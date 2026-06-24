@@ -117,6 +117,7 @@ class SoundFont {
     const activeSources = options.activeSources || null;
     const scheduledIds = options.scheduledIds || null;
     const minLeadTime = Math.max(0.005, Number(options.minLeadTime) || 0.015);
+    const playbackSpeed = Math.max(0.05, Number(options.playbackSpeed) || 1);
     const now = ctx.currentTime;
     let maxEnd = now;
     let count = 0;
@@ -130,9 +131,9 @@ class SoundFont {
       const remainingDur = n.noteEnd - audibleStart;
       if (remainingDur <= 0.002) continue;
 
-      let start = baseTime + (audibleStart - fromSec);
+      let start = baseTime + (audibleStart - fromSec) / playbackSpeed;
       if (start < now + minLeadTime) start = now + minLeadTime;
-      const playDur = Math.max(0.006, remainingDur);
+      const playDur = Math.max(0.006, remainingDur / playbackSpeed);
       const end = start + playDur;
 
       const source = ctx.createBufferSource();

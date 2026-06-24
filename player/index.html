@@ -34,21 +34,39 @@
     </div>
   </section>
 
-  <section class="card" aria-label="재생 조작">
+  <section class="card play-card" aria-label="재생 조작">
     <div class="play-head">
-      <h2>재생 조작 <span id="playInfo" class="play-info">00:00 / 00:00</span></h2>
+      <h2>재생 조작</h2>
     </div>
-    <div class="control-row">
-      <button id="playToggleBtn" class="primary" type="button">재생</button>
-      <button id="rewindBtn" class="compact" type="button" title="처음으로 되돌리기">처음</button>
-      <label class="loop-label"><input id="loopPlayback" type="checkbox" /> 반복</label>
-      <div class="progress-wrap">
-        <div id="tempoMarkerLayer" class="tempo-markers" aria-hidden="true"></div>
-        <input id="progressSlider" class="progress" type="range" min="0" max="0" step="0.01" value="0" disabled />
+
+    <div class="play-layout">
+      <div class="transport-row">
+        <div class="transport-actions">
+          <button id="playToggleBtn" class="primary" type="button">재생</button>
+          <button id="rewindBtn" class="compact" type="button" title="처음으로 되돌리기">처음</button>
+          <label class="loop-label"><input id="loopPlayback" type="checkbox" /> 반복</label>
+          <span id="playInfo" class="play-info">00:00.000 / 00:00.000</span>
+        </div>
+        <div class="quick-controls" aria-label="배속과 볼륨">
+          <label class="mini-control" for="speedSlider">
+            <span class="mini-label">배속</span>
+            <input id="speedSlider" class="speed" type="range" min="0.75" max="1.5" step="0.01" value="1" />
+            <strong id="speedValue" class="speed-value">1.00x</strong>
+          </label>
+          <label class="mini-control" for="volumeSlider">
+            <span class="mini-label">볼륨</span>
+            <input id="volumeSlider" class="volume" type="range" min="0" max="150" value="100" />
+            <strong id="volumeValue" class="volume-value">100%</strong>
+          </label>
+        </div>
       </div>
-      <label class="volume-label" for="volumeSlider">볼륨</label>
-      <input id="volumeSlider" class="volume" type="range" min="0" max="100" value="100" />
-      <strong id="volumeValue" class="volume-value">100%</strong>
+
+      <div class="seek-row">
+        <div class="progress-wrap">
+          <div id="tempoMarkerLayer" class="tempo-markers" aria-hidden="true"></div>
+          <input id="progressSlider" class="progress" type="range" min="0" max="0" step="0.001" value="0" disabled />
+        </div>
+      </div>
     </div>
   </section>
 
@@ -59,6 +77,10 @@
         <p class="command-help">지원 명령어: <code>MML@...;</code> <code>T</code> <code>O</code> <code>L</code> <code>V</code> <code>r</code> <code>cdefgab</code> <code>#</code> <code>+</code> <code>-</code> <code>&lt;</code> <code>&gt;</code> <code>.</code> <code>&amp;</code> <code>n</code></p>
       </div>
       <div class="editor-actions"><button id="pasteBtn" class="ghost" type="button">붙여넣기</button><button id="copyBtn" class="ghost" type="button">복사하기</button><button id="saveBtn" class="ghost" type="button">저장하기</button></div>
+    </div>
+
+    <div class="editor-tool-row" aria-label="편집 편의 기능">
+      <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button>
     </div>
 
     <div class="tab-line">
@@ -88,6 +110,26 @@
     <div class="mml-panel part-panel part-5" data-panel="part5" hidden><textarea id="part5" spellcheck="false"></textarea></div>
   </section>
 </main>
+
+<dialog id="restTrimDialog" class="mml-dialog">
+  <form id="restTrimForm" class="dialog-card" method="dialog">
+    <h3>쉼표 삭제</h3>
+    <p>선택한 기준 이하의 쉼표를 삭제하고, 삭제한 길이만큼 바로 앞 음표를 늘립니다.</p>
+    <label class="dialog-field" for="restTrimLimit">삭제 기준</label>
+    <select id="restTrimLimit">
+      <option value="all">모든 쉼표</option>
+      <option value="4">4분음표 이하</option>
+      <option value="8">8분음표 이하</option>
+      <option value="16">16분음표 이하</option>
+      <option value="32" selected>32분음표 이하</option>
+      <option value="64">64분음표 이하</option>
+    </select>
+    <div class="dialog-actions">
+      <button id="restTrimCancel" type="button">취소</button>
+      <button id="restTrimApply" class="primary" type="button">삭제</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="assets/default-sf2-base64.js"></script>
 <script src="js/utils.js"></script>

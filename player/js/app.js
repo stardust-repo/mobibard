@@ -4,6 +4,8 @@
   const DEFAULT_SF2_URL = "assets/Roland_SC-55.sf2";
   const DEFAULT_SF2_EMBEDDED_B64 = () => window.MABINOGI_DEFAULT_SF2_B64 || "";
   const PART_LABELS = ["멜로디", "화음1", "화음2", "화음3", "화음4", "화음5"];
+  const PREF_PREFIX = "mobibard.player.";
+
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml } = window.MabiMidi;
@@ -19,6 +21,8 @@
   const playToggleBtn = $("playToggleBtn");
   const rewindBtn = $("rewindBtn");
   const loopPlayback = $("loopPlayback");
+  const speedSlider = $("speedSlider");
+  const speedValue = $("speedValue");
   const volumeSlider = $("volumeSlider");
   const volumeValue = $("volumeValue");
   const progressSlider = $("progressSlider");
@@ -27,6 +31,11 @@
   const copyBtn = $("copyBtn");
   const pasteBtn = $("pasteBtn");
   const saveBtn = $("saveBtn");
+  const restTrimBtn = $("restTrimBtn");
+  const restTrimDialog = $("restTrimDialog");
+  const restTrimLimit = $("restTrimLimit");
+  const restTrimApply = $("restTrimApply");
+  const restTrimCancel = $("restTrimCancel");
   const discordBtn = $("discordBtn");
   const charCount = $("charCount");
   const mainMml = $("mainMml");
@@ -48,6 +57,7 @@
   const SCHEDULE_AHEAD_SEC = 1.6;
   const SCHEDULE_INTERVAL_MS = 80;
   let isPlaying = false;
+  let playbackSpeed = 1;
   let scheduleCache = null;
   let currentOffset = 0;
   let playContextStart = 0;
@@ -62,12 +72,16 @@
   init();
 
   function init() {
+    loadPlaybackPrefs();
     midiLoadBtn.addEventListener("click", () => { midiFile.value = ""; midiFile.click(); });
     midiFile.addEventListener("change", () => void loadSourceFile());
     soundSource.addEventListener("change", () => handleSoundSourceChange());
     sf2File.addEventListener("change", () => { if (sf2File.files?.[0]) void loadUserSf2(); resetSoundActionMenu(); });
     playToggleBtn.addEventListener("click", () => { isPlaying ? stopPlayback(false) : void playFromCurrent(); });
     rewindBtn.addEventListener("click", () => void rewindToStart());
+    loopPlayback?.addEventListener("change", () => writePref("loop", loopPlayback.checked ? "1" : "0"));
+    speedSlider?.addEventListener("input", applyPlaybackSpeed);
+    speedSlider?.addEventListener("change", applyPlaybackSpeed);
     volumeSlider.addEventListener("input", applyOutputVolume);
     progressSlider.addEventListener("pointerdown", () => { isSeeking = true; });
     progressSlider.addEventListener("pointerup", () => { isSeeking = false; handleSeekInput(true); });
@@ -77,6 +91,9 @@
     copyBtn.addEventListener("click", () => void copyVisibleMml());
     pasteBtn.addEventListener("click", () => void pasteVisibleMml());
     saveBtn.addEventListener("click", () => void saveVisibleMml());
+    restTrimBtn?.addEventListener("click", openRestTrimDialog);
+    restTrimApply?.addEventListener("click", () => applyRestTrimFromDialog());
+    restTrimCancel?.addEventListener("click", () => restTrimDialog?.close());
     discordBtn?.addEventListener("click", openDiscord);
     mainMml.addEventListener("input", () => {
       normalizeTextareaCommands(mainMml);
@@ -91,10 +108,38 @@
     tabs.forEach(btn => btn.addEventListener("click", () => selectTab(btn.dataset.tab)));
     normalizeTextareaCommands(mainMml);
     syncPartsFromMain();
+    applyPlaybackSpeed(false);
     applyOutputVolume();
     resetSoundActionMenu();
     updateCharCount();
     rebuildSchedulePreviewSilently();
+  }
+
+  function loadPlaybackPrefs() {
+    const savedVolumeText = readPref("volume");
+    if (savedVolumeText != null && savedVolumeText !== "") {
+      const savedVolume = Number(savedVolumeText);
+      if (Number.isFinite(savedVolume)) volumeSlider.value = String(Math.max(0, Math.min(150, Math.round(savedVolume))));
+    }
+
+    const savedSpeedText = readPref("speed");
+    if (savedSpeedText != null && savedSpeedText !== "") {
+      const savedSpeed = Number(savedSpeedText);
+      if (Number.isFinite(savedSpeed)) speedSlider.value = String(Math.max(0.75, Math.min(1.5, savedSpeed)));
+    }
+
+    const savedLoop = readPref("loop");
+    if (loopPlayback && savedLoop != null) loopPlayback.checked = savedLoop === "1";
+  }
+
+  function readPref(name) {
+    try { return localStorage.getItem(PREF_PREFIX + name); }
+    catch (_) { return null; }
+  }
+
+  function writePref(name, value) {
+    try { localStorage.setItem(PREF_PREFIX + name, String(value)); }
+    catch (_) {}
   }
 
   function handleSoundSourceChange() {
@@ -245,10 +290,11 @@
     }
 
     const windowStart = Math.max(playOffsetStart, nowOffset - 0.03);
-    const windowEnd = Math.min(duration, nowOffset + SCHEDULE_AHEAD_SEC);
+    const windowEnd = Math.min(duration, nowOffset + SCHEDULE_AHEAD_SEC * playbackSpeed);
     schedulePreparedNotes(audioCtx, preparedNotes, {
       baseTime: playContextStart,
       fromSec: playOffsetStart,
+      playbackSpeed,
       windowStart,
       windowEnd,
       destination: masterGain || audioCtx.destination,
@@ -348,7 +394,7 @@
   function getCurrentPlaybackOffset() {
     if (!audioCtx || !isPlaying) return currentOffset;
     if (audioCtx.currentTime < playContextStart) return playOffsetStart;
-    const elapsed = Math.max(0, audioCtx.currentTime - playContextStart);
+    const elapsed = Math.max(0, audioCtx.currentTime - playContextStart) * playbackSpeed;
     const duration = scheduleCache?.duration || Infinity;
     return Math.max(0, Math.min(duration, playOffsetStart + elapsed));
   }
@@ -453,10 +499,27 @@
     return audioCtx;
   }
 
+  function applyPlaybackSpeed(restartPlaying = true) {
+    if (!speedSlider) return;
+    const wasPlaying = isPlaying;
+    const oldSpeed = playbackSpeed;
+    if (wasPlaying) currentOffset = getCurrentPlaybackOffset();
+    const raw = Number(speedSlider.value || 1);
+    playbackSpeed = Math.max(0.75, Math.min(1.5, Number.isFinite(raw) ? raw : 1));
+    speedSlider.value = playbackSpeed.toFixed(2).replace(/\.00$/, "");
+    if (speedValue) speedValue.textContent = `${playbackSpeed.toFixed(2)}x`;
+    writePref("speed", playbackSpeed.toFixed(2));
+    if (wasPlaying && restartPlaying && Math.abs(oldSpeed - playbackSpeed) > 0.0001) {
+      clearTimeout(seekRestartTimer);
+      seekRestartTimer = setTimeout(() => void playFromCurrent(), 20);
+    }
+  }
+
   function applyOutputVolume() {
-    const percent = clampInt(Number(volumeSlider.value || 100), 0, 100);
+    const percent = clampInt(Number(volumeSlider.value || 100), 0, 150);
     volumeSlider.value = String(percent);
     volumeValue.textContent = `${percent}%`;
+    writePref("volume", String(percent));
     if (masterGain && audioCtx && audioCtx.state !== "closed") {
       const now = audioCtx.currentTime;
       masterGain.gain.cancelScheduledValues(now);
@@ -537,6 +600,291 @@
     return Math.max(0, Number(value) || 0).toLocaleString("ko-KR");
   }
 
+
+  function openRestTrimDialog() {
+    if (restTrimLimit) restTrimLimit.value = "32";
+    if (restTrimDialog?.showModal) {
+      restTrimDialog.showModal();
+      return;
+    }
+    const answer = prompt("삭제할 쉼표 기준을 입력해 주세요.\nall = 모든 쉼표\n4 = 4분음표 이하\n8 = 8분음표 이하\n16 = 16분음표 이하\n32 = 32분음표 이하\n64 = 64분음표 이하", "32");
+    if (answer == null) return;
+    applyRestTrim(answer);
+  }
+
+  function applyRestTrimFromDialog() {
+    const value = restTrimLimit?.value || "32";
+    restTrimDialog?.close();
+    applyRestTrim(value);
+  }
+
+  function applyRestTrim(limitValue) {
+    const threshold = parseRestTrimLimit(limitValue);
+    if (!threshold) return;
+    const wasPlaying = isPlaying;
+    stopPlayback(false);
+
+    const activePanel = panels.find(p => !p.hidden) || panels[0];
+    const isMainPanel = activePanel.dataset.panel === "main";
+    let totalRemoved = 0;
+    let totalTicks = 0;
+
+    try {
+      if (isMainPanel) {
+        const parts = splitMmlParts(normalizeMmlForDisplay(mainMml.value)).slice(0, 6).map(normalizePartText);
+        while (parts.length < 6) parts.push("");
+        const next = parts.map(part => {
+          const result = removeShortRestsFromPart(part, threshold);
+          totalRemoved += result.removed;
+          totalTicks += result.removedUnits;
+          return result.text;
+        });
+        setMainMml(composeMml(next, { preserveEmpty: true, partCount: 6 }));
+      } else {
+        const textarea = activePanel.querySelector("textarea");
+        if (!textarea) return;
+        const result = removeShortRestsFromPart(normalizePartText(textarea.value), threshold);
+        totalRemoved = result.removed;
+        totalTicks = result.removedUnits;
+        textarea.value = result.text;
+        syncMainFromParts();
+      }
+
+      rebuildSchedulePreviewSilently();
+      if (totalRemoved <= 0) {
+        showDialog("쉼표 삭제", "삭제할 수 있는 쉼표가 없습니다.\n채널 시작 부분의 쉼표나 앞에 음표가 없는 쉼표는 유지됩니다.");
+      } else {
+        const label = threshold.all ? "모든 쉼표" : `${threshold.denom}분음표 이하`;
+        flashButton(restTrimBtn, "삭제 완료");
+        showDialog("쉼표 삭제", `${label} 기준으로 쉼표 ${totalRemoved.toLocaleString("ko-KR")}개를 정리했습니다.`);
+      }
+    } catch (err) {
+      showDialog("쉼표 삭제 실패", shortError(err));
+    } finally {
+      if (wasPlaying) currentOffset = 0;
+    }
+  }
+
+  function parseRestTrimLimit(value) {
+    const raw = String(value || "32").trim().toLowerCase();
+    if (raw === "all" || raw === "전체" || raw === "모두") return { all: true, units: Infinity, denom: null };
+    const denom = Number(raw);
+    if (![4, 8, 16, 32, 64].includes(denom)) {
+      showDialog("쉼표 삭제", "삭제 기준은 all, 4, 8, 16, 32, 64 중 하나를 선택해 주세요.");
+      return null;
+    }
+    return { all: false, units: durationUnits(denom, 0), denom };
+  }
+
+  function removeShortRestsFromPart(partText, threshold) {
+    const tokens = tokenizeMmlPartForEdit(normalizePartText(partText));
+    let lastNote = null;
+    let canAbsorb = false;
+    let removed = 0;
+    let removedUnits = 0;
+
+    for (const token of tokens) {
+      if (token.type === "note") {
+        lastNote = token;
+        canAbsorb = Boolean(token.extendBase) && Number.isInteger(token.durUnits);
+        continue;
+      }
+
+      if (token.type === "rest") {
+        const restUnits = token.durUnits;
+        const canDelete = Number.isFinite(restUnits) && restUnits <= threshold.units + 1e-9;
+        if (canDelete && lastNote && canAbsorb && Number.isInteger(lastNote.durUnits + restUnits)) {
+          lastNote.durUnits += restUnits;
+          lastNote.raw = renderNoteDuration(lastNote.extendBase, lastNote.durUnits, lastNote.defaultUnits);
+          token.omit = true;
+          removed++;
+          removedUnits += restUnits;
+          continue;
+        }
+        canAbsorb = false;
+        continue;
+      }
+
+      if (token.type === "space") continue;
+      canAbsorb = false;
+    }
+
+    return {
+      text: tokens.filter(t => !t.omit).map(t => t.raw).join(""),
+      removed,
+      removedUnits
+    };
+  }
+
+  function tokenizeMmlPartForEdit(partText) {
+    const s = String(partText || "");
+    const tokens = [];
+    let i = 0;
+    let octave = 4;
+    let defaultUnits = durationUnits(4, 0);
+
+    const readNumber = () => {
+      const start = i;
+      while (i < s.length && /\d/.test(s[i])) i++;
+      return i > start ? { text: s.slice(start, i), value: Number(s.slice(start, i)), start, end: i } : null;
+    };
+    const readDotsCount = () => {
+      let count = 0;
+      while (s[i] === ".") { count++; i++; }
+      return count;
+    };
+    const readLengthUnits = () => {
+      const n = readNumber();
+      const dots = readDotsCount();
+      if (!n) return durationUnitsFromBase(defaultUnits, dots);
+      if (![1, 2, 4, 8, 16, 32, 64].includes(n.value)) return NaN;
+      return durationUnits(n.value, dots);
+    };
+    const pushRaw = (type, start, extra = {}) => tokens.push({ type, raw: s.slice(start, i), ...extra });
+
+    while (i < s.length) {
+      const start = i;
+      const ch = s[i];
+      const lower = ch.toLowerCase();
+
+      if (/\s/.test(ch)) {
+        while (i < s.length && /\s/.test(s[i])) i++;
+        pushRaw("space", start);
+      } else if ("cdefgab".includes(lower)) {
+        i++;
+        let semitone = { c:0, d:2, e:4, f:5, g:7, a:9, b:11 }[lower];
+        if (s[i] === "+" || s[i] === "#") { semitone++; i++; }
+        else if (s[i] === "-") { semitone--; i++; }
+        const baseEnd = i;
+        const units = readLengthUnits();
+        const midi = (octave + 1) * 12 + semitone;
+        pushRaw("note", start, {
+          midi,
+          durUnits: units,
+          defaultUnits,
+          extendBase: s.slice(start, baseEnd)
+        });
+      } else if (lower === "n") {
+        i++;
+        const n = readNumber();
+        const midi = n ? Math.max(0, Math.min(127, n.value)) : null;
+        const dots = readDotsCount();
+        const units = durationUnitsFromBase(defaultUnits, dots);
+        const base = midi == null ? null : noteBaseForMidiInOctave(midi, octave);
+        pushRaw("note", start, {
+          midi,
+          durUnits: units,
+          defaultUnits,
+          extendBase: base
+        });
+      } else if (lower === "r") {
+        i++;
+        const units = readLengthUnits();
+        pushRaw("rest", start, { durUnits: units });
+      } else if (lower === "l") {
+        i++;
+        const n = readNumber();
+        const dots = readDotsCount();
+        if (n && [1, 2, 4, 8, 16, 32, 64].includes(n.value)) defaultUnits = durationUnits(n.value, dots);
+        pushRaw("command", start);
+      } else if (lower === "o") {
+        i++;
+        const n = readNumber();
+        if (n && n.value >= 0 && n.value <= 9) octave = n.value;
+        pushRaw("command", start);
+      } else if (ch === ">") {
+        i++;
+        octave++;
+        pushRaw("command", start);
+      } else if (ch === "<") {
+        i++;
+        octave--;
+        pushRaw("command", start);
+      } else if (lower === "t" || lower === "v") {
+        i++;
+        readNumber();
+        pushRaw("command", start);
+      } else if (ch === "&") {
+        i++;
+        pushRaw("command", start);
+      } else {
+        i++;
+        pushRaw("other", start);
+      }
+    }
+    return tokens;
+  }
+
+  function durationUnits(denom, dots = 0) {
+    let total = 256 / denom;
+    let add = total / 2;
+    for (let i = 0; i < dots; i++) {
+      total += add;
+      add /= 2;
+    }
+    return total;
+  }
+
+  function durationUnitsFromBase(baseUnits, dots = 0) {
+    let total = baseUnits;
+    let add = baseUnits / 2;
+    for (let i = 0; i < dots; i++) {
+      total += add;
+      add /= 2;
+    }
+    return total;
+  }
+
+  function noteBaseForMidiInOctave(midi, octave) {
+    const semitone = midi - (octave + 1) * 12;
+    const names = ["c", "c+", "d", "d+", "e", "f", "f+", "g", "g+", "a", "a+", "b"];
+    return semitone >= 0 && semitone < names.length ? names[semitone] : null;
+  }
+
+  function renderNoteDuration(base, totalUnits, defaultUnits) {
+    const units = Math.round(totalUnits);
+    if (!base || units <= 0 || !Number.isInteger(units)) return base || "";
+    const candidates = buildDurationCandidates(defaultUnits);
+    const dp = Array(units + 1).fill(null);
+    dp[0] = "";
+
+    for (let u = 1; u <= units; u++) {
+      let best = null;
+      for (const cand of candidates) {
+        if (cand.units > u || dp[u - cand.units] == null) continue;
+        const piece = `${base}${cand.suffix}`;
+        const text = u === cand.units ? piece : `${dp[u - cand.units]}&${piece}`;
+        if (best == null || text.length < best.length || (text.length === best.length && text < best)) best = text;
+      }
+      dp[u] = best;
+    }
+    return dp[units] || `${base}${durationSuffixFromUnits(units)}`;
+  }
+
+  function buildDurationCandidates(defaultUnits) {
+    const map = new Map();
+    const add = (units, suffix) => {
+      if (!Number.isInteger(units) || units <= 0) return;
+      const old = map.get(units);
+      if (old == null || suffix.length < old.length) map.set(units, suffix);
+    };
+    add(Math.round(defaultUnits), "");
+    add(Math.round(defaultUnits * 1.5), ".");
+    for (const denom of [1, 2, 4, 8, 16, 32, 64]) {
+      add(durationUnits(denom, 0), String(denom));
+      add(durationUnits(denom, 1), `${denom}.`);
+    }
+    return Array.from(map, ([units, suffix]) => ({ units, suffix })).sort((a, b) => b.units - a.units || a.suffix.length - b.suffix.length);
+  }
+
+  function durationSuffixFromUnits(units) {
+    for (const denom of [1, 2, 4, 8, 16, 32, 64]) {
+      if (durationUnits(denom, 0) === units) return String(denom);
+      if (durationUnits(denom, 1) === units) return `${denom}.`;
+    }
+    return "";
+  }
+
   async function pasteVisibleMml() {
     let text = "";
     try {
@@ -575,15 +923,48 @@
     try {
       await navigator.clipboard.writeText(text);
       flashButton(copyBtn, "복사 완료");
+      showCopySummary(activePanel, text);
     } catch {
       textarea?.select();
       try {
         document.execCommand("copy");
         flashButton(copyBtn, "복사 완료");
+        showCopySummary(activePanel, text);
       } catch (err) {
         showDialog("복사 실패", "자동 복사가 막혔습니다. MML을 선택한 뒤 Ctrl+C로 복사해 주세요.");
       }
     }
+  }
+
+  function showCopySummary(activePanel, copiedText) {
+    const isMainPanel = activePanel.dataset.panel === "main";
+    let rows = [];
+
+    if (isMainPanel) {
+      const sourceParts = splitMmlParts(normalizeMmlForDisplay(mainMml.value)).slice(0, 6).map(normalizePartText);
+      rows = sourceParts
+        .map((part, i) => ({ label: PART_LABELS[i] || `채널${i + 1}`, length: part.length }))
+        .filter(row => row.length > 0);
+    } else {
+      const m = /^part(\d+)$/.exec(activePanel.dataset.panel || "");
+      const idx = m ? Number(m[1]) : 0;
+      rows = [{ label: PART_LABELS[idx] || "현재 채널", length: normalizePartText(copiedText).length }].filter(row => row.length > 0);
+    }
+
+    if (!rows.length) {
+      showDialog("복사 완료", "복사된 MML이 비어 있습니다.");
+      return;
+    }
+
+    const total = rows.reduce((sum, row) => sum + row.length, 0);
+    const body = [
+      "복사된 MML 정보",
+      "",
+      ...rows.map(row => `${row.label}: ${formatCount(row.length)} 자`),
+      "",
+      `합계: ${formatCount(total)} 자`
+    ].join("\n");
+    showDialog("복사 완료", body);
   }
 
   async function saveVisibleMml() {
