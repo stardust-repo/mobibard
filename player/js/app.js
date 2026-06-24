@@ -357,7 +357,7 @@
     const d = Math.max(0, Number(duration) || 0);
     const c = Math.max(0, Math.min(d, Number(current) || 0));
     progressSlider.max = d > 0 ? String(d) : "0";
-    progressSlider.step = "0.01";
+    progressSlider.step = "0.001";
     progressSlider.value = String(c);
     progressSlider.disabled = d <= 0;
     playInfo.textContent = `${formatTime(c)} / ${formatTime(d)}`;
