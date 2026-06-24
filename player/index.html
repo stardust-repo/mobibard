@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>마비노기 MML 재생기</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<main>
+  <section class="card menu-card" aria-label="불러오기와 폰트 선택">
+    <h2 class="app-title-small">마비노기 MML 재생기</h2>
+    <div class="menu-grid">
+      <div class="menu-item">
+        <span class="menu-label">불러오기</span>
+        <button id="midiLoadBtn" type="button">MID / MML</button>
+        <input id="midiFile" type="file" accept=".mid,.midi,.txt,.md,audio/midi,audio/x-midi,text/plain,text/markdown" hidden />
+      </div>
+      <div class="menu-item wide">
+        <label class="menu-label" for="soundSource">폰트 선택</label>
+        <select id="soundSource">
+          <option value="" selected disabled hidden>폰트 선택</option>
+          <option value="default">기본 사운드 사용</option>
+          <option value="custom">사용자 SF2 선택</option>
+        </select>
+        <input id="sf2File" type="file" accept=".sf2" hidden />
+        <span id="soundName" class="hint">기본 사운드</span>
+      </div>
+      <div class="menu-item link-actions">
+        <span class="menu-label">바로가기</span>
+        <a class="link-button" href="https://drive.google.com/drive/folders/17mHTnFD475WKYUFK9aowEymi1183vtqD?usp=drive_link" target="_blank" rel="noopener noreferrer">악보 공유</a>
+        <button id="discordBtn" class="link-button" type="button">디스코드</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-label="재생 조작">
+    <div class="play-head">
+      <h2>재생 조작 <span id="playInfo" class="play-info">00:00 / 00:00</span></h2>
+    </div>
+    <div class="control-row">
+      <button id="playToggleBtn" class="primary" type="button">재생</button>
+      <button id="rewindBtn" class="compact" type="button" title="처음으로 되돌리기">처음</button>
+      <label class="loop-label"><input id="loopPlayback" type="checkbox" /> 반복</label>
+      <div class="progress-wrap">
+        <div id="tempoMarkerLayer" class="tempo-markers" aria-hidden="true"></div>
+        <input id="progressSlider" class="progress" type="range" min="0" max="0" step="0.01" value="0" disabled />
+      </div>
+      <label class="volume-label" for="volumeSlider">볼륨</label>
+      <input id="volumeSlider" class="volume" type="range" min="0" max="100" value="100" />
+      <strong id="volumeValue" class="volume-value">100%</strong>
+    </div>
+  </section>
+
+  <section class="card mml-editor" aria-label="MML 보기와 편집">
+    <div class="editor-head">
+      <div class="editor-title-wrap">
+        <h2>MML 보기 · 편집</h2>
+        <p class="command-help">지원 명령어: <code>MML@...;</code> <code>T</code> <code>O</code> <code>L</code> <code>V</code> <code>r</code> <code>cdefgab</code> <code>#</code> <code>+</code> <code>-</code> <code>&lt;</code> <code>&gt;</code> <code>.</code> <code>&amp;</code> <code>n</code></p>
+      </div>
+      <div class="editor-actions"><button id="pasteBtn" class="ghost" type="button">붙여넣기</button><button id="copyBtn" class="ghost" type="button">복사하기</button><button id="saveBtn" class="ghost" type="button">저장하기</button></div>
+    </div>
+
+    <div class="tab-line">
+      <div class="tabs" role="tablist" aria-label="MML 파트 선택">
+        <button class="tab-btn tab-all active" type="button" data-tab="main">전체 MML</button>
+        <button class="tab-btn part-tab part-0" type="button" data-tab="part0">멜로디</button>
+        <button class="tab-btn part-tab part-1" type="button" data-tab="part1">화음1</button>
+        <button class="tab-btn part-tab part-2" type="button" data-tab="part2">화음2</button>
+        <button class="tab-btn part-tab part-3" type="button" data-tab="part3">화음3</button>
+        <button class="tab-btn part-tab part-4" type="button" data-tab="part4">화음4</button>
+        <button class="tab-btn part-tab part-5" type="button" data-tab="part5">화음5</button>
+      </div>
+      <div id="charCount" class="char-count" aria-live="polite">0글자</div>
+    </div>
+
+    <div class="mml-panel" data-panel="main">
+      <div class="colored-textarea">
+        <pre id="mainMmlHighlight" class="mml-highlight" aria-hidden="true"></pre>
+        <textarea id="mainMml" class="highlight-source" spellcheck="false">MML@T120V12O5L8ccggaag4ffeeddc4,O4L4cgrgcrgc,O3L2cgcg;</textarea>
+      </div>
+    </div>
+    <div class="mml-panel part-panel part-0" data-panel="part0" hidden><textarea id="part0" spellcheck="false"></textarea></div>
+    <div class="mml-panel part-panel part-1" data-panel="part1" hidden><textarea id="part1" spellcheck="false"></textarea></div>
+    <div class="mml-panel part-panel part-2" data-panel="part2" hidden><textarea id="part2" spellcheck="false"></textarea></div>
+    <div class="mml-panel part-panel part-3" data-panel="part3" hidden><textarea id="part3" spellcheck="false"></textarea></div>
+    <div class="mml-panel part-panel part-4" data-panel="part4" hidden><textarea id="part4" spellcheck="false"></textarea></div>
+    <div class="mml-panel part-panel part-5" data-panel="part5" hidden><textarea id="part5" spellcheck="false"></textarea></div>
+  </section>
+</main>
+
+<script src="assets/default-sf2-base64.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/midi-to-mml.js"></script>
+<script src="js/mml-parser.js"></script>
+<script src="js/sf2-sampler.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
