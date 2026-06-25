@@ -24,22 +24,29 @@ h2 { margin: 0 0 12px; font-size: 18px; }
 .app-title-small { margin: 0 0 16px; font-size: clamp(22px, 3vw, 28px); letter-spacing: -0.02em; }
 p { margin: 0; line-height: 1.55; }
 button, input, select, textarea { font: inherit; }
-button { border: 0; border-radius: 12px; padding: 10px 16px; cursor: pointer; background: #f3f4f6; color: var(--text); font-weight: 700; }
+button { border: 0; border-radius: 9px; padding: 6px 10px; min-height: 32px; cursor: pointer; background: #f3f4f6; color: var(--text); font-weight: 700; font-size: 13.5px; line-height: 1.2; }
 button.primary { background: var(--accent); color: white; }
 button.primary.danger { background: var(--danger); }
 button.ghost { background: var(--accent-weak); color: var(--accent); }
-.link-button { display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; padding: 10px 14px; background: #f3f4f6; color: var(--text); font-weight: 800; text-decoration: none; border: 1px solid transparent; }
+.link-button { display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; padding: 6px 10px; min-height: 32px; background: #f3f4f6; color: var(--text); font-weight: 800; font-size: 13.5px; line-height: 1.2; text-decoration: none; border: 1px solid transparent; }
 .link-button:hover { background: var(--accent-weak); color: var(--accent); border-color: #c7d2fe; }
 .link-actions { justify-content: flex-end; }
-button.compact { padding: 9px 12px; border-radius: 10px; }
+button.compact { padding: 6px 9px; min-height: 30px; border-radius: 8px; }
 button:disabled { opacity: .5; cursor: not-allowed; }
-select { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff; min-width: 170px; }
+select { border: 1px solid var(--line); border-radius: 9px; padding: 5px 28px 5px 9px; min-height: 32px; background: #fff; min-width: 126px; max-width: 170px; font-size: 13.5px; line-height: 1.2; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; font-weight: 800; }
+/* 데스크톱에서 콤보박스가 버튼처럼 크게 보이지 않도록 메뉴 영역의 입력류를 슬림하게 고정 */
+.menu-card select { width: auto; max-width: 165px; }
+.menu-card button, .menu-card .link-button { white-space: nowrap; }
+
 .page-title { margin-bottom: 16px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04); margin-bottom: 16px; }
-.menu-grid { display: grid; grid-template-columns: 220px 1fr auto; gap: 14px; align-items: end; }
-.menu-item { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.menu-label { font-weight: 900; font-size: 15px; color: var(--muted); }
+.menu-grid { display: grid; grid-template-columns: 180px 1fr auto; gap: 10px; align-items: end; }
+.menu-item { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.menu-label { font-weight: 900; font-size: 13.5px; color: var(--muted); }
+.menu-item select { width: auto; flex: 0 0 auto; }
+.menu-item.wide select { min-width: 142px; }
+.dialog-card select { max-width: none; width: 100%; }
 .hint { color: var(--muted); font-size: 13px; }
 .play-card { padding-bottom: 16px; }
 .play-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
@@ -47,8 +54,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .play-info { color: #111827; background: #f8fafc; border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .play-layout { display: grid; gap: 8px; }
 .transport-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.transport-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.quick-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 14px; }
+.transport-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.quick-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; }
 .mini-control { display: grid; grid-template-columns: auto 112px 48px; align-items: center; gap: 8px; color: var(--muted); font-weight: 800; font-size: 14px; }
 .mini-label { white-space: nowrap; }
 .seek-row { min-width: 0; }
@@ -71,8 +78,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .speed-value { width: 48px; font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; color: var(--text); }
 .volume-value { width: 48px; font-size: 13px; text-align: right; color: var(--text); }
 .editor-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; }
-.editor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.editor-tool-row { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; margin: -2px 0 12px; padding-top: 4px; border-top: 1px dashed #e5e7eb; }
+.editor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.editor-tool-row { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; margin: -2px 0 12px; padding-top: 4px; border-top: 1px dashed #e5e7eb; }
 .editor-title-wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; }
 .editor-title-wrap h2 { margin-bottom: 0; }
 .command-help { color: var(--muted); font-size: 14px; line-height: 1.8; }
@@ -86,7 +93,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .char-count.part-count-3 { color: var(--part3); }
 .char-count.part-count-4 { color: var(--part4); }
 .char-count.part-count-5 { color: var(--part5); }
-.tab-btn { padding: 8px 12px; border: 1px solid var(--line); background: #fff; color: var(--muted); }
+.tab-btn { padding: 7px 10px; min-height: 32px; border: 1px solid var(--line); background: #fff; color: var(--muted); }
 .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .part-tab.part-0 { color: var(--part0); border-color: color-mix(in srgb, var(--part0), white 62%); }
 .part-tab.part-1 { color: var(--part1); border-color: color-mix(in srgb, var(--part1), white 62%); }
@@ -135,6 +142,7 @@ textarea { resize: vertical; color: var(--text); }
   .tab-line { align-items: flex-start; flex-direction: column; }
   .char-count { margin-left: 0; text-align: left; }
   .editor-actions { justify-content: flex-start; }
+  .menu-item select { width: min(100%, 220px); max-width: 220px; }
   textarea { min-height: 340px; }
   .colored-textarea { height: 340px; }
 }
@@ -145,4 +153,4 @@ textarea { resize: vertical; color: var(--text); }
 .dialog-card h3 { margin: 0; font-size: 20px; }
 .dialog-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .dialog-field { font-weight: 900; color: var(--muted); font-size: 14px; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
