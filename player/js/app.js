@@ -38,6 +38,7 @@
   const restTrimApply = $("restTrimApply");
   const restTrimCancel = $("restTrimCancel");
   const discordBtn = $("discordBtn");
+  const themeToggleBtn = $("themeToggleBtn");
   const charCount = $("charCount");
   const mainMml = $("mainMml");
   const mainMmlHighlight = $("mainMmlHighlight");
@@ -73,6 +74,7 @@
   init();
 
   function init() {
+    loadThemePref();
     loadPlaybackPrefs();
     midiLoadBtn.addEventListener("click", () => { midiFile.value = ""; midiFile.click(); });
     midiFile.addEventListener("change", () => void loadSourceFile());
@@ -96,6 +98,7 @@
     restTrimApply?.addEventListener("click", () => applyRestTrimFromDialog());
     restTrimCancel?.addEventListener("click", () => restTrimDialog?.close());
     discordBtn?.addEventListener("click", openDiscord);
+    themeToggleBtn?.addEventListener("click", toggleTheme);
     mainMml.addEventListener("input", () => {
       normalizeTextareaCommands(mainMml);
       syncPartsFromMain();
@@ -131,6 +134,28 @@
 
     const savedLoop = readPref("loop");
     if (loopPlayback && savedLoop != null) loopPlayback.checked = savedLoop === "1";
+  }
+
+  function loadThemePref() {
+    const savedTheme = readPref("theme");
+    applyTheme(savedTheme === "dark" ? "dark" : "light", false);
+  }
+
+  function toggleTheme() {
+    const current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+    applyTheme(current === "dark" ? "light" : "dark", true);
+  }
+
+  function applyTheme(theme, persist = true) {
+    const resolved = theme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = resolved;
+    if (themeToggleBtn) {
+      const nextLabel = resolved === "dark" ? "밝은 테마로 변경" : "어두운 테마로 변경";
+      themeToggleBtn.setAttribute("aria-pressed", resolved === "dark" ? "true" : "false");
+      themeToggleBtn.setAttribute("aria-label", nextLabel);
+      themeToggleBtn.title = nextLabel;
+    }
+    if (persist) writePref("theme", resolved);
   }
 
   function readPref(name) {

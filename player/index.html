@@ -4,12 +4,21 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>마비노기 MML 재생기</title>
+  <link rel="icon" href="assets/favicon.ico" sizes="any" />
+  <link rel="shortcut icon" href="assets/favicon.ico" />
   <link rel="stylesheet" href="styles.css" />
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 </head>
 <body>
 <main>
   <section class="card menu-card" aria-label="불러오기와 폰트 선택">
-    <h2 class="app-title-small">마비노기 MML 재생기</h2>
+    <div class="app-head">
+      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">v1.1</span></h2>
+      <div class="title-theme-control">
+        <span class="theme-label menu-label">테마</span>
+        <button id="themeToggleBtn" class="theme-swatch" type="button" aria-pressed="false" aria-label="어두운 테마로 변경" title="어두운 테마로 변경"></button>
+      </div>
+    </div>
     <div class="menu-grid">
       <div class="menu-item">
         <span class="menu-label">불러오기</span>
