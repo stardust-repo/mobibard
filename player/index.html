@@ -114,7 +114,7 @@
 <dialog id="restTrimDialog" class="mml-dialog">
   <form id="restTrimForm" class="dialog-card" method="dialog">
     <h3>쉼표 삭제</h3>
-    <p>선택한 기준 이하의 쉼표를 삭제하고, 삭제한 길이만큼 바로 앞 음표를 늘립니다.</p>
+    <p>선택한 기준 이하의 쉼표를 삭제하고, 삭제한 길이만큼 바로 앞 음표를 늘린 뒤 최적화합니다.</p>
     <label class="dialog-field" for="restTrimLimit">삭제 기준</label>
     <select id="restTrimLimit">
       <option value="all">모든 쉼표</option>
@@ -135,6 +135,7 @@
 <script src="js/utils.js"></script>
 <script src="js/midi-to-mml.js"></script>
 <script src="js/mml-parser.js"></script>
+<script src="js/mml-optimizer.js"></script>
 <script src="js/sf2-sampler.js"></script>
 <script src="js/app.js"></script>
 </body>

@@ -10,6 +10,7 @@
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml } = window.MabiMidi;
   const { parseMabinogiMml, splitMmlParts, buildSchedule, composeMml } = window.MabiMml;
+  const { optimizeMml, optimizePart, trimShortRestsMml } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
   const $ = (id) => document.getElementById(id);
@@ -182,10 +183,18 @@
       if (ext === "mid" || ext === "midi") {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const result = midiToMml(bytes, name);
-        setMainMml(result.mml);
+        const optimized = optimizeMml(result.mml);
+        setMainMml(optimized.mml);
       } else if (ext === "txt" || ext === "md") {
         const text = await file.text();
-        setMainMml(readMmlTextFile(text));
+        const loaded = readMmlTextFile(text);
+        try {
+          const optimized = optimizeMml(loaded);
+          setMainMml(optimized.mml);
+        } catch (optErr) {
+          setMainMml(loaded);
+          showDialog("MML 최적화 생략", `파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+        }
       } else {
         throw new Error("지원하지 않는 파일입니다. mid, midi, txt, md 파일을 선택해 주세요.");
       }
@@ -626,37 +635,31 @@
 
     const activePanel = panels.find(p => !p.hidden) || panels[0];
     const isMainPanel = activePanel.dataset.panel === "main";
-    let totalRemoved = 0;
-    let totalTicks = 0;
+    const partMatch = /^part(\d+)$/.exec(activePanel.dataset.panel || "");
+    const targetPartIndex = isMainPanel ? null : (partMatch ? Number(partMatch[1]) : null);
 
     try {
-      if (isMainPanel) {
-        const parts = splitMmlParts(normalizeMmlForDisplay(mainMml.value)).slice(0, 6).map(normalizePartText);
-        while (parts.length < 6) parts.push("");
-        const next = parts.map(part => {
-          const result = removeShortRestsFromPart(part, threshold);
-          totalRemoved += result.removed;
-          totalTicks += result.removedUnits;
-          return result.text;
-        });
-        setMainMml(composeMml(next, { preserveEmpty: true, partCount: 6 }));
-      } else {
-        const textarea = activePanel.querySelector("textarea");
-        if (!textarea) return;
-        const result = removeShortRestsFromPart(normalizePartText(textarea.value), threshold);
-        totalRemoved = result.removed;
-        totalTicks = result.removedUnits;
-        textarea.value = result.text;
-        syncMainFromParts();
-      }
+      const result = trimShortRestsMml(normalizeMmlForDisplay(mainMml.value), {
+        partCount: 6,
+        targetPartIndex,
+        all: threshold.all,
+        denom: threshold.denom
+      });
 
-      rebuildSchedulePreviewSilently();
-      if (totalRemoved <= 0) {
+      if (result.removed <= 0) {
         showDialog("쉼표 삭제", "삭제할 수 있는 쉼표가 없습니다.\n채널 시작 부분의 쉼표나 앞에 음표가 없는 쉼표는 유지됩니다.");
       } else {
+        setMainMml(result.mml);
+        rebuildSchedulePreviewSilently();
         const label = threshold.all ? "모든 쉼표" : `${threshold.denom}분음표 이하`;
+        const saved = Math.max(0, Number(result.saved) || 0);
         flashButton(restTrimBtn, "삭제 완료");
-        showDialog("쉼표 삭제", `${label} 기준으로 쉼표 ${totalRemoved.toLocaleString("ko-KR")}개를 정리했습니다.`);
+        showDialog(
+          "쉼표 삭제",
+          `${label} 기준으로 쉼표 ${result.removed.toLocaleString("ko-KR")}개를 정리했습니다.\n` +
+          `최적화 결과: ${result.before.toLocaleString("ko-KR")} 자 → ${result.after.toLocaleString("ko-KR")} 자` +
+          (saved ? `\n절약: ${saved.toLocaleString("ko-KR")} 자` : "")
+        );
       }
     } catch (err) {
       showDialog("쉼표 삭제 실패", shortError(err));
@@ -919,7 +922,15 @@
     const activePanel = panels.find(p => !p.hidden) || panels[0];
     const textarea = activePanel.querySelector("textarea");
     const isMainPanel = activePanel.dataset.panel === "main";
-    const text = isMainPanel ? normalizeMmlForCopy(textarea?.value || "") : normalizePartText(textarea?.value || "");
+    let text;
+    try {
+      text = isMainPanel
+        ? normalizeMmlForCopy(optimizeMml(textarea?.value || "").mml)
+        : optimizePart(normalizePartText(textarea?.value || ""), { includeTempo: activePanel.dataset.panel === "part0" }).part;
+    } catch (err) {
+      showDialog("복사 실패", `MML 최적화 중 문제가 발생했습니다.\n\n${shortError(err)}`);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(text);
       flashButton(copyBtn, "복사 완료");
@@ -941,8 +952,8 @@
     let rows = [];
 
     if (isMainPanel) {
-      const sourceParts = splitMmlParts(normalizeMmlForDisplay(mainMml.value)).slice(0, 6).map(normalizePartText);
-      rows = sourceParts
+      const copiedParts = splitMmlParts(normalizeMmlForDisplay(copiedText)).slice(0, 6).map(normalizePartText);
+      rows = copiedParts
         .map((part, i) => ({ label: PART_LABELS[i] || `채널${i + 1}`, length: part.length }))
         .filter(row => row.length > 0);
     } else {
@@ -968,7 +979,14 @@
   }
 
   async function saveVisibleMml() {
-    const { text, isMainPanel, panelName } = getVisibleMmlForExport();
+    let exportData;
+    try {
+      exportData = getVisibleMmlForExport();
+    } catch (err) {
+      showDialog("저장 실패", `MML 최적화 중 문제가 발생했습니다.\n\n${shortError(err)}`);
+      return;
+    }
+    const { text, isMainPanel, panelName } = exportData;
     if (!text.trim()) {
       showDialog("저장 실패", "저장할 MML이 비어 있습니다.");
       return;
@@ -1010,7 +1028,12 @@
     const activePanel = panels.find(p => !p.hidden) || panels[0];
     const textarea = activePanel.querySelector("textarea");
     const isMainPanel = activePanel.dataset.panel === "main";
-    const text = isMainPanel ? normalizeMmlForCopy(textarea?.value || "") : normalizePartText(textarea?.value || "");
+    let text;
+    if (isMainPanel) {
+      text = normalizeMmlForCopy(optimizeMml(textarea?.value || "").mml);
+    } else {
+      text = optimizePart(normalizePartText(textarea?.value || ""), { includeTempo: activePanel.dataset.panel === "part0" }).part;
+    }
     return { text, isMainPanel, panelName: activePanel.dataset.panel || "part" };
   }
 
