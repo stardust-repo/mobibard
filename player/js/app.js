@@ -10,7 +10,7 @@
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml, analyzeMidi } = window.MabiMidi;
   const { parseMabinogiMml, splitMmlParts, buildSchedule, composeMml } = window.MabiMml;
-  const { optimizeMml, optimizePart, trimShortRestsMml } = window.MabiOptimizer;
+  const { optimizeMml, optimizePart, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
   const $ = (id) => document.getElementById(id);
@@ -32,11 +32,23 @@
   const copyBtn = $("copyBtn");
   const pasteBtn = $("pasteBtn");
   const saveBtn = $("saveBtn");
+  const splitCopyBtn = $("splitCopyBtn");
+  const splitCopyDialog = $("splitCopyDialog");
+  const splitCopyLimit = $("splitCopyLimit");
+  const splitCopySummary = $("splitCopySummary");
+  const splitCopyPages = $("splitCopyPages");
+  const splitCopyRebuild = $("splitCopyRebuild");
+  const splitCopyClose = $("splitCopyClose");
   const restTrimBtn = $("restTrimBtn");
   const restTrimDialog = $("restTrimDialog");
   const restTrimLimit = $("restTrimLimit");
   const restTrimApply = $("restTrimApply");
   const restTrimCancel = $("restTrimCancel");
+  const leadingSilenceBtn = $("leadingSilenceBtn");
+  const leadingSilenceDialog = $("leadingSilenceDialog");
+  const leadingSilenceBeats = $("leadingSilenceBeats");
+  const leadingSilenceApply = $("leadingSilenceApply");
+  const leadingSilenceCancel = $("leadingSilenceCancel");
   const midiConvertDialog = $("midiConvertDialog");
   const midiConvertSummary = $("midiConvertSummary");
   const midiChannelList = $("midiChannelList");
@@ -104,11 +116,17 @@
     progressSlider.addEventListener("input", () => handleSeekInput(false));
     progressSlider.addEventListener("change", () => handleSeekInput(true));
     copyBtn.addEventListener("click", () => void copyVisibleMml());
+    splitCopyBtn?.addEventListener("click", () => openSplitCopyDialog());
+    splitCopyRebuild?.addEventListener("click", () => buildSplitCopyPages());
+    splitCopyClose?.addEventListener("click", () => splitCopyDialog?.close());
     pasteBtn.addEventListener("click", () => void pasteVisibleMml());
     saveBtn.addEventListener("click", () => void saveVisibleMml());
     restTrimBtn?.addEventListener("click", openRestTrimDialog);
     restTrimApply?.addEventListener("click", () => applyRestTrimFromDialog());
     restTrimCancel?.addEventListener("click", () => restTrimDialog?.close());
+    leadingSilenceBtn?.addEventListener("click", openLeadingSilenceDialog);
+    leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
+    leadingSilenceCancel?.addEventListener("click", () => leadingSilenceDialog?.close());
     midiExportCount?.addEventListener("change", updateMidiRoleControls);
     midiConvertApply?.addEventListener("click", () => applyMidiConvertDialog());
     midiConvertCancel?.addEventListener("click", () => { pendingMidiImport = null; pendingMidiSettings = null; midiConvertDialog?.close(); });
@@ -228,7 +246,8 @@
         const text = await file.text();
         const loaded = readMmlTextFile(text);
         try {
-          const optimized = optimizeMml(loaded);
+          const trimmed = trimLeadingSilenceMml(loaded);
+          const optimized = optimizeMml(trimmed.mml);
           setMainMml(optimized.mml);
         } catch (optErr) {
           setMainMml(loaded);
@@ -507,7 +526,8 @@
       const options = collectMidiConvertOptions();
       stopPlayback(false);
       const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
-      const optimized = optimizeMml(result.mml);
+      const trimmed = trimLeadingSilenceMml(result.mml);
+      const optimized = optimizeMml(trimmed.mml);
       setMainMml(optimized.mml);
       midiConvertDialog?.close();
       pendingMidiImport = null;
@@ -915,6 +935,12 @@
     return Math.max(0, Number(value) || 0).toLocaleString("ko-KR");
   }
 
+  function formatBeatCount(value) {
+    const n = Number(value) || 0;
+    if (Math.abs(n - Math.round(n)) < 1e-9) return Math.round(n).toLocaleString("ko-KR");
+    return n.toLocaleString("ko-KR", { maximumFractionDigits: 3 });
+  }
+
 
   function openRestTrimDialog() {
     if (restTrimLimit) restTrimLimit.value = "32";
@@ -971,6 +997,50 @@
       showDialog("쉼표 삭제 실패", shortError(err));
     } finally {
       if (wasPlaying) currentOffset = 0;
+    }
+  }
+
+  function openLeadingSilenceDialog() {
+    if (leadingSilenceBeats) leadingSilenceBeats.value = "4";
+    if (leadingSilenceDialog?.showModal) {
+      leadingSilenceDialog.showModal();
+      return;
+    }
+    const answer = prompt("맨 앞에 설정할 무음 박자를 입력해 주세요.\n기존 첫 음 앞 공통 무음은 제거됩니다.\n4박 = 온음표 1개", "4");
+    if (answer == null) return;
+    applyLeadingSilence(answer);
+  }
+
+  function applyLeadingSilenceFromDialog() {
+    const value = leadingSilenceBeats?.value || "4";
+    leadingSilenceDialog?.close();
+    applyLeadingSilence(value);
+  }
+
+  function applyLeadingSilence(value) {
+    const beats = Number(value);
+    if (!Number.isFinite(beats) || beats < 0) {
+      showDialog("무음 설정", "설정할 박자는 0 이상의 숫자로 입력해 주세요.");
+      return;
+    }
+    try {
+      stopPlayback(false);
+      const result = addLeadingSilenceMml(normalizeMmlForDisplay(mainMml.value), {
+        partCount: 6,
+        beats
+      });
+      setMainMml(result.mml);
+      rebuildSchedulePreviewSilently();
+      flashButton(leadingSilenceBtn, "설정 완료");
+      const removedLine = result.removedLeadingBeats > 0
+        ? `\n기존 첫 음 앞 공통 무음 ${formatBeatCount(result.removedLeadingBeats)}박을 제거했습니다.`
+        : "";
+      showDialog(
+        "무음 설정 완료",
+        `맨 앞 무음을 ${formatBeatCount(result.addedBeats)}박으로 설정했습니다.${removedLine}\n설정 구간은 T120 기준으로 시작합니다.`
+      );
+    } catch (err) {
+      showDialog("무음 설정 실패", shortError(err));
     }
   }
 
@@ -1213,7 +1283,13 @@
     const isMainPanel = activePanel.dataset.panel === "main";
     const looksLikeFullMml = /^\s*mml\s*@/i.test(text) || String(text).includes(",");
     if (isMainPanel || looksLikeFullMml) {
-      setMainMml(text);
+      let pasted = text;
+      try {
+        pasted = trimLeadingSilenceMml(text).mml;
+      } catch (_) {
+        pasted = text;
+      }
+      setMainMml(pasted);
     } else {
       const textarea = activePanel.querySelector("textarea");
       if (!textarea) return;
@@ -1282,6 +1358,134 @@
       `합계: ${formatCount(total)} 자`
     ].join("\n");
     showDialog("복사 완료", body);
+  }
+
+
+  function openSplitCopyDialog() {
+    try {
+      buildSplitCopyPages();
+      if (splitCopyDialog?.showModal) splitCopyDialog.showModal();
+      else showDialog("악보 나눠복사", "이 브라우저는 나눠복사 Dialog를 지원하지 않습니다.");
+    } catch (err) {
+      showDialog("나눠복사 실패", shortError(err));
+    }
+  }
+
+  function buildSplitCopyPages() {
+    if (!splitCopyPages || !splitCopySummary) return;
+    const maxChars = Math.max(200, Math.min(5000, Math.round(Number(splitCopyLimit?.value || 2400) || 2400)));
+    if (splitCopyLimit) splitCopyLimit.value = String(maxChars);
+
+    let result;
+    try {
+      result = splitMmlPages(mainMml.value || "", {
+        partCount: 6,
+        maxChars,
+        searchSlackChars: Math.round(maxChars / 2),
+        minCommonSilenceBeats: 2
+      });
+    } catch (err) {
+      splitCopySummary.textContent = `분할 실패: ${shortError(err)}`;
+      splitCopyPages.innerHTML = "";
+      throw err;
+    }
+
+    const pages = result.pages || [];
+    const warnings = Array.from(result.warnings || []);
+    splitCopySummary.innerHTML = [
+      `<strong>총 ${formatCount(pages.length)}장</strong> · 채널당 ${formatCount(maxChars)} 자 이하 기준`,
+      `<span>탐색 범위 ${formatCount(Math.round(maxChars / 2))} 자 · 공통 무음 2박 이상 우선</span>`,
+      warnings.length ? `<em>${escapeHtml(warnings.slice(0, 3).join(" / "))}${warnings.length > 3 ? " 외" : ""}</em>` : ""
+    ].filter(Boolean).join("<br>");
+
+    splitCopyPages.innerHTML = "";
+    if (!pages.length) {
+      splitCopyPages.innerHTML = `<div class="split-copy-empty">분할할 MML이 없습니다.</div>`;
+      return;
+    }
+
+    for (const page of pages) {
+      const row = document.createElement("div");
+      row.className = `split-copy-page${page.maxPartLength > maxChars ? " over" : ""}`;
+      const nonEmpty = page.parts
+        .map((part, i) => ({ label: PART_LABELS[i] || `채널${i + 1}`, length: String(part || "").length }))
+        .filter(item => item.length > 0);
+      const lengthText = nonEmpty.length
+        ? nonEmpty.map(item => `${item.label} ${formatCount(item.length)}자`).join(" · ")
+        : "빈 악보";
+      const reasonText = describeSplitReason(page.reason);
+      const skipped = page.skippedUnits > 0 ? ` · 공통 무음 ${formatBeatUnits(page.skippedUnits)} 제거` : "";
+      row.innerHTML = `
+        <div class="split-copy-page-main">
+          <strong>악보 ${page.index}</strong>
+          <span>${escapeHtml(lengthText)}</span>
+          <small>${escapeHtml(reasonText + skipped)}${page.warning ? ` · ${escapeHtml(page.warning)}` : ""}</small>
+        </div>
+        <button type="button" class="primary" data-split-copy-index="${page.index - 1}">복사</button>
+      `;
+      row.querySelector("button")?.addEventListener("click", () => void copySplitPage(page));
+      splitCopyPages.appendChild(row);
+    }
+  }
+
+  async function copySplitPage(page) {
+    const text = String(page.mml || "").trim();
+    if (!text) {
+      showDialog("나눠복사 실패", "복사할 악보가 비어 있습니다.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showDialog("복사 완료", buildSplitCopyPageMessage(page));
+    } catch (_) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        showDialog("복사 완료", buildSplitCopyPageMessage(page));
+      } catch (err) {
+        showDialog("복사 실패", "자동 복사가 막혔습니다. Dialog의 악보를 직접 선택해 복사해 주세요.");
+      } finally {
+        ta.remove();
+      }
+    }
+  }
+
+  function buildSplitCopyPageMessage(page) {
+    const rows = page.parts
+      .map((part, i) => ({ label: PART_LABELS[i] || `채널${i + 1}`, length: String(part || "").length }))
+      .filter(row => row.length > 0);
+    const total = rows.reduce((sum, row) => sum + row.length, 0);
+    return [
+      `악보 ${page.index}가 복사되었습니다.`,
+      "",
+      ...rows.map(row => `${row.label}: ${formatCount(row.length)} 자`),
+      "",
+      `합계: ${formatCount(total)} 자`
+    ].join("\n");
+  }
+
+  function describeSplitReason(reason) {
+    switch (reason) {
+      case "last": return "마지막 악보";
+      case "common-silence": return "2박 이상 공통 무음에서 분할";
+      case "longest-silence": return "가장 긴 공통 무음에서 분할";
+      case "clean-boundary": return "전체 채널 경계에서 분할";
+      case "partial-boundary": return "최대 안전 경계에서 분할";
+      case "char-limit": return "글자 수 기준 분할";
+      case "forced": return "강제 분할";
+      default: return "분할";
+    }
+  }
+
+  function formatBeatUnits(units) {
+    const beats = (Number(units) || 0) / 256;
+    if (Math.abs(beats - Math.round(beats)) < 1e-6) return `${formatCount(Math.round(beats))}박`;
+    return `${beats.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}박`;
   }
 
   async function saveVisibleMml() {

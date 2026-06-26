@@ -118,6 +118,676 @@
     };
   }
 
+
+  function trimLeadingSilenceMml(text, options = {}) {
+    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
+    while (sourceParts.length < partCount) sourceParts.push("");
+
+    const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
+    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
+    const firstNoteStart = findFirstNoteStart(parsedParts);
+    if (!(firstNoteStart > EPS)) {
+      const optimized = optimizeMml(text, { partCount });
+      return { ...optimized, removedUnits: 0, removedBeats: 0 };
+    }
+
+    const shiftedParts = parsedParts.map(part => ({
+      ...part,
+      events: shiftEventsAfterTrim(part.events, firstNoteStart)
+    }));
+    const shiftedTempoMap = shiftTempoMapAfterTrim(tempoMap, firstNoteStart);
+    const hasAnyContent = shiftedParts.some(p => p.events.length || p.tempos.length || String(p.raw || "").trim()) || shiftedTempoMap.length > 0;
+    const outputParts = [];
+
+    for (let i = 0; i < partCount; i++) {
+      let events = shiftedParts[i].events;
+      if (i === 0) events = injectTempoEvents(events, shiftedTempoMap);
+      outputParts.push(renderPart(events, {
+        isMelody: i === 0,
+        startTempo: shiftedTempoMap[0]?.bpm || DEFAULT_TEMPO,
+        forceHeader: i === 0 && hasAnyContent,
+        partIndex: i
+      }));
+    }
+
+    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+    const before = countPartChars(sourceParts);
+    const after = countPartChars(outputParts);
+    return {
+      mml,
+      parts: outputParts,
+      before,
+      after,
+      saved: before - after,
+      tempoMap: shiftedTempoMap,
+      removedUnits: firstNoteStart,
+      removedBeats: firstNoteStart / durationUnits(4, 0)
+    };
+  }
+
+  function addLeadingSilenceMml(text, options = {}) {
+    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const beats = Math.max(0, Number(options.beats ?? 8));
+    const addUnits = Math.round(beats * durationUnits(4, 0));
+    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
+    while (sourceParts.length < partCount) sourceParts.push("");
+
+    const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
+    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
+    const leadingUnits = findFirstNoteStart(parsedParts);
+    const removeUnits = leadingUnits > EPS ? Math.round(leadingUnits) : 0;
+
+    // "맨앞 무음 설정"은 누적 추가가 아니라 현재 첫 음 앞의 공통 무음을 먼저 제거한 뒤
+    // 사용자가 지정한 길이만큼 T120 기준 무음을 새로 넣는 기능이다.
+    const baseParts = removeUnits > 0
+      ? parsedParts.map(part => ({
+          ...part,
+          events: shiftEventsAfterTrim(part.events, removeUnits)
+        }))
+      : parsedParts;
+    const baseTempoMap = removeUnits > 0
+      ? shiftTempoMapAfterTrim(tempoMap, removeUnits)
+      : tempoMap;
+
+    const renderBaseWithoutLeadingSilence = () => {
+      const hasAnyContent = baseParts.some(p => p.events.length || p.tempos.length || String(p.raw || "").trim()) || baseTempoMap.length > 0;
+      const outputParts = [];
+      for (let i = 0; i < partCount; i++) {
+        let events = baseParts[i].events;
+        if (i === 0) events = injectTempoEvents(events, baseTempoMap);
+        outputParts.push(renderPart(events, {
+          isMelody: i === 0,
+          startTempo: baseTempoMap[0]?.bpm || DEFAULT_TEMPO,
+          forceHeader: i === 0 && hasAnyContent,
+          partIndex: i
+        }));
+      }
+      return { outputParts, tempo: baseTempoMap };
+    };
+
+    if (addUnits <= 0) {
+      const rendered = renderBaseWithoutLeadingSilence();
+      const mml = composeMml(rendered.outputParts, { preserveEmpty: true, partCount });
+      const before = countPartChars(sourceParts);
+      const after = countPartChars(rendered.outputParts);
+      return {
+        mml,
+        parts: rendered.outputParts,
+        before,
+        after,
+        saved: before - after,
+        tempoMap: rendered.tempo,
+        addedUnits: 0,
+        addedBeats: 0,
+        removedLeadingUnits: removeUnits,
+        removedLeadingBeats: removeUnits / durationUnits(4, 0)
+      };
+    }
+
+    const shiftedTempoMap = buildTempoMapWithLeadingSilence(baseTempoMap, addUnits);
+    const hasAnyContent = baseParts.some(p => p.events.length || p.tempos.length || String(p.raw || "").trim());
+    const outputParts = [];
+
+    for (let i = 0; i < partCount; i++) {
+      const hasPartContent = baseParts[i].events.length || String(baseParts[i].raw || "").trim();
+      let events = hasPartContent
+        ? prependRestToEvents(baseParts[i].events, addUnits)
+        : [];
+      if (i === 0) events = injectTempoEvents(events, shiftedTempoMap);
+      outputParts.push(renderPart(events, {
+        isMelody: i === 0,
+        startTempo: DEFAULT_TEMPO,
+        forceHeader: i === 0 && (hasAnyContent || shiftedTempoMap.length > 0),
+        partIndex: i
+      }));
+    }
+
+    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+    const before = countPartChars(sourceParts);
+    const after = countPartChars(outputParts);
+    return {
+      mml,
+      parts: outputParts,
+      before,
+      after,
+      saved: before - after,
+      tempoMap: shiftedTempoMap,
+      addedUnits: addUnits,
+      addedBeats: addUnits / durationUnits(4, 0),
+      removedLeadingUnits: removeUnits,
+      removedLeadingBeats: removeUnits / durationUnits(4, 0)
+    };
+  }
+
+
+  function findFirstNoteStart(parsedParts) {
+    let first = Infinity;
+    for (const part of parsedParts || []) {
+      for (const ev of part.events || []) {
+        if (ev.type === "note") first = Math.min(first, ev.start);
+      }
+    }
+    return Number.isFinite(first) ? Math.max(0, Math.round(first)) : 0;
+  }
+
+  function shiftEventsAfterTrim(events, trimUnits) {
+    const out = [];
+    for (const ev of events || []) {
+      const start = Number(ev.start) || 0;
+      const end = start + (Number(ev.duration) || 0);
+      if (end <= trimUnits + EPS) continue;
+      if (ev.type === "rest") {
+        const newStart = Math.max(0, Math.round(start - trimUnits));
+        const newEnd = Math.max(0, Math.round(end - trimUnits));
+        if (newEnd > newStart + EPS) out.push({ type: "rest", start: newStart, duration: newEnd - newStart });
+        continue;
+      }
+      if (ev.type === "note") {
+        const newStart = Math.max(0, Math.round(start - trimUnits));
+        const newEnd = Math.max(newStart, Math.round(end - trimUnits));
+        if (newEnd > newStart + EPS) out.push({ ...ev, start: newStart, duration: newEnd - newStart });
+      }
+    }
+    return mergeAdjacentRests(normalizeEventStarts(out));
+  }
+
+  function shiftTempoMapAfterTrim(tempoMap, trimUnits) {
+    const current = tempoAt(tempoMap, trimUnits);
+    const shifted = [{ pos: 0, bpm: current, order: -1 }];
+    let order = 0;
+    for (const t of tempoMap || []) {
+      if (t.pos > trimUnits + EPS) shifted.push({ pos: Math.round(t.pos - trimUnits), bpm: t.bpm, order: order++ });
+    }
+    return normalizeTempoEvents(shifted);
+  }
+
+  function prependRestToEvents(events, addUnits) {
+    const out = [{ type: "rest", start: 0, duration: addUnits }];
+    for (const ev of events || []) {
+      if (ev.type !== "note" && ev.type !== "rest") continue;
+      out.push({ ...ev, start: Math.round((Number(ev.start) || 0) + addUnits) });
+    }
+    return mergeAdjacentRests(normalizeEventStarts(out));
+  }
+
+  function buildTempoMapWithLeadingSilence(tempoMap, addUnits) {
+    const originalStartTempo = tempoAt(tempoMap, 0);
+    const out = [{ pos: 0, bpm: DEFAULT_TEMPO, order: -2 }];
+    let order = 0;
+    if (originalStartTempo !== DEFAULT_TEMPO) out.push({ pos: addUnits, bpm: originalStartTempo, order: order++ });
+    for (const t of tempoMap || []) {
+      if (t.pos <= EPS) continue;
+      out.push({ pos: Math.round(t.pos + addUnits), bpm: t.bpm, order: order++ });
+    }
+    return normalizeTempoEvents(out);
+  }
+
+
+  function splitMmlPages(text, options = {}) {
+    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const maxChars = Math.max(200, Math.round(Number(options.maxChars || options.maxPartChars || 2400)));
+    // 이전의 "200자 안쪽" 탐색 범위를, 요청대로 목표 글자 수의 절반으로 둔다.
+    const searchSlackChars = Math.max(0, Math.round(Number(options.searchSlackChars ?? (maxChars / 2))));
+    const minCommonSilenceUnits = Math.max(0, Math.round(Number(options.minCommonSilenceBeats ?? 2) * durationUnits(4, 0)));
+    const maxPages = Math.max(1, Math.min(200, Math.round(Number(options.maxPages || 120))));
+
+    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
+    while (sourceParts.length < partCount) sourceParts.push("");
+
+    const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
+    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
+    const totalUnits = Math.max(
+      0,
+      ...parsedParts.map(p => partMusicalEnd(p.events)),
+      ...tempoMap.map(t => t.pos || 0)
+    );
+
+    if (totalUnits <= EPS) {
+      const optimized = optimizeMml(text, { partCount });
+      return {
+        pages: [{
+          index: 1,
+          mml: optimized.mml,
+          parts: optimized.parts,
+          lengths: optimized.parts.map(p => p.length),
+          maxPartLength: Math.max(0, ...optimized.parts.map(p => p.length)),
+          start: 0,
+          end: 0,
+          nextStart: 0,
+          skippedUnits: 0,
+          reason: "empty",
+          warning: ""
+        }],
+        maxChars,
+        searchSlackChars,
+        minCommonSilenceUnits,
+        totalUnits,
+        warnings: []
+      };
+    }
+
+    const pages = [];
+    const warnings = [];
+    let pageStart = 0;
+    let guard = 0;
+
+    while (pageStart < totalUnits - EPS && guard++ < maxPages) {
+      const cut = choosePageCut(parsedParts, tempoMap, pageStart, totalUnits, {
+        partCount,
+        maxChars,
+        searchSlackChars,
+        minCommonSilenceUnits
+      });
+
+      let pageEnd = Math.max(pageStart, Math.min(totalUnits, cut.end));
+      let nextStart = Math.max(pageEnd, Math.min(totalUnits, cut.nextStart));
+      if (pageEnd <= pageStart + EPS && totalUnits > pageStart + EPS) {
+        pageEnd = Math.min(totalUnits, pageStart + durationUnits(4, 0));
+        nextStart = pageEnd;
+        cut.reason = "forced";
+        cut.warning = "분할 가능한 위치가 너무 가까워 강제로 1박자 뒤에서 잘랐습니다.";
+      }
+
+      const rendered = renderPageSegment(parsedParts, tempoMap, pageStart, pageEnd, partCount);
+      const page = {
+        index: pages.length + 1,
+        mml: rendered.mml,
+        parts: rendered.parts,
+        lengths: rendered.lengths,
+        maxPartLength: Math.max(0, ...rendered.lengths),
+        start: pageStart,
+        end: pageEnd,
+        nextStart,
+        skippedUnits: Math.max(0, nextStart - pageEnd),
+        reason: cut.reason,
+        warning: cut.warning || ""
+      };
+      pages.push(page);
+      if (page.maxPartLength > maxChars) {
+        warnings.push(`${page.index}번 악보의 가장 긴 채널이 ${page.maxPartLength}자로 제한 ${maxChars}자를 넘었습니다.`);
+      }
+      if (page.warning) warnings.push(`${page.index}번 악보: ${page.warning}`);
+
+      if (nextStart <= pageStart + EPS) break;
+      pageStart = nextStart;
+    }
+
+    if (guard >= maxPages && pageStart < totalUnits - EPS) {
+      warnings.push("페이지 수가 너무 많아 분할을 중단했습니다.");
+    }
+
+    return {
+      pages,
+      maxChars,
+      searchSlackChars,
+      minCommonSilenceUnits,
+      totalUnits,
+      warnings
+    };
+  }
+
+  function choosePageCut(parsedParts, tempoMap, pageStart, totalUnits, options) {
+    const { partCount, maxChars, searchSlackChars, minCommonSilenceUnits } = options;
+    const measureCache = new Map();
+    const measure = (end) => {
+      const key = String(Math.round(end));
+      if (!measureCache.has(key)) {
+        const safeEnd = Math.max(pageStart, Math.min(totalUnits, Math.round(end)));
+        try {
+          const rendered = renderPageSegment(parsedParts, tempoMap, pageStart, safeEnd, partCount);
+          measureCache.set(key, {
+            end: safeEnd,
+            maxLen: Math.max(0, ...rendered.lengths),
+            lengths: rendered.lengths
+          });
+        } catch (_) {
+          measureCache.set(key, {
+            end: safeEnd,
+            maxLen: Infinity,
+            lengths: []
+          });
+        }
+      }
+      return measureCache.get(key);
+    };
+
+    const wholeEstimate = estimatePageMaxLength(parsedParts, pageStart, totalUnits);
+    if (wholeEstimate <= maxChars) {
+      const whole = measure(totalUnits);
+      if (whole.maxLen <= maxChars) {
+        return { end: totalUnits, nextStart: totalUnits, reason: "last", warning: "" };
+      }
+    }
+
+    const candidateEnds = collectBoundaryPoints(parsedParts, pageStart, totalUnits)
+      .filter(pos => pos > pageStart + EPS && pos <= totalUnits + EPS)
+      .sort((a, b) => a - b);
+    if (!candidateEnds.length || candidateEnds[candidateEnds.length - 1] !== Math.round(totalUnits)) {
+      candidateEnds.push(Math.round(totalUnits));
+    }
+
+    let bestIdx = findEstimatedBestIndex(parsedParts, pageStart, candidateEnds, maxChars);
+    if (bestIdx < 0) bestIdx = 0;
+
+    // 실제 렌더링은 비싸므로, 추정값으로 잡은 근처만 확인한다.
+    // 초과하면 이분 탐색으로 앞으로 당기고, 여유가 크면 몇 번만 뒤로 늘린다.
+    if (measure(candidateEnds[bestIdx]).maxLen > maxChars) {
+      let loFit = -1;
+      let hiFail = bestIdx;
+      while (hiFail - loFit > 1) {
+        const mid = Math.floor((loFit + hiFail) / 2);
+        if (measure(candidateEnds[mid]).maxLen <= maxChars) loFit = mid;
+        else hiFail = mid;
+      }
+      bestIdx = Math.max(0, loFit);
+    }
+
+    const bestEnd = Math.max(pageStart + 1, Math.min(candidateEnds[bestIdx], totalUnits));
+    const lowerTarget = Math.max(0, maxChars - searchSlackChars);
+    const bestMeasure = measure(bestEnd);
+    const targetReachable = bestMeasure.maxLen >= lowerTarget;
+
+    // 분할 지점 탐색은 반드시 "제한 글자 수에 가까운 영역" 안에서만 한다.
+    // 예: 제한 2400자라면 searchSlackChars 기본값은 1200자이고,
+    // 실제 렌더링 기준으로 1200자 이상이 되는 첫 후보부터 2400자 이하의 마지막 후보까지만 탐색한다.
+    // 예전 로직은 이 범위 안에서 2박 무음을 못 찾으면 초반 무음으로 되돌아가는 fallback이 있어서
+    // 100자대 악보가 먼저 잘리는 문제가 있었다.
+    const minSearchEnd = targetReachable
+      ? findEarliestCandidateAtLeastLength(measure, candidateEnds, bestIdx, lowerTarget)
+      : null;
+    const searchStart = targetReachable && minSearchEnd ? minSearchEnd : pageStart + 1;
+    const searchEnd = bestEnd;
+
+    const commonSilences = getCommonSilenceIntervals(parsedParts, pageStart, bestEnd)
+      .filter(iv => iv.end > pageStart + EPS && iv.start > pageStart + EPS && iv.start <= searchEnd + EPS)
+      .map(iv => ({
+        start: Math.max(pageStart + 1, Math.round(iv.start)),
+        end: Math.max(pageStart + 1, Math.round(iv.end)),
+        duration: Math.max(0, Math.round(iv.end - iv.start))
+      }))
+      .filter(iv => iv.start >= searchStart - EPS && iv.start <= searchEnd + EPS);
+
+    const goodSilence = pickSilenceCandidate(commonSilences, measure, maxChars, lowerTarget, minCommonSilenceUnits, targetReachable, searchStart, searchEnd);
+    if (goodSilence) {
+      return { end: goodSilence.start, nextStart: Math.max(goodSilence.end, goodSilence.start), reason: "common-silence", warning: "" };
+    }
+
+    const anySilence = pickSilenceCandidate(commonSilences, measure, maxChars, lowerTarget, 1, targetReachable, searchStart, searchEnd);
+    if (anySilence) {
+      return {
+        end: anySilence.start,
+        nextStart: Math.max(anySilence.end, anySilence.start),
+        reason: "longest-silence",
+        warning: anySilence.duration < minCommonSilenceUnits ? "2박 이상 공통 무음이 없어 가장 긴 공통 무음에서 나눴습니다." : ""
+      };
+    }
+
+    const bestSafeChannels = countSafeChannelsAt(parsedParts, bestEnd);
+    if (bestSafeChannels >= parsedParts.length && measure(bestEnd).maxLen <= maxChars) {
+      return { end: bestEnd, nextStart: bestEnd, reason: "clean-boundary", warning: "" };
+    }
+
+    const clean = pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, true, searchStart, searchEnd);
+    if (clean) return { end: clean.pos, nextStart: clean.pos, reason: "clean-boundary", warning: "" };
+
+    if (measure(bestEnd).maxLen <= maxChars) {
+      return {
+        end: bestEnd,
+        nextStart: bestEnd,
+        reason: "partial-boundary",
+        warning: `모든 채널이 안전하게 나뉘는 지점을 찾지 못해 ${bestSafeChannels}/${partCount}개 채널이 안전한 지점에서 잘랐습니다.`
+      };
+    }
+
+    const fallback = pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, false, searchStart, searchEnd);
+    if (fallback) {
+      return {
+        end: fallback.pos,
+        nextStart: fallback.pos,
+        reason: "partial-boundary",
+        warning: `모든 채널이 안전하게 나뉘는 지점을 찾지 못해 ${fallback.safeChannels}/${partCount}개 채널이 안전한 지점에서 잘랐습니다.`
+      };
+    }
+
+    return {
+      end: bestEnd,
+      nextStart: bestEnd,
+      reason: "char-limit",
+      warning: "적절한 분할 지점을 찾지 못해 글자 수 기준으로 잘랐습니다. 일부 음이 잘릴 수 있습니다."
+    };
+  }
+
+
+  function findEstimatedBestIndex(parsedParts, pageStart, candidates, maxChars) {
+    let lo = 0;
+    let hi = candidates.length - 1;
+    let best = -1;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const est = estimatePageMaxLength(parsedParts, pageStart, candidates[mid]);
+      if (est <= maxChars) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return best;
+  }
+
+  function findEarliestEstimatedCandidateAtLeastLength(parsedParts, pageStart, candidates, bestIdx, targetLen) {
+    if (!targetLen || bestIdx < 0 || estimatePageMaxLength(parsedParts, pageStart, candidates[bestIdx]) < targetLen) return null;
+    let lo = 0;
+    let hi = bestIdx;
+    let ans = candidates[bestIdx];
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const est = estimatePageMaxLength(parsedParts, pageStart, candidates[mid]);
+      if (est >= targetLen) {
+        ans = candidates[mid];
+        hi = mid - 1;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    return ans;
+  }
+
+  function estimatePageMaxLength(parsedParts, start, end) {
+    let max = 0;
+    for (const part of parsedParts || []) {
+      let count = 0;
+      let gaps = 0;
+      let lastEnd = 0;
+      for (const ev of part.events || []) {
+        if (ev.type !== "note") continue;
+        const evEnd = ev.start + ev.duration;
+        if (ev.start < start - EPS || ev.start >= end - EPS || evEnd <= start + EPS) continue;
+        const localStart = Math.max(0, ev.start - start);
+        if (localStart > lastEnd + EPS) gaps++;
+        count++;
+        lastEnd = Math.max(lastEnd, Math.min(evEnd, end) - start);
+      }
+      if (count || gaps) {
+        // 실제 최적화는 반복 길이/옥타브/볼륨을 꽤 줄이므로 보수적인 근사만 사용한다.
+        max = Math.max(max, 10 + count * 1.35 + gaps * 2.4);
+      }
+    }
+    return max;
+  }
+
+  function findEarliestCandidateAtLeastLength(measure, candidates, bestIdx, targetLen) {
+    if (!targetLen || bestIdx < 0 || measure(candidates[bestIdx]).maxLen < targetLen) return null;
+    let lo = 0;
+    let hi = bestIdx;
+    let ans = candidates[bestIdx];
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const m = measure(candidates[mid]);
+      if (m.maxLen >= targetLen) {
+        ans = candidates[mid];
+        hi = mid - 1;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    return ans;
+  }
+
+  function pickSilenceCandidate(intervals, measure, maxChars, lowerTarget, minDuration, requireLower, searchStart, searchEnd) {
+    let best = null;
+    for (const iv of intervals) {
+      if (iv.duration < minDuration) continue;
+      if (iv.start < searchStart - EPS || iv.start > searchEnd + EPS) continue;
+      const m = measure(iv.start);
+      if (m.maxLen > maxChars) continue;
+      if (requireLower && m.maxLen < lowerTarget) continue;
+      const score = {
+        lenScore: m.maxLen,
+        duration: iv.duration,
+        start: iv.start
+      };
+      if (!best
+        || score.lenScore > best.score.lenScore
+        || (score.lenScore === best.score.lenScore && score.duration > best.score.duration)
+        || (score.lenScore === best.score.lenScore && score.duration === best.score.duration && score.start > best.score.start)) {
+        best = { ...iv, score };
+      }
+    }
+    return best;
+  }
+
+  function pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, requireAllSafe, searchStart, searchEnd) {
+    const points = collectBoundaryPoints(parsedParts, pageStart, bestEnd);
+    let best = null;
+    const targetReachable = measure(bestEnd).maxLen >= lowerTarget;
+    for (const pos of points) {
+      if (pos <= pageStart + EPS || pos > bestEnd + EPS) continue;
+      const m = measure(pos);
+      if (m.maxLen > maxChars) continue;
+      if (targetReachable && (pos < searchStart - EPS || m.maxLen < lowerTarget)) continue;
+      const safeChannels = countSafeChannelsAt(parsedParts, pos);
+      if (requireAllSafe && safeChannels < parsedParts.length) continue;
+      const score = { safeChannels, lenScore: m.maxLen, pos };
+      if (!best
+        || score.safeChannels > best.score.safeChannels
+        || (score.safeChannels === best.score.safeChannels && score.lenScore > best.score.lenScore)
+        || (score.safeChannels === best.score.safeChannels && score.lenScore === best.score.lenScore && score.pos > best.score.pos)) {
+        best = { pos, safeChannels, score };
+      }
+    }
+    return best;
+  }
+
+  function renderPageSegment(parsedParts, tempoMap, start, end, partCount) {
+    start = Math.max(0, Math.round(start));
+    end = Math.max(start, Math.round(end));
+    const currentTempo = tempoAt(tempoMap, start);
+    const relTempoMap = [{ pos: 0, bpm: currentTempo }];
+    for (const t of tempoMap || []) {
+      if (t.pos > start + EPS && t.pos < end - EPS) relTempoMap.push({ pos: Math.round(t.pos - start), bpm: t.bpm });
+    }
+    const hasAnyNotes = parsedParts.some(p => (p.events || []).some(ev => ev.type === "note" && ev.start >= start - EPS && ev.start < end - EPS));
+    const hasTempoInside = relTempoMap.length > 1;
+    const outputParts = [];
+    for (let i = 0; i < partCount; i++) {
+      let events = buildPartSegmentEvents(parsedParts[i]?.events || [], start, end);
+      if (i === 0) events = injectTempoEvents(events, relTempoMap);
+      outputParts.push(renderPartFast(events, {
+        isMelody: i === 0,
+        startTempo: currentTempo,
+        forceHeader: i === 0 && (hasAnyNotes || hasTempoInside),
+        partIndex: i
+      }));
+    }
+    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+    return { mml, parts: outputParts, lengths: outputParts.map(part => String(part || "").length) };
+  }
+
+  function buildPartSegmentEvents(events, start, end) {
+    const notes = (events || [])
+      .filter(ev => ev.type === "note")
+      .map(ev => ({ ...ev, end: ev.start + ev.duration }))
+      .filter(ev => ev.start >= start - EPS && ev.start < end - EPS && ev.end > start + EPS)
+      .sort((a, b) => a.start - b.start || a.midi - b.midi);
+    const out = [];
+    let cursor = 0;
+    for (const note of notes) {
+      const localStart = Math.max(0, Math.round(note.start - start));
+      if (localStart > cursor) {
+        out.push({ type: "rest", start: cursor, duration: localStart - cursor });
+        cursor = localStart;
+      }
+      const clippedEnd = Math.min(note.end, end);
+      const dur = Math.max(0, Math.round(clippedEnd - note.start));
+      if (dur <= 0) continue;
+      out.push({ type: "note", start: cursor, duration: dur, midi: note.midi, volume: note.volume });
+      cursor += dur;
+    }
+    return mergeAdjacentRests(normalizeEventStarts(out));
+  }
+
+  function tempoAt(tempoMap, pos) {
+    let bpm = DEFAULT_TEMPO;
+    for (const t of tempoMap || []) {
+      if (t.pos <= pos + EPS) bpm = t.bpm;
+      else break;
+    }
+    return bpm;
+  }
+
+  function partMusicalEnd(events) {
+    let end = 0;
+    for (const ev of events || []) {
+      if (ev.type === "note" || ev.type === "rest") end = Math.max(end, ev.start + ev.duration);
+    }
+    return end;
+  }
+
+  function collectAllNotes(parsedParts) {
+    const notes = [];
+    for (let p = 0; p < parsedParts.length; p++) {
+      for (const ev of parsedParts[p].events || []) {
+        if (ev.type === "note") notes.push({ part: p, start: ev.start, end: ev.start + ev.duration, midi: ev.midi });
+      }
+    }
+    return notes;
+  }
+
+  function getCommonSilenceIntervals(parsedParts, from, to) {
+    const intervals = collectAllNotes(parsedParts)
+      .map(n => ({ start: Math.max(from, n.start), end: Math.min(to, n.end) }))
+      .filter(n => n.end > from + EPS && n.start < to - EPS && n.end > n.start + EPS)
+      .sort((a, b) => a.start - b.start || a.end - b.end);
+    const gaps = [];
+    let cursor = from;
+    for (const iv of intervals) {
+      if (iv.start > cursor + EPS) gaps.push({ start: cursor, end: iv.start });
+      cursor = Math.max(cursor, iv.end);
+    }
+    if (cursor < to - EPS) gaps.push({ start: cursor, end: to });
+    return gaps;
+  }
+
+  function collectBoundaryPoints(parsedParts, from, to) {
+    const set = new Set([Math.round(to)]);
+    for (const n of collectAllNotes(parsedParts)) {
+      if (n.start > from + EPS && n.start < to + EPS) set.add(Math.round(n.start));
+      if (n.end > from + EPS && n.end < to + EPS) set.add(Math.round(n.end));
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }
+
+  function countSafeChannelsAt(parsedParts, pos) {
+    let safe = 0;
+    for (const p of parsedParts) {
+      const active = (p.events || []).some(ev => ev.type === "note" && ev.start < pos - EPS && ev.start + ev.duration > pos + EPS);
+      if (!active) safe++;
+    }
+    return safe;
+  }
+
   function splitMmlPartsStrict(text) {
     let s = String(text || "").replace(/^\uFEFF/, "").trim();
     const m = s.match(/^\s*MML\s*@([\s\S]*?)\s*;?\s*$/i);
@@ -499,6 +1169,72 @@
     return events.reduce((pos, ev) => pos + (ev.duration || 0), 0);
   }
 
+
+  function renderPartFast(events, options) {
+    const musicalEvents = events.filter(ev => ev.type === "note" || ev.type === "rest");
+    const firstNote = musicalEvents.find(ev => ev.type === "note");
+    const initVolume = firstNote ? clamp(firstNote.volume, 0, 15) : DEFAULT_VOLUME;
+    const initOctave = firstNote ? midiToOctave(firstNote.midi) : DEFAULT_OCTAVE;
+    const hasAnything = options.forceHeader || musicalEvents.length || events.some(ev => ev.type === "tempo" || ev.preTempos?.length || ev.postTempos?.length);
+    if (!hasAnything) return "";
+
+    const initialL = chooseFastInitialL(musicalEvents);
+    let currentVolume = initVolume;
+    let currentOctave = initOctave;
+    let out = `${options.isMelody ? `T${options.startTempo || DEFAULT_TEMPO}` : ""}V${initVolume}O${initOctave}L${initialL.label}`;
+
+    for (const ev of events) {
+      if (ev.type === "tempo") {
+        out += renderTempoList(ev.preTempos);
+        continue;
+      }
+      const preTempo = renderTempoList(ev.preTempos);
+      if (ev.tieFromPrev) out += "&";
+      out += preTempo;
+      if (ev.type === "rest") {
+        out += renderRestDuration(ev.duration, initialL.units);
+        continue;
+      }
+      if (ev.type === "note") {
+        const vol = clamp(ev.volume, 0, 15);
+        let command = "";
+        if (vol !== currentVolume) {
+          command += `V${vol}`;
+          currentVolume = vol;
+        }
+        const pitch = renderPitch(ev.midi, currentOctave);
+        command += pitch.prefix;
+        currentOctave = pitch.octave;
+        out += renderNoteDuration(command + pitch.symbol, pitch.symbol, ev.duration, initialL.units);
+      }
+    }
+    return out;
+  }
+
+  function chooseFastInitialL(events) {
+    const musical = (events || []).filter(ev => ev.type === "note" || ev.type === "rest");
+    if (!musical.length) return L_STATES.find(x => x.label === String(DEFAULT_LENGTH)) || L_STATES[0];
+    let best = null;
+    for (const l of L_STATES) {
+      let score = 0;
+      for (const ev of musical) {
+        try {
+          score += ev.type === "rest"
+            ? renderRestDuration(ev.duration, l.units).length
+            : renderNoteDuration("c", "c", ev.duration, l.units).length;
+        } catch (_) {
+          score += 9999;
+        }
+      }
+      // 짧은 악보에서는 기본 선언 길이 차이가 그대로 체감되므로 라벨 길이도 더한다.
+      score += String(l.label).length;
+      if (!best || score < best.score || (score === best.score && Number(l.label) < Number(best.label))) {
+        best = { ...l, score };
+      }
+    }
+    return best || L_STATES[0];
+  }
+
   function renderPart(events, options) {
     const musicalEvents = events.filter(ev => ev.type === "note" || ev.type === "rest");
     const firstNote = musicalEvents.find(ev => ev.type === "note");
@@ -744,5 +1480,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = { optimizeMml, optimizePart, trimShortRestsMml };
+  window.MabiOptimizer = { optimizeMml, optimizePart, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, splitMmlPages };
 })();
