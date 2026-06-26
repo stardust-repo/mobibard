@@ -571,3 +571,122 @@ textarea { resize: vertical; color: var(--text); }
     grid-row: 3;
   }
 }
+
+/* v2.3 channel sound settings */
+.tab-sound-btn {
+  min-height: 32px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--line) 48%);
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+.tab-sound-btn:hover { background: var(--control-hover); }
+.part-sound-dialog { max-width: min(560px, calc(100vw - 28px)); width: min(560px, calc(100vw - 28px)); }
+.part-sound-card { gap: 14px; }
+.part-sound-rows { display: grid; gap: 8px; }
+.part-sound-row {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--input-bg);
+  padding: 9px 10px;
+}
+.part-sound-label {
+  font-size: 13px;
+  font-weight: 950;
+  color: var(--text);
+  white-space: nowrap;
+}
+.part-sound-row.part-0 .part-sound-label { color: var(--part0); }
+.part-sound-row.part-1 .part-sound-label { color: var(--part1); }
+.part-sound-row.part-2 .part-sound-label { color: var(--part2); }
+.part-sound-row.part-3 .part-sound-label { color: var(--part3); }
+.part-sound-row.part-4 .part-sound-label { color: var(--part4); }
+.part-sound-row.part-5 .part-sound-label { color: var(--part5); }
+.part-sound-row select {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 6px 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+.part-sound-empty {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--input-bg);
+  color: var(--muted);
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+@media (max-width: 560px) {
+  .part-sound-row { grid-template-columns: 1fr; align-items: stretch; }
+  .tab-sound-btn { padding-inline: 9px; }
+}
+
+/* v2.3.3 channel sound selector */
+.tab-sound-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 6px 10px;
+  min-height: 31px;
+  border-radius: 9px;
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-weight: 950;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--line) 60%);
+}
+.tab-sound-btn:hover { background: var(--control-hover); }
+.part-sound-dialog { max-width: min(680px, calc(100vw - 28px)); width: min(680px, calc(100vw - 28px)); }
+.part-sound-card { gap: 14px; }
+.part-sound-card p { color: var(--muted); font-size: 13px; }
+.part-sound-rows { display: grid; gap: 8px; max-height: min(58vh, 520px); overflow: auto; padding-right: 4px; }
+.part-sound-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: var(--input-bg);
+}
+.part-sound-label { font-weight: 950; white-space: nowrap; }
+.part-sound-row.part-0 .part-sound-label { color: var(--part0); }
+.part-sound-row.part-1 .part-sound-label { color: var(--part1); }
+.part-sound-row.part-2 .part-sound-label { color: var(--part2); }
+.part-sound-row.part-3 .part-sound-label { color: var(--part3); }
+.part-sound-row.part-4 .part-sound-label { color: var(--part4); }
+.part-sound-row.part-5 .part-sound-label { color: var(--part5); }
+.part-sound-row select { width: 100%; max-width: none; }
+.part-sound-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.part-sound-preview-btn {
+  min-width: 54px;
+  min-height: 32px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.part-sound-empty { border: 1px dashed var(--line); border-radius: 12px; padding: 12px; color: var(--muted); background: var(--input-bg); }
+@media (max-width: 560px) {
+  .tab-sound-btn { width: auto; }
+  .part-sound-row { grid-template-columns: 1fr; align-items: stretch; }
+  .part-sound-control { grid-template-columns: minmax(0, 1fr) auto; }
+}

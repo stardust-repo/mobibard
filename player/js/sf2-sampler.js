@@ -94,7 +94,7 @@ class SoundFont {
 
       prepared.push({
         ...n,
-        id: i,
+        id: n.id ?? i,
         noteEnd: n.start + n.durationSec,
         region,
         sample,

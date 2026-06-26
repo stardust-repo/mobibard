@@ -93,6 +93,7 @@
 
     <div class="tab-line">
       <div class="tabs" role="tablist" aria-label="MML 파트 선택">
+        <button id="partSoundBtn" class="tab-sound-btn" type="button" title="채널별 재생 음색 설정">음색</button>
         <button class="tab-btn tab-all active" type="button" data-tab="main">전체 MML</button>
         <button class="tab-btn part-tab part-0" type="button" data-tab="part0">멜로디</button>
         <button class="tab-btn part-tab part-1" type="button" data-tab="part1">화음1</button>
@@ -119,6 +120,19 @@
   </section>
 </main>
 
+
+<dialog id="partSoundDialog" class="mml-dialog part-sound-dialog">
+  <form id="partSoundForm" class="dialog-card part-sound-card" method="dialog">
+    <h3>채널 음색 설정</h3>
+    <p>재생기에서 미리 들을 때 사용할 소리를 고르는 설정입니다.<br>악보(MML)의 악기 정보가 바뀌거나 저장되는 것은 아닙니다.</p>
+    <div id="partSoundRows" class="part-sound-rows" aria-label="채널별 음색 목록"></div>
+    <div class="dialog-actions">
+      <button id="partSoundReset" type="button">기본값</button>
+      <button id="partSoundCancel" type="button">취소</button>
+      <button id="partSoundApply" class="primary" type="button">적용</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="restTrimDialog" class="mml-dialog">
   <form id="restTrimForm" class="dialog-card" method="dialog">
@@ -213,6 +227,7 @@
     </div>
   </form>
 </dialog>
+
 
 <script src="assets/default-sf2-base64.js"></script>
 <script src="js/utils.js"></script>

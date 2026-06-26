@@ -5,6 +5,9 @@
   const DEFAULT_SF2_EMBEDDED_B64 = () => window.MABINOGI_DEFAULT_SF2_B64 || "";
   const PART_LABELS = ["멜로디", "화음1", "화음2", "화음3", "화음4", "화음5"];
   const PREF_PREFIX = "mobibard.player.";
+  const DEFAULT_PART_PRESET_KEY = "0:0";
+  const PART_PREVIEW_MELODY_INTERVALS = [0, 2, 4, 7, 9, 7, 4, 0];
+  const PART_PREVIEW_DRUM_NOTES = [36, 42, 38, 42, 36, 46, 38, 42];
 
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
@@ -63,6 +66,12 @@
   const discordBtn = $("discordBtn");
   const themeToggleBtn = $("themeToggleBtn");
   const charCount = $("charCount");
+  const partSoundBtn = $("partSoundBtn");
+  const partSoundDialog = $("partSoundDialog");
+  const partSoundRows = $("partSoundRows");
+  const partSoundReset = $("partSoundReset");
+  const partSoundCancel = $("partSoundCancel");
+  const partSoundApply = $("partSoundApply");
   const mainMml = $("mainMml");
   const mainMmlHighlight = $("mainMmlHighlight");
   const partTexts = PART_LABELS.map((_, i) => $(`part${i}`));
@@ -100,12 +109,15 @@
   let midiFullPreviewActive = false;
   let splitPreviewButton = null;
   let splitPreviewButtonText = "";
+  let partPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
+  let draftPartPresetKeys = null;
 
   init();
 
   function init() {
     loadThemePref();
     loadPlaybackPrefs();
+    loadPartSoundPrefs();
     midiLoadBtn.addEventListener("click", () => { midiFile.value = ""; midiFile.click(); });
     midiFile.addEventListener("change", () => void loadSourceFile());
     soundSource.addEventListener("change", () => handleSoundSourceChange());
@@ -134,6 +146,10 @@
     leadingSilenceBtn?.addEventListener("click", openLeadingSilenceDialog);
     leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
     leadingSilenceCancel?.addEventListener("click", () => leadingSilenceDialog?.close());
+    partSoundBtn?.addEventListener("click", () => void openPartSoundDialog());
+    partSoundReset?.addEventListener("click", () => resetPartSoundDraft());
+    partSoundCancel?.addEventListener("click", () => partSoundDialog?.close());
+    partSoundApply?.addEventListener("click", () => applyPartSoundDialog());
     leadingSilenceSeconds?.addEventListener("change", normalizeLeadingSilenceSecondsInput);
     leadingSilenceSeconds?.addEventListener("blur", normalizeLeadingSilenceSecondsInput);
     midiExportCount?.addEventListener("change", updateMidiRoleControls);
@@ -141,6 +157,7 @@
     midiConvertApply?.addEventListener("click", () => applyMidiConvertDialog());
     midiConvertCancel?.addEventListener("click", () => { stopMidiPreview(); pendingMidiImport = null; pendingMidiSettings = null; midiConvertDialog?.close(); });
     midiConvertDialog?.addEventListener("close", () => stopMidiPreview());
+    partSoundDialog?.addEventListener("close", () => stopMidiPreview());
     discordBtn?.addEventListener("click", openDiscord);
     themeToggleBtn?.addEventListener("click", toggleTheme);
     mainMml.addEventListener("input", () => {
@@ -178,6 +195,24 @@
 
     const savedLoop = readPref("loop");
     if (loopPlayback && savedLoop != null) loopPlayback.checked = savedLoop === "1";
+  }
+
+
+  function loadPartSoundPrefs() {
+    const saved = readPref("partPresetKeys");
+    if (!saved) return;
+    try {
+      const arr = JSON.parse(saved);
+      if (!Array.isArray(arr)) return;
+      const next = Array.from({ length: 6 }, (_, i) => sanitizePresetKey(arr[i] || DEFAULT_PART_PRESET_KEY));
+      partPresetKeys = next;
+    } catch (_) {
+      partPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
+    }
+  }
+
+  function savePartSoundPrefs() {
+    writePref("partPresetKeys", JSON.stringify(partPresetKeys));
   }
 
   function loadThemePref() {
@@ -415,7 +450,7 @@
     const setting = pendingMidiSettings.channels[index];
     const allowed = getAllowedMidiGroupsForSetting(setting);
     const selectedCount = allowed.filter(g => setting.selectedInstrumentGroups.has(g.id)).length;
-    return `${formatCount(selectedCount)}개 선택`;
+    return `악기 ${formatCount(selectedCount)}개 선택`;
   }
 
   function getMidiGroupSelectedChannels(groupId) {
@@ -785,6 +820,266 @@
     return base64ToUint8Array(b64);
   }
 
+  async function openPartSoundDialog() {
+    try {
+      stopPlayback(false);
+      stopMidiPreview();
+      await loadDefaultSf2IfNeeded();
+      draftPartPresetKeys = partPresetKeys.slice(0, 6).map(k => sanitizePresetKey(k));
+      while (draftPartPresetKeys.length < 6) draftPartPresetKeys.push(DEFAULT_PART_PRESET_KEY);
+      renderPartSoundRows();
+      if (partSoundDialog?.showModal) partSoundDialog.showModal();
+      else showDialog("채널 음색 설정", "이 브라우저에서는 설정 창을 열 수 없습니다.");
+    } catch (err) {
+      showDialog("채널 음색 설정 실패", shortError(err));
+    }
+  }
+
+  function resetPartSoundDraft() {
+    draftPartPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
+    renderPartSoundRows();
+  }
+
+  async function previewPartPreset(key, partIndex = 0, triggerButton = null) {
+    const button = triggerButton instanceof HTMLElement ? triggerButton : null;
+    const originalText = button?.textContent || "듣기";
+    try {
+      stopPlayback(false);
+      stopMidiPreview();
+      if (button) {
+        button.disabled = true;
+        button.textContent = "재생중";
+      }
+      await loadDefaultSf2IfNeeded();
+      const preset = findPresetByKey(key);
+      if (!preset) throw new Error("선택한 SF2 프리셋을 찾지 못했습니다.");
+      const ctx = await ensureAudioContext();
+      const notes = buildPartPresetPreviewNotes(preset, partIndex);
+      const prepared = prepareNotes(ctx, soundFont, preset, notes);
+      if (!prepared.length) throw new Error("SF2에서 미리듣기 할 소리를 찾지 못했습니다.");
+      const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+      const result = schedulePreparedNotes(ctx, prepared, {
+        baseTime: ctx.currentTime + 0.08,
+        fromSec: 0,
+        windowStart: 0,
+        windowEnd: Math.max(0.5, duration + 0.1),
+        destination: masterGain || ctx.destination,
+        activeSources: midiPreviewSources,
+        scheduledIds: new Set(),
+        minLeadTime: 0.01
+      });
+      const stopMs = Math.max(650, Math.min(6000, (result.maxEnd - ctx.currentTime + 0.25) * 1000));
+      midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
+    } catch (err) {
+      showDialog("음색 미리듣기 실패", shortError(err));
+    } finally {
+      if (button) {
+        window.setTimeout(() => {
+          button.disabled = false;
+          button.textContent = originalText;
+        }, 350);
+      }
+    }
+  }
+
+  function buildPartPresetPreviewNotes(preset, partIndex = 0) {
+    const part = clampInt(Number(partIndex) || 0, 0, 5);
+    if (Number(preset?.bank) === 128) {
+      return PART_PREVIEW_DRUM_NOTES.map((midi, i) => ({
+        id: i,
+        part,
+        start: i * 0.18,
+        durationSec: midi === 46 ? 0.2 : 0.13,
+        midi,
+        volume: midi === 42 ? 10 : 13
+      }));
+    }
+
+    const range = getPresetPlayableRange(preset);
+    const base = choosePreviewMelodyBaseMidi(range, PART_PREVIEW_MELODY_INTERVALS);
+    let start = 0;
+    return PART_PREVIEW_MELODY_INTERVALS.map((interval, i) => {
+      const last = i === PART_PREVIEW_MELODY_INTERVALS.length - 1;
+      const durationSec = last ? 0.34 : 0.18;
+      const note = {
+        id: i,
+        part,
+        start,
+        durationSec,
+        midi: clampInt(base + interval, range.min, range.max),
+        volume: 13
+      };
+      start += last ? 0.34 : 0.2;
+      return note;
+    });
+  }
+
+  function getPresetPlayableRange(preset) {
+    const regions = Array.isArray(preset?.regions) ? preset.regions : [];
+    let min = 127;
+    let max = 0;
+    let found = false;
+    for (const region of regions) {
+      const keyRange = Array.isArray(region?.keyRange) ? region.keyRange : [0, 127];
+      const lo = clampInt(Number(keyRange[0]), 0, 127);
+      const hi = clampInt(Number(keyRange[1]), 0, 127);
+      if (hi < lo) continue;
+      min = Math.min(min, lo);
+      max = Math.max(max, hi);
+      found = true;
+    }
+    return found ? { min, max } : { min: 0, max: 127 };
+  }
+
+  function choosePreviewMelodyBaseMidi(range, intervals) {
+    const min = clampInt(Number(range?.min), 0, 127);
+    const max = clampInt(Number(range?.max), min, 127);
+    const minInterval = Math.min(...intervals);
+    const maxInterval = Math.max(...intervals);
+    for (const base of [60, 48, 72, 36, 84, 24, 96]) {
+      if (base + minInterval >= min && base + maxInterval <= max) return base;
+    }
+    const centered = Math.round((min + max - minInterval - maxInterval) / 2);
+    return clampInt(centered, Math.max(0, min - minInterval), Math.min(127, max - maxInterval));
+  }
+
+  function applyPartSoundDialog() {
+    if (!Array.isArray(draftPartPresetKeys)) draftPartPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
+    partPresetKeys = Array.from({ length: 6 }, (_, i) => sanitizePresetKey(draftPartPresetKeys[i] || DEFAULT_PART_PRESET_KEY));
+    savePartSoundPrefs();
+    rebuildSchedulePreviewSilently();
+    partSoundDialog?.close();
+  }
+
+  function renderPartSoundRows() {
+    if (!partSoundRows) return;
+    const presets = getPresetOptions();
+    partSoundRows.innerHTML = "";
+    if (!presets.length) {
+      const empty = document.createElement("div");
+      empty.className = "part-sound-empty";
+      empty.textContent = "현재 SF2에서 선택 가능한 프리셋을 찾지 못했습니다.";
+      partSoundRows.appendChild(empty);
+      return;
+    }
+
+    for (let i = 0; i < 6; i++) {
+      const row = document.createElement("div");
+      row.className = `part-sound-row part-${i}`;
+      const label = document.createElement("label");
+      label.className = "part-sound-label";
+      label.htmlFor = `partSoundSelect${i}`;
+      label.textContent = PART_LABELS[i] || `${i + 1}번`;
+
+      const select = document.createElement("select");
+      select.id = `partSoundSelect${i}`;
+      select.dataset.partPresetIndex = String(i);
+      select.setAttribute("aria-label", `${PART_LABELS[i]} 음색`);
+      const current = sanitizePresetKey(draftPartPresetKeys?.[i] || DEFAULT_PART_PRESET_KEY);
+      const availableKeys = new Set(presets.map(p => p.key));
+      const selectedKey = availableKeys.has(current) ? current : (availableKeys.has(DEFAULT_PART_PRESET_KEY) ? DEFAULT_PART_PRESET_KEY : presets[0].key);
+      if (draftPartPresetKeys) draftPartPresetKeys[i] = selectedKey;
+      for (const preset of presets) {
+        const option = document.createElement("option");
+        option.value = preset.key;
+        option.textContent = preset.label;
+        option.selected = preset.key === selectedKey;
+        select.appendChild(option);
+      }
+      const previewButton = document.createElement("button");
+      previewButton.className = "part-sound-preview-btn";
+      previewButton.type = "button";
+      previewButton.textContent = "듣기";
+      previewButton.setAttribute("aria-label", `${PART_LABELS[i]} 선택 음색 듣기`);
+      previewButton.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        void previewPartPreset(select.value, i, previewButton);
+      });
+
+      select.addEventListener("change", () => {
+        if (!draftPartPresetKeys) draftPartPresetKeys = partPresetKeys.slice(0, 6);
+        draftPartPresetKeys[i] = sanitizePresetKey(select.value);
+        void previewPartPreset(select.value, i, previewButton);
+      });
+
+      const control = document.createElement("div");
+      control.className = "part-sound-control";
+      control.appendChild(select);
+      control.appendChild(previewButton);
+
+      row.appendChild(label);
+      row.appendChild(control);
+      partSoundRows.appendChild(row);
+    }
+  }
+
+  function sanitizePresetKey(value) {
+    const text = String(value == null ? DEFAULT_PART_PRESET_KEY : value).trim();
+    const m = text.match(/^(\d{1,5}):(\d{1,5})$/);
+    if (!m) return DEFAULT_PART_PRESET_KEY;
+    const bank = clampInt(Number(m[1]), 0, 16383);
+    const preset = clampInt(Number(m[2]), 0, 127);
+    return `${bank}:${preset}`;
+  }
+
+  function presetKey(preset) {
+    return `${clampInt(Number(preset?.bank ?? 0), 0, 16383)}:${clampInt(Number(preset?.preset ?? 0), 0, 127)}`;
+  }
+
+  function getPresetOptions() {
+    if (!soundFont || !Array.isArray(soundFont.presets)) return [];
+    const seen = new Set();
+    return soundFont.presets
+      .filter(p => p && Array.isArray(p.regions) && p.regions.length)
+      .slice()
+      .sort((a, b) => (a.bank - b.bank) || (a.preset - b.preset) || String(a.name || "").localeCompare(String(b.name || "")))
+      .filter(p => {
+        const key = presetKey(p);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(p => ({ key: presetKey(p), label: formatPresetLabel(p) }));
+  }
+
+  function formatPresetLabel(preset) {
+    const bank = clampInt(Number(preset?.bank ?? 0), 0, 16383);
+    const program = clampInt(Number(preset?.preset ?? 0), 0, 127);
+    const name = String(preset?.name || "이름 없는 프리셋").trim();
+    const num = String(program + 1).padStart(3, "0");
+    return bank === 0 ? `${num} ${name}` : `Bank ${bank} · ${num} ${name}`;
+  }
+
+  function findPresetByKey(key) {
+    if (!soundFont) return null;
+    const [bankText, presetText] = sanitizePresetKey(key).split(":");
+    const bank = Number(bankText);
+    const program = Number(presetText);
+    return soundFont.presets.find(p => p.bank === bank && p.preset === program)
+      || (bank === 0 ? soundFont.findPreset(program) : null)
+      || null;
+  }
+
+  function getPartPreset(partIndex) {
+    const key = partPresetKeys[clampInt(Number(partIndex), 0, 5)] || DEFAULT_PART_PRESET_KEY;
+    return findPresetByKey(key) || soundFont?.findPreset(0) || soundFont?.presets?.[0] || null;
+  }
+
+  function prepareNotesWithPartPresets(ctx, notes) {
+    const prepared = [];
+    const list = Array.isArray(notes) ? notes : [];
+    for (let part = 0; part < 6; part++) {
+      const partNotes = list.filter(n => Number(n.part) === part);
+      if (!partNotes.length) continue;
+      const preset = getPartPreset(part);
+      if (!preset) continue;
+      prepared.push(...prepareNotes(ctx, soundFont, preset, partNotes));
+    }
+    prepared.sort((a, b) => a.start - b.start || a.part - b.part || a.midi - b.midi);
+    for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
+    return prepared;
+  }
+
   async function playFromCurrent() {
     try {
       stopMidiPreview();
@@ -795,10 +1090,9 @@
       if (scheduleCache.notes.length === 0) throw new Error("재생할 음표가 없습니다. MML 내용을 확인해 주세요.");
       if (currentOffset >= scheduleCache.duration - 0.05) currentOffset = 0;
       const ctx = await ensureAudioContext();
-      const preset = soundFont.findPreset(0) || soundFont.presets[0];
-      if (!preset) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
-      preparedNotes = prepareNotes(ctx, soundFont, preset, scheduleCache.notes);
-      if (preparedNotes.length === 0) throw new Error("소리 나는 음표가 없습니다. V0만 있거나 SF2에서 맞는 음색을 찾지 못했습니다.");
+      if (!soundFont.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+      preparedNotes = prepareNotesWithPartPresets(ctx, scheduleCache.notes);
+      if (preparedNotes.length === 0) throw new Error("소리 나는 음표가 없습니다. V0만 있거나 선택한 음색에서 맞는 음역을 찾지 못했습니다.");
 
       const baseTime = ctx.currentTime + PLAY_START_DELAY;
       activeSources = [];
@@ -1686,9 +1980,8 @@
       const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
       const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
       if (!notes.length || duration <= 0) throw new Error("재생할 음표가 없습니다.");
-      const preset = soundFont.findPreset(0) || soundFont.presets[0];
-      if (!preset) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
-      const prepared = prepareNotes(ctx, soundFont, preset, notes);
+      if (!soundFont.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+      const prepared = prepareNotesWithPartPresets(ctx, notes);
       if (!prepared.length) throw new Error("소리 나는 음표가 없습니다.");
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
