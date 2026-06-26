@@ -2323,19 +2323,7 @@
 
 
   function openDiscord() {
-    const guildId = "1518552079499792434";
-    const appUrl = `discord://-/channels/${guildId}`;
-    const webUrl = `https://discord.com/channels/${guildId}`;
-    let openedApp = false;
-    const onVisibility = () => {
-      if (document.hidden) openedApp = true;
-    };
-    document.addEventListener("visibilitychange", onVisibility, { once: true });
-    try { window.location.href = appUrl; } catch (_) {}
-    setTimeout(() => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      if (!openedApp) window.open(webUrl, "_blank", "noopener,noreferrer");
-    }, 850);
+    window.open("https://discord.gg/msEKJU6Jj", "_blank", "noopener,noreferrer");
   }
 
   function showDialog(title, message) {
