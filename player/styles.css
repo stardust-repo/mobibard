@@ -221,3 +221,54 @@ textarea { resize: vertical; color: var(--text); }
 .dialog-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .dialog-field { font-weight: 900; color: var(--muted); font-size: 14px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+
+.midi-dialog { max-width: min(1040px, calc(100vw - 28px)); width: min(1040px, calc(100vw - 28px)); }
+.midi-dialog-card { gap: 14px; }
+.midi-dialog-layout { display: grid; grid-template-columns: minmax(300px, .92fr) minmax(0, 1.08fr); gap: 16px; align-items: start; }
+.midi-dialog-section { display: grid; gap: 10px; min-width: 0; }
+.dialog-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.dialog-section-head strong { font-size: 14px; color: var(--text); }
+.dialog-small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.role-head { margin-top: 6px; }
+.midi-beat-notice { border: 1px dashed var(--line); border-radius: 10px; padding: 7px 9px; color: var(--muted); background: var(--input-bg); font-size: 12.5px; font-weight: 800; }
+.midi-channel-list { display: grid; gap: 10px; max-height: min(52vh, 520px); overflow: auto; padding-right: 4px; }
+.midi-instrument-section { display: grid; gap: 7px; }
+.midi-instrument-section + .midi-instrument-section { padding-top: 4px; border-top: 1px solid var(--line); }
+.midi-instrument-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 0 2px; }
+.midi-instrument-section-head strong { color: var(--text); font-size: 13px; }
+.midi-instrument-section-head span { color: var(--muted); font-size: 11.5px; font-weight: 700; text-align: right; }
+.midi-instrument-empty { border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; color: var(--muted); font-size: 12.5px; background: var(--input-bg); }
+.midi-channel-row { display: grid; grid-template-columns: auto minmax(150px, .8fr) minmax(0, 1fr); align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--input-bg); cursor: pointer; }
+.midi-channel-row:hover { border-color: var(--accent); background: var(--control-hover); }
+.midi-channel-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+.midi-channel-row.percussion { border-style: dashed; }
+.midi-channel-main { display: grid; gap: 2px; min-width: 0; }
+.midi-channel-main strong { color: var(--accent); font-size: 13.5px; }
+.midi-channel-main span { font-size: 13px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.midi-channel-sub { color: var(--muted); font-size: 12.5px; line-height: 1.35; overflow-wrap: anywhere; }
+.midi-channel-sub em { display: block; margin-top: 2px; color: var(--danger); font-style: normal; font-weight: 900; }
+.midi-role-list { display: grid; gap: 8px; }
+.midi-role-row { display: grid; grid-template-columns: minmax(130px, 1fr) 94px 88px; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--input-bg); }
+.midi-role-row.active { border-color: var(--accent); background: var(--control-hover); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 78%); }
+.midi-role-row.disabled { opacity: .45; }
+.midi-role-row select { width: 100%; max-width: none; min-width: 0; }
+.midi-channel-select { display: grid; gap: 2px; width: 100%; min-height: 0; padding: 4px 6px; border-radius: 8px; text-align: left; background: transparent; }
+.midi-channel-select:hover { background: var(--accent-weak); }
+.midi-export-label { font-weight: 900; font-size: 13px; }
+.midi-export-summary { color: var(--muted); font-size: 11.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.merge-check { display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 900; white-space: nowrap; }
+.merge-check input { width: 14px; height: 14px; accent-color: var(--accent); }
+.midi-role-row.part-0 .midi-export-label { color: var(--part0); }
+.midi-role-row.part-1 .midi-export-label { color: var(--part1); }
+.midi-role-row.part-2 .midi-export-label { color: var(--part2); }
+.midi-role-row.part-3 .midi-export-label { color: var(--part3); }
+.midi-role-row.part-4 .midi-export-label { color: var(--part4); }
+.midi-role-row.part-5 .midi-export-label { color: var(--part5); }
+
+@media (max-width: 760px) {
+  .midi-dialog-layout { grid-template-columns: 1fr; }
+  .midi-role-row { grid-template-columns: 1fr; align-items: stretch; }
+  .merge-check { justify-content: flex-start; }
+  .midi-channel-row { grid-template-columns: auto minmax(0, 1fr); }
+  .midi-channel-sub { grid-column: 2; }
+}

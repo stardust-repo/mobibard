@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>마비노기 MML 재생기</title>
+  <title>마비노기 MML 재생기 v2.0</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
   <link rel="stylesheet" href="styles.css" />
@@ -13,7 +13,7 @@
 <main>
   <section class="card menu-card" aria-label="불러오기와 폰트 선택">
     <div class="app-head">
-      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">v1.1</span></h2>
+      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">v2.0</span></h2>
       <div class="title-theme-control">
         <span class="theme-label menu-label">테마</span>
         <button id="themeToggleBtn" class="theme-swatch" type="button" aria-pressed="false" aria-label="어두운 테마로 변경" title="어두운 테마로 변경"></button>
@@ -26,8 +26,7 @@
         <input id="midiFile" type="file" accept=".mid,.midi,.txt,.md,audio/midi,audio/x-midi,text/plain,text/markdown" hidden />
       </div>
       <div class="menu-item wide">
-        <label class="menu-label" for="soundSource">폰트 선택</label>
-        <select id="soundSource">
+        <select id="soundSource" aria-label="폰트 선택">
           <option value="" selected disabled hidden>폰트 선택</option>
           <option value="default">기본 사운드 사용</option>
           <option value="custom">사용자 SF2 선택</option>
@@ -120,6 +119,7 @@
   </section>
 </main>
 
+
 <dialog id="restTrimDialog" class="mml-dialog">
   <form id="restTrimForm" class="dialog-card" method="dialog">
     <h3>쉼표 삭제</h3>
@@ -136,6 +136,46 @@
     <div class="dialog-actions">
       <button id="restTrimCancel" type="button">취소</button>
       <button id="restTrimApply" class="primary" type="button">삭제</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="midiConvertDialog" class="mml-dialog midi-dialog">
+  <form id="midiConvertForm" class="dialog-card midi-dialog-card" method="dialog">
+    <h3>MIDI 변환 설정</h3>
+    <p id="midiConvertSummary">MML 채널별 역할, 겹침 병합, 사용할 악기를 선택해 주세요.</p>
+
+    <div class="midi-dialog-layout midi-channel-config-layout">
+      <section class="midi-dialog-section midi-left-panel">
+        <label class="dialog-field" for="midiExportCount">Export 채널 수</label>
+        <select id="midiExportCount">
+          <option value="1">1개</option>
+          <option value="2">2개</option>
+          <option value="3" selected>3개</option>
+          <option value="4">4개</option>
+          <option value="5">5개</option>
+          <option value="6">6개</option>
+        </select>
+        <div id="midiBeatNotice" class="midi-beat-notice" hidden>이 MIDI에는 비트 그룹 악기가 없습니다.</div>
+        <div class="dialog-section-head role-head">
+          <strong>MML 채널</strong>
+          <span class="dialog-small">채널을 선택한 뒤 오른쪽에서 악기를 고릅니다.</span>
+        </div>
+        <div id="midiRoleList" class="midi-role-list" aria-label="MML 채널 설정"></div>
+      </section>
+
+      <section class="midi-dialog-section midi-right-panel">
+        <div class="dialog-section-head">
+          <strong id="midiInstrumentPanelTitle">선택 채널 악기</strong>
+          <span id="midiInstrumentPanelHint" class="dialog-small">한 채널에 여러 악기를 선택할 수 있습니다.</span>
+        </div>
+        <div id="midiChannelList" class="midi-channel-list" aria-label="선택 채널에 포함할 악기 목록"></div>
+      </section>
+    </div>
+
+    <div class="dialog-actions">
+      <button id="midiConvertCancel" type="button">취소</button>
+      <button id="midiConvertApply" class="primary" type="button">변환</button>
     </div>
   </form>
 </dialog>
