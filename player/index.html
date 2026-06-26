@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>마비노기 MML 재생기 v2.1</title>
+  <title>마비노기 MML 재생기 v2.3</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
   <link rel="stylesheet" href="styles.css" />
@@ -13,7 +13,7 @@
 <main>
   <section class="card menu-card" aria-label="불러오기와 폰트 선택">
     <div class="app-head">
-      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">v2.1</span></h2>
+      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">v2.3</span></h2>
       <div class="title-theme-control">
         <span class="theme-label menu-label">테마</span>
         <button id="themeToggleBtn" class="theme-swatch" type="button" aria-pressed="false" aria-label="어두운 테마로 변경" title="어두운 테마로 변경"></button>
@@ -88,7 +88,7 @@
     </div>
 
     <div class="editor-tool-row" aria-label="편집 편의 기능">
-      <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="leadingSilenceBtn" class="ghost" type="button">맨앞 무음 설정</button>
+      <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="leadingSilenceBtn" class="ghost" type="button">시작 공백 추가</button>
     </div>
 
     <div class="tab-line">
@@ -123,8 +123,8 @@
 <dialog id="restTrimDialog" class="mml-dialog">
   <form id="restTrimForm" class="dialog-card" method="dialog">
     <h3>쉼표 삭제</h3>
-    <p>선택한 기준 이하의 쉼표를 삭제하고, 삭제한 길이만큼 바로 앞 음표를 늘린 뒤 최적화합니다.</p>
-    <label class="dialog-field" for="restTrimLimit">삭제 기준</label>
+    <p>선택한 길이 이하의 쉼표를 삭제하고, 삭제한 길이만큼 바로 앞 음표를 늘린 뒤 최적화합니다.</p>
+    <label class="dialog-field" for="restTrimLimit">삭제 길이</label>
     <select id="restTrimLimit">
       <option value="all">모든 쉼표</option>
       <option value="4">4분음표 이하</option>
@@ -142,10 +142,11 @@
 
 <dialog id="leadingSilenceDialog" class="mml-dialog">
   <form id="leadingSilenceForm" class="dialog-card" method="dialog">
-    <h3>맨앞 무음 설정</h3>
-    <p>현재 첫 음 앞의 공통 무음을 제거한 뒤, T120 기준 무음을 지정한 박자만큼 새로 설정합니다. 기본 4박은 온음표 1개 분량입니다.</p>
-    <label class="dialog-field" for="leadingSilenceBeats">설정할 박자</label>
-    <input id="leadingSilenceBeats" type="number" min="0" max="256" step="0.25" value="4" inputmode="decimal" />
+    <h3>시작 공백 추가</h3>
+    <p>악보 맨앞에 입력한 시간만큼 공백을 넣습니다.</p>
+    <label class="dialog-field" for="leadingSilenceSeconds">설정할 시간(초)</label>
+    <input id="leadingSilenceSeconds" type="number" min="0.25" max="600" step="0.25" value="2" inputmode="decimal" />
+    <span class="dialog-small">0.25초 단위</span>
     <div class="dialog-actions">
       <button id="leadingSilenceCancel" type="button">취소</button>
       <button id="leadingSilenceApply" class="primary" type="button">적용</button>
@@ -156,13 +157,12 @@
 <dialog id="splitCopyDialog" class="mml-dialog split-copy-dialog">
   <form id="splitCopyForm" class="dialog-card split-copy-card" method="dialog">
     <h3>악보 나눠복사</h3>
-    <p>채널당 글자 수 제한을 넘지 않도록 현재 전체 MML을 여러 악보로 나눕니다. 각 악보는 독립적으로 시작할 수 있도록 T/O/L/V를 다시 넣습니다.</p>
+    <p>악보를 나눌 최대 글자 수를 입력해 주세요.</p>
     <div class="split-copy-options">
-      <label class="dialog-field" for="splitCopyLimit">채널당 글자 수</label>
+      <label class="dialog-field" for="splitCopyLimit">최대 글자 수</label>
       <input id="splitCopyLimit" type="number" min="200" max="5000" step="50" value="2400" inputmode="numeric" />
-      <span class="dialog-small">분할 탐색 범위는 입력값의 절반으로 적용됩니다.</span>
     </div>
-    <div id="splitCopySummary" class="split-copy-summary">아직 계산하지 않았습니다.</div>
+    <div id="splitCopySummary" class="split-copy-summary" hidden></div>
     <div id="splitCopyPages" class="split-copy-pages" aria-label="분할된 악보 목록"></div>
     <div class="dialog-actions">
       <button id="splitCopyRebuild" type="button">다시 계산</button>
@@ -174,7 +174,10 @@
 <dialog id="midiConvertDialog" class="mml-dialog midi-dialog">
   <form id="midiConvertForm" class="dialog-card midi-dialog-card" method="dialog">
     <h3>MIDI 변환 설정</h3>
-    <p id="midiConvertSummary">MML 채널별 역할, 겹침 병합, 사용할 악기를 선택해 주세요.</p>
+    <div class="midi-dialog-topline">
+      <p id="midiConvertSummary">MML 채널별 역할, 겹침 병합, 사용할 악기를 선택해 주세요.</p>
+      <button id="midiFullPreviewBtn" class="midi-full-preview-btn" type="button">MID 듣기</button>
+    </div>
 
     <div class="midi-dialog-layout midi-channel-config-layout">
       <section class="midi-dialog-section midi-left-panel">

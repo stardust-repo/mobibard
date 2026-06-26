@@ -226,6 +226,185 @@
     return `${names[((midi % 12) + 12) % 12]}${octave}`;
   }
 
+  function buildMidiInstrumentPreview(bytes, instrumentChoiceId, options = {}) {
+    const midi = parseMidiFile(bytes);
+    if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
+    const ppq = midi.ppq;
+    const ticksPerGrid = ppq / 16;
+    const sourceGroups = buildInstrumentSourceGroups(midi, ticksPerGrid);
+    const instrumentGroups = buildInstrumentChoices(sourceGroups);
+    const choiceMap = new Map(instrumentGroups.map(g => [g.id, g]));
+    const choice = choiceMap.get(String(instrumentChoiceId || ""));
+    if (!choice) throw new Error("미리듣기 할 악기를 찾지 못했습니다.");
+
+    const sourceToChoice = new Map();
+    for (const c of instrumentGroups) {
+      for (const sourceId of c.sourceGroupIds || []) sourceToChoice.set(sourceId, c.id);
+    }
+
+    let nextNoteId = 1;
+    const rawNotes = midi.notes
+      .map(n => {
+        const sourceInfo = getInstrumentGroupInfo(n);
+        const choiceId = sourceToChoice.get(sourceInfo.id) || instrumentChoiceId(sourceInfo.instrumentName, sourceInfo.isBeat);
+        if (choiceId !== choice.id) return null;
+        const startGrid = Math.max(0, Math.round(n.startTick / ticksPerGrid));
+        const durGrid = Math.max(1, Math.round((n.endTick - n.startTick) / ticksPerGrid));
+        return {
+          id: `preview-${nextNoteId++}`,
+          midi: n.midi,
+          startGrid,
+          endGrid: startGrid + durGrid,
+          durGrid,
+          midiVelocity: clampInt(Math.round(n.velocity), 1, 127),
+          velocity: clampInt(Math.round(n.velocity / 127 * 15), 1, 15),
+          channel: n.channel,
+          program: normalizeProgram(n.program),
+          instrumentGroupId: sourceInfo.id,
+          instrumentChoiceId: choice.id,
+          isBeat: Boolean(choice.isBeat || sourceInfo.isBeat),
+          isPercussion: Boolean(choice.isBeat || sourceInfo.isBeat)
+        };
+      })
+      .filter(Boolean);
+
+    if (!rawNotes.length) throw new Error("선택한 악기에서 미리듣기 할 노트를 찾지 못했습니다.");
+
+    const { notes } = mergeDuplicateGridNotes(rawNotes);
+    notes.sort((a, b) => a.startGrid - b.startGrid || b.midi - a.midi || b.velocity - a.velocity);
+
+    const firstGrid = Math.min(...notes.map(n => n.startGrid));
+    const tempoGridEvents = normalizeGridTempos(normalizeMidiTempos(midi.tempoEvents).map(t => ({
+      grid: Math.max(0, Math.round(t.tick / ticksPerGrid)),
+      bpm: t.bpm
+    })));
+    const firstSec = gridToSeconds(firstGrid, tempoGridEvents);
+    const maxSeconds = Math.max(2, Math.min(20, Number(options.maxSeconds ?? options.seconds ?? 8) || 8));
+    const tailSeconds = Math.max(0.25, Math.min(2, Number(options.tailSeconds ?? 0.75) || 0.75));
+    const previewNotes = [];
+    for (const n of notes) {
+      const start = gridToSeconds(n.startGrid, tempoGridEvents) - firstSec;
+      if (start > maxSeconds) break;
+      const end = gridToSeconds(n.endGrid, tempoGridEvents) - firstSec;
+      const clippedStart = Math.max(0, start);
+      const clippedEnd = Math.min(maxSeconds + tailSeconds, end);
+      const durationSec = clippedEnd - clippedStart;
+      if (durationSec <= 0.01) continue;
+      previewNotes.push({
+        part: 0,
+        midi: n.midi,
+        start: clippedStart,
+        durationSec,
+        volume: n.velocity
+      });
+    }
+    if (!previewNotes.length) throw new Error("미리듣기 구간에 소리 나는 노트가 없습니다.");
+
+    const programCounts = new Map();
+    for (const n of rawNotes) {
+      const p = normalizeProgram(n.program);
+      programCounts.set(p, (programCounts.get(p) || 0) + 1);
+    }
+    const program = Array.from(programCounts.entries()).sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
+    const duration = previewNotes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+    return {
+      instrumentId: choice.id,
+      instrumentName: choice.instrumentName,
+      isBeat: Boolean(choice.isBeat),
+      program,
+      notes: previewNotes,
+      duration,
+      firstGrid,
+      noteCount: rawNotes.length
+    };
+  }
+
+  function buildMidiFilePreview(bytes, options = {}) {
+    const midi = parseMidiFile(bytes);
+    if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
+    const ppq = midi.ppq;
+    const ticksPerGrid = ppq / 16;
+    let nextNoteId = 1;
+    const rawNotes = midi.notes.map(n => {
+      const sourceInfo = getInstrumentGroupInfo(n);
+      const startGrid = Math.max(0, Math.round(n.startTick / ticksPerGrid));
+      const durGrid = Math.max(1, Math.round((n.endTick - n.startTick) / ticksPerGrid));
+      return {
+        id: `file-preview-${nextNoteId++}`,
+        midi: n.midi,
+        startGrid,
+        endGrid: startGrid + durGrid,
+        durGrid,
+        midiVelocity: clampInt(Math.round(n.velocity), 1, 127),
+        velocity: clampInt(Math.round(n.velocity / 127 * 15), 1, 15),
+        channel: n.channel,
+        program: normalizeProgram(n.program),
+        instrumentGroupId: sourceInfo.id,
+        instrumentChoiceId: instrumentChoiceId(sourceInfo.instrumentName, sourceInfo.isBeat),
+        isBeat: Boolean(sourceInfo.isBeat),
+        isPercussion: Boolean(sourceInfo.isBeat)
+      };
+    });
+    if (!rawNotes.length) throw new Error("미리듣기 할 노트를 찾지 못했습니다.");
+
+    const { notes } = mergeDuplicateGridNotes(rawNotes);
+    notes.sort((a, b) => a.startGrid - b.startGrid || b.midi - a.midi || b.velocity - a.velocity);
+    const firstGrid = Math.min(...notes.map(n => n.startGrid));
+    const tempoGridEvents = normalizeGridTempos(normalizeMidiTempos(midi.tempoEvents).map(t => ({
+      grid: Math.max(0, Math.round(t.tick / ticksPerGrid)),
+      bpm: t.bpm
+    })));
+    const firstSec = gridToSeconds(firstGrid, tempoGridEvents);
+    const maxSeconds = Math.max(5, Math.min(180, Number(options.maxSeconds ?? options.seconds ?? 45) || 45));
+    const tailSeconds = Math.max(0.25, Math.min(3, Number(options.tailSeconds ?? 1.0) || 1.0));
+    const previewNotes = [];
+    for (const n of notes) {
+      const start = gridToSeconds(n.startGrid, tempoGridEvents) - firstSec;
+      if (start > maxSeconds) break;
+      const end = gridToSeconds(n.endGrid, tempoGridEvents) - firstSec;
+      const clippedStart = Math.max(0, start);
+      const clippedEnd = Math.min(maxSeconds + tailSeconds, end);
+      const durationSec = clippedEnd - clippedStart;
+      if (durationSec <= 0.01) continue;
+      previewNotes.push({
+        part: 0,
+        midi: n.midi,
+        start: clippedStart,
+        durationSec,
+        volume: n.velocity,
+        program: normalizeProgram(n.program),
+        isBeat: Boolean(n.isBeat || n.isPercussion)
+      });
+    }
+    if (!previewNotes.length) throw new Error("미리듣기 구간에 소리 나는 노트가 없습니다.");
+
+    const duration = previewNotes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+    return {
+      notes: previewNotes,
+      duration,
+      firstGrid,
+      noteCount: notes.length,
+      previewSeconds: maxSeconds
+    };
+  }
+
+  function gridToSeconds(grid, tempoEvents) {
+    const target = Math.max(0, Math.round(Number(grid) || 0));
+    const events = normalizeGridTempos(tempoEvents || []);
+    let sec = 0;
+    let pos = 0;
+    let bpm = events[0]?.bpm || 120;
+    for (let i = 1; i < events.length; i++) {
+      const ev = events[i];
+      if (ev.grid >= target) break;
+      sec += (ev.grid - pos) * (60 / bpm / 16);
+      pos = ev.grid;
+      bpm = ev.bpm;
+    }
+    sec += Math.max(0, target - pos) * (60 / bpm / 16);
+    return sec;
+  }
+
   function midiToMml(bytes, fileName = "MID", options = {}) {
     const midi = parseMidiFile(bytes);
     if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
@@ -882,5 +1061,5 @@
     skip(n) { this.pos = Math.min(this.bytes.length, this.pos + n); }
   }
 
-  window.MabiMidi = { midiToMml, analyzeMidi };
+  window.MabiMidi = { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview };
 })();
