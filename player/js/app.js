@@ -63,7 +63,6 @@
   const midiInstrumentPanelHint = $("midiInstrumentPanelHint");
   const midiConvertApply = $("midiConvertApply");
   const midiConvertCancel = $("midiConvertCancel");
-  const discordBtn = $("discordBtn");
   const themeToggleBtn = $("themeToggleBtn");
   const charCount = $("charCount");
   const partSoundBtn = $("partSoundBtn");
@@ -158,7 +157,6 @@
     midiConvertCancel?.addEventListener("click", () => { stopMidiPreview(); pendingMidiImport = null; pendingMidiSettings = null; midiConvertDialog?.close(); });
     midiConvertDialog?.addEventListener("close", () => stopMidiPreview());
     partSoundDialog?.addEventListener("close", () => stopMidiPreview());
-    discordBtn?.addEventListener("click", openDiscord);
     themeToggleBtn?.addEventListener("click", toggleTheme);
     mainMml.addEventListener("input", () => {
       normalizeTextareaCommands(mainMml);
@@ -2321,10 +2319,6 @@
     return String(text).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
   }
 
-
-  function openDiscord() {
-    window.open("https://discord.gg/msEKJU6Jj", "_blank", "noopener,noreferrer");
-  }
 
   function showDialog(title, message) {
     alert(`${title}\n\n${message}`);
