@@ -1092,7 +1092,11 @@
       const view = new window.google.picker.DocsView(window.google.picker.ViewId.DOCS);
       view.setIncludeFolders(true);
       view.setSelectFolderEnabled(false);
-      try { view.setMimeTypes(`audio/midi,audio/x-midi,text/plain,application/octet-stream,${GOOGLE_DRIVE_FOLDER_MIME}`); } catch (_) {}
+      // Drive에 업로드된 MIDI 파일은 환경에 따라 audio/midi, audio/x-midi,
+      // application/octet-stream 등 서로 다른 MIME 타입으로 저장될 수 있다.
+      // Picker에서 MIME 타입을 강하게 제한하면 .mid/.midi 파일이 목록에서
+      // 사라질 수 있으므로 기본 폴더 안의 파일을 넓게 보여주고, 선택 후
+      // 확장자/MIME 검사로 MIDI 또는 TXT만 처리한다.
       try { if (folderId && typeof view.setParent === "function") view.setParent(folderId); } catch (_) {}
       const builder = new window.google.picker.PickerBuilder()
         .setDeveloperKey(googleApiKey())
@@ -1133,16 +1137,36 @@
     return googleDriveJson(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,size,modifiedTime,webViewLink,parents`);
   }
 
+  function isGoogleDriveMidiFile(name, mimeType = "") {
+    const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
+    if (ext === "mid" || ext === "midi") return true;
+    const type = String(mimeType || "").toLowerCase();
+    return [
+      "audio/midi",
+      "audio/mid",
+      "audio/x-midi",
+      "audio/x-mid",
+      "application/midi",
+      "application/x-midi"
+    ].includes(type);
+  }
+
+  function isGoogleDriveTextMmlFile(name, mimeType = "") {
+    const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
+    if (ext === "txt") return true;
+    return String(mimeType || "").toLowerCase() === "text/plain";
+  }
+
   async function loadGoogleDriveSourceFile(fileId, fallbackName = "Google Drive 파일") {
     await ensureGoogleAccessToken(true);
     stopMidiPreview();
     stopPlayback(false);
     const meta = await getGoogleDriveFileMeta(fileId);
     const name = meta?.name || fallbackName;
-    const ext = name.split(".").pop()?.toLowerCase() || "";
+    const mimeType = meta?.mimeType || "";
     const response = await googleDriveFetch(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?alt=media`);
     if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
-    if (ext === "mid" || ext === "midi") {
+    if (isGoogleDriveMidiFile(name, mimeType)) {
       const bytes = new Uint8Array(await response.arrayBuffer());
       const overview = analyzeMidi(bytes, name);
       googleDriveMmlFileId = "";
@@ -1151,7 +1175,7 @@
       setGoogleStatus("Drive MIDI 불러옴");
       return;
     }
-    if (ext === "txt") {
+    if (isGoogleDriveTextMmlFile(name, mimeType)) {
       const loaded = readMmlTextFile(await response.text());
       try {
         const normalized = normalizeImportedFullMml(loaded);
@@ -1169,7 +1193,7 @@
       setGoogleStatus("Drive TXT 불러옴");
       return;
     }
-    throw new Error("지원하지 않는 Drive 파일입니다. midi 또는 txt 파일만 선택해 주세요.");
+    throw new Error("지원하지 않는 Drive 파일입니다. mid, midi 또는 txt 파일만 선택해 주세요.");
   }
 
   async function saveMmlToGoogleDrive() {
