@@ -27,6 +27,9 @@
   const GOOGLE_MML_FOLDER_NAME = "MML_Mobibard";
   const GOOGLE_DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
+  const MMI_IMPORT_MAX_CHANNELS = 6;
+  const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
+  const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi"]);
 
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
@@ -53,6 +56,14 @@
   const googleDriveSaveStatus = $("googleDriveSaveStatus");
   const googleDriveSaveCancel = $("googleDriveSaveCancel");
   const googleDriveSaveApply = $("googleDriveSaveApply");
+  const mmiImportDialog = $("mmiImportDialog");
+  const mmiImportForm = $("mmiImportForm");
+  const mmiImportSummary = $("mmiImportSummary");
+  const mmiChannelList = $("mmiChannelList");
+  const mmiImportStatus = $("mmiImportStatus");
+  const mmiImportClear = $("mmiImportClear");
+  const mmiImportCancel = $("mmiImportCancel");
+  const mmiImportApply = $("mmiImportApply");
   const codeHelpBtn = $("codeHelpBtn");
   const codeHelpDialog = $("codeHelpDialog");
   const codeHelpClose = $("codeHelpClose");
@@ -170,6 +181,7 @@
   let googleDriveSaveFolderId = "";
   let googleDriveSaveFolderName = "";
   let suggestedMmlSaveFileName = "";
+  let pendingMmiImport = null;
 
   init();
 
@@ -183,11 +195,22 @@
     loadGoogleDriveFolderPrefs();
     midiLoadBtn.addEventListener("click", () => { midiFile.value = ""; midiFile.click(); });
     midiFile.addEventListener("change", () => void loadSourceFile());
+    installSourceFileDropHandlers();
     googleLoginBtn?.addEventListener("click", () => void handleGoogleLoginButton());
     googleDriveLoadBtn?.addEventListener("click", () => void openGoogleDrivePicker());
     googleDriveSaveBtn?.addEventListener("click", () => void saveMmlToGoogleDrive());
     codeHelpBtn?.addEventListener("click", () => openCodeHelpDialog());
     codeHelpClose?.addEventListener("click", () => codeHelpDialog?.close());
+    mmiImportClear?.addEventListener("click", () => clearMmiImportSelection());
+    mmiImportCancel?.addEventListener("click", () => closeMmiImportDialog(null));
+    mmiImportApply?.addEventListener("click", () => applyMmiImportDialog());
+    mmiImportDialog?.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      closeMmiImportDialog(null);
+    });
+    mmiImportDialog?.addEventListener("close", () => {
+      if (pendingMmiImport) resolveMmiImportDialog(null);
+    });
     soundSource.addEventListener("change", () => handleSoundSourceChange());
     sf2File.addEventListener("change", () => { if (sf2File.files?.[0]) void loadUserSf2(); resetSoundActionMenu(); });
     playToggleBtn.addEventListener("click", () => { isPlaying ? stopPlayback(false) : void playFromCurrent(); });
@@ -422,7 +445,7 @@
       googleDriveLoadBtn.disabled = !connected || !hasPickerKey;
       googleDriveLoadBtn.title = !hasPickerKey
         ? "Drive 파일 선택에는 js/google-config.js의 API Key가 필요합니다."
-        : "Google Drive의 MML_Mobibard 폴더에서 MIDI 또는 TXT MML 파일을 선택합니다.";
+        : "Google Drive의 MML_Mobibard 폴더에서 MIDI, MMI 또는 TXT MML 파일을 선택합니다.";
     }
     if (googleDriveSaveBtn) {
       googleDriveSaveBtn.disabled = !connected;
@@ -1101,7 +1124,7 @@
       const builder = new window.google.picker.PickerBuilder()
         .setDeveloperKey(googleApiKey())
         .setOAuthToken(googleAccessToken)
-        .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 MIDI / TXT MML 파일 선택`)
+        .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 MIDI / MMI / TXT MML 파일 선택`)
         .addView(view)
         .setCallback((data) => void handleGooglePickerResult(data));
       const appId = googleAppId();
@@ -1154,7 +1177,14 @@
   function isGoogleDriveTextMmlFile(name, mimeType = "") {
     const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
     if (ext === "txt") return true;
-    return String(mimeType || "").toLowerCase() === "text/plain";
+    return ext !== "mmi" && String(mimeType || "").toLowerCase() === "text/plain";
+  }
+
+  function isGoogleDriveMabiIccoFile(name, mimeType = "") {
+    const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
+    if (ext === "mmi") return true;
+    const type = String(mimeType || "").toLowerCase();
+    return type === "application/x-mabiicco" || type === "application/vnd.mabiicco";
   }
 
   async function loadGoogleDriveSourceFile(fileId, fallbackName = "Google Drive 파일") {
@@ -1166,8 +1196,8 @@
     const mimeType = meta?.mimeType || "";
     const response = await googleDriveFetch(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?alt=media`);
     if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
+    const bytes = new Uint8Array(await response.arrayBuffer());
     if (isGoogleDriveMidiFile(name, mimeType)) {
-      const bytes = new Uint8Array(await response.arrayBuffer());
       const overview = analyzeMidi(bytes, name);
       googleDriveMmlFileId = "";
       googleDriveMmlFileName = "";
@@ -1175,8 +1205,27 @@
       setGoogleStatus("Drive MIDI 불러옴");
       return;
     }
+    if (isGoogleDriveMabiIccoFile(name, mimeType)) {
+      const loaded = await readMabiIccoMmiFile(bytes, name);
+      if (!loaded) return;
+      try {
+        const normalized = normalizeImportedFullMml(loaded);
+        setMainMml(normalized.mml);
+      } catch (optErr) {
+        setMainMml(loaded);
+        showDialog("MML 최적화 생략", `Drive MMI 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+      }
+      googleDriveMmlFileId = "";
+      googleDriveMmlFileName = "";
+      rememberSuggestedMmlSaveFileName(name);
+      if (Array.isArray(meta?.parents) && meta.parents[0]) {
+        rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
+      }
+      setGoogleStatus("Drive MMI 불러옴");
+      return;
+    }
     if (isGoogleDriveTextMmlFile(name, mimeType)) {
-      const loaded = readMmlTextFile(await response.text());
+      const loaded = readMmlTextFile(decodeTextFileBytes(bytes));
       try {
         const normalized = normalizeImportedFullMml(loaded);
         setMainMml(normalized.mml);
@@ -1193,7 +1242,7 @@
       setGoogleStatus("Drive TXT 불러옴");
       return;
     }
-    throw new Error("지원하지 않는 Drive 파일입니다. mid, midi 또는 txt 파일만 선택해 주세요.");
+    throw new Error("지원하지 않는 Drive 파일입니다. mid, midi, mmi 또는 txt 파일만 선택해 주세요.");
   }
 
   async function saveMmlToGoogleDrive() {
@@ -1579,8 +1628,13 @@ ${shortError(err)}`);
   async function loadSourceFile() {
     const file = midiFile.files?.[0];
     if (!file) return;
+    await loadLocalSourceFile(file);
+  }
+
+  async function loadLocalSourceFile(file) {
+    if (!file) return;
     const name = file.name || "선택한 파일";
-    const ext = name.split(".").pop()?.toLowerCase() || "";
+    const ext = getSourceFileExtension(name);
     googleDriveMmlFileId = "";
     googleDriveMmlFileName = "";
     clearSuggestedMmlSaveFileName();
@@ -1591,6 +1645,18 @@ ${shortError(err)}`);
         const bytes = new Uint8Array(await file.arrayBuffer());
         const overview = analyzeMidi(bytes, name);
         openMidiConvertDialog({ bytes, name, overview });
+      } else if (ext === "mmi") {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const loaded = await readMabiIccoMmiFile(bytes, name);
+        if (!loaded) return;
+        try {
+          const normalized = normalizeImportedFullMml(loaded);
+          setMainMml(normalized.mml);
+        } catch (optErr) {
+          setMainMml(loaded);
+          showDialog("MML 최적화 생략", `MMI 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+        }
+        rememberSuggestedMmlSaveFileName(name);
       } else if (ext === "txt") {
         const text = await file.text();
         const loaded = readMmlTextFile(text);
@@ -1602,11 +1668,51 @@ ${shortError(err)}`);
           showDialog("MML 최적화 생략", `파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
         }
       } else {
-        throw new Error("지원하지 않는 파일입니다. mid, midi, txt 파일을 선택해 주세요.");
+        throw new Error("지원하지 않는 파일입니다. mid, midi, mmi, txt 파일을 선택해 주세요.");
       }
     } catch (err) {
       showDialog("파일 불러오기 실패", shortError(err));
     }
+  }
+
+  function installSourceFileDropHandlers() {
+    document.addEventListener("dragover", (event) => {
+      if (!isSourceFileDrag(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = hasOpenAppDialog() ? "none" : "copy";
+    });
+    document.addEventListener("drop", (event) => {
+      if (!isSourceFileDrag(event)) return;
+      event.preventDefault();
+      if (hasOpenAppDialog()) return;
+      const file = findFirstSupportedSourceFile(event.dataTransfer?.files);
+      if (!file) {
+        showDialog("파일 불러오기 실패", "드래그 앤 드롭은 mid, midi, mmi, txt 파일만 지원합니다.");
+        return;
+      }
+      void loadLocalSourceFile(file);
+    });
+  }
+
+  function isSourceFileDrag(event) {
+    const types = Array.from(event.dataTransfer?.types || []);
+    return types.includes("Files") || types.includes("application/x-moz-file");
+  }
+
+  function hasOpenAppDialog() {
+    return Array.from(document.querySelectorAll("dialog")).some(dialog => dialog.open);
+  }
+
+  function getSourceFileExtension(name) {
+    return String(name || "").split(".").pop()?.toLowerCase() || "";
+  }
+
+  function isSupportedSourceFile(file) {
+    return SOURCE_FILE_EXTENSIONS.has(getSourceFileExtension(file?.name || ""));
+  }
+
+  function findFirstSupportedSourceFile(files) {
+    return Array.from(files || []).find(isSupportedSourceFile) || null;
   }
 
 
@@ -1629,6 +1735,471 @@ ${shortError(err)}`);
     }
     // 채널 내부 문법은 여기서 검사하지 않는다. 잘못된 명령은 편집기에서 빨간 배경으로 표시한다.
     return normalizeMmlForDisplay(raw);
+  }
+
+  async function readMabiIccoMmiFile(data, name = "MMI 파일") {
+    const text = decodeTextFileBytes(data).replace(/^\uFEFF/, "");
+    const candidates = extractMabiIccoMmlPartCandidates(text);
+    if (!candidates.length) {
+      throw new Error(`${name}에서 MML 코드를 찾지 못했습니다.`);
+    }
+    const selectedParts = await openMmiImportDialog(candidates, name);
+    if (!selectedParts) return null;
+    while (selectedParts.length < MMI_IMPORT_MAX_CHANNELS) selectedParts.push("");
+    const normalizedParts = selectedParts
+      .slice(0, MMI_IMPORT_MAX_CHANNELS)
+      .map(part => normalizeMmiLegacyLengthsInPart(part));
+    return normalizeMmlForDisplay(composeMml(normalizedParts, { preserveEmpty: true, partCount: MMI_IMPORT_MAX_CHANNELS }));
+  }
+
+
+  function openMmiImportDialog(candidates, name = "MMI 파일") {
+    const normalizedCandidates = (candidates || [])
+      .map((candidate, index) => ({
+        label: candidate.label || `채널 ${index + 1}`,
+        value: cleanupMmiMmlValue(candidate.value || ""),
+        index
+      }))
+      .filter(candidate => candidate.value.trim())
+      .slice(0, MMI_IMPORT_MAX_DETECTED_PARTS);
+
+    if (!normalizedCandidates.length) {
+      throw new Error(`${name}에서 불러올 수 있는 MML 채널을 찾지 못했습니다.`);
+    }
+
+    if (!mmiImportDialog?.showModal || !mmiChannelList) {
+      return Promise.resolve(normalizedCandidates.slice(0, MMI_IMPORT_MAX_CHANNELS).map(candidate => candidate.value));
+    }
+
+    return new Promise(resolve => {
+      pendingMmiImport = { candidates: normalizedCandidates, resolve };
+      renderMmiImportDialog(name);
+      try {
+        mmiImportDialog.showModal();
+      } catch (_) {
+        resolveMmiImportDialog(normalizedCandidates.slice(0, MMI_IMPORT_MAX_CHANNELS).map(candidate => candidate.value));
+      }
+    });
+  }
+
+  function renderMmiImportDialog(name = "MMI 파일") {
+    if (!pendingMmiImport || !mmiChannelList) return;
+    const candidates = pendingMmiImport.candidates || [];
+    if (mmiImportSummary) {
+      mmiImportSummary.textContent = `${name}에서 ${formatCount(candidates.length)}개의 MML 채널을 찾았습니다. 불러올 채널을 최대 ${MMI_IMPORT_MAX_CHANNELS}개까지 선택해 주세요.`;
+    }
+    mmiChannelList.innerHTML = candidates.map((candidate, index) => {
+      const normalized = normalizeMmiLegacyLengthsInPart(candidate.value);
+      const changed = normalized !== candidate.value;
+      const checked = index < MMI_IMPORT_MAX_CHANNELS ? " checked" : "";
+      const preview = normalized.replace(/\s+/g, " ").slice(0, 180) || "빈 채널";
+      const meta = [`${formatCount(normalized.length)}자`];
+      if (changed) meta.push("길이 보정");
+      return `
+        <label class="mmi-channel-row${checked ? " selected" : ""}">
+          <input class="mmi-channel-check" type="checkbox" value="${index}"${checked} />
+          <span class="mmi-channel-main">
+            <strong>${escapeHtml(candidate.label || `채널 ${index + 1}`)}</strong>
+            <small>${escapeHtml(meta.join(" · "))}</small>
+          </span>
+          <code>${escapeHtml(preview)}${normalized.length > 180 ? "…" : ""}</code>
+        </label>`;
+    }).join("");
+    Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check")).forEach(input => {
+      input.addEventListener("change", updateMmiImportSelectionState);
+    });
+    updateMmiImportSelectionState();
+  }
+
+  function updateMmiImportSelectionState() {
+    if (!mmiChannelList) return;
+    const checks = Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check"));
+    const checked = checks.filter(input => input.checked);
+    const checkedCount = checked.length;
+    for (const input of checks) {
+      input.disabled = !input.checked && checkedCount >= MMI_IMPORT_MAX_CHANNELS;
+      input.closest(".mmi-channel-row")?.classList.toggle("selected", Boolean(input.checked));
+    }
+    if (mmiImportStatus) {
+      mmiImportStatus.textContent = checkedCount
+        ? `선택 ${checkedCount}/${MMI_IMPORT_MAX_CHANNELS}개`
+        : "불러올 채널을 1개 이상 선택해 주세요.";
+    }
+    if (mmiImportClear) mmiImportClear.disabled = checkedCount < 1;
+    if (mmiImportApply) mmiImportApply.disabled = checkedCount < 1;
+  }
+
+  function clearMmiImportSelection() {
+    if (!mmiChannelList) return;
+    Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check")).forEach(input => {
+      input.checked = false;
+      input.disabled = false;
+    });
+    updateMmiImportSelectionState();
+  }
+
+  function applyMmiImportDialog() {
+    if (!pendingMmiImport || !mmiChannelList) return;
+    const selectedIndexes = Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check:checked"))
+      .map(input => Number(input.value))
+      .filter(index => Number.isInteger(index));
+    if (!selectedIndexes.length) {
+      if (mmiImportStatus) mmiImportStatus.textContent = "불러올 채널을 1개 이상 선택해 주세요.";
+      return;
+    }
+    const selectedParts = selectedIndexes
+      .slice(0, MMI_IMPORT_MAX_CHANNELS)
+      .map(index => pendingMmiImport.candidates[index]?.value || "")
+      .filter(value => value.trim());
+    resolveMmiImportDialog(selectedParts);
+    if (mmiImportDialog?.open) mmiImportDialog.close("apply");
+  }
+
+  function closeMmiImportDialog(value = null) {
+    resolveMmiImportDialog(value);
+    if (mmiImportDialog?.open) mmiImportDialog.close(value ? "apply" : "cancel");
+  }
+
+  function resolveMmiImportDialog(value) {
+    if (!pendingMmiImport) return;
+    const resolve = pendingMmiImport.resolve;
+    pendingMmiImport = null;
+    if (typeof resolve === "function") resolve(value);
+  }
+
+
+  function decodeTextFileBytes(data) {
+    if (typeof data === "string") return data;
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data || []);
+    if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+      return new TextDecoder("utf-16le").decode(bytes);
+    }
+    if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+      return new TextDecoder("utf-16be").decode(bytes);
+    }
+    const utf8 = new TextDecoder("utf-8").decode(bytes);
+    const bad = (utf8.match(/\uFFFD/g) || []).length;
+    if (bad > 0 && typeof TextDecoder === "function") {
+      for (const enc of ["shift_jis", "windows-31j", "euc-kr"]) {
+        try {
+          const decoded = new TextDecoder(enc).decode(bytes);
+          const decodedBad = (decoded.match(/\uFFFD/g) || []).length;
+          if (decodedBad < bad) return decoded;
+        } catch (_) {}
+      }
+    }
+    return utf8;
+  }
+
+  function extractMabiIccoMmlParts(text) {
+    return extractMabiIccoMmlPartCandidates(text).map(candidate => candidate.value);
+  }
+
+  function extractMabiIccoMmlPartCandidates(text) {
+    const source = String(text || "");
+    const nameMarkers = extractMmiNameMarkers(source);
+    const fullRecords = [];
+    const fullRe = /MML\s*@([\s\S]*?)\s*;/gi;
+    let m;
+    let fullIndex = 0;
+    while ((m = fullRe.exec(source))) {
+      const parsed = splitMmlParts(`MML@${m[1]};`);
+      for (const part of parsed) {
+        fullIndex++;
+        const cleaned = cleanupMmiMmlValue(part);
+        if (cleaned) {
+          const name = nameMarkers[fullIndex - 1]?.name || findMmiNameForCandidate(m.index, nameMarkers, fullIndex - 1);
+          fullRecords.push({ label: formatMmiChannelLabel(fullIndex, name), value: cleaned, name });
+        }
+        if (fullRecords.length >= MMI_IMPORT_MAX_DETECTED_PARTS) return fullRecords;
+      }
+    }
+    if (fullRecords.length) return fullRecords;
+
+    const found = [];
+    const add = (value, index = 0) => {
+      const cleaned = cleanupMmiMmlValue(value);
+      if (!cleaned) return;
+      const parts = cleaned.includes(",") ? cleaned.split(",") : [cleaned];
+      for (const part of parts) {
+        const candidate = cleanupMmiMmlValue(part);
+        if (looksLikeMmlPart(candidate)) {
+          const name = findMmiNameForCandidate(index, nameMarkers, found.length);
+          found.push({ index, value: candidate, name });
+        }
+      }
+    };
+
+    const keyed = /(?:^|[\s<{,;])(?:[A-Za-z0-9_:-]*(?:mml|melody|chord|song|part|track)[A-Za-z0-9_:-]*)\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\r\n<>]+))/gim;
+    while ((m = keyed.exec(source))) add(m[1] ?? m[2] ?? m[3] ?? "", m.index);
+
+    const tagged = /<([A-Za-z0-9_:-]*(?:mml|melody|chord|song|part|track)[A-Za-z0-9_:-]*)\b[^>]*>([\s\S]*?)<\/\1>/gim;
+    while ((m = tagged.exec(source))) add(m[2] || "", m.index);
+
+    const stringTagged = /<string\b[^>]*>([\s\S]*?)<\/string>/gim;
+    while ((m = stringTagged.exec(source))) add(m[1] || "", m.index);
+
+    if (found.length < MMI_IMPORT_MAX_CHANNELS) {
+      const lineRe = /^\s*([^\r\n=:#<>]{1,20000})\s*$/gm;
+      while ((m = lineRe.exec(source))) add(m[1] || "", m.index);
+    }
+
+    found.sort((a, b) => a.index - b.index);
+    const parts = [];
+    for (const item of found) {
+      pushMmiPart(parts, item.value, item.index, item.name);
+      if (parts.length >= MMI_IMPORT_MAX_DETECTED_PARTS) break;
+    }
+    return parts.map((part, index) => ({
+      label: formatMmiChannelLabel(index + 1, part.name),
+      value: part.value,
+      name: part.name
+    }));
+  }
+
+  function extractMmiNameMarkers(source) {
+    const text = String(source || "");
+    const markers = [];
+    const seen = new Set();
+    const addName = (raw, index = 0) => {
+      const name = cleanupMmiNameValue(raw);
+      if (!name) return;
+      const key = `${index}:${name}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      markers.push({ index: Math.max(0, Number(index) || 0), name });
+    };
+
+    let m;
+    const nameTag = /<([A-Za-z0-9_:-]*(?:name|trackname|partname)[A-Za-z0-9_:-]*)\b[^>]*>([\s\S]{0,500}?)<\/\1>/gim;
+    while ((m = nameTag.exec(text))) addName(m[2] || "", m.index);
+
+    const nameAttr = /\b(?:name|trackName|track_name|partName|part_name)\s*=\s*(?:"([^"]{0,220})"|'([^']{0,220})')/gim;
+    while ((m = nameAttr.exec(text))) addName(m[1] ?? m[2] ?? "", m.index);
+
+    const keyedName = /(?:^|[\r\n,{;\s])(?:[A-Za-z0-9_.:-]*(?:name|trackname|track_name|partname|part_name)[A-Za-z0-9_.:-]*)\s*[:=]\s*(?:"([^"]{0,220})"|'([^']{0,220})'|([^\r\n,}<>]{0,220}))/gim;
+    while ((m = keyedName.exec(text))) addName(m[1] ?? m[2] ?? m[3] ?? "", m.index);
+
+    return markers.sort((a, b) => a.index - b.index);
+  }
+
+  function cleanupMmiNameValue(value) {
+    let s = String(value == null ? "" : value);
+    s = s.replace(/^\s*<!\[CDATA\[/i, "").replace(/\]\]>\s*$/i, "");
+    s = s.replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    s = s.replace(/\\r\\n|\\n|\\r|\\t/g, " ");
+    s = s.replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'");
+    s = s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    s = s.replace(/^name\s*[:=]\s*/i, "").trim();
+    if (!s || s.length > 120) return "";
+    if (/^MML\s*@/i.test(s)) return "";
+    const cleanedAsMml = cleanupMmiMmlValue(s);
+    if (cleanedAsMml && looksLikeMmlPart(cleanedAsMml)) return "";
+    return s;
+  }
+
+  function findMmiNameForCandidate(position, markers, orderIndex = 0) {
+    if (!markers?.length) return "";
+    const pos = Math.max(0, Number(position) || 0);
+    let best = null;
+    for (const marker of markers) {
+      const beforeDistance = pos - marker.index;
+      if (beforeDistance >= 0 && beforeDistance <= 2400) {
+        if (!best || beforeDistance < best.distance) best = { name: marker.name, distance: beforeDistance };
+      }
+    }
+    if (best?.name) return best.name;
+    for (const marker of markers) {
+      const afterDistance = marker.index - pos;
+      if (afterDistance >= 0 && afterDistance <= 900) {
+        if (!best || afterDistance < best.distance) best = { name: marker.name, distance: afterDistance };
+      }
+    }
+    if (best?.name) return best.name;
+    const ordered = markers[Math.max(0, Math.min(markers.length - 1, Number(orderIndex) || 0))];
+    return ordered?.name || "";
+  }
+
+  function formatMmiChannelLabel(number, name = "") {
+    const label = `Ch ${number}`;
+    const cleaned = cleanupMmiNameValue(name);
+    return cleaned ? `${label} · ${cleaned}` : label;
+  }
+
+  function cleanupMmiMmlValue(value) {
+    let s = String(value == null ? "" : value);
+    s = s.replace(/^\s*<!\[CDATA\[/i, "").replace(/\]\]>\s*$/i, "");
+    s = s.replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+    s = s.replace(/\\r\\n|\\n|\\r|\\t/g, " ");
+    s = s.replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'");
+    return s.replace(/^\s*MML\s*@/i, "").replace(/;\s*$/g, "").trim();
+  }
+
+
+  function normalizeMmiLegacyLengthsInPart(value) {
+    const s = String(value || "");
+    let i = 0;
+    let out = "";
+    let legacyDefault = null;
+
+    const isDigit = ch => /\d/.test(ch || "");
+    const readDigits = () => {
+      const start = i;
+      while (i < s.length && isDigit(s[i])) i++;
+      return i > start ? s.slice(start, i) : "";
+    };
+    const readDots = () => {
+      const start = i;
+      while (s[i] === ".") i++;
+      return i - start;
+    };
+    const legacyFactor = dots => {
+      let factor = 1;
+      let add = 0.5;
+      for (let n = 0; n < dots; n++) {
+        factor += add;
+        add /= 2;
+      }
+      return factor;
+    };
+    const isValidMmlLength = n => [1, 2, 4, 8, 16, 32, 64].includes(n);
+    const quantaFromSpec = spec => {
+      if (!spec || !spec.length || spec.length <= 0) return 16;
+      const factor = legacyFactor(spec.dots || 0) * (spec.extraFactor || 1);
+      return Math.max(1, Math.round((64 / spec.length) * factor));
+    };
+    const decomposeQuanta = quanta => {
+      let remain = Math.max(1, Math.floor(quanta));
+      const result = [];
+      for (const entry of [
+        { len: 1, q: 64 },
+        { len: 2, q: 32 },
+        { len: 4, q: 16 },
+        { len: 8, q: 8 },
+        { len: 16, q: 4 },
+        { len: 32, q: 2 },
+        { len: 64, q: 1 }
+      ]) {
+        while (remain >= entry.q) {
+          result.push(entry.len);
+          remain -= entry.q;
+        }
+      }
+      return result.length ? result : [64];
+    };
+    const expandTimedToken = (head, spec, options = {}) => {
+      const lengths = decomposeQuanta(quantaFromSpec(spec));
+      const isRest = options.rest || /^r$/i.test(head) || /^n0$/i.test(head);
+      if (options.needsLengthCommand) {
+        return lengths
+          .map(len => `l${len}${head}`)
+          .join(isRest ? "" : "&");
+      }
+      return lengths
+        .map(len => `${head}${len}`)
+        .join(isRest ? "" : "&");
+    };
+    const combineDefaultSpec = (dots = 0) => {
+      if (!legacyDefault) return null;
+      return {
+        length: legacyDefault.length,
+        dots: legacyDefault.dots,
+        extraFactor: legacyFactor(dots)
+      };
+    };
+
+    while (i < s.length) {
+      const ch = s[i];
+      const lower = ch.toLowerCase();
+
+      if (lower === "l") {
+        const start = i;
+        i++;
+        const digits = readDigits();
+        const dots = readDots();
+        const n = digits ? Number(digits) : null;
+        if (n && !isValidMmlLength(n)) {
+          legacyDefault = { length: n, dots };
+        } else {
+          legacyDefault = null;
+          out += s.slice(start, i);
+        }
+        continue;
+      }
+
+      if (/[cdefgab]/i.test(ch)) {
+        i++;
+        let head = ch;
+        if (s[i] === "+" || s[i] === "#" || s[i] === "-") {
+          head += s[i];
+          i++;
+        }
+        const digits = readDigits();
+        const dots = readDots();
+        const n = digits ? Number(digits) : null;
+        if (n && !isValidMmlLength(n)) {
+          out += expandTimedToken(head, { length: n, dots });
+        } else if (!digits && legacyDefault) {
+          out += expandTimedToken(head, combineDefaultSpec(dots));
+        } else {
+          out += `${head}${digits}${".".repeat(dots)}`;
+        }
+        continue;
+      }
+
+      if (lower === "r") {
+        i++;
+        const digits = readDigits();
+        const dots = readDots();
+        const n = digits ? Number(digits) : null;
+        if (n && !isValidMmlLength(n)) {
+          out += expandTimedToken(ch, { length: n, dots }, { rest: true });
+        } else if (!digits && legacyDefault) {
+          out += expandTimedToken(ch, combineDefaultSpec(dots), { rest: true });
+        } else {
+          out += `${ch}${digits}${".".repeat(dots)}`;
+        }
+        continue;
+      }
+
+      if (lower === "n") {
+        i++;
+        const noteNumber = readDigits();
+        const dots = readDots();
+        const head = `n${noteNumber}`;
+        if (legacyDefault && noteNumber) {
+          out += expandTimedToken(head, combineDefaultSpec(dots), { needsLengthCommand: true, rest: Number(noteNumber) === 0 });
+        } else {
+          out += `${head}${".".repeat(dots)}`;
+        }
+        continue;
+      }
+
+      out += ch;
+      i++;
+    }
+    return out;
+  }
+
+  function looksLikeMmlPart(value) {
+    const s = String(value || "").trim();
+    if (!s) return false;
+    if (/[^cdefgabronltv<>+#\-&.0-9\s]/i.test(s)) return false;
+    if (!/[cdefgabronrltv<>]/i.test(s)) return false;
+    const normalized = normalizeMmiLegacyLengthsInPart(s);
+    try {
+      const parsed = parseMabinogiMml(composeMml([normalized], { preserveEmpty: true, partCount: 1 }));
+      const part = parsed.parts?.[0];
+      return Boolean(part && (part.notes.length || part.tempos.length || /[rR]/.test(normalized)));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function pushMmiPart(list, value, index = 0, name = "") {
+    const cleaned = cleanupMmiMmlValue(value);
+    if (!cleaned) return;
+    list.push({ value: cleaned, index, name: cleanupMmiNameValue(name) });
   }
 
 
