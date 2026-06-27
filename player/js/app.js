@@ -650,7 +650,7 @@
         const bytes = new Uint8Array(await file.arrayBuffer());
         const overview = analyzeMidi(bytes, name);
         openMidiConvertDialog({ bytes, name, overview });
-      } else if (ext === "txt" || ext === "md") {
+      } else if (ext === "txt") {
         const text = await file.text();
         const loaded = readMmlTextFile(text);
         try {
@@ -662,7 +662,7 @@
           showDialog("MML 최적화 생략", `파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
         }
       } else {
-        throw new Error("지원하지 않는 파일입니다. mid, midi, txt, md 파일을 선택해 주세요.");
+        throw new Error("지원하지 않는 파일입니다. mid, midi, txt 파일을 선택해 주세요.");
       }
     } catch (err) {
       showDialog("파일 불러오기 실패", shortError(err));
@@ -673,7 +673,7 @@
   function readMmlTextFile(text) {
     const raw = String(text || "").replace(/^\uFEFF/, "").trim();
     if (!/^MML\s*@/i.test(raw)) {
-      throw new Error("TXT/MD 파일은 MML@...; 형식이어야 합니다.");
+      throw new Error("TXT 파일은 MML@...; 형식이어야 합니다.");
     }
     const m = raw.match(/^MML\s*@([\s\S]*);\s*$/i);
     if (!m) {
@@ -2516,27 +2516,27 @@ ${shortError(err)}`);
   async function saveVisibleMml() {
     let exportData;
     try {
-      exportData = getVisibleMmlForExport();
+      exportData = getFullMmlForExport();
     } catch (err) {
       showDialog("저장 실패", `MML 최적화 중 문제가 발생했습니다.\n\n${shortError(err)}`);
       return;
     }
-    const { text, isMainPanel, panelName } = exportData;
+    const { text } = exportData;
     if (!text.trim()) {
       showDialog("저장 실패", "저장할 MML이 비어 있습니다.");
       return;
     }
 
-    const defaultName = isMainPanel ? "mabinogi-mml.md" : `mabinogi-${panelName || "part"}.md`;
-    const blob = new Blob([text + "\n"], { type: "text/markdown;charset=utf-8" });
+    const defaultName = "mabinogi-mml.txt";
+    const blob = new Blob([text + "\n"], { type: "text/plain;charset=utf-8" });
 
     if (window.showSaveFilePicker) {
       try {
         const handle = await window.showSaveFilePicker({
           suggestedName: defaultName,
           types: [{
-            description: "Markdown MML 파일",
-            accept: { "text/markdown": [".md"] }
+            description: "텍스트 MML 파일",
+            accept: { "text/plain": [".txt"] }
           }]
         });
         const writable = await handle.createWritable();
@@ -2554,22 +2554,14 @@ ${shortError(err)}`);
     const entered = prompt("저장할 파일 이름을 입력해 주세요.\n브라우저에 따라 저장 위치는 다운로드 설정을 따릅니다.", defaultName);
     if (entered == null) return;
     let fileName = entered.trim() || defaultName;
-    if (!/\.md$/i.test(fileName)) fileName += ".md";
+    if (!/\.txt$/i.test(fileName)) fileName += ".txt";
     downloadBlob(blob, fileName);
     flashButton(saveBtn, "저장 완료");
   }
 
-  function getVisibleMmlForExport() {
-    const activePanel = panels.find(p => !p.hidden) || panels[0];
-    const textarea = activePanel.querySelector("textarea");
-    const isMainPanel = activePanel.dataset.panel === "main";
-    let text;
-    if (isMainPanel) {
-      text = normalizeMmlForCopy(optimizeMml(textarea?.value || "").mml);
-    } else {
-      text = optimizePart(normalizePartText(textarea?.value || ""), { includeTempo: activePanel.dataset.panel === "part0" }).part;
-    }
-    return { text, isMainPanel, panelName: activePanel.dataset.panel || "part" };
+  function getFullMmlForExport() {
+    const text = normalizeMmlForCopy(optimizeMml(mainMml?.value || "").mml);
+    return { text };
   }
 
   function downloadBlob(blob, fileName) {
