@@ -15,12 +15,24 @@
     { value: "half", label: "절반" },
     { value: "none", label: "안함" }
   ];
+  const GOOGLE_CONFIG = window.MOBIBARD_GOOGLE_CONFIG || {};
+  const GOOGLE_DRIVE_SCOPE = [
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive.appdata"
+  ].join(" ");
+  const GOOGLE_DRIVE_API_BASE = "https://www.googleapis.com/drive/v3";
+  const GOOGLE_DRIVE_UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3";
+  const GOOGLE_SETTINGS_FILE_NAME = "mobibard-player-settings.json";
+  const GOOGLE_SETTINGS_APP_NAME = "mabinogi-mml-player";
+  const GOOGLE_MML_FOLDER_NAME = "MML_Mobibard";
+  const GOOGLE_DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
+  const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
 
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { parseMabinogiMml, splitMmlParts, buildSchedule, composeMml } = window.MabiMml;
-  const { optimizeMml, optimizePart, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, splitMmlPages } = window.MabiOptimizer;
+  const { optimizeMml, optimizePart, trimShortRestsMml, addLeadingSilenceMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
   const $ = (id) => document.getElementById(id);
@@ -29,6 +41,21 @@
   const soundSource = $("soundSource");
   const sf2File = $("sf2File");
   const soundName = $("soundName");
+  const googleLoginBtn = $("googleLoginBtn");
+  const googleDriveLoadBtn = $("googleDriveLoadBtn");
+  const googleDriveSaveBtn = $("googleDriveSaveBtn");
+  const googleStatus = $("googleStatus");
+  const googleDriveSaveDialog = $("googleDriveSaveDialog");
+  const googleDriveSaveForm = $("googleDriveSaveForm");
+  const googleDriveSaveFolderNameText = $("googleDriveSaveFolderNameText");
+  const googleDriveSaveFolderBtn = $("googleDriveSaveFolderBtn");
+  const googleDriveSaveFileName = $("googleDriveSaveFileName");
+  const googleDriveSaveStatus = $("googleDriveSaveStatus");
+  const googleDriveSaveCancel = $("googleDriveSaveCancel");
+  const googleDriveSaveApply = $("googleDriveSaveApply");
+  const codeHelpBtn = $("codeHelpBtn");
+  const codeHelpDialog = $("codeHelpDialog");
+  const codeHelpClose = $("codeHelpClose");
   const playToggleBtn = $("playToggleBtn");
   const rewindBtn = $("rewindBtn");
   const loopPlayback = $("loopPlayback");
@@ -70,6 +97,7 @@
   const midiInstrumentPanelHint = $("midiInstrumentPanelHint");
   const midiConvertApply = $("midiConvertApply");
   const midiConvertCancel = $("midiConvertCancel");
+  const midiConvertStatus = $("midiConvertStatus");
   const themeToggleBtn = $("themeToggleBtn");
   const charCount = $("charCount");
   const partSoundBtn = $("partSoundBtn");
@@ -118,6 +146,7 @@
   let midiPreviewSources = [];
   let midiPreviewTimer = 0;
   let midiFullPreviewActive = false;
+  let midiConvertBusy = false;
   let splitPreviewButton = null;
   let splitPreviewButtonText = "";
   let partPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
@@ -127,6 +156,20 @@
   let midiPartPresetName = DEFAULT_MIDI_SOUND_PRESET_LABEL;
   let userSoundPresets = [];
   let partMuteStates = Array.from({ length: 6 }, () => false);
+  let googleTokenClient = null;
+  let googleAccessToken = "";
+  let googleTokenExpiresAt = 0;
+  let googlePickerLoaded = false;
+  let googleSettingsFileId = "";
+  let googleSettingsApplying = false;
+  let googleSettingsSaveTimer = 0;
+  let googleSettingsSaving = false;
+  let googleDriveMmlFileId = "";
+  let googleDriveMmlFileName = "";
+  let googleDriveMmlFolderId = "";
+  let googleDriveSaveFolderId = "";
+  let googleDriveSaveFolderName = "";
+  let suggestedMmlSaveFileName = "";
 
   init();
 
@@ -137,8 +180,14 @@
     loadMidiPartSoundPresetPrefs();
     loadUserSoundPresetPrefs();
     loadPartMutePrefs();
+    loadGoogleDriveFolderPrefs();
     midiLoadBtn.addEventListener("click", () => { midiFile.value = ""; midiFile.click(); });
     midiFile.addEventListener("change", () => void loadSourceFile());
+    googleLoginBtn?.addEventListener("click", () => void handleGoogleLoginButton());
+    googleDriveLoadBtn?.addEventListener("click", () => void openGoogleDrivePicker());
+    googleDriveSaveBtn?.addEventListener("click", () => void saveMmlToGoogleDrive());
+    codeHelpBtn?.addEventListener("click", () => openCodeHelpDialog());
+    codeHelpClose?.addEventListener("click", () => codeHelpDialog?.close());
     soundSource.addEventListener("change", () => handleSoundSourceChange());
     sf2File.addEventListener("change", () => { if (sf2File.files?.[0]) void loadUserSf2(); resetSoundActionMenu(); });
     playToggleBtn.addEventListener("click", () => { isPlaying ? stopPlayback(false) : void playFromCurrent(); });
@@ -177,9 +226,21 @@
     leadingSilenceSeconds?.addEventListener("blur", normalizeLeadingSilenceSecondsInput);
     midiExportCount?.addEventListener("change", updateMidiRoleControls);
     midiFullPreviewBtn?.addEventListener("click", () => void toggleMidiFullPreview());
-    midiConvertApply?.addEventListener("click", () => applyMidiConvertDialog());
-    midiConvertCancel?.addEventListener("click", () => { stopMidiPreview(); pendingMidiImport = null; pendingMidiSettings = null; midiConvertDialog?.close(); });
-    midiConvertDialog?.addEventListener("close", () => stopMidiPreview());
+    midiConvertApply?.addEventListener("click", () => void applyMidiConvertDialog());
+    midiConvertCancel?.addEventListener("click", () => {
+      if (midiConvertBusy) return;
+      stopMidiPreview();
+      pendingMidiImport = null;
+      pendingMidiSettings = null;
+      midiConvertDialog?.close();
+    });
+    midiConvertDialog?.addEventListener("cancel", (event) => {
+      if (midiConvertBusy) event.preventDefault();
+    });
+    midiConvertDialog?.addEventListener("close", () => {
+      stopMidiPreview();
+      if (!midiConvertBusy) setMidiConvertBusy(false);
+    });
     partSoundDialog?.addEventListener("close", () => stopMidiPreview());
     themeToggleBtn?.addEventListener("click", toggleTheme);
     mainMml.addEventListener("input", () => {
@@ -200,6 +261,7 @@
     resetSoundActionMenu();
     updateSoundPresetControls();
     updatePartMuteControl();
+    updateGoogleDriveControls();
     updateCharCount();
     rebuildSchedulePreviewSilently();
   }
@@ -322,6 +384,859 @@
   function writePref(name, value) {
     try { localStorage.setItem(PREF_PREFIX + name, String(value)); }
     catch (_) {}
+    scheduleGoogleSettingsSave();
+  }
+
+  function googleClientId() {
+    return String(GOOGLE_CONFIG.clientId || GOOGLE_CONFIG.clientID || GOOGLE_CONFIG.CLIENT_ID || "").trim();
+  }
+
+  function googleApiKey() {
+    return String(GOOGLE_CONFIG.apiKey || GOOGLE_CONFIG.API_KEY || "").trim();
+  }
+
+  function googleAppId() {
+    return String(GOOGLE_CONFIG.appId || GOOGLE_CONFIG.APP_ID || "").trim();
+  }
+
+  function isGoogleConnected() {
+    return Boolean(googleAccessToken) && Date.now() < googleTokenExpiresAt - 30000;
+  }
+
+  function setGoogleStatus(message) {
+    if (googleStatus) googleStatus.textContent = message || "";
+  }
+
+  function updateGoogleDriveControls(message = "") {
+    const hasClient = Boolean(googleClientId());
+    const hasPickerKey = Boolean(googleApiKey());
+    const connected = isGoogleConnected();
+    if (googleLoginBtn) {
+      googleLoginBtn.disabled = !hasClient;
+      googleLoginBtn.textContent = connected ? "로그아웃" : "로그인";
+      googleLoginBtn.title = hasClient
+        ? (connected ? "Google Drive 연동을 해제합니다." : "Google 계정으로 Drive 연동을 시작합니다.")
+        : "js/google-config.js에 OAuth Client ID를 입력해야 합니다.";
+    }
+    if (googleDriveLoadBtn) {
+      googleDriveLoadBtn.disabled = !connected || !hasPickerKey;
+      googleDriveLoadBtn.title = !hasPickerKey
+        ? "Drive 파일 선택에는 js/google-config.js의 API Key가 필요합니다."
+        : "Google Drive의 MML_Mobibard 폴더에서 MIDI 또는 TXT MML 파일을 선택합니다.";
+    }
+    if (googleDriveSaveBtn) {
+      googleDriveSaveBtn.disabled = !connected;
+      googleDriveSaveBtn.title = "현재 전체 MML을 Google Drive의 MML_Mobibard 폴더에 TXT 파일로 저장합니다.";
+    }
+    if (message) {
+      setGoogleStatus(message);
+    } else if (!hasClient) {
+      setGoogleStatus("구글 설정 필요");
+    } else if (connected && !hasPickerKey) {
+      setGoogleStatus("연동됨 · API Key 필요");
+    } else if (connected) {
+      setGoogleStatus("구글 연동됨");
+    } else {
+      setGoogleStatus("미연동");
+    }
+  }
+
+  function openCodeHelpDialog() {
+    if (codeHelpDialog?.showModal) {
+      codeHelpDialog.showModal();
+    } else {
+      showDialog("코드 도움말", "이 브라우저에서는 코드 도움말 Dialog를 열 수 없습니다.");
+    }
+  }
+
+  function waitForGoogleGlobal(test, label, timeoutMs = 10000) {
+    if (test()) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const started = Date.now();
+      const timer = window.setInterval(() => {
+        if (test()) {
+          window.clearInterval(timer);
+          resolve();
+        } else if (Date.now() - started > timeoutMs) {
+          window.clearInterval(timer);
+          reject(new Error(`${label} 라이브러리를 불러오지 못했습니다.`));
+        }
+      }, 80);
+    });
+  }
+
+  async function ensureGoogleIdentityLoaded() {
+    await waitForGoogleGlobal(() => Boolean(window.google?.accounts?.oauth2), "Google 로그인");
+  }
+
+  async function ensureGooglePickerLoaded() {
+    await waitForGoogleGlobal(() => Boolean(window.gapi?.load), "Google Picker");
+    if (googlePickerLoaded && window.google?.picker) return;
+    await new Promise((resolve, reject) => {
+      try {
+        window.gapi.load("picker", {
+          callback: () => { googlePickerLoaded = true; resolve(); },
+          onerror: () => reject(new Error("Google Picker를 불러오지 못했습니다.")),
+          timeout: 10000,
+          ontimeout: () => reject(new Error("Google Picker 불러오기가 시간 초과되었습니다."))
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  async function ensureGoogleAccessToken(interactive = true) {
+    if (isGoogleConnected()) return googleAccessToken;
+    const clientId = googleClientId();
+    if (!clientId) throw new Error("Google OAuth Client ID가 설정되지 않았습니다. js/google-config.js를 먼저 채워 주세요.");
+    await ensureGoogleIdentityLoaded();
+    return new Promise((resolve, reject) => {
+      try {
+        if (!googleTokenClient) {
+          googleTokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: GOOGLE_DRIVE_SCOPE,
+            callback: () => {}
+          });
+        }
+        googleTokenClient.callback = (response) => {
+          if (!response || response.error) {
+            reject(new Error(response?.error_description || response?.error || "Google 로그인에 실패했습니다."));
+            return;
+          }
+          googleAccessToken = String(response.access_token || "");
+          const expiresIn = Math.max(60, Number(response.expires_in) || 3600);
+          googleTokenExpiresAt = Date.now() + expiresIn * 1000;
+          updateGoogleDriveControls("구글 연동됨");
+          resolve(googleAccessToken);
+        };
+        googleTokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  async function handleGoogleLoginButton() {
+    if (isGoogleConnected()) {
+      const token = googleAccessToken;
+      googleAccessToken = "";
+      googleTokenExpiresAt = 0;
+      googleDriveMmlFileId = "";
+      googleDriveMmlFileName = "";
+      googleDriveMmlFolderId = "";
+      try { window.google?.accounts?.oauth2?.revoke?.(token, () => {}); } catch (_) {}
+      clearTimeout(googleSettingsSaveTimer);
+      updateGoogleDriveControls("구글 연동 해제됨");
+      return;
+    }
+    try {
+      updateGoogleDriveControls("구글 로그인 중...");
+      await ensureGoogleAccessToken(true);
+      const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
+      updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : "로컬 설정 사용 중");
+    } catch (err) {
+      googleAccessToken = "";
+      googleTokenExpiresAt = 0;
+      googleDriveMmlFolderId = "";
+      updateGoogleDriveControls("구글 로그인 실패");
+      showDialog("구글 로그인 실패", shortError(err));
+    }
+  }
+
+  function driveQueryString(text) {
+    return String(text || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  }
+
+  async function googleDriveFetch(url, options = {}, retry = true) {
+    const token = await ensureGoogleAccessToken(true);
+    const headers = new Headers(options.headers || {});
+    headers.set("Authorization", `Bearer ${token}`);
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 401 && retry) {
+      googleAccessToken = "";
+      googleTokenExpiresAt = 0;
+      updateGoogleDriveControls("구글 인증 갱신 필요");
+      await ensureGoogleAccessToken(true);
+      return googleDriveFetch(url, options, false);
+    }
+    return response;
+  }
+
+  async function googleDriveJson(url, options = {}) {
+    const response = await googleDriveFetch(url, options);
+    if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
+    return response.json();
+  }
+
+  async function googleDriveErrorMessage(response) {
+    try {
+      const data = await response.json();
+      return data?.error?.message || `${response.status} ${response.statusText}`;
+    } catch (_) {
+      try { return await response.text() || `${response.status} ${response.statusText}`; }
+      catch (__) { return `${response.status} ${response.statusText}`; }
+    }
+  }
+
+  function createMultipartBody(metadata, content, contentType) {
+    const boundary = `mobibard_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+    const body = new Blob([
+      `--${boundary}\r\n`,
+      "Content-Type: application/json; charset=UTF-8\r\n\r\n",
+      JSON.stringify(metadata),
+      `\r\n--${boundary}\r\n`,
+      `Content-Type: ${contentType}\r\n\r\n`,
+      content,
+      `\r\n--${boundary}--`
+    ], { type: `multipart/related; boundary=${boundary}` });
+    return { body, contentType: `multipart/related; boundary=${boundary}` };
+  }
+
+  async function uploadGoogleDriveTextFile({ fileId = "", name, text, parents = null, mimeType = "text/plain" }) {
+    const metadata = { name, mimeType };
+    if (parents && !fileId) metadata.parents = parents;
+    const multipart = createMultipartBody(metadata, text, `${mimeType}; charset=UTF-8`);
+    const encodedId = encodeURIComponent(fileId);
+    const url = fileId
+      ? `${GOOGLE_DRIVE_UPLOAD_BASE}/files/${encodedId}?uploadType=multipart&fields=id,name,modifiedTime,webViewLink`
+      : `${GOOGLE_DRIVE_UPLOAD_BASE}/files?uploadType=multipart&fields=id,name,modifiedTime,webViewLink`;
+    const method = fileId ? "PATCH" : "POST";
+    return googleDriveJson(url, {
+      method,
+      headers: { "Content-Type": multipart.contentType },
+      body: multipart.body
+    });
+  }
+
+  async function findGoogleMmlFolder() {
+    const q = encodeURIComponent(`name = '${driveQueryString(GOOGLE_MML_FOLDER_NAME)}' and mimeType = '${GOOGLE_DRIVE_FOLDER_MIME}' and trashed = false`);
+    const url = `${GOOGLE_DRIVE_API_BASE}/files?spaces=drive&pageSize=1&q=${q}&fields=files(id,name,modifiedTime,webViewLink)`;
+    const data = await googleDriveJson(url);
+    return Array.isArray(data.files) && data.files.length ? data.files[0] : null;
+  }
+
+  async function createGoogleMmlFolder() {
+    return googleDriveJson(`${GOOGLE_DRIVE_API_BASE}/files?fields=id,name,modifiedTime,webViewLink`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: GOOGLE_MML_FOLDER_NAME,
+        mimeType: GOOGLE_DRIVE_FOLDER_MIME,
+        parents: ["root"]
+      })
+    });
+  }
+
+  async function ensureGoogleMmlFolder() {
+    if (googleDriveMmlFolderId) return googleDriveMmlFolderId;
+    const existing = await findGoogleMmlFolder();
+    if (existing?.id) {
+      googleDriveMmlFolderId = existing.id;
+      return googleDriveMmlFolderId;
+    }
+    const created = await createGoogleMmlFolder();
+    if (!created?.id) throw new Error(`${GOOGLE_MML_FOLDER_NAME} 폴더를 만들지 못했습니다.`);
+    googleDriveMmlFolderId = created.id;
+    return googleDriveMmlFolderId;
+  }
+
+  function loadGoogleDriveFolderPrefs() {
+    googleDriveSaveFolderId = String(readPref("googleDriveSaveFolderId") || "").trim();
+    googleDriveSaveFolderName = String(readPref("googleDriveSaveFolderName") || "").trim();
+  }
+
+  function rememberGoogleDriveSaveFolder(id, name) {
+    googleDriveSaveFolderId = String(id || "").trim();
+    googleDriveSaveFolderName = String(name || "").replace(/\s+/g, " ").trim().slice(0, 120);
+    if (googleDriveSaveFolderId) writePref("googleDriveSaveFolderId", googleDriveSaveFolderId);
+    if (googleDriveSaveFolderName) writePref("googleDriveSaveFolderName", googleDriveSaveFolderName);
+  }
+
+  async function pickGoogleDriveSaveFolder() {
+    await ensureGoogleAccessToken(true);
+    if (!googleApiKey()) throw new Error("Google Picker API Key가 설정되지 않았습니다. js/google-config.js의 apiKey를 채워 주세요.");
+    setGoogleStatus(`${GOOGLE_MML_FOLDER_NAME} 폴더 확인 중...`);
+    const defaultFolderId = await ensureGoogleMmlFolder();
+    await ensureGooglePickerLoaded();
+
+    return new Promise((resolve, reject) => {
+      try {
+        const picker = window.google?.picker;
+        if (!picker) throw new Error("Google Picker를 불러오지 못했습니다.");
+        const viewId = picker.ViewId.FOLDERS || picker.ViewId.DOCS;
+        const view = new picker.DocsView(viewId);
+        try { view.setIncludeFolders(true); } catch (_) {}
+        try { view.setSelectFolderEnabled(true); } catch (_) {}
+        try { view.setMimeTypes(GOOGLE_DRIVE_FOLDER_MIME); } catch (_) {}
+        try { if (defaultFolderId && typeof view.setParent === "function") view.setParent(defaultFolderId); } catch (_) {}
+
+        const folderHint = googleDriveSaveFolderName
+          ? `현재 선택: ${googleDriveSaveFolderName}`
+          : `기본 폴더: ${GOOGLE_MML_FOLDER_NAME}`;
+        const builder = new picker.PickerBuilder()
+          .setDeveloperKey(googleApiKey())
+          .setOAuthToken(googleAccessToken)
+          .setTitle(`저장 위치 선택 · ${folderHint}`)
+          .addView(view)
+          .setCallback((data) => {
+            const action = data?.[picker.Response.ACTION];
+            if (action === picker.Action.CANCEL) {
+              resolve(null);
+              return;
+            }
+            if (action !== picker.Action.PICKED) return;
+            const doc = data[picker.Response.DOCUMENTS]?.[0];
+            const id = doc?.[picker.Document.ID] || "";
+            const name = doc?.[picker.Document.NAME] || "선택한 폴더";
+            const mimeType = doc?.[picker.Document.MIME_TYPE] || "";
+            if (!id) {
+              resolve(null);
+              return;
+            }
+            if (mimeType && mimeType !== GOOGLE_DRIVE_FOLDER_MIME) {
+              showDialog("Drive 저장 위치", "파일이 아니라 폴더를 선택해 주세요.");
+              resolve(null);
+              return;
+            }
+            resolve({ id, name });
+          });
+        const appId = googleAppId();
+        if (appId) builder.setAppId(appId);
+        builder.build().setVisible(true);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  function pad2(value) {
+    return String(value).padStart(2, "0");
+  }
+
+  function buildGoogleDriveDefaultMmlFileName() {
+    const d = new Date();
+    const stamp = [
+      pad2(d.getFullYear() % 100),
+      pad2(d.getMonth() + 1),
+      pad2(d.getDate()),
+      pad2(d.getHours()),
+      pad2(d.getMinutes()),
+      pad2(d.getSeconds())
+    ].join("");
+    return `mml_${stamp}.txt`;
+  }
+
+  function sourceNameToTxtFileName(name) {
+    const cleaned = String(name == null ? "" : name)
+      .replace(/\.[^.\\/]*$/, "")
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .replace(/\s+/g, " ")
+      .trim();
+    return cleaned ? `${cleaned}.txt` : "";
+  }
+
+  function rememberSuggestedMmlSaveFileName(name) {
+    const suggested = sourceNameToTxtFileName(name);
+    suggestedMmlSaveFileName = suggested ? normalizeGoogleDriveTxtFileName(suggested) : "";
+  }
+
+  function clearSuggestedMmlSaveFileName() {
+    suggestedMmlSaveFileName = "";
+  }
+
+  function defaultMmlSaveFileName() {
+    return suggestedMmlSaveFileName || buildGoogleDriveDefaultMmlFileName();
+  }
+
+  function defaultGoogleDriveSaveFileName() {
+    return defaultMmlSaveFileName();
+  }
+
+  function defaultLocalSaveFileName() {
+    return defaultMmlSaveFileName();
+  }
+
+  function normalizeGoogleDriveTxtFileName(name) {
+    const text = String(name == null ? "" : name).replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, " ").trim();
+    const base = text || buildGoogleDriveDefaultMmlFileName();
+    return /\.txt$/i.test(base) ? base : `${base}.txt`;
+  }
+
+  async function findGoogleDriveTextFileInFolder(folderId, name) {
+    if (!folderId || !name) return null;
+    const q = encodeURIComponent(`'${driveQueryString(folderId)}' in parents and name = '${driveQueryString(name)}' and trashed = false`);
+    const url = `${GOOGLE_DRIVE_API_BASE}/files?spaces=drive&pageSize=10&q=${q}&fields=files(id,name,modifiedTime,webViewLink,parents)`;
+    const data = await googleDriveJson(url);
+    return Array.isArray(data.files) && data.files.length ? data.files[0] : null;
+  }
+
+  function openGoogleDriveSaveDialog({ defaultFolderId, defaultFolderName, defaultFileName, onCommit = null }) {
+    const initialFolder = {
+      id: defaultFolderId || googleDriveSaveFolderId || googleDriveMmlFolderId,
+      name: defaultFolderName || googleDriveSaveFolderName || GOOGLE_MML_FOLDER_NAME
+    };
+    const initialName = normalizeGoogleDriveTxtFileName(defaultFileName || buildGoogleDriveDefaultMmlFileName());
+
+    if (!googleDriveSaveDialog?.showModal || !googleDriveSaveFileName) {
+      const entered = window.prompt(`${initialFolder.name} 폴더에 저장할 TXT 파일 이름을 입력해 주세요.`, initialName);
+      if (entered == null) return Promise.resolve(null);
+      return Promise.resolve({
+        folderId: initialFolder.id,
+        folderName: initialFolder.name,
+        fileName: normalizeGoogleDriveTxtFileName(entered)
+      });
+    }
+
+    let selectedFolder = { ...initialFolder };
+    let settled = false;
+    let pauseCloseResolve = false;
+    let saving = false;
+
+    const updateFolderLabel = () => {
+      if (googleDriveSaveFolderNameText) googleDriveSaveFolderNameText.textContent = selectedFolder.name || GOOGLE_MML_FOLDER_NAME;
+    };
+    const focusFileName = () => {
+      requestAnimationFrame(() => {
+        try {
+          googleDriveSaveFileName.focus();
+          const dot = googleDriveSaveFileName.value.toLowerCase().lastIndexOf(".txt");
+          googleDriveSaveFileName.setSelectionRange(0, dot > 0 ? dot : googleDriveSaveFileName.value.length);
+        } catch (_) {}
+      });
+    };
+    const reopenSaveDialog = () => {
+      if (settled || googleDriveSaveDialog.open) return;
+      try {
+        googleDriveSaveDialog.showModal();
+        focusFileName();
+      } catch (_) {}
+    };
+    const setSaveBusy = (busy, message = "") => {
+      saving = busy;
+      if (googleDriveSaveApply) {
+        googleDriveSaveApply.disabled = busy;
+        googleDriveSaveApply.textContent = busy ? "저장 중..." : "저장";
+      }
+      if (googleDriveSaveCancel) googleDriveSaveCancel.disabled = busy;
+      if (googleDriveSaveFolderBtn) googleDriveSaveFolderBtn.disabled = busy;
+      if (googleDriveSaveFileName) googleDriveSaveFileName.disabled = busy;
+      if (googleDriveSaveStatus) googleDriveSaveStatus.textContent = message || "";
+    };
+
+    return new Promise((resolve) => {
+      const cleanup = () => {
+        googleDriveSaveCancel?.removeEventListener("click", onCancel);
+        googleDriveSaveApply?.removeEventListener("click", onSave);
+        googleDriveSaveFolderBtn?.removeEventListener("click", onPickFolder);
+        googleDriveSaveDialog.removeEventListener("cancel", onCancelEvent);
+        googleDriveSaveDialog.removeEventListener("close", onClose);
+        setSaveBusy(false);
+      };
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+      const closeDialog = () => {
+        try { googleDriveSaveDialog.close(); } catch (_) {}
+      };
+      const onCancel = () => {
+        if (saving) return;
+        finish(null);
+        closeDialog();
+      };
+      const onCancelEvent = (event) => {
+        event.preventDefault();
+        onCancel();
+      };
+      const onClose = () => {
+        if (pauseCloseResolve) return;
+        if (!settled) finish(null);
+      };
+      const onSave = async () => {
+        if (saving) return;
+        const fileName = normalizeGoogleDriveTxtFileName(googleDriveSaveFileName.value);
+        googleDriveSaveFileName.value = fileName;
+        setSaveBusy(true, "같은 이름의 파일이 있는지 확인 중...");
+        try {
+          const folderId = selectedFolder.id || googleDriveMmlFolderId || await ensureGoogleMmlFolder();
+          const folderName = selectedFolder.name || GOOGLE_MML_FOLDER_NAME;
+          const existing = await findGoogleDriveTextFileInFolder(folderId, fileName);
+          if (existing?.id) {
+            const overwrite = window.confirm(`'${folderName}' 폴더에 '${fileName}' 파일이 이미 있습니다.
+
+덮어쓸까요?`);
+            if (!overwrite) {
+              setSaveBusy(false);
+              focusFileName();
+              return;
+            }
+          }
+          const target = {
+            folderId,
+            folderName,
+            fileName,
+            overwriteFileId: existing?.id || ""
+          };
+          if (typeof onCommit === "function") {
+            setSaveBusy(true, "Google Drive에 저장 중입니다. 잠시만 기다려 주세요...");
+            const result = await onCommit(target);
+            const savedName = result?.fileName || result?.name || fileName;
+            const action = result?.createsNewFile === false ? "덮어썼습니다" : "저장했습니다";
+            showDialog("Drive 저장 완료", `'${folderName}' 폴더에 '${savedName}' 파일로 ${action}.`);
+            finish(result || target);
+            closeDialog();
+            return;
+          }
+          finish(target);
+          closeDialog();
+        } catch (err) {
+          setSaveBusy(false);
+          showDialog("Drive 저장 실패", shortError(err));
+          reopenSaveDialog();
+        }
+      };
+      const onPickFolder = async () => {
+        if (saving) return;
+        const savedName = googleDriveSaveFileName.value;
+        pauseCloseResolve = true;
+        closeDialog();
+        await new Promise((resolveFrame) => requestAnimationFrame(resolveFrame));
+        try {
+          const picked = await pickGoogleDriveSaveFolder();
+          if (picked) {
+            selectedFolder = { id: picked.id, name: picked.name || "선택한 폴더" };
+            rememberGoogleDriveSaveFolder(selectedFolder.id, selectedFolder.name);
+          }
+        } catch (err) {
+          showDialog("Drive 저장 위치 선택 실패", shortError(err));
+        } finally {
+          googleDriveSaveFileName.value = savedName;
+          updateFolderLabel();
+          pauseCloseResolve = false;
+          reopenSaveDialog();
+        }
+      };
+
+      updateFolderLabel();
+      googleDriveSaveFileName.value = initialName;
+      googleDriveSaveCancel?.addEventListener("click", onCancel);
+      googleDriveSaveApply?.addEventListener("click", onSave);
+      googleDriveSaveFolderBtn?.addEventListener("click", onPickFolder);
+      googleDriveSaveDialog.addEventListener("cancel", onCancelEvent);
+      googleDriveSaveDialog.addEventListener("close", onClose);
+      googleDriveSaveDialog.showModal();
+      focusFileName();
+    });
+  }
+
+  function captureLocalPrefSnapshot() {
+    const prefs = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(PREF_PREFIX)) continue;
+        const name = key.slice(PREF_PREFIX.length);
+        const value = localStorage.getItem(key);
+        if (name && value != null && value.length < 250000) prefs[name] = value;
+      }
+    } catch (_) {}
+    return prefs;
+  }
+
+  function parseGoogleSettings(text) {
+    const data = JSON.parse(String(text || ""));
+    const prefs = data?.prefs;
+    if (!prefs || typeof prefs !== "object" || Array.isArray(prefs)) {
+      throw new Error("설정 파일 형식이 올바르지 않습니다.");
+    }
+    const normalized = {};
+    for (const [key, value] of Object.entries(prefs)) {
+      const name = String(key || "").trim();
+      if (!name || name.includes(".") || name.length > 80) continue;
+      if (value == null) continue;
+      if (["string", "number", "boolean"].includes(typeof value)) normalized[name] = String(value);
+    }
+    return normalized;
+  }
+
+  function buildGoogleSettingsPayload() {
+    return JSON.stringify({
+      app: GOOGLE_SETTINGS_APP_NAME,
+      version: 1,
+      savedAt: new Date().toISOString(),
+      prefs: captureLocalPrefSnapshot()
+    }, null, 2);
+  }
+
+  async function findGoogleSettingsFile() {
+    const q = encodeURIComponent(`name = '${driveQueryString(GOOGLE_SETTINGS_FILE_NAME)}' and trashed = false`);
+    const url = `${GOOGLE_DRIVE_API_BASE}/files?spaces=appDataFolder&pageSize=1&q=${q}&fields=files(id,name,modifiedTime,size)`;
+    const data = await googleDriveJson(url);
+    return Array.isArray(data.files) && data.files.length ? data.files[0] : null;
+  }
+
+  async function downloadGoogleDriveText(fileId) {
+    const response = await googleDriveFetch(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?alt=media`);
+    if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
+    return response.text();
+  }
+
+  function applyPrefSnapshot(prefs) {
+    googleSettingsApplying = true;
+    try {
+      for (const [name, value] of Object.entries(prefs || {})) {
+        try { localStorage.setItem(PREF_PREFIX + name, String(value)); }
+        catch (_) {}
+      }
+      reloadPreferencesFromStorage();
+    } finally {
+      googleSettingsApplying = false;
+    }
+  }
+
+  function reloadPreferencesFromStorage() {
+    partPresetKeys = defaultPartPresetKeys();
+    midiPartPresetKeys = null;
+    midiPartPresetName = DEFAULT_MIDI_SOUND_PRESET_LABEL;
+    userSoundPresets = [];
+    partMuteStates = Array.from({ length: 6 }, () => false);
+    loadThemePref();
+    loadPlaybackPrefs();
+    loadPartSoundPrefs();
+    loadMidiPartSoundPresetPrefs();
+    loadUserSoundPresetPrefs();
+    loadPartMutePrefs();
+    loadGoogleDriveFolderPrefs();
+    applyPlaybackSpeed(false);
+    applyOutputVolume();
+    updateSoundPresetControls();
+    updatePartMuteControl();
+    updateCharCount();
+    rebuildSchedulePreviewSilently();
+  }
+
+  async function loadGoogleSettingsOrFallbackLocal() {
+    if (!isGoogleConnected()) return false;
+    try {
+      setGoogleStatus("구글 설정 확인 중...");
+      const file = await findGoogleSettingsFile();
+      if (!file?.id) {
+        googleSettingsFileId = "";
+        setGoogleStatus("구글 설정 생성 중...");
+        await saveGoogleSettingsNow(true);
+        setGoogleStatus("로컬 설정 사용 중");
+        return false;
+      }
+      googleSettingsFileId = file.id;
+      const text = await downloadGoogleDriveText(file.id);
+      const prefs = parseGoogleSettings(text);
+      applyPrefSnapshot(prefs);
+      setGoogleStatus("구글 설정 적용됨");
+      return true;
+    } catch (err) {
+      setGoogleStatus("구글 설정 실패 · 로컬 사용");
+      try { await saveGoogleSettingsNow(true); } catch (_) {}
+      return false;
+    }
+  }
+
+  function scheduleGoogleSettingsSave(delay = 1600) {
+    if (googleSettingsApplying || !isGoogleConnected()) return;
+    clearTimeout(googleSettingsSaveTimer);
+    googleSettingsSaveTimer = window.setTimeout(() => void saveGoogleSettingsNow(true), delay);
+  }
+
+  async function saveGoogleSettingsNow(silent = false) {
+    if (!isGoogleConnected()) return false;
+    if (googleSettingsSaving) {
+      clearTimeout(googleSettingsSaveTimer);
+      googleSettingsSaveTimer = window.setTimeout(() => void saveGoogleSettingsNow(true), 1200);
+      return false;
+    }
+    googleSettingsSaving = true;
+    try {
+      if (!googleSettingsFileId) {
+        const existing = await findGoogleSettingsFile();
+        googleSettingsFileId = existing?.id || "";
+      }
+      const payload = buildGoogleSettingsPayload();
+      const saved = await uploadGoogleDriveTextFile({
+        fileId: googleSettingsFileId,
+        name: GOOGLE_SETTINGS_FILE_NAME,
+        text: payload,
+        parents: googleSettingsFileId ? null : ["appDataFolder"],
+        mimeType: "application/json"
+      });
+      googleSettingsFileId = saved?.id || googleSettingsFileId;
+      if (!silent) setGoogleStatus("구글 설정 저장됨");
+      return true;
+    } catch (err) {
+      if (!silent) showDialog("구글 설정 저장 실패", shortError(err));
+      else setGoogleStatus("구글 설정 저장 실패");
+      return false;
+    } finally {
+      googleSettingsSaving = false;
+    }
+  }
+
+  async function openGoogleDrivePicker() {
+    try {
+      await ensureGoogleAccessToken(true);
+      if (!googleApiKey()) throw new Error("Google Picker API Key가 설정되지 않았습니다. js/google-config.js의 apiKey를 채워 주세요.");
+      setGoogleStatus(`${GOOGLE_MML_FOLDER_NAME} 폴더 확인 중...`);
+      const folderId = await ensureGoogleMmlFolder();
+      await ensureGooglePickerLoaded();
+      const view = new window.google.picker.DocsView(window.google.picker.ViewId.DOCS);
+      view.setIncludeFolders(true);
+      view.setSelectFolderEnabled(false);
+      try { view.setMimeTypes(`audio/midi,audio/x-midi,text/plain,application/octet-stream,${GOOGLE_DRIVE_FOLDER_MIME}`); } catch (_) {}
+      try { if (folderId && typeof view.setParent === "function") view.setParent(folderId); } catch (_) {}
+      const builder = new window.google.picker.PickerBuilder()
+        .setDeveloperKey(googleApiKey())
+        .setOAuthToken(googleAccessToken)
+        .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 MIDI / TXT MML 파일 선택`)
+        .addView(view)
+        .setCallback((data) => void handleGooglePickerResult(data));
+      const appId = googleAppId();
+      if (appId) builder.setAppId(appId);
+      builder.build().setVisible(true);
+      setGoogleStatus("구글 연동됨");
+    } catch (err) {
+      showDialog("Drive 불러오기 실패", shortError(err));
+      updateGoogleDriveControls();
+    }
+  }
+
+  async function handleGooglePickerResult(data) {
+    const picker = window.google?.picker;
+    if (!picker || data?.[picker.Response.ACTION] !== picker.Action.PICKED) return;
+    const doc = data[picker.Response.DOCUMENTS]?.[0];
+    const fileId = doc?.[picker.Document.ID];
+    const name = doc?.[picker.Document.NAME] || "Google Drive 파일";
+    const mimeType = doc?.[picker.Document.MIME_TYPE] || "";
+    if (!fileId) return;
+    if (mimeType === GOOGLE_DRIVE_FOLDER_MIME) {
+      showDialog("Drive 불러오기", "폴더가 아니라 MIDI 또는 TXT 파일을 선택해 주세요.");
+      return;
+    }
+    try {
+      await loadGoogleDriveSourceFile(fileId, name);
+    } catch (err) {
+      showDialog("Drive 불러오기 실패", shortError(err));
+    }
+  }
+
+  async function getGoogleDriveFileMeta(fileId) {
+    return googleDriveJson(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,size,modifiedTime,webViewLink,parents`);
+  }
+
+  async function loadGoogleDriveSourceFile(fileId, fallbackName = "Google Drive 파일") {
+    await ensureGoogleAccessToken(true);
+    stopMidiPreview();
+    stopPlayback(false);
+    const meta = await getGoogleDriveFileMeta(fileId);
+    const name = meta?.name || fallbackName;
+    const ext = name.split(".").pop()?.toLowerCase() || "";
+    const response = await googleDriveFetch(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?alt=media`);
+    if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
+    if (ext === "mid" || ext === "midi") {
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const overview = analyzeMidi(bytes, name);
+      googleDriveMmlFileId = "";
+      googleDriveMmlFileName = "";
+      openMidiConvertDialog({ bytes, name, overview });
+      setGoogleStatus("Drive MIDI 불러옴");
+      return;
+    }
+    if (ext === "txt") {
+      const loaded = readMmlTextFile(await response.text());
+      try {
+        const normalized = normalizeImportedFullMml(loaded);
+        setMainMml(normalized.mml);
+      } catch (optErr) {
+        setMainMml(loaded);
+        showDialog("MML 최적화 생략", `Drive 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+      }
+      googleDriveMmlFileId = fileId;
+      googleDriveMmlFileName = name;
+      rememberSuggestedMmlSaveFileName(name);
+      if (Array.isArray(meta?.parents) && meta.parents[0]) {
+        rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
+      }
+      setGoogleStatus("Drive TXT 불러옴");
+      return;
+    }
+    throw new Error("지원하지 않는 Drive 파일입니다. midi 또는 txt 파일만 선택해 주세요.");
+  }
+
+  async function saveMmlToGoogleDrive() {
+    try {
+      await ensureGoogleAccessToken(true);
+      setGoogleStatus(`${GOOGLE_MML_FOLDER_NAME} 폴더 확인 중...`);
+      const defaultFolderId = await ensureGoogleMmlFolder();
+      let exportData;
+      try {
+        exportData = getFullMmlForExport();
+      } catch (err) {
+        showDialog("Drive 저장 실패", `MML 최적화 중 문제가 발생했습니다.
+
+${shortError(err)}`);
+        return;
+      }
+      const text = exportData.text;
+      if (!text.trim()) {
+        showDialog("Drive 저장 실패", "저장할 MML이 비어 있습니다.");
+        return;
+      }
+
+      const defaultFolderName = googleDriveSaveFolderName || GOOGLE_MML_FOLDER_NAME;
+      const defaultFileName = googleDriveMmlFileName || defaultGoogleDriveSaveFileName();
+      const result = await openGoogleDriveSaveDialog({
+        defaultFolderId: googleDriveSaveFolderId || defaultFolderId,
+        defaultFolderName,
+        defaultFileName,
+        onCommit: async (target) => {
+          const folderId = target.folderId || defaultFolderId;
+          const folderName = target.folderName || GOOGLE_MML_FOLDER_NAME;
+          const fileName = normalizeGoogleDriveTxtFileName(target.fileName);
+          rememberGoogleDriveSaveFolder(folderId, folderName);
+
+          const targetId = target.overwriteFileId || "";
+          const createsNewFile = !targetId;
+          setGoogleStatus("Drive 저장 중...");
+          const saved = await uploadGoogleDriveTextFile({
+            fileId: targetId,
+            name: fileName,
+            text: text + "\n",
+            parents: createsNewFile ? [folderId] : null,
+            mimeType: "text/plain"
+          });
+          googleDriveMmlFileId = saved?.id || targetId;
+          googleDriveMmlFileName = saved?.name || fileName;
+          rememberSuggestedMmlSaveFileName(googleDriveMmlFileName);
+          return {
+            saved,
+            folderId,
+            folderName,
+            fileName: googleDriveMmlFileName,
+            createsNewFile
+          };
+        }
+      });
+      if (!result) {
+        setGoogleStatus("Drive 저장 취소");
+        return;
+      }
+      flashButton(googleDriveSaveBtn, "Drive 저장 완료");
+      setGoogleStatus("Drive 저장 완료");
+    } catch (err) {
+      showDialog("Drive 저장 실패", shortError(err));
+      updateGoogleDriveControls();
+    }
   }
 
   function hasMidiPartSoundPreset() {
@@ -643,6 +1558,9 @@
     if (!file) return;
     const name = file.name || "선택한 파일";
     const ext = name.split(".").pop()?.toLowerCase() || "";
+    googleDriveMmlFileId = "";
+    googleDriveMmlFileName = "";
+    clearSuggestedMmlSaveFileName();
     try {
       stopMidiPreview();
       stopPlayback(false);
@@ -654,9 +1572,8 @@
         const text = await file.text();
         const loaded = readMmlTextFile(text);
         try {
-          const trimmed = trimLeadingSilenceMml(loaded);
-          const optimized = optimizeMml(trimmed.mml);
-          setMainMml(optimized.mml);
+          const normalized = normalizeImportedFullMml(loaded);
+          setMainMml(normalized.mml);
         } catch (optErr) {
           setMainMml(loaded);
           showDialog("MML 최적화 생략", `파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
@@ -667,6 +1584,14 @@
     } catch (err) {
       showDialog("파일 불러오기 실패", shortError(err));
     }
+  }
+
+
+  function normalizeImportedFullMml(text) {
+    return addLeadingSilenceMml(normalizeMmlForDisplay(text), {
+      partCount: 6,
+      beats: AUTO_IMPORT_LEADING_SILENCE_SECONDS * 2
+    });
   }
 
 
@@ -698,13 +1623,14 @@
     pendingMidiSettings = createDefaultMidiSettings(groups, Boolean(overview.hasBeatGroups));
 
     if (midiConvertSummary) {
-      midiConvertSummary.textContent = `${importData.name || "MID"} · 노트 ${formatCount(overview.noteCount)}개 · 악기 ${formatCount(groups.length)}개 · 일반 ${formatCount(normalGroups.length)}개 / 비트 ${formatCount(beatGroups.length)}개 · PPQ ${overview.ppq}`;
+      midiConvertSummary.textContent = `${importData.name || "MIDI"} · 노트 ${formatCount(overview.noteCount)}개 · 악기 ${formatCount(groups.length)}개 · 일반 ${formatCount(normalGroups.length)}개 / 비트 ${formatCount(beatGroups.length)}개 · PPQ ${overview.ppq}`;
     }
     if (midiBeatNotice) {
       midiBeatNotice.hidden = beatGroups.length > 0;
       midiBeatNotice.textContent = beatGroups.length ? "" : "이 MIDI에는 비트 그룹 악기가 없습니다.";
     }
     if (midiExportCount) midiExportCount.value = "3";
+    setMidiConvertBusy(false);
     renderMidiRoleList();
     renderActiveMidiInstrumentList();
     updateMidiRoleControls();
@@ -999,7 +1925,7 @@
   function setMidiFullPreviewState(active) {
     midiFullPreviewActive = Boolean(active);
     if (midiFullPreviewBtn) {
-      midiFullPreviewBtn.textContent = midiFullPreviewActive ? "MID 정지" : "MID 듣기";
+      midiFullPreviewBtn.textContent = midiFullPreviewActive ? "MIDI 정지" : "MIDI 듣기";
       midiFullPreviewBtn.classList.toggle("danger", midiFullPreviewActive);
       midiFullPreviewBtn.setAttribute("aria-pressed", midiFullPreviewActive ? "true" : "false");
     }
@@ -1184,22 +2110,36 @@
     };
   }
 
-  function applyMidiConvertDialog() {
-    if (!pendingMidiImport) return;
+  async function applyMidiConvertDialog() {
+    if (!pendingMidiImport || midiConvertBusy) return;
+
+    let options;
     try {
-      const options = collectMidiConvertOptions();
+      options = collectMidiConvertOptions();
+    } catch (err) {
+      showDialog("MIDI 변환 실패", shortError(err));
+      return;
+    }
+
+    stopMidiPreview();
+    setMidiConvertBusy(true, "MIDI를 MML로 변환 중입니다. 잠시만 기다려 주세요.");
+    await waitForBrowserPaint();
+
+    try {
       stopPlayback(false);
       const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
       const midiSoundPresetKeys = buildMidiPartSoundPreset(options.exportChannels, pendingMidiSettings?.groups || [], options.partCount);
-      const trimmed = trimLeadingSilenceMml(result.mml);
-      const optimized = optimizeMml(trimmed.mml);
-      setMainMml(optimized.mml);
+      const normalized = normalizeImportedFullMml(result.mml);
+      setMainMml(normalized.mml);
+      rememberSuggestedMmlSaveFileName(pendingMidiImport.name);
+      googleDriveMmlFileId = "";
+      googleDriveMmlFileName = "";
       const autoSoundApplied = rememberMidiPartSoundPreset(midiSoundPresetKeys);
-      stopMidiPreview();
       midiConvertDialog?.close();
+      setMidiConvertBusy(false);
       pendingMidiImport = null;
       pendingMidiSettings = null;
-      const saved = Math.max(0, Number(optimized.saved) || 0);
+      const saved = Math.max(0, Number(normalized.saved) || 0);
       showDialog(
         "MIDI 변환 완료",
         result.message +
@@ -1209,8 +2149,43 @@
             : "\n\nMIDI 악기 구성을 자동 음색 정보로 갱신했습니다. 현재 선택한 음색 설정은 유지했습니다.")
       );
     } catch (err) {
+      setMidiConvertBusy(false);
       showDialog("MIDI 변환 실패", shortError(err));
     }
+  }
+
+  function setMidiConvertBusy(busy, message = "") {
+    midiConvertBusy = Boolean(busy);
+    if (midiConvertStatus) {
+      midiConvertStatus.textContent = message || "";
+      midiConvertStatus.hidden = !message;
+    }
+    const controls = midiConvertDialog ? Array.from(midiConvertDialog.querySelectorAll("button, input, select")) : [];
+    for (const control of controls) {
+      if (busy) {
+        if (!control.dataset.prevMidiBusyDisabled) {
+          control.dataset.prevMidiBusyDisabled = control.disabled ? "1" : "0";
+        }
+        control.disabled = true;
+      } else if (control.dataset.prevMidiBusyDisabled) {
+        control.disabled = control.dataset.prevMidiBusyDisabled === "1";
+        delete control.dataset.prevMidiBusyDisabled;
+      }
+    }
+    if (midiConvertApply) {
+      midiConvertApply.textContent = busy ? "변환 중..." : "변환";
+      if (busy) midiConvertApply.disabled = true;
+    }
+  }
+
+  function waitForBrowserPaint() {
+    return new Promise(resolve => {
+      if (typeof requestAnimationFrame !== "function") {
+        setTimeout(resolve, 0);
+        return;
+      }
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
   }
 
   async function loadUserSf2() {
@@ -1685,15 +2660,6 @@
     updateActiveTempoMarker(c);
   }
 
-  function resetSchedule() {
-    currentOffset = 0;
-    scheduleCache = null;
-    preparedNotes = [];
-    scheduledNoteIds = new Set();
-    updateProgressUi(0, 0);
-    updateTempoMarkers([], 0);
-  }
-
   function rebuildSchedulePreviewSilently() {
     currentOffset = 0;
     try {
@@ -1876,12 +2842,6 @@
     return Math.max(0, Number(value) || 0).toLocaleString("ko-KR");
   }
 
-  function formatBeatCount(value) {
-    const n = Number(value) || 0;
-    if (Math.abs(n - Math.round(n)) < 1e-9) return Math.round(n).toLocaleString("ko-KR");
-    return n.toLocaleString("ko-KR", { maximumFractionDigits: 3 });
-  }
-
 
   function openRestTrimDialog() {
     if (restTrimLimit) restTrimLimit.value = "32";
@@ -2014,222 +2974,13 @@
 
   function parseRestTrimLimit(value) {
     const raw = String(value || "32").trim().toLowerCase();
-    if (raw === "all" || raw === "전체" || raw === "모두") return { all: true, units: Infinity, denom: null };
+    if (raw === "all" || raw === "전체" || raw === "모두") return { all: true, denom: null };
     const denom = Number(raw);
     if (![4, 8, 16, 32, 64].includes(denom)) {
       showDialog("쉼표 삭제", "삭제 길이는 all, 4, 8, 16, 32, 64 중 하나를 선택해 주세요.");
       return null;
     }
-    return { all: false, units: durationUnits(denom, 0), denom };
-  }
-
-  function removeShortRestsFromPart(partText, threshold) {
-    const tokens = tokenizeMmlPartForEdit(normalizePartText(partText));
-    let lastNote = null;
-    let canAbsorb = false;
-    let removed = 0;
-    let removedUnits = 0;
-
-    for (const token of tokens) {
-      if (token.type === "note") {
-        lastNote = token;
-        canAbsorb = Boolean(token.extendBase) && Number.isInteger(token.durUnits);
-        continue;
-      }
-
-      if (token.type === "rest") {
-        const restUnits = token.durUnits;
-        const canDelete = Number.isFinite(restUnits) && restUnits <= threshold.units + 1e-9;
-        if (canDelete && lastNote && canAbsorb && Number.isInteger(lastNote.durUnits + restUnits)) {
-          lastNote.durUnits += restUnits;
-          lastNote.raw = renderNoteDuration(lastNote.extendBase, lastNote.durUnits, lastNote.defaultUnits);
-          token.omit = true;
-          removed++;
-          removedUnits += restUnits;
-          continue;
-        }
-        canAbsorb = false;
-        continue;
-      }
-
-      if (token.type === "space") continue;
-      canAbsorb = false;
-    }
-
-    return {
-      text: tokens.filter(t => !t.omit).map(t => t.raw).join(""),
-      removed,
-      removedUnits
-    };
-  }
-
-  function tokenizeMmlPartForEdit(partText) {
-    const s = String(partText || "");
-    const tokens = [];
-    let i = 0;
-    let octave = 4;
-    let defaultUnits = durationUnits(4, 0);
-
-    const readNumber = () => {
-      const start = i;
-      while (i < s.length && /\d/.test(s[i])) i++;
-      return i > start ? { text: s.slice(start, i), value: Number(s.slice(start, i)), start, end: i } : null;
-    };
-    const readDotsCount = () => {
-      let count = 0;
-      while (s[i] === ".") { count++; i++; }
-      return count;
-    };
-    const readLengthUnits = () => {
-      const n = readNumber();
-      const dots = readDotsCount();
-      if (!n) return durationUnitsFromBase(defaultUnits, dots);
-      if (![1, 2, 4, 8, 16, 32, 64].includes(n.value)) return NaN;
-      return durationUnits(n.value, dots);
-    };
-    const pushRaw = (type, start, extra = {}) => tokens.push({ type, raw: s.slice(start, i), ...extra });
-
-    while (i < s.length) {
-      const start = i;
-      const ch = s[i];
-      const lower = ch.toLowerCase();
-
-      if (/\s/.test(ch)) {
-        while (i < s.length && /\s/.test(s[i])) i++;
-        pushRaw("space", start);
-      } else if ("cdefgab".includes(lower)) {
-        i++;
-        let semitone = { c:0, d:2, e:4, f:5, g:7, a:9, b:11 }[lower];
-        if (s[i] === "+" || s[i] === "#") { semitone++; i++; }
-        else if (s[i] === "-") { semitone--; i++; }
-        const baseEnd = i;
-        const units = readLengthUnits();
-        const midi = (octave + 1) * 12 + semitone;
-        pushRaw("note", start, {
-          midi,
-          durUnits: units,
-          defaultUnits,
-          extendBase: s.slice(start, baseEnd)
-        });
-      } else if (lower === "n") {
-        i++;
-        const n = readNumber();
-        const midi = n ? Math.max(0, Math.min(127, n.value)) : null;
-        const dots = readDotsCount();
-        const units = durationUnitsFromBase(defaultUnits, dots);
-        const base = midi == null ? null : noteBaseForMidiInOctave(midi, octave);
-        pushRaw("note", start, {
-          midi,
-          durUnits: units,
-          defaultUnits,
-          extendBase: base
-        });
-      } else if (lower === "r") {
-        i++;
-        const units = readLengthUnits();
-        pushRaw("rest", start, { durUnits: units });
-      } else if (lower === "l") {
-        i++;
-        const n = readNumber();
-        const dots = readDotsCount();
-        if (n && [1, 2, 4, 8, 16, 32, 64].includes(n.value)) defaultUnits = durationUnits(n.value, dots);
-        pushRaw("command", start);
-      } else if (lower === "o") {
-        i++;
-        const n = readNumber();
-        if (n && n.value >= 0 && n.value <= 9) octave = n.value;
-        pushRaw("command", start);
-      } else if (ch === ">") {
-        i++;
-        octave++;
-        pushRaw("command", start);
-      } else if (ch === "<") {
-        i++;
-        octave--;
-        pushRaw("command", start);
-      } else if (lower === "t" || lower === "v") {
-        i++;
-        readNumber();
-        pushRaw("command", start);
-      } else if (ch === "&") {
-        i++;
-        pushRaw("command", start);
-      } else {
-        i++;
-        pushRaw("other", start);
-      }
-    }
-    return tokens;
-  }
-
-  function durationUnits(denom, dots = 0) {
-    let total = 256 / denom;
-    let add = total / 2;
-    for (let i = 0; i < dots; i++) {
-      total += add;
-      add /= 2;
-    }
-    return total;
-  }
-
-  function durationUnitsFromBase(baseUnits, dots = 0) {
-    let total = baseUnits;
-    let add = baseUnits / 2;
-    for (let i = 0; i < dots; i++) {
-      total += add;
-      add /= 2;
-    }
-    return total;
-  }
-
-  function noteBaseForMidiInOctave(midi, octave) {
-    const semitone = midi - (octave + 1) * 12;
-    const names = ["c", "c+", "d", "d+", "e", "f", "f+", "g", "g+", "a", "a+", "b"];
-    return semitone >= 0 && semitone < names.length ? names[semitone] : null;
-  }
-
-  function renderNoteDuration(base, totalUnits, defaultUnits) {
-    const units = Math.round(totalUnits);
-    if (!base || units <= 0 || !Number.isInteger(units)) return base || "";
-    const candidates = buildDurationCandidates(defaultUnits);
-    const dp = Array(units + 1).fill(null);
-    dp[0] = "";
-
-    for (let u = 1; u <= units; u++) {
-      let best = null;
-      for (const cand of candidates) {
-        if (cand.units > u || dp[u - cand.units] == null) continue;
-        const piece = `${base}${cand.suffix}`;
-        const text = u === cand.units ? piece : `${dp[u - cand.units]}&${piece}`;
-        if (best == null || text.length < best.length || (text.length === best.length && text < best)) best = text;
-      }
-      dp[u] = best;
-    }
-    return dp[units] || `${base}${durationSuffixFromUnits(units)}`;
-  }
-
-  function buildDurationCandidates(defaultUnits) {
-    const map = new Map();
-    const add = (units, suffix) => {
-      if (!Number.isInteger(units) || units <= 0) return;
-      const old = map.get(units);
-      if (old == null || suffix.length < old.length) map.set(units, suffix);
-    };
-    add(Math.round(defaultUnits), "");
-    add(Math.round(defaultUnits * 1.5), ".");
-    for (const denom of [1, 2, 4, 8, 16, 32, 64]) {
-      add(durationUnits(denom, 0), String(denom));
-      add(durationUnits(denom, 1), `${denom}.`);
-    }
-    return Array.from(map, ([units, suffix]) => ({ units, suffix })).sort((a, b) => b.units - a.units || a.suffix.length - b.suffix.length);
-  }
-
-  function durationSuffixFromUnits(units) {
-    for (const denom of [1, 2, 4, 8, 16, 32, 64]) {
-      if (durationUnits(denom, 0) === units) return String(denom);
-      if (durationUnits(denom, 1) === units) return `${denom}.`;
-    }
-    return "";
+    return { all: false, denom };
   }
 
   async function pasteVisibleMml() {
@@ -2253,7 +3004,7 @@
     if (isMainPanel || looksLikeFullMml) {
       let pasted = text;
       try {
-        pasted = trimLeadingSilenceMml(text).mml;
+        pasted = normalizeImportedFullMml(text).mml;
       } catch (_) {
         pasted = text;
       }
@@ -2264,6 +3015,9 @@
       textarea.value = normalizePartText(text);
       syncMainFromParts();
     }
+    clearSuggestedMmlSaveFileName();
+    googleDriveMmlFileId = "";
+    googleDriveMmlFileName = "";
     rebuildSchedulePreviewSilently();
     flashButton(pasteBtn, "붙여넣기 완료");
   }
@@ -2527,7 +3281,7 @@ ${shortError(err)}`);
       return;
     }
 
-    const defaultName = "mabinogi-mml.txt";
+    const defaultName = defaultLocalSaveFileName();
     const blob = new Blob([text + "\n"], { type: "text/plain;charset=utf-8" });
 
     if (window.showSaveFilePicker) {

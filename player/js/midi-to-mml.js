@@ -39,7 +39,7 @@
   const PERCUSSION_NAME_RE = /(drum|percussion|perc|snare|cymbal|kick|tom|hi[- ]?hat|ride|crash|clap|taiko|gong|wood\s*block|timpani|북|드럼|스네어|심벌|심벌즈|퍼커션|킥|탐|하이햇|라이드|크래시|공|징|북|박수|클랩|우드블록|팀파니)/i;
   const BEAT_PROGRAMS = new Set([47, 112, 113, 115, 116, 117, 118, 119]);
 
-  function analyzeMidi(bytes, fileName = "MID") {
+  function analyzeMidi(bytes, fileName = "MIDI") {
     const midi = parseMidiFile(bytes);
     if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
     const ppq = midi.ppq;
@@ -411,7 +411,7 @@
     return sec;
   }
 
-  function midiToMml(bytes, fileName = "MID", options = {}) {
+  function midiToMml(bytes, fileName = "MIDI", options = {}) {
     const midi = parseMidiFile(bytes);
     if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
 
@@ -936,7 +936,7 @@
   function parseMidiFile(bytes) {
     const r = new ByteReader(bytes);
     const warnings = [];
-    if (r.readAscii(4) !== "MThd") throw new Error("MThd 헤더가 없습니다. 표준 MID 파일인지 확인해 주세요.");
+    if (r.readAscii(4) !== "MThd") throw new Error("MThd 헤더가 없습니다. 표준 MIDI 파일인지 확인해 주세요.");
     const headerLength = r.readU32();
     if (headerLength < 6) throw new Error("MIDI 헤더 길이가 올바르지 않습니다.");
     const format = r.readU16();

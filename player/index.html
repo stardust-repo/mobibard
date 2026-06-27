@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>마비노기 MML 재생기 v2.4</title>
+  <title>모비바드 v3.1</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
   <link rel="stylesheet" href="styles.css" />
@@ -11,40 +11,42 @@
 </head>
 <body>
 <main>
-  <section class="card menu-card" aria-label="불러오기와 폰트 선택">
+  <section class="card menu-card" aria-label="마비노기 MML 재생기">
     <div class="app-head">
-      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">v2.4</span></h2>
-      <div class="title-theme-control">
-        <span class="theme-label menu-label">테마</span>
-        <button id="themeToggleBtn" class="theme-swatch" type="button" aria-pressed="false" aria-label="어두운 테마로 변경" title="어두운 테마로 변경"></button>
+      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">모비바드 v3.1</span></h2>
+      <div class="app-head-controls">
+        <div class="header-links" aria-label="바로가기">
+          <span class="menu-label">바로가기</span>
+          <a class="link-button" href="https://drive.google.com/drive/folders/17mHTnFD475WKYUFK9aowEymi1183vtqD?usp=drive_link" target="_blank" rel="noopener noreferrer">악보 공유</a>
+          <a class="link-button" href="https://discord.gg/msEKJU6Jj" target="_blank" rel="noopener noreferrer">디스코드</a>
+        </div>
+        <div class="google-account" aria-label="구글 계정">
+          <span class="menu-label">Google</span>
+          <span id="googleStatus" class="hint google-status visually-hidden" aria-live="polite">구글 설정 필요</span>
+          <button id="googleLoginBtn" type="button">로그인</button>
+        </div>
+        <div class="title-theme-control">
+          <span class="theme-label menu-label">테마</span>
+          <button id="themeToggleBtn" class="theme-swatch" type="button" aria-pressed="false" aria-label="어두운 테마로 변경" title="어두운 테마로 변경"></button>
+        </div>
       </div>
     </div>
-    <div class="menu-grid">
-      <div class="menu-item">
-        <span class="menu-label">불러오기</span>
-        <button id="midiLoadBtn" type="button">MID / MML</button>
+
+    <div class="player-file-toolbar" aria-label="MML 파일 작업">
+      <div class="player-file-actions-left">
+        <span class="toolbar-label">불러오기</span>
+        <button id="midiLoadBtn" type="button">MML / MIDI</button>
+        <button id="googleDriveLoadBtn" type="button" disabled title="Google Drive의 MML_Mobibard 폴더에서 불러오기">구글</button>
+        <span class="toolbar-label">저장하기</span>
+        <button id="saveBtn" class="ghost" type="button">파일</button>
+        <button id="googleDriveSaveBtn" class="ghost" type="button" disabled title="Google Drive의 MML_Mobibard 폴더에 저장">구글</button>
         <input id="midiFile" type="file" accept=".mid,.midi,.txt,audio/midi,audio/x-midi,text/plain" hidden />
       </div>
-      <div class="menu-item wide">
-        <select id="soundSource" aria-label="폰트 선택">
-          <option value="" selected disabled hidden>폰트 선택</option>
-          <option value="default">기본 사운드 사용</option>
-          <option value="custom">사용자 SF2 선택</option>
-        </select>
-        <input id="sf2File" type="file" accept=".sf2" hidden />
-        <span id="soundName" class="hint">기본 사운드</span>
+      <div class="player-file-actions-right">
+        <button id="pasteBtn" class="ghost" type="button">붙여넣기</button>
+        <button id="copyBtn" class="ghost" type="button">전부복사</button>
+        <button id="splitCopyBtn" class="ghost" type="button">나눠복사</button>
       </div>
-      <div class="menu-item link-actions">
-        <span class="menu-label">바로가기</span>
-        <a class="link-button" href="https://drive.google.com/drive/folders/17mHTnFD475WKYUFK9aowEymi1183vtqD?usp=drive_link" target="_blank" rel="noopener noreferrer">악보 공유</a>
-        <a class="link-button" href="https://discord.gg/msEKJU6Jj" target="_blank" rel="noopener noreferrer">디스코드</a>
-      </div>
-    </div>
-  </section>
-
-  <section class="card play-card" aria-label="재생 조작">
-    <div class="play-head">
-      <h2>재생 조작</h2>
     </div>
 
     <div class="play-layout">
@@ -82,21 +84,27 @@
     <div class="editor-head">
       <div class="editor-title-wrap">
         <h2>MML 보기 · 편집</h2>
-        <p class="command-help">지원 명령어: <code>MML@...;</code> <code>T</code> <code>O</code> <code>L</code> <code>V</code> <code>r</code> <code>cdefgab</code> <code>#</code> <code>+</code> <code>-</code> <code>&lt;</code> <code>&gt;</code> <code>.</code> <code>&amp;</code> <code>n</code></p>
+        <button id="codeHelpBtn" class="tiny-help-btn" type="button">코드 도움말</button>
       </div>
-      <div class="editor-actions"><button id="pasteBtn" class="ghost" type="button">붙여넣기</button><button id="copyBtn" class="ghost" type="button">전부복사</button><button id="splitCopyBtn" class="ghost" type="button">나눠복사</button><button id="saveBtn" class="ghost" type="button">파일저장</button></div>
+      <div class="editor-sound-actions" aria-label="사운드와 재생 음색 편의 기능">
+        <label class="part-mute-toggle"><input id="partMuteToggle" type="checkbox" /> <span id="partMuteLabel">채널 음소거</span></label>
+        <select id="soundSource" aria-label="사운드 폰트 선택">
+          <option value="" selected disabled hidden>폰트 선택</option>
+          <option value="default">기본 사운드 사용</option>
+          <option value="custom">사용자 SF2 선택</option>
+        </select>
+        <input id="sf2File" type="file" accept=".sf2" hidden />
+        <span id="soundName" class="hint sound-name-hidden" aria-live="polite">기본 사운드</span>
+        <select id="soundPresetQuickSelect" class="sound-preset-select" aria-label="음색 프리셋 선택">
+          <option value="auto">자동 음색</option>
+        </select>
+        <button id="partSoundBtn" class="tab-sound-btn" type="button" title="채널별 재생 음색 설정">음색</button>
+      </div>
     </div>
 
     <div class="editor-tool-row" aria-label="편집 편의 기능">
       <div class="editor-tools-left">
         <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="leadingSilenceBtn" class="ghost" type="button">시작 공백 추가</button>
-      </div>
-      <div class="editor-tools-right" aria-label="재생 음색 편의 기능">
-        <select id="soundPresetQuickSelect" class="sound-preset-select" aria-label="음색 프리셋 선택">
-          <option value="auto">자동 음색</option>
-        </select>
-        <label class="part-mute-toggle"><input id="partMuteToggle" type="checkbox" /> <span id="partMuteLabel">채널 음소거</span></label>
-        <button id="partSoundBtn" class="tab-sound-btn" type="button" title="채널별 재생 음색 설정">음색</button>
       </div>
     </div>
 
@@ -129,6 +137,27 @@
 </main>
 
 
+
+<dialog id="googleDriveSaveDialog" class="mml-dialog drive-save-dialog">
+  <form id="googleDriveSaveForm" class="dialog-card drive-save-card" method="dialog">
+    <h3>Google Drive 저장</h3>
+    <p>기본 저장 위치는 <strong>MML_Mobibard</strong> 폴더입니다. 필요하면 위치를 바꾼 뒤 파일 이름을 정해 저장하세요.</p>
+    <div class="drive-save-folder-row">
+      <span class="dialog-field">저장 위치</span>
+      <strong id="googleDriveSaveFolderNameText">MML_Mobibard</strong>
+      <button id="googleDriveSaveFolderBtn" class="ghost" type="button">위치 변경</button>
+    </div>
+    <label class="dialog-field" for="googleDriveSaveFileName">파일 이름</label>
+    <input id="googleDriveSaveFileName" type="text" autocomplete="off" inputmode="text" />
+    <span class="dialog-small">같은 이름의 파일이 있으면 저장할 때 덮어쓸지 확인합니다.</span>
+    <span id="googleDriveSaveStatus" class="dialog-small drive-save-status" role="status" aria-live="polite"></span>
+    <div class="dialog-actions">
+      <button id="googleDriveSaveCancel" type="button">취소</button>
+      <button id="googleDriveSaveApply" class="primary" type="button">저장</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="partSoundDialog" class="mml-dialog part-sound-dialog">
   <form id="partSoundForm" class="dialog-card part-sound-card" method="dialog">
     <h3>채널 음색 설정</h3>
@@ -147,6 +176,35 @@
     <div class="dialog-actions">
       <button id="partSoundCancel" type="button">취소</button>
       <button id="partSoundApply" class="primary" type="button">적용</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="codeHelpDialog" class="mml-dialog code-help-dialog">
+  <form class="dialog-card code-help-card" method="dialog">
+    <h3>MML 코드 도움말</h3>
+    <p>재생기에서 지원하는 기본 MML 코드입니다. 대소문자는 구분하지 않습니다.</p>
+    <div class="code-help-table" role="table" aria-label="지원 MML 코드 목록">
+      <div class="code-help-row code-help-head" role="row"><strong role="columnheader">코드</strong><strong role="columnheader">의미</strong><strong role="columnheader">예시</strong></div>
+      <div class="code-help-row" role="row"><code>MML@...;</code><span>전체 악보 형식입니다. 쉼표로 채널을 나눕니다.</span><code>MML@cde,egc,ccg;</code></div>
+      <div class="code-help-row" role="row"><code>T</code><span>템포를 정합니다.</span><code>T120</code></div>
+      <div class="code-help-row" role="row"><code>O</code><span>기본 옥타브를 정합니다.</span><code>O5</code></div>
+      <div class="code-help-row" role="row"><code>L</code><span>기본 음 길이를 정합니다.</span><code>L8</code></div>
+      <div class="code-help-row" role="row"><code>V</code><span>볼륨을 정합니다.</span><code>V12</code></div>
+      <div class="code-help-row" role="row"><code>c d e f g a b</code><span>도레미파솔라시 음표입니다.</span><code>cdefgab</code></div>
+      <div class="code-help-row" role="row"><code>r</code><span>쉼표입니다.</span><code>r4</code></div>
+      <div class="code-help-row" role="row"><code># + -</code><span>반음 올림/내림입니다. <code>#</code>, <code>+</code>는 올림, <code>-</code>는 내림입니다.</span><code>c# d-</code></div>
+      <div class="code-help-row" role="row"><code>&lt; &gt;</code><span>옥타브를 한 단계 이동합니다.</span><code>&gt;c&lt;c</code></div>
+      <div class="code-help-row" role="row"><code>.</code><span>점음표입니다. 길이를 1.5배로 늘립니다.</span><code>c4.</code></div>
+      <div class="code-help-row" role="row"><code>&amp;</code><span>같은 음을 이어서 길게 연주합니다.</span><code>c4&amp;c8</code></div>
+      <div class="code-help-row" role="row"><code>n</code><span>숫자로 음 높이를 직접 지정합니다.</span><code>n60</code></div>
+    </div>
+    <div class="code-help-example">
+      <strong>짧은 예시</strong>
+      <code>MML@T120O5L8cdefgab&gt;c,O4L4ceg,O3L2cgcg;</code>
+    </div>
+    <div class="dialog-actions">
+      <button id="codeHelpClose" type="button">닫기</button>
     </div>
   </form>
 </dialog>
@@ -207,7 +265,7 @@
     <h3>MIDI 변환 설정</h3>
     <div class="midi-dialog-topline">
       <p id="midiConvertSummary">MML 채널별 역할, 겹침 병합 방식, 사용할 악기를 선택해 주세요.</p>
-      <button id="midiFullPreviewBtn" class="midi-full-preview-btn" type="button">MID 듣기</button>
+      <button id="midiFullPreviewBtn" class="midi-full-preview-btn" type="button">MIDI 듣기</button>
     </div>
 
     <div class="midi-dialog-layout midi-channel-config-layout">
@@ -238,9 +296,12 @@
       </section>
     </div>
 
-    <div class="dialog-actions">
-      <button id="midiConvertCancel" type="button">취소</button>
-      <button id="midiConvertApply" class="primary" type="button">변환</button>
+    <div class="midi-convert-footer">
+      <span id="midiConvertStatus" class="dialog-small midi-convert-status" role="status" aria-live="polite" hidden></span>
+      <div class="dialog-actions">
+        <button id="midiConvertCancel" type="button">취소</button>
+        <button id="midiConvertApply" class="primary" type="button">변환</button>
+      </div>
     </div>
   </form>
 </dialog>
@@ -252,6 +313,9 @@
 <script src="js/mml-parser.js"></script>
 <script src="js/mml-optimizer.js"></script>
 <script src="js/sf2-sampler.js"></script>
+<script src="js/google-config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
 <script src="js/app.js"></script>
 </body>
 </html>
