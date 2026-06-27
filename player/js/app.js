@@ -415,7 +415,7 @@
       googleLoginBtn.disabled = !hasClient;
       googleLoginBtn.textContent = connected ? "로그아웃" : "로그인";
       googleLoginBtn.title = hasClient
-        ? (connected ? "Google Drive 연동을 해제합니다." : "Google 계정으로 Drive 연동을 시작합니다.")
+        ? (connected ? "Google 계정에서 로그아웃합니다. 권한 동의는 유지됩니다." : "Google 계정으로 Drive 연동을 시작합니다.")
         : "js/google-config.js에 OAuth Client ID를 입력해야 합니다.";
     }
     if (googleDriveLoadBtn) {
@@ -497,6 +497,7 @@
           googleTokenClient = window.google.accounts.oauth2.initTokenClient({
             client_id: clientId,
             scope: GOOGLE_DRIVE_SCOPE,
+            include_granted_scopes: true,
             callback: () => {}
           });
         }
@@ -511,7 +512,7 @@
           updateGoogleDriveControls("구글 연동됨");
           resolve(googleAccessToken);
         };
-        googleTokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" });
+        googleTokenClient.requestAccessToken({ prompt: "" });
       } catch (err) {
         reject(err);
       }
@@ -520,15 +521,13 @@
 
   async function handleGoogleLoginButton() {
     if (isGoogleConnected()) {
-      const token = googleAccessToken;
       googleAccessToken = "";
       googleTokenExpiresAt = 0;
       googleDriveMmlFileId = "";
       googleDriveMmlFileName = "";
       googleDriveMmlFolderId = "";
-      try { window.google?.accounts?.oauth2?.revoke?.(token, () => {}); } catch (_) {}
       clearTimeout(googleSettingsSaveTimer);
-      updateGoogleDriveControls("구글 연동 해제됨");
+      updateGoogleDriveControls("구글 로그아웃됨");
       return;
     }
     try {
