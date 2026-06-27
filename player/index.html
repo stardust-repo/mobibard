@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>마비노기 MML 재생기 v2.3</title>
+  <title>마비노기 MML 재생기 v2.4</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
   <link rel="stylesheet" href="styles.css" />
@@ -13,7 +13,7 @@
 <main>
   <section class="card menu-card" aria-label="불러오기와 폰트 선택">
     <div class="app-head">
-      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">v2.3</span></h2>
+      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">v2.4</span></h2>
       <div class="title-theme-control">
         <span class="theme-label menu-label">테마</span>
         <button id="themeToggleBtn" class="theme-swatch" type="button" aria-pressed="false" aria-label="어두운 테마로 변경" title="어두운 테마로 변경"></button>
@@ -88,12 +88,20 @@
     </div>
 
     <div class="editor-tool-row" aria-label="편집 편의 기능">
-      <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="leadingSilenceBtn" class="ghost" type="button">시작 공백 추가</button>
+      <div class="editor-tools-left">
+        <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="leadingSilenceBtn" class="ghost" type="button">시작 공백 추가</button>
+      </div>
+      <div class="editor-tools-right" aria-label="재생 음색 편의 기능">
+        <select id="soundPresetQuickSelect" class="sound-preset-select" aria-label="음색 프리셋 선택">
+          <option value="auto">자동 음색</option>
+        </select>
+        <label class="part-mute-toggle"><input id="partMuteToggle" type="checkbox" /> <span id="partMuteLabel">채널 음소거</span></label>
+        <button id="partSoundBtn" class="tab-sound-btn" type="button" title="채널별 재생 음색 설정">음색</button>
+      </div>
     </div>
 
     <div class="tab-line">
       <div class="tabs" role="tablist" aria-label="MML 파트 선택">
-        <button id="partSoundBtn" class="tab-sound-btn" type="button" title="채널별 재생 음색 설정">음색</button>
         <button class="tab-btn tab-all active" type="button" data-tab="main">전체 MML</button>
         <button class="tab-btn part-tab part-0" type="button" data-tab="part0">멜로디</button>
         <button class="tab-btn part-tab part-1" type="button" data-tab="part1">화음1</button>
@@ -125,9 +133,18 @@
   <form id="partSoundForm" class="dialog-card part-sound-card" method="dialog">
     <h3>채널 음색 설정</h3>
     <p>재생기에서 미리 들을 때 사용할 소리를 고르는 설정입니다.<br>악보(MML)의 악기 정보가 바뀌거나 저장되는 것은 아닙니다.</p>
+    <div class="part-sound-preset-row">
+      <label class="dialog-field" for="partSoundPresetSelect">음색 프리셋</label>
+      <div class="part-sound-preset-control">
+        <select id="partSoundPresetSelect" aria-label="채널별 음색 프리셋 선택">
+          <option value="auto">자동 음색</option>
+        </select>
+        <button id="partSoundPresetSave" type="button">저장</button>
+        <button id="partSoundPresetDelete" type="button">삭제</button>
+      </div>
+    </div>
     <div id="partSoundRows" class="part-sound-rows" aria-label="채널별 음색 목록"></div>
     <div class="dialog-actions">
-      <button id="partSoundReset" type="button">기본값</button>
       <button id="partSoundCancel" type="button">취소</button>
       <button id="partSoundApply" class="primary" type="button">적용</button>
     </div>
@@ -189,7 +206,7 @@
   <form id="midiConvertForm" class="dialog-card midi-dialog-card" method="dialog">
     <h3>MIDI 변환 설정</h3>
     <div class="midi-dialog-topline">
-      <p id="midiConvertSummary">MML 채널별 역할, 겹침 병합, 사용할 악기를 선택해 주세요.</p>
+      <p id="midiConvertSummary">MML 채널별 역할, 겹침 병합 방식, 사용할 악기를 선택해 주세요.</p>
       <button id="midiFullPreviewBtn" class="midi-full-preview-btn" type="button">MID 듣기</button>
     </div>
 

@@ -263,7 +263,7 @@ textarea { resize: vertical; color: var(--text); }
 .midi-channel-sub { color: var(--muted); font-size: 12.5px; line-height: 1.35; overflow-wrap: anywhere; }
 .midi-channel-sub em { display: block; margin-top: 2px; color: var(--danger); font-style: normal; font-weight: 900; }
 .midi-role-list { display: grid; gap: 8px; }
-.midi-role-row { display: grid; grid-template-columns: minmax(130px, 1fr) 94px 88px; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--input-bg); }
+.midi-role-row { display: grid; grid-template-columns: minmax(130px, 1fr) 94px 132px; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--input-bg); }
 .midi-role-row.active { border-color: var(--accent); background: var(--control-hover); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 78%); }
 .midi-role-row.disabled { opacity: .45; }
 .midi-role-row select { width: 100%; max-width: none; min-width: 0; }
@@ -273,6 +273,8 @@ textarea { resize: vertical; color: var(--text); }
 .midi-export-summary { color: var(--muted); font-size: 11.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .merge-check { display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 900; white-space: nowrap; }
 .merge-check input { width: 14px; height: 14px; accent-color: var(--accent); }
+.merge-mode { display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 900; white-space: nowrap; }
+.merge-mode select { width: 62px; min-width: 0; padding-left: 6px; padding-right: 6px; font-size: 12px; }
 .midi-role-row.part-0 .midi-export-label { color: var(--part0); }
 .midi-role-row.part-1 .midi-export-label { color: var(--part1); }
 .midi-role-row.part-2 .midi-export-label { color: var(--part2); }
@@ -283,7 +285,7 @@ textarea { resize: vertical; color: var(--text); }
 @media (max-width: 760px) {
   .midi-dialog-layout { grid-template-columns: 1fr; }
   .midi-role-row { grid-template-columns: 1fr; align-items: stretch; }
-  .merge-check { justify-content: flex-start; }
+  .merge-check, .merge-mode { justify-content: flex-start; }
   .midi-channel-row { grid-template-columns: auto minmax(0, 1fr) auto; }
   .midi-instrument-selected-parts { grid-column: 2 / 4; }
   .midi-channel-sub { grid-column: 2 / 4; }
@@ -689,4 +691,93 @@ textarea { resize: vertical; color: var(--text); }
   .tab-sound-btn { width: auto; }
   .part-sound-row { grid-template-columns: 1fr; align-items: stretch; }
   .part-sound-control { grid-template-columns: minmax(0, 1fr) auto; }
+}
+
+/* v2.4 sound preset toolbar */
+.editor-tool-row {
+  align-items: center;
+  justify-content: space-between;
+}
+.editor-tools-left,
+.editor-tools-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.editor-tools-right {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+.sound-preset-select {
+  min-width: 152px;
+  max-width: 220px;
+}
+.part-mute-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--input-bg);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.part-mute-toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+.part-mute-toggle:has(input:checked) {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger), var(--line) 45%);
+  background: color-mix(in srgb, var(--danger), transparent 90%);
+}
+.part-mute-toggle:has(input:disabled) {
+  opacity: .55;
+}
+.part-tab.muted {
+  opacity: .55;
+  text-decoration: line-through;
+}
+.part-sound-preset-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: var(--input-bg);
+}
+.part-sound-preset-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.part-sound-preset-row select {
+  width: 100%;
+  max-width: none;
+}
+.part-sound-preset-control button {
+  min-height: 32px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .editor-tool-row { align-items: stretch; }
+  .editor-tools-left,
+  .editor-tools-right { width: 100%; justify-content: flex-start; }
+  .editor-tools-right { margin-left: 0; }
+  .sound-preset-select { flex: 1 1 160px; max-width: none; }
+}
+@media (max-width: 560px) {
+  .part-sound-preset-row { grid-template-columns: 1fr; align-items: stretch; }
+  .part-sound-preset-control { grid-template-columns: 1fr auto auto auto; }
 }

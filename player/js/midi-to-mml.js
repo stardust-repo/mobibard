@@ -132,25 +132,31 @@
           duplicateMerged: 0,
           minMidi: Infinity,
           maxMidi: -Infinity,
-          sourceGroupIds: []
+          sourceGroupIds: [],
+          programCounts: new Map()
         };
         choices.set(id, choice);
       }
-      choice.noteCount += Number(group.noteCount) || 0;
+      const groupNoteCount = Number(group.noteCount) || 0;
+      choice.noteCount += groupNoteCount;
       choice.duplicateMerged += Number(group.duplicateMerged) || 0;
       choice.minMidi = Math.min(choice.minMidi, group.minMidi);
       choice.maxMidi = Math.max(choice.maxMidi, group.maxMidi);
       choice.sourceGroupIds.push(group.id);
+      const program = normalizeProgram(group.program);
+      choice.programCounts.set(program, (choice.programCounts.get(program) || 0) + groupNoteCount);
     }
 
     return Array.from(choices.values()).map(choice => {
       const rangeText = Number.isFinite(choice.minMidi) ? `${midiName(choice.minMidi)}~${midiName(choice.maxMidi)}` : "노트 없음";
+      const program = Array.from(choice.programCounts.entries()).sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
       return {
         id: choice.id,
         isBeat: choice.isBeat,
         isPercussion: choice.isPercussion,
         instrumentName: choice.instrumentName,
         programText: choice.programText,
+        program,
         noteCount: choice.noteCount,
         duplicateMerged: choice.duplicateMerged,
         rangeText,
@@ -478,7 +484,8 @@
     const channelLines = exportChannels.map((ch, i) => {
       const names = ch.selectedInstrumentGroups.map(id => choiceMap.get(id)?.instrumentName).filter(Boolean);
       const label = names.length > 3 ? `${names.slice(0, 3).join(", ")} 외 ${names.length - 3}개` : names.join(", ");
-      return `${i + 1}. ${roleLabel(ch.role)}${ch.overlapMerge ? "/겹침 병합" : ""}: ${label || "선택 없음"}`;
+      const overlapLabel = overlapMergeModeLabel(ch.overlapMergeMode ?? ch.overlapMerge);
+      return `${i + 1}. ${roleLabel(ch.role)}${overlapLabel ? `/${overlapLabel}` : ""}: ${label || "선택 없음"}`;
     });
     const tempoMessage = tempoGridEvents.length > 1
       ? `MIDI 템포 ${tempoGridEvents.length}개를 멜로디 파트에 반영했습니다.`
@@ -517,9 +524,11 @@
         ? raw.selectedInstrumentGroups.map(String).filter(id => validIds.has(id) && allowedSet.has(id))
         : globalSelected.filter(id => allowedSet.has(id));
       if (!selected.length) selected = allowed.length ? [allowed[0]] : [];
+      const overlapMergeMode = normalizeOverlapMergeMode(raw?.overlapMergeMode ?? raw?.overlapMerge ?? true);
       return {
         role,
-        overlapMerge: raw ? Boolean(raw.overlapMerge) : true,
+        overlapMergeMode,
+        overlapMerge: overlapMergeMode !== "none",
         selectedInstrumentGroups: [...new Set(selected)]
       };
     });
@@ -594,10 +603,24 @@
     return ({ auto: "자동", high: "고음", low: "저음", beat: "비트" })[role] || "자동";
   }
 
+  function normalizeOverlapMergeMode(value) {
+    if (value === true || value === "true") return "all";
+    if (value === false || value === "false") return "none";
+    const mode = String(value || "all").toLowerCase();
+    return ["all", "half", "none"].includes(mode) ? mode : "all";
+  }
+
+  function overlapMergeModeLabel(value) {
+    const mode = normalizeOverlapMergeMode(value);
+    if (mode === "all") return "겹침 모두 병합";
+    if (mode === "half") return "겹침 절반 병합";
+    return "";
+  }
+
   function assignNotesToVoices(notes, exportChannelsOrCount, oldRoles = null) {
     const exportChannels = Array.isArray(exportChannelsOrCount)
       ? exportChannelsOrCount
-      : Array.from({ length: clampInt(exportChannelsOrCount || 3, 1, 6) }, (_, i) => ({ role: oldRoles?.[i] || defaultRoles(exportChannelsOrCount || 3)[i] || "auto", overlapMerge: false, selectedInstrumentGroups: [] }));
+      : Array.from({ length: clampInt(exportChannelsOrCount || 3, 1, 6) }, (_, i) => ({ role: oldRoles?.[i] || defaultRoles(exportChannelsOrCount || 3)[i] || "auto", overlapMergeMode: "none", overlapMerge: false, selectedInstrumentGroups: [] }));
     const partCount = exportChannels.length;
     const voices = Array.from({ length: partCount }, () => []);
     const voiceEnd = Array(partCount).fill(0);
@@ -670,10 +693,12 @@
       for (let channelIndex = 0; channelIndex < exportChannels.length; channelIndex++) {
         if (assignedChannels.has(channelIndex)) continue;
         const cfg = exportChannels[channelIndex];
-        if (!cfg.overlapMerge) continue;
+        const mergeMode = normalizeOverlapMergeMode(cfg.overlapMergeMode ?? cfg.overlapMerge);
+        if (mergeMode === "none") continue;
         if (!canChannelUseNote(note, cfg)) continue;
         const active = findActiveNoteAt(voices[channelIndex], startGrid);
         if (!active) continue;
+        if (mergeMode === "half" && !isPastOverlapMergeHalfPoint(active, startGrid)) continue;
         const trimLoss = Math.max(0, active.endGrid - startGrid);
         const score = [...channelNoteScore(note, cfg, channelIndex, true), -trimLoss];
         const item = { noteIndex, channelIndex, score };
@@ -681,6 +706,15 @@
       }
     }
     return best;
+  }
+
+  function isPastOverlapMergeHalfPoint(active, startGrid) {
+    if (!active) return false;
+    const activeStart = Number(active.startGrid) || 0;
+    const activeEnd = Number(active.endGrid) || activeStart;
+    if (activeEnd <= activeStart) return false;
+    const halfPoint = activeStart + (activeEnd - activeStart) * 0.5;
+    return startGrid >= halfPoint;
   }
 
   function canChannelUseNote(note, cfg) {

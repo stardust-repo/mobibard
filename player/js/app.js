@@ -6,8 +6,15 @@
   const PART_LABELS = ["멜로디", "화음1", "화음2", "화음3", "화음4", "화음5"];
   const PREF_PREFIX = "mobibard.player.";
   const DEFAULT_PART_PRESET_KEY = "0:0";
+  const DEFAULT_MIDI_SOUND_PRESET_LABEL = "최근 MIDI 음색";
+  const USER_SOUND_PRESET_VALUE_PREFIX = "user:";
   const PART_PREVIEW_MELODY_INTERVALS = [0, 2, 4, 7, 9, 7, 4, 0];
   const PART_PREVIEW_DRUM_NOTES = [36, 42, 38, 42, 36, 46, 38, 42];
+  const OVERLAP_MERGE_OPTIONS = [
+    { value: "all", label: "모두" },
+    { value: "half", label: "절반" },
+    { value: "none", label: "안함" }
+  ];
 
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
@@ -68,9 +75,14 @@
   const partSoundBtn = $("partSoundBtn");
   const partSoundDialog = $("partSoundDialog");
   const partSoundRows = $("partSoundRows");
-  const partSoundReset = $("partSoundReset");
   const partSoundCancel = $("partSoundCancel");
   const partSoundApply = $("partSoundApply");
+  const partSoundPresetSelect = $("partSoundPresetSelect");
+  const partSoundPresetSave = $("partSoundPresetSave");
+  const partSoundPresetDelete = $("partSoundPresetDelete");
+  const soundPresetQuickSelect = $("soundPresetQuickSelect");
+  const partMuteToggle = $("partMuteToggle");
+  const partMuteLabel = $("partMuteLabel");
   const mainMml = $("mainMml");
   const mainMmlHighlight = $("mainMmlHighlight");
   const partTexts = PART_LABELS.map((_, i) => $(`part${i}`));
@@ -110,6 +122,11 @@
   let splitPreviewButtonText = "";
   let partPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
   let draftPartPresetKeys = null;
+  let draftSoundPresetBaseId = "";
+  let midiPartPresetKeys = null;
+  let midiPartPresetName = DEFAULT_MIDI_SOUND_PRESET_LABEL;
+  let userSoundPresets = [];
+  let partMuteStates = Array.from({ length: 6 }, () => false);
 
   init();
 
@@ -117,6 +134,9 @@
     loadThemePref();
     loadPlaybackPrefs();
     loadPartSoundPrefs();
+    loadMidiPartSoundPresetPrefs();
+    loadUserSoundPresetPrefs();
+    loadPartMutePrefs();
     midiLoadBtn.addEventListener("click", () => { midiFile.value = ""; midiFile.click(); });
     midiFile.addEventListener("change", () => void loadSourceFile());
     soundSource.addEventListener("change", () => handleSoundSourceChange());
@@ -146,9 +166,13 @@
     leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
     leadingSilenceCancel?.addEventListener("click", () => leadingSilenceDialog?.close());
     partSoundBtn?.addEventListener("click", () => void openPartSoundDialog());
-    partSoundReset?.addEventListener("click", () => resetPartSoundDraft());
     partSoundCancel?.addEventListener("click", () => partSoundDialog?.close());
     partSoundApply?.addEventListener("click", () => applyPartSoundDialog());
+    partSoundPresetSelect?.addEventListener("change", () => applyPartSoundPresetToDraft(partSoundPresetSelect.value));
+    partSoundPresetSave?.addEventListener("click", () => saveDraftSoundPreset());
+    partSoundPresetDelete?.addEventListener("click", () => deleteSelectedSoundPreset());
+    soundPresetQuickSelect?.addEventListener("change", () => applyQuickSoundPreset(soundPresetQuickSelect.value));
+    partMuteToggle?.addEventListener("change", () => handlePartMuteToggleChange());
     leadingSilenceSeconds?.addEventListener("change", normalizeLeadingSilenceSecondsInput);
     leadingSilenceSeconds?.addEventListener("blur", normalizeLeadingSilenceSecondsInput);
     midiExportCount?.addEventListener("change", updateMidiRoleControls);
@@ -174,6 +198,8 @@
     applyPlaybackSpeed(false);
     applyOutputVolume();
     resetSoundActionMenu();
+    updateSoundPresetControls();
+    updatePartMuteControl();
     updateCharCount();
     rebuildSchedulePreviewSilently();
   }
@@ -196,21 +222,74 @@
   }
 
 
+  function defaultPartPresetKeys() {
+    return Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
+  }
+
+  function normalizePresetKeyArray(input, fallback = DEFAULT_PART_PRESET_KEY) {
+    const source = Array.isArray(input) ? input : [];
+    return Array.from({ length: 6 }, (_, i) => sanitizePresetKey(source[i] || fallback));
+  }
+
+  function samePresetKeys(a, b) {
+    const aa = normalizePresetKeyArray(a);
+    const bb = normalizePresetKeyArray(b);
+    return aa.every((key, i) => key === bb[i]);
+  }
+
   function loadPartSoundPrefs() {
     const saved = readPref("partPresetKeys");
     if (!saved) return;
     try {
       const arr = JSON.parse(saved);
       if (!Array.isArray(arr)) return;
-      const next = Array.from({ length: 6 }, (_, i) => sanitizePresetKey(arr[i] || DEFAULT_PART_PRESET_KEY));
-      partPresetKeys = next;
+      partPresetKeys = normalizePresetKeyArray(arr);
     } catch (_) {
-      partPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
+      partPresetKeys = defaultPartPresetKeys();
     }
   }
 
   function savePartSoundPrefs() {
+    partPresetKeys = normalizePresetKeyArray(partPresetKeys);
     writePref("partPresetKeys", JSON.stringify(partPresetKeys));
+  }
+
+  function loadMidiPartSoundPresetPrefs() {
+    const saved = readPref("midiPartPresetKeys");
+    if (!saved) return;
+    try {
+      const arr = JSON.parse(saved);
+      if (!Array.isArray(arr)) return;
+      midiPartPresetKeys = normalizePresetKeyArray(arr);
+      midiPartPresetName = readPref("midiPartPresetName") || DEFAULT_MIDI_SOUND_PRESET_LABEL;
+    } catch (_) {
+      midiPartPresetKeys = null;
+      midiPartPresetName = DEFAULT_MIDI_SOUND_PRESET_LABEL;
+    }
+  }
+
+  function saveMidiPartSoundPresetPrefs() {
+    if (!Array.isArray(midiPartPresetKeys)) return;
+    midiPartPresetKeys = normalizePresetKeyArray(midiPartPresetKeys);
+    writePref("midiPartPresetKeys", JSON.stringify(midiPartPresetKeys));
+    writePref("midiPartPresetName", midiPartPresetName || DEFAULT_MIDI_SOUND_PRESET_LABEL);
+  }
+
+  function loadPartMutePrefs() {
+    const saved = readPref("partMuteStates");
+    if (!saved) return;
+    try {
+      const arr = JSON.parse(saved);
+      if (!Array.isArray(arr)) return;
+      partMuteStates = Array.from({ length: 6 }, (_, i) => Boolean(arr[i]));
+    } catch (_) {
+      partMuteStates = Array.from({ length: 6 }, () => false);
+    }
+  }
+
+  function savePartMutePrefs() {
+    partMuteStates = Array.from({ length: 6 }, (_, i) => Boolean(partMuteStates[i]));
+    writePref("partMuteStates", JSON.stringify(partMuteStates));
   }
 
   function loadThemePref() {
@@ -243,6 +322,290 @@
   function writePref(name, value) {
     try { localStorage.setItem(PREF_PREFIX + name, String(value)); }
     catch (_) {}
+  }
+
+  function hasMidiPartSoundPreset() {
+    return Array.isArray(midiPartPresetKeys) && midiPartPresetKeys.length >= 6;
+  }
+
+  function getAutoPartPresetKeys() {
+    return hasMidiPartSoundPreset() ? normalizePresetKeyArray(midiPartPresetKeys) : defaultPartPresetKeys();
+  }
+
+  function sanitizeUserSoundPresetName(name, fallback = "음색 프리셋") {
+    const text = String(name == null ? "" : name).replace(/\s+/g, " ").trim();
+    return (text || fallback).slice(0, 40);
+  }
+
+  function createUserSoundPresetId() {
+    const random = Math.random().toString(36).slice(2, 7);
+    return `p${Date.now().toString(36)}${random}`;
+  }
+
+  function normalizeUserSoundPreset(raw, index = 0, usedIds = new Set()) {
+    if (!raw || typeof raw !== "object") return null;
+    let id = String(raw.id || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+    if (!id || usedIds.has(id)) id = createUserSoundPresetId();
+    usedIds.add(id);
+    const name = sanitizeUserSoundPresetName(raw.name, `음색 프리셋 ${index + 1}`);
+    const keys = normalizePresetKeyArray(raw.keys);
+    return { id, name, keys };
+  }
+
+  function loadUserSoundPresetPrefs() {
+    const saved = readPref("userSoundPresets");
+    if (!saved) return;
+    try {
+      const arr = JSON.parse(saved);
+      if (!Array.isArray(arr)) return;
+      const usedIds = new Set();
+      userSoundPresets = arr
+        .map((item, index) => normalizeUserSoundPreset(item, index, usedIds))
+        .filter(Boolean)
+        .slice(0, 80);
+    } catch (_) {
+      userSoundPresets = [];
+    }
+  }
+
+  function saveUserSoundPresetPrefs() {
+    const usedIds = new Set();
+    userSoundPresets = (Array.isArray(userSoundPresets) ? userSoundPresets : [])
+      .map((item, index) => normalizeUserSoundPreset(item, index, usedIds))
+      .filter(Boolean)
+      .slice(0, 80);
+    writePref("userSoundPresets", JSON.stringify(userSoundPresets));
+  }
+
+  function userSoundPresetValue(id) {
+    return `${USER_SOUND_PRESET_VALUE_PREFIX}${id}`;
+  }
+
+  function userSoundPresetIdFromValue(value) {
+    const text = String(value || "");
+    return text.startsWith(USER_SOUND_PRESET_VALUE_PREFIX) ? text.slice(USER_SOUND_PRESET_VALUE_PREFIX.length) : "";
+  }
+
+  function findUserSoundPreset(id) {
+    return userSoundPresets.find(p => p.id === id) || null;
+  }
+
+  function findUserSoundPresetIdByKeys(keys) {
+    const normalized = normalizePresetKeyArray(keys);
+    const matched = userSoundPresets.find(p => samePresetKeys(normalized, p.keys));
+    return matched?.id || "";
+  }
+
+  function soundPresetMatch(keys) {
+    const normalized = normalizePresetKeyArray(keys);
+    if (samePresetKeys(normalized, getAutoPartPresetKeys())) return "auto";
+    const matched = userSoundPresets.find(p => samePresetKeys(normalized, p.keys));
+    return matched ? userSoundPresetValue(matched.id) : "current";
+  }
+
+  function renderSoundPresetSelect(select, keys, preferredValue = null) {
+    if (!select) return;
+    const match = soundPresetMatch(keys);
+    const currentValue = preferredValue || match;
+    select.innerHTML = "";
+
+    select.appendChild(new Option("자동 음색", "auto"));
+
+    if (userSoundPresets.length) {
+      const group = document.createElement("optgroup");
+      group.label = "저장한 프리셋";
+      for (const preset of userSoundPresets) {
+        group.appendChild(new Option(preset.name, userSoundPresetValue(preset.id)));
+      }
+      select.appendChild(group);
+    }
+
+    const hasPreferred = Array.from(select.options).some(option => option.value === currentValue);
+    if (hasPreferred) {
+      select.value = currentValue;
+    } else if (match === "current") {
+      const current = new Option("현재 설정", "current");
+      current.disabled = true;
+      current.selected = true;
+      select.insertBefore(current, select.children[1] || null);
+    } else {
+      select.value = match;
+    }
+  }
+
+  function updateSoundPresetControls(preferredDialogValue = null, preferredQuickValue = null) {
+    renderSoundPresetSelect(soundPresetQuickSelect, partPresetKeys, preferredQuickValue);
+    renderSoundPresetSelect(partSoundPresetSelect, draftPartPresetKeys || partPresetKeys, preferredDialogValue);
+    updatePartSoundPresetDeleteState();
+  }
+
+  function updatePartSoundPresetDeleteState() {
+    const id = userSoundPresetIdFromValue(partSoundPresetSelect?.value);
+    const preset = id ? findUserSoundPreset(id) : null;
+    const canManage = Boolean(preset);
+    if (partSoundPresetDelete) {
+      partSoundPresetDelete.disabled = !canManage;
+      partSoundPresetDelete.title = canManage ? "선택한 저장 프리셋을 삭제합니다." : "저장한 프리셋을 선택했을 때만 삭제할 수 있습니다.";
+    }
+  }
+
+  function getPartPresetKeysForMode(mode) {
+    if (mode === "auto") return getAutoPartPresetKeys();
+    const id = userSoundPresetIdFromValue(mode);
+    const preset = id ? findUserSoundPreset(id) : null;
+    return preset ? normalizePresetKeyArray(preset.keys) : null;
+  }
+
+  function applyQuickSoundPreset(mode) {
+    const keys = getPartPresetKeysForMode(mode);
+    if (!keys) {
+      updateSoundPresetControls();
+      return;
+    }
+    partPresetKeys = normalizePresetKeyArray(keys);
+    savePartSoundPrefs();
+    updateSoundPresetControls(null, mode);
+    rebuildSchedulePreviewSilently();
+    restartPlaybackAfterSoundChange();
+  }
+
+  function applyPartSoundPresetToDraft(mode) {
+    const keys = getPartPresetKeysForMode(mode);
+    if (!keys) {
+      updateSoundPresetControls();
+      return;
+    }
+    draftSoundPresetBaseId = userSoundPresetIdFromValue(mode);
+    draftPartPresetKeys = normalizePresetKeyArray(keys);
+    renderPartSoundRows();
+    updateSoundPresetControls(mode);
+  }
+
+  function saveDraftSoundPreset() {
+    if (!Array.isArray(draftPartPresetKeys)) draftPartPresetKeys = normalizePresetKeyArray(partPresetKeys);
+    const keys = normalizePresetKeyArray(draftPartPresetKeys);
+    const selectedId = userSoundPresetIdFromValue(partSoundPresetSelect?.value);
+    const baseId = selectedId || draftSoundPresetBaseId;
+    const basePreset = baseId ? findUserSoundPreset(baseId) : null;
+    let target = null;
+    let message = "";
+
+    if (basePreset) {
+      if (samePresetKeys(keys, basePreset.keys)) {
+        showDialog("프리셋 저장", "변경된 음색이 없습니다.");
+        updatePartSoundPresetDeleteState();
+        return;
+      }
+      const overwrite = window.confirm(`'${basePreset.name}' 프리셋에 덮어쓸까요?
+
+확인: 덮어쓰기
+취소: 새 프리셋으로 저장`);
+      if (overwrite) {
+        basePreset.keys = keys;
+        target = basePreset;
+        message = `'${target.name}' 프리셋을 덮어썼습니다.`;
+      } else {
+        target = createSoundPresetFromPrompt(keys, `${basePreset.name} 복사`);
+        if (!target) return;
+        message = `'${target.name}' 프리셋을 새로 저장했습니다.`;
+      }
+    } else {
+      target = createSoundPresetFromPrompt(keys, `음색 프리셋 ${userSoundPresets.length + 1}`);
+      if (!target) return;
+      message = `'${target.name}' 프리셋을 저장했습니다.`;
+    }
+
+    saveUserSoundPresetPrefs();
+    draftPartPresetKeys = keys;
+    draftSoundPresetBaseId = target.id;
+    updateSoundPresetControls(userSoundPresetValue(target.id));
+    showDialog("프리셋 저장 완료", message);
+  }
+
+  function createSoundPresetFromPrompt(keys, defaultName, excludeId = "") {
+    const input = window.prompt("저장할 음색 프리셋 이름을 입력하세요.", defaultName);
+    if (input == null) return null;
+    const name = sanitizeUserSoundPresetName(input, "");
+    if (!name) {
+      showDialog("프리셋 저장 실패", "프리셋 이름을 입력해 주세요.");
+      return null;
+    }
+
+    let target = userSoundPresets.find(p => p.name === name && p.id !== excludeId) || null;
+    if (target) {
+      if (!window.confirm(`이미 '${name}' 프리셋이 있습니다. 덮어쓸까요?`)) return null;
+      target.keys = keys;
+      return target;
+    }
+
+    target = { id: createUserSoundPresetId(), name, keys };
+    userSoundPresets.push(target);
+    return target;
+  }
+
+  function deleteSelectedSoundPreset() {
+    const id = userSoundPresetIdFromValue(partSoundPresetSelect?.value);
+    const preset = id ? findUserSoundPreset(id) : null;
+    if (!preset) {
+      showDialog("프리셋 삭제 실패", "삭제할 저장 프리셋을 선택해 주세요.");
+      updatePartSoundPresetDeleteState();
+      return;
+    }
+    if (!window.confirm(`'${preset.name}' 프리셋을 삭제할까요?`)) return;
+    userSoundPresets = userSoundPresets.filter(p => p.id !== id);
+    saveUserSoundPresetPrefs();
+    updateSoundPresetControls();
+    showDialog("프리셋 삭제 완료", `'${preset.name}' 프리셋을 삭제했습니다.`);
+  }
+
+  function getActivePartIndex() {
+    const m = /^part(\d+)$/.exec(activeTabName || "");
+    if (!m) return null;
+    const idx = Number(m[1]);
+    return idx >= 0 && idx < 6 ? idx : null;
+  }
+
+  function updatePartMuteControl() {
+    const idx = getActivePartIndex();
+    const allMuted = partMuteStates.every(Boolean);
+    if (partMuteToggle) {
+      partMuteToggle.disabled = false;
+      partMuteToggle.indeterminate = false;
+      partMuteToggle.checked = idx == null ? allMuted : Boolean(partMuteStates[idx]);
+      partMuteToggle.title = idx == null
+        ? "모든 채널을 한 번에 재생에서 제외하거나 다시 켭니다."
+        : `${PART_LABELS[idx]} 채널을 재생에서 제외합니다.`;
+    }
+    if (partMuteLabel) partMuteLabel.textContent = idx == null ? "전체 음소거" : "채널 음소거";
+    for (let i = 0; i < 6; i++) {
+      const tab = tabs.find(t => t.dataset.tab === `part${i}`);
+      if (tab) tab.classList.toggle("muted", Boolean(partMuteStates[i]));
+    }
+  }
+
+  function handlePartMuteToggleChange() {
+    if (!partMuteToggle) {
+      updatePartMuteControl();
+      return;
+    }
+    const idx = getActivePartIndex();
+    const muted = Boolean(partMuteToggle.checked);
+    if (idx == null) {
+      partMuteStates = Array.from({ length: 6 }, () => muted);
+    } else {
+      partMuteStates[idx] = muted;
+    }
+    savePartMutePrefs();
+    updatePartMuteControl();
+    rebuildSchedulePreviewSilently();
+    restartPlaybackAfterSoundChange();
+  }
+
+  function restartPlaybackAfterSoundChange() {
+    if (!isPlaying) return;
+    currentOffset = getCurrentPlaybackOffset();
+    stopPlayback(false);
+    void playFromCurrent();
   }
 
   function handleSoundSourceChange() {
@@ -360,9 +723,11 @@
     const beatIds = allGroups.filter(g => g.isBeat).map(g => g.id);
     const channelSettings = Array.from({ length: 6 }, (_, i) => {
       const role = i === 0 ? "high" : (i === 2 ? "low" : "auto");
+      const overlapMergeMode = (i === 0 || i === 2) ? "half" : "all";
       return {
         role,
-        overlapMerge: true,
+        overlapMerge: overlapMergeMode !== "none",
+        overlapMergeMode,
         selectedInstrumentGroups: new Set(role === "beat" ? beatIds : normalIds)
       };
     });
@@ -400,6 +765,12 @@
         `<option value="low" ${setting.role === "low" ? "selected" : ""}>저음</option>`,
         allowBeat ? `<option value="beat" ${setting.role === "beat" ? "selected" : ""}>비트</option>` : ""
       ].join("");
+      const mergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
+      setting.overlapMergeMode = mergeMode;
+      setting.overlapMerge = mergeMode !== "none";
+      const mergeOptions = OVERLAP_MERGE_OPTIONS.map(opt =>
+        `<option value="${opt.value}" ${mergeMode === opt.value ? "selected" : ""}>${opt.label}</option>`
+      ).join("");
       row.innerHTML = `
         <button class="midi-channel-select" type="button" data-midi-channel-select="${i}" aria-label="${PART_LABELS[i]} 악기 선택">
           <span class="midi-export-label">${PART_LABELS[i]}</span>
@@ -408,7 +779,13 @@
         <select data-role-index="${i}" aria-label="${PART_LABELS[i]} 역할">
           ${selectOptions}
         </select>
-        <label class="merge-check"><input type="checkbox" data-merge-index="${i}" ${setting.overlapMerge ? "checked" : ""} /> 겹침 병합</label>
+        <label class="merge-mode">
+          <span>겹침</span>
+          <select data-merge-index="${i}" aria-label="${PART_LABELS[i]} 겹침 병합 방식">
+            ${mergeOptions}
+          </select>
+          <span>병합</span>
+        </label>
       `;
       row.querySelector("button")?.addEventListener("click", () => {
         pendingMidiSettings.activeIndex = i;
@@ -416,12 +793,14 @@
         renderActiveMidiInstrumentList();
         updateMidiRoleControls();
       });
-      row.querySelector("select")?.addEventListener("change", (ev) => {
+      row.querySelector("[data-role-index]")?.addEventListener("change", (ev) => {
         const role = String(ev.target.value || "auto");
         updateMidiChannelRole(i, role);
       });
-      row.querySelector('input[type="checkbox"]')?.addEventListener("change", (ev) => {
-        pendingMidiSettings.channels[i].overlapMerge = Boolean(ev.target.checked);
+      row.querySelector("[data-merge-index]")?.addEventListener("change", (ev) => {
+        const mode = normalizeOverlapMergeMode(ev.target.value);
+        pendingMidiSettings.channels[i].overlapMergeMode = mode;
+        pendingMidiSettings.channels[i].overlapMerge = mode !== "none";
       });
       midiRoleList.appendChild(row);
     }
@@ -449,6 +828,13 @@
     const allowed = getAllowedMidiGroupsForSetting(setting);
     const selectedCount = allowed.filter(g => setting.selectedInstrumentGroups.has(g.id)).length;
     return `악기 ${formatCount(selectedCount)}개 선택`;
+  }
+
+  function normalizeOverlapMergeMode(value) {
+    if (value === true || value === "true") return "all";
+    if (value === false || value === "false") return "none";
+    const mode = String(value || "all").toLowerCase();
+    return OVERLAP_MERGE_OPTIONS.some(opt => opt.value === mode) ? mode : "all";
   }
 
   function getMidiGroupSelectedChannels(groupId) {
@@ -732,6 +1118,48 @@
     renderActiveMidiInstrumentList();
   }
 
+  function buildMidiPartSoundPreset(exportChannels, groups, partCount = 6) {
+    const keys = defaultPartPresetKeys();
+    const groupMap = new Map((groups || []).map(g => [String(g.id), g]));
+    const count = clampInt(Number(partCount) || 6, 1, 6);
+    for (let i = 0; i < count; i++) {
+      const channel = exportChannels?.[i];
+      const selected = Array.isArray(channel?.selectedInstrumentGroups)
+        ? channel.selectedInstrumentGroups.map(id => groupMap.get(String(id))).filter(Boolean)
+        : [];
+      if (!selected.length) continue;
+      selected.sort((a, b) => (Number(b.noteCount) || 0) - (Number(a.noteCount) || 0) || String(a.instrumentName || "").localeCompare(String(b.instrumentName || ""), "ko"));
+      keys[i] = midiGroupToPresetKey(selected[0]);
+    }
+    return normalizePresetKeyArray(keys);
+  }
+
+  function midiGroupToPresetKey(group) {
+    if (!group) return DEFAULT_PART_PRESET_KEY;
+    if (group.isBeat || group.isPercussion) return "128:0";
+    const program = clampInt(Number(group.program ?? group.preset ?? 0), 0, 127);
+    return `0:${program}`;
+  }
+
+  function rememberMidiPartSoundPreset(keys) {
+    const selectedQuickMode = soundPresetQuickSelect?.value || soundPresetMatch(partPresetKeys);
+    const shouldApplyToCurrentSound = selectedQuickMode === "auto";
+    midiPartPresetKeys = normalizePresetKeyArray(keys);
+    midiPartPresetName = DEFAULT_MIDI_SOUND_PRESET_LABEL;
+    saveMidiPartSoundPresetPrefs();
+
+    if (shouldApplyToCurrentSound) {
+      partPresetKeys = normalizePresetKeyArray(midiPartPresetKeys);
+      savePartSoundPrefs();
+      updateSoundPresetControls(null, "auto");
+      return true;
+    }
+
+    const preferredQuickMode = userSoundPresetIdFromValue(selectedQuickMode) ? selectedQuickMode : null;
+    updateSoundPresetControls(null, preferredQuickMode);
+    return false;
+  }
+
   function collectMidiConvertOptions() {
     if (!pendingMidiSettings) throw new Error("MIDI 변환 설정을 찾지 못했습니다.");
     const partCount = clampInt(Number(midiExportCount?.value || pendingMidiSettings.partCount || 3), 1, 6);
@@ -741,9 +1169,11 @@
       const allowedIds = new Set(getAllowedMidiGroupsForSetting(setting).map(g => g.id));
       const selected = Array.from(setting.selectedInstrumentGroups || []).filter(id => allowedIds.has(id));
       if (!selected.length) throw new Error(`${PART_LABELS[i]} 채널에 포함할 악기를 하나 이상 선택해 주세요.`);
+      const overlapMergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
       exportChannels.push({
         role: setting.role || "auto",
-        overlapMerge: Boolean(setting.overlapMerge),
+        overlapMergeMode,
+        overlapMerge: overlapMergeMode !== "none",
         selectedInstrumentGroups: selected
       });
     }
@@ -760,9 +1190,11 @@
       const options = collectMidiConvertOptions();
       stopPlayback(false);
       const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
+      const midiSoundPresetKeys = buildMidiPartSoundPreset(options.exportChannels, pendingMidiSettings?.groups || [], options.partCount);
       const trimmed = trimLeadingSilenceMml(result.mml);
       const optimized = optimizeMml(trimmed.mml);
       setMainMml(optimized.mml);
+      const autoSoundApplied = rememberMidiPartSoundPreset(midiSoundPresetKeys);
       stopMidiPreview();
       midiConvertDialog?.close();
       pendingMidiImport = null;
@@ -770,7 +1202,11 @@
       const saved = Math.max(0, Number(optimized.saved) || 0);
       showDialog(
         "MIDI 변환 완료",
-        result.message + (saved ? `\n\n최적화 절약: ${formatCount(saved)} 자` : "")
+        result.message +
+          (saved ? `\n\n최적화 절약: ${formatCount(saved)} 자` : "") +
+          (autoSoundApplied
+            ? "\n\nMIDI 악기 구성을 자동 음색으로 갱신하고 현재 재생 음색에 적용했습니다."
+            : "\n\nMIDI 악기 구성을 자동 음색 정보로 갱신했습니다. 현재 선택한 음색 설정은 유지했습니다.")
       );
     } catch (err) {
       showDialog("MIDI 변환 실패", shortError(err));
@@ -823,19 +1259,15 @@
       stopPlayback(false);
       stopMidiPreview();
       await loadDefaultSf2IfNeeded();
-      draftPartPresetKeys = partPresetKeys.slice(0, 6).map(k => sanitizePresetKey(k));
-      while (draftPartPresetKeys.length < 6) draftPartPresetKeys.push(DEFAULT_PART_PRESET_KEY);
+      draftPartPresetKeys = normalizePresetKeyArray(partPresetKeys);
+      draftSoundPresetBaseId = userSoundPresetIdFromValue(soundPresetQuickSelect?.value) || findUserSoundPresetIdByKeys(draftPartPresetKeys);
       renderPartSoundRows();
+      updateSoundPresetControls();
       if (partSoundDialog?.showModal) partSoundDialog.showModal();
       else showDialog("채널 음색 설정", "이 브라우저에서는 설정 창을 열 수 없습니다.");
     } catch (err) {
       showDialog("채널 음색 설정 실패", shortError(err));
     }
-  }
-
-  function resetPartSoundDraft() {
-    draftPartPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
-    renderPartSoundRows();
   }
 
   async function previewPartPreset(key, partIndex = 0, triggerButton = null) {
@@ -942,11 +1374,13 @@
   }
 
   function applyPartSoundDialog() {
-    if (!Array.isArray(draftPartPresetKeys)) draftPartPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
-    partPresetKeys = Array.from({ length: 6 }, (_, i) => sanitizePresetKey(draftPartPresetKeys[i] || DEFAULT_PART_PRESET_KEY));
+    if (!Array.isArray(draftPartPresetKeys)) draftPartPresetKeys = defaultPartPresetKeys();
+    partPresetKeys = normalizePresetKeyArray(draftPartPresetKeys);
     savePartSoundPrefs();
+    updateSoundPresetControls();
     rebuildSchedulePreviewSilently();
     partSoundDialog?.close();
+    restartPlaybackAfterSoundChange();
   }
 
   function renderPartSoundRows() {
@@ -995,8 +1429,9 @@
       });
 
       select.addEventListener("change", () => {
-        if (!draftPartPresetKeys) draftPartPresetKeys = partPresetKeys.slice(0, 6);
+        if (!draftPartPresetKeys) draftPartPresetKeys = normalizePresetKeyArray(partPresetKeys);
         draftPartPresetKeys[i] = sanitizePresetKey(select.value);
+        updateSoundPresetControls();
         void previewPartPreset(select.value, i, previewButton);
       });
 
@@ -1067,6 +1502,7 @@
     const prepared = [];
     const list = Array.isArray(notes) ? notes : [];
     for (let part = 0; part < 6; part++) {
+      if (partMuteStates[part]) continue;
       const partNotes = list.filter(n => Number(n.part) === part);
       if (!partNotes.length) continue;
       const preset = getPartPreset(part);
@@ -1076,6 +1512,14 @@
     prepared.sort((a, b) => a.start - b.start || a.part - b.part || a.midi - b.midi);
     for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
     return prepared;
+  }
+
+  function areAllScheduledNotesMuted(notes) {
+    const list = Array.isArray(notes) ? notes : [];
+    return list.length > 0 && list.every(n => {
+      const part = clampInt(Number(n?.part ?? 0), 0, 5);
+      return Boolean(partMuteStates[part]);
+    });
   }
 
   async function playFromCurrent() {
@@ -1090,7 +1534,8 @@
       const ctx = await ensureAudioContext();
       if (!soundFont.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
       preparedNotes = prepareNotesWithPartPresets(ctx, scheduleCache.notes);
-      if (preparedNotes.length === 0) throw new Error("소리 나는 음표가 없습니다. V0만 있거나 선택한 음색에서 맞는 음역을 찾지 못했습니다.");
+      const allScheduledNotesMuted = areAllScheduledNotesMuted(scheduleCache.notes);
+      if (preparedNotes.length === 0 && !allScheduledNotesMuted) throw new Error("소리 나는 음표가 없습니다. V0만 있거나 선택한 음색에서 맞는 음역을 찾지 못했습니다.");
 
       const baseTime = ctx.currentTime + PLAY_START_DELAY;
       activeSources = [];
@@ -1405,6 +1850,7 @@
     activeTabName = name || "main";
     tabs.forEach(t => t.classList.toggle("active", t.dataset.tab === activeTabName));
     panels.forEach(p => p.hidden = p.dataset.panel !== activeTabName);
+    updatePartMuteControl();
     updateCharCount();
   }
 
@@ -1823,33 +2269,40 @@
   }
 
   async function copyVisibleMml() {
-    const activePanel = panels.find(p => !p.hidden) || panels[0];
-    const textarea = activePanel.querySelector("textarea");
-    const isMainPanel = activePanel.dataset.panel === "main";
     let text;
     try {
-      text = isMainPanel
-        ? normalizeMmlForCopy(optimizeMml(textarea?.value || "").mml)
-        : optimizePart(normalizePartText(textarea?.value || ""), { includeTempo: activePanel.dataset.panel === "part0" }).part;
+      text = normalizeMmlForCopy(optimizeMml(mainMml?.value || "").mml);
     } catch (err) {
-      showDialog("복사 실패", `MML 최적화 중 문제가 발생했습니다.\n\n${shortError(err)}`);
+      showDialog("복사 실패", `MML 최적화 중 문제가 발생했습니다.
+
+${shortError(err)}`);
       return;
     }
+    const mainPanel = panels.find(p => p.dataset.panel === "main") || panels[0];
     try {
       await navigator.clipboard.writeText(text);
       flashButton(copyBtn, "복사 완료");
-      showCopySummary(activePanel, text);
+      showCopySummary(mainPanel, text);
     } catch {
-      textarea?.select();
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      ta.style.top = "0";
+      document.body.appendChild(ta);
+      ta.select();
       try {
         document.execCommand("copy");
         flashButton(copyBtn, "복사 완료");
-        showCopySummary(activePanel, text);
+        showCopySummary(mainPanel, text);
       } catch (err) {
-        showDialog("복사 실패", "자동 복사가 막혔습니다. MML을 선택한 뒤 Ctrl+C로 복사해 주세요.");
+        showDialog("복사 실패", "자동 복사가 막혔습니다. 전체 MML을 선택한 뒤 Ctrl+C로 복사해 주세요.");
+      } finally {
+        ta.remove();
       }
     }
   }
+
 
   function showCopySummary(activePanel, copiedText) {
     const isMainPanel = activePanel.dataset.panel === "main";
