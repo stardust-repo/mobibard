@@ -1,8 +1,8 @@
 # 마비노기 MML 재생기 샘플 - 모비바드 v3.2
 
-공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
+공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
 
-기본 재생은 로컬 파일만으로 동작합니다. Google Drive 연동을 사용하려면 Google Identity Services와 Google Picker 스크립트를 온라인으로 불러오며, `js/google-config.js` 설정이 필요합니다.
+기본 재생은 로컬 파일만으로 동작합니다. Google Drive 연동을 사용하려면 Google Identity Services와 Google Picker 스크립트를 온라인으로 불러오며, `js/google-config.js` 설정이 필요합니다. Firebase Analytics는 `js/firebase-config.js`와 `js/firebase-analytics.js`에서 초기화합니다.
 
 ---
 
@@ -38,6 +38,8 @@ mabinogi_mml_public/
    ├─ mml-optimizer.js         # 자동 최적화, 쉼표 삭제, 시작 공백, 나눠복사
    ├─ sf2-sampler.js           # SF2 파싱, 노트 준비, look-ahead 오디오 스케줄링
    ├─ google-config.js         # Google OAuth/Picker/API Key 설정
+   ├─ firebase-config.js       # Firebase Web App 설정 객체
+   ├─ firebase-analytics.js    # Firebase Analytics 초기화와 이벤트 큐 처리
    └─ app.js                   # 앱 상태, UI 이벤트, 파일/Drive 입출력, Dialog 제어, 재생 제어
 ```
 
@@ -52,6 +54,7 @@ mabinogi_mml_public/
 | `js/mml-parser.js` | `window.MabiMml` | `parseMabinogiMml`, `splitMmlParts`, `parseMmlPart`, `buildSchedule`, `beatToSeconds`, `composeMml` |
 | `js/mml-optimizer.js` | `window.MabiOptimizer` | `optimizeMml`, `optimizePart`, `trimShortRestsMml`, `addLeadingSilenceMml`, `splitMmlPages` |
 | `js/sf2-sampler.js` | `window.MabiSf2` | `parseSoundFont`, `prepareNotes`, `schedulePreparedNotes`, `scheduleNotes` |
+| `js/firebase-analytics.js` | `window.MobibardAnalytics` | `logEvent`, `isReady`, `isEnabled`, `getStatus` |
 
 `app.js`는 위 전역 객체를 가져와 UI와 파일 흐름을 연결합니다. 새 기능을 넣을 때는 계산/변환 로직은 가능한 전용 JS에 두고, `app.js`에는 UI 상태와 호출 흐름만 남기는 편이 유지보수하기 쉽습니다.
 
@@ -75,6 +78,9 @@ mabinogi_mml_public/
 | Google 로그인 유지 플래그 | `mobibard.player.googleAutoReconnect` |
 | Google 단기 토큰 캐시 | `mobibard.player.googleTokenCache` (`accessToken`, `expiresAt`, 로컬 전용) |
 | Google scope | `drive.file`, `drive.appdata` |
+| Firebase 프로젝트 | `mobibard` (`js/firebase-config.js`) |
+| Firebase Analytics 측정 ID | `G-38SYBVDLZQ` (`js/firebase-config.js`) |
+| Firebase SDK | CDN modular SDK `12.15.0` (`js/firebase-analytics.js`) |
 
 ---
 
@@ -362,6 +368,45 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 
 ---
 
+## Firebase Analytics 연동
+
+Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로 불러와 초기화합니다.
+
+### 파일 역할
+
+| 파일 | 역할 |
+|---|---|
+| `js/firebase-config.js` | Firebase Console에서 가져온 웹 앱 `firebaseConfig` 보관 |
+| `js/firebase-analytics.js` | `initializeApp()`, `getAnalytics()`, `logEvent()` 래퍼, 초기화 전 이벤트 큐 처리 |
+| `js/app.js` | `trackAnalytics()`로 앱 동작 이벤트 호출 |
+| `index.html` | Firebase 설정/Analytics 스크립트를 `app.js`보다 먼저 선언 |
+
+### 현재 기록하는 이벤트
+
+파일명이나 원문 MML 내용은 Analytics로 보내지 않습니다. 이벤트에는 파일 종류, 채널 수, 미리듣기 종류처럼 동작 분석에 필요한 값만 넣습니다.
+
+| 이벤트 | 발생 위치 | 주요 파라미터 |
+|---|---|---|
+| `mobibard_app_open` | 앱 초기화 완료 | `version` |
+| `google_drive_login`, `google_drive_logout` | Google 로그인/로그아웃 | `settings_source` |
+| `google_drive_picker_open` | Drive Picker 열기 | 없음 |
+| `local_import_midi`, `drive_import_midi` | MIDI 파일을 변환 Dialog로 열 때 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
+| `local_import_mml`, `drive_import_mml` | MMI/3MLE/TXT MML 불러오기 완료 | `file_type`, `file_size`, `channel_count` |
+| `preview_midi_file`, `preview_midi_instrument` | MIDI 전체/악기 미리듣기 | 없음 |
+| `preview_mml_selected`, `preview_mml_all`, `preview_mml_channel` | MMI/3MLE 선택/전부/채널 미리듣기 | `channel_count`, `channel_index` |
+| `midi_convert_complete` | MIDI 변환 완료 | `export_channels`, `instrument_groups`, `optimized_chars` |
+| `playback_start` | 메인 재생 시작 | `offset_sec`, `channel_count` |
+| `paste_mml`, `copy_all_mml`, `local_save_mml`, `drive_save_mml` | 붙여넣기/복사/저장 | `channel_count`, `create_new` |
+| `split_copy_open`, `preview_split_page`, `copy_split_page` | 나눠복사 Dialog/악보별 듣기/복사 | `page_index` |
+
+### 동작 방식
+
+- Analytics가 지원되지 않는 환경, 광고 차단, 네트워크 실패가 있어도 앱 기능은 계속 동작합니다.
+- `app.js`가 먼저 이벤트를 호출해도 `window.__MOBIBARD_ANALYTICS_QUEUE__`에 잠시 보관하고, Firebase 초기화 후 전송합니다.
+- Firebase 웹 클라이언트 config는 공개 클라이언트 식별자입니다. Admin SDK 키, service account JSON, OAuth secret, refresh token은 사용하지 않습니다.
+
+---
+
 ## 수정할 때 자주 봐야 하는 위치
 
 | 작업 | 먼저 볼 파일 / 함수 |
@@ -376,6 +421,7 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 | 최적화/쉼표/공백/나눠복사 변경 | `js/mml-optimizer.js` |
 | 재생/스케줄링/SF2 변경 | `js/sf2-sampler.js`, `app.js`의 재생 제어 함수 |
 | Google Drive 변경 | `app.js`의 Google 관련 함수, `js/google-config.js` |
+| Firebase Analytics 변경 | `js/firebase-config.js`, `js/firebase-analytics.js`, `app.js`의 `trackAnalytics()` 호출 위치 |
 | 저장 설정 변경 | `PREF_PREFIX`, `readPref()`, `writePref()`, Google settings snapshot 관련 함수 |
 
 ---
@@ -406,6 +452,9 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 - [ ] 저장된 Google 토큰이 만료되거나 401이 발생했을 때 토큰 캐시가 삭제되고 재로그인 흐름으로 넘어가는지
 - [ ] 로그아웃 후 새로고침했을 때 자동 재연동이 일어나지 않는지
 - [ ] Drive 설정 동기화 실패 시 로컬 설정을 계속 사용하는지
+- [ ] Firebase Analytics가 네트워크/차단 문제로 실패해도 앱 기본 기능이 계속 동작하는지
+- [ ] Firebase DebugView 또는 Analytics 실시간 보고서에서 `mobibard_app_open`과 주요 커스텀 이벤트가 들어오는지
+- [ ] Analytics 이벤트에 파일명, MML 원문, Google access token 같은 민감한 값이 들어가지 않는지
 
 ---
 
@@ -423,6 +472,8 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 - MMI/3MLE MML 채널 선택 Dialog 상단의 기존 `전체 듣기` 버튼을 `선택 듣기`로 이름 변경했습니다. 기능은 현재 체크된 채널만 합쳐 재생하도록 유지했습니다.
 - `선택 듣기` 오른쪽에 `전부 듣기` 버튼을 추가해, 체크 여부와 관계없이 읽어온 파일의 모든 감지 채널을 합쳐 재생할 수 있게 했습니다.
 - MMI/3MLE MML 채널 선택 Dialog 하단의 `파일 불러오기`와 `모두 선택해제` 버튼 위치를 서로 바꿨습니다.
+- Firebase Analytics 연동을 추가했습니다. `js/firebase-config.js`에는 웹 앱 설정을, `js/firebase-analytics.js`에는 SDK 초기화/이벤트 큐 처리를 분리했습니다.
+- 앱 열기, 파일 불러오기, MIDI 변환, 미리듣기, 재생, 복사, 저장, Google Drive 동작을 커스텀 이벤트로 기록하도록 했습니다. 파일명과 MML 본문은 Analytics 이벤트에 포함하지 않습니다.
 - v3.1까지의 MIDI/MMI/3MLE/Google Drive/음색/최적화 변경 내용을 현재 구조 기준으로 다시 묶어 정리했습니다.
 
 ### v3.1

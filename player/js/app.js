@@ -312,6 +312,43 @@
     scheduleGoogleAutoReconnect();
     updateCharCount();
     rebuildSchedulePreviewSilently();
+    trackAnalytics("mobibard_app_open", { version: "3_2" });
+  }
+
+  function trackAnalytics(eventName, params = {}) {
+    try {
+      const analytics = window.MobibardAnalytics;
+      if (analytics && typeof analytics.logEvent === "function") {
+        analytics.logEvent(eventName, params);
+        return;
+      }
+      const queue = window.__MOBIBARD_ANALYTICS_QUEUE__ || [];
+      window.__MOBIBARD_ANALYTICS_QUEUE__ = queue;
+      queue.push({ name: eventName, params });
+      if (queue.length > 100) queue.splice(0, queue.length - 100);
+    } catch (_) {}
+  }
+
+  function analyticsFileType(nameOrExt) {
+    const text = String(nameOrExt || "").trim().toLowerCase();
+    const ext = text.includes(".") ? text.split(".").pop() : text;
+    if (ext === "midi") return "mid";
+    return SOURCE_FILE_EXTENSIONS.has(ext) ? ext : "unknown";
+  }
+
+  function analyticsFileSizeBucket(bytes) {
+    const size = Number(bytes) || 0;
+    if (size <= 0) return "unknown";
+    if (size < 10 * 1024) return "lt_10kb";
+    if (size < 100 * 1024) return "lt_100kb";
+    if (size < 1024 * 1024) return "lt_1mb";
+    if (size < 10 * 1024 * 1024) return "lt_10mb";
+    return "gte_10mb";
+  }
+
+  function analyticsChannelCount(text) {
+    try { return Math.max(0, countMmlChannels(text)); }
+    catch (_) { return 0; }
   }
 
   function loadPlaybackPrefs() {
@@ -681,6 +718,7 @@
       resetGoogleSessionState(true);
       googleSilentRestoreFailed = false;
       updateGoogleDriveControls("구글 로그아웃됨");
+      trackAnalytics("google_drive_logout");
       return;
     }
     try {
@@ -689,6 +727,7 @@
       setGoogleAutoReconnect(true);
       const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
       updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : "로컬 설정 사용 중");
+      trackAnalytics("google_drive_login", { settings_source: appliedDriveSettings ? "drive" : "local" });
     } catch (err) {
       resetGoogleSessionState(true);
       updateGoogleDriveControls("구글 로그인 실패");
@@ -1259,6 +1298,7 @@
       const appId = googleAppId();
       if (appId) builder.setAppId(appId);
       builder.build().setVisible(true);
+      trackAnalytics("google_drive_picker_open");
       setGoogleStatus("구글 연동됨");
     } catch (err) {
       showDialog("Drive 불러오기 실패", shortError(err));
@@ -1338,6 +1378,11 @@
       googleDriveMmlFileId = "";
       googleDriveMmlFileName = "";
       openMidiConvertDialog({ bytes, name, overview });
+      trackAnalytics("drive_import_midi", {
+        file_type: analyticsFileType(name),
+        instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
+        note_count: Number(overview.noteCount || 0)
+      });
       setGoogleStatus("Drive MIDI 불러옴");
       return;
     }
@@ -1358,6 +1403,10 @@
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
       showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
+      trackAnalytics("drive_import_mml", {
+        file_type: analyticsFileType(name),
+        channel_count: analyticsChannelCount(mainMml.value)
+      });
       setGoogleStatus("Drive MMI 불러옴");
       return;
     }
@@ -1378,6 +1427,10 @@
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
       showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
+      trackAnalytics("drive_import_mml", {
+        file_type: analyticsFileType(name),
+        channel_count: analyticsChannelCount(mainMml.value)
+      });
       setGoogleStatus("Drive 3MLE MML 불러옴");
       return;
     }
@@ -1397,6 +1450,10 @@
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
+      trackAnalytics("drive_import_mml", {
+        file_type: analyticsFileType(name),
+        channel_count: analyticsChannelCount(mainMml.value)
+      });
       setGoogleStatus("Drive TXT 불러옴");
       return;
     }
@@ -1463,6 +1520,10 @@ ${shortError(err)}`);
       }
       flashButton(googleDriveSaveBtn, "Drive 저장 완료");
       setGoogleStatus("Drive 저장 완료");
+      trackAnalytics("drive_save_mml", {
+        create_new: Boolean(result.createsNewFile),
+        channel_count: analyticsChannelCount(text)
+      });
     } catch (err) {
       showDialog("Drive 저장 실패", shortError(err));
       updateGoogleDriveControls();
@@ -1823,6 +1884,12 @@ ${shortError(err)}`);
         const bytes = new Uint8Array(await file.arrayBuffer());
         const overview = analyzeMidi(bytes, name);
         openMidiConvertDialog({ bytes, name, overview });
+        trackAnalytics("local_import_midi", {
+          file_type: analyticsFileType(ext),
+          file_size: analyticsFileSizeBucket(file.size),
+          instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
+          note_count: Number(overview.noteCount || 0)
+        });
       } else if (ext === "mmi") {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const loaded = await readMabiIccoMmiFile(bytes, name);
@@ -1836,6 +1903,11 @@ ${shortError(err)}`);
         }
         rememberSuggestedMmlSaveFileName(name);
         showLoadedChannelCount(midiLoadBtn, "불러옴", mainMml.value);
+        trackAnalytics("local_import_mml", {
+          file_type: analyticsFileType(ext),
+          file_size: analyticsFileSizeBucket(file.size),
+          channel_count: analyticsChannelCount(mainMml.value)
+        });
       } else if (ext === "mml") {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const loaded = await readThreeMleMmlFile(bytes, name);
@@ -1849,6 +1921,11 @@ ${shortError(err)}`);
         }
         rememberSuggestedMmlSaveFileName(name);
         showLoadedChannelCount(midiLoadBtn, "불러옴", mainMml.value);
+        trackAnalytics("local_import_mml", {
+          file_type: analyticsFileType(ext),
+          file_size: analyticsFileSizeBucket(file.size),
+          channel_count: analyticsChannelCount(mainMml.value)
+        });
       } else if (ext === "txt") {
         const text = await file.text();
         const loaded = readMmlTextFile(text);
@@ -1860,6 +1937,11 @@ ${shortError(err)}`);
           showDialog("MML 최적화 생략", `파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
         }
         showLoadedChannelCount(midiLoadBtn, "불러옴", mainMml.value);
+        trackAnalytics("local_import_mml", {
+          file_type: analyticsFileType(ext),
+          file_size: analyticsFileSizeBucket(file.size),
+          channel_count: analyticsChannelCount(mainMml.value)
+        });
       } else {
         throw new Error("지원하지 않는 파일입니다. mid, midi, mmi, mml, txt 파일을 선택해 주세요.");
       }
@@ -2128,6 +2210,7 @@ ${shortError(err)}`);
       return;
     }
 
+    trackAnalytics("preview_mml_selected", { channel_count: selectedParts.length });
     await playMmiImportPartsPreview(selectedParts, {
       button,
       statusText: `선택 ${selectedParts.length}/${MMI_IMPORT_MAX_CHANNELS}개 미리듣기 중...`,
@@ -2150,6 +2233,7 @@ ${shortError(err)}`);
       return;
     }
 
+    trackAnalytics("preview_mml_all", { channel_count: allParts.length });
     await playMmiImportPartsPreview(allParts, {
       button,
       statusText: `전체 ${allParts.length}개 채널 미리듣기 중...`,
@@ -2283,6 +2367,7 @@ ${shortError(err)}`);
         button.setAttribute("aria-pressed", "true");
       }
       if (mmiImportStatus) mmiImportStatus.textContent = `${candidate.label || "선택 채널"} 미리듣기 중...`;
+      trackAnalytics("preview_mml_channel", { channel_index: Number(index) + 1 });
 
       await loadDefaultSf2IfNeeded();
       const ctx = await ensureAudioContext();
@@ -3149,6 +3234,7 @@ ${shortError(err)}`);
       stopPlayback(false);
       stopMidiPreview();
       setMidiFullPreviewState(true);
+      trackAnalytics("preview_midi_file");
       await loadDefaultSf2IfNeeded();
       const preview = buildMidiFilePreview(pendingMidiImport.bytes, { maxSeconds: 45, tailSeconds: 1.0 });
       const ctx = await ensureAudioContext();
@@ -3204,6 +3290,7 @@ ${shortError(err)}`);
         button.disabled = true;
         button.textContent = "재생중";
       }
+      trackAnalytics("preview_midi_instrument");
       await loadDefaultSf2IfNeeded();
       const preview = buildMidiInstrumentPreview(pendingMidiImport.bytes, groupId, { maxSeconds: 8, tailSeconds: 0.75 });
       const ctx = await ensureAudioContext();
@@ -3397,11 +3484,17 @@ ${shortError(err)}`);
       googleDriveMmlFileId = "";
       googleDriveMmlFileName = "";
       const autoSoundApplied = rememberMidiPartSoundPreset(midiSoundPresetKeys);
+      const midiGroupCount = Number(pendingMidiSettings?.groups?.length || 0);
       midiConvertDialog?.close();
       setMidiConvertBusy(false);
       pendingMidiImport = null;
       pendingMidiSettings = null;
       const saved = Math.max(0, Number(normalized.saved) || 0);
+      trackAnalytics("midi_convert_complete", {
+        export_channels: Number(options.partCount || 0),
+        instrument_groups: midiGroupCount,
+        optimized_chars: saved
+      });
       showDialog(
         "MIDI 변환 완료",
         result.message +
@@ -3780,6 +3873,10 @@ ${shortError(err)}`);
       playContextStart = baseTime;
       playOffsetStart = currentOffset;
       isPlaying = true;
+      trackAnalytics("playback_start", {
+        offset_sec: Math.max(0, Math.round(Number(currentOffset) || 0)),
+        channel_count: analyticsChannelCount(mainMml.value)
+      });
       updatePlayButton();
       updateProgressUi(currentOffset, scheduleCache.duration);
       schedulePlaybackWindow();
@@ -4282,6 +4379,7 @@ ${shortError(err)}`);
     googleDriveMmlFileName = "";
     rebuildSchedulePreviewSilently();
     flashButton(pasteBtn, "붙여넣기 완료");
+    trackAnalytics("paste_mml", { channel_count: analyticsChannelCount(mainMml.value) });
   }
 
   async function copyVisibleMml() {
@@ -4299,6 +4397,7 @@ ${shortError(err)}`);
       await navigator.clipboard.writeText(text);
       flashButton(copyBtn, "복사 완료");
       showCopySummary(mainPanel, text);
+      trackAnalytics("copy_all_mml", { channel_count: analyticsChannelCount(text) });
     } catch {
       const ta = document.createElement("textarea");
       ta.value = text;
@@ -4311,6 +4410,7 @@ ${shortError(err)}`);
         document.execCommand("copy");
         flashButton(copyBtn, "복사 완료");
         showCopySummary(mainPanel, text);
+        trackAnalytics("copy_all_mml", { channel_count: analyticsChannelCount(text) });
       } catch (err) {
         showDialog("복사 실패", "자동 복사가 막혔습니다. 전체 MML을 선택한 뒤 Ctrl+C로 복사해 주세요.");
       } finally {
@@ -4355,6 +4455,7 @@ ${shortError(err)}`);
   function openSplitCopyDialog() {
     try {
       buildSplitCopyPages();
+      trackAnalytics("split_copy_open");
       if (splitCopyDialog?.showModal) splitCopyDialog.showModal();
       else showDialog("악보 나눠복사", "이 브라우저는 나눠복사 Dialog를 지원하지 않습니다.");
     } catch (err) {
@@ -4440,6 +4541,7 @@ ${shortError(err)}`);
       stopPlayback(false);
       stopMidiPreview();
       if (button) setSplitPreviewButton(button);
+      trackAnalytics("preview_split_page", { page_index: Number(page?.index || 0) });
       await loadDefaultSf2IfNeeded();
       const ctx = await ensureAudioContext();
       const parsed = parseMabinogiMml(text);
@@ -4478,6 +4580,7 @@ ${shortError(err)}`);
     try {
       await navigator.clipboard.writeText(text);
       showDialog("복사 완료", buildSplitCopyPageMessage(page));
+      trackAnalytics("copy_split_page", { page_index: Number(page?.index || 0) });
     } catch (_) {
       const ta = document.createElement("textarea");
       ta.value = text;
@@ -4488,6 +4591,7 @@ ${shortError(err)}`);
       try {
         document.execCommand("copy");
         showDialog("복사 완료", buildSplitCopyPageMessage(page));
+        trackAnalytics("copy_split_page", { page_index: Number(page?.index || 0) });
       } catch (err) {
         showDialog("복사 실패", "자동 복사가 막혔습니다. Dialog의 악보를 직접 선택해 복사해 주세요.");
       } finally {
@@ -4559,6 +4663,7 @@ ${shortError(err)}`);
         await writable.write(blob);
         await writable.close();
         flashButton(saveBtn, "저장 완료");
+        trackAnalytics("local_save_mml", { channel_count: analyticsChannelCount(text) });
         return;
       } catch (err) {
         if (err?.name === "AbortError") return;
@@ -4573,6 +4678,7 @@ ${shortError(err)}`);
     if (!/\.txt$/i.test(fileName)) fileName += ".txt";
     downloadBlob(blob, fileName);
     flashButton(saveBtn, "저장 완료");
+    trackAnalytics("local_save_mml", { channel_count: analyticsChannelCount(text) });
   }
 
   function getFullMmlForExport() {
