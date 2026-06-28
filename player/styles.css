@@ -93,6 +93,7 @@ button.ghost { background: var(--accent-weak); color: var(--accent); }
 .google-account { display: inline-flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--play-info-bg); }
 .google-status { min-width: 116px; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header-links { display: inline-flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--play-info-bg); }
+.midi-site-links { min-width: 128px; max-width: 150px; font-weight: 800; }
 
 .title-theme-control { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; white-space: nowrap; }
 .title-theme-control .menu-label { font-size: 12.5px; }

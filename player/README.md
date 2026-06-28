@@ -89,7 +89,8 @@ mabinogi_mml_public/
 ### 1. 상단 앱 카드
 
 - 앱 제목과 버전 표시
-- 악보 공유 / 디스코드 바로가기
+- 디스코드 바로가기
+- 개발자 악보 공유와 MIDI 파일 사이트를 여는 바로가기 콤보박스
 - Google 로그인 / 로그아웃
 - 테마 전환
 - 파일 불러오기 / 저장하기 그룹
@@ -390,6 +391,8 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 | `mobibard_app_open` | 앱 초기화 완료 | `version` |
 | `google_drive_login`, `google_drive_logout` | Google 로그인/로그아웃 | `settings_source` |
 | `google_drive_picker_open` | Drive Picker 열기 | 없음 |
+| `shortcut_link_open` | 상단 바로가기 콤보박스 선택 | `link` |
+| `midi_resource_link_open` | 상단 바로가기 콤보박스에서 MIDI 사이트 선택 | `site` |
 | `local_import_midi`, `drive_import_midi` | MIDI 파일을 변환 Dialog로 열 때 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
 | `local_import_mml`, `drive_import_mml` | MMI/3MLE/TXT MML 불러오기 완료 | `file_type`, `file_size`, `channel_count` |
 | `preview_midi_file`, `preview_midi_instrument` | MIDI 전체/악기 미리듣기 | 없음 |
@@ -413,6 +416,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 |---|---|
 | 앱 버전 변경 | `index.html`의 `<title>`, `.app-version`, `README.md` |
 | 버튼/레이아웃 변경 | `index.html`, `styles.css`, `app.js:init()` 이벤트 연결 |
+| 상단 바로가기/MIDI 사이트 목록·배치 변경 | `index.html`의 `#midiSiteLinks`, `app.js`의 `HEADER_SHORTCUT_LINKS`, `MIDI_RESOURCE_LINK_IDS`, `openHeaderShortcutLink()` |
 | MIDI 변환 규칙 변경 | `js/midi-to-mml.js`의 `midiToMml()`, `assignNotesToVoices()`, `normalizeExportChannels()` |
 | MIDI 변환 Dialog 변경 | `index.html#midiConvertDialog`, `app.js`의 `openMidiConvertDialog()`, `renderMidiRoleList()`, `renderMidiInstrumentList()`, `syncMidiInstrumentListHeight()` |
 | MMI/3MLE import 변경 | `app.js`의 `readMabiIccoMmiFile()`, `readThreeMleMmlFile()`, `openMmiImportDialog()`, `toggleMmiSelectedPreview()`, `toggleMmiAllPreview()` |
@@ -431,6 +435,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
 - [ ] 제목에 `모비바드 v3.2`가 보이는지
+- [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 악보 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
 - [ ] 전체 MML 편집과 개별 파트 탭 편집이 서로 동기화되는지
@@ -475,6 +480,9 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - Firebase Analytics 연동을 추가했습니다. `js/firebase-config.js`에는 웹 앱 설정을, `js/firebase-analytics.js`에는 SDK 초기화/이벤트 큐 처리를 분리했습니다.
 - 앱 열기, 파일 불러오기, MIDI 변환, 미리듣기, 재생, 복사, 저장, Google Drive 동작을 커스텀 이벤트로 기록하도록 했습니다. 파일명과 MML 본문은 Analytics 이벤트에 포함하지 않습니다.
 - Google token 만료 처리 방식을 수정했습니다. 유효한 토큰은 새로고침/새 창에서 유지하지만, 만료되거나 401이 발생하면 자동으로 Google 로그인을 다시 요청하지 않고 `로그인 필요` 상태로만 전환합니다.
+- 상단 바로가기 영역의 콤보박스 기본 문구를 `MML / MIDI 링크`로 바꾸고 디스코드 버튼 왼쪽에 배치했습니다. 기존 `개발자 악보 공유` 버튼은 제거하고 콤보박스 맨 위 항목으로 옮겼습니다.
+- `https://www.vgmusic.com/` 항목은 `VGMusic (https)`로 명확히 표시했습니다. MuseScore, MIDIEX, BitMidi, Midisite, VGMusic, Ichigo's를 선택하면 새 창으로 열립니다.
+- 바로가기 콤보박스 선택을 `shortcut_link_open` Analytics 이벤트로 기록하고, MIDI 사이트 선택은 기존 `midi_resource_link_open` 이벤트도 함께 기록합니다. 링크 식별자만 보내고 검색어/파일명은 보내지 않습니다.
 - v3.1까지의 MIDI/MMI/3MLE/Google Drive/음색/최적화 변경 내용을 현재 구조 기준으로 다시 묶어 정리했습니다.
 
 ### v3.1

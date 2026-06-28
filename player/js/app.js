@@ -33,6 +33,16 @@
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
   const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi", "mml"]);
+  const HEADER_SHORTCUT_LINKS = new Map([
+    ["https://drive.google.com/drive/folders/17mHTnFD475WKYUFK9aowEymi1183vtqD?usp=drive_link", "score_share"],
+    ["https://musescore.com/", "musescore"],
+    ["http://www.midiex.net/", "midiex"],
+    ["https://bitmidi.com/", "bitmidi"],
+    ["http://www.midisite.co.uk/", "midisite"],
+    ["https://www.vgmusic.com/", "vgmusic_https"],
+    ["https://ichigos.com/", "ichigos"]
+  ]);
+  const MIDI_RESOURCE_LINK_IDS = new Set(["musescore", "midiex", "bitmidi", "midisite", "vgmusic_https", "ichigos"]);
 
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
@@ -44,6 +54,7 @@
   const $ = (id) => document.getElementById(id);
   const midiFile = $("midiFile");
   const midiLoadBtn = $("midiLoadBtn");
+  const midiSiteLinks = $("midiSiteLinks");
   const soundSource = $("soundSource");
   const sf2File = $("sf2File");
   const soundName = $("soundName");
@@ -205,6 +216,7 @@
     loadGoogleDriveFolderPrefs();
     restoreGoogleTokenCache();
     midiLoadBtn.addEventListener("click", () => openSourceFilePicker());
+    midiSiteLinks?.addEventListener("change", openHeaderShortcutLink);
     midiFile.addEventListener("change", () => void loadSourceFile());
     installSourceFileDropHandlers();
     googleLoginBtn?.addEventListener("click", () => void handleGoogleLoginButton());
@@ -328,6 +340,23 @@
       queue.push({ name: eventName, params });
       if (queue.length > 100) queue.splice(0, queue.length - 100);
     } catch (_) {}
+  }
+
+  function openHeaderShortcutLink() {
+    if (!midiSiteLinks) return;
+    const url = midiSiteLinks.value;
+    midiSiteLinks.value = "";
+    if (!url || !HEADER_SHORTCUT_LINKS.has(url)) return;
+
+    const linkId = HEADER_SHORTCUT_LINKS.get(url);
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (opened) {
+      try { opened.opener = null; } catch (_) {}
+    }
+    trackAnalytics("shortcut_link_open", { link: linkId });
+    if (MIDI_RESOURCE_LINK_IDS.has(linkId)) {
+      trackAnalytics("midi_resource_link_open", { site: linkId });
+    }
   }
 
   function analyticsFileType(nameOrExt) {
