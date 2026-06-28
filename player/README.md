@@ -481,7 +481,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - 앱 열기, 파일 불러오기, MIDI 변환, 미리듣기, 재생, 복사, 저장, Google Drive 동작을 커스텀 이벤트로 기록하도록 했습니다. 파일명과 MML 본문은 Analytics 이벤트에 포함하지 않습니다.
 - Google token 만료 처리 방식을 수정했습니다. 유효한 토큰은 새로고침/새 창에서 유지하지만, 만료되거나 401이 발생하면 자동으로 Google 로그인을 다시 요청하지 않고 `로그인 필요` 상태로만 전환합니다.
 - 상단 바로가기 영역의 콤보박스 기본 문구를 `MML / MIDI 링크`로 바꾸고 디스코드 버튼 왼쪽에 배치했습니다. 기존 `개발자 악보 공유` 버튼은 제거하고 콤보박스 맨 위 항목으로 옮겼습니다.
-- `https://www.vgmusic.com/` 항목은 `VGMusic (https)`로 명확히 표시했습니다. MuseScore, MIDIEX, BitMidi, Midisite, VGMusic, Ichigo's를 선택하면 새 창으로 열립니다.
+- `https://www.vgmusic.com/` 항목은 화면에 `VGMusic`으로 표시합니다. MuseScore, MIDIEX, BitMidi, Midisite, VGMusic, Ichigo's를 선택하면 새 창으로 열립니다.
 - 바로가기 콤보박스 선택을 `shortcut_link_open` Analytics 이벤트로 기록하고, MIDI 사이트 선택은 기존 `midi_resource_link_open` 이벤트도 함께 기록합니다. 링크 식별자만 보내고 검색어/파일명은 보내지 않습니다.
 - v3.1까지의 MIDI/MMI/3MLE/Google Drive/음색/최적화 변경 내용을 현재 구조 기준으로 다시 묶어 정리했습니다.
 
