@@ -344,6 +344,10 @@ textarea { resize: vertical; color: var(--text); }
   border-color: color-mix(in srgb, var(--accent), var(--line) 55%);
 }
 .midi-full-preview-btn:hover { background: var(--control-hover); }
+.midi-full-preview-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
 .midi-full-preview-btn.danger {
   background: color-mix(in srgb, var(--danger), transparent 86%);
   color: var(--danger);
@@ -976,6 +980,7 @@ textarea { resize: vertical; color: var(--text); }
 
 .mmi-import-actions { align-items: center; }
 .mmi-clear-selection { margin-right: auto; }
+.mmi-full-preview-btn { flex-shrink: 0; }
 .mmi-channel-list {
   display: grid;
   gap: 8px;

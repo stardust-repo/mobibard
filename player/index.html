@@ -163,14 +163,17 @@
   <form id="mmiImportForm" class="dialog-card mmi-import-card" method="dialog">
     <div class="dialog-title-row">
       <h3 id="mmiImportTitle">MML 채널 선택</h3>
+      <div class="dialog-title-actions">
+        <button id="mmiFullPreviewBtn" class="midi-full-preview-btn mmi-full-preview-btn" type="button" aria-pressed="false">전체 듣기</button>
+      </div>
     </div>
     <p id="mmiImportSummary">파일에서 찾은 MML 채널 중 불러올 채널을 선택해 주세요.</p>
     <div id="mmiChannelList" class="mmi-channel-list" aria-label="MML 채널 목록"></div>
     <span id="mmiImportStatus" class="dialog-small mmi-import-status" role="status" aria-live="polite"></span>
     <div class="dialog-actions mmi-import-actions">
       <div class="dialog-actions-left">
-        <button id="mmiImportClear" class="mmi-clear-selection" type="button">모두 선택해제</button>
         <button id="mmiImportReloadFile" type="button">파일 불러오기</button>
+        <button id="mmiImportClear" class="mmi-clear-selection" type="button">모두 선택해제</button>
       </div>
       <div class="dialog-actions-right">
         <button id="mmiImportCancel" type="button">취소</button>

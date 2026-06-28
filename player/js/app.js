@@ -63,6 +63,7 @@
   const mmiImportForm = $("mmiImportForm");
   const mmiImportTitle = $("mmiImportTitle");
   const mmiImportSummary = $("mmiImportSummary");
+  const mmiFullPreviewBtn = $("mmiFullPreviewBtn");
   const mmiChannelList = $("mmiChannelList");
   const mmiImportStatus = $("mmiImportStatus");
   const mmiImportClear = $("mmiImportClear");
@@ -209,6 +210,7 @@
     googleDriveSaveBtn?.addEventListener("click", () => void saveMmlToGoogleDrive());
     codeHelpBtn?.addEventListener("click", () => openCodeHelpDialog());
     codeHelpClose?.addEventListener("click", () => codeHelpDialog?.close());
+    mmiFullPreviewBtn?.addEventListener("click", () => void toggleMmiFullPreview());
     mmiImportClear?.addEventListener("click", () => clearMmiImportSelection());
     mmiImportReloadFile?.addEventListener("click", () => openSourceFilePicker());
     mmiImportCancel?.addEventListener("click", () => closeMmiImportDialog(null));
@@ -2038,7 +2040,7 @@ ${shortError(err)}`);
         </div>`;
     }).join("");
     Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check")).forEach(input => {
-      input.addEventListener("change", updateMmiImportSelectionState);
+      input.addEventListener("change", handleMmiImportSelectionChanged);
     });
     Array.from(mmiChannelList.querySelectorAll("[data-mmi-preview]")).forEach(button => {
       button.addEventListener("click", (ev) => {
@@ -2053,9 +2055,29 @@ ${shortError(err)}`);
         const input = row.querySelector(".mmi-channel-check");
         if (!input || input.disabled) return;
         input.checked = !input.checked;
-        updateMmiImportSelectionState();
+        handleMmiImportSelectionChanged();
       });
     });
+    updateMmiImportSelectionState();
+  }
+
+  function getSelectedMmiImportIndexes() {
+    if (!mmiChannelList) return [];
+    return Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check:checked"))
+      .map(input => Number(input.value))
+      .filter(index => Number.isInteger(index));
+  }
+
+  function getSelectedMmiImportParts() {
+    if (!pendingMmiImport) return [];
+    return getSelectedMmiImportIndexes()
+      .slice(0, MMI_IMPORT_MAX_CHANNELS)
+      .map(index => pendingMmiImport.candidates[index]?.value || "")
+      .filter(value => value.trim());
+  }
+
+  function handleMmiImportSelectionChanged() {
+    if (splitPreviewButton === mmiFullPreviewBtn) stopMidiPreview();
     updateMmiImportSelectionState();
   }
 
@@ -2073,17 +2095,88 @@ ${shortError(err)}`);
         ? `선택 ${checkedCount}/${MMI_IMPORT_MAX_CHANNELS}개`
         : "불러올 채널을 1개 이상 선택해 주세요.";
     }
+    if (mmiFullPreviewBtn) mmiFullPreviewBtn.disabled = checkedCount < 1 && splitPreviewButton !== mmiFullPreviewBtn;
     if (mmiImportClear) mmiImportClear.disabled = checkedCount < 1;
     if (mmiImportApply) mmiImportApply.disabled = checkedCount < 1;
   }
 
   function clearMmiImportSelection() {
     if (!mmiChannelList) return;
+    if (splitPreviewButton === mmiFullPreviewBtn) stopMidiPreview();
     Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check")).forEach(input => {
       input.checked = false;
       input.disabled = false;
     });
     updateMmiImportSelectionState();
+  }
+
+  async function toggleMmiFullPreview() {
+    if (!pendingMmiImport || !mmiChannelList) return;
+    const button = mmiFullPreviewBtn instanceof HTMLElement ? mmiFullPreviewBtn : null;
+    if (button && splitPreviewButton === button) {
+      stopMidiPreview();
+      updateMmiImportSelectionState();
+      return;
+    }
+
+    const selectedParts = getSelectedMmiImportParts();
+    if (!selectedParts.length) {
+      if (mmiImportStatus) mmiImportStatus.textContent = "전체 듣기를 하려면 채널을 1개 이상 선택해 주세요.";
+      return;
+    }
+
+    try {
+      stopPlayback(false);
+      stopMidiPreview();
+      if (button) setSplitPreviewButton(button);
+      if (mmiImportStatus) mmiImportStatus.textContent = `선택 ${selectedParts.length}/${MMI_IMPORT_MAX_CHANNELS}개 전체 미리듣기 중...`;
+
+      await loadDefaultSf2IfNeeded();
+      const ctx = await ensureAudioContext();
+      const parts = selectedParts
+        .slice(0, MMI_IMPORT_MAX_CHANNELS)
+        .map(part => normalizeMmiLegacyLengthsInPart(cleanupMmiMmlValue(part || "")));
+      while (parts.length < MMI_IMPORT_MAX_CHANNELS) parts.push("");
+      const mml = composeMml(parts, { preserveEmpty: true, partCount: MMI_IMPORT_MAX_CHANNELS });
+      const parsed = parseMabinogiMml(mml);
+      const scheduled = buildSchedule(parsed);
+      const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
+      if (!notes.length) throw new Error("미리들을 음표가 없습니다.");
+      if (!soundFont?.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+
+      const prepared = [];
+      for (let partIndex = 0; partIndex < MMI_IMPORT_MAX_CHANNELS; partIndex++) {
+        const partNotes = notes.filter(note => note.part === partIndex);
+        if (!partNotes.length) continue;
+        const preset = getPartPreset(partIndex);
+        if (!preset) continue;
+        prepared.push(...prepareNotes(ctx, soundFont, preset, partNotes));
+      }
+      prepared.sort((a, b) => a.start - b.start || a.part - b.part || a.midi - b.midi || a.id - b.id);
+      for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
+      if (!prepared.length) throw new Error("소리 나는 음표가 없습니다.");
+
+      const duration = notes.reduce((m, n) => Math.max(m, (Number(n.start) || 0) + (Number(n.durationSec) || 0)), 0);
+      const result = schedulePreparedNotes(ctx, prepared, {
+        baseTime: ctx.currentTime + 0.08,
+        fromSec: 0,
+        playbackSpeed,
+        windowStart: 0,
+        windowEnd: Math.max(0.5, duration + 0.1),
+        destination: masterGain || ctx.destination,
+        activeSources: midiPreviewSources,
+        scheduledIds: null,
+        minLeadTime: 0.01
+      });
+      const stopMs = Math.max(800, (result.maxEnd - ctx.currentTime + 0.35) * 1000);
+      midiPreviewTimer = window.setTimeout(() => {
+        stopMidiPreview();
+        updateMmiImportSelectionState();
+      }, stopMs);
+    } catch (err) {
+      stopMidiPreview();
+      if (mmiImportStatus) mmiImportStatus.textContent = `전체 미리듣기 실패: ${shortError(err)}`;
+    }
   }
 
   async function previewMmiImportCandidate(index, triggerButton = null) {
@@ -2153,17 +2246,11 @@ ${shortError(err)}`);
 
   function applyMmiImportDialog() {
     if (!pendingMmiImport || !mmiChannelList) return;
-    const selectedIndexes = Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check:checked"))
-      .map(input => Number(input.value))
-      .filter(index => Number.isInteger(index));
-    if (!selectedIndexes.length) {
+    const selectedParts = getSelectedMmiImportParts();
+    if (!selectedParts.length) {
       if (mmiImportStatus) mmiImportStatus.textContent = "불러올 채널을 1개 이상 선택해 주세요.";
       return;
     }
-    const selectedParts = selectedIndexes
-      .slice(0, MMI_IMPORT_MAX_CHANNELS)
-      .map(index => pendingMmiImport.candidates[index]?.value || "")
-      .filter(value => value.trim());
     resolveMmiImportDialog(selectedParts);
     if (mmiImportDialog?.open) mmiImportDialog.close("apply");
   }
