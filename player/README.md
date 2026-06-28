@@ -73,6 +73,7 @@ mabinogi_mml_public/
 | Google 기본 폴더 | `MML_Mobibard` |
 | Google 설정 파일 | 앱 데이터 폴더의 `mobibard-player-settings.json` |
 | Google 로그인 유지 플래그 | `mobibard.player.googleAutoReconnect` |
+| Google 단기 토큰 캐시 | `mobibard.player.googleTokenCache` (`accessToken`, `expiresAt`, 로컬 전용) |
 | Google scope | `drive.file`, `drive.appdata` |
 
 ---
@@ -342,11 +343,12 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 ### 앱 동작
 
 - 제목 오른쪽 `Google` 영역에서 로그인/로그아웃합니다.
-- 로그인 성공 시 `mobibard.player.googleAutoReconnect = 1`을 저장하고, 다음 새로고침부터는 Google 브라우저 세션을 이용해 조용히 재연동을 시도합니다.
-- 로그인 유지용으로 access token 자체를 localStorage에 저장하지 않습니다. 새로고침 후에는 Google Identity Services에서 새 access token을 다시 받아옵니다.
-- `googleAutoReconnect`는 브라우저별 로그인 유지 플래그이므로 Google Drive 설정 동기화 payload에서는 제외합니다.
-- 자동 재연동이 실패하면 팝업을 띄우지 않고 `로그인 필요` 상태로 남기며, 사용자가 로그인 버튼을 누르면 계정 선택 UI로 다시 로그인합니다.
-- 로그아웃은 `googleAutoReconnect`를 `0`으로 바꾸고 현재 브라우저 세션의 토큰만 해제합니다. Google 계정의 앱 권한 동의를 철회하지 않습니다.
+- 로그인 성공 시 `mobibard.player.googleAutoReconnect = 1`을 저장합니다.
+- 새 창/새로고침에서 바로 연동 상태를 복원하기 위해 `mobibard.player.googleTokenCache`에 단기 access token과 만료 시각(`expiresAt`)을 저장합니다.
+- 저장된 토큰이 아직 유효하면 Google 팝업 없이 즉시 `구글 연동됨` 상태와 Drive 버튼을 복원합니다.
+- 저장된 토큰이 만료되었거나 Drive API가 401을 반환하면 토큰 캐시를 지우고 Google Identity Services로 재발급을 시도합니다. 브라우저/Google 정책상 자동 재발급이 막히면 `로그인 필요` 상태로 남습니다.
+- `googleAutoReconnect`와 `googleTokenCache`는 브라우저별 로그인 유지용 로컬 상태이므로 Google Drive 설정 동기화 payload에서는 제외합니다.
+- 로그아웃은 `googleAutoReconnect`를 `0`으로 바꾸고 현재 토큰과 토큰 캐시를 삭제합니다. Google 계정의 앱 권한 동의를 철회하지 않습니다.
 - `불러오기 > 구글`은 `MML_Mobibard` 폴더를 기본 위치로 열고, MIDI/MMI/3MLE MML/TXT 파일을 선택하게 합니다.
 - Google Picker 목록은 Drive MIME 타입 차이를 고려해 넓게 표시하고, 선택 후 확장자/MIME 검사를 다시 합니다.
 - `저장하기 > 구글`은 현재 전체 MML을 최적화한 뒤 `.txt` 파일로 저장합니다.
@@ -393,7 +395,9 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 - [ ] `.mmi`의 비정규 길이 `6/12/24/48`이 정규 길이 조합으로 보정되는지
 - [ ] TXT 문법 오류가 있어도 `MML@...;` 형식이면 가능한 경우 원본을 불러오는지
 - [ ] Google 로그인 후 Drive 불러오기/저장 버튼이 활성화되는지
-- [ ] Google 로그인 후 새로고침했을 때 별도 클릭 없이 자동 재연동이 시도되고, 성공 시 Drive 버튼이 다시 활성화되는지
+- [ ] Google 로그인 후 새로고침했을 때 별도 클릭 없이 Drive 버튼이 바로 활성화되는지
+- [ ] Google 로그인 후 새 창/새 탭으로 같은 주소를 열었을 때 Drive 버튼이 바로 활성화되는지
+- [ ] 저장된 Google 토큰이 만료되거나 401이 발생했을 때 토큰 캐시가 삭제되고 재로그인 흐름으로 넘어가는지
 - [ ] 로그아웃 후 새로고침했을 때 자동 재연동이 일어나지 않는지
 - [ ] Drive 설정 동기화 실패 시 로컬 설정을 계속 사용하는지
 
@@ -406,10 +410,10 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 - 버전 표기를 `모비바드 v3.2`로 변경했습니다.
 - 누적 수정 사항이 많아져 `README.md`를 개발 작업 기준으로 재정리했습니다.
 - 파일별 역할, 주요 흐름, Dialog ID, 상태 저장 위치, 회귀 방지 체크리스트를 추가했습니다.
-- Google 로그인 성공 후 새로고침 시 브라우저의 Google 세션으로 자동 재연동을 시도하도록 변경했습니다.
-- 보안을 위해 access token은 저장하지 않고, 자동 재연동 허용 플래그만 localStorage에 저장하도록 정리했습니다.
-- 로그인 유지 플래그가 Google Drive 설정 동기화에 섞이지 않도록 저장/파싱 단계에서 제외했습니다.
-- 로그아웃하면 자동 재연동 플래그를 끄고 다음 새로고침에서 다시 로그인되지 않도록 변경했습니다.
+- Google 로그인 성공 후 새로고침/새 창에서 즉시 연동 상태를 복원할 수 있도록 단기 access token 캐시(`googleTokenCache`)를 추가했습니다.
+- access token 캐시는 만료 시각과 함께 저장하고, 만료되었거나 Drive API가 401을 반환하면 자동 삭제하도록 변경했습니다.
+- `googleAutoReconnect`와 `googleTokenCache`가 Google Drive 설정 동기화에 섞이지 않도록 저장/파싱 단계에서 제외했습니다.
+- 로그아웃하면 자동 재연동 플래그와 토큰 캐시를 함께 삭제해 다음 새로고침에서 다시 로그인되지 않도록 변경했습니다.
 - v3.1까지의 MIDI/MMI/3MLE/Google Drive/음색/최적화 변경 내용을 현재 구조 기준으로 다시 묶어 정리했습니다.
 
 ### v3.1

@@ -27,6 +27,8 @@
   const GOOGLE_MML_FOLDER_NAME = "MML_Mobibard";
   const GOOGLE_DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
   const GOOGLE_AUTO_RECONNECT_PREF = "googleAutoReconnect";
+  const GOOGLE_TOKEN_CACHE_PREF = "googleTokenCache";
+  const GOOGLE_LOCAL_ONLY_PREFS = new Set([GOOGLE_AUTO_RECONNECT_PREF, GOOGLE_TOKEN_CACHE_PREF]);
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
@@ -198,6 +200,7 @@
     loadUserSoundPresetPrefs();
     loadPartMutePrefs();
     loadGoogleDriveFolderPrefs();
+    restoreGoogleTokenCache();
     midiLoadBtn.addEventListener("click", () => openSourceFilePicker());
     midiFile.addEventListener("change", () => void loadSourceFile());
     installSourceFileDropHandlers();
@@ -433,6 +436,11 @@
     catch (_) {}
   }
 
+  function removeLocalPrefOnly(name) {
+    try { localStorage.removeItem(PREF_PREFIX + name); }
+    catch (_) {}
+  }
+
   function shouldGoogleAutoReconnect() {
     return readPref(GOOGLE_AUTO_RECONNECT_PREF) === "1";
   }
@@ -457,14 +465,56 @@
     return Boolean(googleAccessToken) && Date.now() < googleTokenExpiresAt - 30000;
   }
 
-  function clearGoogleTokenState() {
+  function clearGoogleTokenCache() {
+    removeLocalPrefOnly(GOOGLE_TOKEN_CACHE_PREF);
+  }
+
+  function saveGoogleTokenCache(response = {}) {
+    if (!googleAccessToken || !Number.isFinite(googleTokenExpiresAt) || Date.now() >= googleTokenExpiresAt - 30000) {
+      clearGoogleTokenCache();
+      return;
+    }
+    const payload = {
+      accessToken: googleAccessToken,
+      expiresAt: googleTokenExpiresAt,
+      cachedAt: Date.now(),
+      scope: String(response.scope || GOOGLE_DRIVE_SCOPE)
+    };
+    try { writeLocalPrefOnly(GOOGLE_TOKEN_CACHE_PREF, JSON.stringify(payload)); }
+    catch (_) { clearGoogleTokenCache(); }
+  }
+
+  function restoreGoogleTokenCache() {
+    if (isGoogleConnected()) return true;
+    const raw = readPref(GOOGLE_TOKEN_CACHE_PREF);
+    if (!raw) return false;
+    try {
+      const data = JSON.parse(raw);
+      const token = String(data?.accessToken || data?.access_token || "");
+      const expiresAt = Number(data?.expiresAt || data?.expires_at || 0);
+      if (!token || !Number.isFinite(expiresAt) || Date.now() >= expiresAt - 30000) {
+        clearGoogleTokenCache();
+        return false;
+      }
+      googleAccessToken = token;
+      googleTokenExpiresAt = expiresAt;
+      googleSilentRestoreFailed = false;
+      return true;
+    } catch (_) {
+      clearGoogleTokenCache();
+      return false;
+    }
+  }
+
+  function clearGoogleTokenState(clearCache = false) {
     googleAccessToken = "";
     googleTokenExpiresAt = 0;
     clearTimeout(googleSettingsSaveTimer);
+    if (clearCache) clearGoogleTokenCache();
   }
 
-  function resetGoogleSessionState() {
-    clearGoogleTokenState();
+  function resetGoogleSessionState(clearCache = false) {
+    clearGoogleTokenState(clearCache);
     googleDriveMmlFileId = "";
     googleDriveMmlFileName = "";
     googleDriveMmlFolderId = "";
@@ -554,7 +604,7 @@
   }
 
   async function ensureGoogleAccessToken(interactive = true) {
-    if (isGoogleConnected()) return googleAccessToken;
+    if (isGoogleConnected() || restoreGoogleTokenCache()) return googleAccessToken;
     const clientId = googleClientId();
     if (!clientId) throw new Error("Google OAuth Client ID가 설정되지 않았습니다. js/google-config.js를 먼저 채워 주세요.");
     await ensureGoogleIdentityLoaded();
@@ -577,6 +627,8 @@
           const expiresIn = Math.max(60, Number(response.expires_in) || 3600);
           googleTokenExpiresAt = Date.now() + expiresIn * 1000;
           googleSilentRestoreFailed = false;
+          setGoogleAutoReconnect(true);
+          saveGoogleTokenCache(response);
           updateGoogleDriveControls("구글 연동됨");
           resolve(googleAccessToken);
         };
@@ -591,8 +643,19 @@
   }
 
   function scheduleGoogleAutoReconnect() {
-    if (!shouldGoogleAutoReconnect() || isGoogleConnected() || !googleClientId()) return;
-    window.setTimeout(() => void restoreGoogleSessionFromBrowser(), 150);
+    if (!shouldGoogleAutoReconnect() || !googleClientId()) return;
+    if (restoreGoogleTokenCache()) {
+      updateGoogleDriveControls("구글 연동 복원됨");
+      window.setTimeout(() => void applyGoogleSettingsAfterSessionRestore("구글 연동 복원됨"), 100);
+      return;
+    }
+    if (!isGoogleConnected()) window.setTimeout(() => void restoreGoogleSessionFromBrowser(), 150);
+  }
+
+  async function applyGoogleSettingsAfterSessionRestore(fallbackMessage = "구글 연동 복원됨") {
+    if (!isGoogleConnected()) return;
+    const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
+    updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : fallbackMessage);
   }
 
   async function restoreGoogleSessionFromBrowser() {
@@ -600,10 +663,9 @@
     try {
       updateGoogleDriveControls("구글 연동 복원 중...");
       await ensureGoogleAccessToken(false);
-      const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
-      updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : "로컬 설정 사용 중");
+      await applyGoogleSettingsAfterSessionRestore("로컬 설정 사용 중");
     } catch (_) {
-      resetGoogleSessionState();
+      resetGoogleSessionState(false);
       googleSilentRestoreFailed = true;
       updateGoogleDriveControls("로그인 필요");
     }
@@ -612,7 +674,7 @@
   async function handleGoogleLoginButton() {
     if (isGoogleConnected()) {
       setGoogleAutoReconnect(false);
-      resetGoogleSessionState();
+      resetGoogleSessionState(true);
       googleSilentRestoreFailed = false;
       updateGoogleDriveControls("구글 로그아웃됨");
       return;
@@ -624,7 +686,7 @@
       const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
       updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : "로컬 설정 사용 중");
     } catch (err) {
-      resetGoogleSessionState();
+      resetGoogleSessionState(true);
       updateGoogleDriveControls("구글 로그인 실패");
       showDialog("구글 로그인 실패", shortError(err));
     }
@@ -640,7 +702,7 @@
     headers.set("Authorization", `Bearer ${token}`);
     const response = await fetch(url, { ...options, headers });
     if (response.status === 401 && retry) {
-      clearGoogleTokenState();
+      clearGoogleTokenState(true);
       updateGoogleDriveControls("구글 인증 갱신 필요");
       await ensureGoogleAccessToken(true);
       return googleDriveFetch(url, options, false);
@@ -1024,7 +1086,7 @@
         const key = localStorage.key(i);
         if (!key || !key.startsWith(PREF_PREFIX)) continue;
         const name = key.slice(PREF_PREFIX.length);
-        if (name === GOOGLE_AUTO_RECONNECT_PREF) continue;
+        if (GOOGLE_LOCAL_ONLY_PREFS.has(name)) continue;
         const value = localStorage.getItem(key);
         if (name && value != null && value.length < 250000) prefs[name] = value;
       }
@@ -1041,7 +1103,7 @@
     const normalized = {};
     for (const [key, value] of Object.entries(prefs)) {
       const name = String(key || "").trim();
-      if (!name || name === GOOGLE_AUTO_RECONNECT_PREF || name.includes(".") || name.length > 80) continue;
+      if (!name || GOOGLE_LOCAL_ONLY_PREFS.has(name) || name.includes(".") || name.length > 80) continue;
       if (value == null) continue;
       if (["string", "number", "boolean"].includes(typeof value)) normalized[name] = String(value);
     }
