@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>모비바드 v3.1</title>
+  <title>모비바드 v3.2</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
   <link rel="stylesheet" href="styles.css" />
@@ -13,7 +13,7 @@
 <main>
   <section class="card menu-card" aria-label="마비노기 MML 재생기">
     <div class="app-head">
-      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">모비바드 v3.1</span></h2>
+      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">모비바드 v3.2</span></h2>
       <div class="app-head-controls">
         <div class="header-links" aria-label="바로가기">
           <span class="menu-label">바로가기</span>
@@ -35,12 +35,12 @@
     <div class="player-file-toolbar" aria-label="MML 파일 작업">
       <div class="player-file-actions-left">
         <span class="toolbar-label">불러오기</span>
-        <button id="midiLoadBtn" type="button">MML / MIDI / MMI</button>
+        <button id="midiLoadBtn" type="button">MML / MIDI</button>
         <button id="googleDriveLoadBtn" type="button" disabled title="Google Drive의 MML_Mobibard 폴더에서 불러오기">구글</button>
         <span class="toolbar-label">저장하기</span>
         <button id="saveBtn" class="ghost" type="button">파일</button>
         <button id="googleDriveSaveBtn" class="ghost" type="button" disabled title="Google Drive의 MML_Mobibard 폴더에 저장">구글</button>
-        <input id="midiFile" type="file" accept=".mid,.midi,.txt,.mmi,audio/midi,audio/x-midi,text/plain" hidden />
+        <input id="midiFile" type="file" accept=".mid,.midi,.txt,.mmi,.mml,audio/midi,audio/x-midi,text/plain" hidden />
       </div>
       <div class="player-file-actions-right">
         <button id="pasteBtn" class="ghost" type="button">붙여넣기</button>
@@ -161,14 +161,21 @@
 
 <dialog id="mmiImportDialog" class="mml-dialog mmi-import-dialog">
   <form id="mmiImportForm" class="dialog-card mmi-import-card" method="dialog">
-    <h3>MMI 채널 선택</h3>
-    <p id="mmiImportSummary">MMI 파일에서 찾은 MML 채널 중 불러올 채널을 선택해 주세요.</p>
-    <div id="mmiChannelList" class="mmi-channel-list" aria-label="MMI 채널 목록"></div>
+    <div class="dialog-title-row">
+      <h3 id="mmiImportTitle">MML 채널 선택</h3>
+    </div>
+    <p id="mmiImportSummary">파일에서 찾은 MML 채널 중 불러올 채널을 선택해 주세요.</p>
+    <div id="mmiChannelList" class="mmi-channel-list" aria-label="MML 채널 목록"></div>
     <span id="mmiImportStatus" class="dialog-small mmi-import-status" role="status" aria-live="polite"></span>
     <div class="dialog-actions mmi-import-actions">
-      <button id="mmiImportClear" class="mmi-clear-selection" type="button">모두 선택해제</button>
-      <button id="mmiImportCancel" type="button">취소</button>
-      <button id="mmiImportApply" class="primary" type="button">불러오기</button>
+      <div class="dialog-actions-left">
+        <button id="mmiImportClear" class="mmi-clear-selection" type="button">모두 선택해제</button>
+        <button id="mmiImportReloadFile" type="button">파일 불러오기</button>
+      </div>
+      <div class="dialog-actions-right">
+        <button id="mmiImportCancel" type="button">취소</button>
+        <button id="mmiImportApply" class="primary" type="button">불러오기</button>
+      </div>
     </div>
   </form>
 </dialog>
@@ -312,8 +319,11 @@
     </div>
 
     <div class="midi-convert-footer">
+      <div class="dialog-actions-left">
+        <button id="midiConvertReloadFile" type="button">파일 불러오기</button>
+      </div>
       <span id="midiConvertStatus" class="dialog-small midi-convert-status" role="status" aria-live="polite" hidden></span>
-      <div class="dialog-actions">
+      <div class="dialog-actions dialog-actions-right">
         <button id="midiConvertCancel" type="button">취소</button>
         <button id="midiConvertApply" class="primary" type="button">변환</button>
       </div>

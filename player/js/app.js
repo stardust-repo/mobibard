@@ -29,7 +29,7 @@
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
-  const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi"]);
+  const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi", "mml"]);
 
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
@@ -58,10 +58,12 @@
   const googleDriveSaveApply = $("googleDriveSaveApply");
   const mmiImportDialog = $("mmiImportDialog");
   const mmiImportForm = $("mmiImportForm");
+  const mmiImportTitle = $("mmiImportTitle");
   const mmiImportSummary = $("mmiImportSummary");
   const mmiChannelList = $("mmiChannelList");
   const mmiImportStatus = $("mmiImportStatus");
   const mmiImportClear = $("mmiImportClear");
+  const mmiImportReloadFile = $("mmiImportReloadFile");
   const mmiImportCancel = $("mmiImportCancel");
   const mmiImportApply = $("mmiImportApply");
   const codeHelpBtn = $("codeHelpBtn");
@@ -106,6 +108,7 @@
   const midiBeatNotice = $("midiBeatNotice");
   const midiInstrumentPanelTitle = $("midiInstrumentPanelTitle");
   const midiInstrumentPanelHint = $("midiInstrumentPanelHint");
+  const midiConvertReloadFile = $("midiConvertReloadFile");
   const midiConvertApply = $("midiConvertApply");
   const midiConvertCancel = $("midiConvertCancel");
   const midiConvertStatus = $("midiConvertStatus");
@@ -193,7 +196,7 @@
     loadUserSoundPresetPrefs();
     loadPartMutePrefs();
     loadGoogleDriveFolderPrefs();
-    midiLoadBtn.addEventListener("click", () => { midiFile.value = ""; midiFile.click(); });
+    midiLoadBtn.addEventListener("click", () => openSourceFilePicker());
     midiFile.addEventListener("change", () => void loadSourceFile());
     installSourceFileDropHandlers();
     googleLoginBtn?.addEventListener("click", () => void handleGoogleLoginButton());
@@ -202,13 +205,16 @@
     codeHelpBtn?.addEventListener("click", () => openCodeHelpDialog());
     codeHelpClose?.addEventListener("click", () => codeHelpDialog?.close());
     mmiImportClear?.addEventListener("click", () => clearMmiImportSelection());
+    mmiImportReloadFile?.addEventListener("click", () => openSourceFilePicker());
     mmiImportCancel?.addEventListener("click", () => closeMmiImportDialog(null));
     mmiImportApply?.addEventListener("click", () => applyMmiImportDialog());
     mmiImportDialog?.addEventListener("cancel", (event) => {
       event.preventDefault();
+      stopMidiPreview();
       closeMmiImportDialog(null);
     });
     mmiImportDialog?.addEventListener("close", () => {
+      stopMidiPreview();
       if (pendingMmiImport) resolveMmiImportDialog(null);
     });
     soundSource.addEventListener("change", () => handleSoundSourceChange());
@@ -249,6 +255,7 @@
     leadingSilenceSeconds?.addEventListener("blur", normalizeLeadingSilenceSecondsInput);
     midiExportCount?.addEventListener("change", updateMidiRoleControls);
     midiFullPreviewBtn?.addEventListener("click", () => void toggleMidiFullPreview());
+    midiConvertReloadFile?.addEventListener("click", () => { if (!midiConvertBusy) openSourceFilePicker(); });
     midiConvertApply?.addEventListener("click", () => void applyMidiConvertDialog());
     midiConvertCancel?.addEventListener("click", () => {
       if (midiConvertBusy) return;
@@ -263,6 +270,14 @@
     midiConvertDialog?.addEventListener("close", () => {
       stopMidiPreview();
       if (!midiConvertBusy) setMidiConvertBusy(false);
+      if (midiChannelList) {
+        midiChannelList.style.height = "";
+        midiChannelList.style.minHeight = "";
+        midiChannelList.style.maxHeight = "";
+      }
+    });
+    window.addEventListener("resize", () => {
+      if (midiConvertDialog?.open) scheduleMidiInstrumentListHeightSync();
     });
     partSoundDialog?.addEventListener("close", () => stopMidiPreview());
     themeToggleBtn?.addEventListener("click", toggleTheme);
@@ -1124,7 +1139,7 @@
       const builder = new window.google.picker.PickerBuilder()
         .setDeveloperKey(googleApiKey())
         .setOAuthToken(googleAccessToken)
-        .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 MIDI / MMI / TXT MML 파일 선택`)
+        .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 MIDI / MMI / 3MLE MML / TXT 파일 선택`)
         .addView(view)
         .setCallback((data) => void handleGooglePickerResult(data));
       const appId = googleAppId();
@@ -1146,7 +1161,7 @@
     const mimeType = doc?.[picker.Document.MIME_TYPE] || "";
     if (!fileId) return;
     if (mimeType === GOOGLE_DRIVE_FOLDER_MIME) {
-      showDialog("Drive 불러오기", "폴더가 아니라 MIDI 또는 TXT 파일을 선택해 주세요.");
+      showDialog("Drive 불러오기", "폴더가 아니라 MIDI, MMI, 3MLE MML 또는 TXT 파일을 선택해 주세요.");
       return;
     }
     try {
@@ -1187,6 +1202,13 @@
     return type === "application/x-mabiicco" || type === "application/vnd.mabiicco";
   }
 
+  function isGoogleDriveThreeMleFile(name, mimeType = "") {
+    const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
+    if (ext === "mml") return true;
+    const type = String(mimeType || "").toLowerCase();
+    return type === "application/x-3mle" || type === "application/vnd.3mle";
+  }
+
   async function loadGoogleDriveSourceFile(fileId, fallbackName = "Google Drive 파일") {
     await ensureGoogleAccessToken(true);
     stopMidiPreview();
@@ -1221,7 +1243,28 @@
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
+      showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
       setGoogleStatus("Drive MMI 불러옴");
+      return;
+    }
+    if (isGoogleDriveThreeMleFile(name, mimeType)) {
+      const loaded = await readThreeMleMmlFile(bytes, name);
+      if (!loaded) return;
+      try {
+        const normalized = normalizeImportedFullMml(loaded);
+        setMainMml(normalized.mml);
+      } catch (optErr) {
+        setMainMml(loaded);
+        showDialog("MML 최적화 생략", `Drive 3MLE MML 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+      }
+      googleDriveMmlFileId = "";
+      googleDriveMmlFileName = "";
+      rememberSuggestedMmlSaveFileName(name);
+      if (Array.isArray(meta?.parents) && meta.parents[0]) {
+        rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
+      }
+      showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
+      setGoogleStatus("Drive 3MLE MML 불러옴");
       return;
     }
     if (isGoogleDriveTextMmlFile(name, mimeType)) {
@@ -1236,13 +1279,14 @@
       googleDriveMmlFileId = fileId;
       googleDriveMmlFileName = name;
       rememberSuggestedMmlSaveFileName(name);
+      showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
       setGoogleStatus("Drive TXT 불러옴");
       return;
     }
-    throw new Error("지원하지 않는 Drive 파일입니다. mid, midi, mmi 또는 txt 파일만 선택해 주세요.");
+    throw new Error("지원하지 않는 Drive 파일입니다. mid, midi, mmi, mml 또는 txt 파일만 선택해 주세요.");
   }
 
   async function saveMmlToGoogleDrive() {
@@ -1625,6 +1669,25 @@ ${shortError(err)}`);
     soundName.textContent = "기본 사운드";
   }
 
+  function openSourceFilePicker() {
+    if (!midiFile) return;
+    midiFile.value = "";
+    midiFile.click();
+  }
+
+  function closeImportDialogsForSourceReload() {
+    stopMidiPreview();
+    if (midiConvertDialog?.open) {
+      try { midiConvertDialog.close("reload"); } catch (_) {}
+      pendingMidiImport = null;
+      pendingMidiSettings = null;
+      setMidiConvertBusy(false);
+    }
+    if (mmiImportDialog?.open) {
+      try { mmiImportDialog.close("reload"); } catch (_) {}
+    }
+  }
+
   async function loadSourceFile() {
     const file = midiFile.files?.[0];
     if (!file) return;
@@ -1638,6 +1701,7 @@ ${shortError(err)}`);
     googleDriveMmlFileId = "";
     googleDriveMmlFileName = "";
     clearSuggestedMmlSaveFileName();
+    closeImportDialogsForSourceReload();
     try {
       stopMidiPreview();
       stopPlayback(false);
@@ -1657,6 +1721,20 @@ ${shortError(err)}`);
           showDialog("MML 최적화 생략", `MMI 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
         }
         rememberSuggestedMmlSaveFileName(name);
+        showLoadedChannelCount(midiLoadBtn, "불러옴", mainMml.value);
+      } else if (ext === "mml") {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const loaded = await readThreeMleMmlFile(bytes, name);
+        if (!loaded) return;
+        try {
+          const normalized = normalizeImportedFullMml(loaded);
+          setMainMml(normalized.mml);
+        } catch (optErr) {
+          setMainMml(loaded);
+          showDialog("MML 최적화 생략", `3MLE MML 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+        }
+        rememberSuggestedMmlSaveFileName(name);
+        showLoadedChannelCount(midiLoadBtn, "불러옴", mainMml.value);
       } else if (ext === "txt") {
         const text = await file.text();
         const loaded = readMmlTextFile(text);
@@ -1667,8 +1745,9 @@ ${shortError(err)}`);
           setMainMml(loaded);
           showDialog("MML 최적화 생략", `파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
         }
+        showLoadedChannelCount(midiLoadBtn, "불러옴", mainMml.value);
       } else {
-        throw new Error("지원하지 않는 파일입니다. mid, midi, mmi, txt 파일을 선택해 주세요.");
+        throw new Error("지원하지 않는 파일입니다. mid, midi, mmi, mml, txt 파일을 선택해 주세요.");
       }
     } catch (err) {
       showDialog("파일 불러오기 실패", shortError(err));
@@ -1687,7 +1766,7 @@ ${shortError(err)}`);
       if (hasOpenAppDialog()) return;
       const file = findFirstSupportedSourceFile(event.dataTransfer?.files);
       if (!file) {
-        showDialog("파일 불러오기 실패", "드래그 앤 드롭은 mid, midi, mmi, txt 파일만 지원합니다.");
+        showDialog("파일 불러오기 실패", "드래그 앤 드롭은 mid, midi, mmi, mml, txt 파일만 지원합니다.");
         return;
       }
       void loadLocalSourceFile(file);
@@ -1737,11 +1816,50 @@ ${shortError(err)}`);
     return normalizeMmlForDisplay(raw);
   }
 
+
+  function countMmlChannels(text) {
+    try {
+      return splitMmlParts(normalizeMmlForDisplay(text))
+        .slice(0, MMI_IMPORT_MAX_CHANNELS)
+        .filter(part => String(part || "").trim()).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function showLoadedChannelCount(button, label, text) {
+    const count = countMmlChannels(text);
+    if (count > 0) {
+      flashButton(button, `${formatCount(count)}채널`);
+      return;
+    }
+    flashButton(button, label || "불러옴");
+  }
+
   async function readMabiIccoMmiFile(data, name = "MMI 파일") {
     const text = decodeTextFileBytes(data).replace(/^\uFEFF/, "");
     const candidates = extractMabiIccoMmlPartCandidates(text);
     if (!candidates.length) {
       throw new Error(`${name}에서 MML 코드를 찾지 못했습니다.`);
+    }
+    const selectedParts = await openMmiImportDialog(candidates, name);
+    if (!selectedParts) return null;
+    while (selectedParts.length < MMI_IMPORT_MAX_CHANNELS) selectedParts.push("");
+    const normalizedParts = selectedParts
+      .slice(0, MMI_IMPORT_MAX_CHANNELS)
+      .map(part => normalizeMmiLegacyLengthsInPart(part));
+    return normalizeMmlForDisplay(composeMml(normalizedParts, { preserveEmpty: true, partCount: MMI_IMPORT_MAX_CHANNELS }));
+  }
+
+  async function readThreeMleMmlFile(data, name = "3MLE MML 파일") {
+    const text = decodeTextFileBytes(data).replace(/^\uFEFF/, "");
+    if (/^\s*MML\s*@/i.test(text)) {
+      return readMmlTextFile(text);
+    }
+    const globalTempo = extractThreeMleGlobalTempo(text);
+    const candidates = applyThreeMleGlobalTempoToCandidates(extractThreeMleMmlPartCandidates(text), globalTempo);
+    if (!candidates.length) {
+      throw new Error(`${name}에서 3MLE MML 채널을 찾지 못했습니다.`);
     }
     const selectedParts = await openMmiImportDialog(candidates, name);
     if (!selectedParts) return null;
@@ -1785,6 +1903,9 @@ ${shortError(err)}`);
   function renderMmiImportDialog(name = "MMI 파일") {
     if (!pendingMmiImport || !mmiChannelList) return;
     const candidates = pendingMmiImport.candidates || [];
+    if (mmiImportTitle) {
+      mmiImportTitle.textContent = `MML 채널 선택 · 총 ${formatCount(candidates.length)}개`;
+    }
     if (mmiImportSummary) {
       mmiImportSummary.textContent = `${name}에서 ${formatCount(candidates.length)}개의 MML 채널을 찾았습니다. 불러올 채널을 최대 ${MMI_IMPORT_MAX_CHANNELS}개까지 선택해 주세요.`;
     }
@@ -1796,17 +1917,34 @@ ${shortError(err)}`);
       const meta = [`${formatCount(normalized.length)}자`];
       if (changed) meta.push("길이 보정");
       return `
-        <label class="mmi-channel-row${checked ? " selected" : ""}">
-          <input class="mmi-channel-check" type="checkbox" value="${index}"${checked} />
+        <div class="mmi-channel-row${checked ? " selected" : ""}" data-mmi-row="${index}">
+          <input class="mmi-channel-check" type="checkbox" value="${index}"${checked} aria-label="${escapeHtml(candidate.label || `채널 ${index + 1}`)} 선택" />
           <span class="mmi-channel-main">
             <strong>${escapeHtml(candidate.label || `채널 ${index + 1}`)}</strong>
             <small>${escapeHtml(meta.join(" · "))}</small>
           </span>
           <code>${escapeHtml(preview)}${normalized.length > 180 ? "…" : ""}</code>
-        </label>`;
+          <button class="mmi-preview-btn" type="button" data-mmi-preview="${index}" aria-label="${escapeHtml(candidate.label || `채널 ${index + 1}`)} 듣기">듣기</button>
+        </div>`;
     }).join("");
     Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check")).forEach(input => {
       input.addEventListener("change", updateMmiImportSelectionState);
+    });
+    Array.from(mmiChannelList.querySelectorAll("[data-mmi-preview]")).forEach(button => {
+      button.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        void previewMmiImportCandidate(Number(button.dataset.mmiPreview), button);
+      });
+    });
+    Array.from(mmiChannelList.querySelectorAll("[data-mmi-row]")).forEach(row => {
+      row.addEventListener("click", (ev) => {
+        if (ev.target?.closest?.("button, input, a, select, textarea")) return;
+        const input = row.querySelector(".mmi-channel-check");
+        if (!input || input.disabled) return;
+        input.checked = !input.checked;
+        updateMmiImportSelectionState();
+      });
     });
     updateMmiImportSelectionState();
   }
@@ -1836,6 +1974,71 @@ ${shortError(err)}`);
       input.disabled = false;
     });
     updateMmiImportSelectionState();
+  }
+
+  async function previewMmiImportCandidate(index, triggerButton = null) {
+    const candidates = pendingMmiImport?.candidates || [];
+    const candidate = candidates[Number(index)];
+    if (!candidate) return;
+
+    const button = triggerButton instanceof HTMLElement ? triggerButton : null;
+    if (button && splitPreviewButton === button) {
+      stopMidiPreview();
+      updateMmiImportSelectionState();
+      return;
+    }
+
+    try {
+      stopPlayback(false);
+      stopMidiPreview();
+      if (button) setSplitPreviewButton(button);
+      if (button) {
+        button.textContent = "정지";
+        button.classList.add("danger");
+        button.setAttribute("aria-pressed", "true");
+      }
+      if (mmiImportStatus) mmiImportStatus.textContent = `${candidate.label || "선택 채널"} 미리듣기 중...`;
+
+      await loadDefaultSf2IfNeeded();
+      const ctx = await ensureAudioContext();
+      const part = normalizeMmiLegacyLengthsInPart(cleanupMmiMmlValue(candidate.value || ""));
+      const mml = composeMml([part, "", "", "", "", ""], { preserveEmpty: true, partCount: MMI_IMPORT_MAX_CHANNELS });
+      const parsed = parseMabinogiMml(mml);
+      const scheduled = buildSchedule(parsed);
+      const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
+      if (!notes.length) throw new Error("미리들을 음표가 없습니다.");
+      if (!soundFont?.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+
+      const firstStart = notes.reduce((m, n) => Math.min(m, Number(n.start) || 0), Infinity);
+      const lastEnd = notes.reduce((m, n) => Math.max(m, (Number(n.start) || 0) + (Number(n.durationSec) || 0)), 0);
+      const fromSec = Number.isFinite(firstStart) ? Math.max(0, firstStart) : 0;
+      const windowEnd = Math.min(lastEnd, fromSec + 10);
+      const preset = getPartPreset(0);
+      if (!preset) throw new Error("미리듣기에 사용할 음색을 찾지 못했습니다.");
+      const prepared = prepareNotes(ctx, soundFont, preset, notes).sort((a, b) => a.start - b.start || a.midi - b.midi);
+      for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
+      if (!prepared.length) throw new Error("소리 나는 음표가 없습니다.");
+
+      const result = schedulePreparedNotes(ctx, prepared, {
+        baseTime: ctx.currentTime + 0.08,
+        fromSec,
+        playbackSpeed,
+        windowStart: fromSec,
+        windowEnd: Math.max(fromSec + 0.25, windowEnd + 0.05),
+        destination: masterGain || ctx.destination,
+        activeSources: midiPreviewSources,
+        scheduledIds: new Set(),
+        minLeadTime: 0.012
+      });
+      const stopMs = Math.max(800, Math.min(12000, (result.maxEnd - ctx.currentTime + 0.35) * 1000));
+      midiPreviewTimer = window.setTimeout(() => {
+        stopMidiPreview();
+        updateMmiImportSelectionState();
+      }, stopMs);
+    } catch (err) {
+      stopMidiPreview();
+      if (mmiImportStatus) mmiImportStatus.textContent = `미리듣기 실패: ${shortError(err)}`;
+    }
   }
 
   function applyMmiImportDialog() {
@@ -1889,6 +2092,136 @@ ${shortError(err)}`);
       }
     }
     return utf8;
+  }
+
+  function extractThreeMleGlobalTempo(text) {
+    const source = String(text || "");
+    const channel1 = extractThreeMleSectionBlock(source, "Channel1");
+    const scanSources = [channel1, source].filter(Boolean);
+    for (const scanSource of scanSources) {
+      const lines = String(scanSource || "").split(/\r?\n/);
+      for (const line of lines) {
+        const cleaned = cleanupThreeMleMmlLine(line);
+        const m = /(?:^|[^a-z])t\s*(\d{2,3})/i.exec(cleaned);
+        if (!m) continue;
+        const bpm = clampInt(Number(m[1]) || 0, 32, 255);
+        if (bpm) return `t${bpm}`;
+      }
+      const rawMatch = /(?:^|[^a-z])t\s*(\d{2,3})/i.exec(String(scanSource || ""));
+      if (rawMatch) {
+        const bpm = clampInt(Number(rawMatch[1]) || 0, 32, 255);
+        if (bpm) return `t${bpm}`;
+      }
+    }
+    return "";
+  }
+
+  function extractThreeMleSectionBlock(text, sectionName) {
+    const source = String(text || "");
+    const escaped = String(sectionName || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`^\\s*\\[${escaped}\\]\\s*$`, "im");
+    const match = re.exec(source);
+    if (!match) return "";
+    const start = match.index + match[0].length;
+    const next = /^\s*\[[^\]]+\]\s*$/gim;
+    next.lastIndex = start;
+    const nextMatch = next.exec(source);
+    const end = nextMatch ? nextMatch.index : source.length;
+    return source.slice(start, end);
+  }
+
+  function applyThreeMleGlobalTempoToCandidates(candidates, tempoToken) {
+    const tempo = String(tempoToken || "").trim();
+    if (!tempo) return candidates || [];
+    return (candidates || []).map(candidate => {
+      const value = String(candidate?.value || "").trim();
+      if (!value) return candidate;
+      const nextValue = /^t\s*\d+/i.test(value) ? value : `${tempo}${value}`;
+      return { ...candidate, value: nextValue };
+    });
+  }
+
+  function extractThreeMleMmlPartCandidates(text) {
+    const source = String(text || "");
+    const headers = [];
+    const headerRe = /^\s*\[([^\]]+)\]\s*$/gim;
+    let m;
+    while ((m = headerRe.exec(source))) {
+      headers.push({ title: String(m[1] || "").trim(), index: m.index, end: headerRe.lastIndex });
+    }
+
+    const records = [];
+    for (let i = 0; i < headers.length; i++) {
+      const header = headers[i];
+      const chMatch = /^Channel\s*(\d+)$/i.exec(header.title);
+      if (!chMatch) continue;
+      const channelNo = Number(chMatch[1]) || records.length + 1;
+      const nextIndex = headers[i + 1]?.index ?? source.length;
+      const block = source.slice(header.end, nextIndex);
+      const code = extractThreeMleChannelMmlCode(block);
+      if (!code || !hasThreeMlePlayableTokens(code) || !looksLikeMmlPart(code)) continue;
+      const name = extractThreeMleChannelName(block);
+      records.push({
+        label: formatMmiChannelLabel(channelNo, name),
+        value: code,
+        name
+      });
+      if (records.length >= MMI_IMPORT_MAX_DETECTED_PARTS) break;
+    }
+    return records;
+  }
+
+  function extractThreeMleChannelName(block) {
+    const text = String(block || "");
+    const lines = text.split(/\r?\n/);
+    for (const line of lines) {
+      const m = /^\s*\/\/\s*(.+?)\s*$/.exec(line);
+      if (!m) continue;
+      const raw = m[1] || "";
+      if (!raw || /^#/.test(raw)) continue;
+      if (/^(initialize|init|using_extension|using_channel)$/i.test(raw.trim())) continue;
+      const name = cleanupMmiNameValue(raw);
+      if (name) return name;
+    }
+    return "";
+  }
+
+  function extractThreeMleChannelMmlCode(block) {
+    const lines = String(block || "").split(/\r?\n/);
+    const parts = [];
+    for (const line of lines) {
+      const cleaned = cleanupThreeMleMmlLine(line);
+      if (cleaned) parts.push(cleaned);
+    }
+    return cleanupThreeMleMmlCode(parts.join(""));
+  }
+
+  function cleanupThreeMleMmlLine(line) {
+    let s = String(line || "");
+    if (!s.trim() || /^\s*\/\//.test(s)) return "";
+    s = s.replace(/^\s*\/\*\s*M\s*\d+\s*\*\/\s*/i, "");
+    s = s.replace(/\/\*[\s\S]*?\*\//g, "");
+    s = s.replace(/\/\/.*$/g, "");
+    return cleanupThreeMleMmlCode(s);
+  }
+
+  function cleanupThreeMleMmlCode(value) {
+    let s = String(value || "");
+    s = s.replace(/\bEXx[^\s]*/gi, "");
+    s = s.replace(/[Yy]\s*\d+\s*,\s*-?\d+/g, "");
+    s = s.replace(/@\s*-?\d+/g, "");
+    s = s.replace(/~\s*-?\d+(?:\s*,\s*-?\d+)*/g, "");
+    s = s.replace(/[Vv]\s*(\d+)/g, (_, raw) => {
+      const n = Math.max(0, Number(raw) || 0);
+      const scaled = n > 15 ? Math.round(Math.min(127, n) * 15 / 127) : n;
+      return `v${clampInt(scaled, 0, 15)}`;
+    });
+    s = s.replace(/[^cdefgabronltv<>+#\-&.0-9\s]/gi, "");
+    return s.replace(/\s+/g, "").trim();
+  }
+
+  function hasThreeMlePlayableTokens(value) {
+    return /[cdefgabn]/i.test(String(value || ""));
   }
 
   function extractMabiIccoMmlParts(text) {
@@ -2217,7 +2550,8 @@ ${shortError(err)}`);
     pendingMidiSettings = createDefaultMidiSettings(groups, Boolean(overview.hasBeatGroups));
 
     if (midiConvertSummary) {
-      midiConvertSummary.textContent = `${importData.name || "MIDI"} · 노트 ${formatCount(overview.noteCount)}개 · 악기 ${formatCount(groups.length)}개 · 일반 ${formatCount(normalGroups.length)}개 / 비트 ${formatCount(beatGroups.length)}개 · PPQ ${overview.ppq}`;
+      const trackCount = Number(overview.trackCount) || 0;
+      midiConvertSummary.textContent = `${importData.name || "MIDI"} · 트랙 ${formatCount(trackCount)}개 · 변환 후보 채널 ${formatCount(groups.length)}개 · 노트 ${formatCount(overview.noteCount)}개 · 일반 ${formatCount(normalGroups.length)}개 / 비트 ${formatCount(beatGroups.length)}개 · PPQ ${overview.ppq}`;
     }
     if (midiBeatNotice) {
       midiBeatNotice.hidden = beatGroups.length > 0;
@@ -2231,6 +2565,7 @@ ${shortError(err)}`);
 
     if (midiConvertDialog?.showModal) {
       midiConvertDialog.showModal();
+      scheduleMidiInstrumentListHeightSync();
     } else {
       // 오래된 브라우저에서는 기본값으로 바로 변환한다.
       applyMidiConvertDialog();
@@ -2324,6 +2659,58 @@ ${shortError(err)}`);
       });
       midiRoleList.appendChild(row);
     }
+    scheduleMidiInstrumentListHeightSync();
+  }
+
+  function syncMidiInstrumentListHeight() {
+    if (!midiRoleList || !midiChannelList) return;
+    const resetHeight = () => {
+      midiChannelList.style.height = "";
+      midiChannelList.style.minHeight = "";
+      midiChannelList.style.maxHeight = "";
+    };
+    if (window.matchMedia?.("(max-width: 980px)")?.matches) {
+      resetHeight();
+      return;
+    }
+
+    const leftPanel = midiRoleList.closest(".midi-left-panel");
+    const rightPanel = midiChannelList.closest(".midi-right-panel");
+    const rightHead = rightPanel?.querySelector(".dialog-section-head");
+    if (!leftPanel || !rightPanel || !rightHead) {
+      resetHeight();
+      return;
+    }
+
+    // 오른쪽 악기 목록은 내용이 많아도 Dialog/Grid 높이를 키우지 않도록 먼저 임시로 0px에 가깝게 고정한다.
+    // 그 상태에서 왼쪽 전체 파트(Export 콤보 + 안내 + 6개 채널)의 자연 높이를 측정해 오른쪽 하단을 맞춘다.
+    const previousHeight = midiChannelList.style.height;
+    const previousMinHeight = midiChannelList.style.minHeight;
+    const previousMaxHeight = midiChannelList.style.maxHeight;
+    midiChannelList.style.height = "1px";
+    midiChannelList.style.minHeight = "0px";
+    midiChannelList.style.maxHeight = "1px";
+
+    const leftHeight = Math.ceil(leftPanel.getBoundingClientRect().height || 0);
+    const headHeight = Math.ceil(rightHead.getBoundingClientRect().height || 0);
+    if (!leftHeight || !headHeight) {
+      midiChannelList.style.height = previousHeight;
+      midiChannelList.style.minHeight = previousMinHeight;
+      midiChannelList.style.maxHeight = previousMaxHeight;
+      return;
+    }
+
+    const styles = window.getComputedStyle(rightPanel);
+    const rowGap = parseFloat(styles.rowGap || styles.gap || "0") || 0;
+    const availableHeight = Math.max(160, leftHeight - headHeight - rowGap);
+    const height = `${Math.ceil(availableHeight)}px`;
+    midiChannelList.style.height = height;
+    midiChannelList.style.minHeight = height;
+    midiChannelList.style.maxHeight = height;
+  }
+
+  function scheduleMidiInstrumentListHeightSync() {
+    requestAnimationFrame(() => syncMidiInstrumentListHeight());
   }
 
   function updateMidiChannelRole(index, role) {
@@ -2411,6 +2798,7 @@ ${shortError(err)}`);
       empty.textContent = isBeat ? "선택할 비트 악기가 없습니다." : "선택할 일반 악기가 없습니다.";
       section.appendChild(empty);
       midiChannelList.appendChild(section);
+      scheduleMidiInstrumentListHeightSync();
       return;
     }
 
@@ -2469,6 +2857,7 @@ ${shortError(err)}`);
       section.appendChild(row);
     }
     midiChannelList.appendChild(section);
+    scheduleMidiInstrumentListHeightSync();
   }
 
   async function toggleMidiFullPreview() {
