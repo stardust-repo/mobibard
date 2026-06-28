@@ -355,7 +355,7 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 - 로그인 성공 시 `mobibard.player.googleAutoReconnect = 1`을 저장합니다.
 - 새 창/새로고침에서 바로 연동 상태를 복원하기 위해 `mobibard.player.googleTokenCache`에 단기 access token과 만료 시각(`expiresAt`)을 저장합니다.
 - 저장된 토큰이 아직 유효하면 Google 팝업 없이 즉시 `구글 연동됨` 상태와 Drive 버튼을 복원합니다.
-- 저장된 토큰이 만료되었거나 Drive API가 401을 반환하면 토큰 캐시를 지우고 Google Identity Services로 재발급을 시도합니다. 브라우저/Google 정책상 자동 재발급이 막히면 `로그인 필요` 상태로 남습니다.
+- 저장된 토큰이 만료되었거나 Drive API가 401을 반환하면 토큰 캐시를 지우고 `로그인 필요` 상태로만 전환합니다. 페이지 진입/백그라운드 설정 동기화 중에는 Google 로그인 팝업이나 계정 선택창을 자동으로 띄우지 않습니다.
 - `googleAutoReconnect`와 `googleTokenCache`는 브라우저별 로그인 유지용 로컬 상태이므로 Google Drive 설정 동기화 payload에서는 제외합니다.
 - 로그아웃은 `googleAutoReconnect`를 `0`으로 바꾸고 현재 토큰과 토큰 캐시를 삭제합니다. Google 계정의 앱 권한 동의를 철회하지 않습니다.
 - `불러오기 > 구글`은 `MML_Mobibard` 폴더를 기본 위치로 열고, MIDI/MMI/3MLE MML/TXT 파일을 선택하게 합니다.
@@ -449,7 +449,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - [ ] Google 로그인 후 Drive 불러오기/저장 버튼이 활성화되는지
 - [ ] Google 로그인 후 새로고침했을 때 별도 클릭 없이 Drive 버튼이 바로 활성화되는지
 - [ ] Google 로그인 후 새 창/새 탭으로 같은 주소를 열었을 때 Drive 버튼이 바로 활성화되는지
-- [ ] 저장된 Google 토큰이 만료되거나 401이 발생했을 때 토큰 캐시가 삭제되고 재로그인 흐름으로 넘어가는지
+- [ ] 저장된 Google 토큰이 만료되거나 401이 발생했을 때 토큰 캐시가 삭제되고, 자동 팝업 없이 `로그인 필요` 상태로만 바뀌는지
 - [ ] 로그아웃 후 새로고침했을 때 자동 재연동이 일어나지 않는지
 - [ ] Drive 설정 동기화 실패 시 로컬 설정을 계속 사용하는지
 - [ ] Firebase Analytics가 네트워크/차단 문제로 실패해도 앱 기본 기능이 계속 동작하는지
@@ -474,6 +474,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - MMI/3MLE MML 채널 선택 Dialog 하단의 `파일 불러오기`와 `모두 선택해제` 버튼 위치를 서로 바꿨습니다.
 - Firebase Analytics 연동을 추가했습니다. `js/firebase-config.js`에는 웹 앱 설정을, `js/firebase-analytics.js`에는 SDK 초기화/이벤트 큐 처리를 분리했습니다.
 - 앱 열기, 파일 불러오기, MIDI 변환, 미리듣기, 재생, 복사, 저장, Google Drive 동작을 커스텀 이벤트로 기록하도록 했습니다. 파일명과 MML 본문은 Analytics 이벤트에 포함하지 않습니다.
+- Google token 만료 처리 방식을 수정했습니다. 유효한 토큰은 새로고침/새 창에서 유지하지만, 만료되거나 401이 발생하면 자동으로 Google 로그인을 다시 요청하지 않고 `로그인 필요` 상태로만 전환합니다.
 - v3.1까지의 MIDI/MMI/3MLE/Google Drive/음색/최적화 변경 내용을 현재 구조 기준으로 다시 묶어 정리했습니다.
 
 ### v3.1

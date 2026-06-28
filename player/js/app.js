@@ -178,6 +178,7 @@
   let googleTokenClient = null;
   let googleAccessToken = "";
   let googleTokenExpiresAt = 0;
+  let googleTokenExpiryTimer = 0;
   let googlePickerLoaded = false;
   let googleSettingsFileId = "";
   let googleSettingsApplying = false;
@@ -506,6 +507,29 @@
     return Boolean(googleAccessToken) && Date.now() < googleTokenExpiresAt - 30000;
   }
 
+  function clearGoogleTokenExpiryTimer() {
+    if (googleTokenExpiryTimer) {
+      window.clearTimeout(googleTokenExpiryTimer);
+      googleTokenExpiryTimer = 0;
+    }
+  }
+
+  function scheduleGoogleTokenExpiryRefresh() {
+    clearGoogleTokenExpiryTimer();
+    if (!googleAccessToken || !Number.isFinite(googleTokenExpiresAt) || !googleTokenExpiresAt) return;
+    const delay = Math.max(0, googleTokenExpiresAt - Date.now() - 30000);
+    googleTokenExpiryTimer = window.setTimeout(() => {
+      if (!isGoogleConnected()) {
+        clearGoogleTokenState(true);
+        googleSilentRestoreFailed = true;
+        updateGoogleDriveControls("로그인 필요");
+      } else {
+        updateGoogleDriveControls();
+        scheduleGoogleTokenExpiryRefresh();
+      }
+    }, delay + 250);
+  }
+
   function clearGoogleTokenCache() {
     removeLocalPrefOnly(GOOGLE_TOKEN_CACHE_PREF);
   }
@@ -521,8 +545,12 @@
       cachedAt: Date.now(),
       scope: String(response.scope || GOOGLE_DRIVE_SCOPE)
     };
-    try { writeLocalPrefOnly(GOOGLE_TOKEN_CACHE_PREF, JSON.stringify(payload)); }
-    catch (_) { clearGoogleTokenCache(); }
+    try {
+      writeLocalPrefOnly(GOOGLE_TOKEN_CACHE_PREF, JSON.stringify(payload));
+      scheduleGoogleTokenExpiryRefresh();
+    } catch (_) {
+      clearGoogleTokenCache();
+    }
   }
 
   function restoreGoogleTokenCache() {
@@ -540,6 +568,7 @@
       googleAccessToken = token;
       googleTokenExpiresAt = expiresAt;
       googleSilentRestoreFailed = false;
+      scheduleGoogleTokenExpiryRefresh();
       return true;
     } catch (_) {
       clearGoogleTokenCache();
@@ -550,6 +579,7 @@
   function clearGoogleTokenState(clearCache = false) {
     googleAccessToken = "";
     googleTokenExpiresAt = 0;
+    clearGoogleTokenExpiryTimer();
     clearTimeout(googleSettingsSaveTimer);
     if (clearCache) clearGoogleTokenCache();
   }
@@ -644,7 +674,19 @@
     });
   }
 
-  async function ensureGoogleAccessToken(interactive = true) {
+  function googleLoginRequiredError() {
+    return new Error("Google 로그인 세션이 만료되었습니다. 상단 Google 로그인 버튼으로 다시 연동해 주세요.");
+  }
+
+  function requireGoogleAccessToken() {
+    if (isGoogleConnected() || restoreGoogleTokenCache()) return googleAccessToken;
+    clearGoogleTokenState(true);
+    googleSilentRestoreFailed = true;
+    updateGoogleDriveControls("로그인 필요");
+    throw googleLoginRequiredError();
+  }
+
+  async function requestGoogleAccessTokenInteractive() {
     if (isGoogleConnected() || restoreGoogleTokenCache()) return googleAccessToken;
     const clientId = googleClientId();
     if (!clientId) throw new Error("Google OAuth Client ID가 설정되지 않았습니다. js/google-config.js를 먼저 채워 주세요.");
@@ -673,10 +715,7 @@
           updateGoogleDriveControls("구글 연동됨");
           resolve(googleAccessToken);
         };
-        const prompt = interactive
-          ? (shouldGoogleAutoReconnect() && !googleSilentRestoreFailed ? "" : "select_account")
-          : "";
-        googleTokenClient.requestAccessToken({ prompt });
+        googleTokenClient.requestAccessToken({ prompt: "select_account" });
       } catch (err) {
         reject(err);
       }
@@ -690,26 +729,14 @@
       window.setTimeout(() => void applyGoogleSettingsAfterSessionRestore("구글 연동 복원됨"), 100);
       return;
     }
-    if (!isGoogleConnected()) window.setTimeout(() => void restoreGoogleSessionFromBrowser(), 150);
+    googleSilentRestoreFailed = true;
+    updateGoogleDriveControls("로그인 필요");
   }
 
   async function applyGoogleSettingsAfterSessionRestore(fallbackMessage = "구글 연동 복원됨") {
     if (!isGoogleConnected()) return;
     const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
     updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : fallbackMessage);
-  }
-
-  async function restoreGoogleSessionFromBrowser() {
-    if (!shouldGoogleAutoReconnect() || isGoogleConnected()) return;
-    try {
-      updateGoogleDriveControls("구글 연동 복원 중...");
-      await ensureGoogleAccessToken(false);
-      await applyGoogleSettingsAfterSessionRestore("로컬 설정 사용 중");
-    } catch (_) {
-      resetGoogleSessionState(false);
-      googleSilentRestoreFailed = true;
-      updateGoogleDriveControls("로그인 필요");
-    }
   }
 
   async function handleGoogleLoginButton() {
@@ -723,7 +750,7 @@
     }
     try {
       updateGoogleDriveControls("구글 로그인 중...");
-      await ensureGoogleAccessToken(true);
+      await requestGoogleAccessTokenInteractive();
       setGoogleAutoReconnect(true);
       const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
       updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : "로컬 설정 사용 중");
@@ -740,15 +767,15 @@
   }
 
   async function googleDriveFetch(url, options = {}, retry = true) {
-    const token = await ensureGoogleAccessToken(true);
+    const token = requireGoogleAccessToken();
     const headers = new Headers(options.headers || {});
     headers.set("Authorization", `Bearer ${token}`);
     const response = await fetch(url, { ...options, headers });
     if (response.status === 401 && retry) {
       clearGoogleTokenState(true);
-      updateGoogleDriveControls("구글 인증 갱신 필요");
-      await ensureGoogleAccessToken(true);
-      return googleDriveFetch(url, options, false);
+      googleSilentRestoreFailed = true;
+      updateGoogleDriveControls("로그인 필요");
+      throw googleLoginRequiredError();
     }
     return response;
   }
@@ -844,7 +871,7 @@
   }
 
   async function pickGoogleDriveSaveFolder() {
-    await ensureGoogleAccessToken(true);
+    requireGoogleAccessToken();
     if (!googleApiKey()) throw new Error("Google Picker API Key가 설정되지 않았습니다. js/google-config.js의 apiKey를 채워 주세요.");
     setGoogleStatus(`${GOOGLE_MML_FOLDER_NAME} 폴더 확인 중...`);
     const defaultFolderId = await ensureGoogleMmlFolder();
@@ -1275,7 +1302,7 @@
 
   async function openGoogleDrivePicker() {
     try {
-      await ensureGoogleAccessToken(true);
+      requireGoogleAccessToken();
       if (!googleApiKey()) throw new Error("Google Picker API Key가 설정되지 않았습니다. js/google-config.js의 apiKey를 채워 주세요.");
       setGoogleStatus(`${GOOGLE_MML_FOLDER_NAME} 폴더 확인 중...`);
       const folderId = await ensureGoogleMmlFolder();
@@ -1364,7 +1391,7 @@
   }
 
   async function loadGoogleDriveSourceFile(fileId, fallbackName = "Google Drive 파일") {
-    await ensureGoogleAccessToken(true);
+    requireGoogleAccessToken();
     stopMidiPreview();
     stopPlayback(false);
     const meta = await getGoogleDriveFileMeta(fileId);
@@ -1462,7 +1489,7 @@
 
   async function saveMmlToGoogleDrive() {
     try {
-      await ensureGoogleAccessToken(true);
+      requireGoogleAccessToken();
       setGoogleStatus(`${GOOGLE_MML_FOLDER_NAME} 폴더 확인 중...`);
       const defaultFolderId = await ensureGoogleMmlFolder();
       let exportData;
