@@ -26,6 +26,7 @@
   const GOOGLE_SETTINGS_APP_NAME = "mabinogi-mml-player";
   const GOOGLE_MML_FOLDER_NAME = "MML_Mobibard";
   const GOOGLE_DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
+  const GOOGLE_AUTO_RECONNECT_PREF = "googleAutoReconnect";
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
@@ -183,6 +184,7 @@
   let googleDriveMmlFolderId = "";
   let googleDriveSaveFolderId = "";
   let googleDriveSaveFolderName = "";
+  let googleSilentRestoreFailed = false;
   let suggestedMmlSaveFileName = "";
   let pendingMmiImport = null;
 
@@ -300,6 +302,7 @@
     updateSoundPresetControls();
     updatePartMuteControl();
     updateGoogleDriveControls();
+    scheduleGoogleAutoReconnect();
     updateCharCount();
     rebuildSchedulePreviewSilently();
   }
@@ -425,6 +428,19 @@
     scheduleGoogleSettingsSave();
   }
 
+  function writeLocalPrefOnly(name, value) {
+    try { localStorage.setItem(PREF_PREFIX + name, String(value)); }
+    catch (_) {}
+  }
+
+  function shouldGoogleAutoReconnect() {
+    return readPref(GOOGLE_AUTO_RECONNECT_PREF) === "1";
+  }
+
+  function setGoogleAutoReconnect(enabled) {
+    writeLocalPrefOnly(GOOGLE_AUTO_RECONNECT_PREF, enabled ? "1" : "0");
+  }
+
   function googleClientId() {
     return String(GOOGLE_CONFIG.clientId || GOOGLE_CONFIG.clientID || GOOGLE_CONFIG.CLIENT_ID || "").trim();
   }
@@ -439,6 +455,19 @@
 
   function isGoogleConnected() {
     return Boolean(googleAccessToken) && Date.now() < googleTokenExpiresAt - 30000;
+  }
+
+  function clearGoogleTokenState() {
+    googleAccessToken = "";
+    googleTokenExpiresAt = 0;
+    clearTimeout(googleSettingsSaveTimer);
+  }
+
+  function resetGoogleSessionState() {
+    clearGoogleTokenState();
+    googleDriveMmlFileId = "";
+    googleDriveMmlFileName = "";
+    googleDriveMmlFolderId = "";
   }
 
   function setGoogleStatus(message) {
@@ -547,36 +576,55 @@
           googleAccessToken = String(response.access_token || "");
           const expiresIn = Math.max(60, Number(response.expires_in) || 3600);
           googleTokenExpiresAt = Date.now() + expiresIn * 1000;
+          googleSilentRestoreFailed = false;
           updateGoogleDriveControls("구글 연동됨");
           resolve(googleAccessToken);
         };
-        googleTokenClient.requestAccessToken({ prompt: "" });
+        const prompt = interactive
+          ? (shouldGoogleAutoReconnect() && !googleSilentRestoreFailed ? "" : "select_account")
+          : "";
+        googleTokenClient.requestAccessToken({ prompt });
       } catch (err) {
         reject(err);
       }
     });
   }
 
+  function scheduleGoogleAutoReconnect() {
+    if (!shouldGoogleAutoReconnect() || isGoogleConnected() || !googleClientId()) return;
+    window.setTimeout(() => void restoreGoogleSessionFromBrowser(), 150);
+  }
+
+  async function restoreGoogleSessionFromBrowser() {
+    if (!shouldGoogleAutoReconnect() || isGoogleConnected()) return;
+    try {
+      updateGoogleDriveControls("구글 연동 복원 중...");
+      await ensureGoogleAccessToken(false);
+      const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
+      updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : "로컬 설정 사용 중");
+    } catch (_) {
+      resetGoogleSessionState();
+      googleSilentRestoreFailed = true;
+      updateGoogleDriveControls("로그인 필요");
+    }
+  }
+
   async function handleGoogleLoginButton() {
     if (isGoogleConnected()) {
-      googleAccessToken = "";
-      googleTokenExpiresAt = 0;
-      googleDriveMmlFileId = "";
-      googleDriveMmlFileName = "";
-      googleDriveMmlFolderId = "";
-      clearTimeout(googleSettingsSaveTimer);
+      setGoogleAutoReconnect(false);
+      resetGoogleSessionState();
+      googleSilentRestoreFailed = false;
       updateGoogleDriveControls("구글 로그아웃됨");
       return;
     }
     try {
       updateGoogleDriveControls("구글 로그인 중...");
       await ensureGoogleAccessToken(true);
+      setGoogleAutoReconnect(true);
       const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
       updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : "로컬 설정 사용 중");
     } catch (err) {
-      googleAccessToken = "";
-      googleTokenExpiresAt = 0;
-      googleDriveMmlFolderId = "";
+      resetGoogleSessionState();
       updateGoogleDriveControls("구글 로그인 실패");
       showDialog("구글 로그인 실패", shortError(err));
     }
@@ -592,8 +640,7 @@
     headers.set("Authorization", `Bearer ${token}`);
     const response = await fetch(url, { ...options, headers });
     if (response.status === 401 && retry) {
-      googleAccessToken = "";
-      googleTokenExpiresAt = 0;
+      clearGoogleTokenState();
       updateGoogleDriveControls("구글 인증 갱신 필요");
       await ensureGoogleAccessToken(true);
       return googleDriveFetch(url, options, false);
@@ -977,6 +1024,7 @@
         const key = localStorage.key(i);
         if (!key || !key.startsWith(PREF_PREFIX)) continue;
         const name = key.slice(PREF_PREFIX.length);
+        if (name === GOOGLE_AUTO_RECONNECT_PREF) continue;
         const value = localStorage.getItem(key);
         if (name && value != null && value.length < 250000) prefs[name] = value;
       }
@@ -993,7 +1041,7 @@
     const normalized = {};
     for (const [key, value] of Object.entries(prefs)) {
       const name = String(key || "").trim();
-      if (!name || name.includes(".") || name.length > 80) continue;
+      if (!name || name === GOOGLE_AUTO_RECONNECT_PREF || name.includes(".") || name.length > 80) continue;
       if (value == null) continue;
       if (["string", "number", "boolean"].includes(typeof value)) normalized[name] = String(value);
     }
