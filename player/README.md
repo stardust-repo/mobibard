@@ -105,7 +105,7 @@ mabinogi_mml_public/
 | ID | 용도 |
 |---|---|
 | `googleDriveSaveDialog` | Google Drive 저장 파일명/폴더 선택 |
-| `mmiImportDialog` | MMI/3MLE MML 채널 선택, 모두 선택해제, 파일 다시 불러오기, 채널 미리듣기 |
+| `mmiImportDialog` | MMI/3MLE MML 채널 선택, 선택 듣기, 전부 듣기, 모두 선택해제, 파일 다시 불러오기, 채널 미리듣기 |
 | `partSoundDialog` | 멜로디/화음1~5 채널별 SF2 프리셋 설정 및 사용자 프리셋 저장/삭제 |
 | `codeHelpDialog` | 지원 MML 코드 도움말 |
 | `restTrimDialog` | 짧은 쉼표 삭제 옵션 선택 |
@@ -150,6 +150,8 @@ mabinogi_mml_public/
 - `name` 항목이 있으면 `Ch 번호 · 이름` 형식으로 표시합니다.
 - 처음에는 앞쪽 최대 6개 채널이 자동 선택됩니다.
 - 선택 채널은 최대 6개입니다.
+- `선택 듣기`는 현재 체크된 채널만 합쳐서 재생합니다.
+- `전부 듣기`는 체크 여부와 관계없이 읽어온 파일에서 감지된 모든 MML 후보 채널을 합쳐서 재생합니다.
 - 오래된 MMI의 `6`, `12`, `24`, `48` 같은 비정규 길이는 64분음표 기준의 정규 길이 조합으로 근사 보정합니다.
   - 예: `c6` → `c8&c32&c64`
   - 예: `r12` → `r16r64`
@@ -158,6 +160,7 @@ mabinogi_mml_public/
 
 - `[ChannelN]` 섹션을 찾아 채널 후보로 표시합니다.
 - `// 채널명` 주석을 채널 이름으로 표시합니다.
+- MMI와 같은 선택 Dialog를 사용하므로 `선택 듣기`와 `전부 듣기`를 모두 지원합니다.
 - `/*M */` 마디 주석과 3MLE 전용 명령은 불러오기 전에 정리합니다.
 - `[Channel1]` 또는 파일 전체에서 전역 템포 `T150` 같은 값을 찾으면, 템포가 없는 각 선택 채널 앞에 적용합니다.
 - 이미 채널 자체가 `T숫자`로 시작하면 전역 템포를 중복 삽입하지 않습니다.
@@ -367,7 +370,7 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 | 버튼/레이아웃 변경 | `index.html`, `styles.css`, `app.js:init()` 이벤트 연결 |
 | MIDI 변환 규칙 변경 | `js/midi-to-mml.js`의 `midiToMml()`, `assignNotesToVoices()`, `normalizeExportChannels()` |
 | MIDI 변환 Dialog 변경 | `index.html#midiConvertDialog`, `app.js`의 `openMidiConvertDialog()`, `renderMidiRoleList()`, `renderMidiInstrumentList()`, `syncMidiInstrumentListHeight()` |
-| MMI/3MLE import 변경 | `app.js`의 `readMabiIccoMmiFile()`, `readThreeMleMmlFile()`, `openMmiImportDialog()` |
+| MMI/3MLE import 변경 | `app.js`의 `readMabiIccoMmiFile()`, `readThreeMleMmlFile()`, `openMmiImportDialog()`, `toggleMmiSelectedPreview()`, `toggleMmiAllPreview()` |
 | 3MLE 템포 처리 변경 | `app.js`의 `extractThreeMleGlobalTempo()`, `applyThreeMleGlobalTempoToCandidates()` |
 | MML 파싱/시간 계산 변경 | `js/mml-parser.js` |
 | 최적화/쉼표/공백/나눠복사 변경 | `js/mml-optimizer.js` |
@@ -390,6 +393,8 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 - [ ] MIDI 변환 Dialog에서 `파일 불러오기` 버튼이 왼쪽에 있고, 창을 좁혀도 좌우 영역이 겹치지 않는지
 - [ ] MIDI 악기가 많아도 오른쪽 악기 목록만 스크롤되고 왼쪽 채널 영역 높이가 불필요하게 늘어나지 않는지
 - [ ] MIDI 변환 중 변환 버튼 주변 상태 문구가 보이고 입력이 잠기는지
+- [ ] MMI/3MLE 선택 Dialog에서 `선택 듣기`가 체크된 채널만 재생하는지
+- [ ] MMI/3MLE 선택 Dialog에서 `전부 듣기`가 체크 여부와 관계없이 읽어온 모든 후보 채널을 재생하는지
 - [ ] MMI/3MLE 선택 Dialog에서 `모두 선택해제`와 `파일 불러오기`가 동작하는지
 - [ ] 3MLE `.mml`에서 `[Channel1]` 또는 전역 영역의 `T150` 같은 템포가 선택 채널 앞에 반영되는지
 - [ ] MMI/3MLE MML 채널 선택 Dialog 하단에서 `파일 불러오기`가 `모두 선택해제`보다 왼쪽에 표시되는지
@@ -415,7 +420,8 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 - access token 캐시는 만료 시각과 함께 저장하고, 만료되었거나 Drive API가 401을 반환하면 자동 삭제하도록 변경했습니다.
 - `googleAutoReconnect`와 `googleTokenCache`가 Google Drive 설정 동기화에 섞이지 않도록 저장/파싱 단계에서 제외했습니다.
 - 로그아웃하면 자동 재연동 플래그와 토큰 캐시를 함께 삭제해 다음 새로고침에서 다시 로그인되지 않도록 변경했습니다.
-- MMI/3MLE MML 채널 선택 Dialog 상단에 `전체 듣기` 버튼을 추가해, 현재 선택된 채널들을 합쳐 파일 전체를 미리 들을 수 있게 했습니다.
+- MMI/3MLE MML 채널 선택 Dialog 상단의 기존 `전체 듣기` 버튼을 `선택 듣기`로 이름 변경했습니다. 기능은 현재 체크된 채널만 합쳐 재생하도록 유지했습니다.
+- `선택 듣기` 오른쪽에 `전부 듣기` 버튼을 추가해, 체크 여부와 관계없이 읽어온 파일의 모든 감지 채널을 합쳐 재생할 수 있게 했습니다.
 - MMI/3MLE MML 채널 선택 Dialog 하단의 `파일 불러오기`와 `모두 선택해제` 버튼 위치를 서로 바꿨습니다.
 - v3.1까지의 MIDI/MMI/3MLE/Google Drive/음색/최적화 변경 내용을 현재 구조 기준으로 다시 묶어 정리했습니다.
 
