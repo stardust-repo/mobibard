@@ -153,6 +153,7 @@
   const mainMml = $("mainMml");
   const mainMmlHighlight = $("mainMmlHighlight");
   const partTexts = PART_LABELS.map((_, i) => $(`part${i}`));
+  const partMmlHighlights = PART_LABELS.map((_, i) => $(`part${i}Highlight`));
   const tabs = Array.from(document.querySelectorAll(".tab-btn"));
   const panels = Array.from(document.querySelectorAll(".mml-panel"));
 
@@ -326,10 +327,13 @@
       updateMainHighlight();
     });
     mainMml.addEventListener("scroll", syncHighlightScroll);
-    partTexts.forEach(t => t.addEventListener("input", () => {
-      normalizeTextareaCommands(t);
-      syncMainFromParts();
-    }));
+    partTexts.forEach((t, i) => {
+      t.addEventListener("input", () => {
+        normalizeTextareaCommands(t);
+        syncMainFromParts();
+      });
+      t.addEventListener("scroll", () => syncPartHighlightScroll(i));
+    });
     tabs.forEach(btn => btn.addEventListener("click", () => selectTab(btn.dataset.tab)));
     normalizeTextareaCommands(mainMml);
     syncPartsFromMain();
@@ -4223,6 +4227,7 @@ ${shortError(err)}`);
       while (parts.length < 6) parts.push("");
       partTexts.forEach((t, i) => { t.value = parts[i] || ""; });
       updateMainHighlight();
+      updatePartHighlights();
       updateCharCount();
       rebuildSchedulePreviewSilently();
     } finally {
@@ -4237,6 +4242,7 @@ ${shortError(err)}`);
       partTexts.forEach(normalizeTextareaCommands);
       mainMml.value = normalizeMmlForDisplay(composeMml(partTexts.map(t => t.value), { preserveEmpty: true, partCount: 6 }));
       updateMainHighlight();
+      updatePartHighlights();
       updateCharCount();
       rebuildSchedulePreviewSilently();
     } finally {
@@ -4250,6 +4256,8 @@ ${shortError(err)}`);
     panels.forEach(p => p.hidden = p.dataset.panel !== activeTabName);
     updatePartMuteControl();
     updateCharCount();
+    const partMatch = /^part(\d+)$/.exec(activeTabName || "");
+    if (partMatch) updatePartHighlight(Number(partMatch[1]));
   }
 
   function updateCharCount() {
@@ -4957,6 +4965,26 @@ ${shortError(err)}`);
     mainMmlHighlight.scrollLeft = mainMml.scrollLeft;
   }
 
+  function updatePartHighlights() {
+    partMmlHighlights.forEach((_, i) => updatePartHighlight(i));
+  }
+
+  function updatePartHighlight(index) {
+    const highlight = partMmlHighlights[index];
+    const textarea = partTexts[index];
+    if (!highlight || !textarea) return;
+    highlight.innerHTML = renderPartWithErrors(textarea.value) + "\n";
+    syncPartHighlightScroll(index);
+  }
+
+  function syncPartHighlightScroll(index) {
+    const highlight = partMmlHighlights[index];
+    const textarea = partTexts[index];
+    if (!highlight || !textarea) return;
+    highlight.scrollTop = textarea.scrollTop;
+    highlight.scrollLeft = textarea.scrollLeft;
+  }
+
   function renderColoredMml(text) {
     const s = normalizeMmlForDisplay(text);
     const at = s.indexOf("@");
@@ -4973,13 +5001,42 @@ ${shortError(err)}`);
   }
 
   function renderPartWithErrors(part) {
-    const invalid = findInvalidPartChars(part);
+    const text = String(part || "");
+    const invalid = findInvalidPartChars(text);
+    const tempoRanges = findTempoHighlightRanges(text, invalid);
+    let tempoRangeIndex = 0;
     let out = "";
-    for (let i = 0; i < part.length; i++) {
-      const ch = escapeHtml(part[i]);
+
+    for (let i = 0; i < text.length; i++) {
+      const tempoRange = tempoRanges[tempoRangeIndex];
+      if (tempoRange && i === tempoRange.start) {
+        out += `<span class="tempo-code">${escapeHtml(text.slice(tempoRange.start, tempoRange.end))}</span>`;
+        i = tempoRange.end - 1;
+        tempoRangeIndex++;
+        continue;
+      }
+
+      const ch = escapeHtml(text[i]);
       out += invalid.has(i) ? `<span class="invalid-code">${ch}</span>` : ch;
     }
     return out;
+  }
+
+  function findTempoHighlightRanges(part, invalid = new Set()) {
+    const text = String(part || "");
+    const ranges = [];
+    const re = /[tT]\s*\d+/g;
+    let match;
+    while ((match = re.exec(text))) {
+      const start = match.index;
+      const end = start + match[0].length;
+      let hasInvalid = false;
+      for (let i = start; i < end; i++) {
+        if (invalid.has(i)) { hasInvalid = true; break; }
+      }
+      if (!hasInvalid) ranges.push({ start, end });
+    }
+    return ranges;
   }
 
   function findInvalidPartChars(part) {

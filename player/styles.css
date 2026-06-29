@@ -24,6 +24,8 @@
   --invalid-bg: #fecaca;
   --invalid-text: #7f1d1d;
   --invalid-line: #ef4444;
+  --tempo-code-bg: rgba(96, 165, 250, 0.24);
+  --tempo-code-line: rgba(37, 99, 235, 0.62);
   --tempo: #7c3aed;
   --tempo-active: #16a34a;
   --part0: #0b4fc4;
@@ -62,6 +64,8 @@
   --invalid-bg: #7f1d1d;
   --invalid-text: #fee2e2;
   --invalid-line: #f87171;
+  --tempo-code-bg: rgba(59, 130, 246, 0.24);
+  --tempo-code-line: rgba(147, 197, 253, 0.70);
   --tempo: #a78bfa;
   --tempo-active: #22c55e;
   --part0: #60a5fa;
@@ -185,14 +189,15 @@ textarea { resize: vertical; color: var(--text); }
 .ch3 { color: var(--part3); font-weight: 800; }
 .ch4 { color: var(--part4); font-weight: 800; }
 .ch5 { color: var(--part5); font-weight: 800; }
+.tempo-code { background: var(--tempo-code-bg); border-radius: 4px; box-shadow: 0 0 0 1px var(--tempo-code-line) inset; font-weight: 950; }
 .invalid-code { background: var(--invalid-bg); color: var(--invalid-text); border-radius: 3px; box-shadow: 0 0 0 1px var(--invalid-line) inset; }
-.part-panel textarea { border-top-width: 4px; }
-.part-panel.part-0 textarea { border-top-color: var(--part0); }
-.part-panel.part-1 textarea { border-top-color: var(--part1); }
-.part-panel.part-2 textarea { border-top-color: var(--part2); }
-.part-panel.part-3 textarea { border-top-color: var(--part3); }
-.part-panel.part-4 textarea { border-top-color: var(--part4); }
-.part-panel.part-5 textarea { border-top-color: var(--part5); }
+.part-panel textarea, .part-panel .mml-highlight { border-top-width: 4px; }
+.part-panel.part-0 textarea, .part-panel.part-0 .mml-highlight { border-top-color: var(--part0); }
+.part-panel.part-1 textarea, .part-panel.part-1 .mml-highlight { border-top-color: var(--part1); }
+.part-panel.part-2 textarea, .part-panel.part-2 .mml-highlight { border-top-color: var(--part2); }
+.part-panel.part-3 textarea, .part-panel.part-3 .mml-highlight { border-top-color: var(--part3); }
+.part-panel.part-4 textarea, .part-panel.part-4 .mml-highlight { border-top-color: var(--part4); }
+.part-panel.part-5 textarea, .part-panel.part-5 .mml-highlight { border-top-color: var(--part5); }
 @media (max-width: 820px) {
   main { width: min(100vw - 20px, 1120px); padding-top: 20px; }
   .app-head { align-items: flex-start; flex-direction: column; gap: 10px; margin-bottom: 14px; }

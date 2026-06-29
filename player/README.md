@@ -428,6 +428,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 |---|---|
 | 앱 버전 변경 | `index.html`의 `<title>`, `.app-version`, `README.md` |
 | 버튼/레이아웃 변경 | `index.html`, `styles.css`, `app.js:init()` 이벤트 연결 |
+| MML 편집기 강조 표시 변경 | `index.html`의 `.colored-textarea`, `styles.css`의 `.tempo-code`, `app.js`의 `renderPartWithErrors()`, `updateMainHighlight()`, `updatePartHighlight()` |
 | 상단 바로가기/MIDI 사이트 목록·배치 변경 | `index.html`의 `#midiSiteLinks`, `app.js`의 `HEADER_SHORTCUT_LINKS`, `MIDI_RESOURCE_LINK_IDS`, `openHeaderShortcutLink()` |
 | MIDI 변환 규칙 변경 | `js/midi-to-mml.js`의 `midiToMml()`, `assignNotesToVoices()`, `normalizeExportChannels()` |
 | MIDI 변환 Dialog 변경 | `index.html#midiConvertDialog`, `app.js`의 `openMidiConvertDialog()`, `renderMidiRoleList()`, `renderMidiInstrumentList()`, `syncMidiInstrumentListHeight()` |
@@ -451,6 +452,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
 - [ ] 전체 MML 편집과 개별 파트 탭 편집이 서로 동기화되는지
+- [ ] 전체 MML/개별 파트 탭에서 `T120` 같은 템포 명령이 배경색으로 강조되어 찾기 쉬운지
 - [ ] 전부복사/파일저장 전에 자동 최적화가 적용되는지
 - [ ] `쉼표 삭제` Dialog에서 기본 6채널이 모두 체크되고, `전부 선택` / `선택 해제`가 동작하는지
 - [ ] `쉼표 삭제`가 체크한 채널에만 적용되는지
@@ -490,6 +492,8 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - 볼륨 조절은 선택한 채널의 모든 음표 볼륨에 입력값을 더하고, 결과를 `V0~V15` 범위로 제한합니다.
 - 볼륨 조절 입력값은 `-15~15` 사이 정수로 제한합니다.
 - `mml-optimizer.js`에 `adjustVolumesMml()`을 추가하고, `trimShortRestsMml()`이 여러 선택 채널을 받을 수 있게 수정했습니다.
+- MML 편집기에서 `T120` 같은 템포 명령과 숫자 부분에 배경색을 넣어 전체 MML/개별 파트 탭에서 쉽게 찾을 수 있게 했습니다.
+- 템포 강조색은 에러 표시와 헷갈리지 않고 초록 계열 파트 색에 묻히지 않도록 푸른 계열 배경/테두리로 조정했습니다.
 
 ### v3.2
 
