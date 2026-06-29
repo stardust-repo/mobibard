@@ -34,15 +34,15 @@
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
   const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi", "mml"]);
   const HEADER_SHORTCUT_LINKS = new Map([
-    ["https://drive.google.com/drive/folders/17mHTnFD475WKYUFK9aowEymi1183vtqD?usp=drive_link", "score_share"],
-    ["https://musescore.com/", "musescore"],
-    ["http://www.midiex.net/", "midiex"],
+    ["https://drive.google.com/drive/folders/17mHTnFD475WKYUFK9aowEymi1183vtqD?usp=drive_link", "developer_mml_share"],
     ["https://bitmidi.com/", "bitmidi"],
+    ["https://ichigos.com/", "ichigos"],
+    ["http://www.midiex.net/", "midiex"],
     ["http://www.midisite.co.uk/", "midisite"],
-    ["https://www.vgmusic.com/", "vgmusic_https"],
-    ["https://ichigos.com/", "ichigos"]
+    ["https://musescore.com/", "musescore"],
+    ["https://www.vgmusic.com/", "vgmusic_https"]
   ]);
-  const MIDI_RESOURCE_LINK_IDS = new Set(["musescore", "midiex", "bitmidi", "midisite", "vgmusic_https", "ichigos"]);
+  const MIDI_RESOURCE_LINK_IDS = new Set(["bitmidi", "ichigos", "midiex", "midisite", "musescore", "vgmusic_https"]);
 
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;

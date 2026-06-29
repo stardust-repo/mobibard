@@ -90,7 +90,7 @@ mabinogi_mml_public/
 
 - 앱 제목과 버전 표시
 - 디스코드 바로가기
-- 개발자 악보 공유와 MIDI 파일 사이트를 여는 바로가기 콤보박스
+- 개발자 MML 공유와 MIDI 파일 사이트를 여는 바로가기 콤보박스
 - Google 로그인 / 로그아웃
 - 테마 전환
 - 파일 불러오기 / 저장하기 그룹
@@ -465,7 +465,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
 - [ ] 제목에 `모비바드 v3.3`가 보이는지
-- [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 악보 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
+- [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 MML 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
 - [ ] 전체 MML 편집과 개별 파트 탭 편집이 서로 동기화되는지
@@ -537,8 +537,8 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - Firebase Analytics 연동을 추가했습니다. `js/firebase-config.js`에는 웹 앱 설정을, `js/firebase-analytics.js`에는 SDK 초기화/이벤트 큐 처리를 분리했습니다.
 - 앱 열기, 파일 불러오기, MIDI 변환, 미리듣기, 재생, 복사, 저장, Google Drive 동작을 커스텀 이벤트로 기록하도록 했습니다. 파일명과 MML 본문은 Analytics 이벤트에 포함하지 않습니다.
 - Google token 만료 처리 방식을 수정했습니다. 유효한 토큰은 새로고침/새 창에서 유지하지만, 만료되거나 401이 발생하면 자동으로 Google 로그인을 다시 요청하지 않고 `로그인 필요` 상태로만 전환합니다.
-- 상단 바로가기 영역의 콤보박스 기본 문구를 `MML / MIDI 링크`로 바꾸고 디스코드 버튼 왼쪽에 배치했습니다. 기존 `개발자 악보 공유` 버튼은 제거하고 콤보박스 맨 위 항목으로 옮겼습니다.
-- `https://www.vgmusic.com/` 항목은 화면에 `VGMusic`으로 표시합니다. MuseScore, MIDIEX, BitMidi, Midisite, VGMusic, Ichigo's를 선택하면 새 창으로 열립니다.
+- 상단 바로가기 영역의 콤보박스 기본 문구를 `MML / MIDI 링크`로 바꾸고 디스코드 버튼 왼쪽에 배치했습니다. 기존 `개발자 MML 공유` 버튼은 제거하고 `개발자 MML 공유` 항목으로 콤보박스 맨 위에 배치했습니다.
+- `https://www.vgmusic.com/` 항목은 화면에 `VGMusic`으로 표시합니다. MIDI 사이트는 BitMidi, Ichigo's, MIDIEX, Midisite, MuseScore, VGMusic 순서로 정렬되어 새 창으로 열립니다.
 - 바로가기 콤보박스 선택을 `shortcut_link_open` Analytics 이벤트로 기록하고, MIDI 사이트 선택은 기존 `midi_resource_link_open` 이벤트도 함께 기록합니다. 링크 식별자만 보내고 검색어/파일명은 보내지 않습니다.
 - v3.1까지의 MIDI/MMI/3MLE/Google Drive/음색/최적화 변경 내용을 현재 구조 기준으로 다시 묶어 정리했습니다.
 
