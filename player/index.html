@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>모비바드 v3.2</title>
+  <title>모비바드 v3.3</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
   <link rel="stylesheet" href="styles.css" />
@@ -13,7 +13,7 @@
 <main>
   <section class="card menu-card" aria-label="마비노기 MML 재생기">
     <div class="app-head">
-      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">모비바드 v3.2</span></h2>
+      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">모비바드 v3.3</span></h2>
       <div class="app-head-controls">
         <div class="header-links" aria-label="바로가기">
           <span class="menu-label">바로가기</span>
@@ -113,7 +113,7 @@
 
     <div class="editor-tool-row" aria-label="편집 편의 기능">
       <div class="editor-tools-left">
-        <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="leadingSilenceBtn" class="ghost" type="button">시작 공백 추가</button>
+        <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="bulkVolumeBtn" class="ghost" type="button">볼륨 조절</button><button id="leadingSilenceBtn" class="ghost" type="button">시작 공백 시간</button>
       </div>
     </div>
 
@@ -247,7 +247,7 @@
 <dialog id="restTrimDialog" class="mml-dialog">
   <form id="restTrimForm" class="dialog-card" method="dialog">
     <h3>쉼표 삭제</h3>
-    <p>선택한 길이 이하의 쉼표를 삭제하고, 삭제한 길이만큼 바로 앞 음표를 늘린 뒤 최적화합니다.</p>
+    <p>선택한 채널에서 지정 길이 이하의 쉼표를 삭제하고, 삭제한 길이만큼 바로 앞 음표를 늘린 뒤 최적화합니다.</p>
     <label class="dialog-field" for="restTrimLimit">삭제 길이</label>
     <select id="restTrimLimit">
       <option value="all">모든 쉼표</option>
@@ -257,6 +257,21 @@
       <option value="32" selected>32분음표 이하</option>
       <option value="64">64분음표 이하</option>
     </select>
+    <div class="dialog-field-row">
+      <span class="dialog-field">적용 채널</span>
+      <span class="dialog-mini-actions">
+        <button id="restTrimSelectAll" class="compact" type="button">전부 선택</button>
+        <button id="restTrimSelectNone" class="compact" type="button">선택 해제</button>
+      </span>
+    </div>
+    <div class="dialog-channel-grid" aria-label="쉼표 삭제 적용 채널">
+      <label class="dialog-channel-option part-0"><input class="rest-trim-channel" type="checkbox" data-part-index="0" checked /> 멜로디</label>
+      <label class="dialog-channel-option part-1"><input class="rest-trim-channel" type="checkbox" data-part-index="1" checked /> 화음1</label>
+      <label class="dialog-channel-option part-2"><input class="rest-trim-channel" type="checkbox" data-part-index="2" checked /> 화음2</label>
+      <label class="dialog-channel-option part-3"><input class="rest-trim-channel" type="checkbox" data-part-index="3" checked /> 화음3</label>
+      <label class="dialog-channel-option part-4"><input class="rest-trim-channel" type="checkbox" data-part-index="4" checked /> 화음4</label>
+      <label class="dialog-channel-option part-5"><input class="rest-trim-channel" type="checkbox" data-part-index="5" checked /> 화음5</label>
+    </div>
     <div class="dialog-actions">
       <button id="restTrimCancel" type="button">취소</button>
       <button id="restTrimApply" class="primary" type="button">삭제</button>
@@ -264,9 +279,38 @@
   </form>
 </dialog>
 
+<dialog id="bulkVolumeDialog" class="mml-dialog">
+  <form id="bulkVolumeForm" class="dialog-card" method="dialog">
+    <h3>볼륨 조절</h3>
+    <p>선택한 채널의 모든 음표 볼륨에 입력한 값을 더합니다. 결과 볼륨은 MML 지원 범위인 0~15로 제한됩니다.</p>
+    <label class="dialog-field" for="bulkVolumeAmount">볼륨 변화량</label>
+    <input id="bulkVolumeAmount" type="number" min="-15" max="15" step="1" value="0" inputmode="numeric" />
+    <span class="dialog-small">-15 ~ 15 사이의 정수만 입력할 수 있습니다.</span>
+    <div class="dialog-field-row">
+      <span class="dialog-field">적용 채널</span>
+      <span class="dialog-mini-actions">
+        <button id="bulkVolumeSelectAll" class="compact" type="button">전부 선택</button>
+        <button id="bulkVolumeSelectNone" class="compact" type="button">선택 해제</button>
+      </span>
+    </div>
+    <div class="dialog-channel-grid" aria-label="볼륨 조절 적용 채널">
+      <label class="dialog-channel-option part-0"><input class="bulk-volume-channel" type="checkbox" data-part-index="0" checked /> 멜로디</label>
+      <label class="dialog-channel-option part-1"><input class="bulk-volume-channel" type="checkbox" data-part-index="1" checked /> 화음1</label>
+      <label class="dialog-channel-option part-2"><input class="bulk-volume-channel" type="checkbox" data-part-index="2" checked /> 화음2</label>
+      <label class="dialog-channel-option part-3"><input class="bulk-volume-channel" type="checkbox" data-part-index="3" checked /> 화음3</label>
+      <label class="dialog-channel-option part-4"><input class="bulk-volume-channel" type="checkbox" data-part-index="4" checked /> 화음4</label>
+      <label class="dialog-channel-option part-5"><input class="bulk-volume-channel" type="checkbox" data-part-index="5" checked /> 화음5</label>
+    </div>
+    <div class="dialog-actions">
+      <button id="bulkVolumeCancel" type="button">취소</button>
+      <button id="bulkVolumeApply" class="primary" type="button">적용</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="leadingSilenceDialog" class="mml-dialog">
   <form id="leadingSilenceForm" class="dialog-card" method="dialog">
-    <h3>시작 공백 추가</h3>
+    <h3>시작 공백 시간</h3>
     <p>악보 맨앞에 입력한 시간만큼 공백을 넣습니다.</p>
     <label class="dialog-field" for="leadingSilenceSeconds">설정할 시간(초)</label>
     <input id="leadingSilenceSeconds" type="number" min="0.25" max="600" step="0.25" value="2" inputmode="decimal" />

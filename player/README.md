@@ -1,4 +1,4 @@
-# 마비노기 MML 재생기 샘플 - 모비바드 v3.2
+# 마비노기 MML 재생기 샘플 - 모비바드 v3.3
 
 공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
 
@@ -35,7 +35,7 @@ mabinogi_mml_public/
    ├─ utils.js                 # 공통 유틸: clamp, formatTime, shortError, base64 변환
    ├─ midi-to-mml.js           # MIDI 파서/분석/미리듣기 이벤트/6채널 MML 변환
    ├─ mml-parser.js            # MML@ 분해, 파트 파싱, 글로벌 템포맵, 재생 스케줄 생성
-   ├─ mml-optimizer.js         # 자동 최적화, 쉼표 삭제, 시작 공백, 나눠복사
+   ├─ mml-optimizer.js         # 자동 최적화, 쉼표 삭제, 볼륨 조절, 시작 공백, 나눠복사
    ├─ sf2-sampler.js           # SF2 파싱, 노트 준비, look-ahead 오디오 스케줄링
    ├─ google-config.js         # Google OAuth/Picker/API Key 설정
    ├─ firebase-config.js       # Firebase Web App 설정 객체
@@ -52,7 +52,7 @@ mabinogi_mml_public/
 | `js/utils.js` | `window.MabiUtils` | `clamp`, `clampInt`, `unique`, `formatTime`, `shortError`, `base64ToUint8Array` |
 | `js/midi-to-mml.js` | `window.MabiMidi` | `analyzeMidi`, `midiToMml`, `buildMidiInstrumentPreview`, `buildMidiFilePreview` |
 | `js/mml-parser.js` | `window.MabiMml` | `parseMabinogiMml`, `splitMmlParts`, `parseMmlPart`, `buildSchedule`, `beatToSeconds`, `composeMml` |
-| `js/mml-optimizer.js` | `window.MabiOptimizer` | `optimizeMml`, `optimizePart`, `trimShortRestsMml`, `addLeadingSilenceMml`, `splitMmlPages` |
+| `js/mml-optimizer.js` | `window.MabiOptimizer` | `optimizeMml`, `optimizePart`, `trimShortRestsMml`, `adjustVolumesMml`, `addLeadingSilenceMml`, `splitMmlPages` |
 | `js/sf2-sampler.js` | `window.MabiSf2` | `parseSoundFont`, `prepareNotes`, `schedulePreparedNotes`, `scheduleNotes` |
 | `js/firebase-analytics.js` | `window.MobibardAnalytics` | `logEvent`, `isReady`, `isEnabled`, `getStatus` |
 
@@ -64,7 +64,7 @@ mabinogi_mml_public/
 
 | 항목 | 값 / 위치 |
 |---|---|
-| 앱 버전 표시 | `index.html`의 `<title>`과 `.app-version`: `모비바드 v3.2` |
+| 앱 버전 표시 | `index.html`의 `<title>`과 `.app-version`: `모비바드 v3.3` |
 | MML 파트 수 | 최대 6개: `멜로디`, `화음1`~`화음5` (`app.js`의 `PART_LABELS`) |
 | 설정 localStorage prefix | `mobibard.player.` (`app.js`의 `PREF_PREFIX`) |
 | 기본 SF2 | `assets/Roland_SC-55.sf2` |
@@ -104,7 +104,7 @@ mabinogi_mml_public/
 - 전체 MML 탭은 파트별 색상 하이라이트를 표시합니다.
 - 현재 탭 글자 수를 `1,234 자` 형식으로 표시합니다.
 - 전체 MML의 글자 수는 `MML@`, 쉼표, 세미콜론을 제외한 파트 내용 합계입니다.
-- `쉼표 삭제`, `시작 공백 추가` 편집 기능을 제공합니다.
+- `쉼표 삭제`, `볼륨 조절`, `시작 공백 시간` 편집 기능을 제공합니다.
 - 사운드 폰트 선택, 자동/사용자 음색 프리셋, 채널별 음색 설정, 전체/채널 음소거를 제공합니다.
 
 ### 3. Dialog 목록
@@ -115,7 +115,8 @@ mabinogi_mml_public/
 | `mmiImportDialog` | MMI/3MLE MML 채널 선택, 선택 듣기, 전부 듣기, 모두 선택해제, 파일 다시 불러오기, 채널 미리듣기 |
 | `partSoundDialog` | 멜로디/화음1~5 채널별 SF2 프리셋 설정 및 사용자 프리셋 저장/삭제 |
 | `codeHelpDialog` | 지원 MML 코드 도움말 |
-| `restTrimDialog` | 짧은 쉼표 삭제 옵션 선택 |
+| `restTrimDialog` | 짧은 쉼표 삭제 길이와 적용 채널 선택 |
+| `bulkVolumeDialog` | 볼륨 조절 변화량과 적용 채널 선택 |
 | `leadingSilenceDialog` | 시작 공백 초 단위 입력 |
 | `splitCopyDialog` | 나눠복사 결과, 악보별 듣기/복사 |
 | `midiConvertDialog` | MIDI 변환 설정: 채널 역할, 겹침 병합, 악기 선택, MIDI 듣기, 악기별 듣기, 파일 다시 불러오기 |
@@ -241,7 +242,7 @@ MIDI 변환은 `js/midi-to-mml.js`가 담당하고, `app.js`는 설정 Dialog와
 
 ### 자동 최적화
 
-MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 쉼표 삭제, 시작 공백 추가, 나눠복사 결과에는 공통 최적화 단계를 적용합니다.
+MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 쉼표 삭제, 시작 공백 시간, 나눠복사 결과에는 공통 최적화 단계를 적용합니다.
 
 - 각 비어 있지 않은 채널 시작에 `V`, `O`, `L`을 명시합니다.
 - 시작 템포가 없으면 멜로디 채널 시작에 `T120`을 추가합니다.
@@ -259,9 +260,20 @@ MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 쉼표
 - 기본 선택값은 `32분음표 이하`입니다.
 - 삭제한 쉼표 길이는 바로 앞 음표에 흡수합니다.
 - 템포 변화 지점을 지나도록 늘어난 음표는 해당 지점에서 `&`로 나누어 타이밍을 보존합니다.
-- 전체 MML 탭에서는 전체 채널에, 개별 파트 탭에서는 해당 파트에만 적용합니다.
+- Dialog의 6채널 체크박스에서 적용할 채널을 선택합니다.
+- Dialog를 열면 기본으로 6채널이 모두 체크되어 있습니다.
+- `전부 선택` / `선택 해제` 버튼으로 적용 채널을 빠르게 바꿀 수 있습니다.
 
-### 시작 공백 추가
+### 볼륨 조절
+
+- `볼륨 조절` 버튼에서 Dialog를 엽니다.
+- 볼륨 변화량은 `-15 ~ 15` 사이의 정수만 입력할 수 있습니다.
+- 선택한 채널의 모든 음표 볼륨에 변화량을 더합니다.
+- 결과 볼륨은 마비노기 MML 지원 범위인 `V0 ~ V15`로 제한합니다.
+- Dialog를 열면 기본으로 6채널이 모두 체크되어 있습니다.
+- `전부 선택` / `선택 해제` 버튼으로 적용 채널을 빠르게 바꿀 수 있습니다.
+
+### 시작 공백 시간
 
 - Dialog에서 초 단위로 입력합니다.
 - 기본값은 2초입니다.
@@ -434,12 +446,16 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
-- [ ] 제목에 `모비바드 v3.2`가 보이는지
+- [ ] 제목에 `모비바드 v3.3`가 보이는지
 - [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 악보 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
 - [ ] 전체 MML 편집과 개별 파트 탭 편집이 서로 동기화되는지
 - [ ] 전부복사/파일저장 전에 자동 최적화가 적용되는지
+- [ ] `쉼표 삭제` Dialog에서 기본 6채널이 모두 체크되고, `전부 선택` / `선택 해제`가 동작하는지
+- [ ] `쉼표 삭제`가 체크한 채널에만 적용되는지
+- [ ] `볼륨 조절` Dialog에서 기본 6채널이 모두 체크되고, `전부 선택` / `선택 해제`가 동작하는지
+- [ ] `볼륨 조절` 입력값이 -15~15로 제한되고, 체크한 채널의 V값만 변경되는지
 - [ ] 나눠복사 Dialog에서 각 악보 듣기/복사가 동작하는지
 - [ ] MIDI 변환 Dialog에서 `파일 불러오기` 버튼이 왼쪽에 있고, 창을 좁혀도 좌우 영역이 겹치지 않는지
 - [ ] MIDI 악기가 많아도 오른쪽 악기 목록만 스크롤되고 왼쪽 채널 영역 높이가 불필요하게 늘어나지 않는지
@@ -464,6 +480,16 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 ---
 
 ## 변경 이력
+
+### v3.3
+
+- 버전 표기를 `모비바드 v3.3`으로 변경했습니다.
+- `쉼표 삭제` Dialog에 6채널 체크박스를 추가했습니다. Dialog를 열면 기본으로 6채널이 모두 체크됩니다.
+- `쉼표 삭제` Dialog에 `전부 선택` / `선택 해제` 버튼을 추가했습니다. 이제 현재 탭 기준이 아니라 체크한 채널 기준으로 적용합니다.
+- `볼륨 조절` 버튼과 Dialog를 추가했습니다.
+- 볼륨 조절은 선택한 채널의 모든 음표 볼륨에 입력값을 더하고, 결과를 `V0~V15` 범위로 제한합니다.
+- 볼륨 조절 입력값은 `-15~15` 사이 정수로 제한합니다.
+- `mml-optimizer.js`에 `adjustVolumesMml()`을 추가하고, `trimShortRestsMml()`이 여러 선택 채널을 받을 수 있게 수정했습니다.
 
 ### v3.2
 
@@ -536,7 +562,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - MIDI 변환 Dialog에서 악기 목록에 현재 선택된 MML 채널을 표시합니다.
 - MIDI 변환 Dialog의 MML 채널 요약은 악기 이름 대신 선택된 악기 개수로 표시합니다.
 - MIDI 변환 Dialog에서 표시 가능한 악기는 기본적으로 모두 선택됩니다.
-- `시작 공백 추가` Dialog 설명을 단순화했습니다.
+- `시작 공백 시간` Dialog 설명을 단순화했습니다.
 - 나눠복사 Dialog에서 악보별 듣기 버튼을 추가했습니다.
 - 악보 나눠복사 설명과 요약 박스를 단순화했습니다.
 - 버전 표기를 v2.3으로 변경했습니다.

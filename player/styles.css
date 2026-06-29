@@ -227,6 +227,18 @@ textarea { resize: vertical; color: var(--text); }
 .dialog-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .dialog-field { font-weight: 900; color: var(--muted); font-size: 14px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+.dialog-field-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dialog-mini-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.dialog-channel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dialog-channel-option { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--input-bg); color: var(--text); font-weight: 900; cursor: pointer; }
+.dialog-channel-option:hover { border-color: var(--accent); background: var(--control-hover); }
+.dialog-channel-option input { width: 16px; height: 16px; accent-color: var(--accent); }
+.dialog-channel-option.part-0 { color: var(--part0); }
+.dialog-channel-option.part-1 { color: var(--part1); }
+.dialog-channel-option.part-2 { color: var(--part2); }
+.dialog-channel-option.part-3 { color: var(--part3); }
+.dialog-channel-option.part-4 { color: var(--part4); }
+.dialog-channel-option.part-5 { color: var(--part5); }
 
 .dialog-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .dialog-title-row h3 { min-width: 0; }

@@ -48,7 +48,7 @@
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { parseMabinogiMml, splitMmlParts, parseMmlPart, buildSchedule, composeMml } = window.MabiMml;
-  const { optimizeMml, optimizePart, trimShortRestsMml, addLeadingSilenceMml, splitMmlPages } = window.MabiOptimizer;
+  const { optimizeMml, optimizePart, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
   const $ = (id) => document.getElementById(id);
@@ -110,6 +110,15 @@
   const restTrimLimit = $("restTrimLimit");
   const restTrimApply = $("restTrimApply");
   const restTrimCancel = $("restTrimCancel");
+  const restTrimSelectAll = $("restTrimSelectAll");
+  const restTrimSelectNone = $("restTrimSelectNone");
+  const bulkVolumeBtn = $("bulkVolumeBtn");
+  const bulkVolumeDialog = $("bulkVolumeDialog");
+  const bulkVolumeAmount = $("bulkVolumeAmount");
+  const bulkVolumeApply = $("bulkVolumeApply");
+  const bulkVolumeCancel = $("bulkVolumeCancel");
+  const bulkVolumeSelectAll = $("bulkVolumeSelectAll");
+  const bulkVolumeSelectNone = $("bulkVolumeSelectNone");
   const leadingSilenceBtn = $("leadingSilenceBtn");
   const leadingSilenceDialog = $("leadingSilenceDialog");
   const leadingSilenceSeconds = $("leadingSilenceSeconds");
@@ -262,6 +271,14 @@
     restTrimBtn?.addEventListener("click", openRestTrimDialog);
     restTrimApply?.addEventListener("click", () => applyRestTrimFromDialog());
     restTrimCancel?.addEventListener("click", () => restTrimDialog?.close());
+    restTrimSelectAll?.addEventListener("click", () => setDialogChannelSelection(".rest-trim-channel", true));
+    restTrimSelectNone?.addEventListener("click", () => setDialogChannelSelection(".rest-trim-channel", false));
+    bulkVolumeBtn?.addEventListener("click", openBulkVolumeDialog);
+    bulkVolumeApply?.addEventListener("click", () => applyBulkVolumeFromDialog());
+    bulkVolumeCancel?.addEventListener("click", () => bulkVolumeDialog?.close());
+    bulkVolumeSelectAll?.addEventListener("click", () => setDialogChannelSelection(".bulk-volume-channel", true));
+    bulkVolumeSelectNone?.addEventListener("click", () => setDialogChannelSelection(".bulk-volume-channel", false));
+    bulkVolumeAmount?.addEventListener("change", normalizeBulkVolumeAmountInput);
     leadingSilenceBtn?.addEventListener("click", openLeadingSilenceDialog);
     leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
     leadingSilenceCancel?.addEventListener("click", () => leadingSilenceDialog?.close());
@@ -325,7 +342,7 @@
     scheduleGoogleAutoReconnect();
     updateCharCount();
     rebuildSchedulePreviewSilently();
-    trackAnalytics("mobibard_app_open", { version: "3_2" });
+    trackAnalytics("mobibard_app_open", { version: "3_3" });
   }
 
   function trackAnalytics(eventName, params = {}) {
@@ -4260,51 +4277,62 @@ ${shortError(err)}`);
 
   function openRestTrimDialog() {
     if (restTrimLimit) restTrimLimit.value = "32";
+    setDialogChannelSelection(".rest-trim-channel", true);
     if (restTrimDialog?.showModal) {
       restTrimDialog.showModal();
       return;
     }
-    const answer = prompt("삭제할 쉼표 길이를 입력해 주세요.\nall = 모든 쉼표\n4 = 4분음표 이하\n8 = 8분음표 이하\n16 = 16분음표 이하\n32 = 32분음표 이하\n64 = 64분음표 이하", "32");
+    const answer = prompt("삭제할 쉼표 길이를 입력해 주세요.\nall = 모든 쉼표\n4 = 4분음표 이하\n8 = 8분음표 이하\n16 = 16분음표 이하\n32 = 32분음표 이하\n64 = 64분음표 이하\n\n이 브라우저에서는 채널 선택 Dialog를 사용할 수 없어 전체 6채널에 적용됩니다.", "32");
     if (answer == null) return;
-    applyRestTrim(answer);
+    applyRestTrim(answer, null);
   }
 
   function applyRestTrimFromDialog() {
     const value = restTrimLimit?.value || "32";
+    const targetPartIndexes = getDialogSelectedPartIndexes(".rest-trim-channel");
+    if (!targetPartIndexes.length) {
+      showDialog("쉼표 삭제", "적용할 채널을 1개 이상 선택해 주세요.");
+      return;
+    }
     restTrimDialog?.close();
-    applyRestTrim(value);
+    applyRestTrim(value, targetPartIndexes);
   }
 
-  function applyRestTrim(limitValue) {
+  function applyRestTrim(limitValue, targetPartIndexes = null) {
     const threshold = parseRestTrimLimit(limitValue);
     if (!threshold) return;
+    const selectedIndexes = targetPartIndexes == null ? null : normalizePartIndexList(targetPartIndexes);
+    if (targetPartIndexes != null && !selectedIndexes.length) {
+      showDialog("쉼표 삭제", "적용할 채널을 1개 이상 선택해 주세요.");
+      return;
+    }
     const wasPlaying = isPlaying;
     stopPlayback(false);
-
-    const activePanel = panels.find(p => !p.hidden) || panels[0];
-    const isMainPanel = activePanel.dataset.panel === "main";
-    const partMatch = /^part(\d+)$/.exec(activePanel.dataset.panel || "");
-    const targetPartIndex = isMainPanel ? null : (partMatch ? Number(partMatch[1]) : null);
 
     try {
       const result = trimShortRestsMml(normalizeMmlForDisplay(mainMml.value), {
         partCount: 6,
-        targetPartIndex,
+        targetPartIndexes: selectedIndexes,
         all: threshold.all,
         denom: threshold.denom
       });
 
       if (result.removed <= 0) {
-        showDialog("쉼표 삭제", "삭제할 수 있는 쉼표가 없습니다.\n채널 시작 부분의 쉼표나 앞에 음표가 없는 쉼표는 유지됩니다.");
+        showDialog("쉼표 삭제", "선택한 채널에서 삭제할 수 있는 쉼표가 없습니다.\n채널 시작 부분의 쉼표나 앞에 음표가 없는 쉼표는 유지됩니다.");
       } else {
         setMainMml(result.mml);
         rebuildSchedulePreviewSilently();
         const label = threshold.all ? "모든 쉼표" : `${threshold.denom}분음표 이하`;
+        const selectedLabel = formatSelectedPartLabels(selectedIndexes);
         const saved = Math.max(0, Number(result.saved) || 0);
         flashButton(restTrimBtn, "삭제 완료");
+        trackAnalytics("rest_trim_apply", {
+          limit: threshold.all ? "all" : String(threshold.denom),
+          selected_channel_count: selectedIndexes?.length || 6
+        });
         showDialog(
           "쉼표 삭제",
-          `${label} 길이로 쉼표 ${result.removed.toLocaleString("ko-KR")}개를 정리했습니다.\n` +
+          `${selectedLabel}에서 ${label} 길이로 쉼표 ${result.removed.toLocaleString("ko-KR")}개를 정리했습니다.\n` +
           `최적화 결과: ${result.before.toLocaleString("ko-KR")} 자 → ${result.after.toLocaleString("ko-KR")} 자` +
           (saved ? `\n절약: ${saved.toLocaleString("ko-KR")} 자` : "")
         );
@@ -4314,6 +4342,121 @@ ${shortError(err)}`);
     } finally {
       if (wasPlaying) currentOffset = 0;
     }
+  }
+
+  function openBulkVolumeDialog() {
+    if (bulkVolumeAmount) bulkVolumeAmount.value = "0";
+    setDialogChannelSelection(".bulk-volume-channel", true);
+    if (bulkVolumeDialog?.showModal) {
+      bulkVolumeDialog.showModal();
+      bulkVolumeAmount?.focus();
+      bulkVolumeAmount?.select?.();
+      return;
+    }
+    const answer = prompt("선택 채널에 더할 볼륨 변화량을 입력해 주세요.\n-15 ~ 15 사이의 정수만 사용할 수 있습니다.\n\n이 브라우저에서는 채널 선택 Dialog를 사용할 수 없어 전체 6채널에 적용됩니다.", "0");
+    if (answer == null) return;
+    applyBulkVolume(answer, null);
+  }
+
+  function applyBulkVolumeFromDialog() {
+    normalizeBulkVolumeAmountInput();
+    const targetPartIndexes = getDialogSelectedPartIndexes(".bulk-volume-channel");
+    if (!targetPartIndexes.length) {
+      showDialog("볼륨 조절", "적용할 채널을 1개 이상 선택해 주세요.");
+      return;
+    }
+    const value = bulkVolumeAmount?.value || "0";
+    bulkVolumeDialog?.close();
+    applyBulkVolume(value, targetPartIndexes);
+  }
+
+  function applyBulkVolume(value, targetPartIndexes = null) {
+    const delta = normalizeBulkVolumeDelta(value);
+    const selectedIndexes = targetPartIndexes == null ? null : normalizePartIndexList(targetPartIndexes);
+    if (targetPartIndexes != null && !selectedIndexes.length) {
+      showDialog("볼륨 조절", "적용할 채널을 1개 이상 선택해 주세요.");
+      return;
+    }
+
+    const wasPlaying = isPlaying;
+    stopPlayback(false);
+    try {
+      const result = adjustVolumesMml(normalizeMmlForDisplay(mainMml.value), {
+        partCount: 6,
+        targetPartIndexes: selectedIndexes,
+        delta
+      });
+
+      if (result.changedNotes <= 0) {
+        const message = delta === 0
+          ? "볼륨 변화량이 0이라 변경할 내용이 없습니다."
+          : "선택한 채널에서 변경 가능한 음표가 없습니다. 이미 0 또는 15에 걸려 있으면 더 이상 변하지 않습니다.";
+        showDialog("볼륨 조절", message);
+      } else {
+        setMainMml(result.mml);
+        rebuildSchedulePreviewSilently();
+        const saved = Math.max(0, Number(result.saved) || 0);
+        const selectedLabel = formatSelectedPartLabels(selectedIndexes);
+        flashButton(bulkVolumeBtn, "적용 완료");
+        trackAnalytics("bulk_volume_adjust", {
+          delta,
+          selected_channel_count: selectedIndexes?.length || 6
+        });
+        showDialog(
+          "볼륨 조절",
+          `${selectedLabel}의 음표 ${result.changedNotes.toLocaleString("ko-KR")}개 볼륨을 ${delta > 0 ? "+" : ""}${delta} 조절했습니다.\n` +
+          `결과 범위는 V0~V15로 제한됩니다.` +
+          (result.clampedNotes ? `\n범위 제한 적용: ${result.clampedNotes.toLocaleString("ko-KR")}개` : "") +
+          `\n최적화 결과: ${result.before.toLocaleString("ko-KR")} 자 → ${result.after.toLocaleString("ko-KR")} 자` +
+          (saved ? `\n절약: ${saved.toLocaleString("ko-KR")} 자` : "")
+        );
+      }
+    } catch (err) {
+      showDialog("볼륨 조절 실패", shortError(err));
+    } finally {
+      if (wasPlaying) currentOffset = 0;
+    }
+  }
+
+  function setDialogChannelSelection(selector, checked) {
+    document.querySelectorAll(selector).forEach(input => {
+      input.checked = Boolean(checked);
+    });
+  }
+
+  function getDialogSelectedPartIndexes(selector) {
+    return normalizePartIndexList(Array.from(document.querySelectorAll(selector))
+      .filter(input => input.checked)
+      .map(input => Number(input.dataset.partIndex)));
+  }
+
+  function normalizePartIndexList(indexes) {
+    const selected = [];
+    const seen = new Set();
+    for (const raw of indexes || []) {
+      const index = Number(raw);
+      if (!Number.isInteger(index) || index < 0 || index >= PART_LABELS.length || seen.has(index)) continue;
+      seen.add(index);
+      selected.push(index);
+    }
+    return selected;
+  }
+
+  function formatSelectedPartLabels(indexes) {
+    const selected = normalizePartIndexList(indexes);
+    if (!selected.length || selected.length >= PART_LABELS.length) return "전체 채널";
+    return selected.map(index => PART_LABELS[index] || `${index + 1}채널`).join(", ");
+  }
+
+  function normalizeBulkVolumeAmountInput() {
+    if (!bulkVolumeAmount) return;
+    bulkVolumeAmount.value = String(normalizeBulkVolumeDelta(bulkVolumeAmount.value));
+  }
+
+  function normalizeBulkVolumeDelta(value) {
+    let delta = Math.round(Number(value));
+    if (!Number.isFinite(delta)) delta = 0;
+    return clampInt(delta, -15, 15);
   }
 
   function openLeadingSilenceDialog() {

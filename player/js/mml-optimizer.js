@@ -65,9 +65,7 @@
     while (sourceParts.length < partCount) sourceParts.push("");
 
     const threshold = normalizeRestTrimThreshold(options);
-    const targetPartIndex = Number.isInteger(options.targetPartIndex)
-      ? Math.max(0, Math.min(partCount - 1, options.targetPartIndex))
-      : null;
+    const targetPartIndexes = normalizeTargetPartIndexes(options, partCount);
 
     const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
     const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
@@ -78,7 +76,7 @@
     const outputParts = [];
 
     for (let i = 0; i < partCount; i++) {
-      const shouldTrim = targetPartIndex == null || targetPartIndex === i;
+      const shouldTrim = targetPartIndexes == null || targetPartIndexes.has(i);
       let events;
       if (shouldTrim) {
         const trimmed = absorbShortRests(parsedParts[i].events, threshold, tempoMap);
@@ -114,6 +112,71 @@
       saved: before - after,
       removed,
       removedUnits,
+      tempoMap
+    };
+  }
+
+
+  function adjustVolumesMml(text, options = {}) {
+    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const rawDelta = Number(options.delta ?? 0);
+    if (!Number.isFinite(rawDelta)) throw new Error("볼륨 변화량은 숫자로 입력해 주세요.");
+    const delta = clamp(rawDelta, -15, 15);
+    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
+    while (sourceParts.length < partCount) sourceParts.push("");
+
+    const targetPartIndexes = normalizeTargetPartIndexes(options, partCount);
+    const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
+    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
+    const hasAnyContent = parsedParts.some(p => p.events.length || p.tempos.length || String(p.raw || "").trim());
+
+    let touchedNotes = 0;
+    let changedNotes = 0;
+    let clampedNotes = 0;
+    const outputParts = [];
+
+    for (let i = 0; i < partCount; i++) {
+      const shouldAdjust = targetPartIndexes == null || targetPartIndexes.has(i);
+      if (!shouldAdjust) {
+        outputParts.push(sourceParts[i] || "");
+        continue;
+      }
+
+      let events = parsedParts[i].events.map(ev => {
+        if (ev.type !== "note") return { ...ev };
+        const beforeVolume = clamp(ev.volume, 0, 15);
+        const unclamped = beforeVolume + delta;
+        const afterVolume = clamp(unclamped, 0, 15);
+        touchedNotes++;
+        if (afterVolume !== beforeVolume) changedNotes++;
+        if (afterVolume !== unclamped) clampedNotes++;
+        return { ...ev, volume: afterVolume };
+      });
+
+      events = mergeAdjacentRests(events);
+      if (i === 0) events = injectTempoEvents(events, tempoMap);
+
+      outputParts.push(renderPart(events, {
+        isMelody: i === 0,
+        startTempo: tempoMap[0]?.bpm || DEFAULT_TEMPO,
+        forceHeader: i === 0 && hasAnyContent,
+        partIndex: i
+      }));
+    }
+
+    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+    const before = countPartChars(sourceParts);
+    const after = countPartChars(outputParts);
+    return {
+      mml,
+      parts: outputParts,
+      before,
+      after,
+      saved: before - after,
+      delta,
+      touchedNotes,
+      changedNotes,
+      clampedNotes,
       tempoMap
     };
   }
@@ -966,6 +1029,22 @@
     return out;
   }
 
+  function normalizeTargetPartIndexes(options = {}, partCount = 6) {
+    if (Array.isArray(options.targetPartIndexes)) {
+      const set = new Set();
+      for (const raw of options.targetPartIndexes) {
+        const index = Number(raw);
+        if (Number.isInteger(index) && index >= 0 && index < partCount) set.add(index);
+      }
+      return set;
+    }
+    if (Number.isInteger(options.targetPartIndex)) {
+      return new Set([Math.max(0, Math.min(partCount - 1, options.targetPartIndex))]);
+    }
+    return null;
+  }
+
+
   function normalizeRestTrimThreshold(options = {}) {
     if (options.all || String(options.denom || options.threshold || "").toLowerCase() === "all") {
       return { all: true, units: Infinity, denom: null };
@@ -1480,5 +1559,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = { optimizeMml, optimizePart, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, splitMmlPages };
+  window.MabiOptimizer = { optimizeMml, optimizePart, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages };
 })();
