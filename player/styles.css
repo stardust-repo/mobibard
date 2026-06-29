@@ -1254,3 +1254,153 @@ textarea { resize: vertical; color: var(--text); }
     justify-content: flex-end;
   }
 }
+
+/* v3.3 help text reinforcement */
+.code-help-dialog { max-width: min(920px, calc(100vw - 32px)); }
+.code-help-note,
+.code-help-tips,
+.midi-guide-box {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid var(--code-chip-line);
+  border-radius: 13px;
+  background: var(--accent-weak);
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.code-help-note span,
+.code-help-tips li,
+.midi-guide-box li,
+.midi-guide-box span {
+  color: var(--muted);
+}
+.code-help-tips ul,
+.midi-guide-box ol {
+  margin: 0;
+  padding-left: 20px;
+}
+.code-help-tips li + li,
+.midi-guide-box li + li {
+  margin-top: 3px;
+}
+.code-help-row {
+  grid-template-columns: minmax(108px, .88fr) minmax(240px, 1.85fr) minmax(155px, 1.05fr);
+}
+.midi-guide-box {
+  display: block;
+  border-color: var(--line);
+  background: var(--play-info-bg);
+}
+.midi-guide-box summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.midi-guide-box summary::-webkit-details-marker { display: none; }
+.midi-guide-box summary::before {
+  content: "▶";
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 12px;
+  transition: transform .16s ease;
+}
+.midi-guide-box[open] summary::before { transform: rotate(90deg); }
+.midi-guide-box summary strong { flex: 1 1 auto; }
+.midi-guide-summary-hint {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.midi-guide-body {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+.midi-guide-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.midi-guide-terms span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--input-bg);
+  font-size: 12.5px;
+  font-weight: 750;
+}
+.dialog-inline-help {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (max-width: 640px) {
+  .code-help-note,
+  .code-help-tips,
+  .midi-guide-box { font-size: 13px; }
+  .midi-guide-terms { display: grid; grid-template-columns: 1fr; }
+  .midi-guide-terms span { border-radius: 10px; }
+}
+
+/* v3.3 mobile/help layout refinement */
+.code-help-row {
+  grid-template-columns: minmax(96px, .78fr) minmax(280px, 2.35fr) minmax(100px, .62fr);
+}
+.code-help-example {
+  padding: 9px 10px;
+}
+.code-help-example code {
+  font-size: 12.5px;
+}
+@media (max-width: 760px) {
+  .midi-role-row {
+    grid-template-columns: 88px minmax(0, 1fr);
+    align-items: center;
+  }
+  .midi-role-row .midi-channel-select {
+    grid-column: 1 / -1;
+  }
+  .midi-role-row > select[data-role-index] {
+    grid-column: 1;
+    width: 88px;
+    min-width: 88px;
+    justify-self: start;
+  }
+  .midi-role-row .merge-mode {
+    grid-column: 2;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+}
+@media (max-width: 420px) {
+  .midi-role-row { grid-template-columns: 82px minmax(0, 1fr); gap: 6px; }
+  .midi-role-row > select[data-role-index] { width: 82px; min-width: 82px; padding-left: 7px; padding-right: 7px; }
+  .merge-mode { gap: 3px; font-size: 11.5px; }
+  .merge-mode select { width: 56px; padding-left: 5px; padding-right: 5px; font-size: 11.5px; }
+}
+@media (max-width: 640px) {
+  .code-help-dialog { max-width: calc(100vw - 18px); }
+  .code-help-card { padding-left: 12px; padding-right: 12px; }
+  .code-help-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 9px 10px;
+  }
+  .code-help-head { display: none; }
+  .code-help-row code { font-size: 12.5px; }
+  .code-help-example { padding: 8px 9px; }
+}

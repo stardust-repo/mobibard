@@ -248,25 +248,25 @@
 <dialog id="codeHelpDialog" class="mml-dialog code-help-dialog">
   <form class="dialog-card code-help-card" method="dialog">
     <h3>MML 코드 도움말</h3>
-    <p>재생기에서 지원하는 기본 MML 코드입니다. 대소문자는 구분하지 않습니다.</p>
+    <p>재생기에서 지원하는 기본 MML 코드입니다. 대소문자는 구분하지 않습니다. 숫자가 붙는 코드는 아래 설명의 범위 안에서 사용해 주세요.</p>
     <div class="code-help-table" role="table" aria-label="지원 MML 코드 목록">
-      <div class="code-help-row code-help-head" role="row"><strong role="columnheader">코드</strong><strong role="columnheader">의미</strong><strong role="columnheader">예시</strong></div>
-      <div class="code-help-row" role="row"><code>MML@...;</code><span>전체 악보 형식입니다. 쉼표로 채널을 나눕니다.</span><code>MML@cde,egc,ccg;</code></div>
-      <div class="code-help-row" role="row"><code>T</code><span>템포를 정합니다.</span><code>T120</code></div>
-      <div class="code-help-row" role="row"><code>O</code><span>기본 옥타브를 정합니다.</span><code>O5</code></div>
-      <div class="code-help-row" role="row"><code>L</code><span>기본 음 길이를 정합니다.</span><code>L8</code></div>
-      <div class="code-help-row" role="row"><code>V</code><span>볼륨을 정합니다.</span><code>V12</code></div>
-      <div class="code-help-row" role="row"><code>c d e f g a b</code><span>도레미파솔라시 음표입니다.</span><code>cdefgab</code></div>
-      <div class="code-help-row" role="row"><code>r</code><span>쉼표입니다.</span><code>r4</code></div>
-      <div class="code-help-row" role="row"><code># + -</code><span>반음 올림/내림입니다. <code>#</code>, <code>+</code>는 올림, <code>-</code>는 내림입니다.</span><code>c# d-</code></div>
-      <div class="code-help-row" role="row"><code>&lt; &gt;</code><span>옥타브를 한 단계 이동합니다.</span><code>&gt;c&lt;c</code></div>
-      <div class="code-help-row" role="row"><code>.</code><span>점음표입니다. 길이를 1.5배로 늘립니다.</span><code>c4.</code></div>
-      <div class="code-help-row" role="row"><code>&amp;</code><span>같은 음을 이어서 길게 연주합니다.</span><code>c4&amp;c8</code></div>
-      <div class="code-help-row" role="row"><code>n</code><span>숫자로 음 높이를 직접 지정합니다.</span><code>n60</code></div>
+      <div class="code-help-row code-help-head" role="row"><strong role="columnheader">코드</strong><strong role="columnheader">설명</strong><strong role="columnheader">예시</strong></div>
+      <div class="code-help-row" role="row"><code>MML@...;</code><span>전체 악보 형식입니다. <code>@</code> 뒤 내용을 쉼표로 나눠 최대 6채널(멜로디, 화음1~5)을 입력하고 <code>;</code>로 끝냅니다.</span><code>MML@cde,egc,ccg;</code></div>
+      <div class="code-help-row" role="row"><code>T32~255</code><span>템포(BPM)입니다. 숫자가 클수록 빠릅니다.</span><code>T120</code></div>
+      <div class="code-help-row" role="row"><code>O0~7</code><span>옥타브입니다. 숫자가 클수록 높은 음역입니다.</span><code>O4cde</code></div>
+      <div class="code-help-row" role="row"><code>L1,2,4,8,16,32,64</code><span>기본 음 길이입니다. 숫자는 “몇 분음표인지”를 뜻합니다. <code>L4</code>는 4분음표, <code>L8</code>은 8분음표라서 숫자가 클수록 짧아집니다.</span><code>L8cdef</code></div>
+      <div class="code-help-row" role="row"><code>V0~15</code><span>볼륨입니다. <code>0</code>은 가장 작고 <code>15</code>가 가장 큽니다.</span><code>V12cde</code></div>
+      <div class="code-help-row" role="row"><code>c d e f g a b</code><span>도레미파솔라시 음표입니다. 뒤에 <code>1,2,4,8,16,32,64</code>를 붙이면 그 음표만 길이를 바꿉니다.</span><code>c4 d8 e</code></div>
+      <div class="code-help-row" role="row"><code>r</code><span>쉼표입니다. 뒤 숫자는 쉼표 길이입니다.</span><code>r4 r8</code></div>
+      <div class="code-help-row" role="row"><code>N4~88</code><span>마비노기 음 번호로 음 높이를 직접 지정합니다. 숫자가 클수록 높은 음입니다. <code>N48</code>은 4옥타브 도입니다.</span><code>L8N48N52</code></div>
+      <div class="code-help-row" role="row"><code># + -</code><span>반음 올림/내림입니다. <code>#</code>, <code>+</code>는 반음 올림, <code>-</code>는 반음 내림입니다.</span><code>c# d-</code></div>
+      <div class="code-help-row" role="row"><code>&lt; &gt;</code><span>옥타브를 한 단계 이동합니다. <code>&gt;</code>는 한 옥타브 위로, <code>&lt;</code>는 한 옥타브 아래로 이동합니다.</span><code>&gt;c&lt;c</code></div>
+      <div class="code-help-row" role="row"><code>.</code><span>점음표입니다. 바로 앞 길이를 1.5배로 늘립니다. 점을 여러 개 붙이면 남은 절반씩 더 늘어납니다.</span><code>c4. r8.</code></div>
+      <div class="code-help-row" role="row"><code>&amp;</code><span>같은 음을 이어서 길게 연주합니다. <code>&amp;</code> 앞뒤는 같은 음이어야 합니다.</span><code>c4&amp;c8</code></div>
     </div>
     <div class="code-help-example">
       <strong>짧은 예시</strong>
-      <code>MML@T120O5L8cdefgab&gt;c,O4L4ceg,O3L2cgcg;</code>
+      <code>MML@T120V12O5L8cdefgab&gt;c,O4V10L4ceg,O3V9L2cgcg;</code>
     </div>
     <div class="dialog-actions">
       <button id="codeHelpClose" type="button">닫기</button>
@@ -376,10 +376,31 @@
       <p id="midiConvertSummary">MML 채널별 역할, 겹침 병합 방식, 사용할 악기를 선택해 주세요.</p>
       <button id="midiFullPreviewBtn" class="midi-full-preview-btn" type="button">MIDI 듣기</button>
     </div>
+    <details class="midi-guide-box" aria-label="MIDI 변환 설정 안내">
+      <summary>
+        <strong>이 창은 MIDI 파일의 악기들을 마비노기 MML 최대 6채널로 나눠 넣는 설정입니다.</strong>
+        <span class="midi-guide-summary-hint">설명 접기/펼치기</span>
+      </summary>
+      <div class="midi-guide-body">
+        <ol>
+          <li><b>MIDI 듣기</b>로 원본 파일이 어떤 곡인지 먼저 확인합니다.</li>
+          <li><b>Export 채널 수</b>에서 만들 MML 채널 수를 고릅니다. 마비노기 악보 구조에 맞춰 최대 6개까지 사용할 수 있습니다.</li>
+          <li>왼쪽 <b>MML 채널</b>에서 채널을 누른 뒤, 오른쪽 <b>악기 목록</b>에서 그 채널에 넣을 악기를 선택합니다.</li>
+          <li><b>변환</b>을 누르면 선택한 악기와 역할 기준으로 현재 MML 편집기에 반영됩니다.</li>
+        </ol>
+        <div class="midi-guide-terms">
+          <span><b>자동</b>: 선택한 악기를 가능한 범위에서 자동 배치</span>
+          <span><b>고음</b>: 높은 음역을 우선 배치</span>
+          <span><b>저음</b>: 낮은 음역을 우선 배치</span>
+          <span><b>비트</b>: 드럼/타악 계열만 배치</span>
+          <span><b>겹침 병합</b>: MML 6채널 한계 안에 더 많은 소리를 담기 위해, 이미 울리는 음 일부를 줄이고 겹친 음을 이어 넣습니다.</span>
+        </div>
+      </div>
+    </details>
 
     <div class="midi-dialog-layout midi-channel-config-layout">
       <section class="midi-dialog-section midi-left-panel">
-        <label class="dialog-field" for="midiExportCount">Export 채널 수</label>
+        <label class="dialog-field" for="midiExportCount">Export 채널 수 <span class="dialog-inline-help">최종 MML로 만들 채널 개수</span></label>
         <select id="midiExportCount">
           <option value="1">1개</option>
           <option value="2">2개</option>
@@ -391,7 +412,7 @@
         <div id="midiBeatNotice" class="midi-beat-notice" hidden>이 MIDI에는 비트 그룹 악기가 없습니다.</div>
         <div class="dialog-section-head role-head">
           <strong>MML 채널</strong>
-          <span class="dialog-small">채널을 선택한 뒤 오른쪽에서 악기를 고릅니다.</span>
+          <span class="dialog-small">왼쪽 채널 버튼을 누르면 오른쪽 악기 목록이 바뀝니다.</span>
         </div>
         <div id="midiRoleList" class="midi-role-list" aria-label="MML 채널 설정"></div>
       </section>
@@ -399,7 +420,7 @@
       <section class="midi-dialog-section midi-right-panel">
         <div class="dialog-section-head">
           <strong id="midiInstrumentPanelTitle">선택 채널 악기</strong>
-          <span id="midiInstrumentPanelHint" class="dialog-small">한 채널에 여러 악기를 선택할 수 있습니다.</span>
+          <span id="midiInstrumentPanelHint" class="dialog-small">체크한 악기가 현재 선택한 MML 채널에 들어갑니다.</span>
         </div>
         <div id="midiChannelList" class="midi-channel-list" aria-label="선택 채널에 포함할 악기 목록"></div>
       </section>
