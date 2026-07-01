@@ -118,6 +118,7 @@ class SoundFont {
     const scheduledIds = options.scheduledIds || null;
     const minLeadTime = Math.max(0.005, Number(options.minLeadTime) || 0.015);
     const playbackSpeed = Math.max(0.05, Number(options.playbackSpeed) || 1);
+    const gainScale = Number.isFinite(Number(options.gainScale)) ? Math.max(0.02, Math.min(2, Number(options.gainScale))) : 1;
     const now = ctx.currentTime;
     let maxEnd = now;
     let count = 0;
@@ -149,7 +150,7 @@ class SoundFont {
       }
 
       const gain = ctx.createGain();
-      const v = n.gainValue;
+      const v = Math.max(0.0001, Math.min(1.25, n.gainValue * gainScale));
       const attack = Math.min(0.008, playDur * 0.25);
       const release = Math.min(0.04, Math.max(0.004, playDur * 0.55));
       const holdEnd = Math.max(start + attack, end - release);

@@ -1,4 +1,4 @@
-# 마비노기 MML 재생기 샘플 - 모비바드 v3.3
+# 마비노기 MML 재생기 샘플 - 모비바드 v3.4
 
 공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
 
@@ -64,7 +64,7 @@ mabinogi_mml_public/
 
 | 항목 | 값 / 위치 |
 |---|---|
-| 앱 버전 표시 | `index.html`의 `<title>`과 `.app-version`: `모비바드 v3.3` |
+| 앱 버전 표시 | `index.html`의 `<title>`과 `.app-version`: `모비바드 v3.4` |
 | MML 파트 수 | 최대 6개: `멜로디`, `화음1`~`화음5` (`app.js`의 `PART_LABELS`) |
 | 설정 localStorage prefix | `mobibard.player.` (`app.js`의 `PREF_PREFIX`) |
 | 기본 SF2 | `assets/Roland_SC-55.sf2` |
@@ -119,7 +119,7 @@ mabinogi_mml_public/
 | `bulkVolumeDialog` | 볼륨 조절 변화량과 적용 채널 선택 |
 | `leadingSilenceDialog` | 시작 공백 초 단위 입력 |
 | `splitCopyDialog` | 나눠복사 결과, 악보별 듣기/복사 |
-| `midiConvertDialog` | MIDI 변환 설정 안내, 채널 역할, 겹침 병합, 악기 선택, MIDI 듣기, 악기별 듣기, 파일 다시 불러오기 |
+| `midiConvertDialog` | MIDI 변환 설정 안내, 채널 역할, 겹침 병합, 악기 선택, 미리 듣기, MIDI 듣기, 채널별 듣기, 악기별 듣기, 파일 다시 불러오기 |
 
 ---
 
@@ -179,14 +179,24 @@ mabinogi_mml_public/
 
 MIDI 변환은 `js/midi-to-mml.js`가 담당하고, `app.js`는 설정 Dialog와 결과 적용만 담당합니다.
 
-사용자가 MIDI 파일을 불러오면 `midiConvertDialog`가 열립니다. 이 Dialog는 “MIDI 안의 악기들을 마비노기 MML의 1~6개 채널에 어떻게 배치할지” 정하는 화면입니다. 상단 안내는 기본 접힘 상태의 `<details>`로 표시합니다. 요약 줄에는 이 화면이 “MIDI 안의 악기들을 마비노기 MML의 최대 6채널에 나눠 넣는 설정”임을 보여 주고, 펼치면 `MIDI 듣기 → Export 채널 수 선택 → MML 채널 선택 → 오른쪽 악기 선택 → 변환` 순서와 용어 설명을 확인할 수 있습니다.
+사용자가 MIDI 파일을 불러오면 `midiConvertDialog`가 열립니다. 이 Dialog는 “MIDI 안의 악기들을 마비노기 MML의 1~6개 채널에 어떻게 배치할지” 정하는 화면입니다. 상단 안내는 기본 접힘 상태의 `<details>`로 표시합니다. 요약 줄에는 이 화면이 “MIDI 안의 악기들을 마비노기 MML의 최대 6채널에 나눠 넣는 설정”임을 보여 주고, 펼치면 `MIDI 듣기 → MML 채널 선택 → 오른쪽 악기 선택 → 미리 듣기/변환` 순서와 용어 설명을 확인할 수 있습니다.
 
 1. MIDI 전체를 파싱합니다.
 2. 트랙 수, PPQ, 템포 수, 후보 채널 수, 악기 그룹을 분석합니다.
-3. MIDI 변환 Dialog에서 Export 채널 수를 1~6개로 고릅니다.
-4. 각 MML 채널마다 역할, 겹침 병합 방식, 사용할 악기를 고릅니다.
-5. 변환 버튼을 누르면 입력/버튼을 잠그고 상태 문구를 표시합니다.
-6. 변환 결과를 전체 MML에 반영하고, MIDI 악기 선택 정보를 `최근 MIDI 음색` 자동 프리셋으로 갱신합니다.
+3. 기본 상태에서는 멜로디/화음1/화음2에 일반 악기 후보가 모두 체크되고, 화음3/화음4/화음5는 악기가 선택되지 않습니다.
+4. 각 MML 채널마다 역할, 겹침 병합 방식, 사용할 악기를 직접 조정할 수 있습니다.
+5. 악기가 하나 이상 선택된 채널만 최종 MML에 포함됩니다. 비어 있는 채널은 자동으로 제외됩니다.
+6. `미리 듣기`를 누르면 현재 선택/역할/겹침 병합 기준으로 실제 MML 변환 결과를 만들고, 편집기에 반영하지 않은 채 미리 재생합니다.
+7. 변환 버튼을 누르면 입력/버튼을 잠그고 상태 문구를 표시합니다.
+8. 변환 결과를 전체 MML에 반영하고, MIDI 악기 선택 정보를 `최근 MIDI 음색` 자동 프리셋으로 갱신합니다.
+
+### MIDI 미리듣기
+
+- `MIDI 듣기`: 원본 MIDI 파일을 최대 45초까지 미리 재생합니다.
+- `미리 듣기`: 악기가 선택된 MML 채널, 채널 역할, 겹침 병합, 악기 체크 상태를 기준으로 MML로 변환했을 때의 소리를 미리 재생합니다.
+- MML 채널 행의 `듣기`: 해당 채널 하나만 현재 역할/악기 선택 기준으로 MML 변환해 미리 재생합니다.
+- 악기별 `듣기`: 오른쪽 악기 목록에서 해당 악기만 짧게 재생합니다.
+- 모든 듣기/재생 경로에는 동시 발음 4개 이상부터 자동 음량 보정이 적용되어, 여러 소리가 겹칠 때만 소리가 과하게 커지는 것을 줄입니다.
 
 ### MIDI 악기 선택
 
@@ -196,7 +206,10 @@ MIDI 변환은 `js/midi-to-mml.js`가 담당하고, `app.js`는 설정 Dialog와
 - 한 MML 채널에는 여러 악기를 선택할 수 있습니다.
 - 여러 MML 채널이 같은 악기를 선택할 수 있습니다.
 - 원본 MIDI 노트 하나는 전체 MML 채널 중 한 곳에만 배치됩니다. 같은 노트를 여러 MML 채널에 복제하지 않습니다.
-- 악기 목록에는 전부 선택 / 전부 해제 / 악기별 듣기 버튼이 있습니다.
+- 악기 목록에는 전부 선택 / 전부 해제 / 분류별 선택 / 악기별 듣기 버튼이 있습니다.
+- 일반 악기는 `건반악기`, `현악기`, `관악기`, `타악기`, `나머지` 섹션으로 나눠 표시하며, 각 섹션 제목에 `현악기 6개`처럼 현재 목록 개수를 함께 표시합니다.
+- 섹션 제목은 접고 펼칠 수 있으며, 기본은 모두 펼친 상태입니다.
+- 분류별 선택 버튼은 `건반악기`, `현악기`, `관악기`, `타악기` 4개만 제공하고 `나머지`는 목록 분류로만 표시합니다.
 - 악기 목록에는 해당 악기가 선택된 MML 채널을 배지로 표시합니다.
 - MML 채널 목록에는 악기 이름 대신 선택된 악기 개수를 표시합니다.
 
@@ -204,7 +217,7 @@ MIDI 변환은 `js/midi-to-mml.js`가 담당하고, `app.js`는 설정 Dialog와
 
 - MIDI 10번 채널의 타악 노트는 킥/스네어/심벌즈처럼 노트 번호별 비트 악기로 묶습니다.
 - 드럼, 스네어, 북, 공, 심벌즈, 킥, 하이햇, 탐 등 비트 힌트가 있는 악기는 비트 그룹으로 분류합니다.
-- 비트 그룹이 없는 MIDI에서는 역할 선택에서 `비트` 항목을 숨기고 안내 문구를 표시합니다.
+- 비트 그룹이 없는 MIDI에서는 역할 선택에서 `비트` 항목을 숨기고, MML 채널의 `미리 듣기` 버튼 줄 왼쪽에 안내 문구를 표시합니다.
 - 일반 채널 역할은 일반 악기만, 비트 역할은 비트 악기만 선택할 수 있습니다.
 
 ### MML 채널 역할
@@ -424,7 +437,10 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 | `midi_resource_link_open` | 상단 바로가기 콤보박스에서 MIDI 사이트 선택 | `site` |
 | `local_import_midi`, `drive_import_midi` | MIDI 파일을 변환 Dialog로 열 때 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
 | `local_import_mml`, `drive_import_mml` | MMI/3MLE/TXT MML 불러오기 완료 | `file_type`, `file_size`, `channel_count` |
-| `preview_midi_file`, `preview_midi_instrument` | MIDI 전체/악기 미리듣기 | 없음 |
+| `preview_midi_file` | MIDI 원본 미리듣기 | 없음 |
+| `preview_midi_selected` | MIDI 현재 설정 미리듣기 | `export_channels` |
+| `preview_midi_export_channel` | MIDI 변환 설정의 MML 채널별 미리듣기 | `channel_index` |
+| `preview_midi_instrument` | MIDI 악기별 미리듣기 | 없음 |
 | `preview_mml_selected`, `preview_mml_all`, `preview_mml_channel` | MMI/3MLE 선택/전부/채널 미리듣기 | `channel_count`, `channel_index` |
 | `midi_convert_complete` | MIDI 변환 완료 | `export_channels`, `instrument_groups`, `optimized_chars` |
 | `playback_start` | 메인 재생 시작 | `offset_sec`, `channel_count` |
@@ -448,7 +464,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 | MML 편집기 강조 표시 변경 | `index.html`의 `.colored-textarea`, `styles.css`의 `.tempo-code`, `app.js`의 `renderPartWithErrors()`, `updateMainHighlight()`, `updatePartHighlight()` |
 | 상단 바로가기/MIDI 사이트 목록·배치 변경 | `index.html`의 `#midiSiteLinks`, `app.js`의 `HEADER_SHORTCUT_LINKS`, `MIDI_RESOURCE_LINK_IDS`, `openHeaderShortcutLink()` |
 | MIDI 변환 규칙 변경 | `js/midi-to-mml.js`의 `midiToMml()`, `assignNotesToVoices()`, `normalizeExportChannels()` |
-| MIDI 변환 Dialog 변경 | `index.html#midiConvertDialog`, `app.js`의 `openMidiConvertDialog()`, `renderMidiRoleList()`, `renderMidiInstrumentList()`, `syncMidiInstrumentListHeight()` |
+| MIDI 변환 Dialog 변경 | `index.html#midiConvertDialog`, `app.js`의 `openMidiConvertDialog()`, `toggleMidiSelectedPreview()`, `renderMidiRoleList()`, `renderMidiInstrumentList()`, `syncMidiInstrumentListHeight()` |
 | MMI/3MLE import 변경 | `app.js`의 `readMabiIccoMmiFile()`, `readThreeMleMmlFile()`, `openMmiImportDialog()`, `toggleMmiSelectedPreview()`, `toggleMmiAllPreview()` |
 | 3MLE 템포 처리 변경 | `app.js`의 `extractThreeMleGlobalTempo()`, `applyThreeMleGlobalTempoToCandidates()` |
 | MML 파싱/시간 계산 변경 | `js/mml-parser.js` |
@@ -464,7 +480,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
-- [ ] 제목에 `모비바드 v3.3`가 보이는지
+- [ ] 제목에 `모비바드 v3.4`가 보이는지
 - [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 MML 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
@@ -478,7 +494,15 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - [ ] `볼륨 조절` 입력값이 -15~15로 제한되고, 체크한 채널의 V값만 변경되는지
 - [ ] 나눠복사 Dialog에서 각 악보 듣기/복사가 동작하는지
 - [ ] MIDI 변환 Dialog 상단 안내가 기본 접힘 상태인지
-- [ ] MIDI 변환 Dialog 상단 안내를 펼쳤을 때 `MIDI 듣기 → Export 채널 수 → 채널/악기 선택 → 변환` 흐름을 이해할 수 있는지
+- [ ] MIDI 변환 Dialog 상단 안내를 펼쳤을 때 `MIDI 듣기 → 채널/악기 선택 → 미리 듣기/변환` 흐름을 이해할 수 있는지
+- [ ] MIDI 변환 Dialog의 기본 상태에서 멜로디/화음1/화음2는 일반 악기가 모두 체크되어 있는지
+- [ ] 화음3/화음4/화음5는 기본 악기 선택이 비어 있고, 선택하지 않으면 최종 MML에서 제외되는지
+- [ ] `미리 듣기`가 현재 MIDI 변환 선택 사항을 기준으로 MML 변환 결과를 미리 재생하고, 재생 중 버튼 문구가 `정지`로 바뀌는지
+- [ ] `MIDI 듣기`, `미리 듣기`, 채널별 듣기, 악기별 듣기, MMI/3MLE 듣기, 나눠복사 듣기, 메인 재생에서 동시 발음 4개 이상일 때만 자동 음량 보정이 적용되는지
+- [ ] `MIDI 듣기`와 `미리 듣기`는 재생 중 버튼 문구가 모두 `정지`로 표시되는지
+- [ ] MIDI 변환 Dialog에서 비트 그룹이 없는 파일의 안내가 `미리 듣기` 버튼 줄 왼쪽에 표시되는지
+- [ ] 오른쪽 악기 영역 제목이 `악기 선택`으로 보이고, 일반 악기 목록이 `건반악기/현악기/관악기/타악기/나머지`로 분류되는지
+- [ ] 일반 악기 선택에서 `전부 해제` 옆의 `건반악기/현악기/관악기/타악기` 버튼 4개가 현재 채널 선택만 해당 분류로 바꾸는지
 - [ ] MIDI 변환 Dialog에서 `파일 불러오기` 버튼이 왼쪽에 있고, 창을 좁혀도 좌우 영역이 겹치지 않는지
 - [ ] MIDI 악기가 많아도 오른쪽 악기 목록만 스크롤되고 왼쪽 채널 영역 높이가 불필요하게 늘어나지 않는지
 - [ ] MIDI 변환 중 변환 버튼 주변 상태 문구가 보이고 입력이 잠기는지
@@ -503,6 +527,64 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 ## 변경 이력
 
+### v3.4
+
+#### 버전 / 문서 / 코드 정리
+
+- 버전 표기를 `모비바드 v3.4`로 변경했습니다.
+- README의 파일 구조, 주요 UI 영역, MIDI 변환 흐름, 악기 분류, Google Drive/Firebase Analytics 설명, 회귀 방지 체크리스트를 현재 코드 기준으로 정리했습니다.
+- 더 이상 참조되지 않는 `extractMabiIccoMmlParts()` 헬퍼를 제거했습니다. 현재 MMI 처리는 이름/라벨 정보가 포함된 `extractMabiIccoMmlPartCandidates()`를 사용합니다.
+- 제거된 `MML 채널 수`/추천 구성 UI에서 남은 미사용 CSS 선택자(`midi-top-options`, `midi-top-option`, `midi-export-option`, `midi-export-control-row`, `midi-preview-toolbar`, `midi-instrument-action-spacer`)를 정리했습니다.
+
+#### MML 편집기 / 코드 도움말
+
+- `시작 공백 추가` 문구를 `시작 공백 시간`으로 정리했습니다.
+- MML 편집기에서 `T120` 같은 템포 명령과 숫자 부분에 배경색을 넣어 전체 MML/개별 파트 탭에서 쉽게 찾을 수 있게 했습니다.
+- 템포 강조색은 에러 표시와 헷갈리지 않고 초록 계열 파트 색에 묻히지 않도록 푸른 계열 배경/테두리로 조정했습니다.
+- `코드 도움말` Dialog에서 불필요한 숫자 읽는 법/입문자 팁 영역을 제거하고, 표 머리글을 `설명`으로 변경했습니다. 설명 영역은 더 넓게, 예시 영역은 더 좁게 조정했습니다.
+- `코드 도움말`의 `O` 범위를 `0~7`, `N` 범위를 `4~88`로 수정하고, `N48`이 4옥타브 도임을 명시했습니다.
+- 코드 도움말 표의 모바일 레이아웃을 정비해 좁은 화면에서 3열 표가 깨지지 않고 1열 카드형으로 내려오도록 했습니다.
+
+#### MIDI 변환 Dialog
+
+- MIDI 변환 Dialog 상단 안내를 기본 접힘 상태의 설명 영역으로 변경했습니다. 펼치면 이 화면이 무엇을 정하는지, `MIDI 듣기`, MML 채널 설정, 악기 선택, 역할/겹침 병합의 의미를 확인할 수 있습니다.
+- `겹침 병합` 설명을 “MML 6채널 한계 안에 더 많은 소리를 담기 위해 기존 음 일부를 줄이고 겹친 음을 이어 넣는 기능”으로 다시 정리했습니다.
+- MIDI 변환 설정의 좁은 화면 레이아웃을 조정했습니다. 모바일 폭에서도 `자동/고음/저음/비트` 역할 선택과 `겹침 병합` 선택이 같은 줄에 들어가도록 정리했습니다.
+- MIDI 변환 Dialog의 `추천 구성` 콤보박스를 제거했습니다.
+- 기본 상태는 멜로디/화음1/화음2만 일반 악기를 모두 체크하고, 화음3/화음4/화음5는 빈 선택으로 시작합니다.
+- `MML 채널 수` 콤보박스를 제거했습니다. 최종 MML 채널 수는 악기가 하나 이상 선택된 MML 채널 개수로 자동 결정됩니다.
+- `미리 듣기`는 현재 선택/역할/겹침 병합/악기 체크 상태를 기준으로 실제 MML 변환 결과를 만들고, 편집기에 반영하지 않은 채 재생합니다.
+- `MIDI 듣기`와 `미리 듣기`는 재생 중 버튼 문구를 모두 `정지`로 통일했습니다.
+- `MIDI 듣기`는 오른쪽 악기 영역의 안내 아래 액션 줄 오른쪽으로 이동했고, 재생 중 상태 안내 문구를 표시합니다.
+- 오른쪽 악기 영역의 `전부 선택`/`전부 해제` 버튼은 안내 아래 액션 줄 왼쪽으로 이동했습니다.
+- MML 채널 행의 역할 콤보박스 폭을 겹침 병합 콤보박스와 맞추고, 채널별 `듣기` 버튼을 행 맨 오른쪽으로 이동했습니다.
+- 각 MML 채널 행에 현재 설정 기준으로 해당 채널만 미리 들어볼 수 있는 `듣기` 버튼을 추가했습니다.
+- 비트 그룹이 없는 파일의 안내를 `미리 듣기` 버튼 줄 왼쪽으로 옮겼습니다.
+- MIDI 변환 Dialog의 `MML 채널`/`악기 선택` 타이틀 높이를 맞췄습니다.
+
+#### MIDI 악기 선택 / 악기 분류
+
+- 오른쪽 악기 영역 제목을 `악기 선택`으로 변경했습니다.
+- 일반 악기 목록을 `건반악기`, `현악기`, `관악기`, `타악기`, `나머지` 5개 섹션으로 분류하고, 각 섹션 제목에 개수를 함께 표시합니다.
+- 일반 악기일 때 `전부 선택`/`전부 해제` 옆에 `건반악기`, `현악기`, `관악기`, `타악기` 선택 버튼 4개를 표시합니다. `나머지`는 목록 분류로만 표시합니다.
+- 악기 섹션은 기본 펼침 상태의 접기/펼치기 영역으로 바꿨습니다.
+- Bassoon처럼 `bass` 문자열이 들어간 관악기가 현악기로 잘못 분류되지 않도록 General MIDI 프로그램 번호 우선 분류와 이름 매칭 순서를 정리했습니다.
+- MIDI 악기 섹션의 접기/펼치기 삼각형 인디케이터 크기를 글자 크기에 맞춰 키웠습니다.
+- 악기 섹션 사이의 구분선을 제거했습니다.
+- 악기 항목 사이 간격을 다시 추가해 목록 가독성을 보강했습니다.
+- 악기 섹션 접기/펼치기 삼각형 인디케이터를 조금 더 키우고, 섹션명과의 간격을 줄였습니다.
+
+#### 미리듣기 / 자동 음량 보정
+
+- 모든 미리듣기/재생 스케줄에 자동 음량 보정을 적용했습니다.
+- 자동 음량 보정은 동시 발음 4개 이상부터만 적용되도록 조정했습니다.
+- 1~3개 동시 발음은 원음에 가깝게 유지하고, 4개 이상부터 점진적으로 볼륨을 낮춥니다.
+
+#### 바로가기 링크
+
+- 바로가기 콤보박스의 `개발자 악보 공유` 표시를 `개발자 MML 공유`로 변경했습니다.
+- MIDI 사이트 목록을 BitMidi, Ichigo's, MIDIEX, Midisite, MuseScore, VGMusic 순서로 정렬했습니다.
+
 ### v3.3
 
 - 버전 표기를 `모비바드 v3.3`으로 변경했습니다.
@@ -512,15 +594,6 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - 볼륨 조절은 선택한 채널의 모든 음표 볼륨에 입력값을 더하고, 결과를 `V0~V15` 범위로 제한합니다.
 - 볼륨 조절 입력값은 `-15~15` 사이 정수로 제한합니다.
 - `mml-optimizer.js`에 `adjustVolumesMml()`을 추가하고, `trimShortRestsMml()`이 여러 선택 채널을 받을 수 있게 수정했습니다.
-- MML 편집기에서 `T120` 같은 템포 명령과 숫자 부분에 배경색을 넣어 전체 MML/개별 파트 탭에서 쉽게 찾을 수 있게 했습니다.
-- 템포 강조색은 에러 표시와 헷갈리지 않고 초록 계열 파트 색에 묻히지 않도록 푸른 계열 배경/테두리로 조정했습니다.
-- `코드 도움말` Dialog에서 불필요한 숫자 읽는 법/입문자 팁 영역을 제거하고, 표 머리글을 `설명`으로 변경했습니다. 설명 영역은 더 넓게, 예시 영역은 더 좁게 조정했습니다.
-- `코드 도움말`의 `O` 범위를 `0~7`, `N` 범위를 `4~88`로 수정하고, `N48`이 4옥타브 도임을 명시했습니다.
-
-- MIDI 변환 설정의 좁은 화면 레이아웃을 조정했습니다. 모바일 폭에서도 `자동/고음/저음/비트` 역할 선택과 `겹침 병합` 선택이 같은 줄에 들어가도록 정리했습니다.
-- 코드 도움말 표의 모바일 레이아웃을 다시 정비해 좁은 화면에서 3열 표가 깨지지 않고 1열 카드처럼 내려오도록 했습니다.
-- MIDI 변환 Dialog 상단 안내를 기본 접힘 상태의 설명 영역으로 변경했습니다. 펼치면 이 화면이 무엇을 정하는지, `MIDI 듣기`, `Export 채널 수`, MML 채널 선택, 악기 선택, 역할/겹침 병합의 의미를 확인할 수 있습니다.
-- `겹침 병합` 설명을 “MML 6채널 한계 안에 더 많은 소리를 담기 위해 기존 음 일부를 줄이고 겹친 음을 이어 넣는 기능”으로 다시 정리했습니다.
 
 ### v3.2
 
@@ -586,7 +659,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 ### v2.3
 
-- MIDI 변환 Dialog의 `MIDI 듣기` 버튼을 하나로 정리했습니다. MIDI 파일의 첫 소리 지점부터 최대 45초까지 미리듣습니다.
+- MIDI 변환 Dialog의 `MIDI 듣기` 버튼은 원본 MIDI 파일을 최대 45초까지 미리듣습니다.
 - MIDI 변환 Dialog의 악기별 `듣기` 버튼은 해당 악기의 첫 소리 지점부터 짧게 미리듣습니다.
 - 악기 목록의 선택 채널 표시는 채널 색상의 라운드 배지로 표시합니다.
 - MIDI 변환 Dialog의 악기 목록 레이아웃을 조정했습니다.

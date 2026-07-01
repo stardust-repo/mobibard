@@ -15,6 +15,14 @@
     { value: "half", label: "절반" },
     { value: "none", label: "안함" }
   ];
+  const MIDI_INSTRUMENT_CATEGORY_ORDER = ["keyboard", "strings", "winds", "percussion", "other"];
+  const MIDI_INSTRUMENT_CATEGORY_LABELS = {
+    keyboard: "건반악기",
+    strings: "현악기",
+    winds: "관악기",
+    percussion: "타악기",
+    other: "나머지"
+  };
   const GOOGLE_CONFIG = window.MOBIBARD_GOOGLE_CONFIG || {};
   const GOOGLE_DRIVE_SCOPE = [
     "https://www.googleapis.com/auth/drive.file",
@@ -127,8 +135,11 @@
   const midiConvertDialog = $("midiConvertDialog");
   const midiConvertSummary = $("midiConvertSummary");
   const midiFullPreviewBtn = $("midiFullPreviewBtn");
+  const midiSelectedPreviewBtn = $("midiSelectedPreviewBtn");
+  const midiInstrumentSelectAll = $("midiInstrumentSelectAll");
+  const midiInstrumentSelectNone = $("midiInstrumentSelectNone");
+  const midiInstrumentCategoryButtons = Array.from(document.querySelectorAll("[data-midi-category-select]"));
   const midiChannelList = $("midiChannelList");
-  const midiExportCount = $("midiExportCount");
   const midiRoleList = $("midiRoleList");
   const midiBeatNotice = $("midiBeatNotice");
   const midiInstrumentPanelTitle = $("midiInstrumentPanelTitle");
@@ -175,6 +186,7 @@
   let currentOffset = 0;
   let playContextStart = 0;
   let playOffsetStart = 0;
+  let playbackAutoGainScale = 1;
   let rafId = 0;
   let syncing = false;
   let copyTimer = 0;
@@ -186,6 +198,9 @@
   let midiPreviewSources = [];
   let midiPreviewTimer = 0;
   let midiFullPreviewActive = false;
+  let midiSelectedPreviewActive = false;
+  let midiChannelPreviewButton = null;
+  let midiChannelPreviewButtonText = "";
   let midiConvertBusy = false;
   let splitPreviewButton = null;
   let splitPreviewButtonText = "";
@@ -293,8 +308,13 @@
     partMuteToggle?.addEventListener("change", () => handlePartMuteToggleChange());
     leadingSilenceSeconds?.addEventListener("change", normalizeLeadingSilenceSecondsInput);
     leadingSilenceSeconds?.addEventListener("blur", normalizeLeadingSilenceSecondsInput);
-    midiExportCount?.addEventListener("change", updateMidiRoleControls);
+    midiSelectedPreviewBtn?.addEventListener("click", () => void toggleMidiSelectedPreview());
     midiFullPreviewBtn?.addEventListener("click", () => void toggleMidiFullPreview());
+    midiInstrumentSelectAll?.addEventListener("click", () => selectActiveMidiInstruments(true));
+    midiInstrumentSelectNone?.addEventListener("click", () => selectActiveMidiInstruments(false));
+    for (const button of midiInstrumentCategoryButtons) {
+      button.addEventListener("click", () => selectActiveMidiInstrumentCategory(button.dataset.midiCategorySelect));
+    }
     midiConvertReloadFile?.addEventListener("click", () => { if (!midiConvertBusy) openSourceFilePicker(); });
     midiConvertApply?.addEventListener("click", () => void applyMidiConvertDialog());
     midiConvertCancel?.addEventListener("click", () => {
@@ -2291,7 +2311,7 @@ ${shortError(err)}`);
     await playMmiImportPartsPreview(selectedParts, {
       button,
       statusText: `선택 ${selectedParts.length}/${MMI_IMPORT_MAX_CHANNELS}개 미리듣기 중...`,
-      errorPrefix: "선택 미리듣기 실패"
+      errorPrefix: "선택 듣기 실패"
     });
   }
 
@@ -2353,6 +2373,7 @@ ${shortError(err)}`);
       if (!prepared.length) throw new Error("소리 나는 음표가 없습니다.");
 
       const duration = notes.reduce((m, n) => Math.max(m, (Number(n.start) || 0) + (Number(n.durationSec) || 0)), 0);
+      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
         fromSec: 0,
@@ -2362,7 +2383,8 @@ ${shortError(err)}`);
         destination: masterGain || ctx.destination,
         activeSources: midiPreviewSources,
         scheduledIds: null,
-        minLeadTime: 0.01
+        minLeadTime: 0.01,
+        gainScale
       });
       const stopMs = Math.max(800, (result.maxEnd - ctx.currentTime + 0.35) * 1000);
       midiPreviewTimer = window.setTimeout(() => {
@@ -2465,6 +2487,7 @@ ${shortError(err)}`);
       const prepared = prepareNotes(ctx, soundFont, preset, notes).sort((a, b) => a.start - b.start || a.midi - b.midi);
       for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
       if (!prepared.length) throw new Error("소리 나는 음표가 없습니다.");
+      const gainScale = computeAutoGainScale(prepared, { windowStart: fromSec, windowEnd });
 
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
@@ -2475,7 +2498,8 @@ ${shortError(err)}`);
         destination: masterGain || ctx.destination,
         activeSources: midiPreviewSources,
         scheduledIds: new Set(),
-        minLeadTime: 0.012
+        minLeadTime: 0.012,
+        gainScale
       });
       const stopMs = Math.max(800, Math.min(12000, (result.maxEnd - ctx.currentTime + 0.35) * 1000));
       midiPreviewTimer = window.setTimeout(() => {
@@ -2664,11 +2688,6 @@ ${shortError(err)}`);
   function hasThreeMlePlayableTokens(value) {
     return /[cdefgabn]/i.test(String(value || ""));
   }
-
-  function extractMabiIccoMmlParts(text) {
-    return extractMabiIccoMmlPartCandidates(text).map(candidate => candidate.value);
-  }
-
   function extractMabiIccoMmlPartCandidates(text) {
     const source = String(text || "");
     const nameMarkers = extractMmiNameMarkers(source);
@@ -2998,7 +3017,6 @@ ${shortError(err)}`);
       midiBeatNotice.hidden = beatGroups.length > 0;
       midiBeatNotice.textContent = beatGroups.length ? "" : "이 MIDI에는 비트 그룹 악기가 없습니다.";
     }
-    if (midiExportCount) midiExportCount.value = "3";
     setMidiConvertBusy(false);
     renderMidiRoleList();
     renderActiveMidiInstrumentList();
@@ -3024,7 +3042,7 @@ ${shortError(err)}`);
         role,
         overlapMerge: overlapMergeMode !== "none",
         overlapMergeMode,
-        selectedInstrumentGroups: new Set(role === "beat" ? beatIds : normalIds)
+        selectedInstrumentGroups: new Set(i >= 3 ? [] : (role === "beat" ? beatIds : normalIds))
       };
     });
     return {
@@ -3040,9 +3058,7 @@ ${shortError(err)}`);
 
   function getActiveMidiChannelSetting() {
     if (!pendingMidiSettings) return null;
-    const count = clampInt(Number(midiExportCount?.value || pendingMidiSettings.partCount || 3), 1, 6);
-    pendingMidiSettings.partCount = count;
-    if (pendingMidiSettings.activeIndex >= count) pendingMidiSettings.activeIndex = Math.max(0, count - 1);
+    pendingMidiSettings.activeIndex = clampInt(Number(pendingMidiSettings.activeIndex || 0), 0, 5);
     return pendingMidiSettings.channels[pendingMidiSettings.activeIndex] || null;
   }
 
@@ -3082,6 +3098,7 @@ ${shortError(err)}`);
           </select>
           <span>병합</span>
         </label>
+        <button class="midi-role-preview-btn" type="button" data-midi-part-preview="${i}" aria-label="${PART_LABELS[i]} 미리 듣기">듣기</button>
       `;
       row.querySelector("button")?.addEventListener("click", () => {
         pendingMidiSettings.activeIndex = i;
@@ -3092,6 +3109,11 @@ ${shortError(err)}`);
       row.querySelector("[data-role-index]")?.addEventListener("change", (ev) => {
         const role = String(ev.target.value || "auto");
         updateMidiChannelRole(i, role);
+      });
+      row.querySelector("[data-midi-part-preview]")?.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        void previewMidiExportChannel(i, ev.currentTarget);
       });
       row.querySelector("[data-merge-index]")?.addEventListener("change", (ev) => {
         const mode = normalizeOverlapMergeMode(ev.target.value);
@@ -3118,6 +3140,7 @@ ${shortError(err)}`);
     const leftPanel = midiRoleList.closest(".midi-left-panel");
     const rightPanel = midiChannelList.closest(".midi-right-panel");
     const rightHead = rightPanel?.querySelector(".dialog-section-head");
+    const rightActions = rightPanel?.querySelector(".midi-instrument-panel-actions");
     if (!leftPanel || !rightPanel || !rightHead) {
       resetHeight();
       return;
@@ -3134,6 +3157,7 @@ ${shortError(err)}`);
 
     const leftHeight = Math.ceil(leftPanel.getBoundingClientRect().height || 0);
     const headHeight = Math.ceil(rightHead.getBoundingClientRect().height || 0);
+    const actionsHeight = Math.ceil(rightActions?.getBoundingClientRect?.().height || 0);
     if (!leftHeight || !headHeight) {
       midiChannelList.style.height = previousHeight;
       midiChannelList.style.minHeight = previousMinHeight;
@@ -3143,7 +3167,7 @@ ${shortError(err)}`);
 
     const styles = window.getComputedStyle(rightPanel);
     const rowGap = parseFloat(styles.rowGap || styles.gap || "0") || 0;
-    const availableHeight = Math.max(160, leftHeight - headHeight - rowGap);
+    const availableHeight = Math.max(160, leftHeight - headHeight - actionsHeight - rowGap * (actionsHeight ? 2 : 1));
     const height = `${Math.ceil(availableHeight)}px`;
     midiChannelList.style.height = height;
     midiChannelList.style.minHeight = height;
@@ -3158,12 +3182,15 @@ ${shortError(err)}`);
     if (!pendingMidiSettings) return;
     const setting = pendingMidiSettings.channels[index];
     const previousIsBeat = setting.role === "beat";
+    const previousSelected = Array.from(setting.selectedInstrumentGroups || []);
     const nextRole = role === "beat" && !pendingMidiSettings.hasBeatGroups ? "auto" : role;
     setting.role = nextRole;
     const nextIsBeat = nextRole === "beat";
     if (previousIsBeat !== nextIsBeat) {
       const allowedIds = nextIsBeat ? pendingMidiSettings.beatIds : pendingMidiSettings.normalIds;
-      setting.selectedInstrumentGroups = new Set(allowedIds);
+      const allowedSet = new Set(allowedIds);
+      const kept = previousSelected.filter(id => allowedSet.has(id));
+      setting.selectedInstrumentGroups = new Set(kept.length ? kept : (previousSelected.length ? allowedIds : []));
     }
     renderMidiRoleList();
     renderActiveMidiInstrumentList();
@@ -3187,9 +3214,8 @@ ${shortError(err)}`);
 
   function getMidiGroupSelectedChannels(groupId) {
     if (!pendingMidiSettings) return [];
-    const count = clampInt(Number(midiExportCount?.value || pendingMidiSettings.partCount || 3), 1, 6);
     const items = [];
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < 6; i++) {
       const setting = pendingMidiSettings.channels[i];
       if (setting?.selectedInstrumentGroups?.has(groupId)) {
         items.push({ index: i, label: PART_LABELS[i] || `${i + 1}번` });
@@ -3211,29 +3237,103 @@ ${shortError(err)}`);
     return pendingMidiSettings.groups.filter(g => wantBeat ? g.isBeat : !g.isBeat);
   }
 
+
+  function getMidiInstrumentCategory(group) {
+    if (!group || group.isBeat) return "beat";
+    const rawProgram = Number(group.program);
+    const hasProgram = Number.isFinite(rawProgram);
+    const program = hasProgram ? clampInt(rawProgram, 0, 127) : null;
+    const name = String(group.instrumentName || group.programText || "").toLowerCase();
+
+    // General MIDI program numbers are handled first so names like "Bassoon" do not get
+    // accidentally caught by a broad "bass" string matcher. Bassoon is a woodwind.
+    if (hasProgram) {
+      if ((program >= 0 && program <= 7) || (program >= 16 && program <= 20) || program === 21 || program === 23) return "keyboard";
+      if ((program >= 24 && program <= 46) || (program >= 48 && program <= 51) || (program >= 104 && program <= 107) || program === 110) return "strings";
+      if (program === 22 || (program >= 56 && program <= 79) || program === 109 || program === 111) return "winds";
+      if ((program >= 8 && program <= 15) || program === 47 || program === 108 || (program >= 112 && program <= 119)) return "percussion";
+    }
+
+    if (/(piano|keyboard|organ|harpsichord|clavinet|clavi|accordion)/i.test(name)) return "keyboard";
+    if (/(bassoon|trumpet|trombone|tuba|horn|brass|sax|oboe|clarinet|piccolo|flute|recorder|pipe|whistle|ocarina|harmonica|shanai|bagpipe|bag pipe)/i.test(name)) return "winds";
+    if (/(guitar|\bbass\b|violin|viola|cello|contrabass|string|harp|sitar|banjo|shamisen|koto|fiddle)/i.test(name)) return "strings";
+    if (/(celesta|glockenspiel|music box|vibraphone|marimba|xylophone|bell|dulcimer|kalimba|timpani|agogo|steel drums|woodblock|taiko|tom|drum|cymbal)/i.test(name)) return "percussion";
+    return "other";
+  }
+
+  function sortMidiInstrumentGroups(groups) {
+    return [...(groups || [])].sort((a, b) => {
+      const ca = MIDI_INSTRUMENT_CATEGORY_ORDER.indexOf(getMidiInstrumentCategory(a));
+      const cb = MIDI_INSTRUMENT_CATEGORY_ORDER.indexOf(getMidiInstrumentCategory(b));
+      const oa = ca >= 0 ? ca : MIDI_INSTRUMENT_CATEGORY_ORDER.length;
+      const ob = cb >= 0 ? cb : MIDI_INSTRUMENT_CATEGORY_ORDER.length;
+      return oa - ob || String(a.instrumentName || a.programText || "").localeCompare(String(b.instrumentName || b.programText || ""), "ko") || String(a.id).localeCompare(String(b.id));
+    });
+  }
+
+  function syncMidiInstrumentPanelActions(groups = null) {
+    const setting = getActiveMidiChannelSetting();
+    const hasGroups = Array.isArray(groups) ? groups.length > 0 : Boolean(setting);
+    const isBeat = setting?.role === "beat";
+    if (midiInstrumentSelectAll) midiInstrumentSelectAll.disabled = !hasGroups;
+    if (midiInstrumentSelectNone) midiInstrumentSelectNone.disabled = !hasGroups;
+    for (const button of midiInstrumentCategoryButtons) {
+      button.hidden = Boolean(isBeat);
+      button.disabled = Boolean(isBeat || !hasGroups);
+    }
+  }
+
+  function selectActiveMidiInstruments(checked) {
+    const setting = getActiveMidiChannelSetting();
+    if (!setting) return;
+    const groups = getAllowedMidiGroupsForSetting(setting);
+    for (const g of groups) {
+      if (checked) setting.selectedInstrumentGroups.add(g.id);
+      else setting.selectedInstrumentGroups.delete(g.id);
+    }
+    renderMidiRoleList();
+    renderActiveMidiInstrumentList();
+    updateMidiRoleControls();
+  }
+
+  function selectActiveMidiInstrumentCategory(category) {
+    const setting = getActiveMidiChannelSetting();
+    if (!setting || setting.role === "beat") return;
+    const target = MIDI_INSTRUMENT_CATEGORY_ORDER.includes(category) ? category : "other";
+    const groups = getAllowedMidiGroupsForSetting(setting).filter(g => !g.isBeat);
+    for (const g of groups) {
+      if (getMidiInstrumentCategory(g) === target) setting.selectedInstrumentGroups.add(g.id);
+      else setting.selectedInstrumentGroups.delete(g.id);
+    }
+    renderMidiRoleList();
+    renderActiveMidiInstrumentList();
+    updateMidiRoleControls();
+  }
+
   function renderActiveMidiInstrumentList() {
     if (!midiChannelList || !pendingMidiSettings) return;
     const activeIndex = pendingMidiSettings.activeIndex;
     const setting = getActiveMidiChannelSetting();
     const groups = getAllowedMidiGroupsForSetting(setting);
     const isBeat = setting?.role === "beat";
-    if (midiInstrumentPanelTitle) midiInstrumentPanelTitle.textContent = `${PART_LABELS[activeIndex]} 악기`;
+    if (midiInstrumentPanelTitle) midiInstrumentPanelTitle.textContent = `${PART_LABELS[activeIndex]} 악기 선택`;
     if (midiInstrumentPanelHint) {
       midiInstrumentPanelHint.textContent = isBeat
         ? "비트 채널은 비트 그룹 악기만 선택할 수 있습니다."
         : "한 채널에 여러 일반 악기를 선택할 수 있습니다.";
     }
+    syncMidiInstrumentPanelActions(groups);
 
     midiChannelList.innerHTML = "";
-    const section = document.createElement("div");
-    section.className = `midi-instrument-section${groups.length ? "" : " empty"}`;
-    section.innerHTML = `
-      <div class="midi-instrument-section-head">
-        <strong>${isBeat ? "비트 악기" : "일반 악기"}</strong>
-        ${isBeat ? `<span>드럼·북·스네어·심벌즈 계열</span>` : ""}
-      </div>
-    `;
     if (!groups.length) {
+      const section = document.createElement("div");
+      section.className = "midi-instrument-section empty";
+      section.innerHTML = `
+        <div class="midi-instrument-section-head">
+          <strong>${isBeat ? "비트 악기" : "일반 악기"}</strong>
+          ${isBeat ? `<span>드럼·북·스네어·심벌즈 계열</span>` : ""}
+        </div>
+      `;
       const empty = document.createElement("div");
       empty.className = "midi-instrument-empty";
       empty.textContent = isBeat ? "선택할 비트 악기가 없습니다." : "선택할 일반 악기가 없습니다.";
@@ -3243,27 +3343,7 @@ ${shortError(err)}`);
       return;
     }
 
-    const actions = document.createElement("div");
-    actions.className = "midi-instrument-actions";
-    actions.innerHTML = `
-      <button class="mini-button" type="button" data-midi-select-all>전부 선택</button>
-      <button class="mini-button" type="button" data-midi-select-none>전부 해제</button>
-    `;
-    actions.querySelector("[data-midi-select-all]")?.addEventListener("click", () => {
-      for (const g of groups) setting.selectedInstrumentGroups.add(g.id);
-      renderMidiRoleList();
-      renderActiveMidiInstrumentList();
-      updateMidiRoleControls();
-    });
-    actions.querySelector("[data-midi-select-none]")?.addEventListener("click", () => {
-      for (const g of groups) setting.selectedInstrumentGroups.delete(g.id);
-      renderMidiRoleList();
-      renderActiveMidiInstrumentList();
-      updateMidiRoleControls();
-    });
-    section.appendChild(actions);
-
-    for (const group of groups) {
+    const makeRow = (group) => {
       const id = `midi-instrument-${activeIndex}-${cssSafeId(group.id)}`;
       const row = document.createElement("div");
       row.className = `midi-channel-row midi-instrument-row${group.isBeat ? " percussion" : ""}`;
@@ -3295,10 +3375,203 @@ ${shortError(err)}`);
         ev.stopPropagation();
         void previewMidiInstrument(group.id, ev.currentTarget);
       });
-      section.appendChild(row);
+      return row;
+    };
+
+    if (isBeat) {
+      const section = document.createElement("details");
+      section.open = true;
+      section.className = "midi-instrument-section";
+      section.innerHTML = `
+        <summary class="midi-instrument-section-head">
+          <strong>비트 악기 ${formatCount(groups.length)}개</strong>
+          <span>한 음색만 내는 드럼·북·스네어·심벌즈 계열</span>
+        </summary>
+      `;
+      for (const group of groups) section.appendChild(makeRow(group));
+      midiChannelList.appendChild(section);
+    } else {
+      const grouped = new Map(MIDI_INSTRUMENT_CATEGORY_ORDER.map(key => [key, []]));
+      for (const group of sortMidiInstrumentGroups(groups)) {
+        const key = getMidiInstrumentCategory(group);
+        if (!grouped.has(key)) grouped.set("other", []);
+        grouped.get(grouped.has(key) ? key : "other").push(group);
+      }
+      for (const key of MIDI_INSTRUMENT_CATEGORY_ORDER) {
+        const items = grouped.get(key) || [];
+        if (!items.length) continue;
+        const label = MIDI_INSTRUMENT_CATEGORY_LABELS[key] || "나머지";
+        const section = document.createElement("details");
+        section.open = true;
+        section.className = `midi-instrument-section midi-instrument-category-section category-${key}`;
+        section.innerHTML = `
+          <summary class="midi-instrument-section-head">
+            <strong>${escapeHtml(label)} ${formatCount(items.length)}개</strong>
+          </summary>
+        `;
+        for (const group of items) section.appendChild(makeRow(group));
+        midiChannelList.appendChild(section);
+      }
     }
-    midiChannelList.appendChild(section);
     scheduleMidiInstrumentListHeightSync();
+  }
+
+  function collectMidiConvertOptionsForSingleChannel(index) {
+    if (!pendingMidiSettings) throw new Error("MIDI 변환 설정을 찾지 못했습니다.");
+    const sourceIndex = clampInt(Number(index), 0, 5);
+    const setting = pendingMidiSettings.channels[sourceIndex];
+    const allowedIds = new Set(getAllowedMidiGroupsForSetting(setting).map(g => g.id));
+    const selected = Array.from(setting.selectedInstrumentGroups || []).filter(id => allowedIds.has(id));
+    if (!selected.length) throw new Error(`${PART_LABELS[sourceIndex]} 채널에 포함할 악기를 하나 이상 선택해 주세요.`);
+    const overlapMergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
+    return {
+      partCount: 1,
+      roles: [setting.role || "auto"],
+      sourcePartIndex: sourceIndex,
+      exportChannels: [{
+        sourcePartIndex: sourceIndex,
+        role: setting.role || "auto",
+        overlapMergeMode,
+        overlapMerge: overlapMergeMode !== "none",
+        selectedInstrumentGroups: selected
+      }]
+    };
+  }
+
+  async function toggleMidiSelectedPreview() {
+    if (!pendingMidiImport) return;
+    if (midiSelectedPreviewActive) {
+      stopMidiPreview();
+      return;
+    }
+
+    let options;
+    try {
+      options = collectMidiConvertOptions();
+    } catch (err) {
+      showDialog("미리 듣기 실패", shortError(err));
+      return;
+    }
+
+    try {
+      stopPlayback(false);
+      stopMidiPreview();
+      setMidiSelectedPreviewState(true);
+      if (midiConvertStatus) {
+        midiConvertStatus.textContent = "현재 설정으로 MML 미리듣기를 준비 중입니다.";
+        midiConvertStatus.hidden = false;
+      }
+      trackAnalytics("preview_midi_selected", { export_channels: Number(options.partCount || 0) });
+      await loadDefaultSf2IfNeeded();
+      const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
+      const normalized = normalizeImportedFullMml(result.mml);
+      const parsed = parseMabinogiMml(normalized.mml);
+      const scheduled = buildSchedule(parsed);
+      const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
+      const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+      if (!notes.length || duration <= 0) throw new Error("선택한 설정으로 재생할 음표가 없습니다.");
+      if (!soundFont?.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+      const ctx = await ensureAudioContext();
+      const presetKeys = buildMidiPartSoundPreset(options.exportChannels, pendingMidiSettings?.groups || [], options.partCount);
+      const prepared = prepareNotesWithPresetKeys(ctx, notes, presetKeys, { respectMute: false });
+      if (!prepared.length) throw new Error("소리 나는 음표가 없습니다. 선택한 음색에서 맞는 음역을 찾지 못했습니다.");
+      const windowEnd = Math.min(duration, 45);
+      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd });
+      const scheduleResult = schedulePreparedNotes(ctx, prepared, {
+        baseTime: ctx.currentTime + 0.08,
+        fromSec: 0,
+        playbackSpeed,
+        windowStart: 0,
+        windowEnd: Math.max(0.5, windowEnd + 0.05),
+        destination: masterGain || ctx.destination,
+        activeSources: midiPreviewSources,
+        scheduledIds: new Set(),
+        minLeadTime: 0.012,
+        gainScale
+      });
+      if (midiConvertStatus) {
+        midiConvertStatus.textContent = "미리 듣기 중...";
+        midiConvertStatus.hidden = false;
+      }
+      const stopMs = Math.max(800, Math.min(60000, (scheduleResult.maxEnd - ctx.currentTime + 0.35) * 1000));
+      midiPreviewTimer = window.setTimeout(() => {
+        stopMidiPreview();
+        if (midiConvertStatus) midiConvertStatus.hidden = true;
+      }, stopMs);
+    } catch (err) {
+      stopMidiPreview();
+      if (midiConvertStatus) midiConvertStatus.hidden = true;
+      showDialog("미리 듣기 실패", shortError(err));
+    }
+  }
+
+  async function previewMidiExportChannel(index, triggerButton = null) {
+    if (!pendingMidiImport) return;
+    const button = triggerButton instanceof HTMLElement ? triggerButton : null;
+    if (button && midiChannelPreviewButton === button) {
+      stopMidiPreview();
+      return;
+    }
+
+    let options;
+    const sourceIndex = clampInt(Number(index), 0, 5);
+    try {
+      options = collectMidiConvertOptionsForSingleChannel(sourceIndex);
+    } catch (err) {
+      showDialog("채널 미리 듣기 실패", shortError(err));
+      return;
+    }
+
+    try {
+      stopPlayback(false);
+      stopMidiPreview();
+      setMidiChannelPreviewButton(button);
+      if (midiConvertStatus) {
+        midiConvertStatus.textContent = `${PART_LABELS[sourceIndex]} 미리 듣기를 준비 중입니다.`;
+        midiConvertStatus.hidden = false;
+      }
+      trackAnalytics("preview_midi_export_channel", { channel_index: sourceIndex + 1 });
+      await loadDefaultSf2IfNeeded();
+      const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
+      const normalized = normalizeImportedFullMml(result.mml);
+      const parsed = parseMabinogiMml(normalized.mml);
+      const scheduled = buildSchedule(parsed);
+      const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
+      const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+      if (!notes.length || duration <= 0) throw new Error("선택한 채널 설정으로 재생할 음표가 없습니다.");
+      if (!soundFont?.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+      const ctx = await ensureAudioContext();
+      const presetKeys = buildMidiPartSoundPreset(options.exportChannels, pendingMidiSettings?.groups || [], options.partCount);
+      const prepared = prepareNotesWithPresetKeys(ctx, notes, presetKeys, { respectMute: false });
+      if (!prepared.length) throw new Error("소리 나는 음표가 없습니다. 선택한 음색에서 맞는 음역을 찾지 못했습니다.");
+      const windowEnd = Math.min(duration, 30);
+      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd });
+      const scheduleResult = schedulePreparedNotes(ctx, prepared, {
+        baseTime: ctx.currentTime + 0.08,
+        fromSec: 0,
+        playbackSpeed,
+        windowStart: 0,
+        windowEnd: Math.max(0.5, windowEnd + 0.05),
+        destination: masterGain || ctx.destination,
+        activeSources: midiPreviewSources,
+        scheduledIds: new Set(),
+        minLeadTime: 0.012,
+        gainScale
+      });
+      if (midiConvertStatus) {
+        midiConvertStatus.textContent = `${PART_LABELS[sourceIndex]} 미리 듣기 중...`;
+        midiConvertStatus.hidden = false;
+      }
+      const stopMs = Math.max(800, Math.min(45000, (scheduleResult.maxEnd - ctx.currentTime + 0.35) * 1000));
+      midiPreviewTimer = window.setTimeout(() => {
+        stopMidiPreview();
+        if (midiConvertStatus) midiConvertStatus.hidden = true;
+      }, stopMs);
+    } catch (err) {
+      stopMidiPreview();
+      if (midiConvertStatus) midiConvertStatus.hidden = true;
+      showDialog("채널 미리 듣기 실패", shortError(err));
+    }
   }
 
   async function toggleMidiFullPreview() {
@@ -3311,6 +3584,10 @@ ${shortError(err)}`);
       stopPlayback(false);
       stopMidiPreview();
       setMidiFullPreviewState(true);
+      if (midiConvertStatus) {
+        midiConvertStatus.textContent = "MIDI 미리듣기를 준비 중입니다.";
+        midiConvertStatus.hidden = false;
+      }
       trackAnalytics("preview_midi_file");
       await loadDefaultSf2IfNeeded();
       const preview = buildMidiFilePreview(pendingMidiImport.bytes, { maxSeconds: 45, tailSeconds: 1.0 });
@@ -3329,6 +3606,7 @@ ${shortError(err)}`);
       }
       prepared.sort((a, b) => a.start - b.start || a.midi - b.midi || a.id - b.id);
       if (!prepared.length) throw new Error("MIDI 미리듣기에 사용할 소리를 찾지 못했습니다.");
+      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: preview.duration });
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
         fromSec: 0,
@@ -3337,12 +3615,18 @@ ${shortError(err)}`);
         destination: masterGain || ctx.destination,
         activeSources: midiPreviewSources,
         scheduledIds: null,
-        minLeadTime: 0.01
+        minLeadTime: 0.01,
+        gainScale
       });
+      if (midiConvertStatus) {
+        midiConvertStatus.textContent = "MIDI 미리듣기 중...";
+        midiConvertStatus.hidden = false;
+      }
       const stopMs = Math.max(800, Math.min(60000, (result.maxEnd - ctx.currentTime + 0.3) * 1000));
       midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
     } catch (err) {
       stopMidiPreview();
+      if (midiConvertStatus) midiConvertStatus.hidden = true;
       showDialog("MIDI 미리듣기 실패", shortError(err));
     }
   }
@@ -3350,9 +3634,18 @@ ${shortError(err)}`);
   function setMidiFullPreviewState(active) {
     midiFullPreviewActive = Boolean(active);
     if (midiFullPreviewBtn) {
-      midiFullPreviewBtn.textContent = midiFullPreviewActive ? "MIDI 정지" : "MIDI 듣기";
+      midiFullPreviewBtn.textContent = midiFullPreviewActive ? "정지" : "MIDI 듣기";
       midiFullPreviewBtn.classList.toggle("danger", midiFullPreviewActive);
       midiFullPreviewBtn.setAttribute("aria-pressed", midiFullPreviewActive ? "true" : "false");
+    }
+  }
+
+  function setMidiSelectedPreviewState(active) {
+    midiSelectedPreviewActive = Boolean(active);
+    if (midiSelectedPreviewBtn) {
+      midiSelectedPreviewBtn.textContent = midiSelectedPreviewActive ? "정지" : "미리 듣기";
+      midiSelectedPreviewBtn.classList.toggle("danger", midiSelectedPreviewActive);
+      midiSelectedPreviewBtn.setAttribute("aria-pressed", midiSelectedPreviewActive ? "true" : "false");
     }
   }
 
@@ -3375,6 +3668,7 @@ ${shortError(err)}`);
       if (!preset) throw new Error("미리듣기에 사용할 SF2 프리셋을 찾지 못했습니다.");
       const prepared = prepareNotes(ctx, soundFont, preset, preview.notes);
       if (!prepared.length) throw new Error("SF2에서 미리듣기 할 소리를 찾지 못했습니다.");
+      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: preview.duration });
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
         fromSec: 0,
@@ -3383,7 +3677,8 @@ ${shortError(err)}`);
         destination: masterGain || ctx.destination,
         activeSources: midiPreviewSources,
         scheduledIds: new Set(),
-        minLeadTime: 0.01
+        minLeadTime: 0.01,
+        gainScale
       });
       const stopMs = Math.max(600, Math.min(12000, (result.maxEnd - ctx.currentTime + 0.25) * 1000));
       midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
@@ -3424,8 +3719,32 @@ ${shortError(err)}`);
       try { item.gain?.disconnect(); } catch {}
     }
     midiPreviewSources = [];
+    if ((midiFullPreviewActive || midiSelectedPreviewActive || midiChannelPreviewButton) && midiConvertStatus) midiConvertStatus.hidden = true;
     setMidiFullPreviewState(false);
+    setMidiSelectedPreviewState(false);
+    resetMidiChannelPreviewButton();
     resetSplitPreviewButton();
+  }
+
+  function resetMidiChannelPreviewButton() {
+    if (!midiChannelPreviewButton) return;
+    try {
+      midiChannelPreviewButton.textContent = midiChannelPreviewButtonText || "듣기";
+      midiChannelPreviewButton.classList.remove("danger");
+      midiChannelPreviewButton.setAttribute("aria-pressed", "false");
+      midiChannelPreviewButton.disabled = false;
+    } catch (_) {}
+    midiChannelPreviewButton = null;
+    midiChannelPreviewButtonText = "";
+  }
+
+  function setMidiChannelPreviewButton(button) {
+    if (!(button instanceof HTMLElement)) return;
+    midiChannelPreviewButton = button;
+    midiChannelPreviewButtonText = button.textContent || "듣기";
+    button.textContent = "정지";
+    button.classList.add("danger");
+    button.setAttribute("aria-pressed", "true");
   }
 
   function resetSplitPreviewButton() {
@@ -3455,17 +3774,14 @@ ${shortError(err)}`);
 
   function updateMidiRoleControls() {
     if (!pendingMidiSettings) return;
-    const count = clampInt(Number(midiExportCount?.value || 3), 1, 6);
-    pendingMidiSettings.partCount = count;
-    if (midiExportCount) midiExportCount.value = String(count);
-    if (pendingMidiSettings.activeIndex >= count) pendingMidiSettings.activeIndex = Math.max(0, count - 1);
+    pendingMidiSettings.activeIndex = clampInt(Number(pendingMidiSettings.activeIndex || 0), 0, 5);
+    pendingMidiSettings.partCount = countActiveMidiExportChannels();
     const rows = Array.from(midiRoleList?.querySelectorAll(".midi-role-row") || []);
     rows.forEach((row, i) => {
-      const enabled = i < count;
       const active = i === pendingMidiSettings.activeIndex;
-      row.classList.toggle("disabled", !enabled);
+      row.classList.remove("disabled");
       row.classList.toggle("active", active);
-      row.querySelectorAll("button, select, input").forEach(control => { control.disabled = !enabled; });
+      row.querySelectorAll("button, select, input").forEach(control => { control.disabled = false; });
     });
     renderActiveMidiInstrumentList();
   }
@@ -3512,23 +3828,35 @@ ${shortError(err)}`);
     return false;
   }
 
-  function collectMidiConvertOptions() {
-    if (!pendingMidiSettings) throw new Error("MIDI 변환 설정을 찾지 못했습니다.");
-    const partCount = clampInt(Number(midiExportCount?.value || pendingMidiSettings.partCount || 3), 1, 6);
+  function getMidiExportChannelConfigs() {
+    if (!pendingMidiSettings) return [];
     const exportChannels = [];
-    for (let i = 0; i < partCount; i++) {
+    for (let i = 0; i < 6; i++) {
       const setting = pendingMidiSettings.channels[i];
       const allowedIds = new Set(getAllowedMidiGroupsForSetting(setting).map(g => g.id));
       const selected = Array.from(setting.selectedInstrumentGroups || []).filter(id => allowedIds.has(id));
-      if (!selected.length) throw new Error(`${PART_LABELS[i]} 채널에 포함할 악기를 하나 이상 선택해 주세요.`);
+      if (!selected.length) continue;
       const overlapMergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
       exportChannels.push({
+        sourcePartIndex: i,
         role: setting.role || "auto",
         overlapMergeMode,
         overlapMerge: overlapMergeMode !== "none",
         selectedInstrumentGroups: selected
       });
     }
+    return exportChannels;
+  }
+
+  function countActiveMidiExportChannels() {
+    return getMidiExportChannelConfigs().length;
+  }
+
+  function collectMidiConvertOptions() {
+    if (!pendingMidiSettings) throw new Error("MIDI 변환 설정을 찾지 못했습니다.");
+    const exportChannels = getMidiExportChannelConfigs();
+    if (!exportChannels.length) throw new Error("MML에 포함할 악기를 하나 이상 선택해 주세요.");
+    const partCount = exportChannels.length;
     return {
       partCount,
       roles: exportChannels.map(ch => ch.role),
@@ -3695,6 +4023,7 @@ ${shortError(err)}`);
       const prepared = prepareNotes(ctx, soundFont, preset, notes);
       if (!prepared.length) throw new Error("SF2에서 미리듣기 할 소리를 찾지 못했습니다.");
       const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
         fromSec: 0,
@@ -3703,7 +4032,8 @@ ${shortError(err)}`);
         destination: masterGain || ctx.destination,
         activeSources: midiPreviewSources,
         scheduledIds: new Set(),
-        minLeadTime: 0.01
+        minLeadTime: 0.01,
+        gainScale
       });
       const stopMs = Math.max(650, Math.min(6000, (result.maxEnd - ctx.currentTime + 0.25) * 1000));
       midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
@@ -3905,6 +4235,57 @@ ${shortError(err)}`);
     return findPresetByKey(key) || soundFont?.findPreset(0) || soundFont?.presets?.[0] || null;
   }
 
+  function getPresetByKeyOrDefault(key) {
+    return findPresetByKey(key) || soundFont?.findPreset(0) || soundFont?.presets?.[0] || null;
+  }
+
+  function prepareNotesWithPresetKeys(ctx, notes, presetKeys, options = {}) {
+    const keys = normalizePresetKeyArray(presetKeys);
+    const prepared = [];
+    const list = Array.isArray(notes) ? notes : [];
+    const respectMute = Boolean(options.respectMute);
+    for (let part = 0; part < 6; part++) {
+      if (respectMute && partMuteStates[part]) continue;
+      const partNotes = list.filter(n => Number(n.part) === part);
+      if (!partNotes.length) continue;
+      const preset = getPresetByKeyOrDefault(keys[part]);
+      if (!preset) continue;
+      prepared.push(...prepareNotes(ctx, soundFont, preset, partNotes));
+    }
+    prepared.sort((a, b) => a.start - b.start || a.part - b.part || a.midi - b.midi);
+    for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
+    return prepared;
+  }
+
+  function computeAutoGainScale(prepared, options = {}) {
+    const list = Array.isArray(prepared) ? prepared : [];
+    if (!list.length) return 1;
+    const windowStart = Number.isFinite(Number(options.windowStart)) ? Number(options.windowStart) : 0;
+    const windowEnd = Number.isFinite(Number(options.windowEnd)) ? Number(options.windowEnd) : Infinity;
+    const events = [];
+    for (const n of list) {
+      const start = Number(n?.start);
+      const end = Number(n?.noteEnd ?? (Number(n?.start) + Number(n?.durationSec || 0)));
+      const gain = Math.max(0, Number(n?.gainValue) || 0);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= windowStart || start >= windowEnd || gain <= 0) continue;
+      events.push({ t: Math.max(start, windowStart), deltaCount: 1 });
+      events.push({ t: Math.min(end, windowEnd), deltaCount: -1 });
+    }
+    if (!events.length) return 1;
+    events.sort((a, b) => a.t - b.t || a.deltaCount - b.deltaCount);
+    let simultaneous = 0;
+    let peakSimultaneous = 0;
+    for (const ev of events) {
+      simultaneous += ev.deltaCount;
+      if (simultaneous > peakSimultaneous) peakSimultaneous = simultaneous;
+    }
+    if (peakSimultaneous <= 3) return 1;
+
+    // 1~3개 동시 발음은 원음을 유지하고, 4개 이상부터만 완만하게 낮춘다.
+    const scale = Math.sqrt(3 / peakSimultaneous);
+    return Math.max(0.35, Math.min(1, scale));
+  }
+
   function prepareNotesWithPartPresets(ctx, notes) {
     const prepared = [];
     const list = Array.isArray(notes) ? notes : [];
@@ -3941,6 +4322,7 @@ ${shortError(err)}`);
       const ctx = await ensureAudioContext();
       if (!soundFont.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
       preparedNotes = prepareNotesWithPartPresets(ctx, scheduleCache.notes);
+      playbackAutoGainScale = computeAutoGainScale(preparedNotes, { windowStart: 0, windowEnd: scheduleCache.duration || 0 });
       const allScheduledNotesMuted = areAllScheduledNotesMuted(scheduleCache.notes);
       if (preparedNotes.length === 0 && !allScheduledNotesMuted) throw new Error("소리 나는 음표가 없습니다. V0만 있거나 선택한 음색에서 맞는 음역을 찾지 못했습니다.");
 
@@ -3986,7 +4368,8 @@ ${shortError(err)}`);
       destination: masterGain || audioCtx.destination,
       activeSources,
       scheduledIds: scheduledNoteIds,
-      minLeadTime: 0.018
+      minLeadTime: 0.018,
+      gainScale: playbackAutoGainScale
     });
 
     schedulerTimer = setTimeout(schedulePlaybackWindow, SCHEDULE_INTERVAL_MS);
@@ -4016,6 +4399,7 @@ ${shortError(err)}`);
     }
     activeSources = [];
     scheduledNoteIds = new Set();
+    playbackAutoGainScale = 1;
     isPlaying = false;
     updatePlayButton();
     if (scheduleCache) updateProgressUi(currentOffset, scheduleCache.duration);
@@ -4759,6 +5143,7 @@ ${shortError(err)}`);
       if (!soundFont.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
       const prepared = prepareNotesWithPartPresets(ctx, notes);
       if (!prepared.length) throw new Error("소리 나는 음표가 없습니다.");
+      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
         fromSec: 0,
@@ -4768,7 +5153,8 @@ ${shortError(err)}`);
         destination: masterGain || ctx.destination,
         activeSources: midiPreviewSources,
         scheduledIds: new Set(),
-        minLeadTime: 0.012
+        minLeadTime: 0.012,
+        gainScale
       });
       const stopMs = Math.max(800, Math.min(180000, (result.maxEnd - ctx.currentTime + 0.35) * 1000));
       midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>모비바드 v3.3</title>
+  <title>모비바드 v3.4</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
   <link rel="stylesheet" href="styles.css" />
@@ -13,7 +13,7 @@
 <main>
   <section class="card menu-card" aria-label="마비노기 MML 재생기">
     <div class="app-head">
-      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">모비바드 v3.3</span></h2>
+      <h2 class="app-title-small">마비노기 MML 재생기 <span class="app-version">모비바드 v3.4</span></h2>
       <div class="app-head-controls">
         <div class="header-links" aria-label="바로가기">
           <span class="menu-label">바로가기</span>
@@ -374,7 +374,6 @@
     <h3>MIDI 변환 설정</h3>
     <div class="midi-dialog-topline">
       <p id="midiConvertSummary">MML 채널별 역할, 겹침 병합 방식, 사용할 악기를 선택해 주세요.</p>
-      <button id="midiFullPreviewBtn" class="midi-full-preview-btn" type="button">MIDI 듣기</button>
     </div>
     <details class="midi-guide-box" aria-label="MIDI 변환 설정 안내">
       <summary>
@@ -384,9 +383,9 @@
       <div class="midi-guide-body">
         <ol>
           <li><b>MIDI 듣기</b>로 원본 파일이 어떤 곡인지 먼저 확인합니다.</li>
-          <li><b>Export 채널 수</b>에서 만들 MML 채널 수를 고릅니다. 마비노기 악보 구조에 맞춰 최대 6개까지 사용할 수 있습니다.</li>
           <li>왼쪽 <b>MML 채널</b>에서 채널을 누른 뒤, 오른쪽 <b>악기 목록</b>에서 그 채널에 넣을 악기를 선택합니다.</li>
-          <li><b>변환</b>을 누르면 선택한 악기와 역할 기준으로 현재 MML 편집기에 반영됩니다.</li>
+          <li>악기를 하나 이상 선택한 채널만 최종 MML에 포함됩니다. 최대 6채널까지 사용할 수 있습니다.</li>
+          <li><b>미리 듣기</b>로 현재 설정을 MML로 바꿨을 때의 소리를 먼저 확인하고, <b>변환</b>을 누르면 현재 MML 편집기에 반영됩니다.</li>
         </ol>
         <div class="midi-guide-terms">
           <span><b>자동</b>: 선택한 악기를 가능한 범위에서 자동 배치</span>
@@ -400,27 +399,32 @@
 
     <div class="midi-dialog-layout midi-channel-config-layout">
       <section class="midi-dialog-section midi-left-panel">
-        <label class="dialog-field" for="midiExportCount">Export 채널 수 <span class="dialog-inline-help">최종 MML로 만들 채널 개수</span></label>
-        <select id="midiExportCount">
-          <option value="1">1개</option>
-          <option value="2">2개</option>
-          <option value="3" selected>3개</option>
-          <option value="4">4개</option>
-          <option value="5">5개</option>
-          <option value="6">6개</option>
-        </select>
-        <div id="midiBeatNotice" class="midi-beat-notice" hidden>이 MIDI에는 비트 그룹 악기가 없습니다.</div>
         <div class="dialog-section-head role-head">
           <strong>MML 채널</strong>
           <span class="dialog-small">왼쪽 채널 버튼을 누르면 오른쪽 악기 목록이 바뀝니다.</span>
+        </div>
+        <div class="midi-role-actions">
+          <div id="midiBeatNotice" class="midi-beat-notice" hidden>이 MIDI에는 비트 그룹 악기가 없습니다.</div>
+          <button id="midiSelectedPreviewBtn" class="midi-full-preview-btn" type="button" aria-pressed="false">미리 듣기</button>
         </div>
         <div id="midiRoleList" class="midi-role-list" aria-label="MML 채널 설정"></div>
       </section>
 
       <section class="midi-dialog-section midi-right-panel">
-        <div class="dialog-section-head">
-          <strong id="midiInstrumentPanelTitle">선택 채널 악기</strong>
+        <div class="dialog-section-head midi-instrument-panel-head">
+          <strong id="midiInstrumentPanelTitle">선택 채널 악기 선택</strong>
           <span id="midiInstrumentPanelHint" class="dialog-small">체크한 악기가 현재 선택한 MML 채널에 들어갑니다.</span>
+        </div>
+        <div class="midi-instrument-panel-actions" aria-label="선택 채널 악기 빠른 동작">
+          <div class="midi-instrument-panel-actions-left">
+            <button id="midiInstrumentSelectAll" class="mini-button" type="button">전부 선택</button>
+            <button id="midiInstrumentSelectNone" class="mini-button" type="button">전부 해제</button>
+            <button class="mini-button midi-instrument-category-btn" type="button" data-midi-category-select="keyboard">건반악기</button>
+            <button class="mini-button midi-instrument-category-btn" type="button" data-midi-category-select="strings">현악기</button>
+            <button class="mini-button midi-instrument-category-btn" type="button" data-midi-category-select="winds">관악기</button>
+            <button class="mini-button midi-instrument-category-btn" type="button" data-midi-category-select="percussion">타악기</button>
+          </div>
+          <button id="midiFullPreviewBtn" class="midi-full-preview-btn" type="button" aria-pressed="false">MIDI 듣기</button>
         </div>
         <div id="midiChannelList" class="midi-channel-list" aria-label="선택 채널에 포함할 악기 목록"></div>
       </section>
