@@ -234,6 +234,14 @@
     return `${names[((midi % 12) + 12) % 12]}${octave}`;
   }
 
+  function midiVelocityToMmlVolume(value) {
+    const velocity = clampInt(Math.round(Number(value) || 0), 0, 127);
+    if (velocity <= 0) return 0;
+    if (velocity === 1) return 1;
+    // MIDI velocity 2~127, 126개 값을 MML V2~V15의 14단계로 균등하게 나눈다.
+    return clampInt(2 + Math.floor((velocity - 2) / 9), 2, 15);
+  }
+
   function buildMidiInstrumentPreview(bytes, instrumentChoiceId, options = {}) {
     const midi = parseMidiFile(bytes);
     if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
@@ -264,8 +272,8 @@
           startGrid,
           endGrid: startGrid + durGrid,
           durGrid,
-          midiVelocity: clampInt(Math.round(n.velocity), 1, 127),
-          velocity: clampInt(Math.round(n.velocity / 127 * 15), 1, 15),
+          midiVelocity: clampInt(Math.round(n.velocity), 0, 127),
+          velocity: midiVelocityToMmlVolume(n.velocity),
           channel: n.channel,
           program: normalizeProgram(n.program),
           instrumentGroupId: sourceInfo.id,
@@ -343,8 +351,8 @@
         startGrid,
         endGrid: startGrid + durGrid,
         durGrid,
-        midiVelocity: clampInt(Math.round(n.velocity), 1, 127),
-        velocity: clampInt(Math.round(n.velocity / 127 * 15), 1, 15),
+        midiVelocity: clampInt(Math.round(n.velocity), 0, 127),
+        velocity: midiVelocityToMmlVolume(n.velocity),
         channel: n.channel,
         program: normalizeProgram(n.program),
         instrumentGroupId: sourceInfo.id,
@@ -455,8 +463,8 @@
           startGrid,
           endGrid: startGrid + durGrid,
           durGrid,
-          midiVelocity: clampInt(Math.round(n.velocity), 1, 127),
-          velocity: clampInt(Math.round(n.velocity / 127 * 15), 1, 15),
+          midiVelocity: clampInt(Math.round(n.velocity), 0, 127),
+          velocity: midiVelocityToMmlVolume(n.velocity),
           channel: n.channel,
           trackIndex: n.trackIndex,
           program: normalizeProgram(n.program),
@@ -586,7 +594,7 @@
         ...n,
         id: n.sourceCount > 1 ? `merged-${nextMergedId++}` : n.id,
         midiVelocity: mergedMidiVelocity,
-        velocity: clampInt(Math.round(mergedMidiVelocity / 127 * 15), 1, 15),
+        velocity: midiVelocityToMmlVolume(mergedMidiVelocity),
         durGrid: Math.max(1, n.endGrid - n.startGrid)
       };
     });
@@ -595,11 +603,11 @@
   }
 
   function mergeMidiVelocity(values) {
-    const nums = values.map(v => clampInt(Math.round(v), 1, 127));
+    const nums = values.map(v => clampInt(Math.round(v), 0, 127));
     const max = Math.max(...nums);
     if (nums.length <= 1) return max;
     // 완전 중복은 대체로 제작/변환 과정의 중복이므로 과증폭하지 않고 약간만 보정한다.
-    return clampInt(Math.round(max * (1 + 0.12 * Math.min(nums.length - 1, 4))), 1, 127);
+    return clampInt(Math.round(max * (1 + 0.12 * Math.min(nums.length - 1, 4))), 0, 127);
   }
 
   function roleLabel(role) {

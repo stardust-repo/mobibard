@@ -5538,6 +5538,41 @@ ${shortError(err)}`);
       readDots();
     };
     const isNote = ch => "cdefgab".includes(ch);
+    const hasTieTargetAhead = from => {
+      let j = from;
+      const skipAheadSpace = () => { while (j < s.length && /\s/.test(s[j])) j++; };
+      const readAheadDigits = () => {
+        const start = j;
+        while (j < s.length && /\d/.test(s[j])) j++;
+        return j > start;
+      };
+
+      while (j < s.length) {
+        skipAheadSpace();
+        if (j >= s.length) return false;
+
+        const raw = s[j];
+        const lower = raw.toLowerCase();
+        if (isNote(lower) || lower === "r" || lower === "n") return true;
+
+        if (raw === ">" || raw === "<") {
+          j++;
+          continue;
+        }
+
+        if ("tolv".includes(lower)) {
+          j++;
+          if (!readAheadDigits()) return false;
+          if (lower === "l") {
+            while (s[j] === ".") j++;
+          }
+          continue;
+        }
+
+        return false;
+      }
+      return false;
+    };
 
     while (i < s.length) {
       skipSpace();
@@ -5591,10 +5626,7 @@ ${shortError(err)}`);
         i++;
       } else if (ch === "&") {
         i++;
-        let j = i;
-        while (j < s.length && /\s/.test(s[j])) j++;
-        const next = s[j]?.toLowerCase();
-        if (!(isNote(next) || next === "r" || next === "n")) mark(start, start + 1);
+        if (!hasTieTargetAhead(i)) mark(start, start + 1);
       } else if (ch === "." || ch === "+" || ch === "#" || ch === "-" || ch === "[" || ch === "]" || ch === ";" || ch === ",") {
         mark(start, start + 1);
         i++;

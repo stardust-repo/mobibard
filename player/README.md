@@ -2,7 +2,7 @@
 
 공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MusicXML/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
 
-`v3.5`에서는 MusicXML 불러오기와 함께 변환 창 문구, 지원 파일 표시, 상단 제목/추천 링크/테마 배치, 악기 선택 버튼과 hover 스타일을 정리했습니다.
+`v3.5`에서는 MusicXML 불러오기와 함께 변환 창 문구, 지원 파일 표시, 상단 제목/추천 링크/테마 배치, 악기 선택 버튼과 hover 스타일을 정리했습니다. MIDI/MusicXML 변환의 볼륨 매핑은 MIDI velocity `0 → V0`, `1 → V1`, `2~127 → V2~V15` 균등 분배 기준으로 보정했습니다.
 
 기본 재생은 로컬 파일만으로 동작합니다. Google Drive 연동을 사용하려면 Google Identity Services와 Google Picker 스크립트를 온라인으로 불러오며, `js/google-config.js` 설정이 필요합니다. Firebase Analytics는 `js/firebase-config.js`와 `js/firebase-analytics.js`에서 초기화합니다.
 
@@ -85,6 +85,7 @@ mabinogi_mml_public/
 | Firebase 프로젝트 | `mobibard` (`js/firebase-config.js`) |
 | Firebase Analytics 측정 ID | `G-38SYBVDLZQ` (`js/firebase-config.js`) |
 | Firebase SDK | CDN modular SDK `12.15.0` (`js/firebase-analytics.js`) |
+| MIDI/MusicXML 볼륨 변환 | `js/midi-to-mml.js`의 `midiVelocityToMmlVolume()`: velocity `0 → V0`, `1 → V1`, `2~127 → V2~V15` |
 
 ---
 
@@ -194,6 +195,13 @@ MIDI 변환은 `js/midi-to-mml.js`가 담당합니다. MusicXML은 `js/musicxml-
 6. `미리 듣기`를 누르면 현재 선택/역할/겹침 병합 기준으로 실제 MML 변환 결과를 만들고, 편집기에 반영하지 않은 채 미리 재생합니다.
 7. 변환 버튼을 누르면 입력/버튼을 잠그고 상태 문구를 표시합니다.
 8. 변환 결과를 전체 MML에 반영하고, MIDI 악기 선택 정보를 `최근 MIDI 음색` 자동 프리셋으로 갱신합니다.
+
+### MIDI/MusicXML 볼륨 변환
+
+- MIDI velocity `0`은 `V0`, `1`은 `V1`로 고정합니다.
+- 나머지 velocity `2~127`은 마비노기 MML의 실제 사용 영역을 살리기 위해 `V2~V15` 14단계에 균등 분배합니다.
+- 따라서 낮은 velocity 구간이 과도하게 `V1`에 몰리지 않으며, 작은 소리도 `V2` 이상으로 더 잘 살아납니다.
+- MIDI의 `Note On velocity 0`은 표준적으로 note off처럼 처리되므로 실제 노트 생성에서는 보통 제외됩니다.
 
 ### MIDI 미리듣기
 
@@ -688,3 +696,17 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - 나눠복사 Dialog에서 악보별 듣기 버튼을 추가했습니다.
 - 악보 나눠복사 설명과 요약 박스를 단순화했습니다.
 - 버전 표기를 v2.3으로 변경했습니다.
+
+---
+
+## GitHub Pages 배포
+
+정적 사이트 그대로 배포할 수 있도록 `.github/workflows/pages.yml`을 포함했습니다.
+
+- Pages 권한은 `contents: read`, `pages: write`, `id-token: write`를 명시합니다.
+- 배포 대상 환경은 `github-pages`입니다.
+- `_site` 폴더에 정적 파일만 복사하고 `.github`, `.git`, `node_modules`, `_site`는 배포 산출물에서 제외합니다.
+- `.nojekyll`을 넣어 GitHub Pages의 Jekyll 처리를 우회합니다.
+- `actions/deploy-pages@v5`에서 환경에 따라 `Deployment failed, try again later.`가 발생할 수 있어, 현재 워크플로는 안정성을 위해 GitHub 문서 예시와 같은 `actions/deploy-pages@v4`를 사용합니다.
+
+저장소 Settings → Pages에서 Source가 `GitHub Actions`로 설정되어 있어야 합니다.
