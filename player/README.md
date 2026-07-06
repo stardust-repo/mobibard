@@ -1,6 +1,8 @@
-# 마비노기 MML 재생기 샘플 - 모비바드 v3.4
+# 마비노기 MML 생성기 샘플 - 모비바드 v3.5
 
-공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
+공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MusicXML/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
+
+`v3.5`에서는 MusicXML 불러오기와 함께 변환 창 문구, 지원 파일 표시, 상단 제목/추천 링크/테마 배치, 악기 선택 버튼과 hover 스타일을 정리했습니다.
 
 기본 재생은 로컬 파일만으로 동작합니다. Google Drive 연동을 사용하려면 Google Identity Services와 Google Picker 스크립트를 온라인으로 불러오며, `js/google-config.js` 설정이 필요합니다. Firebase Analytics는 `js/firebase-config.js`와 `js/firebase-analytics.js`에서 초기화합니다.
 
@@ -24,7 +26,7 @@ python -m http.server 8000
 ```text
 mabinogi_mml_public/
 ├─ index.html                  # 화면 골격, 주요 버튼, 모든 dialog 마크업, 버전 표시
-├─ styles.css                  # 전체 레이아웃, 다이얼로그, MIDI 변환 UI, 테마 스타일
+├─ styles.css                  # 전체 레이아웃, 다이얼로그, MIDI/MusicXML 변환 UI, 테마 스타일
 ├─ README.md                   # 현재 문서
 ├─ favicon.ico                 # 루트 favicon 복사본
 ├─ assets/
@@ -34,6 +36,7 @@ mabinogi_mml_public/
 └─ js/
    ├─ utils.js                 # 공통 유틸: clamp, formatTime, shortError, base64 변환
    ├─ midi-to-mml.js           # MIDI 파서/분석/미리듣기 이벤트/6채널 MML 변환
+   ├─ musicxml-to-midi.js      # MusicXML/MXL 파서와 MIDI 이벤트 변환 브리지
    ├─ mml-parser.js            # MML@ 분해, 파트 파싱, 글로벌 템포맵, 재생 스케줄 생성
    ├─ mml-optimizer.js         # 자동 최적화, 쉼표 삭제, 볼륨 조절, 시작 공백, 나눠복사
    ├─ sf2-sampler.js           # SF2 파싱, 노트 준비, look-ahead 오디오 스케줄링
@@ -51,6 +54,7 @@ mabinogi_mml_public/
 |---|---|---|
 | `js/utils.js` | `window.MabiUtils` | `clamp`, `clampInt`, `unique`, `formatTime`, `shortError`, `base64ToUint8Array` |
 | `js/midi-to-mml.js` | `window.MabiMidi` | `analyzeMidi`, `midiToMml`, `buildMidiInstrumentPreview`, `buildMidiFilePreview` |
+| `js/musicxml-to-midi.js` | `window.MabiMusicXml` | `musicXmlToMidiBytes`, `extractMusicXmlText` |
 | `js/mml-parser.js` | `window.MabiMml` | `parseMabinogiMml`, `splitMmlParts`, `parseMmlPart`, `buildSchedule`, `beatToSeconds`, `composeMml` |
 | `js/mml-optimizer.js` | `window.MabiOptimizer` | `optimizeMml`, `optimizePart`, `trimShortRestsMml`, `adjustVolumesMml`, `addLeadingSilenceMml`, `splitMmlPages` |
 | `js/sf2-sampler.js` | `window.MabiSf2` | `parseSoundFont`, `prepareNotes`, `schedulePreparedNotes`, `scheduleNotes` |
@@ -64,7 +68,7 @@ mabinogi_mml_public/
 
 | 항목 | 값 / 위치 |
 |---|---|
-| 앱 버전 표시 | `index.html`의 `<title>`과 `.app-version`: `모비바드 v3.4` |
+| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v3.5` |
 | MML 파트 수 | 최대 6개: `멜로디`, `화음1`~`화음5` (`app.js`의 `PART_LABELS`) |
 | 설정 localStorage prefix | `mobibard.player.` (`app.js`의 `PREF_PREFIX`) |
 | 기본 SF2 | `assets/Roland_SC-55.sf2` |
@@ -72,7 +76,7 @@ mabinogi_mml_public/
 | 자동 시작 공백 | 불러오기/붙여넣기 시 T120 기준 약 2초 (`AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2`) |
 | MMI/3MLE 선택 최대 채널 | 6개 (`MMI_IMPORT_MAX_CHANNELS`) |
 | 감지 채널 최대 표시 | 96개 (`MMI_IMPORT_MAX_DETECTED_PARTS`) |
-| 지원 불러오기 확장자 | `.mid`, `.midi`, `.txt`, `.mmi`, `.mml` |
+| 지원 불러오기 확장자 | `.mid`, `.midi`, `.musicxml`, `.xml`, `.mxl`, `.txt`, `.mmi`, `.mml` |
 | Google 기본 폴더 | `MML_Mobibard` |
 | Google 설정 파일 | 앱 데이터 폴더의 `mobibard-player-settings.json` |
 | Google 로그인 유지 플래그 | `mobibard.player.googleAutoReconnect` |
@@ -92,7 +96,7 @@ mabinogi_mml_public/
 - 디스코드 바로가기
 - 개발자 MML 공유와 MIDI 파일 사이트를 여는 바로가기 콤보박스
 - Google 로그인 / 로그아웃
-- 테마 전환
+- Google 로그인 옆 테마 전환
 - 파일 불러오기 / 저장하기 그룹
 - 붙여넣기, 전부복사, 나눠복사
 - 재생, 처음, 반복, 재생 시간, 배속, 볼륨, 진행 슬라이더
@@ -138,6 +142,7 @@ mabinogi_mml_public/
 | 확장자 | 처리 |
 |---|---|
 | `.mid`, `.midi` | `analyzeMidi()`로 파일 요약과 악기 그룹을 만들고 `midiConvertDialog` 표시 |
+| `.musicxml`, `.xml`, `.mxl` | `musicXmlToMidiBytes()`로 악보를 MIDI 이벤트로 변환한 뒤 MIDI와 같은 `midiConvertDialog` 표시 |
 | `.mmi` | MabiIcco 저장 파일에서 MML 후보를 추출해 `mmiImportDialog`에서 최대 6개 선택 |
 | `.mml` | `MML@...;`이면 TXT처럼 처리, 아니면 3MLE `[ChannelN]` 프로젝트로 처리 |
 | `.txt` | `MML@...;` 형식만 허용, 가능하면 자동 최적화 후 반영 |
@@ -145,7 +150,7 @@ mabinogi_mml_public/
 ### 불러온 뒤 공통 보정
 
 - 전체 MML 형식은 `normalizeMmlForDisplay()`로 정리합니다.
-- MIDI/MMI/3MLE/TXT 불러오기와 클립보드 붙여넣기에는 기존 공통 선행 무음을 정리한 뒤 T120 기준 약 2초 시작 공백을 자동으로 넣습니다.
+- MIDI/MusicXML/MMI/3MLE/TXT 불러오기와 클립보드 붙여넣기에는 기존 공통 선행 무음을 정리한 뒤 T120 기준 약 2초 시작 공백을 자동으로 넣습니다.
 - 최적화 중 채널 내부 문법 오류가 있으면 가능한 경우 원본을 불러오고, 최적화 생략 안내를 표시합니다.
 
 ---
@@ -175,13 +180,13 @@ mabinogi_mml_public/
 
 ---
 
-## MIDI 변환 흐름
+## MIDI / MusicXML 변환 흐름
 
-MIDI 변환은 `js/midi-to-mml.js`가 담당하고, `app.js`는 설정 Dialog와 결과 적용만 담당합니다.
+MIDI 변환은 `js/midi-to-mml.js`가 담당합니다. MusicXML은 `js/musicxml-to-midi.js`에서 표준 MIDI 이벤트로 변환한 뒤 같은 Dialog와 변환 흐름을 재사용합니다.
 
-사용자가 MIDI 파일을 불러오면 `midiConvertDialog`가 열립니다. 이 Dialog는 “MIDI 안의 악기들을 마비노기 MML의 1~6개 채널에 어떻게 배치할지” 정하는 화면입니다. 상단 안내는 기본 접힘 상태의 `<details>`로 표시합니다. 요약 줄에는 이 화면이 “MIDI 안의 악기들을 마비노기 MML의 최대 6채널에 나눠 넣는 설정”임을 보여 주고, 펼치면 `MIDI 듣기 → MML 채널 선택 → 오른쪽 악기 선택 → 미리 듣기/변환` 순서와 용어 설명을 확인할 수 있습니다.
+사용자가 MIDI 또는 MusicXML 파일을 불러오면 `midiConvertDialog`가 열립니다. 이 Dialog는 “입력 파일 안의 악기들을 마비노기 MML의 1~6개 채널에 어떻게 배치할지” 정하는 화면입니다. 상단 안내는 기본 접힘 상태의 `<details>`로 표시합니다. 요약 줄에는 입력 파일의 악기들을 마비노기 MML의 최대 6채널에 나눠 넣는 설정임을 보여 주고, 펼치면 `MIDI/MusicXML 듣기 → MML 채널 선택 → 오른쪽 악기 선택 → 미리 듣기/변환` 순서와 용어 설명을 확인할 수 있습니다.
 
-1. MIDI 전체를 파싱합니다.
+1. MIDI 파일은 그대로 파싱하고, MusicXML 파일은 먼저 표준 MIDI 이벤트로 변환합니다.
 2. 트랙 수, PPQ, 템포 수, 후보 채널 수, 악기 그룹을 분석합니다.
 3. 기본 상태에서는 멜로디/화음1/화음2에 일반 악기 후보가 모두 체크되고, 화음3/화음4/화음5는 악기가 선택되지 않습니다.
 4. 각 MML 채널마다 역할, 겹침 병합 방식, 사용할 악기를 직접 조정할 수 있습니다.
@@ -192,7 +197,7 @@ MIDI 변환은 `js/midi-to-mml.js`가 담당하고, `app.js`는 설정 Dialog와
 
 ### MIDI 미리듣기
 
-- `MIDI 듣기`: 원본 MIDI 파일을 최대 45초까지 미리 재생합니다.
+- `MIDI/MusicXML 듣기`: 원본 MIDI 또는 MusicXML 변환 결과를 최대 45초까지 미리 재생합니다.
 - `미리 듣기`: 악기가 선택된 MML 채널, 채널 역할, 겹침 병합, 악기 체크 상태를 기준으로 MML로 변환했을 때의 소리를 미리 재생합니다.
 - MML 채널 행의 `듣기`: 해당 채널 하나만 현재 역할/악기 선택 기준으로 MML 변환해 미리 재생합니다.
 - 악기별 `듣기`: 오른쪽 악기 목록에서 해당 악기만 짧게 재생합니다.
@@ -436,13 +441,14 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 | `shortcut_link_open` | 상단 바로가기 콤보박스 선택 | `link` |
 | `midi_resource_link_open` | 상단 바로가기 콤보박스에서 MIDI 사이트 선택 | `site` |
 | `local_import_midi`, `drive_import_midi` | MIDI 파일을 변환 Dialog로 열 때 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
+| `local_import_musicxml`, `drive_import_musicxml` | MusicXML 파일을 변환 Dialog로 열 때 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
 | `local_import_mml`, `drive_import_mml` | MMI/3MLE/TXT MML 불러오기 완료 | `file_type`, `file_size`, `channel_count` |
-| `preview_midi_file` | MIDI 원본 미리듣기 | 없음 |
-| `preview_midi_selected` | MIDI 현재 설정 미리듣기 | `export_channels` |
+| `preview_midi_file` | MIDI/MusicXML 원본 미리듣기 | `source_type` |
+| `preview_midi_selected` | MIDI/MusicXML 현재 설정 미리듣기 | `source_type`, `export_channels` |
 | `preview_midi_export_channel` | MIDI 변환 설정의 MML 채널별 미리듣기 | `channel_index` |
 | `preview_midi_instrument` | MIDI 악기별 미리듣기 | 없음 |
 | `preview_mml_selected`, `preview_mml_all`, `preview_mml_channel` | MMI/3MLE 선택/전부/채널 미리듣기 | `channel_count`, `channel_index` |
-| `midi_convert_complete` | MIDI 변환 완료 | `export_channels`, `instrument_groups`, `optimized_chars` |
+| `midi_convert_complete` | MIDI/MusicXML 변환 완료 | `source_type`, `export_channels`, `instrument_groups`, `optimized_chars` |
 | `playback_start` | 메인 재생 시작 | `offset_sec`, `channel_count` |
 | `paste_mml`, `copy_all_mml`, `local_save_mml`, `drive_save_mml` | 붙여넣기/복사/저장 | `channel_count`, `create_new` |
 | `split_copy_open`, `preview_split_page`, `copy_split_page` | 나눠복사 Dialog/악보별 듣기/복사 | `page_index` |
@@ -462,7 +468,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 | 앱 버전 변경 | `index.html`의 `<title>`, `.app-version`, `README.md` |
 | 버튼/레이아웃 변경 | `index.html`, `styles.css`, `app.js:init()` 이벤트 연결 |
 | MML 편집기 강조 표시 변경 | `index.html`의 `.colored-textarea`, `styles.css`의 `.tempo-code`, `app.js`의 `renderPartWithErrors()`, `updateMainHighlight()`, `updatePartHighlight()` |
-| 상단 바로가기/MIDI 사이트 목록·배치 변경 | `index.html`의 `#midiSiteLinks`, `app.js`의 `HEADER_SHORTCUT_LINKS`, `MIDI_RESOURCE_LINK_IDS`, `openHeaderShortcutLink()` |
+| 상단 추천 링크/MIDI 사이트 목록·배치 변경 | `index.html`의 `#midiSiteLinks`, `app.js`의 `HEADER_SHORTCUT_LINKS`, `MIDI_RESOURCE_LINK_IDS`, `openHeaderShortcutLink()` |
 | MIDI 변환 규칙 변경 | `js/midi-to-mml.js`의 `midiToMml()`, `assignNotesToVoices()`, `normalizeExportChannels()` |
 | MIDI 변환 Dialog 변경 | `index.html#midiConvertDialog`, `app.js`의 `openMidiConvertDialog()`, `toggleMidiSelectedPreview()`, `renderMidiRoleList()`, `renderMidiInstrumentList()`, `syncMidiInstrumentListHeight()` |
 | MMI/3MLE import 변경 | `app.js`의 `readMabiIccoMmiFile()`, `readThreeMleMmlFile()`, `openMmiImportDialog()`, `toggleMmiSelectedPreview()`, `toggleMmiAllPreview()` |
@@ -480,7 +486,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
-- [ ] 제목에 `모비바드 v3.4`가 보이는지
+- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v3.5`가 보이는지
 - [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 MML 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
@@ -494,7 +500,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - [ ] `볼륨 조절` 입력값이 -15~15로 제한되고, 체크한 채널의 V값만 변경되는지
 - [ ] 나눠복사 Dialog에서 각 악보 듣기/복사가 동작하는지
 - [ ] MIDI 변환 Dialog 상단 안내가 기본 접힘 상태인지
-- [ ] MIDI 변환 Dialog 상단 안내를 펼쳤을 때 `MIDI 듣기 → 채널/악기 선택 → 미리 듣기/변환` 흐름을 이해할 수 있는지
+- [ ] MIDI/MusicXML 변환 Dialog 상단 안내를 펼쳤을 때 `연주 듣기 → 채널/악기 선택 → 미리 듣기/변환` 흐름을 이해할 수 있는지
 - [ ] MIDI 변환 Dialog의 기본 상태에서 멜로디/화음1/화음2는 일반 악기가 모두 체크되어 있는지
 - [ ] 화음3/화음4/화음5는 기본 악기 선택이 비어 있고, 선택하지 않으면 최종 MML에서 제외되는지
 - [ ] `미리 듣기`가 현재 MIDI 변환 선택 사항을 기준으로 MML 변환 결과를 미리 재생하고, 재생 중 버튼 문구가 `정지`로 바뀌는지
@@ -526,6 +532,18 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 ---
 
 ## 변경 이력
+
+### v3.5
+
+#### MusicXML 불러오기
+
+- 로컬 파일과 Google Drive 불러오기에서 `.musicxml`, `.xml`, `.mxl` 파일을 지원합니다.
+- MusicXML은 악보 정보를 표준 MIDI 이벤트로 변환한 뒤 기존 MIDI 변환 Dialog를 그대로 사용합니다.
+- 상단 제목 영역에 `지원 파일: MIDI · MusicXML · MMI · 3MLE` 안내 배지를 표시합니다.
+- MIDI/MusicXML 변환 Dialog 제목, 원본 듣기 버튼, 완료/실패 메시지가 입력 포맷에 맞춰 표시됩니다.
+- 버전 표기는 두 자리 체계에 맞춰 `v3.5`로 유지합니다.
+- 제목은 큰 `모비바드`와 작은 `마비노기 MML 생성기 v3.5` 조합으로 표시합니다.
+- 추천 링크 콤보박스, Google 로그인 옆 테마 버튼, MIDI/MusicXML 악기 선택 버튼과 hover 반응을 정리했습니다.
 
 ### v3.4
 

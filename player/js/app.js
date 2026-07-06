@@ -21,7 +21,7 @@
     strings: "현악기",
     winds: "관악기",
     percussion: "타악기",
-    other: "나머지"
+    other: "미분류"
   };
   const GOOGLE_CONFIG = window.MOBIBARD_GOOGLE_CONFIG || {};
   const GOOGLE_DRIVE_SCOPE = [
@@ -40,7 +40,7 @@
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
-  const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi", "mml"]);
+  const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi", "mml", "musicxml", "xml", "mxl"]);
   const HEADER_SHORTCUT_LINKS = new Map([
     ["https://drive.google.com/drive/folders/17mHTnFD475WKYUFK9aowEymi1183vtqD?usp=drive_link", "developer_mml_share"],
     ["https://bitmidi.com/", "bitmidi"],
@@ -55,6 +55,7 @@
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
+  const { musicXmlToMidiBytes } = window.MabiMusicXml || {};
   const { parseMabinogiMml, splitMmlParts, parseMmlPart, buildSchedule, composeMml } = window.MabiMml;
   const { optimizeMml, optimizePart, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
@@ -133,12 +134,16 @@
   const leadingSilenceApply = $("leadingSilenceApply");
   const leadingSilenceCancel = $("leadingSilenceCancel");
   const midiConvertDialog = $("midiConvertDialog");
+  const midiConvertTitle = $("midiConvertTitle");
   const midiConvertSummary = $("midiConvertSummary");
+  const midiGuideBox = $("midiGuideBox");
+  const midiGuideLead = $("midiGuideLead");
   const midiFullPreviewBtn = $("midiFullPreviewBtn");
   const midiSelectedPreviewBtn = $("midiSelectedPreviewBtn");
   const midiInstrumentSelectAll = $("midiInstrumentSelectAll");
   const midiInstrumentSelectNone = $("midiInstrumentSelectNone");
   const midiInstrumentCategoryButtons = Array.from(document.querySelectorAll("[data-midi-category-select]"));
+  const midiInstrumentCategoryActions = document.querySelector(".midi-category-actions");
   const midiChannelList = $("midiChannelList");
   const midiRoleList = $("midiRoleList");
   const midiBeatNotice = $("midiBeatNotice");
@@ -366,7 +371,7 @@
     scheduleGoogleAutoReconnect();
     updateCharCount();
     rebuildSchedulePreviewSilently();
-    trackAnalytics("mobibard_app_open", { version: "3_3" });
+    trackAnalytics("mobibard_app_open", { version: "3_5" });
   }
 
   function trackAnalytics(eventName, params = {}) {
@@ -671,7 +676,7 @@
     const connected = isGoogleConnected();
     if (googleLoginBtn) {
       googleLoginBtn.disabled = !hasClient;
-      googleLoginBtn.textContent = connected ? "로그아웃" : "로그인";
+      googleLoginBtn.textContent = connected ? "Google 로그아웃" : "Google 로그인";
       googleLoginBtn.title = hasClient
         ? (connected ? "Google 계정에서 로그아웃합니다. 권한 동의는 유지됩니다." : "Google 계정으로 Drive 연동을 시작합니다.")
         : "js/google-config.js에 OAuth Client ID를 입력해야 합니다.";
@@ -680,7 +685,7 @@
       googleDriveLoadBtn.disabled = !connected || !hasPickerKey;
       googleDriveLoadBtn.title = !hasPickerKey
         ? "Drive 파일 선택에는 js/google-config.js의 API Key가 필요합니다."
-        : "Google Drive의 MML_Mobibard 폴더에서 MIDI, MMI 또는 TXT MML 파일을 선택합니다.";
+        : "Google Drive의 MML_Mobibard 폴더에서 MML, MIDI, MusicXML, MMI, 3MLE 또는 TXT 파일을 선택합니다.";
     }
     if (googleDriveSaveBtn) {
       googleDriveSaveBtn.disabled = !connected;
@@ -1384,12 +1389,12 @@
       // application/octet-stream 등 서로 다른 MIME 타입으로 저장될 수 있다.
       // Picker에서 MIME 타입을 강하게 제한하면 .mid/.midi 파일이 목록에서
       // 사라질 수 있으므로 기본 폴더 안의 파일을 넓게 보여주고, 선택 후
-      // 확장자/MIME 검사로 MIDI 또는 TXT만 처리한다.
+      // 확장자/MIME 검사로 MIDI, MusicXML, MMI, 3MLE 또는 TXT만 처리한다.
       try { if (folderId && typeof view.setParent === "function") view.setParent(folderId); } catch (_) {}
       const builder = new window.google.picker.PickerBuilder()
         .setDeveloperKey(googleApiKey())
         .setOAuthToken(googleAccessToken)
-        .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 MIDI / MMI / 3MLE MML / TXT 파일 선택`)
+        .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 MML / MIDI / MusicXML / MMI / 3MLE / TXT 파일 선택`)
         .addView(view)
         .setCallback((data) => void handleGooglePickerResult(data));
       const appId = googleAppId();
@@ -1412,7 +1417,7 @@
     const mimeType = doc?.[picker.Document.MIME_TYPE] || "";
     if (!fileId) return;
     if (mimeType === GOOGLE_DRIVE_FOLDER_MIME) {
-      showDialog("Drive 불러오기", "폴더가 아니라 MIDI, MMI, 3MLE MML 또는 TXT 파일을 선택해 주세요.");
+      showDialog("Drive 불러오기", "폴더가 아니라 MML, MIDI, MusicXML, MMI, 3MLE 또는 TXT 파일을 선택해 주세요.");
       return;
     }
     try {
@@ -1440,10 +1445,25 @@
     ].includes(type);
   }
 
+  function isGoogleDriveMusicXmlFile(name, mimeType = "") {
+    const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
+    if (ext === "musicxml" || ext === "mxl" || ext === "xml") return true;
+    const type = String(mimeType || "").toLowerCase();
+    return [
+      "application/vnd.recordare.musicxml+xml",
+      "application/vnd.recordare.musicxml",
+      "application/vnd.recordare.musicxml-mxl",
+      "application/musicxml+xml",
+      "application/xml",
+      "text/xml"
+    ].includes(type);
+  }
+
   function isGoogleDriveTextMmlFile(name, mimeType = "") {
     const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
     if (ext === "txt") return true;
-    return ext !== "mmi" && String(mimeType || "").toLowerCase() === "text/plain";
+    if (["mmi", "mml", "musicxml", "xml", "mxl"].includes(ext)) return false;
+    return String(mimeType || "").toLowerCase() === "text/plain";
   }
 
   function isGoogleDriveMabiIccoFile(name, mimeType = "") {
@@ -1460,6 +1480,31 @@
     return type === "application/x-3mle" || type === "application/vnd.3mle";
   }
 
+  function isMusicXmlSourceExtension(ext) {
+    return ["musicxml", "xml", "mxl"].includes(String(ext || "").toLowerCase());
+  }
+
+  async function buildMusicXmlMidiImport(bytes, name = "MusicXML") {
+    if (typeof musicXmlToMidiBytes !== "function") {
+      throw new Error("MusicXML 변환 모듈을 불러오지 못했습니다.");
+    }
+    const midiBytes = await musicXmlToMidiBytes(bytes, name);
+    const overview = analyzeMidi(midiBytes, name);
+    return {
+      bytes: midiBytes,
+      name,
+      overview,
+      sourceType: "musicxml",
+      sourceLabel: "MusicXML"
+    };
+  }
+
+  function getMidiImportSourceLabel(importData = pendingMidiImport) {
+    if (importData?.sourceLabel) return String(importData.sourceLabel);
+    if (importData?.sourceType === "musicxml") return "MusicXML";
+    return "MIDI";
+  }
+
   async function loadGoogleDriveSourceFile(fileId, fallbackName = "Google Drive 파일") {
     requireGoogleAccessToken();
     stopMidiPreview();
@@ -1474,13 +1519,27 @@
       const overview = analyzeMidi(bytes, name);
       googleDriveMmlFileId = "";
       googleDriveMmlFileName = "";
-      openMidiConvertDialog({ bytes, name, overview });
+      openMidiConvertDialog({ bytes, name, overview, sourceType: "midi", sourceLabel: "MIDI" });
       trackAnalytics("drive_import_midi", {
         file_type: analyticsFileType(name),
         instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
         note_count: Number(overview.noteCount || 0)
       });
       setGoogleStatus("Drive MIDI 불러옴");
+      return;
+    }
+    if (isGoogleDriveMusicXmlFile(name, mimeType)) {
+      const importData = await buildMusicXmlMidiImport(bytes, name);
+      googleDriveMmlFileId = "";
+      googleDriveMmlFileName = "";
+      openMidiConvertDialog(importData);
+      const overview = importData.overview || {};
+      trackAnalytics("drive_import_musicxml", {
+        file_type: analyticsFileType(name),
+        instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
+        note_count: Number(overview.noteCount || 0)
+      });
+      setGoogleStatus("Drive MusicXML 불러옴");
       return;
     }
     if (isGoogleDriveMabiIccoFile(name, mimeType)) {
@@ -1554,7 +1613,7 @@
       setGoogleStatus("Drive TXT 불러옴");
       return;
     }
-    throw new Error("지원하지 않는 Drive 파일입니다. mid, midi, mmi, mml 또는 txt 파일만 선택해 주세요.");
+    throw new Error("지원하지 않는 Drive 파일입니다. mid, midi, musicxml, xml, mxl, mmi, mml 또는 txt 파일만 선택해 주세요.");
   }
 
   async function saveMmlToGoogleDrive() {
@@ -1980,8 +2039,19 @@ ${shortError(err)}`);
       if (ext === "mid" || ext === "midi") {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const overview = analyzeMidi(bytes, name);
-        openMidiConvertDialog({ bytes, name, overview });
+        openMidiConvertDialog({ bytes, name, overview, sourceType: "midi", sourceLabel: "MIDI" });
         trackAnalytics("local_import_midi", {
+          file_type: analyticsFileType(ext),
+          file_size: analyticsFileSizeBucket(file.size),
+          instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
+          note_count: Number(overview.noteCount || 0)
+        });
+      } else if (isMusicXmlSourceExtension(ext)) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const importData = await buildMusicXmlMidiImport(bytes, name);
+        openMidiConvertDialog(importData);
+        const overview = importData.overview || {};
+        trackAnalytics("local_import_musicxml", {
           file_type: analyticsFileType(ext),
           file_size: analyticsFileSizeBucket(file.size),
           instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
@@ -2040,7 +2110,7 @@ ${shortError(err)}`);
           channel_count: analyticsChannelCount(mainMml.value)
         });
       } else {
-        throw new Error("지원하지 않는 파일입니다. mid, midi, mmi, mml, txt 파일을 선택해 주세요.");
+        throw new Error("지원하지 않는 파일입니다. mid, midi, musicxml, xml, mxl, mmi, mml, txt 파일을 선택해 주세요.");
       }
     } catch (err) {
       showDialog("파일 불러오기 실패", shortError(err));
@@ -2059,7 +2129,7 @@ ${shortError(err)}`);
       if (hasOpenAppDialog()) return;
       const file = findFirstSupportedSourceFile(event.dataTransfer?.files);
       if (!file) {
-        showDialog("파일 불러오기 실패", "드래그 앤 드롭은 mid, midi, mmi, mml, txt 파일만 지원합니다.");
+        showDialog("파일 불러오기 실패", "드래그 앤 드롭은 mid, midi, musicxml, xml, mxl, mmi, mml, txt 파일만 지원합니다.");
         return;
       }
       void loadLocalSourceFile(file);
@@ -2998,25 +3068,30 @@ ${shortError(err)}`);
 
   function openMidiConvertDialog(importData) {
     pendingMidiImport = importData;
+    const sourceLabel = getMidiImportSourceLabel(importData);
     const overview = importData.overview;
     const groups = overview.instrumentGroups || overview.channels || [];
     if (!groups.length) {
       pendingMidiImport = null;
-      throw new Error("변환할 수 있는 MIDI 악기 그룹을 찾지 못했습니다.");
+      throw new Error(`변환할 수 있는 ${sourceLabel} 악기 그룹을 찾지 못했습니다.`);
     }
 
     const normalGroups = groups.filter(g => !g.isBeat);
     const beatGroups = groups.filter(g => g.isBeat);
     pendingMidiSettings = createDefaultMidiSettings(groups, Boolean(overview.hasBeatGroups));
 
+    if (midiConvertTitle) midiConvertTitle.textContent = `${sourceLabel} 변환 설정`;
+    if (midiGuideBox) midiGuideBox.setAttribute("aria-label", `${sourceLabel} 변환 설정 안내`);
+    if (midiGuideLead) midiGuideLead.textContent = `이 창은 ${sourceLabel} 파일의 악기들을 마비노기 MML 최대 6채널로 나눠 넣는 설정입니다.`;
     if (midiConvertSummary) {
       const trackCount = Number(overview.trackCount) || 0;
-      midiConvertSummary.textContent = `${importData.name || "MIDI"} · 트랙 ${formatCount(trackCount)}개 · 변환 후보 채널 ${formatCount(groups.length)}개 · 노트 ${formatCount(overview.noteCount)}개 · 일반 ${formatCount(normalGroups.length)}개 / 비트 ${formatCount(beatGroups.length)}개 · PPQ ${overview.ppq}`;
+      midiConvertSummary.textContent = `${importData.name || sourceLabel} · 트랙 ${formatCount(trackCount)}개 · 변환 후보 채널 ${formatCount(groups.length)}개 · 노트 ${formatCount(overview.noteCount)}개 · 일반 ${formatCount(normalGroups.length)}개 / 비트 ${formatCount(beatGroups.length)}개 · PPQ ${overview.ppq}`;
     }
     if (midiBeatNotice) {
       midiBeatNotice.hidden = beatGroups.length > 0;
-      midiBeatNotice.textContent = beatGroups.length ? "" : "이 MIDI에는 비트 그룹 악기가 없습니다.";
+      midiBeatNotice.textContent = beatGroups.length ? "" : "이 파일에는 비트 구룹 악기가 없습니다.";
     }
+    setMidiFullPreviewState(false);
     setMidiConvertBusy(false);
     renderMidiRoleList();
     renderActiveMidiInstrumentList();
@@ -3277,6 +3352,7 @@ ${shortError(err)}`);
     const isBeat = setting?.role === "beat";
     if (midiInstrumentSelectAll) midiInstrumentSelectAll.disabled = !hasGroups;
     if (midiInstrumentSelectNone) midiInstrumentSelectNone.disabled = !hasGroups;
+    if (midiInstrumentCategoryActions) midiInstrumentCategoryActions.hidden = Boolean(isBeat);
     for (const button of midiInstrumentCategoryButtons) {
       button.hidden = Boolean(isBeat);
       button.disabled = Boolean(isBeat || !hasGroups);
@@ -3417,7 +3493,8 @@ ${shortError(err)}`);
   }
 
   function collectMidiConvertOptionsForSingleChannel(index) {
-    if (!pendingMidiSettings) throw new Error("MIDI 변환 설정을 찾지 못했습니다.");
+    const sourceLabel = getMidiImportSourceLabel();
+    if (!pendingMidiSettings) throw new Error(`${sourceLabel} 변환 설정을 찾지 못했습니다.`);
     const sourceIndex = clampInt(Number(index), 0, 5);
     const setting = pendingMidiSettings.channels[sourceIndex];
     const allowedIds = new Set(getAllowedMidiGroupsForSetting(setting).map(g => g.id));
@@ -3428,6 +3505,7 @@ ${shortError(err)}`);
       partCount: 1,
       roles: [setting.role || "auto"],
       sourcePartIndex: sourceIndex,
+      sourceLabel,
       exportChannels: [{
         sourcePartIndex: sourceIndex,
         role: setting.role || "auto",
@@ -3452,6 +3530,7 @@ ${shortError(err)}`);
       showDialog("미리 듣기 실패", shortError(err));
       return;
     }
+    const sourceLabel = options.sourceLabel || getMidiImportSourceLabel();
 
     try {
       stopPlayback(false);
@@ -3461,9 +3540,9 @@ ${shortError(err)}`);
         midiConvertStatus.textContent = "현재 설정으로 MML 미리듣기를 준비 중입니다.";
         midiConvertStatus.hidden = false;
       }
-      trackAnalytics("preview_midi_selected", { export_channels: Number(options.partCount || 0) });
+      trackAnalytics("preview_midi_selected", { source_type: pendingMidiImport?.sourceType || "midi", export_channels: Number(options.partCount || 0) });
       await loadDefaultSf2IfNeeded();
-      const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
+      const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, { ...options, sourceLabel });
       const normalized = normalizeImportedFullMml(result.mml);
       const parsed = parseMabinogiMml(normalized.mml);
       const scheduled = buildSchedule(parsed);
@@ -3576,6 +3655,7 @@ ${shortError(err)}`);
 
   async function toggleMidiFullPreview() {
     if (!pendingMidiImport) return;
+    const sourceLabel = getMidiImportSourceLabel();
     if (midiFullPreviewActive) {
       stopMidiPreview();
       return;
@@ -3585,10 +3665,10 @@ ${shortError(err)}`);
       stopMidiPreview();
       setMidiFullPreviewState(true);
       if (midiConvertStatus) {
-        midiConvertStatus.textContent = "MIDI 미리듣기를 준비 중입니다.";
+        midiConvertStatus.textContent = `${sourceLabel} 미리듣기를 준비 중입니다.`;
         midiConvertStatus.hidden = false;
       }
-      trackAnalytics("preview_midi_file");
+      trackAnalytics("preview_midi_file", { source_type: pendingMidiImport?.sourceType || "midi" });
       await loadDefaultSf2IfNeeded();
       const preview = buildMidiFilePreview(pendingMidiImport.bytes, { maxSeconds: 45, tailSeconds: 1.0 });
       const ctx = await ensureAudioContext();
@@ -3605,7 +3685,7 @@ ${shortError(err)}`);
         prepared.push(...prepareNotes(ctx, soundFont, item.preset, item.notes));
       }
       prepared.sort((a, b) => a.start - b.start || a.midi - b.midi || a.id - b.id);
-      if (!prepared.length) throw new Error("MIDI 미리듣기에 사용할 소리를 찾지 못했습니다.");
+      if (!prepared.length) throw new Error(`${sourceLabel} 미리듣기에 사용할 소리를 찾지 못했습니다.`);
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: preview.duration });
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
@@ -3619,7 +3699,7 @@ ${shortError(err)}`);
         gainScale
       });
       if (midiConvertStatus) {
-        midiConvertStatus.textContent = "MIDI 미리듣기 중...";
+        midiConvertStatus.textContent = `${sourceLabel} 미리듣기 중...`;
         midiConvertStatus.hidden = false;
       }
       const stopMs = Math.max(800, Math.min(60000, (result.maxEnd - ctx.currentTime + 0.3) * 1000));
@@ -3627,14 +3707,14 @@ ${shortError(err)}`);
     } catch (err) {
       stopMidiPreview();
       if (midiConvertStatus) midiConvertStatus.hidden = true;
-      showDialog("MIDI 미리듣기 실패", shortError(err));
+      showDialog(`${sourceLabel} 미리듣기 실패`, shortError(err));
     }
   }
 
   function setMidiFullPreviewState(active) {
     midiFullPreviewActive = Boolean(active);
     if (midiFullPreviewBtn) {
-      midiFullPreviewBtn.textContent = midiFullPreviewActive ? "정지" : "MIDI 듣기";
+      midiFullPreviewBtn.textContent = midiFullPreviewActive ? "정지" : "연주 듣기";
       midiFullPreviewBtn.classList.toggle("danger", midiFullPreviewActive);
       midiFullPreviewBtn.setAttribute("aria-pressed", midiFullPreviewActive ? "true" : "false");
     }
@@ -3853,30 +3933,34 @@ ${shortError(err)}`);
   }
 
   function collectMidiConvertOptions() {
-    if (!pendingMidiSettings) throw new Error("MIDI 변환 설정을 찾지 못했습니다.");
+    const sourceLabel = getMidiImportSourceLabel();
+    if (!pendingMidiSettings) throw new Error(`${sourceLabel} 변환 설정을 찾지 못했습니다.`);
     const exportChannels = getMidiExportChannelConfigs();
     if (!exportChannels.length) throw new Error("MML에 포함할 악기를 하나 이상 선택해 주세요.");
     const partCount = exportChannels.length;
     return {
       partCount,
       roles: exportChannels.map(ch => ch.role),
-      exportChannels
+      exportChannels,
+      sourceLabel
     };
   }
 
   async function applyMidiConvertDialog() {
     if (!pendingMidiImport || midiConvertBusy) return;
+    const sourceLabel = getMidiImportSourceLabel();
+    const sourceType = pendingMidiImport?.sourceType || "midi";
 
     let options;
     try {
       options = collectMidiConvertOptions();
     } catch (err) {
-      showDialog("MIDI 변환 실패", shortError(err));
+      showDialog(`${sourceLabel} 변환 실패`, shortError(err));
       return;
     }
 
     stopMidiPreview();
-    setMidiConvertBusy(true, "MIDI를 MML로 변환 중입니다. 잠시만 기다려 주세요.");
+    setMidiConvertBusy(true, `${sourceLabel} → MML 변환 중입니다. 잠시만 기다려 주세요.`);
     await waitForBrowserPaint();
 
     try {
@@ -3896,21 +3980,22 @@ ${shortError(err)}`);
       pendingMidiSettings = null;
       const saved = Math.max(0, Number(normalized.saved) || 0);
       trackAnalytics("midi_convert_complete", {
+        source_type: sourceType,
         export_channels: Number(options.partCount || 0),
         instrument_groups: midiGroupCount,
         optimized_chars: saved
       });
       showDialog(
-        "MIDI 변환 완료",
+        `${sourceLabel} 변환 완료`,
         result.message +
           (saved ? `\n\n최적화 절약: ${formatCount(saved)} 자` : "") +
           (autoSoundApplied
-            ? "\n\nMIDI 악기 구성을 자동 음색으로 갱신하고 현재 재생 음색에 적용했습니다."
-            : "\n\nMIDI 악기 구성을 자동 음색 정보로 갱신했습니다. 현재 선택한 음색 설정은 유지했습니다.")
+            ? `\n\n${sourceLabel} 악기 구성을 자동 음색으로 갱신하고 현재 재생 음색에 적용했습니다.`
+            : `\n\n${sourceLabel} 악기 구성을 자동 음색 정보로 갱신했습니다. 현재 선택한 음색 설정은 유지했습니다.`)
       );
     } catch (err) {
       setMidiConvertBusy(false);
-      showDialog("MIDI 변환 실패", shortError(err));
+      showDialog(`${sourceLabel} 변환 실패`, shortError(err));
     }
   }
 

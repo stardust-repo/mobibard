@@ -36,6 +36,8 @@
   --part5: #0f5f59;
   --theme-swatch-a: #fbfbff;
   --theme-swatch-b: #4f46e5;
+  --theme-swatch-text: #111827;
+  --theme-swatch-text-shadow: 0 1px 0 rgba(255,255,255,.72), 0 0 4px rgba(255,255,255,.72);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 :root[data-theme="dark"] {
@@ -76,6 +78,8 @@
   --part5: #2dd4bf;
   --theme-swatch-a: #111827;
   --theme-swatch-b: #818cf8;
+  --theme-swatch-text: #f8fafc;
+  --theme-swatch-text-shadow: 0 1px 1px rgba(0,0,0,.62), 0 0 4px rgba(0,0,0,.58);
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: linear-gradient(180deg, var(--body-start) 0%, var(--bg) 100%); color: var(--text); }
@@ -111,6 +115,21 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 /* 데스크톱에서 콤보박스가 버튼처럼 크게 보이지 않도록 메뉴 영역의 입력류를 슬림하게 고정 */
 .menu-card select { width: auto; max-width: 165px; }
 .menu-card button, .menu-card .link-button { white-space: nowrap; }
+
+.import-format-list {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  background: var(--play-info-bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+}
 
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; box-shadow: 0 10px 30px var(--panel-shadow); margin-bottom: 16px; }
 
@@ -1647,4 +1666,421 @@ details.midi-instrument-section > summary.midi-instrument-section-head::before {
   width: 0.9em;
   margin-right: 0;
   font-size: 18px;
+}
+
+/* v3.5 requested compact header and MIDI/MusicXML dialog cleanup */
+.app-brand-line {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px 10px;
+  min-width: 0;
+}
+.app-brand-line .app-title-small {
+  margin: 0;
+  font-size: clamp(20px, 2.5vw, 26px);
+}
+.menu-card .app-head {
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+.menu-card .app-head-controls {
+  gap: 6px;
+}
+.menu-card .header-links,
+.menu-card .google-account {
+  gap: 5px;
+  padding: 3px 5px;
+  border-radius: 10px;
+}
+.menu-card .title-theme-control {
+  gap: 5px;
+}
+.menu-card .app-head button,
+.menu-card .app-head .link-button,
+.menu-card .player-file-toolbar button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.menu-card .app-head select {
+  min-height: 28px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  font-size: 12.5px;
+}
+.menu-card .menu-label,
+.toolbar-label {
+  font-size: 12px;
+}
+.import-format-list {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+}
+.player-file-toolbar {
+  gap: 5px 10px;
+  padding: 5px 0 8px;
+}
+.player-file-actions-left,
+.player-file-actions-right {
+  gap: 4px;
+}
+.toolbar-label {
+  line-height: 28px;
+}
+.toolbar-divider {
+  align-self: center;
+  width: 1px;
+  height: 20px;
+  margin: 0 3px;
+  background: var(--line);
+}
+.player-file-toolbar + .play-layout,
+.menu-card .play-layout {
+  padding-top: 10px;
+}
+
+.midi-role-preview-btn {
+  min-width: 0;
+  min-height: 24px;
+  padding: 2px 7px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  line-height: 1.1;
+}
+.midi-role-row .midi-role-preview-btn {
+  min-width: 40px;
+}
+.midi-instrument-panel-actions {
+  gap: 5px;
+}
+.midi-instrument-panel-actions-left {
+  gap: 4px;
+}
+.midi-action-cluster {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.midi-bulk-actions,
+.midi-category-actions {
+  gap: 3px;
+}
+.midi-bulk-label {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+}
+.midi-instrument-panel-actions-left .mini-button {
+  min-height: 26px;
+  padding: 3px 7px;
+  border-radius: 7px;
+  font-size: 11.8px;
+}
+.midi-bulk-actions .mini-button {
+  padding-left: 7px;
+  padding-right: 7px;
+}
+
+@media (max-width: 820px) {
+  .menu-card .app-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .menu-card .app-head-controls {
+    width: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+}
+.menu-card .app-head .theme-swatch {
+  width: 34px;
+  height: 22px;
+  min-width: 34px;
+  min-height: 22px;
+  padding: 0;
+}
+
+/* v3.5 user-requested header, dialog spacing, and consistent hover cleanup */
+.app-brand-line {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+.app-main-title {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(30px, 4.2vw, 42px);
+  font-weight: 950;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+.app-subtitle {
+  color: var(--muted);
+  font-size: clamp(12px, 1.45vw, 14px);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.import-format-list {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
+}
+.menu-card .header-links {
+  gap: 5px;
+  padding: 3px 5px;
+}
+.menu-card .midi-site-links {
+  min-width: 108px;
+  max-width: 128px;
+  font-weight: 900;
+}
+.menu-card .title-theme-control {
+  gap: 5px;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--play-info-bg);
+}
+.menu-card .google-account + .title-theme-control {
+  margin-left: -1px;
+}
+
+button,
+.link-button {
+  transition: background .14s ease, color .14s ease, border-color .14s ease, box-shadow .14s ease, transform .14s ease, filter .14s ease;
+}
+button:not(:disabled):hover,
+.link-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--panel-shadow);
+  filter: brightness(1.02);
+}
+button:not(.primary):not(.theme-swatch):not(:disabled):hover {
+  background: var(--control-hover);
+  color: var(--accent);
+}
+button.primary:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+button:disabled:hover {
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
+.midi-role-row {
+  grid-template-columns: minmax(130px, 1fr) 62px max-content auto;
+  column-gap: 4px;
+  row-gap: 6px;
+}
+.midi-role-row .merge-mode {
+  justify-self: start;
+  width: max-content;
+}
+.midi-role-row .midi-role-preview-btn {
+  justify-self: start;
+}
+
+.midi-instrument-panel-actions {
+  gap: 8px;
+}
+.midi-instrument-panel-actions-left {
+  gap: 8px;
+}
+.midi-action-cluster {
+  gap: 6px;
+}
+.midi-bulk-actions {
+  gap: 5px;
+}
+.midi-category-actions {
+  gap: 7px;
+}
+.midi-bulk-label,
+.midi-category-label {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+}
+.midi-instrument-panel-actions-left .mini-button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.midi-category-actions .mini-button {
+  min-width: 34px;
+}
+.midi-category-actions .mini-button[data-midi-category-select="other"] {
+  min-width: 54px;
+}
+.midi-instrument-category-btn:hover,
+.mini-button:hover,
+.midi-full-preview-btn:hover,
+.midi-role-preview-btn:hover,
+.midi-preview-btn:hover {
+  background: var(--control-hover);
+}
+
+@media (max-width: 820px) {
+  .app-main-title {
+    font-size: clamp(28px, 8vw, 38px);
+  }
+  .menu-card .app-head-controls {
+    gap: 6px;
+  }
+}
+@media (max-width: 760px) {
+  .midi-role-row {
+    column-gap: 4px;
+  }
+  .midi-role-row .merge-mode {
+    width: auto;
+  }
+}
+@media (max-width: 520px) {
+  .menu-card .title-theme-control {
+    margin-left: 0;
+  }
+  .midi-category-actions .mini-button[data-midi-category-select="other"] {
+    min-width: 50px;
+  }
+}
+
+@media (max-width: 760px) {
+  .midi-role-row {
+    grid-template-columns: 62px max-content auto;
+    align-items: center;
+  }
+  .midi-role-row .midi-channel-select {
+    grid-column: 1 / -1;
+  }
+  .midi-role-row > select[data-role-index] {
+    grid-column: 1;
+    width: 62px;
+    min-width: 62px;
+  }
+  .midi-role-row .merge-mode {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+  .midi-role-row .midi-role-preview-btn {
+    grid-column: 3;
+    justify-self: start;
+  }
+}
+@media (max-width: 420px) {
+  .midi-role-row {
+    grid-template-columns: 56px max-content auto;
+  }
+  .midi-role-row > select[data-role-index] {
+    width: 56px;
+    min-width: 56px;
+  }
+}
+
+
+/* v3.5 minor header/control refinement requested after UI fix */
+.app-brand-line {
+  align-items: center;
+  gap: 10px;
+}
+.app-main-title {
+  font-size: clamp(32px, 4.45vw, 46px);
+}
+.app-title-meta {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+.app-title-meta .app-subtitle,
+.app-title-meta .import-format-list {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+}
+.app-title-meta .app-subtitle {
+  line-height: 1.15;
+}
+.app-title-meta .import-format-list {
+  min-height: 20px;
+  padding: 1px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  line-height: 1.15;
+}
+.menu-card .header-links,
+.menu-card .google-account,
+.menu-card .title-theme-control {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.menu-card .google-account,
+.menu-card .title-theme-control {
+  gap: 5px;
+}
+.menu-card .google-account + .title-theme-control {
+  margin-left: 0;
+}
+.menu-card .app-head .theme-swatch.theme-text-button {
+  width: auto;
+  height: auto;
+  min-width: 46px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, var(--theme-swatch-a) 0 48%, var(--theme-swatch-b) 52% 100%);
+  color: var(--theme-swatch-text);
+  font-size: 12.5px;
+  font-weight: 900;
+  text-shadow: var(--theme-swatch-text-shadow);
+  box-shadow: 0 1px 0 rgba(255,255,255,.42) inset, 0 2px 8px var(--panel-shadow);
+}
+.menu-card .app-head .theme-swatch.theme-text-button:hover {
+  background: linear-gradient(135deg, var(--theme-swatch-a) 0 43%, var(--theme-swatch-b) 57% 100%);
+  color: var(--theme-swatch-text);
+  box-shadow: 0 1px 0 rgba(255,255,255,.46) inset, 0 5px 14px var(--panel-shadow);
+}
+.midi-role-row .midi-role-preview-btn {
+  margin-left: 4px;
+}
+@media (max-width: 820px) {
+  .app-brand-line {
+    align-items: center;
+  }
+  .app-title-meta {
+    gap: 2px;
+  }
+}
+@media (max-width: 520px) {
+  .app-brand-line {
+    gap: 8px;
+  }
+  .app-main-title {
+    font-size: clamp(30px, 10vw, 40px);
+  }
+  .app-title-meta .import-format-list {
+    white-space: normal;
+  }
 }

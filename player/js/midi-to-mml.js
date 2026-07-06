@@ -210,9 +210,11 @@
         programText: drumName
       };
     }
+    const metaName = cleanInstrumentName(note.instrumentMetaName || note.trackName || "");
+    const hasUsefulMetaName = metaName !== "악기 정보 없음" && !/^(track|part|instrument)\s*\d*$/i.test(metaName);
     const instrumentName = isBeat && note.instrumentMetaName && PERCUSSION_NAME_RE.test(note.instrumentMetaName)
       ? note.instrumentMetaName
-      : programName(program);
+      : (hasUsefulMetaName ? metaName : programName(program));
     return {
       id: `ch${note.channel}:program:${program}:beat:${isBeat ? 1 : 0}`,
       isBeat,
@@ -412,6 +414,7 @@
   }
 
   function midiToMml(bytes, fileName = "MIDI", options = {}) {
+    const sourceLabel = String(options.sourceLabel || "MIDI");
     const midi = parseMidiFile(bytes);
     if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
 
@@ -488,7 +491,7 @@
       return `${i + 1}. ${roleLabel(ch.role)}${overlapLabel ? `/${overlapLabel}` : ""}: ${label || "선택 없음"}`;
     });
     const tempoMessage = tempoGridEvents.length > 1
-      ? `MIDI 템포 ${tempoGridEvents.length}개를 멜로디 파트에 반영했습니다.`
+      ? `${sourceLabel} 템포 ${tempoGridEvents.length}개를 멜로디 파트에 반영했습니다.`
       : `시작 템포 T${tempoGridEvents[0]?.bpm || 120}을 사용했습니다.`;
     const message = [
       `${fileName} 변환 완료`,
