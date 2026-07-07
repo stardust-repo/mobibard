@@ -100,6 +100,11 @@ button.ghost { background: var(--accent-weak); color: var(--accent); }
 .app-head-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-left: auto; }
 .google-account { display: inline-flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--play-info-bg); }
 .google-status { min-width: 116px; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.google-login-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.google-login-button .google-icon-badge { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex: 0 0 18px; border-radius: 999px; background: #fff; box-shadow: 0 0 0 1px rgba(15, 23, 42, .08); }
+.google-login-button .google-g-icon { display: block; width: 14px; height: 14px; object-fit: contain; }
+.google-login-button .google-login-label { display: inline-block; line-height: 1; }
 .header-links { display: inline-flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--play-info-bg); }
 .midi-site-links { min-width: 128px; max-width: 150px; font-weight: 800; }
 
@@ -1704,6 +1709,20 @@ details.midi-instrument-section > summary.midi-instrument-section-head::before {
   padding: 4px 8px;
   border-radius: 8px;
   font-size: 12.5px;
+}
+.menu-card .app-head .google-login-button {
+  gap: 5px;
+  padding-left: 7px;
+  padding-right: 9px;
+}
+.menu-card .app-head .google-login-button .google-icon-badge {
+  width: 17px;
+  height: 17px;
+  flex-basis: 17px;
+}
+.menu-card .app-head .google-login-button .google-g-icon {
+  width: 13px;
+  height: 13px;
 }
 .menu-card .app-head select {
   min-height: 28px;

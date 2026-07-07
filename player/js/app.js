@@ -676,7 +676,14 @@
     const connected = isGoogleConnected();
     if (googleLoginBtn) {
       googleLoginBtn.disabled = !hasClient;
-      googleLoginBtn.textContent = connected ? "Google 로그아웃" : "Google 로그인";
+      const googleLoginLabel = googleLoginBtn.querySelector(".google-login-label");
+      const labelText = connected ? "로그아웃" : "로그인";
+      if (googleLoginLabel) {
+        googleLoginLabel.textContent = labelText;
+      } else {
+        googleLoginBtn.textContent = labelText;
+      }
+      googleLoginBtn.setAttribute("aria-label", connected ? "Google 계정 로그아웃" : "Google 계정 로그인");
       googleLoginBtn.title = hasClient
         ? (connected ? "Google 계정에서 로그아웃합니다. 권한 동의는 유지됩니다." : "Google 계정으로 Drive 연동을 시작합니다.")
         : "js/google-config.js에 OAuth Client ID를 입력해야 합니다.";

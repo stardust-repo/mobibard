@@ -639,6 +639,7 @@
     let skipped = 0;
     let placed = 0;
     let overlapMerged = 0;
+    const overallPitchSpread = getMelodicPitchSpread(notes);
     let i = 0;
 
     while (i < notes.length) {
@@ -648,21 +649,30 @@
       const remaining = group.filter(note => !usedNoteIds.has(note.id));
       const assignedChannels = new Set();
 
-      // 1차: 비어 있는 채널에 정상 배치. 역할/옥타브 영역 점수로 채널-노트 조합을 고른다.
+      // 1차: 정상 배치를 우선하되, 고음/저음 역할과 반대로 1옥타브를 초과해 튀는 노트는
+      // 겹침 병합 허용 채널까지 포함해 더 가까운 성부가 있는지 먼저 비교한다.
       while (remaining.length) {
-        const best = findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid);
+        const best = findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, overallPitchSpread);
         if (!best) break;
         const [chosen] = remaining.splice(best.noteIndex, 1);
-        voices[best.channelIndex].push(chosen);
-        voiceEnd[best.channelIndex] = Math.max(voiceEnd[best.channelIndex], chosen.endGrid);
+        if (best.isMerge) {
+          trimActiveNoteAt(voices[best.channelIndex], startGrid);
+          voices[best.channelIndex].push(chosen);
+          voices[best.channelIndex].sort((a, b) => a.startGrid - b.startGrid || a.endGrid - b.endGrid || a.midi - b.midi);
+          voiceEnd[best.channelIndex] = Math.max(chosen.endGrid, getVoiceEnd(voices[best.channelIndex]));
+          overlapMerged++;
+        } else {
+          voices[best.channelIndex].push(chosen);
+          voiceEnd[best.channelIndex] = Math.max(voiceEnd[best.channelIndex], chosen.endGrid);
+          placed++;
+        }
         assignedChannels.add(best.channelIndex);
         usedNoteIds.add(chosen.id);
-        placed++;
       }
 
       // 2차: 정상 배치가 불가능한 노트만 겹침 병합으로 구제한다.
       while (remaining.length) {
-        const best = findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid);
+        const best = findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid, overallPitchSpread);
         if (!best) break;
         const [chosen] = remaining.splice(best.noteIndex, 1);
         trimActiveNoteAt(voices[best.channelIndex], startGrid);
@@ -680,39 +690,106 @@
     return { voices, skipped, placed, overlapMerged };
   }
 
-  function findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid) {
+  function findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, overallPitchSpread = null) {
     let best = null;
+    const pitchSpread = getMelodicPitchSpread(remaining);
     for (let noteIndex = 0; noteIndex < remaining.length; noteIndex++) {
       const note = remaining[noteIndex];
+      const normalCandidates = [];
+      const mergeCandidates = [];
       for (let channelIndex = 0; channelIndex < exportChannels.length; channelIndex++) {
         if (assignedChannels.has(channelIndex)) continue;
-        if (voiceEnd[channelIndex] > startGrid) continue;
         const cfg = exportChannels[channelIndex];
         if (!canChannelUseNote(note, cfg)) continue;
-        const score = channelNoteScore(note, cfg, channelIndex, false);
-        const item = { noteIndex, channelIndex, score };
+
+        if (voiceEnd[channelIndex] <= startGrid) {
+          const referenceNote = findLastNoteBefore(voices[channelIndex], startGrid);
+          normalCandidates.push({
+            type: "normal",
+            noteIndex,
+            channelIndex,
+            cfg,
+            referenceNote,
+            pitchDistance: notePitchDistance(note, referenceNote),
+            playedLength: 0
+          });
+        } else {
+          const mergeInfo = getOverlapMergeCandidateInfo(cfg, voices[channelIndex], startGrid);
+          if (mergeInfo) {
+            mergeCandidates.push({
+              type: "merge",
+              noteIndex,
+              channelIndex,
+              cfg,
+              referenceNote: mergeInfo.active,
+              pitchDistance: notePitchDistance(note, mergeInfo.active),
+              playedLength: mergeInfo.playedLength
+            });
+          }
+        }
+      }
+
+      const allCandidates = normalCandidates.concat(mergeCandidates);
+      const nearestPitchDistance = nearestFinitePitchDistance(allCandidates);
+      const guardedNormalDistance = nearestGuardedNormalDistance(note, normalCandidates, nearestPitchDistance, pitchSpread);
+      const eligibleMergeCandidates = Number.isFinite(guardedNormalDistance)
+        ? mergeCandidates.filter(candidate => Number.isFinite(candidate.pitchDistance) && candidate.pitchDistance < guardedNormalDistance)
+        : [];
+      const candidates = normalCandidates.concat(eligibleMergeCandidates);
+
+      for (const candidate of candidates) {
+        const isMerge = candidate.type === "merge";
+        const score = channelNoteScore(note, candidate.cfg, candidate.channelIndex, {
+          referenceNote: candidate.referenceNote,
+          pitchDistance: candidate.pitchDistance,
+          nearestPitchDistance,
+          pitchSpread,
+          overallPitchSpread,
+          isMerge,
+          playedLength: candidate.playedLength,
+          mergeAsNormalCandidate: isMerge
+        });
+        const item = { noteIndex, channelIndex: candidate.channelIndex, score, isMerge };
         if (!best || compareScore(item.score, best.score) > 0) best = item;
       }
     }
     return best;
   }
 
-  function findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid) {
+  function findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid, overallPitchSpread = null) {
     let best = null;
+    const pitchSpread = getMelodicPitchSpread(remaining);
     for (let noteIndex = 0; noteIndex < remaining.length; noteIndex++) {
       const note = remaining[noteIndex];
+      const candidates = [];
       for (let channelIndex = 0; channelIndex < exportChannels.length; channelIndex++) {
         if (assignedChannels.has(channelIndex)) continue;
         const cfg = exportChannels[channelIndex];
-        const mergeMode = normalizeOverlapMergeMode(cfg.overlapMergeMode ?? cfg.overlapMerge);
-        if (mergeMode === "none") continue;
         if (!canChannelUseNote(note, cfg)) continue;
-        const active = findActiveNoteAt(voices[channelIndex], startGrid);
-        if (!active) continue;
-        if (mergeMode === "half" && !isPastOverlapMergeHalfPoint(active, startGrid)) continue;
-        const trimLoss = Math.max(0, active.endGrid - startGrid);
-        const score = [...channelNoteScore(note, cfg, channelIndex, true), -trimLoss];
-        const item = { noteIndex, channelIndex, score };
+        const mergeInfo = getOverlapMergeCandidateInfo(cfg, voices[channelIndex], startGrid);
+        if (!mergeInfo) continue;
+        candidates.push({
+          noteIndex,
+          channelIndex,
+          cfg,
+          active: mergeInfo.active,
+          playedLength: mergeInfo.playedLength,
+          pitchDistance: notePitchDistance(note, mergeInfo.active)
+        });
+      }
+
+      const nearestPitchDistance = nearestFinitePitchDistance(candidates);
+      for (const candidate of candidates) {
+        const score = channelNoteScore(note, candidate.cfg, candidate.channelIndex, {
+          referenceNote: candidate.active,
+          pitchDistance: candidate.pitchDistance,
+          nearestPitchDistance,
+          pitchSpread,
+          overallPitchSpread,
+          isMerge: true,
+          playedLength: candidate.playedLength
+        });
+        const item = { noteIndex, channelIndex: candidate.channelIndex, score };
         if (!best || compareScore(item.score, best.score) > 0) best = item;
       }
     }
@@ -728,6 +805,18 @@
     return startGrid >= halfPoint;
   }
 
+
+  function getOverlapMergeCandidateInfo(cfg, voice, startGrid) {
+    const mergeMode = normalizeOverlapMergeMode(cfg?.overlapMergeMode ?? cfg?.overlapMerge);
+    if (mergeMode === "none") return null;
+    const active = findActiveNoteAt(voice, startGrid);
+    if (!active) return null;
+    if (mergeMode === "half" && !isPastOverlapMergeHalfPoint(active, startGrid)) return null;
+    const activeStart = Number(active.startGrid);
+    const playedLength = Math.max(0, startGrid - (Number.isFinite(activeStart) ? activeStart : startGrid));
+    return { active, playedLength };
+  }
+
   function canChannelUseNote(note, cfg) {
     if (!cfg) return false;
     const wantsBeat = cfg.role === "beat";
@@ -737,30 +826,170 @@
     return true;
   }
 
-  function channelNoteScore(note, cfg, channelIndex, isMerge) {
-    const role = cfg?.role || "auto";
-    const highArea = note.midi >= 60; // O4C 이상
-    let roleFit = 0;
-    let rolePitch = 0;
-    if (role === "beat") {
-      roleFit = 400;
-      rolePitch = drumPriority(note.midi);
-    } else if (role === "high") {
-      roleFit = highArea ? 320 : 30;
-      rolePitch = note.midi;
-    } else if (role === "low") {
-      roleFit = highArea ? 30 : 320;
-      rolePitch = -note.midi;
-    } else {
-      roleFit = 170;
-      rolePitch = note.midi;
+  function getMelodicPitchSpread(notes) {
+    const melodic = (notes || []).filter(n => !isBeatCandidate(n));
+    const src = melodic.length ? melodic : (notes || []);
+    let minMidi = Infinity;
+    let maxMidi = -Infinity;
+    for (const n of src) {
+      const midi = Number(n?.midi);
+      if (!Number.isFinite(midi)) continue;
+      minMidi = Math.min(minMidi, midi);
+      maxMidi = Math.max(maxMidi, midi);
     }
-    return [
-      roleFit,
-      isMerge ? -35 : 0,
-      rolePitch,
+    if (!Number.isFinite(minMidi) || !Number.isFinite(maxMidi)) return { minMidi: 0, maxMidi: 0 };
+    return { minMidi, maxMidi };
+  }
+
+  function melodicRoleDirectionScore(note, role, pitchSpread, fallbackPitchSpread = null) {
+    if (role !== "high" && role !== "low") return 500;
+
+    // 같은 시작 시점에 여러 음이 있으면 그 안에서 고/저 역할을 먼저 나눈다.
+    // 단일 음처럼 비교 폭이 없을 때는 전체 곡 음역으로 억지 판정하지 않고 중립으로 둔다.
+    // 그래야 고음/저음 채널의 입력 조건이 사실상 동률인 상황에서 선행 노트와 더 가까운 채널이 자연스럽게 가져간다.
+    const minMidi = Number(pitchSpread?.minMidi);
+    const maxMidi = Number(pitchSpread?.maxMidi);
+    if (!Number.isFinite(minMidi) || !Number.isFinite(maxMidi) || maxMidi <= minMidi) return 500;
+
+    const pos = Math.max(0, Math.min(1, ((Number(note.midi) || 0) - minMidi) / (maxMidi - minMidi)));
+    return role === "high" ? Math.round(pos * 1000) : Math.round((1 - pos) * 1000);
+  }
+
+  function findLastNoteBefore(voice, grid) {
+    for (let i = voice.length - 1; i >= 0; i--) {
+      const n = voice[i];
+      if (n.startGrid <= grid && n.endGrid <= grid) return n;
+    }
+    return null;
+  }
+
+  function notePitchDistance(note, referenceNote) {
+    const noteMidi = Number(note?.midi);
+    const referenceMidi = Number(referenceNote?.midi);
+    if (!Number.isFinite(noteMidi) || !Number.isFinite(referenceMidi)) return null;
+    return Math.abs(noteMidi - referenceMidi);
+  }
+
+  function nearestFinitePitchDistance(candidates) {
+    let nearest = Infinity;
+    for (const candidate of candidates || []) {
+      const distance = candidate?.pitchDistance;
+      if (Number.isFinite(distance)) nearest = Math.min(nearest, distance);
+    }
+    return Number.isFinite(nearest) ? nearest : null;
+  }
+
+
+  function nearestGuardedNormalDistance(note, normalCandidates, nearestPitchDistance, pitchSpread = null) {
+    let nearest = Infinity;
+    for (const candidate of normalCandidates || []) {
+      if (!shouldRelaxRolePriority(note, candidate.cfg?.role, candidate.referenceNote, candidate.pitchDistance, nearestPitchDistance, pitchSpread)) continue;
+      if (Number.isFinite(candidate.pitchDistance)) nearest = Math.min(nearest, candidate.pitchDistance);
+    }
+    return Number.isFinite(nearest) ? nearest : null;
+  }
+
+  function isReverseOctaveRoleJump(note, role, referenceNote) {
+    const noteMidi = Number(note?.midi);
+    const referenceMidi = Number(referenceNote?.midi);
+    if (!Number.isFinite(noteMidi) || !Number.isFinite(referenceMidi)) return false;
+    // 예: 고음 파트의 마지막 음이 F5라면 F4까지는 역할 우선 유지, E4 이하는 가까운 다른 채널을 먼저 찾는다.
+    if (role === "high") return noteMidi < referenceMidi - 12;
+    // 예: 저음 파트의 마지막 음이 E2라면 E3까지는 역할 우선 유지, F3 이상은 가까운 다른 채널을 먼저 찾는다.
+    if (role === "low") return noteMidi > referenceMidi + 12;
+    return false;
+  }
+
+  function isRoleEdgeNoteInPitchSpread(note, role, pitchSpread) {
+    if (role !== "high" && role !== "low") return false;
+    const noteMidi = Number(note?.midi);
+    const minMidi = Number(pitchSpread?.minMidi);
+    const maxMidi = Number(pitchSpread?.maxMidi);
+    if (!Number.isFinite(noteMidi) || !Number.isFinite(minMidi) || !Number.isFinite(maxMidi) || maxMidi <= minMidi) return false;
+    // 같은 시작 시점에 여러 음이 있으면 고음 파트는 그 묶음의 가장 높은 음,
+    // 저음 파트는 가장 낮은 음을 먼저 가져가야 성부 순서가 뒤집히지 않는다.
+    // 이 경우에는 직전 음과 1옥타브를 초과해 떨어져도 역할 우선권을 유지한다.
+    if (role === "high") return noteMidi >= maxMidi;
+    if (role === "low") return noteMidi <= minMidi;
+    return false;
+  }
+
+  function shouldRelaxRolePriority(note, role, referenceNote, pitchDistance, nearestPitchDistance, pitchSpread = null) {
+    if (isRoleEdgeNoteInPitchSpread(note, role, pitchSpread)) return false;
+    if (!isReverseOctaveRoleJump(note, role, referenceNote)) return false;
+    const distance = pitchDistance;
+    const nearest = nearestPitchDistance;
+    return Number.isFinite(distance) && Number.isFinite(nearest) && distance > nearest;
+  }
+
+  function channelNoteScore(note, cfg, channelIndex, options = {}) {
+    const role = cfg?.role || "auto";
+    const referenceNote = options.referenceNote || null;
+    const playedLength = Math.max(0, Number(options.playedLength) || 0);
+    const durGrid = note.durGrid || Math.max(1, note.endGrid - note.startGrid);
+
+    if (role === "beat") {
+      // 비트 파트는 음높이 성부보다 타악기 우선순위가 더 중요하다.
+      // 겹침 병합에서는 이미 더 오래 울린 타격음을 먼저 희생시킨다.
+      return [
+        400,
+        drumPriority(note.midi),
+        options.isMerge ? playedLength : 0,
+        note.velocity || 0,
+        durGrid,
+        -channelIndex
+      ];
+    }
+
+    // C4 같은 고정 옥타브 기준은 쓰지 않는다.
+    // 고음/저음 역할은 성부 연속성보다 먼저 본다.
+    // 같은 시작 시점에 여러 음이 있으면 그 안에서
+    // 고음 채널은 더 높은 음, 저음 채널은 더 낮은 음을 우선한다.
+    // 단일 음처럼 고/저 입력 조건이 동률이면 역할 방향 점수는 중립으로 두고 선행 노트 근접성을 우선한다.
+    // 다만 단일 음이나 역할 끝점이 아닌 음이 역할 방향과 반대로 1옥타브를 초과해 튀는 경우에는,
+    // 정상 배치 후보와 겹침 병합 허용 후보를 함께 보고 더 가까운 채널이 있으면 역할 우선권을 내려준다.
+    // 같은 시작 시점의 최고음/최저음은 성부 순서 보존을 위해 이 완화에서 제외한다.
+    // 예: 고음 F5 뒤의 F4까지는 고음 우선 유지, E4 이하는 더 가까운 후보를 먼저 본다.
+    const optionPitchDistance = options.pitchDistance;
+    const pitchDistance = Number.isFinite(optionPitchDistance)
+      ? optionPitchDistance
+      : notePitchDistance(note, referenceNote);
+    const proximity = pitchDistance === null ? 0 : Math.max(0, 128 - Math.min(128, pitchDistance));
+    const roleDirection = melodicRoleDirectionScore(note, role, options.pitchSpread, options.overallPitchSpread);
+    const relaxRolePriority = shouldRelaxRolePriority(note, role, referenceNote, pitchDistance, options.nearestPitchDistance, options.pitchSpread);
+    // 고음/저음 역할은 자동보다 기본 우선권을 가진다.
+    // 단, 역할 방향과 반대로 1옥타브를 초과해 튀고 더 가까운 후보가 있으면 우선권을 내려준다.
+    // 이렇게 해야 중간 음역에서 자동 500점이 가까운 고음/저음 성부를 빼앗지 않는다.
+    const roleTier = relaxRolePriority ? 0 : ((role === "high" || role === "low") ? 2 : 1);
+    const effectiveRoleDirection = relaxRolePriority ? -1000 : roleDirection;
+    const mergePlayed = options.isMerge ? playedLength : 0;
+
+    if (options.isMerge && options.mergeAsNormalCandidate) {
+      return [
+        roleTier,
+        effectiveRoleDirection,
+        proximity,
+        mergePlayed,
+        note.velocity || 0,
+        durGrid,
+        -channelIndex
+      ];
+    }
+
+    return options.isMerge ? [
+      roleTier,
+      effectiveRoleDirection,
+      mergePlayed,
+      proximity,
       note.velocity || 0,
-      note.durGrid || Math.max(1, note.endGrid - note.startGrid),
+      durGrid,
+      -channelIndex
+    ] : [
+      roleTier,
+      effectiveRoleDirection,
+      proximity,
+      note.velocity || 0,
+      durGrid,
       -channelIndex
     ];
   }
