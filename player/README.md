@@ -28,7 +28,6 @@ mabinogi_mml_public/
 ├─ index.html                  # 화면 골격, 주요 버튼, 모든 dialog 마크업, 버전 표시
 ├─ styles.css                  # 전체 레이아웃, 다이얼로그, MIDI/MusicXML 변환 UI, 테마 스타일
 ├─ README.md                   # 현재 문서
-├─ favicon.ico                 # 루트 favicon 복사본
 ├─ assets/
 │  ├─ favicon.ico              # 실제 favicon 링크 대상
 │  ├─ Roland_SC-55.sf2         # 기본 사운드폰트
