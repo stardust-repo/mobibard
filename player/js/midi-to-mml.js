@@ -640,6 +640,7 @@
     let placed = 0;
     let overlapMerged = 0;
     const overallPitchSpread = getMelodicPitchSpread(notes);
+    const startupRoleContexts = buildStartupRoleContexts(notes, exportChannels);
     let i = 0;
 
     while (i < notes.length) {
@@ -652,7 +653,7 @@
       // 1차: 정상 배치를 우선하되, 고음/저음 역할과 반대로 1옥타브를 초과해 튀는 노트는
       // 겹침 병합 허용 채널까지 포함해 더 가까운 성부가 있는지 먼저 비교한다.
       while (remaining.length) {
-        const best = findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, overallPitchSpread);
+        const best = findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, overallPitchSpread, startupRoleContexts);
         if (!best) break;
         const [chosen] = remaining.splice(best.noteIndex, 1);
         if (best.isMerge) {
@@ -672,7 +673,7 @@
 
       // 2차: 정상 배치가 불가능한 노트만 겹침 병합으로 구제한다.
       while (remaining.length) {
-        const best = findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid, overallPitchSpread);
+        const best = findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid, overallPitchSpread, startupRoleContexts);
         if (!best) break;
         const [chosen] = remaining.splice(best.noteIndex, 1);
         trimActiveNoteAt(voices[best.channelIndex], startGrid);
@@ -690,7 +691,7 @@
     return { voices, skipped, placed, overlapMerged };
   }
 
-  function findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, overallPitchSpread = null) {
+  function findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, overallPitchSpread = null, startupRoleContexts = null) {
     let best = null;
     const pitchSpread = getMelodicPitchSpread(remaining);
     for (let noteIndex = 0; noteIndex < remaining.length; noteIndex++) {
@@ -747,7 +748,8 @@
           overallPitchSpread,
           isMerge,
           playedLength: candidate.playedLength,
-          mergeAsNormalCandidate: isMerge
+          mergeAsNormalCandidate: isMerge,
+          startupRoleContext: getStartupRoleContextForNote(note, startupRoleContexts)
         });
         const item = { noteIndex, channelIndex: candidate.channelIndex, score, isMerge };
         if (!best || compareScore(item.score, best.score) > 0) best = item;
@@ -756,7 +758,7 @@
     return best;
   }
 
-  function findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid, overallPitchSpread = null) {
+  function findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid, overallPitchSpread = null, startupRoleContexts = null) {
     let best = null;
     const pitchSpread = getMelodicPitchSpread(remaining);
     for (let noteIndex = 0; noteIndex < remaining.length; noteIndex++) {
@@ -787,7 +789,8 @@
           pitchSpread,
           overallPitchSpread,
           isMerge: true,
-          playedLength: candidate.playedLength
+          playedLength: candidate.playedLength,
+          startupRoleContext: getStartupRoleContextForNote(note, startupRoleContexts)
         });
         const item = { noteIndex, channelIndex: candidate.channelIndex, score };
         if (!best || compareScore(item.score, best.score) > 0) best = item;
@@ -839,6 +842,90 @@
     }
     if (!Number.isFinite(minMidi) || !Number.isFinite(maxMidi)) return { minMidi: 0, maxMidi: 0 };
     return { minMidi, maxMidi };
+  }
+
+  function buildStartupRoleContexts(notes, exportChannels) {
+    const contexts = new Map();
+    const melodicChannels = (exportChannels || [])
+      .map((cfg, channelIndex) => ({ cfg, channelIndex }))
+      .filter(item => item.cfg?.role !== "beat");
+    if (!melodicChannels.length) return contexts;
+
+    const instrumentIds = [...new Set((notes || [])
+      .filter(n => !isBeatCandidate(n) && n?.instrumentChoiceId != null)
+      .map(n => String(n.instrumentChoiceId)))]
+      .filter(Boolean);
+
+    for (const instrumentId of instrumentIds) {
+      const channels = melodicChannels.filter(item => {
+        const selected = item.cfg?.selectedInstrumentGroups;
+        return Array.isArray(selected) && selected.map(String).includes(instrumentId);
+      });
+      const validChannelCount = channels.length;
+      if (!validChannelCount) continue;
+
+      const source = (notes || []).filter(n => !isBeatCandidate(n) && String(n.instrumentChoiceId) === instrumentId);
+      if (!source.length) continue;
+
+      // 도입부에서 모든 채널이 비어 있을 때는 선행 노트가 없으므로 고음/저음 기준이 사라진다.
+      // 그래서 첫 발생 음부터 유효 채널 수만큼의 초기 노트 묶음을 보고,
+      // 그 묶음 안의 최고음/최저음을 각각 고음/저음 역할의 초기 기준으로 쓴다.
+      // 같은 시작점에 여러 음이 있으면 그 시작점의 음들은 통째로 포함해 성부 순서를 보존한다.
+      const initialNotes = [];
+      let idx = 0;
+      while (idx < source.length && initialNotes.length < validChannelCount) {
+        const start = source[idx].startGrid;
+        while (idx < source.length && source[idx].startGrid === start) {
+          initialNotes.push(source[idx++]);
+        }
+      }
+      if (initialNotes.length < 2) continue;
+
+      const spread = getMelodicPitchSpread(initialNotes);
+      if (!(spread.maxMidi > spread.minMidi)) continue;
+      contexts.set(instrumentId, {
+        noteIds: new Set(initialNotes.map(n => n.id)),
+        minMidi: spread.minMidi,
+        maxMidi: spread.maxMidi,
+        hasHigh: channels.some(item => item.cfg?.role === "high"),
+        hasLow: channels.some(item => item.cfg?.role === "low"),
+        hasAuto: channels.some(item => item.cfg?.role === "auto"),
+        validChannelCount
+      });
+    }
+    return contexts;
+  }
+
+  function getStartupRoleContextForNote(note, contexts) {
+    if (!note || !contexts || typeof contexts.get !== "function") return null;
+    return contexts.get(String(note.instrumentChoiceId)) || null;
+  }
+
+  function startupRoleSeedScore(note, role, referenceNote, context) {
+    if (!context || referenceNote || role === "beat" || !context.noteIds?.has(note?.id)) return 0;
+    const noteMidi = Number(note?.midi);
+    const minMidi = Number(context.minMidi);
+    const maxMidi = Number(context.maxMidi);
+    if (!Number.isFinite(noteMidi) || !Number.isFinite(minMidi) || !Number.isFinite(maxMidi) || maxMidi <= minMidi) return 0;
+
+    const isHighEdge = noteMidi >= maxMidi;
+    const isLowEdge = noteMidi <= minMidi;
+    const pos = Math.max(0, Math.min(1, (noteMidi - minMidi) / (maxMidi - minMidi)));
+
+    if (role === "high") {
+      if (isHighEdge) return 30;
+      // 자동 채널이 없는 2파트 구성에서는, 최고음이 아닌 초기음도 높은 쪽에 가까우면 약하게 받을 수 있게 한다.
+      return context.hasAuto ? 0 : Math.round(pos * 10);
+    }
+    if (role === "low") {
+      if (isLowEdge) return 30;
+      return context.hasAuto ? 0 : Math.round((1 - pos) * 10);
+    }
+    if (role === "auto") {
+      if ((isHighEdge && context.hasHigh) || (isLowEdge && context.hasLow)) return 0;
+      return 20;
+    }
+    return 0;
   }
 
   function melodicRoleDirectionScore(note, role, pitchSpread, fallbackPitchSpread = null) {
@@ -956,6 +1043,7 @@
       : notePitchDistance(note, referenceNote);
     const proximity = pitchDistance === null ? 0 : Math.max(0, 128 - Math.min(128, pitchDistance));
     const roleDirection = melodicRoleDirectionScore(note, role, options.pitchSpread, options.overallPitchSpread);
+    const startupRoleFit = startupRoleSeedScore(note, role, referenceNote, options.startupRoleContext);
     const relaxRolePriority = shouldRelaxRolePriority(note, role, referenceNote, pitchDistance, options.nearestPitchDistance, options.pitchSpread);
     // 고음/저음 역할은 자동보다 기본 우선권을 가진다.
     // 단, 역할 방향과 반대로 1옥타브를 초과해 튀고 더 가까운 후보가 있으면 우선권을 내려준다.
@@ -966,6 +1054,7 @@
 
     if (options.isMerge && options.mergeAsNormalCandidate) {
       return [
+        startupRoleFit,
         roleTier,
         effectiveRoleDirection,
         proximity,
@@ -977,6 +1066,7 @@
     }
 
     return options.isMerge ? [
+      startupRoleFit,
       roleTier,
       effectiveRoleDirection,
       mergePlayed,
@@ -985,6 +1075,7 @@
       durGrid,
       -channelIndex
     ] : [
+      startupRoleFit,
       roleTier,
       effectiveRoleDirection,
       proximity,
