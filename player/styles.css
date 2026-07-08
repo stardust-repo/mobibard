@@ -1331,9 +1331,21 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   overflow-wrap: anywhere;
   white-space: normal;
 }
+.mmi-import-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 1.8em;
+  flex-wrap: wrap;
+}
 .mmi-import-status {
   min-height: 1.3em;
   color: var(--muted);
+}
+.mmi-import-status-row .mmi-clear-selection {
+  margin-right: 0;
+  padding-inline: 9px;
 }
 @media (max-width: 640px) {
   .mmi-channel-row {
@@ -2346,4 +2358,15 @@ button:disabled:hover {
   .app-title-meta .import-format-list {
     white-space: normal;
   }
+}
+
+/* compact import buttons inside conversion dialogs */
+.import-action-label {
+  margin-right: 2px;
+}
+.dialog-actions-left .import-action-label + button,
+.dialog-actions-left .import-action-label + button + button {
+  min-width: 0;
+  padding-left: 10px;
+  padding-right: 10px;
 }

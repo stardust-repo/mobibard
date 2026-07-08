@@ -97,6 +97,7 @@
   const mmiImportStatus = $("mmiImportStatus");
   const mmiImportClear = $("mmiImportClear");
   const mmiImportReloadFile = $("mmiImportReloadFile");
+  const mmiImportGoogleDriveLoad = $("mmiImportGoogleDriveLoad");
   const mmiImportCancel = $("mmiImportCancel");
   const mmiImportApply = $("mmiImportApply");
   const codeHelpBtn = $("codeHelpBtn");
@@ -165,6 +166,7 @@
   const midiInstrumentPanelTitle = $("midiInstrumentPanelTitle");
   const midiInstrumentPanelHint = $("midiInstrumentPanelHint");
   const midiConvertReloadFile = $("midiConvertReloadFile");
+  const midiConvertGoogleDriveLoad = $("midiConvertGoogleDriveLoad");
   const midiConvertApply = $("midiConvertApply");
   const midiConvertCancel = $("midiConvertCancel");
   const midiConvertStatus = $("midiConvertStatus");
@@ -283,6 +285,7 @@
     mmiAllPreviewBtn?.addEventListener("click", () => void toggleMmiAllPreview());
     mmiImportClear?.addEventListener("click", () => clearMmiImportSelection());
     mmiImportReloadFile?.addEventListener("click", () => openSourceFilePicker());
+    mmiImportGoogleDriveLoad?.addEventListener("click", () => void openGoogleDrivePicker());
     mmiImportCancel?.addEventListener("click", () => closeMmiImportDialog(null));
     mmiImportApply?.addEventListener("click", () => applyMmiImportDialog());
     mmiImportDialog?.addEventListener("cancel", (event) => {
@@ -353,6 +356,7 @@
       button.addEventListener("click", () => selectActiveMidiInstrumentCategory(button.dataset.midiCategorySelect));
     }
     midiConvertReloadFile?.addEventListener("click", () => { if (!midiConvertBusy) openSourceFilePicker(); });
+    midiConvertGoogleDriveLoad?.addEventListener("click", () => { if (!midiConvertBusy) void openGoogleDrivePicker(); });
     midiConvertApply?.addEventListener("click", () => void applyMidiConvertDialog());
     midiConvertCancel?.addEventListener("click", () => {
       if (midiConvertBusy) return;
@@ -742,11 +746,21 @@
         ? (connected ? "Google 계정에서 로그아웃합니다. 권한 동의는 유지됩니다." : "Google 계정으로 Drive 연동을 시작합니다.")
         : "js/google-config.js에 OAuth Client ID를 입력해야 합니다.";
     }
+    const googleDriveLoadDisabled = !connected || !hasPickerKey;
+    const googleDriveLoadTitle = !hasPickerKey
+      ? "Drive 파일 선택에는 js/google-config.js의 API Key가 필요합니다."
+      : "Google Drive의 MML_Mobibard 폴더에서 MML, MIDI, MusicXML, MMI, 3MLE 또는 TXT 파일을 선택합니다.";
     if (googleDriveLoadBtn) {
-      googleDriveLoadBtn.disabled = !connected || !hasPickerKey;
-      googleDriveLoadBtn.title = !hasPickerKey
-        ? "Drive 파일 선택에는 js/google-config.js의 API Key가 필요합니다."
-        : "Google Drive의 MML_Mobibard 폴더에서 MML, MIDI, MusicXML, MMI, 3MLE 또는 TXT 파일을 선택합니다.";
+      googleDriveLoadBtn.disabled = googleDriveLoadDisabled;
+      googleDriveLoadBtn.title = googleDriveLoadTitle;
+    }
+    if (mmiImportGoogleDriveLoad) {
+      mmiImportGoogleDriveLoad.disabled = googleDriveLoadDisabled;
+      mmiImportGoogleDriveLoad.title = googleDriveLoadTitle;
+    }
+    if (midiConvertGoogleDriveLoad) {
+      midiConvertGoogleDriveLoad.disabled = googleDriveLoadDisabled || midiConvertBusy;
+      midiConvertGoogleDriveLoad.title = midiConvertBusy ? "변환 준비 중에는 다른 Drive 파일을 불러올 수 없습니다." : googleDriveLoadTitle;
     }
     if (googleDriveSaveBtn) {
       googleDriveSaveBtn.disabled = !connected;
@@ -1569,6 +1583,7 @@
 
   async function loadGoogleDriveSourceFile(fileId, fallbackName = "Google Drive 파일") {
     requireGoogleAccessToken();
+    closeImportDialogsForSourceReload();
     stopMidiPreview();
     stopPlayback(false);
     const meta = await getGoogleDriveFileMeta(fileId);

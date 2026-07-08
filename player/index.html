@@ -227,11 +227,15 @@
     </div>
     <p id="mmiImportSummary">파일에서 찾은 MML 채널 중 불러올 채널을 선택해 주세요.</p>
     <div id="mmiChannelList" class="mmi-channel-list" aria-label="MML 채널 목록"></div>
-    <span id="mmiImportStatus" class="dialog-small mmi-import-status" role="status" aria-live="polite"></span>
+    <div class="mmi-import-status-row">
+      <span id="mmiImportStatus" class="dialog-small mmi-import-status" role="status" aria-live="polite"></span>
+      <button id="mmiImportClear" class="mmi-clear-selection mini-button" type="button">전부해제</button>
+    </div>
     <div class="dialog-actions mmi-import-actions">
       <div class="dialog-actions-left">
-        <button id="mmiImportReloadFile" type="button">파일 불러오기</button>
-        <button id="mmiImportClear" class="mmi-clear-selection" type="button">모두 선택해제</button>
+        <span class="toolbar-label import-action-label">불러오기</span>
+        <button id="mmiImportReloadFile" type="button" title="파일에서 불러오기">파일</button>
+        <button id="mmiImportGoogleDriveLoad" type="button" disabled title="Google Drive에서 파일 불러오기">구글</button>
       </div>
       <div class="dialog-actions-right">
         <button id="mmiImportCancel" type="button">취소</button>
@@ -457,7 +461,9 @@
 
     <div class="midi-convert-footer">
       <div class="dialog-actions-left">
-        <button id="midiConvertReloadFile" type="button">파일 불러오기</button>
+        <span class="toolbar-label import-action-label">불러오기</span>
+        <button id="midiConvertReloadFile" type="button" title="파일에서 불러오기">파일</button>
+        <button id="midiConvertGoogleDriveLoad" type="button" disabled title="Google Drive에서 파일 불러오기">구글</button>
       </div>
       <span id="midiConvertStatus" class="dialog-small midi-convert-status" role="status" aria-live="polite" hidden></span>
       <div class="dialog-actions dialog-actions-right">
