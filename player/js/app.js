@@ -270,6 +270,8 @@
   let activePlaybackMainRanges = [];
   let activePlaybackPartRanges = Array.from({ length: 6 }, () => []);
   const googlePickerSuspendedCloseDialogs = new WeakSet();
+  let googlePickerLayerWatchTimer = 0;
+  let googlePickerLayerObserver = null;
 
   init();
 
@@ -1235,10 +1237,15 @@
           .setCallback((data) => {
             const action = data?.[picker.Response.ACTION];
             if (action === picker.Action.CANCEL) {
+              stopGooglePickerLayerWatch();
               resolve(null);
               return;
             }
-            if (action !== picker.Action.PICKED) return;
+            if (action !== picker.Action.PICKED) {
+              forceGooglePickerLayer();
+              return;
+            }
+            stopGooglePickerLayerWatch();
             const doc = data[picker.Response.DOCUMENTS]?.[0];
             const id = doc?.[picker.Document.ID] || "";
             const name = doc?.[picker.Document.NAME] || "선택한 폴더";
@@ -1257,7 +1264,14 @@
         const appId = googleAppId();
         if (appId) builder.setAppId(appId);
         builder.build().setVisible(true);
+        startGooglePickerLayerWatch();
+        requestAnimationFrame(() => {
+          forceGooglePickerLayer();
+          window.setTimeout(forceGooglePickerLayer, 80);
+          window.setTimeout(forceGooglePickerLayer, 240);
+        });
       } catch (err) {
+        stopGooglePickerLayerWatch();
         reject(err);
       }
     });
@@ -1672,6 +1686,68 @@
     }
   }
 
+  function forceGooglePickerLayer() {
+    const pickerLayerZ = 2147483001;
+    const pickerBackdropZ = 2147483000;
+    const selectors = [
+      ".picker-dialog-bg",
+      ".picker-dialog",
+      "iframe[src*=\"picker\"]",
+      "iframe[src*=\"docs.google.com/picker\"]",
+      "iframe[src*=\"apis.google.com/picker\"]"
+    ];
+    const nodes = new Set();
+    for (const selector of selectors) {
+      try {
+        document.querySelectorAll(selector).forEach((node) => nodes.add(node));
+      } catch (_) {}
+    }
+    for (const node of nodes) {
+      try {
+        const isBackdrop = node.classList?.contains("picker-dialog-bg");
+        const z = isBackdrop ? pickerBackdropZ : pickerLayerZ;
+        node.style.setProperty("z-index", String(z), "important");
+        if (node.classList?.contains("picker-dialog") || node.tagName === "IFRAME") {
+          node.style.setProperty("position", node.style.position || "fixed", "important");
+        }
+        const parent = node.parentElement;
+        if (parent && parent !== document.body) {
+          parent.style.setProperty("z-index", String(z), "important");
+        }
+      } catch (_) {}
+    }
+  }
+
+  function startGooglePickerLayerWatch() {
+    stopGooglePickerLayerWatch();
+    forceGooglePickerLayer();
+    googlePickerLayerWatchTimer = window.setInterval(forceGooglePickerLayer, 120);
+    try {
+      googlePickerLayerObserver = new MutationObserver(() => forceGooglePickerLayer());
+      googlePickerLayerObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class", "style"]
+      });
+    } catch (_) {
+      googlePickerLayerObserver = null;
+    }
+    // Picker가 비정상 종료되더라도 보정 루프가 남지 않도록 안전 타임아웃을 둔다.
+    window.setTimeout(() => stopGooglePickerLayerWatch(), 60_000);
+  }
+
+  function stopGooglePickerLayerWatch() {
+    if (googlePickerLayerWatchTimer) {
+      clearInterval(googlePickerLayerWatchTimer);
+      googlePickerLayerWatchTimer = 0;
+    }
+    if (googlePickerLayerObserver) {
+      try { googlePickerLayerObserver.disconnect(); } catch (_) {}
+      googlePickerLayerObserver = null;
+    }
+  }
+
   function suspendPopupPanelsForGooglePicker() {
     const suspended = [];
     const suspend = (dialog, type) => {
@@ -1748,9 +1824,16 @@
       const appId = googleAppId();
       if (appId) builder.setAppId(appId);
       builder.build().setVisible(true);
+      startGooglePickerLayerWatch();
+      requestAnimationFrame(() => {
+        forceGooglePickerLayer();
+        window.setTimeout(forceGooglePickerLayer, 80);
+        window.setTimeout(forceGooglePickerLayer, 240);
+      });
       trackAnalytics("google_drive_picker_open");
       setGoogleStatus("구글 연동됨");
     } catch (err) {
+      stopGooglePickerLayerWatch();
       restorePopupPanelsAfterGooglePicker(suspendedPanels);
       showDialog("Drive 불러오기 실패", shortError(err));
       updateGoogleDriveControls();
@@ -1760,10 +1843,21 @@
   async function handleGooglePickerResult(data, suspendedPanels = null) {
     const picker = window.google?.picker;
     const action = data?.[picker?.Response?.ACTION];
-    if (!picker || action !== picker.Action.PICKED) {
+    if (!picker) {
+      return;
+    }
+    if (action === picker.Action.CANCEL) {
+      stopGooglePickerLayerWatch();
       restorePopupPanelsAfterGooglePicker(suspendedPanels);
       return;
     }
+    if (action !== picker.Action.PICKED) {
+      // Google Picker는 열리는 과정에서 LOADED 같은 중간 이벤트를 보낼 수 있다.
+      // 이때 변환/가져오기 dialog를 복구하면 Picker가 다시 뒤로 밀리므로 무시한다.
+      forceGooglePickerLayer();
+      return;
+    }
+    stopGooglePickerLayerWatch();
     const doc = data[picker.Response.DOCUMENTS]?.[0];
     const fileId = doc?.[picker.Document.ID];
     const name = doc?.[picker.Document.NAME] || "Google Drive 파일";

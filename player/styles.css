@@ -2246,6 +2246,10 @@ button:disabled:hover {
 .picker-dialog-bg {
   z-index: 2147483000 !important;
 }
-.picker-dialog {
+.picker-dialog,
+.picker-dialog iframe,
+iframe[src*="picker"],
+iframe[src*="docs.google.com/picker"],
+iframe[src*="apis.google.com/picker"] {
   z-index: 2147483001 !important;
 }
