@@ -42,7 +42,7 @@
   const GENERATED_ACCOMP_LEGACY_ROLE = "accomp";
   const GENERATED_ACCOMP_BAR_GRIDS = 64; // 4/4 기준: 64분음표 64칸 = 한 마디
   const GENERATED_ACCOMP_STEP_GRIDS = 8; // 8분음표 아르페지오
-  const GENERATED_ACCOMP_STYLES = new Set(["calm", "normal", "bright"]);
+  const GENERATED_ACCOMP_STYLES = new Set(["calm", "normal", "bright", "auto"]);
   const KEY_MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
   const KEY_MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
   const MAJOR_SCALE_STEPS = [0, 2, 4, 5, 7, 9, 11];
@@ -660,6 +660,7 @@
     const mode = normalizeGeneratedAccompanimentStyle(value);
     if (mode === "calm") return "잔잔";
     if (mode === "bright") return "경쾌";
+    if (mode === "auto") return "자동";
     return "보통";
   }
 
@@ -799,7 +800,7 @@
       const relative = average > 0 ? smooth / average : 1;
       let bias = 0;
 
-      // 사용자가 고른 반주 성향은 유지하되, 선율이 비거나 과하게 몰리는 구간만 한 단계 보정한다.
+      // 잔잔/보통/경쾌은 한 단계 보정용 bias로 쓰고, 자동은 이 값을 포함한 구간 밀도로 직접 패턴을 고른다.
       const verySparse = current.raw <= 0.02 || (current.attackCount <= 1 && current.occupiedRatio < 0.34) || (average > 0 && relative < 0.58 && current.attackCount <= 3);
       const veryActive = current.attackCount >= 8 || current.distinctAttackCount >= 6 || (average > 0 && relative > 1.38 && current.attackCount >= 4);
       if (verySparse) bias = -1;
@@ -855,14 +856,36 @@
 
   function chooseGeneratedAccompanimentEffectiveStyle(baseStyle, intensity = null) {
     const baseMode = normalizeGeneratedAccompanimentStyle(baseStyle);
-    const baseLevel = generatedAccompanimentStyleLevel(baseMode);
     const bias = clampInt(Number(intensity?.bias) || 0, -1, 1);
+
+    if (baseMode === "auto") {
+      return chooseGeneratedAccompanimentAutoStyle(intensity);
+    }
+
+    const baseLevel = generatedAccompanimentStyleLevel(baseMode);
     if (!bias) return baseMode;
 
     // 잔잔/보통/경쾌은 중심 성향이므로 최대 한 단계까지만 움직인다.
     const minLevel = baseLevel === 0 ? 0 : baseLevel - 1;
     const maxLevel = baseLevel === 2 ? 2 : baseLevel + 1;
     return generatedAccompanimentStyleFromLevel(clampInt(baseLevel + bias, minLevel, maxLevel));
+  }
+
+  function chooseGeneratedAccompanimentAutoStyle(intensity = null) {
+    if (!intensity) return "normal";
+    const raw = Number(intensity.raw) || 0;
+    const relative = Number.isFinite(Number(intensity.relative)) ? Number(intensity.relative) : 1;
+    const attackCount = Number(intensity.attackCount) || 0;
+    const distinctAttackCount = Number(intensity.distinctAttackCount) || 0;
+    const occupiedRatio = Number(intensity.occupiedRatio) || 0;
+    const bias = clampInt(Number(intensity.bias) || 0, -1, 1);
+
+    // 자동은 사용자가 고른 중심 성향이 없으므로, 구간 밀도에 따라 더 적극적으로 잔잔/보통/경쾌을 고른다.
+    const sparse = bias < 0 || raw <= 0.05 || relative < 0.72 || (attackCount <= 2 && occupiedRatio < 0.45);
+    const active = bias > 0 || relative > 1.18 || attackCount >= 6 || distinctAttackCount >= 5;
+    if (active && !sparse) return "bright";
+    if (sparse && !active) return "calm";
+    return "normal";
   }
 
   function generatedAccompanimentStyleLevel(style) {

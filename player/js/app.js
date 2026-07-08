@@ -19,7 +19,8 @@
   const GENERATED_ACCOMP_STYLE_OPTIONS = [
     { value: "calm", label: "잔잔" },
     { value: "normal", label: "보통" },
-    { value: "bright", label: "경쾌" }
+    { value: "bright", label: "경쾌" },
+    { value: "auto", label: "자동" }
   ];
   const MIDI_INSTRUMENT_CATEGORY_ORDER = ["keyboard", "strings", "winds", "percussion", "other"];
   const MIDI_INSTRUMENT_CATEGORY_LABELS = {
