@@ -660,7 +660,7 @@
     const mode = normalizeGeneratedAccompanimentStyle(value);
     if (mode === "calm") return "잔잔";
     if (mode === "bright") return "경쾌";
-    return "기본";
+    return "보통";
   }
 
   function overlapMergeModeLabel(value) {
@@ -716,6 +716,7 @@
     if (!(endBar > startBar)) return { notes: [], measureCount: 0 };
 
     const measureMap = buildMeasureNoteMap(source, startBar, endBar, GENERATED_ACCOMP_BAR_GRIDS);
+    const intensityMap = buildGeneratedAccompanimentIntensityMap(measureMap, startBar, endBar, GENERATED_ACCOMP_BAR_GRIDS);
     const key = estimateGeneratedAccompanimentKey(source);
     const sourceSpread = getMelodicPitchSpread(source);
     const volume = estimateGeneratedAccompanimentVolume(source);
@@ -728,7 +729,8 @@
       const barEnd = Math.min(barStart + GENERATED_ACCOMP_BAR_GRIDS, endBar);
       const measureNotes = measureMap.get(barStart) || [];
       const chord = chooseGeneratedAccompanimentChord(measureNotes, key, barIndex, prevChord);
-      const pattern = buildGeneratedAccompanimentPattern(chord, sourceSpread, generatedOrdinal, cfg?.generatedAccompanimentStyle);
+      const effectiveStyle = chooseGeneratedAccompanimentEffectiveStyle(cfg?.generatedAccompanimentStyle, intensityMap.get(barStart));
+      const pattern = buildGeneratedAccompanimentPattern(chord, sourceSpread, generatedOrdinal, effectiveStyle);
       if (!pattern.midis.length || pattern.stepGrid <= 0) continue;
       measureCount++;
       prevChord = chord;
@@ -771,6 +773,108 @@
       }
     }
     return map;
+  }
+
+
+  function buildGeneratedAccompanimentIntensityMap(measureMap, startBar, endBar, barGrid) {
+    const bars = [];
+    for (let barStart = startBar; barStart < endBar; barStart += barGrid) {
+      const barEnd = Math.min(barStart + barGrid, endBar);
+      const notes = measureMap.get(barStart) || [];
+      bars.push(measureGeneratedAccompanimentIntensity(notes, barStart, barEnd, barGrid));
+    }
+
+    const activeBars = bars.filter(b => b.raw > 0);
+    const average = activeBars.length
+      ? activeBars.reduce((sum, b) => sum + b.raw, 0) / activeBars.length
+      : 0;
+    const map = new Map();
+
+    for (let i = 0; i < bars.length; i++) {
+      const prev = bars[i - 1] || null;
+      const current = bars[i];
+      const next = bars[i + 1] || null;
+      const weight = (prev ? 0.45 : 0) + 1 + (next ? 0.45 : 0);
+      const smooth = ((prev?.raw || 0) * 0.45 + current.raw + (next?.raw || 0) * 0.45) / Math.max(1, weight);
+      const relative = average > 0 ? smooth / average : 1;
+      let bias = 0;
+
+      // 사용자가 고른 반주 성향은 유지하되, 선율이 비거나 과하게 몰리는 구간만 한 단계 보정한다.
+      const verySparse = current.raw <= 0.02 || (current.attackCount <= 1 && current.occupiedRatio < 0.34) || (average > 0 && relative < 0.58 && current.attackCount <= 3);
+      const veryActive = current.attackCount >= 8 || current.distinctAttackCount >= 6 || (average > 0 && relative > 1.38 && current.attackCount >= 4);
+      if (verySparse) bias = -1;
+      else if (veryActive) bias = 1;
+
+      map.set(current.barStart, { ...current, average, smooth, relative, bias });
+    }
+
+    return map;
+  }
+
+  function measureGeneratedAccompanimentIntensity(notes, barStart, barEnd, barGrid) {
+    let attackCount = 0;
+    let occupiedGrid = 0;
+    let velocitySum = 0;
+    let velocityCount = 0;
+    const attackPositions = new Set();
+
+    for (const note of notes || []) {
+      const start = Number(note?.startGrid) || 0;
+      const end = Math.max(start, Number(note?.endGrid) || start);
+      const overlap = Math.max(0, Math.min(end, barEnd) - Math.max(start, barStart));
+      if (overlap <= 0) continue;
+      occupiedGrid += Math.min(overlap, barGrid);
+      velocitySum += normalizeGeneratedAccompanimentVelocity(note);
+      velocityCount++;
+      if (start >= barStart && start < barEnd) {
+        attackCount++;
+        attackPositions.add(Math.round(start));
+      }
+    }
+
+    const occupiedRatio = Math.min(1.75, occupiedGrid / Math.max(1, barGrid));
+    const density = Math.min(1.75, attackCount / 8);
+    const velocityRatio = velocityCount ? Math.min(1.2, (velocitySum / velocityCount) / 15) : 0;
+    const raw = density * 0.56 + Math.min(1.2, occupiedRatio) * 0.30 + velocityRatio * 0.14;
+    return {
+      barStart,
+      attackCount,
+      distinctAttackCount: attackPositions.size,
+      occupiedRatio,
+      raw
+    };
+  }
+
+  function normalizeGeneratedAccompanimentVelocity(note) {
+    const mmlVelocity = Number(note?.velocity);
+    if (Number.isFinite(mmlVelocity) && mmlVelocity > 0) return clampInt(Math.round(mmlVelocity), 1, 15);
+    const midiVelocity = Number(note?.midiVelocity);
+    if (Number.isFinite(midiVelocity) && midiVelocity > 0) return clampInt(Math.round(midiVelocity / 127 * 15), 1, 15);
+    return 8;
+  }
+
+  function chooseGeneratedAccompanimentEffectiveStyle(baseStyle, intensity = null) {
+    const baseMode = normalizeGeneratedAccompanimentStyle(baseStyle);
+    const baseLevel = generatedAccompanimentStyleLevel(baseMode);
+    const bias = clampInt(Number(intensity?.bias) || 0, -1, 1);
+    if (!bias) return baseMode;
+
+    // 잔잔/보통/경쾌은 중심 성향이므로 최대 한 단계까지만 움직인다.
+    const minLevel = baseLevel === 0 ? 0 : baseLevel - 1;
+    const maxLevel = baseLevel === 2 ? 2 : baseLevel + 1;
+    return generatedAccompanimentStyleFromLevel(clampInt(baseLevel + bias, minLevel, maxLevel));
+  }
+
+  function generatedAccompanimentStyleLevel(style) {
+    const mode = normalizeGeneratedAccompanimentStyle(style);
+    if (mode === "calm") return 0;
+    if (mode === "bright") return 2;
+    return 1;
+  }
+
+  function generatedAccompanimentStyleFromLevel(level) {
+    const index = clampInt(Number(level) || 0, 0, 2);
+    return ["calm", "normal", "bright"][index] || "normal";
   }
 
   function estimateGeneratedAccompanimentKey(notes) {
