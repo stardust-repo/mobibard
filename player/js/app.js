@@ -213,6 +213,9 @@
   let pianoRollLastDataSignature = "";
   let pianoRollPlayableCacheSignature = "";
   let pianoRollPlayableCache = [];
+  let pianoRollRefreshRaf = 0;
+  let pianoRollRefreshSettleTimer = 0;
+  let pianoRollResizeObserver = null;
   let playContextStart = 0;
   let playOffsetStart = 0;
   let playbackAutoGainScale = 1;
@@ -321,6 +324,7 @@
         togglePianoRoll();
       }
     });
+    installPianoRollRefreshHooks();
     copyBtn.addEventListener("click", () => void copyVisibleMml());
     splitCopyBtn?.addEventListener("click", () => openSplitCopyDialog());
     splitCopyRebuild?.addEventListener("click", () => buildSplitCopyPages());
@@ -383,7 +387,7 @@
     });
     window.addEventListener("resize", () => {
       if (midiConvertDialog?.open) scheduleMidiInstrumentListHeightSync();
-      updatePianoRoll(currentOffset, scheduleCache?.duration || Number(progressSlider.max) || 0, true);
+      requestPianoRollRefresh(true);
     });
     partSoundDialog?.addEventListener("close", () => stopMidiPreview());
     themeToggleBtn?.addEventListener("click", toggleTheme);
@@ -412,6 +416,7 @@
     scheduleGoogleAutoReconnect();
     updateCharCount();
     rebuildSchedulePreviewSilently();
+    requestPianoRollRefresh(true);
     trackAnalytics("mobibard_app_open", { version: "4_0" });
   }
 
@@ -547,7 +552,7 @@
   function togglePianoRoll() {
     pianoRollExpanded = !pianoRollExpanded;
     applyPianoRollExpandedState(true);
-    updatePianoRoll(currentOffset, scheduleCache?.duration || Number(progressSlider.max) || 0, true);
+    requestPianoRollRefresh(true);
   }
 
   function applyPianoRollExpandedState(persist) {
@@ -558,6 +563,68 @@
     pianoRoll.title = pianoRollExpanded ? "클릭해서 피아노 롤 접기" : "클릭해서 피아노 롤 펼치기";
     if (pianoRollToggleLabel) pianoRollToggleLabel.textContent = pianoRollExpanded ? "접기" : "펼치기";
     if (persist) writePref("pianoRollExpanded", pianoRollExpanded ? "1" : "0");
+  }
+
+  function getPianoRollRenderDuration() {
+    return scheduleCache?.duration || Number(progressSlider?.max) || 0;
+  }
+
+  function requestPianoRollRefresh(settle = false) {
+    if (!pianoRoll || !pianoRollCanvas) return;
+
+    const run = () => updatePianoRoll(currentOffset, getPianoRollRenderDuration(), true);
+    const raf = typeof window !== "undefined" && typeof window.requestAnimationFrame === "function"
+      ? window.requestAnimationFrame.bind(window)
+      : (callback) => window.setTimeout(callback, 16);
+    const caf = typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function"
+      ? window.cancelAnimationFrame.bind(window)
+      : window.clearTimeout.bind(window);
+
+    if (pianoRollRefreshRaf) caf(pianoRollRefreshRaf);
+    pianoRollRefreshRaf = raf(() => {
+      pianoRollRefreshRaf = 0;
+      run();
+      // 레이아웃 계산 직후 한 번 더 그려서 접힘/펼침 직후 캔버스 비율이 늘어나 보이는 현상을 줄인다.
+      raf(run);
+    });
+
+    if (settle) {
+      clearTimeout(pianoRollRefreshSettleTimer);
+      pianoRollRefreshSettleTimer = setTimeout(run, 240);
+    }
+  }
+
+  function installPianoRollRefreshHooks() {
+    const stage = pianoRoll?.querySelector(".piano-roll-stage");
+    if (!stage) return;
+
+    if (typeof ResizeObserver === "function") {
+      try { pianoRollResizeObserver?.disconnect?.(); } catch (_) {}
+      let lastWidth = -1;
+      let lastHeight = -1;
+      pianoRollResizeObserver = new ResizeObserver((entries) => {
+        const rect = entries?.[0]?.contentRect;
+        const width = Math.round((rect?.width || stage.clientWidth || 0) * 10);
+        const height = Math.round((rect?.height || stage.clientHeight || 0) * 10);
+        if (width === lastWidth && height === lastHeight) return;
+        lastWidth = width;
+        lastHeight = height;
+        requestPianoRollRefresh(false);
+      });
+      pianoRollResizeObserver.observe(stage);
+    }
+
+    stage.addEventListener("transitionend", (event) => {
+      if (!event || event.propertyName === "height" || event.propertyName === "all") {
+        requestPianoRollRefresh(false);
+      }
+    });
+
+    if (document.readyState === "complete") {
+      requestPianoRollRefresh(true);
+    } else {
+      window.addEventListener("load", () => requestPianoRollRefresh(true), { once: true });
+    }
   }
 
   function loadPartMutePrefs() {
