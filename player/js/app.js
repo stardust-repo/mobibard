@@ -35,6 +35,9 @@
   const GOOGLE_SETTINGS_APP_NAME = "mabinogi-mml-player";
   const GOOGLE_MML_FOLDER_NAME = "MML_Mobibard";
   const GOOGLE_DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
+  const GOOGLE_DRIVE_SHORTCUT_MIME = "application/vnd.google-apps.shortcut";
+  const GOOGLE_DOCS_DOCUMENT_MIME = "application/vnd.google-apps.document";
+  const GOOGLE_DRIVE_TEXT_EXPORT_MIME = "text/plain";
   const GOOGLE_AUTO_RECONNECT_PREF = "googleAutoReconnect";
   const GOOGLE_TOKEN_CACHE_PREF = "googleTokenCache";
   const GOOGLE_LOCAL_ONLY_PREFS = new Set([GOOGLE_AUTO_RECONNECT_PREF, GOOGLE_TOKEN_CACHE_PREF]);
@@ -822,7 +825,7 @@
     const googleDriveLoadDisabled = !connected || !hasPickerKey;
     const googleDriveLoadTitle = !hasPickerKey
       ? "Drive 파일 선택에는 js/google-config.js의 API Key가 필요합니다."
-      : "Google Drive의 MML_Mobibard 폴더에서 MML, MIDI, MusicXML, MMI, 3MLE 또는 TXT 파일을 선택합니다.";
+      : "Google Drive의 MML_Mobibard 폴더에서 Google Docs, MML, MIDI, MusicXML, MMI, 3MLE 또는 TXT 파일을 선택합니다.";
     if (googleDriveLoadBtn) {
       googleDriveLoadBtn.disabled = googleDriveLoadDisabled;
       googleDriveLoadBtn.title = googleDriveLoadTitle;
@@ -989,6 +992,46 @@
     return String(text || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   }
 
+  function appendGoogleDriveParams(url, params = {}) {
+    const query = Object.entries(params)
+      .filter(([, value]) => value != null && value !== "")
+      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+      .join("&");
+    if (!query) return url;
+    return `${url}${url.includes("?") ? "&" : "?"}${query}`;
+  }
+
+  function googleDriveSupportsAllDrivesParams(extra = {}) {
+    return { supportsAllDrives: "true", ...extra };
+  }
+
+  function googleDriveListParams(extra = {}) {
+    return { supportsAllDrives: "true", includeItemsFromAllDrives: "true", ...extra };
+  }
+
+  function isGoogleDriveNotFoundError(err) {
+    return /(?:^|\b)(?:404|notFound|File not found)(?:\b|:)/i.test(String(err?.message || err || ""));
+  }
+
+  function clearRememberedGoogleDriveSaveFolder() {
+    googleDriveSaveFolderId = "";
+    googleDriveSaveFolderName = "";
+    removeLocalPrefOnly("googleDriveSaveFolderId");
+    removeLocalPrefOnly("googleDriveSaveFolderName");
+    scheduleGoogleSettingsSave();
+  }
+
+  function isGoogleDriveNativeEditorMime(mimeType = "") {
+    const type = String(mimeType || "").toLowerCase();
+    return type.startsWith("application/vnd.google-apps.")
+      && type !== GOOGLE_DRIVE_FOLDER_MIME
+      && type !== GOOGLE_DRIVE_SHORTCUT_MIME;
+  }
+
+  function isGoogleDocsDocumentMime(mimeType = "") {
+    return String(mimeType || "").toLowerCase() === GOOGLE_DOCS_DOCUMENT_MIME;
+  }
+
   async function googleDriveFetch(url, options = {}, retry = true) {
     const token = requireGoogleAccessToken();
     const headers = new Headers(options.headers || {});
@@ -1038,9 +1081,13 @@
     if (parents && !fileId) metadata.parents = parents;
     const multipart = createMultipartBody(metadata, text, `${mimeType}; charset=UTF-8`);
     const encodedId = encodeURIComponent(fileId);
-    const url = fileId
-      ? `${GOOGLE_DRIVE_UPLOAD_BASE}/files/${encodedId}?uploadType=multipart&fields=id,name,modifiedTime,webViewLink`
-      : `${GOOGLE_DRIVE_UPLOAD_BASE}/files?uploadType=multipart&fields=id,name,modifiedTime,webViewLink`;
+    const baseUrl = fileId
+      ? `${GOOGLE_DRIVE_UPLOAD_BASE}/files/${encodedId}`
+      : `${GOOGLE_DRIVE_UPLOAD_BASE}/files`;
+    const url = appendGoogleDriveParams(baseUrl, googleDriveSupportsAllDrivesParams({
+      uploadType: "multipart",
+      fields: "id,name,modifiedTime,webViewLink,parents"
+    }));
     const method = fileId ? "PATCH" : "POST";
     return googleDriveJson(url, {
       method,
@@ -1050,14 +1097,23 @@
   }
 
   async function findGoogleMmlFolder() {
-    const q = encodeURIComponent(`name = '${driveQueryString(GOOGLE_MML_FOLDER_NAME)}' and mimeType = '${GOOGLE_DRIVE_FOLDER_MIME}' and trashed = false`);
-    const url = `${GOOGLE_DRIVE_API_BASE}/files?spaces=drive&pageSize=1&q=${q}&fields=files(id,name,modifiedTime,webViewLink)`;
+    const q = `name = '${driveQueryString(GOOGLE_MML_FOLDER_NAME)}' and mimeType = '${GOOGLE_DRIVE_FOLDER_MIME}' and trashed = false`;
+    const url = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files`, googleDriveListParams({
+      spaces: "drive",
+      corpora: "allDrives",
+      pageSize: "1",
+      q,
+      fields: "files(id,name,mimeType,modifiedTime,webViewLink,capabilities,driveId)"
+    }));
     const data = await googleDriveJson(url);
     return Array.isArray(data.files) && data.files.length ? data.files[0] : null;
   }
 
   async function createGoogleMmlFolder() {
-    return googleDriveJson(`${GOOGLE_DRIVE_API_BASE}/files?fields=id,name,modifiedTime,webViewLink`, {
+    const url = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files`, googleDriveSupportsAllDrivesParams({
+      fields: "id,name,mimeType,modifiedTime,webViewLink,capabilities,driveId"
+    }));
+    return googleDriveJson(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1069,11 +1125,25 @@
   }
 
   async function ensureGoogleMmlFolder() {
-    if (googleDriveMmlFolderId) return googleDriveMmlFolderId;
+    if (googleDriveMmlFolderId) {
+      try {
+        const cached = await validateGoogleDriveFolder(googleDriveMmlFolderId, { requireWritable: true });
+        googleDriveMmlFolderId = cached.id;
+        return googleDriveMmlFolderId;
+      } catch (err) {
+        if (!isGoogleDriveNotFoundError(err)) throw err;
+        googleDriveMmlFolderId = "";
+      }
+    }
     const existing = await findGoogleMmlFolder();
     if (existing?.id) {
-      googleDriveMmlFolderId = existing.id;
-      return googleDriveMmlFolderId;
+      try {
+        const folder = await validateGoogleDriveFolder(existing.id, { requireWritable: true });
+        googleDriveMmlFolderId = folder.id || existing.id;
+        return googleDriveMmlFolderId;
+      } catch (_) {
+        googleDriveMmlFolderId = "";
+      }
     }
     const created = await createGoogleMmlFolder();
     if (!created?.id) throw new Error(`${GOOGLE_MML_FOLDER_NAME} 폴더를 만들지 못했습니다.`);
@@ -1091,6 +1161,44 @@
     googleDriveSaveFolderName = String(name || "").replace(/\s+/g, " ").trim().slice(0, 120);
     if (googleDriveSaveFolderId) writePref("googleDriveSaveFolderId", googleDriveSaveFolderId);
     if (googleDriveSaveFolderName) writePref("googleDriveSaveFolderName", googleDriveSaveFolderName);
+  }
+
+  async function validateGoogleDriveFolder(folderId, { requireWritable = false } = {}) {
+    const id = String(folderId || "").trim();
+    if (!id) throw new Error("저장 위치 폴더가 선택되지 않았습니다.");
+    const meta = await getGoogleDriveFileMeta(id, "id,name,mimeType,trashed,capabilities,driveId,shortcutDetails");
+    let folder = meta;
+    if (folder?.mimeType === GOOGLE_DRIVE_SHORTCUT_MIME && folder.shortcutDetails?.targetId) {
+      folder = await getGoogleDriveFileMeta(folder.shortcutDetails.targetId, "id,name,mimeType,trashed,capabilities,driveId");
+    }
+    if (!folder?.id) throw new Error("저장 위치 폴더를 찾지 못했습니다.");
+    if (folder.trashed) throw new Error(`'${folder.name || "선택한 폴더"}' 폴더가 휴지통에 있습니다.`);
+    if (folder.mimeType !== GOOGLE_DRIVE_FOLDER_MIME) throw new Error("저장 위치가 폴더가 아닙니다. 폴더를 다시 선택해 주세요.");
+    if (requireWritable && folder.capabilities && folder.capabilities.canAddChildren === false) {
+      throw new Error(`'${folder.name || "선택한 폴더"}' 폴더에 파일을 저장할 권한이 없습니다.`);
+    }
+    return {
+      id: folder.id,
+      name: folder.name || GOOGLE_MML_FOLDER_NAME,
+      driveId: folder.driveId || "",
+      capabilities: folder.capabilities || null
+    };
+  }
+
+  async function resolveGoogleDriveSaveFolder(folderId, folderName) {
+    try {
+      const folder = await validateGoogleDriveFolder(folderId, { requireWritable: true });
+      rememberGoogleDriveSaveFolder(folder.id, folder.name || folderName || GOOGLE_MML_FOLDER_NAME);
+      return folder;
+    } catch (err) {
+      if (!isGoogleDriveNotFoundError(err)) throw err;
+      clearRememberedGoogleDriveSaveFolder();
+      googleDriveMmlFolderId = "";
+      const fallbackId = await ensureGoogleMmlFolder();
+      const fallback = await validateGoogleDriveFolder(fallbackId, { requireWritable: true });
+      rememberGoogleDriveSaveFolder(fallback.id, fallback.name || GOOGLE_MML_FOLDER_NAME);
+      return fallback;
+    }
   }
 
   async function pickGoogleDriveSaveFolder() {
@@ -1205,8 +1313,14 @@
 
   async function findGoogleDriveTextFileInFolder(folderId, name) {
     if (!folderId || !name) return null;
-    const q = encodeURIComponent(`'${driveQueryString(folderId)}' in parents and name = '${driveQueryString(name)}' and trashed = false`);
-    const url = `${GOOGLE_DRIVE_API_BASE}/files?spaces=drive&pageSize=10&q=${q}&fields=files(id,name,modifiedTime,webViewLink,parents)`;
+    const q = `'${driveQueryString(folderId)}' in parents and name = '${driveQueryString(name)}' and trashed = false`;
+    const url = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files`, googleDriveListParams({
+      spaces: "drive",
+      corpora: "allDrives",
+      pageSize: "10",
+      q,
+      fields: "files(id,name,mimeType,modifiedTime,webViewLink,parents,driveId)"
+    }));
     const data = await googleDriveJson(url);
     return Array.isArray(data.files) && data.files.length ? data.files[0] : null;
   }
@@ -1301,8 +1415,14 @@
         googleDriveSaveFileName.value = fileName;
         setSaveBusy(true, "같은 이름의 파일이 있는지 확인 중...");
         try {
-          const folderId = selectedFolder.id || googleDriveMmlFolderId || await ensureGoogleMmlFolder();
-          const folderName = selectedFolder.name || GOOGLE_MML_FOLDER_NAME;
+          const preparedFolder = await resolveGoogleDriveSaveFolder(
+            selectedFolder.id || googleDriveMmlFolderId || await ensureGoogleMmlFolder(),
+            selectedFolder.name || GOOGLE_MML_FOLDER_NAME
+          );
+          const folderId = preparedFolder.id;
+          const folderName = preparedFolder.name || selectedFolder.name || GOOGLE_MML_FOLDER_NAME;
+          selectedFolder = { id: folderId, name: folderName };
+          updateFolderLabel();
           const existing = await findGoogleDriveTextFileInFolder(folderId, fileName);
           if (existing?.id) {
             const overwrite = window.confirm(`'${folderName}' 폴더에 '${fileName}' 파일이 이미 있습니다.
@@ -1420,7 +1540,17 @@
   }
 
   async function downloadGoogleDriveText(fileId) {
-    const response = await googleDriveFetch(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?alt=media`);
+    const url = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}`, googleDriveSupportsAllDrivesParams({ alt: "media" }));
+    const response = await googleDriveFetch(url);
+    if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
+    return response.text();
+  }
+
+  async function exportGoogleDriveText(fileId, exportMimeType = GOOGLE_DRIVE_TEXT_EXPORT_MIME) {
+    const url = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}/export`, {
+      mimeType: exportMimeType
+    });
+    const response = await googleDriveFetch(url);
     if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
     return response.text();
   }
@@ -1505,13 +1635,26 @@
         googleSettingsFileId = existing?.id || "";
       }
       const payload = buildGoogleSettingsPayload();
-      const saved = await uploadGoogleDriveTextFile({
-        fileId: googleSettingsFileId,
-        name: GOOGLE_SETTINGS_FILE_NAME,
-        text: payload,
-        parents: googleSettingsFileId ? null : ["appDataFolder"],
-        mimeType: "application/json"
-      });
+      let saved;
+      try {
+        saved = await uploadGoogleDriveTextFile({
+          fileId: googleSettingsFileId,
+          name: GOOGLE_SETTINGS_FILE_NAME,
+          text: payload,
+          parents: googleSettingsFileId ? null : ["appDataFolder"],
+          mimeType: "application/json"
+        });
+      } catch (err) {
+        if (!googleSettingsFileId || !isGoogleDriveNotFoundError(err)) throw err;
+        googleSettingsFileId = "";
+        saved = await uploadGoogleDriveTextFile({
+          fileId: "",
+          name: GOOGLE_SETTINGS_FILE_NAME,
+          text: payload,
+          parents: ["appDataFolder"],
+          mimeType: "application/json"
+        });
+      }
       googleSettingsFileId = saved?.id || googleSettingsFileId;
       if (!silent) setGoogleStatus("구글 설정 저장됨");
       return true;
@@ -1538,12 +1681,12 @@
       // application/octet-stream 등 서로 다른 MIME 타입으로 저장될 수 있다.
       // Picker에서 MIME 타입을 강하게 제한하면 .mid/.midi 파일이 목록에서
       // 사라질 수 있으므로 기본 폴더 안의 파일을 넓게 보여주고, 선택 후
-      // 확장자/MIME 검사로 MIDI, MusicXML, MMI, 3MLE 또는 TXT만 처리한다.
+      // 확장자/MIME 검사로 Google Docs, MIDI, MusicXML, MMI, 3MLE 또는 TXT만 처리한다.
       try { if (folderId && typeof view.setParent === "function") view.setParent(folderId); } catch (_) {}
       const builder = new window.google.picker.PickerBuilder()
         .setDeveloperKey(googleApiKey())
         .setOAuthToken(googleAccessToken)
-        .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 MML / MIDI / MusicXML / MMI / 3MLE / TXT 파일 선택`)
+        .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 Google Docs / MML / MIDI / MusicXML / MMI / 3MLE / TXT 파일 선택`)
         .addView(view)
         .setCallback((data) => void handleGooglePickerResult(data));
       const appId = googleAppId();
@@ -1576,8 +1719,14 @@
     }
   }
 
-  async function getGoogleDriveFileMeta(fileId) {
-    return googleDriveJson(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,size,modifiedTime,webViewLink,parents`);
+  async function getGoogleDriveFileMeta(fileId, fields = "id,name,mimeType,size,modifiedTime,webViewLink,parents,driveId,shortcutDetails") {
+    const url = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}`, googleDriveSupportsAllDrivesParams({ fields }));
+    return googleDriveJson(url);
+  }
+
+  async function resolveGoogleDriveShortcutMeta(meta) {
+    if (meta?.mimeType !== GOOGLE_DRIVE_SHORTCUT_MIME || !meta.shortcutDetails?.targetId) return meta;
+    return getGoogleDriveFileMeta(meta.shortcutDetails.targetId);
   }
 
   function isGoogleDriveMidiFile(name, mimeType = "") {
@@ -1659,10 +1808,39 @@
     closeImportDialogsForSourceReload();
     stopMidiPreview();
     stopPlayback(false);
-    const meta = await getGoogleDriveFileMeta(fileId);
-    const name = meta?.name || fallbackName;
-    const mimeType = meta?.mimeType || "";
-    const response = await googleDriveFetch(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?alt=media`);
+    const pickedMeta = await getGoogleDriveFileMeta(fileId);
+    const meta = await resolveGoogleDriveShortcutMeta(pickedMeta);
+    const sourceFileId = meta?.id || fileId;
+    const name = meta?.name || pickedMeta?.name || fallbackName;
+    const mimeType = meta?.mimeType || pickedMeta?.mimeType || "";
+    if (isGoogleDocsDocumentMime(mimeType)) {
+      const loaded = readMmlTextFile(await exportGoogleDriveText(sourceFileId, GOOGLE_DRIVE_TEXT_EXPORT_MIME));
+      try {
+        const normalized = normalizeImportedFullMml(loaded);
+        setMainMml(normalized.mml);
+      } catch (optErr) {
+        setMainMml(loaded);
+        showDialog("MML 최적화 생략", `Drive Google Docs 문서는 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+      }
+      googleDriveMmlFileId = "";
+      googleDriveMmlFileName = "";
+      rememberSuggestedMmlSaveFileName(name);
+      if (Array.isArray(meta?.parents) && meta.parents[0]) {
+        rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
+      }
+      showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
+      trackAnalytics("drive_import_mml", {
+        file_type: "google_docs",
+        channel_count: analyticsChannelCount(mainMml.value)
+      });
+      setGoogleStatus("Drive Google Docs 불러옴");
+      return;
+    }
+    if (isGoogleDriveNativeEditorMime(mimeType)) {
+      throw new Error("Google Docs 문서는 TXT로 변환해 불러올 수 있지만, Sheets/Slides 같은 다른 Google 편집기 파일은 아직 지원하지 않습니다.");
+    }
+    const mediaUrl = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(sourceFileId)}`, googleDriveSupportsAllDrivesParams({ alt: "media" }));
+    const response = await googleDriveFetch(mediaUrl);
     if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (isGoogleDriveMidiFile(name, mimeType)) {
@@ -1749,7 +1927,7 @@
         setMainMml(loaded);
         showDialog("MML 최적화 생략", `Drive 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
       }
-      googleDriveMmlFileId = fileId;
+      googleDriveMmlFileId = sourceFileId;
       googleDriveMmlFileName = name;
       rememberSuggestedMmlSaveFileName(name);
       showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
@@ -1798,16 +1976,30 @@ ${shortError(err)}`);
           const fileName = normalizeGoogleDriveTxtFileName(target.fileName);
           rememberGoogleDriveSaveFolder(folderId, folderName);
 
-          const targetId = target.overwriteFileId || "";
-          const createsNewFile = !targetId;
+          let targetId = target.overwriteFileId || "";
+          let createsNewFile = !targetId;
           setGoogleStatus("Drive 저장 중...");
-          const saved = await uploadGoogleDriveTextFile({
-            fileId: targetId,
-            name: fileName,
-            text: text + "\n",
-            parents: createsNewFile ? [folderId] : null,
-            mimeType: "text/plain"
-          });
+          let saved;
+          try {
+            saved = await uploadGoogleDriveTextFile({
+              fileId: targetId,
+              name: fileName,
+              text: text + "\n",
+              parents: createsNewFile ? [folderId] : null,
+              mimeType: "text/plain"
+            });
+          } catch (err) {
+            if (!targetId || !isGoogleDriveNotFoundError(err)) throw err;
+            targetId = "";
+            createsNewFile = true;
+            saved = await uploadGoogleDriveTextFile({
+              fileId: "",
+              name: fileName,
+              text: text + "\n",
+              parents: [folderId],
+              mimeType: "text/plain"
+            });
+          }
           googleDriveMmlFileId = saved?.id || targetId;
           googleDriveMmlFileName = saved?.name || fileName;
           rememberSuggestedMmlSaveFileName(googleDriveMmlFileName);
