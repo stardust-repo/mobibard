@@ -1707,9 +1707,8 @@
         const isBackdrop = node.classList?.contains("picker-dialog-bg");
         const z = isBackdrop ? pickerBackdropZ : pickerLayerZ;
         node.style.setProperty("z-index", String(z), "important");
-        if (node.classList?.contains("picker-dialog") || node.tagName === "IFRAME") {
-          node.style.setProperty("position", node.style.position || "fixed", "important");
-        }
+        // Keep the Picker's own size and placement intact.
+        // Changing iframe/dialog position here can make Google Picker expand incorrectly on some browsers.
         const parent = node.parentElement;
         if (parent && parent !== document.body) {
           parent.style.setProperty("z-index", String(z), "important");
