@@ -746,3 +746,6 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - `actions/deploy-pages@v5`에서 환경에 따라 `Deployment failed, try again later.`가 발생할 수 있어, 현재 워크플로는 안정성을 위해 GitHub 문서 예시와 같은 `actions/deploy-pages@v4`를 사용합니다.
 
 저장소 Settings → Pages에서 Source가 `GitHub Actions`로 설정되어 있어야 합니다.
+
+
+- 생성 역할의 반주 패턴 기본값을 `자동`으로 변경

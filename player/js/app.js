@@ -3624,7 +3624,7 @@ ${shortError(err)}`);
         role,
         overlapMerge: overlapMergeMode !== "none",
         overlapMergeMode,
-        generatedAccompanimentStyle: "normal",
+        generatedAccompanimentStyle: "auto",
         selectedInstrumentGroups: new Set(i >= 3 ? [] : (role === "beat" ? beatIds : normalIds))
       };
     });
@@ -3789,8 +3789,13 @@ ${shortError(err)}`);
     const rawRole = String(role);
     const requestedRole = rawRole === "accomp" ? "generate" : (validRoles.has(rawRole) ? rawRole : "auto");
     const nextRole = requestedRole === "beat" && !pendingMidiSettings.hasBeatGroups ? "auto" : requestedRole;
+    const previousRole = setting.role;
     setting.role = nextRole;
-    if (nextRole === "generate") setting.generatedAccompanimentStyle = normalizeGeneratedAccompanimentStyle(setting.generatedAccompanimentStyle);
+    if (nextRole === "generate") {
+      setting.generatedAccompanimentStyle = previousRole === "generate"
+        ? normalizeGeneratedAccompanimentStyle(setting.generatedAccompanimentStyle)
+        : "auto";
+    }
     const nextIsBeat = nextRole === "beat";
     if (previousIsBeat !== nextIsBeat) {
       const allowedIds = nextIsBeat ? pendingMidiSettings.beatIds : pendingMidiSettings.normalIds;
@@ -3819,8 +3824,8 @@ ${shortError(err)}`);
   }
 
   function normalizeGeneratedAccompanimentStyle(value) {
-    const mode = String(value || "normal").toLowerCase();
-    return GENERATED_ACCOMP_STYLE_OPTIONS.some(opt => opt.value === mode) ? mode : "normal";
+    const mode = String(value || "auto").toLowerCase();
+    return GENERATED_ACCOMP_STYLE_OPTIONS.some(opt => opt.value === mode) ? mode : "auto";
   }
 
   function getMidiGroupSelectedChannels(groupId) {

@@ -652,8 +652,8 @@
   }
 
   function normalizeGeneratedAccompanimentStyle(value) {
-    const mode = String(value || "normal").toLowerCase();
-    return GENERATED_ACCOMP_STYLES.has(mode) ? mode : "normal";
+    const mode = String(value || "auto").toLowerCase();
+    return GENERATED_ACCOMP_STYLES.has(mode) ? mode : "auto";
   }
 
   function generatedAccompanimentStyleLabel(value) {
