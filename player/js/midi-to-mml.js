@@ -38,6 +38,19 @@
 
   const PERCUSSION_NAME_RE = /(drum|percussion|perc|snare|cymbal|kick|tom|hi[- ]?hat|ride|crash|clap|taiko|gong|wood\s*block|timpani|북|드럼|스네어|심벌|심벌즈|퍼커션|킥|탐|하이햇|라이드|크래시|공|징|북|박수|클랩|우드블록|팀파니)/i;
   const BEAT_PROGRAMS = new Set([47, 112, 113, 115, 116, 117, 118, 119]);
+  const GENERATED_ACCOMP_ROLE = "generate";
+  const GENERATED_ACCOMP_LEGACY_ROLE = "accomp";
+  const GENERATED_ACCOMP_BAR_GRIDS = 64; // 4/4 기준: 64분음표 64칸 = 한 마디
+  const GENERATED_ACCOMP_STEP_GRIDS = 8; // 8분음표 아르페지오
+  const GENERATED_ACCOMP_STYLES = new Set(["calm", "normal", "bright"]);
+  const KEY_MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+  const KEY_MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+  const MAJOR_SCALE_STEPS = [0, 2, 4, 5, 7, 9, 11];
+  const MINOR_SCALE_STEPS = [0, 2, 3, 5, 7, 8, 10];
+  const MAJOR_DEGREE_QUALITIES = ["maj", "min", "min", "maj", "maj", "min", "dim"];
+  const MINOR_DEGREE_QUALITIES = ["min", "dim", "maj", "min", "min", "maj", "maj"];
+  const COMMON_MAJOR_PROGRESSION = [1, 5, 6, 4];
+  const COMMON_MINOR_PROGRESSION = [1, 6, 3, 7];
 
   function analyzeMidi(bytes, fileName = "MIDI") {
     const midi = parseMidiFile(bytes);
@@ -482,10 +495,14 @@
     const { notes, mergedCount } = mergeDuplicateGridNotes(rawNotes);
     notes.sort((a, b) => a.startGrid - b.startGrid || b.midi - a.midi || b.velocity - a.velocity);
 
-    const assignment = assignNotesToVoices(notes, exportChannels);
-    const { voices, skipped, placed, overlapMerged } = assignment;
     const maxEndGrid = Math.max(0, ...notes.map(n => n.endGrid));
-    const parts = voices.map((v, i) => voiceToMml64(v, i === 0 ? tempoGridEvents : [], i === 0 ? maxEndGrid : 0));
+    const assignableNotes = notes.filter(note => exportChannels.some(ch => canChannelUseNote(note, ch)));
+    const assignment = assignNotesToVoices(assignableNotes, exportChannels);
+    const { voices, skipped, placed, overlapMerged } = assignment;
+    const generated = applyGeneratedAccompanimentVoices(voices, notes, exportChannels, maxEndGrid);
+    if (generated.warnings.length) warnings.push(...generated.warnings);
+    const finalEndGrid = Math.max(maxEndGrid, ...voices.flatMap(v => v.map(n => n.endGrid || 0)), 0);
+    const parts = voices.map((v, i) => voiceToMml64(v, i === 0 ? tempoGridEvents : [], i === 0 ? finalEndGrid : 0));
     const mml = `MML@${parts.join(",")};`;
     const totalUsed = voices.reduce((sum, v) => sum + v.length, 0);
     const selectedLabels = Array.from(selectedSet)
@@ -495,8 +512,10 @@
     const channelLines = exportChannels.map((ch, i) => {
       const names = ch.selectedInstrumentGroups.map(id => choiceMap.get(id)?.instrumentName).filter(Boolean);
       const label = names.length > 3 ? `${names.slice(0, 3).join(", ")} 외 ${names.length - 3}개` : names.join(", ");
-      const overlapLabel = overlapMergeModeLabel(ch.overlapMergeMode ?? ch.overlapMerge);
-      return `${i + 1}. ${roleLabel(ch.role)}${overlapLabel ? `/${overlapLabel}` : ""}: ${label || "선택 없음"}`;
+      const optionLabel = isGeneratedAccompanimentRole(ch.role)
+        ? `반주 ${generatedAccompanimentStyleLabel(ch.generatedAccompanimentStyle)}`
+        : overlapMergeModeLabel(ch.overlapMergeMode ?? ch.overlapMerge);
+      return `${i + 1}. ${roleLabel(ch.role)}${optionLabel ? `/${optionLabel}` : ""}: ${label || "선택 없음"}`;
     });
     const tempoMessage = tempoGridEvents.length > 1
       ? `${sourceLabel} 템포 ${tempoGridEvents.length}개를 멜로디 파트에 반영했습니다.`
@@ -505,6 +524,7 @@
       `${fileName} 변환 완료`,
       `선택 악기: ${selectedLabels.length > 6 ? selectedLabels.slice(0, 6).join(", ") + ` 외 ${selectedLabels.length - 6}개` : selectedLabels.join(", ")}`,
       `입력 노트 ${rawNotes.length.toLocaleString("ko-KR")}개 → 완전 중복 병합 ${mergedCount.toLocaleString("ko-KR")}개 → 정상 배치 ${placed.toLocaleString("ko-KR")}개` + (overlapMerged ? ` / 겹침 병합 ${overlapMerged.toLocaleString("ko-KR")}개` : ""),
+      generated.generatedChannels ? `생성 반주: ${generated.generatedChannels.toLocaleString("ko-KR")}파트 / ${generated.generatedMeasures.toLocaleString("ko-KR")}마디 / ${generated.generatedNotes.toLocaleString("ko-KR")}개 노트` : "",
       `출력 노트 ${totalUsed.toLocaleString("ko-KR")}개 / 생략 ${skipped.toLocaleString("ko-KR")}개`,
       `변환 설정: ${exportChannels.length}파트 / 최소 64분음표`,
       `채널 설정:\n- ${channelLines.join("\n- ")}`,
@@ -512,7 +532,7 @@
       skipped ? `역할/악기/동시음 제한으로 ${skipped.toLocaleString("ko-KR")}개를 생략했습니다.` : "생략된 노트가 없습니다.",
       warnings.length ? "\n주의:\n- " + unique(warnings).join("\n- ") : ""
     ].filter(Boolean).join("\n");
-    return { mml, parts, message, warnings, selectedInstrumentGroups: Array.from(selectedSet), partCount: exportChannels.length, roles, exportChannels, skipped, mergedCount, placed, overlapMerged };
+    return { mml, parts, message, warnings, selectedInstrumentGroups: Array.from(selectedSet), partCount: exportChannels.length, roles, exportChannels, skipped, mergedCount, placed, overlapMerged, generated };
   }
 
   function normalizeExportChannels(options, partCount, instrumentGroups, allowBeat = true) {
@@ -526,9 +546,8 @@
 
     return Array.from({ length: partCount }, (_, i) => {
       const raw = rawChannels?.[i] || null;
-      let role = String(raw?.role || roles[i] || "auto");
+      let role = normalizeExportRole(raw?.role || roles[i] || "auto", allowBeat && beatIds.length > 0);
       if (role === "beat" && (!allowBeat || !beatIds.length)) role = "auto";
-      if (!["auto", "high", "low", "beat"].includes(role)) role = "auto";
       const allowed = role === "beat" ? beatIds : normalIds;
       const allowedSet = new Set(allowed);
       let selected = Array.isArray(raw?.selectedInstrumentGroups)
@@ -540,6 +559,7 @@
         role,
         overlapMergeMode,
         overlapMerge: overlapMergeMode !== "none",
+        generatedAccompanimentStyle: normalizeGeneratedAccompanimentStyle(raw?.generatedAccompanimentStyle ?? raw?.accompanimentStyle),
         selectedInstrumentGroups: [...new Set(selected)]
       };
     });
@@ -558,12 +578,22 @@
   }
 
   function normalizeRoles(input, partCount, allowBeat = true) {
-    const valid = new Set(["auto", "high", "low", ...(allowBeat ? ["beat"] : [])]);
     const defaults = defaultRoles(partCount, allowBeat);
     return Array.from({ length: partCount }, (_, i) => {
       const raw = Array.isArray(input) ? String(input[i] || defaults[i] || "auto") : (defaults[i] || "auto");
-      return valid.has(raw) ? raw : (defaults[i] || "auto");
+      return normalizeExportRole(raw, allowBeat);
     });
+  }
+
+  function normalizeExportRole(role, allowBeat = true) {
+    const raw = String(role || "auto").toLowerCase();
+    if (raw === GENERATED_ACCOMP_LEGACY_ROLE || raw === GENERATED_ACCOMP_ROLE) return GENERATED_ACCOMP_ROLE;
+    if (raw === "beat") return allowBeat ? "beat" : "auto";
+    return ["auto", "high", "low"].includes(raw) ? raw : "auto";
+  }
+
+  function isGeneratedAccompanimentRole(role) {
+    return normalizeExportRole(role, true) === GENERATED_ACCOMP_ROLE;
   }
 
   function defaultRoles(partCount, allowBeat = true) {
@@ -611,7 +641,7 @@
   }
 
   function roleLabel(role) {
-    return ({ auto: "자동", high: "고음", low: "저음", beat: "비트" })[role] || "자동";
+    return ({ auto: "자동", high: "고음", low: "저음", generate: "생성", accomp: "생성", beat: "비트" })[role] || "자동";
   }
 
   function normalizeOverlapMergeMode(value) {
@@ -621,11 +651,317 @@
     return ["all", "half", "none"].includes(mode) ? mode : "all";
   }
 
+  function normalizeGeneratedAccompanimentStyle(value) {
+    const mode = String(value || "normal").toLowerCase();
+    return GENERATED_ACCOMP_STYLES.has(mode) ? mode : "normal";
+  }
+
+  function generatedAccompanimentStyleLabel(value) {
+    const mode = normalizeGeneratedAccompanimentStyle(value);
+    if (mode === "calm") return "잔잔";
+    if (mode === "bright") return "경쾌";
+    return "기본";
+  }
+
   function overlapMergeModeLabel(value) {
     const mode = normalizeOverlapMergeMode(value);
     if (mode === "all") return "겹침 모두 병합";
     if (mode === "half") return "겹침 절반 병합";
     return "";
+  }
+
+  function applyGeneratedAccompanimentVoices(voices, sourceNotes, exportChannels, maxEndGrid) {
+    const stats = { generatedChannels: 0, generatedMeasures: 0, generatedNotes: 0, warnings: [] };
+    if (!Array.isArray(voices) || !Array.isArray(exportChannels)) return stats;
+    let generatedOrdinal = 0;
+    for (let channelIndex = 0; channelIndex < exportChannels.length; channelIndex++) {
+      const cfg = exportChannels[channelIndex];
+      if (!isGeneratedAccompanimentRole(cfg?.role)) continue;
+      const source = getGeneratedAccompanimentSourceNotes(sourceNotes, cfg);
+      if (!source.length) {
+        voices[channelIndex] = [];
+        stats.warnings.push(`${channelIndex + 1}번 생성 파트: 분석할 일반 악기 노트가 없어 반주를 만들지 못했습니다.`);
+        generatedOrdinal++;
+        continue;
+      }
+      const result = buildGeneratedAccompanimentNotes(source, cfg, channelIndex, maxEndGrid, generatedOrdinal);
+      voices[channelIndex] = result.notes;
+      stats.generatedChannels++;
+      stats.generatedMeasures += result.measureCount;
+      stats.generatedNotes += result.notes.length;
+      if (!result.notes.length) stats.warnings.push(`${channelIndex + 1}번 생성 파트: 선율은 찾았지만 생성 가능한 반주 노트가 없었습니다.`);
+      generatedOrdinal++;
+    }
+    return stats;
+  }
+
+  function getGeneratedAccompanimentSourceNotes(sourceNotes, cfg) {
+    const selected = new Set((Array.isArray(cfg?.selectedInstrumentGroups) ? cfg.selectedInstrumentGroups : []).map(String));
+    return (sourceNotes || [])
+      .filter(n => !isBeatCandidate(n) && n?.instrumentChoiceId != null)
+      .filter(n => !selected.size || selected.has(String(n.instrumentChoiceId)))
+      .map(n => ({ ...n }))
+      .sort((a, b) => a.startGrid - b.startGrid || a.midi - b.midi || a.endGrid - b.endGrid);
+  }
+
+  function buildGeneratedAccompanimentNotes(sourceNotes, cfg, channelIndex, maxEndGrid, generatedOrdinal = 0) {
+    const source = (sourceNotes || []).filter(n => Number.isFinite(Number(n?.midi)) && Number.isFinite(Number(n?.startGrid)) && Number.isFinite(Number(n?.endGrid)) && n.endGrid > n.startGrid);
+    if (!source.length) return { notes: [], measureCount: 0 };
+
+    const firstSourceGrid = Math.min(...source.map(n => Math.max(0, Number(n.startGrid) || 0)));
+    const lastSourceGrid = Math.max(...source.map(n => Math.max(Number(n.endGrid) || 0, Number(n.startGrid) || 0)));
+    const songEnd = Math.max(lastSourceGrid, Number(maxEndGrid) || 0);
+    const startBar = Math.floor(firstSourceGrid / GENERATED_ACCOMP_BAR_GRIDS) * GENERATED_ACCOMP_BAR_GRIDS;
+    const endBar = Math.ceil(Math.max(firstSourceGrid + 1, Math.min(songEnd || lastSourceGrid, lastSourceGrid)) / GENERATED_ACCOMP_BAR_GRIDS) * GENERATED_ACCOMP_BAR_GRIDS;
+    if (!(endBar > startBar)) return { notes: [], measureCount: 0 };
+
+    const measureMap = buildMeasureNoteMap(source, startBar, endBar, GENERATED_ACCOMP_BAR_GRIDS);
+    const key = estimateGeneratedAccompanimentKey(source);
+    const sourceSpread = getMelodicPitchSpread(source);
+    const volume = estimateGeneratedAccompanimentVolume(source);
+    const notes = [];
+    let prevChord = null;
+    let noteId = 1;
+    let measureCount = 0;
+
+    for (let barStart = startBar, barIndex = 0; barStart < endBar; barStart += GENERATED_ACCOMP_BAR_GRIDS, barIndex++) {
+      const barEnd = Math.min(barStart + GENERATED_ACCOMP_BAR_GRIDS, endBar);
+      const measureNotes = measureMap.get(barStart) || [];
+      const chord = chooseGeneratedAccompanimentChord(measureNotes, key, barIndex, prevChord);
+      const pattern = buildGeneratedAccompanimentPattern(chord, sourceSpread, generatedOrdinal, cfg?.generatedAccompanimentStyle);
+      if (!pattern.midis.length || pattern.stepGrid <= 0) continue;
+      measureCount++;
+      prevChord = chord;
+
+      for (let pos = barStart, stepIndex = 0; pos < barEnd; pos += pattern.stepGrid, stepIndex++) {
+        const midi = pattern.midis[stepIndex % pattern.midis.length];
+        const durGrid = Math.max(1, Math.min(pattern.durationGrid, barEnd - pos));
+        if (durGrid <= 0) continue;
+        notes.push({
+          id: `generated-${channelIndex + 1}-${noteId++}`,
+          midi,
+          startGrid: pos,
+          endGrid: pos + durGrid,
+          durGrid,
+          midiVelocity: 72,
+          velocity: volume,
+          channel: 0,
+          trackIndex: -1,
+          program: 0,
+          instrumentGroupId: `generated-${channelIndex + 1}`,
+          instrumentChoiceId: `generated-${channelIndex + 1}`,
+          isBeat: false,
+          isPercussion: false,
+          generated: true
+        });
+      }
+    }
+
+    return { notes, measureCount };
+  }
+
+  function buildMeasureNoteMap(notes, startBar, endBar, barGrid) {
+    const map = new Map();
+    for (let bar = startBar; bar < endBar; bar += barGrid) map.set(bar, []);
+    for (const note of notes || []) {
+      const start = Math.max(startBar, Math.floor((Number(note.startGrid) || 0) / barGrid) * barGrid);
+      const end = Math.min(endBar, Math.floor((Math.max(Number(note.endGrid) || 0, Number(note.startGrid) || 0) - 1) / barGrid) * barGrid);
+      for (let bar = start; bar <= end; bar += barGrid) {
+        if (map.has(bar)) map.get(bar).push(note);
+      }
+    }
+    return map;
+  }
+
+  function estimateGeneratedAccompanimentKey(notes) {
+    const histogram = pitchClassHistogram(notes);
+    let best = { root: 0, mode: "major", score: -Infinity };
+    for (let root = 0; root < 12; root++) {
+      const majorScore = scoreKeyProfile(histogram, root, KEY_MAJOR_PROFILE);
+      if (majorScore > best.score) best = { root, mode: "major", score: majorScore };
+      const minorScore = scoreKeyProfile(histogram, root, KEY_MINOR_PROFILE);
+      if (minorScore > best.score) best = { root, mode: "minor", score: minorScore };
+    }
+    return best;
+  }
+
+  function pitchClassHistogram(notes) {
+    const histogram = Array(12).fill(0);
+    for (const note of notes || []) {
+      const midi = Number(note?.midi);
+      if (!Number.isFinite(midi)) continue;
+      const pc = ((Math.round(midi) % 12) + 12) % 12;
+      const dur = Math.max(1, (Number(note.endGrid) || 0) - (Number(note.startGrid) || 0));
+      const velocityWeight = Math.max(1, Number(note.velocity) || 8) / 8;
+      histogram[pc] += dur * velocityWeight;
+    }
+    return histogram;
+  }
+
+  function scoreKeyProfile(histogram, root, profile) {
+    let score = 0;
+    for (let pc = 0; pc < 12; pc++) {
+      const rel = ((pc - root) % 12 + 12) % 12;
+      score += (histogram[pc] || 0) * (profile[rel] || 0);
+    }
+    return score;
+  }
+
+  function buildGeneratedChordCandidates(key) {
+    const minor = key?.mode === "minor";
+    const scale = minor ? MINOR_SCALE_STEPS : MAJOR_SCALE_STEPS;
+    const qualities = minor ? MINOR_DEGREE_QUALITIES : MAJOR_DEGREE_QUALITIES;
+    const root = clampPitchClass(key?.root ?? 0);
+    const candidates = scale.map((step, i) => makeGeneratedChord(root, step, qualities[i], i + 1));
+    // 단조에서는 V 장화음이 흔히 쓰이므로 자연단음계 v와 별도로 약하게 후보에 둔다.
+    if (minor) candidates.push(makeGeneratedChord(root, 7, "maj", 5, true));
+    return candidates;
+  }
+
+  function makeGeneratedChord(keyRoot, rootStep, quality, degree, borrowed = false) {
+    const rootPc = clampPitchClass(keyRoot + rootStep);
+    const intervals = quality === "dim" ? [0, 3, 6] : (quality === "min" ? [0, 3, 7] : [0, 4, 7]);
+    return {
+      rootPc,
+      quality,
+      degree,
+      borrowed,
+      pcs: intervals.map(interval => clampPitchClass(rootPc + interval)),
+      intervals
+    };
+  }
+
+  function clampPitchClass(value) {
+    return ((Math.round(Number(value) || 0) % 12) + 12) % 12;
+  }
+
+  function chooseGeneratedAccompanimentChord(measureNotes, key, barIndex, previousChord = null) {
+    const candidates = buildGeneratedChordCandidates(key);
+    const progression = key?.mode === "minor" ? COMMON_MINOR_PROGRESSION : COMMON_MAJOR_PROGRESSION;
+    const preferredDegree = progression[((barIndex % progression.length) + progression.length) % progression.length];
+    const histogram = pitchClassHistogram(measureNotes || []);
+    const totalWeight = histogram.reduce((sum, v) => sum + v, 0);
+    if (totalWeight <= 0) return candidates.find(c => c.degree === preferredDegree && !c.borrowed) || candidates[0];
+
+    const scalePcs = new Set((key?.mode === "minor" ? MINOR_SCALE_STEPS : MAJOR_SCALE_STEPS).map(step => clampPitchClass((key?.root || 0) + step)));
+    let best = null;
+    for (const chord of candidates) {
+      const chordPcs = new Set(chord.pcs);
+      let score = 0;
+      for (let pc = 0; pc < 12; pc++) {
+        const weight = histogram[pc] || 0;
+        if (!weight) continue;
+        if (chordPcs.has(pc)) score += weight * (pc === chord.rootPc ? 12 : 10);
+        else if (scalePcs.has(pc)) score += weight * 2;
+        else score -= weight * 1.5;
+      }
+      if (chord.degree === preferredDegree) score += Math.max(4, totalWeight * 0.16);
+      if (previousChord) {
+        const shared = chord.pcs.filter(pc => previousChord.pcs.includes(pc)).length;
+        score += shared * 2;
+        const rootMove = Math.abs(((chord.rootPc - previousChord.rootPc + 18) % 12) - 6);
+        if (rootMove === 5 || rootMove === 7) score += 2;
+        if (chord.rootPc === previousChord.rootPc) score += 1;
+      }
+      if (chord.borrowed) score -= 1.5;
+      if (!best || score > best.score) best = { chord, score };
+    }
+    return best?.chord || candidates[0];
+  }
+
+  function buildGeneratedAccompanimentPattern(chord, sourceSpread, generatedOrdinal = 0, style = "normal") {
+    const rootTarget = chooseGeneratedRootTarget(sourceSpread);
+    const root = midiForPitchClassNear(chord.rootPc, rootTarget, 36, 59);
+    const third = clampGeneratedMidi(root + (chord.intervals[1] || 3));
+    const fifth = clampGeneratedMidi(root + (chord.intervals[2] || 7));
+    const octave = clampGeneratedMidi(root + 12);
+    const mode = normalizeGeneratedAccompanimentStyle(style);
+    const variant = Math.abs(Math.round(Number(generatedOrdinal) || 0)) % 3;
+
+    if (mode === "calm") {
+      const calmPatterns = [
+        [root, fifth, third, fifth],
+        [root, fifth, octave, fifth],
+        [root, third, fifth, third]
+      ];
+      return {
+        stepGrid: 16,
+        durationGrid: 15,
+        midis: calmPatterns[variant] || calmPatterns[0]
+      };
+    }
+
+    if (mode === "bright") {
+      const brightPatterns = [
+        [root, fifth, octave, fifth, third, fifth, octave, fifth],
+        [root, octave, fifth, octave, root, octave, fifth, octave],
+        [root, third, fifth, octave, fifth, third, fifth, octave]
+      ];
+      return {
+        stepGrid: GENERATED_ACCOMP_STEP_GRIDS,
+        durationGrid: Math.max(1, GENERATED_ACCOMP_STEP_GRIDS - 2),
+        midis: brightPatterns[variant] || brightPatterns[0]
+      };
+    }
+
+    if (variant === 1) {
+      return {
+        stepGrid: 16,
+        durationGrid: 14,
+        midis: [root, fifth, root, octave]
+      };
+    }
+    if (variant === 2) {
+      return {
+        stepGrid: GENERATED_ACCOMP_STEP_GRIDS,
+        durationGrid: Math.max(1, GENERATED_ACCOMP_STEP_GRIDS - 1),
+        midis: [root, third, fifth, third, octave, third, fifth, third]
+      };
+    }
+    return {
+      stepGrid: GENERATED_ACCOMP_STEP_GRIDS,
+      durationGrid: Math.max(1, GENERATED_ACCOMP_STEP_GRIDS - 1),
+      midis: [root, fifth, third, fifth, octave, fifth, third, fifth]
+    };
+  }
+
+  function chooseGeneratedRootTarget(sourceSpread) {
+    const minMidi = Number(sourceSpread?.minMidi);
+    if (Number.isFinite(minMidi) && minMidi > 0) return clampInt(Math.round(minMidi - 19), 36, 55);
+    return 48;
+  }
+
+  function midiForPitchClassNear(pc, target, minMidi = 0, maxMidi = 127) {
+    const pitchClass = clampPitchClass(pc);
+    let best = pitchClass;
+    let bestDistance = Infinity;
+    for (let midi = pitchClass; midi <= 127; midi += 12) {
+      if (midi < minMidi || midi > maxMidi) continue;
+      const distance = Math.abs(midi - target);
+      if (distance < bestDistance) {
+        best = midi;
+        bestDistance = distance;
+      }
+    }
+    if (Number.isFinite(bestDistance)) return best;
+    while (best < minMidi) best += 12;
+    while (best > maxMidi) best -= 12;
+    return clampInt(best, minMidi, maxMidi);
+  }
+
+  function clampGeneratedMidi(midi) {
+    let value = Math.round(Number(midi) || 60);
+    while (value < 36) value += 12;
+    while (value > 76) value -= 12;
+    return clampInt(value, 24, 84);
+  }
+
+  function estimateGeneratedAccompanimentVolume(notes) {
+    const values = (notes || []).map(n => Number(n.velocity)).filter(v => Number.isFinite(v) && v > 0);
+    if (!values.length) return 8;
+    values.sort((a, b) => a - b);
+    const median = values[Math.floor(values.length / 2)] || 8;
+    return clampInt(Math.round(median * 0.72), 5, 10);
   }
 
   function assignNotesToVoices(notes, exportChannelsOrCount, oldRoles = null) {
@@ -821,7 +1157,7 @@
   }
 
   function canChannelUseNote(note, cfg) {
-    if (!cfg) return false;
+    if (!cfg || isGeneratedAccompanimentRole(cfg.role)) return false;
     const wantsBeat = cfg.role === "beat";
     if (wantsBeat !== isBeatCandidate(note)) return false;
     const selected = cfg.selectedInstrumentGroups;
@@ -848,7 +1184,7 @@
     const contexts = new Map();
     const melodicChannels = (exportChannels || [])
       .map((cfg, channelIndex) => ({ cfg, channelIndex }))
-      .filter(item => item.cfg?.role !== "beat");
+      .filter(item => item.cfg?.role !== "beat" && !isGeneratedAccompanimentRole(item.cfg?.role));
     if (!melodicChannels.length) return contexts;
 
     const instrumentIds = [...new Set((notes || [])

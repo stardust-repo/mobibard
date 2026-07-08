@@ -16,6 +16,11 @@
     { value: "half", label: "절반" },
     { value: "none", label: "안함" }
   ];
+  const GENERATED_ACCOMP_STYLE_OPTIONS = [
+    { value: "calm", label: "잔잔" },
+    { value: "normal", label: "기본" },
+    { value: "bright", label: "경쾌" }
+  ];
   const MIDI_INSTRUMENT_CATEGORY_ORDER = ["keyboard", "strings", "winds", "percussion", "other"];
   const MIDI_INSTRUMENT_CATEGORY_LABELS = {
     keyboard: "건반악기",
@@ -3618,6 +3623,7 @@ ${shortError(err)}`);
         role,
         overlapMerge: overlapMergeMode !== "none",
         overlapMergeMode,
+        generatedAccompanimentStyle: "normal",
         selectedInstrumentGroups: new Set(i >= 3 ? [] : (role === "beat" ? beatIds : normalIds))
       };
     });
@@ -3651,14 +3657,35 @@ ${shortError(err)}`);
         `<option value="auto" ${setting.role === "auto" ? "selected" : ""}>자동</option>`,
         `<option value="high" ${setting.role === "high" ? "selected" : ""}>고음</option>`,
         `<option value="low" ${setting.role === "low" ? "selected" : ""}>저음</option>`,
+        `<option value="generate" ${setting.role === "generate" ? "selected" : ""}>생성</option>`,
         allowBeat ? `<option value="beat" ${setting.role === "beat" ? "selected" : ""}>비트</option>` : ""
       ].join("");
       const mergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
       setting.overlapMergeMode = mergeMode;
       setting.overlapMerge = mergeMode !== "none";
+      const styleMode = normalizeGeneratedAccompanimentStyle(setting.generatedAccompanimentStyle);
+      setting.generatedAccompanimentStyle = styleMode;
       const mergeOptions = OVERLAP_MERGE_OPTIONS.map(opt =>
         `<option value="${opt.value}" ${mergeMode === opt.value ? "selected" : ""}>${opt.label}</option>`
       ).join("");
+      const styleOptions = GENERATED_ACCOMP_STYLE_OPTIONS.map(opt =>
+        `<option value="${opt.value}" ${styleMode === opt.value ? "selected" : ""}>${opt.label}</option>`
+      ).join("");
+      const rightControl = setting.role === "generate"
+        ? `<label class="merge-mode generated-style-mode">
+            <span>반주</span>
+            <select data-accomp-style-index="${i}" aria-label="${PART_LABELS[i]} 생성 반주 패턴">
+              ${styleOptions}
+            </select>
+            <span>패턴</span>
+          </label>`
+        : `<label class="merge-mode">
+            <span>겹침</span>
+            <select data-merge-index="${i}" aria-label="${PART_LABELS[i]} 겹침 병합 방식">
+              ${mergeOptions}
+            </select>
+            <span>병합</span>
+          </label>`;
       row.innerHTML = `
         <button class="midi-channel-select" type="button" data-midi-channel-select="${i}" aria-label="${PART_LABELS[i]} 악기 선택">
           <span class="midi-export-label">${PART_LABELS[i]}</span>
@@ -3667,13 +3694,7 @@ ${shortError(err)}`);
         <select data-role-index="${i}" aria-label="${PART_LABELS[i]} 역할">
           ${selectOptions}
         </select>
-        <label class="merge-mode">
-          <span>겹침</span>
-          <select data-merge-index="${i}" aria-label="${PART_LABELS[i]} 겹침 병합 방식">
-            ${mergeOptions}
-          </select>
-          <span>병합</span>
-        </label>
+        ${rightControl}
         <button class="midi-role-preview-btn" type="button" data-midi-part-preview="${i}" aria-label="${PART_LABELS[i]} 미리 듣기">듣기</button>
       `;
       row.querySelector("button")?.addEventListener("click", () => {
@@ -3695,6 +3716,9 @@ ${shortError(err)}`);
         const mode = normalizeOverlapMergeMode(ev.target.value);
         pendingMidiSettings.channels[i].overlapMergeMode = mode;
         pendingMidiSettings.channels[i].overlapMerge = mode !== "none";
+      });
+      row.querySelector("[data-accomp-style-index]")?.addEventListener("change", (ev) => {
+        pendingMidiSettings.channels[i].generatedAccompanimentStyle = normalizeGeneratedAccompanimentStyle(ev.target.value);
       });
       midiRoleList.appendChild(row);
     }
@@ -3757,10 +3781,15 @@ ${shortError(err)}`);
   function updateMidiChannelRole(index, role) {
     if (!pendingMidiSettings) return;
     const setting = pendingMidiSettings.channels[index];
+    if (setting.role === "accomp") setting.role = "generate";
     const previousIsBeat = setting.role === "beat";
     const previousSelected = Array.from(setting.selectedInstrumentGroups || []);
-    const nextRole = role === "beat" && !pendingMidiSettings.hasBeatGroups ? "auto" : role;
+    const validRoles = new Set(["auto", "high", "low", "generate", "accomp", "beat"]);
+    const rawRole = String(role);
+    const requestedRole = rawRole === "accomp" ? "generate" : (validRoles.has(rawRole) ? rawRole : "auto");
+    const nextRole = requestedRole === "beat" && !pendingMidiSettings.hasBeatGroups ? "auto" : requestedRole;
     setting.role = nextRole;
+    if (nextRole === "generate") setting.generatedAccompanimentStyle = normalizeGeneratedAccompanimentStyle(setting.generatedAccompanimentStyle);
     const nextIsBeat = nextRole === "beat";
     if (previousIsBeat !== nextIsBeat) {
       const allowedIds = nextIsBeat ? pendingMidiSettings.beatIds : pendingMidiSettings.normalIds;
@@ -3778,7 +3807,7 @@ ${shortError(err)}`);
     const setting = pendingMidiSettings.channels[index];
     const allowed = getAllowedMidiGroupsForSetting(setting);
     const selectedCount = allowed.filter(g => setting.selectedInstrumentGroups.has(g.id)).length;
-    return `악기 ${formatCount(selectedCount)}개 선택`;
+    return `${setting.role === "generate" ? "생성 원본" : "악기"} ${formatCount(selectedCount)}개 선택`;
   }
 
   function normalizeOverlapMergeMode(value) {
@@ -3786,6 +3815,11 @@ ${shortError(err)}`);
     if (value === false || value === "false") return "none";
     const mode = String(value || "all").toLowerCase();
     return OVERLAP_MERGE_OPTIONS.some(opt => opt.value === mode) ? mode : "all";
+  }
+
+  function normalizeGeneratedAccompanimentStyle(value) {
+    const mode = String(value || "normal").toLowerCase();
+    return GENERATED_ACCOMP_STYLE_OPTIONS.some(opt => opt.value === mode) ? mode : "normal";
   }
 
   function getMidiGroupSelectedChannels(groupId) {
@@ -3897,7 +3931,9 @@ ${shortError(err)}`);
     if (midiInstrumentPanelHint) {
       midiInstrumentPanelHint.textContent = isBeat
         ? "비트 채널은 비트 그룹 악기만 선택할 수 있습니다."
-        : "한 채널에 여러 일반 악기를 선택할 수 있습니다.";
+        : (setting?.role === "generate"
+          ? "선택한 일반 악기의 선율을 분석해 이 채널에 코드 반주를 생성합니다."
+          : "한 채널에 여러 일반 악기를 선택할 수 있습니다.");
     }
     syncMidiInstrumentPanelActions(groups);
 
@@ -4004,14 +4040,15 @@ ${shortError(err)}`);
     const overlapMergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
     return {
       partCount: 1,
-      roles: [setting.role || "auto"],
+      roles: [setting.role === "accomp" ? "generate" : (setting.role || "auto")],
       sourcePartIndex: sourceIndex,
       sourceLabel,
       exportChannels: [{
         sourcePartIndex: sourceIndex,
-        role: setting.role || "auto",
+        role: setting.role === "accomp" ? "generate" : (setting.role || "auto"),
         overlapMergeMode,
         overlapMerge: overlapMergeMode !== "none",
+        generatedAccompanimentStyle: normalizeGeneratedAccompanimentStyle(setting.generatedAccompanimentStyle),
         selectedInstrumentGroups: selected
       }]
     };
@@ -4420,9 +4457,10 @@ ${shortError(err)}`);
       const overlapMergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
       exportChannels.push({
         sourcePartIndex: i,
-        role: setting.role || "auto",
+        role: setting.role === "accomp" ? "generate" : (setting.role || "auto"),
         overlapMergeMode,
         overlapMerge: overlapMergeMode !== "none",
+        generatedAccompanimentStyle: normalizeGeneratedAccompanimentStyle(setting.generatedAccompanimentStyle),
         selectedInstrumentGroups: selected
       });
     }

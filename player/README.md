@@ -1,8 +1,8 @@
-# 마비노기 MML 생성기 샘플 - 모비바드 v4.0
+# 마비노기 MML 생성기 샘플 - 모비바드 v4.1
 
 공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MusicXML/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
 
-`v4.0`에서는 진행 슬라이더가 가리키는 시간에 실제로 울리는 MML 음표 코드와 해당 위치의 쉼표 코드를 편집창 안에서 초록색 상자로 표시합니다. 재생 중이 아니어도 현재 위치의 음표/쉼표 토큰을 표시하며, 전체 MML 탭과 개별 파트 탭 모두 같은 기준을 따릅니다.
+`v4.1`에서는 MIDI/MusicXML 변환 설정에 시범 기능인 생성 파트를 추가했습니다. 선택한 선율 악기를 분석해 코드 진행과 아르페지오 반주를 규칙 기반으로 생성할 수 있으며, 생성 파트에서는 겹침 병합 대신 `잔잔` / `기본` / `경쾌` 반주 스타일을 고를 수 있습니다. 기존 v4.0처럼 진행 슬라이더가 가리키는 시간에 실제로 울리는 MML 음표 코드와 해당 위치의 쉼표 코드를 편집창 안에서 초록색 상자로 표시합니다. 재생 중이 아니어도 현재 위치의 음표/쉼표 토큰을 표시하며, 전체 MML 탭과 개별 파트 탭 모두 같은 기준을 따릅니다.
 
 기본 재생은 로컬 파일만으로 동작합니다. Google Drive 연동을 사용하려면 Google Identity Services와 Google Picker 스크립트를 온라인으로 불러오며, `js/google-config.js` 설정이 필요합니다. Firebase Analytics는 `js/firebase-config.js`와 `js/firebase-analytics.js`에서 초기화합니다.
 
@@ -69,7 +69,7 @@ mabinogi_mml_public/
 
 | 항목 | 값 / 위치 |
 |---|---|
-| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v4.0` |
+| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v4.1` |
 | MML 파트 수 | 최대 6개: `멜로디`, `화음1`~`화음5` (`app.js`의 `PART_LABELS`) |
 | 설정 localStorage prefix | `mobibard.player.` (`app.js`의 `PREF_PREFIX`) |
 | 기본 SF2 | `assets/Roland_SC-55.sf2` |
@@ -496,7 +496,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
-- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v4.0`가 보이는지
+- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v4.1`가 보이는지
 - [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 MML 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
@@ -542,6 +542,13 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 ---
 
 ## 변경 이력
+
+### v4.1
+- 버전 표기를 `v4.1`으로 변경했습니다.
+- MIDI/MusicXML 변환 설정의 채널 역할에 시범 기능 `생성`을 추가했습니다.
+- `생성` 파트는 오른쪽 악기 목록에서 선택한 일반 선율 노트를 분석해 4/4 기준 마디별 코드와 아르페지오 반주를 생성합니다.
+- 생성 파트에서는 기존 `겹침 병합` 콤보 대신 `잔잔` / `기본` / `경쾌` 스타일 콤보를 표시합니다. 기본값은 `기본`입니다.
+- 생성 반주는 완전한 작곡 AI가 아니라, 키 추정·다이어토닉 코드·흔한 I-V-vi-IV / i-VI-III-VII 진행을 섞은 규칙 기반 보조 기능입니다.
 
 ### v4.0
 - 버전 표기를 `v4.0`으로 변경했습니다.
