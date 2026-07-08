@@ -53,6 +53,12 @@
   const MIDI_RESOURCE_LINK_IDS = new Set(["bitmidi", "ichigos", "midiex", "midisite", "musescore", "vgmusic_https"]);
   const ACTIVE_CODE_LOOKAHEAD_SEC = 0.012;
   const ACTIVE_CODE_RELEASE_SEC = 0.026;
+  const PIANO_ROLL_MIN_KEY_SPAN = 24;
+  const PIANO_ROLL_FALL_WINDOW_COLLAPSED = 1.8;
+  const PIANO_ROLL_FALL_WINDOW_EXPANDED = 4.6;
+  const PIANO_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const PIANO_BLACK_KEY_PITCHES = new Set([1, 3, 6, 8, 10]);
+  const PIANO_WHITE_INDEX_BY_PITCH = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
 
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
@@ -105,6 +111,13 @@
   const volumeValue = $("volumeValue");
   const progressSlider = $("progressSlider");
   const tempoMarkerLayer = $("tempoMarkerLayer");
+  const pianoRoll = $("pianoRoll");
+  const pianoRollGrid = $("pianoRollGrid");
+  const pianoRollNotes = $("pianoRollNotes");
+  const pianoRollKeyboard = $("pianoRollKeyboard");
+  const pianoRollEmpty = $("pianoRollEmpty");
+  const pianoRollRangeLabel = $("pianoRollRangeLabel");
+  const pianoRollToggleLabel = $("pianoRollToggleLabel");
   const playInfo = $("playInfo");
   const copyBtn = $("copyBtn");
   const pasteBtn = $("pasteBtn");
@@ -190,7 +203,13 @@
   let isPlaying = false;
   let playbackSpeed = 1;
   let scheduleCache = null;
+  let scheduleCacheVersion = 0;
   let currentOffset = 0;
+  let pianoRollExpanded = false;
+  let pianoRollKeyMin = 48;
+  let pianoRollKeyMax = 72;
+  let pianoRollLastRenderBucket = -1;
+  let pianoRollLastDataSignature = "";
   let playContextStart = 0;
   let playOffsetStart = 0;
   let playbackAutoGainScale = 1;
@@ -244,6 +263,7 @@
   function init() {
     loadThemePref();
     loadPlaybackPrefs();
+    loadPianoRollPrefs();
     loadPartSoundPrefs();
     loadMidiPartSoundPresetPrefs();
     loadUserSoundPresetPrefs();
@@ -287,6 +307,13 @@
     progressSlider.addEventListener("touchend", () => { isSeeking = false; handleSeekInput(true); }, { passive: true });
     progressSlider.addEventListener("input", () => handleSeekInput(false));
     progressSlider.addEventListener("change", () => handleSeekInput(true));
+    pianoRoll?.addEventListener("click", togglePianoRoll);
+    pianoRoll?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        togglePianoRoll();
+      }
+    });
     copyBtn.addEventListener("click", () => void copyVisibleMml());
     splitCopyBtn?.addEventListener("click", () => openSplitCopyDialog());
     splitCopyRebuild?.addEventListener("click", () => buildSplitCopyPages());
@@ -348,6 +375,7 @@
     });
     window.addEventListener("resize", () => {
       if (midiConvertDialog?.open) scheduleMidiInstrumentListHeightSync();
+      updatePianoRoll(currentOffset, scheduleCache?.duration || Number(progressSlider.max) || 0, true);
     });
     partSoundDialog?.addEventListener("close", () => stopMidiPreview());
     themeToggleBtn?.addEventListener("click", toggleTheme);
@@ -501,6 +529,27 @@
     midiPartPresetKeys = normalizePresetKeyArray(midiPartPresetKeys);
     writePref("midiPartPresetKeys", JSON.stringify(midiPartPresetKeys));
     writePref("midiPartPresetName", midiPartPresetName || DEFAULT_MIDI_SOUND_PRESET_LABEL);
+  }
+
+  function loadPianoRollPrefs() {
+    pianoRollExpanded = readPref("pianoRollExpanded") === "1";
+    applyPianoRollExpandedState(false);
+  }
+
+  function togglePianoRoll() {
+    pianoRollExpanded = !pianoRollExpanded;
+    applyPianoRollExpandedState(true);
+    updatePianoRoll(currentOffset, scheduleCache?.duration || Number(progressSlider.max) || 0, true);
+  }
+
+  function applyPianoRollExpandedState(persist) {
+    if (!pianoRoll) return;
+    pianoRoll.classList.toggle("expanded", pianoRollExpanded);
+    pianoRoll.setAttribute("aria-expanded", pianoRollExpanded ? "true" : "false");
+    pianoRoll.setAttribute("aria-label", pianoRollExpanded ? "피아노 롤 접기" : "피아노 롤 펼치기");
+    pianoRoll.title = pianoRollExpanded ? "클릭해서 피아노 롤 접기" : "클릭해서 피아노 롤 펼치기";
+    if (pianoRollToggleLabel) pianoRollToggleLabel.textContent = pianoRollExpanded ? "접기" : "펼치기";
+    if (persist) writePref("pianoRollExpanded", pianoRollExpanded ? "1" : "0");
   }
 
   function loadPartMutePrefs() {
@@ -1310,6 +1359,7 @@
     partMuteStates = Array.from({ length: 6 }, () => false);
     loadThemePref();
     loadPlaybackPrefs();
+    loadPianoRollPrefs();
     loadPartSoundPrefs();
     loadMidiPartSoundPresetPrefs();
     loadUserSoundPresetPrefs();
@@ -4413,6 +4463,7 @@ ${shortError(err)}`);
       stopPlayback(false);
       await loadDefaultSf2IfNeeded();
       scheduleCache = createScheduleFromEditor();
+      scheduleCacheVersion++;
       updateTempoMarkers(scheduleCache.tempoMarkers, scheduleCache.duration);
       if (scheduleCache.notes.length === 0) throw new Error("재생할 음표가 없습니다. MML 내용을 확인해 주세요.");
       if (currentOffset >= scheduleCache.duration - 0.05) currentOffset = 0;
@@ -4578,16 +4629,19 @@ ${shortError(err)}`);
     playInfo.textContent = `${formatTime(c)} / ${formatTime(d)}`;
     updateActiveTempoMarker(c);
     updatePlaybackCodeHighlight(c);
+    updatePianoRoll(c, d);
   }
 
   function rebuildSchedulePreviewSilently() {
     currentOffset = 0;
     try {
       scheduleCache = createScheduleFromEditor();
+      scheduleCacheVersion++;
       updateProgressUi(0, scheduleCache.duration);
       updateTempoMarkers(scheduleCache.tempoMarkers, scheduleCache.duration);
     } catch (_) {
       scheduleCache = null;
+      scheduleCacheVersion++;
       updateProgressUi(0, 0);
       updateTempoMarkers([], 0);
     }
@@ -5469,6 +5523,230 @@ ${shortError(err)}`);
     if (!highlight || !textarea) return;
     highlight.scrollTop = textarea.scrollTop;
     highlight.scrollLeft = textarea.scrollLeft;
+  }
+
+  function getPlayablePianoRollNotes() {
+    const notes = Array.isArray(scheduleCache?.notes) ? scheduleCache.notes : [];
+    return notes.filter((note) => {
+      const part = clampInt(Number(note?.part ?? 0), 0, 5);
+      const midi = Number(note?.midi);
+      if (!Number.isFinite(midi)) return false;
+      if (partMuteStates[part]) return false;
+      if (Number(note?.volume ?? 0) <= 0) return false;
+      return true;
+    });
+  }
+
+  function getPianoRollRange(notes) {
+    if (!notes.length) return { min: 48, max: 72 };
+    let min = 127;
+    let max = 0;
+    for (const note of notes) {
+      const midi = clampInt(Number(note.midi) || 0, 0, 127);
+      min = Math.min(min, midi);
+      max = Math.max(max, midi);
+    }
+
+    min = Math.max(0, Math.floor(min / 12) * 12);
+    max = Math.min(127, Math.ceil((max + 1) / 12) * 12 - 1);
+    if (max - min + 1 < PIANO_ROLL_MIN_KEY_SPAN) {
+      const center = Math.round((min + max) / 2);
+      min = Math.max(0, center - Math.floor(PIANO_ROLL_MIN_KEY_SPAN / 2));
+      max = Math.min(127, min + PIANO_ROLL_MIN_KEY_SPAN - 1);
+      min = Math.max(0, max - PIANO_ROLL_MIN_KEY_SPAN + 1);
+      min = Math.max(0, Math.floor(min / 12) * 12);
+      max = Math.min(127, Math.max(max, min + PIANO_ROLL_MIN_KEY_SPAN - 1));
+    }
+
+    // 실제 피아노처럼 흰건반이 기본 폭을 차지하고 검은건반은 흰건반 사이에 겹쳐 올라가야 하므로,
+    // 표시 범위는 항상 C에서 시작해 B에서 끝나는 온전한 옥타브 단위로 맞춘다.
+    min = Math.max(0, Math.floor(min / 12) * 12);
+    max = Math.min(127, Math.ceil((max + 1) / 12) * 12 - 1);
+    return { min, max };
+  }
+
+  function getPianoRollKeyHeight() {
+    if (!pianoRoll) return pianoRollExpanded ? 38 : 30;
+    const raw = getComputedStyle(pianoRoll).getPropertyValue("--piano-key-h");
+    const parsed = Number.parseFloat(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : (pianoRollExpanded ? 38 : 30);
+  }
+
+  function getPianoRollStageHeight() {
+    const stage = pianoRoll?.querySelector(".piano-roll-stage");
+    const height = Number(stage?.clientHeight) || 0;
+    return height > 0 ? height : (pianoRollExpanded ? 286 : 58);
+  }
+
+  function noteNameForMidi(midi) {
+    const n = clampInt(Number(midi) || 0, 0, 127);
+    return `${PIANO_NOTE_NAMES[n % 12]}${Math.floor(n / 12) - 1}`;
+  }
+
+  function getPianoPitch(midi) {
+    return ((clampInt(Number(midi) || 0, 0, 127) % 12) + 12) % 12;
+  }
+
+  function isPianoBlackKey(midi) {
+    return PIANO_BLACK_KEY_PITCHES.has(getPianoPitch(midi));
+  }
+
+  function getPianoWhiteIndex(midi) {
+    const n = clampInt(Number(midi) || 0, 0, 127);
+    return Math.floor(n / 12) * 7 + PIANO_WHITE_INDEX_BY_PITCH[n % 12];
+  }
+
+  function getPianoRollLayout(minMidi, maxMidi) {
+    const min = clampInt(Number(minMidi) || 0, 0, 127);
+    const max = clampInt(Number(maxMidi) || 0, 0, 127);
+    const firstWhiteIndex = getPianoWhiteIndex(min);
+    let whiteKeyCount = 0;
+    for (let midi = min; midi <= max; midi++) {
+      if (!isPianoBlackKey(midi)) whiteKeyCount++;
+    }
+    whiteKeyCount = Math.max(1, whiteKeyCount);
+    const whiteWidth = 100 / whiteKeyCount;
+    const blackWidth = whiteWidth * 0.62;
+
+    const getKeyMetrics = (midi) => {
+      const n = clampInt(Number(midi) || 0, 0, 127);
+      const black = isPianoBlackKey(n);
+      const relativeWhiteIndex = getPianoWhiteIndex(n) - firstWhiteIndex;
+      if (black) {
+        const boundary = (relativeWhiteIndex + 1) * whiteWidth;
+        const width = blackWidth;
+        return {
+          black,
+          left: Math.max(0, Math.min(100 - width, boundary - width / 2)),
+          width,
+          center: boundary
+        };
+      }
+      const left = relativeWhiteIndex * whiteWidth;
+      return {
+        black,
+        left,
+        width: whiteWidth,
+        center: left + whiteWidth / 2
+      };
+    };
+
+    return { whiteWidth, blackWidth, getKeyMetrics };
+  }
+
+  function buildPianoRollKeyLabel(midi, widthPercent) {
+    if (getPianoPitch(midi) !== 0) return "";
+    const label = noteNameForMidi(midi);
+    const match = /^([A-G]#?)(-?\d+)$/.exec(label);
+    if (!match) return `<em>${escapeHtml(label)}</em>`;
+    if (widthPercent < 3.2) {
+      return `<em class="vertical"><span>${escapeHtml(match[1])}</span><span>${escapeHtml(match[2])}</span></em>`;
+    }
+    return `<em>${escapeHtml(label)}</em>`;
+  }
+
+  function buildPianoRollDataSignature(notes, duration) {
+    const first = notes[0] || null;
+    const last = notes[notes.length - 1] || null;
+    return [
+      scheduleCacheVersion,
+      notes.length,
+      Math.round((Number(duration) || 0) * 1000),
+      pianoRollExpanded ? 1 : 0,
+      partMuteStates.map(v => v ? "1" : "0").join(""),
+      first ? `${Math.round(first.start * 1000)}:${first.midi}:${first.part}` : "-",
+      last ? `${Math.round(last.start * 1000)}:${last.midi}:${last.part}` : "-"
+    ].join("|");
+  }
+
+  function updatePianoRoll(currentSec, durationSec, force = false) {
+    if (!pianoRoll || !pianoRollNotes || !pianoRollKeyboard || !pianoRollGrid) return;
+
+    const notes = getPlayablePianoRollNotes();
+    const duration = Math.max(0, Number(durationSec) || 0);
+    const current = Math.max(0, Math.min(duration || Infinity, Number(currentSec) || 0));
+    const bucket = Math.floor(current * (pianoRollExpanded ? 36 : 24));
+    const dataSignature = buildPianoRollDataSignature(notes, duration);
+    if (!force && bucket === pianoRollLastRenderBucket && dataSignature === pianoRollLastDataSignature) return;
+    pianoRollLastRenderBucket = bucket;
+    pianoRollLastDataSignature = dataSignature;
+
+    if (!notes.length || duration <= 0) {
+      pianoRollGrid.innerHTML = "";
+      pianoRollNotes.innerHTML = "";
+      pianoRollKeyboard.innerHTML = "";
+      if (pianoRollEmpty) pianoRollEmpty.hidden = false;
+      if (pianoRollRangeLabel) pianoRollRangeLabel.textContent = "Piano Roll";
+      return;
+    }
+
+    if (pianoRollEmpty) pianoRollEmpty.hidden = true;
+    const range = getPianoRollRange(notes);
+    pianoRollKeyMin = range.min;
+    pianoRollKeyMax = range.max;
+    const keyLayout = getPianoRollLayout(pianoRollKeyMin, pianoRollKeyMax);
+    const keyHeight = getPianoRollKeyHeight();
+    const stageHeight = getPianoRollStageHeight();
+    const fallAreaHeight = Math.max(16, stageHeight - keyHeight);
+    const fallWindow = pianoRollExpanded ? PIANO_ROLL_FALL_WINDOW_EXPANDED : PIANO_ROLL_FALL_WINDOW_COLLAPSED;
+    const pxPerSec = fallAreaHeight / fallWindow;
+    const visibleEnd = current + fallWindow;
+    const activeKeyParts = new Map();
+
+    const gridHtml = [];
+    const keyHtml = [];
+    for (let midi = pianoRollKeyMin; midi <= pianoRollKeyMax; midi++) {
+      const metrics = keyLayout.getKeyMetrics(midi);
+      const isBlack = metrics.black;
+      const isC = getPianoPitch(midi) === 0;
+      gridHtml.push(`<span class="piano-roll-grid-key${isBlack ? " black" : ""}${isC ? " octave" : ""}" style="left:${metrics.left}%;width:${metrics.width}%"></span>`);
+      const keyLabel = buildPianoRollKeyLabel(midi, metrics.width);
+      keyHtml.push(`<span class="piano-roll-key${isBlack ? " black" : " white"}" data-midi="${midi}" style="left:${metrics.left}%;width:${metrics.width}%">${keyLabel}</span>`);
+    }
+
+    const visibleNotes = [];
+    for (const note of notes) {
+      const start = Math.max(0, Number(note.start) || 0);
+      const noteDuration = Math.max(0.02, Number(note.durationSec) || 0.02);
+      const end = start + noteDuration;
+      // 노트의 아래쪽 끝은 발음 시작점, 위쪽 끝은 발음 종료점이다.
+      // 시작점이 건반 구분선에 닿는 순간 소리가 나고, 종료점이 구분선을 지나면 완전히 사라진다.
+      if (end <= current || start > visibleEnd) continue;
+      const midi = clampInt(Number(note.midi) || 0, 0, 127);
+      if (midi < pianoRollKeyMin || midi > pianoRollKeyMax) continue;
+      const part = clampInt(Number(note.part ?? 0), 0, 5);
+      const active = start <= current + 0.012 && end >= current - 0.026;
+      if (active && !activeKeyParts.has(midi)) activeKeyParts.set(midi, part);
+      visibleNotes.push({ note, start, end, noteDuration, midi, part, active });
+    }
+
+    const noteHtml = visibleNotes.slice(0, pianoRollExpanded ? 520 : 260).map(({ start, noteDuration, midi, part, active }) => {
+      const metrics = keyLayout.getKeyMetrics(midi);
+      const noteWidth = Math.max(0.28, metrics.width * (metrics.black ? 0.82 : 0.72));
+      const left = Math.max(0, Math.min(100 - noteWidth, metrics.center - noteWidth / 2));
+      const bottom = (start - current) * pxPerSec;
+      const height = noteDuration * pxPerSec;
+      const title = `${PART_LABELS[part] || "파트"} · ${noteNameForMidi(midi)} · ${formatTime(start)}`;
+      return `<span class="piano-roll-note part-${part}${active ? " active" : ""}" style="left:${left}%;width:${noteWidth}%;bottom:${bottom.toFixed(2)}px;height:${height.toFixed(2)}px" title="${escapeHtml(title)}"></span>`;
+    });
+
+    if (activeKeyParts.size) {
+      for (let i = 0; i < keyHtml.length; i++) {
+        const midi = pianoRollKeyMin + i;
+        const part = activeKeyParts.get(midi);
+        if (part == null) continue;
+        keyHtml[i] = keyHtml[i].replace('piano-roll-key', `piano-roll-key active part-${part}`);
+      }
+    }
+
+    pianoRollGrid.innerHTML = gridHtml.join("");
+    pianoRollNotes.innerHTML = noteHtml.join("");
+    pianoRollKeyboard.innerHTML = keyHtml.join("");
+    if (pianoRollRangeLabel) {
+      const shown = visibleNotes.length;
+      const total = notes.length;
+      pianoRollRangeLabel.textContent = `${noteNameForMidi(pianoRollKeyMin)}–${noteNameForMidi(pianoRollKeyMax)} · ${shown}/${total}`;
+    }
   }
 
   function updatePlaybackCodeHighlight(currentSec) {

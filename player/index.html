@@ -90,6 +90,20 @@
           <input id="progressSlider" class="progress" type="range" min="0" max="0" step="0.001" value="0" disabled />
         </div>
       </div>
+
+      <div id="pianoRoll" class="piano-roll" role="button" tabindex="0" aria-expanded="false" aria-label="피아노 롤 펼치기">
+        <div class="piano-roll-stage">
+          <div id="pianoRollGrid" class="piano-roll-grid" aria-hidden="true"></div>
+          <div id="pianoRollNotes" class="piano-roll-notes" aria-hidden="true"></div>
+          <div id="pianoRollHitLine" class="piano-roll-hit-line" aria-hidden="true"></div>
+          <div id="pianoRollKeyboard" class="piano-roll-keyboard" aria-hidden="true"></div>
+          <div id="pianoRollEmpty" class="piano-roll-empty">연주할 노트가 없습니다</div>
+          <div class="piano-roll-corner" aria-hidden="true">
+            <span id="pianoRollRangeLabel" class="piano-roll-range-label">Piano Roll</span>
+            <span id="pianoRollToggleLabel" class="piano-roll-toggle-label">펼치기</span>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
