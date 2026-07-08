@@ -269,6 +269,7 @@
   let defaultSf2FallbackLoadPromise = null;
   let activePlaybackMainRanges = [];
   let activePlaybackPartRanges = Array.from({ length: 6 }, () => []);
+  const googlePickerSuspendedCloseDialogs = new WeakSet();
 
   init();
 
@@ -305,6 +306,10 @@
     });
     mmiImportDialog?.addEventListener("close", () => {
       stopMidiPreview();
+      if (googlePickerSuspendedCloseDialogs.has(mmiImportDialog)) {
+        googlePickerSuspendedCloseDialogs.delete(mmiImportDialog);
+        return;
+      }
       if (pendingMmiImport) resolveMmiImportDialog(null);
     });
     soundSource.addEventListener("change", () => handleSoundSourceChange());
@@ -1667,13 +1672,64 @@
     }
   }
 
+  function suspendPopupPanelsForGooglePicker() {
+    const suspended = [];
+    const suspend = (dialog, type) => {
+      if (!dialog?.open) return;
+      googlePickerSuspendedCloseDialogs.add(dialog);
+      try {
+        dialog.close("google-picker");
+        suspended.push(type);
+      } catch (_) {
+        googlePickerSuspendedCloseDialogs.delete(dialog);
+      }
+    };
+
+    // Google Picker는 일반 document 레이어에 붙기 때문에, showModal()로 열린
+    // 앱 내부 팝업은 브라우저 top-layer 특성상 z-index만으로 Picker보다 뒤로
+    // 보낼 수 없다. Picker를 열 때 변환/가져오기 팝업을 잠깐 닫고, 취소 시 복구한다.
+    suspend(midiConvertDialog, "midi");
+    suspend(mmiImportDialog, "mmi");
+    return suspended;
+  }
+
+  function restorePopupPanelsAfterGooglePicker(suspended) {
+    if (!Array.isArray(suspended) || !suspended.length) return;
+    for (const type of suspended) {
+      try {
+        if (type === "midi" && pendingMidiImport && pendingMidiSettings && midiConvertDialog?.showModal && !midiConvertDialog.open) {
+          midiConvertDialog.showModal();
+          scheduleMidiInstrumentListHeightSync();
+        } else if (type === "mmi" && pendingMmiImport && mmiImportDialog?.showModal && !mmiImportDialog.open) {
+          mmiImportDialog.showModal();
+        }
+      } catch (_) {}
+    }
+  }
+
+  function discardPopupPanelsAfterGooglePicker(suspended) {
+    if (!Array.isArray(suspended) || !suspended.length) return;
+    stopMidiPreview();
+    if (suspended.includes("midi")) {
+      pendingMidiImport = null;
+      pendingMidiSettings = null;
+      setMidiConvertBusy(false);
+    }
+    if (suspended.includes("mmi")) {
+      resolveMmiImportDialog(null);
+    }
+  }
+
   async function openGoogleDrivePicker() {
+    let suspendedPanels = null;
     try {
       requireGoogleAccessToken();
       if (!googleApiKey()) throw new Error("Google Picker API Key가 설정되지 않았습니다. js/google-config.js의 apiKey를 채워 주세요.");
       setGoogleStatus(`${GOOGLE_MML_FOLDER_NAME} 폴더 확인 중...`);
       const folderId = await ensureGoogleMmlFolder();
       await ensureGooglePickerLoaded();
+      suspendedPanels = suspendPopupPanelsForGooglePicker();
+      await new Promise((resolveFrame) => requestAnimationFrame(resolveFrame));
       const view = new window.google.picker.DocsView(window.google.picker.ViewId.DOCS);
       view.setIncludeFolders(true);
       view.setSelectFolderEnabled(false);
@@ -1688,30 +1744,40 @@
         .setOAuthToken(googleAccessToken)
         .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 Google Docs / MML / MIDI / MusicXML / MMI / 3MLE / TXT 파일 선택`)
         .addView(view)
-        .setCallback((data) => void handleGooglePickerResult(data));
+        .setCallback((data) => void handleGooglePickerResult(data, suspendedPanels));
       const appId = googleAppId();
       if (appId) builder.setAppId(appId);
       builder.build().setVisible(true);
       trackAnalytics("google_drive_picker_open");
       setGoogleStatus("구글 연동됨");
     } catch (err) {
+      restorePopupPanelsAfterGooglePicker(suspendedPanels);
       showDialog("Drive 불러오기 실패", shortError(err));
       updateGoogleDriveControls();
     }
   }
 
-  async function handleGooglePickerResult(data) {
+  async function handleGooglePickerResult(data, suspendedPanels = null) {
     const picker = window.google?.picker;
-    if (!picker || data?.[picker.Response.ACTION] !== picker.Action.PICKED) return;
+    const action = data?.[picker?.Response?.ACTION];
+    if (!picker || action !== picker.Action.PICKED) {
+      restorePopupPanelsAfterGooglePicker(suspendedPanels);
+      return;
+    }
     const doc = data[picker.Response.DOCUMENTS]?.[0];
     const fileId = doc?.[picker.Document.ID];
     const name = doc?.[picker.Document.NAME] || "Google Drive 파일";
     const mimeType = doc?.[picker.Document.MIME_TYPE] || "";
-    if (!fileId) return;
-    if (mimeType === GOOGLE_DRIVE_FOLDER_MIME) {
-      showDialog("Drive 불러오기", "폴더가 아니라 MML, MIDI, MusicXML, MMI, 3MLE 또는 TXT 파일을 선택해 주세요.");
+    if (!fileId) {
+      restorePopupPanelsAfterGooglePicker(suspendedPanels);
       return;
     }
+    if (mimeType === GOOGLE_DRIVE_FOLDER_MIME) {
+      showDialog("Drive 불러오기", "폴더가 아니라 MML, MIDI, MusicXML, MMI, 3MLE 또는 TXT 파일을 선택해 주세요.");
+      restorePopupPanelsAfterGooglePicker(suspendedPanels);
+      return;
+    }
+    discardPopupPanelsAfterGooglePicker(suspendedPanels);
     try {
       await loadGoogleDriveSourceFile(fileId, name);
     } catch (err) {

@@ -2237,3 +2237,15 @@ button:disabled:hover {
   padding-left: 10px;
   padding-right: 10px;
 }
+
+/* Google Picker layer order
+   - Browser alert/info dialogs stay above everything.
+   - Google Picker should be above app popup panels.
+   - Native modal <dialog> panels are temporarily suspended in JS before Picker opens,
+     because top-layer dialogs cannot be beaten by z-index alone. */
+.picker-dialog-bg {
+  z-index: 2147483000 !important;
+}
+.picker-dialog {
+  z-index: 2147483001 !important;
+}
