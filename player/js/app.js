@@ -51,12 +51,14 @@
     ["https://www.vgmusic.com/", "vgmusic_https"]
   ]);
   const MIDI_RESOURCE_LINK_IDS = new Set(["bitmidi", "ichigos", "midiex", "midisite", "musescore", "vgmusic_https"]);
+  const ACTIVE_CODE_LOOKAHEAD_SEC = 0.012;
+  const ACTIVE_CODE_RELEASE_SEC = 0.026;
 
 
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { musicXmlToMidiBytes } = window.MabiMusicXml || {};
-  const { parseMabinogiMml, splitMmlParts, parseMmlPart, buildSchedule, composeMml } = window.MabiMml;
+  const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml } = window.MabiMml;
   const { optimizeMml, optimizePart, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
@@ -233,6 +235,9 @@
   let googleSilentRestoreFailed = false;
   let suggestedMmlSaveFileName = "";
   let pendingMmiImport = null;
+  let activePlaybackCodeSignature = "";
+  let activePlaybackMainRanges = [];
+  let activePlaybackPartRanges = Array.from({ length: 6 }, () => []);
 
   init();
 
@@ -371,7 +376,7 @@
     scheduleGoogleAutoReconnect();
     updateCharCount();
     rebuildSchedulePreviewSilently();
-    trackAnalytics("mobibard_app_open", { version: "3_5" });
+    trackAnalytics("mobibard_app_open", { version: "4_0" });
   }
 
   function trackAnalytics(eventName, params = {}) {
@@ -4471,7 +4476,9 @@ ${shortError(err)}`);
     normalizeTextareaCommands(mainMml);
     const parsed = parseMabinogiMml(mainMml.value);
     const scheduled = buildSchedule(parsed);
-    const duration = scheduled.notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+    const noteDuration = scheduled.notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+    const restDuration = (scheduled.rests || []).reduce((m, r) => Math.max(m, r.start + r.durationSec), 0);
+    const duration = Math.max(Number(scheduled.duration) || 0, noteDuration, restDuration);
     return { ...scheduled, duration };
   }
 
@@ -4570,6 +4577,7 @@ ${shortError(err)}`);
     progressSlider.disabled = d <= 0;
     playInfo.textContent = `${formatTime(c)} / ${formatTime(d)}`;
     updateActiveTempoMarker(c);
+    updatePlaybackCodeHighlight(c);
   }
 
   function rebuildSchedulePreviewSilently() {
@@ -5433,7 +5441,7 @@ ${shortError(err)}`);
 
   function updateMainHighlight() {
     if (!mainMmlHighlight) return;
-    mainMmlHighlight.innerHTML = renderColoredMml(mainMml.value) + "\n";
+    mainMmlHighlight.innerHTML = renderColoredMml(mainMml.value, activePlaybackMainRanges) + "\n";
     syncHighlightScroll();
   }
 
@@ -5451,7 +5459,7 @@ ${shortError(err)}`);
     const highlight = partMmlHighlights[index];
     const textarea = partTexts[index];
     if (!highlight || !textarea) return;
-    highlight.innerHTML = renderPartWithErrors(textarea.value) + "\n";
+    highlight.innerHTML = renderPartWithErrors(textarea.value, activePlaybackPartRanges[index] || []) + "\n";
     syncPartHighlightScroll(index);
   }
 
@@ -5463,40 +5471,172 @@ ${shortError(err)}`);
     highlight.scrollLeft = textarea.scrollLeft;
   }
 
-  function renderColoredMml(text) {
+  function updatePlaybackCodeHighlight(currentSec) {
+    const noteList = Array.isArray(scheduleCache?.notes) ? scheduleCache.notes : [];
+    const restList = Array.isArray(scheduleCache?.rests) ? scheduleCache.rests : [];
+    if (!noteList.length && !restList.length) {
+      clearPlaybackCodeHighlight();
+      return;
+    }
+
+    const current = Math.max(0, Number(currentSec) || 0);
+    const mainRanges = [];
+    const partRanges = Array.from({ length: 6 }, () => []);
+
+    const collectSourceRanges = (item, part) => {
+      const sourceRanges = Array.isArray(item.sourceRanges) && item.sourceRanges.length
+        ? item.sourceRanges
+        : [{ start: item.sourceStart, end: item.sourceEnd, globalStart: item.globalSourceStart, globalEnd: item.globalSourceEnd }];
+
+      for (const range of sourceRanges) {
+        const partStart = Number(range?.start);
+        const partEnd = Number(range?.end);
+        const globalStart = Number(range?.globalStart);
+        const globalEnd = Number(range?.globalEnd);
+        if (Number.isFinite(partStart) && Number.isFinite(partEnd) && partEnd > partStart) {
+          partRanges[part].push({ start: partStart, end: partEnd });
+        }
+        if (Number.isFinite(globalStart) && Number.isFinite(globalEnd) && globalEnd > globalStart) {
+          mainRanges.push({ start: globalStart, end: globalEnd });
+        }
+      }
+    };
+
+    const isCurrentItem = (item) => {
+      const start = Number(item.start) || 0;
+      const end = start + Math.max(0, Number(item.durationSec) || 0);
+      return current + ACTIVE_CODE_LOOKAHEAD_SEC >= start && current <= end + ACTIVE_CODE_RELEASE_SEC;
+    };
+
+    for (const note of noteList) {
+      const part = clampInt(Number(note?.part ?? 0), 0, 5);
+      if (partMuteStates[part]) continue;
+      if (Number(note?.volume ?? 0) <= 0) continue;
+      if (!isCurrentItem(note)) continue;
+      collectSourceRanges(note, part);
+    }
+
+    for (const rest of restList) {
+      const part = clampInt(Number(rest?.part ?? 0), 0, 5);
+      if (partMuteStates[part]) continue;
+      if (!isCurrentItem(rest)) continue;
+      collectSourceRanges(rest, part);
+    }
+
+    const compactMain = compactCodeRanges(mainRanges);
+    const compactParts = partRanges.map(compactCodeRanges);
+    const signature = buildActiveCodeSignature(compactMain, compactParts);
+    if (signature === activePlaybackCodeSignature) return;
+
+    activePlaybackCodeSignature = signature;
+    activePlaybackMainRanges = compactMain;
+    activePlaybackPartRanges = compactParts;
+    updateMainHighlight();
+    updatePartHighlights();
+  }
+
+  function clearPlaybackCodeHighlight() {
+    if (!activePlaybackCodeSignature && activePlaybackMainRanges.length === 0 && activePlaybackPartRanges.every(r => !r.length)) return;
+    activePlaybackCodeSignature = "";
+    activePlaybackMainRanges = [];
+    activePlaybackPartRanges = Array.from({ length: 6 }, () => []);
+    updateMainHighlight();
+    updatePartHighlights();
+  }
+
+  function compactCodeRanges(ranges) {
+    const sorted = Array.from(ranges || [])
+      .map(r => ({ start: Math.max(0, Math.floor(Number(r.start) || 0)), end: Math.max(0, Math.ceil(Number(r.end) || 0)) }))
+      .filter(r => r.end > r.start)
+      .sort((a, b) => a.start - b.start || a.end - b.end);
+    const out = [];
+    for (const range of sorted) {
+      const last = out[out.length - 1];
+      if (last && range.start <= last.end) last.end = Math.max(last.end, range.end);
+      else out.push({ ...range });
+    }
+    return out;
+  }
+
+  function buildActiveCodeSignature(mainRanges, partRanges) {
+    const main = (mainRanges || []).map(r => `m${r.start}:${r.end}`).join("|");
+    const parts = (partRanges || []).map((ranges, i) => ranges.map(r => `p${i}:${r.start}:${r.end}`).join("|")).join("|");
+    return `${main}#${parts}`;
+  }
+
+  function renderColoredMml(text, activeRanges = []) {
     const s = normalizeMmlForDisplay(text);
+    const classes = createClassBuckets(s.length);
     const at = s.indexOf("@");
     const lastSemi = s.lastIndexOf(";");
     const hasHeader = /^\s*MML\s*@/i.test(s) && at >= 0;
-    const prefix = hasHeader ? s.slice(0, at + 1) : "";
     const bodyStart = hasHeader ? at + 1 : 0;
     const bodyEnd = lastSemi >= bodyStart ? lastSemi : s.length;
-    const body = s.slice(bodyStart, bodyEnd);
-    const suffix = lastSemi >= bodyStart ? s.slice(lastSemi) : "";
-    const parts = body.split(",").map(x => x.trim()).slice(0, 6);
-    const colored = parts.map((part, i) => `<span class="ch${Math.min(i, 5)}">${renderPartWithErrors(part)}</span>`).join(`<span class="mml-separator">,</span>`);
-    return `<span class="mml-prefix">${escapeHtml(prefix)}</span>${colored}<span class="mml-suffix">${escapeHtml(suffix)}</span>`;
+
+    if (hasHeader) addRangeClass(classes, 0, bodyStart, "mml-prefix");
+    if (lastSemi >= bodyStart) addRangeClass(classes, bodyEnd, s.length, "mml-suffix");
+    for (let i = bodyStart; i < bodyEnd; i++) {
+      if (s[i] === ",") addRangeClass(classes, i, i + 1, "mml-separator");
+    }
+
+    const detailedParts = typeof splitMmlPartsDetailed === "function" ? splitMmlPartsDetailed(s).slice(0, 6) : [];
+    detailedParts.forEach((info, index) => {
+      const partClass = `ch${Math.min(index, 5)}`;
+      addRangeClass(classes, info.sourceStart, info.sourceEnd, partClass);
+      const invalid = findInvalidPartChars(info.text);
+      invalid.forEach(pos => addRangeClass(classes, info.sourceStart + pos, info.sourceStart + pos + 1, "invalid-code"));
+      const tempoRanges = findTempoHighlightRanges(info.text, invalid);
+      for (const range of tempoRanges) addRangeClass(classes, info.sourceStart + range.start, info.sourceStart + range.end, "tempo-code");
+    });
+
+    for (const range of activeRanges || []) addRangeClass(classes, range.start, range.end, "mml-active-code");
+    return renderClassedText(s, classes);
   }
 
-  function renderPartWithErrors(part) {
+  function renderPartWithErrors(part, activeRanges = []) {
     const text = String(part || "");
+    const classes = createClassBuckets(text.length);
     const invalid = findInvalidPartChars(text);
+    invalid.forEach(pos => addRangeClass(classes, pos, pos + 1, "invalid-code"));
     const tempoRanges = findTempoHighlightRanges(text, invalid);
-    let tempoRangeIndex = 0;
-    let out = "";
+    for (const range of tempoRanges) addRangeClass(classes, range.start, range.end, "tempo-code");
+    for (const range of activeRanges || []) addRangeClass(classes, range.start, range.end, "mml-active-code");
+    return renderClassedText(text, classes);
+  }
 
-    for (let i = 0; i < text.length; i++) {
-      const tempoRange = tempoRanges[tempoRangeIndex];
-      if (tempoRange && i === tempoRange.start) {
-        out += `<span class="tempo-code">${escapeHtml(text.slice(tempoRange.start, tempoRange.end))}</span>`;
-        i = tempoRange.end - 1;
-        tempoRangeIndex++;
-        continue;
-      }
+  function createClassBuckets(length) {
+    return Array.from({ length: Math.max(0, Number(length) || 0) }, () => []);
+  }
 
-      const ch = escapeHtml(text[i]);
-      out += invalid.has(i) ? `<span class="invalid-code">${ch}</span>` : ch;
+  function addRangeClass(classes, start, end, className) {
+    if (!className || !classes?.length) return;
+    const from = Math.max(0, Math.min(classes.length, Math.floor(Number(start) || 0)));
+    const to = Math.max(from, Math.min(classes.length, Math.ceil(Number(end) || 0)));
+    for (let i = from; i < to; i++) {
+      if (!classes[i].includes(className)) classes[i].push(className);
     }
+  }
+
+  function renderClassedText(text, classes) {
+    const s = String(text || "");
+    if (!s) return "";
+    let out = "";
+    let runStart = 0;
+    let runKey = (classes[0] || []).join(" ");
+
+    const flush = (to) => {
+      const chunk = escapeHtml(s.slice(runStart, to));
+      out += runKey ? `<span class="${runKey}">${chunk}</span>` : chunk;
+    };
+
+    for (let i = 1; i < s.length; i++) {
+      const key = (classes[i] || []).join(" ");
+      if (key === runKey) continue;
+      flush(i);
+      runStart = i;
+      runKey = key;
+    }
+    flush(s.length);
     return out;
   }
 

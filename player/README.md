@@ -1,8 +1,8 @@
-# 마비노기 MML 생성기 샘플 - 모비바드 v3.6
+# 마비노기 MML 생성기 샘플 - 모비바드 v4.0
 
 공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MusicXML/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
 
-`v3.6`에서는 MIDI/MusicXML → MML 변환의 노트 배정 로직을 보정했습니다. C4 고정 기준을 제거하고, 고음/저음 파트는 자동 파트보다 기본 우선권을 가지면서 같은 시작 시점의 노트 묶음 안에서는 각각 더 높은/더 낮은 노트를 우선합니다. 도입부처럼 아직 선행 노트가 없는 상태에서는 첫 발생 음부터 유효 채널 수만큼의 초기 노트 묶음을 보고 최고음/최저음을 고음/저음 파트의 초기 기준으로 삼습니다. 동시 시작 묶음의 최고음/최저음은 성부 순서 보존을 위해 1옥타브 초과 점프 완화 규칙보다 우선하도록 했습니다. 단일 음처럼 고음/저음 입력 조건이 동률인 상황에서는 전체 곡 음역으로 억지 판정하지 않고 선행 노트와의 피치 근접도를 우선합니다. 고음/저음 역할 방향과 반대로 1옥타브를 초과해 튀고 더 가까운 후보가 있으면 정상 배치 후보와 겹침 병합 허용 후보를 함께 비교해 더 가까운 성부를 우선 탐색합니다. 겹침 병합에서는 새로 발생해야 할 노트를 살리기 위해 이미 더 오래 울린 기존 음을 우선적으로 잘라냅니다. 볼륨 매핑은 MIDI velocity `0 → V0`, `1 → V1`, `2~127 → V2~V15` 균등 분배 기준입니다.
+`v4.0`에서는 진행 슬라이더가 가리키는 시간에 실제로 울리는 MML 음표 코드와 해당 위치의 쉼표 코드를 편집창 안에서 초록색 상자로 표시합니다. 재생 중이 아니어도 현재 위치의 음표/쉼표 토큰을 표시하며, 전체 MML 탭과 개별 파트 탭 모두 같은 기준을 따릅니다.
 
 기본 재생은 로컬 파일만으로 동작합니다. Google Drive 연동을 사용하려면 Google Identity Services와 Google Picker 스크립트를 온라인으로 불러오며, `js/google-config.js` 설정이 필요합니다. Firebase Analytics는 `js/firebase-config.js`와 `js/firebase-analytics.js`에서 초기화합니다.
 
@@ -28,7 +28,6 @@ mabinogi_mml_public/
 ├─ index.html                  # 화면 골격, 주요 버튼, 모든 dialog 마크업, 버전 표시
 ├─ styles.css                  # 전체 레이아웃, 다이얼로그, MIDI/MusicXML 변환 UI, 테마 스타일
 ├─ README.md                   # 현재 문서
-├─ favicon.ico                 # 루트 favicon 복사본
 ├─ assets/
 │  ├─ favicon.ico              # 실제 favicon 링크 대상
 │  ├─ Roland_SC-55.sf2         # 기본 사운드폰트
@@ -57,7 +56,7 @@ mabinogi_mml_public/
 | `js/utils.js` | `window.MabiUtils` | `clamp`, `clampInt`, `unique`, `formatTime`, `shortError`, `base64ToUint8Array` |
 | `js/midi-to-mml.js` | `window.MabiMidi` | `analyzeMidi`, `midiToMml`, `buildMidiInstrumentPreview`, `buildMidiFilePreview` |
 | `js/musicxml-to-midi.js` | `window.MabiMusicXml` | `musicXmlToMidiBytes`, `extractMusicXmlText` |
-| `js/mml-parser.js` | `window.MabiMml` | `parseMabinogiMml`, `splitMmlParts`, `parseMmlPart`, `buildSchedule`, `beatToSeconds`, `composeMml` |
+| `js/mml-parser.js` | `window.MabiMml` | `parseMabinogiMml`, `splitMmlParts`, `splitMmlPartsDetailed`, `parseMmlPart`, `buildSchedule`, `beatToSeconds`, `composeMml` |
 | `js/mml-optimizer.js` | `window.MabiOptimizer` | `optimizeMml`, `optimizePart`, `trimShortRestsMml`, `adjustVolumesMml`, `addLeadingSilenceMml`, `splitMmlPages` |
 | `js/sf2-sampler.js` | `window.MabiSf2` | `parseSoundFont`, `prepareNotes`, `schedulePreparedNotes`, `scheduleNotes` |
 | `js/firebase-analytics.js` | `window.MobibardAnalytics` | `logEvent`, `isReady`, `isEnabled`, `getStatus` |
@@ -70,7 +69,7 @@ mabinogi_mml_public/
 
 | 항목 | 값 / 위치 |
 |---|---|
-| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v3.6` |
+| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v4.0` |
 | MML 파트 수 | 최대 6개: `멜로디`, `화음1`~`화음5` (`app.js`의 `PART_LABELS`) |
 | 설정 localStorage prefix | `mobibard.player.` (`app.js`의 `PREF_PREFIX`) |
 | 기본 SF2 | `assets/Roland_SC-55.sf2` |
@@ -109,6 +108,7 @@ mabinogi_mml_public/
 
 - `전체 MML`, `멜로디`, `화음1`~`화음5` 탭
 - 전체 MML 탭은 파트별 색상 하이라이트를 표시합니다.
+- 진행 슬라이더가 가리키는 시간에 울리는 음표 코드와 해당 위치의 쉼표 코드가 초록색 상자로 표시됩니다. 재생 중이 아니어도 현재 위치 기준으로 표시됩니다.
 - 현재 탭 글자 수를 `1,234 자` 형식으로 표시합니다.
 - 전체 MML의 글자 수는 `MML@`, 쉼표, 세미콜론을 제외한 파트 내용 합계입니다.
 - `쉼표 삭제`, `볼륨 조절`, `시작 공백 시간` 편집 기능을 제공합니다.
@@ -496,7 +496,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
-- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v3.6`가 보이는지
+- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v4.0`가 보이는지
 - [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 MML 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
@@ -542,6 +542,13 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 ---
 
 ## 변경 이력
+
+### v4.0
+- 버전 표기를 `v4.0`으로 변경했습니다.
+- 진행 슬라이더가 가리키는 시간에 울리는 MML 음표 코드와 해당 위치의 쉼표 코드가 편집창 안에서 초록색 상자로 표시되도록 추가했습니다.
+- 정지/일시정지 상태에서도 현재 재생 위치 기준으로 초록색 코드 표시가 유지되도록 조정했습니다.
+- MML 파서가 음표/쉼표 토큰의 원본 위치를 보존하도록 `sourceRanges`와 `globalSourceStart/globalSourceEnd` 정보를 추가했습니다.
+- `&`로 이어진 음표와 쉼표는 하나의 재생 구간으로 처리하면서, 연결된 각 토큰을 함께 하이라이트합니다.
 
 ### v3.6
 - Google 로그인/로그아웃 버튼에서 텍스트의 Google 표기를 제거하고, 로컬에 포함한 공식 G 아이콘을 표시하도록 조정했습니다.

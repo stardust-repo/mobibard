@@ -5,12 +5,12 @@
   const EPS = 1e-9;
 
 function parseMabinogiMml(text) {
-  if (!text.trim()) throw new Error("MML이 비어 있습니다.");
+  if (!String(text || "").trim()) throw new Error("MML이 비어 있습니다.");
   if (/\[|\]/.test(text)) throw new Error("마비노기 MML에서는 [] 표기를 사용할 수 없습니다. 파트는 쉼표로 나눠 입력해 주세요.");
-  const parts = splitMmlParts(text);
-  if (parts.length > 6) throw new Error("이 샘플은 최대 6파트까지만 재생합니다.");
-  while (parts.length < 6) parts.push("");
-  const parsedParts = parts.map((p, i) => parseMmlPart(p, i));
+  const partInfos = splitMmlPartsDetailed(text);
+  if (partInfos.length > 6) throw new Error("이 샘플은 최대 6파트까지만 재생합니다.");
+  while (partInfos.length < 6) partInfos.push({ text: "", sourceStart: 0, sourceEnd: 0, rawStart: 0, rawEnd: 0 });
+  const parsedParts = partInfos.map((p, i) => parseMmlPart(p.text, i, { globalOffset: p.sourceStart }));
   const tempos = [{ beat: 0, bpm: 120, part: -1, order: -1 }];
   for (const p of parsedParts) tempos.push(...p.tempos);
   tempos.sort((a, b) => a.beat - b.beat || a.order - b.order || a.part - b.part);
@@ -21,19 +21,57 @@ function parseMabinogiMml(text) {
 }
 
 function splitMmlParts(text) {
-  let s = String(text || "").trim();
-  const m = s.match(/^\s*MML\s*@([\s\S]*?)\s*;?\s*$/i);
-  if (m) s = m[1];
-  if (s === "") return [];
-  return s.split(",").map(x => x.trim());
+  return splitMmlPartsDetailed(text).map(p => p.text);
 }
 
-function parseMmlPart(s, partIndex) {
+function splitMmlPartsDetailed(text) {
+  const raw = String(text || "");
+  let bodyStart = 0;
+  const header = raw.match(/^\s*MML\s*@/i);
+  if (header) bodyStart = header[0].length;
+  let bodyEnd = raw.length;
+  const lastSemi = raw.lastIndexOf(";");
+  if (lastSemi >= bodyStart) bodyEnd = lastSemi;
+
+  const body = raw.slice(bodyStart, bodyEnd);
+  if (body.trim() === "") return [];
+
+  const result = [];
+  let partRawStart = bodyStart;
+  for (let i = 0; i <= body.length; i++) {
+    if (i < body.length && body[i] !== ",") continue;
+    const rawEnd = bodyStart + i;
+    const rawText = raw.slice(partRawStart, rawEnd);
+    const leading = rawText.match(/^\s*/)?.[0].length || 0;
+    const trailing = rawText.match(/\s*$/)?.[0].length || 0;
+    const sourceStart = partRawStart + leading;
+    const sourceEnd = Math.max(sourceStart, rawEnd - trailing);
+    result.push({
+      text: raw.slice(sourceStart, sourceEnd),
+      sourceStart,
+      sourceEnd,
+      rawStart: partRawStart,
+      rawEnd
+    });
+    partRawStart = rawEnd + 1;
+  }
+  return result;
+}
+
+function parseMmlPart(s, partIndex, options = {}) {
+  const globalOffset = Number(options.globalOffset) || 0;
   let i = 0, beat = 0, octave = 4, length = 4, defaultDuration = 1, volume = 8, order = 0;
   let pendingTie = false;
   let lastTieTarget = null;
   const notes = [];
+  const rests = [];
   const tempos = [];
+  const makeSourceRange = (start, end) => ({
+    start,
+    end,
+    globalStart: globalOffset + start,
+    globalEnd: globalOffset + end
+  });
   const readNumber = () => { let start = i; while (i < s.length && /\d/.test(s[i])) i++; return i > start ? Number(s.slice(start, i)) : null; };
   const skipSpace = () => { while (i < s.length && /\s/.test(s[i])) i++; };
   const readDots = (base) => { let dur = base, add = base / 2; while (s[i] === ".") { dur += add; add /= 2; i++; } return dur; };
@@ -45,44 +83,82 @@ function parseMmlPart(s, partIndex) {
   };
   const readNoteToken = () => {
     skipSpace();
+    const tokenStart = i;
     const ch = s[i]?.toLowerCase();
     if (!(ch in NOTE_BASE) && ch !== "r" && ch !== "n") return null;
-    if (ch === "r") { i++; return { rest: true, midi: null, dur: readLengthBeats() }; }
+    if (ch === "r") {
+      i++;
+      const dur = readLengthBeats();
+      return { rest: true, midi: null, dur, sourceRange: makeSourceRange(tokenStart, i) };
+    }
     if (ch === "n") {
       i++;
       const num = readNumber();
       if (num == null) throw new Error(`${partIndex + 1}파트: N 뒤에 음 번호가 필요합니다.`);
       const dur = readDots(defaultDuration);
-      if (num === 0) return { rest: true, midi: null, dur };
-      return { rest: false, midi: clampInt(num, 0, 127), dur };
+      if (num === 0) return { rest: true, midi: null, dur, sourceRange: makeSourceRange(tokenStart, i) };
+      return { rest: false, midi: clampInt(num, 0, 127), dur, sourceRange: makeSourceRange(tokenStart, i) };
     }
     i++;
     let semitone = NOTE_BASE[ch];
     if (s[i] === "+" || s[i] === "#") { semitone++; i++; }
     else if (s[i] === "-") { semitone--; i++; }
     const midi = (octave + 1) * 12 + semitone;
-    return { rest: false, midi, dur: readLengthBeats() };
+    const dur = readLengthBeats();
+    return { rest: false, midi, dur, sourceRange: makeSourceRange(tokenStart, i) };
   };
   const applyNoteToken = (token) => {
+    if (!token) return;
     if (pendingTie) {
       if (!lastTieTarget) throw new Error(`${partIndex + 1}파트: & 앞에 이어질 음표가 필요합니다.`);
       if (lastTieTarget.rest !== token.rest || lastTieTarget.midi !== token.midi) {
         throw new Error(`${partIndex + 1}파트: &는 같은 음끼리만 이어 주세요.`);
       }
-      if (!token.rest) lastTieTarget.note.duration += token.dur;
+      if (lastTieTarget.note) {
+        lastTieTarget.note.duration += token.dur;
+        lastTieTarget.note.sourceRanges.push(token.sourceRange);
+        lastTieTarget.note.sourceStart = Math.min(lastTieTarget.note.sourceStart, token.sourceRange.start);
+        lastTieTarget.note.sourceEnd = Math.max(lastTieTarget.note.sourceEnd, token.sourceRange.end);
+        lastTieTarget.note.globalSourceStart = Math.min(lastTieTarget.note.globalSourceStart, token.sourceRange.globalStart);
+        lastTieTarget.note.globalSourceEnd = Math.max(lastTieTarget.note.globalSourceEnd, token.sourceRange.globalEnd);
+      }
       beat += token.dur;
       pendingTie = false;
       return;
     }
 
     if (token.rest) {
+      const rest = {
+        part: partIndex,
+        beat,
+        duration: token.dur,
+        rest: true,
+        midi: null,
+        sourceStart: token.sourceRange.start,
+        sourceEnd: token.sourceRange.end,
+        globalSourceStart: token.sourceRange.globalStart,
+        globalSourceEnd: token.sourceRange.globalEnd,
+        sourceRanges: [token.sourceRange]
+      };
+      rests.push(rest);
       beat += token.dur;
-      lastTieTarget = { rest: true, midi: null, note: null };
+      lastTieTarget = { rest: true, midi: null, note: rest };
       return;
     }
 
     if (token.midi < 0 || token.midi > 127) throw new Error(`${partIndex + 1}파트: 음역이 너무 높거나 낮습니다.`);
-    const note = { part: partIndex, beat, duration: token.dur, midi: token.midi, volume };
+    const note = {
+      part: partIndex,
+      beat,
+      duration: token.dur,
+      midi: token.midi,
+      volume,
+      sourceStart: token.sourceRange.start,
+      sourceEnd: token.sourceRange.end,
+      globalSourceStart: token.sourceRange.globalStart,
+      globalSourceEnd: token.sourceRange.globalEnd,
+      sourceRanges: [token.sourceRange]
+    };
     notes.push(note);
     beat += token.dur;
     lastTieTarget = { rest: false, midi: token.midi, note };
@@ -117,7 +193,7 @@ function parseMmlPart(s, partIndex) {
     else { throw new Error(`${partIndex + 1}파트: 알 수 없는 문자 '${s[i]}'가 있습니다.`); }
   }
   if (pendingTie) throw new Error(`${partIndex + 1}파트: & 뒤에 이어질 음표가 필요합니다.`);
-  return { notes, tempos, lengthBeats: beat };
+  return { notes, rests, tempos, lengthBeats: beat };
 }
 
 function normalizeTempoMap(events) {
@@ -133,18 +209,29 @@ function normalizeTempoMap(events) {
 
 function buildSchedule(parsed) {
   const notes = [];
+  const rests = [];
   for (const p of parsed.parts) {
     for (const n of p.notes) {
       const start = beatToSeconds(n.beat, parsed.tempos);
       const end = beatToSeconds(n.beat + n.duration, parsed.tempos);
       notes.push({ ...n, start, durationSec: Math.max(0.02, end - start) });
     }
+    for (const r of (p.rests || [])) {
+      const start = beatToSeconds(r.beat, parsed.tempos);
+      const end = beatToSeconds(r.beat + r.duration, parsed.tempos);
+      rests.push({ ...r, start, durationSec: Math.max(0, end - start) });
+    }
   }
   notes.sort((a, b) => a.start - b.start || a.part - b.part);
-  const len = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+  rests.sort((a, b) => a.start - b.start || a.part - b.part);
+  const noteLen = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+  const partLen = (parsed.parts || []).reduce((m, p) => Math.max(m, beatToSeconds(Number(p.lengthBeats) || 0, parsed.tempos)), 0);
+  const len = Math.max(noteLen, partLen);
   const tempoMarkers = buildTempoMarkers(parsed.tempos, len);
   return {
     notes,
+    rests,
+    duration: len,
     tempoMarkers,
     summary: `예상 길이 ${formatTime(len)}`
   };
@@ -193,5 +280,5 @@ function isValidLength(n) { return [1,2,4,8,16,32,64].includes(n); }
     return `MML@${list.join(",")};`;
   }
 
-  window.MabiMml = { parseMabinogiMml, splitMmlParts, parseMmlPart, buildSchedule, beatToSeconds, composeMml };
+  window.MabiMml = { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, beatToSeconds, composeMml };
 })();
