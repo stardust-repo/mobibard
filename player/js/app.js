@@ -5,6 +5,7 @@
   const DEFAULT_SF2_EMBEDDED_B64 = () => window.MABINOGI_DEFAULT_SF2_B64 || "";
   const DEFAULT_SF2_FALLBACK_SCRIPT_URL = "assets/default-sf2-base64.js";
   const PART_LABELS = ["멜로디", "화음1", "화음2", "화음3", "화음4", "화음5"];
+  const PART_LABEL_SHORTS = ["멜", "화1", "화2", "화3", "화4", "화5"];
   const PREF_PREFIX = "mobibard.player.";
   const DEFAULT_PART_PRESET_KEY = "0:0";
   const DEFAULT_MIDI_SOUND_PRESET_LABEL = "최근 MIDI 음색";
@@ -148,6 +149,7 @@
   const bulkVolumeBtn = $("bulkVolumeBtn");
   const bulkVolumeDialog = $("bulkVolumeDialog");
   const bulkVolumeAmount = $("bulkVolumeAmount");
+  const bulkVolumeStats = $("bulkVolumeStats");
   const bulkVolumeApply = $("bulkVolumeApply");
   const bulkVolumeCancel = $("bulkVolumeCancel");
   const bulkVolumeSelectAll = $("bulkVolumeSelectAll");
@@ -351,13 +353,16 @@
     restTrimBtn?.addEventListener("click", openRestTrimDialog);
     restTrimApply?.addEventListener("click", () => applyRestTrimFromDialog());
     restTrimCancel?.addEventListener("click", () => restTrimDialog?.close());
-    restTrimSelectAll?.addEventListener("click", () => setDialogChannelSelection(".rest-trim-channel", true));
-    restTrimSelectNone?.addEventListener("click", () => setDialogChannelSelection(".rest-trim-channel", false));
+    restTrimLimit?.addEventListener("change", updateRestTrimPreview);
+    document.querySelectorAll(".rest-trim-channel").forEach(input => input.addEventListener("change", updateRestTrimPreview));
+    restTrimSelectAll?.addEventListener("click", () => { setDialogChannelSelection(".rest-trim-channel", true); updateRestTrimPreview(); });
+    restTrimSelectNone?.addEventListener("click", () => { setDialogChannelSelection(".rest-trim-channel", false); updateRestTrimPreview(); });
     bulkVolumeBtn?.addEventListener("click", openBulkVolumeDialog);
     bulkVolumeApply?.addEventListener("click", () => applyBulkVolumeFromDialog());
     bulkVolumeCancel?.addEventListener("click", () => bulkVolumeDialog?.close());
-    bulkVolumeSelectAll?.addEventListener("click", () => setDialogChannelSelection(".bulk-volume-channel", true));
-    bulkVolumeSelectNone?.addEventListener("click", () => setDialogChannelSelection(".bulk-volume-channel", false));
+    document.querySelectorAll(".bulk-volume-channel").forEach(input => input.addEventListener("change", updateBulkVolumeStats));
+    bulkVolumeSelectAll?.addEventListener("click", () => { setDialogChannelSelection(".bulk-volume-channel", true); updateBulkVolumeStats(); });
+    bulkVolumeSelectNone?.addEventListener("click", () => { setDialogChannelSelection(".bulk-volume-channel", false); updateBulkVolumeStats(); });
     bulkVolumeAmount?.addEventListener("change", normalizeBulkVolumeAmountInput);
     leadingSilenceBtn?.addEventListener("click", openLeadingSilenceDialog);
     leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
@@ -5296,10 +5301,16 @@ ${shortError(err)}`);
     if (partMatch) updatePartHighlight(Number(partMatch[1]));
   }
 
+  function getCurrentPartTexts(partCount = 6) {
+    const count = Math.max(1, Math.min(6, Number(partCount) || 6));
+    const parts = splitMmlParts(normalizeMmlForDisplay(mainMml?.value || "")).slice(0, count).map(normalizePartText);
+    while (parts.length < count) parts.push("");
+    return parts;
+  }
+
   function updateCharCount() {
     if (!charCount) return;
-    const parts = splitMmlParts(normalizeMmlForDisplay(mainMml.value)).slice(0, 6).map(normalizePartText);
-    while (parts.length < 6) parts.push("");
+    const parts = getCurrentPartTexts(6);
 
     if (activeTabName === "main") {
       const total = parts.reduce((sum, part) => sum + part.length, 0);
@@ -5322,6 +5333,7 @@ ${shortError(err)}`);
   function openRestTrimDialog() {
     if (restTrimLimit) restTrimLimit.value = "32";
     setDialogChannelSelection(".rest-trim-channel", true);
+    updateRestTrimPreview();
     if (restTrimDialog?.showModal) {
       restTrimDialog.showModal();
       return;
@@ -5329,6 +5341,60 @@ ${shortError(err)}`);
     const answer = prompt("삭제할 쉼표 길이를 입력해 주세요.\nall = 모든 쉼표\n4 = 4분음표 이하\n8 = 8분음표 이하\n16 = 16분음표 이하\n32 = 32분음표 이하\n64 = 64분음표 이하\n\n이 브라우저에서는 채널 선택 Dialog를 사용할 수 없어 전체 6채널에 적용됩니다.", "32");
     if (answer == null) return;
     applyRestTrim(answer, null);
+  }
+
+  function updateRestTrimPreview() {
+    const statEls = Array.from(document.querySelectorAll(".rest-trim-stat"));
+    if (!statEls.length) return;
+    const threshold = parseRestTrimLimit(restTrimLimit?.value || "32", { silent: true });
+    if (!threshold) {
+      statEls.forEach(el => { el.textContent = "-"; el.title = "삭제 길이를 확인할 수 없습니다."; });
+      return;
+    }
+
+    let baseText = "";
+    let parts = [];
+    try {
+      baseText = normalizeMmlForDisplay(mainMml?.value || "");
+      parts = getCurrentPartTexts(6);
+    } catch (err) {
+      statEls.forEach(el => { el.textContent = "확인불가"; el.title = shortError(err); });
+      return;
+    }
+
+    for (const el of statEls) {
+      const index = Number(el.dataset.partIndex);
+      if (!Number.isInteger(index) || index < 0 || index >= 6) continue;
+      try {
+        const before = String(parts[index] || "").length;
+        const result = trimShortRestsMml(baseText, {
+          partCount: 6,
+          targetPartIndexes: [index],
+          all: threshold.all,
+          denom: threshold.denom
+        });
+        const afterPart = normalizePartText(result.parts?.[index] || "");
+        const after = afterPart.length;
+        const removed = Math.max(0, Number(result.removed) || 0);
+        const delta = before - after;
+        if (removed <= 0) {
+          el.textContent = "0자";
+          el.title = "삭제될 쉼표가 없습니다.";
+        } else if (delta > 0) {
+          el.textContent = `-${formatCount(delta)}자`;
+          el.title = `예상 절약 ${formatCount(delta)}자 / 쉼표 ${formatCount(removed)}개`;
+        } else if (delta < 0) {
+          el.textContent = `+${formatCount(Math.abs(delta))}자`;
+          el.title = `쉼표 ${formatCount(removed)}개 삭제 후 최적화 결과 글자 수가 늘어날 수 있습니다.`;
+        } else {
+          el.textContent = "0자";
+          el.title = `쉼표 ${formatCount(removed)}개 삭제, 예상 글자 수 변화 없음`;
+        }
+      } catch (err) {
+        el.textContent = "확인불가";
+        el.title = shortError(err);
+      }
+    }
   }
 
   function applyRestTrimFromDialog() {
@@ -5391,6 +5457,7 @@ ${shortError(err)}`);
   function openBulkVolumeDialog() {
     if (bulkVolumeAmount) bulkVolumeAmount.value = "0";
     setDialogChannelSelection(".bulk-volume-channel", true);
+    updateBulkVolumeStats();
     if (bulkVolumeDialog?.showModal) {
       bulkVolumeDialog.showModal();
       bulkVolumeAmount?.focus();
@@ -5400,6 +5467,36 @@ ${shortError(err)}`);
     const answer = prompt("선택 채널에 더할 볼륨 변화량을 입력해 주세요.\n-15 ~ 15 사이의 정수만 사용할 수 있습니다.\n\n이 브라우저에서는 채널 선택 Dialog를 사용할 수 없어 전체 6채널에 적용됩니다.", "0");
     if (answer == null) return;
     applyBulkVolume(answer, null);
+  }
+
+  function updateBulkVolumeStats() {
+    if (!bulkVolumeStats) return;
+    const counts = Array(16).fill(0);
+    try {
+      const parsed = parseMabinogiMml(normalizeMmlForDisplay(mainMml?.value || ""));
+      (parsed.parts || []).forEach(part => {
+        for (const note of (part.notes || [])) {
+          const volume = clampInt(Number(note.volume ?? 8), 0, 15);
+          counts[volume]++;
+        }
+      });
+    } catch (err) {
+      bulkVolumeStats.innerHTML = `<div class="volume-count-title">볼륨 통계를 확인할 수 없습니다.</div><div class="dialog-small">${escapeHtml(shortError(err))}</div>`;
+      return;
+    }
+
+    const visibleCounts = counts
+      .map((count, volume) => ({ count, volume }))
+      .filter(item => item.count > 0);
+
+    if (!visibleCounts.length) {
+      bulkVolumeStats.innerHTML = `<div class="volume-count-title">볼륨 정보가 없습니다.</div>`;
+      return;
+    }
+
+    const items = visibleCounts.map(({ count, volume }) => `
+      <span class="volume-count-item"><em>V${volume}</em><strong>${formatCount(count)}</strong></span>`).join("");
+    bulkVolumeStats.innerHTML = `<div class="volume-count-grid">${items}</div>`;
   }
 
   function applyBulkVolumeFromDialog() {
@@ -5574,12 +5671,12 @@ ${shortError(err)}`);
     }
   }
 
-  function parseRestTrimLimit(value) {
+  function parseRestTrimLimit(value, options = {}) {
     const raw = String(value || "32").trim().toLowerCase();
     if (raw === "all" || raw === "전체" || raw === "모두") return { all: true, denom: null };
     const denom = Number(raw);
     if (![4, 8, 16, 32, 64].includes(denom)) {
-      showDialog("쉼표 삭제", "삭제 길이는 all, 4, 8, 16, 32, 64 중 하나를 선택해 주세요.");
+      if (!options.silent) showDialog("쉼표 삭제", "삭제 길이는 all, 4, 8, 16, 32, 64 중 하나를 선택해 주세요.");
       return null;
     }
     return { all: false, denom };

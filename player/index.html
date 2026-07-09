@@ -314,12 +314,12 @@
       </span>
     </div>
     <div class="dialog-channel-grid" aria-label="쉼표 삭제 적용 채널">
-      <label class="dialog-channel-option part-0"><input class="rest-trim-channel" type="checkbox" data-part-index="0" checked /> 멜로디</label>
-      <label class="dialog-channel-option part-1"><input class="rest-trim-channel" type="checkbox" data-part-index="1" checked /> 화음1</label>
-      <label class="dialog-channel-option part-2"><input class="rest-trim-channel" type="checkbox" data-part-index="2" checked /> 화음2</label>
-      <label class="dialog-channel-option part-3"><input class="rest-trim-channel" type="checkbox" data-part-index="3" checked /> 화음3</label>
-      <label class="dialog-channel-option part-4"><input class="rest-trim-channel" type="checkbox" data-part-index="4" checked /> 화음4</label>
-      <label class="dialog-channel-option part-5"><input class="rest-trim-channel" type="checkbox" data-part-index="5" checked /> 화음5</label>
+      <label class="dialog-channel-option part-0"><input class="rest-trim-channel" type="checkbox" data-part-index="0" checked /> <span class="dialog-channel-name">멜로디</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="0">0자</span></label>
+      <label class="dialog-channel-option part-1"><input class="rest-trim-channel" type="checkbox" data-part-index="1" checked /> <span class="dialog-channel-name">화음1</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="1">0자</span></label>
+      <label class="dialog-channel-option part-2"><input class="rest-trim-channel" type="checkbox" data-part-index="2" checked /> <span class="dialog-channel-name">화음2</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="2">0자</span></label>
+      <label class="dialog-channel-option part-3"><input class="rest-trim-channel" type="checkbox" data-part-index="3" checked /> <span class="dialog-channel-name">화음3</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="3">0자</span></label>
+      <label class="dialog-channel-option part-4"><input class="rest-trim-channel" type="checkbox" data-part-index="4" checked /> <span class="dialog-channel-name">화음4</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="4">0자</span></label>
+      <label class="dialog-channel-option part-5"><input class="rest-trim-channel" type="checkbox" data-part-index="5" checked /> <span class="dialog-channel-name">화음5</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="5">0자</span></label>
     </div>
     <div class="dialog-actions">
       <button id="restTrimCancel" type="button">취소</button>
@@ -335,6 +335,7 @@
     <label class="dialog-field" for="bulkVolumeAmount">볼륨 변화량</label>
     <input id="bulkVolumeAmount" type="number" min="-15" max="15" step="1" value="0" inputmode="numeric" />
     <span class="dialog-small">-15 ~ 15 사이의 정수만 입력할 수 있습니다.</span>
+    <div id="bulkVolumeStats" class="volume-count-box" aria-live="polite"></div>
     <div class="dialog-field-row">
       <span class="dialog-field">적용 채널</span>
       <span class="dialog-mini-actions">
