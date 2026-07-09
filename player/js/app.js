@@ -17,10 +17,10 @@
     { value: "none", label: "안함" }
   ];
   const GENERATED_ACCOMP_STYLE_OPTIONS = [
+    { value: "auto", label: "자동" },
     { value: "calm", label: "잔잔" },
     { value: "normal", label: "보통" },
-    { value: "bright", label: "경쾌" },
-    { value: "auto", label: "자동" }
+    { value: "bright", label: "경쾌" }
   ];
   const MIDI_INSTRUMENT_CATEGORY_ORDER = ["keyboard", "strings", "winds", "percussion", "other"];
   const MIDI_INSTRUMENT_CATEGORY_LABELS = {
@@ -52,7 +52,7 @@
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
   const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi", "mml", "musicxml", "xml", "mxl"]);
   const HEADER_SHORTCUT_LINKS = new Map([
-    ["https://drive.google.com/drive/folders/17mHTnFD475WKYUFK9aowEymi1183vtqD?usp=drive_link", "developer_mml_share"],
+    ["https://drive.google.com/drive/folders/1J11Vh-twyZVaYDFBlJJnvkje5M48zAUn", "developer_mml_share"],
     ["https://bitmidi.com/", "bitmidi"],
     ["https://ichigos.com/", "ichigos"],
     ["http://www.midiex.net/", "midiex"],
