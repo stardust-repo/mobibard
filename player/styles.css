@@ -941,6 +941,11 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   border-color: color-mix(in srgb, var(--danger), var(--line) 45%);
   background: color-mix(in srgb, var(--danger), transparent 90%);
 }
+.part-mute-toggle:has(input:indeterminate) {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent), var(--line) 45%);
+  background: color-mix(in srgb, var(--accent), transparent 91%);
+}
 .part-mute-toggle:has(input:disabled) {
   opacity: .55;
 }

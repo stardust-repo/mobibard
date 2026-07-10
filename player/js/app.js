@@ -5,7 +5,6 @@
   const DEFAULT_SF2_EMBEDDED_B64 = () => window.MABINOGI_DEFAULT_SF2_B64 || "";
   const DEFAULT_SF2_FALLBACK_SCRIPT_URL = "assets/default-sf2-base64.js";
   const PART_LABELS = ["멜로디", "화음1", "화음2", "화음3", "화음4", "화음5"];
-  const PART_LABEL_SHORTS = ["멜", "화1", "화2", "화3", "화4", "화5"];
   const PREF_PREFIX = "mobibard.player.";
   const DEFAULT_PART_PRESET_KEY = "0:0";
   const DEFAULT_MIDI_SOUND_PRESET_LABEL = "최근 MIDI 음색";
@@ -76,7 +75,7 @@
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { musicXmlToMidiBytes } = window.MabiMusicXml || {};
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml } = window.MabiMml;
-  const { optimizeMml, optimizePart, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages } = window.MabiOptimizer;
+  const { optimizeMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
   const $ = (id) => document.getElementById(id);
@@ -222,8 +221,8 @@
   let pianoRollKeyMax = 72;
   let pianoRollLastRenderBucket = -1;
   let pianoRollLastDataSignature = "";
-  let pianoRollPlayableCacheSignature = "";
-  let pianoRollPlayableCache = [];
+  let pianoRollVisibleCacheSignature = "";
+  let pianoRollVisibleCache = [];
   let pianoRollRefreshRaf = 0;
   let pianoRollRefreshSettleTimer = 0;
   let pianoRollResizeObserver = null;
@@ -277,6 +276,16 @@
   let defaultSf2FallbackLoadPromise = null;
   let activePlaybackMainRanges = [];
   let activePlaybackPartRanges = Array.from({ length: 6 }, () => []);
+  let editorContentVersion = 0;
+  let editorAnalysisCache = {
+    source: "",
+    parts: null,
+    parsed: null,
+    schedule: null,
+    volumeCounts: null
+  };
+  let mainHighlightRenderSignature = "";
+  let partHighlightRenderSignatures = Array.from({ length: 6 }, () => "");
   const googlePickerSuspendedCloseDialogs = new WeakSet();
   let googlePickerLayerWatchTimer = 0;
   let googlePickerLayerObserver = null;
@@ -354,15 +363,13 @@
     restTrimApply?.addEventListener("click", () => applyRestTrimFromDialog());
     restTrimCancel?.addEventListener("click", () => restTrimDialog?.close());
     restTrimLimit?.addEventListener("change", updateRestTrimPreview);
-    document.querySelectorAll(".rest-trim-channel").forEach(input => input.addEventListener("change", updateRestTrimPreview));
-    restTrimSelectAll?.addEventListener("click", () => { setDialogChannelSelection(".rest-trim-channel", true); updateRestTrimPreview(); });
-    restTrimSelectNone?.addEventListener("click", () => { setDialogChannelSelection(".rest-trim-channel", false); updateRestTrimPreview(); });
+    restTrimSelectAll?.addEventListener("click", () => setDialogChannelSelection(".rest-trim-channel", true));
+    restTrimSelectNone?.addEventListener("click", () => setDialogChannelSelection(".rest-trim-channel", false));
     bulkVolumeBtn?.addEventListener("click", openBulkVolumeDialog);
     bulkVolumeApply?.addEventListener("click", () => applyBulkVolumeFromDialog());
     bulkVolumeCancel?.addEventListener("click", () => bulkVolumeDialog?.close());
-    document.querySelectorAll(".bulk-volume-channel").forEach(input => input.addEventListener("change", updateBulkVolumeStats));
-    bulkVolumeSelectAll?.addEventListener("click", () => { setDialogChannelSelection(".bulk-volume-channel", true); updateBulkVolumeStats(); });
-    bulkVolumeSelectNone?.addEventListener("click", () => { setDialogChannelSelection(".bulk-volume-channel", false); updateBulkVolumeStats(); });
+    bulkVolumeSelectAll?.addEventListener("click", () => setDialogChannelSelection(".bulk-volume-channel", true));
+    bulkVolumeSelectNone?.addEventListener("click", () => setDialogChannelSelection(".bulk-volume-channel", false));
     bulkVolumeAmount?.addEventListener("change", normalizeBulkVolumeAmountInput);
     leadingSilenceBtn?.addEventListener("click", openLeadingSilenceDialog);
     leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
@@ -374,7 +381,7 @@
     partSoundPresetSave?.addEventListener("click", () => saveDraftSoundPreset());
     partSoundPresetDelete?.addEventListener("click", () => deleteSelectedSoundPreset());
     soundPresetQuickSelect?.addEventListener("change", () => applyQuickSoundPreset(soundPresetQuickSelect.value));
-    partMuteToggle?.addEventListener("change", () => handlePartMuteToggleChange());
+    partMuteToggle?.addEventListener("click", () => handlePartMuteToggleClick());
     leadingSilenceSeconds?.addEventListener("change", normalizeLeadingSilenceSecondsInput);
     leadingSilenceSeconds?.addEventListener("blur", normalizeLeadingSilenceSecondsInput);
     midiSelectedPreviewBtn?.addEventListener("click", () => void toggleMidiSelectedPreview());
@@ -415,7 +422,6 @@
     mainMml.addEventListener("input", () => {
       normalizeTextareaCommands(mainMml);
       syncPartsFromMain();
-      updateMainHighlight();
     });
     mainMml.addEventListener("scroll", syncHighlightScroll);
     partTexts.forEach((t, i) => {
@@ -2432,47 +2438,85 @@ ${shortError(err)}`);
     showDialog("프리셋 삭제 완료", `'${preset.name}' 프리셋을 삭제했습니다.`);
   }
 
-  function getActivePartIndex() {
-    const m = /^part(\d+)$/.exec(activeTabName || "");
-    if (!m) return null;
-    const idx = Number(m[1]);
-    return idx >= 0 && idx < 6 ? idx : null;
-  }
-
   function updatePartMuteControl() {
-    const idx = getActivePartIndex();
+    const idx = getActiveEditorPartIndex();
+    const isAllTab = activeTabName === "main" || idx < 0;
     const allMuted = partMuteStates.every(Boolean);
+    const anyMuted = partMuteStates.some(Boolean);
     if (partMuteToggle) {
+      const mixed = isAllTab && anyMuted && !allMuted;
+      const label = isAllTab ? "전체 음소거" : "채널 음소거";
       partMuteToggle.disabled = false;
-      partMuteToggle.indeterminate = false;
-      partMuteToggle.checked = idx == null ? allMuted : Boolean(partMuteStates[idx]);
-      partMuteToggle.title = idx == null
-        ? "모든 채널을 한 번에 재생에서 제외하거나 다시 켭니다."
-        : `${PART_LABELS[idx]} 채널을 재생에서 제외합니다.`;
+      partMuteToggle.indeterminate = mixed;
+      partMuteToggle.checked = isAllTab ? allMuted : Boolean(partMuteStates[idx]);
+      partMuteToggle.setAttribute("aria-checked", mixed ? "mixed" : (partMuteToggle.checked ? "true" : "false"));
+      partMuteToggle.setAttribute("aria-label", isAllTab ? label : `${PART_LABELS[idx]} ${label}`);
+      partMuteToggle.title = isAllTab
+        ? (allMuted
+          ? "모든 채널이 음소거되어 있습니다. 누르면 전체 음소거를 해제합니다."
+          : "하나 이상의 채널이 재생 상태입니다. 누르면 모든 채널을 음소거합니다.")
+        : `${PART_LABELS[idx]} 채널의 음소거 상태를 전환합니다.`;
     }
-    if (partMuteLabel) partMuteLabel.textContent = idx == null ? "전체 음소거" : "채널 음소거";
+    if (partMuteLabel) partMuteLabel.textContent = isAllTab ? "전체 음소거" : "채널 음소거";
     for (let i = 0; i < 6; i++) {
       const tab = tabs.find(t => t.dataset.tab === `part${i}`);
       if (tab) tab.classList.toggle("muted", Boolean(partMuteStates[i]));
     }
   }
 
-  function handlePartMuteToggleChange() {
+  function invalidatePartMuteVisualState() {
+    pianoRollVisibleCacheSignature = "";
+    pianoRollLastDataSignature = "";
+    activePlaybackScanBucket = -1;
+    activePlaybackScanSignature = "";
+  }
+
+  function getNextPartMuteStates() {
+    const nextStates = Array.from({ length: 6 }, (_, i) => Boolean(partMuteStates[i]));
+    const activePartIndex = getActiveEditorPartIndex();
+    const isAllTab = activeTabName === "main" || activePartIndex < 0;
+    if (isAllTab) {
+      // 전체 MML 탭: 하나라도 음소거가 아니면 모두 음소거하고,
+      // 여섯 채널이 전부 음소거 상태일 때만 모두 해제한다.
+      const muteAll = nextStates.some(muted => !muted);
+      nextStates.fill(muteAll);
+      return nextStates;
+    }
+
+    nextStates[activePartIndex] = !nextStates[activePartIndex];
+    return nextStates;
+  }
+
+  function applyPartMuteStates(nextStates) {
+    const wasPlaying = isPlaying;
+    const resumeOffset = wasPlaying ? getCurrentPlaybackOffset() : currentOffset;
+    if (wasPlaying) stopPlayback(false);
+
+    partMuteStates = Array.from({ length: 6 }, (_, i) => Boolean(nextStates?.[i]));
+    savePartMutePrefs();
+
+    try {
+      updatePartMuteControl();
+      invalidatePartMuteVisualState();
+      updatePlaybackCodeHighlight(resumeOffset);
+      updatePianoRoll(resumeOffset, scheduleCache?.duration || Number(progressSlider?.max) || 0, true);
+    } finally {
+      if (wasPlaying) {
+        currentOffset = resumeOffset;
+        void playFromCurrent();
+      }
+    }
+  }
+
+  function handlePartMuteToggleClick() {
     if (!partMuteToggle) {
       updatePartMuteControl();
       return;
     }
-    const idx = getActivePartIndex();
-    const muted = Boolean(partMuteToggle.checked);
-    if (idx == null) {
-      partMuteStates = Array.from({ length: 6 }, () => muted);
-    } else {
-      partMuteStates[idx] = muted;
-    }
-    savePartMutePrefs();
-    updatePartMuteControl();
-    rebuildSchedulePreviewSilently();
-    restartPlaybackAfterSoundChange();
+
+    // 네이티브 체크박스가 방금 만든 checked 값은 사용하지 않는다.
+    // 현재 저장된 채널 상태만 기준으로 토글하면 전체/부분 음소거에서도 동작이 일정하다.
+    applyPartMuteStates(getNextPartMuteStates());
   }
 
   function restartPlaybackAfterSoundChange() {
@@ -5026,14 +5070,66 @@ ${shortError(err)}`);
     schedulerTimer = setTimeout(schedulePlaybackWindow, SCHEDULE_INTERVAL_MS);
   }
 
+  function invalidateEditorDerivedState() {
+    editorContentVersion++;
+    editorAnalysisCache = {
+      source: "",
+      parts: null,
+      parsed: null,
+      schedule: null,
+      volumeCounts: null
+    };
+    mainHighlightRenderSignature = "";
+    partHighlightRenderSignatures = Array.from({ length: 6 }, () => "");
+  }
+
+  function getEditorDerivedState({ needSchedule = false, needVolumeCounts = false } = {}) {
+    const source = normalizeMmlForDisplay(mainMml?.value || "");
+    if (editorAnalysisCache.source !== source) {
+      editorAnalysisCache = {
+        source,
+        parts: null,
+        parsed: null,
+        schedule: null,
+        volumeCounts: null
+      };
+    }
+
+    if (!editorAnalysisCache.parts) {
+      const parts = splitMmlParts(source).slice(0, 6).map(normalizePartText);
+      while (parts.length < 6) parts.push("");
+      editorAnalysisCache.parts = parts;
+    }
+
+    if ((needSchedule || needVolumeCounts) && !editorAnalysisCache.parsed) {
+      editorAnalysisCache.parsed = parseMabinogiMml(source);
+    }
+
+    if (needSchedule && !editorAnalysisCache.schedule) {
+      const scheduled = buildSchedule(editorAnalysisCache.parsed);
+      const noteDuration = (scheduled.notes || []).reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+      const restDuration = (scheduled.rests || []).reduce((m, r) => Math.max(m, r.start + r.durationSec), 0);
+      const duration = Math.max(Number(scheduled.duration) || 0, noteDuration, restDuration);
+      editorAnalysisCache.schedule = { ...scheduled, duration };
+    }
+
+    if (needVolumeCounts && !editorAnalysisCache.volumeCounts) {
+      const counts = Array(16).fill(0);
+      for (const part of (editorAnalysisCache.parsed?.parts || [])) {
+        for (const note of (part.notes || [])) {
+          const volume = clampInt(Number(note.volume ?? 8), 0, 15);
+          counts[volume]++;
+        }
+      }
+      editorAnalysisCache.volumeCounts = counts;
+    }
+
+    return editorAnalysisCache;
+  }
+
   function createScheduleFromEditor() {
     normalizeTextareaCommands(mainMml);
-    const parsed = parseMabinogiMml(mainMml.value);
-    const scheduled = buildSchedule(parsed);
-    const noteDuration = scheduled.notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
-    const restDuration = (scheduled.rests || []).reduce((m, r) => Math.max(m, r.start + r.durationSec), 0);
-    const duration = Math.max(Number(scheduled.duration) || 0, noteDuration, restDuration);
-    return { ...scheduled, duration };
+    return getEditorDerivedState({ needSchedule: true }).schedule;
   }
 
   function stopPlayback(updateOffset = true) {
@@ -5255,8 +5351,6 @@ ${shortError(err)}`);
     mainMml.value = normalizeMmlForDisplay(text);
     syncing = false;
     syncPartsFromMain();
-    updateMainHighlight();
-    updateCharCount();
   }
 
   function syncPartsFromMain() {
@@ -5267,8 +5361,8 @@ ${shortError(err)}`);
       const parts = splitMmlParts(mainMml.value).slice(0, 6).map(normalizePartText);
       while (parts.length < 6) parts.push("");
       partTexts.forEach((t, i) => { t.value = parts[i] || ""; });
-      updateMainHighlight();
-      updatePartHighlights();
+      invalidateEditorDerivedState();
+      updateVisibleHighlight();
       updateCharCount();
       rebuildSchedulePreviewSilently();
     } finally {
@@ -5282,8 +5376,8 @@ ${shortError(err)}`);
     try {
       partTexts.forEach(normalizeTextareaCommands);
       mainMml.value = normalizeMmlForDisplay(composeMml(partTexts.map(t => t.value), { preserveEmpty: true, partCount: 6 }));
-      updateMainHighlight();
-      updatePartHighlights();
+      invalidateEditorDerivedState();
+      updateVisibleHighlight();
       updateCharCount();
       rebuildSchedulePreviewSilently();
     } finally {
@@ -5297,15 +5391,13 @@ ${shortError(err)}`);
     panels.forEach(p => p.hidden = p.dataset.panel !== activeTabName);
     updatePartMuteControl();
     updateCharCount();
-    const partMatch = /^part(\d+)$/.exec(activeTabName || "");
-    if (partMatch) updatePartHighlight(Number(partMatch[1]));
+    updatePlaybackCodeHighlight(currentOffset);
+    updateVisibleHighlight();
   }
 
   function getCurrentPartTexts(partCount = 6) {
     const count = Math.max(1, Math.min(6, Number(partCount) || 6));
-    const parts = splitMmlParts(normalizeMmlForDisplay(mainMml?.value || "")).slice(0, count).map(normalizePartText);
-    while (parts.length < count) parts.push("");
-    return parts;
+    return getEditorDerivedState().parts.slice(0, count);
   }
 
   function updateCharCount() {
@@ -5352,48 +5444,25 @@ ${shortError(err)}`);
       return;
     }
 
-    let baseText = "";
-    let parts = [];
     try {
-      baseText = normalizeMmlForDisplay(mainMml?.value || "");
-      parts = getCurrentPartTexts(6);
-    } catch (err) {
-      statEls.forEach(el => { el.textContent = "확인불가"; el.title = shortError(err); });
-      return;
-    }
+      const result = countShortRestsMml(normalizeMmlForDisplay(mainMml?.value || ""), {
+        partCount: 6,
+        all: threshold.all,
+        denom: threshold.denom
+      });
+      const counts = Array.isArray(result?.counts) ? result.counts : [];
 
-    for (const el of statEls) {
-      const index = Number(el.dataset.partIndex);
-      if (!Number.isInteger(index) || index < 0 || index >= 6) continue;
-      try {
-        const before = String(parts[index] || "").length;
-        const result = trimShortRestsMml(baseText, {
-          partCount: 6,
-          targetPartIndexes: [index],
-          all: threshold.all,
-          denom: threshold.denom
-        });
-        const afterPart = normalizePartText(result.parts?.[index] || "");
-        const after = afterPart.length;
-        const removed = Math.max(0, Number(result.removed) || 0);
-        const delta = before - after;
-        if (removed <= 0) {
-          el.textContent = "0자";
-          el.title = "삭제될 쉼표가 없습니다.";
-        } else if (delta > 0) {
-          el.textContent = `-${formatCount(delta)}자`;
-          el.title = `예상 절약 ${formatCount(delta)}자 / 쉼표 ${formatCount(removed)}개`;
-        } else if (delta < 0) {
-          el.textContent = `+${formatCount(Math.abs(delta))}자`;
-          el.title = `쉼표 ${formatCount(removed)}개 삭제 후 최적화 결과 글자 수가 늘어날 수 있습니다.`;
-        } else {
-          el.textContent = "0자";
-          el.title = `쉼표 ${formatCount(removed)}개 삭제, 예상 글자 수 변화 없음`;
-        }
-      } catch (err) {
-        el.textContent = "확인불가";
-        el.title = shortError(err);
+      for (const el of statEls) {
+        const index = Number(el.dataset.partIndex);
+        if (!Number.isInteger(index) || index < 0 || index >= 6) continue;
+        const count = Math.max(0, Number(counts[index]) || 0);
+        el.textContent = formatCount(count);
+        el.title = count > 0
+          ? `삭제 대상 쉼표 ${formatCount(count)}개`
+          : "삭제 대상 쉼표가 없습니다.";
       }
+    } catch (err) {
+      statEls.forEach(el => { el.textContent = "-"; el.title = shortError(err); });
     }
   }
 
@@ -5431,7 +5500,6 @@ ${shortError(err)}`);
         showDialog("쉼표 삭제", "선택한 채널에서 삭제할 수 있는 쉼표가 없습니다.\n채널 시작 부분의 쉼표나 앞에 음표가 없는 쉼표는 유지됩니다.");
       } else {
         setMainMml(result.mml);
-        rebuildSchedulePreviewSilently();
         const label = threshold.all ? "모든 쉼표" : `${threshold.denom}분음표 이하`;
         const selectedLabel = formatSelectedPartLabels(selectedIndexes);
         const saved = Math.max(0, Number(result.saved) || 0);
@@ -5471,15 +5539,9 @@ ${shortError(err)}`);
 
   function updateBulkVolumeStats() {
     if (!bulkVolumeStats) return;
-    const counts = Array(16).fill(0);
+    let counts;
     try {
-      const parsed = parseMabinogiMml(normalizeMmlForDisplay(mainMml?.value || ""));
-      (parsed.parts || []).forEach(part => {
-        for (const note of (part.notes || [])) {
-          const volume = clampInt(Number(note.volume ?? 8), 0, 15);
-          counts[volume]++;
-        }
-      });
+      counts = getEditorDerivedState({ needVolumeCounts: true }).volumeCounts;
     } catch (err) {
       bulkVolumeStats.innerHTML = `<div class="volume-count-title">볼륨 통계를 확인할 수 없습니다.</div><div class="dialog-small">${escapeHtml(shortError(err))}</div>`;
       return;
@@ -5535,7 +5597,6 @@ ${shortError(err)}`);
         showDialog("볼륨 조절", message);
       } else {
         setMainMml(result.mml);
-        rebuildSchedulePreviewSilently();
         const saved = Math.max(0, Number(result.saved) || 0);
         const selectedLabel = formatSelectedPartLabels(selectedIndexes);
         flashButton(bulkVolumeBtn, "적용 완료");
@@ -5655,7 +5716,6 @@ ${shortError(err)}`);
         beats: seconds * 2
       });
       setMainMml(result.mml);
-      rebuildSchedulePreviewSilently();
       flashButton(leadingSilenceBtn, "설정 완료");
       const removedSeconds = Math.max(0, Number(result.removedLeadingBeats || 0) / 2);
       const addedSeconds = Math.max(0, Number(result.addedBeats || 0) / 2);
@@ -5717,7 +5777,6 @@ ${shortError(err)}`);
     clearSuggestedMmlSaveFileName();
     googleDriveMmlFileId = "";
     googleDriveMmlFileName = "";
-    rebuildSchedulePreviewSilently();
     flashButton(pasteBtn, "붙여넣기 완료");
     trackAnalytics("paste_mml", { channel_count: analyticsChannelCount(mainMml.value) });
   }
@@ -6088,9 +6147,33 @@ ${shortError(err)}`);
     return `MML@${parts.join(",")};`;
   }
 
+  function getActiveEditorPartIndex() {
+    const match = /^part(\d+)$/.exec(activeTabName || "");
+    if (!match) return -1;
+    const index = Number(match[1]);
+    return Number.isInteger(index) && index >= 0 && index < 6 ? index : -1;
+  }
+
+  function codeRangeSignature(ranges) {
+    return (ranges || []).map(range => `${range.start}:${range.end}`).join("|");
+  }
+
+  function updateVisibleHighlight() {
+    if (activeTabName === "main") {
+      updateMainHighlight();
+      return;
+    }
+    const index = getActiveEditorPartIndex();
+    if (index >= 0) updatePartHighlight(index);
+  }
+
   function updateMainHighlight() {
-    if (!mainMmlHighlight) return;
-    mainMmlHighlight.innerHTML = renderColoredMml(mainMml.value, activePlaybackMainRanges) + "\n";
+    if (!mainMmlHighlight || activeTabName !== "main") return;
+    const signature = `${editorContentVersion}|${codeRangeSignature(activePlaybackMainRanges)}`;
+    if (signature !== mainHighlightRenderSignature) {
+      mainMmlHighlight.innerHTML = renderColoredMml(mainMml.value, activePlaybackMainRanges) + "\n";
+      mainHighlightRenderSignature = signature;
+    }
     syncHighlightScroll();
   }
 
@@ -6100,15 +6183,16 @@ ${shortError(err)}`);
     mainMmlHighlight.scrollLeft = mainMml.scrollLeft;
   }
 
-  function updatePartHighlights() {
-    partMmlHighlights.forEach((_, i) => updatePartHighlight(i));
-  }
-
   function updatePartHighlight(index) {
+    if (activeTabName !== `part${index}`) return;
     const highlight = partMmlHighlights[index];
     const textarea = partTexts[index];
     if (!highlight || !textarea) return;
-    highlight.innerHTML = renderPartWithErrors(textarea.value, activePlaybackPartRanges[index] || []) + "\n";
+    const signature = `${editorContentVersion}|${codeRangeSignature(activePlaybackPartRanges[index] || [])}`;
+    if (signature !== partHighlightRenderSignatures[index]) {
+      highlight.innerHTML = renderPartWithErrors(textarea.value, activePlaybackPartRanges[index] || []) + "\n";
+      partHighlightRenderSignatures[index] = signature;
+    }
     syncPartHighlightScroll(index);
   }
 
@@ -6120,24 +6204,30 @@ ${shortError(err)}`);
     highlight.scrollLeft = textarea.scrollLeft;
   }
 
-  function getPlayablePianoRollNotes() {
+  function getVisiblePianoRollNotes() {
     const notes = Array.isArray(scheduleCache?.notes) ? scheduleCache.notes : [];
     const signature = [
       scheduleCacheVersion,
       notes.length,
       partMuteStates.map(v => v ? "1" : "0").join("")
     ].join("|");
-    if (signature === pianoRollPlayableCacheSignature) return pianoRollPlayableCache;
-    pianoRollPlayableCacheSignature = signature;
-    pianoRollPlayableCache = notes.filter((note) => {
+    if (signature === pianoRollVisibleCacheSignature) return pianoRollVisibleCache;
+
+    pianoRollVisibleCacheSignature = signature;
+    pianoRollVisibleCache = [];
+    for (const note of notes) {
       const part = clampInt(Number(note?.part ?? 0), 0, 5);
       const midi = Number(note?.midi);
-      if (!Number.isFinite(midi)) return false;
-      if (partMuteStates[part]) return false;
-      if (Number(note?.volume ?? 0) <= 0) return false;
-      return true;
-    });
-    return pianoRollPlayableCache;
+      if (!Number.isFinite(midi) || Number(note?.volume ?? 0) <= 0) continue;
+      pianoRollVisibleCache.push({
+        start: Math.max(0, Number(note?.start) || 0),
+        durationSec: Math.max(0.02, Number(note?.durationSec) || 0.02),
+        midi: clampInt(midi, 0, 127),
+        part,
+        muted: Boolean(partMuteStates[part])
+      });
+    }
+    return pianoRollVisibleCache;
   }
 
   function getPianoRollRange(notes) {
@@ -6173,12 +6263,6 @@ ${shortError(err)}`);
     const raw = getComputedStyle(pianoRoll).getPropertyValue("--piano-key-h");
     const parsed = Number.parseFloat(raw);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : (pianoRollExpanded ? 38 : 30);
-  }
-
-  function getPianoRollStageHeight() {
-    const stage = pianoRoll?.querySelector(".piano-roll-stage");
-    const height = Number(stage?.clientHeight) || 0;
-    return height > 0 ? height : (pianoRollExpanded ? 286 : 58);
   }
 
   function noteNameForMidi(midi) {
@@ -6235,17 +6319,6 @@ ${shortError(err)}`);
     };
 
     return { whiteWidth, blackWidth, getKeyMetrics };
-  }
-
-  function buildPianoRollKeyLabel(midi, widthPercent) {
-    if (getPianoPitch(midi) !== 0) return "";
-    const label = noteNameForMidi(midi);
-    const match = /^([A-G]#?)(-?\d+)$/.exec(label);
-    if (!match) return `<em>${escapeHtml(label)}</em>`;
-    if (widthPercent < 3.2) {
-      return `<em class="vertical"><span>${escapeHtml(match[1])}</span><span>${escapeHtml(match[2])}</span></em>`;
-    }
-    return `<em>${escapeHtml(label)}</em>`;
   }
 
   function buildPianoRollDataSignature(notes, duration) {
@@ -6344,6 +6417,8 @@ ${shortError(err)}`);
       accent: getCanvasCssVar("--accent", dark ? "#818cf8" : "#4f46e5"),
       tempoActive: getCanvasCssVar("--tempo-active", dark ? "#22c55e" : "#16a34a"),
       activeLine: getCanvasCssVar("--active-code-line", dark ? "rgba(74, 222, 128, 0.95)" : "rgba(22, 163, 74, 0.92)"),
+      mutedLine: dark ? "rgba(226, 232, 240, 0.82)" : "rgba(51, 65, 85, 0.72)",
+      mutedMark: dark ? "rgba(248, 250, 252, 0.88)" : "rgba(30, 41, 59, 0.78)",
       whiteA: getCanvasCssVar("--piano-white-key-bg-a", "#ffffff", pianoRoll),
       whiteB: getCanvasCssVar("--piano-white-key-bg-b", dark ? "#dbeafe" : "#eef2f7", pianoRoll),
       whiteText: getCanvasCssVar("--piano-white-key-text", dark ? "#172033" : "#334155", pianoRoll),
@@ -6396,7 +6471,7 @@ ${shortError(err)}`);
     ctx.clip();
 
     const limit = pianoRollExpanded ? 1800 : 720;
-    for (const { start, end, noteDuration, midi, part, active } of visibleNotes.slice(0, limit)) {
+    for (const { start, end, noteDuration, midi, part, active, muted } of visibleNotes.slice(0, limit)) {
       const metrics = keyLayout.getKeyMetrics(midi);
       const laneWidth = metrics.width * width / 100;
       const noteWidth = Math.max(2, laneWidth * (metrics.black ? 0.82 : 0.72));
@@ -6407,16 +6482,30 @@ ${shortError(err)}`);
       if (y > fallAreaHeight || y + h < 0) continue;
       const r = pianoRollExpanded ? 5 : 4;
       ctx.save();
-      ctx.globalAlpha = active ? 0.98 : 0.86;
+      ctx.globalAlpha = muted ? (active ? 0.42 : 0.27) : (active ? 0.98 : 0.86);
       ctx.fillStyle = colors.parts[part] || colors.parts[0];
       drawRoundRect(ctx, x, y, noteWidth, h, r);
       ctx.fill();
-      ctx.globalAlpha = active ? 0.95 : 0.28;
-      ctx.lineWidth = active ? 2 : 1;
-      ctx.strokeStyle = active ? colors.activeLine : "rgba(255, 255, 255, 0.55)";
+      ctx.globalAlpha = muted ? 0.9 : (active ? 0.95 : 0.28);
+      ctx.lineWidth = muted ? 1.4 : (active ? 2 : 1);
+      ctx.strokeStyle = muted ? colors.mutedLine : (active ? colors.activeLine : "rgba(255, 255, 255, 0.55)");
+      if (muted) ctx.setLineDash([Math.max(2, noteWidth * 0.28), 2.5]);
       ctx.stroke();
       ctx.restore();
     }
+    ctx.restore();
+  }
+
+  function drawMutedPianoKeyMark(ctx, x, y, width, height, colors) {
+    if (width < 3 || height < 6) return;
+    ctx.save();
+    ctx.strokeStyle = colors.mutedMark;
+    ctx.lineWidth = Math.max(1.2, Math.min(2, width * 0.08));
+    ctx.globalAlpha = 0.92;
+    ctx.beginPath();
+    ctx.moveTo(x + width * 0.22, y + height * 0.2);
+    ctx.lineTo(x + width * 0.78, y + height * 0.8);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -6429,16 +6518,22 @@ ${shortError(err)}`);
       const metrics = keyLayout.getKeyMetrics(midi);
       const x = metrics.left * width / 100;
       const w = metrics.width * width / 100;
-      const activePart = activeKeyParts.get(midi);
+      const activeKey = activeKeyParts.get(midi) || null;
+      const activePart = activeKey?.part;
+      const activeMuted = Boolean(activeKey?.muted);
       const gradient = ctx.createLinearGradient(0, keyY, 0, keyY + keyHeight);
       gradient.addColorStop(0, colors.whiteA);
       gradient.addColorStop(1, colors.whiteB);
+      ctx.save();
+      ctx.globalAlpha = activeMuted ? 0.42 : 1;
       ctx.fillStyle = activePart == null ? gradient : (colors.parts[activePart] || colors.parts[0]);
       ctx.fillRect(x, keyY, w, keyHeight);
+      ctx.restore();
       ctx.strokeStyle = colors.whiteLine;
       ctx.strokeRect(x + 0.5, keyY + 0.5, Math.max(0, w - 1), Math.max(0, keyHeight - 1));
       ctx.fillStyle = "rgba(15, 23, 42, 0.07)";
       ctx.fillRect(x, keyY + keyHeight - Math.max(4, keyHeight * 0.18), w, Math.max(3, keyHeight * 0.18));
+      if (activeMuted) drawMutedPianoKeyMark(ctx, x, keyY, w, keyHeight, colors);
     }
 
     for (let midi = minMidi; midi <= maxMidi; midi++) {
@@ -6447,20 +6542,27 @@ ${shortError(err)}`);
       const x = metrics.left * width / 100;
       const w = metrics.width * width / 100;
       const h = keyHeight * 0.62;
-      const activePart = activeKeyParts.get(midi);
+      const activeKey = activeKeyParts.get(midi) || null;
+      const activePart = activeKey?.part;
+      const activeMuted = Boolean(activeKey?.muted);
       const gradient = ctx.createLinearGradient(0, keyY, 0, keyY + h);
       gradient.addColorStop(0, colors.blackA);
       gradient.addColorStop(1, colors.blackB);
+      ctx.save();
+      ctx.globalAlpha = activeMuted ? 0.46 : 1;
       ctx.fillStyle = activePart == null ? gradient : (colors.parts[activePart] || colors.parts[0]);
       drawRoundRect(ctx, x, keyY, w, h, Math.min(4, w / 2));
       ctx.fill();
+      ctx.restore();
       ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
       ctx.stroke();
+      if (activeMuted) drawMutedPianoKeyMark(ctx, x, keyY, w, h, colors);
     }
 
     for (let midi = minMidi; midi <= maxMidi; midi++) {
       if (isPianoBlackKey(midi)) continue;
       const metrics = keyLayout.getKeyMetrics(midi);
+      const activeKey = activeKeyParts.get(midi) || null;
       drawPianoKeyLabel(
         ctx,
         midi,
@@ -6468,7 +6570,7 @@ ${shortError(err)}`);
         keyY,
         metrics.width * width / 100,
         keyHeight,
-        activeKeyParts.get(midi),
+        activeKey?.part,
         colors
       );
     }
@@ -6478,7 +6580,7 @@ ${shortError(err)}`);
   function updatePianoRoll(currentSec, durationSec, force = false) {
     if (!pianoRoll || !pianoRollCanvas) return;
 
-    const notes = getPlayablePianoRollNotes();
+    const notes = getVisiblePianoRollNotes();
     const duration = Math.max(0, Number(durationSec) || 0);
     const current = Math.max(0, Math.min(duration || Infinity, Number(currentSec) || 0));
     const bucket = Math.floor(current * (pianoRollExpanded ? 36 : 24));
@@ -6521,9 +6623,14 @@ ${shortError(err)}`);
       const midi = clampInt(Number(note.midi) || 0, 0, 127);
       if (midi < pianoRollKeyMin || midi > pianoRollKeyMax) continue;
       const part = clampInt(Number(note.part ?? 0), 0, 5);
+      const muted = Boolean(note.muted);
       const active = start <= current + 0.012 && end >= current - 0.026;
-      if (active && !activeKeyParts.has(midi)) activeKeyParts.set(midi, part);
-      visibleNotes.push({ start, end, noteDuration, midi, part, active });
+      if (active) {
+        const previous = activeKeyParts.get(midi);
+        // 같은 건반에 음소거/재생 채널이 동시에 있으면 실제로 들리는 채널을 우선 표시한다.
+        if (!previous || (previous.muted && !muted)) activeKeyParts.set(midi, { part, muted });
+      }
+      visibleNotes.push({ start, end, noteDuration, midi, part, active, muted });
     }
 
     const colors = buildPianoRollCanvasColors();
@@ -6559,12 +6666,14 @@ ${shortError(err)}`);
 
     const current = Math.max(0, Number(currentSec) || 0);
     const scanBucket = Math.floor(current * 30);
-    const scanSignature = `${scheduleCacheVersion}|${noteList.length}|${restList.length}|${partMuteStates.map(v => v ? "1" : "0").join("")}`;
+    const scanSignature = `${scheduleCacheVersion}|${activeTabName}|${noteList.length}|${restList.length}|${partMuteStates.map(v => v ? "1" : "0").join("")}`;
     if (scanBucket === activePlaybackScanBucket && scanSignature === activePlaybackScanSignature) return;
     activePlaybackScanBucket = scanBucket;
     activePlaybackScanSignature = scanSignature;
     const mainRanges = [];
     const partRanges = Array.from({ length: 6 }, () => []);
+    const activePartIndex = getActiveEditorPartIndex();
+    const collectMainRanges = activeTabName === "main";
 
     const collectSourceRanges = (item, part) => {
       const sourceRanges = Array.isArray(item.sourceRanges) && item.sourceRanges.length
@@ -6576,10 +6685,10 @@ ${shortError(err)}`);
         const partEnd = Number(range?.end);
         const globalStart = Number(range?.globalStart);
         const globalEnd = Number(range?.globalEnd);
-        if (Number.isFinite(partStart) && Number.isFinite(partEnd) && partEnd > partStart) {
+        if (part === activePartIndex && Number.isFinite(partStart) && Number.isFinite(partEnd) && partEnd > partStart) {
           partRanges[part].push({ start: partStart, end: partEnd });
         }
-        if (Number.isFinite(globalStart) && Number.isFinite(globalEnd) && globalEnd > globalStart) {
+        if (collectMainRanges && Number.isFinite(globalStart) && Number.isFinite(globalEnd) && globalEnd > globalStart) {
           mainRanges.push({ start: globalStart, end: globalEnd });
         }
       }
@@ -6614,8 +6723,7 @@ ${shortError(err)}`);
     activePlaybackCodeSignature = signature;
     activePlaybackMainRanges = compactMain;
     activePlaybackPartRanges = compactParts;
-    updateMainHighlight();
-    updatePartHighlights();
+    updateVisibleHighlight();
   }
 
   function clearPlaybackCodeHighlight() {
@@ -6625,8 +6733,7 @@ ${shortError(err)}`);
     activePlaybackScanSignature = "";
     activePlaybackMainRanges = [];
     activePlaybackPartRanges = Array.from({ length: 6 }, () => []);
-    updateMainHighlight();
-    updatePartHighlights();
+    updateVisibleHighlight();
   }
 
   function compactCodeRanges(ranges) {

@@ -59,6 +59,24 @@
     return { part, before: String(text || "").trim().length, after: part.length };
   }
 
+  function countShortRestsMml(text, options = {}) {
+    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
+    while (sourceParts.length < partCount) sourceParts.push("");
+
+    const threshold = normalizeRestTrimThreshold(options);
+    const counts = sourceParts.map((part, index) => {
+      const parsed = parsePart(part, index, { mergeRests: false });
+      return countAbsorbableShortRests(parsed.events, threshold);
+    });
+
+    return {
+      counts,
+      total: counts.reduce((sum, count) => sum + count, 0),
+      threshold
+    };
+  }
+
   function trimShortRestsMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
@@ -639,24 +657,6 @@
     return best;
   }
 
-  function findEarliestEstimatedCandidateAtLeastLength(parsedParts, pageStart, candidates, bestIdx, targetLen) {
-    if (!targetLen || bestIdx < 0 || estimatePageMaxLength(parsedParts, pageStart, candidates[bestIdx]) < targetLen) return null;
-    let lo = 0;
-    let hi = bestIdx;
-    let ans = candidates[bestIdx];
-    while (lo <= hi) {
-      const mid = Math.floor((lo + hi) / 2);
-      const est = estimatePageMaxLength(parsedParts, pageStart, candidates[mid]);
-      if (est >= targetLen) {
-        ans = candidates[mid];
-        hi = mid - 1;
-      } else {
-        lo = mid + 1;
-      }
-    }
-    return ans;
-  }
-
   function estimatePageMaxLength(parsedParts, start, end) {
     let max = 0;
     for (const part of parsedParts || []) {
@@ -1054,6 +1054,32 @@
       throw new Error("쉼표 삭제 기준은 all, 4, 8, 16, 32, 64 중 하나여야 합니다.");
     }
     return { all: false, units: durationUnits(denom, 0), denom };
+  }
+
+  function countAbsorbableShortRests(events, threshold) {
+    let hasAbsorbableNote = false;
+    let count = 0;
+
+    for (const ev of events || []) {
+      if (ev.type === "note") {
+        hasAbsorbableNote = true;
+        continue;
+      }
+
+      if (ev.type === "rest") {
+        const canDelete = threshold.all || (Number.isFinite(ev.duration) && ev.duration <= threshold.units + EPS);
+        if (canDelete && hasAbsorbableNote) {
+          count++;
+          continue;
+        }
+        hasAbsorbableNote = false;
+        continue;
+      }
+
+      hasAbsorbableNote = false;
+    }
+
+    return count;
   }
 
   function absorbShortRests(events, threshold, tempoMap = []) {
@@ -1559,5 +1585,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = { optimizeMml, optimizePart, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages };
+  window.MabiOptimizer = { optimizeMml, optimizePart, countShortRestsMml, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages };
 })();

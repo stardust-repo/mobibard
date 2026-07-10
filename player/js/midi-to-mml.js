@@ -1684,44 +1684,6 @@
     return out.filter((ev, i, arr) => i === 0 || ev.bpm !== arr[i - 1].bpm || ev.grid === 0);
   }
 
-  function buildChannelSummaries(midi) {
-    return midi.channelInfo.map((info, channelIndex) => {
-      const programs = Array.from(info.programs).sort((a, b) => a - b);
-      const trackNames = Array.from(info.trackNames).filter(Boolean);
-      const instrumentNames = Array.from(info.instrumentNames).filter(Boolean);
-      const allNames = [...trackNames, ...instrumentNames, ...programs.map(programName)].join(" / ");
-      const drumNotes = Array.from(info.drumNotes).sort((a, b) => a - b);
-      const isPercussion = channelIndex === 9 || PERCUSSION_NAME_RE.test(allNames);
-      const programNames = isPercussion
-        ? ["드럼/퍼커션"]
-        : (programs.length ? programs.map(programName) : ["프로그램 미지정(기본 피아노)"]);
-      const drumNoteNames = drumNotes.slice(0, 8).map(n => GM_DRUM_NAMES[n] || `Perc ${n}`);
-      return {
-        channelIndex,
-        channelNumber: channelIndex + 1,
-        noteCount: info.noteCount,
-        programs,
-        programNames,
-        trackNames,
-        instrumentNames,
-        drumNoteNames,
-        isPercussion,
-        defaultChecked: info.noteCount > 0 && !isPercussion,
-        description: buildChannelDescription({ programNames, trackNames, instrumentNames, drumNoteNames, noteCount: info.noteCount, isPercussion })
-      };
-    });
-  }
-
-  function buildChannelDescription(summary) {
-    const chunks = [];
-    chunks.push(summary.programNames.join(" / "));
-    if (summary.trackNames.length) chunks.push(`트랙: ${summary.trackNames.slice(0, 2).join(" / ")}`);
-    if (summary.instrumentNames.length) chunks.push(`이름: ${summary.instrumentNames.slice(0, 2).join(" / ")}`);
-    if (summary.isPercussion && summary.drumNoteNames.length) chunks.push(`예: ${summary.drumNoteNames.join(", ")}`);
-    chunks.push(`노트 ${summary.noteCount.toLocaleString("ko-KR")}개`);
-    return chunks.join(" · ");
-  }
-
   function programName(program) {
     const p = clampInt(program, 0, 127);
     return `${p + 1}. ${GM_PROGRAM_NAMES[p] || "Unknown"}`;
