@@ -59,6 +59,904 @@
     return { part, before: String(text || "").trim().length, after: part.length };
   }
 
+  function arrangeGenreMml(text, options = {}) {
+    const partCount = 6;
+    const genre = String(options.genre || "jazz").trim().toLowerCase();
+    const supportedGenres = new Set(["jazz", "ballad", "bossa", "rock", "funk"]);
+    if (!supportedGenres.has(genre)) throw new Error("지원하지 않는 장르입니다.");
+
+    const strength = normalizeGenreArrangeStrength(options.strength);
+    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
+    while (sourceParts.length < partCount) sourceParts.push("");
+
+    const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
+    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(part => part.tempos));
+    const melodyPartIndex = resolveGenreMelodyPartIndex(parsedParts, options.melodyPartIndex);
+    const melodySource = parsedParts[melodyPartIndex];
+    const melodyNotes = melodySource.events.filter(ev => ev.type === "note");
+    if (melodyNotes.length < 2) throw new Error("편곡할 멜로디 음표가 부족합니다. 멜로디 채널을 확인해 주세요.");
+
+    const melodyEvents = normalizeEventStarts(melodySource.events.map(ev => ({ ...ev })));
+    const songEnd = Math.max(
+      melodySource.length || 0,
+      melodyEvents.reduce((max, ev) => Math.max(max, (ev.start || 0) + (ev.duration || 0)), 0)
+    );
+    if (!(songEnd > 0)) throw new Error("편곡할 연주 구간을 찾지 못했습니다.");
+
+    const key = estimateGenreKey(melodyNotes);
+    const medianPitch = medianNumber(melodyNotes.map(note => note.midi), 60);
+    const baseVolume = clamp(Math.round(medianNumber(melodyNotes.map(note => note.volume), DEFAULT_VOLUME)) - 2, 3, 13);
+    const chordPlan = buildGenreChordPlan(melodyNotes, key, songEnd, strength, genre);
+    const accompaniment = buildGenreAccompanimentParts(genre, chordPlan, {
+      songEnd,
+      strength,
+      medianPitch,
+      baseVolume
+    });
+
+    const outputEvents = [melodyEvents, ...accompaniment];
+    while (outputEvents.length < partCount) outputEvents.push([]);
+    const outputParts = [];
+    const hasAnyContent = melodyEvents.length > 0 || chordPlan.length > 0;
+
+    for (let i = 0; i < partCount; i++) {
+      let events = outputEvents[i] || [];
+      if (i === 0) events = injectTempoEvents(events, tempoMap);
+      outputParts.push(renderPartFast(events, {
+        isMelody: i === 0,
+        startTempo: tempoMap[0]?.bpm || DEFAULT_TEMPO,
+        forceHeader: i === 0 && hasAnyContent,
+        partIndex: i
+      }));
+    }
+
+    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+    return {
+      mml,
+      parts: outputParts,
+      before: countPartChars(sourceParts),
+      after: countPartChars(outputParts),
+      genre,
+      strength,
+      melodyPartIndex,
+      key: { tonic: key.tonic, mode: key.mode, label: formatGenreKeyLabel(key) },
+      chordCount: chordPlan.length,
+      generatedPartCount: accompaniment.filter(events => events.some(ev => ev.type === "note")).length,
+      replacedPartCount: 5
+    };
+  }
+
+  function normalizeGenreArrangeStrength(value) {
+    const raw = String(value || "normal").trim().toLowerCase();
+    return ["light", "normal", "strong"].includes(raw) ? raw : "normal";
+  }
+
+  function resolveGenreMelodyPartIndex(parsedParts, requested) {
+    const direct = Number(requested);
+    if (Number.isInteger(direct) && direct >= 0 && direct < parsedParts.length) {
+      if (parsedParts[direct].events.some(ev => ev.type === "note")) return direct;
+      throw new Error(`${direct + 1}채널에 멜로디 음표가 없습니다.`);
+    }
+
+    const primaryNotes = parsedParts[0]?.events?.filter(ev => ev.type === "note") || [];
+    if (primaryNotes.length >= 2) return 0;
+
+    let bestIndex = -1;
+    let bestScore = -Infinity;
+    for (let i = 0; i < parsedParts.length; i++) {
+      const notes = parsedParts[i].events.filter(ev => ev.type === "note");
+      if (!notes.length) continue;
+      const duration = notes.reduce((sum, note) => sum + note.duration, 0);
+      const avgPitch = notes.reduce((sum, note) => sum + note.midi * note.duration, 0) / Math.max(1, duration);
+      const uniqueStarts = new Set(notes.map(note => note.start)).size;
+      const overlapPenalty = Math.max(0, notes.length - uniqueStarts) * 2;
+      const score = (i === 0 ? 18 : 0) + avgPitch * 0.55 + Math.min(notes.length, 160) * 0.18 - overlapPenalty;
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = i;
+      }
+    }
+    if (bestIndex < 0) throw new Error("음표가 들어 있는 채널을 찾지 못했습니다.");
+    return bestIndex;
+  }
+
+  function estimateGenreKey(notes) {
+    const majorScale = [0, 2, 4, 5, 7, 9, 11];
+    const minorScale = [0, 2, 3, 5, 7, 8, 10];
+    const histogram = Array(12).fill(0);
+    for (const note of notes) {
+      const pc = ((note.midi % 12) + 12) % 12;
+      const weight = Math.max(1, note.duration) * (0.65 + clamp(note.volume, 0, 15) / 24);
+      histogram[pc] += weight;
+    }
+
+    const firstPc = ((notes[0]?.midi || 60) % 12 + 12) % 12;
+    const lastPc = ((notes[notes.length - 1]?.midi || 60) % 12 + 12) % 12;
+    let best = null;
+    for (let tonic = 0; tonic < 12; tonic++) {
+      for (const mode of ["major", "minor"]) {
+        const scale = mode === "major" ? majorScale : minorScale;
+        const scaleSet = new Set(scale.map(interval => (tonic + interval) % 12));
+        let score = 0;
+        for (let pc = 0; pc < 12; pc++) score += histogram[pc] * (scaleSet.has(pc) ? 2.5 : -2.2);
+        score += histogram[tonic] * 1.8;
+        const third = (tonic + (mode === "major" ? 4 : 3)) % 12;
+        const fifth = (tonic + 7) % 12;
+        score += histogram[third] * 0.65 + histogram[fifth] * 0.45;
+        if (firstPc === tonic) score += 12;
+        if (lastPc === tonic) score += 24;
+        if (lastPc === third || lastPc === fifth) score += 8;
+        if (!best || score > best.score) best = { tonic, mode, score, scale };
+      }
+    }
+    return best || { tonic: 0, mode: "major", scale: majorScale, score: 0 };
+  }
+
+  function formatGenreKeyLabel(key) {
+    const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    return `${names[key.tonic] || "C"}${key.mode === "minor" ? "m" : ""}`;
+  }
+
+
+  function buildGenreChordPlan(notes, key, songEnd, strength, genre) {
+    if (genre === "jazz") return buildJazzChordPlan(notes, key, songEnd, strength);
+
+    const config = {
+      ballad: {
+        chords: buildBalladDiatonicChords(key),
+        passing: false,
+        split: intensity => strength === "strong" && intensity.score >= 0.58
+      },
+      bossa: {
+        chords: buildJazzDiatonicChords(key),
+        passing: strength === "strong",
+        split: intensity => strength === "strong" || (strength === "normal" && intensity.score >= 0.48)
+      },
+      rock: {
+        chords: buildRockDiatonicChords(key),
+        passing: false,
+        split: intensity => strength === "strong" && intensity.score >= 0.4
+      },
+      funk: {
+        chords: buildFunkDiatonicChords(key),
+        passing: false,
+        split: intensity => strength !== "light" && intensity.score >= 0.34
+      }
+    }[genre];
+
+    return buildConfiguredGenreChordPlan(notes, key, songEnd, strength, config);
+  }
+
+  function buildConfiguredGenreChordPlan(notes, key, songEnd, strength, config) {
+    const BAR_UNITS = WHOLE_UNITS;
+    const firstNoteStart = notes.reduce((min, note) => Math.min(min, note.start), Infinity);
+    const lastNoteEnd = notes.reduce((max, note) => Math.max(max, note.start + note.duration), 0);
+    const start = Number.isFinite(firstNoteStart) ? Math.max(0, firstNoteStart) : 0;
+    const end = Math.min(songEnd, Math.max(start + BAR_UNITS, Math.ceil(lastNoteEnd / BAR_UNITS) * BAR_UNITS));
+    const chords = config?.chords?.length ? config.chords : buildJazzDiatonicChords(key);
+    const segments = [];
+    let previous = null;
+    let segmentIndex = 0;
+
+    for (let barStart = start; barStart < end; barStart += BAR_UNITS) {
+      const barEnd = Math.min(barStart + BAR_UNITS, end);
+      const barNotes = notes.filter(note => note.start < barEnd && note.start + note.duration > barStart);
+      const intensity = measureGenreSegmentIntensity(barNotes, barStart, barEnd);
+      const splitBar = Boolean(config?.split?.(intensity, barNotes));
+      const segmentSize = splitBar ? BAR_UNITS / 2 : barEnd - barStart;
+
+      for (let segmentStart = barStart; segmentStart < barEnd; segmentStart += segmentSize) {
+        const segmentEnd = Math.min(segmentStart + segmentSize, barEnd);
+        const segmentNotes = barNotes.filter(note => note.start < segmentEnd && note.start + note.duration > segmentStart);
+        const isFinal = segmentEnd >= end - EPS;
+        let chord = chooseJazzChordForSegment(segmentNotes, chords, key, previous, segmentIndex, isFinal);
+        if (config?.passing) chord = applyJazzPassingHarmony(chord, previous, segmentNotes, key, segmentIndex, strength);
+        const segmentIntensity = measureGenreSegmentIntensity(segmentNotes, segmentStart, segmentEnd);
+        segments.push({
+          start: segmentStart,
+          end: segmentEnd,
+          duration: segmentEnd - segmentStart,
+          chord,
+          intensity: segmentIntensity
+        });
+        previous = chord;
+        segmentIndex++;
+      }
+    }
+    return segments;
+  }
+
+  function buildBalladDiatonicChords(key) {
+    const roots = key.mode === "minor" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+    const qualities = key.mode === "minor"
+      ? ["minAdd9", "m7b5", "add9", "min7", "sus4", "add9", "dom7"]
+      : ["add9", "min7", "min7", "add9", "sus4", "min7", "dim"];
+    return roots.map((interval, degree) => createJazzChord((key.tonic + interval) % 12, qualities[degree], degree));
+  }
+
+  function buildRockDiatonicChords(key) {
+    const roots = key.mode === "minor" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+    return roots.map((interval, degree) => createJazzChord((key.tonic + interval) % 12, "power", degree));
+  }
+
+  function buildFunkDiatonicChords(key) {
+    const roots = key.mode === "minor" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+    const qualities = key.mode === "minor"
+      ? ["min7", "m7b5", "maj7", "min7", "dom7", "maj7", "dom7"]
+      : ["dom7", "min7", "min7", "dom7", "dom7", "min7", "m7b5"];
+    return roots.map((interval, degree) => createJazzChord((key.tonic + interval) % 12, qualities[degree], degree));
+  }
+
+  function buildJazzChordPlan(notes, key, songEnd, strength) {
+    const BAR_UNITS = WHOLE_UNITS;
+    const firstNoteStart = notes.reduce((min, note) => Math.min(min, note.start), Infinity);
+    const lastNoteEnd = notes.reduce((max, note) => Math.max(max, note.start + note.duration), 0);
+    const start = Number.isFinite(firstNoteStart) ? Math.max(0, firstNoteStart) : 0;
+    const end = Math.min(songEnd, Math.max(start + BAR_UNITS, Math.ceil(lastNoteEnd / BAR_UNITS) * BAR_UNITS));
+    const chords = buildJazzDiatonicChords(key);
+    const segments = [];
+    let previous = null;
+    let segmentIndex = 0;
+
+    for (let barStart = start; barStart < end; barStart += BAR_UNITS) {
+      const barEnd = Math.min(barStart + BAR_UNITS, end);
+      const barNotes = notes.filter(note => note.start < barEnd && note.start + note.duration > barStart);
+      const intensity = measureGenreSegmentIntensity(barNotes, barStart, barEnd);
+      const splitBar = strength === "strong" && intensity.score >= 0.44 && barNotes.length >= 3;
+      const segmentSize = splitBar ? BAR_UNITS / 2 : barEnd - barStart;
+
+      for (let segmentStart = barStart; segmentStart < barEnd; segmentStart += segmentSize) {
+        const segmentEnd = Math.min(segmentStart + segmentSize, barEnd);
+        const segmentNotes = barNotes.filter(note => note.start < segmentEnd && note.start + note.duration > segmentStart);
+        const isFinal = segmentEnd >= end - EPS;
+        let chord = chooseJazzChordForSegment(segmentNotes, chords, key, previous, segmentIndex, isFinal);
+        if (strength !== "light") chord = applyJazzPassingHarmony(chord, previous, segmentNotes, key, segmentIndex, strength);
+        const segmentIntensity = measureGenreSegmentIntensity(segmentNotes, segmentStart, segmentEnd);
+        segments.push({
+          start: segmentStart,
+          end: segmentEnd,
+          duration: segmentEnd - segmentStart,
+          chord,
+          intensity: segmentIntensity
+        });
+        previous = chord;
+        segmentIndex++;
+      }
+    }
+
+    return segments;
+  }
+
+  function buildJazzDiatonicChords(key) {
+    const roots = key.mode === "minor" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+    const qualities = key.mode === "minor"
+      ? ["min7", "m7b5", "maj7", "min7", "dom7", "maj7", "dom7"]
+      : ["maj7", "min7", "min7", "maj7", "dom7", "min7", "m7b5"];
+    return roots.map((interval, degree) => createJazzChord((key.tonic + interval) % 12, qualities[degree], degree));
+  }
+
+  function createJazzChord(rootPc, quality, degree = null, labelSuffix = "") {
+    const intervalMap = {
+      major: [0, 4, 7],
+      minor: [0, 3, 7],
+      add9: [0, 4, 7, 14],
+      minAdd9: [0, 3, 7, 14],
+      power: [0, 7],
+      sus2: [0, 2, 7],
+      sus4: [0, 5, 7],
+      dim: [0, 3, 6],
+      maj7: [0, 4, 7, 11],
+      min7: [0, 3, 7, 10],
+      dom7: [0, 4, 7, 10],
+      m7b5: [0, 3, 6, 10],
+      dim7: [0, 3, 6, 9]
+    };
+    const intervals = intervalMap[quality] || intervalMap.maj7;
+    return {
+      rootPc,
+      quality,
+      degree,
+      labelSuffix,
+      intervals,
+      pcs: intervals.map(interval => (rootPc + interval) % 12)
+    };
+  }
+
+  function chooseJazzChordForSegment(notes, chords, key, previous, segmentIndex, isFinal) {
+    if (!notes.length) {
+      const fallback = key.mode === "minor" ? [0, 5, 1, 4] : [0, 5, 1, 4];
+      return chords[fallback[segmentIndex % fallback.length]];
+    }
+
+    let best = null;
+    for (const chord of chords) {
+      let score = scoreJazzChordAgainstNotes(chord, notes, key);
+      score += scoreJazzChordProgression(previous, chord, key);
+      if (isFinal && chord.degree === 0) score += 18;
+      if (previous && previous.rootPc === chord.rootPc) score -= 1.5;
+      if (!best || score > best.score) best = { chord, score };
+    }
+    return best?.chord || chords[0];
+  }
+
+  function scoreJazzChordAgainstNotes(chord, notes, key) {
+    const scaleSet = new Set(key.scale.map(interval => (key.tonic + interval) % 12));
+    let score = 0;
+    for (const note of notes) {
+      const pc = ((note.midi % 12) + 12) % 12;
+      const overlap = Math.max(1, note.duration);
+      if (chord.pcs.includes(pc)) score += overlap * 5.2;
+      else if (scaleSet.has(pc)) score += overlap * 1.15;
+      else score -= overlap * 3.4;
+      if ((note.start % WHOLE_UNITS) < durationUnits(8, 0) && chord.pcs.includes(pc)) score += overlap * 1.3;
+    }
+    return score;
+  }
+
+  function scoreJazzChordProgression(previous, chord, key) {
+    if (!previous || previous.degree == null || chord.degree == null) return 0;
+    const majorMap = {
+      0: { 5: 5, 3: 4, 1: 3, 4: 3 },
+      1: { 4: 8, 6: 2 },
+      2: { 5: 4, 3: 3, 4: 3 },
+      3: { 4: 7, 0: 4, 1: 3 },
+      4: { 0: 9, 5: 5 },
+      5: { 1: 7, 3: 5, 4: 4 },
+      6: { 0: 6, 2: 3 }
+    };
+    const minorMap = {
+      0: { 5: 5, 3: 4, 1: 3, 4: 4 },
+      1: { 4: 9 },
+      2: { 5: 5, 3: 4 },
+      3: { 4: 7, 0: 4 },
+      4: { 0: 10, 5: 4 },
+      5: { 1: 6, 3: 5, 4: 4 },
+      6: { 0: 5 }
+    };
+    return (key.mode === "minor" ? minorMap : majorMap)[previous.degree]?.[chord.degree] || 0;
+  }
+
+  function applyJazzPassingHarmony(chord, previous, notes, key, segmentIndex, strength) {
+    if (!previous || chord.rootPc === previous.rootPc) return chord;
+    const sparse = notes.length <= 1;
+    const allow = strength === "strong" || (strength === "normal" && sparse && segmentIndex % 2 === 1);
+    if (!allow) return chord;
+
+    const dominantRoot = (chord.rootPc + 7) % 12;
+    const dominant = createJazzChord(dominantRoot, "dom7", null, "/V");
+    const chordScore = scoreJazzChordAgainstNotes(chord, notes, key);
+    const dominantScore = scoreJazzChordAgainstNotes(dominant, notes, key);
+    if (dominantScore + (strength === "strong" ? 8 : 3) >= chordScore) return dominant;
+    return chord;
+  }
+
+  function measureGenreSegmentIntensity(notes, start, end) {
+    const span = Math.max(1, end - start);
+    if (!notes.length) return { score: 0, density: 0, coverage: 0, velocity: 0, range: 0 };
+    let covered = 0;
+    let velocitySum = 0;
+    let minPitch = Infinity;
+    let maxPitch = -Infinity;
+    for (const note of notes) {
+      covered += Math.max(0, Math.min(end, note.start + note.duration) - Math.max(start, note.start));
+      velocitySum += clamp(note.volume, 0, 15) / 15;
+      minPitch = Math.min(minPitch, note.midi);
+      maxPitch = Math.max(maxPitch, note.midi);
+    }
+    const density = Math.min(1, notes.length / Math.max(2, span / durationUnits(8, 0)));
+    const coverage = Math.min(1, covered / span);
+    const velocity = velocitySum / notes.length;
+    const range = Math.min(1, Math.max(0, maxPitch - minPitch) / 18);
+    return { score: density * 0.4 + coverage * 0.27 + velocity * 0.2 + range * 0.13, density, coverage, velocity, range };
+  }
+
+
+  function buildGenreAccompanimentParts(genre, chordPlan, options) {
+    if (genre === "ballad") return buildBalladAccompanimentParts(chordPlan, options);
+    if (genre === "bossa") return buildBossaAccompanimentParts(chordPlan, options);
+    if (genre === "rock") return buildRockAccompanimentParts(chordPlan, options);
+    if (genre === "funk") return buildFunkAccompanimentParts(chordPlan, options);
+    return buildJazzAccompanimentParts(chordPlan, options);
+  }
+
+  function buildBalladAccompanimentParts(chordPlan, options) {
+    const strength = options.strength;
+    const voiceCount = strength === "light" ? 2 : (strength === "strong" ? 4 : 3);
+    const voiceSegments = Array.from({ length: 4 }, () => []);
+    const bassSegments = [];
+    let previousVoicing = null;
+    let previousBass = null;
+
+    for (let i = 0; i < chordPlan.length; i++) {
+      const segment = chordPlan[i];
+      const nextChord = chordPlan[i + 1]?.chord || segment.chord;
+      const voicing = chooseGenreVoicing(segment.chord, voiceCount, options.medianPitch, previousVoicing, strength, "ballad");
+      previousVoicing = voicing;
+      const hits = buildBalladHits(segment, strength);
+      const volume = clamp(Math.round(options.baseVolume + segment.intensity.score * 2), 3, 12);
+      pushVoicingHits(voiceSegments, voicing, hits, segment, volume);
+      const bass = buildBalladBassSegments(segment, nextChord, strength, previousBass, options.baseVolume);
+      if (bass.length) previousBass = bass[bass.length - 1].midi;
+      bassSegments.push(...bass);
+    }
+    return buildAccompanimentEventParts(voiceSegments, bassSegments, options.songEnd);
+  }
+
+  function buildBossaAccompanimentParts(chordPlan, options) {
+    const strength = options.strength;
+    const voiceCount = strength === "light" ? 2 : (strength === "strong" ? 4 : 3);
+    const voiceSegments = Array.from({ length: 4 }, () => []);
+    const bassSegments = [];
+    let previousVoicing = null;
+    let previousBass = null;
+
+    for (let i = 0; i < chordPlan.length; i++) {
+      const segment = chordPlan[i];
+      const nextChord = chordPlan[i + 1]?.chord || segment.chord;
+      const voicing = chooseGenreVoicing(segment.chord, voiceCount, options.medianPitch, previousVoicing, strength, "bossa");
+      previousVoicing = voicing;
+      const hits = buildBossaHits(segment, strength);
+      const volume = clamp(Math.round(options.baseVolume + 1 + segment.intensity.score * 2), 3, 13);
+      pushVoicingHits(voiceSegments, voicing, hits, segment, volume);
+      const bass = buildBossaBassSegments(segment, nextChord, strength, previousBass, options.baseVolume);
+      if (bass.length) previousBass = bass[bass.length - 1].midi;
+      bassSegments.push(...bass);
+    }
+    return buildAccompanimentEventParts(voiceSegments, bassSegments, options.songEnd);
+  }
+
+  function buildRockAccompanimentParts(chordPlan, options) {
+    const strength = options.strength;
+    const voiceCount = strength === "light" ? 2 : (strength === "strong" ? 4 : 3);
+    const voiceSegments = Array.from({ length: 4 }, () => []);
+    const bassSegments = [];
+    let previousVoicing = null;
+    let previousBass = null;
+
+    for (let i = 0; i < chordPlan.length; i++) {
+      const segment = chordPlan[i];
+      const nextChord = chordPlan[i + 1]?.chord || segment.chord;
+      const voicing = chooseGenreVoicing(segment.chord, voiceCount, options.medianPitch, previousVoicing, strength, "rock");
+      previousVoicing = voicing;
+      const hits = buildRockHits(segment, strength);
+      const volume = clamp(Math.round(options.baseVolume + 2 + segment.intensity.score * 2), 5, 14);
+      pushVoicingHits(voiceSegments, voicing, hits, segment, volume, { accentBeats: true });
+      const bass = buildRockBassSegments(segment, nextChord, strength, previousBass, options.baseVolume);
+      if (bass.length) previousBass = bass[bass.length - 1].midi;
+      bassSegments.push(...bass);
+    }
+    return buildAccompanimentEventParts(voiceSegments, bassSegments, options.songEnd);
+  }
+
+  function buildFunkAccompanimentParts(chordPlan, options) {
+    const strength = options.strength;
+    const voiceCount = strength === "light" ? 2 : (strength === "strong" ? 4 : 3);
+    const voiceSegments = Array.from({ length: 4 }, () => []);
+    const bassSegments = [];
+    let previousVoicing = null;
+    let previousBass = null;
+
+    for (let i = 0; i < chordPlan.length; i++) {
+      const segment = chordPlan[i];
+      const nextChord = chordPlan[i + 1]?.chord || segment.chord;
+      const voicing = chooseGenreVoicing(segment.chord, voiceCount, options.medianPitch, previousVoicing, strength, "funk");
+      previousVoicing = voicing;
+      const hits = buildFunkHits(segment, strength);
+      const volume = clamp(Math.round(options.baseVolume + 1 + segment.intensity.score * 3), 4, 14);
+      pushVoicingHits(voiceSegments, voicing, hits, segment, volume, { accentBeats: true });
+      const bass = buildFunkBassSegments(segment, nextChord, strength, previousBass, options.baseVolume);
+      if (bass.length) previousBass = bass[bass.length - 1].midi;
+      bassSegments.push(...bass);
+    }
+    return buildAccompanimentEventParts(voiceSegments, bassSegments, options.songEnd);
+  }
+
+  function buildAccompanimentEventParts(voiceSegments, bassSegments, songEnd) {
+    const parts = [];
+    for (let voice = 0; voice < 4; voice++) parts.push(noteSegmentsToEvents(voiceSegments[voice], songEnd));
+    parts.push(noteSegmentsToEvents(bassSegments, songEnd));
+    return parts;
+  }
+
+  function pushVoicingHits(voiceSegments, voicing, hits, segment, volume, options = {}) {
+    for (let voice = 0; voice < voicing.length && voice < voiceSegments.length; voice++) {
+      for (const hit of hits) {
+        const start = segment.start + hit.offset;
+        const beatAccent = options.accentBeats && ((Math.round(hit.offset / durationUnits(4, 0)) % 2) === 0) ? 1 : 0;
+        voiceSegments[voice].push({
+          start,
+          duration: Math.min(hit.duration, segment.end - start),
+          midi: voicing[voice],
+          volume: clamp(volume + beatAccent - (voice === voicing.length - 1 ? 1 : 0), 2, 15)
+        });
+      }
+    }
+  }
+
+  function makeGenreHits(segment, rawOffsets, duration) {
+    const result = [];
+    const seen = new Set();
+    for (const raw of rawOffsets) {
+      const offset = Math.max(0, Math.round(raw));
+      if (offset >= segment.duration || seen.has(offset)) continue;
+      seen.add(offset);
+      const available = segment.duration - offset;
+      if (available < durationUnits(64, 0)) continue;
+      result.push({ offset, duration: Math.max(durationUnits(64, 0), Math.min(duration, available)) });
+    }
+    return result;
+  }
+
+  function buildBalladHits(segment, strength) {
+    const q = durationUnits(4, 0);
+    const h = durationUnits(2, 0);
+    const gap = durationUnits(32, 0);
+    if (strength === "light") return makeGenreHits(segment, [0], Math.max(1, segment.duration - gap));
+    if (strength === "strong") {
+      const offsets = segment.intensity.score >= 0.56 ? [0, q, q * 2, q * 3] : [0, h];
+      const unit = offsets.length >= 4 ? q : h;
+      return makeGenreHits(segment, offsets, Math.max(1, unit - gap));
+    }
+    const offsets = segment.intensity.score >= 0.5 ? [0, h] : [0];
+    const unit = offsets.length > 1 ? h : segment.duration;
+    return makeGenreHits(segment, offsets, Math.max(1, unit - gap));
+  }
+
+  function buildBossaHits(segment, strength) {
+    const q = durationUnits(4, 0);
+    const e = durationUnits(8, 0);
+    const s = durationUnits(16, 0);
+    if (strength === "light") return makeGenreHits(segment, [0, q * 2 + e], Math.max(s, e - durationUnits(32, 0)));
+    if (strength === "strong") return makeGenreHits(segment, [0, e, q + e, q * 2, q * 2 + e, q * 3 + e], Math.max(s, e - durationUnits(32, 0)));
+    return makeGenreHits(segment, [0, q + e, q * 2, q * 3 + e], Math.max(s, e - durationUnits(32, 0)));
+  }
+
+  function buildRockHits(segment, strength) {
+    const q = durationUnits(4, 0);
+    const e = durationUnits(8, 0);
+    const gap = durationUnits(64, 0);
+    const step = strength === "light" ? q : e;
+    const offsets = [];
+    for (let offset = 0; offset < segment.duration; offset += step) offsets.push(offset);
+    return makeGenreHits(segment, offsets, Math.max(durationUnits(64, 0), step - gap));
+  }
+
+  function buildFunkHits(segment, strength) {
+    const q = durationUnits(4, 0);
+    const e = durationUnits(8, 0);
+    const s = durationUnits(16, 0);
+    if (strength === "light") return makeGenreHits(segment, [0, q + e, q * 3], s);
+    if (strength === "strong") return makeGenreHits(segment, [0, s * 3, q + s, q + e, q * 2 + s, q * 2 + e + s, q * 3 + s, q * 3 + e + s], s);
+    return makeGenreHits(segment, [0, e + s, q + e, q * 2 + s, q * 3 + e], s);
+  }
+
+  function chooseGenreVoicing(chord, voiceCount, melodyMedian, previousVoicing, strength, genre) {
+    if (genre === "jazz") return chooseJazzVoicing(chord, voiceCount, melodyMedian, previousVoicing, strength);
+    const quality = chord.quality;
+    const guides = {
+      ballad: {
+        major: [0, 4, 7, 14], add9: [0, 4, 7, 14], minor: [0, 3, 7, 14], minAdd9: [0, 3, 7, 14],
+        maj7: [0, 4, 7, 11], min7: [0, 3, 7, 10], dom7: [0, 4, 7, 10], sus4: [0, 5, 7, 12],
+        m7b5: [0, 3, 6, 10], dim: [0, 3, 6, 12]
+      },
+      bossa: {
+        maj7: [4, 11, 14, 21], min7: [3, 10, 14, 19], dom7: [4, 10, 14, 21], m7b5: [3, 10, 13, 17]
+      },
+      rock: { power: [0, 7, 12, 19] },
+      funk: {
+        dom7: [4, 10, 14, 21], min7: [3, 10, 14, 19], maj7: [4, 11, 14, 21], m7b5: [3, 10, 13, 17]
+      }
+    };
+    const fallback = chord.intervals?.length ? chord.intervals : [0, 4, 7, 12];
+    const intervals = (guides[genre]?.[quality] || fallback).slice(0, voiceCount);
+    const upperCap = Math.max(62, Math.min(88, Math.round(melodyMedian) - 1));
+    const baseCenters = voiceCount === 2
+      ? [melodyMedian - 18, melodyMedian - 10]
+      : voiceCount === 3
+        ? [melodyMedian - 21, melodyMedian - 14, melodyMedian - 7]
+        : [melodyMedian - 24, melodyMedian - 17, melodyMedian - 10, melodyMedian - 4];
+    const pitches = [];
+    for (let i = 0; i < intervals.length; i++) {
+      const pc = (chord.rootPc + intervals[i]) % 12;
+      const target = Number.isFinite(previousVoicing?.[i]) ? previousVoicing[i] : baseCenters[i];
+      let pitch = nearestPitchForClass(pc, target, genre === "rock" ? 36 : 40, upperCap);
+      if (i > 0) {
+        while (pitch <= pitches[i - 1] + 2 && pitch + 12 <= upperCap) pitch += 12;
+        while (pitch > upperCap && pitch - 12 > pitches[i - 1] + 2) pitch -= 12;
+      }
+      pitches.push(pitch);
+    }
+    return pitches;
+  }
+
+  function buildBalladBassSegments(segment, nextChord, strength, previousBass, baseVolume) {
+    const q = durationUnits(4, 0);
+    const h = durationUnits(2, 0);
+    const gap = durationUnits(32, 0);
+    const volume = clamp(Math.round(baseVolume + segment.intensity.score * 2), 4, 13);
+    const root = chooseJazzBassPitch(segment.chord.rootPc, previousBass, 41);
+    const fifth = nearestPitchForClass((segment.chord.rootPc + 7) % 12, root + 5, 32, 55);
+    const nextRoot = chooseJazzBassPitch(nextChord.rootPc, root, 41);
+    if (strength === "light") return [{ start: segment.start, duration: Math.max(1, segment.duration - gap), midi: root, volume }];
+    const offsets = strength === "strong" ? [0, q, q * 2, q * 3] : [0, h];
+    return offsets.filter(offset => offset < segment.duration).map((offset, index) => ({
+      start: segment.start + offset,
+      duration: Math.max(1, Math.min((strength === "strong" ? q : h) - gap, segment.duration - offset)),
+      midi: index === offsets.length - 1 && strength === "strong" ? chooseJazzApproachPitch(root, nextRoot, segment.chord) : (index % 2 ? fifth : root),
+      volume: clamp(volume + (index === 0 ? 1 : 0), 3, 14)
+    }));
+  }
+
+  function buildBossaBassSegments(segment, nextChord, strength, previousBass, baseVolume) {
+    const q = durationUnits(4, 0);
+    const e = durationUnits(8, 0);
+    const gap = durationUnits(32, 0);
+    const volume = clamp(Math.round(baseVolume + 1 + segment.intensity.score * 2), 4, 13);
+    const root = chooseJazzBassPitch(segment.chord.rootPc, previousBass, 42);
+    const fifth = nearestPitchForClass((segment.chord.rootPc + 7) % 12, root + 4, 33, 56);
+    const nextRoot = chooseJazzBassPitch(nextChord.rootPc, root, 42);
+    const pattern = strength === "strong"
+      ? [[0, root], [q + e, fifth], [q * 2, root], [q * 3 + e, chooseJazzApproachPitch(fifth, nextRoot, segment.chord)]]
+      : [[0, root], [q * 2, fifth]];
+    const active = pattern.filter(([offset]) => offset < segment.duration);
+    return active.map(([offset, midi], index) => {
+      const nextOffset = active[index + 1]?.[0] ?? segment.duration;
+      const desired = strength === "strong" ? e - gap : (strength === "light" ? q * 2 - gap : q + e - gap);
+      return {
+        start: segment.start + offset,
+        duration: Math.max(1, Math.min(desired, nextOffset - offset - gap, segment.duration - offset)),
+        midi,
+        volume: clamp(volume + (index === 0 ? 1 : 0), 3, 14)
+      };
+    });
+  }
+
+  function buildRockBassSegments(segment, nextChord, strength, previousBass, baseVolume) {
+    const q = durationUnits(4, 0);
+    const e = durationUnits(8, 0);
+    const gap = durationUnits(64, 0);
+    const step = strength === "light" ? q : e;
+    const volume = clamp(Math.round(baseVolume + 2 + segment.intensity.score * 2), 5, 15);
+    const root = chooseJazzBassPitch(segment.chord.rootPc, previousBass, 40);
+    const fifth = nearestPitchForClass((segment.chord.rootPc + 7) % 12, root + 5, 31, 56);
+    const octave = root + 12 <= 59 ? root + 12 : root;
+    const nextRoot = chooseJazzBassPitch(nextChord.rootPc, root, 40);
+    const result = [];
+    let index = 0;
+    for (let offset = 0; offset < segment.duration; offset += step, index++) {
+      let midi = index % 4 === 2 ? fifth : (strength === "strong" && index % 4 === 3 ? octave : root);
+      if (offset + step >= segment.duration && strength === "strong") midi = chooseJazzApproachPitch(midi, nextRoot, segment.chord);
+      result.push({ start: segment.start + offset, duration: Math.max(1, Math.min(step - gap, segment.duration - offset)), midi, volume: clamp(volume + (index % 4 === 0 ? 1 : 0), 4, 15) });
+    }
+    return result;
+  }
+
+  function buildFunkBassSegments(segment, nextChord, strength, previousBass, baseVolume) {
+    const q = durationUnits(4, 0);
+    const e = durationUnits(8, 0);
+    const s = durationUnits(16, 0);
+    const volume = clamp(Math.round(baseVolume + 2 + segment.intensity.score * 2), 5, 15);
+    const root = chooseJazzBassPitch(segment.chord.rootPc, previousBass, 41);
+    const fifth = nearestPitchForClass((segment.chord.rootPc + 7) % 12, root + 4, 31, 57);
+    const octave = root + 12 <= 59 ? root + 12 : root;
+    const nextRoot = chooseJazzBassPitch(nextChord.rootPc, root, 41);
+    const pattern = strength === "light"
+      ? [[0, root], [q + e, octave], [q * 3, fifth]]
+      : strength === "strong"
+        ? [[0, root], [e, octave], [q + s, fifth], [q + e + s, octave], [q * 2 + e, root], [q * 3 + s, chooseJazzApproachPitch(fifth, nextRoot, segment.chord)]]
+        : [[0, root], [e + s, octave], [q + e, fifth], [q * 2 + s, root], [q * 3 + e, octave]];
+    return pattern.filter(([offset]) => offset < segment.duration).map(([offset, midi], index) => ({
+      start: segment.start + offset,
+      duration: Math.max(1, Math.min(strength === "light" ? e : s * 2, segment.duration - offset)),
+      midi,
+      volume: clamp(volume + (index === 0 ? 1 : 0), 4, 15)
+    }));
+  }
+
+  function buildJazzAccompanimentParts(chordPlan, options) {
+    const strength = options.strength;
+    const voiceCount = strength === "light" ? 2 : (strength === "strong" ? 4 : 3);
+    const voiceSegments = Array.from({ length: 4 }, () => []);
+    const bassSegments = [];
+    let previousVoicing = null;
+    let previousBass = null;
+
+    for (let i = 0; i < chordPlan.length; i++) {
+      const segment = chordPlan[i];
+      const nextChord = chordPlan[i + 1]?.chord || segment.chord;
+      const voicing = chooseJazzVoicing(segment.chord, voiceCount, options.medianPitch, previousVoicing, strength);
+      previousVoicing = voicing;
+      const compVolume = clamp(Math.round(options.baseVolume + segment.intensity.score * 3 + (strength === "strong" ? 1 : 0)), 3, 13);
+      const hits = buildJazzCompingHits(segment, strength);
+
+      for (let voice = 0; voice < voiceCount; voice++) {
+        for (const hit of hits) {
+          voiceSegments[voice].push({
+            start: segment.start + hit.offset,
+            duration: Math.min(hit.duration, segment.end - (segment.start + hit.offset)),
+            midi: voicing[voice],
+            volume: clamp(compVolume + (voice === voiceCount - 1 ? -1 : 0), 2, 13)
+          });
+        }
+      }
+
+      const bass = buildJazzBassSegments(segment, nextChord, strength, previousBass, options.baseVolume);
+      if (bass.length) previousBass = bass[bass.length - 1].midi;
+      bassSegments.push(...bass);
+    }
+
+    const parts = [];
+    for (let voice = 0; voice < 4; voice++) parts.push(noteSegmentsToEvents(voiceSegments[voice], options.songEnd));
+    parts.push(noteSegmentsToEvents(bassSegments, options.songEnd));
+
+    // 출력은 화음1~화음4 + 화음5(베이스) 순서다.
+    return parts;
+  }
+
+  function buildJazzCompingHits(segment, strength) {
+    const q = durationUnits(4, 0);
+    const e = durationUnits(8, 0);
+    const len = segment.duration;
+    const intensity = segment.intensity.score;
+    let offsets;
+    let duration;
+
+    if (strength === "light") {
+      offsets = intensity < 0.22 ? [0] : [q, Math.min(len - e, q * 3)];
+      duration = e;
+    } else if (strength === "strong") {
+      offsets = intensity < 0.2 ? [0, q * 2] : [e, q + e, q * 2, q * 3 + e];
+      duration = Math.max(durationUnits(16, 0), e - durationUnits(32, 0));
+    } else {
+      offsets = intensity < 0.2 ? [0, q * 2] : [e, q * 2, Math.min(len - e, q * 3 + e)];
+      duration = e;
+    }
+
+    const unique = [];
+    const seen = new Set();
+    for (const raw of offsets) {
+      const offset = Math.round(raw);
+      if (offset < 0 || offset >= len || seen.has(offset)) continue;
+      seen.add(offset);
+      const available = len - offset;
+      if (available < durationUnits(64, 0)) continue;
+      unique.push({ offset, duration: Math.max(durationUnits(64, 0), Math.min(duration, available)) });
+    }
+    return unique;
+  }
+
+  function chooseJazzVoicing(chord, voiceCount, melodyMedian, previousVoicing, strength) {
+    const qualityGuide = {
+      maj7: [4, 11, 14, 21],
+      min7: [3, 10, 14, 19],
+      dom7: [4, 10, 14, 21],
+      m7b5: [3, 10, 13, 17],
+      dim7: [3, 9, 15, 18]
+    };
+    const intervals = qualityGuide[chord.quality] || qualityGuide.maj7;
+    const selectedIntervals = intervals.slice(0, voiceCount);
+    const upperCap = Math.max(62, Math.min(88, Math.round(melodyMedian) - 1));
+    const centers = voiceCount === 2
+      ? [melodyMedian - 16, melodyMedian - 9]
+      : voiceCount === 3
+        ? [melodyMedian - 19, melodyMedian - 13, melodyMedian - 7]
+        : [melodyMedian - 22, melodyMedian - 16, melodyMedian - 10, melodyMedian - 5];
+    const pitches = [];
+
+    for (let i = 0; i < selectedIntervals.length; i++) {
+      const pc = (chord.rootPc + selectedIntervals[i]) % 12;
+      const previous = previousVoicing?.[i];
+      const target = Number.isFinite(previous) ? previous : centers[i];
+      let pitch = nearestPitchForClass(pc, target, 40, upperCap);
+      if (i > 0) {
+        while (pitch <= pitches[i - 1] + 2 && pitch + 12 <= upperCap) pitch += 12;
+        while (pitch > upperCap && pitch - 12 > pitches[i - 1] + 2) pitch -= 12;
+      }
+      pitches.push(pitch);
+    }
+
+    if (strength === "strong" && pitches.length >= 4 && pitches[3] - pitches[0] > 26) pitches[3] -= 12;
+    return pitches;
+  }
+
+  function buildJazzBassSegments(segment, nextChord, strength, previousBass, baseVolume) {
+    const q = durationUnits(4, 0);
+    const h = durationUnits(2, 0);
+    const volume = clamp(Math.round(baseVolume + 1 + segment.intensity.score * 2), 4, 14);
+    const result = [];
+    const root = chooseJazzBassPitch(segment.chord.rootPc, previousBass, 43);
+    const nextRoot = chooseJazzBassPitch(nextChord.rootPc, root, 43);
+
+    if (strength === "light") {
+      const firstDur = Math.min(h - durationUnits(32, 0), segment.duration);
+      result.push({ start: segment.start, duration: Math.max(1, firstDur), midi: root, volume });
+      if (segment.duration > h) {
+        const fifth = nearestPitchForClass((segment.chord.rootPc + 7) % 12, root + 3, 34, 55);
+        result.push({ start: segment.start + h, duration: Math.max(1, Math.min(h - durationUnits(32, 0), segment.end - (segment.start + h))), midi: fifth, volume: clamp(volume - 1, 3, 14) });
+      }
+      return result;
+    }
+
+    const beatCount = Math.max(1, Math.floor(segment.duration / q));
+    for (let beat = 0; beat < beatCount; beat++) {
+      const start = segment.start + beat * q;
+      const isLast = beat === beatCount - 1;
+      let pitch;
+      if (beat === 0) pitch = root;
+      else if (isLast) pitch = chooseJazzApproachPitch(previousBass ?? root, nextRoot, segment.chord);
+      else if (beat % 2 === 1) pitch = nearestPitchForClass((segment.chord.rootPc + (segment.chord.quality === "min7" ? 3 : 4)) % 12, root + 4, 34, 57);
+      else pitch = nearestPitchForClass((segment.chord.rootPc + 7) % 12, root + 6, 34, 57);
+      if (strength === "strong" && beat === 2 && segment.intensity.score > 0.55) pitch = root + 12 <= 59 ? root + 12 : root;
+      result.push({
+        start,
+        duration: Math.max(1, Math.min(q - durationUnits(32, 0), segment.end - start)),
+        midi: pitch,
+        volume: clamp(volume + (beat === 0 ? 1 : 0), 3, 14)
+      });
+      previousBass = pitch;
+    }
+    return result;
+  }
+
+  function chooseJazzApproachPitch(previous, nextRoot, chord) {
+    const candidates = [nextRoot - 1, nextRoot + 1, nextRoot - 2, nextRoot + 2, nearestPitchForClass((chord.rootPc + 7) % 12, nextRoot, 34, 59)]
+      .filter(pitch => pitch >= 34 && pitch <= 59);
+    candidates.sort((a, b) => Math.abs(a - previous) - Math.abs(b - previous) || Math.abs(a - nextRoot) - Math.abs(b - nextRoot));
+    return candidates[0] ?? nextRoot;
+  }
+
+  function chooseJazzBassPitch(pc, previous, center) {
+    const target = Number.isFinite(previous) ? previous : center;
+    const candidates = [];
+    for (let midi = 34; midi <= 55; midi++) if (midi % 12 === pc) candidates.push(midi);
+    candidates.sort((a, b) => Math.abs(a - target) - Math.abs(b - target) || Math.abs(a - center) - Math.abs(b - center));
+    return candidates[0] ?? 43;
+  }
+
+  function nearestPitchForClass(pc, target, min, max) {
+    const normalizedPc = ((pc % 12) + 12) % 12;
+    let best = null;
+    for (let midi = min; midi <= max; midi++) {
+      if (((midi % 12) + 12) % 12 !== normalizedPc) continue;
+      const score = Math.abs(midi - target);
+      if (!best || score < best.score) best = { midi, score };
+    }
+    return best?.midi ?? clamp(Math.round(target), min, max);
+  }
+
+  function noteSegmentsToEvents(segments, songEnd) {
+    const sorted = [...(segments || [])]
+      .filter(segment => Number.isFinite(segment.start) && Number.isFinite(segment.duration) && segment.duration > 0 && Number.isFinite(segment.midi))
+      .sort((a, b) => a.start - b.start || a.midi - b.midi);
+    if (!sorted.length) return [];
+    const events = [];
+    let cursor = 0;
+    for (const segment of sorted) {
+      let start = Math.max(0, Math.round(segment.start));
+      let duration = Math.max(1, Math.round(segment.duration));
+      if (start < cursor) {
+        const cut = cursor - start;
+        start = cursor;
+        duration -= cut;
+      }
+      if (duration <= 0 || start >= songEnd) continue;
+      duration = Math.min(duration, Math.max(0, Math.round(songEnd - start)));
+      if (start > cursor) events.push({ type: "rest", start: cursor, duration: start - cursor });
+      events.push({ type: "note", start, duration, midi: clamp(segment.midi, 0, 127), volume: clamp(segment.volume, 0, 15) });
+      cursor = start + duration;
+    }
+    if (cursor < songEnd) events.push({ type: "rest", start: cursor, duration: Math.round(songEnd - cursor) });
+    return mergeAdjacentRests(normalizeEventStarts(events));
+  }
+
+  function medianNumber(values, fallback = 0) {
+    const sorted = Array.from(values || []).filter(Number.isFinite).sort((a, b) => a - b);
+    if (!sorted.length) return fallback;
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
+
   function countShortRestsMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
@@ -1585,5 +2483,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = { optimizeMml, optimizePart, countShortRestsMml, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages };
+  window.MabiOptimizer = { optimizeMml, optimizePart, arrangeGenreMml, countShortRestsMml, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages };
 })();

@@ -2274,3 +2274,17 @@ iframe[src*="docs.google.com/picker"],
 iframe[src*="apis.google.com/picker"] {
   z-index: 2147483001 !important;
 }
+
+/* v4.3 genre arrangement */
+.genre-arrange-dialog { max-width: min(440px, calc(100vw - 32px)); }
+.genre-arrange-note {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 11px;
+  background: var(--input-bg);
+}
+.genre-arrange-note strong { color: var(--text); font-size: 13px; }
+.genre-arrange-note span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+#genreArrangeStatus:empty { display: none; }

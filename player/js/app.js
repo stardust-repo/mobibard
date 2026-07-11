@@ -75,7 +75,7 @@
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { musicXmlToMidiBytes } = window.MabiMusicXml || {};
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml } = window.MabiMml;
-  const { optimizeMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages } = window.MabiOptimizer;
+  const { optimizeMml, arrangeGenreMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
   const $ = (id) => document.getElementById(id);
@@ -158,6 +158,16 @@
   const leadingSilenceSeconds = $("leadingSilenceSeconds");
   const leadingSilenceApply = $("leadingSilenceApply");
   const leadingSilenceCancel = $("leadingSilenceCancel");
+  const genreArrangeBtn = $("genreArrangeBtn");
+  const genreArrangeDialog = $("genreArrangeDialog");
+  const genreArrangeGenre = $("genreArrangeGenre");
+  const genreArrangeStrength = $("genreArrangeStrength");
+  const genreArrangeMelodyPart = $("genreArrangeMelodyPart");
+  const genreArrangeStatus = $("genreArrangeStatus");
+  const genreArrangeRuleTitle = $("genreArrangeRuleTitle");
+  const genreArrangeRuleText = $("genreArrangeRuleText");
+  const genreArrangeApply = $("genreArrangeApply");
+  const genreArrangeCancel = $("genreArrangeCancel");
   const midiConvertDialog = $("midiConvertDialog");
   const midiConvertTitle = $("midiConvertTitle");
   const midiConvertSummary = $("midiConvertSummary");
@@ -374,6 +384,10 @@
     leadingSilenceBtn?.addEventListener("click", openLeadingSilenceDialog);
     leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
     leadingSilenceCancel?.addEventListener("click", () => leadingSilenceDialog?.close());
+    genreArrangeBtn?.addEventListener("click", openGenreArrangeDialog);
+    genreArrangeGenre?.addEventListener("change", updateGenreArrangeDescription);
+    genreArrangeApply?.addEventListener("click", () => void applyGenreArrangementFromDialog());
+    genreArrangeCancel?.addEventListener("click", () => genreArrangeDialog?.close());
     partSoundBtn?.addEventListener("click", () => void openPartSoundDialog());
     partSoundCancel?.addEventListener("click", () => partSoundDialog?.close());
     partSoundApply?.addEventListener("click", () => applyPartSoundDialog());
@@ -5729,6 +5743,135 @@ ${shortError(err)}`);
     } catch (err) {
       showDialog("시작 공백 설정 실패", shortError(err));
     }
+  }
+
+  const GENRE_ARRANGE_INFO = {
+    jazz: {
+      label: "재즈",
+      title: "재즈 편곡 규칙",
+      detail: "7th 코드 · 보이스 리딩 · 싱코페이션 · 워킹 베이스",
+      completion: "7th 코드 보이싱, 싱코페이션 컴핑, 워킹 베이스"
+    },
+    ballad: {
+      label: "발라드",
+      title: "발라드 편곡 규칙",
+      detail: "부드러운 add9 코드 · 긴 패드 · 절제된 루트/5도 베이스",
+      completion: "긴 코드 패드, 부드러운 재타격, 루트와 5도 중심 베이스"
+    },
+    bossa: {
+      label: "보사노바",
+      title: "보사노바 편곡 규칙",
+      detail: "7th 코드 · 엇박 컴핑 · 루트/5도 교대 베이스",
+      completion: "보사노바 엇박 컴핑과 루트·5도 교대 베이스"
+    },
+    rock: {
+      label: "록",
+      title: "록 편곡 규칙",
+      detail: "파워 코드 · 8비트 드라이브 · 강한 루트/옥타브 베이스",
+      completion: "파워 코드, 8비트 리듬, 루트·5도·옥타브 베이스"
+    },
+    funk: {
+      label: "펑크",
+      title: "펑크 편곡 규칙",
+      detail: "짧은 코드 스탭 · 16비트 싱코페이션 · 옥타브 베이스",
+      completion: "짧은 싱코페이션 코드 스탭과 옥타브 중심 베이스"
+    }
+  };
+
+  function updateGenreArrangeDescription() {
+    const genre = genreArrangeGenre?.value || "jazz";
+    const info = GENRE_ARRANGE_INFO[genre] || GENRE_ARRANGE_INFO.jazz;
+    if (genreArrangeRuleTitle) genreArrangeRuleTitle.textContent = info.title;
+    if (genreArrangeRuleText) genreArrangeRuleText.textContent = info.detail;
+  }
+
+  function openGenreArrangeDialog() {
+    if (genreArrangeStatus) genreArrangeStatus.textContent = "";
+    if (genreArrangeGenre && !Object.prototype.hasOwnProperty.call(GENRE_ARRANGE_INFO, genreArrangeGenre.value)) {
+      genreArrangeGenre.value = "jazz";
+    }
+    if (genreArrangeStrength && !["light", "normal", "strong"].includes(genreArrangeStrength.value)) {
+      genreArrangeStrength.value = "normal";
+    }
+    if (genreArrangeMelodyPart && !["auto", "0", "1", "2", "3", "4", "5"].includes(genreArrangeMelodyPart.value)) {
+      genreArrangeMelodyPart.value = "auto";
+    }
+    updateGenreArrangeDescription();
+    if (genreArrangeDialog?.showModal) {
+      genreArrangeDialog.showModal();
+      genreArrangeGenre?.focus();
+      return;
+    }
+    applyGenreArrangement({ genre: "jazz", strength: "normal", melodyPartIndex: null });
+  }
+
+  async function applyGenreArrangementFromDialog() {
+    if (!genreArrangeApply || genreArrangeApply.disabled) return;
+    const melodyValue = genreArrangeMelodyPart?.value || "auto";
+    const options = {
+      genre: genreArrangeGenre?.value || "jazz",
+      strength: genreArrangeStrength?.value || "normal",
+      melodyPartIndex: melodyValue === "auto" ? null : Number(melodyValue)
+    };
+
+    genreArrangeApply.disabled = true;
+    if (genreArrangeCancel) genreArrangeCancel.disabled = true;
+    if (genreArrangeStatus) {
+      const genreLabel = GENRE_ARRANGE_INFO[options.genre]?.label || "선택한 장르";
+      genreArrangeStatus.textContent = `멜로디와 코드를 분석해 ${genreLabel} 스타일로 편곡하고 있습니다.`;
+    }
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
+    try {
+      const result = applyGenreArrangement(options, { closeDialog: false, showCompletion: false });
+      genreArrangeDialog?.close();
+      showGenreArrangementResult(result);
+    } catch (err) {
+      if (genreArrangeStatus) genreArrangeStatus.textContent = shortError(err);
+      showDialog("장르 편곡 실패", shortError(err));
+    } finally {
+      genreArrangeApply.disabled = false;
+      if (genreArrangeCancel) genreArrangeCancel.disabled = false;
+    }
+  }
+
+  function applyGenreArrangement(options = {}, behavior = {}) {
+    if (typeof arrangeGenreMml !== "function") throw new Error("장르 편곡 모듈을 불러오지 못했습니다.");
+    stopPlayback(false);
+    const result = arrangeGenreMml(normalizeMmlForDisplay(mainMml.value), {
+      genre: options.genre || "jazz",
+      strength: options.strength || "normal",
+      melodyPartIndex: options.melodyPartIndex
+    });
+    setMainMml(result.mml);
+    flashButton(genreArrangeBtn, "편곡 완료");
+    trackAnalytics("genre_arrange_apply", {
+      genre: result.genre,
+      strength: result.strength,
+      melody_part: result.melodyPartIndex + 1,
+      chord_count: result.chordCount
+    });
+    if (behavior.closeDialog !== false) genreArrangeDialog?.close();
+    if (behavior.showCompletion !== false) showGenreArrangementResult(result);
+    return result;
+  }
+
+  function showGenreArrangementResult(result) {
+    const strengthLabels = { light: "가볍게", normal: "보통", strong: "강하게" };
+    const melodyLabel = PART_LABELS[result.melodyPartIndex] || `${result.melodyPartIndex + 1}채널`;
+    const info = GENRE_ARRANGE_INFO[result.genre] || GENRE_ARRANGE_INFO.jazz;
+    showDialog(
+      "장르 편곡 완료",
+      `${melodyLabel}를 멜로디로 사용해 ${info.label} 스타일로 편곡했습니다.
+` +
+      `감지 조성: ${result.key?.label || "확인 불가"}
+` +
+      `변형 강도: ${strengthLabels[result.strength] || result.strength}
+` +
+      `코드 구간: ${Number(result.chordCount || 0).toLocaleString("ko-KR")}개
+` +
+      `화음1~5는 ${info.completion} 반주로 교체했습니다.`
+    );
   }
 
   function parseRestTrimLimit(value, options = {}) {

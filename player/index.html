@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>모비바드 v4.1</title>
+  <title>모비바드 v4.3</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
   <link rel="stylesheet" href="styles.css" />
@@ -16,7 +16,7 @@
       <div class="app-brand-line">
         <h1 class="app-main-title">모비바드</h1>
         <div class="app-title-meta">
-          <span class="app-subtitle">마비노기 MML 생성기 v4.1</span>
+          <span class="app-subtitle">마비노기 MML 생성기 v4.3</span>
           <span class="import-format-list" title="불러오기 지원 포맷">지원 파일: MIDI · MusicXML · MMI · 3MLE</span>
         </div>
       </div>
@@ -128,7 +128,7 @@
 
     <div class="editor-tool-row" aria-label="편집 편의 기능">
       <div class="editor-tools-left">
-        <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="bulkVolumeBtn" class="ghost" type="button">볼륨 조절</button><button id="leadingSilenceBtn" class="ghost" type="button">시작 공백 시간</button>
+        <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="bulkVolumeBtn" class="ghost" type="button">볼륨 조절</button><button id="leadingSilenceBtn" class="ghost" type="button">시작 공백 시간</button><button id="genreArrangeBtn" class="ghost" type="button">장르 편곡</button>
       </div>
     </div>
 
@@ -368,6 +368,46 @@
     <div class="dialog-actions">
       <button id="leadingSilenceCancel" type="button">취소</button>
       <button id="leadingSilenceApply" class="primary" type="button">적용</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="genreArrangeDialog" class="mml-dialog genre-arrange-dialog">
+  <form id="genreArrangeForm" class="dialog-card" method="dialog">
+    <h3>장르 편곡</h3>
+    <p>선택한 멜로디는 유지하고 화음1~5를 선택한 장르의 반주로 새로 만듭니다. 현재 화음 채널 내용은 교체됩니다.</p>
+    <label class="dialog-field" for="genreArrangeGenre">편곡 장르</label>
+    <select id="genreArrangeGenre">
+      <option value="jazz" selected>재즈</option>
+      <option value="ballad">발라드</option>
+      <option value="bossa">보사노바</option>
+      <option value="rock">록</option>
+      <option value="funk">펑크</option>
+    </select>
+    <label class="dialog-field" for="genreArrangeStrength">변형 강도</label>
+    <select id="genreArrangeStrength">
+      <option value="light">가볍게</option>
+      <option value="normal" selected>보통</option>
+      <option value="strong">강하게</option>
+    </select>
+    <label class="dialog-field" for="genreArrangeMelodyPart">멜로디 기준 채널</label>
+    <select id="genreArrangeMelodyPart">
+      <option value="auto" selected>자동 감지</option>
+      <option value="0">멜로디</option>
+      <option value="1">화음1</option>
+      <option value="2">화음2</option>
+      <option value="3">화음3</option>
+      <option value="4">화음4</option>
+      <option value="5">화음5</option>
+    </select>
+    <div class="genre-arrange-note">
+      <strong id="genreArrangeRuleTitle">재즈 편곡 규칙</strong>
+      <span id="genreArrangeRuleText">7th 코드 · 보이스 리딩 · 싱코페이션 · 워킹 베이스</span>
+    </div>
+    <div id="genreArrangeStatus" class="dialog-small" role="status" aria-live="polite"></div>
+    <div class="dialog-actions">
+      <button id="genreArrangeCancel" type="button">취소</button>
+      <button id="genreArrangeApply" class="primary" type="button">편곡</button>
     </div>
   </form>
 </dialog>

@@ -1,6 +1,8 @@
-# 마비노기 MML 생성기 샘플 - 모비바드 v4.1
+# 마비노기 MML 생성기 샘플 - 모비바드 v4.3
 
 공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MusicXML/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
+
+`v4.3`에서는 MML 편집 도구에 시범 기능인 `장르 편곡`을 추가했습니다. 선택하거나 자동 감지한 멜로디를 유지한 채 화음1~5를 `재즈` / `발라드` / `보사노바` / `록` / `펑크` 스타일 반주로 다시 만듭니다. 변형 강도는 `가볍게` / `보통` / `강하게` 중에서 선택할 수 있습니다.
 
 `v4.1`에서는 MIDI/MusicXML 변환 설정에 시범 기능인 생성 파트를 추가했습니다. 선택한 선율 악기를 분석해 코드 진행과 아르페지오 반주를 규칙 기반으로 생성할 수 있으며, 생성 파트에서는 겹침 병합 대신 `자동` / `잔잔` / `보통` / `경쾌` 반주 패턴을 고를 수 있습니다. 각 패턴은 선택한 성향을 유지하되, 선율이 매우 비거나 격해지는 구간에서는 한 단계 안에서 일시적으로 보정됩니다. 기존 v4.0처럼 진행 슬라이더가 가리키는 시간에 실제로 울리는 MML 음표 코드와 해당 위치의 쉼표 코드를 편집창 안에서 초록색 상자로 표시합니다. 재생 중이 아니어도 현재 위치의 음표/쉼표 토큰을 표시하며, 전체 MML 탭과 개별 파트 탭 모두 같은 기준을 따릅니다. 전체 MML 탭의 음소거는 6개 채널 상태를 일괄 전환하며, 음소거된 채널도 피아노롤에서는 반투명 점선 노트와 음소거 표식으로 계속 확인할 수 있습니다.
 
@@ -39,7 +41,7 @@ mabinogi_mml_public/
    ├─ midi-to-mml.js           # MIDI 파서/분석/미리듣기 이벤트/6채널 MML 변환
    ├─ musicxml-to-midi.js      # MusicXML/MXL 파서와 MIDI 이벤트 변환 브리지
    ├─ mml-parser.js            # MML@ 분해, 파트 파싱, 글로벌 템포맵, 재생 스케줄 생성
-   ├─ mml-optimizer.js         # 자동 최적화, 쉼표 삭제, 볼륨 조절, 시작 공백, 나눠복사
+   ├─ mml-optimizer.js         # 자동 최적화, 장르 편곡, 쉼표 삭제, 볼륨 조절, 시작 공백, 나눠복사
    ├─ sf2-sampler.js           # SF2 파싱, 노트 준비, look-ahead 오디오 스케줄링
    ├─ google-config.js         # Google OAuth/Picker/API Key 설정
    ├─ firebase-config.js       # Firebase Web App 설정 객체
@@ -57,7 +59,7 @@ mabinogi_mml_public/
 | `js/midi-to-mml.js` | `window.MabiMidi` | `analyzeMidi`, `midiToMml`, `buildMidiInstrumentPreview`, `buildMidiFilePreview` |
 | `js/musicxml-to-midi.js` | `window.MabiMusicXml` | `musicXmlToMidiBytes`, `extractMusicXmlText` |
 | `js/mml-parser.js` | `window.MabiMml` | `parseMabinogiMml`, `splitMmlParts`, `splitMmlPartsDetailed`, `parseMmlPart`, `buildSchedule`, `beatToSeconds`, `composeMml` |
-| `js/mml-optimizer.js` | `window.MabiOptimizer` | `optimizeMml`, `optimizePart`, `trimShortRestsMml`, `adjustVolumesMml`, `addLeadingSilenceMml`, `splitMmlPages` |
+| `js/mml-optimizer.js` | `window.MabiOptimizer` | `optimizeMml`, `optimizePart`, `arrangeGenreMml`, `trimShortRestsMml`, `adjustVolumesMml`, `addLeadingSilenceMml`, `splitMmlPages` |
 | `js/sf2-sampler.js` | `window.MabiSf2` | `parseSoundFont`, `prepareNotes`, `schedulePreparedNotes`, `scheduleNotes` |
 | `js/firebase-analytics.js` | `window.MobibardAnalytics` | `logEvent`, `isReady`, `isEnabled`, `getStatus` |
 
@@ -69,7 +71,7 @@ mabinogi_mml_public/
 
 | 항목 | 값 / 위치 |
 |---|---|
-| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v4.1` |
+| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v4.3` |
 | MML 파트 수 | 최대 6개: `멜로디`, `화음1`~`화음5` (`app.js`의 `PART_LABELS`) |
 | 설정 localStorage prefix | `mobibard.player.` (`app.js`의 `PREF_PREFIX`) |
 | 기본 SF2 | `assets/Roland_SC-55.sf2` |
@@ -111,7 +113,7 @@ mabinogi_mml_public/
 - 진행 슬라이더가 가리키는 시간에 울리는 음표 코드와 해당 위치의 쉼표 코드가 초록색 상자로 표시됩니다. 재생 중이 아니어도 현재 위치 기준으로 표시됩니다.
 - 현재 탭 글자 수를 `1,234 자` 형식으로 표시합니다.
 - 전체 MML의 글자 수는 `MML@`, 쉼표, 세미콜론을 제외한 파트 내용 합계입니다.
-- `쉼표 삭제`, `볼륨 조절`, `시작 공백 시간` 편집 기능을 제공합니다.
+- `쉼표 삭제`, `볼륨 조절`, `시작 공백 시간`, `장르 편곡` 편집 기능을 제공합니다.
 - 사운드 폰트 선택, 자동/사용자 음색 프리셋, 채널별 음색 설정, 전체/채널 음소거를 제공합니다.
 
 ### 3. Dialog 목록
@@ -125,6 +127,7 @@ mabinogi_mml_public/
 | `restTrimDialog` | 짧은 쉼표 삭제 길이와 적용 채널 선택 |
 | `bulkVolumeDialog` | 볼륨 조절 변화량과 적용 채널 선택 |
 | `leadingSilenceDialog` | 시작 공백 초 단위 입력 |
+| `genreArrangeDialog` | 재즈/발라드/보사노바/록/펑크 장르, 변형 강도, 멜로디 기준 채널 선택 |
 | `splitCopyDialog` | 나눠복사 결과, 악보별 듣기/복사 |
 | `midiConvertDialog` | MIDI 변환 설정 안내, 채널 역할, 겹침 병합, 악기 선택, 미리 듣기, MIDI 듣기, 채널별 듣기, 악기별 듣기, 파일 다시 불러오기 |
 
@@ -496,7 +499,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
-- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v4.1`가 보이는지
+- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v4.3`가 보이는지
 - [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 MML 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
@@ -542,6 +545,19 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 ---
 
 ## 변경 이력
+
+### v4.3
+- 버전 표기를 `v4.3`으로 변경했습니다.
+- `시작 공백 시간` 오른쪽에 `장르 편곡` 버튼을 추가했습니다.
+- 현재 MML에서 멜로디 채널을 자동 감지하거나 직접 선택할 수 있는 편곡 Dialog를 추가했습니다.
+- 멜로디는 유지하고 화음1~5를 새 반주로 교체하는 장르 편곡 기능을 추가했습니다.
+- 지원 장르는 `재즈`, `발라드`, `보사노바`, `록`, `펑크`입니다.
+- 재즈는 7th 코드 보이싱·싱코페이션·워킹 베이스를 사용합니다.
+- 발라드는 add9 중심의 긴 코드 패드와 절제된 루트/5도 베이스를 사용합니다.
+- 보사노바는 엇박 코드 컴핑과 루트/5도 교대 베이스를 사용합니다.
+- 록은 파워 코드, 8비트 드라이브, 루트·5도·옥타브 베이스를 사용합니다.
+- 펑크는 짧은 16비트 코드 스탭과 싱코페이션 옥타브 베이스를 사용합니다.
+- 변형 강도 `가볍게` / `보통` / `강하게`를 제공합니다. 강도가 높을수록 코드 변경과 반주 밀도, 보이싱 수가 늘어납니다.
 
 ### v4.1
 - 버전 표기를 `v4.1`으로 변경했습니다.
