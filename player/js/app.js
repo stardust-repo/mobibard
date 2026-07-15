@@ -131,6 +131,18 @@
   const copyBtn = $("copyBtn");
   const pasteBtn = $("pasteBtn");
   const saveBtn = $("saveBtn");
+  const midiExtractBtn = $("midiExtractBtn");
+  const midiExtractDialog = $("midiExtractDialog");
+  const midiExtractClose = $("midiExtractClose");
+  const midiExtractDownloads = Array.from(document.querySelectorAll("[data-midi-extract-download]"));
+  const midiExtractSampleVideoLoad = $("midiExtractSampleVideoLoad");
+  const midiExtractSampleVideo = $("midiExtractSampleVideo");
+  const midiExtractSampleAudioLoad = $("midiExtractSampleAudioLoad");
+  const midiExtractSampleAudio = $("midiExtractSampleAudio");
+  const midiExtractSampleAudioStatus = $("midiExtractSampleAudioStatus");
+  const midiExtractSampleMidiPlay = $("midiExtractSampleMidiPlay");
+  const midiExtractSampleMidiAudio = $("midiExtractSampleMidiAudio");
+  const midiExtractSampleMidiStatus = $("midiExtractSampleMidiStatus");
   const splitCopyBtn = $("splitCopyBtn");
   const splitCopyDialog = $("splitCopyDialog");
   const splitCopyLimit = $("splitCopyLimit");
@@ -369,6 +381,35 @@
     splitCopyDialog?.addEventListener("close", () => stopMidiPreview());
     pasteBtn.addEventListener("click", () => void pasteVisibleMml());
     saveBtn.addEventListener("click", () => void saveVisibleMml());
+    midiExtractBtn?.addEventListener("click", openMidiExtractDialog);
+    midiExtractClose?.addEventListener("click", closeMidiExtractDialog);
+    midiExtractDialog?.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      closeMidiExtractDialog();
+    });
+    midiExtractDialog?.addEventListener("close", pauseMidiExtractSamples);
+    midiExtractSampleVideoLoad?.addEventListener("click", () => void playMidiExtractSampleVideo());
+    midiExtractSampleAudioLoad?.addEventListener("click", () => void playMidiExtractSampleAudio());
+    midiExtractSampleMidiPlay?.addEventListener("click", () => void playMidiExtractSampleMidiAudio());
+    midiExtractSampleVideo?.addEventListener("play", () => {
+      pauseMidiExtractSampleAudio();
+      pauseMidiExtractSampleMidiAudio();
+    });
+    midiExtractSampleAudio?.addEventListener("play", () => {
+      pauseMidiExtractSampleVideo();
+      pauseMidiExtractSampleMidiAudio();
+    });
+    midiExtractSampleMidiAudio?.addEventListener("play", () => {
+      pauseMidiExtractSampleVideo();
+      pauseMidiExtractSampleAudio();
+      stopPlayback(false);
+      stopMidiPreview();
+    });
+    for (const link of midiExtractDownloads) {
+      link.addEventListener("click", () => {
+        trackAnalytics("download_muscriptor_package", { platform: link.dataset.midiExtractDownload || "unknown" });
+      });
+    }
     restTrimBtn?.addEventListener("click", openRestTrimDialog);
     restTrimApply?.addEventListener("click", () => applyRestTrimFromDialog());
     restTrimCancel?.addEventListener("click", () => restTrimDialog?.close());
@@ -779,6 +820,158 @@
 
   function clearGoogleTokenCache() {
     removeLocalPrefOnly(GOOGLE_TOKEN_CACHE_PREF);
+  }
+
+  function openMidiExtractDialog() {
+    if (!midiExtractDialog) return;
+    const details = midiExtractDialog.querySelector(".midi-extract-details");
+    const card = midiExtractDialog.querySelector(".midi-extract-card");
+    if (details) details.open = false;
+    if (card) card.scrollTop = 0;
+    trackAnalytics("open_midi_extract_dialog");
+
+    if (midiExtractDialog.open) closeMidiExtractDialog();
+    if (typeof midiExtractDialog.showModal === "function") {
+      midiExtractDialog.showModal();
+    } else {
+      midiExtractDialog.setAttribute("open", "");
+    }
+    requestAnimationFrame(() => { if (card) card.scrollTop = 0; });
+  }
+
+  function closeMidiExtractDialog() {
+    if (!midiExtractDialog) return;
+    pauseMidiExtractSamples();
+    if (typeof midiExtractDialog.close === "function" && midiExtractDialog.open) {
+      midiExtractDialog.close();
+      return;
+    }
+    midiExtractDialog.removeAttribute("open");
+  }
+
+  async function playMidiExtractSampleVideo() {
+    if (!midiExtractSampleVideo || !midiExtractSampleVideoLoad) return;
+    pauseMidiExtractSampleAudio();
+    pauseMidiExtractSampleMidiAudio();
+    const source = String(midiExtractSampleVideoLoad.dataset.src || "").trim();
+    if (!source) return;
+    const firstLoad = !midiExtractSampleVideo.hasAttribute("src");
+    try {
+      midiExtractSampleVideoLoad.disabled = true;
+      midiExtractSampleVideoLoad.setAttribute("aria-busy", "true");
+      if (firstLoad) {
+        midiExtractSampleVideo.src = source;
+        midiExtractSampleVideo.load();
+      }
+      midiExtractSampleVideo.hidden = false;
+      await midiExtractSampleVideo.play();
+      midiExtractSampleVideoLoad.remove();
+      trackAnalytics("play_midi_extract_sample", { media_type: "video" });
+    } catch (err) {
+      if (firstLoad) {
+        midiExtractSampleVideo.removeAttribute("src");
+        try { midiExtractSampleVideo.load(); } catch (_) {}
+      }
+      midiExtractSampleVideo.hidden = true;
+      midiExtractSampleVideoLoad.hidden = false;
+      showDialog("샘플 영상 재생 실패", shortError(err));
+    } finally {
+      midiExtractSampleVideoLoad.disabled = false;
+      midiExtractSampleVideoLoad.removeAttribute("aria-busy");
+    }
+  }
+
+  async function playMidiExtractSampleAudio() {
+    if (!midiExtractSampleAudio || !midiExtractSampleAudioLoad) return;
+    pauseMidiExtractSampleVideo();
+    pauseMidiExtractSampleMidiAudio();
+    const source = String(midiExtractSampleAudioLoad.dataset.src || "").trim();
+    if (!source) return;
+    const firstLoad = !midiExtractSampleAudio.hasAttribute("src");
+    try {
+      midiExtractSampleAudioLoad.disabled = true;
+      midiExtractSampleAudioLoad.setAttribute("aria-busy", "true");
+      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = "입력 오디오를 불러오는 중입니다...";
+      if (firstLoad) {
+        midiExtractSampleAudio.src = source;
+        midiExtractSampleAudio.load();
+      }
+      midiExtractSampleAudio.hidden = false;
+      await midiExtractSampleAudio.play();
+      midiExtractSampleAudioLoad.remove();
+      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = "변환에 사용한 원본 오디오를 재생하고 있습니다.";
+      trackAnalytics("play_midi_extract_sample", { media_type: "audio" });
+    } catch (err) {
+      if (firstLoad) {
+        midiExtractSampleAudio.removeAttribute("src");
+        try { midiExtractSampleAudio.load(); } catch (_) {}
+      }
+      midiExtractSampleAudio.hidden = true;
+      midiExtractSampleAudioLoad.hidden = false;
+      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = "재생 버튼을 누르면 오디오 파일을 불러옵니다.";
+      showDialog("샘플 오디오 재생 실패", shortError(err));
+    } finally {
+      midiExtractSampleAudioLoad.disabled = false;
+      midiExtractSampleAudioLoad.removeAttribute("aria-busy");
+    }
+  }
+
+  function pauseMidiExtractSampleVideo() {
+    if (!midiExtractSampleVideo || midiExtractSampleVideo.paused) return;
+    try { midiExtractSampleVideo.pause(); } catch (_) {}
+  }
+
+  function pauseMidiExtractSampleAudio() {
+    if (!midiExtractSampleAudio || midiExtractSampleAudio.paused) return;
+    try { midiExtractSampleAudio.pause(); } catch (_) {}
+  }
+
+  function pauseMidiExtractSampleMidiAudio() {
+    if (!midiExtractSampleMidiAudio || midiExtractSampleMidiAudio.paused) return;
+    try { midiExtractSampleMidiAudio.pause(); } catch (_) {}
+  }
+
+  function pauseMidiExtractSamples() {
+    pauseMidiExtractSampleVideo();
+    pauseMidiExtractSampleAudio();
+    pauseMidiExtractSampleMidiAudio();
+  }
+
+  async function playMidiExtractSampleMidiAudio() {
+    if (!midiExtractSampleMidiAudio || !midiExtractSampleMidiPlay) return;
+    pauseMidiExtractSampleVideo();
+    pauseMidiExtractSampleAudio();
+    stopPlayback(false);
+    stopMidiPreview();
+    const source = String(midiExtractSampleMidiPlay.dataset.src || "").trim();
+    if (!source) return;
+    const firstLoad = !midiExtractSampleMidiAudio.hasAttribute("src");
+    try {
+      midiExtractSampleMidiPlay.disabled = true;
+      midiExtractSampleMidiPlay.setAttribute("aria-busy", "true");
+      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = "출력 MIDI 미리듣기를 불러오는 중입니다...";
+      if (firstLoad) {
+        midiExtractSampleMidiAudio.src = source;
+        midiExtractSampleMidiAudio.load();
+      }
+      midiExtractSampleMidiAudio.hidden = false;
+      await midiExtractSampleMidiAudio.play();
+      midiExtractSampleMidiPlay.remove();
+      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = "sample_out.mid의 변환 결과를 재생하고 있습니다.";
+      trackAnalytics("play_midi_extract_sample", { media_type: "midi_preview_audio" });
+    } catch (err) {
+      if (firstLoad) {
+        midiExtractSampleMidiAudio.removeAttribute("src");
+        try { midiExtractSampleMidiAudio.load(); } catch (_) {}
+      }
+      midiExtractSampleMidiAudio.hidden = true;
+      midiExtractSampleMidiPlay.hidden = false;
+      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = "재생 버튼을 누르면 sample_out.mid의 미리듣기 오디오를 불러옵니다.";
+      showDialog("샘플 MIDI 미리듣기 실패", shortError(err));
+    } finally {
+      midiExtractSampleMidiPlay.disabled = false;
+      midiExtractSampleMidiPlay.removeAttribute("aria-busy");
+    }
   }
 
   function saveGoogleTokenCache(response = {}) {
