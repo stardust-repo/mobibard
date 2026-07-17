@@ -60,7 +60,6 @@
     ["https://musescore.com/", "musescore"],
     ["https://www.vgmusic.com/", "vgmusic_https"]
   ]);
-  const MIDI_RESOURCE_LINK_IDS = new Set(["bitmidi", "ichigos", "midiex", "midisite", "musescore", "vgmusic_https"]);
   const ACTIVE_CODE_LOOKAHEAD_SEC = 0.012;
   const ACTIVE_CODE_RELEASE_SEC = 0.026;
   const PIANO_ROLL_MIN_KEY_SPAN = 24;
@@ -499,7 +498,6 @@
     updateCharCount();
     rebuildSchedulePreviewSilently();
     requestPianoRollRefresh(true);
-    trackAnalytics("mobibard_app_open", { version: "4_0" });
   }
 
   function trackAnalytics(eventName, params = {}) {
@@ -528,9 +526,6 @@
       try { opened.opener = null; } catch (_) {}
     }
     trackAnalytics("shortcut_link_open", { link: linkId });
-    if (MIDI_RESOURCE_LINK_IDS.has(linkId)) {
-      trackAnalytics("midi_resource_link_open", { site: linkId });
-    }
   }
 
   function analyticsFileType(nameOrExt) {
@@ -866,7 +861,6 @@
       midiExtractSampleVideo.hidden = false;
       await midiExtractSampleVideo.play();
       midiExtractSampleVideoLoad.remove();
-      trackAnalytics("play_midi_extract_sample", { media_type: "video" });
     } catch (err) {
       if (firstLoad) {
         midiExtractSampleVideo.removeAttribute("src");
@@ -900,7 +894,6 @@
       await midiExtractSampleAudio.play();
       midiExtractSampleAudioLoad.remove();
       if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = "변환에 사용한 원본 오디오를 재생하고 있습니다.";
-      trackAnalytics("play_midi_extract_sample", { media_type: "audio" });
     } catch (err) {
       if (firstLoad) {
         midiExtractSampleAudio.removeAttribute("src");
@@ -958,7 +951,6 @@
       await midiExtractSampleMidiAudio.play();
       midiExtractSampleMidiPlay.remove();
       if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = "sample_out.mid의 변환 결과를 재생하고 있습니다.";
-      trackAnalytics("play_midi_extract_sample", { media_type: "midi_preview_audio" });
     } catch (err) {
       if (firstLoad) {
         midiExtractSampleMidiAudio.removeAttribute("src");
@@ -1202,7 +1194,6 @@
       resetGoogleSessionState(true);
       googleSilentRestoreFailed = false;
       updateGoogleDriveControls("구글 로그아웃됨");
-      trackAnalytics("google_drive_logout");
       return;
     }
     try {
@@ -3140,7 +3131,7 @@ ${shortError(err)}`);
       return;
     }
 
-    trackAnalytics("preview_mml_selected", { channel_count: selectedParts.length });
+    trackAnalytics("preview_mml_start", { scope: "selected", channel_count: selectedParts.length });
     await playMmiImportPartsPreview(selectedParts, {
       button,
       statusText: `선택 ${selectedParts.length}/${MMI_IMPORT_MAX_CHANNELS}개 미리듣기 중...`,
@@ -3163,7 +3154,7 @@ ${shortError(err)}`);
       return;
     }
 
-    trackAnalytics("preview_mml_all", { channel_count: allParts.length });
+    trackAnalytics("preview_mml_start", { scope: "all", channel_count: allParts.length });
     await playMmiImportPartsPreview(allParts, {
       button,
       statusText: `전체 ${allParts.length}개 채널 미리듣기 중...`,
@@ -3299,7 +3290,7 @@ ${shortError(err)}`);
         button.setAttribute("aria-pressed", "true");
       }
       if (mmiImportStatus) mmiImportStatus.textContent = `${candidate.label || "선택 채널"} 미리듣기 중...`;
-      trackAnalytics("preview_mml_channel", { channel_index: Number(index) + 1 });
+      trackAnalytics("preview_mml_start", { scope: "channel", channel_count: 1 });
 
       await loadDefaultSf2IfNeeded();
       const ctx = await ensureAudioContext();
@@ -4340,7 +4331,7 @@ ${shortError(err)}`);
         midiConvertStatus.textContent = "현재 설정으로 MML 미리듣기를 준비 중입니다.";
         midiConvertStatus.hidden = false;
       }
-      trackAnalytics("preview_midi_selected", { source_type: pendingMidiImport?.sourceType || "midi", export_channels: Number(options.partCount || 0) });
+      trackAnalytics("preview_midi_start", { scope: "selected", source_type: pendingMidiImport?.sourceType || "midi", export_channels: Number(options.partCount || 0) });
       await loadDefaultSf2IfNeeded();
       const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, { ...options, sourceLabel });
       const normalized = normalizeImportedFullMml(result.mml);
@@ -4409,7 +4400,7 @@ ${shortError(err)}`);
         midiConvertStatus.textContent = `${PART_LABELS[sourceIndex]} 미리 듣기를 준비 중입니다.`;
         midiConvertStatus.hidden = false;
       }
-      trackAnalytics("preview_midi_export_channel", { channel_index: sourceIndex + 1 });
+      trackAnalytics("preview_midi_start", { scope: "export_channel", source_type: pendingMidiImport?.sourceType || "midi", export_channels: 1 });
       await loadDefaultSf2IfNeeded();
       const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
       const normalized = normalizeImportedFullMml(result.mml);
@@ -4468,7 +4459,7 @@ ${shortError(err)}`);
         midiConvertStatus.textContent = `${sourceLabel} 미리듣기를 준비 중입니다.`;
         midiConvertStatus.hidden = false;
       }
-      trackAnalytics("preview_midi_file", { source_type: pendingMidiImport?.sourceType || "midi" });
+      trackAnalytics("preview_midi_start", { scope: "source_file", source_type: pendingMidiImport?.sourceType || "midi" });
       await loadDefaultSf2IfNeeded();
       const preview = buildMidiFilePreview(pendingMidiImport.bytes, { maxSeconds: 45, tailSeconds: 1.0 });
       const ctx = await ensureAudioContext();
@@ -4540,7 +4531,7 @@ ${shortError(err)}`);
         button.disabled = true;
         button.textContent = "재생중";
       }
-      trackAnalytics("preview_midi_instrument");
+      trackAnalytics("preview_midi_start", { scope: "instrument", source_type: pendingMidiImport?.sourceType || "midi" });
       await loadDefaultSf2IfNeeded();
       const preview = buildMidiInstrumentPreview(pendingMidiImport.bytes, groupId, { maxSeconds: 8, tailSeconds: 0.75 });
       const ctx = await ensureAudioContext();
@@ -5235,7 +5226,6 @@ ${shortError(err)}`);
       playOffsetStart = currentOffset;
       isPlaying = true;
       trackAnalytics("playback_start", {
-        offset_sec: Math.max(0, Math.round(Number(currentOffset) || 0)),
         channel_count: analyticsChannelCount(mainMml.value)
       });
       updatePlayButton();
@@ -5925,6 +5915,10 @@ ${shortError(err)}`);
       setMainMml(result.mml);
       flashButton(leadingSilenceBtn, "설정 완료");
       const removedSeconds = Math.max(0, Number(result.removedLeadingBeats || 0) / 2);
+      trackAnalytics("leading_silence_apply", {
+        seconds,
+        removed_seconds: Number(removedSeconds.toFixed(2))
+      });
       const addedSeconds = Math.max(0, Number(result.addedBeats || 0) / 2);
       const removedLine = removedSeconds > 0
         ? `\n기존 첫 음 앞 공통 공백 ${formatSecondCount(removedSeconds)}를 제거했습니다.`
@@ -6114,7 +6108,6 @@ ${shortError(err)}`);
     googleDriveMmlFileId = "";
     googleDriveMmlFileName = "";
     flashButton(pasteBtn, "붙여넣기 완료");
-    trackAnalytics("paste_mml", { channel_count: analyticsChannelCount(mainMml.value) });
   }
 
   async function copyVisibleMml() {
@@ -6276,7 +6269,7 @@ ${shortError(err)}`);
       stopPlayback(false);
       stopMidiPreview();
       if (button) setSplitPreviewButton(button);
-      trackAnalytics("preview_split_page", { page_index: Number(page?.index || 0) });
+      trackAnalytics("preview_split_page");
       await loadDefaultSf2IfNeeded();
       const ctx = await ensureAudioContext();
       const parsed = parseMabinogiMml(text);
@@ -6317,7 +6310,7 @@ ${shortError(err)}`);
     try {
       await navigator.clipboard.writeText(text);
       showDialog("복사 완료", buildSplitCopyPageMessage(page));
-      trackAnalytics("copy_split_page", { page_index: Number(page?.index || 0) });
+      trackAnalytics("copy_split_page");
     } catch (_) {
       const ta = document.createElement("textarea");
       ta.value = text;
@@ -6328,7 +6321,7 @@ ${shortError(err)}`);
       try {
         document.execCommand("copy");
         showDialog("복사 완료", buildSplitCopyPageMessage(page));
-        trackAnalytics("copy_split_page", { page_index: Number(page?.index || 0) });
+        trackAnalytics("copy_split_page");
       } catch (err) {
         showDialog("복사 실패", "자동 복사가 막혔습니다. Dialog의 악보를 직접 선택해 복사해 주세요.");
       } finally {

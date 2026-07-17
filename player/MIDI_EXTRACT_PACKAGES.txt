@@ -6,4 +6,3 @@ assets/midi-extract/packages/muscriptor_mac.zip	40038 bytes	SHA-256 f363cafb9e76
 assets/midi-extract/audio_to_midi.mp4	11308232 bytes	SHA-256 4439d118401056d0cf587c48127ecc0ca2aaa48900ac19b02c0ce9310be53450
 assets/midi-extract/sample_in.mp3	4196480 bytes	SHA-256 79e520c59095cab0af5a29677ea60b57f9218228e31d43d39cb692991ef8278e
 assets/midi-extract/sample_out.mid	19099 bytes	SHA-256 20c464f3afc10fe7af334116d4a1276263610d09b4e3fd56f496a8b5d64307fa
-assets/midi-extract/sample_out_preview.mp3	3487076 bytes	SHA-256 5f911d481ff5fcd485508239debb106031b5b7889e5e81c9941e8bf58ab59ed5

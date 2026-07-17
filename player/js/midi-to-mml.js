@@ -384,7 +384,7 @@
       bpm: t.bpm
     })));
     const firstSec = gridToSeconds(firstGrid, tempoGridEvents);
-    const maxSeconds = Math.max(5, Math.min(180, Number(options.maxSeconds ?? options.seconds ?? 45) || 45));
+    const maxSeconds = Math.max(5, Math.min(900, Number(options.maxSeconds ?? options.seconds ?? 45) || 45));
     const tailSeconds = Math.max(0.25, Math.min(3, Number(options.tailSeconds ?? 1.0) || 1.0));
     const previewNotes = [];
     for (const n of notes) {

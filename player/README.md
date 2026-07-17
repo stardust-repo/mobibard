@@ -445,27 +445,26 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 ### 현재 기록하는 이벤트
 
-파일명이나 원문 MML 내용은 Analytics로 보내지 않습니다. 이벤트에는 파일 종류, 채널 수, 미리듣기 종류처럼 동작 분석에 필요한 값만 넣습니다.
+파일명이나 원문 MML 내용은 Analytics로 보내지 않습니다. 이벤트에는 기능을 열었는지, 실제 실행·적용·변환·복사·저장을 했는지 판단하는 데 필요한 값만 넣습니다. 전체 상세 목록은 `FIREBASE_ANALYTICS_EVENTS.md`를 참고합니다.
 
 | 이벤트 | 발생 위치 | 주요 파라미터 |
 |---|---|---|
-| `mobibard_app_open` | 앱 초기화 완료 | `version` |
-| `google_drive_login`, `google_drive_logout` | Google 로그인/로그아웃 | `settings_source` |
+| `google_drive_login` | Google 로그인 성공 | `settings_source` |
 | `google_drive_picker_open` | Drive Picker 열기 | 없음 |
-| `shortcut_link_open` | 상단 바로가기 콤보박스 선택 | `link` |
-| `midi_resource_link_open` | 상단 바로가기 콤보박스에서 MIDI 사이트 선택 | `site` |
-| `local_import_midi`, `drive_import_midi` | MIDI 파일을 변환 Dialog로 열 때 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
-| `local_import_musicxml`, `drive_import_musicxml` | MusicXML 파일을 변환 Dialog로 열 때 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
-| `local_import_mml`, `drive_import_mml` | MMI/3MLE/TXT MML 불러오기 완료 | `file_type`, `file_size`, `channel_count` |
-| `preview_midi_file` | MIDI/MusicXML 원본 미리듣기 | `source_type` |
-| `preview_midi_selected` | MIDI/MusicXML 현재 설정 미리듣기 | `source_type`, `export_channels` |
-| `preview_midi_export_channel` | MIDI 변환 설정의 MML 채널별 미리듣기 | `channel_index` |
-| `preview_midi_instrument` | MIDI 악기별 미리듣기 | 없음 |
-| `preview_mml_selected`, `preview_mml_all`, `preview_mml_channel` | MMI/3MLE 선택/전부/채널 미리듣기 | `channel_count`, `channel_index` |
+| `shortcut_link_open` | 상단 바로가기 열기 | `link` |
+| `local_import_midi`, `drive_import_midi` | MIDI 파일 분석 성공 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
+| `local_import_musicxml`, `drive_import_musicxml` | MusicXML 분석 성공 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
+| `local_import_mml`, `drive_import_mml` | MML/MMI/3MLE/TXT/Google Docs 불러오기 성공 | `file_type`, `file_size`, `channel_count` |
+| `preview_midi_start` | MIDI/MusicXML 미리듣기 시작 | `scope`, `source_type`, `export_channels` |
+| `preview_mml_start` | MMI/3MLE MML 미리듣기 시작 | `scope`, `channel_count` |
 | `midi_convert_complete` | MIDI/MusicXML 변환 완료 | `source_type`, `export_channels`, `instrument_groups`, `optimized_chars` |
-| `playback_start` | 메인 재생 시작 | `offset_sec`, `channel_count` |
-| `paste_mml`, `copy_all_mml`, `local_save_mml`, `drive_save_mml` | 붙여넣기/복사/저장 | `channel_count`, `create_new` |
-| `split_copy_open`, `preview_split_page`, `copy_split_page` | 나눠복사 Dialog/악보별 듣기/복사 | `page_index` |
+| `playback_start` | 메인 MML 재생 시작 | `channel_count` |
+| `rest_trim_apply`, `bulk_volume_adjust`, `leading_silence_apply`, `genre_arrange_apply` | 편집 도구 적용 성공 | 도구별 설정값과 적용 채널 수 |
+| `copy_all_mml`, `local_save_mml`, `drive_save_mml` | 복사·저장 성공 | `channel_count`, `create_new` |
+| `split_copy_open`, `preview_split_page`, `copy_split_page` | 나눠복사 진입·미리듣기·복사 | 없음 |
+| `open_midi_extract_dialog`, `download_muscriptor_package` | MIDI 추출 기능 확인·패키지 다운로드 | `platform` |
+
+앱 실행, Google 로그아웃, 붙여넣기, 샘플 미디어 재생, 재생 시작 위치, 채널·페이지 번호처럼 기능 이용 성과와 직접 관련이 적은 값은 기록하지 않습니다.
 
 ### 동작 방식
 
@@ -540,7 +539,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - [ ] 로그아웃 후 새로고침했을 때 자동 재연동이 일어나지 않는지
 - [ ] Drive 설정 동기화 실패 시 로컬 설정을 계속 사용하는지
 - [ ] Firebase Analytics가 네트워크/차단 문제로 실패해도 앱 기본 기능이 계속 동작하는지
-- [ ] Firebase DebugView 또는 Analytics 실시간 보고서에서 `mobibard_app_open`과 주요 커스텀 이벤트가 들어오는지
+- [ ] Firebase DebugView 또는 Analytics 실시간 보고서에서 `playback_start`, `rest_trim_apply`, `midi_convert_complete` 같은 주요 커스텀 이벤트가 들어오는지
 - [ ] Analytics 이벤트에 파일명, MML 원문, Google access token 같은 민감한 값이 들어가지 않는지
 
 ---
@@ -687,11 +686,11 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - `선택 듣기` 오른쪽에 `전부 듣기` 버튼을 추가해, 체크 여부와 관계없이 읽어온 파일의 모든 감지 채널을 합쳐 재생할 수 있게 했습니다.
 - MMI/3MLE MML 채널 선택 Dialog 하단의 `파일 불러오기`와 `모두 선택해제` 버튼 위치를 서로 바꿨습니다.
 - Firebase Analytics 연동을 추가했습니다. `js/firebase-config.js`에는 웹 앱 설정을, `js/firebase-analytics.js`에는 SDK 초기화/이벤트 큐 처리를 분리했습니다.
-- 앱 열기, 파일 불러오기, MIDI 변환, 미리듣기, 재생, 복사, 저장, Google Drive 동작을 커스텀 이벤트로 기록하도록 했습니다. 파일명과 MML 본문은 Analytics 이벤트에 포함하지 않습니다.
+- 파일 불러오기, MIDI 변환, 미리듣기, 재생, 도구 적용, 복사, 저장, Google Drive 동작을 커스텀 이벤트로 기록합니다. 앱 실행·로그아웃·붙여넣기처럼 의미가 약한 이벤트와 중복 이벤트는 제거했으며, 파일명과 MML 본문은 포함하지 않습니다.
 - Google token 만료 처리 방식을 수정했습니다. 유효한 토큰은 새로고침/새 창에서 유지하지만, 만료되거나 401이 발생하면 자동으로 Google 로그인을 다시 요청하지 않고 `로그인 필요` 상태로만 전환합니다.
 - 상단 바로가기 영역의 콤보박스 기본 문구를 `MML / MIDI 링크`로 바꾸고 디스코드 버튼 왼쪽에 배치했습니다. 기존 `개발자 MML 공유` 버튼은 제거하고 `개발자 MML 공유` 항목으로 콤보박스 맨 위에 배치했습니다.
 - `https://www.vgmusic.com/` 항목은 화면에 `VGMusic`으로 표시합니다. MIDI 사이트는 BitMidi, Ichigo's, MIDIEX, Midisite, MuseScore, VGMusic 순서로 정렬되어 새 창으로 열립니다.
-- 바로가기 콤보박스 선택을 `shortcut_link_open` Analytics 이벤트로 기록하고, MIDI 사이트 선택은 기존 `midi_resource_link_open` 이벤트도 함께 기록합니다. 링크 식별자만 보내고 검색어/파일명은 보내지 않습니다.
+- 바로가기 콤보박스 선택은 `shortcut_link_open` 하나로 기록하고 `link` 값으로 대상을 구분합니다. 같은 클릭을 중복 집계하던 `midi_resource_link_open`은 제거했습니다.
 - v3.1까지의 MIDI/MMI/3MLE/Google Drive/음색/최적화 변경 내용을 현재 구조 기준으로 다시 묶어 정리했습니다.
 
 ### v3.1
@@ -768,4 +767,4 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - 생성 역할의 반주 패턴 기본값을 `자동`으로 변경
 
 
-샘플 `sample_out.mid`는 브라우저 호환성을 위해 미리 렌더링한 `assets/midi-extract/sample_out_preview.mp3`로 재생됩니다. 영상과 샘플 오디오는 사용자가 재생 버튼을 누를 때만 불러옵니다.
+샘플 `sample_out.mid`는 사용자가 재생 버튼을 누를 때만 불러옵니다. 먼저 브라우저의 MIDI 직접 재생을 시도하고, 지원하지 않는 환경에서는 파일을 분석해 기본 SF2로 재생합니다. 영상과 입력 오디오도 각 재생 버튼을 누를 때만 불러옵니다.
