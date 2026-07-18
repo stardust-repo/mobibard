@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>모비바드 v4.3</title>
+  <title>모비바드 v4.5</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
-  <link rel="stylesheet" href="styles.css?v=4.3-analytics-cleanup" />
+  <link rel="stylesheet" href="styles.css?v=4.5-beta-round-resume" />
   <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 </head>
 <body>
@@ -16,7 +16,7 @@
       <div class="app-brand-line">
         <h1 class="app-main-title">모비바드</h1>
         <div class="app-title-meta">
-          <span class="app-subtitle">마비노기 MML 생성기 v4.3</span>
+          <span class="app-subtitle">마비노기 MML 생성기 v4.5</span>
           <span class="import-format-list" title="불러오기 지원 포맷">지원 파일: MIDI · MusicXML · MMI · 3MLE</span>
         </div>
       </div>
@@ -53,12 +53,12 @@
         <span class="toolbar-label">저장</span>
         <button id="saveBtn" class="ghost" type="button">파일</button>
         <button id="googleDriveSaveBtn" class="ghost" type="button" disabled title="Google Drive의 MML_Mobibard 폴더에 저장">구글</button>
+        <div class="player-file-actions-special" aria-label="오디오 MIDI 추출 도구">
+          <button id="midiExtractBtn" class="midi-extract-toolbar-button beta-feature" type="button" aria-haspopup="dialog" aria-controls="midiExtractDialog" title="MuScriptor 로컬 MIDI 추출 도구 다운로드 (BETA)">
+            <span class="midi-extract-toolbar-icon" aria-hidden="true">♪</span><span>MIDI 추출</span><span class="beta-badge" aria-hidden="true" title="BETA 기능">B</span>
+          </button>
+        </div>
         <input id="midiFile" type="file" accept=".mid,.midi,.txt,.mmi,.mml,.musicxml,.xml,.mxl,audio/midi,audio/x-midi,text/plain,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden />
-      </div>
-      <div class="player-file-actions-special" aria-label="오디오 MIDI 추출 도구">
-        <button id="midiExtractBtn" class="midi-extract-toolbar-button" type="button" aria-haspopup="dialog" aria-controls="midiExtractDialog" title="MuScriptor 로컬 MIDI 추출 도구 다운로드">
-          <span class="midi-extract-toolbar-icon" aria-hidden="true">♪</span><span>MIDI 추출</span>
-        </button>
       </div>
       <div class="player-file-actions-right">
         <button id="pasteBtn" class="ghost" type="button">붙여넣기</button>
@@ -91,7 +91,7 @@
 
       <div class="seek-row">
         <div class="progress-wrap">
-          <div id="tempoMarkerLayer" class="tempo-markers" aria-hidden="true"></div>
+          <div id="tempoMarkerLayer" class="tempo-markers" aria-label="템포 표시와 수정"></div>
           <input id="progressSlider" class="progress" type="range" min="0" max="0" step="0.001" value="0" disabled />
         </div>
       </div>
@@ -133,7 +133,7 @@
 
     <div class="editor-tool-row" aria-label="편집 편의 기능">
       <div class="editor-tools-left">
-        <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="bulkVolumeBtn" class="ghost" type="button">볼륨 조절</button><button id="leadingSilenceBtn" class="ghost" type="button">시작 공백 시간</button><button id="genreArrangeBtn" class="ghost" type="button">장르 편곡</button>
+        <button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="bulkVolumeBtn" class="ghost" type="button">볼륨 조절</button><button id="bulkPitchBtn" class="ghost" type="button">음정 조절</button><button id="leadingSilenceBtn" class="ghost" type="button">시작 공백 시간</button><button id="genreArrangeBtn" class="ghost beta-feature" type="button" title="장르 편곡 (BETA)"><span>장르 편곡</span><span class="beta-badge" aria-hidden="true" title="BETA 기능">B</span></button>
       </div>
     </div>
 
@@ -359,6 +359,50 @@
     <div class="dialog-actions">
       <button id="bulkVolumeCancel" type="button">취소</button>
       <button id="bulkVolumeApply" class="primary" type="button">적용</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="bulkPitchDialog" class="mml-dialog">
+  <form id="bulkPitchForm" class="dialog-card" method="dialog">
+    <h3>음정 조절</h3>
+    <p>선택한 채널에 이미 적혀 있는 O숫자 명령만 입력한 값만큼 증감합니다. 음표와 &lt; &gt; 명령은 변경하지 않으며, 결과 O값은 O0~O7로 제한됩니다.</p>
+    <label class="dialog-field" for="bulkPitchAmount">옥타브 변화량</label>
+    <input id="bulkPitchAmount" type="number" min="-7" max="7" step="1" value="0" inputmode="numeric" />
+    <span class="dialog-small">-7 ~ 7 사이의 정수만 입력할 수 있습니다.</span>
+    <div id="bulkPitchStats" class="volume-count-box" aria-live="polite"></div>
+    <div class="dialog-field-row">
+      <span class="dialog-field">적용 채널</span>
+      <span class="dialog-mini-actions">
+        <button id="bulkPitchSelectAll" class="compact" type="button">전부 선택</button>
+        <button id="bulkPitchSelectNone" class="compact" type="button">선택 해제</button>
+      </span>
+    </div>
+    <div class="dialog-channel-grid" aria-label="음정 조절 적용 채널">
+      <label class="dialog-channel-option part-0"><input class="bulk-pitch-channel" type="checkbox" data-part-index="0" checked /> 멜로디</label>
+      <label class="dialog-channel-option part-1"><input class="bulk-pitch-channel" type="checkbox" data-part-index="1" checked /> 화음1</label>
+      <label class="dialog-channel-option part-2"><input class="bulk-pitch-channel" type="checkbox" data-part-index="2" checked /> 화음2</label>
+      <label class="dialog-channel-option part-3"><input class="bulk-pitch-channel" type="checkbox" data-part-index="3" checked /> 화음3</label>
+      <label class="dialog-channel-option part-4"><input class="bulk-pitch-channel" type="checkbox" data-part-index="4" checked /> 화음4</label>
+      <label class="dialog-channel-option part-5"><input class="bulk-pitch-channel" type="checkbox" data-part-index="5" checked /> 화음5</label>
+    </div>
+    <div class="dialog-actions">
+      <button id="bulkPitchCancel" type="button">취소</button>
+      <button id="bulkPitchApply" class="primary" type="button">적용</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="tempoEditDialog" class="mml-dialog">
+  <form id="tempoEditForm" class="dialog-card tempo-edit-card" method="dialog">
+    <h3>템포 수정</h3>
+    <p id="tempoEditContext">선택한 템포를 수정합니다.</p>
+    <label class="dialog-field" for="tempoEditBpm">템포</label>
+    <input id="tempoEditBpm" type="number" min="32" max="255" step="1" value="120" inputmode="numeric" />
+    <span class="dialog-small">마비노기 MML 지원 범위인 32~255 사이의 정수만 입력할 수 있습니다.</span>
+    <div class="dialog-actions">
+      <button id="tempoEditCancel" type="button">취소</button>
+      <button id="tempoEditApply" class="primary" type="button">수정</button>
     </div>
   </form>
 </dialog>
@@ -668,14 +712,14 @@
 <script src="js/utils.js"></script>
 <script src="js/midi-to-mml.js"></script>
 <script src="js/musicxml-to-midi.js"></script>
-<script src="js/mml-parser.js"></script>
-<script src="js/mml-optimizer.js"></script>
+<script src="js/mml-parser.js?v=4.5-beta-ui"></script>
+<script src="js/mml-optimizer.js?v=4.5-beta-ui"></script>
 <script src="js/sf2-sampler.js"></script>
 <script src="js/google-config.js"></script>
 <script src="js/firebase-config.js"></script>
 <script type="module" src="js/firebase-analytics.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="js/app.js?v=4.3-analytics-cleanup"></script>
+<script src="js/app.js?v=4.5-beta-round-resume"></script>
 </body>
 </html>

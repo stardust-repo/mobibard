@@ -7,7 +7,7 @@
 - 이벤트는 Firebase 초기화 전에도 최대 100개까지 대기열에 보관됩니다.
 - 적용·저장·복사 이벤트는 작업이 성공한 뒤에만 전송합니다.
 - 파일명, MML 본문, Google Drive 파일 ID, 접근 토큰, 원본 음원 내용은 전송하지 않습니다.
-- 아래 목록은 앱이 직접 호출하는 사용자 정의 이벤트 25개입니다. Firebase의 자동 수집 이벤트인 `page_view`, `session_start`, `first_visit` 등은 별도입니다.
+- 아래 목록은 앱이 직접 호출하는 사용자 정의 이벤트 27개입니다. Firebase의 자동 수집 이벤트인 `page_view`, `session_start`, `first_visit` 등은 별도입니다.
 
 ## 핵심 도구·편집 이벤트
 
@@ -15,6 +15,8 @@
 |---|---|---|---|
 | `rest_trim_apply` | 쉼표 삭제가 실제 적용된 뒤 | `limit`, `selected_channel_count` | 삭제 기준과 적용 채널 수를 기록합니다. |
 | `bulk_volume_adjust` | 볼륨 조절이 실제 적용된 뒤 | `delta`, `selected_channel_count` | 볼륨 증감값과 적용 채널 수를 기록합니다. |
+| `bulk_pitch_adjust` | 음정 조절이 실제 적용된 뒤 | `octaves`, `selected_channel_count` | 옥타브 증감값과 적용 채널 수를 기록합니다. |
+| `tempo_edit` | 슬라이더 또는 피아노롤에서 템포 수정이 성공한 뒤 | `before_bpm`, `after_bpm` | 수정 전후 BPM을 기록합니다. |
 | `leading_silence_apply` | 시작 공백이 실제 적용된 뒤 | `seconds`, `removed_seconds` | 설정한 시작 공백과 제거된 기존 공백을 기록합니다. |
 | `genre_arrange_apply` | 장르 편곡이 완료된 뒤 | `genre`, `strength`, `melody_part`, `chord_count` | 장르, 강도, 멜로디 채널, 생성 코드 구간 수를 기록합니다. |
 | `copy_all_mml` | 전부복사가 성공한 뒤 | `channel_count` | 전체 복사 사용과 복사 채널 수를 기록합니다. |
@@ -81,6 +83,8 @@
 - `scope`: 같은 기능 안에서 사용한 범위 또는 미리듣기 종류
 - `channel_count`: 비어 있지 않은 MML 채널 수
 - `selected_channel_count`: 도구를 적용한 채널 수
+- `octaves`: 음정 조절에 적용한 옥타브 증감값
+- `before_bpm`, `after_bpm`: 템포 수정 전후의 BPM
 - `source_type`: `midi`, `musicxml` 등 현재 원본 종류
 - `file_type`: 확장자 또는 `google_docs`
 - `create_new`: 새 Drive 파일 생성 여부

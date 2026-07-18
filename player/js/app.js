@@ -74,7 +74,7 @@
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { musicXmlToMidiBytes } = window.MabiMusicXml || {};
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml } = window.MabiMml;
-  const { optimizeMml, arrangeGenreMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages } = window.MabiOptimizer;
+  const { optimizeMml, arrangeGenreMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
   const $ = (id) => document.getElementById(id);
@@ -121,6 +121,12 @@
   const volumeValue = $("volumeValue");
   const progressSlider = $("progressSlider");
   const tempoMarkerLayer = $("tempoMarkerLayer");
+  const tempoEditDialog = $("tempoEditDialog");
+  const tempoEditForm = $("tempoEditForm");
+  const tempoEditContext = $("tempoEditContext");
+  const tempoEditBpm = $("tempoEditBpm");
+  const tempoEditApply = $("tempoEditApply");
+  const tempoEditCancel = $("tempoEditCancel");
   const pianoRoll = $("pianoRoll");
   const pianoRollCanvas = $("pianoRollCanvas");
   const pianoRollEmpty = $("pianoRollEmpty");
@@ -164,6 +170,15 @@
   const bulkVolumeCancel = $("bulkVolumeCancel");
   const bulkVolumeSelectAll = $("bulkVolumeSelectAll");
   const bulkVolumeSelectNone = $("bulkVolumeSelectNone");
+  const bulkPitchBtn = $("bulkPitchBtn");
+  const bulkPitchDialog = $("bulkPitchDialog");
+  const bulkPitchForm = $("bulkPitchForm");
+  const bulkPitchAmount = $("bulkPitchAmount");
+  const bulkPitchStats = $("bulkPitchStats");
+  const bulkPitchApply = $("bulkPitchApply");
+  const bulkPitchCancel = $("bulkPitchCancel");
+  const bulkPitchSelectAll = $("bulkPitchSelectAll");
+  const bulkPitchSelectNone = $("bulkPitchSelectNone");
   const leadingSilenceBtn = $("leadingSilenceBtn");
   const leadingSilenceDialog = $("leadingSilenceDialog");
   const leadingSilenceSeconds = $("leadingSilenceSeconds");
@@ -247,6 +262,10 @@
   let pianoRollRefreshRaf = 0;
   let pianoRollRefreshSettleTimer = 0;
   let pianoRollResizeObserver = null;
+  let selectedTempoMarker = null;
+  let tempoEditResumePlayback = false;
+  let tempoEditResumeOffset = 0;
+  let tempoEditSuppressCloseResume = false;
   let playContextStart = 0;
   let playOffsetStart = 0;
   let playbackAutoGainScale = 1;
@@ -365,7 +384,17 @@
     progressSlider.addEventListener("touchend", () => { isSeeking = false; handleSeekInput(true); }, { passive: true });
     progressSlider.addEventListener("input", () => handleSeekInput(false));
     progressSlider.addEventListener("change", () => handleSeekInput(true));
-    pianoRoll?.addEventListener("click", togglePianoRoll);
+    tempoMarkerLayer?.addEventListener("click", handleTempoMarkerLayerClick);
+    tempoEditApply?.addEventListener("click", applyTempoEditFromDialog);
+    tempoEditForm?.addEventListener("submit", event => { event.preventDefault(); applyTempoEditFromDialog(); });
+    tempoEditCancel?.addEventListener("click", () => tempoEditDialog?.close());
+    tempoEditBpm?.addEventListener("change", normalizeTempoEditBpmInput);
+    tempoEditBpm?.addEventListener("blur", normalizeTempoEditBpmInput);
+    tempoEditDialog?.addEventListener("close", () => {
+      selectedTempoMarker = null;
+      if (!tempoEditSuppressCloseResume) resumePlaybackAfterTempoEdit();
+    });
+    pianoRoll?.addEventListener("click", handlePianoRollClick);
     pianoRoll?.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
@@ -421,6 +450,14 @@
     bulkVolumeSelectAll?.addEventListener("click", () => setDialogChannelSelection(".bulk-volume-channel", true));
     bulkVolumeSelectNone?.addEventListener("click", () => setDialogChannelSelection(".bulk-volume-channel", false));
     bulkVolumeAmount?.addEventListener("change", normalizeBulkVolumeAmountInput);
+    bulkPitchBtn?.addEventListener("click", openBulkPitchDialog);
+    bulkPitchApply?.addEventListener("click", applyBulkPitchFromDialog);
+    bulkPitchForm?.addEventListener("submit", event => { event.preventDefault(); applyBulkPitchFromDialog(); });
+    bulkPitchCancel?.addEventListener("click", () => bulkPitchDialog?.close());
+    bulkPitchSelectAll?.addEventListener("click", () => setDialogChannelSelection(".bulk-pitch-channel", true));
+    bulkPitchSelectNone?.addEventListener("click", () => setDialogChannelSelection(".bulk-pitch-channel", false));
+    bulkPitchAmount?.addEventListener("change", normalizeBulkPitchAmountInput);
+    bulkPitchAmount?.addEventListener("blur", normalizeBulkPitchAmountInput);
     leadingSilenceBtn?.addEventListener("click", openLeadingSilenceDialog);
     leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
     leadingSilenceCancel?.addEventListener("click", () => leadingSilenceDialog?.close());
@@ -632,12 +669,71 @@
     requestPianoRollRefresh(true);
   }
 
+  function handlePianoRollClick(event) {
+    const toggleControl = event?.target?.closest?.(".piano-roll-corner");
+    if (toggleControl && pianoRoll?.contains(toggleControl)) {
+      event.preventDefault();
+      event.stopPropagation();
+      togglePianoRoll();
+      return;
+    }
+
+    const marker = findPianoRollTempoMarkerAtEvent(event);
+    if (marker) {
+      event.preventDefault();
+      event.stopPropagation();
+      openTempoEditDialog(marker);
+      return;
+    }
+    togglePianoRoll();
+  }
+
+  function findPianoRollTempoMarkerAtEvent(event) {
+    const stage = pianoRoll?.querySelector?.(".piano-roll-stage");
+    const markers = Array.isArray(scheduleCache?.tempoMarkers) ? scheduleCache.tempoMarkers : [];
+    if (!stage || !markers.length) return null;
+
+    const rect = stage.getBoundingClientRect();
+    const x = Number(event?.clientX) - rect.left;
+    const y = Number(event?.clientY) - rect.top;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > rect.width || y < 0 || y > rect.height) return null;
+
+    const keyHeight = Math.min(getPianoRollKeyHeight(), Math.max(18, rect.height * 0.72));
+    const fallAreaHeight = Math.max(12, rect.height - keyHeight);
+    if (y > fallAreaHeight + 7) return null;
+
+    const duration = scheduleCache?.duration || Number(progressSlider?.max) || 0;
+    const current = Math.max(0, Math.min(duration || Infinity, Number(currentOffset) || 0));
+    const fallWindow = pianoRollExpanded ? PIANO_ROLL_FALL_WINDOW_EXPANDED : PIANO_ROLL_FALL_WINDOW_COLLAPSED;
+    const pxPerSec = fallAreaHeight / fallWindow;
+    const visibleEnd = current + fallWindow;
+    let best = null;
+    let bestDistance = Infinity;
+
+    for (const marker of markers) {
+      const time = Math.max(0, Number(marker?.time) || 0);
+      if (time < current - 0.03 || time > visibleEnd + 0.03) continue;
+      const rawY = fallAreaHeight - ((time - current) * pxPerSec);
+      if (rawY < -1 || rawY > fallAreaHeight + 1) continue;
+      const lineY = Math.max(0.5, Math.min(fallAreaHeight - 0.5, Math.round(rawY) + 0.5));
+      const lineDistance = Math.abs(y - lineY);
+      const labelY = Math.max(2, Math.min(fallAreaHeight - 21, lineY - 19));
+      const labelHit = x >= 3 && x <= 78 && y >= labelY - 2 && y <= labelY + 21;
+      const hitDistance = labelHit ? 0 : lineDistance;
+      if ((labelHit || lineDistance <= 7) && hitDistance < bestDistance) {
+        best = marker;
+        bestDistance = hitDistance;
+      }
+    }
+    return best;
+  }
+
   function applyPianoRollExpandedState(persist) {
     if (!pianoRoll) return;
     pianoRoll.classList.toggle("expanded", pianoRollExpanded);
     pianoRoll.setAttribute("aria-expanded", pianoRollExpanded ? "true" : "false");
     pianoRoll.setAttribute("aria-label", pianoRollExpanded ? "피아노 롤 접기" : "피아노 롤 펼치기");
-    pianoRoll.title = pianoRollExpanded ? "클릭해서 피아노 롤 접기" : "클릭해서 피아노 롤 펼치기";
+    pianoRoll.title = pianoRollExpanded ? "빈 영역을 클릭하면 피아노 롤을 접고, 템포선은 클릭해서 수정합니다." : "빈 영역을 클릭하면 피아노 롤을 펼치고, 템포선은 클릭해서 수정합니다.";
     if (pianoRollToggleLabel) pianoRollToggleLabel.textContent = pianoRollExpanded ? "접기" : "펼치기";
     if (persist) writePref("pianoRollExpanded", pianoRollExpanded ? "1" : "0");
   }
@@ -5450,7 +5546,7 @@ ${shortError(err)}`);
     if (d <= 0 || !Array.isArray(markers) || markers.length === 0) return;
 
     const used = new Map();
-    for (const marker of markers) {
+    for (const [markerIndex, marker] of markers.entries()) {
       const time = Math.max(0, Math.min(d, Number(marker.time) || 0));
       const bpm = Math.max(1, Math.round(Number(marker.bpm) || 0));
       const percent = Math.max(0, Math.min(100, time / d * 100));
@@ -5465,10 +5561,14 @@ ${shortError(err)}`);
       el.style.left = `${percent}%`;
       el.dataset.time = String(time);
       el.dataset.bpm = String(bpm);
-      el.title = `T${bpm} · ${formatTime(time)}`;
-      const label = document.createElement("span");
+      el.dataset.beat = String(Math.max(0, Number(marker.beat) || 0));
+      el.dataset.markerIndex = String(markerIndex);
+      el.title = `T${bpm} · ${formatTime(time)} · 클릭해서 수정`;
+      const label = document.createElement("button");
+      label.type = "button";
       label.className = "tempo-marker-label";
       label.textContent = `T${bpm}`;
+      label.setAttribute("aria-label", `T${bpm}, ${formatTime(time)}, 클릭해서 템포 수정`);
       el.appendChild(label);
       tempoMarkerLayer.appendChild(el);
     }
@@ -5491,6 +5591,140 @@ ${shortError(err)}`);
       }
     }
     if (active) active.classList.add("active");
+  }
+
+  function handleTempoMarkerLayerClick(event) {
+    const labelElement = event?.target?.closest?.(".tempo-marker-label");
+    const markerElement = labelElement?.closest?.(".tempo-marker");
+    if (!labelElement || !markerElement || !tempoMarkerLayer?.contains(markerElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const index = Number(markerElement.dataset.markerIndex);
+    const markers = Array.isArray(scheduleCache?.tempoMarkers) ? scheduleCache.tempoMarkers : [];
+    const marker = Number.isInteger(index) ? markers[index] : null;
+    openTempoEditDialog(marker || {
+      beat: Number(markerElement.dataset.beat) || 0,
+      time: Number(markerElement.dataset.time) || 0,
+      bpm: Number(markerElement.dataset.bpm) || 120
+    });
+  }
+
+  function openTempoEditDialog(marker) {
+    if (!marker) return;
+
+    tempoEditResumePlayback = Boolean(isPlaying);
+    if (tempoEditResumePlayback) {
+      stopPlayback(true);
+      tempoEditResumeOffset = Math.max(0, Number(currentOffset) || 0);
+    } else {
+      tempoEditResumeOffset = Math.max(0, Number(currentOffset) || 0);
+    }
+
+    const bpm = normalizeTempoBpm(marker.bpm);
+    selectedTempoMarker = { ...marker, bpm };
+    if (tempoEditBpm) tempoEditBpm.value = String(bpm);
+    if (tempoEditContext) {
+      const part = Number.isInteger(marker.part) && marker.part >= 0 ? PART_LABELS[marker.part] : "기본 템포";
+      tempoEditContext.textContent = `${formatTime(Math.max(0, Number(marker.time) || 0))} 위치의 T${bpm} (${part})를 수정합니다.`;
+    }
+    if (tempoEditDialog?.showModal) {
+      tempoEditDialog.showModal();
+      tempoEditBpm?.focus();
+      tempoEditBpm?.select?.();
+      return;
+    }
+    const answer = prompt(`T${bpm}을 수정할 템포를 입력해 주세요.\n32~255 사이의 정수만 사용할 수 있습니다.`, String(bpm));
+    if (answer == null) {
+      selectedTempoMarker = null;
+      resumePlaybackAfterTempoEdit();
+      return;
+    }
+    applyTempoEdit(answer, selectedTempoMarker);
+    selectedTempoMarker = null;
+    resumePlaybackAfterTempoEdit();
+  }
+
+  function resumePlaybackAfterTempoEdit() {
+    if (!tempoEditResumePlayback) return;
+    const resumeOffset = Math.max(0, Number(tempoEditResumeOffset) || 0);
+    tempoEditResumePlayback = false;
+    tempoEditResumeOffset = 0;
+
+    const duration = Math.max(0, Number(scheduleCache?.duration) || Number(progressSlider?.max) || 0);
+    currentOffset = duration > 0 ? Math.min(resumeOffset, duration) : resumeOffset;
+    if (scheduleCache) updateProgressUi(currentOffset, duration);
+
+    setTimeout(() => {
+      if (!isPlaying && !tempoEditDialog?.open) void playFromCurrent();
+    }, 20);
+  }
+
+  function normalizeTempoEditBpmInput() {
+    if (!tempoEditBpm) return;
+    tempoEditBpm.value = String(normalizeTempoBpm(tempoEditBpm.value));
+  }
+
+  function normalizeTempoBpm(value) {
+    let bpm = Math.round(Number(value));
+    if (!Number.isFinite(bpm)) bpm = 120;
+    return clampInt(bpm, 32, 255);
+  }
+
+  function applyTempoEditFromDialog() {
+    if (!selectedTempoMarker) {
+      tempoEditDialog?.close();
+      return;
+    }
+    normalizeTempoEditBpmInput();
+    const bpm = normalizeTempoBpm(tempoEditBpm?.value);
+    const marker = selectedTempoMarker;
+    tempoEditSuppressCloseResume = true;
+    tempoEditDialog?.close();
+    try {
+      applyTempoEdit(bpm, marker);
+    } finally {
+      tempoEditSuppressCloseResume = false;
+      resumePlaybackAfterTempoEdit();
+    }
+  }
+
+  function applyTempoEdit(value, marker) {
+    const bpm = normalizeTempoBpm(value);
+    const beforeBpm = normalizeTempoBpm(marker?.bpm);
+    if (bpm === beforeBpm) {
+      showDialog("템포 수정", `T${beforeBpm}과 같은 값이라 변경하지 않았습니다.`);
+      return;
+    }
+
+    stopPlayback(false);
+    try {
+      const source = normalizeMmlForDisplay(mainMml?.value || "");
+      const updated = replaceTempoMarkerCommand(source, marker, bpm);
+      setMainMml(updated);
+      currentOffset = 0;
+      trackAnalytics("tempo_edit", { before_bpm: beforeBpm, after_bpm: bpm });
+      showDialog("템포 수정", `${formatTime(Math.max(0, Number(marker?.time) || 0))} 위치의 템포를 T${beforeBpm} → T${bpm}으로 수정했습니다.`);
+    } catch (err) {
+      showDialog("템포 수정 실패", shortError(err));
+    }
+  }
+
+  function replaceTempoMarkerCommand(source, marker, bpm) {
+    const text = String(source || "");
+    const start = Number(marker?.globalSourceStart);
+    const end = Number(marker?.globalSourceEnd);
+    if (Boolean(marker?.explicit) && Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end > start && end <= text.length) {
+      const token = text.slice(start, end);
+      if (!/^T\d+$/i.test(token)) throw new Error("선택한 템포 명령의 원본 위치를 찾지 못했습니다. 악보를 다시 입력한 뒤 시도해 주세요.");
+      return `${text.slice(0, start)}T${bpm}${text.slice(end)}`;
+    }
+
+    if (Math.abs(Number(marker?.beat) || 0) <= 1e-7) {
+      const header = text.match(/^\s*MML\s*@/i);
+      if (header) return `${text.slice(0, header[0].length)}T${bpm}${text.slice(header[0].length)}`;
+      return `MML@T${bpm}${text.replace(/^\s*MML\s*@/i, "").replace(/;\s*$/, "")};`;
+    }
+    throw new Error("선택한 템포 명령의 원본 위치를 찾지 못했습니다.");
   }
 
   async function ensureAudioContext() {
@@ -5602,16 +5836,46 @@ ${shortError(err)}`);
     const parts = getCurrentPartTexts(6);
 
     if (activeTabName === "main") {
-      const total = parts.reduce((sum, part) => sum + part.length, 0);
-      charCount.textContent = `${formatCount(total)} 자`;
-      charCount.className = "char-count";
+      const counts = parts.map(part => part.length);
+      const total = counts.reduce((sum, count) => sum + count, 0);
+      charCount.className = "char-count char-count-all";
+      charCount.replaceChildren();
+
+      const totalLine = document.createElement("div");
+      totalLine.className = "char-count-total";
+      totalLine.textContent = `${formatCount(total)} 자`;
+
+      const partLine = document.createElement("div");
+      partLine.className = "char-count-parts";
+      counts.forEach((count, idx) => {
+        if (idx > 0) {
+          const separator = document.createElement("span");
+          separator.className = "char-count-separator";
+          separator.textContent = "/";
+          partLine.append(separator);
+        }
+        const channelCount = document.createElement("span");
+        channelCount.className = `char-count-channel part-count-${idx}`;
+        channelCount.textContent = formatCount(count);
+        channelCount.title = `${PART_LABELS[idx]} ${formatCount(count)} 자`;
+        partLine.append(channelCount);
+      });
+      const unit = document.createElement("span");
+      unit.className = "char-count-unit";
+      unit.textContent = "자";
+      partLine.append(unit);
+
+      charCount.append(totalLine, partLine);
+      charCount.setAttribute("aria-label", `총 ${formatCount(total)} 자. 채널별 ${counts.map(formatCount).join(", ")} 자`);
       return;
     }
 
     const m = /^part(\d+)$/.exec(activeTabName || "");
     const idx = m ? Number(m[1]) : 0;
-    charCount.textContent = `${formatCount((parts[idx] || "").length)} 자`;
+    const partCount = (parts[idx] || "").length;
+    charCount.textContent = `${formatCount(partCount)} 자`;
     charCount.className = `char-count part-count-${idx}`;
+    charCount.setAttribute("aria-label", `${PART_LABELS[idx] || "채널"} ${formatCount(partCount)} 자`);
   }
 
   function formatCount(value) {
@@ -5856,6 +6120,122 @@ ${shortError(err)}`);
     let delta = Math.round(Number(value));
     if (!Number.isFinite(delta)) delta = 0;
     return clampInt(delta, -15, 15);
+  }
+
+  function openBulkPitchDialog() {
+    if (bulkPitchAmount) bulkPitchAmount.value = "0";
+    setDialogChannelSelection(".bulk-pitch-channel", true);
+    updateBulkPitchStats();
+    if (bulkPitchDialog?.showModal) {
+      bulkPitchDialog.showModal();
+      bulkPitchAmount?.focus();
+      bulkPitchAmount?.select?.();
+      return;
+    }
+    const answer = prompt("선택 채널에 더할 옥타브 변화량을 입력해 주세요.\n-7 ~ 7 사이의 정수만 사용할 수 있습니다.\n\n이 브라우저에서는 채널 선택 Dialog를 사용할 수 없어 전체 6채널에 적용됩니다.", "0");
+    if (answer == null) return;
+    applyBulkPitch(answer, null);
+  }
+
+  function updateBulkPitchStats() {
+    if (!bulkPitchStats) return;
+    let parts;
+    try {
+      parts = splitMmlParts(normalizeMmlForDisplay(mainMml?.value || "")).slice(0, 6);
+    } catch (err) {
+      bulkPitchStats.innerHTML = `<div class="volume-count-title">옥타브 명령을 확인할 수 없습니다.</div><div class="dialog-small">${escapeHtml(shortError(err))}</div>`;
+      return;
+    }
+
+    const counts = new Map();
+    let total = 0;
+    for (const part of parts) {
+      const re = /O(\d+)/gi;
+      let match;
+      while ((match = re.exec(String(part || ""))) !== null) {
+        const octave = Number(match[1]);
+        if (!Number.isInteger(octave)) continue;
+        counts.set(octave, (counts.get(octave) || 0) + 1);
+        total++;
+      }
+    }
+    if (!total) {
+      bulkPitchStats.innerHTML = `<div class="volume-count-title">O숫자 명령이 없습니다.</div><div class="dialog-small">음표나 &lt; &gt; 명령은 변경하지 않으며, 기존 O숫자 명령만 조절합니다.</div>`;
+      return;
+    }
+
+    const items = Array.from(counts.entries()).sort((a, b) => a[0] - b[0]).map(([octave, count]) =>
+      `<span class="volume-count-item"><em>O${octave}</em><strong>${formatCount(count)}</strong></span>`).join("");
+    bulkPitchStats.innerHTML = `<div class="volume-count-title">O숫자 명령 전체 ${formatCount(total)}개</div><div class="volume-count-grid">${items}</div>`;
+  }
+
+  function applyBulkPitchFromDialog() {
+    normalizeBulkPitchAmountInput();
+    const targetPartIndexes = getDialogSelectedPartIndexes(".bulk-pitch-channel");
+    if (!targetPartIndexes.length) {
+      showDialog("음정 조절", "적용할 채널을 1개 이상 선택해 주세요.");
+      return;
+    }
+    const value = bulkPitchAmount?.value || "0";
+    bulkPitchDialog?.close();
+    applyBulkPitch(value, targetPartIndexes);
+  }
+
+  function applyBulkPitch(value, targetPartIndexes = null) {
+    const octaves = normalizeBulkPitchDelta(value);
+    const selectedIndexes = targetPartIndexes == null ? null : normalizePartIndexList(targetPartIndexes);
+    if (targetPartIndexes != null && !selectedIndexes.length) {
+      showDialog("음정 조절", "적용할 채널을 1개 이상 선택해 주세요.");
+      return;
+    }
+
+    const wasPlaying = isPlaying;
+    stopPlayback(false);
+    try {
+      const result = transposeOctavesMml(normalizeMmlForDisplay(mainMml.value), {
+        partCount: 6,
+        targetPartIndexes: selectedIndexes,
+        octaves
+      });
+
+      if (result.changedCommands <= 0) {
+        const message = octaves === 0
+          ? "옥타브 변화량이 0이라 변경할 내용이 없습니다."
+          : result.touchedCommands <= 0
+            ? "선택한 채널에 O숫자 명령이 없습니다. 음표와 < > 명령은 변경하지 않습니다."
+            : "선택한 채널의 O숫자 명령이 이미 O0 또는 O7 경계에 있어 변경되지 않았습니다.";
+        showDialog("음정 조절", message);
+      } else {
+        setMainMml(result.mml);
+        const selectedLabel = formatSelectedPartLabels(selectedIndexes);
+        flashButton(bulkPitchBtn, "적용 완료");
+        trackAnalytics("bulk_pitch_adjust", {
+          octaves,
+          selected_channel_count: selectedIndexes?.length || 6
+        });
+        showDialog(
+          "음정 조절",
+          `${selectedLabel}의 O숫자 명령 ${result.changedCommands.toLocaleString("ko-KR")}개를 ${octaves > 0 ? "+" : ""}${octaves}만큼 조절했습니다.\n` +
+          `음표와 < > 명령은 변경하지 않았습니다.` +
+          (result.clampedCommands ? `\nO0~O7 범위 제한 적용: ${result.clampedCommands.toLocaleString("ko-KR")}개` : "")
+        );
+      }
+    } catch (err) {
+      showDialog("음정 조절 실패", shortError(err));
+    } finally {
+      if (wasPlaying) currentOffset = 0;
+    }
+  }
+
+  function normalizeBulkPitchAmountInput() {
+    if (!bulkPitchAmount) return;
+    bulkPitchAmount.value = String(normalizeBulkPitchDelta(bulkPitchAmount.value));
+  }
+
+  function normalizeBulkPitchDelta(value) {
+    let delta = Math.round(Number(value));
+    if (!Number.isFinite(delta)) delta = 0;
+    return clampInt(delta, -7, 7);
   }
 
   function openLeadingSilenceDialog() {
@@ -6744,6 +7124,7 @@ ${shortError(err)}`);
       dark,
       line: getCanvasCssVar("--line", dark ? "#334155" : "#d1d5db"),
       accent: getCanvasCssVar("--accent", dark ? "#818cf8" : "#4f46e5"),
+      tempo: getCanvasCssVar("--tempo", dark ? "#a78bfa" : "#7c3aed"),
       tempoActive: getCanvasCssVar("--tempo-active", dark ? "#22c55e" : "#16a34a"),
       activeLine: getCanvasCssVar("--active-code-line", dark ? "rgba(74, 222, 128, 0.95)" : "rgba(22, 163, 74, 0.92)"),
       mutedLine: dark ? "rgba(226, 232, 240, 0.82)" : "rgba(51, 65, 85, 0.72)",
@@ -6760,20 +7141,55 @@ ${shortError(err)}`);
     };
   }
 
-  function drawPianoRollCanvasGrid(ctx, width, fallAreaHeight, keyLayout, minMidi, maxMidi, colors) {
+  function getPianoRollTempoMap() {
+    const source = Array.isArray(scheduleCache?.tempoMap) && scheduleCache.tempoMap.length
+      ? scheduleCache.tempoMap
+      : (Array.isArray(scheduleCache?.tempoMarkers) ? scheduleCache.tempoMarkers : []);
+    const sorted = source
+      .map((tempo) => ({
+        beat: Math.max(0, Number(tempo?.beat) || 0),
+        time: Math.max(0, Number(tempo?.time) || 0),
+        bpm: Math.max(1, Number(tempo?.bpm) || 120)
+      }))
+      .sort((a, b) => a.beat - b.beat || a.time - b.time);
+
+    const result = [];
+    for (const tempo of sorted) {
+      const previous = result[result.length - 1];
+      if (previous && Math.abs(previous.beat - tempo.beat) < 1e-7) result[result.length - 1] = tempo;
+      else result.push(tempo);
+    }
+    if (!result.length || result[0].beat > 1e-7) result.unshift({ beat: 0, time: 0, bpm: 120 });
+    return result;
+  }
+
+  function pianoRollBeatToSeconds(beat, tempoMap) {
+    const target = Math.max(0, Number(beat) || 0);
+    const map = Array.isArray(tempoMap) && tempoMap.length ? tempoMap : [{ beat: 0, time: 0, bpm: 120 }];
+    let segment = map[0];
+    for (let i = 1; i < map.length; i++) {
+      if (map[i].beat > target + 1e-9) break;
+      segment = map[i];
+    }
+    return segment.time + Math.max(0, target - segment.beat) * 60 / segment.bpm;
+  }
+
+  function pianoRollSecondsToBeat(seconds, tempoMap) {
+    const target = Math.max(0, Number(seconds) || 0);
+    const map = Array.isArray(tempoMap) && tempoMap.length ? tempoMap : [{ beat: 0, time: 0, bpm: 120 }];
+    let segment = map[0];
+    for (let i = 1; i < map.length; i++) {
+      if (map[i].time > target + 1e-9) break;
+      segment = map[i];
+    }
+    return segment.beat + Math.max(0, target - segment.time) * segment.bpm / 60;
+  }
+
+  function drawPianoRollCanvasGrid(ctx, width, fallAreaHeight, keyLayout, minMidi, maxMidi, current, visibleEnd, pxPerSec, tempoMap, colors) {
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, width, fallAreaHeight);
     ctx.clip();
-
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = colors.gridLine;
-    for (let y = 31.5; y < fallAreaHeight; y += 32) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
 
     for (let midi = minMidi; midi <= maxMidi; midi++) {
       const metrics = keyLayout.getKeyMetrics(midi);
@@ -6789,6 +7205,71 @@ ${shortError(err)}`);
       ctx.moveTo(x + 0.5, 0);
       ctx.lineTo(x + 0.5, fallAreaHeight);
       ctx.stroke();
+    }
+
+    // L4는 1박이다. 각 정수 박자의 실제 시간을 템포맵으로 환산해
+    // 건반 윗선에서 시작하고 재생 시간에 따라 아래로 흐르는 격자를 그린다.
+    const firstBeat = Math.max(0, Math.ceil(pianoRollSecondsToBeat(current, tempoMap) - 1e-7));
+    const lastBeat = Math.max(firstBeat, Math.floor(pianoRollSecondsToBeat(visibleEnd, tempoMap) + 1e-7));
+    ctx.strokeStyle = colors.gridLine;
+    ctx.lineWidth = 1;
+    for (let beat = firstBeat; beat <= lastBeat; beat++) {
+      const lineTime = pianoRollBeatToSeconds(beat, tempoMap);
+      const rawY = fallAreaHeight - ((lineTime - current) * pxPerSec);
+      if (rawY < -1 || rawY > fallAreaHeight + 1) continue;
+      const y = Math.max(0.5, Math.min(fallAreaHeight - 0.5, Math.round(rawY) + 0.5));
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawPianoRollCanvasTempoLines(ctx, width, fallAreaHeight, markers, current, visibleEnd, pxPerSec, colors) {
+    if (!Array.isArray(markers) || !markers.length) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, width, fallAreaHeight);
+    ctx.clip();
+
+    for (const marker of markers) {
+      const time = Math.max(0, Number(marker?.time) || 0);
+      if (time < current - 0.03 || time > visibleEnd + 0.03) continue;
+      const bpm = Math.max(1, Math.round(Number(marker?.bpm) || 120));
+      const rawY = fallAreaHeight - ((time - current) * pxPerSec);
+      if (rawY < -1 || rawY > fallAreaHeight + 1) continue;
+      const y = Math.max(0.5, Math.min(fallAreaHeight - 0.5, Math.round(rawY) + 0.5));
+      const active = Math.abs(time - current) <= 0.035;
+      const lineColor = active ? colors.tempoActive : colors.tempo;
+
+      ctx.save();
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = active ? 1.5 : 1;
+      ctx.setLineDash(active ? [] : [7, 4]);
+      ctx.shadowColor = lineColor;
+      ctx.shadowBlur = active ? 3 : 1;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+      ctx.restore();
+
+      const label = `T${bpm}`;
+      ctx.save();
+      ctx.font = `950 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "left";
+      const labelWidth = Math.ceil(ctx.measureText(label).width) + 12;
+      const labelHeight = 17;
+      const labelX = 5;
+      const labelY = Math.max(2, Math.min(fallAreaHeight - labelHeight - 2, y - labelHeight - 2));
+      ctx.fillStyle = lineColor;
+      drawRoundRect(ctx, labelX, labelY, labelWidth, labelHeight, 8);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(label, labelX + 6, labelY + labelHeight / 2 + 0.25);
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -6963,8 +7444,31 @@ ${shortError(err)}`);
     }
 
     const colors = buildPianoRollCanvasColors();
-    drawPianoRollCanvasGrid(ctx, width, fallAreaHeight, keyLayout, pianoRollKeyMin, pianoRollKeyMax, colors);
+    const tempoMap = getPianoRollTempoMap();
+    drawPianoRollCanvasGrid(
+      ctx,
+      width,
+      fallAreaHeight,
+      keyLayout,
+      pianoRollKeyMin,
+      pianoRollKeyMax,
+      current,
+      visibleEnd,
+      pxPerSec,
+      tempoMap,
+      colors
+    );
     drawPianoRollCanvasNotes(ctx, width, fallAreaHeight, keyLayout, visibleNotes, current, pxPerSec, colors);
+    drawPianoRollCanvasTempoLines(
+      ctx,
+      width,
+      fallAreaHeight,
+      scheduleCache?.tempoMarkers || [],
+      current,
+      visibleEnd,
+      pxPerSec,
+      colors
+    );
     drawPianoRollCanvasKeyboard(ctx, width, fallAreaHeight, keyHeight, keyLayout, pianoRollKeyMin, pianoRollKeyMax, activeKeyParts, colors);
 
     ctx.save();

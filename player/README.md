@@ -1,6 +1,8 @@
-# 마비노기 MML 생성기 샘플 - 모비바드 v4.3
+# 마비노기 MML 생성기 샘플 - 모비바드 v4.5
 
 공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MusicXML/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
+
+`v4.5`에서는 피아노롤 시간 격자를 고정 픽셀 간격에서 실제 MML `L4` 1박 간격으로 변경했습니다. 격자는 피아노 건반 윗선에서 시작해 재생 시간과 템포 변화에 맞춰 위에서 아래로 흐르며, 각 템포 변경 지점은 얇은 `T숫자` 가로선으로 표시됩니다. 진행 슬라이더의 `T숫자` 라벨이나 피아노롤 템포선을 선택하면 해당 템포를 `32~255` 범위에서 바로 수정할 수 있습니다. 편집 도구에는 선택 채널의 기존 `O숫자` 명령만 일괄 증감하는 `음정 조절`도 추가했습니다. `MIDI 추출`과 `장르 편곡`에는 공통 `.beta-feature` / `.beta-badge` 스타일의 노란색 B 마커를 표시하며, 전체 MML 탭의 글자 수는 총합과 채널별 색상 숫자를 두 줄로 보여 줍니다.
 
 `v4.3`에서는 MML 편집 도구에 시범 기능인 `장르 편곡`을 추가했습니다. 선택하거나 자동 감지한 멜로디를 유지한 채 화음1~5를 `재즈` / `발라드` / `보사노바` / `록` / `펑크` 스타일 반주로 다시 만듭니다. 변형 강도는 `가볍게` / `보통` / `강하게` 중에서 선택할 수 있습니다.
 상단 저장 영역 오른쪽의 `MIDI 추출` 버튼에서 MuScriptor 로컬 실행 패키지를 내려받을 수 있습니다. `muscriptor_win.zip`과 `muscriptor_mac.zip`은 `assets/midi-extract/packages/`에 포함됩니다.
@@ -42,7 +44,7 @@ mabinogi_mml_public/
    ├─ midi-to-mml.js           # MIDI 파서/분석/미리듣기 이벤트/6채널 MML 변환
    ├─ musicxml-to-midi.js      # MusicXML/MXL 파서와 MIDI 이벤트 변환 브리지
    ├─ mml-parser.js            # MML@ 분해, 파트 파싱, 글로벌 템포맵, 재생 스케줄 생성
-   ├─ mml-optimizer.js         # 자동 최적화, 장르 편곡, 쉼표 삭제, 볼륨 조절, 시작 공백, 나눠복사
+   ├─ mml-optimizer.js         # 자동 최적화, 장르 편곡, 쉼표 삭제, 볼륨 조절, O숫자 음정 조절, 시작 공백, 나눠복사
    ├─ sf2-sampler.js           # SF2 파싱, 노트 준비, look-ahead 오디오 스케줄링
    ├─ google-config.js         # Google OAuth/Picker/API Key 설정
    ├─ firebase-config.js       # Firebase Web App 설정 객체
@@ -60,7 +62,7 @@ mabinogi_mml_public/
 | `js/midi-to-mml.js` | `window.MabiMidi` | `analyzeMidi`, `midiToMml`, `buildMidiInstrumentPreview`, `buildMidiFilePreview` |
 | `js/musicxml-to-midi.js` | `window.MabiMusicXml` | `musicXmlToMidiBytes`, `extractMusicXmlText` |
 | `js/mml-parser.js` | `window.MabiMml` | `parseMabinogiMml`, `splitMmlParts`, `splitMmlPartsDetailed`, `parseMmlPart`, `buildSchedule`, `beatToSeconds`, `composeMml` |
-| `js/mml-optimizer.js` | `window.MabiOptimizer` | `optimizeMml`, `optimizePart`, `arrangeGenreMml`, `trimShortRestsMml`, `adjustVolumesMml`, `addLeadingSilenceMml`, `splitMmlPages` |
+| `js/mml-optimizer.js` | `window.MabiOptimizer` | `optimizeMml`, `optimizePart`, `arrangeGenreMml`, `trimShortRestsMml`, `adjustVolumesMml`, `transposeOctavesMml`, `addLeadingSilenceMml`, `splitMmlPages` |
 | `js/sf2-sampler.js` | `window.MabiSf2` | `parseSoundFont`, `prepareNotes`, `schedulePreparedNotes`, `scheduleNotes` |
 | `js/firebase-analytics.js` | `window.MobibardAnalytics` | `logEvent`, `isReady`, `isEnabled`, `getStatus` |
 
@@ -72,7 +74,7 @@ mabinogi_mml_public/
 
 | 항목 | 값 / 위치 |
 |---|---|
-| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v4.3` |
+| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v4.5` |
 | MML 파트 수 | 최대 6개: `멜로디`, `화음1`~`화음5` (`app.js`의 `PART_LABELS`) |
 | 설정 localStorage prefix | `mobibard.player.` (`app.js`의 `PREF_PREFIX`) |
 | 기본 SF2 | `assets/Roland_SC-55.sf2` |
@@ -105,16 +107,17 @@ mabinogi_mml_public/
 - 파일 불러오기 / 저장하기 그룹
 - 붙여넣기, 전부복사, 나눠복사
 - 재생, 처음, 반복, 재생 시간, 배속, 볼륨, 진행 슬라이더
-- 진행 슬라이더 위 템포 변화 마커
+- 진행 슬라이더 위 템포 변화 마커와 클릭 편집 (`T32~T255`)
 
 ### 2. MML 보기 · 편집 카드
 
 - `전체 MML`, `멜로디`, `화음1`~`화음5` 탭
 - 전체 MML 탭은 파트별 색상 하이라이트를 표시합니다.
 - 진행 슬라이더가 가리키는 시간에 울리는 음표 코드와 해당 위치의 쉼표 코드가 초록색 상자로 표시됩니다. 재생 중이 아니어도 현재 위치 기준으로 표시됩니다.
-- 현재 탭 글자 수를 `1,234 자` 형식으로 표시합니다.
+- 개별 채널 탭은 현재 채널 글자 수를 `1,234 자` 형식으로 표시합니다.
+- 전체 MML 탭은 첫 줄에 총 글자 수, 둘째 줄에 멜로디~화음5 글자 수를 채널 색상과 `/` 구분으로 표시합니다. 단위 `자`는 채널별 줄의 맨 끝에 한 번만 붙습니다.
 - 전체 MML의 글자 수는 `MML@`, 쉼표, 세미콜론을 제외한 파트 내용 합계입니다.
-- `쉼표 삭제`, `볼륨 조절`, `시작 공백 시간`, `장르 편곡` 편집 기능을 제공합니다.
+- `쉼표 삭제`, `볼륨 조절`, `음정 조절`, `시작 공백 시간`, `장르 편곡` 편집 기능을 제공합니다.
 - 사운드 폰트 선택, 자동/사용자 음색 프리셋, 채널별 음색 설정, 전체/채널 음소거를 제공합니다.
 
 ### 3. Dialog 목록
@@ -127,6 +130,8 @@ mabinogi_mml_public/
 | `codeHelpDialog` | 지원 MML 코드 도움말, 숫자형 명령 설명/예시 |
 | `restTrimDialog` | 짧은 쉼표 삭제 길이와 적용 채널 선택 |
 | `bulkVolumeDialog` | 볼륨 조절 변화량과 적용 채널 선택 |
+| `bulkPitchDialog` | 옥타브 변화량과 적용 채널 선택 |
+| `tempoEditDialog` | 슬라이더/피아노롤에서 선택한 템포를 `32~255` 범위로 수정 |
 | `leadingSilenceDialog` | 시작 공백 초 단위 입력 |
 | `genreArrangeDialog` | 재즈/발라드/보사노바/록/펑크 장르, 변형 강도, 멜로디 기준 채널 선택 |
 | `splitCopyDialog` | 나눠복사 결과, 악보별 듣기/복사 |
@@ -287,7 +292,9 @@ MIDI 변환은 `js/midi-to-mml.js`가 담당합니다. MusicXML은 `js/musicxml-
 - 템포 `T`는 파트별 템포가 아니라 전체 성부에 공유되는 글로벌 템포로 취급합니다.
 - 모든 파트에서 발견한 템포 이벤트를 하나의 템포맵으로 합칩니다.
 - 같은 박자 위치에 여러 `T`가 있으면 나중 순서의 값을 최종값으로 사용합니다.
-- 재생 스케줄은 `buildSchedule()`에서 초 단위 노트 목록과 템포 마커를 만듭니다.
+- 재생 스케줄은 `buildSchedule()`에서 초 단위 노트 목록과 원본 `T` 명령 위치를 포함한 템포 마커를 만듭니다.
+- 진행 슬라이더의 템포 마커와 피아노롤의 템포 가로선을 누르면 같은 `tempoEditDialog`가 열립니다.
+- 수정값은 `32~255` 범위로 제한하며, 명시된 `T`가 있으면 해당 명령만 교체합니다. 시작 템포가 생략된 악보의 첫 마커를 수정하면 첫 채널 앞에 새 `T` 명령을 삽입합니다.
 
 ### 자동 최적화
 
@@ -319,6 +326,16 @@ MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 쉼표
 - 볼륨 변화량은 `-15 ~ 15` 사이의 정수만 입력할 수 있습니다.
 - 선택한 채널의 모든 음표 볼륨에 변화량을 더합니다.
 - 결과 볼륨은 마비노기 MML 지원 범위인 `V0 ~ V15`로 제한합니다.
+- Dialog를 열면 기본으로 6채널이 모두 체크되어 있습니다.
+- `전부 선택` / `선택 해제` 버튼으로 적용 채널을 빠르게 바꿀 수 있습니다.
+
+### 음정 조절
+
+- `음정 조절` 버튼에서 Dialog를 엽니다.
+- 옥타브 변화량은 `-7 ~ 7` 사이의 정수만 입력할 수 있습니다.
+- Dialog의 6채널 체크박스에서 적용할 채널을 선택합니다.
+- 선택한 채널에 이미 적혀 있는 `O숫자` 명령의 숫자만 증감합니다. 음표, 길이, `<`/`>` 상대 옥타브 명령은 다시 작성하지 않습니다.
+- 결과 `O숫자`는 마비노기 MML 범위인 `O0 ~ O7` 안으로 제한하며, 제한된 명령 수를 적용 결과에 표시합니다.
 - Dialog를 열면 기본으로 6채널이 모두 체크되어 있습니다.
 - `전부 선택` / `선택 해제` 버튼으로 적용 채널을 빠르게 바꿀 수 있습니다.
 
@@ -459,7 +476,8 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 | `preview_mml_start` | MMI/3MLE MML 미리듣기 시작 | `scope`, `channel_count` |
 | `midi_convert_complete` | MIDI/MusicXML 변환 완료 | `source_type`, `export_channels`, `instrument_groups`, `optimized_chars` |
 | `playback_start` | 메인 MML 재생 시작 | `channel_count` |
-| `rest_trim_apply`, `bulk_volume_adjust`, `leading_silence_apply`, `genre_arrange_apply` | 편집 도구 적용 성공 | 도구별 설정값과 적용 채널 수 |
+| `rest_trim_apply`, `bulk_volume_adjust`, `bulk_pitch_adjust`, `leading_silence_apply`, `genre_arrange_apply` | 편집 도구 적용 성공 | 도구별 설정값과 적용 채널 수 |
+| `tempo_edit` | 슬라이더/피아노롤 템포 수정 성공 | `before_bpm`, `after_bpm` |
 | `copy_all_mml`, `local_save_mml`, `drive_save_mml` | 복사·저장 성공 | `channel_count`, `create_new` |
 | `split_copy_open`, `preview_split_page`, `copy_split_page` | 나눠복사 진입·미리듣기·복사 | 없음 |
 | `open_midi_extract_dialog`, `download_muscriptor_package` | MIDI 추출 기능 확인·패키지 다운로드 | `platform` |
@@ -487,7 +505,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 | MMI/3MLE import 변경 | `app.js`의 `readMabiIccoMmiFile()`, `readThreeMleMmlFile()`, `openMmiImportDialog()`, `toggleMmiSelectedPreview()`, `toggleMmiAllPreview()` |
 | 3MLE 템포 처리 변경 | `app.js`의 `extractThreeMleGlobalTempo()`, `applyThreeMleGlobalTempoToCandidates()` |
 | MML 파싱/시간 계산 변경 | `js/mml-parser.js` |
-| 최적화/쉼표/공백/나눠복사 변경 | `js/mml-optimizer.js` |
+| 최적화/쉼표/볼륨/음정/공백/나눠복사 변경 | `js/mml-optimizer.js` |
 | 재생/스케줄링/SF2 변경 | `js/sf2-sampler.js`, `app.js`의 재생 제어 함수 |
 | Google Drive 변경 | `app.js`의 Google 관련 함수, `js/google-config.js` |
 | Firebase Analytics 변경 | `js/firebase-config.js`, `js/firebase-analytics.js`, `app.js`의 `trackAnalytics()` 호출 위치 |
@@ -499,10 +517,19 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
-- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v4.3`가 보이는지
+- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v4.5`가 보이는지
 - [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 MML 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
+- [ ] 피아노롤 정지 위치 0초에서 첫 가로 격자가 건반 윗선에 맞는지
+- [ ] 피아노롤 가로 격자가 현재 템포의 `L4` 1박 간격으로 표시되는지
+- [ ] 재생 또는 진행 슬라이더 이동 시 격자와 템포 가로선이 노트와 함께 아래로 흐르는지
+- [ ] 템포 변경 지점에 얇은 `T숫자` 가로선이 표시되고 해당 선이 건반에 닿는 순간 템포가 바뀌는지
+- [ ] 진행 슬라이더의 `T숫자` 라벨과 피아노롤의 템포 가로선을 선택하면 같은 수정 팝업이 열리는지
+- [ ] 진행 슬라이더의 템포 세로선이 슬라이더 드래그를 가로막지 않는지
+- [ ] 재생 중 템포 수정 팝업을 열면 현재 위치를 유지한 채 재생이 정지되는지
+- [ ] 템포 수정 입력값이 `32~255`로 제한되고, 명시된 해당 `T` 명령만 바뀌는지
+- [ ] 시작 템포 명령이 없는 악보에서 첫 템포 마커를 수정하면 첫 채널 앞에 `T숫자`가 추가되는지
 - [ ] 전체 MML 편집과 개별 파트 탭 편집이 서로 동기화되는지
 - [ ] 전체 MML/개별 파트 탭에서 `T120` 같은 템포 명령이 배경색으로 강조되어 찾기 쉬운지
 - [ ] `코드 도움말`에서 `T/O/L/V/N`, 음표 길이, 쉼표 길이의 범위와 숫자 의미가 보이는지
@@ -511,6 +538,9 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - [ ] `쉼표 삭제`가 체크한 채널에만 적용되는지
 - [ ] `볼륨 조절` Dialog에서 기본 6채널이 모두 체크되고, `전부 선택` / `선택 해제`가 동작하는지
 - [ ] `볼륨 조절` 입력값이 -15~15로 제한되고, 체크한 채널의 V값만 변경되는지
+- [ ] `음정 조절` Dialog에서 기본 6채널이 모두 체크되고, `전부 선택` / `선택 해제`가 동작하는지
+- [ ] `음정 조절` 입력값이 -7~7로 제한되고, 체크한 채널의 기존 `O숫자` 명령만 증감하는지
+- [ ] 음표 및 `<`/`>` 명령은 변경되지 않고, 결과 `O숫자`가 `O0~O7`을 벗어나지 않는지
 - [ ] 나눠복사 Dialog에서 각 악보 듣기/복사가 동작하는지
 - [ ] MIDI 변환 Dialog 상단 안내가 기본 접힘 상태인지
 - [ ] MIDI/MusicXML 변환 Dialog 상단 안내를 펼쳤을 때 `연주 듣기 → 채널/악기 선택 → 미리 듣기/변환` 흐름을 이해할 수 있는지
@@ -545,6 +575,20 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 ---
 
 ## 변경 이력
+
+### v4.5
+- 버전 표기를 `v4.5`로 변경했습니다.
+- 피아노롤의 가로 격자 간격을 고정 픽셀값이 아닌 실제 `L4` 1박 길이로 변경했습니다.
+- 가로 격자의 기준점을 피아노 건반 윗선으로 맞췄습니다.
+- 가로 격자가 현재 재생 시간과 글로벌 템포맵을 따라 위에서 아래로 흐르도록 변경했습니다.
+- 피아노롤에 템포 변경 위치를 나타내는 `T숫자` 가로선을 추가했습니다.
+- 템포 가로선의 두께와 강조 효과를 줄여 노트와 격자를 덜 가리도록 조정했습니다.
+- 진행 슬라이더의 `T숫자` 라벨과 피아노롤 템포선을 선택해 `32~255` 범위에서 템포를 수정하는 Dialog를 추가했습니다.
+- 원본의 해당 `T` 명령만 교체하고, 시작 템포가 생략된 경우에는 첫 채널 앞에 새 `T` 명령을 삽입하도록 했습니다.
+- `볼륨 조절` 옆에 선택 채널의 기존 `O숫자` 명령만 일괄 증감하는 `음정 조절` 버튼과 Dialog를 추가했습니다.
+- 음정 조절은 음표를 다시 작성하지 않고 `O숫자`만 `-7~7` 범위에서 증감하며 결과를 `O0~O7`로 제한합니다.
+- 진행 슬라이더의 템포 세로선이 드래그를 가로막지 않도록 원래 비상호작용 크기로 되돌리고, `T숫자` 라벨만 선택 가능하게 했습니다.
+- 템포 수정 팝업을 여는 즉시 현재 재생 위치를 보존한 채 재생을 정지하도록 변경했습니다.
 
 ### v4.3
 - 버전 표기를 `v4.3`으로 변경했습니다.
@@ -768,3 +812,10 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 
 샘플 `sample_out.mid`는 사용자가 재생 버튼을 누를 때만 불러옵니다. 먼저 브라우저의 MIDI 직접 재생을 시도하고, 지원하지 않는 환경에서는 파일을 분석해 기본 SF2로 재생합니다. 영상과 입력 오디오도 각 재생 버튼을 누를 때만 불러옵니다.
+
+
+### v4.5 BETA UI · 템포 편집 보완
+- 공통 BETA `B` 마커를 완전한 원형으로 변경했습니다.
+- MIDI 추출 버튼을 파일/구글 작업 묶음 안에 배치해 좁은 폭에서 별도 줄로 밀리지 않게 했습니다. 아주 좁은 화면에서는 작업 묶음을 한 줄 가로 스크롤로 유지합니다.
+- 피아노롤의 펼치기/접기 표시가 템포 클릭 판정보다 우선하도록 조정했습니다.
+- 재생 중 템포 편집을 열었다면 취소 또는 수정 후 저장 여부와 관계없이 편집 전 재생 위치에서 자동으로 재생을 재개합니다.

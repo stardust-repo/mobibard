@@ -11,7 +11,7 @@ function parseMabinogiMml(text) {
   if (partInfos.length > 6) throw new Error("이 샘플은 최대 6파트까지만 재생합니다.");
   while (partInfos.length < 6) partInfos.push({ text: "", sourceStart: 0, sourceEnd: 0, rawStart: 0, rawEnd: 0 });
   const parsedParts = partInfos.map((p, i) => parseMmlPart(p.text, i, { globalOffset: p.sourceStart }));
-  const tempos = [{ beat: 0, bpm: 120, part: -1, order: -1 }];
+  const tempos = [{ beat: 0, bpm: 120, part: -1, order: -1, explicit: false, sourceStart: -1, sourceEnd: -1, globalSourceStart: -1, globalSourceEnd: -1 }];
   for (const p of parsedParts) tempos.push(...p.tempos);
   tempos.sort((a, b) => a.beat - b.beat || a.order - b.order || a.part - b.part);
   for (const t of tempos) {
@@ -177,8 +177,21 @@ function parseMmlPart(s, partIndex, options = {}) {
       if (pendingTie) throw new Error(`${partIndex + 1}파트: &가 연속으로 나왔습니다.`);
       pendingTie = true;
     } else if (ch === "t") {
-      i++; const bpm = readNumber(); if (bpm == null) throw new Error(`${partIndex + 1}파트: T 뒤에 숫자가 필요합니다.`);
-      tempos.push({ beat, bpm, part: partIndex, order: order++ });
+      const tempoStart = i;
+      i++;
+      const bpm = readNumber();
+      if (bpm == null) throw new Error(`${partIndex + 1}파트: T 뒤에 숫자가 필요합니다.`);
+      tempos.push({
+        beat,
+        bpm,
+        part: partIndex,
+        order: order++,
+        explicit: true,
+        sourceStart: tempoStart,
+        sourceEnd: i,
+        globalSourceStart: globalOffset + tempoStart,
+        globalSourceEnd: globalOffset + i
+      });
     } else if (ch === "o") {
       i++; const v = readNumber(); if (v == null) throw new Error(`${partIndex + 1}파트: O 뒤에 숫자가 필요합니다.`);
       if (v < 0 || v > 9) throw new Error(`${partIndex + 1}파트: O${v}는 지원 범위를 벗어났습니다.`); octave = v;
@@ -199,11 +212,24 @@ function parseMmlPart(s, partIndex, options = {}) {
 function normalizeTempoMap(events) {
   const map = [];
   for (const ev of events) {
+    const normalized = {
+      beat: Number(ev.beat) || 0,
+      bpm: Number(ev.bpm) || 120,
+      part: Number.isInteger(ev.part) ? ev.part : -1,
+      order: Number.isFinite(ev.order) ? ev.order : -1,
+      explicit: Boolean(ev.explicit),
+      sourceStart: Number.isFinite(ev.sourceStart) ? ev.sourceStart : -1,
+      sourceEnd: Number.isFinite(ev.sourceEnd) ? ev.sourceEnd : -1,
+      globalSourceStart: Number.isFinite(ev.globalSourceStart) ? ev.globalSourceStart : -1,
+      globalSourceEnd: Number.isFinite(ev.globalSourceEnd) ? ev.globalSourceEnd : -1
+    };
     const last = map[map.length - 1];
-    if (last && Math.abs(last.beat - ev.beat) < EPS) last.bpm = ev.bpm;
-    else map.push({ beat: ev.beat, bpm: ev.bpm });
+    if (last && Math.abs(last.beat - normalized.beat) < EPS) map[map.length - 1] = normalized;
+    else map.push(normalized);
   }
-  if (map[0].beat !== 0) map.unshift({ beat: 0, bpm: 120 });
+  if (!map.length || map[0].beat !== 0) {
+    map.unshift({ beat: 0, bpm: 120, part: -1, order: -1, explicit: false, sourceStart: -1, sourceEnd: -1, globalSourceStart: -1, globalSourceEnd: -1 });
+  }
   return map;
 }
 
@@ -228,11 +254,23 @@ function buildSchedule(parsed) {
   const partLen = (parsed.parts || []).reduce((m, p) => Math.max(m, beatToSeconds(Number(p.lengthBeats) || 0, parsed.tempos)), 0);
   const len = Math.max(noteLen, partLen);
   const tempoMarkers = buildTempoMarkers(parsed.tempos, len);
+  const tempoMap = (parsed.tempos || []).map((tempo) => ({
+    beat: Math.max(0, Number(tempo.beat) || 0),
+    time: beatToSeconds(Number(tempo.beat) || 0, parsed.tempos),
+    bpm: Math.max(1, Number(tempo.bpm) || 120),
+    part: Number.isInteger(tempo.part) ? tempo.part : -1,
+    explicit: Boolean(tempo.explicit),
+    sourceStart: Number.isFinite(tempo.sourceStart) ? tempo.sourceStart : -1,
+    sourceEnd: Number.isFinite(tempo.sourceEnd) ? tempo.sourceEnd : -1,
+    globalSourceStart: Number.isFinite(tempo.globalSourceStart) ? tempo.globalSourceStart : -1,
+    globalSourceEnd: Number.isFinite(tempo.globalSourceEnd) ? tempo.globalSourceEnd : -1
+  }));
   return {
     notes,
     rests,
     duration: len,
     tempoMarkers,
+    tempoMap,
     summary: `예상 길이 ${formatTime(len)}`
   };
 }
@@ -243,7 +281,7 @@ function buildTempoMarkers(tempoMap, durationSec) {
 
   // 시작 템포도 사용자가 위치를 파악할 수 있도록 표시한다.
   const first = tempoMap[0];
-  markers.push({ beat: first.beat, time: 0, bpm: first.bpm });
+  markers.push(makeTempoMarker(first, 0));
 
   let previousBpm = first.bpm;
   for (let i = 1; i < tempoMap.length; i++) {
@@ -253,9 +291,23 @@ function buildTempoMarkers(tempoMap, durationSec) {
 
     const time = beatToSeconds(cur.beat, tempoMap);
     if (time < -EPS || time > durationSec + EPS) continue;
-    markers.push({ beat: cur.beat, time: Math.max(0, Math.min(durationSec, time)), bpm: cur.bpm });
+    markers.push(makeTempoMarker(cur, Math.max(0, Math.min(durationSec, time))));
   }
   return markers;
+}
+
+function makeTempoMarker(tempo, time) {
+  return {
+    beat: Math.max(0, Number(tempo?.beat) || 0),
+    time: Math.max(0, Number(time) || 0),
+    bpm: Math.max(1, Number(tempo?.bpm) || 120),
+    part: Number.isInteger(tempo?.part) ? tempo.part : -1,
+    explicit: Boolean(tempo?.explicit),
+    sourceStart: Number.isFinite(tempo?.sourceStart) ? tempo.sourceStart : -1,
+    sourceEnd: Number.isFinite(tempo?.sourceEnd) ? tempo.sourceEnd : -1,
+    globalSourceStart: Number.isFinite(tempo?.globalSourceStart) ? tempo.globalSourceStart : -1,
+    globalSourceEnd: Number.isFinite(tempo?.globalSourceEnd) ? tempo.globalSourceEnd : -1
+  };
 }
 
 function beatToSeconds(beat, tempoMap) {

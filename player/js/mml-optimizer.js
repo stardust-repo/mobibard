@@ -1098,6 +1098,56 @@
   }
 
 
+  function transposeOctavesMml(text, options = {}) {
+    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const rawOctaves = Number(options.octaves ?? options.delta ?? 0);
+    if (!Number.isFinite(rawOctaves)) throw new Error("옥타브 변화량은 숫자로 입력해 주세요.");
+    const octaves = clamp(Math.round(rawOctaves), -7, 7);
+    let source = String(text || "").replace(/^\uFEFF/, "").trim();
+    const wrapped = source.match(/^\s*MML\s*@([\s\S]*?)\s*;?\s*$/i);
+    if (wrapped) source = wrapped[1];
+    if (/\[|\]/.test(source)) throw new Error("마비노기 MML에서는 [] 표기를 사용할 수 없습니다.");
+    const sourceParts = source === "" ? [] : source.split(",").slice(0, partCount).map(part => String(part || "").trim());
+    while (sourceParts.length < partCount) sourceParts.push("");
+
+    const targetPartIndexes = normalizeTargetPartIndexes(options, partCount);
+    let touchedCommands = 0;
+    let changedCommands = 0;
+    let clampedCommands = 0;
+
+    const outputParts = sourceParts.map((part, index) => {
+      const shouldAdjust = targetPartIndexes == null || targetPartIndexes.has(index);
+      if (!shouldAdjust) return part || "";
+
+      return String(part || "").replace(/O(\d+)/gi, (full, digits) => {
+        const beforeOctave = Number(digits);
+        if (!Number.isInteger(beforeOctave)) return full;
+        const requestedOctave = beforeOctave + octaves;
+        const afterOctave = octaves === 0 ? beforeOctave : clamp(requestedOctave, 0, 7);
+        touchedCommands++;
+        if (afterOctave !== requestedOctave) clampedCommands++;
+        if (afterOctave !== beforeOctave) changedCommands++;
+        return `${full.charAt(0)}${afterOctave}`;
+      });
+    });
+
+    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+    const before = countPartChars(sourceParts);
+    const after = countPartChars(outputParts);
+    return {
+      mml,
+      parts: outputParts,
+      before,
+      after,
+      saved: before - after,
+      octaves,
+      touchedCommands,
+      changedCommands,
+      clampedCommands
+    };
+  }
+
+
   function trimLeadingSilenceMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
@@ -2093,6 +2143,22 @@
     return out;
   }
 
+  function injectOriginalPartTempoEvents(events, tempos) {
+    const ordered = [...(tempos || [])]
+      .filter(tempo => Number.isFinite(tempo?.pos) && Number.isFinite(tempo?.bpm))
+      .sort((a, b) => a.pos - b.pos || a.order - b.order);
+    if (!ordered.length) return mergeAdjacentRests(events.map(event => ({ ...event })));
+
+    const initialBpms = ordered.filter(tempo => tempo.pos <= 0).map(tempo => tempo.bpm);
+    const laterTempos = ordered.filter(tempo => tempo.pos > 0);
+    let result = injectTempoEvents(events, laterTempos);
+    if (initialBpms.length) {
+      result = [{ type: "tempo", start: 0, duration: 0, preTempos: initialBpms }, ...result];
+      result = normalizeEventStarts(result);
+    }
+    return result;
+  }
+
   function injectTempoEvents(events, tempoMap) {
     const tempos = (tempoMap || []).filter(t => t.pos > 0).sort((a, b) => a.pos - b.pos);
     if (!tempos.length) return mergeAdjacentRests(events.map(e => ({ ...e })));
@@ -2293,7 +2359,7 @@
       });
     }
 
-    const startTempo = state.isMelody ? `T${state.startTempo || DEFAULT_TEMPO}` : "";
+    const startTempo = state.isMelody && state.emitStartTempo !== false ? `T${state.startTempo || DEFAULT_TEMPO}` : "";
     const header = `${startTempo}V${state.initVolume}O${state.initOctave}L${state.initialL.label}`;
     let dp = new Map([[state.initialL.label, { text: header, lState: state.initialL }]]);
 
@@ -2483,5 +2549,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = { optimizeMml, optimizePart, arrangeGenreMml, countShortRestsMml, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, splitMmlPages };
+  window.MabiOptimizer = { optimizeMml, optimizePart, arrangeGenreMml, countShortRestsMml, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages };
 })();
