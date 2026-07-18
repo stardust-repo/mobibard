@@ -262,6 +262,7 @@
   let pianoRollRefreshRaf = 0;
   let pianoRollRefreshSettleTimer = 0;
   let pianoRollResizeObserver = null;
+  let pianoRollHoveredTempoMarker = null;
   let selectedTempoMarker = null;
   let tempoEditResumePlayback = false;
   let tempoEditResumeOffset = 0;
@@ -395,6 +396,8 @@
       if (!tempoEditSuppressCloseResume) resumePlaybackAfterTempoEdit();
     });
     pianoRoll?.addEventListener("click", handlePianoRollClick);
+    pianoRoll?.addEventListener("pointermove", handlePianoRollPointerMove);
+    pianoRoll?.addEventListener("pointerleave", clearPianoRollTempoHover);
     pianoRoll?.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
@@ -678,6 +681,7 @@
       return;
     }
 
+    // 템포 가로선은 순수 표시 요소다. 왼쪽의 T숫자 라벨만 편집 버튼으로 동작한다.
     const marker = findPianoRollTempoMarkerAtEvent(event);
     if (marker) {
       event.preventDefault();
@@ -686,6 +690,22 @@
       return;
     }
     togglePianoRoll();
+  }
+
+  function handlePianoRollPointerMove(event) {
+    const toggleControl = event?.target?.closest?.(".piano-roll-corner");
+    const marker = toggleControl ? null : findPianoRollTempoMarkerAtEvent(event);
+    if (marker === pianoRollHoveredTempoMarker) return;
+    pianoRollHoveredTempoMarker = marker;
+    pianoRoll?.classList.toggle("tempo-label-hover", Boolean(marker));
+    requestPianoRollRefresh(false);
+  }
+
+  function clearPianoRollTempoHover() {
+    if (!pianoRollHoveredTempoMarker) return;
+    pianoRollHoveredTempoMarker = null;
+    pianoRoll?.classList.remove("tempo-label-hover");
+    requestPianoRollRefresh(false);
   }
 
   function findPianoRollTempoMarkerAtEvent(event) {
@@ -716,16 +736,31 @@
       const rawY = fallAreaHeight - ((time - current) * pxPerSec);
       if (rawY < -1 || rawY > fallAreaHeight + 1) continue;
       const lineY = Math.max(0.5, Math.min(fallAreaHeight - 0.5, Math.round(rawY) + 0.5));
-      const lineDistance = Math.abs(y - lineY);
-      const labelY = Math.max(2, Math.min(fallAreaHeight - 21, lineY - 19));
-      const labelHit = x >= 3 && x <= 78 && y >= labelY - 2 && y <= labelY + 21;
-      const hitDistance = labelHit ? 0 : lineDistance;
-      if ((labelHit || lineDistance <= 7) && hitDistance < bestDistance) {
+      const bpm = Math.max(1, Math.round(Number(marker?.bpm) || 120));
+      const labelWidth = measurePianoRollTempoLabelWidth(bpm);
+      const labelHeight = 17;
+      const labelX = 5;
+      const labelY = Math.max(2, Math.min(fallAreaHeight - labelHeight - 2, lineY - labelHeight - 2));
+      const labelHit = x >= labelX - 3 && x <= labelX + labelWidth + 3 && y >= labelY - 3 && y <= labelY + labelHeight + 3;
+      if (labelHit && 0 < bestDistance) {
         best = marker;
-        bestDistance = hitDistance;
+        bestDistance = 0;
       }
     }
     return best;
+  }
+
+
+  function measurePianoRollTempoLabelWidth(bpm) {
+    const fallback = Math.max(31, 7 * String(`T${bpm}`).length + 12);
+    if (!(pianoRollCanvas instanceof HTMLCanvasElement)) return fallback;
+    const ctx = pianoRollCanvas.getContext("2d");
+    if (!ctx) return fallback;
+    ctx.save();
+    ctx.font = `950 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const width = Math.ceil(ctx.measureText(`T${bpm}`).width) + 12;
+    ctx.restore();
+    return Math.max(31, width);
   }
 
   function applyPianoRollExpandedState(persist) {
@@ -733,7 +768,7 @@
     pianoRoll.classList.toggle("expanded", pianoRollExpanded);
     pianoRoll.setAttribute("aria-expanded", pianoRollExpanded ? "true" : "false");
     pianoRoll.setAttribute("aria-label", pianoRollExpanded ? "피아노 롤 접기" : "피아노 롤 펼치기");
-    pianoRoll.title = pianoRollExpanded ? "빈 영역을 클릭하면 피아노 롤을 접고, 템포선은 클릭해서 수정합니다." : "빈 영역을 클릭하면 피아노 롤을 펼치고, 템포선은 클릭해서 수정합니다.";
+    pianoRoll.title = pianoRollExpanded ? "빈 영역을 클릭하면 피아노 롤을 접고, 왼쪽 T숫자 버튼을 클릭하면 템포를 수정합니다." : "빈 영역을 클릭하면 피아노 롤을 펼치고, 왼쪽 T숫자 버튼을 클릭하면 템포를 수정합니다.";
     if (pianoRollToggleLabel) pianoRollToggleLabel.textContent = pianoRollExpanded ? "접기" : "펼치기";
     if (persist) writePref("pianoRollExpanded", pianoRollExpanded ? "1" : "0");
   }
@@ -7256,19 +7291,35 @@ ${shortError(err)}`);
       ctx.restore();
 
       const label = `T${bpm}`;
+      const hovered = marker === pianoRollHoveredTempoMarker;
       ctx.save();
       ctx.font = `950 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
       ctx.textBaseline = "middle";
       ctx.textAlign = "left";
       const labelWidth = Math.ceil(ctx.measureText(label).width) + 12;
       const labelHeight = 17;
-      const labelX = 5;
-      const labelY = Math.max(2, Math.min(fallAreaHeight - labelHeight - 2, y - labelHeight - 2));
+      const baseLabelX = 5;
+      const baseLabelY = Math.max(2, Math.min(fallAreaHeight - labelHeight - 2, y - labelHeight - 2));
+      const labelX = hovered ? baseLabelX - 1 : baseLabelX;
+      const labelY = hovered ? Math.max(1, baseLabelY - 1) : baseLabelY;
+      const drawWidth = hovered ? labelWidth + 2 : labelWidth;
+      const drawHeight = hovered ? labelHeight + 2 : labelHeight;
+      if (hovered) {
+        ctx.shadowColor = lineColor;
+        ctx.shadowBlur = 9;
+        ctx.shadowOffsetY = 1;
+      }
       ctx.fillStyle = lineColor;
-      drawRoundRect(ctx, labelX, labelY, labelWidth, labelHeight, 8);
+      drawRoundRect(ctx, labelX, labelY, drawWidth, drawHeight, hovered ? 10 : 8);
       ctx.fill();
+      if (hovered) {
+        ctx.shadowColor = "transparent";
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+        ctx.stroke();
+      }
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(label, labelX + 6, labelY + labelHeight / 2 + 0.25);
+      ctx.fillText(label, baseLabelX + 6, baseLabelY + labelHeight / 2 + 0.25);
       ctx.restore();
     }
     ctx.restore();

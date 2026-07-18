@@ -216,6 +216,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   border-color: color-mix(in srgb, var(--accent), var(--line) 50%);
   box-shadow: 0 8px 18px var(--panel-shadow);
 }
+.piano-roll.tempo-label-hover .piano-roll-stage {
+  border-color: color-mix(in srgb, var(--tempo), var(--line) 42%);
+}
 .piano-roll:focus-visible .piano-roll-stage {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
