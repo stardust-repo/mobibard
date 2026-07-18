@@ -61,8 +61,8 @@
 
   function arrangeGenreMml(text, options = {}) {
     const partCount = 6;
-    const genre = String(options.genre || "jazz").trim().toLowerCase();
-    const supportedGenres = new Set(["jazz", "ballad", "bossa", "rock", "funk"]);
+    const genre = String(options.genre || "pop").trim().toLowerCase();
+    const supportedGenres = new Set(["pop", "jazz", "ballad", "bossa", "rock", "funk", "classical"]);
     if (!supportedGenres.has(genre)) throw new Error("지원하지 않는 장르입니다.");
 
     const strength = normalizeGenreArrangeStrength(options.strength);
@@ -202,6 +202,11 @@
     if (genre === "jazz") return buildJazzChordPlan(notes, key, songEnd, strength);
 
     const config = {
+      pop: {
+        chords: buildPopDiatonicChords(key),
+        passing: false,
+        split: intensity => strength === "strong" && intensity.score >= 0.52
+      },
       ballad: {
         chords: buildBalladDiatonicChords(key),
         passing: false,
@@ -221,6 +226,11 @@
         chords: buildFunkDiatonicChords(key),
         passing: false,
         split: intensity => strength !== "light" && intensity.score >= 0.34
+      },
+      classical: {
+        chords: buildClassicalDiatonicChords(key),
+        passing: false,
+        split: intensity => strength === "strong" || (strength === "normal" && intensity.score >= 0.62)
       }
     }[genre];
 
@@ -264,6 +274,22 @@
       }
     }
     return segments;
+  }
+
+  function buildPopDiatonicChords(key) {
+    const roots = key.mode === "minor" ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+    const qualities = key.mode === "minor"
+      ? ["minor", "dim", "major", "minor", "major", "major", "major"]
+      : ["major", "minor", "minor", "major", "major", "minor", "dim"];
+    return roots.map((interval, degree) => createJazzChord((key.tonic + interval) % 12, qualities[degree], degree));
+  }
+
+  function buildClassicalDiatonicChords(key) {
+    const roots = key.mode === "minor" ? [0, 2, 3, 5, 7, 8, 11] : [0, 2, 4, 5, 7, 9, 11];
+    const qualities = key.mode === "minor"
+      ? ["minor", "dim", "major", "minor", "major", "major", "dim"]
+      : ["major", "minor", "minor", "major", "major", "minor", "dim"];
+    return roots.map((interval, degree) => createJazzChord((key.tonic + interval) % 12, qualities[degree], degree));
   }
 
   function buildBalladDiatonicChords(key) {
@@ -452,11 +478,74 @@
 
 
   function buildGenreAccompanimentParts(genre, chordPlan, options) {
+    if (genre === "pop") return buildPopAccompanimentParts(chordPlan, options);
+    if (genre === "classical") return buildClassicalAccompanimentParts(chordPlan, options);
     if (genre === "ballad") return buildBalladAccompanimentParts(chordPlan, options);
     if (genre === "bossa") return buildBossaAccompanimentParts(chordPlan, options);
     if (genre === "rock") return buildRockAccompanimentParts(chordPlan, options);
     if (genre === "funk") return buildFunkAccompanimentParts(chordPlan, options);
     return buildJazzAccompanimentParts(chordPlan, options);
+  }
+
+  function buildPopAccompanimentParts(chordPlan, options) {
+    const strength = options.strength;
+    const voiceCount = strength === "light" ? 2 : (strength === "strong" ? 4 : 3);
+    const voiceSegments = Array.from({ length: 4 }, () => []);
+    const bassSegments = [];
+    let previousVoicing = null;
+    let previousBass = null;
+
+    for (let i = 0; i < chordPlan.length; i++) {
+      const segment = chordPlan[i];
+      const nextChord = chordPlan[i + 1]?.chord || segment.chord;
+      const voicing = chooseGenreVoicing(segment.chord, voiceCount, options.medianPitch, previousVoicing, strength, "pop");
+      previousVoicing = voicing;
+      const hits = buildPopHits(segment, strength);
+      const volume = clamp(Math.round(options.baseVolume + 1 + segment.intensity.score * 2), 3, 13);
+      pushVoicingHits(voiceSegments, voicing, hits, segment, volume, { accentBeats: strength !== "light" });
+      const bass = buildPopBassSegments(segment, nextChord, strength, previousBass, options.baseVolume);
+      if (bass.length) previousBass = bass[bass.length - 1].midi;
+      bassSegments.push(...bass);
+    }
+    return buildAccompanimentEventParts(voiceSegments, bassSegments, options.songEnd);
+  }
+
+  function buildClassicalAccompanimentParts(chordPlan, options) {
+    const strength = options.strength;
+    const voiceSegments = Array.from({ length: 4 }, () => []);
+    const bassSegments = [];
+    let previousVoicing = null;
+    let previousBass = null;
+
+    for (let i = 0; i < chordPlan.length; i++) {
+      const segment = chordPlan[i];
+      const nextChord = chordPlan[i + 1]?.chord || segment.chord;
+      const voicing = chooseGenreVoicing(segment.chord, 4, options.medianPitch, previousVoicing, strength, "classical");
+      previousVoicing = voicing;
+      const chordHits = buildClassicalChordHits(segment, strength);
+      const chordVoices = strength === "light" ? 2 : 3;
+      const volume = clamp(Math.round(options.baseVolume + segment.intensity.score * 2), 3, 12);
+      pushVoicingHits(voiceSegments, voicing.slice(0, chordVoices), chordHits, segment, volume);
+
+      if (strength !== "light" && voicing.length >= 3) {
+        const arpeggio = buildClassicalArpeggioHits(segment, strength);
+        const order = strength === "strong" ? [0, 2, 1, 3, 1, 2] : [0, 2, 1, 2];
+        for (let hitIndex = 0; hitIndex < arpeggio.length; hitIndex++) {
+          const hit = arpeggio[hitIndex];
+          voiceSegments[3].push({
+            start: segment.start + hit.offset,
+            duration: Math.min(hit.duration, segment.end - (segment.start + hit.offset)),
+            midi: voicing[order[hitIndex % order.length] % voicing.length],
+            volume: clamp(volume - 1 + (hitIndex === 0 ? 1 : 0), 2, 13)
+          });
+        }
+      }
+
+      const bass = buildClassicalBassSegments(segment, nextChord, strength, previousBass, options.baseVolume);
+      if (bass.length) previousBass = bass[bass.length - 1].midi;
+      bassSegments.push(...bass);
+    }
+    return buildAccompanimentEventParts(voiceSegments, bassSegments, options.songEnd);
   }
 
   function buildBalladAccompanimentParts(chordPlan, options) {
@@ -587,6 +676,31 @@
     return result;
   }
 
+  function buildPopHits(segment, strength) {
+    const q = durationUnits(4, 0);
+    const h = durationUnits(2, 0);
+    const e = durationUnits(8, 0);
+    const gap = durationUnits(64, 0);
+    if (strength === "light") return makeGenreHits(segment, [0, h], Math.max(e, h - gap));
+    if (strength === "strong") return makeGenreHits(segment, [0, e, q, q + e, q * 2, q * 3], Math.max(durationUnits(16, 0), e - gap));
+    return makeGenreHits(segment, [0, q, q * 2, q * 3], Math.max(e, q - gap));
+  }
+
+  function buildClassicalChordHits(segment, strength) {
+    const h = durationUnits(2, 0);
+    const gap = durationUnits(32, 0);
+    if (strength === "light") return makeGenreHits(segment, [0], Math.max(1, segment.duration - gap));
+    return makeGenreHits(segment, [0, h], Math.max(durationUnits(8, 0), h - gap));
+  }
+
+  function buildClassicalArpeggioHits(segment, strength) {
+    const step = strength === "strong" ? durationUnits(8, 0) : durationUnits(4, 0);
+    const gap = durationUnits(64, 0);
+    const offsets = [];
+    for (let offset = 0; offset < segment.duration; offset += step) offsets.push(offset);
+    return makeGenreHits(segment, offsets, Math.max(durationUnits(64, 0), step - gap));
+  }
+
   function buildBalladHits(segment, strength) {
     const q = durationUnits(4, 0);
     const h = durationUnits(2, 0);
@@ -634,6 +748,14 @@
     if (genre === "jazz") return chooseJazzVoicing(chord, voiceCount, melodyMedian, previousVoicing, strength);
     const quality = chord.quality;
     const guides = {
+      pop: {
+        major: [0, 4, 7, 12], minor: [0, 3, 7, 12], dim: [0, 3, 6, 12],
+        add9: [0, 4, 7, 14], minAdd9: [0, 3, 7, 14]
+      },
+      classical: {
+        major: [0, 4, 7, 12], minor: [0, 3, 7, 12], dim: [0, 3, 6, 12],
+        maj7: [0, 4, 7, 11], min7: [0, 3, 7, 10], dom7: [0, 4, 7, 10]
+      },
       ballad: {
         major: [0, 4, 7, 14], add9: [0, 4, 7, 14], minor: [0, 3, 7, 14], minAdd9: [0, 3, 7, 14],
         maj7: [0, 4, 7, 11], min7: [0, 3, 7, 10], dom7: [0, 4, 7, 10], sus4: [0, 5, 7, 12],
@@ -667,6 +789,51 @@
       pitches.push(pitch);
     }
     return pitches;
+  }
+
+  function buildPopBassSegments(segment, nextChord, strength, previousBass, baseVolume) {
+    const q = durationUnits(4, 0);
+    const h = durationUnits(2, 0);
+    const e = durationUnits(8, 0);
+    const gap = durationUnits(64, 0);
+    const root = chooseJazzBassPitch(segment.chord.rootPc, previousBass, 41);
+    const fifth = nearestPitchForClass((segment.chord.rootPc + 7) % 12, root + 5, 32, 56);
+    const nextRoot = chooseJazzBassPitch(nextChord.rootPc, root, 41);
+    const volume = clamp(Math.round(baseVolume + 1 + segment.intensity.score * 2), 4, 14);
+    let pattern;
+    if (strength === "light") pattern = [[0, root], [h, fifth]];
+    else if (strength === "strong") pattern = [[0, root], [e, root], [q, fifth], [q + e, root], [q * 2, root], [q * 3, chooseJazzApproachPitch(fifth, nextRoot, segment.chord)]];
+    else pattern = [[0, root], [q, root], [q * 2, fifth], [q * 3, root]];
+    return pattern.filter(([offset]) => offset < segment.duration).map(([offset, midi], index) => ({
+      start: segment.start + offset,
+      duration: Math.max(1, Math.min((strength === "strong" ? e : q) - gap, segment.duration - offset)),
+      midi,
+      volume: clamp(volume + (index === 0 ? 1 : 0), 3, 15)
+    }));
+  }
+
+  function buildClassicalBassSegments(segment, nextChord, strength, previousBass, baseVolume) {
+    const q = durationUnits(4, 0);
+    const h = durationUnits(2, 0);
+    const e = durationUnits(8, 0);
+    const gap = durationUnits(64, 0);
+    const root = chooseJazzBassPitch(segment.chord.rootPc, previousBass, 40);
+    const thirdInterval = segment.chord.quality === "minor" || segment.chord.quality === "dim" ? 3 : 4;
+    const third = nearestPitchForClass((segment.chord.rootPc + thirdInterval) % 12, root + 4, 31, 57);
+    const fifth = nearestPitchForClass((segment.chord.rootPc + 7) % 12, root + 7, 31, 57);
+    const nextRoot = chooseJazzBassPitch(nextChord.rootPc, root, 40);
+    const volume = clamp(Math.round(baseVolume + segment.intensity.score * 2), 3, 13);
+    let pattern;
+    if (strength === "light") pattern = [[0, root], [h, fifth]];
+    else if (strength === "strong") pattern = [[0, root], [e, fifth], [q, third], [q + e, fifth], [q * 2, root], [q * 2 + e, fifth], [q * 3, third], [q * 3 + e, chooseJazzApproachPitch(fifth, nextRoot, segment.chord)]];
+    else pattern = [[0, root], [q, fifth], [q * 2, third], [q * 3, fifth]];
+    const step = strength === "strong" ? e : (strength === "light" ? h : q);
+    return pattern.filter(([offset]) => offset < segment.duration).map(([offset, midi], index) => ({
+      start: segment.start + offset,
+      duration: Math.max(1, Math.min(step - gap, segment.duration - offset)),
+      midi,
+      volume: clamp(volume + (index === 0 ? 1 : 0), 2, 14)
+    }));
   }
 
   function buildBalladBassSegments(segment, nextChord, strength, previousBass, baseVolume) {
@@ -956,6 +1123,350 @@
     return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
   }
 
+
+
+  function generateDynamicsMml(text, options = {}) {
+    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const genre = String(options.genre || "pop").trim().toLowerCase();
+    const supportedGenres = new Set(["pop", "jazz", "ballad", "bossa", "rock", "funk", "classical"]);
+    if (!supportedGenres.has(genre)) throw new Error("지원하지 않는 강약 장르입니다.");
+    const strength = normalizeGenreArrangeStrength(options.strength);
+    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
+    while (sourceParts.length < partCount) sourceParts.push("");
+    const targetPartIndexes = normalizeTargetPartIndexes(options, partCount);
+    const outputParts = [...sourceParts];
+    const partResults = [];
+    let generatedCommands = 0;
+    let changedNotes = 0;
+    let processedPartCount = 0;
+    let skippedExpressivePartCount = 0;
+    let existingExpressivePartCount = 0;
+
+    for (let partIndex = 0; partIndex < partCount; partIndex++) {
+      const selected = targetPartIndexes == null || targetPartIndexes.has(partIndex);
+      if (!selected) {
+        partResults.push({ partIndex, status: "unselected", generatedCommands: 0, changedNotes: 0 });
+        continue;
+      }
+
+      const scanned = scanPartForDynamics(sourceParts[partIndex], partIndex);
+      const soundingNotes = scanned.notes.filter(note => note.volume > 0);
+      if (soundingNotes.length < 2) {
+        partResults.push({ partIndex, status: "no_notes", generatedCommands: 0, changedNotes: 0 });
+        continue;
+      }
+
+      const distinctVolumes = [...new Set(soundingNotes.map(note => clamp(note.volume, 2, 15)))];
+      const minVolume = Math.min(...distinctVolumes);
+      const maxVolume = Math.max(...distinctVolumes);
+      const volumeRange = maxVolume - minVolume;
+      const hasExistingExpression = distinctVolumes.length >= 3 || volumeRange >= 2;
+      if (hasExistingExpression) existingExpressivePartCount++;
+      if (hasExistingExpression && options.overwriteExisting !== true) {
+        skippedExpressivePartCount++;
+        partResults.push({
+          partIndex,
+          status: "existing_expression",
+          generatedCommands: 0,
+          changedNotes: 0,
+          distinctVolumeCount: distinctVolumes.length,
+          minVolume,
+          maxVolume,
+          volumeRange,
+          matchedConditions: [
+            ...(distinctVolumes.length >= 3 ? ["distinct_values"] : []),
+            ...(volumeRange >= 2 ? ["volume_range"] : [])
+          ]
+        });
+        continue;
+      }
+
+      const generated = buildDynamicsTargets(scanned.notes, {
+        genre,
+        strength,
+        partIndex,
+        baseVolume: clamp(Math.round(medianNumber(soundingNotes.map(note => note.volume), DEFAULT_VOLUME)), 2, 15)
+      });
+      const rewritten = rewritePartWithDynamics(sourceParts[partIndex], scanned, generated.targets);
+      outputParts[partIndex] = rewritten.part;
+      generatedCommands += rewritten.generatedCommands;
+      changedNotes += generated.changedNotes;
+      processedPartCount++;
+      partResults.push({
+        partIndex,
+        status: "generated",
+        generatedCommands: rewritten.generatedCommands,
+        changedNotes: generated.changedNotes,
+        baseVolume: generated.baseVolume,
+        minVolume: generated.minVolume,
+        maxVolume: generated.maxVolume
+      });
+    }
+
+    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+    const before = countPartChars(sourceParts);
+    const after = countPartChars(outputParts);
+    return {
+      mml,
+      parts: outputParts,
+      before,
+      after,
+      saved: before - after,
+      genre,
+      strength,
+      generatedCommands,
+      changedNotes,
+      processedPartCount,
+      skippedExpressivePartCount,
+      existingExpressivePartCount,
+      partResults
+    };
+  }
+
+  function scanPartForDynamics(input, partIndex) {
+    const s = String(input || "").trim();
+    let i = 0;
+    let pos = 0;
+    let octave = DEFAULT_OCTAVE;
+    let defaultUnits = durationUnits(DEFAULT_LENGTH, 0);
+    let volume = DEFAULT_VOLUME;
+    let pendingTie = false;
+    let lastTieTarget = null;
+    const notes = [];
+    const volumeRanges = [];
+
+    const fail = message => { throw new Error(`${partIndex + 1}파트: ${message}`); };
+    const skipSpace = () => { while (i < s.length && /\s/.test(s[i])) i++; };
+    const readNumber = () => {
+      const start = i;
+      while (i < s.length && /\d/.test(s[i])) i++;
+      return i > start ? { value: Number(s.slice(start, i)), text: s.slice(start, i) } : null;
+    };
+    const readDotsCount = () => {
+      let dots = 0;
+      while (s[i] === ".") { dots++; i++; }
+      return dots;
+    };
+    const readLengthUnits = () => {
+      const n = readNumber();
+      const dots = readDotsCount();
+      if (!n) return durationUnitsFromBase(defaultUnits, dots);
+      if (!VALID_LENGTHS.includes(n.value)) fail(`길이 ${n.value}은 지원하지 않습니다.`);
+      return durationUnits(n.value, dots);
+    };
+    const appendToken = token => {
+      token.duration = Math.round(token.duration);
+      if (pendingTie) {
+        if (!lastTieTarget || lastTieTarget.kind !== token.kind || lastTieTarget.midi !== token.midi) fail("&는 같은 음끼리만 이어 주세요.");
+        if (lastTieTarget.note) lastTieTarget.note.duration += token.duration;
+        pos += token.duration;
+        pendingTie = false;
+        return;
+      }
+      let note = null;
+      if (token.kind === "note") {
+        note = { start: pos, duration: token.duration, midi: token.midi, volume, sourceIndex: token.sourceIndex };
+        notes.push(note);
+      }
+      pos += token.duration;
+      lastTieTarget = { kind: token.kind, midi: token.midi, note };
+    };
+
+    while (i < s.length) {
+      skipSpace();
+      if (i >= s.length) break;
+      const raw = s[i];
+      const ch = raw.toLowerCase();
+      if (ch in NOTE_BASE || ch === "r" || ch === "n") {
+        const sourceIndex = i;
+        if (ch === "r") {
+          i++;
+          appendToken({ kind: "rest", duration: readLengthUnits(), sourceIndex });
+          continue;
+        }
+        if (ch === "n") {
+          i++;
+          const n = readNumber();
+          if (!n) fail("N 뒤에 음 번호가 필요합니다.");
+          const duration = durationUnitsFromBase(defaultUnits, readDotsCount());
+          if (n.value === 0) appendToken({ kind: "rest", duration, sourceIndex });
+          else appendToken({ kind: "note", midi: n.value, duration, sourceIndex });
+          continue;
+        }
+        i++;
+        let semitone = NOTE_BASE[ch];
+        if (s[i] === "+" || s[i] === "#") { semitone++; i++; }
+        else if (s[i] === "-") { semitone--; i++; }
+        appendToken({ kind: "note", midi: (octave + 1) * 12 + semitone, duration: readLengthUnits(), sourceIndex });
+      } else if (ch === "&") {
+        i++;
+        if (!lastTieTarget || pendingTie) fail("잘못된 & 연결입니다.");
+        pendingTie = true;
+      } else if (ch === "t") {
+        i++;
+        if (!readNumber()) fail("T 뒤에 숫자가 필요합니다.");
+      } else if (ch === "o") {
+        i++;
+        const n = readNumber();
+        if (!n) fail("O 뒤에 숫자가 필요합니다.");
+        octave = n.value;
+      } else if (ch === "l") {
+        i++;
+        const n = readNumber();
+        const dots = readDotsCount();
+        if (!n || !VALID_LENGTHS.includes(n.value)) fail("L 길이를 확인해 주세요.");
+        defaultUnits = Math.round(durationUnits(n.value, dots));
+      } else if (ch === "v") {
+        const start = i++;
+        const n = readNumber();
+        if (!n) fail("V 뒤에 숫자가 필요합니다.");
+        volume = clamp(n.value, 0, 15);
+        volumeRanges.push({ start, end: i });
+      } else if (raw === ">") {
+        octave++;
+        i++;
+      } else if (raw === "<") {
+        octave--;
+        i++;
+      } else if (raw === ";") {
+        i++;
+        break;
+      } else {
+        fail(`알 수 없는 문자 '${raw}'가 있습니다.`);
+      }
+    }
+    if (pendingTie) fail("& 뒤에 이어질 음표가 필요합니다.");
+    return { source: s, notes, volumeRanges, length: pos };
+  }
+
+  function buildDynamicsTargets(allNotes, options) {
+    const sounding = allNotes.filter(note => note.volume > 0);
+    const baseVolume = clamp(options.baseVolume, 2, 15);
+    const strengthAmount = { light: 1, normal: 2, strong: 3 }[options.strength] || 2;
+    const q = durationUnits(4, 0);
+    const e = durationUnits(8, 0);
+    const s16 = durationUnits(16, 0);
+    const bar = WHOLE_UNITS;
+    const medianPitch = medianNumber(sounding.map(note => note.midi), 60);
+    const profile = {
+      pop: { beat: [1.0, -0.2, 0.55, -0.15], offbeat: 0.15, phrase: 0.75, length: 0.35, pitch: 0.22, density: 0.40 },
+      jazz: { beat: [0.15, 0.15, 0.05, 0.20], offbeat: 0.70, phrase: 0.55, length: 0.35, pitch: 0.18, density: 0.30 },
+      ballad: { beat: [0.50, -0.15, 0.25, -0.15], offbeat: 0.05, phrase: 1.05, length: 0.65, pitch: 0.38, density: 0.45 },
+      bossa: { beat: [0.55, 0.05, 0.30, 0.10], offbeat: 0.55, phrase: 0.48, length: 0.25, pitch: 0.12, density: 0.30 },
+      rock: { beat: [1.00, 0.05, 0.80, 0.05], offbeat: 0.10, phrase: 0.45, length: 0.20, pitch: 0.12, density: 0.25 },
+      funk: { beat: [0.50, -0.05, 0.25, -0.05], offbeat: 0.95, phrase: 0.38, length: 0.10, pitch: 0.08, density: 0.20 },
+      classical: { beat: [0.85, -0.20, 0.35, -0.15], offbeat: 0.05, phrase: 1.10, length: 0.70, pitch: 0.48, density: 0.42 }
+    }[options.genre];
+    const roleFactor = options.partIndex === 0 ? 1 : 0.72;
+
+    const phraseIds = [];
+    let phraseId = 0;
+    let phraseStartTime = sounding[0]?.start || 0;
+    for (let index = 0; index < sounding.length; index++) {
+      if (index > 0) {
+        const previous = sounding[index - 1];
+        const gap = sounding[index].start - (previous.start + previous.duration);
+        const longContinuous = sounding[index].start - phraseStartTime >= bar * 4 && (sounding[index].start % bar) < s16;
+        if (gap >= e || longContinuous) {
+          phraseId++;
+          phraseStartTime = sounding[index].start;
+        }
+      }
+      phraseIds[index] = phraseId;
+    }
+    const phraseGroups = new Map();
+    for (let i = 0; i < sounding.length; i++) {
+      if (!phraseGroups.has(phraseIds[i])) phraseGroups.set(phraseIds[i], []);
+      phraseGroups.get(phraseIds[i]).push(i);
+    }
+
+    const rawTargets = new Map();
+    const forceChange = new Set();
+    for (const indexes of phraseGroups.values()) {
+      for (let localIndex = 0; localIndex < indexes.length; localIndex++) {
+        const noteIndex = indexes[localIndex];
+        const note = sounding[noteIndex];
+        const progress = indexes.length <= 1 ? 0.5 : localIndex / (indexes.length - 1);
+        const phraseCurve = (Math.sin(Math.PI * progress) - 0.38) * profile.phrase * roleFactor;
+        const withinBar = ((note.start % bar) + bar) % bar;
+        const quarterIndex = Math.floor(withinBar / q) % 4;
+        const withinQuarter = withinBar % q;
+        const isOffbeat = Math.abs(withinQuarter - e) <= s16 / 2 || (options.genre === "funk" && withinQuarter >= s16 && withinQuarter <= q - s16);
+        let beatScore = profile.beat[quarterIndex] || 0;
+        if (isOffbeat) beatScore += profile.offbeat;
+        const lengthRatio = note.duration / q;
+        const lengthScore = lengthRatio >= 2 ? profile.length : (lengthRatio <= 0.25 ? -profile.length * 0.55 : 0);
+        const pitchScore = clamp((note.midi - medianPitch) / 12, -1, 1) * profile.pitch * roleFactor;
+        const windowStart = note.start - q / 2;
+        const windowEnd = note.start + q / 2;
+        const localDensity = sounding.reduce((count, other) => count + (other.start >= windowStart && other.start < windowEnd ? 1 : 0), 0);
+        const densityScore = localDensity >= 5 ? -profile.density : (localDensity <= 1 ? profile.density * 0.18 : 0);
+        const previous = noteIndex > 0 ? sounding[noteIndex - 1] : null;
+        const repeatScore = previous && previous.midi === note.midi ? (noteIndex % 2 ? -0.25 : 0.20) : 0;
+        const boundaryScore = localIndex === 0 ? 0.45 : (localIndex === indexes.length - 1 ? (lengthRatio >= 1 ? 0.20 : -0.30) : 0);
+        const score = (beatScore + phraseCurve + lengthScore + pitchScore + densityScore + repeatScore + boundaryScore) * strengthAmount;
+        rawTargets.set(note, clamp(baseVolume + Math.round(score), 2, 15));
+        if (localIndex === 0 || beatScore >= 0.8) forceChange.add(note);
+      }
+    }
+
+    const targets = new Map();
+    let currentVolume = null;
+    let notesSinceChange = 999;
+    const minHold = options.strength === "light" ? 4 : (options.strength === "normal" ? 2 : 1);
+    let changedNotes = 0;
+    let minVolume = 15;
+    let maxVolume = 2;
+    for (const note of allNotes) {
+      if (note.volume <= 0) {
+        targets.set(note, 0);
+        currentVolume = 0;
+        notesSinceChange = 0;
+        continue;
+      }
+      let target = rawTargets.get(note) ?? baseVolume;
+      if (currentVolume == null || currentVolume === 0) {
+        currentVolume = target;
+        notesSinceChange = 0;
+      } else if (target !== currentVolume) {
+        const allow = forceChange.has(note) || Math.abs(target - currentVolume) >= 2 || notesSinceChange >= minHold;
+        if (allow) {
+          currentVolume = target;
+          notesSinceChange = 0;
+        } else {
+          target = currentVolume;
+        }
+      }
+      targets.set(note, currentVolume);
+      notesSinceChange++;
+      if (currentVolume !== clamp(note.volume, 2, 15)) changedNotes++;
+      minVolume = Math.min(minVolume, currentVolume);
+      maxVolume = Math.max(maxVolume, currentVolume);
+    }
+    return { targets, changedNotes, baseVolume, minVolume, maxVolume };
+  }
+
+  function rewritePartWithDynamics(source, scanned, targets) {
+    const insertions = new Map();
+    let currentVolume = null;
+    let generatedCommands = 0;
+    for (const note of scanned.notes) {
+      const target = targets.get(note);
+      if (!Number.isFinite(target)) continue;
+      if (currentVolume === target) continue;
+      insertions.set(note.sourceIndex, `${insertions.get(note.sourceIndex) || ""}V${target}`);
+      currentVolume = target;
+      generatedCommands++;
+    }
+    const skipped = new Set();
+    for (const range of scanned.volumeRanges) for (let index = range.start; index < range.end; index++) skipped.add(index);
+    let out = "";
+    for (let index = 0; index <= source.length; index++) {
+      if (insertions.has(index)) out += insertions.get(index);
+      if (index < source.length && !skipped.has(index)) out += source[index];
+    }
+    return { part: out, generatedCommands };
+  }
 
   function countShortRestsMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
@@ -2549,5 +3060,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = { optimizeMml, optimizePart, arrangeGenreMml, countShortRestsMml, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages };
+  window.MabiOptimizer = { optimizeMml, optimizePart, arrangeGenreMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages };
 })();

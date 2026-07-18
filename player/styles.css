@@ -2335,16 +2335,19 @@ iframe[src*="apis.google.com/picker"] {
 }
 .genre-arrange-note strong { color: var(--text); font-size: 13px; }
 .genre-arrange-note span { color: var(--muted); font-size: 12px; line-height: 1.5; }
-#genreArrangeStatus:empty { display: none; }
+#genreArrangeStatus:empty,
+#dynamicsGenerateStatus:empty { display: none; }
 
 
 /* Shared BETA feature badge
-   Add .beta-feature to the control and a .beta-badge child to reuse this marker. */
+   Add only .beta-feature to a control. The circular B marker is rendered here,
+   so the letter never becomes part of the button label or layout. */
 .beta-feature {
   position: relative;
   overflow: visible;
 }
-.beta-badge {
+.beta-feature::after {
+  content: "B";
   position: absolute;
   top: -7px;
   right: -7px;
@@ -2360,6 +2363,7 @@ iframe[src*="apis.google.com/picker"] {
   color: var(--beta-badge-text);
   font-size: 10px;
   font-weight: 1000;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1;
   letter-spacing: 0;
   box-shadow: 0 2px 5px rgba(113, 63, 18, .22), 0 1px 0 rgba(255,255,255,.58) inset;
@@ -2788,4 +2792,37 @@ iframe[src*="apis.google.com/picker"] {
   .midi-extract-media-loader { min-height: 220px; }
   .midi-extract-sample-grid { grid-template-columns: 1fr; }
   .midi-extract-platform-grid { grid-template-columns: 1fr; }
+}
+
+/* v4.5 dynamics overwrite confirmation */
+.dynamics-confirm-dialog { max-width: min(480px, calc(100vw - 32px)); }
+.dynamics-confirm-rules {
+  margin: 0;
+  padding: 10px 12px 10px 30px;
+  border: 1px dashed var(--line);
+  border-radius: 11px;
+  background: var(--input-bg);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.dynamics-confirm-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(260px, 38vh);
+  overflow: auto;
+}
+.dynamics-confirm-item {
+  display: grid;
+  gap: 3px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-bg);
+}
+.dynamics-confirm-item strong { font-size: 13px; }
+.dynamics-confirm-item span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }

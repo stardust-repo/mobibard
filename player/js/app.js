@@ -74,7 +74,7 @@
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { musicXmlToMidiBytes } = window.MabiMusicXml || {};
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml } = window.MabiMml;
-  const { optimizeMml, arrangeGenreMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
+  const { optimizeMml, arrangeGenreMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
   const $ = (id) => document.getElementById(id);
@@ -179,6 +179,23 @@
   const bulkPitchCancel = $("bulkPitchCancel");
   const bulkPitchSelectAll = $("bulkPitchSelectAll");
   const bulkPitchSelectNone = $("bulkPitchSelectNone");
+  const dynamicsGenerateBtn = $("dynamicsGenerateBtn");
+  const dynamicsGenerateDialog = $("dynamicsGenerateDialog");
+  const dynamicsGenerateForm = $("dynamicsGenerateForm");
+  const dynamicsGenerateGenre = $("dynamicsGenerateGenre");
+  const dynamicsGenerateStrength = $("dynamicsGenerateStrength");
+  const dynamicsGenerateRuleTitle = $("dynamicsGenerateRuleTitle");
+  const dynamicsGenerateRuleText = $("dynamicsGenerateRuleText");
+  const dynamicsGenerateStatus = $("dynamicsGenerateStatus");
+  const dynamicsGenerateSelectAll = $("dynamicsGenerateSelectAll");
+  const dynamicsGenerateSelectNone = $("dynamicsGenerateSelectNone");
+  const dynamicsGenerateApply = $("dynamicsGenerateApply");
+  const dynamicsGenerateCancel = $("dynamicsGenerateCancel");
+  const dynamicsGenerateConfirmDialog = $("dynamicsGenerateConfirmDialog");
+  const dynamicsGenerateConfirmList = $("dynamicsGenerateConfirmList");
+  const dynamicsGenerateConfirmApply = $("dynamicsGenerateConfirmApply");
+  const dynamicsGenerateConfirmCancel = $("dynamicsGenerateConfirmCancel");
+  let pendingDynamicsGenerateOptions = null;
   const leadingSilenceBtn = $("leadingSilenceBtn");
   const leadingSilenceDialog = $("leadingSilenceDialog");
   const leadingSilenceSeconds = $("leadingSilenceSeconds");
@@ -461,6 +478,19 @@
     bulkPitchSelectNone?.addEventListener("click", () => setDialogChannelSelection(".bulk-pitch-channel", false));
     bulkPitchAmount?.addEventListener("change", normalizeBulkPitchAmountInput);
     bulkPitchAmount?.addEventListener("blur", normalizeBulkPitchAmountInput);
+    dynamicsGenerateBtn?.addEventListener("click", openDynamicsGenerateDialog);
+    dynamicsGenerateGenre?.addEventListener("change", updateDynamicsGenerateDescription);
+    dynamicsGenerateApply?.addEventListener("click", applyDynamicsGenerateFromDialog);
+    dynamicsGenerateForm?.addEventListener("submit", event => { event.preventDefault(); applyDynamicsGenerateFromDialog(); });
+    dynamicsGenerateCancel?.addEventListener("click", () => dynamicsGenerateDialog?.close());
+    dynamicsGenerateConfirmApply?.addEventListener("click", confirmDynamicsGenerateOverwrite);
+    dynamicsGenerateConfirmCancel?.addEventListener("click", cancelDynamicsGenerateOverwrite);
+    dynamicsGenerateConfirmDialog?.addEventListener("cancel", event => {
+      event.preventDefault();
+      cancelDynamicsGenerateOverwrite();
+    });
+    dynamicsGenerateSelectAll?.addEventListener("click", () => setDialogChannelSelection(".dynamics-generate-channel", true));
+    dynamicsGenerateSelectNone?.addEventListener("click", () => setDialogChannelSelection(".dynamics-generate-channel", false));
     leadingSilenceBtn?.addEventListener("click", openLeadingSilenceDialog);
     leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
     leadingSilenceCancel?.addEventListener("click", () => leadingSilenceDialog?.close());
@@ -6347,7 +6377,232 @@ ${shortError(err)}`);
     }
   }
 
+
+  const DYNAMICS_GENERATE_INFO = {
+    pop: { label: "팝", title: "팝 강약 규칙", detail: "규칙적인 강박 · 안정적인 프레이즈 · 절제된 반복음 악센트" },
+    jazz: { label: "재즈", title: "재즈 강약 규칙", detail: "약박과 싱코페이션 · 유연한 프레이즈 · 도착음 강조" },
+    ballad: { label: "발라드", title: "발라드 강약 규칙", detail: "완만한 프레이즈 · 긴 음 강조 · 부드러운 마무리" },
+    bossa: { label: "보사노바", title: "보사노바 강약 규칙", detail: "부드러운 엇박 · 작은 강약 폭 · 안정적인 반복 흐름" },
+    rock: { label: "록", title: "록 강약 규칙", detail: "강한 첫 박과 셋째 박 · 선명한 어택 · 단단한 반복 리듬" },
+    funk: { label: "펑크", title: "펑크 강약 규칙", detail: "16비트 오프비트 · 싱코페이션 · 반복음 교차 악센트" },
+    classical: { label: "클래식", title: "클래식 강약 규칙", detail: "프레이즈 호흡 · 긴 음과 절정음 강조 · 완만한 상승과 하강" }
+  };
+
+  function updateDynamicsGenerateDescription() {
+    const genre = dynamicsGenerateGenre?.value || "pop";
+    const info = DYNAMICS_GENERATE_INFO[genre] || DYNAMICS_GENERATE_INFO.pop;
+    if (dynamicsGenerateRuleTitle) dynamicsGenerateRuleTitle.textContent = info.title;
+    if (dynamicsGenerateRuleText) dynamicsGenerateRuleText.textContent = info.detail;
+  }
+
+  function openDynamicsGenerateDialog() {
+    if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = "기존 강약이 감지되면 조건을 안내한 뒤 적용 여부를 확인합니다.";
+    if (dynamicsGenerateGenre && !Object.prototype.hasOwnProperty.call(DYNAMICS_GENERATE_INFO, dynamicsGenerateGenre.value)) {
+      dynamicsGenerateGenre.value = "pop";
+    }
+    if (dynamicsGenerateStrength && !["light", "normal", "strong"].includes(dynamicsGenerateStrength.value)) {
+      dynamicsGenerateStrength.value = "normal";
+    }
+    setDialogChannelSelection(".dynamics-generate-channel", true);
+    updateDynamicsGenerateDescription();
+    if (dynamicsGenerateDialog?.showModal) {
+      dynamicsGenerateDialog.showModal();
+      dynamicsGenerateGenre?.focus();
+      return;
+    }
+    applyDynamicsGenerate({ genre: "pop", strength: "normal", targetPartIndexes: null });
+  }
+
+  function applyDynamicsGenerateFromDialog() {
+    const targetPartIndexes = getDialogSelectedPartIndexes(".dynamics-generate-channel");
+    if (!targetPartIndexes.length) {
+      showDialog("강약 생성", "적용할 채널을 1개 이상 선택해 주세요.");
+      return;
+    }
+    applyDynamicsGenerate({
+      genre: dynamicsGenerateGenre?.value || "pop",
+      strength: dynamicsGenerateStrength?.value || "normal",
+      targetPartIndexes
+    });
+  }
+
+  function formatDynamicsConflict(partResult) {
+    const conditions = [];
+    if (Number(partResult.distinctVolumeCount || 0) >= 3) {
+      conditions.push(`사용 중인 V 값 ${partResult.distinctVolumeCount.toLocaleString("ko-KR")}종`);
+    }
+    if (Number(partResult.volumeRange || 0) >= 2) {
+      conditions.push(`V${partResult.minVolume}~V${partResult.maxVolume} · 차이 ${partResult.volumeRange}`);
+    }
+    return conditions.join(" / ") || "기존 강약 변화 감지";
+  }
+
+  function reopenDynamicsGenerateSettings() {
+    if (!dynamicsGenerateDialog?.showModal || dynamicsGenerateDialog.open) return;
+    dynamicsGenerateDialog.showModal();
+    dynamicsGenerateGenre?.focus();
+  }
+
+  function showDynamicsGenerateOverwriteConfirmation(options, conflicts) {
+    pendingDynamicsGenerateOptions = { ...options, overwriteExisting: true };
+    if (dynamicsGenerateConfirmList) {
+      dynamicsGenerateConfirmList.replaceChildren();
+      for (const conflict of conflicts) {
+        const item = document.createElement("div");
+        item.className = `dynamics-confirm-item part-${conflict.partIndex}`;
+        const title = document.createElement("strong");
+        title.textContent = PART_LABELS[conflict.partIndex] || `채널 ${conflict.partIndex + 1}`;
+        const detail = document.createElement("span");
+        detail.textContent = formatDynamicsConflict(conflict);
+        item.append(title, detail);
+        dynamicsGenerateConfirmList.append(item);
+      }
+    }
+
+    dynamicsGenerateDialog?.close();
+    if (dynamicsGenerateConfirmDialog?.showModal) {
+      dynamicsGenerateConfirmDialog.showModal();
+      dynamicsGenerateConfirmCancel?.focus();
+      return;
+    }
+
+    const lines = conflicts.map(conflict => `${PART_LABELS[conflict.partIndex] || `채널 ${conflict.partIndex + 1}`}: ${formatDynamicsConflict(conflict)}`);
+    const confirmed = window.confirm(
+      `기존 강약이 감지되었습니다.\n\n` +
+      `판단 조건: V 값 3종 이상 또는 최대·최소 차이 2 이상\n\n` +
+      `${lines.join("\n")}\n\n기존 V 변화를 교체하고 그래도 생성할까요?`
+    );
+    if (confirmed) {
+      const nextOptions = pendingDynamicsGenerateOptions;
+      pendingDynamicsGenerateOptions = null;
+      applyDynamicsGenerate(nextOptions || options);
+    } else {
+      pendingDynamicsGenerateOptions = null;
+      reopenDynamicsGenerateSettings();
+    }
+  }
+
+  function confirmDynamicsGenerateOverwrite() {
+    const options = pendingDynamicsGenerateOptions;
+    pendingDynamicsGenerateOptions = null;
+    dynamicsGenerateConfirmDialog?.close();
+    if (options) applyDynamicsGenerate(options);
+  }
+
+  function cancelDynamicsGenerateOverwrite() {
+    pendingDynamicsGenerateOptions = null;
+    dynamicsGenerateConfirmDialog?.close();
+    reopenDynamicsGenerateSettings();
+  }
+
+  function applyDynamicsGenerate(options = {}) {
+    if (typeof generateDynamicsMml !== "function") {
+      showDialog("강약 생성 실패", "강약 생성 모듈을 불러오지 못했습니다.");
+      return;
+    }
+    const selectedIndexes = options.targetPartIndexes == null ? null : normalizePartIndexList(options.targetPartIndexes);
+    if (options.targetPartIndexes != null && !selectedIndexes.length) {
+      showDialog("강약 생성", "적용할 채널을 1개 이상 선택해 주세요.");
+      return;
+    }
+
+    const normalizedOptions = {
+      genre: options.genre || "pop",
+      strength: options.strength || "normal",
+      targetPartIndexes: selectedIndexes,
+      overwriteExisting: options.overwriteExisting === true
+    };
+    const sourceMml = normalizeMmlForDisplay(mainMml.value);
+
+    try {
+      if (!normalizedOptions.overwriteExisting) {
+        const preview = generateDynamicsMml(sourceMml, {
+          partCount: 6,
+          genre: normalizedOptions.genre,
+          strength: normalizedOptions.strength,
+          targetPartIndexes: selectedIndexes,
+          overwriteExisting: false
+        });
+        const conflicts = preview.partResults.filter(part => part.status === "existing_expression");
+        if (conflicts.length) {
+          if (dynamicsGenerateStatus) {
+            dynamicsGenerateStatus.textContent = `기존 강약이 감지된 채널 ${conflicts.length.toLocaleString("ko-KR")}개를 확인해 주세요.`;
+          }
+          showDynamicsGenerateOverwriteConfirmation(normalizedOptions, conflicts);
+          return;
+        }
+        commitDynamicsGenerate(preview, normalizedOptions, selectedIndexes);
+        return;
+      }
+
+      const result = generateDynamicsMml(sourceMml, {
+        partCount: 6,
+        genre: normalizedOptions.genre,
+        strength: normalizedOptions.strength,
+        targetPartIndexes: selectedIndexes,
+        overwriteExisting: true
+      });
+      commitDynamicsGenerate(result, normalizedOptions, selectedIndexes);
+    } catch (err) {
+      if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = shortError(err);
+      showDialog("강약 생성 실패", shortError(err));
+    }
+  }
+
+  function commitDynamicsGenerate(result, options, selectedIndexes) {
+    const wasPlaying = isPlaying;
+    stopPlayback(false);
+    if (dynamicsGenerateApply) dynamicsGenerateApply.disabled = true;
+    if (dynamicsGenerateCancel) dynamicsGenerateCancel.disabled = true;
+    try {
+      const info = DYNAMICS_GENERATE_INFO[result.genre] || DYNAMICS_GENERATE_INFO.pop;
+      if (result.generatedCommands <= 0 || result.processedPartCount <= 0) {
+        const reason = "선택한 채널에서 강약을 생성할 음표를 찾지 못했습니다.";
+        if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = reason;
+        showDialog("강약 생성", reason);
+        return;
+      }
+      setMainMml(result.mml);
+      dynamicsGenerateDialog?.close();
+      dynamicsGenerateConfirmDialog?.close();
+      flashButton(dynamicsGenerateBtn, "생성 완료");
+      trackAnalytics("dynamics_generate_apply", {
+        genre: result.genre,
+        strength: result.strength,
+        selected_channel_count: selectedIndexes?.length || 6,
+        processed_channel_count: result.processedPartCount,
+        generated_v_count: result.generatedCommands,
+        overwrite_existing: options.overwriteExisting,
+        overwritten_channel_count: options.overwriteExisting ? result.existingExpressivePartCount || 0 : 0
+      });
+      const strengthLabels = { light: "가볍게", normal: "보통", strong: "강하게" };
+      const overwrittenLine = options.overwriteExisting && result.existingExpressivePartCount > 0
+        ? `\n기존 강약을 교체한 채널: ${result.existingExpressivePartCount.toLocaleString("ko-KR")}개`
+        : "";
+      showDialog(
+        "강약 생성 완료",
+        `${info.label} 스타일 · ${strengthLabels[result.strength] || result.strength}\n` +
+        `적용 채널: ${result.processedPartCount.toLocaleString("ko-KR")}개\n` +
+        `생성한 V 명령: ${result.generatedCommands.toLocaleString("ko-KR")}개\n` +
+        `변경된 음표 강약: ${result.changedNotes.toLocaleString("ko-KR")}개${overwrittenLine}`
+      );
+    } catch (err) {
+      if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = shortError(err);
+      showDialog("강약 생성 실패", shortError(err));
+    } finally {
+      if (dynamicsGenerateApply) dynamicsGenerateApply.disabled = false;
+      if (dynamicsGenerateCancel) dynamicsGenerateCancel.disabled = false;
+      if (wasPlaying) currentOffset = 0;
+    }
+  }
+
   const GENRE_ARRANGE_INFO = {
+    pop: {
+      label: "팝",
+      title: "팝 편곡 규칙",
+      detail: "안정적인 3화음 · 4박 코드 펄스 · 루트/5도 베이스",
+      completion: "규칙적인 코드 펄스, 깔끔한 3화음, 루트와 5도 중심 베이스"
+    },
     jazz: {
       label: "재즈",
       title: "재즈 편곡 규칙",
@@ -6377,12 +6632,18 @@ ${shortError(err)}`);
       title: "펑크 편곡 규칙",
       detail: "짧은 코드 스탭 · 16비트 싱코페이션 · 옥타브 베이스",
       completion: "짧은 싱코페이션 코드 스탭과 옥타브 중심 베이스"
+    },
+    classical: {
+      label: "클래식",
+      title: "클래식 편곡 규칙",
+      detail: "성부 진행 · 분산화음 · 알베르티형 저음 진행",
+      completion: "부드러운 성부 진행, 분산화음, 알베르티형 저음 반주"
     }
   };
 
   function updateGenreArrangeDescription() {
-    const genre = genreArrangeGenre?.value || "jazz";
-    const info = GENRE_ARRANGE_INFO[genre] || GENRE_ARRANGE_INFO.jazz;
+    const genre = genreArrangeGenre?.value || "pop";
+    const info = GENRE_ARRANGE_INFO[genre] || GENRE_ARRANGE_INFO.pop;
     if (genreArrangeRuleTitle) genreArrangeRuleTitle.textContent = info.title;
     if (genreArrangeRuleText) genreArrangeRuleText.textContent = info.detail;
   }
@@ -6390,7 +6651,7 @@ ${shortError(err)}`);
   function openGenreArrangeDialog() {
     if (genreArrangeStatus) genreArrangeStatus.textContent = "";
     if (genreArrangeGenre && !Object.prototype.hasOwnProperty.call(GENRE_ARRANGE_INFO, genreArrangeGenre.value)) {
-      genreArrangeGenre.value = "jazz";
+      genreArrangeGenre.value = "pop";
     }
     if (genreArrangeStrength && !["light", "normal", "strong"].includes(genreArrangeStrength.value)) {
       genreArrangeStrength.value = "normal";
@@ -6404,14 +6665,14 @@ ${shortError(err)}`);
       genreArrangeGenre?.focus();
       return;
     }
-    applyGenreArrangement({ genre: "jazz", strength: "normal", melodyPartIndex: null });
+    applyGenreArrangement({ genre: "pop", strength: "normal", melodyPartIndex: null });
   }
 
   async function applyGenreArrangementFromDialog() {
     if (!genreArrangeApply || genreArrangeApply.disabled) return;
     const melodyValue = genreArrangeMelodyPart?.value || "auto";
     const options = {
-      genre: genreArrangeGenre?.value || "jazz",
+      genre: genreArrangeGenre?.value || "pop",
       strength: genreArrangeStrength?.value || "normal",
       melodyPartIndex: melodyValue === "auto" ? null : Number(melodyValue)
     };
@@ -6441,7 +6702,7 @@ ${shortError(err)}`);
     if (typeof arrangeGenreMml !== "function") throw new Error("장르 편곡 모듈을 불러오지 못했습니다.");
     stopPlayback(false);
     const result = arrangeGenreMml(normalizeMmlForDisplay(mainMml.value), {
-      genre: options.genre || "jazz",
+      genre: options.genre || "pop",
       strength: options.strength || "normal",
       melodyPartIndex: options.melodyPartIndex
     });
@@ -6461,7 +6722,7 @@ ${shortError(err)}`);
   function showGenreArrangementResult(result) {
     const strengthLabels = { light: "가볍게", normal: "보통", strong: "강하게" };
     const melodyLabel = PART_LABELS[result.melodyPartIndex] || `${result.melodyPartIndex + 1}채널`;
-    const info = GENRE_ARRANGE_INFO[result.genre] || GENRE_ARRANGE_INFO.jazz;
+    const info = GENRE_ARRANGE_INFO[result.genre] || GENRE_ARRANGE_INFO.pop;
     showDialog(
       "장르 편곡 완료",
       `${melodyLabel}를 멜로디로 사용해 ${info.label} 스타일로 편곡했습니다.

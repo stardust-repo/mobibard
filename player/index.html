@@ -6,7 +6,7 @@
   <title>모비바드 v4.5</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
-  <link rel="stylesheet" href="styles.css?v=4.5-tempo-label-hover" />
+  <link rel="stylesheet" href="styles.css?v=4.5-dynamics-confirm" />
   <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 </head>
 <body>
@@ -55,7 +55,7 @@
         <button id="googleDriveSaveBtn" class="ghost" type="button" disabled title="Google Drive의 MML_Mobibard 폴더에 저장">구글</button>
         <div class="player-file-actions-special" aria-label="오디오 MIDI 추출 도구">
           <button id="midiExtractBtn" class="midi-extract-toolbar-button beta-feature" type="button" aria-haspopup="dialog" aria-controls="midiExtractDialog" title="MuScriptor 로컬 MIDI 추출 도구 다운로드 (BETA)">
-            <span class="midi-extract-toolbar-icon" aria-hidden="true">♪</span><span>MIDI 추출</span><span class="beta-badge" aria-hidden="true" title="BETA 기능">B</span>
+            <span class="midi-extract-toolbar-icon" aria-hidden="true">♪</span><span>MIDI 추출</span>
           </button>
         </div>
         <input id="midiFile" type="file" accept=".mid,.midi,.txt,.mmi,.mml,.musicxml,.xml,.mxl,audio/midi,audio/x-midi,text/plain,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden />
@@ -133,7 +133,7 @@
 
     <div class="editor-tool-row" aria-label="편집 편의 기능">
       <div class="editor-tools-left">
-        <button id="leadingSilenceBtn" class="ghost" type="button">시작 공백</button><button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="bulkVolumeBtn" class="ghost" type="button">볼륨 조절</button><button id="bulkPitchBtn" class="ghost" type="button">음정 조절</button><button id="genreArrangeBtn" class="ghost beta-feature" type="button" title="장르 편곡 (BETA)"><span>장르 편곡</span><span class="beta-badge" aria-hidden="true" title="BETA 기능">B</span></button>
+        <button id="leadingSilenceBtn" class="ghost" type="button">시작 공백</button><button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="bulkVolumeBtn" class="ghost" type="button">볼륨 조절</button><button id="bulkPitchBtn" class="ghost" type="button">음정 조절</button><button id="dynamicsGenerateBtn" class="ghost beta-feature" type="button" title="강약 생성 (BETA)"><span>강약 생성</span></button><button id="genreArrangeBtn" class="ghost beta-feature" type="button" title="장르 편곡 (BETA)"><span>장르 편곡</span></button>
       </div>
     </div>
 
@@ -393,6 +393,73 @@
   </form>
 </dialog>
 
+<dialog id="dynamicsGenerateDialog" class="mml-dialog genre-arrange-dialog">
+  <form id="dynamicsGenerateForm" class="dialog-card" method="dialog">
+    <div class="genre-arrange-title-row">
+      <h3>강약 생성</h3>
+      <span class="genre-beta-badge" aria-label="베타 기능">BETA</span>
+    </div>
+    <p>노트의 길이, 밀도, 쉼표와 음정 흐름을 분석해 선택한 장르에 어울리는 V 변화를 자동으로 생성합니다. 기존 강약이 감지되면 적용 전에 확인합니다.</p>
+    <label class="dialog-field" for="dynamicsGenerateGenre">강약 장르</label>
+    <select id="dynamicsGenerateGenre">
+      <option value="pop" selected>팝</option>
+      <option value="jazz">재즈</option>
+      <option value="ballad">발라드</option>
+      <option value="bossa">보사노바</option>
+      <option value="rock">록</option>
+      <option value="funk">펑크</option>
+      <option value="classical">클래식</option>
+    </select>
+    <label class="dialog-field" for="dynamicsGenerateStrength">변형 강도</label>
+    <select id="dynamicsGenerateStrength">
+      <option value="light">가볍게</option>
+      <option value="normal" selected>보통</option>
+      <option value="strong">강하게</option>
+    </select>
+    <div class="genre-arrange-note">
+      <strong id="dynamicsGenerateRuleTitle">팝 강약 규칙</strong>
+      <span id="dynamicsGenerateRuleText">규칙적인 강박 · 안정적인 프레이즈 · 절제된 반복음 악센트</span>
+    </div>
+    <div class="dialog-field-row">
+      <span class="dialog-field">적용 채널</span>
+      <span class="dialog-mini-actions">
+        <button id="dynamicsGenerateSelectAll" class="compact" type="button">전부 선택</button>
+        <button id="dynamicsGenerateSelectNone" class="compact" type="button">선택 해제</button>
+      </span>
+    </div>
+    <div class="dialog-channel-grid" aria-label="강약 생성 적용 채널">
+      <label class="dialog-channel-option part-0"><input class="dynamics-generate-channel" type="checkbox" data-part-index="0" checked /> 멜로디</label>
+      <label class="dialog-channel-option part-1"><input class="dynamics-generate-channel" type="checkbox" data-part-index="1" checked /> 화음1</label>
+      <label class="dialog-channel-option part-2"><input class="dynamics-generate-channel" type="checkbox" data-part-index="2" checked /> 화음2</label>
+      <label class="dialog-channel-option part-3"><input class="dynamics-generate-channel" type="checkbox" data-part-index="3" checked /> 화음3</label>
+      <label class="dialog-channel-option part-4"><input class="dynamics-generate-channel" type="checkbox" data-part-index="4" checked /> 화음4</label>
+      <label class="dialog-channel-option part-5"><input class="dynamics-generate-channel" type="checkbox" data-part-index="5" checked /> 화음5</label>
+    </div>
+    <div id="dynamicsGenerateStatus" class="dialog-small" role="status" aria-live="polite"></div>
+    <div class="dialog-actions">
+      <button id="dynamicsGenerateCancel" type="button">취소</button>
+      <button id="dynamicsGenerateApply" class="primary" type="button">생성</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dynamicsGenerateConfirmDialog" class="mml-dialog dynamics-confirm-dialog">
+  <form class="dialog-card" method="dialog">
+    <h3>기존 강약 확인</h3>
+    <p>아래 조건 중 하나에 해당하는 채널이 있습니다.</p>
+    <ul class="dynamics-confirm-rules">
+      <li>사용 중인 V 값이 3종 이상</li>
+      <li>가장 큰 V와 가장 작은 V의 차이가 2 이상</li>
+    </ul>
+    <div id="dynamicsGenerateConfirmList" class="dynamics-confirm-list" aria-live="polite"></div>
+    <p class="dialog-small">계속하면 선택한 채널의 기존 V 변화를 교체하고 새 강약을 생성합니다.</p>
+    <div class="dialog-actions">
+      <button id="dynamicsGenerateConfirmCancel" type="button">돌아가기</button>
+      <button id="dynamicsGenerateConfirmApply" class="primary" type="button">그래도 생성</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="tempoEditDialog" class="mml-dialog">
   <form id="tempoEditForm" class="dialog-card tempo-edit-card" method="dialog">
     <h3>템포 수정</h3>
@@ -430,11 +497,13 @@
     <p>선택한 멜로디는 유지하고 화음1~5를 선택한 장르의 반주로 새로 만듭니다. 현재 화음 채널 내용은 교체됩니다.</p>
     <label class="dialog-field" for="genreArrangeGenre">편곡 장르</label>
     <select id="genreArrangeGenre">
-      <option value="jazz" selected>재즈</option>
+      <option value="pop" selected>팝</option>
+      <option value="jazz">재즈</option>
       <option value="ballad">발라드</option>
       <option value="bossa">보사노바</option>
       <option value="rock">록</option>
       <option value="funk">펑크</option>
+      <option value="classical">클래식</option>
     </select>
     <label class="dialog-field" for="genreArrangeStrength">변형 강도</label>
     <select id="genreArrangeStrength">
@@ -453,8 +522,8 @@
       <option value="5">화음5</option>
     </select>
     <div class="genre-arrange-note">
-      <strong id="genreArrangeRuleTitle">재즈 편곡 규칙</strong>
-      <span id="genreArrangeRuleText">7th 코드 · 보이스 리딩 · 싱코페이션 · 워킹 베이스</span>
+      <strong id="genreArrangeRuleTitle">팝 편곡 규칙</strong>
+      <span id="genreArrangeRuleText">안정적인 3화음 · 4박 코드 펄스 · 루트/5도 베이스</span>
     </div>
     <div id="genreArrangeStatus" class="dialog-small" role="status" aria-live="polite"></div>
     <div class="dialog-actions">
@@ -713,13 +782,13 @@
 <script src="js/midi-to-mml.js"></script>
 <script src="js/musicxml-to-midi.js"></script>
 <script src="js/mml-parser.js?v=4.5-beta-ui"></script>
-<script src="js/mml-optimizer.js?v=4.5-beta-ui"></script>
+<script src="js/mml-optimizer.js?v=4.5-dynamics-confirm"></script>
 <script src="js/sf2-sampler.js"></script>
 <script src="js/google-config.js"></script>
 <script src="js/firebase-config.js"></script>
 <script type="module" src="js/firebase-analytics.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="js/app.js?v=4.5-tempo-label-hover"></script>
+<script src="js/app.js?v=4.5-dynamics-confirm"></script>
 </body>
 </html>
