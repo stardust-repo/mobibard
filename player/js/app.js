@@ -4003,8 +4003,12 @@ ${shortError(err)}`);
       midiConvertSummary.textContent = `${importData.name || sourceLabel} · 트랙 ${formatCount(trackCount)}개 · 변환 후보 채널 ${formatCount(groups.length)}개 · 노트 ${formatCount(overview.noteCount)}개 · 일반 ${formatCount(normalGroups.length)}개 / 비트 ${formatCount(beatGroups.length)}개 · PPQ ${overview.ppq}`;
     }
     if (midiBeatNotice) {
-      midiBeatNotice.hidden = beatGroups.length > 0;
-      midiBeatNotice.textContent = beatGroups.length ? "" : "이 파일에는 비트 구룹 악기가 없습니다.";
+      const beatInstrumentCount = beatGroups.length;
+      midiBeatNotice.hidden = false;
+      midiBeatNotice.classList.toggle("has-beat", beatInstrumentCount > 0);
+      midiBeatNotice.textContent = beatInstrumentCount > 0
+        ? `${formatCount(beatInstrumentCount)}개의 비트 악기가 있습니다.`
+        : "비트 악기가 없습니다.";
     }
     setMidiFullPreviewState(false);
     setMidiConvertBusy(false);
@@ -4344,10 +4348,10 @@ ${shortError(err)}`);
     if (midiInstrumentPanelTitle) midiInstrumentPanelTitle.textContent = `${PART_LABELS[activeIndex]} 악기 선택`;
     if (midiInstrumentPanelHint) {
       midiInstrumentPanelHint.textContent = isBeat
-        ? "비트 채널은 비트 그룹 악기만 선택할 수 있습니다."
+        ? "비트 채널에는 비트 악기를 배정할 수 있습니다."
         : (setting?.role === "generate"
-          ? "선택한 일반 악기의 선율을 분석해 이 채널에 코드 반주를 생성합니다."
-          : "한 채널에 여러 일반 악기를 선택할 수 있습니다.");
+          ? "선택한 악기의 선율을 분석해 이 채널에 코드 반주를 생성합니다."
+          : "각 채널마다 여러 악기를 배정할 수 있습니다.");
     }
     syncMidiInstrumentPanelActions(groups);
 

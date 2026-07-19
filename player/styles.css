@@ -430,6 +430,7 @@ textarea { resize: vertical; color: var(--text); }
 .dialog-small { color: var(--muted); font-size: 12px; font-weight: 700; }
 .role-head { margin-top: 6px; }
 .midi-beat-notice { border: 1px dashed var(--line); border-radius: 10px; padding: 7px 9px; color: var(--muted); background: var(--input-bg); font-size: 12.5px; font-weight: 800; }
+.midi-beat-notice.has-beat { color: var(--tempo-active); border-color: var(--active-code-line); background: var(--active-code-bg); }
 .midi-channel-list { display: grid; gap: 10px; max-height: min(52vh, 520px); overflow: auto; padding-right: 4px; }
 .midi-instrument-section { display: grid; gap: 7px; }
 .midi-instrument-section + .midi-instrument-section { padding-top: 4px; border-top: 1px solid var(--line); }

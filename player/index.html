@@ -6,7 +6,7 @@
   <title>모비바드 v4.5</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
-  <link rel="stylesheet" href="styles.css?v=4.5-dynamics-confirm" />
+  <link rel="stylesheet" href="styles.css?v=4.5-beat-instrument-count" />
   <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 </head>
 <body>
@@ -707,7 +707,7 @@
       <div class="midi-guide-body">
         <ol>
           <li><b>연주 듣기</b>로 원본 파일이 어떤 곡인지 먼저 확인합니다.</li>
-          <li>왼쪽 <b>MML 채널</b>에서 채널을 누른 뒤, 오른쪽 <b>악기 목록</b>에서 그 채널에 넣을 악기를 선택합니다.</li>
+          <li>각 <b>MML 채널</b>마다 악기를 선택할 수 있습니다. 왼쪽에서 채널을 고른 뒤, 오른쪽에서 배정할 악기를 선택합니다.</li>
           <li>악기를 하나 이상 선택한 채널만 최종 MML에 포함됩니다. 최대 6채널까지 사용할 수 있습니다.</li>
           <li><b>미리 듣기</b>로 현재 설정을 MML로 바꿨을 때의 소리를 먼저 확인하고, <b>변환</b>을 누르면 현재 MML 편집기에 반영됩니다.</li>
         </ol>
@@ -726,10 +726,10 @@
       <section class="midi-dialog-section midi-left-panel">
         <div class="dialog-section-head role-head">
           <strong>MML 채널</strong>
-          <span class="dialog-small">왼쪽 채널 버튼을 누르면 오른쪽 악기 목록이 바뀝니다.</span>
+          <span class="dialog-small">각 MML 채널마다 악기를 선택할 수 있습니다.</span>
         </div>
         <div class="midi-role-actions">
-          <div id="midiBeatNotice" class="midi-beat-notice" hidden>이 파일에는 비트 구룹 악기가 없습니다.</div>
+          <div id="midiBeatNotice" class="midi-beat-notice" hidden>비트 악기 정보를 확인하는 중입니다.</div>
           <button id="midiSelectedPreviewBtn" class="midi-full-preview-btn" type="button" aria-pressed="false">미리 듣기</button>
         </div>
         <div id="midiRoleList" class="midi-role-list" aria-label="MML 채널 설정"></div>
@@ -782,13 +782,13 @@
 <script src="js/midi-to-mml.js"></script>
 <script src="js/musicxml-to-midi.js"></script>
 <script src="js/mml-parser.js?v=4.5-beta-ui"></script>
-<script src="js/mml-optimizer.js?v=4.5-dynamics-confirm"></script>
+<script src="js/mml-optimizer.js?v=4.5-beat-instrument-count"></script>
 <script src="js/sf2-sampler.js"></script>
 <script src="js/google-config.js"></script>
 <script src="js/firebase-config.js"></script>
 <script type="module" src="js/firebase-analytics.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="js/app.js?v=4.5-dynamics-confirm"></script>
+<script src="js/app.js?v=4.5-beat-instrument-count"></script>
 </body>
 </html>
