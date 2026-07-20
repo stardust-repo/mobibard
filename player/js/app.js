@@ -362,6 +362,7 @@
   let rhythmGameFrameReady = false;
   let rhythmGamePendingPayload = null;
   let rhythmGameLoadTimer = 0;
+  let rhythmGamePayloadPending = false;
 
   init();
 
@@ -1053,22 +1054,32 @@
     rhythmGameLoadTimer = 0;
   }
 
-  function startRhythmGameLoadTimer() {
+  function startRhythmGameLoadTimer(stage = "ready_timeout") {
     clearRhythmGameLoadTimer();
     rhythmGameLoadTimer = window.setTimeout(() => {
-      if (!rhythmGameLayer?.hidden && !rhythmGameFrameReady) {
-        setRhythmGameLoading("모비비트를 불러오지 못했습니다. ../mobibeats/ 경로를 확인해 주세요.", "error");
-      }
+      if (rhythmGameLayer?.hidden) return;
+      const timedOut = stage === "ready_timeout"
+        ? !rhythmGameFrameReady
+        : rhythmGameFrameReady && rhythmGamePayloadPending;
+      if (!timedOut) return;
+
+      rhythmGamePayloadPending = false;
+      const message = stage === "payload_timeout"
+        ? "모비비트에 연주 정보를 전달하지 못했습니다. 페이지를 닫고 다시 시도해 주세요."
+        : "모비비트를 불러오지 못했습니다. ../mobibeats/ 경로를 확인해 주세요.";
+      setRhythmGameLoading(message, "error");
     }, 10000);
   }
 
   function sendRhythmGamePayload() {
     if (!rhythmGameFrameReady || !rhythmGamePendingPayload || !rhythmGameFrame?.contentWindow) return;
     setRhythmGameLoading("현재 MML과 악기 정보를 전달하고 있습니다.");
+    rhythmGamePayloadPending = true;
     rhythmGameFrame.contentWindow.postMessage({
       type: "MML_RHYTHM_LOAD",
       payload: rhythmGamePendingPayload
     }, MOBIBEATS_TARGET_ORIGIN);
+    startRhythmGameLoadTimer("payload_timeout");
   }
 
   function openRhythmGameLayer() {
@@ -1080,6 +1091,8 @@
       return;
     }
 
+    const currentUrl = String(rhythmGameFrame.getAttribute("src") || "");
+
     stopPlayback(true);
     stopMidiPreview();
     pauseMidiExtractSamples();
@@ -1087,9 +1100,10 @@
     rhythmGameLayer.setAttribute("aria-hidden", "false");
     document.body.classList.add("rhythm-game-open");
     setRhythmGameLoading("모비비트를 불러오는 중입니다.");
-    trackAnalytics("open_rhythm_game", { channel_count: rhythmGamePendingPayload.channelCount });
+    trackAnalytics("open_rhythm_game", {
+      channel_count: rhythmGamePendingPayload.channelCount
+    });
 
-    const currentUrl = String(rhythmGameFrame.getAttribute("src") || "");
     if (!rhythmGameFrameReady || currentUrl === "about:blank") {
       rhythmGameFrameReady = false;
       rhythmGameFrame.src = MOBIBEATS_URL;
@@ -1104,6 +1118,7 @@
     if (!rhythmGameLayer || rhythmGameLayer.hidden) return;
     try { rhythmGameFrame?.contentWindow?.MobiBeats?.pause?.(); } catch (_) {}
     clearRhythmGameLoadTimer();
+    rhythmGamePayloadPending = false;
     rhythmGamePendingPayload = null;
     rhythmGameLayer.hidden = true;
     rhythmGameLayer.setAttribute("aria-hidden", "true");
@@ -1142,6 +1157,7 @@
 
     if (data.type === "MML_RHYTHM_LOADED") {
       clearRhythmGameLoadTimer();
+      rhythmGamePayloadPending = false;
       hideRhythmGameLoading("게임 준비 완료");
       try { rhythmGameFrame.contentWindow.focus(); } catch (_) {}
       return;
@@ -1149,6 +1165,7 @@
 
     if (data.type === "MML_RHYTHM_ERROR") {
       clearRhythmGameLoadTimer();
+      rhythmGamePayloadPending = false;
       const message = String(data.message || data.payload?.message || "연주 정보를 불러오지 못했습니다.");
       setRhythmGameLoading(message, "error");
       return;
