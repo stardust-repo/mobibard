@@ -32,7 +32,7 @@
   };
   const LANE_COLORS = ["#53d9ff", "#8d91ff", "#d778ff", "#ff72bd", "#ffb35e", "#67eea2"];
   const JUDGE_WINDOWS = Object.freeze({
-    Perfect: 0.045,
+    Perfect: 0.055,
     Great: 0.09,
     GoodEarly: 0.18,
     GoodLate: 0.26
@@ -1223,11 +1223,18 @@
     return Boolean(target?.closest?.("input, textarea, select, button, [contenteditable='true']"));
   }
 
+  function canAcceptLaneInput() {
+    if (state.status === "playing") return true;
+    if (state.status !== "countdown") return false;
+    return getChartTime() >= -JUDGE_WINDOWS.GoodEarly;
+  }
+
   function pressLane(lane) {
     if (!Number.isInteger(lane) || lane < 0 || lane >= state.keyCount) return;
+    const canJudge = canAcceptLaneInput();
     state.lanePressed[lane] = true;
     updateLaneKeyPressed(lane, true);
-    if (state.status !== "playing") return;
+    if (!canJudge) return;
 
     const now = getChartTime();
     const note = findHittableNote(lane, now);
@@ -1502,7 +1509,7 @@
   }
 
   function onPointerDown(event) {
-    if (state.status !== "playing") return;
+    if (!canAcceptLaneInput()) return;
     event.preventDefault();
     const lane = laneFromPointer(event);
     if (lane < 0) return;
