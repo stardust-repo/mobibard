@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090b20">
+  <meta name="color-scheme" content="dark">
+  <title>모비비트 | MobiBeats v1.0</title>
+  <link rel="icon" href="assets/favicon.ico">
+  <link rel="stylesheet" href="styles.css?v=1.0-effect-optimized">
+</head>
+<body>
+  <main id="app" class="app-shell" aria-label="모비비트 리듬게임">
+    <header id="topHud" class="top-hud">
+      <div class="hud-group hud-left">
+        <button id="scoreInfoBtn" class="hud-button" type="button" aria-haspopup="dialog">
+          <span class="hud-icon" aria-hidden="true">♫</span>
+          <span>연주 정보</span>
+        </button>
+        <button id="pauseBtn" class="hud-button icon-only" type="button" aria-label="일시정지" title="일시정지 (Esc)">
+          <span aria-hidden="true">Ⅱ</span>
+        </button>
+        <div class="song-mini" aria-live="polite">
+          <strong id="hudSongTitle">샘플 곡</strong>
+          <span id="hudChartInfo">4 KEY · 0 NOTES</span>
+        </div>
+      </div>
+
+      <div class="hud-center" aria-label="현재 점수와 진행률">
+        <div id="scoreValue" class="score-value">000000</div>
+        <div class="progress-track" aria-hidden="true">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+        <div class="time-row">
+          <span id="currentTime">00:00</span>
+          <span id="totalTime">00:00</span>
+        </div>
+      </div>
+
+      <div class="hud-group hud-right">
+        <button id="speedBtn" class="hud-button speed-button" type="button" title="노트가 다가오는 배속을 변경합니다.">
+          <span>배속</span>
+          <strong id="speedValue">1.0×</strong>
+        </button>
+        <button id="offsetBtn" class="hud-button offset-button" type="button" aria-haspopup="dialog" title="노트 판정 시점을 앞뒤로 조절합니다.">
+          <span>노트</span>
+          <strong id="offsetValue">0ms</strong>
+        </button>
+        <label class="volume-control" for="volumeSlider">
+          <span class="volume-icon" aria-hidden="true">◖</span>
+          <span class="sr-only">음량</span>
+          <input id="volumeSlider" type="range" min="0" max="150" value="100" step="1">
+          <output id="volumeValue" for="volumeSlider">100%</output>
+        </label>
+        <button id="fullscreenBtn" class="hud-button icon-only" type="button" aria-label="전체 화면" title="전체 화면">
+          <span aria-hidden="true">⛶</span>
+        </button>
+        <button id="closeBtn" class="hud-button icon-only close-button" type="button" aria-label="리듬게임 닫기" title="닫기">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+    </header>
+
+    <section id="gameViewport" class="game-viewport" aria-label="리듬게임 트랙">
+      <canvas id="gameCanvas"></canvas>
+      <div id="laneKeys" class="lane-keys" aria-hidden="true"></div>
+      <div id="comboDisplay" class="combo-display" aria-live="polite">
+        <strong id="comboValue">0</strong>
+        <span>COMBO</span>
+      </div>
+      <div id="judgementDisplay" class="judgement-display" aria-live="assertive">
+        <strong id="judgementText"></strong>
+        <span id="judgementOffset"></span>
+      </div>
+      <div id="countdownDisplay" class="countdown-display" aria-live="assertive"></div>
+      <div id="audioStatus" class="audio-status" aria-live="polite">음원 준비 중…</div>
+    </section>
+
+    <section id="startOverlay" class="screen-overlay visible" aria-labelledby="startTitle">
+      <div class="screen-card start-card">
+        <p class="eyebrow">MOBIBEATS</p>
+        <h1 id="startTitle">샘플 곡</h1>
+        <p id="startSubtitle" class="screen-description">MML을 분석해 자동으로 생성한 리듬 차트입니다.</p>
+
+        <div class="chart-options" aria-label="차트 설정">
+          <div class="chart-option-group">
+            <span class="chart-option-label">난이도</span>
+            <div id="difficultyControl" class="segmented-control" role="group" aria-label="난이도 선택">
+              <button type="button" data-difficulty="easy" aria-pressed="false">EASY</button>
+              <button type="button" data-difficulty="normal" aria-pressed="true">NORMAL</button>
+              <button type="button" data-difficulty="hard" aria-pressed="false">HARD</button>
+            </div>
+          </div>
+          <div class="chart-option-group">
+            <span class="chart-option-label">키 설정</span>
+            <div id="keyModeControl" class="segmented-control" role="group" aria-label="키 구성 선택">
+              <button type="button" data-key-count="4" aria-pressed="true">4 KEY</button>
+              <button type="button" data-key-count="5" aria-pressed="false">5 KEY</button>
+              <button type="button" data-key-count="6" aria-pressed="false">6 KEY</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-summary" aria-label="차트 정보">
+          <div><span>키 구성</span><strong id="startKeyMode">4 KEY</strong></div>
+          <div><span>노트</span><strong id="startNoteCount">0</strong></div>
+          <div><span>장노트</span><strong id="startLongCount">0</strong></div>
+          <div><span>난이도</span><strong id="startLevel">NORMAL 1</strong></div>
+          <div><span>길이</span><strong id="startDuration">00:00</strong></div>
+          <div><span>채널</span><strong id="startChannelCount">0</strong></div>
+        </div>
+
+        <div id="startKeyGuide" class="start-key-guide"></div>
+        <p id="startStatus" class="start-status">MML을 준비하고 있습니다.</p>
+
+        <div class="screen-actions primary-actions">
+          <button id="startBtn" class="action-button primary" type="button" disabled>게임 시작</button>
+          <button id="startInfoBtn" class="action-button" type="button">연주 정보</button>
+          <button id="helpBtn" class="action-button" type="button">게임 방법</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="pauseOverlay" class="screen-overlay" aria-labelledby="pauseTitle">
+      <div class="screen-card compact-card">
+        <p class="eyebrow">PAUSED</p>
+        <h2 id="pauseTitle">일시정지</h2>
+        <p class="screen-description">준비되면 같은 위치에서 이어서 연주할 수 있습니다.</p>
+        <div class="screen-actions vertical-actions">
+          <button id="resumeBtn" class="action-button primary" type="button">계속하기</button>
+          <button id="restartBtn" class="action-button" type="button">처음부터 다시</button>
+          <button id="pauseInfoBtn" class="action-button" type="button">연주 정보</button>
+          <button id="quitBtn" class="action-button danger" type="button">게임 종료</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="resultOverlay" class="screen-overlay" aria-labelledby="resultTitle">
+      <div class="screen-card result-card">
+        <p class="eyebrow">RESULT</p>
+        <div id="resultRank" class="result-rank">S</div>
+        <h2 id="resultTitle">연주 결과</h2>
+        <div id="resultScore" class="result-score">000000</div>
+        <div class="result-grid">
+          <div><span>Perfect</span><strong id="resultPerfect">0</strong></div>
+          <div><span>Great</span><strong id="resultGreat">0</strong></div>
+          <div><span>Good</span><strong id="resultGood">0</strong></div>
+          <div><span>Miss</span><strong id="resultMiss">0</strong></div>
+          <div><span>MAX COMBO</span><strong id="resultCombo">0</strong></div>
+          <div><span>정확도</span><strong id="resultAccuracy">0.00%</strong></div>
+        </div>
+        <p id="resultMessage" class="result-message"></p>
+        <div class="screen-actions primary-actions">
+          <button id="retryBtn" class="action-button primary" type="button">다시 도전</button>
+          <button id="resultInfoBtn" class="action-button" type="button">연주 정보</button>
+          <button id="resultCloseBtn" class="action-button" type="button">시작 화면</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="scoreDialog" class="modal-dialog score-dialog" aria-labelledby="scoreDialogTitle">
+    <form id="scoreForm" method="dialog">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">PLAY DATA</p>
+          <h2 id="scoreDialogTitle">연주 정보</h2>
+        </div>
+        <button class="dialog-close" type="button" data-close-dialog="scoreDialog" aria-label="닫기">×</button>
+      </div>
+
+      <div class="dialog-body">
+        <label class="field-block">
+          <span>곡 제목</span>
+          <input id="songTitleInput" type="text" maxlength="80" autocomplete="off" placeholder="곡 제목">
+        </label>
+
+        <label class="field-block">
+          <span>MML</span>
+          <textarea id="mmlInput" rows="11" spellcheck="false" placeholder="MML@t120o5cdefg,...;"></textarea>
+        </label>
+
+        <div class="instrument-section">
+          <div class="section-heading">
+            <div>
+              <h3>채널별 악기</h3>
+              <p>MML 채널의 사용 여부와 관계없이 6개 악기를 미리 선택할 수 있습니다.</p>
+            </div>
+            <div class="section-state-group">
+              <span id="scoreChannelCount" class="state-pill channel-count-pill">MML 채널 0개</span>
+              <span id="sf2State" class="state-pill">음원 로딩 중</span>
+            </div>
+          </div>
+          <div class="instrument-quick-actions" aria-label="악기 빠른 설정">
+            <button id="allPianoBtn" class="action-button subtle compact" type="button">6개 모두 피아노</button>
+            <button id="defaultInstrumentsBtn" class="action-button subtle compact" type="button">기본 악기</button>
+          </div>
+          <div id="instrumentRows" class="instrument-rows"></div>
+        </div>
+
+        <div id="scoreParseStatus" class="dialog-status" role="status"></div>
+      </div>
+
+      <div class="dialog-footer">
+        <button id="loadSampleBtn" class="action-button subtle" type="button">샘플 불러오기</button>
+        <span class="footer-spacer"></span>
+        <button class="action-button" type="button" data-close-dialog="scoreDialog">취소</button>
+        <button id="applyScoreBtn" class="action-button primary" type="submit">적용</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="offsetDialog" class="modal-dialog offset-dialog" aria-labelledby="offsetDialogTitle">
+    <form id="offsetForm" method="dialog">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">TIMING</p>
+          <h2 id="offsetDialogTitle">노트 오프셋</h2>
+        </div>
+        <button class="dialog-close" type="button" data-close-dialog="offsetDialog" aria-label="닫기">×</button>
+      </div>
+      <div class="dialog-body offset-dialog-body">
+        <div class="offset-readout" aria-live="polite">
+          <span>노트 이동</span>
+          <strong id="offsetDialogValue">0ms</strong>
+        </div>
+        <label class="offset-slider" for="noteOffsetSlider">
+          <span class="sr-only">노트 오프셋</span>
+          <input id="noteOffsetSlider" type="range" min="-300" max="300" value="0" step="5">
+        </label>
+        <div class="offset-scale" aria-hidden="true">
+          <span>-300ms</span><span>0ms</span><span>+300ms</span>
+        </div>
+        <div class="offset-quick-actions" aria-label="노트 오프셋 빠른 설정">
+          <button class="action-button compact" type="button" data-offset-adjust="-50">-50ms</button>
+          <button class="action-button compact" type="button" data-offset-value="0">초기화</button>
+          <button class="action-button compact" type="button" data-offset-adjust="50">+50ms</button>
+        </div>
+        <p class="offset-help">노트가 소리보다 빠르게 도착하면 <strong>+</strong>, 늦게 도착하면 <strong>-</strong> 방향으로 조절하세요. 음악 재생 시점은 바뀌지 않고 노트와 판정 시점만 이동합니다.</p>
+      </div>
+      <div class="dialog-footer">
+        <span class="footer-spacer"></span>
+        <button class="action-button" type="button" data-close-dialog="offsetDialog">취소</button>
+        <button id="applyOffsetBtn" class="action-button primary" type="submit">적용</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="helpDialog" class="modal-dialog help-dialog" aria-labelledby="helpDialogTitle">
+    <div class="dialog-header">
+      <div>
+        <p class="eyebrow">HOW TO PLAY</p>
+        <h2 id="helpDialogTitle">게임 방법</h2>
+      </div>
+      <button class="dialog-close" type="button" data-close-dialog="helpDialog" aria-label="닫기">×</button>
+    </div>
+    <div class="dialog-body help-content">
+      <section>
+        <h3>조작</h3>
+        <p>4키는 <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd>, 5키는 <kbd>D</kbd><kbd>F</kbd><kbd>SPACE</kbd><kbd>J</kbd><kbd>K</kbd>, 6키는 <kbd>S</kbd><kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd>을 사용합니다. 화면의 레인을 직접 눌러도 됩니다.</p>
+      </section>
+      <section>
+        <h3>난이도와 키 설정</h3>
+        <p>HARD는 가능한 노트를 가장 많이 사용합니다. NORMAL은 빠른 연속 구간과 큰 동시 입력을 더 줄이고, EASY는 과밀 구간의 중간 노트를 적극적으로 덜어 대표 노트 중심으로 구성합니다. 시작 화면에서 4·5·6키를 자유롭게 선택할 수 있습니다.</p>
+      </section>
+      <section>
+        <h3>노트와 판정</h3>
+        <p><code>L2</code> 미만은 단노트, <code>L2</code> 이상은 장노트입니다. 장노트는 시작 지점에서 키를 누르고 끝까지 유지해야 합니다.</p>
+        <div class="judgement-guide">
+          <span class="perfect">Perfect ±45ms</span>
+          <span class="great">Great ±90ms</span>
+          <span class="good">Good -180ms / +260ms</span>
+          <span class="miss">Miss</span>
+        </div>
+      </section>
+      <section>
+        <h3>콤보와 점수</h3>
+        <p>Perfect와 Great만 콤보가 이어집니다. 모든 노트를 Perfect로 연주하면 100,000점이며, 장노트는 단노트의 3배 가중치로 계산됩니다.</p>
+      </section>
+      <section>
+        <h3>노트 오프셋</h3>
+        <p>기기나 브라우저 환경 때문에 소리와 입력 시점이 어긋날 때 사용합니다. 노트가 소리보다 빠르면 <code>+</code>, 느리면 <code>-</code> 방향으로 맞추세요.</p>
+      </section>
+      <section>
+        <h3>기타</h3>
+        <p><kbd>Esc</kbd>로 일시정지할 수 있습니다. 상단의 배속은 음악 속도가 아니라 노트가 다가오는 시간을 조절합니다.</p>
+      </section>
+    </div>
+    <div class="dialog-footer">
+      <span class="footer-spacer"></span>
+      <button class="action-button primary" type="button" data-close-dialog="helpDialog">확인</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/utils.js?v=1.0-effect-optimized"></script>
+  <script src="js/mml-parser.js?v=1.0-effect-optimized"></script>
+  <script src="js/sf2-sampler.js?v=1.0-effect-optimized"></script>
+  <script src="js/game.js?v=1.0-effect-optimized"></script>
+</body>
+</html>

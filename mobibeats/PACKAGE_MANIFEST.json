@@ -1,0 +1,60 @@
+{
+  "name": "MobiBeats",
+  "display_name": "모비비트",
+  "version": "1.0.0",
+  "type": "independent-static-webpage",
+  "created_utc": "2026-07-20T13:27:25.552127+00:00",
+  "entry": "index.html",
+  "files": [
+    {
+      "path": ".nojekyll",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "README.md",
+      "size": 7245,
+      "sha256": "7687abf2a150c64181373158bcb60e3c9bc15369b1196c8cc03b3c0c40d6ac99"
+    },
+    {
+      "path": "assets/Roland_SC-55.sf2",
+      "size": 9862608,
+      "sha256": "e3420bfd064f3f096e83522f743de88830e1487b0564c35d219cb138142361ce"
+    },
+    {
+      "path": "assets/favicon.ico",
+      "size": 8957,
+      "sha256": "1faf08e82fea6ba431c30f9b3a01afdf33c8a470026290bd9d7977f6b5a38700"
+    },
+    {
+      "path": "index.html",
+      "size": 15622,
+      "sha256": "8407706133081c0fc08b75bc98c511487ba83dbed07a50258b5e9af9ef8c5e3e"
+    },
+    {
+      "path": "js/game.js",
+      "size": 104262,
+      "sha256": "c30a87b4f45b3c3bbd60d98c65a775e8cc5e3515a804e303d8a551fcf50d37d6"
+    },
+    {
+      "path": "js/mml-parser.js",
+      "size": 14454,
+      "sha256": "066a91ddae610e7fa2f14c82934da998272b7abbe74ddf99de6207734cfa1140"
+    },
+    {
+      "path": "js/sf2-sampler.js",
+      "size": 13233,
+      "sha256": "ae7a6baf78d3c624f82c873a86c2cde67a8563abd76c9f95046b87317995f501"
+    },
+    {
+      "path": "js/utils.js",
+      "size": 1109,
+      "sha256": "ae9c0644fe1c93b52f7183683bd449d8a726311c6e6af0f446090daf5a7c2829"
+    },
+    {
+      "path": "styles.css",
+      "size": 31328,
+      "sha256": "865dbec94e74652dd33213d22e5827467b00de3b06444df9fcb9060391481f87"
+    }
+  ]
+}
