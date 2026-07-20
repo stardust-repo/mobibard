@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>모비바드 v4.5</title>
+  <title>모비바드 v4.6</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
-  <link rel="stylesheet" href="styles.css?v=4.5-copy-actions-primary-accent" />
+  <link rel="stylesheet" href="styles.css?v=4.6-accompaniment-defaults" />
   <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 </head>
 <body>
@@ -16,7 +16,7 @@
       <div class="app-brand-line">
         <h1 class="app-main-title">모비바드</h1>
         <div class="app-title-meta">
-          <span class="app-subtitle">마비노기 MML 생성기 v4.5</span>
+          <span class="app-subtitle">마비노기 MML 생성기 v4.6</span>
           <span class="import-format-list" title="불러오기 지원 포맷">지원 파일: MIDI · MusicXML · MMI · 3MLE</span>
         </div>
       </div>
@@ -133,7 +133,7 @@
 
     <div class="editor-tool-row" aria-label="편집 편의 기능">
       <div class="editor-tools-left">
-        <button id="leadingSilenceBtn" class="ghost" type="button">시작 공백</button><button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="bulkVolumeBtn" class="ghost" type="button">볼륨 조절</button><button id="bulkPitchBtn" class="ghost" type="button">음정 조절</button><button id="dynamicsGenerateBtn" class="ghost beta-feature" type="button" title="강약 생성 (BETA)"><span>강약 생성</span></button><button id="genreArrangeBtn" class="ghost beta-feature" type="button" title="장르 편곡 (BETA)"><span>장르 편곡</span></button>
+        <button id="leadingSilenceBtn" class="ghost" type="button">시작 공백</button><button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="bulkVolumeBtn" class="ghost" type="button">볼륨 조절</button><button id="bulkPitchBtn" class="ghost" type="button">음정 조절</button><button id="dynamicsGenerateBtn" class="ghost beta-feature" type="button" title="볼륨 생성 (BETA)"><span>볼륨 생성</span></button><button id="accompanimentGenerateBtn" class="ghost beta-feature" type="button" title="반주 생성 (BETA)"><span>반주 생성</span></button>
       </div>
     </div>
 
@@ -396,11 +396,11 @@
 <dialog id="dynamicsGenerateDialog" class="mml-dialog genre-arrange-dialog">
   <form id="dynamicsGenerateForm" class="dialog-card" method="dialog">
     <div class="genre-arrange-title-row">
-      <h3>강약 생성</h3>
+      <h3>볼륨 생성</h3>
       <span class="genre-beta-badge" aria-label="베타 기능">BETA</span>
     </div>
-    <p>노트의 길이, 밀도, 쉼표와 음정 흐름을 분석해 선택한 장르에 어울리는 V 변화를 자동으로 생성합니다. 기존 강약이 감지되면 적용 전에 확인합니다.</p>
-    <label class="dialog-field" for="dynamicsGenerateGenre">강약 장르</label>
+    <p>노트의 길이, 밀도, 쉼표와 음정 흐름을 분석해 선택한 장르에 어울리는 V 변화를 자동으로 생성합니다. 기존 볼륨 변화가 감지되면 적용 전에 확인합니다.</p>
+    <label class="dialog-field" for="dynamicsGenerateGenre">볼륨 스타일</label>
     <select id="dynamicsGenerateGenre">
       <option value="pop" selected>팝</option>
       <option value="jazz">재즈</option>
@@ -417,7 +417,7 @@
       <option value="strong">강하게</option>
     </select>
     <div class="genre-arrange-note">
-      <strong id="dynamicsGenerateRuleTitle">팝 강약 규칙</strong>
+      <strong id="dynamicsGenerateRuleTitle">팝 볼륨 규칙</strong>
       <span id="dynamicsGenerateRuleText">규칙적인 강박 · 안정적인 프레이즈 · 절제된 반복음 악센트</span>
     </div>
     <div class="dialog-field-row">
@@ -427,7 +427,7 @@
         <button id="dynamicsGenerateSelectNone" class="compact" type="button">선택 해제</button>
       </span>
     </div>
-    <div class="dialog-channel-grid" aria-label="강약 생성 적용 채널">
+    <div class="dialog-channel-grid" aria-label="볼륨 생성 적용 채널">
       <label class="dialog-channel-option part-0"><input class="dynamics-generate-channel" type="checkbox" data-part-index="0" checked /> 멜로디</label>
       <label class="dialog-channel-option part-1"><input class="dynamics-generate-channel" type="checkbox" data-part-index="1" checked /> 화음1</label>
       <label class="dialog-channel-option part-2"><input class="dynamics-generate-channel" type="checkbox" data-part-index="2" checked /> 화음2</label>
@@ -445,14 +445,14 @@
 
 <dialog id="dynamicsGenerateConfirmDialog" class="mml-dialog dynamics-confirm-dialog">
   <form class="dialog-card" method="dialog">
-    <h3>기존 강약 확인</h3>
+    <h3>기존 볼륨 변화 확인</h3>
     <p>아래 조건 중 하나에 해당하는 채널이 있습니다.</p>
     <ul class="dynamics-confirm-rules">
       <li>사용 중인 V 값이 3종 이상</li>
       <li>가장 큰 V와 가장 작은 V의 차이가 2 이상</li>
     </ul>
     <div id="dynamicsGenerateConfirmList" class="dynamics-confirm-list" aria-live="polite"></div>
-    <p class="dialog-small">계속하면 선택한 채널의 기존 V 변화를 교체하고 새 강약을 생성합니다.</p>
+    <p class="dialog-small">계속하면 선택한 채널의 기존 V 변화를 교체하고 새 볼륨 변화를 생성합니다.</p>
     <div class="dialog-actions">
       <button id="dynamicsGenerateConfirmCancel" type="button">돌아가기</button>
       <button id="dynamicsGenerateConfirmApply" class="primary" type="button">그래도 생성</button>
@@ -488,15 +488,16 @@
   </form>
 </dialog>
 
-<dialog id="genreArrangeDialog" class="mml-dialog genre-arrange-dialog">
-  <form id="genreArrangeForm" class="dialog-card" method="dialog">
+<dialog id="accompanimentGenerateDialog" class="mml-dialog accompaniment-generate-dialog">
+  <form id="accompanimentGenerateForm" class="dialog-card" method="dialog">
     <div class="genre-arrange-title-row">
-      <h3>장르 편곡</h3>
+      <h3>반주 생성</h3>
       <span class="genre-beta-badge" aria-label="베타 기능">BETA</span>
     </div>
-    <p>선택한 멜로디는 유지하고 화음1~5를 선택한 장르의 반주로 새로 만듭니다. 현재 화음 채널 내용은 교체됩니다.</p>
-    <label class="dialog-field" for="genreArrangeGenre">편곡 장르</label>
-    <select id="genreArrangeGenre">
+    <p>선택한 참고 채널을 함께 분석한 뒤, 생성 채널 수에 맞춰 화음·리듬·아르페지오·베이스 역할을 나누어 반주를 만듭니다.</p>
+
+    <label class="dialog-field" for="accompanimentGenerateGenre">반주 장르</label>
+    <select id="accompanimentGenerateGenre">
       <option value="pop" selected>팝</option>
       <option value="jazz">재즈</option>
       <option value="ballad">발라드</option>
@@ -505,34 +506,75 @@
       <option value="funk">펑크</option>
       <option value="classical">클래식</option>
     </select>
-    <label class="dialog-field" for="genreArrangeStrength">변형 강도</label>
-    <select id="genreArrangeStrength">
+    <label class="dialog-field" for="accompanimentGenerateStrength">적용 강도</label>
+    <select id="accompanimentGenerateStrength">
       <option value="light">가볍게</option>
       <option value="normal" selected>보통</option>
       <option value="strong">강하게</option>
     </select>
-    <label class="dialog-field" for="genreArrangeMelodyPart">멜로디 기준 채널</label>
-    <select id="genreArrangeMelodyPart">
-      <option value="auto" selected>자동 감지</option>
-      <option value="0">멜로디</option>
-      <option value="1">화음1</option>
-      <option value="2">화음2</option>
-      <option value="3">화음3</option>
-      <option value="4">화음4</option>
-      <option value="5">화음5</option>
-    </select>
     <div class="genre-arrange-note">
-      <strong id="genreArrangeRuleTitle">팝 편곡 규칙</strong>
-      <span id="genreArrangeRuleText">안정적인 3화음 · 4박 코드 펄스 · 루트/5도 베이스</span>
+      <strong id="accompanimentGenerateRuleTitle">팝 반주 규칙</strong>
+      <span id="accompanimentGenerateRuleText">안정적인 화음 · 규칙적인 리듬 · 루트와 5도 중심 베이스</span>
     </div>
-    <div id="genreArrangeStatus" class="dialog-small" role="status" aria-live="polite"></div>
+
+    <section class="accompaniment-channel-section" aria-labelledby="accompanimentAnalysisTitle">
+      <div class="dialog-field-row">
+        <span id="accompanimentAnalysisTitle" class="dialog-field">참고할 채널</span>
+        <span class="dialog-mini-actions">
+          <button id="accompanimentAnalysisSelectAll" class="compact" type="button">전부 선택</button>
+          <button id="accompanimentAnalysisSelectNone" class="compact" type="button">선택 해제</button>
+        </span>
+      </div>
+      <div class="dialog-channel-grid" aria-label="반주 분석 참고 채널">
+        <label class="dialog-channel-option part-0"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="0" /> 멜로디</label>
+        <label class="dialog-channel-option part-1"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="1" /> 화음1</label>
+        <label class="dialog-channel-option part-2"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="2" /> 화음2</label>
+        <label class="dialog-channel-option part-3"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="3" /> 화음3</label>
+        <label class="dialog-channel-option part-4"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="4" /> 화음4</label>
+        <label class="dialog-channel-option part-5"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="5" /> 화음5</label>
+      </div>
+      <span class="dialog-small">선택한 채널의 음표를 합쳐 화성·저음·리듬 흐름을 분석합니다.</span>
+    </section>
+
+    <section class="accompaniment-channel-section" aria-labelledby="accompanimentTargetTitle">
+      <div class="dialog-field-row">
+        <span id="accompanimentTargetTitle" class="dialog-field">반주를 생성할 채널</span>
+        <span class="dialog-mini-actions">
+          <button id="accompanimentTargetSelectAll" class="compact" type="button">전부 선택</button>
+          <button id="accompanimentTargetSelectNone" class="compact" type="button">선택 해제</button>
+        </span>
+      </div>
+      <div class="dialog-channel-grid" aria-label="반주 생성 대상 채널">
+        <label class="dialog-channel-option part-0"><input class="accompaniment-target-channel" type="checkbox" data-part-index="0" /> 멜로디</label>
+        <label class="dialog-channel-option part-1"><input class="accompaniment-target-channel" type="checkbox" data-part-index="1" /> 화음1</label>
+        <label class="dialog-channel-option part-2"><input class="accompaniment-target-channel" type="checkbox" data-part-index="2" /> 화음2</label>
+        <label class="dialog-channel-option part-3"><input class="accompaniment-target-channel" type="checkbox" data-part-index="3" /> 화음3</label>
+        <label class="dialog-channel-option part-4"><input class="accompaniment-target-channel" type="checkbox" data-part-index="4" /> 화음4</label>
+        <label class="dialog-channel-option part-5"><input class="accompaniment-target-channel" type="checkbox" data-part-index="5" /> 화음5</label>
+      </div>
+      <span class="dialog-small">선택한 채널의 기존 내용은 새 반주로 교체됩니다.</span>
+    </section>
+
+    <div id="accompanimentGenerateStatus" class="dialog-small" role="status" aria-live="polite"></div>
     <div class="dialog-actions">
-      <button id="genreArrangeCancel" type="button">취소</button>
-      <button id="genreArrangeApply" class="primary" type="button">편곡</button>
+      <button id="accompanimentGenerateCancel" type="button">취소</button>
+      <button id="accompanimentGenerateApply" class="primary" type="button">생성</button>
     </div>
   </form>
 </dialog>
 
+<dialog id="accompanimentGenerateConfirmDialog" class="mml-dialog accompaniment-confirm-dialog">
+  <form class="dialog-card" method="dialog">
+    <h3>반주 생성 확인</h3>
+    <p>아래 채널의 원본 내용이 생성 과정에서 교체됩니다.</p>
+    <div id="accompanimentGenerateConfirmList" class="dynamics-confirm-list" aria-live="polite"></div>
+    <p class="dialog-small">참고와 생성에 모두 선택된 채널은 원본을 먼저 분석한 뒤 새 반주로 교체합니다.</p>
+    <div class="dialog-actions">
+      <button id="accompanimentGenerateConfirmCancel" type="button">돌아가기</button>
+      <button id="accompanimentGenerateConfirmApply" class="primary" type="button">그래도 생성</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="midiExtractDialog" class="mml-dialog midi-extract-dialog" aria-labelledby="midiExtractTitle">
   <form class="dialog-card midi-extract-card" method="dialog">
@@ -715,7 +757,6 @@
           <span><b>자동</b>: 선택한 악기를 가능한 범위에서 자동 배치</span>
           <span><b>고음</b>: 높은 음역을 우선 배치</span>
           <span><b>저음</b>: 낮은 음역을 우선 배치</span>
-          <span><b>생성</b>: 선택한 선율에서 코드와 아르페지오 반주를 생성</span>
           <span><b>비트</b>: 드럼/타악 계열만 배치</span>
           <span><b>겹침 병합</b>: MML 6채널 한계 안에 더 많은 소리를 담기 위해, 이미 울리는 음 일부를 줄이고 겹친 음을 이어 넣습니다.</span>
         </div>
@@ -779,16 +820,16 @@
 
 
 <script src="js/utils.js"></script>
-<script src="js/midi-to-mml.js"></script>
+<script src="js/midi-to-mml.js?v=4.6-midi-source-only"></script>
 <script src="js/musicxml-to-midi.js"></script>
-<script src="js/mml-parser.js?v=4.5-beta-ui"></script>
-<script src="js/mml-optimizer.js?v=4.5-copy-actions-primary-accent"></script>
+<script src="js/mml-parser.js?v=4.6-piano-roll"></script>
+<script src="js/mml-optimizer.js?v=4.6-accompaniment-defaults"></script>
 <script src="js/sf2-sampler.js"></script>
 <script src="js/google-config.js"></script>
 <script src="js/firebase-config.js"></script>
 <script type="module" src="js/firebase-analytics.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="js/app.js?v=4.5-copy-actions-primary-accent"></script>
+<script src="js/app.js?v=4.6-accompaniment-defaults"></script>
 </body>
 </html>

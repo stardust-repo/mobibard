@@ -16,12 +16,6 @@
     { value: "half", label: "절반" },
     { value: "none", label: "안함" }
   ];
-  const GENERATED_ACCOMP_STYLE_OPTIONS = [
-    { value: "auto", label: "자동" },
-    { value: "calm", label: "잔잔" },
-    { value: "normal", label: "보통" },
-    { value: "bright", label: "경쾌" }
-  ];
   const MIDI_INSTRUMENT_CATEGORY_ORDER = ["keyboard", "strings", "winds", "percussion", "other"];
   const MIDI_INSTRUMENT_CATEGORY_LABELS = {
     keyboard: "건반악기",
@@ -74,7 +68,7 @@
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { musicXmlToMidiBytes } = window.MabiMusicXml || {};
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml } = window.MabiMml;
-  const { optimizeMml, arrangeGenreMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
+  const { optimizeMml, generateAccompanimentMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
   const $ = (id) => document.getElementById(id);
@@ -201,16 +195,25 @@
   const leadingSilenceSeconds = $("leadingSilenceSeconds");
   const leadingSilenceApply = $("leadingSilenceApply");
   const leadingSilenceCancel = $("leadingSilenceCancel");
-  const genreArrangeBtn = $("genreArrangeBtn");
-  const genreArrangeDialog = $("genreArrangeDialog");
-  const genreArrangeGenre = $("genreArrangeGenre");
-  const genreArrangeStrength = $("genreArrangeStrength");
-  const genreArrangeMelodyPart = $("genreArrangeMelodyPart");
-  const genreArrangeStatus = $("genreArrangeStatus");
-  const genreArrangeRuleTitle = $("genreArrangeRuleTitle");
-  const genreArrangeRuleText = $("genreArrangeRuleText");
-  const genreArrangeApply = $("genreArrangeApply");
-  const genreArrangeCancel = $("genreArrangeCancel");
+  const accompanimentGenerateBtn = $("accompanimentGenerateBtn");
+  const accompanimentGenerateDialog = $("accompanimentGenerateDialog");
+  const accompanimentGenerateForm = $("accompanimentGenerateForm");
+  const accompanimentGenerateGenre = $("accompanimentGenerateGenre");
+  const accompanimentGenerateStrength = $("accompanimentGenerateStrength");
+  const accompanimentGenerateStatus = $("accompanimentGenerateStatus");
+  const accompanimentGenerateRuleTitle = $("accompanimentGenerateRuleTitle");
+  const accompanimentGenerateRuleText = $("accompanimentGenerateRuleText");
+  const accompanimentAnalysisSelectAll = $("accompanimentAnalysisSelectAll");
+  const accompanimentAnalysisSelectNone = $("accompanimentAnalysisSelectNone");
+  const accompanimentTargetSelectAll = $("accompanimentTargetSelectAll");
+  const accompanimentTargetSelectNone = $("accompanimentTargetSelectNone");
+  const accompanimentGenerateApply = $("accompanimentGenerateApply");
+  const accompanimentGenerateCancel = $("accompanimentGenerateCancel");
+  const accompanimentGenerateConfirmDialog = $("accompanimentGenerateConfirmDialog");
+  const accompanimentGenerateConfirmList = $("accompanimentGenerateConfirmList");
+  const accompanimentGenerateConfirmApply = $("accompanimentGenerateConfirmApply");
+  const accompanimentGenerateConfirmCancel = $("accompanimentGenerateConfirmCancel");
+  let pendingAccompanimentGenerateOptions = null;
   const midiConvertDialog = $("midiConvertDialog");
   const midiConvertTitle = $("midiConvertTitle");
   const midiConvertSummary = $("midiConvertSummary");
@@ -494,10 +497,21 @@
     leadingSilenceBtn?.addEventListener("click", openLeadingSilenceDialog);
     leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
     leadingSilenceCancel?.addEventListener("click", () => leadingSilenceDialog?.close());
-    genreArrangeBtn?.addEventListener("click", openGenreArrangeDialog);
-    genreArrangeGenre?.addEventListener("change", updateGenreArrangeDescription);
-    genreArrangeApply?.addEventListener("click", () => void applyGenreArrangementFromDialog());
-    genreArrangeCancel?.addEventListener("click", () => genreArrangeDialog?.close());
+    accompanimentGenerateBtn?.addEventListener("click", openAccompanimentGenerateDialog);
+    accompanimentGenerateGenre?.addEventListener("change", updateAccompanimentGenerateDescription);
+    accompanimentGenerateApply?.addEventListener("click", () => void applyAccompanimentGenerateFromDialog());
+    accompanimentGenerateForm?.addEventListener("submit", event => { event.preventDefault(); void applyAccompanimentGenerateFromDialog(); });
+    accompanimentGenerateCancel?.addEventListener("click", () => accompanimentGenerateDialog?.close());
+    accompanimentAnalysisSelectAll?.addEventListener("click", () => setDialogChannelSelection(".accompaniment-analysis-channel", true));
+    accompanimentAnalysisSelectNone?.addEventListener("click", () => setDialogChannelSelection(".accompaniment-analysis-channel", false));
+    accompanimentTargetSelectAll?.addEventListener("click", () => setDialogChannelSelection(".accompaniment-target-channel", true));
+    accompanimentTargetSelectNone?.addEventListener("click", () => setDialogChannelSelection(".accompaniment-target-channel", false));
+    accompanimentGenerateConfirmApply?.addEventListener("click", () => void confirmAccompanimentGeneration());
+    accompanimentGenerateConfirmCancel?.addEventListener("click", cancelAccompanimentGeneration);
+    accompanimentGenerateConfirmDialog?.addEventListener("cancel", event => {
+      event.preventDefault();
+      cancelAccompanimentGeneration();
+    });
     partSoundBtn?.addEventListener("click", () => void openPartSoundDialog());
     partSoundCancel?.addEventListener("click", () => partSoundDialog?.close());
     partSoundApply?.addEventListener("click", () => applyPartSoundDialog());
@@ -4036,7 +4050,6 @@ ${shortError(err)}`);
         role,
         overlapMerge: overlapMergeMode !== "none",
         overlapMergeMode,
-        generatedAccompanimentStyle: "auto",
         selectedInstrumentGroups: new Set(i >= 3 ? [] : (role === "beat" ? beatIds : normalIds))
       };
     });
@@ -4070,35 +4083,21 @@ ${shortError(err)}`);
         `<option value="auto" ${setting.role === "auto" ? "selected" : ""}>자동</option>`,
         `<option value="high" ${setting.role === "high" ? "selected" : ""}>고음</option>`,
         `<option value="low" ${setting.role === "low" ? "selected" : ""}>저음</option>`,
-        `<option value="generate" ${setting.role === "generate" ? "selected" : ""}>생성</option>`,
         allowBeat ? `<option value="beat" ${setting.role === "beat" ? "selected" : ""}>비트</option>` : ""
       ].join("");
       const mergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
       setting.overlapMergeMode = mergeMode;
       setting.overlapMerge = mergeMode !== "none";
-      const styleMode = normalizeGeneratedAccompanimentStyle(setting.generatedAccompanimentStyle);
-      setting.generatedAccompanimentStyle = styleMode;
       const mergeOptions = OVERLAP_MERGE_OPTIONS.map(opt =>
         `<option value="${opt.value}" ${mergeMode === opt.value ? "selected" : ""}>${opt.label}</option>`
       ).join("");
-      const styleOptions = GENERATED_ACCOMP_STYLE_OPTIONS.map(opt =>
-        `<option value="${opt.value}" ${styleMode === opt.value ? "selected" : ""}>${opt.label}</option>`
-      ).join("");
-      const rightControl = setting.role === "generate"
-        ? `<label class="merge-mode generated-style-mode">
-            <span>반주</span>
-            <select data-accomp-style-index="${i}" aria-label="${PART_LABELS[i]} 생성 반주 패턴">
-              ${styleOptions}
-            </select>
-            <span>패턴</span>
-          </label>`
-        : `<label class="merge-mode">
-            <span>겹침</span>
-            <select data-merge-index="${i}" aria-label="${PART_LABELS[i]} 겹침 병합 방식">
-              ${mergeOptions}
-            </select>
-            <span>병합</span>
-          </label>`;
+      const rightControl = `<label class="merge-mode">
+          <span>겹침</span>
+          <select data-merge-index="${i}" aria-label="${PART_LABELS[i]} 겹침 병합 방식">
+            ${mergeOptions}
+          </select>
+          <span>병합</span>
+        </label>`;
       row.innerHTML = `
         <button class="midi-channel-select" type="button" data-midi-channel-select="${i}" aria-label="${PART_LABELS[i]} 악기 선택">
           <span class="midi-export-label">${PART_LABELS[i]}</span>
@@ -4129,9 +4128,6 @@ ${shortError(err)}`);
         const mode = normalizeOverlapMergeMode(ev.target.value);
         pendingMidiSettings.channels[i].overlapMergeMode = mode;
         pendingMidiSettings.channels[i].overlapMerge = mode !== "none";
-      });
-      row.querySelector("[data-accomp-style-index]")?.addEventListener("change", (ev) => {
-        pendingMidiSettings.channels[i].generatedAccompanimentStyle = normalizeGeneratedAccompanimentStyle(ev.target.value);
       });
       midiRoleList.appendChild(row);
     }
@@ -4194,20 +4190,13 @@ ${shortError(err)}`);
   function updateMidiChannelRole(index, role) {
     if (!pendingMidiSettings) return;
     const setting = pendingMidiSettings.channels[index];
-    if (setting.role === "accomp") setting.role = "generate";
     const previousIsBeat = setting.role === "beat";
     const previousSelected = Array.from(setting.selectedInstrumentGroups || []);
-    const validRoles = new Set(["auto", "high", "low", "generate", "accomp", "beat"]);
-    const rawRole = String(role);
-    const requestedRole = rawRole === "accomp" ? "generate" : (validRoles.has(rawRole) ? rawRole : "auto");
+    const validRoles = new Set(["auto", "high", "low", "beat"]);
+    const rawRole = String(role || "auto").toLowerCase();
+    const requestedRole = validRoles.has(rawRole) ? rawRole : "auto";
     const nextRole = requestedRole === "beat" && !pendingMidiSettings.hasBeatGroups ? "auto" : requestedRole;
-    const previousRole = setting.role;
     setting.role = nextRole;
-    if (nextRole === "generate") {
-      setting.generatedAccompanimentStyle = previousRole === "generate"
-        ? normalizeGeneratedAccompanimentStyle(setting.generatedAccompanimentStyle)
-        : "auto";
-    }
     const nextIsBeat = nextRole === "beat";
     if (previousIsBeat !== nextIsBeat) {
       const allowedIds = nextIsBeat ? pendingMidiSettings.beatIds : pendingMidiSettings.normalIds;
@@ -4225,7 +4214,7 @@ ${shortError(err)}`);
     const setting = pendingMidiSettings.channels[index];
     const allowed = getAllowedMidiGroupsForSetting(setting);
     const selectedCount = allowed.filter(g => setting.selectedInstrumentGroups.has(g.id)).length;
-    return `${setting.role === "generate" ? "생성 원본" : "악기"} ${formatCount(selectedCount)}개 선택`;
+    return `악기 ${formatCount(selectedCount)}개 선택`;
   }
 
   function normalizeOverlapMergeMode(value) {
@@ -4235,10 +4224,6 @@ ${shortError(err)}`);
     return OVERLAP_MERGE_OPTIONS.some(opt => opt.value === mode) ? mode : "all";
   }
 
-  function normalizeGeneratedAccompanimentStyle(value) {
-    const mode = String(value || "auto").toLowerCase();
-    return GENERATED_ACCOMP_STYLE_OPTIONS.some(opt => opt.value === mode) ? mode : "auto";
-  }
 
   function getMidiGroupSelectedChannels(groupId) {
     if (!pendingMidiSettings) return [];
@@ -4349,9 +4334,7 @@ ${shortError(err)}`);
     if (midiInstrumentPanelHint) {
       midiInstrumentPanelHint.textContent = isBeat
         ? "비트 채널에는 비트 악기를 배정할 수 있습니다."
-        : (setting?.role === "generate"
-          ? "선택한 악기의 선율을 분석해 이 채널에 코드 반주를 생성합니다."
-          : "각 채널마다 여러 악기를 배정할 수 있습니다.");
+        : "각 채널마다 여러 악기를 배정할 수 있습니다.";
     }
     syncMidiInstrumentPanelActions(groups);
 
@@ -4458,15 +4441,14 @@ ${shortError(err)}`);
     const overlapMergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
     return {
       partCount: 1,
-      roles: [setting.role === "accomp" ? "generate" : (setting.role || "auto")],
+      roles: [setting.role || "auto"],
       sourcePartIndex: sourceIndex,
       sourceLabel,
       exportChannels: [{
         sourcePartIndex: sourceIndex,
-        role: setting.role === "accomp" ? "generate" : (setting.role || "auto"),
+        role: setting.role || "auto",
         overlapMergeMode,
         overlapMerge: overlapMergeMode !== "none",
-        generatedAccompanimentStyle: normalizeGeneratedAccompanimentStyle(setting.generatedAccompanimentStyle),
         selectedInstrumentGroups: selected
       }]
     };
@@ -4875,10 +4857,9 @@ ${shortError(err)}`);
       const overlapMergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
       exportChannels.push({
         sourcePartIndex: i,
-        role: setting.role === "accomp" ? "generate" : (setting.role || "auto"),
+        role: setting.role || "auto",
         overlapMergeMode,
         overlapMerge: overlapMergeMode !== "none",
-        generatedAccompanimentStyle: normalizeGeneratedAccompanimentStyle(setting.generatedAccompanimentStyle),
         selectedInstrumentGroups: selected
       });
     }
@@ -6383,13 +6364,13 @@ ${shortError(err)}`);
 
 
   const DYNAMICS_GENERATE_INFO = {
-    pop: { label: "팝", title: "팝 강약 규칙", detail: "규칙적인 강박 · 안정적인 프레이즈 · 절제된 반복음 악센트" },
-    jazz: { label: "재즈", title: "재즈 강약 규칙", detail: "약박과 싱코페이션 · 유연한 프레이즈 · 도착음 강조" },
-    ballad: { label: "발라드", title: "발라드 강약 규칙", detail: "완만한 프레이즈 · 긴 음 강조 · 부드러운 마무리" },
-    bossa: { label: "보사노바", title: "보사노바 강약 규칙", detail: "부드러운 엇박 · 작은 강약 폭 · 안정적인 반복 흐름" },
-    rock: { label: "록", title: "록 강약 규칙", detail: "강한 첫 박과 셋째 박 · 선명한 어택 · 단단한 반복 리듬" },
-    funk: { label: "펑크", title: "펑크 강약 규칙", detail: "16비트 오프비트 · 싱코페이션 · 반복음 교차 악센트" },
-    classical: { label: "클래식", title: "클래식 강약 규칙", detail: "프레이즈 호흡 · 긴 음과 절정음 강조 · 완만한 상승과 하강" }
+    pop: { label: "팝", title: "팝 볼륨 규칙", detail: "규칙적인 강박 · 안정적인 프레이즈 · 절제된 반복음 악센트" },
+    jazz: { label: "재즈", title: "재즈 볼륨 규칙", detail: "약박과 싱코페이션 · 유연한 프레이즈 · 도착음 강조" },
+    ballad: { label: "발라드", title: "발라드 볼륨 규칙", detail: "완만한 프레이즈 · 긴 음 강조 · 부드러운 마무리" },
+    bossa: { label: "보사노바", title: "보사노바 볼륨 규칙", detail: "부드러운 엇박 · 작은 강약 폭 · 안정적인 반복 흐름" },
+    rock: { label: "록", title: "록 볼륨 규칙", detail: "강한 첫 박과 셋째 박 · 선명한 어택 · 단단한 반복 리듬" },
+    funk: { label: "펑크", title: "펑크 볼륨 규칙", detail: "16비트 오프비트 · 싱코페이션 · 반복음 교차 악센트" },
+    classical: { label: "클래식", title: "클래식 볼륨 규칙", detail: "프레이즈 호흡 · 긴 음과 절정음 강조 · 완만한 상승과 하강" }
   };
 
   function updateDynamicsGenerateDescription() {
@@ -6400,7 +6381,7 @@ ${shortError(err)}`);
   }
 
   function openDynamicsGenerateDialog() {
-    if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = "기존 강약이 감지되면 조건을 안내한 뒤 적용 여부를 확인합니다.";
+    if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = "기존 볼륨 변화가 감지되면 조건을 안내한 뒤 적용 여부를 확인합니다.";
     if (dynamicsGenerateGenre && !Object.prototype.hasOwnProperty.call(DYNAMICS_GENERATE_INFO, dynamicsGenerateGenre.value)) {
       dynamicsGenerateGenre.value = "pop";
     }
@@ -6420,7 +6401,7 @@ ${shortError(err)}`);
   function applyDynamicsGenerateFromDialog() {
     const targetPartIndexes = getDialogSelectedPartIndexes(".dynamics-generate-channel");
     if (!targetPartIndexes.length) {
-      showDialog("강약 생성", "적용할 채널을 1개 이상 선택해 주세요.");
+      showDialog("볼륨 생성", "적용할 채널을 1개 이상 선택해 주세요.");
       return;
     }
     applyDynamicsGenerate({
@@ -6438,7 +6419,7 @@ ${shortError(err)}`);
     if (Number(partResult.volumeRange || 0) >= 2) {
       conditions.push(`V${partResult.minVolume}~V${partResult.maxVolume} · 차이 ${partResult.volumeRange}`);
     }
-    return conditions.join(" / ") || "기존 강약 변화 감지";
+    return conditions.join(" / ") || "기존 볼륨 변화 감지";
   }
 
   function reopenDynamicsGenerateSettings() {
@@ -6472,7 +6453,7 @@ ${shortError(err)}`);
 
     const lines = conflicts.map(conflict => `${PART_LABELS[conflict.partIndex] || `채널 ${conflict.partIndex + 1}`}: ${formatDynamicsConflict(conflict)}`);
     const confirmed = window.confirm(
-      `기존 강약이 감지되었습니다.\n\n` +
+      `기존 볼륨 변화가 감지되었습니다.\n\n` +
       `판단 조건: V 값 3종 이상 또는 최대·최소 차이 2 이상\n\n` +
       `${lines.join("\n")}\n\n기존 V 변화를 교체하고 그래도 생성할까요?`
     );
@@ -6501,12 +6482,12 @@ ${shortError(err)}`);
 
   function applyDynamicsGenerate(options = {}) {
     if (typeof generateDynamicsMml !== "function") {
-      showDialog("강약 생성 실패", "강약 생성 모듈을 불러오지 못했습니다.");
+      showDialog("볼륨 생성 실패", "볼륨 생성 모듈을 불러오지 못했습니다.");
       return;
     }
     const selectedIndexes = options.targetPartIndexes == null ? null : normalizePartIndexList(options.targetPartIndexes);
     if (options.targetPartIndexes != null && !selectedIndexes.length) {
-      showDialog("강약 생성", "적용할 채널을 1개 이상 선택해 주세요.");
+      showDialog("볼륨 생성", "적용할 채널을 1개 이상 선택해 주세요.");
       return;
     }
 
@@ -6530,7 +6511,7 @@ ${shortError(err)}`);
         const conflicts = preview.partResults.filter(part => part.status === "existing_expression");
         if (conflicts.length) {
           if (dynamicsGenerateStatus) {
-            dynamicsGenerateStatus.textContent = `기존 강약이 감지된 채널 ${conflicts.length.toLocaleString("ko-KR")}개를 확인해 주세요.`;
+            dynamicsGenerateStatus.textContent = `기존 볼륨 변화가 감지된 채널 ${conflicts.length.toLocaleString("ko-KR")}개를 확인해 주세요.`;
           }
           showDynamicsGenerateOverwriteConfirmation(normalizedOptions, conflicts);
           return;
@@ -6549,7 +6530,7 @@ ${shortError(err)}`);
       commitDynamicsGenerate(result, normalizedOptions, selectedIndexes);
     } catch (err) {
       if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = shortError(err);
-      showDialog("강약 생성 실패", shortError(err));
+      showDialog("볼륨 생성 실패", shortError(err));
     }
   }
 
@@ -6561,16 +6542,16 @@ ${shortError(err)}`);
     try {
       const info = DYNAMICS_GENERATE_INFO[result.genre] || DYNAMICS_GENERATE_INFO.pop;
       if (result.generatedCommands <= 0 || result.processedPartCount <= 0) {
-        const reason = "선택한 채널에서 강약을 생성할 음표를 찾지 못했습니다.";
+        const reason = "선택한 채널에서 볼륨 변화를 생성할 음표를 찾지 못했습니다.";
         if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = reason;
-        showDialog("강약 생성", reason);
+        showDialog("볼륨 생성", reason);
         return;
       }
       setMainMml(result.mml);
       dynamicsGenerateDialog?.close();
       dynamicsGenerateConfirmDialog?.close();
       flashButton(dynamicsGenerateBtn, "생성 완료");
-      trackAnalytics("dynamics_generate_apply", {
+      trackAnalytics("volume_generate_apply", {
         genre: result.genre,
         strength: result.strength,
         selected_channel_count: selectedIndexes?.length || 6,
@@ -6581,18 +6562,18 @@ ${shortError(err)}`);
       });
       const strengthLabels = { light: "가볍게", normal: "보통", strong: "강하게" };
       const overwrittenLine = options.overwriteExisting && result.existingExpressivePartCount > 0
-        ? `\n기존 강약을 교체한 채널: ${result.existingExpressivePartCount.toLocaleString("ko-KR")}개`
+        ? `\n기존 볼륨 변화를 교체한 채널: ${result.existingExpressivePartCount.toLocaleString("ko-KR")}개`
         : "";
       showDialog(
-        "강약 생성 완료",
+        "볼륨 생성 완료",
         `${info.label} 스타일 · ${strengthLabels[result.strength] || result.strength}\n` +
         `적용 채널: ${result.processedPartCount.toLocaleString("ko-KR")}개\n` +
         `생성한 V 명령: ${result.generatedCommands.toLocaleString("ko-KR")}개\n` +
-        `변경된 음표 강약: ${result.changedNotes.toLocaleString("ko-KR")}개${overwrittenLine}`
+        `변경된 음표 볼륨: ${result.changedNotes.toLocaleString("ko-KR")}개${overwrittenLine}`
       );
     } catch (err) {
       if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = shortError(err);
-      showDialog("강약 생성 실패", shortError(err));
+      showDialog("볼륨 생성 실패", shortError(err));
     } finally {
       if (dynamicsGenerateApply) dynamicsGenerateApply.disabled = false;
       if (dynamicsGenerateCancel) dynamicsGenerateCancel.disabled = false;
@@ -6600,144 +6581,302 @@ ${shortError(err)}`);
     }
   }
 
-  const GENRE_ARRANGE_INFO = {
+  const ACCOMPANIMENT_GENERATE_INFO = {
     pop: {
       label: "팝",
-      title: "팝 편곡 규칙",
-      detail: "안정적인 3화음 · 4박 코드 펄스 · 루트/5도 베이스",
-      completion: "규칙적인 코드 펄스, 깔끔한 3화음, 루트와 5도 중심 베이스"
+      title: "팝 반주 규칙",
+      detail: "안정적인 화음 · 규칙적인 리듬 · 루트와 5도 중심 베이스",
+      completion: "안정적인 화음, 규칙적인 리듬과 루트·5도 중심 베이스"
     },
     jazz: {
       label: "재즈",
-      title: "재즈 편곡 규칙",
+      title: "재즈 반주 규칙",
       detail: "7th 코드 · 보이스 리딩 · 싱코페이션 · 워킹 베이스",
-      completion: "7th 코드 보이싱, 싱코페이션 컴핑, 워킹 베이스"
+      completion: "7th 코드 보이싱, 싱코페이션과 워킹 베이스"
     },
     ballad: {
       label: "발라드",
-      title: "발라드 편곡 규칙",
-      detail: "부드러운 add9 코드 · 긴 패드 · 절제된 루트/5도 베이스",
-      completion: "긴 코드 패드, 부드러운 재타격, 루트와 5도 중심 베이스"
+      title: "발라드 반주 규칙",
+      detail: "긴 화음 · 완만한 아르페지오 · 절제된 저음 진행",
+      completion: "긴 화음, 완만한 아르페지오와 절제된 저음 진행"
     },
     bossa: {
       label: "보사노바",
-      title: "보사노바 편곡 규칙",
-      detail: "7th 코드 · 엇박 컴핑 · 루트/5도 교대 베이스",
-      completion: "보사노바 엇박 컴핑과 루트·5도 교대 베이스"
+      title: "보사노바 반주 규칙",
+      detail: "부드러운 엇박 · 코드 분산 · 루트와 5도 교대 베이스",
+      completion: "부드러운 엇박 코드와 루트·5도 교대 베이스"
     },
     rock: {
       label: "록",
-      title: "록 편곡 규칙",
-      detail: "파워 코드 · 8비트 드라이브 · 강한 루트/옥타브 베이스",
-      completion: "파워 코드, 8비트 리듬, 루트·5도·옥타브 베이스"
+      title: "록 반주 규칙",
+      detail: "파워 코드 · 강박 중심 리듬 · 활동적인 저음",
+      completion: "파워 코드, 강박 중심 리듬과 활동적인 저음"
     },
     funk: {
       label: "펑크",
-      title: "펑크 편곡 규칙",
-      detail: "짧은 코드 스탭 · 16비트 싱코페이션 · 옥타브 베이스",
-      completion: "짧은 싱코페이션 코드 스탭과 옥타브 중심 베이스"
+      title: "펑크 반주 규칙",
+      detail: "짧은 코드 · 16비트 싱코페이션 · 옥타브 베이스",
+      completion: "짧은 싱코페이션 코드와 옥타브 중심 베이스"
     },
     classical: {
       label: "클래식",
-      title: "클래식 편곡 규칙",
-      detail: "성부 진행 · 분산화음 · 알베르티형 저음 진행",
-      completion: "부드러운 성부 진행, 분산화음, 알베르티형 저음 반주"
+      title: "클래식 반주 규칙",
+      detail: "성부 진행 · 분산화음 · 알베르티형 저음",
+      completion: "부드러운 성부 진행, 분산화음과 알베르티형 저음"
     }
   };
 
-  function updateGenreArrangeDescription() {
-    const genre = genreArrangeGenre?.value || "pop";
-    const info = GENRE_ARRANGE_INFO[genre] || GENRE_ARRANGE_INFO.pop;
-    if (genreArrangeRuleTitle) genreArrangeRuleTitle.textContent = info.title;
-    if (genreArrangeRuleText) genreArrangeRuleText.textContent = info.detail;
+  function updateAccompanimentGenerateDescription() {
+    const genre = accompanimentGenerateGenre?.value || "pop";
+    const info = ACCOMPANIMENT_GENERATE_INFO[genre] || ACCOMPANIMENT_GENERATE_INFO.pop;
+    if (accompanimentGenerateRuleTitle) accompanimentGenerateRuleTitle.textContent = info.title;
+    if (accompanimentGenerateRuleText) accompanimentGenerateRuleText.textContent = info.detail;
   }
 
-  function openGenreArrangeDialog() {
-    if (genreArrangeStatus) genreArrangeStatus.textContent = "";
-    if (genreArrangeGenre && !Object.prototype.hasOwnProperty.call(GENRE_ARRANGE_INFO, genreArrangeGenre.value)) {
-      genreArrangeGenre.value = "pop";
+  function getAccompanimentPartFlags() {
+    const parts = splitMmlParts(normalizeMmlForDisplay(mainMml?.value || "")).slice(0, 6);
+    while (parts.length < 6) parts.push("");
+    return parts.map((part, partIndex) => {
+      let noteCount = 0;
+      try {
+        noteCount = parseMmlPart(part, partIndex)?.notes?.length || 0;
+      } catch (_) {
+        noteCount = /(?:^|[^a-z])[a-g](?:\+|#|-)?(?:\d+)?/i.test(String(part || "")) ? 1 : 0;
+      }
+      return {
+        partIndex,
+        text: String(part || ""),
+        hasContent: Boolean(String(part || "").trim()),
+        hasNotes: noteCount > 0,
+        noteCount
+      };
+    });
+  }
+
+  function getDefaultAccompanimentTargetIndexes(flags) {
+    const notePartIndexes = flags
+      .filter(flag => flag.hasNotes)
+      .map(flag => flag.partIndex);
+
+    // 멜로디 채널 하나만 있는 경우에는 첫 두 화음 채널을 기본 생성 대상으로 사용합니다.
+    if (notePartIndexes.length === 1 && notePartIndexes[0] === 0) return [1, 2];
+
+    // 6개 채널이 모두 차 있으면 마지막 채널을 교체 대상으로 제안합니다.
+    if (notePartIndexes.length === 6) return [5];
+
+    // 2개 이상의 채널이 있으면 번호가 가장 앞선 빈 채널 하나만 선택합니다.
+    if (notePartIndexes.length >= 2) {
+      const firstEmpty = flags.find(flag => !flag.hasNotes);
+      return firstEmpty ? [firstEmpty.partIndex] : [];
     }
-    if (genreArrangeStrength && !["light", "normal", "strong"].includes(genreArrangeStrength.value)) {
-      genreArrangeStrength.value = "normal";
+
+    // 예외적으로 첫 채널이 아닌 한 채널만 있는 경우에도 가장 앞선 빈 채널을 사용합니다.
+    if (notePartIndexes.length === 1) {
+      const firstEmpty = flags.find(flag => !flag.hasNotes);
+      return firstEmpty ? [firstEmpty.partIndex] : [];
     }
-    if (genreArrangeMelodyPart && !["auto", "0", "1", "2", "3", "4", "5"].includes(genreArrangeMelodyPart.value)) {
-      genreArrangeMelodyPart.value = "auto";
+
+    return [];
+  }
+
+  function setAccompanimentDefaultSelection() {
+    const flags = getAccompanimentPartFlags();
+    const targetIndexes = getDefaultAccompanimentTargetIndexes(flags);
+    const targetSet = new Set(targetIndexes);
+
+    document.querySelectorAll(".accompaniment-analysis-channel").forEach(input => {
+      const index = Number(input.dataset.partIndex);
+      input.checked = Boolean(flags[index]?.hasNotes);
+    });
+    document.querySelectorAll(".accompaniment-target-channel").forEach(input => {
+      const index = Number(input.dataset.partIndex);
+      input.checked = targetSet.has(index);
+    });
+    return { flags, targetIndexes };
+  }
+
+  function openAccompanimentGenerateDialog() {
+    if (accompanimentGenerateStatus) accompanimentGenerateStatus.textContent = "";
+    if (accompanimentGenerateGenre && !Object.prototype.hasOwnProperty.call(ACCOMPANIMENT_GENERATE_INFO, accompanimentGenerateGenre.value)) {
+      accompanimentGenerateGenre.value = "pop";
     }
-    updateGenreArrangeDescription();
-    if (genreArrangeDialog?.showModal) {
-      genreArrangeDialog.showModal();
-      genreArrangeGenre?.focus();
+    if (accompanimentGenerateStrength && !["light", "normal", "strong"].includes(accompanimentGenerateStrength.value)) {
+      accompanimentGenerateStrength.value = "normal";
+    }
+    const { flags, targetIndexes } = setAccompanimentDefaultSelection();
+    const notePartIndexes = flags.filter(flag => flag.hasNotes).map(flag => flag.partIndex);
+    if (accompanimentGenerateStatus) {
+      if (notePartIndexes.length === 1 && notePartIndexes[0] === 0) {
+        accompanimentGenerateStatus.textContent = "멜로디만 있어 화음1과 화음2를 생성 대상으로 선택했습니다.";
+      } else if (notePartIndexes.length === 6) {
+        accompanimentGenerateStatus.textContent = "6개 채널이 모두 차 있어 마지막 화음5 채널을 교체 대상으로 선택했습니다.";
+      } else if (targetIndexes.length > 0) {
+        const targetLabel = PART_LABELS[targetIndexes[0]] || `${targetIndexes[0] + 1}번 채널`;
+        accompanimentGenerateStatus.textContent = `내용이 있는 채널은 참고 대상으로, 가장 앞선 빈 채널인 ${targetLabel}을 생성 대상으로 선택했습니다.`;
+      } else {
+        accompanimentGenerateStatus.textContent = "반주를 생성할 채널을 직접 선택해 주세요.";
+      }
+    }
+    updateAccompanimentGenerateDescription();
+    pendingAccompanimentGenerateOptions = null;
+    if (accompanimentGenerateDialog?.showModal) {
+      accompanimentGenerateDialog.showModal();
+      accompanimentGenerateGenre?.focus();
       return;
     }
-    applyGenreArrangement({ genre: "pop", strength: "normal", melodyPartIndex: null });
+    void executeAccompanimentGeneration({
+      genre: "pop",
+      strength: "normal",
+      analysisPartIndexes: flags.filter(flag => flag.hasNotes).map(flag => flag.partIndex),
+      generationPartIndexes: targetIndexes
+    });
   }
 
-  async function applyGenreArrangementFromDialog() {
-    if (!genreArrangeApply || genreArrangeApply.disabled) return;
-    const melodyValue = genreArrangeMelodyPart?.value || "auto";
-    const options = {
-      genre: genreArrangeGenre?.value || "pop",
-      strength: genreArrangeStrength?.value || "normal",
-      melodyPartIndex: melodyValue === "auto" ? null : Number(melodyValue)
+  function getAccompanimentDialogOptions() {
+    return {
+      genre: accompanimentGenerateGenre?.value || "pop",
+      strength: accompanimentGenerateStrength?.value || "normal",
+      analysisPartIndexes: getDialogSelectedPartIndexes(".accompaniment-analysis-channel"),
+      generationPartIndexes: getDialogSelectedPartIndexes(".accompaniment-target-channel")
     };
+  }
 
-    genreArrangeApply.disabled = true;
-    if (genreArrangeCancel) genreArrangeCancel.disabled = true;
-    if (genreArrangeStatus) {
-      const genreLabel = GENRE_ARRANGE_INFO[options.genre]?.label || "선택한 장르";
-      genreArrangeStatus.textContent = `멜로디와 코드를 분석해 ${genreLabel} 스타일로 편곡하고 있습니다.`;
+  async function applyAccompanimentGenerateFromDialog() {
+    if (!accompanimentGenerateApply || accompanimentGenerateApply.disabled) return;
+    const options = getAccompanimentDialogOptions();
+    if (!options.analysisPartIndexes.length) {
+      showDialog("반주 생성", "참고할 채널을 1개 이상 선택해 주세요.");
+      return;
+    }
+    if (!options.generationPartIndexes.length) {
+      showDialog("반주 생성", "반주를 생성할 채널을 1개 이상 선택해 주세요.");
+      return;
+    }
+
+    const flags = getAccompanimentPartFlags();
+    const overlapPartIndexes = options.generationPartIndexes.filter(index => options.analysisPartIndexes.includes(index));
+    const existingTargetIndexes = options.generationPartIndexes.filter(index => flags[index]?.hasContent);
+    const confirmationIndexes = Array.from(new Set([...overlapPartIndexes, ...existingTargetIndexes])).sort((a, b) => a - b);
+    if (confirmationIndexes.length) {
+      pendingAccompanimentGenerateOptions = { ...options, overlapPartIndexes, existingTargetIndexes, confirmationIndexes };
+      renderAccompanimentGenerateConfirmation(pendingAccompanimentGenerateOptions);
+      accompanimentGenerateDialog?.close();
+      if (accompanimentGenerateConfirmDialog?.showModal) {
+        accompanimentGenerateConfirmDialog.showModal();
+        accompanimentGenerateConfirmCancel?.focus();
+        return;
+      }
+      const labels = confirmationIndexes.map(index => PART_LABELS[index] || `${index + 1}채널`).join(", ");
+      if (window.confirm(`${labels}의 기존 내용이 새 반주로 교체됩니다. 계속할까요?`)) {
+        const confirmedOptions = pendingAccompanimentGenerateOptions;
+        pendingAccompanimentGenerateOptions = null;
+        await executeAccompanimentGeneration(confirmedOptions);
+      } else {
+        pendingAccompanimentGenerateOptions = null;
+        if (accompanimentGenerateDialog?.showModal) accompanimentGenerateDialog.showModal();
+      }
+      return;
+    }
+    await executeAccompanimentGeneration(options);
+  }
+
+  function renderAccompanimentGenerateConfirmation(options) {
+    if (!accompanimentGenerateConfirmList) return;
+    accompanimentGenerateConfirmList.replaceChildren();
+    for (const partIndex of options.confirmationIndexes || []) {
+      const item = document.createElement("div");
+      item.className = `dynamics-confirm-item part-${partIndex}`;
+      const title = document.createElement("strong");
+      title.textContent = PART_LABELS[partIndex] || `${partIndex + 1}채널`;
+      const detail = document.createElement("span");
+      const overlap = options.overlapPartIndexes?.includes(partIndex);
+      detail.textContent = overlap
+        ? "참고 채널의 원본을 먼저 분석한 뒤, 이 채널을 새 반주로 교체합니다."
+        : "현재 채널의 기존 내용을 새 반주로 교체합니다.";
+      item.append(title, detail);
+      accompanimentGenerateConfirmList.append(item);
+    }
+  }
+
+  async function confirmAccompanimentGeneration() {
+    const options = pendingAccompanimentGenerateOptions;
+    pendingAccompanimentGenerateOptions = null;
+    accompanimentGenerateConfirmDialog?.close();
+    if (!options) return;
+    await executeAccompanimentGeneration(options);
+  }
+
+  function cancelAccompanimentGeneration() {
+    pendingAccompanimentGenerateOptions = null;
+    accompanimentGenerateConfirmDialog?.close();
+    if (accompanimentGenerateDialog?.showModal && !accompanimentGenerateDialog.open) {
+      accompanimentGenerateDialog.showModal();
+      accompanimentGenerateGenre?.focus();
+    }
+  }
+
+  async function executeAccompanimentGeneration(options) {
+    if (!accompanimentGenerateApply || accompanimentGenerateApply.disabled) return;
+    accompanimentGenerateApply.disabled = true;
+    if (accompanimentGenerateCancel) accompanimentGenerateCancel.disabled = true;
+    if (accompanimentGenerateStatus) {
+      const label = ACCOMPANIMENT_GENERATE_INFO[options.genre]?.label || "선택한 장르";
+      accompanimentGenerateStatus.textContent = `${options.analysisPartIndexes.length.toLocaleString("ko-KR")}개 채널을 분석해 ${label} 반주를 생성하고 있습니다.`;
     }
     await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
-
     try {
-      const result = applyGenreArrangement(options, { closeDialog: false, showCompletion: false });
-      genreArrangeDialog?.close();
-      showGenreArrangementResult(result);
+      const result = applyAccompanimentGeneration(options);
+      accompanimentGenerateDialog?.close();
+      accompanimentGenerateConfirmDialog?.close();
+      showAccompanimentGenerationResult(result);
     } catch (err) {
-      if (genreArrangeStatus) genreArrangeStatus.textContent = shortError(err);
-      showDialog("장르 편곡 실패", shortError(err));
+      if (accompanimentGenerateStatus) accompanimentGenerateStatus.textContent = shortError(err);
+      showDialog("반주 생성 실패", shortError(err));
+      if (accompanimentGenerateDialog?.showModal && !accompanimentGenerateDialog.open) accompanimentGenerateDialog.showModal();
     } finally {
-      genreArrangeApply.disabled = false;
-      if (genreArrangeCancel) genreArrangeCancel.disabled = false;
+      accompanimentGenerateApply.disabled = false;
+      if (accompanimentGenerateCancel) accompanimentGenerateCancel.disabled = false;
     }
   }
 
-  function applyGenreArrangement(options = {}, behavior = {}) {
-    if (typeof arrangeGenreMml !== "function") throw new Error("장르 편곡 모듈을 불러오지 못했습니다.");
+  function applyAccompanimentGeneration(options = {}) {
+    if (typeof generateAccompanimentMml !== "function") throw new Error("반주 생성 모듈을 불러오지 못했습니다.");
     stopPlayback(false);
-    const result = arrangeGenreMml(normalizeMmlForDisplay(mainMml.value), {
+    const result = generateAccompanimentMml(normalizeMmlForDisplay(mainMml.value), {
       genre: options.genre || "pop",
       strength: options.strength || "normal",
-      melodyPartIndex: options.melodyPartIndex
+      analysisPartIndexes: options.analysisPartIndexes,
+      generationPartIndexes: options.generationPartIndexes
     });
     setMainMml(result.mml);
-    flashButton(genreArrangeBtn, "편곡 완료");
-    trackAnalytics("genre_arrange_apply", {
+    flashButton(accompanimentGenerateBtn, "생성 완료");
+    trackAnalytics("accompaniment_generate_apply", {
       genre: result.genre,
       strength: result.strength,
-      melody_part: result.melodyPartIndex + 1,
+      analysis_channel_count: result.analyzedPartCount,
+      generation_channel_count: result.generatedPartCount,
+      overlap_channel_count: result.overlapPartIndexes.length,
+      replaced_channel_count: result.replacedPartIndexes.length,
       chord_count: result.chordCount
     });
-    if (behavior.closeDialog !== false) genreArrangeDialog?.close();
-    if (behavior.showCompletion !== false) showGenreArrangementResult(result);
     return result;
   }
 
-  function showGenreArrangementResult(result) {
+  function showAccompanimentGenerationResult(result) {
     const strengthLabels = { light: "가볍게", normal: "보통", strong: "강하게" };
-    const melodyLabel = PART_LABELS[result.melodyPartIndex] || `${result.melodyPartIndex + 1}채널`;
-    const info = GENRE_ARRANGE_INFO[result.genre] || GENRE_ARRANGE_INFO.pop;
+    const info = ACCOMPANIMENT_GENERATE_INFO[result.genre] || ACCOMPANIMENT_GENERATE_INFO.pop;
+    const analysisLabels = result.analysisPartIndexes.map(index => PART_LABELS[index] || `${index + 1}채널`).join(", ");
+    const roleLines = result.generatedRoles
+      .map(role => `${PART_LABELS[role.partIndex] || `${role.partIndex + 1}채널`}: ${role.role}`)
+      .join("\n");
     showDialog(
-      "장르 편곡 완료",
-      `${melodyLabel}를 멜로디로 사용해 ${info.label} 스타일로 편곡했습니다.
-` +
-      `감지 조성: ${result.key?.label || "확인 불가"}
-` +
-      `변형 강도: ${strengthLabels[result.strength] || result.strength}
-` +
-      `코드 구간: ${Number(result.chordCount || 0).toLocaleString("ko-KR")}개
-` +
-      `화음1~5는 ${info.completion} 반주로 교체했습니다.`
+      "반주 생성 완료",
+      `${info.label} 스타일 · ${strengthLabels[result.strength] || result.strength}\n` +
+      `참고 채널: ${analysisLabels}\n` +
+      `감지 조성: ${result.key?.label || "확인 불가"}\n` +
+      `화성 구간: ${Number(result.chordCount || 0).toLocaleString("ko-KR")}개\n` +
+      `생성 역할:\n${roleLines}\n` +
+      `${info.completion}을 적용했습니다.`
     );
   }
 

@@ -478,10 +478,6 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
 .merge-mode { display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 900; white-space: nowrap; }
 .merge-mode select { width: 62px; min-width: 0; padding-left: 6px; padding-right: 6px; font-size: 12px; }
 
-.generated-style-mode select { width: 62px; min-width: 0; padding-left: 6px; padding-right: 6px; font-size: 12px; }
-@media (max-width: 420px) {
-  .generated-style-mode select { width: 56px; padding-left: 5px; padding-right: 5px; font-size: 11.5px; }
-}
 .midi-role-row.part-0 .midi-export-label { color: var(--part0); }
 .midi-role-row.part-1 .midi-export-label { color: var(--part1); }
 .midi-role-row.part-2 .midi-export-label { color: var(--part2); }
@@ -2299,7 +2295,7 @@ iframe[src*="apis.google.com/picker"] {
   z-index: 2147483001 !important;
 }
 
-/* v4.3 genre arrangement */
+/* Shared style for automatic music-generation dialogs */
 .genre-arrange-dialog { max-width: min(440px, calc(100vw - 32px)); }
 .genre-arrange-title-row {
   display: flex;
@@ -2336,7 +2332,20 @@ iframe[src*="apis.google.com/picker"] {
 }
 .genre-arrange-note strong { color: var(--text); font-size: 13px; }
 .genre-arrange-note span { color: var(--muted); font-size: 12px; line-height: 1.5; }
-#genreArrangeStatus:empty,
+
+.accompaniment-generate-dialog { max-width: min(580px, calc(100vw - 32px)); }
+.accompaniment-confirm-dialog { max-width: min(500px, calc(100vw - 32px)); }
+.accompaniment-channel-section {
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--input-bg) 84%, transparent);
+}
+.accompaniment-channel-section .dialog-field-row { margin: 0; }
+.accompaniment-channel-section .dialog-small { margin-top: -1px; }
+#accompanimentGenerateStatus:empty,
 #dynamicsGenerateStatus:empty { display: none; }
 
 
@@ -2795,7 +2804,7 @@ iframe[src*="apis.google.com/picker"] {
   .midi-extract-platform-grid { grid-template-columns: 1fr; }
 }
 
-/* v4.5 dynamics overwrite confirmation */
+/* v4.6 volume overwrite confirmation */
 .dynamics-confirm-dialog { max-width: min(480px, calc(100vw - 32px)); }
 .dynamics-confirm-rules {
   margin: 0;

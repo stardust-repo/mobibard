@@ -59,58 +59,69 @@
     return { part, before: String(text || "").trim().length, after: part.length };
   }
 
-  function arrangeGenreMml(text, options = {}) {
+  function generateAccompanimentMml(text, options = {}) {
     const partCount = 6;
     const genre = String(options.genre || "pop").trim().toLowerCase();
     const supportedGenres = new Set(["pop", "jazz", "ballad", "bossa", "rock", "funk", "classical"]);
-    if (!supportedGenres.has(genre)) throw new Error("지원하지 않는 장르입니다.");
+    if (!supportedGenres.has(genre)) throw new Error("지원하지 않는 반주 장르입니다.");
 
-    const strength = normalizeGenreArrangeStrength(options.strength);
+    const strength = normalizeGenerationStrength(options.strength);
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
     while (sourceParts.length < partCount) sourceParts.push("");
 
     const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
-    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(part => part.tempos));
-    const melodyPartIndex = resolveGenreMelodyPartIndex(parsedParts, options.melodyPartIndex);
-    const melodySource = parsedParts[melodyPartIndex];
-    const melodyNotes = melodySource.events.filter(ev => ev.type === "note");
-    if (melodyNotes.length < 2) throw new Error("편곡할 멜로디 음표가 부족합니다. 멜로디 채널을 확인해 주세요.");
+    const analysisPartIndexes = normalizeAccompanimentPartIndexes(options.analysisPartIndexes, parsedParts, "analysis");
+    const generationPartIndexes = normalizeAccompanimentPartIndexes(options.generationPartIndexes, parsedParts, "generation");
+    if (!analysisPartIndexes.length) throw new Error("참고할 채널을 1개 이상 선택해 주세요.");
+    if (!generationPartIndexes.length) throw new Error("반주를 생성할 채널을 1개 이상 선택해 주세요.");
 
-    const melodyEvents = normalizeEventStarts(melodySource.events.map(ev => ({ ...ev })));
-    const songEnd = Math.max(
-      melodySource.length || 0,
-      melodyEvents.reduce((max, ev) => Math.max(max, (ev.start || 0) + (ev.duration || 0)), 0)
-    );
-    if (!(songEnd > 0)) throw new Error("편곡할 연주 구간을 찾지 못했습니다.");
-
-    const key = estimateGenreKey(melodyNotes);
-    const medianPitch = medianNumber(melodyNotes.map(note => note.midi), 60);
-    const baseVolume = clamp(Math.round(medianNumber(melodyNotes.map(note => note.volume), DEFAULT_VOLUME)) - 2, 3, 13);
-    const chordPlan = buildGenreChordPlan(melodyNotes, key, songEnd, strength, genre);
-    const accompaniment = buildGenreAccompanimentParts(genre, chordPlan, {
-      songEnd,
-      strength,
-      medianPitch,
-      baseVolume
-    });
-
-    const outputEvents = [melodyEvents, ...accompaniment];
-    while (outputEvents.length < partCount) outputEvents.push([]);
-    const outputParts = [];
-    const hasAnyContent = melodyEvents.length > 0 || chordPlan.length > 0;
-
-    for (let i = 0; i < partCount; i++) {
-      let events = outputEvents[i] || [];
-      if (i === 0) events = injectTempoEvents(events, tempoMap);
-      outputParts.push(renderPartFast(events, {
-        isMelody: i === 0,
-        startTempo: tempoMap[0]?.bpm || DEFAULT_TEMPO,
-        forceHeader: i === 0 && hasAnyContent,
-        partIndex: i
-      }));
+    const analysis = buildAccompanimentAnalysis(parsedParts, analysisPartIndexes);
+    if (analysis.notes.length < 2 || !(analysis.songEnd > 0)) {
+      throw new Error("선택한 참고 채널에서 반주를 만들 만큼 충분한 음표 흐름을 찾지 못했습니다.");
     }
 
+    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(part => part.tempos));
+    const key = estimateGenreKey(analysis.notes);
+    const baseVolume = clamp(Math.round(medianNumber(analysis.notes.map(note => note.volume), DEFAULT_VOLUME)) - 2, 3, 13);
+    const chordPlan = buildGenreChordPlan(analysis.notes, key, analysis.songEnd, strength, genre);
+    if (!chordPlan.length) throw new Error("선택한 참고 채널에서 화성 흐름을 찾지 못했습니다.");
+
+    const fullParts = buildGenreAccompanimentParts(genre, chordPlan, {
+      songEnd: analysis.songEnd,
+      strength,
+      medianPitch: analysis.upperPitchCenter,
+      baseVolume
+    });
+    const compactPart = buildCompactAccompanimentPart(genre, chordPlan, {
+      songEnd: analysis.songEnd,
+      strength,
+      medianPitch: analysis.upperPitchCenter,
+      baseVolume
+    });
+    const roleAssignments = chooseAccompanimentRoleAssignments(generationPartIndexes.length, fullParts, compactPart);
+
+    const outputParts = sourceParts.slice();
+    for (let order = 0; order < generationPartIndexes.length; order++) {
+      const partIndex = generationPartIndexes[order];
+      let events = roleAssignments[order]?.events || [];
+      if (partIndex === 0) events = injectTempoEvents(events, tempoMap);
+      outputParts[partIndex] = renderPartFast(events, {
+        isMelody: partIndex === 0,
+        startTempo: tempoMap[0]?.bpm || DEFAULT_TEMPO,
+        forceHeader: partIndex === 0,
+        partIndex
+      });
+    }
+
+    const overlapPartIndexes = analysisPartIndexes.filter(index => generationPartIndexes.includes(index));
+    const replacedPartIndexes = generationPartIndexes.filter(index => parsedParts[index].events.some(event => event.type === "note"));
+    const generatedRoles = roleAssignments.map((assignment, order) => ({
+      partIndex: generationPartIndexes[order],
+      role: assignment.role,
+      noteCount: assignment.events.filter(event => event.type === "note").length
+    }));
     const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+
     return {
       mml,
       parts: outputParts,
@@ -118,46 +129,155 @@
       after: countPartChars(outputParts),
       genre,
       strength,
-      melodyPartIndex,
+      analysisPartIndexes,
+      generationPartIndexes,
+      overlapPartIndexes,
+      replacedPartIndexes,
+      analyzedPartCount: analysisPartIndexes.length,
+      generatedPartCount: generatedRoles.filter(role => role.noteCount > 0).length,
+      generatedRoles,
       key: { tonic: key.tonic, mode: key.mode, label: formatGenreKeyLabel(key) },
       chordCount: chordPlan.length,
-      generatedPartCount: accompaniment.filter(events => events.some(ev => ev.type === "note")).length,
-      replacedPartCount: 5
+      analysisNoteCount: analysis.notes.length,
+      songEnd: analysis.songEnd
     };
   }
 
-  function normalizeGenreArrangeStrength(value) {
-    const raw = String(value || "normal").trim().toLowerCase();
-    return ["light", "normal", "strong"].includes(raw) ? raw : "normal";
+  function normalizeAccompanimentPartIndexes(values, parsedParts, kind) {
+    const source = Array.isArray(values) ? values : [];
+    const result = [];
+    const seen = new Set();
+    for (const raw of source) {
+      const index = Number(raw);
+      if (!Number.isInteger(index) || index < 0 || index >= parsedParts.length || seen.has(index)) continue;
+      seen.add(index);
+      result.push(index);
+    }
+    if (result.length) return result.sort((a, b) => a - b);
+
+    if (kind === "analysis") {
+      return parsedParts
+        .map((part, index) => part.events.some(event => event.type === "note") ? index : -1)
+        .filter(index => index >= 0);
+    }
+    return parsedParts
+      .map((part, index) => index > 0 && !part.events.some(event => event.type === "note") ? index : -1)
+      .filter(index => index >= 0);
   }
 
-  function resolveGenreMelodyPartIndex(parsedParts, requested) {
-    const direct = Number(requested);
-    if (Number.isInteger(direct) && direct >= 0 && direct < parsedParts.length) {
-      if (parsedParts[direct].events.some(ev => ev.type === "note")) return direct;
-      throw new Error(`${direct + 1}채널에 멜로디 음표가 없습니다.`);
-    }
-
-    const primaryNotes = parsedParts[0]?.events?.filter(ev => ev.type === "note") || [];
-    if (primaryNotes.length >= 2) return 0;
-
-    let bestIndex = -1;
-    let bestScore = -Infinity;
-    for (let i = 0; i < parsedParts.length; i++) {
-      const notes = parsedParts[i].events.filter(ev => ev.type === "note");
-      if (!notes.length) continue;
-      const duration = notes.reduce((sum, note) => sum + note.duration, 0);
-      const avgPitch = notes.reduce((sum, note) => sum + note.midi * note.duration, 0) / Math.max(1, duration);
-      const uniqueStarts = new Set(notes.map(note => note.start)).size;
-      const overlapPenalty = Math.max(0, notes.length - uniqueStarts) * 2;
-      const score = (i === 0 ? 18 : 0) + avgPitch * 0.55 + Math.min(notes.length, 160) * 0.18 - overlapPenalty;
-      if (score > bestScore) {
-        bestScore = score;
-        bestIndex = i;
+  function buildAccompanimentAnalysis(parsedParts, partIndexes) {
+    const noteMap = new Map();
+    let songEnd = 0;
+    for (const partIndex of partIndexes) {
+      const part = parsedParts[partIndex];
+      songEnd = Math.max(songEnd, Number(part.length) || 0);
+      for (const event of part.events) {
+        if (event.type !== "note" || !(event.duration > 0)) continue;
+        const start = Math.max(0, Math.round(event.start || 0));
+        const end = start + Math.max(1, Math.round(event.duration));
+        const key = `${start}:${event.midi}`;
+        const previous = noteMap.get(key);
+        if (previous) {
+          previous.duration = Math.max(previous.duration, end - start);
+          previous.volume = Math.max(previous.volume, event.volume || DEFAULT_VOLUME);
+          previous.sourceCount += 1;
+        } else {
+          noteMap.set(key, {
+            ...event,
+            start,
+            duration: end - start,
+            volume: clamp(event.volume ?? DEFAULT_VOLUME, 0, 15),
+            sourcePartIndex: partIndex,
+            sourceCount: 1
+          });
+        }
+        songEnd = Math.max(songEnd, end);
       }
     }
-    if (bestIndex < 0) throw new Error("음표가 들어 있는 채널을 찾지 못했습니다.");
-    return bestIndex;
+    const notes = Array.from(noteMap.values()).sort((a, b) => a.start - b.start || a.midi - b.midi);
+    const pitches = notes.map(note => note.midi).sort((a, b) => a - b);
+    const upperIndex = Math.max(0, Math.min(pitches.length - 1, Math.round((pitches.length - 1) * 0.68)));
+    const upperPitchCenter = pitches[upperIndex] ?? 64;
+    return { notes, songEnd, upperPitchCenter };
+  }
+
+  function chooseAccompanimentRoleAssignments(targetCount, fullParts, compactPart) {
+    const count = Math.max(1, Math.min(6, Number(targetCount) || 1));
+    const hasNotes = events => Array.isArray(events) && events.some(event => event.type === "note");
+    const voices = [
+      { role: "하단 화음", events: fullParts[0] || [] },
+      { role: "중단 화음", events: fullParts[1] || [] },
+      { role: "상단 화음", events: fullParts[2] || [] },
+      { role: "보조 성부", events: fullParts[3] || [] }
+    ].filter(item => hasNotes(item.events));
+    const compact = { role: "핵심 반주", events: compactPart || [] };
+    const bass = { role: "베이스", events: fullParts[4] || [] };
+    if (count === 1) return [compact];
+
+    const harmonyNeeded = count - 2;
+    const harmony = voices.slice(Math.max(0, voices.length - harmonyNeeded));
+    while (harmony.length < harmonyNeeded) {
+      const shift = harmony.length % 2 === 0 ? -12 : 12;
+      const shifted = shiftGeneratedEvents(compact.events, shift);
+      harmony.unshift({ role: shift < 0 ? "하단 반주" : "상단 반주", events: shifted });
+    }
+    return [...harmony.slice(-harmonyNeeded), compact, bass];
+  }
+
+  function shiftGeneratedEvents(events, semitones) {
+    return (events || []).map(event => event.type === "note"
+      ? { ...event, midi: clamp((event.midi || 60) + semitones, 12, 107) }
+      : { ...event });
+  }
+
+  function buildCompactAccompanimentPart(genre, chordPlan, options) {
+    const q = durationUnits(4, 0);
+    const e = durationUnits(8, 0);
+    const s = durationUnits(16, 0);
+    const minDuration = durationUnits(64, 0);
+    const segments = [];
+    let previousVoicing = null;
+    const orderMap = {
+      pop: [0, 1, 2, 1],
+      jazz: [1, 2, 0, 2],
+      ballad: [0, 1, 2, 1],
+      bossa: [0, 2, 1, 2],
+      rock: [0, 2, 0, 2],
+      funk: [0, 2, 1, 2, 0, 1],
+      classical: [0, 2, 1, 2]
+    };
+    const order = orderMap[genre] || orderMap.pop;
+
+    for (const segment of chordPlan) {
+      const voicing = chooseGenreVoicing(segment.chord, 3, options.medianPitch, previousVoicing, options.strength, genre);
+      previousVoicing = voicing;
+      let step = options.strength === "light" ? q : e;
+      if (options.strength === "strong" && (genre === "funk" || genre === "rock")) step = s;
+      const syncOffset = (genre === "jazz" || genre === "bossa" || genre === "funk") && options.strength !== "light" ? Math.floor(step / 2) : 0;
+      let hitIndex = 0;
+      for (let offset = syncOffset; offset < segment.duration; offset += step) {
+        const start = segment.start + offset;
+        const available = segment.end - start;
+        if (available < minDuration) continue;
+        const pitch = voicing[order[hitIndex % order.length] % Math.max(1, voicing.length)];
+        const accent = hitIndex === 0 || (genre === "rock" && hitIndex % 2 === 0) || (genre === "funk" && hitIndex % 3 === 1);
+        const rawDuration = Math.min(step * (genre === "ballad" ? 1 : 0.75), available);
+        const quantizedDuration = Math.max(minDuration, Math.floor(rawDuration / minDuration) * minDuration);
+        segments.push({
+          start,
+          duration: Math.min(quantizedDuration, available),
+          midi: pitch,
+          volume: clamp(options.baseVolume + (accent ? 1 : 0) + (options.strength === "strong" ? 1 : 0), 2, 14)
+        });
+        hitIndex++;
+      }
+    }
+    return noteSegmentsToEvents(segments, options.songEnd);
+  }
+
+  function normalizeGenerationStrength(value) {
+    const raw = String(value || "normal").trim().toLowerCase();
+    return ["light", "normal", "strong"].includes(raw) ? raw : "normal";
   }
 
   function estimateGenreKey(notes) {
@@ -1130,7 +1250,7 @@
     const genre = String(options.genre || "pop").trim().toLowerCase();
     const supportedGenres = new Set(["pop", "jazz", "ballad", "bossa", "rock", "funk", "classical"]);
     if (!supportedGenres.has(genre)) throw new Error("지원하지 않는 강약 장르입니다.");
-    const strength = normalizeGenreArrangeStrength(options.strength);
+    const strength = normalizeGenerationStrength(options.strength);
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
     while (sourceParts.length < partCount) sourceParts.push("");
     const targetPartIndexes = normalizeTargetPartIndexes(options, partCount);
@@ -3060,5 +3180,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = { optimizeMml, optimizePart, arrangeGenreMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages };
+  window.MabiOptimizer = { optimizeMml, optimizePart, generateAccompanimentMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages };
 })();

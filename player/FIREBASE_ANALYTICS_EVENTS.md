@@ -18,8 +18,8 @@
 | `bulk_pitch_adjust` | 음정 조절이 실제 적용된 뒤 | `octaves`, `selected_channel_count` | 옥타브 증감값과 적용 채널 수를 기록합니다. |
 | `tempo_edit` | 슬라이더 또는 피아노롤에서 템포 수정이 성공한 뒤 | `before_bpm`, `after_bpm` | 수정 전후 BPM을 기록합니다. |
 | `leading_silence_apply` | 시작 공백이 실제 적용된 뒤 | `seconds`, `removed_seconds` | 설정한 시작 공백과 제거된 기존 공백을 기록합니다. |
-| `dynamics_generate_apply` | 강약 생성이 완료된 뒤 | `genre`, `strength`, `selected_channel_count`, `processed_channel_count`, `generated_v_count`, `overwrite_existing`, `overwritten_channel_count` | 선택한 장르·강도와 처리 채널 수, 생성한 V 명령 수, 기존 강약 교체 여부를 기록합니다. |
-| `genre_arrange_apply` | 장르 편곡이 완료된 뒤 | `genre`, `strength`, `melody_part`, `chord_count` | 장르, 강도, 멜로디 채널, 생성 코드 구간 수를 기록합니다. |
+| `volume_generate_apply` | 볼륨 생성이 완료된 뒤 | `genre`, `strength`, `selected_channel_count`, `processed_channel_count`, `generated_v_count`, `overwrite_existing`, `overwritten_channel_count` | 선택한 장르·강도와 처리 채널 수, 생성한 V 명령 수, 기존 볼륨 변화 교체 여부를 기록합니다. |
+| `accompaniment_generate_apply` | 반주 생성이 완료된 뒤 | `genre`, `strength`, `analysis_channel_count`, `generation_channel_count`, `overlap_channel_count`, `replaced_channel_count`, `chord_count` | 반주 장르·강도, 참고/생성 채널 수, 중복·교체 채널 수와 화성 구간 수를 기록합니다. |
 | `copy_all_mml` | 전부복사가 성공한 뒤 | `channel_count` | 전체 복사 사용과 복사 채널 수를 기록합니다. |
 | `split_copy_open` | 나눠복사 창을 열 때 | 없음 | 나눠복사 기능 진입을 기록합니다. |
 | `preview_split_page` | 나눠진 악보 미리듣기를 시작할 때 | 없음 | 나눠복사 결과를 실제로 확인했는지 기록합니다. |
@@ -85,9 +85,9 @@
 - `channel_count`: 비어 있지 않은 MML 채널 수
 - `selected_channel_count`: 도구를 적용한 채널 수
 - `octaves`: 음정 조절에 적용한 옥타브 증감값
-- `genre`, `strength`: 장르 편곡 또는 강약 생성에 사용한 장르와 변형 강도
-- `generated_v_count`: 강약 생성으로 추가한 V 명령 수
-- `overwrite_existing`, `overwritten_channel_count`: 기존 강약을 확인 후 교체했는지와 교체한 채널 수
+- `genre`, `strength`: 반주 생성 또는 볼륨 생성에 사용한 장르와 적용 강도
+- `generated_v_count`: 볼륨 생성으로 추가한 V 명령 수
+- `overwrite_existing`, `overwritten_channel_count`: 기존 볼륨 변화를 확인 후 교체했는지와 교체한 채널 수
 - `before_bpm`, `after_bpm`: 템포 수정 전후의 BPM
 - `source_type`: `midi`, `musicxml` 등 현재 원본 종류
 - `file_type`: 확장자 또는 `google_docs`
