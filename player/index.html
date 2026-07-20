@@ -6,7 +6,7 @@
   <title>모비바드 v4.6</title>
   <link rel="icon" href="assets/favicon.ico" sizes="any" />
   <link rel="shortcut icon" href="assets/favicon.ico" />
-  <link rel="stylesheet" href="styles.css?v=4.6-accompaniment-defaults" />
+  <link rel="stylesheet" href="styles.css?v=4.6-mobibeats-layer" />
   <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 </head>
 <body>
@@ -53,9 +53,12 @@
         <span class="toolbar-label">저장</span>
         <button id="saveBtn" class="ghost" type="button">파일</button>
         <button id="googleDriveSaveBtn" class="ghost" type="button" disabled title="Google Drive의 MML_Mobibard 폴더에 저장">구글</button>
-        <div class="player-file-actions-special" aria-label="오디오 MIDI 추출 도구">
+        <div class="player-file-actions-special" aria-label="MIDI 추출과 리듬게임">
           <button id="midiExtractBtn" class="midi-extract-toolbar-button beta-feature" type="button" aria-haspopup="dialog" aria-controls="midiExtractDialog" title="MuScriptor 로컬 MIDI 추출 도구 다운로드 (BETA)">
             <span class="midi-extract-toolbar-icon" aria-hidden="true">♪</span><span>MIDI 추출</span>
+          </button>
+          <button id="rhythmGameBtn" class="rhythm-game-toolbar-button" type="button" aria-haspopup="dialog" aria-controls="rhythmGameLayer" title="현재 MML로 모비비트 리듬게임 열기">
+            <span class="rhythm-game-toolbar-icon" aria-hidden="true">▦</span><span>리듬게임</span>
           </button>
         </div>
         <input id="midiFile" type="file" accept=".mid,.midi,.txt,.mmi,.mml,.musicxml,.xml,.mxl,audio/midi,audio/x-midi,text/plain,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden />
@@ -195,6 +198,24 @@
   </section>
 </main>
 
+
+<section id="rhythmGameLayer" class="rhythm-game-layer" role="dialog" aria-modal="true" aria-labelledby="rhythmGameLayerTitle" hidden aria-hidden="true">
+  <header class="rhythm-game-layer-head">
+    <div class="rhythm-game-layer-title">
+      <strong id="rhythmGameLayerTitle">모비비트</strong>
+      <span id="rhythmGameStatus" role="status" aria-live="polite">게임을 준비하고 있습니다.</span>
+    </div>
+    <button id="rhythmGameClose" class="rhythm-game-layer-close" type="button">생성기로 돌아가기</button>
+  </header>
+  <div class="rhythm-game-frame-wrap">
+    <div id="rhythmGameLoading" class="rhythm-game-loading" role="status" aria-live="polite">
+      <span class="rhythm-game-loading-spinner" aria-hidden="true"></span>
+      <strong id="rhythmGameLoadingText">모비비트를 불러오는 중입니다.</strong>
+      <small>연결 경로: ../mobibeats/</small>
+    </div>
+    <iframe id="rhythmGameFrame" class="rhythm-game-frame" src="about:blank" data-src="../mobibeats/" title="모비비트 MML 리듬게임" allow="autoplay; fullscreen" allowfullscreen></iframe>
+  </div>
+</section>
 
 
 <dialog id="googleDriveSaveDialog" class="mml-dialog drive-save-dialog">
@@ -830,6 +851,6 @@
 <script type="module" src="js/firebase-analytics.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="js/app.js?v=4.6-accompaniment-defaults"></script>
+<script src="js/app.js?v=4.6-mobibeats-layer"></script>
 </body>
 </html>

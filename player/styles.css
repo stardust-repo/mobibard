@@ -2389,6 +2389,7 @@ iframe[src*="apis.google.com/picker"] {
   padding-left: 10px;
   border-left: 1px solid var(--line);
   white-space: nowrap;
+  gap: 6px;
 }
 #midiExtractBtn.midi-extract-toolbar-button {
   display: inline-flex !important;
@@ -2837,3 +2838,133 @@ iframe[src*="apis.google.com/picker"] {
   line-height: 1.45;
 }
 
+
+
+/* v4.6 MobiBeats popup integration */
+#rhythmGameBtn.rhythm-game-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid #087f8c;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0f766e 0%, #2563eb 100%);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 950;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 4px 13px color-mix(in srgb, #0f766e 30%, transparent), 0 1px 0 rgba(255,255,255,.25) inset;
+  transition: transform .14s ease, filter .14s ease, box-shadow .14s ease;
+}
+#rhythmGameBtn.rhythm-game-toolbar-button:hover {
+  color: #fff;
+  filter: brightness(1.09);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px color-mix(in srgb, #0f766e 38%, transparent), 0 1px 0 rgba(255,255,255,.28) inset;
+}
+#rhythmGameBtn.rhythm-game-toolbar-button:active { transform: translateY(0); }
+#rhythmGameBtn.rhythm-game-toolbar-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, #22d3ee 40%, transparent);
+  outline-offset: 2px;
+}
+.rhythm-game-toolbar-icon {
+  font-size: 13px;
+  line-height: 1;
+  transform: translateY(-.5px);
+}
+body.rhythm-game-open { overflow: hidden; }
+.rhythm-game-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50000;
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr);
+  width: 100vw;
+  height: 100dvh;
+  background: #050816;
+  color: #f8fafc;
+}
+.rhythm-game-layer[hidden] { display: none !important; }
+.rhythm-game-layer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 6px 10px 6px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, .24);
+  background: linear-gradient(90deg, #071329 0%, #111827 55%, #071329 100%);
+  box-shadow: 0 5px 18px rgba(0,0,0,.3);
+}
+.rhythm-game-layer-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.rhythm-game-layer-title strong {
+  flex: 0 0 auto;
+  color: #67e8f9;
+  font-size: 15px;
+  font-weight: 1000;
+  letter-spacing: -.02em;
+}
+.rhythm-game-layer-title span {
+  min-width: 0;
+  overflow: hidden;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rhythm-game-layer-close {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 5px 11px;
+  border: 1px solid rgba(103, 232, 249, .55);
+  border-radius: 9px;
+  background: rgba(8, 47, 73, .76);
+  color: #ecfeff;
+  font-size: 12.5px;
+  font-weight: 950;
+}
+.rhythm-game-layer-close:hover { background: rgba(14, 116, 144, .88); color: #fff; }
+.rhythm-game-frame-wrap { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #030712; }
+.rhythm-game-frame { display: block; width: 100%; height: 100%; border: 0; background: #030712; }
+.rhythm-game-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 9px;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 42%, rgba(8, 145, 178, .18), transparent 34%), #050816;
+  color: #f8fafc;
+  text-align: center;
+}
+.rhythm-game-loading[hidden] { display: none !important; }
+.rhythm-game-loading strong { max-width: min(560px, 90vw); font-size: 16px; line-height: 1.5; }
+.rhythm-game-loading small { color: #94a3b8; font-size: 12px; font-weight: 750; }
+.rhythm-game-loading[data-mode="error"] strong { color: #fca5a5; }
+.rhythm-game-loading[data-mode="error"] .rhythm-game-loading-spinner { display: none; }
+.rhythm-game-loading-spinner {
+  width: 34px;
+  height: 34px;
+  border: 4px solid rgba(103, 232, 249, .18);
+  border-top-color: #22d3ee;
+  border-radius: 50%;
+  animation: rhythm-game-spin .8s linear infinite;
+}
+@keyframes rhythm-game-spin { to { transform: rotate(360deg); } }
+@media (max-width: 560px) {
+  .rhythm-game-layer { grid-template-rows: 42px minmax(0, 1fr); }
+  .rhythm-game-layer-head { padding-left: 10px; }
+  .rhythm-game-layer-title span { display: none; }
+  .rhythm-game-layer-close { min-height: 30px; padding: 4px 8px; font-size: 11.5px; }
+}

@@ -7,7 +7,7 @@
 - 이벤트는 Firebase 초기화 전에도 최대 100개까지 대기열에 보관됩니다.
 - 적용·저장·복사 이벤트는 작업이 성공한 뒤에만 전송합니다.
 - 파일명, MML 본문, Google Drive 파일 ID, 접근 토큰, 원본 음원 내용은 전송하지 않습니다.
-- 아래 목록은 앱이 직접 호출하는 사용자 정의 이벤트 28개입니다. Firebase의 자동 수집 이벤트인 `page_view`, `session_start`, `first_visit` 등은 별도입니다.
+- 아래 목록은 앱이 직접 호출하는 사용자 정의 이벤트 29개입니다. Firebase의 자동 수집 이벤트인 `page_view`, `session_start`, `first_visit` 등은 별도입니다.
 
 ## 핵심 도구·편집 이벤트
 
@@ -33,6 +33,7 @@
 | 이벤트명 | 발생 시점 | 주요 매개변수 | 설명 |
 |---|---|---|---|
 | `open_midi_extract_dialog` | MIDI 추출 팝업을 열 때 | 없음 | MIDI 추출 기능을 확인한 횟수를 기록합니다. |
+| `open_rhythm_game` | 리듬게임 팝업 레이어를 열 때 | `channel_count` | 모비비트로 전달한 현재 MML의 소리 나는 채널 수를 기록합니다. |
 | `download_muscriptor_package` | Windows 또는 macOS 패키지 링크를 누를 때 | `platform` | 어떤 운영체제 패키지를 다운로드했는지 기록합니다. |
 
 샘플 영상, 입력 오디오, 출력 MIDI 미리듣기 재생은 실제 기능 사용과 구분하기 어려워 기록하지 않습니다.

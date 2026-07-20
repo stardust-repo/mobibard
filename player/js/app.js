@@ -7,6 +7,8 @@
   const PART_LABELS = ["멜로디", "화음1", "화음2", "화음3", "화음4", "화음5"];
   const PREF_PREFIX = "mobibard.player.";
   const DEFAULT_PART_PRESET_KEY = "0:0";
+  const MOBIBEATS_URL = new URL("../mobibeats/", window.location.href).href;
+  const MOBIBEATS_TARGET_ORIGIN = window.location.origin === "null" ? "*" : window.location.origin;
   const DEFAULT_MIDI_SOUND_PRESET_LABEL = "최근 MIDI 음색";
   const USER_SOUND_PRESET_VALUE_PREFIX = "user:";
   const PART_PREVIEW_MELODY_INTERVALS = [0, 2, 4, 7, 9, 7, 4, 0];
@@ -142,6 +144,13 @@
   const midiExtractSampleMidiPlay = $("midiExtractSampleMidiPlay");
   const midiExtractSampleMidiAudio = $("midiExtractSampleMidiAudio");
   const midiExtractSampleMidiStatus = $("midiExtractSampleMidiStatus");
+  const rhythmGameBtn = $("rhythmGameBtn");
+  const rhythmGameLayer = $("rhythmGameLayer");
+  const rhythmGameClose = $("rhythmGameClose");
+  const rhythmGameFrame = $("rhythmGameFrame");
+  const rhythmGameStatus = $("rhythmGameStatus");
+  const rhythmGameLoading = $("rhythmGameLoading");
+  const rhythmGameLoadingText = $("rhythmGameLoadingText");
   const splitCopyBtn = $("splitCopyBtn");
   const splitCopyDialog = $("splitCopyDialog");
   const splitCopyLimit = $("splitCopyLimit");
@@ -350,6 +359,9 @@
   const googlePickerSuspendedCloseDialogs = new WeakSet();
   let googlePickerLayerWatchTimer = 0;
   let googlePickerLayerObserver = null;
+  let rhythmGameFrameReady = false;
+  let rhythmGamePendingPayload = null;
+  let rhythmGameLoadTimer = 0;
 
   init();
 
@@ -433,6 +445,10 @@
     pasteBtn.addEventListener("click", () => void pasteVisibleMml());
     saveBtn.addEventListener("click", () => void saveVisibleMml());
     midiExtractBtn?.addEventListener("click", openMidiExtractDialog);
+    rhythmGameBtn?.addEventListener("click", openRhythmGameLayer);
+    rhythmGameClose?.addEventListener("click", closeRhythmGameLayer);
+    rhythmGameFrame?.addEventListener("load", handleRhythmGameFrameLoad);
+    window.addEventListener("message", handleRhythmGameMessage);
     midiExtractClose?.addEventListener("click", closeMidiExtractDialog);
     midiExtractDialog?.addEventListener("cancel", (event) => {
       event.preventDefault();
@@ -990,6 +1006,157 @@
 
   function clearGoogleTokenCache() {
     removeLocalPrefOnly(GOOGLE_TOKEN_CACHE_PREF);
+  }
+
+  function currentRhythmGameTitle() {
+    const name = String(googleDriveMmlFileName || suggestedMmlSaveFileName || "")
+      .replace(/\.(txt|mml|mid|midi|musicxml|xml|mxl|mmi)$/i, "")
+      .replace(/[_-]+/g, " ")
+      .trim();
+    return name || "모비바드 MML";
+  }
+
+  function buildRhythmGamePayload() {
+    normalizeTextareaCommands(mainMml);
+    const mml = normalizeMmlForDisplay(mainMml?.value || "");
+    const parsed = parseMabinogiMml(mml);
+    const activeChannelCount = (parsed.parts || []).filter(part =>
+      (part.notes || []).some(note => Number(note.volume ?? 8) > 0)
+    ).length;
+    if (!activeChannelCount) throw new Error("리듬게임에 사용할 소리 나는 MML 채널이 없습니다.");
+
+    return {
+      title: currentRhythmGameTitle(),
+      mml,
+      instruments: normalizePresetKeyArray(partPresetKeys),
+      channelCount: activeChannelCount
+    };
+  }
+
+  function setRhythmGameLoading(message, mode = "loading") {
+    if (rhythmGameLoadingText) rhythmGameLoadingText.textContent = message;
+    if (rhythmGameLoading) {
+      rhythmGameLoading.hidden = false;
+      rhythmGameLoading.dataset.mode = mode;
+    }
+    if (rhythmGameStatus) rhythmGameStatus.textContent = message;
+  }
+
+  function hideRhythmGameLoading(message = "게임 준비 완료") {
+    if (rhythmGameLoading) rhythmGameLoading.hidden = true;
+    if (rhythmGameStatus) rhythmGameStatus.textContent = message;
+  }
+
+  function clearRhythmGameLoadTimer() {
+    if (!rhythmGameLoadTimer) return;
+    window.clearTimeout(rhythmGameLoadTimer);
+    rhythmGameLoadTimer = 0;
+  }
+
+  function startRhythmGameLoadTimer() {
+    clearRhythmGameLoadTimer();
+    rhythmGameLoadTimer = window.setTimeout(() => {
+      if (!rhythmGameLayer?.hidden && !rhythmGameFrameReady) {
+        setRhythmGameLoading("모비비트를 불러오지 못했습니다. ../mobibeats/ 경로를 확인해 주세요.", "error");
+      }
+    }, 10000);
+  }
+
+  function sendRhythmGamePayload() {
+    if (!rhythmGameFrameReady || !rhythmGamePendingPayload || !rhythmGameFrame?.contentWindow) return;
+    setRhythmGameLoading("현재 MML과 악기 정보를 전달하고 있습니다.");
+    rhythmGameFrame.contentWindow.postMessage({
+      type: "MML_RHYTHM_LOAD",
+      payload: rhythmGamePendingPayload
+    }, MOBIBEATS_TARGET_ORIGIN);
+  }
+
+  function openRhythmGameLayer() {
+    if (!rhythmGameLayer || !rhythmGameFrame) return;
+    try {
+      rhythmGamePendingPayload = buildRhythmGamePayload();
+    } catch (err) {
+      showDialog("리듬게임을 열 수 없습니다", shortError(err));
+      return;
+    }
+
+    stopPlayback(true);
+    stopMidiPreview();
+    pauseMidiExtractSamples();
+    rhythmGameLayer.hidden = false;
+    rhythmGameLayer.setAttribute("aria-hidden", "false");
+    document.body.classList.add("rhythm-game-open");
+    setRhythmGameLoading("모비비트를 불러오는 중입니다.");
+    trackAnalytics("open_rhythm_game", { channel_count: rhythmGamePendingPayload.channelCount });
+
+    const currentUrl = String(rhythmGameFrame.getAttribute("src") || "");
+    if (!rhythmGameFrameReady || currentUrl === "about:blank") {
+      rhythmGameFrameReady = false;
+      rhythmGameFrame.src = MOBIBEATS_URL;
+      startRhythmGameLoadTimer();
+    } else {
+      sendRhythmGamePayload();
+    }
+    requestAnimationFrame(() => rhythmGameClose?.focus());
+  }
+
+  function closeRhythmGameLayer() {
+    if (!rhythmGameLayer || rhythmGameLayer.hidden) return;
+    try { rhythmGameFrame?.contentWindow?.MobiBeats?.pause?.(); } catch (_) {}
+    clearRhythmGameLoadTimer();
+    rhythmGamePendingPayload = null;
+    rhythmGameLayer.hidden = true;
+    rhythmGameLayer.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("rhythm-game-open");
+    if (rhythmGameStatus) rhythmGameStatus.textContent = "게임을 준비하고 있습니다.";
+    rhythmGameBtn?.focus();
+  }
+
+  function handleRhythmGameFrameLoad() {
+    if (!rhythmGameFrame) return;
+    const loadedUrl = String(rhythmGameFrame.getAttribute("src") || "");
+    if (!loadedUrl || loadedUrl === "about:blank" || rhythmGameFrameReady) return;
+    if (!rhythmGameLayer?.hidden) {
+      setRhythmGameLoading("모비비트의 준비 신호를 기다리고 있습니다.");
+      startRhythmGameLoadTimer();
+    }
+  }
+
+  function isTrustedRhythmGameMessage(event) {
+    if (!rhythmGameFrame?.contentWindow || event.source !== rhythmGameFrame.contentWindow) return false;
+    if (window.location.origin === "null") return event.origin === "null";
+    return event.origin === window.location.origin;
+  }
+
+  function handleRhythmGameMessage(event) {
+    if (!isTrustedRhythmGameMessage(event)) return;
+    const data = event.data;
+    if (!data || typeof data !== "object") return;
+
+    if (data.type === "MML_RHYTHM_READY") {
+      rhythmGameFrameReady = true;
+      clearRhythmGameLoadTimer();
+      if (!rhythmGameLayer?.hidden && rhythmGamePendingPayload) sendRhythmGamePayload();
+      return;
+    }
+
+    if (data.type === "MML_RHYTHM_LOADED") {
+      clearRhythmGameLoadTimer();
+      hideRhythmGameLoading("게임 준비 완료");
+      try { rhythmGameFrame.contentWindow.focus(); } catch (_) {}
+      return;
+    }
+
+    if (data.type === "MML_RHYTHM_ERROR") {
+      clearRhythmGameLoadTimer();
+      const message = String(data.message || data.payload?.message || "연주 정보를 불러오지 못했습니다.");
+      setRhythmGameLoading(message, "error");
+      return;
+    }
+
+    if (data.type === "MML_RHYTHM_CLOSE") {
+      closeRhythmGameLayer();
+    }
   }
 
   function openMidiExtractDialog() {
