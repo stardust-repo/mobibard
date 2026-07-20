@@ -1382,11 +1382,11 @@
     if (typeof dom.judgementDisplay.animate === "function") {
       dom.judgementDisplay.animate([
         { opacity: 0, transform: "translate(-50%, -50%) scale(0.66)" },
-        { opacity: 1, transform: "translate(-50%, -50%) scale(1.08)", offset: 0.22 },
-        { opacity: 1, transform: "translate(-50%, -50%) scale(1)", offset: 0.7 },
+        { opacity: 1, transform: "translate(-50%, -50%) scale(1.08)", offset: 0.08 },
+        { opacity: 1, transform: "translate(-50%, -50%) scale(1)", offset: 0.82 },
         { opacity: 0, transform: "translate(-50%, -58%) scale(0.96)" }
       ], {
-        duration: 400,
+        duration: 1800,
         easing: "cubic-bezier(0.18, 0.86, 0.26, 1)"
       });
     }

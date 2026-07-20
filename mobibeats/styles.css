@@ -440,7 +440,7 @@ button:disabled {
 }
 
 .judgement-display.show {
-  animation: judgement-pop 430ms cubic-bezier(0.18, 0.86, 0.26, 1) both;
+  animation: judgement-pop 1800ms cubic-bezier(0.18, 0.86, 0.26, 1) both;
 }
 
 .judgement-display strong {
@@ -454,8 +454,8 @@ button:disabled {
 .judgement-display span {
   margin-top: 3px;
   color: rgba(255, 255, 255, 0.78);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: clamp(22px, 3vw, 26px);
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
 }
 
@@ -467,8 +467,8 @@ button:disabled {
 
 @keyframes judgement-pop {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.62); }
-  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-  72% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  8% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+  82% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -58%) scale(0.95); }
 }
 
