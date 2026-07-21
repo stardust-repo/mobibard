@@ -17,8 +17,8 @@ MML과 채널별 악기 정보만 전달하면 바로 플레이할 수 있는 �
   - Good: 빠른 입력 -180ms, 늦은 입력 +260ms
 - 콤보는 Perfect와 Great에서만 증가하며 Good과 Miss에서 끊김
 - 모든 노트를 Perfect로 처리하면 정확히 100,000점
-- 단노트 가중치: Perfect 2 / Great 1 / Good 0.5 / Miss 0
-- 장노트 가중치: 단노트 가중치의 3배
+- 단노트 가중치: Perfect 1.5 / Great 1 / Good 0.8 / Miss 0
+- 장노트 가중치: 단노트 가중치의 2배
 
 ## 난이도
 

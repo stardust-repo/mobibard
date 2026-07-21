@@ -3,7 +3,7 @@
   "display_name": "모비비트",
   "version": "1.0.0",
   "type": "independent-static-webpage",
-  "created_utc": "2026-07-20T17:24:40.562237+00:00",
+  "created_utc": "2026-07-21T21:29:23.014022+00:00",
   "entry": "index.html",
   "files": [
     {
@@ -13,8 +13,8 @@
     },
     {
       "path": "README.md",
-      "size": 7727,
-      "sha256": "6b10a7090cc286bf03cebdaea8e77ea7f1d024634a6fc9795be87bc43e76b9f1"
+      "size": 7729,
+      "sha256": "b446b53a200847389041f919c162a25f38d22a1711babd6081405f9cfa613a93"
     },
     {
       "path": "assets/Roland_SC-55.sf2",
@@ -28,13 +28,13 @@
     },
     {
       "path": "index.html",
-      "size": 15632,
-      "sha256": "e12d1ba6601b2a4ae95c15d2b2b820aa0da89bb1103fbad3cb6a5f683485d668"
+      "size": 15700,
+      "sha256": "a6eaf5e13af62d27cbd439e923e6800d6cab80a56d6a1d4bbda089cb24d16bbd"
     },
     {
       "path": "js/game.js",
-      "size": 104480,
-      "sha256": "fff8f83818d4ff48f7cfb1f07dc9b5ae82ca3e3f30d2b22ba156f7b063c21d60"
+      "size": 104698,
+      "sha256": "6d74bdf397071c3d9fe264eeb2effd73a759bdf60aba5914816bb993348d008a"
     },
     {
       "path": "js/mml-parser.js",

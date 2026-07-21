@@ -37,7 +37,8 @@
     GoodEarly: 0.18,
     GoodLate: 0.26
   });
-  const JUDGE_WEIGHTS = Object.freeze({ Perfect: 2, Great: 1, Good: 0.5, Miss: 0 });
+  const JUDGE_WEIGHTS = Object.freeze({ Perfect: 1.5, Great: 1, Good: 0.8, Miss: 0 });
+  const LONG_NOTE_SCORE_MULTIPLIER = 2;
   const DIFFICULTY_LABELS = Object.freeze({ easy: "EASY", normal: "NORMAL", hard: "HARD" });
   const DIFFICULTY_PROFILES = Object.freeze({
     easy: { minGroupGap: 0.26, maxChord: 1, densityScale: 0.4 },
@@ -569,7 +570,10 @@
     const laneNotes = Array.from({ length: keyCount }, () => []);
     for (const note of generated) laneNotes[note.lane].push(note);
     const longCount = generated.filter((note) => note.isLong).length;
-    const maxRawScore = generated.reduce((sum, note) => sum + (note.isLong ? 6 : 2), 0) || 1;
+    const maxRawScore = generated.reduce((sum, note) => {
+      const multiplier = note.isLong ? LONG_NOTE_SCORE_MULTIPLIER : 1;
+      return sum + JUDGE_WEIGHTS.Perfect * multiplier;
+    }, 0) || 1;
     const selectedGroups = groupNotesByStart(generated, 0.012);
     const maxChord = selectedGroups.reduce((max, group) => Math.max(max, group.length), generated.length ? 1 : 0);
     const nps = generated.length / Math.max(1, durationSec);
@@ -1313,7 +1317,7 @@
     if (note.isLong && state.heldLongByLane[lane] === note) state.heldLongByLane[lane] = null;
 
     state.counts[judgement]++;
-    const multiplier = note.isLong ? 3 : 1;
+    const multiplier = note.isLong ? LONG_NOTE_SCORE_MULTIPLIER : 1;
     state.rawScore += JUDGE_WEIGHTS[judgement] * multiplier;
     state.score = clampInt(Math.round(state.rawScore / state.maxRawScore * 100000), 0, 100000);
 
@@ -2640,8 +2644,8 @@
       let raw = 0;
       let maximum = 0;
       for (const item of Array.from(results || [])) {
-        const multiplier = item?.isLong || item?.hold ? 3 : 1;
-        maximum += 2 * multiplier;
+        const multiplier = item?.isLong || item?.hold ? LONG_NOTE_SCORE_MULTIPLIER : 1;
+        maximum += JUDGE_WEIGHTS.Perfect * multiplier;
         raw += (JUDGE_WEIGHTS[item?.judgement || item?.grade] || 0) * multiplier;
       }
       return maximum ? clampInt(Math.round(raw / maximum * 100000), 0, 100000) : 0;
