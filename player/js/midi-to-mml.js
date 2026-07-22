@@ -1,6 +1,10 @@
 (() => {
   "use strict";
 
+  const tr = (key, values = []) => window.MobibardI18n?.t?.(key, values) || String(key);
+  const fmt = value => Number(value || 0).toLocaleString(document.documentElement.lang || undefined);
+  const escapeRegExp = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
   const { clampInt, unique } = window.MabiUtils;
   const NOTE_NAMES = ["c", "c+", "d", "d+", "e", "f", "f+", "g", "g+", "a", "a+", "b"];
 
@@ -41,12 +45,12 @@
 
   function analyzeMidi(bytes, fileName = "MIDI") {
     const midi = parseMidiFile(bytes);
-    if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
+    if (midi.smpteDivision) throw new Error(tr("midi.err_smpte"));
     const ppq = midi.ppq;
     const ticksPerGrid = ppq / 16;
     const sourceGroups = buildInstrumentSourceGroups(midi, ticksPerGrid);
     const instrumentChoices = buildInstrumentChoices(sourceGroups);
-    if (!instrumentChoices.length) throw new Error("노트를 찾지 못했습니다. 드럼/컨트롤만 있는 MIDI이거나 note on/off 쌍이 깨진 파일일 수 있습니다.");
+    if (!instrumentChoices.length) throw new Error(tr("midi.err_no_notes"));
     return {
       fileName,
       format: midi.format,
@@ -110,7 +114,7 @@
     return Array.from(groups.values()).map(group => ({
       ...group,
       duplicateMerged: mergedByGroup.get(group.id) || 0,
-      rangeText: Number.isFinite(group.minMidi) ? `${midiName(group.minMidi)}~${midiName(group.maxMidi)}` : "노트 없음",
+      rangeText: Number.isFinite(group.minMidi) ? `${midiName(group.minMidi)}~${midiName(group.maxMidi)}` : tr("ui.no_notes"),
       choiceId: instrumentChoiceId(group.instrumentName, group.isBeat)
     }));
   }
@@ -118,7 +122,7 @@
   function buildInstrumentChoices(sourceGroups) {
     const choices = new Map();
     for (const group of sourceGroups || []) {
-      const name = cleanInstrumentName(group.instrumentName || group.programText || "악기 정보 없음");
+      const name = cleanInstrumentName(group.instrumentName || group.programText || tr("snd.no_inst"));
       const id = instrumentChoiceId(name, group.isBeat);
       let choice = choices.get(id);
       if (!choice) {
@@ -127,7 +131,7 @@
           isBeat: Boolean(group.isBeat),
           isPercussion: Boolean(group.isBeat),
           instrumentName: name,
-          programText: group.isBeat ? `${name} · 비트` : name,
+          programText: group.isBeat ? tr("midi.name_beat", [name]) : name,
           noteCount: 0,
           duplicateMerged: 0,
           minMidi: Infinity,
@@ -148,7 +152,7 @@
     }
 
     return Array.from(choices.values()).map(choice => {
-      const rangeText = Number.isFinite(choice.minMidi) ? `${midiName(choice.minMidi)}~${midiName(choice.maxMidi)}` : "노트 없음";
+      const rangeText = Number.isFinite(choice.minMidi) ? `${midiName(choice.minMidi)}~${midiName(choice.maxMidi)}` : tr("ui.no_notes");
       const program = Array.from(choice.programCounts.entries()).sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
       return {
         id: choice.id,
@@ -180,15 +184,15 @@
   function buildInstrumentGroupDescription(group) {
     const chunks = [];
     chunks.push(group.programText || group.instrumentName);
-    chunks.push(`노트 ${group.noteCount.toLocaleString("ko-KR")}개`);
-    if (group.duplicateMerged) chunks.push(`완전 중복 ${group.duplicateMerged.toLocaleString("ko-KR")}개 병합 예정`);
+    chunks.push(tr("midi.note_count", [fmt(group.noteCount)]));
+    if (group.duplicateMerged) chunks.push(tr("midi.dup_planned", [fmt(group.duplicateMerged)]));
     chunks.push(group.rangeText);
-    if (group.isBeat) chunks.push("비트");
+    if (group.isBeat) chunks.push(tr("ui.beat"));
     return chunks.join(" · ");
   }
 
   function cleanInstrumentName(name) {
-    return String(name || "악기 정보 없음").replace(/\s*·\s*비트\s*$/i, "").replace(/^\d+\.\s*/, "").trim() || "악기 정보 없음";
+    return String(name || tr("snd.no_inst")).replace(new RegExp(`\\s*·\\s*${escapeRegExp(tr("ui.beat"))}\\s*$`, "i"), "").replace(/^\d+\.\s*/, "").trim() || tr("snd.no_inst");
   }
 
   function instrumentChoiceId(name, isBeat) {
@@ -211,7 +215,7 @@
       };
     }
     const metaName = cleanInstrumentName(note.instrumentMetaName || note.trackName || "");
-    const hasUsefulMetaName = metaName !== "악기 정보 없음" && !/^(track|part|instrument)\s*\d*$/i.test(metaName);
+    const hasUsefulMetaName = metaName !== tr("snd.no_inst") && !/^(track|part|instrument)\s*\d*$/i.test(metaName);
     const instrumentName = isBeat && note.instrumentMetaName && PERCUSSION_NAME_RE.test(note.instrumentMetaName)
       ? note.instrumentMetaName
       : (hasUsefulMetaName ? metaName : programName(program));
@@ -220,7 +224,7 @@
       isBeat,
       isDrumNoteGroup: false,
       instrumentName,
-      programText: isBeat ? `${instrumentName} · 비트` : instrumentName
+      programText: isBeat ? tr("midi.name_beat", [instrumentName]) : instrumentName
     };
   }
 
@@ -244,14 +248,14 @@
 
   function buildMidiInstrumentPreview(bytes, instrumentChoiceId, options = {}) {
     const midi = parseMidiFile(bytes);
-    if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
+    if (midi.smpteDivision) throw new Error(tr("midi.err_smpte"));
     const ppq = midi.ppq;
     const ticksPerGrid = ppq / 16;
     const sourceGroups = buildInstrumentSourceGroups(midi, ticksPerGrid);
     const instrumentGroups = buildInstrumentChoices(sourceGroups);
     const choiceMap = new Map(instrumentGroups.map(g => [g.id, g]));
     const choice = choiceMap.get(String(instrumentChoiceId || ""));
-    if (!choice) throw new Error("미리듣기 할 악기를 찾지 못했습니다.");
+    if (!choice) throw new Error(tr("midi.err_no_preview_inst"));
 
     const sourceToChoice = new Map();
     for (const c of instrumentGroups) {
@@ -284,7 +288,7 @@
       })
       .filter(Boolean);
 
-    if (!rawNotes.length) throw new Error("선택한 악기에서 미리듣기 할 노트를 찾지 못했습니다.");
+    if (!rawNotes.length) throw new Error(tr("midi.err_no_preview_notes_selected"));
 
     const { notes } = mergeDuplicateGridNotes(rawNotes);
     notes.sort((a, b) => a.startGrid - b.startGrid || b.midi - a.midi || b.velocity - a.velocity);
@@ -314,7 +318,7 @@
         volume: n.velocity
       });
     }
-    if (!previewNotes.length) throw new Error("미리듣기 구간에 소리 나는 노트가 없습니다.");
+    if (!previewNotes.length) throw new Error(tr("midi.err_preview_silent"));
 
     const programCounts = new Map();
     for (const n of rawNotes) {
@@ -337,7 +341,7 @@
 
   function buildMidiFilePreview(bytes, options = {}) {
     const midi = parseMidiFile(bytes);
-    if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
+    if (midi.smpteDivision) throw new Error(tr("midi.err_smpte"));
     const ppq = midi.ppq;
     const ticksPerGrid = ppq / 16;
     let nextNoteId = 1;
@@ -361,7 +365,7 @@
         isPercussion: Boolean(sourceInfo.isBeat)
       };
     });
-    if (!rawNotes.length) throw new Error("미리듣기 할 노트를 찾지 못했습니다.");
+    if (!rawNotes.length) throw new Error(tr("midi.err_no_preview_notes"));
 
     const { notes } = mergeDuplicateGridNotes(rawNotes);
     notes.sort((a, b) => a.startGrid - b.startGrid || b.midi - a.midi || b.velocity - a.velocity);
@@ -392,7 +396,7 @@
         isBeat: Boolean(n.isBeat || n.isPercussion)
       });
     }
-    if (!previewNotes.length) throw new Error("미리듣기 구간에 소리 나는 노트가 없습니다.");
+    if (!previewNotes.length) throw new Error(tr("midi.err_preview_silent"));
 
     const duration = previewNotes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
     return {
@@ -424,7 +428,7 @@
   function midiToMml(bytes, fileName = "MIDI", options = {}) {
     const sourceLabel = String(options.sourceLabel || "MIDI");
     const midi = parseMidiFile(bytes);
-    if (midi.smpteDivision) throw new Error("SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.");
+    if (midi.smpteDivision) throw new Error(tr("midi.err_smpte"));
 
     const ppq = midi.ppq;
     const ticksPerGrid = ppq / 16; // 64분음표 = 4분음표 / 16
@@ -477,7 +481,7 @@
       })
       .filter(Boolean);
 
-    if (!rawNotes.length) throw new Error("선택한 악기에서 노트를 찾지 못했습니다.");
+    if (!rawNotes.length) throw new Error(tr("midi.err_selected_no_notes"));
 
     const { notes, mergedCount } = mergeDuplicateGridNotes(rawNotes);
     notes.sort((a, b) => a.startGrid - b.startGrid || b.midi - a.midi || b.velocity - a.velocity);
@@ -496,23 +500,23 @@
       .map(g => g.instrumentName);
     const channelLines = exportChannels.map((ch, i) => {
       const names = ch.selectedInstrumentGroups.map(id => choiceMap.get(id)?.instrumentName).filter(Boolean);
-      const label = names.length > 3 ? `${names.slice(0, 3).join(", ")} 외 ${names.length - 3}개` : names.join(", ");
+      const label = names.length > 3 ? tr("ui.more_count", [names.slice(0, 3).join(", "), names.length - 3]) : names.join(", ");
       const optionLabel = overlapMergeModeLabel(ch.overlapMergeMode ?? ch.overlapMerge);
-      return `${i + 1}. ${roleLabel(ch.role)}${optionLabel ? `/${optionLabel}` : ""}: ${label || "선택 없음"}`;
+      return `${i + 1}. ${roleLabel(ch.role)}${optionLabel ? `/${optionLabel}` : ""}: ${label || tr("ui.none_selected")}`;
     });
     const tempoMessage = tempoGridEvents.length > 1
-      ? `${sourceLabel} 템포 ${tempoGridEvents.length}개를 멜로디 파트에 반영했습니다.`
-      : `시작 템포 T${tempoGridEvents[0]?.bpm || 120}을 사용했습니다.`;
+      ? tr("midi.tempo_applied", [sourceLabel, tempoGridEvents.length])
+      : tr("midi.start_tempo", [tempoGridEvents[0]?.bpm || 120]);
     const message = [
-      `${fileName} 변환 완료`,
-      `선택 악기: ${selectedLabels.length > 6 ? selectedLabels.slice(0, 6).join(", ") + ` 외 ${selectedLabels.length - 6}개` : selectedLabels.join(", ")}`,
-      `입력 노트 ${rawNotes.length.toLocaleString("ko-KR")}개 → 완전 중복 병합 ${mergedCount.toLocaleString("ko-KR")}개 → 정상 배치 ${placed.toLocaleString("ko-KR")}개` + (overlapMerged ? ` / 겹침 병합 ${overlapMerged.toLocaleString("ko-KR")}개` : ""),
-      `출력 노트 ${totalUsed.toLocaleString("ko-KR")}개 / 생략 ${skipped.toLocaleString("ko-KR")}개`,
-      `변환 설정: ${exportChannels.length}파트 / 최소 64분음표`,
-      `채널 설정:\n- ${channelLines.join("\n- ")}`,
+      tr("midi.convert_done_named", [fileName]),
+      tr("midi.selected_instruments", [selectedLabels.length > 6 ? tr("ui.more_count", [selectedLabels.slice(0, 6).join(", "), selectedLabels.length - 6]) : selectedLabels.join(", ")]),
+      tr("midi.note_flow", [fmt(rawNotes.length), fmt(mergedCount), fmt(placed), overlapMerged ? tr("midi.overlap_merged_suffix", [fmt(overlapMerged)]) : ""]),
+      tr("midi.output_skipped", [fmt(totalUsed), fmt(skipped)]),
+      tr("midi.settings_summary", [exportChannels.length]),
+      tr("midi.channel_settings", [channelLines.join("\n- ")]),
       tempoMessage,
-      skipped ? `역할/악기/동시음 제한으로 ${skipped.toLocaleString("ko-KR")}개를 생략했습니다.` : "생략된 노트가 없습니다.",
-      warnings.length ? "\n주의:\n- " + unique(warnings).join("\n- ") : ""
+      skipped ? tr("midi.skipped_reason", [fmt(skipped)]) : tr("midi.none_skipped"),
+      warnings.length ? tr("ui.warnings_list", [unique(warnings).join("\n- ")]) : ""
     ].filter(Boolean).join("\n");
     return { mml, parts, message, warnings, selectedInstrumentGroups: Array.from(selectedSet), partCount: exportChannels.length, roles, exportChannels, skipped, mergedCount, placed, overlapMerged };
   }
@@ -617,7 +621,7 @@
   }
 
   function roleLabel(role) {
-    return ({ auto: "자동", high: "고음", low: "저음", beat: "비트" })[role] || "자동";
+    return ({ auto: tr("ui.auto"), high: tr("ui.high"), low: tr("ui.low"), beat: tr("ui.beat") })[role] || tr("ui.auto");
   }
 
   function normalizeOverlapMergeMode(value) {
@@ -629,8 +633,8 @@
 
   function overlapMergeModeLabel(value) {
     const mode = normalizeOverlapMergeMode(value);
-    if (mode === "all") return "겹침 모두 병합";
-    if (mode === "half") return "겹침 절반 병합";
+    if (mode === "all") return tr("midi.merge_all");
+    if (mode === "half") return tr("midi.merge_half");
     return "";
   }
 
@@ -1235,9 +1239,9 @@
   function parseMidiFile(bytes) {
     const r = new ByteReader(bytes);
     const warnings = [];
-    if (r.readAscii(4) !== "MThd") throw new Error("MThd 헤더가 없습니다. 표준 MIDI 파일인지 확인해 주세요.");
+    if (r.readAscii(4) !== "MThd") throw new Error(tr("midi.err_header"));
     const headerLength = r.readU32();
-    if (headerLength < 6) throw new Error("MIDI 헤더 길이가 올바르지 않습니다.");
+    if (headerLength < 6) throw new Error(tr("midi.err_header_length"));
     const format = r.readU16();
     const trackCount = r.readU16();
     const divisionRaw = r.readU16();
@@ -1260,7 +1264,7 @@
       if (r.remaining() < 8) break;
       const id = r.readAscii(4);
       const len = r.readU32();
-      if (id !== "MTrk") throw new Error(`${trackIndex + 1}번 트랙에서 MTrk 헤더를 찾지 못했습니다.`);
+      if (id !== "MTrk") throw new Error(tr("midi.err_track_header", [trackIndex + 1]));
       const end = r.pos + len;
       parseMidiTrack(r, end, trackIndex, notes, tempoEvents, warnings, channelInfo, trackMeta);
       r.pos = end;
@@ -1317,7 +1321,7 @@
       tick += r.readVarLen();
       let status = r.readU8();
       if (status < 0x80) {
-        if (running == null) throw new Error("MIDI running status가 올바르지 않습니다.");
+        if (running == null) throw new Error(tr("midi.err_running_status"));
         r.pos--;
         status = running;
       } else if (status < 0xf0) running = status;
@@ -1356,7 +1360,7 @@
     }
     if (open.size) {
       const count = Array.from(open.values()).reduce((sum, arr) => sum + arr.length, 0);
-      warnings.push(`${trackIndex + 1}번 트랙: note off가 없는 노트 ${count}개를 생략했습니다.`);
+      warnings.push(tr("midi.warn_missing_note_off", [trackIndex + 1, count]));
     }
     r.pos = end;
   }
@@ -1380,12 +1384,12 @@
   class ByteReader {
     constructor(bytes) { this.bytes = bytes; this.pos = 0; }
     remaining() { return this.bytes.length - this.pos; }
-    readU8() { if (this.pos >= this.bytes.length) throw new Error("파일 끝에 도달했습니다."); return this.bytes[this.pos++]; }
+    readU8() { if (this.pos >= this.bytes.length) throw new Error(tr("file.err_eof")); return this.bytes[this.pos++]; }
     readU16() { const v = (this.readU8() << 8) | this.readU8(); return v >>> 0; }
     readU32() { return (((this.readU8() << 24) >>> 0) | (this.readU8() << 16) | (this.readU8() << 8) | this.readU8()) >>> 0; }
     readAscii(n) { let s = ""; for (let i = 0; i < n; i++) s += String.fromCharCode(this.readU8()); return s; }
     readBytes(n) {
-      if (this.pos + n > this.bytes.length) throw new Error("파일 끝에 도달했습니다.");
+      if (this.pos + n > this.bytes.length) throw new Error(tr("file.err_eof"));
       const out = this.bytes.slice(this.pos, this.pos + n);
       this.pos += n;
       return out;

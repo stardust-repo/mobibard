@@ -1,21 +1,23 @@
 (() => {
   "use strict";
+
+  const tr = (key, values = []) => window.MobibardI18n?.t?.(key, values) || String(key);
   const { clampInt, formatTime } = window.MabiUtils;
   const NOTE_BASE = { c:0, d:2, e:4, f:5, g:7, a:9, b:11 };
   const EPS = 1e-9;
 
 function parseMabinogiMml(text) {
-  if (!String(text || "").trim()) throw new Error("MML이 비어 있습니다.");
-  if (/\[|\]/.test(text)) throw new Error("마비노기 MML에서는 [] 표기를 사용할 수 없습니다. 파트는 쉼표로 나눠 입력해 주세요.");
+  if (!String(text || "").trim()) throw new Error(tr("mml.err_empty"));
+  if (/\[|\]/.test(text)) throw new Error(tr("mml.err_brackets_parts"));
   const partInfos = splitMmlPartsDetailed(text);
-  if (partInfos.length > 6) throw new Error("이 샘플은 최대 6파트까지만 재생합니다.");
+  if (partInfos.length > 6) throw new Error(tr("mml.err_max_parts"));
   while (partInfos.length < 6) partInfos.push({ text: "", sourceStart: 0, sourceEnd: 0, rawStart: 0, rawEnd: 0 });
   const parsedParts = partInfos.map((p, i) => parseMmlPart(p.text, i, { globalOffset: p.sourceStart }));
   const tempos = [{ beat: 0, bpm: 120, part: -1, order: -1, explicit: false, sourceStart: -1, sourceEnd: -1, globalSourceStart: -1, globalSourceEnd: -1 }];
   for (const p of parsedParts) tempos.push(...p.tempos);
   tempos.sort((a, b) => a.beat - b.beat || a.order - b.order || a.part - b.part);
   for (const t of tempos) {
-    if (t.bpm < 32 || t.bpm > 255) throw new Error(`T${t.bpm}은 지원 범위를 벗어났습니다. 템포는 32~255로 입력해 주세요.`);
+    if (t.bpm < 32 || t.bpm > 255) throw new Error(tr("mml.err_tempo_range", [t.bpm]));
   }
   return { parts: parsedParts, tempos: normalizeTempoMap(tempos) };
 }
@@ -78,7 +80,7 @@ function parseMmlPart(s, partIndex, options = {}) {
   const readLengthBeats = () => {
     const n = readNumber();
     if (n == null) return readDots(defaultDuration);
-    if (!isValidLength(n)) throw new Error(`${partIndex + 1}파트: 길이 ${n}은 지원하지 않습니다. 1,2,4,8,16,32,64를 사용해 주세요.`);
+    if (!isValidLength(n)) throw new Error(tr("mml.err_part_length", [partIndex + 1, n]));
     return readDots(4 / n);
   };
   const readNoteToken = () => {
@@ -94,7 +96,7 @@ function parseMmlPart(s, partIndex, options = {}) {
     if (ch === "n") {
       i++;
       const num = readNumber();
-      if (num == null) throw new Error(`${partIndex + 1}파트: N 뒤에 음 번호가 필요합니다.`);
+      if (num == null) throw new Error(tr("mml.err_part_n_required", [partIndex + 1]));
       const dur = readDots(defaultDuration);
       if (num === 0) return { rest: true, midi: null, dur, sourceRange: makeSourceRange(tokenStart, i) };
       return { rest: false, midi: clampInt(num, 0, 127), dur, sourceRange: makeSourceRange(tokenStart, i) };
@@ -110,9 +112,9 @@ function parseMmlPart(s, partIndex, options = {}) {
   const applyNoteToken = (token) => {
     if (!token) return;
     if (pendingTie) {
-      if (!lastTieTarget) throw new Error(`${partIndex + 1}파트: & 앞에 이어질 음표가 필요합니다.`);
+      if (!lastTieTarget) throw new Error(tr("mml.err_part_tie_before", [partIndex + 1]));
       if (lastTieTarget.rest !== token.rest || lastTieTarget.midi !== token.midi) {
-        throw new Error(`${partIndex + 1}파트: &는 같은 음끼리만 이어 주세요.`);
+        throw new Error(tr("mml.err_part_tie_same", [partIndex + 1]));
       }
       if (lastTieTarget.note) {
         lastTieTarget.note.duration += token.dur;
@@ -146,7 +148,7 @@ function parseMmlPart(s, partIndex, options = {}) {
       return;
     }
 
-    if (token.midi < 0 || token.midi > 127) throw new Error(`${partIndex + 1}파트: 음역이 너무 높거나 낮습니다.`);
+    if (token.midi < 0 || token.midi > 127) throw new Error(tr("mml.err_part_pitch_range", [partIndex + 1]));
     const note = {
       part: partIndex,
       beat,
@@ -173,14 +175,14 @@ function parseMmlPart(s, partIndex, options = {}) {
       applyNoteToken(token);
     } else if (ch === "&") {
       i++;
-      if (!lastTieTarget) throw new Error(`${partIndex + 1}파트: & 앞에 이어질 음표가 필요합니다.`);
-      if (pendingTie) throw new Error(`${partIndex + 1}파트: &가 연속으로 나왔습니다.`);
+      if (!lastTieTarget) throw new Error(tr("mml.err_part_tie_before", [partIndex + 1]));
+      if (pendingTie) throw new Error(tr("mml.err_part_tie_repeat", [partIndex + 1]));
       pendingTie = true;
     } else if (ch === "t") {
       const tempoStart = i;
       i++;
       const bpm = readNumber();
-      if (bpm == null) throw new Error(`${partIndex + 1}파트: T 뒤에 숫자가 필요합니다.`);
+      if (bpm == null) throw new Error(tr("mml.err_part_t_required", [partIndex + 1]));
       tempos.push({
         beat,
         bpm,
@@ -193,19 +195,19 @@ function parseMmlPart(s, partIndex, options = {}) {
         globalSourceEnd: globalOffset + i
       });
     } else if (ch === "o") {
-      i++; const v = readNumber(); if (v == null) throw new Error(`${partIndex + 1}파트: O 뒤에 숫자가 필요합니다.`);
-      if (v < 0 || v > 9) throw new Error(`${partIndex + 1}파트: O${v}는 지원 범위를 벗어났습니다.`); octave = v;
+      i++; const v = readNumber(); if (v == null) throw new Error(tr("mml.err_part_o_required", [partIndex + 1]));
+      if (v < 0 || v > 9) throw new Error(tr("mml.err_part_o_range", [partIndex + 1, v])); octave = v;
     } else if (ch === "l") {
-      i++; const v = readNumber(); if (v == null || !isValidLength(v)) throw new Error(`${partIndex + 1}파트: L은 1,2,4,8,16,32,64 중 하나를 사용해 주세요.`); length = v; defaultDuration = readDots(4 / v);
+      i++; const v = readNumber(); if (v == null || !isValidLength(v)) throw new Error(tr("mml.err_part_l_range", [partIndex + 1])); length = v; defaultDuration = readDots(4 / v);
     } else if (ch === "v") {
-      i++; const v = readNumber(); if (v == null) throw new Error(`${partIndex + 1}파트: V 뒤에 숫자가 필요합니다.`);
-      if (v < 0 || v > 15) throw new Error(`${partIndex + 1}파트: V${v}는 지원 범위를 벗어났습니다. 0~15를 사용해 주세요.`); volume = v;
-    } else if (ch === ">") { i++; octave++; if (octave > 9) throw new Error(`${partIndex + 1}파트: 옥타브가 너무 높습니다.`); }
-    else if (ch === "<") { i++; octave--; if (octave < 0) throw new Error(`${partIndex + 1}파트: 옥타브가 너무 낮습니다.`); }
+      i++; const v = readNumber(); if (v == null) throw new Error(tr("mml.err_part_v_required", [partIndex + 1]));
+      if (v < 0 || v > 15) throw new Error(tr("mml.err_part_v_range", [partIndex + 1, v])); volume = v;
+    } else if (ch === ">") { i++; octave++; if (octave > 9) throw new Error(tr("mml.err_part_octave_high", [partIndex + 1])); }
+    else if (ch === "<") { i++; octave--; if (octave < 0) throw new Error(tr("mml.err_part_octave_low", [partIndex + 1])); }
     else if (ch === ";") { i++; break; }
-    else { throw new Error(`${partIndex + 1}파트: 알 수 없는 문자 '${s[i]}'가 있습니다.`); }
+    else { throw new Error(tr("mml.err_part_unknown_char", [partIndex + 1, s[i]])); }
   }
-  if (pendingTie) throw new Error(`${partIndex + 1}파트: & 뒤에 이어질 음표가 필요합니다.`);
+  if (pendingTie) throw new Error(tr("mml.err_part_tie_after", [partIndex + 1]));
   return { notes, rests, tempos, lengthBeats: beat };
 }
 
@@ -271,7 +273,7 @@ function buildSchedule(parsed) {
     duration: len,
     tempoMarkers,
     tempoMap,
-    summary: `예상 길이 ${formatTime(len)}`
+    summary: tr("mml.estimated_length", [formatTime(len)])
   };
 }
 

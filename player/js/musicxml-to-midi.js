@@ -1,6 +1,8 @@
 (() => {
   "use strict";
 
+  const tr = (key, values = []) => window.MobibardI18n?.t?.(key, values) || String(key);
+
   const PPQ = 480;
   const DEFAULT_TEMPO = 120;
   const DEFAULT_VELOCITY = 92;
@@ -17,7 +19,7 @@
   }
 
   async function extractMusicXmlText(bytes, name = "MusicXML") {
-    if (!bytes?.length) throw new Error(`${name} 파일이 비어 있습니다.`);
+    if (!bytes?.length) throw new Error(tr("xml.err_empty", [name]));
     if (looksLikeZip(bytes)) return readCompressedMusicXml(bytes, name);
     const text = decodeXmlBytes(bytes);
     ensureMusicXmlText(text, name);
@@ -30,13 +32,13 @@
 
   function ensureMusicXmlText(text, name = "MusicXML") {
     if (!/<\s*(?:[\w.-]+:)?score-(?:partwise|timewise)\b/i.test(String(text || ""))) {
-      throw new Error(`${name}에서 MusicXML score-partwise/timewise 문서를 찾지 못했습니다.`);
+      throw new Error(tr("xml.err_score_missing", [name]));
     }
   }
 
   async function readCompressedMusicXml(bytes, name = "MusicXML") {
     const entries = parseZipEntries(bytes);
-    if (!entries.length) throw new Error(`${name} 압축 파일에서 항목을 찾지 못했습니다.`);
+    if (!entries.length) throw new Error(tr("xml.err_zip_empty", [name]));
     const entryMap = new Map(entries.map(entry => [entry.name, entry]));
     let rootPath = "";
     const container = entryMap.get("META-INF/container.xml") || entryMap.get("meta-inf/container.xml");
@@ -52,7 +54,7 @@
       scoreEntry = entries.find(entry => /\.musicxml$/i.test(entry.name))
         || entries.find(entry => /\.xml$/i.test(entry.name) && !/^META-INF\//i.test(entry.name) && !/^meta-inf\//i.test(entry.name));
     }
-    if (!scoreEntry) throw new Error(`${name} 압축 파일에서 MusicXML 본문을 찾지 못했습니다.`);
+    if (!scoreEntry) throw new Error(tr("xml.err_body_missing", [name]));
     const text = decodeXmlBytes(await inflateZipEntry(scoreEntry));
     ensureMusicXmlText(text, name);
     return text;
@@ -70,7 +72,7 @@
         break;
       }
     }
-    if (eocd < 0) throw new Error("MXL 압축 파일의 중앙 디렉터리를 찾지 못했습니다.");
+    if (eocd < 0) throw new Error(tr("xml.err_central_dir"));
     const entryCount = getU16(eocd + 10);
     let pos = getU32(eocd + 16);
     const entries = [];
@@ -103,9 +105,9 @@
 
   async function inflateZipEntry(entry) {
     if (entry.method === 0) return entry.data;
-    if (entry.method !== 8) throw new Error(`MXL 압축 방식 ${entry.method}은 지원하지 않습니다.`);
+    if (entry.method !== 8) throw new Error(tr("xml.err_compression", [entry.method]));
     if (typeof DecompressionStream !== "function") {
-      throw new Error("이 브라우저에서는 압축된 MXL 파일 해제를 지원하지 않습니다. 압축하지 않은 .musicxml 파일로 내보내 주세요.");
+      throw new Error(tr("xml.err_decompress_unsupported"));
     }
     try {
       const stream = new Blob([entry.data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
@@ -144,12 +146,12 @@
     const root = doc.documentElement;
     const rootName = local(root);
     if (rootName !== "score-partwise" && rootName !== "score-timewise") {
-      throw new Error(`${name}은 score-partwise 또는 score-timewise MusicXML이어야 합니다.`);
+      throw new Error(tr("xml.err_score_type", [name]));
     }
 
     const partInfo = parsePartList(root);
     const partSources = rootName === "score-timewise" ? collectTimewiseParts(root) : collectPartwiseParts(root);
-    if (!partSources.length) throw new Error(`${name}에서 악보 파트를 찾지 못했습니다.`);
+    if (!partSources.length) throw new Error(tr("xml.err_parts_missing", [name]));
 
     const usedChannels = new Set();
     const allNotes = [];
@@ -175,7 +177,7 @@
       }
     });
 
-    if (!allNotes.length) throw new Error(`${name}에서 연주할 수 있는 음표를 찾지 못했습니다.`);
+    if (!allNotes.length) throw new Error(tr("xml.err_notes_missing", [name]));
     return {
       ppq: PPQ,
       format: 1,
@@ -189,7 +191,7 @@
     const parser = new DOMParser();
     const doc = parser.parseFromString(String(text || ""), "application/xml");
     const error = Array.from(doc.getElementsByTagName("parsererror"))[0];
-    if (error) throw new Error(`${name} XML을 읽지 못했습니다: ${error.textContent?.trim()?.slice(0, 180) || "파싱 오류"}`);
+    if (error) throw new Error(tr("xml.err_parse", [name, error.textContent?.trim()?.slice(0, 180) || tr("xml.parse_error")]));
     return doc;
   }
 

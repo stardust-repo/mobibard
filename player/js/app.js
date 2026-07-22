@@ -2,29 +2,38 @@
   "use strict";
 
   const DEFAULT_SF2_URL = "assets/Roland_SC-55.sf2";
+  const DEFAULT_SF2_FILE_NAME = DEFAULT_SF2_URL.split("/").pop() || "Roland_SC-55.sf2";
   const DEFAULT_SF2_EMBEDDED_B64 = () => window.MABINOGI_DEFAULT_SF2_B64 || "";
   const DEFAULT_SF2_FALLBACK_SCRIPT_URL = "assets/default-sf2-base64.js";
-  const PART_LABELS = ["멜로디", "화음1", "화음2", "화음3", "화음4", "화음5"];
+  const PART_LABEL_KEYS = ["part.melody", "part.harmony1", "part.harmony2", "part.harmony3", "part.harmony4", "part.harmony5"];
+  const PART_LABELS = new Proxy(PART_LABEL_KEYS, {
+    get(target, property, receiver) {
+      if (typeof property === "string" && /^\d+$/.test(property)) {
+        return i18nText(target[Number(property)]);
+      }
+      return Reflect.get(target, property, receiver);
+    }
+  });
   const PREF_PREFIX = "mobibard.player.";
   const DEFAULT_PART_PRESET_KEY = "0:0";
   const MOBIBEATS_URL = new URL("../mobibeats/", window.location.href).href;
   const MOBIBEATS_TARGET_ORIGIN = window.location.origin === "null" ? "*" : window.location.origin;
-  const DEFAULT_MIDI_SOUND_PRESET_LABEL = "최근 MIDI 음색";
+  const DEFAULT_MIDI_SOUND_PRESET_KEY = "midi.recent_sounds";
   const USER_SOUND_PRESET_VALUE_PREFIX = "user:";
   const PART_PREVIEW_MELODY_INTERVALS = [0, 2, 4, 7, 9, 7, 4, 0];
   const PART_PREVIEW_DRUM_NOTES = [36, 42, 38, 42, 36, 46, 38, 42];
   const OVERLAP_MERGE_OPTIONS = [
-    { value: "all", label: "모두" },
-    { value: "half", label: "절반" },
-    { value: "none", label: "안함" }
+    { value: "all", labelKey: "ui.all" },
+    { value: "half", labelKey: "ui.half" },
+    { value: "none", labelKey: "ui.none" }
   ];
   const MIDI_INSTRUMENT_CATEGORY_ORDER = ["keyboard", "strings", "winds", "percussion", "other"];
-  const MIDI_INSTRUMENT_CATEGORY_LABELS = {
-    keyboard: "건반악기",
-    strings: "현악기",
-    winds: "관악기",
-    percussion: "타악기",
-    other: "미분류"
+  const MIDI_INSTRUMENT_CATEGORY_LABEL_KEYS = {
+    keyboard: "ui.keyboards",
+    strings: "ui.strings",
+    winds: "ui.winds",
+    percussion: "ui.percussion",
+    other: "ui.uncategorized"
   };
   const GOOGLE_CONFIG = window.MOBIBARD_GOOGLE_CONFIG || {};
   const GOOGLE_DRIVE_SCOPE = [
@@ -43,6 +52,7 @@
   const GOOGLE_AUTO_RECONNECT_PREF = "googleAutoReconnect";
   const GOOGLE_TOKEN_CACHE_PREF = "googleTokenCache";
   const GOOGLE_LOCAL_ONLY_PREFS = new Set([GOOGLE_AUTO_RECONNECT_PREF, GOOGLE_TOKEN_CACHE_PREF]);
+  const GUEST_AVATAR_URL = "assets/icons/guest-user.svg";
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
@@ -77,13 +87,20 @@
   const midiFile = $("midiFile");
   const midiLoadBtn = $("midiLoadBtn");
   const midiSiteLinks = $("midiSiteLinks");
-  const soundSource = $("soundSource");
   const sf2File = $("sf2File");
   const soundName = $("soundName");
+  const soundFontLoadBtn = $("soundFontLoadBtn");
+  const soundFontResetBtn = $("soundFontResetBtn");
+  const languageSelect = $("languageSelect");
   const googleLoginBtn = $("googleLoginBtn");
   const googleDriveLoadBtn = $("googleDriveLoadBtn");
   const googleDriveSaveBtn = $("googleDriveSaveBtn");
   const googleStatus = $("googleStatus");
+  const accountMenuButton = $("accountMenuButton");
+  const accountMenu = $("accountMenu");
+  const accountAvatarImg = $("accountAvatarImg");
+  const accountMenuName = $("accountMenuName");
+  const accountMenuEmail = $("accountMenuEmail");
   const googleDriveSaveDialog = $("googleDriveSaveDialog");
   const googleDriveSaveForm = $("googleDriveSaveForm");
   const googleDriveSaveFolderNameText = $("googleDriveSaveFolderNameText");
@@ -111,8 +128,14 @@
   const playToggleBtn = $("playToggleBtn");
   const rewindBtn = $("rewindBtn");
   const loopPlayback = $("loopPlayback");
+  const speedControlButton = $("speedControlButton");
+  const speedControlPopover = $("speedControlPopover");
+  const speedResetBtn = $("speedResetBtn");
   const speedSlider = $("speedSlider");
   const speedValue = $("speedValue");
+  const volumeControlButton = $("volumeControlButton");
+  const volumeControlPopover = $("volumeControlPopover");
+  const volumeResetBtn = $("volumeResetBtn");
   const volumeSlider = $("volumeSlider");
   const volumeValue = $("volumeValue");
   const progressSlider = $("progressSlider");
@@ -245,6 +268,7 @@
   const midiConvertCancel = $("midiConvertCancel");
   const midiConvertStatus = $("midiConvertStatus");
   const themeToggleBtn = $("themeToggleBtn");
+  const themeModeText = $("themeModeText");
   const charCount = $("charCount");
   const partSoundBtn = $("partSoundBtn");
   const partSoundDialog = $("partSoundDialog");
@@ -254,8 +278,12 @@
   const partSoundPresetSelect = $("partSoundPresetSelect");
   const partSoundPresetSave = $("partSoundPresetSave");
   const partSoundPresetDelete = $("partSoundPresetDelete");
-  const soundPresetQuickSelect = $("soundPresetQuickSelect");
-  const partMuteToggle = $("partMuteToggle");
+  const muteControlButton = $("muteControlButton");
+  const muteControlPopover = $("muteControlPopover");
+  const muteControlValue = $("muteControlValue");
+  const muteSelectAll = $("muteSelectAll");
+  const muteSelectNone = $("muteSelectNone");
+  const muteChannelCheckboxes = Array.from(document.querySelectorAll("[data-mute-part]"));
   const partMuteLabel = $("partMuteLabel");
   const mainMml = $("mainMml");
   const mainMmlHighlight = $("mainMmlHighlight");
@@ -267,7 +295,7 @@
   let audioCtx = null;
   let masterGain = null;
   let soundFont = null;
-  let sf2Name = "기본 사운드";
+  let sf2Name = DEFAULT_SF2_FILE_NAME;
   let activeSources = [];
   let activeTimers = [];
   let preparedNotes = [];
@@ -320,7 +348,7 @@
   let draftPartPresetKeys = null;
   let draftSoundPresetBaseId = "";
   let midiPartPresetKeys = null;
-  let midiPartPresetName = DEFAULT_MIDI_SOUND_PRESET_LABEL;
+  let midiPartPresetName = defaultMidiSoundPresetLabel();
   let userSoundPresets = [];
   let partMuteStates = Array.from({ length: 6 }, () => false);
   let googleTokenClient = null;
@@ -338,6 +366,9 @@
   let googleDriveSaveFolderId = "";
   let googleDriveSaveFolderName = "";
   let googleSilentRestoreFailed = false;
+  let googleUserProfile = null;
+  let googleUserProfileToken = "";
+  let googleUserProfilePromise = null;
   let suggestedMmlSaveFileName = "";
   let pendingMmiImport = null;
   let activePlaybackCodeSignature = "";
@@ -364,9 +395,10 @@
   let rhythmGameLoadTimer = 0;
   let rhythmGamePayloadPending = false;
 
-  init();
+  void init();
 
-  function init() {
+  async function init() {
+    try { await window.MobibardI18n?.ready; } catch (_) {}
     loadThemePref();
     loadPlaybackPrefs();
     loadPianoRollPrefs();
@@ -380,6 +412,19 @@
     midiSiteLinks?.addEventListener("change", openHeaderShortcutLink);
     midiFile.addEventListener("change", () => void loadSourceFile());
     installSourceFileDropHandlers();
+    languageSelect?.addEventListener("change", () => void handleLanguageChange());
+    accountMenuButton?.addEventListener("click", toggleAccountMenu);
+    document.addEventListener("pointerdown", handleAccountMenuOutsidePointer);
+    document.addEventListener("keydown", handleAccountMenuKeydown);
+    document.addEventListener("pointerdown", handleControlPopoverOutsidePointer);
+    document.addEventListener("keydown", handleControlPopoverKeydown);
+    window.addEventListener("mobibard:localechange", handleLocaleChange);
+    if (accountAvatarImg) {
+      accountAvatarImg.addEventListener("error", () => {
+        const current = accountAvatarImg.getAttribute("src") || "";
+        if (!current.endsWith(GUEST_AVATAR_URL)) accountAvatarImg.src = GUEST_AVATAR_URL;
+      });
+    }
     googleLoginBtn?.addEventListener("click", () => void handleGoogleLoginButton());
     googleDriveLoadBtn?.addEventListener("click", () => void openGoogleDrivePicker());
     googleDriveSaveBtn?.addEventListener("click", () => void saveMmlToGoogleDrive());
@@ -405,14 +450,20 @@
       }
       if (pendingMmiImport) resolveMmiImportDialog(null);
     });
-    soundSource.addEventListener("change", () => handleSoundSourceChange());
-    sf2File.addEventListener("change", () => { if (sf2File.files?.[0]) void loadUserSf2(); resetSoundActionMenu(); });
+    sf2File?.addEventListener("change", () => { if (sf2File.files?.[0]) void loadUserSf2(); });
+    soundFontLoadBtn?.addEventListener("click", openSf2Picker);
+    soundFontResetBtn?.addEventListener("click", () => void restoreDefaultSoundFont());
     playToggleBtn.addEventListener("click", () => { isPlaying ? stopPlayback(false) : void playFromCurrent(); });
     rewindBtn.addEventListener("click", () => void rewindToStart());
     loopPlayback?.addEventListener("change", () => writePref("loop", loopPlayback.checked ? "1" : "0"));
+    speedControlButton?.addEventListener("click", () => toggleControlPopover(speedControlButton, speedControlPopover));
+    volumeControlButton?.addEventListener("click", () => toggleControlPopover(volumeControlButton, volumeControlPopover));
+    muteControlButton?.addEventListener("click", () => toggleControlPopover(muteControlButton, muteControlPopover));
+    speedResetBtn?.addEventListener("click", resetPlaybackSpeed);
+    volumeResetBtn?.addEventListener("click", resetOutputVolume);
     speedSlider?.addEventListener("input", applyPlaybackSpeed);
     speedSlider?.addEventListener("change", applyPlaybackSpeed);
-    volumeSlider.addEventListener("input", applyOutputVolume);
+    volumeSlider?.addEventListener("input", applyOutputVolume);
     progressSlider.addEventListener("pointerdown", () => { isSeeking = true; });
     progressSlider.addEventListener("pointerup", () => { isSeeking = false; handleSeekInput(true); });
     progressSlider.addEventListener("touchend", () => { isSeeking = false; handleSeekInput(true); }, { passive: true });
@@ -456,6 +507,7 @@
       closeMidiExtractDialog();
     });
     midiExtractDialog?.addEventListener("close", pauseMidiExtractSamples);
+    midiExtractDialog?.querySelector(".midi-extract-details")?.addEventListener("toggle", updateMidiExtractDetailsLabel);
     midiExtractSampleVideoLoad?.addEventListener("click", () => void playMidiExtractSampleVideo());
     midiExtractSampleAudioLoad?.addEventListener("click", () => void playMidiExtractSampleAudio());
     midiExtractSampleMidiPlay?.addEventListener("click", () => void playMidiExtractSampleMidiAudio());
@@ -535,8 +587,9 @@
     partSoundPresetSelect?.addEventListener("change", () => applyPartSoundPresetToDraft(partSoundPresetSelect.value));
     partSoundPresetSave?.addEventListener("click", () => saveDraftSoundPreset());
     partSoundPresetDelete?.addEventListener("click", () => deleteSelectedSoundPreset());
-    soundPresetQuickSelect?.addEventListener("change", () => applyQuickSoundPreset(soundPresetQuickSelect.value));
-    partMuteToggle?.addEventListener("click", () => handlePartMuteToggleClick());
+    muteSelectAll?.addEventListener("click", () => setAllPartMuteStates(true));
+    muteSelectNone?.addEventListener("click", () => setAllPartMuteStates(false));
+    for (const checkbox of muteChannelCheckboxes) checkbox.addEventListener("change", handleMuteChannelChange);
     leadingSilenceSeconds?.addEventListener("change", normalizeLeadingSilenceSecondsInput);
     leadingSilenceSeconds?.addEventListener("blur", normalizeLeadingSilenceSecondsInput);
     midiSelectedPreviewBtn?.addEventListener("click", () => void toggleMidiSelectedPreview());
@@ -591,7 +644,7 @@
     syncPartsFromMain();
     applyPlaybackSpeed(false);
     applyOutputVolume();
-    resetSoundActionMenu();
+    updateSoundFontUi();
     updateSoundPresetControls();
     updatePartMuteControl();
     updateGoogleDriveControls();
@@ -599,6 +652,142 @@
     updateCharCount();
     rebuildSchedulePreviewSilently();
     requestPianoRollRefresh(true);
+  }
+
+  async function handleLanguageChange() {
+    if (!languageSelect) return;
+    const requested = window.MobibardI18n?.normalizeLanguage(languageSelect.value) || "en";
+    writePref("language", requested);
+    const applied = await window.MobibardI18n?.setLanguage(requested, { persist: false, source: "user" });
+    trackAnalytics("language_change", { language: applied || requested });
+  }
+
+  function i18nText(key, values = []) {
+    return window.MobibardI18n?.t?.(key, values) || String(key);
+  }
+
+  function defaultMidiSoundPresetLabel() {
+    return i18nText(DEFAULT_MIDI_SOUND_PRESET_KEY);
+  }
+
+  function setAccountMenuOpen(open) {
+    if (!accountMenu || !accountMenuButton) return;
+    const next = Boolean(open);
+    if (next) closeAllControlPopovers();
+    accountMenu.hidden = !next;
+    accountMenuButton.setAttribute("aria-expanded", next ? "true" : "false");
+    if (next) {
+      updateAccountUi();
+      if (isGoogleConnected()) void loadGoogleUserProfile();
+    }
+  }
+
+  function toggleAccountMenu() {
+    setAccountMenuOpen(Boolean(accountMenu?.hidden));
+  }
+
+  function handleAccountMenuOutsidePointer(event) {
+    if (accountMenu?.hidden) return;
+    if (event?.target?.closest?.(".account-menu-wrap")) return;
+    setAccountMenuOpen(false);
+  }
+
+  function handleAccountMenuKeydown(event) {
+    if (event?.key !== "Escape" || accountMenu?.hidden) return;
+    event.preventDefault();
+    setAccountMenuOpen(false);
+    accountMenuButton?.focus();
+  }
+
+  function getControlPopoverPairs() {
+    return [
+      [speedControlButton, speedControlPopover],
+      [volumeControlButton, volumeControlPopover],
+      [muteControlButton, muteControlPopover]
+    ].filter(([button, popover]) => button && popover);
+  }
+
+  function closeAllControlPopovers(exceptPopover = null) {
+    for (const [button, popover] of getControlPopoverPairs()) {
+      if (popover === exceptPopover) continue;
+      popover.hidden = true;
+      button.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function positionControlPopover(popover) {
+    if (!popover || popover.hidden) return;
+    const viewportPadding = 8;
+    popover.classList.remove("place-below");
+    popover.style.removeProperty("--popover-shift-x");
+
+    let rect = popover.getBoundingClientRect();
+    if (rect.top < viewportPadding) {
+      popover.classList.add("place-below");
+      rect = popover.getBoundingClientRect();
+    }
+
+    let shiftX = 0;
+    if (rect.left < viewportPadding) shiftX = viewportPadding - rect.left;
+    if (rect.right > window.innerWidth - viewportPadding) {
+      shiftX += window.innerWidth - viewportPadding - rect.right;
+    }
+    if (shiftX) popover.style.setProperty("--popover-shift-x", `${Math.round(shiftX)}px`);
+  }
+
+  function setControlPopoverOpen(button, popover, open) {
+    if (!button || !popover) return;
+    const next = Boolean(open);
+    if (next) {
+      setAccountMenuOpen(false);
+      closeAllControlPopovers(popover);
+    }
+    popover.hidden = !next;
+    button.setAttribute("aria-expanded", next ? "true" : "false");
+    if (next) {
+      requestAnimationFrame(() => {
+        positionControlPopover(popover);
+        popover.querySelector("input, button")?.focus({ preventScroll: true });
+      });
+    } else {
+      popover.classList.remove("place-below");
+      popover.style.removeProperty("--popover-shift-x");
+    }
+  }
+
+  function toggleControlPopover(button, popover) {
+    setControlPopoverOpen(button, popover, Boolean(popover?.hidden));
+  }
+
+  function handleControlPopoverOutsidePointer(event) {
+    if (event?.target?.closest?.(".compact-control-wrap")) return;
+    closeAllControlPopovers();
+  }
+
+  function handleControlPopoverKeydown(event) {
+    if (event?.key !== "Escape") return;
+    const openPair = getControlPopoverPairs().find(([, popover]) => !popover.hidden);
+    if (!openPair) return;
+    event.preventDefault();
+    closeAllControlPopovers();
+    openPair[0]?.focus();
+  }
+
+  function handleLocaleChange() {
+    applyTheme(document.documentElement.dataset.theme, false);
+    updateAccountUi();
+    updateGoogleDriveControls();
+    updatePlayButton();
+    applyPlaybackSpeed(false);
+    applyOutputVolume();
+    updatePartMuteControl();
+    updateSoundFontUi();
+    updateSoundPresetControls();
+    if (mmiImportDialog?.open) updateMmiImportSelectionState();
+    if (pianoRollEmpty && !pianoRollEmpty.hidden && pianoRollRangeLabel) {
+      pianoRollRangeLabel.textContent = i18nText("roll.title");
+    }
+    updateMidiExtractDetailsLabel();
   }
 
   function trackAnalytics(eventName, params = {}) {
@@ -708,10 +897,10 @@
       const arr = JSON.parse(saved);
       if (!Array.isArray(arr)) return;
       midiPartPresetKeys = normalizePresetKeyArray(arr);
-      midiPartPresetName = readPref("midiPartPresetName") || DEFAULT_MIDI_SOUND_PRESET_LABEL;
+      midiPartPresetName = readPref("midiPartPresetName") || defaultMidiSoundPresetLabel();
     } catch (_) {
       midiPartPresetKeys = null;
-      midiPartPresetName = DEFAULT_MIDI_SOUND_PRESET_LABEL;
+      midiPartPresetName = defaultMidiSoundPresetLabel();
     }
   }
 
@@ -719,7 +908,7 @@
     if (!Array.isArray(midiPartPresetKeys)) return;
     midiPartPresetKeys = normalizePresetKeyArray(midiPartPresetKeys);
     writePref("midiPartPresetKeys", JSON.stringify(midiPartPresetKeys));
-    writePref("midiPartPresetName", midiPartPresetName || DEFAULT_MIDI_SOUND_PRESET_LABEL);
+    writePref("midiPartPresetName", midiPartPresetName || defaultMidiSoundPresetLabel());
   }
 
   function loadPianoRollPrefs() {
@@ -828,9 +1017,9 @@
     if (!pianoRoll) return;
     pianoRoll.classList.toggle("expanded", pianoRollExpanded);
     pianoRoll.setAttribute("aria-expanded", pianoRollExpanded ? "true" : "false");
-    pianoRoll.setAttribute("aria-label", pianoRollExpanded ? "피아노 롤 접기" : "피아노 롤 펼치기");
-    pianoRoll.title = pianoRollExpanded ? "빈 영역을 클릭하면 피아노 롤을 접고, 왼쪽 T숫자 버튼을 클릭하면 템포를 수정합니다." : "빈 영역을 클릭하면 피아노 롤을 펼치고, 왼쪽 T숫자 버튼을 클릭하면 템포를 수정합니다.";
-    if (pianoRollToggleLabel) pianoRollToggleLabel.textContent = pianoRollExpanded ? "접기" : "펼치기";
+    pianoRoll.setAttribute("aria-label", pianoRollExpanded ? i18nText("roll.collapse") : i18nText("roll.expand"));
+    pianoRoll.title = pianoRollExpanded ? i18nText("roll.collapse_help") : i18nText("roll.expand_help");
+    if (pianoRollToggleLabel) pianoRollToggleLabel.textContent = pianoRollExpanded ? i18nText("ui.collapse") : i18nText("ui.expand");
     if (persist) writePref("pianoRollExpanded", pianoRollExpanded ? "1" : "0");
   }
 
@@ -927,10 +1116,13 @@
     const resolved = theme === "dark" ? "dark" : "light";
     document.documentElement.dataset.theme = resolved;
     if (themeToggleBtn) {
-      const nextLabel = resolved === "dark" ? "밝은 테마로 변경" : "어두운 테마로 변경";
+      const nextTheme = resolved === "dark" ? "light" : "dark";
+      const nextLabel = i18nText(nextTheme === "light" ? "theme.light" : "theme.dark");
+      themeToggleBtn.dataset.targetTheme = nextTheme;
       themeToggleBtn.setAttribute("aria-pressed", resolved === "dark" ? "true" : "false");
       themeToggleBtn.setAttribute("aria-label", nextLabel);
       themeToggleBtn.title = nextLabel;
+      if (themeModeText) themeModeText.textContent = nextLabel;
     }
     if (persist) writePref("theme", resolved);
     pianoRollLastDataSignature = "";
@@ -997,7 +1189,7 @@
       if (!isGoogleConnected()) {
         clearGoogleTokenState(true);
         googleSilentRestoreFailed = true;
-        updateGoogleDriveControls("로그인 필요");
+        updateGoogleDriveControls(i18nText("ui.login_required"));
       } else {
         updateGoogleDriveControls();
         scheduleGoogleTokenExpiryRefresh();
@@ -1014,7 +1206,7 @@
       .replace(/\.(txt|mml|mid|midi|musicxml|xml|mxl|mmi)$/i, "")
       .replace(/[_-]+/g, " ")
       .trim();
-    return name || "모비바드 MML";
+    return name || i18nText("mml.title");
   }
 
   function buildRhythmGamePayload() {
@@ -1024,7 +1216,7 @@
     const activeChannelCount = (parsed.parts || []).filter(part =>
       (part.notes || []).some(note => Number(note.volume ?? 8) > 0)
     ).length;
-    if (!activeChannelCount) throw new Error("리듬게임에 사용할 소리 나는 MML 채널이 없습니다.");
+    if (!activeChannelCount) throw new Error(i18nText("game.no_channel"));
 
     return {
       title: currentRhythmGameTitle(),
@@ -1043,7 +1235,7 @@
     if (rhythmGameStatus) rhythmGameStatus.textContent = message;
   }
 
-  function hideRhythmGameLoading(message = "게임 준비 완료") {
+  function hideRhythmGameLoading(message = i18nText("game.ready")) {
     if (rhythmGameLoading) rhythmGameLoading.hidden = true;
     if (rhythmGameStatus) rhythmGameStatus.textContent = message;
   }
@@ -1065,15 +1257,15 @@
 
       rhythmGamePayloadPending = false;
       const message = stage === "payload_timeout"
-        ? "모비비트에 연주 정보를 전달하지 못했습니다. 페이지를 닫고 다시 시도해 주세요."
-        : "모비비트를 불러오지 못했습니다. ../mobibeats/ 경로를 확인해 주세요.";
+        ? i18nText("game.send_fail")
+        : i18nText("game.load_fail");
       setRhythmGameLoading(message, "error");
     }, 10000);
   }
 
   function sendRhythmGamePayload() {
     if (!rhythmGameFrameReady || !rhythmGamePendingPayload || !rhythmGameFrame?.contentWindow) return;
-    setRhythmGameLoading("현재 MML과 악기 정보를 전달하고 있습니다.");
+    setRhythmGameLoading(i18nText("mml.send_inst"));
     rhythmGamePayloadPending = true;
     rhythmGameFrame.contentWindow.postMessage({
       type: "MML_RHYTHM_LOAD",
@@ -1087,7 +1279,7 @@
     try {
       rhythmGamePendingPayload = buildRhythmGamePayload();
     } catch (err) {
-      showDialog("리듬게임을 열 수 없습니다", shortError(err));
+      showDialog(i18nText("game.open_fail"), shortError(err));
       return;
     }
 
@@ -1099,7 +1291,7 @@
     rhythmGameLayer.hidden = false;
     rhythmGameLayer.setAttribute("aria-hidden", "false");
     document.body.classList.add("rhythm-game-open");
-    setRhythmGameLoading("모비비트를 불러오는 중입니다.");
+    setRhythmGameLoading(i18nText("game.loading"));
     trackAnalytics("open_rhythm_game", {
       channel_count: rhythmGamePendingPayload.channelCount
     });
@@ -1123,7 +1315,7 @@
     rhythmGameLayer.hidden = true;
     rhythmGameLayer.setAttribute("aria-hidden", "true");
     document.body.classList.remove("rhythm-game-open");
-    if (rhythmGameStatus) rhythmGameStatus.textContent = "게임을 준비하고 있습니다.";
+    if (rhythmGameStatus) rhythmGameStatus.textContent = i18nText("game.preparing");
     rhythmGameBtn?.focus();
   }
 
@@ -1132,7 +1324,7 @@
     const loadedUrl = String(rhythmGameFrame.getAttribute("src") || "");
     if (!loadedUrl || loadedUrl === "about:blank" || rhythmGameFrameReady) return;
     if (!rhythmGameLayer?.hidden) {
-      setRhythmGameLoading("모비비트의 준비 신호를 기다리고 있습니다.");
+      setRhythmGameLoading(i18nText("game.wait_ready"));
       startRhythmGameLoadTimer();
     }
   }
@@ -1158,7 +1350,7 @@
     if (data.type === "MML_RHYTHM_LOADED") {
       clearRhythmGameLoadTimer();
       rhythmGamePayloadPending = false;
-      hideRhythmGameLoading("게임 준비 완료");
+      hideRhythmGameLoading(i18nText("game.ready"));
       try { rhythmGameFrame.contentWindow.focus(); } catch (_) {}
       return;
     }
@@ -1166,7 +1358,7 @@
     if (data.type === "MML_RHYTHM_ERROR") {
       clearRhythmGameLoadTimer();
       rhythmGamePayloadPending = false;
-      const message = String(data.message || data.payload?.message || "연주 정보를 불러오지 못했습니다.");
+      const message = String(data.message || data.payload?.message || i18nText("game.data_fail"));
       setRhythmGameLoading(message, "error");
       return;
     }
@@ -1176,11 +1368,18 @@
     }
   }
 
+  function updateMidiExtractDetailsLabel() {
+    const details = midiExtractDialog?.querySelector(".midi-extract-details");
+    const summary = details?.querySelector(":scope > summary");
+    if (summary) summary.dataset.toggleLabel = i18nText(details.open ? "ui.collapse" : "ui.expand");
+  }
+
   function openMidiExtractDialog() {
     if (!midiExtractDialog) return;
     const details = midiExtractDialog.querySelector(".midi-extract-details");
     const card = midiExtractDialog.querySelector(".midi-extract-card");
     if (details) details.open = false;
+    updateMidiExtractDetailsLabel();
     if (card) card.scrollTop = 0;
     trackAnalytics("open_midi_extract_dialog");
 
@@ -1227,7 +1426,7 @@
       }
       midiExtractSampleVideo.hidden = true;
       midiExtractSampleVideoLoad.hidden = false;
-      showDialog("샘플 영상 재생 실패", shortError(err));
+      showDialog(i18nText("audio.video_fail"), shortError(err));
     } finally {
       midiExtractSampleVideoLoad.disabled = false;
       midiExtractSampleVideoLoad.removeAttribute("aria-busy");
@@ -1244,7 +1443,7 @@
     try {
       midiExtractSampleAudioLoad.disabled = true;
       midiExtractSampleAudioLoad.setAttribute("aria-busy", "true");
-      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = "입력 오디오를 불러오는 중입니다...";
+      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = i18nText("audio.input_load");
       if (firstLoad) {
         midiExtractSampleAudio.src = source;
         midiExtractSampleAudio.load();
@@ -1252,7 +1451,7 @@
       midiExtractSampleAudio.hidden = false;
       await midiExtractSampleAudio.play();
       midiExtractSampleAudioLoad.remove();
-      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = "변환에 사용한 원본 오디오를 재생하고 있습니다.";
+      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = i18nText("audio.source_play");
     } catch (err) {
       if (firstLoad) {
         midiExtractSampleAudio.removeAttribute("src");
@@ -1260,8 +1459,8 @@
       }
       midiExtractSampleAudio.hidden = true;
       midiExtractSampleAudioLoad.hidden = false;
-      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = "재생 버튼을 누르면 오디오 파일을 불러옵니다.";
-      showDialog("샘플 오디오 재생 실패", shortError(err));
+      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = i18nText("file.audio_loaded");
+      showDialog(i18nText("audio.sample_fail"), shortError(err));
     } finally {
       midiExtractSampleAudioLoad.disabled = false;
       midiExtractSampleAudioLoad.removeAttribute("aria-busy");
@@ -1301,7 +1500,7 @@
     try {
       midiExtractSampleMidiPlay.disabled = true;
       midiExtractSampleMidiPlay.setAttribute("aria-busy", "true");
-      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = "출력 MIDI 미리듣기를 불러오는 중입니다...";
+      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = i18nText("midi.preview_load");
       if (firstLoad) {
         midiExtractSampleMidiAudio.src = source;
         midiExtractSampleMidiAudio.load();
@@ -1309,7 +1508,7 @@
       midiExtractSampleMidiAudio.hidden = false;
       await midiExtractSampleMidiAudio.play();
       midiExtractSampleMidiPlay.remove();
-      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = "sample_out.mid의 변환 결과를 재생하고 있습니다.";
+      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = i18nText("msg.play_conv");
     } catch (err) {
       if (firstLoad) {
         midiExtractSampleMidiAudio.removeAttribute("src");
@@ -1317,8 +1516,8 @@
       }
       midiExtractSampleMidiAudio.hidden = true;
       midiExtractSampleMidiPlay.hidden = false;
-      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = "재생 버튼을 누르면 sample_out.mid의 미리듣기 오디오를 불러옵니다.";
-      showDialog("샘플 MIDI 미리듣기 실패", shortError(err));
+      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = i18nText("audio.preview_help");
+      showDialog(i18nText("midi.preview_fail"), shortError(err));
     } finally {
       midiExtractSampleMidiPlay.disabled = false;
       midiExtractSampleMidiPlay.removeAttribute("aria-busy");
@@ -1360,6 +1559,7 @@
       googleTokenExpiresAt = expiresAt;
       googleSilentRestoreFailed = false;
       scheduleGoogleTokenExpiryRefresh();
+      void loadGoogleUserProfile();
       return true;
     } catch (_) {
       clearGoogleTokenCache();
@@ -1372,6 +1572,7 @@
     googleTokenExpiresAt = 0;
     clearGoogleTokenExpiryTimer();
     clearTimeout(googleSettingsSaveTimer);
+    clearGoogleUserProfile();
     if (clearCache) clearGoogleTokenCache();
   }
 
@@ -1386,6 +1587,80 @@
     if (googleStatus) googleStatus.textContent = message || "";
   }
 
+  function clearGoogleUserProfile(refresh = true) {
+    googleUserProfile = null;
+    googleUserProfileToken = "";
+    googleUserProfilePromise = null;
+    if (refresh) updateAccountUi();
+  }
+
+  function updateAccountUi() {
+    const connected = isGoogleConnected();
+    const profile = connected && googleUserProfile ? googleUserProfile : {};
+    const displayName = connected
+      ? (String(profile.displayName || "").trim() || i18nText("account.user"))
+      : i18nText("account.guest");
+    const email = connected ? String(profile.emailAddress || "").trim() : "";
+    const photo = connected ? String(profile.photoLink || "").trim() : "";
+
+    if (accountMenuName) accountMenuName.textContent = displayName;
+    if (accountMenuEmail) {
+      accountMenuEmail.textContent = email;
+      accountMenuEmail.hidden = !email;
+    }
+    if (accountAvatarImg) {
+      const target = photo || GUEST_AVATAR_URL;
+      if (accountAvatarImg.getAttribute("src") !== target) accountAvatarImg.src = target;
+      accountAvatarImg.alt = "";
+    }
+    if (accountMenuButton) {
+      accountMenuButton.dataset.connected = connected ? "true" : "false";
+      accountMenuButton.setAttribute("aria-label", connected ? displayName : i18nText("account.menu"));
+      accountMenuButton.title = connected ? displayName : i18nText("account.menu");
+    }
+  }
+
+  async function loadGoogleUserProfile(force = false) {
+    if (!isGoogleConnected()) {
+      clearGoogleUserProfile();
+      return null;
+    }
+    const token = googleAccessToken;
+    if (!force && googleUserProfileToken === token && googleUserProfile) {
+      updateAccountUi();
+      return googleUserProfile;
+    }
+    if (!force && googleUserProfilePromise && googleUserProfileToken === token) {
+      return googleUserProfilePromise;
+    }
+
+    googleUserProfileToken = token;
+    googleUserProfilePromise = (async () => {
+      try {
+        const fields = encodeURIComponent("user(displayName,emailAddress,photoLink)");
+        const response = await fetch(`${GOOGLE_DRIVE_API_BASE}/about?fields=${fields}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error(`Google profile HTTP ${response.status}`);
+        const data = await response.json();
+        if (googleAccessToken !== token) return null;
+        const user = data?.user || {};
+        googleUserProfile = {
+          displayName: String(user.displayName || ""),
+          emailAddress: String(user.emailAddress || ""),
+          photoLink: String(user.photoLink || "")
+        };
+      } catch (_) {
+        if (googleAccessToken === token) googleUserProfile = {};
+      } finally {
+        if (googleAccessToken === token) updateAccountUi();
+        if (googleUserProfileToken === token) googleUserProfilePromise = null;
+      }
+      return googleUserProfile;
+    })();
+    return googleUserProfilePromise;
+  }
+
   function updateGoogleDriveControls(message = "") {
     const hasClient = Boolean(googleClientId());
     const hasPickerKey = Boolean(googleApiKey());
@@ -1393,21 +1668,21 @@
     if (googleLoginBtn) {
       googleLoginBtn.disabled = !hasClient;
       const googleLoginLabel = googleLoginBtn.querySelector(".google-login-label");
-      const labelText = connected ? "로그아웃" : "로그인";
+      const labelText = i18nText(connected ? "auth.logout" : "auth.login");
       if (googleLoginLabel) {
         googleLoginLabel.textContent = labelText;
       } else {
         googleLoginBtn.textContent = labelText;
       }
-      googleLoginBtn.setAttribute("aria-label", connected ? "Google 계정 로그아웃" : "Google 계정 로그인");
+      googleLoginBtn.setAttribute("aria-label", i18nText(connected ? "google.logout" : "google.login"));
       googleLoginBtn.title = hasClient
-        ? (connected ? "Google 계정에서 로그아웃합니다. 권한 동의는 유지됩니다." : "Google 계정으로 Drive 연동을 시작합니다.")
-        : "js/google-config.js에 OAuth Client ID를 입력해야 합니다.";
+        ? i18nText(connected ? "google.logout_help" : "google.connect_help")
+        : i18nText("msg.enter_oauth");
     }
     const googleDriveLoadDisabled = !connected || !hasPickerKey;
     const googleDriveLoadTitle = !hasPickerKey
-      ? "Drive 파일 선택에는 js/google-config.js의 API Key가 필요합니다."
-      : "Google Drive의 MML_Mobibard 폴더에서 Google Docs, MML, MIDI, MusicXML, MMI, 3MLE 또는 TXT 파일을 선택합니다.";
+      ? i18nText("drive.select_files")
+      : i18nText("drive.select_gdocs");
     if (googleDriveLoadBtn) {
       googleDriveLoadBtn.disabled = googleDriveLoadDisabled;
       googleDriveLoadBtn.title = googleDriveLoadTitle;
@@ -1418,30 +1693,32 @@
     }
     if (midiConvertGoogleDriveLoad) {
       midiConvertGoogleDriveLoad.disabled = googleDriveLoadDisabled || midiConvertBusy;
-      midiConvertGoogleDriveLoad.title = midiConvertBusy ? "변환 준비 중에는 다른 Drive 파일을 불러올 수 없습니다." : googleDriveLoadTitle;
+      midiConvertGoogleDriveLoad.title = midiConvertBusy ? i18nText("drive.fail_load") : googleDriveLoadTitle;
     }
     if (googleDriveSaveBtn) {
       googleDriveSaveBtn.disabled = !connected;
-      googleDriveSaveBtn.title = "현재 전체 MML을 Google Drive의 MML_Mobibard 폴더에 TXT 파일로 저장합니다.";
+      googleDriveSaveBtn.title = i18nText("drive.save_done_mml");
     }
     if (message) {
       setGoogleStatus(message);
     } else if (!hasClient) {
-      setGoogleStatus("구글 설정 필요");
+      setGoogleStatus(i18nText("google.setup_required"));
     } else if (connected && !hasPickerKey) {
-      setGoogleStatus("연동됨 · API Key 필요");
+      setGoogleStatus(i18nText("st.connected_api"));
     } else if (connected) {
-      setGoogleStatus("구글 연동됨");
+      setGoogleStatus(i18nText("google.connected"));
     } else {
-      setGoogleStatus("미연동");
+      setGoogleStatus(i18nText("st.not_connected"));
     }
+    updateAccountUi();
+    if (connected && googleUserProfileToken !== googleAccessToken) void loadGoogleUserProfile();
   }
 
   function openCodeHelpDialog() {
     if (codeHelpDialog?.showModal) {
       codeHelpDialog.showModal();
     } else {
-      showDialog("코드 도움말", "이 브라우저에서는 코드 도움말 Dialog를 열 수 없습니다.");
+      showDialog(i18nText("edit.help"), i18nText("err.code_help"));
     }
   }
 
@@ -1455,14 +1732,14 @@
           resolve();
         } else if (Date.now() - started > timeoutMs) {
           window.clearInterval(timer);
-          reject(new Error(`${label} 라이브러리를 불러오지 못했습니다.`));
+          reject(new Error(i18nText("err.lib_load", [label])));
         }
       }, 80);
     });
   }
 
   async function ensureGoogleIdentityLoaded() {
-    await waitForGoogleGlobal(() => Boolean(window.google?.accounts?.oauth2), "Google 로그인");
+    await waitForGoogleGlobal(() => Boolean(window.google?.accounts?.oauth2), i18nText("google.login_title"));
   }
 
   async function ensureGooglePickerLoaded() {
@@ -1472,9 +1749,9 @@
       try {
         window.gapi.load("picker", {
           callback: () => { googlePickerLoaded = true; resolve(); },
-          onerror: () => reject(new Error("Google Picker를 불러오지 못했습니다.")),
+          onerror: () => reject(new Error(i18nText("google.picker_fail"))),
           timeout: 10000,
-          ontimeout: () => reject(new Error("Google Picker 불러오기가 시간 초과되었습니다."))
+          ontimeout: () => reject(new Error(i18nText("google.picker_timeout")))
         });
       } catch (err) {
         reject(err);
@@ -1483,21 +1760,21 @@
   }
 
   function googleLoginRequiredError() {
-    return new Error("Google 로그인 세션이 만료되었습니다. 상단 Google 로그인 버튼으로 다시 연동해 주세요.");
+    return new Error(i18nText("google.session_expired"));
   }
 
   function requireGoogleAccessToken() {
     if (isGoogleConnected() || restoreGoogleTokenCache()) return googleAccessToken;
     clearGoogleTokenState(true);
     googleSilentRestoreFailed = true;
-    updateGoogleDriveControls("로그인 필요");
+    updateGoogleDriveControls(i18nText("ui.login_required"));
     throw googleLoginRequiredError();
   }
 
   async function requestGoogleAccessTokenInteractive() {
     if (isGoogleConnected() || restoreGoogleTokenCache()) return googleAccessToken;
     const clientId = googleClientId();
-    if (!clientId) throw new Error("Google OAuth Client ID가 설정되지 않았습니다. js/google-config.js를 먼저 채워 주세요.");
+    if (!clientId) throw new Error(i18nText("google.client_id_missing"));
     await ensureGoogleIdentityLoaded();
     return new Promise((resolve, reject) => {
       try {
@@ -1511,7 +1788,7 @@
         }
         googleTokenClient.callback = (response) => {
           if (!response || response.error) {
-            reject(new Error(response?.error_description || response?.error || "Google 로그인에 실패했습니다."));
+            reject(new Error(response?.error_description || response?.error || i18nText("google.login_fail")));
             return;
           }
           googleAccessToken = String(response.access_token || "");
@@ -1520,7 +1797,8 @@
           googleSilentRestoreFailed = false;
           setGoogleAutoReconnect(true);
           saveGoogleTokenCache(response);
-          updateGoogleDriveControls("구글 연동됨");
+          void loadGoogleUserProfile(true);
+          updateGoogleDriveControls(i18nText("google.connected"));
           resolve(googleAccessToken);
         };
         googleTokenClient.requestAccessToken({ prompt: "select_account" });
@@ -1533,18 +1811,18 @@
   function scheduleGoogleAutoReconnect() {
     if (!shouldGoogleAutoReconnect() || !googleClientId()) return;
     if (restoreGoogleTokenCache()) {
-      updateGoogleDriveControls("구글 연동 복원됨");
-      window.setTimeout(() => void applyGoogleSettingsAfterSessionRestore("구글 연동 복원됨"), 100);
+      updateGoogleDriveControls(i18nText("google.restored"));
+      window.setTimeout(() => void applyGoogleSettingsAfterSessionRestore(i18nText("google.restored")), 100);
       return;
     }
     googleSilentRestoreFailed = true;
-    updateGoogleDriveControls("로그인 필요");
+    updateGoogleDriveControls(i18nText("ui.login_required"));
   }
 
-  async function applyGoogleSettingsAfterSessionRestore(fallbackMessage = "구글 연동 복원됨") {
+  async function applyGoogleSettingsAfterSessionRestore(fallbackMessage = i18nText("google.restored")) {
     if (!isGoogleConnected()) return;
     const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
-    updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : fallbackMessage);
+    updateGoogleDriveControls(appliedDriveSettings ? i18nText("google.cfg_applied") : fallbackMessage);
   }
 
   async function handleGoogleLoginButton() {
@@ -1552,20 +1830,20 @@
       setGoogleAutoReconnect(false);
       resetGoogleSessionState(true);
       googleSilentRestoreFailed = false;
-      updateGoogleDriveControls("구글 로그아웃됨");
+      updateGoogleDriveControls(i18nText("google.logout_done"));
       return;
     }
     try {
-      updateGoogleDriveControls("구글 로그인 중...");
+      updateGoogleDriveControls(i18nText("google.login_wait"));
       await requestGoogleAccessTokenInteractive();
       setGoogleAutoReconnect(true);
       const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
-      updateGoogleDriveControls(appliedDriveSettings ? "구글 설정 적용됨" : "로컬 설정 사용 중");
+      updateGoogleDriveControls(appliedDriveSettings ? i18nText("google.cfg_applied") : i18nText("cfg.local"));
       trackAnalytics("google_drive_login", { settings_source: appliedDriveSettings ? "drive" : "local" });
     } catch (err) {
       resetGoogleSessionState(true);
-      updateGoogleDriveControls("구글 로그인 실패");
-      showDialog("구글 로그인 실패", shortError(err));
+      updateGoogleDriveControls(i18nText("google.login_fail_short"));
+      showDialog(i18nText("google.login_fail_short"), shortError(err));
     }
   }
 
@@ -1621,7 +1899,7 @@
     if (response.status === 401 && retry) {
       clearGoogleTokenState(true);
       googleSilentRestoreFailed = true;
-      updateGoogleDriveControls("로그인 필요");
+      updateGoogleDriveControls(i18nText("ui.login_required"));
       throw googleLoginRequiredError();
     }
     return response;
@@ -1727,7 +2005,7 @@
       }
     }
     const created = await createGoogleMmlFolder();
-    if (!created?.id) throw new Error(`${GOOGLE_MML_FOLDER_NAME} 폴더를 만들지 못했습니다.`);
+    if (!created?.id) throw new Error(i18nText("drive.folder_create_fail", [GOOGLE_MML_FOLDER_NAME]));
     googleDriveMmlFolderId = created.id;
     return googleDriveMmlFolderId;
   }
@@ -1746,17 +2024,17 @@
 
   async function validateGoogleDriveFolder(folderId, { requireWritable = false } = {}) {
     const id = String(folderId || "").trim();
-    if (!id) throw new Error("저장 위치 폴더가 선택되지 않았습니다.");
+    if (!id) throw new Error(i18nText("drive.folder_required"));
     const meta = await getGoogleDriveFileMeta(id, "id,name,mimeType,trashed,capabilities,driveId,shortcutDetails");
     let folder = meta;
     if (folder?.mimeType === GOOGLE_DRIVE_SHORTCUT_MIME && folder.shortcutDetails?.targetId) {
       folder = await getGoogleDriveFileMeta(folder.shortcutDetails.targetId, "id,name,mimeType,trashed,capabilities,driveId");
     }
-    if (!folder?.id) throw new Error("저장 위치 폴더를 찾지 못했습니다.");
-    if (folder.trashed) throw new Error(`'${folder.name || "선택한 폴더"}' 폴더가 휴지통에 있습니다.`);
-    if (folder.mimeType !== GOOGLE_DRIVE_FOLDER_MIME) throw new Error("저장 위치가 폴더가 아닙니다. 폴더를 다시 선택해 주세요.");
+    if (!folder?.id) throw new Error(i18nText("drive.folder_not_found"));
+    if (folder.trashed) throw new Error(i18nText("drive.folder_trashed", [folder.name || i18nText("drive.selected_dir")]));
+    if (folder.mimeType !== GOOGLE_DRIVE_FOLDER_MIME) throw new Error(i18nText("drive.not_folder"));
     if (requireWritable && folder.capabilities && folder.capabilities.canAddChildren === false) {
-      throw new Error(`'${folder.name || "선택한 폴더"}' 폴더에 파일을 저장할 권한이 없습니다.`);
+      throw new Error(i18nText("drive.folder_no_permission", [folder.name || i18nText("drive.selected_dir")]));
     }
     return {
       id: folder.id,
@@ -1784,15 +2062,15 @@
 
   async function pickGoogleDriveSaveFolder() {
     requireGoogleAccessToken();
-    if (!googleApiKey()) throw new Error("Google Picker API Key가 설정되지 않았습니다. js/google-config.js의 apiKey를 채워 주세요.");
-    setGoogleStatus(`${GOOGLE_MML_FOLDER_NAME} 폴더 확인 중...`);
+    if (!googleApiKey()) throw new Error(i18nText("google.api_key_missing"));
+    setGoogleStatus(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]));
     const defaultFolderId = await ensureGoogleMmlFolder();
     await ensureGooglePickerLoaded();
 
     return new Promise((resolve, reject) => {
       try {
         const picker = window.google?.picker;
-        if (!picker) throw new Error("Google Picker를 불러오지 못했습니다.");
+        if (!picker) throw new Error(i18nText("google.picker_load_fail"));
         const viewId = picker.ViewId.FOLDERS || picker.ViewId.DOCS;
         const view = new picker.DocsView(viewId);
         try { view.setIncludeFolders(true); } catch (_) {}
@@ -1801,12 +2079,12 @@
         try { if (defaultFolderId && typeof view.setParent === "function") view.setParent(defaultFolderId); } catch (_) {}
 
         const folderHint = googleDriveSaveFolderName
-          ? `현재 선택: ${googleDriveSaveFolderName}`
-          : `기본 폴더: ${GOOGLE_MML_FOLDER_NAME}`;
+          ? i18nText("drive.current_selection", [googleDriveSaveFolderName])
+          : i18nText("drive.default_folder", [GOOGLE_MML_FOLDER_NAME]);
         const builder = new picker.PickerBuilder()
           .setDeveloperKey(googleApiKey())
           .setOAuthToken(googleAccessToken)
-          .setTitle(`저장 위치 선택 · ${folderHint}`)
+          .setTitle(i18nText("drive.select_location_title", [folderHint]))
           .addView(view)
           .setCallback((data) => {
             const action = data?.[picker.Response.ACTION];
@@ -1822,14 +2100,14 @@
             stopGooglePickerLayerWatch();
             const doc = data[picker.Response.DOCUMENTS]?.[0];
             const id = doc?.[picker.Document.ID] || "";
-            const name = doc?.[picker.Document.NAME] || "선택한 폴더";
+            const name = doc?.[picker.Document.NAME] || i18nText("drive.selected_dir");
             const mimeType = doc?.[picker.Document.MIME_TYPE] || "";
             if (!id) {
               resolve(null);
               return;
             }
             if (mimeType && mimeType !== GOOGLE_DRIVE_FOLDER_MIME) {
-              showDialog("Drive 저장 위치", "파일이 아니라 폴더를 선택해 주세요.");
+              showDialog(i18nText("drive.save_loc"), i18nText("drive.select_folder_only"));
               resolve(null);
               return;
             }
@@ -1926,7 +2204,7 @@
     const initialName = normalizeGoogleDriveTxtFileName(defaultFileName || buildGoogleDriveDefaultMmlFileName());
 
     if (!googleDriveSaveDialog?.showModal || !googleDriveSaveFileName) {
-      const entered = window.prompt(`${initialFolder.name} 폴더에 저장할 TXT 파일 이름을 입력해 주세요.`, initialName);
+      const entered = window.prompt(i18nText("drive.save_name_prompt", [initialFolder.name]), initialName);
       if (entered == null) return Promise.resolve(null);
       return Promise.resolve({
         folderId: initialFolder.id,
@@ -1963,7 +2241,7 @@
       saving = busy;
       if (googleDriveSaveApply) {
         googleDriveSaveApply.disabled = busy;
-        googleDriveSaveApply.textContent = busy ? "저장 중..." : "저장";
+        googleDriveSaveApply.textContent = busy ? i18nText("st.saving") : i18nText("ui.save");
       }
       if (googleDriveSaveCancel) googleDriveSaveCancel.disabled = busy;
       if (googleDriveSaveFolderBtn) googleDriveSaveFolderBtn.disabled = busy;
@@ -2006,7 +2284,7 @@
         if (saving) return;
         const fileName = normalizeGoogleDriveTxtFileName(googleDriveSaveFileName.value);
         googleDriveSaveFileName.value = fileName;
-        setSaveBusy(true, "같은 이름의 파일이 있는지 확인 중...");
+        setSaveBusy(true, i18nText("drive.duplicate_check"));
         try {
           const preparedFolder = await resolveGoogleDriveSaveFolder(
             selectedFolder.id || googleDriveMmlFolderId || await ensureGoogleMmlFolder(),
@@ -2018,9 +2296,7 @@
           updateFolderLabel();
           const existing = await findGoogleDriveTextFileInFolder(folderId, fileName);
           if (existing?.id) {
-            const overwrite = window.confirm(`'${folderName}' 폴더에 '${fileName}' 파일이 이미 있습니다.
-
-덮어쓸까요?`);
+            const overwrite = window.confirm(i18nText("drive.file_exists_confirm", [folderName, fileName]));
             if (!overwrite) {
               setSaveBusy(false);
               focusFileName();
@@ -2034,11 +2310,11 @@
             overwriteFileId: existing?.id || ""
           };
           if (typeof onCommit === "function") {
-            setSaveBusy(true, "Google Drive에 저장 중입니다. 잠시만 기다려 주세요...");
+            setSaveBusy(true, i18nText("drive.saving_wait"));
             const result = await onCommit(target);
             const savedName = result?.fileName || result?.name || fileName;
-            const action = result?.createsNewFile === false ? "덮어썼습니다" : "저장했습니다";
-            showDialog("Drive 저장 완료", `'${folderName}' 폴더에 '${savedName}' 파일로 ${action}.`);
+            const action = result?.createsNewFile === false ? i18nText("drive.overwritten") : i18nText("drive.saved");
+            showDialog(i18nText("drive.save_done"), i18nText("drive.save_result", [folderName, savedName, action]));
             finish(result || target);
             closeDialog();
             return;
@@ -2047,7 +2323,7 @@
           closeDialog();
         } catch (err) {
           setSaveBusy(false);
-          showDialog("Drive 저장 실패", shortError(err));
+          showDialog(i18nText("drive.save_fail"), shortError(err));
           reopenSaveDialog();
         }
       };
@@ -2060,11 +2336,11 @@
         try {
           const picked = await pickGoogleDriveSaveFolder();
           if (picked) {
-            selectedFolder = { id: picked.id, name: picked.name || "선택한 폴더" };
+            selectedFolder = { id: picked.id, name: picked.name || i18nText("drive.selected_dir") };
             rememberGoogleDriveSaveFolder(selectedFolder.id, selectedFolder.name);
           }
         } catch (err) {
-          showDialog("Drive 저장 위치 선택 실패", shortError(err));
+          showDialog(i18nText("drive.folder_select_fail"), shortError(err));
         } finally {
           googleDriveSaveFileName.value = savedName;
           updateFolderLabel();
@@ -2104,7 +2380,7 @@
     const data = JSON.parse(String(text || ""));
     const prefs = data?.prefs;
     if (!prefs || typeof prefs !== "object" || Array.isArray(prefs)) {
-      throw new Error("설정 파일 형식이 올바르지 않습니다.");
+      throw new Error(i18nText("google.settings_invalid"));
     }
     const normalized = {};
     for (const [key, value] of Object.entries(prefs)) {
@@ -2164,7 +2440,7 @@
   function reloadPreferencesFromStorage() {
     partPresetKeys = defaultPartPresetKeys();
     midiPartPresetKeys = null;
-    midiPartPresetName = DEFAULT_MIDI_SOUND_PRESET_LABEL;
+    midiPartPresetName = defaultMidiSoundPresetLabel();
     userSoundPresets = [];
     partMuteStates = Array.from({ length: 6 }, () => false);
     loadThemePref();
@@ -2175,6 +2451,7 @@
     loadUserSoundPresetPrefs();
     loadPartMutePrefs();
     loadGoogleDriveFolderPrefs();
+    void window.MobibardI18n?.syncFromPreference({ source: "settings" });
     applyPlaybackSpeed(false);
     applyOutputVolume();
     updateSoundPresetControls();
@@ -2186,23 +2463,23 @@
   async function loadGoogleSettingsOrFallbackLocal() {
     if (!isGoogleConnected()) return false;
     try {
-      setGoogleStatus("구글 설정 확인 중...");
+      setGoogleStatus(i18nText("google.settings_check"));
       const file = await findGoogleSettingsFile();
       if (!file?.id) {
         googleSettingsFileId = "";
-        setGoogleStatus("구글 설정 생성 중...");
+        setGoogleStatus(i18nText("google.settings_create"));
         await saveGoogleSettingsNow(true);
-        setGoogleStatus("로컬 설정 사용 중");
+        setGoogleStatus(i18nText("google.local_settings"));
         return false;
       }
       googleSettingsFileId = file.id;
       const text = await downloadGoogleDriveText(file.id);
       const prefs = parseGoogleSettings(text);
       applyPrefSnapshot(prefs);
-      setGoogleStatus("구글 설정 적용됨");
+      setGoogleStatus(i18nText("google.settings_applied"));
       return true;
     } catch (err) {
-      setGoogleStatus("구글 설정 실패 · 로컬 사용");
+      setGoogleStatus(i18nText("google.settings_fallback"));
       try { await saveGoogleSettingsNow(true); } catch (_) {}
       return false;
     }
@@ -2249,11 +2526,11 @@
         });
       }
       googleSettingsFileId = saved?.id || googleSettingsFileId;
-      if (!silent) setGoogleStatus("구글 설정 저장됨");
+      if (!silent) setGoogleStatus(i18nText("google.settings_saved"));
       return true;
     } catch (err) {
-      if (!silent) showDialog("구글 설정 저장 실패", shortError(err));
-      else setGoogleStatus("구글 설정 저장 실패");
+      if (!silent) showDialog(i18nText("google.settings_save_fail"), shortError(err));
+      else setGoogleStatus(i18nText("google.settings_save_fail"));
       return false;
     } finally {
       googleSettingsSaving = false;
@@ -2373,8 +2650,8 @@
     let suspendedPanels = null;
     try {
       requireGoogleAccessToken();
-      if (!googleApiKey()) throw new Error("Google Picker API Key가 설정되지 않았습니다. js/google-config.js의 apiKey를 채워 주세요.");
-      setGoogleStatus(`${GOOGLE_MML_FOLDER_NAME} 폴더 확인 중...`);
+      if (!googleApiKey()) throw new Error(i18nText("google.api_key_missing"));
+      setGoogleStatus(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]));
       const folderId = await ensureGoogleMmlFolder();
       await ensureGooglePickerLoaded();
       suspendedPanels = suspendPopupPanelsForGooglePicker();
@@ -2391,7 +2668,7 @@
       const builder = new window.google.picker.PickerBuilder()
         .setDeveloperKey(googleApiKey())
         .setOAuthToken(googleAccessToken)
-        .setTitle(`${GOOGLE_MML_FOLDER_NAME}에서 Google Docs / MML / MIDI / MusicXML / MMI / 3MLE / TXT 파일 선택`)
+        .setTitle(i18nText("drive.select_files_title", [GOOGLE_MML_FOLDER_NAME]))
         .addView(view)
         .setCallback((data) => void handleGooglePickerResult(data, suspendedPanels));
       const appId = googleAppId();
@@ -2404,11 +2681,11 @@
         window.setTimeout(forceGooglePickerLayer, 240);
       });
       trackAnalytics("google_drive_picker_open");
-      setGoogleStatus("구글 연동됨");
+      setGoogleStatus(i18nText("google.connected"));
     } catch (err) {
       stopGooglePickerLayerWatch();
       restorePopupPanelsAfterGooglePicker(suspendedPanels);
-      showDialog("Drive 불러오기 실패", shortError(err));
+      showDialog(i18nText("drive.load_fail"), shortError(err));
       updateGoogleDriveControls();
     }
   }
@@ -2433,14 +2710,14 @@
     stopGooglePickerLayerWatch();
     const doc = data[picker.Response.DOCUMENTS]?.[0];
     const fileId = doc?.[picker.Document.ID];
-    const name = doc?.[picker.Document.NAME] || "Google Drive 파일";
+    const name = doc?.[picker.Document.NAME] || i18nText("drive.file");
     const mimeType = doc?.[picker.Document.MIME_TYPE] || "";
     if (!fileId) {
       restorePopupPanelsAfterGooglePicker(suspendedPanels);
       return;
     }
     if (mimeType === GOOGLE_DRIVE_FOLDER_MIME) {
-      showDialog("Drive 불러오기", "폴더가 아니라 MML, MIDI, MusicXML, MMI, 3MLE 또는 TXT 파일을 선택해 주세요.");
+      showDialog(i18nText("drive.load"), i18nText("drive.select_mml"));
       restorePopupPanelsAfterGooglePicker(suspendedPanels);
       return;
     }
@@ -2448,7 +2725,7 @@
     try {
       await loadGoogleDriveSourceFile(fileId, name);
     } catch (err) {
-      showDialog("Drive 불러오기 실패", shortError(err));
+      showDialog(i18nText("drive.load_fail"), shortError(err));
     }
   }
 
@@ -2517,7 +2794,7 @@
 
   async function buildMusicXmlMidiImport(bytes, name = "MusicXML") {
     if (typeof musicXmlToMidiBytes !== "function") {
-      throw new Error("MusicXML 변환 모듈을 불러오지 못했습니다.");
+      throw new Error(i18nText("xml.load_conv"));
     }
     const midiBytes = await musicXmlToMidiBytes(bytes, name);
     const overview = analyzeMidi(midiBytes, name);
@@ -2536,7 +2813,7 @@
     return "MIDI";
   }
 
-  async function loadGoogleDriveSourceFile(fileId, fallbackName = "Google Drive 파일") {
+  async function loadGoogleDriveSourceFile(fileId, fallbackName = i18nText("drive.file")) {
     requireGoogleAccessToken();
     closeImportDialogsForSourceReload();
     stopMidiPreview();
@@ -2553,7 +2830,7 @@
         setMainMml(normalized.mml);
       } catch (optErr) {
         setMainMml(loaded);
-        showDialog("MML 최적화 생략", `Drive Google Docs 문서는 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+        showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_gdocs", [shortError(optErr)]));
       }
       googleDriveMmlFileId = "";
       googleDriveMmlFileName = "";
@@ -2561,16 +2838,16 @@
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
-      showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
+      showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
       trackAnalytics("drive_import_mml", {
         file_type: "google_docs",
         channel_count: analyticsChannelCount(mainMml.value)
       });
-      setGoogleStatus("Drive Google Docs 불러옴");
+      setGoogleStatus(i18nText("drive.gdocs_loaded"));
       return;
     }
     if (isGoogleDriveNativeEditorMime(mimeType)) {
-      throw new Error("Google Docs 문서는 TXT로 변환해 불러올 수 있지만, Sheets/Slides 같은 다른 Google 편집기 파일은 아직 지원하지 않습니다.");
+      throw new Error(i18nText("file.gdocs_documents"));
     }
     const mediaUrl = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(sourceFileId)}`, googleDriveSupportsAllDrivesParams({ alt: "media" }));
     const response = await googleDriveFetch(mediaUrl);
@@ -2586,7 +2863,7 @@
         instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
         note_count: Number(overview.noteCount || 0)
       });
-      setGoogleStatus("Drive MIDI 불러옴");
+      setGoogleStatus(i18nText("drive.midi_loaded"));
       return;
     }
     if (isGoogleDriveMusicXmlFile(name, mimeType)) {
@@ -2600,7 +2877,7 @@
         instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
         note_count: Number(overview.noteCount || 0)
       });
-      setGoogleStatus("Drive MusicXML 불러옴");
+      setGoogleStatus(i18nText("drive.musicxml_loaded"));
       return;
     }
     if (isGoogleDriveMabiIccoFile(name, mimeType)) {
@@ -2611,7 +2888,7 @@
         setMainMml(normalized.mml);
       } catch (optErr) {
         setMainMml(loaded);
-        showDialog("MML 최적화 생략", `Drive MMI 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+        showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_mmi", [shortError(optErr)]));
       }
       googleDriveMmlFileId = "";
       googleDriveMmlFileName = "";
@@ -2619,12 +2896,12 @@
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
-      showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
+      showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
       trackAnalytics("drive_import_mml", {
         file_type: analyticsFileType(name),
         channel_count: analyticsChannelCount(mainMml.value)
       });
-      setGoogleStatus("Drive MMI 불러옴");
+      setGoogleStatus(i18nText("drive.mmi_loaded"));
       return;
     }
     if (isGoogleDriveThreeMleFile(name, mimeType)) {
@@ -2635,7 +2912,7 @@
         setMainMml(normalized.mml);
       } catch (optErr) {
         setMainMml(loaded);
-        showDialog("MML 최적화 생략", `Drive 3MLE MML 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+        showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_3mle", [shortError(optErr)]));
       }
       googleDriveMmlFileId = "";
       googleDriveMmlFileName = "";
@@ -2643,12 +2920,12 @@
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
-      showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
+      showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
       trackAnalytics("drive_import_mml", {
         file_type: analyticsFileType(name),
         channel_count: analyticsChannelCount(mainMml.value)
       });
-      setGoogleStatus("Drive 3MLE MML 불러옴");
+      setGoogleStatus(i18nText("drive.mle3_loaded"));
       return;
     }
     if (isGoogleDriveTextMmlFile(name, mimeType)) {
@@ -2658,12 +2935,12 @@
         setMainMml(normalized.mml);
       } catch (optErr) {
         setMainMml(loaded);
-        showDialog("MML 최적화 생략", `Drive 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+        showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_file", [shortError(optErr)]));
       }
       googleDriveMmlFileId = sourceFileId;
       googleDriveMmlFileName = name;
       rememberSuggestedMmlSaveFileName(name);
-      showLoadedChannelCount(googleDriveLoadBtn, "Drive 불러옴", mainMml.value);
+      showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
@@ -2671,29 +2948,27 @@
         file_type: analyticsFileType(name),
         channel_count: analyticsChannelCount(mainMml.value)
       });
-      setGoogleStatus("Drive TXT 불러옴");
+      setGoogleStatus(i18nText("drive.txt_loaded"));
       return;
     }
-    throw new Error("지원하지 않는 Drive 파일입니다. mid, midi, musicxml, xml, mxl, mmi, mml 또는 txt 파일만 선택해 주세요.");
+    throw new Error(i18nText("drive.unsupported_file"));
   }
 
   async function saveMmlToGoogleDrive() {
     try {
       requireGoogleAccessToken();
-      setGoogleStatus(`${GOOGLE_MML_FOLDER_NAME} 폴더 확인 중...`);
+      setGoogleStatus(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]));
       const defaultFolderId = await ensureGoogleMmlFolder();
       let exportData;
       try {
         exportData = getFullMmlForExport();
       } catch (err) {
-        showDialog("Drive 저장 실패", `MML 최적화 중 문제가 발생했습니다.
-
-${shortError(err)}`);
+        showDialog(i18nText("drive.save_fail"), i18nText("mml.optimize_error_detail", [shortError(err)]));
         return;
       }
       const text = exportData.text;
       if (!text.trim()) {
-        showDialog("Drive 저장 실패", "저장할 MML이 비어 있습니다.");
+        showDialog(i18nText("drive.save_fail"), i18nText("mml.empty"));
         return;
       }
 
@@ -2711,7 +2986,7 @@ ${shortError(err)}`);
 
           let targetId = target.overwriteFileId || "";
           let createsNewFile = !targetId;
-          setGoogleStatus("Drive 저장 중...");
+          setGoogleStatus(i18nText("drive.saving"));
           let saved;
           try {
             saved = await uploadGoogleDriveTextFile({
@@ -2746,17 +3021,17 @@ ${shortError(err)}`);
         }
       });
       if (!result) {
-        setGoogleStatus("Drive 저장 취소");
+        setGoogleStatus(i18nText("drive.save_cancel"));
         return;
       }
-      flashButton(googleDriveSaveBtn, "Drive 저장 완료");
-      setGoogleStatus("Drive 저장 완료");
+      flashButton(googleDriveSaveBtn, i18nText("drive.save_done"));
+      setGoogleStatus(i18nText("drive.save_done"));
       trackAnalytics("drive_save_mml", {
         create_new: Boolean(result.createsNewFile),
         channel_count: analyticsChannelCount(text)
       });
     } catch (err) {
-      showDialog("Drive 저장 실패", shortError(err));
+      showDialog(i18nText("drive.save_fail"), shortError(err));
       updateGoogleDriveControls();
     }
   }
@@ -2769,7 +3044,7 @@ ${shortError(err)}`);
     return hasMidiPartSoundPreset() ? normalizePresetKeyArray(midiPartPresetKeys) : defaultPartPresetKeys();
   }
 
-  function sanitizeUserSoundPresetName(name, fallback = "음색 프리셋") {
+  function sanitizeUserSoundPresetName(name, fallback = i18nText("snd.preset")) {
     const text = String(name == null ? "" : name).replace(/\s+/g, " ").trim();
     return (text || fallback).slice(0, 40);
   }
@@ -2784,7 +3059,7 @@ ${shortError(err)}`);
     let id = String(raw.id || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
     if (!id || usedIds.has(id)) id = createUserSoundPresetId();
     usedIds.add(id);
-    const name = sanitizeUserSoundPresetName(raw.name, `음색 프리셋 ${index + 1}`);
+    const name = sanitizeUserSoundPresetName(raw.name, i18nText("snd.preset_default_name", [index + 1]));
     const keys = normalizePresetKeyArray(raw.keys);
     return { id, name, keys };
   }
@@ -2846,11 +3121,11 @@ ${shortError(err)}`);
     const currentValue = preferredValue || match;
     select.innerHTML = "";
 
-    select.appendChild(new Option("자동 음색", "auto"));
+    select.appendChild(new Option(i18nText("snd.auto"), "auto"));
 
     if (userSoundPresets.length) {
       const group = document.createElement("optgroup");
-      group.label = "저장한 프리셋";
+      group.label = i18nText("snd.saved");
       for (const preset of userSoundPresets) {
         group.appendChild(new Option(preset.name, userSoundPresetValue(preset.id)));
       }
@@ -2861,7 +3136,7 @@ ${shortError(err)}`);
     if (hasPreferred) {
       select.value = currentValue;
     } else if (match === "current") {
-      const current = new Option("현재 설정", "current");
+      const current = new Option(i18nText("cfg.current"), "current");
       current.disabled = true;
       current.selected = true;
       select.insertBefore(current, select.children[1] || null);
@@ -2870,8 +3145,7 @@ ${shortError(err)}`);
     }
   }
 
-  function updateSoundPresetControls(preferredDialogValue = null, preferredQuickValue = null) {
-    renderSoundPresetSelect(soundPresetQuickSelect, partPresetKeys, preferredQuickValue);
+  function updateSoundPresetControls(preferredDialogValue = null) {
     renderSoundPresetSelect(partSoundPresetSelect, draftPartPresetKeys || partPresetKeys, preferredDialogValue);
     updatePartSoundPresetDeleteState();
   }
@@ -2882,7 +3156,7 @@ ${shortError(err)}`);
     const canManage = Boolean(preset);
     if (partSoundPresetDelete) {
       partSoundPresetDelete.disabled = !canManage;
-      partSoundPresetDelete.title = canManage ? "선택한 저장 프리셋을 삭제합니다." : "저장한 프리셋을 선택했을 때만 삭제할 수 있습니다.";
+      partSoundPresetDelete.title = canManage ? i18nText("snd.delete_saved") : i18nText("snd.delete_select");
     }
   }
 
@@ -2891,19 +3165,6 @@ ${shortError(err)}`);
     const id = userSoundPresetIdFromValue(mode);
     const preset = id ? findUserSoundPreset(id) : null;
     return preset ? normalizePresetKeyArray(preset.keys) : null;
-  }
-
-  function applyQuickSoundPreset(mode) {
-    const keys = getPartPresetKeysForMode(mode);
-    if (!keys) {
-      updateSoundPresetControls();
-      return;
-    }
-    partPresetKeys = normalizePresetKeyArray(keys);
-    savePartSoundPrefs();
-    updateSoundPresetControls(null, mode);
-    rebuildSchedulePreviewSilently();
-    restartPlaybackAfterSoundChange();
   }
 
   function applyPartSoundPresetToDraft(mode) {
@@ -2929,48 +3190,45 @@ ${shortError(err)}`);
 
     if (basePreset) {
       if (samePresetKeys(keys, basePreset.keys)) {
-        showDialog("프리셋 저장", "변경된 음색이 없습니다.");
+        showDialog(i18nText("snd.preset_save"), i18nText("snd.no_settings"));
         updatePartSoundPresetDeleteState();
         return;
       }
-      const overwrite = window.confirm(`'${basePreset.name}' 프리셋에 덮어쓸까요?
-
-확인: 덮어쓰기
-취소: 새 프리셋으로 저장`);
+      const overwrite = window.confirm(i18nText("snd.preset_overwrite_confirm", [basePreset.name]));
       if (overwrite) {
         basePreset.keys = keys;
         target = basePreset;
-        message = `'${target.name}' 프리셋을 덮어썼습니다.`;
+        message = i18nText("snd.preset_overwritten", [target.name]);
       } else {
-        target = createSoundPresetFromPrompt(keys, `${basePreset.name} 복사`);
+        target = createSoundPresetFromPrompt(keys, i18nText("snd.preset_copy_name", [basePreset.name]));
         if (!target) return;
-        message = `'${target.name}' 프리셋을 새로 저장했습니다.`;
+        message = i18nText("snd.preset_saved_new", [target.name]);
       }
     } else {
-      target = createSoundPresetFromPrompt(keys, `음색 프리셋 ${userSoundPresets.length + 1}`);
+      target = createSoundPresetFromPrompt(keys, i18nText("snd.preset_default_name", [userSoundPresets.length + 1]));
       if (!target) return;
-      message = `'${target.name}' 프리셋을 저장했습니다.`;
+      message = i18nText("snd.preset_saved_named", [target.name]);
     }
 
     saveUserSoundPresetPrefs();
     draftPartPresetKeys = keys;
     draftSoundPresetBaseId = target.id;
     updateSoundPresetControls(userSoundPresetValue(target.id));
-    showDialog("프리셋 저장 완료", message);
+    showDialog(i18nText("snd.preset_saved"), message);
   }
 
   function createSoundPresetFromPrompt(keys, defaultName, excludeId = "") {
-    const input = window.prompt("저장할 음색 프리셋 이름을 입력하세요.", defaultName);
+    const input = window.prompt(i18nText("snd.name_required"), defaultName);
     if (input == null) return null;
     const name = sanitizeUserSoundPresetName(input, "");
     if (!name) {
-      showDialog("프리셋 저장 실패", "프리셋 이름을 입력해 주세요.");
+      showDialog(i18nText("snd.save_preset"), i18nText("snd.enter_preset"));
       return null;
     }
 
     let target = userSoundPresets.find(p => p.name === name && p.id !== excludeId) || null;
     if (target) {
-      if (!window.confirm(`이미 '${name}' 프리셋이 있습니다. 덮어쓸까요?`)) return null;
+      if (!window.confirm(i18nText("snd.preset_exists_confirm", [name]))) return null;
       target.keys = keys;
       return target;
     }
@@ -2984,37 +3242,31 @@ ${shortError(err)}`);
     const id = userSoundPresetIdFromValue(partSoundPresetSelect?.value);
     const preset = id ? findUserSoundPreset(id) : null;
     if (!preset) {
-      showDialog("프리셋 삭제 실패", "삭제할 저장 프리셋을 선택해 주세요.");
+      showDialog(i18nText("snd.delete_preset"), i18nText("snd.select_saved"));
       updatePartSoundPresetDeleteState();
       return;
     }
-    if (!window.confirm(`'${preset.name}' 프리셋을 삭제할까요?`)) return;
+    if (!window.confirm(i18nText("snd.preset_delete_confirm", [preset.name]))) return;
     userSoundPresets = userSoundPresets.filter(p => p.id !== id);
     saveUserSoundPresetPrefs();
     updateSoundPresetControls();
-    showDialog("프리셋 삭제 완료", `'${preset.name}' 프리셋을 삭제했습니다.`);
+    showDialog(i18nText("snd.preset_deleted"), i18nText("snd.preset_deleted_named", [preset.name]));
   }
 
   function updatePartMuteControl() {
-    const idx = getActiveEditorPartIndex();
-    const isAllTab = activeTabName === "main" || idx < 0;
-    const allMuted = partMuteStates.every(Boolean);
-    const anyMuted = partMuteStates.some(Boolean);
-    if (partMuteToggle) {
-      const mixed = isAllTab && anyMuted && !allMuted;
-      const label = isAllTab ? "전체 음소거" : "채널 음소거";
-      partMuteToggle.disabled = false;
-      partMuteToggle.indeterminate = mixed;
-      partMuteToggle.checked = isAllTab ? allMuted : Boolean(partMuteStates[idx]);
-      partMuteToggle.setAttribute("aria-checked", mixed ? "mixed" : (partMuteToggle.checked ? "true" : "false"));
-      partMuteToggle.setAttribute("aria-label", isAllTab ? label : `${PART_LABELS[idx]} ${label}`);
-      partMuteToggle.title = isAllTab
-        ? (allMuted
-          ? "모든 채널이 음소거되어 있습니다. 누르면 전체 음소거를 해제합니다."
-          : "하나 이상의 채널이 재생 상태입니다. 누르면 모든 채널을 음소거합니다.")
-        : `${PART_LABELS[idx]} 채널의 음소거 상태를 전환합니다.`;
+    const mutedCount = partMuteStates.filter(Boolean).length;
+    const label = i18nText("snd.mute");
+    if (partMuteLabel) partMuteLabel.textContent = label;
+    if (muteControlValue) muteControlValue.textContent = `${mutedCount}/6`;
+    if (muteControlButton) {
+      muteControlButton.classList.toggle("active", mutedCount > 0);
+      muteControlButton.setAttribute("aria-label", `${label} ${mutedCount}/6`);
+      muteControlButton.title = `${i18nText("snd.mute_channels")} ${mutedCount}/6`;
     }
-    if (partMuteLabel) partMuteLabel.textContent = isAllTab ? "전체 음소거" : "채널 음소거";
+    for (const checkbox of muteChannelCheckboxes) {
+      const index = clampInt(Number(checkbox.dataset.mutePart), 0, 5);
+      checkbox.checked = Boolean(partMuteStates[index]);
+    }
     for (let i = 0; i < 6; i++) {
       const tab = tabs.find(t => t.dataset.tab === `part${i}`);
       if (tab) tab.classList.toggle("muted", Boolean(partMuteStates[i]));
@@ -3028,21 +3280,6 @@ ${shortError(err)}`);
     activePlaybackScanSignature = "";
   }
 
-  function getNextPartMuteStates() {
-    const nextStates = Array.from({ length: 6 }, (_, i) => Boolean(partMuteStates[i]));
-    const activePartIndex = getActiveEditorPartIndex();
-    const isAllTab = activeTabName === "main" || activePartIndex < 0;
-    if (isAllTab) {
-      // 전체 MML 탭: 하나라도 음소거가 아니면 모두 음소거하고,
-      // 여섯 채널이 전부 음소거 상태일 때만 모두 해제한다.
-      const muteAll = nextStates.some(muted => !muted);
-      nextStates.fill(muteAll);
-      return nextStates;
-    }
-
-    nextStates[activePartIndex] = !nextStates[activePartIndex];
-    return nextStates;
-  }
 
   function applyPartMuteStates(nextStates) {
     const wasPlaying = isPlaying;
@@ -3065,15 +3302,17 @@ ${shortError(err)}`);
     }
   }
 
-  function handlePartMuteToggleClick() {
-    if (!partMuteToggle) {
-      updatePartMuteControl();
-      return;
+  function handleMuteChannelChange() {
+    const nextStates = Array.from({ length: 6 }, () => false);
+    for (const checkbox of muteChannelCheckboxes) {
+      const index = clampInt(Number(checkbox.dataset.mutePart), 0, 5);
+      nextStates[index] = Boolean(checkbox.checked);
     }
+    applyPartMuteStates(nextStates);
+  }
 
-    // 네이티브 체크박스가 방금 만든 checked 값은 사용하지 않는다.
-    // 현재 저장된 채널 상태만 기준으로 토글하면 전체/부분 음소거에서도 동작이 일정하다.
-    applyPartMuteStates(getNextPartMuteStates());
+  function setAllPartMuteStates(muted) {
+    applyPartMuteStates(Array.from({ length: 6 }, () => Boolean(muted)));
   }
 
   function restartPlaybackAfterSoundChange() {
@@ -3083,34 +3322,43 @@ ${shortError(err)}`);
     void playFromCurrent();
   }
 
-  function handleSoundSourceChange() {
-    const action = soundSource.value;
-    resetSoundActionMenu();
-    if (action === "default") {
-      useDefaultSound();
-    } else if (action === "custom") {
-      openSf2Picker();
-    }
+  function setSoundFontControlsBusy(busy) {
+    if (soundFontLoadBtn) soundFontLoadBtn.disabled = Boolean(busy);
+    if (soundFontResetBtn) soundFontResetBtn.disabled = Boolean(busy);
   }
 
-  function resetSoundActionMenu() {
-    // select를 동작 메뉴처럼 사용한다. 선택 후 빈 값으로 되돌리면 같은 메뉴를 다시 선택해도 change가 발생한다.
-    soundSource.value = "";
+  function updateSoundFontUi(message = "") {
+    if (soundName) soundName.textContent = message || sf2Name || DEFAULT_SF2_FILE_NAME;
   }
 
   function openSf2Picker() {
-    // 같은 SF2 파일을 다시 선택해도 change 이벤트가 발생하도록 매번 초기화한다.
+    if (!sf2File) return;
     sf2File.value = "";
     sf2File.click();
   }
 
-  function useDefaultSound() {
+  async function restoreDefaultSoundFont(options = {}) {
+    const silent = Boolean(options?.silent);
     stopPlayback(false);
+    stopMidiPreview();
+    setSoundFontControlsBusy(true);
     soundFont = null;
-    sf2Name = "기본 사운드";
-    sf2File.value = "";
-    resetSoundActionMenu();
-    soundName.textContent = "기본 사운드";
+    sf2Name = DEFAULT_SF2_FILE_NAME;
+    if (sf2File) sf2File.value = "";
+    updateSoundFontUi(i18nText("snd.reading_sf2"));
+    try {
+      await loadDefaultSf2IfNeeded();
+      if (partSoundDialog?.open) {
+        draftPartPresetKeys = normalizePresetKeyArray(draftPartPresetKeys || partPresetKeys);
+        renderPartSoundRows();
+        updateSoundPresetControls();
+      }
+    } catch (err) {
+      updateSoundFontUi(DEFAULT_SF2_FILE_NAME);
+      if (!silent) showDialog(i18nText("snd.load_sf2"), shortError(err));
+    } finally {
+      setSoundFontControlsBusy(false);
+    }
   }
 
   function openSourceFilePicker() {
@@ -3140,7 +3388,7 @@ ${shortError(err)}`);
 
   async function loadLocalSourceFile(file) {
     if (!file) return;
-    const name = file.name || "선택한 파일";
+    const name = file.name || i18nText("file.selected");
     const ext = getSourceFileExtension(name);
     googleDriveMmlFileId = "";
     googleDriveMmlFileName = "";
@@ -3179,10 +3427,10 @@ ${shortError(err)}`);
           setMainMml(normalized.mml);
         } catch (optErr) {
           setMainMml(loaded);
-          showDialog("MML 최적화 생략", `MMI 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+          showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_mmi", [shortError(optErr)]));
         }
         rememberSuggestedMmlSaveFileName(name);
-        showLoadedChannelCount(midiLoadBtn, "불러옴", mainMml.value);
+        showLoadedChannelCount(midiLoadBtn, i18nText("st.loaded"), mainMml.value);
         trackAnalytics("local_import_mml", {
           file_type: analyticsFileType(ext),
           file_size: analyticsFileSizeBucket(file.size),
@@ -3197,10 +3445,10 @@ ${shortError(err)}`);
           setMainMml(normalized.mml);
         } catch (optErr) {
           setMainMml(loaded);
-          showDialog("MML 최적화 생략", `3MLE MML 파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+          showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_3mle", [shortError(optErr)]));
         }
         rememberSuggestedMmlSaveFileName(name);
-        showLoadedChannelCount(midiLoadBtn, "불러옴", mainMml.value);
+        showLoadedChannelCount(midiLoadBtn, i18nText("st.loaded"), mainMml.value);
         trackAnalytics("local_import_mml", {
           file_type: analyticsFileType(ext),
           file_size: analyticsFileSizeBucket(file.size),
@@ -3214,19 +3462,19 @@ ${shortError(err)}`);
           setMainMml(normalized.mml);
         } catch (optErr) {
           setMainMml(loaded);
-          showDialog("MML 최적화 생략", `파일은 불러왔지만 문법 오류 때문에 자동 최적화는 생략했습니다.\n\n${shortError(optErr)}`);
+          showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_file", [shortError(optErr)]));
         }
-        showLoadedChannelCount(midiLoadBtn, "불러옴", mainMml.value);
+        showLoadedChannelCount(midiLoadBtn, i18nText("st.loaded"), mainMml.value);
         trackAnalytics("local_import_mml", {
           file_type: analyticsFileType(ext),
           file_size: analyticsFileSizeBucket(file.size),
           channel_count: analyticsChannelCount(mainMml.value)
         });
       } else {
-        throw new Error("지원하지 않는 파일입니다. mid, midi, musicxml, xml, mxl, mmi, mml, txt 파일을 선택해 주세요.");
+        throw new Error(i18nText("xml.unsupported_file"));
       }
     } catch (err) {
-      showDialog("파일 불러오기 실패", shortError(err));
+      showDialog(i18nText("file.load_fail"), shortError(err));
     }
   }
 
@@ -3242,7 +3490,7 @@ ${shortError(err)}`);
       if (hasOpenAppDialog()) return;
       const file = findFirstSupportedSourceFile(event.dataTransfer?.files);
       if (!file) {
-        showDialog("파일 불러오기 실패", "드래그 앤 드롭은 mid, midi, musicxml, xml, mxl, mmi, mml, txt 파일만 지원합니다.");
+        showDialog(i18nText("file.load_fail"), i18nText("xml.drag_drop"));
         return;
       }
       void loadLocalSourceFile(file);
@@ -3282,11 +3530,11 @@ ${shortError(err)}`);
   function readMmlTextFile(text) {
     const raw = String(text || "").replace(/^\uFEFF/, "").trim();
     if (!/^MML\s*@/i.test(raw)) {
-      throw new Error("TXT 파일은 MML@...; 형식이어야 합니다.");
+      throw new Error(i18nText("mml.txt_files"));
     }
     const m = raw.match(/^MML\s*@([\s\S]*);\s*$/i);
     if (!m) {
-      throw new Error("MML 끝에 세미콜론(;)이 필요합니다.");
+      throw new Error(i18nText("mml.semicolon_required"));
     }
     // 채널 내부 문법은 여기서 검사하지 않는다. 잘못된 명령은 편집기에서 빨간 배경으로 표시한다.
     return normalizeMmlForDisplay(raw);
@@ -3306,17 +3554,17 @@ ${shortError(err)}`);
   function showLoadedChannelCount(button, label, text) {
     const count = countMmlChannels(text);
     if (count > 0) {
-      flashButton(button, `${formatCount(count)}채널`);
+      flashButton(button, i18nText("ui.channel_count", [formatCount(count)]));
       return;
     }
-    flashButton(button, label || "불러옴");
+    flashButton(button, label || i18nText("st.loaded"));
   }
 
-  async function readMabiIccoMmiFile(data, name = "MMI 파일") {
+  async function readMabiIccoMmiFile(data, name = i18nText("file.mmi")) {
     const text = decodeTextFileBytes(data).replace(/^\uFEFF/, "");
     const candidates = extractMabiIccoMmlPartCandidates(text);
     if (!candidates.length) {
-      throw new Error(`${name}에서 MML 코드를 찾지 못했습니다.`);
+      throw new Error(i18nText("mml.code_not_found", [name]));
     }
     const selectedParts = await openMmiImportDialog(candidates, name);
     if (!selectedParts) return null;
@@ -3327,7 +3575,7 @@ ${shortError(err)}`);
     return normalizeMmlForDisplay(composeMml(normalizedParts, { preserveEmpty: true, partCount: MMI_IMPORT_MAX_CHANNELS }));
   }
 
-  async function readThreeMleMmlFile(data, name = "3MLE MML 파일") {
+  async function readThreeMleMmlFile(data, name = i18nText("mml.mle3_file")) {
     const text = decodeTextFileBytes(data).replace(/^\uFEFF/, "");
     if (/^\s*MML\s*@/i.test(text)) {
       return readMmlTextFile(text);
@@ -3335,7 +3583,7 @@ ${shortError(err)}`);
     const globalTempo = extractThreeMleGlobalTempo(text);
     const candidates = applyThreeMleGlobalTempoToCandidates(extractThreeMleMmlPartCandidates(text), globalTempo);
     if (!candidates.length) {
-      throw new Error(`${name}에서 3MLE MML 채널을 찾지 못했습니다.`);
+      throw new Error(i18nText("mml.mle3_channels_not_found", [name]));
     }
     const selectedParts = await openMmiImportDialog(candidates, name);
     if (!selectedParts) return null;
@@ -3347,10 +3595,10 @@ ${shortError(err)}`);
   }
 
 
-  function openMmiImportDialog(candidates, name = "MMI 파일") {
+  function openMmiImportDialog(candidates, name = i18nText("file.mmi")) {
     const normalizedCandidates = (candidates || [])
       .map((candidate, index) => ({
-        label: candidate.label || `채널 ${index + 1}`,
+        label: candidate.label || i18nText("ui.channel_n", [index + 1]),
         value: cleanupMmiMmlValue(candidate.value || ""),
         index
       }))
@@ -3358,7 +3606,7 @@ ${shortError(err)}`);
       .slice(0, MMI_IMPORT_MAX_DETECTED_PARTS);
 
     if (!normalizedCandidates.length) {
-      throw new Error(`${name}에서 불러올 수 있는 MML 채널을 찾지 못했습니다.`);
+      throw new Error(i18nText("mml.import_channels_not_found", [name]));
     }
 
     if (!mmiImportDialog?.showModal || !mmiChannelList) {
@@ -3376,31 +3624,28 @@ ${shortError(err)}`);
     });
   }
 
-  function renderMmiImportDialog(name = "MMI 파일") {
+  function renderMmiImportDialog(name = i18nText("file.mmi")) {
     if (!pendingMmiImport || !mmiChannelList) return;
     const candidates = pendingMmiImport.candidates || [];
-    if (mmiImportTitle) {
-      mmiImportTitle.textContent = `MML 채널 선택 · 총 ${formatCount(candidates.length)}개`;
-    }
     if (mmiImportSummary) {
-      mmiImportSummary.textContent = `${name}에서 ${formatCount(candidates.length)}개의 MML 채널을 찾았습니다. 불러올 채널을 최대 ${MMI_IMPORT_MAX_CHANNELS}개까지 선택해 주세요.`;
+      mmiImportSummary.textContent = i18nText("mml.import_summary", [name, formatCount(candidates.length), MMI_IMPORT_MAX_CHANNELS]);
     }
     mmiChannelList.innerHTML = candidates.map((candidate, index) => {
       const normalized = normalizeMmiLegacyLengthsInPart(candidate.value);
       const changed = normalized !== candidate.value;
       const checked = index < MMI_IMPORT_MAX_CHANNELS ? " checked" : "";
-      const preview = normalized.replace(/\s+/g, " ").slice(0, 180) || "빈 채널";
-      const meta = [`${formatCount(normalized.length)}자`];
-      if (changed) meta.push("길이 보정");
+      const preview = normalized.replace(/\s+/g, " ").slice(0, 180) || i18nText("ui.empty_ch");
+      const meta = [i18nText("ui.char_count", [formatCount(normalized.length)])];
+      if (changed) meta.push(i18nText("ui.length_correction"));
       return `
         <div class="mmi-channel-row${checked ? " selected" : ""}" data-mmi-row="${index}">
-          <input class="mmi-channel-check" type="checkbox" value="${index}"${checked} aria-label="${escapeHtml(candidate.label || `채널 ${index + 1}`)} 선택" />
+          <input class="mmi-channel-check" type="checkbox" value="${index}"${checked} aria-label="${escapeHtml(i18nText("aria.select_item", [candidate.label || i18nText("ui.channel_n", [index + 1])]))}" />
           <span class="mmi-channel-main">
-            <strong>${escapeHtml(candidate.label || `채널 ${index + 1}`)}</strong>
+            <strong>${escapeHtml(candidate.label || i18nText("ui.channel_n", [index + 1]))}</strong>
             <small>${escapeHtml(meta.join(" · "))}</small>
           </span>
           <code>${escapeHtml(preview)}${normalized.length > 180 ? "…" : ""}</code>
-          <button class="mmi-preview-btn" type="button" data-mmi-preview="${index}" aria-label="${escapeHtml(candidate.label || `채널 ${index + 1}`)} 듣기">듣기</button>
+          <button class="mmi-preview-btn" type="button" data-mmi-preview="${index}" aria-label="${escapeHtml(i18nText("aria.listen_item", [candidate.label || i18nText("ui.channel_n", [index + 1])]))}">${escapeHtml(i18nText("ui.listen"))}</button>
         </div>`;
     }).join("");
     Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check")).forEach(input => {
@@ -3445,20 +3690,26 @@ ${shortError(err)}`);
     updateMmiImportSelectionState();
   }
 
+  function setMmiImportStatus(message = "") {
+    if (!mmiImportStatus) return;
+    const text = String(message || "");
+    mmiImportStatus.textContent = text;
+    mmiImportStatus.closest(".mmi-import-status-row")?.toggleAttribute("hidden", !text);
+  }
+
   function updateMmiImportSelectionState() {
     if (!mmiChannelList) return;
     const checks = Array.from(mmiChannelList.querySelectorAll(".mmi-channel-check"));
     const checked = checks.filter(input => input.checked);
     const checkedCount = checked.length;
+    if (mmiImportTitle) {
+      mmiImportTitle.textContent = i18nText("mml.select_chs_total", [checkedCount, MMI_IMPORT_MAX_CHANNELS]);
+    }
     for (const input of checks) {
       input.disabled = !input.checked && checkedCount >= MMI_IMPORT_MAX_CHANNELS;
       input.closest(".mmi-channel-row")?.classList.toggle("selected", Boolean(input.checked));
     }
-    if (mmiImportStatus) {
-      mmiImportStatus.textContent = checkedCount
-        ? `선택 ${checkedCount}/${MMI_IMPORT_MAX_CHANNELS}개`
-        : "불러올 채널을 1개 이상 선택해 주세요.";
-    }
+    setMmiImportStatus(checkedCount ? "" : i18nText("msg.select_one_ch"));
     if (mmiFullPreviewBtn) mmiFullPreviewBtn.disabled = checkedCount < 1 && splitPreviewButton !== mmiFullPreviewBtn;
     if (mmiAllPreviewBtn) mmiAllPreviewBtn.disabled = getAllMmiImportParts().length < 1 && splitPreviewButton !== mmiAllPreviewBtn;
     if (mmiImportClear) mmiImportClear.disabled = checkedCount < 1;
@@ -3486,15 +3737,15 @@ ${shortError(err)}`);
 
     const selectedParts = getSelectedMmiImportParts();
     if (!selectedParts.length) {
-      if (mmiImportStatus) mmiImportStatus.textContent = "선택 듣기를 하려면 채널을 1개 이상 선택해 주세요.";
+      setMmiImportStatus(i18nText("msg.select_one_ch_2"));
       return;
     }
 
     trackAnalytics("preview_mml_start", { scope: "selected", channel_count: selectedParts.length });
     await playMmiImportPartsPreview(selectedParts, {
       button,
-      statusText: `선택 ${selectedParts.length}/${MMI_IMPORT_MAX_CHANNELS}개 미리듣기 중...`,
-      errorPrefix: "선택 듣기 실패"
+      statusText: i18nText("mml.preview_selected_status", [selectedParts.length, MMI_IMPORT_MAX_CHANNELS]),
+      errorPrefix: i18nText("err.preview_select")
     });
   }
 
@@ -3509,15 +3760,15 @@ ${shortError(err)}`);
 
     const allParts = getAllMmiImportParts();
     if (!allParts.length) {
-      if (mmiImportStatus) mmiImportStatus.textContent = "전부 듣기를 하려면 파일 안에 MML 채널이 1개 이상 있어야 합니다.";
+      setMmiImportStatus(i18nText("mml.file_contain"));
       return;
     }
 
     trackAnalytics("preview_mml_start", { scope: "all", channel_count: allParts.length });
     await playMmiImportPartsPreview(allParts, {
       button,
-      statusText: `전체 ${allParts.length}개 채널 미리듣기 중...`,
-      errorPrefix: "전부 미리듣기 실패",
+      statusText: i18nText("mml.preview_all_status", [allParts.length]),
+      errorPrefix: i18nText("err.preview_all"),
       allowManyParts: true
     });
   }
@@ -3535,7 +3786,7 @@ ${shortError(err)}`);
       .map(part => normalizeMmiLegacyLengthsInPart(cleanupMmiMmlValue(part || "")))
       .filter(part => part.trim());
     if (!parts.length) {
-      if (mmiImportStatus) mmiImportStatus.textContent = "미리들을 MML 채널이 없습니다.";
+      setMmiImportStatus(i18nText("mml.no_chs"));
       return;
     }
 
@@ -3543,17 +3794,17 @@ ${shortError(err)}`);
       stopPlayback(false);
       stopMidiPreview();
       if (button) setSplitPreviewButton(button);
-      if (mmiImportStatus) mmiImportStatus.textContent = options.statusText || "미리듣기 중...";
+      setMmiImportStatus(options.statusText || i18nText("ui.preview_wait"));
 
       await loadDefaultSf2IfNeeded();
       const ctx = await ensureAudioContext();
       const scheduled = buildMmiImportPreviewSchedule(parts, { allowManyParts: Boolean(options.allowManyParts) });
       const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
-      if (!notes.length) throw new Error("미리들을 음표가 없습니다.");
-      if (!soundFont?.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+      if (!notes.length) throw new Error(i18nText("msg.no_notes_preview"));
+      if (!soundFont?.presets?.length) throw new Error(i18nText("snd.find_avail"));
 
       const prepared = prepareMmiImportPreviewNotes(ctx, notes, parts.length);
-      if (!prepared.length) throw new Error("소리 나는 음표가 없습니다.");
+      if (!prepared.length) throw new Error(i18nText("msg.no_audible"));
 
       const duration = notes.reduce((m, n) => Math.max(m, (Number(n.start) || 0) + (Number(n.durationSec) || 0)), 0);
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
@@ -3576,7 +3827,7 @@ ${shortError(err)}`);
       }, stopMs);
     } catch (err) {
       stopMidiPreview();
-      if (mmiImportStatus) mmiImportStatus.textContent = `${options.errorPrefix || "미리듣기 실패"}: ${shortError(err)}`;
+      setMmiImportStatus(i18nText("err.with_detail", [options.errorPrefix || i18nText("err.preview"), shortError(err)]));
     }
   }
 
@@ -3644,11 +3895,11 @@ ${shortError(err)}`);
       stopMidiPreview();
       if (button) setSplitPreviewButton(button);
       if (button) {
-        button.textContent = "정지";
+        button.textContent = i18nText("player.stop");
         button.classList.add("danger");
         button.setAttribute("aria-pressed", "true");
       }
-      if (mmiImportStatus) mmiImportStatus.textContent = `${candidate.label || "선택 채널"} 미리듣기 중...`;
+      setMmiImportStatus(i18nText("mml.preview_channel_status", [candidate.label || i18nText("ui.channel_selected")]));
       trackAnalytics("preview_mml_start", { scope: "channel", channel_count: 1 });
 
       await loadDefaultSf2IfNeeded();
@@ -3658,18 +3909,18 @@ ${shortError(err)}`);
       const parsed = parseMabinogiMml(mml);
       const scheduled = buildSchedule(parsed);
       const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
-      if (!notes.length) throw new Error("미리들을 음표가 없습니다.");
-      if (!soundFont?.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+      if (!notes.length) throw new Error(i18nText("msg.no_notes_preview"));
+      if (!soundFont?.presets?.length) throw new Error(i18nText("snd.find_avail"));
 
       const firstStart = notes.reduce((m, n) => Math.min(m, Number(n.start) || 0), Infinity);
       const lastEnd = notes.reduce((m, n) => Math.max(m, (Number(n.start) || 0) + (Number(n.durationSec) || 0)), 0);
       const fromSec = Number.isFinite(firstStart) ? Math.max(0, firstStart) : 0;
       const windowEnd = Math.min(lastEnd, fromSec + 10);
       const preset = getPartPreset(0);
-      if (!preset) throw new Error("미리듣기에 사용할 음색을 찾지 못했습니다.");
+      if (!preset) throw new Error(i18nText("snd.find_preview"));
       const prepared = prepareNotes(ctx, soundFont, preset, notes).sort((a, b) => a.start - b.start || a.midi - b.midi);
       for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
-      if (!prepared.length) throw new Error("소리 나는 음표가 없습니다.");
+      if (!prepared.length) throw new Error(i18nText("msg.no_audible"));
       const gainScale = computeAutoGainScale(prepared, { windowStart: fromSec, windowEnd });
 
       const result = schedulePreparedNotes(ctx, prepared, {
@@ -3691,7 +3942,7 @@ ${shortError(err)}`);
       }, stopMs);
     } catch (err) {
       stopMidiPreview();
-      if (mmiImportStatus) mmiImportStatus.textContent = `미리듣기 실패: ${shortError(err)}`;
+      setMmiImportStatus(i18nText("err.with_detail", [i18nText("err.preview"), shortError(err)]));
     }
   }
 
@@ -3699,7 +3950,7 @@ ${shortError(err)}`);
     if (!pendingMmiImport || !mmiChannelList) return;
     const selectedParts = getSelectedMmiImportParts();
     if (!selectedParts.length) {
-      if (mmiImportStatus) mmiImportStatus.textContent = "불러올 채널을 1개 이상 선택해 주세요.";
+      setMmiImportStatus(i18nText("msg.select_one_ch"));
       return;
     }
     resolveMmiImportDialog(selectedParts);
@@ -4186,27 +4437,27 @@ ${shortError(err)}`);
     const groups = overview.instrumentGroups || overview.channels || [];
     if (!groups.length) {
       pendingMidiImport = null;
-      throw new Error(`변환할 수 있는 ${sourceLabel} 악기 그룹을 찾지 못했습니다.`);
+      throw new Error(i18nText("midi.group_not_found", [sourceLabel]));
     }
 
     const normalGroups = groups.filter(g => !g.isBeat);
     const beatGroups = groups.filter(g => g.isBeat);
     pendingMidiSettings = createDefaultMidiSettings(groups, Boolean(overview.hasBeatGroups));
 
-    if (midiConvertTitle) midiConvertTitle.textContent = `${sourceLabel} 변환 설정`;
-    if (midiGuideBox) midiGuideBox.setAttribute("aria-label", `${sourceLabel} 변환 설정 안내`);
-    if (midiGuideLead) midiGuideLead.textContent = `이 창은 ${sourceLabel} 파일의 악기들을 마비노기 MML 최대 6채널로 나눠 넣는 설정입니다.`;
+    if (midiConvertTitle) midiConvertTitle.textContent = i18nText("cfg.conv_cfg", [sourceLabel]);
+    if (midiGuideBox) midiGuideBox.setAttribute("aria-label", i18nText("midi.guide_label", [sourceLabel]));
+    if (midiGuideLead) midiGuideLead.textContent = i18nText("midi.guide_lead", [sourceLabel]);
     if (midiConvertSummary) {
       const trackCount = Number(overview.trackCount) || 0;
-      midiConvertSummary.textContent = `${importData.name || sourceLabel} · 트랙 ${formatCount(trackCount)}개 · 변환 후보 채널 ${formatCount(groups.length)}개 · 노트 ${formatCount(overview.noteCount)}개 · 일반 ${formatCount(normalGroups.length)}개 / 비트 ${formatCount(beatGroups.length)}개 · PPQ ${overview.ppq}`;
+      midiConvertSummary.textContent = i18nText("midi.summary", [importData.name || sourceLabel, formatCount(trackCount), formatCount(groups.length), formatCount(overview.noteCount), formatCount(normalGroups.length), formatCount(beatGroups.length), overview.ppq]);
     }
     if (midiBeatNotice) {
       const beatInstrumentCount = beatGroups.length;
       midiBeatNotice.hidden = false;
       midiBeatNotice.classList.toggle("has-beat", beatInstrumentCount > 0);
       midiBeatNotice.textContent = beatInstrumentCount > 0
-        ? `${formatCount(beatInstrumentCount)}개의 비트 악기가 있습니다.`
-        : "비트 악기가 없습니다.";
+        ? i18nText("midi.beat_count", [formatCount(beatInstrumentCount)])
+        : i18nText("snd.no_beat_inst");
     }
     setMidiFullPreviewState(false);
     setMidiConvertBusy(false);
@@ -4264,34 +4515,34 @@ ${shortError(err)}`);
       row.className = `midi-role-row midi-export-channel part-${i}`;
       row.dataset.channelIndex = String(i);
       const selectOptions = [
-        `<option value="auto" ${setting.role === "auto" ? "selected" : ""}>자동</option>`,
-        `<option value="high" ${setting.role === "high" ? "selected" : ""}>고음</option>`,
-        `<option value="low" ${setting.role === "low" ? "selected" : ""}>저음</option>`,
-        allowBeat ? `<option value="beat" ${setting.role === "beat" ? "selected" : ""}>비트</option>` : ""
+        `<option value="auto" ${setting.role === "auto" ? "selected" : ""}>${escapeHtml(i18nText("ui.auto"))}</option>`,
+        `<option value="high" ${setting.role === "high" ? "selected" : ""}>${escapeHtml(i18nText("ui.high"))}</option>`,
+        `<option value="low" ${setting.role === "low" ? "selected" : ""}>${escapeHtml(i18nText("ui.low"))}</option>`,
+        allowBeat ? `<option value="beat" ${setting.role === "beat" ? "selected" : ""}>${escapeHtml(i18nText("ui.beat"))}</option>` : ""
       ].join("");
       const mergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
       setting.overlapMergeMode = mergeMode;
       setting.overlapMerge = mergeMode !== "none";
       const mergeOptions = OVERLAP_MERGE_OPTIONS.map(opt =>
-        `<option value="${opt.value}" ${mergeMode === opt.value ? "selected" : ""}>${opt.label}</option>`
+        `<option value="${opt.value}" ${mergeMode === opt.value ? "selected" : ""}>${escapeHtml(i18nText(opt.labelKey))}</option>`
       ).join("");
       const rightControl = `<label class="merge-mode">
-          <span>겹침</span>
-          <select data-merge-index="${i}" aria-label="${PART_LABELS[i]} 겹침 병합 방식">
+          <span>${escapeHtml(i18nText("ui.overlap"))}</span>
+          <select data-merge-index="${i}" aria-label="${escapeHtml(i18nText("aria.merge_mode", [PART_LABELS[i]]))}">
             ${mergeOptions}
           </select>
-          <span>병합</span>
+          <span>${escapeHtml(i18nText("ui.merge"))}</span>
         </label>`;
       row.innerHTML = `
-        <button class="midi-channel-select" type="button" data-midi-channel-select="${i}" aria-label="${PART_LABELS[i]} 악기 선택">
+        <button class="midi-channel-select" type="button" data-midi-channel-select="${i}" aria-label="${escapeHtml(i18nText("aria.select_instruments", [PART_LABELS[i]]))}">
           <span class="midi-export-label">${PART_LABELS[i]}</span>
           <span class="midi-export-summary">${escapeHtml(summarizeMidiChannelInstruments(i))}</span>
         </button>
-        <select data-role-index="${i}" aria-label="${PART_LABELS[i]} 역할">
+        <select data-role-index="${i}" aria-label="${escapeHtml(i18nText("aria.role", [PART_LABELS[i]]))}">
           ${selectOptions}
         </select>
         ${rightControl}
-        <button class="midi-role-preview-btn" type="button" data-midi-part-preview="${i}" aria-label="${PART_LABELS[i]} 미리 듣기">듣기</button>
+        <button class="midi-role-preview-btn" type="button" data-midi-part-preview="${i}" aria-label="${escapeHtml(i18nText("aria.preview", [PART_LABELS[i]]))}">${escapeHtml(i18nText("ui.listen"))}</button>
       `;
       row.querySelector("button")?.addEventListener("click", () => {
         pendingMidiSettings.activeIndex = i;
@@ -4398,7 +4649,7 @@ ${shortError(err)}`);
     const setting = pendingMidiSettings.channels[index];
     const allowed = getAllowedMidiGroupsForSetting(setting);
     const selectedCount = allowed.filter(g => setting.selectedInstrumentGroups.has(g.id)).length;
-    return `악기 ${formatCount(selectedCount)}개 선택`;
+    return i18nText("midi.selected_inst_count", [formatCount(selectedCount)]);
   }
 
   function normalizeOverlapMergeMode(value) {
@@ -4415,7 +4666,7 @@ ${shortError(err)}`);
     for (let i = 0; i < 6; i++) {
       const setting = pendingMidiSettings.channels[i];
       if (setting?.selectedInstrumentGroups?.has(groupId)) {
-        items.push({ index: i, label: PART_LABELS[i] || `${i + 1}번` });
+        items.push({ index: i, label: PART_LABELS[i] || i18nText("ui.numbered", [i + 1]) });
       }
     }
     return items;
@@ -4424,7 +4675,7 @@ ${shortError(err)}`);
   function renderMidiGroupSelectedChips(groupId) {
     const items = getMidiGroupSelectedChannels(groupId);
     if (!items.length) return '<span class="midi-part-chip empty">-</span>';
-    const shortLabel = (item) => item.index === 0 ? "멜" : String(item.index);
+    const shortLabel = (item) => item.index === 0 ? i18nText("ui.mel") : String(item.index);
     return items.map(item => `<span class="midi-part-chip part-${item.index}" title="${escapeHtml(item.label)}">${escapeHtml(shortLabel(item))}</span>`).join("");
   }
 
@@ -4514,11 +4765,11 @@ ${shortError(err)}`);
     const setting = getActiveMidiChannelSetting();
     const groups = getAllowedMidiGroupsForSetting(setting);
     const isBeat = setting?.role === "beat";
-    if (midiInstrumentPanelTitle) midiInstrumentPanelTitle.textContent = `${PART_LABELS[activeIndex]} 악기 선택`;
+    if (midiInstrumentPanelTitle) midiInstrumentPanelTitle.textContent = i18nText("midi.panel_title", [PART_LABELS[activeIndex]]);
     if (midiInstrumentPanelHint) {
       midiInstrumentPanelHint.textContent = isBeat
-        ? "비트 채널에는 비트 악기를 배정할 수 있습니다."
-        : "각 채널마다 여러 악기를 배정할 수 있습니다.";
+        ? i18nText("snd.beat_inst_assigned")
+        : i18nText("snd.multiple_inst");
     }
     syncMidiInstrumentPanelActions(groups);
 
@@ -4528,13 +4779,13 @@ ${shortError(err)}`);
       section.className = "midi-instrument-section empty";
       section.innerHTML = `
         <div class="midi-instrument-section-head">
-          <strong>${isBeat ? "비트 악기" : "일반 악기"}</strong>
-          ${isBeat ? `<span>드럼·북·스네어·심벌즈 계열</span>` : ""}
+          <strong>${escapeHtml(i18nText(isBeat ? "snd.beat_inst" : "snd.melodic_inst"))}</strong>
+          ${isBeat ? `<span>${escapeHtml(i18nText("msg.drums_toms"))}</span>` : ""}
         </div>
       `;
       const empty = document.createElement("div");
       empty.className = "midi-instrument-empty";
-      empty.textContent = isBeat ? "선택할 비트 악기가 없습니다." : "선택할 일반 악기가 없습니다.";
+      empty.textContent = isBeat ? i18nText("snd.no_beat_inst_2") : i18nText("snd.no_melodic");
       section.appendChild(empty);
       midiChannelList.appendChild(section);
       scheduleMidiInstrumentListHeightSync();
@@ -4548,14 +4799,14 @@ ${shortError(err)}`);
       row.innerHTML = `
         <input type="checkbox" value="${escapeHtml(group.id)}" ${setting.selectedInstrumentGroups.has(group.id) ? "checked" : ""} />
         <label class="midi-channel-main" for="${escapeHtml(id)}">
-          <strong>${escapeHtml(group.instrumentName || group.programText || "악기 정보 없음")}</strong>
+          <strong>${escapeHtml(group.instrumentName || group.programText || i18nText("snd.no_inst"))}</strong>
         </label>
-        <div class="midi-instrument-selected-parts" aria-label="선택된 MML 채널">${renderMidiGroupSelectedChips(group.id)}</div>
-        <button class="midi-preview-btn" type="button" data-midi-preview="${escapeHtml(group.id)}">듣기</button>
+        <div class="midi-instrument-selected-parts" aria-label="${escapeHtml(i18nText("mml.chs"))}">${renderMidiGroupSelectedChips(group.id)}</div>
+        <button class="midi-preview-btn" type="button" data-midi-preview="${escapeHtml(group.id)}">${escapeHtml(i18nText("ui.listen"))}</button>
         <span class="midi-channel-sub">
-          노트 ${formatCount(group.noteCount)}개 · ${escapeHtml(group.rangeText || "노트 없음")}
-          ${group.duplicateMerged ? `<em>64분음표 기준 완전 중복 ${formatCount(group.duplicateMerged)}개 병합 예정</em>` : ""}
-          ${group.isBeat ? `<em>비트 그룹</em>` : ""}
+          ${escapeHtml(i18nText("snd.note_count_range", [formatCount(group.noteCount), group.rangeText || i18nText("ui.no_notes")]))}
+          ${group.duplicateMerged ? `<em>${escapeHtml(i18nText("snd.dup_merge", [formatCount(group.duplicateMerged)]))}</em>` : ""}
+          ${group.isBeat ? `<em>${escapeHtml(i18nText("ui.beat_group"))}</em>` : ""}
         </span>
       `;
       const input = row.querySelector("input");
@@ -4582,8 +4833,8 @@ ${shortError(err)}`);
       section.className = "midi-instrument-section";
       section.innerHTML = `
         <summary class="midi-instrument-section-head">
-          <strong>비트 악기 ${formatCount(groups.length)}개</strong>
-          <span>한 음색만 내는 드럼·북·스네어·심벌즈 계열</span>
+          <strong>${escapeHtml(i18nText("snd.beat_group_count", [formatCount(groups.length)]))}</strong>
+          <span>${escapeHtml(i18nText("snd.drums_toms"))}</span>
         </summary>
       `;
       for (const group of groups) section.appendChild(makeRow(group));
@@ -4598,13 +4849,13 @@ ${shortError(err)}`);
       for (const key of MIDI_INSTRUMENT_CATEGORY_ORDER) {
         const items = grouped.get(key) || [];
         if (!items.length) continue;
-        const label = MIDI_INSTRUMENT_CATEGORY_LABELS[key] || "나머지";
+        const label = i18nText(MIDI_INSTRUMENT_CATEGORY_LABEL_KEYS[key] || "ui.other");
         const section = document.createElement("details");
         section.open = true;
         section.className = `midi-instrument-section midi-instrument-category-section category-${key}`;
         section.innerHTML = `
           <summary class="midi-instrument-section-head">
-            <strong>${escapeHtml(label)} ${formatCount(items.length)}개</strong>
+            <strong>${escapeHtml(i18nText("ui.name_count", [label, formatCount(items.length)]))}</strong>
           </summary>
         `;
         for (const group of items) section.appendChild(makeRow(group));
@@ -4616,12 +4867,12 @@ ${shortError(err)}`);
 
   function collectMidiConvertOptionsForSingleChannel(index) {
     const sourceLabel = getMidiImportSourceLabel();
-    if (!pendingMidiSettings) throw new Error(`${sourceLabel} 변환 설정을 찾지 못했습니다.`);
+    if (!pendingMidiSettings) throw new Error(i18nText("midi.settings_missing", [sourceLabel]));
     const sourceIndex = clampInt(Number(index), 0, 5);
     const setting = pendingMidiSettings.channels[sourceIndex];
     const allowedIds = new Set(getAllowedMidiGroupsForSetting(setting).map(g => g.id));
     const selected = Array.from(setting.selectedInstrumentGroups || []).filter(id => allowedIds.has(id));
-    if (!selected.length) throw new Error(`${PART_LABELS[sourceIndex]} 채널에 포함할 악기를 하나 이상 선택해 주세요.`);
+    if (!selected.length) throw new Error(i18nText("midi.select_inst_for_channel", [PART_LABELS[sourceIndex]]));
     const overlapMergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
     return {
       partCount: 1,
@@ -4649,7 +4900,7 @@ ${shortError(err)}`);
     try {
       options = collectMidiConvertOptions();
     } catch (err) {
-      showDialog("미리 듣기 실패", shortError(err));
+      showDialog(i18nText("err.preview_3"), shortError(err));
       return;
     }
     const sourceLabel = options.sourceLabel || getMidiImportSourceLabel();
@@ -4659,7 +4910,7 @@ ${shortError(err)}`);
       stopMidiPreview();
       setMidiSelectedPreviewState(true);
       if (midiConvertStatus) {
-        midiConvertStatus.textContent = "현재 설정으로 MML 미리듣기를 준비 중입니다.";
+        midiConvertStatus.textContent = i18nText("mml.prepare_preview");
         midiConvertStatus.hidden = false;
       }
       trackAnalytics("preview_midi_start", { scope: "selected", source_type: pendingMidiImport?.sourceType || "midi", export_channels: Number(options.partCount || 0) });
@@ -4670,12 +4921,12 @@ ${shortError(err)}`);
       const scheduled = buildSchedule(parsed);
       const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
       const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
-      if (!notes.length || duration <= 0) throw new Error("선택한 설정으로 재생할 음표가 없습니다.");
-      if (!soundFont?.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+      if (!notes.length || duration <= 0) throw new Error(i18nText("cfg.no_notes_play"));
+      if (!soundFont?.presets?.length) throw new Error(i18nText("snd.find_avail"));
       const ctx = await ensureAudioContext();
       const presetKeys = buildMidiPartSoundPreset(options.exportChannels, pendingMidiSettings?.groups || [], options.partCount);
       const prepared = prepareNotesWithPresetKeys(ctx, notes, presetKeys, { respectMute: false });
-      if (!prepared.length) throw new Error("소리 나는 음표가 없습니다. 선택한 음색에서 맞는 음역을 찾지 못했습니다.");
+      if (!prepared.length) throw new Error(i18nText("snd.no_audible"));
       const windowEnd = Math.min(duration, 45);
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd });
       const scheduleResult = schedulePreparedNotes(ctx, prepared, {
@@ -4691,7 +4942,7 @@ ${shortError(err)}`);
         gainScale
       });
       if (midiConvertStatus) {
-        midiConvertStatus.textContent = "미리 듣기 중...";
+        midiConvertStatus.textContent = i18nText("ui.preview_wait_2");
         midiConvertStatus.hidden = false;
       }
       const stopMs = Math.max(800, Math.min(60000, (scheduleResult.maxEnd - ctx.currentTime + 0.35) * 1000));
@@ -4702,7 +4953,7 @@ ${shortError(err)}`);
     } catch (err) {
       stopMidiPreview();
       if (midiConvertStatus) midiConvertStatus.hidden = true;
-      showDialog("미리 듣기 실패", shortError(err));
+      showDialog(i18nText("err.preview_3"), shortError(err));
     }
   }
 
@@ -4719,7 +4970,7 @@ ${shortError(err)}`);
     try {
       options = collectMidiConvertOptionsForSingleChannel(sourceIndex);
     } catch (err) {
-      showDialog("채널 미리 듣기 실패", shortError(err));
+      showDialog(i18nText("err.ch_preview"), shortError(err));
       return;
     }
 
@@ -4728,7 +4979,7 @@ ${shortError(err)}`);
       stopMidiPreview();
       setMidiChannelPreviewButton(button);
       if (midiConvertStatus) {
-        midiConvertStatus.textContent = `${PART_LABELS[sourceIndex]} 미리 듣기를 준비 중입니다.`;
+        midiConvertStatus.textContent = i18nText("midi.preview_prepare_channel", [PART_LABELS[sourceIndex]]);
         midiConvertStatus.hidden = false;
       }
       trackAnalytics("preview_midi_start", { scope: "export_channel", source_type: pendingMidiImport?.sourceType || "midi", export_channels: 1 });
@@ -4739,12 +4990,12 @@ ${shortError(err)}`);
       const scheduled = buildSchedule(parsed);
       const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
       const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
-      if (!notes.length || duration <= 0) throw new Error("선택한 채널 설정으로 재생할 음표가 없습니다.");
-      if (!soundFont?.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+      if (!notes.length || duration <= 0) throw new Error(i18nText("cfg.no_notes_play_2"));
+      if (!soundFont?.presets?.length) throw new Error(i18nText("snd.find_avail"));
       const ctx = await ensureAudioContext();
       const presetKeys = buildMidiPartSoundPreset(options.exportChannels, pendingMidiSettings?.groups || [], options.partCount);
       const prepared = prepareNotesWithPresetKeys(ctx, notes, presetKeys, { respectMute: false });
-      if (!prepared.length) throw new Error("소리 나는 음표가 없습니다. 선택한 음색에서 맞는 음역을 찾지 못했습니다.");
+      if (!prepared.length) throw new Error(i18nText("snd.no_audible"));
       const windowEnd = Math.min(duration, 30);
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd });
       const scheduleResult = schedulePreparedNotes(ctx, prepared, {
@@ -4760,7 +5011,7 @@ ${shortError(err)}`);
         gainScale
       });
       if (midiConvertStatus) {
-        midiConvertStatus.textContent = `${PART_LABELS[sourceIndex]} 미리 듣기 중...`;
+        midiConvertStatus.textContent = i18nText("midi.previewing_channel", [PART_LABELS[sourceIndex]]);
         midiConvertStatus.hidden = false;
       }
       const stopMs = Math.max(800, Math.min(45000, (scheduleResult.maxEnd - ctx.currentTime + 0.35) * 1000));
@@ -4771,7 +5022,7 @@ ${shortError(err)}`);
     } catch (err) {
       stopMidiPreview();
       if (midiConvertStatus) midiConvertStatus.hidden = true;
-      showDialog("채널 미리 듣기 실패", shortError(err));
+      showDialog(i18nText("err.ch_preview"), shortError(err));
     }
   }
 
@@ -4787,7 +5038,7 @@ ${shortError(err)}`);
       stopMidiPreview();
       setMidiFullPreviewState(true);
       if (midiConvertStatus) {
-        midiConvertStatus.textContent = `${sourceLabel} 미리듣기를 준비 중입니다.`;
+        midiConvertStatus.textContent = i18nText("midi.preview_prepare", [sourceLabel]);
         midiConvertStatus.hidden = false;
       }
       trackAnalytics("preview_midi_start", { scope: "source_file", source_type: pendingMidiImport?.sourceType || "midi" });
@@ -4807,7 +5058,7 @@ ${shortError(err)}`);
         prepared.push(...prepareNotes(ctx, soundFont, item.preset, item.notes));
       }
       prepared.sort((a, b) => a.start - b.start || a.midi - b.midi || a.id - b.id);
-      if (!prepared.length) throw new Error(`${sourceLabel} 미리듣기에 사용할 소리를 찾지 못했습니다.`);
+      if (!prepared.length) throw new Error(i18nText("midi.preview_sound_missing", [sourceLabel]));
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: preview.duration });
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
@@ -4821,7 +5072,7 @@ ${shortError(err)}`);
         gainScale
       });
       if (midiConvertStatus) {
-        midiConvertStatus.textContent = `${sourceLabel} 미리듣기 중...`;
+        midiConvertStatus.textContent = i18nText("midi.previewing", [sourceLabel]);
         midiConvertStatus.hidden = false;
       }
       const stopMs = Math.max(800, Math.min(60000, (result.maxEnd - ctx.currentTime + 0.3) * 1000));
@@ -4829,14 +5080,14 @@ ${shortError(err)}`);
     } catch (err) {
       stopMidiPreview();
       if (midiConvertStatus) midiConvertStatus.hidden = true;
-      showDialog(`${sourceLabel} 미리듣기 실패`, shortError(err));
+      showDialog(i18nText("midi.preview_fail_title", [sourceLabel]), shortError(err));
     }
   }
 
   function setMidiFullPreviewState(active) {
     midiFullPreviewActive = Boolean(active);
     if (midiFullPreviewBtn) {
-      midiFullPreviewBtn.textContent = midiFullPreviewActive ? "정지" : "연주 듣기";
+      midiFullPreviewBtn.textContent = midiFullPreviewActive ? i18nText("player.stop") : i18nText("ui.preview_perf");
       midiFullPreviewBtn.classList.toggle("danger", midiFullPreviewActive);
       midiFullPreviewBtn.setAttribute("aria-pressed", midiFullPreviewActive ? "true" : "false");
     }
@@ -4845,7 +5096,7 @@ ${shortError(err)}`);
   function setMidiSelectedPreviewState(active) {
     midiSelectedPreviewActive = Boolean(active);
     if (midiSelectedPreviewBtn) {
-      midiSelectedPreviewBtn.textContent = midiSelectedPreviewActive ? "정지" : "미리 듣기";
+      midiSelectedPreviewBtn.textContent = midiSelectedPreviewActive ? i18nText("player.stop") : i18nText("ui.preview");
       midiSelectedPreviewBtn.classList.toggle("danger", midiSelectedPreviewActive);
       midiSelectedPreviewBtn.setAttribute("aria-pressed", midiSelectedPreviewActive ? "true" : "false");
     }
@@ -4854,22 +5105,22 @@ ${shortError(err)}`);
   async function previewMidiInstrument(groupId, triggerButton = null) {
     if (!pendingMidiImport) return;
     const button = triggerButton instanceof HTMLElement ? triggerButton : null;
-    const originalText = button?.textContent || "듣기";
+    const originalText = button?.textContent || i18nText("ui.listen");
     try {
       stopPlayback(false);
       stopMidiPreview();
       if (button) {
         button.disabled = true;
-        button.textContent = "재생중";
+        button.textContent = i18nText("ui.play");
       }
       trackAnalytics("preview_midi_start", { scope: "instrument", source_type: pendingMidiImport?.sourceType || "midi" });
       await loadDefaultSf2IfNeeded();
       const preview = buildMidiInstrumentPreview(pendingMidiImport.bytes, groupId, { maxSeconds: 8, tailSeconds: 0.75 });
       const ctx = await ensureAudioContext();
       const preset = findPreviewPreset(preview);
-      if (!preset) throw new Error("미리듣기에 사용할 SF2 프리셋을 찾지 못했습니다.");
+      if (!preset) throw new Error(i18nText("snd.find_sf2_preset"));
       const prepared = prepareNotes(ctx, soundFont, preset, preview.notes);
-      if (!prepared.length) throw new Error("SF2에서 미리듣기 할 소리를 찾지 못했습니다.");
+      if (!prepared.length) throw new Error(i18nText("snd.find_preview_sf2"));
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: preview.duration });
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
@@ -4885,7 +5136,7 @@ ${shortError(err)}`);
       const stopMs = Math.max(600, Math.min(12000, (result.maxEnd - ctx.currentTime + 0.25) * 1000));
       midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
     } catch (err) {
-      showDialog("악기 미리듣기 실패", shortError(err));
+      showDialog(i18nText("snd.inst_preview"), shortError(err));
     } finally {
       if (button) {
         window.setTimeout(() => {
@@ -4931,7 +5182,7 @@ ${shortError(err)}`);
   function resetMidiChannelPreviewButton() {
     if (!midiChannelPreviewButton) return;
     try {
-      midiChannelPreviewButton.textContent = midiChannelPreviewButtonText || "듣기";
+      midiChannelPreviewButton.textContent = midiChannelPreviewButtonText || i18nText("ui.listen");
       midiChannelPreviewButton.classList.remove("danger");
       midiChannelPreviewButton.setAttribute("aria-pressed", "false");
       midiChannelPreviewButton.disabled = false;
@@ -4943,8 +5194,8 @@ ${shortError(err)}`);
   function setMidiChannelPreviewButton(button) {
     if (!(button instanceof HTMLElement)) return;
     midiChannelPreviewButton = button;
-    midiChannelPreviewButtonText = button.textContent || "듣기";
-    button.textContent = "정지";
+    midiChannelPreviewButtonText = button.textContent || i18nText("ui.listen");
+    button.textContent = i18nText("player.stop");
     button.classList.add("danger");
     button.setAttribute("aria-pressed", "true");
   }
@@ -4952,7 +5203,7 @@ ${shortError(err)}`);
   function resetSplitPreviewButton() {
     if (!splitPreviewButton) return;
     try {
-      splitPreviewButton.textContent = splitPreviewButtonText || "듣기";
+      splitPreviewButton.textContent = splitPreviewButtonText || i18nText("ui.listen");
       splitPreviewButton.classList.remove("danger");
       splitPreviewButton.setAttribute("aria-pressed", "false");
       splitPreviewButton.disabled = false;
@@ -4964,8 +5215,8 @@ ${shortError(err)}`);
   function setSplitPreviewButton(button) {
     if (!(button instanceof HTMLElement)) return;
     splitPreviewButton = button;
-    splitPreviewButtonText = button.textContent || "듣기";
-    button.textContent = "정지";
+    splitPreviewButtonText = button.textContent || i18nText("ui.listen");
+    button.textContent = i18nText("player.stop");
     button.classList.add("danger");
     button.setAttribute("aria-pressed", "true");
   }
@@ -5012,21 +5263,20 @@ ${shortError(err)}`);
   }
 
   function rememberMidiPartSoundPreset(keys) {
-    const selectedQuickMode = soundPresetQuickSelect?.value || soundPresetMatch(partPresetKeys);
+    const selectedQuickMode = soundPresetMatch(partPresetKeys);
     const shouldApplyToCurrentSound = selectedQuickMode === "auto";
     midiPartPresetKeys = normalizePresetKeyArray(keys);
-    midiPartPresetName = DEFAULT_MIDI_SOUND_PRESET_LABEL;
+    midiPartPresetName = defaultMidiSoundPresetLabel();
     saveMidiPartSoundPresetPrefs();
 
     if (shouldApplyToCurrentSound) {
       partPresetKeys = normalizePresetKeyArray(midiPartPresetKeys);
       savePartSoundPrefs();
-      updateSoundPresetControls(null, "auto");
+      updateSoundPresetControls();
       return true;
     }
 
-    const preferredQuickMode = userSoundPresetIdFromValue(selectedQuickMode) ? selectedQuickMode : null;
-    updateSoundPresetControls(null, preferredQuickMode);
+    updateSoundPresetControls();
     return false;
   }
 
@@ -5056,9 +5306,9 @@ ${shortError(err)}`);
 
   function collectMidiConvertOptions() {
     const sourceLabel = getMidiImportSourceLabel();
-    if (!pendingMidiSettings) throw new Error(`${sourceLabel} 변환 설정을 찾지 못했습니다.`);
+    if (!pendingMidiSettings) throw new Error(i18nText("midi.settings_missing", [sourceLabel]));
     const exportChannels = getMidiExportChannelConfigs();
-    if (!exportChannels.length) throw new Error("MML에 포함할 악기를 하나 이상 선택해 주세요.");
+    if (!exportChannels.length) throw new Error(i18nText("mml.select_one"));
     const partCount = exportChannels.length;
     return {
       partCount,
@@ -5077,12 +5327,12 @@ ${shortError(err)}`);
     try {
       options = collectMidiConvertOptions();
     } catch (err) {
-      showDialog(`${sourceLabel} 변환 실패`, shortError(err));
+      showDialog(i18nText("midi.convert_fail_title", [sourceLabel]), shortError(err));
       return;
     }
 
     stopMidiPreview();
-    setMidiConvertBusy(true, `${sourceLabel} → MML 변환 중입니다. 잠시만 기다려 주세요.`);
+    setMidiConvertBusy(true, i18nText("midi.converting", [sourceLabel]));
     await waitForBrowserPaint();
 
     try {
@@ -5108,16 +5358,16 @@ ${shortError(err)}`);
         optimized_chars: saved
       });
       showDialog(
-        `${sourceLabel} 변환 완료`,
+        i18nText("midi.convert_done_title", [sourceLabel]),
         result.message +
-          (saved ? `\n\n최적화 절약: ${formatCount(saved)} 자` : "") +
+          (saved ? i18nText("mml.saved_chars", [formatCount(saved)]) : "") +
           (autoSoundApplied
-            ? `\n\n${sourceLabel} 악기 구성을 자동 음색으로 갱신하고 현재 재생 음색에 적용했습니다.`
-            : `\n\n${sourceLabel} 악기 구성을 자동 음색 정보로 갱신했습니다. 현재 선택한 음색 설정은 유지했습니다.`)
+            ? i18nText("midi.sound_applied", [sourceLabel])
+            : i18nText("midi.sound_info_updated", [sourceLabel]))
       );
     } catch (err) {
       setMidiConvertBusy(false);
-      showDialog(`${sourceLabel} 변환 실패`, shortError(err));
+      showDialog(i18nText("midi.convert_fail_title", [sourceLabel]), shortError(err));
     }
   }
 
@@ -5140,7 +5390,7 @@ ${shortError(err)}`);
       }
     }
     if (midiConvertApply) {
-      midiConvertApply.textContent = busy ? "변환 중..." : "변환";
+      midiConvertApply.textContent = busy ? i18nText("ui.conv") : i18nText("ui.convert");
       if (busy) midiConvertApply.disabled = true;
     }
   }
@@ -5156,32 +5406,42 @@ ${shortError(err)}`);
   }
 
   async function loadUserSf2() {
-    const file = sf2File.files?.[0];
-    if (!file) return useDefaultSound();
+    const file = sf2File?.files?.[0];
+    if (!file) return;
+    stopPlayback(false);
+    stopMidiPreview();
+    setSoundFontControlsBusy(true);
+    updateSoundFontUi(i18nText("snd.reading_sf2"));
     try {
-      stopPlayback(false);
-      soundName.textContent = "SF2 읽는 중...";
       const bytes = new Uint8Array(await file.arrayBuffer());
       soundFont = await parseSoundFont(bytes);
-      sf2Name = file.name;
-      resetSoundActionMenu();
-      soundName.textContent = file.name;
+      sf2Name = file.name || "SoundFont.sf2";
+      updateSoundFontUi();
+      if (partSoundDialog?.open) {
+        draftPartPresetKeys = normalizePresetKeyArray(draftPartPresetKeys || partPresetKeys);
+        renderPartSoundRows();
+        updateSoundPresetControls();
+      }
     } catch (err) {
       soundFont = null;
-      resetSoundActionMenu();
-      soundName.textContent = "기본 사운드";
-      sf2File.value = "";
-      showDialog("SF2 불러오기 실패", shortError(err));
+      sf2Name = DEFAULT_SF2_FILE_NAME;
+      if (sf2File) sf2File.value = "";
+      try { await loadDefaultSf2IfNeeded(); } catch (_) { updateSoundFontUi(); }
+      showDialog(i18nText("snd.load_sf2"), shortError(err));
+    } finally {
+      setSoundFontControlsBusy(false);
     }
   }
 
   async function loadDefaultSf2IfNeeded() {
-    if (soundFont && sf2Name !== "기본 사운드") return;
-    if (soundFont && sf2Name === "기본 사운드") return;
+    if (soundFont) {
+      updateSoundFontUi();
+      return;
+    }
     const bytes = await readDefaultSf2Bytes();
     soundFont = await parseSoundFont(bytes);
-    sf2Name = "기본 사운드";
-    soundName.textContent = "기본 사운드";
+    sf2Name = DEFAULT_SF2_FILE_NAME;
+    updateSoundFontUi();
   }
 
   async function readDefaultSf2Bytes() {
@@ -5193,7 +5453,7 @@ ${shortError(err)}`);
     }
     await loadDefaultSf2FallbackScriptIfNeeded();
     const b64 = DEFAULT_SF2_EMBEDDED_B64();
-    if (!b64) throw new Error("기본 SF2를 읽지 못했습니다. assets 폴더와 default-sf2-base64.js 파일을 확인해 주세요.");
+    if (!b64) throw new Error(i18nText("drive.read_default"));
     return base64ToUint8Array(b64);
   }
 
@@ -5205,7 +5465,7 @@ ${shortError(err)}`);
       script.src = DEFAULT_SF2_FALLBACK_SCRIPT_URL;
       script.async = true;
       script.onload = () => resolve();
-      script.onerror = () => reject(new Error("기본 SF2 fallback 스크립트를 읽지 못했습니다."));
+      script.onerror = () => reject(new Error(i18nText("snd.load_default")));
       document.head.appendChild(script);
     });
     return defaultSf2FallbackLoadPromise;
@@ -5216,34 +5476,35 @@ ${shortError(err)}`);
       stopPlayback(false);
       stopMidiPreview();
       await loadDefaultSf2IfNeeded();
+      updateSoundFontUi();
       draftPartPresetKeys = normalizePresetKeyArray(partPresetKeys);
-      draftSoundPresetBaseId = userSoundPresetIdFromValue(soundPresetQuickSelect?.value) || findUserSoundPresetIdByKeys(draftPartPresetKeys);
+      draftSoundPresetBaseId = findUserSoundPresetIdByKeys(draftPartPresetKeys);
       renderPartSoundRows();
       updateSoundPresetControls();
       if (partSoundDialog?.showModal) partSoundDialog.showModal();
-      else showDialog("채널 음색 설정", "이 브라우저에서는 설정 창을 열 수 없습니다.");
+      else showDialog(i18nText("snd.ch_settings"), i18nText("cfg.browser_fail"));
     } catch (err) {
-      showDialog("채널 음색 설정 실패", shortError(err));
+      showDialog(i18nText("snd.open_ch"), shortError(err));
     }
   }
 
   async function previewPartPreset(key, partIndex = 0, triggerButton = null) {
     const button = triggerButton instanceof HTMLElement ? triggerButton : null;
-    const originalText = button?.textContent || "듣기";
+    const originalText = button?.textContent || i18nText("ui.listen");
     try {
       stopPlayback(false);
       stopMidiPreview();
       if (button) {
         button.disabled = true;
-        button.textContent = "재생중";
+        button.textContent = i18nText("ui.play");
       }
       await loadDefaultSf2IfNeeded();
       const preset = findPresetByKey(key);
-      if (!preset) throw new Error("선택한 SF2 프리셋을 찾지 못했습니다.");
+      if (!preset) throw new Error(i18nText("snd.find_sf2_preset_2"));
       const ctx = await ensureAudioContext();
       const notes = buildPartPresetPreviewNotes(preset, partIndex);
       const prepared = prepareNotes(ctx, soundFont, preset, notes);
-      if (!prepared.length) throw new Error("SF2에서 미리듣기 할 소리를 찾지 못했습니다.");
+      if (!prepared.length) throw new Error(i18nText("snd.find_preview_sf2"));
       const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
       const result = schedulePreparedNotes(ctx, prepared, {
@@ -5260,7 +5521,7 @@ ${shortError(err)}`);
       const stopMs = Math.max(650, Math.min(6000, (result.maxEnd - ctx.currentTime + 0.25) * 1000));
       midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
     } catch (err) {
-      showDialog("음색 미리듣기 실패", shortError(err));
+      showDialog(i18nText("snd.preview_fail"), shortError(err));
     } finally {
       if (button) {
         window.setTimeout(() => {
@@ -5349,7 +5610,7 @@ ${shortError(err)}`);
     if (!presets.length) {
       const empty = document.createElement("div");
       empty.className = "part-sound-empty";
-      empty.textContent = "현재 SF2에서 선택 가능한 프리셋을 찾지 못했습니다.";
+      empty.textContent = i18nText("snd.find_any");
       partSoundRows.appendChild(empty);
       return;
     }
@@ -5360,12 +5621,12 @@ ${shortError(err)}`);
       const label = document.createElement("label");
       label.className = "part-sound-label";
       label.htmlFor = `partSoundSelect${i}`;
-      label.textContent = PART_LABELS[i] || `${i + 1}번`;
+      label.textContent = PART_LABELS[i] || i18nText("ui.numbered", [i + 1]);
 
       const select = document.createElement("select");
       select.id = `partSoundSelect${i}`;
       select.dataset.partPresetIndex = String(i);
-      select.setAttribute("aria-label", `${PART_LABELS[i]} 음색`);
+      select.setAttribute("aria-label", i18nText("aria.sound", [PART_LABELS[i]]));
       const current = sanitizePresetKey(draftPartPresetKeys?.[i] || DEFAULT_PART_PRESET_KEY);
       const availableKeys = new Set(presets.map(p => p.key));
       const selectedKey = availableKeys.has(current) ? current : (availableKeys.has(DEFAULT_PART_PRESET_KEY) ? DEFAULT_PART_PRESET_KEY : presets[0].key);
@@ -5378,10 +5639,10 @@ ${shortError(err)}`);
         select.appendChild(option);
       }
       const previewButton = document.createElement("button");
-      previewButton.className = "part-sound-preview-btn";
+      previewButton.className = "part-sound-preview-btn soft-tool-button";
       previewButton.type = "button";
-      previewButton.textContent = "듣기";
-      previewButton.setAttribute("aria-label", `${PART_LABELS[i]} 선택 음색 듣기`);
+      previewButton.textContent = i18nText("ui.listen");
+      previewButton.setAttribute("aria-label", i18nText("aria.preview_selected_sound", [PART_LABELS[i]]));
       previewButton.addEventListener("click", (ev) => {
         ev.preventDefault();
         void previewPartPreset(select.value, i, previewButton);
@@ -5437,7 +5698,7 @@ ${shortError(err)}`);
   function formatPresetLabel(preset) {
     const bank = clampInt(Number(preset?.bank ?? 0), 0, 16383);
     const program = clampInt(Number(preset?.preset ?? 0), 0, 127);
-    const name = String(preset?.name || "이름 없는 프리셋").trim();
+    const name = String(preset?.name || i18nText("snd.unnamed_preset")).trim();
     const num = String(program + 1).padStart(3, "0");
     return bank === 0 ? `${num} ${name}` : `Bank ${bank} · ${num} ${name}`;
   }
@@ -5540,14 +5801,14 @@ ${shortError(err)}`);
       scheduleCache = createScheduleFromEditor();
       scheduleCacheVersion++;
       updateTempoMarkers(scheduleCache.tempoMarkers, scheduleCache.duration);
-      if (scheduleCache.notes.length === 0) throw new Error("재생할 음표가 없습니다. MML 내용을 확인해 주세요.");
+      if (scheduleCache.notes.length === 0) throw new Error(i18nText("mml.no_notes"));
       if (currentOffset >= scheduleCache.duration - 0.05) currentOffset = 0;
       const ctx = await ensureAudioContext();
-      if (!soundFont.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+      if (!soundFont.presets?.length) throw new Error(i18nText("snd.find_avail"));
       preparedNotes = prepareNotesWithPartPresets(ctx, scheduleCache.notes);
       playbackAutoGainScale = computeAutoGainScale(preparedNotes, { windowStart: 0, windowEnd: scheduleCache.duration || 0 });
       const allScheduledNotesMuted = areAllScheduledNotesMuted(scheduleCache.notes);
-      if (preparedNotes.length === 0 && !allScheduledNotesMuted) throw new Error("소리 나는 음표가 없습니다. V0만 있거나 선택한 음색에서 맞는 음역을 찾지 못했습니다.");
+      if (preparedNotes.length === 0 && !allScheduledNotesMuted) throw new Error(i18nText("mml.no_audible"));
 
       const baseTime = ctx.currentTime + PLAY_START_DELAY;
       activeSources = [];
@@ -5564,7 +5825,7 @@ ${shortError(err)}`);
       startProgressLoop();
     } catch (err) {
       stopPlayback(false);
-      showDialog("재생 실패", shortError(err));
+      showDialog(i18nText("play.fail"), shortError(err));
     }
   }
 
@@ -5705,9 +5966,13 @@ ${shortError(err)}`);
     if (wasPlaying) await playFromCurrent();
   }
 
+  function quantizePlaybackTime(value) {
+    return Math.round(Math.max(0, Number(value) || 0) * 100) / 100;
+  }
+
   function handleSeekInput(restart) {
     const duration = scheduleCache?.duration || Number(progressSlider.max) || 0;
-    currentOffset = Math.max(0, Math.min(duration, Number(progressSlider.value) || 0));
+    currentOffset = Math.max(0, Math.min(duration, quantizePlaybackTime(progressSlider.value)));
     updateProgressUi(currentOffset, duration);
     if (restart && isPlaying) {
       clearTimeout(seekRestartTimer);
@@ -5749,8 +6014,8 @@ ${shortError(err)}`);
     const d = Math.max(0, Number(duration) || 0);
     const c = Math.max(0, Math.min(d, Number(current) || 0));
     progressSlider.max = d > 0 ? String(d) : "0";
-    progressSlider.step = "0.001";
-    progressSlider.value = String(c);
+    progressSlider.step = "0.01";
+    progressSlider.value = String(quantizePlaybackTime(c));
     progressSlider.disabled = d <= 0;
     playInfo.textContent = `${formatTime(c)} / ${formatTime(d)}`;
     updateActiveTempoMarker(c);
@@ -5797,12 +6062,12 @@ ${shortError(err)}`);
       el.dataset.bpm = String(bpm);
       el.dataset.beat = String(Math.max(0, Number(marker.beat) || 0));
       el.dataset.markerIndex = String(markerIndex);
-      el.title = `T${bpm} · ${formatTime(time)} · 클릭해서 수정`;
+      el.title = i18nText("tempo.marker_title", [bpm, formatTime(time)]);
       const label = document.createElement("button");
       label.type = "button";
       label.className = "tempo-marker-label";
       label.textContent = `T${bpm}`;
-      label.setAttribute("aria-label", `T${bpm}, ${formatTime(time)}, 클릭해서 템포 수정`);
+      label.setAttribute("aria-label", i18nText("tempo.marker_aria", [bpm, formatTime(time)]));
       el.appendChild(label);
       tempoMarkerLayer.appendChild(el);
     }
@@ -5858,8 +6123,8 @@ ${shortError(err)}`);
     selectedTempoMarker = { ...marker, bpm };
     if (tempoEditBpm) tempoEditBpm.value = String(bpm);
     if (tempoEditContext) {
-      const part = Number.isInteger(marker.part) && marker.part >= 0 ? PART_LABELS[marker.part] : "기본 템포";
-      tempoEditContext.textContent = `${formatTime(Math.max(0, Number(marker.time) || 0))} 위치의 T${bpm} (${part})를 수정합니다.`;
+      const part = Number.isInteger(marker.part) && marker.part >= 0 ? PART_LABELS[marker.part] : i18nText("tempo.default");
+      tempoEditContext.textContent = i18nText("tempo.edit_context", [formatTime(Math.max(0, Number(marker.time) || 0)), bpm, part]);
     }
     if (tempoEditDialog?.showModal) {
       tempoEditDialog.showModal();
@@ -5867,7 +6132,7 @@ ${shortError(err)}`);
       tempoEditBpm?.select?.();
       return;
     }
-    const answer = prompt(`T${bpm}을 수정할 템포를 입력해 주세요.\n32~255 사이의 정수만 사용할 수 있습니다.`, String(bpm));
+    const answer = prompt(i18nText("tempo.prompt", [bpm]), String(bpm));
     if (answer == null) {
       selectedTempoMarker = null;
       resumePlaybackAfterTempoEdit();
@@ -5926,7 +6191,7 @@ ${shortError(err)}`);
     const bpm = normalizeTempoBpm(value);
     const beforeBpm = normalizeTempoBpm(marker?.bpm);
     if (bpm === beforeBpm) {
-      showDialog("템포 수정", `T${beforeBpm}과 같은 값이라 변경하지 않았습니다.`);
+      showDialog(i18nText("tempo.edit"), i18nText("tempo.no_change", [beforeBpm]));
       return;
     }
 
@@ -5937,9 +6202,9 @@ ${shortError(err)}`);
       setMainMml(updated);
       currentOffset = 0;
       trackAnalytics("tempo_edit", { before_bpm: beforeBpm, after_bpm: bpm });
-      showDialog("템포 수정", `${formatTime(Math.max(0, Number(marker?.time) || 0))} 위치의 템포를 T${beforeBpm} → T${bpm}으로 수정했습니다.`);
+      showDialog(i18nText("tempo.edit"), i18nText("tempo.changed", [formatTime(Math.max(0, Number(marker?.time) || 0)), beforeBpm, bpm]));
     } catch (err) {
-      showDialog("템포 수정 실패", shortError(err));
+      showDialog(i18nText("tempo.edit_2"), shortError(err));
     }
   }
 
@@ -5949,7 +6214,7 @@ ${shortError(err)}`);
     const end = Number(marker?.globalSourceEnd);
     if (Boolean(marker?.explicit) && Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end > start && end <= text.length) {
       const token = text.slice(start, end);
-      if (!/^T\d+$/i.test(token)) throw new Error("선택한 템포 명령의 원본 위치를 찾지 못했습니다. 악보를 다시 입력한 뒤 시도해 주세요.");
+      if (!/^T\d+$/i.test(token)) throw new Error(i18nText("mml.locate_tempo_cmd"));
       return `${text.slice(0, start)}T${bpm}${text.slice(end)}`;
     }
 
@@ -5958,13 +6223,13 @@ ${shortError(err)}`);
       if (header) return `${text.slice(0, header[0].length)}T${bpm}${text.slice(header[0].length)}`;
       return `MML@T${bpm}${text.replace(/^\s*MML\s*@/i, "").replace(/;\s*$/, "")};`;
     }
-    throw new Error("선택한 템포 명령의 원본 위치를 찾지 못했습니다.");
+    throw new Error(i18nText("mml.locate_tempo_cmd_2"));
   }
 
   async function ensureAudioContext() {
     if (!audioCtx || audioCtx.state === "closed") {
       const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) throw new Error("이 브라우저는 WebAudio를 지원하지 않습니다.");
+      if (!AC) throw new Error(i18nText("audio.unsupported_web"));
       audioCtx = new AC();
       masterGain = audioCtx.createGain();
       masterGain.connect(audioCtx.destination);
@@ -5994,10 +6259,27 @@ ${shortError(err)}`);
     }
   }
 
+  function resetPlaybackSpeed() {
+    if (!speedSlider) return;
+    speedSlider.value = "1";
+    applyPlaybackSpeed(true);
+  }
+
+  function resetOutputVolume() {
+    if (!volumeSlider) return;
+    volumeSlider.value = "100";
+    applyOutputVolume();
+  }
+
   function applyOutputVolume() {
     const percent = clampInt(Number(volumeSlider.value || 100), 0, 150);
     volumeSlider.value = String(percent);
     volumeValue.textContent = `${percent}%`;
+    if (volumeControlButton) {
+      const muted = percent === 0;
+      volumeControlButton.classList.toggle("volume-muted", muted);
+      volumeControlButton.setAttribute("aria-pressed", muted ? "true" : "false");
+    }
     writePref("volume", String(percent));
     if (masterGain && audioCtx && audioCtx.state !== "closed") {
       const now = audioCtx.currentTime;
@@ -6007,7 +6289,7 @@ ${shortError(err)}`);
   }
 
   function updatePlayButton() {
-    playToggleBtn.textContent = isPlaying ? "정지" : "재생";
+    playToggleBtn.textContent = isPlaying ? i18nText("player.stop") : i18nText("player.play");
     playToggleBtn.classList.toggle("danger", isPlaying);
   }
 
@@ -6077,7 +6359,7 @@ ${shortError(err)}`);
 
       const totalLine = document.createElement("div");
       totalLine.className = "char-count-total";
-      totalLine.textContent = `${formatCount(total)} 자`;
+      totalLine.textContent = i18nText("ui.char_count", [formatCount(total)]);
 
       const partLine = document.createElement("div");
       partLine.className = "char-count-parts";
@@ -6091,29 +6373,29 @@ ${shortError(err)}`);
         const channelCount = document.createElement("span");
         channelCount.className = `char-count-channel part-count-${idx}`;
         channelCount.textContent = formatCount(count);
-        channelCount.title = `${PART_LABELS[idx]} ${formatCount(count)} 자`;
+        channelCount.title = i18nText("ui.part_chars", [PART_LABELS[idx], formatCount(count)]);
         partLine.append(channelCount);
       });
       const unit = document.createElement("span");
       unit.className = "char-count-unit";
-      unit.textContent = "자";
+      unit.textContent = i18nText("ui.chars");
       partLine.append(unit);
 
       charCount.append(totalLine, partLine);
-      charCount.setAttribute("aria-label", `총 ${formatCount(total)} 자. 채널별 ${counts.map(formatCount).join(", ")} 자`);
+      charCount.setAttribute("aria-label", i18nText("ui.char_summary", [formatCount(total), counts.map(formatCount).join(", ")]));
       return;
     }
 
     const m = /^part(\d+)$/.exec(activeTabName || "");
     const idx = m ? Number(m[1]) : 0;
     const partCount = (parts[idx] || "").length;
-    charCount.textContent = `${formatCount(partCount)} 자`;
+    charCount.textContent = i18nText("ui.char_count", [formatCount(partCount)]);
     charCount.className = `char-count part-count-${idx}`;
-    charCount.setAttribute("aria-label", `${PART_LABELS[idx] || "채널"} ${formatCount(partCount)} 자`);
+    charCount.setAttribute("aria-label", i18nText("ui.part_chars", [PART_LABELS[idx] || i18nText("ui.channel"), formatCount(partCount)]));
   }
 
   function formatCount(value) {
-    return Math.max(0, Number(value) || 0).toLocaleString("ko-KR");
+    return Math.max(0, Number(value) || 0).toLocaleString(document.documentElement.lang || undefined);
   }
 
 
@@ -6125,7 +6407,7 @@ ${shortError(err)}`);
       restTrimDialog.showModal();
       return;
     }
-    const answer = prompt("삭제할 쉼표 길이를 입력해 주세요.\nall = 모든 쉼표\n4 = 4분음표 이하\n8 = 8분음표 이하\n16 = 16분음표 이하\n32 = 32분음표 이하\n64 = 64분음표 이하\n\n이 브라우저에서는 채널 선택 Dialog를 사용할 수 없어 전체 6채널에 적용됩니다.", "32");
+    const answer = prompt(i18nText("rest.prompt_fallback"), "32");
     if (answer == null) return;
     applyRestTrim(answer, null);
   }
@@ -6135,7 +6417,7 @@ ${shortError(err)}`);
     if (!statEls.length) return;
     const threshold = parseRestTrimLimit(restTrimLimit?.value || "32", { silent: true });
     if (!threshold) {
-      statEls.forEach(el => { el.textContent = "-"; el.title = "삭제 길이를 확인할 수 없습니다."; });
+      statEls.forEach(el => { el.textContent = "-"; el.title = i18nText("err.determine_remove"); });
       return;
     }
 
@@ -6153,8 +6435,8 @@ ${shortError(err)}`);
         const count = Math.max(0, Number(counts[index]) || 0);
         el.textContent = formatCount(count);
         el.title = count > 0
-          ? `삭제 대상 쉼표 ${formatCount(count)}개`
-          : "삭제 대상 쉼표가 없습니다.";
+          ? i18nText("rest.target_count", [formatCount(count)])
+          : i18nText("msg.no_rests");
       }
     } catch (err) {
       statEls.forEach(el => { el.textContent = "-"; el.title = shortError(err); });
@@ -6165,7 +6447,7 @@ ${shortError(err)}`);
     const value = restTrimLimit?.value || "32";
     const targetPartIndexes = getDialogSelectedPartIndexes(".rest-trim-channel");
     if (!targetPartIndexes.length) {
-      showDialog("쉼표 삭제", "적용할 채널을 1개 이상 선택해 주세요.");
+      showDialog(i18nText("ui.remove_rests"), i18nText("msg.select_one_ch_3"));
       return;
     }
     restTrimDialog?.close();
@@ -6177,7 +6459,7 @@ ${shortError(err)}`);
     if (!threshold) return;
     const selectedIndexes = targetPartIndexes == null ? null : normalizePartIndexList(targetPartIndexes);
     if (targetPartIndexes != null && !selectedIndexes.length) {
-      showDialog("쉼표 삭제", "적용할 채널을 1개 이상 선택해 주세요.");
+      showDialog(i18nText("ui.remove_rests"), i18nText("msg.select_one_ch_3"));
       return;
     }
     const wasPlaying = isPlaying;
@@ -6192,26 +6474,26 @@ ${shortError(err)}`);
       });
 
       if (result.removed <= 0) {
-        showDialog("쉼표 삭제", "선택한 채널에서 삭제할 수 있는 쉼표가 없습니다.\n채널 시작 부분의 쉼표나 앞에 음표가 없는 쉼표는 유지됩니다.");
+        showDialog(i18nText("ui.remove_rests"), i18nText("rest.none_removable"));
       } else {
         setMainMml(result.mml);
-        const label = threshold.all ? "모든 쉼표" : `${threshold.denom}분음표 이하`;
+        const label = threshold.all ? i18nText("ui.all_rests") : i18nText("rest.note_or_shorter", [threshold.denom]);
         const selectedLabel = formatSelectedPartLabels(selectedIndexes);
         const saved = Math.max(0, Number(result.saved) || 0);
-        flashButton(restTrimBtn, "삭제 완료");
+        flashButton(restTrimBtn, i18nText("st.remove_done"));
         trackAnalytics("rest_trim_apply", {
           limit: threshold.all ? "all" : String(threshold.denom),
           selected_channel_count: selectedIndexes?.length || 6
         });
         showDialog(
-          "쉼표 삭제",
-          `${selectedLabel}에서 ${label} 길이로 쉼표 ${result.removed.toLocaleString("ko-KR")}개를 정리했습니다.\n` +
-          `최적화 결과: ${result.before.toLocaleString("ko-KR")} 자 → ${result.after.toLocaleString("ko-KR")} 자` +
-          (saved ? `\n절약: ${saved.toLocaleString("ko-KR")} 자` : "")
+          i18nText("ui.remove_rests"),
+          i18nText("rest.result", [selectedLabel, label, formatCount(result.removed)]) + "\n" +
+          i18nText("mml.optimize_result", [formatCount(result.before), formatCount(result.after)]) +
+          (saved ? "\n" + i18nText("mml.saved_chars_line", [formatCount(saved)]) : "")
         );
       }
     } catch (err) {
-      showDialog("쉼표 삭제 실패", shortError(err));
+      showDialog(i18nText("err.remove_rests"), shortError(err));
     } finally {
       if (wasPlaying) currentOffset = 0;
     }
@@ -6227,7 +6509,7 @@ ${shortError(err)}`);
       bulkVolumeAmount?.select?.();
       return;
     }
-    const answer = prompt("선택 채널에 더할 볼륨 변화량을 입력해 주세요.\n-15 ~ 15 사이의 정수만 사용할 수 있습니다.\n\n이 브라우저에서는 채널 선택 Dialog를 사용할 수 없어 전체 6채널에 적용됩니다.", "0");
+    const answer = prompt(i18nText("vol.prompt_fallback"), "0");
     if (answer == null) return;
     applyBulkVolume(answer, null);
   }
@@ -6238,7 +6520,7 @@ ${shortError(err)}`);
     try {
       counts = getEditorDerivedState({ needVolumeCounts: true }).volumeCounts;
     } catch (err) {
-      bulkVolumeStats.innerHTML = `<div class="volume-count-title">볼륨 통계를 확인할 수 없습니다.</div><div class="dialog-small">${escapeHtml(shortError(err))}</div>`;
+      bulkVolumeStats.innerHTML = `<div class="volume-count-title">${escapeHtml(i18nText("vol.stats_unavailable"))}</div><div class="dialog-small">${escapeHtml(shortError(err))}</div>`;
       return;
     }
 
@@ -6247,7 +6529,7 @@ ${shortError(err)}`);
       .filter(item => item.count > 0);
 
     if (!visibleCounts.length) {
-      bulkVolumeStats.innerHTML = `<div class="volume-count-title">볼륨 정보가 없습니다.</div>`;
+      bulkVolumeStats.innerHTML = i18nText("tpl.vol_count_no");
       return;
     }
 
@@ -6260,7 +6542,7 @@ ${shortError(err)}`);
     normalizeBulkVolumeAmountInput();
     const targetPartIndexes = getDialogSelectedPartIndexes(".bulk-volume-channel");
     if (!targetPartIndexes.length) {
-      showDialog("볼륨 조절", "적용할 채널을 1개 이상 선택해 주세요.");
+      showDialog(i18nText("vol.adjust"), i18nText("msg.select_one_ch_3"));
       return;
     }
     const value = bulkVolumeAmount?.value || "0";
@@ -6272,7 +6554,7 @@ ${shortError(err)}`);
     const delta = normalizeBulkVolumeDelta(value);
     const selectedIndexes = targetPartIndexes == null ? null : normalizePartIndexList(targetPartIndexes);
     if (targetPartIndexes != null && !selectedIndexes.length) {
-      showDialog("볼륨 조절", "적용할 채널을 1개 이상 선택해 주세요.");
+      showDialog(i18nText("vol.adjust"), i18nText("msg.select_one_ch_3"));
       return;
     }
 
@@ -6287,29 +6569,29 @@ ${shortError(err)}`);
 
       if (result.changedNotes <= 0) {
         const message = delta === 0
-          ? "볼륨 변화량이 0이라 변경할 내용이 없습니다."
-          : "선택한 채널에서 변경 가능한 음표가 없습니다. 이미 0 또는 15에 걸려 있으면 더 이상 변하지 않습니다.";
-        showDialog("볼륨 조절", message);
+          ? i18nText("vol.change_0")
+          : i18nText("err.no_adjustable");
+        showDialog(i18nText("vol.adjust"), message);
       } else {
         setMainMml(result.mml);
         const saved = Math.max(0, Number(result.saved) || 0);
         const selectedLabel = formatSelectedPartLabels(selectedIndexes);
-        flashButton(bulkVolumeBtn, "적용 완료");
+        flashButton(bulkVolumeBtn, i18nText("st.applied"));
         trackAnalytics("bulk_volume_adjust", {
           delta,
           selected_channel_count: selectedIndexes?.length || 6
         });
         showDialog(
-          "볼륨 조절",
-          `${selectedLabel}의 음표 ${result.changedNotes.toLocaleString("ko-KR")}개 볼륨을 ${delta > 0 ? "+" : ""}${delta} 조절했습니다.\n` +
-          `결과 범위는 V0~V15로 제한됩니다.` +
-          (result.clampedNotes ? `\n범위 제한 적용: ${result.clampedNotes.toLocaleString("ko-KR")}개` : "") +
-          `\n최적화 결과: ${result.before.toLocaleString("ko-KR")} 자 → ${result.after.toLocaleString("ko-KR")} 자` +
-          (saved ? `\n절약: ${saved.toLocaleString("ko-KR")} 자` : "")
+          i18nText("vol.adjust"),
+          i18nText("vol.result", [selectedLabel, formatCount(result.changedNotes), `${delta > 0 ? "+" : ""}${delta}`]) + "\n" +
+          i18nText("msg.result_limited") +
+          (result.clampedNotes ? "\n" + i18nText("vol.clamped_count", [formatCount(result.clampedNotes)]) : "") +
+          "\n" + i18nText("mml.optimize_result", [formatCount(result.before), formatCount(result.after)]) +
+          (saved ? "\n" + i18nText("mml.saved_chars_line", [formatCount(saved)]) : "")
         );
       }
     } catch (err) {
-      showDialog("볼륨 조절 실패", shortError(err));
+      showDialog(i18nText("vol.adjust_2"), shortError(err));
     } finally {
       if (wasPlaying) currentOffset = 0;
     }
@@ -6341,8 +6623,8 @@ ${shortError(err)}`);
 
   function formatSelectedPartLabels(indexes) {
     const selected = normalizePartIndexList(indexes);
-    if (!selected.length || selected.length >= PART_LABELS.length) return "전체 채널";
-    return selected.map(index => PART_LABELS[index] || `${index + 1}채널`).join(", ");
+    if (!selected.length || selected.length >= PART_LABELS.length) return i18nText("ui.all_chs");
+    return selected.map(index => PART_LABELS[index] || i18nText("ui.channel_n", [index + 1])).join(", ");
   }
 
   function normalizeBulkVolumeAmountInput() {
@@ -6366,7 +6648,7 @@ ${shortError(err)}`);
       bulkPitchAmount?.select?.();
       return;
     }
-    const answer = prompt("선택 채널에 더할 옥타브 변화량을 입력해 주세요.\n-7 ~ 7 사이의 정수만 사용할 수 있습니다.\n\n이 브라우저에서는 채널 선택 Dialog를 사용할 수 없어 전체 6채널에 적용됩니다.", "0");
+    const answer = prompt(i18nText("pitch.prompt_fallback"), "0");
     if (answer == null) return;
     applyBulkPitch(answer, null);
   }
@@ -6377,7 +6659,7 @@ ${shortError(err)}`);
     try {
       parts = splitMmlParts(normalizeMmlForDisplay(mainMml?.value || "")).slice(0, 6);
     } catch (err) {
-      bulkPitchStats.innerHTML = `<div class="volume-count-title">옥타브 명령을 확인할 수 없습니다.</div><div class="dialog-small">${escapeHtml(shortError(err))}</div>`;
+      bulkPitchStats.innerHTML = `<div class="volume-count-title">${escapeHtml(i18nText("pitch.octave_cmds"))}</div><div class="dialog-small">${escapeHtml(shortError(err))}</div>`;
       return;
     }
 
@@ -6394,20 +6676,20 @@ ${shortError(err)}`);
       }
     }
     if (!total) {
-      bulkPitchStats.innerHTML = `<div class="volume-count-title">O숫자 명령이 없습니다.</div><div class="dialog-small">음표나 &lt; &gt; 명령은 변경하지 않으며, 기존 O숫자 명령만 조절합니다.</div>`;
+      bulkPitchStats.innerHTML = i18nText("tpl.vol_count_no_2");
       return;
     }
 
     const items = Array.from(counts.entries()).sort((a, b) => a[0] - b[0]).map(([octave, count]) =>
       `<span class="volume-count-item"><em>O${octave}</em><strong>${formatCount(count)}</strong></span>`).join("");
-    bulkPitchStats.innerHTML = `<div class="volume-count-title">O숫자 명령 전체 ${formatCount(total)}개</div><div class="volume-count-grid">${items}</div>`;
+    bulkPitchStats.innerHTML = `<div class="volume-count-title">${escapeHtml(i18nText("pitch.total_commands", [formatCount(total)]))}</div><div class="volume-count-grid">${items}</div>`;
   }
 
   function applyBulkPitchFromDialog() {
     normalizeBulkPitchAmountInput();
     const targetPartIndexes = getDialogSelectedPartIndexes(".bulk-pitch-channel");
     if (!targetPartIndexes.length) {
-      showDialog("음정 조절", "적용할 채널을 1개 이상 선택해 주세요.");
+      showDialog(i18nText("pitch.adjust"), i18nText("msg.select_one_ch_3"));
       return;
     }
     const value = bulkPitchAmount?.value || "0";
@@ -6419,7 +6701,7 @@ ${shortError(err)}`);
     const octaves = normalizeBulkPitchDelta(value);
     const selectedIndexes = targetPartIndexes == null ? null : normalizePartIndexList(targetPartIndexes);
     if (targetPartIndexes != null && !selectedIndexes.length) {
-      showDialog("음정 조절", "적용할 채널을 1개 이상 선택해 주세요.");
+      showDialog(i18nText("pitch.adjust"), i18nText("msg.select_one_ch_3"));
       return;
     }
 
@@ -6434,28 +6716,28 @@ ${shortError(err)}`);
 
       if (result.changedCommands <= 0) {
         const message = octaves === 0
-          ? "옥타브 변화량이 0이라 변경할 내용이 없습니다."
+          ? i18nText("pitch.octave_change_0")
           : result.touchedCommands <= 0
-            ? "선택한 채널에 O숫자 명령이 없습니다. 음표와 < > 명령은 변경하지 않습니다."
-            : "선택한 채널의 O숫자 명령이 이미 O0 또는 O7 경계에 있어 변경되지 않았습니다.";
-        showDialog("음정 조절", message);
+            ? i18nText("msg.no_oct")
+            : i18nText("st.oct_cmds");
+        showDialog(i18nText("pitch.adjust"), message);
       } else {
         setMainMml(result.mml);
         const selectedLabel = formatSelectedPartLabels(selectedIndexes);
-        flashButton(bulkPitchBtn, "적용 완료");
+        flashButton(bulkPitchBtn, i18nText("st.applied"));
         trackAnalytics("bulk_pitch_adjust", {
           octaves,
           selected_channel_count: selectedIndexes?.length || 6
         });
         showDialog(
-          "음정 조절",
-          `${selectedLabel}의 O숫자 명령 ${result.changedCommands.toLocaleString("ko-KR")}개를 ${octaves > 0 ? "+" : ""}${octaves}만큼 조절했습니다.\n` +
-          `음표와 < > 명령은 변경하지 않았습니다.` +
-          (result.clampedCommands ? `\nO0~O7 범위 제한 적용: ${result.clampedCommands.toLocaleString("ko-KR")}개` : "")
+          i18nText("pitch.adjust"),
+          i18nText("pitch.result", [selectedLabel, formatCount(result.changedCommands), `${octaves > 0 ? "+" : ""}${octaves}`]) + "\n" +
+          i18nText("msg.notes_cmds_not") +
+          (result.clampedCommands ? "\n" + i18nText("pitch.clamped_count", [formatCount(result.clampedCommands)]) : "")
         );
       }
     } catch (err) {
-      showDialog("음정 조절 실패", shortError(err));
+      showDialog(i18nText("pitch.adjust_2"), shortError(err));
     } finally {
       if (wasPlaying) currentOffset = 0;
     }
@@ -6480,7 +6762,7 @@ ${shortError(err)}`);
       leadingSilenceSeconds?.select?.();
       return;
     }
-    const answer = prompt("악보 맨앞에 넣을 공백 시간을 초 단위로 입력해 주세요.\n기본값 2초, 최소 0.25초, 0.25초 단위", "2");
+    const answer = prompt(i18nText("lead.prompt"), "2");
     if (answer == null) return;
     applyLeadingSilence(answer);
   }
@@ -6514,8 +6796,8 @@ ${shortError(err)}`);
 
   function formatSecondCount(seconds) {
     const value = Number(seconds);
-    if (!Number.isFinite(value)) return "0초";
-    return `${Number(value.toFixed(2)).toLocaleString("ko-KR")}초`;
+    if (!Number.isFinite(value)) return i18nText("ui.zero_seconds");
+    return i18nText("ui.seconds", [Number(value.toFixed(2)).toLocaleString(document.documentElement.lang || undefined)]);
   }
 
   function applyLeadingSilence(value) {
@@ -6527,7 +6809,7 @@ ${shortError(err)}`);
         beats: seconds * 2
       });
       setMainMml(result.mml);
-      flashButton(leadingSilenceBtn, "설정 완료");
+      flashButton(leadingSilenceBtn, i18nText("cfg.applied"));
       const removedSeconds = Math.max(0, Number(result.removedLeadingBeats || 0) / 2);
       trackAnalytics("leading_silence_apply", {
         seconds,
@@ -6535,37 +6817,46 @@ ${shortError(err)}`);
       });
       const addedSeconds = Math.max(0, Number(result.addedBeats || 0) / 2);
       const removedLine = removedSeconds > 0
-        ? `\n기존 첫 음 앞 공통 공백 ${formatSecondCount(removedSeconds)}를 제거했습니다.`
+        ? "\n" + i18nText("lead.removed", [formatSecondCount(removedSeconds)])
         : "";
       showDialog(
-        "시작 공백 설정 완료",
-        `시작 공백을 ${formatSecondCount(addedSeconds)}로 설정했습니다.${removedLine}\n설정 구간은 T120 기준 쉼표로 시작합니다.`
+        i18nText("st.lead_gap"),
+        i18nText("lead.result", [formatSecondCount(addedSeconds), removedLine])
       );
     } catch (err) {
-      showDialog("시작 공백 설정 실패", shortError(err));
+      showDialog(i18nText("err.set_lead"), shortError(err));
     }
   }
 
 
   const DYNAMICS_GENERATE_INFO = {
-    pop: { label: "팝", title: "팝 볼륨 규칙", detail: "규칙적인 강박 · 안정적인 프레이즈 · 절제된 반복음 악센트" },
-    jazz: { label: "재즈", title: "재즈 볼륨 규칙", detail: "약박과 싱코페이션 · 유연한 프레이즈 · 도착음 강조" },
-    ballad: { label: "발라드", title: "발라드 볼륨 규칙", detail: "완만한 프레이즈 · 긴 음 강조 · 부드러운 마무리" },
-    bossa: { label: "보사노바", title: "보사노바 볼륨 규칙", detail: "부드러운 엇박 · 작은 강약 폭 · 안정적인 반복 흐름" },
-    rock: { label: "록", title: "록 볼륨 규칙", detail: "강한 첫 박과 셋째 박 · 선명한 어택 · 단단한 반복 리듬" },
-    funk: { label: "펑크", title: "펑크 볼륨 규칙", detail: "16비트 오프비트 · 싱코페이션 · 반복음 교차 악센트" },
-    classical: { label: "클래식", title: "클래식 볼륨 규칙", detail: "프레이즈 호흡 · 긴 음과 절정음 강조 · 완만한 상승과 하강" }
+    pop: { labelKey: "ui.pop", titleKey: "vol.pop_rules", detailKey: "msg.reg_strong" },
+    jazz: { labelKey: "ui.jazz", titleKey: "vol.jazz_rules", detailKey: "msg.weak_beats" },
+    ballad: { labelKey: "ui.ballad", titleKey: "vol.ballad_rules", detailKey: "msg.gentle_phrasing" },
+    bossa: { labelKey: "ui.bossa_nova", titleKey: "vol.bossa_nova", detailKey: "msg.soft_offbeats_narrow" },
+    rock: { labelKey: "ui.rock", titleKey: "vol.rock_rules", detailKey: "msg.strong_first" },
+    funk: { labelKey: "ui.funk", titleKey: "vol.funk_rules", detailKey: "msg.syncopation16" },
+    classical: { labelKey: "ui.classical", titleKey: "vol.classical_rules", detailKey: "msg.phrase_breathing" }
   };
+
+  function getDynamicsGenerateInfo(genre) {
+    const info = DYNAMICS_GENERATE_INFO[genre] || DYNAMICS_GENERATE_INFO.pop;
+    return {
+      label: i18nText(info.labelKey),
+      title: i18nText(info.titleKey),
+      detail: i18nText(info.detailKey)
+    };
+  }
 
   function updateDynamicsGenerateDescription() {
     const genre = dynamicsGenerateGenre?.value || "pop";
-    const info = DYNAMICS_GENERATE_INFO[genre] || DYNAMICS_GENERATE_INFO.pop;
+    const info = getDynamicsGenerateInfo(genre);
     if (dynamicsGenerateRuleTitle) dynamicsGenerateRuleTitle.textContent = info.title;
     if (dynamicsGenerateRuleText) dynamicsGenerateRuleText.textContent = info.detail;
   }
 
   function openDynamicsGenerateDialog() {
-    if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = "기존 볼륨 변화가 감지되면 조건을 안내한 뒤 적용 여부를 확인합니다.";
+    if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = i18nText("vol.change_confirm");
     if (dynamicsGenerateGenre && !Object.prototype.hasOwnProperty.call(DYNAMICS_GENERATE_INFO, dynamicsGenerateGenre.value)) {
       dynamicsGenerateGenre.value = "pop";
     }
@@ -6585,7 +6876,7 @@ ${shortError(err)}`);
   function applyDynamicsGenerateFromDialog() {
     const targetPartIndexes = getDialogSelectedPartIndexes(".dynamics-generate-channel");
     if (!targetPartIndexes.length) {
-      showDialog("볼륨 생성", "적용할 채널을 1개 이상 선택해 주세요.");
+      showDialog(i18nText("vol.generate"), i18nText("msg.select_one_ch_3"));
       return;
     }
     applyDynamicsGenerate({
@@ -6598,12 +6889,12 @@ ${shortError(err)}`);
   function formatDynamicsConflict(partResult) {
     const conditions = [];
     if (Number(partResult.distinctVolumeCount || 0) >= 3) {
-      conditions.push(`사용 중인 V 값 ${partResult.distinctVolumeCount.toLocaleString("ko-KR")}종`);
+      conditions.push(i18nText("vol.distinct_values", [formatCount(partResult.distinctVolumeCount)]));
     }
     if (Number(partResult.volumeRange || 0) >= 2) {
-      conditions.push(`V${partResult.minVolume}~V${partResult.maxVolume} · 차이 ${partResult.volumeRange}`);
+      conditions.push(i18nText("vol.range_diff", [partResult.minVolume, partResult.maxVolume, partResult.volumeRange]));
     }
-    return conditions.join(" / ") || "기존 볼륨 변화 감지";
+    return conditions.join(" / ") || i18nText("vol.changes_detected");
   }
 
   function reopenDynamicsGenerateSettings() {
@@ -6620,7 +6911,7 @@ ${shortError(err)}`);
         const item = document.createElement("div");
         item.className = `dynamics-confirm-item part-${conflict.partIndex}`;
         const title = document.createElement("strong");
-        title.textContent = PART_LABELS[conflict.partIndex] || `채널 ${conflict.partIndex + 1}`;
+        title.textContent = PART_LABELS[conflict.partIndex] || i18nText("ui.channel_n", [conflict.partIndex + 1]);
         const detail = document.createElement("span");
         detail.textContent = formatDynamicsConflict(conflict);
         item.append(title, detail);
@@ -6635,11 +6926,11 @@ ${shortError(err)}`);
       return;
     }
 
-    const lines = conflicts.map(conflict => `${PART_LABELS[conflict.partIndex] || `채널 ${conflict.partIndex + 1}`}: ${formatDynamicsConflict(conflict)}`);
+    const lines = conflicts.map(conflict => `${PART_LABELS[conflict.partIndex] || i18nText("ui.channel_n", [conflict.partIndex + 1])}: ${formatDynamicsConflict(conflict)}`);
     const confirmed = window.confirm(
-      `기존 볼륨 변화가 감지되었습니다.\n\n` +
-      `판단 조건: V 값 3종 이상 또는 최대·최소 차이 2 이상\n\n` +
-      `${lines.join("\n")}\n\n기존 V 변화를 교체하고 그래도 생성할까요?`
+      i18nText("vol.conflict_intro") + "\n\n" +
+      i18nText("vol.conflict_rule") + "\n\n" +
+      `${lines.join("\n")}\n\n${i18nText("vol.replace_confirm")}`
     );
     if (confirmed) {
       const nextOptions = pendingDynamicsGenerateOptions;
@@ -6666,12 +6957,12 @@ ${shortError(err)}`);
 
   function applyDynamicsGenerate(options = {}) {
     if (typeof generateDynamicsMml !== "function") {
-      showDialog("볼륨 생성 실패", "볼륨 생성 모듈을 불러오지 못했습니다.");
+      showDialog(i18nText("vol.gen_fail"), i18nText("vol.load_gen"));
       return;
     }
     const selectedIndexes = options.targetPartIndexes == null ? null : normalizePartIndexList(options.targetPartIndexes);
     if (options.targetPartIndexes != null && !selectedIndexes.length) {
-      showDialog("볼륨 생성", "적용할 채널을 1개 이상 선택해 주세요.");
+      showDialog(i18nText("vol.generate"), i18nText("msg.select_one_ch_3"));
       return;
     }
 
@@ -6695,7 +6986,7 @@ ${shortError(err)}`);
         const conflicts = preview.partResults.filter(part => part.status === "existing_expression");
         if (conflicts.length) {
           if (dynamicsGenerateStatus) {
-            dynamicsGenerateStatus.textContent = `기존 볼륨 변화가 감지된 채널 ${conflicts.length.toLocaleString("ko-KR")}개를 확인해 주세요.`;
+            dynamicsGenerateStatus.textContent = i18nText("vol.conflict_count", [formatCount(conflicts.length)]);
           }
           showDynamicsGenerateOverwriteConfirmation(normalizedOptions, conflicts);
           return;
@@ -6714,7 +7005,7 @@ ${shortError(err)}`);
       commitDynamicsGenerate(result, normalizedOptions, selectedIndexes);
     } catch (err) {
       if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = shortError(err);
-      showDialog("볼륨 생성 실패", shortError(err));
+      showDialog(i18nText("vol.gen_fail"), shortError(err));
     }
   }
 
@@ -6724,17 +7015,17 @@ ${shortError(err)}`);
     if (dynamicsGenerateApply) dynamicsGenerateApply.disabled = true;
     if (dynamicsGenerateCancel) dynamicsGenerateCancel.disabled = true;
     try {
-      const info = DYNAMICS_GENERATE_INFO[result.genre] || DYNAMICS_GENERATE_INFO.pop;
+      const info = getDynamicsGenerateInfo(result.genre);
       if (result.generatedCommands <= 0 || result.processedPartCount <= 0) {
-        const reason = "선택한 채널에서 볼륨 변화를 생성할 음표를 찾지 못했습니다.";
+        const reason = i18nText("vol.find_notes");
         if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = reason;
-        showDialog("볼륨 생성", reason);
+        showDialog(i18nText("vol.generate"), reason);
         return;
       }
       setMainMml(result.mml);
       dynamicsGenerateDialog?.close();
       dynamicsGenerateConfirmDialog?.close();
-      flashButton(dynamicsGenerateBtn, "생성 완료");
+      flashButton(dynamicsGenerateBtn, i18nText("st.gen_done"));
       trackAnalytics("volume_generate_apply", {
         genre: result.genre,
         strength: result.strength,
@@ -6744,20 +7035,20 @@ ${shortError(err)}`);
         overwrite_existing: options.overwriteExisting,
         overwritten_channel_count: options.overwriteExisting ? result.existingExpressivePartCount || 0 : 0
       });
-      const strengthLabels = { light: "가볍게", normal: "보통", strong: "강하게" };
+      const strengthLabels = { light: i18nText("ui.light"), normal: i18nText("ui.normal"), strong: i18nText("ui.strong") };
       const overwrittenLine = options.overwriteExisting && result.existingExpressivePartCount > 0
-        ? `\n기존 볼륨 변화를 교체한 채널: ${result.existingExpressivePartCount.toLocaleString("ko-KR")}개`
+        ? "\n" + i18nText("vol.replaced_count", [formatCount(result.existingExpressivePartCount)])
         : "";
       showDialog(
-        "볼륨 생성 완료",
-        `${info.label} 스타일 · ${strengthLabels[result.strength] || result.strength}\n` +
-        `적용 채널: ${result.processedPartCount.toLocaleString("ko-KR")}개\n` +
-        `생성한 V 명령: ${result.generatedCommands.toLocaleString("ko-KR")}개\n` +
-        `변경된 음표 볼륨: ${result.changedNotes.toLocaleString("ko-KR")}개${overwrittenLine}`
+        i18nText("vol.gen_done"),
+        i18nText("gen.style_strength", [info.label, strengthLabels[result.strength] || result.strength]) + "\n" +
+        i18nText("gen.applied_channels", [formatCount(result.processedPartCount)]) + "\n" +
+        i18nText("vol.generated_commands", [formatCount(result.generatedCommands)]) + "\n" +
+        i18nText("vol.changed_notes", [formatCount(result.changedNotes), overwrittenLine])
       );
     } catch (err) {
       if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = shortError(err);
-      showDialog("볼륨 생성 실패", shortError(err));
+      showDialog(i18nText("vol.gen_fail"), shortError(err));
     } finally {
       if (dynamicsGenerateApply) dynamicsGenerateApply.disabled = false;
       if (dynamicsGenerateCancel) dynamicsGenerateCancel.disabled = false;
@@ -6766,53 +7057,28 @@ ${shortError(err)}`);
   }
 
   const ACCOMPANIMENT_GENERATE_INFO = {
-    pop: {
-      label: "팝",
-      title: "팝 반주 규칙",
-      detail: "안정적인 화음 · 규칙적인 리듬 · 루트와 5도 중심 베이스",
-      completion: "안정적인 화음, 규칙적인 리듬과 루트·5도 중심 베이스"
-    },
-    jazz: {
-      label: "재즈",
-      title: "재즈 반주 규칙",
-      detail: "7th 코드 · 보이스 리딩 · 싱코페이션 · 워킹 베이스",
-      completion: "7th 코드 보이싱, 싱코페이션과 워킹 베이스"
-    },
-    ballad: {
-      label: "발라드",
-      title: "발라드 반주 규칙",
-      detail: "긴 화음 · 완만한 아르페지오 · 절제된 저음 진행",
-      completion: "긴 화음, 완만한 아르페지오와 절제된 저음 진행"
-    },
-    bossa: {
-      label: "보사노바",
-      title: "보사노바 반주 규칙",
-      detail: "부드러운 엇박 · 코드 분산 · 루트와 5도 교대 베이스",
-      completion: "부드러운 엇박 코드와 루트·5도 교대 베이스"
-    },
-    rock: {
-      label: "록",
-      title: "록 반주 규칙",
-      detail: "파워 코드 · 강박 중심 리듬 · 활동적인 저음",
-      completion: "파워 코드, 강박 중심 리듬과 활동적인 저음"
-    },
-    funk: {
-      label: "펑크",
-      title: "펑크 반주 규칙",
-      detail: "짧은 코드 · 16비트 싱코페이션 · 옥타브 베이스",
-      completion: "짧은 싱코페이션 코드와 옥타브 중심 베이스"
-    },
-    classical: {
-      label: "클래식",
-      title: "클래식 반주 규칙",
-      detail: "성부 진행 · 분산화음 · 알베르티형 저음",
-      completion: "부드러운 성부 진행, 분산화음과 알베르티형 저음"
-    }
+    pop: { labelKey: "ui.pop", titleKey: "ui.pop_accomp", detailKey: "msg.stable_harm_reg", completionKey: "msg.stable_harm_reg_2" },
+    jazz: { labelKey: "ui.jazz", titleKey: "ui.jazz_accomp", detailKey: "msg.jazz_walk", completionKey: "msg.jazz_walk_2" },
+    ballad: { labelKey: "ui.ballad", titleKey: "ui.ballad_accomp", detailKey: "msg.long_chords_gentle", completionKey: "msg.long_chords_gentle_2" },
+    bossa: { labelKey: "ui.bossa_nova", titleKey: "ui.bossa_nova_accomp", detailKey: "msg.soft_offbeats_broken", completionKey: "msg.soft_offbeat" },
+    rock: { labelKey: "ui.rock", titleKey: "ui.rock_accomp", detailKey: "msg.power_chords", completionKey: "msg.power_chords_2" },
+    funk: { labelKey: "ui.funk", titleKey: "ui.funk_accomp", detailKey: "pitch.short_chords", completionKey: "pitch.short_syncopated" },
+    classical: { labelKey: "ui.classical", titleKey: "ui.classical_accomp", detailKey: "msg.voice_leading", completionKey: "msg.smooth_voice" }
   };
+
+  function getAccompanimentGenerateInfo(genre) {
+    const info = ACCOMPANIMENT_GENERATE_INFO[genre] || ACCOMPANIMENT_GENERATE_INFO.pop;
+    return {
+      label: i18nText(info.labelKey),
+      title: i18nText(info.titleKey),
+      detail: i18nText(info.detailKey),
+      completion: i18nText(info.completionKey)
+    };
+  }
 
   function updateAccompanimentGenerateDescription() {
     const genre = accompanimentGenerateGenre?.value || "pop";
-    const info = ACCOMPANIMENT_GENERATE_INFO[genre] || ACCOMPANIMENT_GENERATE_INFO.pop;
+    const info = getAccompanimentGenerateInfo(genre);
     if (accompanimentGenerateRuleTitle) accompanimentGenerateRuleTitle.textContent = info.title;
     if (accompanimentGenerateRuleText) accompanimentGenerateRuleText.textContent = info.detail;
   }
@@ -6891,14 +7157,14 @@ ${shortError(err)}`);
     const notePartIndexes = flags.filter(flag => flag.hasNotes).map(flag => flag.partIndex);
     if (accompanimentGenerateStatus) {
       if (notePartIndexes.length === 1 && notePartIndexes[0] === 0) {
-        accompanimentGenerateStatus.textContent = "멜로디만 있어 화음1과 화음2를 생성 대상으로 선택했습니다.";
+        accompanimentGenerateStatus.textContent = i18nText("msg.melody_present");
       } else if (notePartIndexes.length === 6) {
-        accompanimentGenerateStatus.textContent = "6개 채널이 모두 차 있어 마지막 화음5 채널을 교체 대상으로 선택했습니다.";
+        accompanimentGenerateStatus.textContent = i18nText("msg.all_six");
       } else if (targetIndexes.length > 0) {
-        const targetLabel = PART_LABELS[targetIndexes[0]] || `${targetIndexes[0] + 1}번 채널`;
-        accompanimentGenerateStatus.textContent = `내용이 있는 채널은 참고 대상으로, 가장 앞선 빈 채널인 ${targetLabel}을 생성 대상으로 선택했습니다.`;
+        const targetLabel = PART_LABELS[targetIndexes[0]] || i18nText("ui.channel_n", [targetIndexes[0] + 1]);
+        accompanimentGenerateStatus.textContent = i18nText("accomp.auto_target", [targetLabel]);
       } else {
-        accompanimentGenerateStatus.textContent = "반주를 생성할 채널을 직접 선택해 주세요.";
+        accompanimentGenerateStatus.textContent = i18nText("msg.select_chs");
       }
     }
     updateAccompanimentGenerateDescription();
@@ -6929,11 +7195,11 @@ ${shortError(err)}`);
     if (!accompanimentGenerateApply || accompanimentGenerateApply.disabled) return;
     const options = getAccompanimentDialogOptions();
     if (!options.analysisPartIndexes.length) {
-      showDialog("반주 생성", "참고할 채널을 1개 이상 선택해 주세요.");
+      showDialog(i18nText("ui.gen_accomp"), i18nText("msg.select_one_ref"));
       return;
     }
     if (!options.generationPartIndexes.length) {
-      showDialog("반주 생성", "반주를 생성할 채널을 1개 이상 선택해 주세요.");
+      showDialog(i18nText("ui.gen_accomp"), i18nText("msg.select_one_ch_4"));
       return;
     }
 
@@ -6950,8 +7216,8 @@ ${shortError(err)}`);
         accompanimentGenerateConfirmCancel?.focus();
         return;
       }
-      const labels = confirmationIndexes.map(index => PART_LABELS[index] || `${index + 1}채널`).join(", ");
-      if (window.confirm(`${labels}의 기존 내용이 새 반주로 교체됩니다. 계속할까요?`)) {
+      const labels = confirmationIndexes.map(index => PART_LABELS[index] || i18nText("ui.channel_n", [index + 1])).join(", ");
+      if (window.confirm(i18nText("accomp.replace_confirm", [labels]))) {
         const confirmedOptions = pendingAccompanimentGenerateOptions;
         pendingAccompanimentGenerateOptions = null;
         await executeAccompanimentGeneration(confirmedOptions);
@@ -6971,12 +7237,12 @@ ${shortError(err)}`);
       const item = document.createElement("div");
       item.className = `dynamics-confirm-item part-${partIndex}`;
       const title = document.createElement("strong");
-      title.textContent = PART_LABELS[partIndex] || `${partIndex + 1}채널`;
+      title.textContent = PART_LABELS[partIndex] || i18nText("ui.channel_n", [partIndex + 1]);
       const detail = document.createElement("span");
       const overlap = options.overlapPartIndexes?.includes(partIndex);
       detail.textContent = overlap
-        ? "참고 채널의 원본을 먼저 분석한 뒤, 이 채널을 새 반주로 교체합니다."
-        : "현재 채널의 기존 내용을 새 반주로 교체합니다.";
+        ? i18nText("msg.src_ref")
+        : i18nText("msg.content_ch");
       item.append(title, detail);
       accompanimentGenerateConfirmList.append(item);
     }
@@ -7004,8 +7270,8 @@ ${shortError(err)}`);
     accompanimentGenerateApply.disabled = true;
     if (accompanimentGenerateCancel) accompanimentGenerateCancel.disabled = true;
     if (accompanimentGenerateStatus) {
-      const label = ACCOMPANIMENT_GENERATE_INFO[options.genre]?.label || "선택한 장르";
-      accompanimentGenerateStatus.textContent = `${options.analysisPartIndexes.length.toLocaleString("ko-KR")}개 채널을 분석해 ${label} 반주를 생성하고 있습니다.`;
+      const label = getAccompanimentGenerateInfo(options.genre)?.label || i18nText("ui.genre");
+      accompanimentGenerateStatus.textContent = i18nText("accomp.generating", [formatCount(options.analysisPartIndexes.length), label]);
     }
     await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
     try {
@@ -7015,7 +7281,7 @@ ${shortError(err)}`);
       showAccompanimentGenerationResult(result);
     } catch (err) {
       if (accompanimentGenerateStatus) accompanimentGenerateStatus.textContent = shortError(err);
-      showDialog("반주 생성 실패", shortError(err));
+      showDialog(i18nText("err.accomp_gen"), shortError(err));
       if (accompanimentGenerateDialog?.showModal && !accompanimentGenerateDialog.open) accompanimentGenerateDialog.showModal();
     } finally {
       accompanimentGenerateApply.disabled = false;
@@ -7024,7 +7290,7 @@ ${shortError(err)}`);
   }
 
   function applyAccompanimentGeneration(options = {}) {
-    if (typeof generateAccompanimentMml !== "function") throw new Error("반주 생성 모듈을 불러오지 못했습니다.");
+    if (typeof generateAccompanimentMml !== "function") throw new Error(i18nText("err.load_accomp"));
     stopPlayback(false);
     const result = generateAccompanimentMml(normalizeMmlForDisplay(mainMml.value), {
       genre: options.genre || "pop",
@@ -7033,7 +7299,7 @@ ${shortError(err)}`);
       generationPartIndexes: options.generationPartIndexes
     });
     setMainMml(result.mml);
-    flashButton(accompanimentGenerateBtn, "생성 완료");
+    flashButton(accompanimentGenerateBtn, i18nText("st.gen_done"));
     trackAnalytics("accompaniment_generate_apply", {
       genre: result.genre,
       strength: result.strength,
@@ -7047,29 +7313,29 @@ ${shortError(err)}`);
   }
 
   function showAccompanimentGenerationResult(result) {
-    const strengthLabels = { light: "가볍게", normal: "보통", strong: "강하게" };
-    const info = ACCOMPANIMENT_GENERATE_INFO[result.genre] || ACCOMPANIMENT_GENERATE_INFO.pop;
-    const analysisLabels = result.analysisPartIndexes.map(index => PART_LABELS[index] || `${index + 1}채널`).join(", ");
+    const strengthLabels = { light: i18nText("ui.light"), normal: i18nText("ui.normal"), strong: i18nText("ui.strong") };
+    const info = getAccompanimentGenerateInfo(result.genre);
+    const analysisLabels = result.analysisPartIndexes.map(index => PART_LABELS[index] || i18nText("ui.channel_n", [index + 1])).join(", ");
     const roleLines = result.generatedRoles
-      .map(role => `${PART_LABELS[role.partIndex] || `${role.partIndex + 1}채널`}: ${role.role}`)
+      .map(role => `${PART_LABELS[role.partIndex] || i18nText("ui.channel_n", [role.partIndex + 1])}: ${role.role}`)
       .join("\n");
     showDialog(
-      "반주 생성 완료",
-      `${info.label} 스타일 · ${strengthLabels[result.strength] || result.strength}\n` +
-      `참고 채널: ${analysisLabels}\n` +
-      `감지 조성: ${result.key?.label || "확인 불가"}\n` +
-      `화성 구간: ${Number(result.chordCount || 0).toLocaleString("ko-KR")}개\n` +
-      `생성 역할:\n${roleLines}\n` +
-      `${info.completion}을 적용했습니다.`
+      i18nText("st.accomp_gen"),
+      i18nText("gen.style_strength", [info.label, strengthLabels[result.strength] || result.strength]) + "\n" +
+      i18nText("accomp.reference_channels", [analysisLabels]) + "\n" +
+      i18nText("accomp.detected_key", [result.key?.label || i18nText("ui.unknown")]) + "\n" +
+      i18nText("accomp.chord_sections", [formatCount(result.chordCount || 0)]) + "\n" +
+      i18nText("accomp.generated_roles", [roleLines]) + "\n" +
+      i18nText("accomp.applied", [info.completion])
     );
   }
 
   function parseRestTrimLimit(value, options = {}) {
     const raw = String(value || "32").trim().toLowerCase();
-    if (raw === "all" || raw === "전체" || raw === "모두") return { all: true, denom: null };
+    if (raw === "all" || raw === i18nText("ui.all_2") || raw === i18nText("ui.all")) return { all: true, denom: null };
     const denom = Number(raw);
     if (![4, 8, 16, 32, 64].includes(denom)) {
-      if (!options.silent) showDialog("쉼표 삭제", "삭제 길이는 all, 4, 8, 16, 32, 64 중 하나를 선택해 주세요.");
+      if (!options.silent) showDialog(i18nText("ui.remove_rests"), i18nText("msg.select_one_all"));
       return null;
     }
     return { all: false, denom };
@@ -7081,12 +7347,12 @@ ${shortError(err)}`);
       if (!navigator.clipboard?.readText) throw new Error("clipboard read unavailable");
       text = await navigator.clipboard.readText();
     } catch (_) {
-      const manual = prompt("붙여넣을 MML을 입력해 주세요.");
+      const manual = prompt(i18nText("mml.enter_paste"));
       if (manual == null) return;
       text = manual;
     }
     if (!String(text || "").trim()) {
-      showDialog("붙여넣기 실패", "붙여넣을 MML이 비어 있습니다.");
+      showDialog(i18nText("err.paste"), i18nText("mml.paste_empty"));
       return;
     }
 
@@ -7110,7 +7376,7 @@ ${shortError(err)}`);
     clearSuggestedMmlSaveFileName();
     googleDriveMmlFileId = "";
     googleDriveMmlFileName = "";
-    flashButton(pasteBtn, "붙여넣기 완료");
+    flashButton(pasteBtn, i18nText("st.paste_done"));
   }
 
   async function copyVisibleMml() {
@@ -7118,15 +7384,13 @@ ${shortError(err)}`);
     try {
       text = normalizeMmlForCopy(optimizeMml(mainMml?.value || "").mml);
     } catch (err) {
-      showDialog("복사 실패", `MML 최적화 중 문제가 발생했습니다.
-
-${shortError(err)}`);
+      showDialog(i18nText("err.copy"), i18nText("mml.optimize_error_detail", [shortError(err)]));
       return;
     }
     const mainPanel = panels.find(p => p.dataset.panel === "main") || panels[0];
     try {
       await navigator.clipboard.writeText(text);
-      flashButton(copyBtn, "복사 완료");
+      flashButton(copyBtn, i18nText("st.copy_done"));
       showCopySummary(mainPanel, text);
       trackAnalytics("copy_all_mml", { channel_count: analyticsChannelCount(text) });
     } catch {
@@ -7139,11 +7403,11 @@ ${shortError(err)}`);
       ta.select();
       try {
         document.execCommand("copy");
-        flashButton(copyBtn, "복사 완료");
+        flashButton(copyBtn, i18nText("st.copy_done"));
         showCopySummary(mainPanel, text);
         trackAnalytics("copy_all_mml", { channel_count: analyticsChannelCount(text) });
       } catch (err) {
-        showDialog("복사 실패", "자동 복사가 막혔습니다. 전체 MML을 선택한 뒤 Ctrl+C로 복사해 주세요.");
+        showDialog(i18nText("err.copy"), i18nText("mml.auto_copying"));
       } finally {
         ta.remove();
       }
@@ -7158,28 +7422,28 @@ ${shortError(err)}`);
     if (isMainPanel) {
       const copiedParts = splitMmlParts(normalizeMmlForDisplay(copiedText)).slice(0, 6).map(normalizePartText);
       rows = copiedParts
-        .map((part, i) => ({ label: PART_LABELS[i] || `채널${i + 1}`, length: part.length }))
+        .map((part, i) => ({ label: PART_LABELS[i] || i18nText("ui.channel_n", [i + 1]), length: part.length }))
         .filter(row => row.length > 0);
     } else {
       const m = /^part(\d+)$/.exec(activePanel.dataset.panel || "");
       const idx = m ? Number(m[1]) : 0;
-      rows = [{ label: PART_LABELS[idx] || "현재 채널", length: normalizePartText(copiedText).length }].filter(row => row.length > 0);
+      rows = [{ label: PART_LABELS[idx] || i18nText("ui.channel_current"), length: normalizePartText(copiedText).length }].filter(row => row.length > 0);
     }
 
     if (!rows.length) {
-      showDialog("복사 완료", "복사된 MML이 비어 있습니다.");
+      showDialog(i18nText("st.copy_done"), i18nText("mml.copied_empty"));
       return;
     }
 
     const total = rows.reduce((sum, row) => sum + row.length, 0);
     const body = [
-      "복사된 MML 정보",
+      i18nText("mml.copied_info"),
       "",
-      ...rows.map(row => `${row.label}: ${formatCount(row.length)} 자`),
+      ...rows.map(row => i18nText("ui.named_chars", [row.label, formatCount(row.length)])),
       "",
-      `합계: ${formatCount(total)} 자`
+      i18nText("ui.total_chars", [formatCount(total)])
     ].join("\n");
-    showDialog("복사 완료", body);
+    showDialog(i18nText("st.copy_done"), body);
   }
 
 
@@ -7188,9 +7452,9 @@ ${shortError(err)}`);
       buildSplitCopyPages();
       trackAnalytics("split_copy_open");
       if (splitCopyDialog?.showModal) splitCopyDialog.showModal();
-      else showDialog("악보 나눠복사", "이 브라우저는 나눠복사 Dialog를 지원하지 않습니다.");
+      else showDialog(i18nText("ui.split_copy_score"), i18nText("msg.unsupported_split"));
     } catch (err) {
-      showDialog("나눠복사 실패", shortError(err));
+      showDialog(i18nText("err.split_copy"), shortError(err));
     }
   }
 
@@ -7209,7 +7473,7 @@ ${shortError(err)}`);
       });
     } catch (err) {
       splitCopySummary.hidden = false;
-      splitCopySummary.textContent = `분할 실패: ${shortError(err)}`;
+      splitCopySummary.textContent = i18nText("split.fail_detail", [shortError(err)]);
       splitCopyPages.innerHTML = "";
       throw err;
     }
@@ -7219,13 +7483,13 @@ ${shortError(err)}`);
     if (splitCopySummary) {
       splitCopySummary.hidden = warnings.length === 0;
       splitCopySummary.innerHTML = warnings.length
-        ? `<em>${escapeHtml(warnings.slice(0, 3).join(" / "))}${warnings.length > 3 ? " 외" : ""}</em>`
+        ? `<em>${escapeHtml(warnings.slice(0, 3).join(" / "))}${warnings.length > 3 ? i18nText("ui.more") : ""}</em>`
         : "";
     }
 
     splitCopyPages.innerHTML = "";
     if (!pages.length) {
-      splitCopyPages.innerHTML = `<div class="split-copy-empty">분할할 MML이 없습니다.</div>`;
+      splitCopyPages.innerHTML = i18nText("tpl.mml_split");
       return;
     }
 
@@ -7233,22 +7497,22 @@ ${shortError(err)}`);
       const row = document.createElement("div");
       row.className = `split-copy-page${page.maxPartLength > maxChars ? " over" : ""}`;
       const nonEmpty = page.parts
-        .map((part, i) => ({ label: PART_LABELS[i] || `채널${i + 1}`, length: String(part || "").length }))
+        .map((part, i) => ({ label: PART_LABELS[i] || i18nText("ui.channel_n", [i + 1]), length: String(part || "").length }))
         .filter(item => item.length > 0);
       const lengthText = nonEmpty.length
-        ? nonEmpty.map(item => `${item.label} ${formatCount(item.length)}자`).join(" · ")
-        : "빈 악보";
+        ? nonEmpty.map(item => i18nText("ui.named_chars", [item.label, formatCount(item.length)])).join(" · ")
+        : i18nText("ui.empty_score");
       const reasonText = describeSplitReason(page.reason);
-      const skipped = page.skippedUnits > 0 ? ` · 공통 무음 ${formatBeatUnits(page.skippedUnits)} 제거` : "";
+      const skipped = page.skippedUnits > 0 ? i18nText("split.removed_silence", [formatBeatUnits(page.skippedUnits)]) : "";
       row.innerHTML = `
         <div class="split-copy-page-main">
-          <strong>악보 ${page.index}</strong>
+          <strong>${escapeHtml(i18nText("split.score_n", [page.index]))}</strong>
           <span>${escapeHtml(lengthText)}</span>
           <small>${escapeHtml(reasonText + skipped)}${page.warning ? ` · ${escapeHtml(page.warning)}` : ""}</small>
         </div>
         <div class="split-copy-page-actions">
-          <button type="button" class="ghost" data-split-preview-index="${page.index - 1}">듣기</button>
-          <button type="button" class="primary" data-split-copy-index="${page.index - 1}">복사</button>
+          <button type="button" class="ghost" data-split-preview-index="${page.index - 1}">${escapeHtml(i18nText("ui.listen"))}</button>
+          <button type="button" class="primary" data-split-copy-index="${page.index - 1}">${escapeHtml(i18nText("ui.copy_2"))}</button>
         </div>
       `;
       row.querySelector("[data-split-copy-index]")?.addEventListener("click", () => void copySplitPage(page));
@@ -7260,7 +7524,7 @@ ${shortError(err)}`);
   async function previewSplitPage(page, triggerButton = null) {
     const text = String(page?.mml || "").trim();
     if (!text) {
-      showDialog("나눠복사 미리듣기 실패", "재생할 악보가 비어 있습니다.");
+      showDialog(i18nText("err.split_copy_preview"), i18nText("msg.score_play"));
       return;
     }
     const button = triggerButton instanceof HTMLElement ? triggerButton : null;
@@ -7279,10 +7543,10 @@ ${shortError(err)}`);
       const scheduled = buildSchedule(parsed);
       const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
       const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
-      if (!notes.length || duration <= 0) throw new Error("재생할 음표가 없습니다.");
-      if (!soundFont.presets?.length) throw new Error("SF2 안에서 사용할 수 있는 프리셋을 찾지 못했습니다.");
+      if (!notes.length || duration <= 0) throw new Error(i18nText("msg.no_notes_play"));
+      if (!soundFont.presets?.length) throw new Error(i18nText("snd.find_avail"));
       const prepared = prepareNotesWithPartPresets(ctx, notes);
-      if (!prepared.length) throw new Error("소리 나는 음표가 없습니다.");
+      if (!prepared.length) throw new Error(i18nText("msg.no_audible"));
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
       const result = schedulePreparedNotes(ctx, prepared, {
         baseTime: ctx.currentTime + 0.08,
@@ -7300,19 +7564,19 @@ ${shortError(err)}`);
       midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
     } catch (err) {
       stopMidiPreview();
-      showDialog("나눠복사 미리듣기 실패", shortError(err));
+      showDialog(i18nText("err.split_copy_preview"), shortError(err));
     }
   }
 
   async function copySplitPage(page) {
     const text = String(page.mml || "").trim();
     if (!text) {
-      showDialog("나눠복사 실패", "복사할 악보가 비어 있습니다.");
+      showDialog(i18nText("err.split_copy"), i18nText("msg.score_copy"));
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
-      showDialog("복사 완료", buildSplitCopyPageMessage(page));
+      showDialog(i18nText("st.copy_done"), buildSplitCopyPageMessage(page));
       trackAnalytics("copy_split_page");
     } catch (_) {
       const ta = document.createElement("textarea");
@@ -7323,10 +7587,10 @@ ${shortError(err)}`);
       ta.select();
       try {
         document.execCommand("copy");
-        showDialog("복사 완료", buildSplitCopyPageMessage(page));
+        showDialog(i18nText("st.copy_done"), buildSplitCopyPageMessage(page));
         trackAnalytics("copy_split_page");
       } catch (err) {
-        showDialog("복사 실패", "자동 복사가 막혔습니다. Dialog의 악보를 직접 선택해 복사해 주세요.");
+        showDialog(i18nText("err.copy"), i18nText("msg.auto_copying"));
       } finally {
         ta.remove();
       }
@@ -7335,35 +7599,35 @@ ${shortError(err)}`);
 
   function buildSplitCopyPageMessage(page) {
     const rows = page.parts
-      .map((part, i) => ({ label: PART_LABELS[i] || `채널${i + 1}`, length: String(part || "").length }))
+      .map((part, i) => ({ label: PART_LABELS[i] || i18nText("ui.channel_n", [i + 1]), length: String(part || "").length }))
       .filter(row => row.length > 0);
     const total = rows.reduce((sum, row) => sum + row.length, 0);
     return [
-      `악보 ${page.index}가 복사되었습니다.`,
+      i18nText("split.score_copied", [page.index]),
       "",
-      ...rows.map(row => `${row.label}: ${formatCount(row.length)} 자`),
+      ...rows.map(row => i18nText("ui.named_chars", [row.label, formatCount(row.length)])),
       "",
-      `합계: ${formatCount(total)} 자`
+      i18nText("ui.total_chars", [formatCount(total)])
     ].join("\n");
   }
 
   function describeSplitReason(reason) {
     switch (reason) {
-      case "last": return "마지막 악보";
-      case "common-silence": return "2박 이상 공통 무음에서 분할";
-      case "longest-silence": return "가장 긴 공통 무음에서 분할";
-      case "clean-boundary": return "전체 채널 경계에서 분할";
-      case "partial-boundary": return "최대 안전 경계에서 분할";
-      case "char-limit": return "글자 수 기준 분할";
-      case "forced": return "강제 분할";
-      default: return "분할";
+      case "last": return i18nText("ui.last_score");
+      case "common-silence": return i18nText("msg.split_shared");
+      case "longest-silence": return i18nText("msg.split_longest");
+      case "clean-boundary": return i18nText("msg.split_all");
+      case "partial-boundary": return i18nText("msg.split_safest");
+      case "char-limit": return i18nText("ui.split_char");
+      case "forced": return i18nText("ui.forced_split");
+      default: return i18nText("ui.split");
     }
   }
 
   function formatBeatUnits(units) {
     const beats = (Number(units) || 0) / 256;
-    if (Math.abs(beats - Math.round(beats)) < 1e-6) return `${formatCount(Math.round(beats))}박`;
-    return `${beats.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}박`;
+    if (Math.abs(beats - Math.round(beats)) < 1e-6) return i18nText("ui.beats", [formatCount(Math.round(beats))]);
+    return i18nText("ui.beats", [beats.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")]);
   }
 
   async function saveVisibleMml() {
@@ -7371,12 +7635,12 @@ ${shortError(err)}`);
     try {
       exportData = getFullMmlForExport();
     } catch (err) {
-      showDialog("저장 실패", `MML 최적화 중 문제가 발생했습니다.\n\n${shortError(err)}`);
+      showDialog(i18nText("err.save"), i18nText("mml.optimize_error_detail", [shortError(err)]));
       return;
     }
     const { text } = exportData;
     if (!text.trim()) {
-      showDialog("저장 실패", "저장할 MML이 비어 있습니다.");
+      showDialog(i18nText("err.save"), i18nText("mml.empty"));
       return;
     }
 
@@ -7388,29 +7652,29 @@ ${shortError(err)}`);
         const handle = await window.showSaveFilePicker({
           suggestedName: defaultName,
           types: [{
-            description: "텍스트 MML 파일",
+            description: i18nText("mml.text_file"),
             accept: { "text/plain": [".txt"] }
           }]
         });
         const writable = await handle.createWritable();
         await writable.write(blob);
         await writable.close();
-        flashButton(saveBtn, "저장 완료");
+        flashButton(saveBtn, i18nText("st.save_done"));
         trackAnalytics("local_save_mml", { channel_count: analyticsChannelCount(text) });
         return;
       } catch (err) {
         if (err?.name === "AbortError") return;
-        showDialog("저장 실패", shortError(err));
+        showDialog(i18nText("err.save"), shortError(err));
         return;
       }
     }
 
-    const entered = prompt("저장할 파일 이름을 입력해 주세요.\n브라우저에 따라 저장 위치는 다운로드 설정을 따릅니다.", defaultName);
+    const entered = prompt(i18nText("file.save_name_prompt"), defaultName);
     if (entered == null) return;
     let fileName = entered.trim() || defaultName;
     if (!/\.txt$/i.test(fileName)) fileName += ".txt";
     downloadBlob(blob, fileName);
-    flashButton(saveBtn, "저장 완료");
+    flashButton(saveBtn, i18nText("st.save_done"));
     trackAnalytics("local_save_mml", { channel_count: analyticsChannelCount(text) });
   }
 
@@ -8044,7 +8308,7 @@ ${shortError(err)}`);
 
     if (!notes.length || duration <= 0) {
       if (pianoRollEmpty) pianoRollEmpty.hidden = false;
-      if (pianoRollRangeLabel) pianoRollRangeLabel.textContent = "Piano Roll";
+      if (pianoRollRangeLabel) pianoRollRangeLabel.textContent = i18nText("roll.title");
       return;
     }
 

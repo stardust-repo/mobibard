@@ -1,16 +1,18 @@
 (() => {
   "use strict";
 
+  const tr = (key, values = []) => window.MobibardI18n?.t?.(key, values) || String(key);
+
 async function parseSoundFont(bytes) {
-  if (ascii(bytes, 0, 4) !== "RIFF" || ascii(bytes, 8, 4) !== "sfbk") throw new Error("SF2 파일이 아닙니다. RIFF/sfbk 헤더를 확인해 주세요.");
+  if (ascii(bytes, 0, 4) !== "RIFF" || ascii(bytes, 8, 4) !== "sfbk") throw new Error(tr("sf2.err_header"));
   const root = parseRiff(bytes, 12, bytes.length);
   const sdta = findList(root, "sdta");
   const pdta = findList(root, "pdta");
-  if (!sdta || !pdta) throw new Error("SF2에 필요한 sdta/pdta 영역이 없습니다.");
+  if (!sdta || !pdta) throw new Error(tr("sf2.err_sections"));
   const smpl = findChunk(sdta.children, "smpl");
-  if (!smpl) throw new Error("SF2 샘플 데이터(smpl)를 찾지 못했습니다.");
+  if (!smpl) throw new Error(tr("sf2.err_samples"));
   const tables = parsePdta(bytes, pdta);
-  if (!tables.phdr.length || !tables.shdr.length) throw new Error("SF2 프리셋 또는 샘플 헤더가 비어 있습니다.");
+  if (!tables.phdr.length || !tables.shdr.length) throw new Error(tr("sf2.err_headers"));
   const sampleData = new Int16Array(bytes.buffer, bytes.byteOffset + smpl.offset, Math.floor(smpl.size / 2));
   const sf = new SoundFont(sampleData, tables);
   sf.buildPresets();
@@ -237,7 +239,7 @@ function parsePdta(bytes, pdta) {
     shdr: readRecords(bytes, findChunk(c, "shdr"), 46, readShdr)
   };
 }
-function readRecords(bytes, chunk, size, fn) { if (!chunk) throw new Error(`SF2 ${size}바이트 테이블을 찾지 못했습니다.`); const out = []; for (let p = chunk.offset; p + size <= chunk.offset + chunk.size; p += size) out.push(fn(bytes, p)); return out; }
+function readRecords(bytes, chunk, size, fn) { if (!chunk) throw new Error(tr("sf2.err_table", [size])); const out = []; for (let p = chunk.offset; p + size <= chunk.offset + chunk.size; p += size) out.push(fn(bytes, p)); return out; }
 function readName(bytes, p, n) { let s = ""; for (let i = 0; i < n; i++) { const b = bytes[p + i]; if (!b) break; s += String.fromCharCode(b); } return s; }
 function readPhdr(b,p){ return { name:readName(b,p,20), preset:u16le(b,p+20), bank:u16le(b,p+22), bagIndex:u16le(b,p+24) }; }
 function readBag(b,p){ return { genIndex:u16le(b,p), modIndex:u16le(b,p+2) }; }
@@ -283,7 +285,7 @@ function i8(v){ return v & 0x80 ? v - 0x100 : v; }
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 function clampInt(v, a, b) { return Math.round(clamp(Number.isFinite(v) ? v : a, a, b)); }
 function unique(a) { return [...new Set(a)]; }
-function formatTime(sec) { const m = Math.floor(sec / 60), s = Math.round(sec % 60); return m ? `${m}분 ${s}초` : `${s}초`; }
+function formatTime(sec) { const m = Math.floor(sec / 60), s = Math.round(sec % 60); return m ? tr("time.min_sec", [m, s]) : tr("time.sec", [s]); }
 
 
   window.MabiSf2 = { parseSoundFont, prepareNotes, schedulePreparedNotes, scheduleNotes };
