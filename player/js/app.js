@@ -1679,25 +1679,32 @@
         ? i18nText(connected ? "google.logout_help" : "google.connect_help")
         : i18nText("msg.enter_oauth");
     }
-    const googleDriveLoadDisabled = !connected || !hasPickerKey;
-    const googleDriveLoadTitle = !hasPickerKey
-      ? i18nText("drive.select_files")
-      : i18nText("drive.select_gdocs");
+    const googleDriveLoadTitle = !hasClient
+      ? i18nText("msg.enter_oauth")
+      : !connected
+        ? i18nText("google.connect_help")
+        : !hasPickerKey
+          ? i18nText("drive.select_files")
+          : i18nText("drive.select_gdocs");
     if (googleDriveLoadBtn) {
-      googleDriveLoadBtn.disabled = googleDriveLoadDisabled;
+      googleDriveLoadBtn.disabled = false;
       googleDriveLoadBtn.title = googleDriveLoadTitle;
     }
     if (mmiImportGoogleDriveLoad) {
-      mmiImportGoogleDriveLoad.disabled = googleDriveLoadDisabled;
+      mmiImportGoogleDriveLoad.disabled = false;
       mmiImportGoogleDriveLoad.title = googleDriveLoadTitle;
     }
     if (midiConvertGoogleDriveLoad) {
-      midiConvertGoogleDriveLoad.disabled = googleDriveLoadDisabled || midiConvertBusy;
+      midiConvertGoogleDriveLoad.disabled = Boolean(midiConvertBusy);
       midiConvertGoogleDriveLoad.title = midiConvertBusy ? i18nText("drive.fail_load") : googleDriveLoadTitle;
     }
     if (googleDriveSaveBtn) {
-      googleDriveSaveBtn.disabled = !connected;
-      googleDriveSaveBtn.title = i18nText("drive.save_done_mml");
+      googleDriveSaveBtn.disabled = false;
+      googleDriveSaveBtn.title = !hasClient
+        ? i18nText("msg.enter_oauth")
+        : !connected
+          ? i18nText("google.connect_help")
+          : i18nText("drive.save_done_mml");
     }
     if (message) {
       setGoogleStatus(message);
@@ -1806,6 +1813,20 @@
         reject(err);
       }
     });
+  }
+
+  async function ensureGoogleSessionForDriveAction() {
+    if (isGoogleConnected() || restoreGoogleTokenCache()) return googleAccessToken;
+    updateGoogleDriveControls(i18nText("google.login_wait"));
+    await requestGoogleAccessTokenInteractive();
+    setGoogleAutoReconnect(true);
+    const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
+    updateGoogleDriveControls(appliedDriveSettings ? i18nText("google.cfg_applied") : i18nText("cfg.local"));
+    trackAnalytics("google_drive_login", {
+      settings_source: appliedDriveSettings ? "drive" : "local",
+      entry_point: "drive_action"
+    });
+    return googleAccessToken;
   }
 
   function scheduleGoogleAutoReconnect() {
@@ -2649,7 +2670,7 @@
   async function openGoogleDrivePicker() {
     let suspendedPanels = null;
     try {
-      requireGoogleAccessToken();
+      await ensureGoogleSessionForDriveAction();
       if (!googleApiKey()) throw new Error(i18nText("google.api_key_missing"));
       setGoogleStatus(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]));
       const folderId = await ensureGoogleMmlFolder();
@@ -2956,7 +2977,7 @@
 
   async function saveMmlToGoogleDrive() {
     try {
-      requireGoogleAccessToken();
+      await ensureGoogleSessionForDriveAction();
       setGoogleStatus(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]));
       const defaultFolderId = await ensureGoogleMmlFolder();
       let exportData;

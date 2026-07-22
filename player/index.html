@@ -73,11 +73,11 @@
 <div class="player-file-actions-left">
 <span class="toolbar-label" data-i18n="ui.load"></span>
 <button class="soft-tool-button" data-i18n="file.label" data-i18n-title="xml.load_mml" id="midiLoadBtn" title="" type="button"></button>
-<button class="soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.load_mobibard" disabled="" id="googleDriveLoadBtn" title="" type="button"></button>
+<button class="soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.load_mobibard" id="googleDriveLoadBtn" title="" type="button"></button>
 <span aria-hidden="true" class="toolbar-divider"></span>
 <span class="toolbar-label" data-i18n="ui.save"></span>
 <button class="ghost soft-tool-button" data-i18n="file.label" id="saveBtn" type="button"></button>
-<button class="ghost soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.save_mobibard" disabled="" id="googleDriveSaveBtn" title="" type="button"></button>
+<button class="ghost soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.save_mobibard" id="googleDriveSaveBtn" title="" type="button"></button>
 </div>
 <div aria-label="" class="player-file-actions-special" data-i18n-aria-label="game.midi_extraction">
 <button aria-controls="midiExtractDialog" aria-haspopup="dialog" class="midi-extract-toolbar-button beta-feature" data-i18n-title="midi.download_local" id="midiExtractBtn" title="" type="button">
@@ -292,7 +292,7 @@
 <div class="dialog-actions-left">
 <span class="toolbar-label import-action-label" data-i18n="ui.load"></span>
 <button class="soft-tool-button" data-i18n="file.label" data-i18n-title="file.load" id="mmiImportReloadFile" title="" type="button"></button>
-<button class="soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.load_file" disabled="" id="mmiImportGoogleDriveLoad" title="" type="button"></button>
+<button class="soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.load_file" id="mmiImportGoogleDriveLoad" title="" type="button"></button>
 </div>
 <div class="dialog-actions-right">
 <button data-i18n="ui.cancel" id="mmiImportCancel" type="button"></button>
@@ -838,7 +838,7 @@
 <div class="dialog-actions-left">
 <span class="toolbar-label import-action-label" data-i18n="ui.load"></span>
 <button class="soft-tool-button" data-i18n="file.label" data-i18n-title="file.load" id="midiConvertReloadFile" title="" type="button"></button>
-<button class="soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.load_file" disabled="" id="midiConvertGoogleDriveLoad" title="" type="button"></button>
+<button class="soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.load_file" id="midiConvertGoogleDriveLoad" title="" type="button"></button>
 </div>
 <span aria-live="polite" class="dialog-small midi-convert-status" hidden="" id="midiConvertStatus" role="status"></span>
 <div class="dialog-actions dialog-actions-right">
@@ -860,6 +860,6 @@
 <script src="js/firebase-analytics.js" type="module"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
-<script src="js/app.js?v=5.3.1-overlap-fix"></script>
+<script src="js/app.js?v=5.3.2-google-login-action"></script>
 </body>
 </html>

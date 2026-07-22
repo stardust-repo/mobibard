@@ -508,8 +508,9 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 
 ### 앱 동작
 
-- 제목 오른쪽 `Google` 영역에서 로그인/로그아웃합니다.
+- 우상단 계정 메뉴에서 로그인/로그아웃합니다.
 - 로그인 성공 시 `mobibard.player.googleAutoReconnect = 1`을 저장합니다.
+- 비로그인 상태에서 Google 불러오기·저장 버튼을 누르면 Google 계정 선택 창을 열고, 로그인 성공 후 원래 요청한 Drive 동작을 계속합니다.
 - 새 창/새로고침에서 바로 연동 상태를 복원하기 위해 `mobibard.player.googleTokenCache`에 단기 access token과 만료 시각(`expiresAt`)을 저장합니다.
 - 저장된 토큰이 아직 유효하면 Google 팝업 없이 즉시 `구글 연동됨` 상태와 Drive 버튼을 복원합니다.
 - 저장된 토큰이 만료되었거나 Drive API가 401을 반환하면 토큰 캐시를 지우고 `로그인 필요` 상태로만 전환합니다. 페이지 진입/백그라운드 설정 동기화 중에는 Google 로그인 팝업이나 계정 선택창을 자동으로 띄우지 않습니다.
@@ -544,7 +545,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 | 이벤트 | 발생 위치 | 주요 파라미터 |
 |---|---|---|
-| `google_drive_login` | Google 로그인 성공 | `settings_source` |
+| `google_drive_login` | Google 로그인 성공 | `settings_source`, `entry_point` |
 | `google_drive_picker_open` | Drive Picker 열기 | 없음 |
 | `shortcut_link_open` | 상단 바로가기 열기 | `link` |
 | `local_import_midi`, `drive_import_midi` | MIDI 파일 분석 성공 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
@@ -650,7 +651,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - [ ] MMI/3MLE MML 채널 선택 Dialog 하단에서 `파일 불러오기`가 `모두 선택해제`보다 왼쪽에 표시되는지
 - [ ] `.mmi`의 비정규 길이 `6/12/24/48`이 정규 길이 조합으로 보정되는지
 - [ ] TXT 문법 오류가 있어도 `MML@...;` 형식이면 가능한 경우 원본을 불러오는지
-- [ ] Google 로그인 후 Drive 불러오기/저장 버튼이 활성화되는지
+- [ ] 비로그인 상태에서도 Drive 불러오기/저장 버튼이 활성화되고, 클릭하면 로그인 후 원래 동작을 계속하는지
 - [ ] Google 로그인 후 새로고침했을 때 별도 클릭 없이 Drive 버튼이 바로 활성화되는지
 - [ ] Google 로그인 후 새 창/새 탭으로 같은 주소를 열었을 때 Drive 버튼이 바로 활성화되는지
 - [ ] 저장된 Google 토큰이 만료되거나 401이 발생했을 때 토큰 캐시가 삭제되고, 자동 팝업 없이 `로그인 필요` 상태로만 바뀌는지
