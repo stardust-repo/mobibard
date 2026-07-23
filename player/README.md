@@ -5,6 +5,10 @@
 `v4.6`에서는 반주 생성 Dialog의 기본 생성 채널 선택을 현재 채널 구성에 맞게 조정했습니다. 멜로디만 있으면 화음1·화음2를 선택하고, 2~5개 채널이 있으면 가장 앞선 빈 채널 하나를 선택하며, 6개 채널이 모두 차 있으면 마지막 화음5 채널을 교체 대상으로 선택합니다. 기존 v4.5에서 피아노롤 시간 격자를 실제 MML `L4` 1박 간격으로 표시하고, 템포 변경 지점을 선택해 `32~255` 범위에서 수정할 수 있습니다. 편집 도구에는 `음정 조절`, `볼륨 생성`, `반주 생성`을 제공합니다. `볼륨 생성`은 음표의 길이·밀도·쉼표·음정 흐름을 분석해 장르별 `V` 변화를 만들며, 기존 볼륨 변화가 있으면 확인 후 교체합니다. 새 `반주 생성`은 선택한 여러 참고 채널을 함께 분석해 공통 화성 흐름을 만든 뒤, 선택한 생성 채널 수에 따라 화음·리듬·아르페지오·베이스 역할을 배분합니다. 참고와 생성에 동시에 선택된 채널은 원본을 먼저 분석하고 확인 후 새 반주로 교체합니다. MIDI/MusicXML 변환 단계는 원본 악기의 선택·음역 배정·겹침 병합·비트 변환에만 집중합니다.
 상단 저장 영역 오른쪽의 `MIDI 추출` 버튼에서 MuScriptor 로컬 실행 패키지를 내려받을 수 있습니다. 그 오른쪽의 `리듬게임` 버튼은 전체 화면 팝업 레이어에서 이웃 경로 `../mobibeats/`의 모비비트를 열고, 현재 MML과 6개 채널 악기 정보를 전달합니다. Firebase Analytics에는 리듬게임 팝업을 연 횟수를 `open_rhythm_game` 이벤트 하나로 기록합니다. `muscriptor_win.zip`과 `muscriptor_mac.zip`은 `assets/midi-extract/packages/`에 포함됩니다.
 
+최근 UI에서는 재생 위치와 시간을 0.01초 단위로 표시합니다. 배속과 볼륨은 현재값 버튼을 누르면 세로 슬라이더와 초기화 버튼이 나타나며, 음소거 버튼에서는 멜로디·화음1~5를 개별 선택하거나 전부 선택/해제할 수 있습니다. 음소거와 음색 설정 버튼은 볼륨 오른쪽에 모았고, 사운드폰트 파일 선택은 채널 음색 설정 Dialog 안에서 현재 파일명·불러오기·원본 복원 방식으로 제공합니다. 모든 Dialog의 하단 취소/적용 영역은 작은 화면에서도 보이도록 스크롤 하단에 고정됩니다.
+
+추가 UI 보완에서는 MIDI Dialog 제목을 `MIDI 변환`으로 단순화하고, 좁은 화면의 MIDI 악기 목록과 MMI/3MLE 채널 목록에서 중첩 스크롤을 제거했습니다. MMI/3MLE Dialog 제목은 현재 선택 수를 `채널 선택 N/6` 형식으로 표시하며, `전부 해제` 버튼은 `선택 듣기` 왼쪽에 배치합니다. MML 편집 제목과 코드 도움말·복사 작업 행도 가능한 폭까지 한 줄을 유지합니다.
+
 `v4.1`에서는 진행 슬라이더가 가리키는 시간에 실제로 울리는 MML 음표 코드와 해당 위치의 쉼표 코드를 편집창 안에서 초록색 상자로 표시하도록 개선했습니다. 재생 중이 아니어도 현재 위치의 음표/쉼표 토큰을 표시하며, 전체 MML 탭과 개별 파트 탭 모두 같은 기준을 따릅니다. 전체 MML 탭의 음소거는 6개 채널 상태를 일괄 전환하며, 음소거된 채널도 피아노롤에서는 반투명 점선 노트와 음소거 표식으로 계속 확인할 수 있습니다.
 
 기본 재생은 로컬 파일만으로 동작합니다. Google Drive 연동을 사용하려면 Google Identity Services와 Google Picker 스크립트를 온라인으로 불러오며, `js/google-config.js` 설정이 필요합니다. Firebase Analytics는 `js/firebase-config.js`와 `js/firebase-analytics.js`에서 초기화합니다.
@@ -21,6 +25,31 @@ python -m http.server 8000
 브라우저에서 `http://localhost:8000/`로 접속합니다.
 
 `index.html`만 따로 복사하면 `js/`, `styles.css`, `assets/` 파일을 찾지 못합니다. 배포할 때는 폴더 구조를 그대로 유지해야 합니다.
+
+### 언어 GET 파라미터
+
+URL의 `lang` 값으로 최초 언어를 지정할 수 있습니다. `language`, `locale`도 같은 별칭으로 처리합니다.
+
+```text
+?lang=ko
+?lang=ja
+?lang=en
+?lang=zh-CN
+?lang=zh-TW
+```
+
+- 파라미터가 없거나 `?lang=`, `?lang=auto`이면 저장된 설정과 브라우저 언어를 사용합니다.
+- 지원하지 않는 값이면 영어를 사용합니다.
+- 지정한 언어 파일을 읽지 못하면 영어 파일을 시도합니다.
+- 영어 파일까지 읽지 못하면 `player.play` 같은 번역 키를 그대로 표시합니다.
+- GET으로 지정한 언어는 임시 우선값이며, 사용자가 계정 메뉴에서 언어를 선택하면 URL의 언어 파라미터를 제거하고 선택값을 저장합니다.
+- 최초에는 결정된 언어 파일 하나만 읽으며, 다른 언어는 실제로 선택될 때 지연 로딩합니다.
+
+### 우상단 계정 메뉴
+
+우상단 원형 아이콘을 누르면 로그인/로그아웃, 언어, 테마 설정을 작은 팝업에서 변경할 수 있습니다. 로그아웃 상태에서는 `assets/icons/guest-user.svg`를 표시합니다. Google 연결 후에는 Drive `about.get`의 사용자 정보에서 이름, 이메일, 프로필 사진을 읽어 원형 썸네일로 표시하며, 조회 실패 시 게스트 아이콘을 유지합니다.
+
+Discord 바로가기는 Discord 공식 브랜딩 페이지의 흰색 Symbol SVG를 직접 사용하며, 원형 버튼 배경에는 공식 Blurple(`#5865F2`)를 적용합니다.
 
 ---
 
@@ -52,8 +81,13 @@ mabinogi_mml_public/
 │  ├─ Roland_SC-55.sf2         # 기본 사운드폰트
 │  ├─ default-sf2-base64.js    # 기본 SF2 내장 fallback
 │  └─ icons/
-│     └─ google-g.png          # Google 로그인/로그아웃 버튼용 로컬 G 아이콘
+│     ├─ google-g.png                  # Google 로그인/로그아웃 버튼용 로컬 G 아이콘
+│     └─ guest-user.svg                # 로그아웃 상태의 원형 게스트 아이콘
+├─ locale/
+│  ├─ ko.js, ja.js, en.js      # 선택 시 지연 로딩하는 언어 카탈로그
+│  └─ zh-CN.js, zh-TW.js
 └─ js/
+   ├─ language-manager.js      # GET/저장값/브라우저 감지, 언어 카탈로그 지연 로딩, 키 fallback
    ├─ utils.js                 # 공통 유틸: clamp, formatTime, shortError, base64 변환
    ├─ midi-to-mml.js           # MIDI 파서/분석/미리듣기 이벤트/6채널 MML 변환
    ├─ musicxml-to-midi.js      # MusicXML/MXL 파서와 MIDI 이벤트 변환 브리지
@@ -72,6 +106,7 @@ mabinogi_mml_public/
 
 | 파일 | export 전역 | 주요 함수 |
 |---|---|---|
+| `js/language-manager.js` | `window.MobibardI18n` | `setLanguage`, `syncFromPreference`, `normalizeLanguage`, `t` |
 | `js/utils.js` | `window.MabiUtils` | `clamp`, `clampInt`, `unique`, `formatTime`, `shortError`, `base64ToUint8Array` |
 | `js/midi-to-mml.js` | `window.MabiMidi` | `analyzeMidi`, `midiToMml`, `buildMidiInstrumentPreview`, `buildMidiFilePreview` |
 | `js/musicxml-to-midi.js` | `window.MabiMusicXml` | `musicXmlToMidiBytes`, `extractMusicXmlText` |
@@ -114,17 +149,20 @@ mabinogi_mml_public/
 ### 1. 상단 앱 카드
 
 - 앱 제목과 버전 표시
-- 디스코드 바로가기
-- 개발자 MML 공유와 MIDI 파일 사이트를 여는 바로가기 콤보박스
-- Google 로그인 / 로그아웃
-- Google 로그인 옆 테마 전환
+- 원형 Discord 바로가기 아이콘
+- MML 공유와 MIDI 파일 사이트를 여는 바로가기 콤보박스
+- 원형 게스트/Google 사용자 아이콘과 작은 계정 팝업
+- 계정 팝업 안의 Google 로그인/로그아웃, 언어, 테마 설정
 - 파일 불러오기 / 저장하기 그룹
-- 붙여넣기, 전부복사, 나눠복사
-- 재생, 처음, 반복, 재생 시간, 배속, 볼륨, 진행 슬라이더
+- 오른쪽 정렬된 MIDI 추출, 리듬게임 버튼
+- 재생, 처음, 반복, 0.01초 단위 재생 시간과 진행 슬라이더
+- 버튼형 배속/볼륨 조작과 세로 슬라이더 팝업, 채널별 음소거 팝업
+- 볼륨 오른쪽의 채널 음소거와 음색 설정 버튼
 - 진행 슬라이더 위 템포 변화 마커와 클릭 편집 (`T32~T255`)
 
-### 2. MML 보기 · 편집 카드
+### 2. MML 편집 카드
 
+- 제목 오른쪽의 붙여넣기, 전부복사, 나눠복사 버튼
 - `전체 MML`, `멜로디`, `화음1`~`화음5` 탭
 - 전체 MML 탭은 파트별 색상 하이라이트를 표시합니다.
 - 진행 슬라이더가 가리키는 시간에 울리는 음표 코드와 해당 위치의 쉼표 코드가 초록색 상자로 표시됩니다. 재생 중이 아니어도 현재 위치 기준으로 표시됩니다.
@@ -132,7 +170,8 @@ mabinogi_mml_public/
 - 전체 MML 탭은 첫 줄에 총 글자 수, 둘째 줄에 멜로디~화음5 글자 수를 채널 색상과 `/` 구분으로 표시합니다. 단위 `자`는 채널별 줄의 맨 끝에 한 번만 붙습니다.
 - 전체 MML의 글자 수는 `MML@`, 쉼표, 세미콜론을 제외한 파트 내용 합계입니다.
 - `시작 공백`, `쉼표 삭제`, `볼륨 조절`, `음정 조절`, `볼륨 생성`, `반주 생성` 편집 기능을 제공합니다.
-- 사운드 폰트 선택, 자동/사용자 음색 프리셋, 채널별 음색 설정, 전체/채널 음소거를 제공합니다.
+- 채널 음색 설정 Dialog에서 현재 사운드폰트 파일명, 새 파일 불러오기, 기본 파일 복원, 자동/사용자 음색 프리셋과 채널별 음색을 설정합니다.
+- 상단 음소거 팝업에서 6개 채널을 개별 선택하거나 전부 선택/해제합니다.
 
 ### 3. Dialog 목록
 
@@ -140,7 +179,7 @@ mabinogi_mml_public/
 |---|---|
 | `googleDriveSaveDialog` | Google Drive 저장 파일명/폴더 선택 |
 | `mmiImportDialog` | MMI/3MLE MML 채널 선택, 선택 듣기, 전부 듣기, 모두 선택해제, 파일 다시 불러오기, 채널 미리듣기 |
-| `partSoundDialog` | 멜로디/화음1~5 채널별 SF2 프리셋 설정 및 사용자 프리셋 저장/삭제 |
+| `partSoundDialog` | 현재 SF2 파일 확인·불러오기·기본 파일 복원, 멜로디/화음1~5 채널별 프리셋 설정 및 사용자 프리셋 저장/삭제 |
 | `codeHelpDialog` | 지원 MML 코드 도움말, 숫자형 명령 설명/예시 |
 | `restTrimDialog` | 짧은 쉼표 삭제 길이와 적용 채널 선택 |
 | `bulkVolumeDialog` | 볼륨 조절 변화량과 적용 채널 선택 |
@@ -151,7 +190,7 @@ mabinogi_mml_public/
 | `accompanimentGenerateDialog` | 반주 장르, 적용 강도, 참고 채널과 생성 채널 선택 |
 | `accompanimentGenerateConfirmDialog` | 참고·생성 중복 또는 기존 내용 교체 확인 |
 | `splitCopyDialog` | 나눠복사 결과, 악보별 듣기/복사 |
-| `midiConvertDialog` | MIDI 변환 설정 안내, 채널 역할, 겹침 병합, 악기 선택, 미리 듣기, MIDI 듣기, 채널별 듣기, 악기별 듣기, 파일 다시 불러오기 |
+| `midiConvertDialog` | MIDI 변환 안내, 채널 역할, 겹침 병합, 악기 선택, 미리 듣기, MIDI 듣기, 채널별 듣기, 악기별 듣기, 파일 다시 불러오기 |
 
 ---
 
@@ -404,7 +443,7 @@ MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 시작
 - `V0`처럼 소리 나지 않는 음표는 실제 오디오 노드를 만들지 않습니다.
 - 64분음표처럼 짧은 음표는 attack/release 시간을 음 길이에 맞게 줄여 짧은 음이 뭉개지거나 밀리는 현상을 줄입니다.
 - 재생이 끝난 `AudioBufferSourceNode`는 active 목록에서 제거합니다.
-- 재생 시간 표시는 `분:초.밀리초` 형식입니다. 예: `01:23.456`
+- 재생 시간 표시는 10ms 단위의 `분:초.백분초` 형식입니다. 예: `01:23.45`
 - 재생 배속 범위는 `0.75x`~`1.50x`, 기본값은 `1.00x`입니다.
 - 볼륨은 기본 100%, 최대 150%입니다. 100%를 넘기면 악보와 사운드폰트에 따라 소리가 찢어질 수 있습니다.
 
@@ -416,7 +455,6 @@ MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 시작
 - Dialog의 `음색 프리셋` 첫 항목은 `자동 음색`입니다.
 - 최근 MIDI 변환 음색이 있으면 자동 음색은 그 구성을 사용하고, 없으면 기본 음색을 사용합니다.
 - 현재 채널별 음색 구성을 이름 붙여 저장하고 삭제할 수 있습니다.
-- 상단의 프리셋 콤보박스에서도 `자동 음색`과 저장한 프리셋을 바로 적용할 수 있습니다.
 - 전체 MML 탭에서는 `전체 음소거`로 모든 채널을 한 번에 음소거/해제합니다.
 - 개별 파트 탭에서는 `채널 음소거`로 해당 채널만 재생에서 제외합니다.
 - 설정은 localStorage와 Google Drive 앱 데이터 설정 동기화 대상에 포함됩니다.
@@ -470,8 +508,9 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 
 ### 앱 동작
 
-- 제목 오른쪽 `Google` 영역에서 로그인/로그아웃합니다.
+- 우상단 계정 메뉴에서 로그인/로그아웃합니다.
 - 로그인 성공 시 `mobibard.player.googleAutoReconnect = 1`을 저장합니다.
+- 비로그인 상태에서 Google 불러오기·저장 버튼을 누르면 Google 계정 선택 창을 열고, 로그인 성공 후 원래 요청한 Drive 동작을 계속합니다.
 - 새 창/새로고침에서 바로 연동 상태를 복원하기 위해 `mobibard.player.googleTokenCache`에 단기 access token과 만료 시각(`expiresAt`)을 저장합니다.
 - 저장된 토큰이 아직 유효하면 Google 팝업 없이 즉시 `구글 연동됨` 상태와 Drive 버튼을 복원합니다.
 - 저장된 토큰이 만료되었거나 Drive API가 401을 반환하면 토큰 캐시를 지우고 `로그인 필요` 상태로만 전환합니다. 페이지 진입/백그라운드 설정 동기화 중에는 Google 로그인 팝업이나 계정 선택창을 자동으로 띄우지 않습니다.
@@ -506,7 +545,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 | 이벤트 | 발생 위치 | 주요 파라미터 |
 |---|---|---|
-| `google_drive_login` | Google 로그인 성공 | `settings_source` |
+| `google_drive_login` | Google 로그인 성공 | `settings_source`, `entry_point` |
 | `google_drive_picker_open` | Drive Picker 열기 | 없음 |
 | `shortcut_link_open` | 상단 바로가기 열기 | `link` |
 | `local_import_midi`, `drive_import_midi` | MIDI 파일 분석 성공 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
@@ -537,7 +576,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 | 작업 | 먼저 볼 파일 / 함수 |
 |---|---|
-| 앱 버전 변경 | `index.html`의 `<title>`, `.app-version`, `README.md` |
+| 앱 버전 변경 | `index.html`의 `<title>`과 `README.md` |
 | 버튼/레이아웃 변경 | `index.html`, `styles.css`, `app.js:init()` 이벤트 연결 |
 | MML 편집기 강조 표시 변경 | `index.html`의 `.colored-textarea`, `styles.css`의 `.tempo-code`, `app.js`의 `renderPartWithErrors()`, `updateMainHighlight()`, `updatePartHighlight()` |
 | 상단 추천 링크/MIDI 사이트 목록·배치 변경 | `index.html`의 `#midiSiteLinks`, `app.js`의 `HEADER_SHORTCUT_LINKS`, `MIDI_RESOURCE_LINK_IDS`, `openHeaderShortcutLink()` |
@@ -559,7 +598,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
 - [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v4.6`이 보이는지
-- [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `개발자 MML 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
+- [ ] 상단 `MML / MIDI 링크` 콤보박스가 디스코드 버튼 왼쪽에 있고, `MML 공유`와 MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
 - [ ] 피아노롤 정지 위치 0초에서 첫 가로 격자가 건반 윗선에 맞는지
@@ -612,7 +651,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - [ ] MMI/3MLE MML 채널 선택 Dialog 하단에서 `파일 불러오기`가 `모두 선택해제`보다 왼쪽에 표시되는지
 - [ ] `.mmi`의 비정규 길이 `6/12/24/48`이 정규 길이 조합으로 보정되는지
 - [ ] TXT 문법 오류가 있어도 `MML@...;` 형식이면 가능한 경우 원본을 불러오는지
-- [ ] Google 로그인 후 Drive 불러오기/저장 버튼이 활성화되는지
+- [ ] 비로그인 상태에서도 Drive 불러오기/저장 버튼이 활성화되고, 클릭하면 로그인 후 원래 동작을 계속하는지
 - [ ] Google 로그인 후 새로고침했을 때 별도 클릭 없이 Drive 버튼이 바로 활성화되는지
 - [ ] Google 로그인 후 새 창/새 탭으로 같은 주소를 열었을 때 Drive 버튼이 바로 활성화되는지
 - [ ] 저장된 Google 토큰이 만료되거나 401이 발생했을 때 토큰 캐시가 삭제되고, 자동 팝업 없이 `로그인 필요` 상태로만 바뀌는지
@@ -760,7 +799,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 #### 바로가기 링크
 
-- 바로가기 콤보박스의 `개발자 악보 공유` 표시를 `개발자 MML 공유`로 변경했습니다.
+- 바로가기 콤보박스의 공유 항목 표시를 `MML 공유`로 변경했습니다.
 - MIDI 사이트 목록을 BitMidi, Ichigo's, MIDIEX, Midisite, MuseScore, VGMusic 순서로 정렬했습니다.
 
 ### v3.3
@@ -788,7 +827,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - Firebase Analytics 연동을 추가했습니다. `js/firebase-config.js`에는 웹 앱 설정을, `js/firebase-analytics.js`에는 SDK 초기화/이벤트 큐 처리를 분리했습니다.
 - 파일 불러오기, MIDI 변환, 미리듣기, 재생, 도구 적용, 복사, 저장, Google Drive 동작을 커스텀 이벤트로 기록합니다. 앱 실행·로그아웃·붙여넣기처럼 의미가 약한 이벤트와 중복 이벤트는 제거했으며, 파일명과 MML 본문은 포함하지 않습니다.
 - Google token 만료 처리 방식을 수정했습니다. 유효한 토큰은 새로고침/새 창에서 유지하지만, 만료되거나 401이 발생하면 자동으로 Google 로그인을 다시 요청하지 않고 `로그인 필요` 상태로만 전환합니다.
-- 상단 바로가기 영역의 콤보박스 기본 문구를 `MML / MIDI 링크`로 바꾸고 디스코드 버튼 왼쪽에 배치했습니다. 기존 `개발자 MML 공유` 버튼은 제거하고 `개발자 MML 공유` 항목으로 콤보박스 맨 위에 배치했습니다.
+- 상단 바로가기 영역의 콤보박스 기본 문구를 `MML / MIDI 링크`로 바꾸고 디스코드 버튼 왼쪽에 배치했습니다. 기존 `MML 공유` 버튼은 제거하고 `MML 공유` 항목으로 콤보박스 맨 위에 배치했습니다.
 - `https://www.vgmusic.com/` 항목은 화면에 `VGMusic`으로 표시합니다. MIDI 사이트는 BitMidi, Ichigo's, MIDIEX, Midisite, MuseScore, VGMusic 순서로 정렬되어 새 창으로 열립니다.
 - 바로가기 콤보박스 선택은 `shortcut_link_open` 하나로 기록하고 `link` 값으로 대상을 구분합니다. 같은 클릭을 중복 집계하던 `midi_resource_link_open`은 제거했습니다.
 - v3.1까지의 MIDI/MMI/3MLE/Google Drive/음색/최적화 변경 내용을 현재 구조 기준으로 다시 묶어 정리했습니다.
@@ -815,7 +854,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - 기존 지원 명령어 설명을 `코드 도움말` Dialog로 옮겼습니다.
 - 재생 조작 박스를 앱 제목 카드와 합쳐 별도 `재생 조작` 제목을 제거했습니다.
 - MML 보기 · 편집 제목 줄 오른쪽에 `불러오기`/`저장하기` 그룹과 붙여넣기, 전부복사, 나눠복사 버튼을 순서대로 배치했습니다.
-- 편집 편의 기능 줄 오른쪽을 전체/채널 음소거, 폰트 선택, 자동 음색, 음색 버튼 순서로 정리했습니다.
+- 편집 편의 기능 줄 오른쪽을 전체/채널 음소거, 음소거, 음색 버튼 순서로 정리했습니다.
 
 ### v2.4
 
@@ -863,7 +902,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 저장소 Settings → Pages에서 Source가 `GitHub Actions`로 설정되어 있어야 합니다.
 
-샘플 `sample_out.mid`는 사용자가 재생 버튼을 누를 때만 불러옵니다. 먼저 브라우저의 MIDI 직접 재생을 시도하고, 지원하지 않는 환경에서는 파일을 분석해 기본 SF2로 재생합니다. 영상과 입력 오디오도 각 재생 버튼을 누를 때만 불러옵니다.
+출력 예시는 `sample_out_preview.mp3` 미리듣기를 사용하며, 영상과 입력 오디오를 포함한 모든 샘플 미디어는 재생 버튼을 누를 때만 불러옵니다.
 
 
 ### v4.5 BETA UI · 템포 편집 보완
@@ -875,7 +914,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - 피아노롤의 펼치기/접기 표시가 템포 클릭 판정보다 우선하도록 조정했습니다.
 - 재생 중 템포 편집을 열었다면 취소 또는 수정 후 저장 여부와 관계없이 편집 전 재생 위치에서 자동으로 재생을 재개합니다.
 
-### MIDI 변환 설정 안내 문구
+### MIDI 변환 안내 문구
 
 - 각 MML 채널마다 악기를 선택할 수 있음을 안내합니다.
 - 각 채널에는 여러 악기를 배정할 수 있습니다.
@@ -885,3 +924,23 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 - `전부복사`, `나눠복사` 버튼을 재생 버튼 및 전체 MML 활성 버튼과 같은 `primary` 강조 배색으로 통일했습니다.
 - 별도 그림자, 테두리, 떠오름 효과를 제거해 재생 버튼과 같은 크기·모서리·글자 스타일을 사용합니다.
+
+## 다국어 파일 구조
+
+화면 언어는 `locale` 폴더의 언어 코드별 언어 파일로 관리합니다.
+
+- `ko.js`
+- `ja.js`
+- `en.js`
+- `zh-CN.js`
+- `zh-TW.js`
+
+초기 언어는 저장된 `mobibard.player.language` 설정을 우선 사용합니다. Google 계정 설정이 적용되면 Google 설정의 언어 값으로 다시 동기화하며, 저장된 값이 없거나 올바르지 않으면 브라우저 언어를 감지합니다. 감지할 수 없는 언어는 영어로 처리합니다.
+
+언어 스크립트는 한꺼번에 불러오지 않습니다. 시작할 때 결정된 언어 파일 하나만 요청하며, 사용자가 다른 언어를 선택할 때 해당 파일을 추가로 요청합니다. 같은 페이지에서 이미 불러온 언어는 메모리 캐시를 재사용합니다.
+
+## Locale key convention
+
+Locale 키는 `영역.동작_상태` 정도의 짧은 이름만 사용합니다. 예: `player.play`, `drive.save_done`, `drive.save_fail`, `snd.preset_saved`, `mml.opt_fail`. 문장 전체를 키에 옮기거나 해시를 붙이지 않으며, 비슷한 문구만 `_2`처럼 구분합니다. 한국어 원문은 locale 키로 사용하지 않습니다.
+
+정적 HTML에는 표시 문구를 중복해서 넣지 않고 `data-i18n="key"`, `data-i18n-title="key"`, `data-i18n-aria-label="key"`처럼 키만 선언합니다. 언어 파일을 아직 받지 못했거나 모든 언어 파일 로딩이 실패하면 원문 대신 키 자체를 표시합니다. 동적으로 생성되는 기존 문구는 `js/language-manager.js`의 런타임 호환 매핑을 거치며, 새 코드는 `MobibardI18n.t("key", [values])`로 호출할 수 있습니다. 실제 실행 시에는 선택된 언어 파일 하나만 요청합니다.

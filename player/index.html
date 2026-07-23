@@ -1,856 +1,865 @@
-<!doctype html>
-<html lang="ko">
+<!DOCTYPE html>
+
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>모비바드 v4.6</title>
-  <link rel="icon" href="assets/favicon.ico" sizes="any" />
-  <link rel="shortcut icon" href="assets/favicon.ico" />
-  <link rel="stylesheet" href="styles.css?v=4.6-rhythm-open-analytics" />
-  <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title data-i18n="ui.mobibard_v4"></title>
+<link href="assets/favicon.ico" rel="icon" sizes="any"/>
+<link href="assets/favicon.ico" rel="shortcut icon"/>
+<link href="styles.css?v=5.2-dialog-layout" rel="stylesheet"/>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 </head>
 <body>
 <main>
-  <section class="card menu-card" aria-label="마비노기 MML 재생기">
-    <div class="app-head">
-      <div class="app-brand-line">
-        <h1 class="app-main-title">모비바드</h1>
-        <div class="app-title-meta">
-          <span class="app-subtitle">마비노기 MML 생성기 v4.6</span>
-          <span class="import-format-list" title="불러오기 지원 포맷">지원 파일: MIDI · MusicXML · MMI · 3MLE</span>
-        </div>
-      </div>
-      <div class="app-head-controls">
-        <div class="header-links" aria-label="추천 링크">
-          <select id="midiSiteLinks" class="midi-site-links" aria-label="추천 링크 선택">
-            <option value="">추천 링크</option>
-            <option value="https://drive.google.com/drive/folders/1J11Vh-twyZVaYDFBlJJnvkje5M48zAUn">개발자 MML 공유</option>
-            <option value="https://bitmidi.com/">BitMidi</option>
-            <option value="https://ichigos.com/">Ichigo's</option>
-            <option value="http://www.midiex.net/">MIDIEX</option>
-            <option value="http://www.midisite.co.uk/">Midisite</option>
-            <option value="https://musescore.com/">MuseScore</option>
-            <option value="https://www.vgmusic.com/">VGMusic</option>
-          </select>
-          <a class="link-button" href="https://discord.gg/msEKJU6Jj" target="_blank" rel="noopener noreferrer">디스코드</a>
-        </div>
-        <div class="google-account" aria-label="구글 계정">
-          <span id="googleStatus" class="hint google-status visually-hidden" aria-live="polite">구글 설정 필요</span>
-          <button id="googleLoginBtn" class="google-login-button" type="button" aria-label="Google 계정 로그인"><span class="google-icon-badge" aria-hidden="true"><img class="google-g-icon" src="assets/icons/google-g.png" alt="" decoding="async" /></span><span class="google-login-label">로그인</span></button>
-        </div>
-        <div class="title-theme-control">
-          <button id="themeToggleBtn" class="theme-swatch theme-text-button" type="button" aria-pressed="false" aria-label="어두운 테마로 변경" title="어두운 테마로 변경">테마</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="player-file-toolbar" aria-label="MML 파일 작업">
-      <div class="player-file-actions-left">
-        <span class="toolbar-label">불러오기</span>
-        <button id="midiLoadBtn" type="button" title="MML, MIDI, MusicXML, MMI, 3MLE, TXT 파일 불러오기">파일</button>
-        <button id="googleDriveLoadBtn" type="button" disabled title="Google Drive의 MML_Mobibard 폴더에서 불러오기">구글</button>
-        <span class="toolbar-divider" aria-hidden="true"></span>
-        <span class="toolbar-label">저장</span>
-        <button id="saveBtn" class="ghost" type="button">파일</button>
-        <button id="googleDriveSaveBtn" class="ghost" type="button" disabled title="Google Drive의 MML_Mobibard 폴더에 저장">구글</button>
-        <div class="player-file-actions-special" aria-label="MIDI 추출과 리듬게임">
-          <button id="midiExtractBtn" class="midi-extract-toolbar-button beta-feature" type="button" aria-haspopup="dialog" aria-controls="midiExtractDialog" title="MuScriptor 로컬 MIDI 추출 도구 다운로드 (BETA)">
-            <span class="midi-extract-toolbar-icon" aria-hidden="true">♪</span><span>MIDI 추출</span>
-          </button>
-          <button id="rhythmGameBtn" class="rhythm-game-toolbar-button" type="button" aria-haspopup="dialog" aria-controls="rhythmGameLayer" title="현재 MML로 모비비트 리듬게임 열기">
-            <span class="rhythm-game-toolbar-icon" aria-hidden="true">▦</span><span>리듬게임</span>
-          </button>
-        </div>
-        <input id="midiFile" type="file" accept=".mid,.midi,.txt,.mmi,.mml,.musicxml,.xml,.mxl,audio/midi,audio/x-midi,text/plain,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden />
-      </div>
-      <div class="player-file-actions-right">
-        <button id="pasteBtn" class="ghost" type="button">붙여넣기</button>
-        <button id="copyBtn" class="primary" type="button">전부복사</button>
-        <button id="splitCopyBtn" class="primary" type="button">나눠복사</button>
-      </div>
-    </div>
-
-    <div class="play-layout">
-      <div class="transport-row">
-        <div class="transport-actions">
-          <button id="playToggleBtn" class="primary" type="button">재생</button>
-          <button id="rewindBtn" class="compact" type="button" title="처음으로 되돌리기">처음</button>
-          <label class="loop-label"><input id="loopPlayback" type="checkbox" /> 반복</label>
-          <span id="playInfo" class="play-info">00:00.000 / 00:00.000</span>
-        </div>
-        <div class="quick-controls" aria-label="배속과 볼륨">
-          <label class="mini-control" for="speedSlider">
-            <span class="mini-label">배속</span>
-            <input id="speedSlider" class="speed" type="range" min="0.75" max="1.5" step="0.01" value="1" />
-            <strong id="speedValue" class="speed-value">1.00x</strong>
-          </label>
-          <label class="mini-control" for="volumeSlider">
-            <span class="mini-label">볼륨</span>
-            <input id="volumeSlider" class="volume" type="range" min="0" max="150" value="100" />
-            <strong id="volumeValue" class="volume-value">100%</strong>
-          </label>
-        </div>
-      </div>
-
-      <div class="seek-row">
-        <div class="progress-wrap">
-          <div id="tempoMarkerLayer" class="tempo-markers" aria-label="템포 표시와 수정"></div>
-          <input id="progressSlider" class="progress" type="range" min="0" max="0" step="0.001" value="0" disabled />
-        </div>
-      </div>
-
-      <div id="pianoRoll" class="piano-roll" role="button" tabindex="0" aria-expanded="false" aria-label="피아노 롤 펼치기">
-        <div class="piano-roll-stage">
-          <canvas id="pianoRollCanvas" class="piano-roll-canvas" aria-hidden="true"></canvas>
-          <div id="pianoRollEmpty" class="piano-roll-empty">연주할 노트가 없습니다</div>
-          <div class="piano-roll-corner" aria-hidden="true">
-            <span id="pianoRollRangeLabel" class="piano-roll-range-label">Piano Roll</span>
-            <span id="pianoRollToggleLabel" class="piano-roll-toggle-label">펼치기</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="card mml-editor" aria-label="MML 보기와 편집">
-    <div class="editor-head">
-      <div class="editor-title-wrap">
-        <h2>MML 보기 · 편집</h2>
-        <button id="codeHelpBtn" class="tiny-help-btn" type="button">코드 도움말</button>
-      </div>
-      <div class="editor-sound-actions" aria-label="사운드와 재생 음색 편의 기능">
-        <label class="part-mute-toggle"><input id="partMuteToggle" type="checkbox" /> <span id="partMuteLabel">전체 음소거</span></label>
-        <select id="soundSource" aria-label="사운드 폰트 선택">
-          <option value="" selected disabled hidden>폰트 선택</option>
-          <option value="default">기본 사운드 사용</option>
-          <option value="custom">사용자 SF2 선택</option>
-        </select>
-        <input id="sf2File" type="file" accept=".sf2" hidden />
-        <span id="soundName" class="hint sound-name-hidden" aria-live="polite">기본 사운드</span>
-        <select id="soundPresetQuickSelect" class="sound-preset-select" aria-label="음색 프리셋 선택">
-          <option value="auto">자동 음색</option>
-        </select>
-        <button id="partSoundBtn" class="tab-sound-btn" type="button" title="채널별 재생 음색 설정">음색</button>
-      </div>
-    </div>
-
-    <div class="editor-tool-row" aria-label="편집 편의 기능">
-      <div class="editor-tools-left">
-        <button id="leadingSilenceBtn" class="ghost" type="button">시작 공백</button><button id="restTrimBtn" class="ghost" type="button">쉼표 삭제</button><button id="bulkVolumeBtn" class="ghost" type="button">볼륨 조절</button><button id="bulkPitchBtn" class="ghost" type="button">음정 조절</button><button id="dynamicsGenerateBtn" class="ghost beta-feature" type="button" title="볼륨 생성 (BETA)"><span>볼륨 생성</span></button><button id="accompanimentGenerateBtn" class="ghost beta-feature" type="button" title="반주 생성 (BETA)"><span>반주 생성</span></button>
-      </div>
-    </div>
-
-    <div class="tab-line">
-      <div class="tabs" role="tablist" aria-label="MML 파트 선택">
-        <button class="tab-btn tab-all active" type="button" data-tab="main">전체 MML</button>
-        <button class="tab-btn part-tab part-0" type="button" data-tab="part0">멜로디</button>
-        <button class="tab-btn part-tab part-1" type="button" data-tab="part1">화음1</button>
-        <button class="tab-btn part-tab part-2" type="button" data-tab="part2">화음2</button>
-        <button class="tab-btn part-tab part-3" type="button" data-tab="part3">화음3</button>
-        <button class="tab-btn part-tab part-4" type="button" data-tab="part4">화음4</button>
-        <button class="tab-btn part-tab part-5" type="button" data-tab="part5">화음5</button>
-      </div>
-      <div id="charCount" class="char-count" aria-live="polite">0글자</div>
-    </div>
-
-    <div class="mml-panel" data-panel="main">
-      <div class="colored-textarea">
-        <pre id="mainMmlHighlight" class="mml-highlight" aria-hidden="true"></pre>
-        <textarea id="mainMml" class="highlight-source" spellcheck="false">MML@T120V12O5L8ccggaag4ffeeddc4,O4L4cgrgcrgc,O3L2cgcg;</textarea>
-      </div>
-    </div>
-    <div class="mml-panel part-panel part-0" data-panel="part0" hidden>
-      <div class="colored-textarea">
-        <pre id="part0Highlight" class="mml-highlight part-highlight ch0" aria-hidden="true"></pre>
-        <textarea id="part0" class="highlight-source" spellcheck="false"></textarea>
-      </div>
-    </div>
-    <div class="mml-panel part-panel part-1" data-panel="part1" hidden>
-      <div class="colored-textarea">
-        <pre id="part1Highlight" class="mml-highlight part-highlight ch1" aria-hidden="true"></pre>
-        <textarea id="part1" class="highlight-source" spellcheck="false"></textarea>
-      </div>
-    </div>
-    <div class="mml-panel part-panel part-2" data-panel="part2" hidden>
-      <div class="colored-textarea">
-        <pre id="part2Highlight" class="mml-highlight part-highlight ch2" aria-hidden="true"></pre>
-        <textarea id="part2" class="highlight-source" spellcheck="false"></textarea>
-      </div>
-    </div>
-    <div class="mml-panel part-panel part-3" data-panel="part3" hidden>
-      <div class="colored-textarea">
-        <pre id="part3Highlight" class="mml-highlight part-highlight ch3" aria-hidden="true"></pre>
-        <textarea id="part3" class="highlight-source" spellcheck="false"></textarea>
-      </div>
-    </div>
-    <div class="mml-panel part-panel part-4" data-panel="part4" hidden>
-      <div class="colored-textarea">
-        <pre id="part4Highlight" class="mml-highlight part-highlight ch4" aria-hidden="true"></pre>
-        <textarea id="part4" class="highlight-source" spellcheck="false"></textarea>
-      </div>
-    </div>
-    <div class="mml-panel part-panel part-5" data-panel="part5" hidden>
-      <div class="colored-textarea">
-        <pre id="part5Highlight" class="mml-highlight part-highlight ch5" aria-hidden="true"></pre>
-        <textarea id="part5" class="highlight-source" spellcheck="false"></textarea>
-      </div>
-    </div>
-  </section>
-</main>
-
-
-<section id="rhythmGameLayer" class="rhythm-game-layer" role="dialog" aria-modal="true" aria-labelledby="rhythmGameLayerTitle" hidden aria-hidden="true">
-  <header class="rhythm-game-layer-head">
-    <div class="rhythm-game-layer-title">
-      <strong id="rhythmGameLayerTitle">모비비트</strong>
-      <span id="rhythmGameStatus" role="status" aria-live="polite">게임을 준비하고 있습니다.</span>
-    </div>
-    <button id="rhythmGameClose" class="rhythm-game-layer-close" type="button">생성기로 돌아가기</button>
-  </header>
-  <div class="rhythm-game-frame-wrap">
-    <div id="rhythmGameLoading" class="rhythm-game-loading" role="status" aria-live="polite">
-      <span class="rhythm-game-loading-spinner" aria-hidden="true"></span>
-      <strong id="rhythmGameLoadingText">모비비트를 불러오는 중입니다.</strong>
-      <small>연결 경로: ../mobibeats/</small>
-    </div>
-    <iframe id="rhythmGameFrame" class="rhythm-game-frame" src="about:blank" data-src="../mobibeats/" title="모비비트 MML 리듬게임" allow="autoplay; fullscreen" allowfullscreen></iframe>
-  </div>
+<section aria-label="" class="card menu-card" data-i18n-aria-label="mml.mabinogi_player">
+<div class="app-head">
+<div class="app-brand-line">
+<h1 class="app-main-title" data-i18n="ui.mobibard"></h1>
+<div class="app-title-meta">
+<span class="app-subtitle" data-i18n="mml.mabinogi_generator"></span>
+<span class="import-format-list" data-i18n="xml.supported_files" data-i18n-title="ui.supported_import" title=""></span>
+</div>
+</div>
+<div class="app-head-controls">
+<div aria-label="" class="header-links" data-i18n-aria-label="ui.recommend_links">
+<select aria-label="" class="midi-site-links" data-i18n-aria-label="ui.select_recommend" id="midiSiteLinks">
+<option data-i18n="ui.recommend_links" value=""></option>
+<option data-i18n="mml.dev_collection" value="https://drive.google.com/drive/folders/1J11Vh-twyZVaYDFBlJJnvkje5M48zAUn"></option>
+<option value="https://bitmidi.com/">BitMidi</option>
+<option value="https://ichigos.com/">Ichigo's</option>
+<option value="http://www.midiex.net/">MIDIEX</option>
+<option value="http://www.midisite.co.uk/">Midisite</option>
+<option value="https://musescore.com/">MuseScore</option>
+<option value="https://www.vgmusic.com/">VGMusic</option>
+</select>
+<a aria-label="" class="discord-icon-button" data-i18n-aria-label="ui.discord" data-i18n-title="ui.discord" href="https://discord.gg/msEKJU6Jj" rel="noopener noreferrer" target="_blank" title="">
+<img alt="" decoding="async" src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d7f4ef6498ac018f2c55_Symbol.svg"/>
+</a>
+</div>
+<div class="account-menu-wrap">
+<button aria-controls="accountMenu" aria-expanded="false" aria-haspopup="dialog" aria-label="" class="account-avatar-button" data-i18n-aria-label="account.menu" id="accountMenuButton" type="button">
+<img alt="" class="account-avatar-image" decoding="async" id="accountAvatarImg" referrerpolicy="no-referrer" src="assets/icons/guest-user.svg"/>
+</button>
+<div aria-labelledby="accountMenuButton" class="account-menu-popover" hidden="" id="accountMenu" role="dialog">
+<div class="account-menu-header">
+<div class="account-menu-identity">
+<strong data-i18n="account.guest" id="accountMenuName"></strong>
+<span class="account-menu-email" hidden="" id="accountMenuEmail"></span>
+<span aria-live="polite" class="account-menu-status" id="googleStatus"></span>
+</div>
+</div>
+<button aria-label="" class="account-login-button google-login-button" data-i18n-aria-label="google.login" id="googleLoginBtn" type="button"><span aria-hidden="true" class="google-icon-badge"><img alt="" class="google-g-icon" decoding="async" src="assets/icons/google-g.png"/></span><span class="google-login-label" data-i18n="auth.login"></span></button>
+<div aria-hidden="true" class="account-menu-divider"></div>
+<label class="account-menu-field" for="languageSelect">
+<span class="account-menu-field-label" data-i18n="lang.label"></span>
+<select aria-label="" class="language-select" data-i18n-aria-label="lang.select" id="languageSelect">
+<option data-i18n="lang.ko" value="ko"></option>
+<option data-i18n="lang.ja" value="ja"></option>
+<option data-i18n="lang.en" value="en"></option>
+<option data-i18n="lang.zh_cn" value="zh-CN"></option>
+<option data-i18n="lang.zh_tw" value="zh-TW"></option>
+</select>
+</label>
+<div class="account-menu-field">
+<span class="account-menu-field-label" data-i18n="theme.label"></span>
+<button aria-label="" aria-pressed="false" class="theme-menu-button" data-i18n-aria-label="theme.dark" data-i18n-title="theme.dark" id="themeToggleBtn" title="" type="button"><span id="themeModeText"></span></button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div aria-label="" class="player-file-toolbar" data-i18n-aria-label="mml.file_ops">
+<div class="player-file-actions-left">
+<span class="toolbar-label" data-i18n="ui.load"></span>
+<button class="soft-tool-button" data-i18n="file.label" data-i18n-title="xml.load_mml" id="midiLoadBtn" title="" type="button"></button>
+<button class="soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.load_mobibard" id="googleDriveLoadBtn" title="" type="button"></button>
+<span aria-hidden="true" class="toolbar-divider"></span>
+<span class="toolbar-label" data-i18n="ui.save"></span>
+<button class="ghost soft-tool-button" data-i18n="file.label" id="saveBtn" type="button"></button>
+<button class="ghost soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.save_mobibard" id="googleDriveSaveBtn" title="" type="button"></button>
+</div>
+<div aria-label="" class="player-file-actions-special" data-i18n-aria-label="game.midi_extraction">
+<button aria-controls="midiExtractDialog" aria-haspopup="dialog" class="midi-extract-toolbar-button beta-feature" data-i18n-title="midi.download_local" id="midiExtractBtn" title="" type="button">
+<span aria-hidden="true" class="midi-extract-toolbar-icon">♪</span><span data-i18n="midi.extract"></span>
+</button>
+<button aria-controls="rhythmGameLayer" aria-haspopup="dialog" class="rhythm-game-toolbar-button" data-i18n-title="game.open_mobibeat" id="rhythmGameBtn" title="" type="button">
+<span aria-hidden="true" class="rhythm-game-toolbar-icon">▦</span><span data-i18n="game.label"></span>
+</button>
+</div>
+<input accept=".mid,.midi,.txt,.mmi,.mml,.musicxml,.xml,.mxl,audio/midi,audio/x-midi,text/plain,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFile" type="file"/>
+</div>
+<div class="play-layout">
+<div class="transport-row">
+<div class="transport-actions">
+<button class="primary" data-i18n="player.play" id="playToggleBtn" type="button"></button>
+<button class="compact soft-tool-button" data-i18n="ui.start" data-i18n-title="ui.return_beginning" id="rewindBtn" title="" type="button"></button>
+<label class="loop-label"><input id="loopPlayback" type="checkbox"/> <span data-i18n="play.loop"></span></label>
+<span class="play-info" id="playInfo">00:00.00 / 00:00.00</span>
+</div>
+<div aria-label="" class="quick-controls" data-i18n-aria-label="vol.speed">
+<div class="compact-control-wrap" id="speedControlWrap">
+<button aria-controls="speedControlPopover" aria-expanded="false" aria-haspopup="dialog" class="compact-value-button" id="speedControlButton" type="button">
+<span data-i18n="play.speed"></span><strong id="speedValue">1.00x</strong>
+</button>
+<div aria-labelledby="speedControlButton" class="control-popover value-control-popover" hidden="" id="speedControlPopover" role="dialog">
+<div class="vertical-slider-scale">
+<span aria-hidden="true">1.50x</span>
+<input aria-label="" class="speed vertical-slider" data-i18n-aria-label="play.speed" id="speedSlider" max="1.5" min="0.75" step="0.01" type="range" value="1"/>
+<span aria-hidden="true">0.75x</span>
+</div>
+<button class="mini-button control-reset-button soft-tool-button" data-i18n="ui.reset" id="speedResetBtn" type="button"></button>
+</div>
+</div>
+<div class="compact-control-wrap" id="volumeControlWrap">
+<button aria-controls="volumeControlPopover" aria-expanded="false" aria-haspopup="dialog" class="compact-value-button" id="volumeControlButton" type="button">
+<span data-i18n="vol.label"></span><strong id="volumeValue">100%</strong>
+</button>
+<div aria-labelledby="volumeControlButton" class="control-popover value-control-popover" hidden="" id="volumeControlPopover" role="dialog">
+<div class="vertical-slider-scale">
+<span aria-hidden="true">150%</span>
+<input aria-label="" class="volume vertical-slider" data-i18n-aria-label="vol.label" id="volumeSlider" max="150" min="0" step="1" type="range" value="100"/>
+<span aria-hidden="true">0%</span>
+</div>
+<button class="mini-button control-reset-button soft-tool-button" data-i18n="ui.reset" id="volumeResetBtn" type="button"></button>
+</div>
+</div>
+<div class="compact-control-wrap" id="muteControlWrap">
+<button aria-controls="muteControlPopover" aria-expanded="false" aria-haspopup="dialog" class="compact-value-button mute-control-button" id="muteControlButton" type="button">
+<span data-i18n="snd.mute" id="partMuteLabel"></span><strong id="muteControlValue">0/6</strong>
+</button>
+<div aria-label="" class="control-popover mute-control-popover" data-i18n-aria-label="snd.mute_channels" hidden="" id="muteControlPopover" role="dialog">
+<div class="mute-popover-actions">
+<button class="mini-button soft-tool-button" data-i18n="ui.select_all" id="muteSelectAll" type="button"></button>
+<button class="mini-button soft-tool-button" data-i18n="ui.clear_all" id="muteSelectNone" type="button"></button>
+</div>
+<div class="mute-channel-list">
+<label class="mute-channel-option part-0"><input data-mute-part="0" type="checkbox"/><span data-i18n="part.melody"></span></label>
+<label class="mute-channel-option part-1"><input data-mute-part="1" type="checkbox"/><span data-i18n="part.harmony1"></span></label>
+<label class="mute-channel-option part-2"><input data-mute-part="2" type="checkbox"/><span data-i18n="part.harmony2"></span></label>
+<label class="mute-channel-option part-3"><input data-mute-part="3" type="checkbox"/><span data-i18n="part.harmony3"></span></label>
+<label class="mute-channel-option part-4"><input data-mute-part="4" type="checkbox"/><span data-i18n="part.harmony4"></span></label>
+<label class="mute-channel-option part-5"><input data-mute-part="5" type="checkbox"/><span data-i18n="part.harmony5"></span></label>
+</div>
+</div>
+</div>
+<button class="tab-sound-btn soft-tool-button" data-i18n="snd.label" data-i18n-title="snd.configure_playback" id="partSoundBtn" title="" type="button"></button>
+</div>
+</div>
+<div class="seek-row">
+<div class="progress-wrap">
+<div aria-label="" class="tempo-markers" data-i18n-aria-label="tempo.display_editing" id="tempoMarkerLayer"></div>
+<input class="progress" disabled="" id="progressSlider" max="0" min="0" step="0.01" type="range" value="0"/>
+</div>
+</div>
+<div aria-expanded="false" aria-label="" class="piano-roll" data-i18n-aria-label="roll.expand" id="pianoRoll" role="button" tabindex="0">
+<div class="piano-roll-stage">
+<canvas aria-hidden="true" class="piano-roll-canvas" id="pianoRollCanvas"></canvas>
+<div class="piano-roll-empty" data-i18n="ui.no_notes_play" id="pianoRollEmpty"></div>
+<div aria-hidden="true" class="piano-roll-corner">
+<span class="piano-roll-range-label" data-i18n="roll.title" id="pianoRollRangeLabel"></span>
+<span class="piano-roll-toggle-label" data-i18n="ui.expand" id="pianoRollToggleLabel"></span>
+</div>
+</div>
+</div>
+</div>
 </section>
-
-
-<dialog id="googleDriveSaveDialog" class="mml-dialog drive-save-dialog">
-  <form id="googleDriveSaveForm" class="dialog-card drive-save-card" method="dialog">
-    <h3>Google Drive 저장</h3>
-    <p>기본 저장 위치는 <strong>MML_Mobibard</strong> 폴더입니다. 필요하면 위치를 바꾼 뒤 파일 이름을 정해 저장하세요.</p>
-    <div class="drive-save-folder-row">
-      <span class="dialog-field">저장 위치</span>
-      <strong id="googleDriveSaveFolderNameText">MML_Mobibard</strong>
-      <button id="googleDriveSaveFolderBtn" class="ghost" type="button">위치 변경</button>
-    </div>
-    <label class="dialog-field" for="googleDriveSaveFileName">파일 이름</label>
-    <input id="googleDriveSaveFileName" type="text" autocomplete="off" inputmode="text" />
-    <span class="dialog-small">같은 이름의 파일이 있으면 저장할 때 덮어쓸지 확인합니다.</span>
-    <span id="googleDriveSaveStatus" class="dialog-small drive-save-status" role="status" aria-live="polite"></span>
-    <div class="dialog-actions">
-      <button id="googleDriveSaveCancel" type="button">취소</button>
-      <button id="googleDriveSaveApply" class="primary" type="button">저장</button>
-    </div>
-  </form>
+<section aria-label="" class="card mml-editor" data-i18n-aria-label="mml.view_edit_2">
+<div class="editor-head">
+<div class="editor-title-wrap">
+<h2 data-i18n="mml.view_edit"></h2>
+<button class="tiny-help-btn soft-tool-button" data-i18n="edit.help" id="codeHelpBtn" type="button"></button>
+</div>
+<div aria-label="" class="editor-title-actions" data-i18n-aria-label="edit.tools">
+<button class="ghost soft-tool-button" data-i18n="ui.paste" id="pasteBtn" type="button"></button>
+<button class="primary soft-tool-button" data-i18n="ui.copy_all" id="copyBtn" type="button"></button>
+<button class="primary soft-tool-button" data-i18n="ui.split_copy" id="splitCopyBtn" type="button"></button>
+</div>
+</div>
+<div aria-label="" class="editor-tool-row" data-i18n-aria-label="edit.tools">
+<div class="editor-tools-left">
+<button class="ghost soft-tool-button" data-i18n="ui.lead_gap" id="leadingSilenceBtn" type="button"></button><button class="ghost soft-tool-button" data-i18n="ui.remove_rests" id="restTrimBtn" type="button"></button><button class="ghost soft-tool-button" data-i18n="vol.adjust" id="bulkVolumeBtn" type="button"></button><button class="ghost soft-tool-button" data-i18n="pitch.adjust" id="bulkPitchBtn" type="button"></button><button class="ghost beta-feature soft-tool-button" data-i18n-title="vol.generate_beta" id="dynamicsGenerateBtn" title="" type="button"><span data-i18n="vol.generate"></span></button><button class="ghost beta-feature soft-tool-button" data-i18n-title="ui.gen_accomp_beta" id="accompanimentGenerateBtn" title="" type="button"><span data-i18n="ui.gen_accomp"></span></button>
+</div>
+</div>
+<div class="tab-line">
+<div aria-label="" class="tabs" data-i18n-aria-label="mml.select_part" role="tablist">
+<button class="tab-btn tab-all active" data-i18n="mml.done" data-tab="main" type="button"></button>
+<button class="tab-btn part-tab part-0" data-i18n="part.melody" data-tab="part0" type="button"></button>
+<button class="tab-btn part-tab part-1" data-i18n="part.harmony1" data-tab="part1" type="button"></button>
+<button class="tab-btn part-tab part-2" data-i18n="part.harmony2" data-tab="part2" type="button"></button>
+<button class="tab-btn part-tab part-3" data-i18n="part.harmony3" data-tab="part3" type="button"></button>
+<button class="tab-btn part-tab part-4" data-i18n="part.harmony4" data-tab="part4" type="button"></button>
+<button class="tab-btn part-tab part-5" data-i18n="part.harmony5" data-tab="part5" type="button"></button>
+</div>
+<div aria-live="polite" class="char-count" data-i18n="ui.no_chars" id="charCount"></div>
+</div>
+<div class="mml-panel" data-panel="main">
+<div class="colored-textarea">
+<pre aria-hidden="true" class="mml-highlight" id="mainMmlHighlight"></pre>
+<textarea class="highlight-source" id="mainMml" spellcheck="false">MML@T120V12O5L8ccggaag4ffeeddc4,O4L4cgrgcrgc,O3L2cgcg;</textarea>
+</div>
+</div>
+<div class="mml-panel part-panel part-0" data-panel="part0" hidden="">
+<div class="colored-textarea">
+<pre aria-hidden="true" class="mml-highlight part-highlight ch0" id="part0Highlight"></pre>
+<textarea class="highlight-source" id="part0" spellcheck="false"></textarea>
+</div>
+</div>
+<div class="mml-panel part-panel part-1" data-panel="part1" hidden="">
+<div class="colored-textarea">
+<pre aria-hidden="true" class="mml-highlight part-highlight ch1" id="part1Highlight"></pre>
+<textarea class="highlight-source" id="part1" spellcheck="false"></textarea>
+</div>
+</div>
+<div class="mml-panel part-panel part-2" data-panel="part2" hidden="">
+<div class="colored-textarea">
+<pre aria-hidden="true" class="mml-highlight part-highlight ch2" id="part2Highlight"></pre>
+<textarea class="highlight-source" id="part2" spellcheck="false"></textarea>
+</div>
+</div>
+<div class="mml-panel part-panel part-3" data-panel="part3" hidden="">
+<div class="colored-textarea">
+<pre aria-hidden="true" class="mml-highlight part-highlight ch3" id="part3Highlight"></pre>
+<textarea class="highlight-source" id="part3" spellcheck="false"></textarea>
+</div>
+</div>
+<div class="mml-panel part-panel part-4" data-panel="part4" hidden="">
+<div class="colored-textarea">
+<pre aria-hidden="true" class="mml-highlight part-highlight ch4" id="part4Highlight"></pre>
+<textarea class="highlight-source" id="part4" spellcheck="false"></textarea>
+</div>
+</div>
+<div class="mml-panel part-panel part-5" data-panel="part5" hidden="">
+<div class="colored-textarea">
+<pre aria-hidden="true" class="mml-highlight part-highlight ch5" id="part5Highlight"></pre>
+<textarea class="highlight-source" id="part5" spellcheck="false"></textarea>
+</div>
+</div>
+</section>
+</main>
+<section aria-hidden="true" aria-labelledby="rhythmGameLayerTitle" aria-modal="true" class="rhythm-game-layer" hidden="" id="rhythmGameLayer" role="dialog">
+<header class="rhythm-game-layer-head">
+<div class="rhythm-game-layer-title">
+<strong data-i18n="game.mobibeat" id="rhythmGameLayerTitle"></strong>
+<span aria-live="polite" data-i18n="game.preparing" id="rhythmGameStatus" role="status"></span>
+</div>
+<button class="rhythm-game-layer-close" data-i18n="ui.return_generator" id="rhythmGameClose" type="button"></button>
+</header>
+<div class="rhythm-game-frame-wrap">
+<div aria-live="polite" class="rhythm-game-loading" id="rhythmGameLoading" role="status">
+<span aria-hidden="true" class="rhythm-game-loading-spinner"></span>
+<strong data-i18n="game.loading" id="rhythmGameLoadingText"></strong>
+<small data-i18n="game.connection_path"></small>
+</div>
+<iframe allow="autoplay; fullscreen" allowfullscreen="" class="rhythm-game-frame" data-i18n-title="game.mobibeat_mml" data-src="../mobibeats/" id="rhythmGameFrame" src="about:blank" title=""></iframe>
+</div>
+</section>
+<dialog class="mml-dialog drive-save-dialog" id="googleDriveSaveDialog">
+<form class="dialog-card drive-save-card" id="googleDriveSaveForm" method="dialog">
+<h3 data-i18n="drive.save"></h3>
+<p><span data-i18n="drive.default_save"></span> <strong>MML_Mobibard</strong> <span data-i18n="drive.dir_change"></span></p>
+<div class="drive-save-folder-row">
+<span class="dialog-field" data-i18n="drive.save_loc"></span>
+<strong id="googleDriveSaveFolderNameText">MML_Mobibard</strong>
+<button class="ghost soft-tool-button" data-i18n="ui.change_loc" id="googleDriveSaveFolderBtn" type="button"></button>
+</div>
+<label class="dialog-field" data-i18n="file.name" for="googleDriveSaveFileName"></label>
+<input autocomplete="off" id="googleDriveSaveFileName" inputmode="text" type="text"/>
+<span class="dialog-small" data-i18n="file.duplicate_exists"></span>
+<span aria-live="polite" class="dialog-small drive-save-status" id="googleDriveSaveStatus" role="status"></span>
+<div class="dialog-actions">
+<button data-i18n="ui.cancel" id="googleDriveSaveCancel" type="button"></button>
+<button class="primary" data-i18n="ui.save" id="googleDriveSaveApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-
-<dialog id="mmiImportDialog" class="mml-dialog mmi-import-dialog">
-  <form id="mmiImportForm" class="dialog-card mmi-import-card" method="dialog">
-    <div class="dialog-title-row">
-      <h3 id="mmiImportTitle">MML 채널 선택</h3>
-      <div class="dialog-title-actions">
-        <button id="mmiFullPreviewBtn" class="midi-full-preview-btn mmi-full-preview-btn" type="button" aria-pressed="false">선택 듣기</button>
-        <button id="mmiAllPreviewBtn" class="midi-full-preview-btn mmi-full-preview-btn" type="button" aria-pressed="false">전부 듣기</button>
-      </div>
-    </div>
-    <p id="mmiImportSummary">파일에서 찾은 MML 채널 중 불러올 채널을 선택해 주세요.</p>
-    <div id="mmiChannelList" class="mmi-channel-list" aria-label="MML 채널 목록"></div>
-    <div class="mmi-import-status-row">
-      <span id="mmiImportStatus" class="dialog-small mmi-import-status" role="status" aria-live="polite"></span>
-      <button id="mmiImportClear" class="mmi-clear-selection mini-button" type="button">전부해제</button>
-    </div>
-    <div class="dialog-actions mmi-import-actions">
-      <div class="dialog-actions-left">
-        <span class="toolbar-label import-action-label">불러오기</span>
-        <button id="mmiImportReloadFile" type="button" title="파일에서 불러오기">파일</button>
-        <button id="mmiImportGoogleDriveLoad" type="button" disabled title="Google Drive에서 파일 불러오기">구글</button>
-      </div>
-      <div class="dialog-actions-right">
-        <button id="mmiImportCancel" type="button">취소</button>
-        <button id="mmiImportApply" class="primary" type="button">불러오기</button>
-      </div>
-    </div>
-  </form>
+<dialog class="mml-dialog mmi-import-dialog" id="mmiImportDialog">
+<form class="dialog-card mmi-import-card" id="mmiImportForm" method="dialog">
+<div class="dialog-title-row mmi-import-title-row">
+<h3 id="mmiImportTitle"></h3>
+<div class="dialog-title-actions mmi-import-title-actions">
+<button class="mmi-clear-selection mini-button soft-tool-button" data-i18n="ui.clear_all" id="mmiImportClear" type="button"></button>
+<button aria-pressed="false" class="midi-full-preview-btn mmi-full-preview-btn soft-tool-button" data-i18n="ui.preview_2" id="mmiFullPreviewBtn" type="button"></button>
+<button aria-pressed="false" class="midi-full-preview-btn mmi-full-preview-btn soft-tool-button" data-i18n="ui.preview_all" id="mmiAllPreviewBtn" type="button"></button>
+</div>
+</div>
+<p data-i18n="mml.select_which" id="mmiImportSummary"></p>
+<div aria-label="" class="mmi-channel-list" data-i18n-aria-label="mml.ch_list" id="mmiChannelList"></div>
+<div class="mmi-import-status-row" hidden>
+<span aria-live="polite" class="dialog-small mmi-import-status" id="mmiImportStatus" role="status"></span>
+</div>
+<div class="dialog-actions mmi-import-actions">
+<div class="dialog-actions-left">
+<span class="toolbar-label import-action-label" data-i18n="ui.load"></span>
+<button class="soft-tool-button" data-i18n="file.label" data-i18n-title="file.load" id="mmiImportReloadFile" title="" type="button"></button>
+<button class="soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.load_file" id="mmiImportGoogleDriveLoad" title="" type="button"></button>
+</div>
+<div class="dialog-actions-right">
+<button data-i18n="ui.cancel" id="mmiImportCancel" type="button"></button>
+<button class="primary" data-i18n="ui.load" id="mmiImportApply" type="button"></button>
+</div>
+</div>
+</form>
 </dialog>
-
-<dialog id="partSoundDialog" class="mml-dialog part-sound-dialog">
-  <form id="partSoundForm" class="dialog-card part-sound-card" method="dialog">
-    <h3>채널 음색 설정</h3>
-    <p>재생기에서 미리 들을 때 사용할 소리를 고르는 설정입니다.<br>악보(MML)의 악기 정보가 바뀌거나 저장되는 것은 아닙니다.</p>
-    <div class="part-sound-preset-row">
-      <label class="dialog-field" for="partSoundPresetSelect">음색 프리셋</label>
-      <div class="part-sound-preset-control">
-        <select id="partSoundPresetSelect" aria-label="채널별 음색 프리셋 선택">
-          <option value="auto">자동 음색</option>
-        </select>
-        <button id="partSoundPresetSave" type="button">저장</button>
-        <button id="partSoundPresetDelete" type="button">삭제</button>
-      </div>
-    </div>
-    <div id="partSoundRows" class="part-sound-rows" aria-label="채널별 음색 목록"></div>
-    <div class="dialog-actions">
-      <button id="partSoundCancel" type="button">취소</button>
-      <button id="partSoundApply" class="primary" type="button">적용</button>
-    </div>
-  </form>
+<dialog class="mml-dialog part-sound-dialog" id="partSoundDialog">
+<form class="dialog-card part-sound-card" id="partSoundForm" method="dialog">
+<h3 data-i18n="snd.ch_settings"></h3>
+<p><span data-i18n="snd.choose_previewing"></span><br/><span data-i18n="mml.not_change"></span></p>
+<div class="soundfont-file-row">
+<span class="dialog-field" data-i18n="snd.soundfont_file"></span>
+<div class="soundfont-file-control">
+<strong aria-live="polite" class="soundfont-file-name" id="soundName">Roland_SC-55.sf2</strong>
+<button class="soft-tool-button" data-i18n="ui.load" id="soundFontLoadBtn" type="button"></button>
+<button class="soft-tool-button" data-i18n="snd.restore_default" id="soundFontResetBtn" type="button"></button>
+<input accept=".sf2" hidden="" id="sf2File" type="file"/>
+</div>
+</div>
+<div class="part-sound-preset-row">
+<label class="dialog-field" data-i18n="snd.preset" for="partSoundPresetSelect"></label>
+<div class="part-sound-preset-control">
+<select aria-label="" data-i18n-aria-label="snd.select_preset_ch" id="partSoundPresetSelect">
+<option data-i18n="snd.auto" value="auto"></option>
+</select>
+<button class="soft-tool-button" data-i18n="ui.save" id="partSoundPresetSave" type="button"></button>
+<button class="soft-tool-button" data-i18n="ui.delete" id="partSoundPresetDelete" type="button"></button>
+</div>
+</div>
+<div aria-label="" class="part-sound-rows" data-i18n-aria-label="snd.list_ch" id="partSoundRows"></div>
+<div class="dialog-actions">
+<button data-i18n="ui.cancel" id="partSoundCancel" type="button"></button>
+<button class="primary" data-i18n="ui.apply" id="partSoundApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="codeHelpDialog" class="mml-dialog code-help-dialog">
-  <form class="dialog-card code-help-card" method="dialog">
-    <h3>MML 코드 도움말</h3>
-    <p>재생기에서 지원하는 기본 MML 코드입니다. 대소문자는 구분하지 않습니다. 숫자가 붙는 코드는 아래 설명의 범위 안에서 사용해 주세요.</p>
-    <div class="code-help-table" role="table" aria-label="지원 MML 코드 목록">
-      <div class="code-help-row code-help-head" role="row"><strong role="columnheader">코드</strong><strong role="columnheader">설명</strong><strong role="columnheader">예시</strong></div>
-      <div class="code-help-row" role="row"><code>MML@...;</code><span>전체 악보 형식입니다. <code>@</code> 뒤 내용을 쉼표로 나눠 최대 6채널(멜로디, 화음1~5)을 입력하고 <code>;</code>로 끝냅니다.</span><code>MML@cde,egc,ccg;</code></div>
-      <div class="code-help-row" role="row"><code>T32~255</code><span>템포(BPM)입니다. 숫자가 클수록 빠릅니다.</span><code>T120</code></div>
-      <div class="code-help-row" role="row"><code>O0~7</code><span>옥타브입니다. 숫자가 클수록 높은 음역입니다.</span><code>O4cde</code></div>
-      <div class="code-help-row" role="row"><code>L1,2,4,8,16,32,64</code><span>기본 음 길이입니다. 숫자는 “몇 분음표인지”를 뜻합니다. <code>L4</code>는 4분음표, <code>L8</code>은 8분음표라서 숫자가 클수록 짧아집니다.</span><code>L8cdef</code></div>
-      <div class="code-help-row" role="row"><code>V0~15</code><span>볼륨입니다. <code>0</code>은 가장 작고 <code>15</code>가 가장 큽니다.</span><code>V12cde</code></div>
-      <div class="code-help-row" role="row"><code>c d e f g a b</code><span>도레미파솔라시 음표입니다. 뒤에 <code>1,2,4,8,16,32,64</code>를 붙이면 그 음표만 길이를 바꿉니다.</span><code>c4 d8 e</code></div>
-      <div class="code-help-row" role="row"><code>r</code><span>쉼표입니다. 뒤 숫자는 쉼표 길이입니다.</span><code>r4 r8</code></div>
-      <div class="code-help-row" role="row"><code>N4~88</code><span>마비노기 음 번호로 음 높이를 직접 지정합니다. 숫자가 클수록 높은 음입니다. <code>N48</code>은 4옥타브 도입니다.</span><code>L8N48N52</code></div>
-      <div class="code-help-row" role="row"><code># + -</code><span>반음 올림/내림입니다. <code>#</code>, <code>+</code>는 반음 올림, <code>-</code>는 반음 내림입니다.</span><code>c# d-</code></div>
-      <div class="code-help-row" role="row"><code>&lt; &gt;</code><span>옥타브를 한 단계 이동합니다. <code>&gt;</code>는 한 옥타브 위로, <code>&lt;</code>는 한 옥타브 아래로 이동합니다.</span><code>&gt;c&lt;c</code></div>
-      <div class="code-help-row" role="row"><code>.</code><span>점음표입니다. 바로 앞 길이를 1.5배로 늘립니다. 점을 여러 개 붙이면 남은 절반씩 더 늘어납니다.</span><code>c4. r8.</code></div>
-      <div class="code-help-row" role="row"><code>&amp;</code><span>같은 음을 이어서 길게 연주합니다. <code>&amp;</code> 앞뒤는 같은 음이어야 합니다.</span><code>c4&amp;c8</code></div>
-    </div>
-    <div class="code-help-example">
-      <strong>짧은 예시</strong>
-      <code>MML@T120V12O5L8cdefgab&gt;c,O4V10L4ceg,O3V9L2cgcg;</code>
-    </div>
-    <div class="dialog-actions">
-      <button id="codeHelpClose" type="button">닫기</button>
-    </div>
-  </form>
+<dialog class="mml-dialog code-help-dialog" id="codeHelpDialog">
+<form class="dialog-card code-help-card" method="dialog">
+<h3 data-i18n="mml.code_help"></h3>
+<p data-i18n="mml.basic_codes"></p>
+<div aria-label="" class="code-help-table" data-i18n-aria-label="mml.supported_code" role="table">
+<div class="code-help-row code-help-head" role="row"><strong data-i18n="ui.code" role="columnheader"></strong><strong data-i18n="ui.description" role="columnheader"></strong><strong data-i18n="ui.example" role="columnheader"></strong></div>
+<div class="code-help-row" role="row"><code>MML@...;</code><span><span data-i18n="st.format_done"></span> <code>@</code> <span data-i18n="msg.separate_following"></span> <code>;</code><span data-i18n="ui.finish"></span></span><code>MML@cde,egc,ccg;</code></div>
+<div class="code-help-row" role="row"><code>T32~255</code><span data-i18n="tempo.bpm_higher"></span><code>T120</code></div>
+<div class="code-help-row" role="row"><code>O0~7</code><span data-i18n="pitch.octave_higher"></span><code>O4cde</code></div>
+<div class="code-help-row" role="row"><code>L1,2,4,8,16,32,64</code><span><span data-i18n="msg.default_note"></span> <code>L4</code><span data-i18n="msg.quarter_note"></span> <code>L8</code><span data-i18n="msg.eighth_note"></span></span><code>L8cdef</code></div>
+<div class="code-help-row" role="row"><code>V0~15</code><span><span data-i18n="vol.label_dot"></span> <code>0</code><span data-i18n="ui.quietest"></span> <code>15</code><span data-i18n="ui.loudest"></span></span><code>V12cde</code></div>
+<div class="code-help-row" role="row"><code>c d e f g a b</code><span><span data-i18n="msg.do_re"></span> <code>1,2,4,8,16,32,64</code><span data-i18n="msg.note_change"></span></span><code>c4 d8 e</code></div>
+<div class="code-help-row" role="row"><code>r</code><span data-i18n="msg.rest_following"></span><code>r4 r8</code></div>
+<div class="code-help-row" role="row"><code>N4~88</code><span><span data-i18n="pitch.direct_set"></span> <code>N48</code><span data-i18n="ui.middle_c"></span></span><code>L8N48N52</code></div>
+<div class="code-help-row" role="row"><code># + -</code><span><span data-i18n="msg.raises_lowers"></span> <code>#</code>, <code>+</code><span data-i18n="msg.raises_semitone"></span> <code>-</code><span data-i18n="ui.lowers_semitone"></span></span><code>c# d-</code></div>
+<div class="code-help-row" role="row"><code>&lt; &gt;</code><span><span data-i18n="pitch.moves_octave"></span> <code>&gt;</code><span data-i18n="pitch.moves_one_octave"></span> <code>&lt;</code><span data-i18n="pitch.moves_one_octave_2"></span></span><code>&gt;c&lt;c</code></div>
+<div class="code-help-row" role="row"><code>.</code><span data-i18n="msg.dotted_note"></span><code>c4. r8.</code></div>
+<div class="code-help-row" role="row"><code>&amp;</code><span><span data-i18n="msg.ties_same"></span> <code>&amp;</code> <span data-i18n="msg.notes_same"></span></span><code>c4&amp;c8</code></div>
+</div>
+<div class="code-help-example">
+<strong data-i18n="ui.short_example"></strong>
+<code>MML@T120V12O5L8cdefgab&gt;c,O4V10L4ceg,O3V9L2cgcg;</code>
+</div>
+<div class="dialog-actions">
+<button data-i18n="ui.close" id="codeHelpClose" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="restTrimDialog" class="mml-dialog">
-  <form id="restTrimForm" class="dialog-card" method="dialog">
-    <h3>쉼표 삭제</h3>
-    <p>선택한 채널에서 지정 길이 이하의 쉼표를 삭제하고, 삭제한 길이만큼 바로 앞 음표를 늘린 뒤 최적화합니다.</p>
-    <label class="dialog-field" for="restTrimLimit">삭제 길이</label>
-    <select id="restTrimLimit">
-      <option value="all">모든 쉼표</option>
-      <option value="4">4분음표 이하</option>
-      <option value="8">8분음표 이하</option>
-      <option value="16">16분음표 이하</option>
-      <option value="32" selected>32분음표 이하</option>
-      <option value="64">64분음표 이하</option>
-    </select>
-    <div class="dialog-field-row">
-      <span class="dialog-field">적용 채널</span>
-      <span class="dialog-mini-actions">
-        <button id="restTrimSelectAll" class="compact" type="button">전부 선택</button>
-        <button id="restTrimSelectNone" class="compact" type="button">선택 해제</button>
-      </span>
-    </div>
-    <div class="dialog-channel-grid" aria-label="쉼표 삭제 적용 채널">
-      <label class="dialog-channel-option part-0"><input class="rest-trim-channel" type="checkbox" data-part-index="0" checked /> <span class="dialog-channel-name">멜로디</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="0">0</span></label>
-      <label class="dialog-channel-option part-1"><input class="rest-trim-channel" type="checkbox" data-part-index="1" checked /> <span class="dialog-channel-name">화음1</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="1">0</span></label>
-      <label class="dialog-channel-option part-2"><input class="rest-trim-channel" type="checkbox" data-part-index="2" checked /> <span class="dialog-channel-name">화음2</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="2">0</span></label>
-      <label class="dialog-channel-option part-3"><input class="rest-trim-channel" type="checkbox" data-part-index="3" checked /> <span class="dialog-channel-name">화음3</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="3">0</span></label>
-      <label class="dialog-channel-option part-4"><input class="rest-trim-channel" type="checkbox" data-part-index="4" checked /> <span class="dialog-channel-name">화음4</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="4">0</span></label>
-      <label class="dialog-channel-option part-5"><input class="rest-trim-channel" type="checkbox" data-part-index="5" checked /> <span class="dialog-channel-name">화음5</span><span class="dialog-channel-stat rest-trim-stat" data-part-index="5">0</span></label>
-    </div>
-    <div class="dialog-actions">
-      <button id="restTrimCancel" type="button">취소</button>
-      <button id="restTrimApply" class="primary" type="button">삭제</button>
-    </div>
-  </form>
+<dialog class="mml-dialog" id="restTrimDialog">
+<form class="dialog-card" id="restTrimForm" method="dialog">
+<h3 data-i18n="ui.remove_rests"></h3>
+<p data-i18n="msg.removes_rests"></p>
+<label class="dialog-field" data-i18n="ui.remove_length" for="restTrimLimit"></label>
+<select id="restTrimLimit">
+<option data-i18n="ui.all_rests" value="all"></option>
+<option data-i18n="ui.quarter_notes" value="4"></option>
+<option data-i18n="ui.eighth_notes" value="8"></option>
+<option data-i18n="ui.note16_short" value="16"></option>
+<option data-i18n="ui.note32_short" selected="" value="32"></option>
+<option data-i18n="ui.note64_short" value="64"></option>
+</select>
+<div class="dialog-field-row">
+<span class="dialog-field" data-i18n="ui.target_chs"></span>
+<span class="dialog-mini-actions">
+<button class="compact soft-tool-button" data-i18n="ui.select_all" id="restTrimSelectAll" type="button"></button>
+<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="restTrimSelectNone" type="button"></button>
+</span>
+</div>
+<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="ui.chs_rest">
+<label class="dialog-channel-option part-0"><input checked="" class="rest-trim-channel" data-part-index="0" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.melody"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="0">0</span></label>
+<label class="dialog-channel-option part-1"><input checked="" class="rest-trim-channel" data-part-index="1" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.harmony1"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="1">0</span></label>
+<label class="dialog-channel-option part-2"><input checked="" class="rest-trim-channel" data-part-index="2" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.harmony2"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="2">0</span></label>
+<label class="dialog-channel-option part-3"><input checked="" class="rest-trim-channel" data-part-index="3" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.harmony3"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="3">0</span></label>
+<label class="dialog-channel-option part-4"><input checked="" class="rest-trim-channel" data-part-index="4" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.harmony4"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="4">0</span></label>
+<label class="dialog-channel-option part-5"><input checked="" class="rest-trim-channel" data-part-index="5" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.harmony5"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="5">0</span></label>
+</div>
+<div class="dialog-actions">
+<button data-i18n="ui.cancel" id="restTrimCancel" type="button"></button>
+<button class="primary" data-i18n="ui.delete" id="restTrimApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="bulkVolumeDialog" class="mml-dialog">
-  <form id="bulkVolumeForm" class="dialog-card" method="dialog">
-    <h3>볼륨 조절</h3>
-    <p>선택한 채널의 모든 음표 볼륨에 입력한 값을 더합니다. 결과 볼륨은 MML 지원 범위인 0~15로 제한됩니다.</p>
-    <label class="dialog-field" for="bulkVolumeAmount">볼륨 변화량</label>
-    <input id="bulkVolumeAmount" type="number" min="-15" max="15" step="1" value="0" inputmode="numeric" />
-    <span class="dialog-small">-15 ~ 15 사이의 정수만 입력할 수 있습니다.</span>
-    <div id="bulkVolumeStats" class="volume-count-box" aria-live="polite"></div>
-    <div class="dialog-field-row">
-      <span class="dialog-field">적용 채널</span>
-      <span class="dialog-mini-actions">
-        <button id="bulkVolumeSelectAll" class="compact" type="button">전부 선택</button>
-        <button id="bulkVolumeSelectNone" class="compact" type="button">선택 해제</button>
-      </span>
-    </div>
-    <div class="dialog-channel-grid" aria-label="볼륨 조절 적용 채널">
-      <label class="dialog-channel-option part-0"><input class="bulk-volume-channel" type="checkbox" data-part-index="0" checked /> 멜로디</label>
-      <label class="dialog-channel-option part-1"><input class="bulk-volume-channel" type="checkbox" data-part-index="1" checked /> 화음1</label>
-      <label class="dialog-channel-option part-2"><input class="bulk-volume-channel" type="checkbox" data-part-index="2" checked /> 화음2</label>
-      <label class="dialog-channel-option part-3"><input class="bulk-volume-channel" type="checkbox" data-part-index="3" checked /> 화음3</label>
-      <label class="dialog-channel-option part-4"><input class="bulk-volume-channel" type="checkbox" data-part-index="4" checked /> 화음4</label>
-      <label class="dialog-channel-option part-5"><input class="bulk-volume-channel" type="checkbox" data-part-index="5" checked /> 화음5</label>
-    </div>
-    <div class="dialog-actions">
-      <button id="bulkVolumeCancel" type="button">취소</button>
-      <button id="bulkVolumeApply" class="primary" type="button">적용</button>
-    </div>
-  </form>
+<dialog class="mml-dialog" id="bulkVolumeDialog">
+<form class="dialog-card" id="bulkVolumeForm" method="dialog">
+<h3 data-i18n="vol.adjust"></h3>
+<p data-i18n="mml.adds_entered"></p>
+<label class="dialog-field" data-i18n="vol.change" for="bulkVolumeAmount"></label>
+<input id="bulkVolumeAmount" inputmode="numeric" max="15" min="-15" step="1" type="number" value="0"/>
+<span class="dialog-small" data-i18n="msg.enter_integer_15"></span>
+<div aria-live="polite" class="volume-count-box" id="bulkVolumeStats"></div>
+<div class="dialog-field-row">
+<span class="dialog-field" data-i18n="ui.target_chs"></span>
+<span class="dialog-mini-actions">
+<button class="compact soft-tool-button" data-i18n="ui.select_all" id="bulkVolumeSelectAll" type="button"></button>
+<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="bulkVolumeSelectNone" type="button"></button>
+</span>
+</div>
+<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="vol.chs_adjust">
+<label class="dialog-channel-option part-0"><input checked="" class="bulk-volume-channel" data-part-index="0" type="checkbox"/> <span data-i18n="part.melody"></span></label>
+<label class="dialog-channel-option part-1"><input checked="" class="bulk-volume-channel" data-part-index="1" type="checkbox"/> <span data-i18n="part.harmony1"></span></label>
+<label class="dialog-channel-option part-2"><input checked="" class="bulk-volume-channel" data-part-index="2" type="checkbox"/> <span data-i18n="part.harmony2"></span></label>
+<label class="dialog-channel-option part-3"><input checked="" class="bulk-volume-channel" data-part-index="3" type="checkbox"/> <span data-i18n="part.harmony3"></span></label>
+<label class="dialog-channel-option part-4"><input checked="" class="bulk-volume-channel" data-part-index="4" type="checkbox"/> <span data-i18n="part.harmony4"></span></label>
+<label class="dialog-channel-option part-5"><input checked="" class="bulk-volume-channel" data-part-index="5" type="checkbox"/> <span data-i18n="part.harmony5"></span></label>
+</div>
+<div class="dialog-actions">
+<button data-i18n="ui.cancel" id="bulkVolumeCancel" type="button"></button>
+<button class="primary" data-i18n="ui.apply" id="bulkVolumeApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="bulkPitchDialog" class="mml-dialog">
-  <form id="bulkPitchForm" class="dialog-card" method="dialog">
-    <h3>음정 조절</h3>
-    <p>선택한 채널에 이미 적혀 있는 O숫자 명령만 입력한 값만큼 증감합니다. 음표와 &lt; &gt; 명령은 변경하지 않으며, 결과 O값은 O0~O7로 제한됩니다.</p>
-    <label class="dialog-field" for="bulkPitchAmount">옥타브 변화량</label>
-    <input id="bulkPitchAmount" type="number" min="-7" max="7" step="1" value="0" inputmode="numeric" />
-    <span class="dialog-small">-7 ~ 7 사이의 정수만 입력할 수 있습니다.</span>
-    <div id="bulkPitchStats" class="volume-count-box" aria-live="polite"></div>
-    <div class="dialog-field-row">
-      <span class="dialog-field">적용 채널</span>
-      <span class="dialog-mini-actions">
-        <button id="bulkPitchSelectAll" class="compact" type="button">전부 선택</button>
-        <button id="bulkPitchSelectNone" class="compact" type="button">선택 해제</button>
-      </span>
-    </div>
-    <div class="dialog-channel-grid" aria-label="음정 조절 적용 채널">
-      <label class="dialog-channel-option part-0"><input class="bulk-pitch-channel" type="checkbox" data-part-index="0" checked /> 멜로디</label>
-      <label class="dialog-channel-option part-1"><input class="bulk-pitch-channel" type="checkbox" data-part-index="1" checked /> 화음1</label>
-      <label class="dialog-channel-option part-2"><input class="bulk-pitch-channel" type="checkbox" data-part-index="2" checked /> 화음2</label>
-      <label class="dialog-channel-option part-3"><input class="bulk-pitch-channel" type="checkbox" data-part-index="3" checked /> 화음3</label>
-      <label class="dialog-channel-option part-4"><input class="bulk-pitch-channel" type="checkbox" data-part-index="4" checked /> 화음4</label>
-      <label class="dialog-channel-option part-5"><input class="bulk-pitch-channel" type="checkbox" data-part-index="5" checked /> 화음5</label>
-    </div>
-    <div class="dialog-actions">
-      <button id="bulkPitchCancel" type="button">취소</button>
-      <button id="bulkPitchApply" class="primary" type="button">적용</button>
-    </div>
-  </form>
+<dialog class="mml-dialog" id="bulkPitchDialog">
+<form class="dialog-card" id="bulkPitchForm" method="dialog">
+<h3 data-i18n="pitch.adjust"></h3>
+<p data-i18n="msg.changes_oct"></p>
+<label class="dialog-field" data-i18n="pitch.octave_change" for="bulkPitchAmount"></label>
+<input id="bulkPitchAmount" inputmode="numeric" max="7" min="-7" step="1" type="number" value="0"/>
+<span class="dialog-small" data-i18n="msg.enter_integer_7"></span>
+<div aria-live="polite" class="volume-count-box" id="bulkPitchStats"></div>
+<div class="dialog-field-row">
+<span class="dialog-field" data-i18n="ui.target_chs"></span>
+<span class="dialog-mini-actions">
+<button class="compact soft-tool-button" data-i18n="ui.select_all" id="bulkPitchSelectAll" type="button"></button>
+<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="bulkPitchSelectNone" type="button"></button>
+</span>
+</div>
+<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="pitch.chs_adjust">
+<label class="dialog-channel-option part-0"><input checked="" class="bulk-pitch-channel" data-part-index="0" type="checkbox"/> <span data-i18n="part.melody"></span></label>
+<label class="dialog-channel-option part-1"><input checked="" class="bulk-pitch-channel" data-part-index="1" type="checkbox"/> <span data-i18n="part.harmony1"></span></label>
+<label class="dialog-channel-option part-2"><input checked="" class="bulk-pitch-channel" data-part-index="2" type="checkbox"/> <span data-i18n="part.harmony2"></span></label>
+<label class="dialog-channel-option part-3"><input checked="" class="bulk-pitch-channel" data-part-index="3" type="checkbox"/> <span data-i18n="part.harmony3"></span></label>
+<label class="dialog-channel-option part-4"><input checked="" class="bulk-pitch-channel" data-part-index="4" type="checkbox"/> <span data-i18n="part.harmony4"></span></label>
+<label class="dialog-channel-option part-5"><input checked="" class="bulk-pitch-channel" data-part-index="5" type="checkbox"/> <span data-i18n="part.harmony5"></span></label>
+</div>
+<div class="dialog-actions">
+<button data-i18n="ui.cancel" id="bulkPitchCancel" type="button"></button>
+<button class="primary" data-i18n="ui.apply" id="bulkPitchApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="dynamicsGenerateDialog" class="mml-dialog genre-arrange-dialog">
-  <form id="dynamicsGenerateForm" class="dialog-card" method="dialog">
-    <div class="genre-arrange-title-row">
-      <h3>볼륨 생성</h3>
-      <span class="genre-beta-badge" aria-label="베타 기능">BETA</span>
-    </div>
-    <p>노트의 길이, 밀도, 쉼표와 음정 흐름을 분석해 선택한 장르에 어울리는 V 변화를 자동으로 생성합니다. 기존 볼륨 변화가 감지되면 적용 전에 확인합니다.</p>
-    <label class="dialog-field" for="dynamicsGenerateGenre">볼륨 스타일</label>
-    <select id="dynamicsGenerateGenre">
-      <option value="pop" selected>팝</option>
-      <option value="jazz">재즈</option>
-      <option value="ballad">발라드</option>
-      <option value="bossa">보사노바</option>
-      <option value="rock">록</option>
-      <option value="funk">펑크</option>
-      <option value="classical">클래식</option>
-    </select>
-    <label class="dialog-field" for="dynamicsGenerateStrength">변형 강도</label>
-    <select id="dynamicsGenerateStrength">
-      <option value="light">가볍게</option>
-      <option value="normal" selected>보통</option>
-      <option value="strong">강하게</option>
-    </select>
-    <div class="genre-arrange-note">
-      <strong id="dynamicsGenerateRuleTitle">팝 볼륨 규칙</strong>
-      <span id="dynamicsGenerateRuleText">규칙적인 강박 · 안정적인 프레이즈 · 절제된 반복음 악센트</span>
-    </div>
-    <div class="dialog-field-row">
-      <span class="dialog-field">적용 채널</span>
-      <span class="dialog-mini-actions">
-        <button id="dynamicsGenerateSelectAll" class="compact" type="button">전부 선택</button>
-        <button id="dynamicsGenerateSelectNone" class="compact" type="button">선택 해제</button>
-      </span>
-    </div>
-    <div class="dialog-channel-grid" aria-label="볼륨 생성 적용 채널">
-      <label class="dialog-channel-option part-0"><input class="dynamics-generate-channel" type="checkbox" data-part-index="0" checked /> 멜로디</label>
-      <label class="dialog-channel-option part-1"><input class="dynamics-generate-channel" type="checkbox" data-part-index="1" checked /> 화음1</label>
-      <label class="dialog-channel-option part-2"><input class="dynamics-generate-channel" type="checkbox" data-part-index="2" checked /> 화음2</label>
-      <label class="dialog-channel-option part-3"><input class="dynamics-generate-channel" type="checkbox" data-part-index="3" checked /> 화음3</label>
-      <label class="dialog-channel-option part-4"><input class="dynamics-generate-channel" type="checkbox" data-part-index="4" checked /> 화음4</label>
-      <label class="dialog-channel-option part-5"><input class="dynamics-generate-channel" type="checkbox" data-part-index="5" checked /> 화음5</label>
-    </div>
-    <div id="dynamicsGenerateStatus" class="dialog-small" role="status" aria-live="polite"></div>
-    <div class="dialog-actions">
-      <button id="dynamicsGenerateCancel" type="button">취소</button>
-      <button id="dynamicsGenerateApply" class="primary" type="button">생성</button>
-    </div>
-  </form>
+<dialog class="mml-dialog genre-arrange-dialog" id="dynamicsGenerateDialog">
+<form class="dialog-card" id="dynamicsGenerateForm" method="dialog">
+<div class="genre-arrange-title-row">
+<h3 data-i18n="vol.generate"></h3>
+<span aria-label="" class="genre-beta-badge" data-i18n-aria-label="ui.beta_feature">BETA</span>
+</div>
+<p data-i18n="vol.analyzes_note"></p>
+<label class="dialog-field" data-i18n="vol.style" for="dynamicsGenerateGenre"></label>
+<select id="dynamicsGenerateGenre">
+<option data-i18n="ui.pop" selected="" value="pop"></option>
+<option data-i18n="ui.jazz" value="jazz"></option>
+<option data-i18n="ui.ballad" value="ballad"></option>
+<option data-i18n="ui.bossa_nova" value="bossa"></option>
+<option data-i18n="ui.rock" value="rock"></option>
+<option data-i18n="ui.funk" value="funk"></option>
+<option data-i18n="ui.classical" value="classical"></option>
+</select>
+<label class="dialog-field" data-i18n="ui.variation_strength" for="dynamicsGenerateStrength"></label>
+<select id="dynamicsGenerateStrength">
+<option data-i18n="ui.light" value="light"></option>
+<option data-i18n="ui.normal" selected="" value="normal"></option>
+<option data-i18n="ui.strong" value="strong"></option>
+</select>
+<div class="genre-arrange-note">
+<strong data-i18n="vol.pop_rules" id="dynamicsGenerateRuleTitle"></strong>
+<span data-i18n="msg.reg_strong" id="dynamicsGenerateRuleText"></span>
+</div>
+<div class="dialog-field-row">
+<span class="dialog-field" data-i18n="ui.target_chs"></span>
+<span class="dialog-mini-actions">
+<button class="compact soft-tool-button" data-i18n="ui.select_all" id="dynamicsGenerateSelectAll" type="button"></button>
+<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="dynamicsGenerateSelectNone" type="button"></button>
+</span>
+</div>
+<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="vol.chs_gen">
+<label class="dialog-channel-option part-0"><input checked="" class="dynamics-generate-channel" data-part-index="0" type="checkbox"/> <span data-i18n="part.melody"></span></label>
+<label class="dialog-channel-option part-1"><input checked="" class="dynamics-generate-channel" data-part-index="1" type="checkbox"/> <span data-i18n="part.harmony1"></span></label>
+<label class="dialog-channel-option part-2"><input checked="" class="dynamics-generate-channel" data-part-index="2" type="checkbox"/> <span data-i18n="part.harmony2"></span></label>
+<label class="dialog-channel-option part-3"><input checked="" class="dynamics-generate-channel" data-part-index="3" type="checkbox"/> <span data-i18n="part.harmony3"></span></label>
+<label class="dialog-channel-option part-4"><input checked="" class="dynamics-generate-channel" data-part-index="4" type="checkbox"/> <span data-i18n="part.harmony4"></span></label>
+<label class="dialog-channel-option part-5"><input checked="" class="dynamics-generate-channel" data-part-index="5" type="checkbox"/> <span data-i18n="part.harmony5"></span></label>
+</div>
+<div aria-live="polite" class="dialog-small" id="dynamicsGenerateStatus" role="status"></div>
+<div class="dialog-actions">
+<button data-i18n="ui.cancel" id="dynamicsGenerateCancel" type="button"></button>
+<button class="primary" data-i18n="ui.generate" id="dynamicsGenerateApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="dynamicsGenerateConfirmDialog" class="mml-dialog dynamics-confirm-dialog">
-  <form class="dialog-card" method="dialog">
-    <h3>기존 볼륨 변화 확인</h3>
-    <p>아래 조건 중 하나에 해당하는 채널이 있습니다.</p>
-    <ul class="dynamics-confirm-rules">
-      <li>사용 중인 V 값이 3종 이상</li>
-      <li>가장 큰 V와 가장 작은 V의 차이가 2 이상</li>
-    </ul>
-    <div id="dynamicsGenerateConfirmList" class="dynamics-confirm-list" aria-live="polite"></div>
-    <p class="dialog-small">계속하면 선택한 채널의 기존 V 변화를 교체하고 새 볼륨 변화를 생성합니다.</p>
-    <div class="dialog-actions">
-      <button id="dynamicsGenerateConfirmCancel" type="button">돌아가기</button>
-      <button id="dynamicsGenerateConfirmApply" class="primary" type="button">그래도 생성</button>
-    </div>
-  </form>
+<dialog class="mml-dialog dynamics-confirm-dialog" id="dynamicsGenerateConfirmDialog">
+<form class="dialog-card" method="dialog">
+<h3 data-i18n="vol.review_changes"></h3>
+<p data-i18n="msg.some_chs"></p>
+<ul class="dynamics-confirm-rules">
+<li data-i18n="msg.three_more"></li>
+<li data-i18n="msg.diff_between"></li>
+</ul>
+<div aria-live="polite" class="dynamics-confirm-list" id="dynamicsGenerateConfirmList"></div>
+<p class="dialog-small" data-i18n="vol.continuing_replaces"></p>
+<div class="dialog-actions">
+<button data-i18n="ui.go_back" id="dynamicsGenerateConfirmCancel" type="button"></button>
+<button class="primary" data-i18n="ui.generate_anyway" id="dynamicsGenerateConfirmApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="tempoEditDialog" class="mml-dialog">
-  <form id="tempoEditForm" class="dialog-card tempo-edit-card" method="dialog">
-    <h3>템포 수정</h3>
-    <p id="tempoEditContext">선택한 템포를 수정합니다.</p>
-    <label class="dialog-field" for="tempoEditBpm">템포</label>
-    <input id="tempoEditBpm" type="number" min="32" max="255" step="1" value="120" inputmode="numeric" />
-    <span class="dialog-small">마비노기 MML 지원 범위인 32~255 사이의 정수만 입력할 수 있습니다.</span>
-    <div class="dialog-actions">
-      <button id="tempoEditCancel" type="button">취소</button>
-      <button id="tempoEditApply" class="primary" type="button">수정</button>
-    </div>
-  </form>
+<dialog class="mml-dialog" id="tempoEditDialog">
+<form class="dialog-card tempo-edit-card" id="tempoEditForm" method="dialog">
+<h3 data-i18n="tempo.edit"></h3>
+<p data-i18n="tempo.edit_3" id="tempoEditContext"></p>
+<label class="dialog-field" data-i18n="tempo.label" for="tempoEditBpm"></label>
+<input id="tempoEditBpm" inputmode="numeric" max="255" min="32" step="1" type="number" value="120"/>
+<span class="dialog-small" data-i18n="mml.enter_integer"></span>
+<div class="dialog-actions">
+<button data-i18n="ui.cancel" id="tempoEditCancel" type="button"></button>
+<button class="primary" data-i18n="ui.update" id="tempoEditApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="leadingSilenceDialog" class="mml-dialog">
-  <form id="leadingSilenceForm" class="dialog-card" method="dialog">
-    <h3>시작 공백</h3>
-    <p>악보 맨앞에 입력한 시간만큼 공백을 넣습니다.</p>
-    <label class="dialog-field" for="leadingSilenceSeconds">공백 시간(초)</label>
-    <input id="leadingSilenceSeconds" type="number" min="0.25" max="600" step="0.25" value="2" inputmode="decimal" />
-    <span class="dialog-small">0.25초 단위</span>
-    <div class="dialog-actions">
-      <button id="leadingSilenceCancel" type="button">취소</button>
-      <button id="leadingSilenceApply" class="primary" type="button">적용</button>
-    </div>
-  </form>
+<dialog class="mml-dialog" id="leadingSilenceDialog">
+<form class="dialog-card" id="leadingSilenceForm" method="dialog">
+<h3 data-i18n="ui.lead_gap"></h3>
+<p data-i18n="msg.adds_entered"></p>
+<label class="dialog-field" data-i18n="ui.silence_duration" for="leadingSilenceSeconds"></label>
+<input id="leadingSilenceSeconds" inputmode="decimal" max="600" min="0.25" step="0.25" type="number" value="2"/>
+<span class="dialog-small" data-i18n="ui.quarter_sec_step"></span>
+<div class="dialog-actions">
+<button data-i18n="ui.cancel" id="leadingSilenceCancel" type="button"></button>
+<button class="primary" data-i18n="ui.apply" id="leadingSilenceApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="accompanimentGenerateDialog" class="mml-dialog accompaniment-generate-dialog">
-  <form id="accompanimentGenerateForm" class="dialog-card" method="dialog">
-    <div class="genre-arrange-title-row">
-      <h3>반주 생성</h3>
-      <span class="genre-beta-badge" aria-label="베타 기능">BETA</span>
-    </div>
-    <p>선택한 참고 채널을 함께 분석한 뒤, 생성 채널 수에 맞춰 화음·리듬·아르페지오·베이스 역할을 나누어 반주를 만듭니다.</p>
-
-    <label class="dialog-field" for="accompanimentGenerateGenre">반주 장르</label>
-    <select id="accompanimentGenerateGenre">
-      <option value="pop" selected>팝</option>
-      <option value="jazz">재즈</option>
-      <option value="ballad">발라드</option>
-      <option value="bossa">보사노바</option>
-      <option value="rock">록</option>
-      <option value="funk">펑크</option>
-      <option value="classical">클래식</option>
-    </select>
-    <label class="dialog-field" for="accompanimentGenerateStrength">적용 강도</label>
-    <select id="accompanimentGenerateStrength">
-      <option value="light">가볍게</option>
-      <option value="normal" selected>보통</option>
-      <option value="strong">강하게</option>
-    </select>
-    <div class="genre-arrange-note">
-      <strong id="accompanimentGenerateRuleTitle">팝 반주 규칙</strong>
-      <span id="accompanimentGenerateRuleText">안정적인 화음 · 규칙적인 리듬 · 루트와 5도 중심 베이스</span>
-    </div>
-
-    <section class="accompaniment-channel-section" aria-labelledby="accompanimentAnalysisTitle">
-      <div class="dialog-field-row">
-        <span id="accompanimentAnalysisTitle" class="dialog-field">참고할 채널</span>
-        <span class="dialog-mini-actions">
-          <button id="accompanimentAnalysisSelectAll" class="compact" type="button">전부 선택</button>
-          <button id="accompanimentAnalysisSelectNone" class="compact" type="button">선택 해제</button>
-        </span>
-      </div>
-      <div class="dialog-channel-grid" aria-label="반주 분석 참고 채널">
-        <label class="dialog-channel-option part-0"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="0" /> 멜로디</label>
-        <label class="dialog-channel-option part-1"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="1" /> 화음1</label>
-        <label class="dialog-channel-option part-2"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="2" /> 화음2</label>
-        <label class="dialog-channel-option part-3"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="3" /> 화음3</label>
-        <label class="dialog-channel-option part-4"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="4" /> 화음4</label>
-        <label class="dialog-channel-option part-5"><input class="accompaniment-analysis-channel" type="checkbox" data-part-index="5" /> 화음5</label>
-      </div>
-      <span class="dialog-small">선택한 채널의 음표를 합쳐 화성·저음·리듬 흐름을 분석합니다.</span>
-    </section>
-
-    <section class="accompaniment-channel-section" aria-labelledby="accompanimentTargetTitle">
-      <div class="dialog-field-row">
-        <span id="accompanimentTargetTitle" class="dialog-field">반주를 생성할 채널</span>
-        <span class="dialog-mini-actions">
-          <button id="accompanimentTargetSelectAll" class="compact" type="button">전부 선택</button>
-          <button id="accompanimentTargetSelectNone" class="compact" type="button">선택 해제</button>
-        </span>
-      </div>
-      <div class="dialog-channel-grid" aria-label="반주 생성 대상 채널">
-        <label class="dialog-channel-option part-0"><input class="accompaniment-target-channel" type="checkbox" data-part-index="0" /> 멜로디</label>
-        <label class="dialog-channel-option part-1"><input class="accompaniment-target-channel" type="checkbox" data-part-index="1" /> 화음1</label>
-        <label class="dialog-channel-option part-2"><input class="accompaniment-target-channel" type="checkbox" data-part-index="2" /> 화음2</label>
-        <label class="dialog-channel-option part-3"><input class="accompaniment-target-channel" type="checkbox" data-part-index="3" /> 화음3</label>
-        <label class="dialog-channel-option part-4"><input class="accompaniment-target-channel" type="checkbox" data-part-index="4" /> 화음4</label>
-        <label class="dialog-channel-option part-5"><input class="accompaniment-target-channel" type="checkbox" data-part-index="5" /> 화음5</label>
-      </div>
-      <span class="dialog-small">선택한 채널의 기존 내용은 새 반주로 교체됩니다.</span>
-    </section>
-
-    <div id="accompanimentGenerateStatus" class="dialog-small" role="status" aria-live="polite"></div>
-    <div class="dialog-actions">
-      <button id="accompanimentGenerateCancel" type="button">취소</button>
-      <button id="accompanimentGenerateApply" class="primary" type="button">생성</button>
-    </div>
-  </form>
+<dialog class="mml-dialog accompaniment-generate-dialog" id="accompanimentGenerateDialog">
+<form class="dialog-card" id="accompanimentGenerateForm" method="dialog">
+<div class="genre-arrange-title-row">
+<h3 data-i18n="ui.gen_accomp"></h3>
+<span aria-label="" class="genre-beta-badge" data-i18n-aria-label="ui.beta_feature">BETA</span>
+</div>
+<p data-i18n="msg.analyzes_ref"></p>
+<label class="dialog-field" data-i18n="ui.accomp_genre" for="accompanimentGenerateGenre"></label>
+<select id="accompanimentGenerateGenre">
+<option data-i18n="ui.pop" selected="" value="pop"></option>
+<option data-i18n="ui.jazz" value="jazz"></option>
+<option data-i18n="ui.ballad" value="ballad"></option>
+<option data-i18n="ui.bossa_nova" value="bossa"></option>
+<option data-i18n="ui.rock" value="rock"></option>
+<option data-i18n="ui.funk" value="funk"></option>
+<option data-i18n="ui.classical" value="classical"></option>
+</select>
+<label class="dialog-field" data-i18n="ui.strength" for="accompanimentGenerateStrength"></label>
+<select id="accompanimentGenerateStrength">
+<option data-i18n="ui.light" value="light"></option>
+<option data-i18n="ui.normal" selected="" value="normal"></option>
+<option data-i18n="ui.strong" value="strong"></option>
+</select>
+<div class="genre-arrange-note">
+<strong data-i18n="ui.pop_accomp" id="accompanimentGenerateRuleTitle"></strong>
+<span data-i18n="msg.stable_harm_reg" id="accompanimentGenerateRuleText"></span>
+</div>
+<section aria-labelledby="accompanimentAnalysisTitle" class="accompaniment-channel-section">
+<div class="dialog-field-row">
+<span class="dialog-field" data-i18n="ui.ref_chs_2" id="accompanimentAnalysisTitle"></span>
+<span class="dialog-mini-actions">
+<button class="compact soft-tool-button" data-i18n="ui.select_all" id="accompanimentAnalysisSelectAll" type="button"></button>
+<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="accompanimentAnalysisSelectNone" type="button"></button>
+</span>
+</div>
+<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="msg.ref_chs">
+<label class="dialog-channel-option part-0"><input class="accompaniment-analysis-channel" data-part-index="0" type="checkbox"/> <span data-i18n="part.melody"></span></label>
+<label class="dialog-channel-option part-1"><input class="accompaniment-analysis-channel" data-part-index="1" type="checkbox"/> <span data-i18n="part.harmony1"></span></label>
+<label class="dialog-channel-option part-2"><input class="accompaniment-analysis-channel" data-part-index="2" type="checkbox"/> <span data-i18n="part.harmony2"></span></label>
+<label class="dialog-channel-option part-3"><input class="accompaniment-analysis-channel" data-part-index="3" type="checkbox"/> <span data-i18n="part.harmony3"></span></label>
+<label class="dialog-channel-option part-4"><input class="accompaniment-analysis-channel" data-part-index="4" type="checkbox"/> <span data-i18n="part.harmony4"></span></label>
+<label class="dialog-channel-option part-5"><input class="accompaniment-analysis-channel" data-part-index="5" type="checkbox"/> <span data-i18n="part.harmony5"></span></label>
+</div>
+<span class="dialog-small" data-i18n="msg.combines_notes"></span>
+</section>
+<section aria-labelledby="accompanimentTargetTitle" class="accompaniment-channel-section">
+<div class="dialog-field-row">
+<span class="dialog-field" data-i18n="msg.chs_gen" id="accompanimentTargetTitle"></span>
+<span class="dialog-mini-actions">
+<button class="compact soft-tool-button" data-i18n="ui.select_all" id="accompanimentTargetSelectAll" type="button"></button>
+<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="accompanimentTargetSelectNone" type="button"></button>
+</span>
+</div>
+<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="msg.target_chs">
+<label class="dialog-channel-option part-0"><input class="accompaniment-target-channel" data-part-index="0" type="checkbox"/> <span data-i18n="part.melody"></span></label>
+<label class="dialog-channel-option part-1"><input class="accompaniment-target-channel" data-part-index="1" type="checkbox"/> <span data-i18n="part.harmony1"></span></label>
+<label class="dialog-channel-option part-2"><input class="accompaniment-target-channel" data-part-index="2" type="checkbox"/> <span data-i18n="part.harmony2"></span></label>
+<label class="dialog-channel-option part-3"><input class="accompaniment-target-channel" data-part-index="3" type="checkbox"/> <span data-i18n="part.harmony3"></span></label>
+<label class="dialog-channel-option part-4"><input class="accompaniment-target-channel" data-part-index="4" type="checkbox"/> <span data-i18n="part.harmony4"></span></label>
+<label class="dialog-channel-option part-5"><input class="accompaniment-target-channel" data-part-index="5" type="checkbox"/> <span data-i18n="part.harmony5"></span></label>
+</div>
+<span class="dialog-small" data-i18n="msg.content_chs"></span>
+</section>
+<div aria-live="polite" class="dialog-small" id="accompanimentGenerateStatus" role="status"></div>
+<div class="dialog-actions">
+<button data-i18n="ui.cancel" id="accompanimentGenerateCancel" type="button"></button>
+<button class="primary" data-i18n="ui.generate" id="accompanimentGenerateApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="accompanimentGenerateConfirmDialog" class="mml-dialog accompaniment-confirm-dialog">
-  <form class="dialog-card" method="dialog">
-    <h3>반주 생성 확인</h3>
-    <p>아래 채널의 원본 내용이 생성 과정에서 교체됩니다.</p>
-    <div id="accompanimentGenerateConfirmList" class="dynamics-confirm-list" aria-live="polite"></div>
-    <p class="dialog-small">참고와 생성에 모두 선택된 채널은 원본을 먼저 분석한 뒤 새 반주로 교체합니다.</p>
-    <div class="dialog-actions">
-      <button id="accompanimentGenerateConfirmCancel" type="button">돌아가기</button>
-      <button id="accompanimentGenerateConfirmApply" class="primary" type="button">그래도 생성</button>
-    </div>
-  </form>
+<dialog class="mml-dialog accompaniment-confirm-dialog" id="accompanimentGenerateConfirmDialog">
+<form class="dialog-card" method="dialog">
+<h3 data-i18n="ui.confirm_accomp"></h3>
+<p data-i18n="msg.src_content"></p>
+<div aria-live="polite" class="dynamics-confirm-list" id="accompanimentGenerateConfirmList"></div>
+<p class="dialog-small" data-i18n="msg.chs_both"></p>
+<div class="dialog-actions">
+<button data-i18n="ui.go_back" id="accompanimentGenerateConfirmCancel" type="button"></button>
+<button class="primary" data-i18n="ui.generate_anyway" id="accompanimentGenerateConfirmApply" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="midiExtractDialog" class="mml-dialog midi-extract-dialog" aria-labelledby="midiExtractTitle">
-  <form class="dialog-card midi-extract-card" method="dialog">
-    <div class="midi-extract-title-row">
-      <h3 id="midiExtractTitle">MIDI 추출</h3>
-      <span class="midi-extract-beta-badge" aria-label="베타 기능">BETA</span>
-    </div>
-
-    <p class="midi-extract-lead">
-      <a href="https://huggingface.co/MuScriptor" target="_blank" rel="noopener noreferrer">MuScriptor</a>의 오디오→MIDI 변환 AI 모델을 컴퓨터에 보다 쉽게 설치하고 실행할 수 있도록 준비한 보조 패키지를 제공합니다. 오디오 파일을 입력하면 AI가 연주 내용을 분석해 MIDI 파일로 변환합니다.
+<dialog aria-labelledby="midiExtractTitle" class="mml-dialog midi-extract-dialog" id="midiExtractDialog">
+<form class="dialog-card midi-extract-card" method="dialog">
+<div class="midi-extract-title-row">
+<h3 data-i18n="midi.extract" id="midiExtractTitle"></h3>
+<span aria-label="" class="midi-extract-beta-badge" data-i18n-aria-label="ui.beta_feature">BETA</span>
+</div>
+<p class="midi-extract-lead">
+<a href="https://huggingface.co/MuScriptor" rel="noopener noreferrer" target="_blank">MuScriptor</a><span data-i18n="midi.provides_helper"></span>
     </p>
-
-    <div class="midi-extract-downloads" aria-label="운영체제별 MuScriptor 실행 패키지">
-      <a class="midi-extract-download" href="./assets/midi-extract/packages/muscriptor_win.zip" download="muscriptor_win.zip" data-midi-extract-download="windows">
-        <span class="midi-extract-os">Windows</span>
-        <strong>Windows용 패키지 받기</strong>
-        <small>설치·실행용 BAT 파일 포함</small>
-      </a>
-      <a class="midi-extract-download" href="./assets/midi-extract/packages/muscriptor_mac.zip" download="muscriptor_mac.zip" data-midi-extract-download="macos">
-        <span class="midi-extract-os">macOS</span>
-        <strong>macOS용 패키지 받기</strong>
-        <small>설치·실행용 SH 파일 포함</small>
-      </a>
-    </div>
-
-    <section class="midi-extract-samples" aria-labelledby="midiExtractSamplesTitle">
-      <div class="midi-extract-section-heading">
-        <h4 id="midiExtractSamplesTitle">변환 예시</h4>
-        <span>아래 샘플은 재생 버튼을 누른 뒤에만 다운로드됩니다.</span>
-      </div>
-
-      <div class="midi-extract-video-shell">
-        <button id="midiExtractSampleVideoLoad" class="midi-extract-media-loader midi-extract-video-loader" type="button" data-src="./assets/midi-extract/audio_to_midi.mp4" aria-controls="midiExtractSampleVideo">
-          <span class="midi-extract-play-symbol" aria-hidden="true">▶</span>
-          <strong>변환 과정 영상 보기</strong>
-          <small>오디오 입력부터 MIDI 출력까지의 사용 예시</small>
-        </button>
-        <video id="midiExtractSampleVideo" class="midi-extract-sample-video" controls preload="none" playsinline hidden>
-          이 브라우저에서는 샘플 영상을 재생할 수 없습니다.
+<div aria-label="" class="midi-extract-downloads" data-i18n-aria-label="msg.muscriptor_run">
+<a class="midi-extract-download" data-midi-extract-download="windows" download="muscriptor_win.zip" href="./assets/midi-extract/packages/muscriptor_win.zip">
+<span class="midi-extract-os">Windows</span>
+<strong data-i18n="ui.download_windows"></strong>
+<small data-i18n="file.includes_bat"></small>
+</a>
+<a class="midi-extract-download" data-midi-extract-download="macos" download="muscriptor_mac.zip" href="./assets/midi-extract/packages/muscriptor_mac.zip">
+<span class="midi-extract-os">macOS</span>
+<strong data-i18n="ui.download_macos"></strong>
+<small data-i18n="file.includes_sh"></small>
+</a>
+</div>
+<section aria-labelledby="midiExtractSamplesTitle" class="midi-extract-samples">
+<div class="midi-extract-section-heading">
+<h4 data-i18n="ui.conv_example" id="midiExtractSamplesTitle"></h4>
+<span data-i18n="st.samples_below"></span>
+</div>
+<div class="midi-extract-video-shell">
+<button aria-controls="midiExtractSampleVideo" class="midi-extract-media-loader midi-extract-video-loader" data-src="./assets/midi-extract/audio_to_midi.mp4" id="midiExtractSampleVideoLoad" type="button">
+<span aria-hidden="true" class="midi-extract-play-symbol">▶</span>
+<strong data-i18n="ui.watch_conv"></strong>
+<small data-i18n="midi.example_audio"></small>
+</button>
+<video class="midi-extract-sample-video" controls="" data-i18n="audio.video_unsupported" hidden="" id="midiExtractSampleVideo" playsinline="" preload="none">
+          
         </video>
-      </div>
-
-      <div class="midi-extract-sample-grid">
-        <article class="midi-extract-sample-card">
-          <div class="midi-extract-sample-title">
-            <strong>입력 오디오</strong>
-            <span>변환에 사용한 원본 · sample_in.mp3</span>
-          </div>
-          <button id="midiExtractSampleAudioLoad" class="midi-extract-sample-play" type="button" data-src="./assets/midi-extract/sample_in.mp3" aria-controls="midiExtractSampleAudio">
-            <span aria-hidden="true">▶</span><span>입력 오디오 재생</span>
-          </button>
-          <audio id="midiExtractSampleAudio" controls preload="none" hidden>
-            이 브라우저에서는 샘플 오디오를 재생할 수 없습니다.
+</div>
+<div class="midi-extract-sample-grid">
+<article class="midi-extract-sample-card">
+<div class="midi-extract-sample-title">
+<strong data-i18n="audio.input"></strong>
+<span data-i18n="msg.src_conv"></span>
+</div>
+<button aria-controls="midiExtractSampleAudio" class="midi-extract-sample-play" data-src="./assets/midi-extract/sample_in.mp3" id="midiExtractSampleAudioLoad" type="button">
+<span aria-hidden="true">▶</span><span data-i18n="audio.play_input"></span>
+</button>
+<audio controls="" data-i18n="audio.sample_unsupported" hidden="" id="midiExtractSampleAudio" preload="none">
+            
           </audio>
-          <p id="midiExtractSampleAudioStatus" class="midi-extract-sample-status" aria-live="polite">재생 버튼을 누르면 오디오 파일을 불러옵니다.</p>
-        </article>
-
-        <article class="midi-extract-sample-card">
-          <div class="midi-extract-sample-title">
-            <strong>출력 MIDI</strong>
-            <span>AI가 변환한 결과 · sample_out.mid</span>
-          </div>
-          <button id="midiExtractSampleMidiPlay" class="midi-extract-sample-play" type="button" data-src="./assets/midi-extract/sample_out_preview.mp3" aria-controls="midiExtractSampleMidiAudio">
-            <span aria-hidden="true">▶</span><span>출력 MIDI 재생</span>
-          </button>
-          <audio id="midiExtractSampleMidiAudio" controls preload="none" hidden>
-            이 브라우저에서는 출력 MIDI 미리듣기를 재생할 수 없습니다.
+<p aria-live="polite" class="midi-extract-sample-status" data-i18n="file.audio_loaded" id="midiExtractSampleAudioStatus"></p>
+</article>
+<article class="midi-extract-sample-card">
+<div class="midi-extract-sample-title">
+<strong data-i18n="midi.output"></strong>
+<span data-i18n="msg.ai_conv"></span>
+</div>
+<button aria-controls="midiExtractSampleMidiAudio" class="midi-extract-sample-play" data-src="./assets/midi-extract/sample_out_preview.mp3" id="midiExtractSampleMidiPlay" type="button">
+<span aria-hidden="true">▶</span><span data-i18n="midi.play_output"></span>
+</button>
+<audio controls="" data-i18n="midi.browser_fail" hidden="" id="midiExtractSampleMidiAudio" preload="none">
+            
           </audio>
-          <p id="midiExtractSampleMidiStatus" class="midi-extract-sample-status" aria-live="polite">재생 버튼을 누르면 sample_out.mid의 미리듣기 오디오를 불러옵니다.</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="midi-extract-requirements" aria-labelledby="midiExtractRequirementsTitle">
-      <div class="midi-extract-advisory" role="note">
-        <strong>권장 대상</strong>
-        <span>Python 설치나 로컬 AI 모델 실행 경험이 있는 사용자에게 권장합니다. 처음 실행할 때 모델 다운로드와 환경 설정이 필요하며, PC 사양과 원본 오디오에 따라 처리 시간과 변환 결과가 달라질 수 있습니다.</span>
-      </div>
-      <h4 id="midiExtractRequirementsTitle">필수 준비</h4>
-      <ul>
-        <li><strong>Python 3.10 이상</strong> — Python 3.12 또는 3.13 64비트를 권장합니다. 설치 후 Windows에서는 <code>python --version</code>, macOS에서는 <code>python3 --version</code> 명령이 실행되어야 합니다.</li>
-        <li><strong>Hugging Face 계정</strong> — AI 모델을 내려받기 위해 필요합니다. 사용할 모델 페이지에서 로그인한 뒤 이용 조건에 동의하세요.</li>
-        <li><strong>인터넷 연결과 저장 공간</strong> — 첫 설치와 모델 다운로드에 필요합니다. AI 모델 파일은 이 패키지에 포함되어 있지 않습니다.</li>
-      </ul>
-      <p class="midi-extract-platform-note"><strong>GPU는 선택 사항:</strong> GPU가 없어도 CPU로 실행할 수 있지만 변환 시간이 길어질 수 있습니다. Windows는 NVIDIA CUDA를 우선 사용하며, Apple Silicon Mac은 macOS 14 이상에서 MLX 가속을 사용할 수 있습니다. Intel Mac은 CPU로 실행됩니다.</p>
-    </section>
-
-    <details class="midi-extract-details">
-      <summary>설치 방법·설정·악기 목록 자세히 보기</summary>
-      <div class="midi-extract-details-body">
-        <section>
-          <h4>빠른 설치</h4>
-          <div class="midi-extract-platform-grid">
-            <div>
-              <strong>Windows</strong>
-              <ol>
-                <li>Python 3.12 또는 3.13 64비트를 설치하고, 설치 화면에서 <code>Add python.exe to PATH</code>를 선택합니다.</li>
-                <li>압축을 푼 뒤 <code>1_install.bat</code>를 실행합니다.</li>
-                <li>설치가 끝나면 <code>2_model_run.bat</code>를 실행합니다. 필요한 경우 실행 전에 <code>settings.toml</code>을 수정합니다.</li>
-              </ol>
-            </div>
-            <div>
-              <strong>macOS</strong>
-              <ol>
-                <li>Python 3.12 또는 3.13을 설치한 뒤 Terminal에서 압축을 푼 폴더로 이동합니다.</li>
-                <li><code>bash ./1_install.sh</code>를 실행합니다.</li>
-                <li><code>bash ./2_model_run.sh</code>를 실행합니다.</li>
-              </ol>
-            </div>
-          </div>
-          <p>서버가 시작되면 브라우저가 자동으로 열립니다. 열리지 않으면 <code>http://127.0.0.1:8222/</code>에 접속하세요. 처음 실행할 때는 Hugging Face 로그인과 모델 다운로드 안내가 표시될 수 있습니다.</p>
-        </section>
-
-        <section>
-          <h4>설정 파일 요약</h4>
-          <ul>
-            <li><code>name</code>: small / medium / large 중 모델 크기를 선택합니다. 처음에는 small 또는 medium을 권장합니다.</li>
-            <li><code>quantization</code>: fp16은 기본 권장, q8은 메모리 절약, fp32는 더 많은 메모리를 사용하는 방식입니다.</li>
-            <li><code>use_gpu</code>: 가능한 경우 GPU 가속을 사용합니다. <code>batch_size</code>는 한 번에 처리할 분량을 정합니다.</li>
-            <li><code>instruments</code>: 예상 악기를 직접 지정합니다. 빈 배열 <code>[]</code>로 두면 AI가 자동으로 판단합니다.</li>
-          </ul>
-          <p>메모리가 부족하거나 실행이 멈추면 <code>batch_size</code>를 1~2로 낮추고, medium 또는 large 대신 small 모델을 사용하세요.</p>
-        </section>
-
-        <section>
-          <h4>악기 목록과 포함 문서</h4>
-          <p><code>INSTRUMENT_LIST_KO.txt</code>에서 AI가 인식할 수 있는 악기 이름과 설정 예시를 확인할 수 있습니다. 어떤 악기가 들어 있는지 확실하지 않다면 <code>instruments = []</code>를 그대로 두어 자동 판단을 사용하세요.</p>
-          <p>패키지에는 빠른 사용법(<code>QUICK_START_KO.txt</code>), 설정 파일(<code>settings.toml</code>), 악기 목록, 기술 설명, 라이선스 안내와 설치·실행 스크립트가 포함되어 있습니다.</p>
-        </section>
-
-        <section class="midi-extract-license-note">
-          <h4>모델 이용 전 확인</h4>
-          <p>이 패키지는 MuScriptor의 공식 배포본이 아니라 설치와 실행을 돕기 위해 구성한 보조 패키지입니다. MuScriptor 프로그램 코드와 AI 모델에는 서로 다른 라이선스가 적용됩니다. 모델은 Hugging Face에서 본인 계정으로 이용 조건에 동의한 뒤 내려받으며, 저작권을 보유했거나 변환 허가를 받은 오디오만 사용하세요.</p>
-        </section>
-      </div>
-    </details>
-
-    <div class="dialog-actions">
-      <button id="midiExtractClose" type="button">닫기</button>
-    </div>
-  </form>
+<p aria-live="polite" class="midi-extract-sample-status" data-i18n="audio.preview_help" id="midiExtractSampleMidiStatus"></p>
+</article>
+</div>
+</section>
+<section aria-labelledby="midiExtractRequirementsTitle" class="midi-extract-requirements">
+<div class="midi-extract-advisory" role="note">
+<strong data-i18n="ui.recommend"></strong>
+<span data-i18n="audio.recommend_users"></span>
+</div>
+<h4 data-i18n="ui.requirements" id="midiExtractRequirementsTitle"></h4>
+<ul>
+<li><strong data-i18n="msg.python_3_10"></strong> <span data-i18n="msg.python_3_12"></span> <code>python --version</code><span data-i18n="ui.macos"></span> <code>python3 --version</code> <span data-i18n="ui.run_successfully"></span></li>
+<li><strong data-i18n="ui.hugging_face"></strong> <span data-i18n="msg.required_download"></span></li>
+<li><strong data-i18n="msg.internet_connection"></strong> <span data-i18n="file.required_initial"></span></li>
+</ul>
+<p class="midi-extract-platform-note"><strong data-i18n="ui.gpu_optional"></strong> <span data-i18n="msg.run_cpu"></span></p>
+</section>
+<details class="midi-extract-details">
+<summary data-i18n="snd.show_install"></summary>
+<div class="midi-extract-details-body">
+<section>
+<h4 data-i18n="ui.quick_setup"></h4>
+<div class="midi-extract-platform-grid">
+<div>
+<strong>Windows</strong>
+<ol>
+<li><span data-i18n="msg.install_python"></span> <code>Add python.exe to PATH</code><span data-i18n="ui.installer_screen"></span></li>
+<li><span data-i18n="msg.extracting_archive"></span> <code>1_install.bat</code><span data-i18n="ui.period"></span></li>
+<li><span data-i18n="st.install_completes"></span> <code>2_model_run.bat</code><span data-i18n="edit.necessary_running"></span> <code>settings.toml</code><span data-i18n="ui.period_2"></span></li>
+</ol>
+</div>
+<div>
+<strong>macOS</strong>
+<ol>
+<li data-i18n="drive.install_python"></li>
+<li><code>bash ./1_install.sh</code><span data-i18n="ui.period"></span></li>
+<li><code>bash ./2_model_run.sh</code><span data-i18n="ui.period"></span></li>
+</ol>
+</div>
+</div>
+<p><span data-i18n="msg.server_starts"></span> <code>http://127.0.0.1:8222/</code><span data-i18n="msg.first_run"></span></p>
+</section>
+<section>
+<h4 data-i18n="file.settings_summary"></h4>
+<ul>
+<li><code>name</code><span data-i18n="msg.selects_model"></span></li>
+<li><code>quantization</code><span data-i18n="msg.fp16_recommend"></span></li>
+<li><code>use_gpu</code><span data-i18n="msg.uses_gpu"></span> <code>batch_size</code><span data-i18n="msg.sets_amount"></span></li>
+<li><code>instruments</code><span data-i18n="snd.direct_set"></span> <code>[]</code><span data-i18n="msg.let_ai"></span></li>
+</ul>
+<p><span data-i18n="msg.memory_insufficient"></span> <code>batch_size</code><span data-i18n="msg.lower_1"></span></p>
+</section>
+<section>
+<h4 data-i18n="snd.inst_list_included"></h4>
+<p><code>INSTRUMENT_LIST_KO.txt</code><span data-i18n="snd.shows_inst"></span> <code>instruments = []</code><span data-i18n="msg.unchanged_auto"></span></p>
+<p><span data-i18n="msg.package_includes"></span><code>QUICK_START_KO.txt</code><span data-i18n="file.settings"></span><code>settings.toml</code><span data-i18n="snd.inst_list_technical"></span></p>
+</section>
+<section class="midi-extract-license-note">
+<h4 data-i18n="ui.model"></h4>
+<p data-i18n="audio.not_official"></p>
+</section>
+</div>
+</details>
+<div class="dialog-actions">
+<button data-i18n="ui.close" id="midiExtractClose" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="splitCopyDialog" class="mml-dialog split-copy-dialog">
-  <form id="splitCopyForm" class="dialog-card split-copy-card" method="dialog">
-    <h3>악보 나눠복사</h3>
-    <p>악보를 나눌 최대 글자 수를 입력해 주세요.</p>
-    <div class="split-copy-options">
-      <label class="dialog-field" for="splitCopyLimit">최대 글자 수</label>
-      <input id="splitCopyLimit" type="number" min="200" max="5000" step="50" value="2400" inputmode="numeric" />
-    </div>
-    <div id="splitCopySummary" class="split-copy-summary" hidden></div>
-    <div id="splitCopyPages" class="split-copy-pages" aria-label="분할된 악보 목록"></div>
-    <div class="dialog-actions">
-      <button id="splitCopyRebuild" type="button">다시 계산</button>
-      <button id="splitCopyClose" type="button">닫기</button>
-    </div>
-  </form>
+<dialog class="mml-dialog split-copy-dialog" id="splitCopyDialog">
+<form class="dialog-card split-copy-card" id="splitCopyForm" method="dialog">
+<h3 data-i18n="ui.split_copy_score"></h3>
+<p data-i18n="msg.enter_max"></p>
+<div class="split-copy-options">
+<label class="dialog-field" data-i18n="ui.max_chars" for="splitCopyLimit"></label>
+<input id="splitCopyLimit" inputmode="numeric" max="5000" min="200" step="50" type="number" value="2400"/>
+</div>
+<div class="split-copy-summary" hidden="" id="splitCopySummary"></div>
+<div aria-label="" class="split-copy-pages" data-i18n-aria-label="ui.split_score" id="splitCopyPages"></div>
+<div class="dialog-actions">
+<button class="soft-tool-button" data-i18n="ui.recalculate" id="splitCopyRebuild" type="button"></button>
+<button data-i18n="ui.close" id="splitCopyClose" type="button"></button>
+</div>
+</form>
 </dialog>
-
-<dialog id="midiConvertDialog" class="mml-dialog midi-dialog">
-  <form id="midiConvertForm" class="dialog-card midi-dialog-card" method="dialog">
-    <h3 id="midiConvertTitle">MIDI 변환 설정</h3>
-    <div class="midi-dialog-topline">
-      <p id="midiConvertSummary">MML 채널별 역할, 겹침 병합 방식, 사용할 악기를 선택해 주세요.</p>
-    </div>
-    <details id="midiGuideBox" class="midi-guide-box" aria-label="MIDI 변환 설정 안내">
-      <summary>
-        <strong id="midiGuideLead">이 창은 MIDI 파일의 악기들을 마비노기 MML 최대 6채널로 나눠 넣는 설정입니다.</strong>
-        <span class="midi-guide-summary-hint">설명 접기/펼치기</span>
-      </summary>
-      <div class="midi-guide-body">
-        <ol>
-          <li><b>연주 듣기</b>로 원본 파일이 어떤 곡인지 먼저 확인합니다.</li>
-          <li>각 <b>MML 채널</b>마다 악기를 선택할 수 있습니다. 왼쪽에서 채널을 고른 뒤, 오른쪽에서 배정할 악기를 선택합니다.</li>
-          <li>악기를 하나 이상 선택한 채널만 최종 MML에 포함됩니다. 최대 6채널까지 사용할 수 있습니다.</li>
-          <li><b>미리 듣기</b>로 현재 설정을 MML로 바꿨을 때의 소리를 먼저 확인하고, <b>변환</b>을 누르면 현재 MML 편집기에 반영됩니다.</li>
-        </ol>
-        <div class="midi-guide-terms">
-          <span><b>자동</b>: 선택한 악기를 가능한 범위에서 자동 배치</span>
-          <span><b>고음</b>: 높은 음역을 우선 배치</span>
-          <span><b>저음</b>: 낮은 음역을 우선 배치</span>
-          <span><b>비트</b>: 드럼/타악 계열만 배치</span>
-          <span><b>겹침 병합</b>: MML 6채널 한계 안에 더 많은 소리를 담기 위해, 이미 울리는 음 일부를 줄이고 겹친 음을 이어 넣습니다.</span>
-        </div>
-      </div>
-    </details>
-
-    <div class="midi-dialog-layout midi-channel-config-layout">
-      <section class="midi-dialog-section midi-left-panel">
-        <div class="dialog-section-head role-head">
-          <strong>MML 채널</strong>
-          <span class="dialog-small">각 MML 채널마다 악기를 선택할 수 있습니다.</span>
-        </div>
-        <div class="midi-role-actions">
-          <div id="midiBeatNotice" class="midi-beat-notice" hidden>비트 악기 정보를 확인하는 중입니다.</div>
-          <button id="midiSelectedPreviewBtn" class="midi-full-preview-btn" type="button" aria-pressed="false">미리 듣기</button>
-        </div>
-        <div id="midiRoleList" class="midi-role-list" aria-label="MML 채널 설정"></div>
-      </section>
-
-      <section class="midi-dialog-section midi-right-panel">
-        <div class="dialog-section-head midi-instrument-panel-head">
-          <strong id="midiInstrumentPanelTitle">선택 채널 악기 선택</strong>
-          <span id="midiInstrumentPanelHint" class="dialog-small">체크한 악기가 현재 선택한 MML 채널에 들어갑니다.</span>
-        </div>
-        <div class="midi-instrument-panel-actions" aria-label="선택 채널 악기 빠른 동작">
-          <div class="midi-instrument-panel-actions-left">
-            <div class="midi-action-cluster midi-bulk-actions" aria-label="전체 악기 선택 동작">
-              <span class="midi-bulk-label">전부</span>
-              <button id="midiInstrumentSelectAll" class="mini-button" type="button">선택</button>
-              <button id="midiInstrumentSelectNone" class="mini-button" type="button">해제</button>
-            </div>
-            <div class="midi-action-cluster midi-category-actions" aria-label="악기 분류 선택">
-              <span class="midi-category-label">악기</span>
-              <button class="mini-button midi-instrument-category-btn" type="button" data-midi-category-select="keyboard">건반</button>
-              <button class="mini-button midi-instrument-category-btn" type="button" data-midi-category-select="strings">현</button>
-              <button class="mini-button midi-instrument-category-btn" type="button" data-midi-category-select="winds">관</button>
-              <button class="mini-button midi-instrument-category-btn" type="button" data-midi-category-select="percussion">타</button>
-              <button class="mini-button midi-instrument-category-btn" type="button" data-midi-category-select="other">미분류</button>
-            </div>
-          </div>
-          <button id="midiFullPreviewBtn" class="midi-full-preview-btn" type="button" aria-pressed="false">연주 듣기</button>
-        </div>
-        <div id="midiChannelList" class="midi-channel-list" aria-label="선택 채널에 포함할 악기 목록"></div>
-      </section>
-    </div>
-
-    <div class="midi-convert-footer">
-      <div class="dialog-actions-left">
-        <span class="toolbar-label import-action-label">불러오기</span>
-        <button id="midiConvertReloadFile" type="button" title="파일에서 불러오기">파일</button>
-        <button id="midiConvertGoogleDriveLoad" type="button" disabled title="Google Drive에서 파일 불러오기">구글</button>
-      </div>
-      <span id="midiConvertStatus" class="dialog-small midi-convert-status" role="status" aria-live="polite" hidden></span>
-      <div class="dialog-actions dialog-actions-right">
-        <button id="midiConvertCancel" type="button">취소</button>
-        <button id="midiConvertApply" class="primary" type="button">변환</button>
-      </div>
-    </div>
-  </form>
+<dialog class="mml-dialog midi-dialog" id="midiConvertDialog">
+<form class="dialog-card midi-dialog-card" id="midiConvertForm" method="dialog">
+<h3 data-i18n="midi.conv_cfg" id="midiConvertTitle"></h3>
+<div class="midi-dialog-topline">
+<p data-i18n="mml.choose_each" id="midiConvertSummary"></p>
+</div>
+<details aria-label="" class="midi-guide-box" data-i18n-aria-label="midi.conv_cfg_guide" id="midiGuideBox">
+<summary>
+<strong data-i18n="midi.dialog_divides" id="midiGuideLead"></strong>
+<span class="midi-guide-summary-hint" data-i18n="ui.collapse_expand"></span>
+</summary>
+<div class="midi-guide-body">
+<ol>
+<li><b data-i18n="ui.preview_perf"></b><span data-i18n="file.first_check"></span></li>
+<li><span data-i18n="ui.each"></span> <b data-i18n="mml.channel"></b><span data-i18n="snd.have_own"></span></li>
+<li data-i18n="mml.chs_least"></li>
+<li><b data-i18n="ui.preview"></b><span data-i18n="mml.hear_how"></span> <b data-i18n="ui.convert"></b><span data-i18n="mml.apply_them"></span></li>
+</ol>
+<div class="midi-guide-terms">
+<span><b data-i18n="ui.auto"></b><span data-i18n="snd.place_inst"></span></span>
+<span><b data-i18n="ui.high"></b><span data-i18n="pitch.prioritize_higher"></span></span>
+<span><b data-i18n="ui.low"></b><span data-i18n="pitch.prioritize_lower"></span></span>
+<span><b data-i18n="ui.beat"></b><span data-i18n="msg.place_drums"></span></span>
+<span><b data-i18n="ui.overlap_merge"></b><span data-i18n="mml.fit_more"></span></span>
+</div>
+</div>
+</details>
+<div class="midi-dialog-layout midi-channel-config-layout">
+<section class="midi-dialog-section midi-left-panel">
+<div class="dialog-section-head role-head">
+<strong data-i18n="mml.channel"></strong>
+<span class="dialog-small" data-i18n="mml.choose_inst"></span>
+</div>
+<div class="midi-role-actions">
+<div class="midi-beat-notice" data-i18n="snd.check_beat" hidden="" id="midiBeatNotice"></div>
+<button aria-pressed="false" class="midi-full-preview-btn soft-tool-button" data-i18n="ui.preview" id="midiSelectedPreviewBtn" type="button"></button>
+</div>
+<div aria-label="" class="midi-role-list" data-i18n-aria-label="mml.ch_settings" id="midiRoleList"></div>
+</section>
+<section class="midi-dialog-section midi-right-panel">
+<div class="dialog-section-head midi-instrument-panel-head">
+<strong data-i18n="snd.select_inst_ch" id="midiInstrumentPanelTitle"></strong>
+<span class="dialog-small" data-i18n="mml.checked_inst" id="midiInstrumentPanelHint"></span>
+</div>
+<div aria-label="" class="midi-instrument-panel-actions" data-i18n-aria-label="snd.quick_inst">
+<div class="midi-instrument-panel-actions-left">
+<div aria-label="" class="midi-action-cluster midi-bulk-actions" data-i18n-aria-label="snd.all_inst">
+<span class="midi-bulk-label" data-i18n="ui.all_3"></span>
+<button class="mini-button soft-tool-button" data-i18n="ui.select" id="midiInstrumentSelectAll" type="button"></button>
+<button class="mini-button soft-tool-button" data-i18n="ui.clear" id="midiInstrumentSelectNone" type="button"></button>
+</div>
+<div aria-label="" class="midi-action-cluster midi-category-actions" data-i18n-aria-label="snd.select_inst_cat">
+<span class="midi-category-label" data-i18n="snd.inst_2"></span>
+<button class="mini-button midi-instrument-category-btn" data-i18n="ui.keys" data-midi-category-select="keyboard" type="button"></button>
+<button class="mini-button midi-instrument-category-btn" data-i18n="ui.strings_2" data-midi-category-select="strings" type="button"></button>
+<button class="mini-button midi-instrument-category-btn" data-i18n="ui.winds_2" data-midi-category-select="winds" type="button"></button>
+<button class="mini-button midi-instrument-category-btn" data-i18n="ui.perc" data-midi-category-select="percussion" type="button"></button>
+<button class="mini-button midi-instrument-category-btn" data-i18n="ui.uncategorized" data-midi-category-select="other" type="button"></button>
+</div>
+</div>
+<button aria-pressed="false" class="midi-full-preview-btn soft-tool-button" data-i18n="ui.preview_perf" id="midiFullPreviewBtn" type="button"></button>
+</div>
+<div aria-label="" class="midi-channel-list" data-i18n-aria-label="snd.inst_list_ch" id="midiChannelList"></div>
+</section>
+</div>
+<div class="midi-convert-footer">
+<div class="dialog-actions-left">
+<span class="toolbar-label import-action-label" data-i18n="ui.load"></span>
+<button class="soft-tool-button" data-i18n="file.label" data-i18n-title="file.load" id="midiConvertReloadFile" title="" type="button"></button>
+<button class="soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.load_file" id="midiConvertGoogleDriveLoad" title="" type="button"></button>
+</div>
+<span aria-live="polite" class="dialog-small midi-convert-status" hidden="" id="midiConvertStatus" role="status"></span>
+<div class="dialog-actions dialog-actions-right">
+<button data-i18n="ui.cancel" id="midiConvertCancel" type="button"></button>
+<button class="primary" data-i18n="ui.convert" id="midiConvertApply" type="button"></button>
+</div>
+</div>
+</form>
 </dialog>
-
-
-<script src="js/utils.js"></script>
-<script src="js/midi-to-mml.js?v=4.6-midi-source-only"></script>
-<script src="js/musicxml-to-midi.js"></script>
-<script src="js/mml-parser.js?v=4.6-piano-roll"></script>
-<script src="js/mml-optimizer.js?v=4.6-accompaniment-defaults"></script>
-<script src="js/sf2-sampler.js"></script>
+<script src="js/language-manager.js?v=5.3-runtime-i18n"></script>
+<script src="js/utils.js?v=5.3-runtime-i18n"></script>
+<script src="js/midi-to-mml.js?v=5.3-runtime-i18n"></script>
+<script src="js/musicxml-to-midi.js?v=5.3-runtime-i18n"></script>
+<script src="js/mml-parser.js?v=5.3-runtime-i18n"></script>
+<script src="js/mml-optimizer.js?v=5.3-runtime-i18n"></script>
+<script src="js/sf2-sampler.js?v=5.3-runtime-i18n"></script>
 <script src="js/google-config.js"></script>
 <script src="js/firebase-config.js"></script>
-<script type="module" src="js/firebase-analytics.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="js/app.js?v=4.6-rhythm-open-analytics"></script>
+<script src="js/firebase-analytics.js" type="module"></script>
+<script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
+<script async="" defer="" src="https://apis.google.com/js/api.js"></script>
+<script src="js/app.js?v=5.3.2-google-login-action"></script>
 </body>
 </html>

@@ -1,6 +1,8 @@
 (() => {
   "use strict";
 
+  const tr = (key, values = []) => window.MobibardI18n?.t?.(key, values) || String(key);
+
   const NOTE_BASE = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
   const NOTE_NAMES = ["c", "c+", "d", "d+", "e", "f", "f+", "g", "g+", "a", "a+", "b"];
   const VALID_LENGTHS = [1, 2, 4, 8, 16, 32, 64];
@@ -63,7 +65,7 @@
     const partCount = 6;
     const genre = String(options.genre || "pop").trim().toLowerCase();
     const supportedGenres = new Set(["pop", "jazz", "ballad", "bossa", "rock", "funk", "classical"]);
-    if (!supportedGenres.has(genre)) throw new Error("지원하지 않는 반주 장르입니다.");
+    if (!supportedGenres.has(genre)) throw new Error(tr("accomp.err_genre"));
 
     const strength = normalizeGenerationStrength(options.strength);
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
@@ -72,19 +74,19 @@
     const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
     const analysisPartIndexes = normalizeAccompanimentPartIndexes(options.analysisPartIndexes, parsedParts, "analysis");
     const generationPartIndexes = normalizeAccompanimentPartIndexes(options.generationPartIndexes, parsedParts, "generation");
-    if (!analysisPartIndexes.length) throw new Error("참고할 채널을 1개 이상 선택해 주세요.");
-    if (!generationPartIndexes.length) throw new Error("반주를 생성할 채널을 1개 이상 선택해 주세요.");
+    if (!analysisPartIndexes.length) throw new Error(tr("msg.select_one_ref"));
+    if (!generationPartIndexes.length) throw new Error(tr("msg.select_one_ch_4"));
 
     const analysis = buildAccompanimentAnalysis(parsedParts, analysisPartIndexes);
     if (analysis.notes.length < 2 || !(analysis.songEnd > 0)) {
-      throw new Error("선택한 참고 채널에서 반주를 만들 만큼 충분한 음표 흐름을 찾지 못했습니다.");
+      throw new Error(tr("accomp.err_flow"));
     }
 
     const tempoMap = normalizeTempoEvents(parsedParts.flatMap(part => part.tempos));
     const key = estimateGenreKey(analysis.notes);
     const baseVolume = clamp(Math.round(medianNumber(analysis.notes.map(note => note.volume), DEFAULT_VOLUME)) - 2, 3, 13);
     const chordPlan = buildGenreChordPlan(analysis.notes, key, analysis.songEnd, strength, genre);
-    if (!chordPlan.length) throw new Error("선택한 참고 채널에서 화성 흐름을 찾지 못했습니다.");
+    if (!chordPlan.length) throw new Error(tr("accomp.err_harmony"));
 
     const fullParts = buildGenreAccompanimentParts(genre, chordPlan, {
       songEnd: analysis.songEnd,
@@ -205,13 +207,13 @@
     const count = Math.max(1, Math.min(6, Number(targetCount) || 1));
     const hasNotes = events => Array.isArray(events) && events.some(event => event.type === "note");
     const voices = [
-      { role: "하단 화음", events: fullParts[0] || [] },
-      { role: "중단 화음", events: fullParts[1] || [] },
-      { role: "상단 화음", events: fullParts[2] || [] },
-      { role: "보조 성부", events: fullParts[3] || [] }
+      { role: tr("accomp.role.low_harmony"), events: fullParts[0] || [] },
+      { role: tr("accomp.role.mid_harmony"), events: fullParts[1] || [] },
+      { role: tr("accomp.role.high_harmony"), events: fullParts[2] || [] },
+      { role: tr("accomp.role.support"), events: fullParts[3] || [] }
     ].filter(item => hasNotes(item.events));
-    const compact = { role: "핵심 반주", events: compactPart || [] };
-    const bass = { role: "베이스", events: fullParts[4] || [] };
+    const compact = { role: tr("accomp.role.core"), events: compactPart || [] };
+    const bass = { role: tr("accomp.role.bass"), events: fullParts[4] || [] };
     if (count === 1) return [compact];
 
     const harmonyNeeded = count - 2;
@@ -219,7 +221,7 @@
     while (harmony.length < harmonyNeeded) {
       const shift = harmony.length % 2 === 0 ? -12 : 12;
       const shifted = shiftGeneratedEvents(compact.events, shift);
-      harmony.unshift({ role: shift < 0 ? "하단 반주" : "상단 반주", events: shifted });
+      harmony.unshift({ role: shift < 0 ? tr("accomp.role.low") : tr("accomp.role.high"), events: shifted });
     }
     return [...harmony.slice(-harmonyNeeded), compact, bass];
   }
@@ -1249,7 +1251,7 @@
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const genre = String(options.genre || "pop").trim().toLowerCase();
     const supportedGenres = new Set(["pop", "jazz", "ballad", "bossa", "rock", "funk", "classical"]);
-    if (!supportedGenres.has(genre)) throw new Error("지원하지 않는 강약 장르입니다.");
+    if (!supportedGenres.has(genre)) throw new Error(tr("vol.err_genre"));
     const strength = normalizeGenerationStrength(options.strength);
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
     while (sourceParts.length < partCount) sourceParts.push("");
@@ -1355,7 +1357,7 @@
     const notes = [];
     const volumeRanges = [];
 
-    const fail = message => { throw new Error(`${partIndex + 1}파트: ${message}`); };
+    const fail = message => { throw new Error(tr("mml.err_part_detail", [partIndex + 1, message])); };
     const skipSpace = () => { while (i < s.length && /\s/.test(s[i])) i++; };
     const readNumber = () => {
       const start = i;
@@ -1371,13 +1373,13 @@
       const n = readNumber();
       const dots = readDotsCount();
       if (!n) return durationUnitsFromBase(defaultUnits, dots);
-      if (!VALID_LENGTHS.includes(n.value)) fail(`길이 ${n.value}은 지원하지 않습니다.`);
+      if (!VALID_LENGTHS.includes(n.value)) fail(tr("mml.err_length", [n.value]));
       return durationUnits(n.value, dots);
     };
     const appendToken = token => {
       token.duration = Math.round(token.duration);
       if (pendingTie) {
-        if (!lastTieTarget || lastTieTarget.kind !== token.kind || lastTieTarget.midi !== token.midi) fail("&는 같은 음끼리만 이어 주세요.");
+        if (!lastTieTarget || lastTieTarget.kind !== token.kind || lastTieTarget.midi !== token.midi) fail(tr("mml.err_tie_same"));
         if (lastTieTarget.note) lastTieTarget.note.duration += token.duration;
         pos += token.duration;
         pendingTie = false;
@@ -1407,7 +1409,7 @@
         if (ch === "n") {
           i++;
           const n = readNumber();
-          if (!n) fail("N 뒤에 음 번호가 필요합니다.");
+          if (!n) fail(tr("mml.err_n_required"));
           const duration = durationUnitsFromBase(defaultUnits, readDotsCount());
           if (n.value === 0) appendToken({ kind: "rest", duration, sourceIndex });
           else appendToken({ kind: "note", midi: n.value, duration, sourceIndex });
@@ -1420,26 +1422,26 @@
         appendToken({ kind: "note", midi: (octave + 1) * 12 + semitone, duration: readLengthUnits(), sourceIndex });
       } else if (ch === "&") {
         i++;
-        if (!lastTieTarget || pendingTie) fail("잘못된 & 연결입니다.");
+        if (!lastTieTarget || pendingTie) fail(tr("mml.err_tie_invalid"));
         pendingTie = true;
       } else if (ch === "t") {
         i++;
-        if (!readNumber()) fail("T 뒤에 숫자가 필요합니다.");
+        if (!readNumber()) fail(tr("mml.err_t_required"));
       } else if (ch === "o") {
         i++;
         const n = readNumber();
-        if (!n) fail("O 뒤에 숫자가 필요합니다.");
+        if (!n) fail(tr("mml.err_o_required"));
         octave = n.value;
       } else if (ch === "l") {
         i++;
         const n = readNumber();
         const dots = readDotsCount();
-        if (!n || !VALID_LENGTHS.includes(n.value)) fail("L 길이를 확인해 주세요.");
+        if (!n || !VALID_LENGTHS.includes(n.value)) fail(tr("mml.err_l_check"));
         defaultUnits = Math.round(durationUnits(n.value, dots));
       } else if (ch === "v") {
         const start = i++;
         const n = readNumber();
-        if (!n) fail("V 뒤에 숫자가 필요합니다.");
+        if (!n) fail(tr("mml.err_v_required"));
         volume = clamp(n.value, 0, 15);
         volumeRanges.push({ start, end: i });
       } else if (raw === ">") {
@@ -1452,10 +1454,10 @@
         i++;
         break;
       } else {
-        fail(`알 수 없는 문자 '${raw}'가 있습니다.`);
+        fail(tr("mml.err_unknown_char", [raw]));
       }
     }
-    if (pendingTie) fail("& 뒤에 이어질 음표가 필요합니다.");
+    if (pendingTie) fail(tr("mml.err_tie_after"));
     return { source: s, notes, volumeRanges, length: pos };
   }
 
@@ -1667,7 +1669,7 @@
   function adjustVolumesMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const rawDelta = Number(options.delta ?? 0);
-    if (!Number.isFinite(rawDelta)) throw new Error("볼륨 변화량은 숫자로 입력해 주세요.");
+    if (!Number.isFinite(rawDelta)) throw new Error(tr("vol.err_number"));
     const delta = clamp(rawDelta, -15, 15);
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
     while (sourceParts.length < partCount) sourceParts.push("");
@@ -1732,12 +1734,12 @@
   function transposeOctavesMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const rawOctaves = Number(options.octaves ?? options.delta ?? 0);
-    if (!Number.isFinite(rawOctaves)) throw new Error("옥타브 변화량은 숫자로 입력해 주세요.");
+    if (!Number.isFinite(rawOctaves)) throw new Error(tr("pitch.err_number"));
     const octaves = clamp(Math.round(rawOctaves), -7, 7);
     let source = String(text || "").replace(/^\uFEFF/, "").trim();
     const wrapped = source.match(/^\s*MML\s*@([\s\S]*?)\s*;?\s*$/i);
     if (wrapped) source = wrapped[1];
-    if (/\[|\]/.test(source)) throw new Error("마비노기 MML에서는 [] 표기를 사용할 수 없습니다.");
+    if (/\[|\]/.test(source)) throw new Error(tr("mml.err_brackets"));
     const sourceParts = source === "" ? [] : source.split(",").slice(0, partCount).map(part => String(part || "").trim());
     while (sourceParts.length < partCount) sourceParts.push("");
 
@@ -2046,7 +2048,7 @@
         pageEnd = Math.min(totalUnits, pageStart + durationUnits(4, 0));
         nextStart = pageEnd;
         cut.reason = "forced";
-        cut.warning = "분할 가능한 위치가 너무 가까워 강제로 1박자 뒤에서 잘랐습니다.";
+        cut.warning = tr("split.warn_forced_beat");
       }
 
       const rendered = renderPageSegment(parsedParts, tempoMap, pageStart, pageEnd, partCount);
@@ -2065,16 +2067,16 @@
       };
       pages.push(page);
       if (page.maxPartLength > maxChars) {
-        warnings.push(`${page.index}번 악보의 가장 긴 채널이 ${page.maxPartLength}자로 제한 ${maxChars}자를 넘었습니다.`);
+        warnings.push(tr("split.warn_page_over", [page.index, page.maxPartLength, maxChars]));
       }
-      if (page.warning) warnings.push(`${page.index}번 악보: ${page.warning}`);
+      if (page.warning) warnings.push(tr("split.warn_page", [page.index, page.warning]));
 
       if (nextStart <= pageStart + EPS) break;
       pageStart = nextStart;
     }
 
     if (guard >= maxPages && pageStart < totalUnits - EPS) {
-      warnings.push("페이지 수가 너무 많아 분할을 중단했습니다.");
+      warnings.push(tr("split.warn_too_many_pages"));
     }
 
     return {
@@ -2179,7 +2181,7 @@
         end: anySilence.start,
         nextStart: Math.max(anySilence.end, anySilence.start),
         reason: "longest-silence",
-        warning: anySilence.duration < minCommonSilenceUnits ? "2박 이상 공통 무음이 없어 가장 긴 공통 무음에서 나눴습니다." : ""
+        warning: anySilence.duration < minCommonSilenceUnits ? tr("split.warn_longest_silence") : ""
       };
     }
 
@@ -2196,7 +2198,7 @@
         end: bestEnd,
         nextStart: bestEnd,
         reason: "partial-boundary",
-        warning: `모든 채널이 안전하게 나뉘는 지점을 찾지 못해 ${bestSafeChannels}/${partCount}개 채널이 안전한 지점에서 잘랐습니다.`
+        warning: tr("split.warn_partial_safe", [bestSafeChannels, partCount])
       };
     }
 
@@ -2206,7 +2208,7 @@
         end: fallback.pos,
         nextStart: fallback.pos,
         reason: "partial-boundary",
-        warning: `모든 채널이 안전하게 나뉘는 지점을 찾지 못해 ${fallback.safeChannels}/${partCount}개 채널이 안전한 지점에서 잘랐습니다.`
+        warning: tr("split.warn_partial_safe", [fallback.safeChannels, partCount])
       };
     }
 
@@ -2214,7 +2216,7 @@
       end: bestEnd,
       nextStart: bestEnd,
       reason: "char-limit",
-      warning: "적절한 분할 지점을 찾지 못해 글자 수 기준으로 잘랐습니다. 일부 음이 잘릴 수 있습니다."
+      warning: tr("split.warn_char_limit")
     };
   }
 
@@ -2434,7 +2436,7 @@
     let s = String(text || "").replace(/^\uFEFF/, "").trim();
     const m = s.match(/^\s*MML\s*@([\s\S]*?)\s*;?\s*$/i);
     if (m) s = m[1];
-    if (/\[|\]/.test(s)) throw new Error("마비노기 MML에서는 [] 표기를 사용할 수 없습니다.");
+    if (/\[|\]/.test(s)) throw new Error(tr("mml.err_brackets"));
     if (s === "") return [];
     return s.split(",").map(part => normalizeCommandCase(part.trim()));
   }
@@ -2467,7 +2469,7 @@
     const events = [];
     const tempos = [];
 
-    const fail = message => { throw new Error(`${partIndex + 1}파트: ${message}`); };
+    const fail = message => { throw new Error(tr("mml.err_part_detail", [partIndex + 1, message])); };
     const skipSpace = () => { while (i < s.length && /\s/.test(s[i])) i++; };
     const readNumber = () => {
       const start = i;
@@ -2483,7 +2485,7 @@
       const n = readNumber();
       const dots = readDotsCount();
       if (!n) return durationUnitsFromBase(defaultUnits, dots);
-      if (!VALID_LENGTHS.includes(n.value)) fail(`길이 ${n.value}은 지원하지 않습니다. 1,2,4,8,16,32,64를 사용해 주세요.`);
+      if (!VALID_LENGTHS.includes(n.value)) fail(tr("mml.err_length_full", [n.value]));
       return durationUnits(n.value, dots);
     };
     const readNoteToken = () => {
@@ -2497,8 +2499,8 @@
       if (ch === "n") {
         i++;
         const num = readNumber();
-        if (!num) fail("N 뒤에 음 번호가 필요합니다.");
-        if (num.value < 0 || num.value > 127) fail(`N${num.value}은 지원 범위를 벗어났습니다.`);
+        if (!num) fail(tr("mml.err_n_required"));
+        if (num.value < 0 || num.value > 127) fail(tr("mml.err_n_range", [num.value]));
         const duration = durationUnitsFromBase(defaultUnits, readDotsCount());
         if (num.value === 0) return { kind: "rest", duration };
         return { kind: "note", midi: num.value, duration, volume };
@@ -2513,13 +2515,13 @@
     };
     const appendToken = token => {
       if (!isIntegerLike(token.duration) || token.duration <= 0) {
-        fail("64분음표보다 더 작은 소수 길이는 현재 최적화할 수 없습니다.");
+        fail(tr("mml.err_tiny_fraction"));
       }
       token.duration = Math.round(token.duration);
 
       if (pendingTie) {
-        if (!lastTieTarget) fail("& 앞에 이어질 음표가 필요합니다.");
-        if (lastTieTarget.kind !== token.kind || lastTieTarget.midi !== token.midi) fail("&는 같은 음끼리만 이어 주세요.");
+        if (!lastTieTarget) fail(tr("mml.err_tie_before"));
+        if (lastTieTarget.kind !== token.kind || lastTieTarget.midi !== token.midi) fail(tr("mml.err_tie_same"));
         lastTieTarget.event.duration += token.duration;
         pos += token.duration;
         pendingTie = false;
@@ -2544,51 +2546,51 @@
         appendToken(readNoteToken());
       } else if (ch === "&") {
         i++;
-        if (!lastTieTarget) fail("& 앞에 이어질 음표가 필요합니다.");
-        if (pendingTie) fail("&가 연속으로 나왔습니다.");
+        if (!lastTieTarget) fail(tr("mml.err_tie_before"));
+        if (pendingTie) fail(tr("mml.err_tie_repeat"));
         pendingTie = true;
       } else if (ch === "t") {
         i++;
         const n = readNumber();
-        if (!n) fail("T 뒤에 숫자가 필요합니다.");
-        if (n.value < 32 || n.value > 255) fail(`T${n.value}은 지원 범위를 벗어났습니다.`);
+        if (!n) fail(tr("mml.err_t_required"));
+        if (n.value < 32 || n.value > 255) fail(tr("mml.err_t_range", [n.value]));
         tempos.push({ pos, bpm: n.value, part: partIndex, order: partIndex * 100000000 + order++ });
       } else if (ch === "o") {
         i++;
         const n = readNumber();
-        if (!n) fail("O 뒤에 숫자가 필요합니다.");
-        if (n.value < 0 || n.value > 9) fail(`O${n.value}은 지원 범위를 벗어났습니다.`);
+        if (!n) fail(tr("mml.err_o_required"));
+        if (n.value < 0 || n.value > 9) fail(tr("mml.err_o_range", [n.value]));
         octave = n.value;
       } else if (ch === "l") {
         i++;
         const n = readNumber();
         const dots = readDotsCount();
-        if (!n || !VALID_LENGTHS.includes(n.value)) fail("L은 1,2,4,8,16,32,64 중 하나를 사용해 주세요.");
+        if (!n || !VALID_LENGTHS.includes(n.value)) fail(tr("mml.err_l_range"));
         defaultUnits = durationUnits(n.value, dots);
-        if (!isIntegerLike(defaultUnits)) fail("현재 최적화할 수 없는 L 점음표 길이입니다.");
+        if (!isIntegerLike(defaultUnits)) fail(tr("mml.err_l_dotted"));
         defaultUnits = Math.round(defaultUnits);
       } else if (ch === "v") {
         i++;
         const n = readNumber();
-        if (!n) fail("V 뒤에 숫자가 필요합니다.");
-        if (n.value < 0 || n.value > 15) fail(`V${n.value}는 지원 범위를 벗어났습니다.`);
+        if (!n) fail(tr("mml.err_v_required"));
+        if (n.value < 0 || n.value > 15) fail(tr("mml.err_v_range", [n.value]));
         volume = n.value;
       } else if (raw === ">") {
         i++;
         octave++;
-        if (octave > 9) fail("옥타브가 너무 높습니다.");
+        if (octave > 9) fail(tr("mml.err_octave_high"));
       } else if (raw === "<") {
         i++;
         octave--;
-        if (octave < 0) fail("옥타브가 너무 낮습니다.");
+        if (octave < 0) fail(tr("mml.err_octave_low"));
       } else if (raw === ";") {
         i++;
         break;
       } else {
-        fail(`알 수 없는 문자 '${raw}'가 있습니다.`);
+        fail(tr("mml.err_unknown_char", [raw]));
       }
     }
-    if (pendingTie) fail("& 뒤에 이어질 음표가 필요합니다.");
+    if (pendingTie) fail(tr("mml.err_tie_after"));
 
     return { raw: s, events: options.mergeRests === false ? normalizeEventStarts(events) : mergeAdjacentRests(events), tempos, length: pos };
   }
@@ -2630,7 +2632,7 @@
     }
     const denom = Number(options.denom ?? options.thresholdDenom ?? options.threshold ?? 32);
     if (!VALID_LENGTHS.includes(denom) || denom < 4) {
-      throw new Error("쉼표 삭제 기준은 all, 4, 8, 16, 32, 64 중 하나여야 합니다.");
+      throw new Error(tr("rest.err_limit"));
     }
     return { all: false, units: durationUnits(denom, 0), denom };
   }
@@ -2774,21 +2776,6 @@
     return out;
   }
 
-  function injectOriginalPartTempoEvents(events, tempos) {
-    const ordered = [...(tempos || [])]
-      .filter(tempo => Number.isFinite(tempo?.pos) && Number.isFinite(tempo?.bpm))
-      .sort((a, b) => a.pos - b.pos || a.order - b.order);
-    if (!ordered.length) return mergeAdjacentRests(events.map(event => ({ ...event })));
-
-    const initialBpms = ordered.filter(tempo => tempo.pos <= 0).map(tempo => tempo.bpm);
-    const laterTempos = ordered.filter(tempo => tempo.pos > 0);
-    let result = injectTempoEvents(events, laterTempos);
-    if (initialBpms.length) {
-      result = [{ type: "tempo", start: 0, duration: 0, preTempos: initialBpms }, ...result];
-      result = normalizeEventStarts(result);
-    }
-    return result;
-  }
 
   function injectTempoEvents(events, tempoMap) {
     const tempos = (tempoMap || []).filter(t => t.pos > 0).sort((a, b) => a.pos - b.pos);
@@ -3032,9 +3019,9 @@
   }
 
   function renderPitch(midi, currentOctave) {
-    if (midi < 0 || midi > 127) throw new Error(`음역 ${midi}은 지원할 수 없습니다.`);
+    if (midi < 0 || midi > 127) throw new Error(tr("mml.err_midi_range", [midi]));
     const targetOctave = midiToOctave(midi);
-    if (targetOctave < 0 || targetOctave > 9) throw new Error(`O${targetOctave} 음역은 지원할 수 없습니다.`);
+    if (targetOctave < 0 || targetOctave > 9) throw new Error(tr("mml.err_target_octave", [targetOctave]));
     const symbol = NOTE_NAMES[((midi % 12) + 12) % 12];
     const candidates = [];
     if (targetOctave === currentOctave) candidates.push({ prefix: "", symbol, octave: targetOctave });
@@ -3069,7 +3056,7 @@
       }
       if (best == null || text.length < best.length || (text.length === best.length && text < best)) best = text;
     }
-    if (best == null) throw new Error(`길이 ${units}을 MML로 표현하지 못했습니다.`);
+    if (best == null) throw new Error(tr("mml.err_duration_render", [units]));
     noteDurationCache.set(key, best);
     return best;
   }
@@ -3093,7 +3080,7 @@
       dp[u] = best;
     }
     const out = dp[units];
-    if (out == null) throw new Error(`길이 ${units}을 MML로 표현하지 못했습니다.`);
+    if (out == null) throw new Error(tr("mml.err_duration_render", [units]));
     noteDurationCache.set(key, out);
     return out;
   }
@@ -3116,7 +3103,7 @@
       dp[u] = best;
     }
     const out = dp[units];
-    if (out == null) throw new Error(`쉼표 길이 ${units}을 MML로 표현하지 못했습니다.`);
+    if (out == null) throw new Error(tr("mml.err_rest_render", [units]));
     restDurationCache.set(key, out);
     return out;
   }
@@ -3164,7 +3151,7 @@
   }
 
   function normalizeUnits(value) {
-    if (!isIntegerLike(value)) throw new Error("현재 최적화할 수 없는 소수 길이가 있습니다.");
+    if (!isIntegerLike(value)) throw new Error(tr("mml.err_fraction_unsupported"));
     return Math.round(value);
   }
 

@@ -6,11 +6,11 @@
   function unique(a) { return [...new Set(a)]; }
   function formatTime(sec) {
     sec = Math.max(0, Number(sec) || 0);
-    const totalMs = Math.round(sec * 1000);
-    const m = Math.floor(totalMs / 60000);
-    const s = Math.floor((totalMs % 60000) / 1000);
-    const ms = totalMs % 1000;
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
+    const totalHundredths = Math.round(sec * 100);
+    const m = Math.floor(totalHundredths / 6000);
+    const s = Math.floor((totalHundredths % 6000) / 100);
+    const hundredths = totalHundredths % 100;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(hundredths).padStart(2, "0")}`;
   }
   function shortError(err) {
     const msg = err?.message || String(err);

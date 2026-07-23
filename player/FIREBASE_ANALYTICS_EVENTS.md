@@ -76,7 +76,7 @@
 
 | 이벤트명 | 발생 시점 | 주요 매개변수 | 설명 |
 |---|---|---|---|
-| `shortcut_link_open` | 상단 바로가기 링크를 열 때 | `link` | 개발자 MML 공유 또는 MIDI 자료 사이트 식별자를 기록합니다. |
+| `shortcut_link_open` | 상단 바로가기 링크를 열 때 | `link` | MML 공유 또는 MIDI 자료 사이트 식별자를 기록합니다. |
 
 같은 클릭을 중복 집계하던 `midi_resource_link_open`은 제거하고 `shortcut_link_open.link` 값으로만 구분합니다.
 
