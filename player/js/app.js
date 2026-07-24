@@ -539,8 +539,17 @@
     bulkVolumeBtn?.addEventListener("click", openBulkVolumeDialog);
     bulkVolumeApply?.addEventListener("click", () => applyBulkVolumeFromDialog());
     bulkVolumeCancel?.addEventListener("click", () => bulkVolumeDialog?.close());
-    bulkVolumeSelectAll?.addEventListener("click", () => setDialogChannelSelection(".bulk-volume-channel", true));
-    bulkVolumeSelectNone?.addEventListener("click", () => setDialogChannelSelection(".bulk-volume-channel", false));
+    bulkVolumeSelectAll?.addEventListener("click", () => {
+      setDialogChannelSelection(".bulk-volume-channel", true);
+      updateBulkVolumeStats();
+    });
+    bulkVolumeSelectNone?.addEventListener("click", () => {
+      setDialogChannelSelection(".bulk-volume-channel", false);
+      updateBulkVolumeStats();
+    });
+    document.querySelectorAll(".bulk-volume-channel").forEach(input => {
+      input.addEventListener("change", updateBulkVolumeStats);
+    });
     bulkVolumeAmount?.addEventListener("change", normalizeBulkVolumeAmountInput);
     bulkPitchBtn?.addEventListener("click", openBulkPitchDialog);
     bulkPitchApply?.addEventListener("click", applyBulkPitchFromDialog);
@@ -783,6 +792,7 @@
     updatePartMuteControl();
     updateSoundFontUi();
     updateSoundPresetControls();
+    if (bulkVolumeDialog?.open) updateBulkVolumeStats();
     if (mmiImportDialog?.open) updateMmiImportSelectionState();
     if (pianoRollEmpty && !pianoRollEmpty.hidden && pianoRollRangeLabel) {
       pianoRollRangeLabel.textContent = i18nText("roll.title");
@@ -6537,9 +6547,26 @@
 
   function updateBulkVolumeStats() {
     if (!bulkVolumeStats) return;
+
+    const selectedPartIndexes = getDialogSelectedPartIndexes(".bulk-volume-channel");
+    if (!selectedPartIndexes.length) {
+      bulkVolumeStats.replaceChildren();
+      return;
+    }
+
     let counts;
     try {
-      counts = getEditorDerivedState({ needVolumeCounts: true }).volumeCounts;
+      const parsedParts = getEditorDerivedState({ needVolumeCounts: true }).parsed?.parts || [];
+      const selectedSet = new Set(selectedPartIndexes);
+      counts = Array(16).fill(0);
+
+      parsedParts.forEach((part, partIndex) => {
+        if (!selectedSet.has(partIndex)) return;
+        for (const note of (part?.notes || [])) {
+          const volume = clampInt(Number(note.volume ?? 8), 0, 15);
+          counts[volume]++;
+        }
+      });
     } catch (err) {
       bulkVolumeStats.innerHTML = `<div class="volume-count-title">${escapeHtml(i18nText("vol.stats_unavailable"))}</div><div class="dialog-small">${escapeHtml(shortError(err))}</div>`;
       return;
