@@ -1126,13 +1126,13 @@
     const resolved = theme === "dark" ? "dark" : "light";
     document.documentElement.dataset.theme = resolved;
     if (themeToggleBtn) {
-      const nextTheme = resolved === "dark" ? "light" : "dark";
-      const nextLabel = i18nText(nextTheme === "light" ? "theme.light" : "theme.dark");
-      themeToggleBtn.dataset.targetTheme = nextTheme;
+      const currentLabel = i18nText(resolved === "dark" ? "theme.dark" : "theme.light");
+      themeToggleBtn.dataset.currentTheme = resolved;
+      delete themeToggleBtn.dataset.targetTheme;
       themeToggleBtn.setAttribute("aria-pressed", resolved === "dark" ? "true" : "false");
-      themeToggleBtn.setAttribute("aria-label", nextLabel);
-      themeToggleBtn.title = nextLabel;
-      if (themeModeText) themeModeText.textContent = nextLabel;
+      themeToggleBtn.setAttribute("aria-label", currentLabel);
+      themeToggleBtn.title = currentLabel;
+      if (themeModeText) themeModeText.textContent = currentLabel;
     }
     if (persist) writePref("theme", resolved);
     pianoRollLastDataSignature = "";

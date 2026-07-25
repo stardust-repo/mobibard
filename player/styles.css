@@ -83,7 +83,7 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: linear-gradient(180deg, var(--body-start) 0%, var(--bg) 100%); color: var(--text); }
-main { width: min(1120px, calc(100vw - 32px)); margin: 0 auto; padding: 28px 0 44px; }
+main { width: min(1120px, calc(100vw - 32px)); margin: 0 auto; padding: 14px 0 30px; }
 h1 { margin: 0; font-size: clamp(28px, 4vw, 44px); letter-spacing: -0.03em; }
 h2 { margin: 0 0 12px; font-size: 18px; }
 
@@ -341,7 +341,7 @@ textarea { resize: vertical; color: var(--text); }
 .part-panel.part-4 textarea, .part-panel.part-4 .mml-highlight { border-top-color: var(--part4); }
 .part-panel.part-5 textarea, .part-panel.part-5 .mml-highlight { border-top-color: var(--part5); }
 @media (max-width: 820px) {
-  main { width: min(100vw - 20px, 1120px); padding-top: 20px; }
+  main { width: min(100vw - 20px, 1120px); padding: 10px 0 34px; }
   .app-head { align-items: flex-start; flex-direction: column; gap: 10px; margin-bottom: 14px; }
   .app-head-controls { justify-content: flex-start; margin-left: 0; width: 100%; }
   .header-links{ justify-content: flex-start; }
@@ -3439,7 +3439,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   color: var(--danger);
 }
 
-/* The theme button itself previews the target theme; the old inner swatch is gone. */
+/* The account-menu theme button shows the current theme, not the next action. */
 .menu-card .app-head .theme-menu-button {
   justify-content: center;
   gap: 0;
@@ -3447,25 +3447,25 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   box-shadow: 0 2px 8px var(--panel-shadow);
 }
 :root[data-theme="light"] .menu-card .app-head .theme-menu-button {
-  border-color: #0f172a;
-  background: #1e293b;
-  color: #f8fafc;
-}
-:root[data-theme="dark"] .menu-card .app-head .theme-menu-button {
-  border-color: #e2e8f0;
+  border-color: #cbd5e1;
   background: #f8fafc;
   color: #1e293b;
 }
+:root[data-theme="dark"] .menu-card .app-head .theme-menu-button {
+  border-color: #475569;
+  background: #1e293b;
+  color: #f8fafc;
+}
 :root[data-theme="light"] .menu-card .app-head .theme-menu-button:not(:disabled):hover {
-  border-color: #020617;
-  background: #0f172a;
-  color: #fff;
+  border-color: #94a3b8;
+  background: #eef2f7;
+  color: #0f172a;
   filter: none;
 }
 :root[data-theme="dark"] .menu-card .app-head .theme-menu-button:not(:disabled):hover {
-  border-color: #fff;
-  background: #fff;
-  color: #0f172a;
+  border-color: #64748b;
+  background: #334155;
+  color: #fff;
   filter: none;
 }
 
