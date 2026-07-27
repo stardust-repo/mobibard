@@ -237,6 +237,8 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "midi.err_track_header": "MTrk header was not found in track {0}.",
     "midi.example_audio": "Example from audio input to MIDI output",
     "midi.extract": "Extract MIDI",
+    "midi.use_now": "Use now",
+    "midi.pc_install": "Install on PC",
     "midi.group_not_found": "No instrument groups were found in {0}.",
     "midi.guide_label": "{0} conversion guide",
     "midi.guide_lead": "Review the instruments and channel roles for {0}, then convert.",

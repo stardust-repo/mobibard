@@ -1997,6 +1997,7 @@
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
     while (sourceParts.length < partCount) sourceParts.push("");
 
+    const sourceLengths = sourceParts.map(part => String(part || "").length);
     const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
     const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
     const totalUnits = Math.max(
@@ -2004,6 +2005,33 @@
       ...parsedParts.map(p => partMusicalEnd(p.events)),
       ...tempoMap.map(t => t.pos || 0)
     );
+
+    // 원본의 모든 채널이 제한 글자 수 이하면 분할 지점을 찾지 않는다.
+    // 렌더링 과정에서 헤더나 쉼표가 추가되어 길이가 늘더라도 사용자가 입력한
+    // 각 채널 자체가 제한 안에 있다면 원문을 한 페이지로 그대로 제공한다.
+    if (sourceLengths.every(length => length <= maxChars)) {
+      const mml = composeMml(sourceParts, { preserveEmpty: true, partCount });
+      return {
+        pages: [{
+          index: 1,
+          mml,
+          parts: sourceParts.slice(),
+          lengths: sourceLengths,
+          maxPartLength: Math.max(0, ...sourceLengths),
+          start: 0,
+          end: totalUnits,
+          nextStart: totalUnits,
+          skippedUnits: 0,
+          reason: "within-limit",
+          warning: ""
+        }],
+        maxChars,
+        searchSlackChars,
+        minCommonSilenceUnits,
+        totalUnits,
+        warnings: []
+      };
+    }
 
     if (totalUnits <= EPS) {
       const optimized = optimizeMml(text, { partCount });

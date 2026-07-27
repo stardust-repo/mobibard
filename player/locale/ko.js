@@ -237,6 +237,8 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "midi.err_track_header": "{0}번 트랙에서 MTrk 헤더를 찾지 못했습니다.",
     "midi.example_audio": "오디오 입력부터 MIDI 출력까지의 사용 예시",
     "midi.extract": "MIDI 추출",
+    "midi.use_now": "바로 이용",
+    "midi.pc_install": "PC 설치",
     "midi.group_not_found": "{0}에서 악기 그룹을 찾지 못했습니다.",
     "midi.guide_label": "{0} 변환 안내",
     "midi.guide_lead": "{0}의 악기와 채널 역할을 확인한 뒤 변환해 주세요.",

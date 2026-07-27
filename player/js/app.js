@@ -156,6 +156,9 @@
   const pasteBtn = $("pasteBtn");
   const saveBtn = $("saveBtn");
   const midiExtractBtn = $("midiExtractBtn");
+  const midiExtractMenu = $("midiExtractMenu");
+  const midiExtractOnline = $("midiExtractOnline");
+  const midiExtractInstall = $("midiExtractInstall");
   const midiExtractDialog = $("midiExtractDialog");
   const midiExtractClose = $("midiExtractClose");
   const midiExtractDownloads = Array.from(document.querySelectorAll("[data-midi-extract-download]"));
@@ -496,7 +499,14 @@
     splitCopyDialog?.addEventListener("close", () => stopMidiPreview());
     pasteBtn.addEventListener("click", () => void pasteVisibleMml());
     saveBtn.addEventListener("click", () => void saveVisibleMml());
-    midiExtractBtn?.addEventListener("click", openMidiExtractDialog);
+    midiExtractBtn?.addEventListener("click", () => toggleControlPopover(midiExtractBtn, midiExtractMenu));
+    midiExtractOnline?.addEventListener("click", () => {
+      closeAllControlPopovers();
+    });
+    midiExtractInstall?.addEventListener("click", () => {
+      closeAllControlPopovers();
+      openMidiExtractDialog();
+    });
     rhythmGameBtn?.addEventListener("click", openRhythmGameLayer);
     rhythmGameClose?.addEventListener("click", closeRhythmGameLayer);
     rhythmGameFrame?.addEventListener("load", handleRhythmGameFrameLoad);
@@ -712,7 +722,8 @@
     return [
       [speedControlButton, speedControlPopover],
       [volumeControlButton, volumeControlPopover],
-      [muteControlButton, muteControlPopover]
+      [muteControlButton, muteControlPopover],
+      [midiExtractBtn, midiExtractMenu]
     ].filter(([button, popover]) => button && popover);
   }
 
@@ -756,7 +767,7 @@
     if (next) {
       requestAnimationFrame(() => {
         positionControlPopover(popover);
-        popover.querySelector("input, button")?.focus({ preventScroll: true });
+        popover.querySelector('a[href], input, button, [tabindex]:not([tabindex="-1"])')?.focus({ preventScroll: true });
       });
     } else {
       popover.classList.remove("place-below");

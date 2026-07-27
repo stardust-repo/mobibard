@@ -237,6 +237,8 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "midi.err_track_header": "在第 {0} 轨中找不到 MTrk 头。",
     "midi.example_audio": "从音频输入到MIDI输出的使用示例",
     "midi.extract": "提取MIDI",
+    "midi.use_now": "立即使用",
+    "midi.pc_install": "PC 安装",
     "midi.group_not_found": "在 {0} 中找不到乐器组。",
     "midi.guide_label": "{0} 转换指南",
     "midi.guide_lead": "请检查 {0} 的乐器和声道角色后再转换。",

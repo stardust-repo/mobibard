@@ -237,6 +237,8 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "midi.err_track_header": "トラック{0}にMTrkヘッダーがありません。",
     "midi.example_audio": "オーディオ入力からMIDI出力までの使用例",
     "midi.extract": "MIDI抽出",
+    "midi.use_now": "すぐに利用",
+    "midi.pc_install": "PCにインストール",
     "midi.group_not_found": "{0}に楽器グループが見つかりません。",
     "midi.guide_label": "{0}変換ガイド",
     "midi.guide_lead": "{0}の楽器とチャンネル役割を確認してから変換してください。",

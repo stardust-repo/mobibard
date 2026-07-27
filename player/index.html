@@ -7,7 +7,7 @@
 <title data-i18n="ui.mobibard_v4"></title>
 <link href="assets/favicon.ico" rel="icon" sizes="any"/>
 <link href="assets/favicon.ico" rel="shortcut icon"/>
-<link href="styles.css?v=5.4-spacing-current-theme" rel="stylesheet"/>
+<link href="styles.css?v=5.6-midi-extract-menu-narrow" rel="stylesheet"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 </head>
 <body>
@@ -80,9 +80,15 @@
 <button class="ghost soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.save_mobibard" id="googleDriveSaveBtn" title="" type="button"></button>
 </div>
 <div aria-label="" class="player-file-actions-special" data-i18n-aria-label="game.midi_extraction">
-<button aria-controls="midiExtractDialog" aria-haspopup="dialog" class="midi-extract-toolbar-button beta-feature" data-i18n-title="midi.download_local" id="midiExtractBtn" title="" type="button">
-<span aria-hidden="true" class="midi-extract-toolbar-icon">♪</span><span data-i18n="midi.extract"></span>
+<div class="compact-control-wrap midi-extract-control-wrap">
+<button aria-controls="midiExtractMenu" aria-expanded="false" aria-haspopup="menu" class="midi-extract-toolbar-button beta-feature" data-i18n-title="midi.extract" id="midiExtractBtn" title="" type="button">
+<span aria-hidden="true" class="midi-extract-toolbar-icon">♪</span><span data-i18n="midi.extract"></span><span aria-hidden="true" class="midi-extract-menu-arrow">▾</span>
 </button>
+<div aria-labelledby="midiExtractBtn" class="control-popover midi-extract-menu-popover" hidden="" id="midiExtractMenu" role="menu">
+<a class="midi-extract-menu-item" data-i18n="midi.use_now" href="https://muscriptor.kyutai.org/" id="midiExtractOnline" rel="noopener noreferrer" role="menuitem" target="_blank"></a>
+<button class="midi-extract-menu-item" data-i18n="midi.pc_install" data-i18n-title="midi.download_local" id="midiExtractInstall" role="menuitem" title="" type="button"></button>
+</div>
+</div>
 <button aria-controls="rhythmGameLayer" aria-haspopup="dialog" class="rhythm-game-toolbar-button" data-i18n-title="game.open_mobibeat" id="rhythmGameBtn" title="" type="button">
 <span aria-hidden="true" class="rhythm-game-toolbar-icon">▦</span><span data-i18n="game.label"></span>
 </button>
@@ -634,12 +640,12 @@
 <a href="https://huggingface.co/MuScriptor" rel="noopener noreferrer" target="_blank">MuScriptor</a><span data-i18n="midi.provides_helper"></span>
     </p>
 <div aria-label="" class="midi-extract-downloads" data-i18n-aria-label="msg.muscriptor_run">
-<a class="midi-extract-download" data-midi-extract-download="windows" download="muscriptor_win.zip" href="./assets/midi-extract/packages/muscriptor_win.zip">
+<a class="midi-extract-download" data-midi-extract-download="windows" download="muscriptor_win.zip" href="./assets/midi-extract/packages/muscriptor_win.zip?v=14">
 <span class="midi-extract-os">Windows</span>
 <strong data-i18n="ui.download_windows"></strong>
 <small data-i18n="file.includes_bat"></small>
 </a>
-<a class="midi-extract-download" data-midi-extract-download="macos" download="muscriptor_mac.zip" href="./assets/midi-extract/packages/muscriptor_mac.zip">
+<a class="midi-extract-download" data-midi-extract-download="macos" download="muscriptor_mac.zip" href="./assets/midi-extract/packages/muscriptor_mac.zip?v=18">
 <span class="midi-extract-os">macOS</span>
 <strong data-i18n="ui.download_macos"></strong>
 <small data-i18n="file.includes_sh"></small>
@@ -848,18 +854,18 @@
 </div>
 </form>
 </dialog>
-<script src="js/language-manager.js?v=5.4-current-theme"></script>
+<script src="js/language-manager.js?v=5.6-midi-extract-menu"></script>
 <script src="js/utils.js?v=5.3-runtime-i18n"></script>
 <script src="js/midi-to-mml.js?v=5.3-runtime-i18n"></script>
 <script src="js/musicxml-to-midi.js?v=5.3-runtime-i18n"></script>
 <script src="js/mml-parser.js?v=5.3-runtime-i18n"></script>
-<script src="js/mml-optimizer.js?v=5.3-runtime-i18n"></script>
+<script src="js/mml-optimizer.js?v=5.4-split-within-limit"></script>
 <script src="js/sf2-sampler.js?v=5.3-runtime-i18n"></script>
 <script src="js/google-config.js"></script>
 <script src="js/firebase-config.js"></script>
 <script src="js/firebase-analytics.js" type="module"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
-<script src="js/app.js?v=5.4-spacing-current-theme"></script>
+<script src="js/app.js?v=5.6-midi-extract-menu"></script>
 </body>
 </html>
