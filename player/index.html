@@ -7,7 +7,7 @@
 <title data-i18n="ui.mobibard_v4"></title>
 <link href="assets/favicon.ico" rel="icon" sizes="any"/>
 <link href="assets/favicon.ico" rel="shortcut icon"/>
-<link href="styles.css?v=5.8-midi-preview-pitch-fix" rel="stylesheet"/>
+<link href="styles.css?v=6.2.5-channel-layout-repair" rel="stylesheet"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 <script>
 (() => {
@@ -52,7 +52,7 @@
   document.documentElement.lang = htmlLang[language] || "en";
   document.documentElement.dataset.i18nPending = "true";
   const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "5.8-midi-preview-pitch-fix");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "6.0-midi-bank-part-groups");
   document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
 })();
@@ -903,9 +903,9 @@
 </div>
 </form>
 </dialog>
-<script src="js/language-manager.js?v=5.8-midi-preview-pitch-fix"></script>
+<script src="js/language-manager.js?v=6.1-midi-program-part-groups"></script>
 <script src="js/utils.js?v=5.3-runtime-i18n"></script>
-<script src="js/midi-to-mml.js?v=5.8-midi-preview-pitch-fix"></script>
+<script src="js/midi-to-mml.js?v=6.1-midi-program-part-groups"></script>
 <script src="js/musicxml-to-midi.js?v=5.3-runtime-i18n"></script>
 <script src="js/mml-parser.js?v=5.3-runtime-i18n"></script>
 <script src="js/mml-optimizer.js?v=5.4-split-within-limit"></script>
@@ -915,6 +915,6 @@
 <script src="js/firebase-analytics.js" type="module"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
-<script src="js/app.js?v=5.8-midi-preview-pitch-fix"></script>
+<script src="js/app.js?v=6.2-midi-channel-assign"></script>
 </body>
 </html>

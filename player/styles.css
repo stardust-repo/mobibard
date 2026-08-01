@@ -4899,3 +4899,284 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   }
 }
 
+
+/* v6.2 MIDI instrument rows: direct export-channel assignment */
+.midi-channel-row.midi-instrument-row {
+  grid-template-columns: 18px minmax(0, 1fr) minmax(82px, auto) !important;
+  grid-template-rows: auto auto;
+  align-items: start;
+  gap: 5px 9px;
+}
+.midi-channel-row.midi-instrument-row > input {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: start;
+  margin-top: 4px;
+}
+.midi-channel-row.midi-instrument-row .midi-channel-main {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  align-self: center;
+}
+.midi-channel-row.midi-instrument-row .midi-channel-sub {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  align-self: start;
+}
+.midi-instrument-row-actions {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  display: grid;
+  justify-items: stretch;
+  align-content: start;
+  gap: 4px;
+  width: min-content;
+  min-width: 82px;
+}
+.midi-channel-row.midi-instrument-row .midi-preview-btn {
+  width: 100%;
+  min-width: 0;
+  grid-column: auto;
+  grid-row: auto;
+}
+.midi-channel-row.midi-instrument-row .midi-instrument-selected-parts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(22px, 1fr));
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  justify-self: stretch;
+  justify-content: stretch;
+}
+.midi-part-chip.midi-part-toggle {
+  appearance: none;
+  min-width: 22px;
+  min-height: 21px;
+  padding: 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--line), #8a94a6 25%);
+  border-radius: 7px;
+  background: #fff;
+  color: #354052;
+  box-shadow: none;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 950;
+  line-height: 1;
+  cursor: pointer;
+}
+.midi-part-chip.midi-part-toggle:hover {
+  border-color: var(--accent);
+  background: #f7f9ff;
+}
+.midi-part-chip.midi-part-toggle.selected {
+  color: #fff;
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff, transparent 72%);
+}
+.midi-part-chip.midi-part-toggle.selected.part-0 { background: var(--part0); }
+.midi-part-chip.midi-part-toggle.selected.part-1 { background: var(--part1); }
+.midi-part-chip.midi-part-toggle.selected.part-2 { background: var(--part2); }
+.midi-part-chip.midi-part-toggle.selected.part-3 { background: var(--part3); }
+.midi-part-chip.midi-part-toggle.selected.part-4 { background: var(--part4); }
+.midi-part-chip.midi-part-toggle.selected.part-5 { background: var(--part5); }
+@media (max-width: 560px) {
+  .midi-channel-row.midi-instrument-row {
+    grid-template-columns: 18px minmax(0, 1fr) minmax(76px, auto) !important;
+  }
+  .midi-instrument-row-actions {
+    min-width: 76px;
+  }
+  .midi-part-chip.midi-part-toggle {
+    min-width: 20px;
+    padding-inline: 3px;
+  }
+}
+.midi-instrument-row-actions > .midi-preview-btn {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+.midi-instrument-row-actions > .midi-instrument-selected-parts {
+  grid-column: 1 !important;
+  grid-row: 2 !important;
+}
+
+/* v6.2.2 MIDI instrument row: two-line aligned controls */
+.midi-channel-row.midi-instrument-row {
+  grid-template-columns: 18px minmax(0, 1fr) auto !important;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 5px 9px;
+}
+.midi-channel-row.midi-instrument-row > input {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-self: center;
+  margin: 0;
+}
+.midi-channel-row.midi-instrument-row .midi-channel-main {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  min-width: 0;
+}
+.midi-channel-row.midi-instrument-row .midi-channel-sub {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: center;
+  min-width: 0;
+}
+.midi-instrument-row-actions {
+  display: contents;
+  width: auto;
+  min-width: 0;
+}
+.midi-instrument-row-actions > .midi-preview-btn {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+  width: auto !important;
+  min-width: 0;
+  justify-self: end;
+  align-self: center;
+}
+.midi-instrument-row-actions > .midi-instrument-selected-parts {
+  grid-column: 3 !important;
+  grid-row: 2 !important;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  justify-self: end;
+  align-self: center;
+  overflow: visible;
+  white-space: nowrap;
+}
+.midi-part-chip.midi-part-toggle {
+  flex: 0 0 auto;
+  min-width: 20px;
+  min-height: 19px;
+  padding: 2px 5px;
+  font-size: 10px;
+}
+.midi-part-chip.midi-part-toggle.selected:hover {
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #fff, transparent 72%),
+    0 0 0 2px color-mix(in srgb, currentColor, transparent 82%);
+}
+.midi-part-chip.midi-part-toggle.selected.part-0:hover { background: var(--part0) !important; }
+.midi-part-chip.midi-part-toggle.selected.part-1:hover { background: var(--part1) !important; }
+.midi-part-chip.midi-part-toggle.selected.part-2:hover { background: var(--part2) !important; }
+.midi-part-chip.midi-part-toggle.selected.part-3:hover { background: var(--part3) !important; }
+.midi-part-chip.midi-part-toggle.selected.part-4:hover { background: var(--part4) !important; }
+.midi-part-chip.midi-part-toggle.selected.part-5:hover { background: var(--part5) !important; }
+@media (max-width: 560px) {
+  .midi-channel-row.midi-instrument-row {
+    grid-template-columns: 18px minmax(0, 1fr) auto !important;
+    gap: 4px 6px;
+  }
+  .midi-instrument-row-actions > .midi-instrument-selected-parts {
+    gap: 2px;
+  }
+  .midi-part-chip.midi-part-toggle {
+    min-width: 18px;
+    padding-inline: 3px;
+    font-size: 9.5px;
+  }
+}
+
+/* v6.2.5 MIDI dialog: restore the 1040px popup without collapsing the channel panel */
+.midi-dialog {
+  max-width: min(1040px, calc(100vw - 28px));
+  width: min(1040px, calc(100vw - 28px));
+}
+
+@media (min-width: 981px) {
+  .midi-dialog-layout {
+    grid-template-columns: 420px minmax(0, 1fr) !important;
+    gap: 16px;
+  }
+}
+
+.midi-left-panel .dialog-section-head,
+.midi-right-panel .dialog-section-head {
+  min-width: 0;
+}
+.midi-left-panel .dialog-section-head {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+}
+.midi-left-panel .dialog-section-head .dialog-small,
+.midi-right-panel .dialog-section-head .dialog-small {
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.midi-left-panel .dialog-section-head .dialog-small {
+  text-align: right;
+}
+.midi-role-row {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.midi-channel-row.midi-instrument-row {
+  grid-template-columns: 18px minmax(0, 1fr) 166px !important;
+}
+
+.midi-instrument-row-actions > .midi-instrument-selected-parts {
+  display: grid !important;
+  grid-template-columns: repeat(6, max-content) !important;
+  grid-auto-flow: column;
+  grid-template-rows: 1fr !important;
+  column-gap: 3px;
+  row-gap: 0;
+  width: 166px !important;
+  min-width: 166px !important;
+  max-width: 166px !important;
+  justify-content: end !important;
+  justify-items: end;
+  align-items: center;
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
+
+.midi-instrument-row-actions > .midi-instrument-selected-parts > .midi-part-chip {
+  grid-row: 1 !important;
+  white-space: nowrap !important;
+  flex: none !important;
+}
+
+@media (max-width: 560px) {
+  .midi-channel-row.midi-instrument-row {
+    grid-template-columns: 18px minmax(0, 1fr) 148px !important;
+  }
+  .midi-instrument-row-actions > .midi-instrument-selected-parts {
+    width: 148px !important;
+    min-width: 148px !important;
+    max-width: 148px !important;
+    column-gap: 2px;
+  }
+  .midi-part-chip.midi-part-toggle {
+    min-width: 19px;
+    padding-inline: 3px;
+    font-size: 9.5px;
+  }
+}

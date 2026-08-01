@@ -4748,23 +4748,50 @@
   }
 
 
-  function getMidiGroupSelectedChannels(groupId) {
-    if (!pendingMidiSettings) return [];
+  function getMidiGroupSelectableChannels(group) {
+    if (!pendingMidiSettings || !group) return [];
     const items = [];
     for (let i = 0; i < 6; i++) {
       const setting = pendingMidiSettings.channels[i];
-      if (setting?.selectedInstrumentGroups?.has(groupId)) {
-        items.push({ index: i, label: PART_LABELS[i] || i18nText("ui.numbered", [i + 1]) });
-      }
+      const canUse = group.isBeat ? setting?.role === "beat" : setting?.role !== "beat";
+      if (!canUse) continue;
+      items.push({
+        index: i,
+        label: PART_LABELS[i] || i18nText("ui.numbered", [i + 1]),
+        selected: Boolean(setting?.selectedInstrumentGroups?.has(group.id))
+      });
     }
     return items;
   }
 
-  function renderMidiGroupSelectedChips(groupId) {
-    const items = getMidiGroupSelectedChannels(groupId);
-    if (!items.length) return '<span class="midi-part-chip empty">-</span>';
+  function renderMidiGroupChannelButtons(group) {
+    const items = getMidiGroupSelectableChannels(group);
+    if (!items.length) return "";
     const shortLabel = (item) => item.index === 0 ? i18nText("ui.mel") : String(item.index);
-    return items.map(item => `<span class="midi-part-chip part-${item.index}" title="${escapeHtml(item.label)}">${escapeHtml(shortLabel(item))}</span>`).join("");
+    return items.map(item => `
+      <button
+        class="midi-part-chip midi-part-toggle part-${item.index}${item.selected ? " selected" : ""}"
+        type="button"
+        data-midi-group-channel="${item.index}"
+        aria-pressed="${item.selected ? "true" : "false"}"
+        aria-label="${escapeHtml(i18nText("aria.select_item", [item.label]))}"
+        title="${escapeHtml(item.label)}"
+      >${escapeHtml(shortLabel(item))}</button>
+    `).join("");
+  }
+
+  function toggleMidiGroupChannel(groupId, channelIndex) {
+    if (!pendingMidiSettings) return;
+    const index = clampInt(Number(channelIndex), 0, 5);
+    const group = pendingMidiSettings.groups.find(item => String(item.id) === String(groupId));
+    const setting = pendingMidiSettings.channels[index];
+    if (!group || !setting) return;
+    const canUse = group.isBeat ? setting.role === "beat" : setting.role !== "beat";
+    if (!canUse) return;
+    if (setting.selectedInstrumentGroups.has(group.id)) setting.selectedInstrumentGroups.delete(group.id);
+    else setting.selectedInstrumentGroups.add(group.id);
+    renderMidiRoleList();
+    updateMidiRoleControls();
   }
 
   function getAllowedMidiGroupsForSetting(setting) {
@@ -4803,7 +4830,11 @@
       const cb = MIDI_INSTRUMENT_CATEGORY_ORDER.indexOf(getMidiInstrumentCategory(b));
       const oa = ca >= 0 ? ca : MIDI_INSTRUMENT_CATEGORY_ORDER.length;
       const ob = cb >= 0 ? cb : MIDI_INSTRUMENT_CATEGORY_ORDER.length;
-      return oa - ob || String(a.instrumentName || a.programText || "").localeCompare(String(b.instrumentName || b.programText || ""), "ko") || String(a.id).localeCompare(String(b.id));
+      return oa - ob
+        || String(a.instrumentName || a.programText || "").localeCompare(String(b.instrumentName || b.programText || ""), "ko")
+        || String(a.partName || "").localeCompare(String(b.partName || ""), "ko")
+        || (Number(a.program) || 0) - (Number(b.program) || 0)
+        || String(a.id).localeCompare(String(b.id));
     });
   }
 
@@ -4887,15 +4918,18 @@
       row.innerHTML = `
         <input type="checkbox" value="${escapeHtml(group.id)}" ${setting.selectedInstrumentGroups.has(group.id) ? "checked" : ""} />
         <label class="midi-channel-main" for="${escapeHtml(id)}">
-          <strong>${escapeHtml(group.instrumentName || group.programText || i18nText("snd.no_inst"))}</strong>
+          <strong>${escapeHtml(group.displayName || [group.instrumentName || group.programText || i18nText("snd.no_inst"), group.partName].filter(Boolean).join(" · "))}</strong>
         </label>
-        <div class="midi-instrument-selected-parts" aria-label="${escapeHtml(i18nText("mml.chs"))}">${renderMidiGroupSelectedChips(group.id)}</div>
-        <button class="midi-preview-btn" type="button" data-midi-preview="${escapeHtml(group.id)}">${escapeHtml(i18nText("ui.listen"))}</button>
         <span class="midi-channel-sub">
+          ${group.programNumberText ? `<span>${escapeHtml(group.programNumberText)}</span>` : ""}
           ${escapeHtml(i18nText("snd.note_count_range", [formatCount(group.noteCount), group.rangeText || i18nText("ui.no_notes")]))}
           ${group.duplicateMerged ? `<em>${escapeHtml(i18nText("snd.dup_merge", [formatCount(group.duplicateMerged)]))}</em>` : ""}
           ${group.isBeat ? `<em>${escapeHtml(i18nText("ui.beat_group"))}</em>` : ""}
         </span>
+        <div class="midi-instrument-row-actions">
+          <button class="midi-preview-btn" type="button" data-midi-preview="${escapeHtml(group.id)}">${escapeHtml(i18nText("ui.listen"))}</button>
+          <div class="midi-instrument-selected-parts" aria-label="${escapeHtml(i18nText("mml.chs"))}">${renderMidiGroupChannelButtons(group)}</div>
+        </div>
       `;
       const input = row.querySelector("input");
       if (input) {
@@ -4911,6 +4945,13 @@
         ev.preventDefault();
         ev.stopPropagation();
         void previewMidiInstrument(group.id, ev.currentTarget);
+      });
+      row.querySelectorAll("[data-midi-group-channel]").forEach(button => {
+        button.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          toggleMidiGroupChannel(group.id, Number(button.dataset.midiGroupChannel));
+        });
       });
       return row;
     };
@@ -5236,17 +5277,32 @@
     }
   }
 
-  function findPreviewPreset(preview) {
-    if (!soundFont) return null;
-    const program = clampInt(Number(preview?.program ?? 0), 0, 127);
-    if (preview?.isBeat) {
-      return soundFont.presets.find(p => p.bank === 128 && p.preset === 0)
-        || soundFont.presets.find(p => p.bank === 128)
-        || soundFont.findPreset(program)
-        || soundFont.findPreset(0)
-        || soundFont.presets[0];
+  function findMidiBankPreset(bankMsb, bankLsb, program, options = {}) {
+    if (!soundFont || !Array.isArray(soundFont.presets)) return null;
+    const msb = clampInt(Number(bankMsb) || 0, 0, 127);
+    const lsb = clampInt(Number(bankLsb) || 0, 0, 127);
+    const presetNumber = clampInt(Number(program) || 0, 0, 127);
+    const candidates = [];
+    if (options.preferDrum) candidates.push(128);
+    candidates.push(msb * 128 + lsb, lsb, msb, 0);
+    for (const bank of [...new Set(candidates)]) {
+      const preset = soundFont.presets.find(p => p.bank === bank && p.preset === presetNumber);
+      if (preset) return preset;
     }
-    return soundFont.findPreset(program) || soundFont.findPreset(0) || soundFont.presets[0];
+    if (options.preferDrum) {
+      const drumPreset = soundFont.presets.find(p => p.bank === 128);
+      if (drumPreset) return drumPreset;
+    }
+    return soundFont.findPreset(presetNumber) || soundFont.findPreset(0) || soundFont.presets[0] || null;
+  }
+
+  function findPreviewPreset(preview) {
+    return findMidiBankPreset(
+      preview?.bankMsb,
+      preview?.bankLsb,
+      preview?.program,
+      { preferDrum: Boolean(preview?.isBeat) }
+    );
   }
 
   function stopMidiPreview() {
@@ -5338,7 +5394,9 @@
         ? channel.selectedInstrumentGroups.map(id => groupMap.get(String(id))).filter(Boolean)
         : [];
       if (!selected.length) continue;
-      selected.sort((a, b) => (Number(b.noteCount) || 0) - (Number(a.noteCount) || 0) || String(a.instrumentName || "").localeCompare(String(b.instrumentName || ""), "ko"));
+      selected.sort((a, b) => (Number(b.noteCount) || 0) - (Number(a.noteCount) || 0)
+        || String(a.instrumentName || "").localeCompare(String(b.instrumentName || ""), "ko")
+        || String(a.partName || "").localeCompare(String(b.partName || ""), "ko"));
       keys[i] = midiGroupToPresetKey(selected[0]);
     }
     return normalizePresetKeyArray(keys);
@@ -5346,9 +5404,11 @@
 
   function midiGroupToPresetKey(group) {
     if (!group) return DEFAULT_PART_PRESET_KEY;
-    if (group.isBeat || group.isPercussion) return "128:0";
     const program = clampInt(Number(group.program ?? group.preset ?? 0), 0, 127);
-    return `0:${program}`;
+    const preset = findMidiBankPreset(group.bankMsb, group.bankLsb, program, {
+      preferDrum: Boolean(group.isBeat || group.isPercussion)
+    });
+    return preset ? presetKey(preset) : `${group.isBeat || group.isPercussion ? 128 : 0}:${program}`;
   }
 
   function rememberMidiPartSoundPreset(keys) {

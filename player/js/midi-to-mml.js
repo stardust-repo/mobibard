@@ -67,10 +67,10 @@
       tempoCount: normalizeMidiTempos(midi.tempoEvents).length,
       warnings,
       unsupportedPitchCount,
-      // 사용자 선택용: 같은 악기명은 하나의 선택지로 묶어서 보여준다.
+      // 사용자 선택용: 같은 파트(채널 표시명) + Program 조합을 하나의 선택지로 묶는다. Bank는 분류에 사용하지 않는다.
       instrumentGroups: instrumentChoices,
       instrumentChoices,
-      // 내부 변환용: 채널/프로그램 상태를 포함한다. 중복 병합 경계로만 사용한다.
+      // 내부 변환용: 채널 + 파트 + Bank/Program 상태를 보존하며 중복 병합 경계로 사용한다.
       sourceInstrumentGroups: sourceGroups,
       hasBeatGroups: instrumentChoices.some(g => g.isBeat),
       channels: instrumentChoices
@@ -86,12 +86,20 @@
       if (!group) {
         group = {
           id: groupInfo.id,
+          choiceId: groupInfo.choiceId,
           channel: note.channel,
-          program: normalizeProgram(note.program),
+          trackIndex: note.trackIndex,
+          partName: groupInfo.partName,
+          bankMsb: groupInfo.bankMsb,
+          bankLsb: groupInfo.bankLsb,
+          program: groupInfo.program,
+          drumMidi: groupInfo.drumMidi,
           isBeat: groupInfo.isBeat,
           isDrumNoteGroup: groupInfo.isDrumNoteGroup,
           instrumentName: groupInfo.instrumentName,
+          displayName: groupInfo.displayName,
           programText: groupInfo.programText,
+          programNumberText: groupInfo.programNumberText,
           noteCount: 0,
           duplicateMerged: 0,
           minMidi: Infinity,
@@ -124,61 +132,80 @@
     return Array.from(groups.values()).map(group => ({
       ...group,
       duplicateMerged: mergedByGroup.get(group.id) || 0,
-      rangeText: Number.isFinite(group.minMidi) ? `${midiName(group.minMidi)}~${midiName(group.maxMidi)}` : tr("ui.no_notes"),
-      choiceId: instrumentChoiceId(group.instrumentName, group.isBeat)
+      rangeText: Number.isFinite(group.minMidi) ? `${midiName(group.minMidi)}~${midiName(group.maxMidi)}` : tr("ui.no_notes")
     }));
   }
 
   function buildInstrumentChoices(sourceGroups) {
     const choices = new Map();
     for (const group of sourceGroups || []) {
-      const name = cleanInstrumentName(group.instrumentName || group.programText || tr("snd.no_inst"));
-      const id = instrumentChoiceId(name, group.isBeat);
+      const id = group.choiceId || instrumentChoiceId(
+        group.partName,
+        group.program,
+        group.isBeat,
+        group.drumMidi
+      );
       let choice = choices.get(id);
       if (!choice) {
         choice = {
           id,
+          partName: group.partName,
+          bankMsb: normalizeBank(group.bankMsb),
+          bankLsb: normalizeBank(group.bankLsb),
+          program: normalizeProgram(group.program),
+          drumMidi: Number.isInteger(group.drumMidi) ? group.drumMidi : null,
           isBeat: Boolean(group.isBeat),
           isPercussion: Boolean(group.isBeat),
-          instrumentName: name,
-          programText: group.isBeat ? tr("midi.name_beat", [name]) : name,
           noteCount: 0,
           duplicateMerged: 0,
           minMidi: Infinity,
           maxMidi: -Infinity,
           sourceGroupIds: [],
-          programCounts: new Map()
+          instrumentNameCounts: new Map()
         };
         choices.set(id, choice);
       }
       const groupNoteCount = Number(group.noteCount) || 0;
+      const instrumentName = cleanInstrumentName(group.instrumentName || group.programText || programName(choice.program));
+      choice.instrumentNameCounts.set(instrumentName, (choice.instrumentNameCounts.get(instrumentName) || 0) + groupNoteCount);
       choice.noteCount += groupNoteCount;
       choice.duplicateMerged += Number(group.duplicateMerged) || 0;
       choice.minMidi = Math.min(choice.minMidi, group.minMidi);
       choice.maxMidi = Math.max(choice.maxMidi, group.maxMidi);
       choice.sourceGroupIds.push(group.id);
-      const program = normalizeProgram(group.program);
-      choice.programCounts.set(program, (choice.programCounts.get(program) || 0) + groupNoteCount);
     }
 
     return Array.from(choices.values()).map(choice => {
       const rangeText = Number.isFinite(choice.minMidi) ? `${midiName(choice.minMidi)}~${midiName(choice.maxMidi)}` : tr("ui.no_notes");
-      const program = Array.from(choice.programCounts.entries()).sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
+      const instrumentName = Array.from(choice.instrumentNameCounts.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"))[0]?.[0]
+        || programName(choice.program);
+      const displayName = instrumentDisplayName(instrumentName, choice.partName);
+      const programNumberText = tr("midi.program_number", [choice.program + 1]);
+      const programText = choice.isBeat ? tr("midi.name_beat", [instrumentName]) : instrumentName;
       return {
         id: choice.id,
+        partName: choice.partName,
+        bankMsb: choice.bankMsb,
+        bankLsb: choice.bankLsb,
+        program: choice.program,
+        drumMidi: choice.drumMidi,
         isBeat: choice.isBeat,
         isPercussion: choice.isPercussion,
-        instrumentName: choice.instrumentName,
-        programText: choice.programText,
-        program,
+        instrumentName,
+        displayName,
+        programText,
+        programNumberText,
         noteCount: choice.noteCount,
         duplicateMerged: choice.duplicateMerged,
         rangeText,
         sourceGroupIds: [...new Set(choice.sourceGroupIds)],
         defaultChecked: !choice.isBeat,
         description: buildInstrumentGroupDescription({
-          instrumentName: choice.instrumentName,
-          programText: choice.programText,
+          instrumentName,
+          displayName,
+          programText,
+          programNumberText,
           noteCount: choice.noteCount,
           duplicateMerged: choice.duplicateMerged,
           rangeText,
@@ -187,13 +214,17 @@
       };
     }).sort((a, b) => {
       if (a.isBeat !== b.isBeat) return a.isBeat ? 1 : -1;
-      return a.instrumentName.localeCompare(b.instrumentName, "ko") || a.id.localeCompare(b.id);
+      return a.instrumentName.localeCompare(b.instrumentName, "ko")
+        || a.partName.localeCompare(b.partName, "ko")
+        || a.program - b.program
+        || a.id.localeCompare(b.id);
     });
   }
 
   function buildInstrumentGroupDescription(group) {
     const chunks = [];
-    chunks.push(group.programText || group.instrumentName);
+    chunks.push(group.displayName || instrumentDisplayName(group.instrumentName || group.programText, group.partName));
+    if (group.programNumberText) chunks.push(group.programNumberText);
     chunks.push(tr("midi.note_count", [fmt(group.noteCount)]));
     if (group.duplicateMerged) chunks.push(tr("midi.dup_planned", [fmt(group.duplicateMerged)]));
     chunks.push(group.rangeText);
@@ -205,41 +236,102 @@
     return String(name || tr("snd.no_inst")).replace(new RegExp(`\\s*·\\s*${escapeRegExp(tr("ui.beat"))}\\s*$`, "i"), "").replace(/^\d+\.\s*/, "").trim() || tr("snd.no_inst");
   }
 
-  function instrumentChoiceId(name, isBeat) {
-    const key = cleanInstrumentName(name).toLocaleLowerCase("ko-KR").replace(/\s+/g, " ").replace(/[^\p{L}\p{N}+#(). _-]+/gu, "");
-    return `${isBeat ? "beat" : "inst"}:${key || "unknown"}`;
+  function cleanInstrumentMetaName(name) {
+    const text = String(name || "")
+      .replace(/\0/g, " ")
+      .replace(/(?:https?:\/\/|www\.)\S+/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!text || /^(?:track|part|instrument)\s*\d*$/i.test(text)) return "";
+    return text.slice(0, 100);
+  }
+
+  function cleanPartName(name, trackIndex = 0) {
+    const text = String(name || "")
+      .replace(/\0/g, " ")
+      .replace(/(?:https?:\/\/|www\.)\S+/gi, " ")
+      .replace(/(?:\s*[,;|])+\s*$/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return (text || tr("midi.part_default", [Number(trackIndex) + 1])).slice(0, 100);
+  }
+
+  function identityText(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .toLocaleLowerCase("ko-KR")
+      .replace(/\s+/g, " ")
+      .replace(/[^\p{L}\p{N}+#(). _-]+/gu, "")
+      .trim()
+      .slice(0, 100) || "unknown";
+  }
+
+  function instrumentDisplayName(instrumentName, partName) {
+    const instrument = cleanInstrumentName(instrumentName || tr("snd.no_inst"));
+    const part = String(partName || "").trim();
+    if (!part || instrument.toLocaleLowerCase("ko-KR") === part.toLocaleLowerCase("ko-KR")) return instrument;
+    return `${instrument} · ${part}`;
+  }
+
+  function instrumentChoiceId(partName, program, isBeat, drumMidi = null) {
+    const partKey = identityText(partName);
+    const programKey = normalizeProgram(program);
+    const drumKey = Number.isInteger(drumMidi) ? `:drum:${drumMidi}` : "";
+    return `${isBeat ? "beat" : "inst"}:part:${partKey}:program:${programKey}${drumKey}`;
   }
 
   function getInstrumentGroupInfo(note) {
     const program = normalizeProgram(note.program);
-    const names = [programName(program), note.trackName, note.instrumentMetaName].filter(Boolean).join(" / ");
+    const bankMsb = normalizeBank(note.bankMsb);
+    const bankLsb = normalizeBank(note.bankLsb);
+    const partName = cleanPartName(note.trackName, note.trackIndex);
+    const explicitInstrumentName = cleanInstrumentMetaName(note.instrumentMetaName);
+    const names = [programName(program), explicitInstrumentName].filter(Boolean).join(" / ");
     const isBeat = note.channel === 9 || BEAT_PROGRAMS.has(program) || PERCUSSION_NAME_RE.test(names);
     if (note.channel === 9) {
       const drumName = GM_DRUM_NAMES[note.midi] || `Percussion ${note.midi}`;
+      const choiceId = instrumentChoiceId(partName, program, true, note.midi);
       return {
-        id: `ch${note.channel}:drum:${note.midi}`,
+        id: `part:${identityText(partName)}:ch${note.channel}:bank:${bankMsb}:${bankLsb}:program:${program}:drum:${note.midi}`,
+        choiceId,
+        partName,
+        bankMsb,
+        bankLsb,
+        program,
+        drumMidi: note.midi,
         isBeat: true,
         isDrumNoteGroup: true,
         instrumentName: drumName,
-        programText: drumName
+        displayName: instrumentDisplayName(drumName, partName),
+        programText: drumName,
+        programNumberText: tr("midi.program_number", [program + 1])
       };
     }
-    const metaName = cleanInstrumentName(note.instrumentMetaName || note.trackName || "");
-    const hasUsefulMetaName = metaName !== tr("snd.no_inst") && !/^(track|part|instrument)\s*\d*$/i.test(metaName);
-    const instrumentName = isBeat && note.instrumentMetaName && PERCUSSION_NAME_RE.test(note.instrumentMetaName)
-      ? note.instrumentMetaName
-      : (hasUsefulMetaName ? metaName : programName(program));
+    const instrumentName = explicitInstrumentName || programName(program);
+    const choiceId = instrumentChoiceId(partName, program, isBeat, null);
     return {
-      id: `ch${note.channel}:program:${program}:beat:${isBeat ? 1 : 0}`,
+      id: `part:${identityText(partName)}:ch${note.channel}:bank:${bankMsb}:${bankLsb}:program:${program}:beat:${isBeat ? 1 : 0}`,
+      choiceId,
+      partName,
+      bankMsb,
+      bankLsb,
+      program,
+      drumMidi: null,
       isBeat,
       isDrumNoteGroup: false,
       instrumentName,
-      programText: isBeat ? tr("midi.name_beat", [instrumentName]) : instrumentName
+      displayName: instrumentDisplayName(instrumentName, partName),
+      programText: isBeat ? tr("midi.name_beat", [instrumentName]) : instrumentName,
+      programNumberText: tr("midi.program_number", [program + 1])
     };
   }
 
   function normalizeProgram(program) {
     return Number.isInteger(program) && program >= 0 && program < 128 ? program : 0;
+  }
+
+  function normalizeBank(bank) {
+    return Number.isInteger(bank) && bank >= 0 && bank < 128 ? bank : 0;
   }
 
 
@@ -296,7 +388,7 @@
       .map(n => {
         if (!isMmlPitchSupported(n.midi)) return null;
         const sourceInfo = getInstrumentGroupInfo(n);
-        const choiceId = sourceToChoice.get(sourceInfo.id) || instrumentChoiceId(sourceInfo.instrumentName, sourceInfo.isBeat);
+        const choiceId = sourceToChoice.get(sourceInfo.id) || sourceInfo.choiceId;
         if (choiceId !== choice.id) return null;
         const startGrid = Math.max(0, Math.round(n.startTick / ticksPerGrid));
         const durGrid = Math.max(1, Math.round((n.endTick - n.startTick) / ticksPerGrid));
@@ -310,6 +402,8 @@
           velocity: midiVelocityToMmlVolume(n.velocity),
           channel: n.channel,
           program: normalizeProgram(n.program),
+          bankMsb: normalizeBank(n.bankMsb),
+          bankLsb: normalizeBank(n.bankLsb),
           instrumentGroupId: sourceInfo.id,
           instrumentChoiceId: choice.id,
           isBeat: Boolean(choice.isBeat || sourceInfo.isBeat),
@@ -350,18 +444,17 @@
     }
     if (!previewNotes.length) throw new Error(tr("midi.err_preview_silent"));
 
-    const programCounts = new Map();
-    for (const n of rawNotes) {
-      const p = normalizeProgram(n.program);
-      programCounts.set(p, (programCounts.get(p) || 0) + 1);
-    }
-    const program = Array.from(programCounts.entries()).sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
+    const program = normalizeProgram(choice.program);
+    const bankMsb = normalizeBank(choice.bankMsb);
+    const bankLsb = normalizeBank(choice.bankLsb);
     const duration = previewNotes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
     return {
       instrumentId: choice.id,
       instrumentName: choice.instrumentName,
       isBeat: Boolean(choice.isBeat),
       program,
+      bankMsb,
+      bankLsb,
       notes: previewNotes,
       duration,
       firstGrid,
@@ -389,8 +482,10 @@
         velocity: midiVelocityToMmlVolume(n.velocity),
         channel: n.channel,
         program: normalizeProgram(n.program),
+        bankMsb: normalizeBank(n.bankMsb),
+        bankLsb: normalizeBank(n.bankLsb),
         instrumentGroupId: sourceInfo.id,
-        instrumentChoiceId: instrumentChoiceId(sourceInfo.instrumentName, sourceInfo.isBeat),
+        instrumentChoiceId: sourceInfo.choiceId,
         isBeat: Boolean(sourceInfo.isBeat),
         isPercussion: Boolean(sourceInfo.isBeat)
       };
@@ -493,7 +588,7 @@
       .map(n => {
         if (!isMmlPitchSupported(n.midi)) return null;
         const sourceInfo = getInstrumentGroupInfo(n);
-        const choiceId = sourceToChoice.get(sourceInfo.id) || instrumentChoiceId(sourceInfo.instrumentName, sourceInfo.isBeat);
+        const choiceId = sourceToChoice.get(sourceInfo.id) || sourceInfo.choiceId;
         const choice = choiceMap.get(choiceId);
         if (!selectedSet.has(choiceId)) return null;
         const startGrid = quantizeGridValue(n.startTick / ticksPerGrid, gridStep, 0);
@@ -509,6 +604,8 @@
           channel: n.channel,
           trackIndex: n.trackIndex,
           program: normalizeProgram(n.program),
+          bankMsb: normalizeBank(n.bankMsb),
+          bankLsb: normalizeBank(n.bankLsb),
           // UI 선택은 악기명 기준이지만, 완전 중복 병합은 원본 연주 그룹 기준으로만 한다.
           instrumentGroupId: sourceInfo.id,
           instrumentChoiceId: choiceId,
@@ -534,9 +631,9 @@
     const selectedLabels = Array.from(selectedSet)
       .map(id => choiceMap.get(id))
       .filter(Boolean)
-      .map(g => g.instrumentName);
+      .map(g => g.displayName || instrumentDisplayName(g.instrumentName, g.partName));
     const channelLines = exportChannels.map((ch, i) => {
-      const names = ch.selectedInstrumentGroups.map(id => choiceMap.get(id)?.instrumentName).filter(Boolean);
+      const names = ch.selectedInstrumentGroups.map(id => choiceMap.get(id)?.displayName || choiceMap.get(id)?.instrumentName).filter(Boolean);
       const label = names.length > 3 ? tr("ui.more_count", [names.slice(0, 3).join(", "), names.length - 3]) : names.join(", ");
       const optionLabel = overlapMergeModeLabel(ch.overlapMergeMode ?? ch.overlapMerge);
       return `${i + 1}. ${roleLabel(ch.role)}${optionLabel ? `/${optionLabel}` : ""}: ${label || tr("ui.none_selected")}`;
@@ -1291,6 +1388,7 @@
     const channelInfo = Array.from({ length: 16 }, () => ({
       noteCount: 0,
       programs: new Set(),
+      bankPrograms: new Set(),
       tracks: new Set(),
       trackNames: new Set(),
       instrumentNames: new Set(),
@@ -1306,6 +1404,11 @@
       const end = r.pos + len;
       parseMidiTrack(r, end, trackIndex, notes, tempoEvents, warnings, channelInfo, trackMeta);
       r.pos = end;
+    }
+    for (const note of notes) {
+      const meta = trackMeta[note.trackIndex] || {};
+      note.trackName = meta.trackName || note.trackName || "";
+      note.instrumentMetaName = meta.instrumentName || note.instrumentMetaName || "";
     }
     notes.sort((a, b) => a.startTick - b.startTick || a.midi - b.midi);
     tempoEvents.sort((a, b) => a.tick - b.tick);
@@ -1327,12 +1430,22 @@
     let tick = 0;
     let running = null;
     const open = new Map();
-    const currentProgram = Array(16).fill(null);
+    const currentProgram = Array(16).fill(0);
+    const pendingBankMsb = Array(16).fill(0);
+    const pendingBankLsb = Array(16).fill(0);
+    const activeBankMsb = Array(16).fill(0);
+    const activeBankLsb = Array(16).fill(0);
 
     const addOpen = (ch, midi, velocity) => {
       const key = `${ch}:${midi}`;
       if (!open.has(key)) open.set(key, []);
-      open.get(key).push({ tick, velocity, program: currentProgram[ch] });
+      open.get(key).push({
+        tick,
+        velocity,
+        program: currentProgram[ch],
+        bankMsb: activeBankMsb[ch],
+        bankLsb: activeBankLsb[ch]
+      });
     };
     const closeOpen = (ch, midi) => {
       const key = `${ch}:${midi}`;
@@ -1349,6 +1462,8 @@
         channel: ch,
         trackIndex,
         program: s.program,
+        bankMsb: s.bankMsb,
+        bankLsb: s.bankLsb,
         trackName: trackMeta[trackIndex]?.trackName || "",
         instrumentMetaName: trackMeta[trackIndex]?.instrumentName || ""
       });
@@ -1386,9 +1501,15 @@
         const d1 = r.readU8();
         const needs2 = cmd !== 0xc0 && cmd !== 0xd0;
         const d2 = needs2 ? r.readU8() : 0;
-        if (cmd === 0xc0) {
+        if (cmd === 0xb0) {
+          if (d1 === 0) pendingBankMsb[ch] = d2;
+          else if (d1 === 32) pendingBankLsb[ch] = d2;
+        } else if (cmd === 0xc0) {
           currentProgram[ch] = d1;
+          activeBankMsb[ch] = pendingBankMsb[ch];
+          activeBankLsb[ch] = pendingBankLsb[ch];
           channelInfo[ch].programs.add(d1);
+          channelInfo[ch].bankPrograms.add(`${activeBankMsb[ch]}:${activeBankLsb[ch]}:${d1}`);
         } else if (cmd === 0x90 && d2 > 0) {
           addOpen(ch, d1, d2);
         } else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) {
@@ -1413,10 +1534,21 @@
 
   function decodeMetaText(bytes) {
     if (!bytes || !bytes.length) return "";
+    const clean = value => String(value || "").replace(/\0/g, "").trim();
     try {
-      if (window.TextDecoder) return new TextDecoder("utf-8", { fatal: false }).decode(bytes).replace(/\0/g, "").trim();
+      if (window.TextDecoder) {
+        const utf8 = clean(new TextDecoder("utf-8", { fatal: false }).decode(bytes));
+        if (!utf8.includes("�")) return utf8;
+        try {
+          const shiftJis = clean(new TextDecoder("shift_jis", { fatal: false }).decode(bytes));
+          const utfErrors = (utf8.match(/�/g) || []).length;
+          const sjisErrors = (shiftJis.match(/�/g) || []).length;
+          if (shiftJis && sjisErrors < utfErrors) return shiftJis;
+        } catch (_) {}
+        return utf8;
+      }
     } catch (_) {}
-    return Array.from(bytes, b => String.fromCharCode(b)).join("").replace(/\0/g, "").trim();
+    return clean(Array.from(bytes, b => String.fromCharCode(b)).join(""));
   }
 
   class ByteReader {
