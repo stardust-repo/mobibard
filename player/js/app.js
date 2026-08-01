@@ -263,6 +263,7 @@
   const midiChannelList = $("midiChannelList");
   const midiRoleList = $("midiRoleList");
   const midiBeatNotice = $("midiBeatNotice");
+  const midiQuantizeToggle = $("midiQuantizeToggle");
   const midiInstrumentPanelTitle = $("midiInstrumentPanelTitle");
   const midiInstrumentPanelHint = $("midiInstrumentPanelHint");
   const midiConvertReloadFile = $("midiConvertReloadFile");
@@ -611,6 +612,7 @@
     for (const checkbox of muteChannelCheckboxes) checkbox.addEventListener("change", handleMuteChannelChange);
     leadingSilenceSeconds?.addEventListener("change", normalizeLeadingSilenceSecondsInput);
     leadingSilenceSeconds?.addEventListener("blur", normalizeLeadingSilenceSecondsInput);
+    midiQuantizeToggle?.addEventListener("click", toggleMidiQuantizeDivision);
     midiSelectedPreviewBtn?.addEventListener("click", () => void toggleMidiSelectedPreview());
     midiFullPreviewBtn?.addEventListener("click", () => void toggleMidiFullPreview());
     midiInstrumentSelectAll?.addEventListener("click", () => selectActiveMidiInstruments(true));
@@ -809,6 +811,7 @@
       pianoRollRangeLabel.textContent = i18nText("roll.title");
     }
     updateMidiExtractDetailsLabel();
+    if (midiConvertDialog?.open) refreshMidiConvertLocale();
   }
 
   function trackAnalytics(eventName, params = {}) {
@@ -4488,7 +4491,7 @@
 
     if (midiConvertTitle) midiConvertTitle.textContent = i18nText("cfg.conv_cfg", [sourceLabel]);
     if (midiGuideBox) midiGuideBox.setAttribute("aria-label", i18nText("midi.guide_label", [sourceLabel]));
-    if (midiGuideLead) midiGuideLead.textContent = i18nText("midi.guide_lead", [sourceLabel]);
+    if (midiGuideLead) midiGuideLead.textContent = i18nText("midi.help_source", [sourceLabel]);
     if (midiConvertSummary) {
       const trackCount = Number(overview.trackCount) || 0;
       midiConvertSummary.textContent = i18nText("midi.summary", [importData.name || sourceLabel, formatCount(trackCount), formatCount(groups.length), formatCount(overview.noteCount), formatCount(normalGroups.length), formatCount(beatGroups.length), overview.ppq]);
@@ -4501,6 +4504,7 @@
         ? i18nText("midi.beat_count", [formatCount(beatInstrumentCount)])
         : i18nText("snd.no_beat_inst");
     }
+    updateMidiQuantizeToggle();
     setMidiFullPreviewState(false);
     setMidiConvertBusy(false);
     renderMidiRoleList();
@@ -4535,10 +4539,52 @@
       normalIds,
       beatIds,
       hasBeatGroups: Boolean(hasBeatGroups && beatIds.length),
+      quantizeDivision: 64,
       activeIndex: 0,
       partCount: 3,
       channels: channelSettings
     };
+  }
+
+  function updateMidiQuantizeToggle() {
+    if (!midiQuantizeToggle) return;
+    const division = Number(pendingMidiSettings?.quantizeDivision) === 32 ? 32 : 64;
+    midiQuantizeToggle.textContent = i18nText(division === 32 ? "midi.quantize_32" : "midi.quantize_64");
+    midiQuantizeToggle.setAttribute("aria-pressed", division === 32 ? "true" : "false");
+    midiQuantizeToggle.setAttribute("aria-label", i18nText("midi.quantize_current", [division]));
+    midiQuantizeToggle.title = i18nText("midi.quantize_toggle");
+  }
+
+  function toggleMidiQuantizeDivision() {
+    if (!pendingMidiSettings || midiConvertBusy) return;
+    stopMidiPreview();
+    pendingMidiSettings.quantizeDivision = Number(pendingMidiSettings.quantizeDivision) === 32 ? 64 : 32;
+    updateMidiQuantizeToggle();
+    if (midiConvertStatus) {
+      midiConvertStatus.textContent = i18nText("midi.quantize_changed", [pendingMidiSettings.quantizeDivision]);
+      midiConvertStatus.hidden = false;
+    }
+  }
+
+  function refreshMidiConvertLocale() {
+    if (!pendingMidiImport || !pendingMidiSettings) return;
+    const sourceLabel = getMidiImportSourceLabel(pendingMidiImport);
+    const overview = pendingMidiImport.overview || {};
+    const groups = overview.instrumentGroups || overview.channels || [];
+    const normalGroups = groups.filter(group => !group.isBeat);
+    const beatGroups = groups.filter(group => group.isBeat);
+    if (midiConvertTitle) midiConvertTitle.textContent = i18nText("cfg.conv_cfg", [sourceLabel]);
+    if (midiGuideBox) midiGuideBox.setAttribute("aria-label", i18nText("midi.guide_label", [sourceLabel]));
+    if (midiGuideLead) midiGuideLead.textContent = i18nText("midi.help_source", [sourceLabel]);
+    if (midiConvertSummary) {
+      midiConvertSummary.textContent = i18nText("midi.summary", [pendingMidiImport.name || sourceLabel, formatCount(Number(overview.trackCount) || 0), formatCount(groups.length), formatCount(overview.noteCount), formatCount(normalGroups.length), formatCount(beatGroups.length), overview.ppq]);
+    }
+    updateMidiQuantizeToggle();
+    renderMidiRoleList();
+    renderActiveMidiInstrumentList();
+    updateMidiRoleControls();
+    setMidiFullPreviewState(midiFullPreviewActive);
+    setMidiSelectedPreviewState(midiSelectedPreviewActive);
   }
 
   function getActiveMidiChannelSetting() {
@@ -4921,6 +4967,7 @@
       roles: [setting.role || "auto"],
       sourcePartIndex: sourceIndex,
       sourceLabel,
+      quantizeDivision: Number(pendingMidiSettings.quantizeDivision) === 32 ? 32 : 64,
       exportChannels: [{
         sourcePartIndex: sourceIndex,
         role: setting.role || "auto",
@@ -5356,6 +5403,7 @@
       partCount,
       roles: exportChannels.map(ch => ch.role),
       exportChannels,
+      quantizeDivision: Number(pendingMidiSettings.quantizeDivision) === 32 ? 32 : 64,
       sourceLabel
     };
   }
@@ -5396,6 +5444,7 @@
       trackAnalytics("midi_convert_complete", {
         source_type: sourceType,
         export_channels: Number(options.partCount || 0),
+        quantize_division: Number(options.quantizeDivision || 64),
         instrument_groups: midiGroupCount,
         optimized_chars: saved
       });

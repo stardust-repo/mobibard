@@ -7,8 +7,56 @@
 <title data-i18n="ui.mobibard_v4"></title>
 <link href="assets/favicon.ico" rel="icon" sizes="any"/>
 <link href="assets/favicon.ico" rel="shortcut icon"/>
-<link href="styles.css?v=5.6-midi-extract-menu-narrow" rel="stylesheet"/>
+<link href="styles.css?v=5.8-midi-guide-quantize-label" rel="stylesheet"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
+<script>
+(() => {
+  "use strict";
+  const files = { ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" };
+  const htmlLang = { ko: "ko", ja: "ja", en: "en", "zh-CN": "zh-Hans", "zh-TW": "zh-Hant" };
+  const normalize = value => {
+    const raw = String(value || "").trim().replace(/_/g, "-").toLowerCase();
+    if (!raw) return "";
+    if (raw === "ko" || raw.startsWith("ko-")) return "ko";
+    if (raw === "ja" || raw.startsWith("ja-")) return "ja";
+    if (raw === "en" || raw.startsWith("en-")) return "en";
+    if (["zh-cn", "zh-sg", "zh-hans"].includes(raw) || raw.startsWith("zh-hans-")) return "zh-CN";
+    if (["zh-tw", "zh-hk", "zh-mo", "zh-hant"].includes(raw) || raw.startsWith("zh-hant-")) return "zh-TW";
+    if (raw === "zh" || raw.startsWith("zh-")) return "zh-CN";
+    return "";
+  };
+  let language = "";
+  try {
+    const params = new URL(location.href).searchParams;
+    for (const key of ["lang", "language", "locale"]) {
+      if (!params.has(key)) continue;
+      const raw = String(params.get(key) || "").trim();
+      language = !raw || /^(?:auto|browser|system)$/i.test(raw) ? "" : (normalize(raw) || "en");
+      break;
+    }
+  } catch (_) {}
+  if (!language) {
+    try { language = normalize(localStorage.getItem("mobibard.player.language")); } catch (_) {}
+  }
+  if (!language) {
+    const candidates = Array.isArray(navigator.languages) && navigator.languages.length
+      ? navigator.languages
+      : [navigator.language || ""];
+    for (const candidate of candidates) {
+      language = normalize(candidate);
+      if (language) break;
+    }
+  }
+  language = files[language] ? language : "en";
+  window.__MOBIBARD_INITIAL_LANGUAGE__ = language;
+  document.documentElement.lang = htmlLang[language] || "en";
+  document.documentElement.dataset.i18nPending = "true";
+  const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "5.8-midi-guide-quantize-label");
+  document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
+  window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
+})();
+</script>
 </head>
 <body>
 <main>
@@ -810,6 +858,7 @@
 </div>
 <div class="midi-role-actions">
 <div class="midi-beat-notice" data-i18n="snd.check_beat" hidden="" id="midiBeatNotice"></div>
+<button aria-pressed="false" class="midi-quantize-toggle soft-tool-button" data-i18n-title="midi.quantize_toggle" id="midiQuantizeToggle" title="" type="button"></button>
 <button aria-pressed="false" class="midi-full-preview-btn soft-tool-button" data-i18n="ui.preview" id="midiSelectedPreviewBtn" type="button"></button>
 </div>
 <div aria-label="" class="midi-role-list" data-i18n-aria-label="mml.ch_settings" id="midiRoleList"></div>
@@ -854,9 +903,9 @@
 </div>
 </form>
 </dialog>
-<script src="js/language-manager.js?v=5.6-midi-extract-menu"></script>
+<script src="js/language-manager.js?v=5.8-midi-guide-quantize-label"></script>
 <script src="js/utils.js?v=5.3-runtime-i18n"></script>
-<script src="js/midi-to-mml.js?v=5.3-runtime-i18n"></script>
+<script src="js/midi-to-mml.js?v=5.8-midi-guide-quantize-label"></script>
 <script src="js/musicxml-to-midi.js?v=5.3-runtime-i18n"></script>
 <script src="js/mml-parser.js?v=5.3-runtime-i18n"></script>
 <script src="js/mml-optimizer.js?v=5.4-split-within-limit"></script>
@@ -866,6 +915,6 @@
 <script src="js/firebase-analytics.js" type="module"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
-<script src="js/app.js?v=5.6-midi-extract-menu"></script>
+<script src="js/app.js?v=5.8-midi-guide-quantize-label"></script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 
   const PREF_KEY = "mobibard.player.language";
   const DEFAULT_LANGUAGE = "en";
-  const LOCALE_VERSION = "5.6-midi-extract-menu";
+  const LOCALE_VERSION = "5.8-midi-guide-quantize-label";
   const SUPPORTED = Object.freeze({
     ko: { file: "ko.js", htmlLang: "ko" },
     ja: { file: "ja.js", htmlLang: "ja" },
@@ -122,6 +122,10 @@
     const query = readLanguageQuery();
     if (query.mode === "fixed") {
       return { language: query.language, source: query.language === DEFAULT_LANGUAGE && !normalizeLanguage(query.raw) ? "query-fallback" : "query" };
+    }
+    const bootstrapped = normalizeLanguage(window.__MOBIBARD_INITIAL_LANGUAGE__);
+    if (bootstrapped && SUPPORTED[bootstrapped]) {
+      return { language: bootstrapped, source: "bootstrap" };
     }
     return { language: resolveAutomaticLanguage(), source: "auto" };
   }
@@ -407,17 +411,19 @@
 
   async function initialize() {
     const initial = resolveInitialLanguage();
-    if (initial.source === "auto" && !normalizeLanguage(readCachedLanguage())) {
+    if ((initial.source === "auto" || initial.source === "bootstrap") && !normalizeLanguage(readCachedLanguage())) {
       writeCachedLanguage(initial.language);
     }
     installDialogTranslation();
-    // The HTML contains keys only. Show those keys immediately, then replace
-    // them after the selected locale file arrives. If every locale load fails,
-    // the key remains visible instead of silently falling back to source text.
-    translateSubtree(document.documentElement, true);
-    const resolved = await setLanguage(initial.language, { persist: false, source: initial.source });
-    installObserver();
-    return resolved;
+    try {
+      // The selected locale is bootstrapped in <head>. Keep key-backed elements
+      // blank until that catalog is applied, so translation keys never flash.
+      const resolved = await setLanguage(initial.language, { persist: false, source: initial.source });
+      installObserver();
+      return resolved;
+    } finally {
+      document.documentElement.removeAttribute("data-i18n-pending");
+    }
   }
 
   const api = {

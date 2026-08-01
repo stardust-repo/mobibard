@@ -69,7 +69,7 @@
     };
   }
 
-  function buildInstrumentSourceGroups(midi, ticksPerGrid) {
+  function buildInstrumentSourceGroups(midi, ticksPerGrid, gridStep = 1) {
     const groups = new Map();
     for (const note of midi.notes) {
       const groupInfo = getInstrumentGroupInfo(note);
@@ -95,12 +95,12 @@
       group.maxMidi = Math.max(group.maxMidi, note.midi);
     }
 
-    // 64분음표 양자화 기준 완전 중복 수. 채널이 다른 같은 악기는 병합하지 않는다.
+    // 선택한 양자화 격자 기준 완전 중복 수. 채널이 다른 같은 악기는 병합하지 않는다.
     const dupStats = new Map();
     for (const note of midi.notes) {
       const groupInfo = getInstrumentGroupInfo(note);
-      const startGrid = Math.max(0, Math.round(note.startTick / ticksPerGrid));
-      const durGrid = Math.max(1, Math.round((note.endTick - note.startTick) / ticksPerGrid));
+      const startGrid = quantizeGridValue(note.startTick / ticksPerGrid, gridStep, 0);
+      const durGrid = quantizeGridValue((note.endTick - note.startTick) / ticksPerGrid, gridStep, gridStep);
       const key = `${groupInfo.id}|${note.midi}|${startGrid}|${startGrid + durGrid}`;
       dupStats.set(key, (dupStats.get(key) || 0) + 1);
     }
@@ -244,6 +244,19 @@
     if (velocity === 1) return 1;
     // MIDI velocity 2~127, 126개 값을 MML V2~V15의 14단계로 균등하게 나눈다.
     return clampInt(2 + Math.floor((velocity - 2) / 9), 2, 15);
+  }
+
+  function normalizeQuantizeDivision(value) {
+    return Number(value) === 32 ? 32 : 64;
+  }
+
+  function quantizeGridStep(division) {
+    return normalizeQuantizeDivision(division) === 32 ? 2 : 1;
+  }
+
+  function quantizeGridValue(value, step = 1, minimum = 0) {
+    const unit = step === 2 ? 2 : 1;
+    return Math.max(minimum, Math.round((Number(value) || 0) / unit) * unit);
   }
 
   function buildMidiInstrumentPreview(bytes, instrumentChoiceId, options = {}) {
@@ -431,9 +444,11 @@
     if (midi.smpteDivision) throw new Error(tr("midi.err_smpte"));
 
     const ppq = midi.ppq;
-    const ticksPerGrid = ppq / 16; // 64분음표 = 4분음표 / 16
+    const ticksPerGrid = ppq / 16; // 내부 격자는 64분음표. 32분음표 모드는 2칸 단위로 스냅한다.
+    const quantizeDivision = normalizeQuantizeDivision(options.quantizeDivision);
+    const gridStep = quantizeGridStep(quantizeDivision);
     const warnings = [...midi.warnings];
-    const sourceGroups = buildInstrumentSourceGroups(midi, ticksPerGrid);
+    const sourceGroups = buildInstrumentSourceGroups(midi, ticksPerGrid, gridStep);
     const instrumentGroups = buildInstrumentChoices(sourceGroups);
     const choiceMap = new Map(instrumentGroups.map(g => [g.id, g]));
     const sourceToChoice = new Map();
@@ -448,7 +463,7 @@
 
     const normalizedMidiTempos = normalizeMidiTempos(midi.tempoEvents);
     const tempoGridEvents = normalizeGridTempos(normalizedMidiTempos.map(t => ({
-      grid: Math.max(0, Math.round(t.tick / ticksPerGrid)),
+      grid: quantizeGridValue(t.tick / ticksPerGrid, gridStep, 0),
       bpm: t.bpm
     })));
 
@@ -459,8 +474,8 @@
         const choiceId = sourceToChoice.get(sourceInfo.id) || instrumentChoiceId(sourceInfo.instrumentName, sourceInfo.isBeat);
         const choice = choiceMap.get(choiceId);
         if (!selectedSet.has(choiceId)) return null;
-        const startGrid = Math.max(0, Math.round(n.startTick / ticksPerGrid));
-        const durGrid = Math.max(1, Math.round((n.endTick - n.startTick) / ticksPerGrid));
+        const startGrid = quantizeGridValue(n.startTick / ticksPerGrid, gridStep, 0);
+        const durGrid = quantizeGridValue((n.endTick - n.startTick) / ticksPerGrid, gridStep, gridStep);
         return {
           id: `note-${nextNoteId++}`,
           midi: n.midi,
@@ -512,13 +527,13 @@
       tr("midi.selected_instruments", [selectedLabels.length > 6 ? tr("ui.more_count", [selectedLabels.slice(0, 6).join(", "), selectedLabels.length - 6]) : selectedLabels.join(", ")]),
       tr("midi.note_flow", [fmt(rawNotes.length), fmt(mergedCount), fmt(placed), overlapMerged ? tr("midi.overlap_merged_suffix", [fmt(overlapMerged)]) : ""]),
       tr("midi.output_skipped", [fmt(totalUsed), fmt(skipped)]),
-      tr("midi.settings_summary", [exportChannels.length]),
+      tr("midi.settings_summary", [exportChannels.length, quantizeDivision]),
       tr("midi.channel_settings", [channelLines.join("\n- ")]),
       tempoMessage,
       skipped ? tr("midi.skipped_reason", [fmt(skipped)]) : tr("midi.none_skipped"),
       warnings.length ? tr("ui.warnings_list", [unique(warnings).join("\n- ")]) : ""
     ].filter(Boolean).join("\n");
-    return { mml, parts, message, warnings, selectedInstrumentGroups: Array.from(selectedSet), partCount: exportChannels.length, roles, exportChannels, skipped, mergedCount, placed, overlapMerged };
+    return { mml, parts, message, warnings, selectedInstrumentGroups: Array.from(selectedSet), partCount: exportChannels.length, roles, exportChannels, skipped, mergedCount, placed, overlapMerged, quantizeDivision };
   }
 
   function normalizeExportChannels(options, partCount, instrumentGroups, allowBeat = true) {
