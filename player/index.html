@@ -7,7 +7,7 @@
 <title data-i18n="ui.mobibard_v4"></title>
 <link href="assets/favicon.ico" rel="icon" sizes="any"/>
 <link href="assets/favicon.ico" rel="shortcut icon"/>
-<link href="styles.css?v=5.8-midi-guide-quantize-label" rel="stylesheet"/>
+<link href="styles.css?v=5.8-midi-preview-pitch-fix" rel="stylesheet"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 <script>
 (() => {
@@ -52,7 +52,7 @@
   document.documentElement.lang = htmlLang[language] || "en";
   document.documentElement.dataset.i18nPending = "true";
   const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "5.8-midi-guide-quantize-label");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "5.8-midi-preview-pitch-fix");
   document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
 })();
@@ -837,7 +837,7 @@
 <div class="midi-guide-body">
 <ol>
 <li><b data-i18n="ui.preview_perf"></b><span data-i18n="file.first_check"></span></li>
-<li><span data-i18n="ui.each"></span> <b data-i18n="mml.channel"></b><span data-i18n="snd.have_own"></span></li>
+<li data-i18n="mml.choose_inst"></li>
 <li data-i18n="mml.chs_least"></li>
 <li><b data-i18n="ui.preview"></b><span data-i18n="mml.hear_how"></span> <b data-i18n="ui.convert"></b><span data-i18n="mml.apply_them"></span></li>
 </ol>
@@ -903,9 +903,9 @@
 </div>
 </form>
 </dialog>
-<script src="js/language-manager.js?v=5.8-midi-guide-quantize-label"></script>
+<script src="js/language-manager.js?v=5.8-midi-preview-pitch-fix"></script>
 <script src="js/utils.js?v=5.3-runtime-i18n"></script>
-<script src="js/midi-to-mml.js?v=5.8-midi-guide-quantize-label"></script>
+<script src="js/midi-to-mml.js?v=5.8-midi-preview-pitch-fix"></script>
 <script src="js/musicxml-to-midi.js?v=5.3-runtime-i18n"></script>
 <script src="js/mml-parser.js?v=5.3-runtime-i18n"></script>
 <script src="js/mml-optimizer.js?v=5.4-split-within-limit"></script>
@@ -915,6 +915,6 @@
 <script src="js/firebase-analytics.js" type="module"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
-<script src="js/app.js?v=5.8-midi-guide-quantize-label"></script>
+<script src="js/app.js?v=5.8-midi-preview-pitch-fix"></script>
 </body>
 </html>

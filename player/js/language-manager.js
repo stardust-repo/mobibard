@@ -3,7 +3,7 @@
 
   const PREF_KEY = "mobibard.player.language";
   const DEFAULT_LANGUAGE = "en";
-  const LOCALE_VERSION = "5.8-midi-guide-quantize-label";
+  const LOCALE_VERSION = "5.9-midi-guide-text-fix";
   const SUPPORTED = Object.freeze({
     ko: { file: "ko.js", htmlLang: "ko" },
     ja: { file: "ja.js", htmlLang: "ja" },

@@ -7,6 +7,8 @@
 
   const { clampInt, unique } = window.MabiUtils;
   const NOTE_NAMES = ["c", "c+", "d", "d+", "e", "f", "f+", "g", "g+", "a", "a+", "b"];
+  const MML_MIN_MIDI = 12; // O0C
+  const MML_MAX_MIDI = 127; // O9G (MIDI maximum)
 
   const GM_PROGRAM_NAMES = [
     "Acoustic Grand Piano", "Bright Acoustic Piano", "Electric Grand Piano", "Honky-tonk Piano",
@@ -48,6 +50,11 @@
     if (midi.smpteDivision) throw new Error(tr("midi.err_smpte"));
     const ppq = midi.ppq;
     const ticksPerGrid = ppq / 16;
+    const warnings = [...midi.warnings];
+    const unsupportedPitchCount = midi.notes.reduce((count, note) => count + (isMmlPitchSupported(note.midi) ? 0 : 1), 0);
+    if (unsupportedPitchCount > 0) {
+      warnings.push(tr("midi.warn_pitch_skipped", [fmt(unsupportedPitchCount), midiName(MML_MIN_MIDI), midiName(MML_MAX_MIDI)]));
+    }
     const sourceGroups = buildInstrumentSourceGroups(midi, ticksPerGrid);
     const instrumentChoices = buildInstrumentChoices(sourceGroups);
     if (!instrumentChoices.length) throw new Error(tr("midi.err_no_notes"));
@@ -58,7 +65,8 @@
       ppq,
       noteCount: midi.notes.length,
       tempoCount: normalizeMidiTempos(midi.tempoEvents).length,
-      warnings: [...midi.warnings],
+      warnings,
+      unsupportedPitchCount,
       // 사용자 선택용: 같은 악기명은 하나의 선택지로 묶어서 보여준다.
       instrumentGroups: instrumentChoices,
       instrumentChoices,
@@ -72,6 +80,7 @@
   function buildInstrumentSourceGroups(midi, ticksPerGrid, gridStep = 1) {
     const groups = new Map();
     for (const note of midi.notes) {
+      if (!isMmlPitchSupported(note.midi)) continue;
       const groupInfo = getInstrumentGroupInfo(note);
       let group = groups.get(groupInfo.id);
       if (!group) {
@@ -98,6 +107,7 @@
     // 선택한 양자화 격자 기준 완전 중복 수. 채널이 다른 같은 악기는 병합하지 않는다.
     const dupStats = new Map();
     for (const note of midi.notes) {
+      if (!isMmlPitchSupported(note.midi)) continue;
       const groupInfo = getInstrumentGroupInfo(note);
       const startGrid = quantizeGridValue(note.startTick / ticksPerGrid, gridStep, 0);
       const durGrid = quantizeGridValue((note.endTick - note.startTick) / ticksPerGrid, gridStep, gridStep);
@@ -232,6 +242,12 @@
     return Number.isInteger(program) && program >= 0 && program < 128 ? program : 0;
   }
 
+
+  function isMmlPitchSupported(midi) {
+    const value = Number(midi);
+    return Number.isInteger(value) && value >= MML_MIN_MIDI && value <= MML_MAX_MIDI;
+  }
+
   function midiName(midi) {
     const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
     const octave = Math.floor(midi / 12) - 1;
@@ -278,6 +294,7 @@
     let nextNoteId = 1;
     const rawNotes = midi.notes
       .map(n => {
+        if (!isMmlPitchSupported(n.midi)) return null;
         const sourceInfo = getInstrumentGroupInfo(n);
         const choiceId = sourceToChoice.get(sourceInfo.id) || instrumentChoiceId(sourceInfo.instrumentName, sourceInfo.isBeat);
         if (choiceId !== choice.id) return null;
@@ -448,6 +465,10 @@
     const quantizeDivision = normalizeQuantizeDivision(options.quantizeDivision);
     const gridStep = quantizeGridStep(quantizeDivision);
     const warnings = [...midi.warnings];
+    const unsupportedPitchCount = midi.notes.reduce((count, note) => count + (isMmlPitchSupported(note.midi) ? 0 : 1), 0);
+    if (unsupportedPitchCount > 0) {
+      warnings.push(tr("midi.warn_pitch_skipped", [fmt(unsupportedPitchCount), midiName(MML_MIN_MIDI), midiName(MML_MAX_MIDI)]));
+    }
     const sourceGroups = buildInstrumentSourceGroups(midi, ticksPerGrid, gridStep);
     const instrumentGroups = buildInstrumentChoices(sourceGroups);
     const choiceMap = new Map(instrumentGroups.map(g => [g.id, g]));
@@ -470,6 +491,7 @@
     let nextNoteId = 1;
     const rawNotes = midi.notes
       .map(n => {
+        if (!isMmlPitchSupported(n.midi)) return null;
         const sourceInfo = getInstrumentGroupInfo(n);
         const choiceId = sourceToChoice.get(sourceInfo.id) || instrumentChoiceId(sourceInfo.instrumentName, sourceInfo.isBeat);
         const choice = choiceMap.get(choiceId);
@@ -533,7 +555,7 @@
       skipped ? tr("midi.skipped_reason", [fmt(skipped)]) : tr("midi.none_skipped"),
       warnings.length ? tr("ui.warnings_list", [unique(warnings).join("\n- ")]) : ""
     ].filter(Boolean).join("\n");
-    return { mml, parts, message, warnings, selectedInstrumentGroups: Array.from(selectedSet), partCount: exportChannels.length, roles, exportChannels, skipped, mergedCount, placed, overlapMerged, quantizeDivision };
+    return { mml, parts, message, warnings, selectedInstrumentGroups: Array.from(selectedSet), partCount: exportChannels.length, roles, exportChannels, skipped, unsupportedPitchCount, mergedCount, placed, overlapMerged, quantizeDivision };
   }
 
   function normalizeExportChannels(options, partCount, instrumentGroups, allowBeat = true) {
@@ -1163,7 +1185,8 @@
     let pos = 0;
     let octave = 4;
     let volume = 8;
-    const tempos = (tempoEvents && tempoEvents.length ? normalizeGridTempos(tempoEvents) : []).filter(t => t.grid <= Math.max(finalGrid, ...notes.map(n => n.endGrid), 0));
+    const playableNotes = Array.from(notes || []).filter(note => isMmlPitchSupported(note?.midi));
+    const tempos = (tempoEvents && tempoEvents.length ? normalizeGridTempos(tempoEvents) : []).filter(t => t.grid <= Math.max(finalGrid, ...playableNotes.map(n => n.endGrid), 0));
     let tempoIndex = 0;
 
     const peekTempoGrid = () => tempoIndex < tempos.length ? tempos[tempoIndex].grid : Infinity;
@@ -1201,7 +1224,7 @@
       emitTemposAtCurrentPos();
     };
 
-    for (const n of notes) {
+    for (const n of playableNotes) {
       if (n.startGrid > pos) emitRestTo(n.startGrid);
       else emitTemposAtCurrentPos();
       if (n.endGrid <= pos) continue;
