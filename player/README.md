@@ -3,7 +3,7 @@
 공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MusicXML/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
 
 `v4.6`에서는 반주 생성 Dialog의 기본 생성 채널 선택을 현재 채널 구성에 맞게 조정했습니다. 멜로디만 있으면 화음1·화음2를 선택하고, 2~5개 채널이 있으면 가장 앞선 빈 채널 하나를 선택하며, 6개 채널이 모두 차 있으면 마지막 화음5 채널을 교체 대상으로 선택합니다. 기존 v4.5에서 피아노롤 시간 격자를 실제 MML `L4` 1박 간격으로 표시하고, 템포 변경 지점을 선택해 `32~255` 범위에서 수정할 수 있습니다. 편집 도구에는 `음정 조절`, `볼륨 생성`, `반주 생성`을 제공합니다. `볼륨 생성`은 음표의 길이·밀도·쉼표·음정 흐름을 분석해 장르별 `V` 변화를 만들며, 기존 볼륨 변화가 있으면 확인 후 교체합니다. 새 `반주 생성`은 선택한 여러 참고 채널을 함께 분석해 공통 화성 흐름을 만든 뒤, 선택한 생성 채널 수에 따라 화음·리듬·아르페지오·베이스 역할을 배분합니다. 참고와 생성에 동시에 선택된 채널은 원본을 먼저 분석하고 확인 후 새 반주로 교체합니다. MIDI/MusicXML 변환 단계는 원본 악기의 선택·음역 배정·겹침 병합·비트 변환에 집중하며, 64박(기본)과 32박 양자화를 토글할 수 있습니다.
-상단 저장 영역 오른쪽의 `MIDI 추출` 메뉴에서 웹 버전을 새 창으로 바로 열거나, `PC 설치`를 선택해 MuScriptor 로컬 실행 패키지를 내려받을 수 있습니다. 그 오른쪽의 `리듬게임` 버튼은 전체 화면 팝업 레이어에서 이웃 경로 `../mobibeats/`의 모비비트를 열고, 현재 MML과 6개 채널 악기 정보를 전달합니다. Firebase Analytics에는 리듬게임 팝업을 연 횟수를 `open_rhythm_game` 이벤트 하나로 기록합니다. `muscriptor_win.zip`과 `muscriptor_mac.zip`은 `assets/midi-extract/packages/`에 포함됩니다.
+상단 저장 영역 오른쪽의 `MIDI 추출` 메뉴에서 웹 버전을 새 창으로 바로 열거나, `PC 설치`를 선택해 MuScriptor 로컬 실행 패키지를 내려받을 수 있습니다. 그 오른쪽의 `리듬게임` 버튼은 전체 화면 팝업 레이어에서 이웃 경로 `../mobibeats/`의 모비비트를 열고, 현재 MML과 6개 채널 악기 정보를 전달합니다. Firebase Analytics에는 리듬게임 팝업을 열 때마다 `open_rhythm_game`, MIDI 추출의 `바로 이용`으로 웹 버전을 열 때마다 `open_midi_extract_online` 이벤트를 기록합니다. `muscriptor_win.zip`과 `muscriptor_mac.zip`은 `assets/midi-extract/packages/`에 포함됩니다.
 
 최근 UI에서는 재생 위치와 시간을 0.01초 단위로 표시합니다. 배속과 볼륨은 현재값 버튼을 누르면 세로 슬라이더와 초기화 버튼이 나타나며, 음소거 버튼에서는 멜로디·화음1~5를 개별 선택하거나 전부 선택/해제할 수 있습니다. 음소거와 음색 설정 버튼은 볼륨 오른쪽에 모았고, 사운드폰트 파일 선택은 채널 음색 설정 Dialog 안에서 현재 파일명·불러오기·원본 복원 방식으로 제공합니다. 모든 Dialog의 하단 취소/적용 영역은 작은 화면에서도 보이도록 스크롤 하단에 고정됩니다.
 
@@ -567,8 +567,8 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 | `tempo_edit` | 슬라이더/피아노롤 템포 수정 성공 | `before_bpm`, `after_bpm` |
 | `copy_all_mml`, `local_save_mml`, `drive_save_mml` | 복사·저장 성공 | `channel_count`, `create_new` |
 | `split_copy_open`, `preview_split_page`, `copy_split_page` | 나눠복사 진입·미리듣기·복사 | 없음 |
-| `open_midi_extract_dialog`, `download_muscriptor_package` | MIDI 추출 기능 확인·패키지 다운로드 | `platform` |
-| `open_rhythm_game` | 모비비트 팝업 열기 | `channel_count` |
+| `open_midi_extract_online`, `open_midi_extract_dialog`, `download_muscriptor_package` | MIDI 추출 웹 열기·설치 기능 확인·패키지 다운로드 | `platform` |
+| `open_rhythm_game` | 모비비트 팝업을 열 때마다 | `channel_count` |
 
 앱 실행, Google 로그아웃, 붙여넣기, 샘플 미디어 재생, 재생 시작 위치, 채널·페이지 번호처럼 기능 이용 성과와 직접 관련이 적은 값은 기록하지 않습니다.
 
@@ -679,7 +679,8 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - 버튼을 누르면 전체 화면 팝업 레이어에서 이웃 폴더 `../mobibeats/`의 모비비트를 불러옵니다.
 - 모비비트가 준비된 뒤 현재 전체 MML과 채널별 악기 키 6개를 전달하며, 게임의 닫기 메시지와 생성기의 `생성기로 돌아가기` 버튼으로 레이어를 닫을 수 있습니다.
 - 리듬게임을 열 때 생성기 재생과 MIDI 미리듣기를 정지해 오디오가 겹치지 않게 했습니다.
-- 리듬게임 팝업을 열면 `open_rhythm_game` 이벤트 하나만 기록합니다.
+- 리듬게임 팝업은 닫힘 상태에서 다시 열릴 때마다 `open_rhythm_game` 이벤트를 1회 기록합니다.
+- MIDI 추출의 `바로 이용` 링크를 열 때마다 `open_midi_extract_online` 이벤트를 기록합니다.
 - 반주 생성 Dialog의 참고 채널은 기존처럼 음표가 있는 채널을 자동 선택합니다.
 - 멜로디 채널 하나만 있을 때는 화음1과 화음2를 기본 생성 대상으로 선택합니다.
 - 음표가 있는 채널이 2~5개일 때는 번호가 가장 앞선 빈 채널 하나만 기본 생성 대상으로 선택합니다.

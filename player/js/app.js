@@ -501,9 +501,7 @@
     pasteBtn.addEventListener("click", () => void pasteVisibleMml());
     saveBtn.addEventListener("click", () => void saveVisibleMml());
     midiExtractBtn?.addEventListener("click", () => toggleControlPopover(midiExtractBtn, midiExtractMenu));
-    midiExtractOnline?.addEventListener("click", () => {
-      closeAllControlPopovers();
-    });
+    midiExtractOnline?.addEventListener("click", handleMidiExtractOnlineOpen);
     midiExtractInstall?.addEventListener("click", () => {
       closeAllControlPopovers();
       openMidiExtractDialog();
@@ -1300,6 +1298,7 @@
 
   function openRhythmGameLayer() {
     if (!rhythmGameLayer || !rhythmGameFrame) return;
+    const isNewSiteOpen = rhythmGameLayer.hidden;
     try {
       rhythmGamePendingPayload = buildRhythmGamePayload();
     } catch (err) {
@@ -1316,9 +1315,12 @@
     rhythmGameLayer.setAttribute("aria-hidden", "false");
     document.body.classList.add("rhythm-game-open");
     setRhythmGameLoading(i18nText("game.loading"));
-    trackAnalytics("open_rhythm_game", {
-      channel_count: rhythmGamePendingPayload.channelCount
-    });
+    // 닫힌 레이어가 실제로 열릴 때마다 1회 기록합니다. 세션 단위 중복 제거는 하지 않습니다.
+    if (isNewSiteOpen) {
+      trackAnalytics("open_rhythm_game", {
+        channel_count: rhythmGamePendingPayload.channelCount
+      });
+    }
 
     if (!rhythmGameFrameReady || currentUrl === "about:blank") {
       rhythmGameFrameReady = false;
@@ -1390,6 +1392,12 @@
     if (data.type === "MML_RHYTHM_CLOSE") {
       closeRhythmGameLayer();
     }
+  }
+
+  function handleMidiExtractOnlineOpen() {
+    closeAllControlPopovers();
+    // target=_blank 링크가 활성화될 때마다 별도 이벤트로 기록합니다.
+    trackAnalytics("open_midi_extract_online");
   }
 
   function updateMidiExtractDetailsLabel() {
