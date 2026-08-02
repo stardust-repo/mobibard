@@ -4860,17 +4860,17 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   flex-wrap: nowrap;
 }
 
-/* On the narrowest layout, instrument rows flow through the dialog instead of adding a second scrollbar. */
-@media (max-width: 560px) {
+/* Once the MIDI panels stack, use the dialog's single scrollbar just like the mobile layout. */
+@media (max-width: 980px) {
   .midi-right-panel {
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
   }
   .midi-right-panel .midi-channel-list {
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
     overflow: visible !important;
-    padding-right: 0;
+    padding-right: 0 !important;
   }
 }
 
@@ -5178,5 +5178,215 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
     min-width: 19px;
     padding-inline: 3px;
     font-size: 9.5px;
+  }
+}
+
+
+/* v6.2.6 MIDI instrument title width and flush list container */
+.midi-right-panel .midi-channel-list {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+/* The first row reserves only the listening button width.
+   The wider channel selector sits independently at the right of the second row. */
+.midi-channel-row.midi-instrument-row {
+  grid-template-columns: 18px minmax(0, 1fr) auto !important;
+}
+.midi-channel-row.midi-instrument-row .midi-channel-main {
+  grid-column: 2;
+  grid-row: 1;
+}
+.midi-instrument-row-actions > .midi-preview-btn {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+}
+.midi-channel-row.midi-instrument-row .midi-channel-sub {
+  grid-column: 2 / 4 !important;
+  grid-row: 2;
+  box-sizing: border-box;
+  width: 100%;
+  padding-right: 174px;
+}
+.midi-instrument-row-actions > .midi-instrument-selected-parts {
+  grid-column: 2 / 4 !important;
+  grid-row: 2 !important;
+  width: 166px !important;
+  min-width: 166px !important;
+  max-width: 166px !important;
+  justify-self: end !important;
+  align-self: center;
+}
+
+@media (max-width: 560px) {
+  .midi-channel-row.midi-instrument-row {
+    grid-template-columns: 18px minmax(0, 1fr) auto !important;
+  }
+  .midi-channel-row.midi-instrument-row .midi-channel-sub {
+    padding-right: 154px;
+  }
+  .midi-instrument-row-actions > .midi-instrument-selected-parts {
+    width: 148px !important;
+    min-width: 148px !important;
+    max-width: 148px !important;
+  }
+}
+
+
+/* v6.2.7 MIDI mobile channel rows: keep the role menu at the right of the channel summary. */
+@media (max-width: 760px) {
+  .midi-role-row {
+    grid-template-columns: minmax(0, 1fr) 62px !important;
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 6px;
+    row-gap: 5px;
+  }
+  .midi-role-row .midi-channel-select {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .midi-role-row > select[data-role-index] {
+    grid-column: 2;
+    grid-row: 1;
+    width: 62px;
+    min-width: 62px;
+    justify-self: end;
+  }
+  .midi-role-row .merge-mode {
+    grid-column: 1;
+    grid-row: 2;
+    width: max-content;
+    min-width: 0;
+    justify-self: start;
+    justify-content: flex-start;
+  }
+  .midi-role-row .midi-role-preview-btn {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .midi-role-row {
+    grid-template-columns: minmax(0, 1fr) 56px !important;
+  }
+  .midi-role-row > select[data-role-index] {
+    width: 56px;
+    min-width: 56px;
+  }
+}
+
+/* v6.2.8 MIDI stacked/mobile layout: one scroll surface and compact channel rows */
+@media (max-width: 980px) {
+  /* Once the two panels stack, let the dialog body own all vertical scrolling. */
+  .midi-dialog-layout {
+    grid-template-columns: 1fr !important;
+    overflow: visible !important;
+  }
+  .midi-right-panel {
+    grid-template-rows: auto auto auto;
+    align-content: start;
+  }
+  .midi-right-panel .midi-channel-list {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
+  }
+
+  /* The stacked panel has enough width: keep every channel control on one row. */
+  .midi-role-row {
+    grid-template-columns: minmax(0, 1fr) 62px max-content auto !important;
+    grid-template-rows: auto !important;
+    align-items: center !important;
+    column-gap: 4px;
+    row-gap: 0;
+  }
+  .midi-role-row .midi-channel-select {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    min-width: 0;
+  }
+  .midi-role-row > select[data-role-index] {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    width: 62px;
+    min-width: 62px;
+    justify-self: end;
+  }
+  .midi-role-row .merge-mode {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    width: max-content;
+    min-width: 0;
+    justify-self: start;
+    justify-content: flex-start;
+  }
+  .midi-role-row .midi-role-preview-btn {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    justify-self: end;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .midi-role-row {
+    grid-template-columns: minmax(0, 1fr) 56px max-content auto !important;
+    column-gap: 3px;
+    padding-inline: 7px;
+  }
+  .midi-role-row > select[data-role-index] {
+    width: 56px;
+    min-width: 56px;
+  }
+  .midi-role-row .merge-mode {
+    gap: 2px;
+    font-size: 11px;
+  }
+  .midi-role-row .merge-mode select {
+    width: 52px;
+    padding-inline: 4px;
+    font-size: 11px;
+  }
+  .midi-role-row .midi-role-preview-btn {
+    min-width: 36px;
+    padding-inline: 6px;
+  }
+
+  /* If the description wraps, channel buttons stay anchored to its upper-right. */
+  .midi-instrument-row-actions > .midi-instrument-selected-parts {
+    align-self: start;
+  }
+}
+
+@media (max-width: 350px) {
+  .midi-role-row {
+    grid-template-columns: minmax(0, 1fr) 52px 52px auto !important;
+    column-gap: 3px;
+  }
+  .midi-role-row > select[data-role-index] {
+    width: 52px;
+    min-width: 52px;
+    padding-inline: 3px;
+    font-size: 10.5px;
+  }
+  .midi-role-row .merge-mode {
+    width: 52px;
+  }
+  .midi-role-row .merge-mode > span {
+    display: none;
+  }
+  .midi-role-row .merge-mode select {
+    width: 52px;
   }
 }
