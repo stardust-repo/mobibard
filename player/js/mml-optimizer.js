@@ -46,21 +46,6 @@
     return { mml, parts: outputParts, before, after, saved: before - after, tempoMap };
   }
 
-  function optimizePart(text, options = {}) {
-    const parsed = parsePart(String(text || ""), 0);
-    const startTempo = options.includeTempo === false
-      ? null
-      : normalizeTempoEvents(parsed.tempos)[0]?.bpm || DEFAULT_TEMPO;
-    const events = options.includeTempo === false ? parsed.events : injectTempoEvents(parsed.events, normalizeTempoEvents(parsed.tempos));
-    const part = renderPart(events, {
-      isMelody: options.includeTempo !== false,
-      startTempo,
-      forceHeader: Boolean(String(text || "").trim()),
-      partIndex: 0
-    });
-    return { part, before: String(text || "").trim().length, after: part.length };
-  }
-
   function generateAccompanimentMml(text, options = {}) {
     const partCount = 6;
     const genre = String(options.genre || "pop").trim().toLowerCase();
@@ -1781,53 +1766,6 @@
   }
 
 
-  function trimLeadingSilenceMml(text, options = {}) {
-    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
-    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
-    while (sourceParts.length < partCount) sourceParts.push("");
-
-    const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
-    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
-    const firstNoteStart = findFirstNoteStart(parsedParts);
-    if (!(firstNoteStart > EPS)) {
-      const optimized = optimizeMml(text, { partCount });
-      return { ...optimized, removedUnits: 0, removedBeats: 0 };
-    }
-
-    const shiftedParts = parsedParts.map(part => ({
-      ...part,
-      events: shiftEventsAfterTrim(part.events, firstNoteStart)
-    }));
-    const shiftedTempoMap = shiftTempoMapAfterTrim(tempoMap, firstNoteStart);
-    const hasAnyContent = shiftedParts.some(p => p.events.length || p.tempos.length || String(p.raw || "").trim()) || shiftedTempoMap.length > 0;
-    const outputParts = [];
-
-    for (let i = 0; i < partCount; i++) {
-      let events = shiftedParts[i].events;
-      if (i === 0) events = injectTempoEvents(events, shiftedTempoMap);
-      outputParts.push(renderPart(events, {
-        isMelody: i === 0,
-        startTempo: shiftedTempoMap[0]?.bpm || DEFAULT_TEMPO,
-        forceHeader: i === 0 && hasAnyContent,
-        partIndex: i
-      }));
-    }
-
-    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
-    const before = countPartChars(sourceParts);
-    const after = countPartChars(outputParts);
-    return {
-      mml,
-      parts: outputParts,
-      before,
-      after,
-      saved: before - after,
-      tempoMap: shiftedTempoMap,
-      removedUnits: firstNoteStart,
-      removedBeats: firstNoteStart / durationUnits(4, 0)
-    };
-  }
-
   function addLeadingSilenceMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const beats = Math.max(0, Number(options.beats ?? 8));
@@ -2218,7 +2156,7 @@
       return { end: bestEnd, nextStart: bestEnd, reason: "clean-boundary", warning: "" };
     }
 
-    const clean = pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, true, searchStart, searchEnd);
+    const clean = pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, true, searchStart);
     if (clean) return { end: clean.pos, nextStart: clean.pos, reason: "clean-boundary", warning: "" };
 
     if (measure(bestEnd).maxLen <= maxChars) {
@@ -2230,7 +2168,7 @@
       };
     }
 
-    const fallback = pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, false, searchStart, searchEnd);
+    const fallback = pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, false, searchStart);
     if (fallback) {
       return {
         end: fallback.pos,
@@ -2330,7 +2268,7 @@
     return best;
   }
 
-  function pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, requireAllSafe, searchStart, searchEnd) {
+  function pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, requireAllSafe, searchStart) {
     const points = collectBoundaryPoints(parsedParts, pageStart, bestEnd);
     let best = null;
     const targetReachable = measure(bestEnd).maxLen >= lowerTarget;
@@ -3195,5 +3133,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = { optimizeMml, optimizePart, generateAccompanimentMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, trimLeadingSilenceMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages };
+  window.MabiOptimizer = { optimizeMml, generateAccompanimentMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages };
 })();

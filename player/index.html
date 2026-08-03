@@ -13,7 +13,7 @@
 <link rel="alternate" hreflang="zh-CN" href="https://stardust-repo.github.io/mobibard/player/?lang=zh-CN"/>
 <link rel="alternate" hreflang="zh-TW" href="https://stardust-repo.github.io/mobibard/player/?lang=zh-TW"/>
 <link rel="alternate" hreflang="x-default" href="https://stardust-repo.github.io/mobibard/player/"/>
-<link href="styles.css?v=6.2.8-midi-responsive-scroll" rel="stylesheet"/>
+<link href="styles.css?v=7.2-convert-summary" rel="stylesheet"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 <script>
 (() => {
@@ -58,7 +58,7 @@
   document.documentElement.lang = htmlLang[language] || "en";
   document.documentElement.dataset.i18nPending = "true";
   const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "6.0-midi-bank-part-groups");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "7.2-convert-summary");
   document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
 })();
@@ -79,7 +79,6 @@
 <div aria-label="" class="header-links" data-i18n-aria-label="ui.recommend_links">
 <select aria-label="" class="midi-site-links" data-i18n-aria-label="ui.select_recommend" id="midiSiteLinks">
 <option data-i18n="ui.recommend_links" value=""></option>
-<option data-i18n="mml.dev_collection" value="https://drive.google.com/drive/folders/1J11Vh-twyZVaYDFBlJJnvkje5M48zAUn"></option>
 <option value="https://bitmidi.com/">BitMidi</option>
 <option value="https://ichigos.com/">Ichigo's</option>
 <option value="http://www.midiex.net/">MIDIEX</option>
@@ -134,7 +133,7 @@
 <button class="ghost soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.save_mobibard" id="googleDriveSaveBtn" title="" type="button"></button>
 </div>
 <div aria-label="" class="player-file-actions-special" data-i18n-aria-label="game.midi_extraction">
-<div class="compact-control-wrap midi-extract-control-wrap">
+<div class="compact-control-wrap">
 <button aria-controls="midiExtractMenu" aria-expanded="false" aria-haspopup="menu" class="midi-extract-toolbar-button beta-feature" data-i18n-title="midi.extract" id="midiExtractBtn" title="" type="button">
 <span aria-hidden="true" class="midi-extract-toolbar-icon">♪</span><span data-i18n="midi.extract"></span><span aria-hidden="true" class="midi-extract-menu-arrow">▾</span>
 </button>
@@ -158,7 +157,7 @@
 <span class="play-info" id="playInfo">00:00.00 / 00:00.00</span>
 </div>
 <div aria-label="" class="quick-controls" data-i18n-aria-label="vol.speed">
-<div class="compact-control-wrap" id="speedControlWrap">
+<div class="compact-control-wrap">
 <button aria-controls="speedControlPopover" aria-expanded="false" aria-haspopup="dialog" class="compact-value-button" id="speedControlButton" type="button">
 <span data-i18n="play.speed"></span><strong id="speedValue">1.00x</strong>
 </button>
@@ -171,7 +170,7 @@
 <button class="mini-button control-reset-button soft-tool-button" data-i18n="ui.reset" id="speedResetBtn" type="button"></button>
 </div>
 </div>
-<div class="compact-control-wrap" id="volumeControlWrap">
+<div class="compact-control-wrap">
 <button aria-controls="volumeControlPopover" aria-expanded="false" aria-haspopup="dialog" class="compact-value-button" id="volumeControlButton" type="button">
 <span data-i18n="vol.label"></span><strong id="volumeValue">100%</strong>
 </button>
@@ -184,7 +183,7 @@
 <button class="mini-button control-reset-button soft-tool-button" data-i18n="ui.reset" id="volumeResetBtn" type="button"></button>
 </div>
 </div>
-<div class="compact-control-wrap" id="muteControlWrap">
+<div class="compact-control-wrap">
 <button aria-controls="muteControlPopover" aria-expanded="false" aria-haspopup="dialog" class="compact-value-button mute-control-button" id="muteControlButton" type="button">
 <span data-i18n="snd.mute" id="partMuteLabel"></span><strong id="muteControlValue">0/6</strong>
 </button>
@@ -224,7 +223,7 @@
 </div>
 </div>
 </section>
-<section aria-label="" class="card mml-editor" data-i18n-aria-label="mml.view_edit_2">
+<section aria-label="" class="card" data-i18n-aria-label="mml.view_edit_2">
 <div class="editor-head">
 <div class="editor-title-wrap">
 <h2 data-i18n="mml.view_edit"></h2>
@@ -243,7 +242,7 @@
 </div>
 <div class="tab-line">
 <div aria-label="" class="tabs" data-i18n-aria-label="mml.select_part" role="tablist">
-<button class="tab-btn tab-all active" data-i18n="mml.done" data-tab="main" type="button"></button>
+<button class="tab-btn active" data-i18n="mml.done" data-tab="main" type="button"></button>
 <button class="tab-btn part-tab part-0" data-i18n="part.melody" data-tab="part0" type="button"></button>
 <button class="tab-btn part-tab part-1" data-i18n="part.harmony1" data-tab="part1" type="button"></button>
 <button class="tab-btn part-tab part-2" data-i18n="part.harmony2" data-tab="part2" type="button"></button>
@@ -261,37 +260,37 @@
 </div>
 <div class="mml-panel part-panel part-0" data-panel="part0" hidden="">
 <div class="colored-textarea">
-<pre aria-hidden="true" class="mml-highlight part-highlight ch0" id="part0Highlight"></pre>
+<pre aria-hidden="true" class="mml-highlight ch0" id="part0Highlight"></pre>
 <textarea class="highlight-source" id="part0" spellcheck="false"></textarea>
 </div>
 </div>
 <div class="mml-panel part-panel part-1" data-panel="part1" hidden="">
 <div class="colored-textarea">
-<pre aria-hidden="true" class="mml-highlight part-highlight ch1" id="part1Highlight"></pre>
+<pre aria-hidden="true" class="mml-highlight ch1" id="part1Highlight"></pre>
 <textarea class="highlight-source" id="part1" spellcheck="false"></textarea>
 </div>
 </div>
 <div class="mml-panel part-panel part-2" data-panel="part2" hidden="">
 <div class="colored-textarea">
-<pre aria-hidden="true" class="mml-highlight part-highlight ch2" id="part2Highlight"></pre>
+<pre aria-hidden="true" class="mml-highlight ch2" id="part2Highlight"></pre>
 <textarea class="highlight-source" id="part2" spellcheck="false"></textarea>
 </div>
 </div>
 <div class="mml-panel part-panel part-3" data-panel="part3" hidden="">
 <div class="colored-textarea">
-<pre aria-hidden="true" class="mml-highlight part-highlight ch3" id="part3Highlight"></pre>
+<pre aria-hidden="true" class="mml-highlight ch3" id="part3Highlight"></pre>
 <textarea class="highlight-source" id="part3" spellcheck="false"></textarea>
 </div>
 </div>
 <div class="mml-panel part-panel part-4" data-panel="part4" hidden="">
 <div class="colored-textarea">
-<pre aria-hidden="true" class="mml-highlight part-highlight ch4" id="part4Highlight"></pre>
+<pre aria-hidden="true" class="mml-highlight ch4" id="part4Highlight"></pre>
 <textarea class="highlight-source" id="part4" spellcheck="false"></textarea>
 </div>
 </div>
 <div class="mml-panel part-panel part-5" data-panel="part5" hidden="">
 <div class="colored-textarea">
-<pre aria-hidden="true" class="mml-highlight part-highlight ch5" id="part5Highlight"></pre>
+<pre aria-hidden="true" class="mml-highlight ch5" id="part5Highlight"></pre>
 <textarea class="highlight-source" id="part5" spellcheck="false"></textarea>
 </div>
 </div>
@@ -315,7 +314,7 @@
 </div>
 </section>
 <dialog class="mml-dialog drive-save-dialog" id="googleDriveSaveDialog">
-<form class="dialog-card drive-save-card" id="googleDriveSaveForm" method="dialog">
+<form class="dialog-card drive-save-card" method="dialog">
 <h3 data-i18n="drive.save"></h3>
 <p><span data-i18n="drive.default_save"></span> <strong>MML_Mobibard</strong> <span data-i18n="drive.dir_change"></span></p>
 <div class="drive-save-folder-row">
@@ -334,7 +333,7 @@
 </form>
 </dialog>
 <dialog class="mml-dialog mmi-import-dialog" id="mmiImportDialog">
-<form class="dialog-card mmi-import-card" id="mmiImportForm" method="dialog">
+<form class="dialog-card mmi-import-card" method="dialog">
 <div class="dialog-title-row mmi-import-title-row">
 <h3 id="mmiImportTitle"></h3>
 <div class="dialog-title-actions mmi-import-title-actions">
@@ -362,7 +361,7 @@
 </form>
 </dialog>
 <dialog class="mml-dialog part-sound-dialog" id="partSoundDialog">
-<form class="dialog-card part-sound-card" id="partSoundForm" method="dialog">
+<form class="dialog-card part-sound-card" method="dialog">
 <h3 data-i18n="snd.ch_settings"></h3>
 <p><span data-i18n="snd.choose_previewing"></span><br/><span data-i18n="mml.not_change"></span></p>
 <div class="soundfont-file-row">
@@ -420,7 +419,7 @@
 </form>
 </dialog>
 <dialog class="mml-dialog" id="restTrimDialog">
-<form class="dialog-card" id="restTrimForm" method="dialog">
+<form class="dialog-card" method="dialog">
 <h3 data-i18n="ui.remove_rests"></h3>
 <p data-i18n="msg.removes_rests"></p>
 <label class="dialog-field" data-i18n="ui.remove_length" for="restTrimLimit"></label>
@@ -454,7 +453,7 @@
 </form>
 </dialog>
 <dialog class="mml-dialog" id="bulkVolumeDialog">
-<form class="dialog-card" id="bulkVolumeForm" method="dialog">
+<form class="dialog-card" method="dialog">
 <h3 data-i18n="vol.adjust"></h3>
 <p data-i18n="mml.adds_entered"></p>
 <label class="dialog-field" data-i18n="vol.change" for="bulkVolumeAmount"></label>
@@ -590,7 +589,7 @@
 </form>
 </dialog>
 <dialog class="mml-dialog" id="leadingSilenceDialog">
-<form class="dialog-card" id="leadingSilenceForm" method="dialog">
+<form class="dialog-card" method="dialog">
 <h3 data-i18n="ui.lead_gap"></h3>
 <p data-i18n="msg.adds_entered"></p>
 <label class="dialog-field" data-i18n="ui.silence_duration" for="leadingSilenceSeconds"></label>
@@ -711,7 +710,7 @@
 <span data-i18n="st.samples_below"></span>
 </div>
 <div class="midi-extract-video-shell">
-<button aria-controls="midiExtractSampleVideo" class="midi-extract-media-loader midi-extract-video-loader" data-src="./assets/midi-extract/audio_to_midi.mp4" id="midiExtractSampleVideoLoad" type="button">
+<button aria-controls="midiExtractSampleVideo" class="midi-extract-media-loader" data-src="./assets/midi-extract/audio_to_midi.mp4" id="midiExtractSampleVideoLoad" type="button">
 <span aria-hidden="true" class="midi-extract-play-symbol">▶</span>
 <strong data-i18n="ui.watch_conv"></strong>
 <small data-i18n="midi.example_audio"></small>
@@ -814,11 +813,10 @@
 </form>
 </dialog>
 <dialog class="mml-dialog split-copy-dialog" id="splitCopyDialog">
-<form class="dialog-card split-copy-card" id="splitCopyForm" method="dialog">
+<form class="dialog-card split-copy-card" method="dialog">
 <h3 data-i18n="ui.split_copy_score"></h3>
-<p data-i18n="msg.enter_max"></p>
 <div class="split-copy-options">
-<label class="dialog-field" data-i18n="ui.max_chars" for="splitCopyLimit"></label>
+<label class="dialog-field" data-i18n="msg.enter_max" for="splitCopyLimit"></label>
 <input id="splitCopyLimit" inputmode="numeric" max="5000" min="200" step="50" type="number" value="2400"/>
 </div>
 <div class="split-copy-summary" hidden="" id="splitCopySummary"></div>
@@ -830,7 +828,7 @@
 </form>
 </dialog>
 <dialog class="mml-dialog midi-dialog" id="midiConvertDialog">
-<form class="dialog-card midi-dialog-card" id="midiConvertForm" method="dialog">
+<form class="dialog-card midi-dialog-card" method="dialog">
 <h3 data-i18n="midi.conv_cfg" id="midiConvertTitle"></h3>
 <div class="midi-dialog-topline">
 <p data-i18n="mml.choose_each" id="midiConvertSummary"></p>
@@ -842,55 +840,35 @@
 </summary>
 <div class="midi-guide-body">
 <ol>
-<li><b data-i18n="ui.preview_perf"></b><span data-i18n="file.first_check"></span></li>
-<li data-i18n="mml.choose_inst"></li>
-<li data-i18n="mml.chs_least"></li>
-<li><b data-i18n="ui.preview"></b><span data-i18n="mml.hear_how"></span> <b data-i18n="ui.convert"></b><span data-i18n="mml.apply_them"></span></li>
+<li><b data-i18n="midi.listen_original"></b><span data-i18n="file.first_check"></span></li>
+<li><b data-i18n="midi.listen_mml"></b><span data-i18n="mml.hear_how"></span> <b data-i18n="ui.convert"></b><span data-i18n="mml.apply_them"></span></li>
 </ol>
 <div class="midi-guide-terms">
 <span><b data-i18n="ui.auto"></b><span data-i18n="snd.place_inst"></span></span>
 <span><b data-i18n="ui.high"></b><span data-i18n="pitch.prioritize_higher"></span></span>
 <span><b data-i18n="ui.low"></b><span data-i18n="pitch.prioritize_lower"></span></span>
-<span><b data-i18n="ui.beat"></b><span data-i18n="msg.place_drums"></span></span>
 <span><b data-i18n="ui.overlap_merge"></b><span data-i18n="mml.fit_more"></span></span>
 </div>
 </div>
 </details>
-<div class="midi-dialog-layout midi-channel-config-layout">
+<div class="midi-dialog-layout">
 <section class="midi-dialog-section midi-left-panel">
-<div class="dialog-section-head role-head">
+<div class="dialog-section-head role-head midi-panel-title-row">
 <strong data-i18n="mml.channel"></strong>
-<span class="dialog-small" data-i18n="mml.choose_inst"></span>
-</div>
-<div class="midi-role-actions">
-<div class="midi-beat-notice" data-i18n="snd.check_beat" hidden="" id="midiBeatNotice"></div>
+<div class="midi-panel-title-actions">
 <button aria-pressed="false" class="midi-quantize-toggle soft-tool-button" data-i18n-title="midi.quantize_toggle" id="midiQuantizeToggle" title="" type="button"></button>
-<button aria-pressed="false" class="midi-full-preview-btn soft-tool-button" data-i18n="ui.preview" id="midiSelectedPreviewBtn" type="button"></button>
+<button aria-pressed="false" class="midi-full-preview-btn soft-tool-button" data-i18n="midi.listen_mml" id="midiSelectedPreviewBtn" type="button"></button>
+</div>
 </div>
 <div aria-label="" class="midi-role-list" data-i18n-aria-label="mml.ch_settings" id="midiRoleList"></div>
 </section>
 <section class="midi-dialog-section midi-right-panel">
-<div class="dialog-section-head midi-instrument-panel-head">
-<strong data-i18n="snd.select_inst_ch" id="midiInstrumentPanelTitle"></strong>
-<span class="dialog-small" data-i18n="mml.checked_inst" id="midiInstrumentPanelHint"></span>
+<div class="dialog-section-head midi-instrument-panel-head midi-panel-title-row">
+<strong data-i18n="midi.instrument_channel_select" id="midiInstrumentPanelTitle"></strong>
+<div class="midi-panel-title-actions">
+<button class="soft-tool-button" data-i18n="midi.bulk_assign" id="midiBulkAssignBtn" type="button"></button>
+<button aria-pressed="false" class="midi-full-preview-btn soft-tool-button" data-i18n="midi.listen_original" id="midiFullPreviewBtn" type="button"></button>
 </div>
-<div aria-label="" class="midi-instrument-panel-actions" data-i18n-aria-label="snd.quick_inst">
-<div class="midi-instrument-panel-actions-left">
-<div aria-label="" class="midi-action-cluster midi-bulk-actions" data-i18n-aria-label="snd.all_inst">
-<span class="midi-bulk-label" data-i18n="ui.all_3"></span>
-<button class="mini-button soft-tool-button" data-i18n="ui.select" id="midiInstrumentSelectAll" type="button"></button>
-<button class="mini-button soft-tool-button" data-i18n="ui.clear" id="midiInstrumentSelectNone" type="button"></button>
-</div>
-<div aria-label="" class="midi-action-cluster midi-category-actions" data-i18n-aria-label="snd.select_inst_cat">
-<span class="midi-category-label" data-i18n="snd.inst_2"></span>
-<button class="mini-button midi-instrument-category-btn" data-i18n="ui.keys" data-midi-category-select="keyboard" type="button"></button>
-<button class="mini-button midi-instrument-category-btn" data-i18n="ui.strings_2" data-midi-category-select="strings" type="button"></button>
-<button class="mini-button midi-instrument-category-btn" data-i18n="ui.winds_2" data-midi-category-select="winds" type="button"></button>
-<button class="mini-button midi-instrument-category-btn" data-i18n="ui.perc" data-midi-category-select="percussion" type="button"></button>
-<button class="mini-button midi-instrument-category-btn" data-i18n="ui.uncategorized" data-midi-category-select="other" type="button"></button>
-</div>
-</div>
-<button aria-pressed="false" class="midi-full-preview-btn soft-tool-button" data-i18n="ui.preview_perf" id="midiFullPreviewBtn" type="button"></button>
 </div>
 <div aria-label="" class="midi-channel-list" data-i18n-aria-label="snd.inst_list_ch" id="midiChannelList"></div>
 </section>
@@ -909,18 +887,52 @@
 </div>
 </form>
 </dialog>
-<script src="js/language-manager.js?v=6.1-midi-program-part-groups"></script>
-<script src="js/utils.js?v=5.3-runtime-i18n"></script>
-<script src="js/midi-to-mml.js?v=6.1-midi-program-part-groups"></script>
-<script src="js/musicxml-to-midi.js?v=5.3-runtime-i18n"></script>
-<script src="js/mml-parser.js?v=5.3-runtime-i18n"></script>
-<script src="js/mml-optimizer.js?v=5.4-split-within-limit"></script>
-<script src="js/sf2-sampler.js?v=5.3-runtime-i18n"></script>
+<dialog aria-labelledby="midiBulkAssignTitle" class="mml-dialog midi-bulk-assign-dialog" id="midiBulkAssignDialog">
+<form class="dialog-card midi-bulk-assign-card" method="dialog">
+<h3 data-i18n="midi.bulk_assign" id="midiBulkAssignTitle"></h3>
+<div class="midi-bulk-field-group">
+<span class="dialog-field" data-i18n="midi.target_instruments"></span>
+<div aria-label="" class="midi-bulk-instrument-grid" data-i18n-aria-label="midi.target_instruments">
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle midi-bulk-all-instrument" data-i18n="ui.all" id="midiBulkAllInstrumentBtn" type="button"></button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle midi-bulk-instrument" data-i18n="midi.category_keyboard_short" data-midi-bulk-category="keyboard" type="button"></button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle midi-bulk-instrument" data-i18n="midi.category_strings_short" data-midi-bulk-category="strings" type="button"></button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle midi-bulk-instrument" data-i18n="midi.category_winds_short" data-midi-bulk-category="winds" type="button"></button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle midi-bulk-instrument" data-i18n="midi.category_vocal_short" data-midi-bulk-category="vocal" type="button"></button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle midi-bulk-instrument" data-i18n="midi.category_other_short" data-midi-bulk-category="other" type="button"></button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle midi-bulk-instrument" data-i18n="midi.category_drums_short" data-midi-bulk-category="drums" type="button"></button>
+</div>
+</div>
+<div class="midi-bulk-field-group">
+<span class="dialog-field" data-i18n="midi.target_channels"></span>
+<div aria-label="" class="midi-bulk-channel-grid" data-i18n-aria-label="midi.target_channels">
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle midi-bulk-all-channel" data-i18n="ui.all" id="midiBulkAllBtn" type="button"></button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle part-0 midi-bulk-channel" data-i18n-title="part.melody" data-midi-bulk-channel="0" title="" type="button"><span data-i18n="ui.mel"></span></button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle part-1 midi-bulk-channel" data-i18n-title="part.harmony1" data-midi-bulk-channel="1" title="" type="button">1</button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle part-2 midi-bulk-channel" data-i18n-title="part.harmony2" data-midi-bulk-channel="2" title="" type="button">2</button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle part-3 midi-bulk-channel" data-i18n-title="part.harmony3" data-midi-bulk-channel="3" title="" type="button">3</button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle part-4 midi-bulk-channel" data-i18n-title="part.harmony4" data-midi-bulk-channel="4" title="" type="button">4</button>
+<button aria-pressed="false" class="midi-part-chip midi-part-toggle part-5 midi-bulk-channel" data-i18n-title="part.harmony5" data-midi-bulk-channel="5" title="" type="button">5</button>
+</div>
+</div>
+<div class="dialog-actions midi-bulk-assign-actions">
+<button data-i18n="ui.cancel" id="midiBulkCancelBtn" type="button"></button>
+<button class="primary danger" data-i18n="midi.clear_action" id="midiBulkClearBtn" type="button"></button>
+<button class="primary" data-i18n="midi.select_action" id="midiBulkSelectBtn" type="button"></button>
+</div>
+</form>
+<script src="js/language-manager.js?v=7.2-convert-summary"></script>
+<script src="js/utils.js?v=7.2-convert-summary"></script>
+<script src="js/midi-to-mml.js?v=7.2-convert-summary"></script>
+<script src="js/mabinogi-instrument-map.js?v=1.0"></script>
+<script src="js/musicxml-to-midi.js?v=7.2-convert-summary"></script>
+<script src="js/mml-parser.js?v=7.2-convert-summary"></script>
+<script src="js/mml-optimizer.js?v=7.2-convert-summary"></script>
+<script src="js/sf2-sampler.js?v=7.2-convert-summary"></script>
 <script src="js/google-config.js"></script>
 <script src="js/firebase-config.js"></script>
 <script src="js/firebase-analytics.js" type="module"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
-<script src="js/app.js?v=6.3-site-open-analytics"></script>
+<script src="js/app.js?v=7.2-convert-summary"></script>
 </body>
 </html>

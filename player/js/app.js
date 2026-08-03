@@ -27,13 +27,14 @@
     { value: "half", labelKey: "ui.half" },
     { value: "none", labelKey: "ui.none" }
   ];
-  const MIDI_INSTRUMENT_CATEGORY_ORDER = ["keyboard", "strings", "winds", "percussion", "other"];
+  const MIDI_INSTRUMENT_CATEGORY_ORDER = ["keyboard", "strings", "winds", "vocal", "other", "drums"];
   const MIDI_INSTRUMENT_CATEGORY_LABEL_KEYS = {
     keyboard: "ui.keyboards",
     strings: "ui.strings",
     winds: "ui.winds",
-    percussion: "ui.percussion",
-    other: "ui.uncategorized"
+    vocal: "midi.vocal_instruments",
+    other: "midi.other_instruments",
+    drums: "midi.drums"
   };
   const GOOGLE_CONFIG = window.MOBIBARD_GOOGLE_CONFIG || {};
   const GOOGLE_DRIVE_SCOPE = [
@@ -58,7 +59,6 @@
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
   const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi", "mml", "musicxml", "xml", "mxl"]);
   const HEADER_SHORTCUT_LINKS = new Map([
-    ["https://drive.google.com/drive/folders/1J11Vh-twyZVaYDFBlJJnvkje5M48zAUn", "developer_mml_share"],
     ["https://bitmidi.com/", "bitmidi"],
     ["https://ichigos.com/", "ichigos"],
     ["http://www.midiex.net/", "midiex"],
@@ -102,7 +102,6 @@
   const accountMenuName = $("accountMenuName");
   const accountMenuEmail = $("accountMenuEmail");
   const googleDriveSaveDialog = $("googleDriveSaveDialog");
-  const googleDriveSaveForm = $("googleDriveSaveForm");
   const googleDriveSaveFolderNameText = $("googleDriveSaveFolderNameText");
   const googleDriveSaveFolderBtn = $("googleDriveSaveFolderBtn");
   const googleDriveSaveFileName = $("googleDriveSaveFileName");
@@ -110,7 +109,6 @@
   const googleDriveSaveCancel = $("googleDriveSaveCancel");
   const googleDriveSaveApply = $("googleDriveSaveApply");
   const mmiImportDialog = $("mmiImportDialog");
-  const mmiImportForm = $("mmiImportForm");
   const mmiImportTitle = $("mmiImportTitle");
   const mmiImportSummary = $("mmiImportSummary");
   const mmiFullPreviewBtn = $("mmiFullPreviewBtn");
@@ -256,16 +254,19 @@
   const midiGuideLead = $("midiGuideLead");
   const midiFullPreviewBtn = $("midiFullPreviewBtn");
   const midiSelectedPreviewBtn = $("midiSelectedPreviewBtn");
-  const midiInstrumentSelectAll = $("midiInstrumentSelectAll");
-  const midiInstrumentSelectNone = $("midiInstrumentSelectNone");
-  const midiInstrumentCategoryButtons = Array.from(document.querySelectorAll("[data-midi-category-select]"));
-  const midiInstrumentCategoryActions = document.querySelector(".midi-category-actions");
+  const midiBulkAssignBtn = $("midiBulkAssignBtn");
+  const midiBulkAssignDialog = $("midiBulkAssignDialog");
+  const midiBulkChannelButtons = Array.from(document.querySelectorAll(".midi-bulk-channel"));
+  const midiBulkAllBtn = $("midiBulkAllBtn");
+  const midiBulkInstrumentButtons = Array.from(document.querySelectorAll(".midi-bulk-instrument"));
+  const midiBulkAllInstrumentBtn = $("midiBulkAllInstrumentBtn");
+  const midiBulkSelectBtn = $("midiBulkSelectBtn");
+  const midiBulkClearBtn = $("midiBulkClearBtn");
+  const midiBulkCancelBtn = $("midiBulkCancelBtn");
   const midiChannelList = $("midiChannelList");
   const midiRoleList = $("midiRoleList");
-  const midiBeatNotice = $("midiBeatNotice");
   const midiQuantizeToggle = $("midiQuantizeToggle");
   const midiInstrumentPanelTitle = $("midiInstrumentPanelTitle");
-  const midiInstrumentPanelHint = $("midiInstrumentPanelHint");
   const midiConvertReloadFile = $("midiConvertReloadFile");
   const midiConvertGoogleDriveLoad = $("midiConvertGoogleDriveLoad");
   const midiConvertApply = $("midiConvertApply");
@@ -339,6 +340,7 @@
   let seekRestartTimer = 0;
   let pendingMidiImport = null;
   let pendingMidiSettings = null;
+  const midiInstrumentSectionOpenState = new Map();
   let midiPreviewSources = [];
   let midiPreviewTimer = 0;
   let midiFullPreviewActive = false;
@@ -364,12 +366,10 @@
   let googleSettingsApplying = false;
   let googleSettingsSaveTimer = 0;
   let googleSettingsSaving = false;
-  let googleDriveMmlFileId = "";
   let googleDriveMmlFileName = "";
   let googleDriveMmlFolderId = "";
   let googleDriveSaveFolderId = "";
   let googleDriveSaveFolderName = "";
-  let googleSilentRestoreFailed = false;
   let googleUserProfile = null;
   let googleUserProfileToken = "";
   let googleUserProfilePromise = null;
@@ -613,11 +613,34 @@
     midiQuantizeToggle?.addEventListener("click", toggleMidiQuantizeDivision);
     midiSelectedPreviewBtn?.addEventListener("click", () => void toggleMidiSelectedPreview());
     midiFullPreviewBtn?.addEventListener("click", () => void toggleMidiFullPreview());
-    midiInstrumentSelectAll?.addEventListener("click", () => selectActiveMidiInstruments(true));
-    midiInstrumentSelectNone?.addEventListener("click", () => selectActiveMidiInstruments(false));
-    for (const button of midiInstrumentCategoryButtons) {
-      button.addEventListener("click", () => selectActiveMidiInstrumentCategory(button.dataset.midiCategorySelect));
+    midiBulkAssignBtn?.addEventListener("click", openMidiBulkAssignDialog);
+    for (const button of midiBulkChannelButtons) {
+      button.addEventListener("click", () => {
+        const selected = button.getAttribute("aria-pressed") !== "true";
+        setMidiBulkChannelButtonState(button, selected);
+        updateMidiBulkAllButtonState();
+      });
     }
+    midiBulkAllBtn?.addEventListener("click", () => {
+      const shouldSelectAll = !midiBulkChannelButtons.every(button => button.getAttribute("aria-pressed") === "true");
+      for (const button of midiBulkChannelButtons) setMidiBulkChannelButtonState(button, shouldSelectAll);
+      updateMidiBulkAllButtonState();
+    });
+    for (const button of midiBulkInstrumentButtons) {
+      button.addEventListener("click", () => {
+        const selected = button.getAttribute("aria-pressed") !== "true";
+        setMidiBulkChannelButtonState(button, selected);
+        updateMidiBulkAllInstrumentButtonState();
+      });
+    }
+    midiBulkAllInstrumentBtn?.addEventListener("click", () => {
+      const shouldSelectAll = !midiBulkInstrumentButtons.every(button => button.getAttribute("aria-pressed") === "true");
+      for (const button of midiBulkInstrumentButtons) setMidiBulkChannelButtonState(button, shouldSelectAll);
+      updateMidiBulkAllInstrumentButtonState();
+    });
+    midiBulkClearBtn?.addEventListener("click", () => applyMidiBulkAssignment(false));
+    midiBulkSelectBtn?.addEventListener("click", () => applyMidiBulkAssignment(true));
+    midiBulkCancelBtn?.addEventListener("click", () => midiBulkAssignDialog?.close());
     midiConvertReloadFile?.addEventListener("click", () => { if (!midiConvertBusy) openSourceFilePicker(); });
     midiConvertGoogleDriveLoad?.addEventListener("click", () => { if (!midiConvertBusy) void openGoogleDrivePicker(); });
     midiConvertApply?.addEventListener("click", () => void applyMidiConvertDialog());
@@ -1210,7 +1233,6 @@
     googleTokenExpiryTimer = window.setTimeout(() => {
       if (!isGoogleConnected()) {
         clearGoogleTokenState(true);
-        googleSilentRestoreFailed = true;
         updateGoogleDriveControls(i18nText("ui.login_required"));
       } else {
         updateGoogleDriveControls();
@@ -1589,7 +1611,6 @@
       }
       googleAccessToken = token;
       googleTokenExpiresAt = expiresAt;
-      googleSilentRestoreFailed = false;
       scheduleGoogleTokenExpiryRefresh();
       void loadGoogleUserProfile();
       return true;
@@ -1610,7 +1631,6 @@
 
   function resetGoogleSessionState(clearCache = false) {
     clearGoogleTokenState(clearCache);
-    googleDriveMmlFileId = "";
     googleDriveMmlFileName = "";
     googleDriveMmlFolderId = "";
   }
@@ -1805,7 +1825,6 @@
   function requireGoogleAccessToken() {
     if (isGoogleConnected() || restoreGoogleTokenCache()) return googleAccessToken;
     clearGoogleTokenState(true);
-    googleSilentRestoreFailed = true;
     updateGoogleDriveControls(i18nText("ui.login_required"));
     throw googleLoginRequiredError();
   }
@@ -1833,8 +1852,7 @@
           googleAccessToken = String(response.access_token || "");
           const expiresIn = Math.max(60, Number(response.expires_in) || 3600);
           googleTokenExpiresAt = Date.now() + expiresIn * 1000;
-          googleSilentRestoreFailed = false;
-          setGoogleAutoReconnect(true);
+              setGoogleAutoReconnect(true);
           saveGoogleTokenCache(response);
           void loadGoogleUserProfile(true);
           updateGoogleDriveControls(i18nText("google.connected"));
@@ -1868,7 +1886,6 @@
       window.setTimeout(() => void applyGoogleSettingsAfterSessionRestore(i18nText("google.restored")), 100);
       return;
     }
-    googleSilentRestoreFailed = true;
     updateGoogleDriveControls(i18nText("ui.login_required"));
   }
 
@@ -1882,7 +1899,6 @@
     if (isGoogleConnected()) {
       setGoogleAutoReconnect(false);
       resetGoogleSessionState(true);
-      googleSilentRestoreFailed = false;
       updateGoogleDriveControls(i18nText("google.logout_done"));
       return;
     }
@@ -1951,8 +1967,7 @@
     const response = await fetch(url, { ...options, headers });
     if (response.status === 401 && retry) {
       clearGoogleTokenState(true);
-      googleSilentRestoreFailed = true;
-      updateGoogleDriveControls(i18nText("ui.login_required"));
+        updateGoogleDriveControls(i18nText("ui.login_required"));
       throw googleLoginRequiredError();
     }
     return response;
@@ -2885,8 +2900,7 @@
         setMainMml(loaded);
         showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_gdocs", [shortError(optErr)]));
       }
-      googleDriveMmlFileId = "";
-      googleDriveMmlFileName = "";
+        googleDriveMmlFileName = "";
       rememberSuggestedMmlSaveFileName(name);
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
@@ -2908,8 +2922,7 @@
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (isGoogleDriveMidiFile(name, mimeType)) {
       const overview = analyzeMidi(bytes, name);
-      googleDriveMmlFileId = "";
-      googleDriveMmlFileName = "";
+        googleDriveMmlFileName = "";
       openMidiConvertDialog({ bytes, name, overview, sourceType: "midi", sourceLabel: "MIDI" });
       trackAnalytics("drive_import_midi", {
         file_type: analyticsFileType(name),
@@ -2921,8 +2934,7 @@
     }
     if (isGoogleDriveMusicXmlFile(name, mimeType)) {
       const importData = await buildMusicXmlMidiImport(bytes, name);
-      googleDriveMmlFileId = "";
-      googleDriveMmlFileName = "";
+        googleDriveMmlFileName = "";
       openMidiConvertDialog(importData);
       const overview = importData.overview || {};
       trackAnalytics("drive_import_musicxml", {
@@ -2943,8 +2955,7 @@
         setMainMml(loaded);
         showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_mmi", [shortError(optErr)]));
       }
-      googleDriveMmlFileId = "";
-      googleDriveMmlFileName = "";
+        googleDriveMmlFileName = "";
       rememberSuggestedMmlSaveFileName(name);
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
@@ -2967,8 +2978,7 @@
         setMainMml(loaded);
         showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_3mle", [shortError(optErr)]));
       }
-      googleDriveMmlFileId = "";
-      googleDriveMmlFileName = "";
+        googleDriveMmlFileName = "";
       rememberSuggestedMmlSaveFileName(name);
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
@@ -2990,7 +3000,6 @@
         setMainMml(loaded);
         showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_file", [shortError(optErr)]));
       }
-      googleDriveMmlFileId = sourceFileId;
       googleDriveMmlFileName = name;
       rememberSuggestedMmlSaveFileName(name);
       showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
@@ -3061,7 +3070,6 @@
               mimeType: "text/plain"
             });
           }
-          googleDriveMmlFileId = saved?.id || targetId;
           googleDriveMmlFileName = saved?.name || fileName;
           rememberSuggestedMmlSaveFileName(googleDriveMmlFileName);
           return {
@@ -3443,7 +3451,6 @@
     if (!file) return;
     const name = file.name || i18nText("file.selected");
     const ext = getSourceFileExtension(name);
-    googleDriveMmlFileId = "";
     googleDriveMmlFileName = "";
     clearSuggestedMmlSaveFileName();
     closeImportDialogsForSourceReload();
@@ -4493,25 +4500,14 @@
       throw new Error(i18nText("midi.group_not_found", [sourceLabel]));
     }
 
-    const normalGroups = groups.filter(g => !g.isBeat);
-    const beatGroups = groups.filter(g => g.isBeat);
-    pendingMidiSettings = createDefaultMidiSettings(groups, Boolean(overview.hasBeatGroups));
+    pendingMidiSettings = createDefaultMidiSettings(groups);
+    applyInitialMidiGroupAssignment(pendingMidiSettings);
+    midiInstrumentSectionOpenState.clear();
 
     if (midiConvertTitle) midiConvertTitle.textContent = i18nText("cfg.conv_cfg", [sourceLabel]);
     if (midiGuideBox) midiGuideBox.setAttribute("aria-label", i18nText("midi.guide_label", [sourceLabel]));
     if (midiGuideLead) midiGuideLead.textContent = i18nText("midi.help_source", [sourceLabel]);
-    if (midiConvertSummary) {
-      const trackCount = Number(overview.trackCount) || 0;
-      midiConvertSummary.textContent = i18nText("midi.summary", [importData.name || sourceLabel, formatCount(trackCount), formatCount(groups.length), formatCount(overview.noteCount), formatCount(normalGroups.length), formatCount(beatGroups.length), overview.ppq]);
-    }
-    if (midiBeatNotice) {
-      const beatInstrumentCount = beatGroups.length;
-      midiBeatNotice.hidden = false;
-      midiBeatNotice.classList.toggle("has-beat", beatInstrumentCount > 0);
-      midiBeatNotice.textContent = beatInstrumentCount > 0
-        ? i18nText("midi.beat_count", [formatCount(beatInstrumentCount)])
-        : i18nText("snd.no_beat_inst");
-    }
+    updateMidiConvertSummary();
     updateMidiQuantizeToggle();
     setMidiFullPreviewState(false);
     setMidiConvertBusy(false);
@@ -4528,10 +4524,8 @@
     }
   }
 
-  function createDefaultMidiSettings(groups, hasBeatGroups) {
+  function createDefaultMidiSettings(groups) {
     const allGroups = Array.isArray(groups) ? groups : [];
-    const normalIds = allGroups.filter(g => !g.isBeat).map(g => g.id);
-    const beatIds = allGroups.filter(g => g.isBeat).map(g => g.id);
     const channelSettings = Array.from({ length: 6 }, (_, i) => {
       const role = i === 0 ? "high" : (i === 2 ? "low" : "auto");
       const overlapMergeMode = (i === 0 || i === 2) ? "half" : "all";
@@ -4539,19 +4533,34 @@
         role,
         overlapMerge: overlapMergeMode !== "none",
         overlapMergeMode,
-        selectedInstrumentGroups: new Set(i >= 3 ? [] : (role === "beat" ? beatIds : normalIds))
+        selectedInstrumentGroups: new Set()
       };
     });
     return {
       groups: allGroups,
-      normalIds,
-      beatIds,
-      hasBeatGroups: Boolean(hasBeatGroups && beatIds.length),
       quantizeDivision: 64,
-      activeIndex: 0,
-      partCount: 3,
+      partCount: 0,
       channels: channelSettings
     };
+  }
+
+  function applyInitialMidiGroupAssignment(settings) {
+    if (!settings?.groups?.length || !Array.isArray(settings.channels)) return;
+    const sortedGroups = sortMidiInstrumentGroups(settings.groups);
+    const firstGroup = sortedGroups[0];
+    if (!firstGroup) return;
+    const firstCategory = getMidiInstrumentCategory(firstGroup);
+    if (firstCategory === "drums") return;
+
+    const firstCategoryGroupIds = sortedGroups
+      .filter(group => getMidiInstrumentCategory(group) === firstCategory)
+      .map(group => group.id);
+
+    for (const channelIndex of [0, 1, 2]) {
+      const selected = settings.channels[channelIndex]?.selectedInstrumentGroups;
+      if (!selected) continue;
+      for (const groupId of firstCategoryGroupIds) selected.add(groupId);
+    }
   }
 
   function updateMidiQuantizeToggle() {
@@ -4577,16 +4586,10 @@
   function refreshMidiConvertLocale() {
     if (!pendingMidiImport || !pendingMidiSettings) return;
     const sourceLabel = getMidiImportSourceLabel(pendingMidiImport);
-    const overview = pendingMidiImport.overview || {};
-    const groups = overview.instrumentGroups || overview.channels || [];
-    const normalGroups = groups.filter(group => !group.isBeat);
-    const beatGroups = groups.filter(group => group.isBeat);
     if (midiConvertTitle) midiConvertTitle.textContent = i18nText("cfg.conv_cfg", [sourceLabel]);
     if (midiGuideBox) midiGuideBox.setAttribute("aria-label", i18nText("midi.guide_label", [sourceLabel]));
     if (midiGuideLead) midiGuideLead.textContent = i18nText("midi.help_source", [sourceLabel]);
-    if (midiConvertSummary) {
-      midiConvertSummary.textContent = i18nText("midi.summary", [pendingMidiImport.name || sourceLabel, formatCount(Number(overview.trackCount) || 0), formatCount(groups.length), formatCount(overview.noteCount), formatCount(normalGroups.length), formatCount(beatGroups.length), overview.ppq]);
-    }
+    updateMidiConvertSummary();
     updateMidiQuantizeToggle();
     renderMidiRoleList();
     renderActiveMidiInstrumentList();
@@ -4595,16 +4598,10 @@
     setMidiSelectedPreviewState(midiSelectedPreviewActive);
   }
 
-  function getActiveMidiChannelSetting() {
-    if (!pendingMidiSettings) return null;
-    pendingMidiSettings.activeIndex = clampInt(Number(pendingMidiSettings.activeIndex || 0), 0, 5);
-    return pendingMidiSettings.channels[pendingMidiSettings.activeIndex] || null;
-  }
 
   function renderMidiRoleList() {
     if (!midiRoleList || !pendingMidiSettings) return;
     midiRoleList.innerHTML = "";
-    const allowBeat = pendingMidiSettings.hasBeatGroups;
     for (let i = 0; i < 6; i++) {
       const setting = pendingMidiSettings.channels[i];
       const row = document.createElement("div");
@@ -4613,8 +4610,7 @@
       const selectOptions = [
         `<option value="auto" ${setting.role === "auto" ? "selected" : ""}>${escapeHtml(i18nText("ui.auto"))}</option>`,
         `<option value="high" ${setting.role === "high" ? "selected" : ""}>${escapeHtml(i18nText("ui.high"))}</option>`,
-        `<option value="low" ${setting.role === "low" ? "selected" : ""}>${escapeHtml(i18nText("ui.low"))}</option>`,
-        allowBeat ? `<option value="beat" ${setting.role === "beat" ? "selected" : ""}>${escapeHtml(i18nText("ui.beat"))}</option>` : ""
+        `<option value="low" ${setting.role === "low" ? "selected" : ""}>${escapeHtml(i18nText("ui.low"))}</option>`
       ].join("");
       const mergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
       setting.overlapMergeMode = mergeMode;
@@ -4622,33 +4618,25 @@
       const mergeOptions = OVERLAP_MERGE_OPTIONS.map(opt =>
         `<option value="${opt.value}" ${mergeMode === opt.value ? "selected" : ""}>${escapeHtml(i18nText(opt.labelKey))}</option>`
       ).join("");
-      const rightControl = `<label class="merge-mode">
+      row.innerHTML = `
+        <div class="midi-channel-summary">
+          <span class="midi-export-label">${PART_LABELS[i]}</span>
+          <span class="midi-export-summary">${escapeHtml(summarizeMidiChannelInstruments(i))}</span>
+        </div>
+        <select data-role-index="${i}" aria-label="${escapeHtml(i18nText("aria.role", [PART_LABELS[i]]))}">
+          ${selectOptions}
+        </select>
+        <label class="merge-mode">
           <span>${escapeHtml(i18nText("ui.overlap"))}</span>
           <select data-merge-index="${i}" aria-label="${escapeHtml(i18nText("aria.merge_mode", [PART_LABELS[i]]))}">
             ${mergeOptions}
           </select>
           <span>${escapeHtml(i18nText("ui.merge"))}</span>
-        </label>`;
-      row.innerHTML = `
-        <button class="midi-channel-select" type="button" data-midi-channel-select="${i}" aria-label="${escapeHtml(i18nText("aria.select_instruments", [PART_LABELS[i]]))}">
-          <span class="midi-export-label">${PART_LABELS[i]}</span>
-          <span class="midi-export-summary">${escapeHtml(summarizeMidiChannelInstruments(i))}</span>
-        </button>
-        <select data-role-index="${i}" aria-label="${escapeHtml(i18nText("aria.role", [PART_LABELS[i]]))}">
-          ${selectOptions}
-        </select>
-        ${rightControl}
+        </label>
         <button class="midi-role-preview-btn" type="button" data-midi-part-preview="${i}" aria-label="${escapeHtml(i18nText("aria.preview", [PART_LABELS[i]]))}">${escapeHtml(i18nText("ui.listen"))}</button>
       `;
-      row.querySelector("button")?.addEventListener("click", () => {
-        pendingMidiSettings.activeIndex = i;
-        renderMidiRoleList();
-        renderActiveMidiInstrumentList();
-        updateMidiRoleControls();
-      });
       row.querySelector("[data-role-index]")?.addEventListener("change", (ev) => {
-        const role = String(ev.target.value || "auto");
-        updateMidiChannelRole(i, role);
+        updateMidiChannelRole(i, String(ev.target.value || "auto"));
       });
       row.querySelector("[data-midi-part-preview]")?.addEventListener("click", (ev) => {
         ev.preventDefault();
@@ -4680,7 +4668,6 @@
     const leftPanel = midiRoleList.closest(".midi-left-panel");
     const rightPanel = midiChannelList.closest(".midi-right-panel");
     const rightHead = rightPanel?.querySelector(".dialog-section-head");
-    const rightActions = rightPanel?.querySelector(".midi-instrument-panel-actions");
     if (!leftPanel || !rightPanel || !rightHead) {
       resetHeight();
       return;
@@ -4697,7 +4684,6 @@
 
     const leftHeight = Math.ceil(leftPanel.getBoundingClientRect().height || 0);
     const headHeight = Math.ceil(rightHead.getBoundingClientRect().height || 0);
-    const actionsHeight = Math.ceil(rightActions?.getBoundingClientRect?.().height || 0);
     if (!leftHeight || !headHeight) {
       midiChannelList.style.height = previousHeight;
       midiChannelList.style.minHeight = previousMinHeight;
@@ -4707,7 +4693,7 @@
 
     const styles = window.getComputedStyle(rightPanel);
     const rowGap = parseFloat(styles.rowGap || styles.gap || "0") || 0;
-    const availableHeight = Math.max(160, leftHeight - headHeight - actionsHeight - rowGap * (actionsHeight ? 2 : 1));
+    const availableHeight = Math.max(160, leftHeight - headHeight - rowGap);
     const height = `${Math.ceil(availableHeight)}px`;
     midiChannelList.style.height = height;
     midiChannelList.style.minHeight = height;
@@ -4721,22 +4707,9 @@
   function updateMidiChannelRole(index, role) {
     if (!pendingMidiSettings) return;
     const setting = pendingMidiSettings.channels[index];
-    const previousIsBeat = setting.role === "beat";
-    const previousSelected = Array.from(setting.selectedInstrumentGroups || []);
-    const validRoles = new Set(["auto", "high", "low", "beat"]);
-    const rawRole = String(role || "auto").toLowerCase();
-    const requestedRole = validRoles.has(rawRole) ? rawRole : "auto";
-    const nextRole = requestedRole === "beat" && !pendingMidiSettings.hasBeatGroups ? "auto" : requestedRole;
-    setting.role = nextRole;
-    const nextIsBeat = nextRole === "beat";
-    if (previousIsBeat !== nextIsBeat) {
-      const allowedIds = nextIsBeat ? pendingMidiSettings.beatIds : pendingMidiSettings.normalIds;
-      const allowedSet = new Set(allowedIds);
-      const kept = previousSelected.filter(id => allowedSet.has(id));
-      setting.selectedInstrumentGroups = new Set(kept.length ? kept : (previousSelected.length ? allowedIds : []));
-    }
+    const requestedRole = String(role || "auto").toLowerCase();
+    setting.role = ["auto", "high", "low"].includes(requestedRole) ? requestedRole : "auto";
     renderMidiRoleList();
-    renderActiveMidiInstrumentList();
     updateMidiRoleControls();
   }
 
@@ -4758,18 +4731,11 @@
 
   function getMidiGroupSelectableChannels(group) {
     if (!pendingMidiSettings || !group) return [];
-    const items = [];
-    for (let i = 0; i < 6; i++) {
-      const setting = pendingMidiSettings.channels[i];
-      const canUse = group.isBeat ? setting?.role === "beat" : setting?.role !== "beat";
-      if (!canUse) continue;
-      items.push({
-        index: i,
-        label: PART_LABELS[i] || i18nText("ui.numbered", [i + 1]),
-        selected: Boolean(setting?.selectedInstrumentGroups?.has(group.id))
-      });
-    }
-    return items;
+    return Array.from({ length: 6 }, (_, i) => ({
+      index: i,
+      label: PART_LABELS[i] || i18nText("ui.numbered", [i + 1]),
+      selected: Boolean(pendingMidiSettings.channels[i]?.selectedInstrumentGroups?.has(group.id))
+    }));
   }
 
   function renderMidiGroupChannelButtons(group) {
@@ -4794,41 +4760,38 @@
     const group = pendingMidiSettings.groups.find(item => String(item.id) === String(groupId));
     const setting = pendingMidiSettings.channels[index];
     if (!group || !setting) return;
-    const canUse = group.isBeat ? setting.role === "beat" : setting.role !== "beat";
-    if (!canUse) return;
     if (setting.selectedInstrumentGroups.has(group.id)) setting.selectedInstrumentGroups.delete(group.id);
     else setting.selectedInstrumentGroups.add(group.id);
     renderMidiRoleList();
+    renderActiveMidiInstrumentList();
     updateMidiRoleControls();
   }
 
   function getAllowedMidiGroupsForSetting(setting) {
     if (!pendingMidiSettings || !setting) return [];
-    const wantBeat = setting.role === "beat";
-    return pendingMidiSettings.groups.filter(g => wantBeat ? g.isBeat : !g.isBeat);
+    return pendingMidiSettings.groups;
   }
 
 
   function getMidiInstrumentCategory(group) {
-    if (!group || group.isBeat) return "beat";
+    if (!group) return "other";
+    if (group.isDrumNoteGroup || Number.isInteger(group.drumMidi)) return "drums";
     const rawProgram = Number(group.program);
     const hasProgram = Number.isFinite(rawProgram);
     const program = hasProgram ? clampInt(rawProgram, 0, 127) : null;
     const name = String(group.instrumentName || group.programText || "").toLowerCase();
 
-    // General MIDI program numbers are handled first so names like "Bassoon" do not get
-    // accidentally caught by a broad "bass" string matcher. Bassoon is a woodwind.
     if (hasProgram) {
+      if ([52, 53, 54, 85, 91, 101, 121, 123].includes(program)) return "vocal";
       if ((program >= 0 && program <= 7) || (program >= 16 && program <= 20) || program === 21 || program === 23) return "keyboard";
       if ((program >= 24 && program <= 46) || (program >= 48 && program <= 51) || (program >= 104 && program <= 107) || program === 110) return "strings";
       if (program === 22 || (program >= 56 && program <= 79) || program === 109 || program === 111) return "winds";
-      if ((program >= 8 && program <= 15) || program === 47 || program === 108 || (program >= 112 && program <= 119)) return "percussion";
     }
 
+    if (/(choir|chorus|voice|vocal|vocoder|aahs?|oohs?|sing|singer|chant|breath|bird|goblin|합창|보컬|목소리|코러스|성악|人声|人聲|合唱|ボーカル|コーラス|声)/i.test(name)) return "vocal";
     if (/(piano|keyboard|organ|harpsichord|clavinet|clavi|accordion)/i.test(name)) return "keyboard";
     if (/(bassoon|trumpet|trombone|tuba|horn|brass|sax|oboe|clarinet|piccolo|flute|recorder|pipe|whistle|ocarina|harmonica|shanai|bagpipe|bag pipe)/i.test(name)) return "winds";
     if (/(guitar|\bbass\b|violin|viola|cello|contrabass|string|harp|sitar|banjo|shamisen|koto|fiddle)/i.test(name)) return "strings";
-    if (/(celesta|glockenspiel|music box|vibraphone|marimba|xylophone|bell|dulcimer|kalimba|timpani|agogo|steel drums|woodblock|taiko|tom|drum|cymbal)/i.test(name)) return "percussion";
     return "other";
   }
 
@@ -4846,41 +4809,70 @@
     });
   }
 
-  function syncMidiInstrumentPanelActions(groups = null) {
-    const setting = getActiveMidiChannelSetting();
-    const hasGroups = Array.isArray(groups) ? groups.length > 0 : Boolean(setting);
-    const isBeat = setting?.role === "beat";
-    if (midiInstrumentSelectAll) midiInstrumentSelectAll.disabled = !hasGroups;
-    if (midiInstrumentSelectNone) midiInstrumentSelectNone.disabled = !hasGroups;
-    if (midiInstrumentCategoryActions) midiInstrumentCategoryActions.hidden = Boolean(isBeat);
-    for (const button of midiInstrumentCategoryButtons) {
-      button.hidden = Boolean(isBeat);
-      button.disabled = Boolean(isBeat || !hasGroups);
-    }
+  function setMidiBulkChannelButtonState(button, selected) {
+    if (!button) return;
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+    button.classList.toggle("selected", selected);
   }
 
-  function selectActiveMidiInstruments(checked) {
-    const setting = getActiveMidiChannelSetting();
-    if (!setting) return;
-    const groups = getAllowedMidiGroupsForSetting(setting);
-    for (const g of groups) {
-      if (checked) setting.selectedInstrumentGroups.add(g.id);
-      else setting.selectedInstrumentGroups.delete(g.id);
-    }
-    renderMidiRoleList();
-    renderActiveMidiInstrumentList();
-    updateMidiRoleControls();
+  function updateMidiBulkAllButtonState() {
+    if (!midiBulkAllBtn) return;
+    const allSelected = midiBulkChannelButtons.length > 0
+      && midiBulkChannelButtons.every(button => button.getAttribute("aria-pressed") === "true");
+    setMidiBulkChannelButtonState(midiBulkAllBtn, allSelected);
   }
 
-  function selectActiveMidiInstrumentCategory(category) {
-    const setting = getActiveMidiChannelSetting();
-    if (!setting || setting.role === "beat") return;
-    const target = MIDI_INSTRUMENT_CATEGORY_ORDER.includes(category) ? category : "other";
-    const groups = getAllowedMidiGroupsForSetting(setting).filter(g => !g.isBeat);
-    for (const g of groups) {
-      if (getMidiInstrumentCategory(g) === target) setting.selectedInstrumentGroups.add(g.id);
-      else setting.selectedInstrumentGroups.delete(g.id);
+  function updateMidiBulkAllInstrumentButtonState() {
+    if (!midiBulkAllInstrumentBtn) return;
+    const allSelected = midiBulkInstrumentButtons.length > 0
+      && midiBulkInstrumentButtons.every(button => button.getAttribute("aria-pressed") === "true");
+    setMidiBulkChannelButtonState(midiBulkAllInstrumentBtn, allSelected);
+  }
+
+  function openMidiBulkAssignDialog() {
+    if (!pendingMidiSettings || midiConvertBusy || !midiBulkAssignDialog) return;
+    for (const button of midiBulkChannelButtons) setMidiBulkChannelButtonState(button, false);
+    updateMidiBulkAllButtonState();
+    for (const button of midiBulkInstrumentButtons) setMidiBulkChannelButtonState(button, false);
+    updateMidiBulkAllInstrumentButtonState();
+    if (midiBulkAssignDialog.showModal) midiBulkAssignDialog.showModal();
+  }
+
+  function getMidiBulkTargetGroups(categories) {
+    if (!pendingMidiSettings) return [];
+    const targets = categories instanceof Set ? categories : new Set(categories || []);
+    return pendingMidiSettings.groups.filter(group => targets.has(getMidiInstrumentCategory(group)));
+  }
+
+  function applyMidiBulkAssignment(checked) {
+    if (!pendingMidiSettings) return;
+    const channelIndexes = midiBulkChannelButtons
+      .filter(button => button.getAttribute("aria-pressed") === "true")
+      .map(button => clampInt(Number(button.dataset.midiBulkChannel), 0, 5));
+    if (!channelIndexes.length) {
+      showDialog(i18nText("midi.bulk_assign"), i18nText("midi.choose_target_channel"));
+      return;
     }
+    const targetCategories = new Set(
+      midiBulkInstrumentButtons
+        .filter(button => button.getAttribute("aria-pressed") === "true")
+        .map(button => String(button.dataset.midiBulkCategory || ""))
+        .filter(Boolean)
+    );
+    if (!targetCategories.size) {
+      showDialog(i18nText("midi.bulk_assign"), i18nText("midi.choose_target_instrument"));
+      return;
+    }
+    const groups = getMidiBulkTargetGroups(targetCategories);
+    for (const index of channelIndexes) {
+      const selected = pendingMidiSettings.channels[index]?.selectedInstrumentGroups;
+      if (!selected) continue;
+      for (const group of groups) {
+        if (checked) selected.add(group.id);
+        else selected.delete(group.id);
+      }
+    }
+    midiBulkAssignDialog?.close();
     renderMidiRoleList();
     renderActiveMidiInstrumentList();
     updateMidiRoleControls();
@@ -4888,67 +4880,40 @@
 
   function renderActiveMidiInstrumentList() {
     if (!midiChannelList || !pendingMidiSettings) return;
-    const activeIndex = pendingMidiSettings.activeIndex;
-    const setting = getActiveMidiChannelSetting();
-    const groups = getAllowedMidiGroupsForSetting(setting);
-    const isBeat = setting?.role === "beat";
-    if (midiInstrumentPanelTitle) midiInstrumentPanelTitle.textContent = i18nText("midi.panel_title", [PART_LABELS[activeIndex]]);
-    if (midiInstrumentPanelHint) {
-      midiInstrumentPanelHint.textContent = isBeat
-        ? i18nText("snd.beat_inst_assigned")
-        : i18nText("snd.multiple_inst");
-    }
-    syncMidiInstrumentPanelActions(groups);
+    const groups = sortMidiInstrumentGroups(pendingMidiSettings.groups || []);
+    if (midiInstrumentPanelTitle) midiInstrumentPanelTitle.textContent = i18nText("midi.instrument_channel_select");
 
+    const previousScrollTop = midiChannelList.scrollTop;
+    midiChannelList.querySelectorAll("details.midi-instrument-section[data-midi-category]").forEach(section => {
+      midiInstrumentSectionOpenState.set(String(section.dataset.midiCategory || ""), section.open);
+    });
     midiChannelList.innerHTML = "";
     if (!groups.length) {
-      const section = document.createElement("div");
-      section.className = "midi-instrument-section empty";
-      section.innerHTML = `
-        <div class="midi-instrument-section-head">
-          <strong>${escapeHtml(i18nText(isBeat ? "snd.beat_inst" : "snd.melodic_inst"))}</strong>
-          ${isBeat ? `<span>${escapeHtml(i18nText("msg.drums_toms"))}</span>` : ""}
-        </div>
-      `;
       const empty = document.createElement("div");
       empty.className = "midi-instrument-empty";
-      empty.textContent = isBeat ? i18nText("snd.no_beat_inst_2") : i18nText("snd.no_melodic");
-      section.appendChild(empty);
-      midiChannelList.appendChild(section);
+      empty.textContent = i18nText("snd.no_inst");
+      midiChannelList.appendChild(empty);
       scheduleMidiInstrumentListHeightSync();
       return;
     }
 
     const makeRow = (group) => {
-      const id = `midi-instrument-${activeIndex}-${cssSafeId(group.id)}`;
       const row = document.createElement("div");
-      row.className = `midi-channel-row midi-instrument-row${group.isBeat ? " percussion" : ""}`;
+      row.className = `midi-channel-row midi-instrument-row${getMidiInstrumentCategory(group) === "drums" ? " percussion" : ""}`;
       row.innerHTML = `
-        <input type="checkbox" value="${escapeHtml(group.id)}" ${setting.selectedInstrumentGroups.has(group.id) ? "checked" : ""} />
-        <label class="midi-channel-main" for="${escapeHtml(id)}">
+        <div class="midi-channel-main">
           <strong>${escapeHtml(group.displayName || [group.instrumentName || group.programText || i18nText("snd.no_inst"), group.partName].filter(Boolean).join(" · "))}</strong>
-        </label>
+        </div>
         <span class="midi-channel-sub">
           ${group.programNumberText ? `<span>${escapeHtml(group.programNumberText)}</span>` : ""}
           ${escapeHtml(i18nText("snd.note_count_range", [formatCount(group.noteCount), group.rangeText || i18nText("ui.no_notes")]))}
           ${group.duplicateMerged ? `<em>${escapeHtml(i18nText("snd.dup_merge", [formatCount(group.duplicateMerged)]))}</em>` : ""}
-          ${group.isBeat ? `<em>${escapeHtml(i18nText("ui.beat_group"))}</em>` : ""}
         </span>
         <div class="midi-instrument-row-actions">
           <button class="midi-preview-btn" type="button" data-midi-preview="${escapeHtml(group.id)}">${escapeHtml(i18nText("ui.listen"))}</button>
           <div class="midi-instrument-selected-parts" aria-label="${escapeHtml(i18nText("mml.chs"))}">${renderMidiGroupChannelButtons(group)}</div>
         </div>
       `;
-      const input = row.querySelector("input");
-      if (input) {
-        input.id = id;
-        input.addEventListener("change", () => {
-          if (input.checked) setting.selectedInstrumentGroups.add(group.id);
-          else setting.selectedInstrumentGroups.delete(group.id);
-          renderMidiRoleList();
-          updateMidiRoleControls();
-        });
-      }
       row.querySelector("[data-midi-preview]")?.addEventListener("click", (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
@@ -4964,42 +4929,34 @@
       return row;
     };
 
-    if (isBeat) {
+    const grouped = new Map(MIDI_INSTRUMENT_CATEGORY_ORDER.map(key => [key, []]));
+    for (const group of groups) {
+      const key = getMidiInstrumentCategory(group);
+      grouped.get(grouped.has(key) ? key : "other").push(group);
+    }
+    for (const key of MIDI_INSTRUMENT_CATEGORY_ORDER) {
+      const items = grouped.get(key) || [];
+      if (!items.length) continue;
+      const label = i18nText(MIDI_INSTRUMENT_CATEGORY_LABEL_KEYS[key] || "midi.other_instruments");
       const section = document.createElement("details");
-      section.open = true;
-      section.className = "midi-instrument-section";
+      section.dataset.midiCategory = key;
+      section.open = midiInstrumentSectionOpenState.get(key) !== false;
+      section.className = `midi-instrument-section midi-instrument-category-section category-${key}`;
+      section.addEventListener("toggle", () => {
+        midiInstrumentSectionOpenState.set(key, section.open);
+      });
       section.innerHTML = `
         <summary class="midi-instrument-section-head">
-          <strong>${escapeHtml(i18nText("snd.beat_group_count", [formatCount(groups.length)]))}</strong>
-          <span>${escapeHtml(i18nText("snd.drums_toms"))}</span>
+          <strong>${escapeHtml(i18nText("ui.name_count", [label, formatCount(items.length)]))}</strong>
         </summary>
       `;
-      for (const group of groups) section.appendChild(makeRow(group));
+      for (const group of items) section.appendChild(makeRow(group));
       midiChannelList.appendChild(section);
-    } else {
-      const grouped = new Map(MIDI_INSTRUMENT_CATEGORY_ORDER.map(key => [key, []]));
-      for (const group of sortMidiInstrumentGroups(groups)) {
-        const key = getMidiInstrumentCategory(group);
-        if (!grouped.has(key)) grouped.set("other", []);
-        grouped.get(grouped.has(key) ? key : "other").push(group);
-      }
-      for (const key of MIDI_INSTRUMENT_CATEGORY_ORDER) {
-        const items = grouped.get(key) || [];
-        if (!items.length) continue;
-        const label = i18nText(MIDI_INSTRUMENT_CATEGORY_LABEL_KEYS[key] || "ui.other");
-        const section = document.createElement("details");
-        section.open = true;
-        section.className = `midi-instrument-section midi-instrument-category-section category-${key}`;
-        section.innerHTML = `
-          <summary class="midi-instrument-section-head">
-            <strong>${escapeHtml(i18nText("ui.name_count", [label, formatCount(items.length)]))}</strong>
-          </summary>
-        `;
-        for (const group of items) section.appendChild(makeRow(group));
-        midiChannelList.appendChild(section);
-      }
     }
     scheduleMidiInstrumentListHeightSync();
+    requestAnimationFrame(() => {
+      if (midiChannelList) midiChannelList.scrollTop = previousScrollTop;
+    });
   }
 
   function collectMidiConvertOptionsForSingleChannel(index) {
@@ -5225,7 +5182,7 @@
   function setMidiFullPreviewState(active) {
     midiFullPreviewActive = Boolean(active);
     if (midiFullPreviewBtn) {
-      midiFullPreviewBtn.textContent = midiFullPreviewActive ? i18nText("player.stop") : i18nText("ui.preview_perf");
+      midiFullPreviewBtn.textContent = midiFullPreviewActive ? i18nText("player.stop") : i18nText("midi.listen_original");
       midiFullPreviewBtn.classList.toggle("danger", midiFullPreviewActive);
       midiFullPreviewBtn.setAttribute("aria-pressed", midiFullPreviewActive ? "true" : "false");
     }
@@ -5234,7 +5191,7 @@
   function setMidiSelectedPreviewState(active) {
     midiSelectedPreviewActive = Boolean(active);
     if (midiSelectedPreviewBtn) {
-      midiSelectedPreviewBtn.textContent = midiSelectedPreviewActive ? i18nText("player.stop") : i18nText("ui.preview");
+      midiSelectedPreviewBtn.textContent = midiSelectedPreviewActive ? i18nText("player.stop") : i18nText("midi.listen_mml");
       midiSelectedPreviewBtn.classList.toggle("danger", midiSelectedPreviewActive);
       midiSelectedPreviewBtn.setAttribute("aria-pressed", midiSelectedPreviewActive ? "true" : "false");
     }
@@ -5374,49 +5331,62 @@
     button.setAttribute("aria-pressed", "true");
   }
 
-  function cssSafeId(value) {
-    return String(value).replace(/[^a-zA-Z0-9_-]/g, "-");
+  function updateMidiConvertSummary() {
+    if (!midiConvertSummary || !pendingMidiImport) return;
+    const overview = pendingMidiImport.overview || {};
+    const sourceLabel = pendingMidiImport.name || getMidiImportSourceLabel(pendingMidiImport);
+    const selectedChannelCount = pendingMidiSettings ? countActiveMidiExportChannels() : 0;
+    midiConvertSummary.textContent = i18nText("midi.summary", [
+      sourceLabel,
+      formatCount(selectedChannelCount),
+      formatCount(Number(overview.noteCount) || 0)
+    ]);
+  }
+
+  function updateMidiConvertApplyState() {
+    if (!midiConvertApply) return;
+    const hasSelectedChannel = Boolean(pendingMidiSettings && countActiveMidiExportChannels() > 0);
+    const disabled = midiConvertBusy || !hasSelectedChannel;
+    midiConvertApply.disabled = disabled;
+    midiConvertApply.setAttribute("aria-disabled", disabled ? "true" : "false");
+    midiConvertApply.title = hasSelectedChannel ? "" : i18nText("midi.choose_target_channel");
   }
 
   function updateMidiRoleControls() {
-    if (!pendingMidiSettings) return;
-    pendingMidiSettings.activeIndex = clampInt(Number(pendingMidiSettings.activeIndex || 0), 0, 5);
+    if (!pendingMidiSettings) {
+      updateMidiConvertApplyState();
+      return;
+    }
     pendingMidiSettings.partCount = countActiveMidiExportChannels();
-    const rows = Array.from(midiRoleList?.querySelectorAll(".midi-role-row") || []);
-    rows.forEach((row, i) => {
-      const active = i === pendingMidiSettings.activeIndex;
-      row.classList.remove("disabled");
-      row.classList.toggle("active", active);
-      row.querySelectorAll("button, select, input").forEach(control => { control.disabled = false; });
-    });
-    renderActiveMidiInstrumentList();
+    updateMidiConvertSummary();
+    updateMidiConvertApplyState();
   }
 
   function buildMidiPartSoundPreset(exportChannels, groups, partCount = 6) {
     const keys = defaultPartPresetKeys();
     const groupMap = new Map((groups || []).map(g => [String(g.id), g]));
     const count = clampInt(Number(partCount) || 6, 1, 6);
+    const instrumentMap = window.MobibardInstrumentMap;
+
     for (let i = 0; i < count; i++) {
       const channel = exportChannels?.[i];
       const selected = Array.isArray(channel?.selectedInstrumentGroups)
         ? channel.selectedInstrumentGroups.map(id => groupMap.get(String(id))).filter(Boolean)
         : [];
       if (!selected.length) continue;
-      selected.sort((a, b) => (Number(b.noteCount) || 0) - (Number(a.noteCount) || 0)
-        || String(a.instrumentName || "").localeCompare(String(b.instrumentName || ""), "ko")
-        || String(a.partName || "").localeCompare(String(b.partName || ""), "ko"));
-      keys[i] = midiGroupToPresetKey(selected[0]);
+
+      // 설정 파일이 로드되어 있으면 선택된 모든 MIDI 악기의 노트 수를 합산해
+      // 14개 마비노기 악기 중 가장 비중이 큰 대표 음색을 고른다.
+      const mappedTarget = instrumentMap?.chooseTarget?.(selected);
+      if (mappedTarget?.presetKey) {
+        keys[i] = sanitizePresetKey(mappedTarget.presetKey);
+        continue;
+      }
+
+      // 설정 파일이 없거나 잘못된 경우에도 범주 외 코드는 1번 피아노를 사용한다.
+      keys[i] = DEFAULT_PART_PRESET_KEY;
     }
     return normalizePresetKeyArray(keys);
-  }
-
-  function midiGroupToPresetKey(group) {
-    if (!group) return DEFAULT_PART_PRESET_KEY;
-    const program = clampInt(Number(group.program ?? group.preset ?? 0), 0, 127);
-    const preset = findMidiBankPreset(group.bankMsb, group.bankLsb, program, {
-      preferDrum: Boolean(group.isBeat || group.isPercussion)
-    });
-    return preset ? presetKey(preset) : `${group.isBeat || group.isPercussion ? 128 : 0}:${program}`;
   }
 
   function rememberMidiPartSoundPreset(keys) {
@@ -5500,9 +5470,8 @@
       const normalized = normalizeImportedFullMml(result.mml);
       setMainMml(normalized.mml);
       rememberSuggestedMmlSaveFileName(pendingMidiImport.name);
-      googleDriveMmlFileId = "";
-      googleDriveMmlFileName = "";
-      const autoSoundApplied = rememberMidiPartSoundPreset(midiSoundPresetKeys);
+        googleDriveMmlFileName = "";
+      rememberMidiPartSoundPreset(midiSoundPresetKeys);
       const midiGroupCount = Number(pendingMidiSettings?.groups?.length || 0);
       midiConvertDialog?.close();
       setMidiConvertBusy(false);
@@ -5518,11 +5487,7 @@
       });
       showDialog(
         i18nText("midi.convert_done_title", [sourceLabel]),
-        result.message +
-          (saved ? i18nText("mml.saved_chars", [formatCount(saved)]) : "") +
-          (autoSoundApplied
-            ? i18nText("midi.sound_applied", [sourceLabel])
-            : i18nText("midi.sound_info_updated", [sourceLabel]))
+        result.message
       );
     } catch (err) {
       setMidiConvertBusy(false);
@@ -5550,8 +5515,8 @@
     }
     if (midiConvertApply) {
       midiConvertApply.textContent = busy ? i18nText("ui.conv") : i18nText("ui.convert");
-      if (busy) midiConvertApply.disabled = true;
     }
+    updateMidiConvertApplyState();
   }
 
   function waitForBrowserPaint() {
@@ -7550,7 +7515,6 @@
       syncMainFromParts();
     }
     clearSuggestedMmlSaveFileName();
-    googleDriveMmlFileId = "";
     googleDriveMmlFileName = "";
     flashButton(pasteBtn, i18nText("st.paste_done"));
   }
@@ -8360,7 +8324,7 @@
     ctx.clip();
 
     const limit = pianoRollExpanded ? 1800 : 720;
-    for (const { start, end, noteDuration, midi, part, active, muted } of visibleNotes.slice(0, limit)) {
+    for (const { end, noteDuration, midi, part, active, muted } of visibleNotes.slice(0, limit)) {
       const metrics = keyLayout.getKeyMetrics(midi);
       const laneWidth = metrics.width * width / 100;
       const noteWidth = Math.max(2, laneWidth * (metrics.black ? 0.82 : 0.72));
@@ -8765,7 +8729,6 @@
     const s = String(part || "");
     const invalid = new Set();
     let i = 0;
-    let defaultLength = 4;
 
     const mark = (from, to) => {
       const end = Math.max(from + 1, to);
@@ -8865,7 +8828,6 @@
         i++;
         const n = readNumberRange();
         if (n.value == null || ![1, 2, 4, 8, 16, 32, 64].includes(n.value)) mark(n.start === n.end ? start : n.start, n.end);
-        else defaultLength = n.value;
         readDots();
       } else if (lower === "v") {
         if (ch !== "V") mark(start, start + 1);

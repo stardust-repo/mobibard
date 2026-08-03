@@ -630,5 +630,5 @@
     return String(node?.textContent || "").trim();
   }
 
-  window.MabiMusicXml = { musicXmlToMidiBytes, extractMusicXmlText };
+  window.MabiMusicXml = { musicXmlToMidiBytes };
 })();

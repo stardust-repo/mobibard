@@ -185,21 +185,6 @@ class SoundFont {
     return { maxEnd, count };
   }
 
-  function scheduleNotes(ctx, sf, preset, notes, baseTime, master, fromSec = 0, destination = null, activeSources = null) {
-    const prepared = prepareNotes(ctx, sf, preset, notes);
-    const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), fromSec);
-    const result = schedulePreparedNotes(ctx, prepared, {
-      baseTime,
-      fromSec,
-      windowStart: fromSec,
-      windowEnd: duration + 1,
-      destination,
-      activeSources,
-      scheduledIds: new Set()
-    });
-    return result.maxEnd;
-  }
-
 function selectRegion(regions, midi, velocity) {
   let best = null, bestScore = -1;
   for (const r of regions) {
@@ -282,11 +267,7 @@ function u16le(b,p){ return b[p] | (b[p+1] << 8); }
 function i16le(b,p){ const v = u16le(b,p); return v & 0x8000 ? v - 0x10000 : v; }
 function u32le(b,p){ return (b[p] | (b[p+1] << 8) | (b[p+2] << 16) | (b[p+3] << 24)) >>> 0; }
 function i8(v){ return v & 0x80 ? v - 0x100 : v; }
-function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-function clampInt(v, a, b) { return Math.round(clamp(Number.isFinite(v) ? v : a, a, b)); }
-function unique(a) { return [...new Set(a)]; }
-function formatTime(sec) { const m = Math.floor(sec / 60), s = Math.round(sec % 60); return m ? tr("time.min_sec", [m, s]) : tr("time.sec", [s]); }
 
 
-  window.MabiSf2 = { parseSoundFont, prepareNotes, schedulePreparedNotes, scheduleNotes };
+  window.MabiSf2 = { parseSoundFont, prepareNotes, schedulePreparedNotes };
 })();

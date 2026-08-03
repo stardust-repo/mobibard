@@ -62,7 +62,7 @@ function splitMmlPartsDetailed(text) {
 
 function parseMmlPart(s, partIndex, options = {}) {
   const globalOffset = Number(options.globalOffset) || 0;
-  let i = 0, beat = 0, octave = 4, length = 4, defaultDuration = 1, volume = 8, order = 0;
+  let i = 0, beat = 0, octave = 4, defaultDuration = 1, volume = 8, order = 0;
   let pendingTie = false;
   let lastTieTarget = null;
   const notes = [];
@@ -198,7 +198,7 @@ function parseMmlPart(s, partIndex, options = {}) {
       i++; const v = readNumber(); if (v == null) throw new Error(tr("mml.err_part_o_required", [partIndex + 1]));
       if (v < 0 || v > 9) throw new Error(tr("mml.err_part_o_range", [partIndex + 1, v])); octave = v;
     } else if (ch === "l") {
-      i++; const v = readNumber(); if (v == null || !isValidLength(v)) throw new Error(tr("mml.err_part_l_range", [partIndex + 1])); length = v; defaultDuration = readDots(4 / v);
+      i++; const v = readNumber(); if (v == null || !isValidLength(v)) throw new Error(tr("mml.err_part_l_range", [partIndex + 1])); defaultDuration = readDots(4 / v);
     } else if (ch === "v") {
       i++; const v = readNumber(); if (v == null) throw new Error(tr("mml.err_part_v_required", [partIndex + 1]));
       if (v < 0 || v > 15) throw new Error(tr("mml.err_part_v_range", [partIndex + 1, v])); volume = v;
@@ -334,5 +334,5 @@ function isValidLength(n) { return [1,2,4,8,16,32,64].includes(n); }
     return `MML@${list.join(",")};`;
   }
 
-  window.MabiMml = { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, beatToSeconds, composeMml };
+  window.MabiMml = { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml };
 })();

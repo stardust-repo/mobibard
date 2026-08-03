@@ -5,7 +5,7 @@
   const fmt = value => Number(value || 0).toLocaleString(document.documentElement.lang || undefined);
   const escapeRegExp = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  const { clampInt, unique } = window.MabiUtils;
+  const { clampInt } = window.MabiUtils;
   const NOTE_NAMES = ["c", "c+", "d", "d+", "e", "f", "f+", "g", "g+", "a", "a+", "b"];
   const MML_MIN_MIDI = 12; // O0C
   const MML_MAX_MIDI = 127; // O9G (MIDI maximum)
@@ -72,7 +72,6 @@
       instrumentChoices,
       // 내부 변환용: 채널 + 파트 + Bank/Program 상태를 보존하며 중복 병합 경계로 사용한다.
       sourceInstrumentGroups: sourceGroups,
-      hasBeatGroups: instrumentChoices.some(g => g.isBeat),
       channels: instrumentChoices
     };
   }
@@ -155,6 +154,7 @@
           program: normalizeProgram(group.program),
           drumMidi: Number.isInteger(group.drumMidi) ? group.drumMidi : null,
           isBeat: Boolean(group.isBeat),
+          isDrumNoteGroup: Boolean(group.isDrumNoteGroup || Number.isInteger(group.drumMidi)),
           isPercussion: Boolean(group.isBeat),
           noteCount: 0,
           duplicateMerged: 0,
@@ -182,7 +182,7 @@
         || programName(choice.program);
       const displayName = instrumentDisplayName(instrumentName, choice.partName);
       const programNumberText = tr("midi.program_number", [choice.program + 1]);
-      const programText = choice.isBeat ? tr("midi.name_beat", [instrumentName]) : instrumentName;
+      const programText = instrumentName;
       return {
         id: choice.id,
         partName: choice.partName,
@@ -191,6 +191,7 @@
         program: choice.program,
         drumMidi: choice.drumMidi,
         isBeat: choice.isBeat,
+        isDrumNoteGroup: choice.isDrumNoteGroup,
         isPercussion: choice.isPercussion,
         instrumentName,
         displayName,
@@ -200,7 +201,7 @@
         duplicateMerged: choice.duplicateMerged,
         rangeText,
         sourceGroupIds: [...new Set(choice.sourceGroupIds)],
-        defaultChecked: !choice.isBeat,
+        defaultChecked: false,
         description: buildInstrumentGroupDescription({
           instrumentName,
           displayName,
@@ -228,7 +229,6 @@
     chunks.push(tr("midi.note_count", [fmt(group.noteCount)]));
     if (group.duplicateMerged) chunks.push(tr("midi.dup_planned", [fmt(group.duplicateMerged)]));
     chunks.push(group.rangeText);
-    if (group.isBeat) chunks.push(tr("ui.beat"));
     return chunks.join(" · ");
   }
 
@@ -321,7 +321,7 @@
       isDrumNoteGroup: false,
       instrumentName,
       displayName: instrumentDisplayName(instrumentName, partName),
-      programText: isBeat ? tr("midi.name_beat", [instrumentName]) : instrumentName,
+      programText: instrumentName,
       programNumberText: tr("midi.program_number", [program + 1])
     };
   }
@@ -551,7 +551,6 @@
   }
 
   function midiToMml(bytes, fileName = "MIDI", options = {}) {
-    const sourceLabel = String(options.sourceLabel || "MIDI");
     const midi = parseMidiFile(bytes);
     if (midi.smpteDivision) throw new Error(tr("midi.err_smpte"));
 
@@ -571,9 +570,8 @@
     for (const choice of instrumentGroups) {
       for (const sourceId of choice.sourceGroupIds || []) sourceToChoice.set(sourceId, choice.id);
     }
-    const hasBeatGroupsInFile = instrumentGroups.some(g => g.isBeat);
     const partCount = clampInt(options.partCount ?? (Array.isArray(options.exportChannels) ? options.exportChannels.length : 3), 1, 6);
-    const exportChannels = normalizeExportChannels(options, partCount, instrumentGroups, hasBeatGroupsInFile);
+    const exportChannels = normalizeExportChannels(options, partCount, instrumentGroups);
     const roles = exportChannels.map(ch => ch.role);
     const selectedSet = new Set(exportChannels.flatMap(ch => ch.selectedInstrumentGroups));
 
@@ -628,52 +626,28 @@
     const parts = voices.map((v, i) => voiceToMml64(v, i === 0 ? tempoGridEvents : [], i === 0 ? finalEndGrid : 0));
     const mml = `MML@${parts.join(",")};`;
     const totalUsed = voices.reduce((sum, v) => sum + v.length, 0);
-    const selectedLabels = Array.from(selectedSet)
-      .map(id => choiceMap.get(id))
-      .filter(Boolean)
-      .map(g => g.displayName || instrumentDisplayName(g.instrumentName, g.partName));
-    const channelLines = exportChannels.map((ch, i) => {
-      const names = ch.selectedInstrumentGroups.map(id => choiceMap.get(id)?.displayName || choiceMap.get(id)?.instrumentName).filter(Boolean);
-      const label = names.length > 3 ? tr("ui.more_count", [names.slice(0, 3).join(", "), names.length - 3]) : names.join(", ");
-      const optionLabel = overlapMergeModeLabel(ch.overlapMergeMode ?? ch.overlapMerge);
-      return `${i + 1}. ${roleLabel(ch.role)}${optionLabel ? `/${optionLabel}` : ""}: ${label || tr("ui.none_selected")}`;
-    });
-    const tempoMessage = tempoGridEvents.length > 1
-      ? tr("midi.tempo_applied", [sourceLabel, tempoGridEvents.length])
-      : tr("midi.start_tempo", [tempoGridEvents[0]?.bpm || 120]);
-    const message = [
-      tr("midi.convert_done_named", [fileName]),
-      tr("midi.selected_instruments", [selectedLabels.length > 6 ? tr("ui.more_count", [selectedLabels.slice(0, 6).join(", "), selectedLabels.length - 6]) : selectedLabels.join(", ")]),
-      tr("midi.note_flow", [fmt(rawNotes.length), fmt(mergedCount), fmt(placed), overlapMerged ? tr("midi.overlap_merged_suffix", [fmt(overlapMerged)]) : ""]),
-      tr("midi.output_skipped", [fmt(totalUsed), fmt(skipped)]),
-      tr("midi.settings_summary", [exportChannels.length, quantizeDivision]),
-      tr("midi.channel_settings", [channelLines.join("\n- ")]),
-      tempoMessage,
-      skipped ? tr("midi.skipped_reason", [fmt(skipped)]) : tr("midi.none_skipped"),
-      warnings.length ? tr("ui.warnings_list", [unique(warnings).join("\n- ")]) : ""
-    ].filter(Boolean).join("\n");
+    const message = tr("midi.convert_result_brief", [
+      fmt(exportChannels.length),
+      fmt(rawNotes.length),
+      fmt(totalUsed),
+      fmt(skipped)
+    ]);
     return { mml, parts, message, warnings, selectedInstrumentGroups: Array.from(selectedSet), partCount: exportChannels.length, roles, exportChannels, skipped, unsupportedPitchCount, mergedCount, placed, overlapMerged, quantizeDivision };
   }
 
-  function normalizeExportChannels(options, partCount, instrumentGroups, allowBeat = true) {
-    const active = (instrumentGroups || []).filter(g => g.noteCount > 0);
-    const normalIds = active.filter(g => !g.isBeat).map(g => g.id);
-    const beatIds = active.filter(g => g.isBeat).map(g => g.id);
-    const validIds = new Set(active.map(g => g.id));
+  function normalizeExportChannels(options, partCount, instrumentGroups) {
+    const active = (instrumentGroups || []).filter(group => group.noteCount > 0);
+    const validIds = new Set(active.map(group => group.id));
     const rawChannels = Array.isArray(options.exportChannels) ? options.exportChannels : null;
-    const roles = normalizeRoles(options.roles, partCount, allowBeat && beatIds.length > 0);
+    const roles = normalizeRoles(options.roles, partCount);
     const globalSelected = normalizeSelectedInstrumentGroups(options.selectedInstrumentGroups, instrumentGroups);
 
     return Array.from({ length: partCount }, (_, i) => {
       const raw = rawChannels?.[i] || null;
-      let role = normalizeExportRole(raw?.role || roles[i] || "auto", allowBeat && beatIds.length > 0);
-      if (role === "beat" && (!allowBeat || !beatIds.length)) role = "auto";
-      const allowed = role === "beat" ? beatIds : normalIds;
-      const allowedSet = new Set(allowed);
-      let selected = Array.isArray(raw?.selectedInstrumentGroups)
-        ? raw.selectedInstrumentGroups.map(String).filter(id => validIds.has(id) && allowedSet.has(id))
-        : globalSelected.filter(id => allowedSet.has(id));
-      if (!selected.length) selected = allowed.length ? [allowed[0]] : [];
+      const role = normalizeExportRole(raw?.role || roles[i] || "auto");
+      const selected = Array.isArray(raw?.selectedInstrumentGroups)
+        ? raw.selectedInstrumentGroups.map(String).filter(id => validIds.has(id))
+        : globalSelected.filter(id => validIds.has(id));
       const overlapMergeMode = normalizeOverlapMergeMode(raw?.overlapMergeMode ?? raw?.overlapMerge ?? true);
       return {
         role,
@@ -685,32 +659,26 @@
   }
 
   function normalizeSelectedInstrumentGroups(input, groups) {
-    const active = (groups || []).filter(g => g.noteCount > 0);
-    const validIds = new Set(active.map(g => g.id));
-    let list = Array.isArray(input) ? input.map(String).filter(id => validIds.has(id)) : [];
-    if (!list.length) {
-      const firstNormal = active.find(g => !g.isBeat);
-      if (firstNormal) list = [firstNormal.id];
-    }
-    if (!list.length && active[0]) list = [active[0].id];
+    const active = (groups || []).filter(group => group.noteCount > 0);
+    const validIds = new Set(active.map(group => group.id));
+    const list = Array.isArray(input) ? input.map(String).filter(id => validIds.has(id)) : [];
     return [...new Set(list)];
   }
 
-  function normalizeRoles(input, partCount, allowBeat = true) {
-    const defaults = defaultRoles(partCount, allowBeat);
+  function normalizeRoles(input, partCount) {
+    const defaults = defaultRoles(partCount);
     return Array.from({ length: partCount }, (_, i) => {
       const raw = Array.isArray(input) ? String(input[i] || defaults[i] || "auto") : (defaults[i] || "auto");
-      return normalizeExportRole(raw, allowBeat);
+      return normalizeExportRole(raw);
     });
   }
 
-  function normalizeExportRole(role, allowBeat = true) {
+  function normalizeExportRole(role) {
     const raw = String(role || "auto").toLowerCase();
-    if (raw === "beat") return allowBeat ? "beat" : "auto";
     return ["auto", "high", "low"].includes(raw) ? raw : "auto";
   }
 
-  function defaultRoles(partCount, allowBeat = true) {
+  function defaultRoles(partCount) {
     const roles = Array.from({ length: partCount }, () => "auto");
     if (partCount >= 1) roles[0] = "high";
     if (partCount >= 3) roles[2] = "low";
@@ -754,22 +722,11 @@
     return clampInt(Math.round(max * (1 + 0.12 * Math.min(nums.length - 1, 4))), 0, 127);
   }
 
-  function roleLabel(role) {
-    return ({ auto: tr("ui.auto"), high: tr("ui.high"), low: tr("ui.low"), beat: tr("ui.beat") })[role] || tr("ui.auto");
-  }
-
   function normalizeOverlapMergeMode(value) {
     if (value === true || value === "true") return "all";
     if (value === false || value === "false") return "none";
     const mode = String(value || "all").toLowerCase();
     return ["all", "half", "none"].includes(mode) ? mode : "all";
-  }
-
-  function overlapMergeModeLabel(value) {
-    const mode = normalizeOverlapMergeMode(value);
-    if (mode === "all") return tr("midi.merge_all");
-    if (mode === "half") return tr("midi.merge_half");
-    return "";
   }
 
   function assignNotesToVoices(notes, exportChannelsOrCount, oldRoles = null) {
@@ -783,7 +740,6 @@
     let skipped = 0;
     let placed = 0;
     let overlapMerged = 0;
-    const overallPitchSpread = getMelodicPitchSpread(notes);
     const startupRoleContexts = buildStartupRoleContexts(notes, exportChannels);
     let i = 0;
 
@@ -797,7 +753,7 @@
       // 1차: 정상 배치를 우선하되, 고음/저음 역할과 반대로 1옥타브를 초과해 튀는 노트는
       // 겹침 병합 허용 채널까지 포함해 더 가까운 성부가 있는지 먼저 비교한다.
       while (remaining.length) {
-        const best = findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, overallPitchSpread, startupRoleContexts);
+        const best = findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, startupRoleContexts);
         if (!best) break;
         const [chosen] = remaining.splice(best.noteIndex, 1);
         if (best.isMerge) {
@@ -817,7 +773,7 @@
 
       // 2차: 정상 배치가 불가능한 노트만 겹침 병합으로 구제한다.
       while (remaining.length) {
-        const best = findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid, overallPitchSpread, startupRoleContexts);
+        const best = findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid, startupRoleContexts);
         if (!best) break;
         const [chosen] = remaining.splice(best.noteIndex, 1);
         trimActiveNoteAt(voices[best.channelIndex], startGrid);
@@ -835,7 +791,7 @@
     return { voices, skipped, placed, overlapMerged };
   }
 
-  function findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, overallPitchSpread = null, startupRoleContexts = null) {
+  function findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, startupRoleContexts = null) {
     let best = null;
     const pitchSpread = getMelodicPitchSpread(remaining);
     for (let noteIndex = 0; noteIndex < remaining.length; noteIndex++) {
@@ -889,7 +845,6 @@
           pitchDistance: candidate.pitchDistance,
           nearestPitchDistance,
           pitchSpread,
-          overallPitchSpread,
           isMerge,
           playedLength: candidate.playedLength,
           mergeAsNormalCandidate: isMerge,
@@ -902,7 +857,7 @@
     return best;
   }
 
-  function findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid, overallPitchSpread = null, startupRoleContexts = null) {
+  function findBestOverlapMergePlacement(remaining, exportChannels, voices, assignedChannels, startGrid, startupRoleContexts = null) {
     let best = null;
     const pitchSpread = getMelodicPitchSpread(remaining);
     for (let noteIndex = 0; noteIndex < remaining.length; noteIndex++) {
@@ -931,7 +886,6 @@
           pitchDistance: candidate.pitchDistance,
           nearestPitchDistance,
           pitchSpread,
-          overallPitchSpread,
           isMerge: true,
           playedLength: candidate.playedLength,
           startupRoleContext: getStartupRoleContextForNote(note, startupRoleContexts)
@@ -966,11 +920,9 @@
 
   function canChannelUseNote(note, cfg) {
     if (!cfg) return false;
-    const wantsBeat = cfg.role === "beat";
-    if (wantsBeat !== isBeatCandidate(note)) return false;
     const selected = cfg.selectedInstrumentGroups;
-    if (Array.isArray(selected) && selected.length && !selected.includes(note.instrumentChoiceId)) return false;
-    return true;
+    if (!Array.isArray(selected) || !selected.length) return false;
+    return selected.includes(note.instrumentChoiceId);
   }
 
   function getMelodicPitchSpread(notes) {
@@ -991,8 +943,7 @@
   function buildStartupRoleContexts(notes, exportChannels) {
     const contexts = new Map();
     const melodicChannels = (exportChannels || [])
-      .map((cfg, channelIndex) => ({ cfg, channelIndex }))
-      .filter(item => item.cfg?.role !== "beat");
+      .map((cfg, channelIndex) => ({ cfg, channelIndex }));
     if (!melodicChannels.length) return contexts;
 
     const instrumentIds = [...new Set((notes || [])
@@ -1046,7 +997,7 @@
   }
 
   function startupRoleSeedScore(note, role, referenceNote, context) {
-    if (!context || referenceNote || role === "beat" || !context.noteIds?.has(note?.id)) return 0;
+    if (!context || referenceNote || !context.noteIds?.has(note?.id)) return 0;
     const noteMidi = Number(note?.midi);
     const minMidi = Number(context.minMidi);
     const maxMidi = Number(context.maxMidi);
@@ -1072,7 +1023,7 @@
     return 0;
   }
 
-  function melodicRoleDirectionScore(note, role, pitchSpread, fallbackPitchSpread = null) {
+  function melodicRoleDirectionScore(note, role, pitchSpread) {
     if (role !== "high" && role !== "low") return 500;
 
     // 같은 시작 시점에 여러 음이 있으면 그 안에서 고/저 역할을 먼저 나눈다.
@@ -1159,19 +1110,6 @@
     const playedLength = Math.max(0, Number(options.playedLength) || 0);
     const durGrid = note.durGrid || Math.max(1, note.endGrid - note.startGrid);
 
-    if (role === "beat") {
-      // 비트 파트는 음높이 성부보다 타악기 우선순위가 더 중요하다.
-      // 겹침 병합에서는 이미 더 오래 울린 타격음을 먼저 희생시킨다.
-      return [
-        400,
-        drumPriority(note.midi),
-        options.isMerge ? playedLength : 0,
-        note.velocity || 0,
-        durGrid,
-        -channelIndex
-      ];
-    }
-
     // C4 같은 고정 옥타브 기준은 쓰지 않는다.
     // 고음/저음 역할은 성부 연속성보다 먼저 본다.
     // 같은 시작 시점에 여러 음이 있으면 그 안에서
@@ -1186,7 +1124,7 @@
       ? optionPitchDistance
       : notePitchDistance(note, referenceNote);
     const proximity = pitchDistance === null ? 0 : Math.max(0, 128 - Math.min(128, pitchDistance));
-    const roleDirection = melodicRoleDirectionScore(note, role, options.pitchSpread, options.overallPitchSpread);
+    const roleDirection = melodicRoleDirectionScore(note, role, options.pitchSpread);
     const startupRoleFit = startupRoleSeedScore(note, role, referenceNote, options.startupRoleContext);
     const relaxRolePriority = shouldRelaxRolePriority(note, role, referenceNote, pitchDistance, options.nearestPitchDistance, options.pitchSpread);
     // 고음/저음 역할은 자동보다 기본 우선권을 가진다.
@@ -1265,16 +1203,6 @@
       if (av !== bv) return av - bv;
     }
     return 0;
-  }
-
-  function drumPriority(midi) {
-    if ([35, 36].includes(midi)) return 100; // Kick
-    if ([38, 40, 37].includes(midi)) return 96; // Snare / side stick
-    if ([42, 44, 46].includes(midi)) return 90; // Hi-hat
-    if ([49, 51, 52, 55, 57, 59].includes(midi)) return 84; // Cymbal / ride
-    if ([41, 43, 45, 47, 48, 50].includes(midi)) return 76; // Tom
-    if ([39, 54, 56, 69, 70, 75, 80, 81].includes(midi)) return 68;
-    return GM_DRUM_NAMES[midi] ? 60 : 0;
   }
 
   function voiceToMml64(notes, tempoEvents = [], finalGrid = 0) {

@@ -24,5 +24,5 @@
     return out;
   }
 
-  window.MabiUtils = { clamp, clampInt, unique, formatTime, shortError, base64ToUint8Array };
+  window.MabiUtils = { clampInt, unique, formatTime, shortError, base64ToUint8Array };
 })();
