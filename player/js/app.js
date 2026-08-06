@@ -52,7 +52,16 @@
   const GOOGLE_DRIVE_TEXT_EXPORT_MIME = "text/plain";
   const GOOGLE_AUTO_RECONNECT_PREF = "googleAutoReconnect";
   const GOOGLE_TOKEN_CACHE_PREF = "googleTokenCache";
-  const GOOGLE_LOCAL_ONLY_PREFS = new Set([GOOGLE_AUTO_RECONNECT_PREF, GOOGLE_TOKEN_CACHE_PREF]);
+  const MIDI_CONVERT_CACHE_PREF = "midiConvertLastSettings";
+  const MML_DRAFT_CACHE_PREF = "mmlDraft";
+  const MIDI_CONVERT_CACHE_VERSION = 1;
+  const MML_DRAFT_CACHE_VERSION = 1;
+  const GOOGLE_LOCAL_ONLY_PREFS = new Set([
+    GOOGLE_AUTO_RECONNECT_PREF,
+    GOOGLE_TOKEN_CACHE_PREF,
+    MIDI_CONVERT_CACHE_PREF,
+    MML_DRAFT_CACHE_PREF
+  ]);
   const GUEST_AVATAR_URL = "assets/icons/guest-user.svg";
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
@@ -151,6 +160,7 @@
   const pianoRollToggleLabel = $("pianoRollToggleLabel");
   const playInfo = $("playInfo");
   const copyBtn = $("copyBtn");
+  const clearAllMmlBtn = $("clearAllMmlBtn");
   const pasteBtn = $("pasteBtn");
   const saveBtn = $("saveBtn");
   const midiExtractBtn = $("midiExtractBtn");
@@ -335,6 +345,8 @@
   let rafId = 0;
   let syncing = false;
   let copyTimer = 0;
+  let mmlDraftSaveTimer = 0;
+  let mmlDraftRestoring = false;
   let activeTabName = "main";
   let isSeeking = false;
   let seekRestartTimer = 0;
@@ -494,6 +506,7 @@
     });
     installPianoRollRefreshHooks();
     copyBtn.addEventListener("click", () => void copyVisibleMml());
+    clearAllMmlBtn?.addEventListener("click", clearAllMmlChannels);
     splitCopyBtn?.addEventListener("click", () => openSplitCopyDialog());
     splitCopyRebuild?.addEventListener("click", () => buildSplitCopyPages());
     splitCopyClose?.addEventListener("click", () => splitCopyDialog?.close());
@@ -628,14 +641,17 @@
     });
     for (const button of midiBulkInstrumentButtons) {
       button.addEventListener("click", () => {
+        if (button.disabled) return;
         const selected = button.getAttribute("aria-pressed") !== "true";
         setMidiBulkChannelButtonState(button, selected);
         updateMidiBulkAllInstrumentButtonState();
       });
     }
     midiBulkAllInstrumentBtn?.addEventListener("click", () => {
-      const shouldSelectAll = !midiBulkInstrumentButtons.every(button => button.getAttribute("aria-pressed") === "true");
-      for (const button of midiBulkInstrumentButtons) setMidiBulkChannelButtonState(button, shouldSelectAll);
+      const availableButtons = midiBulkInstrumentButtons.filter(button => !button.disabled);
+      if (!availableButtons.length) return;
+      const shouldSelectAll = !availableButtons.every(button => button.getAttribute("aria-pressed") === "true");
+      for (const button of availableButtons) setMidiBulkChannelButtonState(button, shouldSelectAll);
       updateMidiBulkAllInstrumentButtonState();
     });
     midiBulkClearBtn?.addEventListener("click", () => applyMidiBulkAssignment(false));
@@ -682,8 +698,15 @@
       t.addEventListener("scroll", () => syncPartHighlightScroll(i));
     });
     tabs.forEach(btn => btn.addEventListener("click", () => selectTab(btn.dataset.tab)));
+    const restoredDraftTab = restoreMmlDraftCache();
     normalizeTextareaCommands(mainMml);
     syncPartsFromMain();
+    if (restoredDraftTab) selectTab(restoredDraftTab);
+    window.addEventListener("pagehide", saveMmlDraftNow);
+    window.addEventListener("beforeunload", saveMmlDraftNow);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") saveMmlDraftNow();
+    });
     applyPlaybackSpeed(false);
     applyOutputVolume();
     updateSoundFontUi();
@@ -1193,6 +1216,18 @@
   function removeLocalPrefOnly(name) {
     try { localStorage.removeItem(PREF_PREFIX + name); }
     catch (_) {}
+  }
+
+  function readLocalJsonPref(name) {
+    const raw = readPref(name);
+    if (!raw) return null;
+    try { return JSON.parse(raw); }
+    catch (_) { return null; }
+  }
+
+  function writeLocalJsonPref(name, value) {
+    try { writeLocalPrefOnly(name, JSON.stringify(value)); return true; }
+    catch (_) { return false; }
   }
 
   function shouldGoogleAutoReconnect() {
@@ -2871,7 +2906,8 @@
       name,
       overview,
       sourceType: "musicxml",
-      sourceLabel: "MusicXML"
+      sourceLabel: "MusicXML",
+      cacheFingerprint: buildSourceFileFingerprint("musicxml", bytes)
     };
   }
 
@@ -4501,8 +4537,9 @@
     }
 
     pendingMidiSettings = createDefaultMidiSettings(groups);
-    applyInitialMidiGroupAssignment(pendingMidiSettings);
     midiInstrumentSectionOpenState.clear();
+    const restoredCachedSettings = restoreLastMidiConvertSettings(importData, pendingMidiSettings);
+    if (!restoredCachedSettings) applyInitialMidiGroupAssignment(pendingMidiSettings);
 
     if (midiConvertTitle) midiConvertTitle.textContent = i18nText("cfg.conv_cfg", [sourceLabel]);
     if (midiGuideBox) midiGuideBox.setAttribute("aria-label", i18nText("midi.guide_label", [sourceLabel]));
@@ -4522,6 +4559,127 @@
       // 오래된 브라우저에서는 기본값으로 바로 변환한다.
       applyMidiConvertDialog();
     }
+  }
+
+  let sourceFingerprintCrcTable = null;
+
+  function buildSourceFileFingerprint(sourceType, bytes) {
+    let data;
+    if (bytes instanceof Uint8Array) {
+      data = bytes;
+    } else if (ArrayBuffer.isView(bytes)) {
+      data = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    } else if (bytes instanceof ArrayBuffer) {
+      data = new Uint8Array(bytes);
+    } else {
+      data = new Uint8Array(0);
+    }
+    if (!sourceFingerprintCrcTable) {
+      sourceFingerprintCrcTable = new Uint32Array(256);
+      for (let i = 0; i < 256; i++) {
+        let value = i;
+        for (let bit = 0; bit < 8; bit++) {
+          value = (value & 1) ? (0xEDB88320 ^ (value >>> 1)) : (value >>> 1);
+        }
+        sourceFingerprintCrcTable[i] = value >>> 0;
+      }
+    }
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < data.length; i++) {
+      crc = sourceFingerprintCrcTable[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+    }
+    const checksum = ((crc ^ 0xFFFFFFFF) >>> 0).toString(16).padStart(8, "0");
+    return `${String(sourceType || "midi").toLowerCase()}:${data.byteLength}:${checksum}`;
+  }
+
+  function getMidiImportCacheFingerprint(importData) {
+    const saved = String(importData?.cacheFingerprint || "").trim();
+    if (saved) return saved;
+    return buildSourceFileFingerprint(importData?.sourceType || "midi", importData?.bytes);
+  }
+
+  function midiGroupCacheSignature(group) {
+    return [
+      Number.isInteger(group?.program) ? group.program : 0,
+      Number.isInteger(group?.drumMidi) ? group.drumMidi : "-",
+      Number(group?.noteCount) || 0,
+      Array.isArray(group?.sourceGroupIds) ? group.sourceGroupIds.length : 0,
+      group?.isBeat ? 1 : 0
+    ].join(":");
+  }
+
+  function serializeMidiConvertSettings(importData, settings) {
+    const groups = Array.isArray(settings?.groups) ? settings.groups : [];
+    const indexById = new Map(groups.map((group, index) => [String(group.id), index]));
+    return {
+      version: MIDI_CONVERT_CACHE_VERSION,
+      fingerprint: getMidiImportCacheFingerprint(importData),
+      sourceType: String(importData?.sourceType || "midi"),
+      sourceName: String(importData?.name || ""),
+      savedAt: Date.now(),
+      groupSignatures: groups.map(midiGroupCacheSignature),
+      quantizeDivision: Number(settings?.quantizeDivision) === 32 ? 32 : 64,
+      channels: Array.from({ length: 6 }, (_, index) => {
+        const channel = settings?.channels?.[index] || {};
+        const selectedGroupIndexes = Array.from(channel.selectedInstrumentGroups || [])
+          .map(id => indexById.get(String(id)))
+          .filter(groupIndex => Number.isInteger(groupIndex));
+        return {
+          role: ["auto", "high", "low"].includes(channel.role) ? channel.role : "auto",
+          overlapMergeMode: normalizeOverlapMergeMode(channel.overlapMergeMode ?? channel.overlapMerge),
+          selectedGroupIndexes
+        };
+      }),
+      sectionOpenState: Object.fromEntries(
+        MIDI_INSTRUMENT_CATEGORY_ORDER
+          .filter(category => midiInstrumentSectionOpenState.has(category))
+          .map(category => [category, midiInstrumentSectionOpenState.get(category) !== false])
+      )
+    };
+  }
+
+  function saveLastMidiConvertSettings(importData, settings) {
+    if (!importData || !settings) return;
+    writeLocalJsonPref(MIDI_CONVERT_CACHE_PREF, serializeMidiConvertSettings(importData, settings));
+  }
+
+  function restoreLastMidiConvertSettings(importData, settings) {
+    const cached = readLocalJsonPref(MIDI_CONVERT_CACHE_PREF);
+    if (!cached || cached.version !== MIDI_CONVERT_CACHE_VERSION) return false;
+    if (cached.fingerprint !== getMidiImportCacheFingerprint(importData)) return false;
+
+    const groups = Array.isArray(settings?.groups) ? settings.groups : [];
+    const signatures = groups.map(midiGroupCacheSignature);
+    if (!Array.isArray(cached.groupSignatures)
+      || cached.groupSignatures.length !== signatures.length
+      || cached.groupSignatures.some((signature, index) => signature !== signatures[index])) {
+      return false;
+    }
+
+    settings.quantizeDivision = Number(cached.quantizeDivision) === 32 ? 32 : 64;
+    for (let index = 0; index < 6; index++) {
+      const target = settings.channels?.[index];
+      const source = cached.channels?.[index];
+      if (!target || !source) continue;
+      target.role = ["auto", "high", "low"].includes(source.role) ? source.role : target.role;
+      target.overlapMergeMode = normalizeOverlapMergeMode(source.overlapMergeMode);
+      target.overlapMerge = target.overlapMergeMode !== "none";
+      target.selectedInstrumentGroups.clear();
+      for (const groupIndex of source.selectedGroupIndexes || []) {
+        const group = groups[Number(groupIndex)];
+        if (group) target.selectedInstrumentGroups.add(group.id);
+      }
+    }
+
+    const openState = cached.sectionOpenState;
+    if (openState && typeof openState === "object" && !Array.isArray(openState)) {
+      for (const category of MIDI_INSTRUMENT_CATEGORY_ORDER) {
+        if (typeof openState[category] === "boolean") {
+          midiInstrumentSectionOpenState.set(category, openState[category]);
+        }
+      }
+    }
+    return true;
   }
 
   function createDefaultMidiSettings(groups) {
@@ -4824,9 +4982,37 @@
 
   function updateMidiBulkAllInstrumentButtonState() {
     if (!midiBulkAllInstrumentBtn) return;
-    const allSelected = midiBulkInstrumentButtons.length > 0
-      && midiBulkInstrumentButtons.every(button => button.getAttribute("aria-pressed") === "true");
+    const availableButtons = midiBulkInstrumentButtons.filter(button => !button.disabled);
+    const allSelected = availableButtons.length > 0
+      && availableButtons.every(button => button.getAttribute("aria-pressed") === "true");
     setMidiBulkChannelButtonState(midiBulkAllInstrumentBtn, allSelected);
+  }
+
+  function updateMidiBulkInstrumentAvailability() {
+    const categoryCounts = new Map();
+    for (const group of pendingMidiSettings?.groups || []) {
+      const category = getMidiInstrumentCategory(group);
+      categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+    }
+
+    let availableCount = 0;
+    for (const button of midiBulkInstrumentButtons) {
+      const category = String(button.dataset.midiBulkCategory || "");
+      const count = categoryCounts.get(category) || 0;
+      const disabled = count === 0;
+      button.disabled = disabled;
+      button.setAttribute("aria-disabled", disabled ? "true" : "false");
+      button.dataset.instrumentCount = String(count);
+      if (disabled) setMidiBulkChannelButtonState(button, false);
+      else availableCount += 1;
+    }
+
+    if (midiBulkAllInstrumentBtn) {
+      midiBulkAllInstrumentBtn.disabled = availableCount === 0;
+      midiBulkAllInstrumentBtn.setAttribute("aria-disabled", availableCount === 0 ? "true" : "false");
+      if (availableCount === 0) setMidiBulkChannelButtonState(midiBulkAllInstrumentBtn, false);
+    }
+    updateMidiBulkAllInstrumentButtonState();
   }
 
   function openMidiBulkAssignDialog() {
@@ -4834,7 +5020,7 @@
     for (const button of midiBulkChannelButtons) setMidiBulkChannelButtonState(button, false);
     updateMidiBulkAllButtonState();
     for (const button of midiBulkInstrumentButtons) setMidiBulkChannelButtonState(button, false);
-    updateMidiBulkAllInstrumentButtonState();
+    updateMidiBulkInstrumentAvailability();
     if (midiBulkAssignDialog.showModal) midiBulkAssignDialog.showModal();
   }
 
@@ -4855,7 +5041,7 @@
     }
     const targetCategories = new Set(
       midiBulkInstrumentButtons
-        .filter(button => button.getAttribute("aria-pressed") === "true")
+        .filter(button => !button.disabled && button.getAttribute("aria-pressed") === "true")
         .map(button => String(button.dataset.midiBulkCategory || ""))
         .filter(Boolean)
     );
@@ -5459,6 +5645,7 @@
       return;
     }
 
+    saveLastMidiConvertSettings(pendingMidiImport, pendingMidiSettings);
     stopMidiPreview();
     setMidiConvertBusy(true, i18nText("midi.converting", [sourceLabel]));
     await waitForBrowserPaint();
@@ -6417,6 +6604,56 @@
     playToggleBtn.classList.toggle("danger", isPlaying);
   }
 
+  function scheduleMmlDraftSave() {
+    if (mmlDraftRestoring) return;
+    clearTimeout(mmlDraftSaveTimer);
+    mmlDraftSaveTimer = setTimeout(saveMmlDraftNow, 180);
+  }
+
+  function saveMmlDraftNow() {
+    clearTimeout(mmlDraftSaveTimer);
+    mmlDraftSaveTimer = 0;
+    if (mmlDraftRestoring || !mainMml) return;
+    writeLocalJsonPref(MML_DRAFT_CACHE_PREF, {
+      version: MML_DRAFT_CACHE_VERSION,
+      savedAt: Date.now(),
+      activeTab: activeTabName,
+      mainMml: String(mainMml.value || ""),
+      parts: partTexts.map(textarea => String(textarea?.value || ""))
+    });
+  }
+
+  function restoreMmlDraftCache() {
+    const cached = readLocalJsonPref(MML_DRAFT_CACHE_PREF);
+    if (!cached || cached.version !== MML_DRAFT_CACHE_VERSION || !mainMml) return "";
+    const hasCachedMain = typeof cached.mainMml === "string";
+    const hasCachedParts = Array.isArray(cached.parts);
+    if (!hasCachedMain && !hasCachedParts) return "";
+    const cachedMain = hasCachedMain
+      ? cached.mainMml
+      : composeMml(cached.parts.slice(0, 6), { preserveEmpty: true, partCount: 6 });
+    mmlDraftRestoring = true;
+    try {
+      mainMml.value = normalizeMmlForDisplay(cachedMain);
+    } finally {
+      mmlDraftRestoring = false;
+    }
+    const tab = String(cached.activeTab || "main");
+    return tabs.some(button => button.dataset.tab === tab) ? tab : "main";
+  }
+
+  function clearAllMmlChannels() {
+    stopPlayback(false);
+    stopMidiPreview();
+    setMainMml(composeMml(Array.from({ length: 6 }, () => ""), {
+      preserveEmpty: true,
+      partCount: 6
+    }));
+    clearSuggestedMmlSaveFileName();
+    googleDriveMmlFileName = "";
+    saveMmlDraftNow();
+  }
+
   function setMainMml(text) {
     syncing = true;
     mainMml.value = normalizeMmlForDisplay(text);
@@ -6436,6 +6673,7 @@
       updateVisibleHighlight();
       updateCharCount();
       rebuildSchedulePreviewSilently();
+      scheduleMmlDraftSave();
     } finally {
       syncing = false;
     }
@@ -6451,6 +6689,7 @@
       updateVisibleHighlight();
       updateCharCount();
       rebuildSchedulePreviewSilently();
+      scheduleMmlDraftSave();
     } finally {
       syncing = false;
     }
@@ -6464,6 +6703,7 @@
     updateCharCount();
     updatePlaybackCodeHighlight(currentOffset);
     updateVisibleHighlight();
+    scheduleMmlDraftSave();
   }
 
   function getCurrentPartTexts(partCount = 6) {
@@ -6525,6 +6765,7 @@
 
   function openRestTrimDialog() {
     if (restTrimLimit) restTrimLimit.value = "32";
+    applyMmlChannelAvailability(".rest-trim-channel");
     setDialogChannelSelection(".rest-trim-channel", true);
     updateRestTrimPreview();
     if (restTrimDialog?.showModal) {
@@ -6625,6 +6866,7 @@
 
   function openBulkVolumeDialog() {
     if (bulkVolumeAmount) bulkVolumeAmount.value = "0";
+    applyMmlChannelAvailability(".bulk-volume-channel");
     setDialogChannelSelection(".bulk-volume-channel", true);
     updateBulkVolumeStats();
     if (bulkVolumeDialog?.showModal) {
@@ -6738,9 +6980,25 @@
     }
   }
 
+  function getMmlChannelContentFlags() {
+    const parts = getCurrentPartTexts(6);
+    return Array.from({ length: 6 }, (_, index) => Boolean(String(parts[index] || "").trim()));
+  }
+
+  function applyMmlChannelAvailability(selector, availability = null) {
+    const flags = Array.isArray(availability) ? availability : getMmlChannelContentFlags();
+    document.querySelectorAll(selector).forEach(input => {
+      const index = Number(input.dataset.partIndex);
+      const enabled = Number.isInteger(index) && index >= 0 && index < 6 && Boolean(flags[index]);
+      input.disabled = !enabled;
+      if (!enabled) input.checked = false;
+      input.closest(".dialog-channel-option")?.classList.toggle("is-disabled", !enabled);
+    });
+  }
+
   function setDialogChannelSelection(selector, checked) {
     document.querySelectorAll(selector).forEach(input => {
-      input.checked = Boolean(checked);
+      input.checked = input.disabled ? false : Boolean(checked);
     });
   }
 
@@ -6781,6 +7039,7 @@
 
   function openBulkPitchDialog() {
     if (bulkPitchAmount) bulkPitchAmount.value = "0";
+    applyMmlChannelAvailability(".bulk-pitch-channel");
     setDialogChannelSelection(".bulk-pitch-channel", true);
     updateBulkPitchStats();
     if (bulkPitchDialog?.showModal) {
@@ -7004,6 +7263,7 @@
     if (dynamicsGenerateStrength && !["light", "normal", "strong"].includes(dynamicsGenerateStrength.value)) {
       dynamicsGenerateStrength.value = "normal";
     }
+    applyMmlChannelAvailability(".dynamics-generate-channel");
     setDialogChannelSelection(".dynamics-generate-channel", true);
     updateDynamicsGenerateDescription();
     if (dynamicsGenerateDialog?.showModal) {
@@ -7275,9 +7535,13 @@
     const targetIndexes = getDefaultAccompanimentTargetIndexes(flags);
     const targetSet = new Set(targetIndexes);
 
+    applyMmlChannelAvailability(
+      ".accompaniment-analysis-channel",
+      flags.map(flag => Boolean(flag?.hasContent))
+    );
     document.querySelectorAll(".accompaniment-analysis-channel").forEach(input => {
       const index = Number(input.dataset.partIndex);
-      input.checked = Boolean(flags[index]?.hasNotes);
+      input.checked = !input.disabled && Boolean(flags[index]?.hasNotes);
     });
     document.querySelectorAll(".accompaniment-target-channel").forEach(input => {
       const index = Number(input.dataset.partIndex);
@@ -7516,7 +7780,6 @@
     }
     clearSuggestedMmlSaveFileName();
     googleDriveMmlFileName = "";
-    flashButton(pasteBtn, i18nText("st.paste_done"));
   }
 
   async function copyVisibleMml() {

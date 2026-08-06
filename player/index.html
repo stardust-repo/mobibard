@@ -1,3 +1,4 @@
+<!-- 모비바드 | モビバード | Mobibard -->
 <!DOCTYPE html>
 
 <html lang="en">
@@ -13,7 +14,7 @@
 <link rel="alternate" hreflang="zh-CN" href="https://stardust-repo.github.io/mobibard/player/?lang=zh-CN"/>
 <link rel="alternate" hreflang="zh-TW" href="https://stardust-repo.github.io/mobibard/player/?lang=zh-TW"/>
 <link rel="alternate" hreflang="x-default" href="https://stardust-repo.github.io/mobibard/player/"/>
-<link href="styles.css?v=7.2-convert-summary" rel="stylesheet"/>
+<link href="styles.css?v=7.3-v47-empty-channel-controls" rel="stylesheet"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 <script>
 (() => {
@@ -58,7 +59,7 @@
   document.documentElement.lang = htmlLang[language] || "en";
   document.documentElement.dataset.i18nPending = "true";
   const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "7.2-convert-summary");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "7.3-v47-cache");
   document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
 })();
@@ -230,6 +231,7 @@
 <button class="tiny-help-btn soft-tool-button" data-i18n="edit.help" id="codeHelpBtn" type="button"></button>
 </div>
 <div aria-label="" class="editor-title-actions" data-i18n-aria-label="edit.tools">
+<button class="ghost soft-tool-button" data-i18n="mml.clear_all_channels" id="clearAllMmlBtn" type="button"></button>
 <button class="ghost soft-tool-button" data-i18n="ui.paste" id="pasteBtn" type="button"></button>
 <button class="primary soft-tool-button" data-i18n="ui.copy_all" id="copyBtn" type="button"></button>
 <button class="primary soft-tool-button" data-i18n="ui.split_copy" id="splitCopyBtn" type="button"></button>
@@ -920,19 +922,19 @@
 <button class="primary" data-i18n="midi.select_action" id="midiBulkSelectBtn" type="button"></button>
 </div>
 </form>
-<script src="js/language-manager.js?v=7.2-convert-summary"></script>
-<script src="js/utils.js?v=7.2-convert-summary"></script>
-<script src="js/midi-to-mml.js?v=7.2-convert-summary"></script>
+<script src="js/language-manager.js?v=7.3-v47-empty-channel-controls"></script>
+<script src="js/utils.js?v=7.3-v47-cache"></script>
+<script src="js/midi-to-mml.js?v=7.3-v47-cache"></script>
 <script src="js/mabinogi-instrument-map.js?v=1.0"></script>
-<script src="js/musicxml-to-midi.js?v=7.2-convert-summary"></script>
-<script src="js/mml-parser.js?v=7.2-convert-summary"></script>
-<script src="js/mml-optimizer.js?v=7.2-convert-summary"></script>
-<script src="js/sf2-sampler.js?v=7.2-convert-summary"></script>
+<script src="js/musicxml-to-midi.js?v=7.3-v47-cache"></script>
+<script src="js/mml-parser.js?v=7.3-v47-cache"></script>
+<script src="js/mml-optimizer.js?v=7.3-v47-cache"></script>
+<script src="js/sf2-sampler.js?v=7.3-v47-cache"></script>
 <script src="js/google-config.js"></script>
 <script src="js/firebase-config.js"></script>
 <script src="js/firebase-analytics.js" type="module"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
-<script src="js/app.js?v=7.2-convert-summary"></script>
+<script src="js/app.js?v=7.3-v47-empty-channel-controls"></script>
 </body>
 </html>

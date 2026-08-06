@@ -378,6 +378,10 @@ textarea { resize: vertical; color: var(--text); }
 .dialog-channel-option { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--input-bg); color: var(--text); font-weight: 900; cursor: pointer; }
 .dialog-channel-option:hover { border-color: var(--accent); background: var(--control-hover); }
 .dialog-channel-option input { width: 16px; height: 16px; accent-color: var(--accent); flex: 0 0 auto; }
+.dialog-channel-option.is-disabled,
+.dialog-channel-option:has(input:disabled) { opacity: .46; cursor: not-allowed; }
+.dialog-channel-option.is-disabled:hover,
+.dialog-channel-option:has(input:disabled):hover { border-color: var(--line); background: var(--input-bg); }
 .dialog-channel-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dialog-channel-stat { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 950; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dialog-channel-option:has(input:not(:checked)) .dialog-channel-stat { opacity: .55; }
