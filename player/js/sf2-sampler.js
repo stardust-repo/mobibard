@@ -116,6 +116,7 @@ class SoundFont {
     const windowStart = Math.max(0, Number(options.windowStart) || fromSec);
     const windowEnd = Math.max(windowStart, Number(options.windowEnd) || windowStart);
     const output = options.destination || ctx.destination;
+    const destinationsByPart = Array.isArray(options.destinationsByPart) ? options.destinationsByPart : null;
     const activeSources = options.activeSources || null;
     const scheduledIds = options.scheduledIds || null;
     const minLeadTime = Math.max(0.005, Number(options.minLeadTime) || 0.015);
@@ -162,7 +163,9 @@ class SoundFont {
       gain.gain.setValueAtTime(v, holdEnd);
       gain.gain.linearRampToValueAtTime(0.0001, end + release);
 
-      source.connect(gain).connect(output);
+      const partIndex = Number.isFinite(Number(n.part)) ? Math.max(0, Math.min(5, Math.trunc(Number(n.part)))) : -1;
+      const noteOutput = partIndex >= 0 && destinationsByPart?.[partIndex] ? destinationsByPart[partIndex] : output;
+      source.connect(gain).connect(noteOutput);
       source.start(start);
       source.stop(end + release + 0.03);
 

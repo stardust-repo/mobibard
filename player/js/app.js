@@ -309,6 +309,7 @@
 
   let audioCtx = null;
   let masterGain = null;
+  let partPlaybackGains = [];
   let soundFont = null;
   let sf2Name = DEFAULT_SF2_FILE_NAME;
   let activeSources = [];
@@ -2561,6 +2562,7 @@
     applyOutputVolume();
     updateSoundPresetControls();
     updatePartMuteControl();
+    applyPartMuteAudioGains();
     updateCharCount();
     rebuildSchedulePreviewSilently();
   }
@@ -3380,25 +3382,46 @@
   }
 
 
+  function applyPartMuteAudioGains({ instant = false } = {}) {
+    if (!audioCtx || audioCtx.state === "closed" || partPlaybackGains.length !== 6) return;
+    const now = audioCtx.currentTime;
+    const fadeSec = 0.012;
+    for (let part = 0; part < 6; part++) {
+      const gainNode = partPlaybackGains[part];
+      const param = gainNode?.gain;
+      if (!param) continue;
+      const target = partMuteStates[part] ? 0 : 1;
+      try {
+        if (instant) {
+          param.cancelScheduledValues(now);
+          param.setValueAtTime(target, now);
+          continue;
+        }
+        if (typeof param.cancelAndHoldAtTime === "function") {
+          param.cancelAndHoldAtTime(now);
+        } else {
+          const current = Number.isFinite(param.value) ? param.value : (target ? 0 : 1);
+          param.cancelScheduledValues(now);
+          param.setValueAtTime(current, now);
+        }
+        param.linearRampToValueAtTime(target, now + fadeSec);
+      } catch {
+        try { param.value = target; } catch {}
+      }
+    }
+  }
+
   function applyPartMuteStates(nextStates) {
-    const wasPlaying = isPlaying;
-    const resumeOffset = wasPlaying ? getCurrentPlaybackOffset() : currentOffset;
-    if (wasPlaying) stopPlayback(false);
+    const playbackOffset = isPlaying ? getCurrentPlaybackOffset() : currentOffset;
 
     partMuteStates = Array.from({ length: 6 }, (_, i) => Boolean(nextStates?.[i]));
     savePartMutePrefs();
+    applyPartMuteAudioGains();
 
-    try {
-      updatePartMuteControl();
-      invalidatePartMuteVisualState();
-      updatePlaybackCodeHighlight(resumeOffset);
-      updatePianoRoll(resumeOffset, scheduleCache?.duration || Number(progressSlider?.max) || 0, true);
-    } finally {
-      if (wasPlaying) {
-        currentOffset = resumeOffset;
-        void playFromCurrent();
-      }
-    }
+    updatePartMuteControl();
+    invalidatePartMuteVisualState();
+    updatePlaybackCodeHighlight(playbackOffset);
+    updatePianoRoll(playbackOffset, scheduleCache?.duration || Number(progressSlider?.max) || 0, true);
   }
 
   function handleMuteChannelChange() {
@@ -6086,7 +6109,7 @@
     const prepared = [];
     const list = Array.isArray(notes) ? notes : [];
     for (let part = 0; part < 6; part++) {
-      if (partMuteStates[part]) continue;
+      // 음소거 채널도 미리 준비한다. 재생 중 음소거 해제 시 재스케줄 없이 즉시 소리가 나야 한다.
       const partNotes = list.filter(n => Number(n.part) === part);
       if (!partNotes.length) continue;
       const preset = getPartPreset(part);
@@ -6162,6 +6185,7 @@
       windowStart,
       windowEnd,
       destination: masterGain || audioCtx.destination,
+      destinationsByPart: partPlaybackGains,
       activeSources,
       scheduledIds: scheduledNoteIds,
       minLeadTime: 0.018,
@@ -6539,6 +6563,20 @@
     throw new Error(i18nText("mml.locate_tempo_cmd_2"));
   }
 
+  function ensurePartPlaybackGains() {
+    if (!audioCtx || !masterGain) return;
+    if (partPlaybackGains.length === 6 && partPlaybackGains.every(Boolean)) return;
+    for (const node of partPlaybackGains) {
+      try { node?.disconnect(); } catch {}
+    }
+    partPlaybackGains = Array.from({ length: 6 }, (_, part) => {
+      const gain = audioCtx.createGain();
+      gain.gain.value = partMuteStates[part] ? 0 : 1;
+      gain.connect(masterGain);
+      return gain;
+    });
+  }
+
   async function ensureAudioContext() {
     if (!audioCtx || audioCtx.state === "closed") {
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -6546,11 +6584,15 @@
       audioCtx = new AC();
       masterGain = audioCtx.createGain();
       masterGain.connect(audioCtx.destination);
+      partPlaybackGains = [];
     }
     if (!masterGain) {
       masterGain = audioCtx.createGain();
       masterGain.connect(audioCtx.destination);
+      partPlaybackGains = [];
     }
+    ensurePartPlaybackGains();
+    applyPartMuteAudioGains({ instant: true });
     if (audioCtx.state !== "running") await audioCtx.resume();
     applyOutputVolume();
     return audioCtx;
