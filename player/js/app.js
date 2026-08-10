@@ -88,7 +88,7 @@
   const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { musicXmlToMidiBytes } = window.MabiMusicXml || {};
-  const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml } = window.MabiMml;
+  const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths } = window.MabiMml;
   const { optimizeMml, generateAccompanimentMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
@@ -685,12 +685,14 @@
     });
     partSoundDialog?.addEventListener("close", () => stopMidiPreview());
     themeToggleBtn?.addEventListener("click", toggleTheme);
+    mainMml.addEventListener("paste", handleEditorMmlPaste);
     mainMml.addEventListener("input", () => {
       normalizeTextareaCommands(mainMml);
       syncPartsFromMain();
     });
     mainMml.addEventListener("scroll", syncHighlightScroll);
     partTexts.forEach((t, i) => {
+      t.addEventListener("paste", handleEditorMmlPaste);
       t.addEventListener("input", () => {
         normalizeTextareaCommands(t);
         syncMainFromParts();
@@ -6645,6 +6647,21 @@
   function clearAllMmlChannels() {
     stopPlayback(false);
     stopMidiPreview();
+
+    // 비우기 시 MIDI에서 기억한 "자동 음색"도 기본 피아노로 되돌린다.
+    // 현재 음색이 자동 음색을 따라가고 있었다면 실제 채널 음색도 피아노로 초기화하고,
+    // 사용자가 직접 선택한 음색은 그대로 유지한다.
+    const wasUsingAutoSound = soundPresetMatch(partPresetKeys) === "auto";
+    midiPartPresetKeys = null;
+    midiPartPresetName = defaultMidiSoundPresetLabel();
+    writePref("midiPartPresetKeys", "");
+    writePref("midiPartPresetName", midiPartPresetName);
+    if (wasUsingAutoSound) {
+      partPresetKeys = defaultPartPresetKeys();
+      savePartSoundPrefs();
+    }
+    updateSoundPresetControls();
+
     setMainMml(composeMml(Array.from({ length: 6 }, () => ""), {
       preserveEmpty: true,
       partCount: 6
@@ -7761,6 +7778,10 @@
       return;
     }
 
+    const prepared = await prepareIrregularLengthPaste(text);
+    if (!prepared) return;
+    text = prepared.text;
+
     const activePanel = panels.find(p => !p.hidden) || panels[0];
     const isMainPanel = activePanel.dataset.panel === "main";
     const looksLikeFullMml = /^\s*mml\s*@/i.test(text) || String(text).includes(",");
@@ -7780,6 +7801,63 @@
     }
     clearSuggestedMmlSaveFileName();
     googleDriveMmlFileName = "";
+  }
+
+  async function handleEditorMmlPaste(event) {
+    const textarea = event.currentTarget;
+    if (!(textarea instanceof HTMLTextAreaElement)) return;
+    const pastedText = event.clipboardData?.getData?.("text/plain");
+    if (pastedText == null) return;
+
+    let info;
+    try {
+      info = analyzeIrregularMmlLengths(pastedText);
+    } catch (_) {
+      return;
+    }
+    if (!info?.count) return;
+
+    let convertedText;
+    try {
+      convertedText = normalizeIrregularMmlLengths(pastedText).mml;
+    } catch (err) {
+      showDialog(i18nText("err.paste"), i18nText("mml.irregular_convert_failed", [shortError(err)]));
+      return;
+    }
+
+    // 붙여넣은 조각만 자동 보정한다. 기존 편집 내용에 사용자가 직접 입력해 둔
+    // 비정규 박자는 경고 상태로 그대로 유지한다.
+    event.preventDefault();
+    const before = String(textarea.value || "");
+    const start = Number.isInteger(textarea.selectionStart) ? textarea.selectionStart : before.length;
+    const end = Number.isInteger(textarea.selectionEnd) ? textarea.selectionEnd : start;
+    const next = before.slice(0, start) + convertedText + before.slice(end);
+
+    textarea.value = next;
+    const caret = Math.min(next.length, start + convertedText.length);
+    try { textarea.setSelectionRange(caret, caret); } catch {}
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    clearSuggestedMmlSaveFileName();
+    googleDriveMmlFileName = "";
+  }
+
+  async function prepareIrregularLengthPaste(text) {
+    const original = String(text || "");
+    let info;
+    try {
+      info = analyzeIrregularMmlLengths(original);
+    } catch (_) {
+      return { text: original, converted: false };
+    }
+    if (!info?.count) return { text: original, converted: false };
+
+    try {
+      const converted = normalizeIrregularMmlLengths(original);
+      return { text: converted.mml, converted: converted.changed, info: converted };
+    } catch (err) {
+      showDialog(i18nText("err.paste"), i18nText("mml.irregular_convert_failed", [shortError(err)]));
+      return { text: original, converted: false };
+    }
   }
 
   async function copyVisibleMml() {
@@ -8916,6 +8994,8 @@
       addRangeClass(classes, info.sourceStart, info.sourceEnd, partClass);
       const invalid = findInvalidPartChars(info.text);
       invalid.forEach(pos => addRangeClass(classes, info.sourceStart + pos, info.sourceStart + pos + 1, "invalid-code"));
+      const irregularRanges = findIrregularPartRanges(info.text);
+      for (const range of irregularRanges) addRangeClass(classes, info.sourceStart + range.start, info.sourceStart + range.end, "irregular-length-code");
       const tempoRanges = findTempoHighlightRanges(info.text, invalid);
       for (const range of tempoRanges) addRangeClass(classes, info.sourceStart + range.start, info.sourceStart + range.end, "tempo-code");
     });
@@ -8929,6 +9009,8 @@
     const classes = createClassBuckets(text.length);
     const invalid = findInvalidPartChars(text);
     invalid.forEach(pos => addRangeClass(classes, pos, pos + 1, "invalid-code"));
+    const irregularRanges = findIrregularPartRanges(text);
+    for (const range of irregularRanges) addRangeClass(classes, range.start, range.end, "irregular-length-code");
     const tempoRanges = findTempoHighlightRanges(text, invalid);
     for (const range of tempoRanges) addRangeClass(classes, range.start, range.end, "tempo-code");
     for (const range of activeRanges || []) addRangeClass(classes, range.start, range.end, "mml-active-code");
@@ -8988,6 +9070,20 @@
     return ranges;
   }
 
+  function findIrregularPartRanges(part) {
+    try {
+      const info = analyzeIrregularMmlLengths(String(part || ""));
+      return (info?.occurrences || [])
+        .map(item => ({
+          start: Math.max(0, Number(item?.start) || 0),
+          end: Math.max(0, Number(item?.end) || 0)
+        }))
+        .filter(range => range.end > range.start);
+    } catch (_) {
+      return [];
+    }
+  }
+
   function findInvalidPartChars(part) {
     const s = String(part || "");
     const invalid = new Set();
@@ -9011,7 +9107,7 @@
         readDots();
         return;
       }
-      if (![1, 2, 4, 8, 16, 32, 64].includes(n.value)) mark(n.start, n.end);
+      if (!Number.isFinite(n.value) || n.value <= 0) mark(n.start, n.end);
       readDots();
     };
     const isNote = ch => "cdefgab".includes(ch);
@@ -9090,7 +9186,7 @@
         if (ch !== "L") mark(start, start + 1);
         i++;
         const n = readNumberRange();
-        if (n.value == null || ![1, 2, 4, 8, 16, 32, 64].includes(n.value)) mark(n.start === n.end ? start : n.start, n.end);
+        if (n.value == null || !Number.isFinite(n.value) || n.value <= 0) mark(n.start === n.end ? start : n.start, n.end);
         readDots();
       } else if (lower === "v") {
         if (ch !== "V") mark(start, start + 1);

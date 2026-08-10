@@ -19,6 +19,16 @@
   const noteDurationCache = new Map();
   const restDurationCache = new Map();
 
+  const isUsableInputLength = value => Number.isInteger(value) && value > 0;
+  // Optimizer rendering is integer-unit based. Irregular source lengths are accepted and
+  // quantized here so editing tools remain usable even when their exact rhythm cannot be preserved.
+  const quantizeInputDurationUnits = value => {
+    const raw = Number(value) || 0;
+    // 64분음표(16)와 점64분음표(24)의 조합으로 표현 가능한 최소 격자는 8 units.
+    // 비정규 길이는 가장 가까운 이 격자로 맞춰 후속 렌더러가 반드시 표준 길이로 출력할 수 있게 한다.
+    return Math.max(16, Math.round(raw / 8) * 8);
+  };
+
   function optimizeMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
@@ -1358,11 +1368,11 @@
       const n = readNumber();
       const dots = readDotsCount();
       if (!n) return durationUnitsFromBase(defaultUnits, dots);
-      if (!VALID_LENGTHS.includes(n.value)) fail(tr("mml.err_length", [n.value]));
+      if (!isUsableInputLength(n.value)) fail(tr("mml.err_length", [n.value]));
       return durationUnits(n.value, dots);
     };
     const appendToken = token => {
-      token.duration = Math.round(token.duration);
+      token.duration = quantizeInputDurationUnits(token.duration);
       if (pendingTie) {
         if (!lastTieTarget || lastTieTarget.kind !== token.kind || lastTieTarget.midi !== token.midi) fail(tr("mml.err_tie_same"));
         if (lastTieTarget.note) lastTieTarget.note.duration += token.duration;
@@ -1421,8 +1431,8 @@
         i++;
         const n = readNumber();
         const dots = readDotsCount();
-        if (!n || !VALID_LENGTHS.includes(n.value)) fail(tr("mml.err_l_check"));
-        defaultUnits = Math.round(durationUnits(n.value, dots));
+        if (!n || !isUsableInputLength(n.value)) fail(tr("mml.err_l_check"));
+        defaultUnits = quantizeInputDurationUnits(durationUnits(n.value, dots));
       } else if (ch === "v") {
         const start = i++;
         const n = readNumber();
@@ -2451,7 +2461,7 @@
       const n = readNumber();
       const dots = readDotsCount();
       if (!n) return durationUnitsFromBase(defaultUnits, dots);
-      if (!VALID_LENGTHS.includes(n.value)) fail(tr("mml.err_length_full", [n.value]));
+      if (!isUsableInputLength(n.value)) fail(tr("mml.err_length_full", [n.value]));
       return durationUnits(n.value, dots);
     };
     const readNoteToken = () => {
@@ -2480,10 +2490,10 @@
       return { kind: "note", midi, duration, volume };
     };
     const appendToken = token => {
-      if (!isIntegerLike(token.duration) || token.duration <= 0) {
+      if (!Number.isFinite(token.duration) || token.duration <= 0) {
         fail(tr("mml.err_tiny_fraction"));
       }
-      token.duration = Math.round(token.duration);
+      token.duration = quantizeInputDurationUnits(token.duration);
 
       if (pendingTie) {
         if (!lastTieTarget) fail(tr("mml.err_tie_before"));
@@ -2531,10 +2541,8 @@
         i++;
         const n = readNumber();
         const dots = readDotsCount();
-        if (!n || !VALID_LENGTHS.includes(n.value)) fail(tr("mml.err_l_range"));
-        defaultUnits = durationUnits(n.value, dots);
-        if (!isIntegerLike(defaultUnits)) fail(tr("mml.err_l_dotted"));
-        defaultUnits = Math.round(defaultUnits);
+        if (!n || !isUsableInputLength(n.value)) fail(tr("mml.err_l_range"));
+        defaultUnits = quantizeInputDurationUnits(durationUnits(n.value, dots));
       } else if (ch === "v") {
         i++;
         const n = readNumber();
