@@ -63,6 +63,7 @@
   let conversionSerial = 0;
   let fileSelectionSerial = 0;
   let conversionTimer = 0;
+  let analyticsTrackedSelectionSerial = -1;
 
   let audioCtx = null;
   let masterGain = null;
@@ -420,6 +421,48 @@
     return match[1].split(",").slice(0, 3);
   }
 
+  function analyticsSourceType(file) {
+    if (isMidiFile(file)) return "midi";
+    if (isMusicXmlFile(file)) return "musicxml";
+    return "unknown";
+  }
+
+  function analyticsFileSizeBucket(bytes) {
+    const size = Number(bytes) || 0;
+    if (size <= 0) return "unknown";
+    if (size < 10 * 1024) return "lt_10kb";
+    if (size < 100 * 1024) return "lt_100kb";
+    if (size < 1024 * 1024) return "lt_1mb";
+    if (size < 10 * 1024 * 1024) return "lt_10mb";
+    return "gte_10mb";
+  }
+
+  function trackSimpleFileConvertComplete(file, pages) {
+    if (!file || analyticsTrackedSelectionSerial === fileSelectionSerial) return;
+    const event = {
+      name: "simple_file_convert_complete",
+      params: {
+        source_type: analyticsSourceType(file),
+        file_size: analyticsFileSizeBucket(file.size),
+        quantize_division: Number(selectedQuantize || 64),
+        rest_mode: String(selectedRest || "keep"),
+        page_count: Array.isArray(pages) ? pages.length : 0
+      }
+    };
+    try {
+      const analytics = window.MobibardAnalytics;
+      if (analytics && typeof analytics.logEvent === "function") {
+        analytics.logEvent(event.name, event.params);
+      } else {
+        const queueKey = "__MOBIBARD_ANALYTICS_QUEUE__";
+        const queue = Array.isArray(window[queueKey]) ? window[queueKey] : (window[queueKey] = []);
+        queue.push(event);
+        if (queue.length > 100) queue.splice(0, queue.length - 100);
+      }
+      analyticsTrackedSelectionSerial = fileSelectionSerial;
+    } catch (_) {}
+  }
+
   function requestConversion() {
     if (!selectedBytes || !selectedFile) return;
     const token = ++conversionSerial;
@@ -454,6 +497,7 @@
       rebuildPlayback(cleanedMml);
       renderResults(resultPages);
       hideStatus();
+      trackSimpleFileConvertComplete(selectedFile, resultPages);
     } catch (error) {
       if (token !== conversionSerial) return;
       clearResults();

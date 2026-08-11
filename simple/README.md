@@ -23,3 +23,8 @@
 - Shared 64x64 brand image: `assets/icons/mobibard-mark-64.png`
 
 The preview loads the same bundled default SF3 and `player/js/sf2-sampler.js` used by the main player only when playback is first requested. Playback always selects Bank 0 / Program 0; MIDI/MusicXML instrument metadata remains unchanged for conversion.
+
+
+## Firebase Analytics
+
+파일을 선택한 뒤 MIDI/MusicXML → MML 변환이 최초로 성공 완료되면 simple 전용 이벤트 `simple_file_convert_complete`를 1회 기록합니다. 같은 파일에서 양자화 또는 쉼표 제거 옵션을 바꿔 자동 재변환되는 과정은 중복 집계하지 않습니다. 이 이벤트는 player의 `mml_import_complete`와 별개이며 서로 합쳐지지 않습니다. 파일명이나 MML 내용은 수집하지 않고 `source_type`, `file_size`, `quantize_division`, `rest_mode`, `page_count`만 이벤트 파라미터로 기록합니다.
