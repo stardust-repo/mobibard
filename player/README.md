@@ -811,7 +811,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 #### 바로가기 링크
 
 - 추천 링크에서 `MML 공유` 항목을 제거했습니다.
-- MIDI 사이트 목록을 BitMidi, Ichigo's, MIDIEX, Midisite, MuseScore, VGMusic 순서로 정렬했습니다.
+- MIDI 사이트 목록을 BitMidi, ClassicalArchives, Ichigo's, MIDIEX, Midisite, MuseScore, VGMusic 순서로 정렬했습니다.
 
 ### v3.3
 
@@ -839,7 +839,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - 파일 불러오기, MIDI 변환, 미리듣기, 재생, 도구 적용, 복사, 저장, Google Drive 동작을 커스텀 이벤트로 기록합니다. 앱 실행·로그아웃·붙여넣기처럼 의미가 약한 이벤트와 중복 이벤트는 제거했으며, 파일명과 MML 본문은 포함하지 않습니다.
 - Google token 만료 처리 방식을 수정했습니다. 유효한 토큰은 새로고침/새 창에서 유지하지만, 만료되거나 401이 발생하면 자동으로 Google 로그인을 다시 요청하지 않고 `로그인 필요` 상태로만 전환합니다.
 - 상단 바로가기 영역의 콤보박스 기본 문구를 `MML / MIDI 링크`로 바꾸고 디스코드 버튼 왼쪽에 배치했습니다. `MML 공유` 추천 링크는 제거했습니다.
-- `https://www.vgmusic.com/` 항목은 화면에 `VGMusic`으로 표시합니다. MIDI 사이트는 BitMidi, Ichigo's, MIDIEX, Midisite, MuseScore, VGMusic 순서로 정렬되어 새 창으로 열립니다.
+- `https://www.vgmusic.com/` 항목은 화면에 `VGMusic`으로 표시합니다. MIDI 사이트는 BitMidi, ClassicalArchives, Ichigo's, MIDIEX, Midisite, MuseScore, VGMusic 순서로 정렬되어 새 창으로 열립니다.
 - 바로가기 콤보박스 선택은 `shortcut_link_open` 하나로 기록하고 `link` 값으로 대상을 구분합니다. 같은 클릭을 중복 집계하던 `midi_resource_link_open`은 제거했습니다.
 - v3.1까지의 MIDI/MMI/3MLE/Google Drive/음색/최적화 변경 내용을 현재 구조 기준으로 다시 묶어 정리했습니다.
 

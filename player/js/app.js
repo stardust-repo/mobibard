@@ -67,6 +67,7 @@
   const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi", "mml", "musicxml", "xml", "mxl"]);
   const HEADER_SHORTCUT_LINKS = new Set([
     "https://bitmidi.com/",
+    "https://www.classicalarchives.com/midi.html",
     "https://ichigos.com/",
     "http://www.midiex.net/",
     "http://www.midisite.co.uk/",
