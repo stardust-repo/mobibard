@@ -127,7 +127,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "game.label": "Rhythm game",
     "game.load_fail": "Could not load Mobibeat. Check the ../mobibeats/ path.",
     "game.loading": "Loading Mobibeat.",
-    "game.midi_extraction": "MIDI extraction and rhythm game",
+    "game.midi_extraction": "MIDI extraction, rhythm game, and Click version",
     "game.mobibeat": "Mobibeat",
     "game.mobibeat_mml": "Mobibeat MML rhythm game",
     "game.no_channel": "There are no audible MML channels to use in the rhythm game.",
@@ -769,6 +769,8 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "midi.category_winds_short": "Winds",
     "midi.category_other_short": "Other",
     "midi.category_drums_short": "Drums",
-    "midi.choose_target_instrument": "Select at least one target instrument category."
+    "midi.choose_target_instrument": "Select at least one target instrument category.",
+    "simple.label": "Click version",
+    "simple.open": "Open the Click version"
   }
 };

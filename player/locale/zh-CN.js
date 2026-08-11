@@ -127,7 +127,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "game.label": "节奏游戏",
     "game.load_fail": "无法加载Mobibeat。请检查 ../mobibeats/ 路径。",
     "game.loading": "正在加载Mobibeat。",
-    "game.midi_extraction": "MIDI提取与节奏游戏",
+    "game.midi_extraction": "MIDI 提取、节奏游戏和一键版",
     "game.mobibeat": "Mobibeat",
     "game.mobibeat_mml": "Mobibeat MML节奏游戏",
     "game.no_channel": "没有可用于节奏游戏的有声MML声道。",
@@ -769,6 +769,8 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "midi.category_winds_short": "管乐",
     "midi.category_other_short": "其他",
     "midi.category_drums_short": "鼓",
-    "midi.choose_target_instrument": "请至少选择一个目标乐器分类。"
+    "midi.choose_target_instrument": "请至少选择一个目标乐器分类。",
+    "simple.label": "一键版",
+    "simple.open": "打开一键版"
   }
 };

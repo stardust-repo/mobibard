@@ -127,7 +127,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "game.label": "리듬게임",
     "game.load_fail": "모비비트를 불러오지 못했습니다. ../mobibeats/ 경로를 확인해 주세요.",
     "game.loading": "모비비트를 불러오는 중입니다.",
-    "game.midi_extraction": "MIDI 추출과 리듬게임",
+    "game.midi_extraction": "MIDI 추출, 리듬게임, 딸각 버전",
     "game.mobibeat": "모비비트",
     "game.mobibeat_mml": "모비비트 MML 리듬게임",
     "game.no_channel": "리듬게임에 사용할 소리 나는 MML 채널이 없습니다.",
@@ -769,6 +769,8 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "midi.category_winds_short": "관",
     "midi.category_other_short": "미분류",
     "midi.category_drums_short": "드럼",
-    "midi.choose_target_instrument": "대상 악기를 하나 이상 선택해 주세요."
+    "midi.choose_target_instrument": "대상 악기를 하나 이상 선택해 주세요.",
+    "simple.label": "딸깍 버전",
+    "simple.open": "딸깍 버전 열기"
   }
 };

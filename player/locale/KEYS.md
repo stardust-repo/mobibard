@@ -47,6 +47,7 @@ mml.opt_fail
 | `rest` | 6 |
 | `roll` | 5 |
 | `sf2` | 5 |
+| `simple` | 2 |
 | `snd` | 52 |
 | `sound` | 4 |
 | `split` | 11 |
@@ -58,4 +59,4 @@ mml.opt_fail
 | `vol` | 42 |
 | `xml` | 17 |
 
-Total: **766** keys.
+Total: **768** keys.

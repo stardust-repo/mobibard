@@ -163,6 +163,7 @@
   const saveBtn = $("saveBtn");
   const midiExtractBtn = $("midiExtractBtn");
   const rhythmGameBtn = $("rhythmGameBtn");
+  const simpleVersionBtn = $("simpleVersionBtn");
   const rhythmGameLayer = $("rhythmGameLayer");
   const rhythmGameClose = $("rhythmGameClose");
   const rhythmGameFrame = $("rhythmGameFrame");
@@ -422,6 +423,7 @@
     document.addEventListener("pointerdown", handleControlPopoverOutsidePointer);
     document.addEventListener("keydown", handleControlPopoverKeydown);
     window.addEventListener("mobibard:localechange", handleLocaleChange);
+    updateSimpleVersionLink();
     if (accountAvatarImg) {
       accountAvatarImg.addEventListener("error", () => {
         const current = accountAvatarImg.getAttribute("src") || "";
@@ -684,11 +686,24 @@
     requestPianoRollRefresh(true);
   }
 
+  function updateSimpleVersionLink(language = "") {
+    if (!simpleVersionBtn) return;
+    const requested = window.MobibardI18n?.normalizeLanguage(language || languageSelect?.value || document.documentElement.lang) || "en";
+    try {
+      const url = new URL("../simple/index.html", window.location.href);
+      url.searchParams.set("lang", requested);
+      simpleVersionBtn.href = url.href;
+    } catch (_) {
+      simpleVersionBtn.href = `../simple/index.html?lang=${encodeURIComponent(requested)}`;
+    }
+  }
+
   async function handleLanguageChange() {
     if (!languageSelect) return;
     const requested = window.MobibardI18n?.normalizeLanguage(languageSelect.value) || "en";
     writePref("language", requested);
     const applied = await window.MobibardI18n?.setLanguage(requested, { persist: false, source: "user" });
+    updateSimpleVersionLink(applied || requested);
   }
 
   function i18nText(key, values = []) {
@@ -802,7 +817,8 @@
     openPair[0]?.focus();
   }
 
-  function handleLocaleChange() {
+  function handleLocaleChange(event) {
+    updateSimpleVersionLink(event?.detail?.language || "");
     applyTheme(document.documentElement.dataset.theme, false);
     updateAccountUi();
     updateGoogleDriveControls();

@@ -127,7 +127,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "game.label": "リズムゲーム",
     "game.load_fail": "モビビートを読み込めませんでした。../mobibeats/ のパスを確認してください。",
     "game.loading": "モビビートを読み込んでいます。",
-    "game.midi_extraction": "MIDI抽出とリズムゲーム",
+    "game.midi_extraction": "MIDI抽出、リズムゲーム、カチッ版",
     "game.mobibeat": "モビビート",
     "game.mobibeat_mml": "モビビートMMLリズムゲーム",
     "game.no_channel": "リズムゲームで使用できる、音の出るMMLチャンネルがありません。",
@@ -769,6 +769,8 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "midi.category_winds_short": "管",
     "midi.category_other_short": "未分類",
     "midi.category_drums_short": "ドラム",
-    "midi.choose_target_instrument": "対象楽器を1つ以上選択してください。"
+    "midi.choose_target_instrument": "対象楽器を1つ以上選択してください。",
+    "simple.label": "カチッ版",
+    "simple.open": "カチッ版を開く"
   }
 };
