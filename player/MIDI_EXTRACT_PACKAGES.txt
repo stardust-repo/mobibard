@@ -1,8 +1,0 @@
-MuScriptor MIDI 추출 패키지 및 샘플 파일
-
-아래 파일은 배포 ZIP에 포함되어 있습니다.
-assets/midi-extract/packages/muscriptor_win.zip	34728 bytes	SHA-256 9e3a64bfc85bcae39c17cca73ca219069563545d8eb6d33dc9928c18cf8b5164
-assets/midi-extract/packages/muscriptor_mac.zip	40038 bytes	SHA-256 f363cafb9e76292355560aef62751b1b12d5cd04ac5be09c22c690c47094a6e6
-assets/midi-extract/audio_to_midi.mp4	11308232 bytes	SHA-256 4439d118401056d0cf587c48127ecc0ca2aaa48900ac19b02c0ce9310be53450
-assets/midi-extract/sample_in.mp3	4196480 bytes	SHA-256 79e520c59095cab0af5a29677ea60b57f9218228e31d43d39cb692991ef8278e
-assets/midi-extract/sample_out.mid	19099 bytes	SHA-256 20c464f3afc10fe7af334116d4a1276263610d09b4e3fd56f496a8b5d64307fa

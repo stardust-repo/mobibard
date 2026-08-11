@@ -1,10 +1,7 @@
 (() => {
   "use strict";
 
-  const DEFAULT_SF2_URL = "assets/Roland_SC-55.sf2";
-  const DEFAULT_SF2_FILE_NAME = DEFAULT_SF2_URL.split("/").pop() || "Roland_SC-55.sf2";
-  const DEFAULT_SF2_EMBEDDED_B64 = () => window.MABINOGI_DEFAULT_SF2_B64 || "";
-  const DEFAULT_SF2_FALLBACK_SCRIPT_URL = "assets/default-sf2-base64.js";
+  const DEFAULT_SF2_FILE_NAME = String(window.MOBIBARD_DEFAULT_SF3_NAME || "Roland_SC-55.sf3");
   const PART_LABEL_KEYS = ["part.melody", "part.harmony1", "part.harmony2", "part.harmony3", "part.harmony4", "part.harmony5"];
   const PART_LABELS = new Proxy(PART_LABEL_KEYS, {
     get(target, property, receiver) {
@@ -53,27 +50,28 @@
   const GOOGLE_AUTO_RECONNECT_PREF = "googleAutoReconnect";
   const GOOGLE_TOKEN_CACHE_PREF = "googleTokenCache";
   const MIDI_CONVERT_CACHE_PREF = "midiConvertLastSettings";
-  const MML_DRAFT_CACHE_PREF = "mmlDraft";
-  const MIDI_CONVERT_CACHE_VERSION = 1;
-  const MML_DRAFT_CACHE_VERSION = 1;
+  const MIDI_CONVERT_CACHE_VERSION = 2;
+  const SOUND_BANK_SELECTION_PREF = "soundBankSelectionMeta";
+  const GOOGLE_SOUND_BANK_FILE_NAME = "mobibard-player-soundbank-cache.bin";
+  const GOOGLE_SOUND_BANK_MIME = "application/octet-stream";
   const GOOGLE_LOCAL_ONLY_PREFS = new Set([
     GOOGLE_AUTO_RECONNECT_PREF,
     GOOGLE_TOKEN_CACHE_PREF,
     MIDI_CONVERT_CACHE_PREF,
-    MML_DRAFT_CACHE_PREF
+    SOUND_BANK_SELECTION_PREF
   ]);
-  const GUEST_AVATAR_URL = "assets/icons/guest-user.svg";
+  const GUEST_AVATAR_URL = "../assets/icons/guest-user.svg";
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
   const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "txt", "mmi", "mml", "musicxml", "xml", "mxl"]);
-  const HEADER_SHORTCUT_LINKS = new Map([
-    ["https://bitmidi.com/", "bitmidi"],
-    ["https://ichigos.com/", "ichigos"],
-    ["http://www.midiex.net/", "midiex"],
-    ["http://www.midisite.co.uk/", "midisite"],
-    ["https://musescore.com/", "musescore"],
-    ["https://www.vgmusic.com/", "vgmusic_https"]
+  const HEADER_SHORTCUT_LINKS = new Set([
+    "https://bitmidi.com/",
+    "https://ichigos.com/",
+    "http://www.midiex.net/",
+    "http://www.midisite.co.uk/",
+    "https://musescore.com/",
+    "https://www.vgmusic.com/"
   ]);
   const ACTIVE_CODE_LOOKAHEAD_SEC = 0.012;
   const ACTIVE_CODE_RELEASE_SEC = 0.026;
@@ -85,12 +83,12 @@
   const PIANO_WHITE_INDEX_BY_PITCH = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
 
 
-  const { shortError, base64ToUint8Array, clampInt, formatTime } = window.MabiUtils;
+  const { shortError, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { musicXmlToMidiBytes } = window.MabiMusicXml || {};
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths } = window.MabiMml;
   const { optimizeMml, generateAccompanimentMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
-  const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
+  const { parseSoundBank, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
 
   const $ = (id) => document.getElementById(id);
   const midiFile = $("midiFile");
@@ -164,20 +162,6 @@
   const pasteBtn = $("pasteBtn");
   const saveBtn = $("saveBtn");
   const midiExtractBtn = $("midiExtractBtn");
-  const midiExtractMenu = $("midiExtractMenu");
-  const midiExtractOnline = $("midiExtractOnline");
-  const midiExtractInstall = $("midiExtractInstall");
-  const midiExtractDialog = $("midiExtractDialog");
-  const midiExtractClose = $("midiExtractClose");
-  const midiExtractDownloads = Array.from(document.querySelectorAll("[data-midi-extract-download]"));
-  const midiExtractSampleVideoLoad = $("midiExtractSampleVideoLoad");
-  const midiExtractSampleVideo = $("midiExtractSampleVideo");
-  const midiExtractSampleAudioLoad = $("midiExtractSampleAudioLoad");
-  const midiExtractSampleAudio = $("midiExtractSampleAudio");
-  const midiExtractSampleAudioStatus = $("midiExtractSampleAudioStatus");
-  const midiExtractSampleMidiPlay = $("midiExtractSampleMidiPlay");
-  const midiExtractSampleMidiAudio = $("midiExtractSampleMidiAudio");
-  const midiExtractSampleMidiStatus = $("midiExtractSampleMidiStatus");
   const rhythmGameBtn = $("rhythmGameBtn");
   const rhythmGameLayer = $("rhythmGameLayer");
   const rhythmGameClose = $("rhythmGameClose");
@@ -311,7 +295,9 @@
   let masterGain = null;
   let partPlaybackGains = [];
   let soundFont = null;
+  let defaultSoundFont = null;
   let sf2Name = DEFAULT_SF2_FILE_NAME;
+  let soundFontIsDefault = true;
   let activeSources = [];
   let activeTimers = [];
   let preparedNotes = [];
@@ -346,8 +332,6 @@
   let rafId = 0;
   let syncing = false;
   let copyTimer = 0;
-  let mmlDraftSaveTimer = 0;
-  let mmlDraftRestoring = false;
   let activeTabName = "main";
   let isSeeking = false;
   let seekRestartTimer = 0;
@@ -376,6 +360,9 @@
   let googleTokenExpiryTimer = 0;
   let googlePickerLoaded = false;
   let googleSettingsFileId = "";
+  let googleSoundBankFileId = "";
+  let googleSoundBankSyncing = false;
+  let googleSoundBankSyncQueue = Promise.resolve();
   let googleSettingsApplying = false;
   let googleSettingsSaveTimer = 0;
   let googleSettingsSaving = false;
@@ -391,7 +378,6 @@
   let activePlaybackCodeSignature = "";
   let activePlaybackScanBucket = -1;
   let activePlaybackScanSignature = "";
-  let defaultSf2FallbackLoadPromise = null;
   let activePlaybackMainRanges = [];
   let activePlaybackPartRanges = Array.from({ length: 6 }, () => []);
   let editorContentVersion = 0;
@@ -506,53 +492,32 @@
       }
     });
     installPianoRollRefreshHooks();
-    copyBtn.addEventListener("click", () => void copyVisibleMml());
+    copyBtn.addEventListener("click", () => {
+      trackAnalytics("copy_all_mml");
+      void copyVisibleMml();
+    });
     clearAllMmlBtn?.addEventListener("click", clearAllMmlChannels);
-    splitCopyBtn?.addEventListener("click", () => openSplitCopyDialog());
+    splitCopyBtn?.addEventListener("click", () => {
+      trackAnalytics("split_copy_open");
+      openSplitCopyDialog();
+    });
     splitCopyRebuild?.addEventListener("click", () => buildSplitCopyPages());
     splitCopyClose?.addEventListener("click", () => splitCopyDialog?.close());
     splitCopyDialog?.addEventListener("close", () => stopMidiPreview());
     pasteBtn.addEventListener("click", () => void pasteVisibleMml());
     saveBtn.addEventListener("click", () => void saveVisibleMml());
-    midiExtractBtn?.addEventListener("click", () => toggleControlPopover(midiExtractBtn, midiExtractMenu));
-    midiExtractOnline?.addEventListener("click", handleMidiExtractOnlineOpen);
-    midiExtractInstall?.addEventListener("click", () => {
-      closeAllControlPopovers();
-      openMidiExtractDialog();
+    midiExtractBtn?.addEventListener("click", () => {
+      trackAnalytics("open_midi_extract_online");
+      const midiExtractWindow = window.open("https://muscriptor.kyutai.org/", "_blank");
+      if (midiExtractWindow) midiExtractWindow.opener = null;
     });
-    rhythmGameBtn?.addEventListener("click", openRhythmGameLayer);
+    rhythmGameBtn?.addEventListener("click", () => {
+      trackAnalytics("open_rhythm_game");
+      openRhythmGameLayer();
+    });
     rhythmGameClose?.addEventListener("click", closeRhythmGameLayer);
     rhythmGameFrame?.addEventListener("load", handleRhythmGameFrameLoad);
     window.addEventListener("message", handleRhythmGameMessage);
-    midiExtractClose?.addEventListener("click", closeMidiExtractDialog);
-    midiExtractDialog?.addEventListener("cancel", (event) => {
-      event.preventDefault();
-      closeMidiExtractDialog();
-    });
-    midiExtractDialog?.addEventListener("close", pauseMidiExtractSamples);
-    midiExtractDialog?.querySelector(".midi-extract-details")?.addEventListener("toggle", updateMidiExtractDetailsLabel);
-    midiExtractSampleVideoLoad?.addEventListener("click", () => void playMidiExtractSampleVideo());
-    midiExtractSampleAudioLoad?.addEventListener("click", () => void playMidiExtractSampleAudio());
-    midiExtractSampleMidiPlay?.addEventListener("click", () => void playMidiExtractSampleMidiAudio());
-    midiExtractSampleVideo?.addEventListener("play", () => {
-      pauseMidiExtractSampleAudio();
-      pauseMidiExtractSampleMidiAudio();
-    });
-    midiExtractSampleAudio?.addEventListener("play", () => {
-      pauseMidiExtractSampleVideo();
-      pauseMidiExtractSampleMidiAudio();
-    });
-    midiExtractSampleMidiAudio?.addEventListener("play", () => {
-      pauseMidiExtractSampleVideo();
-      pauseMidiExtractSampleAudio();
-      stopPlayback(false);
-      stopMidiPreview();
-    });
-    for (const link of midiExtractDownloads) {
-      link.addEventListener("click", () => {
-        trackAnalytics("download_muscriptor_package", { platform: link.dataset.midiExtractDownload || "unknown" });
-      });
-    }
     restTrimBtn?.addEventListener("click", openRestTrimDialog);
     restTrimApply?.addEventListener("click", () => applyRestTrimFromDialog());
     restTrimCancel?.addEventListener("click", () => restTrimDialog?.close());
@@ -701,15 +666,12 @@
       t.addEventListener("scroll", () => syncPartHighlightScroll(i));
     });
     tabs.forEach(btn => btn.addEventListener("click", () => selectTab(btn.dataset.tab)));
-    const restoredDraftTab = restoreMmlDraftCache();
+    // v4.8 이전의 MML 편집 초안 캐시는 더 이상 사용하지 않는다.
+    // MIDI/파일 불러오기 설정 캐시(midiConvertLastSettings)는 별도 키이므로 유지한다.
+    try { localStorage.removeItem(PREF_PREFIX + "mmlDraft"); } catch (_) {}
+    await restoreCachedSoundBankFromLocal();
     normalizeTextareaCommands(mainMml);
     syncPartsFromMain();
-    if (restoredDraftTab) selectTab(restoredDraftTab);
-    window.addEventListener("pagehide", saveMmlDraftNow);
-    window.addEventListener("beforeunload", saveMmlDraftNow);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") saveMmlDraftNow();
-    });
     applyPlaybackSpeed(false);
     applyOutputVolume();
     updateSoundFontUi();
@@ -727,7 +689,6 @@
     const requested = window.MobibardI18n?.normalizeLanguage(languageSelect.value) || "en";
     writePref("language", requested);
     const applied = await window.MobibardI18n?.setLanguage(requested, { persist: false, source: "user" });
-    trackAnalytics("language_change", { language: applied || requested });
   }
 
   function i18nText(key, values = []) {
@@ -771,8 +732,7 @@
     return [
       [speedControlButton, speedControlPopover],
       [volumeControlButton, volumeControlPopover],
-      [muteControlButton, muteControlPopover],
-      [midiExtractBtn, midiExtractMenu]
+      [muteControlButton, muteControlPopover]
     ].filter(([button, popover]) => button && popover);
   }
 
@@ -857,22 +817,29 @@
     if (pianoRollEmpty && !pianoRollEmpty.hidden && pianoRollRangeLabel) {
       pianoRollRangeLabel.textContent = i18nText("roll.title");
     }
-    updateMidiExtractDetailsLabel();
     if (midiConvertDialog?.open) refreshMidiConvertLocale();
   }
 
   function trackAnalytics(eventName, params = {}) {
+    const aliases = {
+      local_import_mml: "mml_import_complete",
+      drive_import_mml: "mml_import_complete",
+      midi_convert_complete: "mml_import_complete",
+      copy_all_mml: "copy_all_mml",
+      split_copy_open: "split_copy",
+      open_midi_extract_online: "open_midi_extract",
+      open_rhythm_game: "open_rhythm_game"
+    };
+    const normalized = aliases[String(eventName || "")];
+    if (!normalized) return false;
     try {
       const analytics = window.MobibardAnalytics;
       if (analytics && typeof analytics.logEvent === "function") {
-        analytics.logEvent(eventName, params);
-        return;
+        analytics.logEvent(normalized, params);
+        return true;
       }
-      const queue = window.__MOBIBARD_ANALYTICS_QUEUE__ || [];
-      window.__MOBIBARD_ANALYTICS_QUEUE__ = queue;
-      queue.push({ name: eventName, params });
-      if (queue.length > 100) queue.splice(0, queue.length - 100);
     } catch (_) {}
+    return false;
   }
 
   function openHeaderShortcutLink() {
@@ -881,12 +848,10 @@
     midiSiteLinks.value = "";
     if (!url || !HEADER_SHORTCUT_LINKS.has(url)) return;
 
-    const linkId = HEADER_SHORTCUT_LINKS.get(url);
     const opened = window.open(url, "_blank", "noopener,noreferrer");
     if (opened) {
       try { opened.opener = null; } catch (_) {}
     }
-    trackAnalytics("shortcut_link_open", { link: linkId });
   }
 
   function analyticsFileType(nameOrExt) {
@@ -1358,7 +1323,6 @@
 
   function openRhythmGameLayer() {
     if (!rhythmGameLayer || !rhythmGameFrame) return;
-    const isNewSiteOpen = rhythmGameLayer.hidden;
     try {
       rhythmGamePendingPayload = buildRhythmGamePayload();
     } catch (err) {
@@ -1370,17 +1334,10 @@
 
     stopPlayback(true);
     stopMidiPreview();
-    pauseMidiExtractSamples();
     rhythmGameLayer.hidden = false;
     rhythmGameLayer.setAttribute("aria-hidden", "false");
     document.body.classList.add("rhythm-game-open");
     setRhythmGameLoading(i18nText("game.loading"));
-    // 닫힌 레이어가 실제로 열릴 때마다 1회 기록합니다. 세션 단위 중복 제거는 하지 않습니다.
-    if (isNewSiteOpen) {
-      trackAnalytics("open_rhythm_game", {
-        channel_count: rhythmGamePendingPayload.channelCount
-      });
-    }
 
     if (!rhythmGameFrameReady || currentUrl === "about:blank") {
       rhythmGameFrameReady = false;
@@ -1451,168 +1408,6 @@
 
     if (data.type === "MML_RHYTHM_CLOSE") {
       closeRhythmGameLayer();
-    }
-  }
-
-  function handleMidiExtractOnlineOpen() {
-    closeAllControlPopovers();
-    // target=_blank 링크가 활성화될 때마다 별도 이벤트로 기록합니다.
-    trackAnalytics("open_midi_extract_online");
-  }
-
-  function updateMidiExtractDetailsLabel() {
-    const details = midiExtractDialog?.querySelector(".midi-extract-details");
-    const summary = details?.querySelector(":scope > summary");
-    if (summary) summary.dataset.toggleLabel = i18nText(details.open ? "ui.collapse" : "ui.expand");
-  }
-
-  function openMidiExtractDialog() {
-    if (!midiExtractDialog) return;
-    const details = midiExtractDialog.querySelector(".midi-extract-details");
-    const card = midiExtractDialog.querySelector(".midi-extract-card");
-    if (details) details.open = false;
-    updateMidiExtractDetailsLabel();
-    if (card) card.scrollTop = 0;
-    trackAnalytics("open_midi_extract_dialog");
-
-    if (midiExtractDialog.open) closeMidiExtractDialog();
-    if (typeof midiExtractDialog.showModal === "function") {
-      midiExtractDialog.showModal();
-    } else {
-      midiExtractDialog.setAttribute("open", "");
-    }
-    requestAnimationFrame(() => { if (card) card.scrollTop = 0; });
-  }
-
-  function closeMidiExtractDialog() {
-    if (!midiExtractDialog) return;
-    pauseMidiExtractSamples();
-    if (typeof midiExtractDialog.close === "function" && midiExtractDialog.open) {
-      midiExtractDialog.close();
-      return;
-    }
-    midiExtractDialog.removeAttribute("open");
-  }
-
-  async function playMidiExtractSampleVideo() {
-    if (!midiExtractSampleVideo || !midiExtractSampleVideoLoad) return;
-    pauseMidiExtractSampleAudio();
-    pauseMidiExtractSampleMidiAudio();
-    const source = String(midiExtractSampleVideoLoad.dataset.src || "").trim();
-    if (!source) return;
-    const firstLoad = !midiExtractSampleVideo.hasAttribute("src");
-    try {
-      midiExtractSampleVideoLoad.disabled = true;
-      midiExtractSampleVideoLoad.setAttribute("aria-busy", "true");
-      if (firstLoad) {
-        midiExtractSampleVideo.src = source;
-        midiExtractSampleVideo.load();
-      }
-      midiExtractSampleVideo.hidden = false;
-      await midiExtractSampleVideo.play();
-      midiExtractSampleVideoLoad.remove();
-    } catch (err) {
-      if (firstLoad) {
-        midiExtractSampleVideo.removeAttribute("src");
-        try { midiExtractSampleVideo.load(); } catch (_) {}
-      }
-      midiExtractSampleVideo.hidden = true;
-      midiExtractSampleVideoLoad.hidden = false;
-      showDialog(i18nText("audio.video_fail"), shortError(err));
-    } finally {
-      midiExtractSampleVideoLoad.disabled = false;
-      midiExtractSampleVideoLoad.removeAttribute("aria-busy");
-    }
-  }
-
-  async function playMidiExtractSampleAudio() {
-    if (!midiExtractSampleAudio || !midiExtractSampleAudioLoad) return;
-    pauseMidiExtractSampleVideo();
-    pauseMidiExtractSampleMidiAudio();
-    const source = String(midiExtractSampleAudioLoad.dataset.src || "").trim();
-    if (!source) return;
-    const firstLoad = !midiExtractSampleAudio.hasAttribute("src");
-    try {
-      midiExtractSampleAudioLoad.disabled = true;
-      midiExtractSampleAudioLoad.setAttribute("aria-busy", "true");
-      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = i18nText("audio.input_load");
-      if (firstLoad) {
-        midiExtractSampleAudio.src = source;
-        midiExtractSampleAudio.load();
-      }
-      midiExtractSampleAudio.hidden = false;
-      await midiExtractSampleAudio.play();
-      midiExtractSampleAudioLoad.remove();
-      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = i18nText("audio.source_play");
-    } catch (err) {
-      if (firstLoad) {
-        midiExtractSampleAudio.removeAttribute("src");
-        try { midiExtractSampleAudio.load(); } catch (_) {}
-      }
-      midiExtractSampleAudio.hidden = true;
-      midiExtractSampleAudioLoad.hidden = false;
-      if (midiExtractSampleAudioStatus) midiExtractSampleAudioStatus.textContent = i18nText("file.audio_loaded");
-      showDialog(i18nText("audio.sample_fail"), shortError(err));
-    } finally {
-      midiExtractSampleAudioLoad.disabled = false;
-      midiExtractSampleAudioLoad.removeAttribute("aria-busy");
-    }
-  }
-
-  function pauseMidiExtractSampleVideo() {
-    if (!midiExtractSampleVideo || midiExtractSampleVideo.paused) return;
-    try { midiExtractSampleVideo.pause(); } catch (_) {}
-  }
-
-  function pauseMidiExtractSampleAudio() {
-    if (!midiExtractSampleAudio || midiExtractSampleAudio.paused) return;
-    try { midiExtractSampleAudio.pause(); } catch (_) {}
-  }
-
-  function pauseMidiExtractSampleMidiAudio() {
-    if (!midiExtractSampleMidiAudio || midiExtractSampleMidiAudio.paused) return;
-    try { midiExtractSampleMidiAudio.pause(); } catch (_) {}
-  }
-
-  function pauseMidiExtractSamples() {
-    pauseMidiExtractSampleVideo();
-    pauseMidiExtractSampleAudio();
-    pauseMidiExtractSampleMidiAudio();
-  }
-
-  async function playMidiExtractSampleMidiAudio() {
-    if (!midiExtractSampleMidiAudio || !midiExtractSampleMidiPlay) return;
-    pauseMidiExtractSampleVideo();
-    pauseMidiExtractSampleAudio();
-    stopPlayback(false);
-    stopMidiPreview();
-    const source = String(midiExtractSampleMidiPlay.dataset.src || "").trim();
-    if (!source) return;
-    const firstLoad = !midiExtractSampleMidiAudio.hasAttribute("src");
-    try {
-      midiExtractSampleMidiPlay.disabled = true;
-      midiExtractSampleMidiPlay.setAttribute("aria-busy", "true");
-      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = i18nText("midi.preview_load");
-      if (firstLoad) {
-        midiExtractSampleMidiAudio.src = source;
-        midiExtractSampleMidiAudio.load();
-      }
-      midiExtractSampleMidiAudio.hidden = false;
-      await midiExtractSampleMidiAudio.play();
-      midiExtractSampleMidiPlay.remove();
-      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = i18nText("msg.play_conv");
-    } catch (err) {
-      if (firstLoad) {
-        midiExtractSampleMidiAudio.removeAttribute("src");
-        try { midiExtractSampleMidiAudio.load(); } catch (_) {}
-      }
-      midiExtractSampleMidiAudio.hidden = true;
-      midiExtractSampleMidiPlay.hidden = false;
-      if (midiExtractSampleMidiStatus) midiExtractSampleMidiStatus.textContent = i18nText("audio.preview_help");
-      showDialog(i18nText("midi.preview_fail"), shortError(err));
-    } finally {
-      midiExtractSampleMidiPlay.disabled = false;
-      midiExtractSampleMidiPlay.removeAttribute("aria-busy");
     }
   }
 
@@ -1910,10 +1705,6 @@
     setGoogleAutoReconnect(true);
     const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
     updateGoogleDriveControls(appliedDriveSettings ? i18nText("google.cfg_applied") : i18nText("cfg.local"));
-    trackAnalytics("google_drive_login", {
-      settings_source: appliedDriveSettings ? "drive" : "local",
-      entry_point: "drive_action"
-    });
     return googleAccessToken;
   }
 
@@ -1946,7 +1737,6 @@
       setGoogleAutoReconnect(true);
       const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
       updateGoogleDriveControls(appliedDriveSettings ? i18nText("google.cfg_applied") : i18nText("cfg.local"));
-      trackAnalytics("google_drive_login", { settings_source: appliedDriveSettings ? "drive" : "local" });
     } catch (err) {
       resetGoogleSessionState(true);
       updateGoogleDriveControls(i18nText("google.login_fail_short"));
@@ -2059,6 +1849,63 @@
       headers: { "Content-Type": multipart.contentType },
       body: multipart.body
     });
+  }
+
+  async function uploadGoogleDriveBinaryFile({ fileId = "", name, bytes, parents = null, mimeType = GOOGLE_SOUND_BANK_MIME }) {
+    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
+    const metadata = { name, mimeType };
+    if (parents && !fileId) metadata.parents = parents;
+    const encodedId = encodeURIComponent(fileId);
+    const baseUrl = fileId
+      ? `${GOOGLE_DRIVE_UPLOAD_BASE}/files/${encodedId}`
+      : `${GOOGLE_DRIVE_UPLOAD_BASE}/files`;
+    const initUrl = appendGoogleDriveParams(baseUrl, googleDriveSupportsAllDrivesParams({
+      uploadType: "resumable",
+      fields: "id,name,modifiedTime,size,mimeType,parents"
+    }));
+    const method = fileId ? "PATCH" : "POST";
+    const initResponse = await googleDriveFetch(initUrl, {
+      method,
+      headers: {
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": mimeType,
+        "X-Upload-Content-Length": String(view.byteLength)
+      },
+      body: JSON.stringify(metadata)
+    });
+    if (!initResponse.ok) throw new Error(await googleDriveErrorMessage(initResponse));
+    const sessionUrl = initResponse.headers.get("Location");
+    if (!sessionUrl) throw new Error("Google Drive did not return an upload session URL.");
+    const uploadResponse = await googleDriveFetch(sessionUrl, {
+      method: "PUT",
+      headers: { "Content-Type": mimeType },
+      body: new Blob([view], { type: mimeType })
+    });
+    if (!uploadResponse.ok) throw new Error(await googleDriveErrorMessage(uploadResponse));
+    return uploadResponse.json();
+  }
+
+  async function findGoogleSoundBankCacheFile() {
+    const q = encodeURIComponent(`name = '${driveQueryString(GOOGLE_SOUND_BANK_FILE_NAME)}' and trashed = false`);
+    const url = `${GOOGLE_DRIVE_API_BASE}/files?spaces=appDataFolder&pageSize=1&q=${q}&fields=files(id,name,modifiedTime,size,mimeType)`;
+    const data = await googleDriveJson(url);
+    return Array.isArray(data.files) && data.files.length ? data.files[0] : null;
+  }
+
+  async function downloadGoogleDriveBinary(fileId) {
+    const url = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}`, googleDriveSupportsAllDrivesParams({ alt: "media" }));
+    const response = await googleDriveFetch(url);
+    if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  async function deleteGoogleDriveFile(fileId) {
+    if (!fileId) return false;
+    const url = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}`, googleDriveSupportsAllDrivesParams());
+    const response = await googleDriveFetch(url, { method: "DELETE" });
+    if (response.status === 404) return false;
+    if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
+    return true;
   }
 
   async function findGoogleMmlFolder() {
@@ -2467,6 +2314,215 @@
     });
   }
 
+  function soundBankSelectionTime(meta) {
+    const time = Date.parse(String(meta?.updatedAt || ""));
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function normalizeGoogleSoundBankMeta(value) {
+    const normalized = normalizeSoundBankSelectionMeta(value);
+    if (!normalized) return null;
+    return {
+      ...normalized,
+      fileId: normalized.mode === "custom" ? String(value?.fileId || "").trim().slice(0, 200) : ""
+    };
+  }
+
+  function buildGoogleSoundBankSettingsMeta() {
+    const local = readSoundBankSelectionMeta() || newDefaultSoundBankSelectionMeta("");
+    return {
+      ...local,
+      fileId: local.mode === "custom" ? String(googleSoundBankFileId || "") : ""
+    };
+  }
+
+  async function uploadSoundBankBytesToGoogle(bytes) {
+    if (!googleSoundBankFileId) {
+      const existing = await findGoogleSoundBankCacheFile();
+      googleSoundBankFileId = existing?.id || "";
+    }
+    let saved;
+    try {
+      saved = await uploadGoogleDriveBinaryFile({
+        fileId: googleSoundBankFileId,
+        name: GOOGLE_SOUND_BANK_FILE_NAME,
+        bytes,
+        parents: googleSoundBankFileId ? null : ["appDataFolder"],
+        mimeType: GOOGLE_SOUND_BANK_MIME
+      });
+    } catch (err) {
+      if (!googleSoundBankFileId || !isGoogleDriveNotFoundError(err)) throw err;
+      googleSoundBankFileId = "";
+      saved = await uploadGoogleDriveBinaryFile({
+        fileId: "",
+        name: GOOGLE_SOUND_BANK_FILE_NAME,
+        bytes,
+        parents: ["appDataFolder"],
+        mimeType: GOOGLE_SOUND_BANK_MIME
+      });
+    }
+    googleSoundBankFileId = saved?.id || googleSoundBankFileId;
+    return saved;
+  }
+
+  async function removeGoogleSoundBankCacheFile(fileId = "") {
+    let targetId = String(fileId || googleSoundBankFileId || "").trim();
+    if (!targetId) {
+      try { targetId = String((await findGoogleSoundBankCacheFile())?.id || ""); } catch (_) {}
+    }
+    if (targetId) {
+      try { await deleteGoogleDriveFile(targetId); }
+      catch (err) { if (!isGoogleDriveNotFoundError(err)) throw err; }
+    }
+    googleSoundBankFileId = "";
+  }
+
+  function queueGoogleSoundBankSync(task) {
+    const run = googleSoundBankSyncQueue
+      .catch(() => false)
+      .then(async () => {
+        googleSoundBankSyncing = true;
+        try { return await task(); }
+        finally { googleSoundBankSyncing = false; }
+      });
+    googleSoundBankSyncQueue = run;
+    return run;
+  }
+
+  async function syncManualSoundBankSelectionToGoogle(bytes, meta) {
+    if (!isGoogleConnected()) return false;
+    return queueGoogleSoundBankSync(async () => {
+      try {
+        await uploadSoundBankBytesToGoogle(bytes);
+        await saveGoogleSettingsNow(true);
+        return true;
+      } catch (err) {
+        console.warn("[Mobibard] Failed to cache sound bank in Google Drive.", err);
+        return false;
+      }
+    });
+  }
+
+  async function syncDefaultSoundBankSelectionToGoogle(meta) {
+    if (!isGoogleConnected()) return false;
+    return queueGoogleSoundBankSync(async () => {
+      try {
+        await removeGoogleSoundBankCacheFile();
+        if (meta) writeSoundBankSelectionMeta(meta);
+        await saveGoogleSettingsNow(true);
+        return true;
+      } catch (err) {
+        console.warn("[Mobibard] Failed to clear Google sound-bank cache.", err);
+        return false;
+      }
+    });
+  }
+
+  async function applyGoogleCustomSoundBank(bytes, cloudMeta) {
+    const meta = normalizeGoogleSoundBankMeta(cloudMeta);
+    if (!meta || meta.mode !== "custom") throw new Error("Invalid Google sound-bank metadata.");
+    if (meta.size > 0 && bytes.byteLength !== meta.size) {
+      throw new Error(`Cached sound-bank size mismatch (${bytes.byteLength}/${meta.size}).`);
+    }
+    if (meta.sha256) {
+      const actual = await sha256Hex(bytes);
+      if (actual && actual !== meta.sha256) throw new Error("Cached sound-bank SHA-256 mismatch.");
+    }
+    const parsed = await parseSoundBank(bytes);
+    stopPlayback(false);
+    stopMidiPreview();
+    soundFont = parsed;
+    soundFontIsDefault = false;
+    sf2Name = meta.name || "SoundBank";
+    const api = soundBankCacheApi();
+    if (api?.putActive) {
+      try {
+        await api.putActive({
+          bytes,
+          name: sf2Name,
+          mimeType: meta.mimeType || GOOGLE_SOUND_BANK_MIME,
+          extension: meta.extension || soundBankExtension(sf2Name),
+          sha256: meta.sha256,
+          updatedAt: meta.updatedAt
+        });
+      } catch (err) {
+        console.warn("[Mobibard] Local sound-bank cache write failed after Google restore.", err);
+      }
+    }
+    writeSoundBankSelectionMeta(meta);
+    updateSoundFontUi();
+    if (partSoundDialog?.open) {
+      draftPartPresetKeys = normalizePresetKeyArray(draftPartPresetKeys || partPresetKeys);
+      renderPartSoundRows();
+      updateSoundPresetControls();
+    }
+  }
+
+  async function syncSoundBankSelectionWithGoogle(cloudValue) {
+    if (!isGoogleConnected()) return false;
+    return queueGoogleSoundBankSync(async () => {
+      try {
+      const cloud = normalizeGoogleSoundBankMeta(cloudValue);
+      if (cloud?.fileId) googleSoundBankFileId = cloud.fileId;
+      const local = readSoundBankSelectionMeta();
+      let cached = null;
+      if (local?.mode === "custom") {
+        try { cached = await soundBankCacheApi()?.getActive?.(); } catch (_) {}
+      }
+      const localTime = soundBankSelectionTime(local);
+      const cloudTime = soundBankSelectionTime(cloud);
+
+      if (!cloud) {
+        if (local?.mode === "custom" && cached?.bytes?.byteLength) {
+          await uploadSoundBankBytesToGoogle(cached.bytes);
+        } else {
+          googleSoundBankFileId = "";
+          if (!local) writeSoundBankSelectionMeta(newDefaultSoundBankSelectionMeta(new Date().toISOString()));
+        }
+        return true;
+      }
+
+      if (cloud.mode === "default" && (cloudTime > localTime || !local)) {
+        await removeGoogleSoundBankCacheFile();
+        await restoreDefaultSoundFont({
+          silent: true,
+          syncGoogle: false,
+          persistSelection: true,
+          updatedAt: cloud.updatedAt || new Date().toISOString()
+        });
+        return false;
+      }
+
+      if (local?.mode === "default" && cloud.mode === "custom" && localTime >= cloudTime) {
+        await removeGoogleSoundBankCacheFile(cloud.fileId);
+        return true;
+      }
+
+      if (cloud.mode === "custom" && (
+        cloudTime > localTime
+        || !local
+        || (local.mode === "custom" && !cached?.bytes?.byteLength)
+        || (local.mode !== "custom" && cloudTime >= localTime)
+      )) {
+        if (!cloud.fileId) throw new Error("Google sound-bank cache metadata has no file ID.");
+        const bytes = await downloadGoogleDriveBinary(cloud.fileId);
+        await applyGoogleCustomSoundBank(bytes, cloud);
+        return false;
+      }
+
+      if (local?.mode === "custom" && cached?.bytes?.byteLength && (localTime > cloudTime || cloud.mode !== "custom" || !cloud.fileId)) {
+        await uploadSoundBankBytesToGoogle(cached.bytes);
+        return true;
+      }
+
+      return false;
+      } catch (err) {
+        console.warn("[Mobibard] Failed to synchronize sound-bank cache with Google Drive.", err);
+        return false;
+      }
+    });
+  }
+
   function captureLocalPrefSnapshot() {
     const prefs = {};
     try {
@@ -2495,15 +2551,19 @@
       if (value == null) continue;
       if (["string", "number", "boolean"].includes(typeof value)) normalized[name] = String(value);
     }
-    return normalized;
+    return {
+      prefs: normalized,
+      soundBank: normalizeGoogleSoundBankMeta(data?.soundBank)
+    };
   }
 
   function buildGoogleSettingsPayload() {
     return JSON.stringify({
       app: GOOGLE_SETTINGS_APP_NAME,
-      version: 1,
+      version: 2,
       savedAt: new Date().toISOString(),
-      prefs: captureLocalPrefSnapshot()
+      prefs: captureLocalPrefSnapshot(),
+      soundBank: buildGoogleSoundBankSettingsMeta()
     }, null, 2);
   }
 
@@ -2575,14 +2635,17 @@
       if (!file?.id) {
         googleSettingsFileId = "";
         setGoogleStatus(i18nText("google.settings_create"));
+        await syncSoundBankSelectionWithGoogle(null);
         await saveGoogleSettingsNow(true);
         setGoogleStatus(i18nText("google.local_settings"));
         return false;
       }
       googleSettingsFileId = file.id;
       const text = await downloadGoogleDriveText(file.id);
-      const prefs = parseGoogleSettings(text);
-      applyPrefSnapshot(prefs);
+      const settings = parseGoogleSettings(text);
+      applyPrefSnapshot(settings.prefs);
+      const soundBankChangedCloud = await syncSoundBankSelectionWithGoogle(settings.soundBank);
+      if (soundBankChangedCloud) await saveGoogleSettingsNow(true);
       setGoogleStatus(i18nText("google.settings_applied"));
       return true;
     } catch (err) {
@@ -2787,7 +2850,6 @@
         window.setTimeout(forceGooglePickerLayer, 80);
         window.setTimeout(forceGooglePickerLayer, 240);
       });
-      trackAnalytics("google_drive_picker_open");
       setGoogleStatus(i18nText("google.connected"));
     } catch (err) {
       stopGooglePickerLayerWatch();
@@ -2964,11 +3026,6 @@
       const overview = analyzeMidi(bytes, name);
         googleDriveMmlFileName = "";
       openMidiConvertDialog({ bytes, name, overview, sourceType: "midi", sourceLabel: "MIDI" });
-      trackAnalytics("drive_import_midi", {
-        file_type: analyticsFileType(name),
-        instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
-        note_count: Number(overview.noteCount || 0)
-      });
       setGoogleStatus(i18nText("drive.midi_loaded"));
       return;
     }
@@ -2976,12 +3033,6 @@
       const importData = await buildMusicXmlMidiImport(bytes, name);
         googleDriveMmlFileName = "";
       openMidiConvertDialog(importData);
-      const overview = importData.overview || {};
-      trackAnalytics("drive_import_musicxml", {
-        file_type: analyticsFileType(name),
-        instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
-        note_count: Number(overview.noteCount || 0)
-      });
       setGoogleStatus(i18nText("drive.musicxml_loaded"));
       return;
     }
@@ -3127,10 +3178,6 @@
       }
       flashButton(googleDriveSaveBtn, i18nText("drive.save_done"));
       setGoogleStatus(i18nText("drive.save_done"));
-      trackAnalytics("drive_save_mml", {
-        create_new: Boolean(result.createsNewFile),
-        channel_count: analyticsChannelCount(text)
-      });
     } catch (err) {
       showDialog(i18nText("drive.save_fail"), shortError(err));
       updateGoogleDriveControls();
@@ -3449,8 +3496,147 @@
     if (soundFontResetBtn) soundFontResetBtn.disabled = Boolean(busy);
   }
 
+  function soundBankCacheApi() {
+    return window.MobibardSoundBankCache || null;
+  }
+
+  function soundBankExtension(name = "") {
+    const match = String(name || "").trim().toLowerCase().match(/\.([a-z0-9]+)$/);
+    return match ? match[1] : "";
+  }
+
+  function normalizeSoundBankSelectionMeta(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const mode = value.mode === "custom" ? "custom" : (value.mode === "default" ? "default" : "");
+    if (!mode) return null;
+    const updatedAt = String(value.updatedAt || "");
+    if (updatedAt && !Number.isFinite(Date.parse(updatedAt))) return null;
+    const normalized = {
+      version: 1,
+      mode,
+      updatedAt,
+      name: String(value.name || "").slice(0, 255),
+      extension: String(value.extension || "").replace(/^\./, "").toLowerCase().slice(0, 12),
+      mimeType: String(value.mimeType || GOOGLE_SOUND_BANK_MIME).slice(0, 120),
+      size: Math.max(0, Number(value.size) || 0),
+      sha256: String(value.sha256 || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 64)
+    };
+    return normalized;
+  }
+
+  function readSoundBankSelectionMeta() {
+    return normalizeSoundBankSelectionMeta(readLocalJsonPref(SOUND_BANK_SELECTION_PREF));
+  }
+
+  function writeSoundBankSelectionMeta(meta) {
+    const normalized = normalizeSoundBankSelectionMeta(meta);
+    if (!normalized) return false;
+    return writeLocalJsonPref(SOUND_BANK_SELECTION_PREF, normalized);
+  }
+
+  function newDefaultSoundBankSelectionMeta(updatedAt) {
+    const resolvedUpdatedAt = updatedAt === undefined ? new Date().toISOString() : String(updatedAt || "");
+    return {
+      version: 1,
+      mode: "default",
+      updatedAt: resolvedUpdatedAt,
+      name: "",
+      extension: "",
+      mimeType: GOOGLE_SOUND_BANK_MIME,
+      size: 0,
+      sha256: ""
+    };
+  }
+
+  async function sha256Hex(bytes) {
+    try {
+      if (!window.crypto?.subtle) return "";
+      const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
+      const digest = await window.crypto.subtle.digest("SHA-256", view);
+      return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join("");
+    } catch (_) {
+      return "";
+    }
+  }
+
+  async function persistManualSoundBankCache(bytes, file) {
+    const api = soundBankCacheApi();
+    const updatedAt = new Date().toISOString();
+    const name = String(file?.name || sf2Name || "SoundBank");
+    const extension = soundBankExtension(name);
+    const mimeType = String(file?.type || GOOGLE_SOUND_BANK_MIME);
+    const sha256 = await sha256Hex(bytes);
+    const meta = normalizeSoundBankSelectionMeta({
+      version: 1,
+      mode: "custom",
+      updatedAt,
+      name,
+      extension,
+      mimeType,
+      size: bytes.byteLength,
+      sha256
+    });
+    if (api?.putActive) {
+      try {
+        await api.putActive({
+          bytes,
+          name: meta.name,
+          mimeType: meta.mimeType,
+          extension: meta.extension,
+          sha256: meta.sha256,
+          updatedAt: meta.updatedAt
+        });
+      } catch (err) {
+        console.warn("[Mobibard] Local sound-bank cache write failed.", err);
+      }
+    }
+    writeSoundBankSelectionMeta(meta);
+    return meta;
+  }
+
+  async function restoreCachedSoundBankFromLocal() {
+    const meta = readSoundBankSelectionMeta();
+    if (!meta || meta.mode !== "custom") {
+      soundFontIsDefault = true;
+      sf2Name = DEFAULT_SF2_FILE_NAME;
+      return false;
+    }
+    const api = soundBankCacheApi();
+    if (!api?.getActive) return false;
+    try {
+      const cached = await api.getActive();
+      if (!cached?.bytes?.byteLength) return false;
+      if (meta.size > 0 && cached.bytes.byteLength !== meta.size) return false;
+      if (meta.sha256 && cached.sha256 && meta.sha256 !== String(cached.sha256).toLowerCase()) return false;
+      const parsed = await parseSoundBank(cached.bytes);
+      soundFont = parsed;
+      soundFontIsDefault = false;
+      sf2Name = meta.name || cached.name || "SoundBank";
+      return true;
+    } catch (err) {
+      console.warn("[Mobibard] Failed to restore cached sound bank.", err);
+      return false;
+    }
+  }
+
+  async function clearLocalSoundBankCache(updatedAt = new Date().toISOString()) {
+    try { await soundBankCacheApi()?.clearActive?.(); } catch (err) {
+      console.warn("[Mobibard] Failed to clear cached sound bank.", err);
+    }
+    const meta = newDefaultSoundBankSelectionMeta(updatedAt);
+    writeSoundBankSelectionMeta(meta);
+    return meta;
+  }
+
   function updateSoundFontUi(message = "") {
-    if (soundName) soundName.textContent = message || sf2Name || DEFAULT_SF2_FILE_NAME;
+    if (!soundName) return;
+    if (message) {
+      soundName.textContent = message;
+      return;
+    }
+    soundName.textContent = soundFontIsDefault
+      ? i18nText("snd.restore_default")
+      : (sf2Name || "SoundBank");
   }
 
   function openSf2Picker() {
@@ -3461,23 +3647,33 @@
 
   async function restoreDefaultSoundFont(options = {}) {
     const silent = Boolean(options?.silent);
+    const syncGoogle = options?.syncGoogle !== false;
+    const persistSelection = options?.persistSelection !== false;
+    const selectionUpdatedAt = String(options?.updatedAt || new Date().toISOString());
     stopPlayback(false);
     stopMidiPreview();
     setSoundFontControlsBusy(true);
     soundFont = null;
+    soundFontIsDefault = true;
     sf2Name = DEFAULT_SF2_FILE_NAME;
     if (sf2File) sf2File.value = "";
-    updateSoundFontUi(i18nText("snd.reading_sf2"));
+    updateSoundFontUi(i18nText("snd.reading_soundbank"));
+    let selectionMeta = null;
     try {
+      if (persistSelection) selectionMeta = await clearLocalSoundBankCache(selectionUpdatedAt);
       await loadDefaultSf2IfNeeded();
+      updateSoundFontUi();
       if (partSoundDialog?.open) {
         draftPartPresetKeys = normalizePresetKeyArray(draftPartPresetKeys || partPresetKeys);
         renderPartSoundRows();
         updateSoundPresetControls();
       }
+      if (syncGoogle && isGoogleConnected()) {
+        void syncDefaultSoundBankSelectionToGoogle(selectionMeta || newDefaultSoundBankSelectionMeta(selectionUpdatedAt));
+      }
     } catch (err) {
-      updateSoundFontUi(DEFAULT_SF2_FILE_NAME);
-      if (!silent) showDialog(i18nText("snd.load_sf2"), shortError(err));
+      updateSoundFontUi();
+      if (!silent) showDialog(i18nText("snd.load_soundbank"), shortError(err));
     } finally {
       setSoundFontControlsBusy(false);
     }
@@ -3522,23 +3718,10 @@
         const bytes = new Uint8Array(await file.arrayBuffer());
         const overview = analyzeMidi(bytes, name);
         openMidiConvertDialog({ bytes, name, overview, sourceType: "midi", sourceLabel: "MIDI" });
-        trackAnalytics("local_import_midi", {
-          file_type: analyticsFileType(ext),
-          file_size: analyticsFileSizeBucket(file.size),
-          instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
-          note_count: Number(overview.noteCount || 0)
-        });
       } else if (isMusicXmlSourceExtension(ext)) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const importData = await buildMusicXmlMidiImport(bytes, name);
         openMidiConvertDialog(importData);
-        const overview = importData.overview || {};
-        trackAnalytics("local_import_musicxml", {
-          file_type: analyticsFileType(ext),
-          file_size: analyticsFileSizeBucket(file.size),
-          instrument_groups: Number(overview.instrumentGroups?.length || overview.channels?.length || 0),
-          note_count: Number(overview.noteCount || 0)
-        });
       } else if (ext === "mmi") {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const loaded = await readMabiIccoMmiFile(bytes, name);
@@ -3862,7 +4045,6 @@
       return;
     }
 
-    trackAnalytics("preview_mml_start", { scope: "selected", channel_count: selectedParts.length });
     await playMmiImportPartsPreview(selectedParts, {
       button,
       statusText: i18nText("mml.preview_selected_status", [selectedParts.length, MMI_IMPORT_MAX_CHANNELS]),
@@ -3885,7 +4067,6 @@
       return;
     }
 
-    trackAnalytics("preview_mml_start", { scope: "all", channel_count: allParts.length });
     await playMmiImportPartsPreview(allParts, {
       button,
       statusText: i18nText("mml.preview_all_status", [allParts.length]),
@@ -4021,7 +4202,6 @@
         button.setAttribute("aria-pressed", "true");
       }
       setMmiImportStatus(i18nText("mml.preview_channel_status", [candidate.label || i18nText("ui.channel_selected")]));
-      trackAnalytics("preview_mml_start", { scope: "channel", channel_count: 1 });
 
       await loadDefaultSf2IfNeeded();
       const ctx = await ensureAudioContext();
@@ -4625,6 +4805,8 @@
 
   function midiGroupCacheSignature(group) {
     return [
+      Number.isInteger(group?.bankMsb) ? group.bankMsb : 0,
+      Number.isInteger(group?.bankLsb) ? group.bankLsb : 0,
       Number.isInteger(group?.program) ? group.program : 0,
       Number.isInteger(group?.drumMidi) ? group.drumMidi : "-",
       Number(group?.noteCount) || 0,
@@ -4985,9 +5167,11 @@
       const oa = ca >= 0 ? ca : MIDI_INSTRUMENT_CATEGORY_ORDER.length;
       const ob = cb >= 0 ? cb : MIDI_INSTRUMENT_CATEGORY_ORDER.length;
       return oa - ob
-        || String(a.instrumentName || a.programText || "").localeCompare(String(b.instrumentName || b.programText || ""), "ko")
-        || String(a.partName || "").localeCompare(String(b.partName || ""), "ko")
+        || (Number(a.bankMsb) || 0) - (Number(b.bankMsb) || 0)
+        || (Number(a.bankLsb) || 0) - (Number(b.bankLsb) || 0)
         || (Number(a.program) || 0) - (Number(b.program) || 0)
+        || (Number.isInteger(a.drumMidi) ? a.drumMidi : -1) - (Number.isInteger(b.drumMidi) ? b.drumMidi : -1)
+        || String(a.instrumentName || a.programText || "").localeCompare(String(b.instrumentName || b.programText || ""), "ko")
         || String(a.id).localeCompare(String(b.id));
     });
   }
@@ -5116,6 +5300,7 @@
           <strong>${escapeHtml(group.displayName || [group.instrumentName || group.programText || i18nText("snd.no_inst"), group.partName].filter(Boolean).join(" · "))}</strong>
         </div>
         <span class="midi-channel-sub">
+          ${group.bankText ? `<span>${escapeHtml(group.bankText)}</span>` : ""}
           ${group.programNumberText ? `<span>${escapeHtml(group.programNumberText)}</span>` : ""}
           ${escapeHtml(i18nText("snd.note_count_range", [formatCount(group.noteCount), group.rangeText || i18nText("ui.no_notes")]))}
           ${group.duplicateMerged ? `<em>${escapeHtml(i18nText("snd.dup_merge", [formatCount(group.duplicateMerged)]))}</em>` : ""}
@@ -5219,7 +5404,6 @@
         midiConvertStatus.textContent = i18nText("mml.prepare_preview");
         midiConvertStatus.hidden = false;
       }
-      trackAnalytics("preview_midi_start", { scope: "selected", source_type: pendingMidiImport?.sourceType || "midi", export_channels: Number(options.partCount || 0) });
       await loadDefaultSf2IfNeeded();
       const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, { ...options, sourceLabel });
       const normalized = normalizeImportedFullMml(result.mml);
@@ -5288,7 +5472,6 @@
         midiConvertStatus.textContent = i18nText("midi.preview_prepare_channel", [PART_LABELS[sourceIndex]]);
         midiConvertStatus.hidden = false;
       }
-      trackAnalytics("preview_midi_start", { scope: "export_channel", source_type: pendingMidiImport?.sourceType || "midi", export_channels: 1 });
       await loadDefaultSf2IfNeeded();
       const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
       const normalized = normalizeImportedFullMml(result.mml);
@@ -5347,7 +5530,6 @@
         midiConvertStatus.textContent = i18nText("midi.preview_prepare", [sourceLabel]);
         midiConvertStatus.hidden = false;
       }
-      trackAnalytics("preview_midi_start", { scope: "source_file", source_type: pendingMidiImport?.sourceType || "midi" });
       await loadDefaultSf2IfNeeded();
       const preview = buildMidiFilePreview(pendingMidiImport.bytes, { maxSeconds: 45, tailSeconds: 1.0 });
       const ctx = await ensureAudioContext();
@@ -5419,7 +5601,6 @@
         button.disabled = true;
         button.textContent = i18nText("ui.play");
       }
-      trackAnalytics("preview_midi_start", { scope: "instrument", source_type: pendingMidiImport?.sourceType || "midi" });
       await loadDefaultSf2IfNeeded();
       const preview = buildMidiInstrumentPreview(pendingMidiImport.bytes, groupId, { maxSeconds: 8, tailSeconds: 0.75 });
       const ctx = await ensureAudioContext();
@@ -5458,18 +5639,18 @@
     const msb = clampInt(Number(bankMsb) || 0, 0, 127);
     const lsb = clampInt(Number(bankLsb) || 0, 0, 127);
     const presetNumber = clampInt(Number(program) || 0, 0, 127);
-    const candidates = [];
-    if (options.preferDrum) candidates.push(128);
-    candidates.push(msb * 128 + lsb, lsb, msb, 0);
-    for (const bank of [...new Set(candidates)]) {
+    const exactBanks = options.preferDrum ? [128, msb * 128 + lsb, lsb, msb] : [msb * 128 + lsb, lsb, msb];
+    for (const bank of [...new Set(exactBanks)]) {
       const preset = soundFont.presets.find(p => p.bank === bank && p.preset === presetNumber);
       if (preset) return preset;
     }
-    if (options.preferDrum) {
-      const drumPreset = soundFont.presets.find(p => p.bank === 128);
-      if (drumPreset) return drumPreset;
-    }
-    return soundFont.findPreset(presetNumber) || soundFont.findPreset(0) || soundFont.presets[0] || null;
+    // Requested instrument is unavailable in the selected SF/SF3/DLS:
+    // use the bundled original sound bank's Bank 0 with the same program,
+    // then Bank 0 / Program 0 as the last audible fallback.
+    const originalPresets = Array.isArray(defaultSoundFont?.presets) ? defaultSoundFont.presets : [];
+    return originalPresets.find(p => p.bank === 0 && p.preset === presetNumber)
+      || originalPresets.find(p => p.bank === 0 && p.preset === 0)
+      || null;
   }
 
   function findPreviewPreset(preview) {
@@ -5744,84 +5925,107 @@
   async function loadUserSf2() {
     const file = sf2File?.files?.[0];
     if (!file) return;
+    const previousSoundFont = soundFont;
+    const previousSoundFontIsDefault = soundFontIsDefault;
+    const previousSf2Name = sf2Name;
     stopPlayback(false);
     stopMidiPreview();
     setSoundFontControlsBusy(true);
-    updateSoundFontUi(i18nText("snd.reading_sf2"));
+    updateSoundFontUi(i18nText("snd.reading_soundbank"));
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      soundFont = await parseSoundFont(bytes);
-      sf2Name = file.name || "SoundFont.sf2";
+      const parsed = await parseSoundBank(bytes);
+      soundFont = parsed;
+      soundFontIsDefault = false;
+      sf2Name = file.name || "SoundBank";
       updateSoundFontUi();
       if (partSoundDialog?.open) {
         draftPartPresetKeys = normalizePresetKeyArray(draftPartPresetKeys || partPresetKeys);
         renderPartSoundRows();
         updateSoundPresetControls();
       }
+      try {
+        const meta = await persistManualSoundBankCache(bytes, file);
+        if (meta && isGoogleConnected()) void syncManualSoundBankSelectionToGoogle(bytes, meta);
+      } catch (cacheErr) {
+        console.warn("[Mobibard] Failed to cache selected sound bank.", cacheErr);
+      }
     } catch (err) {
-      soundFont = null;
-      sf2Name = DEFAULT_SF2_FILE_NAME;
+      soundFont = previousSoundFont;
+      soundFontIsDefault = previousSoundFontIsDefault;
+      sf2Name = previousSf2Name;
       if (sf2File) sf2File.value = "";
-      try { await loadDefaultSf2IfNeeded(); } catch (_) { updateSoundFontUi(); }
-      showDialog(i18nText("snd.load_sf2"), shortError(err));
+      if (!soundFont) {
+        soundFontIsDefault = true;
+        sf2Name = DEFAULT_SF2_FILE_NAME;
+        try { await loadDefaultSf2IfNeeded(); } catch (_) {}
+      }
+      updateSoundFontUi();
+      showDialog(i18nText("snd.load_soundbank"), shortError(err));
     } finally {
       setSoundFontControlsBusy(false);
     }
   }
 
+  async function ensureDefaultSoundFont() {
+    if (defaultSoundFont) return defaultSoundFont;
+    const bytes = readDefaultSf2Bytes();
+    defaultSoundFont = await parseSoundBank(bytes);
+    // 파싱 이후에는 약 4MB의 Base64 문자열을 더 들고 있을 필요가 없다.
+    try { window.MOBIBARD_DEFAULT_SF3_BASE64 = ""; } catch (_) {}
+    return defaultSoundFont;
+  }
+
   async function loadDefaultSf2IfNeeded() {
-    if (soundFont) {
-      updateSoundFontUi();
-      return;
+    const original = await ensureDefaultSoundFont();
+    if (!soundFont) {
+      soundFont = original;
+      soundFontIsDefault = true;
+      sf2Name = DEFAULT_SF2_FILE_NAME;
     }
-    const bytes = await readDefaultSf2Bytes();
-    soundFont = await parseSoundFont(bytes);
-    sf2Name = DEFAULT_SF2_FILE_NAME;
     updateSoundFontUi();
   }
 
-  async function readDefaultSf2Bytes() {
-    if (location.protocol !== "file:") {
-      try {
-        const res = await fetch(DEFAULT_SF2_URL);
-        if (res.ok) return new Uint8Array(await res.arrayBuffer());
-      } catch (_) {}
+  function readDefaultSf2Bytes() {
+    const encoded = String(window.MOBIBARD_DEFAULT_SF3_BASE64 || "").replace(/\s+/g, "");
+    if (!encoded) throw new Error(i18nText("snd.load_default_file", [DEFAULT_SF2_FILE_NAME]));
+    let binary;
+    try {
+      binary = atob(encoded);
+    } catch (_) {
+      throw new Error(i18nText("snd.load_default_file", [DEFAULT_SF2_FILE_NAME]));
     }
-    await loadDefaultSf2FallbackScriptIfNeeded();
-    const b64 = DEFAULT_SF2_EMBEDDED_B64();
-    if (!b64) throw new Error(i18nText("drive.read_default"));
-    return base64ToUint8Array(b64);
-  }
-
-  function loadDefaultSf2FallbackScriptIfNeeded() {
-    if (DEFAULT_SF2_EMBEDDED_B64()) return Promise.resolve();
-    if (defaultSf2FallbackLoadPromise) return defaultSf2FallbackLoadPromise;
-    defaultSf2FallbackLoadPromise = new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = DEFAULT_SF2_FALLBACK_SCRIPT_URL;
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(i18nText("snd.load_default")));
-      document.head.appendChild(script);
-    });
-    return defaultSf2FallbackLoadPromise;
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i) & 0xff;
+    return bytes;
   }
 
   async function openPartSoundDialog() {
-    try {
-      stopPlayback(false);
-      stopMidiPreview();
-      await loadDefaultSf2IfNeeded();
+    stopPlayback(false);
+    stopMidiPreview();
+
+    // 음색 파일을 읽지 못하더라도 설정 창 자체는 항상 연다.
+    // 사용자는 이 창의 "불러오기" 버튼으로 SF2/SF3/DLS 파일을 교체할 수 있어야 한다.
+    if (!soundFont) {
+      updateSoundFontUi(i18nText("snd.reading_soundbank"));
+      try {
+        await loadDefaultSf2IfNeeded();
+      } catch (_) {
+        soundFont = null;
+        soundFontIsDefault = true;
+        sf2Name = DEFAULT_SF2_FILE_NAME;
+        updateSoundFontUi();
+      }
+    } else {
       updateSoundFontUi();
-      draftPartPresetKeys = normalizePresetKeyArray(partPresetKeys);
-      draftSoundPresetBaseId = findUserSoundPresetIdByKeys(draftPartPresetKeys);
-      renderPartSoundRows();
-      updateSoundPresetControls();
-      if (partSoundDialog?.showModal) partSoundDialog.showModal();
-      else showDialog(i18nText("snd.ch_settings"), i18nText("cfg.browser_fail"));
-    } catch (err) {
-      showDialog(i18nText("snd.open_ch"), shortError(err));
     }
+
+    draftPartPresetKeys = normalizePresetKeyArray(partPresetKeys);
+    draftSoundPresetBaseId = findUserSoundPresetIdByKeys(draftPartPresetKeys);
+    renderPartSoundRows();
+    updateSoundPresetControls();
+    if (partSoundDialog?.showModal) partSoundDialog.showModal();
+    else showDialog(i18nText("snd.ch_settings"), i18nText("cfg.browser_fail"));
   }
 
   async function previewPartPreset(key, partIndex = 0, triggerButton = null) {
@@ -5946,7 +6150,7 @@
     if (!presets.length) {
       const empty = document.createElement("div");
       empty.className = "part-sound-empty";
-      empty.textContent = i18nText("snd.find_any");
+      empty.textContent = soundFont ? i18nText("snd.find_any") : i18nText("snd.load_or_replace");
       partSoundRows.appendChild(empty);
       return;
     }
@@ -6019,7 +6223,7 @@
     if (!soundFont || !Array.isArray(soundFont.presets)) return [];
     const seen = new Set();
     return soundFont.presets
-      .filter(p => p && Array.isArray(p.regions) && p.regions.length)
+      .filter(p => p && Array.isArray(p.regions) && p.regions.length && (typeof soundFont.hasAudiblePreset !== "function" || soundFont.hasAudiblePreset(p)))
       .slice()
       .sort((a, b) => (a.bank - b.bank) || (a.preset - b.preset) || String(a.name || "").localeCompare(String(b.name || "")))
       .filter(p => {
@@ -6152,9 +6356,6 @@
       playContextStart = baseTime;
       playOffsetStart = currentOffset;
       isPlaying = true;
-      trackAnalytics("playback_start", {
-        channel_count: analyticsChannelCount(mainMml.value)
-      });
       updatePlayButton();
       updateProgressUi(currentOffset, scheduleCache.duration);
       schedulePlaybackWindow();
@@ -6538,7 +6739,6 @@
       const updated = replaceTempoMarkerCommand(source, marker, bpm);
       setMainMml(updated);
       currentOffset = 0;
-      trackAnalytics("tempo_edit", { before_bpm: beforeBpm, after_bpm: bpm });
       showDialog(i18nText("tempo.edit"), i18nText("tempo.changed", [formatTime(Math.max(0, Number(marker?.time) || 0)), beforeBpm, bpm]));
     } catch (err) {
       showDialog(i18nText("tempo.edit_2"), shortError(err));
@@ -6648,44 +6848,6 @@
     playToggleBtn.classList.toggle("danger", isPlaying);
   }
 
-  function scheduleMmlDraftSave() {
-    if (mmlDraftRestoring) return;
-    clearTimeout(mmlDraftSaveTimer);
-    mmlDraftSaveTimer = setTimeout(saveMmlDraftNow, 180);
-  }
-
-  function saveMmlDraftNow() {
-    clearTimeout(mmlDraftSaveTimer);
-    mmlDraftSaveTimer = 0;
-    if (mmlDraftRestoring || !mainMml) return;
-    writeLocalJsonPref(MML_DRAFT_CACHE_PREF, {
-      version: MML_DRAFT_CACHE_VERSION,
-      savedAt: Date.now(),
-      activeTab: activeTabName,
-      mainMml: String(mainMml.value || ""),
-      parts: partTexts.map(textarea => String(textarea?.value || ""))
-    });
-  }
-
-  function restoreMmlDraftCache() {
-    const cached = readLocalJsonPref(MML_DRAFT_CACHE_PREF);
-    if (!cached || cached.version !== MML_DRAFT_CACHE_VERSION || !mainMml) return "";
-    const hasCachedMain = typeof cached.mainMml === "string";
-    const hasCachedParts = Array.isArray(cached.parts);
-    if (!hasCachedMain && !hasCachedParts) return "";
-    const cachedMain = hasCachedMain
-      ? cached.mainMml
-      : composeMml(cached.parts.slice(0, 6), { preserveEmpty: true, partCount: 6 });
-    mmlDraftRestoring = true;
-    try {
-      mainMml.value = normalizeMmlForDisplay(cachedMain);
-    } finally {
-      mmlDraftRestoring = false;
-    }
-    const tab = String(cached.activeTab || "main");
-    return tabs.some(button => button.dataset.tab === tab) ? tab : "main";
-  }
-
   function clearAllMmlChannels() {
     stopPlayback(false);
     stopMidiPreview();
@@ -6710,7 +6872,6 @@
     }));
     clearSuggestedMmlSaveFileName();
     googleDriveMmlFileName = "";
-    saveMmlDraftNow();
   }
 
   function setMainMml(text) {
@@ -6732,7 +6893,6 @@
       updateVisibleHighlight();
       updateCharCount();
       rebuildSchedulePreviewSilently();
-      scheduleMmlDraftSave();
     } finally {
       syncing = false;
     }
@@ -6748,7 +6908,6 @@
       updateVisibleHighlight();
       updateCharCount();
       rebuildSchedulePreviewSilently();
-      scheduleMmlDraftSave();
     } finally {
       syncing = false;
     }
@@ -6762,7 +6921,6 @@
     updateCharCount();
     updatePlaybackCodeHighlight(currentOffset);
     updateVisibleHighlight();
-    scheduleMmlDraftSave();
   }
 
   function getCurrentPartTexts(partCount = 6) {
@@ -6905,10 +7063,6 @@
         const selectedLabel = formatSelectedPartLabels(selectedIndexes);
         const saved = Math.max(0, Number(result.saved) || 0);
         flashButton(restTrimBtn, i18nText("st.remove_done"));
-        trackAnalytics("rest_trim_apply", {
-          limit: threshold.all ? "all" : String(threshold.denom),
-          selected_channel_count: selectedIndexes?.length || 6
-        });
         showDialog(
           i18nText("ui.remove_rests"),
           i18nText("rest.result", [selectedLabel, label, formatCount(result.removed)]) + "\n" +
@@ -7019,10 +7173,6 @@
         const saved = Math.max(0, Number(result.saved) || 0);
         const selectedLabel = formatSelectedPartLabels(selectedIndexes);
         flashButton(bulkVolumeBtn, i18nText("st.applied"));
-        trackAnalytics("bulk_volume_adjust", {
-          delta,
-          selected_channel_count: selectedIndexes?.length || 6
-        });
         showDialog(
           i18nText("vol.adjust"),
           i18nText("vol.result", [selectedLabel, formatCount(result.changedNotes), `${delta > 0 ? "+" : ""}${delta}`]) + "\n" +
@@ -7184,10 +7334,6 @@
         setMainMml(result.mml);
         const selectedLabel = formatSelectedPartLabels(selectedIndexes);
         flashButton(bulkPitchBtn, i18nText("st.applied"));
-        trackAnalytics("bulk_pitch_adjust", {
-          octaves,
-          selected_channel_count: selectedIndexes?.length || 6
-        });
         showDialog(
           i18nText("pitch.adjust"),
           i18nText("pitch.result", [selectedLabel, formatCount(result.changedCommands), `${octaves > 0 ? "+" : ""}${octaves}`]) + "\n" +
@@ -7270,10 +7416,6 @@
       setMainMml(result.mml);
       flashButton(leadingSilenceBtn, i18nText("cfg.applied"));
       const removedSeconds = Math.max(0, Number(result.removedLeadingBeats || 0) / 2);
-      trackAnalytics("leading_silence_apply", {
-        seconds,
-        removed_seconds: Number(removedSeconds.toFixed(2))
-      });
       const addedSeconds = Math.max(0, Number(result.addedBeats || 0) / 2);
       const removedLine = removedSeconds > 0
         ? "\n" + i18nText("lead.removed", [formatSecondCount(removedSeconds)])
@@ -7486,15 +7628,6 @@
       dynamicsGenerateDialog?.close();
       dynamicsGenerateConfirmDialog?.close();
       flashButton(dynamicsGenerateBtn, i18nText("st.gen_done"));
-      trackAnalytics("volume_generate_apply", {
-        genre: result.genre,
-        strength: result.strength,
-        selected_channel_count: selectedIndexes?.length || 6,
-        processed_channel_count: result.processedPartCount,
-        generated_v_count: result.generatedCommands,
-        overwrite_existing: options.overwriteExisting,
-        overwritten_channel_count: options.overwriteExisting ? result.existingExpressivePartCount || 0 : 0
-      });
       const strengthLabels = { light: i18nText("ui.light"), normal: i18nText("ui.normal"), strong: i18nText("ui.strong") };
       const overwrittenLine = options.overwriteExisting && result.existingExpressivePartCount > 0
         ? "\n" + i18nText("vol.replaced_count", [formatCount(result.existingExpressivePartCount)])
@@ -7764,15 +7897,6 @@
     });
     setMainMml(result.mml);
     flashButton(accompanimentGenerateBtn, i18nText("st.gen_done"));
-    trackAnalytics("accompaniment_generate_apply", {
-      genre: result.genre,
-      strength: result.strength,
-      analysis_channel_count: result.analyzedPartCount,
-      generation_channel_count: result.generatedPartCount,
-      overlap_channel_count: result.overlapPartIndexes.length,
-      replaced_channel_count: result.replacedPartIndexes.length,
-      chord_count: result.chordCount
-    });
     return result;
   }
 
@@ -7811,9 +7935,8 @@
       if (!navigator.clipboard?.readText) throw new Error("clipboard read unavailable");
       text = await navigator.clipboard.readText();
     } catch (_) {
-      const manual = prompt(i18nText("mml.enter_paste"));
-      if (manual == null) return;
-      text = manual;
+      showDialog(i18nText("err.paste"), i18nText("mml.clipboard_read_failed"));
+      return;
     }
     if (!String(text || "").trim()) {
       showDialog(i18nText("err.paste"), i18nText("mml.paste_empty"));
@@ -7915,7 +8038,6 @@
       await navigator.clipboard.writeText(text);
       flashButton(copyBtn, i18nText("st.copy_done"));
       showCopySummary(mainPanel, text);
-      trackAnalytics("copy_all_mml", { channel_count: analyticsChannelCount(text) });
     } catch {
       const ta = document.createElement("textarea");
       ta.value = text;
@@ -7928,8 +8050,7 @@
         document.execCommand("copy");
         flashButton(copyBtn, i18nText("st.copy_done"));
         showCopySummary(mainPanel, text);
-        trackAnalytics("copy_all_mml", { channel_count: analyticsChannelCount(text) });
-      } catch (err) {
+        } catch (err) {
         showDialog(i18nText("err.copy"), i18nText("mml.auto_copying"));
       } finally {
         ta.remove();
@@ -7973,7 +8094,6 @@
   function openSplitCopyDialog() {
     try {
       buildSplitCopyPages();
-      trackAnalytics("split_copy_open");
       if (splitCopyDialog?.showModal) splitCopyDialog.showModal();
       else showDialog(i18nText("ui.split_copy_score"), i18nText("msg.unsupported_split"));
     } catch (err) {
@@ -8059,7 +8179,6 @@
       stopPlayback(false);
       stopMidiPreview();
       if (button) setSplitPreviewButton(button);
-      trackAnalytics("preview_split_page");
       await loadDefaultSf2IfNeeded();
       const ctx = await ensureAudioContext();
       const parsed = parseMabinogiMml(text);
@@ -8100,7 +8219,6 @@
     try {
       await navigator.clipboard.writeText(text);
       showDialog(i18nText("st.copy_done"), buildSplitCopyPageMessage(page));
-      trackAnalytics("copy_split_page");
     } catch (_) {
       const ta = document.createElement("textarea");
       ta.value = text;
@@ -8111,7 +8229,6 @@
       try {
         document.execCommand("copy");
         showDialog(i18nText("st.copy_done"), buildSplitCopyPageMessage(page));
-        trackAnalytics("copy_split_page");
       } catch (err) {
         showDialog(i18nText("err.copy"), i18nText("msg.auto_copying"));
       } finally {
@@ -8183,7 +8300,6 @@
         await writable.write(blob);
         await writable.close();
         flashButton(saveBtn, i18nText("st.save_done"));
-        trackAnalytics("local_save_mml", { channel_count: analyticsChannelCount(text) });
         return;
       } catch (err) {
         if (err?.name === "AbortError") return;
@@ -8198,7 +8314,6 @@
     if (!/\.txt$/i.test(fileName)) fileName += ".txt";
     downloadBlob(blob, fileName);
     flashButton(saveBtn, i18nText("st.save_done"));
-    trackAnalytics("local_save_mml", { channel_count: analyticsChannelCount(text) });
   }
 
   function getFullMmlForExport() {

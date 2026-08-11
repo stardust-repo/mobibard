@@ -67,10 +67,11 @@
       tempoCount: normalizeMidiTempos(midi.tempoEvents).length,
       warnings,
       unsupportedPitchCount,
-      // 사용자 선택용: 같은 파트(채널 표시명) + Program 조합을 하나의 선택지로 묶는다. Bank는 분류에 사용하지 않는다.
+      // 사용자 선택용: Track/Channel과 무관하게 실제 음색 Bank MSB/LSB + Program 조합을 하나의 선택지로 묶는다.
+      // GM percussion Channel 10은 Drum Note까지 포함해 개별 타악기로 분리한다.
       instrumentGroups: instrumentChoices,
       instrumentChoices,
-      // 내부 변환용: 채널 + 파트 + Bank/Program 상태를 보존하며 중복 병합 경계로 사용한다.
+      // 내부 변환용: 원본 채널/Track 경계를 보존하며 완전 중복 병합 경계로만 사용한다.
       sourceInstrumentGroups: sourceGroups,
       channels: instrumentChoices
     };
@@ -139,16 +140,17 @@
     const choices = new Map();
     for (const group of sourceGroups || []) {
       const id = group.choiceId || instrumentChoiceId(
-        group.partName,
+        group.bankMsb,
+        group.bankLsb,
         group.program,
-        group.isBeat,
+        group.isDrumNoteGroup,
         group.drumMidi
       );
       let choice = choices.get(id);
       if (!choice) {
         choice = {
           id,
-          partName: group.partName,
+          partName: "",
           bankMsb: normalizeBank(group.bankMsb),
           bankLsb: normalizeBank(group.bankLsb),
           program: normalizeProgram(group.program),
@@ -161,10 +163,14 @@
           minMidi: Infinity,
           maxMidi: -Infinity,
           sourceGroupIds: [],
+          sourcePartNames: new Set(),
           instrumentNameCounts: new Map()
         };
         choices.set(id, choice);
       }
+      choice.isBeat = choice.isBeat || Boolean(group.isBeat);
+      choice.isPercussion = choice.isPercussion || Boolean(group.isBeat);
+      choice.isDrumNoteGroup = choice.isDrumNoteGroup || Boolean(group.isDrumNoteGroup || Number.isInteger(group.drumMidi));
       const groupNoteCount = Number(group.noteCount) || 0;
       const instrumentName = cleanInstrumentName(group.instrumentName || group.programText || programName(choice.program));
       choice.instrumentNameCounts.set(instrumentName, (choice.instrumentNameCounts.get(instrumentName) || 0) + groupNoteCount);
@@ -173,6 +179,7 @@
       choice.minMidi = Math.min(choice.minMidi, group.minMidi);
       choice.maxMidi = Math.max(choice.maxMidi, group.maxMidi);
       choice.sourceGroupIds.push(group.id);
+      if (group.partName) choice.sourcePartNames.add(group.partName);
     }
 
     return Array.from(choices.values()).map(choice => {
@@ -180,7 +187,9 @@
       const instrumentName = Array.from(choice.instrumentNameCounts.entries())
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"))[0]?.[0]
         || programName(choice.program);
-      const displayName = instrumentDisplayName(instrumentName, choice.partName);
+      // Track 이름은 악기 식별/표시에 사용하지 않는다. 같은 Bank+Program은 파일 전체에서 정확히 한 항목으로 표시한다.
+      const displayName = instrumentName;
+      const bankText = `Bank ${choice.bankMsb}:${choice.bankLsb}`;
       const programNumberText = tr("midi.program_number", [choice.program + 1]);
       const programText = instrumentName;
       return {
@@ -196,6 +205,7 @@
         instrumentName,
         displayName,
         programText,
+        bankText,
         programNumberText,
         noteCount: choice.noteCount,
         duplicateMerged: choice.duplicateMerged,
@@ -206,6 +216,7 @@
           instrumentName,
           displayName,
           programText,
+          bankText,
           programNumberText,
           noteCount: choice.noteCount,
           duplicateMerged: choice.duplicateMerged,
@@ -215,9 +226,11 @@
       };
     }).sort((a, b) => {
       if (a.isBeat !== b.isBeat) return a.isBeat ? 1 : -1;
-      return a.instrumentName.localeCompare(b.instrumentName, "ko")
-        || a.partName.localeCompare(b.partName, "ko")
+      return a.bankMsb - b.bankMsb
+        || a.bankLsb - b.bankLsb
         || a.program - b.program
+        || (Number.isInteger(a.drumMidi) ? a.drumMidi : -1) - (Number.isInteger(b.drumMidi) ? b.drumMidi : -1)
+        || a.instrumentName.localeCompare(b.instrumentName, "ko")
         || a.id.localeCompare(b.id);
     });
   }
@@ -225,6 +238,7 @@
   function buildInstrumentGroupDescription(group) {
     const chunks = [];
     chunks.push(group.displayName || instrumentDisplayName(group.instrumentName || group.programText, group.partName));
+    if (group.bankText) chunks.push(group.bankText);
     if (group.programNumberText) chunks.push(group.programNumberText);
     chunks.push(tr("midi.note_count", [fmt(group.noteCount)]));
     if (group.duplicateMerged) chunks.push(tr("midi.dup_planned", [fmt(group.duplicateMerged)]));
@@ -273,11 +287,14 @@
     return `${instrument} · ${part}`;
   }
 
-  function instrumentChoiceId(partName, program, isBeat, drumMidi = null) {
-    const partKey = identityText(partName);
+  function instrumentChoiceId(bankMsb, bankLsb, program, isDrumNoteGroup = false, drumMidi = null) {
+    const msb = normalizeBank(bankMsb);
+    const lsb = normalizeBank(bankLsb);
     const programKey = normalizeProgram(program);
-    const drumKey = Number.isInteger(drumMidi) ? `:drum:${drumMidi}` : "";
-    return `${isBeat ? "beat" : "inst"}:part:${partKey}:program:${programKey}${drumKey}`;
+    if (isDrumNoteGroup && Number.isInteger(drumMidi)) {
+      return `drum:bank:${msb}:${lsb}:program:${programKey}:note:${drumMidi}`;
+    }
+    return `inst:bank:${msb}:${lsb}:program:${programKey}`;
   }
 
   function getInstrumentGroupInfo(note) {
@@ -290,7 +307,7 @@
     const isBeat = note.channel === 9 || BEAT_PROGRAMS.has(program) || PERCUSSION_NAME_RE.test(names);
     if (note.channel === 9) {
       const drumName = GM_DRUM_NAMES[note.midi] || `Percussion ${note.midi}`;
-      const choiceId = instrumentChoiceId(partName, program, true, note.midi);
+      const choiceId = instrumentChoiceId(bankMsb, bankLsb, program, true, note.midi);
       return {
         id: `part:${identityText(partName)}:ch${note.channel}:bank:${bankMsb}:${bankLsb}:program:${program}:drum:${note.midi}`,
         choiceId,
@@ -308,7 +325,7 @@
       };
     }
     const instrumentName = explicitInstrumentName || programName(program);
-    const choiceId = instrumentChoiceId(partName, program, isBeat, null);
+    const choiceId = instrumentChoiceId(bankMsb, bankLsb, program, false, null);
     return {
       id: `part:${identityText(partName)}:ch${note.channel}:bank:${bankMsb}:${bankLsb}:program:${program}:beat:${isBeat ? 1 : 0}`,
       choiceId,
@@ -1306,13 +1323,15 @@
     const headerLength = r.readU32();
     if (headerLength < 6) throw new Error(tr("midi.err_header_length"));
     const format = r.readU16();
-    const trackCount = r.readU16();
+    const sourceTrackCount = r.readU16();
+    // Type 2는 각 Track이 독립 Sequence이므로 모비바드 정책상 첫 번째 Track만 한 곡으로 사용한다.
+    const trackCount = format === 2 ? Math.min(sourceTrackCount, 1) : sourceTrackCount;
     const divisionRaw = r.readU16();
     if (headerLength > 6) r.skip(headerLength - 6);
     const smpteDivision = (divisionRaw & 0x8000) !== 0;
     const ppq = smpteDivision ? 480 : (divisionRaw & 0x7fff);
-    const notes = [];
     const tempoEvents = [{ tick: 0, bpm: 120 }];
+    const channelEvents = [];
     const channelInfo = Array.from({ length: 16 }, () => ({
       noteCount: 0,
       programs: new Set(),
@@ -1330,17 +1349,21 @@
       const len = r.readU32();
       if (id !== "MTrk") throw new Error(tr("midi.err_track_header", [trackIndex + 1]));
       const end = r.pos + len;
-      parseMidiTrack(r, end, trackIndex, notes, tempoEvents, warnings, channelInfo, trackMeta);
+      parseMidiTrack(r, end, trackIndex, tempoEvents, trackMeta, channelEvents);
       r.pos = end;
     }
+
+    // Track은 저장 컨테이너일 뿐이므로 Type 0/1의 Channel 이벤트를 전체 시간축으로 합쳐
+    // Bank/Program 상태와 Note On/Off를 Channel 기준으로 해석한다.
+    const notes = buildNotesFromChannelEvents(channelEvents, warnings, channelInfo, trackMeta);
     for (const note of notes) {
       const meta = trackMeta[note.trackIndex] || {};
-      note.trackName = meta.trackName || note.trackName || "";
-      note.instrumentMetaName = meta.instrumentName || note.instrumentMetaName || "";
+      note.trackName = meta.trackName || "";
+      note.instrumentMetaName = meta.instrumentName || "";
     }
-    notes.sort((a, b) => a.startTick - b.startTick || a.midi - b.midi);
+    notes.sort((a, b) => a.startTick - b.startTick || a.midi - b.midi || a.channel - b.channel);
     tempoEvents.sort((a, b) => a.tick - b.tick);
-    return { format, trackCount, ppq, smpteDivision, notes, tempoEvents, warnings, channelInfo, trackMeta };
+    return { format, trackCount, sourceTrackCount, ppq, smpteDivision, notes, tempoEvents, warnings, channelInfo, trackMeta };
   }
 
   function normalizeMidiTempos(events) {
@@ -1354,52 +1377,14 @@
     return map.filter((ev, i, arr) => i === 0 || ev.bpm !== arr[i - 1].bpm || ev.tick === 0);
   }
 
-  function parseMidiTrack(r, end, trackIndex, notes, tempoEvents, warnings, channelInfo, trackMeta) {
+  function parseMidiTrack(r, end, trackIndex, tempoEvents, trackMeta, channelEvents) {
     let tick = 0;
     let running = null;
-    const open = new Map();
-    const currentProgram = Array(16).fill(0);
-    const pendingBankMsb = Array(16).fill(0);
-    const pendingBankLsb = Array(16).fill(0);
-    const activeBankMsb = Array(16).fill(0);
-    const activeBankLsb = Array(16).fill(0);
-
-    const addOpen = (ch, midi, velocity) => {
-      const key = `${ch}:${midi}`;
-      if (!open.has(key)) open.set(key, []);
-      open.get(key).push({
-        tick,
-        velocity,
-        program: currentProgram[ch],
-        bankMsb: activeBankMsb[ch],
-        bankLsb: activeBankLsb[ch]
-      });
-    };
-    const closeOpen = (ch, midi) => {
-      const key = `${ch}:${midi}`;
-      const arr = open.get(key);
-      if (!arr || !arr.length) return;
-      const s = arr.shift();
-      if (!arr.length) open.delete(key);
-      if (tick <= s.tick) return;
-      notes.push({
-        startTick: s.tick,
-        endTick: tick,
-        midi,
-        velocity: s.velocity,
-        channel: ch,
-        trackIndex,
-        program: s.program,
-        bankMsb: s.bankMsb,
-        bankLsb: s.bankLsb,
-        trackName: trackMeta[trackIndex]?.trackName || "",
-        instrumentMetaName: trackMeta[trackIndex]?.instrumentName || ""
-      });
-      registerNoteChannel(channelInfo[ch], ch, midi, trackIndex, trackMeta[trackIndex]);
-    };
+    let eventOrder = 0;
 
     while (r.pos < end && r.remaining() > 0) {
       tick += r.readVarLen();
+      eventOrder++;
       let status = r.readU8();
       if (status < 0x80) {
         if (running == null) throw new Error(tr("midi.err_running_status"));
@@ -1425,31 +1410,108 @@
         r.skip(r.readVarLen());
       } else {
         const cmd = status & 0xf0;
-        const ch = status & 0x0f;
+        const channel = status & 0x0f;
         const d1 = r.readU8();
         const needs2 = cmd !== 0xc0 && cmd !== 0xd0;
         const d2 = needs2 ? r.readU8() : 0;
+        const base = { tick, trackIndex, eventOrder, channel };
         if (cmd === 0xb0) {
-          if (d1 === 0) pendingBankMsb[ch] = d2;
-          else if (d1 === 32) pendingBankLsb[ch] = d2;
+          if (d1 === 0) channelEvents.push({ ...base, kind: "bankMsb", value: d2 });
+          else if (d1 === 32) channelEvents.push({ ...base, kind: "bankLsb", value: d2 });
         } else if (cmd === 0xc0) {
-          currentProgram[ch] = d1;
-          activeBankMsb[ch] = pendingBankMsb[ch];
-          activeBankLsb[ch] = pendingBankLsb[ch];
-          channelInfo[ch].programs.add(d1);
-          channelInfo[ch].bankPrograms.add(`${activeBankMsb[ch]}:${activeBankLsb[ch]}:${d1}`);
+          channelEvents.push({ ...base, kind: "program", value: d1 });
         } else if (cmd === 0x90 && d2 > 0) {
-          addOpen(ch, d1, d2);
+          channelEvents.push({ ...base, kind: "noteOn", midi: d1, velocity: d2 });
         } else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) {
-          closeOpen(ch, d1);
+          channelEvents.push({ ...base, kind: "noteOff", midi: d1 });
         }
       }
     }
-    if (open.size) {
-      const count = Array.from(open.values()).reduce((sum, arr) => sum + arr.length, 0);
-      warnings.push(tr("midi.warn_missing_note_off", [trackIndex + 1, count]));
-    }
     r.pos = end;
+  }
+
+  function buildNotesFromChannelEvents(channelEvents, warnings, channelInfo, trackMeta) {
+    const currentProgram = Array(16).fill(0);
+    const pendingBankMsb = Array(16).fill(0);
+    const pendingBankLsb = Array(16).fill(0);
+    const activeBankMsb = Array(16).fill(0);
+    const activeBankLsb = Array(16).fill(0);
+    const open = new Map();
+    const notes = [];
+
+    const events = [...(channelEvents || [])].sort((a, b) => a.tick - b.tick
+      || a.trackIndex - b.trackIndex
+      || a.eventOrder - b.eventOrder);
+
+    for (const event of events) {
+      const ch = clampInt(event.channel, 0, 15);
+      if (event.kind === "bankMsb") {
+        pendingBankMsb[ch] = normalizeBank(event.value);
+        continue;
+      }
+      if (event.kind === "bankLsb") {
+        pendingBankLsb[ch] = normalizeBank(event.value);
+        continue;
+      }
+      if (event.kind === "program") {
+        currentProgram[ch] = normalizeProgram(event.value);
+        activeBankMsb[ch] = pendingBankMsb[ch];
+        activeBankLsb[ch] = pendingBankLsb[ch];
+        channelInfo[ch].programs.add(currentProgram[ch]);
+        channelInfo[ch].bankPrograms.add(`${activeBankMsb[ch]}:${activeBankLsb[ch]}:${currentProgram[ch]}`);
+        continue;
+      }
+
+      const midi = clampInt(event.midi, 0, 127);
+      const key = `${ch}:${midi}`;
+      if (event.kind === "noteOn") {
+        if (!open.has(key)) open.set(key, []);
+        open.get(key).push({
+          tick: event.tick,
+          velocity: clampInt(event.velocity, 1, 127),
+          channel: ch,
+          midi,
+          trackIndex: event.trackIndex,
+          program: currentProgram[ch],
+          bankMsb: activeBankMsb[ch],
+          bankLsb: activeBankLsb[ch]
+        });
+        continue;
+      }
+      if (event.kind !== "noteOff") continue;
+      const queue = open.get(key);
+      if (!queue || !queue.length) continue;
+      const start = queue.shift();
+      if (!queue.length) open.delete(key);
+      if (event.tick <= start.tick) continue;
+      notes.push({
+        startTick: start.tick,
+        endTick: event.tick,
+        midi,
+        velocity: start.velocity,
+        channel: ch,
+        trackIndex: start.trackIndex,
+        program: start.program,
+        bankMsb: start.bankMsb,
+        bankLsb: start.bankLsb,
+        trackName: "",
+        instrumentMetaName: ""
+      });
+      registerNoteChannel(channelInfo[ch], ch, midi, start.trackIndex, trackMeta[start.trackIndex]);
+    }
+
+    if (open.size) {
+      const missingByTrack = new Map();
+      for (const queue of open.values()) {
+        for (const item of queue) {
+          missingByTrack.set(item.trackIndex, (missingByTrack.get(item.trackIndex) || 0) + 1);
+        }
+      }
+      for (const [trackIndex, count] of [...missingByTrack.entries()].sort((a, b) => a[0] - b[0])) {
+        warnings.push(tr("midi.warn_missing_note_off", [trackIndex + 1, count]));
+      }
+    }
+    return notes;
   }
 
   function registerNoteChannel(info, ch, midi, trackIndex, meta) {

@@ -1,9 +1,13 @@
-# 마비노기 MML 생성기 샘플 - 모비바드 v4.7
+# 마비노기 MML 생성기 샘플 - 모비바드 v4.8
+
+> 기본 음색은 저장소 루트 `assets/default_sf3.js`에 `Roland_SC-55.sf3`를 Base64로 내장해 사용합니다.
+
 
 공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/MusicXML/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
 
-`v4.7`에서는 마지막 MIDI/MusicXML 변환 설정을 동일 파일에서 복원하고, MML 6채널 편집 내용을 자동 저장해 새로고침 후 복구합니다. 편집 도구에는 전체 채널을 빈 상태로 만드는 `비우기` 버튼을 추가했습니다. 기존 `v4.6`에서는 반주 생성 Dialog의 기본 생성 채널 선택을 현재 채널 구성에 맞게 조정했습니다. 멜로디만 있으면 화음1·화음2를 선택하고, 2~5개 채널이 있으면 가장 앞선 빈 채널 하나를 선택하며, 6개 채널이 모두 차 있으면 마지막 화음5 채널을 교체 대상으로 선택합니다. 기존 v4.5에서 피아노롤 시간 격자를 실제 MML `L4` 1박 간격으로 표시하고, 템포 변경 지점을 선택해 `32~255` 범위에서 수정할 수 있습니다. 편집 도구에는 `음정 조절`, `볼륨 생성`, `반주 생성`을 제공합니다. `볼륨 생성`은 음표의 길이·밀도·쉼표·음정 흐름을 분석해 장르별 `V` 변화를 만들며, 기존 볼륨 변화가 있으면 확인 후 교체합니다. 새 `반주 생성`은 선택한 여러 참고 채널을 함께 분석해 공통 화성 흐름을 만든 뒤, 선택한 생성 채널 수에 따라 화음·리듬·아르페지오·베이스 역할을 배분합니다. 참고와 생성에 동시에 선택된 채널은 원본을 먼저 분석하고 확인 후 새 반주로 교체합니다. MIDI/MusicXML 변환 단계는 악기를 처음부터 선택하지 않은 상태로 열고, 오른쪽 `악기 채널 선택` 목록이나 `일괄 선택` Dialog에서 6개 MML 채널에 악기를 배정합니다. MIDI 10번 채널의 드럼은 음정별 항목으로 분리하며, 64박(기본)과 32박 양자화를 토글할 수 있습니다.
-상단 저장 영역 오른쪽의 `MIDI 추출` 메뉴에서 웹 버전을 새 창으로 바로 열거나, `PC 설치`를 선택해 MuScriptor 로컬 실행 패키지를 내려받을 수 있습니다. 그 오른쪽의 `리듬게임` 버튼은 전체 화면 팝업 레이어에서 이웃 경로 `../mobibeats/`의 모비비트를 열고, 현재 MML과 6개 채널 악기 정보를 전달합니다. Firebase Analytics에는 리듬게임 팝업을 열 때마다 `open_rhythm_game`, MIDI 추출의 `바로 이용`으로 웹 버전을 열 때마다 `open_midi_extract_online` 이벤트를 기록합니다. `muscriptor_win.zip`과 `muscriptor_mac.zip`은 `assets/midi-extract/packages/`에 포함됩니다.
+`v4.8`에서는 마지막 MIDI/MusicXML 변환 설정을 복원하되 MML 편집 내용 자체는 캐시하지 않습니다. 수동으로 선택한 SF2/SF3/DLS 음색 파일은 IndexedDB에 원본 바이너리로 보관하고, Google 로그인 상태에서는 Drive `appDataFolder`에도 동일 바이너리를 연동해 다른 실행 환경에서 복원할 수 있습니다. 편집 도구에는 전체 채널을 빈 상태로 만드는 `비우기` 버튼을 추가했습니다. 기존 `v4.6`에서는 반주 생성 Dialog의 기본 생성 채널 선택을 현재 채널 구성에 맞게 조정했습니다. 멜로디만 있으면 화음1·화음2를 선택하고, 2~5개 채널이 있으면 가장 앞선 빈 채널 하나를 선택하며, 6개 채널이 모두 차 있으면 마지막 화음5 채널을 교체 대상으로 선택합니다. 기존 v4.5에서 피아노롤 시간 격자를 실제 MML `L4` 1박 간격으로 표시하고, 템포 변경 지점을 선택해 `32~255` 범위에서 수정할 수 있습니다. 편집 도구에는 `음정 조절`, `볼륨 생성`, `반주 생성`을 제공합니다. `볼륨 생성`은 음표의 길이·밀도·쉼표·음정 흐름을 분석해 장르별 `V` 변화를 만들며, 기존 볼륨 변화가 있으면 확인 후 교체합니다. 새 `반주 생성`은 선택한 여러 참고 채널을 함께 분석해 공통 화성 흐름을 만든 뒤, 선택한 생성 채널 수에 따라 화음·리듬·아르페지오·베이스 역할을 배분합니다. 참고와 생성에 동시에 선택된 채널은 원본을 먼저 분석하고 확인 후 새 반주로 교체합니다. MIDI/MusicXML 변환 단계는 악기를 처음부터 선택하지 않은 상태로 열고, 오른쪽 `악기 채널 선택` 목록이나 `일괄 선택` Dialog에서 6개 MML 채널에 악기를 배정합니다. MIDI 10번 채널의 드럼은 음정별 항목으로 분리하며, 64박(기본)과 32박 양자화를 토글할 수 있습니다.
+상단 저장 영역 오른쪽의 `MIDI 추출` 버튼은 MuScriptor 웹 버전을 브라우저 새 창(새 탭)으로 엽니다. 그 오른쪽의 `리듬게임` 버튼은 전체 화면 팝업 레이어에서 이웃 경로 `../mobibeats/`의 모비비트를 열고, 현재 MML과 6개 채널 악기 정보를 전달합니다. Firebase Analytics는 MML 가져오기 완료, 전부복사, 나눠복사, MIDI 추출, 리듬게임 선택만 기록합니다.
+`v4.8`의 SF3 로더는 `shdr.end`를 배타적(exclusive) 바이트 오프셋으로 기록한 표준 SF3와, 이전 모비바드 생성본처럼 포함 끝점(inclusive)을 사용한 SF3를 모두 읽도록 호환 처리합니다.
 
 최근 UI에서는 재생 위치와 시간을 0.01초 단위로 표시합니다. 배속과 볼륨은 현재값 버튼을 누르면 세로 슬라이더와 초기화 버튼이 나타나며, 음소거 버튼에서는 멜로디·화음1~5를 개별 선택하거나 전부 선택/해제할 수 있습니다. 음소거와 음색 설정 버튼은 볼륨 오른쪽에 모았고, 사운드폰트 파일 선택은 채널 음색 설정 Dialog 안에서 현재 파일명·불러오기·원본 복원 방식으로 제공합니다. 모든 Dialog의 하단 취소/적용 영역은 작은 화면에서도 보이도록 스크롤 하단에 고정됩니다.
 
@@ -11,7 +15,7 @@
 
 `v4.1`에서는 진행 슬라이더가 가리키는 시간에 실제로 울리는 MML 음표 코드와 해당 위치의 쉼표 코드를 편집창 안에서 초록색 상자로 표시하도록 개선했습니다. 재생 중이 아니어도 현재 위치의 음표/쉼표 토큰을 표시하며, 전체 MML 탭과 개별 파트 탭 모두 같은 기준을 따릅니다. 전체 MML 탭의 음소거는 6개 채널 상태를 일괄 전환하며, 음소거된 채널도 피아노롤에서는 반투명 점선 노트와 음소거 표식으로 계속 확인할 수 있습니다.
 
-기본 재생은 로컬 파일만으로 동작합니다. Google Drive 연동을 사용하려면 Google Identity Services와 Google Picker 스크립트를 온라인으로 불러오며, `js/google-config.js` 설정이 필요합니다. Firebase Analytics는 `js/firebase-config.js`와 `js/firebase-analytics.js`에서 초기화합니다.
+기본 재생은 로컬 파일만으로 동작합니다. Google Drive 연동을 사용하려면 Google Identity Services와 Google Picker 스크립트를 온라인으로 불러오며, 루트 `plugins/google-config.js` 설정이 필요합니다. Firebase Analytics는 루트 `plugins/firebase-config.js`와 `plugins/firebase-analytics.js`에서 초기화합니다. Google/Firebase 같은 외부 서비스 연동 전용 JS는 저장소 루트 `plugins/`에 모으고, Mobibard 자체 기능 코드는 `player/js/`에 유지합니다. Google Identity Services처럼 공급자 CDN 직접 로딩이 요구되는 SDK는 원격 로딩을 유지합니다.
 
 ---
 
@@ -78,11 +82,14 @@ mabinogi_mml_public/
 ├─ README.md                   # 현재 문서
 ├─ assets/
 │  ├─ favicon.ico              # 실제 favicon 링크 대상
-│  ├─ Roland_SC-55.sf2         # 기본 사운드폰트
-│  ├─ default-sf2-base64.js    # 기본 SF2 내장 fallback
+│  ├─ default_sf3.js           # Roland_SC-55.sf3 Base64 내장 기본 음색
 │  └─ icons/
 │     ├─ google-g.png                  # Google 로그인/로그아웃 버튼용 로컬 G 아이콘
 │     └─ guest-user.svg                # 로그아웃 상태의 원형 게스트 아이콘
+├─ plugins/
+│  ├─ google-config.js         # Google OAuth/Picker/API Key 설정
+│  ├─ firebase-config.js       # Firebase Web App 설정 객체
+│  └─ firebase-analytics.js    # Firebase Analytics 초기화와 이벤트 큐 처리
 ├─ locale/
 │  ├─ ko.js, ja.js, en.js      # 선택 시 지연 로딩하는 언어 카탈로그
 │  └─ zh-CN.js, zh-TW.js
@@ -94,10 +101,8 @@ mabinogi_mml_public/
    ├─ musicxml-to-midi.js      # MusicXML/MXL 파서와 MIDI 이벤트 변환 브리지
    ├─ mml-parser.js            # MML@ 분해, 파트 파싱, 글로벌 템포맵, 재생 스케줄 생성
    ├─ mml-optimizer.js         # 자동 최적화, 반주 생성, 볼륨 생성, 쉼표 삭제, 볼륨 조절, O숫자 음정 조절, 시작 공백, 나눠복사
-   ├─ sf2-sampler.js           # SF2 파싱, 노트 준비, look-ahead 오디오 스케줄링
-   ├─ google-config.js         # Google OAuth/Picker/API Key 설정
-   ├─ firebase-config.js       # Firebase Web App 설정 객체
-   ├─ firebase-analytics.js    # Firebase Analytics 초기화와 이벤트 큐 처리
+   ├─ sf2-sampler.js           # SF2/SF3/DLS 파싱, 노트 준비, look-ahead 오디오 스케줄링
+   ├─ soundbank-cache.js       # 수동 SF2/SF3/DLS IndexedDB 바이너리 캐시
    └─ app.js                   # 앱 상태, UI 이벤트, 파일/Drive 입출력, Dialog 제어, 재생 제어
 ```
 
@@ -108,13 +113,14 @@ mabinogi_mml_public/
 | 파일 | export 전역 | 주요 함수 |
 |---|---|---|
 | `js/language-manager.js` | `window.MobibardI18n` | `setLanguage`, `syncFromPreference`, `normalizeLanguage`, `t` |
-| `js/utils.js` | `window.MabiUtils` | `clamp`, `clampInt`, `unique`, `formatTime`, `shortError`, `base64ToUint8Array` |
+| `js/utils.js` | `window.MabiUtils` | `clampInt`, `formatTime`, `shortError` |
 | `js/midi-to-mml.js` | `window.MabiMidi` | `analyzeMidi`, `midiToMml`, `buildMidiInstrumentPreview`, `buildMidiFilePreview` |
 | `js/musicxml-to-midi.js` | `window.MabiMusicXml` | `musicXmlToMidiBytes`, `extractMusicXmlText` |
 | `js/mml-parser.js` | `window.MabiMml` | `parseMabinogiMml`, `splitMmlParts`, `splitMmlPartsDetailed`, `parseMmlPart`, `buildSchedule`, `beatToSeconds`, `composeMml` |
 | `js/mml-optimizer.js` | `window.MabiOptimizer` | `optimizeMml`, `optimizePart`, `generateAccompanimentMml`, `generateDynamicsMml`, `trimShortRestsMml`, `adjustVolumesMml`, `transposeOctavesMml`, `addLeadingSilenceMml`, `splitMmlPages` |
-| `js/sf2-sampler.js` | `window.MabiSf2` | `parseSoundFont`, `prepareNotes`, `schedulePreparedNotes`, `scheduleNotes` |
-| `js/firebase-analytics.js` | `window.MobibardAnalytics` | `logEvent`, `isReady`, `isEnabled`, `getStatus` |
+| `js/sf2-sampler.js` | `window.MabiSf2` | `parseSoundBank`, `parseSoundFont`, `prepareNotes`, `schedulePreparedNotes` |
+| `js/soundbank-cache.js` | `window.MobibardSoundBankCache` | `getActive`, `putActive`, `clearActive` |
+| `plugins/firebase-analytics.js` | `window.MobibardAnalytics` | `logEvent`, `isReady`, `isEnabled`, `getStatus` |
 
 `app.js`는 위 전역 객체를 가져와 UI와 파일 흐름을 연결합니다. 새 기능을 넣을 때는 계산/변환 로직은 가능한 전용 JS에 두고, `app.js`에는 UI 상태와 호출 흐름만 남기는 편이 유지보수하기 쉽습니다.
 
@@ -124,23 +130,24 @@ mabinogi_mml_public/
 
 | 항목 | 값 / 위치 |
 |---|---|
-| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v4.7` |
+| 앱 버전 표시 | `index.html`의 `<title>`, `.app-main-title`, `.app-subtitle`: `모비바드` / `마비노기 MML 생성기 v4.8` |
 | MML 파트 수 | 최대 6개: `멜로디`, `화음1`~`화음5` (`app.js`의 `PART_LABELS`) |
 | 설정 localStorage prefix | `mobibard.player.` (`app.js`의 `PREF_PREFIX`) |
-| 기본 SF2 | `assets/Roland_SC-55.sf2` |
-| 기본 내장 SF2 fallback | `window.MABINOGI_DEFAULT_SF2_B64` (`assets/default-sf2-base64.js`) |
+| 기본 SF2/SF3/DLS | `../assets/default_sf3.js`에 내장된 `Roland_SC-55.sf3` |
 | 자동 시작 공백 | 불러오기/붙여넣기 시 T120 기준 약 2초 (`AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2`) |
 | MMI/3MLE 선택 최대 채널 | 6개 (`MMI_IMPORT_MAX_CHANNELS`) |
 | 감지 채널 최대 표시 | 96개 (`MMI_IMPORT_MAX_DETECTED_PARTS`) |
 | 지원 불러오기 확장자 | `.mid`, `.midi`, `.musicxml`, `.xml`, `.mxl`, `.txt`, `.mmi`, `.mml` |
 | Google 기본 폴더 | `MML_Mobibard` |
 | Google 설정 파일 | 앱 데이터 폴더의 `mobibard-player-settings.json` |
+| 수동 음색 로컬 캐시 | IndexedDB `mobibard-player-cache` / `soundBanks` |
+| 수동 음색 Google 캐시 | appDataFolder의 `mobibard-player-soundbank-cache.bin` |
 | Google 로그인 유지 플래그 | `mobibard.player.googleAutoReconnect` |
 | Google 단기 토큰 캐시 | `mobibard.player.googleTokenCache` (`accessToken`, `expiresAt`, 로컬 전용) |
 | Google scope | `drive.file`, `drive.appdata` |
-| Firebase 프로젝트 | `mobibard` (`js/firebase-config.js`) |
-| Firebase Analytics 측정 ID | `G-38SYBVDLZQ` (`js/firebase-config.js`) |
-| Firebase SDK | CDN modular SDK `12.15.0` (`js/firebase-analytics.js`) |
+| Firebase 프로젝트 | `mobibard` (`plugins/firebase-config.js`) |
+| Firebase Analytics 측정 ID | `G-38SYBVDLZQ` (`plugins/firebase-config.js`) |
+| Firebase SDK | CDN modular SDK `12.15.0` (`plugins/firebase-analytics.js`) |
 | MIDI/MusicXML 볼륨 변환 | `js/midi-to-mml.js`의 `midiVelocityToMmlVolume()`: velocity `0 → V0`, `1 → V1`, `2~127 → V2~V15` |
 
 ---
@@ -171,7 +178,7 @@ mabinogi_mml_public/
 - 전체 MML 탭은 첫 줄에 총 글자 수, 둘째 줄에 멜로디~화음5 글자 수를 채널 색상과 `/` 구분으로 표시합니다. 단위 `자`는 채널별 줄의 맨 끝에 한 번만 붙습니다.
 - 전체 MML의 글자 수는 `MML@`, 쉼표, 세미콜론을 제외한 파트 내용 합계입니다.
 - `시작 공백`, `쉼표 삭제`, `볼륨 조절`, `음정 조절`, `볼륨 생성`, `반주 생성` 편집 기능을 제공합니다.
-- 채널 음색 설정 Dialog에서 현재 사운드폰트 파일명, 새 파일 불러오기, 기본 파일 복원, 자동/사용자 음색 프리셋과 채널별 음색을 설정합니다.
+- 채널 음색 설정 Dialog에서 기본 내장 파일 사용 시 이름을 `기본 음색`으로 표시합니다. 수동 SF2/SF3/DLS를 선택하면 파일명을 표시하고 해당 파일을 로컬/Google 캐시에 보관합니다. `기본 음색` 버튼으로 돌아가면 수동 음색 캐시도 제거합니다.
 - 상단 음소거 팝업에서 6개 채널을 개별 선택하거나 전부 선택/해제합니다.
 
 ### 3. Dialog 목록
@@ -180,7 +187,7 @@ mabinogi_mml_public/
 |---|---|
 | `googleDriveSaveDialog` | Google Drive 저장 파일명/폴더 선택 |
 | `mmiImportDialog` | MMI/3MLE MML 채널 선택, 선택 듣기, 전부 듣기, 모두 선택해제, 파일 다시 불러오기, 채널 미리듣기 |
-| `partSoundDialog` | 현재 SF2 파일 확인·불러오기·기본 파일 복원, 멜로디/화음1~5 채널별 프리셋 설정 및 사용자 프리셋 저장/삭제 |
+| `partSoundDialog` | 현재 SF2/SF3/DLS 파일 확인·불러오기·기본 파일 복원, 멜로디/화음1~5 채널별 프리셋 설정 및 사용자 프리셋 저장/삭제 |
 | `codeHelpDialog` | 지원 MML 코드 도움말, 숫자형 명령 설명/예시 |
 | `restTrimDialog` | 짧은 쉼표 삭제 길이와 적용 채널 선택 |
 | `bulkVolumeDialog` | 볼륨 조절 변화량과 적용 채널 선택 |
@@ -286,11 +293,18 @@ MIDI 변환은 `js/midi-to-mml.js`가 담당합니다. MusicXML은 `js/musicxml-
 - 악기별 `듣기`: 오른쪽 악기 목록에서 해당 악기만 짧게 재생합니다.
 - 모든 듣기/재생 경로에는 동시 발음 4개 이상부터 자동 음량 보정이 적용되어, 여러 소리가 겹칠 때만 소리가 과하게 커지는 것을 줄입니다.
 
+### MIDI Format 처리
+
+- Type 0은 단일 Track 전체를 읽습니다.
+- Type 1은 모든 Track의 Channel 이벤트를 같은 시간축으로 합쳐 읽습니다. Bank Select / Program Change / Note On-Off도 Track 경계가 아니라 Channel 상태 기준으로 해석합니다.
+- Type 2는 각 Track이 독립 Sequence이므로 모비바드에서는 첫 번째 Track만 사용합니다.
+
 ### MIDI 악기 선택
 
 - 초기에는 어느 MML 채널에도 악기가 선택되지 않습니다.
-- 화면에는 `악기명 · 파트명` 순서로 표시합니다.
-- 사용자 메뉴는 `파트(채널 표시명) + Program 번호`가 같은 항목을 하나로 묶고 Bank 값은 분류에 사용하지 않습니다.
+- 화면에는 Track 이름과 무관하게 실제 MIDI 음색 단위의 악기명을 표시합니다.
+- 일반 악기는 `Bank MSB + Bank LSB + Program`이 같으면 Track/Channel이 달라도 하나의 항목으로 묶습니다.
+- MIDI 10번 채널은 같은 Drum Kit 안에서도 Note 번호가 서로 다른 타악기를 뜻하므로 `Bank + Program + Drum Note` 단위로 별도 항목을 만듭니다.
 - 각 악기 행의 `멜·1·2·3·4·5` 버튼으로 해당 악기를 여러 MML 채널에 배정하거나 해제할 수 있습니다.
 - 악기 체크박스, 활성 채널 전환, 전부 선택/해제 및 분류별 빠른 버튼은 사용하지 않습니다.
 - `일괄 선택` Dialog에서는 대상 악기 분류와 `모두·멜·1·2·3·4·5` 채널 버튼을 고른 뒤 `취소`, `해제`, `선택`을 사용할 수 있습니다.
@@ -409,7 +423,7 @@ MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 시작
 
 ### 볼륨 생성
 
-- `볼륨 생성` 버튼에서 BETA Dialog를 엽니다.
+- `볼륨 생성` 버튼에서 Dialog를 엽니다.
 - 볼륨 스타일은 `팝`, `재즈`, `발라드`, `보사노바`, `록`, `펑크`, `클래식` 중에서 선택합니다. 기본값은 `팝`입니다.
 - 변형 강도는 `가볍게`, `보통`, `강하게` 중에서 선택합니다.
 - 선택 채널의 음표 길이, 주변 밀도, 쉼표, 반복음, 음정 흐름과 프레이즈를 분석해 필요한 위치에만 `V` 명령을 생성합니다.
@@ -421,7 +435,7 @@ MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 시작
 
 ### 반주 생성
 
-- `반주 생성` 버튼에서 BETA Dialog를 엽니다.
+- `반주 생성` 버튼에서 Dialog를 엽니다.
 - 참고할 채널과 반주를 생성할 채널을 각각 6개 체크박스로 선택합니다.
 - 선택한 참고 채널의 음표를 모두 합쳐 화성, 저음, 리듬 밀도와 곡의 흐름을 분석합니다.
 - 생성 채널이 1개면 핵심 반주선, 2개면 핵심 반주와 베이스를 만들고, 채널 수가 늘수록 화음 성부와 보조 역할을 나누어 배정합니다.
@@ -447,12 +461,13 @@ MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 시작
 
 ---
 
-## 재생 / SF2 처리
+## 재생 / SF2/SF3/DLS 처리
 
-- 기본 사운드는 `Roland_SC-55.sf2`입니다.
-- 사용자가 `.sf2` 파일을 선택할 수 있고, 기본 사운드로 되돌릴 수 있습니다.
+- 기본 사운드 데이터는 `Roland_SC-55.sf3`이며 UI에는 `기본 음색`으로 표시합니다.
+- 기본 음원은 `assets/default_sf3.js`에 Base64로 내장되어 별도 SF3 파일 fetch 없이 로드됩니다.
+- 사용자가 `.sf2`, `.sf3`, `.dls` 파일을 선택할 수 있고, 선택한 원본 바이너리는 IndexedDB에 캐시됩니다. Google 연결 상태에서는 appDataFolder에도 동기화하며 `기본 음색`으로 되돌리면 해당 수동 캐시를 제거합니다.
 - 긴 MML을 재생할 때 모든 음표를 한 번에 예약하지 않고, 현재 위치 기준 약 1.6초 앞까지만 예약하는 look-ahead 스케줄러를 사용합니다.
-- SF2 샘플 버퍼와 음표별 재생 region은 재생 시작 전에 준비해 첫 재생 중 끊김을 줄입니다.
+- SF2/SF3/DLS 샘플 버퍼와 음표별 재생 region은 재생 시작 전에 준비해 첫 재생 중 끊김을 줄입니다.
 - `V0`처럼 소리 나지 않는 음표는 실제 오디오 노드를 만들지 않습니다.
 - 64분음표처럼 짧은 음표는 attack/release 시간을 음 길이에 맞게 줄여 짧은 음이 뭉개지거나 밀리는 현상을 줄입니다.
 - 재생이 끝난 `AudioBufferSourceNode`는 active 목록에서 제거합니다.
@@ -464,7 +479,7 @@ MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 시작
 
 ## 채널별 음색 / 음소거
 
-- `음색` 버튼에서 멜로디/화음1~5가 사용할 SF2 프리셋을 각각 선택합니다.
+- `음색` 버튼에서 멜로디/화음1~5가 사용할 SF2/SF3/DLS 프리셋을 각각 선택합니다.
 - Dialog의 `음색 프리셋` 첫 항목은 `자동 음색`입니다.
 - 최근 MIDI 변환 음색이 있으면 자동 음색은 그 구성을 사용하고, 없으면 기본 음색을 사용합니다.
 - 현재 채널별 음색 구성을 이름 붙여 저장하고 삭제할 수 있습니다.
@@ -501,7 +516,7 @@ MIDI/MMI/3MLE/TXT 불러오기, 붙여넣기, 전부복사, 파일저장, 시작
 
 ## Google Drive 연동
 
-Google Drive 연동을 쓰려면 Google Cloud Console에서 아래 항목을 준비한 뒤 `js/google-config.js`에 입력합니다.
+Google Drive 연동을 쓰려면 Google Cloud Console에서 아래 항목을 준비한 뒤 `plugins/google-config.js`에 입력합니다.
 
 ```js
 window.MOBIBARD_GOOGLE_CONFIG = {
@@ -535,7 +550,7 @@ window.MOBIBARD_GOOGLE_CONFIG = {
 - 새 TXT 저장 시 `MML_Mobibard` 폴더를 기본 저장 위치로 제안하고, 저장 Dialog에서 위치를 바꿀 수 있습니다.
 - 같은 폴더에 같은 이름의 TXT 파일이 있으면 저장 버튼을 눌렀을 때 덮어쓸지 확인합니다.
 - 브라우저 localStorage 설정 캐시는 앱 데이터 폴더에 `mobibard-player-settings.json`으로 동기화합니다.
-- 사용자 SF2 파일 본문은 브라우저 파일 권한과 용량 문제 때문에 Drive 설정 캐시에 포함하지 않습니다.
+- 사용자 SF2/SF3/DLS 파일 본문은 설정 JSON에 Base64로 넣지 않고 Drive `appDataFolder`의 `mobibard-player-soundbank-cache.bin`에 원본 바이너리로 별도 저장합니다. 설정 JSON에는 파일 ID·이름·형식·크기·SHA-256·수정 시각만 기록합니다.
 
 ---
 
@@ -547,35 +562,24 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 | 파일 | 역할 |
 |---|---|
-| `js/firebase-config.js` | Firebase Console에서 가져온 웹 앱 `firebaseConfig` 보관 |
-| `js/firebase-analytics.js` | `initializeApp()`, `getAnalytics()`, `logEvent()` 래퍼, 초기화 전 이벤트 큐 처리 |
+| `plugins/firebase-config.js` | Firebase Console에서 가져온 웹 앱 `firebaseConfig` 보관 |
+| `plugins/firebase-analytics.js` | `initializeApp()`, `getAnalytics()`, `logEvent()` 래퍼, 초기화 전 이벤트 큐 처리 |
 | `js/app.js` | `trackAnalytics()`로 앱 동작 이벤트 호출 |
 | `index.html` | Firebase 설정/Analytics 스크립트를 `app.js`보다 먼저 선언 |
 
 ### 현재 기록하는 이벤트
 
-파일명이나 원문 MML 내용은 Analytics로 보내지 않습니다. 이벤트에는 기능을 열었는지, 실제 실행·적용·변환·복사·저장을 했는지 판단하는 데 필요한 값만 넣습니다. 전체 상세 목록은 `FIREBASE_ANALYTICS_EVENTS.md`를 참고합니다.
+파일명이나 원문 MML 내용은 Analytics로 보내지 않습니다. Firebase로 전달하는 이벤트는 아래 5종만 사용합니다. 전체 정의는 `FIREBASE_ANALYTICS_EVENTS.md`를 참고합니다.
 
-| 이벤트 | 발생 위치 | 주요 파라미터 |
-|---|---|---|
-| `google_drive_login` | Google 로그인 성공 | `settings_source`, `entry_point` |
-| `google_drive_picker_open` | Drive Picker 열기 | 없음 |
-| `shortcut_link_open` | 상단 바로가기 열기 | `link` |
-| `local_import_midi`, `drive_import_midi` | MIDI 파일 분석 성공 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
-| `local_import_musicxml`, `drive_import_musicxml` | MusicXML 분석 성공 | `file_type`, `file_size`, `instrument_groups`, `note_count` |
-| `local_import_mml`, `drive_import_mml` | MML/MMI/3MLE/TXT/Google Docs 불러오기 성공 | `file_type`, `file_size`, `channel_count` |
-| `preview_midi_start` | MIDI/MusicXML 미리듣기 시작 | `scope`, `source_type`, `export_channels` |
-| `preview_mml_start` | MMI/3MLE MML 미리듣기 시작 | `scope`, `channel_count` |
-| `midi_convert_complete` | MIDI/MusicXML 변환 완료 | `source_type`, `export_channels`, `instrument_groups`, `optimized_chars` |
-| `playback_start` | 메인 MML 재생 시작 | `channel_count` |
-| `rest_trim_apply`, `bulk_volume_adjust`, `bulk_pitch_adjust`, `volume_generate_apply`, `leading_silence_apply`, `accompaniment_generate_apply` | 편집 도구 적용 성공 | 도구별 설정값과 적용 채널 수 |
-| `tempo_edit` | 슬라이더/피아노롤 템포 수정 성공 | `before_bpm`, `after_bpm` |
-| `copy_all_mml`, `local_save_mml`, `drive_save_mml` | 복사·저장 성공 | `channel_count`, `create_new` |
-| `split_copy_open`, `preview_split_page`, `copy_split_page` | 나눠복사 진입·미리듣기·복사 | 없음 |
-| `open_midi_extract_online`, `open_midi_extract_dialog`, `download_muscriptor_package` | MIDI 추출 웹 열기·설치 기능 확인·패키지 다운로드 | `platform` |
-| `open_rhythm_game` | 모비비트 팝업을 열 때마다 | `channel_count` |
+| 이벤트 | 발생 위치 |
+|---|---|
+| `mml_import_complete` | MIDI / MusicXML / MMI / 3MLE / MML / TXT 등을 최종 MML로 가져오기 완료 |
+| `copy_all_mml` | 전부복사 선택 |
+| `split_copy` | 나눠복사 선택 |
+| `open_midi_extract` | MIDI 추출 버튼 선택 |
+| `open_rhythm_game` | 리듬게임 버튼 선택 |
 
-앱 실행, Google 로그아웃, 붙여넣기, 샘플 미디어 재생, 재생 시작 위치, 채널·페이지 번호처럼 기능 이용 성과와 직접 관련이 적은 값은 기록하지 않습니다.
+그 밖의 기존 Analytics 호출은 `trackAnalytics()`에서 전송하지 않습니다.
 
 ### 동작 방식
 
@@ -599,9 +603,9 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 | 3MLE 템포 처리 변경 | `app.js`의 `extractThreeMleGlobalTempo()`, `applyThreeMleGlobalTempoToCandidates()` |
 | MML 파싱/시간 계산 변경 | `js/mml-parser.js` |
 | 최적화/쉼표/볼륨/음정/공백/나눠복사 변경 | `js/mml-optimizer.js` |
-| 재생/스케줄링/SF2 변경 | `js/sf2-sampler.js`, `app.js`의 재생 제어 함수 |
-| Google Drive 변경 | `app.js`의 Google 관련 함수, `js/google-config.js` |
-| Firebase Analytics 변경 | `js/firebase-config.js`, `js/firebase-analytics.js`, `app.js`의 `trackAnalytics()` 호출 위치 |
+| 재생/스케줄링/SF2/SF3/DLS 변경 | `js/sf2-sampler.js`, `app.js`의 재생 제어 함수 |
+| Google Drive 변경 | `app.js`의 Google 관련 함수, `plugins/google-config.js` |
+| Firebase Analytics 변경 | `plugins/firebase-config.js`, `plugins/firebase-analytics.js`, `app.js`의 `trackAnalytics()` 호출 위치 |
 | 저장 설정 변경 | `PREF_PREFIX`, `readPref()`, `writePref()`, Google settings snapshot 관련 함수 |
 
 ---
@@ -610,7 +614,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 수정 후 아래 항목은 한 번씩 확인하는 것을 권장합니다.
 
-- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v4.7`이 보이는지
+- [ ] 제목에 `모비바드`와 `마비노기 MML 생성기 v4.8`이 보이는지
 - [ ] 상단 추천 링크 콤보박스가 디스코드 버튼 왼쪽에 있고, MIDI 사이트가 새 창으로 열린 뒤 선택값이 다시 기본값으로 돌아오는지
 - [ ] 기본 샘플 MML 재생/정지/처음/반복이 동작하는지
 - [ ] 배속/볼륨/테마가 새로고침 후 복원되는지
@@ -677,7 +681,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 
 ## 변경 이력
 
-### v4.7
+### v4.8
 
 - `쉼표 삭제`, `볼륨 조절`, `음정 조절`, `볼륨 생성`에서는 빈 MML 채널의 체크박스를 비활성화합니다. `반주 생성`에서는 참고 채널만 적용하며 생성 대상 채널은 그대로 유지합니다.
 - `비우기`와 `붙여넣기` 버튼은 실행 후에도 버튼 이름을 변경하지 않습니다.
@@ -713,7 +717,6 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - 진행 슬라이더의 템포 세로선이 드래그를 가로막지 않도록 원래 비상호작용 크기로 되돌리고, `T숫자` 라벨만 선택 가능하게 했습니다.
 - 템포 수정 팝업을 여는 즉시 현재 재생 위치를 보존한 채 재생을 정지하도록 변경했습니다.
 - 편집 기능 줄의 `시작 공백` 버튼을 맨 앞으로 이동하고, 버튼과 Dialog 명칭을 `시작 공백`으로 통일했습니다.
-- `음정 조절` 오른쪽에 BETA 기능 `볼륨 생성` 버튼과 Dialog를 추가했습니다.
 - 생성 볼륨은 소리 있는 음표 기준 `V2~V15` 범위로 제한합니다.
 - `강약 생성`의 표시 명칭을 `볼륨 생성`으로 변경했습니다.
 - 기존 `장르 편곡`을 제거하고, 여러 참고 채널을 함께 분석하는 `반주 생성`으로 새로 구축했습니다.
@@ -832,7 +835,7 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 - MMI/3MLE MML 채널 선택 Dialog 상단의 기존 `전체 듣기` 버튼을 `선택 듣기`로 이름 변경했습니다. 기능은 현재 체크된 채널만 합쳐 재생하도록 유지했습니다.
 - `선택 듣기` 오른쪽에 `전부 듣기` 버튼을 추가해, 체크 여부와 관계없이 읽어온 파일의 모든 감지 채널을 합쳐 재생할 수 있게 했습니다.
 - MMI/3MLE MML 채널 선택 Dialog 하단의 `파일 불러오기`와 `모두 선택해제` 버튼 위치를 서로 바꿨습니다.
-- Firebase Analytics 연동을 추가했습니다. `js/firebase-config.js`에는 웹 앱 설정을, `js/firebase-analytics.js`에는 SDK 초기화/이벤트 큐 처리를 분리했습니다.
+- Firebase Analytics 연동을 추가했습니다. `plugins/firebase-config.js`에는 웹 앱 설정을, `plugins/firebase-analytics.js`에는 SDK 초기화/이벤트 큐 처리를 분리했습니다.
 - 파일 불러오기, MIDI 변환, 미리듣기, 재생, 도구 적용, 복사, 저장, Google Drive 동작을 커스텀 이벤트로 기록합니다. 앱 실행·로그아웃·붙여넣기처럼 의미가 약한 이벤트와 중복 이벤트는 제거했으며, 파일명과 MML 본문은 포함하지 않습니다.
 - Google token 만료 처리 방식을 수정했습니다. 유효한 토큰은 새로고침/새 창에서 유지하지만, 만료되거나 401이 발생하면 자동으로 Google 로그인을 다시 요청하지 않고 `로그인 필요` 상태로만 전환합니다.
 - 상단 바로가기 영역의 콤보박스 기본 문구를 `MML / MIDI 링크`로 바꾸고 디스코드 버튼 왼쪽에 배치했습니다. `MML 공유` 추천 링크는 제거했습니다.
@@ -916,8 +919,6 @@ Firebase Analytics는 빌드 도구 없이 CDN modular SDK를 `type="module"`로
 ### v4.5 BETA UI · 템포 편집 보완
 - MIDI/MusicXML 변환 설정에서 `생성` 역할과 반주 패턴 선택을 제거했습니다. 변환기는 원본 악기를 최대 6채널에 선택·배정하는 역할만 담당합니다.
 - 피아노롤 템포 버튼 hover: 왼쪽 `T숫자` 라벨만 템포 편집 버튼으로 동작하고, hover 시 외곽선·확대·그림자 효과를 표시합니다. 가로 템포선은 표시 전용으로 변경했습니다.
-- 공통 BETA `B` 마커를 완전한 원형으로 변경했습니다.
-- BETA 마커를 버튼 내부 문자 대신 공통 `.beta-feature::after` 아이콘으로 렌더링해 버튼명이 `볼륨 생성B`처럼 붙어 보이는 문제를 수정했습니다.
 - MIDI 추출 버튼을 파일/구글 작업 묶음 안에 배치해 좁은 폭에서 별도 줄로 밀리지 않게 했습니다. 아주 좁은 화면에서는 작업 묶음을 한 줄 가로 스크롤로 유지합니다.
 - 피아노롤의 펼치기/접기 표시가 템포 클릭 판정보다 우선하도록 조정했습니다.
 - 재생 중 템포 편집을 열었다면 취소 또는 수정 후 저장 여부와 관계없이 편집 전 재생 위치에서 자동으로 재생을 재개합니다.
@@ -968,3 +969,11 @@ Locale 키는 `영역.동작_상태` 정도의 짧은 이름만 사용합니다.
 - 제거된 비트·악기 체크박스·구형 일괄 선택 UI의 CSS와 번역 키를 정리했습니다.
 - 현재 MIDI 악기 채널 선택, 보컬 그룹, 자동 음색 매핑과 접힘 상태 유지 동작은 그대로 보존합니다.
 
+
+## v7.9 유지보수 정리
+
+- 현재 HTML/JavaScript에서 참조되지 않는 다국어 키 60개를 5개 언어 파일에서 제거하고 `locale/KEYS.md` 통계를 다시 생성했습니다.
+- `utils.js`에서 사용되지 않던 `unique`, `base64ToUint8Array` 유틸리티와 공개 항목을 제거했습니다.
+- 더 이상 존재하지 않는 MIDI 추출 메뉴 화살표용 CSS와 빈 미디어 쿼리를 제거했습니다.
+- Firebase Analytics 정책상 기록하지 않도록 되어 있던 로그인·재생·편집·저장 등의 no-op 이벤트 호출 30개를 제거했습니다.
+- MIDI/MML 변환, 음색 캐시, Google Drive 동기화, 기본 SC-55 음원 동작은 변경하지 않았습니다.
