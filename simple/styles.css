@@ -133,6 +133,8 @@ button { color: inherit; }
 }
 .converter {
   width: min(980px, 100%);
+  max-width: 100%;
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 22px;
@@ -156,6 +158,8 @@ h1 {
 .subtitle { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
 
 .drop-zone {
+  width: 100%;
+  min-width: 0;
   min-height: 230px;
   border: 1.5px dashed var(--line-strong);
   border-radius: var(--radius);
@@ -188,13 +192,17 @@ h1 {
 .drop-hint { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
 .file-name {
   margin: 14px 0 0;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
   color: var(--text);
   font-size: 13px;
   font-weight: 650;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: 1.5;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .options-stack {
