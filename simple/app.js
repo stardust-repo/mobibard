@@ -14,7 +14,7 @@
   const PLAYBACK_SOUNDBANK_SCRIPT = "../assets/default_sf3.js";
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
-  const LOCALE_VERSION = "4.8-simple-lang-mo-drop-short";
+  const LOCALE_VERSION = "4.8-simple-settings-responsive-fix";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 
@@ -37,6 +37,7 @@
     results: $("results"),
     resultsTitle: $("resultsTitle"),
     resultsSummary: $("resultsSummary"),
+    splitResults: $("splitResults"),
     fullScoreTitle: $("fullScoreTitle"),
     fullScoreDetail: $("fullScoreDetail"),
     copyAllButton: $("copyAllButton"),
@@ -47,9 +48,14 @@
     midiExtractLink: $("midiExtractLink"),
     fullEditorLink: $("fullEditorLink"),
     discordLink: $("discordLink"),
+    settingsControl: $("settingsControl"),
+    settingsButton: $("settingsButton"),
+    settingsMenu: $("settingsMenu"),
     languageSelect: $("languageSelect"),
     languageLabel: $("languageLabel"),
-    themeButton: $("themeButton")
+    themeLabel: $("themeLabel"),
+    themeButton: $("themeButton"),
+    themeButtonText: $("themeButtonText")
   };
 
   let language = resolveInitialLanguage();
@@ -266,8 +272,12 @@
     els.fullEditorLink.href = `../player/index.html?lang=${encodeURIComponent(language)}`;
     els.discordLink.setAttribute("aria-label", t("discord"));
     els.discordLink.title = t("discord");
+    els.settingsButton.setAttribute("aria-label", t("settings"));
+    els.settingsButton.title = t("settings");
+    els.settingsMenu.setAttribute("aria-label", t("settings"));
     els.languageLabel.textContent = t("language");
-    els.themeButton.setAttribute("aria-label", t("theme"));
+    els.themeLabel.textContent = t("themeLabel");
+    els.themeButtonText.textContent = t("theme");
     els.themeButton.title = t("theme");
     els.fileButton.textContent = t("choose");
     els.dropHint.textContent = t("drop");
@@ -287,6 +297,16 @@
     els.languageSelect.value = language;
     updatePlayButton();
     if (resultPages.length) renderResults(resultPages);
+  }
+
+  function setSettingsMenuOpen(open) {
+    const next = Boolean(open);
+    els.settingsMenu.hidden = !next;
+    els.settingsButton.setAttribute("aria-expanded", next ? "true" : "false");
+  }
+
+  function toggleSettingsMenu() {
+    setSettingsMenuOpen(els.settingsMenu.hidden);
   }
 
   function toggleTheme() {
@@ -518,13 +538,16 @@
   function renderResults(pages) {
     els.copyButtons.innerHTML = "";
     els.results.hidden = false;
+    const showSplitResults = Array.isArray(pages) && pages.length > 1;
+    els.splitResults.hidden = !showSplitResults;
     els.fullScoreTitle.textContent = t("fullScore");
     els.copyAllButton.textContent = t("copy");
     els.copyAllButton.classList.remove("copied");
     const fullParts = splitMmlPartsFallback(currentMml);
     while (fullParts.length < 3) fullParts.push("");
     els.fullScoreDetail.textContent = t("detail", [fullParts[0].length, fullParts[1].length, fullParts[2].length]);
-    els.resultsSummary.textContent = t("pages", [pages.length]);
+    els.resultsSummary.textContent = showSplitResults ? t("pages", [pages.length]) : "";
+    if (!showSplitResults) return;
 
     for (const page of pages) {
       const parts = Array.isArray(page.parts) && page.parts.length
@@ -908,8 +931,17 @@
   els.playbackSlider.addEventListener("pointerup", () => setTimeout(finishSeek, 0));
 
   els.copyAllButton.addEventListener("click", () => void copyText(currentMml, els.copyAllButton, "copy"));
+  els.settingsButton.addEventListener("click", toggleSettingsMenu);
   els.languageSelect.addEventListener("change", () => void applyLanguage(els.languageSelect.value, true, "user"));
   els.themeButton.addEventListener("click", toggleTheme);
+  document.addEventListener("pointerdown", event => {
+    if (!els.settingsMenu.hidden && !els.settingsControl.contains(event.target)) setSettingsMenuOpen(false);
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape" || els.settingsMenu.hidden) return;
+    setSettingsMenuOpen(false);
+    els.settingsButton.focus();
+  });
 
   selectQuantizeOption(64, false);
   selectRestOption("32", false);

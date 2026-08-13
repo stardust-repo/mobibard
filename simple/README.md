@@ -28,3 +28,14 @@ The preview loads the same bundled default SF3 and `player/js/sf2-sampler.js` us
 ## Firebase Analytics
 
 파일을 선택한 뒤 MIDI/MusicXML → MML 변환이 최초로 성공 완료되면 simple 전용 이벤트 `simple_file_convert_complete`를 1회 기록합니다. 같은 파일에서 양자화 또는 쉼표 제거 옵션을 바꿔 자동 재변환되는 과정은 중복 집계하지 않습니다. 이 이벤트는 player의 `mml_import_complete`와 별개이며 서로 합쳐지지 않습니다. 파일명이나 MML 내용은 수집하지 않고 `source_type`, `file_size`, `quantize_division`, `rest_mode`, `page_count`만 이벤트 파라미터로 기록합니다.
+
+## Header / mobile layout
+
+- The top bar keeps the Mobibard brand text visible at narrow widths.
+- Language and theme controls live inside the right-side Settings menu.
+- On mobile-width layouts, the converter touches the top/left/right viewport edges; only the existing 20px bottom page gap remains.
+
+### Layout polish (2026-08-14)
+- The converter uses the full available width with no outer top/left/right spacing; only the 20px bottom spacing remains.
+- Mobile keeps rounded corners on the top edge as well as the bottom edge.
+- Settings is a labeled icon button with a dropdown indicator so its purpose is visually clear.

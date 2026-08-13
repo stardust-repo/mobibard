@@ -1,6 +1,6 @@
 # Simple locale keys
 
-Total: 45
+Total: 47
 
 - `all`
 - `brand`
@@ -38,10 +38,12 @@ Total: 45
 - `restError`
 - `score`
 - `seek`
+- `settings`
 - `split`
 - `stop`
 - `subtitle`
 - `theme`
+- `themeLabel`
 - `title`
 - `xmlDecompress`
 - `xmlEmpty`

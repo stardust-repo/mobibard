@@ -56,7 +56,7 @@
     language = files[language] ? language : "en";
     document.documentElement.lang = htmlLang[language] || "en";
     const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
-    if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "4.8-simple-lang-mo-drop-short");
+    if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "4.8-simple-settings-responsive-fix");
     document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   })();
   </script>
@@ -64,6 +64,7 @@
 </head>
 <body>
   <header class="topbar">
+    <div class="topbar-inner">
     <a class="brand" href="./index.html" aria-label="Mobibard Simple MML">
       <span class="brand-mark" aria-hidden="true"></span>
       <span id="brandName">모비바드</span>
@@ -74,19 +75,35 @@
       <a id="discordLink" class="discord-link" href="https://discord.gg/qqwzCERZK5" target="_blank" rel="noopener noreferrer" aria-label="디스코드" title="디스코드">
         <img alt="" decoding="async" src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d7f4ef6498ac018f2c55_Symbol.svg">
       </a>
-      <label class="language-control">
-        <span class="sr-only" id="languageLabel">언어</span>
-        <select id="languageSelect" aria-labelledby="languageLabel">
-          <option value="ko">한국어</option>
-          <option value="ja">日本語</option>
-          <option value="en">English</option>
-          <option value="zh-CN">简体中文</option>
-          <option value="zh-TW">繁體中文</option>
-        </select>
-      </label>
-      <button id="themeButton" class="icon-button" type="button" aria-label="테마 변경" title="테마 변경">
-        <span class="theme-icon" aria-hidden="true">◐</span>
-      </button>
+      <div id="settingsControl" class="settings-control">
+        <button id="settingsButton" class="settings-button" type="button" aria-label="설정" title="설정" aria-haspopup="true" aria-expanded="false" aria-controls="settingsMenu">
+          <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="5.15"></circle>
+            <circle cx="12" cy="12" r="1.95"></circle>
+            <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.28 5.28l1.7 1.7M17.02 17.02l1.7 1.7M18.72 5.28l-1.7 1.7M6.98 17.02l-1.7 1.7"></path>
+          </svg>
+        </button>
+        <div id="settingsMenu" class="settings-menu" role="group" aria-label="설정" hidden>
+          <label class="settings-field language-control">
+            <span class="settings-label" id="languageLabel">언어</span>
+            <select id="languageSelect" aria-labelledby="languageLabel">
+              <option value="ko">한국어</option>
+              <option value="ja">日本語</option>
+              <option value="en">English</option>
+              <option value="zh-CN">简体中文</option>
+              <option value="zh-TW">繁體中文</option>
+            </select>
+          </label>
+          <div class="settings-field">
+            <span class="settings-label" id="themeLabel">테마</span>
+            <button id="themeButton" class="settings-theme-button" type="button" aria-labelledby="themeLabel themeButtonText" title="테마 변경">
+              <span class="theme-icon" aria-hidden="true">◐</span>
+              <span id="themeButtonText">테마 변경</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
     </div>
   </header>
 
@@ -95,7 +112,7 @@
       <div class="title-block">
         <p class="eyebrow">MIDI / MusicXML → MML</p>
         <h1 id="pageTitle">모비바드 MML 딸깍 생성기</h1>
-        <p id="subtitle" class="subtitle">MIDI 파일 하나만 넣으면 3채널 MML로 바로 변환합니다.</p>
+        <p id="subtitle" class="subtitle">파일을 넣으면 3채널 MML로 바로 변환합니다.</p>
       </div>
 
       <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-controls="midiFileInput">
@@ -142,11 +159,13 @@
           </div>
           <button id="copyAllButton" class="copy-button" type="button">복사</button>
         </div>
-        <div class="results-head">
-          <h2 id="resultsTitle">나눠 복사</h2>
-          <span id="resultsSummary" class="results-summary"></span>
+        <div id="splitResults" class="split-results">
+          <div class="results-head">
+            <h2 id="resultsTitle">분할 악보</h2>
+            <span id="resultsSummary" class="results-summary"></span>
+          </div>
+          <div id="copyButtons" class="copy-buttons"></div>
         </div>
-        <div id="copyButtons" class="copy-buttons"></div>
       </section>
     </section>
   </main>
