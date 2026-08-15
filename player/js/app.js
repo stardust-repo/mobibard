@@ -69,6 +69,7 @@
     "https://bitmidi.com/",
     "https://www.classicalarchives.com/midi.html",
     "https://ichigos.com/",
+    "https://josh.agarrado.net/music/anime/index.php",
     "http://www.midiex.net/",
     "http://www.midisite.co.uk/",
     "https://musescore.com/",

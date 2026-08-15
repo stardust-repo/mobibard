@@ -13,6 +13,7 @@
   - Ch2: Auto + All overlap merge
   - Ch3: Low + Half overlap merge
 - Rest removal options: Keep / <= 1/64 / <= 1/32 / <= 1/16 / <= 1/8 / <= 1/4 / All (default: <= 1/32)
+- After rest removal, every generated 3-channel MML is normalized to the same leading gap as the player: T120 기준 약 2초 (`R1`). Existing common leading silence is removed first, so repeated option changes do not accumulate extra silence.
 - MML preview uses the bundled player SoundFont sampler and is fixed to Bank 0 / Program 0 for every part, with only a play/stop button and seek slider in the UI
 - Full-score copy card plus split-copy score cards at the same 2400-character limit used by the main editor
 - Shared language/theme preference keys with the main Mobibard player
@@ -39,4 +40,4 @@ The preview loads the same bundled default SF3 and `player/js/sf2-sampler.js` us
 ### Layout polish (2026-08-14)
 - The converter uses the full available width with no outer top/left/right spacing; only the 20px bottom spacing remains.
 - Mobile keeps rounded corners on the top edge as well as the bottom edge.
-- Settings is a labeled icon button with a dropdown indicator so its purpose is visually clear.
+- Settings uses a gear-only icon button; language and theme controls remain inside its popup.

@@ -10,6 +10,7 @@
   const PLAY_SCHEDULER_MS = 120;
   const FIXED_PLAYBACK_BANK = 0;
   const FIXED_PLAYBACK_PROGRAM = 0;
+  const GENERATED_MML_LEADING_SILENCE_SECONDS = 2;
   const PLAYBACK_SAMPLER_SCRIPT = "../player/js/sf2-sampler.js";
   const PLAYBACK_SOUNDBANK_SCRIPT = "../assets/default_sf3.js";
 
@@ -422,6 +423,18 @@
     return window.MabiOptimizer.trimShortRestsMml(mml, options).mml;
   }
 
+  function alignGeneratedMmlStart(mml) {
+    if (!window.MabiOptimizer?.addLeadingSilenceMml) {
+      throw new Error("MML leading-silence optimizer is unavailable");
+    }
+    // Player와 동일하게 기존 공통 앞 공백을 제거한 뒤 T120 기준 2초(R1)로 다시 정렬한다.
+    // 쉼표 제거를 먼저 실행해야 사용자가 선택한 제거 옵션이 최종 2초 공백을 지우지 않는다.
+    return window.MabiOptimizer.addLeadingSilenceMml(mml, {
+      partCount: 3,
+      beats: GENERATED_MML_LEADING_SILENCE_SECONDS * 2
+    }).mml;
+  }
+
   function splitForCopy(mml) {
     if (!window.MabiOptimizer?.splitMmlPages) {
       return [{ index: 1, mml, parts: splitMmlPartsFallback(mml) }];
@@ -510,11 +523,12 @@
       const options = buildSimpleConvertOptions(nonDrumGroups.map(group => group.id));
       const converted = window.MabiMidi.midiToMml(selectedBytes, selectedFile.name, options);
       const cleanedMml = applyRestRemoval(converted.mml);
+      const alignedMml = alignGeneratedMmlStart(cleanedMml);
       if (token !== conversionSerial) return;
 
-      currentMml = cleanedMml;
-      resultPages = splitForCopy(cleanedMml);
-      rebuildPlayback(cleanedMml);
+      currentMml = alignedMml;
+      resultPages = splitForCopy(alignedMml);
+      rebuildPlayback(alignedMml);
       renderResults(resultPages);
       hideStatus();
       trackSimpleFileConvertComplete(selectedFile, resultPages);
