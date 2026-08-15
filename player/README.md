@@ -258,6 +258,7 @@ mabinogi_mml_public/
 ## MIDI / MusicXML 변환 흐름
 
 MIDI 변환은 `js/midi-to-mml.js`가 담당합니다. MusicXML은 `js/musicxml-to-midi.js`에서 표준 MIDI 이벤트로 변환한 뒤 같은 Dialog와 변환 흐름을 재사용합니다.
+클래식 Mac의 128바이트 MacBinary 래퍼가 붙은 MIDI도 자동 감지하며, 헤더에 기록된 데이터 포크 길이만큼의 실제 `MThd` MIDI 구간만 추출해 분석·변환·미리듣기에 사용합니다.
 
 사용자가 MIDI 또는 MusicXML 파일을 불러오면 `midiConvertDialog`가 열립니다. 이 Dialog는 입력 파일의 악기를 마비노기 MML 1~6채널에 배치하는 화면입니다. 접기/펼치기 안내에는 원본 듣기와 변환 순서를 표시하고, 세부 옵션 설명은 한 줄씩 표시합니다.
 

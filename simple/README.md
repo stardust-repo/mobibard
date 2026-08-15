@@ -3,6 +3,7 @@
 `simple/index.html` is a lightweight MIDI / MusicXML-to-MML converter.
 
 - MIDI (`.mid`, `.midi`) and MusicXML (`.musicxml`, `.xml`, `.mxl`) drag & drop / file selection
+- Standard MIDI files wrapped in a classic 128-byte MacBinary container are detected automatically; only the MIDI data fork is passed to the shared parser
 - MusicXML is converted through the same `player/js/musicxml-to-midi.js` parser used by the main player, then passed into the same simple 3-channel MIDI-to-MML pipeline
 - Conversion runs automatically after file selection and whenever an option changes
 - Quantize options: 1/64 or 1/32 (default: 1/64)

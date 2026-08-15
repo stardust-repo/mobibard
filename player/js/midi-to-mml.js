@@ -1316,8 +1316,51 @@
     return `${p + 1}. ${GM_PROGRAM_NAMES[p] || "Unknown"}`;
   }
 
+  function asciiAt(bytes, offset, text) {
+    if (!bytes || offset < 0 || offset + text.length > bytes.length) return false;
+    for (let i = 0; i < text.length; i++) {
+      if (bytes[offset + i] !== text.charCodeAt(i)) return false;
+    }
+    return true;
+  }
+
+  function readU32At(bytes, offset) {
+    if (!bytes || offset < 0 || offset + 4 > bytes.length) return null;
+    return (((bytes[offset] << 24) >>> 0)
+      | (bytes[offset + 1] << 16)
+      | (bytes[offset + 2] << 8)
+      | bytes[offset + 3]) >>> 0;
+  }
+
+  function normalizeMidiContainerBytes(sourceBytes) {
+    const bytes = sourceBytes instanceof Uint8Array
+      ? sourceBytes
+      : new Uint8Array(sourceBytes || 0);
+    if (asciiAt(bytes, 0, "MThd")) return bytes;
+
+    // Classic Mac MIDI files may be wrapped in a 128-byte MacBinary header.
+    // The Standard MIDI data is stored in the data fork, whose exact length
+    // is recorded at header offsets 83..86. Resource-fork bytes after it must
+    // not be passed to the MIDI parser.
+    const headerSize = 128;
+    const fileNameLength = bytes.length > 1 ? bytes[1] : 0;
+    const looksLikeMacBinaryHeader = bytes.length >= headerSize + 14
+      && bytes[0] === 0
+      && fileNameLength >= 1
+      && fileNameLength <= 63;
+    if (looksLikeMacBinaryHeader && asciiAt(bytes, headerSize, "MThd")) {
+      const dataForkLength = readU32At(bytes, 83);
+      const dataForkEnd = dataForkLength == null ? -1 : headerSize + dataForkLength;
+      if (dataForkLength >= 14 && dataForkEnd <= bytes.length) {
+        return bytes.subarray(headerSize, dataForkEnd);
+      }
+    }
+
+    return bytes;
+  }
+
   function parseMidiFile(bytes) {
-    const r = new ByteReader(bytes);
+    const r = new ByteReader(normalizeMidiContainerBytes(bytes));
     const warnings = [];
     if (r.readAscii(4) !== "MThd") throw new Error(tr("midi.err_header"));
     const headerLength = r.readU32();
