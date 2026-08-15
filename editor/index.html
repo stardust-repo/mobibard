@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
+<meta content="yes" name="mobile-web-app-capable"/>
+<meta content="yes" name="apple-mobile-web-app-capable"/>
+<title>모비바드</title>
+<link href="styles.css" rel="stylesheet"/>
+</head>
+<body>
+<div data-context-area="app" id="app">
+<header class="topbar" data-context-area="topbar">
+<div class="topbar-main">
+<div class="brand">모비바드</div>
+<div class="toolbar-group file-actions">
+<div class="file-control">
+<button aria-expanded="false" aria-haspopup="menu" id="fileButton" type="button">파일</button>
+<div class="file-menu" hidden="" id="fileMenu" role="menu">
+<button id="newButton" role="menuitem" type="button">새 파일</button>
+<button id="openButton" role="menuitem" type="button">불러오기</button>
+<button id="saveButton" role="menuitem" type="button">저장</button>
+<div class="file-menu-separator" role="separator"></div>
+<button id="audioOpenButton" role="menuitem" type="button">오디오 불러오기</button>
+<div class="file-menu-separator" role="separator"></div><button id="fileExportButton" role="menuitem" type="button">MML 내보내기</button></div>
+</div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button">되돌리기</button><button id="editRedoButton" role="menuitem" type="button">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button">복사</button><button id="editCutButton" role="menuitem" type="button">잘라내기</button><button id="editPasteButton" role="menuitem" type="button">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button">삭제</button><button id="editNoteVolumeButton" role="menuitem" type="button">노트 볼륨</button></div></div>
+<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,.mid,.midi,.musicxml,.xml,.mxl,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="fileInput" type="file"/>
+<input accept="text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle" hidden="" id="mmlImportFileInput" type="file"/>
+<input accept="audio/midi,audio/x-midi,.mid,.midi,.musicxml,.xml,.mxl,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFileInput" type="file"/>
+<input accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm" hidden="" id="audioFileInput" type="file"/>
+</div>
+<div class="toolbar-separator"></div>
+<div class="toolbar-group transport-actions">
+<div aria-label="재생 위치 및 재생" class="transport-control-group" role="group">
+<button aria-label="맨 처음으로 이동" class="transport-edge-button" id="jumpStartButton" title="맨 처음으로 이동" type="button">|◀</button>
+<button aria-pressed="false" class="transport-main-button" id="playButton" type="button">▶ 재생</button>
+<button aria-label="맨 뒤로 이동" class="transport-edge-button" id="jumpEndButton" title="맨 뒤로 이동" type="button">▶|</button>
+</div>
+<span class="playback-time" id="playbackTime" title="현재 재생 위치 / 전체 재생 시간">0:00.000 / 0:00.000</span>
+<div class="volume-control">
+<button aria-expanded="false" aria-haspopup="dialog" class="transport-utility-button" id="volumeButton" title="전체 재생 볼륨 조절" type="button">볼륨 100</button>
+<div aria-label="전체 재생 볼륨" class="vertical-range-menu volume-menu" hidden="" id="volumeMenu" role="dialog">
+<label class="vertical-range-control">
+<span class="vertical-range-title">볼륨</span>
+<span class="vertical-range-limit">150%</span>
+<input aria-label="전체 볼륨" class="vertical-range-input" id="volumeSlider" max="150" min="0" orient="vertical" step="1" type="range" value="100"/>
+<span class="vertical-range-limit">0%</span>
+</label>
+<button class="vertical-range-reset" id="volumeResetButton" type="button">초기화</button>
+</div>
+</div>
+<div class="playback-rate-control">
+<button aria-expanded="false" aria-haspopup="dialog" class="transport-utility-button" id="playbackRateButton" title="재생 배속 조절" type="button">배속 1×</button>
+<div aria-label="재생 배속" class="vertical-range-menu playback-rate-menu" hidden="" id="playbackRateMenu" role="dialog">
+<label class="vertical-range-control">
+<span class="vertical-range-title">배속</span>
+<span class="vertical-range-limit">1.5×</span>
+<input aria-label="재생 배속" class="vertical-range-input" id="playbackRateSlider" max="1.5" min="0.75" orient="vertical" step="0.05" type="range" value="1"/>
+<span class="vertical-range-limit">0.75×</span>
+</label>
+<button class="vertical-range-reset" id="playbackRateResetButton" type="button">초기화</button>
+</div>
+</div>
+<div aria-label="트랙 공간 편집" class="timeline-space-control" role="group">
+<button aria-label="마디 공간 편집" class="transport-utility-icon-button" id="measureSpaceButton" title="빨간 재생선 기준으로 마디 공간 추가/삭제" type="button">🎼</button>
+<button aria-label="박자 공간 편집" class="transport-utility-icon-button" id="beatSpaceButton" title="빨간 재생선 기준으로 박자 공간 추가/삭제" type="button">🎵</button>
+</div>
+</div>
+<div class="toolbar-spacer"></div>
+<div class="toolbar-group view-actions">
+<div aria-label="피아노롤 조작 도구" class="edit-tool-control" role="group">
+<button aria-pressed="true" id="noteToolButton" title="터치 또는 왼쪽 클릭으로 노트를 배치합니다." type="button">노트</button>
+<button aria-pressed="false" id="selectToolButton" title="터치 또는 왼쪽 드래그로 범위를 선택합니다." type="button">선택</button>
+</div>
+<label class="compact-field compact-field-select-only">
+<select aria-label="편집 단위" id="snapSelect" title="숫자키 1~7로 음표 단위를 변경합니다.">
+<option value="1">1/1</option>
+<option value="2">1/2</option>
+<option selected="" value="4">1/4</option>
+<option value="8">1/8</option>
+<option value="16">1/16</option>
+<option value="32">1/32</option>
+<option value="64">1/64</option>
+</select>
+</label>
+<div class="zoom-control">
+<button aria-expanded="false" aria-haspopup="dialog" class="transport-utility-button" id="zoomButton" title="확대 배율 조절 (Shift+휠, - / = 키 지원)" type="button">배율 100</button>
+<div aria-label="확대 배율" class="vertical-range-menu zoom-menu" hidden="" id="zoomMenu" role="dialog">
+<label class="vertical-range-control">
+<span class="vertical-range-title">배율</span>
+<span class="vertical-range-limit" id="zoomMaxLabel">500%</span>
+<input aria-label="확대 배율" class="vertical-range-input" id="zoomSlider" max="8" min="0" orient="vertical" step="1" type="range" value="4"/>
+<span class="vertical-range-limit" id="zoomMinLabel">30%</span>
+</label>
+<button class="vertical-range-reset" id="zoomResetButton" type="button">초기화</button>
+</div>
+</div>
+</div>
+</div>
+<div class="toolbar-group account-actions">
+<div class="theme-control options-control">
+<button aria-expanded="false" aria-haspopup="dialog" aria-label="Guest 설정" class="account-avatar-button" id="themeButton" title="Guest 설정" type="button">
+<img alt="" class="guest-avatar" id="themeIcon" src="guest-user.svg"/>
+</button>
+<div aria-label="계정 및 설정" class="theme-menu options-menu" hidden="" id="themeMenu" role="dialog">
+<div class="options-profile-row">
+<img alt="" class="options-profile-avatar" src="guest-user.svg"/>
+<div>
+<strong>Guest</strong>
+<span>로그인하지 않음</span>
+</div>
+</div>
+<button class="google-login-button" id="googleLoginButton" type="button">
+<img alt="" src="google-g.png"/>
+<span>Google로 로그인</span>
+</button>
+<label class="options-field">
+<span>언어</span>
+<select aria-label="언어 설정" id="languageSelect">
+<option value="ko">한국어</option>
+<option value="ja">日本語</option>
+<option value="en">English</option>
+<option value="zh-CN">中文(简体)</option>
+<option value="zh-TW">中文(繁體)</option>
+</select>
+</label>
+<div class="options-menu-section-label">테마</div>
+<div aria-label="테마" class="theme-choice-row" role="group">
+<button aria-checked="false" data-theme-choice="light" role="radio" type="button">
+<span aria-hidden="true">☀</span><span>밝은 색상</span>
+</button>
+<button aria-checked="true" data-theme-choice="dark" role="radio" type="button">
+<span aria-hidden="true">☾</span><span>어두운 색상</span>
+</button>
+</div>
+<label class="options-field">
+<span>볼륨 표시</span>
+<select id="noteVolumeDisplaySelect" title="피아노롤 노트의 볼륨(V0~V15) 표시 범위를 변경합니다.">
+<option selected="" value="all">모두 표시</option>
+<option value="selected">선택 채널만</option>
+<option value="none">표시 안 함</option>
+</select>
+</label>
+<label class="options-field">
+<span>음계 간격</span>
+<select id="pitchSpacingSelect" title="피아노롤 음계 줄 간격을 변경합니다.">
+<option value="8">8px</option>
+<option value="10">10px</option>
+<option selected="" value="12">12px</option>
+<option value="14">14px</option>
+<option value="16">16px</option>
+</select>
+</label>
+</div>
+</div>
+</div>
+</header>
+<div class="app-content"><main class="workspace"><div class="editor-body">
+<aside aria-label="채널 및 편집 히스토리" class="side-panel" id="sidePanel">
+<div aria-label="왼쪽 패널" class="side-panel-tabs" role="tablist">
+<button aria-controls="channelPanel" aria-selected="true" class="side-panel-tab active" id="sidebarChannelsTab" role="tab" type="button">채널</button>
+<button aria-controls="historyPanel" aria-selected="false" class="side-panel-tab" id="sidebarHistoryTab" role="tab" type="button">히스토리</button>
+</div>
+<section aria-label="채널 목록" class="side-panel-view channel-panel channel-side-panel" data-context-area="channel-panel" id="channelPanel" role="tabpanel">
+<div class="channel-tree-toolbar"><button aria-label="채널 추가" class="channel-tree-add-button" id="addChannelButton" title="채널 추가" type="button">＋ 채널</button><button aria-label="채널 선택 삭제" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 채널 선택" type="button">🗑</button></div>
+<div aria-label="채널 목록" class="channel-tabs channel-tree" data-context-area="channel-tabs" id="channelTabs" role="tree"></div>
+<div class="channel-detail-row channel-inspector">
+<div class="channel-body note-channel-body" id="noteChannelView">
+<div class="channel-detail-toolbar" data-context-area="channel-info">
+<div class="channel-identity-control" title="채널 색상과 이름"><label class="channel-color-control channel-color-icon" title="현재 채널 색상"><span class="visually-hidden">색상</span><input aria-label="현재 채널 색상" id="channelColorInput" type="color" value="#78a9ff"/></label><label class="channel-name-control"><input aria-label="채널 이름" id="channelNameInput" maxlength="40" type="text" value="Ch1"/></label></div>
+<label class="channel-instrument-control"><select aria-label="현재 채널 악기" id="channelInstrumentSelect"></select></label>
+<div class="channel-inspector-actions"><button id="copyChannelButton" type="button">복사</button><button id="pasteChannelButton" type="button">붙여넣기</button><button aria-label="선택 노트 볼륨" disabled="" id="noteVolumeButton" title="선택 노트 볼륨 수정" type="button">V</button><button id="clearChannelButton" type="button">비우기</button><button aria-label="선택한 채널 삭제" class="trash-button" id="deleteChannelButton" title="선택한 채널 삭제" type="button">🗑</button></div>
+<span class="visually-hidden" id="channelTitle">Ch1</span><span class="dirty-indicator" hidden="" id="dirtyIndicator">수정됨</span>
+<div aria-label="현재 채널 요약" class="channel-summary"><span id="infoChannel">Ch1</span><span>노트 <strong id="infoNoteCount">0</strong></span><span>길이 <strong id="infoLength">0:00.000</strong></span><span>선택 <strong id="infoSelection">없음</strong></span></div>
+</div>
+</div>
+<div aria-hidden="true" class="midi-reference-view" data-context-area="midi-reference" hidden="" id="midiReferenceView">
+<div class="channel-detail-toolbar source-detail-toolbar">
+<div class="channel-identity-control source-identity-control" id="midiSourceIdentity" title="원본 자료 또는 악기 채널 정보"><label class="channel-color-control channel-color-icon source-color-control" title="악기 채널 색상"><span class="visually-hidden">색상</span><input aria-label="원본 악기 채널 색상" id="midiSourceColorInput" type="color" value="#78a9ff"/></label><label class="channel-name-control source-name-control"><input aria-label="원본 자료 또는 악기 채널 이름" id="midiSourceNameInput" type="text" value="원본 자료"/></label></div><label class="channel-instrument-control source-instrument-control" hidden="" id="midiSourceInstrumentControl"><input aria-label="원본 악기 정보" id="midiSourceInstrumentInfo" readonly="" type="text" value=""/></label>
+<div class="channel-inspector-actions source-inspector-actions"><button aria-label="선택한 원본 자료 삭제" class="trash-button" disabled="" id="midiReferenceClearButton" title="선택한 원본 자료 삭제" type="button">🗑</button><button class="midi-transfer-open-button" disabled="" id="midiTransferButton" title="원본 채널을 새 편집 채널로 복사" type="button">채널 복사</button></div>
+<div aria-label="현재 원본 자료 요약" class="channel-summary source-summary"><span id="midiInfoTitle">원본 자료</span><span>노트 <strong id="midiInfoNoteCount">0</strong></span><span>길이 <strong id="midiInfoLength">0:00.000</strong></span><span>선택 <strong id="midiInfoSelection">없음</strong></span></div>
+</div>
+<div aria-hidden="true" hidden="" id="midiInstrumentList"></div>
+<span class="midi-reference-file-name" hidden="" id="midiReferenceFileName"></span><span class="midi-reference-message" hidden="" id="midiReferenceMessage"></span><span class="midi-reference-status" hidden="" id="midiReferenceStatus">원본 자료 없음</span><span hidden="" id="midiInfoFormat"></span><span hidden="" id="midiInfoTrackCount"></span><span hidden="" id="midiInfoInstrumentCount"></span><button hidden="" id="midiReferenceLoadButton" type="button">원본 불러오기</button><button hidden="" id="midiReferenceShowAllButton" type="button">전체 표시</button><button hidden="" id="midiReferenceHideAllButton" type="button">전체 숨김</button><button hidden="" id="midiCopyInstrumentButton" type="button">악기 복사</button><button hidden="" id="midiCopySelectedButton" type="button">선택 복사</button>
+</div>
+<div aria-hidden="true" class="audio-source-view" data-context-area="audio-source" hidden="" id="audioSourceView">
+<div class="channel-detail-toolbar source-detail-toolbar">
+<div class="channel-identity-control source-identity-control" id="audioSourceIdentity" title="오디오 원본 정보"><label class="channel-color-control channel-color-icon source-color-control" title="오디오 색상"><span class="visually-hidden">색상</span><input aria-label="오디오 색상" id="audioSourceColorInput" type="color" value="#e58c5a"/></label><label class="channel-name-control source-name-control"><input aria-label="오디오 제목" id="audioSourceNameInput" type="text" value="오디오"/></label></div>
+<div class="audio-clip-settings" aria-label="오디오 재생 설정">
+<label><span>시작 오프셋</span><span class="audio-setting-input"><input aria-label="오디오 시작 오프셋 초" id="audioSourceOffsetInput" inputmode="decimal" min="0" step="0.01" type="number" value="0"/><small>초</small></span></label>
+<label><span>배속</span><span class="audio-setting-input"><input aria-label="오디오 개별 배속" id="audioSourceRateInput" inputmode="decimal" max="4" min="0.25" step="0.05" type="number" value="1"/><small>×</small></span></label>
+</div>
+<div class="channel-inspector-actions source-inspector-actions audio-source-actions"><button aria-label="선택한 오디오 삭제" class="trash-button" disabled="" id="audioSourceDeleteButton" title="선택한 오디오 삭제" type="button">🗑</button><label class="audio-volume-slider-control" title="오디오 볼륨"><input aria-label="오디오 볼륨" id="audioSourceVolumeInput" max="100" min="0" step="1" type="range" value="30"/><output id="audioSourceVolumeValue">30%</output></label></div>
+<div aria-label="현재 오디오 요약" class="channel-summary source-summary"><span id="audioInfoTitle">오디오</span><span>시작 <strong id="audioInfoStart">0.000 beat</strong></span><span>끝 <strong id="audioInfoEnd">0.000 beat</strong></span><span>길이 <strong id="audioInfoDuration">0:00.000</strong></span></div>
+</div>
+</div>
+</div>
+</section>
+<section aria-label="편집 히스토리" class="side-panel-view history-panel" hidden="" id="historyPanel" role="tabpanel">
+<div aria-label="되돌리기 및 다시 실행" class="history-actions" role="group"><button id="historyUndoButton" title="되돌리기 (Ctrl+Z)" type="button">↶ 되돌리기</button><button id="historyRedoButton" title="다시 적용 (Ctrl+Y)" type="button">↷ 다시적용</button></div>
+<ol aria-label="최신순 편집 기록" class="history-list" id="historyList"></ol>
+</section>
+</aside>
+<section class="piano-section" data-context-area="piano-section">
+<button aria-label="왼쪽 패널 닫기" aria-pressed="false" class="corner-cell" data-context-area="corner" data-state="open" id="historyCornerToggle" title="왼쪽 패널 닫기" type="button">패널 닫기</button>
+<canvas class="timeline" data-context-area="timeline" id="timelineCanvas"></canvas>
+<div aria-hidden="true" class="scrollbar-gutter top-scrollbar-gutter"></div>
+<canvas class="keyboard" data-context-area="keyboard" id="keyboardCanvas"></canvas>
+<div class="roll-viewport" data-context-area="piano-roll" id="rollViewport" tabindex="0"><div aria-hidden="true" class="roll-spacer" id="rollSpacer"></div><canvas id="rollCanvas"></canvas></div>
+<div aria-hidden="true" class="playhead" id="playhead"></div>
+<div aria-label="피아노롤 세로 스크롤" aria-orientation="vertical" aria-valuemax="100" aria-valuemin="0" aria-valuenow="0" class="custom-scrollbar vertical-scrollbar" id="verticalScrollBar" role="scrollbar"><div class="custom-scrollbar-thumb" id="verticalScrollThumb"></div></div>
+<div class="audio-lane-label" id="audioLaneLabel">오디오</div>
+<div aria-label="오디오 배치 트랙" class="audio-lane-viewport" data-context-area="audio-lane" id="audioLaneViewport"><div class="audio-lane-content" id="audioLaneContent"></div></div>
+<div aria-hidden="true" class="audio-lane-gutter"></div>
+<div aria-hidden="true" class="scrollbar-gutter keyboard-scrollbar-gutter"></div>
+<div aria-label="피아노롤 가로 스크롤" aria-orientation="horizontal" aria-valuemax="100" aria-valuemin="0" aria-valuenow="0" class="custom-scrollbar horizontal-scrollbar" id="horizontalScrollBar" role="scrollbar"><div class="custom-scrollbar-thumb" id="horizontalScrollThumb"></div></div>
+<div aria-hidden="true" class="scrollbar-corner"></div>
+</section>
+</div></main></div>
+</div>
+<div class="popup-backdrop" hidden="" id="mmlImportBackdrop">
+<section aria-label="MML, 3MLE 또는 MMI 불러오기" aria-modal="true" class="mml-import-dialog" id="mmlImportDialog" role="dialog">
+<div class="transfer-dialog-header">
+<div><strong>MML / 3MLE / MMI 불러오기</strong><span id="mmlImportSourceLabel">텍스트를 붙여넣거나 파일을 선택하세요.</span></div>
+<button aria-label="닫기" class="channel-mute-close" id="mmlImportCloseButton" type="button">×</button>
+</div>
+<div class="mml-import-source-actions">
+<button id="mmlImportChooseFileButton" type="button">파일 선택</button>
+<button id="mmlImportPasteButton" type="button">클립보드 붙여넣기</button>
+</div>
+<textarea aria-label="불러올 MML, 3MLE 또는 MMI 텍스트" id="mmlImportText" placeholder="MML@t120o4v15c4d4e4,...; · 3MLE [Channel1] · MMI 파일 내용"></textarea>
+<section class="mml-import-channel-section" hidden="" id="mmlImportChannelSection">
+<div class="mml-import-channel-header"><div><strong id="mmlImportChannelTitle">3MLE 채널 선택</strong><span>한 번에 최대 6개 채널을 선택할 수 있습니다.</span></div><div><button id="mmlImportSelectAllButton" type="button">처음 6개 선택</button><button id="mmlImportClearSelectionButton" type="button">전부 해제</button></div></div>
+<div class="mml-import-channel-list" id="mmlImportChannelList"></div>
+</section>
+<div class="mml-import-options mml-import-simple-options">
+<label class="mml-import-tempo-option"><input checked="" id="mmlImportApplyTempo" type="checkbox"/><span>파일의 템포를 프로젝트에 적용</span></label>
+</div>
+<div aria-live="polite" class="mml-import-status" id="mmlImportStatus">MML은 새 편집 채널로 추가되며, 3MLE·MMI 파일은 필요한 채널을 선택해 불러옵니다.</div>
+<div class="transfer-dialog-actions"><button id="mmlImportCancelButton" type="button">취소</button><button id="mmlImportApplyButton" type="button">불러오기</button></div>
+</section>
+</div>
+<div class="popup-backdrop" hidden="" id="midiImportBackdrop">
+<section aria-label="파일 불러오기" aria-modal="true" class="midi-import-dialog unified-import-dialog" id="midiImportDialog" role="dialog">
+<div class="transfer-dialog-header">
+<div><strong id="midiImportTitle">불러오기</strong><span id="midiImportSourceLabel">파일을 분석하고 있습니다.</span></div>
+<button aria-label="닫기" class="channel-mute-close" id="midiImportCloseButton" type="button">×</button>
+</div>
+<div class="midi-import-summary" id="midiImportSummary"></div>
+<div class="midi-import-midi-controls" id="midiImportMidiControls">
+<div class="midi-import-selection-actions midi-import-inline-selection-actions" id="midiImportSelectionActions"><button id="midiImportSelectAllButton" type="button">모두 선택</button><button id="midiImportClearAllButton" type="button">모두 해제</button></div>
+<select aria-label="MIDI 양자화" id="midiImportQuantize"><option selected="" value="64">64박 양자화</option><option value="32">32박 양자화</option></select>
+<div class="midi-import-preview-actions"><button class="midi-import-source-preview" id="midiImportPreviewSelectedButton" type="button">▶ 선택 듣기</button><button class="midi-import-source-preview" id="midiImportPreviewAllButton" type="button">▶ 원본 듣기</button></div>
+</div>
+<div class="midi-import-selection-actions midi-import-text-selection-actions" hidden="" id="midiImportTextSelectionActions"><button id="midiImportTextSelectAllButton" type="button">모두 선택</button><button id="midiImportTextClearAllButton" type="button">모두 해제</button></div>
+<div class="midi-import-selection-list" id="midiImportSelectionList"></div>
+<div class="transfer-dialog-actions unified-import-actions"><div aria-live="polite" class="midi-import-status" id="midiImportStatus">불러올 항목을 선택하세요.</div><button id="midiImportCancelButton" type="button">취소</button><button id="midiImportApplyButton" type="button">추가</button><button id="midiImportNewButton" type="button">새로 열기</button></div>
+</section>
+</div>
+<div class="popup-backdrop" hidden="" id="channelDeleteBackdrop">
+<section aria-label="편집 채널 삭제" aria-modal="true" class="transfer-dialog channel-delete-dialog" id="channelDeleteDialog" role="dialog">
+<div class="transfer-dialog-header"><div><strong>채널 삭제</strong><span>삭제할 편집 채널을 선택하세요.</span></div><button aria-label="닫기" class="channel-mute-close" id="channelDeleteCloseButton" type="button">×</button></div>
+<p class="transfer-dialog-help">체크한 채널의 노트도 함께 삭제됩니다. 모든 채널을 삭제하면 빈 채널 1개가 자동으로 생성됩니다.</p>
+<div class="midi-transfer-selection-actions"><button id="channelDeleteSelectAllButton" type="button">모두 선택</button><button id="channelDeleteClearAllButton" type="button">모두 해제</button></div>
+<div class="midi-transfer-channel-list channel-delete-list" id="channelDeleteList"></div>
+<div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="channelDeleteSummary">삭제할 채널을 선택하세요.</div><button id="channelDeleteCancelButton" type="button">취소</button><button class="danger-button" disabled="" id="channelDeleteApplyButton" type="button">삭제</button></div>
+</section>
+</div><div class="popup-backdrop" hidden="" id="midiTransferBackdrop"><section aria-label="원본 채널 복사" aria-modal="true" class="transfer-dialog" id="midiTransferDialog" role="dialog"><div class="transfer-dialog-header"><div><strong>채널 복사</strong><span id="midiTransferSourceLabel">원본 자료</span></div><button aria-label="닫기" class="channel-mute-close" id="midiTransferCloseButton" type="button">×</button></div><p class="transfer-dialog-help">편집 영역에 새 채널로 복사할 악기를 선택하세요. 화음처럼 노트가 겹치는 악기는 편집 채널의 단선율 규칙에 맞게 필요한 만큼 여러 채널로 자동 분리됩니다.</p><div class="midi-transfer-selection-actions"><button id="midiTransferSelectAllButton" type="button">모두 선택</button><button id="midiTransferClearAllButton" type="button">모두 선택 해제</button></div><div class="midi-transfer-channel-list" id="midiTransferChannelList"></div><div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="midiTransferSummary"></div><button id="midiTransferCancelButton" type="button">취소</button><button id="midiTransferApplyButton" type="button">복사</button></div></section></div><div class="popup-backdrop" hidden="" id="noteVolumeBackdrop"><section aria-label="노트 볼륨 수정" aria-modal="true" class="note-volume-dialog" id="noteVolumeDialog" role="dialog"><div class="transfer-dialog-header"><div><strong>노트 볼륨</strong><span id="noteVolumeSelectionLabel">선택 노트</span></div><button aria-label="닫기" class="channel-mute-close" id="noteVolumeCloseButton" type="button">×</button></div><label class="note-volume-slider-row"><span>마비노기 볼륨</span><input aria-label="노트 볼륨 0에서 15" id="noteVolumeSlider" max="15" min="0" step="1" type="range" value="15"/><strong id="noteVolumeValue">V15</strong></label><p class="transfer-dialog-help">V0은 무음이며 V1은 MIDI velocity 1에 대응합니다. V2~V15는 나머지 velocity 범위를 균등하게 나눕니다.</p><div class="transfer-dialog-actions"><button id="noteVolumeCancelButton" type="button">취소</button><button id="noteVolumeApplyButton" type="button">적용</button></div></section></div><div class="popup-backdrop" hidden="" id="timeEditBackdrop">
+<section aria-label="트랙 공간 편집" aria-modal="true" class="time-edit-dialog" id="timeEditDialog" role="dialog">
+<div class="tempo-editor-header">
+<div><strong id="timeEditTitle">마디 공간 편집</strong><span id="timeEditPosition">빨간 재생선 기준</span></div>
+<button aria-label="닫기" class="channel-mute-close" id="timeEditCloseButton" type="button">×</button>
+</div>
+<label class="time-edit-field"><span>수량</span><span class="time-edit-number"><input aria-label="추가 또는 삭제할 수량" id="timeEditAmountInput" inputmode="numeric" min="1" step="1" type="number" value="1"/><strong id="timeEditUnitLabel">마디</strong></span></label>
+<p class="tempo-editor-help">원본 MIDI·MusicXML·오디오는 그대로 두고, 편집 채널과 편집 템포만 빨간 재생선 위치를 기준으로 이동합니다.</p>
+<div class="time-edit-actions"><button class="danger-button" id="timeEditDeleteButton" type="button">삭제</button><span></span><button id="timeEditCancelButton" type="button">취소</button><button id="timeEditInsertButton" type="button">추가</button></div>
+</section>
+</div>
+<div class="popup-backdrop" hidden="" id="tempoEditorBackdrop">
+<section aria-label="템포 편집" aria-modal="true" class="tempo-editor-dialog" id="tempoEditorDialog" role="dialog">
+<div class="tempo-editor-header">
+<div><strong id="tempoEditorTitle">템포 수정</strong><span id="tempoEditorPosition">0 beat</span></div>
+<button aria-label="닫기" class="channel-mute-close" id="tempoEditorCloseButton" type="button">×</button>
+</div>
+<label class="tempo-editor-field"><span>템포</span><input aria-label="템포 값" id="tempoBpmInput" inputmode="numeric" max="255" min="32" step="1" type="number" value="120"/><strong>BPM</strong></label>
+<p class="tempo-editor-help">32~255 사이의 정수를 입력하세요. 태블릿에서는 템포 박스를 탭해 이 창을 열 수 있습니다.</p>
+<div class="tempo-editor-actions"><button class="danger-button" hidden="" id="tempoEditorDeleteButton" type="button">삭제</button><span></span><button id="tempoEditorCancelButton" type="button">취소</button><button id="tempoEditorApplyButton" type="button">적용</button></div>
+</section>
+</div>
+<dialog class="confirm-dialog" id="confirmDialog">
+<form method="dialog">
+<h2 id="confirmDialogTitle">확인</h2>
+<p id="confirmDialogMessage"></p>
+<div class="confirm-dialog-actions">
+<button id="confirmDialogCancel" type="submit" value="cancel">취소</button>
+<button class="danger-button" id="confirmDialogConfirm" type="submit" value="confirm">삭제</button>
+</div>
+</form>
+</dialog>
+<div class="context-menu" hidden="" id="contextMenu" role="menu"></div>
+<div aria-live="polite" class="toast" id="toast" role="status"></div>
+<script src="default-sf2-base64.js"></script>
+<script src="sf2-player.js"></script>
+<script src="musicxml-to-midi.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
