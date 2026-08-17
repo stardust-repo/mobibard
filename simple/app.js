@@ -321,6 +321,11 @@
     return /\.(?:mid|midi)$/i.test(file.name || "") || /^(?:audio\/midi|audio\/x-midi|audio\/mid|audio\/x-mid|application\/midi|application\/x-midi)$/i.test(file.type || "");
   }
 
+  function isFinaleMusFile(file) {
+    if (!file) return false;
+    return /\.mus$/i.test(file.name || "");
+  }
+
   function isMusicXmlFile(file) {
     if (!file) return false;
     if (/\.(?:musicxml|xml|mxl)$/i.test(file.name || "")) return true;
@@ -328,11 +333,17 @@
   }
 
   function isSupportedSourceFile(file) {
-    return isMidiFile(file) || isMusicXmlFile(file);
+    return isMidiFile(file) || isFinaleMusFile(file) || isMusicXmlFile(file);
   }
 
   async function normalizeSourceToMidiBytes(file, sourceBytes) {
     if (isMidiFile(file)) return sourceBytes;
+    if (isFinaleMusFile(file)) {
+      if (!window.MabiFinaleMus?.musToMidiBytes) {
+        throw new Error(t("failed", ["Finale MUS converter is unavailable"]));
+      }
+      return window.MabiFinaleMus.musToMidiBytes(sourceBytes, file.name || "Finale MUS");
+    }
     if (!isMusicXmlFile(file)) throw new Error(t("invalidFile"));
     if (!window.MabiMusicXml?.musicXmlToMidiBytes) {
       throw new Error(t("failed", ["MusicXML converter is unavailable"]));
@@ -456,6 +467,7 @@
 
   function analyticsSourceType(file) {
     if (isMidiFile(file)) return "midi";
+    if (isFinaleMusFile(file)) return "mus";
     if (isMusicXmlFile(file)) return "musicxml";
     return "unknown";
   }

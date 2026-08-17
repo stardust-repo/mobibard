@@ -14,7 +14,7 @@
 <link rel="alternate" hreflang="zh-CN" href="https://stardust-repo.github.io/mobibard/player/?lang=zh-CN"/>
 <link rel="alternate" hreflang="zh-TW" href="https://stardust-repo.github.io/mobibard/player/?lang=zh-TW"/>
 <link rel="alternate" hreflang="x-default" href="https://stardust-repo.github.io/mobibard/player/"/>
-<link href="styles.css?v=7.9-v48-cleanup" rel="stylesheet"/>
+<link href="styles.css?v=7.9-v48-finale-mus" rel="stylesheet"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 <script>
 (() => {
@@ -59,7 +59,7 @@
   document.documentElement.lang = htmlLang[language] || "en";
   document.documentElement.dataset.i18nPending = "true";
   const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "7.9-v48-cleanup");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "7.9-v48-finale-mus");
   document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
 })();
@@ -144,7 +144,7 @@
 </button>
 <a class="simple-version-toolbar-button" data-i18n="simple.label" data-i18n-title="simple.open" href="../simple/index.html" id="simpleVersionBtn" title=""></a>
 </div>
-<input accept=".mid,.midi,.txt,.mmi,.mml,.musicxml,.xml,.mxl,audio/midi,audio/x-midi,text/plain,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFile" type="file"/>
+<input accept=".mid,.midi,.mus,.txt,.mmi,.mml,.musicxml,.xml,.mxl,audio/midi,audio/x-midi,text/plain,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFile" type="file"/>
 </div>
 <div class="play-layout">
 <div class="transport-row">
@@ -788,8 +788,10 @@
 <button class="primary" data-i18n="midi.select_action" id="midiBulkSelectBtn" type="button"></button>
 </div>
 </form>
-<script src="js/language-manager.js?v=7.9-v48-cleanup"></script>
-<script src="js/utils.js?v=7.9-v48-cleanup"></script>
+<script src="js/language-manager.js?v=7.9-v48-finale-mus"></script>
+<script src="js/utils.js?v=7.9-v48-finale-mus"></script>
+<script src="js/pako_inflate.min.js?v=2.1.0"></script>
+<script src="js/finale-mus-to-midi.js?v=4.8-finale-mus"></script>
 <script src="js/midi-to-mml.js?v=7.9-v48-macbinary-midi"></script>
 <script src="js/mabinogi-instrument-map.js?v=1.0"></script>
 <script src="js/musicxml-to-midi.js?v=7.3-v48-cache"></script>
@@ -803,6 +805,6 @@
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
 <script src="../assets/default_sf3.js?v=1"></script>
-<script src="js/app.js?v=7.9-v48-joshs-anime"></script>
+<script src="js/app.js?v=7.9-v48-finale-mus"></script>
 </body>
 </html>

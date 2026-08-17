@@ -2,7 +2,7 @@
 
 Firebase에는 아래 이벤트만 기록합니다.
 
-- `mml_import_complete`: MIDI / MusicXML / MMI / 3MLE MML / TXT 등을 최종 MML로 가져온 시점
+- `mml_import_complete`: MIDI / Finale MUS / MusicXML / MMI / 3MLE MML / TXT 등을 최종 MML로 가져온 시점
 - `copy_all_mml`: 전부복사 버튼 선택
 - `split_copy`: 나눠복사 버튼 선택
 - `open_midi_extract`: MIDI 추출 버튼 선택

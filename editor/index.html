@@ -25,9 +25,9 @@
 <button id="audioOpenButton" role="menuitem" type="button">오디오 불러오기</button>
 <div class="file-menu-separator" role="separator"></div><button id="fileExportButton" role="menuitem" type="button">MML 내보내기</button></div>
 </div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button">되돌리기</button><button id="editRedoButton" role="menuitem" type="button">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button">복사</button><button id="editCutButton" role="menuitem" type="button">잘라내기</button><button id="editPasteButton" role="menuitem" type="button">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button">삭제</button><button id="editNoteVolumeButton" role="menuitem" type="button">노트 볼륨</button></div></div>
-<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,.mid,.midi,.musicxml,.xml,.mxl,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="fileInput" type="file"/>
+<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,.mid,.midi,.mus,.musicxml,.xml,.mxl,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="fileInput" type="file"/>
 <input accept="text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle" hidden="" id="mmlImportFileInput" type="file"/>
-<input accept="audio/midi,audio/x-midi,.mid,.midi,.musicxml,.xml,.mxl,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFileInput" type="file"/>
+<input accept="audio/midi,audio/x-midi,.mid,.midi,.mus,.musicxml,.xml,.mxl,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFileInput" type="file"/>
 <input accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm" hidden="" id="audioFileInput" type="file"/>
 </div>
 <div class="toolbar-separator"></div>
@@ -303,6 +303,8 @@
 <script src="default-sf2-base64.js"></script>
 <script src="sf2-player.js"></script>
 <script src="musicxml-to-midi.js"></script>
-<script src="app.js"></script>
+<script src="../player/js/pako_inflate.min.js?v=2.1.0"></script>
+<script src="../player/js/finale-mus-to-midi.js?v=4.8-finale-mus"></script>
+<script src="app.js?v=4.8-finale-mus"></script>
 </body>
 </html>
