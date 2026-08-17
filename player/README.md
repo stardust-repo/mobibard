@@ -3,7 +3,7 @@
 > 기본 음색은 저장소 루트 `assets/default_sf3.js`에 `Roland_SC-55.sf3`를 Base64로 내장해 사용합니다.
 
 
-공개용 정적 웹앱입니다. 기본 MML 재생, MIDI/Finale MUS/MusicXML/MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
+공개용 정적 웹앱입니다. 기본 MML 재생, 공통 포맷 플러그인을 통한 음악 파일과 MMI/3MLE MML/TXT 불러오기, MML 최적화, 나눠복사, Google Drive 연동, Firebase Analytics, 채널별 음색 프리셋을 한 페이지에서 처리합니다.
 
 `v4.8`에서는 마지막 MIDI/MusicXML 변환 설정을 복원하되 MML 편집 내용 자체는 캐시하지 않습니다. 수동으로 선택한 SF2/SF3/DLS 음색 파일은 IndexedDB에 원본 바이너리로 보관하고, Google 로그인 상태에서는 Drive `appDataFolder`에도 동일 바이너리를 연동해 다른 실행 환경에서 복원할 수 있습니다. 편집 도구에는 전체 채널을 빈 상태로 만드는 `비우기` 버튼을 추가했습니다. 기존 `v4.6`에서는 반주 생성 Dialog의 기본 생성 채널 선택을 현재 채널 구성에 맞게 조정했습니다. 멜로디만 있으면 화음1·화음2를 선택하고, 2~5개 채널이 있으면 가장 앞선 빈 채널 하나를 선택하며, 6개 채널이 모두 차 있으면 마지막 화음5 채널을 교체 대상으로 선택합니다. 기존 v4.5에서 피아노롤 시간 격자를 실제 MML `L4` 1박 간격으로 표시하고, 템포 변경 지점을 선택해 `32~255` 범위에서 수정할 수 있습니다. 편집 도구에는 `음정 조절`, `볼륨 생성`, `반주 생성`을 제공합니다. `볼륨 생성`은 음표의 길이·밀도·쉼표·음정 흐름을 분석해 장르별 `V` 변화를 만들며, 기존 볼륨 변화가 있으면 확인 후 교체합니다. 새 `반주 생성`은 선택한 여러 참고 채널을 함께 분석해 공통 화성 흐름을 만든 뒤, 선택한 생성 채널 수에 따라 화음·리듬·아르페지오·베이스 역할을 배분합니다. 참고와 생성에 동시에 선택된 채널은 원본을 먼저 분석하고 확인 후 새 반주로 교체합니다. MIDI/MusicXML 변환 단계는 악기를 처음부터 선택하지 않은 상태로 열고, 오른쪽 `악기 채널 선택` 목록이나 `일괄 선택` Dialog에서 6개 MML 채널에 악기를 배정합니다. MIDI 10번 채널의 드럼은 음정별 항목으로 분리하며, 64박(기본)과 32박 양자화를 토글할 수 있습니다.
 상단 저장 영역 오른쪽의 `MIDI 추출` 버튼은 MuScriptor 웹 버전을 브라우저 새 창(새 탭)으로 엽니다. 그 오른쪽의 `리듬게임` 버튼은 전체 화면 팝업 레이어에서 이웃 경로 `../mobibeats/`의 모비비트를 열고, 현재 MML과 6개 채널 악기 정보를 전달합니다. Firebase Analytics는 MML 가져오기 완료, 전부복사, 나눠복사, MIDI 추출, 리듬게임 선택만 기록합니다.
@@ -18,6 +18,17 @@
 기본 재생은 로컬 파일만으로 동작합니다. Google Drive 연동을 사용하려면 Google Identity Services와 Google Picker 스크립트를 온라인으로 불러오며, 루트 `plugins/google-config.js` 설정이 필요합니다. Firebase Analytics는 루트 `plugins/firebase-config.js`와 `plugins/firebase-analytics.js`에서 초기화합니다. Google/Firebase 같은 외부 서비스 연동 전용 JS는 저장소 루트 `plugins/`에 모으고, Mobibard 자체 기능 코드는 `player/js/`에 유지합니다. Google Identity Services처럼 공급자 CDN 직접 로딩이 요구되는 SDK는 원격 로딩을 유지합니다.
 
 ---
+
+## 음악 포맷 플러그인
+
+`simple`, `player`, `editor`는 루트 `plugins/music-format-core.js`의 동일한 등록소를 사용합니다. 각 입력 형식은 `plugins/format-*.js`에서 등록되고 먼저 표준 MIDI로 변환된 뒤 기존 MIDI 분석·미리듣기·MML 변환 경로로 들어갑니다. 상단 `지원 파일` 버튼은 현재 등록된 형식 목록을 팝업으로 표시합니다.
+
+- 기본: `.mid`, `.midi`, `.musicxml`, `.xml`, `.mxl`, 구형 Finale `.mus`
+- TAB: `.gp3`, `.gp5`, `.tab`
+- 보컬: `.vsq`, `.vsqx`, `.vpr`, `.ust`, `.ustx`, `.svp`, `.s5p`, `.ccs`
+- player 고유 입력: `.mml`, `.mmi`, `.txt`
+
+Guitar Pro 3/5 변환기는 `plugins/vendor`에 포함된 로컬 파서를 사용하며 인터넷 연결이 필요하지 않습니다. ASCII TAB은 문자 간격으로 리듬을 추정하며, 보컬 프로젝트의 음소·세밀한 피치·보이스뱅크·표현 데이터와 TAB의 프렛/주법 일부는 MIDI/MML에서 단순화됩니다. 정확한 구조와 확장 방법은 `../docs/music-format-plugins.md`를 참고합니다.
 
 ## 빠른 실행
 

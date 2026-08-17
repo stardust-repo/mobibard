@@ -64,7 +64,7 @@
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
-  const SOURCE_FILE_EXTENSIONS = new Set(["mid", "midi", "mus", "txt", "mmi", "mml", "musicxml", "xml", "mxl"]);
+  const SOURCE_FILE_EXTENSIONS = new Set(["txt", "mmi", "mml", ...(window.MabiMusicFormats?.supportedExtensions?.() || [])]);
   const HEADER_SHORTCUT_LINKS = new Set([
     "https://bitmidi.com/",
     "https://www.classicalarchives.com/midi.html",
@@ -87,8 +87,6 @@
 
   const { shortError, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
-  const { musicXmlToMidiBytes } = window.MabiMusicXml || {};
-  const { musToMidiBytes } = window.MabiFinaleMus || {};
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths } = window.MabiMml;
   const { optimizeMml, generateAccompanimentMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundBank, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
@@ -1269,7 +1267,7 @@
 
   function currentRhythmGameTitle() {
     const name = String(googleDriveMmlFileName || suggestedMmlSaveFileName || "")
-      .replace(/\.(txt|mml|mid|midi|musicxml|xml|mxl|mmi)$/i, "")
+      .replace(/\.(txt|mml|mid|midi|mus|musicxml|xml|mxl|mmi|gp3|gp4|gp5|gpx|gp|tab|vsq|vsqx|vpr|ust|ustx|svp|s5p|ccs)$/i, "")
       .replace(/[_-]+/g, " ")
       .trim();
     return name || i18nText("mml.title");
@@ -2848,11 +2846,10 @@
       const view = new window.google.picker.DocsView(window.google.picker.ViewId.DOCS);
       view.setIncludeFolders(true);
       view.setSelectFolderEnabled(false);
-      // Drive에 업로드된 MIDI 파일은 환경에 따라 audio/midi, audio/x-midi,
-      // application/octet-stream 등 서로 다른 MIME 타입으로 저장될 수 있다.
-      // Picker에서 MIME 타입을 강하게 제한하면 .mid/.midi 파일이 목록에서
-      // 사라질 수 있으므로 기본 폴더 안의 파일을 넓게 보여주고, 선택 후
-      // 확장자/MIME 검사로 Google Docs, MIDI, Finale MUS, MusicXML, MMI, 3MLE 또는 TXT만 처리한다.
+      // Drive에 업로드된 음악 파일은 서비스/브라우저에 따라 MIME 타입이
+      // application/octet-stream 등으로 달라질 수 있다. Picker에서 MIME 타입을
+      // 강하게 제한하지 않고 넓게 보여준 뒤, 선택 후 공통 포맷 등록소와
+      // MML/MMI/TXT 검사로 실제 지원 파일만 처리한다.
       try { if (folderId && typeof view.setParent === "function") view.setParent(folderId); } catch (_) {}
       const builder = new window.google.picker.PickerBuilder()
         .setDeveloperKey(googleApiKey())
@@ -2927,42 +2924,10 @@
     return getGoogleDriveFileMeta(meta.shortcutDetails.targetId);
   }
 
-  function isGoogleDriveMidiFile(name, mimeType = "") {
-    const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
-    if (ext === "mid" || ext === "midi") return true;
-    const type = String(mimeType || "").toLowerCase();
-    return [
-      "audio/midi",
-      "audio/mid",
-      "audio/x-midi",
-      "audio/x-mid",
-      "application/midi",
-      "application/x-midi"
-    ].includes(type);
-  }
-
-  function isGoogleDriveFinaleMusFile(name) {
-    return String(name || "").toLowerCase().endsWith(".mus");
-  }
-
-  function isGoogleDriveMusicXmlFile(name, mimeType = "") {
-    const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
-    if (ext === "musicxml" || ext === "mxl" || ext === "xml") return true;
-    const type = String(mimeType || "").toLowerCase();
-    return [
-      "application/vnd.recordare.musicxml+xml",
-      "application/vnd.recordare.musicxml",
-      "application/vnd.recordare.musicxml-mxl",
-      "application/musicxml+xml",
-      "application/xml",
-      "text/xml"
-    ].includes(type);
-  }
-
   function isGoogleDriveTextMmlFile(name, mimeType = "") {
     const ext = String(name || "").split(".").pop()?.toLowerCase() || "";
     if (ext === "txt") return true;
-    if (["mmi", "mml", "mus", "musicxml", "xml", "mxl"].includes(ext)) return false;
+    if (["mmi", "mml"].includes(ext) || window.MabiMusicFormats?.isSupported(name, mimeType)) return false;
     return String(mimeType || "").toLowerCase() === "text/plain";
   }
 
@@ -2980,47 +2945,28 @@
     return type === "application/x-3mle" || type === "application/vnd.3mle";
   }
 
-  function isMusicXmlSourceExtension(ext) {
-    return ["musicxml", "xml", "mxl"].includes(String(ext || "").toLowerCase());
-  }
-
-  async function buildMusicXmlMidiImport(bytes, name = "MusicXML") {
-    if (typeof musicXmlToMidiBytes !== "function") {
-      throw new Error(i18nText("xml.load_conv"));
+  async function buildPluginMidiImport(bytes, name = "Music", mimeType = "") {
+    if (!window.MabiMusicFormats?.convertBytes) {
+      throw new Error("음악 포맷 플러그인을 불러오지 못했습니다.");
     }
-    const midiBytes = await musicXmlToMidiBytes(bytes, name);
+    const converted = await window.MabiMusicFormats.convertBytes(bytes, name, mimeType);
+    const midiBytes = converted.midiBytes;
     const overview = analyzeMidi(midiBytes, name);
     return {
       bytes: midiBytes,
       name,
       overview,
-      sourceType: "musicxml",
-      sourceLabel: "MusicXML",
-      cacheFingerprint: buildSourceFileFingerprint("musicxml", bytes)
-    };
-  }
-
-  function buildFinaleMusMidiImport(bytes, name = "Finale MUS") {
-    if (typeof musToMidiBytes !== "function") {
-      throw new Error("Finale MUS 변환 모듈을 불러오지 못했습니다.");
-    }
-    const midiBytes = musToMidiBytes(bytes, name);
-    const overview = analyzeMidi(midiBytes, name);
-    return {
-      bytes: midiBytes,
-      name,
-      overview,
-      sourceType: "mus",
-      sourceLabel: "Finale MUS",
-      cacheFingerprint: buildSourceFileFingerprint("mus", bytes)
+      sourceType: converted.sourceType,
+      sourceLabel: converted.sourceLabel,
+      cacheFingerprint: buildSourceFileFingerprint(converted.sourceType, bytes)
     };
   }
 
   function getMidiImportSourceLabel(importData = pendingMidiImport) {
     if (importData?.sourceLabel) return String(importData.sourceLabel);
-    if (importData?.sourceType === "musicxml") return "MusicXML";
-    if (importData?.sourceType === "mus") return "Finale MUS";
-    return "MIDI";
+    const sourceType = String(importData?.sourceType || "");
+    const plugin = window.MabiMusicFormats?.listFormats?.().find(format => format.id === sourceType);
+    return plugin?.label || "MIDI";
   }
 
   async function loadGoogleDriveSourceFile(fileId, fallbackName = i18nText("drive.file")) {
@@ -3062,25 +3008,11 @@
     const response = await googleDriveFetch(mediaUrl);
     if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (isGoogleDriveFinaleMusFile(name)) {
-      const importData = buildFinaleMusMidiImport(bytes, name);
+    if (window.MabiMusicFormats?.isSupported(name, mimeType)) {
+      const importData = await buildPluginMidiImport(bytes, name, mimeType);
       googleDriveMmlFileName = "";
       openMidiConvertDialog(importData);
       setGoogleStatus(i18nText("drive.midi_loaded"));
-      return;
-    }
-    if (isGoogleDriveMidiFile(name, mimeType)) {
-      const overview = analyzeMidi(bytes, name);
-        googleDriveMmlFileName = "";
-      openMidiConvertDialog({ bytes, name, overview, sourceType: "midi", sourceLabel: "MIDI" });
-      setGoogleStatus(i18nText("drive.midi_loaded"));
-      return;
-    }
-    if (isGoogleDriveMusicXmlFile(name, mimeType)) {
-      const importData = await buildMusicXmlMidiImport(bytes, name);
-        googleDriveMmlFileName = "";
-      openMidiConvertDialog(importData);
-      setGoogleStatus(i18nText("drive.musicxml_loaded"));
       return;
     }
     if (isGoogleDriveMabiIccoFile(name, mimeType)) {
@@ -3761,16 +3693,9 @@
     try {
       stopMidiPreview();
       stopPlayback(false);
-      if (ext === "mus") {
+      if (window.MabiMusicFormats?.isSupported(name, file.type || "")) {
         const bytes = new Uint8Array(await file.arrayBuffer());
-        openMidiConvertDialog(buildFinaleMusMidiImport(bytes, name));
-      } else if (ext === "mid" || ext === "midi") {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const overview = analyzeMidi(bytes, name);
-        openMidiConvertDialog({ bytes, name, overview, sourceType: "midi", sourceLabel: "MIDI" });
-      } else if (isMusicXmlSourceExtension(ext)) {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const importData = await buildMusicXmlMidiImport(bytes, name);
+        const importData = await buildPluginMidiImport(bytes, name, file.type || "");
         openMidiConvertDialog(importData);
       } else if (ext === "mmi") {
         const bytes = new Uint8Array(await file.arrayBuffer());
@@ -3865,7 +3790,7 @@
   }
 
   function isSupportedSourceFile(file) {
-    return SOURCE_FILE_EXTENSIONS.has(getSourceFileExtension(file?.name || ""));
+    return Boolean(file && (window.MabiMusicFormats?.isSupported(file.name || "", file.type || "") || SOURCE_FILE_EXTENSIONS.has(getSourceFileExtension(file.name || ""))));
   }
 
   function findFirstSupportedSourceFile(files) {

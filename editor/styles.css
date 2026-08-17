@@ -4548,3 +4548,11 @@ button {
     height: 32px;
   }
 }
+
+/* Supported-file shortcut beside the Note/Select tool tabs. */
+.view-actions > .mabi-supported-files-button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  font-size: 11px;
+}

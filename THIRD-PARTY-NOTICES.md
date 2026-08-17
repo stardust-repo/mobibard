@@ -77,3 +77,20 @@ to the following restrictions:
 2. Altered source versions must be plainly marked as such, and must not be
    misrepresented as being the original software.
 3. This notice may not be removed or altered from any source distribution.
+
+## guitarpro-parser (GP3 subset)
+
+Guitar Pro 3 import includes adapted source from `guitarpro-parser` 1.2.0.
+
+License: Apache License 2.0
+Project: https://www.npmjs.com/package/guitarpro-parser
+Local files: `plugins/vendor/guitarpro-parser/`
+
+## parse-gp5
+
+Guitar Pro 5 import includes an adapted browser-compatible parser based on
+`juliangruber/parse-gp5`.
+
+License: MIT
+Project: https://github.com/juliangruber/parse-gp5
+Local files: `plugins/vendor/parse-gp5/`

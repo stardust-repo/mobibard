@@ -1,8 +1,8 @@
 # Mobibard Simple
 
-`simple/index.html` is a lightweight MIDI / Finale MUS / MusicXML-to-MML converter.
+`simple/index.html` is a lightweight supported-music-file-to-MML converter.
 
-- MIDI (`.mid`, `.midi`), Finale legacy MUS (`.mus`), and MusicXML (`.musicxml`, `.xml`, `.mxl`) drag & drop / file selection
+- Core, tablature, and vocal-project files are accepted through the shared `plugins/music-format-core.js` registry: MIDI, MusicXML, legacy Finale MUS, Guitar Pro 3/5, ASCII TAB, VSQ/VSQX/VPR, UST/USTX, SVP/S5P, and CCS
 - Standard MIDI files wrapped in a classic 128-byte MacBinary container are detected automatically; only the MIDI data fork is passed to the shared parser
 - MusicXML is converted through the same `player/js/musicxml-to-midi.js` parser used by the main player, then passed into the same simple 3-channel MIDI-to-MML pipeline
 - Conversion runs automatically after file selection and whenever an option changes
@@ -24,12 +24,20 @@
 - Header links: MIDI Extractor + full MML Generator + Discord icon
 - Shared 64x64 brand image: `assets/icons/mobibard-mark-64.png`
 
-The preview loads the same bundled default SF3 and `player/js/sf2-sampler.js` used by the main player only when playback is first requested. Playback always selects Bank 0 / Program 0; MIDI/Finale MUS/MusicXML instrument metadata remains unchanged for conversion.
+The preview loads the same bundled default SF3 and `player/js/sf2-sampler.js` used by the main player only when playback is first requested. Playback always selects Bank 0 / Program 0; imported source instrument metadata remains unchanged for conversion.
 
+
+
+## Shared format plug-ins
+
+- `simple`, `player`, and `editor` use the same format registry and one `plugins/format-*.js` registration script per format/extension.
+- The `지원 파일` button opens the common format list generated from the live registry.
+- Every non-MIDI source is normalized to Standard MIDI first and then uses the existing simple 3-channel conversion path.
+- See `../docs/music-format-plugins.md` for exact extensions, limitations, load order, and regression tests.
 
 ## Firebase Analytics
 
-파일을 선택한 뒤 MIDI/Finale MUS/MusicXML → MML 변환이 최초로 성공 완료되면 simple 전용 이벤트 `simple_file_convert_complete`를 1회 기록합니다. 같은 파일에서 양자화 또는 쉼표 제거 옵션을 바꿔 자동 재변환되는 과정은 중복 집계하지 않습니다. 이 이벤트는 player의 `mml_import_complete`와 별개이며 서로 합쳐지지 않습니다. 파일명이나 MML 내용은 수집하지 않고 `source_type`, `file_size`, `quantize_division`, `rest_mode`, `page_count`만 이벤트 파라미터로 기록합니다.
+파일을 선택한 뒤 지원 음악 파일 → MML 변환이 최초로 성공 완료되면 simple 전용 이벤트 `simple_file_convert_complete`를 1회 기록합니다. 같은 파일에서 양자화 또는 쉼표 제거 옵션을 바꿔 자동 재변환되는 과정은 중복 집계하지 않습니다. 이 이벤트는 player의 `mml_import_complete`와 별개이며 서로 합쳐지지 않습니다. 파일명이나 MML 내용은 수집하지 않고 `source_type`, `file_size`, `quantize_division`, `rest_mode`, `page_count`만 이벤트 파라미터로 기록합니다.
 
 ## Header / mobile layout
 
@@ -50,3 +58,5 @@ The preview loads the same bundled default SF3 and `player/js/sf2-sampler.js` us
 - The module converts staff, measure, key/time signature, entry chains, chords, layers, transposition and ties to a standard Format 1 MIDI byte stream, then reuses the existing simple MIDI-to-MML path.
 - The legacy binary format does not currently restore Finale playback expressions, printed layout, articulation playback or a reliable staff instrument assignment. Generated intermediary MIDI therefore uses 120 BPM and Program 0 unless later processing changes them.
 - Keep `pako_inflate.min.js` loaded before `finale-mus-to-midi.js`; both simple and the main player intentionally share this one implementation. See `../THIRD-PARTY-NOTICES.md`.
+
+- Guitar Pro 3/5 parsers are bundled under `plugins/vendor`; importing these files does not require an internet connection.

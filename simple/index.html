@@ -56,11 +56,11 @@
     language = files[language] ? language : "en";
     document.documentElement.lang = htmlLang[language] || "en";
     const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
-    if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "4.8-simple-finale-mus");
+    if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "4.8-format-plugins-1");
     document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   })();
   </script>
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=4.8-ui-buttons-1">
 </head>
 <body>
   <header class="topbar">
@@ -110,14 +110,15 @@
   <main class="page-shell">
     <section class="converter" aria-labelledby="pageTitle">
       <div class="title-block">
-        <p class="eyebrow">MIDI / Finale MUS / MusicXML → MML</p>
+        <p id="eyebrow" class="eyebrow">지원 음악 파일 → MML</p>
         <h1 id="pageTitle">모비바드 MML 딸깍 생성기</h1>
         <p id="subtitle" class="subtitle">파일을 넣으면 3채널 MML로 바로 변환합니다.</p>
       </div>
 
       <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-controls="midiFileInput">
-        <input id="midiFileInput" type="file" accept=".mid,.midi,.mus,.musicxml,.xml,.mxl,audio/midi,audio/x-midi,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,application/musicxml+xml,application/xml,text/xml" hidden>
-        <button id="fileButton" class="file-button" type="button">MIDI / Finale MUS / MusicXML 파일 선택</button>
+        <input id="midiFileInput" data-music-format-input type="file" accept=".mid,.midi,.mus,.musicxml,.xml,.mxl,.gp3,.gp5,.tab,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,audio/midi,audio/x-midi,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,application/musicxml+xml,application/xml,text/xml" hidden>
+        <button class="mabi-supported-files-button" data-supported-files-button data-supported-files-context="simple" type="button">지원 파일</button>
+        <button id="fileButton" class="file-button" type="button">음악 파일 선택</button>
         <p id="dropHint" class="drop-hint">또는 파일을 여기에 드롭하세요</p>
         <p id="fileName" class="file-name" hidden></p>
       </div>
@@ -175,10 +176,30 @@
   <script src="../player/js/pako_inflate.min.js?v=2.1.0"></script>
   <script src="../player/js/finale-mus-to-midi.js?v=4.8-finale-mus"></script>
   <script src="../player/js/midi-to-mml.js?v=4.8-macbinary-midi"></script>
+  <script src="../plugins/music-format-core.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-midi.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-musicxml.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-finale-mus.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/vendor/guitarpro-parser/gp3-browser.js?v=4.8-gp-offline-1"></script>
+  <script src="../plugins/vendor/parse-gp5/index.js?v=4.8-gp-offline-1"></script>
+  <script src="../plugins/guitarpro-local.js?v=4.8-gp-offline-1"></script>
+  <script src="../plugins/format-gp3.js?v=4.8-gp-offline-1"></script>
+  <script src="../plugins/format-gp5.js?v=4.8-gp-offline-1"></script>
+  <script src="../plugins/format-tab.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/vocal-format-parsers.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-vsq.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-vsqx.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-vpr.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-ust.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-ustx.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-svp.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-s5p.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/format-ccs.js?v=4.8-format-plugins-1"></script>
+  <script src="../plugins/supported-files-ui.js?v=4.8-format-plugins-1"></script>
   <script src="../player/js/mml-optimizer.js"></script>
   <script src="../player/js/mml-parser.js"></script>
   <script src="../plugins/firebase-config.js"></script>
   <script src="../plugins/firebase-analytics.js" type="module"></script>
-  <script src="./app.js?v=4.8-simple-finale-mus"></script>
+  <script src="./app.js?v=4.8-format-plugins-1"></script>
 </body>
 </html>

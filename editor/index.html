@@ -7,7 +7,7 @@
 <meta content="yes" name="mobile-web-app-capable"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <title>모비바드</title>
-<link href="styles.css" rel="stylesheet"/>
+<link href="styles.css?v=4.8-ui-buttons-1" rel="stylesheet"/>
 </head>
 <body>
 <div data-context-area="app" id="app">
@@ -25,9 +25,9 @@
 <button id="audioOpenButton" role="menuitem" type="button">오디오 불러오기</button>
 <div class="file-menu-separator" role="separator"></div><button id="fileExportButton" role="menuitem" type="button">MML 내보내기</button></div>
 </div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button">되돌리기</button><button id="editRedoButton" role="menuitem" type="button">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button">복사</button><button id="editCutButton" role="menuitem" type="button">잘라내기</button><button id="editPasteButton" role="menuitem" type="button">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button">삭제</button><button id="editNoteVolumeButton" role="menuitem" type="button">노트 볼륨</button></div></div>
-<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,.mid,.midi,.mus,.musicxml,.xml,.mxl,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="fileInput" type="file"/>
+<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,.mid,.midi,.mus,.musicxml,.xml,.mxl,.gp3,.gp5,.tab,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="fileInput" data-music-format-input type="file"/>
 <input accept="text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle" hidden="" id="mmlImportFileInput" type="file"/>
-<input accept="audio/midi,audio/x-midi,.mid,.midi,.mus,.musicxml,.xml,.mxl,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFileInput" type="file"/>
+<input accept="audio/midi,audio/x-midi,.mid,.midi,.mus,.musicxml,.xml,.mxl,.gp3,.gp5,.tab,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFileInput" data-music-format-input type="file"/>
 <input accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm" hidden="" id="audioFileInput" type="file"/>
 </div>
 <div class="toolbar-separator"></div>
@@ -69,7 +69,7 @@
 </div>
 <div class="toolbar-spacer"></div>
 <div class="toolbar-group view-actions">
-<div aria-label="피아노롤 조작 도구" class="edit-tool-control" role="group">
+<button class="mabi-supported-files-button" data-supported-files-button data-supported-files-context="editor" type="button">지원 파일</button><div aria-label="피아노롤 조작 도구" class="edit-tool-control" role="group">
 <button aria-pressed="true" id="noteToolButton" title="터치 또는 왼쪽 클릭으로 노트를 배치합니다." type="button">노트</button>
 <button aria-pressed="false" id="selectToolButton" title="터치 또는 왼쪽 드래그로 범위를 선택합니다." type="button">선택</button>
 </div>
@@ -273,7 +273,7 @@
 <button aria-label="닫기" class="channel-mute-close" id="timeEditCloseButton" type="button">×</button>
 </div>
 <label class="time-edit-field"><span>수량</span><span class="time-edit-number"><input aria-label="추가 또는 삭제할 수량" id="timeEditAmountInput" inputmode="numeric" min="1" step="1" type="number" value="1"/><strong id="timeEditUnitLabel">마디</strong></span></label>
-<p class="tempo-editor-help">원본 MIDI·MusicXML·오디오는 그대로 두고, 편집 채널과 편집 템포만 빨간 재생선 위치를 기준으로 이동합니다.</p>
+<p class="tempo-editor-help">원본 가져오기 파일과 오디오는 그대로 두고, 편집 채널과 편집 템포만 빨간 재생선 위치를 기준으로 이동합니다.</p>
 <div class="time-edit-actions"><button class="danger-button" id="timeEditDeleteButton" type="button">삭제</button><span></span><button id="timeEditCancelButton" type="button">취소</button><button id="timeEditInsertButton" type="button">추가</button></div>
 </section>
 </div>
@@ -300,11 +300,32 @@
 </dialog>
 <div class="context-menu" hidden="" id="contextMenu" role="menu"></div>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
-<script src="default-sf2-base64.js"></script>
-<script src="sf2-player.js"></script>
+<script src="../player/js/sf2-sampler.js?v=7.7-v48-sf3-ogg-eos-fix"></script>
+<script src="../assets/default_sf3.js?v=1"></script>
+<script src="sf2-player.js?v=4.8-editor-shared-sf3-1"></script>
 <script src="musicxml-to-midi.js"></script>
 <script src="../player/js/pako_inflate.min.js?v=2.1.0"></script>
 <script src="../player/js/finale-mus-to-midi.js?v=4.8-finale-mus"></script>
-<script src="app.js?v=4.8-finale-mus"></script>
+<script src="../plugins/music-format-core.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-midi.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-musicxml.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-finale-mus.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/vendor/guitarpro-parser/gp3-browser.js?v=4.8-gp-offline-1"></script>
+<script src="../plugins/vendor/parse-gp5/index.js?v=4.8-gp-offline-1"></script>
+<script src="../plugins/guitarpro-local.js?v=4.8-gp-offline-1"></script>
+<script src="../plugins/format-gp3.js?v=4.8-gp-offline-1"></script>
+<script src="../plugins/format-gp5.js?v=4.8-gp-offline-1"></script>
+<script src="../plugins/format-tab.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/vocal-format-parsers.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-vsq.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-vsqx.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-vpr.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-ust.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-ustx.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-svp.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-s5p.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/format-ccs.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/supported-files-ui.js?v=4.8-format-plugins-1"></script>
+<script src="app.js?v=4.8-format-plugins-1"></script>
 </body>
 </html>

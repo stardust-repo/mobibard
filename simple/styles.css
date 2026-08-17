@@ -289,6 +289,10 @@ h1 {
   background: var(--hover);
 }
 .drop-zone.dragover { transform: translateY(-1px); }
+.drop-zone > .mabi-supported-files-button {
+  margin-bottom: 14px;
+}
+
 .file-button {
   min-width: 172px;
   height: 46px;

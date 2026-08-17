@@ -402,6 +402,90 @@
     };
   }
 
+  function normalizeSharedRange(value) {
+    const source = Array.isArray(value) ? value : [0, 127];
+    const rawLow = Number(source[0]);
+    const rawHigh = Number(source[1]);
+    const low = clamp(Math.round(Number.isFinite(rawLow) ? rawLow : 0), 0, 127);
+    const high = clamp(Math.round(Number.isFinite(rawHigh) ? rawHigh : 127), low, 127);
+    return { low, high };
+  }
+
+  function selectSharedPreset(soundBank, program = 0, bank = 0) {
+    const presets = Array.isArray(soundBank?.presets) ? soundBank.presets : [];
+    if (!presets.length) return null;
+    const safeProgram = clamp(Math.round(Number(program) || 0), 0, 127);
+    const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
+    return presets.find((preset) => Number(preset?.preset) === safeProgram && Number(preset?.bank) === safeBank)
+      || presets.find((preset) => Number(preset?.preset) === safeProgram && Number(preset?.bank) === 0)
+      || presets.find((preset) => Number(preset?.preset) === safeProgram)
+      || presets.find((preset) => Number(preset?.preset) === 0 && Number(preset?.bank) === 0)
+      || presets[0]
+      || null;
+  }
+
+  function adaptSharedPreset(soundBank, preset) {
+    if (!soundBank || !preset) {
+      throw new Error("재생 가능한 SF3 프리셋이 없습니다.");
+    }
+    const zones = (Array.isArray(preset.regions) ? preset.regions : []).map((region, index) => {
+      const sample = region?.sample;
+      if (!sample || sample.invalid) return null;
+      const channelLength = Array.isArray(sample.channelData) && sample.channelData[0]
+        ? sample.channelData[0].length
+        : 0;
+      const frameLength = Math.max(
+        1,
+        Math.round(Number(sample.frameLength) || channelLength || ((Number(sample.end) || 0) - (Number(sample.start) || 0)) || 1),
+      );
+      const sampleRate = Math.max(8000, Number(sample.decodedSampleRate || sample.sampleRate) || 44100);
+      const loopStart = clamp(Math.round(Number(sample.loopStartFrame) || 0), 0, frameLength);
+      const loopEnd = clamp(Math.round(Number(sample.loopEndFrame) || 0), loopStart, frameLength);
+      const sampleId = String(sample.cacheKey || `shared:${preset.bank}:${preset.preset}:${sample.name || index}:${index}`);
+      const attenuation = Math.max(0, Number(region.initialAttenuation) || 0);
+      return {
+        instrumentName: preset.name || `Preset ${preset.preset}`,
+        sampleId,
+        sampleName: sample.name || `Sample ${index + 1}`,
+        sample,
+        soundBank,
+        start: 0,
+        end: frameLength,
+        loopStart,
+        loopEnd,
+        sampleRate,
+        rootKey: clamp(Math.round(Number(region.overridingRootKey ?? sample.originalPitch ?? 60)), 0, 127),
+        // createSf2Voice subtracts this value. Negating keeps the shared player sampler's
+        // pitch-correction direction so editor/player/simple sound the same.
+        pitchCorrection: -(Number(sample.pitchCorrection) || 0),
+        coarseTune: Number(region.coarseTune) || 0,
+        fineTune: Number(region.fineTune) || 0,
+        scaleTuning: 100,
+        keyRange: normalizeSharedRange(region.keyRange),
+        velocityRange: normalizeSharedRange(region.velRange),
+        pan: 0,
+        gain: 10 ** (-attenuation / 200),
+        attack: 0.006,
+        decay: 1.2,
+        sustainAttenuation: 0,
+        release: 0.4,
+        loop: ((Number(region.sampleModes) || 0) & 1) !== 0 && loopEnd - loopStart > 8,
+      };
+    }).filter(Boolean);
+
+    if (!zones.length) {
+      throw new Error("선택한 SF3 프리셋에 샘플 영역이 없습니다.");
+    }
+
+    return {
+      soundBank,
+      presetName: preset.name || `Preset ${preset.preset}`,
+      bank: Number(preset.bank) || 0,
+      preset: Number(preset.preset) || 0,
+      zones,
+    };
+  }
+
   class MabinogiSf2Player {
     constructor(options = {}) {
       this.presetNumber = options.presetNumber ?? 0;
@@ -410,6 +494,7 @@
       this.context = null;
       this.masterGain = null;
       this.compressor = null;
+      this.soundBank = null;
       this.soundFont = null;
       this.soundFonts = new Map();
       this.preparePromise = null;
@@ -484,25 +569,29 @@
       }
 
       this.preparePromise = (async () => {
-        const base64 = window.MABINOGI_DEFAULT_SF2_B64;
-        if (typeof base64 !== "string" || !base64.length) {
+        const base64 = String(window.MOBIBARD_DEFAULT_SF3_BASE64 || "").replace(/\s+/g, "");
+        if (!base64 || !window.MabiSf2?.parseSoundBank) {
           this.emitStatus("기본 신시사이저", "fallback");
           return null;
         }
 
         try {
-          this.emitStatus("SC-55 음원 준비 0%", "loading");
+          this.emitStatus("SC-55 SF3 음원 준비 0%", "loading");
           const bytes = await decodeBase64ToBytes(base64, (progress) => {
             const percent = Math.min(99, Math.round(progress * 100));
-            this.emitStatus(`SC-55 음원 준비 ${percent}%`, "loading");
+            this.emitStatus(`SC-55 SF3 음원 준비 ${percent}%`, "loading");
           });
-          this.soundFont = parseSf2(bytes, this.presetNumber, this.bankNumber);
+          this.soundBank = await window.MabiSf2.parseSoundBank(bytes);
+          const preset = selectSharedPreset(this.soundBank, this.presetNumber, this.bankNumber);
+          this.soundFont = adaptSharedPreset(this.soundBank, preset);
           this.soundFonts.set(`${this.soundFont.bank}:${this.soundFont.preset}`, this.soundFont);
-          window.MABINOGI_DEFAULT_SF2_B64 = null;
-          this.emitStatus(`SC-55 · ${this.soundFont.presetName}`, "ready");
+          this.soundFonts.set(`${this.bankNumber}:${this.presetNumber}`, this.soundFont);
+          try { window.MOBIBARD_DEFAULT_SF3_BASE64 = ""; } catch {}
+          this.emitStatus(`SC-55 SF3 · ${this.soundFont.presetName}`, "ready");
           return this.soundFont;
         } catch (error) {
           console.error("SoundFont initialization failed", error);
+          this.soundBank = null;
           this.soundFont = null;
           this.emitStatus("기본 신시사이저", "fallback");
           return null;
@@ -518,13 +607,14 @@
     }
 
     getSoundFont(program = this.presetNumber, bank = this.bankNumber) {
-      if (!this.soundFont) return null;
+      if (!this.soundBank || !this.soundFont) return null;
       const safeProgram = clamp(Math.round(Number(program) || 0), 0, 127);
       const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
       const key = `${safeBank}:${safeProgram}`;
       if (this.soundFonts.has(key)) return this.soundFonts.get(key);
       try {
-        const parsed = parseSf2(this.soundFont.bytes, safeProgram, safeBank);
+        const preset = selectSharedPreset(this.soundBank, safeProgram, safeBank);
+        const parsed = adaptSharedPreset(this.soundBank, preset);
         this.soundFonts.set(`${parsed.bank}:${parsed.preset}`, parsed);
         this.soundFonts.set(key, parsed);
         return parsed;
@@ -636,13 +726,11 @@
         return cached;
       }
       const context = this.ensureContext();
-      const length = Math.max(1, zone.end - zone.start);
-      const buffer = context.createBuffer(1, length, zone.sampleRate);
-      const output = buffer.getChannelData(0);
-      const samples = this.soundFont.sampleData;
-      for (let index = 0; index < length; index += 1) {
-        output[index] = (samples[zone.start + index] || 0) / 32768;
+      const soundBank = zone.soundBank || this.soundBank;
+      if (!soundBank?.getBufferForSample || !zone.sample) {
+        throw new Error("SF3 샘플 버퍼를 만들 수 없습니다.");
       }
+      const buffer = soundBank.getBufferForSample(context, zone.sample);
       this.bufferCache.set(zone.sampleId, buffer);
       return buffer;
     }
@@ -853,5 +941,8 @@
   }
 
   window.MabinogiSf2Player = MabinogiSf2Player;
-  window.MabinogiSf2Debug = Object.freeze({ parseSf2 });
+  window.MabinogiSf2Debug = Object.freeze({
+    parseSf2,
+    parseSharedSoundBank: (...args) => window.MabiSf2?.parseSoundBank?.(...args),
+  });
 })();

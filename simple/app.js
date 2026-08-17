@@ -44,6 +44,7 @@
     copyAllButton: $("copyAllButton"),
     copyButtons: $("copyButtons"),
     pageTitle: $("pageTitle"),
+    eyebrow: $("eyebrow"),
     subtitle: $("subtitle"),
     brandName: $("brandName"),
     midiExtractLink: $("midiExtractLink"),
@@ -266,6 +267,7 @@
     document.documentElement.lang = activeLocale.htmlLang || (language === "zh-CN" ? "zh-Hans" : (language === "zh-TW" ? "zh-Hant" : language));
     document.title = t("browserTitle");
     els.pageTitle.textContent = t("title");
+    els.eyebrow.textContent = t("eyebrow");
     els.brandName.textContent = t("brand");
     els.subtitle.textContent = t("subtitle");
     els.midiExtractLink.textContent = t("extract");
@@ -316,39 +318,14 @@
     writeStorage(THEME_KEY, next);
   }
 
-  function isMidiFile(file) {
-    if (!file) return false;
-    return /\.(?:mid|midi)$/i.test(file.name || "") || /^(?:audio\/midi|audio\/x-midi|audio\/mid|audio\/x-mid|application\/midi|application\/x-midi)$/i.test(file.type || "");
-  }
-
-  function isFinaleMusFile(file) {
-    if (!file) return false;
-    return /\.mus$/i.test(file.name || "");
-  }
-
-  function isMusicXmlFile(file) {
-    if (!file) return false;
-    if (/\.(?:musicxml|xml|mxl)$/i.test(file.name || "")) return true;
-    return /^(?:application\/vnd\.recordare\.musicxml\+xml|application\/vnd\.recordare\.musicxml|application\/vnd\.recordare\.musicxml-mxl|application\/musicxml\+xml|application\/xml|text\/xml)$/i.test(file.type || "");
-  }
-
   function isSupportedSourceFile(file) {
-    return isMidiFile(file) || isFinaleMusFile(file) || isMusicXmlFile(file);
+    return Boolean(file && window.MabiMusicFormats?.isSupported(file.name || "", file.type || ""));
   }
 
   async function normalizeSourceToMidiBytes(file, sourceBytes) {
-    if (isMidiFile(file)) return sourceBytes;
-    if (isFinaleMusFile(file)) {
-      if (!window.MabiFinaleMus?.musToMidiBytes) {
-        throw new Error(t("failed", ["Finale MUS converter is unavailable"]));
-      }
-      return window.MabiFinaleMus.musToMidiBytes(sourceBytes, file.name || "Finale MUS");
-    }
-    if (!isMusicXmlFile(file)) throw new Error(t("invalidFile"));
-    if (!window.MabiMusicXml?.musicXmlToMidiBytes) {
-      throw new Error(t("failed", ["MusicXML converter is unavailable"]));
-    }
-    return window.MabiMusicXml.musicXmlToMidiBytes(sourceBytes, file.name || "MusicXML");
+    if (!window.MabiMusicFormats?.convertBytes) throw new Error(t("failed", ["Music format plugins are unavailable"]));
+    const converted = await window.MabiMusicFormats.convertBytes(sourceBytes, file.name || "music", file.type || "");
+    return converted.midiBytes;
   }
 
   async function selectFile(file) {
@@ -466,10 +443,7 @@
   }
 
   function analyticsSourceType(file) {
-    if (isMidiFile(file)) return "midi";
-    if (isFinaleMusFile(file)) return "mus";
-    if (isMusicXmlFile(file)) return "musicxml";
-    return "unknown";
+    return window.MabiMusicFormats?.findFormat(file?.name || "", file?.type || "")?.id || "unknown";
   }
 
   function analyticsFileSizeBucket(bytes) {

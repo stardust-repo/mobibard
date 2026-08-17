@@ -4369,4 +4369,36 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   border-color: transparent !important;
 }
 
-
+/* Make the supported-file action read as a real header button. */
+.app-title-meta > .import-format-list.mabi-supported-files-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--control-bg);
+  color: var(--text);
+  box-shadow: 0 1px 2px var(--panel-shadow), inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  transition: background .14s ease, border-color .14s ease, box-shadow .14s ease, transform .14s ease;
+}
+.app-title-meta > .import-format-list.mabi-supported-files-button:hover {
+  border-color: var(--accent);
+  background: var(--control-hover);
+  color: var(--text);
+  box-shadow: 0 3px 8px var(--panel-shadow);
+  transform: translateY(-1px);
+}
+.app-title-meta > .import-format-list.mabi-supported-files-button:active {
+  box-shadow: 0 1px 2px var(--panel-shadow);
+  transform: translateY(0);
+}
+.app-title-meta > .import-format-list.mabi-supported-files-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

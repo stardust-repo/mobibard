@@ -1034,14 +1034,14 @@
   }
 
   function normalizeMidiSourceType(value) {
-    const type = String(value || "").toLowerCase();
-    return type === "musicxml" || type === "mus" ? type : "midi";
+    const type = String(value || "").trim().toLowerCase();
+    return type || "midi";
   }
 
   function defaultMidiSourceLabel(sourceType) {
-    if (sourceType === "musicxml") return "MusicXML";
-    if (sourceType === "mus") return "Finale MUS";
-    return "MIDI";
+    const normalized = normalizeMidiSourceType(sourceType);
+    const plugin = window.MabiMusicFormats?.listFormats?.().find((format) => format.id === normalized);
+    return plugin?.label || (normalized === "midi" ? "MIDI" : normalized.toUpperCase());
   }
 
   function createDefaultMidiReference() {
@@ -1118,7 +1118,7 @@
   }
 
   function stripMidiFileExtension(fileName) {
-    const name = String(fileName || "MIDI").replace(/\.(?:mid|midi|mus|musicxml|xml|mxl)$/i, "").trim();
+    const name = String(fileName || "MIDI").replace(/\.(?:mid|midi|mus|musicxml|xml|mxl|gp3|gp4|gp5|gpx|gp|tab|vsq|vsqx|vpr|ust|ustx|svp|s5p|ccs)$/i, "").trim();
     return name || "MIDI";
   }
 
@@ -4342,7 +4342,7 @@
     };
 
     // 모든 음악 채널은 하나의 평면 편집 채널 목록으로 표시합니다.
-    // MIDI/Finale MUS/MusicXML도 불러오는 순간 일반 편집 채널로 변환되므로 별도 원본 트리를 만들지 않습니다.
+    // 지원 음악 파일은 불러오는 순간 공통 플러그인에서 MIDI로 정규화한 뒤 일반 편집 채널로 변환하므로 별도 원본 트리를 만들지 않습니다.
     state.channels.forEach((channel, index) => {
       const active = state.activePanel === "notes" && index === state.activeChannel;
       const item = document.createElement("div");
@@ -5138,19 +5138,12 @@
 
 
   function getImportSourceInfo(file) {
-    const name = String(file?.name || "MIDI");
-    const extension = (name.match(/\.([^.]+)$/)?.[1] || "").toLowerCase();
-    const type = String(file?.type || "").toLowerCase();
-    const isFinaleMus = extension === "mus";
-    const isMusicXml = ["musicxml", "xml", "mxl"].includes(extension)
-      || type.includes("musicxml")
-      || type === "application/xml"
-      || type === "text/xml";
-    const sourceType = isFinaleMus ? "mus" : (isMusicXml ? "musicxml" : "midi");
+    const name = String(file?.name || "Music");
+    const format = window.MabiMusicFormats?.findFormat(name, file?.type || "");
     return {
       fileName: name,
-      sourceType,
-      sourceLabel: defaultMidiSourceLabel(sourceType),
+      sourceType: format?.id || "midi",
+      sourceLabel: format?.label || "MIDI",
     };
   }
 
@@ -5161,23 +5154,14 @@
   }
 
   async function convertImportFileToMidiBuffer(file) {
-    const source = getImportSourceInfo(file);
-    const rawBuffer = await file.arrayBuffer();
-    if (source.sourceType === "midi") {
-      return { ...source, midiBuffer: rawBuffer };
-    }
-    if (source.sourceType === "mus") {
-      if (!window.MabiFinaleMus?.musToMidiBytes) {
-        throw new Error("Finale MUS 변환 모듈을 불러오지 못했습니다.");
-      }
-      const midiBytes = window.MabiFinaleMus.musToMidiBytes(new Uint8Array(rawBuffer), source.fileName);
-      return { ...source, midiBuffer: toStandaloneArrayBuffer(midiBytes) };
-    }
-    if (!window.MabiMusicXml?.musicXmlToMidiBytes) {
-      throw new Error("MusicXML 변환 모듈을 불러오지 못했습니다.");
-    }
-    const midiBytes = await window.MabiMusicXml.musicXmlToMidiBytes(new Uint8Array(rawBuffer), source.fileName);
-    return { ...source, midiBuffer: toStandaloneArrayBuffer(midiBytes) };
+    if (!window.MabiMusicFormats?.convertFile) throw new Error("음악 포맷 플러그인을 불러오지 못했습니다.");
+    const converted = await window.MabiMusicFormats.convertFile(file);
+    return {
+      fileName: String(file.name || "Music"),
+      sourceType: converted.sourceType,
+      sourceLabel: converted.sourceLabel,
+      midiBuffer: toStandaloneArrayBuffer(converted.midiBytes),
+    };
   }
 
   function setMidiImportStatus(message, { error = false } = {}) {
@@ -5898,7 +5882,7 @@
         return false;
       }
     }
-    if (["mid", "midi", "mus", "musicxml", "xml", "mxl"].includes(extension)) {
+    if (window.MabiMusicFormats?.isSupported(name, file.type || "")) {
       return prepareMidiImportFile(file);
     }
     if (["mml", "3mle", "mmi", "txt"].includes(extension) || String(file.type || "").startsWith("text/")) {
@@ -5934,7 +5918,7 @@
       return true;
     } catch (error) {
       console.error(error);
-      showToast(error instanceof Error ? error.message : "MIDI, Finale MUS 또는 MusicXML 파일을 읽지 못했습니다.");
+      showToast(error instanceof Error ? error.message : "음악 파일을 읽지 못했습니다.");
       return false;
     }
   }
@@ -11192,7 +11176,7 @@
       nextAudioClipId: state.nextAudioClipId,
       channels: state.channels,
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
-      // v21: MIDI/Finale MUS/MusicXML은 불러오는 즉시 일반 편집 채널로 변환됩니다.
+      // v21: 지원 음악 파일은 공통 플러그인을 거쳐 불러오는 즉시 일반 편집 채널로 변환됩니다.
       midiDocuments: [],
       audioClips: state.audioClips.map((clip) => ({ ...clip, assetAvailable: Boolean(getAudioRuntime(clip.id)?.audioBuffer) })),
       editor: {
@@ -11332,7 +11316,7 @@
     }
     normalizeDefaultChannelNames();
 
-    // v21부터 MIDI/Finale MUS/MusicXML "원본 자료" 트리를 사용하지 않습니다.
+    // v21부터 지원 음악 파일의 별도 "원본 자료" 트리를 사용하지 않습니다.
     // 이전 프로젝트/자동저장에 남은 원본 악기는 데이터 손실 없이 일반 편집 채널로 1회 변환합니다.
     state.nextNoteId = Math.max(
       Number(data.nextNoteId) || 1,
