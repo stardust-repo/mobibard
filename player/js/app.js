@@ -78,13 +78,15 @@
   const ACTIVE_CODE_LOOKAHEAD_SEC = 0.012;
   const ACTIVE_CODE_RELEASE_SEC = 0.026;
   const PIANO_ROLL_MIN_KEY_SPAN = 24;
-  const PIANO_BLACK_KEY_WIDTH_RATIO = 0.62;
+  // 피아노롤의 음정 좌표는 12반음을 동일 폭으로 배치한다.
+  // 아래 피아노 건반만 이 균등한 음정 중심에 맞춰 흰/검은 건반 모양으로 그린다.
+  const PIANO_ROLL_NOTE_WIDTH_RATIO = 0.86;
+  const PIANO_BLACK_KEY_WIDTH_IN_PITCH_LANES = 1.06;
   const PIANO_BLACK_KEY_HEIGHT_RATIO = 0.62;
   const PIANO_ROLL_FALL_WINDOW_COLLAPSED = 1.8;
   const PIANO_ROLL_FALL_WINDOW_EXPANDED = 4.6;
   const PIANO_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const PIANO_BLACK_KEY_PITCHES = new Set([1, 3, 6, 8, 10]);
-  const PIANO_WHITE_INDEX_BY_PITCH = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
 
 
   const { shortError, clampInt, formatTime } = window.MabiUtils;
@@ -8591,47 +8593,57 @@
     return PIANO_BLACK_KEY_PITCHES.has(getPianoPitch(midi));
   }
 
-  function getPianoWhiteIndex(midi) {
-    const n = clampInt(Number(midi) || 0, 0, 127);
-    return Math.floor(n / 12) * 7 + PIANO_WHITE_INDEX_BY_PITCH[n % 12];
-  }
 
   function getPianoRollLayout(minMidi, maxMidi) {
     const min = clampInt(Number(minMidi) || 0, 0, 127);
     const max = clampInt(Number(maxMidi) || 0, 0, 127);
-    const firstWhiteIndex = getPianoWhiteIndex(min);
-    let whiteKeyCount = 0;
-    for (let midi = min; midi <= max; midi++) {
-      if (!isPianoBlackKey(midi)) whiteKeyCount++;
-    }
-    whiteKeyCount = Math.max(1, whiteKeyCount);
-    const whiteWidth = 100 / whiteKeyCount;
-    const blackWidth = whiteWidth * PIANO_BLACK_KEY_WIDTH_RATIO;
+    const pitchCount = Math.max(1, max - min + 1);
+    const pitchWidth = 100 / pitchCount;
 
-    const getKeyMetrics = (midi) => {
-      const n = clampInt(Number(midi) || 0, 0, 127);
-      const black = isPianoBlackKey(n);
-      const relativeWhiteIndex = getPianoWhiteIndex(n) - firstWhiteIndex;
-      if (black) {
-        const boundary = (relativeWhiteIndex + 1) * whiteWidth;
-        const width = blackWidth;
-        return {
-          black,
-          left: Math.max(0, Math.min(100 - width, boundary - width / 2)),
-          width,
-          center: boundary
-        };
-      }
-      const left = relativeWhiteIndex * whiteWidth;
+    // 노트와 피아노롤 레인은 모든 반음이 정확히 같은 폭을 사용한다.
+    // C-C#-D뿐 아니라 E-F, B-C처럼 검은건반이 없는 반음도 같은 간격을 유지한다.
+    const getLaneMetrics = (midi) => {
+      const n = clampInt(Number(midi) || 0, min, max);
+      const left = (n - min) * pitchWidth;
       return {
-        black,
         left,
-        width: whiteWidth,
-        center: left + whiteWidth / 2
+        width: pitchWidth,
+        center: left + pitchWidth / 2
       };
     };
 
-    return { whiteWidth, blackWidth, getKeyMetrics };
+    // 균등한 반음 중심을 유지하면서 피아노 모양을 만들기 위해 흰건반 폭을 조절한다.
+    // 각 흰건반의 좌/우 끝은 인접한 흰건반 중심과의 중간점이다.
+    // 따라서 D/G/A처럼 양옆이 검은건반인 키는 조금 넓고, E-F/B-C 경계의 키는
+    // 조금 좁아지지만 모든 MIDI 음의 중심은 반음 간격으로 정확히 정렬된다.
+    const previousWhiteDistance = [1, 0, 2, 0, 2, 1, 0, 2, 0, 2, 0, 2];
+    const nextWhiteDistance = [2, 0, 2, 0, 1, 2, 0, 2, 0, 2, 0, 1];
+    const blackWidth = pitchWidth * PIANO_BLACK_KEY_WIDTH_IN_PITCH_LANES;
+
+    const getKeyMetrics = (midi) => {
+      const n = clampInt(Number(midi) || 0, min, max);
+      const lane = getLaneMetrics(n);
+      const black = isPianoBlackKey(n);
+      if (black) {
+        const width = Math.min(100, blackWidth);
+        const left = Math.max(0, Math.min(100 - width, lane.center - width / 2));
+        return { black, left, width, center: lane.center };
+      }
+
+      const pitch = getPianoPitch(n);
+      const leftRaw = lane.center - (previousWhiteDistance[pitch] * pitchWidth / 2);
+      const rightRaw = lane.center + (nextWhiteDistance[pitch] * pitchWidth / 2);
+      const left = Math.max(0, leftRaw);
+      const right = Math.min(100, rightRaw);
+      return {
+        black,
+        left,
+        width: Math.max(0, right - left),
+        center: lane.center
+      };
+    };
+
+    return { pitchWidth, blackWidth, getLaneMetrics, getKeyMetrics };
   }
 
   function buildPianoRollDataSignature(notes, duration) {
@@ -8795,79 +8807,53 @@
     ctx.rect(0, 0, width, fallAreaHeight);
     ctx.clip();
 
-    // 세로 레인은 아래 건반과 같은 geometry를 그대로 사용한다.
-    // 흰 건반 경계와 검은 건반 폭을 따로 계산하지 않아 확대/축소나 음역 변화에도
-    // 건반과 레인의 비율이 항상 일치한다.
+    // 피아노롤 본문은 건반의 물리적인 흰/검은 폭이 아니라 균등한 12반음 레인을 사용한다.
+    // 검은음도 흰음과 같은 레인 폭을 가지므로 노트 중심 간격과 두께가 모두 일정하다.
     for (let midi = minMidi; midi <= maxMidi; midi++) {
       if (!isPianoBlackKey(midi)) continue;
-      const metrics = keyLayout.getKeyMetrics(midi);
-      const x = metrics.left * width / 100;
-      const w = metrics.width * width / 100;
+      const lane = keyLayout.getLaneMetrics(midi);
+      const x = lane.left * width / 100;
+      const w = lane.width * width / 100;
       ctx.fillStyle = colors.blackLane;
       ctx.fillRect(x, 0, w, fallAreaHeight);
     }
 
-    // 흰 건반은 실제 흰 건반 경계에, 검은 건반은 실제 검은 건반의 좌우 끝에
-    // 가이드를 그린다. 기존처럼 검은 건반의 왼쪽만 선으로 잡으면 검은 레인의 폭이
-    // 한쪽으로 치우쳐 보여 흰/검은 건반 비율이 찌그러져 보일 수 있다.
+    // 모든 반음의 경계를 같은 간격으로 그린다. C 경계만 옥타브 구분을 위해 강조한다.
     for (let midi = minMidi; midi <= maxMidi; midi++) {
-      if (isPianoBlackKey(midi)) continue;
-      const metrics = keyLayout.getKeyMetrics(midi);
-      const x = metrics.left * width / 100;
+      const lane = keyLayout.getLaneMetrics(midi);
+      const x = lane.left * width / 100;
       ctx.strokeStyle = getPianoPitch(midi) === 0 ? colors.accent : colors.gridLine;
       ctx.lineWidth = getPianoPitch(midi) === 0 ? 1.5 : 1;
       ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, fallAreaHeight);
+      ctx.moveTo(Math.max(0.5, Math.min(width - 0.5, Math.round(x) + 0.5)), 0);
+      ctx.lineTo(Math.max(0.5, Math.min(width - 0.5, Math.round(x) + 0.5)), fallAreaHeight);
       ctx.stroke();
     }
 
-    const finalWhite = (() => {
-      for (let midi = maxMidi; midi >= minMidi; midi--) {
-        if (!isPianoBlackKey(midi)) return keyLayout.getKeyMetrics(midi);
-      }
-      return null;
-    })();
-    if (finalWhite) {
-      const right = (finalWhite.left + finalWhite.width) * width / 100;
-      ctx.strokeStyle = colors.gridLine;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(Math.min(width - 0.5, right - 0.5), 0);
-      ctx.lineTo(Math.min(width - 0.5, right - 0.5), fallAreaHeight);
-      ctx.stroke();
-    }
-
-    for (let midi = minMidi; midi <= maxMidi; midi++) {
-      if (!isPianoBlackKey(midi)) continue;
-      const metrics = keyLayout.getKeyMetrics(midi);
-      const left = metrics.left * width / 100;
-      const right = (metrics.left + metrics.width) * width / 100;
-      ctx.strokeStyle = colors.gridLine;
-      ctx.lineWidth = 1;
-      for (const edge of [left, right]) {
-        const x = Math.max(0.5, Math.min(width - 0.5, Math.round(edge) + 0.5));
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, fallAreaHeight);
-        ctx.stroke();
-      }
-    }
+    const finalLane = keyLayout.getLaneMetrics(maxMidi);
+    const right = (finalLane.left + finalLane.width) * width / 100;
+    ctx.strokeStyle = colors.gridLine;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.min(width - 0.5, Math.max(0.5, Math.round(right) - 0.5)), 0);
+    ctx.lineTo(Math.min(width - 0.5, Math.max(0.5, Math.round(right) - 0.5)), fallAreaHeight);
+    ctx.stroke();
 
     // L4는 1박이다. 각 정수 박자의 실제 시간을 템포맵으로 환산해
     // 건반 윗선에서 시작하고 재생 시간에 따라 아래로 흐르는 격자를 그린다.
     const firstBeat = Math.max(0, Math.ceil(pianoRollSecondsToBeat(current, tempoMap) - 1e-7));
-    const lastBeat = Math.max(firstBeat, Math.floor(pianoRollSecondsToBeat(visibleEnd, tempoMap) + 1e-7));
-    ctx.strokeStyle = colors.gridLine;
-    ctx.lineWidth = 1;
+    const lastBeat = Math.floor(pianoRollSecondsToBeat(visibleEnd, tempoMap) + 1e-7);
     for (let beat = firstBeat; beat <= lastBeat; beat++) {
-      const lineTime = pianoRollBeatToSeconds(beat, tempoMap);
-      const rawY = fallAreaHeight - ((lineTime - current) * pxPerSec);
-      if (rawY < -1 || rawY > fallAreaHeight + 1) continue;
-      const y = Math.max(0.5, Math.min(fallAreaHeight - 0.5, Math.round(rawY) + 0.5));
+      const time = pianoRollBeatToSeconds(beat, tempoMap);
+      if (time < current - 1e-7 || time > visibleEnd + 1e-7) continue;
+      const y = fallAreaHeight - ((time - current) * pxPerSec);
+      const strong = beat % 4 === 0;
+      ctx.strokeStyle = strong ? colors.line : colors.gridLine;
+      ctx.globalAlpha = strong ? 0.58 : 0.34;
+      ctx.lineWidth = strong ? 1.15 : 1;
       ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
+      ctx.moveTo(0, Math.max(0.5, Math.min(fallAreaHeight - 0.5, Math.round(y) + 0.5)));
+      ctx.lineTo(width, Math.max(0.5, Math.min(fallAreaHeight - 0.5, Math.round(y) + 0.5)));
       ctx.stroke();
     }
     ctx.restore();
@@ -8945,10 +8931,10 @@
 
     const limit = pianoRollExpanded ? 1800 : 720;
     for (const { end, noteDuration, midi, part, active, muted } of visibleNotes.slice(0, limit)) {
-      const metrics = keyLayout.getKeyMetrics(midi);
-      const laneWidth = metrics.width * width / 100;
-      const noteWidth = Math.max(2, laneWidth * (metrics.black ? 0.82 : 0.72));
-      const center = metrics.center * width / 100;
+      const lane = keyLayout.getLaneMetrics(midi);
+      const laneWidth = lane.width * width / 100;
+      const noteWidth = Math.max(2, laneWidth * PIANO_ROLL_NOTE_WIDTH_RATIO);
+      const center = lane.center * width / 100;
       const x = Math.max(0, Math.min(width - noteWidth, center - noteWidth / 2));
       const y = fallAreaHeight - ((end - current) * pxPerSec);
       const h = Math.max(1.2, noteDuration * pxPerSec);
