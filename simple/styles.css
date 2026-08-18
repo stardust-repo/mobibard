@@ -50,8 +50,7 @@ button { color: inherit; }
   padding: 0;
   border-bottom: 0;
   background: transparent;
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 5;
 }
 .topbar-inner {
@@ -191,7 +190,7 @@ button { color: inherit; }
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: min(240px, calc(100vw - 24px));
+  width: min(276px, calc(100vw - 24px));
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -204,20 +203,29 @@ button { color: inherit; }
 .settings-menu[hidden] { display: none; }
 .settings-field {
   display: grid;
-  gap: 7px;
+  grid-template-columns: minmax(72px, 1fr) 132px;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
 }
 .settings-label {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 750;
+  white-space: nowrap;
 }
 .settings-field select {
-  width: 100%;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+  justify-self: end;
   padding: 0 30px 0 10px;
   color: var(--text);
 }
 .settings-theme-button {
-  width: 100%;
+  width: 132px;
+  min-width: 132px;
+  justify-self: end;
   height: 36px;
   padding: 0 10px;
   border: 1px solid var(--line);
@@ -266,6 +274,21 @@ h1 {
   font-size: clamp(28px, 4vw, 42px);
   line-height: 1.15;
   letter-spacing: -0.045em;
+}
+#pageTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  column-gap: .28em;
+}
+#pageTitle .title-version {
+  flex: 0 0 auto;
+  font-size: .5em;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 .subtitle { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
 

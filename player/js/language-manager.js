@@ -3,7 +3,8 @@
 
   const PREF_KEY = "mobibard.player.language";
   const DEFAULT_LANGUAGE = "en";
-  const LOCALE_VERSION = "7.9-v48-cleanup";
+  const LOCALE_VERSION = "5.0.0";
+  const LOCALE_REVISION = "20260818-211321";
   const SUPPORTED = Object.freeze({
     ko: { file: "ko.js", htmlLang: "ko" },
     ja: { file: "ja.js", htmlLang: "ja" },
@@ -141,7 +142,10 @@
     const url = new URL(`locale/${file}`, document.baseURI);
     // Query strings are useful for deployed cache invalidation, but can make
     // local file loading inconsistent across browsers and operating systems.
-    if (url.protocol !== "file:") url.searchParams.set("v", LOCALE_VERSION);
+    if (url.protocol !== "file:") {
+      url.searchParams.set("v", LOCALE_VERSION);
+      url.searchParams.set("rev", LOCALE_REVISION);
+    }
     return url.href;
   }
 

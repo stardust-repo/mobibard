@@ -5,16 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#090b20">
   <meta name="color-scheme" content="dark">
-  <title>모비비트 | MobiBeats v1.0</title>
-  <link rel="icon" href="assets/favicon.ico">
-  <link rel="stylesheet" href="styles.css?v=1.0-judgement-readable">
+  <title>모비비트 | MobiBeats v5.0</title>
+  <link rel="icon" href="../assets/favicon.ico">
+  <link rel="stylesheet" href="styles.css?v=5.0.0">
 </head>
 <body>
   <main id="app" class="app-shell" aria-label="모비비트 리듬게임">
     <header id="topHud" class="top-hud">
       <div class="hud-group hud-left">
         <button id="scoreInfoBtn" class="hud-button" type="button" aria-haspopup="dialog">
-          <span class="hud-icon" aria-hidden="true">♫</span>
+          <img class="hud-icon" src="../assets/icons/mobibard-mark-64.png" alt="" aria-hidden="true">
           <span>연주 정보</span>
         </button>
         <button id="pauseBtn" class="hud-button icon-only" type="button" aria-label="일시정지" title="일시정지 (Esc)">
@@ -188,7 +188,7 @@
             </div>
             <div class="section-state-group">
               <span id="scoreChannelCount" class="state-pill channel-count-pill">MML 채널 0개</span>
-              <span id="sf2State" class="state-pill">음원 로딩 중</span>
+              <span id="soundBankState" class="state-pill">음원 로딩 중</span>
             </div>
           </div>
           <div class="instrument-quick-actions" aria-label="악기 빠른 설정">
@@ -294,9 +294,12 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/utils.js?v=1.0-judgement-readable"></script>
-  <script src="js/mml-parser.js?v=1.0-judgement-readable"></script>
-  <script src="js/sf2-sampler.js?v=1.0-judgement-readable"></script>
-  <script src="js/game.js?v=1.0-judgement-readable"></script>
+  <script src="../plugins/common/utils.js?v=5.0.0"></script>
+  <script src="../plugins/common/mml-parser.js?v=5.0.0"></script>
+  <script src="../plugins/formats/midi/midi-parser.js?v=5.0.0"></script>
+  <script src="../plugins/formats/soundbank/soundbank.js?v=5.0.0"></script>
+  <script src="../assets/default_sf3.js?v=5.0.0"></script>
+  <script src="js/runtime.js?v=5.0.0"></script>
+  <script src="js/game.js?v=5.0.0"></script>
 </body>
 </html>

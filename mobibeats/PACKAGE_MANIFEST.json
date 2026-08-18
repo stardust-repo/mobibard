@@ -1,9 +1,10 @@
 {
   "name": "MobiBeats",
   "display_name": "모비비트",
-  "version": "1.0.0",
-  "type": "independent-static-webpage",
-  "created_utc": "2026-07-21T21:29:23.014022+00:00",
+  "version": "5.0.0",
+  "type": "repository-integrated-static-webpage",
+  "deployment_root": "repository-root",
+  "updated_utc": "2026-08-18T08:12:29Z",
   "entry": "index.html",
   "files": [
     {
@@ -13,48 +14,75 @@
     },
     {
       "path": "README.md",
-      "size": 7729,
-      "sha256": "b446b53a200847389041f919c162a25f38d22a1711babd6081405f9cfa613a93"
+      "size": 2926,
+      "sha256": "a54b04da7e84a16cb1b7eba6ca5dd56c3500940c51bdb66a10da585b59737e49"
     },
     {
-      "path": "assets/Roland_SC-55.sf2",
-      "size": 9862608,
-      "sha256": "e3420bfd064f3f096e83522f743de88830e1487b0564c35d219cb138142361ce"
+      "path": "index.html",
+      "size": 15897,
+      "sha256": "af461b0e632dfe8ce8a81d8a8c04ffd67b022f601aa1c3c4600c36a6160ce5ad"
     },
     {
-      "path": "assets/favicon.ico",
+      "path": "js/game.js",
+      "size": 112756,
+      "sha256": "9399b406bfe93839c3009cde26eac3f8a369aea11d005e79cd271a4e9e17c5f6"
+    },
+    {
+      "path": "js/runtime.js",
+      "size": 1901,
+      "sha256": "adee6c6324fe8d3ab38ebe1d9c362f14de0a169d7d7581ea66b80ca6dd047270"
+    },
+    {
+      "path": "styles.css",
+      "size": 31391,
+      "sha256": "46bff89bbc7a67d9fbc3c0569e0b804ba5a961751bf477aef9e3ec0fd14059e8"
+    }
+  ],
+  "shared_dependencies": [
+    {
+      "path": "../assets/default_sf3.js",
+      "size": 19579878,
+      "sha256": "41aa0ac97d4ab23208c965f293edac68d89b3d91ed2fcc617c4eb8413b6400f5"
+    },
+    {
+      "path": "../assets/favicon.ico",
       "size": 8957,
       "sha256": "1faf08e82fea6ba431c30f9b3a01afdf33c8a470026290bd9d7977f6b5a38700"
     },
     {
-      "path": "index.html",
-      "size": 15700,
-      "sha256": "a6eaf5e13af62d27cbd439e923e6800d6cab80a56d6a1d4bbda089cb24d16bbd"
+      "path": "../assets/icons/mobibard-mark-64.png",
+      "size": 5443,
+      "sha256": "d75c2a430a097569ed84d2b87704e757e097b71186935d44f7a8403c15381c7d"
     },
     {
-      "path": "js/game.js",
-      "size": 104698,
-      "sha256": "6d74bdf397071c3d9fe264eeb2effd73a759bdf60aba5914816bb993348d008a"
+      "path": "../plugins/common/utils.js",
+      "size": 20353,
+      "sha256": "4c75a1cc86021ae543d2518315fb74564901fe6fc0e3371ed4b3a62631a0e84a"
     },
     {
-      "path": "js/mml-parser.js",
-      "size": 14454,
-      "sha256": "066a91ddae610e7fa2f14c82934da998272b7abbe74ddf99de6207734cfa1140"
+      "path": "../plugins/common/mml-parser.js",
+      "size": 25494,
+      "sha256": "1da4a0c02f8b058a24979e09663ea370a2c45329b6034b39079030474281ea29"
     },
     {
-      "path": "js/sf2-sampler.js",
-      "size": 13233,
-      "sha256": "ae7a6baf78d3c624f82c873a86c2cde67a8563abd76c9f95046b87317995f501"
+      "path": "../plugins/formats/midi/midi-parser.js",
+      "size": 22299,
+      "sha256": "e83f626dffd080fec088b5321d7f812dd33dcf48a969a798c4bd83a9c6b682b1"
     },
     {
-      "path": "js/utils.js",
-      "size": 1109,
-      "sha256": "ae9c0644fe1c93b52f7183683bd449d8a726311c6e6af0f446090daf5a7c2829"
+      "path": "../plugins/formats/soundbank/soundbank.js",
+      "size": 42998,
+      "sha256": "1bd20e6e1e62eb4f1666235e94624c3b79098f0a52012d56f794f46c7058b053"
     },
     {
-      "path": "styles.css",
-      "size": 31346,
-      "sha256": "0b14010eb6bd356e0e89c30608dab0063f307022cec4af728e9bca2adfab9d3c"
+      "path": "../assets/licenses/FluidR3Mono_GM_LICENSE.md",
+      "size": 3114,
+      "sha256": "4a91cc20c53594f750198b3570761a3f19453b63f437e4753c94af76837616c1"
+    },
+    {
+      "path": "../THIRD-PARTY-NOTICES.md",
+      "size": 7183,
+      "sha256": "940e1024f13ea990a18201c82b80df6fb6d853292eccdaf7eaf28a84c7c3d716"
     }
   ]
 }

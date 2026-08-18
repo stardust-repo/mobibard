@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const DEFAULT_SF2_FILE_NAME = String(window.MOBIBARD_DEFAULT_SF3_NAME || "Roland_SC-55.sf3");
+  const DEFAULT_SOUND_BANK_FILE_NAME = String(window.MOBIBARD_DEFAULT_SF3_NAME || "FluidR3Mono_GM.sf3");
   const PART_LABEL_KEYS = ["part.melody", "part.harmony1", "part.harmony2", "part.harmony3", "part.harmony4", "part.harmony5"];
   const PART_LABELS = new Proxy(PART_LABEL_KEYS, {
     get(target, property, receiver) {
@@ -60,11 +60,11 @@
     MIDI_CONVERT_CACHE_PREF,
     SOUND_BANK_SELECTION_PREF
   ]);
-  const GUEST_AVATAR_URL = "../assets/icons/guest-user.svg";
+  const GUEST_AVATAR_URL = "../assets/icons/guest-user.svg?v=5.0.0&rev=20260818-205217";
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
-  const SOURCE_FILE_EXTENSIONS = new Set(["txt", "mmi", "mml", ...(window.MabiMusicFormats?.supportedExtensions?.() || [])]);
+  const SOURCE_FILE_EXTENSIONS = new Set(["txt", "mmi", "mml", ...(window.MabiMusicFormats?.inputExtensions?.() || window.MabiMusicFormats?.supportedExtensions?.() || [])]);
   const HEADER_SHORTCUT_LINKS = new Set([
     "https://bitmidi.com/",
     "https://www.classicalarchives.com/midi.html",
@@ -88,10 +88,21 @@
   const { shortError, clampInt, formatTime } = window.MabiUtils;
   const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths } = window.MabiMml;
-  const { optimizeMml, generateAccompanimentMml, generateDynamicsMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
-  const { parseSoundBank, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
+  const { optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
+  const { parseSoundBank, loadEmbeddedSoundBank, prepareNotes, schedulePreparedNotes } = window.MabiSoundBank;
 
   const $ = (id) => document.getElementById(id);
+
+  function openFilePickerInput(input) {
+    if (!input || input.disabled) return;
+    const groupedPicker = window.MabiSupportedFilesUi?.openFileInput;
+    if (typeof groupedPicker === "function") {
+      void groupedPicker(input);
+      return;
+    }
+    input.click();
+  }
+
   const midiFile = $("midiFile");
   const midiLoadBtn = $("midiLoadBtn");
   const midiSiteLinks = $("midiSiteLinks");
@@ -152,6 +163,11 @@
   const tempoEditBpm = $("tempoEditBpm");
   const tempoEditApply = $("tempoEditApply");
   const tempoEditCancel = $("tempoEditCancel");
+  const tempoSimplifyBtn = $("tempoSimplifyBtn");
+  const tempoSimplifyDialog = $("tempoSimplifyDialog");
+  const tempoSimplifyPreview = $("tempoSimplifyPreview");
+  const tempoSimplifyApply = $("tempoSimplifyApply");
+  const tempoSimplifyCancel = $("tempoSimplifyCancel");
   const pianoRoll = $("pianoRoll");
   const pianoRollCanvas = $("pianoRollCanvas");
   const pianoRollEmpty = $("pianoRollEmpty");
@@ -298,7 +314,7 @@
   let partPlaybackGains = [];
   let soundFont = null;
   let defaultSoundFont = null;
-  let sf2Name = DEFAULT_SF2_FILE_NAME;
+  let sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
   let soundFontIsDefault = true;
   let activeSources = [];
   let activeTimers = [];
@@ -328,6 +344,7 @@
   let tempoEditResumePlayback = false;
   let tempoEditResumeOffset = 0;
   let tempoEditSuppressCloseResume = false;
+  let pendingTempoSimplification = null;
   let playContextStart = 0;
   let playOffsetStart = 0;
   let playbackAutoGainScale = 1;
@@ -485,6 +502,10 @@
       selectedTempoMarker = null;
       if (!tempoEditSuppressCloseResume) resumePlaybackAfterTempoEdit();
     });
+    tempoSimplifyBtn?.addEventListener("click", openTempoSimplifyDialog);
+    tempoSimplifyApply?.addEventListener("click", applyTempoSimplificationFromDialog);
+    tempoSimplifyCancel?.addEventListener("click", closeTempoSimplifyDialog);
+    tempoSimplifyDialog?.addEventListener("close", () => { pendingTempoSimplification = null; });
     pianoRoll?.addEventListener("click", handlePianoRollClick);
     pianoRoll?.addEventListener("pointermove", handlePianoRollPointerMove);
     pianoRoll?.addEventListener("pointerleave", clearPianoRollTempoHover);
@@ -669,7 +690,7 @@
       t.addEventListener("scroll", () => syncPartHighlightScroll(i));
     });
     tabs.forEach(btn => btn.addEventListener("click", () => selectTab(btn.dataset.tab)));
-    // v4.8 이전의 MML 편집 초안 캐시는 더 이상 사용하지 않는다.
+    // 이전 MML 편집 초안 캐시는 더 이상 사용하지 않는다.
     // MIDI/파일 불러오기 설정 캐시(midiConvertLastSettings)는 별도 키이므로 유지한다.
     try { localStorage.removeItem(PREF_PREFIX + "mmlDraft"); } catch (_) {}
     await restoreCachedSoundBankFromLocal();
@@ -830,6 +851,7 @@
     updateSoundFontUi();
     updateSoundPresetControls();
     if (bulkVolumeDialog?.open) updateBulkVolumeStats();
+    if (tempoSimplifyDialog?.open && pendingTempoSimplification) updateTempoSimplifyPreview(pendingTempoSimplification);
     if (mmiImportDialog?.open) updateMmiImportSelectionState();
     if (pianoRollEmpty && !pianoRollEmpty.hidden && pianoRollRangeLabel) {
       pianoRollRangeLabel.textContent = i18nText("roll.title");
@@ -1169,13 +1191,13 @@
     const resolved = theme === "dark" ? "dark" : "light";
     document.documentElement.dataset.theme = resolved;
     if (themeToggleBtn) {
-      const currentLabel = i18nText(resolved === "dark" ? "theme.dark" : "theme.light");
+      const toggleLabel = i18nText("theme.toggle");
       themeToggleBtn.dataset.currentTheme = resolved;
       delete themeToggleBtn.dataset.targetTheme;
       themeToggleBtn.setAttribute("aria-pressed", resolved === "dark" ? "true" : "false");
-      themeToggleBtn.setAttribute("aria-label", currentLabel);
-      themeToggleBtn.title = currentLabel;
-      if (themeModeText) themeModeText.textContent = currentLabel;
+      themeToggleBtn.setAttribute("aria-label", toggleLabel);
+      themeToggleBtn.title = toggleLabel;
+      if (themeModeText) themeModeText.textContent = toggleLabel;
     }
     if (persist) writePref("theme", resolved);
     pianoRollLastDataSignature = "";
@@ -1267,7 +1289,7 @@
 
   function currentRhythmGameTitle() {
     const name = String(googleDriveMmlFileName || suggestedMmlSaveFileName || "")
-      .replace(/\.(txt|mml|mid|midi|mus|musicxml|xml|mxl|mmi|gp3|gp4|gp5|gpx|gp|tab|vsq|vsqx|vpr|ust|ustx|svp|s5p|ccs)$/i, "")
+      .replace(/\.(txt|mml|mid|midi|kar|mus|musx|mnx(?:\.json)?|mscz|mscx|musicxml|xml|mxl|mmi|gp3|gp4|gp5|gpx|gp|tab|vsq|vsqx|vpr|ust|ustx|svp|s5p|ccs)$/i, "")
       .replace(/[_-]+/g, " ")
       .trim();
     return name || i18nText("mml.title");
@@ -3577,7 +3599,7 @@
     const meta = readSoundBankSelectionMeta();
     if (!meta || meta.mode !== "custom") {
       soundFontIsDefault = true;
-      sf2Name = DEFAULT_SF2_FILE_NAME;
+      sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
       return false;
     }
     const api = soundBankCacheApi();
@@ -3621,7 +3643,7 @@
   function openSf2Picker() {
     if (!sf2File) return;
     sf2File.value = "";
-    sf2File.click();
+    openFilePickerInput(sf2File);
   }
 
   async function restoreDefaultSoundFont(options = {}) {
@@ -3634,7 +3656,7 @@
     setSoundFontControlsBusy(true);
     soundFont = null;
     soundFontIsDefault = true;
-    sf2Name = DEFAULT_SF2_FILE_NAME;
+    sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
     if (sf2File) sf2File.value = "";
     updateSoundFontUi(i18nText("snd.reading_soundbank"));
     let selectionMeta = null;
@@ -3661,7 +3683,7 @@
   function openSourceFilePicker() {
     if (!midiFile) return;
     midiFile.value = "";
-    midiFile.click();
+    openFilePickerInput(midiFile);
   }
 
   function closeImportDialogsForSourceReload() {
@@ -5932,7 +5954,7 @@
       if (sf2File) sf2File.value = "";
       if (!soundFont) {
         soundFontIsDefault = true;
-        sf2Name = DEFAULT_SF2_FILE_NAME;
+        sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
         try { await loadDefaultSf2IfNeeded(); } catch (_) {}
       }
       updateSoundFontUi();
@@ -5944,10 +5966,7 @@
 
   async function ensureDefaultSoundFont() {
     if (defaultSoundFont) return defaultSoundFont;
-    const bytes = readDefaultSf2Bytes();
-    defaultSoundFont = await parseSoundBank(bytes);
-    // 파싱 이후에는 약 4MB의 Base64 문자열을 더 들고 있을 필요가 없다.
-    try { window.MOBIBARD_DEFAULT_SF3_BASE64 = ""; } catch (_) {}
+    defaultSoundFont = await loadEmbeddedSoundBank({ clearBase64: true });
     return defaultSoundFont;
   }
 
@@ -5956,23 +5975,9 @@
     if (!soundFont) {
       soundFont = original;
       soundFontIsDefault = true;
-      sf2Name = DEFAULT_SF2_FILE_NAME;
+      sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
     }
     updateSoundFontUi();
-  }
-
-  function readDefaultSf2Bytes() {
-    const encoded = String(window.MOBIBARD_DEFAULT_SF3_BASE64 || "").replace(/\s+/g, "");
-    if (!encoded) throw new Error(i18nText("snd.load_default_file", [DEFAULT_SF2_FILE_NAME]));
-    let binary;
-    try {
-      binary = atob(encoded);
-    } catch (_) {
-      throw new Error(i18nText("snd.load_default_file", [DEFAULT_SF2_FILE_NAME]));
-    }
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i) & 0xff;
-    return bytes;
   }
 
   async function openPartSoundDialog() {
@@ -5988,7 +5993,7 @@
       } catch (_) {
         soundFont = null;
         soundFontIsDefault = true;
-        sf2Name = DEFAULT_SF2_FILE_NAME;
+        sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
         updateSoundFontUi();
       }
     } else {
@@ -6954,6 +6959,92 @@
     return Math.max(0, Number(value) || 0).toLocaleString(document.documentElement.lang || undefined);
   }
 
+
+  function closeTempoSimplifyDialog() {
+    if (!tempoSimplifyDialog?.open) return;
+    try { tempoSimplifyDialog.close(); } catch (_) {}
+  }
+
+  function calculateTempoSimplification() {
+    if (typeof simplifyTemposMml !== "function") throw new Error(i18nText("tempo.simplify_unavailable"));
+    const source = normalizeMmlForDisplay(mainMml?.value || "");
+    return {
+      source,
+      result: simplifyTemposMml(source, {
+        partCount: 6,
+        windowUnits: 1024,
+        maxBpmDeltaExclusive: 10,
+        preserveExtrema: true
+      })
+    };
+  }
+
+  function tempoSimplificationDeleteCount(pending) {
+    const result = pending?.result;
+    const value = result?.removedTokenCount ?? result?.removedCount;
+    return Math.max(0, Number(value) || 0);
+  }
+
+  function updateTempoSimplifyPreview(pending) {
+    if (!tempoSimplifyPreview || !tempoSimplifyApply) return;
+    const count = tempoSimplificationDeleteCount(pending);
+    tempoSimplifyPreview.textContent = count > 0
+      ? i18nText("tempo.simplify_remove_count", [formatCount(count)])
+      : i18nText("tempo.simplify_none");
+    tempoSimplifyPreview.dataset.empty = count > 0 ? "false" : "true";
+    tempoSimplifyApply.disabled = count <= 0;
+    tempoSimplifyApply.setAttribute("aria-disabled", count <= 0 ? "true" : "false");
+  }
+
+  function openTempoSimplifyDialog() {
+    try {
+      pendingTempoSimplification = calculateTempoSimplification();
+      updateTempoSimplifyPreview(pendingTempoSimplification);
+      if (tempoSimplifyDialog?.showModal) {
+        tempoSimplifyDialog.showModal();
+        return;
+      }
+      const count = tempoSimplificationDeleteCount(pendingTempoSimplification);
+      if (count <= 0) {
+        showDialog(i18nText("tempo.simplify"), i18nText("tempo.simplify_none"));
+        pendingTempoSimplification = null;
+        return;
+      }
+      const message = `${i18nText("tempo.simplify_description")}\n\n${i18nText("tempo.simplify_remove_count", [formatCount(count)])}`;
+      if (window.confirm(message)) applyTempoSimplificationFromDialog();
+      else pendingTempoSimplification = null;
+    } catch (err) {
+      pendingTempoSimplification = null;
+      showDialog(i18nText("tempo.simplify"), shortError(err));
+    }
+  }
+
+  function applyTempoSimplificationFromDialog() {
+    try {
+      const currentSource = normalizeMmlForDisplay(mainMml?.value || "");
+      if (!pendingTempoSimplification || pendingTempoSimplification.source !== currentSource) {
+        pendingTempoSimplification = calculateTempoSimplification();
+      }
+      const result = pendingTempoSimplification.result;
+      const count = tempoSimplificationDeleteCount({ result });
+      if (count <= 0) {
+        closeTempoSimplifyDialog();
+        showDialog(i18nText("tempo.simplify"), i18nText("tempo.simplify_none"));
+        return;
+      }
+      stopPlayback(false);
+      setMainMml(result.mml);
+      closeTempoSimplifyDialog();
+      flashButton(tempoSimplifyBtn, i18nText("cfg.applied"));
+      trackAnalytics("tempo_simplify_apply", { removed_tempos: count });
+      showDialog(
+        i18nText("tempo.simplify"),
+        i18nText("tempo.simplify_applied", [formatCount(count)])
+      );
+    } catch (err) {
+      showDialog(i18nText("tempo.simplify"), shortError(err));
+    }
+  }
 
   function openRestTrimDialog() {
     if (restTrimLimit) restTrimLimit.value = "32";

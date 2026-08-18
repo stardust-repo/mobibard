@@ -1,6 +1,8 @@
 (() => {
   "use strict";
 
+  const APP_VERSION_LABEL = "v5.0";
+
   const CONFIG = {
     defaultChannelCount: 1,
     preRollPixels: 8,
@@ -46,6 +48,16 @@
     longPressDurationMs: 560,
     longPressMoveTolerance: 12,
   };
+
+  function openFilePickerInput(input) {
+    if (!input || input.disabled) return;
+    const groupedPicker = window.MabiSupportedFilesUi?.openFileInput;
+    if (typeof groupedPicker === "function") {
+      void groupedPicker(input);
+      return;
+    }
+    input.click();
+  }
 
   const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
   const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
@@ -557,7 +569,11 @@
     },
   };
 
-  const audioEngine = new window.MabinogiSf2Player({
+  const EditorSoundBankPlayer = window.MobibardEditorSoundBank?.Player;
+  if (typeof EditorSoundBankPlayer !== "function") {
+    throw new Error("Editor SoundBank 플러그인을 불러오지 못했습니다.");
+  }
+  const audioEngine = new EditorSoundBankPlayer({
     bankNumber: 0,
     presetNumber: 0,
     volume: state.masterVolume,
@@ -862,7 +878,7 @@
       color: CHANNEL_COLORS[fallbackIndex % CHANNEL_COLORS.length],
       muted: false,
       visible: true,
-      instrument: "SC-55 Piano 1",
+      instrument: "Acoustic Grand Piano",
       notes: [],
     };
   }
@@ -1118,7 +1134,7 @@
   }
 
   function stripMidiFileExtension(fileName) {
-    const name = String(fileName || "MIDI").replace(/\.(?:mid|midi|mus|musicxml|xml|mxl|gp3|gp4|gp5|gpx|gp|tab|vsq|vsqx|vpr|ust|ustx|svp|s5p|ccs)$/i, "").trim();
+    const name = String(fileName || "MIDI").replace(/\.(?:mid|midi|kar|mus|musx|mnx(?:\.json)?|mscz|mscx|musicxml|xml|mxl|gp3|gp4|gp5|gpx|gp|tab|vsq|vsqx|vpr|ust|ustx|svp|s5p|ccs)$/i, "").trim();
     return name || "MIDI";
   }
 
@@ -1153,9 +1169,8 @@
     return document?.tempoEvents?.length ? document.tempoEvents : state.tempos;
   }
 
-  function clamp(value, min, max) {
-    return Math.min(max, Math.max(min, value));
-  }
+  const clamp = window.MabiUtils?.clamp;
+  if (typeof clamp !== "function") throw new Error("utils.js must be loaded before this Editor script");
 
   function velocityToMmlVolume(value) {
     const velocity = clamp(Math.round(Number(value) || 0), 0, 127);
@@ -4478,7 +4493,7 @@
     elements.channelColorInput.value = activeColor;
     updateChannelColorControl(activeColor);
     if (elements.channelInstrumentSelect) {
-      const instrumentName = String(channel.instrument || "SC-55 Piano 1");
+      const instrumentName = String(channel.instrument || "Acoustic Grand Piano");
       const matchedProgram = GM_PROGRAM_NAMES.findIndex((name) => name === instrumentName);
       elements.channelInstrumentSelect.value = isDrumInstrumentName(instrumentName) ? "drums" : String(matchedProgram >= 0 ? matchedProgram : 0);
     }
@@ -4629,104 +4644,7 @@
     scheduleAutosave();
   }
 
-  function cleanDecodedMidiText(value) {
-    return String(value || "")
-      .replace(/\0/g, "")
-      .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
-      .trim();
-  }
-
-  function scoreDecodedMidiText(value, encoding = "") {
-    const text = cleanDecodedMidiText(value);
-    if (!text) return -100000;
-    const replacementCount = (text.match(/\uFFFD/g) || []).length;
-    const controlCount = (text.match(/[\u0080-\u009F]/g) || []).length;
-    const mojibakeCount = (text.match(/[ÃÂÐÑØÞæ€ž™œšžŸ]/g) || []).length;
-    const hangulCount = (text.match(/[\uAC00-\uD7A3]/g) || []).length;
-    const kanaCount = (text.match(/[\u3040-\u30FF]/g) || []).length;
-    const halfwidthKanaCount = (text.match(/[\uFF66-\uFF9F]/g) || []).length;
-    const hanCount = (text.match(/[\u3400-\u9FFF]/g) || []).length;
-    const simplifiedHintCount = (text.match(/[钢轨乐门车风龙马鸟鱼后发东国台万与云书业专严丛丝两为丽举么义乌乔习乡买乱争于亏亚产亩亲亿仅从仓仪们价众优会伞伟传伤伦体余侠侦侧侨俩俭债倾偿储儿兑党兰关兴养兽冈册写军农冲决况冻净凉减凑凤凭击刘则刚创删别刹剂剑剧办务动励劳势匀区医华协单卖卢卫却厅历厉压厌厕县叁参双变叙叶号叹吓吗吨听启吴呐呕员呛呜咏响哑哗唤啸喷团园围图圆圣场坏块坚坛坝坞坟坠垄垒垦垫垮埘堑墙壮声壳处备复够头夹夺奋奖奥妇妈妆孙学宁宝实宠审宪宫宽宾寝对导寿将尔尘尝层岁岂岛岭岳峡币帅师帐帘帮庄庆库应庙庞废开异弃张弥归录彻径忆忧怀态怂总恋恳恶恼恽悦悬惊惧惨惩惫惬惭惯愤愿懒戏战户扑执扩扫扬扰抚抛抢护报担拟拢拣拥拦拧拨择挂挚挛挞挟挠挡挣挤挥捞损换捣据掳掴掷掺揽搀搁搂搅携摄摆摇摊撑撵敌敛数斋斩断无旧时旷昙显晋晒晓晕暂术机杀杂权条来杨极构枢枣枪柜柠栅标栈栋栏树样栾桨梦检椭楼榄槛欢欧歼残殒殴毁毕气汇汉汤沟没沣沤沥沦沧沪泞注泪泼泽洁洒浅浆浇测济浑浓涂涛涝涟涡涣涤润涧涨涩淀渊渍渐渔渗温湾湿溃溅滚滞满滤滥滨滩潇潜澜濑灭灯灵灾灿炉炖点炼烁烂烛烟烦烧烫热焕爱爷牵犊状犹狈独狭狮狱猎猪猫献环现玺琐琼电画畅疗疟疡疮疯疱疴痉痒痪瘘瘪瘫瘾癣皱盐监盖盘盗睁瞒瞩矫矿码砖砚砺础硕确碍碱礼祷祸离种积称稳穷窑窍竞笔笋笼笺签简箩篓篮篱簖籴类籼粜粝粤粪粮紧纠红纤约级纪纫纬纯纱纲纳纵纷纸纹纺纽线练组细织终绊绍绎经绑绒结绕绘给络绝绞统绣绳维绵绿缀缄缆缎缓缔缕编缘缚缝缠缨缩缴罢罗罚罴羁翘耸耻聂职联聪肃肠肤肾肿胀胁胆胜胡胶脉脏脑脓脚脱脸腊腻腾舰舱艰艳艺节芜苍苏苹范茎荆荐荚荡荣荤荧药莲获莹萝营萧萨蓝蓟蔷蔼蕴薮虑虚虫虽虾蚀蚁蚂蛊蜕蜗蝇蝉蝎蝼蝾衅衔补衬袄袜袭装见观规觅视览觉觑角触誉计订认讥讨让议讯记讲讳讶许论讼设访诀证评诅识诈诉诊词译试诗诚话诞询该详诫诬语误诰诱说请诸诺读课谁调谅谈谊谋谎谓谢谣谤谨谱谷贝贞负贡财责贤败账货质贩贪贫购贯贱贴贵贷贸费贺贼贾贿赂赃资赋赌赏赐赔赖赚赛赞赠赢赵赶趋跃践跷跸躏车轧轨轩转轮软轰轻载较辅辆辈辉辊辑输辖辗辙辞辩边辽达迁过迈运还这进远违连迟迩迹适选递逻遗郑酝酱酿释里鉴钉针钓钙钞钟钢钥钦钧钩钱钳钻钾铁铃铅铜铭铲银铸铺链销锁锅锈锋锐错锡锣锤锦键锯锰锹锻镀镇镜长门闪闭问闯闲间闷闸闹闻闽阁阀阂阅阔队阳阴阵阶际陆陈陕险随隐隶难雾霁静顶顷项顺须顽顾顿颁颂预领颇颈频颗题颜额颠颤风飘飞饥饭饮饯饰饱饲饵饼饿馆馈馒马驭驮驯驰驱驶驷驹驻驾骂骄骆骇验骑骗骚骤鱼鲁鲜鲤鲸鸟鸡鸣鸥鸦鸭鸳鸯鸿鹅鹤鹰麦黄齐齿龄龙龟]/g) || []).length;
-    const traditionalHintCount = (text.match(/[鋼軌樂門車風龍馬鳥魚後發東國臺萬與雲書業專嚴叢絲兩為麗舉麼義烏喬習鄉買亂爭於虧亞產畝親億僅從倉儀們價眾優會傘偉傳傷倫體餘俠偵側僑倆儉債傾償儲兒兌黨蘭關興養獸岡冊寫軍農沖決況凍淨涼減湊鳳憑擊劉則剛創刪別剎劑劍劇辦務動勵勞勢勻區醫華協單賣盧衛卻廳歷厲壓厭廁縣參雙變敘葉號嘆嚇嗎噸聽啟吳吶嘔員嗆嗚詠響啞嘩喚嘯噴團園圍圖圓聖場壞塊堅壇壩塢墳墜壟壘墾墊垮塹牆壯聲殼處備復夠頭夾奪奮獎奧婦媽妝孫學寧寶實寵審憲宮寬賓寢對導壽將爾塵嘗層歲豈島嶺嶽峽幣帥師帳簾幫莊慶庫應廟龐廢開異棄張彌歸錄徹徑憶憂懷態慫總戀懇惡惱惲悅懸驚懼慘懲憊愜慚慣憤願懶戲戰戶撲執擴掃揚擾撫拋搶護報擔擬攏揀擁攔擰撥擇掛摯攣撻挾撓擋掙擠揮撈損換搗據擄摑擲摻攬攙擱摟攪攜攝擺搖攤撐攆敵斂數齋斬斷無舊時曠曇顯晉曬曉暈暫術機殺雜權條來楊極構樞棗槍櫃檸柵標棧棟欄樹樣欒槳夢檢橢樓欖檻歡歐殲殘殞毆毀畢氣匯漢湯溝沒灃漚瀝淪滄滬濘註淚潑澤潔灑淺漿澆測濟渾濃塗濤澇漣渦渙滌潤澗漲澀澱淵漬漸漁滲溫灣濕潰濺滾滯滿濾濫濱灘瀟潛瀾瀨滅燈靈災燦爐燉點煉爍爛燭煙煩燒燙熱煥愛爺牽犢狀猶狽獨狹獅獄獵豬貓獻環現璽瑣瓊電畫暢療瘧瘍瘡瘋皰痙癢瘓瘺癟癱癮癬皺鹽監蓋盤盜睜瞞矚矯礦碼磚硯礪礎碩確礙鹼禮禱禍離種積稱穩窮窯竅競筆筍籠箋簽簡籮簍籃籬糴類秈糶糲粵糞糧緊糾紅纖約級紀紉緯純紗綱納縱紛紙紋紡紐線練組細織終絆紹繹經綁絨結繞繪給絡絕絞統繡繩維綿綠綴緘纜緞緩締縷編緣縛縫纏纓縮繳罷羅罰羈翹聳恥聶職聯聰肅腸膚腎腫脹脅膽勝胡膠脈臟腦膿腳脫臉臘膩騰艦艙艱艷藝節蕪蒼蘇蘋範莖荊薦莢蕩榮葷熒藥蓮獲瑩蘿營蕭薩藍薊薔藹蘊慮虛蟲雖蝦蝕蟻螞蠱蛻蝸蠅蟬蠍螻蠑釁銜補襯襖襪襲裝見觀規覓視覽覺覷角觸譽計訂認譏討讓議訊記講諱訝許論訟設訪訣證評詛識詐訴診詞譯試詩誠話誕詢該詳誡誣語誤誥誘說請諸諾讀課誰調諒談誼謀謊謂謝謠謗謹譜穀貝貞負貢財責賢敗賬貨質販貪貧購貫賤貼貴貸貿費賀賊賈賄賂贓資賦賭賞賜賠賴賺賽讚贈贏趙趕趨躍踐蹺蹕躪車軋軌軒轉輪軟轟輕載較輔輛輩輝輥輯輸轄輾轍辭辯邊遼達遷過邁運還這進遠違連遲邇跡適選遞邏遺鄭醞醬釀釋裡鑒釘針釣鈣鈔鐘鋼鑰欽鈞鉤錢鉗鑽鉀鐵鈴鉛銅銘鏟銀鑄鋪鏈銷鎖鍋鏽鋒銳錯錫鑼錘錦鍵鋸錳鍬鍛鍍鎮鏡長門閃閉問闖閒間悶閘鬧聞閩閣閥閡閱闊隊陽陰陣階際陸陳陝險隨隱隸難霧霽靜頂頃項順須頑顧頓頒頌預領頗頸頻顆題顏額顛顫風飄飛飢飯飲餞飾飽飼餌餅餓館饋饅馬馭馱馴馳驅駛駟駒駐駕罵驕駱駭驗騎騙騷驟魚魯鮮鯉鯨鳥雞鳴鷗鴉鴨鴛鴦鴻鵝鶴鷹麥黃齊齒齡龍龜]/g) || []).length;
-    const visibleCount = (text.match(/[^\s]/g) || []).length;
-    let score = visibleCount * 2 - replacementCount * 80 - controlCount * 24 - mojibakeCount * 12 - halfwidthKanaCount * 6;
-    if (encoding === "shift_jis") score += kanaCount * 8 + hanCount * 1.2;
-    if (encoding === "euc-kr") score += hangulCount * 9 + hanCount * 0.8;
-    if (encoding === "gb18030") score += hanCount * 2.2 + simplifiedHintCount * 6;
-    if (encoding === "big5") score += hanCount * 2.2 + traditionalHintCount * 6;
-    if (encoding === "windows-1252") score -= (hangulCount + kanaCount + halfwidthKanaCount + hanCount) * 3;
-    const locale = String(globalThis.navigator?.language || "").toLowerCase();
-    if (locale.startsWith("ko") && encoding === "euc-kr") score += 20;
-    if (locale.startsWith("ja") && encoding === "shift_jis") score += 20;
-    if (/^zh-(tw|hk|mo)/.test(locale) && encoding === "big5") score += 20;
-    if (locale.startsWith("zh") && !/^zh-(tw|hk|mo)/.test(locale) && encoding === "gb18030") score += 20;
-    return score;
-  }
-
-  function decodeMidiText(bytes) {
-    const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
-    if (!source.length) return "";
-
-    // MIDI meta text has no mandated character encoding.  Preserve ASCII/UTF-8 first,
-    // then try common encodings used by older Japanese/Korean/Chinese MIDI files.
-    if (source.length >= 2 && source[0] === 0xff && source[1] === 0xfe) {
-      try { return cleanDecodedMidiText(new TextDecoder("utf-16le").decode(source.subarray(2))); } catch {}
-    }
-    if (source.length >= 2 && source[0] === 0xfe && source[1] === 0xff) {
-      try { return cleanDecodedMidiText(new TextDecoder("utf-16be").decode(source.subarray(2))); } catch {}
-    }
-    if (source.length >= 3 && source[0] === 0xef && source[1] === 0xbb && source[2] === 0xbf) {
-      try { return cleanDecodedMidiText(new TextDecoder("utf-8").decode(source.subarray(3))); } catch {}
-    }
-
-    const asciiOnly = source.every((value) => value < 0x80);
-    if (asciiOnly) {
-      return cleanDecodedMidiText(Array.from(source, (value) => String.fromCharCode(value)).join(""));
-    }
-
-    try {
-      return cleanDecodedMidiText(new TextDecoder("utf-8", { fatal: true }).decode(source));
-    } catch {}
-
-    const candidates = [];
-    for (const encoding of ["shift_jis", "euc-kr", "big5", "gb18030", "windows-1252"]) {
-      try {
-        const decoded = cleanDecodedMidiText(new TextDecoder(encoding, { fatal: true }).decode(source));
-        if (decoded) candidates.push({ decoded, score: scoreDecodedMidiText(decoded, encoding) });
-      } catch {
-        // Some browsers may not expose every legacy decoder.
-      }
-    }
-    candidates.sort((left, right) => right.score - left.score);
-    if (candidates.length) return candidates[0].decoded;
-    return cleanDecodedMidiText(Array.from(source, (value) => String.fromCharCode(value)).join(""));
-  }
-
-  function readMidiVariableLength(view, cursor, limit) {
-    let value = 0;
-    let count = 0;
-    while (cursor.offset < limit && count < 4) {
-      const byte = view.getUint8(cursor.offset++);
-      value = (value << 7) | (byte & 0x7f);
-      count += 1;
-      if ((byte & 0x80) === 0) {
-        return value;
-      }
-    }
-    if (count === 4) {
-      return value;
-    }
-    throw new Error("MIDI 가변 길이 값을 읽지 못했습니다.");
-  }
-
-  function readMidiChunkId(view, offset) {
-    return String.fromCharCode(
-      view.getUint8(offset),
-      view.getUint8(offset + 1),
-      view.getUint8(offset + 2),
-      view.getUint8(offset + 3),
-    );
-  }
+  // MIDI byte decoding and metadata text decoding are provided by plugins/formats/midi/midi-parser.js.
 
   function evaluateMergedMidiVelocity(velocities) {
     const safe = velocities
@@ -4878,163 +4796,42 @@
     const quantizeUnit = 4 / quantizeDivision;
     const sourceType = normalizeMidiSourceType(options.sourceType);
     const sourceLabel = String(options.sourceLabel || defaultMidiSourceLabel(sourceType));
-    const view = new DataView(arrayBuffer);
-    if (view.byteLength < 14 || readMidiChunkId(view, 0) !== "MThd") {
-      throw new Error("표준 MIDI 파일이 아닙니다.");
-    }
-    const headerLength = view.getUint32(4);
-    if (headerLength < 6 || 8 + headerLength > view.byteLength) {
-      throw new Error("MIDI 헤더가 손상되었습니다.");
-    }
-    const format = view.getUint16(8);
-    const trackCount = view.getUint16(10);
-    const divisionRaw = view.getUint16(12);
-    if (format > 1) {
+    const parser = window.MabiMidiParser;
+    if (!parser?.parse) throw new Error("공용 MIDI 파서를 불러오지 못했습니다.");
+
+    const midi = parser.parse(arrayBuffer, { type2Policy: "all", closeOpenNotes: true });
+    if (midi.format > 1) {
       throw new Error("SMF Format 0과 1 MIDI만 지원합니다.");
     }
-    if (!trackCount) {
+    if (!midi.trackCount) {
       throw new Error("MIDI 트랙이 없습니다.");
     }
-    if (divisionRaw & 0x8000) {
+    if (midi.smpteDivision) {
       throw new Error("SMPTE 시간 형식 MIDI는 아직 지원하지 않습니다. PPQN MIDI를 사용하세요.");
     }
 
-    const division = Math.max(1, divisionRaw);
-    let fileOffset = 8 + headerLength;
-    const rawNotes = [];
-    const tempoEvents = [];
-    let durationTicks = 0;
-    let parsedTracks = 0;
-
-    while (fileOffset + 8 <= view.byteLength && parsedTracks < trackCount) {
-      const chunkId = readMidiChunkId(view, fileOffset);
-      const chunkLength = view.getUint32(fileOffset + 4);
-      const chunkStart = fileOffset + 8;
-      const chunkEnd = Math.min(view.byteLength, chunkStart + chunkLength);
-      fileOffset = chunkStart + chunkLength;
-      if (chunkId !== "MTrk") continue;
-
-      const trackIndex = parsedTracks++;
-      const cursor = { offset: chunkStart };
-      const programs = new Array(16).fill(0);
-      const activeNotes = new Map();
-      let absoluteTick = 0;
-      let runningStatus = 0;
-      let trackName = "";
-      let instrumentName = "";
-
-      const finishNote = (channel, pitch, endTick) => {
-        const key = `${channel}:${pitch}`;
-        const stack = activeNotes.get(key);
-        if (!stack?.length) return;
-        const started = stack.shift();
-        if (!stack.length) activeNotes.delete(key);
-
-        const rawStartBeat = started.tick / division;
-        const rawEndBeat = Math.max(started.tick + 1, endTick) / division;
-        const startBeat = Math.max(0, snapBeatToUnit(rawStartBeat, quantizeUnit));
-        const endBeat = Math.max(
-          startBeat + quantizeUnit,
-          snapBeatToUnit(rawEndBeat, quantizeUnit),
-        );
-        rawNotes.push({
-          trackIndex,
-          trackName: trackName || instrumentName || `Track ${trackIndex + 1}`,
-          instrumentName,
-          channel,
-          program: channel === 9 ? 0 : started.program,
-          pitch,
-          startBeat: Number(startBeat.toFixed(6)),
-          durationBeat: Number((endBeat - startBeat).toFixed(6)),
-          velocity: clamp(started.velocity, 1, 127),
-        });
+    const division = Math.max(1, Number(midi.ppq) || 480);
+    const rawNotes = (midi.notes || []).map((note) => {
+      const rawStartBeat = Math.max(0, Number(note.startTick) || 0) / division;
+      const rawEndBeat = Math.max((Number(note.startTick) || 0) + 1, Number(note.endTick) || 0) / division;
+      const startBeat = Math.max(0, snapBeatToUnit(rawStartBeat, quantizeUnit));
+      const endBeat = Math.max(startBeat + quantizeUnit, snapBeatToUnit(rawEndBeat, quantizeUnit));
+      const trackIndex = Math.max(0, Number(note.trackIndex) || 0);
+      const trackName = String(note.trackName || note.instrumentMetaName || `Track ${trackIndex + 1}`);
+      const channel = clamp(Math.round(Number(note.channel) || 0), 0, 15);
+      const program = channel === 9 ? 0 : clamp(Math.round(Number(note.program) || 0), 0, 127);
+      return {
+        trackIndex,
+        trackName,
+        instrumentName: String(note.instrumentMetaName || ""),
+        channel,
+        program,
+        pitch: clamp(Math.round(Number(note.midi ?? note.pitch) || 60), 0, 127),
+        startBeat: Number(startBeat.toFixed(6)),
+        durationBeat: Number((endBeat - startBeat).toFixed(6)),
+        velocity: clamp(Math.round(Number(note.velocity) || 100), 1, 127),
       };
-
-      while (cursor.offset < chunkEnd) {
-        absoluteTick += readMidiVariableLength(view, cursor, chunkEnd);
-        durationTicks = Math.max(durationTicks, absoluteTick);
-        if (cursor.offset >= chunkEnd) break;
-
-        let status = view.getUint8(cursor.offset++);
-        let firstData = null;
-        if (status < 0x80) {
-          if (!runningStatus) {
-            throw new Error(`Track ${trackIndex + 1}의 running status가 올바르지 않습니다.`);
-          }
-          firstData = status;
-          status = runningStatus;
-        } else if (status < 0xf0) {
-          runningStatus = status;
-        }
-
-        if (status === 0xff) {
-          runningStatus = 0;
-          if (cursor.offset >= chunkEnd) break;
-          const metaType = view.getUint8(cursor.offset++);
-          const length = readMidiVariableLength(view, cursor, chunkEnd);
-          const dataStart = cursor.offset;
-          const dataEnd = Math.min(chunkEnd, dataStart + length);
-          const bytes = new Uint8Array(arrayBuffer, dataStart, Math.max(0, dataEnd - dataStart));
-          if (metaType === 0x03) {
-            trackName = decodeMidiText(bytes) || trackName;
-          } else if (metaType === 0x04) {
-            instrumentName = decodeMidiText(bytes) || instrumentName;
-          } else if (metaType === 0x51 && bytes.length >= 3) {
-            const microseconds = (bytes[0] << 16) | (bytes[1] << 8) | bytes[2];
-            if (microseconds > 0) {
-              tempoEvents.push({
-                beat: Number(Math.max(0, snapBeatToUnit(absoluteTick / division, quantizeUnit)).toFixed(6)),
-                bpm: clamp(Math.round(60000000 / microseconds), CONFIG.minTempo, CONFIG.maxTempo),
-              });
-            }
-          }
-          cursor.offset = dataEnd;
-          if (metaType === 0x2f) break;
-          continue;
-        }
-
-        if (status === 0xf0 || status === 0xf7) {
-          runningStatus = 0;
-          const length = readMidiVariableLength(view, cursor, chunkEnd);
-          cursor.offset = Math.min(chunkEnd, cursor.offset + length);
-          continue;
-        }
-
-        if (status >= 0xf0) {
-          runningStatus = 0;
-          const systemLength = status === 0xf1 || status === 0xf3 ? 1 : status === 0xf2 ? 2 : 0;
-          cursor.offset = Math.min(chunkEnd, cursor.offset + systemLength);
-          continue;
-        }
-
-        const eventType = status & 0xf0;
-        const channel = status & 0x0f;
-        const dataLength = eventType === 0xc0 || eventType === 0xd0 ? 1 : 2;
-        const data1 = firstData == null ? view.getUint8(cursor.offset++) : firstData;
-        const data2 = dataLength === 2 && cursor.offset < chunkEnd ? view.getUint8(cursor.offset++) : 0;
-
-        if (eventType === 0xc0) {
-          programs[channel] = clamp(data1, 0, 127);
-        } else if (eventType === 0x90 && data2 > 0) {
-          const key = `${channel}:${data1}`;
-          let stack = activeNotes.get(key);
-          if (!stack) {
-            stack = [];
-            activeNotes.set(key, stack);
-          }
-          stack.push({ tick: absoluteTick, velocity: clamp(data2, 1, 127), program: programs[channel] });
-        } else if (eventType === 0x80 || (eventType === 0x90 && data2 === 0)) {
-          finishNote(channel, data1, absoluteTick);
-        }
-      }
-
-      for (const [key, stack] of activeNotes) {
-        const [channelText, pitchText] = key.split(":");
-        while (stack.length) {
-          finishNote(Number(channelText), Number(pitchText), Math.max(absoluteTick, stack[0].tick + 1));
-        }
-      }
-    }
+    });
 
     if (!rawNotes.length) {
       throw new Error("MIDI 파일에서 노트 이벤트를 찾지 못했습니다.");
@@ -5077,7 +4874,7 @@
         const notes = mergeMidiInstrumentNotes(instrument.rawNotes);
         mergedDuplicateCount += instrument.rawNotes.length - notes.length;
         const sourceTracks = Array.from(instrument.sourceTracks);
-        const channels = Array.from(instrument.channels).sort((a, b) => a - b);
+        const channels = Array.from(instrument.channels).sort((left, right) => left - right);
         return {
           id: `${instrument.id}-${index + 1}`,
           name: instrument.programName,
@@ -5103,13 +4900,16 @@
     });
 
     const durationBeats = Math.max(
-      durationTicks / division,
+      (Number(midi.durationTicks) || 0) / division,
       ...groups.flatMap((group) => group.notes.map((note) => note.startBeat + note.durationBeat)),
       0,
     );
     const tempoByBeat = new Map();
-    for (const tempo of tempoEvents.sort((left, right) => left.beat - right.beat)) {
-      tempoByBeat.set(Number(tempo.beat.toFixed(6)), tempo.bpm);
+    const parsedTempos = parser.normalizeTempoEvents?.(midi.tempoEvents) || midi.tempoEvents || [];
+    for (const tempo of parsedTempos) {
+      const beat = Number(Math.max(0, snapBeatToUnit((Number(tempo.tick) || 0) / division, quantizeUnit)).toFixed(6));
+      const bpm = clamp(Math.round(Number(tempo.bpm) || 120), CONFIG.minTempo, CONFIG.maxTempo);
+      tempoByBeat.set(beat, bpm);
     }
     if (!tempoByBeat.has(0)) tempoByBeat.set(0, 120);
     const normalizedTempoEvents = Array.from(tempoByBeat, ([beat, bpm]) => ({ beat, bpm }))
@@ -5123,9 +4923,9 @@
       sourceType,
       sourceLabel,
       quantizeDivision,
-      format,
+      format: midi.format,
       division,
-      trackCount: parsedTracks,
+      trackCount: midi.trackCount,
       durationBeats: Number(snapBeatToUnit(durationBeats, quantizeUnit, "ceil").toFixed(6)),
       tempoEvents: normalizedTempoEvents,
       visible: true,
@@ -5133,9 +4933,10 @@
       groups,
       activeGroupId: groups[0]?.id || null,
       message: `${groups.length}개 악기 채널과 ${totalNotes}개 노트를 1/${quantizeDivision} 음표 단위로 읽었습니다.${mergedDuplicateCount ? ` 중복 노트 ${mergedDuplicateCount}개를 병합했습니다.` : ""}`,
+      parserWarnings: [...(midi.warnings || [])],
+      containerMetadata: { ...(midi.metadata || {}) },
     };
   }
-
 
   function getImportSourceInfo(file) {
     const name = String(file?.name || "Music");
@@ -6426,7 +6227,7 @@
 
   function updateDirtyState() {
     elements.dirtyIndicator.hidden = !state.dirty;
-    document.title = `${state.dirty ? "● " : ""}${state.projectName} - 모비바드`;
+    document.title = `${state.dirty ? "● " : ""}${state.projectName} - 모비바드 ${APP_VERSION_LABEL}`;
   }
 
   function captureHistorySnapshot() {
@@ -6694,7 +6495,7 @@
         color: getChannelColor(channel, index),
         muted: mutedByChannelId.get(String(channelId)) || false,
         visible: visibleByChannelId.has(String(channelId)) ? visibleByChannelId.get(String(channelId)) : true,
-        instrument: String(channel.instrument || "SC-55 Piano 1"),
+        instrument: String(channel.instrument || "Acoustic Grand Piano"),
         notes: normalizeMonophonicNotes(channel.notes.map((note) => ({
           id: Number(note.id),
           pitch: clamp(Number(note.pitch), CONFIG.minPitch, CONFIG.maxPitch),
@@ -11288,7 +11089,7 @@
       color: getChannelColor(channel, index),
       muted: Boolean(channel.muted),
       visible: channel.visible !== false,
-      instrument: String(channel.instrument || "SC-55 Piano 1"),
+      instrument: String(channel.instrument || "Acoustic Grand Piano"),
       notes: normalizeMonophonicNotes(channel.notes.map((note) => {
         const startBeat = clamp(
           Number(note.startBeat),
@@ -11813,7 +11614,7 @@
   function registerDefaultContextMenus() {
     const commonItems = () => [
       { label: "새 파일", action: resetProject },
-      { label: "불러오기", action: () => elements.fileInput.click() },
+      { label: "불러오기", action: () => openFilePickerInput(elements.fileInput) },
       { label: "저장", action: saveProject },
     ];
 
@@ -12215,13 +12016,13 @@
     });
     elements.openButton.addEventListener("click", () => {
       closeFileMenu();
-      elements.fileInput.click();
+      openFilePickerInput(elements.fileInput);
     });
     elements.mmlImportButton?.addEventListener("click", () => {
       openMmlImportDialog();
     });
     elements.mmlImportChooseFileButton?.addEventListener("click", () => {
-      elements.mmlImportFileInput?.click();
+      openFilePickerInput(elements.mmlImportFileInput);
     });
     elements.mmlImportPasteButton?.addEventListener("click", pasteMmlImportTextFromClipboard);
     elements.mmlImportFileInput?.addEventListener("change", async () => {
@@ -12257,7 +12058,7 @@
     });
     elements.midiOpenButton?.addEventListener("click", () => {
       closeFileMenu();
-      elements.fileInput.click();
+      openFilePickerInput(elements.fileInput);
     });
     elements.midiFileInput?.addEventListener("change", async () => {
       const [file] = elements.midiFileInput.files || [];
@@ -12266,7 +12067,7 @@
     });
     elements.audioOpenButton?.addEventListener("click", () => {
       closeFileMenu();
-      elements.audioFileInput?.click();
+      openFilePickerInput(elements.audioFileInput);
     });
     elements.audioFileInput?.addEventListener("change", async () => {
       const [file] = elements.audioFileInput.files || [];
@@ -12631,7 +12432,7 @@
       event.preventDefault();
     });
 
-    elements.midiReferenceLoadButton.addEventListener("click", () => elements.midiFileInput.click());
+    elements.midiReferenceLoadButton.addEventListener("click", () => openFilePickerInput(elements.midiFileInput));
     elements.channelDeleteCloseButton?.addEventListener("click", closeChannelDeleteDialog);
     elements.channelDeleteCancelButton?.addEventListener("click", closeChannelDeleteDialog);
     elements.channelDeleteApplyButton?.addEventListener("click", applyChannelDeleteSelection);
@@ -12783,7 +12584,7 @@
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o") {
         event.preventDefault();
         closeFileMenu();
-        elements.fileInput.click();
+        openFilePickerInput(elements.fileInput);
       }
     });
 

@@ -1,11 +1,24 @@
 (() => {
   "use strict";
 
-  const { clamp, clampInt, shortError } = window.MabiUtils;
-  const { parseMabinogiMml, buildSchedule, composeMml } = window.MabiMml;
-  const { parseSoundFont, prepareNotes, schedulePreparedNotes } = window.MabiSf2;
+  const {
+    clamp,
+    clampInt,
+    shortError,
+    base64ToUint8Array,
+    parseMabinogiMml,
+    buildSchedule,
+    composeMml,
+    parseMidi: parseMidiDocument,
+    normalizeMidiTempoEvents,
+    parseSoundBank: parseSoundBankSource,
+    loadDefaultSoundBank,
+    findSoundBankPreset,
+    prepareNotes,
+    schedulePreparedNotes,
+  } = window.MobiBeatsPlugins;
 
-  const APP_VERSION = "1.0.0";
+  const APP_VERSION = "5.0.0";
   const PART_LABELS = ["멜로디", "화음1", "화음2", "화음3", "화음4", "화음5"];
   const KEY_CONFIGS = {
     4: [
@@ -60,7 +73,6 @@
   const AUDIO_LOOKAHEAD = 1.1;
   const AUDIO_INTERVAL_MS = 80;
   const DEFAULT_PRESET_KEY = "0:0";
-  const DEFAULT_SF2_URL = "assets/Roland_SC-55.sf2";
   const NOTE_OFFSET_MIN_MS = -300;
   const NOTE_OFFSET_MAX_MS = 300;
   const STORAGE_KEY = "mml-rhythm-stage-score-v1";
@@ -143,7 +155,7 @@
     scoreChannelCount: $("scoreChannelCount"),
     allPianoBtn: $("allPianoBtn"),
     defaultInstrumentsBtn: $("defaultInstrumentsBtn"),
-    sf2State: $("sf2State"),
+    soundBankState: $("soundBankState"),
     scoreParseStatus: $("scoreParseStatus"),
     loadSampleBtn: $("loadSampleBtn"),
     applyScoreBtn: $("applyScoreBtn"),
@@ -159,6 +171,8 @@
   const hitEffectSpriteCache = new Map();
   const state = {
     title: SAMPLE_SCORE.title,
+    sourceType: "mml",
+    sourceMetadata: null,
     mml: SAMPLE_SCORE.mml,
     instruments: [...SAMPLE_SCORE.instruments],
     instrumentBaseline: [...SAMPLE_SCORE.instruments],
@@ -314,30 +328,30 @@
 
   function applyScoreData(input, options = {}) {
     const normalized = normalizeScorePayload(input);
-    const parsed = parseMabinogiMml(normalized.mml);
-    const schedule = buildSchedule(parsed);
-    const activeParts = parsed.parts
-      .map((part, index) => ({ index, noteCount: part.notes.filter((note) => note.volume > 0).length }))
-      .filter((part) => part.noteCount > 0);
+    const score = normalized.sourceType === "midi"
+      ? buildMidiScore(normalized)
+      : buildMmlScore(normalized);
+    const { parsed, schedule, activeParts } = score;
 
-    if (!activeParts.length) throw new Error("소리 나는 음표가 있는 MML 채널이 없습니다.");
+    if (!activeParts.length) throw new Error("소리 나는 음표가 있는 연주 채널이 없습니다.");
     const suggestedKeyCount = activeParts.length >= 5 ? 6 : 4;
     const keyCount = normalizeKeyCount(normalized.keyCount, suggestedKeyCount);
     const difficulty = normalizeDifficulty(normalized.difficulty, "normal");
-    const activePartIndexes = activeParts.map((part) => part.index);
-    const chart = buildChart(schedule.notes, activePartIndexes, keyCount, schedule.duration, difficulty);
+    const chart = buildChart(schedule.notes, activeParts, keyCount, schedule.duration, difficulty);
     if (!chart.notes.length) throw new Error("게임에 사용할 수 있는 노트를 만들지 못했습니다.");
 
     stopGameAudio();
-    state.title = normalized.title || "제목 없는 곡";
-    state.mml = normalized.mml;
-    state.instruments = normalizeInstrumentList(normalized.instruments);
+    state.title = score.title || normalized.title || "제목 없는 곡";
+    state.sourceType = normalized.sourceType;
+    state.sourceMetadata = score.sourceMetadata || null;
+    state.mml = normalized.sourceType === "mml" ? normalized.mml : "";
+    state.instruments = normalizeInstrumentList(score.instruments || normalized.instruments);
     if (options.updateInstrumentBaseline !== false && options.source !== "dialog") {
       state.instrumentBaseline = [...state.instruments];
     }
     state.parsed = parsed;
     state.schedule = schedule;
-    state.activeParts = activePartIndexes;
+    state.activeParts = activeParts;
     state.keyCount = keyCount;
     state.keyConfig = KEY_CONFIGS[keyCount];
     state.difficulty = difficulty;
@@ -355,11 +369,13 @@
     hideOverlay(dom.pauseOverlay);
     hideOverlay(dom.resultOverlay);
 
-    if (options.persist !== false) saveScore();
+    // MIDI 바이트를 localStorage에 중복 저장하지 않는다. MML 입력만 기존 방식으로 보존한다.
+    if (options.persist !== false && state.sourceType === "mml") saveScore();
 
     if (options.source === "message") {
       postToParent("MML_RHYTHM_LOADED", {
         version: APP_VERSION,
+        sourceType: state.sourceType,
         title: state.title,
         channelCount: state.activeParts.length,
         keyCount: state.keyCount,
@@ -372,11 +388,140 @@
     return getPublicChartInfo();
   }
 
+  function buildMmlScore(normalized) {
+    const parsed = parseMabinogiMml(normalized.mml);
+    const schedule = buildSchedule(parsed);
+    const activeParts = parsed.parts
+      .map((part, index) => ({ index, noteCount: part.notes.filter((note) => note.volume > 0).length }))
+      .filter((part) => part.noteCount > 0)
+      .map((part) => part.index);
+    return {
+      title: normalized.title,
+      parsed,
+      schedule,
+      activeParts,
+      instruments: normalized.instruments,
+      sourceMetadata: null
+    };
+  }
+
+  function buildMidiScore(normalized) {
+    const midi = parseMidiDocument(normalized.midiBytes, { type2Policy: "all", closeOpenNotes: true });
+    if (midi.smpteDivision) throw new Error("SMPTE 시간 분할 MIDI는 리듬 게임으로 불러올 수 없습니다.");
+    if (!midi.notes?.length) throw new Error("MIDI에서 소리 나는 음표를 찾지 못했습니다.");
+
+    const ppq = Math.max(1, Number(midi.ppq) || 480);
+    const grouped = new Map();
+    for (const note of midi.notes) {
+      if (!note || note.velocity <= 0 || note.endTick <= note.startTick) continue;
+      const isDrum = Number(note.channel) === 9;
+      const bank = isDrum ? 128 : clampInt(Number(note.bank ?? 0), 0, 16383);
+      const program = isDrum ? 0 : clampInt(Number(note.program ?? 0), 0, 127);
+      const key = `${bank}:${program}`;
+      let group = grouped.get(key);
+      if (!group) {
+        group = { key, bank, program, isDrum, notes: [], firstTick: note.startTick };
+        grouped.set(key, group);
+      }
+      group.notes.push(note);
+      group.firstTick = Math.min(group.firstTick, note.startTick);
+    }
+    const groups = [...grouped.values()];
+    if (!groups.length) throw new Error("MIDI에서 재생 가능한 음표를 찾지 못했습니다.");
+
+    // MobiBeats는 최대 6파트이므로 음표 수가 많은 음색을 우선 독립 파트로 유지한다.
+    // 나머지 음색은 음표 수가 가장 적은 파트에 병합하되 MIDI 음표와 타이밍은 모두 보존한다.
+    const primaryGroups = groups
+      .slice()
+      .sort((left, right) => right.notes.length - left.notes.length || left.firstTick - right.firstTick || left.key.localeCompare(right.key))
+      .slice(0, 6);
+    const partLoads = Array(primaryGroups.length).fill(0);
+    const groupPart = new Map();
+    primaryGroups.forEach((group, part) => {
+      groupPart.set(group.key, part);
+      partLoads[part] = group.notes.length;
+    });
+    for (const group of groups) {
+      if (groupPart.has(group.key)) continue;
+      let targetPart = 0;
+      for (let part = 1; part < partLoads.length; part++) {
+        if (partLoads[part] < partLoads[targetPart]) targetPart = part;
+      }
+      groupPart.set(group.key, targetPart);
+      partLoads[targetPart] += group.notes.length;
+    }
+
+    const lengthBeats = Math.max(0, Number(midi.durationTicks) || 0) / ppq;
+    const parts = Array.from({ length: 6 }, (_, part) => ({ notes: [], rests: [], tempos: [], lengthBeats: part < primaryGroups.length ? lengthBeats : 0 }));
+    for (const group of groups) {
+      const part = groupPart.get(group.key) ?? 0;
+      for (const note of group.notes) {
+        parts[part].notes.push({
+          part,
+          beat: Math.max(0, Number(note.startTick) || 0) / ppq,
+          duration: Math.max(1, Number(note.endTick) - Number(note.startTick)) / ppq,
+          midi: clampInt(Number(note.midi ?? note.pitch), 0, 127),
+          volume: clampInt(Math.ceil((Number(note.velocity) || 1) / 127 * 15), 1, 15),
+          sourceStart: -1,
+          sourceEnd: -1,
+          globalSourceStart: -1,
+          globalSourceEnd: -1,
+          sourceRanges: []
+        });
+      }
+      parts[part].notes.sort((left, right) => left.beat - right.beat || left.midi - right.midi);
+    }
+
+    const tempoEvents = normalizeMidiTempoEvents(midi.tempoEvents);
+    const tempos = tempoEvents.map((tempo, order) => ({
+      beat: Math.max(0, Number(tempo.tick) || 0) / ppq,
+      bpm: Math.max(1, Number(tempo.bpm) || 120),
+      part: -1,
+      order,
+      explicit: true,
+      sourceStart: -1,
+      sourceEnd: -1,
+      globalSourceStart: -1,
+      globalSourceEnd: -1
+    }));
+    const parsed = { parts, tempos };
+    const schedule = buildSchedule(parsed);
+    const activeParts = parts
+      .map((part, index) => ({ index, noteCount: part.notes.length }))
+      .filter((part) => part.noteCount > 0)
+      .map((part) => part.index);
+    const inferredInstruments = Array(6).fill(DEFAULT_PRESET_KEY);
+    primaryGroups.forEach((group, part) => { inferredInstruments[part] = `${group.bank}:${group.program}`; });
+    const trackTitle = midi.trackMeta?.map((meta) => String(meta?.trackName || "").trim()).find(Boolean) || "";
+
+    return {
+      title: normalized.titleWasExplicit ? normalized.title : (trackTitle || normalized.title),
+      parsed,
+      schedule,
+      activeParts,
+      instruments: normalized.instrumentsWereExplicit ? normalized.instruments : inferredInstruments,
+      sourceMetadata: {
+        format: midi.format,
+        ppq,
+        trackCount: midi.trackCount,
+        noteCount: midi.notes.length,
+        tempoCount: tempoEvents.length,
+        warnings: [...(midi.warnings || [])],
+        macBinary: Boolean(midi.metadata?.macBinary),
+        mergedInstrumentGroupCount: Math.max(0, groups.length - primaryGroups.length)
+      }
+    };
+  }
+
   function normalizeScorePayload(input) {
     const outer = input && typeof input === "object" ? input : {};
     const source = outer.payload && typeof outer.payload === "object" ? outer.payload : outer;
+    const titleWasExplicit = source.title != null || source.name != null;
+    const instrumentsWereExplicit = Array.isArray(source.instruments);
+    const midiSource = source.midiBytes ?? source.midiBuffer ?? source.midiData ?? source.midi;
+    const midiBytes = normalizeMidiBytes(midiSource);
     let mml = String(source.mml || "").trim();
-    let instruments = Array.isArray(source.instruments) ? source.instruments : null;
+    let instruments = instrumentsWereExplicit ? source.instruments : null;
 
     if (Array.isArray(source.parts)) {
       const rawParts = source.parts.slice(0, 6).map((part) => {
@@ -393,20 +538,43 @@
       }
     }
 
-    if (!mml) throw new Error("MML이 비어 있습니다.");
-    if (!/^\s*MML\s*@/i.test(mml)) mml = `MML@${mml.replace(/;\s*$/, "")};`;
-    if (!/;\s*$/.test(mml)) mml += ";";
+    const sourceType = midiBytes?.length ? "midi" : "mml";
+    if (sourceType === "mml") {
+      if (!mml) throw new Error("MML이 비어 있습니다.");
+      if (!/^\s*MML\s*@/i.test(mml)) mml = `MML@${mml.replace(/;\s*$/, "")};`;
+      if (!/;\s*$/.test(mml)) mml += ";";
+    }
 
     return {
+      sourceType,
       title: String(source.title || source.name || "제목 없는 곡").trim().slice(0, 80),
+      titleWasExplicit,
       mml,
+      midiBytes,
       instruments: normalizeInstrumentList(instruments),
+      instrumentsWereExplicit,
       keyCount: normalizeKeyCount(source.keyCount ?? source.keys, null),
       difficulty: normalizeDifficulty(source.difficulty ?? source.levelMode, null),
       noteOffsetMs: source.noteOffsetMs != null || source.noteOffset != null
         ? normalizeNoteOffsetMs(source.noteOffsetMs ?? source.noteOffset)
         : null
     };
+  }
+
+  function normalizeMidiBytes(value) {
+    if (value == null) return null;
+    if (value instanceof Uint8Array) return value;
+    if (value instanceof ArrayBuffer) return new Uint8Array(value);
+    if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    if (Array.isArray(value)) return new Uint8Array(value);
+    if (typeof value === "string") {
+      const text = value.trim();
+      if (!text) return null;
+      const payload = text.includes(",") && /^data:/i.test(text) ? text.slice(text.indexOf(",") + 1) : text;
+      try { return base64ToUint8Array(payload); }
+      catch (_) { throw new Error("MIDI Base64 데이터가 올바르지 않습니다."); }
+    }
+    throw new Error("지원하지 않는 MIDI 데이터 형식입니다.");
   }
 
   function normalizeKeyCount(value, fallback = 4) {
@@ -455,6 +623,11 @@
     updateAllUi();
     if (options.persist !== false) saveScore();
     return getPublicChartInfo();
+  }
+
+  function parseInstrumentKey(value) {
+    const [bankText, programText] = normalizeInstrumentKey(value).split(":");
+    return [Number(programText) || 0, Number(bankText) || 0];
   }
 
   function normalizeInstrumentList(input) {
@@ -838,23 +1011,23 @@
   }
 
   async function loadSoundFont() {
-    setAudioStatus("기본 음원을 불러오는 중…", "loading", false);
-    dom.sf2State.textContent = "음원 로딩 중";
-    dom.sf2State.className = "state-pill";
+    setAudioStatus("공용 기본 음원을 불러오는 중…", "loading", false);
+    dom.soundBankState.textContent = "음원 로딩 중";
+    dom.soundBankState.className = "state-pill";
     try {
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 12000);
-      const response = await fetch(DEFAULT_SF2_URL, { signal: controller.signal });
-      window.clearTimeout(timeout);
-      if (!response.ok) throw new Error(`SF2 응답 오류 (${response.status})`);
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      state.soundFont = await parseSoundFont(bytes);
+      state.soundFont = await loadDefaultSoundBank({
+        clearBase64: true,
+        onProgress(progress) {
+          const percent = Math.min(99, Math.max(0, Math.round((Number(progress) || 0) * 100)));
+          dom.soundBankState.textContent = `음원 로딩 ${percent}%`;
+        }
+      });
       state.presetOptions = buildPresetOptions(state.soundFont);
-      state.audioMode = "sf2";
+      state.audioMode = "soundbank";
       state.soundFontError = null;
-      dom.sf2State.textContent = "기본 음원 준비됨";
-      dom.sf2State.className = "state-pill ready";
-      setAudioStatus("기본 음원 준비 완료", "ready", true);
+      dom.soundBankState.textContent = "공용 기본 음원 준비됨";
+      dom.soundBankState.className = "state-pill ready";
+      setAudioStatus("공용 기본 음원 준비 완료", "ready", true);
       renderInstrumentRows(dom.scoreDialog.open ? (readInstrumentRowsValues() || state.dialogDraftInstruments || state.instruments) : state.instruments);
       updateChartInfoUi();
       return state.soundFont;
@@ -863,9 +1036,9 @@
       state.presetOptions = [];
       state.audioMode = "synth";
       state.soundFontError = err;
-      dom.sf2State.textContent = "간이 음원 사용";
-      dom.sf2State.className = "state-pill error";
-      setAudioStatus("기본 음원을 읽지 못해 간이 음원으로 재생합니다.", "error", false);
+      dom.soundBankState.textContent = "간이 음원 사용";
+      dom.soundBankState.className = "state-pill error";
+      setAudioStatus("공용 기본 음원을 읽지 못해 간이 음원으로 재생합니다.", "error", false);
       renderInstrumentRows(dom.scoreDialog.open ? (readInstrumentRowsValues() || state.dialogDraftInstruments || state.instruments) : state.instruments);
       updateChartInfoUi();
       return null;
@@ -897,18 +1070,6 @@
     return Number(preset.bank) === 0 ? `${number} ${name}` : `Bank ${preset.bank} · ${number} ${name}`;
   }
 
-  function findPreset(key) {
-    const normalized = normalizeInstrumentKey(key);
-    const [bankText, presetText] = normalized.split(":");
-    const bank = Number(bankText);
-    const preset = Number(presetText);
-    return state.soundFont?.presets?.find((item) => item.bank === bank && item.preset === preset)
-      || (bank === 0 ? state.soundFont?.findPreset(preset) : null)
-      || state.soundFont?.findPreset(0)
-      || state.soundFont?.presets?.[0]
-      || null;
-  }
-
   async function ensureAudioContext() {
     if (!state.audioCtx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -935,7 +1096,7 @@
     for (let part = 0; part < 6; part++) {
       const partNotes = state.schedule.notes.filter((note) => note.part === part && note.volume > 0);
       if (!partNotes.length) continue;
-      const preset = findPreset(state.instruments[part]);
+      const preset = findSoundBankPreset(state.soundFont, ...parseInstrumentKey(state.instruments[part]));
       if (!preset) continue;
       prepared.push(...prepareNotes(audioCtx, state.soundFont, preset, partNotes));
     }
@@ -2225,6 +2386,10 @@
   }
 
   function openScoreDialog() {
+    if (state.sourceType === "midi") {
+      showToast("MIDI로 불러온 곡은 MML 편집 창에서 직접 수정할 수 없습니다.");
+      return;
+    }
     state.scoreDialogApplied = false;
     state.dialogDefaultInstruments = [...state.instrumentBaseline];
     populateScoreForm(
@@ -2489,7 +2654,7 @@
     if (!data || typeof data !== "object" || !MESSAGE_LOAD_TYPES.has(data.type)) return;
     try {
       applyScoreData(data.payload || data, { persist: false, source: "message" });
-      showToast("MML 생성기에서 연주 정보를 받았습니다.");
+      showToast("연주 정보를 받았습니다.");
     } catch (err) {
       postToParent("MML_RHYTHM_ERROR", { version: APP_VERSION, message: shortError(err) });
       showToast(`연주 정보 불러오기 실패: ${shortError(err)}`);
@@ -2499,7 +2664,7 @@
   function announceReady() {
     postToParent("MML_RHYTHM_READY", {
       version: APP_VERSION,
-      accepts: ["mml", "title", "instruments", "parts", "keyCount", "difficulty", "noteOffsetMs"]
+      accepts: ["mml", "midiBytes", "midiBuffer", "midiData", "title", "instruments", "parts", "keyCount", "difficulty", "noteOffsetMs"]
     });
   }
 
@@ -2512,6 +2677,7 @@
   function getPublicChartInfo() {
     return {
       title: state.title,
+      sourceType: state.sourceType,
       keyCount: state.keyCount,
       channelCount: state.activeParts.length,
       noteCount: state.chartNotes.length,
@@ -2601,6 +2767,27 @@
     loadScore(data) {
       return applyScoreData(data, { persist: false, source: "api" });
     },
+    loadMidi(bytes, options = {}) {
+      return applyScoreData({ ...options, midiBytes: bytes }, { persist: false, source: "api" });
+    },
+    parseMidi(bytes, options = {}) {
+      return parseMidiDocument(bytes, options);
+    },
+    async loadSoundBank(source, options = {}) {
+      const bank = await parseSoundBankSource(source, options);
+      stopGameAudio();
+      state.soundFont = bank;
+      state.soundFontPromise = Promise.resolve(bank);
+      state.presetOptions = buildPresetOptions(bank);
+      state.preparedAudioNotes = null;
+      state.audioMode = "soundbank";
+      state.soundFontError = null;
+      dom.soundBankState.textContent = `${String(bank.fileName || bank.format || "SoundBank")} 준비됨`;
+      dom.soundBankState.className = "state-pill ready";
+      renderInstrumentRows(dom.scoreDialog.open ? (readInstrumentRowsValues() || state.dialogDraftInstruments || state.instruments) : state.instruments);
+      updateChartInfoUi();
+      return bank;
+    },
     start() { return startGame(); },
     pause() { if (isRunning()) pauseGame(true); },
     resume() { if (state.status === "paused") return resumeGame(); },
@@ -2621,6 +2808,8 @@
     getScoreData() {
       return {
         title: state.title,
+        sourceType: state.sourceType,
+        sourceMetadata: state.sourceMetadata ? { ...state.sourceMetadata, warnings: [...(state.sourceMetadata.warnings || [])] } : null,
         mml: state.mml,
         instruments: [...state.instruments],
         keyCount: state.keyCount,

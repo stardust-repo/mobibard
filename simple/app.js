@@ -11,11 +11,10 @@
   const FIXED_PLAYBACK_BANK = 0;
   const FIXED_PLAYBACK_PROGRAM = 0;
   const GENERATED_MML_LEADING_SILENCE_SECONDS = 2;
-  const PLAYBACK_SAMPLER_SCRIPT = "../player/js/sf2-sampler.js";
-  const PLAYBACK_SOUNDBANK_SCRIPT = "../assets/default_sf3.js";
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
-  const LOCALE_VERSION = "4.8-simple-settings-responsive-fix";
+  const LOCALE_VERSION = "5.0.0";
+  const LOCALE_REVISION = "20260818-211321";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 
@@ -43,7 +42,7 @@
     fullScoreDetail: $("fullScoreDetail"),
     copyAllButton: $("copyAllButton"),
     copyButtons: $("copyButtons"),
-    pageTitle: $("pageTitle"),
+    pageTitleText: $("pageTitleText"),
     eyebrow: $("eyebrow"),
     subtitle: $("subtitle"),
     brandName: $("brandName"),
@@ -59,6 +58,16 @@
     themeButton: $("themeButton"),
     themeButtonText: $("themeButtonText")
   };
+
+  function openFilePickerInput(input) {
+    if (!input || input.disabled) return;
+    const groupedPicker = window.MabiSupportedFilesUi?.openFileInput;
+    if (typeof groupedPicker === "function") {
+      void groupedPicker(input);
+      return;
+    }
+    input.click();
+  }
 
   let language = resolveInitialLanguage();
   let activeLocale = null;
@@ -161,7 +170,10 @@
   function buildLocaleUrl(code) {
     const file = LOCALE_FILES[code] || LOCALE_FILES.en;
     const url = new URL(`locale/${file}`, document.baseURI);
-    if (url.protocol !== "file:") url.searchParams.set("v", LOCALE_VERSION);
+    if (url.protocol !== "file:") {
+      url.searchParams.set("v", LOCALE_VERSION);
+      url.searchParams.set("rev", LOCALE_REVISION);
+    }
     return url.href;
   }
 
@@ -266,7 +278,7 @@
     if (persist) writeStorage(LANGUAGE_KEY, language);
     document.documentElement.lang = activeLocale.htmlLang || (language === "zh-CN" ? "zh-Hans" : (language === "zh-TW" ? "zh-Hant" : language));
     document.title = t("browserTitle");
-    els.pageTitle.textContent = t("title");
+    els.pageTitleText.textContent = t("title");
     els.eyebrow.textContent = t("eyebrow");
     els.brandName.textContent = t("brand");
     els.subtitle.textContent = t("subtitle");
@@ -402,6 +414,12 @@
     return Boolean(group?.isBeat || group?.isPercussion || group?.isDrumNoteGroup || Number.isInteger(group?.drumMidi));
   }
 
+  function applyTempoSimplification(mml) {
+    const simplify = window.MabiOptimizer?.simplifyTemposMml;
+    if (typeof simplify !== "function") return mml;
+    return simplify(mml, { partCount: 3 }).mml;
+  }
+
   function applyRestRemoval(mml) {
     if (selectedRest === "keep") return mml;
     if (!window.MabiOptimizer?.trimShortRestsMml) return mml;
@@ -508,7 +526,9 @@
 
       const options = buildSimpleConvertOptions(nonDrumGroups.map(group => group.id));
       const converted = window.MabiMidi.midiToMml(selectedBytes, selectedFile.name, options);
-      const cleanedMml = applyRestRemoval(converted.mml);
+      // 템포 정리는 앞쪽 2초 공백을 넣기 전에 적용해야 원본의 1온음표 이내 판정이 유지된다.
+      const simplifiedMml = applyTempoSimplification(converted.mml);
+      const cleanedMml = applyRestRemoval(simplifiedMml);
       const alignedMml = alignGeneratedMmlStart(cleanedMml);
       if (token !== conversionSerial) return;
 
@@ -682,54 +702,20 @@
     return audioCtx;
   }
 
-  function buildPlaybackScriptUrl(relativePath) {
-    const url = new URL(relativePath, document.baseURI);
-    if (url.protocol !== "file:") url.searchParams.set("v", "4.8-simple-bank0-program0");
-    return url.href;
-  }
-
-  function loadPlaybackScript(relativePath, isReady) {
-    if (isReady()) return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.async = true;
-      script.charset = "utf-8";
-      script.src = buildPlaybackScriptUrl(relativePath);
-      script.onload = () => {
-        if (isReady()) resolve();
-        else reject(new Error(`Playback module did not initialize: ${relativePath}`));
-      };
-      script.onerror = () => reject(new Error(`Failed to load playback module: ${relativePath}`));
-      document.head.appendChild(script);
-    });
-  }
-
-  function readEmbeddedSoundBankBytes() {
-    const encoded = String(window.MOBIBARD_DEFAULT_SF3_BASE64 || "").replace(/\s+/g, "");
-    if (!encoded) throw new Error("Default playback sound bank is unavailable");
-    const binary = atob(encoded);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i) & 0xff;
-    return bytes;
-  }
-
   async function ensureFixedPlaybackPreset() {
     if (playbackSoundFont && fixedPlaybackPreset) return fixedPlaybackPreset;
     if (!playbackSoundFontPromise) {
       playbackSoundFontPromise = (async () => {
-        await loadPlaybackScript(PLAYBACK_SAMPLER_SCRIPT, () => Boolean(window.MabiSf2?.parseSoundBank));
-        await loadPlaybackScript(PLAYBACK_SOUNDBANK_SCRIPT, () => Boolean(window.MOBIBARD_DEFAULT_SF3_BASE64));
-        const bytes = readEmbeddedSoundBankBytes();
-        // Use the exact same SoundFont parser/decoder path as the main player.
-        const parsed = await window.MabiSf2.parseSoundBank(bytes);
-        const preset = (parsed.presets || []).find(item =>
-          Number(item?.bank) === FIXED_PLAYBACK_BANK && Number(item?.preset) === FIXED_PLAYBACK_PROGRAM
-        );
-        if (!preset) throw new Error("Bank 0 / Program 0 playback preset is unavailable");
-        playbackSoundFont = parsed;
-        fixedPlaybackPreset = preset;
-        try { window.MOBIBARD_DEFAULT_SF3_BASE64 = ""; } catch (_) {}
-        return preset;
+        const playbackApi = window.MobibardSimplePlayback;
+        if (!playbackApi?.loadDefaultPreset) throw new Error("Simple 재생 플러그인을 불러오지 못했습니다.");
+        const loaded = await playbackApi.loadDefaultPreset({
+          bank: FIXED_PLAYBACK_BANK,
+          program: FIXED_PLAYBACK_PROGRAM,
+          clearBase64: true,
+        });
+        playbackSoundFont = loaded.soundBank;
+        fixedPlaybackPreset = loaded.preset;
+        return loaded.preset;
       })().catch(error => {
         playbackSoundFontPromise = null;
         throw error;
@@ -778,15 +764,17 @@
   }
 
   function prepareFixedPlaybackNotes() {
-    if (!playbackSchedule || !playbackSoundFont || !fixedPlaybackPreset || !window.MabiSf2?.prepareNotes) return [];
-    const prepared = window.MabiSf2.prepareNotes(audioCtx, playbackSoundFont, fixedPlaybackPreset, playbackSchedule.notes || []);
+    const playbackApi = window.MobibardSimplePlayback;
+    if (!playbackSchedule || !playbackSoundFont || !fixedPlaybackPreset || !playbackApi?.prepareNotes) return [];
+    const prepared = playbackApi.prepareNotes(audioCtx, playbackSoundFont, fixedPlaybackPreset, playbackSchedule.notes || []);
     for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
     preparedPlaybackNotes = prepared;
     return prepared;
   }
 
   function schedulePlaybackWindow() {
-    if (!playbackPlaying || !audioCtx || !playbackSchedule || !preparedPlaybackNotes || !window.MabiSf2?.schedulePreparedNotes) return;
+    const playbackApi = window.MobibardSimplePlayback;
+    if (!playbackPlaying || !audioCtx || !playbackSchedule || !preparedPlaybackNotes || !playbackApi?.schedulePreparedNotes) return;
     const nowOffset = getCurrentPlaybackOffset();
     const duration = Math.max(0, Number(playbackSchedule.duration) || 0);
     if (duration > 0 && nowOffset >= duration - 0.005) {
@@ -794,7 +782,7 @@
       return;
     }
     const windowEnd = Math.min(duration, nowOffset + PLAY_LOOKAHEAD_SEC);
-    window.MabiSf2.schedulePreparedNotes(audioCtx, preparedPlaybackNotes, {
+    playbackApi.schedulePreparedNotes(audioCtx, preparedPlaybackNotes, {
       baseTime: playContextStart,
       fromSec: playOffsetStart,
       windowStart: nowOffset,
@@ -874,16 +862,16 @@
 
   els.fileButton.addEventListener("click", event => {
     event.stopPropagation();
-    els.fileInput.click();
+    openFilePickerInput(els.fileInput);
   });
   els.dropZone.addEventListener("click", event => {
     if (event.target === els.fileButton) return;
-    els.fileInput.click();
+    openFilePickerInput(els.fileInput);
   });
   els.dropZone.addEventListener("keydown", event => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    els.fileInput.click();
+    openFilePickerInput(els.fileInput);
   });
   els.fileInput.addEventListener("change", () => void selectFile(els.fileInput.files?.[0] || null));
 

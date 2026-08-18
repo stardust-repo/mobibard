@@ -85,7 +85,7 @@ font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-seri
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: linear-gradient(180deg, var(--body-start) 0%, var(--bg) 100%); color: var(--text); }
-main { width: min(1120px, calc(100vw - 32px)); margin: 0 auto; padding: 14px 0 0; }
+main { width: min(1120px, calc(100vw - 32px)); margin: 0 auto; padding: 0; }
 h1 { margin: 0; font-size: clamp(28px, 4vw, 44px); letter-spacing: -0.03em; }
 h2 { margin: 0 0 12px; font-size: 18px; }
 
@@ -338,7 +338,7 @@ textarea { resize: vertical; color: var(--text); }
 .part-panel.part-4 textarea, .part-panel.part-4 .mml-highlight { border-top-color: var(--part4); }
 .part-panel.part-5 textarea, .part-panel.part-5 .mml-highlight { border-top-color: var(--part5); }
 @media (max-width: 820px) {
-  main { width: min(100vw - 20px, 1120px); padding: 10px 0 0; }
+  main { width: min(100vw - 20px, 1120px); padding: 0; }
   .app-head { align-items: flex-start; flex-direction: column; gap: 10px; margin-bottom: 14px; }
   .app-head-controls { justify-content: flex-start; margin-left: 0; width: 100%; }
   .header-links{ justify-content: flex-start; }
@@ -501,7 +501,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   .split-copy-page button { justify-self: start; }
 }
 
-/* v2.3 MIDI dialog refinements */
+/* MIDI dialog refinements */
 .midi-dialog-topline {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -574,7 +574,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   .midi-channel-row.midi-instrument-row .midi-channel-sub { grid-column: 2 / 4; }
 }
 
-/* v2.3.1 dialog cleanup */
+/* dialog cleanup */
 .midi-channel-row.midi-instrument-row {
   grid-template-columns: auto minmax(220px, 1.25fr) minmax(120px, .55fr) auto;
   align-items: start;
@@ -634,7 +634,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   .split-copy-page-actions { justify-content: flex-start; }
 }
 
-/* v2.3.2 MIDI dialog instrument row layout fix */
+/* MIDI dialog instrument row layout fix */
 .midi-dialog,
 .midi-dialog-card,
 .midi-dialog-layout,
@@ -769,7 +769,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   }
 }
 
-/* v2.3 channel sound settings */
+/* channel sound settings */
 .tab-sound-btn {
   min-height: 32px;
   padding: 7px 10px;
@@ -833,7 +833,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   .tab-sound-btn { padding-inline: 9px; }
 }
 
-/* v2.3.3 channel sound selector */
+/* channel sound selector */
 .tab-sound-btn {
   flex: 0 0 auto;
   align-self: center;
@@ -888,7 +888,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   .part-sound-control { grid-template-columns: minmax(0, 1fr) auto; }
 }
 
-/* v3.0 editor toolbar */
+/* editor toolbar */
 .editor-tool-row {
   align-items: center;
   justify-content: space-between;
@@ -944,7 +944,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   .part-sound-preset-control { grid-template-columns: 1fr auto auto auto; }
 }
 
-/* v3.0 compact toolbar refinement */
+/* compact toolbar refinement */
 
 .menu-card .app-head { margin-bottom: 12px; }
 .menu-card .play-layout {
@@ -1025,7 +1025,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   .code-help-head { display: none; }
 }
 
-/* v3.0 Drive folder + toolbar rearrangement */
+/* Drive folder + toolbar rearrangement */
 .player-file-toolbar {
   display: flex;
   align-items: center;
@@ -1212,7 +1212,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   .dialog-title-actions button { min-height: 34px; padding: 7px 10px; }
 }
 
-/* v3.1 MIDI dialog: match instrument list height to the six-channel role list */
+/* MIDI dialog: match instrument list height to the six-channel role list */
 .midi-right-panel {
   align-content: start;
 }
@@ -1237,7 +1237,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   }
 }
 
-/* v3.1 import dialog reload buttons and fixed MIDI instrument height */
+/* import dialog reload buttons and fixed MIDI instrument height */
 .dialog-actions-left,
 .dialog-actions-right {
   display: flex;
@@ -1278,7 +1278,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
 }
 
 
-/* v3.1 MIDI dialog final layout: reload left, actions right, no column overlap */
+/* MIDI dialog final layout: reload left, actions right, no column overlap */
 .midi-convert-footer {
   display: flex;
   align-items: center;
@@ -1343,9 +1343,9 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   }
 }
 
-/* v3.4 help text reinforcement */
+/* help text reinforcement */
 .code-help-dialog { max-width: min(920px, calc(100vw - 32px)); }
-/* v3.4 mobile/help layout refinement */
+/* mobile/help layout refinement */
 .code-help-row {
   grid-template-columns: minmax(96px, .78fr) minmax(280px, 2.35fr) minmax(100px, .62fr);
 }
@@ -1392,10 +1392,10 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   .code-help-example { padding: 8px 9px; }
 }
 
-/* v3.4 MIDI convert preview controls */
+/* MIDI convert preview controls */
 
 
-/* v3.4 MIDI convert action layout and per-channel preview */
+/* MIDI convert action layout and per-channel preview */
 .midi-instrument-panel-head {
   align-items: flex-start;
 }
@@ -1562,7 +1562,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
 }
 }
 
-/* v3.4 mobile/help layout refinement */
+/* mobile/help layout refinement */
 .code-help-row {
   grid-template-columns: minmax(96px, .78fr) minmax(280px, 2.35fr) minmax(100px, .62fr);
 }
@@ -1609,10 +1609,10 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   .code-help-example { padding: 8px 9px; }
 }
 
-/* v3.4 MIDI convert preview controls */
+/* MIDI convert preview controls */
 
 
-/* v3.4 MIDI convert action layout and per-channel preview */
+/* MIDI convert action layout and per-channel preview */
 .midi-instrument-panel-head {
   align-items: flex-start;
 }
@@ -1685,7 +1685,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   
 }
 
-/* v3.4 MIDI channel count auto mode */
+/* MIDI channel count auto mode */
 
 .midi-role-row {
   grid-template-columns: minmax(130px, 1fr) 62px 132px auto;
@@ -1738,7 +1738,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
   }
 }
 
-/* v3.4 MIDI instrument grouping and preview action cleanup */
+/* MIDI instrument grouping and preview action cleanup */
 
 
 .midi-instrument-category-section .midi-instrument-section-head strong {
@@ -1746,7 +1746,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
 }
 
 
-/* v3.4 MIDI instrument category visual spacing cleanup */
+/* MIDI instrument category visual spacing cleanup */
 .midi-instrument-section + .midi-instrument-section {
   border-top: 0;
 }
@@ -1776,7 +1776,7 @@ details.midi-instrument-section > .midi-channel-row + .midi-channel-row {
 }
 
 
-/* v3.4 MIDI panel title alignment and category indicator tuning */
+/* MIDI panel title alignment and category indicator tuning */
 .dialog-section-head.role-head,
 .dialog-section-head.midi-instrument-panel-head {
   align-items: flex-start;
@@ -1792,7 +1792,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head::before {
   font-size: 18px;
 }
 
-/* v3.5 requested compact header and MIDI/MusicXML dialog cleanup */
+/* requested compact header and MIDI/MusicXML dialog cleanup */
 .app-brand-line {
   display: inline-flex;
   align-items: baseline;
@@ -1898,7 +1898,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head::before {
 }
 
 
-/* v3.5 user-requested header, dialog spacing, and consistent hover cleanup */
+/* user-requested header, dialog spacing, and consistent hover cleanup */
 .app-brand-line {
   display: inline-flex;
   align-items: baseline;
@@ -2035,7 +2035,7 @@ button:disabled:hover {
 }
 
 
-/* v3.5 minor header/control refinement requested after UI fix */
+/* minor header/control refinement requested after UI fix */
 .app-brand-line {
   align-items: center;
   gap: 10px;
@@ -2164,7 +2164,7 @@ iframe[src*="apis.google.com/picker"] {
 
 
 
-/* v4.3 MuScriptor MIDI extraction toolbar */
+/* MuScriptor MIDI extraction toolbar */
 .player-file-actions-special {
   display: inline-flex;
   align-items: center;
@@ -2223,7 +2223,7 @@ iframe[src*="apis.google.com/picker"] {
   .player-file-actions-left > * { flex: 0 0 auto; }
 }
 
-/* v3.4 MIDI channel count auto mode */
+/* MIDI channel count auto mode */
 
 .midi-role-row {
   grid-template-columns: minmax(130px, 1fr) 62px 132px auto;
@@ -2276,7 +2276,7 @@ iframe[src*="apis.google.com/picker"] {
   }
 }
 
-/* v3.4 MIDI instrument grouping and preview action cleanup */
+/* MIDI instrument grouping and preview action cleanup */
 
 .midi-quantize-toggle {
   flex: 0 0 auto;
@@ -2299,7 +2299,7 @@ iframe[src*="apis.google.com/picker"] {
 }
 
 
-/* v3.4 MIDI instrument category visual spacing cleanup */
+/* MIDI instrument category visual spacing cleanup */
 .midi-instrument-section + .midi-instrument-section {
   border-top: 0;
 }
@@ -2329,7 +2329,7 @@ details.midi-instrument-section > .midi-channel-row + .midi-channel-row {
 }
 
 
-/* v3.4 MIDI panel title alignment and category indicator tuning */
+/* MIDI panel title alignment and category indicator tuning */
 .dialog-section-head.role-head,
 .dialog-section-head.midi-instrument-panel-head {
   align-items: flex-start;
@@ -2345,7 +2345,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head::before {
   font-size: 18px;
 }
 
-/* v3.5 requested compact header and MIDI/MusicXML dialog cleanup */
+/* requested compact header and MIDI/MusicXML dialog cleanup */
 .app-brand-line {
   display: inline-flex;
   align-items: baseline;
@@ -2451,7 +2451,7 @@ details.midi-instrument-section > summary.midi-instrument-section-head::before {
 }
 
 
-/* v3.5 user-requested header, dialog spacing, and consistent hover cleanup */
+/* user-requested header, dialog spacing, and consistent hover cleanup */
 .app-brand-line {
   display: inline-flex;
   align-items: baseline;
@@ -2588,7 +2588,7 @@ button:disabled:hover {
 }
 
 
-/* v3.5 minor header/control refinement requested after UI fix */
+/* minor header/control refinement requested after UI fix */
 .app-brand-line {
   align-items: center;
   gap: 10px;
@@ -2717,7 +2717,7 @@ iframe[src*="apis.google.com/picker"] {
 
 
 
-/* v4.3 MuScriptor MIDI extraction toolbar */
+/* MuScriptor MIDI extraction toolbar */
 .player-file-actions-special {
   display: inline-flex;
   align-items: center;
@@ -2776,7 +2776,7 @@ iframe[src*="apis.google.com/picker"] {
   .player-file-actions-left > * { flex: 0 0 auto; }
 }
 
-/* v4.6 volume overwrite confirmation */
+/* volume overwrite confirmation */
 .dynamics-confirm-dialog { max-width: min(480px, calc(100vw - 32px)); }
 .dynamics-confirm-rules {
   margin: 0;
@@ -2810,7 +2810,7 @@ iframe[src*="apis.google.com/picker"] {
 }
 
 
-/* v4.6 MobiBeats popup integration */
+/* MobiBeats popup integration */
 #rhythmGameBtn.rhythm-game-toolbar-button {
   display: inline-flex;
   align-items: center;
@@ -2969,7 +2969,7 @@ body.rhythm-game-open { overflow: hidden; }
   .rhythm-game-layer-close { min-height: 30px; padding: 4px 8px; font-size: 11.5px; }
 }
 
-/* v4.9 account popup, compact header icons */
+/* Account popup and compact header icons */
 .menu-card .app-head-controls {
   position: relative;
   flex-wrap: nowrap;
@@ -3157,7 +3157,7 @@ body.rhythm-game-open { overflow: hidden; }
   }
 }
 
-/* v5.0 compact playback controls, sound file controls, and mobile dialog footers */
+/* compact playback controls, sound file controls, and mobile dialog footers */
 .menu-card .app-head .account-avatar-button,
 .menu-card .app-head .account-avatar-button:hover,
 .menu-card .app-head .account-avatar-button:active {
@@ -3491,7 +3491,7 @@ body.rhythm-game-open { overflow: hidden; }
 }
 
 
-/* v5.1 UI polish: delayed wrapping, brighter utility controls, and separator-free popups */
+/* UI polish: delayed wrapping, brighter utility controls, and separator-free popups */
 :root {
   --soft-tool-bg: #eef2ff;
   --soft-tool-hover: #e0e7ff;
@@ -3585,7 +3585,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
 /* The account-menu theme button shows the current theme, not the next action. */
 .menu-card .app-head .theme-menu-button {
   justify-content: center;
-  gap: 0;
+  gap: 8px;
   text-align: center;
   box-shadow: 0 2px 8px var(--panel-shadow);
 }
@@ -3625,7 +3625,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   padding-right: 0;
 }
 
-/* v5.2 dialog scroll and compact editor-header refinements */
+/* dialog scroll and compact editor-header refinements */
 /* MMI/3MLE channel choices use the dialog's single scrollbar. */
 .mmi-channel-list {
   max-height: none;
@@ -3707,7 +3707,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
 }
 
 
-/* v6.2 MIDI instrument rows: direct export-channel assignment */
+/* MIDI instrument rows: direct export-channel assignment */
 .midi-channel-row.midi-instrument-row {
   grid-template-columns: 18px minmax(0, 1fr) minmax(82px, auto) !important;
   grid-template-rows: auto auto;
@@ -3808,7 +3808,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   grid-row: 2 !important;
 }
 
-/* v6.2.2 MIDI instrument row: two-line aligned controls */
+/* MIDI instrument row: two-line aligned controls */
 .midi-channel-row.midi-instrument-row {
   grid-template-columns: 18px minmax(0, 1fr) auto !important;
   grid-template-rows: auto auto;
@@ -3895,7 +3895,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   }
 }
 
-/* v6.2.5 MIDI dialog: restore the 1040px popup without collapsing the channel panel */
+/* MIDI dialog: restore the 1040px popup without collapsing the channel panel */
 .midi-dialog {
   max-width: min(1040px, calc(100vw - 28px));
   width: min(1040px, calc(100vw - 28px));
@@ -3978,7 +3978,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
 }
 
 
-/* v6.2.6 MIDI instrument title width and flush list container */
+/* MIDI instrument title width and flush list container */
 .midi-right-panel .midi-channel-list {
   border: 0 !important;
   border-radius: 0 !important;
@@ -4033,7 +4033,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
 }
 
 
-/* v6.2.7 MIDI mobile channel rows: keep the role menu at the right of the channel summary. */
+/* MIDI mobile channel rows: keep the role menu at the right of the channel summary. */
 @media (max-width: 760px) {
   .midi-role-row {
     grid-template-columns: minmax(0, 1fr) 62px !important;
@@ -4076,7 +4076,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   }
 }
 
-/* v6.2.8 MIDI stacked/mobile layout: one scroll surface and compact channel rows */
+/* MIDI stacked/mobile layout: one scroll surface and compact channel rows */
 @media (max-width: 980px) {
   /* Once the two panels stack, let the dialog body own all vertical scrolling. */
   .midi-dialog-layout {
@@ -4179,7 +4179,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   }
 }
 
-/* v6.4 MIDI selection redesign */
+/* MIDI selection redesign */
 .midi-panel-title-row {
   display: flex !important;
   align-items: center !important;
@@ -4370,7 +4370,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
 }
 
 /* Make the supported-file action read as a real header button. */
-.app-title-meta > .import-format-list.mabi-supported-files-button {
+.player-file-actions-special > .import-format-list.mabi-supported-files-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4387,18 +4387,422 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   letter-spacing: -0.01em;
   transition: background .14s ease, border-color .14s ease, box-shadow .14s ease, transform .14s ease;
 }
-.app-title-meta > .import-format-list.mabi-supported-files-button:hover {
+.player-file-actions-special > .import-format-list.mabi-supported-files-button:hover {
   border-color: var(--accent);
   background: var(--control-hover);
   color: var(--text);
   box-shadow: 0 3px 8px var(--panel-shadow);
   transform: translateY(-1px);
 }
-.app-title-meta > .import-format-list.mabi-supported-files-button:active {
+.player-file-actions-special > .import-format-list.mabi-supported-files-button:active {
   box-shadow: 0 1px 2px var(--panel-shadow);
   transform: translateY(0);
 }
-.app-title-meta > .import-format-list.mabi-supported-files-button:focus-visible {
+.player-file-actions-special > .import-format-list.mabi-supported-files-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+
+/* Player navigation bar mirrors the Simple product header and remains in normal document flow. */
+.player-topbar {
+  position: relative;
+  z-index: 100;
+  height: 64px;
+  padding: 0;
+  background: transparent;
+}
+.player-topbar-inner {
+  width: min(1120px, calc(100vw - 32px));
+  min-width: 0;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.player-brand {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.player-brand-mark {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 9px;
+  background: url("../assets/icons/mobibard-mark-64.png") center / cover no-repeat;
+}
+.player-top-actions,
+.player-topbar .app-head-controls {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.player-topbar .header-links {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.player-topbar .midi-site-links {
+  width: auto;
+  min-width: 128px;
+  max-width: 150px;
+  min-height: 36px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  border-radius: 9px;
+  background: var(--panel);
+  font-size: 13px;
+  font-weight: 850;
+}
+.player-topbar .discord-icon-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 10px;
+}
+.player-topbar #accountMenuButton.account-avatar-button,
+.player-topbar #accountMenuButton.account-avatar-button:hover,
+.player-topbar #accountMenuButton.account-avatar-button:active,
+.player-topbar #accountMenuButton.account-avatar-button:focus-visible {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  max-width: 38px;
+  max-height: 38px;
+  flex: 0 0 38px;
+  aspect-ratio: 1 / 1;
+  padding: 4px !important;
+  border: 1px solid var(--line);
+  border-radius: 9px !important;
+  background: var(--panel) !important;
+  box-shadow: 0 2px 8px var(--panel-shadow);
+  transform: none !important;
+  filter: none !important;
+  overflow: hidden;
+}
+.player-topbar #accountMenuButton.account-avatar-button:hover {
+  border-color: color-mix(in srgb, var(--accent), var(--line) 56%);
+  background: var(--control-hover) !important;
+}
+.player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"],
+.player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"]:hover,
+.player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"]:active {
+  border-color: var(--accent);
+  border-radius: 9px !important;
+  box-shadow: 0 0 0 3px var(--accent-weak), 0 4px 14px var(--panel-shadow);
+}
+.player-topbar #accountMenuButton .account-avatar-image {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 7px !important;
+  object-fit: cover;
+}
+.player-topbar #accountMenuButton[data-connected="false"] .account-avatar-image {
+  border-radius: 0 !important;
+  object-fit: contain;
+}
+.player-topbar .account-menu-popover {
+  top: calc(100% + 9px);
+  right: 0;
+}
+.player-topbar .account-login-button {
+  width: 100%;
+  min-height: 34px;
+  justify-content: flex-start;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  background: var(--control-bg);
+}
+.player-topbar .account-menu-popover .language-select {
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+  justify-self: end;
+  font-weight: 850;
+}
+.player-topbar .theme-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  justify-self: end;
+  gap: 7px;
+  width: 132px;
+  min-width: 132px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 850;
+}
+.menu-card > .app-head {
+  margin-bottom: 12px;
+}
+.menu-card > .app-head .app-main-title {
+  font-size: clamp(23px, 3.2vw, 34px);
+  line-height: 1.12;
+}
+.player-file-actions-special > .player-supported-files-button {
+  flex: 0 0 auto;
+}
+@media (max-width: 900px) {
+  .player-file-toolbar {
+    flex-wrap: wrap;
+  }
+  .player-file-actions-left {
+    flex: 1 1 100%;
+  }
+  .player-file-actions-special {
+    margin-left: auto;
+  }
+}
+@media (max-width: 820px) {
+  .player-topbar-inner {
+    width: min(1120px, calc(100vw - 20px));
+    padding: 0 6px;
+  }
+}
+@media (max-width: 620px) {
+  .player-topbar-inner {
+    gap: 8px;
+  }
+  .player-brand {
+    gap: 7px;
+    font-size: 13px;
+  }
+  .player-brand-mark {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+    border-radius: 8px;
+  }
+  .player-top-actions,
+  .player-topbar .app-head-controls,
+  .player-topbar .header-links {
+    gap: 4px;
+  }
+  .player-topbar .midi-site-links {
+    min-width: 104px;
+    max-width: 118px;
+    min-height: 34px;
+    font-size: 11.5px;
+  }
+  .player-topbar .discord-icon-button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+  }
+  .player-topbar #accountMenuButton.account-avatar-button,
+  .player-topbar #accountMenuButton.account-avatar-button:hover,
+  .player-topbar #accountMenuButton.account-avatar-button:active,
+  .player-topbar #accountMenuButton.account-avatar-button:focus-visible {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    max-width: 38px;
+    max-height: 38px;
+    flex-basis: 38px;
+    padding: 4px !important;
+    border-radius: 9px !important;
+  }
+  .player-topbar #accountMenuButton .account-avatar-image {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+    border-radius: 7px !important;
+  }
+  .player-file-actions-special {
+    width: 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+}
+@media (max-width: 430px) {
+  .player-brand > span:last-child {
+    display: none;
+  }
+  .player-topbar .midi-site-links {
+    min-width: 96px;
+    max-width: 104px;
+  }
+}
+
+/* Preserve the account theme control appearance after moving it into the topbar. */
+.player-topbar .theme-menu-button {
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  box-shadow: 0 2px 8px var(--panel-shadow);
+}
+:root[data-theme="light"] .player-topbar .theme-menu-button {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #1e293b;
+}
+:root[data-theme="dark"] .player-topbar .theme-menu-button {
+  border-color: #475569;
+  background: #1e293b;
+  color: #f8fafc;
+}
+:root[data-theme="light"] .player-topbar .theme-menu-button:not(:disabled):hover {
+  border-color: #94a3b8;
+  background: #eef2f7;
+  color: #0f172a;
+  filter: none;
+}
+:root[data-theme="dark"] .player-topbar .theme-menu-button:not(:disabled):hover {
+  border-color: #64748b;
+  background: #334155;
+  color: #fff;
+  filter: none;
+}
+
+@media (max-width: 430px) {
+  .player-file-actions-special {
+    gap: 2px;
+  }
+  #midiExtractBtn.midi-extract-toolbar-button,
+  #rhythmGameBtn.rhythm-game-toolbar-button,
+  .player-file-actions-special > .player-supported-files-button,
+  .player-file-actions-special > .simple-version-toolbar-button {
+    padding-inline: 6px;
+    font-size: 11.5px;
+  }
+}
+
+/* Tempo cleanup confirmation and final Player header refinements. */
+.tempo-simplify-dialog {
+  max-width: min(500px, calc(100vw - 32px));
+}
+.tempo-simplify-description {
+  white-space: pre-line;
+  line-height: 1.65;
+}
+.tempo-simplify-preview {
+  margin-top: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.5;
+}
+.tempo-simplify-preview[data-empty="true"] {
+  color: var(--muted);
+  font-weight: 800;
+}
+/* Keep the account control rectangular even against older circular avatar rules. */
+.player-topbar #accountMenuButton.account-avatar-button,
+.player-topbar #accountMenuButton.account-avatar-button:hover,
+.player-topbar #accountMenuButton.account-avatar-button:active,
+.player-topbar #accountMenuButton.account-avatar-button:focus-visible,
+.player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"] {
+  border-radius: 9px !important;
+}
+@media (max-width: 620px) {
+  .player-topbar #accountMenuButton.account-avatar-button,
+  .player-topbar #accountMenuButton.account-avatar-button:hover,
+  .player-topbar #accountMenuButton.account-avatar-button:active,
+  .player-topbar #accountMenuButton.account-avatar-button:focus-visible,
+  .player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"] {
+    border-radius: 9px !important;
+  }
+}
+
+
+
+/* v5.0 title/version sizing and account/theme control finalization. */
+html[data-i18n-pending="true"] .app-main-title { visibility: hidden; }
+.app-main-title {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  column-gap: .28em;
+}
+.app-main-title .app-title-version {
+  flex: 0 0 auto;
+  font-size: .5em;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.player-topbar .theme-menu-icon {
+  flex: 0 0 auto;
+  font-size: 18px;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+.player-topbar #accountMenuButton.account-avatar-button,
+.player-topbar #accountMenuButton.account-avatar-button:hover,
+.player-topbar #accountMenuButton.account-avatar-button:active,
+.player-topbar #accountMenuButton.account-avatar-button:focus-visible,
+.player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"],
+.player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"]:hover,
+.player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"]:active {
+  box-sizing: border-box !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  min-height: 38px !important;
+  max-width: 38px !important;
+  max-height: 38px !important;
+  flex: 0 0 38px !important;
+  aspect-ratio: 1 / 1;
+  padding: 4px !important;
+  border-radius: 9px !important;
+  line-height: 0;
+  transform: none !important;
+}
+.player-topbar #accountMenuButton .account-avatar-image {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  max-width: 28px;
+  max-height: 28px;
+  flex: 0 0 28px;
+}
+
+/* Guest account state: keep the transparent guest glyph on a clearly white button. */
+.player-topbar #accountMenuButton[data-connected="false"].account-avatar-button,
+.player-topbar #accountMenuButton[data-connected="false"].account-avatar-button:hover,
+.player-topbar #accountMenuButton[data-connected="false"].account-avatar-button:active,
+.player-topbar #accountMenuButton[data-connected="false"].account-avatar-button:focus-visible,
+.player-topbar #accountMenuButton[data-connected="false"].account-avatar-button[aria-expanded="true"],
+.player-topbar #accountMenuButton[data-connected="false"].account-avatar-button[aria-expanded="true"]:hover,
+.player-topbar #accountMenuButton[data-connected="false"].account-avatar-button[aria-expanded="true"]:active {
+  background: #fff !important;
 }

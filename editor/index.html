@@ -6,8 +6,9 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <meta content="yes" name="mobile-web-app-capable"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
-<title>모비바드</title>
-<link href="styles.css?v=4.8-ui-buttons-1" rel="stylesheet"/>
+<title>모비바드 v5.0</title>
+<link href="../assets/favicon.ico" rel="icon"/>
+<link href="styles.css?v=5.0.0" rel="stylesheet"/>
 </head>
 <body>
 <div data-context-area="app" id="app">
@@ -25,9 +26,9 @@
 <button id="audioOpenButton" role="menuitem" type="button">오디오 불러오기</button>
 <div class="file-menu-separator" role="separator"></div><button id="fileExportButton" role="menuitem" type="button">MML 내보내기</button></div>
 </div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button">되돌리기</button><button id="editRedoButton" role="menuitem" type="button">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button">복사</button><button id="editCutButton" role="menuitem" type="button">잘라내기</button><button id="editPasteButton" role="menuitem" type="button">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button">삭제</button><button id="editNoteVolumeButton" role="menuitem" type="button">노트 볼륨</button></div></div>
-<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,.mid,.midi,.mus,.musicxml,.xml,.mxl,.gp3,.gp5,.tab,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="fileInput" data-music-format-input type="file"/>
+<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.tab,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="fileInput" data-music-format-input type="file"/>
 <input accept="text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle" hidden="" id="mmlImportFileInput" type="file"/>
-<input accept="audio/midi,audio/x-midi,.mid,.midi,.mus,.musicxml,.xml,.mxl,.gp3,.gp5,.tab,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFileInput" data-music-format-input type="file"/>
+<input accept="audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.tab,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFileInput" data-music-format-input type="file"/>
 <input accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm" hidden="" id="audioFileInput" type="file"/>
 </div>
 <div class="toolbar-separator"></div>
@@ -101,18 +102,18 @@
 <div class="toolbar-group account-actions">
 <div class="theme-control options-control">
 <button aria-expanded="false" aria-haspopup="dialog" aria-label="Guest 설정" class="account-avatar-button" id="themeButton" title="Guest 설정" type="button">
-<img alt="" class="guest-avatar" id="themeIcon" src="guest-user.svg"/>
+<img alt="" class="guest-avatar" id="themeIcon" src="../assets/icons/guest-user.svg?v=5.0.0&amp;rev=20260818-205217"/>
 </button>
 <div aria-label="계정 및 설정" class="theme-menu options-menu" hidden="" id="themeMenu" role="dialog">
 <div class="options-profile-row">
-<img alt="" class="options-profile-avatar" src="guest-user.svg"/>
+<img alt="" class="options-profile-avatar" src="../assets/icons/guest-user.svg?v=5.0.0&amp;rev=20260818-205217"/>
 <div>
 <strong>Guest</strong>
 <span>로그인하지 않음</span>
 </div>
 </div>
 <button class="google-login-button" id="googleLoginButton" type="button">
-<img alt="" src="google-g.png"/>
+<img alt="" src="../assets/icons/google-g.png"/>
 <span>Google로 로그인</span>
 </button>
 <label class="options-field">
@@ -300,32 +301,32 @@
 </dialog>
 <div class="context-menu" hidden="" id="contextMenu" role="menu"></div>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
-<script src="../player/js/sf2-sampler.js?v=7.7-v48-sf3-ogg-eos-fix"></script>
-<script src="../assets/default_sf3.js?v=1"></script>
-<script src="sf2-player.js?v=4.8-editor-shared-sf3-1"></script>
-<script src="musicxml-to-midi.js"></script>
-<script src="../player/js/pako_inflate.min.js?v=2.1.0"></script>
-<script src="../player/js/finale-mus-to-midi.js?v=4.8-finale-mus"></script>
-<script src="../plugins/music-format-core.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-midi.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-musicxml.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-finale-mus.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/vendor/guitarpro-parser/gp3-browser.js?v=4.8-gp-offline-1"></script>
-<script src="../plugins/vendor/parse-gp5/index.js?v=4.8-gp-offline-1"></script>
-<script src="../plugins/guitarpro-local.js?v=4.8-gp-offline-1"></script>
-<script src="../plugins/format-gp3.js?v=4.8-gp-offline-1"></script>
-<script src="../plugins/format-gp5.js?v=4.8-gp-offline-1"></script>
-<script src="../plugins/format-tab.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/vocal-format-parsers.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-vsq.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-vsqx.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-vpr.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-ust.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-ustx.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-svp.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-s5p.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/format-ccs.js?v=4.8-format-plugins-1"></script>
-<script src="../plugins/supported-files-ui.js?v=4.8-format-plugins-1"></script>
-<script src="app.js?v=4.8-format-plugins-1"></script>
+<script src="../plugins/common/utils.js?v=5.0.0"></script>
+<script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
+<script src="../plugins/formats/midi/midi-parser.js?v=5.0.0"></script>
+<script src="../plugins/formats/notation/notation-utils.js?v=5.0.0"></script>
+<script src="../plugins/formats/music-format-core.js?v=5.0.0"></script>
+<script src="../plugins/formats/musicxml/musicxml-to-midi.js?v=5.0.0"></script>
+<script src="../plugins/formats/finale/finale-mus-to-midi.js?v=5.0.0"></script>
+<script src="../plugins/formats/finale/finale-musx-to-midi.js?v=5.0.0"></script>
+<script src="../plugins/formats/mnx/mnx-to-midi.js?v=5.0.0"></script>
+<script src="../plugins/formats/musescore/musescore-to-midi.js?v=5.0.0"></script>
+<script src="../plugins/formats/guitarpro/vendor/guitarpro-parser/gp3-browser.js?v=5.0.0"></script>
+<script src="../plugins/formats/guitarpro/vendor/parse-gp5/index.js?v=5.0.0"></script>
+<script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.0.0"></script>
+<script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.0.0"></script>
+<script src="../plugins/formats/midi/format-midi.js?v=5.0.0"></script>
+<script src="../plugins/formats/musicxml/format-musicxml.js?v=5.0.0"></script>
+<script src="../plugins/formats/finale/format-finale.js?v=5.0.0"></script>
+<script src="../plugins/formats/mnx/format-mnx.js?v=5.0.0"></script>
+<script src="../plugins/formats/musescore/format-musescore.js?v=5.0.0"></script>
+<script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.0.0"></script>
+<script src="../plugins/formats/tablature/format-tab.js?v=5.0.0"></script>
+<script src="../plugins/formats/vocal/format-vocal.js?v=5.0.0"></script>
+<script src="../plugins/formats/soundbank/soundbank.js?v=5.0.0"></script>
+<script src="../assets/default_sf3.js?v=5.0.0"></script>
+<script src="js/soundbank-player.js?v=5.0.0"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.0.0"></script>
+<script src="app.js?v=5.0.0"></script>
 </body>
 </html>
