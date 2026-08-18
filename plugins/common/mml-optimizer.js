@@ -2789,14 +2789,40 @@
       });
     }
 
-    const tempoValues = timeline.map(event => event.bpm);
+    // addLeadingSilenceMml() uses T120 only while the generated leading rest is
+    // playing, then restores the song's original starting tempo at the first note.
+    // Treat that leading default tempo as transport padding for cleanup comparisons.
+    // Otherwise Player (cleanup after adding the leading gap) and Simple (cleanup
+    // before adding it) can disagree about the song-wide min/max and previous tempo.
+    const firstNoteStart = findFirstNoteStart(parsedParts);
+    const firstTimelineEvent = timeline[0] || null;
+    const nextTimelineEvent = timeline[1] || null;
+    const hasLeadingDefaultTempoPadding = Boolean(
+      firstTimelineEvent &&
+      firstTimelineEvent.pos === 0 &&
+      firstTimelineEvent.bpm === DEFAULT_TEMPO &&
+      firstNoteStart > EPS &&
+      nextTimelineEvent &&
+      nextTimelineEvent.pos === firstNoteStart
+    );
+    const comparisonTimeline = hasLeadingDefaultTempoPadding ? timeline.slice(1) : timeline;
+    const tempoValues = comparisonTimeline.length
+      ? comparisonTimeline.map(event => event.bpm)
+      : timeline.map(event => event.bpm);
     const minBpm = Math.min(...tempoValues);
     const maxBpm = Math.max(...tempoValues);
     const keptEvents = [];
     const removedEvents = [];
     let previousRetainedChange = null;
 
-    for (const event of timeline) {
+    for (let timelineIndex = 0; timelineIndex < timeline.length; timelineIndex++) {
+      const event = timeline[timelineIndex];
+      if (hasLeadingDefaultTempoPadding && timelineIndex === 0) {
+        // Keep the padding tempo token in the output, but do not let it participate
+        // in the musical tempo cleanup baseline or min/max protection.
+        keptEvents.push(event);
+        continue;
+      }
       if (!previousRetainedChange) {
         keptEvents.push(event);
         previousRetainedChange = event;
@@ -2881,7 +2907,8 @@
       minBpm,
       maxBpm,
       maxBpmDeltaExclusive,
-      preserveExtrema
+      preserveExtrema,
+      ignoredLeadingDefaultTempoForComparison: hasLeadingDefaultTempoPadding
     };
   }
 
