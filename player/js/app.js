@@ -78,6 +78,8 @@
   const ACTIVE_CODE_LOOKAHEAD_SEC = 0.012;
   const ACTIVE_CODE_RELEASE_SEC = 0.026;
   const PIANO_ROLL_MIN_KEY_SPAN = 24;
+  const PIANO_BLACK_KEY_WIDTH_RATIO = 0.62;
+  const PIANO_BLACK_KEY_HEIGHT_RATIO = 0.62;
   const PIANO_ROLL_FALL_WINDOW_COLLAPSED = 1.8;
   const PIANO_ROLL_FALL_WINDOW_EXPANDED = 4.6;
   const PIANO_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -8530,30 +8532,42 @@
   }
 
   function getPianoRollRange(notes) {
-    if (!notes.length) return { min: 48, max: 72 };
-    let min = 127;
-    let max = 0;
+    if (!notes.length) return { min: 48, max: 71 };
+
+    let rawMin = 127;
+    let rawMax = 0;
     for (const note of notes) {
       const midi = clampInt(Number(note.midi) || 0, 0, 127);
-      min = Math.min(min, midi);
-      max = Math.max(max, midi);
+      rawMin = Math.min(rawMin, midi);
+      rawMax = Math.max(rawMax, midi);
     }
 
-    min = Math.max(0, Math.floor(min / 12) * 12);
-    max = Math.min(127, Math.ceil((max + 1) / 12) * 12 - 1);
-    if (max - min + 1 < PIANO_ROLL_MIN_KEY_SPAN) {
-      const center = Math.round((min + max) / 2);
-      min = Math.max(0, center - Math.floor(PIANO_ROLL_MIN_KEY_SPAN / 2));
-      max = Math.min(127, min + PIANO_ROLL_MIN_KEY_SPAN - 1);
-      min = Math.max(0, max - PIANO_ROLL_MIN_KEY_SPAN + 1);
-      min = Math.max(0, Math.floor(min / 12) * 12);
-      max = Math.min(127, Math.max(max, min + PIANO_ROLL_MIN_KEY_SPAN - 1));
+    // 건반 폭은 옥타브 수에 의해 결정된다. 예전 계산은 한 옥타브짜리 곡도
+    // 최소 범위를 맞춘 뒤 다시 C~B로 반올림하면서 3옥타브까지 늘어날 수 있었고,
+    // 그 결과 흰/검은 건반과 세로 레인이 필요 이상으로 눌려 보였다.
+    // 점유한 옥타브를 먼저 구한 뒤 부족한 옥타브만 정확히 보충한다.
+    const minOctaves = Math.max(1, Math.ceil(PIANO_ROLL_MIN_KEY_SPAN / 12));
+    const minOctaveIndex = 0;
+    const maxOctaveIndex = Math.floor(127 / 12);
+    let firstOctave = Math.floor(rawMin / 12);
+    let lastOctave = Math.floor(rawMax / 12);
+    const occupiedOctaves = Math.max(1, lastOctave - firstOctave + 1);
+    const extraOctaves = Math.max(0, minOctaves - occupiedOctaves);
+
+    firstOctave -= Math.floor(extraOctaves / 2);
+    lastOctave += Math.ceil(extraOctaves / 2);
+
+    if (firstOctave < minOctaveIndex) {
+      lastOctave = Math.min(maxOctaveIndex, lastOctave + (minOctaveIndex - firstOctave));
+      firstOctave = minOctaveIndex;
+    }
+    if (lastOctave > maxOctaveIndex) {
+      firstOctave = Math.max(minOctaveIndex, firstOctave - (lastOctave - maxOctaveIndex));
+      lastOctave = maxOctaveIndex;
     }
 
-    // 실제 피아노처럼 흰건반이 기본 폭을 차지하고 검은건반은 흰건반 사이에 겹쳐 올라가야 하므로,
-    // 표시 범위는 항상 C에서 시작해 B에서 끝나는 온전한 옥타브 단위로 맞춘다.
-    min = Math.max(0, Math.floor(min / 12) * 12);
-    max = Math.min(127, Math.ceil((max + 1) / 12) * 12 - 1);
+    const min = Math.max(0, firstOctave * 12);
+    const max = Math.min(127, lastOctave * 12 + 11);
     return { min, max };
   }
 
@@ -8592,7 +8606,7 @@
     }
     whiteKeyCount = Math.max(1, whiteKeyCount);
     const whiteWidth = 100 / whiteKeyCount;
-    const blackWidth = whiteWidth * 0.62;
+    const blackWidth = whiteWidth * PIANO_BLACK_KEY_WIDTH_RATIO;
 
     const getKeyMetrics = (midi) => {
       const n = clampInt(Number(midi) || 0, 0, 127);
@@ -8781,20 +8795,63 @@
     ctx.rect(0, 0, width, fallAreaHeight);
     ctx.clip();
 
+    // 세로 레인은 아래 건반과 같은 geometry를 그대로 사용한다.
+    // 흰 건반 경계와 검은 건반 폭을 따로 계산하지 않아 확대/축소나 음역 변화에도
+    // 건반과 레인의 비율이 항상 일치한다.
     for (let midi = minMidi; midi <= maxMidi; midi++) {
+      if (!isPianoBlackKey(midi)) continue;
       const metrics = keyLayout.getKeyMetrics(midi);
       const x = metrics.left * width / 100;
       const w = metrics.width * width / 100;
-      if (metrics.black) {
-        ctx.fillStyle = colors.blackLane;
-        ctx.fillRect(x, 0, w, fallAreaHeight);
-      }
+      ctx.fillStyle = colors.blackLane;
+      ctx.fillRect(x, 0, w, fallAreaHeight);
+    }
+
+    // 흰 건반은 실제 흰 건반 경계에, 검은 건반은 실제 검은 건반의 좌우 끝에
+    // 가이드를 그린다. 기존처럼 검은 건반의 왼쪽만 선으로 잡으면 검은 레인의 폭이
+    // 한쪽으로 치우쳐 보여 흰/검은 건반 비율이 찌그러져 보일 수 있다.
+    for (let midi = minMidi; midi <= maxMidi; midi++) {
+      if (isPianoBlackKey(midi)) continue;
+      const metrics = keyLayout.getKeyMetrics(midi);
+      const x = metrics.left * width / 100;
       ctx.strokeStyle = getPianoPitch(midi) === 0 ? colors.accent : colors.gridLine;
       ctx.lineWidth = getPianoPitch(midi) === 0 ? 1.5 : 1;
       ctx.beginPath();
       ctx.moveTo(x + 0.5, 0);
       ctx.lineTo(x + 0.5, fallAreaHeight);
       ctx.stroke();
+    }
+
+    const finalWhite = (() => {
+      for (let midi = maxMidi; midi >= minMidi; midi--) {
+        if (!isPianoBlackKey(midi)) return keyLayout.getKeyMetrics(midi);
+      }
+      return null;
+    })();
+    if (finalWhite) {
+      const right = (finalWhite.left + finalWhite.width) * width / 100;
+      ctx.strokeStyle = colors.gridLine;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(Math.min(width - 0.5, right - 0.5), 0);
+      ctx.lineTo(Math.min(width - 0.5, right - 0.5), fallAreaHeight);
+      ctx.stroke();
+    }
+
+    for (let midi = minMidi; midi <= maxMidi; midi++) {
+      if (!isPianoBlackKey(midi)) continue;
+      const metrics = keyLayout.getKeyMetrics(midi);
+      const left = metrics.left * width / 100;
+      const right = (metrics.left + metrics.width) * width / 100;
+      ctx.strokeStyle = colors.gridLine;
+      ctx.lineWidth = 1;
+      for (const edge of [left, right]) {
+        const x = Math.max(0.5, Math.min(width - 0.5, Math.round(edge) + 0.5));
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, fallAreaHeight);
+        ctx.stroke();
+      }
     }
 
     // L4는 1박이다. 각 정수 박자의 실제 시간을 템포맵으로 환산해
@@ -8957,7 +9014,7 @@
       const metrics = keyLayout.getKeyMetrics(midi);
       const x = metrics.left * width / 100;
       const w = metrics.width * width / 100;
-      const h = keyHeight * 0.62;
+      const h = keyHeight * PIANO_BLACK_KEY_HEIGHT_RATIO;
       const activeKey = activeKeyParts.get(midi) || null;
       const activePart = activeKey?.part;
       const activeMuted = Boolean(activeKey?.muted);
