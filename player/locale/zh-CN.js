@@ -545,7 +545,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "tempo.prompt": "请输入新速度。（当前 T{0}）",
     "tempo.simplify": "整理速度",
     "tempo.simplify_applied": "已删除 {0} 个速度变化。",
-    "tempo.simplify_description": "删除一小节内差值小于 10 的速度。",
+    "tempo.simplify_description": "删除与前一个速度差值小于 5 的速度。",
     "tempo.simplify_none": "没有可删除的速度变化。",
     "tempo.simplify_remove_count": "将删除 {0} 个速度变化。",
     "tempo.simplify_unavailable": "无法加载速度整理功能。",

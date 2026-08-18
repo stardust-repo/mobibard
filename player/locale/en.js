@@ -545,7 +545,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "tempo.prompt": "Enter a new tempo. (Current T{0})",
     "tempo.simplify": "Clean up tempo",
     "tempo.simplify_applied": "Removed {0} tempo changes.",
-    "tempo.simplify_description": "Deletes tempos that differ by less than 10 within one measure.",
+    "tempo.simplify_description": "Removes tempos that differ by less than 5 from the preceding tempo.",
     "tempo.simplify_none": "There are no tempo changes to remove.",
     "tempo.simplify_remove_count": "{0} tempo changes will be removed.",
     "tempo.simplify_unavailable": "The tempo cleanup feature is unavailable.",

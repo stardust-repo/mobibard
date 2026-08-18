@@ -417,7 +417,11 @@
   function applyTempoSimplification(mml) {
     const simplify = window.MabiOptimizer?.simplifyTemposMml;
     if (typeof simplify !== "function") return mml;
-    return simplify(mml, { partCount: 3 }).mml;
+    return simplify(mml, {
+      partCount: 3,
+      maxBpmDeltaExclusive: 5,
+      preserveExtrema: true
+    }).mml;
   }
 
   function applyRestRemoval(mml) {
@@ -526,7 +530,7 @@
 
       const options = buildSimpleConvertOptions(nonDrumGroups.map(group => group.id));
       const converted = window.MabiMidi.midiToMml(selectedBytes, selectedFile.name, options);
-      // 템포 정리는 앞쪽 2초 공백을 넣기 전에 적용해야 원본의 1온음표 이내 판정이 유지된다.
+      // 템포 정리는 원본 템포 흐름을 기준으로 먼저 적용한 뒤 나머지 후처리를 수행한다.
       const simplifiedMml = applyTempoSimplification(converted.mml);
       const cleanedMml = applyRestRemoval(simplifiedMml);
       const alignedMml = alignGeneratedMmlStart(cleanedMml);

@@ -545,7 +545,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "tempo.prompt": "新しいテンポを入力してください。(現在T{0})",
     "tempo.simplify": "テンポ整理",
     "tempo.simplify_applied": "{0}件のテンポ変更を削除しました。",
-    "tempo.simplify_description": "1小節内で差が10未満のテンポを削除します。",
+    "tempo.simplify_description": "直前のテンポとの差が5未満のテンポを削除します。",
     "tempo.simplify_none": "削除できるテンポ変更はありません。",
     "tempo.simplify_remove_count": "{0}件のテンポ変更を削除します。",
     "tempo.simplify_unavailable": "テンポ整理機能を読み込めませんでした。",

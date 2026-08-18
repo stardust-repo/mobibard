@@ -545,7 +545,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "tempo.prompt": "새 템포를 입력해 주세요. (현재 T{0})",
     "tempo.simplify": "템포 정리",
     "tempo.simplify_applied": "{0}개의 템포 변경을 삭제했습니다.",
-    "tempo.simplify_description": "1마디 안에서 편차가 10 미만인 템포들을 삭제합니다.",
+    "tempo.simplify_description": "선행 템포와의 편차가 5 미만인 템포들을 삭제합니다.",
     "tempo.simplify_none": "삭제할 템포 변경이 없습니다.",
     "tempo.simplify_remove_count": "{0}개의 템포 변경이 삭제됩니다.",
     "tempo.simplify_unavailable": "템포 정리 기능을 불러오지 못했습니다.",

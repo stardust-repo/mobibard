@@ -6972,8 +6972,7 @@
       source,
       result: simplifyTemposMml(source, {
         partCount: 6,
-        windowUnits: 1024,
-        maxBpmDeltaExclusive: 10,
+        maxBpmDeltaExclusive: 5,
         preserveExtrema: true
       })
     };

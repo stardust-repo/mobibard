@@ -2746,13 +2746,10 @@
       .map(event => ({ ...event }))
       .sort((left, right) => left.pos - right.pos || left.order - right.order || left.part - right.part);
 
-    const windowUnits = Number.isFinite(Number(options.windowUnits))
-      ? Math.max(1, Math.round(Number(options.windowUnits)))
-      : WHOLE_UNITS;
     const thresholdSource = options.maxBpmDeltaExclusive ?? options.bpmThreshold;
     const maxBpmDeltaExclusive = Number.isFinite(Number(thresholdSource))
       ? Math.max(1, Number(thresholdSource))
-      : 10;
+      : 5;
     const preserveExtrema = options.preserveExtrema !== false;
 
     // A position can contain tempo commands in several parts. The command with the
@@ -2806,19 +2803,13 @@
         continue;
       }
 
-      // Repeating the same BPM is not a tempo change. Keep the source command as-is,
-      // but do not reset the one-whole-note comparison window.
-      if (event.bpm === previousRetainedChange.bpm) {
-        keptEvents.push(event);
-        continue;
-      }
-
       const isExtrema = preserveExtrema && (event.bpm === minBpm || event.bpm === maxBpm);
-      const distance = event.pos - previousRetainedChange.pos;
-      const withinWindow = distance >= 0 && distance < windowUnits;
       const isSmallChange = Math.abs(event.bpm - previousRetainedChange.bpm) < maxBpmDeltaExclusive;
 
-      if (!event.implicit && !isExtrema && withinWindow && isSmallChange) {
+      // Tempo cleanup is distance-independent. Compare every tempo command against
+      // the last retained tempo and remove changes inside the exclusive BPM range.
+      // Global minimum/maximum tempo values remain protected when requested.
+      if (!event.implicit && !isExtrema && isSmallChange) {
         removedEvents.push({
           ...event,
           previousPos: previousRetainedChange.pos,
@@ -2889,7 +2880,6 @@
       afterTempoCount: Math.max(0, explicitEvents.length - removedTokenCount),
       minBpm,
       maxBpm,
-      windowUnits,
       maxBpmDeltaExclusive,
       preserveExtrema
     };
