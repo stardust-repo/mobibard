@@ -229,12 +229,12 @@
     {
       id: "playstation", labelKey: "pickerPlayStation", category: "console", formatIds: ["playstation-sequence", "playstation-xsf"],
       description: "PlayStation SEQ/SEP, PS2 SQ/BQ와 PSF/PSF2 컨테이너 안의 MIDI·Sony 시퀀스·SquareSoft AKAO v1.0/v2를 MIDI로 변환합니다.",
-      limitation: "MiniPSF는 곡 시퀀스가 파일 자체에 있으면 단독 변환합니다. PSFLIB/PSF1LIB/PSF2LIB는 곡 선택 파일이 아닌 의존 라이브러리이므로 지원 파일 목록과 파일 선택 대상에서 제외됩니다. 라이브러리 결합이 실제로 필요한 MiniPSF는 제한될 수 있습니다.",
+      limitation: "라이브러리 결합이 실제로 필요한 MiniPSF는 제한될 수 있습니다.",
     },
     {
       id: "nintendo", labelKey: "pickerNintendo", category: "console", formatIds: ["nintendo-sequence", "nintendo-xsf"],
       description: "Nintendo DS/Wii/3DS/Wii U/Switch 시퀀스 및 사운드 아카이브와 NCSF/2SF의 내장 SDAT/SSEQ 데이터를 MIDI로 변환합니다.",
-      limitation: "NCSFLIB/2SFLIB는 곡 선택 파일이 아닌 의존 라이브러리이므로 지원 파일 목록과 파일 선택 대상에서 제외됩니다. 라이브러리나 ROM/게임 고유 사운드 드라이버 복원이 필요한 Mini xSF는 단독 변환이 제한될 수 있습니다.",
+      limitation: "라이브러리나 ROM/게임 고유 사운드 드라이버 복원이 필요한 Mini xSF는 단독 변환이 제한될 수 있습니다.",
     },
   ]);
 
