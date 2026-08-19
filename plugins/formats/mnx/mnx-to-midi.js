@@ -178,7 +178,7 @@
               startTick: Math.round(cursor * context.ppq),
               endTick: Math.max(Math.round(cursor * context.ppq) + 1, Math.round(endQuarter * context.ppq)),
               pitch,
-              velocity: core.clampInt(note.velocity ?? item.velocity, 1, 127, 96),
+              velocity: core.clampInt(note.velocity ?? item.velocity, 1, 127, core.DEFAULT_VELOCITY),
               lyric: String(lyric || ""),
             };
             context.notes.push(output);

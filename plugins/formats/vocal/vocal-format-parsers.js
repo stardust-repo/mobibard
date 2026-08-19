@@ -47,7 +47,9 @@
         startTick: Math.max(0, Math.round(Number(note.startTick) || 0)),
         durationTick: Math.max(1, Math.round(Number(note.durationTick) || 1)),
         pitch: core.clampInt(note.pitch, 0, 127, 60),
-        velocity: core.clampInt(note.velocity, 1, 127, 96),
+        velocity: note.velocity === null || note.velocity === undefined || note.velocity === ""
+          ? core.DEFAULT_VELOCITY
+          : core.clampInt(note.velocity, 1, 127, core.DEFAULT_VELOCITY),
         lyric: String(note.lyric || ""),
       })),
     })).filter(track => track.notes.length);
@@ -120,7 +122,7 @@
           const position = Number(core.childText(noteNode, ["posTick", "pos"], 0)) || 0;
           const duration = Number(core.childText(noteNode, ["durTick", "duration", "dur"], 0)) || 0;
           const pitch = Number(core.childText(noteNode, ["noteNum", "noteNumber", "pitch"], 60));
-          const velocity = Number(core.childText(noteNode, ["velocity", "vel"], 96));
+          const velocity = Number(core.childText(noteNode, ["velocity", "vel"], core.DEFAULT_VELOCITY));
           const lyric = core.childText(noteNode, ["lyric"], "");
           notes.push({
             startTick: Math.round((partPosition + position) * scale),
@@ -168,7 +170,11 @@
       const pitch = Number(values.NoteNum);
       if (values.Tempo) tempoEvents.push({ tick: cursor, bpm: normalizeBpm(values.Tempo) });
       if (Number.isFinite(pitch) && !/^(?:r|休符)$/i.test(lyric.trim())) {
-        notes.push({ startTick: cursor, durationTick: length, pitch, velocity: Number(values.Intensity) || 96, lyric });
+        const intensity = Number(values.Intensity);
+        const velocity = Number.isFinite(intensity)
+          ? core.clampInt(Math.round(intensity * 127 / 200), 1, 127, core.DEFAULT_VELOCITY)
+          : core.DEFAULT_VELOCITY;
+        notes.push({ startTick: cursor, durationTick: length, pitch, velocity, lyric });
       }
       cursor += length;
     }
@@ -193,7 +199,7 @@
           startTick: Math.round((offset + (Number(note.position) || 0)) * scale),
           durationTick: Math.max(1, Math.round((Number(note.duration) || 0) * scale)),
           pitch: Number(note.tone ?? note.pitch ?? note.note_num ?? 60),
-          velocity: 96,
+          velocity: core.DEFAULT_VELOCITY,
           lyric: String(note.lyric || ""),
         });
       }
@@ -247,7 +253,7 @@
             startTick: Math.round((item.offset + onset) * PPQ / SV_QUARTER),
             durationTick: Math.max(1, Math.round(duration * PPQ / SV_QUARTER)),
             pitch,
-            velocity: 96,
+            velocity: core.DEFAULT_VELOCITY,
             lyric: String(pick(note, ["lyrics", "lyric"], "")),
           });
         }
@@ -315,7 +321,7 @@
               start: nextOffset + (Number(pick(note, ["pos", "position", "start", "tick"], 0)) || 0),
               duration,
               pitch,
-              velocity: Number(pick(note, ["velocity", "vel"], 96)) || 96,
+              velocity: Number(pick(note, ["velocity", "vel"], core.DEFAULT_VELOCITY)) || core.DEFAULT_VELOCITY,
               lyric: String(pick(note, ["lyric", "lyrics"], "")),
             });
           }
@@ -434,7 +440,7 @@
         startTick: Math.round(clock * scale),
         durationTick: Math.max(1, Math.round(duration * scale)),
         pitch,
-        velocity: Number(noteNode.getAttribute("Dynamics") || 96) || 96,
+        velocity: Number(noteNode.getAttribute("Dynamics") || core.DEFAULT_VELOCITY) || core.DEFAULT_VELOCITY,
         lyric: noteNode.getAttribute("Lyric") || "",
       });
     }

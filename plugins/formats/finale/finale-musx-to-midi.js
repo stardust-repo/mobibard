@@ -365,7 +365,8 @@
             if (!sourceNote.tieStart) activeTies.delete(tieKey);
             continue;
           }
-          const note = { startTick, endTick, pitch, velocity: 88 };
+          // EnigmaXML dynamics are not decoded yet; use the project-wide 75% fallback.
+          const note = { startTick, endTick, pitch, velocity: core.DEFAULT_VELOCITY };
           notes.push(note);
           if (sourceNote.tieStart) activeTies.set(tieKey, note);
         }

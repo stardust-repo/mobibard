@@ -8,8 +8,8 @@
 
 ## 입력
 
-- 지원 확장자: `.mid`, `.midi`, `.kar`, `.seq`, `.sep`, `.sq`, `.bq`, `.psf`, `.psf1`, `.minipsf`, `.minipsf1`, `.psflib`, `.psf1lib`, `.psf2`, `.minipsf2`, `.psf2lib`, `.ncsf`, `.minincsf`, `.ncsflib`, `.2sf`, `.mini2sf`, `.2sflib`, `.sseq`, `.ssar`, `.sdat`, `.brseq`, `.rseq`, `.brsar`, `.bcseq`, `.cseq`, `.bcsar`, `.bfseq`, `.fseq`, `.bfsar`, `.musicxml`, `.xml`, `.mxl`, `.mus`, `.musx`, `.mnx`, `.mnx.json`, `.mscz`, `.mscx`, `.gp3`, `.gp5`, `.vsq`, `.vsqx`, `.vpr`, `.ust`, `.ustx`, `.svp`, `.s5p`, `.ccs`
-- 공용 포맷 등록소가 입력을 표준 MIDI로 정규화합니다. PlayStation SEQ/SEP·PS2 SQ/BQ·PSF1/PSF2(AKAO v2 포함)와 Nintendo DS·Wii·3DS·Wii U·Switch의 표준 시퀀스/사운드 아카이브 및 NCSF/2SF도 같은 경로를 사용합니다. 콘솔 전용 Bank와 드럼 슬롯은 가능한 경우 GM Bank 0/GM 타악기로 정규화되어 일반 SoundFont 미리듣기에 사용됩니다.
+- 지원 확장자: `.mid`, `.midi`, `.kar`, `.seq`, `.sep`, `.sq`, `.bq`, `.psf`, `.psf1`, `.minipsf`, `.minipsf1`, `.psf2`, `.minipsf2`, `.ncsf`, `.minincsf`, `.2sf`, `.mini2sf`, `.sseq`, `.ssar`, `.sdat`, `.brseq`, `.rseq`, `.brsar`, `.bcseq`, `.cseq`, `.bcsar`, `.bfseq`, `.fseq`, `.bfsar`, `.musicxml`, `.xml`, `.mxl`, `.mus`, `.musx`, `.mnx`, `.mnx.json`, `.mscz`, `.mscx`, `.gp3`, `.gp5`, `.vsq`, `.vsqx`, `.vpr`, `.ust`, `.ustx`, `.svp`, `.s5p`, `.ccs`
+- 공용 포맷 등록소가 입력을 표준 MIDI로 정규화합니다. PlayStation SEQ/SEP·PS2 SQ/BQ·PSF1/PSF2(AKAO v1.0/v2 포함)와 Nintendo DS·Wii·3DS·Wii U·Switch의 표준 시퀀스/사운드 아카이브 및 NCSF/2SF도 같은 경로를 사용합니다. 콘솔 전용 Bank와 드럼 슬롯은 가능한 경우 GM Bank 0/GM 타악기로 정규화되어 일반 SoundFont 미리듣기에 사용됩니다.
 - Classic Mac의 MacBinary 컨테이너는 공용 계층에서 Data Fork·Resource Fork와 MacBinary II 보조 헤더를 판별한 뒤 실제 연주 데이터를 전달합니다.
 - 확장자가 보존되지 않은 Classic Mac 컨테이너를 위해 `.bin`·`.macbin`도 선택할 수 있으며, 내부 파일명과 바이너리 시그니처로 실제 형식을 판별합니다.
 - MIDI와 KAR의 트랙·채널·Program·Bank·노트·템포·가사·텍스트 이벤트는 공용 MIDI 파서가 해석합니다.

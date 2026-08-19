@@ -369,6 +369,12 @@
     return clampInt(2 + Math.floor((velocity - 2) / 9), 2, 15);
   }
 
+  function playbackVelocity(note) {
+    const value = Number(note?.effectiveVelocity);
+    if (Number.isFinite(value)) return clampInt(Math.round(value), 0, 127);
+    return clampInt(Math.round(Number(note?.velocity) || 0), 0, 127);
+  }
+
   function normalizeQuantizeDivision(value) {
     return Number(value) === 32 ? 32 : 64;
   }
@@ -413,8 +419,8 @@
           startGrid,
           endGrid: startGrid + durGrid,
           durGrid,
-          midiVelocity: clampInt(Math.round(n.velocity), 0, 127),
-          velocity: midiVelocityToMmlVolume(n.velocity),
+          midiVelocity: playbackVelocity(n),
+          velocity: midiVelocityToMmlVolume(playbackVelocity(n)),
           channel: n.channel,
           program: normalizeProgram(n.program),
           bankMsb: normalizeBank(n.bankMsb),
@@ -493,8 +499,8 @@
         startGrid,
         endGrid: startGrid + durGrid,
         durGrid,
-        midiVelocity: clampInt(Math.round(n.velocity), 0, 127),
-        velocity: midiVelocityToMmlVolume(n.velocity),
+        midiVelocity: playbackVelocity(n),
+        velocity: midiVelocityToMmlVolume(playbackVelocity(n)),
         channel: n.channel,
         program: normalizeProgram(n.program),
         bankMsb: normalizeBank(n.bankMsb),
@@ -612,8 +618,8 @@
           startGrid,
           endGrid: startGrid + durGrid,
           durGrid,
-          midiVelocity: clampInt(Math.round(n.velocity), 0, 127),
-          velocity: midiVelocityToMmlVolume(n.velocity),
+          midiVelocity: playbackVelocity(n),
+          velocity: midiVelocityToMmlVolume(playbackVelocity(n)),
           channel: n.channel,
           trackIndex: n.trackIndex,
           program: normalizeProgram(n.program),

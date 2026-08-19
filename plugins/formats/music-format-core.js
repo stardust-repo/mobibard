@@ -8,6 +8,26 @@
   const registrations = [];
   const byExtension = new Map();
   const DEFAULT_PPQ = 480;
+  // When a source format provides no usable loudness/dynamic information at all,
+  // Mobibard normalization policy uses MIDI 96 (about 75% of the 0..127 range).
+  const DEFAULT_VELOCITY = 96;
+  const NORMALIZATION_POLICY = Object.freeze({
+    fallbackTempoBpm: 120,
+    fallbackVelocity: DEFAULT_VELOCITY,
+    fallbackVolumePercent: 75,
+    defaultPan: 64,
+    defaultExpression: 127,
+    gmBank: 0,
+    gmDrumChannel: 9,
+    rules: Object.freeze([
+      "Preserve explicit source tempo, note velocity, channel volume, expression, pan, program, bank and drum semantics when the source format defines them.",
+      "Convert source-specific units to Standard MIDI semantics before Editor/MML processing; do not copy non-MIDI numeric domains blindly.",
+      "When loudness is represented by multiple controls, preserve them independently in MIDI and combine Velocity × CC7 × CC11 only at the consumer stage that needs one effective loudness value.",
+      "When source instrument semantics are known, normalize them to a plausible GM program or GM percussion key; when semantics cannot be inferred, keep the safest GM proxy instead of inventing an instrument identity.",
+      "Use tempo 120 BPM only when no usable tempo can be obtained or inferred from the source.",
+      "Use MIDI velocity 96 (about 75%) only when no usable loudness/dynamic information can be obtained or inferred from the source.",
+    ]),
+  });
   const GENERIC_CONTAINER_EXTENSIONS = Object.freeze(["bin", "macbin"]);
   const GENERIC_CONTAINER_MIME_TYPES = Object.freeze(["application/macbinary", "application/x-macbinary"]);
 
@@ -318,12 +338,32 @@
       }
       const events = [{ tick: 0, order: 0, bytes: textMeta(0x03, track.name || `Track ${trackIndex + 1}`) }];
       if (!track.isDrums) events.push({ tick: 0, order: 1, bytes: [0xc0 | channel, clampInt(track.program, 0, 127, 0)] });
+      if (Number.isFinite(Number(track.volume))) {
+        events.push({ tick: 0, order: 2, bytes: [0xb0 | channel, 0x07, clampInt(track.volume, 0, 127, DEFAULT_VELOCITY)] });
+      }
+      if (Number.isFinite(Number(track.pan))) {
+        events.push({ tick: 0, order: 2, bytes: [0xb0 | channel, 0x0a, clampInt(track.pan, 0, 127, 64)] });
+      }
+      if (Number.isFinite(Number(track.expression))) {
+        events.push({ tick: 0, order: 2, bytes: [0xb0 | channel, 0x0b, clampInt(track.expression, 0, 127, 127)] });
+      }
+      for (const control of track.controlChanges || []) {
+        const controlChannel = Number.isFinite(Number(control.channel)) ? clampInt(control.channel, 0, 15, channel) : channel;
+        events.push({
+          tick: Math.max(0, Math.round(numberValue(control.tick ?? control.position, 0))),
+          order: 2,
+          bytes: [0xb0 | controlChannel, clampInt(control.controller ?? control.control, 0, 127, 7), clampInt(control.value, 0, 127, 0)],
+        });
+      }
       for (const note of track.notes || []) {
         const start = Math.max(0, Math.round(numberValue(note.startTick ?? note.start ?? note.position, 0)));
         const duration = Math.max(1, Math.round(numberValue(note.durationTick ?? note.duration ?? note.length, division / 4)));
         const end = Math.max(start + 1, Math.round(numberValue(note.endTick, start + duration)));
         const pitch = clampInt(note.pitch ?? note.note ?? note.tone, 0, 127, 60);
-        const velocity = clampInt(note.velocity, 1, 127, 96);
+        const rawVelocity = note.velocity;
+        const velocity = rawVelocity === null || rawVelocity === undefined || rawVelocity === ""
+          ? DEFAULT_VELOCITY
+          : clampInt(rawVelocity, 1, 127, DEFAULT_VELOCITY);
         const noteChannel = Number.isFinite(Number(note.channel)) ? clampInt(note.channel, 0, 15, channel) : channel;
         events.push({ tick: start, order: 4, bytes: [0x90 | noteChannel, pitch, velocity] });
         events.push({ tick: end, order: 2, bytes: [0x80 | noteChannel, pitch, 0] });
@@ -466,7 +506,7 @@
   }
 
   const api = Object.freeze({
-    version: "5.0.0",
+    version: "5.0.1",
     registerFormat,
     findFormat,
     isSupported,
@@ -494,6 +534,8 @@
     unzip,
     parseYaml,
     DEFAULT_PPQ,
+    DEFAULT_VELOCITY,
+    NORMALIZATION_POLICY,
   });
 
   root.MabiMusicFormats = api;

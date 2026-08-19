@@ -105,16 +105,16 @@
     return out;
   }
 
-  function rawTempoToBpm(rawTempo) {
+  function rawTempoToBpm(rawTempo, version = 2) {
     if (!rawTempo) return 1;
-    // AKAO v1.1+ uses a 0x44E8 timer frequency and PPQN 0x30.
-    // This is the same conversion used by VGMTrans' AkaoSeq::getTempoInBPM().
-    const frequency = 0x44e8;
+    // AKAO v1.0 (FF7) uses a slightly different timer from v1.1+.
+    // VGMTrans uses 0x43D1 for v1.0 and 0x44E8 for later PS1 AKAO.
+    const frequency = Number(version) === 1 ? 0x43d1 : 0x44e8;
     return 60 / (PPQ * (65536 / rawTempo) * (frequency / (33868800 / 8)));
   }
 
-  function tempoBytes(rawTempo) {
-    const bpm = Math.max(1, rawTempoToBpm(rawTempo));
+  function tempoBytes(rawTempo, version = 2) {
+    const bpm = Math.max(1, rawTempoToBpm(rawTempo, version));
     const mpqn = Math.max(1, Math.min(0xffffff, Math.round(60000000 / bpm)));
     return [0xff, 0x51, 0x03, (mpqn >>> 16) & 0xff, (mpqn >>> 8) & 0xff, mpqn & 0xff];
   }
@@ -143,10 +143,45 @@
     0x10: 1, 0x11: 0, 0x12: 2, 0x14: 2, 0x15: 2, 0x16: 2, 0x17: 0, 0x18: 0,
   });
 
-  function inspectHeader(bytes, offset = 0) {
+  function normalizeVersionHint(value) {
+    const text = String(value == null ? "" : value).trim().toLowerCase();
+    if (value === 1 || text === "1" || text === "1.0" || text === "v1" || text === "v1.0" || text === "version_1_0") return 1;
+    if (value === 2 || text === "2" || text === "2.0" || text === "v2" || text === "v2.0" || text === "version_2") return 2;
+    return 0;
+  }
+
+  function isBcdByte(value) {
+    return ((value >>> 4) & 0x0f) <= 9 && (value & 0x0f) <= 9;
+  }
+
+  function plausibleV1Timestamp(view, offset) {
+    if (offset + 0x10 > view.length) return false;
+    for (let index = 0x0a; index <= 0x0f; index++) if (!isBcdByte(view[offset + index])) return false;
+    const month = ((view[offset + 0x0b] >>> 4) * 10) + (view[offset + 0x0b] & 0x0f);
+    const day = ((view[offset + 0x0c] >>> 4) * 10) + (view[offset + 0x0c] & 0x0f);
+    const hour = ((view[offset + 0x0d] >>> 4) * 10) + (view[offset + 0x0d] & 0x0f);
+    const minute = ((view[offset + 0x0e] >>> 4) * 10) + (view[offset + 0x0e] & 0x0f);
+    const second = ((view[offset + 0x0f] >>> 4) * 10) + (view[offset + 0x0f] & 0x0f);
+    return month >= 1 && month <= 12 && day >= 1 && day <= 31 && hour <= 23 && minute <= 59 && second <= 59;
+  }
+
+  function readTrackOffsets(view, offset, totalSize, trackCount, pointerTableOffset) {
+    if (offset + pointerTableOffset + trackCount * 2 > offset + totalSize) return null;
+    const trackOffsets = [];
+    for (let index = 0; index < trackCount; index++) {
+      const pointerPos = pointerTableOffset + index * 2;
+      const relative = le16(view, offset + pointerPos);
+      const localOffset = pointerPos + 2 + relative;
+      if (localOffset < pointerTableOffset || localOffset >= totalSize) return null;
+      trackOffsets.push(localOffset);
+    }
+    return trackOffsets;
+  }
+
+  function inspectHeader(bytes, offset = 0, options = {}) {
     const view = asBytes(bytes);
     if (!asciiAt(view, offset, "AKAO")) return null;
-    if (offset + 0x20 > view.length) return null;
+    if (offset + 0x14 > view.length) return null;
 
     const sequenceId = le16(view, offset + 4);
     const storedSize = le16(view, offset + 6);
@@ -154,34 +189,45 @@
     const end = offset + totalSize;
     const trackMask = le32(view, offset + 0x10);
     const trackCount = popcount32(trackMask);
-
-    // VGMTrans identifies this shape as AKAO PS1 Version 2: the v2 track mask
-    // lives at +0x10 and the word at +0x1C is zero. v2 track allocation uses <=24 bits.
     if (!storedSize || end > view.length || !trackMask || (trackMask & ~0x00ffffff) !== 0) return null;
-    if (le32(view, offset + 0x1c) !== 0 || trackCount < 1 || trackCount > 24) return null;
-    if (offset + 0x20 + trackCount * 2 > end) return null;
+    if (trackCount < 1 || trackCount > 24) return null;
 
-    const trackOffsets = [];
-    for (let index = 0; index < trackCount; index++) {
-      const pointerPos = 0x20 + index * 2;
-      const relative = le16(view, offset + pointerPos);
-      const localOffset = pointerPos + 2 + relative;
-      if (localOffset < 0x20 || localOffset >= totalSize) return null;
-      trackOffsets.push(localOffset);
+    // AKAO v2: 0x20-byte header, and the word at +0x1C is zero.
+    if (offset + 0x20 <= end && le32(view, offset + 0x1c) === 0) {
+      const trackOffsets = readTrackOffsets(view, offset, totalSize, trackCount, 0x20);
+      if (trackOffsets) {
+        return { sequenceId, storedSize, totalSize, end, trackMask, trackCount, trackOffsets, version: 2, versionLabel: "2" };
+      }
     }
 
-    return { sequenceId, storedSize, totalSize, end, trackMask, trackCount, trackOffsets, version: 2 };
+    // AKAO v1.x: 0x14-byte header with a six-byte BCD timestamp at +0x0A.
+    // v1.0 and v1.1 cannot be distinguished reliably from the header alone,
+    // so exact v1.0 parsing is enabled by the xSF game/tag hint (FF7).
+    if (plausibleV1Timestamp(view, offset)) {
+      const trackOffsets = readTrackOffsets(view, offset, totalSize, trackCount, 0x14);
+      if (trackOffsets) {
+        const hint = normalizeVersionHint(options.versionHint);
+        return {
+          sequenceId, storedSize, totalSize, end, trackMask, trackCount, trackOffsets,
+          version: hint === 1 ? 1 : null,
+          versionFamily: 1,
+          versionLabel: hint === 1 ? "1.0" : "1.x",
+          needsVersionHint: hint !== 1,
+        };
+      }
+    }
+    return null;
   }
 
-  function detect(bytes, offset = 0) {
-    return Boolean(inspectHeader(bytes, offset));
+  function detect(bytes, offset = 0, options = {}) {
+    return Boolean(inspectHeader(bytes, offset, options));
   }
 
-  function find(bytes, start = 0) {
+  function find(bytes, start = 0, options = {}) {
     const view = asBytes(bytes);
-    for (let offset = Math.max(0, start | 0); offset + 0x20 <= view.length; offset++) {
+    for (let offset = Math.max(0, start | 0); offset + 0x14 <= view.length; offset++) {
       if (view[offset] !== 0x41 || view[offset + 1] !== 0x4b || view[offset + 2] !== 0x41 || view[offset + 3] !== 0x4f) continue;
-      if (inspectHeader(view, offset)) return offset;
+      if (inspectHeader(view, offset, options)) return offset;
     }
     return -1;
   }
@@ -231,11 +277,18 @@
     };
   }
 
-  function currentVelocity(state) {
-    const volume = controlValueAt(state, "volume", state.tick);
-    const expression = controlValueAt(state, "expression", state.tick);
-    const scaled = NOTE_VELOCITY * (volume / 127) * (expression / 127);
-    return clamp(Math.round(scaled), 1, 127);
+  function emitControlFade(state, name, target, length, controller, channel) {
+    const start = controlValueAt(state, name, state.tick);
+    const targetValue = clamp(target, 0, 127);
+    const duration = Math.max(1, length | 0);
+    setControlFade(state, name, targetValue, duration);
+    const steps = Math.min(32, Math.max(1, Math.ceil(duration / 6)));
+    for (let index = 1; index <= steps; index++) {
+      const ratio = index / steps;
+      const tick = state.tick + Math.round(duration * ratio);
+      const value = clamp(Math.round(start + (targetValue - start) * ratio), 0, 127);
+      addMidiEvent(state, tick, [0xb0 | channel, controller & 0x7f, value & 0x7f], -2);
+    }
   }
 
   function emitTempoFade(state, rawTempo, length) {
@@ -247,7 +300,7 @@
       const ratio = index / steps;
       const tick = state.tick + Math.round(duration * ratio);
       const value = Math.max(1, Math.round(start + (target - start) * ratio));
-      addMidiEvent(state, tick, tempoBytes(value), -15);
+      addMidiEvent(state, tick, tempoBytes(value, state.version), -15);
     }
     state.rawTempo = target;
   }
@@ -291,6 +344,7 @@
       pan: 64,
       panFade: null,
       rawTempo: 0,
+      version: header.version,
       program: 0,
       bankMsb: 0,
       bankLsb: 0,
@@ -365,7 +419,9 @@
             volume: controlValueAt(state, "volume", state.tick),
             expression: controlValueAt(state, "expression", state.tick),
             pan: controlValueAt(state, "pan", state.tick),
-            velocity: currentVelocity(state),
+            // AKAO loudness lives in volume/expression controllers. Keep the
+            // Note On velocity neutral/full so it is not applied twice.
+            velocity: NOTE_VELOCITY,
           };
           emitNoteState(state, note);
           state.lastNote = note;
@@ -400,7 +456,7 @@
         break;
       }
 
-      if (status === 0xfc) {
+      if (status === 0xfc && header.version === 2) {
         const sub = readByte(view, state, limit);
         const operandPos = state.pc;
         switch (sub) {
@@ -408,7 +464,7 @@
             const rawTempo = le16(view, state.pc);
             skipBytes(state, 2, limit);
             state.rawTempo = rawTempo;
-            addMidiEvent(state, state.tick, tempoBytes(rawTempo), -15);
+            addMidiEvent(state, state.tick, tempoBytes(rawTempo, state.version), -15);
             break;
           }
           case 0x01: { // Tempo fade
@@ -503,8 +559,7 @@
             const rawLength = readByte(view, state, limit);
             const length = rawLength === 0 ? 256 : rawLength;
             const volume = readByte(view, state, limit) & 0x7f;
-            setControlFade(state, "volume", volume, length);
-            addMidiEvent(state, state.tick + length, [0xb0 | melodicChannel, 0x07, volume], -2);
+            emitControlFade(state, "volume", volume, length, 0x07, state.drum ? 9 : melodicChannel);
             break;
           }
           case 0x14: { // Key-split/custom instrument
@@ -543,6 +598,138 @@
             }
             break;
           }
+        }
+        if (state.ended) break;
+        continue;
+      }
+
+      if (header.version === 1 && status >= 0xe8) {
+        switch (status) {
+          case 0xe8: { // Tempo (AKAO v1.0 direct opcode)
+            const rawTempo = le16(view, state.pc);
+            skipBytes(state, 2, limit);
+            state.rawTempo = rawTempo;
+            addMidiEvent(state, state.tick, tempoBytes(rawTempo, 1), -15);
+            break;
+          }
+          case 0xe9: { // Tempo fade
+            const rawLength = readByte(view, state, limit);
+            const length = rawLength === 0 ? 256 : rawLength;
+            const rawTempo = le16(view, state.pc);
+            skipBytes(state, 2, limit);
+            emitTempoFade(state, rawTempo, length);
+            break;
+          }
+          case 0xea: // Reverb depth
+            skipBytes(state, 2, limit);
+            break;
+          case 0xeb: // Reverb depth fade
+            skipBytes(state, 3, limit);
+            break;
+          case 0xec: { // Drum kit on (relative pointer follows the operand)
+            const relative = sle16(view, state.pc);
+            skipBytes(state, 2, limit);
+            const drumAddress = state.pc + relative;
+            if (validDestination(drumAddress)) context.drumInstrumentAddresses.add(drumAddress);
+            state.drum = true;
+            state.bankMsb = 0;
+            state.bankLsb = 0;
+            break;
+          }
+          case 0xed:
+            state.drum = false;
+            break;
+          case 0xee: { // Unconditional relative jump
+            const relative = sle16(view, state.pc);
+            skipBytes(state, 2, limit);
+            const destination = state.pc + relative;
+            if (!jumpTo(destination)) state.ended = true;
+            break;
+          }
+          case 0xef: { // CPU conditional jump; use the same default condition (0) as v2 conversion.
+            const targetValue = readByte(view, state, limit);
+            const relative = sle16(view, state.pc);
+            skipBytes(state, 2, limit);
+            const destination = state.pc + relative;
+            if (targetValue === 0 && !jumpTo(destination)) state.ended = true;
+            break;
+          }
+          case 0xf0: { // Loop branch
+            const rawCount = readByte(view, state, limit);
+            const count = rawCount === 0 ? 256 : rawCount;
+            const relative = sle16(view, state.pc);
+            skipBytes(state, 2, limit);
+            const loop = state.loopStack[state.loopStack.length - 1];
+            if (loop && loop.iteration + 1 === count) {
+              const destination = state.pc + relative;
+              if (!validDestination(destination)) state.ended = true;
+              else state.pc = destination;
+            }
+            break;
+          }
+          case 0xf1: { // Loop break
+            const rawCount = readByte(view, state, limit);
+            const count = rawCount === 0 ? 256 : rawCount;
+            const relative = sle16(view, state.pc);
+            skipBytes(state, 2, limit);
+            const loop = state.loopStack[state.loopStack.length - 1];
+            if (loop && loop.iteration + 1 === count) {
+              const destination = state.pc + relative;
+              if (!validDestination(destination)) state.ended = true;
+              else state.pc = destination;
+            }
+            if (loop) state.loopStack.pop();
+            break;
+          }
+          case 0xf2: // Program change without attack sample
+            state.program = consoleGm.normalizeMelodicProgram(readByte(view, state, limit));
+            state.bankMsb = 0;
+            state.bankLsb = 0;
+            break;
+          case 0xf3: // FF7-specific unknown event; VGMTrans treats it as zero-argument and continues.
+            context.ignoredV1OpcodeCount++;
+            break;
+          case 0xf4: { // Overlay voice on: preserve the primary articulation as the preview program.
+            const primary = readByte(view, state, limit);
+            readByte(view, state, limit); // secondary articulation
+            state.program = consoleGm.normalizeMelodicProgram(primary);
+            state.bankMsb = 0;
+            state.bankLsb = 0;
+            context.overlayVoiceCount++;
+            break;
+          }
+          case 0xf5: // Overlay voice off
+            break;
+          case 0xf6: // Overlay volume balance
+            skipBytes(state, 1, limit);
+            break;
+          case 0xf7: // Overlay volume balance fade
+            skipBytes(state, 2, limit);
+            break;
+          case 0xf8: // Alternate voice on (release rate)
+            skipBytes(state, 1, limit);
+            break;
+          case 0xf9: // Alternate voice off
+            break;
+          case 0xfd: { // Time signature
+            const ticksPerBeat = readByte(view, state, limit);
+            const beatsPerMeasure = readByte(view, state, limit);
+            if (ticksPerBeat && beatsPerMeasure) {
+              const denominator = (PPQ * 4) / ticksPerBeat;
+              addMidiEvent(state, state.tick, [0xff, 0x58, 0x04,
+                beatsPerMeasure & 0xff, denominatorPower(denominator), ticksPerBeat & 0xff, 8], -14);
+            }
+            break;
+          }
+          case 0xfe: // Measure marker
+            skipBytes(state, 2, limit);
+            break;
+          default:
+            // v1.0 maps E0-E7 and FA-FC/FF to unimplemented commands.
+            // Stop rather than guessing argument lengths and desynchronizing the stream.
+            state.unsupportedOpcodes.push({ offset: begin - seqOffset, opcode: status });
+            state.ended = true;
+            break;
         }
         if (state.ended) break;
         continue;
@@ -592,8 +779,7 @@
           const rawLength = readByte(view, state, limit);
           const length = rawLength === 0 ? 256 : rawLength;
           const expression = readByte(view, state, limit) & 0x7f;
-          setControlFade(state, "expression", expression, length);
-          addMidiEvent(state, state.tick + length, [0xb0 | melodicChannel, 0x0b, expression], -2);
+          emitControlFade(state, "expression", expression, length, 0x0b, state.drum ? 9 : melodicChannel);
           break;
         }
         case 0xaa:
@@ -604,8 +790,7 @@
           const rawLength = readByte(view, state, limit);
           const length = rawLength === 0 ? 256 : rawLength;
           const pan = readByte(view, state, limit) & 0x7f;
-          setControlFade(state, "pan", pan, length);
-          addMidiEvent(state, state.tick + length, [0xb0 | melodicChannel, 0x0a, pan], -2);
+          emitControlFade(state, "pan", pan, length, 0x0a, state.drum ? 9 : melodicChannel);
           break;
         }
         case 0xc0:
@@ -693,14 +878,20 @@
 
   function parse(bytes, offset = 0, options = {}) {
     const view = asBytes(bytes);
-    const header = inspectHeader(view, offset);
-    if (!header) throw new Error("지원 가능한 AKAO v2 시퀀스 헤더를 찾지 못했습니다.");
+    const header = inspectHeader(view, offset, options);
+    if (!header) throw new Error("지원 가능한 AKAO v1/v2 시퀀스 헤더를 찾지 못했습니다.");
+    if (header.versionFamily === 1 && header.needsVersionHint) {
+      throw new Error("AKAO v1 계열 시퀀스를 찾았지만 v1.0/v1.1을 헤더만으로 구분할 수 없습니다. 게임 태그 또는 명시적 버전 정보가 필요합니다.");
+    }
 
     const context = {
       noteCount: 0,
       keySplitPrograms: new Map(),
+      drumInstrumentAddresses: new Set(),
       drumKeyRemappedCount: 0,
       customBankCollapsedCount: 0,
+      ignoredV1OpcodeCount: 0,
+      overlayVoiceCount: 0,
       warnings: [],
     };
     const parsedTracks = [];
@@ -721,8 +912,8 @@
     return {
       midiBytes: new Uint8Array(chunks),
       metadata: {
-        variant: "AKAO v2",
-        version: 2,
+        variant: `AKAO v${header.versionLabel || header.version}`,
+        version: header.versionLabel || header.version,
         sequenceId: header.sequenceId,
         sequenceSize: header.totalSize,
         storedSequenceSize: header.storedSize,
@@ -732,6 +923,9 @@
         noteCount: context.noteCount,
         eventCount,
         keySplitInstrumentCount: context.keySplitPrograms.size,
+        drumInstrumentCount: context.drumInstrumentAddresses.size,
+        ignoredV1OpcodeCount: context.ignoredV1OpcodeCount,
+        overlayVoiceCount: context.overlayVoiceCount,
         gmNormalized: true,
         drumKeyRemappedCount: context.drumKeyRemappedCount,
         customBankCollapsedCount: context.customBankCollapsedCount,

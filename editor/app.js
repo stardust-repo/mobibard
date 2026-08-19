@@ -4841,7 +4841,7 @@
         pitch: clamp(Math.round(Number(note.midi ?? note.pitch) || 60), 0, 127),
         startBeat: Number(startBeat.toFixed(6)),
         durationBeat: Number((endBeat - startBeat).toFixed(6)),
-        velocity: clamp(Math.round(Number(note.velocity) || 100), 1, 127),
+        velocity: clamp(Math.round(Number(note.effectiveVelocity ?? note.velocity) || 64), 1, 127),
       };
     });
 

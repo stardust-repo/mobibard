@@ -29,7 +29,10 @@
 
   const PPQ = 480;
   const DEFAULT_TEMPO = 120;
-  const DEFAULT_VELOCITY = 92;
+  // MusicXML defines forte as MIDI velocity 90 for percentage-based dynamics.
+  // When the score supplies no usable dynamic information, Mobibard policy is MIDI 96 (~75%).
+  const FORTE_VELOCITY = 90;
+  const FALLBACK_VELOCITY = 96;
   const MIN_NOTE_TICKS = 1;
   const PERCUSSION_RE = /(drum|percussion|perc|snare|cymbal|kick|tom|hi[- ]?hat|timpani|taiko|wood\s*block|claves|cowbell|triangle|gong|tambourine|maracas|bongo|conga|타악|드럼|스네어|심벌|팀파니|북|징|탬버린)/i;
 
@@ -249,7 +252,7 @@
     let measureStartTick = 0;
     let currentTick = 0;
     let lastNoteStartTick = 0;
-    let currentVelocity = DEFAULT_VELOCITY;
+    let currentVelocity = FALLBACK_VELOCITY;
     const notes = [];
 
     for (const measure of measures || []) {
@@ -265,13 +268,15 @@
           const chromatic = parseFloat(text(child(child(node, "transpose"), "chromatic")));
           transpose = Number.isFinite(chromatic) ? chromatic : transpose;
         } else if (name === "direction") {
+          const directionTick = musicXmlDirectionTick(node, currentTick, divisions);
           const tempo = readTempoFromDirection(node);
-          if (tempo) tempoEvents.push({ tick: currentTick, bpm: tempo });
+          if (tempo) tempoEvents.push({ tick: directionTick, bpm: tempo });
           const velocity = readVelocityFromDirection(node);
           if (velocity) currentVelocity = velocity;
         } else if (name === "sound") {
+          const soundTick = musicXmlSoundTick(node, currentTick, divisions);
           const tempo = clampTempo(parseFloat(node.getAttribute("tempo") || ""));
-          if (tempo) tempoEvents.push({ tick: currentTick, bpm: tempo });
+          if (tempo) tempoEvents.push({ tick: soundTick, bpm: tempo });
           const velocity = velocityFromDynamics(node.getAttribute("dynamics"));
           if (velocity) currentVelocity = velocity;
         } else if (name === "backup") {
@@ -301,10 +306,60 @@
     const soundTempo = clampTempo(parseFloat(sound?.getAttribute("tempo") || ""));
     if (soundTempo) return soundTempo;
     for (const metronome of descendants(direction, "metronome")) {
-      const bpm = clampTempo(parseFloat(text(child(metronome, "per-minute"))));
+      const perMinuteText = text(child(metronome, "per-minute"));
+      const match = /[-+]?\d+(?:\.\d+)?/.exec(perMinuteText);
+      const perMinute = match ? Number(match[0]) : NaN;
+      if (!Number.isFinite(perMinute) || perMinute <= 0) continue;
+      const beatUnit = text(child(metronome, "beat-unit")).trim().toLowerCase();
+      const quarterFactor = musicXmlBeatUnitQuarters(beatUnit);
+      if (!quarterFactor) continue;
+      const dotCount = descendants(metronome, "beat-unit-dot").length;
+      let dottedFactor = 1;
+      let add = 0.5;
+      for (let index = 0; index < dotCount; index++) {
+        dottedFactor += add;
+        add /= 2;
+      }
+      const bpm = clampTempo(perMinute * quarterFactor * dottedFactor);
       if (bpm) return bpm;
     }
     return 0;
+  }
+
+  function musicXmlBeatUnitQuarters(value) {
+    const units = {
+      maxima: 32,
+      long: 16,
+      breve: 8,
+      whole: 4,
+      half: 2,
+      quarter: 1,
+      eighth: 0.5,
+      "16th": 0.25,
+      "32nd": 0.125,
+      "64th": 0.0625,
+      "128th": 0.03125,
+      "256th": 0.015625,
+      "512th": 0.0078125,
+      "1024th": 0.00390625,
+    };
+    return units[String(value || "").toLowerCase()] || 0;
+  }
+
+  function musicXmlDirectionTick(direction, currentTick, divisions) {
+    const sound = child(direction, "sound");
+    const soundOffset = text(child(sound, "offset"));
+    const directionOffset = text(child(direction, "offset"));
+    const raw = soundOffset !== "" ? soundOffset : directionOffset;
+    const offset = Number(raw);
+    if (!Number.isFinite(offset) || offset === 0) return currentTick;
+    return Math.max(0, currentTick + Math.round(offset * PPQ / Math.max(1, Number(divisions) || 1)));
+  }
+
+  function musicXmlSoundTick(sound, currentTick, divisions) {
+    const offset = Number(text(child(sound, "offset")));
+    if (!Number.isFinite(offset) || offset === 0) return currentTick;
+    return Math.max(0, currentTick + Math.round(offset * PPQ / Math.max(1, Number(divisions) || 1)));
   }
 
   function readVelocityFromDirection(direction) {
@@ -334,7 +389,7 @@
     if (pitch) midi += Math.round(Number(transpose) || 0);
     midi = Math.max(0, Math.min(127, Math.round(midi)));
 
-    const velocity = velocityFromDynamics(noteEl.getAttribute("dynamics")) || currentVelocity || DEFAULT_VELOCITY;
+    const velocity = velocityFromDynamics(noteEl.getAttribute("dynamics")) || currentVelocity || FALLBACK_VELOCITY;
     const tieTypes = descendants(noteEl, "tie").concat(descendants(noteEl, "tied")).map(el => String(el.getAttribute("type") || "").toLowerCase());
     const note = {
       startTick,
@@ -418,12 +473,14 @@
   function velocityFromDynamics(value) {
     const n = Number(value);
     if (!Number.isFinite(n) || n <= 0) return 0;
-    return Math.max(1, Math.min(127, Math.round(n * 127 / 100)));
+    // MusicXML dynamics is a percentage of the default forte MIDI velocity (90),
+    // not a direct percentage of 127.
+    return Math.max(1, Math.min(127, Math.round(n * FORTE_VELOCITY / 100)));
   }
 
   function dynamicMarkToVelocity(mark) {
     const key = String(mark || "").trim().toLowerCase();
-    return ({ ppp: 34, pp: 44, p: 54, mp: 68, mf: 84, f: 100, ff: 112, fff: 124, sfz: 118, sf: 110, fp: 92 })[key] || 0;
+    return ({ ppp: 28, pp: 38, p: 50, mp: 64, mf: 76, f: 90, ff: 105, fff: 120, sfz: 112, sf: 104, fp: 82 })[key] || 0;
   }
 
   function buildStandardMidiFile(score) {
@@ -471,7 +528,7 @@
       const start = Math.max(0, Math.round(Number(note.startTick) || 0));
       const end = Math.max(start + MIN_NOTE_TICKS, Math.round(Number(note.endTick) || 0));
       const midi = Math.max(0, Math.min(127, Math.round(Number(note.midi) || 0)));
-      const velocity = Math.max(1, Math.min(127, Math.round(Number(note.velocity) || DEFAULT_VELOCITY)));
+      const velocity = Math.max(1, Math.min(127, Math.round(Number(note.velocity) || FALLBACK_VELOCITY)));
       events.push({ tick: start, order: 1, data: [0x90 | ch, midi, velocity] });
       events.push({ tick: end, order: 0, data: [0x80 | ch, midi, 0] });
     }

@@ -344,12 +344,16 @@
         bank: 0,
         instrumentId: 0,
         transpose: 0,
+        volume: 127,
+        expression: 127,
+        pan: 64,
         noteWait: kind === "RCF",
         callStack: [],
         loopStack: [],
         jumpVisits: new Map(),
       };
       const notes = [];
+      const controls = [];
       let steps = 0;
       let stoppedByLoop = false;
 
@@ -367,6 +371,9 @@
             durationTick: duration,
             pitch: Math.max(0, Math.min(127, cmd + state.transpose)),
             velocity: Math.max(1, velocity),
+            volume: state.volume,
+            expression: state.expression,
+            pan: state.pan,
             program: state.program,
             bank: state.bank,
             instrumentId: state.instrumentId,
@@ -474,6 +481,24 @@
           state.transpose = s8(raw[state.pc++]);
           continue;
         }
+        if (kind === "SSEQ" && cmd === 0xc0) {
+          if (state.pc >= raw.length) break;
+          state.pan = raw[state.pc++] & 0x7f;
+          controls.push({ tick: state.tick, controller: 10, value: state.pan });
+          continue;
+        }
+        if (kind === "SSEQ" && cmd === 0xc1) {
+          if (state.pc >= raw.length) break;
+          state.volume = raw[state.pc++] & 0x7f;
+          controls.push({ tick: state.tick, controller: 7, value: state.volume });
+          continue;
+        }
+        if (kind === "SSEQ" && cmd === 0xd5) {
+          if (state.pc >= raw.length) break;
+          state.expression = raw[state.pc++] & 0x7f;
+          controls.push({ tick: state.tick, controller: 11, value: state.expression });
+          continue;
+        }
         if (cmd === 0xc7) {
           if (state.pc >= raw.length) break;
           const value = raw[state.pc++];
@@ -510,7 +535,7 @@
       }
 
       if (steps >= MAX_STEPS) throw new Error("Nintendo 시퀀스 제어 흐름이 너무 길어 변환을 중단했습니다.");
-      parsedTracks.push({ trackIndex: task.track, notes, stoppedByLoop });
+      parsedTracks.push({ trackIndex: task.track, notes, controls, stoppedByLoop });
     }
 
     const grouped = new Map();
@@ -542,6 +567,8 @@
             channel: source.trackIndex % 16,
             isDrums,
             notes: [],
+            controlChanges: [],
+            sourceTrackIndex: source.trackIndex,
           };
           grouped.set(key, group);
           if (isDrums) drumTrackGroupCount++;
@@ -558,6 +585,35 @@
         if (isDrums && pitch !== note.pitch) drumKeyRemappedCount++;
         group.notes.push({ ...note, pitch });
       }
+    }
+
+    for (const group of grouped.values()) {
+      const state = { 7: null, 10: null, 11: null };
+      const sourceControls = parsedTracks
+        .filter(source => source.trackIndex === group.sourceTrackIndex)
+        .flatMap(source => source.controls || [])
+        .sort((a, b) => a.tick - b.tick);
+      for (const control of sourceControls) {
+        const controller = Number(control.controller);
+        const normalized = Math.max(0, Math.min(127, Number(control.value) || 0));
+        if (state[controller] === normalized) continue;
+        state[controller] = normalized;
+        group.controlChanges.push({ tick: control.tick, controller, value: normalized });
+      }
+      // If a sequence never emitted an explicit controller before its first note,
+      // materialize the controller state attached to that note so the MIDI starts
+      // from the same audible state (127/64/127 or an inherited value).
+      for (const note of [...group.notes].sort((a, b) => a.startTick - b.startTick)) {
+        const values = [[7, note.volume], [10, note.pan], [11, note.expression]];
+        for (const [controller, value] of values) {
+          const normalized = Math.max(0, Math.min(127, Number(value) || 0));
+          if (state[controller] !== null) continue;
+          state[controller] = normalized;
+          group.controlChanges.push({ tick: note.startTick, controller, value: normalized });
+        }
+      }
+      group.controlChanges.sort((a, b) => a.tick - b.tick || a.controller - b.controller);
+      delete group.sourceTrackIndex;
     }
 
     if (!grouped.size) {

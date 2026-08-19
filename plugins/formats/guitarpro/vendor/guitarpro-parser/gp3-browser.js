@@ -91,13 +91,12 @@ function readBeat(r, _numStrings) { const f = r.readByte(); let isRest = false, 
     tuplet = TUPLET_MAP[r.readInt()] ?? null; if (f & 2)
     readChord(r); if (f & 4)
     r.readIntByteSizeString(); if (f & 8)
-    readBeatEffects(r); if (f & 16)
-    readMixTableChange(r); const sf = r.readByte(), notes = []; for (let i = 6; i >= 0; i--)
+    readBeatEffects(r); const mixChange = (f & 16) ? readMixTableChange(r) : null; const sf = r.readByte(), notes = []; for (let i = 6; i >= 0; i--)
     if (sf & (1 << i)) {
         const n = readNote(r);
         n.string = (7 - i) - 1;
         notes.push(n);
-    } return { duration, dotted, tuplet, isRest: isRest || isEmpty, isEmpty, notes }; }
+    } return { duration, dotted, tuplet, isRest: isRest || isEmpty, isEmpty, notes, mixChange }; }
 function readChord(r) { const nf = r.readBool(); if (!nf) {
     r.readIntByteSizeString();
     const first = r.readInt();
@@ -139,10 +138,10 @@ function readBeatEffects(r) { const f = r.readByte(); if (f & 32) {
     r.readByte();
     r.readByte();
 } }
-function readMixTableChange(r) { r.readSignedByte(); const vals = [r.readSignedByte(), r.readSignedByte(), r.readSignedByte(), r.readSignedByte(), r.readSignedByte(), r.readSignedByte()], tempo = r.readInt(); for (const v of vals)
+function readMixTableChange(r) { const instrument = r.readSignedByte(); const vals = [r.readSignedByte(), r.readSignedByte(), r.readSignedByte(), r.readSignedByte(), r.readSignedByte(), r.readSignedByte()], tempo = r.readInt(); for (const v of vals)
     if (v >= 0)
         r.readSignedByte(); if (tempo >= 0)
-    r.readSignedByte(); }
+    r.readSignedByte(); return { instrument, volume: vals[0], balance: vals[1], chorus: vals[2], reverb: vals[3], phaser: vals[4], tremolo: vals[5], tempo }; }
 function readNote(r) { const f = r.readByte(); let isTied = false, isDead = false; if (f & 32) {
     const t = r.readByte();
     isTied = t === 2;
@@ -150,7 +149,7 @@ function readNote(r) { const f = r.readByte(); let isTied = false, isDead = fals
 } if (f & 1) {
     r.readSignedByte();
     r.readSignedByte();
-} let velocity = 8; if (f & 16)
+} let velocity = null; if (f & 16)
     velocity = r.readSignedByte(); let fret = 0; if (f & 32) {
     fret = r.readSignedByte();
     if (fret < 0 || fret > 99)
@@ -182,12 +181,12 @@ function transformToTabSong(info, tempo, headers, trackHeaders, measures, channe
                     const p = nd.bend.points;
                     br = { origin: p.length ? p[0].value / 100 : 0, destination: p.length > 1 ? p[p.length - 1].value / 100 : 0, middle: p.length > 2 ? p[Math.floor(p.length / 2)].value / 100 : 0 };
                 }
-                notes.push({ string: idx, fret, pitchClass: pc, noteName: note.name, slide: nd.slide ? 1 : null, harmonic: null, palmMute: false, muted: nd.isDead, letRing: nd.letRing, bend: br, tie: { origin: false, destination: nd.isTied }, vibrato: null, hammerOn: nd.hammerOn, pullOff: false, tapped: false, accent: null });
+                notes.push({ string: idx, fret, pitchClass: pc, noteName: note.name, slide: nd.slide ? 1 : null, harmonic: null, palmMute: false, muted: nd.isDead, letRing: nd.letRing, bend: br, tie: { origin: false, destination: nd.isTied }, vibrato: null, hammerOn: nd.hammerOn, pullOff: false, tapped: false, accent: null, velocity: nd.velocity });
             }
-            beats.push({ index: gi++, barIndex: mi, notes, duration: bd.duration, tuplet: bd.tuplet, dotted: bd.dotted ? 1 : 0, isRest: bd.isRest && notes.length === 0, dynamic: null, tempo });
+            beats.push({ index: gi++, barIndex: mi, notes, duration: bd.duration, tuplet: bd.tuplet, dotted: bd.dotted ? 1 : 0, isRest: bd.isRest && notes.length === 0, dynamic: null, tempo, mixChange: bd.mixChange });
         }
         bars.push({ index: mi, timeSignature: { numerator: mh.numerator, denominator: mh.denominator }, keySignature: mh.keySignature !== 0 ? { accidentalCount: mh.keySignature, mode: mh.keyMode === 1 ? 'minor' : 'major' } : null, section: mh.marker ? { text: mh.marker.name } : null, beats, repeatStart: mh.repeatOpen, repeatEnd: mh.repeatClose >= 0, repeatCount: mh.repeatClose >= 0 ? mh.repeatClose : 0 });
-    } const ch = channels[th.channelIndex]; return { id: String(ti), name: th.name, shortName: th.name.substring(0, 4), instrument: ch ? `MIDI ${ch.instrument}` : null, tuning, tuningMidi: [...pitches], capoFret: th.capoFret, bars }; });
+    } const ch = channels[th.channelIndex]; return { id: String(ti), name: th.name, shortName: th.name.substring(0, 4), instrument: ch ? `MIDI ${ch.instrument}` : null, tuning, tuningMidi: [...pitches], capoFret: th.capoFret, bars, isPercussion: th.isPercussion, channelSettings: ch || null }; });
     return { title: info.title || info.subtitle || '', artist: info.artist, album: info.album, tempo, tracks };
 }
 function parseGp3File(data) { const buf = new ArrayBuffer(data.byteLength); new Uint8Array(buf).set(data); const r = new GP3Reader(buf), version = r.readByteSizeString(30); if (!version.includes('GUITAR PRO') || !version.includes('v3'))

@@ -283,6 +283,9 @@
         document.controlChanges.push(control);
         if (data1 === 0) document.channelEvents.push({ ...base, kind: "bankMsb", value: data2 });
         else if (data1 === 32) document.channelEvents.push({ ...base, kind: "bankLsb", value: data2 });
+        else if (data1 === 7 || data1 === 10 || data1 === 11) {
+          document.channelEvents.push({ ...base, kind: "control", controller: data1, value: data2 });
+        }
       } else if (command === 0xc0) {
         const program = { ...base, program: data1 };
         document.programChanges.push(program);
@@ -303,6 +306,9 @@
     const pendingBankLsb = Array(16).fill(0);
     const activeBankMsb = Array(16).fill(0);
     const activeBankLsb = Array(16).fill(0);
+    const channelVolume = Array(16).fill(127);
+    const channelExpression = Array(16).fill(127);
+    const channelPan = Array(16).fill(64);
     const open = new Map();
     const notes = [];
 
@@ -329,6 +335,12 @@
         info.bankPrograms.add(`${activeBankMsb[channel]}:${activeBankLsb[channel]}:${currentProgram[channel]}`);
         continue;
       }
+      if (event.kind === "control") {
+        if (event.controller === 7) channelVolume[channel] = clampInt(event.value, 0, 127, 127);
+        else if (event.controller === 11) channelExpression[channel] = clampInt(event.value, 0, 127, 127);
+        else if (event.controller === 10) channelPan[channel] = clampInt(event.value, 0, 127, 64);
+        continue;
+      }
 
       const midi = clampInt(event.midi, 0, 127, 0);
       const key = `${channel}:${midi}`;
@@ -337,6 +349,9 @@
         open.get(key).push({
           tick: event.tick,
           velocity: clampInt(event.velocity, 1, 127, 1),
+          volume: channelVolume[channel],
+          expression: channelExpression[channel],
+          pan: channelPan[channel],
           channel,
           midi,
           trackIndex: event.trackIndex,
@@ -353,6 +368,9 @@
       if (!queue.length) open.delete(key);
       if (event.tick <= started.tick) continue;
       const meta = document.trackMeta[started.trackIndex] || {};
+      const effectiveVelocity = clampInt(Math.round(
+        started.velocity * (started.volume / 127) * (started.expression / 127)
+      ), 1, 127, started.velocity);
       notes.push({
         startTick: started.tick,
         endTick: event.tick,
@@ -360,6 +378,10 @@
         midi,
         pitch: midi,
         velocity: started.velocity,
+        effectiveVelocity,
+        channelVolume: started.volume,
+        expression: started.expression,
+        pan: started.pan,
         releaseVelocity: clampInt(event.velocity, 0, 127, 0),
         channel,
         trackIndex: started.trackIndex,
@@ -388,6 +410,12 @@
             midi: item.midi,
             pitch: item.midi,
             velocity: item.velocity,
+            effectiveVelocity: clampInt(Math.round(
+              item.velocity * ((item.volume ?? 127) / 127) * ((item.expression ?? 127) / 127)
+            ), 1, 127, item.velocity),
+            channelVolume: item.volume ?? 127,
+            expression: item.expression ?? 127,
+            pan: item.pan ?? 64,
             releaseVelocity: 0,
             channel: item.channel,
             trackIndex: item.trackIndex,

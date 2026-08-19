@@ -62,6 +62,20 @@
     const m = /(?:MIDI\s*)?(\d+)/i.exec(String(text || ""));
     return clamp(m?.[1], 0, 127, 0);
   }
+  function gpMixerValue(value, fallback) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return fallback;
+    if (n <= 15) return clamp(Math.round(n * 127 / 15), 0, 127, fallback);
+    return clamp(Math.round(n), 0, 127, fallback);
+  }
+  function gp3DynamicVelocity(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return core.DEFAULT_VELOCITY;
+    // GP3 stores one of eight dynamic levels (ppp..fff).
+    if (n >= 1 && n <= 8) return clamp(15 + (n - 1) * 16, 1, 127, core.DEFAULT_VELOCITY);
+    if (n >= 0 && n <= 7) return clamp(15 + n * 16, 1, 127, core.DEFAULT_VELOCITY);
+    return clamp(n, 1, 127, core.DEFAULT_VELOCITY);
+  }
   function tabSongToMidi(song, fileName) {
     const ppq = 480;
     const tempoEvents = [];
@@ -72,8 +86,12 @@
     for (let ti=0; ti<(song.tracks||[]).length; ti++) {
       const track = song.tracks[ti];
       const notes=[];
+      const controlChanges=[];
       let tick=0;
+      let currentTempo = clamp(song.tempo, 1, 999, 120);
       const activeTies = new Map();
+      const initialVolume = gpMixerValue(track.channelSettings?.volume, undefined);
+      const initialPan = gpMixerValue(track.channelSettings?.balance, undefined);
       for (const bar of track.bars || []) {
         const barTick = tick;
         const ts = bar.timeSignature || {numerator:4,denominator:4};
@@ -84,9 +102,18 @@
           if (!seenKey.has(key)) { seenKey.add(key); keySignatures.push({tick:barTick,sharps:bar.keySignature.accidentalCount,minor:bar.keySignature.mode === "minor"}); }
         }
         for (const beat of bar.beats || []) {
-          const bpm = clamp(beat.tempo || song.tempo, 1, 999, 120);
+          if (Number.isFinite(Number(beat.mixChange?.tempo)) && Number(beat.mixChange.tempo) >= 0) {
+            currentTempo = clamp(beat.mixChange.tempo, 1, 999, 120);
+          }
+          const bpm = currentTempo;
           const tk = `${tick}:${bpm}`;
           if (!seenTempo.has(tk)) { seenTempo.add(tk); tempoEvents.push({tick,bpm}); }
+          if (Number.isFinite(Number(beat.mixChange?.volume)) && Number(beat.mixChange.volume) >= 0) {
+            controlChanges.push({ tick, controller: 7, value: gpMixerValue(beat.mixChange.volume, 64) });
+          }
+          if (Number.isFinite(Number(beat.mixChange?.balance)) && Number(beat.mixChange.balance) >= 0) {
+            controlChanges.push({ tick, controller: 10, value: gpMixerValue(beat.mixChange.balance, 64) });
+          }
           const dur = Math.max(1, Math.round(durationBeats(beat.duration, beat.dotted, beat.tuplet) * ppq));
           for (const n of beat.notes || []) {
             const stringIndex = clamp(n.string, 0, 31, 0);
@@ -98,7 +125,8 @@
             if (tieDest && activeTies.has(key)) {
               activeTies.get(key).endTick = tick + dur;
             } else {
-              const item={startTick:tick,endTick:tick+dur,pitch,velocity:n.muted?48:96};
+              const baseVelocity = gp3DynamicVelocity(n.velocity);
+              const item={startTick:tick,endTick:tick+dur,pitch,velocity:n.muted?Math.max(1,Math.round(baseVelocity*0.55)):baseVelocity};
               notes.push(item);
               if (tieOrigin || tieDest) activeTies.set(key,item); else activeTies.delete(key);
             }
@@ -108,7 +136,16 @@
         const expected = Math.max(1, Math.round((Number(ts.numerator)||4) * (4/(Number(ts.denominator)||4)) * ppq));
         if (tick < barTick + expected) tick = barTick + expected;
       }
-      tracks.push({name:track.name || `Track ${ti+1}`,program:instrumentProgram(track.instrument),isDrums:false,notes});
+      tracks.push({
+        name:track.name || `Track ${ti+1}`,
+        program:track.isPercussion ? 0 : instrumentProgram(track.instrument),
+        channel:track.isPercussion ? 9 : undefined,
+        isDrums:!!track.isPercussion,
+        volume:initialVolume,
+        pan:initialPan,
+        controlChanges,
+        notes
+      });
     }
     return { midiBytes:core.buildMidi({ppq,title:song.title||fileName,tempoEvents,timeSignatures,keySignatures,tracks}), metadata:{title:song.title||fileName,trackCount:tracks.length} };
   }
@@ -124,9 +161,18 @@
       const kk=`${tick}:${h.keySignature||0}`; if(!seenKey.has(kk)){seenKey.add(kk);keySignatures.push({tick,sharps:clamp(h.keySignature,-7,7,0),minor:false});}
     }
     for (let ti=0;ti<(song.tracks||[]).length;ti++) {
-      const tr=song.tracks[ti], notes=[], ties=new Map();
+      const tr=song.tracks[ti], notes=[], ties=new Map(), controlChanges=[];
+      const channelSettings=song.channels?.[tr.channel] || null;
+      const initialVolume=gpMixerValue(channelSettings?.volume, undefined);
+      const initialPan=gpMixerValue(channelSettings?.balance, undefined);
       for (const measure of tr.measures||[]) for (const beat of measure.beats||[]) {
         const start=Math.max(0,Math.round((beat.start-(song.quarterTime||960))*scale));
+        if(Number.isFinite(Number(beat.mixChange?.tempo)) && Number(beat.mixChange.tempo)>=0){
+          const bpm=clamp(beat.mixChange.tempo,1,999,120); const tk=`${start}:${bpm}`;
+          if(!seenTempo.has(tk)){seenTempo.add(tk);tempoEvents.push({tick:start,bpm});}
+        }
+        if(Number.isFinite(Number(beat.mixChange?.volume)) && Number(beat.mixChange.volume)>=0) controlChanges.push({tick:start,controller:7,value:gpMixerValue(beat.mixChange.volume,64)});
+        if(Number.isFinite(Number(beat.mixChange?.balance)) && Number(beat.mixChange.balance)>=0) controlChanges.push({tick:start,controller:10,value:gpMixerValue(beat.mixChange.balance,64)});
         for (const voice of beat.voices||[]) {
           const duration=Math.max(1,Math.round((voice.duration||song.quarterTime/4)*scale));
           for (const n of voice.notes||[]) {
@@ -134,11 +180,11 @@
             const pitch=clamp((string?.value||60)+(n.value||0)+(tr.offset||0),0,127,60);
             const key=`${n.string}:${pitch}`;
             if(n.tiedNote && ties.has(key)) ties.get(key).endTick=Math.max(ties.get(key).endTick,start+duration);
-            else { const item={startTick:start,endTick:start+duration,pitch,velocity:clamp(n.velocity,1,127,96)};notes.push(item);ties.set(key,item); }
+            else { const item={startTick:start,endTick:start+duration,pitch,velocity:(n.velocity===null||n.velocity===undefined)?core.DEFAULT_VELOCITY:clamp(n.velocity,1,127,core.DEFAULT_VELOCITY)};notes.push(item);ties.set(key,item); }
           }
         }
       }
-      tracks.push({name:tr.name||`Track ${ti+1}`,program:clamp(tr.program,0,127,0),channel:tr.isDrums?9:undefined,isDrums:!!tr.isDrums,notes});
+      tracks.push({name:tr.name||`Track ${ti+1}`,program:clamp(tr.program,0,127,0),channel:tr.isDrums?9:undefined,isDrums:!!tr.isDrums,volume:initialVolume,pan:initialPan,controlChanges,notes});
     }
     return {midiBytes:core.buildMidi({ppq,title:song.title||fileName,tempoEvents,timeSignatures,keySignatures,tracks}),metadata:{title:song.title||fileName,trackCount:tracks.length}};
   }

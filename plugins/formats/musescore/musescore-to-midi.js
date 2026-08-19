@@ -75,6 +75,23 @@
     return Number.isFinite(value) && value > 0 ? value : 480;
   }
 
+  function museControllerValue(channelNode, controller, fallback = undefined) {
+    if (!channelNode) return fallback;
+    for (const node of utils.descendantsByLocalName(channelNode, "controller")) {
+      const ctrl = Number(node.getAttribute?.("ctrl") ?? node.getAttribute?.("controller") ?? text(node, ["ctrl", "controller"], ""));
+      if (ctrl !== controller) continue;
+      const value = Number(node.getAttribute?.("value") ?? text(node, ["value"], node.textContent));
+      if (Number.isFinite(value)) return core.clampInt(value, 0, 127, fallback ?? 0);
+    }
+    return fallback;
+  }
+
+  function dynamicVelocity(value, fallback = core.DEFAULT_VELOCITY) {
+    const key = String(value || "").trim().toLowerCase();
+    return ({ ppp: 28, pp: 38, p: 50, mp: 64, mf: 76, f: 90, ff: 105, fff: 120, sfz: 112, sf: 104, fp: 82 })[key]
+      || core.clampInt(Number(value), 1, 127, fallback);
+  }
+
   function mapParts(score) {
     const staffToPart = new Map();
     const parts = [];
@@ -94,7 +111,12 @@
       const drumset = Boolean(utils.firstDescendantByLocalName(instrument, "drumset"))
         || String(text(instrument, ["useDrumset"], "")).toLowerCase() === "true"
         || channel === 9;
-      const part = { index, node, name, program, channel: drumset ? 9 : channel, isDrums: drumset, notes: [], activeTies: new Map() };
+      const part = {
+        index, node, name, program, channel: drumset ? 9 : channel, isDrums: drumset, notes: [], activeTies: new Map(),
+        volume: museControllerValue(channelNode, 7, undefined),
+        pan: museControllerValue(channelNode, 10, undefined),
+        expression: museControllerValue(channelNode, 11, undefined),
+      };
       parts.push(part);
       for (const staffNode of children(node, "Staff")) {
         const id = String(staffNode.getAttribute?.("id") || text(staffNode, ["id"], "")).trim();
@@ -152,15 +174,6 @@
       }
       if (index === 0 || keyNode) keySignatures.push({ tick: Math.round(quarter * ppq), ...currentKey });
 
-      for (const measure of measures) {
-        for (const tempoNode of utils.descendantsByLocalName(measure, "tempo")) {
-          if (utils.localName(tempoNode.parentElement) !== "voice" && utils.localName(tempoNode.parentElement) !== "measure") continue;
-          let value = Number(tempoNode.textContent);
-          if (!Number.isFinite(value) || value <= 0) continue;
-          if (value <= 20) value *= 60;
-          tempoEvents.push({ tick: Math.round(quarter * ppq), bpm: Math.max(1, Math.min(999, value)) });
-        }
-      }
       quarter += duration;
     }
     return { maxMeasures, starts, durations, timeSignatures, keySignatures, tempoEvents };
@@ -197,14 +210,23 @@
   function parseStaff(staffNode, part, timeline, division, tuplets, ppq) {
     const staffId = String(staffNode.getAttribute?.("id") || "1");
     const measures = children(staffNode, "Measure");
+    let staffVelocity = 64;
     for (let measureIndex = 0; measureIndex < measures.length; measureIndex++) {
       const measure = measures[measureIndex];
       const measureStart = timeline.starts[measureIndex] || 0;
       const measureDuration = timeline.durations[measureIndex] || 4;
       const voices = children(measure, "voice");
+      for (const tempoNode of utils.descendantsByLocalName(measure, "tempo")) {
+        if (utils.localName(tempoNode.parentElement) !== "measure") continue;
+        let value = Number(String(tempoNode.textContent || "").trim());
+        if (!Number.isFinite(value) || value <= 0) continue;
+        if (value <= 20) value *= 60;
+        timeline.tempoEvents.push({ tick: Math.round(measureStart * ppq), bpm: Math.max(1, Math.min(999, value)) });
+      }
       for (let voiceIndex = 0; voiceIndex < voices.length; voiceIndex++) {
         const voice = voices[voiceIndex];
         let cursor = measureStart;
+        let currentVelocity = staffVelocity;
         for (const item of Array.from(voice.children || [])) {
           const kind = elementName(item);
           if (kind === "tick") {
@@ -215,6 +237,23 @@
           if (kind === "location") {
             const fractions = notation.fractionValue(text(item, ["fractions"], ""), NaN);
             if (Number.isFinite(fractions)) cursor += fractions * 4;
+            continue;
+          }
+          if (kind === "tempo") {
+            let value = Number(String(item.textContent || "").trim());
+            if (Number.isFinite(value) && value > 0) {
+              if (value <= 20) value *= 60;
+              timeline.tempoEvents.push({ tick: Math.round(cursor * ppq), bpm: Math.max(1, Math.min(999, value)) });
+            }
+            continue;
+          }
+          if (kind === "dynamic") {
+            const explicit = numberText(item, ["velocity"], NaN);
+            const mark = text(item, ["subtype", "text"], "");
+            currentVelocity = Number.isFinite(explicit)
+              ? core.clampInt(explicit, 1, 127, currentVelocity)
+              : dynamicVelocity(mark, currentVelocity);
+            staffVelocity = currentVelocity;
             continue;
           }
           if (kind !== "chord" && kind !== "rest") continue;
@@ -235,12 +274,17 @@
                 previous.endTick = Math.max(previous.endTick, endTick);
                 if (!tieStart) part.activeTies.delete(tieKey);
               } else {
-                const velocityOffset = numberText(noteNode, ["veloOffset", "velocity"], 0);
+                const velocityValue = numberText(noteNode, ["veloOffset", "velocity"], NaN);
+                const veloType = String(text(noteNode, ["veloType"], "")).trim().toLowerCase();
+                const isAbsoluteVelocity = veloType === "1" || veloType.includes("user") || veloType.includes("absolute");
+                const velocity = Number.isFinite(velocityValue)
+                  ? (isAbsoluteVelocity ? velocityValue : currentVelocity + velocityValue)
+                  : currentVelocity;
                 const output = {
                   startTick: Math.round(cursor * ppq),
                   endTick,
                   pitch,
-                  velocity: core.clampInt(96 + velocityOffset, 1, 127, 96),
+                  velocity: core.clampInt(velocity, 1, 127, core.DEFAULT_VELOCITY),
                   lyric,
                 };
                 part.notes.push(output);
@@ -280,6 +324,9 @@
       program: part.program,
       channel: part.isDrums ? 9 : part.channel,
       isDrums: part.isDrums,
+      volume: part.volume,
+      pan: part.pan,
+      expression: part.expression,
       notes: part.notes,
     }));
     if (!tracks.length) throw new Error(`${sourceName}에서 재생 가능한 MuseScore 음표를 찾지 못했습니다.`);

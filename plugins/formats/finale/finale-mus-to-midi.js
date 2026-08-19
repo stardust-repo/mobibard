@@ -685,7 +685,9 @@
             if (!sourceNote.tieStart) activeTies.delete(tieKey);
             continue;
           }
-          const note = { startTick, endTick, pitch, velocity: 80 };
+          // The legacy MUS parser currently cannot recover playback dynamics
+          // reliably. Use the project-wide 75% fallback instead of guessing.
+          const note = { startTick, endTick, pitch, velocity: core.DEFAULT_VELOCITY };
           notes.push(note);
           if (sourceNote.tieStart) activeTies.set(tieKey, note);
         }
