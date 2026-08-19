@@ -5,7 +5,7 @@
   const fmt = value => Number(value || 0).toLocaleString(document.documentElement.lang || undefined);
   const escapeRegExp = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  const { clampInt } = window.MabiUtils;
+  const { clampInt, getIgnorableSequentialOverlapTrim } = window.MabiUtils;
   const midiParser = window.MabiMidiParser;
   if (!midiParser) throw new Error("midi-parser.js must be loaded before midi-to-mml.js");
   const normalizeProgram = midiParser.normalizeProgram;
@@ -13,6 +13,9 @@
   const NOTE_NAMES = ["c", "c+", "d", "d+", "e", "f", "f+", "g", "g+", "a", "a+", "b"];
   const MML_MIN_MIDI = 12; // O0C
   const MML_MAX_MIDI = 127; // O9G (MIDI maximum)
+  // MIDI-to-MML uses one grid unit per 64th note. Player enables a one-grid
+  // tolerance so quantization jitter is resolved before its overlap merge mode.
+  const IGNORABLE_OVERLAP_GRID = 1;
 
   const GM_PROGRAM_NAMES = [
     "Acoustic Grand Piano", "Bright Acoustic Piano", "Electric Grand Piano", "Honky-tonk Piano",
@@ -632,7 +635,9 @@
 
     const maxEndGrid = Math.max(0, ...notes.map(n => n.endGrid));
     const assignableNotes = notes.filter(note => exportChannels.some(ch => canChannelUseNote(note, ch)));
-    const assignment = assignNotesToVoices(assignableNotes, exportChannels);
+    const assignment = assignNotesToVoices(assignableNotes, exportChannels, null, {
+      ignoreSingle64thOverlap: options.ignoreSingle64thOverlap === true
+    });
     const { voices, skipped, placed, overlapMerged } = assignment;
     const finalEndGrid = Math.max(maxEndGrid, ...voices.flatMap(v => v.map(n => n.endGrid || 0)), 0);
     const parts = voices.map((v, i) => voiceToMml64(v, i === 0 ? tempoGridEvents : [], i === 0 ? finalEndGrid : 0));
@@ -741,7 +746,7 @@
     return ["all", "half", "none"].includes(mode) ? mode : "all";
   }
 
-  function assignNotesToVoices(notes, exportChannelsOrCount, oldRoles = null) {
+  function assignNotesToVoices(notes, exportChannelsOrCount, oldRoles = null, assignmentOptions = {}) {
     const exportChannels = Array.isArray(exportChannelsOrCount)
       ? exportChannelsOrCount
       : Array.from({ length: clampInt(exportChannelsOrCount || 3, 1, 6) }, (_, i) => ({ role: oldRoles?.[i] || defaultRoles(exportChannelsOrCount || 3)[i] || "auto", overlapMergeMode: "none", overlapMerge: false, selectedInstrumentGroups: [] }));
@@ -765,7 +770,7 @@
       // 1차: 정상 배치를 우선하되, 고음/저음 역할과 반대로 1옥타브를 초과해 튀는 노트는
       // 겹침 병합 허용 채널까지 포함해 더 가까운 성부가 있는지 먼저 비교한다.
       while (remaining.length) {
-        const best = findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, startupRoleContexts);
+        const best = findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, startupRoleContexts, assignmentOptions);
         if (!best) break;
         const [chosen] = remaining.splice(best.noteIndex, 1);
         if (best.isMerge) {
@@ -775,8 +780,13 @@
           voiceEnd[best.channelIndex] = Math.max(chosen.endGrid, getVoiceEnd(voices[best.channelIndex]));
           overlapMerged++;
         } else {
+          // A <= 64th-note overlap is quantization jitter, not an overlap-merge event.
+          // Resolve only the tiny boundary and keep the placement on the normal path,
+          // so this works even when overlapMergeMode is "none".
+          if (best.trimIgnorableOverlap) trimActiveNoteAt(voices[best.channelIndex], startGrid);
           voices[best.channelIndex].push(chosen);
-          voiceEnd[best.channelIndex] = Math.max(voiceEnd[best.channelIndex], chosen.endGrid);
+          voices[best.channelIndex].sort((a, b) => a.startGrid - b.startGrid || a.endGrid - b.endGrid || a.midi - b.midi);
+          voiceEnd[best.channelIndex] = Math.max(chosen.endGrid, getVoiceEnd(voices[best.channelIndex]));
           placed++;
         }
         assignedChannels.add(best.channelIndex);
@@ -803,7 +813,7 @@
     return { voices, skipped, placed, overlapMerged };
   }
 
-  function findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, startupRoleContexts = null) {
+  function findBestNormalPlacement(remaining, exportChannels, voices, voiceEnd, assignedChannels, startGrid, startupRoleContexts = null, assignmentOptions = {}) {
     let best = null;
     const pitchSpread = getMelodicPitchSpread(remaining);
     for (let noteIndex = 0; noteIndex < remaining.length; noteIndex++) {
@@ -824,20 +834,37 @@
             cfg,
             referenceNote,
             pitchDistance: notePitchDistance(note, referenceNote),
-            playedLength: 0
+            playedLength: 0,
+            trimIgnorableOverlap: false
           });
         } else {
-          const mergeInfo = getOverlapMergeCandidateInfo(cfg, voices[channelIndex], startGrid);
-          if (mergeInfo) {
-            mergeCandidates.push({
-              type: "merge",
+          const ignorableOverlap = assignmentOptions.ignoreSingle64thOverlap
+            ? getIgnorableOverlapCandidateInfo(voices[channelIndex], startGrid)
+            : null;
+          if (ignorableOverlap) {
+            normalCandidates.push({
+              type: "normal",
               noteIndex,
               channelIndex,
               cfg,
-              referenceNote: mergeInfo.active,
-              pitchDistance: notePitchDistance(note, mergeInfo.active),
-              playedLength: mergeInfo.playedLength
+              referenceNote: ignorableOverlap.active,
+              pitchDistance: notePitchDistance(note, ignorableOverlap.active),
+              playedLength: ignorableOverlap.playedLength,
+              trimIgnorableOverlap: true
             });
+          } else {
+            const mergeInfo = getOverlapMergeCandidateInfo(cfg, voices[channelIndex], startGrid);
+            if (mergeInfo) {
+              mergeCandidates.push({
+                type: "merge",
+                noteIndex,
+                channelIndex,
+                cfg,
+                referenceNote: mergeInfo.active,
+                pitchDistance: notePitchDistance(note, mergeInfo.active),
+                playedLength: mergeInfo.playedLength
+              });
+            }
           }
         }
       }
@@ -862,7 +889,13 @@
           mergeAsNormalCandidate: isMerge,
           startupRoleContext: getStartupRoleContextForNote(note, startupRoleContexts)
         });
-        const item = { noteIndex, channelIndex: candidate.channelIndex, score, isMerge };
+        const item = {
+          noteIndex,
+          channelIndex: candidate.channelIndex,
+          score,
+          isMerge,
+          trimIgnorableOverlap: Boolean(candidate.trimIgnorableOverlap)
+        };
         if (!best || compareScore(item.score, best.score) > 0) best = item;
       }
     }
@@ -918,6 +951,20 @@
     return startGrid >= halfPoint;
   }
 
+
+  function getIgnorableOverlapCandidateInfo(voice, startGrid) {
+    const active = findActiveNoteAt(voice, startGrid);
+    if (!active) return null;
+    const plan = getIgnorableSequentialOverlapTrim(
+      active.startGrid,
+      active.endGrid,
+      startGrid,
+      IGNORABLE_OVERLAP_GRID,
+      IGNORABLE_OVERLAP_GRID,
+    );
+    if (!plan) return null;
+    return { active, playedLength: plan.trimmedDuration };
+  }
 
   function getOverlapMergeCandidateInfo(cfg, voice, startGrid) {
     const mergeMode = normalizeOverlapMergeMode(cfg?.overlapMergeMode ?? cfg?.overlapMerge);

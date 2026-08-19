@@ -49,6 +49,8 @@
     longPressMoveTolerance: 12,
   };
 
+  const { getIgnorableSequentialOverlapTrim } = window.MabiUtils;
+
   function openFilePickerInput(input) {
     if (!input || input.disabled) return;
     const groupedPicker = window.MabiSupportedFilesUi?.openFileInput;
@@ -292,6 +294,7 @@
     midiImportSummary: document.querySelector("#midiImportSummary"),
     midiImportTargetMode: document.querySelector("#midiImportTargetMode"),
     midiImportQuantize: document.querySelector("#midiImportQuantize"),
+    midiImportIgnoreSingle64thOverlap: document.querySelector("#midiImportIgnoreSingle64thOverlap"),
     midiImportMidiControls: document.querySelector("#midiImportMidiControls"),
     midiImportPreviewSelectedButton: document.querySelector("#midiImportPreviewSelectedButton"),
     midiImportPreviewAllButton: document.querySelector("#midiImportPreviewAllButton"),
@@ -307,6 +310,15 @@
     midiImportCancelButton: document.querySelector("#midiImportCancelButton"),
     midiImportApplyButton: document.querySelector("#midiImportApplyButton"),
     midiImportNewButton: document.querySelector("#midiImportNewButton"),
+    mmlExportBackdrop: document.querySelector("#mmlExportBackdrop"),
+    mmlExportDialog: document.querySelector("#mmlExportDialog"),
+    mmlExportCloseButton: document.querySelector("#mmlExportCloseButton"),
+    mmlExportSelectAllButton: document.querySelector("#mmlExportSelectAllButton"),
+    mmlExportClearAllButton: document.querySelector("#mmlExportClearAllButton"),
+    mmlExportChannelList: document.querySelector("#mmlExportChannelList"),
+    mmlExportSummary: document.querySelector("#mmlExportSummary"),
+    mmlExportCancelButton: document.querySelector("#mmlExportCancelButton"),
+    mmlExportApplyButton: document.querySelector("#mmlExportApplyButton"),
     channelDeleteBackdrop: document.querySelector("#channelDeleteBackdrop"),
     channelDeleteDialog: document.querySelector("#channelDeleteDialog"),
     channelDeleteCloseButton: document.querySelector("#channelDeleteCloseButton"),
@@ -5004,6 +5016,9 @@
     state.midiImport.selectedGroupIds = new Set();
     state.midiImport.selectedTextIndexes = new Set();
     state.midiImport.busy = false;
+    if (elements.midiImportIgnoreSingle64thOverlap) {
+      elements.midiImportIgnoreSingle64thOverlap.checked = true;
+    }
   }
 
   function getMidiImportSelectedGroups(preview = state.midiImport.preview) {
@@ -5167,7 +5182,8 @@
     if (isMidi && state.midiImport.preview) {
       const selected = getMidiImportSelectedGroups().length;
       const division = Number(elements.midiImportQuantize?.value) === 32 ? 32 : 64;
-      setMidiImportStatus(`${selected}/${state.midiImport.preview.groups.length}개 악기 선택 · ${division}박 양자화`);
+      const overlapLabel = elements.midiImportIgnoreSingle64thOverlap?.checked !== false ? " · 1/64 겹침 무시" : "";
+      setMidiImportStatus(`${selected}/${state.midiImport.preview.groups.length}개 악기 선택 · ${division}박 양자화${overlapLabel}`);
     } else if (isText && ["3mle", "mmi"].includes(state.midiImport.textFormat)) {
       setMidiImportStatus(`${state.midiImport.selectedTextIndexes.size}/${state.midiImport.textCandidates.length}개 채널 선택 · 선택한 채널만 편집 영역에 가져옵니다.`);
     } else if (isText && textParsed) {
@@ -5410,7 +5426,28 @@
     };
   }
 
-  function splitNotesIntoMonophonicVoices(notes) {
+  function getIgnorableEditorOverlapPlan(voice, note) {
+    if (!voice?.notes?.length) return null;
+    const previous = voice.notes[voice.notes.length - 1];
+    const previousStart = Number(previous.startBeat) || 0;
+    const previousEnd = previousStart + Math.max(CONFIG.minimumNoteBeat, Number(previous.durationBeat) || CONFIG.minimumNoteBeat);
+    const nextStart = Number(note.startBeat) || 0;
+    const plan = getIgnorableSequentialOverlapTrim(
+      previousStart,
+      previousEnd,
+      nextStart,
+      CONFIG.minimumNoteBeat,
+      CONFIG.minimumNoteBeat,
+    );
+    return plan ? { previous, durationBeat: plan.trimmedDuration } : null;
+  }
+
+  function applyIgnorableEditorOverlapPlan(plan) {
+    if (!plan?.previous) return;
+    plan.previous.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, plan.durationBeat).toFixed(6));
+  }
+
+  function splitNotesIntoMonophonicVoices(notes, { ignoreSingle64thOverlap = true } = {}) {
     const sorted = (notes || []).map((note) => ({ ...note })).sort((left, right) => (
       left.startBeat - right.startBeat
       || left.pitch - right.pitch
@@ -5421,22 +5458,33 @@
       const start = Number(note.startBeat) || 0;
       let bestIndex = -1;
       let bestDistance = Infinity;
+      let bestOverlapPlan = null;
       for (let index = 0; index < voices.length; index += 1) {
         const voice = voices[index];
-        if (voice.endBeat > start + 1e-7) continue;
+        let overlapPlan = null;
+        if (voice.endBeat > start + 1e-7) {
+          overlapPlan = ignoreSingle64thOverlap ? getIgnorableEditorOverlapPlan(voice, note) : null;
+          if (!overlapPlan) continue;
+        }
         const distance = voice.lastPitch == null ? 0 : Math.abs(voice.lastPitch - note.pitch);
         if (distance < bestDistance) {
           bestDistance = distance;
           bestIndex = index;
+          bestOverlapPlan = overlapPlan;
         }
       }
       if (bestIndex < 0) {
         bestIndex = voices.length;
         voices.push({ notes: [], endBeat: 0, lastPitch: null });
+        bestOverlapPlan = null;
       }
       const voice = voices[bestIndex];
+      // One 64th-note-or-smaller overlap is treated as a quantization boundary error,
+      // so the pair stays in the same monophonic voice instead of creating a new one.
+      applyIgnorableEditorOverlapPlan(bestOverlapPlan);
+      const resolvedStart = Number(note.startBeat) || 0;
       voice.notes.push(note);
-      voice.endBeat = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      voice.endBeat = resolvedStart + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
       voice.lastPitch = note.pitch;
     }
     return voices.map((voice) => voice.notes);
@@ -5514,7 +5562,11 @@
     return { channelCount: descriptors.length, noteCount };
   }
 
-  function importMidiSelectionAsEditableChannels(parsed, { openNew = false, fileName = parsed?.fileName || "" } = {}) {
+  function importMidiSelectionAsEditableChannels(parsed, {
+    openNew = false,
+    fileName = parsed?.fileName || "",
+    ignoreSingle64thOverlap = true,
+  } = {}) {
     const groups = (parsed?.groups || []).filter((group) => Array.isArray(group?.notes) && group.notes.length);
     if (!groups.length) return { channelCount: 0, instrumentCount: 0, noteCount: 0 };
 
@@ -5539,7 +5591,7 @@
         colorByInstrument.set(instrumentKey, getMidiGroupColor(group, groupIndex));
       }
       const copyColor = colorByInstrument.get(instrumentKey);
-      const voices = splitNotesIntoMonophonicVoices(group.notes || []);
+      const voices = splitNotesIntoMonophonicVoices(group.notes || [], { ignoreSingle64thOverlap });
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {
@@ -5603,7 +5655,11 @@
       if (kind === "midi") {
         const parsed = cloneMidiImportSelection();
         if (!parsed?.groups?.length) throw new Error("가져올 악기를 하나 이상 선택하세요.");
-        const imported = importMidiSelectionAsEditableChannels(parsed, { openNew, fileName });
+        const imported = importMidiSelectionAsEditableChannels(parsed, {
+          openNew,
+          fileName,
+          ignoreSingle64thOverlap: elements.midiImportIgnoreSingle64thOverlap?.checked !== false,
+        });
         if (!imported.channelCount) throw new Error("가져올 노트가 있는 악기를 하나 이상 선택하세요.");
         markDirty(`${state.midiImport.sourceLabel || "MIDI"} ${openNew ? "새로 열기" : "추가"}`);
         shrinkTimelineToContent();
@@ -9689,15 +9745,134 @@
       : false;
   }
 
-  function exportCurrentContextAsMml() {
+  function getMmlExportSelectedChannels() {
+    if (!elements.mmlExportChannelList) return [];
+    const selectedIds = new Set(
+      [...elements.mmlExportChannelList.querySelectorAll('input[type="checkbox"]:checked')]
+        .map((input) => String(input.value || "")),
+    );
+    return state.channels.filter((channel) => selectedIds.has(String(channel.id)) && channel.notes?.length);
+  }
+
+  function updateMmlExportDialogState() {
+    const selected = getMmlExportSelectedChannels();
+    const exportableCount = state.channels.filter((channel) => channel.notes?.length).length;
+    if (elements.mmlExportSummary) {
+      elements.mmlExportSummary.textContent = selected.length
+        ? `${selected.length}개 채널 선택`
+        : (exportableCount ? "선택된 채널이 없습니다." : "내보낼 노트가 있는 채널이 없습니다.");
+    }
+    if (elements.mmlExportApplyButton) elements.mmlExportApplyButton.disabled = selected.length === 0;
+  }
+
+  function renderMmlExportChannelList() {
+    if (!elements.mmlExportChannelList) return;
+    elements.mmlExportChannelList.replaceChildren();
+    state.channels.forEach((channel, index) => {
+      const row = document.createElement("label");
+      row.className = "mml-export-channel-row";
+      row.style.setProperty("--channel-color", getChannelColor(channel, index));
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = String(channel.id);
+      checkbox.checked = false;
+      checkbox.disabled = !channel.notes?.length;
+
+      const info = document.createElement("span");
+      info.className = "mml-export-channel-info";
+      const name = document.createElement("strong");
+      name.textContent = channel.name || `Ch${index + 1}`;
+      const detail = document.createElement("small");
+      detail.textContent = channel.notes?.length ? `${channel.notes.length}개 노트` : "빈 채널";
+      info.append(name, detail);
+
+      row.append(checkbox, info);
+      checkbox.addEventListener("change", () => {
+        row.classList.toggle("selected", checkbox.checked);
+        updateMmlExportDialogState();
+      });
+      elements.mmlExportChannelList.append(row);
+    });
+    updateMmlExportDialogState();
+  }
+
+  function openMmlExportDialog() {
     if (state.activePanel === "audio") {
       showToast("오디오는 MML로 내보낼 수 없습니다.");
       return false;
     }
-    if (isMidiReferenceActive()) {
-      return state.midiSelectedNoteKeys.size ? exportSelectedMidiNotesAsMml() : exportActiveMidiInstrumentAsMml();
+    closeFileMenu();
+    closeEditMenu();
+    closeContextMenu();
+    closeThemeMenu();
+    closeVolumeMenu();
+    closeZoomMenu();
+    closePlaybackRateMenu();
+    renderMmlExportChannelList();
+    if (elements.mmlExportBackdrop) elements.mmlExportBackdrop.hidden = false;
+    return true;
+  }
+
+  function closeMmlExportDialog() {
+    if (elements.mmlExportBackdrop) elements.mmlExportBackdrop.hidden = true;
+    if (elements.mmlExportChannelList) elements.mmlExportChannelList.replaceChildren();
+    updateMmlExportDialogState();
+  }
+
+  function channelsToMml(channels, { tempos = getSortedTempos(), originBeat = 0 } = {}) {
+    const selectedChannels = (channels || []).filter((channel) => channel?.notes?.length);
+    if (!selectedChannels.length) return "";
+    const firstBeat = Math.max(0, Number(originBeat) || 0);
+    const voices = [];
+    let endBeat = firstBeat;
+
+    for (const channel of selectedChannels) {
+      const normalized = channel.notes.map((note) => ({
+        ...note,
+        startBeat: Math.max(0, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat)),
+        durationBeat: Math.max(CONFIG.minimumNoteBeat, snapBeatToUnit(note.durationBeat, CONFIG.minimumNoteBeat)),
+      }));
+      endBeat = Math.max(endBeat, ...normalized.map((note) => note.startBeat + note.durationBeat));
+      partitionNotesIntoMmlVoices(normalized)
+        .map((voice) => buildNoteVoiceMml(voice, firstBeat))
+        .filter(Boolean)
+        .forEach((voiceMml) => voices.push(voiceMml));
     }
-    return state.selectedNoteIds.size ? exportSelectedNotesAsMml() : exportActiveChannelAsMml();
+
+    if (!voices.length) return "";
+    const tempoChanges = tempos.filter((tempo) => tempo.beat > firstBeat + 1e-7 && tempo.beat <= endBeat + 1e-7);
+    if (tempoChanges.length) {
+      voices.unshift(buildTempoVoiceMml(tempos, firstBeat, endBeat));
+    } else {
+      voices[0] = `t${getTempoAtBeatFromCollection(firstBeat, tempos)}${voices[0]}`;
+    }
+    return `MML@${voices.join(",")};`;
+  }
+
+  async function applyMmlExportSelection() {
+    const channels = getMmlExportSelectedChannels();
+    if (!channels.length) {
+      updateMmlExportDialogState();
+      return false;
+    }
+    const mml = channelsToMml(channels, { originBeat: 0 });
+    if (!mml) {
+      showToast("내보낼 노트가 없습니다.");
+      return false;
+    }
+    const copied = await writeTextToClipboard(mml);
+    if (!copied) {
+      showToast("클립보드에 내보내지 못했습니다.");
+      return false;
+    }
+    closeMmlExportDialog();
+    showToast(`${channels.length}개 채널을 MML로 내보냈습니다.`);
+    return true;
+  }
+
+  function exportCurrentContextAsMml() {
+    return openMmlExportDialog();
   }
 
   function copySelectedNotes() {
@@ -12075,6 +12250,7 @@
       if (file) await importAudioFile(file);
     });
     elements.midiImportTargetMode?.addEventListener("change", updateMidiImportDialog);
+    elements.midiImportIgnoreSingle64thOverlap?.addEventListener("change", updateMidiImportDialog);
     elements.midiImportQuantize?.addEventListener("change", () => {
       if (state.midiImport.kind === "midi" && state.midiImport.midiBuffer && !state.midiImport.busy) {
         try { reparseMidiImportPreview(); }
@@ -12116,6 +12292,27 @@
     elements.midiImportNewButton?.addEventListener("click", () => applyMidiImport("new"));
     elements.midiImportBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.midiImportBackdrop && !state.midiImport.busy) closeMidiImportDialog();
+    });
+
+    elements.mmlExportCloseButton?.addEventListener("click", closeMmlExportDialog);
+    elements.mmlExportCancelButton?.addEventListener("click", closeMmlExportDialog);
+    elements.mmlExportSelectAllButton?.addEventListener("click", () => {
+      elements.mmlExportChannelList?.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach((checkbox) => {
+        checkbox.checked = true;
+        checkbox.closest(".mml-export-channel-row")?.classList.add("selected");
+      });
+      updateMmlExportDialogState();
+    });
+    elements.mmlExportClearAllButton?.addEventListener("click", () => {
+      elements.mmlExportChannelList?.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+        checkbox.checked = false;
+        checkbox.closest(".mml-export-channel-row")?.classList.remove("selected");
+      });
+      updateMmlExportDialogState();
+    });
+    elements.mmlExportApplyButton?.addEventListener("click", applyMmlExportSelection);
+    elements.mmlExportBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.mmlExportBackdrop) closeMmlExportDialog();
     });
 
     elements.fileInput.addEventListener("change", async () => {
@@ -12804,6 +13001,10 @@
       copySelectedMidiNotes,
       copyActiveMidiInstrument,
       exportCurrentContextAsMml,
+      openMmlExportDialog,
+      closeMmlExportDialog,
+      applyMmlExportSelection,
+      channelsToMml,
       exportActiveChannelAsMml,
       exportSelectedNotesAsMml,
       exportSelectedMidiNotesAsMml,

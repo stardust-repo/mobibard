@@ -21,6 +21,40 @@
     return Number.isFinite(number) ? number : fallback;
   }
 
+  function sequentialOverlapAmount(previousEnd, nextStart) {
+    const end = toFiniteNumber(previousEnd, 0);
+    const start = toFiniteNumber(nextStart, 0);
+    return Math.max(0, end - start);
+  }
+
+  function isIgnorableSequentialOverlap(previousEnd, nextStart, tolerance, epsilon = 1e-7) {
+    const overlap = sequentialOverlapAmount(previousEnd, nextStart);
+    const limit = Math.max(0, toFiniteNumber(tolerance, 0));
+    const eps = Math.max(0, toFiniteNumber(epsilon, 1e-7));
+    return overlap > eps && overlap <= limit + eps;
+  }
+
+  function getIgnorableSequentialOverlapTrim(previousStart, previousEnd, nextStart, tolerance, minimumDuration = tolerance, epsilon = 1e-7) {
+    const start = toFiniteNumber(previousStart, 0);
+    const end = toFiniteNumber(previousEnd, start);
+    const incoming = toFiniteNumber(nextStart, start);
+    const limit = Math.max(0, toFiniteNumber(tolerance, 0));
+    const minDuration = Math.max(0, toFiniteNumber(minimumDuration, limit));
+    const eps = Math.max(0, toFiniteNumber(epsilon, 1e-7));
+    if (incoming <= start + eps) return null;
+    const overlap = sequentialOverlapAmount(end, incoming);
+    if (!(overlap > eps && overlap <= limit + eps)) return null;
+    const trimmedDuration = incoming - start;
+    if (trimmedDuration + eps < minDuration) return null;
+    return {
+      overlap,
+      previousStart: start,
+      previousEnd: end,
+      trimmedEnd: incoming,
+      trimmedDuration,
+    };
+  }
+
   function toUint8Array(value) {
     if (value instanceof Uint8Array) return value;
     if (value instanceof ArrayBuffer) return new Uint8Array(value);
@@ -498,6 +532,9 @@
     clamp,
     clampInt,
     toFiniteNumber,
+    sequentialOverlapAmount,
+    isIgnorableSequentialOverlap,
+    getIgnorableSequentialOverlapTrim,
     toUint8Array,
     copyUint8Array,
     asciiAt,

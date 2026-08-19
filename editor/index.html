@@ -8,7 +8,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <title>모비바드 v5.0</title>
 <link href="../assets/favicon.ico" rel="icon"/>
-<link href="styles.css?v=5.0.0" rel="stylesheet"/>
+<link href="styles.css?v=5.0.0&amp;rev=20260819-155700" rel="stylesheet"/>
 </head>
 <body>
 <div data-context-area="app" id="app">
@@ -252,11 +252,20 @@
 <div class="midi-import-midi-controls" id="midiImportMidiControls">
 <div class="midi-import-selection-actions midi-import-inline-selection-actions" id="midiImportSelectionActions"><button id="midiImportSelectAllButton" type="button">모두 선택</button><button id="midiImportClearAllButton" type="button">모두 해제</button></div>
 <select aria-label="MIDI 양자화" id="midiImportQuantize"><option selected="" value="64">64박 양자화</option><option value="32">32박 양자화</option></select>
+<label class="midi-import-overlap-option"><input checked="" id="midiImportIgnoreSingle64thOverlap" type="checkbox"/><span>64박 겹침 무시</span></label>
 <div class="midi-import-preview-actions"><button class="midi-import-source-preview" id="midiImportPreviewSelectedButton" type="button">▶ 선택 듣기</button><button class="midi-import-source-preview" id="midiImportPreviewAllButton" type="button">▶ 원본 듣기</button></div>
 </div>
 <div class="midi-import-selection-actions midi-import-text-selection-actions" hidden="" id="midiImportTextSelectionActions"><button id="midiImportTextSelectAllButton" type="button">모두 선택</button><button id="midiImportTextClearAllButton" type="button">모두 해제</button></div>
 <div class="midi-import-selection-list" id="midiImportSelectionList"></div>
 <div class="transfer-dialog-actions unified-import-actions"><div aria-live="polite" class="midi-import-status" id="midiImportStatus">불러올 항목을 선택하세요.</div><button id="midiImportCancelButton" type="button">취소</button><button id="midiImportApplyButton" type="button">추가</button><button id="midiImportNewButton" type="button">새로 열기</button></div>
+</section>
+</div>
+<div class="popup-backdrop" hidden="" id="mmlExportBackdrop">
+<section aria-label="MML 내보내기" aria-modal="true" class="transfer-dialog mml-export-dialog" id="mmlExportDialog" role="dialog">
+<div class="transfer-dialog-header"><div><strong>MML 내보내기</strong><span>내보낼 편집 채널을 선택하세요.</span></div><button aria-label="닫기" class="channel-mute-close" id="mmlExportCloseButton" type="button">×</button></div>
+<div class="mml-export-selection-actions"><button id="mmlExportSelectAllButton" type="button">모두 선택</button><button id="mmlExportClearAllButton" type="button">모두 해제</button></div>
+<div class="mml-export-channel-list" id="mmlExportChannelList"></div>
+<div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="mmlExportSummary">선택된 채널이 없습니다.</div><button id="mmlExportCancelButton" type="button">취소</button><button disabled="" id="mmlExportApplyButton" type="button">내보내기</button></div>
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="channelDeleteBackdrop">
@@ -301,7 +310,7 @@
 </dialog>
 <div class="context-menu" hidden="" id="contextMenu" role="menu"></div>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
-<script src="../plugins/common/utils.js?v=5.0.0"></script>
+<script src="../plugins/common/utils.js?v=5.0.0&amp;rev=20260819-163106"></script>
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.0.0"></script>
 <script src="../plugins/formats/notation/notation-utils.js?v=5.0.0"></script>
@@ -327,6 +336,6 @@
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
 <script src="js/soundbank-player.js?v=5.0.0"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.0.0"></script>
-<script src="app.js?v=5.0.0"></script>
+<script src="app.js?v=5.0.0&amp;rev=20260819-163106"></script>
 </body>
 </html>

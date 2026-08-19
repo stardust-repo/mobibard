@@ -90,7 +90,11 @@
 
 
   const { shortError, clampInt, formatTime } = window.MabiUtils;
-  const { midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
+  const { midiToMml: sharedMidiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
+  const midiToMml = (bytes, fileName, options = {}) => sharedMidiToMml(bytes, fileName, {
+    ...options,
+    ignoreSingle64thOverlap: true,
+  });
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths } = window.MabiMml;
   const { optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
   const { parseSoundBank, loadEmbeddedSoundBank, prepareNotes, schedulePreparedNotes } = window.MabiSoundBank;

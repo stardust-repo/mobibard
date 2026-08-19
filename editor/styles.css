@@ -4556,3 +4556,145 @@ button {
   border-radius: 7px;
   font-size: 11px;
 }
+
+/* 2026-08 import overlap option, resilient import sizing, and MML export picker. */
+.midi-import-overlap-option {
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--control-bg));
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.midi-import-overlap-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* Long file names / text must never expand an import dialog beyond the viewport. */
+.mml-import-dialog,
+.unified-import-dialog {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+}
+.mml-import-dialog > *,
+.unified-import-dialog > * {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+.mml-import-dialog .transfer-dialog-header > div,
+.unified-import-dialog .transfer-dialog-header > div {
+  min-width: 0;
+  max-width: calc(100% - var(--popup-close-size) - 10px);
+  overflow: hidden;
+}
+#mmlImportSourceLabel,
+#midiImportSourceLabel {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#mmlImportText {
+  box-sizing: border-box;
+  max-width: calc(100% - 28px);
+  overflow-x: auto;
+}
+.unified-import-dialog .midi-import-selection-list,
+.unified-import-dialog .unified-import-actions,
+.unified-import-dialog .midi-import-midi-controls {
+  min-width: 0;
+  max-width: 100%;
+}
+.unified-import-dialog .midi-import-selection-list { overflow-x: hidden; }
+.unified-import-dialog .midi-import-midi-controls { flex-wrap: wrap; }
+
+.mml-export-dialog {
+  width: min(500px, calc(100vw - 24px));
+  max-height: min(650px, calc(100dvh - 24px));
+}
+.mml-export-selection-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 12px 2px;
+}
+.mml-export-channel-list {
+  min-height: 120px;
+  max-height: min(410px, 50dvh);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 4px 12px 9px;
+  scrollbar-width: thin;
+}
+.mml-export-channel-row {
+  --channel-color: var(--accent);
+  min-width: 0;
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--channel-color) 48%, var(--control-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--channel-color) 6%, var(--control-bg));
+  cursor: pointer;
+}
+.mml-export-channel-row.selected {
+  background: color-mix(in srgb, var(--channel-color) 15%, var(--control-bg));
+}
+.mml-export-channel-row:has(input:disabled) {
+  opacity: .48;
+  cursor: default;
+}
+.mml-export-channel-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--channel-color);
+}
+.mml-export-channel-info {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.mml-export-channel-info strong,
+.mml-export-channel-info small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mml-export-channel-info strong { color: var(--text); font-size: 11px; }
+.mml-export-channel-info small { color: var(--muted); font-size: 9px; }
+
+@media (pointer: coarse), (max-width: 700px) {
+  .mml-import-dialog,
+  .unified-import-dialog { max-width: calc(100vw - 16px); }
+  .midi-import-overlap-option { min-height: 34px; }
+  .mml-export-dialog {
+    width: min(500px, calc(100vw - 16px));
+    max-height: calc(100dvh - 16px);
+  }
+}
+.popup-backdrop > .mml-import-dialog,
+.popup-backdrop > .unified-import-dialog,
+.popup-backdrop > .mml-export-dialog {
+  max-width: 100%;
+}

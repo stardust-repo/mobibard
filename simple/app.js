@@ -400,6 +400,7 @@
     return {
       partCount: 3,
       quantizeDivision: selectedQuantize,
+      ignoreSingle64thOverlap: true,
       roles: ["high", "auto", "low"],
       selectedInstrumentGroups: ids,
       exportChannels: [
