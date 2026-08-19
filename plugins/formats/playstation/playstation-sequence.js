@@ -3,9 +3,27 @@
 
   const root = typeof window !== "undefined" ? window : globalThis;
   const core = root.MabiMusicFormats;
+  const consoleGm = root.MabiConsoleGM;
   if (!core) throw new Error("music-format-core.js must be loaded before playstation-sequence.js");
+  if (!consoleGm) throw new Error("console-gm-normalizer.js must be loaded before playstation-sequence.js");
 
   const asBytes = core.asUint8Array;
+
+  function normalizedResult(midiBytes, metadata) {
+    const normalized = consoleGm.normalizeMidiLike(midiBytes, {
+      collapseBanks: true,
+      remapChannel10Drums: true,
+    });
+    return {
+      midiBytes: normalized.midiBytes,
+      metadata: {
+        ...(metadata || {}),
+        gmNormalized: true,
+        bankSelectResetCount: normalized.stats.bankSelectResetCount,
+        drumKeyRemappedCount: normalized.stats.drumKeyRemappedCount,
+      },
+    };
+  }
 
   function asciiAt(bytes, offset, text) {
     const view = asBytes(bytes);
@@ -191,10 +209,10 @@
     }
 
     const track = scoreToMidiTrack(bytes, offset + headerSize, bytes.length, tempo, numerator, denominatorPower);
-    return {
-      midiBytes: new Uint8Array([...midiHeader(0, 1, division), ...midiTrack(track)]),
-      metadata: { variant: "SEQ", version, headerSize, division, tempo, numerator, denominatorPower },
-    };
+    return normalizedResult(
+      new Uint8Array([...midiHeader(0, 1, division), ...midiTrack(track)]),
+      { variant: "SEQ", version, headerSize, division, tempo, numerator, denominatorPower }
+    );
   }
 
   function parseSep(bytes, offset = 0) {
@@ -224,16 +242,16 @@
     const first = sequences[0];
     const track = scoreToMidiTrack(bytes, first.scoreStart, first.scoreEnd,
       first.tempo, first.numerator, first.denominatorPower);
-    return {
-      midiBytes: new Uint8Array([...midiHeader(0, 1, first.division), ...midiTrack(track)]),
-      metadata: {
+    return normalizedResult(
+      new Uint8Array([...midiHeader(0, 1, first.division), ...midiTrack(track)]),
+      {
         variant: "SEP",
         version,
         sequenceCount: sequences.length,
         importedSequenceId: first.id,
         division: first.division,
-      },
-    };
+      }
+    );
   }
 
   function ps2GetDataByte(bytes, state, end) {
@@ -360,9 +378,9 @@
     }
 
     if (!reachedEnd) payload.push(0x00, 0xff, 0x2f, 0x00);
-    return {
-      midiBytes: new Uint8Array([...midiHeader(0, 1, ppq), ...midiTrack(payload)]),
-      metadata: {
+    return normalizedResult(
+      new Uint8Array([...midiHeader(0, 1, ppq), ...midiTrack(payload)]),
+      {
         variant: "PS2 SQ",
         versionMajor: view[offset + 14] || 0,
         versionMinor: view[offset + 15] || 0,
@@ -370,8 +388,8 @@
         compressionOption,
         maxMidiNumber,
         eventCount,
-      },
-    };
+      }
+    );
   }
 
   function detect(bytes) {

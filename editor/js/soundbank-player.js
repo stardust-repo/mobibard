@@ -14,10 +14,30 @@
   }
 
   function selectSharedPreset(soundBank, program = 0, bank = 0) {
-    const shared = window.MabiSoundBank?.findPreset?.(soundBank, program, bank);
+    const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
+    const shared = window.MabiSoundBank?.findPreset?.(soundBank, program, safeBank);
     if (shared) return shared;
+
+    // A drum request must never fall back to the first melodic preset.
+    if (safeBank === 128) return null;
+
     const presets = Array.isArray(soundBank?.presets) ? soundBank.presets : [];
     return presets[0] || null;
+  }
+
+  function findExactZone(soundFont, midi, velocity) {
+    if (!soundFont || !Array.isArray(soundFont.zones)) return null;
+    for (const zone of soundFont.zones) {
+      if (
+        midi >= zone.keyRange.low &&
+        midi <= zone.keyRange.high &&
+        velocity >= zone.velocityRange.low &&
+        velocity <= zone.velocityRange.high
+      ) {
+        return zone;
+      }
+    }
+    return null;
   }
 
   function adaptSharedPreset(soundBank, preset) {
@@ -66,6 +86,7 @@
         sustainAttenuation: 0,
         release: 0.4,
         loop: ((Number(region.sampleModes) || 0) & 1) !== 0 && loopEnd - loopStart > 8,
+        loopRegion: region,
       };
     }).filter(Boolean);
 
@@ -216,6 +237,8 @@
         this.soundFonts.set(key, parsed);
         return parsed;
       } catch {
+        // Missing percussion must not silently turn into the initial melodic preset.
+        if (safeBank === 128) return null;
         return this.soundFont;
       }
     }
@@ -228,24 +251,29 @@
     }
 
     findZone(midi, velocity, program = this.presetNumber, bank = this.bankNumber) {
-      const soundFont = this.getSoundFont(program, bank);
+      const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
+      const soundFont = this.getSoundFont(program, safeBank);
       if (!soundFont) return null;
-      const cacheKey = `${soundFont.bank}:${soundFont.preset}:${Math.round(midi)}:${Math.floor(clamp(velocity, 0, 127) / 16)}`;
+      const cacheKey = `${safeBank}:${soundFont.bank}:${soundFont.preset}:${Math.round(midi)}:${Math.floor(clamp(velocity, 0, 127) / 16)}`;
       if (this.zoneCache.has(cacheKey)) {
         return this.zoneCache.get(cacheKey);
       }
-      let matched = null;
-      for (const zone of soundFont.zones) {
-        if (
-          midi >= zone.keyRange.low &&
-          midi <= zone.keyRange.high &&
-          velocity >= zone.velocityRange.low &&
-          velocity <= zone.velocityRange.high
-        ) {
-          matched = zone;
-          break;
+
+      let matched = findExactZone(soundFont, midi, velocity);
+
+      if (safeBank === 128) {
+        // Percussion keys are discrete instruments. Never transpose/borrow the nearest
+        // key. If the selected drum kit lacks this key, use the same key from the
+        // bundled Standard Drum Kit (Bank 128 / Program 0).
+        if (!matched && Number(soundFont.preset) !== 0) {
+          const standardKit = this.getSoundFont(0, 128);
+          matched = findExactZone(standardKit, midi, velocity);
         }
+        this.zoneCache.set(cacheKey, matched);
+        return matched;
       }
+
+      // Melodic presets keep the existing nearest-zone fallback.
       if (!matched) {
         let bestDistance = Infinity;
         for (const zone of soundFont.zones) {
@@ -339,6 +367,8 @@
         : 1;
       const zone = this.findZone(midi, velocity, program, bank);
       if (!zone) {
+        // A missing drum key should stay silent rather than become a pitched synth.
+        if (clamp(Math.round(Number(bank) || 0), 0, 16383) === 128) return null;
         return this.createFallbackVoice(midi, velocity, when, duration, safeGainScale);
       }
 
@@ -357,9 +387,13 @@
       source.buffer = buffer;
       source.playbackRate.value = 2 ** (centsFromRoot / 1200);
       if (zone.loop) {
-        source.loop = true;
-        source.loopStart = Math.max(0, (zone.loopStart - zone.start) / zone.sampleRate);
-        source.loopEnd = Math.max(source.loopStart + 0.001, (zone.loopEnd - zone.start) / zone.sampleRate);
+        const resolvedLoop = window.MabiSoundBank?.resolveLoopFrames?.(zone.sample, zone.loopRegion, buffer);
+        if (resolvedLoop && resolvedLoop.endFrame > resolvedLoop.startFrame + 1) {
+          source.loop = true;
+          const loopRate = Math.max(8000, Number(buffer.sampleRate || zone.sampleRate) || 44100);
+          source.loopStart = resolvedLoop.startFrame / loopRate;
+          source.loopEnd = Math.max(source.loopStart + 0.001, resolvedLoop.endFrame / loopRate);
+        }
       }
 
       gain.gain.setValueAtTime(0.0001, when);
@@ -400,12 +434,18 @@
         cancel: (time = context.currentTime) => {
           if (voice.ended) return;
           const stopAt = Math.max(context.currentTime, time);
+          const fadeEnd = stopAt + 0.012;
           voice.releaseAt = Math.min(voice.releaseAt, stopAt);
           try {
-            gain.gain.cancelScheduledValues(stopAt);
-            gain.gain.setValueAtTime(0.0001, stopAt);
+            if (typeof gain.gain.cancelAndHoldAtTime === "function") {
+              gain.gain.cancelAndHoldAtTime(stopAt);
+            } else {
+              gain.gain.cancelScheduledValues(stopAt);
+              gain.gain.setValueAtTime(Math.max(0.0001, gain.gain.value || peak), stopAt);
+            }
+            gain.gain.linearRampToValueAtTime(0.0001, fadeEnd);
           } catch {}
-          try { source.stop(stopAt); } catch {}
+          try { source.stop(fadeEnd + 0.004); } catch {}
         },
       };
 
@@ -538,7 +578,7 @@
   }
 
   const editorSoundBankApi = Object.freeze({
-    version: "5.0.0",
+    version: "5.0.1",
     parse(source, options = {}) {
       const shared = window.MabiSoundBank;
       if (source && typeof source.arrayBuffer === "function") return shared?.parseSoundBankFile?.(source, options);

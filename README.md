@@ -1,6 +1,6 @@
 # 모비바드 v5.0
 
-마지막 갱신: 2026-08-19 21:53:00 KST
+마지막 갱신: 2026-08-20 00:34:00 KST
 
 모비바드는 브라우저에서 실행되는 음악 파일 변환·MML 생성·피아노롤 편집·리듬게임 도구 모음입니다. 이 문서는 저장소 전체에 공통 적용된 구조와 이번 갱신에서 영향을 받은 프로젝트만 요약합니다. 각 제품의 현재 구현 상태는 해당 폴더의 `README.md`를 기준으로 확인합니다.
 
@@ -9,8 +9,8 @@
 - 루트 `plugins/`에는 여러 제품이 공유하는 코드만 남겼습니다. 제품 전용 연결부는 각 제품의 `js/` 폴더로 이동했습니다.
 - 공용 기능은 `common`, 파일·음원 규격 처리는 `formats`, Google·Firebase 연동은 `google`로 구분했습니다.
 - `.mid`, `.midi`, `.kar`는 하나의 공용 MIDI 포맷으로 처리하며 KAR의 가사·텍스트 메타 이벤트도 공용 MIDI 파서 결과에 보존합니다.
-- PlayStation 계열은 PS1 `.seq`·`.sep`, PS2 `.sq`·`.bq`와 PSF1/PSF2 xSF 컨테이너를 공용 MIDI로 정규화합니다. PSF 컨테이너는 압축 프로그램/가상 파일시스템을 해제한 뒤 내부의 표준 MIDI·Sony SEQ·PS2 SQ를 탐색합니다. MiniPSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다.
-- Nintendo 계열은 DS `.sseq`·`.ssar`·`.sdat`, Wii `.brseq`·`.rseq`·`.brsar`, 3DS `.bcseq`·`.cseq`·`.bcsar`, Wii U/Switch `.bfseq`·`.fseq`·`.bfsar`와 DS xSF `.2sf`·`.ncsf` 계열을 처리합니다. Sound Archive는 첫 시퀀스를 가져오고, NCSF/2SF는 컨테이너 안에서 복원 가능한 SDAT/SSEQ 계열 데이터를 찾아 MIDI로 변환합니다.
+- PlayStation 계열은 PS1 `.seq`·`.sep`, PS2 `.sq`·`.bq`와 PSF1/PSF2 xSF 컨테이너를 공용 MIDI로 정규화합니다. Sony SEQ/SQ의 전용 Bank Select는 별도 VAB/HD/BD 음색 파일 없이도 GM SoundFont에서 재생되도록 Bank 0으로 정규화하고, 채널 10의 비표준 타악기 Key는 GM 타악기 영역으로 재배치합니다. PSF 컨테이너는 내부의 표준 MIDI·Sony SEQ·PS2 SQ·SquareSoft AKAO v2를 탐색하며, AKAO v2의 12개 드럼 슬롯도 GM 타악기로 변환합니다. 이미 표준 MIDI로 내장된 데이터는 원래 Bank/Program을 보존합니다. MiniPSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다.
+- Nintendo 계열은 DS `.sseq`·`.ssar`·`.sdat`, Wii `.brseq`·`.rseq`·`.brsar`, 3DS `.bcseq`·`.cseq`·`.bcsar`, Wii U/Switch `.bfseq`·`.fseq`·`.bfsar`와 DS xSF `.2sf`·`.ncsf` 계열을 처리합니다. SDAT은 INFO의 SSEQ↔SBNK 연결을 따라가 Drumset을 GM 타악기로, PSG Wave를 GM Square Lead로, PSG Noise를 GM 타악기로 정규화합니다. 별도 악기 Bank를 얻을 수 없는 독립 SSEQ/NintendoWare 시퀀스는 원본 Program 번호를 GM Bank 0의 안정적인 대체 음색으로 사용하며 의미를 임의 추측하지 않습니다. NCSF/2SF도 복원 가능한 SDAT/SSEQ에 같은 규칙을 적용합니다.
 - Classic Mac의 MacBinary 컨테이너 처리를 공용 유틸리티로 통합했습니다. 옛 바이너리 연주 파일과 SF2·SF3·DLS에서 Data Fork·Resource Fork 및 MacBinary II 보조 헤더를 공통으로 판별합니다.
 - 공용 변환 진입점뿐 아니라 MIDI/KAR, Finale MUS, Guitar Pro 3/5, VSQ, SF2/SF3/DLS의 직접 파서 API도 동일한 Classic Mac 전처리를 사용합니다.
 - `.bin`·`.macbin` 선택을 허용하며, 확장자가 없는 Classic Mac 파일은 MacBinary 내부 파일명과 MIDI·Finale MUS·Guitar Pro 바이너리 시그니처를 사용해 실제 형식을 찾습니다.
@@ -56,4 +56,4 @@ plugins/
 - 제품 README에는 누적 변경 이력이나 제품 버전 번호를 남기지 않습니다.
 - 매 수정마다 버전을 올리지 않으므로 각 README의 마지막 갱신 시각으로 수정 전후를 구분합니다.
 
-- 콘솔 가져오기는 PlayStation SEQ/SEP·PS2 SQ/BQ와 PSF1/PSF2의 지원 가능한 내장 MIDI/SEQ/SQ, Nintendo SSEQ/SDAT·NintendoWare 시퀀스와 NCSF/2SF의 내장 SDAT/SSEQ를 공용 MIDI로 정규화합니다. Mini xSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다.
+- 콘솔 가져오기는 PlayStation SEQ/SEP·PS2 SQ/BQ와 PSF1/PSF2의 지원 가능한 내장 MIDI/SEQ/SQ/AKAO v2, Nintendo SSEQ/SDAT·NintendoWare 시퀀스와 NCSF/2SF의 내장 SDAT/SSEQ를 공용 MIDI로 정규화합니다. 전용 콘솔 Bank/드럼 번호는 가능한 범위에서 GM Bank 0 및 GM percussion으로 재배치하여 일반 SoundFont에서 바로 미리듣기 가능하게 하며, 포맷만으로 악기 의미를 알 수 없는 경우에는 거짓 악기 분류 대신 안정적인 GM Program proxy를 사용합니다. Mini xSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다.

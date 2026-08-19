@@ -37,6 +37,19 @@
     return null;
   }
 
+  function findAkaoSequence(bytes) {
+    const akao = root.MabiAkaoSequence;
+    if (!akao?.parse) return null;
+    let cursor = 0;
+    while (cursor + 0x20 <= bytes.length) {
+      const at = xsf.findAscii(bytes, "AKAO", cursor);
+      if (at < 0) return null;
+      try { return akao.parse(bytes, at); } catch (_) {}
+      cursor = at + 4;
+    }
+    return null;
+  }
+
   function findPs2Sequence(bytes) {
     let cursor = 0;
     while (cursor + 0x44 <= bytes.length) {
@@ -54,6 +67,8 @@
       if (midi) return { midiBytes: midi, metadata: { containerEntry: item.name, embeddedFormat: "MIDI" } };
       const seq = findPs1Sequence(item.bytes);
       if (seq) return { ...seq, metadata: { ...(seq.metadata || {}), containerEntry: item.name, embeddedFormat: seq.metadata?.variant || "SEQ" } };
+      const akao = findAkaoSequence(item.bytes);
+      if (akao) return { ...akao, metadata: { ...(akao.metadata || {}), containerEntry: item.name, embeddedFormat: akao.metadata?.variant || "AKAO" } };
       const sq = findPs2Sequence(item.bytes);
       if (sq) return { ...sq, metadata: { ...(sq.metadata || {}), containerEntry: item.name, embeddedFormat: "PS2 SQ" } };
     }
@@ -84,7 +99,7 @@
     if (libraries.length) {
       throw new Error(`${fileName}은(는) ${libraries.join(", ")} 라이브러리에 의존합니다. 현재 파일 안에서 직접 변환 가능한 시퀀스를 찾지 못했습니다.`);
     }
-    throw new Error("PSF/PSF2에서 현재 지원하는 Sony SEQ/SQ 또는 MIDI 시퀀스를 찾지 못했습니다. 게임 고유 음악 드라이버 형식일 수 있습니다.");
+    throw new Error("PSF/PSF2에서 현재 지원하는 MIDI, Sony SEQ/SQ 또는 SquareSoft AKAO v2 시퀀스를 찾지 못했습니다. 게임 고유 음악 드라이버 형식일 수 있습니다.");
   }
 
   function scanNintendoBuffers(buffers) {
@@ -134,8 +149,8 @@
     label: "PlayStation PSF",
     category: "console",
     extensions: ["psf", "psf1", "minipsf", "minipsf1", "psflib", "psf1lib", "psf2", "minipsf2", "psf2lib"],
-    description: "PSF/PSF2 컨테이너를 해제하고 내부의 지원 가능한 Sony SEQ/SQ/MIDI 시퀀스를 찾아 변환",
-    limitation: "MiniPSF 계열은 외부 라이브러리가 필요한 경우 단독 파일만으로 변환할 수 없으며, 게임 고유 드라이버는 추가 엔진 지원이 필요할 수 있습니다.",
+    description: "PSF/PSF2를 해제해 내장 MIDI·Sony SEQ/SQ·SquareSoft AKAO v2를 찾고, 콘솔 전용 악기/드럼 번호는 GM 재생에 맞게 정규화",
+    limitation: "MiniPSF 계열은 외부 라이브러리가 필요한 경우 단독 파일만으로 변환할 수 없습니다. AKAO v2의 12개 드럼 슬롯은 GM 타악기로 재배치하며 일반/키분할 악기는 GM Bank 0 대체 Program으로 정규화합니다. 이미 표준 MIDI로 내장된 데이터는 원래 Bank/Program을 보존합니다. 다른 게임 고유 드라이버/AKAO 버전은 추가 지원이 필요할 수 있습니다.",
     detect(bytes) { return detectXsfVersion(bytes, [0x01, 0x02]); },
     convert: convertPlayStationXsf,
   });
@@ -145,8 +160,8 @@
     label: "Nintendo xSF",
     category: "console",
     extensions: ["ncsf", "minincsf", "ncsflib", "2sf", "mini2sf", "2sflib"],
-    description: "Nintendo DS 계열 xSF를 해제하고 내장 SDAT/SSEQ 시퀀스를 MIDI로 변환",
-    limitation: "Mini/2SF가 외부 라이브러리 또는 ROM 패치만 포함하는 경우 단독 파일만으로는 복원할 수 없습니다.",
+    description: "Nintendo DS 계열 xSF를 해제해 내장 SDAT/SSEQ를 MIDI로 변환하고, SBNK 악기 타입을 확인할 수 있으면 GM 악기/타악기로 정규화",
+    limitation: "Mini/2SF가 외부 라이브러리 또는 ROM 패치만 포함하는 경우 단독 파일만으로는 복원할 수 없습니다. SBNK가 함께 복원되지 않는 경우에는 악기 의미를 추측하지 않고 Program 번호를 GM Bank 0 대체 음색으로 사용합니다.",
     detect(bytes) {
       if (!bytes?.length || bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x53 || bytes[2] !== 0x46) return false;
       // NCSF/2SF use PSF-derived version codes outside PS1/PS2. Extension matching remains the primary discriminator.

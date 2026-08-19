@@ -98,7 +98,7 @@
   });
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths } = window.MabiMml;
   const { optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
-  const { parseSoundBank, loadEmbeddedSoundBank, prepareNotes, schedulePreparedNotes } = window.MabiSoundBank;
+  const { parseSoundBank, loadEmbeddedSoundBank, prepareNotes, prepareDrumNotes, schedulePreparedNotes } = window.MabiSoundBank;
 
   const $ = (id) => document.getElementById(id);
 
@@ -5542,14 +5542,26 @@
       const prepared = [];
       const byPreset = new Map();
       for (const note of preview.notes) {
-        const preset = findPreviewPreset(note);
-        if (!preset) continue;
-        const key = `${preset.bank}:${preset.preset}:${note.isBeat ? 1 : 0}`;
-        if (!byPreset.has(key)) byPreset.set(key, { preset, notes: [] });
+        const resolved = resolvePreviewPreset(note);
+        if (!resolved?.preset || !resolved?.soundBank) continue;
+        const sourceTag = resolved.soundBank === soundFont ? "selected" : "default";
+        const key = `${sourceTag}:${resolved.preset.bank}:${resolved.preset.preset}:${note.isBeat ? 1 : 0}`;
+        if (!byPreset.has(key)) byPreset.set(key, { ...resolved, notes: [] });
         byPreset.get(key).notes.push(note);
       }
       for (const item of byPreset.values()) {
-        prepared.push(...prepareNotes(ctx, soundFont, item.preset, item.notes));
+        if (item.isDrum) {
+          prepared.push(...prepareDrumNotes(
+            ctx,
+            item.soundBank,
+            item.preset,
+            item.notes,
+            item.fallbackSoundBank,
+            item.fallbackPreset
+          ));
+        } else {
+          prepared.push(...prepareNotes(ctx, item.soundBank, item.preset, item.notes));
+        }
       }
       prepared.sort((a, b) => a.start - b.start || a.midi - b.midi || a.id - b.id);
       if (!prepared.length) throw new Error(i18nText("midi.preview_sound_missing", [sourceLabel]));
@@ -5610,9 +5622,18 @@
       await loadDefaultSf2IfNeeded();
       const preview = buildMidiInstrumentPreview(pendingMidiImport.bytes, groupId, { maxSeconds: 8, tailSeconds: 0.75 });
       const ctx = await ensureAudioContext();
-      const preset = findPreviewPreset(preview);
-      if (!preset) throw new Error(i18nText("snd.find_sf2_preset"));
-      const prepared = prepareNotes(ctx, soundFont, preset, preview.notes);
+      const resolved = resolvePreviewPreset(preview);
+      if (!resolved?.preset || !resolved?.soundBank) throw new Error(i18nText("snd.find_sf2_preset"));
+      const prepared = resolved.isDrum
+        ? prepareDrumNotes(
+            ctx,
+            resolved.soundBank,
+            resolved.preset,
+            preview.notes,
+            resolved.fallbackSoundBank,
+            resolved.fallbackPreset
+          )
+        : prepareNotes(ctx, resolved.soundBank, resolved.preset, preview.notes);
       if (!prepared.length) throw new Error(i18nText("snd.find_preview_sf2"));
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: preview.duration });
       const result = schedulePreparedNotes(ctx, prepared, {
@@ -5640,27 +5661,74 @@
     }
   }
 
-  function findMidiBankPreset(bankMsb, bankLsb, program, options = {}) {
-    if (!soundFont || !Array.isArray(soundFont.presets)) return null;
+  function resolveMidiBankPreset(bankMsb, bankLsb, program, options = {}) {
+    const selectedPresets = Array.isArray(soundFont?.presets) ? soundFont.presets : [];
+    const originalPresets = Array.isArray(defaultSoundFont?.presets) ? defaultSoundFont.presets : [];
     const msb = clampInt(Number(bankMsb) || 0, 0, 127);
     const lsb = clampInt(Number(bankLsb) || 0, 0, 127);
     const presetNumber = clampInt(Number(program) || 0, 0, 127);
-    const exactBanks = options.preferDrum ? [128, msb * 128 + lsb, lsb, msb] : [msb * 128 + lsb, lsb, msb];
-    for (const bank of [...new Set(exactBanks)]) {
-      const preset = soundFont.presets.find(p => p.bank === bank && p.preset === presetNumber);
-      if (preset) return preset;
+    const preferDrum = Boolean(options.preferDrum);
+
+    if (preferDrum) {
+      // Percussion fallback is intentionally isolated from melodic Bank 0.
+      // 1) selected SoundBank: requested drum kit
+      // 2) bundled SoundBank: same drum kit
+      // 3) bundled SoundBank: Standard Drum Kit (Bank 128 / Program 0)
+      const selectedKit = selectedPresets.find(p => Number(p.bank) === 128 && Number(p.preset) === presetNumber) || null;
+      const originalSameKit = originalPresets.find(p => Number(p.bank) === 128 && Number(p.preset) === presetNumber) || null;
+      const originalStandardKit = originalPresets.find(p => Number(p.bank) === 128 && Number(p.preset) === 0) || null;
+
+      if (selectedKit) {
+        return {
+          soundBank: soundFont,
+          preset: selectedKit,
+          isDrum: true,
+          fallbackSoundBank: defaultSoundFont || null,
+          fallbackPreset: originalStandardKit
+        };
+      }
+      if (originalSameKit) {
+        return {
+          soundBank: defaultSoundFont,
+          preset: originalSameKit,
+          isDrum: true,
+          fallbackSoundBank: defaultSoundFont,
+          fallbackPreset: originalStandardKit
+        };
+      }
+      if (originalStandardKit) {
+        return {
+          soundBank: defaultSoundFont,
+          preset: originalStandardKit,
+          isDrum: true,
+          fallbackSoundBank: defaultSoundFont,
+          fallbackPreset: originalStandardKit
+        };
+      }
+      return null;
     }
-    // Requested instrument is unavailable in the selected SF/SF3/DLS:
-    // use the bundled original sound bank's Bank 0 with the same program,
-    // then Bank 0 / Program 0 as the last audible fallback.
-    const originalPresets = Array.isArray(defaultSoundFont?.presets) ? defaultSoundFont.presets : [];
-    return originalPresets.find(p => p.bank === 0 && p.preset === presetNumber)
-      || originalPresets.find(p => p.bank === 0 && p.preset === 0)
+
+    const exactBanks = [msb * 128 + lsb, lsb, msb];
+    for (const bank of [...new Set(exactBanks)]) {
+      const preset = selectedPresets.find(p => Number(p.bank) === bank && Number(p.preset) === presetNumber);
+      if (preset) return { soundBank: soundFont, preset, isDrum: false, fallbackSoundBank: null, fallbackPreset: null };
+    }
+
+    // Melodic behavior is unchanged: bundled Bank 0 / same program, then Piano.
+    const originalPreset = originalPresets.find(p => Number(p.bank) === 0 && Number(p.preset) === presetNumber)
+      || originalPresets.find(p => Number(p.bank) === 0 && Number(p.preset) === 0)
       || null;
+    return originalPreset
+      ? { soundBank: soundFont, preset: originalPreset, isDrum: false, fallbackSoundBank: null, fallbackPreset: null }
+      : null;
   }
 
-  function findPreviewPreset(preview) {
-    return findMidiBankPreset(
+  function findMidiBankPreset(bankMsb, bankLsb, program, options = {}) {
+    return resolveMidiBankPreset(bankMsb, bankLsb, program, options)?.preset || null;
+  }
+
+  function resolvePreviewPreset(preview) {
+    return resolveMidiBankPreset(
       preview?.bankMsb,
       preview?.bankLsb,
       preview?.program,
@@ -5668,16 +5736,29 @@
     );
   }
 
+  function findPreviewPreset(preview) {
+    return resolvePreviewPreset(preview)?.preset || null;
+  }
+
   function stopMidiPreview() {
     if (midiPreviewTimer) {
       clearTimeout(midiPreviewTimer);
       midiPreviewTimer = 0;
     }
+    const previewStopAt = audioCtx?.currentTime || 0;
     for (const item of midiPreviewSources) {
-      try { item.gain?.gain?.cancelScheduledValues(audioCtx?.currentTime || 0); } catch {}
-      try { item.source?.stop(); } catch {}
-      try { item.source?.disconnect(); } catch {}
-      try { item.gain?.disconnect(); } catch {}
+      const gainParam = item?.gain?.gain;
+      if (audioCtx && gainParam) {
+        const fadeEnd = previewStopAt + 0.012;
+        try {
+          if (typeof gainParam.cancelAndHoldAtTime === "function") gainParam.cancelAndHoldAtTime(previewStopAt);
+          else gainParam.cancelScheduledValues(previewStopAt);
+          gainParam.linearRampToValueAtTime(0.0001, fadeEnd);
+        } catch {}
+        try { item.source?.stop(fadeEnd + 0.004); } catch {}
+      } else {
+        try { item.source?.stop(); } catch {}
+      }
     }
     midiPreviewSources = [];
     if ((midiFullPreviewActive || midiSelectedPreviewActive || midiChannelPreviewButton) && midiConvertStatus) midiConvertStatus.hidden = true;
@@ -6457,9 +6538,20 @@
     if (rafId) cancelAnimationFrame(rafId);
     rafId = 0;
     if (audioCtx && isPlaying && updateOffset) currentOffset = getCurrentPlaybackOffset();
+    const stopAt = audioCtx?.currentTime || 0;
     for (const item of activeSources) {
-      try { item.gain.gain.cancelScheduledValues(audioCtx?.currentTime || 0); } catch {}
-      try { item.source.stop(); } catch {}
+      const gainParam = item?.gain?.gain;
+      if (audioCtx && gainParam) {
+        const fadeEnd = stopAt + 0.012;
+        try {
+          if (typeof gainParam.cancelAndHoldAtTime === "function") gainParam.cancelAndHoldAtTime(stopAt);
+          else gainParam.cancelScheduledValues(stopAt);
+          gainParam.linearRampToValueAtTime(0.0001, fadeEnd);
+        } catch {}
+        try { item.source.stop(fadeEnd + 0.004); } catch {}
+      } else {
+        try { item.source.stop(); } catch {}
+      }
     }
     activeSources = [];
     scheduledNoteIds = new Set();

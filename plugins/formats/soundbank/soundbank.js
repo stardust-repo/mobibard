@@ -4,7 +4,7 @@
   const utils = window.MabiUtils;
   if (!utils) throw new Error("utils.js must be loaded before soundbank.js");
 
-  const VERSION = "5.0.0";
+  const VERSION = "5.1.0";
   const SUPPORTED_EXTENSIONS = Object.freeze(["sf2", "sf3", "dls"]);
   const FALLBACK_MESSAGES = Object.freeze({
     "sound.err_header": "지원하지 않는 SoundBank 파일입니다. SF2, SF3 또는 DLS 파일을 사용하세요.",
@@ -114,6 +114,16 @@
     if (!presets.length) return null;
     const safeProgram = Math.max(0, Math.min(127, Math.round(Number(program) || 0)));
     const safeBank = Math.max(0, Math.min(16383, Math.round(Number(bankNumber) || 0)));
+
+    // SF2/DLS percussion uses bank 128. Never let a missing drum kit fall through
+    // to melodic Bank 0 (usually Piano). A missing requested kit may use the
+    // Standard Drum Kit in the same SoundBank, but it must remain percussion.
+    if (safeBank === 128) {
+      return presets.find(preset => Number(preset?.preset) === safeProgram && Number(preset?.bank) === 128)
+        || presets.find(preset => Number(preset?.preset) === 0 && Number(preset?.bank) === 128)
+        || null;
+    }
+
     return presets.find(preset => Number(preset?.preset) === safeProgram && Number(preset?.bank) === safeBank)
       || presets.find(preset => Number(preset?.preset) === safeProgram && Number(preset?.bank) === 0)
       || presets.find(preset => Number(preset?.preset) === safeProgram)
@@ -726,37 +736,171 @@
     return s;
   }
 
+  function getRegionLoopOffset(region, fineKey, coarseKey) {
+    const fine = Number(region?.[fineKey]) || 0;
+    const coarse = Number(region?.[coarseKey]) || 0;
+    return Math.trunc(fine) + Math.trunc(coarse) * 32768;
+  }
+
+  // WebAudio jumps directly from loopEnd to loopStart. Lossy SF3 decoding can
+  // slightly change the decoded frame count/waveform, so blindly clamping the
+  // declared loop to the buffer end may create an audible click on every wrap.
+  // Resolve the effective SoundFont generator offsets first, then search a very
+  // small neighbourhood for a phase-compatible boundary when the raw jump is
+  // discontinuous. The search is cached per sample/region combination.
+  function resolveLoopFrames(sample, region, buffer) {
+    if (!sample || !buffer || typeof buffer.getChannelData !== "function") return null;
+    const sampleModes = Number(region?.sampleModes ?? sample.sampleModes ?? 0) || 0;
+    if ((sampleModes & 1) === 0) return null;
+
+    const frameLength = Math.max(0, Math.trunc(Number(buffer.length) || 0));
+    if (frameLength < 16) return null;
+
+    const startOffset = getRegionLoopOffset(region, "startLoopOffset", "startLoopCoarseOffset");
+    const endOffset = getRegionLoopOffset(region, "endLoopOffset", "endLoopCoarseOffset");
+    const declaredStart = Math.trunc(Number(sample.loopStartFrame) || 0) + startOffset;
+    const declaredEnd = Math.trunc(Number(sample.loopEndFrame) || 0) + endOffset;
+    if (!(declaredEnd > declaredStart + 8)) return null;
+
+    const cacheOwner = region || sample;
+    const cacheKey = `${sample.cacheKey || sample.name || "sample"}:${frameLength}:${declaredStart}:${declaredEnd}`;
+    if (cacheOwner?._mobibardLoopCache?.key === cacheKey) {
+      return cacheOwner._mobibardLoopCache.value;
+    }
+
+    // Preserve the intended loop length when an SF3 decoder returns a slightly
+    // shorter tail than the original PCM. This is preferable to chopping only
+    // loopEnd, which can turn a smooth loop into a tiny discontinuous fragment.
+    const overflow = Math.max(0, declaredEnd - frameLength);
+    let startFrame = declaredStart - overflow;
+    let endFrame = declaredEnd - overflow;
+    startFrame = Math.max(0, Math.min(frameLength - 2, startFrame));
+    endFrame = Math.max(startFrame + 2, Math.min(frameLength, endFrame));
+    if (endFrame - startFrame < 12) return null;
+
+    let channel;
+    try {
+      channel = buffer.getChannelData(0);
+    } catch {
+      channel = null;
+    }
+    if (!channel?.length) {
+      const value = { startFrame, endFrame, adjusted: overflow > 0 };
+      try { cacheOwner._mobibardLoopCache = { key: cacheKey, value }; } catch {}
+      return value;
+    }
+
+    const boundaryScore = (start, end) => {
+      if (start < 1 || end < start + 3 || end > channel.length) return Infinity;
+      const startValue = Number(channel[start]) || 0;
+      const endValue = Number(channel[end - 1]) || 0;
+      const startSlope = ((Number(channel[start + 1]) || 0) - (Number(channel[start - 1]) || 0)) * 0.5;
+      const endSlope = (Number(channel[end - 1]) || 0) - (Number(channel[end - 2]) || 0);
+      return Math.abs(endValue - startValue) + Math.abs(endSlope - startSlope) * 0.35;
+    };
+
+    const initialScore = boundaryScore(startFrame, endFrame);
+    const searchNeeded = Number.isFinite(initialScore) && initialScore > 0.008;
+    let bestScore = initialScore;
+    let bestStart = startFrame;
+    let bestEnd = endFrame;
+
+    if (searchNeeded) {
+      const sampleRate = Math.max(8000, Number(buffer.sampleRate || sample.decodedSampleRate || sample.sampleRate) || 44100);
+      const searchRadius = Math.max(48, Math.min(192, Math.round(sampleRate * 0.004)));
+      const originalLength = Math.max(12, endFrame - startFrame);
+      const minimumLength = Math.max(12, Math.floor(originalLength * 0.5));
+      const startLow = Math.max(1, startFrame - searchRadius);
+      const startHigh = Math.min(frameLength - 3, startFrame + searchRadius);
+      const endLow = Math.max(3, endFrame - searchRadius);
+      const endHigh = Math.min(frameLength, endFrame + searchRadius);
+      const shiftPenaltyScale = 0.0005 / Math.max(1, searchRadius);
+
+      for (let start = startLow; start <= startHigh; start += 1) {
+        const firstEnd = Math.max(endLow, start + minimumLength);
+        for (let end = firstEnd; end <= endHigh; end += 1) {
+          const rawScore = boundaryScore(start, end);
+          if (!Number.isFinite(rawScore)) continue;
+          const shiftPenalty = (Math.abs(start - startFrame) + Math.abs(end - endFrame)) * shiftPenaltyScale;
+          const lengthPenalty = Math.abs((end - start) - originalLength) / originalLength * 0.00025;
+          const score = rawScore + shiftPenalty + lengthPenalty;
+          if (score < bestScore) {
+            bestScore = score;
+            bestStart = start;
+            bestEnd = end;
+          }
+        }
+      }
+    }
+
+    const value = {
+      startFrame: bestStart,
+      endFrame: bestEnd,
+      adjusted: overflow > 0 || bestStart !== startFrame || bestEnd !== endFrame,
+      discontinuityBefore: Number.isFinite(initialScore) ? initialScore : 0,
+      discontinuityAfter: Number.isFinite(bestScore) ? bestScore : 0,
+    };
+    try { cacheOwner._mobibardLoopCache = { key: cacheKey, value }; } catch {}
+    return value;
+  }
+
+  function prepareNote(ctx, sf, preset, note, fallbackId = 0) {
+    const n = note;
+    if (!sf || !preset || !Array.isArray(preset.regions) || !n || n.midi == null) return null;
+    if ((n.volume || 0) <= 0) return null;
+    if (!Number.isFinite(n.start) || !Number.isFinite(n.durationSec) || n.durationSec <= 0) return null;
+
+    const velocity = Math.max(1, Math.round(n.volume / 15 * 127));
+    const region = selectRegion(preset.regions, n.midi, velocity);
+    if (!region) return null;
+
+    const sample = region.sample;
+    const buffer = sf.getBufferForSample(ctx, sample);
+    const root = region.overridingRootKey ?? sample.originalPitch ?? 60;
+    const cents = (n.midi - root + (region.coarseTune || 0)) * 100 + (region.fineTune || 0) + (sample.pitchCorrection || 0);
+    const atten = Math.pow(10, -(region.initialAttenuation || 0) / 200);
+    const gainValue = Math.pow(Math.max(0, Math.min(1, n.volume / 15)), 1.6) * atten;
+
+    return {
+      ...n,
+      id: n.id ?? fallbackId,
+      noteEnd: n.start + n.durationSec,
+      region,
+      sample,
+      buffer,
+      playbackRate: Math.pow(2, cents / 1200),
+      gainValue
+    };
+  }
+
   function prepareNotes(ctx, sf, preset, notes) {
     const prepared = [];
     if (!preset || !Array.isArray(preset.regions)) return prepared;
 
     for (let i = 0; i < notes.length; i++) {
-      const n = notes[i];
-      if (!n || n.midi == null) continue;
-      if ((n.volume || 0) <= 0) continue;
-      if (!Number.isFinite(n.start) || !Number.isFinite(n.durationSec) || n.durationSec <= 0) continue;
+      const item = prepareNote(ctx, sf, preset, notes[i], i);
+      if (item) prepared.push(item);
+    }
 
-      const velocity = Math.max(1, Math.round(n.volume / 15 * 127));
-      const region = selectRegion(preset.regions, n.midi, velocity);
-      if (!region) continue;
+    prepared.sort((a, b) => a.start - b.start || a.part - b.part || a.id - b.id);
+    return prepared;
+  }
 
-      const sample = region.sample;
-      const buffer = sf.getBufferForSample(ctx, sample);
-      const root = region.overridingRootKey ?? sample.originalPitch ?? 60;
-      const cents = (n.midi - root + (region.coarseTune || 0)) * 100 + (region.fineTune || 0) + (sample.pitchCorrection || 0);
-      const atten = Math.pow(10, -(region.initialAttenuation || 0) / 200);
-      const gainValue = Math.pow(Math.max(0, Math.min(1, n.volume / 15)), 1.6) * atten;
+  // Drum-only note fallback. The selected/custom kit gets the first chance for
+  // each MIDI key. If that key has no matching region, only that note is read
+  // from the bundled Standard Drum Kit. This deliberately does not substitute
+  // a neighbouring drum key or a melodic preset.
+  function prepareDrumNotes(ctx, primaryBank, primaryPreset, notes, fallbackBank = null, fallbackPreset = null) {
+    const prepared = [];
+    const sameSource = primaryBank === fallbackBank && primaryPreset === fallbackPreset;
+    const list = Array.isArray(notes) ? notes : [];
 
-      prepared.push({
-        ...n,
-        id: n.id ?? i,
-        noteEnd: n.start + n.durationSec,
-        region,
-        sample,
-        buffer,
-        playbackRate: Math.pow(2, cents / 1200),
-        gainValue
-      });
+    for (let i = 0; i < list.length; i++) {
+      let item = prepareNote(ctx, primaryBank, primaryPreset, list[i], i);
+      if (!item && !sameSource && fallbackBank && fallbackPreset) {
+        item = prepareNote(ctx, fallbackBank, fallbackPreset, list[i], i);
+      }
+      if (item) prepared.push(item);
     }
 
     prepared.sort((a, b) => a.start - b.start || a.part - b.part || a.id - b.id);
@@ -799,12 +943,12 @@
 
       const sample = n.sample;
       const region = n.region;
-      const loopStartFrame = Math.max(0, Number(sample.loopStartFrame) || 0);
-      const loopEndFrame = Math.min(Number(sample.frameLength) || n.buffer.length, Math.max(loopStartFrame, Number(sample.loopEndFrame) || 0));
-      if ((region.sampleModes & 1) && loopEndFrame > loopStartFrame + 1) {
+      const loop = resolveLoopFrames(sample, region, n.buffer);
+      if (loop && loop.endFrame > loop.startFrame + 1) {
         source.loop = true;
-        source.loopStart = loopStartFrame / sample.sampleRate;
-        source.loopEnd = Math.max(source.loopStart + 0.001, loopEndFrame / sample.sampleRate);
+        const loopRate = Math.max(8000, Number(n.buffer.sampleRate || sample.decodedSampleRate || sample.sampleRate) || 44100);
+        source.loopStart = loop.startFrame / loopRate;
+        source.loopEnd = Math.max(source.loopStart + 0.001, loop.endFrame / loopRate);
       }
 
       const gain = ctx.createGain();
@@ -919,10 +1063,14 @@
     const z = {};
     for (const g of gens) {
       switch (g.op) {
+        case 2: z.startLoopOffset = g.sAmount; break;
+        case 3: z.endLoopOffset = g.sAmount; break;
         case 41: z.instrument = g.amount; break;
         case 43: z.keyRange = [g.lo, g.hi]; break;
         case 44: z.velRange = [g.lo, g.hi]; break;
+        case 45: z.startLoopCoarseOffset = g.sAmount; break;
         case 48: z.initialAttenuation = g.amount; break;
+        case 50: z.endLoopCoarseOffset = g.sAmount; break;
         case 51: z.coarseTune = g.sAmount; break;
         case 52: z.fineTune = g.sAmount; break;
         case 53: z.sampleID = g.amount; break;
@@ -938,7 +1086,15 @@
     for (const o of objs) {
       if (!o) continue;
       for (const [k,v] of Object.entries(o)) {
-        if (k === "initialAttenuation" || k === "coarseTune" || k === "fineTune") r[k] = (r[k] || 0) + v;
+        if (
+          k === "initialAttenuation" ||
+          k === "coarseTune" ||
+          k === "fineTune" ||
+          k === "startLoopOffset" ||
+          k === "endLoopOffset" ||
+          k === "startLoopCoarseOffset" ||
+          k === "endLoopCoarseOffset"
+        ) r[k] = (r[k] || 0) + v;
         else r[k] = Array.isArray(v) ? [...v] : v;
       }
     }
@@ -969,7 +1125,9 @@
     parseSoundFont,
     parseDls,
     prepareNotes,
+    prepareDrumNotes,
     schedulePreparedNotes,
+    resolveLoopFrames,
   });
   window.MabiSoundBank = api;
   // Backward-compatible alias for integrations that used the previous Player API.

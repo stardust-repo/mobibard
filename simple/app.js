@@ -748,10 +748,20 @@
 
   function stopActiveSampleSources() {
     const sources = activeSampleSources.splice(0);
+    const now = audioCtx?.currentTime || 0;
     for (const item of sources) {
-      try { item?.source?.stop(); } catch (_) {}
-      try { item?.source?.disconnect(); } catch (_) {}
-      try { item?.gain?.disconnect(); } catch (_) {}
+      const gainParam = item?.gain?.gain;
+      if (audioCtx && gainParam) {
+        const fadeEnd = now + 0.012;
+        try {
+          if (typeof gainParam.cancelAndHoldAtTime === "function") gainParam.cancelAndHoldAtTime(now);
+          else gainParam.cancelScheduledValues(now);
+          gainParam.linearRampToValueAtTime(0.0001, fadeEnd);
+        } catch (_) {}
+        try { item?.source?.stop(fadeEnd + 0.004); } catch (_) {}
+      } else {
+        try { item?.source?.stop(); } catch (_) {}
+      }
     }
     scheduledPlaybackIds.clear();
   }

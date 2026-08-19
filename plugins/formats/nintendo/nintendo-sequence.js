@@ -3,7 +3,9 @@
 
   const root = typeof window !== "undefined" ? window : globalThis;
   const core = root.MabiMusicFormats;
+  const consoleGm = root.MabiConsoleGM;
   if (!core) throw new Error("music-format-core.js must be loaded before nintendo-sequence.js");
+  if (!consoleGm) throw new Error("console-gm-normalizer.js must be loaded before nintendo-sequence.js");
 
   const OUT_PPQ = 480;
   const MAX_STEPS = 300000;
@@ -74,27 +76,140 @@
     return { kind: "SSEQ", raw: bytes.subarray(start), little: true, source: "SSAR", sequenceCount: count };
   }
 
+  function sdatFatFile(bytes, fatOffset, count, fileId) {
+    if (!Number.isInteger(fileId) || fileId < 0 || fileId >= count) return null;
+    const rec = fatOffset + 12 + fileId * 16;
+    if (rec + 16 > bytes.length) return null;
+    const offset = u32(bytes, rec, true);
+    const size = u32(bytes, rec + 4, true);
+    if (!size || offset + size > bytes.length) return null;
+    return { fileId, offset, size, bytes: bytes.subarray(offset, offset + size) };
+  }
+
+  function parseSbnkProfile(bytes) {
+    if (!bytes || bytes.length < 0x3c || !asciiAt(bytes, 0, "SBNK")) return null;
+    const count = u32(bytes, 0x38, true);
+    if (!count || count > 4096 || 0x3c + count * 4 > bytes.length) return null;
+    const instruments = [];
+    let drumsetCount = 0;
+    let psgWaveCount = 0;
+    let psgNoiseCount = 0;
+    for (let index = 0; index < count; index++) {
+      const packed = u32(bytes, 0x3c + index * 4, true);
+      if (!packed) { instruments[index] = null; continue; }
+      const type = packed & 0xff;
+      const offset = packed >>> 8;
+      const profile = { type, offset };
+      if (type === 0x10 && offset + 2 <= bytes.length) {
+        profile.lowKey = bytes[offset] & 0x7f;
+        profile.highKey = bytes[offset + 1] & 0x7f;
+        if (profile.highKey < profile.lowKey) {
+          delete profile.lowKey;
+          delete profile.highKey;
+        }
+        drumsetCount++;
+      } else if (type === 0x02) {
+        if (offset < bytes.length) profile.dutyCycle = bytes[offset] & 0x07;
+        psgWaveCount++;
+      } else if (type === 0x03) {
+        psgNoiseCount++;
+      }
+      instruments[index] = profile;
+    }
+    return { instrumentCount: count, instruments, drumsetCount, psgWaveCount, psgNoiseCount };
+  }
+
+  function extractSdatAssociatedSseq(bytes, infoOffset, fatOffset, fatCount) {
+    if (infoOffset + 0x18 > bytes.length || !asciiAt(bytes, infoOffset, "INFO")) return null;
+    const seqListRel = u32(bytes, infoOffset + 0x08, true);
+    if (!seqListRel) return null;
+    const seqList = infoOffset + seqListRel;
+    if (seqList + 4 > bytes.length) return null;
+    const seqCount = u32(bytes, seqList, true);
+    if (!seqCount || seqCount > 65535 || seqList + 4 + seqCount * 4 > bytes.length) return null;
+
+    let bankList = -1;
+    let bankCount = 0;
+    if (infoOffset + 0x14 <= bytes.length) {
+      const bankListRel = u32(bytes, infoOffset + 0x10, true);
+      if (bankListRel) {
+        const candidate = infoOffset + bankListRel;
+        if (candidate + 4 <= bytes.length) {
+          const count = u32(bytes, candidate, true);
+          if (count <= 65535 && candidate + 4 + count * 4 <= bytes.length) {
+            bankList = candidate;
+            bankCount = count;
+          }
+        }
+      }
+    }
+
+    for (let seqIndex = 0; seqIndex < seqCount; seqIndex++) {
+      const seqInfoRel = u32(bytes, seqList + 4 + seqIndex * 4, true);
+      if (!seqInfoRel) continue;
+      const seqInfo = infoOffset + seqInfoRel;
+      if (seqInfo + 6 > bytes.length) continue;
+      const seqFileId = u16(bytes, seqInfo, true);
+      const bankId = u16(bytes, seqInfo + 4, true);
+      const seqFile = sdatFatFile(bytes, fatOffset, fatCount, seqFileId);
+      if (!seqFile || !asciiAt(seqFile.bytes, 0, "SSEQ")) continue;
+
+      let bankProfile = null;
+      let bankFileId = null;
+      if (bankList >= 0 && bankId < bankCount) {
+        const bankInfoRel = u32(bytes, bankList + 4 + bankId * 4, true);
+        if (bankInfoRel) {
+          const bankInfo = infoOffset + bankInfoRel;
+          if (bankInfo + 2 <= bytes.length) {
+            bankFileId = u16(bytes, bankInfo, true);
+            const bankFile = sdatFatFile(bytes, fatOffset, fatCount, bankFileId);
+            if (bankFile) bankProfile = parseSbnkProfile(bankFile.bytes);
+          }
+        }
+      }
+
+      const result = extractSseq(seqFile.bytes);
+      return {
+        ...result,
+        source: "SDAT/SSEQ",
+        archiveFileCount: fatCount,
+        archiveEntry: seqFileId,
+        archiveSequenceIndex: seqIndex,
+        archiveBankIndex: bankId,
+        archiveBankFileId: bankFileId,
+        bankProfile,
+      };
+    }
+    return null;
+  }
+
   function extractSdat(bytes) {
     if (bytes.length < 0x30 || !asciiAt(bytes, 0, "SDAT")) throw new Error("Nintendo DS SDAT 헤더를 찾지 못했습니다.");
+    const infoOffset = u32(bytes, 0x18, true);
     const fatOffset = u32(bytes, 0x20, true);
     if (fatOffset + 12 > bytes.length || !asciiAt(bytes, fatOffset, "FAT ")) {
       throw new Error("Nintendo DS SDAT FAT 블록을 찾지 못했습니다.");
     }
     const count = u32(bytes, fatOffset + 8, true);
+
+    // Prefer SDAT INFO associations so the selected SSEQ can bring along its
+    // matching SBNK instrument type table (sampled / PSG / drumset).
+    const associated = extractSdatAssociatedSseq(bytes, infoOffset, fatOffset, count);
+    if (associated) return associated;
+
+    // Compatibility fallback for malformed/minimal SDAT files: retain the old
+    // first-sequence scan even when INFO associations are unavailable.
     for (let i = 0; i < count; i++) {
-      const rec = fatOffset + 12 + i * 16;
-      if (rec + 16 > bytes.length) break;
-      const offset = u32(bytes, rec, true);
-      const size = u32(bytes, rec + 4, true);
-      if (!size || offset + size > bytes.length) continue;
-      const file = bytes.subarray(offset, offset + size);
+      const entry = sdatFatFile(bytes, fatOffset, count, i);
+      if (!entry) continue;
+      const file = entry.bytes;
       if (asciiAt(file, 0, "SSEQ")) {
         const result = extractSseq(file);
-        return { ...result, source: "SDAT/SSEQ", archiveFileCount: count, archiveEntry: i };
+        return { ...result, source: "SDAT/SSEQ", archiveFileCount: count, archiveEntry: i, bankProfile: null };
       }
       if (asciiAt(file, 0, "SSAR")) {
         const result = extractSsar(file);
-        return { ...result, source: "SDAT/SSAR", archiveFileCount: count, archiveEntry: i };
+        return { ...result, source: "SDAT/SSAR", archiveFileCount: count, archiveEntry: i, bankProfile: null };
       }
     }
     throw new Error("Nintendo DS SDAT에서 SSEQ/SSAR 시퀀스를 찾지 못했습니다.");
@@ -227,6 +342,7 @@
         timebase: 48,
         program: 0,
         bank: 0,
+        instrumentId: 0,
         transpose: 0,
         noteWait: kind === "RCF",
         callStack: [],
@@ -253,6 +369,7 @@
             velocity: Math.max(1, velocity),
             program: state.program,
             bank: state.bank,
+            instrumentId: state.instrumentId,
           });
           if (state.noteWait) state.tick += duration;
           continue;
@@ -264,6 +381,7 @@
         }
         if (cmd === 0x81) {
           const instrument = readVarint(raw, state);
+          state.instrumentId = instrument;
           state.program = instrument & 0x7f;
           state.bank = instrument >>> 7;
           continue;
@@ -396,20 +514,49 @@
     }
 
     const grouped = new Map();
+    let drumKeyRemappedCount = 0;
+    let drumTrackGroupCount = 0;
+    let psgProgramMappedCount = 0;
+    let proprietaryBankCollapsedCount = 0;
+    const profileInstruments = info.bankProfile?.instruments || [];
+
     for (const source of parsedTracks) {
       for (const note of source.notes) {
-        const key = `${source.trackIndex}:${note.bank}:${note.program}`;
+        const instrumentProfile = profileInstruments[note.instrumentId] || null;
+        const instrumentType = instrumentProfile?.type ?? null;
+        const isDrums = instrumentType === 0x10 || instrumentType === 0x03;
+        const normalizedProgram = consoleGm.nintendoProgram(note.program, instrumentType);
+        if (instrumentType === 0x02) psgProgramMappedCount++;
+        if (note.bank) proprietaryBankCollapsedCount++;
+
+        const key = `${source.trackIndex}:${note.instrumentId}:${isDrums ? "D" : normalizedProgram}`;
         let group = grouped.get(key);
         if (!group) {
+          let typeName = `Program ${note.program + 1}`;
+          if (instrumentType === 0x10) typeName = "Drumset";
+          else if (instrumentType === 0x02) typeName = "PSG Wave → GM Square Lead";
+          else if (instrumentType === 0x03) typeName = "PSG Noise → GM Percussion";
           group = {
-            name: `Nintendo Track ${source.trackIndex + 1} · ${note.bank ? `Bank ${note.bank} · ` : ""}Program ${note.program + 1}`,
-            program: note.program,
+            name: `Nintendo Track ${source.trackIndex + 1} · ${typeName}`,
+            program: normalizedProgram,
             channel: source.trackIndex % 16,
+            isDrums,
             notes: [],
           };
           grouped.set(key, group);
+          if (isDrums) drumTrackGroupCount++;
         }
-        group.notes.push(note);
+
+        let pitch = note.pitch;
+        if (instrumentType === 0x10) {
+          pitch = consoleGm.nintendoDrumKey(note.pitch, instrumentProfile);
+        } else if (instrumentType === 0x03) {
+          // The DS PSG noise generator has no melodic SoundFont equivalent.
+          // Spread pitch changes over a small useful percussion palette.
+          pitch = consoleGm.genericDrumKey(note.pitch, { forceSlot: true });
+        }
+        if (isDrums && pitch !== note.pitch) drumKeyRemappedCount++;
+        group.notes.push({ ...note, pitch });
       }
     }
 
@@ -443,6 +590,16 @@
         sequenceCount: info.sequenceCount || 1,
         archiveFileCount: info.archiveFileCount || undefined,
         archiveEntry: info.archiveEntry,
+        archiveSequenceIndex: info.archiveSequenceIndex,
+        archiveBankIndex: info.archiveBankIndex,
+        archiveBankFileId: info.archiveBankFileId,
+        bankProfileDetected: Boolean(info.bankProfile),
+        bankInstrumentCount: info.bankProfile?.instrumentCount,
+        gmNormalized: true,
+        drumTrackGroupCount,
+        drumKeyRemappedCount,
+        psgProgramMappedCount,
+        proprietaryBankCollapsedCount,
       },
     };
   }
@@ -460,5 +617,5 @@
     return parseRawSequence(extractNintendo(view, fileName));
   }
 
-  root.MabiNintendoSequence = Object.freeze({ detect, convert, extractNintendo, parseRawSequence });
+  root.MabiNintendoSequence = Object.freeze({ detect, convert, extractNintendo, parseRawSequence, parseSbnkProfile });
 })();
