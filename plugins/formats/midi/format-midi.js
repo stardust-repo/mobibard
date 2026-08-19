@@ -8,7 +8,7 @@
   core.registerFormat({
     id: "midi",
     label: "MIDI / KAR",
-    category: "basic",
+    category: "standard",
     extensions: ["mid", "midi", "kar"],
     mimeTypes: [
       "audio/midi",

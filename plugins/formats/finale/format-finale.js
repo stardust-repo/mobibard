@@ -7,7 +7,7 @@
   core.registerFormat({
     id: "finale-mus",
     label: "Finale MUS",
-    category: "basic",
+    category: "editor",
     extensions: ["mus"],
     description: "Finale·NotePad·PrintMusic 2001–2005 ENIGMA BINARY",
     limitation: "기본 음표·쉼표·박자·조표를 변환하며 고급 기보와 재생 효과는 단순화됩니다.",
@@ -23,7 +23,7 @@
   core.registerFormat({
     id: "finale-musx",
     label: "Finale MUSX",
-    category: "basic",
+    category: "editor",
     extensions: ["musx"],
     description: "Finale MUSX 압축 프로젝트의 score.dat EnigmaXML",
     limitation: "음표·쉼표·레이어·이음줄·박자·조표 중심으로 변환하며 아티큘레이션·표현·고급 재생 데이터는 단순화됩니다.",

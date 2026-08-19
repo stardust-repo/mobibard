@@ -5,7 +5,7 @@
   core.registerFormat({
     id: "musicxml",
     label: "MusicXML",
-    category: "basic",
+    category: "standard",
     extensions: ["musicxml", "xml", "mxl"],
     mimeTypes: [
       "application/vnd.recordare.musicxml+xml",

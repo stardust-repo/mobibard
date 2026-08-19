@@ -1,6 +1,6 @@
 # Editor 구현 스펙 스냅샷
 
-마지막 갱신: 2026-08-19 16:39:53 KST
+마지막 갱신: 2026-08-19 19:56:00 KST
 
 ## 목적
 
@@ -8,14 +8,15 @@ MML 채널과 참조 연주 파일을 피아노롤에서 시각적으로 편집�
 
 ## 파일 불러오기
 
-- 지원 확장자: `.mid`, `.midi`, `.kar`, `.musicxml`, `.xml`, `.mxl`, `.mus`, `.musx`, `.mnx`, `.mnx.json`, `.mscz`, `.mscx`, `.gp3`, `.gp5`, `.tab`, `.vsq`, `.vsqx`, `.vpr`, `.ust`, `.ustx`, `.svp`, `.s5p`, `.ccs`
-- 공용 포맷 등록소가 원본 파일을 표준 MIDI로 변환합니다.
+- 지원 확장자: `.mid`, `.midi`, `.kar`, `.seq`, `.sep`, `.sq`, `.bq`, `.psf`, `.psf1`, `.minipsf`, `.minipsf1`, `.psflib`, `.psf1lib`, `.psf2`, `.minipsf2`, `.psf2lib`, `.ncsf`, `.minincsf`, `.ncsflib`, `.2sf`, `.mini2sf`, `.2sflib`, `.sseq`, `.ssar`, `.sdat`, `.brseq`, `.rseq`, `.brsar`, `.bcseq`, `.cseq`, `.bcsar`, `.bfseq`, `.fseq`, `.bfsar`, `.musicxml`, `.xml`, `.mxl`, `.mus`, `.musx`, `.mnx`, `.mnx.json`, `.mscz`, `.mscx`, `.gp3`, `.gp5`, `.vsq`, `.vsqx`, `.vpr`, `.ust`, `.ustx`, `.svp`, `.s5p`, `.ccs`
+- 공용 포맷 등록소가 원본 파일을 표준 MIDI로 변환합니다. PlayStation SEQ/SEP·PS2 SQ/BQ·PSF1/PSF2와 Nintendo DS·Wii·3DS·Wii U·Switch 표준 시퀀스/사운드 아카이브 및 NCSF/2SF도 같은 입력 경로를 사용합니다.
 - 공용 MIDI 파서가 MIDI·KAR의 연주 및 가사·텍스트 이벤트를 해석하고, Editor는 그 결과를 피아노롤 문서 구조로 가공합니다.
 - Classic Mac의 MacBinary Data Fork·Resource Fork·보조 헤더와 Program·Bank, running status, 템포·박자·조표는 공용 계층에서 처리합니다.
 - 확장자가 보존되지 않은 Classic Mac 컨테이너를 위해 `.bin`·`.macbin`도 선택할 수 있으며, 내부 파일명과 바이너리 시그니처로 실제 형식을 판별합니다.
 - MUSX·MNX·MuseScore 입력은 기본 재생 정보를 보존하며 고급 기보와 레이아웃은 단순화됩니다.
-- 통합 불러오기 대화상자는 전체 지원 형식과 MIDI·KAR, Finale, MusicXML, MNX, MuseScore, Guitar Pro, TAB, 보컬, 모비바드 프로젝트, MML·MMI 필터를 제공합니다. Classic Mac은 별도 카테고리 없이 전체 또는 관련 옛 포맷군에서 `.bin`·`.macbin`을 선택하면 내부 형식을 자동 판별합니다.
+- 통합 불러오기 대화상자는 전체 지원 형식과 MIDI·KAR, MusicXML, MNX, Finale, MuseScore, Guitar Pro, PlayStation, Nintendo, VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO, 모비바드 프로젝트, MML·MMI 필터를 제공합니다. Classic Mac은 별도 카테고리 없이 전체 또는 관련 옛 포맷군에서 `.bin`·`.macbin`을 선택하면 내부 형식을 자동 판별합니다.
 - MIDI 참조, MML 가져오기, 오디오 가져오기도 같은 공용 파일 선택 경로를 사용하며 브라우저 미지원 시 기존 파일 입력으로 자동 대체됩니다.
+- 지원 파일 팝업은 표준 음악·악보, 음악 편집기, 콘솔, 보컬 편집기 등으로 구분하며 VOCALOID·UTAU·OpenUtau·Synthesizer V·CeVIO를 서로 다른 제품군으로 표시합니다.
 - 지원 파일 팝업에는 Classic Mac 컨테이너를 별도 형식이나 안내 항목으로 표시하지 않으며, 선택 뒤 공용 입력 계층이 자동 판별합니다.
 - 불러오기 팝업은 긴 파일명이나 긴 텍스트가 있어도 뷰포트 폭을 넘겨 늘어나지 않도록 내부 요소의 최소 폭과 말줄임을 제한하며 하단 작업 버튼을 항상 팝업 안에 유지합니다.
 

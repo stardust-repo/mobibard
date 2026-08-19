@@ -11,7 +11,7 @@
     core.registerFormat({
       id: definition.id,
       label: definition.label,
-      category: "tablature",
+      category: "editor",
       extensions: [definition.extension],
       description: "프로젝트에 포함된 오프라인 파서로 Guitar Pro 악보를 트랙별 MIDI로 변환",
       limitation: "프렛·주법 표시는 MML에서 단순화될 수 있습니다.",

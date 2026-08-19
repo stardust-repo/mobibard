@@ -26,9 +26,9 @@
 <button id="audioOpenButton" role="menuitem" type="button">오디오 불러오기</button>
 <div class="file-menu-separator" role="separator"></div><button id="fileExportButton" role="menuitem" type="button">MML 내보내기</button></div>
 </div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button">되돌리기</button><button id="editRedoButton" role="menuitem" type="button">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button">복사</button><button id="editCutButton" role="menuitem" type="button">잘라내기</button><button id="editPasteButton" role="menuitem" type="button">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button">삭제</button><button id="editNoteVolumeButton" role="menuitem" type="button">노트 볼륨</button></div></div>
-<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.tab,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="fileInput" data-music-format-input type="file"/>
+<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psflib,.psf1lib,.psf2,.minipsf2,.psf2lib,.ncsf,.minincsf,.ncsflib,.2sf,.mini2sf,.2sflib,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="fileInput" data-music-format-input type="file"/>
 <input accept="text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle" hidden="" id="mmlImportFileInput" type="file"/>
-<input accept="audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.tab,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFileInput" data-music-format-input type="file"/>
+<input accept="audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psflib,.psf1lib,.psf2,.minipsf2,.psf2lib,.ncsf,.minincsf,.ncsflib,.2sf,.mini2sf,.2sflib,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFileInput" data-music-format-input type="file"/>
 <input accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm" hidden="" id="audioFileInput" type="file"/>
 </div>
 <div class="toolbar-separator"></div>
@@ -315,6 +315,10 @@
 <script src="../plugins/formats/midi/midi-parser.js?v=5.0.0"></script>
 <script src="../plugins/formats/notation/notation-utils.js?v=5.0.0"></script>
 <script src="../plugins/formats/music-format-core.js?v=5.0.0"></script>
+<script src="../plugins/formats/xsf/xsf-container.js?v=5.0.0&amp;rev=20260819-195600"></script>
+<script src="../plugins/formats/playstation/playstation-sequence.js?v=5.0.0&amp;rev=20260819-195600"></script>
+<script src="../plugins/formats/nintendo/nintendo-sequence.js?v=5.0.0&amp;rev=20260819-195600"></script>
+<script src="../plugins/formats/xsf/format-xsf.js?v=5.0.0&amp;rev=20260819-195600"></script>
 <script src="../plugins/formats/musicxml/musicxml-to-midi.js?v=5.0.0"></script>
 <script src="../plugins/formats/finale/finale-mus-to-midi.js?v=5.0.0"></script>
 <script src="../plugins/formats/finale/finale-musx-to-midi.js?v=5.0.0"></script>
@@ -324,18 +328,19 @@
 <script src="../plugins/formats/guitarpro/vendor/parse-gp5/index.js?v=5.0.0"></script>
 <script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.0.0"></script>
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.0.0"></script>
-<script src="../plugins/formats/midi/format-midi.js?v=5.0.0"></script>
-<script src="../plugins/formats/musicxml/format-musicxml.js?v=5.0.0"></script>
-<script src="../plugins/formats/finale/format-finale.js?v=5.0.0"></script>
-<script src="../plugins/formats/mnx/format-mnx.js?v=5.0.0"></script>
-<script src="../plugins/formats/musescore/format-musescore.js?v=5.0.0"></script>
-<script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.0.0"></script>
-<script src="../plugins/formats/tablature/format-tab.js?v=5.0.0"></script>
+<script src="../plugins/formats/midi/format-midi.js?v=5.0.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/playstation/format-playstation.js?v=5.0.0&amp;rev=20260819-195600"></script>
+<script src="../plugins/formats/nintendo/format-nintendo.js?v=5.0.0&amp;rev=20260819-195600"></script>
+<script src="../plugins/formats/musicxml/format-musicxml.js?v=5.0.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/finale/format-finale.js?v=5.0.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/mnx/format-mnx.js?v=5.0.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/musescore/format-musescore.js?v=5.0.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.0.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.0.0"></script>
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.0.0"></script>
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
 <script src="js/soundbank-player.js?v=5.0.0"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.0.0"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.0.0&amp;rev=20260819-195600"></script>
 <script src="app.js?v=5.0.0&amp;rev=20260819-163106"></script>
 </body>
 </html>

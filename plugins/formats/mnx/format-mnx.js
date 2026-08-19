@@ -6,7 +6,7 @@
   core.registerFormat({
     id: "mnx",
     label: "MNX",
-    category: "basic",
+    category: "standard",
     extensions: ["mnx", "mnx.json"],
     mimeTypes: ["application/vnd.mnx+json"],
     description: "MNX JSON 악보 및 ZIP으로 묶인 MNX 문서",

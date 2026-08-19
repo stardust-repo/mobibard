@@ -1,6 +1,6 @@
 # 모비바드 v5.0
 
-마지막 갱신: 2026-08-19 16:39:53 KST
+마지막 갱신: 2026-08-19 19:56:00 KST
 
 모비바드는 브라우저에서 실행되는 음악 파일 변환·MML 생성·피아노롤 편집·리듬게임 도구 모음입니다. 이 문서는 저장소 전체에 공통 적용된 구조와 이번 갱신에서 영향을 받은 프로젝트만 요약합니다. 각 제품의 현재 구현 상태는 해당 폴더의 `README.md`를 기준으로 확인합니다.
 
@@ -9,6 +9,8 @@
 - 루트 `plugins/`에는 여러 제품이 공유하는 코드만 남겼습니다. 제품 전용 연결부는 각 제품의 `js/` 폴더로 이동했습니다.
 - 공용 기능은 `common`, 파일·음원 규격 처리는 `formats`, Google·Firebase 연동은 `google`로 구분했습니다.
 - `.mid`, `.midi`, `.kar`는 하나의 공용 MIDI 포맷으로 처리하며 KAR의 가사·텍스트 메타 이벤트도 공용 MIDI 파서 결과에 보존합니다.
+- PlayStation 계열은 PS1 `.seq`·`.sep`, PS2 `.sq`·`.bq`와 PSF1/PSF2 xSF 컨테이너를 공용 MIDI로 정규화합니다. PSF 컨테이너는 압축 프로그램/가상 파일시스템을 해제한 뒤 내부의 표준 MIDI·Sony SEQ·PS2 SQ를 탐색합니다. MiniPSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다.
+- Nintendo 계열은 DS `.sseq`·`.ssar`·`.sdat`, Wii `.brseq`·`.rseq`·`.brsar`, 3DS `.bcseq`·`.cseq`·`.bcsar`, Wii U/Switch `.bfseq`·`.fseq`·`.bfsar`와 DS xSF `.2sf`·`.ncsf` 계열을 처리합니다. Sound Archive는 첫 시퀀스를 가져오고, NCSF/2SF는 컨테이너 안에서 복원 가능한 SDAT/SSEQ 계열 데이터를 찾아 MIDI로 변환합니다.
 - Classic Mac의 MacBinary 컨테이너 처리를 공용 유틸리티로 통합했습니다. 옛 바이너리 연주 파일과 SF2·SF3·DLS에서 Data Fork·Resource Fork 및 MacBinary II 보조 헤더를 공통으로 판별합니다.
 - 공용 변환 진입점뿐 아니라 MIDI/KAR, Finale MUS, Guitar Pro 3/5, VSQ, SF2/SF3/DLS의 직접 파서 API도 동일한 Classic Mac 전처리를 사용합니다.
 - `.bin`·`.macbin` 선택을 허용하며, 확장자가 없는 Classic Mac 파일은 MacBinary 내부 파일명과 MIDI·Finale MUS·Guitar Pro 바이너리 시그니처를 사용해 실제 형식을 찾습니다.
@@ -21,9 +23,9 @@
 - MUSX, MNX, MSCZ, MSCX 입력을 추가했습니다. 각 형식은 표준 MIDI로 정규화된 뒤 동일한 공용 MIDI 파서를 사용합니다.
 - 배포에 사용되지 않는 Guitar Pro 개발 소스와 테스트 전용 코드·샘플은 최종 패키지에서 제외했습니다.
 - 지원 파일 팝업의 제목을 버튼과 같은 `지원 파일`로 통일하고, 글꼴의 × 문자를 사용하던 닫기 버튼을 중앙 정렬된 SVG 아이콘으로 교체했습니다.
-- 로컬 파일 선택은 공용 그룹형 파일 선택기를 사용합니다. 지원 환경에서는 운영체제 파일 대화상자에서 `지원 파일` 전체 필터와 MIDI·KAR, Finale, MusicXML, MNX, MuseScore, Guitar Pro, TAB, 보컬, 프로젝트·MML, SoundFont·DLS 등의 포맷군 필터를 빠르게 전환할 수 있습니다. Classic Mac은 별도 카테고리로 표시하지 않고 전체 또는 관련 옛 포맷군에서 `.bin`·`.macbin`을 선택한 뒤 내부 데이터를 자동 판별합니다.
+- 로컬 파일 선택은 공용 그룹형 파일 선택기를 사용합니다. 지원 환경에서는 `지원 파일` 전체 필터와 MIDI·KAR, MusicXML, MNX, Finale, MuseScore, Guitar Pro, PlayStation, Nintendo, VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO, 프로젝트·MML, SoundFont·DLS 등의 필터를 빠르게 전환할 수 있습니다. Classic Mac은 별도 카테고리로 표시하지 않고 전체 또는 관련 옛 포맷군에서 `.bin`·`.macbin`을 선택한 뒤 내부 데이터를 자동 판별합니다.
 - 그룹형 파일 선택 API가 없는 환경에서는 기존 `accept` 기반 파일 입력으로 자동 대체됩니다.
-- 지원 파일 팝업에서는 Classic Mac 컨테이너를 별도 형식이나 안내 항목으로 노출하지 않습니다. 파일을 선택한 뒤 공용 입력 계층이 내부 구조를 자동 판별합니다.
+- 지원 파일 팝업은 성격별로 `표준 음악 · 악보`, `음악 편집기`, `콘솔`, `보컬 편집기`, `프로젝트 · MML`, `오디오`로 구분합니다. MIDI·MusicXML·MNX는 표준 음악·악보에, Finale·MuseScore·Guitar Pro는 음악 편집기에, PlayStation·Nintendo는 콘솔에 배치합니다. 보컬 편집기는 VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO를 제품군별로 분리하고 같은 제품의 확장자만 한 카드에 묶습니다. Finale와 Guitar Pro의 묶음 카드에도 실제 MIDI 변환 범위와 단순화되는 정보를 표시합니다.
 - 공용 Guest 아이콘은 자체 배경이 없는 사람 실루엣만 포함하며, 각 제품의 계정 버튼이 배경과 hover 상태를 담당합니다.
 - 공용 MML 최적화기에 템포 정리를 추가했습니다. 사용자 안내는 `선행 템포와의 편차가 5 미만인 템포들을 삭제합니다.`로 단순화했습니다. Simple과 Player는 동일한 판정 규칙을 사용하며, Player의 자동 선행 무음용 T120은 템포 정리의 음악적 최저·최고/선행 템포 판정에서 제외합니다.
 - Simple과 Player의 화면 제목은 제품명과 버전 표시를 분리하고, 버전 글씨를 제목 글씨의 정확히 절반 크기로 표시합니다. Player 계정 버튼은 모든 화면 폭과 상호작용 상태에서 38×38 정사각형으로 통일하고, 테마 변경 버튼에는 Simple과 같은 `◐` 표식을 사용합니다.
@@ -32,16 +34,16 @@
 
 | 프로젝트 | 영향 범위 |
 |---|---|
-| Simple | 공용 1/64 겹침 규칙을 항상 적용하며 최소 1/64 선행 노트 길이를 보존합니다. |
-| Player | 공용 1/64 겹침 규칙을 병합 옵션보다 먼저 항상 적용하며 최소 1/64 선행 노트 길이를 보존합니다. 기존 피아노롤·전체폭 레이아웃·상단바·Compact 음원은 유지합니다. |
-| Editor | Simple/Player와 동일한 공용 1/64 겹침 규칙을 사용하며 불러오기 `64박 겹침 무시` 체크박스는 이 규칙의 ON/OFF만 제어하고 기본 체크합니다. 긴 파일명/텍스트 팝업 보정과 MML 채널 선택 내보내기 동작은 유지합니다. |
+| Simple | `.tab` 입력을 제거하고 PlayStation PSF/PSF2·PS2 SQ/BQ 및 Nintendo 2SF/NCSF를 포함한 콘솔 시퀀스 입력을 확장했습니다. 공용 1/64 겹침 규칙은 계속 항상 적용합니다. |
+| Player | `.tab` 입력을 제거하고 PlayStation PSF/PSF2·PS2 SQ/BQ 및 Nintendo 2SF/NCSF를 포함한 콘솔 시퀀스 입력을 확장했습니다. 기존 1/64 겹침 규칙·피아노롤·전체폭 레이아웃·상단바·Compact 음원은 유지합니다. |
+| Editor | `.tab` 입력을 제거하고 PlayStation PSF/PSF2·PS2 SQ/BQ 및 Nintendo 2SF/NCSF를 포함한 콘솔 시퀀스 입력을 확장했습니다. 기존 `64박 겹침 무시` 옵션, 긴 불러오기 팝업 보정과 MML 채널 선택 내보내기는 유지합니다. |
 
 ## 공용 플러그인 구조
 
 ```text
 plugins/
   common/       여러 제품이 공유하는 일반 기능
-  formats/      MIDI, 악보 파일, Guitar Pro, 보컬, TAB, SF2·SF3·DLS 처리
+  formats/      MIDI, PlayStation·Nintendo 게임 시퀀스, 악보 파일, Guitar Pro, 보컬, SF2·SF3·DLS 처리
   google/       Google Drive, 로그인, Firebase 설정·분석
 ```
 
@@ -53,3 +55,5 @@ plugins/
 - `simple/`, `player/`, `editor/`, `mobibeats/`의 README는 해당 갱신 시점의 구현 스펙 스냅샷입니다.
 - 제품 README에는 누적 변경 이력이나 제품 버전 번호를 남기지 않습니다.
 - 매 수정마다 버전을 올리지 않으므로 각 README의 마지막 갱신 시각으로 수정 전후를 구분합니다.
+
+- 콘솔 가져오기는 PlayStation SEQ/SEP·PS2 SQ/BQ와 PSF1/PSF2의 지원 가능한 내장 MIDI/SEQ/SQ, Nintendo SSEQ/SDAT·NintendoWare 시퀀스와 NCSF/2SF의 내장 SDAT/SSEQ를 공용 MIDI로 정규화합니다. Mini xSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다.

@@ -6,7 +6,7 @@
   core.registerFormat({
     id: "musescore",
     label: "MuseScore",
-    category: "basic",
+    category: "editor",
     extensions: ["mscz", "mscx"],
     mimeTypes: ["application/vnd.musescore", "application/x-musescore"],
     description: "MuseScore 압축 악보(MSCZ) 및 XML 악보(MSCX)",

@@ -9,22 +9,28 @@
       button: "지원 파일",
       title: "지원 파일",
       close: "닫기",
-      basic: "기본 음악 파일",
-      tablature: "TAB 악보",
-      vocal: "보컬 시퀀스",
+      standard: "표준 음악 · 악보",
+      editor: "음악 편집기",
+      console: "콘솔",
+      vocal: "보컬 편집기",
       project: "프로젝트 · MML",
       audio: "오디오 참고 파일",
       network: "처음 불러올 때 인터넷 연결 필요",
       commonNote: "음표·템포·박자는 MIDI로 변환해 가져옵니다. 각 프로그램 고유의 레이아웃, 가사 발음, 보컬 표현과 기타 주법 일부는 단순화될 수 있습니다.",
       pickerAll: "지원 파일",
       pickerMidi: "MIDI · KAR",
+      pickerPlayStation: "PlayStation",
+      pickerNintendo: "Nintendo",
       pickerFinale: "Finale",
       pickerMusicXml: "MusicXML",
       pickerMnx: "MNX",
       pickerMuseScore: "MuseScore",
       pickerGuitarPro: "Guitar Pro",
-      pickerTab: "TAB 악보",
-      pickerVocal: "보컬 시퀀스",
+      pickerVocaloid: "VOCALOID",
+      pickerUtau: "UTAU",
+      pickerOpenUtau: "OpenUtau",
+      pickerSynthV: "Synthesizer V",
+      pickerCevio: "CeVIO",
       pickerMml: "MML · MMI · 텍스트",
       pickerProject: "모비바드 프로젝트",
       pickerSoundFont: "SoundFont",
@@ -35,22 +41,28 @@
       button: "対応ファイル",
       title: "対応ファイル",
       close: "閉じる",
-      basic: "基本音楽ファイル",
-      tablature: "TAB譜",
-      vocal: "ボーカルシーケンス",
+      standard: "標準音楽・楽譜",
+      editor: "音楽エディター",
+      console: "ゲーム機",
+      vocal: "ボーカルエディター",
       project: "プロジェクト・MML",
       audio: "参照オーディオ",
       network: "初回読込時にインターネット接続が必要",
       commonNote: "音符・テンポ・拍子をMIDIへ変換して読み込みます。固有のレイアウト、発音、ボーカル表現や奏法の一部は簡略化される場合があります。",
       pickerAll: "対応ファイル",
       pickerMidi: "MIDI・KAR",
+      pickerPlayStation: "PlayStation",
+      pickerNintendo: "Nintendo",
       pickerFinale: "Finale",
       pickerMusicXml: "MusicXML",
       pickerMnx: "MNX",
       pickerMuseScore: "MuseScore",
       pickerGuitarPro: "Guitar Pro",
-      pickerTab: "TAB譜",
-      pickerVocal: "ボーカルシーケンス",
+      pickerVocaloid: "VOCALOID",
+      pickerUtau: "UTAU",
+      pickerOpenUtau: "OpenUtau",
+      pickerSynthV: "Synthesizer V",
+      pickerCevio: "CeVIO",
       pickerMml: "MML・MMI・テキスト",
       pickerProject: "Mobibardプロジェクト",
       pickerSoundFont: "SoundFont",
@@ -61,22 +73,28 @@
       button: "Supported files",
       title: "Supported files",
       close: "Close",
-      basic: "Core music files",
-      tablature: "Tablature",
-      vocal: "Vocal sequences",
+      standard: "Standard music · notation",
+      editor: "Music editor projects",
+      console: "Console sequences",
+      vocal: "Vocal editors",
       project: "Projects · MML",
       audio: "Reference audio",
       network: "Internet connection required on first import",
       commonNote: "Notes, tempo and time signatures are converted through MIDI. App-specific layout, phonemes, vocal expression and some playing techniques may be simplified.",
       pickerAll: "Supported files",
       pickerMidi: "MIDI · KAR",
+      pickerPlayStation: "PlayStation",
+      pickerNintendo: "Nintendo",
       pickerFinale: "Finale",
       pickerMusicXml: "MusicXML",
       pickerMnx: "MNX",
       pickerMuseScore: "MuseScore",
       pickerGuitarPro: "Guitar Pro",
-      pickerTab: "Tablature",
-      pickerVocal: "Vocal sequences",
+      pickerVocaloid: "VOCALOID",
+      pickerUtau: "UTAU",
+      pickerOpenUtau: "OpenUtau",
+      pickerSynthV: "Synthesizer V",
+      pickerCevio: "CeVIO",
       pickerMml: "MML · MMI · Text",
       pickerProject: "Mobibard projects",
       pickerSoundFont: "SoundFont",
@@ -87,22 +105,28 @@
       button: "支持文件",
       title: "支持文件",
       close: "关闭",
-      basic: "基本音乐文件",
-      tablature: "吉他谱",
-      vocal: "歌声序列",
+      standard: "标准音乐 · 乐谱",
+      editor: "音乐编辑器",
+      console: "游戏机",
+      vocal: "歌声编辑器",
       project: "工程 · MML",
       audio: "参考音频",
       network: "首次导入时需要联网",
       commonNote: "音符、速度和拍号会先转换为 MIDI。各软件特有的排版、音素、歌声表现及部分演奏技法可能会被简化。",
       pickerAll: "支持文件",
       pickerMidi: "MIDI · KAR",
+      pickerPlayStation: "PlayStation",
+      pickerNintendo: "Nintendo",
       pickerFinale: "Finale",
       pickerMusicXml: "MusicXML",
       pickerMnx: "MNX",
       pickerMuseScore: "MuseScore",
       pickerGuitarPro: "Guitar Pro",
-      pickerTab: "吉他谱",
-      pickerVocal: "歌声序列",
+      pickerVocaloid: "VOCALOID",
+      pickerUtau: "UTAU",
+      pickerOpenUtau: "OpenUtau",
+      pickerSynthV: "Synthesizer V",
+      pickerCevio: "CeVIO",
       pickerMml: "MML · MMI · 文本",
       pickerProject: "Mobibard 工程",
       pickerSoundFont: "SoundFont",
@@ -113,22 +137,28 @@
       button: "支援檔案",
       title: "支援檔案",
       close: "關閉",
-      basic: "基本音樂檔案",
-      tablature: "吉他譜",
-      vocal: "歌聲序列",
+      standard: "標準音樂 · 樂譜",
+      editor: "音樂編輯器",
+      console: "遊戲主機",
+      vocal: "歌聲編輯器",
       project: "專案 · MML",
       audio: "參考音訊",
       network: "首次匯入時需要連線",
       commonNote: "音符、速度與拍號會先轉換為 MIDI。各軟體特有的版面、音素、歌聲表現及部分演奏技法可能會被簡化。",
       pickerAll: "支援檔案",
       pickerMidi: "MIDI · KAR",
+      pickerPlayStation: "PlayStation",
+      pickerNintendo: "Nintendo",
       pickerFinale: "Finale",
       pickerMusicXml: "MusicXML",
       pickerMnx: "MNX",
       pickerMuseScore: "MuseScore",
       pickerGuitarPro: "Guitar Pro",
-      pickerTab: "吉他譜",
-      pickerVocal: "歌聲序列",
+      pickerVocaloid: "VOCALOID",
+      pickerUtau: "UTAU",
+      pickerOpenUtau: "OpenUtau",
+      pickerSynthV: "Synthesizer V",
+      pickerCevio: "CeVIO",
       pickerMml: "MML · MMI · 文字",
       pickerProject: "Mobibard 專案",
       pickerSoundFont: "SoundFont",
@@ -153,18 +183,59 @@
 
   const PICKER_GROUPS = Object.freeze([
     { id: "midi", labelKey: "pickerMidi", formatIds: ["midi"], includeMacBinary: true, mimeType: "audio/midi" },
-    { id: "finale", labelKey: "pickerFinale", formatIds: ["finale-mus", "finale-musx"], includeMacBinary: true, mimeType: "application/octet-stream" },
     { id: "musicxml", labelKey: "pickerMusicXml", formatIds: ["musicxml"], mimeType: "application/xml" },
     { id: "mnx", labelKey: "pickerMnx", formatIds: ["mnx"], mimeType: "application/json" },
+    { id: "finale", labelKey: "pickerFinale", formatIds: ["finale-mus", "finale-musx"], includeMacBinary: true, mimeType: "application/octet-stream" },
     { id: "musescore", labelKey: "pickerMuseScore", formatIds: ["musescore"], mimeType: "application/octet-stream" },
     { id: "guitarpro", labelKey: "pickerGuitarPro", formatIds: ["gp3", "gp5"], includeMacBinary: true, mimeType: "application/octet-stream" },
-    { id: "tablature", labelKey: "pickerTab", formatIds: ["ascii-tab"], mimeType: "text/plain" },
-    { id: "vocal", labelKey: "pickerVocal", categories: ["vocal"], includeMacBinary: true, mimeType: "application/octet-stream" },
+    { id: "playstation", labelKey: "pickerPlayStation", formatIds: ["playstation-sequence", "playstation-xsf"], includeMacBinary: true, mimeType: "application/octet-stream" },
+    { id: "nintendo", labelKey: "pickerNintendo", formatIds: ["nintendo-sequence", "nintendo-xsf"], includeMacBinary: true, mimeType: "application/octet-stream" },
+    { id: "vocaloid", labelKey: "pickerVocaloid", formatIds: ["vsq", "vsqx", "vpr"], includeMacBinary: true, mimeType: "application/octet-stream" },
+    { id: "utau", labelKey: "pickerUtau", formatIds: ["ust"], mimeType: "text/plain" },
+    { id: "openutau", labelKey: "pickerOpenUtau", formatIds: ["ustx"], mimeType: "application/octet-stream" },
+    { id: "synthv", labelKey: "pickerSynthV", formatIds: ["svp", "s5p"], mimeType: "application/octet-stream" },
+    { id: "cevio", labelKey: "pickerCevio", formatIds: ["ccs"], mimeType: "application/xml" },
     { id: "project", labelKey: "pickerProject", extensions: ["mmlproj", "mmlproj.json", "json"], mimeType: "application/json" },
     { id: "mml", labelKey: "pickerMml", extensions: ["mml", "mmi", "3mle", "txt"], mimeType: "text/plain" },
     { id: "soundfont", labelKey: "pickerSoundFont", extensions: ["sf2", "sf3"], includeMacBinary: true, mimeType: "application/octet-stream" },
     { id: "dls", labelKey: "pickerDls", extensions: ["dls"], includeMacBinary: true, mimeType: "application/octet-stream" },
     { id: "audio", labelKey: "pickerAudio", extensions: ["wav", "mp3", "ogg", "m4a", "aac", "flac", "webm"], mimeType: "audio/*" },
+  ]);
+
+  const POPUP_FAMILIES = Object.freeze([
+    {
+      id: "finale", labelKey: "pickerFinale", category: "editor", formatIds: ["finale-mus", "finale-musx"],
+      description: "Finale MUS/MUSX 프로젝트를 음표·쉼표·박자·조표 중심으로 MIDI로 변환합니다.",
+      limitation: "아티큘레이션·표현 기호·고급 재생 데이터와 일부 레이아웃은 단순화됩니다.",
+    },
+    {
+      id: "guitarpro", labelKey: "pickerGuitarPro", category: "editor", formatIds: ["gp3", "gp5"],
+      description: "Guitar Pro 3/5 프로젝트를 트랙별 MIDI로 변환합니다.",
+      limitation: "프렛·주법·표현 기호 등 Guitar Pro 고유 정보 일부는 단순화됩니다.",
+    },
+    {
+      id: "vocaloid", labelKey: "pickerVocaloid", category: "vocal", formatIds: ["vsq", "vsqx", "vpr"],
+      description: "VOCALOID 2~6의 시퀀스/프로젝트에서 음표·템포 중심의 연주 정보를 가져옵니다.",
+      limitation: "보이스뱅크·음소·피치 곡선과 보컬 표현 파라미터는 단순화되거나 제외됩니다.",
+    },
+    { id: "utau", labelKey: "pickerUtau", category: "vocal", formatIds: ["ust"] },
+    { id: "openutau", labelKey: "pickerOpenUtau", category: "vocal", formatIds: ["ustx"] },
+    {
+      id: "synthv", labelKey: "pickerSynthV", category: "vocal", formatIds: ["svp", "s5p"],
+      description: "Synthesizer V 프로젝트에서 음표·템포 중심의 연주 정보를 가져옵니다.",
+      limitation: "가수·음소·피치·보컬 표현 데이터는 제외됩니다.",
+    },
+    { id: "cevio", labelKey: "pickerCevio", category: "vocal", formatIds: ["ccs"] },
+    {
+      id: "playstation", labelKey: "pickerPlayStation", category: "console", formatIds: ["playstation-sequence", "playstation-xsf"],
+      description: "PlayStation SEQ/SEP, PS2 SQ/BQ와 PSF/PSF2 컨테이너 안의 지원 가능한 시퀀스를 MIDI로 변환합니다.",
+      limitation: "MiniPSF의 외부 라이브러리나 게임 고유 사운드 드라이버가 필요한 파일은 단독 파일만으로 변환되지 않을 수 있습니다.",
+    },
+    {
+      id: "nintendo", labelKey: "pickerNintendo", category: "console", formatIds: ["nintendo-sequence", "nintendo-xsf"],
+      description: "Nintendo DS/Wii/3DS/Wii U/Switch 시퀀스 및 사운드 아카이브와 NCSF/2SF의 내장 SDAT/SSEQ 데이터를 MIDI로 변환합니다.",
+      limitation: "Mini xSF 라이브러리나 ROM/게임 고유 사운드 드라이버 복원이 필요한 파일은 단독 변환이 제한될 수 있습니다.",
+    },
   ]);
 
   function language() {
@@ -224,6 +295,39 @@
     document.head.appendChild(style);
   }
 
+  function popupFamilyFor(format) {
+    return POPUP_FAMILIES.find(group =>
+      group.formatIds?.includes(format.id) || group.categories?.includes(format.category)
+    ) || null;
+  }
+
+  function groupFormatsForPopup(formats, t) {
+    const result = [];
+    const emitted = new Set();
+    for (const format of formats) {
+      const family = popupFamilyFor(format);
+      if (!family) {
+        result.push({ ...format });
+        continue;
+      }
+      if (emitted.has(family.id)) continue;
+      emitted.add(family.id);
+      const members = formats.filter(item =>
+        family.formatIds?.includes(item.id) || family.categories?.includes(item.category)
+      );
+      result.push({
+        id: `family-${family.id}`,
+        label: t[family.labelKey] || members[0]?.label || family.id,
+        category: family.category || members[0]?.category || "standard",
+        extensions: uniqueExtensions(members.flatMap(item => item.extensions || [])),
+        description: family.description || (members.length === 1 ? (members[0]?.description || "") : ""),
+        limitation: family.limitation || (members.length === 1 ? (members[0]?.limitation || "") : ""),
+        requiresNetwork: members.some(item => item.requiresNetwork),
+      });
+    }
+    return result;
+  }
+
   function itemMarkup(item, t) {
     const extensions = (item.extensions || []).map(ext => `<span class="mabi-supported-file-ext">.${String(ext).replace(/^\./, "")}</span>`).join("");
     const showKoreanDetails = language() === "ko";
@@ -258,9 +362,9 @@
       backdrop.querySelector(".mabi-supported-files-title").textContent = t.title;
       closeButton.setAttribute("aria-label", t.close);
       closeButton.setAttribute("title", t.close);
-      const formats = core.listFormats().map(format => ({ ...format }));
+      const formats = groupFormatsForPopup(core.listFormats(), t);
       const items = [...formats, ...(EXTRA[context] || [])];
-      const categoryOrder = ["basic", "tablature", "vocal", "project", "audio"];
+      const categoryOrder = ["standard", "editor", "console", "vocal", "project", "audio"];
       const body = backdrop.querySelector(".mabi-supported-files-body");
       body.innerHTML = `<p class="mabi-supported-files-note">${t.commonNote}</p>` + categoryOrder.map(category => {
         const categoryItems = items.filter(item => item.category === category);

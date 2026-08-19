@@ -1,6 +1,6 @@
 # Player 구현 스펙 스냅샷
 
-마지막 갱신: 2026-08-19 16:31:06 KST
+마지막 갱신: 2026-08-19 19:56:00 KST
 
 ## 목적
 
@@ -8,13 +8,13 @@
 
 ## 입력
 
-- 지원 확장자: `.mid`, `.midi`, `.kar`, `.musicxml`, `.xml`, `.mxl`, `.mus`, `.musx`, `.mnx`, `.mnx.json`, `.mscz`, `.mscx`, `.gp3`, `.gp5`, `.tab`, `.vsq`, `.vsqx`, `.vpr`, `.ust`, `.ustx`, `.svp`, `.s5p`, `.ccs`
+- 지원 확장자: `.mid`, `.midi`, `.kar`, `.seq`, `.sep`, `.sq`, `.bq`, `.psf`, `.psf1`, `.minipsf`, `.minipsf1`, `.psflib`, `.psf1lib`, `.psf2`, `.minipsf2`, `.psf2lib`, `.ncsf`, `.minincsf`, `.ncsflib`, `.2sf`, `.mini2sf`, `.2sflib`, `.sseq`, `.ssar`, `.sdat`, `.brseq`, `.rseq`, `.brsar`, `.bcseq`, `.cseq`, `.bcsar`, `.bfseq`, `.fseq`, `.bfsar`, `.musicxml`, `.xml`, `.mxl`, `.mus`, `.musx`, `.mnx`, `.mnx.json`, `.mscz`, `.mscx`, `.gp3`, `.gp5`, `.vsq`, `.vsqx`, `.vpr`, `.ust`, `.ustx`, `.svp`, `.s5p`, `.ccs`
 - 로컬 파일과 Google Drive 파일 선택을 지원합니다.
-- 공용 포맷 등록소가 입력을 표준 MIDI로 정규화하고 공용 MIDI 파서가 실제 연주 정보와 KAR 가사·텍스트 이벤트를 해석합니다.
+- 공용 포맷 등록소가 입력을 표준 MIDI로 정규화하고 공용 MIDI 파서가 실제 연주 정보와 KAR 가사·텍스트 이벤트를 해석합니다. PlayStation SEQ/SEP·PS2 SQ/BQ·PSF1/PSF2와 Nintendo DS·Wii·3DS·Wii U·Switch 표준 시퀀스 및 NCSF/2SF도 먼저 MIDI로 변환됩니다.
 - Classic Mac의 MacBinary 컨테이너는 포맷 변환 전에 공용 계층에서 Data Fork·Resource Fork와 MacBinary II 보조 헤더를 판별합니다.
 - 확장자가 보존되지 않은 Classic Mac 컨테이너를 위해 `.bin`·`.macbin`도 선택할 수 있으며, 내부 파일명과 바이너리 시그니처로 실제 형식을 판별합니다.
 - MUSX·MNX·MuseScore 변환은 연주에 필요한 기본 기보를 우선하며 레이아웃과 고급 표현은 단순화됩니다.
-- 로컬 연주 파일 대화상자는 전체 지원 형식, MIDI·KAR, 악보 제품군, Guitar Pro·TAB, 보컬 시퀀스, MML·MMI 필터를 제공합니다.
+- 로컬 연주 파일 대화상자는 전체 지원 형식, MIDI·KAR, MusicXML, MNX, Finale, MuseScore, Guitar Pro, PlayStation, Nintendo, VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO, MML·MMI 필터를 제공합니다.
 - 사용자 음원 대화상자는 전체 지원 형식, SoundFont, DLS 필터로 구분됩니다. Classic Mac은 별도 카테고리 없이 전체 또는 관련 옛 포맷군에서 `.bin`·`.macbin`을 선택하면 내부 형식을 자동 판별하며, 그룹형 선택 API가 없는 환경에서는 기존 파일 입력으로 대체됩니다.
 
 ## MIDI·MML 변환
@@ -24,7 +24,7 @@
 - 채널별 역할, 악기 그룹, 중복 병합, 1/32·1/64 양자화 설정을 지원합니다.
 - 공용 1/64 겹침 규칙을 `없음`·`절반 이후`·`전체` 등 겹침 병합 옵션보다 먼저 항상 적용합니다. 서로 다른 시작점의 순차 노트가 1/64 이하만 겹치고 선행 노트를 잘라도 최소 1/64 길이가 남을 때만 정상 연속 노트로 처리하며, 같은 시작점 화음이나 최소 길이를 침범하는 경우는 기존 겹침 규칙을 따릅니다. 이 경계 정리는 겹침 병합 횟수로 계산하지 않습니다.
 - 변환 전 악기별 미리듣기와 파일 구간 미리듣기를 지원합니다.
-- MusicXML·Finale·MNX·MuseScore·Guitar Pro·TAB·보컬 포맷은 모두 표준 MIDI 변환 뒤 동일한 경로를 사용합니다.
+- MusicXML·Finale·MNX·MuseScore·Guitar Pro·보컬 포맷은 모두 표준 MIDI 변환 뒤 동일한 경로를 사용합니다.
 
 ## 편집과 재생
 
@@ -44,6 +44,7 @@
 - 본문 카드의 주 제목은 일반 MML 생성기 명칭을 사용하며 버전 글씨는 제목 글씨의 절반 크기로 표시합니다. `main`의 별도 상단 여백은 두지 않습니다.
 - `지원 파일` 버튼은 MIDI 추출 버튼 바로 왼쪽에 정렬하고, Simple 이동 버튼은 `간편 모드`로 표시합니다.
 - 계정 버튼은 화면 폭과 hover·focus·열림 상태에 관계없이 38×38 정사각형을 유지합니다. Guest SVG에는 사람 실루엣만 남기고 Guest 상태의 버튼 배경은 흰색으로 표시하며, Google 로그인 상태에서는 기존 프로필 사진과 일반 버튼 배경을 사용합니다. 테마 버튼은 `◐ 테마 변경` 형태로 표시합니다.
+- 지원 파일 팝업은 MIDI·MusicXML·MNX를 `표준 음악 · 악보`, Finale·MuseScore·Guitar Pro를 `음악 편집기`, PlayStation·Nintendo를 `콘솔`로 구분하고 보컬 제품군도 제조사/제품별로 나누어 표시합니다.
 - 지원 파일 팝업에는 Classic Mac 관련 형식 설명을 표시하지 않고 파일 선택 뒤 공용 계층에서 자동 판별합니다.
 
 ## 제품 전용 구현
