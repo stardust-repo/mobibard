@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const DEFAULT_SOUND_BANK_FILE_NAME = String(window.MOBIBARD_DEFAULT_SF3_NAME || "FluidR3Mono_GM.sf3");
+  const DEFAULT_SOUND_BANK_FILE_NAME = String(window.MOBIBARD_DEFAULT_SF3_NAME || "FluidR3Mono_GM_compact.sf3");
   const PART_LABEL_KEYS = ["part.melody", "part.harmony1", "part.harmony2", "part.harmony3", "part.harmony4", "part.harmony5"];
   const PART_LABELS = new Proxy(PART_LABEL_KEYS, {
     get(target, property, receiver) {

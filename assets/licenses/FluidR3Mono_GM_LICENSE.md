@@ -1,12 +1,12 @@
-# FluidR3Mono_GM.sf3 License and Attribution
+# FluidR3Mono_GM Compact SF3 License and Attribution
 
-This Mobibard distribution embeds the user-supplied `FluidR3Mono_GM.sf3` as its default SoundFont. The embedded bytes are preserved without modification.
+This Mobibard distribution embeds `FluidR3Mono_GM_compact.sf3` as its default SoundFont. It is a size-reduced re-encode made from the user-supplied `FluidR3Mono_GM.sf3`: the SoundFont preset/instrument/sample structure and source sample rates were retained while the already-compressed sample audio was decoded and re-encoded with Ogg Vorbis VBR quality `q=0`. The upstream attribution and MIT License remain retained below.
 
 ## Embedded copy identity
 
-- File: `FluidR3Mono_GM.sf3`
-- File size: `14,563,174 bytes`
-- SHA-256: `cfcd66d89e8386823400eca64934b14fbea7bf48ba1f00d21189af1262794ec2`
+- File: `FluidR3Mono_GM_compact.sf3`
+- File size: `9,995,426 bytes`
+- SHA-256: `f1b26ac9c671a4010ed5fb83bdc503c2cb94d05b0ade70e0b02fe7ba953b03e8`
 - Internal SoundFont name: `FluidR3Mono_GM2-312.SF2`
 - Internal creation date: `5th December 2016`
 
@@ -52,7 +52,7 @@ SOFTWARE.
 
 ## Embedded metadata provenance note
 
-The supplied SF3 binary contains legacy internal metadata dated `2014-16`, including a non-redistribution message concerning samples. Mobibard embeds the supplied binary byte-for-byte and retains that internal metadata unchanged. This accompanying notice also preserves the upstream attribution, README, COPYING notice, and MIT License so that both the binary's provenance metadata and its distributed licensing materials remain available together. This paragraph records provenance and does not replace the original notices.
+The compact SF3 is a Mobibard delivery re-encode of the user-supplied FluidR3Mono SF3 rather than a byte-for-byte copy. Its legacy internal SoundFont metadata remains present because the SoundFont structure was retained during the audio re-encode. This accompanying notice preserves the upstream attribution, README, COPYING notice, and MIT License. This paragraph records provenance and does not replace the original notices.
 
 ## Upstream references
 

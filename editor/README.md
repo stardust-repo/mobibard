@@ -1,6 +1,6 @@
 # Editor 구현 스펙 스냅샷
 
-마지막 갱신: 2026-08-18 20:52:17 KST
+마지막 갱신: 2026-08-19 11:58:00 KST
 
 ## 목적
 
@@ -27,7 +27,7 @@ MML 채널과 참조 연주 파일을 피아노롤에서 시각적으로 편집�
 
 ## 재생과 화면
 
-- SF2·SF3·DLS와 `assets/default_sf3.js`에 내장된 `FluidR3Mono_GM.sf3`를 공용 SoundBank 계층에서 사용합니다.
+- SF2·SF3·DLS와 `assets/default_sf3.js`에 내장된 `FluidR3Mono_GM_compact.sf3`를 공용 SoundBank 계층에서 사용합니다.
 - `editor/js/soundbank-player.js`가 공용 SoundBank 모델을 Editor의 실시간 재생기에 연결합니다.
 - 상단 지원 파일 버튼은 노트·선택 도구 묶음의 왼쪽에 있습니다.
 - 확대·축소, 가로·세로 스크롤, 재생 위치 추적, 채널 트리 키보드 이동을 지원합니다.

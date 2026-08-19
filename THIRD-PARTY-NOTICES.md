@@ -1,17 +1,19 @@
 # Third-party notices
 
-- 마지막 업데이트: **2026-08-18 16:39:25 KST**
+- 마지막 업데이트: **2026-08-19 11:58:00 KST**
 
 이 문서는 현재 저장소에 포함된 제3자 코드와 라이선스 고지를 정리합니다. 파일을 이동하거나 공용 플러그인 구조를 변경하더라도 아래 고지와 각 원본 라이선스 파일을 함께 유지해야 합니다.
 
-## FluidR3Mono_GM.sf3 default SoundFont
+## FluidR3Mono_GM Compact default SoundFont
 
-`assets/default_sf3.js` embeds the user-supplied `FluidR3Mono_GM.sf3` byte-for-byte as Mobibard's default SoundFont. Its complete identity, provenance note, attribution, original README notice, COPYING notice, and MIT License are retained in `assets/licenses/FluidR3Mono_GM_LICENSE.md`.
+`assets/default_sf3.js` embeds `FluidR3Mono_GM_compact.sf3`, a smaller Ogg Vorbis q=0 re-encode made from the user-supplied `FluidR3Mono_GM.sf3`. The upstream attribution, provenance note, original README notice, COPYING notice, and MIT License are retained in `assets/licenses/FluidR3Mono_GM_LICENSE.md`.
 
 Embedded copy:
 
-- Size: `14,563,174 bytes`
-- SHA-256: `cfcd66d89e8386823400eca64934b14fbea7bf48ba1f00d21189af1262794ec2`
+- File: `FluidR3Mono_GM_compact.sf3`
+- Size: `9,995,426 bytes`
+- SHA-256: `f1b26ac9c671a4010ed5fb83bdc503c2cb94d05b0ade70e0b02fe7ba953b03e8`
+- Re-encode: `Ogg Vorbis VBR q=0`
 - Internal name: `FluidR3Mono_GM2-312.SF2`
 
 Attribution retained with this distribution:
@@ -23,7 +25,7 @@ Attribution retained with this distribution:
 - Temple Blocks instrument by Ethan Winer, copyright © 2002.
 - Drumline Percussion by Michael Schorsch, copyright © 2016.
 
-The supplied binary also retains its original legacy internal metadata. See the dedicated license file rather than this summary for the full notice and MIT License text.
+The compact re-encode retains the original SoundFont structure and legacy internal metadata. See the dedicated license file rather than this summary for the full notice and MIT License text.
 
 ## pako inflate
 

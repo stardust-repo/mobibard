@@ -4,7 +4,7 @@
   "version": "5.0.0",
   "type": "repository-integrated-static-webpage",
   "deployment_root": "repository-root",
-  "updated_utc": "2026-08-18T08:12:29Z",
+  "updated_utc": "2026-08-19T02:58:00Z",
   "entry": "index.html",
   "files": [
     {
@@ -14,13 +14,13 @@
     },
     {
       "path": "README.md",
-      "size": 2926,
-      "sha256": "a54b04da7e84a16cb1b7eba6ca5dd56c3500940c51bdb66a10da585b59737e49"
+      "size": 2934,
+      "sha256": "3440f349c12b6f787dd6ef6c8c76ff4ba19177fc0718db8457f97a1d93aaea20"
     },
     {
       "path": "index.html",
-      "size": 15897,
-      "sha256": "af461b0e632dfe8ce8a81d8a8c04ffd67b022f601aa1c3c4600c36a6160ce5ad"
+      "size": 15907,
+      "sha256": "5c9c3ab0fe1ed3e4dc325e0315c74be4d9359c63956ee0a03a53f568c837a91e"
     },
     {
       "path": "js/game.js",
@@ -41,8 +41,8 @@
   "shared_dependencies": [
     {
       "path": "../assets/default_sf3.js",
-      "size": 19579878,
-      "sha256": "41aa0ac97d4ab23208c965f293edac68d89b3d91ed2fcc617c4eb8413b6400f5"
+      "size": 13438899,
+      "sha256": "2a5452f0b40cc15fc3866b84be50c6507fe2381859c6abd8984f9081079cdf0a"
     },
     {
       "path": "../assets/favicon.ico",
@@ -76,13 +76,13 @@
     },
     {
       "path": "../assets/licenses/FluidR3Mono_GM_LICENSE.md",
-      "size": 3114,
-      "sha256": "4a91cc20c53594f750198b3570761a3f19453b63f437e4753c94af76837616c1"
+      "size": 3301,
+      "sha256": "a9a221bd0419b92456575418b848e5ef550c522eec38fabdcc4a1606b92658aa"
     },
     {
       "path": "../THIRD-PARTY-NOTICES.md",
-      "size": 7183,
-      "sha256": "940e1024f13ea990a18201c82b80df6fb6d853292eccdaf7eaf28a84c7c3d716"
+      "size": 7297,
+      "sha256": "f737924720b4d73fe072f4ae620b129aae4d6ce0a731f6c3cf54b3869fb0f6f1"
     }
   ]
 }

@@ -1,6 +1,6 @@
 # MobiBeats 구현 스펙 스냅샷
 
-마지막 갱신: 2026-08-18 17:12:29 KST
+마지막 갱신: 2026-08-19 11:58:00 KST
 
 ## 목적
 
@@ -20,7 +20,7 @@ MML 또는 MIDI 연주 정보를 받아 4키·5키·6키 리듬 차트를 자동
 
 - 판정은 Perfect, Great, Good, Miss이며 콤보·점수·진행률·곡 시간을 표시합니다.
 - 장노트, 키보드, 포인터·터치 입력, 일시정지·재시작·전체 화면을 지원합니다.
-- SF2·SF3·DLS와 `assets/default_sf3.js`에 내장된 `FluidR3Mono_GM.sf3`를 공용 SoundBank 계층에서 사용합니다.
+- SF2·SF3·DLS와 `assets/default_sf3.js`에 내장된 `FluidR3Mono_GM_compact.sf3`를 공용 SoundBank 계층에서 사용합니다.
 - `window.MobiBeats.loadSoundBank()`로 사용자 SoundBank를 교체할 수 있으며 Classic Mac MacBinary 컨테이너도 공용 계층에서 처리합니다.
 - 음원 해석에 실패하면 Web Audio 간이 신시사이저로 전환합니다.
 - 제품 전용 공용 모듈 연결부는 `mobibeats/js/runtime.js`입니다.
