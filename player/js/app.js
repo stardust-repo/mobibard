@@ -73,7 +73,8 @@
     "http://www.midiex.net/",
     "http://www.midisite.co.uk/",
     "https://musescore.com/",
-    "https://www.vgmusic.com/"
+    "https://www.vgmusic.com/",
+    "https://www.zophar.net/"
   ]);
   const ACTIVE_CODE_LOOKAHEAD_SEC = 0.012;
   const ACTIVE_CODE_RELEASE_SEC = 0.026;
