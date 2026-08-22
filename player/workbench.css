@@ -5280,3 +5280,78 @@ body.player-source-workbench-v9 > main {
   border-top: 0 !important;
   border-bottom: 0 !important;
 }
+
+/* v5.1 final6: signed-in thumbnail fills the account button; Discord/Guest lift like MIDI Extract. */
+.player-source-workbench-v9 .player-topbar #accountMenuButton[data-connected="true"].account-avatar-button,
+.player-source-workbench-v9 .player-topbar #accountMenuButton[data-connected="true"].account-avatar-button:hover,
+.player-source-workbench-v9 .player-topbar #accountMenuButton[data-connected="true"].account-avatar-button:active,
+.player-source-workbench-v9 .player-topbar #accountMenuButton[data-connected="true"].account-avatar-button:focus-visible,
+.player-source-workbench-v9 .player-topbar #accountMenuButton[data-connected="true"].account-avatar-button[aria-expanded="true"] {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.player-source-workbench-v9 .player-topbar #accountMenuButton[data-connected="true"] .account-avatar-image {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  flex: 1 1 auto !important;
+  border-radius: 0 !important;
+  object-fit: cover !important;
+}
+.player-source-workbench-v9 .player-topbar .discord-icon-button,
+.player-source-workbench-v9 .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button {
+  transition: transform .14s ease, filter .14s ease, box-shadow .14s ease, border-color .14s ease, background-color .14s ease !important;
+}
+.player-source-workbench-v9 .player-topbar .discord-icon-button:hover,
+.player-source-workbench-v9 .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button[aria-expanded="false"]:hover {
+  transform: translateY(-1px) !important;
+}
+.player-source-workbench-v9 .player-topbar .discord-icon-button:active,
+.player-source-workbench-v9 .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button:active {
+  transform: translateY(0) !important;
+}
+
+
+/* v5.1 final7: final instrument workspace spacing polish. */
+.player-source-workbench-v9 .wb6-instrument-panel .wb6-assignment-empty {
+  padding: 26px 16px !important;
+  text-align: center !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+  font-weight: 700 !important;
+}
+
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-right-panel > .dialog-section-head {
+  padding-inline: 16px !important;
+}
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiChannelList {
+  box-sizing: border-box;
+  padding-inline: 12px !important;
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .wb6-instrument-panel .wb6-assignment-empty {
+    padding-inline: 12px !important;
+    font-size: 12px !important;
+  }
+  .player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-right-panel > .dialog-section-head {
+    padding-inline: 12px !important;
+  }
+  .player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiChannelList {
+    padding-inline: 10px !important;
+  }
+}
+
+/* v5.1 final8: give Harmony 5 a little breathing room before the section divider. */
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiRoleList {
+  padding-bottom: 5px !important;
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiRoleList {
+    padding-bottom: 4px !important;
+  }
+}

@@ -1517,3 +1517,18 @@ body.simple-rhythm-game-open { overflow: hidden; }
   border-radius: 0 !important;
   object-fit: cover !important;
 }
+
+/* v5.1 final6: Discord and Guest use the same subtle hover lift as MIDI Extract. */
+.simple-topbar .discord-link,
+.simple-topbar #settingsButton[data-connected="false"].account-avatar-button {
+  transition: transform .14s ease, filter .14s ease, box-shadow .14s ease, border-color .14s ease, background-color .14s ease !important;
+}
+.simple-topbar .discord-link:hover,
+.simple-topbar #settingsButton[data-connected="false"].account-avatar-button[aria-expanded="false"]:hover {
+  transform: translateY(-1px) !important;
+}
+.simple-topbar .discord-link:active,
+.simple-topbar #settingsButton[data-connected="false"].account-avatar-button:active {
+  transform: translateY(0) !important;
+}
+
