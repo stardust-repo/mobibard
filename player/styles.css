@@ -40,6 +40,13 @@ html[data-i18n-pending="true"] [data-i18n] { visibility: hidden; }
   --part3: #b58105;
   --part4: #0891b2;
   --part5: #c026d3;
+  /* Native range controls need a brighter palette than text/channel labels. */
+  --part0-control: #ef4444;
+  --part1-control: #22c55e;
+  --part2-control: #3b82f6;
+  --part3-control: #eab308;
+  --part4-control: #06b6d4;
+  --part5-control: #d946ef;
 font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 :root[data-theme="dark"] {
@@ -82,6 +89,12 @@ font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-seri
   --part3: #facc15;
   --part4: #22d3ee;
   --part5: #e879f9;
+  --part0-control: #fb7185;
+  --part1-control: #4ade80;
+  --part2-control: #60a5fa;
+  --part3-control: #facc15;
+  --part4-control: #22d3ee;
+  --part5-control: #e879f9;
 }
 * { box-sizing: border-box; }
 html { min-height: 100%; background: var(--bg); }

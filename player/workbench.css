@@ -2389,9 +2389,16 @@ textarea.wb4-question-input { min-height: 110px; resize: vertical; }
   gap: 10px;
   width: 100%;
 }
+.player-source-workbench-v9 .wb8-option-list-channel-0 { --wb9-slider-color: var(--part0-control); }
+.player-source-workbench-v9 .wb8-option-list-channel-1 { --wb9-slider-color: var(--part1-control); }
+.player-source-workbench-v9 .wb8-option-list-channel-2 { --wb9-slider-color: var(--part2-control); }
+.player-source-workbench-v9 .wb8-option-list-channel-3 { --wb9-slider-color: var(--part3-control); }
+.player-source-workbench-v9 .wb8-option-list-channel-4 { --wb9-slider-color: var(--part4-control); }
+.player-source-workbench-v9 .wb8-option-list-channel-5 { --wb9-slider-color: var(--part5-control); }
 .player-source-workbench-v9 .wb9-option-list-control .wb4-range {
   width: 100%;
-  accent-color: var(--wb8-channel-color);
+  /* Keep channel text colors readable while ranges use a brighter control palette. */
+  accent-color: var(--wb9-slider-color, var(--wb8-channel-color));
 }
 .player-source-workbench-v9 .wb9-option-list-control .wb4-number {
   width: 58px;
@@ -5354,4 +5361,56 @@ body.player-source-workbench-v9 > main {
   .player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiRoleList {
     padding-bottom: 4px !important;
   }
+}
+
+/* final10: normalize volume/octave range tracks across browsers.
+   Native accent-color rendering could turn some channel tracks nearly black. */
+.player-source-workbench-v9 .wb9-volume-feature .wb4-range,
+.player-source-workbench-v9 .wb9-octave-feature .wb4-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  accent-color: auto;
+  cursor: pointer;
+}
+.player-source-workbench-v9 .wb9-volume-feature .wb4-range::-webkit-slider-runnable-track,
+.player-source-workbench-v9 .wb9-octave-feature .wb4-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--wb4-line);
+}
+.player-source-workbench-v9 .wb9-volume-feature .wb4-range::-moz-range-track,
+.player-source-workbench-v9 .wb9-octave-feature .wb4-range::-moz-range-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--wb4-line);
+}
+.player-source-workbench-v9 .wb9-volume-feature .wb4-range::-webkit-slider-thumb,
+.player-source-workbench-v9 .wb9-octave-feature .wb4-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 2px solid var(--wb4-surface);
+  border-radius: 50%;
+  background: var(--wb9-slider-color, var(--wb4-accent));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wb9-slider-color, var(--wb4-accent)) 42%, var(--wb4-line));
+}
+.player-source-workbench-v9 .wb9-volume-feature .wb4-range::-moz-range-thumb,
+.player-source-workbench-v9 .wb9-octave-feature .wb4-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--wb4-surface);
+  border-radius: 50%;
+  background: var(--wb9-slider-color, var(--wb4-accent));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wb9-slider-color, var(--wb4-accent)) 42%, var(--wb4-line));
+}
+
+/* final11: match the bottom breathing room of Volume with Rest/Octave. */
+.player-source-workbench-v9 .wb6-channel-options-panel .wb9-volume-feature {
+  padding-bottom: 7px !important;
 }
