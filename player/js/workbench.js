@@ -1919,11 +1919,28 @@
     }, 1500);
   }
 
+  function trackScoreCopy() {
+    const event = { name: "score_copy", params: { page: "player", copy_scope: "split" } };
+    try {
+      const analytics = window.MobibardAnalytics;
+      if (analytics && typeof analytics.logEvent === "function") {
+        analytics.logEvent(event.name, event.params);
+      } else {
+        const queueKey = "__MOBIBARD_ANALYTICS_QUEUE__";
+        const queue = Array.isArray(window[queueKey]) ? window[queueKey] : (window[queueKey] = []);
+        queue.push(event);
+        if (queue.length > 100) queue.splice(0, queue.length - 100);
+      }
+    } catch (_) {}
+  }
+
   async function copyText(text) {
     const value = String(text || "").trim();
     if (!value) return;
+    let copied = false;
     try {
       await navigator.clipboard.writeText(value);
+      copied = true;
     } catch (_) {
       const textarea = el("textarea");
       textarea.value = value;
@@ -1931,9 +1948,11 @@
       textarea.style.left = "-9999px";
       document.body.append(textarea);
       textarea.select();
-      try { document.execCommand("copy"); } catch (_) {}
+      try { copied = document.execCommand("copy") === true; } catch (_) { copied = false; }
       textarea.remove();
     }
+    if (!copied) return;
+    trackScoreCopy();
     showToast(t("copyToast"));
   }
 

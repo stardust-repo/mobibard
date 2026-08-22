@@ -1497,3 +1497,23 @@ body.simple-rhythm-game-open { overflow: hidden; }
   .simple-rhythm-game-layer-title span { display: none; }
   .simple-rhythm-game-layer-close { min-height: 30px; padding: 4px 8px; font-size: 11.5px; }
 }
+
+/* v5.1 final5: signed-in profile thumbnail fills the account control. */
+.simple-topbar #settingsButton[data-connected="true"].account-avatar-button,
+.simple-topbar #settingsButton[data-connected="true"].account-avatar-button:hover,
+.simple-topbar #settingsButton[data-connected="true"].account-avatar-button:active,
+.simple-topbar #settingsButton[data-connected="true"].account-avatar-button:focus-visible,
+.simple-topbar #settingsButton[data-connected="true"].account-avatar-button[aria-expanded="true"] {
+  padding: 0 !important;
+}
+.simple-topbar #settingsButton[data-connected="true"] .account-avatar-image {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  flex: 1 1 auto !important;
+  border-radius: 0 !important;
+  object-fit: cover !important;
+}

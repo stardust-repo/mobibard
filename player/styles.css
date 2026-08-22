@@ -34,12 +34,12 @@ html[data-i18n-pending="true"] [data-i18n] { visibility: hidden; }
   --active-code-line: rgba(22, 163, 74, 0.92);
   --tempo: #7c3aed;
   --tempo-active: #16a34a;
-  --part0: #0b4fc4;
-  --part1: #b91c1c;
-  --part2: #047857;
-  --part3: #6d28d9;
-  --part4: #a16207;
-  --part5: #a21caf;
+  --part0: #dc2626;
+  --part1: #16a34a;
+  --part2: #2563eb;
+  --part3: #b58105;
+  --part4: #0891b2;
+  --part5: #c026d3;
 font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 :root[data-theme="dark"] {
@@ -76,11 +76,11 @@ font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-seri
   --active-code-line: rgba(74, 222, 128, 0.95);
   --tempo: #a78bfa;
   --tempo-active: #22c55e;
-  --part0: #60a5fa;
-  --part1: #f87171;
-  --part2: #34d399;
-  --part3: #c084fc;
-  --part4: #fbbf24;
+  --part0: #f87171;
+  --part1: #4ade80;
+  --part2: #60a5fa;
+  --part3: #facc15;
+  --part4: #22d3ee;
   --part5: #e879f9;
 }
 * { box-sizing: border-box; }
@@ -4759,4 +4759,26 @@ html[data-i18n-pending="true"] .app-main-title { visibility: hidden; }
 }
 @media (max-width: 430px) {
   .player-topbar .midi-site-links { min-width: 118px !important; max-width: 126px !important; }
+}
+
+/* v5.1 final5: signed-in profile thumbnail fills the account control. */
+.player-topbar #accountMenuButton[data-connected="true"].account-avatar-button,
+.player-topbar #accountMenuButton[data-connected="true"].account-avatar-button:hover,
+.player-topbar #accountMenuButton[data-connected="true"].account-avatar-button:active,
+.player-topbar #accountMenuButton[data-connected="true"].account-avatar-button:focus-visible,
+.player-topbar #accountMenuButton[data-connected="true"].account-avatar-button[aria-expanded="true"],
+.player-topbar #accountMenuButton[data-connected="true"].account-avatar-button[aria-expanded="true"]:hover,
+.player-topbar #accountMenuButton[data-connected="true"].account-avatar-button[aria-expanded="true"]:active {
+  padding: 0 !important;
+}
+.player-topbar #accountMenuButton[data-connected="true"] .account-avatar-image {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  flex: 1 1 auto !important;
+  border-radius: 0 !important;
+  object-fit: cover !important;
 }

@@ -753,12 +753,10 @@
     installPianoRollRefreshHooks();
     copyBtn.addEventListener("click", async () => {
       if (!(await runWorkbenchBeforeAction("copy"))) return;
-      trackAnalytics("copy_all_mml");
       void copyVisibleMml();
     });
     clearAllMmlBtn?.addEventListener("click", clearAllMmlChannels);
     splitCopyBtn?.addEventListener("click", () => {
-      trackAnalytics("split_copy_open");
       openSplitCopyDialog();
     });
     splitCopyRebuild?.addEventListener("click", () => buildSplitCopyPages());
@@ -781,12 +779,10 @@
       if (await runWorkbenchBeforeAction("save")) void saveVisibleMml();
     });
     midiExtractBtn?.addEventListener("click", () => {
-      trackAnalytics("open_midi_extract_online");
       const midiExtractWindow = window.open("https://muscriptor.kyutai.org/", "_blank");
       if (midiExtractWindow) midiExtractWindow.opener = null;
     });
     rhythmGameBtn?.addEventListener("click", () => {
-      trackAnalytics("open_rhythm_game");
       openRhythmGameLayer();
     });
     rhythmGameClose?.addEventListener("click", closeRhythmGameLayer);
@@ -1128,28 +1124,6 @@
     if (midiConvertDialog?.open) refreshMidiConvertLocale();
   }
 
-  function trackAnalytics(eventName, params = {}) {
-    const aliases = {
-      local_import_mml: "mml_import_complete",
-      drive_import_mml: "mml_import_complete",
-      midi_convert_complete: "mml_import_complete",
-      copy_all_mml: "copy_all_mml",
-      split_copy_open: "split_copy",
-      open_midi_extract_online: "open_midi_extract",
-      open_rhythm_game: "open_rhythm_game"
-    };
-    const normalized = aliases[String(eventName || "")];
-    if (!normalized) return false;
-    try {
-      const analytics = window.MobibardAnalytics;
-      if (analytics && typeof analytics.logEvent === "function") {
-        analytics.logEvent(normalized, params);
-        return true;
-      }
-    } catch (_) {}
-    return false;
-  }
-
   function openHeaderShortcutLink() {
     if (!midiSiteLinks) return;
     const url = midiSiteLinks.value;
@@ -1162,26 +1136,19 @@
     }
   }
 
-  function analyticsFileType(nameOrExt) {
-    const text = String(nameOrExt || "").trim().toLowerCase();
-    const ext = text.includes(".") ? text.split(".").pop() : text;
-    if (ext === "midi") return "mid";
-    return SOURCE_FILE_EXTENSIONS.has(ext) ? ext : "unknown";
-  }
-
-  function analyticsFileSizeBucket(bytes) {
-    const size = Number(bytes) || 0;
-    if (size <= 0) return "unknown";
-    if (size < 10 * 1024) return "lt_10kb";
-    if (size < 100 * 1024) return "lt_100kb";
-    if (size < 1024 * 1024) return "lt_1mb";
-    if (size < 10 * 1024 * 1024) return "lt_10mb";
-    return "gte_10mb";
-  }
-
-  function analyticsChannelCount(text) {
-    try { return Math.max(0, countMmlChannels(text)); }
-    catch (_) { return 0; }
+  function trackScoreCopy(scope) {
+    const event = { name: "score_copy", params: { page: "player", copy_scope: String(scope || "all") } };
+    try {
+      const analytics = window.MobibardAnalytics;
+      if (analytics && typeof analytics.logEvent === "function") {
+        analytics.logEvent(event.name, event.params);
+      } else {
+        const queueKey = "__MOBIBARD_ANALYTICS_QUEUE__";
+        const queue = Array.isArray(window[queueKey]) ? window[queueKey] : (window[queueKey] = []);
+        queue.push(event);
+        if (queue.length > 100) queue.splice(0, queue.length - 100);
+      }
+    } catch (_) {}
   }
 
   function loadPlaybackPrefs() {
@@ -3297,10 +3264,6 @@
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
       showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
-      trackAnalytics("drive_import_mml", {
-        file_type: "google_docs",
-        channel_count: analyticsChannelCount(mainMml.value)
-      });
       setGoogleStatus(i18nText("drive.gdocs_loaded"));
       return;
     }
@@ -3335,10 +3298,6 @@
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
       showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
-      trackAnalytics("drive_import_mml", {
-        file_type: analyticsFileType(name),
-        channel_count: analyticsChannelCount(mainMml.value)
-      });
       setGoogleStatus(i18nText("drive.mmi_loaded"));
       return;
     }
@@ -3359,10 +3318,6 @@
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
       showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
-      trackAnalytics("drive_import_mml", {
-        file_type: analyticsFileType(name),
-        channel_count: analyticsChannelCount(mainMml.value)
-      });
       setGoogleStatus(i18nText("drive.mle3_loaded"));
       return;
     }
@@ -3382,10 +3337,6 @@
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
-      trackAnalytics("drive_import_mml", {
-        file_type: analyticsFileType(name),
-        channel_count: analyticsChannelCount(mainMml.value)
-      });
       setGoogleStatus(i18nText("drive.txt_loaded"));
       return;
     }
@@ -4039,11 +3990,6 @@
         notifyWorkbenchSourceBaseline(mainMml.value, { name, sourceType: "mmi", sourceLabel: "MabiIcco", newSource: true });
         rememberSuggestedMmlSaveFileName(name);
         showLoadedChannelCount(midiLoadBtn, i18nText("st.loaded"), mainMml.value);
-        trackAnalytics("local_import_mml", {
-          file_type: analyticsFileType(ext),
-          file_size: analyticsFileSizeBucket(file.size),
-          channel_count: analyticsChannelCount(mainMml.value)
-        });
       } else if (ext === "mml") {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const loaded = await readThreeMleMmlFile(bytes, name);
@@ -4058,11 +4004,6 @@
         notifyWorkbenchSourceBaseline(mainMml.value, { name, sourceType: "mml", sourceLabel: "3MLE", newSource: true });
         rememberSuggestedMmlSaveFileName(name);
         showLoadedChannelCount(midiLoadBtn, i18nText("st.loaded"), mainMml.value);
-        trackAnalytics("local_import_mml", {
-          file_type: analyticsFileType(ext),
-          file_size: analyticsFileSizeBucket(file.size),
-          channel_count: analyticsChannelCount(mainMml.value)
-        });
       } else if (ext === "txt") {
         const text = await file.text();
         const loaded = readMmlTextFile(text);
@@ -4075,11 +4016,6 @@
         }
         notifyWorkbenchSourceBaseline(mainMml.value, { name, sourceType: "txt", sourceLabel: "MML", newSource: true });
         showLoadedChannelCount(midiLoadBtn, i18nText("st.loaded"), mainMml.value);
-        trackAnalytics("local_import_mml", {
-          file_type: analyticsFileType(ext),
-          file_size: analyticsFileSizeBucket(file.size),
-          channel_count: analyticsChannelCount(mainMml.value)
-        });
       } else {
         throw new Error(i18nText("xml.unsupported_file"));
       }
@@ -6316,13 +6252,6 @@
       setMidiConvertBusy(false);
       pendingMidiImport = null;
       pendingMidiSettings = null;
-      trackAnalytics("midi_convert_complete", {
-        source_type: sourceType,
-        export_channels: Number(options.partCount || 0),
-        quantize_division: Number(options.quantizeDivision || 64),
-        instrument_groups: midiGroupCount,
-        optimized_chars: saved
-      });
       showDialog(i18nText("midi.convert_done_title", [sourceLabel]), result.message);
     } catch (err) {
       setMidiConvertBusy(false);
@@ -7699,7 +7628,6 @@
       setMainMml(result.mml);
       closeTempoSimplifyDialog();
       flashButton(tempoSimplifyBtn, i18nText("cfg.applied"));
-      trackAnalytics("tempo_simplify_apply", { removed_tempos: count });
       showDialog(
         i18nText("tempo.simplify"),
         i18nText("tempo.simplify_applied", [formatCount(count)])
@@ -8813,6 +8741,7 @@
     }
     try {
       await navigator.clipboard.writeText(text);
+      trackScoreCopy("all");
       showTransientToast(i18nText("st.copy_done"));
     } catch {
       const ta = document.createElement("textarea");
@@ -8823,9 +8752,11 @@
       document.body.appendChild(ta);
       ta.select();
       try {
-        document.execCommand("copy");
+        const copied = document.execCommand("copy");
+        if (!copied) throw new Error("copy failed");
+        trackScoreCopy("all");
         showTransientToast(i18nText("st.copy_done"));
-        } catch (err) {
+      } catch (err) {
         showDialog(i18nText("err.copy"), i18nText("mml.auto_copying"));
       } finally {
         ta.remove();
@@ -8962,6 +8893,7 @@
     }
     try {
       await navigator.clipboard.writeText(text);
+      trackScoreCopy("split");
       showTransientToast(i18nText("st.copy_done"));
     } catch (_) {
       const ta = document.createElement("textarea");
@@ -8971,7 +8903,9 @@
       document.body.appendChild(ta);
       ta.select();
       try {
-        document.execCommand("copy");
+        const copied = document.execCommand("copy");
+        if (!copied) throw new Error("copy failed");
+        trackScoreCopy("split");
         showTransientToast(i18nText("st.copy_done"));
       } catch (err) {
         showDialog(i18nText("err.copy"), i18nText("msg.auto_copying"));
@@ -9422,7 +9356,7 @@
       blackLane: dark ? "rgba(255, 255, 255, 0.035)" : "rgba(15, 23, 42, 0.035)",
       blackA: "#020617",
       blackB: "#111827",
-      parts: Array.from({ length: 6 }, (_, i) => getCanvasCssVar(`--part${i}`, ["#0b4fc4", "#b91c1c", "#047857", "#6d28d9", "#a16207", "#0f5f59"][i]))
+      parts: Array.from({ length: 6 }, (_, i) => getCanvasCssVar(`--part${i}`, ["#dc2626", "#16a34a", "#2563eb", "#b58105", "#0891b2", "#c026d3"][i]))
     };
   }
 

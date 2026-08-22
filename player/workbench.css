@@ -1204,7 +1204,7 @@ textarea.wb4-question-input { min-height: 110px; resize: vertical; }
   min-width: 0;
   padding: 10px 9px;
   border-left: 1px solid var(--wb4-line);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--wb6-channel-color) 7%, transparent), transparent);
+  background: color-mix(in srgb, var(--wb6-channel-color) 8%, var(--wb4-surface));
   text-align: center;
 }
 .wb6-channel-count:first-child { border-left: 0; }
@@ -5267,4 +5267,16 @@ body.player-source-workbench-v9 > main {
   background: color-mix(in srgb, var(--danger) 13%, var(--wb4-surface)) !important;
   color: var(--danger) !important;
   border-color: color-mix(in srgb, var(--danger) 45%, var(--wb4-line)) !important;
+}
+
+/* 2026-08-23 final4 --------------------------------------------------------
+   Keep overview boundaries single-pixel: the outer card owns the top/bottom
+   edge, while the channel-count strip owns only the internal divider below it. */
+.player-source-workbench-v9 .wb6-overview-block > .wb6-channel-count-strip {
+  border-top: 0 !important;
+  border-bottom: 1px solid var(--wb4-line) !important;
+}
+.player-source-workbench-v9 .wb6-overview-block > .wb9-common-options.wb4-common-options {
+  border-top: 0 !important;
+  border-bottom: 0 !important;
 }

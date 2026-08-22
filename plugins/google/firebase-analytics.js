@@ -6,6 +6,7 @@ import { getAnalytics, isSupported, logEvent as firebaseLogEvent } from "https:/
 
 const QUEUE_KEY = "__MOBIBARD_ANALYTICS_QUEUE__";
 const MAX_QUEUE = 100;
+const ALLOWED_EVENTS = new Set(["page_open", "score_copy"]);
 const config = window.MOBIBARD_FIREBASE_CONFIG || {};
 const queued = Array.isArray(window[QUEUE_KEY]) ? window[QUEUE_KEY] : [];
 window[QUEUE_KEY] = queued;
@@ -57,6 +58,7 @@ function enqueue(name, params = {}) {
 
 function logEvent(name, params = {}) {
   const eventName = normalizeEventName(name);
+  if (!ALLOWED_EVENTS.has(eventName)) return false;
   const eventParams = normalizeEventParams(params);
   if (!state.enabled || !state.analytics) {
     enqueue(eventName, eventParams);
@@ -68,6 +70,13 @@ function logEvent(name, params = {}) {
   } catch (_) {
     return false;
   }
+}
+
+function currentPageId() {
+  const path = String(window.location?.pathname || "").toLowerCase();
+  if (/(?:^|\/)simple(?:\/|$)/.test(path)) return "simple";
+  if (/(?:^|\/)player(?:\/|$)/.test(path)) return "player";
+  return "";
 }
 
 window.MobibardAnalytics = {
@@ -96,6 +105,10 @@ async function initFirebaseAnalytics() {
     state.ready = true;
     state.enabled = true;
     state.reason = "enabled";
+
+    const page = currentPageId();
+    if (page) logEvent("page_open", { page });
+
     const pending = queued.splice(0, queued.length);
     for (const item of pending) logEvent(item.name, item.params);
   } catch (err) {
