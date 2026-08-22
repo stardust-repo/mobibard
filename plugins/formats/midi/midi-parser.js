@@ -5,7 +5,7 @@
   const utils = root.MabiUtils;
   if (!utils) throw new Error("utils.js must be loaded before midi-parser.js");
 
-  const VERSION = "5.0.0";
+  const VERSION = "5.1.0";
   const DEFAULT_PPQ = 480;
   const DEFAULT_TEMPO = 120;
 

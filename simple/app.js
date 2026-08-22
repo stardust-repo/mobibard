@@ -13,8 +13,8 @@
   const GENERATED_MML_LEADING_SILENCE_SECONDS = 2;
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
-  const LOCALE_VERSION = "5.0.0";
-  const LOCALE_REVISION = "20260818-211321";
+  const LOCALE_VERSION = "5.1.0";
+  const LOCALE_REVISION = "20260823-release5";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 
@@ -33,6 +33,7 @@
     status: $("status"),
     playbackControls: $("playbackControls"),
     playButton: $("playButton"),
+    rewindButton: $("rewindButton"),
     playbackSlider: $("playbackSlider"),
     results: $("results"),
     resultsTitle: $("resultsTitle"),
@@ -56,7 +57,8 @@
     languageLabel: $("languageLabel"),
     themeLabel: $("themeLabel"),
     themeButton: $("themeButton"),
-    themeButtonText: $("themeButtonText")
+    themeButtonText: $("themeButtonText"),
+    toast: $("simpleToast")
   };
 
   function openFilePickerInput(input) {
@@ -245,15 +247,19 @@
       "xml.err_parse": "xmlInvalid",
       "xml.err_parts_missing": "xmlInvalid",
       "xml.err_score_type": "xmlInvalid",
-      "xml.parse_error": "xmlInvalid"
+      "xml.parse_error": "xmlInvalid",
+      "simple.err_playback_plugin": "playbackPluginMissing",
+      "simple.err_soundbank": "soundbankMissing",
+      "simple.err_preset": "presetMissing",
+      "simple.err_no_audible": "noAudiblePlayback"
     };
     const uiKey = map[key];
     if (uiKey) return t(uiKey, values);
     if (key === "ui.no_notes") return t("engineNoNotes");
-    if (key === "midi.program_number") return `Program ${values[0] ?? ""}`;
-    if (key === "midi.part_default") return `Part ${values[0] ?? ""}`;
-    if (key === "ui.beat") return language === "ko" ? "리듬" : (language === "ja" ? "リズム" : "Beat");
-    if (key === "snd.no_inst") return language === "ko" ? "악기 없음" : "No instrument";
+    if (key === "midi.program_number") return ({ ko: `프로그램 ${values[0] ?? ""}`, ja: `プログラム ${values[0] ?? ""}`, "zh-CN": `音色 ${values[0] ?? ""}`, "zh-TW": `音色 ${values[0] ?? ""}` }[language] || `Program ${values[0] ?? ""}`);
+    if (key === "midi.part_default") return ({ ko: `파트 ${values[0] ?? ""}`, ja: `パート ${values[0] ?? ""}`, "zh-CN": `声部 ${values[0] ?? ""}`, "zh-TW": `聲部 ${values[0] ?? ""}` }[language] || `Part ${values[0] ?? ""}`);
+    if (key === "ui.beat") return ({ ko: "리듬", ja: "リズム", "zh-CN": "节拍", "zh-TW": "節拍" }[language] || "Beat");
+    if (key === "snd.no_inst") return ({ ko: "악기 없음", ja: "楽器なし", "zh-CN": "无乐器", "zh-TW": "無樂器" }[language] || "No instrument");
     if (key === "midi.convert_result_brief" || key === "midi.warn_pitch_skipped" || key === "midi.warn_missing_note_off") return "";
     if (key === "midi.note_count") return String(values[0] ?? "");
     if (key.startsWith("split.warn_")) return "";
@@ -279,7 +285,7 @@
     document.documentElement.lang = activeLocale.htmlLang || (language === "zh-CN" ? "zh-Hans" : (language === "zh-TW" ? "zh-Hant" : language));
     document.title = t("browserTitle");
     els.pageTitleText.textContent = t("title");
-    els.eyebrow.textContent = t("eyebrow");
+    if (els.eyebrow) els.eyebrow.textContent = t("eyebrow");
     els.brandName.textContent = t("brand");
     els.subtitle.textContent = t("subtitle");
     els.midiExtractLink.textContent = t("extract");
@@ -287,9 +293,9 @@
     els.fullEditorLink.href = `../player/index.html?lang=${encodeURIComponent(language)}`;
     els.discordLink.setAttribute("aria-label", t("discord"));
     els.discordLink.title = t("discord");
-    els.settingsButton.setAttribute("aria-label", t("settings"));
-    els.settingsButton.title = t("settings");
-    els.settingsMenu.setAttribute("aria-label", t("settings"));
+    els.settingsButton.setAttribute("aria-label", t("account"));
+    els.settingsButton.title = t("account");
+    els.settingsMenu.setAttribute("aria-label", t("account"));
     els.languageLabel.textContent = t("language");
     els.themeLabel.textContent = t("themeLabel");
     els.themeButtonText.textContent = t("theme");
@@ -312,6 +318,11 @@
     els.languageSelect.value = language;
     updatePlayButton();
     if (resultPages.length) renderResults(resultPages);
+    try {
+      window.dispatchEvent(new CustomEvent("mobibard:simple-localechange", {
+        detail: { language, strings: { ...(activeLocale?.strings || {}) } }
+      }));
+    } catch (_) {}
   }
 
   function setSettingsMenuOpen(open) {
@@ -641,12 +652,33 @@
     return text.length > 240 ? `${text.slice(0, 240)}...` : text;
   }
 
-  function showStatus(message) {
-    els.status.textContent = message;
-    els.status.hidden = false;
+  let toastTimer = 0;
+
+  function showToast(message, tone = "info") {
+    const toast = els.toast || $("simpleToast");
+    if (!toast || !message) return;
+    clearTimeout(toastTimer);
+    toast.textContent = String(message);
+    toast.dataset.tone = tone;
+    toast.hidden = false;
+    toast.classList.remove("is-visible");
+    requestAnimationFrame(() => toast.classList.add("is-visible"));
+    toastTimer = window.setTimeout(() => {
+      toast.classList.remove("is-visible");
+      window.setTimeout(() => { toast.hidden = true; }, 180);
+    }, 1800);
+  }
+
+  function showStatus(message, tone = "error") {
+    if (els.status) {
+      els.status.textContent = "";
+      els.status.hidden = true;
+    }
+    showToast(message, tone);
   }
 
   function hideStatus() {
+    if (!els.status) return;
     els.status.hidden = true;
     els.status.textContent = "";
   }
@@ -658,6 +690,7 @@
     preparedPlaybackNotes = null;
     els.playbackControls.hidden = true;
     els.playButton.disabled = true;
+    if (els.rewindButton) els.rewindButton.disabled = true;
     els.playbackSlider.disabled = true;
     els.playbackSlider.min = "0";
     els.playbackSlider.max = "0";
@@ -671,6 +704,7 @@
       const duration = Math.max(0, Number(schedule.duration) || 0);
       els.playbackControls.hidden = false;
       els.playButton.disabled = !(schedule.notes || []).length || duration <= 0;
+      if (els.rewindButton) els.rewindButton.disabled = duration <= 0;
       els.playbackSlider.disabled = duration <= 0;
       els.playbackSlider.max = String(duration);
       els.playbackSlider.value = "0";
@@ -688,6 +722,7 @@
     playbackOffset = 0;
     els.playbackControls.hidden = true;
     els.playButton.disabled = true;
+    if (els.rewindButton) els.rewindButton.disabled = true;
     els.playbackSlider.disabled = true;
     els.playbackSlider.max = "0";
     els.playbackSlider.value = "0";
@@ -712,7 +747,7 @@
     if (!playbackSoundFontPromise) {
       playbackSoundFontPromise = (async () => {
         const playbackApi = window.MobibardSimplePlayback;
-        if (!playbackApi?.loadDefaultPreset) throw new Error("Simple 재생 플러그인을 불러오지 못했습니다.");
+        if (!playbackApi?.loadDefaultPreset) throw new Error(engineText("simple.err_playback_plugin"));
         const loaded = await playbackApi.loadDefaultPreset({
           bank: FIXED_PLAYBACK_BANK,
           program: FIXED_PLAYBACK_PROGRAM,
@@ -730,7 +765,16 @@
   }
 
   function updatePlayButton() {
-    els.playButton.textContent = playbackPlaying ? t("stop") : t("play");
+    const label = playbackPlaying ? t("stop") : t("play");
+    els.playButton.classList.toggle("is-playing", playbackPlaying);
+    els.playButton.setAttribute("aria-label", label);
+    els.playButton.title = label;
+  }
+
+  function rewindPlayback() {
+    stopPlayback(false);
+    playbackOffset = 0;
+    setPlaybackSlider(0);
   }
 
   function getCurrentPlaybackOffset() {
@@ -834,7 +878,7 @@
       await ensureFixedPlaybackPreset();
       stopPlayback(false);
       const prepared = prepareFixedPlaybackNotes();
-      if (!prepared.length) throw new Error("Bank 0 / Program 0 produced no audible playback notes");
+      if (!prepared.length) throw new Error(engineText("simple.err_no_audible"));
       activeSampleSources = [];
       scheduledPlaybackIds = new Set();
       playOffsetStart = playbackOffset;
@@ -868,6 +912,58 @@
     setPlaybackSlider(playbackOffset);
   }
 
+  function normalizePastedMml(value) {
+    let text = String(value || "").trim();
+    if (!text) throw new Error(t("pasteEmpty"));
+    if (!/^MML\s*@/i.test(text)) {
+      if (text.includes(",")) text = `MML@${text.replace(/;\s*$/, "")};`;
+      else text = `MML@${text.replace(/;\s*$/, "")},,;`;
+    }
+    if (!/;\s*$/.test(text)) text += ";";
+    if (window.MabiMml?.parseMabinogiMml) window.MabiMml.parseMabinogiMml(text);
+    return text;
+  }
+
+  function loadPastedMml(value, name = "") {
+    const normalized = normalizePastedMml(value);
+    conversionSerial += 1;
+    fileSelectionSerial += 1;
+    if (conversionTimer) clearTimeout(conversionTimer);
+    conversionTimer = 0;
+    selectedFile = null;
+    selectedBytes = null;
+    currentMml = normalized;
+    resultPages = splitForCopy(normalized);
+    els.fileName.textContent = name || t("pastedName");
+    els.fileName.hidden = false;
+    rebuildPlayback(normalized);
+    renderResults(resultPages);
+    hideStatus();
+    showToast(t("pasteLoaded"), "success");
+    return normalized;
+  }
+
+  function currentSuggestedName() {
+    const base = String(selectedFile?.name || els.fileName?.textContent || "mobibard-simple")
+      .replace(/\.[^.]+$/, "")
+      .replace(/[\/:*?"<>|]+/g, "_")
+      .trim() || "mobibard-simple";
+    return `${base}.txt`;
+  }
+
+  window.MobibardSimpleBridge = {
+    selectFile,
+    loadPastedMml,
+    getCurrentMml: () => currentMml,
+    getSuggestedName: currentSuggestedName,
+    rewindPlayback,
+    stopPlayback: () => stopPlayback(true),
+    showToast,
+    getLanguage: () => language,
+    translate: (key, values = []) => t(key, values)
+  };
+  try { window.dispatchEvent(new Event("mobibard:simple-ready")); } catch (_) {}
+
   function finishSeek() {
     isSeeking = false;
     if (!seekWasPlaying) return;
@@ -880,7 +976,7 @@
     openFilePickerInput(els.fileInput);
   });
   els.dropZone.addEventListener("click", event => {
-    if (event.target === els.fileButton) return;
+    if (event.target.closest("button")) return;
     openFilePickerInput(els.fileInput);
   });
   els.dropZone.addEventListener("keydown", event => {
@@ -918,6 +1014,7 @@
   });
 
   els.playButton.addEventListener("click", togglePlayback);
+  els.rewindButton?.addEventListener("click", rewindPlayback);
   els.playbackSlider.addEventListener("pointerdown", () => {
     isSeeking = true;
     seekWasPlaying = playbackPlaying;

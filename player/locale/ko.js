@@ -211,6 +211,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "midi.preview_sound_missing": "{0} 미리듣기에 사용할 소리를 준비하지 못했습니다.",
     "midi.previewing": "{0} 미리듣기 중...",
     "midi.previewing_channel": "{0} 미리듣기 중...",
+    "midi.preview_stop": "중단",
     "midi.recent_sounds": "최근 MIDI 음색",
     "midi.select_inst_for_channel": "{0}에 사용할 악기를 하나 이상 선택해 주세요.",
     "midi.selected_inst_count": "선택 {0}개",
@@ -629,7 +630,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "ui.merge": "병합",
     "ui.middle_c": "은 4옥타브 도입니다.",
     "ui.mobibard": "모비바드",
-    "ui.mobibard_version": "모비바드 v5.0",
+    "ui.mobibard_version": "모비바드 v5.1",
     "ui.more": " 외",
     "ui.name_count": "{0} {1}개",
     "ui.named_chars": "{0}: {1}자",
@@ -778,6 +779,9 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "midi.category_drums_short": "드럼",
     "midi.choose_target_instrument": "대상 악기를 하나 이상 선택해 주세요.",
     "simple.label": "간편 모드",
-    "simple.open": "간편 모드 열기"
+    "simple.open": "간편 모드 열기",
+    "midi.instrument_note_placement": "노트 배치",
+    "midi.instrument_note_overlap": "노트 겹침",
+    "mml.pasted_name": "붙여넣은 MML"
   }
 };

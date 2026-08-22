@@ -218,7 +218,7 @@
   }
 
   window.MabiGuitarPro = Object.freeze({
-    version: "5.0.0",
+    version: "5.1.0",
     supportedExtensions: GP_FORMATS.map(definition => definition.extension),
     detectFormat,
     convertGuitarPro,

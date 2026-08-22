@@ -1,5 +1,7 @@
 # Music format normalization rules
 
+Release verification: **2026-08-23 / Mobibard v5.1**. No normalization fallback or ordering rule was changed by the final UI pass.
+
 Mobibard converts heterogeneous score, console, sequencer, and vocal-project formats into a common Standard MIDI-oriented representation before Editor/MML processing.
 
 ## Fallback constants

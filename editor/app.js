@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION_LABEL = "v5.0";
+  const APP_VERSION_LABEL = "v5.1";
 
   const CONFIG = {
     defaultChannelCount: 1,
@@ -1150,17 +1150,6 @@
     return name || "MIDI";
   }
 
-  function makeUniqueMidiTitle(fileName) {
-    const base = stripMidiFileExtension(fileName);
-    const occupied = new Set(state.midiDocuments.map((document) => String(document.title || "").toLocaleLowerCase()));
-    let title = base;
-    let suffix = 2;
-    while (occupied.has(title.toLocaleLowerCase())) {
-      title = `${base} (${suffix++})`;
-    }
-    return title;
-  }
-
   function getActiveMidiDocument() {
     return state.midiDocuments.find((document) => String(document.id) === String(state.activeMidiDocumentId)) || null;
   }
@@ -1409,11 +1398,6 @@
     return state.midiReference.groups.find((group) => group.id === groupId) || null;
   }
 
-  function getVisibleMidiGroups() {
-    const document = getActiveMidiDocument();
-    if (!document || document.visible === false) return [];
-    return state.midiReference.groups.filter((group) => group.visible !== false);
-  }
 
   function getMidiReferenceEndBeat(reference = state.midiReference) {
     let endBeat = Math.max(0, Number(reference?.durationBeats) || 0);
@@ -1577,9 +1561,6 @@
     return clamp(secondsToBeatUnclamped(seconds), 0, getTotalBeats());
   }
 
-  function secondsBetweenBeats(startBeat, endBeat) {
-    return Math.max(0, beatToSeconds(endBeat) - beatToSeconds(startBeat));
-  }
 
   function createTempoTimeMap(tempoCollection = null) {
     const tempos = Array.isArray(tempoCollection)
@@ -1800,7 +1781,6 @@
 
   function calculateRollSurfaceGeometry() {
     const viewportWidth = Math.max(1, elements.rollViewport.clientWidth);
-    const viewportHeight = Math.max(1, elements.rollViewport.clientHeight);
     const contentWidth = Math.max(1, getRollWidth());
     const contentHeight = Math.max(1, getRollHeight());
     const overscanX = Math.min(CONFIG.rollOverscanMaxX, Math.round(viewportWidth * CONFIG.rollOverscanXRatio));
@@ -1981,15 +1961,6 @@
     scheduleManualScrollSnap();
   }
 
-  function scheduleRollRedraw() {
-    if (state.viewportScroll.drawFrame) {
-      return;
-    }
-    state.viewportScroll.drawFrame = requestAnimationFrame(() => {
-      state.viewportScroll.drawFrame = 0;
-      drawRoll();
-    });
-  }
 
   function getCanvasTheme() {
     return CANVAS_THEME[state.theme] || CANVAS_THEME.dark;
@@ -2387,7 +2358,6 @@
 
   function resizeAndDraw() {
     ensureTimelineFitsViewport();
-    const rollWidth = getRollWidth();
     const rollHeight = getRollHeight();
     elements.rollViewport.style.setProperty("--roll-height", `${rollHeight}px`);
 
@@ -2838,9 +2808,6 @@
     context.restore();
   }
 
-  function positiveModulo(value, divisor) {
-    return ((value % divisor) + divisor) % divisor;
-  }
 
   function getAlignedVisiblePlayheadX() {
     return Math.round(beatToX(state.playhead.beat) - elements.rollViewport.scrollLeft);
@@ -3831,7 +3798,7 @@
     }
 
     const index = state.channels.findIndex((channel) => String(channel.id) === String(sourceId));
-    if (index >= 0) selectChannel(index, { toggle: false });
+    if (index >= 0) selectChannel(index);
   }
 
 
@@ -3964,9 +3931,6 @@
     return true;
   }
 
-  function removeAudioRuntime(clipId) {
-    state.audioRuntime.delete(String(clipId));
-  }
 
   async function requestDeleteAudioClip(clipId = state.activeAudioClipId) {
     const clip = state.audioClips.find((item) => String(item.id) === String(clipId));
@@ -4095,7 +4059,7 @@
     state.playback.audioSources = new Set();
   }
 
-  function scheduleAudioClipsForPlayback(startBeat) {
+  function scheduleAudioClipsForPlayback() {
     const context = audioEngine.context;
     if (!context) return 0;
     const globalRate = Math.max(0.01, Number(state.playbackRate) || 1);
@@ -5394,14 +5358,6 @@
     }
   }
 
-  function addMidiDocument(parsed, fileName = parsed.fileName) {
-    parsed.id = `midi-doc-${state.nextMidiDocumentId++}`;
-    parsed.title = makeUniqueMidiTitle(fileName || parsed.title);
-    state.collapsedMidiDocumentIds.delete(String(parsed.id));
-    buildMidiPlaybackCache(parsed);
-    state.midiDocuments.push(parsed);
-    return parsed;
-  }
 
   function cloneMidiImportSelection() {
     const preview = state.midiImport.preview;
@@ -5578,7 +5534,6 @@
       state.projectName = sourceTitle;
     }
 
-    const documentLike = { title: sourceTitle, groups };
     const colorByInstrument = new Map();
     const createdChannels = [];
     let noteCount = 0;
@@ -5595,7 +5550,6 @@
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {
-          document: documentLike,
           voiceIndex,
           voiceCount: voices.length,
           copyColor,
@@ -6012,7 +5966,7 @@
     return (document.groups || []).filter((group) => selectedIds.has(String(group.id)));
   }
 
-  function makeEditorChannelFromMidiVoice(group, notes, { document = null, voiceIndex = 0, voiceCount = 1, copyColor = null } = {}) {
+  function makeEditorChannelFromMidiVoice(group, notes, { voiceIndex = 0, voiceCount = 1, copyColor = null } = {}) {
     const id = nextChannelId();
     const channel = createDefaultChannel(id, state.channels.length);
     const voiceSuffix = voiceCount > 1 ? ` (${voiceIndex + 1})` : "";
@@ -6057,7 +6011,6 @@
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {
-          document,
           voiceIndex,
           voiceCount: voices.length,
           copyColor,
@@ -6397,7 +6350,7 @@
     if (!item) return false;
     if (item.dataset.channelId != null) {
       const index = state.channels.findIndex((channel) => String(channel.id) === String(item.dataset.channelId));
-      return index >= 0 ? selectChannel(index, { toggle: false }) : false;
+      return index >= 0 ? selectChannel(index) : false;
     }
     if (item.dataset.audioClipId != null) {
       return selectAudioClip(item.dataset.audioClipId);
@@ -6773,22 +6726,6 @@
     return canPlaceMonophonicNotes(candidateNotes, blockers);
   }
 
-  function buildNoteBoundarySnapPoints(channel, ignoredNoteIds = new Set()) {
-    const ignored = ignoredNoteIds instanceof Set ? ignoredNoteIds : new Set(ignoredNoteIds || []);
-    const values = [0];
-    for (const note of channel?.notes || []) {
-      if (ignored.has(note.id)) continue;
-      const start = Math.max(0, Number(note.startBeat) || 0);
-      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-      values.push(start, end);
-    }
-    values.sort((a, b) => a - b);
-    const unique = [];
-    for (const value of values) {
-      if (!unique.length || Math.abs(value - unique[unique.length - 1]) > 1e-7) unique.push(value);
-    }
-    return unique;
-  }
 
   // Magnetic snapping is directional. A note before the edited interval contributes
   // only its trailing edge; a note after the interval contributes only its leading
@@ -6929,67 +6866,8 @@
     return selected;
   }
 
-  function findMagneticBoundaryBeat(rawBeat, boundaries, thresholdPixels = CONFIG.noteBoundarySnapPixels) {
-    // Kept for non-drag callers. Dragging uses resolveMagneticBoundaryBeat(), which
-    // also catches boundaries crossed between pointer events and provides hysteresis.
-    const captureBeat = Math.max(CONFIG.minimumNoteBeat * 0.18, thresholdPixels / Math.max(1, getQuarterWidth()));
-    return findNearestBoundaryBeat(Number(rawBeat) || 0, boundaries, captureBeat);
-  }
 
-  function buildMoveSnapOffsets(originals, anchorStartBeat) {
-    const offsets = [];
-    for (const original of originals || []) {
-      const start = Number(original.startBeat) || 0;
-      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(original.durationBeat) || CONFIG.minimumNoteBeat);
-      offsets.push(start - anchorStartBeat, end - anchorStartBeat);
-    }
-    offsets.sort((a, b) => a - b);
-    const unique = [];
-    for (const offset of offsets) {
-      if (!unique.length || Math.abs(offset - unique[unique.length - 1]) > 1e-7) unique.push(offset);
-    }
-    if (unique.length <= 128) return unique;
-    const sampled = [unique[0], unique[unique.length - 1]];
-    const step = Math.ceil(unique.length / 126);
-    for (let index = step; index < unique.length - 1; index += step) sampled.push(unique[index]);
-    return sampled.sort((a, b) => a - b);
-  }
 
-  function snapMoveDeltaToNoteBoundaries(rawDeltaBeat, interaction) {
-    const boundaries = interaction?.magnetBoundaries;
-    const offsets = interaction?.magnetOffsets;
-    if (!Array.isArray(boundaries) || !boundaries.length || !Array.isArray(offsets) || !offsets.length) return null;
-
-    const unit = getSnapBeat();
-    const captureBeat = getMagneticSnapCaptureBeat(unit);
-    const releaseBeat = Math.max(captureBeat * 1.45, Math.min(unit * 0.46, 1));
-    const latchedDelta = Number(interaction.magnetLatchedDeltaBeat);
-    if (Number.isFinite(latchedDelta) && Math.abs(rawDeltaBeat - latchedDelta) <= releaseBeat + 1e-9) {
-      interaction.magnetLastRawDeltaBeat = rawDeltaBeat;
-      return latchedDelta;
-    }
-
-    const previousDelta = Number(interaction.magnetLastRawDeltaBeat);
-    let best = null;
-    for (const offset of offsets) {
-      const movingBeat = interaction.anchorOriginalStartBeat + rawDeltaBeat + offset;
-      const nearby = findNearestBoundaryBeat(movingBeat, boundaries, captureBeat);
-      const previousMovingBeat = Number.isFinite(previousDelta)
-        ? interaction.anchorOriginalStartBeat + previousDelta + offset
-        : NaN;
-      const crossed = findCrossedBoundaryBeat(previousMovingBeat, movingBeat, boundaries);
-      const boundary = crossed ?? nearby;
-      if (boundary == null) continue;
-      const correction = boundary - movingBeat;
-      const distance = Math.abs(correction);
-      const candidate = { delta: rawDeltaBeat + correction, distance };
-      if (!best || candidate.distance < best.distance - 1e-9) best = candidate;
-    }
-
-    interaction.magnetLastRawDeltaBeat = rawDeltaBeat;
-    interaction.magnetLatchedDeltaBeat = best?.delta ?? null;
-    return best?.delta ?? null;
-  }
 
   function snapMoveDeltaDirectionally(rawDeltaBeat, interaction) {
     if (!interaction) return null;
@@ -7159,19 +7037,8 @@
     return true;
   }
 
-  function deselectActiveChannel() {
-    // 채널은 항상 하나가 선택되어 있어야 하므로 이전 버전의 선택 해제 동작은 더 이상 사용하지 않습니다.
-    if (!state.channels.length) state.channels = createDefaultChannels(1);
-    state.activePanel = "notes";
-    state.activeAudioClipId = null;
-    state.activeChannel = clamp(state.activeChannel, 0, state.channels.length - 1);
-    clearMidiSelection();
-    renderChannelTabs();
-    renderChannelEditor();
-    return false;
-  }
 
-  function selectChannel(index, { toggle = false } = {}) {
+  function selectChannel(index) {
     setSidebarTab("channels");
     const nextIndex = clamp(index, 0, state.channels.length - 1);
     // 채널 선택은 항상 하나를 유지합니다. 같은 채널을 다시 눌러도 선택 해제하지 않습니다.
@@ -10517,10 +10384,6 @@
     elements.playButton.textContent = "▶ 재생";
   }
 
-  function getAudibleMidiGroups(midiDocument = getActiveMidiDocument()) {
-    if (!midiDocument || midiDocument.muted) return [];
-    return (midiDocument.groups || []).filter((group) => !group.muted);
-  }
 
   function getPlaybackEndBeat() {
     const lastAudioEnd = state.audioClips
@@ -10928,7 +10791,7 @@
       state.playback.loading = false;
       state.playback.running = true;
       updatePlayButton();
-      scheduleAudioClipsForPlayback(startBeat);
+      scheduleAudioClipsForPlayback();
       if (playbackNotes.length) schedulePlaybackLookahead();
       state.playback.animationFrame = requestAnimationFrame(playbackFrame);
     } catch (error) {
@@ -12043,12 +11906,6 @@
     elements.channelColorInput.click();
   }
 
-  function setChannelPanelHeight(height) {
-    const available = elements.workspace.clientHeight;
-    const clamped = clamp(height, 150, Math.max(150, available - 150));
-    document.documentElement.style.setProperty("--channel-height", `${clamped}px`);
-    requestAnimationFrame(resizeAndDraw);
-  }
 
   function initializeSplitter() {
     // 하단 채널 영역은 두 줄 고정 높이이므로 크기 조절기를 사용하지 않습니다.
@@ -12826,20 +12683,6 @@
     });
   }
 
-  function seedDemoNotes() {
-    const channel = state.channels[0];
-    const pitches = [60, 62, 64, 67, 69, 67, 64, 62];
-    pitches.forEach((pitch, index) => {
-      channel.notes.push({
-        id: state.nextNoteId++,
-        pitch,
-        startBeat: index * 0.5,
-        durationBeat: index % 3 === 0 ? 0.5 : 0.25,
-        velocity: 100,
-        volume: velocityToMmlVolume(100),
-      });
-    });
-  }
 
   function populateChannelInstrumentSelect() {
     if (!elements.channelInstrumentSelect || elements.channelInstrumentSelect.options.length) return;

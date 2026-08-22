@@ -128,11 +128,11 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "game.load_fail": "モビビートを読み込めませんでした。../mobibeats/ のパスを確認してください。",
     "game.loading": "モビビートを読み込んでいます。",
     "game.midi_extraction": "MIDI抽出、リズムゲーム、カチッ版",
-    "game.mobibeat": "モビビート",
-    "game.mobibeat_mml": "モビビートMMLリズムゲーム",
+    "game.mobibeat": "モビビーツ",
+    "game.mobibeat_mml": "モビビーツ MMLリズムゲーム",
     "game.no_channel": "リズムゲームで使用できる、音の出るMMLチャンネルがありません。",
     "game.open_fail": "リズムゲームを開けません",
-    "game.open_mobibeat": "現在のMMLでモビビートのリズムゲームを開く",
+    "game.open_mobibeat": "現在のMMLでモビビーツのリズムゲームを開く",
     "game.preparing": "ゲームを準備しています。",
     "game.ready": "ゲームの準備が完了しました",
     "game.send_fail": "モビビートに演奏情報を送信できませんでした。ページを閉じて、もう一度お試しください。",
@@ -211,6 +211,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "midi.preview_sound_missing": "{0}の試聴用サウンドを準備できませんでした。",
     "midi.previewing": "{0}を試聴中...",
     "midi.previewing_channel": "{0}を試聴中...",
+    "midi.preview_stop": "停止",
     "midi.recent_sounds": "最近のMIDI音色",
     "midi.select_inst_for_channel": "{0}に使用する楽器を1つ以上選択してください。",
     "midi.selected_inst_count": "{0}件選択",
@@ -629,7 +630,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "ui.merge": "結合",
     "ui.middle_c": "はC4です。",
     "ui.mobibard": "モビバード",
-    "ui.mobibard_version": "モビバード v5.0",
+    "ui.mobibard_version": "モビバード v5.1",
     "ui.more": "ほか",
     "ui.name_count": "{0}: {1}件",
     "ui.named_chars": "{0}: {1}文字",
@@ -778,6 +779,9 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "midi.category_drums_short": "ドラム",
     "midi.choose_target_instrument": "対象楽器を1つ以上選択してください。",
     "simple.label": "簡単モード",
-    "simple.open": "簡単モードを開く"
+    "simple.open": "簡単モードを開く",
+    "midi.instrument_note_placement": "ノート配置",
+    "midi.instrument_note_overlap": "ノート重複",
+    "mml.pasted_name": "貼り付けたMML"
   }
 };

@@ -578,7 +578,7 @@
   }
 
   const editorSoundBankApi = Object.freeze({
-    version: "5.0.1",
+    version: "5.1.0",
     parse(source, options = {}) {
       const shared = window.MabiSoundBank;
       if (source && typeof source.arrayBuffer === "function") return shared?.parseSoundBankFile?.(source, options);

@@ -1,9 +1,6 @@
 :root {
   --bg: #070817;
-  --bg-2: #0d1030;
   --panel: rgba(16, 19, 49, 0.88);
-  --panel-strong: #121634;
-  --panel-soft: rgba(255, 255, 255, 0.065);
   --line: rgba(255, 255, 255, 0.13);
   --line-strong: rgba(255, 255, 255, 0.24);
   --text: #f8f8ff;
@@ -11,9 +8,6 @@
   --muted-2: #7e88b8;
   --accent: #b578ff;
   --accent-2: #55d6ff;
-  --accent-3: #ff6ec7;
-  --success: #56f2a4;
-  --warning: #ffd166;
   --danger: #ff6b86;
   --perfect: #7ff7ff;
   --great: #d59cff;

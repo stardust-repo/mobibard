@@ -301,5 +301,5 @@
     };
   }
 
-  root.MabiMnx = Object.freeze({ version: "5.0.0", parseDocumentBytes, mnxToMidiBytes });
+  root.MabiMnx = Object.freeze({ version: "5.1.0", parseDocumentBytes, mnxToMidiBytes });
 })();

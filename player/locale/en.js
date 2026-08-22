@@ -128,11 +128,11 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "game.load_fail": "Could not load Mobibeat. Check the ../mobibeats/ path.",
     "game.loading": "Loading Mobibeat.",
     "game.midi_extraction": "MIDI extraction, rhythm game, and Click version",
-    "game.mobibeat": "Mobibeat",
-    "game.mobibeat_mml": "Mobibeat MML rhythm game",
+    "game.mobibeat": "MobiBeats",
+    "game.mobibeat_mml": "MobiBeats MML rhythm game",
     "game.no_channel": "There are no audible MML channels to use in the rhythm game.",
     "game.open_fail": "Unable to open rhythm game",
-    "game.open_mobibeat": "Open the Mobibeat rhythm game with the current MML",
+    "game.open_mobibeat": "Open the MobiBeats rhythm game with the current MML",
     "game.preparing": "Preparing the game.",
     "game.ready": "Game ready",
     "game.send_fail": "Could not send the performance data to Mobibeat. Close this page and try again.",
@@ -211,6 +211,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "midi.preview_sound_missing": "No sound could be prepared for the {0} preview.",
     "midi.previewing": "Previewing {0}...",
     "midi.previewing_channel": "Previewing {0}...",
+    "midi.preview_stop": "Stop",
     "midi.recent_sounds": "Recent MIDI sounds",
     "midi.select_inst_for_channel": "Select at least one instrument for {0}.",
     "midi.selected_inst_count": "{0} selected",
@@ -629,7 +630,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "ui.merge": "Merge",
     "ui.middle_c": "is middle C (C4).",
     "ui.mobibard": "Mobibard",
-    "ui.mobibard_version": "Mobibard v5.0",
+    "ui.mobibard_version": "Mobibard v5.1",
     "ui.more": " more",
     "ui.name_count": "{0}: {1}",
     "ui.named_chars": "{0}: {1} chars",
@@ -778,6 +779,9 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "midi.category_drums_short": "Drums",
     "midi.choose_target_instrument": "Select at least one target instrument category.",
     "simple.label": "Simple mode",
-    "simple.open": "Open Simple mode"
+    "simple.open": "Open Simple mode",
+    "midi.instrument_note_placement": "Note placement",
+    "midi.instrument_note_overlap": "Note overlap",
+    "mml.pasted_name": "Pasted MML"
   }
 };

@@ -350,5 +350,5 @@
     };
   }
 
-  root.MabiMuseScore = Object.freeze({ version: "5.0.0", extractMscxDocument, museScoreToMidiBytes });
+  root.MabiMuseScore = Object.freeze({ version: "5.1.0", extractMscxDocument, museScoreToMidiBytes });
 })();

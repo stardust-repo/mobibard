@@ -128,11 +128,11 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "game.load_fail": "无法加载Mobibeat。请检查 ../mobibeats/ 路径。",
     "game.loading": "正在加载Mobibeat。",
     "game.midi_extraction": "MIDI 提取、节奏游戏和一键版",
-    "game.mobibeat": "Mobibeat",
-    "game.mobibeat_mml": "Mobibeat MML节奏游戏",
+    "game.mobibeat": "MobiBeats",
+    "game.mobibeat_mml": "MobiBeats MML 节奏游戏",
     "game.no_channel": "没有可用于节奏游戏的有声MML声道。",
     "game.open_fail": "无法打开节奏游戏",
-    "game.open_mobibeat": "使用当前MML打开Mobibeat节奏游戏",
+    "game.open_mobibeat": "使用当前 MML 打开 MobiBeats 节奏游戏",
     "game.preparing": "正在准备游戏。",
     "game.ready": "游戏准备完成",
     "game.send_fail": "无法将演奏信息发送到Mobibeat。请关闭页面后重试。",
@@ -211,6 +211,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "midi.preview_sound_missing": "无法为 {0} 预览准备声音。",
     "midi.previewing": "正在预览 {0}...",
     "midi.previewing_channel": "正在预览{0}...",
+    "midi.preview_stop": "停止",
     "midi.recent_sounds": "最近的MIDI音色",
     "midi.select_inst_for_channel": "请为{0}至少选择一种乐器。",
     "midi.selected_inst_count": "已选择 {0} 项",
@@ -629,7 +630,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "ui.merge": "合并",
     "ui.middle_c": "表示C4。",
     "ui.mobibard": "Mobibard",
-    "ui.mobibard_version": "Mobibard v5.0",
+    "ui.mobibard_version": "Mobibard v5.1",
     "ui.more": " 其他",
     "ui.name_count": "{0}：{1}",
     "ui.named_chars": "{0}：{1} 字符",
@@ -778,6 +779,9 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "midi.category_drums_short": "鼓",
     "midi.choose_target_instrument": "请至少选择一个目标乐器分类。",
     "simple.label": "简易模式",
-    "simple.open": "打开简易模式"
+    "simple.open": "打开简易模式",
+    "midi.instrument_note_placement": "音符配置",
+    "midi.instrument_note_overlap": "音符重叠",
+    "mml.pasted_name": "粘贴的 MML"
   }
 };

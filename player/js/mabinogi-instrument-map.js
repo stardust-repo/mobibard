@@ -155,7 +155,7 @@
   }
 
   window.MobibardInstrumentMap = Object.freeze({
-    version: "5.0.0",
+    version: "5.1.0",
     defaultTargetId: DEFAULT_TARGET_ID,
     targets: Object.freeze(Array.from(targetById.values())),
     programRules: Object.freeze(PROGRAM_RULES),

@@ -31,7 +31,6 @@
   --splitter-bottom: #17191e;
   --splitter-hover: #465063;
   --active-tab-bg: #343a46;
-  --active-tab-border: #596170;
   --input-bg: #17191e;
   --input-text: #e6edf7;
   --menu-bg: rgba(36, 40, 48, 0.98);
@@ -75,7 +74,6 @@
   --splitter-bottom: #bfc7d2;
   --splitter-hover: #bdc7d5;
   --active-tab-bg: #ffffff;
-  --active-tab-border: #aab5c3;
   --input-bg: #ffffff;
   --input-text: #202733;
   --menu-bg: rgba(255, 255, 255, 0.98);
@@ -251,14 +249,7 @@ textarea:focus-visible,
   white-space: nowrap;
 }
 
-.audio-status-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #e3b75b;
-  box-shadow: 0 0 0 3px rgba(227, 183, 91, 0.12);
-}
+
 .audio-status[data-mode="ready"] .audio-status-dot { background: #72d6a5; box-shadow: 0 0 0 3px rgba(114,214,165,.12); }
 .audio-status[data-mode="fallback"] .audio-status-dot { background: #78a9ff; box-shadow: 0 0 0 3px rgba(120,169,255,.12); }
 .audio-status[data-mode="loading"] .audio-status-dot { animation: audio-status-pulse 1.1s ease-in-out infinite; }
@@ -274,7 +265,7 @@ textarea:focus-visible,
 }
 .compact-field select { height: 34px; padding: 0 24px 0 8px; }
 #pitchSpacingSelect { width: 74px; }
-#zoomSelect { width: 84px; height: 34px; padding: 0 23px 0 8px; font-variant-numeric: tabular-nums; }
+
 
 .edit-tool-control {
   display: inline-flex;
@@ -342,7 +333,7 @@ textarea:focus-visible,
   background: var(--panel);
 }
 .history-header { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; border-bottom: 1px solid var(--line); }
-.history-collapse-button { width: 34px; min-width: 34px; padding: 0; }
+
 .history-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 7px; border-bottom: 1px solid var(--line); }
 .history-actions button { padding: 0 5px; font-size: 12px; }
 .history-list { min-height: 0; margin: 0; padding: 7px; overflow: auto; list-style: none; counter-reset: history-step; }
@@ -365,7 +356,7 @@ textarea:focus-visible,
 .history-item.current { background: color-mix(in srgb, var(--accent) 19%, transparent); color: var(--text); font-weight: 700; }
 .history-item.future { opacity: .58; }
 .history-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history-expand-button { position: absolute; z-index: 80; left: 4px; top: 8px; writing-mode: vertical-rl; height: 92px; min-width: 34px; padding: 8px 4px; box-shadow: 0 6px 18px var(--shadow); }
+
 
 .workspace {
   min-width: 0;
@@ -430,8 +421,8 @@ textarea:focus-visible,
 
 .channel-panel { min-height: 142px; display: grid; grid-template-rows: 46px minmax(0, 1fr); background: var(--panel); }
 .channel-header { min-width: 0; display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
-.channel-leading-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 5px 7px; border-right: 1px solid var(--line); }
-.channel-leading-button { width: 38px; min-width: 38px; padding: 0; font-size: 18px; }
+
+
 #channelMuteMixerButton { position: relative; }
 #channelMuteMixerButton[data-count]:not([data-count=""])::after { content: attr(data-count); position: absolute; right: -3px; top: -4px; min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 800; box-shadow: 0 0 0 2px var(--panel); }
 .channel-tabs { min-width: 0; flex: 1 1 auto; display: flex; align-items: end; gap: 4px; padding: 6px 8px 0; overflow-x: auto; overflow-y: hidden; touch-action: pan-x; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
@@ -461,27 +452,25 @@ textarea:focus-visible,
 .dirty-indicator { color: #ffca78; font-size: 12px; white-space: nowrap; }
 .trash-button { flex: 0 0 auto; width: 40px; min-width: 40px; padding: 0; color: #ff9aa5; font-size: 17px; }
 .channel-editor { min-width: 0; min-height: 0; padding: 8px; }
-#mmlText { width: 100%; height: 100%; min-height: 0; resize: none; padding: 10px 12px; border: 1px solid var(--control-border); border-radius: 8px; background: var(--input-bg); color: var(--input-text); line-height: 1.5; font-family: "Cascadia Mono", Consolas, monospace; }
+
 
 .popup-backdrop { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); background: rgba(0,0,0,.44); backdrop-filter: blur(2px); }
 .channel-mute-mixer { width: min(390px, 100%); max-height: min(540px, 88vh); display: grid; grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; padding: 10px; border: 1px solid var(--control-border); border-radius: 13px; background: var(--panel-2); box-shadow: 0 18px 46px rgba(0,0,0,.4); }
-.channel-mute-mixer-header,
-.channel-mute-mixer-actions,
-.channel-mute-row { display: flex; align-items: center; }
-.channel-mute-mixer-header { justify-content: space-between; padding: 2px 3px 10px; }
+.channel-mute-row{ display: flex; align-items: center; }
+
 .channel-mute-close { width: 36px; min-width: 36px; height: 36px; padding: 0; font-size: 20px; }
-.channel-mute-mixer-actions { gap: 7px; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
+
 .channel-mute-list { min-height: 0; overflow: auto; padding-top: 6px; }
 .channel-mute-row { gap: 9px; min-height: 42px; padding: 5px 7px; border-radius: 7px; }
 .channel-mute-row:hover { background: var(--control-hover); }
 .channel-mute-row input { width: 20px; height: 20px; margin: 0; }
-.channel-mute-row-color { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; background: var(--channel-color, #78a9ff); }
-.channel-mute-row-name { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+
+
 
 .midi-reference-view { min-width: 0; min-height: 0; height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--panel); }
-.midi-detail-toolbar { flex-wrap: nowrap; }
-.midi-detail-toolbar label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
-.midi-detail-toolbar select { min-width: 118px; height: 34px; }
+
+
+
 .midi-reference-status { display: inline-flex; align-items: center; min-height: 26px; padding: 0 9px; border: 1px solid var(--control-border); border-radius: 999px; color: var(--muted); background: var(--audio-bg); font-size: 12px; white-space: nowrap; }
 .midi-reference-status[data-mode="ready"] { color: #72d6a5; }
 .midi-reference-status[data-mode="error"] { color: #ff8e90; }
@@ -525,10 +514,10 @@ textarea:focus-visible,
 @media (max-width: 1180px) {
   :root { --history-width: 196px; }
   .audio-status { max-width: 116px; min-width: 0; }
-  .audio-status-text { overflow: hidden; text-overflow: ellipsis; }
+  
   .compact-field { font-size: 0; }
   .compact-field select { font-size: 13px; }
-  .account-button-label { display: none; }
+  
 }
 
 @media (max-width: 900px) {
@@ -556,8 +545,7 @@ textarea:focus-visible,
   .topbar { gap: 7px; }
   .transport-edge-button { min-width: 42px; }
   .transport-main-button { min-width: 84px; }
-  .icon-button,
-  .channel-leading-button { width: 42px; min-width: 42px; }
+  .icon-button{ width: 42px; min-width: 42px; }
   .channel-tab-item,
   .channel-tab,
   .midi-reference-tab { height: 40px; }
@@ -655,21 +643,9 @@ textarea:focus-visible,
   line-height: 1;
 }
 .corner-cell > span { pointer-events: none; }
-.corner-history-button {
-  width: 34px;
-  min-width: 34px;
-  height: 18px;
-  min-height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-  color: var(--corner-text);
-  font-size: 10px;
-  line-height: 1;
-}
-.corner-history-button:hover { background: color-mix(in srgb, var(--accent) 34%, transparent); }
-.history-expand-button { display: none !important; }
+
+
+
 
 .workspace { grid-template-rows: minmax(160px, 1fr) 0 var(--channel-height); }
 .splitter { display: none !important; pointer-events: none; }
@@ -680,15 +656,8 @@ textarea:focus-visible,
   overflow: hidden;
 }
 .channel-header { min-height: 40px; height: 40px; }
-.channel-leading-actions { height: 40px; padding: 3px 6px; gap: 5px; }
-.channel-leading-button {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  min-height: 32px;
-  padding: 0;
-  font-size: 16px;
-}
+
+
 .channel-tabs {
   height: 40px;
   align-items: flex-start;
@@ -764,29 +733,16 @@ textarea:focus-visible,
 .mml-editor-header strong { font-size: 16px; }
 .mml-editor-header span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
 .mml-editor-close { width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; font-size: 20px; }
-#mmlText {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  resize: none;
-  padding: 12px;
-  border: 1px solid var(--control-border);
-  border-radius: 8px;
-  background: var(--input-bg);
-  color: var(--input-text);
-  line-height: 1.55;
-  font-family: "Cascadia Mono", Consolas, monospace;
-}
+
 .mml-editor-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px; }
 .mml-editor-actions button { min-width: 84px; }
-#mmlEditorApplyButton { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--control-bg)); }
+
 
 @media (max-width: 900px) {
   :root { --channel-height: 96px; }
   .channel-panel { grid-template-rows: 42px 54px; }
   .channel-header,
-  .channel-tabs,
-  .channel-leading-actions { height: 42px; }
+.channel-tabs{ height: 42px; }
   .channel-detail-row,
   .channel-body,
   .channel-detail-toolbar { height: 54px; min-height: 54px; }
@@ -798,9 +754,8 @@ textarea:focus-visible,
   :root { --channel-height: 100px; }
   .channel-panel { grid-template-rows: 44px 56px; }
   .channel-header,
-  .channel-tabs,
-  .channel-leading-actions { height: 44px; min-height: 44px; }
-  .channel-leading-button { width: 36px; min-width: 36px; height: 36px; min-height: 36px; }
+.channel-tabs{ height: 44px; min-height: 44px; }
+  
   .channel-tabs { padding-top: 4px; padding-bottom: 9px; }
   .channel-tab-item,
   .channel-tab { height: 30px; min-height: 30px; }
@@ -835,7 +790,6 @@ textarea:focus-visible,
   --header-cell-bg: #d8e0e9;
   --roll-viewport-bg: #ffffff;
   --active-tab-bg: #ffffff;
-  --active-tab-border: #687789;
   --input-bg: #ffffff;
   --input-text: #111820;
   --menu-hover: #dbe5ef;
@@ -869,9 +823,7 @@ textarea:focus-visible,
 .corner-cell:hover,
 .corner-cell:focus-visible { background: color-mix(in srgb, var(--accent) 18%, var(--corner-bottom)); }
 .corner-cell[aria-pressed="true"] { color: var(--accent); }
-.corner-history-button,
-.history-collapse-button,
-.history-expand-button { display: none !important; }
+
 
 .playhead {
   position: absolute;
@@ -919,7 +871,7 @@ textarea:focus-visible,
   height: 100%;
   background: var(--panel);
 }
-.midi-detail-toolbar { height: 100%; }
+
 .midi-instrument-tabs {
   min-width: 120px;
   max-width: min(58vw, 760px);
@@ -960,16 +912,8 @@ textarea:focus-visible,
   border-radius: 50%;
   background: var(--midi-color);
 }
-.midi-instrument-tab-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.midi-instrument-tab-count {
-  color: var(--muted);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
+
+
 
 :root[data-theme="light"] .history-item { color: #344151; }
 :root[data-theme="light"] .history-item.current { color: #101820; background: rgba(40,95,189,.18); }
@@ -1007,7 +951,6 @@ textarea:focus-visible,
   --playback-text: #0b121a;
   --header-cell-bg: #d0d9e3;
   --roll-viewport-bg: #ffffff;
-  --active-tab-border: #4f6074;
   --menu-bg: rgba(248, 251, 255, .99);
   --menu-hover: #d6e1ed;
   --menu-border: #637286;
@@ -1043,9 +986,8 @@ textarea:focus-visible,
 :root[data-theme="light"] .channel-tab.active { color: #07111d; }
 :root[data-theme="light"] .channel-summary,
 :root[data-theme="light"] .midi-reference-status,
-:root[data-theme="light"] .midi-instrument-tab-count,
 :root[data-theme="light"] .options-field,
-:root[data-theme="light"] .options-profile-row span { color: #354354; }
+:root[data-theme="light"] .options-profile-row span{ color: #354354; }
 :root[data-theme="light"] .midi-instrument-tab { color: #354354; }
 :root[data-theme="light"] .midi-instrument-tab.active { color: #07111d; }
 :root[data-theme="light"] .menu-label { color: #405066; }
@@ -1054,7 +996,7 @@ textarea:focus-visible,
 :root[data-theme="light"] .trash-button { color: #8f142b; }
 
 .midi-reference-view { min-width: 0; min-height: 0; height: 100%; display: block; background: var(--panel); }
-.midi-detail-toolbar { min-width: 0; overflow: hidden; }
+
 .midi-instrument-tabs { height: 100%; padding-block: 2px; }
 .midi-instrument-empty { color: var(--muted); font-size: 12px; white-space: nowrap; }
 
@@ -1080,10 +1022,9 @@ button {
 .transport-main-button { min-width: 66px; }
 .playback-time { min-width: 124px; height: 30px; padding-inline: 7px; font-size: 11px; }
 .audio-status { min-width: 122px; height: 30px; padding-inline: 7px; font-size: 11px; }
-.compact-field select,
-#zoomSelect { height: 30px; }
+.compact-field select{ height: 30px; }
 .compact-field-select-only select { min-width: 96px; max-width: 104px; }
-#zoomSelect { width: 72px; }
+
 .edit-tool-control { padding: 1px; }
 .edit-tool-control button { min-height: 26px; padding-inline: 7px; }
 .account-avatar-button { width: 34px; min-width: 34px; height: 34px; min-height: 34px; }
@@ -1110,10 +1051,9 @@ button {
 }
 .piano-section { grid-row: 2; }
 .channel-header,
-.channel-tabs,
-.channel-leading-actions { height: 36px; min-height: 36px; }
-.channel-leading-actions { gap: 4px; padding: 3px 5px; }
-.channel-leading-button { width: 30px; min-width: 30px; height: 30px; min-height: 30px; padding: 0; font-size: 15px; }
+.channel-tabs{ height: 36px; min-height: 36px; }
+
+
 .channel-tabs {
   align-items: center;
   gap: 4px;
@@ -1181,33 +1121,12 @@ button {
   font-size: 8px;
   font-weight: 900;
 }
-.channel-visibility-button {
-  flex: 0 0 auto;
-  width: 26px;
-  min-width: 26px;
-  height: 100%;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--channel-color) 40%, var(--control-border));
-  border-radius: 0;
-  background: color-mix(in srgb, var(--channel-color) 8%, transparent);
-  color: color-mix(in srgb, var(--channel-color) 70%, var(--text));
-  font-size: 0;
-}
-.channel-visibility-button::before {
-  content: "◉";
-  font-size: 12px;
-  line-height: 1;
-}
-.channel-visibility-button[aria-pressed="false"]::before { content: "⊘"; }
-.channel-visibility-button:hover { background: color-mix(in srgb, var(--channel-color) 20%, var(--control-hover)); }
 
-.midi-document-tab-item {
-  --channel-color: #3f9ad8;
-  min-width: 82px;
-  max-width: 154px;
-}
+
+
+
+
+
 .midi-document-tab-item .channel-tab::before { display: none; }
 
 .channel-detail-row,
@@ -1225,17 +1144,7 @@ button {
 .channel-summary { gap: 7px; font-size: 11px; }
 
 .midi-instrument-tabs { min-width: 90px; max-width: min(55vw, 650px); gap: 4px; }
-.midi-instrument-tab-item {
-  --midi-color: #78a9ff;
-  flex: 0 0 auto;
-  max-width: 184px;
-  height: 30px;
-  display: flex;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--midi-color) 58%, var(--control-border));
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--midi-color) 10%, var(--control-bg));
-}
+
 .midi-instrument-tab-item.active {
   border-color: var(--midi-color);
   background: color-mix(in srgb, var(--midi-color) 24%, var(--control-bg));
@@ -1253,14 +1162,9 @@ button {
   color: var(--text);
 }
 .midi-instrument-tab::before { display: none !important; }
-.midi-instrument-tab-label { max-width: 116px; font-size: 10px; }
-.midi-instrument-tab-count { font-size: 9px; }
-.midi-visibility-button {
-  width: 25px;
-  min-width: 25px;
-  border-left-color: color-mix(in srgb, var(--midi-color) 40%, var(--control-border));
-  color: color-mix(in srgb, var(--midi-color) 74%, var(--text));
-}
+
+
+
 
 :root[data-theme="light"] .channel-tab-item {
   background: color-mix(in srgb, var(--channel-color) 14%, #fff);
@@ -1270,8 +1174,7 @@ button {
   background: color-mix(in srgb, var(--channel-color) 27%, #fff);
   border-color: color-mix(in srgb, var(--channel-color) 86%, #243244);
 }
-:root[data-theme="light"] .channel-tab,
-:root[data-theme="light"] .channel-visibility-button { color: color-mix(in srgb, var(--channel-color) 70%, #111820); }
+:root[data-theme="light"] .channel-tab{ color: color-mix(in srgb, var(--channel-color) 70%, #111820); }
 :root[data-theme="light"] .channel-tab-item.active .channel-tab-main { color: #07111d; }
 
 @media (max-width: 1180px) {
@@ -1286,12 +1189,11 @@ button {
   .workspace { grid-template-rows: var(--channel-height) minmax(150px, 1fr); }
   .channel-panel { grid-template-rows: 36px 48px; }
   .channel-header,
-  .channel-tabs,
-  .channel-leading-actions { height: 36px; min-height: 36px; }
+.channel-tabs{ height: 36px; min-height: 36px; }
   .channel-detail-row,
   .channel-body,
   .channel-detail-toolbar { height: 48px; min-height: 48px; }
-  .channel-summary span:nth-child(n+3) { display: none; }
+  .channel-summary span:nth-child(n/**/+3) { display: none; }
   .playback-time { min-width: 108px; }
 }
 
@@ -1301,9 +1203,8 @@ button {
   .topbar-main { gap: 4px; }
   .channel-panel { grid-template-rows: 38px 48px; }
   .channel-header,
-  .channel-tabs,
-  .channel-leading-actions { height: 38px; min-height: 38px; }
-  .channel-leading-button { width: 32px; min-width: 32px; height: 32px; min-height: 32px; }
+.channel-tabs{ height: 38px; min-height: 38px; }
+  
   .channel-tab-item { height: 31px; }
   .channel-detail-row,
   .channel-body,
@@ -1311,7 +1212,7 @@ button {
   .channel-detail-toolbar > button,
   .channel-color-icon input[type="color"],
   .trash-button { height: 34px; min-height: 34px; }
-  .midi-instrument-tab-item { height: 34px; }
+  
   .midi-instrument-tab { height: 100%; min-height: 0; }
   .account-avatar-button { width: 36px; min-width: 36px; height: 36px; min-height: 36px; }
   .guest-avatar { width: 30px; height: 30px; }
@@ -1332,7 +1233,7 @@ button {
   .playback-time { min-width: 108px; height: 32px; padding-inline: 5px; font-size: 10px; }
   .edit-tool-control button { min-height: 28px; padding-inline: 5px; font-size: 11px; }
   .compact-field-select-only select { min-width: 82px; max-width: 86px; height: 32px; padding-inline: 5px 22px; font-size: 11px; }
-  #zoomSelect { width: 60px; height: 32px; padding-inline: 5px 20px; font-size: 11px; }
+  
   .view-actions > #zoomOutButton,
   .view-actions > #zoomInButton { width: 29px; min-width: 29px; min-height: 32px; padding: 0; }
   .account-avatar-button { width: 32px; min-width: 32px; height: 32px; min-height: 32px; }
@@ -1349,29 +1250,28 @@ button {
 
 /* Short numeric selectors preserve room for every topbar control. */
 .compact-field-select-only select { min-width: 70px; max-width: 74px; }
-#zoomSelect { width: 68px; }
+
 @media (max-width: 900px) and (min-width: 721px) {
   .compact-field-select-only select { min-width: 62px; max-width: 64px; }
-  #zoomSelect { width: 66px; }
+  
 }
 
-#zoomSelect { width: 72px; }
+
 @media (max-width: 900px) and (min-width: 721px) {
   .playback-time { min-width: 102px; }
-  #zoomSelect { width: 72px; }
+  
 }
 @media (max-width: 800px) and (min-width: 721px) {
   .playback-time { min-width: 100px; }
 }
 
-#zoomSelect { width: 80px; }
+
 @media (max-width: 900px) and (min-width: 721px) {
   .compact-field-select-only select { min-width: 56px; max-width: 58px; }
-  #zoomSelect { width: 80px; }
+  
 }
 
-#snapSelect,
-#zoomSelect {
+#snapSelect{
   -webkit-appearance: none;
   appearance: none;
   padding-left: 6px;
@@ -1386,8 +1286,7 @@ button {
   background-repeat: no-repeat;
 }
 
-:root[data-theme="light"] .channel-tab,
-:root[data-theme="light"] .channel-visibility-button {
+:root[data-theme="light"] .channel-tab{
   color: color-mix(in srgb, var(--channel-color) 52%, #111820);
 }
 
@@ -1452,7 +1351,7 @@ button {
   border-bottom: 0 !important;
   box-shadow: none;
 }
-.channel-leading-actions { border-right: 0 !important; }
+
 .toolbar-separator { display: none !important; }
 .channel-header { background: color-mix(in srgb, var(--panel-2) 62%, var(--panel)); }
 .channel-detail-row { background: var(--panel); }
@@ -1485,7 +1384,7 @@ button {
   font-size: 20px !important;
   line-height: 1;
 }
-.midi-detail-toolbar { position: relative; }
+
 #midiReferenceClearButton {
   position: sticky;
   left: 0;
@@ -1523,20 +1422,9 @@ button {
 .mute-control-button.active { border-color: var(--danger); color: #ff9aa5; }
 
 .channel-mute-list { overflow: auto; overscroll-behavior: contain; }
-.channel-mute-section-label {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  padding: 7px 7px 4px;
-  background: var(--panel);
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-}
+
 .channel-mute-row.nested { padding-left: 28px; min-height: 36px; }
-.channel-mute-row-status { color: var(--muted); font-size: 10px; white-space: nowrap; }
+
 
 .midi-document-tab-item.is-muted,
 .midi-instrument-tab-item.is-muted { opacity: .58; }
@@ -1545,8 +1433,8 @@ button {
 /* Buffered roll canvas is larger than the viewport and is clipped by the scrolling viewport. */
 #rollCanvas { contain: strict; }
 
-:root[data-theme="light"] .channel-mute-section-label { background: #f5f8fb; color: #25364a; }
-:root[data-theme="light"] .channel-mute-row-status { color: #34475d; }
+
+
 :root[data-theme="light"] #midiReferenceClearButton { background: #fff; }
 
 @media (max-width: 900px) {
@@ -1667,7 +1555,7 @@ button {
 }
 
 /* MIDI detail controls stay fixed at the left while instrument tabs scroll. */
-.midi-detail-toolbar { position: relative; }
+
 #midiReferenceClearButton {
   position: sticky;
   left: 0;
@@ -1721,13 +1609,7 @@ button {
 }
 
 /* Compact transport utilities. */
-.icon-only-utility {
-  width: 32px;
-  min-width: 32px !important;
-  padding: 0 !important;
-  font-size: 16px !important;
-  line-height: 1;
-}
+
 .playback-rate-control {
   display: inline-flex;
   align-items: center;
@@ -1932,7 +1814,7 @@ button {
     min-height: 34px;
     font-size: 12px;
   }
-  .icon-only-utility { width: 34px; min-width: 34px !important; min-height: 34px; font-size: 18px !important; }
+  
   .playback-rate-control select { height: 34px; font-size: 11px; }
   .midi-transfer-channel-row { min-height: 48px; }
   .midi-transfer-channel-row select { min-height: 38px; }
@@ -2018,12 +1900,7 @@ button {
 #zoomButton { min-width: 59px; }
 
 /* Let the MIDI instrument strip consume every remaining pixel to the right. */
-.midi-detail-toolbar {
-  width: 100%;
-  min-width: 0;
-  display: flex;
-  overflow: hidden !important;
-}
+
 .midi-detail-toolbar > .channel-detail-spacer { display: none !important; }
 .midi-instrument-tabs,
 #midiInstrumentList {
@@ -2885,30 +2762,8 @@ button {
   background: var(--panel);
 }
 
-.channel-tree-section-label {
-  min-height: 25px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 5px 3px;
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .05em;
-}
-.channel-tree-section-count {
-  min-width: 19px;
-  height: 17px;
-  display: inline-grid;
-  place-items: center;
-  padding-inline: 4px;
-  border-radius: 999px;
-  background: var(--control-bg);
-  color: var(--muted);
-  font-size: 9px;
-  font-variant-numeric: tabular-nums;
-}
+
+
 
 .channel-tree-item,
 .channel-tab-item.channel-tree-item,
@@ -3018,16 +2873,7 @@ button {
   background: transparent;
   font-size: 14px;
 }
-.channel-tree-type-badge {
-  flex: 0 0 auto;
-  padding: 1px 4px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  font-size: 8px;
-  font-weight: 900;
-  line-height: 1.35;
-  opacity: .82;
-}
+
 .channel-tree-child {
   width: calc(100% - 14px) !important;
   margin-left: 14px !important;
@@ -3250,28 +3096,9 @@ button {
   border-bottom: 1px solid color-mix(in srgb, var(--control-border) 78%, transparent) !important;
 }
 
-.channel-tree-section-label {
-  width: 100%;
-  min-height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 3px 0 1px;
-  padding: 5px 7px;
-  border: 0;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--panel-2) 84%, var(--panel));
-  color: var(--text);
-  text-align: left;
-  font-size: 10px;
-  font-weight: 850;
-  letter-spacing: .02em;
-}
-.channel-tree-section-label:hover {
-  background: color-mix(in srgb, var(--control-hover) 78%, var(--panel));
-}
-.channel-tree-section-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+
+
 
 .channel-tree-item,
 .channel-tab-item.channel-tree-item,
@@ -3310,13 +3137,9 @@ button {
   padding-left: 20px !important;
   background: color-mix(in srgb, var(--channel-color) 5%, var(--control-bg));
 }
-.channel-tree-branch,
-.channel-tree-type-badge { display: none !important; }
+.channel-tree-branch{ display: none !important; }
 
-:root[data-theme="light"] .channel-tree-section-label {
-  background: #e6edf5;
-  color: #26384a;
-}
+
 :root[data-theme="light"] .channel-tree-item {
   border: 0 !important;
   background: color-mix(in srgb, var(--channel-color) 10%, #f3f6fa);
@@ -3390,8 +3213,7 @@ button {
 }
 
 /* Old branch/type markers are not merely hidden; they reserve no layout room. */
-.channel-tree-branch,
-.channel-tree-type-badge {
+.channel-tree-branch{
   display: none !important;
   width: 0 !important;
   min-width: 0 !important;
@@ -3440,27 +3262,11 @@ button {
   padding: 5px 7px !important;
 }
 
-.channel-tree-section-label {
-  min-height: 27px !important;
-  margin: 4px 0 2px !important;
-  padding: 4px 9px !important;
-  border-radius: 4px !important;
-  color: #f7fbff !important;
-  font-size: 10px !important;
-}
-.channel-tree-section-label[data-section-key="edit"] {
-  background: #285f9d !important;
-}
-.channel-tree-section-label[data-section-key="source"] {
-  background: #376b55 !important;
-}
-.channel-tree-section-label:hover {
-  filter: brightness(1.08);
-}
-.channel-tree-section-count {
-  background: rgba(0, 0, 0, .24) !important;
-  color: #ffffff !important;
-}
+
+
+
+
+
 
 .channel-tree-item,
 .channel-tab-item.channel-tree-item,
@@ -3600,12 +3406,8 @@ button {
 :root[data-theme="light"] {
   --source-root-color: #737f8e;
 }
-:root[data-theme="light"] .channel-tree-section-label[data-section-key="edit"] {
-  background: #2f6cae !important;
-}
-:root[data-theme="light"] .channel-tree-section-label[data-section-key="source"] {
-  background: #3f765f !important;
-}
+
+
 :root[data-theme="light"] .channel-tree-item,
 :root[data-theme="light"] .channel-tab-item.channel-tree-item,
 :root[data-theme="light"] .midi-instrument-tab-item.channel-tree-item {
@@ -3654,20 +3456,8 @@ button {
 
 
 /* 2026-08 autosave hierarchy state clarity ------------------------------- */
-.channel-tree-section-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.channel-tree-section-expander {
-  display: inline-grid;
-  place-items: center;
-  width: 16px;
-  min-width: 16px;
-  font-size: 16px;
-  font-weight: 900;
-  line-height: 1;
-}
+
+
 .channel-tree-expander {
   font-size: 17px !important;
   font-weight: 900 !important;
@@ -3677,9 +3467,7 @@ button {
 /* The child button icons keep their own saved values. The row opacity and
    background show the currently effective state after the source root is
    taken into account. */
-.midi-instrument-tab-item.is-parent-hidden {
-  background: color-mix(in srgb, var(--channel-color) 10%, var(--control-bg)) !important;
-}
+
 .midi-instrument-tab-item.is-parent-hidden .channel-tree-main {
   opacity: .42 !important;
 }
@@ -3697,11 +3485,7 @@ button {
 }
 
 @media (pointer: coarse) {
-  .channel-tree-section-expander {
-    width: 19px;
-    min-width: 19px;
-    font-size: 19px;
-  }
+  
   .channel-tree-expander {
     font-size: 20px !important;
   }

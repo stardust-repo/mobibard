@@ -410,14 +410,6 @@
     return { note, isChord, isGrace, durationTicks };
   }
 
-  function pitchElementToMidi(pitch) {
-    const step = text(child(pitch, "step")).trim().toUpperCase();
-    const octave = parseInt(text(child(pitch, "octave")), 10);
-    const alter = parseFloat(text(child(pitch, "alter")) || "0") || 0;
-    if (!notation.STEP_TO_SEMITONE[step] && step !== "C") return NaN;
-    if (!Number.isFinite(octave)) return NaN;
-    return notation.pitchToMidi(step, octave, alter, 60);
-  }
 
   function unpitchedToMidi(unpitched, part) {
     if (Number.isFinite(part.midiUnpitched)) return part.midiUnpitched;

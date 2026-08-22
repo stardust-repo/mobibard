@@ -44,13 +44,6 @@
 
   const toBytes = utils.toUint8Array;
 
-  function asciiAt(bytes, offset, text) {
-    if (offset < 0 || offset + text.length > bytes.length) return false;
-    for (let i = 0; i < text.length; i += 1) {
-      if (bytes[offset + i] !== text.charCodeAt(i)) return false;
-    }
-    return true;
-  }
 
   function normalizeFinaleMusContainer(value) {
     const candidate = utils.macBinaryForkCandidates(value, { signature: "ENIGMA BINARY FILE" })[0];
@@ -72,10 +65,6 @@
       : bytes[offset] | (bytes[offset + 1] << 8);
   }
 
-  function readS16(bytes, offset, order) {
-    const value = readU16(bytes, offset, order);
-    return value & 0x8000 ? value - 0x10000 : value;
-  }
 
   function readU32(bytes, offset, order) {
     if (offset < 0 || offset + 4 > bytes.length) throw new FinaleMusError("MUS 데이터가 중간에서 끝났습니다.", "mus.truncated");
@@ -707,7 +696,7 @@
   }
 
   root.MabiFinaleMus = Object.freeze({
-    version: "5.0.0",
+    version: "5.1.0",
     FinaleMusError,
     normalizeContainer: normalizeFinaleMusContainer,
     isFinaleMusBytes,

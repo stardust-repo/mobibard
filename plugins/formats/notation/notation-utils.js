@@ -208,7 +208,7 @@
   }
 
   root.MabiNotation = Object.freeze({
-    version: "5.0.0",
+    version: "5.1.0",
     STEP_TO_SEMITONE,
     NOTE_VALUE_QUARTERS,
     dottedMultiplier,

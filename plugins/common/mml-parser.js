@@ -619,5 +619,5 @@ function renderApproxNumericToken(core, targetUnits, isRest) {
 
 
 
-  window.MabiMml = Object.freeze({ version: "5.0.0", parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, beatToSeconds, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths });
+  window.MabiMml = Object.freeze({ version: "5.1.0", parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, beatToSeconds, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths });
 })();

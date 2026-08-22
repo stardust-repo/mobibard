@@ -368,7 +368,6 @@
     const maxFiniteLoopCount = Math.max(1, Number(options.maxFiniteLoopCount) || 16);
     const infiniteLoopCount = Math.max(1, Number(options.infiniteLoopCount) || 2);
 
-    function localPosition() { return state.pc - seqOffset; }
     function validDestination(destination) { return destination >= seqOffset && destination < limit; }
     function jumpTo(destination, maxVisits = infiniteLoopCount) {
       if (!validDestination(destination)) return false;
@@ -458,7 +457,6 @@
 
       if (status === 0xfc && header.version === 2) {
         const sub = readByte(view, state, limit);
-        const operandPos = state.pc;
         switch (sub) {
           case 0x00: { // Tempo
             const rawTempo = le16(view, state.pc);

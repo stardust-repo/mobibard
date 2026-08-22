@@ -1,6 +1,8 @@
 # Editor 구현 스펙 스냅샷
 
-마지막 갱신: 2026-08-19 19:56:00 KST
+마지막 갱신: 2026-08-23 KST
+
+출시 검증: v5.1 최종 UI 패스에서 Editor 기능 변경 없음. 공용 포맷/정규화 기준은 현재 배포 소스와 `plugins/formats/NORMALIZATION_RULES.md`를 따릅니다.
 
 ## 목적
 

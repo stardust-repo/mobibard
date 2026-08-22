@@ -506,7 +506,7 @@
   }
 
   const api = Object.freeze({
-    version: "5.0.1",
+    version: "5.1.0",
     registerFormat,
     findFormat,
     isSupported,

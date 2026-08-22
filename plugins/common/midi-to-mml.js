@@ -493,6 +493,7 @@
       const sourceInfo = getInstrumentGroupInfo(n);
       const startGrid = Math.max(0, Math.round(n.startTick / ticksPerGrid));
       const durGrid = Math.max(1, Math.round((n.endTick - n.startTick) / ticksPerGrid));
+      const sourceChannel = clampInt(Number(n.channel) || 0, 0, 15);
       return {
         id: `file-preview-${nextNoteId++}`,
         midi: n.midi,
@@ -501,7 +502,8 @@
         durGrid,
         midiVelocity: playbackVelocity(n),
         velocity: midiVelocityToMmlVolume(playbackVelocity(n)),
-        channel: n.channel,
+        channel: sourceChannel,
+        part: sourceChannel % 6,
         program: normalizeProgram(n.program),
         bankMsb: normalizeBank(n.bankMsb),
         bankLsb: normalizeBank(n.bankLsb),
@@ -533,24 +535,59 @@
       const durationSec = clippedEnd - clippedStart;
       if (durationSec <= 0.01) continue;
       previewNotes.push({
-        part: 0,
+        id: n.id,
+        part: clampInt(Number(n.part ?? n.channel ?? 0), 0, 5),
+        channel: clampInt(Number(n.channel) || 0, 0, 15),
         midi: n.midi,
         start: clippedStart,
         durationSec,
         volume: n.velocity,
+        bankMsb: normalizeBank(n.bankMsb),
+        bankLsb: normalizeBank(n.bankLsb),
         program: normalizeProgram(n.program),
         isBeat: Boolean(n.isBeat || n.isPercussion)
       });
     }
     if (!previewNotes.length) throw new Error(tr("midi.err_preview_silent"));
 
+    let initialTempo = tempoGridEvents[0] || { grid: 0, bpm: 120 };
+    for (const event of tempoGridEvents) {
+      if (event.grid > firstGrid) break;
+      initialTempo = event;
+    }
+    const shiftedTempoEvents = [{ grid: 0, bpm: initialTempo.bpm, explicit: initialTempo.grid === firstGrid }];
+    for (const event of tempoGridEvents) {
+      if (event.grid <= firstGrid) continue;
+      const shiftedGrid = event.grid - firstGrid;
+      const last = shiftedTempoEvents[shiftedTempoEvents.length - 1];
+      if (last && last.grid === shiftedGrid) last.bpm = event.bpm;
+      else if (!last || last.bpm !== event.bpm) shiftedTempoEvents.push({ grid: shiftedGrid, bpm: event.bpm, explicit: true });
+    }
+    const tempoMap = shiftedTempoEvents.map(event => ({
+      beat: event.grid / 16,
+      time: Math.max(0, gridToSeconds(firstGrid + event.grid, tempoGridEvents) - firstSec),
+      bpm: event.bpm,
+      part: -1,
+      explicit: Boolean(event.explicit),
+      sourceStart: -1,
+      sourceEnd: -1,
+      globalSourceStart: -1,
+      globalSourceEnd: -1
+    }));
     const duration = previewNotes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
+    const tempoMarkers = tempoMap
+      .filter((event, index, list) => index === 0 || event.bpm !== list[index - 1].bpm)
+      .filter(event => event.time <= duration + 0.001)
+      .map(event => ({ ...event }));
     return {
       notes: previewNotes,
+      rests: [],
       duration,
       firstGrid,
       noteCount: notes.length,
-      previewSeconds: maxSeconds
+      previewSeconds: maxSeconds,
+      tempoMap,
+      tempoMarkers
     };
   }
 
@@ -571,7 +608,7 @@
     return sec;
   }
 
-  function midiToMml(bytes, fileName = "MIDI", options = {}) {
+  function midiToMml(bytes, _fileName = "MIDI", options = {}) {
     const midi = parseMidiFile(bytes);
     if (midi.smpteDivision) throw new Error(tr("midi.err_smpte"));
 
@@ -1384,5 +1421,5 @@
     }));
   }
 
-  window.MabiMidi = Object.freeze({ version: "5.0.0", midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview, parseMidiFile });
+  window.MabiMidi = Object.freeze({ version: "5.1.0", midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview, parseMidiFile });
 })();

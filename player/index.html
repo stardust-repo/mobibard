@@ -14,7 +14,8 @@
 <link rel="alternate" hreflang="zh-CN" href="https://stardust-repo.github.io/mobibard/player/?lang=zh-CN"/>
 <link rel="alternate" hreflang="zh-TW" href="https://stardust-repo.github.io/mobibard/player/?lang=zh-TW"/>
 <link rel="alternate" hreflang="x-default" href="https://stardust-repo.github.io/mobibard/player/"/>
-<link href="styles.css?v=5.0.0&amp;rev=20260819-032900" rel="stylesheet"/>
+<link href="styles.css?v=5.1.0&amp;rev=20260823-release10" rel="stylesheet"/>
+<link href="workbench.css?v=5.1.0&amp;rev=20260823-final" rel="stylesheet"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 <script>
 (() => {
@@ -59,8 +60,8 @@
   document.documentElement.lang = htmlLang[language] || "en";
   document.documentElement.dataset.i18nPending = "true";
   const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "5.0.0");
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("rev", "20260818-211321");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "5.1.0");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("rev", "20260823-release10");
   document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
 })();
@@ -93,14 +94,13 @@
 </div>
 <div class="account-menu-wrap">
 <button aria-controls="accountMenu" aria-expanded="false" aria-haspopup="dialog" aria-label="" class="account-avatar-button" data-connected="false" data-i18n-aria-label="account.menu" id="accountMenuButton" type="button">
-<img alt="" class="account-avatar-image" decoding="async" id="accountAvatarImg" referrerpolicy="no-referrer" src="../assets/icons/guest-user.svg?v=5.0.0&amp;rev=20260818-205217"/>
+<img alt="" class="account-avatar-image" decoding="async" id="accountAvatarImg" referrerpolicy="no-referrer" src="../assets/icons/guest-user.svg?v=5.1.0&amp;rev=20260818-205217"/>
 </button>
 <div aria-labelledby="accountMenuButton" class="account-menu-popover" hidden="" id="accountMenu" role="dialog">
 <div class="account-menu-header">
 <div class="account-menu-identity">
 <strong data-i18n="account.guest" id="accountMenuName"></strong>
 <span class="account-menu-email" hidden="" id="accountMenuEmail"></span>
-<span aria-live="polite" class="account-menu-status" id="googleStatus"></span>
 </div>
 </div>
 <button aria-label="" class="account-login-button google-login-button" data-i18n-aria-label="google.login" id="googleLoginBtn" type="button"><span aria-hidden="true" class="google-icon-badge"><img alt="" class="google-g-icon" decoding="async" src="../assets/icons/google-g.png"/></span><span class="google-login-label" data-i18n="auth.login"></span></button>
@@ -128,7 +128,7 @@
 <section aria-label="" class="card menu-card" data-i18n-aria-label="mml.mabinogi_player">
 <div class="app-head">
 <div class="app-brand-line">
-<h1 class="app-main-title"><span data-i18n="mml.generator_title"></span><span class="app-title-version">v5.0</span></h1>
+<h1 class="app-main-title"><span data-i18n="mml.generator_title"></span><span class="app-title-version">v5.1</span></h1>
 </div>
 </div>
 <div aria-label="" class="player-file-toolbar" data-i18n-aria-label="mml.file_ops">
@@ -147,7 +147,7 @@
 <span aria-hidden="true" class="midi-extract-toolbar-icon">♪</span><span data-i18n="midi.extract"></span>
 </button>
 <button aria-controls="rhythmGameLayer" aria-haspopup="dialog" class="rhythm-game-toolbar-button" data-i18n-title="game.open_mobibeat" id="rhythmGameBtn" title="" type="button">
-<span aria-hidden="true" class="rhythm-game-toolbar-icon">▦</span><span data-i18n="game.label"></span>
+<span data-i18n="game.label"></span>
 </button>
 <a class="simple-version-toolbar-button" data-i18n="simple.label" data-i18n-title="simple.open" href="../simple/index.html" id="simpleVersionBtn" title=""></a>
 </div>
@@ -235,7 +235,6 @@
 <button class="tiny-help-btn soft-tool-button" data-i18n="edit.help" id="codeHelpBtn" type="button"></button>
 </div>
 <div aria-label="" class="editor-title-actions" data-i18n-aria-label="edit.tools">
-<button class="ghost soft-tool-button" data-i18n="mml.clear_all_channels" id="clearAllMmlBtn" type="button"></button>
 <button class="ghost soft-tool-button" data-i18n="ui.paste" id="pasteBtn" type="button"></button>
 <button class="primary soft-tool-button" data-i18n="ui.copy_all" id="copyBtn" type="button"></button>
 <button class="primary soft-tool-button" data-i18n="ui.split_copy" id="splitCopyBtn" type="button"></button>
@@ -396,9 +395,15 @@
 </div>
 </form>
 </dialog>
-<dialog class="mml-dialog code-help-dialog" id="codeHelpDialog">
+<dialog aria-labelledby="codeHelpPopupTitle" class="mml-dialog code-help-dialog" id="codeHelpDialog">
 <form class="dialog-card code-help-card" method="dialog">
-<h3 data-i18n="mml.code_help"></h3>
+<header class="code-help-popup-head">
+<h3 data-i18n="mml.code_help" id="codeHelpPopupTitle"></h3>
+<button aria-label="" class="code-help-popup-close" data-i18n-aria-label="ui.close" data-i18n-title="ui.close" id="codeHelpClose" title="" type="button">
+<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+</button>
+</header>
+<div class="code-help-popup-body">
 <p data-i18n="mml.basic_codes"></p>
 <div aria-label="" class="code-help-table" data-i18n-aria-label="mml.supported_code" role="table">
 <div class="code-help-row code-help-head" role="row"><strong data-i18n="ui.code" role="columnheader"></strong><strong data-i18n="ui.description" role="columnheader"></strong><strong data-i18n="ui.example" role="columnheader"></strong></div>
@@ -419,8 +424,6 @@
 <strong data-i18n="ui.short_example"></strong>
 <code>MML@T120V12O5L8cdefgab&gt;c,O4V10L4ceg,O3V9L2cgcg;</code>
 </div>
-<div class="dialog-actions">
-<button data-i18n="ui.close" id="codeHelpClose" type="button"></button>
 </div>
 </form>
 </dialog>
@@ -739,13 +742,6 @@
 </details>
 <div class="midi-dialog-layout">
 <section class="midi-dialog-section midi-left-panel">
-<div class="dialog-section-head role-head midi-panel-title-row">
-<strong data-i18n="mml.channel"></strong>
-<div class="midi-panel-title-actions">
-<button aria-pressed="false" class="midi-quantize-toggle soft-tool-button" data-i18n-title="midi.quantize_toggle" id="midiQuantizeToggle" title="" type="button"></button>
-<button aria-pressed="false" class="midi-full-preview-btn soft-tool-button" data-i18n="midi.listen_mml" id="midiSelectedPreviewBtn" type="button"></button>
-</div>
-</div>
 <div aria-label="" class="midi-role-list" data-i18n-aria-label="mml.ch_settings" id="midiRoleList"></div>
 </section>
 <section class="midi-dialog-section midi-right-panel">
@@ -753,7 +749,6 @@
 <strong data-i18n="midi.instrument_channel_select" id="midiInstrumentPanelTitle"></strong>
 <div class="midi-panel-title-actions">
 <button class="soft-tool-button" data-i18n="midi.bulk_assign" id="midiBulkAssignBtn" type="button"></button>
-<button aria-pressed="false" class="midi-full-preview-btn soft-tool-button" data-i18n="midi.listen_original" id="midiFullPreviewBtn" type="button"></button>
 </div>
 </div>
 <div aria-label="" class="midi-channel-list" data-i18n-aria-label="snd.inst_list_ch" id="midiChannelList"></div>
@@ -806,49 +801,51 @@
 <button class="primary" data-i18n="midi.select_action" id="midiBulkSelectBtn" type="button"></button>
 </div>
 </form>
-<script src="js/language-manager.js?v=5.0.0&amp;rev=20260818-215700"></script>
-<script src="../plugins/common/utils.js?v=5.0.0&amp;rev=20260819-163106"></script>
+</dialog>
+<script src="js/language-manager.js?v=5.1.0&amp;rev=20260823-release10"></script>
+<script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
-<script src="../plugins/formats/midi/midi-parser.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/notation/notation-utils.js?v=5.0.0"></script>
-<script src="../plugins/formats/music-format-core.js?v=5.0.6&amp;rev=20260820-030000"></script>
-<script src="../plugins/formats/console-gm-normalizer.js?v=5.0.2&amp;rev=20260820-003400"></script>
-<script src="../plugins/formats/xsf/xsf-container.js?v=5.0.0&amp;rev=20260819-195600"></script>
-<script src="../plugins/formats/playstation/playstation-sequence.js?v=5.0.2&amp;rev=20260820-003400"></script>
-<script src="../plugins/formats/playstation/akao-sequence.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/nintendo/nintendo-sequence.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/xsf/format-xsf.js?v=5.0.4&amp;rev=20260820-031400"></script>
-<script src="../plugins/formats/musicxml/musicxml-to-midi.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/finale/finale-mus-to-midi.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/finale/finale-musx-to-midi.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/mnx/mnx-to-midi.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/musescore/musescore-to-midi.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/guitarpro/vendor/guitarpro-parser/gp3-browser.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/guitarpro/vendor/parse-gp5/index.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/midi/format-midi.js?v=5.0.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/playstation/format-playstation.js?v=5.0.2&amp;rev=20260820-003400"></script>
-<script src="../plugins/formats/nintendo/format-nintendo.js?v=5.0.2&amp;rev=20260820-003400"></script>
-<script src="../plugins/formats/musicxml/format-musicxml.js?v=5.0.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/finale/format-finale.js?v=5.0.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/mnx/format-mnx.js?v=5.0.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/musescore/format-musescore.js?v=5.0.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.0.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/vocal/format-vocal.js?v=5.0.0"></script>
-<script src="../plugins/common/midi-to-mml.js?v=5.0.5&amp;rev=20260820-022400"></script>
-<script src="js/mabinogi-instrument-map.js?v=5.0.0"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.0.2&amp;rev=20260820-031400"></script>
-<script src="../plugins/common/mml-parser.js?v=5.0.0"></script>
-<script src="../plugins/common/mml-optimizer.js?v=5.0.0&amp;rev=20260818-222500"></script>
+<script src="../plugins/formats/midi/midi-parser.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/notation/notation-utils.js?v=5.1.0"></script>
+<script src="../plugins/formats/music-format-core.js?v=5.1.0&amp;rev=20260820-030000"></script>
+<script src="../plugins/formats/console-gm-normalizer.js?v=5.1.0&amp;rev=20260820-003400"></script>
+<script src="../plugins/formats/xsf/xsf-container.js?v=5.1.0&amp;rev=20260819-195600"></script>
+<script src="../plugins/formats/playstation/playstation-sequence.js?v=5.1.0&amp;rev=20260820-003400"></script>
+<script src="../plugins/formats/playstation/akao-sequence.js?v=5.1.0&amp;rev=20260823-release9"></script>
+<script src="../plugins/formats/nintendo/nintendo-sequence.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/xsf/format-xsf.js?v=5.1.0&amp;rev=20260820-031400"></script>
+<script src="../plugins/formats/musicxml/musicxml-to-midi.js?v=5.1.0&amp;rev=20260823-release9"></script>
+<script src="../plugins/formats/finale/finale-mus-to-midi.js?v=5.1.0&amp;rev=20260823-release9"></script>
+<script src="../plugins/formats/finale/finale-musx-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/mnx/mnx-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/musescore/musescore-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/guitarpro/vendor/guitarpro-parser/gp3-browser.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/guitarpro/vendor/parse-gp5/index.js?v=5.1.0&amp;rev=20260823-release9"></script>
+<script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
+<script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
+<script src="../plugins/formats/musicxml/format-musicxml.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/finale/format-finale.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/mnx/format-mnx.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/musescore/format-musescore.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
+<script src="../plugins/common/midi-to-mml.js?v=5.1.0&amp;rev=20260823-release9"></script>
+<script src="js/mabinogi-instrument-map.js?v=5.1.0"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260820-031400"></script>
+<script src="../plugins/common/mml-parser.js?v=5.1.0"></script>
+<script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260818-222500"></script>
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
-<script src="js/soundbank-cache.js?v=5.0.0"></script>
-<script src="../plugins/google/google-config.js?v=5.0.0"></script>
-<script src="../plugins/google/firebase-config.js?v=5.0.0"></script>
-<script src="../plugins/google/firebase-analytics.js?v=5.0.0" type="module"></script>
+<script src="js/soundbank-cache.js?v=5.1.0"></script>
+<script src="../plugins/google/google-config.js?v=5.1.0"></script>
+<script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
+<script src="../plugins/google/firebase-analytics.js?v=5.1.0" type="module"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
-<script src="js/app.js?v=20260819-235500"></script>
+<script src="js/workbench.js?v=5.1.0&amp;rev=20260823-final"></script>
+<script src="js/app.js?v=5.1.0&amp;rev=20260823-release10"></script>
 </body>
 </html>

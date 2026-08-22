@@ -1,0 +1,5270 @@
+:root {
+  --wb4-surface: var(--panel, #ffffff);
+  --wb4-surface-2: var(--play-info-bg, #f7f9fc);
+  --wb4-text: var(--text, #1f2937);
+  --wb4-muted: var(--muted, #64748b);
+  --wb4-line: var(--line, #d1d5db);
+  --wb4-line-strong: color-mix(in srgb, var(--wb4-line) 78%, var(--wb4-text));
+  --wb4-accent: var(--accent, #4f46e5);
+  --wb4-accent-weak: var(--accent-weak, #eef2ff);
+  --wb4-tempo: #23865b;
+  --wb4-playhead: #ef4444;
+  --wb4-shadow: 0 18px 48px rgba(15, 23, 42, .07);
+}
+
+html[data-player-layout="source-workbench"] main {
+  max-width: none;
+  margin: 0;
+  padding: 0 16px 64px;
+}
+
+.player-source-workbench-v4 .player-topbar {
+  height: 64px;
+  border: 0;
+  background: transparent;
+}
+.player-source-workbench-v4 .player-topbar-inner {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 8px;
+}
+.player-source-workbench-v4 .player-brand { color: var(--wb4-text); }
+.player-source-workbench-v4 .player-top-actions { gap: 7px; min-width: 0; }
+.player-source-workbench-v4 .header-links {
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.player-source-workbench-v4 .midi-site-links {
+  min-height: 34px;
+  max-width: 132px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.player-source-workbench-v4 .discord-icon-button,
+.player-source-workbench-v4 .account-avatar-button { width: 34px; height: 34px; }
+
+.wb4-top-external {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 2px;
+}
+.wb4-top-external > button,
+.wb4-top-external > a {
+  min-height: 34px !important;
+  padding: 0 10px !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--wb4-muted) !important;
+  box-shadow: none !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-decoration: none;
+}
+.wb4-top-external > button:hover,
+.wb4-top-external > a:hover {
+  background: var(--control-hover) !important;
+  color: var(--wb4-text) !important;
+}
+
+.wb4-shell {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding-top: 0;
+}
+.wb4-canvas {
+  width: 100%;
+  overflow: visible;
+  padding: clamp(24px, 4vw, 42px);
+  border: 1px solid var(--wb4-line);
+  border-radius: 20px;
+  background: var(--wb4-surface);
+  box-shadow: var(--wb4-shadow);
+}
+.wb4-title {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0 0 22px;
+  color: var(--wb4-text);
+  letter-spacing: -.035em;
+}
+.wb4-title-name { font-size: clamp(22px, 3vw, 28px); font-weight: 850; }
+.wb4-title-version { color: var(--wb4-muted); font-size: 12px; font-weight: 800; letter-spacing: 0; }
+.wb4-block { min-width: 0; }
+.wb4-block + .wb4-block {
+  margin-top: 26px;
+  padding-top: 26px;
+  border-top: 1px solid var(--wb4-line);
+}
+
+.wb4-notices:empty { display: none; }
+.wb4-notices { display: grid; gap: 7px; margin-bottom: 16px; }
+.wb4-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  background: var(--wb4-surface-2);
+  color: var(--wb4-muted);
+  font-size: 11px;
+}
+.wb4-notice-content { display: flex; flex-wrap: wrap; gap: 7px; line-height: 1.55; }
+.wb4-notice-content strong { color: var(--wb4-text); }
+.wb4-notice-close {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--wb4-muted);
+  font-size: 17px;
+}
+
+.wb4-drop-zone {
+  position: relative;
+  min-height: 108px;
+  padding: 18px 18px 16px;
+  border: 1.5px dashed var(--wb4-line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--wb4-surface-2) 72%, transparent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+  transition: background .15s ease, border-color .15s ease;
+}
+.wb4-drop-zone:hover,
+.wb4-drop-zone:focus-visible,
+.wb4-drop-zone.dragover {
+  border-color: var(--wb4-line-strong);
+  background: var(--control-hover);
+}
+.wb4-load-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.wb4-load-primary,
+.wb4-load-secondary {
+  min-height: 38px !important;
+  padding: 0 16px !important;
+  border-radius: 8px !important;
+  font-weight: 800 !important;
+}
+.wb4-load-primary {
+  min-width: 158px;
+  border: 1px solid var(--wb4-accent) !important;
+  background: var(--wb4-accent) !important;
+  color: #fff !important;
+}
+.wb4-load-secondary {
+  border: 1px solid var(--wb4-line) !important;
+  background: var(--wb4-surface) !important;
+  color: var(--wb4-text) !important;
+}
+
+
+.wb4-drop-hint { margin-top: 7px; color: var(--wb4-muted); font-size: 11px; }
+.wb4-file-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 17px;
+  margin-top: 7px;
+}
+.wb4-file-name {
+  max-width: min(520px, 80vw);
+  overflow: hidden;
+  color: var(--wb4-text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb4-file-state {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--wb4-accent-weak);
+  color: var(--wb4-accent);
+  font-size: 9px;
+  font-weight: 800;
+}
+.wb4-inline-host:empty { display: none; }
+
+.player-source-workbench-v4 .wb4-preview-block .play-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.player-source-workbench-v4 .wb4-preview-block .piano-roll {
+  order: 1;
+  width: 100%;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 0 !important;
+  overflow: hidden;
+  background: var(--wb4-surface-2);
+}
+.player-source-workbench-v4 .wb4-preview-block .piano-roll-stage,
+.player-source-workbench-v4 .wb4-preview-block .piano-roll-canvas { border-radius: 0 !important; }
+.player-source-workbench-v4 .wb4-preview-block .wb4-seek-row {
+  order: 2;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.player-source-workbench-v4 .wb4-preview-block .transport-row {
+  order: 3;
+  min-height: 54px;
+  padding: 11px 0 0;
+  border: 0;
+  border-top: 1px solid var(--wb4-line);
+  border-radius: 0;
+  background: transparent;
+}
+.player-source-workbench-v4 .transport-actions,
+.player-source-workbench-v4 .quick-controls { min-width: 0; }
+
+.wb4-tempo-timeline {
+  --wb4-playback-progress: 0%;
+  position: relative;
+  width: 100%;
+  height: 76px;
+  margin-top: 8px;
+  padding: 0 !important;
+  overflow: visible;
+  border-top: 1px solid var(--wb4-line);
+  border-bottom: 1px solid var(--wb4-line);
+  background: var(--wb4-surface-2);
+  touch-action: none;
+}
+.wb4-timeline-grid {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.wb4-timeline-grid::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 24px;
+  right: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--wb4-line) 74%, transparent);
+}
+.wb4-timeline-grid::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--wb4-playback-progress);
+  background: color-mix(in srgb, var(--wb4-accent) 8%, transparent);
+  pointer-events: none;
+}
+.wb4-timeline-grid i {
+  position: absolute;
+  top: 23px;
+  bottom: 18px;
+  width: 1px;
+  background: color-mix(in srgb, var(--wb4-line) 55%, transparent);
+}
+.wb4-timeline-grid i.major {
+  top: 17px;
+  background: color-mix(in srgb, var(--wb4-line) 90%, transparent);
+}
+
+.wb4-timeline-tick-labels {
+  position: absolute;
+  inset: auto 0 3px;
+  height: 14px;
+  z-index: 1;
+  color: var(--wb4-muted);
+  font-size: 8.5px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.wb4-timeline-tick-labels span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.wb4-timeline-tick-labels span:first-child { transform: none; }
+.wb4-timeline-tick-labels span:last-child { transform: translateX(-100%); }
+.wb4-tempo-timeline .progress {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 3 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: .001;
+  cursor: ew-resize;
+  appearance: none;
+}
+.wb4-tempo-timeline .progress:disabled { cursor: default; }
+.wb4-tempo-timeline .tempo-markers {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.wb4-tempo-timeline .tempo-marker {
+  top: 0;
+  bottom: 17px;
+  border-left: 3px solid var(--wb4-tempo);
+  filter: none;
+  z-index: 2;
+}
+.wb4-tempo-timeline .tempo-marker::before { display: none; }
+.wb4-tempo-timeline .tempo-marker-label {
+  top: 4px;
+  left: 4px;
+  height: 19px;
+  min-height: 19px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--wb4-tempo) 82%, #fff) !important;
+  border-radius: 3px !important;
+  background: color-mix(in srgb, var(--wb4-tempo) 88%, #000) !important;
+  color: #f4fff8 !important;
+  box-shadow: none;
+  font-size: 10px;
+  line-height: 17px;
+}
+.wb4-tempo-timeline .tempo-marker.active {
+  top: 0;
+  border-left-color: #3abf7c;
+  filter: none;
+}
+.wb4-tempo-timeline .tempo-marker.active .tempo-marker-label {
+  top: 4px;
+  padding: 0 7px;
+  background: #176845 !important;
+  font-size: 11px;
+  box-shadow: none;
+}
+.wb4-timeline-playhead {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  bottom: 0;
+  left: var(--wb4-playback-progress);
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--wb4-playhead);
+  pointer-events: none;
+}
+.wb4-playhead-label {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  min-width: 42px;
+  padding: 2px 5px;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  background: var(--wb4-playhead);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.wb4-tempo-timeline.disabled .wb4-timeline-playhead,
+.wb4-tempo-timeline.disabled .wb4-timeline-grid::after { opacity: .35; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+.wb4-mml-body .tab-line { margin-top: 0; }
+.wb4-mml-body .colored-textarea,
+.wb4-mml-body textarea.highlight-source { min-height: 210px; border-radius: 0 !important; }
+
+.wb4-channel-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  overflow-x: auto;
+  border-bottom: 1px solid var(--wb4-line);
+  scrollbar-width: thin;
+}
+.wb4-channel-tab {
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wb4-muted);
+  font-size: 11px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb4-channel-tab:hover { background: var(--control-hover); color: var(--wb4-text); }
+.wb4-channel-tab.active {
+  border-bottom-color: var(--wb4-accent);
+  background: transparent;
+  color: var(--wb4-accent);
+}
+.wb4-channel-panels { min-width: 0; }
+.wb4-channel-panel[hidden] { display: none !important; }
+.wb4-assignment-slot { min-width: 0; }
+.wb4-assignment-host { min-width: 0; }
+.wb4-assignment-empty {
+  display: block;
+  padding: 15px 2px;
+  color: var(--wb4-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.wb4-option-row {
+  display: grid;
+  grid-template-columns: minmax(128px, 176px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  min-width: 0;
+  padding: 15px 2px;
+  border-top: 1px solid var(--wb4-line);
+}
+.wb4-option-name { display: grid; gap: 3px; min-width: 0; }
+.wb4-option-name strong { color: var(--wb4-text); font-size: 11.5px; }
+.wb4-option-name small { color: var(--wb4-muted); font-size: 9.5px; line-height: 1.45; }
+.wb4-option-control { min-width: 0; }
+.wb4-option-composite { display: grid; gap: 10px; min-width: 0; }
+.wb4-common-options {
+  margin-top: 4px;
+  border-top: 2px solid color-mix(in srgb, var(--wb4-line) 75%, var(--wb4-text));
+}
+.wb4-common-options .wb4-option-row:first-child { border-top: 0; }
+.wb4-common-inline {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.wb4-inline-field {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--wb4-muted);
+  font-size: 10px;
+}
+
+
+
+
+
+.wb4-segmented {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--wb4-line);
+  border-radius: 7px;
+  background: var(--wb4-surface);
+}
+.wb4-segment {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 6px;
+  border: 0;
+  border-right: 1px solid var(--wb4-line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--wb4-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.wb4-segment:last-child { border-right: 0; }
+.wb4-segment:hover:not(.active) { background: var(--control-hover); color: var(--wb4-text); }
+.wb4-segment.active { background: var(--wb4-accent); color: #fff; }
+.wb4-slider-number {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.wb4-range { width: 100%; min-width: 0; accent-color: var(--wb4-accent); }
+.wb4-number,
+.wb4-split-limit {
+  width: 68px;
+  min-height: 34px;
+  padding: 0 7px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 6px;
+  background: var(--wb4-surface);
+  color: var(--wb4-text);
+  font-size: 11px;
+  text-align: center;
+}
+.wb4-number-suffix { color: var(--wb4-muted); font-size: 10px; }
+.wb4-select {
+  width: 100%;
+  max-width: none !important;
+  min-height: 34px;
+  border-radius: 6px !important;
+  font-size: 11px;
+}
+.wb4-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  color: var(--wb4-muted);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.wb4-toggle-row input { accent-color: var(--wb4-accent); }
+.wb4-option-status {
+  margin-top: 8px;
+  padding: 8px 2px 0;
+  border-top: 1px solid var(--wb4-line);
+  color: var(--wb4-muted);
+  font-size: 10.5px;
+}
+.wb4-option-status[data-tone="error"] { color: var(--danger); }
+
+/* MIDI 변환 화면은 선택한 1개 채널에 필요한 항목만 표시한다. */
+.wb4-inline-panel,
+.wb4-converted-dialog {
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.wb4-inline-panel[hidden] { display: none !important; }
+.wb4-inline-panel .dialog-card {
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 13px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.wb4-inline-panel .dialog-actions { position: static !important; }
+
+#midiConvertDialog .midi-dialog-card { padding: 8px 0 15px !important; }
+#midiConvertDialog #midiConvertTitle,
+#midiConvertDialog .midi-dialog-topline,
+#midiConvertDialog .midi-guide-box { display: none !important; }
+#midiConvertDialog .midi-dialog-layout {
+  display: grid !important;
+  grid-template-columns: minmax(220px, .72fr) minmax(0, 1.55fr) !important;
+  gap: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+#midiConvertDialog .midi-dialog-section {
+  min-width: 0;
+  min-height: 0 !important;
+  max-height: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+#midiConvertDialog .midi-right-panel {
+  padding-left: 18px !important;
+  border-left: 1px solid var(--wb4-line) !important;
+}
+#midiConvertDialog .dialog-section-head {
+  padding: 0 0 8px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+#midiConvertDialog #midiRoleList {
+  min-height: 0 !important;
+  height: auto !important;
+}
+#midiConvertDialog #midiChannelList {
+  min-height: 0 !important;
+  max-height: 360px !important;
+  height: auto !important;
+  overflow: auto !important;
+  border-top: 1px solid var(--wb4-line) !important;
+}
+#midiConvertDialog .midi-role-row,
+#midiConvertDialog .midi-channel-row,
+#midiConvertDialog .midi-instrument-row {
+  border: 0 !important;
+  border-bottom: 1px solid var(--wb4-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+#midiConvertDialog .midi-role-row { padding: 8px 0 !important; }
+#midiConvertDialog .midi-channel-row,
+#midiConvertDialog .midi-instrument-row { padding-left: 0 !important; padding-right: 0 !important; }
+#midiConvertDialog .midi-convert-footer .dialog-actions-left,
+#midiConvertDialog .midi-convert-footer .dialog-actions-right,
+#midiConvertDialog #midiConvertApply,
+#midiConvertDialog #midiConvertCancel { display: none !important; }
+#midiConvertDialog .midi-convert-footer {
+  min-height: 22px;
+  justify-content: flex-end !important;
+  padding-top: 5px !important;
+  border: 0 !important;
+}
+#midiConvertDialog #midiConvertStatus {
+  display: inline-flex !important;
+  min-height: 22px;
+  align-items: center;
+  color: var(--wb4-accent);
+  font-size: 10px;
+}
+#midiConvertDialog #midiConvertStatus[hidden] {
+  display: none !important;
+}
+#midiConvertDialog .midi-convert-footer:has(#midiConvertStatus[hidden]) {
+  display: none !important;
+}
+#midiConvertDialog .midi-instrument-selected-parts { display: flex !important; }
+#midiConvertDialog .midi-part-toggle {
+  min-width: 28px !important;
+  min-height: 26px !important;
+  border-radius: 5px !important;
+}
+
+#midiConvertDialog[data-active-channel="0"] .midi-role-row:not([data-channel-index="0"]),
+#midiConvertDialog[data-active-channel="1"] .midi-role-row:not([data-channel-index="1"]),
+#midiConvertDialog[data-active-channel="2"] .midi-role-row:not([data-channel-index="2"]),
+#midiConvertDialog[data-active-channel="3"] .midi-role-row:not([data-channel-index="3"]),
+#midiConvertDialog[data-active-channel="4"] .midi-role-row:not([data-channel-index="4"]),
+#midiConvertDialog[data-active-channel="5"] .midi-role-row:not([data-channel-index="5"]) { display: none !important; }
+
+#midiConvertDialog[data-active-channel="0"] [data-midi-group-channel]:not([data-midi-group-channel="0"]),
+#midiConvertDialog[data-active-channel="1"] [data-midi-group-channel]:not([data-midi-group-channel="1"]),
+#midiConvertDialog[data-active-channel="2"] [data-midi-group-channel]:not([data-midi-group-channel="2"]),
+#midiConvertDialog[data-active-channel="3"] [data-midi-group-channel]:not([data-midi-group-channel="3"]),
+#midiConvertDialog[data-active-channel="4"] [data-midi-group-channel]:not([data-midi-group-channel="4"]),
+#midiConvertDialog[data-active-channel="5"] [data-midi-group-channel]:not([data-midi-group-channel="5"]) { display: none !important; }
+
+.wb4-question-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 6px;
+  background: var(--wb4-surface);
+  color: var(--wb4-text);
+}
+textarea.wb4-question-input { min-height: 110px; resize: vertical; }
+
+/* 개별 템포 수정은 다시 실제 팝업 dialog로 유지한다. */
+#tempoEditDialog.mml-dialog {
+  position: fixed !important;
+  inset: 0 !important;
+  width: min(92vw, 430px) !important;
+  max-width: 430px !important;
+  height: fit-content !important;
+  max-height: min(82vh, 620px) !important;
+  margin: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .28) !important;
+  overflow: visible !important;
+  z-index: 250 !important;
+}
+#tempoEditDialog.mml-dialog::backdrop {
+  background: rgba(15, 23, 42, .46);
+  backdrop-filter: blur(2px);
+}
+#tempoEditDialog .tempo-edit-card {
+  width: 100% !important;
+  margin: 0 !important;
+  border-radius: 12px !important;
+}
+
+.wb4-copy-results { display: grid; }
+.wb4-copy-results .copy-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 9px 8px 14px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 11px;
+  background: var(--wb4-surface-2);
+}
+.wb4-copy-results .copy-meta { min-width: 0; }
+.wb4-copy-results .copy-title {
+  display: block;
+  color: var(--wb4-text);
+  font-size: 13px;
+  font-weight: 750;
+}
+.wb4-copy-results .copy-detail {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--wb4-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb4-copy-button {
+  min-width: 84px;
+  height: 38px !important;
+  padding: 0 14px !important;
+  border: 1px solid var(--wb4-line-strong) !important;
+  border-radius: 9px !important;
+  background: var(--wb4-surface) !important;
+  color: var(--wb4-text) !important;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+}
+.wb4-copy-button:hover { background: var(--control-hover) !important; }
+.wb4-copy-button.copied {
+  border-color: var(--wb4-accent) !important;
+  background: var(--wb4-accent) !important;
+  color: #fff !important;
+}
+.wb4-split-results { margin-top: 18px; }
+.wb4-results-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 12px;
+}
+.wb4-split-title-wrap { display: grid; gap: 3px; min-width: 0; }
+.wb4-results-head h2 { margin: 0; color: var(--wb4-text); font-size: 15px; letter-spacing: -.02em; }
+.wb4-results-head .results-summary { color: var(--wb4-muted); font-size: 10px; }
+.wb4-split-controls { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.wb4-split-control {
+  display: grid;
+  gap: 4px;
+  color: var(--wb4-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+.wb4-split-limit { width: 84px; }
+.wb4-split-search { width: 96px !important; min-width: 96px; }
+.wb4-copy-buttons { display: grid; gap: 8px; }
+
+
+
+
+.wb4-legacy-host { display: none !important; }
+.player-source-workbench-v4 .rhythm-game-layer { z-index: 260; }
+
+@media (max-width: 820px) {
+  html[data-player-layout="source-workbench"] main { padding-inline: 10px; }
+  .player-source-workbench-v4 .player-topbar-inner { padding-inline: 10px; }
+  .player-source-workbench-v4 .midi-site-links { display: none; }
+  .wb4-channel-tabs { grid-template-columns: repeat(6, minmax(104px, 1fr)); }
+  .wb4-option-row { grid-template-columns: minmax(112px, 145px) minmax(0, 1fr); gap: 14px; }
+  #midiConvertDialog .midi-dialog-layout { grid-template-columns: 1fr !important; }
+  #midiConvertDialog .midi-right-panel { padding: 14px 0 0 !important; border-left: 0 !important; border-top: 1px solid var(--wb4-line) !important; }
+  #midiConvertDialog #midiChannelList { max-height: 320px !important; }
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v4 .player-topbar { height: 58px; }
+  .player-source-workbench-v4 .player-brand > span:last-child { display: none; }
+  .player-source-workbench-v4 .header-links { display: none; }
+  .wb4-top-external { margin-left: auto; }
+  .wb4-top-external > a,
+  .wb4-top-external > button { padding-inline: 7px !important; font-size: 9.5px !important; }
+  .wb4-shell { padding-top: 0; }
+  .wb4-canvas { padding: 18px 14px; border-radius: 15px; }
+  .wb4-title { margin-bottom: 18px; }
+  .wb4-title-name { font-size: 22px; }
+  .wb4-block + .wb4-block { margin-top: 21px; padding-top: 21px; }
+  .wb4-drop-zone { min-height: 104px; padding: 25px 10px 14px; }
+  .wb4-load-actions { width: min(100%, 290px); }
+  .wb4-load-primary,
+  .wb4-load-secondary { flex: 1 1 0; min-width: 0; padding-inline: 9px !important; }
+  .player-source-workbench-v4 .wb4-preview-block .transport-row { padding-top: 9px; }
+  .player-source-workbench-v4 .transport-row { align-items: flex-start; }
+  .player-source-workbench-v4 .transport-actions,
+  .player-source-workbench-v4 .quick-controls { width: 100%; }
+  .wb4-tempo-timeline { height: 72px; }
+  .wb4-playhead-label { top: 27px; }
+  .wb4-option-row { grid-template-columns: 1fr; gap: 9px; padding-block: 13px; }
+  .wb4-common-inline { grid-template-columns: 1fr; }
+  
+  .wb4-inline-field { grid-template-columns: 54px minmax(0, 1fr); }
+  
+  
+  .wb4-rest-segments .wb4-segment {
+    border: 1px solid var(--wb4-line) !important;
+    border-radius: 6px !important;
+    background: var(--wb4-surface);
+  }
+  .wb4-strength-segments .wb4-segment { font-size: 9.5px; }
+  .wb4-slider-number { grid-template-columns: minmax(0, 1fr) 60px auto; }
+  .wb4-mml-body .tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .wb4-mml-body .tab-btn { flex: 0 0 auto; }
+  .wb4-results-head { align-items: stretch; flex-direction: column; }
+  .wb4-split-controls { width: 100%; }
+  .wb4-split-control { flex: 1 1 0; }
+  .wb4-split-limit,
+  .wb4-split-search { width: 100% !important; min-width: 0; }
+  
+  
+  #midiConvertDialog #midiChannelList { max-height: 280px !important; }
+}
+
+@media (max-width: 620px) {
+  .wb4-channel-tabs { grid-template-columns: repeat(6, minmax(58px, 1fr)); overflow-x: hidden; }
+  .wb4-channel-tab { min-height: 40px; padding-inline: 3px; font-size: 9.5px; }
+  .wb4-rest-segments .wb4-segment.active {
+    border-color: var(--wb4-accent) !important;
+    background: var(--wb4-accent) !important;
+    color: #fff !important;
+  }
+}
+
+/* Workbench v5 refinements */
+.wb4-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+.wb4-title-row .wb4-title { margin: 0; }
+.wb4-title-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.wb4-title-actions > button,
+.wb4-title-actions > a {
+  min-height: 34px !important;
+  padding: 0 11px !important;
+  border: 0 !important;
+  border-bottom: 1px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--wb4-muted) !important;
+  box-shadow: none !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-decoration: none !important;
+}
+.wb4-title-actions > button:hover,
+.wb4-title-actions > a:hover {
+  border-bottom-color: var(--wb4-line-strong) !important;
+  color: var(--wb4-text) !important;
+}
+
+
+
+.wb4-load-actions { padding-inline: 76px; }
+.wb4-paste-source-button { min-width: 114px; }
+
+.player-source-workbench-v5 .wb4-preview-block .piano-roll {
+  border-bottom: 1px solid var(--wb4-line) !important;
+}
+.player-source-workbench-v5 .wb4-preview-block .wb4-seek-row {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.wb4-tempo-timeline {
+  margin-top: 0 !important;
+  border-top: 0 !important;
+}
+
+
+
+
+
+
+
+
+.wb4-channel-tab { color: var(--wb4-channel-color, var(--wb4-muted)); opacity: .72; }
+.wb4-channel-tab:hover { color: var(--wb4-channel-color, var(--wb4-text)); opacity: 1; }
+.wb4-channel-tab.active {
+  border-bottom-color: var(--wb4-channel-color) !important;
+  background: color-mix(in srgb, var(--wb4-channel-color) 8%, transparent) !important;
+  color: var(--wb4-channel-color) !important;
+  opacity: 1;
+}
+.wb4-channel-panel {
+  --wb4-accent: var(--wb4-channel-color);
+  border-top: 2px solid color-mix(in srgb, var(--wb4-channel-color) 72%, transparent);
+}
+.wb4-channel-panel .wb4-option-name strong { color: var(--wb4-channel-color); }
+.wb4-channel-panel .wb4-range,
+.wb4-channel-panel input[type="checkbox"] { accent-color: var(--wb4-channel-color); }
+.wb4-channel-panel .wb4-segment.active {
+  background: var(--wb4-channel-color) !important;
+  color: #fff !important;
+}
+.wb4-channel-panel .wb4-number:focus,
+.wb4-channel-panel .wb4-select:focus {
+  border-color: var(--wb4-channel-color) !important;
+  outline-color: color-mix(in srgb, var(--wb4-channel-color) 45%, transparent);
+}
+.wb4-channel-panel #midiConvertStatus { color: var(--wb4-channel-color) !important; }
+
+.wb4-channel-code-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--wb4-line);
+}
+
+
+.wb4-channel-code-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.wb4-channel-code-count {
+  display: inline-flex !important;
+  align-items: center;
+  min-height: 28px;
+  margin: 0 !important;
+  color: var(--wb4-channel-color) !important;
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  white-space: nowrap;
+}
+.wb4-code-help-button {
+  min-height: 30px !important;
+  padding: 0 8px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--wb4-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--wb4-muted) !important;
+  font-size: 10px !important;
+  font-weight: 750 !important;
+}
+.wb4-code-help-button:hover { border-bottom-color: var(--wb4-channel-color) !important; color: var(--wb4-channel-color) !important; }
+.wb4-channel-code-editor {
+  padding: 12px 0 16px;
+  border-bottom: 1px solid var(--wb4-line);
+}
+.wb4-channel-code-editor[hidden] { display: none !important; }
+.wb4-channel-code-editor .mml-panel { display: block !important; }
+.wb4-channel-code-editor .colored-textarea,
+.wb4-channel-code-editor textarea.highlight-source {
+  min-height: 190px;
+  border-radius: 0 !important;
+}
+.wb4-channel-code-editor textarea.highlight-source,
+.wb4-channel-code-editor .mml-highlight {
+  border-top-color: var(--wb4-channel-color) !important;
+}
+
+
+
+
+
+
+
+
+/* Rest options use the same wording and compact segmented layout as Simple. */
+.wb4-rest-segments .wb4-segment { min-width: 76px; }
+
+/* Timbre, code help and paste remain true popup layers. */
+#partSoundDialog.mml-dialog,
+#codeHelpDialog.mml-dialog,
+#pasteMmlDialog.mml-dialog {
+  position: fixed !important;
+  inset: 0 !important;
+  width: min(94vw, 760px) !important;
+  max-width: 760px !important;
+  height: fit-content !important;
+  max-height: min(88dvh, 820px) !important;
+  margin: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  background: transparent !important;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, .32) !important;
+  overflow: visible !important;
+  z-index: 310 !important;
+}
+#partSoundDialog.mml-dialog::backdrop,
+#codeHelpDialog.mml-dialog::backdrop,
+#pasteMmlDialog.mml-dialog::backdrop {
+  background: rgba(15, 23, 42, .5);
+  backdrop-filter: blur(3px);
+}
+#partSoundDialog .dialog-card,
+#codeHelpDialog .dialog-card,
+#pasteMmlDialog .dialog-card {
+  width: 100% !important;
+  max-width: none !important;
+  max-height: min(88dvh, 820px) !important;
+  margin: 0 !important;
+  border-radius: 14px !important;
+  overflow: auto !important;
+}
+#partSoundDialog.mml-dialog { width: min(94vw, 820px) !important; max-width: 820px !important; }
+#pasteMmlDialog.mml-dialog { width: min(92vw, 620px) !important; max-width: 620px !important; }
+.wb4-paste-card { display: grid; gap: 12px; }
+.wb4-paste-hint { margin: 0; color: var(--wb4-muted); font-size: 11px; line-height: 1.55; }
+.wb4-paste-textarea {
+  width: 100%;
+  min-height: 260px;
+  padding: 12px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 6px;
+  background: var(--wb4-surface-2);
+  color: var(--wb4-text);
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  resize: vertical;
+}
+.wb4-paste-status { min-height: 18px; color: var(--danger); }
+
+@media (max-width: 700px) {
+  .wb4-title-row { align-items: stretch; flex-direction: column; gap: 8px; }
+  .wb4-title-actions { width: 100%; justify-content: flex-end; }
+  .wb4-load-actions { padding-inline: 0; padding-top: 24px; }
+  .wb4-load-primary,
+  .wb4-load-secondary { flex: 1 1 120px; }
+  .wb4-channel-code-tools { align-items: stretch; flex-direction: column; gap: 5px; }
+  .wb4-channel-code-meta { justify-content: space-between; }
+  
+  .wb4-rest-segments .wb4-segment { min-width: 0; }
+  
+  .wb4-paste-textarea { min-height: 210px; }
+}
+
+/* Workbench v5 final channel identity and responsive title alignment */
+.wb4-channel-tab.active {
+  border-bottom-width: 4px !important;
+  background: color-mix(in srgb, var(--wb4-channel-color) 16%, transparent) !important;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--wb4-channel-color) 82%, transparent);
+}
+.wb4-channel-panel {
+  border-top-width: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--wb4-channel-color) 4%, transparent), transparent 150px);
+}
+.wb4-channel-panel .wb4-option-row {
+  --wb4-accent: var(--wb4-channel-color);
+}
+.wb4-channel-panel .wb4-toggle-row input,
+.wb4-channel-panel .wb4-range {
+  accent-color: var(--wb4-channel-color) !important;
+}
+
+@media (max-width: 700px) {
+  .wb4-title-row {
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 8px;
+    min-height: 38px;
+  }
+  .wb4-title-row .wb4-title { flex: 1 1 auto; min-width: 0; }
+  .wb4-title-actions {
+    flex: 0 0 auto;
+    width: auto;
+    flex-wrap: nowrap;
+  }
+  .wb4-title-actions > button,
+  .wb4-title-actions > a {
+    min-height: 30px !important;
+    padding-inline: 5px !important;
+    font-size: 9.5px !important;
+    white-space: nowrap;
+  }
+  .wb4-title-actions .rhythm-game-toolbar-icon { margin-right: 2px; }
+}
+.wb4-channel-code-count {
+  width: auto !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  justify-items: initial !important;
+  text-align: right !important;
+}
+.wb4-channel-code-editor .mml-panel[hidden] { display: none !important; }
+
+/* Workbench v6: playback source preview and task-oriented lower workspace. */
+.player-source-workbench-v6 .wb4-source-block + .wb6-preview-block {
+  margin-top: 18px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.player-source-workbench-v6 .wb6-hidden-play-info,
+.player-source-workbench-v6 #playInfo {
+  display: none !important;
+}
+
+.player-source-workbench-v6 .wb6-transport-symbol {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-width: 38px;
+  height: 34px;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border-radius: 7px !important;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Symbol", sans-serif;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+.player-source-workbench-v6 .wb6-rewind-symbol {
+  border: 1px solid var(--wb4-line) !important;
+  background: var(--wb4-surface) !important;
+  color: var(--wb4-text) !important;
+}
+.player-source-workbench-v6 .wb6-play-symbol {
+  border: 1px solid var(--wb4-accent) !important;
+  background: var(--wb4-accent) !important;
+  color: #fff !important;
+}
+.player-source-workbench-v6 .wb6-play-symbol.danger {
+  border-color: var(--danger) !important;
+  background: var(--danger) !important;
+}
+.player-source-workbench-v6 .wb6-original-label {
+  margin-left: 3px;
+  color: var(--wb4-text);
+  font-weight: 750;
+}
+.player-source-workbench-v6 .wb6-original-label input {
+  accent-color: var(--wb4-accent);
+}
+.player-source-workbench-v6 .wb6-original-label:has(input:checked) {
+  color: var(--wb4-accent);
+}
+.player-source-workbench-v6 .wb6-preview-block.is-original-preview .piano-roll {
+  box-shadow: inset 0 3px 0 color-mix(in srgb, var(--wb4-accent) 76%, transparent);
+}
+
+.wb6-overview-block {
+  display: grid;
+  gap: 0;
+}
+.wb6-channel-count-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  min-width: 0;
+  border-top: 1px solid var(--wb4-line);
+  border-bottom: 1px solid var(--wb4-line);
+}
+.wb6-channel-count {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 9px;
+  border-left: 1px solid var(--wb4-line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--wb6-channel-color) 7%, transparent), transparent);
+  text-align: center;
+}
+.wb6-channel-count:first-child { border-left: 0; }
+.wb6-channel-count-name {
+  overflow: hidden;
+  color: var(--wb6-channel-color);
+  font-size: 10px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb6-channel-count-value {
+  color: var(--wb4-text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.wb6-common-options.wb4-common-options {
+  display: grid;
+  grid-template-columns: .82fr 1.2fr 1fr;
+  margin: 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--wb4-line);
+}
+.wb6-common-options .wb4-option-row,
+.wb6-common-options .wb4-option-row:first-child {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 15px 14px;
+  border-top: 0;
+  border-left: 1px solid var(--wb4-line);
+}
+.wb6-common-options .wb4-option-row:first-child { border-left: 0; }
+.wb6-common-options .wb4-option-name strong {
+  font-size: 10.5px;
+}
+.wb6-common-options .wb4-option-control {
+  align-self: start;
+}
+.wb6-common-options .wb4-control-help {
+  display: none;
+}
+.wb6-common-options .wb4-slider-number {
+  grid-template-columns: minmax(90px, 1fr) 58px auto;
+  gap: 6px;
+}
+.wb6-common-options .wb4-number {
+  width: 58px;
+}
+.wb6-common-options .wb4-compact-grid {
+  grid-template-columns: 1fr;
+  gap: 7px;
+}
+.wb6-common-options .wb4-inline-field {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+.wb6-option-status {
+  margin-top: 0;
+  padding: 8px 2px 0;
+  border-top: 0;
+}
+
+.wb6-workspace-block {
+  min-width: 0;
+}
+.wb6-workspace-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+  border-bottom: 1px solid var(--wb4-line);
+}
+.wb6-workspace-tab {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wb4-muted);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.wb6-workspace-tab:hover {
+  background: var(--control-hover);
+  color: var(--wb4-text);
+}
+.wb6-workspace-tab.active {
+  border-bottom-color: var(--wb4-accent);
+  background: color-mix(in srgb, var(--wb4-accent) 7%, transparent);
+  color: var(--wb4-accent);
+}
+.wb6-workspace-panel {
+  min-width: 0;
+  padding-top: 13px;
+}
+.wb6-workspace-panel[hidden] {
+  display: none !important;
+}
+
+.wb6-channel-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--wb4-line);
+  scrollbar-width: thin;
+}
+.wb6-channel-tab {
+  min-width: 0;
+  min-height: 39px;
+  padding: 0 7px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wb6-channel-color, var(--wb4-muted));
+  font-size: 10.5px;
+  font-weight: 850;
+  opacity: .68;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb6-channel-tab:hover {
+  background: color-mix(in srgb, var(--wb6-channel-color) 7%, transparent);
+  opacity: 1;
+}
+.wb6-channel-tab.active {
+  border-bottom-color: var(--wb6-channel-color);
+  background: color-mix(in srgb, var(--wb6-channel-color) 13%, transparent);
+  color: var(--wb6-channel-color);
+  opacity: 1;
+}
+
+
+.wb6-channel-option-panel.wb4-channel-panel {
+  --wb4-accent: var(--wb4-channel-color);
+  border-top: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--wb4-channel-color) 4%, transparent), transparent 150px);
+}
+.wb6-channel-option-panel .wb4-option-row:first-child {
+  border-top: 0;
+}
+
+.wb6-code-tools {
+  justify-content: flex-end;
+  min-height: 42px;
+  padding: 6px 2px;
+  border-bottom: 0;
+}
+.wb6-code-count {
+  color: var(--part0);
+}
+.wb6-code-help-button {
+  margin-left: 2px;
+}
+.wb6-channel-code-editor {
+  padding-top: 0;
+  border-top: 2px solid color-mix(in srgb, var(--part0) 74%, transparent);
+}
+.wb6-code-panel[data-active-channel="0"] .wb6-channel-code-editor { border-top-color: var(--part0); }
+.wb6-code-panel[data-active-channel="1"] .wb6-channel-code-editor { border-top-color: var(--part1); }
+.wb6-code-panel[data-active-channel="2"] .wb6-channel-code-editor { border-top-color: var(--part2); }
+.wb6-code-panel[data-active-channel="3"] .wb6-channel-code-editor { border-top-color: var(--part3); }
+.wb6-code-panel[data-active-channel="4"] .wb6-channel-code-editor { border-top-color: var(--part4); }
+.wb6-code-panel[data-active-channel="5"] .wb6-channel-code-editor { border-top-color: var(--part5); }
+.wb6-code-panel[data-active-channel="0"] .wb6-code-count { color: var(--part0) !important; }
+.wb6-code-panel[data-active-channel="1"] .wb6-code-count { color: var(--part1) !important; }
+.wb6-code-panel[data-active-channel="2"] .wb6-code-count { color: var(--part2) !important; }
+.wb6-code-panel[data-active-channel="3"] .wb6-code-count { color: var(--part3) !important; }
+.wb6-code-panel[data-active-channel="4"] .wb6-code-count { color: var(--part4) !important; }
+.wb6-code-panel[data-active-channel="5"] .wb6-code-count { color: var(--part5) !important; }
+.wb6-channel-code-editor.wb4-channel-code-editor {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.wb6-channel-code-editor .colored-textarea,
+.wb6-channel-code-editor textarea.highlight-source {
+  min-height: 260px;
+}
+
+.wb6-copy-panel {
+  padding-top: 17px;
+}
+.wb6-copy-panel .wb4-split-results {
+  margin-top: 18px;
+}
+
+.wb6-assignment-host {
+  min-width: 0;
+}
+.wb6-assignment-empty {
+  padding: 24px 2px;
+  border-bottom: 1px solid var(--wb4-line);
+  line-height: 1.6;
+}
+.player-source-workbench-v6 #midiConvertDialog .midi-dialog-card {
+  padding-top: 10px !important;
+}
+.player-source-workbench-v6 #midiConvertDialog .midi-dialog-layout {
+  display: grid !important;
+  grid-template-columns: minmax(245px, .82fr) minmax(0, 1.45fr) !important;
+  align-items: start !important;
+  gap: 18px !important;
+  width: 100% !important;
+}
+.player-source-workbench-v6 #midiConvertDialog .midi-left-panel,
+.player-source-workbench-v6 #midiConvertDialog .midi-right-panel {
+  min-width: 0;
+  padding: 0 !important;
+  border: 0 !important;
+}
+.player-source-workbench-v6 #midiConvertDialog .midi-left-panel {
+  border-right: 1px solid var(--wb4-line) !important;
+  padding-right: 18px !important;
+}
+.player-source-workbench-v6 #midiConvertDialog .dialog-section-head {
+  min-height: 34px;
+  align-items: center;
+  padding-bottom: 7px !important;
+  border-bottom: 1px solid var(--wb4-line) !important;
+}
+.player-source-workbench-v6 #midiConvertDialog .dialog-section-head > strong {
+  color: var(--wb4-text);
+  font-size: 11px;
+}
+.player-source-workbench-v6 #midiConvertDialog #midiRoleList,
+.player-source-workbench-v6 #midiConvertDialog #midiChannelList {
+  margin-top: 0;
+  border-top: 0 !important;
+}
+.player-source-workbench-v6 #midiConvertDialog #midiChannelList {
+  max-height: 380px !important;
+}
+
+@media (max-width: 820px) {
+  .wb6-common-options.wb4-common-options {
+    grid-template-columns: 1fr 1fr;
+  }
+  .wb6-common-options .wb4-option-row:nth-child(3) {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--wb4-line);
+  }
+  .player-source-workbench-v6 #midiConvertDialog .midi-dialog-layout {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+  .player-source-workbench-v6 #midiConvertDialog .midi-left-panel {
+    padding-right: 0 !important;
+    padding-bottom: 14px !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--wb4-line) !important;
+  }
+  .player-source-workbench-v6 #midiConvertDialog .midi-right-panel {
+    padding-top: 14px !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v6 .transport-actions {
+    align-items: center;
+  }
+  .player-source-workbench-v6 .wb6-transport-symbol {
+    width: 36px;
+    min-width: 36px;
+  }
+  .wb6-channel-count-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .wb6-channel-count:nth-child(4) {
+    border-left: 0;
+    border-top: 1px solid var(--wb4-line);
+  }
+  .wb6-channel-count:nth-child(5),
+  .wb6-channel-count:nth-child(6) {
+    border-top: 1px solid var(--wb4-line);
+  }
+  .wb6-common-options.wb4-common-options {
+    grid-template-columns: 1fr;
+  }
+  .wb6-common-options .wb4-option-row,
+  .wb6-common-options .wb4-option-row:first-child,
+  .wb6-common-options .wb4-option-row:nth-child(3) {
+    grid-column: auto;
+    border-left: 0;
+    border-top: 1px solid var(--wb4-line);
+  }
+  .wb6-common-options .wb4-option-row:first-child {
+    border-top: 0;
+  }
+  .wb6-workspace-tab {
+    min-height: 42px;
+    padding-inline: 4px;
+    font-size: 9.5px;
+  }
+  .wb6-channel-tabs {
+    grid-template-columns: repeat(6, minmax(58px, 1fr));
+  }
+  .wb6-channel-tab {
+    min-height: 38px;
+    padding-inline: 3px;
+    font-size: 9.2px;
+  }
+  .wb6-code-tools {
+    align-items: center;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+  .wb6-channel-code-editor .colored-textarea,
+  .wb6-channel-code-editor textarea.highlight-source {
+    min-height: 220px;
+  }
+}
+
+/* Workbench v6: keep the pre-import instrument hint out of the loaded MIDI layout. */
+.player-source-workbench-v6 .wb6-assignment-empty[hidden] {
+  display: none !important;
+}
+.player-source-workbench-v6 #midiConvertDialog .midi-convert-footer {
+  position: static !important;
+  inset: auto !important;
+  z-index: auto !important;
+  margin: 8px 0 0 !important;
+  padding: 7px 0 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+/* Player Workbench v7 final overrides */
+.player-source-workbench-v7 .wb7-native-quantize-toggle,
+.player-source-workbench-v7 #midiSelectedPreviewBtn,
+.player-source-workbench-v7 #midiFullPreviewBtn,
+.player-source-workbench-v7 .wb6-instrument-channel-tabs {
+  display: none !important;
+}
+
+/* 글자 수는 화면 폭과 관계없이 여섯 채널을 한 줄에 유지한다. */
+.player-source-workbench-v7 .wb6-channel-count-strip {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  overflow: hidden;
+}
+.player-source-workbench-v7 .wb6-channel-count {
+  min-width: 0;
+  padding: 9px 5px;
+}
+.player-source-workbench-v7 .wb6-channel-count-name,
+.player-source-workbench-v7 .wb6-channel-count-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 공용 옵션: 시작 공백 · 템포 · MIDI 양자화. */
+.player-source-workbench-v7 .wb7-common-options.wb4-common-options {
+  grid-template-columns: .82fr 1.2fr .78fr;
+}
+.player-source-workbench-v7 .wb7-quantize-segments {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}
+.player-source-workbench-v7 .wb7-quantize-segments button {
+  min-width: 0;
+}
+.player-source-workbench-v7 .wb7-quantize-segments.is-disabled {
+  opacity: .48;
+}
+.player-source-workbench-v7 .wb7-seconds-stepper {
+  grid-template-columns: minmax(54px, 1fr) auto auto;
+}
+.player-source-workbench-v7 .wb7-seconds-input {
+  min-width: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 채널 옵션과 코드 편집은 전체 채널 + 6개 채널을 한 줄에 표시한다. */
+.player-source-workbench-v7 .wb6-channel-tabs.wb7-has-all-channel {
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  overflow: hidden !important;
+  scrollbar-width: none;
+}
+.player-source-workbench-v7 .wb6-channel-tabs.wb7-has-all-channel::-webkit-scrollbar {
+  display: none;
+}
+.player-source-workbench-v7 .wb6-channel-tabs.wb7-has-all-channel .wb6-channel-tab {
+  min-width: 0 !important;
+  padding-inline: 4px;
+}
+.player-source-workbench-v7 .wb7-all-channel-tab {
+  color: var(--wb4-accent);
+  opacity: .76;
+}
+.player-source-workbench-v7 .wb7-all-channel-tab.active {
+  border-bottom-color: var(--wb4-accent);
+  background: color-mix(in srgb, var(--wb4-accent) 13%, transparent);
+  color: var(--wb4-accent);
+}
+.player-source-workbench-v7 .wb7-all-channel-panel {
+  --wb4-channel-color: var(--accent, #4f46e5);
+  --wb6-channel-color: var(--accent, #4f46e5);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent, #4f46e5) 4%, transparent), transparent 170px);
+}
+.player-source-workbench-v7 .wb7-all-code-count {
+  color: var(--wb4-accent) !important;
+}
+.player-source-workbench-v7 .wb6-code-panel[data-active-channel="-1"] .wb6-channel-code-editor {
+  border-top-color: var(--wb4-accent);
+}
+
+/* 악기 선택은 6개 채널 설정 다음에 전체 악기 목록이 이어지는 한 열 구성이다. */
+.player-source-workbench-v7 #midiConvertDialog .midi-dialog-layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+.player-source-workbench-v7 #midiConvertDialog .midi-left-panel,
+.player-source-workbench-v7 #midiConvertDialog .midi-right-panel {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: visible !important;
+}
+.player-source-workbench-v7 #midiConvertDialog .midi-left-panel {
+  padding-bottom: 15px !important;
+  border-bottom: 1px solid var(--wb4-line) !important;
+}
+.player-source-workbench-v7 #midiConvertDialog .midi-right-panel {
+  padding-top: 15px !important;
+}
+.player-source-workbench-v7 #midiConvertDialog #midiRoleList,
+.player-source-workbench-v7 #midiConvertDialog #midiChannelList {
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  overscroll-behavior: auto !important;
+  scrollbar-width: none;
+}
+.player-source-workbench-v7 #midiConvertDialog #midiChannelList::-webkit-scrollbar {
+  display: none;
+}
+.player-source-workbench-v7 #midiConvertDialog .midi-role-row,
+.player-source-workbench-v7 #midiConvertDialog .midi-channel-row,
+.player-source-workbench-v7 #midiConvertDialog .midi-instrument-row,
+.player-source-workbench-v7 #midiConvertDialog [data-midi-group-channel] {
+  display: grid !important;
+}
+.player-source-workbench-v7 #midiConvertDialog .midi-role-row {
+  grid-template-columns: minmax(145px, 1.1fr) minmax(90px, .55fr) minmax(165px, .9fr) auto;
+  align-items: center;
+  gap: 9px;
+}
+.player-source-workbench-v7 #midiConvertDialog .midi-instrument-selected-parts {
+  display: flex !important;
+  flex-wrap: wrap;
+}
+.player-source-workbench-v7 #midiConvertDialog .midi-instrument-section {
+  width: 100%;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.player-source-workbench-v7 #midiConvertDialog .midi-instrument-section[open] > :not(summary) {
+  display: grid !important;
+}
+.player-source-workbench-v7 #midiConvertDialog .midi-instrument-section-head {
+  position: static;
+}
+.player-source-workbench-v7 #midiConvertDialog .midi-convert-footer {
+  position: static !important;
+}
+
+@media (max-width: 820px) {
+  .player-source-workbench-v7 .wb7-common-options.wb4-common-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .player-source-workbench-v7 .wb7-common-options .wb7-common-quantize {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--wb4-line);
+  }
+  .player-source-workbench-v7 #midiConvertDialog .midi-role-row {
+    grid-template-columns: minmax(130px, 1fr) minmax(85px, .6fr) minmax(155px, 1fr) auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v7 .wb6-channel-count-strip {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+  .player-source-workbench-v7 .wb6-channel-count {
+    padding: 7px 2px;
+    border-top: 0 !important;
+  }
+  .player-source-workbench-v7 .wb6-channel-count:nth-child(4) {
+    border-left: 1px solid var(--wb4-line) !important;
+  }
+  .player-source-workbench-v7 .wb6-channel-count-name {
+    font-size: 8px;
+    letter-spacing: -.04em;
+  }
+  .player-source-workbench-v7 .wb6-channel-count-value {
+    font-size: 9px;
+    letter-spacing: -.03em;
+  }
+  .player-source-workbench-v7 .wb7-common-options.wb4-common-options {
+    grid-template-columns: 1fr;
+  }
+  .player-source-workbench-v7 .wb7-common-options .wb4-option-row,
+  .player-source-workbench-v7 .wb7-common-options .wb7-common-quantize {
+    grid-column: auto;
+    border-left: 0;
+    border-top: 1px solid var(--wb4-line);
+  }
+  .player-source-workbench-v7 .wb7-common-options .wb4-option-row:first-child {
+    border-top: 0;
+  }
+  .player-source-workbench-v7 .wb6-channel-tabs.wb7-has-all-channel .wb6-channel-tab {
+    min-height: 38px;
+    padding-inline: 1px;
+    font-size: 8.1px;
+    letter-spacing: -.055em;
+  }
+  .player-source-workbench-v7 #midiConvertDialog .midi-role-row {
+    grid-template-columns: minmax(0, 1fr) minmax(82px, .72fr);
+    gap: 7px;
+  }
+  .player-source-workbench-v7 #midiConvertDialog .midi-role-row .midi-channel-summary {
+    grid-column: 1 / -1;
+  }
+  .player-source-workbench-v7 #midiConvertDialog .midi-role-row .merge-mode {
+    grid-column: 1 / 2;
+  }
+  .player-source-workbench-v7 #midiConvertDialog .midi-role-row .midi-role-preview-btn {
+    grid-column: 2 / 3;
+    justify-self: stretch;
+  }
+}
+
+
+/* Player Workbench v8 final overrides */
+.player-source-workbench-v8 .transport-actions {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.player-source-workbench-v8 .wb8-playback-channels {
+  display: inline-grid;
+  grid-template-columns: repeat(6, 28px);
+  gap: 4px;
+  align-items: center;
+}
+.player-source-workbench-v8 .wb8-playback-channel {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--wb8-channel-color) 38%, var(--wb4-line));
+  border-radius: 4px;
+  background: transparent;
+  color: color-mix(in srgb, var(--wb8-channel-color) 72%, var(--wb4-muted));
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+.player-source-workbench-v8 .wb8-playback-channel.active {
+  border-color: var(--wb8-channel-color);
+  background: color-mix(in srgb, var(--wb8-channel-color) 18%, transparent);
+  color: var(--wb8-channel-color);
+  box-shadow: inset 0 -2px 0 var(--wb8-channel-color);
+}
+.player-source-workbench-v8 .wb8-playback-channel.muted {
+  opacity: .42;
+  filter: grayscale(.55);
+  box-shadow: none;
+}
+.player-source-workbench-v8 .wb8-original-label {
+  margin-left: 1px;
+}
+
+/* 공용 옵션은 요청 순서대로 가능한 폭에서 한 줄을 유지한다. */
+.player-source-workbench-v8 .wb8-common-options.wb4-common-options {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.05fr) minmax(155px, .92fr) minmax(130px, .72fr) minmax(180px, 1fr) !important;
+  align-items: stretch;
+}
+.player-source-workbench-v8 .wb8-common-options .wb4-option-row {
+  min-width: 0;
+  grid-column: auto !important;
+  border-top: 0 !important;
+  border-left: 1px solid var(--wb4-line);
+}
+.player-source-workbench-v8 .wb8-common-options .wb4-option-row:first-child {
+  border-left: 0;
+}
+.player-source-workbench-v8 .wb8-common-options .wb4-option-name {
+  min-width: 0;
+  white-space: nowrap;
+}
+.player-source-workbench-v8 .wb8-common-options .wb4-option-control {
+  min-width: 0;
+}
+.player-source-workbench-v8 .wb8-number-control {
+  display: inline-grid;
+  grid-template-columns: minmax(55px, 76px) auto;
+  align-items: center;
+  gap: 5px;
+}
+.player-source-workbench-v8 .wb8-number-input {
+  width: 100%;
+  min-width: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.player-source-workbench-v8 .wb8-common-tempo-clean .wb4-toggle-row {
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+/* 전체 악보 저장과 복사를 한 행에 모은다. */
+.player-source-workbench-v8 .wb8-full-copy-item {
+  align-items: center;
+}
+.player-source-workbench-v8 .wb8-full-copy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.player-source-workbench-v8 .wb8-full-copy-actions > button {
+  min-height: 34px;
+  white-space: nowrap;
+}
+.player-source-workbench-v8 .wb4-save-actions {
+  display: none !important;
+}
+
+/* 채널 옵션: 기능 탭 + 전체/채널별 목록. */
+.player-source-workbench-v8 .wb8-channel-options-panel {
+  padding-top: 0;
+}
+.player-source-workbench-v8 .wb8-feature-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-bottom: 1px solid var(--wb4-line);
+}
+.player-source-workbench-v8 .wb8-feature-tab {
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 5px;
+  border: 0;
+  border-right: 1px solid var(--wb4-line);
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wb4-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+.player-source-workbench-v8 .wb8-feature-tab:last-child {
+  border-right: 0;
+}
+.player-source-workbench-v8 .wb8-feature-tab.active {
+  border-bottom-color: var(--wb4-accent);
+  background: color-mix(in srgb, var(--wb4-accent) 7%, transparent);
+  color: var(--wb4-accent);
+}
+.player-source-workbench-v8 .wb8-feature-panel {
+  display: block;
+  width: 100%;
+}
+.player-source-workbench-v8 .wb8-feature-panel[hidden] {
+  display: none !important;
+}
+.player-source-workbench-v8 .wb8-option-list-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 130px) minmax(0, 1fr) minmax(150px, .8fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--wb4-line);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--wb8-channel-color) 4%, transparent), transparent 34%);
+}
+.player-source-workbench-v8 .wb8-option-list-row:last-child {
+  border-bottom: 0;
+}
+.player-source-workbench-v8 .wb8-option-list-all {
+  min-height: 58px;
+  background: color-mix(in srgb, var(--wb4-accent) 5%, transparent);
+}
+.player-source-workbench-v8 .wb8-option-list-label {
+  color: var(--wb8-channel-color);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.player-source-workbench-v8 .wb8-option-list-control {
+  min-width: 0;
+}
+.player-source-workbench-v8 .wb8-option-list-control > select,
+.player-source-workbench-v8 .wb8-rest-select {
+  width: min(100%, 270px);
+}
+.player-source-workbench-v8 .wb8-option-metric {
+  min-width: 0;
+  color: var(--wb4-muted);
+  font-size: 10px;
+  line-height: 1.45;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.player-source-workbench-v8 .wb8-rest-metric {
+  color: color-mix(in srgb, var(--wb8-channel-color) 65%, var(--wb4-muted));
+}
+.player-source-workbench-v8 .wb8-option-list-wide {
+  grid-template-columns: minmax(92px, 130px) minmax(0, 1fr);
+}
+.player-source-workbench-v8 .wb8-dynamics-control,
+.player-source-workbench-v8 .wb8-accompaniment-channel-control,
+.player-source-workbench-v8 .wb8-accompaniment-global {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.player-source-workbench-v8 .wb8-dynamics-control > select {
+  min-width: 105px;
+}
+.player-source-workbench-v8 .wb8-accompaniment-global {
+  min-height: 58px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--wb4-line);
+  background: color-mix(in srgb, var(--wb4-accent) 4%, transparent);
+}
+
+/* 악기 선택: 채널 설정 6개를 한 행, 각 채널 안의 두 콤보는 수직 배치. */
+.player-source-workbench-v8 #midiConvertDialog #midiRoleList {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  width: 100% !important;
+}
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-role-card {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+  min-width: 0;
+  padding: 8px 7px 10px;
+  border-right: 1px solid var(--wb4-line);
+  border-bottom: 0;
+  background: color-mix(in srgb, currentColor 2%, transparent);
+}
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-role-card:last-child {
+  border-right: 0;
+}
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-role-name {
+  min-width: 0;
+  color: currentColor;
+  font-size: 10px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-role-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: var(--wb4-muted);
+  font-size: 8px;
+}
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-role-field select {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding-inline: 4px 18px;
+  font-size: 9px;
+}
+.player-source-workbench-v8 #midiConvertDialog .midi-export-channel.part-0 { color: var(--part0); }
+.player-source-workbench-v8 #midiConvertDialog .midi-export-channel.part-1 { color: var(--part1); }
+.player-source-workbench-v8 #midiConvertDialog .midi-export-channel.part-2 { color: var(--part2); }
+.player-source-workbench-v8 #midiConvertDialog .midi-export-channel.part-3 { color: var(--part3); }
+.player-source-workbench-v8 #midiConvertDialog .midi-export-channel.part-4 { color: var(--part4); }
+.player-source-workbench-v8 #midiConvertDialog .midi-export-channel.part-5 { color: var(--part5); }
+
+/* 악기 한 개당 한 줄: 채널 6개 → 악기명 → 노트 수 → 듣기. */
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-row {
+  display: grid !important;
+  grid-template-columns: 150px minmax(130px, 1fr) minmax(68px, auto) minmax(54px, auto) !important;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 5px 7px;
+}
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-channels {
+  display: grid !important;
+  grid-template-columns: repeat(6, 22px);
+  gap: 3px;
+  flex-wrap: nowrap !important;
+  min-width: 0;
+  order: 0;
+}
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-channels .midi-part-chip {
+  width: 22px;
+  min-width: 22px;
+  height: 24px;
+  padding: 0;
+  font-size: 8px;
+}
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-count {
+  color: var(--wb4-muted);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-listen {
+  min-height: 28px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+.player-source-workbench-v8 #midiConvertDialog #midiChannelList,
+.player-source-workbench-v8 #midiConvertDialog .midi-instrument-section {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+@media (max-width: 900px) {
+  .player-source-workbench-v8 .wb8-common-options.wb4-common-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .player-source-workbench-v8 .wb8-common-options .wb4-option-row:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--wb4-line) !important;
+  }
+  .player-source-workbench-v8 .wb8-common-options .wb4-option-row:nth-child(4) {
+    border-top: 1px solid var(--wb4-line) !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v8 .transport-actions {
+    gap: 6px;
+  }
+  .player-source-workbench-v8 .wb8-playback-channels {
+    grid-template-columns: repeat(6, 25px);
+    gap: 3px;
+  }
+  .player-source-workbench-v8 .wb8-playback-channel {
+    width: 25px;
+    min-width: 25px;
+    height: 27px;
+  }
+  .player-source-workbench-v8 .wb8-common-options.wb4-common-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .player-source-workbench-v8 .wb8-common-options .wb4-option-row {
+    padding-inline: 7px;
+  }
+  .player-source-workbench-v8 .wb8-feature-tab {
+    min-height: 39px;
+    padding-inline: 2px;
+    font-size: 8.5px;
+    letter-spacing: -.035em;
+  }
+  .player-source-workbench-v8 .wb8-option-list-row,
+  .player-source-workbench-v8 .wb8-option-list-wide {
+    grid-template-columns: 66px minmax(0, 1fr) !important;
+    gap: 7px;
+    padding-inline: 5px;
+  }
+  .player-source-workbench-v8 .wb8-option-metric {
+    grid-column: 2;
+    margin-top: -3px;
+    text-align: left;
+  }
+  .player-source-workbench-v8 .wb8-option-list-label {
+    font-size: 9px;
+  }
+  .player-source-workbench-v8 .wb8-full-copy-item {
+    align-items: stretch;
+  }
+  .player-source-workbench-v8 .wb8-full-copy-actions {
+    justify-content: stretch;
+  }
+  .player-source-workbench-v8 .wb8-full-copy-actions > button {
+    flex: 1 1 90px;
+    min-width: 0;
+    padding-inline: 5px;
+    font-size: 9px;
+  }
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-role-card {
+    padding-inline: 3px;
+  }
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-role-name {
+    font-size: 8px;
+  }
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-role-field span {
+    font-size: 7px;
+  }
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-role-field select {
+    height: 28px;
+    padding-inline: 2px 14px;
+    font-size: 8px;
+  }
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-row {
+    grid-template-columns: 126px minmax(88px, 1fr) 49px 45px !important;
+    gap: 4px;
+    padding-inline: 2px;
+  }
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-channels {
+    grid-template-columns: repeat(6, 19px);
+    gap: 2px;
+  }
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-channels .midi-part-chip {
+    width: 19px;
+    min-width: 19px;
+    height: 22px;
+    font-size: 7px;
+  }
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-name,
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-count,
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-listen {
+    font-size: 8px;
+  }
+  .player-source-workbench-v8 #midiConvertDialog .wb8-midi-listen {
+    min-width: 0;
+    padding-inline: 3px;
+  }
+}
+
+/* v8 final ordering: channel chips are the leftmost column of each instrument row. */
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-channels,
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-name,
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-count,
+.player-source-workbench-v8 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-listen {
+  grid-column: auto !important;
+  grid-row: auto !important;
+}
+
+
+/* ==========================================================================\n   Player Workbench v9\n   ========================================================================== */
+.player-source-workbench-v9 .quick-controls {
+  gap: 8px;
+}
+.player-source-workbench-v9 .wb9-sound-button {
+  order: -10;
+  min-height: 34px;
+  padding-inline: 13px;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 28%, var(--wb4-line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--wb4-accent) 7%, var(--wb4-surface));
+  color: var(--wb4-accent);
+  font-weight: 700;
+}
+
+/* 공용 옵션: 한 줄 4개 + 볼륨 생성은 다음 줄 전체 폭. */
+.player-source-workbench-v9 .wb9-common-options.wb4-common-options {
+  display: grid !important;
+  grid-template-columns: minmax(142px, .9fr) minmax(168px, 1.05fr) minmax(150px, .85fr) minmax(164px, .9fr) !important;
+  align-items: stretch;
+  border-top: 1px solid var(--wb4-line);
+  border-bottom: 1px solid var(--wb4-line);
+}
+.player-source-workbench-v9 .wb9-common-options .wb4-option-row {
+  min-width: 0;
+  padding: 11px 14px;
+  border: 0 !important;
+  border-right: 1px solid var(--wb4-line) !important;
+  background: transparent;
+}
+.player-source-workbench-v9 .wb9-common-options .wb4-option-row:nth-child(4) {
+  border-right: 0 !important;
+}
+.player-source-workbench-v9 .wb9-common-options .wb9-common-dynamics {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  align-items: center;
+  min-height: 58px;
+  border-top: 1px solid var(--wb4-line) !important;
+  border-right: 0 !important;
+  background: color-mix(in srgb, var(--wb4-accent) 3%, transparent);
+}
+.player-source-workbench-v9 .wb9-common-options .wb4-option-name strong {
+  font-size: 10.5px;
+  letter-spacing: -.01em;
+}
+.player-source-workbench-v9 .wb9-common-tempo-scale .wb4-option-control,
+.player-source-workbench-v9 .wb9-common-leading .wb4-option-control {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 16%, var(--wb4-line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--wb4-accent) 3%, var(--wb4-surface));
+}
+.player-source-workbench-v9 .wb9-number-control {
+  display: grid;
+  grid-template-columns: minmax(48px, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+}
+.player-source-workbench-v9 .wb9-number-input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 5px;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+}
+.player-source-workbench-v9 .wb9-tempo-clean-button {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 9px;
+  background: var(--wb4-surface);
+  color: var(--wb4-muted);
+  font-size: 10.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb9-tempo-clean-button.active {
+  border-color: color-mix(in srgb, var(--wb4-accent) 50%, var(--wb4-line));
+  background: color-mix(in srgb, var(--wb4-accent) 11%, var(--wb4-surface));
+  color: var(--wb4-accent);
+}
+.player-source-workbench-v9 .wb9-volume-generation-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) minmax(90px, 130px) minmax(220px, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.player-source-workbench-v9 .wb9-genre-select,
+.player-source-workbench-v9 .wb9-strength-select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+}
+.player-source-workbench-v9 .wb9-target-channels {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(30px, 1fr));
+  gap: 6px;
+}
+.player-source-workbench-v9 .wb9-target-channel {
+  min-width: 0;
+  height: 31px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--wb9-channel-color) 40%, var(--wb4-line));
+  border-radius: 7px;
+  background: var(--wb4-surface);
+  color: var(--wb9-channel-color);
+  font-size: 9px;
+  font-weight: 800;
+}
+.player-source-workbench-v9 .wb9-target-channel.active {
+  background: color-mix(in srgb, var(--wb9-channel-color) 16%, var(--wb4-surface));
+  box-shadow: inset 0 -2px 0 var(--wb9-channel-color);
+}
+.player-source-workbench-v9 .wb9-target-channel:disabled,
+.player-source-workbench-v9 .wb9-volume-generation-controls.is-genre-unselected .wb9-strength-select {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+/* 복사/저장 버튼을 동일한 버튼 체계로 통일. */
+.player-source-workbench-v9 .wb8-full-copy-actions > .copy-button,
+.player-source-workbench-v9 .wb9-save-copy-button {
+  min-width: 82px;
+  min-height: 34px;
+  padding: 7px 13px;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 25%, var(--wb4-line));
+  border-radius: 8px;
+  background: var(--wb4-surface);
+  color: var(--wb4-text);
+  font-size: 10px;
+  font-weight: 750;
+}
+.player-source-workbench-v9 .wb8-full-copy-actions > .copy-button:hover {
+  border-color: var(--wb4-accent);
+  color: var(--wb4-accent);
+}
+
+/* 기능 탭 4개. */
+.player-source-workbench-v9 .wb9-feature-tabs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.player-source-workbench-v9 .wb9-option-list-row {
+  grid-template-columns: minmax(124px, 162px) minmax(0, 1fr) minmax(150px, .9fr);
+  gap: 12px;
+  min-height: 64px;
+  padding: 9px 10px;
+}
+.player-source-workbench-v9 .wb9-option-list-row:not(:last-child) {
+  border-bottom: 1px solid var(--wb4-line);
+}
+.player-source-workbench-v9 .wb9-option-list-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+.player-source-workbench-v9 .wb9-option-channel-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb9-option-count {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--wb8-channel-color) 24%, var(--wb4-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wb8-channel-color) 8%, var(--wb4-surface));
+  color: color-mix(in srgb, var(--wb8-channel-color) 74%, var(--wb4-text));
+  font-size: 8.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb9-rest-feature .wb9-option-list-row {
+  grid-template-columns: minmax(124px, 162px) minmax(0, 1fr);
+}
+.player-source-workbench-v9 .wb9-rest-buttons {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
+  overflow: visible;
+  border: 0;
+  gap: 5px;
+  background: transparent;
+}
+.player-source-workbench-v9 .wb9-rest-buttons .wb4-segment {
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 3px;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 7px !important;
+  background: var(--wb4-surface);
+  font-size: 8.5px;
+  line-height: 1.15;
+  white-space: normal;
+}
+.player-source-workbench-v9 .wb9-rest-buttons .wb4-segment.active {
+  border-color: color-mix(in srgb, var(--wb8-channel-color) 60%, var(--wb4-accent)) !important;
+  background: color-mix(in srgb, var(--wb8-channel-color) 12%, var(--wb4-surface));
+  color: var(--wb8-channel-color);
+  box-shadow: inset 0 -2px 0 var(--wb8-channel-color);
+}
+.player-source-workbench-v9 .wb9-option-list-control .wb4-slider-number {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 58px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.player-source-workbench-v9 .wb9-option-list-control .wb4-range {
+  width: 100%;
+  accent-color: var(--wb8-channel-color);
+}
+.player-source-workbench-v9 .wb9-option-list-control .wb4-number {
+  width: 58px;
+  min-width: 58px;
+  height: 32px;
+  text-align: center;
+}
+.player-source-workbench-v9 .wb9-volume-distribution {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.player-source-workbench-v9 .wb9-volume-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--wb8-channel-color) 25%, var(--wb4-line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wb8-channel-color) 6%, var(--wb4-surface));
+  color: var(--wb4-text);
+  font-size: 8.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb9-volume-chip.is-empty {
+  color: var(--wb4-muted);
+}
+.player-source-workbench-v9 .wb9-accompaniment-global {
+  display: grid;
+  grid-template-columns: minmax(130px, 220px) minmax(100px, 150px);
+  gap: 10px;
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--wb4-line);
+}
+.player-source-workbench-v9 .wb9-accompaniment-channel-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+.player-source-workbench-v9 .wb9-accompaniment-feature.is-genre-unselected .wb9-option-list-row {
+  opacity: .58;
+}
+.player-source-workbench-v9 .wb9-accompaniment-feature.is-genre-unselected .wb9-accompaniment-global {
+  opacity: 1;
+}
+.player-source-workbench-v9 .wb9-accompaniment-feature .wb4-toggle-row.is-disabled {
+  cursor: not-allowed;
+}
+
+/* MIDI 채널 버튼 간격과 악기명 가독성. */
+.player-source-workbench-v9 #midiConvertDialog #midiRoleList {
+  gap: 7px !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-card {
+  padding-inline: 8px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 8px;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-card:last-child {
+  border-right: 1px solid var(--wb4-line);
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row {
+  grid-template-columns: 174px minmax(140px, 1fr) minmax(72px, auto) minmax(54px, auto) !important;
+  gap: 11px;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-channels {
+  grid-template-columns: repeat(6, 24px);
+  gap: 5px;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-channels .midi-part-chip {
+  width: 24px;
+  min-width: 24px;
+  height: 25px;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-name {
+  font-size: 11.75px;
+  font-weight: 750;
+}
+
+/* Copy confirmation toast. */
+.wb9-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 100000;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 11px 17px;
+  border: 1px solid color-mix(in srgb, #ffffff 18%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, #111827 94%, transparent);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, .24);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  opacity: 0;
+  transform: translate(-50%, 10px);
+  transition: opacity .18s ease, transform .18s ease;
+  pointer-events: none;
+}
+.wb9-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (max-width: 900px) {
+  .player-source-workbench-v9 .wb9-common-options.wb4-common-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .player-source-workbench-v9 .wb9-common-options .wb4-option-row:nth-child(2),
+  .player-source-workbench-v9 .wb9-common-options .wb4-option-row:nth-child(4) {
+    border-right: 0 !important;
+  }
+  .player-source-workbench-v9 .wb9-common-options .wb4-option-row:nth-child(3),
+  .player-source-workbench-v9 .wb9-common-options .wb4-option-row:nth-child(4) {
+    border-top: 1px solid var(--wb4-line) !important;
+  }
+  .player-source-workbench-v9 .wb9-volume-generation-controls {
+    grid-template-columns: minmax(115px, 1fr) minmax(90px, .7fr) minmax(190px, 1.3fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .wb9-sound-button {
+    min-height: 31px;
+    padding-inline: 9px;
+    font-size: 9px;
+  }
+  .player-source-workbench-v9 .wb9-common-options .wb4-option-row {
+    padding: 8px 7px;
+  }
+  .player-source-workbench-v9 .wb9-common-options .wb9-common-dynamics {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+  .player-source-workbench-v9 .wb9-volume-generation-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(76px, .72fr);
+    gap: 7px;
+  }
+  .player-source-workbench-v9 .wb9-volume-generation-channels {
+    grid-column: 1 / -1;
+  }
+  .player-source-workbench-v9 .wb9-target-channels {
+    gap: 3px;
+  }
+  .player-source-workbench-v9 .wb9-target-channel {
+    height: 28px;
+    padding-inline: 2px;
+    font-size: 8px;
+  }
+  .player-source-workbench-v9 .wb9-feature-tab {
+    font-size: 9px;
+  }
+  .player-source-workbench-v9 .wb9-option-list-row,
+  .player-source-workbench-v9 .wb9-rest-feature .wb9-option-list-row,
+  .player-source-workbench-v9 .wb9-option-list-wide {
+    grid-template-columns: 74px minmax(0, 1fr) !important;
+    gap: 7px;
+    padding-inline: 5px;
+  }
+  .player-source-workbench-v9 .wb9-volume-distribution {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+  .player-source-workbench-v9 .wb9-option-list-control .wb4-slider-number {
+    grid-template-columns: minmax(75px, 1fr) 46px;
+    gap: 5px;
+  }
+  .player-source-workbench-v9 .wb9-option-list-control .wb4-number {
+    width: 46px;
+    min-width: 46px;
+  }
+  .player-source-workbench-v9 .wb9-rest-buttons {
+    gap: 2px;
+  }
+  .player-source-workbench-v9 .wb9-rest-buttons .wb4-segment {
+    min-height: 30px;
+    padding-inline: 1px;
+    font-size: 6.9px;
+    letter-spacing: -.05em;
+  }
+  .player-source-workbench-v9 .wb9-option-count {
+    padding-inline: 4px;
+    font-size: 7.5px;
+  }
+  .player-source-workbench-v9 .wb9-volume-chip {
+    min-height: 21px;
+    padding: 2px 5px;
+    font-size: 7.5px;
+  }
+  .player-source-workbench-v9 .wb9-accompaniment-global {
+    grid-template-columns: minmax(0, 1fr) minmax(86px, .7fr);
+    padding-inline: 5px;
+  }
+  .player-source-workbench-v9 #midiConvertDialog #midiRoleList {
+    gap: 3px !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-card {
+    padding-inline: 4px;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row {
+    grid-template-columns: 132px minmax(89px, 1fr) 49px 45px !important;
+    gap: 5px;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-channels {
+    grid-template-columns: repeat(6, 20px);
+    gap: 2px;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-channels .midi-part-chip {
+    width: 20px;
+    min-width: 20px;
+    height: 22px;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-name {
+    font-size: 8.7px;
+  }
+  .wb9-toast {
+    bottom: 18px;
+    font-size: 10px;
+  }
+}
+
+/* ==========================================================================
+   Mobibard v5.1 release refinements
+   ========================================================================== */
+
+/* Playback quick controls: channels -> speed -> volume -> timbre. */
+.player-source-workbench-v9 .quick-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.player-source-workbench-v9 .quick-controls .wb9-playback-channels {
+  order: 0;
+  flex: 0 0 auto;
+}
+.player-source-workbench-v9 .quick-controls #speedControlButton { order: 1; }
+.player-source-workbench-v9 .quick-controls #volumeControlButton { order: 2; }
+.player-source-workbench-v9 .wb9-sound-button {
+  order: 3;
+  flex: 0 0 auto;
+}
+
+/* Timeline side breathing room and vertically centred tempo/time labels. */
+.wb4-tempo-timeline {
+  --wb4-timeline-side-padding: 14px;
+}
+.wb4-tempo-timeline .wb4-timeline-grid {
+  left: var(--wb4-timeline-side-padding);
+  right: var(--wb4-timeline-side-padding);
+  top: 0;
+  bottom: 0;
+}
+.wb4-tempo-timeline .wb4-timeline-lane-label {
+  left: calc(var(--wb4-timeline-side-padding) + 7px);
+}
+.wb4-tempo-timeline .wb4-timeline-tick-labels {
+  left: var(--wb4-timeline-side-padding);
+  right: var(--wb4-timeline-side-padding);
+}
+.wb4-tempo-timeline .progress {
+  left: var(--wb4-timeline-side-padding) !important;
+  right: var(--wb4-timeline-side-padding) !important;
+  width: auto !important;
+}
+.wb4-tempo-timeline .tempo-markers {
+  left: var(--wb4-timeline-side-padding);
+  right: var(--wb4-timeline-side-padding);
+  top: 0;
+  bottom: 0;
+}
+.wb4-timeline-playhead-track {
+  position: absolute;
+  z-index: 6;
+  inset: 0 var(--wb4-timeline-side-padding);
+  pointer-events: none;
+}
+.wb4-timeline-playhead-track .wb4-timeline-playhead {
+  top: 0;
+  bottom: 0;
+  left: var(--wb4-playback-progress);
+}
+.wb4-tempo-timeline .tempo-marker {
+  top: 0;
+  bottom: 0;
+}
+.wb4-tempo-timeline .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.active .tempo-marker-label {
+  top: 50%;
+  transform: translateY(-50%);
+}
+.wb4-tempo-timeline .tempo-marker-label:hover,
+.wb4-tempo-timeline .tempo-marker-label:focus-visible {
+  transform: translateY(calc(-50% - 1px));
+}
+.wb4-playhead-label {
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Tempo multiplier and start-gap controls share an explicit spinner layout. */
+.player-source-workbench-v9 .wb9-number-control {
+  grid-template-columns: minmax(44px, 1fr) 22px auto;
+  gap: 5px;
+}
+.player-source-workbench-v9 .wb9-number-input {
+  appearance: textfield;
+}
+.player-source-workbench-v9 .wb9-number-input::-webkit-inner-spin-button,
+.player-source-workbench-v9 .wb9-number-input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+.player-source-workbench-v9 .wb9-number-step-buttons {
+  display: grid;
+  align-self: stretch;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+}
+.player-source-workbench-v9 .wb9-number-step {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  min-width: 22px;
+  min-height: 14px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 4px !important;
+  background: var(--wb4-surface-2) !important;
+  color: var(--wb4-muted) !important;
+  font-size: 7px;
+  line-height: 1;
+}
+.player-source-workbench-v9 .wb9-number-step:hover:not(:disabled) {
+  border-color: var(--wb4-accent) !important;
+  color: var(--wb4-accent) !important;
+}
+.player-source-workbench-v9 .wb9-number-step:disabled {
+  opacity: .35;
+  cursor: default;
+}
+.player-source-workbench-v9 .wb9-number-suffix {
+  min-width: max-content;
+}
+
+/* Volume generation row: stable grid, consistent field surfaces, no overflow. */
+.player-source-workbench-v9 .wb9-common-options .wb9-common-dynamics {
+  grid-template-columns: minmax(108px, 118px) minmax(0, 1fr);
+  overflow: hidden;
+}
+.player-source-workbench-v9 .wb9-common-dynamics .wb4-option-control {
+  width: 100%;
+  min-width: 0;
+}
+.player-source-workbench-v9 .wb9-volume-generation-controls {
+  box-sizing: border-box;
+  grid-template-columns: minmax(140px, 1fr) minmax(100px, .72fr) minmax(246px, 1.45fr);
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 15%, var(--wb4-line));
+  border-radius: 10px;
+  background: var(--wb4-surface);
+}
+.player-source-workbench-v9 .wb9-volume-generation-controls > * {
+  min-width: 0;
+}
+.player-source-workbench-v9 .wb9-volume-generation-channels,
+.player-source-workbench-v9 .wb9-target-channels {
+  width: 100%;
+  min-width: 0;
+}
+
+/* MIDI channel cards use vertical separators only; bulk assignment remains modal. */
+.player-source-workbench-v9 #midiConvertDialog #midiRoleList {
+  gap: 0 !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-card {
+  padding-inline: 8px;
+  border: 0 !important;
+  border-right: 1px solid var(--wb4-line) !important;
+  border-bottom: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-card:last-child {
+  border-right: 0 !important;
+}
+#midiBulkAssignDialog.mml-dialog {
+  position: fixed !important;
+  inset: 0 !important;
+  width: min(92vw, 640px) !important;
+  max-width: 640px !important;
+  height: fit-content !important;
+  max-height: min(88dvh, 760px) !important;
+  margin: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  background: transparent !important;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, .32) !important;
+  overflow: visible !important;
+  z-index: 320 !important;
+}
+#midiBulkAssignDialog.mml-dialog::backdrop {
+  background: rgba(15, 23, 42, .5);
+  backdrop-filter: blur(3px);
+}
+#midiBulkAssignDialog .dialog-card {
+  width: 100% !important;
+  max-width: none !important;
+  max-height: min(88dvh, 760px) !important;
+  margin: 0 !important;
+  border-radius: 14px !important;
+  overflow: auto !important;
+}
+
+/* One combined volume distribution above the channel controls. */
+.player-source-workbench-v9 .wb9-volume-feature .wb9-option-list-row {
+  grid-template-columns: minmax(124px, 162px) minmax(0, 1fr);
+}
+.player-source-workbench-v9 .wb10-volume-summary {
+  display: grid;
+  gap: 9px;
+  margin: 10px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 24%, var(--wb4-line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--wb4-accent) 6%, var(--wb4-surface));
+}
+.player-source-workbench-v9 .wb10-volume-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.player-source-workbench-v9 .wb10-volume-summary-title {
+  color: var(--wb4-text);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+.player-source-workbench-v9 .wb10-volume-summary-distribution {
+  grid-column: auto;
+  justify-content: flex-start;
+}
+
+/* Code metrics and one visible editor border only. */
+.player-source-workbench-v9 .wb10-code-tools {
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.player-source-workbench-v9 .wb10-code-metrics {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.player-source-workbench-v9 .wb10-code-metric {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 8px;
+  background: var(--wb4-surface-2);
+  font-variant-numeric: tabular-nums;
+}
+.player-source-workbench-v9 .wb10-code-metric-label {
+  color: var(--wb4-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+.player-source-workbench-v9 .wb10-code-metric-value {
+  color: var(--wb4-text);
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="0"] .wb10-code-metric:first-child .wb10-code-metric-value { color: var(--part0) !important; }
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="1"] .wb10-code-metric:first-child .wb10-code-metric-value { color: var(--part1) !important; }
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="2"] .wb10-code-metric:first-child .wb10-code-metric-value { color: var(--part2) !important; }
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="3"] .wb10-code-metric:first-child .wb10-code-metric-value { color: var(--part3) !important; }
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="4"] .wb10-code-metric:first-child .wb10-code-metric-value { color: var(--part4) !important; }
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="5"] .wb10-code-metric:first-child .wb10-code-metric-value { color: var(--part5) !important; }
+.player-source-workbench-v9 .wb6-channel-code-editor,
+.player-source-workbench-v9 .wb6-channel-code-editor.wb4-channel-code-editor {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 .wb6-channel-code-editor .mml-panel {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 .wb6-channel-code-editor .colored-textarea {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 .wb6-channel-code-editor .mml-highlight {
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 11px !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 .wb6-channel-code-editor textarea.highlight-source {
+  border: 1px solid transparent !important;
+  border-radius: 11px !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 .wb6-channel-code-editor .part-panel .mml-highlight,
+.player-source-workbench-v9 .wb6-channel-code-editor .part-panel textarea.highlight-source {
+  border-top-width: 4px !important;
+}
+.player-source-workbench-v9 .wb6-channel-code-editor .colored-textarea:focus-within .mml-highlight {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wb4-accent) 24%, transparent) !important;
+}
+
+/* Code-help dialog follows the supported-files fixed-header pattern. */
+#codeHelpDialog .code-help-card {
+  display: flex !important;
+  flex-direction: column;
+  gap: 0 !important;
+  max-height: min(88dvh, 820px) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: var(--wb4-surface) !important;
+}
+#codeHelpDialog .code-help-popup-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex: 0 0 auto;
+  padding: 17px 20px;
+  border-bottom: 1px solid var(--wb4-line);
+  background: inherit;
+}
+#codeHelpDialog .code-help-popup-head h3 {
+  margin: 0;
+}
+#codeHelpDialog .code-help-popup-close {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent) !important;
+  border-radius: 50% !important;
+  appearance: none;
+  background: color-mix(in srgb, currentColor 8%, transparent) !important;
+  color: var(--wb4-text) !important;
+  line-height: 0;
+  cursor: pointer;
+}
+#codeHelpDialog .code-help-popup-close:hover {
+  border-color: color-mix(in srgb, currentColor 24%, transparent) !important;
+  background: color-mix(in srgb, currentColor 14%, transparent) !important;
+}
+#codeHelpDialog .code-help-popup-close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--wb4-accent) 78%, transparent);
+  outline-offset: 2px;
+}
+#codeHelpDialog .code-help-popup-close svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+  pointer-events: none;
+}
+#codeHelpDialog .code-help-popup-close path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+#codeHelpDialog .code-help-popup-body {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  padding: 18px 20px 20px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+#codeHelpDialog .code-help-popup-body > p {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .player-source-workbench-v9 .wb9-volume-generation-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(92px, .72fr);
+  }
+  .player-source-workbench-v9 .wb9-volume-generation-channels {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .quick-controls {
+    justify-content: flex-start;
+  }
+  .player-source-workbench-v9 .quick-controls .wb9-playback-channels {
+    width: 100%;
+  }
+  .player-source-workbench-v9 .quick-controls .wb9-playback-channels .wb8-playback-channel {
+    width: auto;
+    min-width: 0;
+  }
+  .wb4-tempo-timeline {
+    --wb4-timeline-side-padding: 9px;
+  }
+  .player-source-workbench-v9 .wb9-common-options .wb9-common-dynamics {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+  .player-source-workbench-v9 .wb9-volume-generation-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(76px, .72fr);
+    padding: 6px;
+  }
+  .player-source-workbench-v9 .wb9-volume-feature .wb9-option-list-row {
+    grid-template-columns: 74px minmax(0, 1fr) !important;
+  }
+  .player-source-workbench-v9 .wb10-volume-summary {
+    margin: 7px 5px;
+  }
+  .player-source-workbench-v9 .wb10-code-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .player-source-workbench-v9 .wb10-code-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+  .player-source-workbench-v9 .wb10-code-metric {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 2px;
+    padding-inline: 4px;
+  }
+  #codeHelpDialog .code-help-popup-head {
+    padding: 14px 16px;
+  }
+  #codeHelpDialog .code-help-popup-body {
+    padding: 15px 16px 17px;
+  }
+}
+
+
+/* v5.1 mobile volume-generation repair: keep the full row and stack safely. */
+.player-source-workbench-v9 .wb9-common-options .wb9-common-dynamics {
+  grid-column: 1 / -1 !important;
+  overflow: visible;
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .wb9-common-options .wb9-common-dynamics {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px;
+    padding: 10px 8px;
+  }
+  .player-source-workbench-v9 .wb9-common-dynamics .wb4-option-name,
+  .player-source-workbench-v9 .wb9-common-dynamics .wb4-option-control {
+    width: 100%;
+    min-width: 0;
+  }
+  .player-source-workbench-v9 .wb9-volume-generation-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(96px, .68fr);
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    padding: 7px;
+  }
+  .player-source-workbench-v9 .wb9-volume-generation-channels {
+    grid-column: 1 / -1;
+  }
+  .player-source-workbench-v9 .wb9-volume-generation-controls .wb9-genre-select,
+  .player-source-workbench-v9 .wb9-volume-generation-controls .wb9-strength-select {
+    min-width: 0;
+    height: 36px;
+  }
+  .player-source-workbench-v9 .wb9-volume-generation-controls .wb9-target-channels {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+  }
+}
+
+
+/* ==========================================================================
+   Mobibard v5.1 UI refinements · 2026-08-22
+   ========================================================================== */
+
+/* Match Simple: header and body share the same 980px width; narrow screens have no outer body gutter. */
+html[data-player-layout="source-workbench"] main {
+  padding-inline: 0 !important;
+}
+.player-source-workbench-v4 .player-topbar-inner {
+  max-width: 980px;
+  padding-inline: 10px;
+}
+
+/* Simple-style MIDI extraction button in the top bar. */
+.player-source-workbench-v9 .wb4-top-external > .wb4-midi-extract-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px !important;
+  padding: 0 13px !important;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 9px !important;
+  background: var(--wb4-surface) !important;
+  color: var(--wb4-text) !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb4-top-external > .wb4-midi-extract-button:hover {
+  border-color: var(--wb4-line-strong) !important;
+  background: var(--control-hover) !important;
+  color: var(--wb4-text) !important;
+}
+
+/* Timeline: the real tempo markers occupy the former TEMPO label lane; playback time stays centred. */
+.wb4-tempo-timeline .wb4-timeline-lane-label {
+  display: none !important;
+}
+.wb4-tempo-timeline .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.active .tempo-marker-label {
+  top: 4px;
+  transform: none;
+}
+.wb4-tempo-timeline .tempo-marker-label:hover,
+.wb4-tempo-timeline .tempo-marker-label:focus-visible {
+  transform: translateY(-1px);
+}
+
+/* Volume generation controls sit directly in the option row, without an extra inner box. */
+.player-source-workbench-v9 .wb9-volume-generation-controls {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible;
+}
+
+/* Instrument rows are separated by spacing only, not individual outlines. */
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Volume information: each V type has a clearly visible compact chip. */
+.player-source-workbench-v9 .wb10-volume-summary {
+  --wb8-channel-color: var(--wb4-accent);
+}
+.player-source-workbench-v9 .wb10-volume-summary .wb9-volume-chip {
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 34%, var(--wb4-line));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--wb4-accent) 8%, var(--wb4-surface));
+  color: var(--wb4-text);
+  font-weight: 750;
+}
+
+/* Octave sliders use the full remaining row width, matching volume sliders. */
+.player-source-workbench-v9 .wb9-octave-feature .wb9-option-list-row {
+  grid-template-columns: minmax(124px, 162px) minmax(0, 1fr);
+}
+
+/* Code statistics are plain channel-coloured text with slash separators. */
+.player-source-workbench-v9 .wb6-code-panel {
+  --wb10-code-color: var(--wb4-accent);
+}
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="0"] { --wb10-code-color: var(--part0); }
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="1"] { --wb10-code-color: var(--part1); }
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="2"] { --wb10-code-color: var(--part2); }
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="3"] { --wb10-code-color: var(--part3); }
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="4"] { --wb10-code-color: var(--part4); }
+.player-source-workbench-v9 .wb6-code-panel[data-active-channel="5"] { --wb10-code-color: var(--part5); }
+.player-source-workbench-v9 .wb10-code-metrics {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  width: auto;
+  color: var(--wb10-code-color);
+}
+.player-source-workbench-v9 .wb10-code-metric {
+  position: relative;
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: baseline;
+  gap: 4px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.player-source-workbench-v9 .wb10-code-metric:not(:last-child)::after {
+  content: "/";
+  margin: 0 9px;
+  color: inherit;
+  opacity: .52;
+  font-weight: 700;
+}
+.player-source-workbench-v9 .wb10-code-metric .wb10-code-metric-label,
+.player-source-workbench-v9 .wb10-code-metric .wb10-code-metric-value {
+  color: inherit !important;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .player-source-workbench-v4 .player-topbar-inner {
+    padding-inline: 6px;
+  }
+}
+
+@media (max-width: 620px) {
+  html[data-player-layout="source-workbench"] main {
+    padding-inline: 0 !important;
+  }
+  .player-source-workbench-v9 .wb4-top-external > .wb4-midi-extract-button {
+    min-height: 34px !important;
+    padding-inline: 8px !important;
+    font-size: 11px !important;
+  }
+  .player-source-workbench-v9 .wb9-volume-generation-controls {
+    padding: 0 !important;
+  }
+  .player-source-workbench-v9 .wb10-code-tools {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .player-source-workbench-v9 .wb10-code-metrics {
+    display: flex;
+    grid-template-columns: none;
+    width: auto;
+  }
+  .player-source-workbench-v9 .wb10-code-metric {
+    display: inline-flex;
+    justify-items: initial;
+    gap: 3px;
+    padding: 0;
+  }
+  .player-source-workbench-v9 .wb10-code-metric:not(:last-child)::after {
+    margin-inline: 6px;
+  }
+}
+
+
+/* ========================================================================== 
+   Mobibard v5.1 UI refinements R2 · explicit apply + compact responsive pass
+   ========================================================================== */
+
+/* The combined wb4/wb6/wb7/wb8 shell needs no extra top gap on narrow screens. */
+@media (max-width: 620px) {
+  .wb4-shell.wb6-shell.wb7-shell.wb8-shell {
+    padding-top: 0 !important;
+  }
+}
+
+/* Tempo labels are horizontally centred on their own tempo bars while staying in the top lane. */
+.wb4-tempo-timeline .tempo-marker .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.active .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.near-start .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.near-end .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.active.near-start .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.active.near-end .tempo-marker-label {
+  top: 4px !important;
+  left: 0 !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
+}
+.wb4-tempo-timeline .tempo-marker .tempo-marker-label:hover,
+.wb4-tempo-timeline .tempo-marker .tempo-marker-label:focus-visible {
+  transform: translate(-50%, -1px) !important;
+}
+
+/* Pending changes stay visible at the top of the instrument/channel workspaces. */
+.player-source-workbench-v9 .wb11-pending-apply {
+  position: sticky;
+  top: 0;
+  z-index: 28;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  margin: 8px 10px 10px;
+  padding: 8px 9px 8px 13px;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 34%, var(--wb4-line));
+  border-left: 4px solid var(--wb4-accent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--wb4-accent) 8%, var(--wb4-surface));
+  box-shadow: 0 5px 18px color-mix(in srgb, #000 8%, transparent);
+  backdrop-filter: blur(8px);
+}
+.player-source-workbench-v9 .wb11-pending-apply[hidden] {
+  display: none !important;
+}
+.player-source-workbench-v9 .wb11-pending-apply-text {
+  min-width: 0;
+  color: var(--wb4-text);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+.player-source-workbench-v9 .wb11-apply-button {
+  flex: 0 0 auto;
+  min-width: 76px;
+  min-height: 34px;
+  padding: 0 15px !important;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 78%, #000) !important;
+  border-radius: 8px !important;
+  background: var(--wb4-accent) !important;
+  color: #fff !important;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--wb4-accent) 24%, transparent) !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+}
+.player-source-workbench-v9 .wb11-apply-button:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.player-source-workbench-v9 .wb6-workspace-tab.has-pending {
+  color: var(--wb4-accent) !important;
+}
+.player-source-workbench-v9 .wb6-workspace-tab.has-pending::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--wb4-accent);
+  box-shadow: 0 0 0 2px var(--wb4-surface);
+}
+.player-source-workbench-v9 .wb6-workspace-tab {
+  position: relative;
+}
+
+/* Channel-setting labels in instrument selection are readable at a glance. */
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-name {
+  font-size: 13px !important;
+  font-weight: 850 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -.015em;
+}
+
+/* Volume information uses a single accent rule rather than an outer box around boxed V chips. */
+.player-source-workbench-v9 .wb10-volume-summary {
+  display: grid;
+  gap: 8px;
+  margin: 10px 10px 12px;
+  padding: 4px 0 9px 12px;
+  border: 0 !important;
+  border-left: 3px solid color-mix(in srgb, var(--wb4-accent) 68%, var(--wb4-line)) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Code statistics remain a single left-aligned line; help stays at the far right. */
+.player-source-workbench-v9 .wb10-code-tools {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  width: 100%;
+  min-width: 0;
+}
+.player-source-workbench-v9 .wb10-code-metrics {
+  display: flex !important;
+  flex: 0 1 auto;
+  flex-flow: row nowrap !important;
+  align-items: baseline !important;
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  width: auto !important;
+  min-width: 0;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb10-code-metric {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb10-code-tools .wb6-code-help-button {
+  flex: 0 0 auto;
+  margin: 0 0 0 auto !important;
+  align-self: center;
+}
+
+/* On narrow screens the channel mute group shares the playback-button row, right aligned. */
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .transport-actions {
+    display: flex;
+    flex-flow: row nowrap !important;
+    align-items: center !important;
+    gap: 5px !important;
+    width: 100%;
+  }
+  .player-source-workbench-v9 .transport-actions > .wb9-playback-channels.is-mobile-transport {
+    display: inline-grid;
+    grid-template-columns: repeat(6, 25px);
+    gap: 3px;
+    flex: 0 0 auto;
+    width: auto !important;
+    margin-left: auto;
+  }
+  .player-source-workbench-v9 .transport-actions > .wb9-playback-channels.is-mobile-transport .wb8-playback-channel {
+    width: 25px;
+    min-width: 25px;
+    height: 28px;
+  }
+  .player-source-workbench-v9 .quick-controls {
+    width: 100%;
+  }
+  .player-source-workbench-v9 .quick-controls .wb9-playback-channels {
+    width: auto;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-name {
+    font-size: 12px !important;
+  }
+  .player-source-workbench-v9 .wb11-pending-apply {
+    margin: 7px 5px 9px;
+    padding-left: 10px;
+  }
+  .player-source-workbench-v9 .wb11-pending-apply-text {
+    font-size: 10px;
+  }
+  .player-source-workbench-v9 .wb11-apply-button {
+    min-width: 66px;
+    padding-inline: 11px !important;
+  }
+  .player-source-workbench-v9 .wb10-volume-summary {
+    margin: 7px 5px 10px;
+    padding-left: 9px;
+  }
+  .player-source-workbench-v9 .wb10-code-tools {
+    gap: 7px !important;
+  }
+  .player-source-workbench-v9 .wb10-code-metric .wb10-code-metric-label,
+  .player-source-workbench-v9 .wb10-code-metric .wb10-code-metric-value {
+    font-size: 9.5px !important;
+  }
+  .player-source-workbench-v9 .wb10-code-metric:not(:last-child)::after {
+    margin-inline: 4px !important;
+  }
+}
+
+/* R2 browser-measured alignment corrections. */
+.wb4-tempo-timeline .tempo-marker .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.active .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.near-start .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.near-end .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.active.near-start .tempo-marker-label,
+.wb4-tempo-timeline .tempo-marker.active.near-end .tempo-marker-label {
+  left: -1.5px !important;
+}
+
+.player-source-workbench-v9 .wb10-code-metric {
+  height: 18px !important;
+  min-height: 18px !important;
+  align-items: center !important;
+  line-height: 18px !important;
+}
+.player-source-workbench-v9 .wb10-code-metric .wb10-code-metric-label,
+.player-source-workbench-v9 .wb10-code-metric .wb10-code-metric-value,
+.player-source-workbench-v9 .wb10-code-metric .char-count {
+  display: inline !important;
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: 18px !important;
+  vertical-align: middle !important;
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .transport-actions > .wb9-playback-channels.is-mobile-transport {
+    grid-template-columns: repeat(6, 24px);
+    gap: 2px;
+  }
+  .player-source-workbench-v9 .transport-actions > .wb9-playback-channels.is-mobile-transport .wb8-playback-channel {
+    width: 24px;
+    min-width: 24px;
+  }
+}
+
+/* Keep the same playback-row arrangement on very narrow phones without horizontal overflow. */
+@media (max-width: 375px) {
+  .player-source-workbench-v9 .transport-actions {
+    gap: 3px !important;
+  }
+  .player-source-workbench-v9 .transport-actions .wb6-transport-symbol {
+    width: 32px !important;
+    min-width: 32px !important;
+  }
+  .player-source-workbench-v9 .transport-actions > .wb9-playback-channels.is-mobile-transport {
+    grid-template-columns: repeat(6, 20px);
+    gap: 2px;
+  }
+  .player-source-workbench-v9 .transport-actions > .wb9-playback-channels.is-mobile-transport .wb8-playback-channel {
+    width: 20px;
+    min-width: 20px;
+    padding-inline: 0 !important;
+    font-size: 9px;
+  }
+  .player-source-workbench-v9 .transport-actions .loop-label {
+    gap: 3px;
+    font-size: 11px;
+  }
+}
+@media (max-width: 340px) {
+  .player-source-workbench-v9 .transport-actions .loop-label {
+    width: 18px;
+    min-width: 18px;
+    gap: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+  .player-source-workbench-v9 .transport-actions .loop-label input {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+}
+
+
+/* ========================================================================== 
+   Mobibard v5.1 UI refinements R3 · compact header, toast status and layering
+   ========================================================================== */
+
+/* Mobibeat / Simple are explicit title actions, without the old decorative glyph. */
+.player-source-workbench-v9 .wb4-title-actions {
+  gap: 8px;
+}
+.player-source-workbench-v9 .wb4-title-actions > #rhythmGameBtn,
+.player-source-workbench-v9 .wb4-title-actions > #simpleVersionBtn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 86px;
+  min-height: 36px !important;
+  padding: 0 13px !important;
+  border: 1px solid var(--wb4-line-strong) !important;
+  border-radius: 9px !important;
+  background: var(--wb4-surface) !important;
+  color: var(--wb4-text) !important;
+  box-shadow: 0 2px 6px color-mix(in srgb, #000 7%, transparent) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb4-title-actions > #rhythmGameBtn:hover,
+.player-source-workbench-v9 .wb4-title-actions > #simpleVersionBtn:hover {
+  border-color: var(--wb4-accent) !important;
+  background: color-mix(in srgb, var(--wb4-accent) 7%, var(--wb4-surface)) !important;
+}
+.player-source-workbench-v9 #rhythmGameBtn .rhythm-game-toolbar-icon {
+  display: none !important;
+}
+
+/* Supported files uses the shared Simple component and sits centred in the drop zone. */
+.player-source-workbench-v9 .wb12-supported-button {
+  position: static !important;
+  inset: auto !important;
+  align-self: center;
+  margin: 0 auto 13px !important;
+}
+
+/* Preserve the full header content. Below 620px it becomes a compact two-row header. */
+.player-source-workbench-v9 .player-topbar-inner,
+.player-source-workbench-v9 .player-top-actions,
+.player-source-workbench-v9 .header-links {
+  min-width: 0;
+}
+.player-source-workbench-v9 .midi-site-links,
+.player-source-workbench-v9 .header-links,
+.player-source-workbench-v9 .player-brand > span:last-child {
+  display: flex;
+}
+.player-source-workbench-v9 .midi-site-links {
+  display: block !important;
+}
+.player-source-workbench-v9 .wb4-title-name {
+  font-size: 28px !important;
+  flex-shrink: 0;
+}
+
+/* Required paint order: tempo/time lines, then tempo/time boxes. */
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-markers,
+.player-source-workbench-v9 .wb4-timeline-playhead-track {
+  z-index: auto !important;
+}
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker {
+  z-index: 4 !important;
+}
+.player-source-workbench-v9 .wb4-timeline-playhead-track .wb4-timeline-playhead {
+  z-index: 5 !important;
+}
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker-label,
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker.active .tempo-marker-label {
+  z-index: 8 !important;
+}
+.player-source-workbench-v9 .wb4-playhead-label {
+  z-index: 9 !important;
+}
+
+/* Channel pending actions: Cancel to the left, Apply to the right. */
+.player-source-workbench-v9 .wb11-pending-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+}
+.player-source-workbench-v9 .wb11-cancel-button {
+  min-width: 68px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--wb4-line-strong);
+  border-radius: 8px;
+  background: var(--wb4-surface);
+  color: var(--wb4-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+.player-source-workbench-v9 .wb11-cancel-button:hover {
+  background: var(--control-hover);
+}
+
+/* Inline apply/status text is disabled in workbench; feedback is emitted as a bottom toast. */
+.player-source-workbench-v9 .wb4-option-status,
+.player-source-workbench-v9 #midiConvertStatus {
+  display: none !important;
+}
+
+/* Full score actions move to their own three-button row on phone widths. */
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .player-topbar {
+    height: auto !important;
+    min-height: 96px;
+  }
+  .player-source-workbench-v9 .player-topbar-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: center;
+    align-items: center;
+    gap: 5px 8px;
+    height: auto !important;
+    min-height: 96px;
+    padding: 7px 6px !important;
+  }
+  .player-source-workbench-v9 .player-brand {
+    flex: 0 0 auto;
+  }
+  .player-source-workbench-v9 .player-brand > span:last-child {
+    display: inline !important;
+    white-space: nowrap;
+  }
+  .player-source-workbench-v9 .player-top-actions {
+    order: 2;
+    display: flex !important;
+    flex: 1 1 100%;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px !important;
+    width: 100%;
+  }
+  .player-source-workbench-v9 .header-links {
+    display: flex !important;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .player-source-workbench-v9 .midi-site-links {
+    display: block !important;
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 80px !important;
+    max-width: none !important;
+  }
+  .player-source-workbench-v9 .wb4-top-external {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  .player-source-workbench-v9 .wb4-title-row {
+    align-items: flex-start;
+  }
+  .player-source-workbench-v9 .wb4-title-name {
+    font-size: 28px !important;
+  }
+  .player-source-workbench-v9 .wb8-full-copy-item {
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+  }
+  .player-source-workbench-v9 .wb8-full-copy-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-column: 1 / -1;
+    width: 100%;
+    gap: 6px;
+  }
+  .player-source-workbench-v9 .wb8-full-copy-actions > button {
+    width: 100%;
+    min-width: 0 !important;
+    padding-inline: 4px !important;
+    font-size: 9.5px !important;
+  }
+  .player-source-workbench-v9 .wb11-pending-apply {
+    align-items: center;
+  }
+  .player-source-workbench-v9 .wb11-pending-actions {
+    gap: 5px;
+  }
+  .player-source-workbench-v9 .wb11-cancel-button,
+  .player-source-workbench-v9 .wb11-apply-button {
+    min-width: 62px;
+    padding-inline: 9px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .player-source-workbench-v9 .player-top-actions {
+    gap: 3px !important;
+  }
+  .player-source-workbench-v9 .wb4-top-external > .wb4-midi-extract-button {
+    padding-inline: 6px !important;
+    font-size: 10px !important;
+  }
+  .player-source-workbench-v9 .midi-site-links {
+    min-width: 64px !important;
+    font-size: 9.5px !important;
+  }
+}
+
+
+/* R3 final timeline paint order: green tempo line, red time line, tempo box, time box. */
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-markers,
+.player-source-workbench-v9 .wb4-timeline-playhead-track {
+  z-index: auto !important;
+}
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker,
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker.active {
+  transform: none !important;
+  border-left: 0 !important;
+  filter: none !important;
+  z-index: auto !important;
+}
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 17px;
+  left: -1.5px;
+  display: block;
+  width: 3px;
+  background: var(--wb4-tempo);
+  pointer-events: none;
+}
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker.active::after {
+  background: #3abf7c;
+}
+.player-source-workbench-v9 .wb4-timeline-playhead-track .wb4-timeline-playhead {
+  width: 0 !important;
+  transform: none !important;
+  background: transparent !important;
+  z-index: auto !important;
+}
+.player-source-workbench-v9 .wb4-timeline-playhead-track .wb4-timeline-playhead::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  background: var(--wb4-playhead);
+  pointer-events: none;
+}
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker .tempo-marker-label,
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker.active .tempo-marker-label,
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker.near-start .tempo-marker-label,
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker.near-end .tempo-marker-label,
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker.active.near-start .tempo-marker-label,
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker.active.near-end .tempo-marker-label {
+  left: 0 !important;
+  right: auto !important;
+  z-index: 4 !important;
+}
+.player-source-workbench-v9 .wb4-playhead-label {
+  z-index: 5 !important;
+}
+
+
+/* R3 final narrow-title guard: keep the 28px title intact and move mode buttons below it. */
+@media (max-width: 350px) {
+  .player-source-workbench-v9 .wb4-title-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: start !important;
+    gap: 8px !important;
+  }
+  .player-source-workbench-v9 .wb4-title-actions {
+    width: 100% !important;
+    justify-content: flex-end !important;
+  }
+}
+
+/* R3 final readable role/overlap captions: channel colour + larger text. */
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-field {
+  color: inherit !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-field > span {
+  color: currentColor !important;
+  font-size: 12.5px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+  opacity: 1 !important;
+}
+@media (max-width: 620px) {
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-field > span {
+    font-size: 12px !important;
+  }
+}
+
+
+/* ========================================================================== 
+   Mobibard v5.1 UI refinements R4 · one-line navigation and compact sources
+   ========================================================================== */
+
+/* The workbench begins immediately below the product header at every width. */
+.wb4-shell,
+.wb4-shell.wb6-shell.wb7-shell.wb8-shell {
+  padding-top: 0 !important;
+}
+
+/* Player source actions use the same equal three-column rhythm as Simple. */
+.player-source-workbench-v9 .wb4-load-actions {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+  width: min(100%, 430px);
+  max-width: 430px;
+  flex-wrap: nowrap !important;
+}
+.player-source-workbench-v9 .wb4-load-primary,
+.player-source-workbench-v9 .wb4-load-secondary {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  padding: 0 11px !important;
+  overflow: hidden;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Shared compact product navigation: all controls stay on one line. */
+.player-source-workbench-v9 .player-topbar {
+  height: 64px !important;
+  min-height: 64px !important;
+}
+.player-source-workbench-v9 .player-topbar-inner {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  align-content: center !important;
+  justify-content: space-between !important;
+  gap: 7px !important;
+  width: 100%;
+  max-width: 980px;
+  height: 64px !important;
+  min-height: 64px !important;
+  padding: 0 8px !important;
+}
+.player-source-workbench-v9 .player-brand {
+  flex: 0 0 auto !important;
+  min-width: 0;
+  gap: 7px;
+}
+.player-source-workbench-v9 .player-top-actions {
+  order: initial !important;
+  display: flex !important;
+  flex: 0 1 auto !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+  width: auto !important;
+  min-width: 0;
+  margin-left: auto;
+}
+.player-source-workbench-v9 .header-links {
+  display: inline-flex !important;
+  flex: 0 1 auto !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  gap: 6px !important;
+  min-width: 0;
+}
+.player-source-workbench-v9 .midi-site-links {
+  box-sizing: border-box;
+  flex: 0 1 96px !important;
+  width: 96px !important;
+  min-width: 78px !important;
+  max-width: 96px !important;
+  padding-inline: 8px 24px !important;
+  font-size: 11px !important;
+}
+.player-source-workbench-v9 .wb4-top-external {
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+
+/* Guest uses the same rounded-square silhouette and dimensions as Discord. */
+.player-source-workbench-v9 .player-topbar .discord-icon-button,
+.player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button,
+.player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button:hover,
+.player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button:active,
+.player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button:focus-visible,
+.player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"] {
+  box-sizing: border-box !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
+  flex: 0 0 36px !important;
+  border-radius: 10px !important;
+}
+.player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button,
+.player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button:hover,
+.player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button:active,
+.player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button:focus-visible,
+.player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"] {
+  padding: 4px !important;
+}
+.player-source-workbench-v9 .player-topbar #accountMenuButton .account-avatar-image {
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  max-width: 26px !important;
+  max-height: 26px !important;
+  flex: 0 0 26px !important;
+  border-radius: 6px !important;
+}
+
+/* Account/settings layer structure is shared with Simple; no inline connection state. */
+.player-source-workbench-v9 .player-topbar .account-menu-popover {
+  top: calc(100% + 9px);
+  right: 0;
+  width: min(282px, calc(100vw - 20px));
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--panel);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, .22), 0 3px 12px var(--panel-shadow);
+}
+.player-source-workbench-v9 .player-topbar .account-menu-status {
+  display: none !important;
+}
+.player-source-workbench-v9 .player-topbar .account-login-button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .player-topbar,
+  .player-source-workbench-v9 .player-topbar-inner {
+    height: 64px !important;
+    min-height: 64px !important;
+  }
+  .player-source-workbench-v9 .player-topbar-inner {
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+    padding: 0 6px !important;
+  }
+  .player-source-workbench-v9 .player-brand {
+    gap: 5px;
+    font-size: 13px;
+  }
+  .player-source-workbench-v9 .player-brand-mark {
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+    border-radius: 7px;
+  }
+  .player-source-workbench-v9 .player-top-actions {
+    flex: 1 1 auto !important;
+    gap: 4px !important;
+    width: auto !important;
+  }
+  .player-source-workbench-v9 .header-links {
+    flex: 0 1 auto !important;
+    gap: 4px !important;
+  }
+  .player-source-workbench-v9 .midi-site-links {
+    flex: 0 0 86px !important;
+    width: 86px !important;
+    min-width: 86px !important;
+    max-width: 86px !important;
+    min-height: 34px !important;
+    padding-inline: 6px 19px !important;
+    font-size: 10px !important;
+  }
+  .player-source-workbench-v9 .wb4-top-external > button,
+  .player-source-workbench-v9 .wb4-top-external > a {
+    min-height: 34px !important;
+    padding-inline: 5px !important;
+    font-size: 10px !important;
+  }
+  .player-source-workbench-v9 .player-topbar .discord-icon-button,
+  .player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button,
+  .player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button:hover,
+  .player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button:active,
+  .player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button:focus-visible,
+  .player-source-workbench-v9 .player-topbar #accountMenuButton.account-avatar-button[aria-expanded="true"] {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    max-width: 34px !important;
+    max-height: 34px !important;
+    flex-basis: 34px !important;
+    border-radius: 9px !important;
+  }
+  .player-source-workbench-v9 .player-topbar #accountMenuButton .account-avatar-image {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    max-width: 24px !important;
+    max-height: 24px !important;
+    flex-basis: 24px !important;
+    border-radius: 5px !important;
+  }
+  .player-source-workbench-v9 .wb4-load-actions {
+    gap: 6px;
+    width: min(100%, 430px);
+  }
+  .player-source-workbench-v9 .wb4-load-primary,
+  .player-source-workbench-v9 .wb4-load-secondary {
+    min-height: 42px !important;
+    padding-inline: 5px !important;
+    font-size: 10.5px !important;
+  }
+}
+
+@media (max-width: 350px) {
+  .player-source-workbench-v9 .player-brand {
+    gap: 4px;
+    font-size: 12px;
+  }
+  .player-source-workbench-v9 .player-brand-mark {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+  }
+  .player-source-workbench-v9 .midi-site-links {
+    flex-basis: 78px !important;
+    width: 78px !important;
+    min-width: 78px !important;
+    max-width: 78px !important;
+    font-size: 9px !important;
+  }
+  .player-source-workbench-v9 .wb4-top-external > button,
+  .player-source-workbench-v9 .wb4-top-external > a {
+    padding-inline: 4px !important;
+    font-size: 9.5px !important;
+  }
+}
+
+/* R4 final source rhythm. */
+.player-source-workbench-v9 .wb4-load-actions {
+  padding: 0 !important;
+}
+
+/* 2026-08-23 workbench refinements */
+/* Overview settings and copy/editor tabs are separate cards instead of one divider-separated surface. */
+.player-source-workbench-v9 .wb6-overview-block {
+  margin-top: 18px !important;
+  padding: 0 !important;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--wb4-surface-2) 54%, var(--wb4-surface));
+  box-shadow: 0 5px 18px color-mix(in srgb, #000 5%, transparent);
+  overflow: hidden;
+}
+.player-source-workbench-v9 .wb6-workspace-block {
+  margin-top: 16px !important;
+  padding: 0 !important;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 14px;
+  background: var(--wb4-surface);
+  box-shadow: 0 7px 22px color-mix(in srgb, #000 6%, transparent);
+  overflow: hidden;
+}
+.player-source-workbench-v9 .wb6-workspace-block > .wb6-workspace-tabs {
+  background: color-mix(in srgb, var(--wb4-surface-2) 66%, var(--wb4-surface));
+}
+.player-source-workbench-v9 .wb6-workspace-panel {
+  padding: 13px;
+}
+
+/* Filename restore replaces the normal filename until the user chooses it. */
+.player-source-workbench-v9 .wb13-restore-button {
+  max-width: 100%;
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 44%, var(--wb4-line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--wb4-accent) 9%, var(--wb4-surface));
+  color: var(--wb4-accent);
+  font-size: 11px;
+  font-weight: 820;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb13-restore-button:hover {
+  background: color-mix(in srgb, var(--wb4-accent) 15%, var(--wb4-surface));
+}
+
+/* Volume-generation channel selection uses the same selected/inactive visual language as mute channel controls. */
+.player-source-workbench-v9 .wb9-target-channel.is-inactive {
+  opacity: .42;
+  filter: grayscale(.55);
+  box-shadow: none !important;
+  background: var(--wb4-surface) !important;
+}
+.player-source-workbench-v9 .wb9-target-channel.active {
+  opacity: 1;
+  filter: none;
+}
+
+/* MIDI channel settings: six rows, with Channel / Note placement / Note overlap columns. */
+.player-source-workbench-v9 #midiConvertDialog #midiRoleList {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+  width: 100%;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header,
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row {
+  display: grid !important;
+  grid-template-columns: minmax(90px, .8fr) minmax(190px, 1.35fr) minmax(190px, 1.35fr) !important;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header {
+  padding: 7px 8px 8px;
+  border-bottom: 1px solid var(--wb4-line-strong);
+  color: var(--wb4-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-card,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-card:last-child {
+  padding: 8px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--wb4-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row:last-child {
+  border-bottom: 0 !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--wb4-text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  min-width: 0;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-option {
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 6px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 7px;
+  background: var(--wb4-surface);
+  color: var(--wb4-muted);
+  font-size: 10px;
+  font-weight: 760;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-option.active {
+  border-color: color-mix(in srgb, var(--wb4-accent) 52%, var(--wb4-line));
+  background: color-mix(in srgb, var(--wb4-accent) 12%, var(--wb4-surface));
+  color: var(--wb4-accent);
+  box-shadow: inset 0 -2px 0 var(--wb4-accent);
+}
+
+/* Instrument assignment channel buttons behave like mute toggles and never collide with instrument names. */
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-template-areas:
+    "name listen"
+    "count channels";
+  align-items: center;
+  gap: 6px 12px !important;
+  min-width: 0;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-name {
+  grid-area: name;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-count { grid-area: count; }
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-listen { grid-area: listen; }
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-channels {
+  grid-area: channels;
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(26px, 1fr)) !important;
+  gap: 5px !important;
+  width: min(244px, 100%) !important;
+  min-width: 0;
+  justify-self: end;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-instrument-channel-button {
+  width: auto !important;
+  min-width: 26px !important;
+  height: 28px !important;
+  padding: 0 4px !important;
+  border: 1px solid color-mix(in srgb, var(--wb13-channel-color) 38%, var(--wb4-line)) !important;
+  border-radius: 7px !important;
+  background: var(--wb4-surface) !important;
+  color: var(--wb13-channel-color) !important;
+  font-weight: 820 !important;
+  opacity: .42;
+  filter: grayscale(.55);
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-instrument-channel-button.selected {
+  opacity: 1;
+  filter: none;
+  background: color-mix(in srgb, var(--wb13-channel-color) 15%, var(--wb4-surface)) !important;
+  box-shadow: inset 0 -2px 0 var(--wb13-channel-color) !important;
+}
+
+/* Live volume preview: channel distributions update with the draft slider values. */
+.player-source-workbench-v9 .wb13-volume-metric-row {
+  grid-template-columns: minmax(124px, 162px) minmax(180px, .95fr) minmax(220px, 1.3fr) !important;
+}
+.player-source-workbench-v9 .wb13-volume-channel-distribution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.player-source-workbench-v9 .wb13-volume-channel-distribution .wb9-volume-chip {
+  min-height: 22px;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--wb8-channel-color) 30%, var(--wb4-line));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wb8-channel-color) 7%, var(--wb4-surface));
+  font-size: 9.5px;
+  font-weight: 730;
+}
+
+/* Octave range is visible per channel and changes immediately with draft slider movement. */
+.player-source-workbench-v9 .wb13-octave-range {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--wb8-channel-color) 32%, var(--wb4-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wb8-channel-color) 8%, var(--wb4-surface));
+  color: var(--wb8-channel-color);
+  font-size: 9.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.player-source-workbench-v9 .wb13-octave-range-all { --wb8-channel-color: var(--wb4-accent); }
+.player-source-workbench-v9 .wb13-octave-range.is-empty { opacity: .58; }
+
+/* Recommendation link group is ~30px wider than R4. */
+.player-source-workbench-v9 .player-topbar .midi-site-links {
+  flex-basis: 180px !important;
+  width: auto !important;
+  min-width: 158px !important;
+  max-width: 180px !important;
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .player-topbar .midi-site-links {
+    flex-basis: 148px !important;
+    min-width: 134px !important;
+    max-width: 148px !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header,
+  .player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row {
+    grid-template-columns: minmax(68px, .62fr) minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 6px;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-option {
+    min-height: 28px;
+    padding-inline: 3px;
+    font-size: 9px;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-areas:
+      "name listen"
+      "count count"
+      "channels channels";
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-channels {
+    justify-self: stretch;
+    width: 100% !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+  .player-source-workbench-v9 .wb13-volume-metric-row {
+    grid-template-columns: minmax(96px, 126px) minmax(0, 1fr) !important;
+  }
+  .player-source-workbench-v9 .wb13-volume-metric-row > .wb13-volume-channel-distribution {
+    grid-column: 1 / -1;
+    padding-left: 4px;
+  }
+}
+
+@media (max-width: 430px) {
+  .player-source-workbench-v9 .player-topbar .midi-site-links {
+    flex-basis: 126px !important;
+    min-width: 118px !important;
+    max-width: 126px !important;
+  }
+  .player-source-workbench-v9 .wb6-workspace-panel { padding: 10px; }
+  .player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header {
+    font-size: 9px;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header,
+  .player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row {
+    grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 350px) {
+  .player-source-workbench-v9 .player-topbar .midi-site-links,
+  .player-source-workbench-v9 .midi-site-links {
+    flex-basis: 108px !important;
+    width: 108px !important;
+    min-width: 108px !important;
+    max-width: 108px !important;
+  }
+}
+
+.player-source-workbench-v9 .wb13-modal-confirm {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 420 !important;
+  display: grid !important;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, .48);
+  backdrop-filter: blur(2px);
+}
+.player-source-workbench-v9 .wb13-modal-confirm[hidden] { display: none !important; }
+.player-source-workbench-v9 .wb13-modal-confirm .wb4-question-card {
+  width: min(100%, 430px);
+  margin: 0;
+  border: 1px solid var(--wb4-line);
+  border-radius: 13px;
+  background: var(--wb4-surface);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .28);
+}
+
+/* 2026-08-23 follow-up corrections */
+/* Channel settings: narrower channel column and clearer spacing between the three columns. */
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header,
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row {
+  grid-template-columns: 76px minmax(180px, 1fr) minmax(180px, 1fr) !important;
+  column-gap: 20px !important;
+  row-gap: 6px !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header {
+  padding-inline: 10px !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row {
+  padding-inline: 10px !important;
+}
+
+/* Restore the instrument list to a stable four-column desktop form.
+   DOM order is channels -> name -> count -> listen, so no grid-area remapping is needed. */
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+  display: grid !important;
+  grid-template-columns: minmax(150px, 164px) minmax(0, 1fr) max-content max-content !important;
+  grid-template-areas: none !important;
+  align-items: center !important;
+  gap: 7px 10px !important;
+  min-height: 42px;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-channels,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-name,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-count,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-listen {
+  grid-column: auto !important;
+  grid-row: auto !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-channels {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(22px, 1fr)) !important;
+  gap: 3px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  justify-self: stretch !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-name {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-count,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-listen {
+  white-space: nowrap !important;
+}
+
+/* Per-channel volume information belongs above its slider, not in a third column. */
+.player-source-workbench-v9 .wb13-volume-metric-row {
+  grid-template-columns: minmax(104px, 136px) minmax(0, 1fr) !important;
+  align-items: start !important;
+}
+.player-source-workbench-v9 .wb13-volume-metric-row .wb9-option-list-control {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 6px !important;
+  min-width: 0;
+}
+.player-source-workbench-v9 .wb13-option-metric-above {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  min-width: 0;
+  min-height: 24px;
+}
+.player-source-workbench-v9 .wb13-option-metric-above .wb13-volume-channel-distribution {
+  flex: 1 1 220px;
+  justify-content: flex-start;
+}
+.player-source-workbench-v9 .wb13-option-metric-above + .wb4-slider-number {
+  width: 100%;
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header,
+  .player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row {
+    grid-template-columns: 58px minmax(0, 1fr) minmax(0, 1fr) !important;
+    column-gap: 8px !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+    grid-template-columns: minmax(0, 1fr) max-content !important;
+    grid-template-rows: auto auto auto !important;
+    gap: 4px 8px !important;
+    padding: 7px 4px !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-name {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-listen {
+    grid-column: 2 !important;
+    grid-row: 1 / span 2 !important;
+    align-self: center;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-count {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-channels {
+    grid-column: 1 / -1 !important;
+    grid-row: 3 !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    width: 100% !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb13-instrument-channel-button {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  .player-source-workbench-v9 .wb13-volume-metric-row {
+    grid-template-columns: 84px minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header,
+  .player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row {
+    grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr) !important;
+    column-gap: 6px !important;
+  }
+  .player-source-workbench-v9 .wb13-volume-metric-row {
+    grid-template-columns: 72px minmax(0, 1fr) !important;
+  }
+  .player-source-workbench-v9 .wb13-option-metric-above {
+    gap: 4px 6px;
+  }
+}
+
+/* 2026-08-23 fix3 ---------------------------------------------------------
+   Keep the workspace itself as the single visual container. Submenus are
+   flattened inside it, while controls that need their own affordance remain. */
+.player-source-workbench-v9 .wb6-workspace-panel {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 .wb6-copy-panel,
+.player-source-workbench-v9 .wb6-instrument-panel,
+.player-source-workbench-v9 .wb6-channel-options-panel,
+.player-source-workbench-v9 .wb6-code-panel {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Copy rows are content rows in the workspace card, not nested cards. */
+.player-source-workbench-v9 .wb6-copy-panel .wb4-copy-results .copy-item {
+  min-height: 56px;
+  padding: 11px 13px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--wb4-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 .wb6-copy-panel .wb4-split-results {
+  margin-top: 0 !important;
+  padding: 13px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 .wb6-copy-panel .wb4-split-results .copy-item {
+  padding-inline: 0 !important;
+}
+
+/* Instrument and channel-option content should also sit directly in the
+   workspace. Dividers are kept because they describe rows/columns, not cards. */
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-dialog-card,
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-dialog-section,
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-left-panel,
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-right-panel,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb9-feature-panel,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb8-feature-panel {
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-dialog-card {
+  padding: 0 !important;
+}
+.player-source-workbench-v9 .wb6-channel-options-panel .wb9-option-list-row,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb8-option-list-row {
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* The code editor uses the outer workspace as its frame. */
+.player-source-workbench-v9 .wb6-code-panel .wb6-channel-code-editor .mml-highlight,
+.player-source-workbench-v9 .wb6-code-panel .wb6-channel-code-editor textarea.highlight-source {
+  border-right: 0 !important;
+  border-bottom: 0 !important;
+  border-left: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* Volume: first line is the live volume distribution, second line is
+   channel name + slider. The previous aggregate note-count badge is gone. */
+.player-source-workbench-v9 .wb13-volume-metric-row {
+  grid-template-columns: minmax(104px, 136px) minmax(0, 1fr) !important;
+  grid-template-rows: auto auto !important;
+  align-items: center !important;
+  column-gap: 10px !important;
+  row-gap: 7px !important;
+}
+.player-source-workbench-v9 .wb13-volume-metric-row > .wb13-option-metric-top {
+  grid-column: 1 / -1 !important;
+  grid-row: 1 !important;
+  display: block !important;
+  min-width: 0;
+  overflow: hidden;
+}
+.player-source-workbench-v9 .wb13-volume-metric-row > .wb9-option-list-label {
+  grid-column: 1 !important;
+  grid-row: 2 !important;
+}
+.player-source-workbench-v9 .wb13-volume-metric-row > .wb9-option-list-control {
+  grid-column: 2 !important;
+  grid-row: 2 !important;
+  display: block !important;
+  min-width: 0;
+}
+.player-source-workbench-v9 .wb13-volume-metric-row .wb13-volume-channel-distribution {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  justify-content: flex-start !important;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 7px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--wb8-channel-color) 24%, var(--wb4-line));
+  background: color-mix(in srgb, var(--wb8-channel-color) 4%, transparent);
+  scrollbar-width: thin;
+}
+.player-source-workbench-v9 .wb13-volume-metric-row .wb13-volume-channel-distribution .wb9-volume-chip {
+  flex: 0 0 auto;
+}
+
+/* Mobile instrument list: one compact horizontal row. */
+@media (max-width: 620px) {
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+    grid-template-columns: minmax(64px, 1fr) max-content minmax(116px, 1.3fr) max-content !important;
+    grid-template-rows: auto !important;
+    grid-template-areas: none !important;
+    align-items: center !important;
+    gap: 4px !important;
+    min-height: 36px !important;
+    padding: 5px 4px !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-name,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-count,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-channels,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-listen {
+    grid-row: 1 !important;
+    min-width: 0 !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-name {
+    grid-column: 1 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    font-size: 9.5px !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-count {
+    grid-column: 2 !important;
+    font-size: 8px !important;
+    white-space: nowrap !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-channels {
+    grid-column: 3 !important;
+    grid-template-columns: repeat(6, minmax(17px, 1fr)) !important;
+    gap: 2px !important;
+    width: 100% !important;
+    justify-self: stretch !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-listen {
+    grid-column: 4 !important;
+    align-self: center !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb13-instrument-channel-button,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-channels .midi-part-chip {
+    width: 100% !important;
+    min-width: 17px !important;
+    height: 24px !important;
+    padding-inline: 1px !important;
+    font-size: 8px !important;
+  }
+
+  /* Give octave channel labels/ranges more room by taking it from the slider. */
+  .player-source-workbench-v9 .wb9-octave-feature .wb9-option-list-row {
+    grid-template-columns: minmax(112px, 132px) minmax(0, 1fr) !important;
+    column-gap: 6px !important;
+  }
+  .player-source-workbench-v9 .wb9-octave-feature .wb9-option-list-label {
+    gap: 4px !important;
+    min-width: 0;
+  }
+  .player-source-workbench-v9 .wb9-octave-feature .wb13-octave-range {
+    max-width: 74px;
+    padding-inline: 5px;
+    font-size: 8.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .player-source-workbench-v9 .wb9-octave-feature .wb4-slider-number {
+    grid-template-columns: minmax(40px, 1fr) 40px !important;
+    gap: 4px !important;
+  }
+  .player-source-workbench-v9 .wb9-octave-feature .wb4-number {
+    width: 40px !important;
+    min-width: 40px !important;
+  }
+
+  .player-source-workbench-v9 .wb13-volume-metric-row {
+    grid-template-columns: 84px minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+    grid-template-columns: minmax(54px, .9fr) max-content minmax(106px, 1.2fr) max-content !important;
+    gap: 3px !important;
+  }
+  .player-source-workbench-v9 .wb9-octave-feature .wb9-option-list-row {
+    grid-template-columns: 108px minmax(0, 1fr) !important;
+  }
+  .player-source-workbench-v9 .wb13-volume-metric-row {
+    grid-template-columns: 76px minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 350px) {
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+    grid-template-columns: minmax(46px, .8fr) max-content minmax(96px, 1.2fr) max-content !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-count {
+    font-size: 7px !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb13-instrument-channel-button,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-channels .midi-part-chip {
+    min-width: 15px !important;
+    height: 22px !important;
+    font-size: 7.5px !important;
+  }
+  .player-source-workbench-v9 .wb9-octave-feature .wb9-option-list-row {
+    grid-template-columns: 102px minmax(0, 1fr) !important;
+  }
+}
+
+
+/* 2026-08-23 fix4 ---------------------------------------------------------
+   Fine spacing and alignment pass for instrument/channel option/code tools. */
+
+/* Instrument selection keeps a small horizontal breathing space without
+   reintroducing nested cards. */
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-left-panel > .dialog-section-head,
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-right-panel > .dialog-section-head {
+  box-sizing: border-box;
+  padding-inline: 12px !important;
+}
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiRoleList,
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiChannelList {
+  box-sizing: border-box;
+  padding-inline: 8px !important;
+}
+
+/* Instrument list order: name -> note count -> channel buttons -> listen.
+   Channel assignment controls stay immediately to the left of Listen. */
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+  grid-template-columns: minmax(0, 1fr) max-content minmax(150px, 164px) max-content !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-name {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-count {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-channels {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-listen {
+  grid-column: 4 !important;
+  grid-row: 1 !important;
+}
+
+/* Volume rows use one identical label/control grid, including Apply all. */
+.player-source-workbench-v9 .wb9-volume-feature .wb9-option-list-row,
+.player-source-workbench-v9 .wb13-volume-metric-row {
+  grid-template-columns: minmax(104px, 136px) minmax(0, 1fr) !important;
+}
+.player-source-workbench-v9 .wb13-volume-metric-row .wb13-volume-channel-distribution {
+  padding: 6px 0 !important;
+  margin-inline: 0 !important;
+  background: transparent !important;
+}
+
+/* Code metrics/help line needs breathing room while the editor itself stays
+   flush with the single outer workspace frame. */
+.player-source-workbench-v9 .wb6-code-panel .wb10-code-tools {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px !important;
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-left-panel > .dialog-section-head,
+  .player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-right-panel > .dialog-section-head {
+    padding-inline: 10px !important;
+  }
+  .player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiRoleList,
+  .player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiChannelList {
+    padding-inline: 6px !important;
+  }
+
+  /* Keep the same one-line order on mobile. */
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+    grid-template-columns: minmax(64px, 1fr) max-content minmax(116px, 1.3fr) max-content !important;
+    grid-template-rows: auto !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-name,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-count,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-channels,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-listen {
+    grid-row: 1 !important;
+  }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-name { grid-column: 1 !important; }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-count { grid-column: 2 !important; }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-instrument-channels { grid-column: 3 !important; }
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-listen { grid-column: 4 !important; }
+
+  .player-source-workbench-v9 .wb9-volume-feature .wb9-option-list-row,
+  .player-source-workbench-v9 .wb13-volume-metric-row {
+    grid-template-columns: 84px minmax(0, 1fr) !important;
+  }
+  .player-source-workbench-v9 .wb6-code-panel .wb10-code-tools {
+    padding-inline: 10px !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+    grid-template-columns: minmax(54px, .9fr) max-content minmax(106px, 1.2fr) max-content !important;
+  }
+  .player-source-workbench-v9 .wb9-volume-feature .wb9-option-list-row,
+  .player-source-workbench-v9 .wb13-volume-metric-row {
+    grid-template-columns: 76px minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 350px) {
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row,
+  .player-source-workbench-v9 #midiConvertDialog .wb8-midi-instrument-row.percussion {
+    grid-template-columns: minmax(46px, .8fr) max-content minmax(96px, 1.2fr) max-content !important;
+  }
+}
+
+
+/* 2026-08-23 release: final instrument-panel spacing. */
+/* Channel-setting children already carry their own spacing, so the list itself is flush. */
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiRoleList {
+  padding-inline: 0 !important;
+}
+/* Instrument list keeps horizontal breathing room and a little bottom space even when every group is collapsed. */
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiChannelList {
+  padding: 0 8px 10px !important;
+}
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiRoleList {
+    padding-inline: 0 !important;
+  }
+  .player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiChannelList {
+    padding: 0 6px 9px !important;
+  }
+}
+
+/* 2026-08-23 release2 ------------------------------------------------------
+   Final release polish: 0.25s leading-gap control and instrument/volume UI. */
+
+/* Channel setting rows use the same six channel colors as the rest of Player. */
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row.part-0 { --wb13-role-color: var(--part0); }
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row.part-1 { --wb13-role-color: var(--part1); }
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row.part-2 { --wb13-role-color: var(--part2); }
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row.part-3 { --wb13-role-color: var(--part3); }
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row.part-4 { --wb13-role-color: var(--part4); }
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row.part-5 { --wb13-role-color: var(--part5); }
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--wb13-role-color) 8%, transparent), transparent 72%) !important;
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--wb13-role-color) 72%, transparent) !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-name {
+  color: var(--wb13-role-color) !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-option.active {
+  border-color: color-mix(in srgb, var(--wb13-role-color) 58%, var(--wb4-line)) !important;
+  background: color-mix(in srgb, var(--wb13-role-color) 13%, var(--wb4-surface)) !important;
+  color: var(--wb13-role-color) !important;
+  box-shadow: inset 0 -2px 0 var(--wb13-role-color) !important;
+}
+
+/* "악기 채널 선택" is the only section title here: make it clearer and
+   remove the divider directly below its title row. */
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-right-panel > .dialog-section-head {
+  border-bottom: 0 !important;
+}
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog #midiInstrumentPanelTitle {
+  font-size: 15px !important;
+  line-height: 1.3;
+  font-weight: 850 !important;
+}
+
+/* Volume information and its channel slider belong to one visual unit. */
+.player-source-workbench-v9 .wb13-volume-metric-row .wb13-volume-channel-distribution {
+  border-bottom: 0 !important;
+}
+
+
+
+/* 2026-08-23 release3 ------------------------------------------------------
+   Final instrument/channel visual distinction pass. */
+
+/* Make the channel-setting column labels slightly easier to scan. */
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header {
+  font-size: 12px !important;
+  line-height: 1.25;
+}
+
+/* Keep channel identity in text/selected controls only: no tinted row fill
+   or left color rail. */
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Channel settings and instrument settings are separated by spacing alone. */
+.player-source-workbench-v9 .wb6-instrument-panel #midiConvertDialog .midi-left-panel {
+  border-bottom: 0 !important;
+}
+
+/* 2026-08-23 release4 ------------------------------------------------------
+   Divider cleanup and final control polish. */
+
+/* Overview options from Quantize through Start gap are separated by spacing,
+   not vertical rules. The dynamics row keeps its horizontal top divider. */
+.player-source-workbench-v9 .wb9-common-options .wb4-option-row:not(.wb9-common-dynamics) {
+  border-right: 0 !important;
+}
+
+/* Code metrics read as one continuous status line without separators. */
+.player-source-workbench-v9 .wb10-code-metric:not(:last-child)::after {
+  content: none !important;
+  display: none !important;
+}
+.player-source-workbench-v9 .wb10-code-metrics {
+  gap: 12px !important;
+}
+
+/* Instrument channel rows have no internal dividers; only one divider after
+   Harmony 5 separates channel settings from instrument settings. */
+.player-source-workbench-v9 #midiConvertDialog #midiRoleList {
+  border-bottom: 1px solid var(--wb4-line) !important;
+}
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-card,
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-role-card:last-child,
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-row:last-child {
+  border-bottom: 0 !important;
+}
+
+/* Channel-option submenus use whitespace only between channel rows. */
+.player-source-workbench-v9 .wb6-channel-options-panel .wb9-option-list-row,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb8-option-list-row,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb9-option-list-row:not(:last-child),
+.player-source-workbench-v9 .wb6-channel-options-panel .wb8-option-list-row:not(:last-child) {
+  border-bottom: 0 !important;
+}
+
+/* Code-help line and editor belong to one flat section. */
+.player-source-workbench-v9 .wb6-code-panel .wb6-channel-code-editor {
+  border-top: 0 !important;
+}
+.player-source-workbench-v9 .wb6-code-panel .wb6-channel-code-editor .mml-highlight,
+.player-source-workbench-v9 .wb6-code-panel .wb6-channel-code-editor textarea.highlight-source {
+  border-top: 0 !important;
+}
+.player-source-workbench-v9 .wb10-code-tools .wb6-code-help-button,
+.player-source-workbench-v9 .wb10-code-tools .wb4-code-help-button {
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  border: 1px solid color-mix(in srgb, var(--wb10-code-color, var(--wb4-accent)) 42%, var(--wb4-line)) !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--wb10-code-color, var(--wb4-accent)) 7%, var(--wb4-surface)) !important;
+  color: var(--wb10-code-color, var(--wb4-accent)) !important;
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 7%, transparent) !important;
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+}
+.player-source-workbench-v9 .wb10-code-tools .wb6-code-help-button:hover,
+.player-source-workbench-v9 .wb10-code-tools .wb4-code-help-button:hover {
+  border-color: color-mix(in srgb, var(--wb10-code-color, var(--wb4-accent)) 68%, var(--wb4-line)) !important;
+  background: color-mix(in srgb, var(--wb10-code-color, var(--wb4-accent)) 13%, var(--wb4-surface)) !important;
+  color: var(--wb10-code-color, var(--wb4-accent)) !important;
+}
+.player-source-workbench-v9 .wb10-code-tools .wb6-code-help-button:focus-visible,
+.player-source-workbench-v9 .wb10-code-tools .wb4-code-help-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--wb10-code-color, var(--wb4-accent)) 38%, transparent) !important;
+  outline-offset: 2px;
+}
+
+
+
+/* 2026-08-23 release5 ------------------------------------------------------
+   Final divider/alignment cleanup. */
+
+/* Full score and split score are separated by spacing only. */
+.player-source-workbench-v9 .wb6-copy-panel .wb8-full-copy-item {
+  border-bottom: 0 !important;
+}
+
+/* Center only the Channel heading in the instrument channel header. */
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header > :first-child {
+  text-align: center !important;
+}
+
+/* Channel-option submenu tabs use spacing/active underline, not vertical rules. */
+.player-source-workbench-v9 .wb6-channel-options-panel .wb8-feature-tab,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb9-feature-tab {
+  border-right: 0 !important;
+}
+
+
+/* 2026-08-23 release6 ------------------------------------------------------
+   Final separator cleanup and stronger Harmony 5 identity. */
+
+/* Melody through Harmony 5 overview cells are separated by spacing only. */
+.player-source-workbench-v9 .wb6-channel-count {
+  border-left: 0 !important;
+}
+
+/* Split score pages form one continuous list without row dividers. */
+.player-source-workbench-v9 .wb6-copy-panel .wb4-split-results .copy-item,
+.player-source-workbench-v9 .wb6-copy-panel .wb4-split-results .copy-item:last-child {
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+}
+
+/* The Channel / Note placement / Note overlap header flows directly into
+   the six channel rows. */
+.player-source-workbench-v9 #midiConvertDialog .wb13-midi-role-header {
+  border-bottom: 0 !important;
+}
+
+/* Channel-option submenu channel rows never use horizontal separators. */
+.player-source-workbench-v9 .wb6-channel-options-panel .wb9-option-list-row,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb8-option-list-row,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb13-volume-metric-row,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb9-option-list-row:not(:last-child),
+.player-source-workbench-v9 .wb6-channel-options-panel .wb8-option-list-row:not(:last-child) {
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+}
+
+/* 2026-08-23 release7 ------------------------------------------------------
+   Compact channel-option rows: keep divider-free layout while reducing
+   the vertical whitespace between consecutive channels by about half. */
+.player-source-workbench-v9 .wb6-channel-options-panel .wb9-option-list-row,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb8-option-list-row,
+.player-source-workbench-v9 .wb6-channel-options-panel .wb13-volume-metric-row {
+  min-height: 48px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+
+
+/* release8: robust modal for pending save/copy confirmation. */
+body.player-source-workbench-v9 > .wb13-modal-confirm {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 10000 !important;
+  display: grid !important;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: none !important;
+  place-items: center !important;
+  margin: 0 !important;
+  padding: 18px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: rgba(15, 23, 42, .52) !important;
+  box-shadow: none !important;
+  overflow: auto !important;
+  backdrop-filter: blur(2px);
+}
+body.player-source-workbench-v9 > .wb13-modal-confirm[hidden] {
+  display: none !important;
+}
+body.player-source-workbench-v9 > .wb13-modal-confirm > .wb4-question-card {
+  width: min(100%, 440px) !important;
+  max-width: 440px !important;
+  margin: auto !important;
+  padding: 20px !important;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 13px !important;
+  background: var(--wb4-surface) !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .30) !important;
+  overflow: hidden !important;
+}
+body.player-source-workbench-v9 > .wb13-modal-confirm > .wb4-question-card > h3 {
+  margin: 0 0 9px !important;
+  color: var(--wb4-text) !important;
+  font-size: 17px !important;
+  line-height: 1.35 !important;
+}
+body.player-source-workbench-v9 > .wb13-modal-confirm > .wb4-question-card > p {
+  margin: 0 !important;
+  color: var(--wb4-muted) !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  white-space: normal !important;
+}
+body.player-source-workbench-v9 > .wb13-modal-confirm > .wb4-question-card > .dialog-actions {
+  position: static !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  margin: 18px 0 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+body.player-source-workbench-v9 > .wb13-modal-confirm > .wb4-question-card > .dialog-actions > button {
+  min-width: 96px !important;
+  min-height: 38px !important;
+  margin: 0 !important;
+  padding: 0 14px !important;
+  border-radius: 8px !important;
+}
+@media (max-width: 430px) {
+  body.player-source-workbench-v9 > .wb13-modal-confirm { padding: 14px !important; }
+  body.player-source-workbench-v9 > .wb13-modal-confirm > .wb4-question-card { padding: 18px 16px !important; }
+  body.player-source-workbench-v9 > .wb13-modal-confirm > .wb4-question-card > .dialog-actions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+  }
+  body.player-source-workbench-v9 > .wb13-modal-confirm > .wb4-question-card > .dialog-actions > button {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+}
+
+
+/* 2026-08-23 release10 -----------------------------------------------------
+   Continuous page canvas, active-tempo priority, instrument spacing and
+   stoppable instrument previews. */
+
+/* Keep the page canvas continuous even when the workbench becomes taller
+   than the initial viewport. main fills the remaining viewport and grows
+   naturally with its content; html uses the same terminal background color. */
+html {
+  min-height: 100%;
+  background: var(--bg);
+}
+body.player-source-workbench-v9 {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg);
+  background-repeat: no-repeat;
+}
+body.player-source-workbench-v9 > main {
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
+/* The tempo that is active at the current playback position wins overlap
+   between tempo boxes. The playhead time badge still remains above them. */
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker {
+  z-index: 10 !important;
+}
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker.active {
+  z-index: 20 !important;
+}
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker .tempo-marker-label {
+  z-index: 11 !important;
+}
+.player-source-workbench-v9 .wb4-tempo-timeline .tempo-marker.active .tempo-marker-label {
+  z-index: 21 !important;
+}
+.player-source-workbench-v9 .wb4-playhead-label {
+  z-index: 30 !important;
+}
+
+/* Give the first instrument-settings heading a small breathing space below
+   the Instrument selection workspace tab. */
+.player-source-workbench-v9 .wb6-instrument-panel .wb6-assignment-host {
+  padding-top: 10px !important;
+}
+
+/* A currently previewed instrument uses the same danger treatment as other
+   explicit stop controls while remaining clickable. */
+.player-source-workbench-v9 #midiConvertDialog .wb8-midi-listen.danger {
+  background: color-mix(in srgb, var(--danger) 13%, var(--wb4-surface)) !important;
+  color: var(--danger) !important;
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--wb4-line)) !important;
+}

@@ -1,12 +1,12 @@
 (() => {
   "use strict";
 
-  const VERSION = "5.0.0";
+  const VERSION = "5.1.0";
 
   function soundBankApi() {
     const api = window.MabiSoundBank;
     if (!api?.loadEmbeddedSoundBank || !api?.findPreset) {
-      throw new Error("공용 SoundBank 모듈을 불러오지 못했습니다.");
+      throw new Error(window.MobibardI18n?.t?.("simple.err_soundbank") || "Could not load the shared sound bank module.");
     }
     return api;
   }
@@ -25,7 +25,7 @@
     const program = Math.max(0, Math.min(127, Math.round(Number(options.program) || 0)));
     const soundBank = await api.loadEmbeddedSoundBank(options);
     const preset = api.findPreset(soundBank, program, bankNumber);
-    if (!preset) throw new Error(`Bank ${bankNumber} / Program ${program} 프리셋을 찾지 못했습니다.`);
+    if (!preset) throw new Error(window.MobibardI18n?.t?.("simple.err_preset", [bankNumber, program]) || `Could not find a playback instrument preset. (Bank ${bankNumber} / Program ${program})`);
     return { soundBank, preset };
   }
 
