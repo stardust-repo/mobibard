@@ -384,7 +384,7 @@
     const pitch = child(noteEl, "pitch");
     const unpitched = child(noteEl, "unpitched");
     const instrumentId = child(noteEl, "instrument")?.getAttribute("id") || "";
-    let midi = pitch ? pitchToMidi(pitch) : unpitchedToMidi(unpitched, part);
+    let midi = pitch ? pitchElementToMidi(pitch) : unpitchedToMidi(unpitched, part);
     if (!Number.isFinite(midi)) return { note: null, isChord, isGrace, durationTicks };
     if (pitch) midi += Math.round(Number(transpose) || 0);
     midi = Math.max(0, Math.min(127, Math.round(midi)));
@@ -408,6 +408,16 @@
       tieStop: tieTypes.includes("stop") || tieTypes.includes("continue")
     };
     return { note, isChord, isGrace, durationTicks };
+  }
+
+
+  function pitchElementToMidi(pitch) {
+    const step = text(child(pitch, "step")).trim().toUpperCase();
+    const octave = parseInt(text(child(pitch, "octave")), 10);
+    const alter = parseFloat(text(child(pitch, "alter")) || "0") || 0;
+    if (!Object.prototype.hasOwnProperty.call(notation.STEP_TO_SEMITONE, step)) return NaN;
+    if (!Number.isFinite(octave)) return NaN;
+    return notation.pitchToMidi(step, octave, alter, 60);
   }
 
 

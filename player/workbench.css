@@ -5414,3 +5414,77 @@ body.player-source-workbench-v9 > main {
 .player-source-workbench-v9 .wb6-channel-options-panel .wb9-volume-feature {
   padding-bottom: 7px !important;
 }
+
+/* final12: mobile top navigation matches Simple exactly. */
+.player-source-workbench-v9 .player-topbar .midi-site-links {
+  box-sizing: border-box !important;
+  flex: 0 1 126px !important;
+  width: 126px !important;
+  min-width: 108px !important;
+  max-width: 126px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 24px 0 8px !important;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 9px !important;
+  background: var(--wb4-surface) !important;
+  color: var(--wb4-text) !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+}
+.player-source-workbench-v9 .wb4-top-external > .wb4-midi-extract-button {
+  box-sizing: border-box !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 13px !important;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 9px !important;
+  background: var(--wb4-surface) !important;
+  color: var(--wb4-text) !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  line-height: 1.2 !important;
+}
+
+@media (max-width: 620px) {
+  .player-source-workbench-v9 .wb4-top-external > .wb4-midi-extract-button {
+    height: 34px !important;
+    min-height: 34px !important;
+    padding-inline: 5px !important;
+    font-size: 10px !important;
+  }
+
+  /* Older v7 mobile rules reintroduced a divider between Harmony 2 and Harmony 3. */
+  .player-source-workbench-v9.player-source-workbench-v7 .wb6-channel-count:nth-child(4),
+  .player-source-workbench-v9.player-source-workbench-v7 .wb6-channel-count:nth-child(5),
+  .player-source-workbench-v9.player-source-workbench-v7 .wb6-channel-count:nth-child(6) {
+    border-top: 0 !important;
+  }
+  .player-source-workbench-v9.player-source-workbench-v7 .wb6-channel-count:nth-child(4) {
+    border-left: 0 !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .player-source-workbench-v9 .player-topbar .midi-site-links {
+    flex: 0 0 116px !important;
+    width: 116px !important;
+    min-width: 108px !important;
+    max-width: 116px !important;
+    font-size: 10px !important;
+  }
+}
+
+@media (max-width: 350px) {
+  .player-source-workbench-v9 .player-topbar .midi-site-links {
+    flex: 0 0 108px !important;
+    width: 108px !important;
+    min-width: 108px !important;
+    max-width: 108px !important;
+    font-size: 9px !important;
+  }
+  .player-source-workbench-v9 .wb4-top-external > .wb4-midi-extract-button {
+    padding-inline: 4px !important;
+    font-size: 9.5px !important;
+  }
+}
