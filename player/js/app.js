@@ -733,6 +733,7 @@
     state.ui.tempoScaleControl?.setValue?.(state.options.tempo.scale);
     state.ui.leadingControl?.setValue?.(state.options.leading.beats * 0.5);
     updateTempoCleanButton();
+    state.ui.leadingControl?.setSuffix?.(t("seconds"));
     syncVolumeGenerationControls();
     state.ui.quantizeControl?.setValue?.(String(Number(state.midiQuantizeDivision) === 32 ? 32 : 64));
   }
@@ -1523,6 +1524,7 @@
     refreshPlayerUiText();
     syncMidiQuantizeControl();
     updateTempoCleanButton();
+    state.ui.leadingControl?.setSuffix?.(t("seconds"));
     syncVolumeGenerationControls();
     syncAccompanimentFeatureControls();
     scheduleChannelCountsUpdate();
@@ -2135,6 +2137,9 @@
     input.addEventListener("change", () => setValue(input.value, { silent: false }));
     input.addEventListener("blur", () => setValue(input.value, { silent: true }));
     wrap.setValue = setValue;
+    wrap.setSuffix = text => {
+      if (suffixNode) suffixNode.textContent = String(text ?? "");
+    };
     wrap._input = input;
     buttonWrap.append(up, down);
     wrap.append(input, buttonWrap);
