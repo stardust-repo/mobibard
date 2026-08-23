@@ -3971,6 +3971,18 @@ html[data-player-layout="player-ui"] main {
   overflow: hidden;
   pointer-events: none;
 }
+.wb4-timeline-activity {
+  position: absolute;
+  z-index: 2;
+  left: var(--wb4-timeline-side-padding, 0px);
+  top: 25px;
+  width: calc(100% - var(--wb4-timeline-side-padding, 0px) - var(--wb4-timeline-side-padding, 0px));
+  height: calc(100% - 42px);
+  min-width: 0;
+  min-height: 0;
+  display: block;
+  pointer-events: none;
+}
 .wb4-timeline-grid::before {
   content: "";
   position: absolute;

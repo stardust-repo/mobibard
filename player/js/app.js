@@ -476,7 +476,8 @@
     state.ui.playhead.append(state.ui.playheadLabel);
     state.ui.playheadTrack = el("div", "wb4-timeline-playhead-track", { "aria-hidden": "true" });
     state.ui.playheadTrack.append(state.ui.playhead);
-    progressWrap.prepend(grid, tickLabels);
+    state.ui.timelineActivityCanvas = el("canvas", "wb4-timeline-activity", { id: "timelineActivityCanvas", "aria-hidden": "true" });
+    progressWrap.prepend(grid, state.ui.timelineActivityCanvas, tickLabels);
     progressWrap.append(state.ui.playheadTrack);
     state.ui.progressSlider = progressSlider;
 
@@ -3438,6 +3439,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const volumeValue = $("volumeValue");
   const progressSlider = $("progressSlider");
   const tempoMarkerLayer = $("tempoMarkerLayer");
+  const timelineActivityCanvas = $("timelineActivityCanvas");
   const tempoEditDialog = $("tempoEditDialog");
   const tempoEditForm = $("tempoEditForm");
   const tempoEditContext = $("tempoEditContext");
@@ -3528,6 +3530,11 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   let playbackSpeed = 1;
   let scheduleCache = null;
   let scheduleCacheVersion = 0;
+  let timelineActivityIntervalsVersion = -1;
+  let timelineActivityIntervals = Array.from({ length: 6 }, () => []);
+  let timelineActivityRenderSignature = "";
+  let timelineActivityResizeObserver = null;
+  let timelineActivityRefreshRaf = 0;
   let currentOffset = 0;
   let pianoRollExpanded = false;
   let pianoRollKeyMin = 48;
@@ -3902,6 +3909,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       }
     });
     installPianoRollRefreshHooks();
+    installTimelineActivityRefreshHooks();
     copyBtn.addEventListener("click", async () => {
       if (!(await runPlayerUiBeforeAction("copy"))) return;
       void copyVisibleMml();
@@ -4513,6 +4521,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     }
     if (persist) writePref("theme", resolved);
     pianoRollLastDataSignature = "";
+    requestTimelineActivityRefresh(true);
     updatePianoRoll(currentOffset, scheduleCache?.duration || Number(progressSlider?.max) || 0, true);
   }
 
@@ -6812,6 +6821,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
     updatePartMuteControl();
     invalidatePartMuteVisualState();
+    requestTimelineActivityRefresh(true);
     updatePlaybackCodeHighlight(playbackOffset);
     updatePianoRoll(playbackOffset, scheduleCache?.duration || Number(progressSlider?.max) || 0, true);
   }
@@ -9678,6 +9688,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       scheduleCache = createScheduleFromEditor();
       scheduleCacheVersion++;
       updateTempoMarkers(scheduleCache.tempoMarkers, scheduleCache.duration);
+      requestTimelineActivityRefresh(true);
       if (scheduleCache.notes.length === 0) throw new Error(i18nText("mml.no_notes"));
       if (currentOffset >= scheduleCache.duration - 0.05) currentOffset = 0;
       const ctx = await ensureAudioContext();
@@ -9930,6 +9941,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (!scheduleCache) {
         scheduleCache = createScheduleFromEditor();
         scheduleCacheVersion++;
+        requestTimelineActivityRefresh(true);
       }
       const time = Math.max(0, Number(offset) || 0);
       const noteIndex = ensureScheduleTemporalIndexes().notes;
@@ -10063,6 +10075,139 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return Math.max(0, Math.min(duration, playOffsetStart + elapsed));
   }
 
+  function getTimelineActivityIntervals() {
+    if (timelineActivityIntervalsVersion === scheduleCacheVersion) return timelineActivityIntervals;
+    timelineActivityIntervalsVersion = scheduleCacheVersion;
+    timelineActivityIntervals = Array.from({ length: 6 }, () => []);
+
+    const notes = Array.isArray(scheduleCache?.notes) ? scheduleCache.notes : [];
+    for (const note of notes) {
+      const part = clampInt(Number(note?.part ?? 0), 0, 5);
+      const volume = Number(note?.volume ?? 0);
+      if (!(volume > 0)) continue;
+      const start = Math.max(0, Number(note?.start) || 0);
+      const duration = Math.max(0, Number(note?.durationSec) || 0);
+      if (!(duration > 0)) continue;
+      timelineActivityIntervals[part].push({ start, end: start + duration });
+    }
+
+    const mergeGapSec = 0.004;
+    for (let part = 0; part < 6; part++) {
+      const source = timelineActivityIntervals[part];
+      if (source.length <= 1) continue;
+      source.sort((a, b) => a.start - b.start || a.end - b.end);
+      const merged = [];
+      for (const interval of source) {
+        const previous = merged[merged.length - 1];
+        if (previous && interval.start <= previous.end + mergeGapSec) {
+          if (interval.end > previous.end) previous.end = interval.end;
+        } else {
+          merged.push({ start: interval.start, end: interval.end });
+        }
+      }
+      timelineActivityIntervals[part] = merged;
+    }
+    return timelineActivityIntervals;
+  }
+
+  function timelinePartColor(part) {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(`--part${part}`).trim();
+    return raw || ["#dc2626", "#16a34a", "#2563eb", "#b58105", "#0891b2", "#c026d3"][part];
+  }
+
+  function renderTimelineActivity(force = false) {
+    if (!(timelineActivityCanvas instanceof HTMLCanvasElement)) return;
+    const rect = timelineActivityCanvas.getBoundingClientRect();
+    const cssWidth = Math.max(1, rect.width || timelineActivityCanvas.clientWidth || 1);
+    const cssHeight = Math.max(1, rect.height || timelineActivityCanvas.clientHeight || 1);
+    const dpr = Math.max(1, Math.min(3, Number(window.devicePixelRatio) || 1));
+    const duration = Math.max(0, Number(scheduleCache?.duration) || Number(progressSlider?.max) || 0);
+    const theme = document.documentElement.dataset.theme || "light";
+    const muteSignature = partMuteStates.map(value => value ? "1" : "0").join("");
+    const signature = `${scheduleCacheVersion}|${Math.round(cssWidth)}x${Math.round(cssHeight)}|${duration.toFixed(4)}|${theme}|${muteSignature}|${dpr}`;
+    if (!force && signature === timelineActivityRenderSignature) return;
+    timelineActivityRenderSignature = signature;
+
+    const pixelWidth = Math.max(1, Math.round(cssWidth * dpr));
+    const pixelHeight = Math.max(1, Math.round(cssHeight * dpr));
+    if (timelineActivityCanvas.width !== pixelWidth) timelineActivityCanvas.width = pixelWidth;
+    if (timelineActivityCanvas.height !== pixelHeight) timelineActivityCanvas.height = pixelHeight;
+    const ctx = timelineActivityCanvas.getContext("2d", { alpha: true });
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+    if (!(duration > 0)) return;
+
+    const intervalsByPart = getTimelineActivityIntervals();
+    const laneHeight = cssHeight / 6;
+    const lineWidth = Math.max(1.5, Math.min(2.6, laneHeight * 0.48));
+    const pixelMergeGap = 0.85;
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (let part = 0; part < 6; part++) {
+      const intervals = intervalsByPart[part] || [];
+      if (!intervals.length) continue;
+      const y = laneHeight * (part + 0.5);
+      ctx.strokeStyle = timelinePartColor(part);
+      ctx.globalAlpha = partMuteStates[part] ? 0.24 : 0.9;
+      ctx.lineWidth = lineWidth;
+      ctx.beginPath();
+
+      let pendingStart = -1;
+      let pendingEnd = -1;
+      const flush = () => {
+        if (pendingStart < 0) return;
+        const x1 = Math.max(0, Math.min(cssWidth, pendingStart));
+        const x2 = Math.max(x1 + 0.8, Math.min(cssWidth, pendingEnd));
+        ctx.moveTo(x1, y);
+        ctx.lineTo(x2, y);
+        pendingStart = -1;
+        pendingEnd = -1;
+      };
+
+      for (const interval of intervals) {
+        const start = Math.max(0, Math.min(duration, Number(interval.start) || 0));
+        const end = Math.max(start, Math.min(duration, Number(interval.end) || start));
+        const x1 = start / duration * cssWidth;
+        const x2 = end / duration * cssWidth;
+        if (pendingStart < 0) {
+          pendingStart = x1;
+          pendingEnd = x2;
+        } else if (x1 <= pendingEnd + pixelMergeGap) {
+          if (x2 > pendingEnd) pendingEnd = x2;
+        } else {
+          flush();
+          pendingStart = x1;
+          pendingEnd = x2;
+        }
+      }
+      flush();
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function requestTimelineActivityRefresh(force = false) {
+    if (force) timelineActivityRenderSignature = "";
+    if (timelineActivityRefreshRaf) return;
+    timelineActivityRefreshRaf = window.requestAnimationFrame(() => {
+      timelineActivityRefreshRaf = 0;
+      renderTimelineActivity(force);
+    });
+  }
+
+  function installTimelineActivityRefreshHooks() {
+    if (!(timelineActivityCanvas instanceof HTMLCanvasElement)) return;
+    if (typeof ResizeObserver === "function") {
+      timelineActivityResizeObserver = new ResizeObserver(() => requestTimelineActivityRefresh(true));
+      timelineActivityResizeObserver.observe(timelineActivityCanvas);
+    } else {
+      window.addEventListener("resize", () => requestTimelineActivityRefresh(true), { passive: true });
+    }
+    requestTimelineActivityRefresh(true);
+  }
+
   function updateProgressUi(current, duration) {
     const d = Math.max(0, Number(duration) || 0);
     const c = Math.max(0, Math.min(d, Number(current) || 0));
@@ -10090,12 +10235,14 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         : Math.max(0, Math.min(nextDuration, previousOffset));
       updateProgressUi(currentOffset, nextDuration);
       updateTempoMarkers(scheduleCache.tempoMarkers, nextDuration);
+      requestTimelineActivityRefresh(true);
     } catch (_) {
       scheduleCache = null;
       scheduleCacheVersion++;
       currentOffset = 0;
       updateProgressUi(0, 0);
       updateTempoMarkers([], 0);
+      requestTimelineActivityRefresh(true);
     }
   }
 
