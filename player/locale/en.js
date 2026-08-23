@@ -510,7 +510,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "simple.label": "Simple mode",
     "simple.open": "Open Simple mode",
     "midi.instrument_note_placement": "Note placement",
-    "midi.instrument_note_overlap": "Note overlap",
+    "midi.instrument_note_overlap": "Merge overlapping notes",
     "mml.pasted_name": "Pasted MML",
     "layout.loadFile": "Local file",
     "layout.driveLoad": "Google file",

@@ -510,7 +510,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "simple.label": "简易模式",
     "simple.open": "打开简易模式",
     "midi.instrument_note_placement": "音符配置",
-    "midi.instrument_note_overlap": "音符重叠",
+    "midi.instrument_note_overlap": "合并重叠音符",
     "mml.pasted_name": "粘贴的 MML",
     "layout.loadFile": "本地文件",
     "layout.driveLoad": "Google 文件",

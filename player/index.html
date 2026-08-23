@@ -62,7 +62,7 @@
   document.documentElement.dataset.i18nPending = "true";
   const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
   if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "5.1.0");
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("rev", "20260823-final21");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("rev", "20260824-final36");
   document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
 })();

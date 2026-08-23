@@ -510,7 +510,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "simple.label": "簡単モード",
     "simple.open": "簡単モードを開く",
     "midi.instrument_note_placement": "ノート配置",
-    "midi.instrument_note_overlap": "ノート重複",
+    "midi.instrument_note_overlap": "重複ノートを結合",
     "mml.pasted_name": "貼り付けたMML",
     "layout.loadFile": "ローカルファイル",
     "layout.driveLoad": "Googleファイル",

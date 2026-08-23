@@ -510,7 +510,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "simple.label": "간편 모드",
     "simple.open": "간편 모드 열기",
     "midi.instrument_note_placement": "노트 배치",
-    "midi.instrument_note_overlap": "노트 겹침",
+    "midi.instrument_note_overlap": "노트 겹침 병합",
     "mml.pasted_name": "붙여넣은 MML",
     "layout.loadFile": "로컬 파일",
     "layout.driveLoad": "구글 파일",
