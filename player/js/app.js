@@ -68,7 +68,7 @@
     pipelineCache: { sourceVersion: -1, stages: [] },
     tempoCleanCount: 0,
     copySplitCache: { mml: "", maxChars: 0, searchPercent: 0, pages: null },
-    copySplitPlan: { sourceVersion: -1, maxChars: 0, searchPercent: 0, pages: null },
+    copySplitPlan: { sourceVersion: -1, maxChars: 0, searchPercent: 0, geometrySignature: "", pages: null },
     channelDraft: null,
     channelOptionsDirty: false,
     instrumentDirty: false,
@@ -1299,7 +1299,27 @@
 
   function invalidateCopySplitPlan() {
     state.copySplitCache = { mml: "", maxChars: 0, searchPercent: 0, pages: null };
-    state.copySplitPlan = { sourceVersion: -1, maxChars: 0, searchPercent: 0, pages: null };
+    state.copySplitPlan = { sourceVersion: -1, maxChars: 0, searchPercent: 0, geometrySignature: "", pages: null };
+  }
+
+  function copySplitGeometrySignature() {
+    // Cached timing boundaries are only reusable while the musical geometry is
+    // unchanged. Rest trimming can extend notes across former silences, leading
+    // silence shifts every event, and accompaniment can add/remove sounding
+    // regions. Volume/octave/dynamics changes keep the same timing geometry and
+    // may safely reuse the expensive boundary search.
+    return JSON.stringify({
+      restModes: state.options.channels.map(channel => String(channel.restMode || "keep")),
+      leadingBeats: Math.max(0, Math.round((Number(state.options.leading?.beats) || 0) * 2) / 2),
+      accompaniment: {
+        genre: String(state.options.accompaniment?.genre || ""),
+        strength: String(state.options.accompaniment?.strength || "normal"),
+        channels: state.options.channels.map(channel => ({
+          analysis: Boolean(channel.accompaniment?.analysis),
+          generation: Boolean(channel.accompaniment?.generation)
+        }))
+      }
+    });
   }
 
   function splitPagesForCopy(mml) {
@@ -1328,10 +1348,12 @@
       return pages;
     }
 
+    const geometrySignature = copySplitGeometrySignature();
     const plan = state.copySplitPlan;
     const canReusePlan = plan?.sourceVersion === state.sourceVersion
       && plan.maxChars === maxChars
       && plan.searchPercent === searchPercent
+      && plan.geometrySignature === geometrySignature
       && Array.isArray(plan.pages)
       && plan.pages.length;
     const result = window.MabiOptimizer.splitMmlPages(input, {
@@ -1347,6 +1369,7 @@
       sourceVersion: state.sourceVersion,
       maxChars,
       searchPercent,
+      geometrySignature,
       pages: pages.map(page => ({ start: page.start, end: page.end, nextStart: page.nextStart }))
         .filter(page => Number.isFinite(page.start) && Number.isFinite(page.end) && Number.isFinite(page.nextStart))
     };
