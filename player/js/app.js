@@ -1360,7 +1360,7 @@
       partCount: 6,
       maxChars,
       searchSlackChars: Math.round(maxChars * searchPercent / 100),
-      minCommonSilenceBeats: 2,
+      maxCommonSilenceBeats: 2,
       preferredPages: canReusePlan ? plan.pages : undefined
     });
     const pages = Array.isArray(result?.pages) && result.pages.length ? result.pages : [{ index: 1, mml: input, parts: sourceParts }];

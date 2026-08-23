@@ -1969,7 +1969,8 @@
     const maxChars = Math.max(200, Math.round(Number(options.maxChars || options.maxPartChars || 2400)));
     // 이전의 "200자 안쪽" 탐색 범위를, 요청대로 목표 글자 수의 절반으로 둔다.
     const searchSlackChars = Math.max(0, Math.round(Number(options.searchSlackChars ?? (maxChars / 2))));
-    const minCommonSilenceUnits = Math.max(0, Math.round(Number(options.minCommonSilenceBeats ?? 2) * durationUnits(4, 0)));
+    // 공통 공백 길이 평가는 2박을 상한으로 둔다. 기존 minCommonSilenceBeats 옵션명도 하위 호환한다.
+    const maxCommonSilenceUnits = Math.max(0, Math.round(Number(options.maxCommonSilenceBeats ?? options.minCommonSilenceBeats ?? 2) * durationUnits(4, 0)));
     const maxPages = Math.max(1, Math.min(200, Math.round(Number(options.maxPages || 120))));
 
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
@@ -2029,7 +2030,8 @@
           pages: reusedPages,
           maxChars,
           searchSlackChars,
-          minCommonSilenceUnits,
+          maxCommonSilenceUnits,
+          minCommonSilenceUnits: maxCommonSilenceUnits,
           totalUnits,
           warnings: [],
           reusedPreferredPages: true
@@ -2058,7 +2060,8 @@
         }],
         maxChars,
         searchSlackChars,
-        minCommonSilenceUnits,
+        maxCommonSilenceUnits,
+        minCommonSilenceUnits: maxCommonSilenceUnits,
         totalUnits,
         warnings: []
       };
@@ -2082,7 +2085,8 @@
         }],
         maxChars,
         searchSlackChars,
-        minCommonSilenceUnits,
+        maxCommonSilenceUnits,
+        minCommonSilenceUnits: maxCommonSilenceUnits,
         totalUnits,
         warnings: []
       };
@@ -2098,7 +2102,7 @@
         partCount,
         maxChars,
         searchSlackChars,
-        minCommonSilenceUnits
+        maxCommonSilenceUnits
       });
 
       let pageEnd = Math.max(pageStart, Math.min(totalUnits, cut.end));
@@ -2142,14 +2146,15 @@
       pages,
       maxChars,
       searchSlackChars,
-      minCommonSilenceUnits,
+      maxCommonSilenceUnits,
+      minCommonSilenceUnits: maxCommonSilenceUnits,
       totalUnits,
       warnings
     };
   }
 
   function choosePageCut(parsedParts, tempoMap, pageStart, totalUnits, options) {
-    const { partCount, maxChars, searchSlackChars, minCommonSilenceUnits } = options;
+    const { partCount, maxChars, searchSlackChars, maxCommonSilenceUnits } = options;
     const measureCache = new Map();
     const measure = (end) => {
       const key = String(Math.round(end));
@@ -2191,8 +2196,9 @@
     let bestIdx = findEstimatedBestIndex(parsedParts, pageStart, candidateEnds, maxChars);
     if (bestIdx < 0) bestIdx = 0;
 
-    // 실제 렌더링은 비싸므로, 추정값으로 잡은 근처만 확인한다.
-    // 초과하면 이분 탐색으로 앞으로 당기고, 여유가 크면 몇 번만 뒤로 늘린다.
+    // 글자 제한 안에서 가능한 가장 뒤쪽 위치를 실제 렌더 길이로 확정한다.
+    // 근사치가 초과했으면 앞으로 당기고, 근사치가 여유 있게 잡혔으면 뒤쪽을 다시
+    // 이분 탐색해 실제로 들어가는 마지막 후보까지 확장한다.
     if (measure(candidateEnds[bestIdx]).maxLen > maxChars) {
       let loFit = -1;
       let hiFail = bestIdx;
@@ -2202,6 +2208,15 @@
         else hiFail = mid;
       }
       bestIdx = Math.max(0, loFit);
+    } else if (bestIdx < candidateEnds.length - 1) {
+      let loFit = bestIdx;
+      let hi = candidateEnds.length - 1;
+      while (loFit < hi) {
+        const mid = Math.ceil((loFit + hi) / 2);
+        if (measure(candidateEnds[mid]).maxLen <= maxChars) loFit = mid;
+        else hi = mid - 1;
+      }
+      bestIdx = loFit;
     }
 
     const bestEnd = Math.max(pageStart + 1, Math.min(candidateEnds[bestIdx], totalUnits));
@@ -2209,68 +2224,61 @@
     const bestMeasure = measure(bestEnd);
     const targetReachable = bestMeasure.maxLen >= lowerTarget;
 
-    // 분할 지점 탐색은 반드시 "제한 글자 수에 가까운 영역" 안에서만 한다.
-    // 예: 제한 2400자라면 searchSlackChars 기본값은 1200자이고,
-    // 실제 렌더링 기준으로 1200자 이상이 되는 첫 후보부터 2400자 이하의 마지막 후보까지만 탐색한다.
-    // 예전 로직은 이 범위 안에서 2박 무음을 못 찾으면 초반 무음으로 되돌아가는 fallback이 있어서
-    // 100자대 악보가 먼저 잘리는 문제가 있었다.
+    // 사용자가 지정한 탐색 폭은 글자 수 기준이다. 예: 2400자/50%이면
+    // 실제 렌더링이 1200자 이상이 되는 지점부터 마지막 허용 지점까지 탐색한다.
     const minSearchEnd = targetReachable
       ? findEarliestCandidateAtLeastLength(measure, candidateEnds, bestIdx, lowerTarget)
       : null;
     const searchStart = targetReachable && minSearchEnd ? minSearchEnd : pageStart + 1;
     const searchEnd = bestEnd;
 
-    const commonSilences = getCommonSilenceIntervals(parsedParts, pageStart, bestEnd)
-      .filter(iv => iv.end > pageStart + EPS && iv.start > pageStart + EPS && iv.start <= searchEnd + EPS)
-      .map(iv => ({
-        start: Math.max(pageStart + 1, Math.round(iv.start)),
-        end: Math.max(pageStart + 1, Math.round(iv.end)),
-        duration: Math.max(0, Math.round(iv.end - iv.start))
-      }))
-      .filter(iv => iv.start >= searchStart - EPS && iv.start <= searchEnd + EPS);
-
-    const goodSilence = pickSilenceCandidate(commonSilences, measure, maxChars, lowerTarget, minCommonSilenceUnits, targetReachable, searchStart, searchEnd);
-    if (goodSilence) {
-      return { end: goodSilence.start, nextStart: Math.max(goodSilence.end, goodSilence.start), reason: "common-silence", warning: "" };
-    }
-
-    const anySilence = pickSilenceCandidate(commonSilences, measure, maxChars, lowerTarget, 1, targetReachable, searchStart, searchEnd);
-    if (anySilence) {
+    // 1순위: 마지막 허용 위치에서 탐색 시작점까지 뒤에서 앞으로 한 번 훑는다.
+    // 모든 채널이 동시에 쉬는 공통 공백 중 가장 긴 곳을 고르되,
+    // 길이 평가는 4분음표 2개(기본 2박)까지만 인정한다.
+    // 역방향 탐색이므로 최고점(2박 이상)을 처음 만나면 즉시 반환할 수 있고,
+    // 같은 길이의 후보가 여러 개면 자연스럽게 가장 뒤쪽 후보가 선택된다.
+    const commonSilence = pickCommonSilenceReverse(
+      parsedParts,
+      searchStart,
+      searchEnd,
+      measure,
+      maxChars,
+      maxCommonSilenceUnits
+    );
+    if (commonSilence) {
       return {
-        end: anySilence.start,
-        nextStart: Math.max(anySilence.end, anySilence.start),
-        reason: "longest-silence",
-        warning: anySilence.duration < minCommonSilenceUnits ? tr("split.warn_longest_silence") : ""
+        end: commonSilence.start,
+        nextStart: Math.max(commonSilence.end, commonSilence.start),
+        reason: "common-silence",
+        warning: ""
       };
     }
 
-    const bestSafeChannels = countSafeChannelsAt(parsedParts, bestEnd);
-    if (bestSafeChannels >= parsedParts.length && measure(bestEnd).maxLen <= maxChars) {
-      return { end: bestEnd, nextStart: bestEnd, reason: "clean-boundary", warning: "" };
-    }
-
-    const clean = pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, true, searchStart);
-    if (clean) return { end: clean.pos, nextStart: clean.pos, reason: "clean-boundary", warning: "" };
-
-    if (measure(bestEnd).maxLen <= maxChars) {
+    // 2순위: 공통 공백이 하나도 없으면 같은 탐색 범위를 뒤에서 앞으로 훑으며
+    // 음이 걸리지 않아 깔끔하게 자를 수 있는 채널 수가 가장 많은 지점을 고른다.
+    // 동점이면 뒤쪽 지점을 유지한다. 단 한 채널도 안전하지 않으면 사용하지 않는다.
+    const partial = pickMostSafeBoundaryReverse(
+      parsedParts,
+      candidateEnds,
+      bestIdx,
+      searchStart,
+      searchEnd,
+      measure,
+      maxChars
+    );
+    if (partial) {
       return {
-        end: bestEnd,
-        nextStart: bestEnd,
-        reason: "partial-boundary",
-        warning: tr("split.warn_partial_safe", [bestSafeChannels, partCount])
+        end: partial.pos,
+        nextStart: partial.pos,
+        reason: partial.safeChannels >= partCount ? "clean-boundary" : "partial-boundary",
+        warning: partial.safeChannels >= partCount
+          ? ""
+          : tr("split.warn_partial_safe", [partial.safeChannels, partCount])
       };
     }
 
-    const fallback = pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, false, searchStart);
-    if (fallback) {
-      return {
-        end: fallback.pos,
-        nextStart: fallback.pos,
-        reason: "partial-boundary",
-        warning: tr("split.warn_partial_safe", [fallback.safeChannels, partCount])
-      };
-    }
-
+    // 3순위: 공통 공백도, 한 채널이라도 깔끔하게 자를 수 있는 후보도 없다면
+    // 글자 제한 안에서 확정한 마지막 위치를 그대로 자른다.
     return {
       end: bestEnd,
       nextStart: bestEnd,
@@ -2363,50 +2371,80 @@
     return ans;
   }
 
-  function pickSilenceCandidate(intervals, measure, maxChars, lowerTarget, minDuration, requireLower, searchStart, searchEnd) {
+  function pickCommonSilenceReverse(parsedParts, searchStart, searchEnd, measure, maxChars, maxScoreUnits) {
+    const busyIntervals = getSplitBusyIntervals(parsedParts);
+    if (searchEnd <= searchStart + EPS) return null;
+
+    const scoreCap = Math.max(1, Math.round(Number(maxScoreUnits) || durationUnits(4, 0) * 2));
+    let cursor = searchEnd;
     let best = null;
-    for (const iv of intervals) {
-      if (iv.duration < minDuration) continue;
-      if (iv.start < searchStart - EPS || iv.start > searchEnd + EPS) continue;
-      const m = measure(iv.start);
-      if (m.maxLen > maxChars) continue;
-      if (requireLower && m.maxLen < lowerTarget) continue;
-      const score = {
-        lenScore: m.maxLen,
-        duration: iv.duration,
-        start: iv.start
-      };
-      if (!best
-        || score.lenScore > best.score.lenScore
-        || (score.lenScore === best.score.lenScore && score.duration > best.score.duration)
-        || (score.lenScore === best.score.lenScore && score.duration === best.score.duration && score.start > best.score.start)) {
-        best = { ...iv, score };
+
+    // 전체 채널의 음표를 미리 합친 busy interval은 겹치지 않고 시간순으로 정렬돼 있다.
+    // 따라서 마지막 위치 직전의 busy interval부터 역방향으로 한 번만 훑으면
+    // 모든 채널이 동시에 쉬는 공통 공백을 정확히 얻을 수 있다.
+    let index = lowerBoundNoteStart(busyIntervals, searchEnd - EPS) - 1;
+    for (; index >= 0; index--) {
+      const busy = busyIntervals[index];
+      if (busy.end <= searchStart + EPS) break;
+
+      const start = Math.max(searchStart, busy.start);
+      const end = Math.min(searchEnd, busy.end);
+      if (end <= start + EPS) continue;
+
+      if (end < cursor - EPS) {
+        const gap = considerCommonGap(end, cursor, searchStart, searchEnd, measure, maxChars, scoreCap, best);
+        if (gap?.perfect) return gap.candidate;
+        if (gap?.candidate) best = gap.candidate;
       }
+      cursor = Math.min(cursor, start);
+    }
+
+    if (cursor > searchStart + EPS) {
+      const gap = considerCommonGap(searchStart, cursor, searchStart, searchEnd, measure, maxChars, scoreCap, best);
+      if (gap?.perfect) return gap.candidate;
+      if (gap?.candidate) best = gap.candidate;
     }
     return best;
   }
 
-  function pickBoundaryCandidate(parsedParts, pageStart, bestEnd, measure, maxChars, lowerTarget, requireAllSafe, searchStart) {
-    const points = collectBoundaryPoints(parsedParts, pageStart, bestEnd);
+
+  function considerCommonGap(rawStart, rawEnd, searchStart, searchEnd, measure, maxChars, scoreCap, currentBest) {
+    const start = Math.max(searchStart, Math.round(rawStart));
+    const end = Math.min(searchEnd, Math.round(rawEnd));
+    if (end <= start + EPS) return null;
+
+    const m = measure(start);
+    if (m.maxLen > maxChars) return null;
+
+    const duration = Math.max(0, end - start);
+    const score = Math.min(duration, scoreCap);
+    const candidate = { start, end, duration, score };
+
+    // 역방향 탐색이므로 score가 같으면 기존(더 뒤쪽) 후보를 유지한다.
+    const better = !currentBest || score > currentBest.score;
+    const chosen = better ? candidate : currentBest;
+    return { candidate: chosen, perfect: better && score >= scoreCap };
+  }
+
+  function pickMostSafeBoundaryReverse(parsedParts, candidateEnds, bestIdx, searchStart, searchEnd, measure, maxChars) {
     let best = null;
-    const targetReachable = measure(bestEnd).maxLen >= lowerTarget;
-    for (const pos of points) {
-      if (pos <= pageStart + EPS || pos > bestEnd + EPS) continue;
-      const m = measure(pos);
-      if (m.maxLen > maxChars) continue;
-      if (targetReachable && (pos < searchStart - EPS || m.maxLen < lowerTarget)) continue;
+    for (let i = Math.min(bestIdx, candidateEnds.length - 1); i >= 0; i--) {
+      const pos = candidateEnds[i];
+      if (pos > searchEnd + EPS) continue;
+      if (pos < searchStart - EPS) break;
+      if (measure(pos).maxLen > maxChars) continue;
+
       const safeChannels = countSafeChannelsAt(parsedParts, pos);
-      if (requireAllSafe && safeChannels < parsedParts.length) continue;
-      const score = { safeChannels, lenScore: m.maxLen, pos };
-      if (!best
-        || score.safeChannels > best.score.safeChannels
-        || (score.safeChannels === best.score.safeChannels && score.lenScore > best.score.lenScore)
-        || (score.safeChannels === best.score.safeChannels && score.lenScore === best.score.lenScore && score.pos > best.score.pos)) {
-        best = { pos, safeChannels, score };
+      if (safeChannels <= 0) continue;
+      if (!best || safeChannels > best.safeChannels) {
+        best = { pos, safeChannels };
+        if (safeChannels >= parsedParts.length) return best;
       }
+      // 같은 safeChannels라면 역방향에서 먼저 만난 더 뒤쪽 위치를 유지한다.
     }
     return best;
   }
+
 
   function renderPageSegment(parsedParts, tempoMap, start, end, partCount) {
     start = Math.max(0, Math.round(start));
@@ -2489,6 +2527,23 @@
     try { Object.defineProperty(parsedParts, "__splitAllNotes", { value: notes, configurable: true }); }
     catch (_) { parsedParts.__splitAllNotes = notes; }
     return notes;
+  }
+
+  function getSplitBusyIntervals(parsedParts) {
+    if (Array.isArray(parsedParts?.__splitBusyIntervals)) return parsedParts.__splitBusyIntervals;
+    const busy = [];
+    for (const note of collectAllNotes(parsedParts)) {
+      if (!note || note.end <= note.start + EPS) continue;
+      const last = busy[busy.length - 1];
+      if (!last || note.start > last.end + EPS) {
+        busy.push({ start: note.start, end: note.end });
+      } else if (note.end > last.end) {
+        last.end = note.end;
+      }
+    }
+    try { Object.defineProperty(parsedParts, "__splitBusyIntervals", { value: busy, configurable: true }); }
+    catch (_) { parsedParts.__splitBusyIntervals = busy; }
+    return busy;
   }
 
   function getCommonSilenceIntervals(parsedParts, from, to) {
