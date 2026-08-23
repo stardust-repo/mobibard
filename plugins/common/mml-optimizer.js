@@ -1611,8 +1611,16 @@
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
     while (sourceParts.length < partCount) sourceParts.push("");
 
-    const threshold = normalizeRestTrimThreshold(options);
-    const targetPartIndexes = normalizeTargetPartIndexes(options, partCount);
+    const perPartModes = Array.isArray(options.partModes) ? options.partModes.slice(0, partCount) : null;
+    const threshold = perPartModes ? null : normalizeRestTrimThreshold(options);
+    const targetPartIndexes = perPartModes ? null : normalizeTargetPartIndexes(options, partCount);
+    const partThresholds = perPartModes
+      ? Array.from({ length: partCount }, (_, index) => {
+          const mode = String(perPartModes[index] ?? "keep").toLowerCase();
+          if (!mode || mode === "keep") return null;
+          return normalizeRestTrimThreshold(mode === "all" ? { all: true } : { denom: Number(mode) });
+        })
+      : null;
 
     const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
     const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
@@ -1623,10 +1631,11 @@
     const outputParts = [];
 
     for (let i = 0; i < partCount; i++) {
-      const shouldTrim = targetPartIndexes == null || targetPartIndexes.has(i);
+      const partThreshold = partThresholds ? partThresholds[i] : threshold;
+      const shouldTrim = partThresholds ? Boolean(partThreshold) : (targetPartIndexes == null || targetPartIndexes.has(i));
       let events;
       if (shouldTrim) {
-        const trimmed = absorbShortRests(parsedParts[i].events, threshold, tempoMap);
+        const trimmed = absorbShortRests(parsedParts[i].events, partThreshold, tempoMap);
         events = trimmed.events;
         removed += trimmed.removed;
         removedUnits += trimmed.removedUnits;
@@ -1666,13 +1675,20 @@
 
   function adjustVolumesMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const partDeltas = Array.isArray(options.partDeltas)
+      ? Array.from({ length: partCount }, (_, index) => {
+          const value = Number(options.partDeltas[index] ?? 0);
+          if (!Number.isFinite(value)) throw new Error(tr("vol.err_number"));
+          return clamp(value, -15, 15);
+        })
+      : null;
     const rawDelta = Number(options.delta ?? 0);
-    if (!Number.isFinite(rawDelta)) throw new Error(tr("vol.err_number"));
-    const delta = clamp(rawDelta, -15, 15);
+    if (!partDeltas && !Number.isFinite(rawDelta)) throw new Error(tr("vol.err_number"));
+    const delta = partDeltas ? 0 : clamp(rawDelta, -15, 15);
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
     while (sourceParts.length < partCount) sourceParts.push("");
 
-    const targetPartIndexes = normalizeTargetPartIndexes(options, partCount);
+    const targetPartIndexes = partDeltas ? null : normalizeTargetPartIndexes(options, partCount);
     const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
     const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
     const hasAnyContent = parsedParts.some(p => p.events.length || p.tempos.length || String(p.raw || "").trim());
@@ -1683,7 +1699,8 @@
     const outputParts = [];
 
     for (let i = 0; i < partCount; i++) {
-      const shouldAdjust = targetPartIndexes == null || targetPartIndexes.has(i);
+      const partDelta = partDeltas ? partDeltas[i] : delta;
+      const shouldAdjust = partDeltas ? partDelta !== 0 : (targetPartIndexes == null || targetPartIndexes.has(i));
       if (!shouldAdjust) {
         outputParts.push(sourceParts[i] || "");
         continue;
@@ -1692,7 +1709,7 @@
       let events = parsedParts[i].events.map(ev => {
         if (ev.type !== "note") return { ...ev };
         const beforeVolume = clamp(ev.volume, 0, 15);
-        const unclamped = beforeVolume + delta;
+        const unclamped = beforeVolume + partDelta;
         const afterVolume = clamp(unclamped, 0, 15);
         touchedNotes++;
         if (afterVolume !== beforeVolume) changedNotes++;
@@ -1721,6 +1738,7 @@
       after,
       saved: before - after,
       delta,
+      partDeltas,
       touchedNotes,
       changedNotes,
       clampedNotes,
@@ -1731,9 +1749,16 @@
 
   function transposeOctavesMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const partOctaves = Array.isArray(options.partOctaves)
+      ? Array.from({ length: partCount }, (_, index) => {
+          const value = Number(options.partOctaves[index] ?? 0);
+          if (!Number.isFinite(value)) throw new Error(tr("pitch.err_number"));
+          return clamp(Math.round(value), -7, 7);
+        })
+      : null;
     const rawOctaves = Number(options.octaves ?? options.delta ?? 0);
-    if (!Number.isFinite(rawOctaves)) throw new Error(tr("pitch.err_number"));
-    const octaves = clamp(Math.round(rawOctaves), -7, 7);
+    if (!partOctaves && !Number.isFinite(rawOctaves)) throw new Error(tr("pitch.err_number"));
+    const octaves = partOctaves ? 0 : clamp(Math.round(rawOctaves), -7, 7);
     let source = String(text || "").replace(/^\uFEFF/, "").trim();
     const wrapped = source.match(/^\s*MML\s*@([\s\S]*?)\s*;?\s*$/i);
     if (wrapped) source = wrapped[1];
@@ -1741,20 +1766,21 @@
     const sourceParts = source === "" ? [] : source.split(",").slice(0, partCount).map(part => String(part || "").trim());
     while (sourceParts.length < partCount) sourceParts.push("");
 
-    const targetPartIndexes = normalizeTargetPartIndexes(options, partCount);
+    const targetPartIndexes = partOctaves ? null : normalizeTargetPartIndexes(options, partCount);
     let touchedCommands = 0;
     let changedCommands = 0;
     let clampedCommands = 0;
 
     const outputParts = sourceParts.map((part, index) => {
-      const shouldAdjust = targetPartIndexes == null || targetPartIndexes.has(index);
+      const partShift = partOctaves ? partOctaves[index] : octaves;
+      const shouldAdjust = partOctaves ? partShift !== 0 : (targetPartIndexes == null || targetPartIndexes.has(index));
       if (!shouldAdjust) return part || "";
 
       return String(part || "").replace(/O(\d+)/gi, (full, digits) => {
         const beforeOctave = Number(digits);
         if (!Number.isInteger(beforeOctave)) return full;
-        const requestedOctave = beforeOctave + octaves;
-        const afterOctave = octaves === 0 ? beforeOctave : clamp(requestedOctave, 0, 7);
+        const requestedOctave = beforeOctave + partShift;
+        const afterOctave = partShift === 0 ? beforeOctave : clamp(requestedOctave, 0, 7);
         touchedCommands++;
         if (afterOctave !== requestedOctave) clampedCommands++;
         if (afterOctave !== beforeOctave) changedCommands++;
@@ -1772,6 +1798,7 @@
       after,
       saved: before - after,
       octaves,
+      partOctaves,
       touchedCommands,
       changedCommands,
       clampedCommands
@@ -1956,6 +1983,59 @@
       ...parsedParts.map(p => partMusicalEnd(p.events)),
       ...tempoMap.map(t => t.pos || 0)
     );
+
+    // Reuse a previously discovered timing plan when option changes preserve the
+    // score timeline. Re-render each page once and fall back to a full search only
+    // when a cached boundary now exceeds the character limit or no longer covers
+    // the complete score.
+    const preferredPages = Array.isArray(options.preferredPages) ? options.preferredPages : null;
+    if (preferredPages?.length && totalUnits > EPS) {
+      const reusedPages = [];
+      let expectedStart = 0;
+      let validPlan = true;
+      for (let index = 0; index < preferredPages.length; index++) {
+        const preferred = preferredPages[index] || {};
+        const start = Math.max(0, Math.min(totalUnits, Math.round(Number(preferred.start) || 0)));
+        const end = Math.max(start, Math.min(totalUnits, Math.round(Number(preferred.end) || 0)));
+        const nextStart = Math.max(end, Math.min(totalUnits, Math.round(Number(preferred.nextStart ?? end) || 0)));
+        if (Math.abs(start - expectedStart) > EPS || end <= start + EPS) {
+          validPlan = false;
+          break;
+        }
+        const rendered = renderPageSegment(parsedParts, tempoMap, start, end, partCount);
+        const maxPartLength = Math.max(0, ...rendered.lengths);
+        if (maxPartLength > maxChars) {
+          validPlan = false;
+          break;
+        }
+        reusedPages.push({
+          index: index + 1,
+          mml: rendered.mml,
+          parts: rendered.parts,
+          lengths: rendered.lengths,
+          maxPartLength,
+          start,
+          end,
+          nextStart,
+          skippedUnits: Math.max(0, nextStart - end),
+          reason: "cached-boundary",
+          warning: ""
+        });
+        expectedStart = nextStart;
+        if (expectedStart >= totalUnits - EPS) break;
+      }
+      if (validPlan && reusedPages.length && expectedStart >= totalUnits - EPS) {
+        return {
+          pages: reusedPages,
+          maxChars,
+          searchSlackChars,
+          minCommonSilenceUnits,
+          totalUnits,
+          warnings: [],
+          reusedPreferredPages: true
+        };
+      }
+    }
 
     // 원본의 모든 채널이 제한 글자 수 이하면 분할 지점을 찾지 않는다.
     // 렌더링 과정에서 헤더나 쉼표가 추가되어 길이가 늘더라도 사용자가 입력한
@@ -2217,20 +2297,45 @@
     return best;
   }
 
+  function lowerBoundNoteStart(notes, value) {
+    let lo = 0;
+    let hi = notes.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (notes[mid].start < value) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  function getSplitPartNotes(part) {
+    if (!part) return [];
+    if (Array.isArray(part.__splitNotes)) return part.__splitNotes;
+    const notes = (part.events || [])
+      .filter(ev => ev.type === "note")
+      .map(ev => ({ ...ev, end: ev.start + ev.duration }))
+      .sort((a, b) => a.start - b.start || a.midi - b.midi);
+    try { Object.defineProperty(part, "__splitNotes", { value: notes, configurable: true }); }
+    catch (_) { part.__splitNotes = notes; }
+    return notes;
+  }
+
   function estimatePageMaxLength(parsedParts, start, end) {
     let max = 0;
     for (const part of parsedParts || []) {
+      const notes = getSplitPartNotes(part);
       let count = 0;
       let gaps = 0;
       let lastEnd = 0;
-      for (const ev of part.events || []) {
-        if (ev.type !== "note") continue;
-        const evEnd = ev.start + ev.duration;
-        if (ev.start < start - EPS || ev.start >= end - EPS || evEnd <= start + EPS) continue;
+      let index = lowerBoundNoteStart(notes, start - EPS);
+      for (; index < notes.length; index++) {
+        const ev = notes[index];
+        if (ev.start >= end - EPS) break;
+        if (ev.end <= start + EPS) continue;
         const localStart = Math.max(0, ev.start - start);
         if (localStart > lastEnd + EPS) gaps++;
         count++;
-        lastEnd = Math.max(lastEnd, Math.min(evEnd, end) - start);
+        lastEnd = Math.max(lastEnd, Math.min(ev.end, end) - start);
       }
       if (count || gaps) {
         // 실제 최적화는 반복 길이/옥타브/볼륨을 꽤 줄이므로 보수적인 근사만 사용한다.
@@ -2311,11 +2416,15 @@
     for (const t of tempoMap || []) {
       if (t.pos > start + EPS && t.pos < end - EPS) relTempoMap.push({ pos: Math.round(t.pos - start), bpm: t.bpm });
     }
-    const hasAnyNotes = parsedParts.some(p => (p.events || []).some(ev => ev.type === "note" && ev.start >= start - EPS && ev.start < end - EPS));
+    const hasAnyNotes = parsedParts.some(part => {
+      const notes = getSplitPartNotes(part);
+      const index = lowerBoundNoteStart(notes, start - EPS);
+      return Boolean(notes[index] && notes[index].start < end - EPS);
+    });
     const hasTempoInside = relTempoMap.length > 1;
     const outputParts = [];
     for (let i = 0; i < partCount; i++) {
-      let events = buildPartSegmentEvents(parsedParts[i]?.events || [], start, end);
+      let events = buildPartSegmentEvents(parsedParts[i], start, end);
       if (i === 0) events = injectTempoEvents(events, relTempoMap);
       outputParts.push(renderPartFast(events, {
         isMelody: i === 0,
@@ -2328,15 +2437,15 @@
     return { mml, parts: outputParts, lengths: outputParts.map(part => String(part || "").length) };
   }
 
-  function buildPartSegmentEvents(events, start, end) {
-    const notes = (events || [])
-      .filter(ev => ev.type === "note")
-      .map(ev => ({ ...ev, end: ev.start + ev.duration }))
-      .filter(ev => ev.start >= start - EPS && ev.start < end - EPS && ev.end > start + EPS)
-      .sort((a, b) => a.start - b.start || a.midi - b.midi);
+  function buildPartSegmentEvents(part, start, end) {
+    const notes = getSplitPartNotes(part);
     const out = [];
     let cursor = 0;
-    for (const note of notes) {
+    let index = lowerBoundNoteStart(notes, start - EPS);
+    for (; index < notes.length; index++) {
+      const note = notes[index];
+      if (note.start >= end - EPS) break;
+      if (note.end <= start + EPS) continue;
       const localStart = Math.max(0, Math.round(note.start - start));
       if (localStart > cursor) {
         out.push({ type: "rest", start: cursor, duration: localStart - cursor });
@@ -2369,12 +2478,16 @@
   }
 
   function collectAllNotes(parsedParts) {
+    if (Array.isArray(parsedParts?.__splitAllNotes)) return parsedParts.__splitAllNotes;
     const notes = [];
-    for (let p = 0; p < parsedParts.length; p++) {
-      for (const ev of parsedParts[p].events || []) {
-        if (ev.type === "note") notes.push({ part: p, start: ev.start, end: ev.start + ev.duration, midi: ev.midi });
+    for (let p = 0; p < (parsedParts || []).length; p++) {
+      for (const ev of getSplitPartNotes(parsedParts[p])) {
+        notes.push({ part: p, start: ev.start, end: ev.end, midi: ev.midi });
       }
     }
+    notes.sort((a, b) => a.start - b.start || a.end - b.end || a.part - b.part || a.midi - b.midi);
+    try { Object.defineProperty(parsedParts, "__splitAllNotes", { value: notes, configurable: true }); }
+    catch (_) { parsedParts.__splitAllNotes = notes; }
     return notes;
   }
 
@@ -2404,8 +2517,11 @@
 
   function countSafeChannelsAt(parsedParts, pos) {
     let safe = 0;
-    for (const p of parsedParts) {
-      const active = (p.events || []).some(ev => ev.type === "note" && ev.start < pos - EPS && ev.start + ev.duration > pos + EPS);
+    for (const part of parsedParts) {
+      const notes = getSplitPartNotes(part);
+      const nextIndex = lowerBoundNoteStart(notes, pos - EPS);
+      const previous = nextIndex > 0 ? notes[nextIndex - 1] : null;
+      const active = Boolean(previous && previous.start < pos - EPS && previous.end > pos + EPS);
       if (!active) safe++;
     }
     return safe;
@@ -3026,18 +3142,19 @@
     const initialL = chooseFastInitialL(musicalEvents);
     let currentVolume = initVolume;
     let currentOctave = initOctave;
-    let out = `${options.isMelody ? `T${options.startTempo || DEFAULT_TEMPO}` : ""}V${initVolume}O${initOctave}L${initialL.label}`;
+    const chunks = [`${options.isMelody ? `T${options.startTempo || DEFAULT_TEMPO}` : ""}V${initVolume}O${initOctave}L${initialL.label}`];
 
     for (const ev of events) {
       if (ev.type === "tempo") {
-        out += renderTempoList(ev.preTempos);
+        const tempo = renderTempoList(ev.preTempos);
+        if (tempo) chunks.push(tempo);
         continue;
       }
+      if (ev.tieFromPrev) chunks.push("&");
       const preTempo = renderTempoList(ev.preTempos);
-      if (ev.tieFromPrev) out += "&";
-      out += preTempo;
+      if (preTempo) chunks.push(preTempo);
       if (ev.type === "rest") {
-        out += renderRestDuration(ev.duration, initialL.units);
+        chunks.push(renderRestDuration(ev.duration, initialL.units));
         continue;
       }
       if (ev.type === "note") {
@@ -3050,25 +3167,40 @@
         const pitch = renderPitch(ev.midi, currentOctave);
         command += pitch.prefix;
         currentOctave = pitch.octave;
-        out += renderNoteDuration(command + pitch.symbol, pitch.symbol, ev.duration, initialL.units);
+        chunks.push(renderNoteDuration(command + pitch.symbol, pitch.symbol, ev.duration, initialL.units));
       }
     }
-    return out;
+    return chunks.join("");
   }
 
   function chooseFastInitialL(events) {
-    const musical = (events || []).filter(ev => ev.type === "note" || ev.type === "rest");
+    const musical = events || [];
     if (!musical.length) return L_STATES.find(x => x.label === String(DEFAULT_LENGTH)) || L_STATES[0];
+
+    // Split-page measurement calls this function many times on overlapping note ranges.
+    // Score repeated durations as a histogram so the cost is proportional to the number
+    // of distinct durations rather than note count × seven L states.
+    const durationCounts = new Map();
+    for (const ev of musical) {
+      if (ev.type !== "note" && ev.type !== "rest") continue;
+      const key = `${ev.type === "rest" ? "r" : "n"}:${ev.duration}`;
+      const item = durationCounts.get(key);
+      if (item) item.count += 1;
+      else durationCounts.set(key, { type: ev.type, duration: ev.duration, count: 1 });
+    }
+    if (!durationCounts.size) return L_STATES.find(x => x.label === String(DEFAULT_LENGTH)) || L_STATES[0];
+
     let best = null;
     for (const l of L_STATES) {
       let score = 0;
-      for (const ev of musical) {
+      for (const item of durationCounts.values()) {
         try {
-          score += ev.type === "rest"
-            ? renderRestDuration(ev.duration, l.units).length
-            : renderNoteDuration("c", "c", ev.duration, l.units).length;
+          const length = item.type === "rest"
+            ? renderRestDuration(item.duration, l.units).length
+            : renderNoteDuration("c", "c", item.duration, l.units).length;
+          score += length * item.count;
         } catch (_) {
-          score += 9999;
+          score += 9999 * item.count;
         }
       }
       // 짧은 악보에서는 기본 선언 길이 차이가 그대로 체감되므로 라벨 길이도 더한다.
@@ -3099,6 +3231,42 @@
       if (best == null || rendered.length < best.length || (rendered.length === best.length && rendered < best)) best = rendered;
     }
     return best || "";
+  }
+
+  function appendRenderPath(path, chunk) {
+    const text = String(chunk || "");
+    if (!text) return path;
+    return {
+      prev: path,
+      chunk: text,
+      length: (path?.length || 0) + text.length,
+      lexRank: path?.lexRank || 0
+    };
+  }
+
+  function flattenRenderPath(path) {
+    if (!path) return "";
+    const chunks = [];
+    for (let cursor = path; cursor; cursor = cursor.prev) {
+      if (cursor.chunk) chunks.push(cursor.chunk);
+    }
+    chunks.reverse();
+    return chunks.join("");
+  }
+
+  function assignRenderLexRanks(items) {
+    const ordered = items.slice().sort((a, b) => {
+      if (a.prevLexRank !== b.prevLexRank) return a.prevLexRank - b.prevLexRank;
+      if (a.chunk === b.chunk) return 0;
+      return a.chunk < b.chunk ? -1 : 1;
+    });
+    let rank = -1;
+    let previous = null;
+    for (const item of ordered) {
+      if (!previous || item.prevLexRank !== previous.prevLexRank || item.chunk !== previous.chunk) rank += 1;
+      item.path.lexRank = rank;
+      previous = item;
+    }
   }
 
   function renderPartWithInitialState(events, state) {
@@ -3137,34 +3305,61 @@
 
     const startTempo = state.isMelody && state.emitStartTempo !== false ? `T${state.startTempo || DEFAULT_TEMPO}` : "";
     const header = `${startTempo}V${state.initVolume}O${state.initOctave}L${state.initialL.label}`;
-    let dp = new Map([[state.initialL.label, { text: header, lState: state.initialL }]]);
+    const initialPath = { prev: null, chunk: header, length: header.length, lexRank: 0 };
+    let dp = new Map([[state.initialL.label, { path: initialPath, lState: state.initialL }]]);
 
     for (const ev of decorated) {
       if (ev.type === "tempo") {
-        for (const item of dp.values()) item.text += ev.pre;
+        if (ev.pre) {
+          for (const item of dp.values()) item.path = appendRenderPath(item.path, ev.pre);
+        }
         continue;
       }
+
+      // The event body depends only on the destination L state. The DP stores a
+      // persistent path rather than copying the full MML string for every transition.
+      // Distinct L-state paths have already diverged before their common end point, so
+      // appending a new chunk preserves their previous lexicographic order. This lets
+      // equal-length candidates use the previous rank without rebuilding long strings.
+      const bodies = new Map();
+      for (const targetL of L_STATES) bodies.set(targetL.label, renderDecoratedEvent(ev, targetL.units));
+
       const next = new Map();
-      for (const item of dp.values()) {
-        for (const targetL of L_STATES) {
+      const rankItems = [];
+      for (const targetL of L_STATES) {
+        const body = bodies.get(targetL.label) || "";
+        let bestItem = null;
+        let bestChunk = "";
+        let bestLength = Infinity;
+        for (const item of dp.values()) {
           const change = targetL.label === item.lState.label ? "" : `L${targetL.label}`;
-          const body = renderDecoratedEvent(ev, targetL.units);
-          const prefix = (ev.tiePrefix ? "&" : "") + (ev.pre || "") + change;
-          const text = item.text + prefix + body;
-          const old = next.get(targetL.label);
-          if (!old || text.length < old.text.length || (text.length === old.text.length && text < old.text)) {
-            next.set(targetL.label, { text, lState: targetL });
+          const chunk = (ev.tiePrefix ? "&" : "") + (ev.pre || "") + change + body;
+          const candidateLength = item.path.length + chunk.length;
+          if (candidateLength < bestLength || (
+            candidateLength === bestLength && bestItem && item.path.lexRank < bestItem.path.lexRank
+          )) {
+            bestItem = item;
+            bestChunk = chunk;
+            bestLength = candidateLength;
           }
         }
+        if (!bestItem) continue;
+        const path = appendRenderPath(bestItem.path, bestChunk);
+        const nextItem = { path, lState: targetL };
+        next.set(targetL.label, nextItem);
+        rankItems.push({ path, prevLexRank: bestItem.path.lexRank, chunk: bestChunk });
       }
+      assignRenderLexRanks(rankItems);
       dp = next;
     }
 
     let best = null;
     for (const item of dp.values()) {
-      if (!best || item.text.length < best.length || (item.text.length === best.length && item.text < best)) best = item.text;
+      if (!best || item.path.length < best.path.length || (
+        item.path.length === best.path.length && item.path.lexRank < best.path.lexRank
+      )) best = item;
     }
-    return best || header;
+    return best ? flattenRenderPath(best.path) : header;
   }
 
   function renderDecoratedEvent(ev, defaultUnits) {

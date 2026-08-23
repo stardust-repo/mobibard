@@ -64,9 +64,11 @@
     lastResultMml: "",
     metricsFrame: 0,
     metricsIdleHandle: 0,
-    metricsCache: { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], tempoInput: "", tempoResult: null },
+    metricsCache: { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], noteStatsSource: "", noteStats: [], tempoInput: "", tempoResult: null },
     pipelineCache: { sourceVersion: -1, stages: [] },
     tempoCleanCount: 0,
+    copySplitCache: { mml: "", maxChars: 0, searchPercent: 0, pages: null },
+    copySplitPlan: { sourceVersion: -1, maxChars: 0, searchPercent: 0, pages: null },
     channelDraft: null,
     channelOptionsDirty: false,
     instrumentDirty: false,
@@ -822,6 +824,15 @@
     if (!snapshot?.sourceMml || snapshot.version < 3 || snapshot.userEdited !== true) return;
     state.restoringSession = true;
     clearTimeout(state.sessionSaveTimer);
+    // Restore replaces the current editing state just like loading a file, Drive
+    // source, or pasted MML. Preserve the saved editor/options state, but start
+    // the restored playback context from 0 seconds instead of carrying the
+    // timeline position of the page that happened to be open before restore.
+    try {
+      window.dispatchEvent(new CustomEvent("mobibard:playback-context-reset", {
+        detail: { reason: "restore" }
+      }));
+    } catch (_) {}
     try {
       state.options = normalizeSessionOptions(snapshot.options || {});
       state.sourceMml = String(snapshot.sourceMml || "");
@@ -832,7 +843,7 @@
       state.manualEdited = Boolean(snapshot.manualEdited);
       state.midiQuantizeDivision = Number(snapshot.midiQuantizeDivision) === 32 ? 32 : 64;
       resetPipelineCache();
-      state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], tempoInput: "", tempoResult: null };
+      state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], noteStatsSource: "", noteStats: [], tempoInput: "", tempoResult: null };
 
       restoreChannelDraftInPlace(snapshot.channelDraft || null);
 
@@ -892,17 +903,6 @@
     if (message) showToast(String(message), tone === "error" ? "error" : "info");
   }
 
-  function groupChannelIndexes(keyFactory, predicate = () => true) {
-    const groups = new Map();
-    state.options.channels.forEach((channel, index) => {
-      if (!predicate(channel, index)) return;
-      const key = String(keyFactory(channel, index));
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(index);
-    });
-    return groups;
-  }
-
   function resetPipelineCache() {
     state.pipelineCache = { sourceVersion: state.sourceVersion, stages: [] };
   }
@@ -940,17 +940,6 @@
   }
 
 
-  function previewChannelGroups(channels, keyFactory, predicate = () => true) {
-    const groups = new Map();
-    channels.forEach((channel, index) => {
-      if (!predicate(channel, index)) return;
-      const key = String(keyFactory(channel, index));
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(index);
-    });
-    return [...groups.entries()];
-  }
-
   function transformPreviewSource(sourceMml, channelOptions, accompanimentOption) {
     const optimizer = window.MabiOptimizer;
     let out = String(sourceMml || "");
@@ -986,34 +975,26 @@
       }), out);
     }
 
-    if (optimizer.trimShortRestsMml) {
-      for (const [mode, targetPartIndexes] of previewChannelGroups(channels, channel => channel.restMode, channel => channel.restMode !== "keep")) {
-        const all = mode === "all";
-        out = resultMml(optimizer.trimShortRestsMml(out, {
-          partCount: 6,
-          targetPartIndexes,
-          all,
-          denom: all ? 64 : Number(mode)
-        }), out);
-      }
+    const previewRestModes = channels.map(channel => String(channel.restMode || "keep"));
+    if (optimizer.trimShortRestsMml && previewRestModes.some(mode => mode !== "keep")) {
+      out = resultMml(optimizer.trimShortRestsMml(out, {
+        partCount: 6,
+        partModes: previewRestModes
+      }), out);
     }
-    if (optimizer.adjustVolumesMml) {
-      for (const [delta, targetPartIndexes] of previewChannelGroups(channels, channel => channel.volumeDelta, channel => Number(channel.volumeDelta) !== 0)) {
-        out = resultMml(optimizer.adjustVolumesMml(out, {
-          partCount: 6,
-          targetPartIndexes,
-          delta: Number(delta)
-        }), out);
-      }
+    const previewVolumeDeltas = channels.map(channel => Number(channel.volumeDelta) || 0);
+    if (optimizer.adjustVolumesMml && previewVolumeDeltas.some(delta => delta !== 0)) {
+      out = resultMml(optimizer.adjustVolumesMml(out, {
+        partCount: 6,
+        partDeltas: previewVolumeDeltas
+      }), out);
     }
-    if (optimizer.transposeOctavesMml) {
-      for (const [octaves, targetPartIndexes] of previewChannelGroups(channels, channel => channel.octaveDelta, channel => Number(channel.octaveDelta) !== 0)) {
-        out = resultMml(optimizer.transposeOctavesMml(out, {
-          partCount: 6,
-          targetPartIndexes,
-          octaves: Number(octaves)
-        }), out);
-      }
+    const previewOctaveDeltas = channels.map(channel => Number(channel.octaveDelta) || 0);
+    if (optimizer.transposeOctavesMml && previewOctaveDeltas.some(octaves => octaves !== 0)) {
+      out = resultMml(optimizer.transposeOctavesMml(out, {
+        partCount: 6,
+        partOctaves: previewOctaveDeltas
+      }), out);
     }
 
     const leadingBeats = Math.max(0, Math.round((Number(state.options.leading.beats) || 0) * 2) / 2);
@@ -1165,55 +1146,38 @@
         state.metricsCache.restInput = restMetricInput;
         state.metricsCache.rest = new Map();
       }
-      const restGroups = [...groupChannelIndexes(channel => channel.restMode, channel => channel.restMode !== "keep")];
-      stage = pipelineStage(stageIndex++, previousKey, "rest", restGroups, out, input => {
-        if (!optimizer.trimShortRestsMml) return input;
-        let next = input;
-        for (const [mode, targetPartIndexes] of restGroups) {
-          const all = mode === "all";
-          transformCalls.rest += 1;
-          next = resultMml(optimizer.trimShortRestsMml(next, {
-            partCount: 6,
-            targetPartIndexes,
-            all,
-            denom: all ? 64 : Number(mode)
-          }), next);
-        }
-        return next;
+      const restModes = state.options.channels.map(channel => String(channel.restMode || "keep"));
+      stage = pipelineStage(stageIndex++, previousKey, "rest", restModes, out, input => {
+        if (!optimizer.trimShortRestsMml || !restModes.some(mode => mode !== "keep")) return input;
+        transformCalls.rest += 1;
+        return resultMml(optimizer.trimShortRestsMml(input, {
+          partCount: 6,
+          partModes: restModes
+        }), input);
       }, diagnostics);
       out = stage.output;
       previousKey = stage.key;
 
-      const volumeGroups = [...groupChannelIndexes(channel => channel.volumeDelta, channel => Number(channel.volumeDelta) !== 0)];
-      stage = pipelineStage(stageIndex++, previousKey, "volume", volumeGroups, out, input => {
-        if (!optimizer.adjustVolumesMml) return input;
-        let next = input;
-        for (const [delta, targetPartIndexes] of volumeGroups) {
-          transformCalls.volume += 1;
-          next = resultMml(optimizer.adjustVolumesMml(next, {
-            partCount: 6,
-            targetPartIndexes,
-            delta: Number(delta)
-          }), next);
-        }
-        return next;
+      const volumeDeltas = state.options.channels.map(channel => Number(channel.volumeDelta) || 0);
+      stage = pipelineStage(stageIndex++, previousKey, "volume", volumeDeltas, out, input => {
+        if (!optimizer.adjustVolumesMml || !volumeDeltas.some(delta => delta !== 0)) return input;
+        transformCalls.volume += 1;
+        return resultMml(optimizer.adjustVolumesMml(input, {
+          partCount: 6,
+          partDeltas: volumeDeltas
+        }), input);
       }, diagnostics);
       out = stage.output;
       previousKey = stage.key;
 
-      const octaveGroups = [...groupChannelIndexes(channel => channel.octaveDelta, channel => Number(channel.octaveDelta) !== 0)];
-      stage = pipelineStage(stageIndex++, previousKey, "octave", octaveGroups, out, input => {
-        if (!optimizer.transposeOctavesMml) return input;
-        let next = input;
-        for (const [octaves, targetPartIndexes] of octaveGroups) {
-          transformCalls.octave += 1;
-          next = resultMml(optimizer.transposeOctavesMml(next, {
-            partCount: 6,
-            targetPartIndexes,
-            octaves: Number(octaves)
-          }), next);
-        }
-        return next;
+      const octaveDeltas = state.options.channels.map(channel => Number(channel.octaveDelta) || 0);
+      stage = pipelineStage(stageIndex++, previousKey, "octave", octaveDeltas, out, input => {
+        if (!optimizer.transposeOctavesMml || !octaveDeltas.some(octaves => octaves !== 0)) return input;
+        transformCalls.octave += 1;
+        return resultMml(optimizer.transposeOctavesMml(input, {
+          partCount: 6,
+          partOctaves: octaveDeltas
+        }), input);
       }, diagnostics);
       out = stage.output;
       previousKey = stage.key;
@@ -1333,21 +1297,60 @@
     showToast(t("copyToast"));
   }
 
+  function invalidateCopySplitPlan() {
+    state.copySplitCache = { mml: "", maxChars: 0, searchPercent: 0, pages: null };
+    state.copySplitPlan = { sourceVersion: -1, maxChars: 0, searchPercent: 0, pages: null };
+  }
+
   function splitPagesForCopy(mml) {
     const maxChars = Math.max(200, Math.min(5000, Math.round(Number(state.options.split.maxChars) || 2400)));
     const searchPercent = [50, 60, 70, 80, 90].includes(Number(state.options.split.searchPercent)) ? Number(state.options.split.searchPercent) : 50;
     state.options.split.maxChars = maxChars;
     state.options.split.searchPercent = searchPercent;
-    if (!window.MabiOptimizer?.splitMmlPages) {
-      return [{ index: 1, mml, parts: normalizeMainToParts(mml) }];
+
+    const input = String(mml || "");
+    const cached = state.copySplitCache;
+    if (cached?.mml === input && cached.maxChars === maxChars && cached.searchPercent === searchPercent && Array.isArray(cached.pages)) {
+      return cached.pages;
     }
-    const result = window.MabiOptimizer.splitMmlPages(mml, {
+
+    const sourceParts = normalizeMainToParts(input);
+    const sourceLengths = sourceParts.map(part => String(part || "").length);
+    if (sourceLengths.every(length => length <= maxChars)) {
+      const pages = [{ index: 1, mml: input, parts: sourceParts, lengths: sourceLengths, maxPartLength: Math.max(0, ...sourceLengths) }];
+      state.copySplitCache = { mml: input, maxChars, searchPercent, pages };
+      return pages;
+    }
+
+    if (!window.MabiOptimizer?.splitMmlPages) {
+      const pages = [{ index: 1, mml: input, parts: sourceParts }];
+      state.copySplitCache = { mml: input, maxChars, searchPercent, pages };
+      return pages;
+    }
+
+    const plan = state.copySplitPlan;
+    const canReusePlan = plan?.sourceVersion === state.sourceVersion
+      && plan.maxChars === maxChars
+      && plan.searchPercent === searchPercent
+      && Array.isArray(plan.pages)
+      && plan.pages.length;
+    const result = window.MabiOptimizer.splitMmlPages(input, {
       partCount: 6,
       maxChars,
       searchSlackChars: Math.round(maxChars * searchPercent / 100),
-      minCommonSilenceBeats: 2
+      minCommonSilenceBeats: 2,
+      preferredPages: canReusePlan ? plan.pages : undefined
     });
-    return Array.isArray(result?.pages) && result.pages.length ? result.pages : [{ index: 1, mml, parts: normalizeMainToParts(mml) }];
+    const pages = Array.isArray(result?.pages) && result.pages.length ? result.pages : [{ index: 1, mml: input, parts: sourceParts }];
+    state.copySplitCache = { mml: input, maxChars, searchPercent, pages };
+    state.copySplitPlan = {
+      sourceVersion: state.sourceVersion,
+      maxChars,
+      searchPercent,
+      pages: pages.map(page => ({ start: page.start, end: page.end, nextStart: page.nextStart }))
+        .filter(page => Number.isFinite(page.start) && Number.isFinite(page.end) && Number.isFinite(page.nextStart))
+    };
+    return pages;
   }
 
   function renderCopyItem(title, detail, button) {
@@ -2057,6 +2060,7 @@
     $("mainMml")?.addEventListener("input", event => {
       if (!state.applying) {
         state.manualEdited = true;
+        invalidateCopySplitPlan();
         if (event.isTrusted) markPlayerEdited();
       }
       scheduleChannelCountsUpdate();
@@ -2182,30 +2186,59 @@
     return counts;
   }
 
+  function getNoteMetricStats(source) {
+    const input = String(source || "");
+    if (state.metricsCache.noteStatsSource === input && state.metricsCache.noteStats.length === 6) return state.metricsCache.noteStats;
+    const parts = normalizeMainToParts(input);
+    const stats = parts.map((part, index) => {
+      if (!part) return { total: 0, volumeCounts: [], minMidi: null, maxMidi: null };
+      try {
+        const notes = window.MabiMml?.parseMmlPart?.(part, index)?.notes || [];
+        const volumes = new Map();
+        let minMidi = Infinity;
+        let maxMidi = -Infinity;
+        for (const note of notes) {
+          const volume = Math.max(0, Math.min(15, Math.round(Number(note?.volume ?? 8))));
+          volumes.set(volume, (volumes.get(volume) || 0) + 1);
+          const midi = Math.max(0, Math.min(127, Math.round(Number(note?.midi) || 0)));
+          minMidi = Math.min(minMidi, midi);
+          maxMidi = Math.max(maxMidi, midi);
+        }
+        return {
+          total: notes.length,
+          volumeCounts: [...volumes.entries()],
+          minMidi: Number.isFinite(minMidi) ? minMidi : null,
+          maxMidi: Number.isFinite(maxMidi) ? maxMidi : null
+        };
+      } catch (_) {
+        return { total: 0, volumeCounts: [], minMidi: null, maxMidi: null };
+      }
+    });
+    state.metricsCache.noteStatsSource = input;
+    state.metricsCache.noteStats = stats;
+    return stats;
+  }
+
   function getVolumeDistributions() {
     const source = String($("mainMml")?.value || "");
     const draft = ensureChannelDraft().channels;
     const adjustments = draft.map((channel, index) => Number(channel.volumeDelta || 0) - Number(state.options.channels[index]?.volumeDelta || 0));
-    const cacheKey = `${source}\n#draft-volume:${adjustments.join(",")}`;
+    const cacheKey = `${source}
+#draft-volume:${adjustments.join(",")}`;
     if (state.metricsCache.volumeSource === cacheKey && state.metricsCache.volume.length === 6) return state.metricsCache.volume;
-    const parts = normalizeMainToParts(source);
-    const rows = parts.map((part, index) => {
-      if (!part) return { total: 0, items: [] };
-      try {
-        const notes = window.MabiMml?.parseMmlPart?.(part, index)?.notes || [];
-        const counts = new Map();
-        const delta = adjustments[index] || 0;
-        for (const note of notes) {
-          const volume = Math.max(0, Math.min(15, Math.round(Number(note?.volume ?? 8) + delta)));
-          counts.set(volume, (counts.get(volume) || 0) + 1);
-        }
-        return {
-          total: notes.length,
-          items: [...counts.entries()].sort((a, b) => b[0] - a[0]).map(([volume, count]) => ({ volume, count }))
-        };
-      } catch (_) {
-        return { total: 0, items: [] };
+    const baseStats = getNoteMetricStats(source);
+    const rows = baseStats.map((stats, index) => {
+      if (!stats?.total) return { total: 0, items: [] };
+      const counts = new Map();
+      const delta = adjustments[index] || 0;
+      for (const [baseVolume, count] of stats.volumeCounts || []) {
+        const volume = Math.max(0, Math.min(15, Math.round(Number(baseVolume) + delta)));
+        counts.set(volume, (counts.get(volume) || 0) + Number(count || 0));
       }
+      return {
+        total: stats.total,
+        items: [...counts.entries()].sort((a, b) => b[0] - a[0]).map(([volume, count]) => ({ volume, count }))
+      };
     });
     state.metricsCache.volumeSource = cacheKey;
     state.metricsCache.volume = rows;
@@ -2214,26 +2247,18 @@
 
   function getOctaveRanges() {
     const source = String($("mainMml")?.value || "");
-    const parts = normalizeMainToParts(source);
+    const baseStats = getNoteMetricStats(source);
     const draft = ensureChannelDraft().channels;
-    return parts.map((part, index) => {
-      if (!part) return null;
-      try {
-        const notes = window.MabiMml?.parseMmlPart?.(part, index)?.notes || [];
-        if (!notes.length) return null;
-        const delta = (Number(draft[index]?.octaveDelta) || 0) - (Number(state.options.channels[index]?.octaveDelta) || 0);
-        let minOctave = Infinity;
-        let maxOctave = -Infinity;
-        for (const note of notes) {
-          const midi = Math.max(0, Math.min(127, Math.round(Number(note?.midi) || 0) + delta * 12));
-          const octave = Math.max(0, Math.min(9, Math.floor(midi / 12) - 1));
-          minOctave = Math.min(minOctave, octave);
-          maxOctave = Math.max(maxOctave, octave);
-        }
-        return Number.isFinite(minOctave) ? { min: minOctave, max: maxOctave, count: notes.length } : null;
-      } catch (_) {
-        return null;
-      }
+    return baseStats.map((stats, index) => {
+      if (!stats?.total || stats.minMidi == null || stats.maxMidi == null) return null;
+      const delta = (Number(draft[index]?.octaveDelta) || 0) - (Number(state.options.channels[index]?.octaveDelta) || 0);
+      const minMidi = Math.max(0, Math.min(127, Math.round(stats.minMidi + delta * 12)));
+      const maxMidi = Math.max(0, Math.min(127, Math.round(stats.maxMidi + delta * 12)));
+      return {
+        min: Math.max(0, Math.min(9, Math.floor(minMidi / 12) - 1)),
+        max: Math.max(0, Math.min(9, Math.floor(maxMidi / 12) - 1)),
+        count: stats.total
+      };
     });
   }
 
@@ -2880,6 +2905,7 @@
     const limitInput = el("input", "wb4-split-limit", { type: "number", min: 200, max: 5000, step: 50, value: state.options.split.maxChars });
     limitInput.addEventListener("change", () => {
       state.options.split.maxChars = Math.max(200, Math.min(5000, Math.round(Number(limitInput.value) || 2400)));
+      invalidateCopySplitPlan();
       markPlayerEdited();
       scheduleCopyRowsRender();
     });
@@ -2888,6 +2914,7 @@
     searchLabel.append(keyedText("splitSearch"));
     const searchSelect = selectControl([["50", "50%"], ["60", "60%"], ["70", "70%"], ["80", "80%"], ["90", "90%"]], String(state.options.split.searchPercent), value => {
       state.options.split.searchPercent = Number(value);
+      invalidateCopySplitPlan();
       markPlayerEdited();
       scheduleCopyRowsRender();
     }, "wb4-split-search");
@@ -2977,7 +3004,9 @@
       clearTimeout(state.sessionSaveTimer);
       state.sessionSaveTimer = 0;
     }
-    if (startsNewSource) resetSubmenuStateForNewSource();
+    if (startsNewSource) {
+      resetSubmenuStateForNewSource();
+    }
     state.sourceMml = nextSource;
     state.sourceMeta = {
       name: detail.name || "",
@@ -2990,7 +3019,7 @@
     state.lastApplySignature = "";
     state.tempoCleanCount = 0;
     syncChannelDraftFromApplied();
-    state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], tempoInput: "", tempoResult: null };
+    state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], noteStatsSource: "", noteStats: [], tempoInput: "", tempoResult: null };
     resetPipelineCache();
     clearPendingPlaybackPreview();
     applyFromSource({ force: true });
@@ -9939,6 +9968,35 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       }
     } catch (_) {}
   }
+
+  function resetPlaybackTimelineForNewContext() {
+    // A newly loaded/restored state is a new playback context. Do not carry the
+    // previous song's seek position or pending seek-preview state forward.
+    if (seekRestartTimer) clearTimeout(seekRestartTimer);
+    seekRestartTimer = 0;
+    stopSeekPreviewAudio();
+    seekPreviewLastBucket = -1;
+    isSeeking = false;
+    if (isPlaying) stopPlayback(false);
+    currentOffset = 0;
+    playOffsetStart = 0;
+    playContextStart = 0;
+    playbackScheduleCursor = 0;
+    clearPlaybackCodeHighlight();
+    const duration = Math.max(0, Number(scheduleCache?.duration) || Number(progressSlider?.max) || 0);
+    updateProgressUi(0, duration);
+  }
+
+  // source-baseline is also consumed by the layout shell in a separate IIFE.
+  // Keep playback reset in the player-app scope and run it in capture phase so
+  // every new source (local file, Drive, paste, etc.) is reset before the
+  // layout shell starts applying the new MML.
+  window.addEventListener("mobibard:source-baseline", event => {
+    if (event?.detail?.newSource === true) resetPlaybackTimelineForNewContext();
+  }, true);
+  window.addEventListener("mobibard:playback-context-reset", () => {
+    resetPlaybackTimelineForNewContext();
+  }, true);
 
   function handleSeekInput(restart) {
     const duration = scheduleCache?.duration || Number(progressSlider.max) || 0;
