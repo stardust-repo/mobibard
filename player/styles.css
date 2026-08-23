@@ -8878,11 +8878,6 @@ body.player-ui > main {
 .player-ui .wb6-instrument-panel .wb6-assignment-host {
   padding-top: 10px !important;
 }
-.player-ui #midiConvertDialog .wb8-midi-listen.danger {
-  background: color-mix(in srgb, var(--danger) 13%, var(--wb4-surface)) !important;
-  color: var(--danger) !important;
-  border-color: color-mix(in srgb, var(--danger) 45%, var(--wb4-line)) !important;
-}
 .player-ui .wb6-overview-block > .wb6-channel-count-strip {
   border-top: 0 !important;
   border-bottom: 1px solid var(--wb4-line) !important;
@@ -9148,7 +9143,7 @@ html[data-player-layout="player-ui"][data-player-ui-booting="true"] main > :not(
   line-height: 32px !important;
 }
 
-/* final18: common transport icon button for MIDI instrument preview */
+/* final23: MIDI instrument preview transport matches the main MML play/stop control */
 .player-ui #midiConvertDialog .wb8-midi-listen {
   display: inline-grid !important;
   place-items: center !important;
@@ -9157,10 +9152,30 @@ html[data-player-layout="player-ui"][data-player-ui-booting="true"] main > :not(
   height: 30px !important;
   min-height: 30px !important;
   padding: 0 !important;
+  border: 1px solid var(--wb4-accent) !important;
+  background: var(--wb4-accent) !important;
+  color: #fff !important;
+}
+.player-ui #midiConvertDialog .wb8-midi-listen:not(:disabled):hover {
+  border-color: var(--wb4-accent) !important;
+  background: var(--wb4-accent) !important;
+  color: #fff !important;
+  filter: brightness(1.06);
+}
+.player-ui #midiConvertDialog .wb8-midi-listen.danger {
+  border-color: var(--danger) !important;
+  background: var(--danger) !important;
+  color: #fff !important;
+}
+.player-ui #midiConvertDialog .wb8-midi-listen.danger:not(:disabled):hover {
+  border-color: var(--danger) !important;
+  background: var(--danger) !important;
+  color: #fff !important;
 }
 .player-ui #midiConvertDialog .wb8-midi-listen .shared-transport-icon {
   width: 15px !important;
   height: 15px !important;
+  filter: invert(1) !important;
 }
 @media (max-width: 620px) {
   .player-ui #midiConvertDialog .wb8-midi-instrument-row > .wb8-midi-listen {
