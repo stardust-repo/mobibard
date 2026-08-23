@@ -4,7 +4,6 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ja"] = {
   "name": "日本語",
   "htmlLang": "ja",
   "strings": {
-    "eyebrow": "対応音楽ファイル → MML",
     "title": "MMLかんたん生成ツール",
     "brand": "モビバード",
     "browserTitle": "モビバード v5.1",
@@ -12,7 +11,6 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ja"] = {
     "full": "詳細モード",
     "discord": "Discord",
     "extract": "MIDI抽出",
-    "settings": "設定",
     "language": "言語",
     "themeLabel": "テーマ",
     "theme": "テーマ切替",

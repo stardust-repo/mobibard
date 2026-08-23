@@ -912,6 +912,7 @@
     const fromSec = Number(options.fromSec) || 0;
     const windowStart = Math.max(0, Number(options.windowStart) || fromSec);
     const windowEnd = Math.max(windowStart, Number(options.windowEnd) || windowStart);
+    const startIndex = Math.max(0, Math.min(preparedNotes.length, Math.trunc(Number(options.startIndex) || 0)));
     const output = options.destination || ctx.destination;
     const destinationsByPart = Array.isArray(options.destinationsByPart) ? options.destinationsByPart : null;
     const activeSources = options.activeSources || null;
@@ -922,9 +923,14 @@
     const now = ctx.currentTime;
     let maxEnd = now;
     let count = 0;
+    let nextIndex = preparedNotes.length;
 
-    for (const n of preparedNotes) {
-      if (n.start >= windowEnd) break;
+    for (let index = startIndex; index < preparedNotes.length; index++) {
+      const n = preparedNotes[index];
+      if (n.start >= windowEnd) {
+        nextIndex = index;
+        break;
+      }
       if (n.noteEnd <= windowStart + 0.0001) continue;
       if (scheduledIds && scheduledIds.has(n.id)) continue;
 
@@ -984,7 +990,7 @@
       count++;
     }
 
-    return { maxEnd, count };
+    return { maxEnd, count, nextIndex };
   }
 
   function selectRegion(regions, midi, velocity) {

@@ -14,7 +14,7 @@
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
   const LOCALE_VERSION = "5.1.0";
-  const LOCALE_REVISION = "20260823-release5";
+  const LOCALE_REVISION = "20260823-final21";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 
@@ -30,7 +30,6 @@
     restLabel: $("restLabel"),
     restOptions: $("restOptions"),
     allRestButton: $("allRestButton"),
-    status: $("status"),
     playbackControls: $("playbackControls"),
     playButton: $("playButton"),
     rewindButton: $("rewindButton"),
@@ -44,7 +43,6 @@
     copyAllButton: $("copyAllButton"),
     copyButtons: $("copyButtons"),
     pageTitleText: $("pageTitleText"),
-    eyebrow: $("eyebrow"),
     subtitle: $("subtitle"),
     brandName: $("brandName"),
     midiExtractLink: $("midiExtractLink"),
@@ -284,7 +282,6 @@
     document.documentElement.lang = activeLocale.htmlLang || (language === "zh-CN" ? "zh-Hans" : (language === "zh-TW" ? "zh-Hant" : language));
     document.title = t("browserTitle");
     els.pageTitleText.textContent = t("title");
-    if (els.eyebrow) els.eyebrow.textContent = t("eyebrow");
     els.brandName.textContent = t("brand");
     els.subtitle.textContent = t("subtitle");
     els.midiExtractLink.textContent = t("extract");
@@ -373,7 +370,6 @@
       selectedBytes = midiBytes instanceof Uint8Array ? midiBytes : new Uint8Array(midiBytes || []);
       els.fileName.textContent = file.name;
       els.fileName.hidden = false;
-      hideStatus();
       requestConversion();
     } catch (error) {
       if (selectToken !== fileSelectionSerial) return;
@@ -508,7 +504,6 @@
       return;
     }
 
-    hideStatus();
     try {
       const analysis = window.MabiMidi.analyzeMidi(selectedBytes, selectedFile.name);
       const nonDrumGroups = (analysis.instrumentGroups || []).filter(group => !isDrumGroup(group) && Number(group.noteCount || 0) > 0);
@@ -526,7 +521,6 @@
       resultPages = splitForCopy(alignedMml);
       rebuildPlayback(alignedMml);
       renderResults(resultPages);
-      hideStatus();
     } catch (error) {
       if (token !== conversionSerial) return;
       clearResults();
@@ -645,17 +639,7 @@
   }
 
   function showStatus(message, tone = "error") {
-    if (els.status) {
-      els.status.textContent = "";
-      els.status.hidden = true;
-    }
     showToast(message, tone);
-  }
-
-  function hideStatus() {
-    if (!els.status) return;
-    els.status.hidden = true;
-    els.status.textContent = "";
   }
 
   function rebuildPlayback(mml) {
@@ -913,7 +897,6 @@
     els.fileName.hidden = false;
     rebuildPlayback(normalized);
     renderResults(resultPages);
-    hideStatus();
     showToast(t("pasteLoaded"), "success");
     return normalized;
   }

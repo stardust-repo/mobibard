@@ -1,6 +1,3091 @@
 (() => {
   "use strict";
 
+  const $ = id => document.getElementById(id);
+  const el = (tag, className = "", attrs = {}) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    for (const [key, value] of Object.entries(attrs)) {
+      if (value == null) continue;
+      if (key === "text") node.textContent = String(value);
+      else if (key === "hidden") node.hidden = Boolean(value);
+      else if (key === "checked") node.checked = Boolean(value);
+      else node.setAttribute(key, String(value));
+    }
+    return node;
+  };
+
+  
+
+  function lang() {
+    const raw = String(window.MobibardI18n?.language || window.__MOBIBARD_INITIAL_LANGUAGE__ || document.documentElement.lang || "en").replace(/_/g, "-").toLowerCase();
+    if (raw.startsWith("ko")) return "ko";
+    if (raw.startsWith("ja")) return "ja";
+    if (raw === "zh-tw" || raw === "zh-hk" || raw === "zh-mo" || raw.includes("hant")) return "zh-TW";
+    if (raw.startsWith("zh") || raw.includes("hans")) return "zh-CN";
+    return "en";
+  }
+
+  function localeText(key, values = [], fallback = "") {
+    const normalizedValues = Array.isArray(values) ? values : [];
+    const apiValue = window.MobibardI18n?.t?.(key, normalizedValues);
+    if (typeof apiValue === "string" && apiValue !== key) return apiValue;
+    const catalogs = window.__MOBIBARD_LOCALES__ || {};
+    const catalog = catalogs[lang()]?.strings || catalogs.en?.strings || {};
+    let value = catalog[key];
+    if (typeof value !== "string") value = fallback || key;
+    normalizedValues.forEach((item, index) => { value = value.replaceAll(`{${index}}`, String(item)); });
+    return value;
+  }
+
+  const t = (key, values = []) => localeText(`layout.${key}`, values, key);
+  const appText = (key, fallback = "") => localeText(key, [], fallback || key);
+  const channelKey = index => index === 0 ? "part.melody" : `part.harmony${index}`;
+  const channelFallback = index => ["Melody", "Harmony 1", "Harmony 2", "Harmony 3", "Harmony 4", "Harmony 5"][index] || `Channel ${index + 1}`;
+  const channelLabel = index => appText(channelKey(index), channelFallback(index));
+
+  const makeChannelOptions = index => ({
+    restMode: "32",
+    volumeDelta: 0,
+    octaveDelta: 0,
+    accompaniment: { analysis: index === 0, generation: index > 0 }
+  });
+
+  const state = {
+    sourceMml: "",
+    sourceMeta: {},
+    applying: false,
+    manualEdited: false,
+    midiAutoTimer: 0,
+    applyFrame: 0,
+    applyTimer: 0,
+    sourceVersion: 0,
+    lastApplySignature: "",
+    lastResultMml: "",
+    metricsFrame: 0,
+    metricsIdleHandle: 0,
+    metricsCache: { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], tempoInput: "", tempoResult: null },
+    pipelineCache: { sourceVersion: -1, stages: [] },
+    tempoCleanCount: 0,
+    channelDraft: null,
+    channelOptionsDirty: false,
+    instrumentDirty: false,
+    playbackChannelMedia: null,
+    toastTimer: 0,
+    sessionSaveTimer: 0,
+    sessionLoadedSnapshot: null,
+    restoringSession: false,
+    sessionHasUserEdit: false,
+    activeOptionFeature: "rest",
+    panelState: new WeakMap(),
+    openPanels: [],
+    activeChannel: 0,
+    activeChannelView: 0,
+    originalPreviewAvailable: false,
+    midiQuantizeAvailable: false,
+    midiQuantizeDivision: 64,
+    ui: {},
+    options: {
+      channels: Array.from({ length: 6 }, (_, index) => makeChannelOptions(index)),
+      leading: { beats: 4 },
+      tempo: { scale: 100, simplify: true },
+      dynamics: { genre: "", strength: "normal", targetChannels: [true, true, true, true, true, true] },
+      accompaniment: { genre: "", strength: "normal" },
+      split: { maxChars: 2400, searchPercent: 50 }
+    }
+  };
+
+  function cloneChannelOptions(channels = state.options.channels) {
+    return Array.from({ length: 6 }, (_, index) => {
+      const source = channels?.[index] || makeChannelOptions(index);
+      return {
+        restMode: String(source.restMode || "keep"),
+        volumeDelta: Math.max(-15, Math.min(15, Math.round(Number(source.volumeDelta) || 0))),
+        octaveDelta: Math.max(-7, Math.min(7, Math.round(Number(source.octaveDelta) || 0))),
+        accompaniment: {
+          analysis: Boolean(source.accompaniment?.analysis),
+          generation: Boolean(source.accompaniment?.generation)
+        }
+      };
+    });
+  }
+
+  function cloneAccompanimentOption(value = state.options.accompaniment) {
+    return {
+      genre: String(value?.genre || ""),
+      strength: String(value?.strength || "normal")
+    };
+  }
+
+  function ensureChannelDraft() {
+    if (!state.channelDraft) {
+      state.channelDraft = {
+        channels: cloneChannelOptions(),
+        accompaniment: cloneAccompanimentOption()
+      };
+    }
+    return state.channelDraft;
+  }
+
+  function workspaceTab(name) {
+    return state.ui.workspaceTabs?.find?.(button => button.dataset.workspaceTab === name) || null;
+  }
+
+  function setWorkspacePending(name, pending) {
+    const tab = workspaceTab(name);
+    if (!tab) return;
+    tab.classList.toggle("has-pending", Boolean(pending));
+    tab.setAttribute("data-pending", pending ? "true" : "false");
+  }
+
+  function setInstrumentDirty(dirty = true) {
+    state.instrumentDirty = Boolean(dirty);
+    if (state.ui.instrumentApplyBar) state.ui.instrumentApplyBar.hidden = !state.instrumentDirty;
+    setWorkspacePending("instrument", state.instrumentDirty);
+  }
+
+  function refreshInstrumentDirtyState({ markEdit = true } = {}) {
+    const api = window.MobibardMidiEditor;
+    const dirty = Boolean(api?.hasSource?.() && api?.isDirty?.());
+    setInstrumentDirty(dirty);
+    if (dirty && markEdit) {
+      markPlayerEdited();
+    } else if (!dirty) {
+      clearPendingPlaybackPreview();
+      scheduleSessionPersist();
+    }
+    return dirty;
+  }
+
+  function setChannelOptionsDirty(dirty = true) {
+    state.channelOptionsDirty = Boolean(dirty);
+    if (state.ui.channelApplyBar) state.ui.channelApplyBar.hidden = !state.channelOptionsDirty;
+    setWorkspacePending("channel", state.channelOptionsDirty);
+  }
+
+  function normalizedChannelOptionSnapshot(channels, accompaniment) {
+    return {
+      channels: cloneChannelOptions(channels).map(channel => ({
+        restMode: String(channel.restMode || "keep"),
+        volumeDelta: Number(channel.volumeDelta) || 0,
+        octaveDelta: Number(channel.octaveDelta) || 0,
+        accompaniment: {
+          analysis: Boolean(channel.accompaniment?.analysis),
+          generation: Boolean(channel.accompaniment?.generation)
+        }
+      })),
+      accompaniment: cloneAccompanimentOption(accompaniment)
+    };
+  }
+
+  function channelDraftMatchesApplied() {
+    const draft = ensureChannelDraft();
+    const pending = normalizedChannelOptionSnapshot(draft.channels, draft.accompaniment);
+    const applied = normalizedChannelOptionSnapshot(state.options.channels, state.options.accompaniment);
+    return JSON.stringify(pending) === JSON.stringify(applied);
+  }
+
+  function markChannelOptionsDirty() {
+    setChannelOptionsDirty(!channelDraftMatchesApplied());
+    markPlayerEdited();
+    if (state.activeOptionFeature === "volume" || state.activeOptionFeature === "octave") scheduleOptionMetricsUpdate();
+  }
+
+  function syncChannelDraftControls() {
+    const draft = ensureChannelDraft();
+    ["rest", "volume", "octave"].forEach(feature => {
+      const refs = state.ui.featureControls?.[feature];
+      if (!refs) return;
+      refs.channels?.forEach((control, index) => {
+        const channel = draft.channels[index];
+        const value = feature === "rest"
+          ? channel?.restMode
+          : feature === "volume"
+            ? channel?.volumeDelta
+            : channel?.octaveDelta;
+        control?.setValue?.(value);
+      });
+      syncFeatureBatchState(feature);
+    });
+    syncAccompanimentFeatureControls();
+    scheduleOptionMetricsUpdate();
+  }
+
+  function cancelChannelOptionsDraft() {
+    syncChannelDraftFromApplied({ force: true });
+    syncChannelDraftControls();
+    setChannelOptionsDirty(false);
+    clearPendingPlaybackPreview();
+    scheduleSessionPersist();
+    showToast(t("channelCancelled"), "info");
+  }
+
+  function applyChannelOptionsDraft() {
+    const draft = ensureChannelDraft();
+    if (channelDraftMatchesApplied()) {
+      setChannelOptionsDirty(false);
+      return;
+    }
+    state.options.channels = cloneChannelOptions(draft.channels);
+    state.options.accompaniment = cloneAccompanimentOption(draft.accompaniment);
+    setChannelOptionsDirty(false);
+    state.lastApplySignature = "";
+    applyFromSource({ force: true });
+    clearPendingPlaybackPreview();
+    scheduleOptionMetricsUpdate();
+    scheduleSessionPersist();
+    showToast(t("channelApplied"), "success");
+  }
+
+  function syncChannelDraftFromApplied({ force = false } = {}) {
+    if (state.channelOptionsDirty && !force) return;
+    const channels = cloneChannelOptions(state.options.channels);
+    const accompaniment = cloneAccompanimentOption(state.options.accompaniment);
+    if (!state.channelDraft) {
+      state.channelDraft = { channels, accompaniment };
+      return;
+    }
+    for (let index = 0; index < 6; index += 1) {
+      const source = channels[index];
+      const target = state.channelDraft.channels[index] || makeChannelOptions(index);
+      target.restMode = source.restMode;
+      target.volumeDelta = source.volumeDelta;
+      target.octaveDelta = source.octaveDelta;
+      target.accompaniment ||= {};
+      target.accompaniment.analysis = source.accompaniment.analysis;
+      target.accompaniment.generation = source.accompaniment.generation;
+      state.channelDraft.channels[index] = target;
+    }
+    state.channelDraft.accompaniment.genre = accompaniment.genre;
+    state.channelDraft.accompaniment.strength = accompaniment.strength;
+  }
+
+  function resetSubmenuStateForNewSource() {
+    // A file/paste/Drive load is a new editing job. Keep the global "전체 설정"
+    // controls, but reset every lower workspace to its clean defaults.
+    state.options.channels = Array.from({ length: 6 }, (_, index) => makeChannelOptions(index));
+    state.options.accompaniment = { genre: "", strength: "normal" };
+    state.options.split = { maxChars: 2400, searchPercent: 50 };
+    state.manualEdited = false;
+    state.activeWorkspaceTab = "copy";
+    state.activeOptionFeature = "rest";
+    state.activeChannel = 0;
+    state.activeChannelView = 0;
+    state.copyDirty = true;
+    syncChannelDraftFromApplied({ force: true });
+    setChannelOptionsDirty(false);
+    setInstrumentDirty(false);
+    clearPendingPlaybackPreview();
+    if (state.ui.manualBadge) state.ui.manualBadge.hidden = true;
+    if (state.ui.featureControls) syncChannelDraftControls();
+  }
+
+  document.documentElement.dataset.playerLayout = "player-ui";
+  document.body.classList.add("player-ui");
+
+  const main = document.querySelector("main");
+  const menuCard = main?.querySelector(".menu-card");
+  const editorCard = main?.querySelector(".card:not(.menu-card)");
+  const fileToolbar = menuCard?.querySelector(".player-file-toolbar");
+  const playLayout = menuCard?.querySelector(".play-layout");
+  const retained = {
+    copy: $("copyBtn"),
+    save: $("saveBtn"),
+    driveSave: $("googleDriveSaveBtn")
+  };
+  if (!main || !menuCard || !editorCard || !fileToolbar || !playLayout) return;
+
+  function keyedText(key, className = "", tag = "span") {
+    return el(tag, className, { "data-wb4-text": key, text: t(key) });
+  }
+
+  function buildHeaderActions() {
+    const topActions = document.querySelector(".player-top-actions");
+    if (!topActions) return;
+    const midiExtract = $("midiExtractBtn");
+    if (!midiExtract) return;
+    midiExtract.classList.add("wb4-midi-extract-button");
+    midiExtract.querySelector(".midi-extract-toolbar-icon")?.remove();
+    const group = el("div", "wb4-top-external", { "aria-label": t("external") });
+    group.append(midiExtract);
+    topActions.prepend(group);
+  }
+
+  function buildTitle(canvas) {
+    const row = el("div", "wb4-title-row");
+    const title = el("h1", "wb4-title");
+    state.ui.titleName = el("span", "wb4-title-name", { text: appText("mml.generator_title", "MML 생성기") });
+    title.append(state.ui.titleName, el("span", "wb4-title-version", { text: "v5.1" }));
+
+    const actions = el("div", "wb4-title-actions");
+    const mobibeat = $("rhythmGameBtn");
+    const simple = $("simpleVersionBtn");
+    if (mobibeat) {
+      mobibeat.querySelector(".rhythm-game-toolbar-icon")?.remove();
+      const label = mobibeat.querySelector("span:last-child");
+      if (label) { label.removeAttribute("data-i18n"); label.textContent = t("mobibeat"); }
+      mobibeat.removeAttribute("data-i18n-title");
+      mobibeat.title = t("mobibeat");
+      actions.append(mobibeat);
+    }
+    if (simple) actions.append(simple);
+    row.append(title, actions);
+    canvas.append(row);
+  }
+
+  function ensurePasteDialog() {
+    let dialog = $("pasteMmlDialog");
+    if (dialog) return dialog;
+    dialog = el("dialog", "mml-dialog wb4-native-popup wb4-paste-dialog", { id: "pasteMmlDialog" });
+    const form = el("form", "dialog-card wb4-paste-card", { id: "pasteMmlForm", method: "dialog" });
+    form.append(keyedText("pasteMml", "", "h3"), keyedText("pasteHint", "wb4-paste-hint", "p"));
+    const textarea = el("textarea", "wb4-paste-textarea", { id: "pasteMmlText", spellcheck: "false", rows: "10" });
+    const status = el("div", "dialog-small wb4-paste-status", { id: "pasteMmlStatus", role: "status", "aria-live": "polite" });
+    const actions = el("div", "dialog-actions");
+    actions.append(
+      el("button", "", { id: "pasteMmlCancel", type: "button", "data-wb4-text": "cancel", text: t("cancel") }),
+      el("button", "primary", { id: "pasteMmlApply", type: "submit", "data-wb4-text": "pasteApply", text: t("pasteApply") })
+    );
+    form.append(textarea, status, actions);
+    dialog.append(form);
+    document.body.append(dialog);
+    return dialog;
+  }
+
+  function buildSourceBlock(canvas) {
+    ensurePasteDialog();
+    const block = el("section", "wb4-block wb4-source-block");
+    const drop = el("div", "wb4-drop-zone", { id: "playerDropZone", role: "button", tabindex: "0", "aria-controls": "midiFile" });
+    const supported = fileToolbar.querySelector("[data-supported-files-button]");
+    const load = $("midiLoadBtn");
+    const drive = $("googleDriveLoadBtn");
+    const paste = $("pasteBtn");
+    const input = $("midiFile");
+
+    if (supported) {
+      supported.className = "mabi-supported-files-button wb12-supported-button";
+      supported.textContent = t("supported");
+    }
+    if (load) {
+      load.removeAttribute("data-i18n");
+      load.removeAttribute("data-i18n-title");
+      load.textContent = t("loadFile");
+      load.className = "wb4-load-primary";
+    }
+    if (drive) {
+      drive.removeAttribute("data-i18n");
+      drive.removeAttribute("data-i18n-title");
+      drive.textContent = t("driveLoad");
+      drive.className = "wb4-load-secondary";
+    }
+    if (paste) {
+      paste.removeAttribute("data-i18n");
+      paste.textContent = t("pasteMml");
+      paste.className = "wb4-load-secondary wb4-paste-source-button";
+    }
+
+    const actions = el("div", "wb4-load-actions");
+    if (load) actions.append(load);
+    if (drive) actions.append(drive);
+    if (paste) actions.append(paste);
+    state.ui.fileName = el("strong", "wb4-file-name", { "data-wb4-text": "noFile" });
+    state.ui.fileState = el("span", "wb4-file-state", { hidden: true });
+    state.ui.restoreButton = el("button", "wb13-restore-button", { type: "button", hidden: true });
+    state.ui.restoreButton.addEventListener("click", () => void restoreLastPlayerUiSession());
+    const meta = el("div", "wb4-file-meta");
+    meta.append(state.ui.fileName, state.ui.restoreButton);
+
+    if (supported) drop.append(supported);
+    drop.append(actions, keyedText("dropHint", "wb4-drop-hint"), meta);
+    if (input) drop.append(input);
+    block.append(drop);
+    state.ui.sourceInlineHost = el("div", "wb4-inline-host");
+    block.append(state.ui.sourceInlineHost);
+    canvas.append(block);
+
+    const openPicker = () => load?.click();
+    drop.addEventListener("click", event => {
+      if (!event.target.closest("button,a,input,select,label")) openPicker();
+    });
+    drop.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openPicker();
+      }
+    });
+    ["dragenter", "dragover"].forEach(type => drop.addEventListener(type, event => {
+      event.preventDefault();
+      drop.classList.add("dragover");
+    }));
+    ["dragleave", "drop"].forEach(type => drop.addEventListener(type, event => {
+      event.preventDefault();
+      drop.classList.remove("dragover");
+    }));
+    drop.addEventListener("drop", event => {
+      const file = event.dataTransfer?.files?.[0];
+      if (!file || !input) return;
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch (_) {}
+    });
+    input?.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (file) {
+        state.sessionHasUserEdit = false;
+        clearTimeout(state.sessionSaveTimer);
+        state.sessionSaveTimer = 0;
+        setSourceName(file.name);
+      }
+    });
+  }
+
+  function formatClock(seconds) {
+    const total = Math.max(0, Number(seconds) || 0);
+    const mins = Math.floor(total / 60);
+    const secs = Math.floor(total % 60);
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+
+  function prepareTimeline(seekRow) {
+    const progressWrap = seekRow?.querySelector(".progress-wrap");
+    const progressSlider = $("progressSlider");
+    const tempoLayer = $("tempoMarkerLayer");
+    if (!progressWrap || !progressSlider || !tempoLayer) return;
+
+    progressWrap.classList.add("wb4-tempo-timeline");
+    seekRow.classList.add("wb4-seek-row");
+    progressSlider.setAttribute("aria-label", t("playbackPosition"));
+
+    const grid = el("div", "wb4-timeline-grid", { "aria-hidden": "true" });
+    for (let index = 0; index <= 16; index += 1) {
+      grid.append(el("i", index % 4 === 0 ? "major" : "minor", { style: `left:${index / 16 * 100}%` }));
+    }
+    const tickLabels = el("div", "wb4-timeline-tick-labels", { "aria-hidden": "true" });
+    state.ui.timelineTicks = [0, .25, .5, .75, 1].map((ratio, index) => {
+      const tick = el("span", "", { style: `left:${ratio * 100}%`, text: index === 0 ? "00:00" : "" });
+      tickLabels.append(tick);
+      return tick;
+    });
+    state.ui.playhead = el("div", "wb4-timeline-playhead", { "aria-hidden": "true" });
+    state.ui.playheadLabel = el("span", "wb4-playhead-label", { text: "00:00" });
+    state.ui.playhead.append(state.ui.playheadLabel);
+    state.ui.playheadTrack = el("div", "wb4-timeline-playhead-track", { "aria-hidden": "true" });
+    state.ui.playheadTrack.append(state.ui.playhead);
+    progressWrap.prepend(grid, tickLabels);
+    progressWrap.append(state.ui.playheadTrack);
+    state.ui.progressSlider = progressSlider;
+
+    let wheelCommitTimer = 0;
+    progressWrap.addEventListener("wheel", event => {
+      const max = Math.max(0, Number(progressSlider.max) || 0);
+      if (progressSlider.disabled || max <= 0) return;
+      const horizontalDelta = Math.abs(event.deltaX) >= Math.abs(event.deltaY)
+        ? event.deltaX
+        : (event.shiftKey ? event.deltaY : 0);
+      if (!horizontalDelta) return;
+      event.preventDefault();
+      const width = Math.max(240, progressWrap.clientWidth || 0);
+      const next = Math.max(0, Math.min(max, Number(progressSlider.value || 0) + max * horizontalDelta / width));
+      progressSlider.value = String(next);
+      progressSlider.dispatchEvent(new Event("input", { bubbles: true }));
+      clearTimeout(wheelCommitTimer);
+      wheelCommitTimer = window.setTimeout(() => {
+        progressSlider.dispatchEvent(new Event("change", { bubbles: true }));
+      }, 120);
+    }, { passive: false });
+
+    const sync = () => {
+      const max = Math.max(0, Number(progressSlider.max) || 0);
+      const value = Math.max(0, Math.min(max || 0, Number(progressSlider.value) || 0));
+      const percent = max > 0 ? value / max * 100 : 0;
+      progressWrap.style.setProperty("--wb4-playback-progress", `${percent}%`);
+      progressWrap.classList.toggle("disabled", progressSlider.disabled || max <= 0);
+      if (state.ui.playheadLabel) state.ui.playheadLabel.textContent = formatClock(value);
+      state.ui.timelineTicks?.forEach((node, index) => { node.textContent = formatClock(max * (index / 4)); });
+      window.requestAnimationFrame(sync);
+    };
+    window.requestAnimationFrame(sync);
+  }
+
+  function segmented(defs, current, onChange, className = "") {
+    const wrap = el("div", `wb4-segmented ${className}`.trim());
+    const buttons = new Map();
+    const setValue = (next, { silent = true, mixed = false } = {}) => {
+      wrap.dataset.mixed = mixed ? "true" : "false";
+      for (const [value, button] of buttons.entries()) {
+        const active = !mixed && String(value) === String(next);
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      }
+      if (!silent && !mixed) onChange(next);
+    };
+    defs.forEach(([value, label]) => {
+      const button = el("button", "wb4-segment", { type: "button", text: label, "aria-pressed": value === current ? "true" : "false" });
+      button.dataset.value = String(value);
+      button.classList.toggle("active", value === current);
+      button.addEventListener("click", () => setValue(value, { silent: false }));
+      buttons.set(String(value), button);
+      wrap.append(button);
+    });
+    wrap.setValue = setValue;
+    return wrap;
+  }
+
+  function selectControl(values, current, onChange, className = "") {
+    const select = el("select", `wb4-select ${className}`.trim());
+    values.forEach(([value, label]) => {
+      const option = el("option", "", { value, text: label });
+      if (String(value) === String(current)) option.selected = true;
+      select.append(option);
+    });
+    select.addEventListener("change", () => onChange(select.value));
+    return select;
+  }
+
+  function sliderNumber({ min, max, step, value, suffix = "", onChange }) {
+    const wrap = el("div", "wb4-slider-number");
+    const range = el("input", "wb4-range", { type: "range", min, max, step, value });
+    const number = el("input", "wb4-number", { type: "number", min, max, step, value });
+    const suffixNode = suffix ? el("span", "wb4-number-suffix", { text: suffix }) : null;
+    const normalize = raw => {
+      let next = Number(raw);
+      if (!Number.isFinite(next)) next = Number(value);
+      next = Math.max(Number(min), Math.min(Number(max), next));
+      if (Number(step) >= 1) next = Math.round(next / Number(step)) * Number(step);
+      return next;
+    };
+    const setValue = (raw, { silent = true, mixed = false } = {}) => {
+      const next = normalize(raw);
+      // 채널 값이 서로 다른 상태에서는 일괄 슬라이더의 thumb를 특정 채널 값으로 끌고 가지 않는다.
+      // 숫자 칸만 mixed 상태로 비우고, 사용자가 일괄 슬라이더를 직접 움직였을 때만 새 값이 된다.
+      if (!mixed) {
+        range.value = String(next);
+        number.value = String(next);
+      } else {
+        number.value = "";
+      }
+      wrap.dataset.mixed = mixed ? "true" : "false";
+      number.placeholder = mixed ? t("mixedValues") : "";
+      if (!silent) onChange(next);
+    };
+    range.addEventListener("input", () => setValue(range.value, { silent: false }));
+    number.addEventListener("change", () => setValue(number.value, { silent: false }));
+    wrap.setValue = setValue;
+    wrap._range = range;
+    wrap._number = number;
+    wrap.append(range, number);
+    if (suffixNode) wrap.append(suffixNode);
+    return wrap;
+  }
+
+  function toggleControl(labelText, checked, onChange, className = "") {
+    const label = el("label", `wb4-toggle-row ${className}`.trim());
+    const input = el("input", "", { type: "checkbox", checked });
+    label.append(input, el("span", "", { text: labelText }));
+    input.addEventListener("change", () => onChange(input.checked));
+    label._input = input;
+    return label;
+  }
+
+  function optionRow(labelKey, control, hintKey = "", className = "") {
+    const row = el("div", `wb4-option-row ${className}`.trim());
+    const label = el("div", "wb4-option-name");
+    label.append(keyedText(labelKey, "", "strong"));
+    if (hintKey) label.append(keyedText(hintKey, "", "small"));
+    const body = el("div", "wb4-option-control");
+    if (control) body.append(control);
+    row.append(label, body);
+    return row;
+  }
+
+  function getApplySignature() {
+    const transformOptions = {
+      channels: state.options.channels,
+      leading: state.options.leading,
+      tempo: state.options.tempo,
+      dynamics: state.options.dynamics,
+      accompaniment: state.options.accompaniment
+    };
+    return `${state.sourceVersion}|${JSON.stringify(transformOptions)}`;
+  }
+
+  function queueApply({ immediate = false, userEdit = true } = {}) {
+    if (userEdit) markPlayerEdited();
+    if (state.applyFrame) cancelAnimationFrame(state.applyFrame);
+    if (state.applyTimer) clearTimeout(state.applyTimer);
+    const run = () => {
+      state.applyTimer = 0;
+      state.applyFrame = requestAnimationFrame(() => {
+        state.applyFrame = 0;
+        applyFromSource();
+      });
+    };
+    if (immediate) run();
+    else state.applyTimer = window.setTimeout(run, 72);
+  }
+
+  function genreValues() {
+    return [["pop", t("pop")], ["jazz", t("jazz")], ["ballad", t("ballad")], ["bossa", t("bossa")], ["rock", t("rock")], ["funk", t("funk")], ["classical", t("classical")]];
+  }
+
+  function genreValuesWithPlaceholder() {
+    return [["", t("genreSelect")], ...genreValues()];
+  }
+
+  function updateMidiChannelFilter() {
+    const dialog = $("midiConvertDialog");
+    if (!dialog) return;
+    dialog.removeAttribute("data-active-channel");
+    dialog.querySelectorAll(".midi-role-row,[data-midi-group-channel]").forEach(node => { node.hidden = false; });
+    dialog.querySelectorAll("details.midi-instrument-section").forEach(section => { section.open = true; });
+  }
+
+  function setSourceName(name) {
+    if (!state.ui.fileName || !name) return;
+    state.ui.fileName.hidden = false;
+    state.ui.fileName.textContent = String(name);
+    state.ui.fileName.dataset.hasFile = "true";
+    if (state.ui.fileState) state.ui.fileState.hidden = true;
+    if (state.ui.restoreButton) state.ui.restoreButton.hidden = true;
+  }
+
+
+  const PLAYER_SESSION_DB = "mobibard-player-session-v1";
+  const PLAYER_SESSION_STORE = "sessions";
+  const PLAYER_SESSION_KEY = "last";
+
+  function openPlayerSessionDb() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) { reject(new Error("IndexedDB unavailable")); return; }
+      const request = indexedDB.open(PLAYER_SESSION_DB, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(PLAYER_SESSION_STORE)) db.createObjectStore(PLAYER_SESSION_STORE);
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("IndexedDB open failed"));
+    });
+  }
+
+  async function readPlayerSession() {
+    let db;
+    try {
+      db = await openPlayerSessionDb();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(PLAYER_SESSION_STORE, "readonly");
+        const request = tx.objectStore(PLAYER_SESSION_STORE).get(PLAYER_SESSION_KEY);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error || new Error("Session read failed"));
+      });
+    } catch (_) {
+      return null;
+    } finally {
+      try { db?.close(); } catch (_) {}
+    }
+  }
+
+  async function writePlayerSession(snapshot) {
+    let db;
+    try {
+      db = await openPlayerSessionDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(PLAYER_SESSION_STORE, "readwrite");
+        tx.objectStore(PLAYER_SESSION_STORE).put(snapshot, PLAYER_SESSION_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error("Session write failed"));
+        tx.onabort = () => reject(tx.error || new Error("Session write aborted"));
+      });
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      try { db?.close(); } catch (_) {}
+    }
+  }
+
+  function normalizeSessionOptions(saved = {}) {
+    const channels = cloneChannelOptions(saved.channels || state.options.channels);
+    const targetChannels = Array.from({ length: 6 }, (_, index) => saved.dynamics?.targetChannels?.[index] !== false);
+    return {
+      channels,
+      leading: { beats: Math.max(0, Math.min(600, Math.round((Number(saved.leading?.beats) || 0) * 2) / 2)) },
+      tempo: {
+        scale: Math.max(50, Math.min(200, Math.round(Number(saved.tempo?.scale) || 100))),
+        simplify: saved.tempo?.simplify !== false
+      },
+      dynamics: {
+        genre: String(saved.dynamics?.genre || ""),
+        strength: String(saved.dynamics?.strength || "normal"),
+        targetChannels
+      },
+      accompaniment: cloneAccompanimentOption(saved.accompaniment),
+      split: {
+        maxChars: Math.max(200, Math.min(5000, Math.round(Number(saved.split?.maxChars) || 2400))),
+        searchPercent: [50, 60, 70, 80, 90].includes(Number(saved.split?.searchPercent)) ? Number(saved.split.searchPercent) : 50
+      }
+    };
+  }
+
+  function syncCommonOptionControls() {
+    state.ui.tempoScaleControl?.setValue?.(state.options.tempo.scale);
+    state.ui.leadingControl?.setValue?.(state.options.leading.beats * 0.5);
+    updateTempoCleanButton();
+    syncVolumeGenerationControls();
+    state.ui.quantizeControl?.setValue?.(String(Number(state.midiQuantizeDivision) === 32 ? 32 : 64));
+  }
+
+  function markPlayerEdited() {
+    if (state.restoringSession || !state.sourceMml) return;
+    state.sessionHasUserEdit = true;
+    scheduleSessionPersist();
+  }
+
+  async function persistLastPlayerSession() {
+    if (state.restoringSession || !state.sessionHasUserEdit || !state.sourceMml) return;
+    const name = String(state.sourceMeta?.name || state.ui.fileName?.textContent || "").trim();
+    if (!name || name === t("noFile")) return;
+    if (name === "Sample MML" && state.sourceMeta?.sourceType === "mml") return;
+    let midiState = null;
+    try {
+      const exported = window.MobibardMidiEditor?.exportSessionState?.() || null;
+      if (exported?.pendingMidiImport?.name === name) midiState = exported;
+    } catch (_) {}
+    const snapshot = {
+      version: 3,
+      userEdited: true,
+      savedAt: Date.now(),
+      name,
+      sourceMml: String(state.sourceMml || ""),
+      sourceMeta: { ...state.sourceMeta, name },
+      resultMml: String($("mainMml")?.value || ""),
+      options: JSON.parse(JSON.stringify(state.options)),
+      channelDraft: state.channelDraft ? normalizedChannelOptionSnapshot(state.channelDraft.channels, state.channelDraft.accompaniment) : null,
+      channelOptionsDirty: Boolean(state.channelOptionsDirty),
+      instrumentDirty: Boolean(state.instrumentDirty),
+      manualEdited: Boolean(state.manualEdited),
+      activeWorkspaceTab: state.activeWorkspaceTab || "copy",
+      activeOptionFeature: state.activeOptionFeature || "rest",
+      activeChannelView: Number(state.activeChannelView),
+      midiQuantizeDivision: Number(state.midiQuantizeDivision) === 32 ? 32 : 64,
+      midiState
+    };
+    await writePlayerSession(snapshot);
+  }
+
+  function scheduleSessionPersist(delay = 160) {
+    if (state.restoringSession || !state.sessionHasUserEdit || !state.sourceMml) return;
+    clearTimeout(state.sessionSaveTimer);
+    state.sessionSaveTimer = window.setTimeout(() => {
+      state.sessionSaveTimer = 0;
+      void persistLastPlayerSession();
+    }, Math.max(60, Number(delay) || 160));
+  }
+
+  async function loadSessionRestorePrompt() {
+    const snapshot = await readPlayerSession();
+    if (!snapshot?.sourceMml || !snapshot?.name || snapshot.version < 3 || snapshot.userEdited !== true || state.sourceMml) return;
+    state.sessionLoadedSnapshot = snapshot;
+    if (state.ui.restoreButton && state.ui.fileName) {
+      state.ui.fileName.hidden = true;
+      state.ui.restoreButton.textContent = `${snapshot.name} ${t("restoreSuffix")}`;
+      state.ui.restoreButton.title = snapshot.name;
+      state.ui.restoreButton.hidden = false;
+    }
+  }
+
+  function restoreChannelDraftInPlace(savedDraft = null) {
+    const target = ensureChannelDraft();
+    const sourceChannels = cloneChannelOptions(savedDraft?.channels || state.options.channels);
+    const sourceAccompaniment = cloneAccompanimentOption(savedDraft?.accompaniment || state.options.accompaniment);
+    for (let index = 0; index < 6; index += 1) {
+      const source = sourceChannels[index];
+      const channel = target.channels[index] || makeChannelOptions(index);
+      channel.restMode = source.restMode;
+      channel.volumeDelta = source.volumeDelta;
+      channel.octaveDelta = source.octaveDelta;
+      channel.accompaniment ||= {};
+      channel.accompaniment.analysis = Boolean(source.accompaniment?.analysis);
+      channel.accompaniment.generation = Boolean(source.accompaniment?.generation);
+      target.channels[index] = channel;
+    }
+    target.accompaniment.genre = sourceAccompaniment.genre;
+    target.accompaniment.strength = sourceAccompaniment.strength;
+    return target;
+  }
+
+  async function restoreLastPlayerUiSession() {
+    const snapshot = state.sessionLoadedSnapshot || await readPlayerSession();
+    if (!snapshot?.sourceMml || snapshot.version < 3 || snapshot.userEdited !== true) return;
+    state.restoringSession = true;
+    clearTimeout(state.sessionSaveTimer);
+    try {
+      state.options = normalizeSessionOptions(snapshot.options || {});
+      state.sourceMml = String(snapshot.sourceMml || "");
+      state.sourceMeta = { ...(snapshot.sourceMeta || {}), name: String(snapshot.name || snapshot.sourceMeta?.name || "") };
+      state.sourceVersion += 1;
+      state.lastApplySignature = "";
+      state.lastResultMml = String(snapshot.resultMml || "");
+      state.manualEdited = Boolean(snapshot.manualEdited);
+      state.midiQuantizeDivision = Number(snapshot.midiQuantizeDivision) === 32 ? 32 : 64;
+      resetPipelineCache();
+      state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], tempoInput: "", tempoResult: null };
+
+      restoreChannelDraftInPlace(snapshot.channelDraft || null);
+
+      const mainMml = $("mainMml");
+      if (mainMml) {
+        state.applying = true;
+        mainMml.dataset.playerUiApply = "1";
+        mainMml.value = String(snapshot.resultMml || state.sourceMml);
+        mainMml.dispatchEvent(new Event("input", { bubbles: true }));
+        delete mainMml.dataset.playerUiApply;
+        state.applying = false;
+      }
+
+      if (snapshot.midiState) {
+        try { window.MobibardMidiEditor?.restoreSessionState?.(snapshot.midiState); } catch (_) {}
+      }
+      setSourceName(state.sourceMeta.name || snapshot.name);
+      syncCommonOptionControls();
+      syncChannelDraftControls();
+      setChannelOptionsDirty(Boolean(snapshot.channelOptionsDirty));
+      setInstrumentDirty(Boolean(snapshot.instrumentDirty));
+      state.activeOptionFeature = ["rest", "volume", "octave", "accompaniment"].includes(snapshot.activeOptionFeature) ? snapshot.activeOptionFeature : "rest";
+      activateChannelView(Number.isFinite(Number(snapshot.activeChannelView)) ? Number(snapshot.activeChannelView) : 0);
+      activateWorkspaceTab(["copy", "instrument", "channel", "code"].includes(snapshot.activeWorkspaceTab) ? snapshot.activeWorkspaceTab : "copy");
+      if (state.activeWorkspaceTab === "channel") activateOptionFeature(state.activeOptionFeature);
+      if (state.ui.manualBadge) state.ui.manualBadge.hidden = !state.manualEdited;
+      clearPendingPlaybackPreview();
+      scheduleChannelCountsUpdate();
+      scheduleCopyRowsRender();
+      scheduleOptionMetricsUpdate();
+      state.sessionLoadedSnapshot = null;
+      state.sessionHasUserEdit = true;
+    } finally {
+      state.restoringSession = false;
+    }
+    scheduleSessionPersist(120);
+  }
+
+  function scaleTempoCommands(mml, percent) {
+    const factor = Number(percent) / 100;
+    if (!Number.isFinite(factor) || Math.abs(factor - 1) < .0001) return String(mml || "");
+    return String(mml || "").replace(/([tT])(\d{1,3})/g, (_, command, raw) => `${command}${Math.max(32, Math.min(255, Math.round(Number(raw) * factor)))}`);
+  }
+
+  function resultMml(result, fallback) {
+    if (typeof result === "string") return result;
+    return typeof result?.mml === "string" ? result.mml : fallback;
+  }
+
+  function showOptionStatus(message, tone = "info") {
+    const node = state.ui.optionStatus;
+    if (node) {
+      node.hidden = true;
+      node.textContent = "";
+      delete node.dataset.tone;
+    }
+    if (message) showToast(String(message), tone === "error" ? "error" : "info");
+  }
+
+  function groupChannelIndexes(keyFactory, predicate = () => true) {
+    const groups = new Map();
+    state.options.channels.forEach((channel, index) => {
+      if (!predicate(channel, index)) return;
+      const key = String(keyFactory(channel, index));
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(index);
+    });
+    return groups;
+  }
+
+  function resetPipelineCache() {
+    state.pipelineCache = { sourceVersion: state.sourceVersion, stages: [] };
+  }
+
+  function pipelineStage(index, previousKey, name, optionKey, input, runner, diagnostics) {
+    if (state.pipelineCache.sourceVersion !== state.sourceVersion) resetPipelineCache();
+    const key = `${previousKey}|${name}:${JSON.stringify(optionKey)}`;
+    const cached = state.pipelineCache.stages[index];
+    if (cached?.key === key) {
+      diagnostics.cacheHits += 1;
+      return { output: cached.output, key };
+    }
+    const started = performance.now();
+    const output = String(runner(input) ?? input);
+    diagnostics.stageDurations[name] = Math.round((performance.now() - started) * 10) / 10;
+    state.pipelineCache.stages[index] = { key, output };
+    state.pipelineCache.stages.length = index + 1;
+    return { output, key };
+  }
+
+  function getTempoCleanupAnalysis(input) {
+    const source = String(input || "");
+    if (state.metricsCache.tempoInput === source && state.metricsCache.tempoResult) return state.metricsCache.tempoResult;
+    let result = { mml: source, removedCount: 0 };
+    try {
+      result = window.MabiOptimizer?.simplifyTemposMml?.(source, {
+        partCount: 6,
+        maxBpmDeltaExclusive: 5,
+        preserveExtrema: true
+      }) || result;
+    } catch (_) {}
+    state.metricsCache.tempoInput = source;
+    state.metricsCache.tempoResult = result;
+    return result;
+  }
+
+
+  function previewChannelGroups(channels, keyFactory, predicate = () => true) {
+    const groups = new Map();
+    channels.forEach((channel, index) => {
+      if (!predicate(channel, index)) return;
+      const key = String(keyFactory(channel, index));
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(index);
+    });
+    return [...groups.entries()];
+  }
+
+  function transformPreviewSource(sourceMml, channelOptions, accompanimentOption) {
+    const optimizer = window.MabiOptimizer;
+    let out = String(sourceMml || "");
+    if (!optimizer || !out) return out;
+    const channels = cloneChannelOptions(channelOptions);
+    const accompaniment = cloneAccompanimentOption(accompanimentOption);
+
+    const analysisPartIndexes = [];
+    const generationPartIndexes = [];
+    channels.forEach((channel, index) => {
+      if (channel.accompaniment.analysis) analysisPartIndexes.push(index);
+      if (channel.accompaniment.generation) generationPartIndexes.push(index);
+    });
+    if (accompaniment.genre && optimizer.generateAccompanimentMml && analysisPartIndexes.length && generationPartIndexes.length) {
+      out = resultMml(optimizer.generateAccompanimentMml(out, {
+        genre: accompaniment.genre,
+        strength: accompaniment.strength,
+        analysisPartIndexes,
+        generationPartIndexes
+      }), out);
+    }
+
+    const dynamicsTargets = state.options.dynamics.targetChannels
+      .map((enabled, index) => enabled ? index : -1)
+      .filter(index => index >= 0);
+    if (state.options.dynamics.genre && optimizer.generateDynamicsMml && dynamicsTargets.length) {
+      out = resultMml(optimizer.generateDynamicsMml(out, {
+        partCount: 6,
+        genre: state.options.dynamics.genre,
+        strength: state.options.dynamics.strength,
+        targetPartIndexes: dynamicsTargets,
+        overwriteExisting: true
+      }), out);
+    }
+
+    if (optimizer.trimShortRestsMml) {
+      for (const [mode, targetPartIndexes] of previewChannelGroups(channels, channel => channel.restMode, channel => channel.restMode !== "keep")) {
+        const all = mode === "all";
+        out = resultMml(optimizer.trimShortRestsMml(out, {
+          partCount: 6,
+          targetPartIndexes,
+          all,
+          denom: all ? 64 : Number(mode)
+        }), out);
+      }
+    }
+    if (optimizer.adjustVolumesMml) {
+      for (const [delta, targetPartIndexes] of previewChannelGroups(channels, channel => channel.volumeDelta, channel => Number(channel.volumeDelta) !== 0)) {
+        out = resultMml(optimizer.adjustVolumesMml(out, {
+          partCount: 6,
+          targetPartIndexes,
+          delta: Number(delta)
+        }), out);
+      }
+    }
+    if (optimizer.transposeOctavesMml) {
+      for (const [octaves, targetPartIndexes] of previewChannelGroups(channels, channel => channel.octaveDelta, channel => Number(channel.octaveDelta) !== 0)) {
+        out = resultMml(optimizer.transposeOctavesMml(out, {
+          partCount: 6,
+          targetPartIndexes,
+          octaves: Number(octaves)
+        }), out);
+      }
+    }
+
+    const leadingBeats = Math.max(0, Math.round((Number(state.options.leading.beats) || 0) * 2) / 2);
+    if (leadingBeats > 0 && optimizer.addLeadingSilenceMml) {
+      out = resultMml(optimizer.addLeadingSilenceMml(out, { partCount: 6, beats: leadingBeats }), out);
+    }
+    if (state.options.tempo.simplify && optimizer.simplifyTemposMml) {
+      out = resultMml(optimizer.simplifyTemposMml(out, {
+        partCount: 6,
+        maxBpmDeltaExclusive: 5,
+        preserveExtrema: true
+      }), out);
+    }
+    if (Number(state.options.tempo.scale) !== 100) out = scaleTempoCommands(out, state.options.tempo.scale);
+    return out;
+  }
+
+  function clearPendingPlaybackPreview() {
+    try {
+      window.dispatchEvent(new CustomEvent("mobibard:preview-source", { detail: { active: false } }));
+    } catch (_) {}
+  }
+
+  async function preparePendingPlaybackPreview() {
+    const hasPending = Boolean(state.instrumentDirty || state.channelOptionsDirty);
+    if (!hasPending) {
+      clearPendingPlaybackPreview();
+      return true;
+    }
+    try {
+      let source = String(state.sourceMml || "");
+      if (state.instrumentDirty && window.MobibardMidiEditor?.buildPendingPreviewMml) {
+        const pendingMidiMml = await window.MobibardMidiEditor.buildPendingPreviewMml();
+        if (pendingMidiMml) source = String(pendingMidiMml);
+      }
+      if (!source) return false;
+      const channelState = state.channelOptionsDirty
+        ? ensureChannelDraft()
+        : { channels: state.options.channels, accompaniment: state.options.accompaniment };
+      const previewMml = transformPreviewSource(source, channelState.channels, channelState.accompaniment);
+      try {
+        window.dispatchEvent(new CustomEvent("mobibard:preview-source", {
+          detail: { active: true, mml: previewMml, label: t("previewPending") }
+        }));
+      } catch (_) {}
+      showToast(t("previewPending"), "info");
+      return true;
+    } catch (error) {
+      showToast(error?.message || String(error), "error");
+      return false;
+    }
+  }
+
+  let pendingExportDialogOpen = false;
+
+  async function confirmPendingExport(action = "copy") {
+    if (!state.instrumentDirty && !state.channelOptionsDirty) return true;
+    if (pendingExportDialogOpen) return false;
+
+    const isSave = action === "save";
+    const message = t(isSave ? "pendingExportSave" : "pendingExportCopy");
+    const confirmUi = window.MobibardInlineUi?.confirm;
+    pendingExportDialogOpen = true;
+    try {
+      if (typeof confirmUi !== "function") return window.confirm(message);
+      return await confirmUi(message, {
+        title: t("pendingExportTitle"),
+        confirmText: t(isSave ? "pendingExportSaveConfirm" : "pendingExportCopyConfirm"),
+        cancelText: t("pendingExportBack"),
+        modal: true
+      });
+    } finally {
+      pendingExportDialogOpen = false;
+    }
+  }
+
+  window.MobibardBeforePlay = preparePendingPlaybackPreview;
+  window.MobibardBeforeExport = confirmPendingExport;
+
+  function applyFromSource({ force = false } = {}) {
+    if (!state.sourceMml) {
+      scheduleCopyRowsRender();
+      scheduleOptionMetricsUpdate();
+      return;
+    }
+    const optimizer = window.MabiOptimizer;
+    if (!optimizer) return;
+    const signature = getApplySignature();
+    if (!force && signature === state.lastApplySignature) return;
+
+    const startedAt = performance.now();
+    const transformCalls = { dynamics: 0, rest: 0, volume: 0, octave: 0, accompaniment: 0, leading: 0, tempoClean: 0, tempoScale: 0 };
+    const diagnostics = { cacheHits: 0, stageDurations: {} };
+    let out = String(state.sourceMml);
+    let previousKey = `source:${state.sourceVersion}`;
+    let stageIndex = 0;
+    try {
+      showOptionStatus("");
+
+      const accompaniment = state.options.accompaniment;
+      const analysisPartIndexes = [];
+      const generationPartIndexes = [];
+      state.options.channels.forEach((channel, index) => {
+        if (channel.accompaniment.analysis) analysisPartIndexes.push(index);
+        if (channel.accompaniment.generation) generationPartIndexes.push(index);
+      });
+      let stage = pipelineStage(stageIndex++, previousKey, "accompaniment", {
+        genre: accompaniment.genre,
+        strength: accompaniment.strength,
+        analysisPartIndexes,
+        generationPartIndexes
+      }, out, input => {
+        if (!accompaniment.genre || !optimizer.generateAccompanimentMml || !analysisPartIndexes.length || !generationPartIndexes.length) return input;
+        transformCalls.accompaniment += 1;
+        return resultMml(optimizer.generateAccompanimentMml(input, {
+          genre: accompaniment.genre,
+          strength: accompaniment.strength,
+          analysisPartIndexes,
+          generationPartIndexes
+        }), input);
+      }, diagnostics);
+      out = stage.output;
+      previousKey = stage.key;
+
+      const dynamics = state.options.dynamics;
+      const dynamicsTargets = dynamics.targetChannels
+        .map((enabled, index) => enabled ? index : -1)
+        .filter(index => index >= 0);
+      stage = pipelineStage(stageIndex++, previousKey, "dynamics", {
+        genre: dynamics.genre,
+        strength: dynamics.strength,
+        targetPartIndexes: dynamicsTargets
+      }, out, input => {
+        if (!dynamics.genre || !optimizer.generateDynamicsMml || !dynamicsTargets.length) return input;
+        transformCalls.dynamics += 1;
+        return resultMml(optimizer.generateDynamicsMml(input, {
+          partCount: 6,
+          genre: dynamics.genre,
+          strength: dynamics.strength,
+          targetPartIndexes: dynamicsTargets,
+          overwriteExisting: true
+        }), input);
+      }, diagnostics);
+      out = stage.output;
+      previousKey = stage.key;
+
+      const restMetricInput = String(out || "");
+      if (state.metricsCache.restInput !== restMetricInput) {
+        state.metricsCache.restInput = restMetricInput;
+        state.metricsCache.rest = new Map();
+      }
+      const restGroups = [...groupChannelIndexes(channel => channel.restMode, channel => channel.restMode !== "keep")];
+      stage = pipelineStage(stageIndex++, previousKey, "rest", restGroups, out, input => {
+        if (!optimizer.trimShortRestsMml) return input;
+        let next = input;
+        for (const [mode, targetPartIndexes] of restGroups) {
+          const all = mode === "all";
+          transformCalls.rest += 1;
+          next = resultMml(optimizer.trimShortRestsMml(next, {
+            partCount: 6,
+            targetPartIndexes,
+            all,
+            denom: all ? 64 : Number(mode)
+          }), next);
+        }
+        return next;
+      }, diagnostics);
+      out = stage.output;
+      previousKey = stage.key;
+
+      const volumeGroups = [...groupChannelIndexes(channel => channel.volumeDelta, channel => Number(channel.volumeDelta) !== 0)];
+      stage = pipelineStage(stageIndex++, previousKey, "volume", volumeGroups, out, input => {
+        if (!optimizer.adjustVolumesMml) return input;
+        let next = input;
+        for (const [delta, targetPartIndexes] of volumeGroups) {
+          transformCalls.volume += 1;
+          next = resultMml(optimizer.adjustVolumesMml(next, {
+            partCount: 6,
+            targetPartIndexes,
+            delta: Number(delta)
+          }), next);
+        }
+        return next;
+      }, diagnostics);
+      out = stage.output;
+      previousKey = stage.key;
+
+      const octaveGroups = [...groupChannelIndexes(channel => channel.octaveDelta, channel => Number(channel.octaveDelta) !== 0)];
+      stage = pipelineStage(stageIndex++, previousKey, "octave", octaveGroups, out, input => {
+        if (!optimizer.transposeOctavesMml) return input;
+        let next = input;
+        for (const [octaves, targetPartIndexes] of octaveGroups) {
+          transformCalls.octave += 1;
+          next = resultMml(optimizer.transposeOctavesMml(next, {
+            partCount: 6,
+            targetPartIndexes,
+            octaves: Number(octaves)
+          }), next);
+        }
+        return next;
+      }, diagnostics);
+      out = stage.output;
+      previousKey = stage.key;
+
+      const leadingBeats = Math.max(0, Math.round((Number(state.options.leading.beats) || 0) * 2) / 2);
+      stage = pipelineStage(stageIndex++, previousKey, "leading", leadingBeats, out, input => {
+        if (leadingBeats <= 0 || !optimizer.addLeadingSilenceMml) return input;
+        transformCalls.leading += 1;
+        return resultMml(optimizer.addLeadingSilenceMml(input, { partCount: 6, beats: leadingBeats }), input);
+      }, diagnostics);
+      out = stage.output;
+      previousKey = stage.key;
+
+      const cleanupAnalysis = getTempoCleanupAnalysis(out);
+      state.tempoCleanCount = Math.max(0, Number(cleanupAnalysis?.removedCount) || 0);
+      updateTempoCleanButton();
+      stage = pipelineStage(stageIndex++, previousKey, "tempoClean", state.options.tempo.simplify, out, input => {
+        if (!state.options.tempo.simplify) return input;
+        transformCalls.tempoClean += 1;
+        return resultMml(cleanupAnalysis, input);
+      }, diagnostics);
+      out = stage.output;
+      previousKey = stage.key;
+
+      stage = pipelineStage(stageIndex++, previousKey, "tempoScale", state.options.tempo.scale, out, input => {
+        if (Number(state.options.tempo.scale) === 100) return input;
+        transformCalls.tempoScale += 1;
+        return scaleTempoCommands(input, state.options.tempo.scale);
+      }, diagnostics);
+      out = stage.output;
+
+      state.lastApplySignature = signature;
+      const changed = writeResultMml(out);
+      try {
+        window.dispatchEvent(new CustomEvent("mobibard:options-applied", {
+          detail: {
+            durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+            sourceVersion: state.sourceVersion,
+            changed,
+            transformCalls,
+            cacheHits: diagnostics.cacheHits,
+            stageDurations: diagnostics.stageDurations
+          }
+        }));
+      } catch (_) {}
+    } catch (error) {
+      showOptionStatus(error?.message || String(error), "error");
+    }
+  }
+
+  function normalizeMainToParts(text) {
+    let source = String(text || "").trim();
+    const match = source.match(/^\s*MML\s*@([\s\S]*?)\s*;?\s*$/i);
+    if (match) source = match[1];
+    const parts = source.split(",").slice(0, 6).map(item => String(item || "").trim());
+    while (parts.length < 6) parts.push("");
+    return parts;
+  }
+
+  function partDetail(parts) {
+    return parts.map((part, index) => ({ part, index })).filter(item => item.part).map(item => `${channelLabel(item.index)} ${item.part.length.toLocaleString()}`).join(" · ") || "0";
+  }
+
+  function showToast(message, tone = "success") {
+    let toast = state.ui.toast;
+    if (!toast) {
+      toast = el("div", "wb9-toast", { role: "status", "aria-live": "polite", hidden: true });
+      state.ui.toast = toast;
+      document.body.append(toast);
+    }
+    clearTimeout(state.toastTimer);
+    toast.textContent = String(message || "");
+    toast.dataset.tone = tone;
+    toast.hidden = false;
+    toast.classList.remove("is-visible");
+    requestAnimationFrame(() => toast.classList.add("is-visible"));
+    state.toastTimer = window.setTimeout(() => {
+      toast.classList.remove("is-visible");
+      window.setTimeout(() => { toast.hidden = true; }, 180);
+    }, 1500);
+  }
+
+  function trackScoreCopy() {
+    const event = { name: "score_copy", params: { page: "player", copy_scope: "split" } };
+    try {
+      const analytics = window.MobibardAnalytics;
+      if (analytics && typeof analytics.logEvent === "function") {
+        analytics.logEvent(event.name, event.params);
+      } else {
+        const queueKey = "__MOBIBARD_ANALYTICS_QUEUE__";
+        const queue = Array.isArray(window[queueKey]) ? window[queueKey] : (window[queueKey] = []);
+        queue.push(event);
+        if (queue.length > 100) queue.splice(0, queue.length - 100);
+      }
+    } catch (_) {}
+  }
+
+  async function copyText(text) {
+    const value = String(text || "").trim();
+    if (!value) return;
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(value);
+      copied = true;
+    } catch (_) {
+      const textarea = el("textarea");
+      textarea.value = value;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.append(textarea);
+      textarea.select();
+      try { copied = document.execCommand("copy") === true; } catch (_) { copied = false; }
+      textarea.remove();
+    }
+    if (!copied) return;
+    trackScoreCopy();
+    showToast(t("copyToast"));
+  }
+
+  function splitPagesForCopy(mml) {
+    const maxChars = Math.max(200, Math.min(5000, Math.round(Number(state.options.split.maxChars) || 2400)));
+    const searchPercent = [50, 60, 70, 80, 90].includes(Number(state.options.split.searchPercent)) ? Number(state.options.split.searchPercent) : 50;
+    state.options.split.maxChars = maxChars;
+    state.options.split.searchPercent = searchPercent;
+    if (!window.MabiOptimizer?.splitMmlPages) {
+      return [{ index: 1, mml, parts: normalizeMainToParts(mml) }];
+    }
+    const result = window.MabiOptimizer.splitMmlPages(mml, {
+      partCount: 6,
+      maxChars,
+      searchSlackChars: Math.round(maxChars * searchPercent / 100),
+      minCommonSilenceBeats: 2
+    });
+    return Array.isArray(result?.pages) && result.pages.length ? result.pages : [{ index: 1, mml, parts: normalizeMainToParts(mml) }];
+  }
+
+  function renderCopyItem(title, detail, button) {
+    const row = el("div", "copy-item wb4-copy-item");
+    const meta = el("div", "copy-meta");
+    meta.append(el("strong", "copy-title", { text: title }), el("span", "copy-detail", { text: detail }));
+    row.append(meta, button);
+    return row;
+  }
+
+  function createQuestionPanel({ title = "", message = "", defaultValue = "", mode = "prompt", multiline = false, confirmText = "", cancelText = "", host = null } = {}) {
+    const panel = el("section", "wb4-inline-panel wb4-question-panel");
+    const form = el("form", "dialog-card wb4-question-card");
+    const titleNode = el("h3", "", { text: title || t(mode === "confirm" ? "confirm" : "promptValue") });
+    const messageNode = el("p", "", { text: message });
+    const uid = `wb-question-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    titleNode.id = `${uid}-title`;
+    messageNode.id = `${uid}-message`;
+    form.append(titleNode, messageNode);
+    let input = null;
+    if (mode === "prompt") {
+      input = el(multiline ? "textarea" : "input", "wb4-question-input");
+      if (!multiline) input.type = "text";
+      input.value = String(defaultValue ?? "");
+      form.append(input);
+    }
+    const actions = el("div", "dialog-actions");
+    const cancel = el("button", "", { type: "button", text: cancelText || t("cancel") });
+    const confirm = el("button", "primary", { type: "submit", text: confirmText || t("confirm") });
+    actions.append(cancel, confirm);
+    form.append(actions);
+    panel.append(form);
+    panel.setAttribute("role", mode === "confirm" ? "dialog" : "region");
+    panel.setAttribute("aria-labelledby", titleNode.id);
+    panel.setAttribute("aria-describedby", messageNode.id);
+    (host || state.ui.sourceInlineHost || state.ui.copyInlineHost || state.ui.legacyHost)?.append(panel);
+    panel.open = false;
+    panel.showModal = () => { panel.open = true; panel.hidden = false; };
+    panel.close = () => { panel.open = false; panel.hidden = true; panel.dispatchEvent(new Event("close")); };
+    panel.hidden = true;
+    return { panel, form, input, cancel, confirm };
+  }
+
+  function notify(title, message, options = {}) {
+    const region = state.ui.noticeRegion;
+    if (!region || (!title && !message)) return null;
+    const notice = el("article", `wb4-notice tone-${options.tone || "info"}`);
+    const content = el("div", "wb4-notice-content");
+    if (title) content.append(el("strong", "", { text: title }));
+    if (message) content.append(el("span", "", { text: message }));
+    const close = el("button", "wb4-notice-close", { type: "button", text: "×", "aria-label": t("close") });
+    close.addEventListener("click", () => notice.remove());
+    notice.append(content, close);
+    region.prepend(notice);
+    while (region.children.length > 3) region.lastElementChild?.remove();
+    return notice;
+  }
+
+  window.MobibardInlineUi = {
+    notify,
+    prompt(message, defaultValue = "", options = {}) {
+      return new Promise(resolve => {
+        const ui = createQuestionPanel({ title: options.title || "", message, defaultValue, mode: "prompt", multiline: Boolean(options.multiline) });
+        let done = false;
+        const finish = value => {
+          if (done) return;
+          done = true;
+          ui.panel.close();
+          ui.panel.remove();
+          resolve(value);
+        };
+        ui.cancel.addEventListener("click", () => finish(null));
+        ui.form.addEventListener("submit", event => {
+          event.preventDefault();
+          finish(ui.input?.value ?? "");
+        });
+        ui.panel.showModal();
+        requestAnimationFrame(() => ui.input?.focus());
+      });
+    },
+    confirm(message, options = {}) {
+      return new Promise(resolve => {
+        const modal = Boolean(options.modal);
+        const ui = createQuestionPanel({
+          title: options.title || t("confirm"),
+          message,
+          mode: "confirm",
+          confirmText: options.confirmText || "",
+          cancelText: options.cancelText || "",
+          host: modal ? document.body : (options.host || null)
+        });
+        if (modal) {
+          ui.panel.classList.add("wb13-modal-confirm");
+          ui.panel.setAttribute("aria-modal", "true");
+        }
+        let done = false;
+        const finish = value => {
+          if (done) return;
+          done = true;
+          ui.panel.close();
+          ui.panel.remove();
+          resolve(Boolean(value));
+        };
+        ui.cancel.addEventListener("click", () => finish(false));
+        ui.form.addEventListener("submit", event => {
+          event.preventDefault();
+          finish(true);
+        });
+        ui.panel.addEventListener("keydown", event => {
+          if (event.key !== "Escape") return;
+          event.preventDefault();
+          finish(false);
+        });
+        if (modal) {
+          ui.panel.addEventListener("pointerdown", event => {
+            if (event.target === ui.panel) finish(false);
+          });
+        }
+        ui.panel.showModal();
+        requestAnimationFrame(() => (modal ? ui.cancel : ui.confirm)?.focus());
+      });
+    }
+  };
+
+  /* PlayerUi v6: source preview, common overview, and task-oriented lower tabs. */
+  
+
+  function wb6t(key, values = []) {
+    return localeText(`layout6.${key}`, values, key);
+  }
+
+  function wb6Text(key, className = "", tag = "span") {
+    return el(tag, className, { "data-wb6-text": key, text: wb6t(key) });
+  }
+
+  function updateLocalText() {
+    document.querySelectorAll("[data-wb4-text]").forEach(node => { node.textContent = t(node.dataset.wb4Text); });
+    document.querySelectorAll("[data-wb4-aria]").forEach(node => node.setAttribute("aria-label", t(node.dataset.wb4Aria)));
+    document.querySelectorAll("[data-wb6-text]").forEach(node => { node.textContent = wb6t(node.dataset.wb6Text); });
+    document.querySelectorAll("[data-wb8-feature-key]").forEach(node => { node.textContent = t(node.dataset.wb8FeatureKey); });
+    document.querySelectorAll("[data-wb8-channel-index]").forEach(node => {
+      const index = Number(node.dataset.wb8ChannelIndex);
+      node.textContent = index < 0 ? t("applyAll") : channelLabel(index);
+    });
+    if (state.ui.titleName) state.ui.titleName.textContent = appText("mml.generator_title", "MML 생성기");
+    if (state.ui.fileName && !state.ui.fileName.dataset.hasFile) state.ui.fileName.textContent = t("noFile");
+    state.ui.channelTabGroups?.forEach(group => group.forEach(button => {
+      const index = Number(button.dataset.channelIndex);
+      button.textContent = index < 0 ? wb6t("allChannels") : channelLabel(index);
+    }));
+    if (state.ui.codeHelpButton) state.ui.codeHelpButton.textContent = t("codeHelp");
+    if ($("pasteBtn")) $("pasteBtn").textContent = t("pasteMml");
+    const play = $("playToggleBtn");
+    if (play) {
+      const playing = play.classList.contains("danger");
+      play.setAttribute("aria-label", wb6t(playing ? "stop" : "play"));
+      play.title = wb6t(playing ? "stop" : "play");
+    }
+    const rewind = $("rewindBtn");
+    if (rewind) {
+      rewind.setAttribute("aria-label", wb6t("rewind"));
+      rewind.title = wb6t("rewind");
+    }
+    const leftHead = $("midiRoleList")?.closest(".midi-left-panel")?.querySelector(".dialog-section-head strong");
+    if (leftHead) {
+      leftHead.removeAttribute("data-i18n");
+      leftHead.textContent = wb6t("channelSettings");
+    }
+    const instrumentHead = $("midiInstrumentPanelTitle");
+    if (instrumentHead) {
+      instrumentHead.removeAttribute("data-i18n");
+      instrumentHead.textContent = wb6t("instrumentSettings");
+    }
+    refreshPlayerUiText();
+    syncMidiQuantizeControl();
+    updateTempoCleanButton();
+    syncVolumeGenerationControls();
+    syncAccompanimentFeatureControls();
+    scheduleChannelCountsUpdate();
+    scheduleCopyRowsRender();
+  }
+
+
+  function refreshPlayerUiText() {
+    const supported = document.querySelector("[data-supported-files-button]");
+    if (supported) supported.textContent = t("supported");
+    if ($("midiLoadBtn")) $("midiLoadBtn").textContent = t("loadFile");
+    if ($("googleDriveLoadBtn")) $("googleDriveLoadBtn").textContent = t("driveLoad");
+    if ($("pasteBtn")) $("pasteBtn").textContent = t("pasteMml");
+
+    const restKeys = { keep: "keep", "64": "rest64", "32": "rest32", "16": "rest16", "8": "rest8", "4": "rest4", all: "all" };
+    document.querySelectorAll(".wb9-rest-buttons .wb4-segment").forEach(button => {
+      const key = restKeys[String(button.dataset.value || "")];
+      if (key) button.textContent = t(key);
+    });
+
+    const quantizeKeys = { "64": "quantize64", "32": "quantize32" };
+    document.querySelectorAll(".wb7-quantize-segments .wb4-segment").forEach(button => {
+      const key = quantizeKeys[String(button.dataset.value || "")];
+      if (key) button.textContent = t(key);
+    });
+
+    const genreKeys = { "": "genreSelect", pop: "pop", jazz: "jazz", ballad: "ballad", bossa: "bossa", rock: "rock", funk: "funk", classical: "classical" };
+    document.querySelectorAll(".wb9-genre-select").forEach(select => {
+      [...select.options].forEach(option => {
+        const key = genreKeys[String(option.value || "")];
+        if (key) option.textContent = t(key);
+      });
+    });
+
+    const strengthKeys = { light: "light", normal: "normal", strong: "strong" };
+    document.querySelectorAll(".wb9-strength-select").forEach(select => {
+      [...select.options].forEach(option => {
+        const key = strengthKeys[String(option.value || "")];
+        if (key) option.textContent = t(key);
+      });
+    });
+
+    const shortLabels = [t("melShort"), "1", "2", "3", "4", "5"];
+    document.querySelectorAll(".wb9-playback-channel[data-playback-channel-index]").forEach(button => {
+      const index = Math.max(0, Math.min(5, Number(button.dataset.playbackChannelIndex) || 0));
+      button.textContent = shortLabels[index];
+      button.title = channelLabel(index);
+    });
+    document.querySelectorAll(".wb9-target-channel").forEach((button, index) => {
+      const normalized = Math.max(0, Math.min(5, index % 6));
+      button.textContent = shortLabels[normalized];
+      button.title = channelLabel(normalized);
+    });
+
+    document.querySelectorAll(".wb9-accompaniment-channel-control").forEach(control => {
+      const labels = control.querySelectorAll(".wb4-toggle-row span");
+      if (labels[0]) labels[0].textContent = t("useForAnalysis");
+      if (labels[1]) labels[1].textContent = t("useForGeneration");
+    });
+
+    const mobibeat = $("rhythmGameBtn");
+    const mobibeatLabel = mobibeat?.querySelector("span:last-child");
+    if (mobibeatLabel) mobibeatLabel.textContent = t("mobibeat");
+    if (mobibeat) {
+      mobibeat.title = t("mobibeat");
+      mobibeat.setAttribute("aria-label", t("mobibeat"));
+    }
+  }
+
+  function syncOriginalPreviewSource() {
+    const checkbox = state.ui.originalCheckbox;
+    if (!checkbox) return;
+    const available = Boolean(state.originalPreviewAvailable);
+    checkbox.disabled = !available;
+    checkbox.title = available ? "" : wb6t("originalUnavailable");
+    if (!available && checkbox.checked) checkbox.checked = false;
+    const requested = available && Boolean(checkbox.checked);
+    state.originalPreview = requested;
+    checkbox.setAttribute("aria-checked", requested ? "true" : "false");
+    state.ui.previewBlock?.classList.toggle("is-original-preview", requested);
+    try {
+      window.dispatchEvent(new CustomEvent("mobibard:original-midi-preview", {
+        detail: { active: requested }
+      }));
+    } catch (_) {}
+  }
+
+  function createChannelTabs(scope, includeAll = false) {
+    const tabs = el("div", `wb6-channel-tabs wb6-${scope}-channel-tabs${includeAll ? " wb7-has-all-channel" : ""}`, {
+      role: "tablist",
+      "aria-label": appText("mml.select_part", t("selectChannel"))
+    });
+    const values = includeAll ? [-1, 0, 1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5];
+    const buttons = [];
+    values.forEach(value => {
+      const activeValue = includeAll ? state.activeChannelView : state.activeChannel;
+      const active = value === activeValue;
+      const button = el("button", `wb6-channel-tab ${value < 0 ? "wb7-all-channel-tab" : `wb6-channel-tab-${value}`}`, {
+        type: "button",
+        role: "tab",
+        text: value < 0 ? wb6t("allChannels") : channelLabel(value),
+        "aria-selected": active ? "true" : "false",
+        tabindex: active ? "0" : "-1",
+        style: value < 0 ? "--wb6-channel-color:var(--wb4-accent)" : `--wb6-channel-color:var(--part${value})`
+      });
+      button.dataset.channelIndex = String(value);
+      button.dataset.channelScope = scope;
+      button.addEventListener("click", () => activateChannelView(value));
+      button.addEventListener("keydown", event => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const current = Math.max(0, values.indexOf(includeAll ? state.activeChannelView : state.activeChannel));
+        let target = current;
+        if (event.key === "ArrowLeft") target = (current + values.length - 1) % values.length;
+        if (event.key === "ArrowRight") target = (current + 1) % values.length;
+        if (event.key === "Home") target = 0;
+        if (event.key === "End") target = values.length - 1;
+        activateChannelView(values[target]);
+        buttons[target]?.focus();
+      });
+      tabs.append(button);
+      buttons.push(button);
+    });
+    state.ui.channelTabGroups ||= [];
+    state.ui.channelTabGroups.push(buttons);
+    return tabs;
+  }
+
+  function commonValue(getter) {
+    const values = ensureChannelDraft().channels.map(getter);
+    return { value: values[0], mixed: values.some(value => String(value) !== String(values[0])) };
+  }
+
+  function syncMidiQuantizeControl() {
+    const control = state.ui.quantizeControl;
+    if (!control) return;
+    control.setValue(String(state.midiQuantizeDivision), { silent: true });
+    control.querySelectorAll("button").forEach(button => {
+      button.disabled = !state.midiQuantizeAvailable;
+      button.title = state.midiQuantizeAvailable ? "" : wb6t("noInstrumentSource");
+    });
+    control.classList.toggle("is-disabled", !state.midiQuantizeAvailable);
+  }
+
+  function scheduleChannelCountsUpdate() {
+    if (state.channelCountFrame) cancelAnimationFrame(state.channelCountFrame);
+    state.channelCountFrame = requestAnimationFrame(() => {
+      state.channelCountFrame = 0;
+      updateChannelCodeCount();
+    });
+  }
+
+  function updateChannelCodeCount(index = state.activeChannelView) {
+    const mainText = String($("mainMml")?.value || "");
+    const mainParts = normalizeMainToParts(mainText);
+    const counts = [];
+    for (let partIndex = 0; partIndex < 6; partIndex += 1) {
+      const partText = String(mainParts[partIndex] || $(`part${partIndex}`)?.value || "");
+      const count = partText.length;
+      counts.push(count);
+      const countNode = state.ui.channelCharCounts?.[partIndex];
+      if (countNode) {
+        const formatted = Number(count).toLocaleString(document.documentElement.lang || undefined);
+        countNode.textContent = lang() === "en" ? `${formatted} ${t("chars")}` : `${formatted}${t("chars")}`;
+      }
+    }
+
+    const allChannels = Number(index) < 0;
+    const metricText = allChannels ? mainText : String(mainParts[index] || $(`part${index}`)?.value || "");
+    const charValue = allChannels ? mainText.length : Number(counts[index] || 0);
+    const restValue = (metricText.match(/r(?=\s*(?:\d|\.|&|[a-g<>ovtln#+,;@-]|$))/gi) || []).length;
+    const volumeValue = (metricText.match(/v\s*\d+/gi) || []).length;
+    const formatMetric = value => Number(value || 0).toLocaleString(document.documentElement.lang || undefined);
+
+    if (state.ui.codeCount) {
+      const count = formatMetric(charValue);
+      state.ui.codeCount.textContent = lang() === "en" ? `${count} ${t("chars")}` : `${count}${t("chars")}`;
+      state.ui.codeCount.className = allChannels
+        ? "char-count wb4-channel-code-count wb6-code-count wb7-all-code-count wb10-code-metric-value"
+        : `char-count wb4-channel-code-count wb6-code-count part-count-${index} wb10-code-metric-value`;
+    }
+    if (state.ui.codeRestCount) state.ui.codeRestCount.textContent = t("itemCount", [formatMetric(restValue)]);
+    if (state.ui.codeVolumeCount) state.ui.codeVolumeCount.textContent = t("itemCount", [formatMetric(volumeValue)]);
+  }
+
+  function buildOverviewBlock(canvas) {
+    const block = el("section", "wb4-block wb6-overview-block", {
+      "data-active-channel": state.activeChannel
+    });
+    state.ui.overviewBlock = block;
+    const countStrip = el("div", "wb6-channel-count-strip", {
+      "aria-label": wb6t("charsSummary")
+    });
+    state.ui.channelCharCounts = [];
+    for (let index = 0; index < 6; index += 1) {
+      const item = el("div", `wb6-channel-count wb6-channel-count-${index}`, {
+        style: `--wb6-channel-color:var(--part${index})`
+      });
+      const name = el("span", "wb6-channel-count-name", { text: channelLabel(index) });
+      const value = el("strong", "wb6-channel-count-value", { text: lang() === "en" ? `0 ${t("chars")}` : `0${t("chars")}` });
+      item.append(name, value);
+      countStrip.append(item);
+      state.ui.channelCharCounts.push(value);
+    }
+    const common = buildCommonOptions();
+    state.ui.optionStatus = el("div", "wb4-option-status wb6-option-status", { role: "status", "aria-live": "polite", hidden: true });
+    block.append(countStrip, common, state.ui.optionStatus);
+    canvas.append(block);
+  }
+
+  function buildInstrumentWorkspacePanel() {
+    const panel = el("section", "wb6-workspace-panel wb6-instrument-panel wb7-instrument-panel", {
+      role: "tabpanel",
+      "data-workspace-panel": "instrument",
+      hidden: true
+    });
+    state.ui.instrumentApplyBar = el("div", "wb11-pending-apply wb11-instrument-apply", {
+      role: "status",
+      "aria-live": "polite",
+      hidden: true
+    });
+    const pendingText = keyedText("instrumentPending", "wb11-pending-apply-text");
+    state.ui.instrumentCancelButton = $("midiConvertCancel");
+    state.ui.instrumentApplyButton = $("midiConvertApply");
+    const pendingActions = el("div", "wb11-pending-actions wb13-instrument-pending-actions");
+    if (state.ui.instrumentCancelButton) {
+      state.ui.instrumentCancelButton.removeAttribute("data-i18n");
+      state.ui.instrumentCancelButton.textContent = t("cancel");
+      state.ui.instrumentCancelButton.className = "wb11-cancel-button wb13-instrument-cancel-button";
+      pendingActions.append(state.ui.instrumentCancelButton);
+    }
+    if (state.ui.instrumentApplyButton) {
+      state.ui.instrumentApplyButton.removeAttribute("data-i18n");
+      state.ui.instrumentApplyButton.setAttribute("data-wb4-text", "apply");
+      state.ui.instrumentApplyButton.textContent = t("apply");
+      state.ui.instrumentApplyButton.className = "wb11-apply-button primary";
+      pendingActions.append(state.ui.instrumentApplyButton);
+    }
+    state.ui.instrumentApplyBar.append(pendingText, pendingActions);
+    state.ui.assignmentHost = el("div", "wb4-assignment-host wb6-assignment-host");
+    state.ui.assignmentEmpty = wb6Text("noInstrumentSource", "wb4-assignment-empty wb6-assignment-empty");
+    state.ui.assignmentHost.append(state.ui.assignmentEmpty);
+    panel.append(state.ui.instrumentApplyBar, state.ui.assignmentHost);
+    return panel;
+  }
+
+  function buildCodeWorkspacePanel() {
+    const panel = el("section", "wb6-workspace-panel wb6-code-panel", {
+      role: "tabpanel",
+      "data-workspace-panel": "code",
+      hidden: true,
+      "data-active-channel": String(state.activeChannelView)
+    });
+    panel.append(createChannelTabs("code", true));
+    const tools = el("div", "wb4-channel-code-tools wb6-code-tools wb10-code-tools");
+    const metrics = el("div", "wb10-code-metrics", { role: "group", "aria-label": t("codeEdit") });
+    const createMetric = (key, valueNode) => {
+      const item = el("div", "wb10-code-metric");
+      item.append(keyedText(key, "wb10-code-metric-label"), valueNode);
+      return item;
+    };
+
+    state.ui.codeCount = $("charCount") || el("span", "char-count wb4-channel-code-count wb6-code-count");
+    state.ui.codeCount.replaceChildren();
+    state.ui.codeCount.className = "char-count wb4-channel-code-count wb6-code-count wb10-code-metric-value";
+    state.ui.codeRestCount = el("strong", "wb10-code-metric-value", { text: t("itemCount", [0]) });
+    state.ui.codeVolumeCount = el("strong", "wb10-code-metric-value", { text: t("itemCount", [0]) });
+    metrics.append(
+      createMetric("codeChars", state.ui.codeCount),
+      createMetric("codeRests", state.ui.codeRestCount),
+      createMetric("codeVolumes", state.ui.codeVolumeCount)
+    );
+    tools.append(metrics);
+
+    state.ui.codeHelpButton = $("codeHelpBtn");
+    if (state.ui.codeHelpButton) {
+      state.ui.codeHelpButton.removeAttribute("data-i18n");
+      state.ui.codeHelpButton.textContent = t("codeHelp");
+      state.ui.codeHelpButton.className = "wb4-code-help-button wb6-code-help-button";
+      tools.append(state.ui.codeHelpButton);
+    }
+    state.ui.codeEditorHost = el("div", "wb4-channel-code-editor wb6-channel-code-editor", { id: "wb4ChannelCodeEditor" });
+    panel.append(tools, state.ui.codeEditorHost);
+    return panel;
+  }
+
+  function buildCopyWorkspacePanel() {
+    const panel = el("section", "wb6-workspace-panel wb6-copy-panel", {
+      role: "tabpanel",
+      "data-workspace-panel": "copy"
+    });
+    state.ui.copyRows = el("div", "wb4-copy-results");
+    state.ui.copyInlineHost = el("div", "wb4-inline-host");
+    panel.append(state.ui.copyRows, state.ui.copyInlineHost);
+    return panel;
+  }
+
+  function buildWorkspaceBlock(canvas) {
+    const block = el("section", "wb4-block wb6-workspace-block", {
+      "data-active-channel": state.activeChannel
+    });
+    state.ui.workspaceBlock = block;
+    const tabs = el("div", "wb6-workspace-tabs", { role: "tablist" });
+    const definitions = [
+      ["copy", "copyTab"],
+      ["instrument", "instrumentTab"],
+      ["channel", "channelOptionTab"],
+      ["code", "codeTab"]
+    ];
+    state.ui.workspaceTabs = [];
+    definitions.forEach(([name, key], index) => {
+      const button = el("button", "wb6-workspace-tab", {
+        type: "button",
+        role: "tab",
+        "data-workspace-tab": name,
+        "data-wb6-text": key,
+        text: wb6t(key),
+        "aria-selected": index === 0 ? "true" : "false",
+        tabindex: index === 0 ? "0" : "-1"
+      });
+      button.addEventListener("click", () => activateWorkspaceTab(name));
+      button.addEventListener("keydown", event => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const current = definitions.findIndex(item => item[0] === state.activeWorkspaceTab);
+        let target = current;
+        if (event.key === "ArrowLeft") target = (current + definitions.length - 1) % definitions.length;
+        if (event.key === "ArrowRight") target = (current + 1) % definitions.length;
+        if (event.key === "Home") target = 0;
+        if (event.key === "End") target = definitions.length - 1;
+        activateWorkspaceTab(definitions[target][0]);
+        state.ui.workspaceTabs[target]?.focus();
+      });
+      tabs.append(button);
+      state.ui.workspaceTabs.push(button);
+    });
+
+    state.ui.workspacePanels = {
+      copy: buildCopyWorkspacePanel(),
+      instrument: buildInstrumentWorkspacePanel(),
+      channel: buildChannelOptionsWorkspacePanel(),
+      code: buildCodeWorkspacePanel()
+    };
+    block.append(tabs, ...Object.values(state.ui.workspacePanels));
+    canvas.append(block);
+    activateWorkspaceTab(state.activeWorkspaceTab || "copy");
+  }
+
+  function syncChannelCodeEditor() {
+    const view = state.activeChannelView;
+    const panelName = view < 0 ? "main" : `part${view}`;
+    const panel = document.querySelector(`.mml-panel[data-panel="${panelName}"]`);
+    if (panel && state.ui.codeEditorHost) {
+      state.ui.codeEditorHost.querySelectorAll(".mml-panel").forEach(item => { item.hidden = true; });
+      state.ui.codeEditorHost.append(panel);
+      panel.hidden = false;
+    }
+    const hiddenTab = document.querySelector(`.tab-btn[data-tab="${panelName}"]`);
+    if (hiddenTab) hiddenTab.click();
+    updateChannelCodeCount(view);
+  }
+
+  function activateChannel(index) {
+    activateChannelView(index);
+  }
+
+  function buildShell() {
+    document.body.classList.add("player-ui");
+    state.activeWorkspaceTab = "copy";
+    state.activeChannelView = 0;
+    state.originalPreview = false;
+    state.ui.channelTabGroups = [];
+    buildHeaderActions();
+    const shell = el("section", "wb4-shell wb6-shell wb7-shell wb8-shell");
+    const canvas = el("div", "wb4-canvas wb6-canvas wb7-canvas wb8-canvas");
+    state.ui.canvas = canvas;
+    state.ui.legacyHost = el("div", "wb4-legacy-host", { hidden: true });
+    state.ui.noticeRegion = el("div", "wb4-notices", { "aria-live": "polite" });
+    buildTitle(canvas);
+    canvas.append(state.ui.noticeRegion);
+    buildSourceBlock(canvas);
+    buildPreviewBlock(canvas);
+    buildOverviewBlock(canvas);
+    buildWorkspaceBlock(canvas);
+    // Move the retained copy/save controls before the legacy file toolbar is removed.
+    // app.js binds these elements synchronously immediately after this script.
+    renderCopyRows();
+    state.ui.legacyHost.append(editorCard);
+    canvas.append(state.ui.legacyHost);
+    shell.append(canvas);
+    main.replaceChildren(shell);
+    fileToolbar.remove();
+    menuCard.remove();
+    activateChannelView(state.activeChannelView);
+  }
+
+  function targetForPanel(id) {
+    if (id === "midiConvertDialog" || id === "midiBulkAssignDialog") return state.ui.assignmentHost;
+    if (id === "mmiImportDialog") return state.ui.sourceInlineHost;
+    if (id === "googleDriveSaveDialog") return state.ui.copyInlineHost;
+    return state.ui.legacyHost;
+  }
+
+  function registerPanel(panel) {
+    const target = targetForPanel(panel.id) || state.ui.legacyHost;
+    const local = { open: false, returnValue: "" };
+    state.panelState.set(panel, local);
+    panel.classList.add("wb4-inline-panel");
+    panel.hidden = true;
+    panel.removeAttribute("aria-modal");
+    panel.setAttribute("role", "region");
+    Object.defineProperty(panel, "open", {
+      configurable: true,
+      enumerable: true,
+      get: () => local.open,
+      set: value => value ? panel.showModal() : panel.close()
+    });
+    Object.defineProperty(panel, "returnValue", {
+      configurable: true,
+      enumerable: true,
+      get: () => local.returnValue,
+      set: value => { local.returnValue = String(value ?? ""); }
+    });
+    panel.showModal = () => {
+      local.open = true;
+      panel.hidden = false;
+      panel.setAttribute("aria-hidden", "false");
+      if (panel.id === "midiConvertDialog") {
+        activateWorkspaceTab("instrument");
+        state.ui.assignmentEmpty.hidden = true;
+        const leftHead = panel.querySelector(".midi-left-panel .dialog-section-head strong");
+        if (leftHead) {
+          leftHead.removeAttribute("data-i18n");
+          leftHead.textContent = wb6t("channelSettings");
+        }
+        const rightHead = panel.querySelector("#midiInstrumentPanelTitle");
+        if (rightHead) {
+          rightHead.removeAttribute("data-i18n");
+          rightHead.textContent = wb6t("instrumentSettings");
+        }
+        updateMidiChannelFilter();
+        requestAnimationFrame(updateMidiChannelFilter);
+      }
+      state.openPanels.push(panel);
+      if (target === state.ui.legacyHost) panel.hidden = true;
+      requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+    };
+    panel.show = panel.showModal;
+    panel.close = (value = "") => {
+      if (!local.open) return;
+      local.open = false;
+      local.returnValue = String(value ?? "");
+      panel.hidden = true;
+      panel.setAttribute("aria-hidden", "true");
+      const index = state.openPanels.lastIndexOf(panel);
+      if (index >= 0) state.openPanels.splice(index, 1);
+      panel.dispatchEvent(new Event("close"));
+    };
+    target?.append(panel);
+  }
+
+  function convertDialogs() {
+    const nativePopupIds = new Set(["tempoEditDialog", "partSoundDialog", "codeHelpDialog", "pasteMmlDialog", "midiBulkAssignDialog"]);
+    Array.from(document.querySelectorAll("dialog")).forEach(dialog => {
+      if (nativePopupIds.has(dialog.id)) return;
+      const panel = el("section", `${dialog.className} wb4-converted-dialog`);
+      for (const attr of Array.from(dialog.attributes)) {
+        if (["class", "open", "aria-modal"].includes(attr.name)) continue;
+        panel.setAttribute(attr.name, attr.value);
+      }
+      while (dialog.firstChild) panel.append(dialog.firstChild);
+      dialog.replaceWith(panel);
+      registerPanel(panel);
+    });
+    state.ui.assignmentHost?.addEventListener("change", event => {
+      if (event.target.closest("#midiConvertDialog")) scheduleMidiAutoApply();
+    });
+    state.ui.assignmentHost?.addEventListener("click", event => {
+      const button = event.target.closest("button");
+      if (!button || !button.closest("#midiConvertDialog")) return;
+      if (["midiBulkAssignBtn", "midiConvertReloadFile", "midiConvertGoogleDriveLoad", "midiConvertApply", "midiConvertCancel"].includes(button.id)) return;
+      if (button.closest("#midiBulkAssignDialog")) return;
+      scheduleMidiAutoApply();
+    });
+  }
+
+  function installGlobalHandling() {
+    window.addEventListener("mobibard:source-baseline", event => receiveSourceBaseline(event.detail || {}));
+    window.addEventListener("mobibard:midi-settings-dirty", () => {
+      queueMicrotask(() => refreshInstrumentDirtyState());
+    });
+    window.addEventListener("mobibard:midi-settings-cancelled", () => {
+      setInstrumentDirty(false);
+      clearPendingPlaybackPreview();
+      showToast(t("instrumentCancelled"), "info");
+      scheduleSessionPersist();
+    });
+    window.addEventListener("mobibard:toast", event => showToast(event.detail?.message || "", event.detail?.tone || "info"));
+    window.addEventListener("mobibard:midi-convert-complete", event => {
+      if (event.detail?.name) setSourceName(event.detail.name);
+      setInstrumentDirty(false);
+      clearPendingPlaybackPreview();
+      scheduleSessionPersist();
+      const status = $("midiConvertStatus");
+      if (status) { status.textContent = ""; status.hidden = true; }
+      activateWorkspaceTab("instrument");
+      scheduleChannelCountsUpdate();
+      renderCopyRows();
+    });
+    window.addEventListener("mobibard:original-preview-availability", event => {
+      state.originalPreviewAvailable = Boolean(event.detail?.available);
+      if (!state.originalPreviewAvailable && state.ui.originalCheckbox) state.ui.originalCheckbox.checked = false;
+      syncOriginalPreviewSource();
+    });
+    window.addEventListener("mobibard:original-preview-state", event => {
+      const active = Boolean(event.detail?.active) && state.originalPreviewAvailable;
+      state.originalPreview = active;
+      if (state.ui.originalCheckbox) {
+        state.ui.originalCheckbox.checked = active;
+        state.ui.originalCheckbox.setAttribute("aria-checked", active ? "true" : "false");
+      }
+      state.ui.previewBlock?.classList.toggle("is-original-preview", active);
+    });
+    window.addEventListener("mobibard:midi-quantize-state", event => {
+      state.midiQuantizeAvailable = Boolean(event.detail?.available);
+      state.midiQuantizeDivision = Number(event.detail?.division) === 32 ? 32 : 64;
+      syncMidiQuantizeControl();
+    });
+    window.addEventListener("mobibard:localechange", updateLocalText);
+    $("mainMml")?.addEventListener("input", event => {
+      if (!state.applying) {
+        state.manualEdited = true;
+        if (event.isTrusted) markPlayerEdited();
+      }
+      scheduleChannelCountsUpdate();
+      scheduleCopyRowsRender();
+      scheduleSessionPersist();
+    });
+    for (let index = 0; index < 6; index += 1) {
+      $(`part${index}`)?.addEventListener("input", event => {
+        if (!state.applying && event.isTrusted) markPlayerEdited();
+        scheduleChannelCountsUpdate();
+        scheduleCopyRowsRender();
+        scheduleSessionPersist();
+      });
+    }
+    window.addEventListener("resize", syncPlaybackChannelPlacement, { passive: true });
+    window.addEventListener("pagehide", () => { if (state.sessionHasUserEdit && state.sourceMml) void persistLastPlayerSession(); });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden" && state.sessionHasUserEdit && state.sourceMml) void persistLastPlayerSession();
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      if (document.querySelector(".wb13-modal-confirm:not([hidden])")) return;
+      const panel = [...state.openPanels].reverse().find(item => item.open && !item.hidden);
+      if (!panel) return;
+      const cancel = new Event("cancel", { cancelable: true });
+      if (panel.dispatchEvent(cancel)) panel.close("escape");
+    }, true);
+  }
+
+  /* PlayerUi v9: immediate source-based options, compact metrics, and cached transforms. */
+  function wb9NumberControl({ min, max, step = 1, value, suffix = "", label = "", onChange }) {
+    const wrap = el("div", "wb9-number-control");
+    const numericStep = Math.max(Number.EPSILON, Number(step) || 1);
+    const decimals = String(numericStep).includes(".") ? String(numericStep).split(".")[1].length : 0;
+    let current = Number(value) || 0;
+    const input = el("input", "wb4-number wb9-number-input", {
+      type: "number", min, max, step: numericStep, value: current,
+      "aria-label": label || undefined
+    });
+    const buttonWrap = el("div", "wb9-number-step-buttons");
+    const up = el("button", "wb9-number-step is-up", {
+      type: "button", text: "▲",
+      "aria-label": t("increaseValue", [label || t("promptValue")])
+    });
+    const down = el("button", "wb9-number-step is-down", {
+      type: "button", text: "▼",
+      "aria-label": t("decreaseValue", [label || t("promptValue")])
+    });
+    const suffixNode = suffix ? el("span", "wb4-number-suffix wb9-number-suffix", { text: suffix }) : null;
+    const normalize = raw => {
+      let next = Number(raw);
+      if (!Number.isFinite(next)) next = current;
+      next = Math.max(Number(min), Math.min(Number(max), next));
+      next = Math.round(next / numericStep) * numericStep;
+      return Number(next.toFixed(decimals));
+    };
+    const format = next => decimals > 0 ? Number(next).toFixed(decimals).replace(/\.0+$/, "") : String(Math.round(next));
+    const syncButtons = () => {
+      up.disabled = current >= Number(max);
+      down.disabled = current <= Number(min);
+    };
+    const setValue = (raw, { silent = true, mixed = false } = {}) => {
+      const next = normalize(raw);
+      current = next;
+      input.value = mixed ? "" : format(next);
+      input.placeholder = mixed ? t("mixedValues") : "";
+      wrap.dataset.mixed = mixed ? "true" : "false";
+      syncButtons();
+      if (!silent && !mixed) onChange(next);
+    };
+    const stepBy = direction => {
+      const base = input.value === "" ? current : Number(input.value);
+      setValue(base + numericStep * direction, { silent: false });
+      input.focus();
+    };
+    up.addEventListener("click", () => stepBy(1));
+    down.addEventListener("click", () => stepBy(-1));
+    input.addEventListener("change", () => setValue(input.value, { silent: false }));
+    input.addEventListener("blur", () => setValue(input.value, { silent: true }));
+    wrap.setValue = setValue;
+    wrap._input = input;
+    buttonWrap.append(up, down);
+    wrap.append(input, buttonWrap);
+    if (suffixNode) wrap.append(suffixNode);
+    setValue(current);
+    return wrap;
+  }
+
+  function scheduleCopyRowsRender() {
+    state.copyDirty = true;
+    if (state.activeWorkspaceTab !== "copy") return;
+    if (state.copyRenderFrame) cancelAnimationFrame(state.copyRenderFrame);
+    state.copyRenderFrame = requestAnimationFrame(() => {
+      state.copyRenderFrame = 0;
+      if (!state.copyDirty) return;
+      state.copyDirty = false;
+      renderCopyRows();
+    });
+  }
+
+  function getRestRemovalCounts(mode) {
+    if (!state.sourceMml || mode === "keep") return Array.from({ length: 6 }, () => 0);
+    if (state.metricsCache.sourceVersion !== state.sourceVersion) {
+      state.metricsCache.sourceVersion = state.sourceVersion;
+      state.metricsCache.restInput = "";
+      state.metricsCache.rest = new Map();
+    }
+    if (state.metricsCache.rest.has(mode)) return state.metricsCache.rest.get(mode);
+    const metricInput = state.metricsCache.restInput || state.sourceMml;
+    let counts = Array.from({ length: 6 }, () => 0);
+    try {
+      const result = window.MabiOptimizer?.countShortRestsMml?.(metricInput, {
+        partCount: 6,
+        all: mode === "all",
+        denom: mode === "all" ? 64 : Number(mode)
+      });
+      counts = Array.from({ length: 6 }, (_, index) => Math.max(0, Number(result?.counts?.[index]) || 0));
+    } catch (_) {}
+    state.metricsCache.rest.set(mode, counts);
+    return counts;
+  }
+
+  function getVolumeDistributions() {
+    const source = String($("mainMml")?.value || "");
+    const draft = ensureChannelDraft().channels;
+    const adjustments = draft.map((channel, index) => Number(channel.volumeDelta || 0) - Number(state.options.channels[index]?.volumeDelta || 0));
+    const cacheKey = `${source}\n#draft-volume:${adjustments.join(",")}`;
+    if (state.metricsCache.volumeSource === cacheKey && state.metricsCache.volume.length === 6) return state.metricsCache.volume;
+    const parts = normalizeMainToParts(source);
+    const rows = parts.map((part, index) => {
+      if (!part) return { total: 0, items: [] };
+      try {
+        const notes = window.MabiMml?.parseMmlPart?.(part, index)?.notes || [];
+        const counts = new Map();
+        const delta = adjustments[index] || 0;
+        for (const note of notes) {
+          const volume = Math.max(0, Math.min(15, Math.round(Number(note?.volume ?? 8) + delta)));
+          counts.set(volume, (counts.get(volume) || 0) + 1);
+        }
+        return {
+          total: notes.length,
+          items: [...counts.entries()].sort((a, b) => b[0] - a[0]).map(([volume, count]) => ({ volume, count }))
+        };
+      } catch (_) {
+        return { total: 0, items: [] };
+      }
+    });
+    state.metricsCache.volumeSource = cacheKey;
+    state.metricsCache.volume = rows;
+    return rows;
+  }
+
+  function getOctaveRanges() {
+    const source = String($("mainMml")?.value || "");
+    const parts = normalizeMainToParts(source);
+    const draft = ensureChannelDraft().channels;
+    return parts.map((part, index) => {
+      if (!part) return null;
+      try {
+        const notes = window.MabiMml?.parseMmlPart?.(part, index)?.notes || [];
+        if (!notes.length) return null;
+        const delta = (Number(draft[index]?.octaveDelta) || 0) - (Number(state.options.channels[index]?.octaveDelta) || 0);
+        let minOctave = Infinity;
+        let maxOctave = -Infinity;
+        for (const note of notes) {
+          const midi = Math.max(0, Math.min(127, Math.round(Number(note?.midi) || 0) + delta * 12));
+          const octave = Math.max(0, Math.min(9, Math.floor(midi / 12) - 1));
+          minOctave = Math.min(minOctave, octave);
+          maxOctave = Math.max(maxOctave, octave);
+        }
+        return Number.isFinite(minOctave) ? { min: minOctave, max: maxOctave, count: notes.length } : null;
+      } catch (_) {
+        return null;
+      }
+    });
+  }
+
+  function renderOctaveRange(node, range) {
+    if (!node) return;
+    node.textContent = range ? `O${range.min} – O${range.max}` : t("noNotes");
+    node.classList.toggle("is-empty", !range);
+  }
+
+  function setCountBadge(node, count) {
+    if (!node) return;
+    node.textContent = t("itemCount", [Math.max(0, Number(count) || 0).toLocaleString(document.documentElement.lang || undefined)]);
+  }
+
+  function renderVolumeChips(node, items) {
+    if (!node) return;
+    node.replaceChildren();
+    const values = Array.isArray(items) ? items : [];
+    if (!values.length) {
+      node.append(el("span", "wb9-volume-chip is-empty", { text: "V-" }));
+      return;
+    }
+    values.forEach(({ volume, count }) => node.append(el("span", "wb9-volume-chip", {
+      text: `V${volume} × ${Number(count).toLocaleString(document.documentElement.lang || undefined)}`
+    })));
+  }
+
+  function updateOptionMetrics() {
+    if (!state.ui.featurePanels || state.activeWorkspaceTab !== "channel") return;
+    if (state.activeOptionFeature === "rest") {
+      const channelCounts = ensureChannelDraft().channels.map((channel, index) => getRestRemovalCounts(channel.restMode)[index] || 0);
+      setCountBadge(state.ui.restBatchMetric, channelCounts.reduce((sum, count) => sum + count, 0));
+      (state.ui.restMetricNodes || []).forEach((node, index) => setCountBadge(node, channelCounts[index]));
+      return;
+    }
+    if (state.activeOptionFeature === "volume") {
+      const rows = getVolumeDistributions();
+      rows.forEach((row, index) => {
+        const metric = state.ui.volumeMetricNodes?.[index];
+        renderVolumeChips(metric?.detail, row.items);
+      });
+      return;
+    }
+    if (state.activeOptionFeature === "octave") {
+      const ranges = getOctaveRanges();
+      (state.ui.octaveMetricNodes || []).forEach((node, index) => renderOctaveRange(node, ranges[index]));
+      const valid = ranges.filter(Boolean);
+      renderOctaveRange(state.ui.octaveBatchMetric, valid.length ? {
+        min: Math.min(...valid.map(item => item.min)),
+        max: Math.max(...valid.map(item => item.max))
+      } : null);
+    }
+  }
+
+  function scheduleOptionMetricsUpdate() {
+    state.metricsDirty = true;
+    if (state.activeWorkspaceTab !== "channel") return;
+    if (state.metricsIdleHandle) {
+      if (typeof cancelIdleCallback === "function") cancelIdleCallback(state.metricsIdleHandle);
+      else clearTimeout(state.metricsIdleHandle);
+    }
+    const run = () => {
+      state.metricsIdleHandle = 0;
+      if (!state.metricsDirty || state.activeWorkspaceTab !== "channel") return;
+      state.metricsDirty = false;
+      updateOptionMetrics();
+    };
+    state.metricsIdleHandle = typeof requestIdleCallback === "function"
+      ? requestIdleCallback(run, { timeout: 180 })
+      : window.setTimeout(run, 50);
+  }
+
+  function syncFeatureBatchState(feature) {
+    const refs = state.ui.featureControls?.[feature];
+    if (!refs) return;
+    const getter = feature === "rest"
+      ? channel => channel.restMode
+      : feature === "volume"
+        ? channel => channel.volumeDelta
+        : channel => channel.octaveDelta;
+    const values = ensureChannelDraft().channels.map(getter);
+    const value = { value: values[0], mixed: values.some(item => String(item) !== String(values[0])) };
+    refs.batch?.setValue(value.value, { mixed: value.mixed });
+  }
+
+  function wb9OptionListRow({ index = -1, control, metric = null, extraClass = "", metricPlacement = "after" }) {
+    const row = el("div", `wb8-option-list-row wb9-option-list-row ${index < 0 ? "wb8-option-list-all wb9-option-list-all" : `wb8-option-list-channel wb8-option-list-channel-${index}`} ${extraClass}`.trim(), {
+      style: index < 0 ? "--wb8-channel-color:var(--wb4-accent)" : `--wb8-channel-color:var(--part${index})`
+    });
+    const label = el("div", "wb8-option-list-label wb9-option-list-label");
+    const labelText = el("strong", "wb9-option-channel-name", {
+      text: index < 0 ? t("applyAll") : channelLabel(index),
+      "data-wb8-channel-index": index
+    });
+    label.append(labelText);
+    const body = el("div", "wb8-option-list-control wb9-option-list-control");
+    if (metricPlacement === "top") {
+      const metricRow = el("div", "wb13-option-metric-top");
+      if (metric?.badge) metricRow.append(metric.badge);
+      if (metric?.detail) metricRow.append(metric.detail);
+      if (metricRow.childNodes.length) row.append(metricRow);
+      if (control) body.append(control);
+      row.append(label, body);
+      return row;
+    }
+    if (metricPlacement === "above") {
+      const metricRow = el("div", "wb13-option-metric-above");
+      if (metric?.badge) metricRow.append(metric.badge);
+      if (metric?.detail) metricRow.append(metric.detail);
+      if (metricRow.childNodes.length) body.append(metricRow);
+      if (control) body.append(control);
+      row.append(label, body);
+      return row;
+    }
+    if (metric?.badge) label.append(metric.badge);
+    if (control) body.append(control);
+    row.append(label, body);
+    if (metric?.detail) row.append(metric.detail);
+    return row;
+  }
+
+  function restDefinitions() {
+    return [["keep", t("keep")], ["64", t("rest64")], ["32", t("rest32")], ["16", t("rest16")], ["8", t("rest8")], ["4", t("rest4")], ["all", t("all")]];
+  }
+
+  function buildRestFeaturePanel() {
+    const panel = el("section", "wb8-feature-panel wb9-feature-panel wb8-rest-feature wb9-rest-feature", { role: "tabpanel", "data-option-feature-panel": "rest" });
+    const channels = ensureChannelDraft().channels;
+    state.ui.restMetricNodes = [];
+    state.ui.featureControls.rest = { channels: [] };
+    const common = commonValue(channel => channel.restMode);
+    const batch = segmented(restDefinitions(), common.value, value => {
+      channels.forEach(channel => { channel.restMode = value; });
+      state.ui.featureControls.rest.channels.forEach(control => control.setValue(value));
+      syncFeatureBatchState("rest");
+      markChannelOptionsDirty();
+      scheduleOptionMetricsUpdate();
+    }, "wb9-rest-buttons wb9-rest-buttons-batch");
+    batch.setValue(common.value, { mixed: common.mixed });
+    state.ui.featureControls.rest.batch = batch;
+    state.ui.restBatchMetric = el("span", "wb9-option-count", { text: t("restRemovedNone") });
+    panel.append(wb9OptionListRow({ index: -1, control: batch, metric: { badge: state.ui.restBatchMetric } }));
+    channels.forEach((channel, index) => {
+      const control = segmented(restDefinitions(), channel.restMode, value => {
+        channel.restMode = value;
+        syncFeatureBatchState("rest");
+        markChannelOptionsDirty();
+        scheduleOptionMetricsUpdate();
+      }, "wb9-rest-buttons");
+      const badge = el("span", "wb9-option-count wb9-rest-count", { text: t("restRemovedNone") });
+      state.ui.featureControls.rest.channels.push(control);
+      state.ui.restMetricNodes.push(badge);
+      panel.append(wb9OptionListRow({ index, control, metric: { badge } }));
+    });
+    return panel;
+  }
+
+  function buildVolumeFeaturePanel() {
+    const panel = el("section", "wb8-feature-panel wb9-feature-panel wb8-volume-feature wb9-volume-feature", { role: "tabpanel", hidden: true, "data-option-feature-panel": "volume" });
+    const channels = ensureChannelDraft().channels;
+    state.ui.volumeMetricNodes = [];
+    state.ui.volumeBatchMetric = null;
+    state.ui.featureControls.volume = { channels: [] };
+
+    const common = commonValue(channel => channel.volumeDelta);
+    const batch = sliderNumber({ min: -15, max: 15, step: 1, value: common.value, onChange: value => {
+      channels.forEach(channel => { channel.volumeDelta = value; });
+      state.ui.featureControls.volume.channels.forEach(control => control.setValue(value));
+      syncFeatureBatchState("volume");
+      markChannelOptionsDirty();
+      scheduleOptionMetricsUpdate();
+    }});
+    batch.setValue(common.value, { mixed: common.mixed });
+    state.ui.featureControls.volume.batch = batch;
+    panel.append(wb9OptionListRow({ index: -1, control: batch }));
+
+    channels.forEach((channel, index) => {
+      const control = sliderNumber({ min: -15, max: 15, step: 1, value: channel.volumeDelta, onChange: value => {
+        channel.volumeDelta = value;
+        syncFeatureBatchState("volume");
+        markChannelOptionsDirty();
+        scheduleOptionMetricsUpdate();
+      }});
+      const metric = {
+        detail: el("div", "wb9-volume-distribution wb13-volume-channel-distribution")
+      };
+      state.ui.featureControls.volume.channels.push(control);
+      state.ui.volumeMetricNodes.push(metric);
+      panel.append(wb9OptionListRow({ index, control, metric, extraClass: "wb13-volume-metric-row", metricPlacement: "top" }));
+    });
+    return panel;
+  }
+
+  function buildOctaveFeaturePanel() {
+    const panel = el("section", "wb8-feature-panel wb9-feature-panel wb8-octave-feature wb9-octave-feature", { role: "tabpanel", hidden: true, "data-option-feature-panel": "octave" });
+    const channels = ensureChannelDraft().channels;
+    state.ui.octaveMetricNodes = [];
+    state.ui.featureControls.octave = { channels: [] };
+    state.ui.octaveBatchMetric = el("span", "wb13-octave-range wb13-octave-range-all", { text: t("noNotes") });
+    const common = commonValue(channel => channel.octaveDelta);
+    const batch = sliderNumber({ min: -7, max: 7, step: 1, value: common.value, onChange: value => {
+      channels.forEach(channel => { channel.octaveDelta = value; });
+      state.ui.featureControls.octave.channels.forEach(control => control.setValue(value));
+      syncFeatureBatchState("octave");
+      markChannelOptionsDirty();
+      scheduleOptionMetricsUpdate();
+    }});
+    batch.setValue(common.value, { mixed: common.mixed });
+    state.ui.featureControls.octave.batch = batch;
+    panel.append(wb9OptionListRow({ index: -1, control: batch, metric: { badge: state.ui.octaveBatchMetric } }));
+    channels.forEach((channel, index) => {
+      const control = sliderNumber({ min: -7, max: 7, step: 1, value: channel.octaveDelta, onChange: value => {
+        channel.octaveDelta = value;
+        syncFeatureBatchState("octave");
+        markChannelOptionsDirty();
+        scheduleOptionMetricsUpdate();
+      }});
+      const range = el("span", "wb13-octave-range", { text: t("noNotes"), title: t("octaveRange") });
+      state.ui.featureControls.octave.channels.push(control);
+      state.ui.octaveMetricNodes.push(range);
+      panel.append(wb9OptionListRow({ index, control, metric: { badge: range } }));
+    });
+    return panel;
+  }
+
+  function wb9SetMixedToggle(toggle, values) {
+    const input = toggle?._input;
+    if (!input) return;
+    input.checked = values.every(Boolean);
+    input.indeterminate = values.some(Boolean) && !values.every(Boolean);
+  }
+
+  function setToggleDisabled(toggle, disabled) {
+    if (!toggle?._input) return;
+    toggle._input.disabled = Boolean(disabled);
+    toggle.classList.toggle("is-disabled", Boolean(disabled));
+  }
+
+  function syncAccompanimentFeatureControls() {
+    const refs = state.ui.featureControls?.accompaniment;
+    if (!refs) return;
+    const draft = ensureChannelDraft();
+    const channels = draft.channels;
+    const accompanimentOption = draft.accompaniment;
+    const disabled = !accompanimentOption.genre;
+    if (refs.genre) refs.genre.value = accompanimentOption.genre;
+    if (refs.strength) {
+      refs.strength.value = accompanimentOption.strength;
+      refs.strength.disabled = disabled;
+    }
+    wb9SetMixedToggle(refs.batch?.analysis, channels.map(item => item.accompaniment.analysis));
+    wb9SetMixedToggle(refs.batch?.generation, channels.map(item => item.accompaniment.generation));
+    setToggleDisabled(refs.batch?.analysis, disabled);
+    setToggleDisabled(refs.batch?.generation, disabled);
+    refs.channels?.forEach((control, index) => {
+      const accompaniment = channels[index]?.accompaniment;
+      if (!accompaniment) return;
+      control.analysis._input.checked = Boolean(accompaniment.analysis);
+      control.analysis._input.indeterminate = false;
+      control.generation._input.checked = Boolean(accompaniment.generation);
+      control.generation._input.indeterminate = false;
+      setToggleDisabled(control.analysis, disabled);
+      setToggleDisabled(control.generation, disabled);
+    });
+    refs.panel?.classList.toggle("is-genre-unselected", disabled);
+  }
+
+  function wb9AccompanimentChannelControl(channel, { batch = false } = {}) {
+    const wrap = el("div", "wb8-accompaniment-channel-control wb9-accompaniment-channel-control");
+    const channels = ensureChannelDraft().channels;
+    const analysis = toggleControl(t("useForAnalysis"), batch ? channels.every(item => item.accompaniment.analysis) : channel.accompaniment.analysis, value => {
+      if (batch) channels.forEach(item => { item.accompaniment.analysis = value; });
+      else channel.accompaniment.analysis = value;
+      syncAccompanimentFeatureControls();
+      markChannelOptionsDirty();
+    });
+    const generation = toggleControl(t("useForGeneration"), batch ? channels.every(item => item.accompaniment.generation) : channel.accompaniment.generation, value => {
+      if (batch) channels.forEach(item => { item.accompaniment.generation = value; });
+      else channel.accompaniment.generation = value;
+      syncAccompanimentFeatureControls();
+      markChannelOptionsDirty();
+    });
+    wrap._controls = { analysis, generation };
+    wrap.append(analysis, generation);
+    return wrap;
+  }
+
+  function buildAccompanimentFeaturePanel() {
+    const panel = el("section", "wb8-feature-panel wb9-feature-panel wb8-accompaniment-feature wb9-accompaniment-feature", { role: "tabpanel", hidden: true, "data-option-feature-panel": "accompaniment" });
+    const draft = ensureChannelDraft();
+    const global = el("div", "wb8-accompaniment-global wb9-accompaniment-global");
+    const genre = selectControl(genreValuesWithPlaceholder(), draft.accompaniment.genre, value => {
+      draft.accompaniment.genre = value;
+      syncAccompanimentFeatureControls();
+      markChannelOptionsDirty();
+    }, "wb9-genre-select");
+    const strength = selectControl([["light", t("light")], ["normal", t("normal")], ["strong", t("strong")]], draft.accompaniment.strength, value => {
+      draft.accompaniment.strength = value;
+      markChannelOptionsDirty();
+    }, "wb9-strength-select");
+    global.append(genre, strength);
+    panel.append(global);
+    const batchWrap = wb9AccompanimentChannelControl(draft.channels[0], { batch: true });
+    state.ui.featureControls.accompaniment = { panel, genre, strength, batch: batchWrap._controls, channels: [] };
+    panel.append(wb9OptionListRow({ index: -1, control: batchWrap, extraClass: "wb8-option-list-wide wb9-option-list-wide" }));
+    draft.channels.forEach((channel, index) => {
+      const control = wb9AccompanimentChannelControl(channel);
+      state.ui.featureControls.accompaniment.channels.push(control._controls);
+      panel.append(wb9OptionListRow({ index, control, extraClass: "wb8-option-list-wide wb9-option-list-wide" }));
+    });
+    requestAnimationFrame(syncAccompanimentFeatureControls);
+    return panel;
+  }
+
+  function activateOptionFeature(name) {
+    const next = ["rest", "volume", "octave", "accompaniment"].includes(name) ? name : "rest";
+    state.activeOptionFeature = next;
+    state.ui.featureTabs?.forEach(button => {
+      const active = button.dataset.optionFeature === next;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+      button.tabIndex = active ? 0 : -1;
+    });
+    state.ui.featurePanels?.forEach(panel => { panel.hidden = panel.dataset.optionFeaturePanel !== next; });
+    if (next === "rest" || next === "volume" || next === "octave") scheduleOptionMetricsUpdate();
+  }
+
+  function buildChannelOptionsWorkspacePanel() {
+    const panel = el("section", "wb6-workspace-panel wb6-channel-options-panel wb8-channel-options-panel wb9-channel-options-panel", {
+      role: "tabpanel",
+      "data-workspace-panel": "channel",
+      hidden: true
+    });
+    const definitions = [["rest", "rest"], ["volume", "volume"], ["octave", "octave"], ["accompaniment", "accompaniment"]];
+    const tabs = el("div", "wb8-feature-tabs wb9-feature-tabs", { role: "tablist" });
+    state.ui.featureTabs = [];
+    definitions.forEach(([name, key], index) => {
+      const button = el("button", "wb8-feature-tab wb9-feature-tab", {
+        type: "button",
+        role: "tab",
+        text: t(key),
+        "data-option-feature": name,
+        "data-wb8-feature-key": key,
+        "aria-selected": index === 0 ? "true" : "false",
+        tabindex: index === 0 ? "0" : "-1"
+      });
+      button.addEventListener("click", () => activateOptionFeature(name));
+      tabs.append(button);
+      state.ui.featureTabs.push(button);
+    });
+    state.ui.featureControls = {};
+    state.ui.channelPanels = [];
+    state.ui.featurePanels = [
+      buildRestFeaturePanel(),
+      buildVolumeFeaturePanel(),
+      buildOctaveFeaturePanel(),
+      buildAccompanimentFeaturePanel()
+    ];
+    state.ui.channelApplyBar = el("div", "wb11-pending-apply wb11-channel-apply", {
+      role: "status",
+      "aria-live": "polite",
+      hidden: true
+    });
+    const channelCancelButton = el("button", "wb11-cancel-button", {
+      type: "button",
+      text: t("cancel"),
+      "data-wb4-text": "cancel"
+    });
+    const channelApplyButton = el("button", "wb11-apply-button", {
+      type: "button",
+      text: t("apply"),
+      "data-wb4-text": "apply"
+    });
+    channelCancelButton.addEventListener("click", cancelChannelOptionsDraft);
+    channelApplyButton.addEventListener("click", applyChannelOptionsDraft);
+    const channelPendingActions = el("div", "wb11-pending-actions");
+    channelPendingActions.append(channelCancelButton, channelApplyButton);
+    state.ui.channelCancelButton = channelCancelButton;
+    state.ui.channelApplyButton = channelApplyButton;
+    state.ui.channelApplyBar.append(keyedText("channelPending", "wb11-pending-apply-text"), channelPendingActions);
+    panel.append(tabs, state.ui.channelApplyBar, ...state.ui.featurePanels);
+    requestAnimationFrame(() => activateOptionFeature(state.activeOptionFeature));
+    return panel;
+  }
+
+  function syncPlaybackChannelPlacement() {
+    const channels = state.ui.playbackChannels;
+    const quickControls = state.ui.playbackQuickControls;
+    const transportActions = state.ui.playbackTransportActions;
+    const speedWrap = state.ui.playbackSpeedWrap;
+    if (!channels || !quickControls || !transportActions) return;
+    const narrow = window.matchMedia?.("(max-width: 620px)")?.matches ?? window.innerWidth <= 620;
+    if (narrow) {
+      if (channels.parentElement !== transportActions) transportActions.append(channels);
+    } else if (channels.parentElement !== quickControls) {
+      if (speedWrap?.parentElement === quickControls) quickControls.insertBefore(channels, speedWrap);
+      else quickControls.prepend(channels);
+    }
+    channels.classList.toggle("is-mobile-transport", narrow);
+  }
+
+  function buildPreviewBlock(canvas) {
+    const block = el("section", "wb4-block wb4-preview-block wb6-preview-block wb8-preview-block wb9-preview-block");
+    state.ui.previewBlock = block;
+    const transport = playLayout.querySelector(".transport-row");
+    const seek = playLayout.querySelector(".seek-row");
+    const piano = $("pianoRoll");
+    const play = $("playToggleBtn");
+    const rewind = $("rewindBtn");
+    const playInfo = $("playInfo");
+    const loopInput = $("loopPlayback");
+    const loopLabel = loopInput?.closest("label");
+    const quickControls = transport?.querySelector(".quick-controls");
+    const transportActions = transport?.querySelector(".transport-actions");
+    const soundButton = $("partSoundBtn");
+    const speedWrap = $("speedControlButton")?.closest(".compact-control-wrap");
+    const volumeWrap = $("volumeControlButton")?.closest(".compact-control-wrap");
+
+    if (play) {
+      play.removeAttribute("data-i18n");
+      play.innerHTML = '<span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span>';
+      play.classList.add("wb6-transport-symbol", "wb6-play-symbol");
+      play.setAttribute("aria-label", wb6t("play"));
+      play.title = wb6t("play");
+    }
+    if (rewind) {
+      rewind.removeAttribute("data-i18n");
+      rewind.removeAttribute("data-i18n-title");
+      rewind.innerHTML = '<span class="shared-transport-icon shared-icon-first" aria-hidden="true"></span>';
+      rewind.classList.add("wb6-transport-symbol", "wb6-rewind-symbol");
+      rewind.setAttribute("aria-label", wb6t("rewind"));
+      rewind.title = wb6t("rewind");
+    }
+    if (playInfo) {
+      playInfo.hidden = true;
+      playInfo.classList.add("wb6-hidden-play-info");
+    }
+    if (quickControls && speedWrap) {
+      const channels = el("div", "wb8-playback-channels wb9-playback-channels", { role: "group", "aria-label": t("playbackChannels") });
+      const labels = [t("melShort"), "1", "2", "3", "4", "5"];
+      for (let index = 0; index < 6; index += 1) {
+        const button = el("button", `wb8-playback-channel wb8-playback-channel-${index} wb9-playback-channel active`, {
+          type: "button",
+          text: labels[index],
+          "data-playback-channel-index": index,
+          "aria-pressed": "true",
+          title: channelLabel(index),
+          style: `--wb8-channel-color:var(--part${index})`
+        });
+        channels.append(button);
+      }
+      state.ui.playbackChannels = channels;
+      state.ui.playbackQuickControls = quickControls;
+      state.ui.playbackTransportActions = transportActions;
+      state.ui.playbackSpeedWrap = speedWrap;
+      quickControls.insertBefore(channels, speedWrap);
+    }
+    if (quickControls && soundButton) {
+      soundButton.classList.add("wb9-sound-button");
+      if (volumeWrap?.parentElement === quickControls) volumeWrap.after(soundButton);
+      else quickControls.append(soundButton);
+    }
+    if (loopLabel) {
+      state.ui.originalCheckbox = el("input", "", { id: "originalPlayback", type: "checkbox", disabled: true });
+      const originalLabel = el("label", "loop-label wb6-original-label wb8-original-label wb9-original-label");
+      originalLabel.append(state.ui.originalCheckbox, wb6Text("original"));
+      loopLabel.after(originalLabel);
+      state.ui.originalCheckbox.addEventListener("change", syncOriginalPreviewSource);
+    }
+
+    playLayout.replaceChildren();
+    if (piano) playLayout.append(piano);
+    if (seek) playLayout.append(seek);
+    if (transport) playLayout.append(transport);
+    syncPlaybackChannelPlacement();
+    prepareTimeline(seek);
+    block.append(playLayout);
+    state.ui.playbackExtraHost = el("div", "wb4-inline-host");
+    block.append(state.ui.playbackExtraHost);
+    canvas.append(block);
+  }
+
+  function updateTempoCleanButton() {
+    const button = state.ui.tempoCleanButton;
+    if (!button) return;
+    button.textContent = state.options.tempo.simplify
+      ? t("tempoCleanEnabledCount", [Math.max(0, Number(state.tempoCleanCount) || 0).toLocaleString(document.documentElement.lang || undefined)])
+      : t("tempoCleanDisabled");
+    button.classList.toggle("active", Boolean(state.options.tempo.simplify));
+    button.setAttribute("aria-pressed", state.options.tempo.simplify ? "true" : "false");
+  }
+
+  function createTargetChannelButtons(values, onChange, className = "") {
+    const wrap = el("div", `wb9-target-channels ${className}`.trim(), { role: "group", "aria-label": t("channelApply") });
+    const buttons = [];
+    const labels = [t("melShort"), "1", "2", "3", "4", "5"];
+    const sync = () => buttons.forEach((button, index) => {
+      const active = Boolean(values[index]);
+      button.classList.toggle("active", active);
+      button.classList.toggle("is-inactive", !active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    for (let index = 0; index < 6; index += 1) {
+      const button = el("button", `wb9-target-channel wb9-target-channel-${index}`, {
+        type: "button",
+        text: labels[index],
+        "aria-pressed": values[index] ? "true" : "false",
+        title: channelLabel(index),
+        style: `--wb9-channel-color:var(--part${index})`
+      });
+      button.addEventListener("click", () => {
+        if (button.disabled) return;
+        values[index] = !values[index];
+        sync();
+        onChange(values.slice());
+      });
+      wrap.append(button);
+      buttons.push(button);
+    }
+    wrap._buttons = buttons;
+    wrap.sync = sync;
+    wrap.setDisabled = disabled => {
+      buttons.forEach(button => { button.disabled = Boolean(disabled); });
+      wrap.classList.toggle("is-disabled", Boolean(disabled));
+    };
+    sync();
+    return wrap;
+  }
+
+  function syncVolumeGenerationControls() {
+    const refs = state.ui.volumeGeneration;
+    if (!refs) return;
+    const disabled = !state.options.dynamics.genre;
+    refs.genre.value = state.options.dynamics.genre;
+    refs.strength.value = state.options.dynamics.strength;
+    refs.strength.disabled = disabled;
+    refs.channels.sync();
+    refs.channels.setDisabled(disabled);
+    refs.wrap.classList.toggle("is-genre-unselected", disabled);
+  }
+
+  function buildCommonOptions() {
+    const common = el("div", "wb4-common-options wb6-common-options wb7-common-options wb8-common-options wb9-common-options");
+    state.ui.quantizeControl = segmented([
+      ["64", t("quantize64")], ["32", t("quantize32")]
+    ], String(state.midiQuantizeDivision), division => {
+      const normalized = Number(division) === 32 ? 32 : 64;
+      state.midiQuantizeDivision = normalized;
+      try { window.dispatchEvent(new CustomEvent("mobibard:set-midi-quantize", { detail: { division: normalized } })); } catch (_) {}
+      scheduleMidiAutoApply();
+    }, "wb7-quantize-segments");
+    common.append(optionRow("quantize", state.ui.quantizeControl, "", "wb7-common-quantize wb8-common-quantize wb9-common-quantize"));
+
+    state.ui.tempoCleanButton = el("button", "wb9-tempo-clean-button", {
+      type: "button",
+      "aria-pressed": state.options.tempo.simplify ? "true" : "false"
+    });
+    state.ui.tempoCleanButton.addEventListener("click", () => {
+      state.options.tempo.simplify = !state.options.tempo.simplify;
+      updateTempoCleanButton();
+      queueApply();
+    });
+    updateTempoCleanButton();
+    common.append(optionRow("tempoClean", state.ui.tempoCleanButton, "", "wb8-common-tempo-clean wb9-common-tempo-clean"));
+
+    const tempoScale = wb9NumberControl({ min: 50, max: 200, step: 1, value: state.options.tempo.scale, suffix: "%", label: t("tempoScale"), onChange: value => {
+      state.options.tempo.scale = value;
+      queueApply();
+    }});
+    state.ui.tempoScaleControl = tempoScale;
+    common.append(optionRow("tempoScale", tempoScale, "", "wb6-common-tempo wb8-common-tempo-scale wb9-common-tempo-scale"));
+
+    const leadingStepper = wb9NumberControl({ min: 0, max: 300, step: 0.25, value: state.options.leading.beats * 0.5, suffix: t("seconds"), label: t("leading"), onChange: value => {
+      state.options.leading.beats = Math.round(value * 4) / 2;
+      queueApply();
+    }});
+    state.ui.leadingControl = leadingStepper;
+    common.append(optionRow("leading", leadingStepper, "", "wb6-common-leading wb8-common-leading wb9-common-leading"));
+
+    const dynamicsWrap = el("div", "wb9-volume-generation-controls");
+    const genre = selectControl(genreValuesWithPlaceholder(), state.options.dynamics.genre, value => {
+      state.options.dynamics.genre = value;
+      syncVolumeGenerationControls();
+      queueApply();
+    }, "wb9-genre-select");
+    const strength = selectControl([["light", t("light")], ["normal", t("normal")], ["strong", t("strong")]], state.options.dynamics.strength, value => {
+      state.options.dynamics.strength = value;
+      if (state.options.dynamics.genre) queueApply();
+    }, "wb9-strength-select");
+    const channels = createTargetChannelButtons(state.options.dynamics.targetChannels, () => {
+      if (state.options.dynamics.genre) queueApply();
+    }, "wb9-volume-generation-channels");
+    dynamicsWrap.append(genre, strength, channels);
+    state.ui.volumeGeneration = { wrap: dynamicsWrap, genre, strength, channels };
+    common.append(optionRow("dynamics", dynamicsWrap, "", "wb9-common-dynamics"));
+    syncVolumeGenerationControls();
+    syncMidiQuantizeControl();
+    return common;
+  }
+
+  function renderCopyRows() {
+    const host = state.ui.copyRows;
+    if (!host) return;
+    const mainMml = $("mainMml")?.value || "";
+    const fullParts = normalizeMainToParts(mainMml);
+    host.replaceChildren();
+
+    const fullRow = el("div", "copy-item wb4-copy-item wb8-full-copy-item");
+    const meta = el("div", "copy-meta");
+    meta.append(el("strong", "copy-title", { text: t("copyAll") }), el("span", "copy-detail", { text: partDetail(fullParts) }));
+    const actions = el("div", "wb8-full-copy-actions");
+    const save = retained.save;
+    const drive = retained.driveSave;
+    const copyButton = retained.copy;
+    if (save) {
+      save.removeAttribute("data-i18n");
+      save.textContent = t("saveFile");
+      save.className = "copy-button wb4-copy-button wb9-save-copy-button";
+      actions.append(save);
+    }
+    if (drive) {
+      drive.removeAttribute("data-i18n");
+      drive.removeAttribute("data-i18n-title");
+      drive.textContent = t("saveDrive");
+      drive.className = "copy-button wb4-copy-button wb9-save-copy-button";
+      actions.append(drive);
+    }
+    if (copyButton) {
+      copyButton.removeAttribute("data-i18n");
+      copyButton.textContent = t("copy");
+      copyButton.className = "copy-button wb4-copy-button";
+      actions.append(copyButton);
+    }
+    fullRow.append(meta, actions);
+    host.append(fullRow);
+
+    const splitResults = el("div", "split-results wb4-split-results");
+    const head = el("div", "results-head wb4-results-head");
+    const titleWrap = el("div", "wb4-split-title-wrap");
+    titleWrap.append(el("h2", "", { text: t("splitCopy") }));
+    const controls = el("div", "wb4-split-controls");
+    const limitLabel = el("label", "wb4-split-control");
+    limitLabel.append(keyedText("splitLimit"));
+    const limitInput = el("input", "wb4-split-limit", { type: "number", min: 200, max: 5000, step: 50, value: state.options.split.maxChars });
+    limitInput.addEventListener("change", () => {
+      state.options.split.maxChars = Math.max(200, Math.min(5000, Math.round(Number(limitInput.value) || 2400)));
+      markPlayerEdited();
+      scheduleCopyRowsRender();
+    });
+    limitLabel.append(limitInput);
+    const searchLabel = el("label", "wb4-split-control");
+    searchLabel.append(keyedText("splitSearch"));
+    const searchSelect = selectControl([["50", "50%"], ["60", "60%"], ["70", "70%"], ["80", "80%"], ["90", "90%"]], String(state.options.split.searchPercent), value => {
+      state.options.split.searchPercent = Number(value);
+      markPlayerEdited();
+      scheduleCopyRowsRender();
+    }, "wb4-split-search");
+    searchSelect.id = "splitSearchPercent";
+    searchLabel.append(searchSelect);
+    controls.append(limitLabel, searchLabel);
+    const pages = splitPagesForCopy(mainMml);
+    const summary = el("span", "results-summary", { text: pages.length > 1 ? t("splitPages", [pages.length]) : t("splitNoNeed") });
+    titleWrap.append(summary);
+    head.append(titleWrap, controls);
+    splitResults.append(head);
+    if (pages.length > 1) {
+      const copyButtons = el("div", "copy-buttons wb4-copy-buttons");
+      pages.forEach((page, pageIndex) => {
+        const parts = Array.isArray(page.parts) && page.parts.length ? page.parts.slice(0, 6) : normalizeMainToParts(page.mml);
+        while (parts.length < 6) parts.push("");
+        const button = el("button", "copy-button wb4-copy-button", { type: "button", text: t("copy") });
+        button.addEventListener("click", async () => {
+          if (await confirmPendingExport("copy")) void copyText(page.mml);
+        });
+        copyButtons.append(renderCopyItem(t("splitPage", [page.index || pageIndex + 1]), partDetail(parts), button));
+      });
+      splitResults.append(copyButtons);
+    }
+    host.append(splitResults);
+  }
+
+  function scheduleMidiAutoApply() {
+    clearTimeout(state.midiAutoTimer);
+    state.midiAutoTimer = window.setTimeout(() => {
+      state.midiAutoTimer = 0;
+      refreshInstrumentDirtyState();
+    }, 0);
+  }
+
+  function activateWorkspaceTab(name) {
+    const next = ["copy", "instrument", "channel", "code"].includes(name) ? name : "copy";
+    state.activeWorkspaceTab = next;
+    state.ui.workspaceTabs?.forEach(button => {
+      const active = button.dataset.workspaceTab === next;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+      button.tabIndex = active ? 0 : -1;
+    });
+    Object.entries(state.ui.workspacePanels || {}).forEach(([key, panel]) => { panel.hidden = key !== next; });
+    if (next === "code") syncChannelCodeEditor();
+    if (next === "instrument") updateMidiChannelFilter();
+    if (next === "channel") {
+      activateOptionFeature(state.activeOptionFeature);
+      scheduleOptionMetricsUpdate();
+    }
+    if (next === "copy") {
+      state.copyDirty = true;
+      scheduleCopyRowsRender();
+    }
+    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+    scheduleSessionPersist();
+  }
+
+  function activateChannelView(index) {
+    const numeric = Number(index);
+    const next = numeric < 0 ? -1 : Math.max(0, Math.min(5, Number.isFinite(numeric) ? numeric : 0));
+    state.activeChannelView = next;
+    if (next >= 0) state.activeChannel = next;
+    [state.ui.workspaceBlock, state.ui.overviewBlock, state.ui.workspacePanels?.code]
+      .filter(Boolean)
+      .forEach(node => node.setAttribute("data-active-channel", String(next)));
+    state.ui.channelTabGroups?.forEach(group => group.forEach(button => {
+      const value = Number(button.dataset.channelIndex);
+      const active = value === next;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+      button.tabIndex = active ? 0 : -1;
+    }));
+    if (state.activeWorkspaceTab === "code") syncChannelCodeEditor();
+    scheduleChannelCountsUpdate();
+    window.dispatchEvent(new Event("resize"));
+    scheduleSessionPersist();
+  }
+
+  function receiveSourceBaseline(detail = {}) {
+    const nextSource = String(detail.mml || "");
+    const startsNewSource = detail.newSource === true;
+    const preserveEditedSession = !startsNewSource && Boolean(state.instrumentDirty && state.sessionHasUserEdit);
+    if (!preserveEditedSession) {
+      state.sessionHasUserEdit = false;
+      clearTimeout(state.sessionSaveTimer);
+      state.sessionSaveTimer = 0;
+    }
+    if (startsNewSource) resetSubmenuStateForNewSource();
+    state.sourceMml = nextSource;
+    state.sourceMeta = {
+      name: detail.name || "",
+      sourceType: detail.sourceType || "",
+      sourceLabel: detail.sourceLabel || ""
+    };
+    if (detail.name) setSourceName(detail.name);
+    state.manualEdited = false;
+    state.sourceVersion += 1;
+    state.lastApplySignature = "";
+    state.tempoCleanCount = 0;
+    syncChannelDraftFromApplied();
+    state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], tempoInput: "", tempoResult: null };
+    resetPipelineCache();
+    clearPendingPlaybackPreview();
+    applyFromSource({ force: true });
+    if (startsNewSource) {
+      activateChannelView(0);
+      activateOptionFeature("rest");
+      activateWorkspaceTab("copy");
+    }
+    scheduleChannelCountsUpdate();
+    scheduleOptionMetricsUpdate();
+    if (preserveEditedSession) scheduleSessionPersist();
+  }
+
+  function writeResultMml(mml) {
+    const mainMml = $("mainMml");
+    if (!mainMml) return false;
+    const next = String(mml || "");
+    const changed = mainMml.value !== next;
+    state.lastResultMml = next;
+    state.manualEdited = false;
+    if (state.ui.manualBadge) state.ui.manualBadge.hidden = true;
+    if (changed) {
+      state.applying = true;
+      mainMml.dataset.playerUiApply = "1";
+      mainMml.value = next;
+      mainMml.dispatchEvent(new Event("input", { bubbles: true }));
+      delete mainMml.dataset.playerUiApply;
+      state.applying = false;
+    }
+    if (changed) {
+      scheduleCopyRowsRender();
+      scheduleChannelCountsUpdate();
+    }
+    scheduleOptionMetricsUpdate();
+    return changed;
+  }
+
+
+  function installMidiStatusToastBridge() {
+    const status = $("midiConvertStatus");
+    if (!status || status.dataset.wbToastBridge === "1") return;
+    status.dataset.wbToastBridge = "1";
+    let scheduled = false;
+    let lastMessage = "";
+    const flush = () => {
+      scheduled = false;
+      const message = status.hidden ? "" : String(status.textContent || "").trim();
+      if (!message || message === lastMessage) return;
+      lastMessage = message;
+      showToast(message, "info");
+      window.setTimeout(() => { if (lastMessage === message) lastMessage = ""; }, 900);
+    };
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(flush);
+    };
+    new MutationObserver(schedule).observe(status, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["hidden"]
+    });
+  }
+
+  buildShell();
+  document.documentElement.removeAttribute("data-player-ui-booting");
+  convertDialogs();
+  installGlobalHandling();
+  installMidiStatusToastBridge();
+  updateLocalText();
+  window.setTimeout(() => syncChannelCodeEditor(), 0);
+
+  Promise.resolve(window.MobibardI18n?.ready).then(async () => {
+    updateLocalText();
+    await loadSessionRestorePrompt();
+    if (!state.sourceMml && !state.sessionLoadedSnapshot) {
+      const initial = $("mainMml")?.value || "";
+      if (initial.trim()) receiveSourceBaseline({ mml: initial, name: "Sample MML", sourceType: "mml", sourceLabel: "MML" });
+    }
+  });
+
+  window.MobibardPlayerLayout = Object.freeze({
+    get sourceMml() { return state.sourceMml; },
+    get options() { return JSON.parse(JSON.stringify(state.options)); },
+    get activeChannel() { return state.activeChannel; },
+    applyFromSource,
+    activateChannel,
+    showToast
+  });
+  window.MobibardToast = Object.freeze({ show: showToast });
+})();
+
+/* ===== Player application ===== */
+window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
+  if (window.__MOBIBARD_PLAYER_APP_STARTED__) return;
+  window.__MOBIBARD_PLAYER_APP_STARTED__ = true;
+  "use strict";
+
   const DEFAULT_SOUND_BANK_FILE_NAME = String(window.MOBIBARD_DEFAULT_SF3_NAME || "FluidR3Mono_GM_compact.sf3");
   const PART_LABEL_KEYS = ["part.melody", "part.harmony1", "part.harmony2", "part.harmony3", "part.harmony4", "part.harmony5"];
   const PART_LABELS = new Proxy(PART_LABEL_KEYS, {
@@ -65,6 +3150,116 @@
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
   const SOURCE_FILE_EXTENSIONS = new Set(["txt", "mmi", "mml", ...(window.MabiMusicFormats?.inputExtensions?.() || window.MabiMusicFormats?.supportedExtensions?.() || [])]);
+  // MIDI/KAR + MML are core Player workflows and remain eagerly loaded.
+  // Other source-format converters are loaded only when a matching file is actually opened.
+  const FORMAT_RUNTIME_REVISION = "20260823-final20";
+  const FORMAT_RUNTIME_SCRIPTS = Object.freeze({
+    notation: "../plugins/formats/notation/notation-utils.js",
+    consoleGm: "../plugins/formats/console-gm-normalizer.js",
+    xsf: "../plugins/formats/xsf/xsf-container.js",
+    playstation: "../plugins/formats/playstation/playstation-sequence.js",
+    akao: "../plugins/formats/playstation/akao-sequence.js",
+    nintendo: "../plugins/formats/nintendo/nintendo-sequence.js",
+    musicxml: "../plugins/formats/musicxml/musicxml-to-midi.js",
+    finaleMus: "../plugins/formats/finale/finale-mus-to-midi.js",
+    finaleMusx: "../plugins/formats/finale/finale-musx-to-midi.js",
+    mnx: "../plugins/formats/mnx/mnx-to-midi.js",
+    musescore: "../plugins/formats/musescore/musescore-to-midi.js",
+    gp3: "../plugins/formats/guitarpro/vendor/guitarpro-parser/gp3-browser.js",
+    gp5: "../plugins/formats/guitarpro/vendor/parse-gp5/index.js",
+    guitarpro: "../plugins/formats/guitarpro/guitarpro-local.js",
+    vocal: "../plugins/formats/vocal/vocal-format-parsers.js"
+  });
+  const FORMAT_RUNTIME_BY_ID = Object.freeze({
+    "midi": [],
+    "playstation-sequence": ["consoleGm", "playstation"],
+    "nintendo-sequence": ["consoleGm", "nintendo"],
+    "playstation-xsf": ["consoleGm", "xsf", "playstation", "akao"],
+    "nintendo-xsf": ["consoleGm", "xsf", "nintendo"],
+    "musicxml": ["notation", "musicxml"],
+    "finale-mus": ["notation", "finaleMus"],
+    "finale-musx": ["notation", "finaleMusx"],
+    "mnx": ["notation", "mnx"],
+    "musescore": ["notation", "musescore"],
+    "gp3": ["notation", "gp3", "guitarpro"],
+    "gp5": ["notation", "gp5", "guitarpro"],
+    "vsq": ["vocal"],
+    "vsqx": ["vocal"],
+    "vpr": ["vocal"],
+    "ust": ["vocal"],
+    "ustx": ["vocal"],
+    "svp": ["vocal"],
+    "s5p": ["vocal"],
+    "ccs": ["vocal"]
+  });
+  const formatRuntimeScriptPromises = new Map();
+
+  function loadPlayerRuntimeScript(path) {
+    const raw = String(path || "");
+    if (!raw) return Promise.resolve();
+    const url = new URL(raw, window.location.href);
+    url.searchParams.set("v", "5.1.0");
+    url.searchParams.set("rev", FORMAT_RUNTIME_REVISION);
+    const key = url.href;
+    if (formatRuntimeScriptPromises.has(key)) return formatRuntimeScriptPromises.get(key);
+    const promise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = key;
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error(`음악 포맷 변환 모듈을 불러오지 못했습니다: ${raw}`));
+      document.head.appendChild(script);
+    }).catch(error => {
+      formatRuntimeScriptPromises.delete(key);
+      throw error;
+    });
+    formatRuntimeScriptPromises.set(key, promise);
+    return promise;
+  }
+
+  async function loadFormatRuntimeKeys(keys) {
+    // Dependencies are intentionally loaded in order because several converters
+    // capture helper globals (notation/console GM) during script evaluation.
+    for (const key of Array.from(new Set(keys || []))) {
+      const path = FORMAT_RUNTIME_SCRIPTS[key];
+      if (path) await loadPlayerRuntimeScript(path);
+    }
+  }
+
+  function resolveSourceFormatForLazyLoad(fileName, mimeType = "", bytes = null) {
+    const core = window.MabiMusicFormats;
+    if (!core) return { format: null, generic: false };
+    const uploadedName = String(fileName || "");
+    let generic = Boolean(core.isGenericContainer?.(uploadedName, mimeType));
+    let format = generic ? null : core.findFormat?.(uploadedName, mimeType);
+    if (bytes != null) {
+      try {
+        const macBinary = window.MabiUtils?.inspectMacBinary?.(bytes);
+        const internalName = String(macBinary?.fileName || "").trim();
+        if (internalName) {
+          const internalFormat = core.findFormat?.(internalName, "");
+          if (internalFormat) {
+            format = internalFormat;
+            generic = false;
+          }
+        }
+      } catch (_) {}
+    }
+    return { format, generic };
+  }
+
+  async function ensureMusicFormatRuntime(fileName, mimeType = "", bytes = null) {
+    const { format, generic } = resolveSourceFormatForLazyLoad(fileName, mimeType, bytes);
+    if (format?.id) {
+      await loadFormatRuntimeKeys(FORMAT_RUNTIME_BY_ID[format.id] || []);
+      return;
+    }
+    if (!generic) return;
+    // A generic MacBinary/BIN container can hide any supported source type.
+    // Load all non-core converters only in this exceptional case so detection remains complete.
+    const allKeys = Object.values(FORMAT_RUNTIME_BY_ID).flat();
+    await loadFormatRuntimeKeys(allKeys);
+  }
   const HEADER_SHORTCUT_LINKS = new Set([
     "https://bitmidi.com/",
     "https://www.classicalarchives.com/midi.html",
@@ -82,8 +3277,8 @@
   // 피아노롤의 음정 좌표는 12반음을 동일 폭으로 배치한다.
   // 아래 피아노 건반만 이 균등한 음정 중심에 맞춰 흰/검은 건반 모양으로 그린다.
   const PIANO_ROLL_NOTE_WIDTH_RATIO = 0.86;
-  const PIANO_BLACK_KEY_WIDTH_IN_PITCH_LANES = 1.06;
   const PIANO_BLACK_KEY_HEIGHT_RATIO = 0.62;
+  const PIANO_BLACK_KEY_WIDTH_IN_PITCH_LANES = 1.06;
   const PIANO_ROLL_FALL_WINDOW_COLLAPSED = 1.8;
   const PIANO_ROLL_FALL_WINDOW_EXPANDED = 4.6;
   const PIANO_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -97,7 +3292,7 @@
     ignoreSingle64thOverlap: true,
   });
   const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths } = window.MabiMml;
-  const { optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages } = window.MabiOptimizer;
+  const { optimizeMml, addLeadingSilenceMml } = window.MabiOptimizer;
   const { parseSoundBank, loadEmbeddedSoundBank, prepareNotes, prepareDrumNotes, schedulePreparedNotes } = window.MabiSoundBank;
 
   const $ = (id) => document.getElementById(id);
@@ -192,11 +3387,6 @@
   const tempoEditBpm = $("tempoEditBpm");
   const tempoEditApply = $("tempoEditApply");
   const tempoEditCancel = $("tempoEditCancel");
-  const tempoSimplifyBtn = $("tempoSimplifyBtn");
-  const tempoSimplifyDialog = $("tempoSimplifyDialog");
-  const tempoSimplifyPreview = $("tempoSimplifyPreview");
-  const tempoSimplifyApply = $("tempoSimplifyApply");
-  const tempoSimplifyCancel = $("tempoSimplifyCancel");
   const pianoRoll = $("pianoRoll");
   const pianoRollCanvas = $("pianoRollCanvas");
   const pianoRollEmpty = $("pianoRollEmpty");
@@ -204,7 +3394,6 @@
   const pianoRollToggleLabel = $("pianoRollToggleLabel");
   const playInfo = $("playInfo");
   const copyBtn = $("copyBtn");
-  const clearAllMmlBtn = $("clearAllMmlBtn");
   const pasteBtn = $("pasteBtn");
   const pasteMmlDialog = $("pasteMmlDialog");
   const pasteMmlForm = $("pasteMmlForm");
@@ -222,85 +3411,9 @@
   const rhythmGameStatus = $("rhythmGameStatus");
   const rhythmGameLoading = $("rhythmGameLoading");
   const rhythmGameLoadingText = $("rhythmGameLoadingText");
-  const splitCopyBtn = $("splitCopyBtn");
-  const splitCopyDialog = $("splitCopyDialog");
-  const splitCopyLimit = $("splitCopyLimit");
-  const splitCopySummary = $("splitCopySummary");
-  const splitCopyPages = $("splitCopyPages");
-  const splitCopyRebuild = $("splitCopyRebuild");
-  const splitCopyClose = $("splitCopyClose");
-  const restTrimBtn = $("restTrimBtn");
-  const restTrimDialog = $("restTrimDialog");
-  const restTrimLimit = $("restTrimLimit");
-  const restTrimApply = $("restTrimApply");
-  const restTrimCancel = $("restTrimCancel");
-  const restTrimSelectAll = $("restTrimSelectAll");
-  const restTrimSelectNone = $("restTrimSelectNone");
-  const bulkVolumeBtn = $("bulkVolumeBtn");
-  const bulkVolumeDialog = $("bulkVolumeDialog");
-  const bulkVolumeAmount = $("bulkVolumeAmount");
-  const bulkVolumeStats = $("bulkVolumeStats");
-  const bulkVolumeApply = $("bulkVolumeApply");
-  const bulkVolumeCancel = $("bulkVolumeCancel");
-  const bulkVolumeSelectAll = $("bulkVolumeSelectAll");
-  const bulkVolumeSelectNone = $("bulkVolumeSelectNone");
-  const bulkPitchBtn = $("bulkPitchBtn");
-  const bulkPitchDialog = $("bulkPitchDialog");
-  const bulkPitchForm = $("bulkPitchForm");
-  const bulkPitchAmount = $("bulkPitchAmount");
-  const bulkPitchStats = $("bulkPitchStats");
-  const bulkPitchApply = $("bulkPitchApply");
-  const bulkPitchCancel = $("bulkPitchCancel");
-  const bulkPitchSelectAll = $("bulkPitchSelectAll");
-  const bulkPitchSelectNone = $("bulkPitchSelectNone");
-  const dynamicsGenerateBtn = $("dynamicsGenerateBtn");
-  const dynamicsGenerateDialog = $("dynamicsGenerateDialog");
-  const dynamicsGenerateForm = $("dynamicsGenerateForm");
-  const dynamicsGenerateGenre = $("dynamicsGenerateGenre");
-  const dynamicsGenerateStrength = $("dynamicsGenerateStrength");
-  const dynamicsGenerateRuleTitle = $("dynamicsGenerateRuleTitle");
-  const dynamicsGenerateRuleText = $("dynamicsGenerateRuleText");
-  const dynamicsGenerateStatus = $("dynamicsGenerateStatus");
-  const dynamicsGenerateSelectAll = $("dynamicsGenerateSelectAll");
-  const dynamicsGenerateSelectNone = $("dynamicsGenerateSelectNone");
-  const dynamicsGenerateApply = $("dynamicsGenerateApply");
-  const dynamicsGenerateCancel = $("dynamicsGenerateCancel");
-  const dynamicsGenerateConfirmDialog = $("dynamicsGenerateConfirmDialog");
-  const dynamicsGenerateConfirmList = $("dynamicsGenerateConfirmList");
-  const dynamicsGenerateConfirmApply = $("dynamicsGenerateConfirmApply");
-  const dynamicsGenerateConfirmCancel = $("dynamicsGenerateConfirmCancel");
-  let pendingDynamicsGenerateOptions = null;
-  const leadingSilenceBtn = $("leadingSilenceBtn");
-  const leadingSilenceDialog = $("leadingSilenceDialog");
-  const leadingSilenceSeconds = $("leadingSilenceSeconds");
-  const leadingSilenceApply = $("leadingSilenceApply");
-  const leadingSilenceCancel = $("leadingSilenceCancel");
-  const accompanimentGenerateBtn = $("accompanimentGenerateBtn");
-  const accompanimentGenerateDialog = $("accompanimentGenerateDialog");
-  const accompanimentGenerateForm = $("accompanimentGenerateForm");
-  const accompanimentGenerateGenre = $("accompanimentGenerateGenre");
-  const accompanimentGenerateStrength = $("accompanimentGenerateStrength");
-  const accompanimentGenerateStatus = $("accompanimentGenerateStatus");
-  const accompanimentGenerateRuleTitle = $("accompanimentGenerateRuleTitle");
-  const accompanimentGenerateRuleText = $("accompanimentGenerateRuleText");
-  const accompanimentAnalysisSelectAll = $("accompanimentAnalysisSelectAll");
-  const accompanimentAnalysisSelectNone = $("accompanimentAnalysisSelectNone");
-  const accompanimentTargetSelectAll = $("accompanimentTargetSelectAll");
-  const accompanimentTargetSelectNone = $("accompanimentTargetSelectNone");
-  const accompanimentGenerateApply = $("accompanimentGenerateApply");
-  const accompanimentGenerateCancel = $("accompanimentGenerateCancel");
-  const accompanimentGenerateConfirmDialog = $("accompanimentGenerateConfirmDialog");
-  const accompanimentGenerateConfirmList = $("accompanimentGenerateConfirmList");
-  const accompanimentGenerateConfirmApply = $("accompanimentGenerateConfirmApply");
-  const accompanimentGenerateConfirmCancel = $("accompanimentGenerateConfirmCancel");
-  let pendingAccompanimentGenerateOptions = null;
   const midiConvertDialog = $("midiConvertDialog");
   const midiConvertTitle = $("midiConvertTitle");
   const midiConvertSummary = $("midiConvertSummary");
-  const midiGuideBox = $("midiGuideBox");
-  const midiGuideLead = $("midiGuideLead");
-  const midiFullPreviewBtn = $("midiFullPreviewBtn");
-  const midiSelectedPreviewBtn = $("midiSelectedPreviewBtn");
   const midiBulkAssignBtn = $("midiBulkAssignBtn");
   const midiBulkAssignDialog = $("midiBulkAssignDialog");
   const midiBulkChannelButtons = Array.from(document.querySelectorAll(".midi-bulk-channel"));
@@ -312,7 +3425,6 @@
   const midiBulkCancelBtn = $("midiBulkCancelBtn");
   const midiChannelList = $("midiChannelList");
   const midiRoleList = $("midiRoleList");
-  const midiQuantizeToggle = $("midiQuantizeToggle");
   const midiInstrumentPanelTitle = $("midiInstrumentPanelTitle");
   const midiConvertReloadFile = $("midiConvertReloadFile");
   const midiConvertGoogleDriveLoad = $("midiConvertGoogleDriveLoad");
@@ -330,13 +3442,6 @@
   const partSoundPresetSelect = $("partSoundPresetSelect");
   const partSoundPresetSave = $("partSoundPresetSave");
   const partSoundPresetDelete = $("partSoundPresetDelete");
-  const muteControlButton = $("muteControlButton");
-  const muteControlPopover = $("muteControlPopover");
-  const muteControlValue = $("muteControlValue");
-  const muteSelectAll = $("muteSelectAll");
-  const muteSelectNone = $("muteSelectNone");
-  const muteChannelCheckboxes = Array.from(document.querySelectorAll("[data-mute-part]"));
-  const partMuteLabel = $("partMuteLabel");
   const playbackChannelButtons = Array.from(document.querySelectorAll("[data-playback-channel-index]"));
   const mainMml = $("mainMml");
   const mainMmlHighlight = $("mainMmlHighlight");
@@ -355,6 +3460,8 @@
   let activeSources = [];
   let activeTimers = [];
   let preparedNotes = [];
+  let preparedPlaybackPrefixMaxEnd = [];
+  let playbackScheduleCursor = 0;
   let scheduledNoteIds = new Set();
   let schedulerTimer = 0;
   const PLAY_START_DELAY = 0.18;
@@ -380,7 +3487,6 @@
   let tempoEditResumePlayback = false;
   let tempoEditResumeOffset = 0;
   let tempoEditSuppressCloseResume = false;
-  let pendingTempoSimplification = null;
   let playContextStart = 0;
   let playOffsetStart = 0;
   let playbackAutoGainScale = 1;
@@ -400,10 +3506,7 @@
   const midiInstrumentSectionOpenState = new Map();
   let midiPreviewSources = [];
   let midiPreviewTimer = 0;
-  let midiFullPreviewActive = false;
-  let midiSelectedPreviewActive = false;
   let midiInstrumentPreviewButton = null;
-  let midiInstrumentPreviewButtonText = "";
   let midiInstrumentPreviewGroupId = "";
   let midiInstrumentPreviewToken = 0;
   let midiChannelPreviewButton = null;
@@ -447,6 +3550,13 @@
   let activePlaybackScanSignature = "";
   let activePlaybackMainRanges = [];
   let activePlaybackPartRanges = Array.from({ length: 6 }, () => []);
+  let scheduleTemporalIndexVersion = -1;
+  let scheduleNoteTemporalIndex = null;
+  let scheduleRestTemporalIndex = null;
+  let pianoRollTemporalIndex = null;
+  let pianoRollRangeCache = { min: 48, max: 71 };
+  let pianoRollTempoMapCacheVersion = -1;
+  let pianoRollTempoMapCache = [];
   let editorContentVersion = 0;
   let editorAnalysisCache = {
     source: "",
@@ -467,16 +3577,11 @@
   let playbackSourceOverride = "";
   let playbackSourceOverrideLabel = "";
   let playbackAnalysisCache = { source: "", schedule: null };
-  let workbenchOriginalMidiImport = null;
-  let workbenchOriginalMidiPreviewCache = null;
+  let originalMidiImport = null;
+  let originalMidiPreviewCache = null;
   let playbackMidiOriginalOverride = false;
 
-  function isSourceWorkbenchLayout() {
-    return document.documentElement?.dataset?.playerLayout === "source-workbench";
-  }
-
-  async function runWorkbenchBeforeAction(action) {
-    if (!isSourceWorkbenchLayout()) return true;
+  async function runPlayerUiBeforeAction(action) {
     const hook = window.MobibardBeforeExport;
     if (typeof hook !== "function") return true;
     try {
@@ -487,8 +3592,7 @@
     }
   }
 
-  async function runWorkbenchBeforePlay() {
-    if (!isSourceWorkbenchLayout()) return true;
+  async function runPlayerUiBeforePlay() {
     const hook = window.MobibardBeforePlay;
     if (typeof hook !== "function") return true;
     try {
@@ -499,8 +3603,7 @@
     }
   }
 
-  function notifyWorkbenchSourceBaseline(text, meta = {}) {
-    if (!isSourceWorkbenchLayout()) return;
+  function notifyPlayerUiSourceBaseline(text, meta = {}) {
     const mml = normalizeMmlForDisplay(String(text || ""));
     try {
       window.dispatchEvent(new CustomEvent("mobibard:source-baseline", {
@@ -515,8 +3618,7 @@
     } catch (_) {}
   }
 
-  function handleWorkbenchPreviewSource(event) {
-    if (!isSourceWorkbenchLayout()) return;
+  function handlePlayerUiPreviewSource(event) {
     const detail = event?.detail || {};
     const active = Boolean(detail.active);
     const nextSource = active ? normalizeMmlForDisplay(String(detail.mml || "")) : "";
@@ -539,49 +3641,47 @@
     if (wasPlaying) setTimeout(() => void playFromCurrent(), 20);
   }
 
-  window.addEventListener("mobibard:preview-source", handleWorkbenchPreviewSource);
+  window.addEventListener("mobibard:preview-source", handlePlayerUiPreviewSource);
 
 
-  function dispatchWorkbenchOriginalAvailability() {
-    if (!isSourceWorkbenchLayout()) return;
+  function dispatchPlayerUiOriginalAvailability() {
     try {
       window.dispatchEvent(new CustomEvent("mobibard:original-preview-availability", {
-        detail: { available: Boolean(workbenchOriginalMidiImport?.bytes) }
+        detail: { available: Boolean(originalMidiImport?.bytes) }
       }));
     } catch (_) {}
   }
 
-  function dispatchWorkbenchOriginalState(active = playbackMidiOriginalOverride) {
-    if (!isSourceWorkbenchLayout()) return;
+  function dispatchPlayerUiOriginalState(active = playbackMidiOriginalOverride) {
     try {
       window.dispatchEvent(new CustomEvent("mobibard:original-preview-state", {
-        detail: { active: Boolean(active), available: Boolean(workbenchOriginalMidiImport?.bytes) }
+        detail: { active: Boolean(active), available: Boolean(originalMidiImport?.bytes) }
       }));
     } catch (_) {}
   }
 
-  function setWorkbenchOriginalMidiImport(importData = null) {
-    workbenchOriginalMidiImport = importData?.bytes ? importData : null;
-    workbenchOriginalMidiPreviewCache = null;
-    if (!workbenchOriginalMidiImport && playbackMidiOriginalOverride) {
+  function setPlayerUiOriginalMidiImport(importData = null) {
+    originalMidiImport = importData?.bytes ? importData : null;
+    originalMidiPreviewCache = null;
+    if (!originalMidiImport && playbackMidiOriginalOverride) {
       playbackMidiOriginalOverride = false;
       currentOffset = 0;
       rebuildSchedulePreviewSilently();
-      dispatchWorkbenchOriginalState(false);
+      dispatchPlayerUiOriginalState(false);
     }
-    dispatchWorkbenchOriginalAvailability();
+    dispatchPlayerUiOriginalAvailability();
   }
 
-  function getWorkbenchOriginalMidiSchedule() {
-    if (workbenchOriginalMidiPreviewCache) return workbenchOriginalMidiPreviewCache;
-    if (!workbenchOriginalMidiImport?.bytes) return null;
-    const preview = buildMidiFilePreview(workbenchOriginalMidiImport.bytes, { maxSeconds: 900, tailSeconds: 1.0 });
+  function getPlayerUiOriginalMidiSchedule() {
+    if (originalMidiPreviewCache) return originalMidiPreviewCache;
+    if (!originalMidiImport?.bytes) return null;
+    const preview = buildMidiFilePreview(originalMidiImport.bytes, { maxSeconds: 900, tailSeconds: 1.0 });
     const notes = Array.isArray(preview?.notes) ? preview.notes : [];
     const duration = Math.max(
       Number(preview?.duration) || 0,
       notes.reduce((max, note) => Math.max(max, Number(note?.start) + Number(note?.durationSec || 0)), 0)
     );
-    workbenchOriginalMidiPreviewCache = {
+    originalMidiPreviewCache = {
       notes,
       rests: [],
       duration,
@@ -591,21 +3691,20 @@
         : [{ beat: 0, time: 0, bpm: 120, part: -1, explicit: false }],
       summary: i18nText("mml.estimated_length", [formatTime(duration)])
     };
-    return workbenchOriginalMidiPreviewCache;
+    return originalMidiPreviewCache;
   }
 
-  function handleWorkbenchOriginalMidiPreview(event) {
-    if (!isSourceWorkbenchLayout()) return;
-    const requested = Boolean(event?.detail?.active) && Boolean(workbenchOriginalMidiImport?.bytes);
+  function handlePlayerUiOriginalMidiPreview(event) {
+    const requested = Boolean(event?.detail?.active) && Boolean(originalMidiImport?.bytes);
     if (requested === playbackMidiOriginalOverride) {
-      dispatchWorkbenchOriginalState(requested);
+      dispatchPlayerUiOriginalState(requested);
       return;
     }
     const wasPlaying = Boolean(isPlaying);
     stopMidiPreview();
     stopPlayback(false);
     try {
-      if (requested && !getWorkbenchOriginalMidiSchedule()) throw new Error(i18nText("midi.err_no_preview_notes"));
+      if (requested && !getPlayerUiOriginalMidiSchedule()) throw new Error(i18nText("midi.err_no_preview_notes"));
       playbackMidiOriginalOverride = requested;
       playbackSourceOverride = "";
       playbackSourceOverrideLabel = "";
@@ -613,18 +3712,18 @@
       currentOffset = 0;
       clearPlaybackCodeHighlight();
       rebuildSchedulePreviewSilently();
-      dispatchWorkbenchOriginalState(requested);
+      dispatchPlayerUiOriginalState(requested);
       if (wasPlaying) setTimeout(() => void playFromCurrent(), 20);
     } catch (err) {
       playbackMidiOriginalOverride = false;
       currentOffset = 0;
       rebuildSchedulePreviewSilently();
-      dispatchWorkbenchOriginalState(false);
-      showDialog(i18nText("midi.preview_fail_title", [getMidiImportSourceLabel(workbenchOriginalMidiImport)]), shortError(err));
+      dispatchPlayerUiOriginalState(false);
+      showDialog(i18nText("midi.preview_fail_title", [getMidiImportSourceLabel(originalMidiImport)]), shortError(err));
     }
   }
 
-  window.addEventListener("mobibard:original-midi-preview", handleWorkbenchOriginalMidiPreview);
+  window.addEventListener("mobibard:original-midi-preview", handlePlayerUiOriginalMidiPreview);
   window.addEventListener("mobibard:set-midi-quantize", event => {
     if (!pendingMidiSettings || midiConvertBusy) return;
     const division = Number(event?.detail?.division) === 32 ? 32 : 64;
@@ -676,7 +3775,7 @@
     googleLoginBtn?.addEventListener("click", () => void handleGoogleLoginButton());
     googleDriveLoadBtn?.addEventListener("click", () => void openGoogleDrivePicker());
     googleDriveSaveBtn?.addEventListener("click", async () => {
-      if (await runWorkbenchBeforeAction("save")) void saveMmlToGoogleDrive();
+      if (await runPlayerUiBeforeAction("save")) void saveMmlToGoogleDrive();
     });
     codeHelpBtn?.addEventListener("click", () => openCodeHelpDialog());
     codeHelpClose?.addEventListener("click", () => codeHelpDialog?.close());
@@ -705,13 +3804,12 @@
     soundFontResetBtn?.addEventListener("click", () => void restoreDefaultSoundFont());
     playToggleBtn.addEventListener("click", async () => {
       if (isPlaying) { stopPlayback(false); return; }
-      if (await runWorkbenchBeforePlay()) void playFromCurrent();
+      if (await runPlayerUiBeforePlay()) void playFromCurrent();
     });
     rewindBtn.addEventListener("click", () => void rewindToStart());
     loopPlayback?.addEventListener("change", () => writePref("loop", loopPlayback.checked ? "1" : "0"));
     speedControlButton?.addEventListener("click", () => toggleControlPopover(speedControlButton, speedControlPopover));
     volumeControlButton?.addEventListener("click", () => toggleControlPopover(volumeControlButton, volumeControlPopover));
-    muteControlButton?.addEventListener("click", () => toggleControlPopover(muteControlButton, muteControlPopover));
     speedResetBtn?.addEventListener("click", resetPlaybackSpeed);
     volumeResetBtn?.addEventListener("click", resetOutputVolume);
     speedSlider?.addEventListener("input", applyPlaybackSpeed);
@@ -737,10 +3835,6 @@
       selectedTempoMarker = null;
       if (!tempoEditSuppressCloseResume) resumePlaybackAfterTempoEdit();
     });
-    tempoSimplifyBtn?.addEventListener("click", openTempoSimplifyDialog);
-    tempoSimplifyApply?.addEventListener("click", applyTempoSimplificationFromDialog);
-    tempoSimplifyCancel?.addEventListener("click", closeTempoSimplifyDialog);
-    tempoSimplifyDialog?.addEventListener("close", () => { pendingTempoSimplification = null; });
     pianoRoll?.addEventListener("click", handlePianoRollClick);
     pianoRoll?.addEventListener("pointermove", handlePianoRollPointerMove);
     pianoRoll?.addEventListener("pointerleave", clearPianoRollTempoHover);
@@ -752,16 +3846,9 @@
     });
     installPianoRollRefreshHooks();
     copyBtn.addEventListener("click", async () => {
-      if (!(await runWorkbenchBeforeAction("copy"))) return;
+      if (!(await runPlayerUiBeforeAction("copy"))) return;
       void copyVisibleMml();
     });
-    clearAllMmlBtn?.addEventListener("click", clearAllMmlChannels);
-    splitCopyBtn?.addEventListener("click", () => {
-      openSplitCopyDialog();
-    });
-    splitCopyRebuild?.addEventListener("click", () => buildSplitCopyPages());
-    splitCopyClose?.addEventListener("click", () => splitCopyDialog?.close());
-    splitCopyDialog?.addEventListener("close", () => stopMidiPreview());
     pasteBtn.addEventListener("click", () => void openPasteMmlDialog());
     pasteMmlCancel?.addEventListener("click", () => pasteMmlDialog?.close());
     pasteMmlApply?.addEventListener("click", event => {
@@ -776,7 +3863,7 @@
       if (pasteMmlStatus) pasteMmlStatus.textContent = "";
     });
     saveBtn.addEventListener("click", async () => {
-      if (await runWorkbenchBeforeAction("save")) void saveVisibleMml();
+      if (await runPlayerUiBeforeAction("save")) void saveVisibleMml();
     });
     midiExtractBtn?.addEventListener("click", () => {
       const midiExtractWindow = window.open("https://muscriptor.kyutai.org/", "_blank");
@@ -788,75 +3875,12 @@
     rhythmGameClose?.addEventListener("click", closeRhythmGameLayer);
     rhythmGameFrame?.addEventListener("load", handleRhythmGameFrameLoad);
     window.addEventListener("message", handleRhythmGameMessage);
-    restTrimBtn?.addEventListener("click", openRestTrimDialog);
-    restTrimApply?.addEventListener("click", () => applyRestTrimFromDialog());
-    restTrimCancel?.addEventListener("click", () => restTrimDialog?.close());
-    restTrimLimit?.addEventListener("change", updateRestTrimPreview);
-    restTrimSelectAll?.addEventListener("click", () => setDialogChannelSelection(".rest-trim-channel", true));
-    restTrimSelectNone?.addEventListener("click", () => setDialogChannelSelection(".rest-trim-channel", false));
-    bulkVolumeBtn?.addEventListener("click", openBulkVolumeDialog);
-    bulkVolumeApply?.addEventListener("click", () => applyBulkVolumeFromDialog());
-    bulkVolumeCancel?.addEventListener("click", () => bulkVolumeDialog?.close());
-    bulkVolumeSelectAll?.addEventListener("click", () => {
-      setDialogChannelSelection(".bulk-volume-channel", true);
-      updateBulkVolumeStats();
-    });
-    bulkVolumeSelectNone?.addEventListener("click", () => {
-      setDialogChannelSelection(".bulk-volume-channel", false);
-      updateBulkVolumeStats();
-    });
-    document.querySelectorAll(".bulk-volume-channel").forEach(input => {
-      input.addEventListener("change", updateBulkVolumeStats);
-    });
-    bulkVolumeAmount?.addEventListener("change", normalizeBulkVolumeAmountInput);
-    bulkPitchBtn?.addEventListener("click", openBulkPitchDialog);
-    bulkPitchApply?.addEventListener("click", applyBulkPitchFromDialog);
-    bulkPitchForm?.addEventListener("submit", event => { event.preventDefault(); applyBulkPitchFromDialog(); });
-    bulkPitchCancel?.addEventListener("click", () => bulkPitchDialog?.close());
-    bulkPitchSelectAll?.addEventListener("click", () => setDialogChannelSelection(".bulk-pitch-channel", true));
-    bulkPitchSelectNone?.addEventListener("click", () => setDialogChannelSelection(".bulk-pitch-channel", false));
-    bulkPitchAmount?.addEventListener("change", normalizeBulkPitchAmountInput);
-    bulkPitchAmount?.addEventListener("blur", normalizeBulkPitchAmountInput);
-    dynamicsGenerateBtn?.addEventListener("click", openDynamicsGenerateDialog);
-    dynamicsGenerateGenre?.addEventListener("change", updateDynamicsGenerateDescription);
-    dynamicsGenerateApply?.addEventListener("click", applyDynamicsGenerateFromDialog);
-    dynamicsGenerateForm?.addEventListener("submit", event => { event.preventDefault(); applyDynamicsGenerateFromDialog(); });
-    dynamicsGenerateCancel?.addEventListener("click", () => dynamicsGenerateDialog?.close());
-    dynamicsGenerateConfirmApply?.addEventListener("click", confirmDynamicsGenerateOverwrite);
-    dynamicsGenerateConfirmCancel?.addEventListener("click", cancelDynamicsGenerateOverwrite);
-    dynamicsGenerateConfirmDialog?.addEventListener("cancel", event => {
-      event.preventDefault();
-      cancelDynamicsGenerateOverwrite();
-    });
-    dynamicsGenerateSelectAll?.addEventListener("click", () => setDialogChannelSelection(".dynamics-generate-channel", true));
-    dynamicsGenerateSelectNone?.addEventListener("click", () => setDialogChannelSelection(".dynamics-generate-channel", false));
-    leadingSilenceBtn?.addEventListener("click", openLeadingSilenceDialog);
-    leadingSilenceApply?.addEventListener("click", () => applyLeadingSilenceFromDialog());
-    leadingSilenceCancel?.addEventListener("click", () => leadingSilenceDialog?.close());
-    accompanimentGenerateBtn?.addEventListener("click", openAccompanimentGenerateDialog);
-    accompanimentGenerateGenre?.addEventListener("change", updateAccompanimentGenerateDescription);
-    accompanimentGenerateApply?.addEventListener("click", () => void applyAccompanimentGenerateFromDialog());
-    accompanimentGenerateForm?.addEventListener("submit", event => { event.preventDefault(); void applyAccompanimentGenerateFromDialog(); });
-    accompanimentGenerateCancel?.addEventListener("click", () => accompanimentGenerateDialog?.close());
-    accompanimentAnalysisSelectAll?.addEventListener("click", () => setDialogChannelSelection(".accompaniment-analysis-channel", true));
-    accompanimentAnalysisSelectNone?.addEventListener("click", () => setDialogChannelSelection(".accompaniment-analysis-channel", false));
-    accompanimentTargetSelectAll?.addEventListener("click", () => setDialogChannelSelection(".accompaniment-target-channel", true));
-    accompanimentTargetSelectNone?.addEventListener("click", () => setDialogChannelSelection(".accompaniment-target-channel", false));
-    accompanimentGenerateConfirmApply?.addEventListener("click", () => void confirmAccompanimentGeneration());
-    accompanimentGenerateConfirmCancel?.addEventListener("click", cancelAccompanimentGeneration);
-    accompanimentGenerateConfirmDialog?.addEventListener("cancel", event => {
-      event.preventDefault();
-      cancelAccompanimentGeneration();
-    });
     partSoundBtn?.addEventListener("click", () => void openPartSoundDialog());
     partSoundCancel?.addEventListener("click", () => partSoundDialog?.close());
     partSoundApply?.addEventListener("click", () => applyPartSoundDialog());
     partSoundPresetSelect?.addEventListener("change", () => applyPartSoundPresetToDraft(partSoundPresetSelect.value));
     partSoundPresetSave?.addEventListener("click", () => void saveDraftSoundPreset());
     partSoundPresetDelete?.addEventListener("click", () => void deleteSelectedSoundPreset());
-    muteSelectAll?.addEventListener("click", () => setAllPartMuteStates(true));
-    muteSelectNone?.addEventListener("click", () => setAllPartMuteStates(false));
-    for (const checkbox of muteChannelCheckboxes) checkbox.addEventListener("change", handleMuteChannelChange);
     for (const button of playbackChannelButtons) {
       button.addEventListener("click", () => {
         const index = clampInt(Number(button.dataset.playbackChannelIndex), 0, 5);
@@ -865,11 +3889,6 @@
         applyPartMuteStates(next);
       });
     }
-    leadingSilenceSeconds?.addEventListener("change", normalizeLeadingSilenceSecondsInput);
-    leadingSilenceSeconds?.addEventListener("blur", normalizeLeadingSilenceSecondsInput);
-    midiQuantizeToggle?.addEventListener("click", toggleMidiQuantizeDivision);
-    midiSelectedPreviewBtn?.addEventListener("click", () => void toggleMidiSelectedPreview());
-    midiFullPreviewBtn?.addEventListener("click", () => void toggleMidiFullPreview());
     midiBulkAssignBtn?.addEventListener("click", openMidiBulkAssignDialog);
     for (const button of midiBulkChannelButtons) {
       button.addEventListener("click", () => {
@@ -907,7 +3926,7 @@
     midiConvertCancel?.addEventListener("click", () => {
       if (midiConvertBusy) return;
       stopMidiPreview();
-      if (isSourceWorkbenchLayout() && midiAppliedSettingsSnapshot) {
+      if (midiAppliedSettingsSnapshot) {
         pendingMidiSettings = cloneMidiPendingSettings(midiAppliedSettingsSnapshot);
         updateMidiConvertSummary();
         updateMidiQuantizeToggle();
@@ -941,9 +3960,9 @@
     themeToggleBtn?.addEventListener("click", toggleTheme);
     mainMml.addEventListener("paste", handleEditorMmlPaste);
     mainMml.addEventListener("input", () => {
-      const generatedByWorkbench = mainMml.dataset.workbenchApply === "1";
-      if (!generatedByWorkbench) normalizeTextareaCommands(mainMml);
-      syncPartsFromMain({ generatedByWorkbench });
+      const generatedByPlayerUi = mainMml.dataset.playerUiApply === "1";
+      if (!generatedByPlayerUi) normalizeTextareaCommands(mainMml);
+      syncPartsFromMain({ generatedByPlayerUi });
     });
     mainMml.addEventListener("scroll", syncHighlightScroll);
     partTexts.forEach((t, i) => {
@@ -1033,8 +4052,7 @@
   function getControlPopoverPairs() {
     return [
       [speedControlButton, speedControlPopover],
-      [volumeControlButton, volumeControlPopover],
-      [muteControlButton, muteControlPopover]
+      [volumeControlButton, volumeControlPopover]
     ].filter(([button, popover]) => button && popover);
   }
 
@@ -1115,8 +4133,6 @@
     updatePartMuteControl();
     updateSoundFontUi();
     updateSoundPresetControls();
-    if (bulkVolumeDialog?.open) updateBulkVolumeStats();
-    if (tempoSimplifyDialog?.open && pendingTempoSimplification) updateTempoSimplifyPreview(pendingTempoSimplification);
     if (mmiImportDialog?.open) updateMmiImportSelectionState();
     if (pianoRollEmpty && !pianoRollEmpty.hidden && pianoRollRangeLabel) {
       pianoRollRangeLabel.textContent = i18nText("roll.title");
@@ -1895,6 +4911,28 @@
     }
   }
 
+  const googleExternalScriptPromises = new Map();
+
+  function loadGoogleExternalScript(src) {
+    const url = String(src || "");
+    if (!url) return Promise.resolve();
+    if (googleExternalScriptPromises.has(url)) return googleExternalScriptPromises.get(url);
+    const promise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = url;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error(`Google API 로드 실패: ${url}`));
+      document.head.appendChild(script);
+    }).catch(error => {
+      googleExternalScriptPromises.delete(url);
+      throw error;
+    });
+    googleExternalScriptPromises.set(url, promise);
+    return promise;
+  }
+
   function waitForGoogleGlobal(test, label, timeoutMs = 10000) {
     if (test()) return Promise.resolve();
     return new Promise((resolve, reject) => {
@@ -1912,10 +4950,16 @@
   }
 
   async function ensureGoogleIdentityLoaded() {
+    if (!window.google?.accounts?.oauth2) {
+      await loadGoogleExternalScript("https://accounts.google.com/gsi/client");
+    }
     await waitForGoogleGlobal(() => Boolean(window.google?.accounts?.oauth2), i18nText("google.login_title"));
   }
 
   async function ensureGooglePickerLoaded() {
+    if (!window.gapi?.load) {
+      await loadGoogleExternalScript("https://apis.google.com/js/api.js");
+    }
     await waitForGoogleGlobal(() => Boolean(window.gapi?.load), "Google Picker");
     if (googlePickerLoaded && window.google?.picker) return;
     await new Promise((resolve, reject) => {
@@ -3218,6 +6262,7 @@
     if (!window.MabiMusicFormats?.convertBytes) {
       throw new Error("음악 포맷 플러그인을 불러오지 못했습니다.");
     }
+    await ensureMusicFormatRuntime(name, mimeType, bytes);
     const converted = await window.MabiMusicFormats.convertBytes(bytes, name, mimeType);
     const midiBytes = converted.midiBytes;
     const overview = analyzeMidi(midiBytes, name);
@@ -3257,7 +6302,7 @@
         setMainMml(loaded);
         showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_gdocs", [shortError(optErr)]));
       }
-      notifyWorkbenchSourceBaseline(mainMml.value, { name, sourceType: "gdocs", sourceLabel: "Google Docs", newSource: true });
+      notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "gdocs", sourceLabel: "Google Docs", newSource: true });
         googleDriveMmlFileName = "";
       rememberSuggestedMmlSaveFileName(name);
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
@@ -3291,7 +6336,7 @@
         setMainMml(loaded);
         showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_mmi", [shortError(optErr)]));
       }
-      notifyWorkbenchSourceBaseline(mainMml.value, { name, sourceType: "mmi", sourceLabel: "MabiIcco", newSource: true });
+      notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "mmi", sourceLabel: "MabiIcco", newSource: true });
         googleDriveMmlFileName = "";
       rememberSuggestedMmlSaveFileName(name);
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
@@ -3311,7 +6356,7 @@
         setMainMml(loaded);
         showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_3mle", [shortError(optErr)]));
       }
-      notifyWorkbenchSourceBaseline(mainMml.value, { name, sourceType: "mml", sourceLabel: "3MLE", newSource: true });
+      notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "mml", sourceLabel: "3MLE", newSource: true });
         googleDriveMmlFileName = "";
       rememberSuggestedMmlSaveFileName(name);
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
@@ -3330,7 +6375,7 @@
         setMainMml(loaded);
         showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_file", [shortError(optErr)]));
       }
-      notifyWorkbenchSourceBaseline(mainMml.value, { name, sourceType: "txt", sourceLabel: "MML", newSource: true });
+      notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "txt", sourceLabel: "MML", newSource: true });
       googleDriveMmlFileName = name;
       rememberSuggestedMmlSaveFileName(name);
       showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
@@ -3360,7 +6405,6 @@
         showDialog(i18nText("drive.save_fail"), i18nText("mml.empty"));
         return;
       }
-
       const defaultFolderName = googleDriveSaveFolderName || GOOGLE_MML_FOLDER_NAME;
       const defaultFileName = googleDriveMmlFileName || defaultGoogleDriveSaveFileName();
       const result = await openGoogleDriveSaveDialog({
@@ -3651,19 +6695,6 @@
   }
 
   function updatePartMuteControl() {
-    const mutedCount = partMuteStates.filter(Boolean).length;
-    const label = i18nText("snd.mute");
-    if (partMuteLabel) partMuteLabel.textContent = label;
-    if (muteControlValue) muteControlValue.textContent = `${mutedCount}/6`;
-    if (muteControlButton) {
-      muteControlButton.classList.toggle("active", mutedCount > 0);
-      muteControlButton.setAttribute("aria-label", `${label} ${mutedCount}/6`);
-      muteControlButton.title = `${i18nText("snd.mute_channels")} ${mutedCount}/6`;
-    }
-    for (const checkbox of muteChannelCheckboxes) {
-      const index = clampInt(Number(checkbox.dataset.mutePart), 0, 5);
-      checkbox.checked = Boolean(partMuteStates[index]);
-    }
     for (const button of playbackChannelButtons) {
       const index = clampInt(Number(button.dataset.playbackChannelIndex), 0, 5);
       const audible = !partMuteStates[index];
@@ -3728,18 +6759,6 @@
     updatePianoRoll(playbackOffset, scheduleCache?.duration || Number(progressSlider?.max) || 0, true);
   }
 
-  function handleMuteChannelChange() {
-    const nextStates = Array.from({ length: 6 }, () => false);
-    for (const checkbox of muteChannelCheckboxes) {
-      const index = clampInt(Number(checkbox.dataset.mutePart), 0, 5);
-      nextStates[index] = Boolean(checkbox.checked);
-    }
-    applyPartMuteStates(nextStates);
-  }
-
-  function setAllPartMuteStates(muted) {
-    applyPartMuteStates(Array.from({ length: 6 }, () => Boolean(muted)));
-  }
 
   function restartPlaybackAfterSoundChange() {
     if (!isPlaying) return;
@@ -3944,7 +6963,7 @@
 
   function closeImportDialogsForSourceReload() {
     stopMidiPreview();
-    setWorkbenchOriginalMidiImport(null);
+    setPlayerUiOriginalMidiImport(null);
     if (midiConvertDialog?.open) {
       try { midiConvertDialog.close("reload"); } catch (_) {}
       pendingMidiImport = null;
@@ -3987,7 +7006,7 @@
           setMainMml(loaded);
           showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_mmi", [shortError(optErr)]));
         }
-        notifyWorkbenchSourceBaseline(mainMml.value, { name, sourceType: "mmi", sourceLabel: "MabiIcco", newSource: true });
+        notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "mmi", sourceLabel: "MabiIcco", newSource: true });
         rememberSuggestedMmlSaveFileName(name);
         showLoadedChannelCount(midiLoadBtn, i18nText("st.loaded"), mainMml.value);
       } else if (ext === "mml") {
@@ -4001,7 +7020,7 @@
           setMainMml(loaded);
           showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_3mle", [shortError(optErr)]));
         }
-        notifyWorkbenchSourceBaseline(mainMml.value, { name, sourceType: "mml", sourceLabel: "3MLE", newSource: true });
+        notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "mml", sourceLabel: "3MLE", newSource: true });
         rememberSuggestedMmlSaveFileName(name);
         showLoadedChannelCount(midiLoadBtn, i18nText("st.loaded"), mainMml.value);
       } else if (ext === "txt") {
@@ -4014,7 +7033,7 @@
           setMainMml(loaded);
           showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_file", [shortError(optErr)]));
         }
-        notifyWorkbenchSourceBaseline(mainMml.value, { name, sourceType: "txt", sourceLabel: "MML", newSource: true });
+        notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "txt", sourceLabel: "MML", newSource: true });
         showLoadedChannelCount(midiLoadBtn, i18nText("st.loaded"), mainMml.value);
       } else {
         throw new Error(i18nText("xml.unsupported_file"));
@@ -4985,26 +8004,23 @@
     const groups = overview.instrumentGroups || overview.channels || [];
     if (!groups.length) {
       pendingMidiImport = null;
-      setWorkbenchOriginalMidiImport(null);
+      setPlayerUiOriginalMidiImport(null);
       throw new Error(i18nText("midi.group_not_found", [sourceLabel]));
     }
 
-    setWorkbenchOriginalMidiImport(importData);
+    setPlayerUiOriginalMidiImport(importData);
     pendingMidiSettings = createDefaultMidiSettings(groups);
     midiAppliedSettingsSnapshot = null;
     midiInstrumentSectionOpenState.clear();
-    // A newly loaded file starts a fresh workbench. Do not resurrect the previous
+    // A newly loaded file starts a fresh playerUi. Do not resurrect the previous
     // instrument/channel assignment cache for the same file; use the automatic
     // initial assignment and let session restore handle intentional recovery.
     applyInitialMidiGroupAssignment(pendingMidiSettings);
     midiAppliedSettingsSnapshot = cloneMidiPendingSettings(pendingMidiSettings);
 
     if (midiConvertTitle) midiConvertTitle.textContent = i18nText("cfg.conv_cfg", [sourceLabel]);
-    if (midiGuideBox) midiGuideBox.setAttribute("aria-label", i18nText("midi.guide_label", [sourceLabel]));
-    if (midiGuideLead) midiGuideLead.textContent = i18nText("midi.help_source", [sourceLabel]);
     updateMidiConvertSummary();
     updateMidiQuantizeToggle();
-    setMidiFullPreviewState(false);
     setMidiConvertBusy(false);
     renderMidiRoleList();
     renderActiveMidiInstrumentList();
@@ -5013,8 +8029,8 @@
     if (midiConvertDialog?.showModal) {
       midiConvertDialog.showModal();
       scheduleMidiInstrumentListHeightSync();
-      // Source Workbench에서는 최초 채널 배정을 바로 적용해 불러오자마자 재생/편집할 수 있게 한다.
-      if (isSourceWorkbenchLayout()) window.setTimeout(() => requestMidiConvert({ force: true }), 0);
+      // Source PlayerUi에서는 최초 채널 배정을 바로 적용해 불러오자마자 재생/편집할 수 있게 한다.
+      window.setTimeout(() => requestMidiConvert({ force: true }), 0);
     } else {
       // 오래된 브라우저에서는 기본값으로 바로 변환한다.
       applyMidiConvertDialog();
@@ -5155,7 +8171,7 @@
     return { ...importData, bytes };
   }
 
-  function restoreMidiWorkbenchSnapshot(snapshot) {
+  function restoreMidiPlayerUiSnapshot(snapshot) {
     if (!snapshot?.pendingMidiImport || !snapshot?.pendingMidiSettings) return false;
     pendingMidiImport = cloneMidiImportData(snapshot.pendingMidiImport);
     pendingMidiSettings = cloneMidiPendingSettings(snapshot.pendingMidiSettings);
@@ -5174,14 +8190,11 @@
     midiConvertQueued = false;
     clearTimeout(midiConvertRequestTimer);
     midiConvertRequestTimer = 0;
-    setWorkbenchOriginalMidiImport(pendingMidiImport);
+    setPlayerUiOriginalMidiImport(pendingMidiImport);
     const sourceLabel = getMidiImportSourceLabel(pendingMidiImport);
     if (midiConvertTitle) midiConvertTitle.textContent = i18nText("cfg.conv_cfg", [sourceLabel]);
-    if (midiGuideBox) midiGuideBox.setAttribute("aria-label", i18nText("midi.guide_label", [sourceLabel]));
-    if (midiGuideLead) midiGuideLead.textContent = i18nText("midi.help_source", [sourceLabel]);
     updateMidiConvertSummary();
     updateMidiQuantizeToggle();
-    setMidiFullPreviewState(false);
     setMidiConvertBusy(false);
     renderMidiRoleList();
     renderActiveMidiInstrumentList();
@@ -5214,46 +8227,22 @@
   function updateMidiQuantizeToggle() {
     const available = Boolean(pendingMidiSettings);
     const division = Number(pendingMidiSettings?.quantizeDivision) === 32 ? 32 : 64;
-    if (midiQuantizeToggle) {
-      midiQuantizeToggle.textContent = i18nText(division === 32 ? "midi.quantize_32" : "midi.quantize_64");
-      midiQuantizeToggle.setAttribute("aria-pressed", division === 32 ? "true" : "false");
-      midiQuantizeToggle.setAttribute("aria-label", i18nText("midi.quantize_current", [division]));
-      midiQuantizeToggle.title = i18nText("midi.quantize_toggle");
-      midiQuantizeToggle.disabled = !available;
-    }
-    if (isSourceWorkbenchLayout()) {
-      try {
-        window.dispatchEvent(new CustomEvent("mobibard:midi-quantize-state", {
-          detail: { available, division }
-        }));
-      } catch (_) {}
-    }
-  }
-
-  function toggleMidiQuantizeDivision() {
-    if (!pendingMidiSettings || midiConvertBusy) return;
-    stopMidiPreview();
-    pendingMidiSettings.quantizeDivision = Number(pendingMidiSettings.quantizeDivision) === 32 ? 64 : 32;
-    updateMidiQuantizeToggle();
-    if (midiConvertStatus) {
-      midiConvertStatus.textContent = i18nText("midi.quantize_changed", [pendingMidiSettings.quantizeDivision]);
-      midiConvertStatus.hidden = false;
-    }
+    try {
+      window.dispatchEvent(new CustomEvent("mobibard:midi-quantize-state", {
+        detail: { available, division }
+      }));
+    } catch (_) {}
   }
 
   function refreshMidiConvertLocale() {
     if (!pendingMidiImport || !pendingMidiSettings) return;
     const sourceLabel = getMidiImportSourceLabel(pendingMidiImport);
     if (midiConvertTitle) midiConvertTitle.textContent = i18nText("cfg.conv_cfg", [sourceLabel]);
-    if (midiGuideBox) midiGuideBox.setAttribute("aria-label", i18nText("midi.guide_label", [sourceLabel]));
-    if (midiGuideLead) midiGuideLead.textContent = i18nText("midi.help_source", [sourceLabel]);
     updateMidiConvertSummary();
     updateMidiQuantizeToggle();
     renderMidiRoleList();
     renderActiveMidiInstrumentList();
     updateMidiRoleControls();
-    setMidiFullPreviewState(midiFullPreviewActive);
-    setMidiSelectedPreviewState(midiSelectedPreviewActive);
   }
 
 
@@ -5317,7 +8306,7 @@
 
   function syncMidiInstrumentListHeight() {
     if (!midiRoleList || !midiChannelList) return;
-    if (document.body?.classList?.contains("player-source-workbench-v7")) {
+    if (document.body?.classList?.contains("player-ui")) {
       midiChannelList.style.height = "";
       midiChannelList.style.minHeight = "";
       midiChannelList.style.maxHeight = "";
@@ -5571,7 +8560,7 @@
     renderMidiRoleList();
     renderActiveMidiInstrumentList();
     updateMidiRoleControls();
-    scheduleMidiConvertRequest(0);
+    scheduleMidiConvertRequest();
   }
 
   function renderActiveMidiInstrumentList() {
@@ -5596,7 +8585,7 @@
         <div class="midi-instrument-selected-parts wb8-midi-instrument-channels" aria-label="${escapeHtml(i18nText("mml.chs"))}">${renderMidiGroupChannelButtons(group)}</div>
         <strong class="wb8-midi-instrument-name">${escapeHtml(name)}</strong>
         <span class="wb8-midi-instrument-count">${escapeHtml(i18nText("midi.note_count", [formatCount(group.noteCount)]))}</span>
-        <button class="midi-preview-btn wb8-midi-listen" type="button" data-midi-preview="${escapeHtml(group.id)}">${escapeHtml(i18nText("ui.listen"))}</button>
+        <button class="midi-preview-btn wb8-midi-listen" type="button" data-midi-preview="${escapeHtml(group.id)}" aria-label="${escapeHtml(i18nText("ui.listen"))}" title="${escapeHtml(i18nText("ui.listen"))}"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span></button>
       `;
       row.querySelector("[data-midi-preview]")?.addEventListener("click", ev => {
         ev.preventDefault();
@@ -5634,159 +8623,6 @@
     scheduleMidiInstrumentListHeightSync();
   }
 
-  async function toggleMidiSelectedPreview() {
-    if (!pendingMidiImport) return;
-    if (midiSelectedPreviewActive) {
-      stopMidiPreview();
-      return;
-    }
-
-    let options;
-    try {
-      options = collectMidiConvertOptions();
-    } catch (err) {
-      showDialog(i18nText("err.preview_3"), shortError(err));
-      return;
-    }
-    const sourceLabel = options.sourceLabel || getMidiImportSourceLabel();
-
-    try {
-      stopPlayback(false);
-      stopMidiPreview();
-      setMidiSelectedPreviewState(true);
-      if (midiConvertStatus) {
-        midiConvertStatus.textContent = i18nText("mml.prepare_preview");
-        midiConvertStatus.hidden = false;
-      }
-      await loadDefaultSf2IfNeeded();
-      const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, { ...options, sourceLabel });
-      const normalized = normalizeImportedFullMml(result.mml);
-      const parsed = parseMabinogiMml(normalized.mml);
-      const scheduled = buildSchedule(parsed);
-      const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
-      const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
-      if (!notes.length || duration <= 0) throw new Error(i18nText("cfg.no_notes_play"));
-      if (!soundFont?.presets?.length) throw new Error(i18nText("snd.find_avail"));
-      const ctx = await ensureAudioContext();
-      const presetKeys = buildMidiPartSoundPreset(options.exportChannels, pendingMidiSettings?.groups || [], options.partCount);
-      const prepared = prepareNotesWithPresetKeys(ctx, notes, presetKeys, { respectMute: false });
-      if (!prepared.length) throw new Error(i18nText("snd.no_audible"));
-      const windowEnd = Math.min(duration, 45);
-      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd });
-      const scheduleResult = schedulePreparedNotes(ctx, prepared, {
-        baseTime: ctx.currentTime + 0.08,
-        fromSec: 0,
-        playbackSpeed,
-        windowStart: 0,
-        windowEnd: Math.max(0.5, windowEnd + 0.05),
-        destination: masterGain || ctx.destination,
-        activeSources: midiPreviewSources,
-        scheduledIds: new Set(),
-        minLeadTime: 0.012,
-        gainScale
-      });
-      if (midiConvertStatus) {
-        midiConvertStatus.textContent = i18nText("ui.preview_wait_2");
-        midiConvertStatus.hidden = false;
-      }
-      const stopMs = Math.max(800, Math.min(60000, (scheduleResult.maxEnd - ctx.currentTime + 0.35) * 1000));
-      midiPreviewTimer = window.setTimeout(() => {
-        stopMidiPreview();
-        if (midiConvertStatus) midiConvertStatus.hidden = true;
-      }, stopMs);
-    } catch (err) {
-      stopMidiPreview();
-      if (midiConvertStatus) midiConvertStatus.hidden = true;
-      showDialog(i18nText("err.preview_3"), shortError(err));
-    }
-  }
-
-  async function toggleMidiFullPreview() {
-    if (!pendingMidiImport) return;
-    const sourceLabel = getMidiImportSourceLabel();
-    if (midiFullPreviewActive) {
-      stopMidiPreview();
-      return;
-    }
-    try {
-      stopPlayback(false);
-      stopMidiPreview();
-      setMidiFullPreviewState(true);
-      if (midiConvertStatus) {
-        midiConvertStatus.textContent = i18nText("midi.preview_prepare", [sourceLabel]);
-        midiConvertStatus.hidden = false;
-      }
-      await loadDefaultSf2IfNeeded();
-      const preview = buildMidiFilePreview(pendingMidiImport.bytes, { maxSeconds: 45, tailSeconds: 1.0 });
-      const ctx = await ensureAudioContext();
-      const prepared = [];
-      const byPreset = new Map();
-      for (const note of preview.notes) {
-        const resolved = resolvePreviewPreset(note);
-        if (!resolved?.preset || !resolved?.soundBank) continue;
-        const sourceTag = resolved.soundBank === soundFont ? "selected" : "default";
-        const key = `${sourceTag}:${resolved.preset.bank}:${resolved.preset.preset}:${note.isBeat ? 1 : 0}`;
-        if (!byPreset.has(key)) byPreset.set(key, { ...resolved, notes: [] });
-        byPreset.get(key).notes.push(note);
-      }
-      for (const item of byPreset.values()) {
-        if (item.isDrum) {
-          prepared.push(...prepareDrumNotes(
-            ctx,
-            item.soundBank,
-            item.preset,
-            item.notes,
-            item.fallbackSoundBank,
-            item.fallbackPreset
-          ));
-        } else {
-          prepared.push(...prepareNotes(ctx, item.soundBank, item.preset, item.notes));
-        }
-      }
-      prepared.sort((a, b) => a.start - b.start || a.midi - b.midi || a.id - b.id);
-      if (!prepared.length) throw new Error(i18nText("midi.preview_sound_missing", [sourceLabel]));
-      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: preview.duration });
-      const result = schedulePreparedNotes(ctx, prepared, {
-        baseTime: ctx.currentTime + 0.08,
-        fromSec: 0,
-        windowStart: 0,
-        windowEnd: Math.max(0.5, preview.duration + 0.1),
-        destination: masterGain || ctx.destination,
-        activeSources: midiPreviewSources,
-        scheduledIds: null,
-        minLeadTime: 0.01,
-        gainScale
-      });
-      if (midiConvertStatus) {
-        midiConvertStatus.textContent = i18nText("midi.previewing", [sourceLabel]);
-        midiConvertStatus.hidden = false;
-      }
-      const stopMs = Math.max(800, Math.min(60000, (result.maxEnd - ctx.currentTime + 0.3) * 1000));
-      midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
-    } catch (err) {
-      stopMidiPreview();
-      if (midiConvertStatus) midiConvertStatus.hidden = true;
-      showDialog(i18nText("midi.preview_fail_title", [sourceLabel]), shortError(err));
-    }
-  }
-
-  function setMidiFullPreviewState(active) {
-    midiFullPreviewActive = Boolean(active);
-    if (midiFullPreviewBtn) {
-      midiFullPreviewBtn.textContent = midiFullPreviewActive ? i18nText("player.stop") : i18nText("midi.listen_original");
-      midiFullPreviewBtn.classList.toggle("danger", midiFullPreviewActive);
-      midiFullPreviewBtn.setAttribute("aria-pressed", midiFullPreviewActive ? "true" : "false");
-    }
-  }
-
-  function setMidiSelectedPreviewState(active) {
-    midiSelectedPreviewActive = Boolean(active);
-    if (midiSelectedPreviewBtn) {
-      midiSelectedPreviewBtn.textContent = midiSelectedPreviewActive ? i18nText("player.stop") : i18nText("midi.listen_mml");
-      midiSelectedPreviewBtn.classList.toggle("danger", midiSelectedPreviewActive);
-      midiSelectedPreviewBtn.setAttribute("aria-pressed", midiSelectedPreviewActive ? "true" : "false");
-    }
-  }
 
   async function previewMidiInstrument(groupId, triggerButton = null, previewLabel = "") {
     if (!pendingMidiImport) return;
@@ -5853,12 +8689,22 @@
     }
   }
 
+  function setMidiInstrumentPreviewButtonIcon(button, isPlaying) {
+    if (!(button instanceof HTMLElement)) return;
+    const label = isPlaying ? i18nText("midi.preview_stop") : i18nText("ui.listen");
+    const icon = document.createElement("span");
+    icon.className = `shared-transport-icon shared-icon-${isPlaying ? "stop" : "play"}`;
+    icon.setAttribute("aria-hidden", "true");
+    button.replaceChildren(icon);
+    button.setAttribute("aria-label", label);
+    button.title = label;
+  }
+
   function setMidiInstrumentPreviewButton(button, groupId) {
     if (!(button instanceof HTMLElement)) return;
     midiInstrumentPreviewButton = button;
-    midiInstrumentPreviewButtonText = button.textContent || i18nText("ui.listen");
     midiInstrumentPreviewGroupId = String(groupId || "");
-    button.textContent = i18nText("midi.preview_stop");
+    setMidiInstrumentPreviewButtonIcon(button, true);
     button.classList.add("danger");
     button.setAttribute("aria-pressed", "true");
     button.disabled = false;
@@ -5867,13 +8713,12 @@
   function resetMidiInstrumentPreviewButton() {
     if (!midiInstrumentPreviewButton) return;
     try {
-      midiInstrumentPreviewButton.textContent = midiInstrumentPreviewButtonText || i18nText("ui.listen");
+      setMidiInstrumentPreviewButtonIcon(midiInstrumentPreviewButton, false);
       midiInstrumentPreviewButton.classList.remove("danger");
       midiInstrumentPreviewButton.setAttribute("aria-pressed", "false");
       midiInstrumentPreviewButton.disabled = false;
     } catch (_) {}
     midiInstrumentPreviewButton = null;
-    midiInstrumentPreviewButtonText = "";
     midiInstrumentPreviewGroupId = "";
   }
 
@@ -5970,9 +8815,7 @@
       }
     }
     midiPreviewSources = [];
-    if ((midiFullPreviewActive || midiSelectedPreviewActive || midiChannelPreviewButton) && midiConvertStatus) midiConvertStatus.hidden = true;
-    setMidiFullPreviewState(false);
-    setMidiSelectedPreviewState(false);
+    if (midiChannelPreviewButton && midiConvertStatus) midiConvertStatus.hidden = true;
     resetMidiInstrumentPreviewButton();
     resetMidiChannelPreviewButton();
     resetSplitPreviewButton();
@@ -6151,17 +8994,10 @@
     void applyMidiConvertDialog({ force });
   }
 
-  function scheduleMidiConvertRequest(delay = 110) {
+  function scheduleMidiConvertRequest() {
     clearTimeout(midiConvertRequestTimer);
     midiConvertRequestTimer = 0;
-    if (isSourceWorkbenchLayout()) {
-      try { window.dispatchEvent(new CustomEvent("mobibard:midi-settings-dirty")); } catch (_) {}
-      return;
-    }
-    midiConvertRequestTimer = window.setTimeout(() => {
-      midiConvertRequestTimer = 0;
-      requestMidiConvert();
-    }, Math.max(0, Number(delay) || 0));
+    try { window.dispatchEvent(new CustomEvent("mobibard:midi-settings-dirty")); } catch (_) {}
   }
 
   function finishMidiConvertRequest() {
@@ -6199,22 +9035,12 @@
       const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
       const midiSoundPresetKeys = buildMidiPartSoundPreset(options.exportChannels, pendingMidiSettings?.groups || [], options.partCount);
       const normalized = normalizeImportedFullMml(result.mml);
-      if (isSourceWorkbenchLayout()) {
-        notifyWorkbenchSourceBaseline(normalized.mml, {
-          name: pendingMidiImport.name,
-          sourceType,
-          sourceLabel,
-          newSource: pendingMidiStartsNewSource
-        });
-      } else {
-        setMainMml(normalized.mml);
-        notifyWorkbenchSourceBaseline(normalized.mml, {
-          name: pendingMidiImport.name,
-          sourceType,
-          sourceLabel,
-          newSource: pendingMidiStartsNewSource
-        });
-      }
+      notifyPlayerUiSourceBaseline(normalized.mml, {
+        name: pendingMidiImport.name,
+        sourceType,
+        sourceLabel,
+        newSource: pendingMidiStartsNewSource
+      });
       rememberSuggestedMmlSaveFileName(pendingMidiImport.name);
       googleDriveMmlFileName = "";
       rememberMidiPartSoundPreset(midiSoundPresetKeys);
@@ -6224,35 +9050,27 @@
       midiAppliedSettingsSnapshot = cloneMidiPendingSettings(pendingMidiSettings);
       pendingMidiStartsNewSource = false;
 
-      if (isSourceWorkbenchLayout()) {
-        setMidiConvertBusy(false);
-        if (midiConvertStatus) {
-          midiConvertStatus.textContent = "";
-          midiConvertStatus.hidden = true;
-        }
-        try {
-          window.dispatchEvent(new CustomEvent("mobibard:midi-convert-complete", {
-            detail: {
-              sourceType,
-              sourceLabel,
-              name: pendingMidiImport?.name || "",
-              exportChannels: Number(options.partCount || 0),
-              quantizeDivision: Number(options.quantizeDivision || 64),
-              instrumentGroups: midiGroupCount,
-              optimizedChars: saved,
-              durationMs: Math.round((performance.now() - startedAt) * 10) / 10
-            }
-          }));
-        } catch (_) {}
-        finishMidiConvertRequest();
-        return;
-      }
-
-      midiConvertDialog?.close();
       setMidiConvertBusy(false);
-      pendingMidiImport = null;
-      pendingMidiSettings = null;
-      showDialog(i18nText("midi.convert_done_title", [sourceLabel]), result.message);
+      if (midiConvertStatus) {
+        midiConvertStatus.textContent = "";
+        midiConvertStatus.hidden = true;
+      }
+      try {
+        window.dispatchEvent(new CustomEvent("mobibard:midi-convert-complete", {
+          detail: {
+            sourceType,
+            sourceLabel,
+            name: pendingMidiImport?.name || "",
+            exportChannels: Number(options.partCount || 0),
+            quantizeDivision: Number(options.quantizeDivision || 64),
+            instrumentGroups: midiGroupCount,
+            optimizedChars: saved,
+            durationMs: Math.round((performance.now() - startedAt) * 10) / 10
+          }
+        }));
+      } catch (_) {}
+      finishMidiConvertRequest();
+      return;
     } catch (err) {
       setMidiConvertBusy(false);
       showDialog(i18nText("midi.convert_fail_title", [sourceLabel]), shortError(err));
@@ -6263,10 +9081,10 @@
   function setMidiConvertBusy(busy, message = "") {
     midiConvertBusy = Boolean(busy);
     if (midiConvertStatus) {
-      midiConvertStatus.textContent = isSourceWorkbenchLayout() ? "" : (message || "");
-      midiConvertStatus.hidden = isSourceWorkbenchLayout() || !message;
+      midiConvertStatus.textContent = "";
+      midiConvertStatus.hidden = true;
     }
-    if (isSourceWorkbenchLayout() && busy && message) {
+    if (busy && message) {
       try {
         window.dispatchEvent(new CustomEvent("mobibard:toast", {
           detail: { message: String(message), tone: "info" }
@@ -6285,13 +9103,11 @@
         delete control.dataset.prevMidiBusyDisabled;
       }
     }
-    // Source Workbench에서는 취소 버튼이 dialog 밖의 pending action bar로 이동되어 있으므로
+    // Source PlayerUi에서는 취소 버튼이 dialog 밖의 pending action bar로 이동되어 있으므로
     // 변환 중 상태를 별도로 동기화한다.
     if (midiConvertCancel) midiConvertCancel.disabled = Boolean(busy);
     if (midiConvertApply) {
-      midiConvertApply.textContent = busy
-        ? i18nText("ui.conv")
-        : (isSourceWorkbenchLayout() ? i18nText("ui.apply") : i18nText("ui.convert"));
+      midiConvertApply.textContent = busy ? i18nText("ui.conv") : i18nText("ui.apply");
     }
     updateMidiConvertApplyState();
   }
@@ -6625,28 +9441,6 @@
     return findPresetByKey(key) || soundFont?.findPreset(0) || soundFont?.presets?.[0] || null;
   }
 
-  function getPresetByKeyOrDefault(key) {
-    return findPresetByKey(key) || soundFont?.findPreset(0) || soundFont?.presets?.[0] || null;
-  }
-
-  function prepareNotesWithPresetKeys(ctx, notes, presetKeys, options = {}) {
-    const keys = normalizePresetKeyArray(presetKeys);
-    const prepared = [];
-    const list = Array.isArray(notes) ? notes : [];
-    const respectMute = Boolean(options.respectMute);
-    for (let part = 0; part < 6; part++) {
-      if (respectMute && partMuteStates[part]) continue;
-      const partNotes = list.filter(n => Number(n.part) === part);
-      if (!partNotes.length) continue;
-      const preset = getPresetByKeyOrDefault(keys[part]);
-      if (!preset) continue;
-      prepared.push(...prepareNotes(ctx, soundFont, preset, partNotes));
-    }
-    prepared.sort((a, b) => a.start - b.start || a.part - b.part || a.midi - b.midi);
-    for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
-    return prepared;
-  }
-
   function computeAutoGainScale(prepared, options = {}) {
     const list = Array.isArray(prepared) ? prepared : [];
     if (!list.length) return 1;
@@ -6725,6 +9519,85 @@
     return prepared;
   }
 
+  function buildTemporalIndex(items) {
+    const list = Array.from(items || []).slice().sort((a, b) => (Number(a?.start) || 0) - (Number(b?.start) || 0));
+    const starts = new Array(list.length);
+    const prefixMaxEnd = new Array(list.length);
+    let maxEnd = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < list.length; i++) {
+      const start = Math.max(0, Number(list[i]?.start) || 0);
+      const end = start + Math.max(0, Number(list[i]?.durationSec) || 0);
+      starts[i] = start;
+      maxEnd = Math.max(maxEnd, end);
+      prefixMaxEnd[i] = maxEnd;
+    }
+    return { list, starts, prefixMaxEnd };
+  }
+
+  function firstTemporalOverlapIndex(index, windowStart) {
+    const prefix = index?.prefixMaxEnd || [];
+    const target = Number(windowStart) || 0;
+    let lo = 0;
+    let hi = prefix.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (prefix[mid] >= target - 0.0000001) hi = mid;
+      else lo = mid + 1;
+    }
+    return lo;
+  }
+
+  function firstTemporalStartAtOrAfter(index, windowEnd) {
+    const starts = index?.starts || [];
+    const target = Number(windowEnd) || 0;
+    let lo = 0;
+    let hi = starts.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (starts[mid] >= target - 0.0000001) hi = mid;
+      else lo = mid + 1;
+    }
+    return lo;
+  }
+
+  function temporalWindow(index, windowStart, windowEnd) {
+    if (!index?.list?.length) return { list: [], start: 0, end: 0 };
+    const start = firstTemporalOverlapIndex(index, windowStart);
+    const end = firstTemporalStartAtOrAfter(index, windowEnd);
+    return { list: index.list, start, end: Math.max(start, end) };
+  }
+
+  function ensureScheduleTemporalIndexes() {
+    if (scheduleTemporalIndexVersion === scheduleCacheVersion) {
+      return { notes: scheduleNoteTemporalIndex, rests: scheduleRestTemporalIndex };
+    }
+    scheduleTemporalIndexVersion = scheduleCacheVersion;
+    scheduleNoteTemporalIndex = buildTemporalIndex(scheduleCache?.notes || []);
+    scheduleRestTemporalIndex = buildTemporalIndex(scheduleCache?.rests || []);
+    return { notes: scheduleNoteTemporalIndex, rests: scheduleRestTemporalIndex };
+  }
+
+  function rebuildPreparedPlaybackIndex() {
+    preparedPlaybackPrefixMaxEnd = new Array(preparedNotes.length);
+    let maxEnd = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < preparedNotes.length; i++) {
+      maxEnd = Math.max(maxEnd, Number(preparedNotes[i]?.noteEnd) || Number(preparedNotes[i]?.start) || 0);
+      preparedPlaybackPrefixMaxEnd[i] = maxEnd;
+    }
+  }
+
+  function findFirstPreparedOverlapIndex(time) {
+    const target = Math.max(0, Number(time) || 0);
+    let lo = 0;
+    let hi = preparedPlaybackPrefixMaxEnd.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (preparedPlaybackPrefixMaxEnd[mid] > target + 0.0001) hi = mid;
+      else lo = mid + 1;
+    }
+    return lo;
+  }
+
   function preparePlaybackNotes(ctx, notes) {
     return playbackMidiOriginalOverride
       ? prepareOriginalMidiNotes(ctx, notes)
@@ -6743,6 +9616,7 @@
     try {
       stopMidiPreview();
       stopPlayback(false);
+      cancelScheduledEditorDerivedRefresh();
       await loadDefaultSf2IfNeeded();
       scheduleCache = createScheduleFromEditor();
       scheduleCacheVersion++;
@@ -6752,6 +9626,8 @@
       const ctx = await ensureAudioContext();
       if (!soundFont.presets?.length) throw new Error(i18nText("snd.find_avail"));
       preparedNotes = preparePlaybackNotes(ctx, scheduleCache.notes);
+      rebuildPreparedPlaybackIndex();
+      playbackScheduleCursor = findFirstPreparedOverlapIndex(currentOffset);
       playbackAutoGainScale = computeAutoGainScale(preparedNotes, { windowStart: 0, windowEnd: scheduleCache.duration || 0 });
       const allScheduledNotesMuted = areAllScheduledNotesMuted(scheduleCache.notes);
       if (preparedNotes.length === 0 && !allScheduledNotesMuted) throw new Error(i18nText("mml.no_audible"));
@@ -6785,12 +9661,13 @@
 
     const windowStart = Math.max(playOffsetStart, nowOffset - 0.03);
     const windowEnd = Math.min(duration, nowOffset + SCHEDULE_AHEAD_SEC * playbackSpeed);
-    schedulePreparedNotes(audioCtx, preparedNotes, {
+    const scheduled = schedulePreparedNotes(audioCtx, preparedNotes, {
       baseTime: playContextStart,
       fromSec: playOffsetStart,
       playbackSpeed,
       windowStart,
       windowEnd,
+      startIndex: playbackScheduleCursor,
       destination: masterGain || audioCtx.destination,
       destinationsByPart: partPlaybackGains,
       activeSources,
@@ -6798,12 +9675,15 @@
       minLeadTime: 0.018,
       gainScale: playbackAutoGainScale
     });
+    if (Number.isInteger(scheduled?.nextIndex)) playbackScheduleCursor = scheduled.nextIndex;
 
     schedulerTimer = setTimeout(schedulePlaybackWindow, SCHEDULE_INTERVAL_MS);
   }
 
   function invalidateEditorDerivedState() {
     editorContentVersion++;
+    scheduleTemporalIndexVersion = -1;
+    pianoRollTempoMapCacheVersion = -1;
     editorAnalysisCache = {
       source: "",
       parts: null,
@@ -6862,7 +9742,7 @@
 
   function createScheduleFromEditor() {
     if (playbackMidiOriginalOverride) {
-      const originalSchedule = getWorkbenchOriginalMidiSchedule();
+      const originalSchedule = getPlayerUiOriginalMidiSchedule();
       if (!originalSchedule) throw new Error(i18nText("midi.err_no_preview_notes"));
       return originalSchedule;
     }
@@ -6910,6 +9790,8 @@
       }
     }
     activeSources = [];
+    preparedPlaybackPrefixMaxEnd = [];
+    playbackScheduleCursor = 0;
     scheduledNoteIds = new Set();
     playbackAutoGainScale = 1;
     isPlaying = false;
@@ -6993,20 +9875,25 @@
         scheduleCacheVersion++;
       }
       const time = Math.max(0, Number(offset) || 0);
-      const notes = Array.isArray(scheduleCache?.notes) ? scheduleCache.notes : [];
-      let candidates = notes.filter(note => {
+      const noteIndex = ensureScheduleTemporalIndexes().notes;
+      const activeWindow = temporalWindow(noteIndex, time - 0.025, time + 0.0451);
+      let candidates = [];
+      for (let index = activeWindow.start; index < activeWindow.end; index++) {
+        const note = activeWindow.list[index];
         const part = clampInt(Number(note?.part ?? 0), 0, 5);
-        if (partMuteStates[part] || Number(note?.volume ?? 0) <= 0) return false;
+        if (partMuteStates[part] || Number(note?.volume ?? 0) <= 0) continue;
         const start = Math.max(0, Number(note?.start) || 0);
         const end = start + Math.max(0, Number(note?.durationSec) || 0);
-        return start <= time + 0.045 && end >= time - 0.025;
-      });
+        if (start <= time + 0.045 && end >= time - 0.025) candidates.push(note);
+      }
       if (!candidates.length) {
-        candidates = notes.filter(note => {
+        const futureWindow = temporalWindow(noteIndex, time - 0.000001, time + 0.1201);
+        for (let index = futureWindow.start; index < futureWindow.end; index++) {
+          const note = futureWindow.list[index];
           const part = clampInt(Number(note?.part ?? 0), 0, 5);
           const start = Math.max(0, Number(note?.start) || 0);
-          return !partMuteStates[part] && Number(note?.volume ?? 0) > 0 && start >= time && start <= time + 0.12;
-        });
+          if (!partMuteStates[part] && Number(note?.volume ?? 0) > 0 && start >= time && start <= time + 0.12) candidates.push(note);
+        }
       }
       candidates.sort((a, b) => Math.abs((Number(a.start) || 0) - time) - Math.abs((Number(b.start) || 0) - time));
       const unique = [];
@@ -7396,76 +10283,69 @@
 
   function updatePlayButton() {
     const label = isPlaying ? i18nText("player.stop") : i18nText("player.play");
-    playToggleBtn.textContent = isPlaying ? "■" : "▶";
+    if (isPlaying) playToggleBtn.innerHTML = '<span class="shared-transport-icon shared-icon-stop" aria-hidden="true"></span>';
+    else playToggleBtn.innerHTML = '<span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span>';
     playToggleBtn.setAttribute("aria-label", label);
     playToggleBtn.title = label;
     playToggleBtn.classList.toggle("danger", isPlaying);
-  }
-
-  function clearAllMmlChannels() {
-    stopPlayback(false);
-    stopMidiPreview();
-
-    // 비우기 시 MIDI에서 기억한 "자동 음색"도 기본 피아노로 되돌린다.
-    // 현재 음색이 자동 음색을 따라가고 있었다면 실제 채널 음색도 피아노로 초기화하고,
-    // 사용자가 직접 선택한 음색은 그대로 유지한다.
-    const wasUsingAutoSound = soundPresetMatch(partPresetKeys) === "auto";
-    midiPartPresetKeys = null;
-    midiPartPresetName = defaultMidiSoundPresetLabel();
-    writePref("midiPartPresetKeys", "");
-    writePref("midiPartPresetName", midiPartPresetName);
-    if (wasUsingAutoSound) {
-      partPresetKeys = defaultPartPresetKeys();
-      savePartSoundPrefs();
-    }
-    updateSoundPresetControls();
-
-    setMainMml(composeMml(Array.from({ length: 6 }, () => ""), {
-      preserveEmpty: true,
-      partCount: 6
-    }));
-    clearSuggestedMmlSaveFileName();
-    googleDriveMmlFileName = "";
   }
 
   function setMainMml(text) {
     syncing = true;
     mainMml.value = normalizeMmlForDisplay(text);
     syncing = false;
-    syncPartsFromMain();
+    syncPartsFromMain({ generatedByPlayerUi: true });
   }
 
-  let workbenchPreviewFrame = 0;
-  let workbenchPreviewTimer = 0;
+  const EDITOR_DERIVED_REFRESH_DEBOUNCE_MS = 120;
+  let previewRefreshFrame = 0;
+  let previewRefreshTimer = 0;
 
-  function scheduleWorkbenchPreviewRefresh() {
-    if (workbenchPreviewFrame) cancelAnimationFrame(workbenchPreviewFrame);
-    if (workbenchPreviewTimer) clearTimeout(workbenchPreviewTimer);
-    workbenchPreviewFrame = requestAnimationFrame(() => {
-      workbenchPreviewFrame = 0;
-      workbenchPreviewTimer = window.setTimeout(() => {
-        workbenchPreviewTimer = 0;
-        updateVisibleHighlight();
-        rebuildSchedulePreviewSilently();
-      }, 0);
+  function cancelScheduledEditorDerivedRefresh() {
+    if (previewRefreshFrame) cancelAnimationFrame(previewRefreshFrame);
+    if (previewRefreshTimer) clearTimeout(previewRefreshTimer);
+    previewRefreshFrame = 0;
+    previewRefreshTimer = 0;
+  }
+
+  function runEditorDerivedRefresh() {
+    updateVisibleHighlight();
+    rebuildSchedulePreviewSilently();
+  }
+
+  function scheduleEditorDerivedRefresh(delayMs = EDITOR_DERIVED_REFRESH_DEBOUNCE_MS) {
+    cancelScheduledEditorDerivedRefresh();
+    previewRefreshFrame = requestAnimationFrame(() => {
+      previewRefreshFrame = 0;
+      previewRefreshTimer = window.setTimeout(() => {
+        previewRefreshTimer = 0;
+        runEditorDerivedRefresh();
+      }, Math.max(0, Number(delayMs) || 0));
     });
   }
 
-  function syncPartsFromMain({ generatedByWorkbench = false } = {}) {
+  function schedulePlayerUiPreviewRefresh() {
+    scheduleEditorDerivedRefresh(0);
+  }
+
+  function seedEditorPartsCache(parts) {
+    editorAnalysisCache.source = normalizeMmlForDisplay(mainMml?.value || "");
+    editorAnalysisCache.parts = Array.from({ length: 6 }, (_, index) => normalizePartText(parts?.[index] || ""));
+  }
+
+  function syncPartsFromMain({ generatedByPlayerUi = false } = {}) {
     if (syncing) return;
     syncing = true;
     try {
-      if (!generatedByWorkbench) mainMml.value = normalizeMmlForDisplay(mainMml.value);
+      if (!generatedByPlayerUi) mainMml.value = normalizeMmlForDisplay(mainMml.value);
       const parts = splitMmlParts(mainMml.value).slice(0, 6).map(normalizePartText);
       while (parts.length < 6) parts.push("");
       partTexts.forEach((t, i) => { t.value = parts[i] || ""; });
       invalidateEditorDerivedState();
+      seedEditorPartsCache(parts);
       updateCharCount();
-      if (generatedByWorkbench) scheduleWorkbenchPreviewRefresh();
-      else {
-        updateVisibleHighlight();
-        rebuildSchedulePreviewSilently();
-      }
+      if (generatedByPlayerUi) schedulePlayerUiPreviewRefresh();
+      else scheduleEditorDerivedRefresh();
     } finally {
       syncing = false;
     }
@@ -7476,11 +10356,12 @@
     syncing = true;
     try {
       partTexts.forEach(normalizeTextareaCommands);
-      mainMml.value = normalizeMmlForDisplay(composeMml(partTexts.map(t => t.value), { preserveEmpty: true, partCount: 6 }));
+      const parts = partTexts.map(t => t.value);
+      mainMml.value = normalizeMmlForDisplay(composeMml(parts, { preserveEmpty: true, partCount: 6 }));
       invalidateEditorDerivedState();
-      updateVisibleHighlight();
+      seedEditorPartsCache(parts);
       updateCharCount();
-      rebuildSchedulePreviewSilently();
+      scheduleEditorDerivedRefresh();
     } finally {
       syncing = false;
     }
@@ -7553,1043 +10434,6 @@
   }
 
 
-  function closeTempoSimplifyDialog() {
-    if (!tempoSimplifyDialog?.open) return;
-    try { tempoSimplifyDialog.close(); } catch (_) {}
-  }
-
-  function calculateTempoSimplification() {
-    if (typeof simplifyTemposMml !== "function") throw new Error(i18nText("tempo.simplify_unavailable"));
-    const source = normalizeMmlForDisplay(mainMml?.value || "");
-    return {
-      source,
-      result: simplifyTemposMml(source, {
-        partCount: 6,
-        maxBpmDeltaExclusive: 5,
-        preserveExtrema: true
-      })
-    };
-  }
-
-  function tempoSimplificationDeleteCount(pending) {
-    const result = pending?.result;
-    const value = result?.removedTokenCount ?? result?.removedCount;
-    return Math.max(0, Number(value) || 0);
-  }
-
-  function updateTempoSimplifyPreview(pending) {
-    if (!tempoSimplifyPreview || !tempoSimplifyApply) return;
-    const count = tempoSimplificationDeleteCount(pending);
-    tempoSimplifyPreview.textContent = count > 0
-      ? i18nText("tempo.simplify_remove_count", [formatCount(count)])
-      : i18nText("tempo.simplify_none");
-    tempoSimplifyPreview.dataset.empty = count > 0 ? "false" : "true";
-    tempoSimplifyApply.disabled = count <= 0;
-    tempoSimplifyApply.setAttribute("aria-disabled", count <= 0 ? "true" : "false");
-  }
-
-  async function openTempoSimplifyDialog() {
-    try {
-      pendingTempoSimplification = calculateTempoSimplification();
-      updateTempoSimplifyPreview(pendingTempoSimplification);
-      if (tempoSimplifyDialog?.showModal) {
-        tempoSimplifyDialog.showModal();
-        return;
-      }
-      const count = tempoSimplificationDeleteCount(pendingTempoSimplification);
-      if (count <= 0) {
-        showDialog(i18nText("tempo.simplify"), i18nText("tempo.simplify_none"));
-        pendingTempoSimplification = null;
-        return;
-      }
-      const message = `${i18nText("tempo.simplify_description")}\n\n${i18nText("tempo.simplify_remove_count", [formatCount(count)])}`;
-      if (await inlineConfirm(message, { title: i18nText("tempo.simplify") })) applyTempoSimplificationFromDialog();
-      else pendingTempoSimplification = null;
-    } catch (err) {
-      pendingTempoSimplification = null;
-      showDialog(i18nText("tempo.simplify"), shortError(err));
-    }
-  }
-
-  function applyTempoSimplificationFromDialog() {
-    try {
-      const currentSource = normalizeMmlForDisplay(mainMml?.value || "");
-      if (!pendingTempoSimplification || pendingTempoSimplification.source !== currentSource) {
-        pendingTempoSimplification = calculateTempoSimplification();
-      }
-      const result = pendingTempoSimplification.result;
-      const count = tempoSimplificationDeleteCount({ result });
-      if (count <= 0) {
-        closeTempoSimplifyDialog();
-        showDialog(i18nText("tempo.simplify"), i18nText("tempo.simplify_none"));
-        return;
-      }
-      stopPlayback(false);
-      setMainMml(result.mml);
-      closeTempoSimplifyDialog();
-      flashButton(tempoSimplifyBtn, i18nText("cfg.applied"));
-      showDialog(
-        i18nText("tempo.simplify"),
-        i18nText("tempo.simplify_applied", [formatCount(count)])
-      );
-    } catch (err) {
-      showDialog(i18nText("tempo.simplify"), shortError(err));
-    }
-  }
-
-  async function openRestTrimDialog() {
-    if (restTrimLimit) restTrimLimit.value = "32";
-    applyMmlChannelAvailability(".rest-trim-channel");
-    setDialogChannelSelection(".rest-trim-channel", true);
-    updateRestTrimPreview();
-    if (restTrimDialog?.showModal) {
-      restTrimDialog.showModal();
-      return;
-    }
-    const answer = await inlinePrompt(i18nText("rest.prompt_fallback"), "32");
-    if (answer == null) return;
-    applyRestTrim(answer, null);
-  }
-
-  function updateRestTrimPreview() {
-    const statEls = Array.from(document.querySelectorAll(".rest-trim-stat"));
-    if (!statEls.length) return;
-    const threshold = parseRestTrimLimit(restTrimLimit?.value || "32", { silent: true });
-    if (!threshold) {
-      statEls.forEach(el => { el.textContent = "-"; el.title = i18nText("err.determine_remove"); });
-      return;
-    }
-
-    try {
-      const result = countShortRestsMml(normalizeMmlForDisplay(mainMml?.value || ""), {
-        partCount: 6,
-        all: threshold.all,
-        denom: threshold.denom
-      });
-      const counts = Array.isArray(result?.counts) ? result.counts : [];
-
-      for (const el of statEls) {
-        const index = Number(el.dataset.partIndex);
-        if (!Number.isInteger(index) || index < 0 || index >= 6) continue;
-        const count = Math.max(0, Number(counts[index]) || 0);
-        el.textContent = formatCount(count);
-        el.title = count > 0
-          ? i18nText("rest.target_count", [formatCount(count)])
-          : i18nText("msg.no_rests");
-      }
-    } catch (err) {
-      statEls.forEach(el => { el.textContent = "-"; el.title = shortError(err); });
-    }
-  }
-
-  function applyRestTrimFromDialog() {
-    const value = restTrimLimit?.value || "32";
-    const targetPartIndexes = getDialogSelectedPartIndexes(".rest-trim-channel");
-    if (!targetPartIndexes.length) {
-      showDialog(i18nText("ui.remove_rests"), i18nText("msg.select_one_ch_3"));
-      return;
-    }
-    restTrimDialog?.close();
-    applyRestTrim(value, targetPartIndexes);
-  }
-
-  function applyRestTrim(limitValue, targetPartIndexes = null) {
-    const threshold = parseRestTrimLimit(limitValue);
-    if (!threshold) return;
-    const selectedIndexes = targetPartIndexes == null ? null : normalizePartIndexList(targetPartIndexes);
-    if (targetPartIndexes != null && !selectedIndexes.length) {
-      showDialog(i18nText("ui.remove_rests"), i18nText("msg.select_one_ch_3"));
-      return;
-    }
-    const wasPlaying = isPlaying;
-    stopPlayback(false);
-
-    try {
-      const result = trimShortRestsMml(normalizeMmlForDisplay(mainMml.value), {
-        partCount: 6,
-        targetPartIndexes: selectedIndexes,
-        all: threshold.all,
-        denom: threshold.denom
-      });
-
-      if (result.removed <= 0) {
-        showDialog(i18nText("ui.remove_rests"), i18nText("rest.none_removable"));
-      } else {
-        setMainMml(result.mml);
-        const label = threshold.all ? i18nText("ui.all_rests") : i18nText("rest.note_or_shorter", [threshold.denom]);
-        const selectedLabel = formatSelectedPartLabels(selectedIndexes);
-        const saved = Math.max(0, Number(result.saved) || 0);
-        flashButton(restTrimBtn, i18nText("st.remove_done"));
-        showDialog(
-          i18nText("ui.remove_rests"),
-          i18nText("rest.result", [selectedLabel, label, formatCount(result.removed)]) + "\n" +
-          i18nText("mml.optimize_result", [formatCount(result.before), formatCount(result.after)]) +
-          (saved ? "\n" + i18nText("mml.saved_chars_line", [formatCount(saved)]) : "")
-        );
-      }
-    } catch (err) {
-      showDialog(i18nText("err.remove_rests"), shortError(err));
-    } finally {
-      if (wasPlaying) currentOffset = 0;
-    }
-  }
-
-  async function openBulkVolumeDialog() {
-    if (bulkVolumeAmount) bulkVolumeAmount.value = "0";
-    applyMmlChannelAvailability(".bulk-volume-channel");
-    setDialogChannelSelection(".bulk-volume-channel", true);
-    updateBulkVolumeStats();
-    if (bulkVolumeDialog?.showModal) {
-      bulkVolumeDialog.showModal();
-      bulkVolumeAmount?.focus();
-      bulkVolumeAmount?.select?.();
-      return;
-    }
-    const answer = await inlinePrompt(i18nText("vol.prompt_fallback"), "0");
-    if (answer == null) return;
-    applyBulkVolume(answer, null);
-  }
-
-  function updateBulkVolumeStats() {
-    if (!bulkVolumeStats) return;
-
-    const selectedPartIndexes = getDialogSelectedPartIndexes(".bulk-volume-channel");
-    if (!selectedPartIndexes.length) {
-      bulkVolumeStats.replaceChildren();
-      return;
-    }
-
-    let counts;
-    try {
-      const parsedParts = getEditorDerivedState({ needVolumeCounts: true }).parsed?.parts || [];
-      const selectedSet = new Set(selectedPartIndexes);
-      counts = Array(16).fill(0);
-
-      parsedParts.forEach((part, partIndex) => {
-        if (!selectedSet.has(partIndex)) return;
-        for (const note of (part?.notes || [])) {
-          const volume = clampInt(Number(note.volume ?? 8), 0, 15);
-          counts[volume]++;
-        }
-      });
-    } catch (err) {
-      bulkVolumeStats.innerHTML = `<div class="volume-count-title">${escapeHtml(i18nText("vol.stats_unavailable"))}</div><div class="dialog-small">${escapeHtml(shortError(err))}</div>`;
-      return;
-    }
-
-    const visibleCounts = counts
-      .map((count, volume) => ({ count, volume }))
-      .filter(item => item.count > 0);
-
-    if (!visibleCounts.length) {
-      bulkVolumeStats.innerHTML = i18nText("tpl.vol_count_no");
-      return;
-    }
-
-    const items = visibleCounts.map(({ count, volume }) => `
-      <span class="volume-count-item"><em>V${volume}</em><strong>${formatCount(count)}</strong></span>`).join("");
-    bulkVolumeStats.innerHTML = `<div class="volume-count-grid">${items}</div>`;
-  }
-
-  function applyBulkVolumeFromDialog() {
-    normalizeBulkVolumeAmountInput();
-    const targetPartIndexes = getDialogSelectedPartIndexes(".bulk-volume-channel");
-    if (!targetPartIndexes.length) {
-      showDialog(i18nText("vol.adjust"), i18nText("msg.select_one_ch_3"));
-      return;
-    }
-    const value = bulkVolumeAmount?.value || "0";
-    bulkVolumeDialog?.close();
-    applyBulkVolume(value, targetPartIndexes);
-  }
-
-  function applyBulkVolume(value, targetPartIndexes = null) {
-    const delta = normalizeBulkVolumeDelta(value);
-    const selectedIndexes = targetPartIndexes == null ? null : normalizePartIndexList(targetPartIndexes);
-    if (targetPartIndexes != null && !selectedIndexes.length) {
-      showDialog(i18nText("vol.adjust"), i18nText("msg.select_one_ch_3"));
-      return;
-    }
-
-    const wasPlaying = isPlaying;
-    stopPlayback(false);
-    try {
-      const result = adjustVolumesMml(normalizeMmlForDisplay(mainMml.value), {
-        partCount: 6,
-        targetPartIndexes: selectedIndexes,
-        delta
-      });
-
-      if (result.changedNotes <= 0) {
-        const message = delta === 0
-          ? i18nText("vol.change_0")
-          : i18nText("err.no_adjustable");
-        showDialog(i18nText("vol.adjust"), message);
-      } else {
-        setMainMml(result.mml);
-        const saved = Math.max(0, Number(result.saved) || 0);
-        const selectedLabel = formatSelectedPartLabels(selectedIndexes);
-        flashButton(bulkVolumeBtn, i18nText("st.applied"));
-        showDialog(
-          i18nText("vol.adjust"),
-          i18nText("vol.result", [selectedLabel, formatCount(result.changedNotes), `${delta > 0 ? "+" : ""}${delta}`]) + "\n" +
-          i18nText("msg.result_limited") +
-          (result.clampedNotes ? "\n" + i18nText("vol.clamped_count", [formatCount(result.clampedNotes)]) : "") +
-          "\n" + i18nText("mml.optimize_result", [formatCount(result.before), formatCount(result.after)]) +
-          (saved ? "\n" + i18nText("mml.saved_chars_line", [formatCount(saved)]) : "")
-        );
-      }
-    } catch (err) {
-      showDialog(i18nText("vol.adjust_2"), shortError(err));
-    } finally {
-      if (wasPlaying) currentOffset = 0;
-    }
-  }
-
-  function getMmlChannelContentFlags() {
-    const parts = getCurrentPartTexts(6);
-    return Array.from({ length: 6 }, (_, index) => Boolean(String(parts[index] || "").trim()));
-  }
-
-  function applyMmlChannelAvailability(selector, availability = null) {
-    const flags = Array.isArray(availability) ? availability : getMmlChannelContentFlags();
-    document.querySelectorAll(selector).forEach(input => {
-      const index = Number(input.dataset.partIndex);
-      const enabled = Number.isInteger(index) && index >= 0 && index < 6 && Boolean(flags[index]);
-      input.disabled = !enabled;
-      if (!enabled) input.checked = false;
-      input.closest(".dialog-channel-option")?.classList.toggle("is-disabled", !enabled);
-    });
-  }
-
-  function setDialogChannelSelection(selector, checked) {
-    document.querySelectorAll(selector).forEach(input => {
-      input.checked = input.disabled ? false : Boolean(checked);
-    });
-  }
-
-  function getDialogSelectedPartIndexes(selector) {
-    return normalizePartIndexList(Array.from(document.querySelectorAll(selector))
-      .filter(input => input.checked)
-      .map(input => Number(input.dataset.partIndex)));
-  }
-
-  function normalizePartIndexList(indexes) {
-    const selected = [];
-    const seen = new Set();
-    for (const raw of indexes || []) {
-      const index = Number(raw);
-      if (!Number.isInteger(index) || index < 0 || index >= PART_LABELS.length || seen.has(index)) continue;
-      seen.add(index);
-      selected.push(index);
-    }
-    return selected;
-  }
-
-  function formatSelectedPartLabels(indexes) {
-    const selected = normalizePartIndexList(indexes);
-    if (!selected.length || selected.length >= PART_LABELS.length) return i18nText("ui.all_chs");
-    return selected.map(index => PART_LABELS[index] || i18nText("ui.channel_n", [index + 1])).join(", ");
-  }
-
-  function normalizeBulkVolumeAmountInput() {
-    if (!bulkVolumeAmount) return;
-    bulkVolumeAmount.value = String(normalizeBulkVolumeDelta(bulkVolumeAmount.value));
-  }
-
-  function normalizeBulkVolumeDelta(value) {
-    let delta = Math.round(Number(value));
-    if (!Number.isFinite(delta)) delta = 0;
-    return clampInt(delta, -15, 15);
-  }
-
-  async function openBulkPitchDialog() {
-    if (bulkPitchAmount) bulkPitchAmount.value = "0";
-    applyMmlChannelAvailability(".bulk-pitch-channel");
-    setDialogChannelSelection(".bulk-pitch-channel", true);
-    updateBulkPitchStats();
-    if (bulkPitchDialog?.showModal) {
-      bulkPitchDialog.showModal();
-      bulkPitchAmount?.focus();
-      bulkPitchAmount?.select?.();
-      return;
-    }
-    const answer = await inlinePrompt(i18nText("pitch.prompt_fallback"), "0");
-    if (answer == null) return;
-    applyBulkPitch(answer, null);
-  }
-
-  function updateBulkPitchStats() {
-    if (!bulkPitchStats) return;
-    let parts;
-    try {
-      parts = splitMmlParts(normalizeMmlForDisplay(mainMml?.value || "")).slice(0, 6);
-    } catch (err) {
-      bulkPitchStats.innerHTML = `<div class="volume-count-title">${escapeHtml(i18nText("pitch.octave_cmds"))}</div><div class="dialog-small">${escapeHtml(shortError(err))}</div>`;
-      return;
-    }
-
-    const counts = new Map();
-    let total = 0;
-    for (const part of parts) {
-      const re = /O(\d+)/gi;
-      let match;
-      while ((match = re.exec(String(part || ""))) !== null) {
-        const octave = Number(match[1]);
-        if (!Number.isInteger(octave)) continue;
-        counts.set(octave, (counts.get(octave) || 0) + 1);
-        total++;
-      }
-    }
-    if (!total) {
-      bulkPitchStats.innerHTML = i18nText("tpl.vol_count_no_2");
-      return;
-    }
-
-    const items = Array.from(counts.entries()).sort((a, b) => a[0] - b[0]).map(([octave, count]) =>
-      `<span class="volume-count-item"><em>O${octave}</em><strong>${formatCount(count)}</strong></span>`).join("");
-    bulkPitchStats.innerHTML = `<div class="volume-count-title">${escapeHtml(i18nText("pitch.total_commands", [formatCount(total)]))}</div><div class="volume-count-grid">${items}</div>`;
-  }
-
-  function applyBulkPitchFromDialog() {
-    normalizeBulkPitchAmountInput();
-    const targetPartIndexes = getDialogSelectedPartIndexes(".bulk-pitch-channel");
-    if (!targetPartIndexes.length) {
-      showDialog(i18nText("pitch.adjust"), i18nText("msg.select_one_ch_3"));
-      return;
-    }
-    const value = bulkPitchAmount?.value || "0";
-    bulkPitchDialog?.close();
-    applyBulkPitch(value, targetPartIndexes);
-  }
-
-  function applyBulkPitch(value, targetPartIndexes = null) {
-    const octaves = normalizeBulkPitchDelta(value);
-    const selectedIndexes = targetPartIndexes == null ? null : normalizePartIndexList(targetPartIndexes);
-    if (targetPartIndexes != null && !selectedIndexes.length) {
-      showDialog(i18nText("pitch.adjust"), i18nText("msg.select_one_ch_3"));
-      return;
-    }
-
-    const wasPlaying = isPlaying;
-    stopPlayback(false);
-    try {
-      const result = transposeOctavesMml(normalizeMmlForDisplay(mainMml.value), {
-        partCount: 6,
-        targetPartIndexes: selectedIndexes,
-        octaves
-      });
-
-      if (result.changedCommands <= 0) {
-        const message = octaves === 0
-          ? i18nText("pitch.octave_change_0")
-          : result.touchedCommands <= 0
-            ? i18nText("msg.no_oct")
-            : i18nText("st.oct_cmds");
-        showDialog(i18nText("pitch.adjust"), message);
-      } else {
-        setMainMml(result.mml);
-        const selectedLabel = formatSelectedPartLabels(selectedIndexes);
-        flashButton(bulkPitchBtn, i18nText("st.applied"));
-        showDialog(
-          i18nText("pitch.adjust"),
-          i18nText("pitch.result", [selectedLabel, formatCount(result.changedCommands), `${octaves > 0 ? "+" : ""}${octaves}`]) + "\n" +
-          i18nText("msg.notes_cmds_not") +
-          (result.clampedCommands ? "\n" + i18nText("pitch.clamped_count", [formatCount(result.clampedCommands)]) : "")
-        );
-      }
-    } catch (err) {
-      showDialog(i18nText("pitch.adjust_2"), shortError(err));
-    } finally {
-      if (wasPlaying) currentOffset = 0;
-    }
-  }
-
-  function normalizeBulkPitchAmountInput() {
-    if (!bulkPitchAmount) return;
-    bulkPitchAmount.value = String(normalizeBulkPitchDelta(bulkPitchAmount.value));
-  }
-
-  function normalizeBulkPitchDelta(value) {
-    let delta = Math.round(Number(value));
-    if (!Number.isFinite(delta)) delta = 0;
-    return clampInt(delta, -7, 7);
-  }
-
-  async function openLeadingSilenceDialog() {
-    if (leadingSilenceSeconds) leadingSilenceSeconds.value = "2";
-    if (leadingSilenceDialog?.showModal) {
-      leadingSilenceDialog.showModal();
-      leadingSilenceSeconds?.focus();
-      leadingSilenceSeconds?.select?.();
-      return;
-    }
-    const answer = await inlinePrompt(i18nText("lead.prompt"), "2");
-    if (answer == null) return;
-    applyLeadingSilence(answer);
-  }
-
-  function applyLeadingSilenceFromDialog() {
-    normalizeLeadingSilenceSecondsInput();
-    const value = leadingSilenceSeconds?.value || "2";
-    leadingSilenceDialog?.close();
-    applyLeadingSilence(value);
-  }
-
-  function normalizeLeadingSilenceSecondsInput() {
-    if (!leadingSilenceSeconds) return;
-    leadingSilenceSeconds.value = formatSecondInput(normalizeLeadingSilenceSeconds(leadingSilenceSeconds.value));
-  }
-
-  function normalizeLeadingSilenceSeconds(value) {
-    const step = 0.25;
-    const min = 0.25;
-    let seconds = Number(value);
-    if (!Number.isFinite(seconds)) seconds = 2;
-    seconds = Math.max(min, seconds);
-    seconds = Math.round(seconds / step) * step;
-    seconds = Math.max(min, seconds);
-    return Number(seconds.toFixed(2));
-  }
-
-  function formatSecondInput(seconds) {
-    return String(Number(seconds.toFixed(2)));
-  }
-
-  function formatSecondCount(seconds) {
-    const value = Number(seconds);
-    if (!Number.isFinite(value)) return i18nText("ui.zero_seconds");
-    return i18nText("ui.seconds", [Number(value.toFixed(2)).toLocaleString(document.documentElement.lang || undefined)]);
-  }
-
-  function applyLeadingSilence(value) {
-    const seconds = normalizeLeadingSilenceSeconds(value);
-    try {
-      stopPlayback(false);
-      const result = addLeadingSilenceMml(normalizeMmlForDisplay(mainMml.value), {
-        partCount: 6,
-        beats: seconds * 2
-      });
-      setMainMml(result.mml);
-      flashButton(leadingSilenceBtn, i18nText("cfg.applied"));
-      const removedSeconds = Math.max(0, Number(result.removedLeadingBeats || 0) / 2);
-      const addedSeconds = Math.max(0, Number(result.addedBeats || 0) / 2);
-      const removedLine = removedSeconds > 0
-        ? "\n" + i18nText("lead.removed", [formatSecondCount(removedSeconds)])
-        : "";
-      showDialog(
-        i18nText("st.lead_gap"),
-        i18nText("lead.result", [formatSecondCount(addedSeconds), removedLine])
-      );
-    } catch (err) {
-      showDialog(i18nText("err.set_lead"), shortError(err));
-    }
-  }
-
-
-  const DYNAMICS_GENERATE_INFO = {
-    pop: { labelKey: "ui.pop", titleKey: "vol.pop_rules", detailKey: "msg.reg_strong" },
-    jazz: { labelKey: "ui.jazz", titleKey: "vol.jazz_rules", detailKey: "msg.weak_beats" },
-    ballad: { labelKey: "ui.ballad", titleKey: "vol.ballad_rules", detailKey: "msg.gentle_phrasing" },
-    bossa: { labelKey: "ui.bossa_nova", titleKey: "vol.bossa_nova", detailKey: "msg.soft_offbeats_narrow" },
-    rock: { labelKey: "ui.rock", titleKey: "vol.rock_rules", detailKey: "msg.strong_first" },
-    funk: { labelKey: "ui.funk", titleKey: "vol.funk_rules", detailKey: "msg.syncopation16" },
-    classical: { labelKey: "ui.classical", titleKey: "vol.classical_rules", detailKey: "msg.phrase_breathing" }
-  };
-
-  function getDynamicsGenerateInfo(genre) {
-    const info = DYNAMICS_GENERATE_INFO[genre] || DYNAMICS_GENERATE_INFO.pop;
-    return {
-      label: i18nText(info.labelKey),
-      title: i18nText(info.titleKey),
-      detail: i18nText(info.detailKey)
-    };
-  }
-
-  function updateDynamicsGenerateDescription() {
-    const genre = dynamicsGenerateGenre?.value || "pop";
-    const info = getDynamicsGenerateInfo(genre);
-    if (dynamicsGenerateRuleTitle) dynamicsGenerateRuleTitle.textContent = info.title;
-    if (dynamicsGenerateRuleText) dynamicsGenerateRuleText.textContent = info.detail;
-  }
-
-  function openDynamicsGenerateDialog() {
-    if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = i18nText("vol.change_confirm");
-    if (dynamicsGenerateGenre && !Object.prototype.hasOwnProperty.call(DYNAMICS_GENERATE_INFO, dynamicsGenerateGenre.value)) {
-      dynamicsGenerateGenre.value = "pop";
-    }
-    if (dynamicsGenerateStrength && !["light", "normal", "strong"].includes(dynamicsGenerateStrength.value)) {
-      dynamicsGenerateStrength.value = "normal";
-    }
-    applyMmlChannelAvailability(".dynamics-generate-channel");
-    setDialogChannelSelection(".dynamics-generate-channel", true);
-    updateDynamicsGenerateDescription();
-    if (dynamicsGenerateDialog?.showModal) {
-      dynamicsGenerateDialog.showModal();
-      dynamicsGenerateGenre?.focus();
-      return;
-    }
-    applyDynamicsGenerate({ genre: "pop", strength: "normal", targetPartIndexes: null });
-  }
-
-  function applyDynamicsGenerateFromDialog() {
-    const targetPartIndexes = getDialogSelectedPartIndexes(".dynamics-generate-channel");
-    if (!targetPartIndexes.length) {
-      showDialog(i18nText("vol.generate"), i18nText("msg.select_one_ch_3"));
-      return;
-    }
-    applyDynamicsGenerate({
-      genre: dynamicsGenerateGenre?.value || "pop",
-      strength: dynamicsGenerateStrength?.value || "normal",
-      targetPartIndexes
-    });
-  }
-
-  function formatDynamicsConflict(partResult) {
-    const conditions = [];
-    if (Number(partResult.distinctVolumeCount || 0) >= 3) {
-      conditions.push(i18nText("vol.distinct_values", [formatCount(partResult.distinctVolumeCount)]));
-    }
-    if (Number(partResult.volumeRange || 0) >= 2) {
-      conditions.push(i18nText("vol.range_diff", [partResult.minVolume, partResult.maxVolume, partResult.volumeRange]));
-    }
-    return conditions.join(" / ") || i18nText("vol.changes_detected");
-  }
-
-  function reopenDynamicsGenerateSettings() {
-    if (!dynamicsGenerateDialog?.showModal || dynamicsGenerateDialog.open) return;
-    dynamicsGenerateDialog.showModal();
-    dynamicsGenerateGenre?.focus();
-  }
-
-  async function showDynamicsGenerateOverwriteConfirmation(options, conflicts) {
-    pendingDynamicsGenerateOptions = { ...options, overwriteExisting: true };
-    if (dynamicsGenerateConfirmList) {
-      dynamicsGenerateConfirmList.replaceChildren();
-      for (const conflict of conflicts) {
-        const item = document.createElement("div");
-        item.className = `dynamics-confirm-item part-${conflict.partIndex}`;
-        const title = document.createElement("strong");
-        title.textContent = PART_LABELS[conflict.partIndex] || i18nText("ui.channel_n", [conflict.partIndex + 1]);
-        const detail = document.createElement("span");
-        detail.textContent = formatDynamicsConflict(conflict);
-        item.append(title, detail);
-        dynamicsGenerateConfirmList.append(item);
-      }
-    }
-
-    dynamicsGenerateDialog?.close();
-    if (dynamicsGenerateConfirmDialog?.showModal) {
-      dynamicsGenerateConfirmDialog.showModal();
-      dynamicsGenerateConfirmCancel?.focus();
-      return;
-    }
-
-    const lines = conflicts.map(conflict => `${PART_LABELS[conflict.partIndex] || i18nText("ui.channel_n", [conflict.partIndex + 1])}: ${formatDynamicsConflict(conflict)}`);
-    const confirmed = await inlineConfirm(
-      i18nText("vol.conflict_intro") + "\n\n" +
-      i18nText("vol.conflict_rule") + "\n\n" +
-      `${lines.join("\n")}\n\n${i18nText("vol.replace_confirm")}`,
-      { title: i18nText("vol.generate") }
-    );
-    if (confirmed) {
-      const nextOptions = pendingDynamicsGenerateOptions;
-      pendingDynamicsGenerateOptions = null;
-      applyDynamicsGenerate(nextOptions || options);
-    } else {
-      pendingDynamicsGenerateOptions = null;
-      reopenDynamicsGenerateSettings();
-    }
-  }
-
-  function confirmDynamicsGenerateOverwrite() {
-    const options = pendingDynamicsGenerateOptions;
-    pendingDynamicsGenerateOptions = null;
-    dynamicsGenerateConfirmDialog?.close();
-    if (options) applyDynamicsGenerate(options);
-  }
-
-  function cancelDynamicsGenerateOverwrite() {
-    pendingDynamicsGenerateOptions = null;
-    dynamicsGenerateConfirmDialog?.close();
-    reopenDynamicsGenerateSettings();
-  }
-
-  function applyDynamicsGenerate(options = {}) {
-    if (typeof generateDynamicsMml !== "function") {
-      showDialog(i18nText("vol.gen_fail"), i18nText("vol.load_gen"));
-      return;
-    }
-    const selectedIndexes = options.targetPartIndexes == null ? null : normalizePartIndexList(options.targetPartIndexes);
-    if (options.targetPartIndexes != null && !selectedIndexes.length) {
-      showDialog(i18nText("vol.generate"), i18nText("msg.select_one_ch_3"));
-      return;
-    }
-
-    const normalizedOptions = {
-      genre: options.genre || "pop",
-      strength: options.strength || "normal",
-      targetPartIndexes: selectedIndexes,
-      overwriteExisting: options.overwriteExisting === true
-    };
-    const sourceMml = normalizeMmlForDisplay(mainMml.value);
-
-    try {
-      if (!normalizedOptions.overwriteExisting) {
-        const preview = generateDynamicsMml(sourceMml, {
-          partCount: 6,
-          genre: normalizedOptions.genre,
-          strength: normalizedOptions.strength,
-          targetPartIndexes: selectedIndexes,
-          overwriteExisting: false
-        });
-        const conflicts = preview.partResults.filter(part => part.status === "existing_expression");
-        if (conflicts.length) {
-          if (dynamicsGenerateStatus) {
-            dynamicsGenerateStatus.textContent = i18nText("vol.conflict_count", [formatCount(conflicts.length)]);
-          }
-          showDynamicsGenerateOverwriteConfirmation(normalizedOptions, conflicts);
-          return;
-        }
-        commitDynamicsGenerate(preview, normalizedOptions);
-        return;
-      }
-
-      const result = generateDynamicsMml(sourceMml, {
-        partCount: 6,
-        genre: normalizedOptions.genre,
-        strength: normalizedOptions.strength,
-        targetPartIndexes: selectedIndexes,
-        overwriteExisting: true
-      });
-      commitDynamicsGenerate(result, normalizedOptions);
-    } catch (err) {
-      if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = shortError(err);
-      showDialog(i18nText("vol.gen_fail"), shortError(err));
-    }
-  }
-
-  function commitDynamicsGenerate(result, options) {
-    const wasPlaying = isPlaying;
-    stopPlayback(false);
-    if (dynamicsGenerateApply) dynamicsGenerateApply.disabled = true;
-    if (dynamicsGenerateCancel) dynamicsGenerateCancel.disabled = true;
-    try {
-      const info = getDynamicsGenerateInfo(result.genre);
-      if (result.generatedCommands <= 0 || result.processedPartCount <= 0) {
-        const reason = i18nText("vol.find_notes");
-        if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = reason;
-        showDialog(i18nText("vol.generate"), reason);
-        return;
-      }
-      setMainMml(result.mml);
-      dynamicsGenerateDialog?.close();
-      dynamicsGenerateConfirmDialog?.close();
-      flashButton(dynamicsGenerateBtn, i18nText("st.gen_done"));
-      const strengthLabels = { light: i18nText("ui.light"), normal: i18nText("ui.normal"), strong: i18nText("ui.strong") };
-      const overwrittenLine = options.overwriteExisting && result.existingExpressivePartCount > 0
-        ? "\n" + i18nText("vol.replaced_count", [formatCount(result.existingExpressivePartCount)])
-        : "";
-      showDialog(
-        i18nText("vol.gen_done"),
-        i18nText("gen.style_strength", [info.label, strengthLabels[result.strength] || result.strength]) + "\n" +
-        i18nText("gen.applied_channels", [formatCount(result.processedPartCount)]) + "\n" +
-        i18nText("vol.generated_commands", [formatCount(result.generatedCommands)]) + "\n" +
-        i18nText("vol.changed_notes", [formatCount(result.changedNotes), overwrittenLine])
-      );
-    } catch (err) {
-      if (dynamicsGenerateStatus) dynamicsGenerateStatus.textContent = shortError(err);
-      showDialog(i18nText("vol.gen_fail"), shortError(err));
-    } finally {
-      if (dynamicsGenerateApply) dynamicsGenerateApply.disabled = false;
-      if (dynamicsGenerateCancel) dynamicsGenerateCancel.disabled = false;
-      if (wasPlaying) currentOffset = 0;
-    }
-  }
-
-  const ACCOMPANIMENT_GENERATE_INFO = {
-    pop: { labelKey: "ui.pop", titleKey: "ui.pop_accomp", detailKey: "msg.stable_harm_reg", completionKey: "msg.stable_harm_reg_2" },
-    jazz: { labelKey: "ui.jazz", titleKey: "ui.jazz_accomp", detailKey: "msg.jazz_walk", completionKey: "msg.jazz_walk_2" },
-    ballad: { labelKey: "ui.ballad", titleKey: "ui.ballad_accomp", detailKey: "msg.long_chords_gentle", completionKey: "msg.long_chords_gentle_2" },
-    bossa: { labelKey: "ui.bossa_nova", titleKey: "ui.bossa_nova_accomp", detailKey: "msg.soft_offbeats_broken", completionKey: "msg.soft_offbeat" },
-    rock: { labelKey: "ui.rock", titleKey: "ui.rock_accomp", detailKey: "msg.power_chords", completionKey: "msg.power_chords_2" },
-    funk: { labelKey: "ui.funk", titleKey: "ui.funk_accomp", detailKey: "pitch.short_chords", completionKey: "pitch.short_syncopated" },
-    classical: { labelKey: "ui.classical", titleKey: "ui.classical_accomp", detailKey: "msg.voice_leading", completionKey: "msg.smooth_voice" }
-  };
-
-  function getAccompanimentGenerateInfo(genre) {
-    const info = ACCOMPANIMENT_GENERATE_INFO[genre] || ACCOMPANIMENT_GENERATE_INFO.pop;
-    return {
-      label: i18nText(info.labelKey),
-      title: i18nText(info.titleKey),
-      detail: i18nText(info.detailKey),
-      completion: i18nText(info.completionKey)
-    };
-  }
-
-  function updateAccompanimentGenerateDescription() {
-    const genre = accompanimentGenerateGenre?.value || "pop";
-    const info = getAccompanimentGenerateInfo(genre);
-    if (accompanimentGenerateRuleTitle) accompanimentGenerateRuleTitle.textContent = info.title;
-    if (accompanimentGenerateRuleText) accompanimentGenerateRuleText.textContent = info.detail;
-  }
-
-  function getAccompanimentPartFlags() {
-    const parts = splitMmlParts(normalizeMmlForDisplay(mainMml?.value || "")).slice(0, 6);
-    while (parts.length < 6) parts.push("");
-    return parts.map((part, partIndex) => {
-      let noteCount = 0;
-      try {
-        noteCount = parseMmlPart(part, partIndex)?.notes?.length || 0;
-      } catch (_) {
-        noteCount = /(?:^|[^a-z])[a-g](?:\+|#|-)?(?:\d+)?/i.test(String(part || "")) ? 1 : 0;
-      }
-      return {
-        partIndex,
-        text: String(part || ""),
-        hasContent: Boolean(String(part || "").trim()),
-        hasNotes: noteCount > 0,
-        noteCount
-      };
-    });
-  }
-
-  function getDefaultAccompanimentTargetIndexes(flags) {
-    const notePartIndexes = flags
-      .filter(flag => flag.hasNotes)
-      .map(flag => flag.partIndex);
-
-    // 멜로디 채널 하나만 있는 경우에는 첫 두 화음 채널을 기본 생성 대상으로 사용합니다.
-    if (notePartIndexes.length === 1 && notePartIndexes[0] === 0) return [1, 2];
-
-    // 6개 채널이 모두 차 있으면 마지막 채널을 교체 대상으로 제안합니다.
-    if (notePartIndexes.length === 6) return [5];
-
-    // 2개 이상의 채널이 있으면 번호가 가장 앞선 빈 채널 하나만 선택합니다.
-    if (notePartIndexes.length >= 2) {
-      const firstEmpty = flags.find(flag => !flag.hasNotes);
-      return firstEmpty ? [firstEmpty.partIndex] : [];
-    }
-
-    // 예외적으로 첫 채널이 아닌 한 채널만 있는 경우에도 가장 앞선 빈 채널을 사용합니다.
-    if (notePartIndexes.length === 1) {
-      const firstEmpty = flags.find(flag => !flag.hasNotes);
-      return firstEmpty ? [firstEmpty.partIndex] : [];
-    }
-
-    return [];
-  }
-
-  function setAccompanimentDefaultSelection() {
-    const flags = getAccompanimentPartFlags();
-    const targetIndexes = getDefaultAccompanimentTargetIndexes(flags);
-    const targetSet = new Set(targetIndexes);
-
-    applyMmlChannelAvailability(
-      ".accompaniment-analysis-channel",
-      flags.map(flag => Boolean(flag?.hasContent))
-    );
-    document.querySelectorAll(".accompaniment-analysis-channel").forEach(input => {
-      const index = Number(input.dataset.partIndex);
-      input.checked = !input.disabled && Boolean(flags[index]?.hasNotes);
-    });
-    document.querySelectorAll(".accompaniment-target-channel").forEach(input => {
-      const index = Number(input.dataset.partIndex);
-      input.checked = targetSet.has(index);
-    });
-    return { flags, targetIndexes };
-  }
-
-  function openAccompanimentGenerateDialog() {
-    if (accompanimentGenerateStatus) accompanimentGenerateStatus.textContent = "";
-    if (accompanimentGenerateGenre && !Object.prototype.hasOwnProperty.call(ACCOMPANIMENT_GENERATE_INFO, accompanimentGenerateGenre.value)) {
-      accompanimentGenerateGenre.value = "pop";
-    }
-    if (accompanimentGenerateStrength && !["light", "normal", "strong"].includes(accompanimentGenerateStrength.value)) {
-      accompanimentGenerateStrength.value = "normal";
-    }
-    const { flags, targetIndexes } = setAccompanimentDefaultSelection();
-    const notePartIndexes = flags.filter(flag => flag.hasNotes).map(flag => flag.partIndex);
-    if (accompanimentGenerateStatus) {
-      if (notePartIndexes.length === 1 && notePartIndexes[0] === 0) {
-        accompanimentGenerateStatus.textContent = i18nText("msg.melody_present");
-      } else if (notePartIndexes.length === 6) {
-        accompanimentGenerateStatus.textContent = i18nText("msg.all_six");
-      } else if (targetIndexes.length > 0) {
-        const targetLabel = PART_LABELS[targetIndexes[0]] || i18nText("ui.channel_n", [targetIndexes[0] + 1]);
-        accompanimentGenerateStatus.textContent = i18nText("accomp.auto_target", [targetLabel]);
-      } else {
-        accompanimentGenerateStatus.textContent = i18nText("msg.select_chs");
-      }
-    }
-    updateAccompanimentGenerateDescription();
-    pendingAccompanimentGenerateOptions = null;
-    if (accompanimentGenerateDialog?.showModal) {
-      accompanimentGenerateDialog.showModal();
-      accompanimentGenerateGenre?.focus();
-      return;
-    }
-    void executeAccompanimentGeneration({
-      genre: "pop",
-      strength: "normal",
-      analysisPartIndexes: flags.filter(flag => flag.hasNotes).map(flag => flag.partIndex),
-      generationPartIndexes: targetIndexes
-    });
-  }
-
-  function getAccompanimentDialogOptions() {
-    return {
-      genre: accompanimentGenerateGenre?.value || "pop",
-      strength: accompanimentGenerateStrength?.value || "normal",
-      analysisPartIndexes: getDialogSelectedPartIndexes(".accompaniment-analysis-channel"),
-      generationPartIndexes: getDialogSelectedPartIndexes(".accompaniment-target-channel")
-    };
-  }
-
-  async function applyAccompanimentGenerateFromDialog() {
-    if (!accompanimentGenerateApply || accompanimentGenerateApply.disabled) return;
-    const options = getAccompanimentDialogOptions();
-    if (!options.analysisPartIndexes.length) {
-      showDialog(i18nText("ui.gen_accomp"), i18nText("msg.select_one_ref"));
-      return;
-    }
-    if (!options.generationPartIndexes.length) {
-      showDialog(i18nText("ui.gen_accomp"), i18nText("msg.select_one_ch_4"));
-      return;
-    }
-
-    const flags = getAccompanimentPartFlags();
-    const overlapPartIndexes = options.generationPartIndexes.filter(index => options.analysisPartIndexes.includes(index));
-    const existingTargetIndexes = options.generationPartIndexes.filter(index => flags[index]?.hasContent);
-    const confirmationIndexes = Array.from(new Set([...overlapPartIndexes, ...existingTargetIndexes])).sort((a, b) => a - b);
-    if (confirmationIndexes.length) {
-      pendingAccompanimentGenerateOptions = { ...options, overlapPartIndexes, existingTargetIndexes, confirmationIndexes };
-      renderAccompanimentGenerateConfirmation(pendingAccompanimentGenerateOptions);
-      accompanimentGenerateDialog?.close();
-      if (accompanimentGenerateConfirmDialog?.showModal) {
-        accompanimentGenerateConfirmDialog.showModal();
-        accompanimentGenerateConfirmCancel?.focus();
-        return;
-      }
-      const labels = confirmationIndexes.map(index => PART_LABELS[index] || i18nText("ui.channel_n", [index + 1])).join(", ");
-      if (await inlineConfirm(
-        i18nText("accomp.replace_confirm", [labels]),
-        { title: i18nText("ui.gen_accomp") }
-      )) {
-        const confirmedOptions = pendingAccompanimentGenerateOptions;
-        pendingAccompanimentGenerateOptions = null;
-        await executeAccompanimentGeneration(confirmedOptions);
-      } else {
-        pendingAccompanimentGenerateOptions = null;
-        if (accompanimentGenerateDialog?.showModal) accompanimentGenerateDialog.showModal();
-      }
-      return;
-    }
-    await executeAccompanimentGeneration(options);
-  }
-
-  function renderAccompanimentGenerateConfirmation(options) {
-    if (!accompanimentGenerateConfirmList) return;
-    accompanimentGenerateConfirmList.replaceChildren();
-    for (const partIndex of options.confirmationIndexes || []) {
-      const item = document.createElement("div");
-      item.className = `dynamics-confirm-item part-${partIndex}`;
-      const title = document.createElement("strong");
-      title.textContent = PART_LABELS[partIndex] || i18nText("ui.channel_n", [partIndex + 1]);
-      const detail = document.createElement("span");
-      const overlap = options.overlapPartIndexes?.includes(partIndex);
-      detail.textContent = overlap
-        ? i18nText("msg.src_ref")
-        : i18nText("msg.content_ch");
-      item.append(title, detail);
-      accompanimentGenerateConfirmList.append(item);
-    }
-  }
-
-  async function confirmAccompanimentGeneration() {
-    const options = pendingAccompanimentGenerateOptions;
-    pendingAccompanimentGenerateOptions = null;
-    accompanimentGenerateConfirmDialog?.close();
-    if (!options) return;
-    await executeAccompanimentGeneration(options);
-  }
-
-  function cancelAccompanimentGeneration() {
-    pendingAccompanimentGenerateOptions = null;
-    accompanimentGenerateConfirmDialog?.close();
-    if (accompanimentGenerateDialog?.showModal && !accompanimentGenerateDialog.open) {
-      accompanimentGenerateDialog.showModal();
-      accompanimentGenerateGenre?.focus();
-    }
-  }
-
-  async function executeAccompanimentGeneration(options) {
-    if (!accompanimentGenerateApply || accompanimentGenerateApply.disabled) return;
-    accompanimentGenerateApply.disabled = true;
-    if (accompanimentGenerateCancel) accompanimentGenerateCancel.disabled = true;
-    if (accompanimentGenerateStatus) {
-      const label = getAccompanimentGenerateInfo(options.genre)?.label || i18nText("ui.genre");
-      accompanimentGenerateStatus.textContent = i18nText("accomp.generating", [formatCount(options.analysisPartIndexes.length), label]);
-    }
-    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
-    try {
-      const result = applyAccompanimentGeneration(options);
-      accompanimentGenerateDialog?.close();
-      accompanimentGenerateConfirmDialog?.close();
-      showAccompanimentGenerationResult(result);
-    } catch (err) {
-      if (accompanimentGenerateStatus) accompanimentGenerateStatus.textContent = shortError(err);
-      showDialog(i18nText("err.accomp_gen"), shortError(err));
-      if (accompanimentGenerateDialog?.showModal && !accompanimentGenerateDialog.open) accompanimentGenerateDialog.showModal();
-    } finally {
-      accompanimentGenerateApply.disabled = false;
-      if (accompanimentGenerateCancel) accompanimentGenerateCancel.disabled = false;
-    }
-  }
-
-  function applyAccompanimentGeneration(options = {}) {
-    if (typeof generateAccompanimentMml !== "function") throw new Error(i18nText("err.load_accomp"));
-    stopPlayback(false);
-    const result = generateAccompanimentMml(normalizeMmlForDisplay(mainMml.value), {
-      genre: options.genre || "pop",
-      strength: options.strength || "normal",
-      analysisPartIndexes: options.analysisPartIndexes,
-      generationPartIndexes: options.generationPartIndexes
-    });
-    setMainMml(result.mml);
-    flashButton(accompanimentGenerateBtn, i18nText("st.gen_done"));
-    return result;
-  }
-
-  function showAccompanimentGenerationResult(result) {
-    const strengthLabels = { light: i18nText("ui.light"), normal: i18nText("ui.normal"), strong: i18nText("ui.strong") };
-    const info = getAccompanimentGenerateInfo(result.genre);
-    const analysisLabels = result.analysisPartIndexes.map(index => PART_LABELS[index] || i18nText("ui.channel_n", [index + 1])).join(", ");
-    const roleLines = result.generatedRoles
-      .map(role => `${PART_LABELS[role.partIndex] || i18nText("ui.channel_n", [role.partIndex + 1])}: ${role.role}`)
-      .join("\n");
-    showDialog(
-      i18nText("st.accomp_gen"),
-      i18nText("gen.style_strength", [info.label, strengthLabels[result.strength] || result.strength]) + "\n" +
-      i18nText("accomp.reference_channels", [analysisLabels]) + "\n" +
-      i18nText("accomp.detected_key", [result.key?.label || i18nText("ui.unknown")]) + "\n" +
-      i18nText("accomp.chord_sections", [formatCount(result.chordCount || 0)]) + "\n" +
-      i18nText("accomp.generated_roles", [roleLines]) + "\n" +
-      i18nText("accomp.applied", [info.completion])
-    );
-  }
-
-  function parseRestTrimLimit(value, options = {}) {
-    const raw = String(value || "32").trim().toLowerCase();
-    if (raw === "all" || raw === i18nText("ui.all_2") || raw === i18nText("ui.all")) return { all: true, denom: null };
-    const denom = Number(raw);
-    if (![4, 8, 16, 32, 64].includes(denom)) {
-      if (!options.silent) showDialog(i18nText("ui.remove_rests"), i18nText("msg.select_one_all"));
-      return null;
-    }
-    return { all: false, denom };
-  }
-
   async function openPasteMmlDialog() {
     if (!pasteMmlDialog?.showModal) return;
     if (pasteMmlStatus) pasteMmlStatus.textContent = "";
@@ -8630,17 +10474,13 @@
         pasted = normalizeMmlForDisplay(composeMml(parts, { preserveEmpty: true, partCount: 6 }));
       }
       if (!pasted.trim()) throw new Error(i18nText("mml.paste_empty"));
-      if (isSourceWorkbenchLayout()) {
-        setWorkbenchOriginalMidiImport(null);
-        notifyWorkbenchSourceBaseline(pasted, {
-          name: i18nText("mml.pasted_name"),
-          sourceType: "mml",
-          sourceLabel: "MML",
-          newSource: true
-        });
-      } else {
-        setMainMml(pasted);
-      }
+      setPlayerUiOriginalMidiImport(null);
+      notifyPlayerUiSourceBaseline(pasted, {
+        name: i18nText("mml.pasted_name"),
+        sourceType: "mml",
+        sourceLabel: "MML",
+        newSource: true
+      });
       clearSuggestedMmlSaveFileName();
       googleDriveMmlFileName = "";
       pasteMmlDialog?.close();
@@ -8762,176 +10602,6 @@
         ta.remove();
       }
     }
-  }
-
-
-
-  function openSplitCopyDialog() {
-    try {
-      buildSplitCopyPages();
-      if (splitCopyDialog?.showModal) splitCopyDialog.showModal();
-      else showDialog(i18nText("ui.split_copy_score"), i18nText("msg.unsupported_split"));
-    } catch (err) {
-      showDialog(i18nText("err.split_copy"), shortError(err));
-    }
-  }
-
-  function buildSplitCopyPages() {
-    if (!splitCopyPages || !splitCopySummary) return;
-    const maxChars = Math.max(200, Math.min(5000, Math.round(Number(splitCopyLimit?.value || 2400) || 2400)));
-    if (splitCopyLimit) splitCopyLimit.value = String(maxChars);
-
-    let result;
-    try {
-      result = splitMmlPages(mainMml.value || "", {
-        partCount: 6,
-        maxChars,
-        searchSlackChars: Math.round(maxChars / 2),
-        minCommonSilenceBeats: 2
-      });
-    } catch (err) {
-      splitCopySummary.hidden = false;
-      splitCopySummary.textContent = i18nText("split.fail_detail", [shortError(err)]);
-      splitCopyPages.innerHTML = "";
-      throw err;
-    }
-
-    const pages = result.pages || [];
-    const warnings = Array.from(result.warnings || []);
-    if (splitCopySummary) {
-      splitCopySummary.hidden = warnings.length === 0;
-      splitCopySummary.innerHTML = warnings.length
-        ? `<em>${escapeHtml(warnings.slice(0, 3).join(" / "))}${warnings.length > 3 ? i18nText("ui.more") : ""}</em>`
-        : "";
-    }
-
-    splitCopyPages.innerHTML = "";
-    if (!pages.length) {
-      splitCopyPages.innerHTML = i18nText("tpl.mml_split");
-      return;
-    }
-
-    for (const page of pages) {
-      const row = document.createElement("div");
-      row.className = `split-copy-page${page.maxPartLength > maxChars ? " over" : ""}`;
-      const nonEmpty = page.parts
-        .map((part, i) => ({ label: PART_LABELS[i] || i18nText("ui.channel_n", [i + 1]), length: String(part || "").length }))
-        .filter(item => item.length > 0);
-      const lengthText = nonEmpty.length
-        ? nonEmpty.map(item => i18nText("ui.named_chars", [item.label, formatCount(item.length)])).join(" · ")
-        : i18nText("ui.empty_score");
-      const reasonText = describeSplitReason(page.reason);
-      const skipped = page.skippedUnits > 0 ? i18nText("split.removed_silence", [formatBeatUnits(page.skippedUnits)]) : "";
-      row.innerHTML = `
-        <div class="split-copy-page-main">
-          <strong>${escapeHtml(i18nText("split.score_n", [page.index]))}</strong>
-          <span>${escapeHtml(lengthText)}</span>
-          <small>${escapeHtml(reasonText + skipped)}${page.warning ? ` · ${escapeHtml(page.warning)}` : ""}</small>
-        </div>
-        <div class="split-copy-page-actions">
-          <button type="button" class="ghost" data-split-preview-index="${page.index - 1}">${escapeHtml(i18nText("ui.listen"))}</button>
-          <button type="button" class="primary" data-split-copy-index="${page.index - 1}">${escapeHtml(i18nText("ui.copy_2"))}</button>
-        </div>
-      `;
-      row.querySelector("[data-split-copy-index]")?.addEventListener("click", () => void copySplitPage(page));
-      row.querySelector("[data-split-preview-index]")?.addEventListener("click", (ev) => void previewSplitPage(page, ev.currentTarget));
-      splitCopyPages.appendChild(row);
-    }
-  }
-
-  async function previewSplitPage(page, triggerButton = null) {
-    const text = String(page?.mml || "").trim();
-    if (!text) {
-      showDialog(i18nText("err.split_copy_preview"), i18nText("msg.score_play"));
-      return;
-    }
-    const button = triggerButton instanceof HTMLElement ? triggerButton : null;
-    if (button && splitPreviewButton === button) {
-      stopMidiPreview();
-      return;
-    }
-    try {
-      stopPlayback(false);
-      stopMidiPreview();
-      if (button) setSplitPreviewButton(button);
-      await loadDefaultSf2IfNeeded();
-      const ctx = await ensureAudioContext();
-      const parsed = parseMabinogiMml(text);
-      const scheduled = buildSchedule(parsed);
-      const notes = Array.isArray(scheduled.notes) ? scheduled.notes : [];
-      const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
-      if (!notes.length || duration <= 0) throw new Error(i18nText("msg.no_notes_play"));
-      if (!soundFont.presets?.length) throw new Error(i18nText("snd.find_avail"));
-      const prepared = prepareNotesWithPartPresets(ctx, notes);
-      if (!prepared.length) throw new Error(i18nText("msg.no_audible"));
-      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
-      const result = schedulePreparedNotes(ctx, prepared, {
-        baseTime: ctx.currentTime + 0.08,
-        fromSec: 0,
-        playbackSpeed,
-        windowStart: 0,
-        windowEnd: duration + 0.05,
-        destination: masterGain || ctx.destination,
-        activeSources: midiPreviewSources,
-        scheduledIds: new Set(),
-        minLeadTime: 0.012,
-        gainScale
-      });
-      const stopMs = Math.max(800, Math.min(180000, (result.maxEnd - ctx.currentTime + 0.35) * 1000));
-      midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
-    } catch (err) {
-      stopMidiPreview();
-      showDialog(i18nText("err.split_copy_preview"), shortError(err));
-    }
-  }
-
-  async function copySplitPage(page) {
-    const text = String(page.mml || "").trim();
-    if (!text) {
-      showDialog(i18nText("err.split_copy"), i18nText("msg.score_copy"));
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      trackScoreCopy("split");
-      showTransientToast(i18nText("st.copy_done"));
-    } catch (_) {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.left = "-9999px";
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        const copied = document.execCommand("copy");
-        if (!copied) throw new Error("copy failed");
-        trackScoreCopy("split");
-        showTransientToast(i18nText("st.copy_done"));
-      } catch (err) {
-        showDialog(i18nText("err.copy"), i18nText("msg.auto_copying"));
-      } finally {
-        ta.remove();
-      }
-    }
-  }
-
-  function describeSplitReason(reason) {
-    switch (reason) {
-      case "last": return i18nText("ui.last_score");
-      case "common-silence": return i18nText("msg.split_shared");
-      case "longest-silence": return i18nText("msg.split_longest");
-      case "clean-boundary": return i18nText("msg.split_all");
-      case "partial-boundary": return i18nText("msg.split_safest");
-      case "char-limit": return i18nText("ui.split_char");
-      case "forced": return i18nText("ui.forced_split");
-      default: return i18nText("ui.split");
-    }
-  }
-
-  function formatBeatUnits(units) {
-    const beats = (Number(units) || 0) / 256;
-    if (Math.abs(beats - Math.round(beats)) < 1e-6) return i18nText("ui.beats", [formatCount(Math.round(beats))]);
-    return i18nText("ui.beats", [beats.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")]);
   }
 
   async function saveVisibleMml() {
@@ -9061,10 +10731,8 @@
   }
 
   function updateVisibleHighlight() {
-    if (isSourceWorkbenchLayout()) {
-      const codePanel = document.querySelector('[data-workspace-panel="code"]');
-      if (codePanel?.hidden) return;
-    }
+    const codePanel = document.querySelector('[data-workspace-panel="code"]');
+    if (codePanel?.hidden) return;
     if (activeTabName === "main") {
       updateMainHighlight();
       return;
@@ -9133,6 +10801,9 @@
         muted: Boolean(partMuteStates[part])
       });
     }
+    pianoRollVisibleCache.sort((a, b) => a.start - b.start || a.part - b.part || a.midi - b.midi);
+    pianoRollTemporalIndex = buildTemporalIndex(pianoRollVisibleCache);
+    pianoRollRangeCache = getPianoRollRange(pianoRollVisibleCache);
     return pianoRollVisibleCache;
   }
 
@@ -9203,8 +10874,6 @@
     const pitchCount = Math.max(1, max - min + 1);
     const pitchWidth = 100 / pitchCount;
 
-    // 노트와 피아노롤 레인은 모든 반음이 정확히 같은 폭을 사용한다.
-    // C-C#-D뿐 아니라 E-F, B-C처럼 검은건반이 없는 반음도 같은 간격을 유지한다.
     const getLaneMetrics = (midi) => {
       const n = clampInt(Number(midi) || 0, min, max);
       const left = (n - min) * pitchWidth;
@@ -9215,10 +10884,6 @@
       };
     };
 
-    // 균등한 반음 중심을 유지하면서 피아노 모양을 만들기 위해 흰건반 폭을 조절한다.
-    // 각 흰건반의 좌/우 끝은 인접한 흰건반 중심과의 중간점이다.
-    // 따라서 D/G/A처럼 양옆이 검은건반인 키는 조금 넓고, E-F/B-C 경계의 키는
-    // 조금 좁아지지만 모든 MIDI 음의 중심은 반음 간격으로 정확히 정렬된다.
     const previousWhiteDistance = [1, 0, 2, 0, 2, 1, 0, 2, 0, 2, 0, 2];
     const nextWhiteDistance = [2, 0, 2, 0, 1, 2, 0, 2, 0, 2, 0, 1];
     const blackWidth = pitchWidth * PIANO_BLACK_KEY_WIDTH_IN_PITCH_LANES;
@@ -9361,6 +11026,7 @@
   }
 
   function getPianoRollTempoMap() {
+    if (pianoRollTempoMapCacheVersion === scheduleCacheVersion) return pianoRollTempoMapCache;
     const source = Array.isArray(scheduleCache?.tempoMap) && scheduleCache.tempoMap.length
       ? scheduleCache.tempoMap
       : (Array.isArray(scheduleCache?.tempoMarkers) ? scheduleCache.tempoMarkers : []);
@@ -9379,7 +11045,9 @@
       else result.push(tempo);
     }
     if (!result.length || result[0].beat > 1e-7) result.unshift({ beat: 0, time: 0, bpm: 120 });
-    return result;
+    pianoRollTempoMapCacheVersion = scheduleCacheVersion;
+    pianoRollTempoMapCache = result;
+    return pianoRollTempoMapCache;
   }
 
   function pianoRollBeatToSeconds(beat, tempoMap) {
@@ -9662,7 +11330,7 @@
     }
 
     if (pianoRollEmpty) pianoRollEmpty.hidden = true;
-    const range = getPianoRollRange(notes);
+    const range = pianoRollRangeCache || getPianoRollRange(notes);
     pianoRollKeyMin = range.min;
     pianoRollKeyMax = range.max;
     const keyLayout = getPianoRollLayout(pianoRollKeyMin, pianoRollKeyMax);
@@ -9673,10 +11341,11 @@
     const visibleEnd = current + fallWindow;
     const activeKeyParts = new Map();
     const visibleNotes = [];
+    const pianoWindow = temporalWindow(pianoRollTemporalIndex || buildTemporalIndex(notes), current, visibleEnd + 0.0001);
 
-    for (const note of notes) {
+    for (let noteIndex = pianoWindow.start; noteIndex < pianoWindow.end; noteIndex++) {
+      const note = pianoWindow.list[noteIndex];
       const start = Math.max(0, Number(note.start) || 0);
-      if (start > visibleEnd) break;
       const noteDuration = Math.max(0.02, Number(note.durationSec) || 0.02);
       const end = start + noteDuration;
       // 노트의 아래쪽 끝은 발음 시작점, 위쪽 끝은 발음 종료점이다.
@@ -9759,6 +11428,9 @@
     if (scanBucket === activePlaybackScanBucket && scanSignature === activePlaybackScanSignature) return;
     activePlaybackScanBucket = scanBucket;
     activePlaybackScanSignature = scanSignature;
+    const temporalIndexes = ensureScheduleTemporalIndexes();
+    const noteWindow = temporalWindow(temporalIndexes.notes, current - ACTIVE_CODE_RELEASE_SEC, current + ACTIVE_CODE_LOOKAHEAD_SEC + 0.0001);
+    const restWindow = temporalWindow(temporalIndexes.rests, current - ACTIVE_CODE_RELEASE_SEC, current + ACTIVE_CODE_LOOKAHEAD_SEC + 0.0001);
     const mainRanges = [];
     const partRanges = Array.from({ length: 6 }, () => []);
     const activePartIndex = getActiveEditorPartIndex();
@@ -9789,7 +11461,8 @@
       return current + ACTIVE_CODE_LOOKAHEAD_SEC >= start && current <= end + ACTIVE_CODE_RELEASE_SEC;
     };
 
-    for (const note of noteList) {
+    for (let noteIndex = noteWindow.start; noteIndex < noteWindow.end; noteIndex++) {
+      const note = noteWindow.list[noteIndex];
       const part = clampInt(Number(note?.part ?? 0), 0, 5);
       if (partMuteStates[part]) continue;
       if (Number(note?.volume ?? 0) <= 0) continue;
@@ -9797,7 +11470,8 @@
       collectSourceRanges(note, part);
     }
 
-    for (const rest of restList) {
+    for (let restIndex = restWindow.start; restIndex < restWindow.end; restIndex++) {
+      const rest = restWindow.list[restIndex];
       const part = clampInt(Number(rest?.part ?? 0), 0, 5);
       if (partMuteStates[part]) continue;
       if (!isCurrentItem(rest)) continue;
@@ -10094,7 +11768,7 @@
     inlineNotify(title, message, { tone: /error|fail|오류|실패/i.test(String(title || "")) ? "error" : "info" });
   }
 
-  window.MobibardMidiWorkbench = {
+  window.MobibardMidiEditor = {
     hasSource() { return Boolean(pendingMidiImport && pendingMidiSettings); },
     isDirty() {
       const signature = getMidiConvertSettingsSignature();
@@ -10133,6 +11807,6 @@
         )
       };
     },
-    restoreSessionState(snapshot) { return restoreMidiWorkbenchSnapshot(snapshot); }
+    restoreSessionState(snapshot) { return restoreMidiPlayerUiSnapshot(snapshot); }
   };
-})();
+};

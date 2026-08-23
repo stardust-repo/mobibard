@@ -1,21 +1,21 @@
 <!-- 모비바드 | モビバード | Mobibard -->
 <!DOCTYPE html>
 
-<html lang="en">
+<html data-player-layout="player-ui" data-player-ui-booting="true" lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <title data-i18n="ui.mobibard_version"></title>
 <link href="../assets/favicon.ico" rel="icon" sizes="any"/>
 <link href="../assets/favicon.ico" rel="shortcut icon"/>
-<link rel="alternate" hreflang="ko" href="https://stardust-repo.github.io/mobibard/player/?lang=ko"/>
-<link rel="alternate" hreflang="ja" href="https://stardust-repo.github.io/mobibard/player/?lang=ja"/>
-<link rel="alternate" hreflang="en" href="https://stardust-repo.github.io/mobibard/player/?lang=en"/>
-<link rel="alternate" hreflang="zh-CN" href="https://stardust-repo.github.io/mobibard/player/?lang=zh-CN"/>
-<link rel="alternate" hreflang="zh-TW" href="https://stardust-repo.github.io/mobibard/player/?lang=zh-TW"/>
-<link rel="alternate" hreflang="x-default" href="https://stardust-repo.github.io/mobibard/player/"/>
-<link href="styles.css?v=5.1.0&amp;rev=20260823-final11" rel="stylesheet"/>
-<link href="workbench.css?v=5.1.0&amp;rev=20260823-final12" rel="stylesheet"/>
+<link href="https://stardust-repo.github.io/mobibard/player/?lang=ko" hreflang="ko" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/player/?lang=ja" hreflang="ja" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/player/?lang=en" hreflang="en" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/player/?lang=zh-CN" hreflang="zh-CN" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/player/?lang=zh-TW" hreflang="zh-TW" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/player/" hreflang="x-default" rel="alternate"/>
+<link href="styles.css?v=5.1.0&amp;rev=20260823-final19" rel="stylesheet"/>
+<link as="script" href="js/app.js?v=5.1.0&amp;rev=20260823-final20" rel="preload"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 <script>
 (() => {
@@ -61,13 +61,13 @@
   document.documentElement.dataset.i18nPending = "true";
   const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
   if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "5.1.0");
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("rev", "20260823-release10");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("rev", "20260823-final21");
   document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
 })();
 </script>
 </head>
-<body>
+<body class="player-ui">
 <header class="player-topbar">
 <div class="player-topbar-inner">
 <a aria-label="" class="player-brand" data-i18n-aria-label="ui.mobibard_version" href="./index.html">
@@ -142,7 +142,7 @@
 <button class="ghost soft-tool-button" data-i18n="ui.google" data-i18n-title="drive.save_mobibard" id="googleDriveSaveBtn" title="" type="button"></button>
 </div>
 <div aria-label="" class="player-file-actions-special" data-i18n-aria-label="game.midi_extraction">
-<button class="import-format-list mabi-supported-files-button player-supported-files-button" data-supported-files-button data-supported-files-context="player" type="button">지원 파일</button>
+<button class="import-format-list mabi-supported-files-button player-supported-files-button" data-supported-files-button="" data-supported-files-context="player" type="button">지원 파일</button>
 <button class="midi-extract-toolbar-button" data-i18n-title="midi.extract" id="midiExtractBtn" title="" type="button">
 <span aria-hidden="true" class="midi-extract-toolbar-icon">♪</span><span data-i18n="midi.extract"></span>
 </button>
@@ -151,13 +151,13 @@
 </button>
 <a class="simple-version-toolbar-button" data-i18n="simple.label" data-i18n-title="simple.open" href="../simple/index.html" id="simpleVersionBtn" title=""></a>
 </div>
-<input accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,.txt,.mmi,.mml,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,text/plain,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFile" data-music-format-input type="file"/>
+<input accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,.txt,.mmi,.mml,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,text/plain,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" data-music-format-input="" hidden="" id="midiFile" type="file"/>
 </div>
 <div class="play-layout">
 <div class="transport-row">
 <div class="transport-actions">
-<button class="primary" data-i18n="player.play" id="playToggleBtn" type="button"></button>
-<button class="compact soft-tool-button" data-i18n="ui.start" data-i18n-title="ui.return_beginning" id="rewindBtn" title="" type="button"></button>
+<button class="primary" id="playToggleBtn" type="button"><span aria-hidden="true" class="shared-transport-icon shared-icon-play"></span></button>
+<button class="compact soft-tool-button" data-i18n-title="ui.return_beginning" id="rewindBtn" title="" type="button"><span aria-hidden="true" class="shared-transport-icon shared-icon-first"></span></button>
 <label class="loop-label"><input id="loopPlayback" type="checkbox"/> <span data-i18n="play.loop"></span></label>
 <span class="play-info" id="playInfo">00:00.00 / 00:00.00</span>
 </div>
@@ -188,25 +188,7 @@
 <button class="mini-button control-reset-button soft-tool-button" data-i18n="ui.reset" id="volumeResetBtn" type="button"></button>
 </div>
 </div>
-<div class="compact-control-wrap">
-<button aria-controls="muteControlPopover" aria-expanded="false" aria-haspopup="dialog" class="compact-value-button mute-control-button" id="muteControlButton" type="button">
-<span data-i18n="snd.mute" id="partMuteLabel"></span><strong id="muteControlValue">0/6</strong>
-</button>
-<div aria-label="" class="control-popover mute-control-popover" data-i18n-aria-label="snd.mute_channels" hidden="" id="muteControlPopover" role="dialog">
-<div class="mute-popover-actions">
-<button class="mini-button soft-tool-button" data-i18n="ui.select_all" id="muteSelectAll" type="button"></button>
-<button class="mini-button soft-tool-button" data-i18n="ui.clear_all" id="muteSelectNone" type="button"></button>
-</div>
-<div class="mute-channel-list">
-<label class="mute-channel-option part-0"><input data-mute-part="0" type="checkbox"/><span data-i18n="part.melody"></span></label>
-<label class="mute-channel-option part-1"><input data-mute-part="1" type="checkbox"/><span data-i18n="part.harmony1"></span></label>
-<label class="mute-channel-option part-2"><input data-mute-part="2" type="checkbox"/><span data-i18n="part.harmony2"></span></label>
-<label class="mute-channel-option part-3"><input data-mute-part="3" type="checkbox"/><span data-i18n="part.harmony3"></span></label>
-<label class="mute-channel-option part-4"><input data-mute-part="4" type="checkbox"/><span data-i18n="part.harmony4"></span></label>
-<label class="mute-channel-option part-5"><input data-mute-part="5" type="checkbox"/><span data-i18n="part.harmony5"></span></label>
-</div>
-</div>
-</div>
+
 <button class="tab-sound-btn soft-tool-button" data-i18n="snd.label" data-i18n-title="snd.configure_playback" id="partSoundBtn" title="" type="button"></button>
 </div>
 </div>
@@ -237,12 +219,6 @@
 <div aria-label="" class="editor-title-actions" data-i18n-aria-label="edit.tools">
 <button class="ghost soft-tool-button" data-i18n="ui.paste" id="pasteBtn" type="button"></button>
 <button class="primary soft-tool-button" data-i18n="ui.copy_all" id="copyBtn" type="button"></button>
-<button class="primary soft-tool-button" data-i18n="ui.split_copy" id="splitCopyBtn" type="button"></button>
-</div>
-</div>
-<div aria-label="" class="editor-tool-row" data-i18n-aria-label="edit.tools">
-<div class="editor-tools-left">
-<button class="ghost soft-tool-button" data-i18n="ui.lead_gap" id="leadingSilenceBtn" type="button"></button><button class="ghost soft-tool-button" data-i18n="tempo.simplify" id="tempoSimplifyBtn" type="button"></button><button class="ghost soft-tool-button" data-i18n="ui.remove_rests" id="restTrimBtn" type="button"></button><button class="ghost soft-tool-button" data-i18n="vol.adjust" id="bulkVolumeBtn" type="button"></button><button class="ghost soft-tool-button" data-i18n="pitch.adjust" id="bulkPitchBtn" type="button"></button><button class="ghost soft-tool-button" data-i18n-title="vol.generate" id="dynamicsGenerateBtn" title="" type="button"><span data-i18n="vol.generate"></span></button><button class="ghost soft-tool-button" data-i18n-title="ui.gen_accomp" id="accompanimentGenerateBtn" title="" type="button"><span data-i18n="ui.gen_accomp"></span></button>
 </div>
 </div>
 <div class="tab-line">
@@ -349,7 +325,7 @@
 </div>
 <p data-i18n="mml.select_which" id="mmiImportSummary"></p>
 <div aria-label="" class="mmi-channel-list" data-i18n-aria-label="mml.ch_list" id="mmiChannelList"></div>
-<div class="mmi-import-status-row" hidden>
+<div class="mmi-import-status-row" hidden="">
 <span aria-live="polite" class="dialog-small mmi-import-status" id="mmiImportStatus" role="status"></span>
 </div>
 <div class="dialog-actions mmi-import-actions">
@@ -400,7 +376,7 @@
 <header class="code-help-popup-head">
 <h3 data-i18n="mml.code_help" id="codeHelpPopupTitle"></h3>
 <button aria-label="" class="code-help-popup-close" data-i18n-aria-label="ui.close" data-i18n-title="ui.close" id="codeHelpClose" title="" type="button">
-<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+<svg aria-hidden="true" viewbox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg>
 </button>
 </header>
 <div class="code-help-popup-body">
@@ -427,162 +403,6 @@
 </div>
 </form>
 </dialog>
-<dialog class="mml-dialog" id="restTrimDialog">
-<form class="dialog-card" method="dialog">
-<h3 data-i18n="ui.remove_rests"></h3>
-<p data-i18n="msg.removes_rests"></p>
-<label class="dialog-field" data-i18n="ui.remove_length" for="restTrimLimit"></label>
-<select id="restTrimLimit">
-<option data-i18n="ui.all_rests" value="all"></option>
-<option data-i18n="ui.quarter_notes" value="4"></option>
-<option data-i18n="ui.eighth_notes" value="8"></option>
-<option data-i18n="ui.note16_short" value="16"></option>
-<option data-i18n="ui.note32_short" selected="" value="32"></option>
-<option data-i18n="ui.note64_short" value="64"></option>
-</select>
-<div class="dialog-field-row">
-<span class="dialog-field" data-i18n="ui.target_chs"></span>
-<span class="dialog-mini-actions">
-<button class="compact soft-tool-button" data-i18n="ui.select_all" id="restTrimSelectAll" type="button"></button>
-<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="restTrimSelectNone" type="button"></button>
-</span>
-</div>
-<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="ui.chs_rest">
-<label class="dialog-channel-option part-0"><input checked="" class="rest-trim-channel" data-part-index="0" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.melody"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="0">0</span></label>
-<label class="dialog-channel-option part-1"><input checked="" class="rest-trim-channel" data-part-index="1" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.harmony1"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="1">0</span></label>
-<label class="dialog-channel-option part-2"><input checked="" class="rest-trim-channel" data-part-index="2" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.harmony2"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="2">0</span></label>
-<label class="dialog-channel-option part-3"><input checked="" class="rest-trim-channel" data-part-index="3" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.harmony3"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="3">0</span></label>
-<label class="dialog-channel-option part-4"><input checked="" class="rest-trim-channel" data-part-index="4" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.harmony4"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="4">0</span></label>
-<label class="dialog-channel-option part-5"><input checked="" class="rest-trim-channel" data-part-index="5" type="checkbox"/> <span class="dialog-channel-name" data-i18n="part.harmony5"></span><span class="dialog-channel-stat rest-trim-stat" data-part-index="5">0</span></label>
-</div>
-<div class="dialog-actions">
-<button data-i18n="ui.cancel" id="restTrimCancel" type="button"></button>
-<button class="primary" data-i18n="ui.delete" id="restTrimApply" type="button"></button>
-</div>
-</form>
-</dialog>
-<dialog class="mml-dialog" id="bulkVolumeDialog">
-<form class="dialog-card" method="dialog">
-<h3 data-i18n="vol.adjust"></h3>
-<p data-i18n="mml.adds_entered"></p>
-<label class="dialog-field" data-i18n="vol.change" for="bulkVolumeAmount"></label>
-<input id="bulkVolumeAmount" inputmode="numeric" max="15" min="-15" step="1" type="number" value="0"/>
-<span class="dialog-small" data-i18n="msg.enter_integer_15"></span>
-<div aria-live="polite" class="volume-count-box" id="bulkVolumeStats"></div>
-<div class="dialog-field-row">
-<span class="dialog-field" data-i18n="ui.target_chs"></span>
-<span class="dialog-mini-actions">
-<button class="compact soft-tool-button" data-i18n="ui.select_all" id="bulkVolumeSelectAll" type="button"></button>
-<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="bulkVolumeSelectNone" type="button"></button>
-</span>
-</div>
-<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="vol.chs_adjust">
-<label class="dialog-channel-option part-0"><input checked="" class="bulk-volume-channel" data-part-index="0" type="checkbox"/> <span data-i18n="part.melody"></span></label>
-<label class="dialog-channel-option part-1"><input checked="" class="bulk-volume-channel" data-part-index="1" type="checkbox"/> <span data-i18n="part.harmony1"></span></label>
-<label class="dialog-channel-option part-2"><input checked="" class="bulk-volume-channel" data-part-index="2" type="checkbox"/> <span data-i18n="part.harmony2"></span></label>
-<label class="dialog-channel-option part-3"><input checked="" class="bulk-volume-channel" data-part-index="3" type="checkbox"/> <span data-i18n="part.harmony3"></span></label>
-<label class="dialog-channel-option part-4"><input checked="" class="bulk-volume-channel" data-part-index="4" type="checkbox"/> <span data-i18n="part.harmony4"></span></label>
-<label class="dialog-channel-option part-5"><input checked="" class="bulk-volume-channel" data-part-index="5" type="checkbox"/> <span data-i18n="part.harmony5"></span></label>
-</div>
-<div class="dialog-actions">
-<button data-i18n="ui.cancel" id="bulkVolumeCancel" type="button"></button>
-<button class="primary" data-i18n="ui.apply" id="bulkVolumeApply" type="button"></button>
-</div>
-</form>
-</dialog>
-<dialog class="mml-dialog" id="bulkPitchDialog">
-<form class="dialog-card" id="bulkPitchForm" method="dialog">
-<h3 data-i18n="pitch.adjust"></h3>
-<p data-i18n="msg.changes_oct"></p>
-<label class="dialog-field" data-i18n="pitch.octave_change" for="bulkPitchAmount"></label>
-<input id="bulkPitchAmount" inputmode="numeric" max="7" min="-7" step="1" type="number" value="0"/>
-<span class="dialog-small" data-i18n="msg.enter_integer_7"></span>
-<div aria-live="polite" class="volume-count-box" id="bulkPitchStats"></div>
-<div class="dialog-field-row">
-<span class="dialog-field" data-i18n="ui.target_chs"></span>
-<span class="dialog-mini-actions">
-<button class="compact soft-tool-button" data-i18n="ui.select_all" id="bulkPitchSelectAll" type="button"></button>
-<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="bulkPitchSelectNone" type="button"></button>
-</span>
-</div>
-<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="pitch.chs_adjust">
-<label class="dialog-channel-option part-0"><input checked="" class="bulk-pitch-channel" data-part-index="0" type="checkbox"/> <span data-i18n="part.melody"></span></label>
-<label class="dialog-channel-option part-1"><input checked="" class="bulk-pitch-channel" data-part-index="1" type="checkbox"/> <span data-i18n="part.harmony1"></span></label>
-<label class="dialog-channel-option part-2"><input checked="" class="bulk-pitch-channel" data-part-index="2" type="checkbox"/> <span data-i18n="part.harmony2"></span></label>
-<label class="dialog-channel-option part-3"><input checked="" class="bulk-pitch-channel" data-part-index="3" type="checkbox"/> <span data-i18n="part.harmony3"></span></label>
-<label class="dialog-channel-option part-4"><input checked="" class="bulk-pitch-channel" data-part-index="4" type="checkbox"/> <span data-i18n="part.harmony4"></span></label>
-<label class="dialog-channel-option part-5"><input checked="" class="bulk-pitch-channel" data-part-index="5" type="checkbox"/> <span data-i18n="part.harmony5"></span></label>
-</div>
-<div class="dialog-actions">
-<button data-i18n="ui.cancel" id="bulkPitchCancel" type="button"></button>
-<button class="primary" data-i18n="ui.apply" id="bulkPitchApply" type="button"></button>
-</div>
-</form>
-</dialog>
-<dialog class="mml-dialog genre-arrange-dialog" id="dynamicsGenerateDialog">
-<form class="dialog-card" id="dynamicsGenerateForm" method="dialog">
-<div class="genre-arrange-title-row">
-<h3 data-i18n="vol.generate"></h3>
-</div>
-<p data-i18n="vol.analyzes_note"></p>
-<label class="dialog-field" data-i18n="vol.style" for="dynamicsGenerateGenre"></label>
-<select id="dynamicsGenerateGenre">
-<option data-i18n="ui.pop" selected="" value="pop"></option>
-<option data-i18n="ui.jazz" value="jazz"></option>
-<option data-i18n="ui.ballad" value="ballad"></option>
-<option data-i18n="ui.bossa_nova" value="bossa"></option>
-<option data-i18n="ui.rock" value="rock"></option>
-<option data-i18n="ui.funk" value="funk"></option>
-<option data-i18n="ui.classical" value="classical"></option>
-</select>
-<label class="dialog-field" data-i18n="ui.variation_strength" for="dynamicsGenerateStrength"></label>
-<select id="dynamicsGenerateStrength">
-<option data-i18n="ui.light" value="light"></option>
-<option data-i18n="ui.normal" selected="" value="normal"></option>
-<option data-i18n="ui.strong" value="strong"></option>
-</select>
-<div class="genre-arrange-note">
-<strong data-i18n="vol.pop_rules" id="dynamicsGenerateRuleTitle"></strong>
-<span data-i18n="msg.reg_strong" id="dynamicsGenerateRuleText"></span>
-</div>
-<div class="dialog-field-row">
-<span class="dialog-field" data-i18n="ui.target_chs"></span>
-<span class="dialog-mini-actions">
-<button class="compact soft-tool-button" data-i18n="ui.select_all" id="dynamicsGenerateSelectAll" type="button"></button>
-<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="dynamicsGenerateSelectNone" type="button"></button>
-</span>
-</div>
-<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="vol.chs_gen">
-<label class="dialog-channel-option part-0"><input checked="" class="dynamics-generate-channel" data-part-index="0" type="checkbox"/> <span data-i18n="part.melody"></span></label>
-<label class="dialog-channel-option part-1"><input checked="" class="dynamics-generate-channel" data-part-index="1" type="checkbox"/> <span data-i18n="part.harmony1"></span></label>
-<label class="dialog-channel-option part-2"><input checked="" class="dynamics-generate-channel" data-part-index="2" type="checkbox"/> <span data-i18n="part.harmony2"></span></label>
-<label class="dialog-channel-option part-3"><input checked="" class="dynamics-generate-channel" data-part-index="3" type="checkbox"/> <span data-i18n="part.harmony3"></span></label>
-<label class="dialog-channel-option part-4"><input checked="" class="dynamics-generate-channel" data-part-index="4" type="checkbox"/> <span data-i18n="part.harmony4"></span></label>
-<label class="dialog-channel-option part-5"><input checked="" class="dynamics-generate-channel" data-part-index="5" type="checkbox"/> <span data-i18n="part.harmony5"></span></label>
-</div>
-<div aria-live="polite" class="dialog-small" id="dynamicsGenerateStatus" role="status"></div>
-<div class="dialog-actions">
-<button data-i18n="ui.cancel" id="dynamicsGenerateCancel" type="button"></button>
-<button class="primary" data-i18n="ui.generate" id="dynamicsGenerateApply" type="button"></button>
-</div>
-</form>
-</dialog>
-<dialog class="mml-dialog dynamics-confirm-dialog" id="dynamicsGenerateConfirmDialog">
-<form class="dialog-card" method="dialog">
-<h3 data-i18n="vol.review_changes"></h3>
-<p data-i18n="msg.some_chs"></p>
-<ul class="dynamics-confirm-rules">
-<li data-i18n="msg.three_more"></li>
-<li data-i18n="msg.diff_between"></li>
-</ul>
-<div aria-live="polite" class="dynamics-confirm-list" id="dynamicsGenerateConfirmList"></div>
-<p class="dialog-small" data-i18n="vol.continuing_replaces"></p>
-<div class="dialog-actions">
-<button data-i18n="ui.go_back" id="dynamicsGenerateConfirmCancel" type="button"></button>
-<button class="primary" data-i18n="ui.generate_anyway" id="dynamicsGenerateConfirmApply" type="button"></button>
-</div>
-</form>
-</dialog>
 <dialog class="mml-dialog" id="tempoEditDialog">
 <form class="dialog-card tempo-edit-card" id="tempoEditForm" method="dialog">
 <h3 data-i18n="tempo.edit"></h3>
@@ -596,150 +416,12 @@
 </div>
 </form>
 </dialog>
-<dialog class="mml-dialog tempo-simplify-dialog" id="tempoSimplifyDialog">
-<form class="dialog-card" method="dialog">
-<h3 data-i18n="tempo.simplify"></h3>
-<p class="dialog-small tempo-simplify-description" data-i18n="tempo.simplify_description"></p>
-<div aria-live="polite" class="tempo-simplify-preview" id="tempoSimplifyPreview" role="status"></div>
-<div class="dialog-actions">
-<button data-i18n="ui.cancel" id="tempoSimplifyCancel" type="button"></button>
-<button class="primary" data-i18n="ui.apply" id="tempoSimplifyApply" type="button"></button>
-</div>
-</form>
-</dialog>
-<dialog class="mml-dialog" id="leadingSilenceDialog">
-<form class="dialog-card" method="dialog">
-<h3 data-i18n="ui.lead_gap"></h3>
-<p data-i18n="msg.adds_entered"></p>
-<label class="dialog-field" data-i18n="ui.silence_duration" for="leadingSilenceSeconds"></label>
-<input id="leadingSilenceSeconds" inputmode="decimal" max="600" min="0.25" step="0.25" type="number" value="2"/>
-<span class="dialog-small" data-i18n="ui.quarter_sec_step"></span>
-<div class="dialog-actions">
-<button data-i18n="ui.cancel" id="leadingSilenceCancel" type="button"></button>
-<button class="primary" data-i18n="ui.apply" id="leadingSilenceApply" type="button"></button>
-</div>
-</form>
-</dialog>
-<dialog class="mml-dialog accompaniment-generate-dialog" id="accompanimentGenerateDialog">
-<form class="dialog-card" id="accompanimentGenerateForm" method="dialog">
-<div class="genre-arrange-title-row">
-<h3 data-i18n="ui.gen_accomp"></h3>
-</div>
-<p data-i18n="msg.analyzes_ref"></p>
-<label class="dialog-field" data-i18n="ui.accomp_genre" for="accompanimentGenerateGenre"></label>
-<select id="accompanimentGenerateGenre">
-<option data-i18n="ui.pop" selected="" value="pop"></option>
-<option data-i18n="ui.jazz" value="jazz"></option>
-<option data-i18n="ui.ballad" value="ballad"></option>
-<option data-i18n="ui.bossa_nova" value="bossa"></option>
-<option data-i18n="ui.rock" value="rock"></option>
-<option data-i18n="ui.funk" value="funk"></option>
-<option data-i18n="ui.classical" value="classical"></option>
-</select>
-<label class="dialog-field" data-i18n="ui.strength" for="accompanimentGenerateStrength"></label>
-<select id="accompanimentGenerateStrength">
-<option data-i18n="ui.light" value="light"></option>
-<option data-i18n="ui.normal" selected="" value="normal"></option>
-<option data-i18n="ui.strong" value="strong"></option>
-</select>
-<div class="genre-arrange-note">
-<strong data-i18n="ui.pop_accomp" id="accompanimentGenerateRuleTitle"></strong>
-<span data-i18n="msg.stable_harm_reg" id="accompanimentGenerateRuleText"></span>
-</div>
-<section aria-labelledby="accompanimentAnalysisTitle" class="accompaniment-channel-section">
-<div class="dialog-field-row">
-<span class="dialog-field" data-i18n="ui.ref_chs_2" id="accompanimentAnalysisTitle"></span>
-<span class="dialog-mini-actions">
-<button class="compact soft-tool-button" data-i18n="ui.select_all" id="accompanimentAnalysisSelectAll" type="button"></button>
-<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="accompanimentAnalysisSelectNone" type="button"></button>
-</span>
-</div>
-<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="msg.ref_chs">
-<label class="dialog-channel-option part-0"><input class="accompaniment-analysis-channel" data-part-index="0" type="checkbox"/> <span data-i18n="part.melody"></span></label>
-<label class="dialog-channel-option part-1"><input class="accompaniment-analysis-channel" data-part-index="1" type="checkbox"/> <span data-i18n="part.harmony1"></span></label>
-<label class="dialog-channel-option part-2"><input class="accompaniment-analysis-channel" data-part-index="2" type="checkbox"/> <span data-i18n="part.harmony2"></span></label>
-<label class="dialog-channel-option part-3"><input class="accompaniment-analysis-channel" data-part-index="3" type="checkbox"/> <span data-i18n="part.harmony3"></span></label>
-<label class="dialog-channel-option part-4"><input class="accompaniment-analysis-channel" data-part-index="4" type="checkbox"/> <span data-i18n="part.harmony4"></span></label>
-<label class="dialog-channel-option part-5"><input class="accompaniment-analysis-channel" data-part-index="5" type="checkbox"/> <span data-i18n="part.harmony5"></span></label>
-</div>
-<span class="dialog-small" data-i18n="msg.combines_notes"></span>
-</section>
-<section aria-labelledby="accompanimentTargetTitle" class="accompaniment-channel-section">
-<div class="dialog-field-row">
-<span class="dialog-field" data-i18n="msg.chs_gen" id="accompanimentTargetTitle"></span>
-<span class="dialog-mini-actions">
-<button class="compact soft-tool-button" data-i18n="ui.select_all" id="accompanimentTargetSelectAll" type="button"></button>
-<button class="compact soft-tool-button" data-i18n="ui.clear_select" id="accompanimentTargetSelectNone" type="button"></button>
-</span>
-</div>
-<div aria-label="" class="dialog-channel-grid" data-i18n-aria-label="msg.target_chs">
-<label class="dialog-channel-option part-0"><input class="accompaniment-target-channel" data-part-index="0" type="checkbox"/> <span data-i18n="part.melody"></span></label>
-<label class="dialog-channel-option part-1"><input class="accompaniment-target-channel" data-part-index="1" type="checkbox"/> <span data-i18n="part.harmony1"></span></label>
-<label class="dialog-channel-option part-2"><input class="accompaniment-target-channel" data-part-index="2" type="checkbox"/> <span data-i18n="part.harmony2"></span></label>
-<label class="dialog-channel-option part-3"><input class="accompaniment-target-channel" data-part-index="3" type="checkbox"/> <span data-i18n="part.harmony3"></span></label>
-<label class="dialog-channel-option part-4"><input class="accompaniment-target-channel" data-part-index="4" type="checkbox"/> <span data-i18n="part.harmony4"></span></label>
-<label class="dialog-channel-option part-5"><input class="accompaniment-target-channel" data-part-index="5" type="checkbox"/> <span data-i18n="part.harmony5"></span></label>
-</div>
-<span class="dialog-small" data-i18n="msg.content_chs"></span>
-</section>
-<div aria-live="polite" class="dialog-small" id="accompanimentGenerateStatus" role="status"></div>
-<div class="dialog-actions">
-<button data-i18n="ui.cancel" id="accompanimentGenerateCancel" type="button"></button>
-<button class="primary" data-i18n="ui.generate" id="accompanimentGenerateApply" type="button"></button>
-</div>
-</form>
-</dialog>
-<dialog class="mml-dialog accompaniment-confirm-dialog" id="accompanimentGenerateConfirmDialog">
-<form class="dialog-card" method="dialog">
-<h3 data-i18n="ui.confirm_accomp"></h3>
-<p data-i18n="msg.src_content"></p>
-<div aria-live="polite" class="dynamics-confirm-list" id="accompanimentGenerateConfirmList"></div>
-<p class="dialog-small" data-i18n="msg.chs_both"></p>
-<div class="dialog-actions">
-<button data-i18n="ui.go_back" id="accompanimentGenerateConfirmCancel" type="button"></button>
-<button class="primary" data-i18n="ui.generate_anyway" id="accompanimentGenerateConfirmApply" type="button"></button>
-</div>
-</form>
-</dialog>
-<dialog class="mml-dialog split-copy-dialog" id="splitCopyDialog">
-<form class="dialog-card split-copy-card" method="dialog">
-<h3 data-i18n="ui.split_copy_score"></h3>
-<div class="split-copy-options">
-<label class="dialog-field" data-i18n="msg.enter_max" for="splitCopyLimit"></label>
-<input id="splitCopyLimit" inputmode="numeric" max="5000" min="200" step="50" type="number" value="2400"/>
-</div>
-<div class="split-copy-summary" hidden="" id="splitCopySummary"></div>
-<div aria-label="" class="split-copy-pages" data-i18n-aria-label="ui.split_score" id="splitCopyPages"></div>
-<div class="dialog-actions">
-<button class="soft-tool-button" data-i18n="ui.recalculate" id="splitCopyRebuild" type="button"></button>
-<button data-i18n="ui.close" id="splitCopyClose" type="button"></button>
-</div>
-</form>
-</dialog>
 <dialog class="mml-dialog midi-dialog" id="midiConvertDialog">
 <form class="dialog-card midi-dialog-card" method="dialog">
 <h3 data-i18n="midi.conv_cfg" id="midiConvertTitle"></h3>
 <div class="midi-dialog-topline">
 <p data-i18n="mml.choose_each" id="midiConvertSummary"></p>
 </div>
-<details aria-label="" class="midi-guide-box" data-i18n-aria-label="midi.conv_cfg_guide" id="midiGuideBox">
-<summary>
-<strong data-i18n="midi.dialog_divides" id="midiGuideLead"></strong>
-<span class="midi-guide-summary-hint" data-i18n="ui.collapse_expand"></span>
-</summary>
-<div class="midi-guide-body">
-<ol>
-<li><b data-i18n="midi.listen_original"></b><span data-i18n="file.first_check"></span></li>
-<li><b data-i18n="midi.listen_mml"></b><span data-i18n="mml.hear_how"></span> <b data-i18n="ui.convert"></b><span data-i18n="mml.apply_them"></span></li>
-</ol>
-<div class="midi-guide-terms">
-<span><b data-i18n="ui.auto"></b><span data-i18n="snd.place_inst"></span></span>
-<span><b data-i18n="ui.high"></b><span data-i18n="pitch.prioritize_higher"></span></span>
-<span><b data-i18n="ui.low"></b><span data-i18n="pitch.prioritize_lower"></span></span>
-<span><b data-i18n="ui.overlap_merge"></b><span data-i18n="mml.fit_more"></span></span>
-</div>
-</div>
-</details>
 <div class="midi-dialog-layout">
 <section class="midi-dialog-section midi-left-panel">
 <div aria-label="" class="midi-role-list" data-i18n-aria-label="mml.ch_settings" id="midiRoleList"></div>
@@ -802,27 +484,13 @@
 </div>
 </form>
 </dialog>
-<script src="js/language-manager.js?v=5.1.0&amp;rev=20260823-release10"></script>
+<script src="js/app.js?v=5.1.0&amp;rev=20260823-final20"></script>
+<script src="js/language-manager.js?v=5.1.0&amp;rev=20260823-final21"></script>
 <script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.0&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/notation/notation-utils.js?v=5.1.0"></script>
 <script src="../plugins/formats/music-format-core.js?v=5.1.0&amp;rev=20260820-030000"></script>
-<script src="../plugins/formats/console-gm-normalizer.js?v=5.1.0&amp;rev=20260820-003400"></script>
-<script src="../plugins/formats/xsf/xsf-container.js?v=5.1.0&amp;rev=20260819-195600"></script>
-<script src="../plugins/formats/playstation/playstation-sequence.js?v=5.1.0&amp;rev=20260820-003400"></script>
-<script src="../plugins/formats/playstation/akao-sequence.js?v=5.1.0&amp;rev=20260823-final8"></script>
-<script src="../plugins/formats/nintendo/nintendo-sequence.js?v=5.1.0&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/xsf/format-xsf.js?v=5.1.0&amp;rev=20260820-031400"></script>
-<script src="../plugins/formats/musicxml/musicxml-to-midi.js?v=5.1.0&amp;rev=20260823-final13"></script>
-<script src="../plugins/formats/finale/finale-mus-to-midi.js?v=5.1.0&amp;rev=20260823-final8"></script>
-<script src="../plugins/formats/finale/finale-musx-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/mnx/mnx-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/musescore/musescore-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/guitarpro/vendor/guitarpro-parser/gp3-browser.js?v=5.1.0&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/guitarpro/vendor/parse-gp5/index.js?v=5.1.0&amp;rev=20260823-final8"></script>
-<script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
-<script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/xsf/format-xsf.js?v=5.1.0&amp;rev=20260823-final20"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
@@ -837,15 +505,18 @@
 <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260820-031400"></script>
 <script src="../plugins/common/mml-parser.js?v=5.1.0"></script>
 <script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260818-222500"></script>
-<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
+<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0&amp;rev=20260823-final20"></script>
 <script src="js/soundbank-cache.js?v=5.1.0"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260823-final8" type="module"></script>
-<script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
-<script async="" defer="" src="https://apis.google.com/js/api.js"></script>
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
-<script src="js/workbench.js?v=5.1.0&amp;rev=20260823-final8"></script>
-<script src="js/app.js?v=5.1.0&amp;rev=20260823-final8"></script>
+<script>
+try {
+  window.MobibardStartPlayerApp?.();
+} finally {
+  try { delete window.MobibardStartPlayerApp; } catch (_) {}
+}
+</script>
 </body>
 </html>

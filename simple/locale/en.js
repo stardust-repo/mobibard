@@ -4,7 +4,6 @@ window.__MOBIBARD_SIMPLE_LOCALES__["en"] = {
   "name": "English",
   "htmlLang": "en",
   "strings": {
-    "eyebrow": "Supported music files → MML",
     "title": "MML Simple Generator",
     "brand": "Mobibard",
     "browserTitle": "Mobibard v5.1",
@@ -12,7 +11,6 @@ window.__MOBIBARD_SIMPLE_LOCALES__["en"] = {
     "full": "Detailed mode",
     "discord": "Discord",
     "extract": "MIDI Extractor",
-    "settings": "Settings",
     "language": "Language",
     "themeLabel": "Theme",
     "theme": "Toggle theme",

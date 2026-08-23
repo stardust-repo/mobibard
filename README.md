@@ -29,6 +29,8 @@
 - 그룹형 파일 선택 API가 없는 환경에서는 기존 `accept` 기반 파일 입력으로 자동 대체됩니다.
 - 지원 파일 팝업은 성격별로 `표준 음악 · 악보`, `음악 편집기`, `콘솔`, `보컬 편집기`, `프로젝트 · MML`, `오디오`로 구분합니다. MIDI·MusicXML·MNX는 표준 음악·악보에, Finale·MuseScore·Guitar Pro는 음악 편집기에, PlayStation·Nintendo는 콘솔에 배치합니다. 보컬 편집기는 VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO를 제품군별로 분리하고 같은 제품의 확장자만 한 카드에 묶습니다. Finale와 Guitar Pro의 묶음 카드에도 실제 MIDI 변환 범위와 단순화되는 정보를 표시합니다.
 - 공용 Guest 아이콘은 자체 배경이 없는 사람 실루엣만 포함하며, 각 제품의 계정 버튼이 배경과 hover 상태를 담당합니다.
+- 공용 재생 컨트롤 아이콘은 `assets/icons/play.svg`, `assets/icons/stop.svg`, `assets/icons/first.svg`, `assets/icons/last.svg`를 사용하며 Simple·Player·Editor가 동일한 SVG 자산을 공유합니다.
+- Player는 별도 스킨 계층 없이 `player/styles.css`와 `player/js/app.js`만 사용하며 현재 출시 UI와 기능 코드가 이 두 파일에 통합되어 있습니다.
 - 공용 MML 최적화기에 템포 정리를 추가했습니다. 사용자 안내는 `선행 템포와의 편차가 5 미만인 템포들을 삭제합니다.`로 단순화했습니다. Simple과 Player는 동일한 판정 규칙을 사용하며, Player의 자동 선행 무음용 T120은 템포 정리의 음악적 최저·최고/선행 템포 판정에서 제외합니다.
 - Simple과 Player의 화면 제목은 제품명과 버전 표시를 분리하고, 버전 글씨를 제목 글씨의 정확히 절반 크기로 표시합니다. Player 계정 버튼은 모든 화면 폭과 상호작용 상태에서 38×38 정사각형으로 통일하고, 테마 변경 버튼에는 Simple과 같은 `◐` 표식을 사용합니다.
 

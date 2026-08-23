@@ -103,14 +103,17 @@
 - Player 재생/프리뷰를 정지한 후 MobiBeats를 엽니다.
 - `MML_RHYTHM_READY / LOADED / ERROR / CLOSE`를 처리합니다.
 
+
+## UI 구조
+
+Player는 별도 스킨 파일을 사용하지 않습니다. 현재 출시 UI는 `styles.css`와 `js/app.js`에 직접 통합되어 있으며, 페이지는 최초 렌더부터 이 UI만 표시합니다.
+
 ## 주요 구현 파일
 
 ```text
 player/index.html
 player/styles.css
-player/workbench.css
 player/js/app.js
-player/js/workbench.js
 plugins/common/
 plugins/formats/
 ```

@@ -5039,6 +5039,30 @@
     elements.midiImportSummary.replaceChildren(fragment);
   }
 
+  function setTransportButtonContent(button, { icon = "", label = "", glyph = "" } = {}) {
+    if (!button) return;
+    const nodes = [];
+    if (icon) {
+      const iconNode = document.createElement("span");
+      iconNode.className = `shared-transport-icon shared-icon-${icon}`;
+      iconNode.setAttribute("aria-hidden", "true");
+      nodes.push(iconNode);
+    } else if (glyph) {
+      const glyphNode = document.createElement("span");
+      glyphNode.className = glyph === "…" ? "transport-loading-glyph" : "transport-stop-glyph";
+      glyphNode.setAttribute("aria-hidden", "true");
+      glyphNode.textContent = glyph;
+      nodes.push(glyphNode);
+    }
+    if (label) {
+      const labelNode = document.createElement("span");
+      labelNode.className = "transport-button-label";
+      labelNode.textContent = label;
+      nodes.push(labelNode);
+    }
+    button.replaceChildren(...nodes);
+  }
+
   function renderMidiImportSelectionList() {
     if (!elements.midiImportSelectionList) return;
     elements.midiImportSelectionList.replaceChildren();
@@ -5071,7 +5095,8 @@
         previewButton.type = "button";
         const previewKey = `group:${group.id}`;
         previewButton.className = "midi-import-row-preview";
-        previewButton.textContent = state.midiImport.previewingKey === previewKey ? "■ 정지" : "▶ 듣기";
+        if (state.midiImport.previewingKey === previewKey) setTransportButtonContent(previewButton, { icon: "stop", label: "정지" });
+        else setTransportButtonContent(previewButton, { icon: "play", label: "듣기" });
         previewButton.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -5133,11 +5158,13 @@
     if (elements.midiImportPreviewSelectedButton) {
       const selectedReady = midiReady && getMidiImportSelectedGroups().length > 0;
       elements.midiImportPreviewSelectedButton.disabled = !selectedReady;
-      elements.midiImportPreviewSelectedButton.textContent = state.midiImport.previewingKey === "selected" ? "■ 선택 정지" : "▶ 선택 듣기";
+      if (state.midiImport.previewingKey === "selected") setTransportButtonContent(elements.midiImportPreviewSelectedButton, { icon: "stop", label: "선택 정지" });
+      else setTransportButtonContent(elements.midiImportPreviewSelectedButton, { icon: "play", label: "선택 듣기" });
     }
     if (elements.midiImportPreviewAllButton) {
       elements.midiImportPreviewAllButton.disabled = !midiReady;
-      elements.midiImportPreviewAllButton.textContent = state.midiImport.previewingKey === "all" ? "■ 원본 정지" : "▶ 원본 듣기";
+      if (state.midiImport.previewingKey === "all") setTransportButtonContent(elements.midiImportPreviewAllButton, { icon: "stop", label: "원본 정지" });
+      else setTransportButtonContent(elements.midiImportPreviewAllButton, { icon: "play", label: "원본 듣기" });
     }
     updateMidiImportSummary();
     renderMidiImportSelectionList();
@@ -10372,16 +10399,22 @@
   function updatePlayButton() {
     if (state.playback.loading) {
       elements.playButton.setAttribute("aria-pressed", "true");
-      elements.playButton.textContent = "… 재생 준비";
+      elements.playButton.setAttribute("aria-label", "재생 준비");
+      elements.playButton.title = "재생 준비";
+      setTransportButtonContent(elements.playButton, { glyph: "…" });
       return;
     }
     if (state.playback.running) {
       elements.playButton.setAttribute("aria-pressed", "true");
-      elements.playButton.textContent = "■ 정지";
+      elements.playButton.setAttribute("aria-label", "정지");
+      elements.playButton.title = "정지";
+      setTransportButtonContent(elements.playButton, { icon: "stop" });
       return;
     }
     elements.playButton.setAttribute("aria-pressed", "false");
-    elements.playButton.textContent = "▶ 재생";
+    elements.playButton.setAttribute("aria-label", "재생");
+    elements.playButton.title = "재생";
+    setTransportButtonContent(elements.playButton, { icon: "play" });
   }
 
 

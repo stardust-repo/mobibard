@@ -2,8 +2,13 @@
   "use strict";
   const root = typeof window !== "undefined" ? window : globalThis;
   const core = root.MabiMusicFormats;
-  const xsf = root.MabiXsf;
-  if (!core || !xsf) throw new Error("music-format-core.js and xsf-container.js must be loaded before format-xsf.js");
+  if (!core) throw new Error("music-format-core.js must be loaded before format-xsf.js");
+
+  function getXsf() {
+    const api = root.MabiXsf;
+    if (!api) throw new Error("xSF 컨테이너 변환 모듈을 불러오지 못했습니다.");
+    return api;
+  }
 
   function midiSlice(bytes, offset) {
     if (offset < 0 || offset + 14 > bytes.length) return null;
@@ -21,11 +26,13 @@
   }
 
   function findMidi(bytes) {
+    const xsf = getXsf();
     const at = xsf.findAscii(bytes, "MThd");
     return at >= 0 ? midiSlice(bytes, at) : null;
   }
 
   function findPs1Sequence(bytes) {
+    const xsf = getXsf();
     let cursor = 0;
     while (cursor + 13 <= bytes.length) {
       const at = xsf.findAscii(bytes, "pQES", cursor);
@@ -45,6 +52,7 @@
   }
 
   function findAkaoSequence(bytes, options = {}, diagnostics = []) {
+    const xsf = getXsf();
     const akao = root.MabiAkaoSequence;
     if (!akao?.parse) return null;
     let cursor = 0;
@@ -61,6 +69,7 @@
   }
 
   function findPs2Sequence(bytes) {
+    const xsf = getXsf();
     let cursor = 0;
     while (cursor + 0x44 <= bytes.length) {
       const at = xsf.findAscii(bytes, "SCEIVers", cursor);
@@ -86,6 +95,7 @@
   }
 
   function convertPlayStationXsf(bytes, fileName) {
+    const xsf = getXsf();
     const parsed = xsf.parse(bytes);
     if (parsed.version !== 0x01 && parsed.version !== 0x02) throw new Error(`지원하지 않는 PlayStation xSF 버전입니다: 0x${parsed.version.toString(16)}`);
     const libraries = xsf.libraryNames(parsed.tags);
@@ -119,6 +129,7 @@
   }
 
   function scanNintendoBuffers(buffers) {
+    const xsf = getXsf();
     const magics = ["SDAT", "SSEQ", "SSAR", "RSEQ", "CSEQ", "FSEQ", "RSAR", "CSAR", "FSAR"];
     for (const item of buffers) {
       const hit = xsf.findStructured(item.bytes, magics);
@@ -137,6 +148,7 @@
   }
 
   function convertNintendoXsf(bytes, fileName) {
+    const xsf = getXsf();
     const parsed = xsf.parse(bytes);
     const libraries = xsf.libraryNames(parsed.tags);
     const buffers = [{ name: "program", bytes: parsed.program }, { name: "reserved", bytes: parsed.reserved }].filter(item => item.bytes.length);

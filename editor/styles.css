@@ -216,6 +216,47 @@ textarea:focus-visible,
 .toolbar-separator { flex: 0 0 1px; width: 1px; height: 28px; margin: 0 3px; background: var(--line); }
 .transport-edge-button { min-width: 38px; padding-inline: 8px; font-variant-numeric: tabular-nums; }
 .transport-main-button { min-width: 78px; }
+.shared-transport-icon {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  background-color: transparent;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  vertical-align: middle;
+}
+.shared-icon-play {
+  background-image: url("../assets/icons/play.svg");
+}
+.shared-icon-stop {
+  background-image: url("../assets/icons/stop.svg");
+}
+.shared-icon-first {
+  background-image: url("../assets/icons/first.svg");
+}
+.shared-icon-last {
+  background-image: url("../assets/icons/last.svg");
+}
+.shared-transport-icon { filter: invert(1); }
+:root[data-theme="light"] .shared-transport-icon { filter: none; }
+.transport-main-button,
+.midi-import-source-preview,
+.midi-import-row-preview {
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.transport-main-button,
+.midi-import-source-preview,
+.midi-import-row-preview { display: inline-flex; }
+.transport-stop-glyph, .transport-loading-glyph {
+  display: inline-block;
+  flex: 0 0 auto;
+  font-size: 13px;
+  line-height: 1;
+}
 
 .playback-time {
   min-width: 140px;
@@ -1242,9 +1283,9 @@ button {
 
 @media (max-width: 800px) and (min-width: 721px) {
   .brand { display: none; }
-  .transport-main-button { width: 34px; min-width: 34px; padding: 0; font-size: 0; }
-  .transport-main-button::before { content: "▶"; font-size: 13px; }
-  .transport-main-button[aria-pressed="true"]::before { content: "■"; }
+  .transport-main-button { width: 34px; min-width: 34px; padding: 0; }
+  .transport-main-button .transport-button-label { display: none; }
+  .transport-main-button .shared-transport-icon { width: 17px; height: 17px; }
   .playback-time { min-width: 104px; }
 }
 
@@ -4481,4 +4522,31 @@ button {
 .popup-backdrop > .unified-import-dialog,
 .popup-backdrop > .mml-export-dialog {
   max-width: 100%;
+}
+
+/* final18: main transport play control is icon-only */
+.transport-control-group .transport-main-button {
+  width: 38px;
+  min-width: 38px;
+  padding-inline: 0;
+}
+@media (max-width: 760px) {
+  .transport-control-group .transport-main-button {
+    width: 34px;
+    min-width: 34px;
+    padding-inline: 0;
+  }
+}
+
+/* final21: keep all transport SVG icons centered on the same horizontal axis. */
+.transport-control-group > .transport-edge-button,
+.transport-control-group > .transport-main-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.transport-control-group > button .shared-transport-icon {
+  margin: 0;
+  vertical-align: initial;
 }

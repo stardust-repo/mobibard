@@ -8,7 +8,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <title>모비바드 v5.1</title>
 <link href="../assets/favicon.ico" rel="icon"/>
-<link href="styles.css?v=5.1.0&amp;rev=20260823-release9" rel="stylesheet"/>
+<link href="styles.css?v=5.1.0&amp;rev=20260823-final21" rel="stylesheet"/>
 </head>
 <body>
 <div data-context-area="app" id="app">
@@ -34,9 +34,9 @@
 <div class="toolbar-separator"></div>
 <div class="toolbar-group transport-actions">
 <div aria-label="재생 위치 및 재생" class="transport-control-group" role="group">
-<button aria-label="맨 처음으로 이동" class="transport-edge-button" id="jumpStartButton" title="맨 처음으로 이동" type="button">|◀</button>
-<button aria-pressed="false" class="transport-main-button" id="playButton" type="button">▶ 재생</button>
-<button aria-label="맨 뒤로 이동" class="transport-edge-button" id="jumpEndButton" title="맨 뒤로 이동" type="button">▶|</button>
+<button aria-label="맨 처음으로 이동" class="transport-edge-button" id="jumpStartButton" title="맨 처음으로 이동" type="button"><span class="shared-transport-icon shared-icon-first" aria-hidden="true"></span></button>
+<button aria-label="재생" aria-pressed="false" class="transport-main-button" id="playButton" title="재생" type="button"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span></button>
+<button aria-label="맨 뒤로 이동" class="transport-edge-button" id="jumpEndButton" title="맨 뒤로 이동" type="button"><span class="shared-transport-icon shared-icon-last" aria-hidden="true"></span></button>
 </div>
 <span class="playback-time" id="playbackTime" title="현재 재생 위치 / 전체 재생 시간">0:00.000 / 0:00.000</span>
 <div class="volume-control">
@@ -253,7 +253,7 @@
 <div class="midi-import-selection-actions midi-import-inline-selection-actions" id="midiImportSelectionActions"><button id="midiImportSelectAllButton" type="button">모두 선택</button><button id="midiImportClearAllButton" type="button">모두 해제</button></div>
 <select aria-label="MIDI 양자화" id="midiImportQuantize"><option selected="" value="64">64박 양자화</option><option value="32">32박 양자화</option></select>
 <label class="midi-import-overlap-option"><input checked="" id="midiImportIgnoreSingle64thOverlap" type="checkbox"/><span>64박 겹침 무시</span></label>
-<div class="midi-import-preview-actions"><button class="midi-import-source-preview" id="midiImportPreviewSelectedButton" type="button">▶ 선택 듣기</button><button class="midi-import-source-preview" id="midiImportPreviewAllButton" type="button">▶ 원본 듣기</button></div>
+<div class="midi-import-preview-actions"><button class="midi-import-source-preview" id="midiImportPreviewSelectedButton" type="button"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span><span class="transport-button-label">선택 듣기</span></button><button class="midi-import-source-preview" id="midiImportPreviewAllButton" type="button"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span><span class="transport-button-label">원본 듣기</span></button></div>
 </div>
 <div class="midi-import-selection-actions midi-import-text-selection-actions" hidden="" id="midiImportTextSelectionActions"><button id="midiImportTextSelectAllButton" type="button">모두 선택</button><button id="midiImportTextClearAllButton" type="button">모두 해제</button></div>
 <div class="midi-import-selection-list" id="midiImportSelectionList"></div>
@@ -343,6 +343,6 @@
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
 <script src="js/soundbank-player.js?v=5.1.0"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260820-031400"></script>
-<script src="app.js?v=5.1.0&amp;rev=20260823-release9"></script>
+<script src="app.js?v=5.1.0&amp;rev=20260823-final18"></script>
 </body>
 </html>

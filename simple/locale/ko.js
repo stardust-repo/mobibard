@@ -4,7 +4,6 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ko"] = {
   "name": "한국어",
   "htmlLang": "ko",
   "strings": {
-    "eyebrow": "지원 음악 파일 → MML",
     "title": "MML 간편 생성기",
     "brand": "모비바드",
     "browserTitle": "모비바드 v5.1",
@@ -12,7 +11,6 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ko"] = {
     "full": "상세 모드",
     "discord": "디스코드",
     "extract": "MIDI 추출",
-    "settings": "설정",
     "language": "언어",
     "themeLabel": "테마",
     "theme": "테마 변경",

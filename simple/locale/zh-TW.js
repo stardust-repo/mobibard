@@ -4,7 +4,6 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-TW"] = {
   "name": "繁體中文",
   "htmlLang": "zh-Hant",
   "strings": {
-    "eyebrow": "支援的音樂檔案 → MML",
     "title": "MML 簡易產生器",
     "brand": "Mobibard",
     "browserTitle": "Mobibard v5.1",
@@ -12,7 +11,6 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-TW"] = {
     "full": "詳細模式",
     "discord": "Discord",
     "extract": "MIDI 擷取",
-    "settings": "設定",
     "language": "語言",
     "themeLabel": "主題",
     "theme": "切換主題",

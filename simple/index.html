@@ -1,25 +1,26 @@
-<!doctype html>
-<html lang="ko" data-theme="light">
+<!DOCTYPE html>
+
+<html data-theme="light" lang="ko">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <title>모비바드 v5.1</title>
-  <link rel="icon" href="../assets/favicon.ico">
-  <link rel="alternate" hreflang="ko" href="https://stardust-repo.github.io/mobibard/simple/?lang=ko">
-  <link rel="alternate" hreflang="ja" href="https://stardust-repo.github.io/mobibard/simple/?lang=ja">
-  <link rel="alternate" hreflang="en" href="https://stardust-repo.github.io/mobibard/simple/?lang=en">
-  <link rel="alternate" hreflang="zh-CN" href="https://stardust-repo.github.io/mobibard/simple/?lang=zh-CN">
-  <link rel="alternate" hreflang="zh-TW" href="https://stardust-repo.github.io/mobibard/simple/?lang=zh-TW">
-  <link rel="alternate" hreflang="x-default" href="https://stardust-repo.github.io/mobibard/simple/">
-  <script>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="light dark" name="color-scheme"/>
+<title>모비바드 v5.1</title>
+<link href="../assets/favicon.ico" rel="icon"/>
+<link href="https://stardust-repo.github.io/mobibard/simple/?lang=ko" hreflang="ko" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/simple/?lang=ja" hreflang="ja" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/simple/?lang=en" hreflang="en" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/simple/?lang=zh-CN" hreflang="zh-CN" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/simple/?lang=zh-TW" hreflang="zh-TW" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/simple/" hreflang="x-default" rel="alternate"/>
+<script>
     try {
       document.documentElement.dataset.theme = localStorage.getItem("mobibard.player.theme") === "dark" ? "dark" : "light";
     } catch (_) {
       document.documentElement.dataset.theme = "light";
     }
   </script>
-  <script>
+<script>
   (() => {
     "use strict";
     const files = { ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" };
@@ -58,244 +59,234 @@
     const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
     if (localeUrl.protocol !== "file:") {
       localeUrl.searchParams.set("v", "5.1.0");
-      localeUrl.searchParams.set("rev", "20260823-release5");
+      localeUrl.searchParams.set("rev", "20260823-final21");
     }
     document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   })();
   </script>
-  <link rel="stylesheet" href="./styles.css?v=5.1.0&rev=20260823-final6">
+<link href="./styles.css?v=5.1.0&amp;rev=20260823-final19" rel="stylesheet"/>
 </head>
 <body>
-  <header class="topbar simple-topbar">
-    <div class="topbar-inner">
-      <a class="brand" href="./index.html" aria-label="Mobibard Simple MML">
-        <span class="brand-mark" aria-hidden="true"></span>
-        <span id="brandName">모비바드</span>
-      </a>
-      <div class="top-actions">
-        <div class="simple-top-external">
-          <a id="midiExtractLink" class="top-link" href="https://muscriptor.kyutai.org/" target="_blank" rel="noopener noreferrer">MIDI 추출</a>
-        </div>
-        <div class="header-links" aria-label="추천 사이트">
-          <select id="midiSiteLinks" class="midi-site-links" aria-label="추천 사이트 선택">
-            <option value="">추천 사이트</option>
-            <option value="https://bitmidi.com/">BitMidi</option>
-            <option value="https://www.classicalarchives.com/midi.html">ClassicalArchives</option>
-            <option value="https://ichigos.com/">Ichigo's</option>
-            <option value="https://josh.agarrado.net/music/anime/index.php">Josh's Anime</option>
-            <option value="http://www.midiex.net/">MIDIEX</option>
-            <option value="http://www.midisite.co.uk/">Midisite</option>
-            <option value="https://musescore.com/">MuseScore</option>
-            <option value="https://www.vgmusic.com/">VGMusic</option>
-            <option value="https://www.zophar.net/">Zophar's Domain</option>
-          </select>
-          <a id="discordLink" class="discord-link" href="https://discord.gg/qqwzCERZK5" target="_blank" rel="noopener noreferrer" aria-label="디스코드" title="디스코드">
-            <img alt="" decoding="async" src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d7f4ef6498ac018f2c55_Symbol.svg">
-          </a>
-        </div>
-        <div id="settingsControl" class="account-menu-wrap">
-          <button id="settingsButton" class="account-avatar-button" type="button" aria-label="계정" title="계정" aria-haspopup="dialog" aria-expanded="false" aria-controls="settingsMenu" data-connected="false">
-            <img id="accountAvatarImg" class="account-avatar-image" alt="" decoding="async" referrerpolicy="no-referrer" src="../assets/icons/guest-user.svg?v=5.1.0&amp;rev=20260818-205217">
-          </button>
-          <div id="settingsMenu" class="account-menu-popover" role="dialog" aria-label="계정" aria-labelledby="settingsButton" hidden>
-            <div class="account-menu-header">
-              <div class="account-menu-identity">
-                <strong id="accountMenuName">게스트</strong>
-                <span id="accountMenuEmail" class="account-menu-email" hidden></span>
-              </div>
-            </div>
-            <button id="googleLoginBtn" class="account-login-button google-login-button" type="button">
-              <span class="google-icon-badge" aria-hidden="true"><img class="google-g-icon" alt="" decoding="async" src="../assets/icons/google-g.png"></span>
-              <span id="googleLoginLabel" class="google-login-label">로그인</span>
-            </button>
-            <div class="account-menu-divider" aria-hidden="true"></div>
-            <label class="account-menu-field" for="languageSelect">
-              <span class="account-menu-field-label" id="languageLabel">언어</span>
-              <select id="languageSelect" class="language-select" aria-labelledby="languageLabel">
-                <option value="ko">한국어</option>
-                <option value="ja">日本語</option>
-                <option value="en">English</option>
-                <option value="zh-CN">简体中文</option>
-                <option value="zh-TW">繁體中文</option>
-              </select>
-            </label>
-            <div class="account-menu-field">
-              <span class="account-menu-field-label" id="themeLabel">테마</span>
-              <button id="themeButton" class="theme-menu-button" type="button" aria-labelledby="themeLabel themeButtonText" title="테마 변경">
-                <span class="theme-menu-icon" aria-hidden="true">◐</span>
-                <span id="themeButtonText">테마 변경</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </header>
+<header class="topbar simple-topbar">
+<div class="topbar-inner">
+<a aria-label="Mobibard Simple MML" class="brand" href="./index.html">
+<span aria-hidden="true" class="brand-mark"></span>
+<span id="brandName">모비바드</span>
+</a>
+<div class="top-actions">
+<div class="simple-top-external">
+<a class="top-link" href="https://muscriptor.kyutai.org/" id="midiExtractLink" rel="noopener noreferrer" target="_blank">MIDI 추출</a>
+</div>
+<div aria-label="추천 사이트" class="header-links">
+<select aria-label="추천 사이트 선택" class="midi-site-links" id="midiSiteLinks">
+<option value="">추천 사이트</option>
+<option value="https://bitmidi.com/">BitMidi</option>
+<option value="https://www.classicalarchives.com/midi.html">ClassicalArchives</option>
+<option value="https://ichigos.com/">Ichigo's</option>
+<option value="https://josh.agarrado.net/music/anime/index.php">Josh's Anime</option>
+<option value="http://www.midiex.net/">MIDIEX</option>
+<option value="http://www.midisite.co.uk/">Midisite</option>
+<option value="https://musescore.com/">MuseScore</option>
+<option value="https://www.vgmusic.com/">VGMusic</option>
+<option value="https://www.zophar.net/">Zophar's Domain</option>
+</select>
+<a aria-label="디스코드" class="discord-link" href="https://discord.gg/qqwzCERZK5" id="discordLink" rel="noopener noreferrer" target="_blank" title="디스코드">
+<img alt="" decoding="async" src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d7f4ef6498ac018f2c55_Symbol.svg"/>
+</a>
+</div>
+<div class="account-menu-wrap" id="settingsControl">
+<button aria-controls="settingsMenu" aria-expanded="false" aria-haspopup="dialog" aria-label="계정" class="account-avatar-button" data-connected="false" id="settingsButton" title="계정" type="button">
+<img alt="" class="account-avatar-image" decoding="async" id="accountAvatarImg" referrerpolicy="no-referrer" src="../assets/icons/guest-user.svg?v=5.1.0&amp;rev=20260818-205217"/>
+</button>
+<div aria-label="계정" aria-labelledby="settingsButton" class="account-menu-popover" hidden="" id="settingsMenu" role="dialog">
+<div class="account-menu-header">
+<div class="account-menu-identity">
+<strong id="accountMenuName">게스트</strong>
+<span class="account-menu-email" hidden="" id="accountMenuEmail"></span>
+</div>
+</div>
+<button class="account-login-button google-login-button" id="googleLoginBtn" type="button">
+<span aria-hidden="true" class="google-icon-badge"><img alt="" class="google-g-icon" decoding="async" src="../assets/icons/google-g.png"/></span>
+<span class="google-login-label" id="googleLoginLabel">로그인</span>
+</button>
+<div aria-hidden="true" class="account-menu-divider"></div>
+<label class="account-menu-field" for="languageSelect">
+<span class="account-menu-field-label" id="languageLabel">언어</span>
+<select aria-labelledby="languageLabel" class="language-select" id="languageSelect">
+<option value="ko">한국어</option>
+<option value="ja">日本語</option>
+<option value="en">English</option>
+<option value="zh-CN">简体中文</option>
+<option value="zh-TW">繁體中文</option>
+</select>
+</label>
+<div class="account-menu-field">
+<span class="account-menu-field-label" id="themeLabel">테마</span>
+<button aria-labelledby="themeLabel themeButtonText" class="theme-menu-button" id="themeButton" title="테마 변경" type="button">
+<span aria-hidden="true" class="theme-menu-icon">◐</span>
+<span id="themeButtonText">테마 변경</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</header>
+<main class="page-shell">
+<section aria-labelledby="pageTitle" class="converter">
+<div class="simple-title-row">
+<div class="title-block">
+<h1 id="pageTitle"><span id="pageTitleText">MML 간편 생성기</span><span class="title-version">v5.1</span></h1>
+<p class="subtitle" id="subtitle">파일을 넣으면 3채널 MML로 바로 변환합니다.</p>
+</div>
+<div aria-label="모드 이동" class="simple-mode-actions">
+<button aria-controls="simpleRhythmGameLayer" aria-haspopup="dialog" class="mode-action-button" id="mobibeatsLink" type="button">모비비트</button>
+<a class="mode-action-button" href="../player/index.html" id="fullEditorLink">상세 모드</a>
+</div>
+</div>
+<div aria-controls="midiFileInput" class="drop-zone" id="dropZone" role="button" tabindex="0">
+<input accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,application/musicxml+xml,application/xml,text/xml" data-music-format-input="" hidden="" id="midiFileInput" type="file"/>
+<button class="mabi-supported-files-button" data-supported-files-button="" data-supported-files-context="simple" type="button">지원 파일</button>
+<div class="simple-source-actions">
+<button class="file-button simple-source-primary" id="fileButton" type="button">로컬 파일</button>
+<button class="file-button simple-source-secondary" id="googleFileButton" type="button">구글 파일</button>
+<button class="file-button simple-source-secondary" id="pasteButton" type="button">붙여넣기</button>
+</div>
+<p class="drop-hint" id="dropHint">또는 파일을 여기에 드롭하세요</p>
+<p class="file-name" hidden="" id="fileName"></p>
+</div>
+<div class="options-stack">
+<div class="option-block option-block-quantize">
+<span class="option-label" id="quantizeLabel">양자화</span>
+<div aria-labelledby="quantizeLabel" class="segmented quantize-options" id="quantizeOptions" role="radiogroup">
+<button aria-checked="true" class="segment active" data-quantize="64" role="radio" type="button">64박</button>
+<button aria-checked="false" class="segment" data-quantize="32" role="radio" type="button">32박</button>
+</div>
+</div>
+<div class="option-block option-block-rest">
+<span class="option-label" id="restLabel">쉼표 제거</span>
+<div aria-labelledby="restLabel" class="segmented rest-options" id="restOptions" role="radiogroup">
+<button aria-checked="false" class="segment" data-rest="keep" role="radio" type="button">그대로</button>
+<button aria-checked="false" class="segment" data-rest="64" role="radio" type="button">64박 이하</button>
+<button aria-checked="true" class="segment active" data-rest="32" role="radio" type="button">32박 이하</button>
+<button aria-checked="false" class="segment" data-rest="16" role="radio" type="button">16박 이하</button>
+<button aria-checked="false" class="segment" data-rest="8" role="radio" type="button">8박 이하</button>
+<button aria-checked="false" class="segment" data-rest="4" role="radio" type="button">4박 이하</button>
+<button aria-checked="false" class="segment" data-rest="all" id="allRestButton" role="radio" type="button">모두</button>
+</div>
+</div>
+</div>
 
-  <main class="page-shell">
-    <section class="converter" aria-labelledby="pageTitle">
-      <div class="simple-title-row">
-        <div class="title-block">
-                <h1 id="pageTitle"><span id="pageTitleText">MML 간편 생성기</span><span class="title-version">v5.1</span></h1>
-          <p id="subtitle" class="subtitle">파일을 넣으면 3채널 MML로 바로 변환합니다.</p>
-        </div>
-        <div class="simple-mode-actions" aria-label="모드 이동">
-          <button id="mobibeatsLink" class="mode-action-button" type="button" aria-controls="simpleRhythmGameLayer" aria-haspopup="dialog">모비비트</button>
-          <a id="fullEditorLink" class="mode-action-button" href="../player/index.html">상세 모드</a>
-        </div>
-      </div>
-
-      <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-controls="midiFileInput">
-        <input id="midiFileInput" data-music-format-input type="file" accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,application/musicxml+xml,application/xml,text/xml" hidden>
-        <button class="mabi-supported-files-button" data-supported-files-button data-supported-files-context="simple" type="button">지원 파일</button>
-        <div class="simple-source-actions">
-          <button id="fileButton" class="file-button simple-source-primary" type="button">로컬 파일</button>
-          <button id="googleFileButton" class="file-button simple-source-secondary" type="button">구글 파일</button>
-          <button id="pasteButton" class="file-button simple-source-secondary" type="button">붙여넣기</button>
-        </div>
-        <p id="dropHint" class="drop-hint">또는 파일을 여기에 드롭하세요</p>
-        <p id="fileName" class="file-name" hidden></p>
-      </div>
-
-      <div class="options-stack">
-        <div class="option-block option-block-quantize">
-          <span id="quantizeLabel" class="option-label">양자화</span>
-          <div id="quantizeOptions" class="segmented quantize-options" role="radiogroup" aria-labelledby="quantizeLabel">
-            <button type="button" class="segment active" data-quantize="64" role="radio" aria-checked="true">64박</button>
-            <button type="button" class="segment" data-quantize="32" role="radio" aria-checked="false">32박</button>
-          </div>
-        </div>
-        <div class="option-block option-block-rest">
-          <span id="restLabel" class="option-label">쉼표 제거</span>
-          <div id="restOptions" class="segmented rest-options" role="radiogroup" aria-labelledby="restLabel">
-            <button type="button" class="segment" data-rest="keep" role="radio" aria-checked="false">그대로</button>
-            <button type="button" class="segment" data-rest="64" role="radio" aria-checked="false">64박 이하</button>
-            <button type="button" class="segment active" data-rest="32" role="radio" aria-checked="true">32박 이하</button>
-            <button type="button" class="segment" data-rest="16" role="radio" aria-checked="false">16박 이하</button>
-            <button type="button" class="segment" data-rest="8" role="radio" aria-checked="false">8박 이하</button>
-            <button type="button" class="segment" data-rest="4" role="radio" aria-checked="false">4박 이하</button>
-            <button id="allRestButton" type="button" class="segment" data-rest="all" role="radio" aria-checked="false">모두</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="status" class="status simple-legacy-status" role="status" aria-live="polite" hidden></div>
-
-      <div id="playbackControls" class="playback-controls" hidden>
-        <div class="simple-playback-actions">
-          <button id="playButton" class="play-button icon-playback-button" type="button" disabled aria-label="재생" title="재생">
-            <svg class="simple-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.8v12.4L18 12 8 5.8Z"></path></svg>
-            <svg class="simple-stop-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"></rect></svg>
-          </button>
-          <button id="rewindButton" class="play-button icon-playback-button" type="button" disabled aria-label="처음으로" title="처음으로">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h2v14H4V5Zm8.5 1.5v11L6.5 12l6-5.5Zm7 0v11l-6-5.5 6-5.5Z"></path></svg>
-          </button>
-        </div>
-        <input id="playbackSlider" class="playback-slider" type="range" min="0" max="0" step="0.01" value="0" disabled aria-label="MML 재생 위치">
-      </div>
-
-      <section id="results" class="results" aria-labelledby="resultsTitle" hidden>
-        <div class="copy-item full-score-item">
-          <div class="copy-meta">
-            <strong id="fullScoreTitle" class="copy-title">전체 악보</strong>
-            <span id="fullScoreDetail" class="copy-detail"></span>
-          </div>
-          <div class="full-score-actions">
-            <button id="localSaveAllButton" class="copy-button" type="button">로컬 저장</button>
-            <button id="googleSaveAllButton" class="copy-button" type="button">구글 저장</button>
-            <button id="copyAllButton" class="copy-button" type="button">복사</button>
-          </div>
-        </div>
-        <div id="splitResults" class="split-results">
-          <div class="results-head">
-            <h2 id="resultsTitle">분할 악보</h2>
-            <span id="resultsSummary" class="results-summary"></span>
-          </div>
-          <div id="copyButtons" class="copy-buttons"></div>
-        </div>
-      </section>
-    </section>
-  </main>
-
-  <dialog id="pasteDialog" class="simple-dialog">
-    <form id="pasteForm" class="simple-dialog-card" method="dialog">
-      <header class="simple-dialog-header">
-        <h2 id="pasteDialogTitle">MML 붙여넣기</h2>
-        <button id="pasteDialogClose" class="simple-dialog-close" type="button" aria-label="닫기" title="닫기">×</button>
-      </header>
-      <div class="simple-dialog-body">
-        <p id="pasteDialogHint">MML 코드를 붙여넣으면 바로 불러옵니다.</p>
-        <textarea id="pasteText" rows="10" spellcheck="false" placeholder="MML@...;"></textarea>
-      </div>
-      <footer class="simple-dialog-actions">
-        <button id="pasteCancelButton" type="button">취소</button>
-        <button id="pasteApplyButton" class="primary" type="submit">불러오기</button>
-      </footer>
-    </form>
-  </dialog>
-
-  <div id="simpleToast" class="simple-toast" role="status" aria-live="polite" hidden></div>
-
-  <section id="simpleRhythmGameLayer" class="simple-rhythm-game-layer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="simpleRhythmGameLayerTitle" hidden>
-    <header class="simple-rhythm-game-layer-head">
-      <div class="simple-rhythm-game-layer-title">
-        <strong id="simpleRhythmGameLayerTitle">모비비트</strong>
-        <span id="simpleRhythmGameStatus" role="status" aria-live="polite">준비 중</span>
-      </div>
-      <button id="simpleRhythmGameClose" class="simple-rhythm-game-layer-close" type="button">생성기로 돌아가기</button>
-    </header>
-    <div class="simple-rhythm-game-frame-wrap">
-      <div id="simpleRhythmGameLoading" class="simple-rhythm-game-loading" role="status" aria-live="polite">
-        <span class="simple-rhythm-game-loading-spinner" aria-hidden="true"></span>
-        <strong id="simpleRhythmGameLoadingText">모비비트를 불러오는 중입니다.</strong>
-        <small>../mobibeats/</small>
-      </div>
-      <iframe id="simpleRhythmGameFrame" class="simple-rhythm-game-frame" src="about:blank" data-src="../mobibeats/" title="모비비트 MML 리듬게임" allow="autoplay; fullscreen" allowfullscreen></iframe>
-    </div>
-  </section>
-
-  <script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
-  <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
-  <script src="../plugins/formats/midi/midi-parser.js?v=5.1.0&amp;rev=20260820-022400"></script>
-  <script src="../plugins/formats/notation/notation-utils.js?v=5.1.0"></script>
-  <script src="../plugins/formats/music-format-core.js?v=5.1.0&amp;rev=20260820-030000"></script>
+<div class="playback-controls" hidden="" id="playbackControls">
+<div class="simple-playback-actions">
+<button aria-label="재생" class="play-button icon-playback-button" disabled="" id="playButton" title="재생" type="button">
+<span aria-hidden="true" class="simple-play-icon shared-transport-icon shared-icon-play"></span>
+<span aria-hidden="true" class="simple-stop-icon shared-transport-icon shared-icon-stop"></span>
+</button>
+<button aria-label="처음으로" class="play-button icon-playback-button" disabled="" id="rewindButton" title="처음으로" type="button">
+<span aria-hidden="true" class="shared-transport-icon shared-icon-first"></span>
+</button>
+</div>
+<input aria-label="MML 재생 위치" class="playback-slider" disabled="" id="playbackSlider" max="0" min="0" step="0.01" type="range" value="0"/>
+</div>
+<section aria-labelledby="resultsTitle" class="results" hidden="" id="results">
+<div class="copy-item full-score-item">
+<div class="copy-meta">
+<strong class="copy-title" id="fullScoreTitle">전체 악보</strong>
+<span class="copy-detail" id="fullScoreDetail"></span>
+</div>
+<div class="full-score-actions">
+<button class="copy-button" id="localSaveAllButton" type="button">로컬 저장</button>
+<button class="copy-button" id="googleSaveAllButton" type="button">구글 저장</button>
+<button class="copy-button" id="copyAllButton" type="button">복사</button>
+</div>
+</div>
+<div class="split-results" id="splitResults">
+<div class="results-head">
+<h2 id="resultsTitle">분할 악보</h2>
+<span class="results-summary" id="resultsSummary"></span>
+</div>
+<div class="copy-buttons" id="copyButtons"></div>
+</div>
+</section>
+</section>
+</main>
+<dialog class="simple-dialog" id="pasteDialog">
+<form class="simple-dialog-card" id="pasteForm" method="dialog">
+<header class="simple-dialog-header">
+<h2 id="pasteDialogTitle">MML 붙여넣기</h2>
+<button aria-label="닫기" class="simple-dialog-close" id="pasteDialogClose" title="닫기" type="button">×</button>
+</header>
+<div class="simple-dialog-body">
+<p id="pasteDialogHint">MML 코드를 붙여넣으면 바로 불러옵니다.</p>
+<textarea id="pasteText" placeholder="MML@...;" rows="10" spellcheck="false"></textarea>
+</div>
+<footer class="simple-dialog-actions">
+<button id="pasteCancelButton" type="button">취소</button>
+<button class="primary" id="pasteApplyButton" type="submit">불러오기</button>
+</footer>
+</form>
+</dialog>
+<div aria-live="polite" class="simple-toast" hidden="" id="simpleToast" role="status"></div>
+<section aria-hidden="true" aria-labelledby="simpleRhythmGameLayerTitle" aria-modal="true" class="simple-rhythm-game-layer" hidden="" id="simpleRhythmGameLayer" role="dialog">
+<header class="simple-rhythm-game-layer-head">
+<div class="simple-rhythm-game-layer-title">
+<strong id="simpleRhythmGameLayerTitle">모비비트</strong>
+<span aria-live="polite" id="simpleRhythmGameStatus" role="status">준비 중</span>
+</div>
+<button class="simple-rhythm-game-layer-close" id="simpleRhythmGameClose" type="button">생성기로 돌아가기</button>
+</header>
+<div class="simple-rhythm-game-frame-wrap">
+<div aria-live="polite" class="simple-rhythm-game-loading" id="simpleRhythmGameLoading" role="status">
+<span aria-hidden="true" class="simple-rhythm-game-loading-spinner"></span>
+<strong id="simpleRhythmGameLoadingText">모비비트를 불러오는 중입니다.</strong>
+<small>../mobibeats/</small>
+</div>
+<iframe allow="autoplay; fullscreen" allowfullscreen="" class="simple-rhythm-game-frame" data-src="../mobibeats/" id="simpleRhythmGameFrame" src="about:blank" title="모비비트 MML 리듬게임"></iframe>
+</div>
+</section>
+<script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
+<script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
+<script src="../plugins/formats/midi/midi-parser.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/notation/notation-utils.js?v=5.1.0"></script>
+<script src="../plugins/formats/music-format-core.js?v=5.1.0&amp;rev=20260820-030000"></script>
 <script src="../plugins/formats/console-gm-normalizer.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/xsf/xsf-container.js?v=5.1.0&amp;rev=20260819-195600"></script>
 <script src="../plugins/formats/playstation/playstation-sequence.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/playstation/akao-sequence.js?v=5.1.0&amp;rev=20260823-final6"></script>
 <script src="../plugins/formats/nintendo/nintendo-sequence.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/xsf/format-xsf.js?v=5.1.0&amp;rev=20260820-031400"></script>
-  <script src="../plugins/formats/musicxml/musicxml-to-midi.js?v=5.1.0&amp;rev=20260823-final13"></script>
-  <script src="../plugins/formats/finale/finale-mus-to-midi.js?v=5.1.0&amp;rev=20260823-final6"></script>
-  <script src="../plugins/formats/finale/finale-musx-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
-  <script src="../plugins/formats/mnx/mnx-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
-  <script src="../plugins/formats/musescore/musescore-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
-  <script src="../plugins/formats/guitarpro/vendor/guitarpro-parser/gp3-browser.js?v=5.1.0&amp;rev=20260820-022400"></script>
-  <script src="../plugins/formats/guitarpro/vendor/parse-gp5/index.js?v=5.1.0&amp;rev=20260823-final6"></script>
-  <script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
-  <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
-  <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/musicxml/musicxml-to-midi.js?v=5.1.0&amp;rev=20260823-final13"></script>
+<script src="../plugins/formats/finale/finale-mus-to-midi.js?v=5.1.0&amp;rev=20260823-final6"></script>
+<script src="../plugins/formats/finale/finale-musx-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/mnx/mnx-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/musescore/musescore-to-midi.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/guitarpro/vendor/guitarpro-parser/gp3-browser.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/guitarpro/vendor/parse-gp5/index.js?v=5.1.0&amp;rev=20260823-final6"></script>
+<script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
-  <script src="../plugins/formats/musicxml/format-musicxml.js?v=5.1.0&amp;rev=20260819-194500"></script>
-  <script src="../plugins/formats/finale/format-finale.js?v=5.1.0&amp;rev=20260819-194500"></script>
-  <script src="../plugins/formats/mnx/format-mnx.js?v=5.1.0&amp;rev=20260819-194500"></script>
-  <script src="../plugins/formats/musescore/format-musescore.js?v=5.1.0&amp;rev=20260819-194500"></script>
-  <script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
-  <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
-  <script src="../plugins/common/midi-to-mml.js?v=5.1.0&amp;rev=20260823-final6"></script>
-  <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260820-031400"></script>
-  <script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260818-222500"></script>
-  <script src="../plugins/common/mml-parser.js?v=5.1.0"></script>
-  <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
-  <script src="../assets/default_sf3.js?v=20260819-115800"></script>
-  <script src="./js/playback.js?v=5.1.0"></script>
-  <script src="../plugins/google/google-config.js?v=5.1.0"></script>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="https://apis.google.com/js/api.js" async defer></script>
-  <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
-  <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260823-final2" type="module"></script>
-  <script src="./app.js?v=5.1.0&amp;rev=20260823-final2"></script>
-  <script src="./enhancements.js?v=5.1.0&amp;rev=20260823-release5"></script>
+<script src="../plugins/formats/musicxml/format-musicxml.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/finale/format-finale.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/mnx/format-mnx.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/musescore/format-musescore.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
+<script src="../plugins/common/midi-to-mml.js?v=5.1.0&amp;rev=20260823-final6"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260820-031400"></script>
+<script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260818-222500"></script>
+<script src="../plugins/common/mml-parser.js?v=5.1.0"></script>
+<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
+<script src="../assets/default_sf3.js?v=20260819-115800"></script>
+<script src="./js/playback.js?v=5.1.0"></script>
+<script src="../plugins/google/google-config.js?v=5.1.0"></script>
+<script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
+<script async="" defer="" src="https://apis.google.com/js/api.js"></script>
+<script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
+<script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260823-final2" type="module"></script>
+<script src="./js/app.js?v=5.1.0&amp;rev=20260823-final21"></script>
+<script src="./enhancements.js?v=5.1.0&amp;rev=20260823-final18"></script>
 </body>
 </html>

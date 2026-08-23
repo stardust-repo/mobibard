@@ -12,8 +12,6 @@
   --hover: #eef1f4;
   --shadow: 0 18px 50px rgba(31, 35, 42, 0.08);
   --radius: 16px;
-  --settings-icon: #626b78;
-  --settings-icon-hover: #2b3139;
 }
 
 :root[data-theme="dark"] {
@@ -29,20 +27,24 @@
   --accent-text: #16191e;
   --hover: #282d34;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
-  --settings-icon: #b7c0cc;
-  --settings-icon-hover: #f0f2f5;
 }
 
 * { box-sizing: border-box; }
-html, body { min-height: 100%; }
+html { min-height: 100%; }
+body { min-height: 100%; }
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: Inter, Pretendard, "Noto Sans KR", "Noto Sans JP", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
-button, select, input { font: inherit; }
-button, a, select, input { -webkit-tap-highlight-color: transparent; }
+button { font: inherit; }
+select { font: inherit; }
+input { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+a { -webkit-tap-highlight-color: transparent; }
+select { -webkit-tap-highlight-color: transparent; }
+input { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
 
 .topbar {
@@ -89,7 +91,19 @@ button { color: inherit; }
   background-size: cover;
 }
 .top-actions { display: flex; min-width: 0; align-items: center; gap: 8px; }
-.top-link, select, .icon-button {
+.top-link {
+  height: 36px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 9px;
+}
+select {
+  height: 36px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 9px;
+}
+.icon-button {
   height: 36px;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -104,7 +118,9 @@ button { color: inherit; }
   font-size: 13px;
   font-weight: 650;
 }
-.top-link:hover, select:hover, .icon-button:hover { border-color: var(--line-strong); background: var(--hover); }
+.top-link:hover { border-color: var(--line-strong); background: var(--hover); }
+select:hover { border-color: var(--line-strong); background: var(--hover); }
+.icon-button:hover { border-color: var(--line-strong); background: var(--hover); }
 .discord-link {
   display: inline-flex;
   align-items: center;
@@ -140,90 +156,6 @@ button { color: inherit; }
 .language-control select { color: var(--text); }
 .icon-button { width: 36px; display: grid; place-items: center; cursor: pointer; }
 .theme-icon { font-size: 18px; transform: translateY(-1px); }
-.settings-control {
-  position: relative;
-  flex: 0 0 auto;
-}
-.settings-button {
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--surface);
-  color: var(--settings-icon);
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 38px;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(31, 35, 42, .06);
-  transition: color .16s ease, background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
-}
-.settings-button:hover {
-  color: var(--settings-icon-hover);
-  border-color: var(--line-strong);
-  background: var(--hover);
-  box-shadow: 0 4px 12px rgba(31, 35, 42, .10);
-}
-.settings-button:active { transform: translateY(1px); }
-.settings-button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--settings-icon-hover) 18%, transparent);
-  outline-offset: 2px;
-}
-.settings-icon {
-  width: 24px;
-  height: 24px;
-  display: block;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.05;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.settings-button[aria-expanded="true"] {
-  color: var(--settings-icon-hover);
-  background: var(--hover);
-  border-color: var(--line-strong);
-}
-.settings-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: min(276px, calc(100vw - 24px));
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  display: grid;
-  gap: 12px;
-  z-index: 20;
-}
-.settings-menu[hidden] { display: none; }
-.settings-field {
-  display: grid;
-  grid-template-columns: minmax(72px, 1fr) 132px;
-  align-items: center;
-  gap: 10px;
-  min-height: 38px;
-}
-.settings-label {
-  color: var(--muted);
-  font-size: 12.5px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-.settings-field select {
-  width: 132px;
-  min-width: 132px;
-  max-width: 132px;
-  justify-self: end;
-  padding: 0 30px 0 10px;
-  color: var(--text);
-}
-
-
 
 .page-shell {
   min-height: calc(100vh - 64px);
@@ -242,13 +174,6 @@ button { color: inherit; }
   padding: clamp(24px, 5vw, 48px);
 }
 .title-block { text-align: center; margin-bottom: 30px; }
-.eyebrow {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-}
 h1 {
   margin: 0;
   font-size: clamp(28px, 4vw, 42px);
@@ -287,7 +212,11 @@ h1 {
   outline: none;
   transition: border-color .15s ease, background .15s ease, transform .15s ease;
 }
-.drop-zone.dragover, .drop-zone:focus-visible {
+.drop-zone.dragover {
+  border-color: var(--text);
+  background: var(--hover);
+}
+.drop-zone:focus-visible {
   border-color: var(--text);
   background: var(--hover);
 }
@@ -371,19 +300,8 @@ h1 {
 .segment:hover { background: var(--hover); }
 .segment.active { background: var(--accent); color: var(--accent-text); }
 
-.status {
-  margin-top: 18px;
-  padding: 11px 13px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-2);
-  color: #b84646;
-  font-size: 12px;
-}
-
 .playback-controls {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 14px;
   margin-top: 22px;
@@ -463,18 +381,6 @@ h1 {
 .copy-button:hover { background: var(--hover); }
 .copy-button.copied { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 @media (max-width: 900px) {
   .options-stack { gap: 12px; }
   .segment { padding-left: 8px; padding-right: 8px; }
@@ -512,7 +418,7 @@ h1 {
     grid-column: span 4;
     border-bottom: 1px solid var(--line);
   }
-  .rest-options .segment:nth-child(3),
+  .rest-options .segment:nth-child(3) { border-right: 0; }
   .rest-options .segment:nth-child(7) { border-right: 0; }
 }
 
@@ -528,47 +434,13 @@ h1 {
     min-height: 34px;
     flex-basis: 34px;
   }
-  .settings-button {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-    flex-basis: 34px;
-    border-radius: 9px;
-  }
-  .settings-icon { width: 22px; height: 22px; }
 }
 
-/* ========================================================================== 
-   Mobibard Simple v5.1 R3 · Player-matched navigation and source actions
-   ========================================================================== */
-
-.simple-topbar .topbar-inner,
-.simple-topbar .top-actions,
-.simple-topbar .header-links {
+.simple-topbar .topbar-inner {
   min-width: 0;
 }
-.simple-topbar .top-actions {
-  gap: 7px;
-}
-.simple-topbar .simple-top-external {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-}
-.simple-topbar .header-links {
-  display: flex;
-  flex: 0 1 auto;
-  align-items: center;
-  gap: 6px;
-}
 .simple-topbar .midi-site-links {
-  width: 132px;
-  min-width: 92px;
-  max-width: 132px;
-  min-height: 36px;
-  padding: 0 28px 0 10px;
   color: var(--text);
-  font-size: 11px;
 }
 .simple-topbar .account-avatar-button {
   display: inline-grid;
@@ -593,70 +465,10 @@ h1 {
   object-fit: cover;
 }
 .simple-topbar .account-menu-popover {
-  width: min(292px, calc(100vw - 20px));
-  padding: 13px;
   gap: 11px;
 }
-.simple-topbar .account-menu-header,
-.simple-topbar .account-menu-identity {
-  display: grid;
-  min-width: 0;
+.simple-topbar .account-menu-header {
   gap: 2px;
-}
-.simple-topbar .account-menu-identity strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.simple-topbar .account-menu-email {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.simple-topbar .account-menu-status {
-  display: none !important;
-}
-.simple-topbar .account-login-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  width: 100%;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 750;
-}
-.simple-topbar .account-login-button:hover {
-  background: var(--hover);
-}
-.simple-topbar .google-icon-badge {
-  display: grid;
-  place-items: center;
-  width: 19px;
-  height: 19px;
-}
-.simple-topbar .google-g-icon {
-  display: block;
-  width: 17px;
-  height: 17px;
-  object-fit: contain;
-}
-.simple-topbar .account-menu-divider {
-  height: 1px;
-  background: var(--line);
-}
-.simple-topbar .account-menu-field {
-  grid-template-columns: minmax(72px, 1fr) 132px;
 }
 
 .simple-title-row {
@@ -732,10 +544,6 @@ h1 {
 .simple-source-actions .simple-source-secondary:hover {
   background: var(--hover);
 }
-.simple-legacy-status {
-  display: none !important;
-}
-
 .playback-controls {
   grid-template-columns: auto minmax(0, 1fr);
 }
@@ -757,6 +565,29 @@ h1 {
   height: 20px;
   fill: currentColor;
 }
+.shared-transport-icon {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  background-color: transparent;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+.shared-icon-play {
+  background-image: url("../assets/icons/play.svg");
+}
+.shared-icon-stop {
+  background-image: url("../assets/icons/stop.svg");
+}
+.shared-icon-first {
+  background-image: url("../assets/icons/first.svg");
+}
+.shared-icon-last {
+  background-image: url("../assets/icons/last.svg");
+}
+:root[data-theme="dark"] .shared-transport-icon { filter: invert(1); }
 .icon-playback-button .simple-stop-icon {
   display: none;
 }
@@ -913,18 +744,9 @@ h1 {
 }
 
 @media (max-width: 620px) {
-  .simple-topbar {
-    height: auto;
-    min-height: 96px;
-  }
   .simple-topbar .topbar-inner {
     display: flex;
-    flex-wrap: wrap;
     align-content: center;
-    gap: 5px 8px;
-    height: auto;
-    min-height: 96px;
-    padding: 7px 6px;
   }
   .simple-topbar .brand {
     flex: 0 0 auto;
@@ -932,32 +754,15 @@ h1 {
   .simple-topbar .top-actions {
     order: 2;
     display: flex;
-    flex: 1 1 100%;
     align-items: center;
     justify-content: flex-end;
-    gap: 5px;
-    width: 100%;
   }
   .simple-topbar .header-links {
     display: flex;
-    flex: 1 1 auto;
     min-width: 0;
-  }
-  .simple-topbar .midi-site-links {
-    flex: 1 1 auto;
-    width: auto;
-    min-width: 80px;
-    max-width: none;
-  }
-  .page-shell {
-    min-height: calc(100vh - 96px);
   }
   .simple-title-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
-  }
-  .simple-mode-actions {
-    justify-content: flex-end;
   }
   .mode-action-button {
     min-height: 34px;
@@ -1005,12 +810,6 @@ h1 {
     font-size: 9.5px;
   }
 }
-
-/* ========================================================================== 
-   Mobibard Simple v5.1 UI refinements R4 · Player-identical account and nav
-   ========================================================================== */
-
-/* One compact line at every viewport width; the recommendation selector is narrower. */
 .simple-topbar {
   height: 64px !important;
   min-height: 64px !important;
@@ -1045,7 +844,13 @@ h1 {
   min-width: 0;
   margin-left: auto;
 }
-.simple-topbar .simple-top-external,
+.simple-topbar .simple-top-external {
+  display: inline-flex !important;
+  flex: 0 1 auto !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  min-width: 0;
+}
 .simple-topbar .header-links {
   display: inline-flex !important;
   flex: 0 1 auto !important;
@@ -1059,20 +864,65 @@ h1 {
 .simple-topbar .midi-site-links {
   box-sizing: border-box;
   flex: 0 1 96px !important;
-  width: 96px !important;
-  min-width: 78px !important;
-  max-width: 96px !important;
   min-height: 36px;
   padding: 0 24px 0 8px !important;
   font-size: 11px !important;
 }
-
-/* Guest mirrors Discord: same rounded-square control rather than a circular avatar. */
-.simple-topbar .discord-link,
-.simple-topbar #settingsButton.account-avatar-button,
-.simple-topbar #settingsButton.account-avatar-button:hover,
-.simple-topbar #settingsButton.account-avatar-button:active,
-.simple-topbar #settingsButton.account-avatar-button:focus-visible,
+.simple-topbar .discord-link {
+  box-sizing: border-box !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
+  flex: 0 0 36px !important;
+  border-radius: 10px !important;
+}
+.simple-topbar #settingsButton.account-avatar-button {
+  box-sizing: border-box !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
+  flex: 0 0 36px !important;
+  border-radius: 10px !important;
+}
+.simple-topbar #settingsButton.account-avatar-button:hover {
+  box-sizing: border-box !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
+  flex: 0 0 36px !important;
+  border-radius: 10px !important;
+}
+.simple-topbar #settingsButton.account-avatar-button:active {
+  box-sizing: border-box !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
+  flex: 0 0 36px !important;
+  border-radius: 10px !important;
+}
+.simple-topbar #settingsButton.account-avatar-button:focus-visible {
+  box-sizing: border-box !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
+  flex: 0 0 36px !important;
+  border-radius: 10px !important;
+}
 .simple-topbar #settingsButton.account-avatar-button[aria-expanded="true"] {
   box-sizing: border-box !important;
   width: 36px !important;
@@ -1084,11 +934,7 @@ h1 {
   flex: 0 0 36px !important;
   border-radius: 10px !important;
 }
-.simple-topbar #settingsButton.account-avatar-button,
-.simple-topbar #settingsButton.account-avatar-button:hover,
-.simple-topbar #settingsButton.account-avatar-button:active,
-.simple-topbar #settingsButton.account-avatar-button:focus-visible,
-.simple-topbar #settingsButton.account-avatar-button[aria-expanded="true"] {
+.simple-topbar #settingsButton.account-avatar-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1097,6 +943,49 @@ h1 {
   border: 1px solid var(--line);
   background: var(--surface) !important;
   box-shadow: 0 2px 8px rgba(31, 35, 42, .06);
+  transform: none !important;
+}
+.simple-topbar #settingsButton.account-avatar-button:hover {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px !important;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface) !important;
+  box-shadow: 0 2px 8px rgba(31, 35, 42, .06);
+  transform: none !important;
+}
+.simple-topbar #settingsButton.account-avatar-button:active {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px !important;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface) !important;
+  box-shadow: 0 2px 8px rgba(31, 35, 42, .06);
+  transform: none !important;
+}
+.simple-topbar #settingsButton.account-avatar-button:focus-visible {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px !important;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface) !important;
+  box-shadow: 0 2px 8px rgba(31, 35, 42, .06);
+  transform: none !important;
+}
+.simple-topbar #settingsButton.account-avatar-button[aria-expanded="true"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px !important;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface) !important;
   transform: none !important;
 }
 .simple-topbar #settingsButton.account-avatar-button[aria-expanded="true"] {
@@ -1119,8 +1008,6 @@ h1 {
   border-radius: 0 !important;
   object-fit: contain;
 }
-
-/* Exact Player account/settings layer composition. */
 .simple-topbar .account-menu-wrap {
   position: relative;
   display: inline-flex;
@@ -1154,7 +1041,11 @@ h1 {
   min-width: 0;
   gap: 2px;
 }
-.simple-topbar .account-menu-identity strong,
+.simple-topbar .account-menu-identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .simple-topbar .account-menu-email {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1226,7 +1117,20 @@ h1 {
   font-weight: 900;
   white-space: nowrap;
 }
-.simple-topbar .account-menu-popover .language-select,
+.simple-topbar .account-menu-popover .language-select {
+  box-sizing: border-box;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+  min-height: 36px;
+  justify-self: end;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 850;
+}
 .simple-topbar .theme-menu-button {
   box-sizing: border-box;
   width: 132px;
@@ -1261,7 +1165,10 @@ h1 {
 }
 
 @media (max-width: 620px) {
-  .simple-topbar,
+  .simple-topbar {
+    height: 64px !important;
+    min-height: 64px !important;
+  }
   .simple-topbar .topbar-inner {
     height: 64px !important;
     min-height: 64px !important;
@@ -1306,11 +1213,56 @@ h1 {
     font-size: 10px;
     white-space: nowrap;
   }
-  .simple-topbar .discord-link,
-  .simple-topbar #settingsButton.account-avatar-button,
-  .simple-topbar #settingsButton.account-avatar-button:hover,
-  .simple-topbar #settingsButton.account-avatar-button:active,
-  .simple-topbar #settingsButton.account-avatar-button:focus-visible,
+  .simple-topbar .discord-link {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    max-width: 34px !important;
+    max-height: 34px !important;
+    flex-basis: 34px !important;
+    border-radius: 9px !important;
+  }
+  .simple-topbar #settingsButton.account-avatar-button {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    max-width: 34px !important;
+    max-height: 34px !important;
+    flex-basis: 34px !important;
+    border-radius: 9px !important;
+  }
+  .simple-topbar #settingsButton.account-avatar-button:hover {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    max-width: 34px !important;
+    max-height: 34px !important;
+    flex-basis: 34px !important;
+    border-radius: 9px !important;
+  }
+  .simple-topbar #settingsButton.account-avatar-button:active {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    max-width: 34px !important;
+    max-height: 34px !important;
+    flex-basis: 34px !important;
+    border-radius: 9px !important;
+  }
+  .simple-topbar #settingsButton.account-avatar-button:focus-visible {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    max-width: 34px !important;
+    max-height: 34px !important;
+    flex-basis: 34px !important;
+    border-radius: 9px !important;
+  }
   .simple-topbar #settingsButton.account-avatar-button[aria-expanded="true"] {
     width: 34px !important;
     height: 34px !important;
@@ -1334,7 +1286,6 @@ h1 {
   .page-shell {
     min-height: calc(100vh - 64px);
   }
-  /* Mobile mode navigation precedes the title instead of competing with it. */
   .simple-title-row {
     display: flex;
     flex-direction: column;
@@ -1361,10 +1312,6 @@ h1 {
     flex-basis: 24px;
   }
   .simple-topbar .midi-site-links {
-    flex-basis: 78px !important;
-    width: 78px !important;
-    min-width: 78px !important;
-    max-width: 78px !important;
     font-size: 9px !important;
   }
   .simple-topbar .top-link {
@@ -1372,10 +1319,6 @@ h1 {
     font-size: 9.5px;
   }
 }
-
-
-
-/* 2026-08-23: recommendation links +30px horizontal room */
 .simple-topbar .midi-site-links {
   flex-basis: 126px !important;
   width: 126px !important;
@@ -1398,9 +1341,6 @@ h1 {
     max-width: 108px !important;
   }
 }
-
-
-/* MobiBeats intentionally uses the same .mode-action-button style as Detailed mode. */
 body.simple-rhythm-game-open { overflow: hidden; }
 .simple-rhythm-game-layer {
   position: fixed;
@@ -1497,12 +1437,18 @@ body.simple-rhythm-game-open { overflow: hidden; }
   .simple-rhythm-game-layer-title span { display: none; }
   .simple-rhythm-game-layer-close { min-height: 30px; padding: 4px 8px; font-size: 11.5px; }
 }
-
-/* v5.1 final5: signed-in profile thumbnail fills the account control. */
-.simple-topbar #settingsButton[data-connected="true"].account-avatar-button,
-.simple-topbar #settingsButton[data-connected="true"].account-avatar-button:hover,
-.simple-topbar #settingsButton[data-connected="true"].account-avatar-button:active,
-.simple-topbar #settingsButton[data-connected="true"].account-avatar-button:focus-visible,
+.simple-topbar #settingsButton[data-connected="true"].account-avatar-button {
+  padding: 0 !important;
+}
+.simple-topbar #settingsButton[data-connected="true"].account-avatar-button:hover {
+  padding: 0 !important;
+}
+.simple-topbar #settingsButton[data-connected="true"].account-avatar-button:active {
+  padding: 0 !important;
+}
+.simple-topbar #settingsButton[data-connected="true"].account-avatar-button:focus-visible {
+  padding: 0 !important;
+}
 .simple-topbar #settingsButton[data-connected="true"].account-avatar-button[aria-expanded="true"] {
   padding: 0 !important;
 }
@@ -1517,18 +1463,21 @@ body.simple-rhythm-game-open { overflow: hidden; }
   border-radius: 0 !important;
   object-fit: cover !important;
 }
-
-/* v5.1 final6: Discord and Guest use the same subtle hover lift as MIDI Extract. */
-.simple-topbar .discord-link,
+.simple-topbar .discord-link {
+  transition: transform .14s ease, filter .14s ease, box-shadow .14s ease, border-color .14s ease, background-color .14s ease !important;
+}
 .simple-topbar #settingsButton[data-connected="false"].account-avatar-button {
   transition: transform .14s ease, filter .14s ease, box-shadow .14s ease, border-color .14s ease, background-color .14s ease !important;
 }
-.simple-topbar .discord-link:hover,
+.simple-topbar .discord-link:hover {
+  transform: translateY(-1px) !important;
+}
 .simple-topbar #settingsButton[data-connected="false"].account-avatar-button[aria-expanded="false"]:hover {
   transform: translateY(-1px) !important;
 }
-.simple-topbar .discord-link:active,
+.simple-topbar .discord-link:active {
+  transform: translateY(0) !important;
+}
 .simple-topbar #settingsButton[data-connected="false"].account-avatar-button:active {
   transform: translateY(0) !important;
 }
-
