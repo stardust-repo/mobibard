@@ -425,7 +425,6 @@ textarea { resize: vertical; color: var(--text); }
 .midi-dialog-card { gap: 14px; }
 .midi-convert-footer { justify-content: flex-start; min-height: 1.3em; margin-top: 4px; }
 .midi-convert-footer .dialog-actions { margin-top: 0; margin-left: auto; flex-shrink: 0; }
-.midi-convert-status { flex: 1 1 auto; min-height: 1.3em; color: var(--muted); text-align: left; }
 .midi-dialog-layout { display: grid; gap: 16px; }
 .midi-dialog-section { display: grid; gap: 10px; }
 .dialog-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
@@ -1118,10 +1117,6 @@ details.midi-instrument-section > summary.midi-instrument-section-head strong { 
 }
 .midi-convert-footer .dialog-actions-left {
   flex: 0 0 auto;
-}
-.midi-convert-footer .midi-convert-status {
-  flex: 1 1 auto;
-  min-width: 0;
 }
 .midi-convert-footer .dialog-actions-right {
   margin-left: auto;
@@ -3807,31 +3802,6 @@ html[data-player-layout="player-ui"] main {
   border-top: 1px solid var(--wb4-line);
 }
 
-.wb4-notices:empty { display: none; }
-.wb4-notices { display: grid; gap: 7px; margin-bottom: 16px; }
-.wb4-notice {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px 11px;
-  background: var(--wb4-surface-2);
-  color: var(--wb4-muted);
-  font-size: 11px;
-}
-.wb4-notice-content { display: flex; flex-wrap: wrap; gap: 7px; line-height: 1.55; }
-.wb4-notice-content strong { color: var(--wb4-text); }
-.wb4-notice-close {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--wb4-muted);
-  font-size: 17px;
-}
-
 .wb4-drop-zone {
   position: relative;
   min-height: 108px;
@@ -4250,14 +4220,6 @@ html[data-player-layout="player-ui"] main {
   cursor: pointer;
 }
 .wb4-toggle-row input { accent-color: var(--wb4-accent); }
-.wb4-option-status {
-  margin-top: 8px;
-  padding: 8px 2px 0;
-  border-top: 1px solid var(--wb4-line);
-  color: var(--wb4-muted);
-  font-size: 10.5px;
-}
-.wb4-option-status[data-tone="error"] { color: var(--danger); }
 .wb4-inline-panel {
   position: static !important;
   inset: auto !important;
@@ -4370,23 +4332,11 @@ html[data-player-layout="player-ui"] main {
 #midiConvertDialog #midiConvertApply { display: none !important; }
 #midiConvertDialog #midiConvertCancel { display: none !important; }
 #midiConvertDialog .midi-convert-footer {
+  display: none !important;
   min-height: 22px;
   justify-content: flex-end !important;
   padding-top: 5px !important;
   border: 0 !important;
-}
-#midiConvertDialog #midiConvertStatus {
-  display: inline-flex !important;
-  min-height: 22px;
-  align-items: center;
-  color: var(--wb4-accent);
-  font-size: 10px;
-}
-#midiConvertDialog #midiConvertStatus[hidden] {
-  display: none !important;
-}
-#midiConvertDialog .midi-convert-footer:has(#midiConvertStatus[hidden]) {
-  display: none !important;
 }
 #midiConvertDialog .midi-instrument-selected-parts { display: flex !important; }
 #midiConvertDialog .midi-part-toggle {
@@ -4679,7 +4629,6 @@ textarea.wb4-question-input { min-height: 110px; resize: vertical; }
   border-color: var(--wb4-channel-color) !important;
   outline-color: color-mix(in srgb, var(--wb4-channel-color) 45%, transparent);
 }
-.wb4-channel-panel #midiConvertStatus { color: var(--wb4-channel-color) !important; }
 
 .wb4-channel-code-tools {
   display: flex;
@@ -5071,11 +5020,6 @@ textarea.wb4-question-input { min-height: 110px; resize: vertical; }
 }
 .wb6-common-options .wb4-inline-field {
   grid-template-columns: 48px minmax(0, 1fr);
-}
-.wb6-option-status {
-  margin-top: 0;
-  padding: 8px 2px 0;
-  border-top: 0;
 }
 
 .wb6-workspace-block {
@@ -7335,12 +7279,6 @@ html[data-player-layout="player-ui"] main {
 }
 .player-ui .wb11-cancel-button:hover {
   background: var(--control-hover);
-}
-.player-ui .wb4-option-status {
-  display: none !important;
-}
-.player-ui #midiConvertStatus {
-  display: none !important;
 }
 @media (max-width: 620px) {
   .player-ui .player-topbar-inner {

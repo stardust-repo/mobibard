@@ -928,16 +928,6 @@
     return typeof result?.mml === "string" ? result.mml : fallback;
   }
 
-  function showOptionStatus(message, tone = "info") {
-    const node = state.ui.optionStatus;
-    if (node) {
-      node.hidden = true;
-      node.textContent = "";
-      delete node.dataset.tone;
-    }
-    if (message) showToast(String(message), tone === "error" ? "error" : "info");
-  }
-
   function resetPipelineCache() {
     state.pipelineCache = { sourceVersion: state.sourceVersion, stages: [] };
   }
@@ -1132,7 +1122,6 @@
     let previousKey = `source:${state.sourceVersion}`;
     let stageIndex = 0;
     try {
-      showOptionStatus("");
 
       const accompaniment = state.options.accompaniment;
       const analysisPartIndexes = [];
@@ -1274,7 +1263,7 @@
         }));
       } catch (_) {}
     } catch (error) {
-      showOptionStatus(error?.message || String(error), "error");
+      showToast(error?.message || String(error), "error");
     }
   }
 
@@ -1467,23 +1456,8 @@
     return { panel, form, input, cancel, confirm };
   }
 
-  function notify(title, message, options = {}) {
-    const region = state.ui.noticeRegion;
-    if (!region || (!title && !message)) return null;
-    const notice = el("article", `wb4-notice tone-${options.tone || "info"}`);
-    const content = el("div", "wb4-notice-content");
-    if (title) content.append(el("strong", "", { text: title }));
-    if (message) content.append(el("span", "", { text: message }));
-    const close = el("button", "wb4-notice-close", { type: "button", text: "×", "aria-label": t("close") });
-    close.addEventListener("click", () => notice.remove());
-    notice.append(content, close);
-    region.prepend(notice);
-    while (region.children.length > 3) region.lastElementChild?.remove();
-    return notice;
-  }
 
   window.MobibardInlineUi = {
-    notify,
     prompt(message, defaultValue = "", options = {}) {
       return new Promise(resolve => {
         const ui = createQuestionPanel({ title: options.title || "", message, defaultValue, mode: "prompt", multiline: Boolean(options.multiline) });
@@ -1808,8 +1782,7 @@
       state.ui.channelCharCounts.push(value);
     }
     const common = buildCommonOptions();
-    state.ui.optionStatus = el("div", "wb4-option-status wb6-option-status", { role: "status", "aria-live": "polite", hidden: true });
-    block.append(countStrip, common, state.ui.optionStatus);
+    block.append(countStrip, common);
     canvas.append(block);
   }
 
@@ -1980,9 +1953,7 @@
     const canvas = el("div", "wb4-canvas wb6-canvas wb7-canvas wb8-canvas");
     state.ui.canvas = canvas;
     state.ui.legacyHost = el("div", "wb4-legacy-host", { hidden: true });
-    state.ui.noticeRegion = el("div", "wb4-notices", { "aria-live": "polite" });
     buildTitle(canvas);
-    canvas.append(state.ui.noticeRegion);
     buildSourceBlock(canvas);
     buildPreviewBlock(canvas);
     buildOverviewBlock(canvas);
@@ -2256,14 +2227,11 @@
       showToast(t("instrumentCancelled"), "info");
       scheduleSessionPersist();
     });
-    window.addEventListener("mobibard:toast", event => showToast(event.detail?.message || "", event.detail?.tone || "info"));
     window.addEventListener("mobibard:midi-convert-complete", event => {
       if (event.detail?.name) setSourceName(event.detail.name);
       setInstrumentDirty(false);
       clearPendingPlaybackPreview();
       scheduleSessionPersist();
-      const status = $("midiConvertStatus");
-      if (status) { status.textContent = ""; status.hidden = true; }
       activateWorkspaceTab("instrument");
       scheduleChannelCountsUpdate();
       renderCopyRows();
@@ -3304,40 +3272,11 @@
   }
 
 
-  function installMidiStatusToastBridge() {
-    const status = $("midiConvertStatus");
-    if (!status || status.dataset.wbToastBridge === "1") return;
-    status.dataset.wbToastBridge = "1";
-    let scheduled = false;
-    let lastMessage = "";
-    const flush = () => {
-      scheduled = false;
-      const message = status.hidden ? "" : String(status.textContent || "").trim();
-      if (!message || message === lastMessage) return;
-      lastMessage = message;
-      showToast(message, "info");
-      window.setTimeout(() => { if (lastMessage === message) lastMessage = ""; }, 900);
-    };
-    const schedule = () => {
-      if (scheduled) return;
-      scheduled = true;
-      queueMicrotask(flush);
-    };
-    new MutationObserver(schedule).observe(status, {
-      childList: true,
-      characterData: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["hidden"]
-    });
-  }
-
   buildShell();
   document.documentElement.removeAttribute("data-player-ui-booting");
   convertDialogs();
   installTutorial();
   installGlobalHandling();
-  installMidiStatusToastBridge();
   updateLocalText();
   window.setTimeout(() => syncChannelCodeEditor(), 0);
 
@@ -3358,7 +3297,6 @@
     activateChannel,
     showToast
   });
-  window.MobibardToast = Object.freeze({ show: showToast });
 })();
 
 /* ===== Player application ===== */
@@ -3591,6 +3529,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
   const $ = (id) => document.getElementById(id);
 
+  const { showToast } = window.MobibardPlayerLayout;
+
   function inlinePrompt(message, defaultValue = "", options = {}) {
     const handler = window.MobibardInlineUi?.prompt;
     return typeof handler === "function"
@@ -3605,12 +3545,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       : Promise.resolve(false);
   }
 
-  function inlineNotify(title, message, options = {}) {
-    const handler = window.MobibardInlineUi?.notify;
-    if (typeof handler === "function") return handler(title, message, options);
-    console.warn([title, message].filter(Boolean).join(": "));
-    return null;
-  }
 
   function openFilePickerInput(input) {
     if (!input || input.disabled) return;
@@ -3725,7 +3659,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const midiConvertGoogleDriveLoad = $("midiConvertGoogleDriveLoad");
   const midiConvertApply = $("midiConvertApply");
   const midiConvertCancel = $("midiConvertCancel");
-  const midiConvertStatus = $("midiConvertStatus");
   const themeToggleBtn = $("themeToggleBtn");
   const themeModeText = $("themeModeText");
   const charCount = $("charCount");
@@ -4019,7 +3952,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       currentOffset = 0;
       rebuildSchedulePreviewSilently();
       dispatchPlayerUiOriginalState(false);
-      showDialog(i18nText("midi.preview_fail_title", [getMidiImportSourceLabel(originalMidiImport)]), shortError(err));
+      showToast([i18nText("midi.preview_fail_title", [getMidiImportSourceLabel(originalMidiImport)]), shortError(err)].filter(Boolean).join(": "), "error");
     }
   }
 
@@ -4034,10 +3967,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     stopMidiPreview();
     pendingMidiSettings.quantizeDivision = division;
     updateMidiQuantizeToggle();
-    if (midiConvertStatus) {
-      midiConvertStatus.textContent = i18nText("midi.quantize_changed", [division]);
-      midiConvertStatus.hidden = false;
-    }
+    showToast(i18nText("midi.quantize_changed", [division]), "info");
   });
   window.addEventListener("mobibard:request-midi-convert", () => requestMidiConvert());
 
@@ -4922,7 +4852,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     try {
       rhythmGamePendingPayload = buildRhythmGamePayload();
     } catch (err) {
-      showDialog(i18nText("game.open_fail"), shortError(err));
+      showToast([i18nText("game.open_fail"), shortError(err)].filter(Boolean).join(": "), "error");
       return;
     }
 
@@ -5067,20 +4997,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   let lastGoogleToastMessage = "";
   let lastGoogleToastAt = 0;
 
-  function setGoogleStatus(message, tone = "info") {
-    const text = String(message || "").trim();
-    if (!text) return;
-    const now = Date.now();
-    if (text === lastGoogleToastMessage && now - lastGoogleToastAt < 900) return;
-    lastGoogleToastMessage = text;
-    lastGoogleToastAt = now;
-    if (window.MobibardToast?.show) {
-      window.MobibardToast.show(text, tone);
-      return;
-    }
-    window.dispatchEvent(new CustomEvent("mobibard:toast", { detail: { message: text, tone } }));
-  }
-
   function clearGoogleUserProfile(refresh = true) {
     googleUserProfile = null;
     googleUserProfileToken = "";
@@ -5200,7 +5116,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
           ? i18nText("google.connect_help")
           : i18nText("drive.save_done_mml");
     }
-    if (message) setGoogleStatus(message);
+    if (message) showToast(message, "info");
     updateAccountUi();
     if (connected && googleUserProfileToken !== googleAccessToken) void loadGoogleUserProfile();
   }
@@ -5209,7 +5125,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     if (codeHelpDialog?.showModal) {
       codeHelpDialog.showModal();
     } else {
-      showDialog(i18nText("edit.help"), i18nText("err.code_help"));
+      showToast([i18nText("edit.help"), i18nText("err.code_help")].filter(Boolean).join(": "), "error");
     }
   }
 
@@ -5356,21 +5272,21 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       setGoogleAutoReconnect(false);
       resetGoogleSessionState(true);
       updateGoogleDriveControls();
-      setGoogleStatus(i18nText("google.logout_done"), "info");
+      showToast(i18nText("google.logout_done"), "info");
       return;
     }
     try {
       updateGoogleDriveControls();
-      setGoogleStatus(i18nText("google.login_wait"), "info");
+      showToast(i18nText("google.login_wait"), "info");
       await requestGoogleAccessTokenInteractive();
       setGoogleAutoReconnect(true);
       const appliedDriveSettings = await loadGoogleSettingsOrFallbackLocal();
       updateGoogleDriveControls();
-      setGoogleStatus(appliedDriveSettings ? i18nText("google.cfg_applied") : i18nText("google.connected"), "success");
+      showToast(appliedDriveSettings ? i18nText("google.cfg_applied") : i18nText("google.connected"), "success");
     } catch (err) {
       resetGoogleSessionState(true);
       updateGoogleDriveControls();
-      setGoogleStatus(`${i18nText("google.login_fail_short")}: ${shortError(err)}`, "error");
+      showToast(`${i18nText("google.login_fail_short")}: ${shortError(err)}`, "error");
     }
   }
 
@@ -5646,7 +5562,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   async function pickGoogleDriveSaveFolder() {
     requireGoogleAccessToken();
     if (!googleApiKey()) throw new Error(i18nText("google.api_key_missing"));
-    setGoogleStatus(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]));
+    showToast(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]), "info");
     const defaultFolderId = await ensureGoogleMmlFolder();
     await ensureGooglePickerLoaded();
 
@@ -5690,7 +5606,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
               return;
             }
             if (mimeType && mimeType !== GOOGLE_DRIVE_FOLDER_MIME) {
-              showDialog(i18nText("drive.save_loc"), i18nText("drive.select_folder_only"));
+              showToast([i18nText("drive.save_loc"), i18nText("drive.select_folder_only")].filter(Boolean).join(": "), "info");
               resolve(null);
               return;
             }
@@ -5902,7 +5818,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
             const result = await onCommit(target);
             const savedName = result?.fileName || result?.name || fileName;
             const action = result?.createsNewFile === false ? i18nText("drive.overwritten") : i18nText("drive.saved");
-            showDialog(i18nText("drive.save_done"), i18nText("drive.save_result", [folderName, savedName, action]));
+            showToast([i18nText("drive.save_done"), i18nText("drive.save_result", [folderName, savedName, action])].filter(Boolean).join(": "), "info");
             finish(result || target);
             closeDialog();
             return;
@@ -5911,7 +5827,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
           closeDialog();
         } catch (err) {
           setSaveBusy(false);
-          showDialog(i18nText("drive.save_fail"), shortError(err));
+          showToast([i18nText("drive.save_fail"), shortError(err)].filter(Boolean).join(": "), "error");
           reopenSaveDialog();
         }
       };
@@ -5928,7 +5844,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
             rememberGoogleDriveSaveFolder(selectedFolder.id, selectedFolder.name);
           }
         } catch (err) {
-          showDialog(i18nText("drive.folder_select_fail"), shortError(err));
+          showToast([i18nText("drive.folder_select_fail"), shortError(err)].filter(Boolean).join(": "), "error");
         } finally {
           googleDriveSaveFileName.value = savedName;
           updateFolderLabel();
@@ -6261,14 +6177,14 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   async function loadGoogleSettingsOrFallbackLocal() {
     if (!isGoogleConnected()) return false;
     try {
-      setGoogleStatus(i18nText("google.settings_check"));
+      showToast(i18nText("google.settings_check"), "info");
       const file = await findGoogleSettingsFile();
       if (!file?.id) {
         googleSettingsFileId = "";
-        setGoogleStatus(i18nText("google.settings_create"));
+        showToast(i18nText("google.settings_create"), "info");
         await syncSoundBankSelectionWithGoogle(null);
         await saveGoogleSettingsNow(true);
-        setGoogleStatus(i18nText("google.local_settings"));
+        showToast(i18nText("google.local_settings"), "info");
         return false;
       }
       googleSettingsFileId = file.id;
@@ -6277,10 +6193,10 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       applyPrefSnapshot(settings.prefs);
       const soundBankChangedCloud = await syncSoundBankSelectionWithGoogle(settings.soundBank);
       if (soundBankChangedCloud) await saveGoogleSettingsNow(true);
-      setGoogleStatus(i18nText("google.settings_applied"));
+      showToast(i18nText("google.settings_applied"), "info");
       return true;
     } catch (err) {
-      setGoogleStatus(i18nText("google.settings_fallback"));
+      showToast(i18nText("google.settings_fallback"), "info");
       try { await saveGoogleSettingsNow(true); } catch (_) {}
       return false;
     }
@@ -6327,11 +6243,11 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         });
       }
       googleSettingsFileId = saved?.id || googleSettingsFileId;
-      if (!silent) setGoogleStatus(i18nText("google.settings_saved"));
+      if (!silent) showToast(i18nText("google.settings_saved"), "info");
       return true;
     } catch (err) {
-      if (!silent) showDialog(i18nText("google.settings_save_fail"), shortError(err));
-      else setGoogleStatus(i18nText("google.settings_save_fail"));
+      if (!silent) showToast([i18nText("google.settings_save_fail"), shortError(err)].filter(Boolean).join(": "), "error");
+      else showToast(i18nText("google.settings_save_fail"), "info");
       return false;
     } finally {
       googleSettingsSaving = false;
@@ -6453,7 +6369,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     try {
       await ensureGoogleSessionForDriveAction();
       if (!googleApiKey()) throw new Error(i18nText("google.api_key_missing"));
-      setGoogleStatus(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]));
+      showToast(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]), "info");
       const folderId = await ensureGoogleMmlFolder();
       await ensureGooglePickerLoaded();
       suspendedPanels = suspendPopupPanelsForGooglePicker();
@@ -6481,11 +6397,11 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         window.setTimeout(forceGooglePickerLayer, 80);
         window.setTimeout(forceGooglePickerLayer, 240);
       });
-      setGoogleStatus(i18nText("google.connected"));
+      showToast(i18nText("google.connected"), "info");
     } catch (err) {
       stopGooglePickerLayerWatch();
       restorePopupPanelsAfterGooglePicker(suspendedPanels);
-      showDialog(i18nText("drive.load_fail"), shortError(err));
+      showToast([i18nText("drive.load_fail"), shortError(err)].filter(Boolean).join(": "), "error");
       updateGoogleDriveControls();
     }
   }
@@ -6517,7 +6433,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       return;
     }
     if (mimeType === GOOGLE_DRIVE_FOLDER_MIME) {
-      showDialog(i18nText("drive.load"), i18nText("drive.select_mml"));
+      showToast([i18nText("drive.load"), i18nText("drive.select_mml")].filter(Boolean).join(": "), "info");
       restorePopupPanelsAfterGooglePicker(suspendedPanels);
       return;
     }
@@ -6525,7 +6441,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     try {
       await loadGoogleDriveSourceFile(fileId, name);
     } catch (err) {
-      showDialog(i18nText("drive.load_fail"), shortError(err));
+      showToast([i18nText("drive.load_fail"), shortError(err)].filter(Boolean).join(": "), "error");
     }
   }
 
@@ -6602,7 +6518,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         setMainMml(normalized.mml);
       } catch (optErr) {
         setMainMml(loaded);
-        showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_gdocs", [shortError(optErr)]));
+        showToast([i18nText("mml.opt_skip"), i18nText("mml.opt_skip_gdocs", [shortError(optErr)])].filter(Boolean).join(": "), "info");
       }
       notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "gdocs", sourceLabel: "Google Docs", newSource: true });
         googleDriveMmlFileName = "";
@@ -6611,7 +6527,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
       showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
-      setGoogleStatus(i18nText("drive.gdocs_loaded"));
+      showToast(i18nText("drive.gdocs_loaded"), "info");
       return;
     }
     if (isGoogleDriveNativeEditorMime(mimeType)) {
@@ -6625,7 +6541,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const importData = await buildPluginMidiImport(bytes, name, mimeType);
       googleDriveMmlFileName = "";
       openMidiConvertDialog(importData);
-      setGoogleStatus(i18nText("drive.midi_loaded"));
+      showToast(i18nText("drive.midi_loaded"), "info");
       return;
     }
     if (isGoogleDriveMabiIccoFile(name, mimeType)) {
@@ -6636,7 +6552,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         setMainMml(normalized.mml);
       } catch (optErr) {
         setMainMml(loaded);
-        showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_mmi", [shortError(optErr)]));
+        showToast([i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_mmi", [shortError(optErr)])].filter(Boolean).join(": "), "info");
       }
       notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "mmi", sourceLabel: "MabiIcco", newSource: true });
         googleDriveMmlFileName = "";
@@ -6645,7 +6561,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
       showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
-      setGoogleStatus(i18nText("drive.mmi_loaded"));
+      showToast(i18nText("drive.mmi_loaded"), "info");
       return;
     }
     if (isGoogleDriveThreeMleFile(name, mimeType)) {
@@ -6656,7 +6572,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         setMainMml(normalized.mml);
       } catch (optErr) {
         setMainMml(loaded);
-        showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_3mle", [shortError(optErr)]));
+        showToast([i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_3mle", [shortError(optErr)])].filter(Boolean).join(": "), "info");
       }
       notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "mml", sourceLabel: "3MLE", newSource: true });
         googleDriveMmlFileName = "";
@@ -6665,7 +6581,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
       showLoadedChannelCount(googleDriveLoadBtn, i18nText("drive.loaded"), mainMml.value);
-      setGoogleStatus(i18nText("drive.mle3_loaded"));
+      showToast(i18nText("drive.mle3_loaded"), "info");
       return;
     }
     if (isGoogleDriveTextMmlFile(name, mimeType)) {
@@ -6675,7 +6591,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         setMainMml(normalized.mml);
       } catch (optErr) {
         setMainMml(loaded);
-        showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_file", [shortError(optErr)]));
+        showToast([i18nText("mml.opt_skip"), i18nText("mml.opt_skip_drive_file", [shortError(optErr)])].filter(Boolean).join(": "), "info");
       }
       notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "txt", sourceLabel: "MML", newSource: true });
       googleDriveMmlFileName = name;
@@ -6684,7 +6600,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (Array.isArray(meta?.parents) && meta.parents[0]) {
         rememberGoogleDriveSaveFolder(meta.parents[0], GOOGLE_MML_FOLDER_NAME);
       }
-      setGoogleStatus(i18nText("drive.txt_loaded"));
+      showToast(i18nText("drive.txt_loaded"), "info");
       return;
     }
     throw new Error(i18nText("drive.unsupported_file"));
@@ -6693,18 +6609,18 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   async function saveMmlToGoogleDrive() {
     try {
       await ensureGoogleSessionForDriveAction();
-      setGoogleStatus(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]));
+      showToast(i18nText("drive.folder_checking", [GOOGLE_MML_FOLDER_NAME]), "info");
       const defaultFolderId = await ensureGoogleMmlFolder();
       let exportData;
       try {
         exportData = getFullMmlForExport();
       } catch (err) {
-        showDialog(i18nText("drive.save_fail"), i18nText("mml.optimize_error_detail", [shortError(err)]));
+        showToast([i18nText("drive.save_fail"), i18nText("mml.optimize_error_detail", [shortError(err)])].filter(Boolean).join(": "), "error");
         return;
       }
       const text = exportData.text;
       if (!text.trim()) {
-        showDialog(i18nText("drive.save_fail"), i18nText("mml.empty"));
+        showToast([i18nText("drive.save_fail"), i18nText("mml.empty")].filter(Boolean).join(": "), "error");
         return;
       }
       const defaultFolderName = googleDriveSaveFolderName || GOOGLE_MML_FOLDER_NAME;
@@ -6721,7 +6637,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
           let targetId = target.overwriteFileId || "";
           let createsNewFile = !targetId;
-          setGoogleStatus(i18nText("drive.saving"));
+          showToast(i18nText("drive.saving"), "info");
           let saved;
           try {
             saved = await uploadGoogleDriveTextFile({
@@ -6755,13 +6671,13 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         }
       });
       if (!result) {
-        setGoogleStatus(i18nText("drive.save_cancel"));
+        showToast(i18nText("drive.save_cancel"), "info");
         return;
       }
       flashButton(googleDriveSaveBtn, i18nText("drive.save_done"));
-      setGoogleStatus(i18nText("drive.save_done"));
+      showToast(i18nText("drive.save_done"), "info");
     } catch (err) {
-      showDialog(i18nText("drive.save_fail"), shortError(err));
+      showToast([i18nText("drive.save_fail"), shortError(err)].filter(Boolean).join(": "), "error");
       updateGoogleDriveControls();
     }
   }
@@ -6920,7 +6836,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
     if (basePreset) {
       if (samePresetKeys(keys, basePreset.keys)) {
-        showDialog(i18nText("snd.preset_save"), i18nText("snd.no_settings"));
+        showToast([i18nText("snd.preset_save"), i18nText("snd.no_settings")].filter(Boolean).join(": "), "info");
         updatePartSoundPresetDeleteState();
         return;
       }
@@ -6947,7 +6863,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     draftPartPresetKeys = keys;
     draftSoundPresetBaseId = target.id;
     updateSoundPresetControls(userSoundPresetValue(target.id));
-    showDialog(i18nText("snd.preset_saved"), message);
+    showToast([i18nText("snd.preset_saved"), message].filter(Boolean).join(": "), "info");
   }
 
   async function createSoundPresetFromPrompt(keys, defaultName, excludeId = "") {
@@ -6959,7 +6875,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     if (input == null) return null;
     const name = sanitizeUserSoundPresetName(input, "");
     if (!name) {
-      showDialog(i18nText("snd.save_preset"), i18nText("snd.enter_preset"));
+      showToast([i18nText("snd.save_preset"), i18nText("snd.enter_preset")].filter(Boolean).join(": "), "info");
       return null;
     }
 
@@ -6982,7 +6898,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const id = userSoundPresetIdFromValue(partSoundPresetSelect?.value);
     const preset = id ? findUserSoundPreset(id) : null;
     if (!preset) {
-      showDialog(i18nText("snd.delete_preset"), i18nText("snd.select_saved"));
+      showToast([i18nText("snd.delete_preset"), i18nText("snd.select_saved")].filter(Boolean).join(": "), "info");
       updatePartSoundPresetDeleteState();
       return;
     }
@@ -6993,7 +6909,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     userSoundPresets = userSoundPresets.filter(p => p.id !== id);
     saveUserSoundPresetPrefs();
     updateSoundPresetControls();
-    showDialog(i18nText("snd.preset_deleted"), i18nText("snd.preset_deleted_named", [preset.name]));
+    showToast([i18nText("snd.preset_deleted"), i18nText("snd.preset_deleted_named", [preset.name])].filter(Boolean).join(": "), "info");
   }
 
   function updatePartMuteControl() {
@@ -7252,7 +7168,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       }
     } catch (err) {
       updateSoundFontUi();
-      if (!silent) showDialog(i18nText("snd.load_soundbank"), shortError(err));
+      if (!silent) showToast([i18nText("snd.load_soundbank"), shortError(err)].filter(Boolean).join(": "), "error");
     } finally {
       setSoundFontControlsBusy(false);
     }
@@ -7307,7 +7223,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
           setMainMml(normalized.mml);
         } catch (optErr) {
           setMainMml(loaded);
-          showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_mmi", [shortError(optErr)]));
+          showToast([i18nText("mml.opt_skip"), i18nText("mml.opt_skip_mmi", [shortError(optErr)])].filter(Boolean).join(": "), "info");
         }
         notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "mmi", sourceLabel: "MabiIcco", newSource: true });
         rememberSuggestedMmlSaveFileName(name);
@@ -7321,7 +7237,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
           setMainMml(normalized.mml);
         } catch (optErr) {
           setMainMml(loaded);
-          showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_3mle", [shortError(optErr)]));
+          showToast([i18nText("mml.opt_skip"), i18nText("mml.opt_skip_3mle", [shortError(optErr)])].filter(Boolean).join(": "), "info");
         }
         notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "mml", sourceLabel: "3MLE", newSource: true });
         rememberSuggestedMmlSaveFileName(name);
@@ -7334,7 +7250,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
           setMainMml(normalized.mml);
         } catch (optErr) {
           setMainMml(loaded);
-          showDialog(i18nText("mml.opt_skip"), i18nText("mml.opt_skip_file", [shortError(optErr)]));
+          showToast([i18nText("mml.opt_skip"), i18nText("mml.opt_skip_file", [shortError(optErr)])].filter(Boolean).join(": "), "info");
         }
         notifyPlayerUiSourceBaseline(mainMml.value, { name, sourceType: "txt", sourceLabel: "MML", newSource: true });
         showLoadedChannelCount(midiLoadBtn, i18nText("st.loaded"), mainMml.value);
@@ -7342,7 +7258,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         throw new Error(i18nText("xml.unsupported_file"));
       }
     } catch (err) {
-      showDialog(i18nText("file.load_fail"), shortError(err));
+      showToast([i18nText("file.load_fail"), shortError(err)].filter(Boolean).join(": "), "error");
     }
   }
 
@@ -7358,7 +7274,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (hasOpenAppDialog()) return;
       const file = findFirstSupportedSourceFile(event.dataTransfer?.files);
       if (!file) {
-        showDialog(i18nText("file.load_fail"), i18nText("xml.drag_drop"));
+        showToast([i18nText("file.load_fail"), i18nText("xml.drag_drop")].filter(Boolean).join(": "), "error");
         return;
       }
       void loadLocalSourceFile(file);
@@ -8837,7 +8753,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       .filter(button => button.getAttribute("aria-pressed") === "true")
       .map(button => clampInt(Number(button.dataset.midiBulkChannel), 0, 5));
     if (!channelIndexes.length) {
-      showDialog(i18nText("midi.bulk_assign"), i18nText("midi.choose_target_channel"));
+      showToast([i18nText("midi.bulk_assign"), i18nText("midi.choose_target_channel")].filter(Boolean).join(": "), "info");
       return;
     }
     const targetCategories = new Set(
@@ -8847,7 +8763,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         .filter(Boolean)
     );
     if (!targetCategories.size) {
-      showDialog(i18nText("midi.bulk_assign"), i18nText("midi.choose_target_instrument"));
+      showToast([i18nText("midi.bulk_assign"), i18nText("midi.choose_target_instrument")].filter(Boolean).join(": "), "info");
       return;
     }
     const groups = getMidiBulkTargetGroups(targetCategories);
@@ -8980,7 +8896,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         stopMidiPreview();
         return;
       }
-      showTransientToast(i18nText("midi.previewing", [label]), "info");
+      showToast(i18nText("midi.previewing", [label]), "info");
       const stopMs = Math.max(600, Math.min(12000, (result.maxEnd - ctx.currentTime + 0.25) * 1000));
       midiPreviewTimer = window.setTimeout(() => {
         if (previewToken === midiInstrumentPreviewToken) stopMidiPreview();
@@ -8988,7 +8904,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     } catch (err) {
       if (previewToken !== midiInstrumentPreviewToken) return;
       stopMidiPreview();
-      showDialog(i18nText("snd.inst_preview"), shortError(err));
+      showToast([i18nText("snd.inst_preview"), shortError(err)].filter(Boolean).join(": "), "error");
     }
   }
 
@@ -9118,7 +9034,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       }
     }
     midiPreviewSources = [];
-    if (midiChannelPreviewButton && midiConvertStatus) midiConvertStatus.hidden = true;
     resetMidiInstrumentPreviewButton();
     resetMidiChannelPreviewButton();
     resetSplitPreviewButton();
@@ -9323,7 +9238,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     try {
       options = collectMidiConvertOptions();
     } catch (err) {
-      showDialog(i18nText("midi.convert_fail_title", [sourceLabel]), shortError(err));
+      showToast([i18nText("midi.convert_fail_title", [sourceLabel]), shortError(err)].filter(Boolean).join(": "), "error");
       return;
     }
 
@@ -9354,10 +9269,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       pendingMidiStartsNewSource = false;
 
       setMidiConvertBusy(false);
-      if (midiConvertStatus) {
-        midiConvertStatus.textContent = "";
-        midiConvertStatus.hidden = true;
-      }
       try {
         window.dispatchEvent(new CustomEvent("mobibard:midi-convert-complete", {
           detail: {
@@ -9376,24 +9287,14 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       return;
     } catch (err) {
       setMidiConvertBusy(false);
-      showDialog(i18nText("midi.convert_fail_title", [sourceLabel]), shortError(err));
+      showToast([i18nText("midi.convert_fail_title", [sourceLabel]), shortError(err)].filter(Boolean).join(": "), "error");
       finishMidiConvertRequest();
     }
   }
 
   function setMidiConvertBusy(busy, message = "") {
     midiConvertBusy = Boolean(busy);
-    if (midiConvertStatus) {
-      midiConvertStatus.textContent = "";
-      midiConvertStatus.hidden = true;
-    }
-    if (busy && message) {
-      try {
-        window.dispatchEvent(new CustomEvent("mobibard:toast", {
-          detail: { message: String(message), tone: "info" }
-        }));
-      } catch (_) {}
-    }
+    if (busy && message) showToast(String(message), "info");
     const controls = midiConvertDialog ? Array.from(midiConvertDialog.querySelectorAll("button, input, select")) : [];
     for (const control of controls) {
       if (busy) {
@@ -9464,7 +9365,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         try { await loadDefaultSf2IfNeeded(); } catch (_) {}
       }
       updateSoundFontUi();
-      showDialog(i18nText("snd.load_soundbank"), shortError(err));
+      showToast([i18nText("snd.load_soundbank"), shortError(err)].filter(Boolean).join(": "), "error");
     } finally {
       setSoundFontControlsBusy(false);
     }
@@ -9511,7 +9412,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     renderPartSoundRows();
     updateSoundPresetControls();
     if (partSoundDialog?.showModal) partSoundDialog.showModal();
-    else showDialog(i18nText("snd.ch_settings"), i18nText("cfg.browser_fail"));
+    else showToast([i18nText("snd.ch_settings"), i18nText("cfg.browser_fail")].filter(Boolean).join(": "), "error");
   }
 
   async function previewPartPreset(key, partIndex = 0, triggerButton = null) {
@@ -9547,7 +9448,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const stopMs = Math.max(650, Math.min(6000, (result.maxEnd - ctx.currentTime + 0.25) * 1000));
       midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
     } catch (err) {
-      showDialog(i18nText("snd.preview_fail"), shortError(err));
+      showToast([i18nText("snd.preview_fail"), shortError(err)].filter(Boolean).join(": "), "error");
     } finally {
       if (button) {
         window.setTimeout(() => {
@@ -9948,7 +9849,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       startProgressLoop();
     } catch (err) {
       stopPlayback(false);
-      showDialog(i18nText("play.fail"), shortError(err));
+      showToast([i18nText("play.fail"), shortError(err)].filter(Boolean).join(": "), "error");
     }
   }
 
@@ -10636,7 +10537,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const bpm = normalizeTempoBpm(value);
     const beforeBpm = normalizeTempoBpm(marker?.bpm);
     if (bpm === beforeBpm) {
-      showDialog(i18nText("tempo.edit"), i18nText("tempo.no_change", [beforeBpm]));
+      showToast([i18nText("tempo.edit"), i18nText("tempo.no_change", [beforeBpm])].filter(Boolean).join(": "), "info");
       return;
     }
 
@@ -10646,9 +10547,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const updated = replaceTempoMarkerCommand(source, marker, bpm);
       setMainMml(updated);
       currentOffset = 0;
-      showDialog(i18nText("tempo.edit"), i18nText("tempo.changed", [formatTime(Math.max(0, Number(marker?.time) || 0)), beforeBpm, bpm]));
+      showToast([i18nText("tempo.edit"), i18nText("tempo.changed", [formatTime(Math.max(0, Number(marker?.time) || 0)), beforeBpm, bpm])].filter(Boolean).join(": "), "info");
     } catch (err) {
-      showDialog(i18nText("tempo.edit_2"), shortError(err));
+      showToast([i18nText("tempo.edit_2"), shortError(err)].filter(Boolean).join(": "), "error");
     }
   }
 
@@ -10976,7 +10877,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     try {
       convertedText = normalizeIrregularMmlLengths(pastedText).mml;
     } catch (err) {
-      showDialog(i18nText("err.paste"), i18nText("mml.irregular_convert_failed", [shortError(err)]));
+      showToast([i18nText("err.paste"), i18nText("mml.irregular_convert_failed", [shortError(err)])].filter(Boolean).join(": "), "error");
       return;
     }
 
@@ -11010,34 +10911,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const converted = normalizeIrregularMmlLengths(original);
       return { text: converted.mml, converted: converted.changed, info: converted };
     } catch (err) {
-      showDialog(i18nText("err.paste"), i18nText("mml.irregular_convert_failed", [shortError(err)]));
+      showToast([i18nText("err.paste"), i18nText("mml.irregular_convert_failed", [shortError(err)])].filter(Boolean).join(": "), "error");
       return { text: original, converted: false };
     }
-  }
-
-  function showTransientToast(message, tone = "success") {
-    if (window.MobibardToast?.show) {
-      window.MobibardToast.show(message, tone);
-      return;
-    }
-    let toast = document.getElementById("appTransientToast");
-    if (!toast) {
-      toast = document.createElement("div");
-      toast.id = "appTransientToast";
-      toast.className = "wb9-toast";
-      toast.setAttribute("role", "status");
-      toast.setAttribute("aria-live", "polite");
-      document.body.appendChild(toast);
-    }
-    toast.textContent = String(message || "");
-    toast.dataset.tone = tone;
-    toast.hidden = false;
-    toast.classList.add("is-visible");
-    clearTimeout(showTransientToast._timer);
-    showTransientToast._timer = window.setTimeout(() => {
-      toast.classList.remove("is-visible");
-      window.setTimeout(() => { toast.hidden = true; }, 180);
-    }, 1500);
   }
 
   async function copyVisibleMml() {
@@ -11045,13 +10921,13 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     try {
       text = normalizeMmlForCopy(optimizeMml(mainMml?.value || "").mml);
     } catch (err) {
-      showDialog(i18nText("err.copy"), i18nText("mml.optimize_error_detail", [shortError(err)]));
+      showToast([i18nText("err.copy"), i18nText("mml.optimize_error_detail", [shortError(err)])].filter(Boolean).join(": "), "error");
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
       trackScoreCopy("all");
-      showTransientToast(i18nText("st.copy_done"));
+      showToast(i18nText("st.copy_done"));
     } catch {
       const ta = document.createElement("textarea");
       ta.value = text;
@@ -11064,9 +10940,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         const copied = document.execCommand("copy");
         if (!copied) throw new Error("copy failed");
         trackScoreCopy("all");
-        showTransientToast(i18nText("st.copy_done"));
+        showToast(i18nText("st.copy_done"));
       } catch (err) {
-        showDialog(i18nText("err.copy"), i18nText("mml.auto_copying"));
+        showToast([i18nText("err.copy"), i18nText("mml.auto_copying")].filter(Boolean).join(": "), "error");
       } finally {
         ta.remove();
       }
@@ -11078,12 +10954,12 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     try {
       exportData = getFullMmlForExport();
     } catch (err) {
-      showDialog(i18nText("err.save"), i18nText("mml.optimize_error_detail", [shortError(err)]));
+      showToast([i18nText("err.save"), i18nText("mml.optimize_error_detail", [shortError(err)])].filter(Boolean).join(": "), "error");
       return;
     }
     const { text } = exportData;
     if (!text.trim()) {
-      showDialog(i18nText("err.save"), i18nText("mml.empty"));
+      showToast([i18nText("err.save"), i18nText("mml.empty")].filter(Boolean).join(": "), "error");
       return;
     }
 
@@ -11106,7 +10982,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         return;
       } catch (err) {
         if (err?.name === "AbortError") return;
-        showDialog(i18nText("err.save"), shortError(err));
+        showToast([i18nText("err.save"), shortError(err)].filter(Boolean).join(": "), "error");
         return;
       }
     }
@@ -12232,10 +12108,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return String(text).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
   }
 
-
-  function showDialog(title, message) {
-    inlineNotify(title, message, { tone: /error|fail|오류|실패/i.test(String(title || "")) ? "error" : "info" });
-  }
 
   window.MobibardMidiEditor = {
     hasSource() { return Boolean(pendingMidiImport && pendingMidiSettings); },

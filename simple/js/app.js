@@ -369,7 +369,7 @@
     clearResults();
 
     if (!isSupportedSourceFile(file)) {
-      showStatus(t("invalidFile"));
+      showToast(t("invalidFile"), "error");
       return;
     }
     try {
@@ -388,7 +388,7 @@
       selectedBytes = null;
       els.fileName.hidden = true;
       clearResults();
-      showStatus(t("failed", [shortError(error)]));
+      showToast(t("failed", [shortError(error)]), "error");
     }
   }
 
@@ -535,7 +535,7 @@
     if (token !== conversionSerial || !selectedBytes || !selectedFile) return;
     if (!window.MabiMidi?.analyzeMidi || !window.MabiMidi?.midiToMml) {
       clearResults();
-      showStatus(t("failed", ["MIDI converter is unavailable"]));
+      showToast(t("failed", ["MIDI converter is unavailable"]), "error");
       return;
     }
 
@@ -560,7 +560,7 @@
     } catch (error) {
       if (token !== conversionSerial) return;
       clearResults();
-      showStatus(t("failed", [shortError(error)]));
+      showToast(t("failed", [shortError(error)]), "error");
     }
   }
 
@@ -648,7 +648,7 @@
         button.classList.remove("copied");
       }, 1200);
     } catch (_) {
-      showStatus(t("copyFailed"));
+      showToast(t("copyFailed"), "error");
     }
   }
 
@@ -672,10 +672,6 @@
       toast.classList.remove("is-visible");
       window.setTimeout(() => { toast.hidden = true; }, 180);
     }, 1800);
-  }
-
-  function showStatus(message, tone = "error") {
-    showToast(message, tone);
   }
 
   function rebuildPlayback(mml) {
@@ -885,7 +881,7 @@
       startProgressLoop();
     } catch (error) {
       stopPlayback(false);
-      showStatus(shortError(error));
+      showToast(shortError(error), "error");
     }
   }
 
