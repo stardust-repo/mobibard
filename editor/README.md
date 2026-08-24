@@ -1,8 +1,8 @@
 # Editor 구현 스펙 스냅샷
 
-마지막 갱신: 2026-08-23 KST
+마지막 갱신: 2026-08-24 KST
 
-출시 검증: v5.1 최종 UI 패스에서 Editor 기능 변경 없음. 공용 포맷/정규화 기준은 현재 배포 소스와 `plugins/formats/NORMALIZATION_RULES.md`를 따릅니다.
+출시 검증: v5.1 final46. Editor 편집 기능은 유지하며 공용 포맷 계층에 VGM/VGZ, GYM, S98 입력을 추가했습니다. 정규화 기준은 현재 배포 소스와 `plugins/formats/NORMALIZATION_RULES.md`를 따릅니다.
 
 ## 목적
 
@@ -10,8 +10,8 @@ MML 채널과 참조 연주 파일을 피아노롤에서 시각적으로 편집�
 
 ## 파일 불러오기
 
-- 지원 확장자: `.mid`, `.midi`, `.kar`, `.seq`, `.sep`, `.sq`, `.bq`, `.psf`, `.psf1`, `.minipsf`, `.minipsf1`, `.psf2`, `.minipsf2`, `.ncsf`, `.minincsf`, `.2sf`, `.mini2sf`, `.sseq`, `.ssar`, `.sdat`, `.brseq`, `.rseq`, `.brsar`, `.bcseq`, `.cseq`, `.bcsar`, `.bfseq`, `.fseq`, `.bfsar`, `.musicxml`, `.xml`, `.mxl`, `.mus`, `.musx`, `.mnx`, `.mnx.json`, `.mscz`, `.mscx`, `.gp3`, `.gp5`, `.vsq`, `.vsqx`, `.vpr`, `.ust`, `.ustx`, `.svp`, `.s5p`, `.ccs`
-- 공용 포맷 등록소가 원본 파일을 표준 MIDI로 변환합니다. PlayStation SEQ/SEP·PS2 SQ/BQ·PSF1/PSF2(AKAO v1.0/v2 포함)와 Nintendo DS·Wii·3DS·Wii U·Switch 표준 시퀀스/사운드 아카이브 및 NCSF/2SF도 같은 입력 경로를 사용합니다. 콘솔 전용 Bank와 드럼 슬롯은 가능한 경우 GM Bank 0/GM 타악기로 정규화되어 편집기 악기 선택과 미리듣기에 전달됩니다.
+- 지원 확장자: `.mid`, `.midi`, `.kar`, `.seq`, `.sep`, `.sq`, `.bq`, `.psf`, `.psf1`, `.minipsf`, `.minipsf1`, `.psf2`, `.minipsf2`, `.ncsf`, `.minincsf`, `.2sf`, `.mini2sf`, `.sseq`, `.ssar`, `.sdat`, `.brseq`, `.rseq`, `.brsar`, `.bcseq`, `.cseq`, `.bcsar`, `.bfseq`, `.fseq`, `.bfsar`, `.musicxml`, `.xml`, `.mxl`, `.mus`, `.musx`, `.mnx`, `.mnx.json`, `.mscz`, `.mscx`, `.gp3`, `.gp5`, `.vsq`, `.vsqx`, `.vpr`, `.ust`, `.ustx`, `.svp`, `.s5p`, `.ccs`, `.xgm`, `.vgm`, `.vgz`, `.gym`, `.s98`
+- 공용 포맷 등록소가 원본 파일을 표준 MIDI로 변환합니다. PlayStation SEQ/SEP·PS2 SQ/BQ·PSF1/PSF2(AKAO v1.0/v2 포함)와 Nintendo DS·Wii·3DS·Wii U·Switch 표준 시퀀스/사운드 아카이브 및 NCSF/2SF, Sega XGM과 VGM/VGZ·GYM·S98 사운드칩 로그도 같은 입력 경로를 사용합니다. 콘솔 전용 Bank와 드럼 슬롯은 가능한 경우 GM Bank 0/GM 타악기로 정규화되어 편집기 악기 선택과 미리듣기에 전달됩니다.
 - 공용 MIDI 파서가 MIDI·KAR의 연주 및 가사·텍스트 이벤트를 해석하고, Editor는 그 결과를 피아노롤 문서 구조로 가공합니다.
 - Classic Mac의 MacBinary Data Fork·Resource Fork·보조 헤더와 Program·Bank, running status, 템포·박자·조표는 공용 계층에서 처리합니다.
 - 확장자가 보존되지 않은 Classic Mac 컨테이너를 위해 `.bin`·`.macbin`도 선택할 수 있으며, 내부 파일명과 바이너리 시그니처로 실제 형식을 판별합니다.

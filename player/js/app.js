@@ -3433,7 +3433,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const SOURCE_FILE_EXTENSIONS = new Set(["txt", "mmi", "mml", ...(window.MabiMusicFormats?.inputExtensions?.() || window.MabiMusicFormats?.supportedExtensions?.() || [])]);
   // MIDI/KAR + MML are core Player workflows and remain eagerly loaded.
   // Other source-format converters are loaded only when a matching file is actually opened.
-  const FORMAT_RUNTIME_REVISION = "20260824-final44";
+  const FORMAT_RUNTIME_REVISION = "20260824-final46";
   const FORMAT_RUNTIME_SCRIPTS = Object.freeze({
     notation: "../plugins/formats/notation/notation-utils.js",
     consoleGm: "../plugins/formats/console-gm-normalizer.js",
@@ -3452,7 +3452,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     vocal: "../plugins/formats/vocal/vocal-format-parsers.js",
     legacyPc: "../plugins/formats/legacy-pc/legacy-pc-sequence.js",
     tracker: "../plugins/formats/tracker/tracker-sequence.js",
-    segaSaturn: "../plugins/formats/sega/sega-saturn-sequence.js"
+    segaSaturn: "../plugins/formats/sega/sega-saturn-sequence.js",
+    segaLogged: "../plugins/formats/sega/sega-logged-sequence.js"
   });
   const FORMAT_RUNTIME_BY_ID = Object.freeze({
     "midi": [],
@@ -3480,7 +3481,10 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     "hmi": ["legacyPc"],
     "tracker-module": ["tracker"],
     "sega-saturn-sequence": ["segaSaturn"],
-    "sega-megadrive-xgm": ["segaSaturn"]
+    "sega-megadrive-xgm": ["segaSaturn"],
+    "sega-vgm": ["segaLogged"],
+    "sega-gym": ["segaLogged"],
+    "s98": ["segaLogged"]
   });
   const formatRuntimeScriptPromises = new Map();
 
@@ -4842,7 +4846,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
   function currentRhythmGameTitle() {
     const name = String(googleDriveMmlFileName || suggestedMmlSaveFileName || "")
-      .replace(/\.(txt|mml|mid|midi|kar|xmi|hmp|hmi|mod|s3m|xm|it|seq|xgm|mus|musx|mnx(?:\.json)?|mscz|mscx|musicxml|xml|mxl|mmi|gp3|gp4|gp5|gpx|gp|tab|vsq|vsqx|vpr|ust|ustx|svp|s5p|ccs)$/i, "")
+      .replace(/\.(txt|mml|mid|midi|kar|xmi|hmp|hmi|mod|s3m|xm|it|seq|xgm|vgm|vgz|gym|s98|mus|musx|mnx(?:\.json)?|mscz|mscx|musicxml|xml|mxl|mmi|gp3|gp4|gp5|gpx|gp|tab|vsq|vsqx|vpr|ust|ustx|svp|s5p|ccs)$/i, "")
       .replace(/[_-]+/g, " ")
       .trim();
     return name || i18nText("mml.title");

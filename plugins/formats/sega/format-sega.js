@@ -54,4 +54,65 @@
       return root.MabiSegaSaturnSequence.convertXgm(bytes, fileName);
     },
   });
+
+  core.registerFormat({
+    id: "sega-vgm",
+    label: "VGM / VGZ",
+    category: "console",
+    extensions: ["vgm", "vgz"],
+    mimeTypes: ["audio/x-vgm", "application/x-vgm"],
+    description: "VGM/VGZ 사운드칩 로그의 FM/PSG 주파수와 Key On/Off를 복원해 표준 MIDI로 변환합니다.",
+    limitation: "YM/OPL/PSG의 음정 채널을 중심으로 복원합니다. PCM/DAC, 노이즈·리듬 모드, 칩 고유 변조·효과는 제외되거나 단순화됩니다.",
+    detect(bytes) {
+      const runtime = root.MabiSegaLoggedSequence;
+      if (runtime?.detectVgm) return Boolean(runtime.detectVgm(bytes));
+      const data = core.asUint8Array(bytes);
+      return data.length >= 4 && data[0] === 0x56 && data[1] === 0x67 && data[2] === 0x6d && data[3] === 0x20;
+    },
+    convert(bytes, fileName) {
+      if (!root.MabiSegaLoggedSequence?.convertVgm) throw new Error("VGM/VGZ 변환 모듈을 불러오지 못했습니다.");
+      return root.MabiSegaLoggedSequence.convertVgm(bytes, fileName);
+    },
+  });
+
+  core.registerFormat({
+    id: "sega-gym",
+    label: "Sega Mega Drive GYM",
+    category: "console",
+    extensions: ["gym"],
+    mimeTypes: ["audio/x-gym", "application/x-gym"],
+    description: "Mega Drive/Genesis GYM의 YM2612·SN76489 레지스터 로그를 FM/PSG 음표로 복원해 표준 MIDI로 변환합니다.",
+    limitation: "FM/PSG 음정 채널을 복원하며 PCM/DAC와 PSG 노이즈는 제외됩니다. PAL 표기가 없는 raw GYM은 기본 60 Hz로 해석합니다.",
+    detect(bytes, fileName) {
+      const runtime = root.MabiSegaLoggedSequence;
+      if (runtime?.detectGym) return Boolean(runtime.detectGym(bytes, fileName));
+      const data = core.asUint8Array(bytes);
+      return data.length >= 4 && data[0] === 0x47 && data[1] === 0x59 && data[2] === 0x4d && data[3] === 0x58;
+    },
+    convert(bytes, fileName) {
+      if (!root.MabiSegaLoggedSequence?.convertGym) throw new Error("GYM 변환 모듈을 불러오지 못했습니다.");
+      return root.MabiSegaLoggedSequence.convertGym(bytes, fileName);
+    },
+  });
+
+  core.registerFormat({
+    id: "s98",
+    label: "S98 Sound Log",
+    category: "console",
+    extensions: ["s98"],
+    mimeTypes: ["audio/x-s98", "application/x-s98"],
+    description: "S98 v0~v3의 OPN/OPNA/OPN2/OPM/OPLL/OPL/OPL3 및 PSG 로그에서 음정 이벤트를 복원해 표준 MIDI로 변환합니다.",
+    limitation: "FM/PSG의 음정 채널 중심 변환입니다. 리듬·ADPCM·노이즈와 칩 고유 효과는 제외되거나 단순화되며, 지원되지 않는 장치는 건너뜁니다.",
+    detect(bytes) {
+      const runtime = root.MabiSegaLoggedSequence;
+      if (runtime?.detectS98) return Boolean(runtime.detectS98(bytes));
+      const data = core.asUint8Array(bytes);
+      return data.length >= 4 && data[0] === 0x53 && data[1] === 0x39 && data[2] === 0x38 && data[3] >= 0x30 && data[3] <= 0x33;
+    },
+    convert(bytes, fileName) {
+      if (!root.MabiSegaLoggedSequence?.convertS98) throw new Error("S98 변환 모듈을 불러오지 못했습니다.");
+      return root.MabiSegaLoggedSequence.convertS98(bytes, fileName);
+    },
+  });
+
 })();

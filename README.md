@@ -61,4 +61,4 @@ plugins/
 - 제품 README에는 누적 변경 이력이나 제품 버전 번호를 남기지 않습니다.
 - 매 수정마다 버전을 올리지 않으므로 각 README의 마지막 갱신 시각으로 수정 전후를 구분합니다.
 
-- 콘솔 가져오기는 PlayStation SEQ/SEP·PS2 SQ/BQ와 PSF1/PSF2의 지원 가능한 내장 MIDI/SEQ/SQ/AKAO v1.0/v2, Nintendo SSEQ/SDAT·NintendoWare 시퀀스와 NCSF/2SF의 내장 SDAT/SSEQ, Sega Saturn SEQ 및 Mega Drive/Genesis XGM/XGM2를 공용 MIDI로 정규화합니다. 전용 콘솔 Bank/드럼 번호는 가능한 범위에서 GM Bank 0 및 GM percussion으로 재배치하여 일반 SoundFont에서 바로 미리듣기 가능하게 하며, 포맷만으로 악기 의미를 알 수 없는 경우에는 거짓 악기 분류 대신 안정적인 GM Program proxy를 사용합니다. Mini xSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다.
+- 콘솔 가져오기는 PlayStation SEQ/SEP·PS2 SQ/BQ와 PSF1/PSF2의 지원 가능한 내장 MIDI/SEQ/SQ/AKAO v1.0/v2, Nintendo SSEQ/SDAT·NintendoWare 시퀀스와 NCSF/2SF의 내장 SDAT/SSEQ, Sega Saturn SEQ 및 Mega Drive/Genesis XGM/XGM2, VGM/VGZ, GYM, S98 사운드칩 로그를 공용 MIDI로 정규화합니다. 전용 콘솔 Bank/드럼 번호는 가능한 범위에서 GM Bank 0 및 GM percussion으로 재배치하여 일반 SoundFont에서 바로 미리듣기 가능하게 하며, 포맷만으로 악기 의미를 알 수 없는 경우에는 거짓 악기 분류 대신 안정적인 GM Program proxy를 사용합니다. Mini xSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다.

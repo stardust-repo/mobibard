@@ -1,6 +1,6 @@
 # Music format normalization rules
 
-Release verification: **2026-08-23 / Mobibard v5.1**. No normalization fallback or ordering rule was changed by the final UI pass.
+Release verification: **2026-08-24 / Mobibard v5.1 final46**. The fallback constants and normalization order remain unchanged; VGM/VGZ, GYM, and S98 chip-log reconstruction rules were added.
 
 Mobibard converts heterogeneous score, console, sequencer, and vocal-project formats into a common Standard MIDI-oriented representation before Editor/MML processing.
 
@@ -31,6 +31,7 @@ The tempo and loudness fallback values are used only when the source provides no
 - **PlayStation Sony SEQ/SQ:** convert Sony timing/controllers to MIDI; normalize proprietary banks to GM Bank 0 only when the external sound bank is unavailable; map percussion to GM keys.
 - **SquareSoft AKAO:** preserve AKAO tempo/controller semantics, keep velocity and channel Volume/Expression separate, and map AKAO drum slots to GM percussion.
 - **Nintendo SSEQ/SDAT/NintendoWare:** use SBNK/instrument types when available; preserve SSEQ tempo, volume, expression and pan events; map PSG/drum types to stable GM proxies.
+- **VGM/VGZ, GYM, S98 chip logs:** reconstruct stable pitched FM/PSG notes from frequency/key-on register writes and convert each format's native waits to real elapsed time. These logs do not define score tempo or MIDI note velocity, so emit a 120 BPM MIDI carrier timeline with reconstructed durations and use Velocity 96 unless stronger source evidence exists. PCM/DAC, noise-only, rhythm/ADPCM and chip-specific modulation are omitted rather than fabricated as pitched notes.
 - **MusicXML/MuseScore/Finale/Guitar Pro:** use documented tempo and dynamic/mixer semantics; do not equate percentages or editor-specific dynamic scales directly with MIDI 0–127.
 - **Vocal project formats:** preserve explicit tempo and loudness/dynamics where defined; do not pretend synthesis parameters such as breathiness/tension are equivalent to MIDI velocity unless a format-specific mapping is documented.
 

@@ -1,6 +1,6 @@
 # Simple 구현 스펙 스냅샷
 
-마지막 갱신: 2026-08-23 KST  
+마지막 갱신: 2026-08-24 KST  
 출시 기준: 이 README와 현재 배포 소스
 
 ## 목적
@@ -9,7 +9,7 @@
 
 ## 입력과 변환
 
-- MIDI/KAR, XMI/HMP/HMI, Tracker(MOD/S3M/XM/IT), PlayStation/Nintendo/Sega 시퀀스, MusicXML/MNX/Finale/MuseScore/Guitar Pro, VOCALOID/UTAU/OpenUtau/Synthesizer V/CeVIO 계열을 공용 포맷 계층으로 처리합니다.
+- MIDI/KAR, XMI/HMP/HMI, Tracker(MOD/S3M/XM/IT), PlayStation/Nintendo/Sega 시퀀스와 VGM/VGZ·GYM·S98 사운드칩 로그, MusicXML/MNX/Finale/MuseScore/Guitar Pro, VOCALOID/UTAU/OpenUtau/Synthesizer V/CeVIO 계열을 공용 포맷 계층으로 처리합니다.
 - `.bin`·`.macbin` Classic Mac 컨테이너는 내부 형식을 공용 계층이 자동 판별합니다.
 - 공용 MIDI→MML 변환기로 최대 3채널을 생성합니다.
 - 공용 1/64 겹침 허용 규칙과 템포 정리를 사용합니다.
