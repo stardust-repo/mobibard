@@ -90,12 +90,31 @@
     options: {
       channels: Array.from({ length: 6 }, (_, index) => makeChannelOptions(index)),
       leading: { beats: 4 },
+      fade: { inSeconds: 0, outSeconds: 0 },
       tempo: { scale: 100, simplify: true },
       dynamics: { genre: "", strength: "normal", targetChannels: [true, true, true, true, true, true] },
       accompaniment: { genre: "", strength: "normal" },
       split: { maxChars: 2400, searchPercent: 50 }
     }
   };
+
+  const FADE_SECOND_OPTIONS = Object.freeze([0, 1, 2, 4]);
+
+  function normalizeFadeSeconds(value) {
+    const raw = Math.max(0, Number(value) || 0);
+    if (raw <= 0) return 0;
+    let best = FADE_SECOND_OPTIONS[1];
+    let bestDistance = Math.abs(raw - best);
+    for (let index = 2; index < FADE_SECOND_OPTIONS.length; index += 1) {
+      const candidate = FADE_SECOND_OPTIONS[index];
+      const distance = Math.abs(raw - candidate);
+      if (distance < bestDistance - 1e-9 || (Math.abs(distance - bestDistance) <= 1e-9 && candidate > best)) {
+        best = candidate;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
 
   function cloneChannelOptions(channels = state.options.channels) {
     return Array.from({ length: 6 }, (_, index) => {
@@ -386,6 +405,15 @@
       paste.className = "wb4-load-secondary wb4-paste-source-button";
     }
 
+    const sourceTools = el("div", "wb15-source-tools");
+    if (supported) sourceTools.append(supported);
+    state.ui.tutorialButton = el("button", "wb15-tutorial-source-button", {
+      id: "tutorialBtn",
+      type: "button",
+      text: appText("tutorial.open", "튜토리얼")
+    });
+    sourceTools.append(state.ui.tutorialButton);
+
     const actions = el("div", "wb4-load-actions");
     if (load) actions.append(load);
     if (drive) actions.append(drive);
@@ -397,8 +425,7 @@
     const meta = el("div", "wb4-file-meta");
     meta.append(state.ui.fileName, state.ui.restoreButton);
 
-    if (supported) drop.append(supported);
-    drop.append(actions, keyedText("dropHint", "wb4-drop-hint"), meta);
+    drop.append(sourceTools, actions, keyedText("dropHint", "wb4-drop-hint"), meta);
     if (input) drop.append(input);
     block.append(drop);
     state.ui.sourceInlineHost = el("div", "wb4-inline-host");
@@ -608,6 +635,7 @@
     const transformOptions = {
       channels: state.options.channels,
       leading: state.options.leading,
+      fade: state.options.fade,
       tempo: state.options.tempo,
       dynamics: state.options.dynamics,
       accompaniment: state.options.accompaniment
@@ -715,6 +743,10 @@
     return {
       channels,
       leading: { beats: Math.max(0, Math.min(600, Math.round((Number(saved.leading?.beats) || 0) * 2) / 2)) },
+      fade: {
+        inSeconds: normalizeFadeSeconds(saved.fade?.inSeconds),
+        outSeconds: normalizeFadeSeconds(saved.fade?.outSeconds)
+      },
       tempo: {
         scale: Math.max(50, Math.min(200, Math.round(Number(saved.tempo?.scale) || 100))),
         simplify: saved.tempo?.simplify !== false
@@ -735,6 +767,8 @@
   function syncCommonOptionControls() {
     state.ui.tempoScaleControl?.setValue?.(state.options.tempo.scale);
     state.ui.leadingControl?.setValue?.(state.options.leading.beats * 0.5);
+    state.ui.fadeInControl?.setValue?.(String(normalizeFadeSeconds(state.options.fade?.inSeconds)));
+    state.ui.fadeOutControl?.setValue?.(String(normalizeFadeSeconds(state.options.fade?.outSeconds)));
     updateTempoCleanButton();
     state.ui.leadingControl?.setSuffix?.(t("seconds"));
     syncVolumeGenerationControls();
@@ -1010,6 +1044,11 @@
       }), out);
     }
     if (Number(state.options.tempo.scale) !== 100) out = scaleTempoCommands(out, state.options.tempo.scale);
+    const fadeInSeconds = normalizeFadeSeconds(state.options.fade?.inSeconds);
+    const fadeOutSeconds = normalizeFadeSeconds(state.options.fade?.outSeconds);
+    if ((fadeInSeconds > 0 || fadeOutSeconds > 0) && optimizer.applyFadeMml) {
+      out = resultMml(optimizer.applyFadeMml(out, { partCount: 6, fadeInSeconds, fadeOutSeconds }), out);
+    }
     return out;
   }
 
@@ -1087,7 +1126,7 @@
     if (!force && signature === state.lastApplySignature) return;
 
     const startedAt = performance.now();
-    const transformCalls = { dynamics: 0, rest: 0, volume: 0, octave: 0, accompaniment: 0, leading: 0, tempoClean: 0, tempoScale: 0 };
+    const transformCalls = { dynamics: 0, rest: 0, volume: 0, octave: 0, accompaniment: 0, leading: 0, tempoClean: 0, tempoScale: 0, fade: 0 };
     const diagnostics = { cacheHits: 0, stageDurations: {} };
     let out = String(state.sourceMml);
     let previousKey = `source:${state.sourceVersion}`;
@@ -1209,6 +1248,16 @@
         return scaleTempoCommands(input, state.options.tempo.scale);
       }, diagnostics);
       out = stage.output;
+      previousKey = stage.key;
+
+      const fadeInSeconds = normalizeFadeSeconds(state.options.fade?.inSeconds);
+      const fadeOutSeconds = normalizeFadeSeconds(state.options.fade?.outSeconds);
+      stage = pipelineStage(stageIndex++, previousKey, "fade", { fadeInSeconds, fadeOutSeconds }, out, input => {
+        if ((fadeInSeconds <= 0 && fadeOutSeconds <= 0) || !optimizer.applyFadeMml) return input;
+        transformCalls.fade += 1;
+        return resultMml(optimizer.applyFadeMml(input, { partCount: 6, fadeInSeconds, fadeOutSeconds }), input);
+      }, diagnostics);
+      out = stage.output;
 
       state.lastApplySignature = signature;
       const changed = writeResultMml(out);
@@ -1307,7 +1356,7 @@
     // Cached timing boundaries are only reusable while the musical geometry is
     // unchanged. Rest trimming can extend notes across former silences, leading
     // silence shifts every event, and accompaniment can add/remove sounding
-    // regions. Volume/octave/dynamics changes keep the same timing geometry and
+    // regions. Volume/octave/dynamics/fade changes keep the same timing geometry and
     // may safely reuse the expensive boundary search.
     return JSON.stringify({
       restModes: state.options.channels.map(channel => String(channel.restMode || "keep")),
@@ -1526,6 +1575,8 @@
       button.textContent = index < 0 ? wb6t("allChannels") : channelLabel(index);
     }));
     if (state.ui.codeHelpButton) state.ui.codeHelpButton.textContent = t("codeHelp");
+    if (state.ui.tutorialButton) state.ui.tutorialButton.textContent = appText("tutorial.open", "튜토리얼");
+    updateTutorialLocale();
     if ($("pasteBtn")) $("pasteBtn").textContent = t("pasteMml");
     const play = $("playToggleBtn");
     if (play) {
@@ -1946,6 +1997,162 @@
     fileToolbar.remove();
     menuCard.remove();
     activateChannelView(state.activeChannelView);
+  }
+
+  const TUTORIAL_STEPS = Object.freeze([
+    { image: "01-source.webp", title: "tutorial.step1.title", body: "tutorial.step1.body", note: "tutorial.step1.note" },
+    { image: "02-common-options.webp", title: "tutorial.step2.title", body: "tutorial.step2.body", note: "tutorial.step2.note" },
+    { image: "03-midi-settings.webp", title: "tutorial.step3.title", body: "tutorial.step3.body", note: "tutorial.step3.note" },
+    { image: "04-channel-options.webp", title: "tutorial.step4.title", body: "tutorial.step4.body", note: "tutorial.step4.note" },
+    { image: "05-preview.webp", title: "tutorial.step5.title", body: "tutorial.step5.body", note: "tutorial.step5.note" },
+    { image: "06-copy.webp", title: "tutorial.step6.title", body: "tutorial.step6.body", note: "tutorial.step6.note" }
+  ]);
+  let tutorialStepIndex = 0;
+
+  function tutorialLanguageFolder() {
+    const current = lang();
+    return ["ko", "en", "ja", "zh-CN", "zh-TW"].includes(current) ? current : "en";
+  }
+
+  function tutorialText(key, fallback = "") {
+    return appText(key, fallback || key);
+  }
+
+  function tutorialFormat(key, values = [], fallback = "") {
+    return localeText(key, values, fallback || key);
+  }
+
+  function renderTutorialStep() {
+    const dialog = state.ui.tutorialDialog;
+    if (!dialog) return;
+    tutorialStepIndex = Math.max(0, Math.min(TUTORIAL_STEPS.length - 1, Number(tutorialStepIndex) || 0));
+    const step = TUTORIAL_STEPS[tutorialStepIndex];
+    const title = tutorialText(step.title, `Step ${tutorialStepIndex + 1}`);
+    const folder = tutorialLanguageFolder();
+    if (state.ui.tutorialStepTitle) state.ui.tutorialStepTitle.textContent = title;
+    if (state.ui.tutorialBody) state.ui.tutorialBody.textContent = tutorialText(step.body, "");
+    if (state.ui.tutorialNote) state.ui.tutorialNote.textContent = tutorialText(step.note, "");
+    if (state.ui.tutorialProgress) state.ui.tutorialProgress.textContent = tutorialFormat(
+      "tutorial.progress",
+      [tutorialStepIndex + 1, TUTORIAL_STEPS.length],
+      `${tutorialStepIndex + 1} / ${TUTORIAL_STEPS.length}`
+    );
+    if (state.ui.tutorialImage) {
+      state.ui.tutorialImage.hidden = false;
+      state.ui.tutorialImage.src = `assets/tutorial/${folder}/${step.image}?rev=20260824-final42`;
+      state.ui.tutorialImage.alt = tutorialFormat("tutorial.image_alt", [title], `${title} screen example`);
+    }
+    if (state.ui.tutorialImageFallback) state.ui.tutorialImageFallback.hidden = true;
+    if (state.ui.tutorialPrev) {
+      state.ui.tutorialPrev.disabled = tutorialStepIndex === 0;
+      state.ui.tutorialPrev.textContent = tutorialText("tutorial.prev", "Previous");
+    }
+    if (state.ui.tutorialNext) {
+      const last = tutorialStepIndex === TUTORIAL_STEPS.length - 1;
+      state.ui.tutorialNext.textContent = tutorialText(last ? "tutorial.finish" : "tutorial.next", last ? "Done" : "Next");
+    }
+    state.ui.tutorialDots?.forEach((button, index) => {
+      const active = index === tutorialStepIndex;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-current", active ? "step" : "false");
+      button.setAttribute("aria-label", tutorialFormat("tutorial.jump", [index + 1], `Go to step ${index + 1}`));
+    });
+    const next = TUTORIAL_STEPS[tutorialStepIndex + 1];
+    if (next) {
+      const preload = new Image();
+      preload.src = `assets/tutorial/${folder}/${next.image}?rev=20260824-final42`;
+    }
+  }
+
+  function updateTutorialLocale() {
+    if (!state.ui.tutorialDialog) return;
+    if (state.ui.tutorialDialogTitle) state.ui.tutorialDialogTitle.textContent = tutorialText("tutorial.title", "Quick tutorial");
+    if (state.ui.tutorialClose) {
+      state.ui.tutorialClose.textContent = tutorialText("tutorial.close", "Close");
+      state.ui.tutorialClose.setAttribute("aria-label", tutorialText("tutorial.close", "Close"));
+    }
+    if (state.ui.tutorialImageFallback) state.ui.tutorialImageFallback.textContent = tutorialText("tutorial.image_error", "Preview image unavailable.");
+    renderTutorialStep();
+  }
+
+  function installTutorial() {
+    const button = state.ui.tutorialButton;
+    if (!button || state.ui.tutorialDialog) return;
+    const dialog = el("dialog", "wb14-tutorial-dialog", { id: "playerTutorialDialog", "aria-labelledby": "playerTutorialTitle" });
+    const card = el("div", "wb14-tutorial-card");
+    const head = el("header", "wb14-tutorial-head");
+    const headText = el("div", "wb14-tutorial-head-text");
+    state.ui.tutorialDialogTitle = el("h2", "wb14-tutorial-title", { id: "playerTutorialTitle" });
+    state.ui.tutorialProgress = el("span", "wb14-tutorial-progress");
+    headText.append(state.ui.tutorialDialogTitle, state.ui.tutorialProgress);
+    state.ui.tutorialClose = el("button", "wb14-tutorial-close", { type: "button" });
+    head.append(headText, state.ui.tutorialClose);
+
+    const content = el("div", "wb14-tutorial-content");
+    const visual = el("div", "wb14-tutorial-visual");
+    state.ui.tutorialImage = el("img", "wb14-tutorial-image", { decoding: "async" });
+    state.ui.tutorialImageFallback = el("p", "wb14-tutorial-image-fallback", { hidden: true });
+    state.ui.tutorialImage.addEventListener("error", () => {
+      state.ui.tutorialImage.hidden = true;
+      state.ui.tutorialImageFallback.hidden = false;
+    });
+    visual.append(state.ui.tutorialImage, state.ui.tutorialImageFallback);
+
+    const copy = el("div", "wb14-tutorial-copy");
+    state.ui.tutorialStepTitle = el("h3", "wb14-tutorial-step-title");
+    state.ui.tutorialBody = el("p", "wb14-tutorial-body");
+    state.ui.tutorialNote = el("p", "wb14-tutorial-note");
+    copy.append(state.ui.tutorialStepTitle, state.ui.tutorialBody, state.ui.tutorialNote);
+    content.append(visual, copy);
+
+    const footer = el("footer", "wb14-tutorial-footer");
+    const dots = el("div", "wb14-tutorial-dots", { role: "group" });
+    state.ui.tutorialDots = TUTORIAL_STEPS.map((_, index) => {
+      const dot = el("button", "wb14-tutorial-dot", { type: "button" });
+      dot.addEventListener("click", () => { tutorialStepIndex = index; renderTutorialStep(); });
+      dots.append(dot);
+      return dot;
+    });
+    const nav = el("div", "wb14-tutorial-nav");
+    state.ui.tutorialPrev = el("button", "wb14-tutorial-prev", { type: "button" });
+    state.ui.tutorialNext = el("button", "wb14-tutorial-next primary", { type: "button" });
+    nav.append(state.ui.tutorialPrev, state.ui.tutorialNext);
+    footer.append(dots, nav);
+    card.append(head, content, footer);
+    dialog.append(card);
+    document.body.append(dialog);
+    state.ui.tutorialDialog = dialog;
+
+    const close = () => { if (dialog.open) dialog.close(); };
+    button.addEventListener("click", () => {
+      tutorialStepIndex = 0;
+      updateTutorialLocale();
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+      requestAnimationFrame(() => state.ui.tutorialNext?.focus());
+    });
+    state.ui.tutorialClose.addEventListener("click", close);
+    state.ui.tutorialPrev.addEventListener("click", () => {
+      if (tutorialStepIndex <= 0) return;
+      tutorialStepIndex -= 1;
+      renderTutorialStep();
+    });
+    state.ui.tutorialNext.addEventListener("click", () => {
+      if (tutorialStepIndex >= TUTORIAL_STEPS.length - 1) { close(); return; }
+      tutorialStepIndex += 1;
+      renderTutorialStep();
+    });
+    dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
+    dialog.addEventListener("pointerdown", event => { if (event.target === dialog) close(); });
+    dialog.addEventListener("keydown", event => {
+      if (event.key === "ArrowLeft" && tutorialStepIndex > 0) {
+        event.preventDefault(); tutorialStepIndex -= 1; renderTutorialStep();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        if (tutorialStepIndex < TUTORIAL_STEPS.length - 1) { tutorialStepIndex += 1; renderTutorialStep(); }
+      }
+    });
+    updateTutorialLocale();
   }
 
   function targetForPanel(id) {
@@ -2862,6 +3069,21 @@
     state.ui.leadingControl = leadingStepper;
     common.append(optionRow("leading", leadingStepper, "", "wb6-common-leading wb8-common-leading wb9-common-leading"));
 
+    const fadeSecondsDefs = FADE_SECOND_OPTIONS.map(value => [String(value), String(value)]);
+    const fadeInSegments = segmented(fadeSecondsDefs, String(normalizeFadeSeconds(state.options.fade?.inSeconds)), value => {
+      state.options.fade.inSeconds = normalizeFadeSeconds(value);
+      queueApply();
+    }, "wb9-fade-segments");
+    state.ui.fadeInControl = fadeInSegments;
+    common.append(optionRow("fadeInSeconds", fadeInSegments, "", "wb9-common-fade-in"));
+
+    const fadeOutSegments = segmented(fadeSecondsDefs, String(normalizeFadeSeconds(state.options.fade?.outSeconds)), value => {
+      state.options.fade.outSeconds = normalizeFadeSeconds(value);
+      queueApply();
+    }, "wb9-fade-segments");
+    state.ui.fadeOutControl = fadeOutSegments;
+    common.append(optionRow("fadeOutSeconds", fadeOutSegments, "", "wb9-common-fade-out"));
+
     const dynamicsWrap = el("div", "wb9-volume-generation-controls");
     const genre = selectControl(genreValuesWithPlaceholder(), state.options.dynamics.genre, value => {
       state.options.dynamics.genre = value;
@@ -3113,6 +3335,7 @@
   buildShell();
   document.documentElement.removeAttribute("data-player-ui-booting");
   convertDialogs();
+  installTutorial();
   installGlobalHandling();
   installMidiStatusToastBridge();
   updateLocalText();

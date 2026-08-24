@@ -14,7 +14,7 @@
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
   const LOCALE_VERSION = "5.1.0";
-  const LOCALE_REVISION = "20260823-final21";
+  const LOCALE_REVISION = "20260824-final43";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 
@@ -30,6 +30,11 @@
     restLabel: $("restLabel"),
     restOptions: $("restOptions"),
     allRestButton: $("allRestButton"),
+    fadeInLabel: $("fadeInLabel"),
+    fadeInOptions: $("fadeInOptions"),
+    fadeOutLabel: $("fadeOutLabel"),
+    fadeOutOptions: $("fadeOutOptions"),
+    tutorialButton: $("simpleTutorialBtn"),
     playbackControls: $("playbackControls"),
     playButton: $("playButton"),
     rewindButton: $("rewindButton"),
@@ -75,6 +80,8 @@
   let selectedBytes = null;
   let selectedRest = "32";
   let selectedQuantize = 64;
+  let selectedFadeIn = 0;
+  let selectedFadeOut = 0;
   let currentMml = "";
   let resultPages = [];
   let conversionSerial = 0;
@@ -307,6 +314,10 @@
       els.restOptions.querySelector(`[data-rest="${denom}"]`).textContent = t(`rest${denom}`);
     }
     els.allRestButton.textContent = t("all");
+    els.fadeInLabel.textContent = t("fadeInSeconds");
+    els.fadeOutLabel.textContent = t("fadeOutSeconds");
+    if (els.tutorialButton) els.tutorialButton.textContent = t("tutorialOpen");
+    updateSimpleTutorialLocale();
     els.fullScoreTitle.textContent = t("fullScore");
     els.copyAllButton.textContent = t("copy");
     els.resultsTitle.textContent = t("split");
@@ -391,6 +402,20 @@
     if (refresh) requestConversion();
   }
 
+  function selectFadeOption(kind, value, refresh = true) {
+    const seconds = [0, 1, 2, 4].includes(Number(value)) ? Number(value) : 0;
+    const wrap = kind === "in" ? els.fadeInOptions : els.fadeOutOptions;
+    if (kind === "in") selectedFadeIn = seconds;
+    else selectedFadeOut = seconds;
+    wrap?.querySelectorAll("[data-fade-in],[data-fade-out]").forEach(button => {
+      const buttonValue = Number(button.dataset.fadeIn ?? button.dataset.fadeOut ?? 0);
+      const active = buttonValue === seconds;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    if (refresh) requestConversion();
+  }
+
   function selectQuantizeOption(value, refresh = true) {
     selectedQuantize = Number(value) === 32 ? 32 : 64;
     for (const button of els.quantizeOptions.querySelectorAll("[data-quantize]")) {
@@ -449,6 +474,16 @@
     return window.MabiOptimizer.addLeadingSilenceMml(mml, {
       partCount: 3,
       beats: GENERATED_MML_LEADING_SILENCE_SECONDS * 2
+    }).mml;
+  }
+
+  function applySimpleFade(mml) {
+    const fade = window.MabiOptimizer?.applyFadeMml;
+    if (typeof fade !== "function" || (selectedFadeIn <= 0 && selectedFadeOut <= 0)) return mml;
+    return fade(mml, {
+      partCount: 3,
+      fadeInSeconds: selectedFadeIn,
+      fadeOutSeconds: selectedFadeOut
     }).mml;
   }
 
@@ -515,11 +550,12 @@
       const simplifiedMml = applyTempoSimplification(converted.mml);
       const cleanedMml = applyRestRemoval(simplifiedMml);
       const alignedMml = alignGeneratedMmlStart(cleanedMml);
+      const fadedMml = applySimpleFade(alignedMml);
       if (token !== conversionSerial) return;
 
-      currentMml = alignedMml;
-      resultPages = splitForCopy(alignedMml);
-      rebuildPlayback(alignedMml);
+      currentMml = fadedMml;
+      resultPages = splitForCopy(fadedMml);
+      rebuildPlayback(fadedMml);
       renderResults(resultPages);
     } catch (error) {
       if (token !== conversionSerial) return;
@@ -901,6 +937,87 @@
     return normalized;
   }
 
+  const SIMPLE_TUTORIAL_STEPS = Object.freeze([
+    { image: "01-source.webp", title: "tutorialStep1Title", body: "tutorialStep1Body", note: "tutorialStep1Note" },
+    { image: "02-options.webp", title: "tutorialStep2Title", body: "tutorialStep2Body", note: "tutorialStep2Note" },
+    { image: "03-preview.webp", title: "tutorialStep3Title", body: "tutorialStep3Body", note: "tutorialStep3Note" },
+    { image: "04-copy.webp", title: "tutorialStep4Title", body: "tutorialStep4Body", note: "tutorialStep4Note" }
+  ]);
+  let simpleTutorialStep = 0;
+  let simpleTutorialUi = null;
+
+  function tutorialLanguageFolder() {
+    return SUPPORTED_LANGUAGES.includes(language) ? language : "en";
+  }
+
+  function ensureSimpleTutorial() {
+    if (simpleTutorialUi) return simpleTutorialUi;
+    const dialog = document.createElement("dialog");
+    dialog.className = "simple-tutorial-dialog";
+    dialog.id = "simpleTutorialDialog";
+    const card = document.createElement("div"); card.className = "simple-tutorial-card";
+    const head = document.createElement("header"); head.className = "simple-tutorial-head";
+    const headText = document.createElement("div");
+    const title = document.createElement("h2");
+    const progress = document.createElement("div"); progress.className = "simple-tutorial-progress";
+    headText.append(title, progress);
+    const close = document.createElement("button"); close.type="button"; close.className="simple-tutorial-close";
+    head.append(headText, close);
+    const content = document.createElement("div"); content.className="simple-tutorial-content";
+    const visual = document.createElement("div"); visual.className="simple-tutorial-visual";
+    const image = document.createElement("img"); image.className="simple-tutorial-image";
+    const fallback = document.createElement("p"); fallback.className="simple-tutorial-image-fallback"; fallback.hidden=true;
+    visual.append(image, fallback);
+    const copy = document.createElement("div"); copy.className="simple-tutorial-copy";
+    const stepTitle = document.createElement("h3"); stepTitle.className="simple-tutorial-step-title";
+    const body = document.createElement("p"); body.className="simple-tutorial-body";
+    const note = document.createElement("p"); note.className="simple-tutorial-note";
+    copy.append(stepTitle, body, note); content.append(visual, copy);
+    const footer = document.createElement("footer"); footer.className="simple-tutorial-footer";
+    const dots = document.createElement("div"); dots.className="simple-tutorial-dots";
+    const dotButtons = SIMPLE_TUTORIAL_STEPS.map((_, index) => { const b=document.createElement("button"); b.type="button"; b.className="simple-tutorial-dot"; b.addEventListener("click",()=>{simpleTutorialStep=index; renderSimpleTutorial();}); dots.append(b); return b; });
+    const nav = document.createElement("div"); nav.className="simple-tutorial-nav";
+    const prev = document.createElement("button"); prev.type="button"; prev.className="simple-tutorial-prev";
+    const next = document.createElement("button"); next.type="button"; next.className="simple-tutorial-next";
+    nav.append(prev,next); footer.append(dots,nav); card.append(head,content,footer); dialog.append(card); document.body.append(dialog);
+    close.addEventListener("click",()=>dialog.close());
+    prev.addEventListener("click",()=>{ if(simpleTutorialStep>0){simpleTutorialStep--;renderSimpleTutorial();} });
+    next.addEventListener("click",()=>{ if(simpleTutorialStep>=SIMPLE_TUTORIAL_STEPS.length-1) dialog.close(); else {simpleTutorialStep++;renderSimpleTutorial();} });
+    image.addEventListener("error",()=>{image.hidden=true;fallback.hidden=false;fallback.textContent=t("tutorialImageError");});
+    dialog.addEventListener("click",event=>{ if(event.target===dialog) dialog.close(); });
+    dialog.addEventListener("keydown",event=>{ if(event.key==="ArrowLeft"&&simpleTutorialStep>0){event.preventDefault();simpleTutorialStep--;renderSimpleTutorial();} if(event.key==="ArrowRight"&&simpleTutorialStep<SIMPLE_TUTORIAL_STEPS.length-1){event.preventDefault();simpleTutorialStep++;renderSimpleTutorial();} });
+    simpleTutorialUi={dialog,title,progress,close,image,fallback,stepTitle,body,note,prev,next,dots:dotButtons};
+    updateSimpleTutorialLocale();
+    return simpleTutorialUi;
+  }
+
+  function renderSimpleTutorial() {
+    const ui=ensureSimpleTutorial();
+    const step=SIMPLE_TUTORIAL_STEPS[Math.max(0,Math.min(SIMPLE_TUTORIAL_STEPS.length-1,simpleTutorialStep))];
+    ui.title.textContent=t("tutorialTitle");
+    ui.progress.textContent=t("tutorialProgress",[simpleTutorialStep+1,SIMPLE_TUTORIAL_STEPS.length]);
+    ui.close.textContent=t("tutorialClose"); ui.close.setAttribute("aria-label",t("tutorialClose"));
+    ui.stepTitle.textContent=t(step.title); ui.body.textContent=t(step.body); ui.note.textContent=t(step.note);
+    ui.prev.textContent=t("tutorialPrev"); ui.prev.disabled=simpleTutorialStep===0;
+    ui.next.textContent=t(simpleTutorialStep===SIMPLE_TUTORIAL_STEPS.length-1?"tutorialFinish":"tutorialNext");
+    ui.image.hidden=false; ui.fallback.hidden=true;
+    ui.image.src=`assets/tutorial/${tutorialLanguageFolder()}/${step.image}?rev=20260824-final43`;
+    ui.image.alt=t("tutorialImageAlt",[t(step.title)]);
+    ui.dots.forEach((button,index)=>{ const active=index===simpleTutorialStep; button.classList.toggle("active",active); button.setAttribute("aria-current",active?"step":"false"); button.setAttribute("aria-label",t("tutorialJump",[index+1])); });
+  }
+
+  function updateSimpleTutorialLocale() {
+    if (els.tutorialButton) els.tutorialButton.textContent=t("tutorialOpen");
+    if (simpleTutorialUi) renderSimpleTutorial();
+  }
+
+  function openSimpleTutorial() {
+    simpleTutorialStep=0;
+    const ui=ensureSimpleTutorial();
+    renderSimpleTutorial();
+    if (typeof ui.dialog.showModal === "function") ui.dialog.showModal(); else ui.dialog.setAttribute("open","");
+  }
+
   function currentSuggestedName() {
     const base = String(selectedFile?.name || els.fileName?.textContent || "mobibard-simple")
       .replace(/\.[^.]+$/, "")
@@ -970,6 +1087,15 @@
     if (!button) return;
     selectRestOption(button.dataset.rest, true);
   });
+  els.fadeInOptions?.addEventListener("click", event => {
+    const button = event.target.closest("[data-fade-in]");
+    if (button) selectFadeOption("in", button.dataset.fadeIn, true);
+  });
+  els.fadeOutOptions?.addEventListener("click", event => {
+    const button = event.target.closest("[data-fade-out]");
+    if (button) selectFadeOption("out", button.dataset.fadeOut, true);
+  });
+  els.tutorialButton?.addEventListener("click", event => { event.stopPropagation(); openSimpleTutorial(); });
 
   els.playButton.addEventListener("click", togglePlayback);
   els.rewindButton?.addEventListener("click", rewindPlayback);
@@ -1003,5 +1129,7 @@
 
   selectQuantizeOption(64, false);
   selectRestOption("32", false);
+  selectFadeOption("in", 0, false);
+  selectFadeOption("out", 0, false);
   void applyLanguage(language, false);
 })();

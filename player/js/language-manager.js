@@ -4,7 +4,7 @@
   const PREF_KEY = "mobibard.player.language";
   const DEFAULT_LANGUAGE = "en";
   const LOCALE_VERSION = "5.1.0";
-  const LOCALE_REVISION = "20260823-final21";
+  const LOCALE_REVISION = "20260824-final43";
   const SUPPORTED = Object.freeze({
     ko: { file: "ko.js", htmlLang: "ko" },
     ja: { file: "ja.js", htmlLang: "ja" },

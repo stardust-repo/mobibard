@@ -1747,6 +1747,162 @@
   }
 
 
+
+  function buildTempoSecondIndex(tempoMap) {
+    const beatUnits = durationUnits(4, 0);
+    const normalized = normalizeTempoEvents(tempoMap || []);
+    const segments = [];
+    let seconds = 0;
+    let previousPos = 0;
+    let previousBpm = normalized[0]?.bpm || DEFAULT_TEMPO;
+    segments.push({ pos: 0, bpm: previousBpm, seconds: 0 });
+    for (let index = 1; index < normalized.length; index++) {
+      const event = normalized[index];
+      const pos = Math.max(previousPos, Number(event.pos) || 0);
+      seconds += (pos - previousPos) * (60 / Math.max(1, previousBpm)) / beatUnits;
+      previousPos = pos;
+      previousBpm = Math.max(1, Number(event.bpm) || DEFAULT_TEMPO);
+      segments.push({ pos: previousPos, bpm: previousBpm, seconds });
+    }
+    return { segments, beatUnits };
+  }
+
+  function secondsAtUnits(index, rawPos) {
+    const pos = Math.max(0, Number(rawPos) || 0);
+    const segments = index?.segments || [];
+    if (!segments.length) return pos * (60 / DEFAULT_TEMPO) / durationUnits(4, 0);
+    let low = 0;
+    let high = segments.length - 1;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (segments[middle].pos <= pos + EPS) low = middle;
+      else high = middle - 1;
+    }
+    const segment = segments[low];
+    return segment.seconds + (pos - segment.pos) * (60 / Math.max(1, segment.bpm)) / index.beatUnits;
+  }
+
+  function applyFadeMml(text, options = {}) {
+    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const fadeInSeconds = Math.max(0, Number(options.fadeInSeconds ?? options.fadeIn ?? 0) || 0);
+    const fadeOutSeconds = Math.max(0, Number(options.fadeOutSeconds ?? options.fadeOut ?? 0) || 0);
+    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
+    while (sourceParts.length < partCount) sourceParts.push("");
+
+    if (fadeInSeconds <= EPS && fadeOutSeconds <= EPS) {
+      return { mml: String(text || ""), parts: sourceParts, fadeInSeconds: 0, fadeOutSeconds: 0, changedNotes: 0 };
+    }
+
+    const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
+    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(part => part.tempos));
+    const hasAnyContent = parsedParts.some(part => part.events.length || part.tempos.length || String(part.raw || "").trim());
+
+    let firstSoundUnit = Infinity;
+    let lastSoundStartUnit = -Infinity;
+    let soundingNotes = 0;
+    for (const part of parsedParts) {
+      for (const event of part.events) {
+        if (event.type !== "note" || clamp(event.volume, 0, 15) <= 0) continue;
+        firstSoundUnit = Math.min(firstSoundUnit, event.start);
+        lastSoundStartUnit = Math.max(lastSoundStartUnit, event.start);
+        soundingNotes += 1;
+      }
+    }
+    if (!Number.isFinite(firstSoundUnit) || !Number.isFinite(lastSoundStartUnit) || soundingNotes <= 0) {
+      return { mml: String(text || ""), parts: sourceParts, fadeInSeconds, fadeOutSeconds, changedNotes: 0, tempoMap };
+    }
+
+    const secondIndex = buildTempoSecondIndex(tempoMap);
+    const firstSoundSeconds = secondsAtUnits(secondIndex, firstSoundUnit);
+    const lastSoundStartSeconds = secondsAtUnits(secondIndex, lastSoundStartUnit);
+    const noteStartSpanSeconds = Math.max(0, lastSoundStartSeconds - firstSoundSeconds);
+
+    // MML volume commands are note-level.  The fade window therefore uses note
+    // start times: fade-in begins at the first sounding note, and fade-out ends
+    // with the final sounding note starting at V1.  When a score is shorter than
+    // the requested envelope, fit the envelope into the available note-onset span.
+    let effectiveFadeInSeconds = fadeInSeconds > EPS ? Math.min(fadeInSeconds, noteStartSpanSeconds) : 0;
+    let effectiveFadeOutSeconds = fadeOutSeconds > EPS ? Math.min(fadeOutSeconds, noteStartSpanSeconds) : 0;
+    if (noteStartSpanSeconds > EPS && effectiveFadeInSeconds > EPS && effectiveFadeOutSeconds > EPS) {
+      const combined = effectiveFadeInSeconds + effectiveFadeOutSeconds;
+      if (combined > noteStartSpanSeconds + EPS) {
+        const fit = noteStartSpanSeconds / combined;
+        effectiveFadeInSeconds *= fit;
+        effectiveFadeOutSeconds *= fit;
+      }
+    }
+    const fadeOutStartSeconds = lastSoundStartSeconds - effectiveFadeOutSeconds;
+
+    let changedNotes = 0;
+    let touchedNotes = 0;
+    const outputParts = [];
+
+    for (let partIndex = 0; partIndex < partCount; partIndex++) {
+      let events = parsedParts[partIndex].events.map(event => {
+        if (event.type !== "note") return { ...event };
+        const originalVolume = clamp(event.volume, 0, 15);
+        if (originalVolume <= 0) return { ...event, volume: originalVolume };
+
+        touchedNotes += 1;
+        const noteStartSeconds = secondsAtUnits(secondIndex, event.start);
+        let factor = 1;
+
+        if (fadeInSeconds > EPS) {
+          let inFactor = 1;
+          if (noteStartSpanSeconds <= EPS) inFactor = 0;
+          else if (effectiveFadeInSeconds > EPS && noteStartSeconds <= firstSoundSeconds + effectiveFadeInSeconds + EPS) {
+            inFactor = Math.max(0, Math.min(1, (noteStartSeconds - firstSoundSeconds) / effectiveFadeInSeconds));
+          }
+          factor = Math.min(factor, inFactor);
+        }
+
+        if (fadeOutSeconds > EPS) {
+          let outFactor = 1;
+          if (noteStartSpanSeconds <= EPS) outFactor = 0;
+          else if (effectiveFadeOutSeconds > EPS && noteStartSeconds >= fadeOutStartSeconds - EPS) {
+            outFactor = Math.max(0, Math.min(1, (lastSoundStartSeconds - noteStartSeconds) / effectiveFadeOutSeconds));
+          }
+          factor = Math.min(factor, outFactor);
+        }
+
+        // Interpolate between V1 and the note's own original volume.  V0 remains
+        // silent and is handled above; V1 naturally stays V1 throughout the fade.
+        const fadedVolume = factor >= 1 - EPS
+          ? originalVolume
+          : Math.max(1, Math.min(originalVolume, Math.round(1 + (originalVolume - 1) * factor)));
+        if (fadedVolume !== originalVolume) changedNotes += 1;
+        return { ...event, volume: fadedVolume };
+      });
+
+      events = mergeAdjacentRests(events);
+      if (partIndex === 0) events = injectTempoEvents(events, tempoMap);
+      outputParts.push(renderPart(events, {
+        isMelody: partIndex === 0,
+        startTempo: tempoMap[0]?.bpm || DEFAULT_TEMPO,
+        forceHeader: partIndex === 0 && hasAnyContent,
+        partIndex
+      }));
+    }
+
+    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+    return {
+      mml,
+      parts: outputParts,
+      fadeInSeconds,
+      fadeOutSeconds,
+      effectiveFadeInSeconds,
+      effectiveFadeOutSeconds,
+      firstSoundUnit,
+      lastSoundStartUnit,
+      firstSoundSeconds,
+      lastSoundStartSeconds,
+      noteStartSpanSeconds,
+      touchedNotes,
+      changedNotes,
+      tempoMap
+    };
+  }
+
   function transposeOctavesMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const partOctaves = Array.isArray(options.partOctaves)
@@ -3571,5 +3727,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = Object.freeze({ version: "5.1.0", optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, transposeOctavesMml, splitMmlPages });
+  window.MabiOptimizer = Object.freeze({ version: "5.1.0", optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, applyFadeMml, transposeOctavesMml, splitMmlPages });
 })();
