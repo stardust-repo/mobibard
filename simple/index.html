@@ -147,7 +147,7 @@
 </div>
 </div>
 <div aria-controls="midiFileInput" class="drop-zone" id="dropZone" role="button" tabindex="0">
-<input accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,application/musicxml+xml,application/xml,text/xml" data-music-format-input="" hidden="" id="midiFileInput" type="file"/>
+<input accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,application/musicxml+xml,application/xml,text/xml,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm" data-music-format-input="" hidden="" id="midiFileInput" type="file"/>
 <div class="simple-help-actions">
 <button class="mabi-supported-files-button" data-supported-files-button="" data-supported-files-context="simple" type="button">지원 파일</button>
 <button class="simple-tutorial-button" id="simpleTutorialBtn" type="button">튜토리얼</button>
@@ -274,12 +274,15 @@
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/notation/notation-utils.js?v=5.1.0"></script>
-<script src="../plugins/formats/music-format-core.js?v=5.1.0&amp;rev=20260820-030000"></script>
+<script src="../plugins/formats/music-format-core.js?v=5.1.0&amp;rev=20260824-final44"></script>
 <script src="../plugins/formats/console-gm-normalizer.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/xsf/xsf-container.js?v=5.1.0&amp;rev=20260819-195600"></script>
 <script src="../plugins/formats/playstation/playstation-sequence.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/playstation/akao-sequence.js?v=5.1.0&amp;rev=20260823-final6"></script>
 <script src="../plugins/formats/nintendo/nintendo-sequence.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/legacy-pc/legacy-pc-sequence.js?v=5.1.0&amp;rev=20260824-final44"></script>
+<script src="../plugins/formats/tracker/tracker-sequence.js?v=5.1.0&amp;rev=20260824-final44"></script>
+<script src="../plugins/formats/sega/sega-saturn-sequence.js?v=5.1.0&amp;rev=20260824-final44"></script>
 <script src="../plugins/formats/xsf/format-xsf.js?v=5.1.0&amp;rev=20260820-031400"></script>
 <script src="../plugins/formats/musicxml/musicxml-to-midi.js?v=5.1.0&amp;rev=20260823-final13"></script>
 <script src="../plugins/formats/finale/finale-mus-to-midi.js?v=5.1.0&amp;rev=20260823-final6"></script>
@@ -293,6 +296,9 @@
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
+<script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
+<script src="../plugins/formats/tracker/format-tracker.js?v=5.1.0&amp;rev=20260824-final44"></script>
+<script src="../plugins/formats/sega/format-sega.js?v=5.1.0&amp;rev=20260824-final44"></script>
 <script src="../plugins/formats/musicxml/format-musicxml.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/finale/format-finale.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/mnx/format-mnx.js?v=5.1.0&amp;rev=20260819-194500"></script>
@@ -300,7 +306,7 @@
 <script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
 <script src="../plugins/common/midi-to-mml.js?v=5.1.0&amp;rev=20260823-final6"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260820-031400"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final44"></script>
 <script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260824-final39"></script>
 <script src="../plugins/common/mml-parser.js?v=5.1.0"></script>
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
@@ -311,7 +317,7 @@
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260823-final2" type="module"></script>
-<script src="./js/app.js?v=5.1.0&amp;rev=20260824-final43"></script>
+<script src="./js/app.js?v=5.1.0&amp;rev=20260824-final44"></script>
 <script src="./enhancements.js?v=5.1.0&amp;rev=20260823-final18"></script>
 </body>
 </html>

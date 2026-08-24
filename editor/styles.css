@@ -193,7 +193,8 @@ textarea:focus-visible,
   padding-left: 7px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--topbar-bg) 0%, transparent), var(--topbar-bg) 14px);
   box-shadow: -6px 0 12px color-mix(in srgb, var(--topbar-bg) 86%, transparent);
-  z-index: 5;
+  /* Keep the Guest/config surface above the editor playhead (z-index: 40). */
+  z-index: 50;
 }
 
 .brand {

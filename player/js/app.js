@@ -3433,7 +3433,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const SOURCE_FILE_EXTENSIONS = new Set(["txt", "mmi", "mml", ...(window.MabiMusicFormats?.inputExtensions?.() || window.MabiMusicFormats?.supportedExtensions?.() || [])]);
   // MIDI/KAR + MML are core Player workflows and remain eagerly loaded.
   // Other source-format converters are loaded only when a matching file is actually opened.
-  const FORMAT_RUNTIME_REVISION = "20260823-final20";
+  const FORMAT_RUNTIME_REVISION = "20260824-final44";
   const FORMAT_RUNTIME_SCRIPTS = Object.freeze({
     notation: "../plugins/formats/notation/notation-utils.js",
     consoleGm: "../plugins/formats/console-gm-normalizer.js",
@@ -3449,7 +3449,10 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     gp3: "../plugins/formats/guitarpro/vendor/guitarpro-parser/gp3-browser.js",
     gp5: "../plugins/formats/guitarpro/vendor/parse-gp5/index.js",
     guitarpro: "../plugins/formats/guitarpro/guitarpro-local.js",
-    vocal: "../plugins/formats/vocal/vocal-format-parsers.js"
+    vocal: "../plugins/formats/vocal/vocal-format-parsers.js",
+    legacyPc: "../plugins/formats/legacy-pc/legacy-pc-sequence.js",
+    tracker: "../plugins/formats/tracker/tracker-sequence.js",
+    segaSaturn: "../plugins/formats/sega/sega-saturn-sequence.js"
   });
   const FORMAT_RUNTIME_BY_ID = Object.freeze({
     "midi": [],
@@ -3471,7 +3474,13 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     "ustx": ["vocal"],
     "svp": ["vocal"],
     "s5p": ["vocal"],
-    "ccs": ["vocal"]
+    "ccs": ["vocal"],
+    "xmi": ["legacyPc"],
+    "hmp": ["legacyPc"],
+    "hmi": ["legacyPc"],
+    "tracker-module": ["tracker"],
+    "sega-saturn-sequence": ["segaSaturn"],
+    "sega-megadrive-xgm": ["segaSaturn"]
   });
   const formatRuntimeScriptPromises = new Map();
 
@@ -3512,13 +3521,13 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     if (!core) return { format: null, generic: false };
     const uploadedName = String(fileName || "");
     let generic = Boolean(core.isGenericContainer?.(uploadedName, mimeType));
-    let format = generic ? null : core.findFormat?.(uploadedName, mimeType);
+    let format = generic ? null : core.findFormat?.(uploadedName, mimeType, bytes);
     if (bytes != null) {
       try {
         const macBinary = window.MabiUtils?.inspectMacBinary?.(bytes);
         const internalName = String(macBinary?.fileName || "").trim();
         if (internalName) {
-          const internalFormat = core.findFormat?.(internalName, "");
+          const internalFormat = core.findFormat?.(internalName, "", macBinary?.data || bytes);
           if (internalFormat) {
             format = internalFormat;
             generic = false;
@@ -4833,7 +4842,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
   function currentRhythmGameTitle() {
     const name = String(googleDriveMmlFileName || suggestedMmlSaveFileName || "")
-      .replace(/\.(txt|mml|mid|midi|kar|mus|musx|mnx(?:\.json)?|mscz|mscx|musicxml|xml|mxl|mmi|gp3|gp4|gp5|gpx|gp|tab|vsq|vsqx|vpr|ust|ustx|svp|s5p|ccs)$/i, "")
+      .replace(/\.(txt|mml|mid|midi|kar|xmi|hmp|hmi|mod|s3m|xm|it|seq|xgm|mus|musx|mnx(?:\.json)?|mscz|mscx|musicxml|xml|mxl|mmi|gp3|gp4|gp5|gpx|gp|tab|vsq|vsqx|vpr|ust|ustx|svp|s5p|ccs)$/i, "")
       .replace(/[_-]+/g, " ")
       .trim();
     return name || i18nText("mml.title");

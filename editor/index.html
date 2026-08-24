@@ -9,7 +9,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <title>모비바드 v5.1</title>
 <link href="../assets/favicon.ico" rel="icon"/>
-<link href="styles.css?v=5.1.0&amp;rev=20260823-final21" rel="stylesheet"/>
+<link href="styles.css?v=5.1.0&amp;rev=20260824-final45" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
 <body>
@@ -28,9 +28,9 @@
 <button id="audioOpenButton" role="menuitem" type="button">오디오 불러오기</button>
 <div class="file-menu-separator" role="separator"></div><button id="fileExportButton" role="menuitem" type="button">MML 내보내기</button></div>
 </div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button">되돌리기</button><button id="editRedoButton" role="menuitem" type="button">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button">복사</button><button id="editCutButton" role="menuitem" type="button">잘라내기</button><button id="editPasteButton" role="menuitem" type="button">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button">삭제</button><button id="editNoteVolumeButton" role="menuitem" type="button">노트 볼륨</button></div></div>
-<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="fileInput" data-music-format-input type="file"/>
+<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm" hidden="" id="fileInput" data-music-format-input type="file"/>
 <input accept="text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle" hidden="" id="mmlImportFileInput" type="file"/>
-<input accept="audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl" hidden="" id="midiFileInput" data-music-format-input type="file"/>
+<input accept="audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm" hidden="" id="midiFileInput" data-music-format-input type="file"/>
 <input accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm" hidden="" id="audioFileInput" type="file"/>
 </div>
 <div class="toolbar-separator"></div>
@@ -223,16 +223,16 @@
 </div></main></div>
 </div>
 <div class="popup-backdrop" hidden="" id="mmlImportBackdrop">
-<section aria-label="MML, 3MLE 또는 MMI 불러오기" aria-modal="true" class="mml-import-dialog" id="mmlImportDialog" role="dialog">
+<section aria-label="3MLE, MabiIcco 또는 MML 불러오기" aria-modal="true" class="mml-import-dialog" id="mmlImportDialog" role="dialog">
 <div class="transfer-dialog-header">
-<div><strong>MML / 3MLE / MMI 불러오기</strong><span id="mmlImportSourceLabel">텍스트를 붙여넣거나 파일을 선택하세요.</span></div>
+<div><strong>3MLE / MabiIcco / MML 불러오기</strong><span id="mmlImportSourceLabel">텍스트를 붙여넣거나 파일을 선택하세요.</span></div>
 <button aria-label="닫기" class="channel-mute-close" id="mmlImportCloseButton" type="button">×</button>
 </div>
 <div class="mml-import-source-actions">
 <button id="mmlImportChooseFileButton" type="button">파일 선택</button>
 <button id="mmlImportPasteButton" type="button">클립보드 붙여넣기</button>
 </div>
-<textarea aria-label="불러올 MML, 3MLE 또는 MMI 텍스트" id="mmlImportText" placeholder="MML@t120o4v15c4d4e4,...; · 3MLE [Channel1] · MMI 파일 내용"></textarea>
+<textarea aria-label="불러올 3MLE, MabiIcco 또는 MML 텍스트" id="mmlImportText" placeholder="MML@t120o4v15c4d4e4,...; · 3MLE(.mml) [Channel1] · MabiIcco(.mmi) 파일 내용"></textarea>
 <section class="mml-import-channel-section" hidden="" id="mmlImportChannelSection">
 <div class="mml-import-channel-header"><div><strong id="mmlImportChannelTitle">3MLE 채널 선택</strong><span>한 번에 최대 6개 채널을 선택할 수 있습니다.</span></div><div><button id="mmlImportSelectAllButton" type="button">처음 6개 선택</button><button id="mmlImportClearSelectionButton" type="button">전부 해제</button></div></div>
 <div class="mml-import-channel-list" id="mmlImportChannelList"></div>
@@ -240,7 +240,7 @@
 <div class="mml-import-options mml-import-simple-options">
 <label class="mml-import-tempo-option"><input checked="" id="mmlImportApplyTempo" type="checkbox"/><span>파일의 템포를 프로젝트에 적용</span></label>
 </div>
-<div aria-live="polite" class="mml-import-status" id="mmlImportStatus">MML은 새 편집 채널로 추가되며, 3MLE·MMI 파일은 필요한 채널을 선택해 불러옵니다.</div>
+<div aria-live="polite" class="mml-import-status" id="mmlImportStatus">MML은 새 편집 채널로 추가되며, 3MLE·MabiIcco 파일은 필요한 채널을 선택해 불러옵니다.</div>
 <div class="transfer-dialog-actions"><button id="mmlImportCancelButton" type="button">취소</button><button id="mmlImportApplyButton" type="button">불러오기</button></div>
 </section>
 </div>
@@ -316,12 +316,15 @@
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/notation/notation-utils.js?v=5.1.0"></script>
-<script src="../plugins/formats/music-format-core.js?v=5.1.0&amp;rev=20260820-030000"></script>
+<script src="../plugins/formats/music-format-core.js?v=5.1.0&amp;rev=20260824-final44"></script>
 <script src="../plugins/formats/console-gm-normalizer.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/xsf/xsf-container.js?v=5.1.0&amp;rev=20260819-195600"></script>
 <script src="../plugins/formats/playstation/playstation-sequence.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/playstation/akao-sequence.js?v=5.1.0&amp;rev=20260823-release9"></script>
 <script src="../plugins/formats/nintendo/nintendo-sequence.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/legacy-pc/legacy-pc-sequence.js?v=5.1.0&amp;rev=20260824-final44"></script>
+<script src="../plugins/formats/tracker/tracker-sequence.js?v=5.1.0&amp;rev=20260824-final44"></script>
+<script src="../plugins/formats/sega/sega-saturn-sequence.js?v=5.1.0&amp;rev=20260824-final44"></script>
 <script src="../plugins/formats/xsf/format-xsf.js?v=5.1.0&amp;rev=20260820-031400"></script>
 <script src="../plugins/formats/musicxml/musicxml-to-midi.js?v=5.1.0&amp;rev=20260823-release9"></script>
 <script src="../plugins/formats/finale/finale-mus-to-midi.js?v=5.1.0&amp;rev=20260823-release9"></script>
@@ -335,6 +338,9 @@
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
+<script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
+<script src="../plugins/formats/tracker/format-tracker.js?v=5.1.0&amp;rev=20260824-final44"></script>
+<script src="../plugins/formats/sega/format-sega.js?v=5.1.0&amp;rev=20260824-final44"></script>
 <script src="../plugins/formats/musicxml/format-musicxml.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/finale/format-finale.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/mnx/format-mnx.js?v=5.1.0&amp;rev=20260819-194500"></script>
@@ -344,7 +350,7 @@
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
 <script src="js/soundbank-player.js?v=5.1.0"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260820-031400"></script>
-<script src="app.js?v=5.1.0&amp;rev=20260823-final18"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final44"></script>
+<script src="app.js?v=5.1.0&amp;rev=20260824-final44"></script>
 </body>
 </html>

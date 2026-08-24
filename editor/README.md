@@ -16,7 +16,7 @@ MML 채널과 참조 연주 파일을 피아노롤에서 시각적으로 편집�
 - Classic Mac의 MacBinary Data Fork·Resource Fork·보조 헤더와 Program·Bank, running status, 템포·박자·조표는 공용 계층에서 처리합니다.
 - 확장자가 보존되지 않은 Classic Mac 컨테이너를 위해 `.bin`·`.macbin`도 선택할 수 있으며, 내부 파일명과 바이너리 시그니처로 실제 형식을 판별합니다.
 - MUSX·MNX·MuseScore 입력은 기본 재생 정보를 보존하며 고급 기보와 레이아웃은 단순화됩니다.
-- 통합 불러오기 대화상자는 전체 지원 형식과 MIDI·KAR, MusicXML, MNX, Finale, MuseScore, Guitar Pro, PlayStation, Nintendo, VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO, 모비바드 프로젝트, MML·MMI 필터를 제공합니다. Classic Mac은 별도 카테고리 없이 전체 또는 관련 옛 포맷군에서 `.bin`·`.macbin`을 선택하면 내부 형식을 자동 판별합니다.
+- 통합 불러오기 대화상자는 전체 지원 형식과 MIDI·KAR, XMI·HMP·HMI, Tracker(MOD/S3M/XM/IT), MusicXML, MNX, Finale, MuseScore, Guitar Pro, PlayStation, Nintendo, Sega, VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO, 모비바드 프로젝트, 3MLE·MabiIcco·MML 필터를 제공합니다. Classic Mac은 별도 카테고리 없이 전체 또는 관련 옛 포맷군에서 `.bin`·`.macbin`을 선택하면 내부 형식을 자동 판별합니다.
 - MIDI 참조, MML 가져오기, 오디오 가져오기도 같은 공용 파일 선택 경로를 사용하며 브라우저 미지원 시 기존 파일 입력으로 자동 대체됩니다.
 - 지원 파일 팝업은 표준 음악·악보, 음악 편집기, 콘솔, 보컬 편집기 등으로 구분하며 VOCALOID·UTAU·OpenUtau·Synthesizer V·CeVIO를 서로 다른 제품군으로 표시합니다.
 - 지원 파일 팝업에는 Classic Mac 컨테이너를 별도 형식이나 안내 항목으로 표시하지 않으며, 선택 뒤 공용 입력 계층이 자동 판별합니다.

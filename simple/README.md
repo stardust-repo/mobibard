@@ -9,7 +9,7 @@
 
 ## 입력과 변환
 
-- MIDI/KAR, PlayStation/Nintendo 시퀀스, MusicXML/MNX/Finale/MuseScore/Guitar Pro, VOCALOID/UTAU/OpenUtau/Synthesizer V/CeVIO 계열을 공용 포맷 계층으로 처리합니다.
+- MIDI/KAR, XMI/HMP/HMI, Tracker(MOD/S3M/XM/IT), PlayStation/Nintendo/Sega 시퀀스, MusicXML/MNX/Finale/MuseScore/Guitar Pro, VOCALOID/UTAU/OpenUtau/Synthesizer V/CeVIO 계열을 공용 포맷 계층으로 처리합니다.
 - `.bin`·`.macbin` Classic Mac 컨테이너는 내부 형식을 공용 계층이 자동 판별합니다.
 - 공용 MIDI→MML 변환기로 최대 3채널을 생성합니다.
 - 공용 1/64 겹침 허용 규칙과 템포 정리를 사용합니다.

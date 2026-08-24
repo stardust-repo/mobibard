@@ -5292,7 +5292,7 @@
         const candidates = format === "mmi"
           ? extractMabiIccoMmlPartCandidates(text)
           : extractThreeMleMmlPartCandidates(text);
-        if (!candidates.length) throw new Error(`${format === "mmi" ? "MMI" : "3MLE"} 파일에서 연주 가능한 채널을 찾지 못했습니다.`);
+        if (!candidates.length) throw new Error(`${format === "mmi" ? "MabiIcco" : "3MLE"} 파일에서 연주 가능한 채널을 찾지 못했습니다.`);
         state.midiImport.textCandidates = candidates;
         state.midiImport.selectedTextIndexes = new Set(candidates.map((_, index) => index));
         state.midiImport.textParsed = parseMmlCandidateParts(candidates, 64);
@@ -9132,7 +9132,7 @@
     elements.mmlImportChannelList.replaceChildren();
     if (!isSelectableProject) return;
     const selectedCount = state.mmlImport.selectedCandidateIndexes.size;
-    const formatLabel = state.mmlImport.format === "mmi" ? "MMI" : "3MLE";
+    const formatLabel = state.mmlImport.format === "mmi" ? "MabiIcco" : "3MLE";
     elements.mmlImportChannelTitle.textContent = `${formatLabel} 채널 선택 (${selectedCount}/6)`;
     state.mmlImport.candidates.forEach((candidate, index) => {
       const row = document.createElement("label");
@@ -9157,7 +9157,7 @@
         if (checkbox.checked) {
           if (next.size >= 6) {
             checkbox.checked = false;
-            showToast("3MLE·MMI 채널은 한 번에 최대 6개까지 선택할 수 있습니다.");
+            showToast("3MLE·MabiIcco 채널은 한 번에 최대 6개까지 선택할 수 있습니다.");
             return;
           }
           next.add(index);
@@ -9183,7 +9183,7 @@
       renderMmlImportChannelList();
       elements.mmlImportApplyButton.disabled = true;
       elements.mmlImportApplyTempo.disabled = true;
-      setMmlImportStatus("MML, 3MLE 또는 MMI 내용을 입력하면 채널·노트·템포 정보를 확인합니다.");
+      setMmlImportStatus("3MLE, MabiIcco 또는 MML 내용을 입력하면 채널·노트·템포 정보를 확인합니다.");
       return null;
     }
     try {
@@ -9191,7 +9191,7 @@
       state.mmlImport.parsed = parsed;
       renderMmlImportChannelList();
       const details = [
-        state.mmlImport.format === "mml" ? `MML 음성 ${parsed.noteParts.length}개` : `${state.mmlImport.format === "mmi" ? "MMI" : "3MLE"} 선택 ${state.mmlImport.selectedCandidateIndexes.size}개`,
+        state.mmlImport.format === "mml" ? `MML 음성 ${parsed.noteParts.length}개` : `${state.mmlImport.format === "mmi" ? "MabiIcco" : "3MLE"} 선택 ${state.mmlImport.selectedCandidateIndexes.size}개`,
         `노트 ${parsed.noteCount}개`,
         "1/64 음표 변환",
         `${parsed.noteParts.length}개 새 편집 채널 추가`,
@@ -9261,7 +9261,7 @@
       } else {
         state.mmlImport.sourceFileName = file.name || "";
         state.mmlImport.candidateSignature = "";
-        elements.mmlImportSourceLabel.textContent = file.name || "MML / 3MLE / MMI 파일";
+        elements.mmlImportSourceLabel.textContent = file.name || "3MLE / MabiIcco / MML 파일";
         elements.mmlImportText.value = text;
         updateMmlImportPreview();
         elements.mmlImportText.focus();
@@ -9269,7 +9269,7 @@
       return true;
     } catch (error) {
       console.error(error);
-      showToast("MML, 3MLE 또는 MMI 파일을 읽지 못했습니다.");
+      showToast("3MLE, MabiIcco 또는 MML 파일을 읽지 못했습니다.");
       return false;
     }
   }
@@ -9284,7 +9284,7 @@
       }
       state.mmlImport.sourceFileName = "";
       state.mmlImport.candidateSignature = "";
-      elements.mmlImportSourceLabel.textContent = "클립보드 MML / 3MLE / MMI";
+      elements.mmlImportSourceLabel.textContent = "클립보드 3MLE / MabiIcco / MML";
       elements.mmlImportText.value = text;
       updateMmlImportPreview();
       elements.mmlImportText.focus();
@@ -9339,7 +9339,7 @@
     clearNoteSelection();
     clearMidiSelection();
     state.channelNoteRuntime.clear();
-    const importLabel = format === "mmi" ? "MMI" : format === "3mle" ? "3MLE" : "MML";
+    const importLabel = format === "mmi" ? "MabiIcco" : format === "3mle" ? "3MLE" : "MML";
     markDirty(`${importLabel} 불러오기`);
     shrinkTimelineToContent();
     ensureTimelineFitsViewport();

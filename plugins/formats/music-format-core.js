@@ -95,30 +95,77 @@
     if (oldIndex >= 0) {
       const old = registrations[oldIndex];
       for (const extension of old.extensions) {
-        if (byExtension.get(extension)?.id === id) byExtension.delete(extension);
+        const bucket = (byExtension.get(extension) || []).filter(item => item.id !== id);
+        if (bucket.length) byExtension.set(extension, bucket);
+        else byExtension.delete(extension);
       }
       registrations.splice(oldIndex, 1, normalized);
     } else {
       registrations.push(normalized);
     }
-    for (const extension of extensions) byExtension.set(extension, normalized);
+    for (const extension of extensions) {
+      const bucket = (byExtension.get(extension) || []).filter(item => item.id !== id);
+      bucket.push(normalized);
+      byExtension.set(extension, bucket);
+    }
     return normalized;
   }
 
-  function findFormatByExtension(fileName) {
+  function formatsByExtension(fileName) {
+    const formats = [];
+    const seen = new Set();
     for (const extension of extensionCandidates(fileName)) {
-      if (byExtension.has(extension)) return byExtension.get(extension);
+      for (const format of byExtension.get(extension) || []) {
+        if (seen.has(format.id)) continue;
+        seen.add(format.id);
+        formats.push(format);
+      }
     }
-    return null;
+    return formats;
+  }
+
+  function findFormatByExtension(fileName, bytes = null, mimeType = "") {
+    const formats = formatsByExtension(fileName);
+    if (!formats.length) return null;
+    if (bytes != null && formats.length > 1) {
+      const view = asUint8Array(bytes);
+      for (const format of formats) {
+        if (!format.detect) continue;
+        try {
+          if (format.detect(view, fileName, mimeType)) return format;
+        } catch (_) {}
+      }
+    }
+    return formats[0];
   }
 
   function findFormat(fileName, mimeType = "", bytes = null) {
-    const extensionMatch = findFormatByExtension(fileName);
-    if (extensionMatch) return extensionMatch;
+    const extensionFormats = formatsByExtension(fileName);
+    if (bytes != null && extensionFormats.length) {
+      const view = asUint8Array(bytes);
+      for (const format of extensionFormats) {
+        if (!format.detect) continue;
+        try {
+          if (format.detect(view, fileName, mimeType)) return format;
+        } catch (_) {}
+      }
+      if (extensionFormats.length === 1) return extensionFormats[0];
+    } else if (extensionFormats.length) {
+      return extensionFormats[0];
+    }
     const type = String(mimeType || "").toLowerCase();
     if (type) {
-      const match = registrations.find(item => item.mimeTypes.includes(type));
-      if (match) return match;
+      const matches = registrations.filter(item => item.mimeTypes.includes(type));
+      if (bytes != null && matches.length > 1) {
+        const view = asUint8Array(bytes);
+        for (const format of matches) {
+          if (!format.detect) continue;
+          try {
+            if (format.detect(view, fileName, mimeType)) return format;
+          } catch (_) {}
+        }
+      }
+      if (matches.length) return matches[0];
     }
     if (bytes != null) {
       const view = asUint8Array(bytes);
@@ -163,7 +210,18 @@
       attempts.push(format);
     };
 
-    for (const name of fileNames) push(findFormatByExtension(name));
+    // When extensions collide (notably .seq for PlayStation and Sega Saturn),
+    // prefer content signatures first, then keep the remaining extension matches as fallbacks.
+    for (const name of fileNames) {
+      const formats = formatsByExtension(name);
+      for (const format of formats) {
+        if (!format.detect) continue;
+        try {
+          if (format.detect(bytes, name, mimeType)) push(format);
+        } catch (_) {}
+      }
+      for (const format of formats) push(format);
+    }
 
     const type = String(mimeType || "").trim().toLowerCase();
     if (type && !GENERIC_CONTAINER_MIME_TYPES.includes(type)) {
@@ -353,6 +411,29 @@
           tick: Math.max(0, Math.round(numberValue(control.tick ?? control.position, 0))),
           order: 2,
           bytes: [0xb0 | controlChannel, clampInt(control.controller ?? control.control, 0, 127, 7), clampInt(control.value, 0, 127, 0)],
+        });
+      }
+      for (const change of track.programChanges || []) {
+        const changeChannel = Number.isFinite(Number(change.channel)) ? clampInt(change.channel, 0, 15, channel) : channel;
+        events.push({
+          tick: Math.max(0, Math.round(numberValue(change.tick ?? change.position, 0))),
+          order: 2,
+          bytes: [0xc0 | changeChannel, clampInt(change.program ?? change.value, 0, 127, 0)],
+        });
+      }
+      for (const bend of track.pitchBends || []) {
+        const bendChannel = Number.isFinite(Number(bend.channel)) ? clampInt(bend.channel, 0, 15, channel) : channel;
+        let value = Number(bend.value ?? bend.pitch ?? bend.amount);
+        if (!Number.isFinite(value)) {
+          const lsb = clampInt(bend.lsb, 0, 127, 0);
+          const msb = clampInt(bend.msb, 0, 127, 64);
+          value = (msb << 7) | lsb;
+        } else if (value >= -8192 && value <= 8191) value += 8192;
+        value = clampInt(value, 0, 16383, 8192);
+        events.push({
+          tick: Math.max(0, Math.round(numberValue(bend.tick ?? bend.position, 0))),
+          order: 2,
+          bytes: [0xe0 | bendChannel, value & 0x7f, (value >>> 7) & 0x7f],
         });
       }
       for (const note of track.notes || []) {

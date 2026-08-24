@@ -25,9 +25,9 @@
 - MUSX, MNX, MSCZ, MSCX 입력을 추가했습니다. 각 형식은 표준 MIDI로 정규화된 뒤 동일한 공용 MIDI 파서를 사용합니다.
 - 배포에 사용되지 않는 Guitar Pro 개발 소스와 테스트 전용 코드·샘플은 최종 패키지에서 제외했습니다.
 - 지원 파일 팝업의 제목을 버튼과 같은 `지원 파일`로 통일하고, 글꼴의 × 문자를 사용하던 닫기 버튼을 중앙 정렬된 SVG 아이콘으로 교체했습니다.
-- 로컬 파일 선택은 공용 그룹형 파일 선택기를 사용합니다. 지원 환경에서는 `지원 파일` 전체 필터와 MIDI·KAR, MusicXML, MNX, Finale, MuseScore, Guitar Pro, PlayStation, Nintendo, VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO, 프로젝트·MML, SoundFont·DLS 등의 필터를 빠르게 전환할 수 있습니다. Classic Mac은 별도 카테고리로 표시하지 않고 전체 또는 관련 옛 포맷군에서 `.bin`·`.macbin`을 선택한 뒤 내부 데이터를 자동 판별합니다.
+- 로컬 파일 선택은 공용 그룹형 파일 선택기를 사용합니다. 지원 환경에서는 `지원 파일` 전체 필터와 MIDI·KAR, XMI·HMP·HMI, Tracker(MOD/S3M/XM/IT), MusicXML, MNX, Finale, MuseScore, Guitar Pro, PlayStation, Nintendo, Sega, VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO, 프로젝트·MML, SoundFont·DLS 등의 필터를 빠르게 전환할 수 있습니다. Classic Mac은 별도 카테고리로 표시하지 않고 전체 또는 관련 옛 포맷군에서 `.bin`·`.macbin`을 선택한 뒤 내부 데이터를 자동 판별합니다.
 - 그룹형 파일 선택 API가 없는 환경에서는 기존 `accept` 기반 파일 입력으로 자동 대체됩니다.
-- 지원 파일 팝업은 성격별로 `표준 음악 · 악보`, `음악 편집기`, `콘솔`, `보컬 편집기`, `프로젝트 · MML`, `오디오`로 구분합니다. MIDI·MusicXML·MNX는 표준 음악·악보에, Finale·MuseScore·Guitar Pro는 음악 편집기에, PlayStation·Nintendo는 콘솔에 배치합니다. 보컬 편집기는 VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO를 제품군별로 분리하고 같은 제품의 확장자만 한 카드에 묶습니다. Finale와 Guitar Pro의 묶음 카드에도 실제 MIDI 변환 범위와 단순화되는 정보를 표시합니다.
+- 지원 파일 팝업은 성격별로 `표준 음악 · 악보`, `음악 편집기`, `콘솔`, `보컬 편집기`, `프로젝트 · MML`, `오디오`로 구분합니다. MIDI·XMI/HMP/HMI·Tracker·MusicXML·MNX는 표준 음악·악보에, Finale·MuseScore·Guitar Pro는 음악 편집기에, PlayStation·Nintendo·Sega는 콘솔에 배치합니다. 보컬 편집기는 VOCALOID, UTAU, OpenUtau, Synthesizer V, CeVIO를 제품군별로 분리하고 같은 제품의 확장자만 한 카드에 묶습니다. Finale와 Guitar Pro의 묶음 카드에도 실제 MIDI 변환 범위와 단순화되는 정보를 표시합니다.
 - 공용 Guest 아이콘은 자체 배경이 없는 사람 실루엣만 포함하며, 각 제품의 계정 버튼이 배경과 hover 상태를 담당합니다.
 - 공용 재생 컨트롤 아이콘은 `assets/icons/play.svg`, `assets/icons/stop.svg`, `assets/icons/first.svg`, `assets/icons/last.svg`를 사용하며 Simple·Player·Editor가 동일한 SVG 자산을 공유합니다.
 - Player는 별도 스킨 계층 없이 `player/styles.css`와 `player/js/app.js`만 사용하며 현재 출시 UI와 기능 코드가 이 두 파일에 통합되어 있습니다.
@@ -61,4 +61,4 @@ plugins/
 - 제품 README에는 누적 변경 이력이나 제품 버전 번호를 남기지 않습니다.
 - 매 수정마다 버전을 올리지 않으므로 각 README의 마지막 갱신 시각으로 수정 전후를 구분합니다.
 
-- 콘솔 가져오기는 PlayStation SEQ/SEP·PS2 SQ/BQ와 PSF1/PSF2의 지원 가능한 내장 MIDI/SEQ/SQ/AKAO v1.0/v2, Nintendo SSEQ/SDAT·NintendoWare 시퀀스와 NCSF/2SF의 내장 SDAT/SSEQ를 공용 MIDI로 정규화합니다. 전용 콘솔 Bank/드럼 번호는 가능한 범위에서 GM Bank 0 및 GM percussion으로 재배치하여 일반 SoundFont에서 바로 미리듣기 가능하게 하며, 포맷만으로 악기 의미를 알 수 없는 경우에는 거짓 악기 분류 대신 안정적인 GM Program proxy를 사용합니다. Mini xSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다.
+- 콘솔 가져오기는 PlayStation SEQ/SEP·PS2 SQ/BQ와 PSF1/PSF2의 지원 가능한 내장 MIDI/SEQ/SQ/AKAO v1.0/v2, Nintendo SSEQ/SDAT·NintendoWare 시퀀스와 NCSF/2SF의 내장 SDAT/SSEQ, Sega Saturn SEQ 및 Mega Drive/Genesis XGM/XGM2를 공용 MIDI로 정규화합니다. 전용 콘솔 Bank/드럼 번호는 가능한 범위에서 GM Bank 0 및 GM percussion으로 재배치하여 일반 SoundFont에서 바로 미리듣기 가능하게 하며, 포맷만으로 악기 의미를 알 수 없는 경우에는 거짓 악기 분류 대신 안정적인 GM Program proxy를 사용합니다. Mini xSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다.
