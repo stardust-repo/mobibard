@@ -158,3 +158,15 @@ Local files: `plugins/formats/guitarpro/vendor/parse-gp5/`
 
 The complete MIT notice is retained in
 `plugins/formats/guitarpro/vendor/parse-gp5/LICENSE`.
+
+## Mediabunny 1.55.3 (RollScriptor)
+
+`rollscriptor/` loads Mediabunny 1.55.3 at runtime for media container parsing,
+WebCodecs decoding, frame iteration, cropping, and resizing.
+
+License: Mozilla Public License 2.0
+Project: https://mediabunny.dev/
+
+The Mediabunny source is not bundled or modified in this repository. The user
+video is processed in the browser and is not uploaded to Mediabunny or a
+RollScriptor analysis server.

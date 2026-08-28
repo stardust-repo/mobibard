@@ -6,7 +6,7 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <meta content="light dark" name="color-scheme"/>
-<title>모비바드 v5.1</title>
+<title>모비바드 v5.2</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <link href="https://stardust-repo.github.io/mobibard/simple/?lang=ko" hreflang="ko" rel="alternate"/>
 <link href="https://stardust-repo.github.io/mobibard/simple/?lang=ja" hreflang="ja" rel="alternate"/>
@@ -59,13 +59,13 @@
     document.documentElement.lang = htmlLang[language] || "en";
     const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
     if (localeUrl.protocol !== "file:") {
-      localeUrl.searchParams.set("v", "5.1.0");
-      localeUrl.searchParams.set("rev", "20260824-final43");
+      localeUrl.searchParams.set("v", "5.2.0");
+      localeUrl.searchParams.set("rev", "20260829-v52");
     }
     document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   })();
   </script>
-<link href="./styles.css?v=5.1.0&amp;rev=20260824-final43" rel="stylesheet"/>
+<link href="./styles.css?v=5.2.0&amp;rev=20260829-v52" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
 <body>
@@ -73,7 +73,7 @@
 <div class="topbar-inner">
 <a aria-label="Mobibard Simple MML" class="brand" href="./index.html">
 <span aria-hidden="true" class="brand-mark"></span>
-<span id="brandName">모비바드</span>
+<span id="brandName">모비바드</span><span class="brand-version">v5.2</span>
 </a>
 <div class="top-actions">
 <div class="simple-top-external">
@@ -138,14 +138,17 @@
 <section aria-labelledby="pageTitle" class="converter">
 <div class="simple-title-row">
 <div class="title-block">
-<h1 id="pageTitle"><span id="pageTitleText">MML 간편 생성기</span><span class="title-version">v5.1</span></h1>
+<h1 id="pageTitle"><span id="pageTitleText">MML 간편 생성기</span></h1>
 <p class="subtitle" id="subtitle">파일을 넣으면 3채널 MML로 바로 변환합니다.</p>
 </div>
 <div aria-label="모드 이동" class="simple-mode-actions">
 <button aria-controls="simpleRhythmGameLayer" aria-haspopup="dialog" class="mode-action-button" id="mobibeatsLink" type="button">모비비트</button>
+<a class="mode-action-button" href="../rollscriptor/index.html" id="rollscriptorLink">RollScriptor</a>
 <a class="mode-action-button" href="../player/index.html" id="fullEditorLink">상세 모드</a>
 </div>
 </div>
+<section class="simple-workflow-section" aria-labelledby="sourceStepTitle">
+<div class="simple-section-head"><div><span class="step-number">1</span><h2 id="sourceStepTitle">파일 불러오기</h2></div><p id="sourceStepDescription">MIDI·악보 파일을 선택하거나 MML을 붙여넣어 변환할 원본을 불러옵니다.</p></div>
 <div aria-controls="midiFileInput" class="drop-zone" id="dropZone" role="button" tabindex="0">
 <input accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,application/musicxml+xml,application/xml,text/xml,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98" data-music-format-input="" hidden="" id="midiFileInput" type="file"/>
 <div class="simple-help-actions">
@@ -160,6 +163,9 @@
 <p class="drop-hint" id="dropHint">또는 파일을 여기에 드롭하세요</p>
 <p class="file-name" hidden="" id="fileName"></p>
 </div>
+</section>
+<section class="simple-workflow-section" aria-labelledby="convertStepTitle">
+<div class="simple-section-head"><div><span class="step-number">2</span><h2 id="convertStepTitle">변환과 결과</h2></div><p id="convertStepDescription">양자화·쉼표·페이드를 조정하고 변환된 MML을 재생·저장·복사합니다.</p></div>
 <div class="options-stack">
 <div class="option-block option-block-quantize">
 <span class="option-label" id="quantizeLabel">양자화</span>
@@ -233,6 +239,7 @@
 </div>
 <div class="copy-buttons" id="copyButtons"></div>
 </div>
+</section>
 </section>
 </section>
 </main>
@@ -318,7 +325,7 @@
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260823-final2" type="module"></script>
-<script src="./js/app.js?v=5.1.0&amp;rev=20260825-final48"></script>
+<script src="./js/app.js?v=5.2.0&amp;rev=20260829-v52"></script>
 <script src="./enhancements.js?v=5.1.0&amp;rev=20260823-final18"></script>
 </body>
 </html>

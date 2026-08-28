@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION_LABEL = "v5.1";
+  const APP_VERSION_LABEL = "v5.2";
 
   const CONFIG = {
     defaultChannelCount: 1,

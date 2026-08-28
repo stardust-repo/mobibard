@@ -1,0 +1,25 @@
+export default {
+  code: 'zh-TW', htmlLang: 'zh-Hant', strings: {
+    'nav.simple_generator': '簡易產生器', 'nav.detail_generator': '詳細產生器',
+    'settings.menu': '設定',
+    'site.title': 'Mobibard v5.2', 'nav.products': '產品導覽', 'language.label': '語言', 'language.select': '選擇語言',
+    'ui.brand': 'Mobibard', 'ui.recommended': '推薦網站', 'ui.select_recommended': '選擇推薦網站', 'ui.discord': 'Discord',
+    'account.menu': '帳戶選單', 'account.guest': '訪客', 'theme.label': '主題', 'theme.change': '切換主題',
+    'theme.toggle': '切換主題', 'theme.to_light': '切換到淺色主題', 'theme.to_dark': '切換到深色主題',
+    'product.subtitle': '讀取鋼琴卷軸影片中的鍵盤，並轉換成 MIDI。',
+    'video.title': '影片與鍵盤設定', 'video.description': '加入影片後，將白鍵與黑鍵偵測線調整到琴鍵較下方的位置。',
+    'file.select': '選擇影片', 'file.prompt': '選擇影片檔案或拖放到這裡。', 'preview.aria': '影片畫面與琴鍵偵測線', 'preview.empty_title': '請加入鋼琴卷軸影片。', 'preview.empty_body': '可以直接在影片上查看偵測線與實際取樣區域。',
+    'transport.play': '▶ 播放', 'transport.pause': '❚❚ 暫停', 'transport.prev_frame': '−1F', 'transport.next_frame': '+1F', 'transport.timeline': '影片位置', 'transport.current_chord': '目前偵測和弦', 'transport.after_analysis': '分析後顯示',
+    'guide.white_key': '白鍵', 'guide.black_key': '黑鍵', 'guide.white_hint': '拖曳青色線', 'guide.black_hint': '拖曳粉色線', 'guide.box_hint': '線上的小框就是實際顏色取樣區域。',
+    'keyboard.no_video': '尚未載入影片。', 'keyboard.adjust_guides': '請將偵測線對準琴鍵。', 'keyboard.baseline_none': '無基準色', 'keyboard.baseline_fixed': '在 {time} 畫面固定基準色',
+    'keyboard.status_ok': '白鍵 {white} · 黑鍵 {black} · 線上的小框是實際取樣區域。 · {baseline}', 'keyboard.status_invalid': '白鍵 {white} · 黑鍵 {black} · {invalid} 個紅色黑鍵框位於鍵體之外，將從分析中排除。 · {baseline}', 'keyboard.detect_failed_hint': '找不到琴鍵邊界。請把白鍵/黑鍵偵測線移到琴鍵主體上。',
+    'analysis.title': '分析與 MIDI 輸出', 'analysis.description': '設定分析區間與 MIDI 參數後開始分析。', 'analysis.range': '分析時間', 'analysis.start_seconds': '開始 (秒)', 'analysis.end_seconds': '結束 (秒)', 'analysis.current': '目前', 'analysis.invalid_range': '分析結束時間必須晚於開始時間。', 'analysis.check_range': '請檢查分析時間。',
+    'settings.leftmost_white': '最左側白鍵', 'settings.tempo': '速度 (BPM)', 'settings.velocity': '力度', 'actions.reset': '重設', 'actions.analyze': '分析影片', 'actions.cancel': '停止分析', 'actions.cancel_requested': '正在停止…', 'actions.download': '下載 MIDI',
+    'progress.waiting': '等待中', 'progress.select_video': '請選擇影片。', 'progress.generated_notes': '產生音符', 'progress.ready': '準備完成', 'progress.ready_detail': '青色線對準白鍵，粉色線對準黑鍵主體。', 'progress.idle_detail': '調整兩條偵測線後執行影片分析。', 'progress.opening': '正在開啟影片', 'progress.opening_detail': '正在檢查影片軌。',
+    'progress.frame_analysis': '畫面分析', 'progress.frame_range': '正在讀取 {start} ~ {end}。', 'progress.frame_count': '{count} 畫面 · {current} / {duration}', 'progress.cancelled': '分析已停止', 'progress.cancelled_detail': '已處理 {count} 畫面。', 'progress.color_compare': '比較琴鍵顏色 · 移除周邊特效', 'progress.done': '完成', 'progress.notes_made': '已產生 {count} 個 MIDI 音符。', 'progress.analysis_error': '分析錯誤', 'progress.runtime_check': '需要檢查執行環境', 'progress.library_error': '函式庫錯誤', 'progress.error': '錯誤',
+    'toast.baseline_fixed': '已將目前畫面({time})的琴鍵顏色固定為基準色。', 'toast.detect_updated': '已更新琴鍵取樣區域。', 'toast.detect_failed': '找不到琴鍵邊界。', 'toast.reset': '已恢復初始偵測線位置與基準色。', 'toast.baseline_missing': '沒有琴鍵基準色。請重新調整偵測線以擷取基準色。', 'toast.midi_done': 'MIDI 產生完成。', 'toast.no_notes': '未偵測到音符。', 'toast.no_video_file': '找不到影片檔案。', 'toast.analysis_error': '分析過程中發生錯誤。',
+    'error.media_library': '無法載入影片函式庫。', 'error.unsupported_video': '影片不受支援或已損壞。', 'error.no_video_track': '找不到影片軌。', 'error.codec': '目前瀏覽器無法解碼此影片編碼。', 'error.open_video': '無法開啟影片。', 'error.no_frames': '沒有可分析的畫面。', 'error.webcodecs': '目前瀏覽器無法使用 WebCodecs。請使用最新版 Chrome 或 Edge。', 'error.secure_context': 'WebCodecs 需要 HTTPS 或 localhost。', 'error.library_load': '無法載入影片處理函式庫。',
+    'error.feature_key_count': 'FeatureStore 鍵數無效。', 'error.feature_size': '畫面顏色資料必須為 {bytes} 位元組。', 'error.key_count_mismatch': '琴鍵數量與分析特徵數量不一致。', 'error.baseline_missing': '沒有從鍵盤設定畫面擷取到基準色。請重新調整偵測線。', 'error.region_small': '選取區域太小。', 'error.white_boundaries': '找不到足夠的白鍵邊界。請嘗試其他參考畫面或調整偵測線。',
+    'overlay.white': '白鍵', 'overlay.black': '黑鍵', 'analysis.post_detail': '固定未按下顏色 + 移除周邊特效 {processed} / {total} 畫面', 'analysis.post_done': '已產生 {count} 個音符。'
+  }
+};

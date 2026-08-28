@@ -80,6 +80,7 @@ button { color: inherit; }
   display: inline;
   white-space: nowrap;
 }
+.brand-version { margin-left:-4px; color:var(--muted); font-size:10px; font-weight:800; line-height:1; letter-spacing:-.01em; white-space:nowrap; }
 .brand-mark {
   width: 30px;
   height: 30px;
@@ -514,6 +515,16 @@ h1 {
   border-color: var(--text);
   background: var(--hover);
 }
+
+
+.simple-workflow-section { padding-top:26px; border-top:0; }
+.simple-workflow-section + .simple-workflow-section { margin-top:30px; }
+.simple-section-head { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin-bottom:16px; }
+.simple-section-head > div { display:flex; align-items:center; gap:10px; min-width:0; }
+.simple-section-head .step-number { width:26px; height:26px; display:grid; place-items:center; flex:0 0 26px; border-radius:50%; background:var(--text); color:var(--surface); font-size:12px; font-weight:900; }
+.simple-section-head h2 { margin:0; font-size:18px; letter-spacing:-.02em; }
+.simple-section-head p { max-width:480px; margin:0; color:var(--muted); font-size:12px; line-height:1.55; text-align:right; }
+@media (max-width:760px){ .simple-section-head{align-items:flex-start;flex-direction:column;gap:7px}.simple-section-head p{text-align:left} }
 
 .simple-source-actions {
   display: grid;

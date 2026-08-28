@@ -6,8 +6,12 @@ window.__MOBIBARD_SIMPLE_LOCALES__["en"] = {
   "strings": {
     "title": "MML Simple Generator",
     "brand": "Mobibard",
-    "browserTitle": "Mobibard v5.1",
+    "browserTitle": "Mobibard v5.2",
     "subtitle": "Load a file and convert it directly to fixed 3-channel MML.",
+    "stepSourceTitle": "Load source",
+    "stepSourceDescription": "Choose a MIDI or score file, or paste MML to load the source you want to convert.",
+    "stepConvertTitle": "Convert and use the result",
+    "stepConvertDescription": "Adjust quantization, rests, and fades, then preview, save, or copy the converted MML.",
     "full": "Detailed mode",
     "discord": "Discord",
     "extract": "MIDI Extractor",

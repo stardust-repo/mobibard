@@ -13,8 +13,8 @@
   const GENERATED_MML_LEADING_SILENCE_SECONDS = 2;
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
-  const LOCALE_VERSION = "5.1.0";
-  const LOCALE_REVISION = "20260824-final43";
+  const LOCALE_VERSION = "5.2.0";
+  const LOCALE_REVISION = "20260829-v52";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 
@@ -49,6 +49,10 @@
     copyButtons: $("copyButtons"),
     pageTitleText: $("pageTitleText"),
     subtitle: $("subtitle"),
+    sourceStepTitle: $("sourceStepTitle"),
+    sourceStepDescription: $("sourceStepDescription"),
+    convertStepTitle: $("convertStepTitle"),
+    convertStepDescription: $("convertStepDescription"),
     brandName: $("brandName"),
     midiExtractLink: $("midiExtractLink"),
     fullEditorLink: $("fullEditorLink"),
@@ -291,6 +295,10 @@
     els.pageTitleText.textContent = t("title");
     els.brandName.textContent = t("brand");
     els.subtitle.textContent = t("subtitle");
+    if (els.sourceStepTitle) els.sourceStepTitle.textContent = t("stepSourceTitle");
+    if (els.sourceStepDescription) els.sourceStepDescription.textContent = t("stepSourceDescription");
+    if (els.convertStepTitle) els.convertStepTitle.textContent = t("stepConvertTitle");
+    if (els.convertStepDescription) els.convertStepDescription.textContent = t("stepConvertDescription");
     els.midiExtractLink.textContent = t("extract");
     els.fullEditorLink.textContent = t("full");
     els.fullEditorLink.href = `../player/index.html?lang=${encodeURIComponent(language)}`;

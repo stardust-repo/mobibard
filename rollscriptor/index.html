@@ -1,0 +1,195 @@
+<!-- 모비바드 | モビバード | Mobibard -->
+<!DOCTYPE html>
+<html data-theme="light" lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="color-scheme" content="light dark"/>
+<title>모비바드 v5.2</title>
+<link href="../assets/favicon.ico" rel="icon"/>
+<link href="https://stardust-repo.github.io/mobibard/rollscriptor/?lang=ko" hreflang="ko" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/rollscriptor/?lang=ja" hreflang="ja" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/rollscriptor/?lang=en" hreflang="en" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/rollscriptor/?lang=zh-CN" hreflang="zh-CN" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/rollscriptor/?lang=zh-TW" hreflang="zh-TW" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/rollscriptor/" hreflang="x-default" rel="alternate"/>
+<script>
+  (() => {
+    try {
+      document.documentElement.dataset.theme = localStorage.getItem("mobibard.player.theme") === "dark" ? "dark" : "light";
+      const normalize = value => {
+        const raw = String(value || "").trim().replace(/_/g, "-").toLowerCase();
+        if (raw === "ko" || raw.startsWith("ko-")) return "ko";
+        if (raw === "ja" || raw.startsWith("ja-")) return "ja";
+        if (raw === "en" || raw.startsWith("en-")) return "en";
+        if (raw === "zh-cn" || raw === "zh-hans" || raw.startsWith("zh-cn-") || raw.startsWith("zh-hans-")) return "zh-CN";
+        if (raw === "zh-tw" || raw === "zh-hant" || raw.startsWith("zh-tw-") || raw.startsWith("zh-hant-")) return "zh-TW";
+        return "";
+      };
+      const params = new URLSearchParams(location.search);
+      let language = normalize(params.get("lang") || params.get("language") || params.get("locale"));
+      if (!language) language = normalize(localStorage.getItem("mobibard.player.language"));
+      if (!language) {
+        const candidates = Array.isArray(navigator.languages) && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+        for (const candidate of candidates) { language = normalize(candidate); if (language) break; }
+      }
+      if (language) document.documentElement.lang = language === "zh-CN" ? "zh-Hans" : (language === "zh-TW" ? "zh-Hant" : language);
+    } catch (_) {
+      document.documentElement.dataset.theme = "light";
+    }
+  })();
+</script>
+<link href="./styles.css" rel="stylesheet"/>
+</head>
+<body>
+<header class="topbar rollscriptor-topbar">
+  <div class="topbar-inner">
+    <a data-i18n-aria-label="site.title" aria-label="모비바드 v5.2" class="brand" href="../simple/index.html"><span aria-hidden="true" class="brand-mark"></span><span data-i18n="ui.brand">모비바드</span><span class="brand-version">v5.2</span></a>
+    <div class="top-actions">
+      <div data-i18n-aria-label="ui.recommended" aria-label="추천 사이트" class="header-links">
+        <select data-i18n-aria-label="ui.select_recommended" aria-label="추천 사이트 선택" class="midi-site-links" id="midiSiteLinks"><option data-i18n="ui.recommended" value="">추천 사이트</option><option value="https://bitmidi.com/">BitMidi</option><option value="https://www.classicalarchives.com/midi.html">ClassicalArchives</option><option value="https://ichigos.com/">Ichigo's</option><option value="https://josh.agarrado.net/music/anime/index.php">Josh's Anime</option><option value="http://www.midiex.net/">MIDIEX</option><option value="http://www.midisite.co.uk/">Midisite</option><option value="https://musescore.com/">MuseScore</option><option value="https://www.vgmusic.com/">VGMusic</option><option value="https://www.zophar.net/">Zophar's Domain</option></select>
+        <a data-i18n-aria-label="ui.discord" data-i18n-title="ui.discord" aria-label="디스코드" class="discord-link" href="https://discord.gg/qqwzCERZK5" rel="noopener noreferrer" target="_blank" title="디스코드"><img alt="" decoding="async" src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d7f4ef6498ac018f2c55_Symbol.svg"/></a>
+      </div>
+      <div class="account-menu-wrap settings-menu-wrap" id="settingsControl">
+        <button data-i18n-aria-label="settings.menu" data-i18n-title="settings.menu" aria-controls="settingsMenu" aria-expanded="false" aria-haspopup="dialog" aria-label="설정" class="settings-icon-button" id="settingsButton" popovertarget="settingsMenu" popovertargetaction="toggle" title="설정" type="button">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h7v2H3V6Zm11 0h7v2h-7V6Zm-4-2h4v6h-4V4ZM3 11h12v2H3v-2Zm16 0h2v2h-2v-2Zm-4-2h4v6h-4V9ZM3 16h4v2H3v-2Zm8 0h10v2H11v-2Zm-4-2h4v6H7v-6Z"/></svg>
+          <span class="sr-only" data-i18n="settings.menu">설정</span>
+        </button>
+        <div data-i18n-aria-label="settings.menu" aria-label="설정" aria-labelledby="settingsButton" class="account-menu-popover settings-menu-popover" id="settingsMenu" popover="auto" role="dialog">
+          <div class="settings-menu-header"><strong data-i18n="settings.menu">설정</strong></div>
+          <label class="account-menu-field" for="languageSelect"><span class="account-menu-field-label" data-i18n="language.label" id="languageLabel">언어</span><select id="languageSelect" class="language-select" data-i18n-aria-label="language.select" aria-label="언어 선택"><option value="ko">한국어</option><option value="ja">日本語</option><option value="en">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option></select></label>
+          <div class="account-menu-field"><span class="account-menu-field-label" data-i18n="theme.label" id="themeLabel">테마</span><button class="theme-menu-button" id="themeButton" title="테마 변경" type="button"><span aria-hidden="true" class="theme-menu-icon">◐</span><span data-i18n="theme.change">테마 변경</span></button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="page-shell">
+  <section class="converter" aria-labelledby="pageTitle">
+    <div class="title-row"><div class="title-block"><h1 id="pageTitle">RollScriptor</h1><p class="subtitle" data-i18n="product.subtitle">피아노 롤 영상을 분석해 MIDI로 변환합니다.</p></div><div class="mode-actions" data-i18n-aria-label="nav.products" aria-label="제품 이동"><a class="mode-action-button" data-i18n="nav.simple_generator" href="../simple/index.html">간단 생성기</a><a class="mode-action-button" data-i18n="nav.detail_generator" href="../player/index.html">상세 생성기</a></div></div>
+
+    <section class="workflow-section" aria-labelledby="videoSectionTitle">
+      <div class="section-head">
+        <div>
+          <span class="step-number">1</span>
+          <h2 id="videoSectionTitle" data-i18n="video.title">영상과 건반 설정</h2>
+        </div>
+        <p data-i18n="video.description">영상을 넣고 흰·검 건반의 검출선을 실제 건반 아래쪽에 맞춰주세요.</p>
+      </div>
+
+      <label class="drop-zone" id="fileDrop">
+        <input id="videoFile" type="file" accept="video/*,.mkv,.webm,.mov,.mp4"/>
+        <span class="drop-icon" aria-hidden="true">＋</span>
+        <span class="drop-copy">
+          <strong data-i18n="file.select">영상 선택</strong>
+          <span id="fileName" data-i18n="file.prompt">동영상 파일을 선택하거나 여기에 드롭하세요.</span>
+        </span>
+      </label>
+
+      <div id="runtimeError" class="runtime-error" hidden></div>
+
+      <div id="previewStage" class="preview-stage is-empty" data-i18n-aria-label="preview.aria" aria-label="동영상 프레임과 건반 검출선">
+        <canvas id="previewCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+        <div id="emptyPreview" class="empty-preview">
+          <strong data-i18n="preview.empty_title">피아노 롤 영상을 넣어주세요.</strong>
+          <span data-i18n="preview.empty_body">영상 위에서 검출선과 실제 분석 영역을 바로 확인할 수 있습니다.</span>
+        </div>
+      </div>
+
+      <div class="transport-card">
+        <div class="playback-row">
+          <button id="playPause" class="transport-primary" disabled type="button" data-i18n="transport.play">▶ 재생</button>
+          <button id="prevFrame" class="compact-button" disabled type="button" data-i18n="transport.prev_frame">−1F</button>
+          <input id="timeline" type="range" min="0" max="1" value="0" step="0.001" disabled data-i18n-aria-label="transport.timeline" aria-label="영상 위치"/>
+          <button id="nextFrame" class="compact-button" disabled type="button" data-i18n="transport.next_frame">+1F</button>
+          <output id="timeLabel">00:00.000 / 00:00.000</output>
+        </div>
+        <div class="current-chord" aria-live="polite">
+          <span data-i18n="transport.current_chord">현재 검출 코드</span>
+          <strong id="currentChord" data-i18n="transport.after_analysis">분석 후 표시</strong>
+        </div>
+      </div>
+
+      <div class="guide-summary">
+        <span><i class="guide-swatch white-guide"></i><strong data-i18n="guide.white_key">흰 건반</strong> <span data-i18n="guide.white_hint">청록 선을 드래그</span></span>
+        <span><i class="guide-swatch black-guide"></i><strong data-i18n="guide.black_key">검은 건반</strong> <span data-i18n="guide.black_hint">분홍 선을 드래그</span></span>
+        <span data-i18n="guide.box_hint">선 위의 작은 박스가 실제 색상 검출 영역입니다.</span>
+      </div>
+      <div id="keyboardStatus" class="status-line" data-i18n="keyboard.no_video">영상이 없습니다.</div>
+    </section>
+
+    <section class="workflow-section" aria-labelledby="analysisSectionTitle">
+      <div class="section-head">
+        <div>
+          <span class="step-number">2</span>
+          <h2 id="analysisSectionTitle" data-i18n="analysis.title">분석과 MIDI 출력</h2>
+        </div>
+        <p data-i18n="analysis.description">필요한 구간과 MIDI 설정을 지정한 뒤 분석합니다.</p>
+      </div>
+
+      <div class="analysis-range settings-group">
+        <div class="group-title-row">
+          <strong data-i18n="analysis.range">분석 시간</strong>
+          <output id="analysisRangeLabel">00:00.000 ~ 00:00.000</output>
+        </div>
+        <div class="range-grid">
+          <label class="field">
+            <span data-i18n="analysis.start_seconds">시작 (초)</span>
+            <div class="time-input-row">
+              <input id="analysisStart" type="number" min="0" step="0.001" value="0" disabled/>
+              <button id="setStartCurrent" class="soft-button" type="button" disabled data-i18n="analysis.current">현재</button>
+            </div>
+          </label>
+          <label class="field">
+            <span data-i18n="analysis.end_seconds">종료 (초)</span>
+            <div class="time-input-row">
+              <input id="analysisEnd" type="number" min="0" step="0.001" value="0" disabled/>
+              <button id="setEndCurrent" class="soft-button" type="button" disabled data-i18n="analysis.current">현재</button>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="field-grid settings-group compact-settings">
+        <label class="field">
+          <span data-i18n="settings.leftmost_white">왼쪽 끝 흰 건반</span>
+          <select id="leftmostNote" disabled></select>
+        </label>
+        <label class="field">
+          <span data-i18n="settings.tempo">템포 (BPM)</span>
+          <input id="tempo" type="number" min="20" max="300" step="1" value="120"/>
+        </label>
+        <label class="field velocity-field">
+          <span><span data-i18n="settings.velocity">벨로시티</span> <output id="velocityValue">75%</output></span>
+          <div class="range-control"><input id="velocity" type="range" min="1" max="100" step="1" value="75"/></div>
+        </label>
+      </div>
+
+      <div class="action-row">
+        <button id="resetSetup" type="button" class="soft-button" disabled data-i18n="actions.reset">초기화</button>
+        <button id="analyzeVideo" type="button" class="primary-button" disabled data-i18n="actions.analyze">영상 분석</button>
+        <button id="cancelAnalysis" type="button" class="danger-button" hidden data-i18n="actions.cancel">분석 중지</button>
+        <button id="downloadMidi" type="button" class="primary-button download-button" disabled data-i18n="actions.download">MIDI 다운로드</button>
+      </div>
+
+      <div class="analysis-status" aria-live="polite">
+        <div class="progress-track"><div id="progressBar"></div></div>
+        <div class="progress-copy">
+          <div>
+            <strong id="progressTitle" data-i18n="progress.waiting">대기 중</strong>
+            <span id="progressDetail" data-i18n="progress.select_video">영상을 선택하세요.</span>
+          </div>
+          <div class="result-count"><span data-i18n="progress.generated_notes">생성 노트</span><strong id="noteCountResult">0</strong></div>
+        </div>
+      </div>
+    </section>
+  </section>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script type="module" src="./js/settings-menu.js?v=20260829-ui6"></script>
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

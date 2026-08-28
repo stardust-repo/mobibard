@@ -336,10 +336,11 @@
     const row = el("div", "wb4-title-row");
     const title = el("h1", "wb4-title");
     state.ui.titleName = el("span", "wb4-title-name", { text: appText("mml.generator_title", "MML 생성기") });
-    title.append(state.ui.titleName, el("span", "wb4-title-version", { text: "v5.1" }));
+    title.append(state.ui.titleName);
 
     const actions = el("div", "wb4-title-actions");
     const mobibeat = $("rhythmGameBtn");
+    const rollscriptor = $("rollscriptorBtn");
     const simple = $("simpleVersionBtn");
     if (mobibeat) {
       mobibeat.querySelector(".rhythm-game-toolbar-icon")?.remove();
@@ -349,9 +350,28 @@
       mobibeat.title = t("mobibeat");
       actions.append(mobibeat);
     }
+    if (rollscriptor) {
+      rollscriptor.className = "player-mode-action-button";
+      actions.append(rollscriptor);
+    }
     if (simple) actions.append(simple);
     row.append(title, actions);
     canvas.append(row);
+  }
+
+  function buildWorkflowHead(canvas, step, titleKey, descriptionKey, first = false) {
+    const head = el("div", `wb15-workflow-head${first ? " wb15-workflow-head-first" : ""}`);
+    const titleWrap = el("div", "wb15-workflow-title-wrap");
+    titleWrap.append(
+      el("span", "wb15-step-number", { text: String(step), "aria-hidden": "true" }),
+      el("h2", "", { "data-player-workflow-title": titleKey, text: appText(titleKey, titleKey) })
+    );
+    const description = el("p", "", {
+      "data-player-workflow-description": descriptionKey,
+      text: appText(descriptionKey, descriptionKey)
+    });
+    head.append(titleWrap, description);
+    canvas.append(head);
   }
 
   function ensurePasteDialog() {
@@ -1537,6 +1557,8 @@
     document.querySelectorAll("[data-wb4-text]").forEach(node => { node.textContent = t(node.dataset.wb4Text); });
     document.querySelectorAll("[data-wb4-aria]").forEach(node => node.setAttribute("aria-label", t(node.dataset.wb4Aria)));
     document.querySelectorAll("[data-wb6-text]").forEach(node => { node.textContent = wb6t(node.dataset.wb6Text); });
+    document.querySelectorAll("[data-player-workflow-title]").forEach(node => { node.textContent = appText(node.dataset.playerWorkflowTitle, node.dataset.playerWorkflowTitle); });
+    document.querySelectorAll("[data-player-workflow-description]").forEach(node => { node.textContent = appText(node.dataset.playerWorkflowDescription, node.dataset.playerWorkflowDescription); });
     document.querySelectorAll("[data-wb8-feature-key]").forEach(node => { node.textContent = t(node.dataset.wb8FeatureKey); });
     document.querySelectorAll("[data-wb8-channel-index]").forEach(node => {
       const index = Number(node.dataset.wb8ChannelIndex);
@@ -1954,9 +1976,12 @@
     state.ui.canvas = canvas;
     state.ui.legacyHost = el("div", "wb4-legacy-host", { hidden: true });
     buildTitle(canvas);
+    buildWorkflowHead(canvas, 1, "workflow.play_title", "workflow.play_description", true);
     buildSourceBlock(canvas);
     buildPreviewBlock(canvas);
+    buildWorkflowHead(canvas, 2, "workflow.global_title", "workflow.global_description");
     buildOverviewBlock(canvas);
+    buildWorkflowHead(canvas, 3, "workflow.copy_detail_title", "workflow.copy_detail_description");
     buildWorkspaceBlock(canvas);
     // Move the retained copy/save controls before the legacy file toolbar is removed.
     // app.js binds these elements synchronously immediately after this script.

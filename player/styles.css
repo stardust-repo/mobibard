@@ -3125,6 +3125,10 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+.player-mode-actions{display:inline-flex;align-items:center;justify-content:flex-end;gap:8px}.player-mode-action-button{display:inline-flex;align-items:center;justify-content:center;min-width:86px;min-height:36px;padding:0 13px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);box-shadow:0 2px 6px var(--panel-shadow);font-size:12px;font-weight:850;line-height:1;text-decoration:none;white-space:nowrap}.player-mode-action-button:hover{border-color:var(--text);background:var(--control-bg)}
+.player-workflow-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:8px 0 14px}.player-workflow-head>div{display:flex;align-items:center;gap:10px;min-width:0}.player-step-number{width:26px;height:26px;display:grid;place-items:center;flex:0 0 26px;border-radius:50%;background:var(--text);color:var(--panel);font-size:12px;font-weight:900}.player-workflow-head h2{margin:0;font-size:18px;letter-spacing:-.02em}.player-workflow-head p{max-width:520px;margin:0;color:var(--muted);font-size:12px;line-height:1.55;text-align:right}.player-edit-workflow-head{margin-top:0;margin-bottom:12px}.player-edit-workflow-head>div{flex-wrap:wrap}.player-editor-actions-head{justify-content:flex-end;margin-top:-4px}@media(max-width:820px){.player-workflow-head{align-items:flex-start;flex-direction:column;gap:7px}.player-workflow-head p{text-align:left}.player-mode-actions{width:100%;justify-content:flex-start}}
+
 .player-topbar {
   position: relative;
   z-index: 100;
@@ -3156,6 +3160,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   text-decoration: none;
   white-space: nowrap;
 }
+.player-brand-version { margin-left:-4px; color:var(--muted); font-size:10px; font-weight:800; line-height:1; letter-spacing:-.01em; }
 .player-brand-mark {
   width: 30px;
   height: 30px;
@@ -3298,10 +3303,7 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
 .menu-card > .app-head {
   margin-bottom: 12px;
 }
-.menu-card > .app-head .app-main-title {
-  font-size: clamp(23px, 3.2vw, 34px);
-  line-height: 1.12;
-}
+.menu-card > .app-head .app-main-title { font-size:clamp(28px,4vw,42px); line-height:1.15; }
 .player-file-actions-special > .player-supported-files-button {
   flex: 0 0 auto;
 }
@@ -3799,7 +3801,7 @@ html[data-player-layout="player-ui"] main {
 .wb4-block + .wb4-block {
   margin-top: 26px;
   padding-top: 26px;
-  border-top: 1px solid var(--wb4-line);
+  border-top: 0;
 }
 
 .wb4-drop-zone {
@@ -9444,3 +9446,61 @@ html[data-player-layout="player-ui"][data-player-ui-booting="true"] main > :not(
     white-space: nowrap;
   }
 }
+
+
+/* v5.2 product workflow alignment */
+.player-ui .wb4-title-name {
+  font-size: clamp(28px, 4vw, 42px) !important;
+  line-height: 1.15;
+  letter-spacing: -.045em;
+}
+.player-ui .wb4-title-version { display: none !important; }
+.player-ui .wb4-title-actions > #rollscriptorBtn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 86px;
+  min-height: 36px !important;
+  padding: 0 13px !important;
+  border: 1px solid var(--wb4-line-strong) !important;
+  border-radius: 9px !important;
+  background: var(--wb4-surface) !important;
+  color: var(--wb4-text) !important;
+  box-shadow: 0 2px 6px color-mix(in srgb, #000 7%, transparent) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+.player-ui .wb4-title-actions > #rollscriptorBtn:hover {
+  border-color: var(--wb4-accent) !important;
+  background: color-mix(in srgb, var(--wb4-accent) 7%, var(--wb4-surface)) !important;
+}
+.player-ui .wb15-workflow-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 30px;
+  padding-top: 26px;
+  margin-bottom: 16px;
+  border-top: 0;
+}
+.player-ui .wb15-workflow-head-first { margin-top: 8px; }
+.player-ui .wb15-workflow-title-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.player-ui .wb15-step-number {
+  width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 26px;
+  border-radius: 50%; background: var(--wb4-text); color: var(--wb4-surface);
+  font-size: 12px; font-weight: 900;
+}
+.player-ui .wb15-workflow-head h2 { margin: 0; color: var(--wb4-text); font-size: 18px; line-height: 1.25; letter-spacing: -.02em; }
+.player-ui .wb15-workflow-head p { max-width: 520px; margin: 0; color: var(--wb4-muted); font-size: 12px; line-height: 1.55; text-align: right; }
+.player-ui .wb15-workflow-head + .wb4-block,
+.player-ui .wb15-workflow-head + .wb6-overview-block,
+.player-ui .wb15-workflow-head + .wb6-workspace-block { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }
+@media (max-width: 820px) {
+  .player-ui .wb15-workflow-head { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .player-ui .wb15-workflow-head p { text-align: left; }
+}
+@media (max-width: 620px) { .player-ui .wb4-title-name { font-size: clamp(28px, 9vw, 38px) !important; } }
