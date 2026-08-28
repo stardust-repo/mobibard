@@ -8,11 +8,13 @@ import {
   formatTime,
   isWhiteMidi,
   midiNoteName,
+  createLineProbeSampler,
   sampleKeyColors,
+  sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
 } from './vision.js';
-import { FeatureStore, detectNotesFromFeatures } from './analysis.js';
+import { StreamingNoteDetector } from './analysis.js';
 import { createMidiFile } from './midi.js';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js';
@@ -1084,7 +1086,9 @@ async function analyzeAllFrames() {
     crop.whiteLineY,
     crop.blackLineY,
   );
-  const featureStore = new FeatureStore(state.keyMap.keys.length);
+  const validKeyMask = probes.map(probe => probe.valid !== false);
+  const probeSampler = createLineProbeSampler(probes, targetWidth, targetHeight);
+  const detector = new StreamingNoteDetector(state.keyMap.keys, { ...analysisOptions(), validKeyMask });
   let frameCount = 0;
   let lastUiUpdate = performance.now();
 
@@ -1110,18 +1114,17 @@ async function analyzeAllFrames() {
     for await (const wrapped of sink.canvases(rangeStartTimestamp, rangeEndTimestamp)) {
       if (state.analysisAbort) break;
       const context = wrapped.canvas.getContext('2d', { willReadFrequently: true });
-      const imageData = context.getImageData(0, 0, targetWidth, targetHeight);
-      const colors = sampleKeyColors(imageData, probes);
       if (wrapped.timestamp + 1e-9 < rangeStartTimestamp) continue;
       if (wrapped.timestamp >= rangeEndTimestamp - 1e-9) break;
+      const colors = sampleKeyColorsFromContext(context, probeSampler);
       const relativeTimestamp = Math.max(0, wrapped.timestamp - rangeStartTimestamp);
-      featureStore.addFrame(relativeTimestamp, wrapped.duration, colors);
+      detector.processFrame(relativeTimestamp, wrapped.duration, colors);
       frameCount += 1;
 
       const now = performance.now();
       if (now - lastUiUpdate > 130) {
         const progress = clamp(relativeTimestamp / Math.max(0.001, range.duration), 0, 1);
-        setProgress(progress * 0.74, t('progress.frame_analysis'), t('progress.frame_count', { count: formatNumber(frameCount), current: formatTime(relativeTimestamp), duration: formatTime(range.duration) }));
+        setProgress(progress * 0.98, t('progress.frame_analysis'), t('progress.frame_count', { count: formatNumber(frameCount), current: formatTime(relativeTimestamp), duration: formatTime(range.duration) }));
         lastUiUpdate = now;
         await new Promise(resolve => setTimeout(resolve, 0));
       }
@@ -1131,9 +1134,9 @@ async function analyzeAllFrames() {
       setProgress(0, t('progress.cancelled'), t('progress.cancelled_detail', { count: formatNumber(frameCount) }));
       return;
     }
-    if (!featureStore.frameCount) throw new Error(t('error.no_frames'));
+    if (!frameCount) throw new Error(t('error.no_frames'));
 
-    const result = detectNotesFromFeatures(featureStore, state.keyMap.keys, { ...analysisOptions(), validKeyMask: probes.map(probe => probe.valid !== false) }, updatePostProcessingProgress);
+    const result = detector.finish();
     state.notes = result.notes
       .map(note => {
         const end = Math.min(range.duration, note.end);

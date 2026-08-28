@@ -1026,6 +1026,122 @@ export function sampleKeyColors(imageData, probes) {
   return output;
 }
 
+
+/**
+ * Precomputes the exact pixel addresses used by the visible line probes.
+ *
+ * The analysis only needs two very thin horizontal bands (white-key line and
+ * black-key line). Reading those bands instead of the entire resized frame
+ * avoids the biggest Canvas -> CPU readback cost without changing a single
+ * sampled pixel or any detection threshold.
+ */
+export function createLineProbeSampler(probes, canvasWidth, canvasHeight) {
+  const width = Math.max(1, Math.round(canvasWidth));
+  const height = Math.max(1, Math.round(canvasHeight));
+  const bands = { white: null, black: null };
+
+  for (const type of ['white', 'black']) {
+    let left = width;
+    let top = height;
+    let right = 0;
+    let bottom = 0;
+    let found = false;
+    for (const probe of probes) {
+      if (probe.valid === false || (probe.key?.type === 'black' ? 'black' : 'white') !== type) continue;
+      for (const rect of probe.patches) {
+        left = Math.min(left, rect.x0);
+        top = Math.min(top, rect.y0);
+        right = Math.max(right, rect.x1);
+        bottom = Math.max(bottom, rect.y1);
+        found = true;
+      }
+    }
+    if (found) {
+      const x = clamp(Math.floor(left), 0, width - 1);
+      const y = clamp(Math.floor(top), 0, height - 1);
+      const x1 = clamp(Math.ceil(right), x + 1, width);
+      const y1 = clamp(Math.ceil(bottom), y + 1, height);
+      bands[type] = { x, y, width: x1 - x, height: y1 - y };
+    }
+  }
+
+  function buildPatchSamples(rect, band) {
+    const patchWidth = Math.max(1, rect.x1 - rect.x0);
+    const patchHeight = Math.max(1, rect.y1 - rect.y0);
+    const gridX = clamp(Math.round(Math.sqrt(48 * patchWidth / patchHeight)), 3, 10);
+    const gridY = clamp(Math.round(48 / gridX), 3, 10);
+    const offsets = new Uint32Array(gridX * gridY);
+    let cursor = 0;
+    for (let gy = 0; gy < gridY; gy += 1) {
+      const globalY = clamp(Math.floor(rect.y0 + (gy + 0.5) * patchHeight / gridY), 0, height - 1);
+      const localY = globalY - band.y;
+      for (let gx = 0; gx < gridX; gx += 1) {
+        const globalX = clamp(Math.floor(rect.x0 + (gx + 0.5) * patchWidth / gridX), 0, width - 1);
+        const localX = globalX - band.x;
+        offsets[cursor++] = (localY * band.width + localX) * 4;
+      }
+    }
+    return offsets;
+  }
+
+  const entries = probes.map(probe => {
+    if (probe.valid === false) return { valid: false, type: probe.key?.type === 'black' ? 'black' : 'white', patches: [] };
+    const type = probe.key?.type === 'black' ? 'black' : 'white';
+    const band = bands[type];
+    if (!band) return { valid: false, type, patches: [] };
+    return {
+      valid: true,
+      type,
+      patches: probe.patches.map(rect => buildPatchSamples(rect, band)),
+    };
+  });
+
+  return { width, height, bands, entries, keyCount: probes.length };
+}
+
+/**
+ * Samples exactly the same RGB points as sampleKeyColors(), but performs only
+ * two narrow getImageData() calls per frame instead of reading the full frame.
+ */
+export function sampleKeyColorsFromContext(context, sampler) {
+  if (!sampler || !context) throw new Error('Invalid probe sampler.');
+  const PATCH_STRIDE = 3;
+  const KEY_STRIDE = PATCH_STRIDE * PROBE_PATCH_COUNT;
+  const output = new Uint8Array(sampler.keyCount * KEY_STRIDE);
+  const bandImages = { white: null, black: null };
+
+  for (const type of ['white', 'black']) {
+    const band = sampler.bands[type];
+    if (!band) continue;
+    bandImages[type] = context.getImageData(band.x, band.y, band.width, band.height);
+  }
+
+  for (let keyIndex = 0; keyIndex < sampler.entries.length; keyIndex += 1) {
+    const entry = sampler.entries[keyIndex];
+    if (!entry.valid) continue;
+    const data = bandImages[entry.type]?.data;
+    if (!data) continue;
+    for (let patchIndex = 0; patchIndex < PROBE_PATCH_COUNT; patchIndex += 1) {
+      const offsets = entry.patches[patchIndex];
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      for (let i = 0; i < offsets.length; i += 1) {
+        const index = offsets[i];
+        red += data[index];
+        green += data[index + 1];
+        blue += data[index + 2];
+      }
+      const count = Math.max(1, offsets.length);
+      const outputOffset = keyIndex * KEY_STRIDE + patchIndex * PATCH_STRIDE;
+      output[outputOffset] = Math.round(red / count);
+      output[outputOffset + 1] = Math.round(green / count);
+      output[outputOffset + 2] = Math.round(blue / count);
+    }
+  }
+  return output;
+}
+
 export function cropImageData(context, rect) {
   const x = clamp(Math.round(rect.x), 0, context.canvas.width - 1);
   const y = clamp(Math.round(rect.y), 0, context.canvas.height - 1);

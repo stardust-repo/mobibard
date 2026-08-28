@@ -9498,9 +9498,10 @@ html[data-player-layout="player-ui"][data-player-ui-booting="true"] main > :not(
 .player-ui .wb15-workflow-head p { max-width: 520px; margin: 0; color: var(--wb4-muted); font-size: 12px; line-height: 1.55; text-align: right; }
 .player-ui .wb15-workflow-head + .wb4-block,
 .player-ui .wb15-workflow-head + .wb6-overview-block,
-.player-ui .wb15-workflow-head + .wb6-workspace-block { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }
+.player-ui .wb15-workflow-head + .wb6-workspace-block { margin-top: 0 !important; padding-top: 0 !important; }
 @media (max-width: 820px) {
   .player-ui .wb15-workflow-head { align-items: flex-start; flex-direction: column; gap: 7px; }
   .player-ui .wb15-workflow-head p { text-align: left; }
 }
 @media (max-width: 620px) { .player-ui .wb4-title-name { font-size: clamp(28px, 9vw, 38px) !important; } }
+

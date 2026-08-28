@@ -68,8 +68,16 @@ export class FeatureStore {
   }
 }
 
+const SRGB_LINEAR_LUT = new Float64Array(256);
+for (let i = 0; i < SRGB_LINEAR_LUT.length; i += 1) {
+  const c = i / 255;
+  SRGB_LINEAR_LUT[i] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
 function srgbToLinear(value) {
-  const c = clamp(Number(value) || 0, 0, 255) / 255;
+  const numeric = clamp(Number(value) || 0, 0, 255);
+  if (Number.isInteger(numeric)) return SRGB_LINEAR_LUT[numeric];
+  const c = numeric / 255;
   return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
@@ -156,11 +164,17 @@ function baselineLabTable(baselineColors, keyCount) {
   return table;
 }
 
+function median3(a, b, c) {
+  if (a > b) { const t = a; a = b; b = t; }
+  if (b > c) { const t = b; b = c; c = t; }
+  if (a > b) { const t = a; a = b; b = t; }
+  return b;
+}
+
 function buildFrameMetrics(colors, baselineLab, keyCount) {
   const metrics = new Array(keyCount);
   for (let keyIndex = 0; keyIndex < keyCount; keyIndex += 1) {
-    const patches = [];
-    const dLs = []; const dAs = []; const dBs = [];
+    const patches = new Array(PATCH_COUNT);
     for (let patchIndex = 0; patchIndex < PATCH_COUNT; patchIndex += 1) {
       const offset = (keyIndex * PATCH_COUNT + patchIndex) * PATCH_STRIDE;
       const base = baselineLab[keyIndex * PATCH_COUNT + patchIndex];
@@ -170,17 +184,19 @@ function buildFrameMetrics(colors, baselineLab, keyCount) {
       const db = current.b - base.b;
       const chroma = Math.hypot(da, db);
       const de = deltaE2000(base, current);
-      patches.push({ base, current, dL, da, db, chroma, de });
-      dLs.push(dL); dAs.push(da); dBs.push(db);
+      patches[patchIndex] = { base, current, dL, da, db, chroma, de };
     }
-    const dL = median(dLs); const da = median(dAs); const db = median(dBs);
+    const p0 = patches[0]; const p1 = patches[1]; const p2 = patches[2];
+    const dL = median3(p0.dL, p1.dL, p2.dL);
+    const da = median3(p0.da, p1.da, p2.da);
+    const db = median3(p0.db, p1.db, p2.db);
     metrics[keyIndex] = {
       patches,
       vector: { dL, da, db },
       chroma: Math.hypot(da, db),
-      minChroma: Math.min(...patches.map(p => p.chroma)),
-      maxChroma: Math.max(...patches.map(p => p.chroma)),
-      minDeltaE: Math.min(...patches.map(p => p.de)),
+      minChroma: Math.min(p0.chroma, p1.chroma, p2.chroma),
+      maxChroma: Math.max(p0.chroma, p1.chroma, p2.chroma),
+      minDeltaE: Math.min(p0.de, p1.de, p2.de),
     };
   }
   return metrics;
@@ -267,8 +283,9 @@ function residualAfterCommonEffect(metric, common) {
 }
 
 function residualDirectionConsensus(residual, options) {
-  const da = median(residual.residualVectors.map(v => v.da));
-  const db = median(residual.residualVectors.map(v => v.db));
+  const vectors = residual.residualVectors;
+  const da = vectors.length === 3 ? median3(vectors[0].da, vectors[1].da, vectors[2].da) : median(vectors.map(v => v.da));
+  const db = vectors.length === 3 ? median3(vectors[0].db, vectors[1].db, vectors[2].db) : median(vectors.map(v => v.db));
   const aggregateMag = Math.hypot(da, db);
   if (aggregateMag < 1e-6 || residual.maxChroma < 1e-6) return false;
   if (residual.minChroma / residual.maxChroma < options.minResidualPatchBalance) return false;
@@ -316,12 +333,8 @@ function keyPressed(metrics, keyIndex, common, options) {
  *  - same-frame neighboring keys are used only to subtract common visual
  *    effects such as glow, bloom, color wash, or lighting.
  */
-export function detectNotesFromFeatures(store, keys, options = {}, onProgress) {
-  if (store.frameCount === 0) return { notes: [], baselines: null };
-  if (keys.length !== store.keyCount) throw new Error(t('error.key_count_mismatch'));
-
-  const velocity = clamp(Math.round(Number(options.velocity) || 100), 1, 127);
-  const detectionOptions = {
+function normalizeDetectionOptions(options = {}) {
+  return {
     clearDeltaE: clamp(Number(options.clearDeltaE) || 18, 1, 100),
     minChromaticShift: clamp(Number(options.minChromaticShift) || 16, 1, 150),
     minPatchBalance: clamp(Number(options.minPatchBalance) || 0.46, 0.05, 1),
@@ -335,58 +348,123 @@ export function detectNotesFromFeatures(store, keys, options = {}, onProgress) {
     minResidualPatchBalance: clamp(Number(options.minResidualPatchBalance) || 0.38, 0.05, 1),
     minResidualDirectionCosine: clamp(Number(options.minResidualDirectionCosine) || 0.58, -1, 1),
   };
+}
 
-  const suppliedBaseline = options.baselineColors;
-  if (!suppliedBaseline || suppliedBaseline.length !== store.keyCount * CHANNELS_PER_KEY) {
-    throw new Error(t('error.baseline_missing'));
+/**
+ * Stateful single-pass detector.
+ *
+ * It uses the exact same per-frame v13 color/effect logic as the previous
+ * FeatureStore post-pass, but notes are emitted while frames are decoded. This
+ * removes the full-video feature buffer and the second traversal without any
+ * temporal smoothing or threshold changes.
+ */
+export class StreamingNoteDetector {
+  constructor(keys, options = {}) {
+    if (!Array.isArray(keys) || keys.length === 0) throw new Error(t('error.key_count_mismatch'));
+    this.keys = keys;
+    this.keyCount = keys.length;
+    this.velocity = clamp(Math.round(Number(options.velocity) || 100), 1, 127);
+    this.detectionOptions = normalizeDetectionOptions(options);
+
+    const suppliedBaseline = options.baselineColors;
+    if (!suppliedBaseline || suppliedBaseline.length !== this.keyCount * CHANNELS_PER_KEY) {
+      throw new Error(t('error.baseline_missing'));
+    }
+    const fixedBaselineColors = Float32Array.from(suppliedBaseline);
+    this.baselines = {
+      colors: fixedBaselineColors,
+      confidence: new Float32Array(this.keyCount * PATCH_COUNT).fill(1),
+      source: 'setup-frame',
+    };
+    this.baselineLab = baselineLabTable(fixedBaselineColors, this.keyCount);
+    this.sameType = buildSameTypePositions(keys);
+    this.validKeyMask = Array.isArray(options.validKeyMask) || ArrayBuffer.isView(options.validKeyMask)
+      ? options.validKeyMask
+      : null;
+    this.states = Array.from({ length: this.keyCount }, () => ({ active: false, noteStart: 0 }));
+    this.notes = [];
+    this.frameCount = 0;
+    this.finalTime = 0;
+    this.finished = false;
   }
-  const fixedBaselineColors = Float32Array.from(suppliedBaseline);
-  const baselines = {
-    colors: fixedBaselineColors,
-    confidence: new Float32Array(store.keyCount * PATCH_COUNT).fill(1),
-    source: 'setup-frame',
-  };
-  const baselineLab = baselineLabTable(fixedBaselineColors, store.keyCount);
-  const sameType = buildSameTypePositions(keys);
-  const validKeyMask = Array.isArray(options.validKeyMask) || ArrayBuffer.isView(options.validKeyMask)
-    ? options.validKeyMask
-    : null;
 
-  const states = Array.from({ length: store.keyCount }, () => ({ active: false, noteStart: 0 }));
-  const notes = [];
-  let processed = 0;
-  let finalTime = 0;
+  processFrame(timestamp, duration, colors) {
+    if (this.finished) throw new Error('StreamingNoteDetector is already finished.');
+    if (!(colors instanceof Uint8Array) || colors.length !== this.keyCount * CHANNELS_PER_KEY) {
+      throw new Error(t('error.feature_size', { bytes: this.keyCount * CHANNELS_PER_KEY }));
+    }
 
-  store.forEachFrame(({ timestamp, duration, colors }) => {
-    finalTime = Math.max(finalTime, timestamp + Math.max(0, duration));
-    const metrics = buildFrameMetrics(colors, baselineLab, store.keyCount);
+    const frameTime = Math.max(0, Number(timestamp) || 0);
+    const frameDuration = Math.max(0, Number(duration) || 0);
+    this.finalTime = Math.max(this.finalTime, frameTime + frameDuration);
+    const metrics = buildFrameMetrics(colors, this.baselineLab, this.keyCount);
 
-    for (let keyIndex = 0; keyIndex < store.keyCount; keyIndex += 1) {
-      const state = states[keyIndex];
-      const valid = !validKeyMask || validKeyMask[keyIndex] !== false;
+    for (let keyIndex = 0; keyIndex < this.keyCount; keyIndex += 1) {
+      const state = this.states[keyIndex];
+      const valid = !this.validKeyMask || this.validKeyMask[keyIndex] !== false;
       const common = valid
-        ? estimateLocalCommonEffect(keyIndex, metrics, keys, sameType, validKeyMask, detectionOptions)
+        ? estimateLocalCommonEffect(keyIndex, metrics, this.keys, this.sameType, this.validKeyMask, this.detectionOptions)
         : { dL: 0, da: 0, db: 0, count: 0 };
-      const pressed = valid && keyPressed(metrics, keyIndex, common, detectionOptions);
+      const pressed = valid && keyPressed(metrics, keyIndex, common, this.detectionOptions);
 
       if (!state.active && pressed) {
         state.active = true;
-        state.noteStart = timestamp;
+        state.noteStart = frameTime;
       } else if (state.active && !pressed) {
-        const end = Math.max(state.noteStart, timestamp);
-        notes.push({
-          midi: keys[keyIndex].midi,
-          name: keys[keyIndex].name,
+        const end = Math.max(state.noteStart, frameTime);
+        this.notes.push({
+          midi: this.keys[keyIndex].midi,
+          name: this.keys[keyIndex].name,
           start: state.noteStart,
           end,
           duration: end - state.noteStart,
-          velocity,
-          keyType: keys[keyIndex].type,
+          velocity: this.velocity,
+          keyType: this.keys[keyIndex].type,
         });
         state.active = false;
       }
     }
 
+    this.frameCount += 1;
+  }
+
+  finish() {
+    if (!this.finished) {
+      for (let keyIndex = 0; keyIndex < this.keyCount; keyIndex += 1) {
+        const state = this.states[keyIndex];
+        if (!state.active) continue;
+        const end = Math.max(state.noteStart, this.finalTime);
+        this.notes.push({
+          midi: this.keys[keyIndex].midi,
+          name: this.keys[keyIndex].name,
+          start: state.noteStart,
+          end,
+          duration: end - state.noteStart,
+          velocity: this.velocity,
+          keyType: this.keys[keyIndex].type,
+        });
+        state.active = false;
+      }
+      this.notes.sort((a, b) => a.start - b.start || a.midi - b.midi || a.end - b.end);
+      this.finished = true;
+    }
+    return {
+      notes: this.notes,
+      baselines: this.baselines,
+      detectionOptions: this.detectionOptions,
+      frameCount: this.frameCount,
+    };
+  }
+}
+
+export function detectNotesFromFeatures(store, keys, options = {}, onProgress) {
+  if (store.frameCount === 0) return { notes: [], baselines: null };
+  if (keys.length !== store.keyCount) throw new Error(t('error.key_count_mismatch'));
+
+  const detector = new StreamingNoteDetector(keys, options);
+  let processed = 0;
+  store.forEachFrame(({ timestamp, duration, colors }) => {
+    detector.processFrame(timestamp, duration, colors);
     processed += 1;
     if (processed % 180 === 0) {
       onProgress?.({
@@ -396,25 +474,9 @@ export function detectNotesFromFeatures(store, keys, options = {}, onProgress) {
       });
     }
   });
-
-  for (let keyIndex = 0; keyIndex < store.keyCount; keyIndex += 1) {
-    const state = states[keyIndex];
-    if (!state.active) continue;
-    const end = Math.max(state.noteStart, finalTime);
-    notes.push({
-      midi: keys[keyIndex].midi,
-      name: keys[keyIndex].name,
-      start: state.noteStart,
-      end,
-      duration: end - state.noteStart,
-      velocity,
-      keyType: keys[keyIndex].type,
-    });
-  }
-
-  notes.sort((a, b) => a.start - b.start || a.midi - b.midi || a.end - b.end);
-  onProgress?.({ phase: 'done', progress: 1, detail: t('analysis.post_done', { count: notes.length.toLocaleString(getLanguage()) }) });
-  return { notes, baselines, detectionOptions };
+  const result = detector.finish();
+  onProgress?.({ phase: 'done', progress: 1, detail: t('analysis.post_done', { count: result.notes.length.toLocaleString(getLanguage()) }) });
+  return result;
 }
 
 export function calculateMaximumPolyphony(notes) {
