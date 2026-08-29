@@ -60,12 +60,12 @@
     const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
     if (localeUrl.protocol !== "file:") {
       localeUrl.searchParams.set("v", "5.2.0");
-      localeUrl.searchParams.set("rev", "20260829-v52");
+      localeUrl.searchParams.set("rev", "20260829-v52b");
     }
     document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   })();
   </script>
-<link href="./styles.css?v=5.2.0&amp;rev=20260829-v52" rel="stylesheet"/>
+<link href="./styles.css?v=5.2.0&amp;rev=20260829-v52b" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
 <body>
@@ -143,7 +143,7 @@
 </div>
 <div aria-label="모드 이동" class="simple-mode-actions">
 <button aria-controls="simpleRhythmGameLayer" aria-haspopup="dialog" class="mode-action-button" id="mobibeatsLink" type="button">모비비트</button>
-<a class="mode-action-button" href="../rollscriptor/index.html" id="rollscriptorLink">RollScriptor</a>
+<a class="mode-action-button" href="../rollscriptor/index.html" id="rollscriptorLink">롤 스크립터</a>
 <a class="mode-action-button" href="../player/index.html" id="fullEditorLink">상세 모드</a>
 </div>
 </div>
@@ -325,7 +325,7 @@
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260823-final2" type="module"></script>
-<script src="./js/app.js?v=5.2.0&amp;rev=20260829-v52"></script>
+<script src="./js/app.js?v=5.2.0&amp;rev=20260829-v52b"></script>
 <script src="./enhancements.js?v=5.1.0&amp;rev=20260823-final18"></script>
 </body>
 </html>

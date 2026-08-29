@@ -55,6 +55,7 @@
     convertStepDescription: $("convertStepDescription"),
     brandName: $("brandName"),
     midiExtractLink: $("midiExtractLink"),
+    rollscriptorLink: $("rollscriptorLink"),
     fullEditorLink: $("fullEditorLink"),
     discordLink: $("discordLink"),
     settingsControl: $("settingsControl"),
@@ -300,6 +301,7 @@
     if (els.convertStepTitle) els.convertStepTitle.textContent = t("stepConvertTitle");
     if (els.convertStepDescription) els.convertStepDescription.textContent = t("stepConvertDescription");
     els.midiExtractLink.textContent = t("extract");
+    if (els.rollscriptorLink) { els.rollscriptorLink.textContent = t("rollscriptor"); els.rollscriptorLink.href = `../rollscriptor/index.html?lang=${encodeURIComponent(language)}`; }
     els.fullEditorLink.textContent = t("full");
     els.fullEditorLink.href = `../player/index.html?lang=${encodeURIComponent(language)}`;
     els.discordLink.setAttribute("aria-label", t("discord"));

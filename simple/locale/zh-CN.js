@@ -13,6 +13,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-CN"] = {
     "stepConvertTitle": "转换与结果",
     "stepConvertDescription": "调整量化、休止符与淡入淡出，并试听、保存或复制转换后的 MML。",
     "full": "详细模式",
+    "rollscriptor": "RollScriptor",
     "discord": "Discord",
     "extract": "MIDI 提取",
     "language": "语言",

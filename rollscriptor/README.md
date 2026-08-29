@@ -31,3 +31,10 @@ The RollScriptor settings panel is initialized independently from the video/WebC
 
 검출 기준과 임계값은 유지하면서 분석 경로만 최적화했습니다. 분석 프레임 전체를 CPU로 읽지 않고 흰/검 건반 검출선 주변의 얇은 두 영역만 읽으며, 프레임 특징을 영상 전체 길이만큼 저장한 뒤 다시 처리하지 않고 디코딩 즉시 동일한 판정 로직으로 Note On/Off를 생성합니다. 프레임 건너뛰기, 시간축 보정, 검출 임계값 변경은 사용하지 않습니다.
 
+
+
+## UI additions (2026-08-29)
+- Localized product name (KO/JA; English name retained for EN/ZH).
+- Recommended video requirements shown at upload: 720p+, 30fps+, 88 keys, minimal key-covering effects/noise.
+- Warning for videos below 720p or nominal 30fps.
+- Compact four-step tutorial dialog.

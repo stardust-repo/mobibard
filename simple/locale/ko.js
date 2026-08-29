@@ -13,6 +13,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ko"] = {
     "stepConvertTitle": "변환과 결과",
     "stepConvertDescription": "양자화·쉼표·페이드를 조정하고 변환된 MML을 재생·저장·복사합니다.",
     "full": "상세 모드",
+    "rollscriptor": "롤 스크립터",
     "discord": "디스코드",
     "extract": "MIDI 추출",
     "language": "언어",

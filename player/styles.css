@@ -9482,12 +9482,12 @@ html[data-player-layout="player-ui"][data-player-ui-booting="true"] main > :not(
   align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
-  margin-top: 30px;
-  padding-top: 26px;
-  margin-bottom: 16px;
+  margin-top: 20px;
+  padding-top: 17px;
+  margin-bottom: 11px;
   border-top: 0;
 }
-.player-ui .wb15-workflow-head-first { margin-top: 8px; }
+.player-ui .wb15-workflow-head-first { margin-top: 5px; }
 .player-ui .wb15-workflow-title-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .player-ui .wb15-step-number {
   width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 26px;
@@ -9500,7 +9500,7 @@ html[data-player-layout="player-ui"][data-player-ui-booting="true"] main > :not(
 .player-ui .wb15-workflow-head + .wb6-overview-block,
 .player-ui .wb15-workflow-head + .wb6-workspace-block { margin-top: 0 !important; padding-top: 0 !important; }
 @media (max-width: 820px) {
-  .player-ui .wb15-workflow-head { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .player-ui .wb15-workflow-head { align-items: flex-start; flex-direction: column; gap: 5px; }
   .player-ui .wb15-workflow-head p { text-align: left; }
 }
 @media (max-width: 620px) { .player-ui .wb4-title-name { font-size: clamp(28px, 9vw, 38px) !important; } }

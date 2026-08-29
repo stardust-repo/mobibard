@@ -13,6 +13,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["en"] = {
     "stepConvertTitle": "Convert and use the result",
     "stepConvertDescription": "Adjust quantization, rests, and fades, then preview, save, or copy the converted MML.",
     "full": "Detailed mode",
+    "rollscriptor": "RollScriptor",
     "discord": "Discord",
     "extract": "MIDI Extractor",
     "language": "Language",

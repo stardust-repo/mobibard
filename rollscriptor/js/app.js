@@ -31,6 +31,7 @@ const elements = Object.fromEntries([
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent',
   'leftmostNote', 'tempo', 'velocity', 'velocityValue', 'resetSetup', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
+  'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose',
 ].map(id => [id, document.getElementById(id)]));
 
 const previewContext = elements.previewCanvas.getContext('2d', { willReadFrequently: true });
@@ -76,6 +77,8 @@ const state = {
   fileBaseName: 'video-piano',
   releaseBaselineColors: null,
   releaseBaselineTime: 0,
+  videoWidth: 0,
+  videoHeight: 0,
 };
 
 function showToast(message, type = '') {
@@ -125,6 +128,31 @@ function populateNoteOptions() {
 
 function updateTimeLabel() {
   elements.timeLabel.textContent = `${formatTime(state.previewTime)} / ${formatTime(state.duration)}`;
+}
+
+function updateVideoQualityWarning() {
+  const box = elements.videoQualityWarning;
+  if (!box) return;
+  if (!state.track || !state.videoWidth || !state.videoHeight) {
+    box.hidden = true;
+    box.textContent = '';
+    return;
+  }
+  const issues = [];
+  if (Math.min(state.videoWidth, state.videoHeight) < 720) issues.push(t('video.quality_resolution_low'));
+  // 29.97/29.976 are conventional 30fps sources, so allow a small nominal tolerance.
+  if (state.fps < 29.5) issues.push(t('video.quality_fps_low'));
+  if (!issues.length) {
+    box.hidden = true;
+    box.textContent = '';
+    return;
+  }
+  box.textContent = t('video.quality_warning', {
+    resolution: `${state.videoWidth}×${state.videoHeight}`,
+    fps: Number(state.fps).toFixed(state.fps < 10 ? 2 : 1),
+    issues: issues.join(' · '),
+  });
+  box.hidden = false;
 }
 
 function minimumAnalysisRange() {
@@ -800,6 +828,7 @@ function detectKeysFromGuides({ quiet = false, captureBaseline = true } = {}) {
     if (captureBaseline) captureReleaseBaseline({ quiet: true });
     resetResults();
     updateKeyboardStatus();
+    updateVideoQualityWarning();
     drawOverlay();
     updateControlAvailability();
     if (!quiet) showToast(t('toast.detect_updated'));
@@ -947,6 +976,9 @@ async function loadVideoFile(file) {
   state.initialSetup = null;
   state.releaseBaselineColors = null;
   state.releaseBaselineTime = 0;
+  state.videoWidth = 0;
+  state.videoHeight = 0;
+  updateVideoQualityWarning();
   state.fileBaseName = sanitizeBaseName(file.name);
   elements.fileName.textContent = file.name;
   elements.previewStage.classList.remove('is-empty');
@@ -971,10 +1003,13 @@ async function loadVideoFile(file) {
 
     state.displayWidth = width;
     state.displayHeight = height;
+    state.videoWidth = width;
+    state.videoHeight = height;
     state.timeOrigin = Math.max(0, firstTimestamp);
     state.endTimestamp = endTimestamp;
     state.duration = Math.max(0, endTimestamp - state.timeOrigin);
     state.fps = clamp(metrics?.bestGuessFrameRate || metrics?.averageFrameRate || 30, 1, 240);
+    updateVideoQualityWarning();
     state.previewTime = 0;
     state.previewFrameTime = 0;
     state.previewFromFrameCache = false;
@@ -997,6 +1032,8 @@ async function loadVideoFile(file) {
     console.error(error);
     disposeCurrentInput();
     elements.previewStage.classList.add('is-empty');
+    state.videoWidth = 0; state.videoHeight = 0;
+    updateVideoQualityWarning();
     updateKeyboardStatus(t('error.open_video'));
     setProgress(0, t('progress.error'), error.message || String(error));
     showToast(error.message || t('error.open_video'), 'error');
@@ -1231,6 +1268,24 @@ function initializeEvents() {
   elements.downloadMidi.addEventListener('click', () => {
     if (state.midiBlob) downloadBlob(state.midiBlob, `${state.fileBaseName}.mid`);
   });
+  elements.tutorialButton?.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const dialog = elements.tutorialDialog;
+    if (!dialog) return;
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  });
+  elements.tutorialClose?.addEventListener('click', () => {
+    const dialog = elements.tutorialDialog;
+    if (!dialog) return;
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+  });
+  elements.tutorialDialog?.addEventListener('click', event => {
+    if (event.target !== elements.tutorialDialog) return;
+    if (typeof elements.tutorialDialog.close === 'function') elements.tutorialDialog.close();
+  });
   window.addEventListener('beforeunload', disposeCurrentInput);
 }
 
@@ -1243,6 +1298,7 @@ async function initialize() {
     updateAnalysisRangeLabel();
     updateCurrentChord();
     updateKeyboardStatus();
+    updateVideoQualityWarning();
     drawOverlay();
     if (!state.track && !elements.runtimeError.hidden) {
       elements.runtimeError.textContent = window.isSecureContext ? t('error.webcodecs') : t('error.secure_context');

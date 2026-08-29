@@ -13,6 +13,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ja"] = {
     "stepConvertTitle": "変換と結果",
     "stepConvertDescription": "量子化・休符・フェードを調整し、変換したMMLを再生・保存・コピーします。",
     "full": "詳細モード",
+    "rollscriptor": "ロールスクリプター",
     "discord": "Discord",
     "extract": "MIDI抽出",
     "language": "言語",
