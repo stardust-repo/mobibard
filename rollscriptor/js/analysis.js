@@ -1,5 +1,5 @@
 import { clamp, PROBE_PATCH_COUNT } from './vision.js';
-import { getLanguage, t } from './language-manager.js';
+import { getLanguage, t } from './language-manager.js?v=20260830-note-expand-v1';
 
 const PATCH_COUNT = PROBE_PATCH_COUNT;
 const PATCH_STRIDE = 3; // R, G, B
@@ -7,6 +7,14 @@ const CHANNELS_PER_KEY = PATCH_COUNT * PATCH_STRIDE;
 
 export const DEFAULT_WHITE_CHANGE_PERCENT = 30;
 export const DEFAULT_BLACK_CHANGE_PERCENT = 50;
+export const DEFAULT_NOTE_EXTENSION_FRAMES = 0;
+export const MAX_NOTE_EXTENSION_FRAMES = 999;
+
+function normalizeNoteExtensionFrames(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_NOTE_EXTENSION_FRAMES;
+  return clamp(Math.round(numeric), 0, MAX_NOTE_EXTENSION_FRAMES);
+}
 
 /**
  * Compact per-frame storage. Each key keeps the averaged RGB of three small,
@@ -199,11 +207,80 @@ export function createKeyChangeEvaluator(keys, baselineColors, options = {}, val
   };
 }
 
+function stripFrameMetadata(note) {
+  const { _startFrame, _endFrame, ...clean } = note;
+  return clean;
+}
+
+function frameBoundaryTime(frameStarts, finalTime, frameIndex) {
+  const count = frameStarts.length;
+  if (!count) return 0;
+  const index = clamp(Math.round(Number(frameIndex) || 0), 0, count);
+  if (index >= count) return Math.max(frameStarts[count - 1], Number(finalTime) || 0);
+  return Math.max(0, Number(frameStarts[index]) || 0);
+}
+
+/**
+ * Expands each raw note into surrounding frames where that same key was not
+ * detected. Raw note runs are never merged. If the tail expansion of an
+ * earlier note overlaps the lead expansion of the following note, the
+ * following note owns the overlap and the earlier tail is clipped there.
+ */
+export function expandNotesByFrames(notes, frameStarts, finalTime, extensionFrames) {
+  const amount = normalizeNoteExtensionFrames(extensionFrames);
+  if (!Array.isArray(notes) || !notes.length) return [];
+  if (!amount || !Array.isArray(frameStarts) || !frameStarts.length) {
+    return notes.map(stripFrameMetadata);
+  }
+
+  const frameCount = frameStarts.length;
+  const groups = new Map();
+  for (const note of notes) {
+    const key = Number(note.midi);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(note);
+  }
+
+  const expandedNotes = [];
+  for (const group of groups.values()) {
+    group.sort((a, b) => a._startFrame - b._startFrame || a._endFrame - b._endFrame);
+    const expanded = group.map((note, index) => {
+      const previousRawEnd = index > 0 ? group[index - 1]._endFrame : 0;
+      const nextRawStart = index + 1 < group.length ? group[index + 1]._startFrame : frameCount;
+      return {
+        note,
+        startFrame: Math.max(previousRawEnd, note._startFrame - amount),
+        endFrame: Math.min(nextRawStart, note._endFrame + amount),
+      };
+    });
+
+    // A shared/overlapping empty area belongs to the following note. This is
+    // deliberately a boundary split, not a merge; both raw notes survive.
+    for (let index = 1; index < expanded.length; index += 1) {
+      const previous = expanded[index - 1];
+      const current = expanded[index];
+      if (previous.endFrame > current.startFrame) previous.endFrame = current.startFrame;
+    }
+
+    for (const item of expanded) {
+      const start = frameBoundaryTime(frameStarts, finalTime, item.startFrame);
+      const end = Math.max(start, frameBoundaryTime(frameStarts, finalTime, item.endFrame));
+      const clean = stripFrameMetadata(item.note);
+      expandedNotes.push({ ...clean, start, end, duration: end - start });
+    }
+  }
+
+  expandedNotes.sort((a, b) => a.start - b.start || a.midi - b.midi || a.end - b.end);
+  return expandedNotes;
+}
+
 /**
  * Stateful single-pass detector using the fixed release colors captured when
  * keyboard detection is confirmed. There is intentionally no temporal
  * smoothing/hysteresis: each decoded frame is compared directly with that
- * fixed reference, and returning to the original region closes the note.
+ * fixed reference, and returning to the original region closes the raw note.
+ * Optional frame expansion is applied only after all raw runs are known, so
+ * neighboring notes remain distinct and following-note priority is preserved.
  */
 export class StreamingNoteDetector {
   constructor(keys, options = {}) {
@@ -212,6 +289,7 @@ export class StreamingNoteDetector {
     this.keyCount = keys.length;
     this.velocity = clamp(Math.round(Number(options.velocity) || 100), 1, 127);
     this.detectionOptions = normalizeDetectionOptions(options);
+    this.noteExtensionFrames = normalizeNoteExtensionFrames(options.noteExtensionFrames);
 
     const suppliedBaseline = options.baselineColors;
     if (!suppliedBaseline || suppliedBaseline.length !== this.keyCount * CHANNELS_PER_KEY) {
@@ -233,8 +311,9 @@ export class StreamingNoteDetector {
       this.detectionOptions,
       this.validKeyMask,
     );
-    this.states = Array.from({ length: this.keyCount }, () => ({ active: false, noteStart: 0 }));
+    this.states = Array.from({ length: this.keyCount }, () => ({ active: false, noteStart: 0, noteStartFrame: 0 }));
     this.notes = [];
+    this.frameStarts = [];
     this.frameCount = 0;
     this.finalTime = 0;
     this.finished = false;
@@ -248,6 +327,8 @@ export class StreamingNoteDetector {
 
     const frameTime = Math.max(0, Number(timestamp) || 0);
     const frameDuration = Math.max(0, Number(duration) || 0);
+    const frameIndex = this.frameCount;
+    this.frameStarts.push(frameTime);
     this.finalTime = Math.max(this.finalTime, frameTime + frameDuration);
 
     const frameDetection = this.evaluateChanges(colors);
@@ -258,6 +339,7 @@ export class StreamingNoteDetector {
       if (!state.active && pressed) {
         state.active = true;
         state.noteStart = frameTime;
+        state.noteStartFrame = frameIndex;
       } else if (state.active && !pressed) {
         const end = Math.max(state.noteStart, frameTime);
         this.notes.push({
@@ -268,6 +350,8 @@ export class StreamingNoteDetector {
           duration: end - state.noteStart,
           velocity: this.velocity,
           keyType: this.keys[keyIndex].type,
+          _startFrame: state.noteStartFrame,
+          _endFrame: frameIndex,
         });
         state.active = false;
       }
@@ -290,16 +374,20 @@ export class StreamingNoteDetector {
           duration: end - state.noteStart,
           velocity: this.velocity,
           keyType: this.keys[keyIndex].type,
+          _startFrame: state.noteStartFrame,
+          _endFrame: this.frameCount,
         });
         state.active = false;
       }
       this.notes.sort((a, b) => a.start - b.start || a.midi - b.midi || a.end - b.end);
+      this.notes = expandNotesByFrames(this.notes, this.frameStarts, this.finalTime, this.noteExtensionFrames);
       this.finished = true;
     }
     return {
       notes: this.notes,
       baselines: this.baselines,
       detectionOptions: this.detectionOptions,
+      noteExtensionFrames: this.noteExtensionFrames,
       frameCount: this.frameCount,
     };
   }

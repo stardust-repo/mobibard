@@ -1,4 +1,4 @@
-import { t } from './language-manager.js';
+import { t } from './language-manager.js?v=20260830-note-expand-v1';
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
 const WHITE_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const WHITE_PCS = [0, 2, 4, 5, 7, 9, 11];
@@ -819,19 +819,39 @@ export function detectSingleLineKeyGeometry(imageData, options = {}) {
   const score = boxSmooth(edge, Math.max(1, Math.round(width / 2200)));
   const nominalWidth = width / expectedKeyCount;
   const detected = buildWhiteBoundaries(score, width, nominalWidth, expectedKeyCount);
-  if (detected.boundaries.length !== expectedKeyCount + 1) throw new Error(t('error.white_boundaries'));
+
+  // In one-line mode the visual keyboard is expected to contain 88 equal
+  // chromatic strips. Some videos deliberately draw almost no borders at all,
+  // so edge detection can have too little evidence even though the keyboard is
+  // perfectly usable. In that case keep working by evenly dividing the selected
+  // guide span into 88 regions and mark the geometry as estimated.
+  const minimumObservedBoundaries = Math.max(8, Math.round(expectedKeyCount * 0.20));
+  const boundaryCountMismatch = detected.boundaries.length !== expectedKeyCount + 1;
+  const insufficientBoundaryEvidence = boundaryCountMismatch
+    || detected.peaks.length < minimumObservedBoundaries
+    || detected.confidence < 0.30;
+  const equalBoundaries = Array.from(
+    { length: expectedKeyCount + 1 },
+    (_, index) => width * index / expectedKeyCount,
+  );
+  const keyBoundaries = insufficientBoundaryEvidence ? equalBoundaries : detected.boundaries;
 
   return {
     mode: 'single',
     width,
     height,
-    keyBoundaries: detected.boundaries,
+    keyBoundaries,
     keyCount: expectedKeyCount,
     whiteCount: Array.from({ length: expectedKeyCount }, (_, index) => isWhiteMidi(21 + index)).filter(Boolean).length,
     detectedBlackCount: Array.from({ length: expectedKeyCount }, (_, index) => !isWhiteMidi(21 + index)).filter(Boolean).length,
     nominalKeyWidth: nominalWidth,
-    confidence: detected.confidence,
-    diagnostics: { boundaryConfidence: detected.confidence, candidateBoundaryCount: detected.peaks.length },
+    confidence: insufficientBoundaryEvidence ? 0 : detected.confidence,
+    boundariesEstimated: insufficientBoundaryEvidence,
+    diagnostics: {
+      boundaryConfidence: detected.confidence,
+      candidateBoundaryCount: detected.peaks.length,
+      boundariesEstimated: insufficientBoundaryEvidence,
+    },
   };
 }
 

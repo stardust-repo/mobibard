@@ -14,11 +14,11 @@ import {
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
-} from './vision.js?v=20260830-single-line-v1';
-import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-detection-info-v4';
+} from './vision.js?v=20260830-note-expand-v1';
+import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-note-expand-v1';
 import { createMidiFile } from './midi.js';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js';
-import { initializeHeaderUi, initializeThemeUi } from './ui.js';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-note-expand-v1';
+import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-note-expand-v1';
 
 const MEDIABUNNY_VERSION = '1.55.3';
 const MEDIABUNNY_URLS = [
@@ -30,7 +30,7 @@ const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
   'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent',
-  'tempo', 'velocity', 'velocityValue', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
+  'tempo', 'velocity', 'velocityValue', 'noteExtensionFrames', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose', 'tutorialProgress', 'tutorialVisual', 'tutorialVisualStep', 'tutorialVisualSymbol', 'tutorialVisualTitle', 'tutorialPart', 'tutorialStepTitle', 'tutorialStepBody', 'tutorialStepNote', 'tutorialPrev', 'tutorialNext',
 ].map(id => [id, document.getElementById(id)]));
@@ -240,6 +240,7 @@ function currentSessionSnapshot() {
     analysisEnd: Number(elements.analysisEnd?.value) || state.duration,
     tempo: clamp(Number(elements.tempo?.value) || 120, 20, 300),
     velocity: clamp(Number(elements.velocity?.value) || 75, 1, 100),
+    noteExtensionFrames: normalizedNoteExtensionFrames(elements.noteExtensionFrames?.value),
     keyboardDetectionConfirmed: Boolean(state.keyboardDetectionConfirmed),
     releaseBaselineTime: Number(state.releaseBaselineTime) || 0,
     analysisCompleted: Boolean(state.midiBlob),
@@ -346,6 +347,7 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
     elements.tempo.value = String(clamp(Math.round(Number(snapshot.tempo) || 120), 20, 300));
     elements.velocity.value = String(clamp(Math.round(Number(snapshot.velocity) || 75), 1, 100));
     elements.velocityValue.textContent = `${elements.velocity.value}%`;
+    if (elements.noteExtensionFrames) elements.noteExtensionFrames.value = String(normalizedNoteExtensionFrames(snapshot.noteExtensionFrames));
 
     const gap = minimumAnalysisRange();
     let start = clamp(Number(snapshot.analysisStart) || 0, 0, state.duration);
@@ -655,6 +657,7 @@ function updateControlAvailability() {
   elements.setEndCurrent.disabled = !hasVideo || locked;
   elements.whiteChangePercent.disabled = locked;
   elements.blackChangePercent.disabled = locked;
+  if (elements.noteExtensionFrames) elements.noteExtensionFrames.disabled = locked;
   elements.detectKeys.disabled = !hasVideo || locked;
   elements.keyboardOrientationToggle.disabled = !hasVideo || locked;
   if (elements.detectionModeToggle) elements.detectionModeToggle.disabled = !hasVideo || locked;
@@ -1336,7 +1339,7 @@ function drawOverlay() {
   const scale = canvasUnitsPerCssPixel();
   const crop = getGuideCrop();
   if (state.detectionMode === 'single') {
-    drawGuideLine(context, 'single', '#ffd166', t('overlay.single'), scale);
+    drawGuideLine(context, 'single', '#2ee66b', t('overlay.single'), scale);
   } else {
     drawGuideLine(context, 'white', '#55d8ff', t('overlay.white'), scale);
     drawGuideLine(context, 'black', '#ff70d2', t('overlay.black'), scale);
@@ -1639,16 +1642,22 @@ function updateKeyboardStatus(message = '') {
     time: formatTime(state.releaseBaselineTime),
     count: formatNumber(state.notes.length),
   };
+  const estimatedBoundaries = Boolean(state.geometry?.boundariesEstimated);
 
   if (state.analyzing) {
-    elements.keyboardStatus.textContent = t('keyboard.stage_analyzing', values);
+    elements.keyboardStatus.textContent = t(
+      estimatedBoundaries ? 'keyboard.stage_analyzing_estimated' : 'keyboard.stage_analyzing',
+      values,
+    );
     elements.keyboardStatus.dataset.stage = 'analyzing';
     return;
   }
 
   if (state.midiBlob) {
     elements.keyboardStatus.textContent = t(
-      invalidBlack ? 'keyboard.stage_analyzed_invalid' : 'keyboard.stage_analyzed',
+      estimatedBoundaries
+        ? 'keyboard.stage_analyzed_estimated'
+        : (invalidBlack ? 'keyboard.stage_analyzed_invalid' : 'keyboard.stage_analyzed'),
       values,
     );
     elements.keyboardStatus.dataset.stage = 'analyzed';
@@ -1656,10 +1665,12 @@ function updateKeyboardStatus(message = '') {
   }
 
   elements.keyboardStatus.textContent = t(
-    invalidBlack ? 'keyboard.stage_detected_invalid' : 'keyboard.stage_detected',
+    estimatedBoundaries
+      ? 'keyboard.stage_detected_estimated'
+      : (invalidBlack ? 'keyboard.stage_detected_invalid' : 'keyboard.stage_detected'),
     values,
   );
-  elements.keyboardStatus.dataset.stage = 'detected';
+  elements.keyboardStatus.dataset.stage = estimatedBoundaries ? 'estimated' : 'detected';
 }
 
 function detectKeysFromGuides({ quiet = false } = {}) {
@@ -1691,7 +1702,9 @@ function detectKeysFromGuides({ quiet = false } = {}) {
     updateVideoQualityWarning();
     drawOverlay();
     updateControlAvailability();
-    if (!quiet) showToast(t('toast.detect_updated'));
+    if (!quiet) {
+      showToast(t(state.geometry?.boundariesEstimated ? 'toast.detect_estimated' : 'toast.detect_updated'));
+    }
     return true;
   } catch (error) {
     console.error(error);
@@ -1717,7 +1730,9 @@ function fallbackGuideForOrientation(orientation = keyboardOrientationForSide(st
     const scan = state.displayWidth * 0.82;
     return {
       side: 'right', mode,
-      span0: state.displayHeight * 0.04, span1: state.displayHeight * 0.96,
+      // Vertical keyboards should start with the guide spanning the full video
+      // height, matching the near-full-width default used for horizontal keys.
+      span0: 0, span1: state.displayHeight,
       blackPos: state.displayWidth * 0.92, whitePos: state.displayWidth * 0.72,
       singlePos: scan,
     };
@@ -2018,10 +2033,21 @@ function currentChangeOptions({ normalize = false } = {}) {
     };
 }
 
+function normalizedNoteExtensionFrames(value = elements.noteExtensionFrames?.value) {
+  const numeric = Number(value);
+  const frames = Number.isFinite(numeric) ? Math.round(numeric) : 0;
+  const normalized = clamp(frames, 0, 999);
+  if (elements.noteExtensionFrames && value === elements.noteExtensionFrames.value) {
+    elements.noteExtensionFrames.value = String(normalized);
+  }
+  return normalized;
+}
+
 function analysisOptions() {
   return {
     velocity: currentVelocityMidi(),
     baselineColors: state.releaseBaselineColors,
+    noteExtensionFrames: normalizedNoteExtensionFrames(),
     // Every sample is converted to OKLab and compared with its own fixed
     // release color. White and black keys can use independent distance limits.
     ...currentChangeOptions({ normalize: true }),
@@ -2262,6 +2288,14 @@ function initializeEvents() {
   });
   elements.tempo.addEventListener('change', () => {
     regenerateMidiFromCurrentNotes();
+    scheduleRollscriptorSessionPersist();
+  });
+  elements.noteExtensionFrames?.addEventListener('change', event => {
+    normalizedNoteExtensionFrames(event.currentTarget.value);
+    if (state.notes.length || state.midiBlob) {
+      resetResults();
+      setProgress(0, t('progress.ready'), state.keyboardDetectionConfirmed ? t('progress.detected_detail') : t('progress.ready_detail'));
+    }
     scheduleRollscriptorSessionPersist();
   });
   elements.detectionModeToggle?.addEventListener('click', () => {

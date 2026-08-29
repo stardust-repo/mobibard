@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-0410" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-note-expand-v1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -234,6 +234,10 @@
           <span><span data-i18n="settings.velocity">벨로시티</span> <output id="velocityValue">75%</output></span>
           <div class="range-control"><input id="velocity" type="range" min="1" max="100" step="1" value="75"/></div>
         </label>
+        <label class="field note-extension-field">
+          <span data-i18n="settings.note_extension">노트 확장 (프레임)</span>
+          <input id="noteExtensionFrames" type="number" min="0" max="999" step="1" value="0" inputmode="numeric" data-i18n-title="settings.note_extension_help" title="검출 전후의 빈 프레임으로 노트를 확장합니다."/>
+        </label>
       </div>
 
       <div class="analysis-output-card">
@@ -295,7 +299,7 @@
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script type="module" src="./js/settings-menu.js?v=20260830-0410"></script>
-<script type="module" src="./js/app.js?v=20260830-0410"></script>
+<script type="module" src="./js/settings-menu.js?v=20260830-note-expand-v1"></script>
+<script type="module" src="./js/app.js?v=20260830-note-expand-v1"></script>
 </body>
 </html>
