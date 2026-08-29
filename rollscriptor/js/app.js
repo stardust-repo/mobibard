@@ -27,9 +27,9 @@ const MEDIABUNNY_URLS = [
 
 const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
-  'playPause', 'prevFrame', 'nextFrame', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
+  'playPause', 'jumpStart', 'prev5Frame', 'prevFrame', 'nextFrame', 'next5Frame', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent',
-  'leftmostNote', 'tempo', 'velocity', 'velocityValue', 'resetSetup', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
+  'leftmostNote', 'tempo', 'velocity', 'velocityValue', 'resetSetup', 'detectKeys', 'keyboardOrientationToggle', 'keyboardOrientationIcon', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose',
 ].map(id => [id, document.getElementById(id)]));
@@ -61,9 +61,11 @@ const state = {
   playbackTimer: null,
   playbackStartWall: 0,
   playbackStartTime: 0,
-  guide: null, // { x0, x1, blackY, whiteY }
+  keyboardSide: 'bottom', // inferred from guide orientation + guide position around the video center
+  guide: null, // { side, span0, span1, blackPos, whitePos }
   geometry: null,
   keyMap: null,
+  keyboardDetectionConfirmed: false,
   initialSetup: null,
   noteManuallyChanged: false,
   dragMode: null,
@@ -238,7 +240,10 @@ function updateCurrentChord(time = state.previewTime) {
 }
 
 function setPlaybackUi() {
-  elements.playPause.textContent = state.playing ? t('transport.pause') : t('transport.play');
+  const label = state.playing ? t('transport.pause') : t('transport.play');
+  elements.playPause.textContent = state.playing ? '■' : '▶';
+  elements.playPause.setAttribute('aria-label', label);
+  elements.playPause.title = label;
 }
 
 function pausePlayback() {
@@ -294,27 +299,37 @@ function resetResults() {
   updateCurrentChord();
   elements.downloadMidi.disabled = true;
   if (!state.analyzing) {
-    setProgress(0, t('progress.waiting'), state.track ? t('progress.idle_detail') : t('progress.select_video'));
+    const detail = !state.track
+      ? t('progress.select_video')
+      : (state.keyboardDetectionConfirmed ? t('progress.detected_detail') : t('progress.idle_detail'));
+    setProgress(0, t('progress.waiting'), detail);
   }
 }
 
 function updateControlAvailability() {
   const hasVideo = Boolean(state.track);
-  const hasKeys = Boolean(state.keyMap?.keys?.length);
-  const hasBaseline = Boolean(state.releaseBaselineColors?.length === (state.keyMap?.keys?.length || 0) * PROBE_PATCH_COUNT * 3);
+  const hasKeys = Boolean(state.keyboardDetectionConfirmed && state.keyMap?.keys?.length);
   const locked = state.analyzing;
   elements.videoFile.disabled = locked || !state.mediabunny;
   elements.timeline.disabled = !hasVideo || locked;
   elements.playPause.disabled = !hasVideo || locked;
+  elements.jumpStart.disabled = !hasVideo || locked;
+  elements.prev5Frame.disabled = !hasVideo || locked;
   elements.prevFrame.disabled = !hasVideo || locked;
   elements.nextFrame.disabled = !hasVideo || locked;
+  elements.next5Frame.disabled = !hasVideo || locked;
+  elements.jumpEnd.disabled = !hasVideo || locked;
   elements.analysisStart.disabled = !hasVideo || locked;
   elements.analysisEnd.disabled = !hasVideo || locked;
   elements.setStartCurrent.disabled = !hasVideo || locked;
   elements.setEndCurrent.disabled = !hasVideo || locked;
   elements.leftmostNote.disabled = !hasKeys || locked;
   elements.resetSetup.disabled = !state.initialSetup || locked;
-  elements.analyzeVideo.disabled = !hasKeys || !hasBaseline || locked;
+  elements.detectKeys.disabled = !hasVideo || locked;
+  elements.keyboardOrientationToggle.disabled = !hasVideo || locked;
+  // Keep Analyze clickable after a video is loaded so an omitted keyboard-detection
+  // step can be explained with a toast instead of looking like a dead control.
+  elements.analyzeVideo.disabled = !hasVideo || locked;
   elements.downloadMidi.disabled = !state.midiBlob || locked;
 }
 
@@ -482,6 +497,21 @@ async function stepPreviewFrame(direction) {
   await renderPreview(state.previewTime + direction / Math.max(1, state.fps), true);
 }
 
+async function stepPreviewFrames(count) {
+  const amount = Math.trunc(Number(count) || 0);
+  if (!amount || !state.track || state.analyzing) return;
+  const direction = amount > 0 ? 1 : -1;
+  for (let index = 0; index < Math.abs(amount); index += 1) {
+    await stepPreviewFrame(direction);
+  }
+}
+
+async function jumpPreviewToBoundary(toEnd = false) {
+  if (!state.track || state.analyzing) return;
+  pausePlayback();
+  await renderPreview(toEnd ? state.duration : 0, true);
+}
+
 async function renderPreview(timeSeconds, force = false) {
   if (!state.previewSink || !state.track) return;
   const targetTime = clamp(Number(timeSeconds) || 0, 0, state.duration);
@@ -535,58 +565,226 @@ function canvasUnitsPerCssPixel() {
   return Math.max(0.5, elements.overlayCanvas.width / Math.max(1, bounds.width));
 }
 
+function isHorizontalKeyboardSide(side = state.keyboardSide) {
+  return side === 'bottom' || side === 'top';
+}
+
+function keyboardOrientationForSide(side = state.keyboardSide) {
+  return isHorizontalKeyboardSide(side) ? 'horizontal' : 'vertical';
+}
+
+function inferKeyboardSideFromGuide(guide) {
+  if (!guide) return state.keyboardSide || 'bottom';
+  const horizontal = isHorizontalKeyboardSide(guide.side);
+  const center = horizontal ? state.displayHeight / 2 : state.displayWidth / 2;
+  const depthCenter = (Number(guide.blackPos) + Number(guide.whitePos)) / 2;
+  return horizontal
+    ? (depthCenter < center ? 'top' : 'bottom')
+    : (depthCenter < center ? 'left' : 'right');
+}
+
+function syncKeyboardSideFromGuide() {
+  if (!state.guide) return;
+  state.keyboardSide = inferKeyboardSideFromGuide(state.guide);
+  state.guide.side = state.keyboardSide;
+}
+
+function keyboardDepthSign(guideOrSide = state.guide || state.keyboardSide) {
+  if (guideOrSide && typeof guideOrSide === 'object') {
+    const difference = Number(guideOrSide.whitePos) - Number(guideOrSide.blackPos);
+    if (Math.abs(difference) > 0.001) return difference > 0 ? 1 : -1;
+    guideOrSide = guideOrSide.side;
+  }
+  return guideOrSide === 'bottom' || guideOrSide === 'left' ? 1 : -1;
+}
+
+function guideSpanLimit(side = state.keyboardSide) {
+  return isHorizontalKeyboardSide(side) ? state.displayWidth : state.displayHeight;
+}
+
+function guideDepthLimit(side = state.keyboardSide) {
+  return isHorizontalKeyboardSide(side) ? state.displayHeight : state.displayWidth;
+}
+
 function cloneGuide(guide) {
-  return guide ? { x0: guide.x0, x1: guide.x1, blackY: guide.blackY, whiteY: guide.whiteY } : null;
+  return guide ? {
+    side: guide.side,
+    span0: guide.span0,
+    span1: guide.span1,
+    blackPos: guide.blackPos,
+    whitePos: guide.whitePos,
+  } : null;
 }
 
 function normalizeGuide(guide) {
   if (!guide) return null;
-  const minWidth = Math.max(60, state.displayWidth * 0.10);
-  const minGap = Math.max(14, state.displayHeight * 0.025);
-  let x0 = clamp(Math.min(guide.x0, guide.x1), 0, state.displayWidth);
-  let x1 = clamp(Math.max(guide.x0, guide.x1), 0, state.displayWidth);
-  if (x1 - x0 < minWidth) {
-    const center = (x0 + x1) / 2;
-    x0 = clamp(center - minWidth / 2, 0, Math.max(0, state.displayWidth - minWidth));
-    x1 = clamp(x0 + minWidth, minWidth, state.displayWidth);
+  const side = ['bottom', 'top', 'left', 'right'].includes(guide.side) ? guide.side : 'bottom';
+  const spanLimit = Math.max(1, guideSpanLimit(side));
+  const depthLimit = Math.max(1, guideDepthLimit(side));
+  const minSpan = Math.min(spanLimit, Math.max(60, spanLimit * 0.10));
+  const minGap = Math.min(depthLimit, Math.max(14, depthLimit * 0.025));
+  let span0 = clamp(Math.min(guide.span0, guide.span1), 0, spanLimit);
+  let span1 = clamp(Math.max(guide.span0, guide.span1), 0, spanLimit);
+  if (span1 - span0 < minSpan) {
+    const center = (span0 + span1) / 2;
+    span0 = clamp(center - minSpan / 2, 0, Math.max(0, spanLimit - minSpan));
+    span1 = clamp(span0 + minSpan, minSpan, spanLimit);
   }
-  let blackY = clamp(guide.blackY, 0, Math.max(0, state.displayHeight - minGap));
-  let whiteY = clamp(guide.whiteY, minGap, state.displayHeight);
-  if (whiteY - blackY < minGap) {
-    const center = (blackY + whiteY) / 2;
-    blackY = clamp(center - minGap / 2, 0, Math.max(0, state.displayHeight - minGap));
-    whiteY = clamp(blackY + minGap, minGap, state.displayHeight);
+
+  const sign = keyboardDepthSign({ side, blackPos: guide.blackPos, whitePos: guide.whitePos });
+  let blackPos = clamp(Number(guide.blackPos) || 0, 0, depthLimit);
+  let whitePos = clamp(Number(guide.whitePos) || 0, 0, depthLimit);
+  if ((whitePos - blackPos) * sign < minGap) {
+    if (sign > 0) {
+      blackPos = clamp(blackPos, 0, Math.max(0, depthLimit - minGap));
+      whitePos = clamp(Math.max(whitePos, blackPos + minGap), minGap, depthLimit);
+    } else {
+      blackPos = clamp(blackPos, minGap, depthLimit);
+      whitePos = clamp(Math.min(whitePos, blackPos - minGap), 0, Math.max(0, depthLimit - minGap));
+    }
   }
-  return { x0, x1, blackY, whiteY };
+  const normalized = { side, span0, span1, blackPos, whitePos };
+  normalized.side = inferKeyboardSideFromGuide(normalized);
+  return normalized;
+}
+
+function guideLineEndpoints(kind) {
+  const guide = state.guide;
+  if (!guide) return null;
+  const pos = kind === 'black' ? guide.blackPos : guide.whitePos;
+  return isHorizontalKeyboardSide(guide.side)
+    ? [{ x: guide.span0, y: pos }, { x: guide.span1, y: pos }]
+    : [{ x: pos, y: guide.span0 }, { x: pos, y: guide.span1 }];
 }
 
 /**
- * Builds the invisible analysis crop from the two visible guide lines.
- * All values returned to Mediabunny are integer source pixels.
+ * Builds an axis-aligned source crop plus a canonical keyboard coordinate system.
+ * Canonical X always runs from low -> high pitch. Canonical Y always runs from
+ * the black-key/back side -> the white-key/front side, regardless of which edge
+ * of the video the piano keyboard is attached to.
  */
 function getGuideCrop() {
   const guide = normalizeGuide(state.guide);
   if (!guide) return null;
-  const gap = Math.max(1, guide.whiteY - guide.blackY);
-  const left = clamp(Math.floor(guide.x0), 0, Math.max(0, state.displayWidth - 1));
-  const right = clamp(Math.ceil(guide.x1), left + 1, state.displayWidth);
+  const sign = keyboardDepthSign(guide);
+  const gap = Math.max(1, Math.abs(guide.whitePos - guide.blackPos));
+  const depthLimit = guideDepthLimit(guide.side);
+  const backPadding = Math.max(gap * 0.75, depthLimit * 0.12);
+  const frontPadding = Math.max(gap * 0.45, depthLimit * 0.045);
 
-  // Geometry detection must keep seeing the real black-key bodies even when
-  // the user moves the two sampling lines close together. v5 based this crop
-  // almost entirely on the line gap, which could crop the black keys away and
-  // make white-key separators look like black keys.
-  const upperPadding = Math.max(gap * 0.75, state.displayHeight * 0.12);
-  const lowerPadding = Math.max(gap * 0.45, state.displayHeight * 0.045);
-  const top = clamp(Math.floor(Math.min(guide.blackY, guide.whiteY) - upperPadding), 0, Math.max(0, state.displayHeight - 2));
-  const bottom = clamp(Math.ceil(Math.max(guide.blackY, guide.whiteY) + lowerPadding), top + 2, state.displayHeight);
+  let depthMin;
+  let depthMax;
+  if (sign > 0) {
+    depthMin = guide.blackPos - backPadding;
+    depthMax = guide.whitePos + frontPadding;
+  } else {
+    depthMin = guide.whitePos - frontPadding;
+    depthMax = guide.blackPos + backPadding;
+  }
+  depthMin = clamp(Math.floor(depthMin), 0, Math.max(0, depthLimit - 2));
+  depthMax = clamp(Math.ceil(depthMax), depthMin + 2, depthLimit);
+
+  const span0 = clamp(Math.floor(guide.span0), 0, Math.max(0, guideSpanLimit(guide.side) - 1));
+  const span1 = clamp(Math.ceil(guide.span1), span0 + 1, guideSpanLimit(guide.side));
+  const horizontal = isHorizontalKeyboardSide(guide.side);
+  const left = horizontal ? span0 : depthMin;
+  const top = horizontal ? depthMin : span0;
+  const width = horizontal ? span1 - span0 : depthMax - depthMin;
+  const height = horizontal ? depthMax - depthMin : span1 - span0;
+  const canonicalWidth = horizontal ? width : height;
+  const canonicalHeight = horizontal ? height : width;
+  const toCanonicalDepth = sourcePos => sign > 0 ? sourcePos - depthMin : depthMax - sourcePos;
+
   return {
+    side: guide.side,
+    depthSign: sign,
     left,
     top,
-    width: Math.max(1, right - left),
-    height: Math.max(2, bottom - top),
-    blackLineY: clamp(guide.blackY - top, 0, Math.max(1, bottom - top - 1)),
-    whiteLineY: clamp(guide.whiteY - top, 0, Math.max(1, bottom - top - 1)),
+    width: Math.max(1, width),
+    height: Math.max(2, height),
+    canonicalWidth: Math.max(1, canonicalWidth),
+    canonicalHeight: Math.max(2, canonicalHeight),
+    blackLineY: clamp(toCanonicalDepth(guide.blackPos), 0, Math.max(1, canonicalHeight - 1)),
+    whiteLineY: clamp(toCanonicalDepth(guide.whitePos), 0, Math.max(1, canonicalHeight - 1)),
   };
+}
+
+function drawCanonicalSource(sourceCanvas, sourceRect, destinationCanvas, side, targetWidth, targetHeight, depthSign = 1) {
+  destinationCanvas.width = Math.max(1, Math.round(targetWidth));
+  destinationCanvas.height = Math.max(1, Math.round(targetHeight));
+  const context = destinationCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
+  const sx = sourceRect?.left ?? 0;
+  const sy = sourceRect?.top ?? 0;
+  const sw = sourceRect?.width ?? sourceCanvas.width;
+  const sh = sourceRect?.height ?? sourceCanvas.height;
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, destinationCanvas.width, destinationCanvas.height);
+
+  if (isHorizontalKeyboardSide(side)) {
+    if (depthSign > 0) {
+      context.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
+    } else {
+      context.setTransform(1, 0, 0, -1, 0, targetHeight);
+      context.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
+    }
+  } else if (side === 'left') {
+    if (depthSign > 0) {
+      // Left-edge keyboard: low -> high runs top -> bottom in source space.
+      context.setTransform(0, 1, 1, 0, 0, 0);
+    } else {
+      context.setTransform(0, -1, 1, 0, 0, targetHeight);
+    }
+    context.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, targetHeight, targetWidth);
+  } else {
+    // Right-edge keyboard: low -> high runs bottom -> top in source space.
+    if (depthSign > 0) {
+      context.setTransform(0, 1, -1, 0, targetWidth, 0);
+    } else {
+      context.setTransform(0, -1, -1, 0, targetWidth, targetHeight);
+    }
+    context.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, targetHeight, targetWidth);
+  }
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  return context;
+}
+
+function canonicalImageDataFromPreview(crop) {
+  const canvas = document.createElement('canvas');
+  const context = drawCanonicalSource(
+    elements.previewCanvas,
+    crop,
+    canvas,
+    crop.side,
+    crop.canonicalWidth,
+    crop.canonicalHeight,
+    crop.depthSign,
+  );
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function canonicalPointToDisplay(x, y, crop) {
+  if (isHorizontalKeyboardSide(crop.side)) {
+    return crop.depthSign > 0
+      ? { x: crop.left + x, y: crop.top + y }
+      : { x: crop.left + x, y: crop.top + crop.canonicalHeight - y };
+  }
+  const sourceDepth = crop.depthSign > 0 ? y : crop.canonicalHeight - y;
+  if (crop.side === 'left') {
+    return { x: crop.left + sourceDepth, y: crop.top + x };
+  }
+  return { x: crop.left + sourceDepth, y: crop.top + crop.canonicalWidth - x };
+}
+
+function canonicalRectToDisplay(rect, crop) {
+  const points = [
+    canonicalPointToDisplay(rect.x0, rect.y0, crop),
+    canonicalPointToDisplay(rect.x1, rect.y0, crop),
+    canonicalPointToDisplay(rect.x1, rect.y1, crop),
+    canonicalPointToDisplay(rect.x0, rect.y1, crop),
+  ];
+  const xs = points.map(point => point.x);
+  const ys = points.map(point => point.y);
+  return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
 }
 
 function drawGuideHandle(context, x, y, radius, color) {
@@ -602,7 +800,7 @@ function drawGuideHandle(context, x, y, radius, color) {
 }
 
 function drawDetectionAreas(context, crop, scale) {
-  if (!state.keyMap || !state.geometry || !crop) return;
+  if (state.dragMode || !state.keyboardDetectionConfirmed || !state.keyMap || !state.geometry || !crop) return;
   const displayProbes = createLineAnalysisProbes(
     state.keyMap,
     state.geometry.width,
@@ -625,12 +823,15 @@ function drawDetectionAreas(context, crop, scale) {
     const isWhite = probe.key.type === 'white';
     const active = activeMidi.has(probe.key.midi);
     const invalid = probe.valid === false;
-    const x0 = crop.left + Math.min(...probe.patches.map(patch => patch.x0));
-    const x1 = crop.left + Math.max(...probe.patches.map(patch => patch.x1));
-    const y0 = crop.top + Math.min(...probe.patches.map(patch => patch.y0));
-    const y1 = crop.top + Math.max(...probe.patches.map(patch => patch.y1));
-    const width = Math.max(1, x1 - x0);
-    const height = Math.max(1, y1 - y0);
+    const canonicalBox = {
+      x0: Math.min(...probe.patches.map(patch => patch.x0)),
+      x1: Math.max(...probe.patches.map(patch => patch.x1)),
+      y0: Math.min(...probe.patches.map(patch => patch.y0)),
+      y1: Math.max(...probe.patches.map(patch => patch.y1)),
+    };
+    const box = canonicalRectToDisplay(canonicalBox, crop);
+    const width = Math.max(1, box.x1 - box.x0);
+    const height = Math.max(1, box.y1 - box.y0);
 
     if (invalid) {
       context.fillStyle = 'rgba(255,82,82,.32)';
@@ -643,34 +844,38 @@ function drawDetectionAreas(context, crop, scale) {
       context.strokeStyle = active ? 'rgba(255,210,242,1)' : 'rgba(255,112,210,.98)';
     }
 
-    // One outlined box per key. The internal dividers show the exact three
-    // sub-patches whose colors are sampled independently during analysis.
     context.lineWidth = Math.max(1.5, 1.35 * scale);
-    context.fillRect(x0, y0, width, height);
-    context.strokeRect(x0 + 0.5, y0 + 0.5, Math.max(0, width - 1), Math.max(0, height - 1));
+    context.fillRect(box.x0, box.y0, width, height);
+    context.strokeRect(box.x0 + 0.5, box.y0 + 0.5, Math.max(0, width - 1), Math.max(0, height - 1));
 
     for (let patchIndex = 0; patchIndex < probe.patches.length - 1; patchIndex += 1) {
-      const splitX = crop.left + probe.patches[patchIndex].x1;
+      const splitX = probe.patches[patchIndex].x1;
+      const a = canonicalPointToDisplay(splitX, canonicalBox.y0, crop);
+      const b = canonicalPointToDisplay(splitX, canonicalBox.y1, crop);
       context.beginPath();
-      context.moveTo(splitX, y0);
-      context.lineTo(splitX, y1);
+      context.moveTo(a.x, a.y);
+      context.lineTo(b.x, b.y);
       context.stroke();
     }
 
     if (invalid) {
+      const a = canonicalPointToDisplay(canonicalBox.x0, canonicalBox.y0, crop);
+      const b = canonicalPointToDisplay(canonicalBox.x1, canonicalBox.y1, crop);
+      const c = canonicalPointToDisplay(canonicalBox.x1, canonicalBox.y0, crop);
+      const d = canonicalPointToDisplay(canonicalBox.x0, canonicalBox.y1, crop);
       context.beginPath();
-      context.moveTo(x0, y0);
-      context.lineTo(x1, y1);
-      context.moveTo(x1, y0);
-      context.lineTo(x0, y1);
+      context.moveTo(a.x, a.y); context.lineTo(b.x, b.y);
+      context.moveTo(c.x, c.y); context.lineTo(d.x, d.y);
       context.stroke();
     }
   }
   context.restore();
 }
 
-function drawGuideLine(context, y, color, label, scale) {
-  const guide = state.guide;
+function drawGuideLine(context, kind, color, label, scale) {
+  const endpoints = guideLineEndpoints(kind);
+  if (!endpoints) return;
+  const [start, end] = endpoints;
   const lineWidth = Math.max(2.2 * scale, 1.5);
   context.save();
   context.globalAlpha = 0.72;
@@ -678,20 +883,21 @@ function drawGuideLine(context, y, color, label, scale) {
   context.lineWidth = lineWidth;
   context.lineCap = 'round';
   context.beginPath();
-  context.moveTo(guide.x0, y);
-  context.lineTo(guide.x1, y);
+  context.moveTo(start.x, start.y);
+  context.lineTo(end.x, end.y);
   context.stroke();
 
   const radius = Math.max(6 * scale, 5);
-  drawGuideHandle(context, guide.x0, y, radius, color);
-  drawGuideHandle(context, guide.x1, y, radius, color);
+  drawGuideHandle(context, start.x, start.y, radius, color);
+  drawGuideHandle(context, end.x, end.y, radius, color);
 
   const fontSize = Math.max(11 * scale, 10);
   context.font = `700 ${fontSize}px system-ui, sans-serif`;
   context.textBaseline = 'bottom';
   context.fillStyle = color;
-  const labelX = clamp(guide.x0 + 10 * scale, 4, Math.max(4, state.displayWidth - 120 * scale));
-  context.fillText(label, labelX, y - 7 * scale);
+  const labelX = clamp(start.x + 9 * scale, 4, Math.max(4, state.displayWidth - 120 * scale));
+  const labelY = clamp(start.y - 7 * scale, fontSize + 3, state.displayHeight - 3);
+  context.fillText(label, labelX, labelY);
   context.restore();
 }
 
@@ -702,10 +908,8 @@ function drawOverlay() {
 
   const scale = canvasUnitsPerCssPixel();
   const crop = getGuideCrop();
-  // Draw guide lines first, then the actual per-key sample boxes on top so the
-  // line itself can never hide where pixels are being read.
-  drawGuideLine(context, state.guide.whiteY, '#55d8ff', t('overlay.white'), scale);
-  drawGuideLine(context, state.guide.blackY, '#ff70d2', t('overlay.black'), scale);
+  drawGuideLine(context, 'white', '#55d8ff', t('overlay.white'), scale);
+  drawGuideLine(context, 'black', '#ff70d2', t('overlay.black'), scale);
   drawDetectionAreas(context, crop, scale);
 }
 
@@ -715,24 +919,57 @@ function hitTest(point) {
   const scale = canvasUnitsPerCssPixel();
   const threshold = 13 * scale;
   const endpointRadius = 16 * scale;
-  const endpoints = [guide.blackY, guide.whiteY];
 
-  for (const y of endpoints) {
-    if (Math.hypot(point.x - guide.x0, point.y - y) <= endpointRadius) return 'left';
-    if (Math.hypot(point.x - guide.x1, point.y - y) <= endpointRadius) return 'right';
+  for (const kind of ['black', 'white']) {
+    const endpoints = guideLineEndpoints(kind);
+    if (!endpoints) continue;
+    if (Math.hypot(point.x - endpoints[0].x, point.y - endpoints[0].y) <= endpointRadius) return 'spanStart';
+    if (Math.hypot(point.x - endpoints[1].x, point.y - endpoints[1].y) <= endpointRadius) return 'spanEnd';
   }
 
-  if (point.x >= guide.x0 - threshold && point.x <= guide.x1 + threshold) {
-    if (Math.abs(point.y - guide.blackY) <= threshold) return 'black';
-    if (Math.abs(point.y - guide.whiteY) <= threshold) return 'white';
+  if (isHorizontalKeyboardSide(guide.side)) {
+    if (point.x >= guide.span0 - threshold && point.x <= guide.span1 + threshold) {
+      if (Math.abs(point.y - guide.blackPos) <= threshold) return 'black';
+      if (Math.abs(point.y - guide.whitePos) <= threshold) return 'white';
+    }
+  } else if (point.y >= guide.span0 - threshold && point.y <= guide.span1 + threshold) {
+    if (Math.abs(point.x - guide.blackPos) <= threshold) return 'black';
+    if (Math.abs(point.x - guide.whitePos) <= threshold) return 'white';
   }
   return null;
 }
 
 function cursorForMode(mode) {
-  if (mode === 'left' || mode === 'right') return 'ew-resize';
-  if (mode === 'black' || mode === 'white') return 'ns-resize';
+  const horizontal = isHorizontalKeyboardSide(state.guide?.side);
+  if (mode === 'spanStart' || mode === 'spanEnd') return horizontal ? 'ew-resize' : 'ns-resize';
+  if (mode === 'black' || mode === 'white') return horizontal ? 'ns-resize' : 'ew-resize';
   return 'default';
+}
+
+function updateKeyboardOrientationButtons() {
+  const orientation = keyboardOrientationForSide(state.keyboardSide);
+  const vertical = orientation === 'vertical';
+  if (elements.keyboardOrientationToggle) {
+    elements.keyboardOrientationToggle.dataset.keyboardOrientation = orientation;
+    elements.keyboardOrientationToggle.setAttribute('aria-pressed', String(vertical));
+    const orientationName = t(vertical ? 'keyboard.orientation_vertical' : 'keyboard.orientation_horizontal');
+    const accessibleLabel = `${t('keyboard.orientation')}: ${orientationName}`;
+    elements.keyboardOrientationToggle.setAttribute('aria-label', accessibleLabel);
+    elements.keyboardOrientationToggle.title = accessibleLabel;
+  }
+  if (elements.keyboardOrientationIcon) elements.keyboardOrientationIcon.textContent = vertical ? '┃' : '━';
+}
+
+function invalidateKeyboardDetection(message = '') {
+  state.keyboardDetectionConfirmed = false;
+  state.geometry = null;
+  state.keyMap = null;
+  state.releaseBaselineColors = null;
+  state.releaseBaselineTime = 0;
+  resetResults();
+  updateKeyboardStatus(message || (state.track ? t('keyboard.detect_required') : ''));
+  drawOverlay();
+  updateControlAvailability();
 }
 
 function captureReleaseBaseline({ quiet = false } = {}) {
@@ -740,12 +977,7 @@ function captureReleaseBaseline({ quiet = false } = {}) {
   const crop = getGuideCrop();
   if (!crop) return false;
   try {
-    const roi = cropImageData(previewContext, {
-      x: crop.left,
-      y: crop.top,
-      width: crop.width,
-      height: crop.height,
-    });
+    const roi = canonicalImageDataFromPreview(crop);
     const probes = createLineAnalysisProbes(
       state.keyMap,
       state.geometry.width,
@@ -772,12 +1004,12 @@ function updateKeyboardStatus(message = '') {
     elements.keyboardStatus.textContent = message;
     return;
   }
-  if (!state.guide) {
+  if (!state.track || !state.guide) {
     elements.keyboardStatus.textContent = t('keyboard.no_video');
     return;
   }
-  if (!state.keyMap) {
-    elements.keyboardStatus.textContent = t('keyboard.adjust_guides');
+  if (!state.keyboardDetectionConfirmed || !state.keyMap) {
+    elements.keyboardStatus.textContent = t('keyboard.detect_required');
     return;
   }
   const crop = getGuideCrop();
@@ -803,7 +1035,7 @@ function updateKeyboardStatus(message = '') {
 }
 
 function rebuildKeyMap() {
-  if (!state.geometry) return;
+  if (!state.keyboardDetectionConfirmed || !state.geometry) return;
   state.keyMap = createKeyMap(state.geometry, Number(elements.leftmostNote.value));
   resetResults();
   updateKeyboardStatus();
@@ -811,23 +1043,20 @@ function rebuildKeyMap() {
   updateControlAvailability();
 }
 
-function detectKeysFromGuides({ quiet = false, captureBaseline = true } = {}) {
+function detectKeysFromGuides({ quiet = false } = {}) {
   if (!state.guide || !state.track) return false;
   const crop = getGuideCrop();
-  if (!crop || crop.width < 40 || crop.height < 24) return false;
+  if (!crop || crop.canonicalWidth < 40 || crop.canonicalHeight < 24) return false;
   try {
-    const roi = cropImageData(previewContext, {
-      x: crop.left,
-      y: crop.top,
-      width: crop.width,
-      height: crop.height,
-    });
+    const roi = canonicalImageDataFromPreview(crop);
     state.geometry = detectKeyGeometry(roi);
     if (!state.noteManuallyChanged) elements.leftmostNote.value = String(suggestLeftmostMidi(state.geometry));
     state.keyMap = createKeyMap(state.geometry, Number(elements.leftmostNote.value));
-    if (captureBaseline) captureReleaseBaseline({ quiet: true });
+    if (!captureReleaseBaseline({ quiet: true })) throw new Error(t('error.baseline_missing'));
+    state.keyboardDetectionConfirmed = true;
     resetResults();
     updateKeyboardStatus();
+    updateKeyboardOrientationButtons();
     updateVideoQualityWarning();
     drawOverlay();
     updateControlAvailability();
@@ -835,6 +1064,7 @@ function detectKeysFromGuides({ quiet = false, captureBaseline = true } = {}) {
     return true;
   } catch (error) {
     console.error(error);
+    state.keyboardDetectionConfirmed = false;
     state.geometry = null;
     state.keyMap = null;
     state.releaseBaselineColors = null;
@@ -848,48 +1078,53 @@ function detectKeysFromGuides({ quiet = false, captureBaseline = true } = {}) {
   }
 }
 
-function fallbackInitialRect() {
-  return {
-    x: Math.round(state.displayWidth * 0.04),
-    y: Math.round(state.displayHeight * 0.62),
-    width: Math.round(state.displayWidth * 0.92),
-    height: Math.round(state.displayHeight * 0.34),
-  };
+function fallbackGuideForOrientation(orientation = keyboardOrientationForSide(state.keyboardSide)) {
+  if (orientation === 'vertical') {
+    // Vertical guides default to the right side. Their actual left/right side is
+    // inferred continuously from where the two lines sit around the video center.
+    return { side: 'right', span0: state.displayHeight * 0.04, span1: state.displayHeight * 0.96, blackPos: state.displayWidth * 0.92, whitePos: state.displayWidth * 0.72 };
+  }
+  // Most piano-roll videos fall from top to bottom toward a keyboard at the bottom.
+  return { side: 'bottom', span0: state.displayWidth * 0.04, span1: state.displayWidth * 0.96, blackPos: state.displayHeight * 0.78, whitePos: state.displayHeight * 0.94 };
+}
+
+function initialGuideForOrientation(orientation = keyboardOrientationForSide(state.keyboardSide)) {
+  if (orientation !== 'horizontal') return normalizeGuide(fallbackGuideForOrientation('vertical'));
+  const frame = previewContext.getImageData(0, 0, state.displayWidth, state.displayHeight);
+  try {
+    const rect = autoDetectKeyboardRegion(frame).rect;
+    const x0 = clamp(rect.x, 0, state.displayWidth - 1);
+    const x1 = clamp(rect.x + rect.width, x0 + 40, state.displayWidth);
+    const y0 = clamp(rect.y, 0, state.displayHeight - 1);
+    const y1 = clamp(rect.y + rect.height, y0 + 24, state.displayHeight);
+    const height = y1 - y0;
+    const regionAtTop = (y0 + y1) / 2 < state.displayHeight / 2;
+    return normalizeGuide(regionAtTop
+      ? { side: 'top', span0: x0, span1: x1, blackPos: y0 + height * 0.36, whitePos: y0 + height * 0.05 }
+      : { side: 'bottom', span0: x0, span1: x1, blackPos: y0 + height * 0.64, whitePos: y0 + height * 0.95 });
+  } catch {
+    return normalizeGuide(fallbackGuideForOrientation('horizontal'));
+  }
 }
 
 function setupInitialGuides() {
-  const frame = previewContext.getImageData(0, 0, state.displayWidth, state.displayHeight);
-  let rect;
-  try { rect = autoDetectKeyboardRegion(frame).rect; }
-  catch { rect = fallbackInitialRect(); }
-
-  rect = {
-    x: clamp(rect.x, 0, state.displayWidth - 1),
-    y: clamp(rect.y, 0, state.displayHeight - 1),
-    width: clamp(rect.width, 40, state.displayWidth),
-    height: clamp(rect.height, 24, state.displayHeight),
-  };
-  const right = clamp(rect.x + rect.width, rect.x + 40, state.displayWidth);
-  const bottom = clamp(rect.y + rect.height, rect.y + 24, state.displayHeight);
-  const height = bottom - rect.y;
-
-  // Initial proposal: keep both sampling lines toward the lower part of the keyboard.
-  // Black stays inside the lower half of typical black-key bodies; white sits near the key fronts.
-  state.guide = normalizeGuide({
-    x0: rect.x,
-    x1: right,
-    blackY: rect.y + height * 0.64,
-    whiteY: rect.y + height * 0.95,
-  });
+  // Default to the common top-to-bottom falling-roll layout: horizontal guides
+  // near the bottom. The exact top/bottom side is then inferred from guide position.
+  state.keyboardSide = 'bottom';
+  state.guide = initialGuideForOrientation('horizontal');
+  syncKeyboardSideFromGuide();
   state.noteManuallyChanged = false;
-  detectKeysFromGuides({ quiet: true });
-
+  state.keyboardDetectionConfirmed = false;
+  state.geometry = null;
+  state.keyMap = null;
+  state.releaseBaselineColors = null;
+  state.releaseBaselineTime = 0;
   state.initialSetup = {
     guide: cloneGuide(state.guide),
+    keyboardSide: state.keyboardSide,
     leftmostNote: elements.leftmostNote.value,
-    releaseBaselineColors: state.releaseBaselineColors ? new Uint8Array(state.releaseBaselineColors) : null,
-    releaseBaselineTime: state.releaseBaselineTime,
   };
+  updateKeyboardOrientationButtons();
   resetResults();
   updateKeyboardStatus();
   drawOverlay();
@@ -899,18 +1134,25 @@ function setupInitialGuides() {
 function resetSetup() {
   if (!state.initialSetup) return;
   pausePlayback();
+  state.keyboardSide = state.initialSetup.keyboardSide || 'bottom';
   state.guide = cloneGuide(state.initialSetup.guide);
+  syncKeyboardSideFromGuide();
   elements.leftmostNote.value = state.initialSetup.leftmostNote;
   state.noteManuallyChanged = false;
-  detectKeysFromGuides({ quiet: true, captureBaseline: false });
-  state.releaseBaselineColors = state.initialSetup.releaseBaselineColors
-    ? new Uint8Array(state.initialSetup.releaseBaselineColors)
-    : null;
-  state.releaseBaselineTime = state.initialSetup.releaseBaselineTime || 0;
-  updateKeyboardStatus();
-  drawOverlay();
-  updateControlAvailability();
+  updateKeyboardOrientationButtons();
+  invalidateKeyboardDetection(t('keyboard.detect_required'));
   showToast(t('toast.reset'));
+}
+
+function setKeyboardOrientation(orientation) {
+  if (!['horizontal', 'vertical'].includes(orientation) || !state.track || state.analyzing) return;
+  if (orientation === keyboardOrientationForSide(state.keyboardSide)) return;
+  pausePlayback();
+  state.guide = initialGuideForOrientation(orientation);
+  syncKeyboardSideFromGuide();
+  state.noteManuallyChanged = false;
+  updateKeyboardOrientationButtons();
+  invalidateKeyboardDetection(t('keyboard.detect_required'));
 }
 
 function onOverlayPointerDown(event) {
@@ -933,21 +1175,32 @@ function onOverlayPointerMove(event) {
     return;
   }
 
-  const original = state.dragOriginalGuide;
-  if (!original) return;
-  const minWidth = Math.max(60, state.displayWidth * 0.10);
-  const minGap = Math.max(14, state.displayHeight * 0.025);
-
-  if (state.dragMode === 'left') {
-    state.guide.x0 = clamp(point.x, 0, state.guide.x1 - minWidth);
-  } else if (state.dragMode === 'right') {
-    state.guide.x1 = clamp(point.x, state.guide.x0 + minWidth, state.displayWidth);
+  const spanLimit = guideSpanLimit(state.guide.side);
+  const depthLimit = guideDepthLimit(state.guide.side);
+  const minSpan = Math.min(spanLimit, Math.max(60, spanLimit * 0.10));
+  const minGap = Math.min(depthLimit, Math.max(14, depthLimit * 0.025));
+  const spanPoint = isHorizontalKeyboardSide(state.guide.side) ? point.x : point.y;
+  const depthPoint = isHorizontalKeyboardSide(state.guide.side) ? point.y : point.x;
+  if (state.dragMode === 'spanStart') {
+    state.guide.span0 = clamp(spanPoint, 0, state.guide.span1 - minSpan);
+  } else if (state.dragMode === 'spanEnd') {
+    state.guide.span1 = clamp(spanPoint, state.guide.span0 + minSpan, spanLimit);
   } else if (state.dragMode === 'black') {
-    state.guide.blackY = clamp(point.y, 0, state.guide.whiteY - minGap);
+    let next = clamp(depthPoint, 0, depthLimit);
+    if (Math.abs(state.guide.whitePos - next) < minGap) {
+      next = next < state.guide.whitePos ? state.guide.whitePos - minGap : state.guide.whitePos + minGap;
+    }
+    state.guide.blackPos = clamp(next, 0, depthLimit);
   } else if (state.dragMode === 'white') {
-    state.guide.whiteY = clamp(point.y, state.guide.blackY + minGap, state.displayHeight);
+    let next = clamp(depthPoint, 0, depthLimit);
+    if (Math.abs(next - state.guide.blackPos) < minGap) {
+      next = next < state.guide.blackPos ? state.guide.blackPos - minGap : state.guide.blackPos + minGap;
+    }
+    state.guide.whitePos = clamp(next, 0, depthLimit);
   }
   state.guide = normalizeGuide(state.guide);
+  syncKeyboardSideFromGuide();
+  updateKeyboardOrientationButtons();
   drawOverlay();
 }
 
@@ -957,12 +1210,25 @@ async function finishGuideDrag(event, cancelled = false) {
   state.dragMode = null;
   try { elements.overlayCanvas.releasePointerCapture(event.pointerId); } catch { /* no-op */ }
   elements.overlayCanvas.style.cursor = cursorForMode(hitTest(canvasPoint(event)));
-  // Cached stepping frames may be downscaled for speed. Refresh the exact source
-  // frame before recapturing keyboard geometry/baseline so analysis precision is unchanged.
-  if (!cancelled && state.previewFromFrameCache) {
-    await renderPreview(state.previewFrameTime, true);
+  if (cancelled) {
+    syncKeyboardSideFromGuide();
+    updateKeyboardOrientationButtons();
+    drawOverlay();
+    return;
   }
-  detectKeysFromGuides({ quiet: true });
+  state.guide = normalizeGuide(state.guide);
+  syncKeyboardSideFromGuide();
+  updateKeyboardOrientationButtons();
+  invalidateKeyboardDetection(t('keyboard.detect_required'));
+}
+
+async function confirmKeyboardDetection() {
+  if (!state.track || state.analyzing) return;
+  pausePlayback();
+  // Frame-cache canvases are intentionally downscaled. Detection and release-color
+  // capture must use the exact decoded frame selected by the user.
+  if (state.previewFromFrameCache) await renderPreview(state.previewFrameTime, true);
+  detectKeysFromGuides({ quiet: false });
 }
 
 async function loadVideoFile(file) {
@@ -973,6 +1239,7 @@ async function loadVideoFile(file) {
   state.guide = null;
   state.geometry = null;
   state.keyMap = null;
+  state.keyboardDetectionConfirmed = false;
   state.initialSetup = null;
   state.releaseBaselineColors = null;
   state.releaseBaselineTime = 0;
@@ -1118,9 +1385,13 @@ function updatePostProcessingProgress(info) {
 }
 
 async function analyzeAllFrames() {
-  if (!state.track || !state.guide || !state.keyMap?.keys?.length || state.analyzing) return;
+  if (!state.track || state.analyzing) return;
+  if (!state.keyboardDetectionConfirmed || !state.guide || !state.keyMap?.keys?.length) {
+    showToast(t('toast.detect_required'), 'error');
+    return;
+  }
   if (!state.releaseBaselineColors || state.releaseBaselineColors.length !== state.keyMap.keys.length * PROBE_PATCH_COUNT * 3) {
-    showToast(t('toast.baseline_missing'), 'error');
+    showToast(t('toast.detect_required'), 'error');
     return;
   }
   pausePlayback();
@@ -1133,8 +1404,10 @@ async function analyzeAllFrames() {
   setAnalysisBusy(true);
   resetResults();
 
-  const targetWidth = Math.round(Math.min(1200, Math.max(480, crop.width)));
-  const targetHeight = Math.round(clamp(crop.height * targetWidth / crop.width, 64, 420));
+  const targetWidth = Math.round(Math.min(1200, Math.max(480, crop.canonicalWidth)));
+  const targetHeight = Math.round(clamp(crop.canonicalHeight * targetWidth / crop.canonicalWidth, 64, 420));
+  const sourceTargetWidth = isHorizontalKeyboardSide(crop.side) ? targetWidth : targetHeight;
+  const sourceTargetHeight = isHorizontalKeyboardSide(crop.side) ? targetHeight : targetWidth;
   const probes = createLineAnalysisProbes(
     state.keyMap,
     state.geometry.width,
@@ -1153,8 +1426,8 @@ async function analyzeAllFrames() {
   try {
     const { CanvasSink } = state.mediabunny;
     const sink = new CanvasSink(state.track, {
-      width: targetWidth,
-      height: targetHeight,
+      width: sourceTargetWidth,
+      height: sourceTargetHeight,
       fit: 'fill',
       crop: {
         left: crop.left,
@@ -1169,11 +1442,12 @@ async function analyzeAllFrames() {
     setProgress(0.01, t('progress.frame_analysis'), t('progress.frame_range', { start: formatTime(range.start), end: formatTime(range.end) }));
     const rangeStartTimestamp = state.timeOrigin + range.start;
     const rangeEndTimestamp = state.timeOrigin + range.end;
+    const canonicalCanvas = document.createElement('canvas');
     for await (const wrapped of sink.canvases(rangeStartTimestamp, rangeEndTimestamp)) {
       if (state.analysisAbort) break;
-      const context = wrapped.canvas.getContext('2d', { willReadFrequently: true });
       if (wrapped.timestamp + 1e-9 < rangeStartTimestamp) continue;
       if (wrapped.timestamp >= rangeEndTimestamp - 1e-9) break;
+      const context = drawCanonicalSource(wrapped.canvas, null, canonicalCanvas, crop.side, targetWidth, targetHeight, crop.depthSign);
       const colors = sampleKeyColorsFromContext(context, probeSampler);
       const relativeTimestamp = Math.max(0, wrapped.timestamp - rangeStartTimestamp);
       detector.processFrame(relativeTimestamp, wrapped.duration, colors);
@@ -1259,8 +1533,12 @@ function initializeEvents() {
     elements.analysisEnd.value = state.previewTime.toFixed(3);
     normalizeAnalysisRange('end');
   });
+  elements.jumpStart.addEventListener('click', () => { void jumpPreviewToBoundary(false); });
+  elements.prev5Frame.addEventListener('click', () => { void stepPreviewFrames(-5); });
   elements.prevFrame.addEventListener('click', () => { void stepPreviewFrame(-1); });
   elements.nextFrame.addEventListener('click', () => { void stepPreviewFrame(1); });
+  elements.next5Frame.addEventListener('click', () => { void stepPreviewFrames(5); });
+  elements.jumpEnd.addEventListener('click', () => { void jumpPreviewToBoundary(true); });
 
   elements.overlayCanvas.addEventListener('pointerdown', onOverlayPointerDown);
   elements.overlayCanvas.addEventListener('pointermove', onOverlayPointerMove);
@@ -1272,7 +1550,7 @@ function initializeEvents() {
 
   elements.leftmostNote.addEventListener('change', () => {
     state.noteManuallyChanged = true;
-    rebuildKeyMap();
+    invalidateKeyboardDetection(t('keyboard.detect_required'));
   });
   elements.velocity.addEventListener('input', () => {
     elements.velocityValue.textContent = `${elements.velocity.value}%`;
@@ -1280,6 +1558,11 @@ function initializeEvents() {
   });
   elements.tempo.addEventListener('change', regenerateMidiFromCurrentNotes);
   elements.resetSetup.addEventListener('click', resetSetup);
+  elements.keyboardOrientationToggle.addEventListener('click', () => {
+    const current = keyboardOrientationForSide(state.keyboardSide);
+    setKeyboardOrientation(current === 'horizontal' ? 'vertical' : 'horizontal');
+  });
+  elements.detectKeys.addEventListener('click', () => { void confirmKeyboardDetection(); });
   elements.analyzeVideo.addEventListener('click', analyzeAllFrames);
   elements.cancelAnalysis.addEventListener('click', () => {
     state.analysisAbort = true;
@@ -1331,7 +1614,9 @@ async function initialize() {
     }
     if (!state.track && elements.fileName) elements.fileName.textContent = t('file.prompt');
   });
+  setPlaybackUi();
   populateNoteOptions();
+  updateKeyboardOrientationButtons();
   initializeEvents();
   updateControlAvailability();
 
