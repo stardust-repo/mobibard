@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-ui10" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-ui11" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -109,9 +109,6 @@
           <span class="step-number">2</span>
           <h2 id="keyboardSectionTitle" data-i18n="keyboard.title">건반 인식 관련 설정</h2>
         </div>
-        <div class="section-head-actions">
-          <button id="resetSetup" type="button" class="soft-button reset-setup-button" disabled data-i18n="actions.reset">초기화</button>
-        </div>
       </div>
 
       <div id="previewStage" class="preview-stage is-empty" data-i18n-aria-label="preview.aria" aria-label="동영상 프레임과 건반 검출선">
@@ -162,6 +159,17 @@
           <span data-i18n="guide.box_hint">건반 검출 후 작은 박스로 실제 인식 영역을 표시합니다.</span>
         </div>
         <div id="keyboardStatus" class="status-line keyboard-detection-status" data-i18n="keyboard.no_video">영상이 없습니다.</div>
+        <div id="keyboardColorPalette" class="keyboard-color-palette" hidden>
+          <div class="keyboard-color-palette-title" data-i18n="keyboard.detected_colors">검출 주요 색상</div>
+          <div class="keyboard-color-row">
+            <span class="keyboard-color-label" data-i18n="keyboard.white_colors">흰 건반</span>
+            <div id="whiteKeyColors" class="keyboard-color-chips"></div>
+          </div>
+          <div class="keyboard-color-row">
+            <span class="keyboard-color-label" data-i18n="keyboard.black_colors">검은 건반</span>
+            <div id="blackKeyColors" class="keyboard-color-chips"></div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -246,6 +254,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script type="module" src="./js/settings-menu.js?v=20260829-ui7"></script>
-<script type="module" src="./js/app.js?v=20260830-orientation3"></script>
+<script type="module" src="./js/app.js?v=20260830-hue30-bright33"></script>
 </body>
 </html>

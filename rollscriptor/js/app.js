@@ -14,7 +14,7 @@ import {
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
 } from './vision.js';
-import { StreamingNoteDetector } from './analysis.js?v=20260829-centercolor1';
+import { StreamingNoteDetector } from './analysis.js?v=20260830-hue30-bright33';
 import { createMidiFile } from './midi.js';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js';
@@ -29,7 +29,7 @@ const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
   'playPause', 'jumpStart', 'prev5Frame', 'prevFrame', 'nextFrame', 'next5Frame', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent',
-  'leftmostNote', 'tempo', 'velocity', 'velocityValue', 'resetSetup', 'detectKeys', 'keyboardOrientationToggle', 'keyboardOrientationIcon', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
+  'leftmostNote', 'tempo', 'velocity', 'velocityValue', 'detectKeys', 'keyboardOrientationToggle', 'keyboardOrientationIcon', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose',
 ].map(id => [id, document.getElementById(id)]));
@@ -66,7 +66,6 @@ const state = {
   geometry: null,
   keyMap: null,
   keyboardDetectionConfirmed: false,
-  initialSetup: null,
   noteManuallyChanged: false,
   dragMode: null,
   dragOriginalGuide: null,
@@ -79,6 +78,7 @@ const state = {
   fileBaseName: 'video-piano',
   releaseBaselineColors: null,
   releaseBaselineTime: 0,
+  detectedColorSummary: null,
   videoWidth: 0,
   videoHeight: 0,
 };
@@ -324,7 +324,6 @@ function updateControlAvailability() {
   elements.setStartCurrent.disabled = !hasVideo || locked;
   elements.setEndCurrent.disabled = !hasVideo || locked;
   elements.leftmostNote.disabled = !hasKeys || locked;
-  elements.resetSetup.disabled = !state.initialSetup || locked;
   elements.detectKeys.disabled = !hasVideo || locked;
   elements.keyboardOrientationToggle.disabled = !hasVideo || locked;
   // Keep Analyze clickable after a video is loaded so an omitted keyboard-detection
@@ -343,6 +342,7 @@ function disposeCurrentInput() {
   state.previewSink = null;
   state.releaseBaselineColors = null;
   state.releaseBaselineTime = 0;
+  state.detectedColorSummary = null;
 }
 
 function setCanvasDimensions(width, height) {
@@ -966,10 +966,92 @@ function invalidateKeyboardDetection(message = '') {
   state.keyMap = null;
   state.releaseBaselineColors = null;
   state.releaseBaselineTime = 0;
+  state.detectedColorSummary = null;
   resetResults();
   updateKeyboardStatus(message || (state.track ? t('keyboard.detect_required') : ''));
   drawOverlay();
   updateControlAvailability();
+}
+
+function rgbToHex(rgb) {
+  return `#${rgb.map(value => Math.round(clamp(value, 0, 255)).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+}
+
+function colorDistance(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+function summarizeDetectedColors(colors, probes, type, maximum = 3) {
+  if (!colors || !probes?.length) return [];
+  const buckets = new Map();
+  const keyStride = PROBE_PATCH_COUNT * 3;
+  for (let keyIndex = 0; keyIndex < probes.length; keyIndex += 1) {
+    const probe = probes[keyIndex];
+    if (probe.valid === false || probe.key?.type !== type) continue;
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+    for (let patchIndex = 0; patchIndex < PROBE_PATCH_COUNT; patchIndex += 1) {
+      const offset = keyIndex * keyStride + patchIndex * 3;
+      red += colors[offset];
+      green += colors[offset + 1];
+      blue += colors[offset + 2];
+    }
+    const rgb = [red / PROBE_PATCH_COUNT, green / PROBE_PATCH_COUNT, blue / PROBE_PATCH_COUNT];
+    const quantized = rgb.map(value => clamp(Math.round(value / 24) * 24, 0, 255));
+    const bucketKey = quantized.join(',');
+    const bucket = buckets.get(bucketKey) || { count: 0, sum: [0, 0, 0] };
+    bucket.count += 1;
+    bucket.sum[0] += rgb[0];
+    bucket.sum[1] += rgb[1];
+    bucket.sum[2] += rgb[2];
+    buckets.set(bucketKey, bucket);
+  }
+  const ranked = Array.from(buckets.values())
+    .map(bucket => ({ count: bucket.count, rgb: bucket.sum.map(value => Math.round(value / bucket.count)) }))
+    .sort((a, b) => b.count - a.count);
+  const selected = [];
+  for (const candidate of ranked) {
+    if (selected.every(entry => colorDistance(entry.rgb, candidate.rgb) >= 28)) selected.push(candidate);
+    if (selected.length >= maximum) break;
+  }
+  if (selected.length < maximum) {
+    for (const candidate of ranked) {
+      if (!selected.includes(candidate)) selected.push(candidate);
+      if (selected.length >= maximum) break;
+    }
+  }
+  return selected;
+}
+
+function renderDetectedKeyColors() {
+  const palette = elements.keyboardColorPalette;
+  if (!palette || !elements.whiteKeyColors || !elements.blackKeyColors) return;
+  const summary = state.detectedColorSummary;
+  const hasColors = Boolean(state.keyboardDetectionConfirmed && summary && (summary.white.length || summary.black.length));
+  palette.hidden = !hasColors;
+  if (!hasColors) {
+    elements.whiteKeyColors.replaceChildren();
+    elements.blackKeyColors.replaceChildren();
+    return;
+  }
+  const render = (container, entries) => {
+    container.replaceChildren(...entries.map(entry => {
+      const chip = document.createElement('span');
+      chip.className = 'keyboard-color-chip';
+      const swatch = document.createElement('i');
+      swatch.className = 'keyboard-color-swatch';
+      swatch.style.background = `rgb(${entry.rgb.join(',')})`;
+      const hex = rgbToHex(entry.rgb);
+      swatch.title = hex;
+      const code = document.createElement('span');
+      code.textContent = hex;
+      chip.append(swatch, code);
+      return chip;
+    }));
+  };
+  render(elements.whiteKeyColors, summary.white);
+  render(elements.blackKeyColors, summary.black);
 }
 
 function captureReleaseBaseline({ quiet = false } = {}) {
@@ -989,17 +1071,24 @@ function captureReleaseBaseline({ quiet = false } = {}) {
     );
     state.releaseBaselineColors = new Uint8Array(sampleKeyColors(roi, probes));
     state.releaseBaselineTime = state.previewTime;
+    state.detectedColorSummary = {
+      white: summarizeDetectedColors(state.releaseBaselineColors, probes, 'white'),
+      black: summarizeDetectedColors(state.releaseBaselineColors, probes, 'black'),
+    };
+    renderDetectedKeyColors();
     if (!quiet) showToast(t('toast.baseline_fixed', { time: formatTime(state.releaseBaselineTime) }));
     return true;
   } catch (error) {
     console.error(error);
     state.releaseBaselineColors = null;
     state.releaseBaselineTime = 0;
+    state.detectedColorSummary = null;
     return false;
   }
 }
 
 function updateKeyboardStatus(message = '') {
+  renderDetectedKeyColors();
   if (message) {
     elements.keyboardStatus.textContent = message;
     return;
@@ -1069,6 +1158,7 @@ function detectKeysFromGuides({ quiet = false } = {}) {
     state.keyMap = null;
     state.releaseBaselineColors = null;
     state.releaseBaselineTime = 0;
+    state.detectedColorSummary = null;
     resetResults();
     updateKeyboardStatus(t('keyboard.detect_failed_hint'));
     drawOverlay();
@@ -1119,29 +1209,12 @@ function setupInitialGuides() {
   state.keyMap = null;
   state.releaseBaselineColors = null;
   state.releaseBaselineTime = 0;
-  state.initialSetup = {
-    guide: cloneGuide(state.guide),
-    keyboardSide: state.keyboardSide,
-    leftmostNote: elements.leftmostNote.value,
-  };
+  state.detectedColorSummary = null;
   updateKeyboardOrientationButtons();
   resetResults();
   updateKeyboardStatus();
   drawOverlay();
   updateControlAvailability();
-}
-
-function resetSetup() {
-  if (!state.initialSetup) return;
-  pausePlayback();
-  state.keyboardSide = state.initialSetup.keyboardSide || 'bottom';
-  state.guide = cloneGuide(state.initialSetup.guide);
-  syncKeyboardSideFromGuide();
-  elements.leftmostNote.value = state.initialSetup.leftmostNote;
-  state.noteManuallyChanged = false;
-  updateKeyboardOrientationButtons();
-  invalidateKeyboardDetection(t('keyboard.detect_required'));
-  showToast(t('toast.reset'));
 }
 
 function setKeyboardOrientation(orientation) {
@@ -1240,9 +1313,9 @@ async function loadVideoFile(file) {
   state.geometry = null;
   state.keyMap = null;
   state.keyboardDetectionConfirmed = false;
-  state.initialSetup = null;
   state.releaseBaselineColors = null;
   state.releaseBaselineTime = 0;
+  state.detectedColorSummary = null;
   state.videoWidth = 0;
   state.videoHeight = 0;
   updateVideoQualityWarning();
@@ -1328,44 +1401,13 @@ function analysisOptions() {
   return {
     velocity: currentVelocityMidi(),
     baselineColors: state.releaseBaselineColors,
-    // v13: a press may become ANY color. The only fixed reference is the
-    // released color captured while adjusting the keyboard.
-    clearDeltaE: 18,
-    minChromaticShift: 16,
-    // Three sub-patches must move in roughly the same color direction.
-    minPatchBalance: 0.46,
-    minPatchDirectionCosine: 0.70,
-    // Brightness-invariant center-color gate. Pure brightening/darkening keeps
-    // the RGB direction unchanged and must not become a Note On.
-    minCenterColorAngle: 0.75,
-    minMedianColorAngle: 0.60,
-    // Black keys are judged spatially, not by hue angle. A real black-key
-    // press may become almost neutral white while bloom edges become purple.
-    // Require a local outlier versus nearby black keys, then accept either a
-    // strong neutral lightness rise or a strong residual color change.
-    blackMinStandaloneLightnessRise: 24,
-    blackMinLocalLightnessResidual: 12,
-    blackLocalLightnessMadMultiplier: 2.4,
-    blackLocalLightnessSlack: 2.0,
-    blackMinLocalLabResidual: 18,
-    blackLocalLabMadMultiplier: 2.2,
-    blackLocalLabSlack: 3.0,
-    blackMinColorLocalLightnessResidual: 8,
-    blackColorLightnessMadMultiplier: 1.4,
-    blackColorLightnessSlack: 1.0,
-    blackMinResidualLightnessRise: 14,
-    blackMinResidualDeltaE: 15,
-    blackMinResidualChromaticShift: 12,
-    // Estimate same-frame glow/lighting from nearby same-type keys and remove
-    // that common component before accepting the note.
-    neighborRadius: 5,
-    neighborQuietFraction: 0.5,
-    minCommonEffectChroma: 6,
-    minCommonEffectLab: 8,
-    minResidualDeltaE: 11,
-    minResidualChromaticShift: 11,
-    minResidualPatchBalance: 0.38,
-    minResidualDirectionCosine: 0.58,
+    // Fixed release-state comparison: 12 hue regions (30° each) plus an
+    // absolute 33-point brightness change on a perceptual 0..100 scale.
+    hueSectorDegrees: 30,
+    brightnessChangePoints: 33,
+    // White/black keys have no stable hue. Treat very low RGB chroma as one
+    // neutral region so tiny codec/noise tint does not flip hue sectors.
+    neutralChromaPercent: 6,
   };
 }
 
@@ -1557,7 +1599,6 @@ function initializeEvents() {
     regenerateMidiFromCurrentNotes();
   });
   elements.tempo.addEventListener('change', regenerateMidiFromCurrentNotes);
-  elements.resetSetup.addEventListener('click', resetSetup);
   elements.keyboardOrientationToggle.addEventListener('click', () => {
     const current = keyboardOrientationForSide(state.keyboardSide);
     setKeyboardOrientation(current === 'horizontal' ? 'vertical' : 'horizontal');
@@ -1602,6 +1643,7 @@ async function initialize() {
     updateAnalysisRangeLabel();
     updateCurrentChord();
     updateKeyboardStatus();
+    renderDetectedKeyColors();
     updateVideoQualityWarning();
     drawOverlay();
     if (!state.track && !elements.runtimeError.hidden) {
