@@ -2254,10 +2254,13 @@
     });
     window.addEventListener("mobibard:midi-convert-complete", event => {
       if (event.detail?.name) setSourceName(event.detail.name);
-      setInstrumentDirty(false);
+      const quantizeOnly = event.detail?.reason === "quantize";
+      if (quantizeOnly) refreshInstrumentDirtyState({ markEdit: false });
+      else setInstrumentDirty(false);
       clearPendingPlaybackPreview();
       scheduleSessionPersist();
-      activateWorkspaceTab("instrument");
+      // 양자화 재계산만으로 악기 선택 탭으로 강제 이동하지 않는다.
+      if (!quantizeOnly) activateWorkspaceTab("instrument");
       scheduleChannelCountsUpdate();
       renderCopyRows();
     });
@@ -3032,7 +3035,6 @@
       const normalized = Number(division) === 32 ? 32 : 64;
       state.midiQuantizeDivision = normalized;
       try { window.dispatchEvent(new CustomEvent("mobibard:set-midi-quantize", { detail: { division: normalized } })); } catch (_) {}
-      scheduleMidiAutoApply();
     }, "wb7-quantize-segments");
     common.append(optionRow("quantize", state.ui.quantizeControl, "", "wb7-common-quantize wb8-common-quantize wb9-common-quantize"));
 
@@ -3773,6 +3775,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   let midiLastAppliedSignature = "";
   let midiAppliedSettingsSnapshot = null;
   let midiConvertQueued = false;
+  let midiConvertQueuedReason = "";
   let midiConvertRequestTimer = 0;
   let splitPreviewButton = null;
   let splitPreviewButtonText = "";
@@ -3983,7 +3986,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
   window.addEventListener("mobibard:original-midi-preview", handlePlayerUiOriginalMidiPreview);
   window.addEventListener("mobibard:set-midi-quantize", event => {
-    if (!pendingMidiSettings || midiConvertBusy) return;
+    if (!pendingMidiSettings) return;
     const division = Number(event?.detail?.division) === 32 ? 32 : 64;
     if (Number(pendingMidiSettings.quantizeDivision) === division) {
       updateMidiQuantizeToggle();
@@ -3993,6 +3996,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     pendingMidiSettings.quantizeDivision = division;
     updateMidiQuantizeToggle();
     showToast(i18nText("midi.quantize_changed", [division]), "info");
+    // 양자화는 악기 설정의 변경 사항이 아니다. 현재 확정된 악기 구성을 유지한 채
+    // 새 그리드로 즉시 다시 계산한다.
+    requestMidiConvert({ reason: "quantize" });
   });
   window.addEventListener("mobibard:request-midi-convert", () => requestMidiConvert());
 
@@ -8241,6 +8247,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     pendingMidiStartsNewSource = true;
     midiLastAppliedSignature = "";
     midiConvertQueued = false;
+    midiConvertQueuedReason = "";
     clearTimeout(midiConvertRequestTimer);
     midiConvertRequestTimer = 0;
     const sourceLabel = getMidiImportSourceLabel(importData);
@@ -8432,6 +8439,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       }
     }
     midiConvertQueued = false;
+    midiConvertQueuedReason = "";
     clearTimeout(midiConvertRequestTimer);
     midiConvertRequestTimer = 0;
     setPlayerUiOriginalMidiImport(pendingMidiImport);
@@ -9173,12 +9181,14 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return false;
   }
 
-  function getMidiExportChannelConfigs() {
-    if (!pendingMidiSettings) return [];
+  function getMidiExportChannelConfigs(settings = pendingMidiSettings) {
+    if (!settings) return [];
     const exportChannels = [];
+    const groups = Array.isArray(settings.groups) ? settings.groups : [];
+    const allowedIds = new Set(groups.map(group => group.id));
     for (let i = 0; i < 6; i++) {
-      const setting = pendingMidiSettings.channels[i];
-      const allowedIds = new Set(getAllowedMidiGroupsForSetting(setting).map(g => g.id));
+      const setting = settings.channels?.[i];
+      if (!setting) continue;
       const selected = Array.from(setting.selectedInstrumentGroups || []).filter(id => allowedIds.has(id));
       if (!selected.length) continue;
       const overlapMergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
@@ -9193,48 +9203,68 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return exportChannels;
   }
 
-  function countActiveMidiExportChannels() {
-    return getMidiExportChannelConfigs().length;
+  function countActiveMidiExportChannels(settings = pendingMidiSettings) {
+    return getMidiExportChannelConfigs(settings).length;
   }
 
-  function collectMidiConvertOptions() {
+  function collectMidiConvertOptions(settings = pendingMidiSettings) {
     const sourceLabel = getMidiImportSourceLabel();
-    if (!pendingMidiSettings) throw new Error(i18nText("midi.settings_missing", [sourceLabel]));
-    const exportChannels = getMidiExportChannelConfigs();
+    if (!settings) throw new Error(i18nText("midi.settings_missing", [sourceLabel]));
+    const exportChannels = getMidiExportChannelConfigs(settings);
     if (!exportChannels.length) throw new Error(i18nText("mml.select_one"));
     const partCount = exportChannels.length;
     return {
       partCount,
       roles: exportChannels.map(ch => ch.role),
       exportChannels,
-      quantizeDivision: Number(pendingMidiSettings.quantizeDivision) === 32 ? 32 : 64,
+      quantizeDivision: Number(settings.quantizeDivision) === 32 ? 32 : 64,
       sourceLabel
     };
   }
 
-  function getMidiConvertSettingsSignature() {
-    if (!pendingMidiSettings || !pendingMidiImport) return "";
-    const channels = pendingMidiSettings.channels.map(channel => ({
-      role: channel.role,
-      overlap: normalizeOverlapMergeMode(channel.overlapMergeMode ?? channel.overlapMerge),
-      groups: [...channel.selectedInstrumentGroups].map(String).sort()
-    }));
+  function getMidiChannelSettingsSignature(settings = pendingMidiSettings) {
+    if (!settings) return "";
+    return JSON.stringify((settings.channels || []).map(channel => ({
+      role: channel?.role || "auto",
+      overlap: normalizeOverlapMergeMode(channel?.overlapMergeMode ?? channel?.overlapMerge),
+      groups: [...(channel?.selectedInstrumentGroups || [])].map(String).sort()
+    })));
+  }
+
+  function getMidiConvertSettingsSignature(settings = pendingMidiSettings) {
+    if (!settings || !pendingMidiImport) return "";
     return JSON.stringify({
       source: `${pendingMidiImport.name || ""}|${pendingMidiImport.bytes?.byteLength || pendingMidiImport.bytes?.length || 0}`,
-      quantize: Number(pendingMidiSettings.quantizeDivision) === 32 ? 32 : 64,
-      channels
+      quantize: Number(settings.quantizeDivision) === 32 ? 32 : 64,
+      channels: JSON.parse(getMidiChannelSettingsSignature(settings) || "[]")
     });
   }
 
-  function requestMidiConvert({ force = false } = {}) {
+  function hasPendingMidiInstrumentChanges() {
+    if (!pendingMidiSettings || !midiAppliedSettingsSnapshot) return false;
+    return getMidiChannelSettingsSignature(pendingMidiSettings) !== getMidiChannelSettingsSignature(midiAppliedSettingsSnapshot);
+  }
+
+  function buildQuantizeReconvertSettings() {
+    const settings = cloneMidiPendingSettings(midiAppliedSettingsSnapshot || pendingMidiSettings);
+    if (!settings) return null;
+    settings.quantizeDivision = Number(pendingMidiSettings?.quantizeDivision) === 32 ? 32 : 64;
+    return settings;
+  }
+
+  function requestMidiConvert({ force = false, reason = "manual" } = {}) {
     if (!pendingMidiImport || !pendingMidiSettings) return;
-    const signature = getMidiConvertSettingsSignature();
+    const normalizedReason = reason === "quantize" ? "quantize" : "manual";
+    const settings = normalizedReason === "quantize" ? buildQuantizeReconvertSettings() : pendingMidiSettings;
+    const signature = getMidiConvertSettingsSignature(settings);
     if (!force && signature && signature === midiLastAppliedSignature) return;
     if (midiConvertBusy) {
       midiConvertQueued = true;
+      // 양자화 재계산 요청은 다음 실행에서도 확정된 악기 설정을 사용해야 한다.
+      if (normalizedReason === "quantize") midiConvertQueuedReason = "quantize";
       return;
     }
-    void applyMidiConvertDialog({ force });
+    void applyMidiConvertDialog({ force, reason: normalizedReason });
   }
 
   function scheduleMidiConvertRequest() {
@@ -9245,30 +9275,36 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
   function finishMidiConvertRequest() {
     if (!midiConvertQueued) return;
+    const reason = midiConvertQueuedReason === "quantize" ? "quantize" : "manual";
     midiConvertQueued = false;
-    setTimeout(() => requestMidiConvert(), 0);
+    midiConvertQueuedReason = "";
+    setTimeout(() => requestMidiConvert({ reason }), 0);
   }
 
-  async function applyMidiConvertDialog({ force = false } = {}) {
+  async function applyMidiConvertDialog({ force = false, reason = "manual" } = {}) {
     if (!pendingMidiImport) return;
+    const normalizedReason = reason === "quantize" ? "quantize" : "manual";
     if (midiConvertBusy) {
       midiConvertQueued = true;
+      if (normalizedReason === "quantize") midiConvertQueuedReason = "quantize";
       return;
     }
-    const requestSignature = getMidiConvertSettingsSignature();
+    const settingsForConvert = normalizedReason === "quantize" ? buildQuantizeReconvertSettings() : pendingMidiSettings;
+    if (!settingsForConvert) return;
+    const requestSignature = getMidiConvertSettingsSignature(settingsForConvert);
     if (!force && requestSignature && requestSignature === midiLastAppliedSignature) return;
     const sourceLabel = getMidiImportSourceLabel();
     const sourceType = pendingMidiImport?.sourceType || "midi";
     let options;
     try {
-      options = collectMidiConvertOptions();
+      options = collectMidiConvertOptions(settingsForConvert);
     } catch (err) {
       showToast([i18nText("midi.convert_fail_title", [sourceLabel]), shortError(err)].filter(Boolean).join(": "), "error");
       return;
     }
 
     const startedAt = performance.now();
-    saveLastMidiConvertSettings(pendingMidiImport, pendingMidiSettings);
+    saveLastMidiConvertSettings(pendingMidiImport, settingsForConvert);
     stopMidiPreview();
     setMidiConvertBusy(true, i18nText("midi.converting", [sourceLabel]));
     await waitForBrowserPaint();
@@ -9276,7 +9312,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     try {
       stopPlayback(false);
       const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
-      const midiSoundPresetKeys = buildMidiPartSoundPreset(options.exportChannels, pendingMidiSettings?.groups || [], options.partCount);
+      const midiSoundPresetKeys = buildMidiPartSoundPreset(options.exportChannels, settingsForConvert?.groups || [], options.partCount);
       const normalized = normalizeImportedFullMml(result.mml);
       notifyPlayerUiSourceBaseline(normalized.mml, {
         name: pendingMidiImport.name,
@@ -9290,14 +9326,22 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const midiGroupCount = Number(pendingMidiSettings?.groups?.length || 0);
       const saved = Math.max(0, Number(normalized.saved) || 0);
       midiLastAppliedSignature = requestSignature;
-      midiAppliedSettingsSnapshot = cloneMidiPendingSettings(pendingMidiSettings);
+      if (normalizedReason === "quantize") {
+        // 확정된 악기 구성은 유지하고 양자화 값만 새 적용 상태에 반영한다.
+        midiAppliedSettingsSnapshot = cloneMidiPendingSettings(settingsForConvert);
+      } else {
+        midiAppliedSettingsSnapshot = cloneMidiPendingSettings(pendingMidiSettings);
+      }
       pendingMidiStartsNewSource = false;
+      const instrumentDraftPending = hasPendingMidiInstrumentChanges();
 
       setMidiConvertBusy(false);
       try {
         window.dispatchEvent(new CustomEvent("mobibard:midi-convert-complete", {
           detail: {
             sourceType,
+            reason: normalizedReason,
+            instrumentDraftPending,
             sourceLabel,
             name: pendingMidiImport?.name || "",
             exportChannels: Number(options.partCount || 0),
@@ -12137,8 +12181,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   window.MobibardMidiEditor = {
     hasSource() { return Boolean(pendingMidiImport && pendingMidiSettings); },
     isDirty() {
-      const signature = getMidiConvertSettingsSignature();
-      return Boolean(signature && signature !== midiLastAppliedSignature);
+      // 악기 선택 확인은 채널/악기 배정 변경에만 사용한다. 양자화 변경은
+      // 별도로 즉시 재계산되므로 여기의 dirty 상태에 포함하지 않는다.
+      return hasPendingMidiInstrumentChanges();
     },
     async buildPendingPreviewMml() {
       if (!pendingMidiImport || !pendingMidiSettings) return "";
