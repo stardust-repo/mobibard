@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-note-expand-v1" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-analysis-settings-v1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -156,7 +156,7 @@
               <span class="percent-input"><input id="whiteChangePercent" type="number" min="1" max="100" step="1" value="30" inputmode="numeric"/><b>%</b></span>
             </label>
             <label class="change-threshold-field">
-              <span data-i18n="settings.black_change">검 건반 변화량</span>
+              <span data-i18n="settings.black_change">검은 건반 변화량</span>
               <span class="percent-input"><input id="blackChangePercent" type="number" min="1" max="100" step="1" value="50" inputmode="numeric"/><b>%</b></span>
             </label>
           </div>
@@ -197,7 +197,7 @@
       <div class="section-head">
         <div>
           <span class="step-number">3</span>
-          <h2 id="analysisSectionTitle" data-i18n="analysis.title">영상 분석과 MIDI 출력</h2>
+          <h2 id="analysisSectionTitle" data-i18n="analysis.title">영상 분석 설정</h2>
         </div>
         <p data-i18n="analysis.description">분석 범위와 MIDI 설정을 지정한 뒤 영상을 분석하고 MIDI로 저장합니다.</p>
       </div>
@@ -226,6 +226,10 @@
       </div>
 
       <div class="field-grid midi-settings settings-group compact-settings">
+        <label class="field note-extension-field">
+          <span data-i18n="settings.note_extension">노트 확장 (프레임)</span>
+          <input id="noteExtensionFrames" type="number" min="0" max="999" step="1" value="0" inputmode="numeric" data-i18n-title="settings.note_extension_help" title="검출 전후의 빈 프레임으로 노트를 확장합니다."/>
+        </label>
         <label class="field">
           <span data-i18n="settings.tempo">템포 (BPM)</span>
           <input id="tempo" type="number" min="20" max="300" step="1" value="120"/>
@@ -233,10 +237,6 @@
         <label class="field velocity-field">
           <span><span data-i18n="settings.velocity">벨로시티</span> <output id="velocityValue">75%</output></span>
           <div class="range-control"><input id="velocity" type="range" min="1" max="100" step="1" value="75"/></div>
-        </label>
-        <label class="field note-extension-field">
-          <span data-i18n="settings.note_extension">노트 확장 (프레임)</span>
-          <input id="noteExtensionFrames" type="number" min="0" max="999" step="1" value="0" inputmode="numeric" data-i18n-title="settings.note_extension_help" title="검출 전후의 빈 프레임으로 노트를 확장합니다."/>
         </label>
       </div>
 
@@ -299,7 +299,7 @@
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script type="module" src="./js/settings-menu.js?v=20260830-note-expand-v1"></script>
-<script type="module" src="./js/app.js?v=20260830-note-expand-v1"></script>
+<script type="module" src="./js/settings-menu.js?v=20260830-analysis-settings-v1"></script>
+<script type="module" src="./js/app.js?v=20260830-analysis-settings-v1"></script>
 </body>
 </html>
