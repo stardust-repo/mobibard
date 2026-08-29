@@ -880,3 +880,33 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   color: var(--text);
   font-weight: 800;
 }
+
+/* RollScriptor last-session restore, matching the compact Player restore affordance. */
+.restore-session-button {
+  flex: 0 1 280px;
+  max-width: min(36vw, 280px);
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 44%, var(--line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 820;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.restore-session-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+}
+.restore-session-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 48%, transparent);
+  outline-offset: 2px;
+}
+.restore-session-button:disabled { opacity: .55; cursor: default; }
+@media(max-width:520px){
+  .restore-session-button{flex:1 1 auto;max-width:calc(100% - 116px);margin-left:auto}
+  .drop-tutorial-button{margin-left:0}
+}

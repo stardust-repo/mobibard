@@ -38,3 +38,10 @@ The RollScriptor settings panel is initialized independently from the video/WebC
 - Recommended video requirements shown at upload: 720p+, 30fps+, 88 keys, minimal key-covering effects/noise.
 - Warning for videos below 720p or nominal 30fps.
 - Four-page tutorial dialog with Previous/Next navigation and page indicators.
+
+## 마지막 작업 복원
+
+- 마지막으로 연 RollScriptor 영상 파일을 브라우저 IndexedDB에 보관하고, 다음 방문 시 영상 선택 영역에 `파일명 복원` 버튼을 표시합니다.
+- 복원 시 건반 인식선, 흰/검 건반 변화량, 분석 범위, BPM/Velocity, 건반 검출 상태와 완료된 분석 노트를 함께 되살립니다.
+- 건반 검출 상태는 저장된 기준 프레임에서 다시 검출하여 현재 디코더/프레임과 일치하는 기준색을 재구성합니다.
+- 영상과 복원 데이터는 브라우저 로컬 저장소에만 저장됩니다. 브라우저 저장 공간이 부족하거나 IndexedDB를 사용할 수 없는 환경에서는 복원 데이터가 남지 않을 수 있습니다.

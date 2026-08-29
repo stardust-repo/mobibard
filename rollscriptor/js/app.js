@@ -24,7 +24,7 @@ const MEDIABUNNY_URLS = [
 ];
 
 const elements = Object.fromEntries([
-  'videoFile', 'fileDrop', 'fileName', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
+  'videoFile', 'fileDrop', 'fileName', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
   'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent',
   'tempo', 'velocity', 'velocityValue', 'detectKeys', 'keyboardOrientationToggle', 'keyboardOrientationText', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
@@ -84,6 +84,10 @@ const state = {
   liveDetectionTime: -1,
   videoWidth: 0,
   videoHeight: 0,
+  sessionSource: null,
+  sessionRestoreCandidate: null,
+  sessionSaveTimer: null,
+  restoringSession: false,
 };
 
 function showToast(message, type = '') {
@@ -117,6 +121,311 @@ function downloadBlob(blob, fileName) {
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+
+const ROLLSCRIPTOR_SESSION_DB = 'mobibard-rollscriptor-session-v1';
+const ROLLSCRIPTOR_SESSION_STORE = 'records';
+const ROLLSCRIPTOR_SESSION_VIDEO_KEY = 'video';
+const ROLLSCRIPTOR_SESSION_STATE_KEY = 'state';
+const ROLLSCRIPTOR_SESSION_VERSION = 1;
+
+function sessionSourceFromFile(file) {
+  return {
+    name: String(file?.name || 'video'),
+    size: Math.max(0, Number(file?.size) || 0),
+    type: String(file?.type || ''),
+    lastModified: Math.max(0, Number(file?.lastModified) || 0),
+  };
+}
+
+function sameSessionSource(a, b) {
+  if (!a || !b) return false;
+  return String(a.name || '') === String(b.name || '')
+    && Number(a.size || 0) === Number(b.size || 0)
+    && Number(a.lastModified || 0) === Number(b.lastModified || 0);
+}
+
+function openRollscriptorSessionDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+    const request = indexedDB.open(ROLLSCRIPTOR_SESSION_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(ROLLSCRIPTOR_SESSION_STORE)) db.createObjectStore(ROLLSCRIPTOR_SESSION_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('IndexedDB open failed'));
+  });
+}
+
+async function readRollscriptorSessionBundle() {
+  let db;
+  try {
+    db = await openRollscriptorSessionDb();
+    const values = await new Promise((resolve, reject) => {
+      const tx = db.transaction(ROLLSCRIPTOR_SESSION_STORE, 'readonly');
+      const store = tx.objectStore(ROLLSCRIPTOR_SESSION_STORE);
+      const videoRequest = store.get(ROLLSCRIPTOR_SESSION_VIDEO_KEY);
+      const stateRequest = store.get(ROLLSCRIPTOR_SESSION_STATE_KEY);
+      tx.oncomplete = () => resolve({ video: videoRequest.result || null, snapshot: stateRequest.result || null });
+      tx.onerror = () => reject(tx.error || new Error('Session read failed'));
+      tx.onabort = () => reject(tx.error || new Error('Session read aborted'));
+    });
+    if (!values.video?.blob || !values.snapshot || values.snapshot.version !== ROLLSCRIPTOR_SESSION_VERSION) return null;
+    if (!sameSessionSource(values.video.source, values.snapshot.source)) return null;
+    return values;
+  } catch (_) {
+    return null;
+  } finally {
+    try { db?.close(); } catch (_) { /* no-op */ }
+  }
+}
+
+async function writeRollscriptorSessionRecord(key, value) {
+  let db;
+  try {
+    db = await openRollscriptorSessionDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(ROLLSCRIPTOR_SESSION_STORE, 'readwrite');
+      tx.objectStore(ROLLSCRIPTOR_SESSION_STORE).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('Session write failed'));
+      tx.onabort = () => reject(tx.error || new Error('Session write aborted'));
+    });
+    return true;
+  } catch (error) {
+    console.warn('[RollScriptor] session save failed', error);
+    return false;
+  } finally {
+    try { db?.close(); } catch (_) { /* no-op */ }
+  }
+}
+
+function updateRestoreButton() {
+  const button = elements.restoreSession;
+  if (!button) return;
+  const candidate = state.sessionRestoreCandidate;
+  const visible = Boolean(!state.track && candidate?.video?.blob && candidate?.snapshot);
+  button.hidden = !visible;
+  button.disabled = !state.mediabunny || state.analyzing;
+  if (visible) {
+    const name = String(candidate.video?.source?.name || candidate.snapshot?.source?.name || 'video');
+    button.textContent = `${name} ${t('file.restore_suffix')}`;
+    button.title = name;
+    if (elements.fileName) elements.fileName.hidden = true;
+  } else if (!state.track && elements.fileName) {
+    elements.fileName.hidden = false;
+  }
+}
+
+function currentSessionSnapshot() {
+  if (!state.track || !state.sessionSource) return null;
+  return {
+    version: ROLLSCRIPTOR_SESSION_VERSION,
+    savedAt: Date.now(),
+    source: { ...state.sessionSource },
+    displayWidth: state.displayWidth,
+    displayHeight: state.displayHeight,
+    guide: cloneGuide(state.guide),
+    previewTime: state.previewTime,
+    whiteChangePercent: currentChangeOptions().whiteChangePercent,
+    blackChangePercent: currentChangeOptions().blackChangePercent,
+    analysisStart: Number(elements.analysisStart?.value) || 0,
+    analysisEnd: Number(elements.analysisEnd?.value) || state.duration,
+    tempo: clamp(Number(elements.tempo?.value) || 120, 20, 300),
+    velocity: clamp(Number(elements.velocity?.value) || 75, 1, 100),
+    keyboardDetectionConfirmed: Boolean(state.keyboardDetectionConfirmed),
+    releaseBaselineTime: Number(state.releaseBaselineTime) || 0,
+    analysisCompleted: Boolean(state.midiBlob),
+    notes: state.notes.map(note => ({ ...note })),
+    noteTimeOrigin: Number(state.noteTimeOrigin) || 0,
+    noteTimeEnd: Number(state.noteTimeEnd) || 0,
+  };
+}
+
+async function persistCurrentRollscriptorSession() {
+  if (state.restoringSession || !state.track || !state.sessionSource) return false;
+  const snapshot = currentSessionSnapshot();
+  if (!snapshot) return false;
+  const saved = await writeRollscriptorSessionRecord(ROLLSCRIPTOR_SESSION_STATE_KEY, snapshot);
+  if (saved && state.sessionRestoreCandidate?.video && sameSessionSource(state.sessionRestoreCandidate.video.source, snapshot.source)) {
+    state.sessionRestoreCandidate = { video: state.sessionRestoreCandidate.video, snapshot };
+  }
+  return saved;
+}
+
+function scheduleRollscriptorSessionPersist(delay = 220) {
+  if (state.restoringSession || !state.track || !state.sessionSource) return;
+  clearTimeout(state.sessionSaveTimer);
+  state.sessionSaveTimer = setTimeout(() => {
+    state.sessionSaveTimer = null;
+    void persistCurrentRollscriptorSession();
+  }, Math.max(80, Number(delay) || 220));
+}
+
+async function persistRollscriptorVideo(file) {
+  if (!file || state.restoringSession) return false;
+  const source = sessionSourceFromFile(file);
+  state.sessionSource = source;
+  const video = {
+    version: ROLLSCRIPTOR_SESSION_VERSION,
+    savedAt: Date.now(),
+    source,
+    blob: file,
+  };
+  const saved = await writeRollscriptorSessionRecord(ROLLSCRIPTOR_SESSION_VIDEO_KEY, video);
+  if (!saved) return false;
+  const snapshot = currentSessionSnapshot();
+  if (snapshot) {
+    await writeRollscriptorSessionRecord(ROLLSCRIPTOR_SESSION_STATE_KEY, snapshot);
+    state.sessionRestoreCandidate = { video, snapshot };
+  }
+  return true;
+}
+
+function restoreGuideFromSnapshot(snapshot) {
+  const saved = snapshot?.guide;
+  if (!saved || !['bottom', 'top', 'left', 'right'].includes(saved.side)) return null;
+  const sourceWidth = Math.max(1, Number(snapshot.displayWidth) || state.displayWidth);
+  const sourceHeight = Math.max(1, Number(snapshot.displayHeight) || state.displayHeight);
+  const scaleX = state.displayWidth / sourceWidth;
+  const scaleY = state.displayHeight / sourceHeight;
+  const horizontal = saved.side === 'bottom' || saved.side === 'top';
+  const restored = horizontal
+    ? {
+      side: saved.side,
+      span0: Number(saved.span0) * scaleX,
+      span1: Number(saved.span1) * scaleX,
+      blackPos: Number(saved.blackPos) * scaleY,
+      whitePos: Number(saved.whitePos) * scaleY,
+    }
+    : {
+      side: saved.side,
+      span0: Number(saved.span0) * scaleY,
+      span1: Number(saved.span1) * scaleY,
+      blackPos: Number(saved.blackPos) * scaleX,
+      whitePos: Number(saved.whitePos) * scaleX,
+    };
+  return normalizeGuide(restored);
+}
+
+function sanitizeRestoredNotes(notes) {
+  if (!Array.isArray(notes)) return [];
+  return notes
+    .filter(note => Number.isFinite(Number(note?.midi)) && Number.isFinite(Number(note?.start)) && Number.isFinite(Number(note?.end)))
+    .map(note => ({
+      ...note,
+      midi: Math.max(0, Math.min(127, Math.round(Number(note.midi)))),
+      start: Math.max(0, Number(note.start)),
+      end: Math.max(0, Number(note.end)),
+      duration: Math.max(0, Number(note.end) - Number(note.start)),
+      velocity: Math.max(1, Math.min(127, Math.round(Number(note.velocity) || currentVelocityMidi()))),
+    }))
+    .filter(note => note.end > note.start);
+}
+
+async function applyRollscriptorSessionSnapshot(snapshot) {
+  if (!snapshot || !state.track) return;
+  state.restoringSession = true;
+  try {
+    elements.whiteChangePercent.value = String(clamp(Math.round(Number(snapshot.whiteChangePercent) || 30), 1, 100));
+    elements.blackChangePercent.value = String(clamp(Math.round(Number(snapshot.blackChangePercent) || 50), 1, 100));
+    elements.tempo.value = String(clamp(Math.round(Number(snapshot.tempo) || 120), 20, 300));
+    elements.velocity.value = String(clamp(Math.round(Number(snapshot.velocity) || 75), 1, 100));
+    elements.velocityValue.textContent = `${elements.velocity.value}%`;
+
+    const gap = minimumAnalysisRange();
+    let start = clamp(Number(snapshot.analysisStart) || 0, 0, state.duration);
+    let end = clamp(Number.isFinite(Number(snapshot.analysisEnd)) ? Number(snapshot.analysisEnd) : state.duration, 0, state.duration);
+    if (end - start < gap) {
+      start = Math.max(0, Math.min(start, state.duration - gap));
+      end = Math.min(state.duration, Math.max(end, start + gap));
+    }
+    elements.analysisStart.value = start.toFixed(3);
+    elements.analysisEnd.value = end.toFixed(3);
+    updateAnalysisRangeLabel();
+
+    const restoredGuide = restoreGuideFromSnapshot(snapshot);
+    if (restoredGuide) {
+      state.guide = restoredGuide;
+      syncKeyboardSideFromGuide();
+      updateKeyboardOrientationButtons();
+      state.keyboardDetectionConfirmed = false;
+      state.geometry = null;
+      state.keyMap = null;
+      state.releaseBaselineColors = null;
+      state.releaseBaselineTime = 0;
+      state.detectedColorSummary = null;
+      clearLiveDetection();
+      resetResults();
+      drawOverlay();
+    }
+
+    let detectionRestored = false;
+    if (snapshot.keyboardDetectionConfirmed && state.guide) {
+      const baselineTime = clamp(Number(snapshot.releaseBaselineTime) || 0, 0, state.duration);
+      await renderPreview(baselineTime, true);
+      detectionRestored = detectKeysFromGuides({ quiet: true });
+    }
+
+    const savedNotes = sanitizeRestoredNotes(snapshot.notes);
+    if (snapshot.analysisCompleted) {
+      state.notes = savedNotes;
+      state.noteTimeOrigin = clamp(Number(snapshot.noteTimeOrigin) || 0, 0, state.duration);
+      state.noteTimeEnd = clamp(Number(snapshot.noteTimeEnd) || state.duration, state.noteTimeOrigin, state.duration);
+      state.midiBlob = createMidiFile(state.notes, {
+        trackName: state.fileBaseName,
+        bpm: clamp(Number(elements.tempo.value) || 120, 20, 300),
+      });
+      elements.noteCountResult.textContent = formatNumber(state.notes.length);
+    }
+
+    const previewTime = clamp(Number(snapshot.previewTime) || 0, 0, state.duration);
+    await renderPreview(previewTime, true);
+    updateCurrentChord(state.previewFrameTime);
+    updateKeyboardStatus();
+    drawOverlay();
+    updateControlAvailability();
+    if (snapshot.analysisCompleted) {
+      setProgress(1, t('progress.done'), t('progress.notes_made', { count: formatNumber(state.notes.length) }));
+    } else if (detectionRestored) {
+      setProgress(0, t('progress.ready'), t('progress.detected_detail'));
+    } else {
+      setProgress(0, t('progress.ready'), t('progress.ready_detail'));
+    }
+  } finally {
+    state.restoringSession = false;
+  }
+}
+
+async function loadRollscriptorRestorePrompt() {
+  state.sessionRestoreCandidate = await readRollscriptorSessionBundle();
+  updateRestoreButton();
+}
+
+async function restoreLastRollscriptorSession() {
+  if (state.analyzing || !state.mediabunny) return;
+  const candidate = state.sessionRestoreCandidate || await readRollscriptorSessionBundle();
+  if (!candidate?.video?.blob || !candidate?.snapshot) {
+    showToast(t('toast.restore_failed'), 'error');
+    return;
+  }
+  const source = candidate.video.source || candidate.snapshot.source || {};
+  try {
+    const file = new File([candidate.video.blob], String(source.name || 'video'), {
+      type: String(source.type || candidate.video.blob.type || ''),
+      lastModified: Number(source.lastModified) || Date.now(),
+    });
+    await loadVideoFile(file, { restoreSnapshot: candidate.snapshot, persistSession: false });
+    if (!state.track) throw new Error('restore failed');
+    state.sessionSource = sessionSourceFromFile(file);
+    updateRestoreButton();
+    showToast(t('toast.restore_done'));
+  } catch (error) {
+    console.error(error);
+    showToast(t('toast.restore_failed'), 'error');
+  }
 }
 
 function updateTimeLabel() {
@@ -193,6 +502,7 @@ function normalizeAnalysisRange(changed = '') {
   elements.analysisEnd.value = end.toFixed(3);
   updateAnalysisRangeLabel();
   resetResults();
+  scheduleRollscriptorSessionPersist();
 }
 
 function setAnalysisRangeDefaults() {
@@ -339,6 +649,7 @@ function updateControlAvailability() {
   // step can be explained with a toast instead of looking like a dead control.
   elements.analyzeVideo.disabled = !hasVideo || locked;
   elements.downloadMidi.disabled = !state.midiBlob || locked;
+  updateRestoreButton();
 }
 
 function clearLiveDetection() {
@@ -511,9 +822,11 @@ async function stepPreviewFrame(direction) {
   if (frame) {
     displayCachedFrame(frame);
     if (cacheNeedsWarm(direction)) scheduleFrameCacheWarm(state.previewFrameTime);
+    scheduleRollscriptorSessionPersist(420);
     return;
   }
   await renderPreview(state.previewTime + direction / Math.max(1, state.fps), true);
+  scheduleRollscriptorSessionPersist(420);
 }
 
 async function stepPreviewSeconds(seconds) {
@@ -521,12 +834,14 @@ async function stepPreviewSeconds(seconds) {
   if (!amount || !state.track || state.analyzing) return;
   pausePlayback();
   await renderPreview(state.previewFrameTime + amount, true);
+  scheduleRollscriptorSessionPersist(420);
 }
 
 async function jumpPreviewToBoundary(toEnd = false) {
   if (!state.track || state.analyzing) return;
   pausePlayback();
   await renderPreview(toEnd ? state.duration : 0, true);
+  scheduleRollscriptorSessionPersist(420);
 }
 
 async function renderPreview(timeSeconds, force = false) {
@@ -569,6 +884,7 @@ function requestPreview(time) {
   updateCurrentChord();
   clearTimeout(timelineTimer);
   timelineTimer = setTimeout(() => renderPreview(state.previewTime, true), 45);
+  scheduleRollscriptorSessionPersist(520);
 }
 
 function canvasPoint(event) {
@@ -1367,6 +1683,7 @@ function setKeyboardOrientation(orientation) {
   syncKeyboardSideFromGuide();
   updateKeyboardOrientationButtons();
   invalidateKeyboardDetection(t('keyboard.stage_detect_required'));
+  scheduleRollscriptorSessionPersist();
 }
 
 function onOverlayPointerDown(event) {
@@ -1434,6 +1751,7 @@ async function finishGuideDrag(event, cancelled = false) {
   syncKeyboardSideFromGuide();
   updateKeyboardOrientationButtons();
   invalidateKeyboardDetection(t('keyboard.stage_detect_required'));
+  scheduleRollscriptorSessionPersist();
 }
 
 async function confirmKeyboardDetection() {
@@ -1443,10 +1761,13 @@ async function confirmKeyboardDetection() {
   // capture must use the exact decoded frame selected by the user.
   if (state.previewFromFrameCache) await renderPreview(state.previewFrameTime, true);
   detectKeysFromGuides({ quiet: false });
+  scheduleRollscriptorSessionPersist();
 }
 
-async function loadVideoFile(file) {
+async function loadVideoFile(file, { restoreSnapshot = null, persistSession = true } = {}) {
   if (!file || state.analyzing || !state.mediabunny) return;
+  clearTimeout(state.sessionSaveTimer);
+  state.sessionSaveTimer = null;
   pausePlayback();
   disposeCurrentInput();
   resetResults();
@@ -1462,6 +1783,8 @@ async function loadVideoFile(file) {
   updateVideoQualityWarning();
   state.fileBaseName = sanitizeBaseName(file.name);
   elements.fileName.textContent = file.name;
+  elements.fileName.hidden = false;
+  if (elements.restoreSession) elements.restoreSession.hidden = true;
   elements.previewStage.classList.remove('is-empty');
   updateKeyboardStatus(t('progress.opening'));
   setProgress(0.02, t('progress.opening'), t('progress.opening_detail'));
@@ -1508,12 +1831,20 @@ async function loadVideoFile(file) {
     updateControlAvailability();
     await renderPreview(0, true);
     setupInitialGuides();
-    setProgress(0, t('progress.ready'), t('progress.ready_detail'));
+    state.sessionSource = sessionSourceFromFile(file);
+    if (restoreSnapshot) {
+      await applyRollscriptorSessionSnapshot(restoreSnapshot);
+    } else {
+      setProgress(0, t('progress.ready'), t('progress.ready_detail'));
+      updateRestoreButton();
+      if (persistSession) void persistRollscriptorVideo(file);
+    }
   } catch (error) {
     console.error(error);
     disposeCurrentInput();
     elements.previewStage.classList.add('is-empty');
     state.videoWidth = 0; state.videoHeight = 0;
+    state.sessionSource = null;
     updateVideoQualityWarning();
     updateKeyboardStatus(t('error.open_video'));
     setProgress(0, t('progress.error'), error.message || String(error));
@@ -1689,6 +2020,7 @@ async function analyzeAllFrames() {
     drawOverlay();
     setProgress(1, t('progress.done'), t('progress.notes_made', { count: formatNumber(state.notes.length) }));
     showToast(state.notes.length ? t('toast.midi_done') : t('toast.no_notes'));
+    scheduleRollscriptorSessionPersist(100);
   } catch (error) {
     console.error(error);
     setProgress(0, t('progress.analysis_error'), error.message || String(error));
@@ -1752,6 +2084,11 @@ function initializeEvents() {
     if (file) loadVideoFile(file);
     else showToast(t('toast.no_video_file'), 'error');
   });
+  elements.restoreSession?.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    void restoreLastRollscriptorSession();
+  });
 
   elements.playPause.addEventListener('click', togglePlayback);
   elements.timeline.addEventListener('input', event => {
@@ -1796,14 +2133,19 @@ function initializeEvents() {
       updateCurrentChord(state.previewFrameTime);
       drawOverlay();
     }
+    scheduleRollscriptorSessionPersist();
   };
   elements.whiteChangePercent.addEventListener('change', onChangeThreshold);
   elements.blackChangePercent.addEventListener('change', onChangeThreshold);
   elements.velocity.addEventListener('input', () => {
     elements.velocityValue.textContent = `${elements.velocity.value}%`;
     regenerateMidiFromCurrentNotes();
+    scheduleRollscriptorSessionPersist();
   });
-  elements.tempo.addEventListener('change', regenerateMidiFromCurrentNotes);
+  elements.tempo.addEventListener('change', () => {
+    regenerateMidiFromCurrentNotes();
+    scheduleRollscriptorSessionPersist();
+  });
   elements.keyboardOrientationToggle.addEventListener('click', () => {
     const current = keyboardOrientationForSide(state.keyboardSide);
     setKeyboardOrientation(current === 'horizontal' ? 'vertical' : 'horizontal');
@@ -1892,6 +2234,7 @@ async function initialize() {
       else setProgress(0, t('progress.ready'), t('progress.ready_detail'));
     }
     if (!state.track && elements.fileName) elements.fileName.textContent = t('file.prompt');
+    updateRestoreButton();
   });
   setPlaybackUi();
   updateKeyboardOrientationButtons();
@@ -1910,6 +2253,7 @@ async function initialize() {
 
   try {
     state.mediabunny = await loadMediabunny();
+    await loadRollscriptorRestorePrompt();
     updateControlAvailability();
   } catch (error) {
     console.error(error);

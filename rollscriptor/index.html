@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-ui16" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-ui17" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -96,6 +96,7 @@
             </span>
           </span>
         </label>
+        <button id="restoreSession" class="restore-session-button" type="button" hidden></button>
         <button id="tutorialButton" class="tutorial-button drop-tutorial-button" type="button" data-i18n="tutorial.open">튜토리얼</button>
       </div>
 
@@ -287,6 +288,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script type="module" src="./js/settings-menu.js?v=20260829-ui7"></script>
-<script type="module" src="./js/app.js?v=20260830-detection-info-v4"></script>
+<script type="module" src="./js/app.js?v=20260830-session-restore-v1"></script>
 </body>
 </html>

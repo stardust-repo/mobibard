@@ -17,7 +17,7 @@ export default {
     'tutorial.step3_part': '鍵盤検出', 'tutorial.step3_title': '基準色を確定する', 'tutorial.step3_body': '鍵盤が押されていないフレームで「鍵盤検出」を押します。サンプル領域と基準色が表示され、現在フレームで変化を検出したサンプルはすぐに明るく表示されます。', 'tutorial.step3_note': '再生やフレーム移動で現在の検出コードを確認できます。ラインを動かした場合は再検出が必要です。',
     'tutorial.step4_part': '解析・MIDI', 'tutorial.step4_title': '動画を解析してMIDI保存', 'tutorial.step4_body': '解析時間、BPM、ベロシティを設定して動画解析を実行します。再生と検出コードを確認してMIDIをダウンロードします。', 'tutorial.step4_note': '±1Fは1フレーム、±1秒ボタンは1秒ずつ移動します。',
     'video.title': '動画選択', 'video.description': '解析するピアノロール動画を選択します。',
-    'file.select': '動画を選択', 'file.prompt': '動画ファイルを選択するか、ここにドロップしてください。',
+    'file.select': '動画を選択', 'file.prompt': '動画ファイルを選択するか、ここにドロップしてください。', 'file.restore_suffix': '復元', 'toast.restore_done': '前回のRollScriptor作業を復元しました。', 'toast.restore_failed': '前回の作業を復元できませんでした。',
     'preview.aria': '動画フレームと鍵盤検出ライン', 'preview.empty_title': 'ピアノロール動画を追加してください。', 'preview.empty_body': '動画上で鍵盤認識ラインの方向と位置を調整できます。',
     'transport.play': '再生', 'transport.pause': '一時停止', 'transport.first': '先頭へ', 'transport.last': '最後へ', 'transport.prev_second': '−1秒', 'transport.prev_frame': '−1F', 'transport.next_frame': '+1F', 'transport.next_second': '+1秒', 'transport.timeline': '動画位置',
     'transport.current_chord': '現在の検出コード', 'transport.after_analysis': '解析後に表示', 'transport.after_detection': '鍵盤検出後に表示',

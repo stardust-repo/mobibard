@@ -18,7 +18,7 @@ export default {
     'tutorial.step3_part': '건반 검출', 'tutorial.step3_title': '기준색 확정하기', 'tutorial.step3_body': '건반이 눌리지 않은 프레임에서 「건반 검출」을 누릅니다. 작은 박스와 기준색이 표시되고, 이후 현재 프레임에서 변화가 감지된 샘플 박스가 바로 밝게 표시됩니다.', 'tutorial.step3_note': '재생하거나 프레임을 이동하면서 현재 검출 코드를 확인할 수 있습니다. 인식선을 다시 움직이면 재검출이 필요합니다.',
     'tutorial.step4_part': '분석 · MIDI', 'tutorial.step4_title': '영상 분석과 MIDI 저장', 'tutorial.step4_body': '분석 시간, BPM, 벨로시티를 정하고 영상 분석을 실행합니다. 재생과 현재 검출 코드로 결과를 확인한 뒤 MIDI를 다운로드합니다.', 'tutorial.step4_note': '±1F는 한 프레임, ±1초 버튼은 한 번에 1초씩 이동합니다.',
     'video.title': '영상 선택', 'video.description': '분석할 피아노 롤 영상을 선택합니다.',
-    'file.select': '영상 선택', 'file.prompt': '동영상 파일을 선택하거나 여기에 드롭하세요.',
+    'file.select': '영상 선택', 'file.prompt': '동영상 파일을 선택하거나 여기에 드롭하세요.', 'file.restore_suffix': '복원', 'toast.restore_done': '마지막 RollScriptor 작업을 복원했습니다.', 'toast.restore_failed': '마지막 작업을 복원하지 못했습니다.',
     'preview.aria': '동영상 프레임과 건반 검출선', 'preview.empty_title': '피아노 롤 영상을 넣어주세요.', 'preview.empty_body': '영상 위에서 건반 인식선의 방향과 위치를 조정할 수 있습니다.',
     'transport.play': '재생', 'transport.pause': '일시정지', 'transport.first': '처음으로', 'transport.last': '마지막으로', 'transport.prev_second': '−1초', 'transport.prev_frame': '−1F', 'transport.next_frame': '+1F', 'transport.next_second': '+1초', 'transport.timeline': '영상 위치',
     'transport.current_chord': '현재 검출 코드', 'transport.after_analysis': '분석 후 표시', 'transport.after_detection': '건반 검출 후 표시',
