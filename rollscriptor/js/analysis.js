@@ -171,20 +171,45 @@ function median3(a, b, c) {
   return b;
 }
 
-function buildFrameMetrics(colors, baselineLab, keyCount) {
+/**
+ * Brightness-invariant RGB direction change in degrees. Multiplying a pixel
+ * by a scalar (same center color, only brighter/darker) keeps the angle at 0.
+ * This is deliberately separate from Lab delta-E because Lab a/b can move a
+ * surprising amount when a dark, slightly tinted black key is simply lit up.
+ */
+function rgbDirectionAngleDegrees(baseR, baseG, baseB, currentR, currentG, currentB) {
+  const baseMag = Math.hypot(baseR, baseG, baseB);
+  const currentMag = Math.hypot(currentR, currentG, currentB);
+  if (baseMag < 1e-6 || currentMag < 1e-6) return 0;
+  const cosine = clamp(
+    (baseR * currentR + baseG * currentG + baseB * currentB) / (baseMag * currentMag),
+    -1,
+    1,
+  );
+  return Math.acos(cosine) * 180 / Math.PI;
+}
+
+function buildFrameMetrics(colors, baselineLab, baselineColors, keyCount) {
   const metrics = new Array(keyCount);
   for (let keyIndex = 0; keyIndex < keyCount; keyIndex += 1) {
     const patches = new Array(PATCH_COUNT);
     for (let patchIndex = 0; patchIndex < PATCH_COUNT; patchIndex += 1) {
       const offset = (keyIndex * PATCH_COUNT + patchIndex) * PATCH_STRIDE;
       const base = baselineLab[keyIndex * PATCH_COUNT + patchIndex];
-      const current = rgbToLab(colors[offset], colors[offset + 1], colors[offset + 2]);
+      const currentR = colors[offset];
+      const currentG = colors[offset + 1];
+      const currentB = colors[offset + 2];
+      const baseR = baselineColors[offset];
+      const baseG = baselineColors[offset + 1];
+      const baseB = baselineColors[offset + 2];
+      const current = rgbToLab(currentR, currentG, currentB);
       const dL = current.l - base.l;
       const da = current.a - base.a;
       const db = current.b - base.b;
       const chroma = Math.hypot(da, db);
       const de = deltaE2000(base, current);
-      patches[patchIndex] = { base, current, dL, da, db, chroma, de };
+      const colorAngle = rgbDirectionAngleDegrees(baseR, baseG, baseB, currentR, currentG, currentB);
+      patches[patchIndex] = { base, current, dL, da, db, chroma, de, colorAngle };
     }
     const p0 = patches[0]; const p1 = patches[1]; const p2 = patches[2];
     const dL = median3(p0.dL, p1.dL, p2.dL);
@@ -197,6 +222,9 @@ function buildFrameMetrics(colors, baselineLab, keyCount) {
       minChroma: Math.min(p0.chroma, p1.chroma, p2.chroma),
       maxChroma: Math.max(p0.chroma, p1.chroma, p2.chroma),
       minDeltaE: Math.min(p0.de, p1.de, p2.de),
+      centerColorAngle: p1.colorAngle,
+      medianColorAngle: median3(p0.colorAngle, p1.colorAngle, p2.colorAngle),
+      minColorAngle: Math.min(p0.colorAngle, p1.colorAngle, p2.colorAngle),
     };
   }
   return metrics;
@@ -229,8 +257,9 @@ function buildSameTypePositions(keys) {
 }
 
 function estimateLocalCommonEffect(keyIndex, metrics, keys, sameType, validKeyMask, options) {
+  const empty = { dL: 0, da: 0, db: 0, count: 0, nearDL: 0, nearDLMad: 0, nearCount: 0 };
   const info = sameType.positions[keyIndex];
-  if (!info) return { dL: 0, da: 0, db: 0, count: 0 };
+  if (!info) return empty;
   const group = sameType.groups[info.type];
   const candidates = [];
   const radius = options.neighborRadius;
@@ -240,21 +269,34 @@ function estimateLocalCommonEffect(keyIndex, metrics, keys, sameType, validKeyMa
     if (pos < 0 || pos >= group.length) continue;
     const neighborIndex = group[pos];
     if (validKeyMask && validKeyMask[neighborIndex] === false) continue;
-    candidates.push({ index: neighborIndex, metric: metrics[neighborIndex] });
+    candidates.push({ index: neighborIndex, distance: Math.abs(delta), metric: metrics[neighborIndex] });
   }
-  if (candidates.length < 2) return { dL: 0, da: 0, db: 0, count: 0 };
+  if (candidates.length < 2) return empty;
 
-  // Real pressed keys are usually the strongest local outliers. Estimate the
-  // common lighting/effect vector from the quieter half of nearby same-type
-  // keys, so chords are not simply averaged into the background effect.
-  candidates.sort((a, b) => a.metric.minDeltaE - b.metric.minDeltaE);
-  const keep = Math.max(2, Math.ceil(candidates.length * options.neighborQuietFraction));
-  const quiet = candidates.slice(0, keep);
+  // Keep the original quiet-neighbour estimator for broad tint/glow removal.
+  // It is robust when several nearby notes in a chord are pressed together.
+  const byQuietness = [...candidates].sort((a, b) => a.metric.minDeltaE - b.metric.minDeltaE);
+  const keep = Math.max(2, Math.ceil(byQuietness.length * options.neighborQuietFraction));
+  const quiet = byQuietness.slice(0, keep);
+
+  // Also retain a very local lightness model. A bloom gradient can make a
+  // black key much brighter while keeping its RGB direction nearly unchanged.
+  // The nearest same-type keys model that local lighting better than the quiet
+  // half, while the color/tint subtraction above remains chord-safe.
+  const nearest = [...candidates]
+    .sort((a, b) => a.distance - b.distance || a.metric.minDeltaE - b.metric.minDeltaE)
+    .slice(0, Math.min(4, candidates.length));
+  const nearDL = median(nearest.map(item => item.metric.vector.dL));
+  const nearDLMad = median(nearest.map(item => Math.abs(item.metric.vector.dL - nearDL)));
+
   return {
     dL: median(quiet.map(item => item.metric.vector.dL)),
     da: median(quiet.map(item => item.metric.vector.da)),
     db: median(quiet.map(item => item.metric.vector.db)),
     count: quiet.length,
+    nearDL,
+    nearDLMad,
+    nearCount: nearest.length,
   };
 }
 
@@ -297,7 +339,7 @@ function residualDirectionConsensus(residual, options) {
   return true;
 }
 
-function keyPressed(metrics, keyIndex, common, options) {
+function keyPressed(metrics, keyIndex, key, common, options) {
   const metric = metrics[keyIndex];
 
   // First gate: all three visible sub-patches must plainly leave the fixed
@@ -307,10 +349,44 @@ function keyPressed(metrics, keyIndex, common, options) {
   if (metric.minChroma < options.minChromaticShift) return false;
   if (!patchDirectionConsensus(metric, options)) return false;
 
-  if (common.count < 2) return true;
+  // Lab chroma is not brightness invariant. A dark, slightly tinted black key
+  // can produce a large Lab a/b delta when a white bloom merely scales its RGB
+  // values. Require the actual center RGB direction to turn as well. The
+  // threshold is intentionally low: it rejects pure lightness changes without
+  // forcing pressed keys to be highly saturated.
+  if (metric.centerColorAngle < options.minCenterColorAngle) return false;
+  if (metric.medianColorAngle < options.minMedianColorAngle) return false;
+
+  if (common.count < 2) {
+    if (key?.type === 'black' && metric.centerColorAngle < options.blackMinCenterColorAngle) return false;
+    return true;
+  }
+
   const commonChroma = Math.hypot(common.da, common.db);
   const commonLabMagnitude = Math.hypot(common.dL, common.da, common.db);
-  if (commonChroma < options.minCommonEffectChroma && commonLabMagnitude < options.minCommonEffectLab) return true;
+  const commonEffectActive = commonChroma >= options.minCommonEffectChroma
+    || commonLabMagnitude >= options.minCommonEffectLab;
+
+  // Black keys are the vulnerable case under strong bloom: their released RGB
+  // values are small, so brightness amplification can look like a large Lab
+  // color change. If the center hue turn is only modest, demand that the key's
+  // lightness change is also a clear LOCAL outlier from nearby black keys.
+  // Strongly colored blue/green/etc. presses bypass this extra guard.
+  if (key?.type === 'black') {
+    if (metric.centerColorAngle < options.blackMinCenterColorAngle) return false;
+    if (commonEffectActive
+      && metric.centerColorAngle < options.blackStrongCenterColorAngle
+      && common.nearCount >= 2) {
+      const localResidual = Math.abs(metric.vector.dL - common.nearDL);
+      const adaptiveFloor = Math.max(
+        options.blackMinLocalLightnessResidual,
+        common.nearDLMad * options.blackLocalLightnessMadMultiplier + options.blackLocalLightnessSlack,
+      );
+      if (localResidual < adaptiveFloor) return false;
+    }
+  }
+
+  if (!commonEffectActive) return true;
 
   // Remove the same-frame color/light movement shared by nearby unpressed
   // keys. A wide blue glow can strongly tint black keys, but if neighboring
@@ -339,6 +415,13 @@ function normalizeDetectionOptions(options = {}) {
     minChromaticShift: clamp(Number(options.minChromaticShift) || 16, 1, 150),
     minPatchBalance: clamp(Number(options.minPatchBalance) || 0.46, 0.05, 1),
     minPatchDirectionCosine: clamp(Number(options.minPatchDirectionCosine) || 0.70, -1, 1),
+    minCenterColorAngle: clamp(Number(options.minCenterColorAngle) || 0.75, 0.05, 30),
+    minMedianColorAngle: clamp(Number(options.minMedianColorAngle) || 0.60, 0.05, 30),
+    blackMinCenterColorAngle: clamp(Number(options.blackMinCenterColorAngle) || 0.55, 0.05, 30),
+    blackStrongCenterColorAngle: clamp(Number(options.blackStrongCenterColorAngle) || 6.5, 0.1, 45),
+    blackMinLocalLightnessResidual: clamp(Number(options.blackMinLocalLightnessResidual) || 8, 0, 100),
+    blackLocalLightnessMadMultiplier: clamp(Number(options.blackLocalLightnessMadMultiplier) || 2.0, 0, 10),
+    blackLocalLightnessSlack: clamp(Number(options.blackLocalLightnessSlack) || 1.5, 0, 30),
     neighborRadius: clamp(Math.round(Number(options.neighborRadius) || 5), 1, 12),
     neighborQuietFraction: clamp(Number(options.neighborQuietFraction) || 0.5, 0.2, 0.8),
     minCommonEffectChroma: clamp(Number(options.minCommonEffectChroma) || 6, 0, 100),
@@ -397,15 +480,15 @@ export class StreamingNoteDetector {
     const frameTime = Math.max(0, Number(timestamp) || 0);
     const frameDuration = Math.max(0, Number(duration) || 0);
     this.finalTime = Math.max(this.finalTime, frameTime + frameDuration);
-    const metrics = buildFrameMetrics(colors, this.baselineLab, this.keyCount);
+    const metrics = buildFrameMetrics(colors, this.baselineLab, this.baselines.colors, this.keyCount);
 
     for (let keyIndex = 0; keyIndex < this.keyCount; keyIndex += 1) {
       const state = this.states[keyIndex];
       const valid = !this.validKeyMask || this.validKeyMask[keyIndex] !== false;
       const common = valid
         ? estimateLocalCommonEffect(keyIndex, metrics, this.keys, this.sameType, this.validKeyMask, this.detectionOptions)
-        : { dL: 0, da: 0, db: 0, count: 0 };
-      const pressed = valid && keyPressed(metrics, keyIndex, common, this.detectionOptions);
+        : { dL: 0, da: 0, db: 0, count: 0, nearDL: 0, nearDLMad: 0, nearCount: 0 };
+      const pressed = valid && keyPressed(metrics, keyIndex, this.keys[keyIndex], common, this.detectionOptions);
 
       if (!state.active && pressed) {
         state.active = true;

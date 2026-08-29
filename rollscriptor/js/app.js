@@ -14,7 +14,7 @@ import {
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
 } from './vision.js';
-import { StreamingNoteDetector } from './analysis.js';
+import { StreamingNoteDetector } from './analysis.js?v=20260829-centercolor1';
 import { createMidiFile } from './midi.js';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js';
@@ -1068,6 +1068,17 @@ function analysisOptions() {
     // Three sub-patches must move in roughly the same color direction.
     minPatchBalance: 0.46,
     minPatchDirectionCosine: 0.70,
+    // Brightness-invariant center-color gate. Pure brightening/darkening keeps
+    // the RGB direction unchanged and must not become a Note On.
+    minCenterColorAngle: 0.75,
+    minMedianColorAngle: 0.60,
+    // Black keys need one extra guard under bloom: a modest color turn must
+    // also be a local lightness outlier. Strong blue/green/etc. presses bypass it.
+    blackMinCenterColorAngle: 0.55,
+    blackStrongCenterColorAngle: 6.5,
+    blackMinLocalLightnessResidual: 8,
+    blackLocalLightnessMadMultiplier: 2.0,
+    blackLocalLightnessSlack: 1.5,
     // Estimate same-frame glow/lighting from nearby same-type keys and remove
     // that common component before accepting the note.
     neighborRadius: 5,
