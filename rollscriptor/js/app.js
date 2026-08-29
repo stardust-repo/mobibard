@@ -1072,13 +1072,23 @@ function analysisOptions() {
     // the RGB direction unchanged and must not become a Note On.
     minCenterColorAngle: 0.75,
     minMedianColorAngle: 0.60,
-    // Black keys need one extra guard under bloom: a modest color turn must
-    // also be a local lightness outlier. Strong blue/green/etc. presses bypass it.
-    blackMinCenterColorAngle: 0.55,
-    blackStrongCenterColorAngle: 6.5,
-    blackMinLocalLightnessResidual: 8,
-    blackLocalLightnessMadMultiplier: 2.0,
-    blackLocalLightnessSlack: 1.5,
+    // Black keys are judged spatially, not by hue angle. A real black-key
+    // press may become almost neutral white while bloom edges become purple.
+    // Require a local outlier versus nearby black keys, then accept either a
+    // strong neutral lightness rise or a strong residual color change.
+    blackMinStandaloneLightnessRise: 24,
+    blackMinLocalLightnessResidual: 12,
+    blackLocalLightnessMadMultiplier: 2.4,
+    blackLocalLightnessSlack: 2.0,
+    blackMinLocalLabResidual: 18,
+    blackLocalLabMadMultiplier: 2.2,
+    blackLocalLabSlack: 3.0,
+    blackMinColorLocalLightnessResidual: 8,
+    blackColorLightnessMadMultiplier: 1.4,
+    blackColorLightnessSlack: 1.0,
+    blackMinResidualLightnessRise: 14,
+    blackMinResidualDeltaE: 15,
+    blackMinResidualChromaticShift: 12,
     // Estimate same-frame glow/lighting from nearby same-type keys and remove
     // that common component before accepting the note.
     neighborRadius: 5,
