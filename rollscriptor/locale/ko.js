@@ -14,7 +14,7 @@ export default {
     'video.quality_resolution_low': '720p 미만', 'video.quality_fps_low': '30fps 미만', 'video.quality_warning': '현재 영상: {resolution} · {fps}fps. {issues}으로 권장 조건에 미달하여 건반이 제대로 인식되지 않을 수 있습니다.',
     'tutorial.open': '튜토리얼', 'tutorial.title': '롤 스크립터 사용법', 'tutorial.close': '닫기', 'tutorial.progress': '{current} / {total}', 'tutorial.prev': '이전', 'tutorial.next': '다음', 'tutorial.finish': '완료', 'tutorial.jump': '{step}페이지로 이동', 'tutorial.pages': '튜토리얼 페이지',
     'tutorial.step1_part': '영상 선택', 'tutorial.step1_title': '영상 준비', 'tutorial.step1_body': '720p·30fps 이상이며 88건반이 모두 보이는 피아노 롤 영상을 선택합니다.', 'tutorial.step1_note': '건반을 가리는 이펙트·노이즈가 적을수록 인식이 안정적입니다.',
-    'tutorial.step2_part': '건반 설정', 'tutorial.step2_title': '인식선 맞추기', 'tutorial.step2_body': '건반 방향을 수평/수직으로 맞춘 뒤 흰 건반과 검은 건반 인식선을 각각 건반 몸통에 맞추고 변화량을 조절합니다.', 'tutorial.step2_note': '흰 건반 변화량은 기본 30%, 검 건반 변화량은 기본 50%입니다. 값이 클수록 더 큰 색 변화만 눌림으로 인식합니다.',
+    'tutorial.step2_part': '건반 설정', 'tutorial.step2_title': '인식선 맞추기', 'tutorial.step2_body': '2선 모드 또는 1선 모드를 선택하고 건반 방향을 수평/수직으로 맞춥니다. 2선은 흰/검 건반에 각각, 1선은 88건반 전체를 가로지르도록 인식선을 맞춘 뒤 변화량을 조절합니다.', 'tutorial.step2_note': '흰 건반 변화량은 기본 30%, 검 건반 변화량은 기본 50%입니다. 값이 클수록 더 큰 색 변화만 눌림으로 인식합니다.',
     'tutorial.step3_part': '건반 검출', 'tutorial.step3_title': '기준색 확정하기', 'tutorial.step3_body': '건반이 눌리지 않은 프레임에서 「건반 검출」을 누릅니다. 작은 박스와 기준색이 표시되고, 이후 현재 프레임에서 변화가 감지된 샘플 박스가 바로 밝게 표시됩니다.', 'tutorial.step3_note': '재생하거나 프레임을 이동하면서 현재 검출 코드를 확인할 수 있습니다. 인식선을 다시 움직이면 재검출이 필요합니다.',
     'tutorial.step4_part': '분석 · MIDI', 'tutorial.step4_title': '영상 분석과 MIDI 저장', 'tutorial.step4_body': '분석 시간, BPM, 벨로시티를 정하고 영상 분석을 실행합니다. 재생과 현재 검출 코드로 결과를 확인한 뒤 MIDI를 다운로드합니다.', 'tutorial.step4_note': '±1F는 한 프레임, ±1초 버튼은 한 번에 1초씩 이동합니다.',
     'video.title': '영상 선택', 'video.description': '분석할 피아노 롤 영상을 선택합니다.',
@@ -22,8 +22,8 @@ export default {
     'preview.aria': '동영상 프레임과 건반 검출선', 'preview.empty_title': '피아노 롤 영상을 넣어주세요.', 'preview.empty_body': '영상 위에서 건반 인식선의 방향과 위치를 조정할 수 있습니다.',
     'transport.play': '재생', 'transport.pause': '일시정지', 'transport.first': '처음으로', 'transport.last': '마지막으로', 'transport.prev_second': '−1초', 'transport.prev_frame': '−1F', 'transport.next_frame': '+1F', 'transport.next_second': '+1초', 'transport.timeline': '영상 위치',
     'transport.current_chord': '현재 검출 코드', 'transport.after_analysis': '분석 후 표시', 'transport.after_detection': '건반 검출 후 표시',
-    'guide.white_key': '흰 건반', 'guide.black_key': '검은 건반', 'guide.white_hint': '청록 선을 드래그', 'guide.black_hint': '분홍 선을 드래그', 'guide.box_hint': '건반 검출 후 작은 박스로 실제 인식 영역을 표시합니다.',
-    'keyboard.title': '건반 인식 설정', 'keyboard.description': '인식선을 맞추고 변화량을 조정한 뒤 현재 프레임에서 건반을 검출합니다.', 'keyboard.help_setup': '건반 방향과 변화량을 정하고, 두 인식선을 각 건반 몸통에 맞춥니다.', 'keyboard.help_detect': '건반이 눌리지 않은 프레임에서 건반 검출을 누릅니다. 이후 재생하거나 프레임을 이동하면 변화가 감지된 샘플 박스와 현재 검출 코드를 바로 확인할 수 있습니다.', 'keyboard.orientation': '건반 방향', 'keyboard.orientation_horizontal': '수평', 'keyboard.orientation_vertical': '수직', 'keyboard.setup_part': '설정', 'keyboard.setup_help': '건반 방향을 정하고 청록색 선은 흰 건반, 분홍색 선은 검은 건반 몸통에 맞춥니다. 변화량은 색 변화 민감도이며 값이 클수록 둔감합니다.', 'keyboard.detect_part': '검출', 'keyboard.detect_help': '건반이 눌리지 않은 프레임에서 검출합니다. 작은 박스와 기준색으로 인식 결과를 확인합니다.',
+    'guide.all_keys': '전체 건반', 'guide.white_key': '흰 건반', 'guide.black_key': '검은 건반', 'guide.white_hint': '청록 선을 드래그', 'guide.black_hint': '분홍 선을 드래그', 'guide.box_hint': '건반 검출 후 작은 박스로 실제 인식 영역을 표시합니다.',
+    'keyboard.title': '건반 인식 설정', 'keyboard.description': '인식선을 맞추고 변화량을 조정한 뒤 현재 프레임에서 건반을 검출합니다.', 'keyboard.help_setup': '건반 방향과 변화량을 정하고, 두 인식선을 각 건반 몸통에 맞춥니다.', 'keyboard.help_detect': '건반이 눌리지 않은 프레임에서 건반 검출을 누릅니다. 이후 재생하거나 프레임을 이동하면 변화가 감지된 샘플 박스와 현재 검출 코드를 바로 확인할 수 있습니다.', 'keyboard.mode_dual': '2선 모드', 'keyboard.mode_single': '1선 모드', 'keyboard.help_setup_single': '건반 방향과 변화량을 정하고, 하나의 인식선이 흰/검 모든 건반을 함께 가로지르도록 맞춥니다.', 'keyboard.orientation': '건반 방향', 'keyboard.orientation_horizontal': '수평', 'keyboard.orientation_vertical': '수직', 'keyboard.setup_part': '설정', 'keyboard.setup_help': '건반 방향을 정하고 청록색 선은 흰 건반, 분홍색 선은 검은 건반 몸통에 맞춥니다. 변화량은 색 변화 민감도이며 값이 클수록 둔감합니다.', 'keyboard.detect_part': '검출', 'keyboard.detect_help': '건반이 눌리지 않은 프레임에서 검출합니다. 작은 박스와 기준색으로 인식 결과를 확인합니다.',
     'keyboard.stage_video_required': '먼저 영상을 선택해 주세요.',
     'keyboard.stage_detect_required': '검출선을 건반에 맞춘 뒤 「건반 검출」을 눌러 주세요.',
     'keyboard.stage_detected': '건반 검출 완료 · 흰 {white} · 검 {black} · 기준 {time}',
@@ -36,7 +36,7 @@ export default {
     'keyboard.baseline_none': '기준 없음', 'keyboard.baseline_fixed': '기준 {time}',
     'keyboard.status_ok': '흰 {white} · 검 {black} · {baseline}',
     'keyboard.status_invalid': '흰 {white} · 검 {black} · 제외 {invalid} · {baseline}',
-    'keyboard.detect_failed_hint': '건반 경계를 찾지 못했습니다. 흰/검은 검출선을 각 건반 몸통 위로 옮겨보세요.',
+    'keyboard.detect_failed_hint_single': '건반 경계를 찾지 못했습니다. 한 인식선이 88건반을 모두 가로지르도록 맞춰보세요.', 'keyboard.detect_failed_hint': '건반 경계를 찾지 못했습니다. 흰/검은 검출선을 각 건반 몸통 위로 옮겨보세요.',
     'analysis.title': '영상 분석과 MIDI 출력', 'analysis.description': '분석 범위와 MIDI 설정을 지정한 뒤 영상을 분석하고 MIDI로 저장합니다.', 'analysis.range': '분석 시간',
     'analysis.start_seconds': '시작 (초)', 'analysis.end_seconds': '종료 (초)', 'analysis.current': '현재', 'analysis.invalid_range': '분석 종료 시간은 시작 시간보다 뒤여야 합니다.', 'analysis.check_range': '분석 시간을 확인하세요.',
     'settings.white_change': '흰 건반 변화량', 'settings.black_change': '검 건반 변화량', 'settings.tempo': '템포 (BPM)', 'settings.velocity': '벨로시티',
@@ -57,7 +57,7 @@ export default {
     'error.secure_context': 'WebCodecs를 사용하려면 HTTPS 또는 localhost에서 페이지를 열어야 합니다.', 'error.library_load': '영상 처리 라이브러리를 불러오지 못했습니다.',
     'error.feature_key_count': 'FeatureStore keyCount가 잘못되었습니다.', 'error.feature_size': '프레임 색상 데이터 크기가 {bytes}바이트여야 합니다.', 'error.key_count_mismatch': '키 개수와 분석 특징 개수가 다릅니다.', 'error.baseline_missing': '건반 조정 프레임에서 캡처한 기준색이 없습니다. 검출선을 다시 조정해 주세요.',
     'error.region_small': '선택 영역이 너무 작습니다.', 'error.white_boundaries': '흰 건반 경계를 충분히 찾지 못했습니다. 다른 기준 프레임이나 수동 영역을 사용하세요.',
-    'overlay.white': '흰 건반', 'overlay.black': '검은 건반',
+    'overlay.single': '전체 건반', 'overlay.white': '흰 건반', 'overlay.black': '검은 건반',
     'analysis.post_detail': '고정 기준색과 OKLab 변화량 비교 {processed} / {total} 프레임', 'analysis.post_done': '{count}개 노트를 생성했습니다.'
   }
 };

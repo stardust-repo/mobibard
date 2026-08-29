@@ -783,6 +783,90 @@ function nearestWhiteMidiWithPitchClass(pitchClass, around = 48) {
   return best?.midi ?? 60;
 }
 
+/**
+ * Detects a flat chromatic keyboard from one guide line. This mode is for
+ * piano-roll videos where all 88 keys are drawn as simple white/black strips
+ * instead of a traditional raised black-key silhouette. Boundaries are found
+ * from color/edge changes around the selected line, while the expected 88-key
+ * count keeps the result stable when adjacent white keys have weak borders.
+ */
+export function detectSingleLineKeyGeometry(imageData, options = {}) {
+  const { width, height, data } = imageData;
+  if (width < 88 || height < 8) throw new Error(t('error.region_small'));
+  const expectedKeyCount = clamp(Math.round(Number(options.expectedKeyCount) || 88), 12, 128);
+  const requestedLineY = Number(options.lineY);
+  const centerY = clamp(Number.isFinite(requestedLineY) ? requestedLineY : height / 2, 0, Math.max(0, height - 1));
+  const halfBand = Math.max(1, Math.round(height * 0.16));
+  const y0 = clamp(Math.floor(centerY - halfBand), 0, Math.max(0, height - 1));
+  const y1 = clamp(Math.ceil(centerY + halfBand), y0 + 1, height);
+  const edge = new Float32Array(width);
+
+  for (let x = 1; x < width; x += 1) {
+    let sum = 0;
+    let count = 0;
+    for (let y = y0; y < y1; y += 1) {
+      const a = (y * width + x - 1) * 4;
+      const b = (y * width + x) * 4;
+      const dr = data[b] - data[a];
+      const dg = data[b + 1] - data[a + 1];
+      const db = data[b + 2] - data[a + 2];
+      sum += Math.hypot(dr, dg, db);
+      count += 1;
+    }
+    edge[x] = count ? sum / count : 0;
+  }
+
+  const score = boxSmooth(edge, Math.max(1, Math.round(width / 2200)));
+  const nominalWidth = width / expectedKeyCount;
+  const detected = buildWhiteBoundaries(score, width, nominalWidth, expectedKeyCount);
+  if (detected.boundaries.length !== expectedKeyCount + 1) throw new Error(t('error.white_boundaries'));
+
+  return {
+    mode: 'single',
+    width,
+    height,
+    keyBoundaries: detected.boundaries,
+    keyCount: expectedKeyCount,
+    whiteCount: Array.from({ length: expectedKeyCount }, (_, index) => isWhiteMidi(21 + index)).filter(Boolean).length,
+    detectedBlackCount: Array.from({ length: expectedKeyCount }, (_, index) => !isWhiteMidi(21 + index)).filter(Boolean).length,
+    nominalKeyWidth: nominalWidth,
+    confidence: detected.confidence,
+    diagnostics: { boundaryConfidence: detected.confidence, candidateBoundaryCount: detected.peaks.length },
+  };
+}
+
+/** Creates the 88-key A0..C8 map used by one-line flat-keyboard detection. */
+export function createSingleLineKeyMap(geometry, startMidi = 21) {
+  const boundaries = geometry?.keyBoundaries;
+  const keyCount = Math.max(0, Math.min(boundaries?.length ? boundaries.length - 1 : 0, 128));
+  if (!boundaries || keyCount < 1) throw new Error(t('error.key_count_mismatch'));
+  const safeStart = clamp(Math.round(Number(startMidi) || 21), 0, Math.max(0, 127 - keyCount + 1));
+  const keys = [];
+  for (let index = 0; index < keyCount; index += 1) {
+    const midi = safeStart + index;
+    keys.push({
+      id: `s-${index}`,
+      type: isWhiteMidi(midi) ? 'white' : 'black',
+      visualIndex: index,
+      midi,
+      name: midiNoteName(midi),
+      x0: boundaries[index],
+      x1: boundaries[index + 1],
+      y0: 0,
+      y1: geometry.height,
+      detected: true,
+    });
+  }
+  return {
+    startMidi: safeStart,
+    whiteKeys: keys.filter(key => key.type === 'white'),
+    blackKeys: keys.filter(key => key.type === 'black'),
+    keys,
+    pitchMismatch: false,
+    inferredLeftmostName: midiNoteName(safeStart),
+  };
+}
+
 export function suggestLeftmostMidi(geometry) {
   if (geometry.whiteCount === 52) return 21; // Full 88-key piano: A0 to C8.
   const pitchClass = WHITE_PCS[geometry.inferredLeftmostWhiteIndex] ?? 0;
@@ -927,6 +1011,49 @@ export function createLineAnalysisProbes(
     const centerPatch = safeProbeRect(cut1, sampleTop, cut2, sampleBottom, targetWidth, targetHeight);
     const rightPatch = safeProbeRect(cut2, sampleTop, innerX1, sampleBottom, targetWidth, targetHeight);
     return { key, patches: [leftPatch, centerPatch, rightPatch], valid };
+  });
+}
+
+/**
+ * Builds the same three independent color samples for every key on one shared
+ * guide line. Unlike the two-line mode, black keys are not clipped to a raised
+ * black-key body because flat-keyboard videos deliberately draw every key on
+ * the same plane.
+ */
+export function createSingleLineAnalysisProbes(
+  keyMap,
+  sourceWidth,
+  sourceHeight,
+  targetWidth,
+  targetHeight,
+  lineY,
+) {
+  const scaleX = targetWidth / Math.max(1, sourceWidth);
+  const scaleY = targetHeight / Math.max(1, sourceHeight);
+  const centerY = clamp(lineY * scaleY, 0, Math.max(0, targetHeight - 1));
+  const halfHeight = Math.max(0.55, targetHeight * 0.0028);
+
+  return keyMap.keys.map(key => {
+    const x0 = key.x0 * scaleX;
+    const x1 = key.x1 * scaleX;
+    const keyWidth = Math.max(1, x1 - x0);
+    const innerMargin = 0.35;
+    const innerX0 = x0 + keyWidth * innerMargin;
+    const innerX1 = x1 - keyWidth * innerMargin;
+    const sampleTop = centerY - halfHeight;
+    const sampleBottom = centerY + halfHeight;
+    const span = Math.max(1, innerX1 - innerX0);
+    const cut1 = innerX0 + span / 3;
+    const cut2 = innerX0 + span * 2 / 3;
+    return {
+      key,
+      patches: [
+        safeProbeRect(innerX0, sampleTop, cut1, sampleBottom, targetWidth, targetHeight),
+        safeProbeRect(cut1, sampleTop, cut2, sampleBottom, targetWidth, targetHeight),
+        safeProbeRect(cut2, sampleTop, innerX1, sampleBottom, targetWidth, targetHeight),
+      ],
+      valid: true,
+    };
   });
 }
 

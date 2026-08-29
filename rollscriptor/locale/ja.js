@@ -13,7 +13,7 @@ export default {
     'video.quality_resolution_low': '720p未満', 'video.quality_fps_low': '30fps未満', 'video.quality_warning': '現在の動画: {resolution} · {fps}fps。{issues}のため推奨条件を満たしておらず、鍵盤を正しく認識できない場合があります。',
     'tutorial.open': 'チュートリアル', 'tutorial.title': 'ロールスクリプター 使い方', 'tutorial.close': '閉じる', 'tutorial.progress': '{current} / {total}', 'tutorial.prev': '前へ', 'tutorial.next': '次へ', 'tutorial.finish': '完了', 'tutorial.jump': '{step}ページへ移動', 'tutorial.pages': 'チュートリアルページ',
     'tutorial.step1_part': '動画選択', 'tutorial.step1_title': '動画を準備', 'tutorial.step1_body': '720p・30fps以上で、88鍵がすべて映るピアノロール動画を選択します。', 'tutorial.step1_note': '鍵盤を覆うエフェクトやノイズが少ないほど認識が安定します。',
-    'tutorial.step2_part': '鍵盤設定', 'tutorial.step2_title': '認識ラインを合わせる', 'tutorial.step2_body': '横/縦を選び、白鍵と黒鍵の認識ラインをそれぞれ鍵盤本体に合わせて変化量を調整します。', 'tutorial.step2_note': '白鍵変化量は30%、黒鍵変化量は50%が初期値です。値が大きいほど大きな色変化だけを押鍵として扱います。',
+    'tutorial.step2_part': '鍵盤設定', 'tutorial.step2_title': '認識ラインを合わせる', 'tutorial.step2_body': '2本モードまたは1本モードを選び、横/縦を設定します。2本モードは白鍵・黒鍵に別々のラインを、1本モードは88鍵すべてを横切る1本のラインを合わせてから変化量を調整します。', 'tutorial.step2_note': '白鍵変化量は30%、黒鍵変化量は50%が初期値です。値が大きいほど大きな色変化だけを押鍵として扱います。',
     'tutorial.step3_part': '鍵盤検出', 'tutorial.step3_title': '基準色を確定する', 'tutorial.step3_body': '鍵盤が押されていないフレームで「鍵盤検出」を押します。サンプル領域と基準色が表示され、現在フレームで変化を検出したサンプルはすぐに明るく表示されます。', 'tutorial.step3_note': '再生やフレーム移動で現在の検出コードを確認できます。ラインを動かした場合は再検出が必要です。',
     'tutorial.step4_part': '解析・MIDI', 'tutorial.step4_title': '動画を解析してMIDI保存', 'tutorial.step4_body': '解析時間、BPM、ベロシティを設定して動画解析を実行します。再生と検出コードを確認してMIDIをダウンロードします。', 'tutorial.step4_note': '±1Fは1フレーム、±1秒ボタンは1秒ずつ移動します。',
     'video.title': '動画選択', 'video.description': '解析するピアノロール動画を選択します。',
@@ -21,8 +21,8 @@ export default {
     'preview.aria': '動画フレームと鍵盤検出ライン', 'preview.empty_title': 'ピアノロール動画を追加してください。', 'preview.empty_body': '動画上で鍵盤認識ラインの方向と位置を調整できます。',
     'transport.play': '再生', 'transport.pause': '一時停止', 'transport.first': '先頭へ', 'transport.last': '最後へ', 'transport.prev_second': '−1秒', 'transport.prev_frame': '−1F', 'transport.next_frame': '+1F', 'transport.next_second': '+1秒', 'transport.timeline': '動画位置',
     'transport.current_chord': '現在の検出コード', 'transport.after_analysis': '解析後に表示', 'transport.after_detection': '鍵盤検出後に表示',
-    'guide.white_key': '白鍵', 'guide.black_key': '黒鍵', 'guide.white_hint': 'シアンのラインをドラッグ', 'guide.black_hint': 'ピンクのラインをドラッグ', 'guide.box_hint': 'ライン上の小さなボックスが実際の色検出領域です。',
-    'keyboard.title': '鍵盤認識設定', 'keyboard.description': '認識ラインと変化量を調整し、現在のフレームで鍵盤を検出します。', 'keyboard.help_setup': '鍵盤方向と変化量を決め、2本の認識ラインをそれぞれ鍵盤本体に合わせます。', 'keyboard.help_detect': '鍵盤が押されていないフレームで鍵盤検出を実行します。その後は再生やフレーム移動で、変化したサンプルと現在の検出コードをすぐ確認できます。', 'keyboard.orientation': '鍵盤方向', 'keyboard.orientation_horizontal': '横', 'keyboard.orientation_vertical': '縦', 'keyboard.setup_part': '設定', 'keyboard.setup_help': '鍵盤方向を選び、シアンを白鍵、ピンクを黒鍵本体に合わせます。変化量は色変化の感度で、値が大きいほど鈍感です。', 'keyboard.detect_part': '検出', 'keyboard.detect_help': '鍵盤が押されていないフレームで検出します。小さなボックスと基準色を確認します。',
+    'guide.all_keys': '全鍵盤', 'guide.white_key': '白鍵', 'guide.black_key': '黒鍵', 'guide.white_hint': 'シアンのラインをドラッグ', 'guide.black_hint': 'ピンクのラインをドラッグ', 'guide.box_hint': 'ライン上の小さなボックスが実際の色検出領域です。',
+    'keyboard.title': '鍵盤認識設定', 'keyboard.description': '認識ラインと変化量を調整し、現在のフレームで鍵盤を検出します。', 'keyboard.help_setup': '鍵盤方向と変化量を決め、2本の認識ラインをそれぞれ鍵盤本体に合わせます。', 'keyboard.help_detect': '鍵盤が押されていないフレームで鍵盤検出を実行します。その後は再生やフレーム移動で、変化したサンプルと現在の検出コードをすぐ確認できます。', 'keyboard.mode_dual': '2本モード', 'keyboard.mode_single': '1本モード', 'keyboard.help_setup_single': '鍵盤方向と変化量を設定し、1本の認識ラインが白鍵・黒鍵の両方を横切るように合わせます。', 'keyboard.orientation': '鍵盤方向', 'keyboard.orientation_horizontal': '横', 'keyboard.orientation_vertical': '縦', 'keyboard.setup_part': '設定', 'keyboard.setup_help': '鍵盤方向を選び、シアンを白鍵、ピンクを黒鍵本体に合わせます。変化量は色変化の感度で、値が大きいほど鈍感です。', 'keyboard.detect_part': '検出', 'keyboard.detect_help': '鍵盤が押されていないフレームで検出します。小さなボックスと基準色を確認します。',
     'keyboard.stage_video_required': 'まず動画を選択してください。',
     'keyboard.stage_detect_required': '検出ラインを鍵盤に合わせてから「鍵盤検出」を押してください。',
     'keyboard.stage_detected': '鍵盤検出完了 · 白 {white} · 黒 {black} · 基準 {time}',
@@ -35,7 +35,7 @@ export default {
     'keyboard.baseline_none': '基準なし', 'keyboard.baseline_fixed': '基準 {time}',
     'keyboard.status_ok': '白 {white} · 黒 {black} · {baseline}',
     'keyboard.status_invalid': '白 {white} · 黒 {black} · 除外 {invalid} · {baseline}',
-    'keyboard.detect_failed_hint': '鍵盤境界を検出できませんでした。白鍵/黒鍵のラインを鍵盤本体へ移動してください。',
+    'keyboard.detect_failed_hint_single': '鍵盤の境界を検出できませんでした。1本の認識ラインが88鍵すべてを横切るように調整してください。', 'keyboard.detect_failed_hint': '鍵盤境界を検出できませんでした。白鍵/黒鍵のラインを鍵盤本体へ移動してください。',
     'analysis.title': '動画解析とMIDI出力', 'analysis.description': '解析範囲とMIDI設定を指定し、動画を解析してMIDIとして保存します。', 'analysis.range': '解析時間',
     'analysis.start_seconds': '開始 (秒)', 'analysis.end_seconds': '終了 (秒)', 'analysis.current': '現在', 'analysis.invalid_range': '解析終了時間は開始時間より後にしてください。', 'analysis.check_range': '解析時間を確認してください。',
     'settings.white_change': '白鍵変化量', 'settings.black_change': '黒鍵変化量', 'settings.tempo': 'テンポ (BPM)', 'settings.velocity': 'ベロシティ',
@@ -50,6 +50,6 @@ export default {
     'error.media_library': '動画ライブラリを読み込めませんでした。', 'error.unsupported_video': '未対応または破損した動画です。', 'error.no_video_track': 'ビデオトラックが見つかりません。', 'error.codec': '現在のブラウザではこの動画コーデックをデコードできません。',
     'error.open_video': '動画を開けませんでした。', 'error.no_frames': '解析可能なフレームがありません。', 'error.webcodecs': 'このブラウザではWebCodecsを利用できません。最新のChromeまたはEdgeを使用してください。', 'error.secure_context': 'WebCodecsを使うにはHTTPSまたはlocalhostが必要です。', 'error.library_load': '動画処理ライブラリを読み込めませんでした。',
     'error.feature_key_count': 'FeatureStoreの鍵盤数が不正です。', 'error.feature_size': 'フレーム色データは {bytes} バイトである必要があります。', 'error.key_count_mismatch': '鍵盤数と解析特徴数が一致しません。', 'error.baseline_missing': '鍵盤設定フレームで取得した基準色がありません。検出ラインを再調整してください。', 'error.region_small': '選択領域が小さすぎます。', 'error.white_boundaries': '白鍵の境界を十分に検出できませんでした。別の基準フレームまたはライン位置を試してください。',
-    'overlay.white': '白鍵', 'overlay.black': '黒鍵', 'analysis.post_detail': '固定基準色とOKLab変化量を比較 {processed} / {total} フレーム', 'analysis.post_done': '{count} 個のノートを生成しました。'
+    'overlay.single': '全鍵盤', 'overlay.white': '白鍵', 'overlay.black': '黒鍵', 'analysis.post_detail': '固定基準色とOKLab変化量を比較 {processed} / {total} フレーム', 'analysis.post_done': '{count} 個のノートを生成しました。'
   }
 };

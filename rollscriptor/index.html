@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-ui17" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-0410" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -140,6 +140,11 @@
         <div class="keyboard-detection-toolbar">
           <div class="keyboard-detection-primary-actions">
             <button id="detectKeys" type="button" class="primary-button detect-keys-button" disabled data-i18n="actions.detect_keys">건반 검출</button>
+            <div class="detection-mode-field">
+              <button id="detectionModeToggle" class="soft-button detection-mode-toggle-button" type="button" disabled aria-pressed="false" aria-label="2선 모드">
+                <span id="detectionModeText">2선 모드</span>
+              </button>
+            </div>
             <div class="orientation-field">
               <span data-i18n="keyboard.orientation">건반 방향</span>
               <button id="keyboardOrientationToggle" class="soft-button orientation-toggle-button" type="button" disabled aria-pressed="false" aria-label="건반 방향: 수평">
@@ -158,10 +163,13 @@
         </div>
         <ul class="keyboard-help-list">
           <li>
-            <span class="keyboard-help-copy" data-i18n="keyboard.help_setup">건반 방향과 변화량을 정하고, 두 인식선을 각 건반 몸통에 맞춥니다.</span>
-            <span class="keyboard-guide-legend" aria-label="건반 인식선">
+            <span id="keyboardHelpSetup" class="keyboard-help-copy" data-i18n="keyboard.help_setup">건반 방향과 변화량을 정하고, 두 인식선을 각 건반 몸통에 맞춥니다.</span>
+            <span id="dualGuideLegend" class="keyboard-guide-legend" aria-label="건반 인식선">
               <span><i class="guide-swatch white-guide" aria-hidden="true"></i><b data-i18n="guide.white_key">흰 건반</b></span>
               <span><i class="guide-swatch black-guide" aria-hidden="true"></i><b data-i18n="guide.black_key">검은 건반</b></span>
+            </span>
+            <span id="singleGuideLegend" class="keyboard-guide-legend" aria-label="단일 건반 인식선" hidden>
+              <span><i class="guide-swatch single-guide" aria-hidden="true"></i><b data-i18n="guide.all_keys">전체 건반</b></span>
             </span>
           </li>
           <li data-i18n="keyboard.help_detect">건반이 눌리지 않은 프레임에서 건반 검출을 누릅니다. 이후 재생하거나 프레임을 이동하면 변화가 감지된 샘플 박스와 현재 검출 코드를 바로 확인할 수 있습니다.</li>
@@ -287,7 +295,7 @@
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script type="module" src="./js/settings-menu.js?v=20260829-ui7"></script>
-<script type="module" src="./js/app.js?v=20260830-session-restore-v1"></script>
+<script type="module" src="./js/settings-menu.js?v=20260830-0410"></script>
+<script type="module" src="./js/app.js?v=20260830-0410"></script>
 </body>
 </html>

@@ -4,14 +4,17 @@ import {
   cropImageData,
   createKeyMap,
   createLineAnalysisProbes,
+  createSingleLineAnalysisProbes,
+  createSingleLineKeyMap,
   detectKeyGeometry,
+  detectSingleLineKeyGeometry,
   formatTime,
   createLineProbeSampler,
   sampleKeyColors,
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
-} from './vision.js';
+} from './vision.js?v=20260830-single-line-v1';
 import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-detection-info-v4';
 import { createMidiFile } from './midi.js';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js';
@@ -27,7 +30,7 @@ const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
   'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent',
-  'tempo', 'velocity', 'velocityValue', 'detectKeys', 'keyboardOrientationToggle', 'keyboardOrientationText', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
+  'tempo', 'velocity', 'velocityValue', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose', 'tutorialProgress', 'tutorialVisual', 'tutorialVisualStep', 'tutorialVisualSymbol', 'tutorialVisualTitle', 'tutorialPart', 'tutorialStepTitle', 'tutorialStepBody', 'tutorialStepNote', 'tutorialPrev', 'tutorialNext',
 ].map(id => [id, document.getElementById(id)]));
@@ -60,7 +63,8 @@ const state = {
   playbackStartWall: 0,
   playbackStartTime: 0,
   keyboardSide: 'bottom', // inferred from guide orientation + guide position around the video center
-  guide: null, // { side, span0, span1, blackPos, whitePos }
+  detectionMode: 'dual', // dual = separate white/black guide lines, single = one shared line for flat keyboards
+  guide: null, // { side, span0, span1, blackPos, whitePos, singlePos, mode }
   geometry: null,
   keyMap: null,
   keyboardDetectionConfirmed: false,
@@ -228,6 +232,7 @@ function currentSessionSnapshot() {
     displayWidth: state.displayWidth,
     displayHeight: state.displayHeight,
     guide: cloneGuide(state.guide),
+    detectionMode: state.detectionMode,
     previewTime: state.previewTime,
     whiteChangePercent: currentChangeOptions().whiteChangePercent,
     blackChangePercent: currentChangeOptions().blackChangePercent,
@@ -292,20 +297,25 @@ function restoreGuideFromSnapshot(snapshot) {
   const scaleX = state.displayWidth / sourceWidth;
   const scaleY = state.displayHeight / sourceHeight;
   const horizontal = saved.side === 'bottom' || saved.side === 'top';
+  const mode = snapshot?.detectionMode === 'single' || saved.mode === 'single' ? 'single' : 'dual';
   const restored = horizontal
     ? {
       side: saved.side,
+      mode,
       span0: Number(saved.span0) * scaleX,
       span1: Number(saved.span1) * scaleX,
       blackPos: Number(saved.blackPos) * scaleY,
       whitePos: Number(saved.whitePos) * scaleY,
+      singlePos: Number(saved.singlePos) * scaleY,
     }
     : {
       side: saved.side,
+      mode,
       span0: Number(saved.span0) * scaleY,
       span1: Number(saved.span1) * scaleY,
       blackPos: Number(saved.blackPos) * scaleX,
       whitePos: Number(saved.whitePos) * scaleX,
+      singlePos: Number(saved.singlePos) * scaleX,
     };
   return normalizeGuide(restored);
 }
@@ -329,6 +339,8 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
   if (!snapshot || !state.track) return;
   state.restoringSession = true;
   try {
+    state.detectionMode = snapshot?.detectionMode === 'single' ? 'single' : 'dual';
+    updateDetectionModeButton();
     elements.whiteChangePercent.value = String(clamp(Math.round(Number(snapshot.whiteChangePercent) || 30), 1, 100));
     elements.blackChangePercent.value = String(clamp(Math.round(Number(snapshot.blackChangePercent) || 50), 1, 100));
     elements.tempo.value = String(clamp(Math.round(Number(snapshot.tempo) || 120), 20, 300));
@@ -645,6 +657,7 @@ function updateControlAvailability() {
   elements.blackChangePercent.disabled = locked;
   elements.detectKeys.disabled = !hasVideo || locked;
   elements.keyboardOrientationToggle.disabled = !hasVideo || locked;
+  if (elements.detectionModeToggle) elements.detectionModeToggle.disabled = !hasVideo || locked;
   // Keep Analyze clickable after a video is loaded so an omitted keyboard-detection
   // step can be explained with a toast instead of looking like a dead control.
   elements.analyzeVideo.disabled = !hasVideo || locked;
@@ -912,7 +925,10 @@ function inferKeyboardSideFromGuide(guide) {
   if (!guide) return state.keyboardSide || 'bottom';
   const horizontal = isHorizontalKeyboardSide(guide.side);
   const center = horizontal ? state.displayHeight / 2 : state.displayWidth / 2;
-  const depthCenter = (Number(guide.blackPos) + Number(guide.whitePos)) / 2;
+  const mode = guide.mode === 'single' ? 'single' : (guide.mode === 'dual' ? 'dual' : state.detectionMode);
+  const depthCenter = mode === 'single'
+    ? Number(guide.singlePos)
+    : (Number(guide.blackPos) + Number(guide.whitePos)) / 2;
   return horizontal
     ? (depthCenter < center ? 'top' : 'bottom')
     : (depthCenter < center ? 'left' : 'right');
@@ -926,8 +942,11 @@ function syncKeyboardSideFromGuide() {
 
 function keyboardDepthSign(guideOrSide = state.guide || state.keyboardSide) {
   if (guideOrSide && typeof guideOrSide === 'object') {
-    const difference = Number(guideOrSide.whitePos) - Number(guideOrSide.blackPos);
-    if (Math.abs(difference) > 0.001) return difference > 0 ? 1 : -1;
+    const mode = guideOrSide.mode === 'single' ? 'single' : (guideOrSide.mode === 'dual' ? 'dual' : state.detectionMode);
+    if (mode !== 'single') {
+      const difference = Number(guideOrSide.whitePos) - Number(guideOrSide.blackPos);
+      if (Math.abs(difference) > 0.001) return difference > 0 ? 1 : -1;
+    }
     guideOrSide = guideOrSide.side;
   }
   return guideOrSide === 'bottom' || guideOrSide === 'left' ? 1 : -1;
@@ -944,16 +963,19 @@ function guideDepthLimit(side = state.keyboardSide) {
 function cloneGuide(guide) {
   return guide ? {
     side: guide.side,
+    mode: guide.mode || state.detectionMode,
     span0: guide.span0,
     span1: guide.span1,
     blackPos: guide.blackPos,
     whitePos: guide.whitePos,
+    singlePos: guide.singlePos,
   } : null;
 }
 
 function normalizeGuide(guide) {
   if (!guide) return null;
   const side = ['bottom', 'top', 'left', 'right'].includes(guide.side) ? guide.side : 'bottom';
+  const mode = guide.mode === 'single' || state.detectionMode === 'single' ? 'single' : 'dual';
   const spanLimit = Math.max(1, guideSpanLimit(side));
   const depthLimit = Math.max(1, guideDepthLimit(side));
   const minSpan = Math.min(spanLimit, Math.max(60, spanLimit * 0.10));
@@ -966,19 +988,29 @@ function normalizeGuide(guide) {
     span1 = clamp(span0 + minSpan, minSpan, spanLimit);
   }
 
-  const sign = keyboardDepthSign({ side, blackPos: guide.blackPos, whitePos: guide.whitePos });
-  let blackPos = clamp(Number(guide.blackPos) || 0, 0, depthLimit);
-  let whitePos = clamp(Number(guide.whitePos) || 0, 0, depthLimit);
-  if ((whitePos - blackPos) * sign < minGap) {
-    if (sign > 0) {
-      blackPos = clamp(blackPos, 0, Math.max(0, depthLimit - minGap));
-      whitePos = clamp(Math.max(whitePos, blackPos + minGap), minGap, depthLimit);
-    } else {
-      blackPos = clamp(blackPos, minGap, depthLimit);
-      whitePos = clamp(Math.min(whitePos, blackPos - minGap), 0, Math.max(0, depthLimit - minGap));
+  let blackPos = clamp(Number(guide.blackPos) || depthLimit * 0.78, 0, depthLimit);
+  let whitePos = clamp(Number(guide.whitePos) || depthLimit * 0.94, 0, depthLimit);
+  let singlePos = clamp(
+    Number.isFinite(Number(guide.singlePos)) ? Number(guide.singlePos) : (blackPos + whitePos) / 2,
+    0,
+    depthLimit,
+  );
+
+  if (mode === 'dual') {
+    const sign = keyboardDepthSign({ ...guide, side, mode: 'dual', blackPos, whitePos });
+    if ((whitePos - blackPos) * sign < minGap) {
+      if (sign > 0) {
+        blackPos = clamp(blackPos, 0, Math.max(0, depthLimit - minGap));
+        whitePos = clamp(Math.max(whitePos, blackPos + minGap), minGap, depthLimit);
+      } else {
+        blackPos = clamp(blackPos, minGap, depthLimit);
+        whitePos = clamp(Math.min(whitePos, blackPos - minGap), 0, Math.max(0, depthLimit - minGap));
+      }
     }
+    singlePos = clamp((blackPos + whitePos) / 2, 0, depthLimit);
   }
-  const normalized = { side, span0, span1, blackPos, whitePos };
+
+  const normalized = { side, mode, span0, span1, blackPos, whitePos, singlePos };
   normalized.side = inferKeyboardSideFromGuide(normalized);
   return normalized;
 }
@@ -986,7 +1018,11 @@ function normalizeGuide(guide) {
 function guideLineEndpoints(kind) {
   const guide = state.guide;
   if (!guide) return null;
-  const pos = kind === 'black' ? guide.blackPos : guide.whitePos;
+  const mode = guide.mode === 'single' ? 'single' : state.detectionMode;
+  if (mode === 'single' && kind !== 'single') return null;
+  const pos = kind === 'single'
+    ? guide.singlePos
+    : (kind === 'black' ? guide.blackPos : guide.whitePos);
   return isHorizontalKeyboardSide(guide.side)
     ? [{ x: guide.span0, y: pos }, { x: guide.span1, y: pos }]
     : [{ x: pos, y: guide.span0 }, { x: pos, y: guide.span1 }];
@@ -1001,20 +1037,27 @@ function guideLineEndpoints(kind) {
 function getGuideCrop() {
   const guide = normalizeGuide(state.guide);
   if (!guide) return null;
-  const sign = keyboardDepthSign(guide);
-  const gap = Math.max(1, Math.abs(guide.whitePos - guide.blackPos));
+  const mode = guide.mode === 'single' ? 'single' : state.detectionMode;
   const depthLimit = guideDepthLimit(guide.side);
-  const backPadding = Math.max(gap * 0.75, depthLimit * 0.12);
-  const frontPadding = Math.max(gap * 0.45, depthLimit * 0.045);
+  const sign = keyboardDepthSign(guide);
 
   let depthMin;
   let depthMax;
-  if (sign > 0) {
-    depthMin = guide.blackPos - backPadding;
-    depthMax = guide.whitePos + frontPadding;
+  if (mode === 'single') {
+    const halfBand = Math.max(12, depthLimit * 0.04);
+    depthMin = guide.singlePos - halfBand;
+    depthMax = guide.singlePos + halfBand;
   } else {
-    depthMin = guide.whitePos - frontPadding;
-    depthMax = guide.blackPos + backPadding;
+    const gap = Math.max(1, Math.abs(guide.whitePos - guide.blackPos));
+    const backPadding = Math.max(gap * 0.75, depthLimit * 0.12);
+    const frontPadding = Math.max(gap * 0.45, depthLimit * 0.045);
+    if (sign > 0) {
+      depthMin = guide.blackPos - backPadding;
+      depthMax = guide.whitePos + frontPadding;
+    } else {
+      depthMin = guide.whitePos - frontPadding;
+      depthMax = guide.blackPos + backPadding;
+    }
   }
   depthMin = clamp(Math.floor(depthMin), 0, Math.max(0, depthLimit - 2));
   depthMax = clamp(Math.ceil(depthMax), depthMin + 2, depthLimit);
@@ -1029,8 +1072,10 @@ function getGuideCrop() {
   const canonicalWidth = horizontal ? width : height;
   const canonicalHeight = horizontal ? height : width;
   const toCanonicalDepth = sourcePos => sign > 0 ? sourcePos - depthMin : depthMax - sourcePos;
+  const singleLineY = clamp(toCanonicalDepth(guide.singlePos), 0, Math.max(1, canonicalHeight - 1));
 
   return {
+    mode,
     side: guide.side,
     depthSign: sign,
     left,
@@ -1039,8 +1084,13 @@ function getGuideCrop() {
     height: Math.max(2, height),
     canonicalWidth: Math.max(1, canonicalWidth),
     canonicalHeight: Math.max(2, canonicalHeight),
-    blackLineY: clamp(toCanonicalDepth(guide.blackPos), 0, Math.max(1, canonicalHeight - 1)),
-    whiteLineY: clamp(toCanonicalDepth(guide.whitePos), 0, Math.max(1, canonicalHeight - 1)),
+    singleLineY,
+    blackLineY: mode === 'single'
+      ? singleLineY
+      : clamp(toCanonicalDepth(guide.blackPos), 0, Math.max(1, canonicalHeight - 1)),
+    whiteLineY: mode === 'single'
+      ? singleLineY
+      : clamp(toCanonicalDepth(guide.whitePos), 0, Math.max(1, canonicalHeight - 1)),
   };
 }
 
@@ -1122,6 +1172,29 @@ function canonicalRectToDisplay(rect, crop) {
   return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
 }
 
+function createGuideAnalysisProbes(targetWidth, targetHeight, crop = getGuideCrop()) {
+  if (!crop || !state.keyMap || !state.geometry) return [];
+  if (state.detectionMode === 'single' || crop.mode === 'single') {
+    return createSingleLineAnalysisProbes(
+      state.keyMap,
+      state.geometry.width,
+      state.geometry.height,
+      targetWidth,
+      targetHeight,
+      crop.singleLineY,
+    );
+  }
+  return createLineAnalysisProbes(
+    state.keyMap,
+    state.geometry.width,
+    state.geometry.height,
+    targetWidth,
+    targetHeight,
+    crop.whiteLineY,
+    crop.blackLineY,
+  );
+}
+
 function drawGuideHandle(context, x, y, radius, color) {
   context.save();
   context.fillStyle = '#0b0e14';
@@ -1136,15 +1209,7 @@ function drawGuideHandle(context, x, y, radius, color) {
 
 function drawDetectionAreas(context, crop, scale) {
   if (state.dragMode || !state.keyboardDetectionConfirmed || !state.keyMap || !state.geometry || !crop) return;
-  const displayProbes = createLineAnalysisProbes(
-    state.keyMap,
-    state.geometry.width,
-    state.geometry.height,
-    state.geometry.width,
-    state.geometry.height,
-    crop.whiteLineY,
-    crop.blackLineY,
-  );
+  const displayProbes = createGuideAnalysisProbes(state.geometry.width, state.geometry.height, crop);
   const localPreviewTime = state.previewTime - state.noteTimeOrigin;
   const activeMidi = new Set(
     state.notes
@@ -1270,8 +1335,12 @@ function drawOverlay() {
 
   const scale = canvasUnitsPerCssPixel();
   const crop = getGuideCrop();
-  drawGuideLine(context, 'white', '#55d8ff', t('overlay.white'), scale);
-  drawGuideLine(context, 'black', '#ff70d2', t('overlay.black'), scale);
+  if (state.detectionMode === 'single') {
+    drawGuideLine(context, 'single', '#ffd166', t('overlay.single'), scale);
+  } else {
+    drawGuideLine(context, 'white', '#55d8ff', t('overlay.white'), scale);
+    drawGuideLine(context, 'black', '#ff70d2', t('overlay.black'), scale);
+  }
   drawDetectionAreas(context, crop, scale);
 }
 
@@ -1281,8 +1350,9 @@ function hitTest(point) {
   const scale = canvasUnitsPerCssPixel();
   const threshold = 13 * scale;
   const endpointRadius = 16 * scale;
+  const kinds = state.detectionMode === 'single' ? ['single'] : ['black', 'white'];
 
-  for (const kind of ['black', 'white']) {
+  for (const kind of kinds) {
     const endpoints = guideLineEndpoints(kind);
     if (!endpoints) continue;
     if (Math.hypot(point.x - endpoints[0].x, point.y - endpoints[0].y) <= endpointRadius) return 'spanStart';
@@ -1291,12 +1361,20 @@ function hitTest(point) {
 
   if (isHorizontalKeyboardSide(guide.side)) {
     if (point.x >= guide.span0 - threshold && point.x <= guide.span1 + threshold) {
-      if (Math.abs(point.y - guide.blackPos) <= threshold) return 'black';
-      if (Math.abs(point.y - guide.whitePos) <= threshold) return 'white';
+      if (state.detectionMode === 'single') {
+        if (Math.abs(point.y - guide.singlePos) <= threshold) return 'single';
+      } else {
+        if (Math.abs(point.y - guide.blackPos) <= threshold) return 'black';
+        if (Math.abs(point.y - guide.whitePos) <= threshold) return 'white';
+      }
     }
   } else if (point.y >= guide.span0 - threshold && point.y <= guide.span1 + threshold) {
-    if (Math.abs(point.x - guide.blackPos) <= threshold) return 'black';
-    if (Math.abs(point.x - guide.whitePos) <= threshold) return 'white';
+    if (state.detectionMode === 'single') {
+      if (Math.abs(point.x - guide.singlePos) <= threshold) return 'single';
+    } else {
+      if (Math.abs(point.x - guide.blackPos) <= threshold) return 'black';
+      if (Math.abs(point.x - guide.whitePos) <= threshold) return 'white';
+    }
   }
   return null;
 }
@@ -1304,7 +1382,7 @@ function hitTest(point) {
 function cursorForMode(mode) {
   const horizontal = isHorizontalKeyboardSide(state.guide?.side);
   if (mode === 'spanStart' || mode === 'spanEnd') return horizontal ? 'ew-resize' : 'ns-resize';
-  if (mode === 'black' || mode === 'white') return horizontal ? 'ns-resize' : 'ew-resize';
+  if (mode === 'black' || mode === 'white' || mode === 'single') return horizontal ? 'ns-resize' : 'ew-resize';
   return 'default';
 }
 
@@ -1320,6 +1398,26 @@ function updateKeyboardOrientationButtons() {
     elements.keyboardOrientationToggle.title = accessibleLabel;
   }
   if (elements.keyboardOrientationText) elements.keyboardOrientationText.textContent = orientationName;
+}
+
+function updateDetectionModeButton() {
+  const single = state.detectionMode === 'single';
+  if (elements.detectionModeToggle) {
+    elements.detectionModeToggle.dataset.detectionMode = state.detectionMode;
+    elements.detectionModeToggle.setAttribute('aria-pressed', String(single));
+    const modeName = t(single ? 'keyboard.mode_single' : 'keyboard.mode_dual');
+    const accessibleLabel = modeName;
+    elements.detectionModeToggle.setAttribute('aria-label', accessibleLabel);
+    elements.detectionModeToggle.title = accessibleLabel;
+  }
+  if (elements.detectionModeText) {
+    elements.detectionModeText.textContent = t(single ? 'keyboard.mode_single' : 'keyboard.mode_dual');
+  }
+  if (elements.keyboardHelpSetup) {
+    elements.keyboardHelpSetup.textContent = t(single ? 'keyboard.help_setup_single' : 'keyboard.help_setup');
+  }
+  if (elements.dualGuideLegend) elements.dualGuideLegend.hidden = single;
+  if (elements.singleGuideLegend) elements.singleGuideLegend.hidden = !single;
 }
 
 function invalidateKeyboardDetection(message = '') {
@@ -1431,15 +1529,7 @@ function prepareLiveDetection() {
     clearLiveDetection();
     return false;
   }
-  const probes = createLineAnalysisProbes(
-    state.keyMap,
-    state.geometry.width,
-    state.geometry.height,
-    crop.canonicalWidth,
-    crop.canonicalHeight,
-    crop.whiteLineY,
-    crop.blackLineY,
-  );
+  const probes = createGuideAnalysisProbes(crop.canonicalWidth, crop.canonicalHeight, crop);
   const validKeyMask = probes.map(probe => probe.valid !== false);
   state.liveProbeSampler = createLineProbeSampler(probes, crop.canonicalWidth, crop.canonicalHeight);
   state.liveChangeEvaluator = createKeyChangeEvaluator(
@@ -1495,15 +1585,7 @@ function captureReleaseBaseline({ quiet = false } = {}) {
   if (!crop) return false;
   try {
     const roi = canonicalImageDataFromPreview(crop);
-    const probes = createLineAnalysisProbes(
-      state.keyMap,
-      state.geometry.width,
-      state.geometry.height,
-      roi.width,
-      roi.height,
-      crop.whiteLineY,
-      crop.blackLineY,
-    );
+    const probes = createGuideAnalysisProbes(roi.width, roi.height, crop);
     state.releaseBaselineColors = new Uint8Array(sampleKeyColors(roi, probes));
     state.releaseBaselineTime = state.previewTime;
     state.detectedColorSummary = {
@@ -1546,15 +1628,7 @@ function updateKeyboardStatus(message = '') {
   const crop = getGuideCrop();
   let invalidBlack = 0;
   if (crop && state.geometry) {
-    const probes = createLineAnalysisProbes(
-      state.keyMap,
-      state.geometry.width,
-      state.geometry.height,
-      state.geometry.width,
-      state.geometry.height,
-      crop.whiteLineY,
-      crop.blackLineY,
-    );
+    const probes = createGuideAnalysisProbes(state.geometry.width, state.geometry.height, crop);
     invalidBlack = probes.filter(probe => probe.key.type === 'black' && probe.valid === false).length;
   }
 
@@ -1591,11 +1665,20 @@ function updateKeyboardStatus(message = '') {
 function detectKeysFromGuides({ quiet = false } = {}) {
   if (!state.guide || !state.track) return false;
   const crop = getGuideCrop();
-  if (!crop || crop.canonicalWidth < 40 || crop.canonicalHeight < 24) return false;
+  if (!crop || crop.canonicalWidth < 40 || crop.canonicalHeight < 8) return false;
   try {
     const roi = canonicalImageDataFromPreview(crop);
-    state.geometry = detectKeyGeometry(roi);
-    state.keyMap = createKeyMap(state.geometry, suggestLeftmostMidi(state.geometry));
+    if (state.detectionMode === 'single') {
+      state.geometry = detectSingleLineKeyGeometry(roi, {
+        expectedKeyCount: 88,
+        lineY: crop.singleLineY,
+      });
+      state.keyMap = createSingleLineKeyMap(state.geometry, 21);
+    } else {
+      if (crop.canonicalHeight < 24) throw new Error(t('error.region_small'));
+      state.geometry = detectKeyGeometry(roi);
+      state.keyMap = createKeyMap(state.geometry, suggestLeftmostMidi(state.geometry));
+    }
     if (!captureReleaseBaseline({ quiet: true })) throw new Error(t('error.baseline_missing'));
     state.keyboardDetectionConfirmed = true;
     prepareLiveDetection();
@@ -1604,6 +1687,7 @@ function detectKeysFromGuides({ quiet = false } = {}) {
     updateCurrentChord(state.previewFrameTime);
     updateKeyboardStatus();
     updateKeyboardOrientationButtons();
+    updateDetectionModeButton();
     updateVideoQualityWarning();
     drawOverlay();
     updateControlAvailability();
@@ -1619,7 +1703,7 @@ function detectKeysFromGuides({ quiet = false } = {}) {
     state.detectedColorSummary = null;
     clearLiveDetection();
     resetResults();
-    updateKeyboardStatus(t('keyboard.detect_failed_hint'));
+    updateKeyboardStatus(t(state.detectionMode === 'single' ? 'keyboard.detect_failed_hint_single' : 'keyboard.detect_failed_hint'));
     drawOverlay();
     updateControlAvailability();
     if (!quiet) showToast(t('toast.detect_failed'), 'error');
@@ -1628,13 +1712,23 @@ function detectKeysFromGuides({ quiet = false } = {}) {
 }
 
 function fallbackGuideForOrientation(orientation = keyboardOrientationForSide(state.keyboardSide)) {
+  const mode = state.detectionMode;
   if (orientation === 'vertical') {
-    // Vertical guides default to the right side. Their actual left/right side is
-    // inferred continuously from where the two lines sit around the video center.
-    return { side: 'right', span0: state.displayHeight * 0.04, span1: state.displayHeight * 0.96, blackPos: state.displayWidth * 0.92, whitePos: state.displayWidth * 0.72 };
+    const scan = state.displayWidth * 0.82;
+    return {
+      side: 'right', mode,
+      span0: state.displayHeight * 0.04, span1: state.displayHeight * 0.96,
+      blackPos: state.displayWidth * 0.92, whitePos: state.displayWidth * 0.72,
+      singlePos: scan,
+    };
   }
-  // Most piano-roll videos fall from top to bottom toward a keyboard at the bottom.
-  return { side: 'bottom', span0: state.displayWidth * 0.04, span1: state.displayWidth * 0.96, blackPos: state.displayHeight * 0.78, whitePos: state.displayHeight * 0.94 };
+  const scan = state.displayHeight * 0.86;
+  return {
+    side: 'bottom', mode,
+    span0: state.displayWidth * 0.04, span1: state.displayWidth * 0.96,
+    blackPos: state.displayHeight * 0.78, whitePos: state.displayHeight * 0.94,
+    singlePos: scan,
+  };
 }
 
 function initialGuideForOrientation(orientation = keyboardOrientationForSide(state.keyboardSide)) {
@@ -1648,9 +1742,11 @@ function initialGuideForOrientation(orientation = keyboardOrientationForSide(sta
     const y1 = clamp(rect.y + rect.height, y0 + 24, state.displayHeight);
     const height = y1 - y0;
     const regionAtTop = (y0 + y1) / 2 < state.displayHeight / 2;
-    return normalizeGuide(regionAtTop
-      ? { side: 'top', span0: x0, span1: x1, blackPos: y0 + height * 0.36, whitePos: y0 + height * 0.05 }
-      : { side: 'bottom', span0: x0, span1: x1, blackPos: y0 + height * 0.64, whitePos: y0 + height * 0.95 });
+    const dualGuide = regionAtTop
+      ? { side: 'top', mode: state.detectionMode, span0: x0, span1: x1, blackPos: y0 + height * 0.36, whitePos: y0 + height * 0.05 }
+      : { side: 'bottom', mode: state.detectionMode, span0: x0, span1: x1, blackPos: y0 + height * 0.64, whitePos: y0 + height * 0.95 };
+    dualGuide.singlePos = regionAtTop ? y0 + height * 0.22 : y0 + height * 0.80;
+    return normalizeGuide(dualGuide);
   } catch {
     return normalizeGuide(fallbackGuideForOrientation('horizontal'));
   }
@@ -1669,6 +1765,7 @@ function setupInitialGuides() {
   state.releaseBaselineTime = 0;
   state.detectedColorSummary = null;
   updateKeyboardOrientationButtons();
+  updateDetectionModeButton();
   resetResults();
   updateKeyboardStatus();
   drawOverlay();
@@ -1681,6 +1778,33 @@ function setKeyboardOrientation(orientation) {
   pausePlayback();
   state.guide = initialGuideForOrientation(orientation);
   syncKeyboardSideFromGuide();
+  updateKeyboardOrientationButtons();
+  invalidateKeyboardDetection(t('keyboard.stage_detect_required'));
+  scheduleRollscriptorSessionPersist();
+}
+
+function setDetectionMode(mode) {
+  if (!['dual', 'single'].includes(mode) || !state.track || state.analyzing || mode === state.detectionMode) return;
+  pausePlayback();
+  const guide = cloneGuide(state.guide) || fallbackGuideForOrientation(keyboardOrientationForSide(state.keyboardSide));
+  const depthLimit = guideDepthLimit(guide.side);
+  const scan = clamp(
+    Number.isFinite(Number(guide.singlePos)) ? Number(guide.singlePos) : (Number(guide.blackPos) + Number(guide.whitePos)) / 2,
+    0,
+    depthLimit,
+  );
+  state.detectionMode = mode;
+  guide.mode = mode;
+  guide.singlePos = scan;
+  if (mode === 'dual') {
+    const gap = Math.max(14, depthLimit * 0.08);
+    const sign = guide.side === 'bottom' || guide.side === 'left' ? 1 : -1;
+    guide.blackPos = clamp(scan - sign * gap / 2, 0, depthLimit);
+    guide.whitePos = clamp(scan + sign * gap / 2, 0, depthLimit);
+  }
+  state.guide = normalizeGuide(guide);
+  syncKeyboardSideFromGuide();
+  updateDetectionModeButton();
   updateKeyboardOrientationButtons();
   invalidateKeyboardDetection(t('keyboard.stage_detect_required'));
   scheduleRollscriptorSessionPersist();
@@ -1716,6 +1840,8 @@ function onOverlayPointerMove(event) {
     state.guide.span0 = clamp(spanPoint, 0, state.guide.span1 - minSpan);
   } else if (state.dragMode === 'spanEnd') {
     state.guide.span1 = clamp(spanPoint, state.guide.span0 + minSpan, spanLimit);
+  } else if (state.dragMode === 'single') {
+    state.guide.singlePos = clamp(depthPoint, 0, depthLimit);
   } else if (state.dragMode === 'black') {
     let next = clamp(depthPoint, 0, depthLimit);
     if (Math.abs(state.guide.whitePos - next) < minGap) {
@@ -1942,15 +2068,7 @@ async function analyzeAllFrames() {
   const targetHeight = Math.round(clamp(crop.canonicalHeight * targetWidth / crop.canonicalWidth, 64, 420));
   const sourceTargetWidth = isHorizontalKeyboardSide(crop.side) ? targetWidth : targetHeight;
   const sourceTargetHeight = isHorizontalKeyboardSide(crop.side) ? targetHeight : targetWidth;
-  const probes = createLineAnalysisProbes(
-    state.keyMap,
-    state.geometry.width,
-    state.geometry.height,
-    targetWidth,
-    targetHeight,
-    crop.whiteLineY,
-    crop.blackLineY,
-  );
+  const probes = createGuideAnalysisProbes(targetWidth, targetHeight, crop);
   const validKeyMask = probes.map(probe => probe.valid !== false);
   const probeSampler = createLineProbeSampler(probes, targetWidth, targetHeight);
   const detector = new StreamingNoteDetector(state.keyMap.keys, { ...analysisOptions(), validKeyMask });
@@ -2146,6 +2264,9 @@ function initializeEvents() {
     regenerateMidiFromCurrentNotes();
     scheduleRollscriptorSessionPersist();
   });
+  elements.detectionModeToggle?.addEventListener('click', () => {
+    setDetectionMode(state.detectionMode === 'dual' ? 'single' : 'dual');
+  });
   elements.keyboardOrientationToggle.addEventListener('click', () => {
     const current = keyboardOrientationForSide(state.keyboardSide);
     setKeyboardOrientation(current === 'horizontal' ? 'vertical' : 'horizontal');
@@ -2222,6 +2343,7 @@ async function initialize() {
     updateKeyboardStatus();
     renderDetectedKeyColors();
     updateKeyboardOrientationButtons();
+    updateDetectionModeButton();
     renderTutorialStep();
     updateVideoQualityWarning();
     drawOverlay();
@@ -2238,6 +2360,7 @@ async function initialize() {
   });
   setPlaybackUi();
   updateKeyboardOrientationButtons();
+  updateDetectionModeButton();
   initializeEvents();
   renderTutorialStep();
   updateControlAvailability();

@@ -595,7 +595,8 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
 }
 
 /* v5.2 RollScriptor compact keyboard help + paged tutorial */
-.orientation-field {
+.orientation-field,
+.detection-mode-field {
   min-height: 38px;
   display: inline-flex;
   align-items: center;
@@ -605,7 +606,8 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   font-weight: 750;
   white-space: nowrap;
 }
-.orientation-toggle-button {
+.orientation-toggle-button,
+.detection-mode-toggle-button {
   min-width: 68px;
   min-height: 38px;
   padding: 7px 12px;
@@ -803,8 +805,10 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
 
 @media (max-width: 620px) {
   .keyboard-help-grid { grid-template-columns: 1fr; }
-  .orientation-field { flex: 0 0 auto; }
-  .orientation-toggle-button { min-width: 64px; }
+  .orientation-field,
+  .detection-mode-field { flex: 0 0 auto; }
+  .orientation-toggle-button,
+  .detection-mode-toggle-button { min-width: 64px; }
   .roll-tutorial-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); border-radius: 16px; }
   .roll-tutorial-card { max-height: calc(100vh - 16px); }
   .roll-tutorial-head { padding: 14px; }
@@ -853,6 +857,8 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   width: 22px;
   border-top-width: 4px;
 }
+.keyboard-guide-legend[hidden] { display: none !important; }
+.single-guide { border-color: #ffd166; }
 .keyboard-guide-legend b {
   color: var(--text);
   font-size: 10px;
