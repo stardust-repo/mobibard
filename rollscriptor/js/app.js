@@ -12,7 +12,7 @@ import {
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
 } from './vision.js';
-import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-live-preview';
+import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-detection-info';
 import { createMidiFile } from './midi.js';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js';
@@ -1074,9 +1074,10 @@ function renderDetectedKeyColors() {
   const palette = elements.keyboardColorPalette;
   if (!palette || !elements.whiteKeyColors || !elements.blackKeyColors) return;
   const summary = state.detectedColorSummary;
-  const hasColors = Boolean(state.keyboardDetectionConfirmed && summary && (summary.white.length || summary.black.length));
-  palette.hidden = !hasColors;
-  if (!hasColors) {
+  const hasDetection = Boolean(state.keyboardDetectionConfirmed);
+  const hasColors = Boolean(summary && (summary.white.length || summary.black.length));
+  palette.hidden = !hasDetection;
+  if (!hasDetection || !hasColors) {
     elements.whiteKeyColors.replaceChildren();
     elements.blackKeyColors.replaceChildren();
     return;
@@ -1503,7 +1504,7 @@ function regenerateMidiFromCurrentNotes() {
   updateControlAvailability();
 }
 
-function normalizedChangePercent(element, fallback = 35) {
+function normalizedChangePercent(element, fallback = 30) {
   const numeric = Number(element?.value);
   const value = clamp(Math.round(Number.isFinite(numeric) ? numeric : fallback), 1, 100);
   if (element) element.value = String(value);
@@ -1517,11 +1518,11 @@ function currentChangeOptions({ normalize = false } = {}) {
   };
   return normalize
     ? {
-      whiteChangePercent: normalizedChangePercent(elements.whiteChangePercent, 35),
+      whiteChangePercent: normalizedChangePercent(elements.whiteChangePercent, 30),
       blackChangePercent: normalizedChangePercent(elements.blackChangePercent, 50),
     }
     : {
-      whiteChangePercent: read(elements.whiteChangePercent, 35),
+      whiteChangePercent: read(elements.whiteChangePercent, 30),
       blackChangePercent: read(elements.blackChangePercent, 50),
     };
 }
@@ -1750,7 +1751,7 @@ function initializeEvents() {
   });
 
   const onChangeThreshold = event => {
-    normalizedChangePercent(event.currentTarget, event.currentTarget === elements.blackChangePercent ? 50 : 35);
+    normalizedChangePercent(event.currentTarget, event.currentTarget === elements.blackChangePercent ? 50 : 30);
     if (state.notes.length || state.midiBlob) {
       resetResults();
       setProgress(0, t('progress.waiting'), state.keyboardDetectionConfirmed ? t('progress.detected_detail') : t('progress.idle_detail'));

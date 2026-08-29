@@ -29,7 +29,7 @@ Mediabunny 1.55.3은 현재 CDN에서 런타임 로드합니다. 영상 파일 �
 The RollScriptor settings panel is initialized independently from the video/WebCodecs application. Language and theme controls therefore remain available even if media initialization fails. Language changes are applied immediately through the locale modules and persisted with the shared Mobibard language key; theme changes use the shared Mobibard theme key.
 ## 분석 최적화
 
-분석 프레임 전체를 CPU로 읽지 않고 흰/검 건반 검출선 주변의 얇은 두 영역만 읽으며, 디코딩 즉시 Note On/Off를 생성합니다. 2026-08-30 조정에서는 건반 검출 시점의 각 건반 3개 샘플 색상을 고정 기준으로 저장하고, 이후 모든 프레임의 같은 샘플을 OKLab 색 벡터로 변환해 기준색과의 유클리드 거리를 비교합니다. Hue/무채색/밝기 규칙은 별도로 사용하지 않습니다. 검정↔흰색에 가까운 OKLab 전체 거리를 100%로 환산하고, 흰 건반과 검은 건반의 변화 임계값은 UI에서 각각 설정하며 기본값은 흰 건반 35%, 검은 건반 50%입니다. 3개 샘플 중 하나라도 해당 건반 타입의 임계값 이상 변하면 건반 상태가 바뀐 것으로 판정합니다. 프레임 건너뛰기나 시간축 보정은 사용하지 않습니다.
+분석 프레임 전체를 CPU로 읽지 않고 흰/검 건반 검출선 주변의 얇은 두 영역만 읽으며, 디코딩 즉시 Note On/Off를 생성합니다. 2026-08-30 조정에서는 건반 검출 시점의 각 건반 3개 샘플 색상을 고정 기준으로 저장하고, 이후 모든 프레임의 같은 샘플을 OKLab 색 벡터로 변환해 기준색과의 유클리드 거리를 비교합니다. Hue/무채색/밝기 규칙은 별도로 사용하지 않습니다. 검정↔흰색에 가까운 OKLab 전체 거리를 100%로 환산하고, 흰 건반과 검은 건반의 변화 임계값은 UI에서 각각 설정하며 기본값은 흰 건반 30%, 검은 건반 50%입니다. 3개 샘플 중 하나라도 해당 건반 타입의 임계값 이상 변하면 건반 상태가 바뀐 것으로 판정합니다. 프레임 건너뛰기나 시간축 보정은 사용하지 않습니다.
 
 
 

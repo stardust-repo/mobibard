@@ -175,7 +175,6 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   .playback-row { grid-template-columns: auto auto auto; }
   .playback-row input { grid-column: 1/-1; grid-row: 2; }
   .playback-row output { grid-row: 3; }
-  .current-chord { align-items: flex-start; flex-direction: column; gap: 4px; }
   .action-row { grid-template-columns: 1fr; }
   .progress-copy { align-items: flex-start; flex-direction: column; }
   .guide-summary { display: grid; }
@@ -470,6 +469,26 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   font-weight: 800;
   letter-spacing: .02em;
 }
+
+.keyboard-detection-code-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+.keyboard-detection-code-row strong {
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: .01em;
+  overflow-wrap: anywhere;
+}
+.keyboard-detection-code-row strong.has-notes { color: var(--cyan); }
+
 .keyboard-color-row {
   min-width: 0;
   display: grid;
