@@ -366,15 +366,13 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   background: var(--surface-2);
 }
 .keyboard-detection-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(190px, .42fr);
-  gap: 12px;
-  align-items: end;
+  display: block;
 }
 .keyboard-detection-primary-actions {
   min-width: 0;
   display: flex;
-  align-items: end;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 .orientation-toggle-button {
@@ -396,7 +394,49 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   line-height: 1;
 }
 .detect-keys-button { min-width: 126px; min-height: 38px; }
-.keyboard-note-field { min-width: 0; }
+
+.change-threshold-field {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.percent-input {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.percent-input input[type="number"] {
+  width: 54px;
+  min-height: 36px;
+  padding: 6px 5px 6px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.percent-input input[type="number"]:focus { outline: 0; }
+.percent-input:focus-within {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 10%, transparent);
+}
+.percent-input b {
+  padding-right: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
 .keyboard-detect-description {
   margin: 10px 0 0;
   color: var(--muted);
@@ -500,7 +540,6 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
     grid-template-columns: auto auto auto auto minmax(90px, 1fr) auto auto auto;
   }
   .playback-row output { grid-column: 1 / -1; min-width: 0; text-align: center; }
-  .keyboard-detection-toolbar { grid-template-columns: minmax(0, 1fr) minmax(170px, .55fr); }
 }
 @media (max-width: 620px) {
   .analysis-output-card {
@@ -512,9 +551,8 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   }
   .analysis-run-actions { grid-template-columns: 1fr; }
   .analysis-output-card .analysis-status { min-height: 0; }
-  .keyboard-detection-toolbar { grid-template-columns: 1fr; }
-  .keyboard-detection-primary-actions { align-items: stretch; }
-  .detect-keys-button { flex: 1 1 auto; }
+  .keyboard-detection-primary-actions { align-items: center; }
+  .detect-keys-button { flex: 1 1 126px; }
 }
 @media (max-width: 560px) {
   .playback-row {
@@ -525,6 +563,8 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   .playback-row .transport-icon-button { width: auto; min-width: 0; }
   .playback-row input[type="range"] { grid-column: 1 / -1; grid-row: 2; }
   .playback-row output { grid-column: 1 / -1; grid-row: 3; }
-  .keyboard-detection-primary-actions { display: grid; grid-template-columns: auto minmax(0, 1fr); }
-  .detect-keys-button { width: 100%; min-width: 0; }
+  .keyboard-detection-primary-actions { display: flex; }
+  .orientation-toggle-button { flex: 0 0 auto; }
+  .detect-keys-button { flex: 1 1 140px; min-width: 0; }
+  .change-threshold-field { flex: 1 1 calc(50% - 4px); justify-content: space-between; }
 }

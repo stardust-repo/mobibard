@@ -146,11 +146,15 @@
               <span data-i18n="keyboard.orientation">건반 방향</span>
             </button>
             <button id="detectKeys" type="button" class="primary-button detect-keys-button" disabled data-i18n="actions.detect_keys">건반 검출</button>
+            <label class="change-threshold-field">
+              <span data-i18n="settings.white_change">흰 변화량</span>
+              <span class="percent-input"><input id="whiteChangePercent" type="number" min="1" max="100" step="1" value="35" inputmode="numeric"/><b>%</b></span>
+            </label>
+            <label class="change-threshold-field">
+              <span data-i18n="settings.black_change">검 변화량</span>
+              <span class="percent-input"><input id="blackChangePercent" type="number" min="1" max="100" step="1" value="35" inputmode="numeric"/><b>%</b></span>
+            </label>
           </div>
-          <label class="field keyboard-note-field">
-            <span data-i18n="settings.leftmost_white">가장 낮은 흰 건반</span>
-            <select id="leftmostNote" disabled></select>
-          </label>
         </div>
         <p class="keyboard-detect-description" data-i18n="keyboard.description">건반 방향 버튼으로 인식선을 회전하고 흰·검 건반 인식선을 맞춘 뒤 건반을 검출합니다. 화면 중심을 기준으로 선의 위치에서 위·아래·좌·우를 자동 판별합니다.</p>
         <div class="guide-summary keyboard-guide-summary">
@@ -254,6 +258,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script type="module" src="./js/settings-menu.js?v=20260829-ui7"></script>
-<script type="module" src="./js/app.js?v=20260830-hue30-bright50"></script>
+<script type="module" src="./js/app.js?v=20260830-oklab35"></script>
 </body>
 </html>

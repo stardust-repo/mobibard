@@ -15,7 +15,7 @@ export default {
     'tutorial.open': 'Tutorial', 'tutorial.title': 'RollScriptor quick guide', 'tutorial.subtitle': 'Four quick steps from preparing the video to saving MIDI.', 'tutorial.close': 'Close',
     'tutorial.step1_title': 'Prepare the video', 'tutorial.step1_body': 'For best results, use 720p/30fps or higher video with all 88 keys visible and minimal effects covering the keyboard.',
     'tutorial.step2_title': 'Set the keyboard orientation and guides', 'tutorial.step2_body': 'Use the Keyboard orientation button to rotate the guides. On a released-key frame, align the cyan white-key line and pink black-key line with the key bodies. Top/bottom/left/right is inferred automatically from which side of the video center the guides occupy.',
-    'tutorial.step3_title': 'Verify detection and analysis settings', 'tutorial.step3_body': 'Check the small detection boxes, then set the start/end time, BPM, and velocity.',
+    'tutorial.step3_title': 'Verify detection and analysis settings', 'tutorial.step3_body': 'Check the small detection boxes, adjust the white/black key change thresholds, then set the start/end time, BPM, and velocity.',
     'tutorial.step4_title': 'Analyze and verify', 'tutorial.step4_body': 'Run video analysis, verify the result with playback and the detected-chord display, then download the MIDI.',
     'video.title': 'Choose video', 'video.description': 'Choose the piano-roll video to analyze.',
     'file.select': 'Choose video', 'file.prompt': 'Choose a video file or drop it here.',
@@ -23,7 +23,7 @@ export default {
     'transport.play': 'Play', 'transport.pause': 'Pause', 'transport.first': 'Jump to start', 'transport.last': 'Jump to end', 'transport.prev_5_frame': '−5F', 'transport.prev_frame': '−1F', 'transport.next_frame': '+1F', 'transport.next_5_frame': '+5F', 'transport.timeline': 'Video position',
     'transport.current_chord': 'Detected chord', 'transport.after_analysis': 'Shown after analysis',
     'guide.white_key': 'White keys', 'guide.black_key': 'Black keys', 'guide.white_hint': 'drag the cyan line', 'guide.black_hint': 'drag the pink line', 'guide.box_hint': 'After detection, small boxes show the actual recognition regions.',
-    'keyboard.title': 'Keyboard recognition settings', 'keyboard.description': 'Use the Keyboard orientation button to rotate the guides, align the white/black recognition lines, then detect the keys. Top/bottom/left/right is inferred from the guides’ position around the video center.', 'keyboard.orientation': 'Keyboard orientation', 'keyboard.orientation_horizontal': 'Horizontal', 'keyboard.orientation_vertical': 'Vertical',
+    'keyboard.title': 'Keyboard recognition settings', 'keyboard.description': 'Rotate and align the white/black guides, then detect the keys. White/Black change is the allowed OKLab vector distance from each fixed key color. Top/bottom/left/right is inferred automatically.', 'keyboard.orientation': 'Keyboard orientation', 'keyboard.orientation_horizontal': 'Horizontal', 'keyboard.orientation_vertical': 'Vertical',
     'keyboard.detected_colors': 'Detected key colors', 'keyboard.white_colors': 'White keys', 'keyboard.black_colors': 'Black keys',
     'keyboard.no_video': 'No video loaded.', 'keyboard.adjust_guides': 'Align the detection lines over the keys.', 'keyboard.detect_required': 'Align the guides, then click “Detect keys” to confirm keyboard recognition.',
     'keyboard.baseline_none': 'no release-color baseline', 'keyboard.baseline_fixed': 'release colors fixed at {time}',
@@ -32,7 +32,7 @@ export default {
     'keyboard.detect_failed_hint': 'Could not find the key boundaries. Move the white/black guide lines onto the bodies of the keys.',
     'analysis.title': 'Analyze video & export MIDI', 'analysis.description': 'Set the analysis range and MIDI options, analyze the video, then save the MIDI.', 'analysis.range': 'Analysis range',
     'analysis.start_seconds': 'Start (sec)', 'analysis.end_seconds': 'End (sec)', 'analysis.current': 'Current', 'analysis.invalid_range': 'The analysis end time must be later than the start time.', 'analysis.check_range': 'Check the analysis range.',
-    'settings.leftmost_white': 'Lowest white key', 'settings.tempo': 'Tempo (BPM)', 'settings.velocity': 'Velocity',
+    'settings.white_change': 'White change', 'settings.black_change': 'Black change', 'settings.tempo': 'Tempo (BPM)', 'settings.velocity': 'Velocity',
     'actions.detect_keys': 'Detect keys', 'actions.analyze': 'Analyze video', 'actions.cancel': 'Stop analysis', 'actions.cancel_requested': 'Stopping…', 'actions.download': 'Download MIDI',
     'progress.waiting': 'Waiting', 'progress.select_video': 'Choose a video.', 'progress.generated_notes': 'Notes',
     'progress.ready': 'Ready', 'progress.ready_detail': 'Choose Horizontal or Vertical, align the guides, then click “Detect keys”.',
@@ -40,7 +40,7 @@ export default {
     'progress.opening': 'Opening video', 'progress.opening_detail': 'Checking the video track.',
     'progress.frame_analysis': 'Frame analysis', 'progress.frame_range': 'Reading {start} ~ {end}.', 'progress.frame_count': '{count} frames · {current} / {duration}',
     'progress.cancelled': 'Analysis stopped', 'progress.cancelled_detail': 'Processed {count} frames.',
-    'progress.color_compare': 'Comparing key colors · removing shared effects', 'progress.done': 'Done', 'progress.notes_made': 'Created {count} MIDI notes.',
+    'progress.color_compare': 'Comparing OKLab key-color vectors', 'progress.done': 'Done', 'progress.notes_made': 'Created {count} MIDI notes.',
     'progress.analysis_error': 'Analysis error', 'progress.runtime_check': 'Runtime check required', 'progress.library_error': 'Library error', 'progress.error': 'Error',
     'toast.baseline_fixed': 'Release-key colors fixed from the current frame ({time}).', 'toast.detect_updated': 'Updated keyboard sampling regions.', 'toast.detect_failed': 'Could not find the key boundaries.',
     'toast.detect_required': 'Align the keyboard guides and run “Detect keys” first.', 'toast.baseline_missing': 'No release-key baseline is available. Adjust the guides again to capture it.',
@@ -51,6 +51,6 @@ export default {
     'error.feature_key_count': 'Invalid FeatureStore key count.', 'error.feature_size': 'Frame color data must be {bytes} bytes.', 'error.key_count_mismatch': 'The key count does not match the analyzed feature count.', 'error.baseline_missing': 'No release colors captured from the keyboard setup frame. Adjust the guides again.',
     'error.region_small': 'The selected region is too small.', 'error.white_boundaries': 'Not enough white-key boundaries were found. Try another reference frame or adjust the guides.',
     'overlay.white': 'White keys', 'overlay.black': 'Black keys',
-    'analysis.post_detail': 'Fixed release colors + shared-effect removal {processed} / {total} frames', 'analysis.post_done': 'Created {count} notes.'
+    'analysis.post_detail': 'Fixed release colors + OKLab vector distance {processed} / {total} frames', 'analysis.post_done': 'Created {count} notes.'
   }
 };

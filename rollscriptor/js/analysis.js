@@ -5,9 +5,8 @@ const PATCH_COUNT = PROBE_PATCH_COUNT;
 const PATCH_STRIDE = 3; // R, G, B
 const CHANNELS_PER_KEY = PATCH_COUNT * PATCH_STRIDE;
 
-export const HUE_SECTOR_DEGREES = 30;
-export const BRIGHTNESS_CHANGE_POINTS = 50;
-const DEFAULT_NEUTRAL_CHROMA_PERCENT = 6;
+export const DEFAULT_WHITE_CHANGE_PERCENT = 35;
+export const DEFAULT_BLACK_CHANGE_PERCENT = 35;
 
 /**
  * Compact per-frame storage. Each key keeps the averaged RGB of three small,
@@ -85,108 +84,77 @@ function srgbToLinear(value) {
   return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
+/** Converts an sRGB sample into the perceptually uniform OKLab color vector. */
+export function rgbToOklab(r, g, b) {
+  const rn = srgbToLinear(r);
+  const gn = srgbToLinear(g);
+  const bn = srgbToLinear(b);
+
+  const l = 0.4122214708 * rn + 0.5363325363 * gn + 0.0514459929 * bn;
+  const m = 0.2119034982 * rn + 0.6806995451 * gn + 0.1073969566 * bn;
+  const s = 0.0883024619 * rn + 0.2817188376 * gn + 0.6299787005 * bn;
+
+  const lRoot = Math.cbrt(l);
+  const mRoot = Math.cbrt(m);
+  const sRoot = Math.cbrt(s);
+
+  return [
+    0.2104542553 * lRoot + 0.7936177850 * mRoot - 0.0040720468 * sRoot,
+    1.9779984951 * lRoot - 2.4285922050 * mRoot + 0.4505937099 * sRoot,
+    0.0259040371 * lRoot + 0.7827717662 * mRoot - 0.8086757660 * sRoot,
+  ];
+}
+
 /**
- * Perceptual lightness on a 0..100 scale (CIE L* from sRGB/D65).
- * This matches the UI notion used by the detector: a baseline of 20 changes
- * state at >= 70 for a baseline of 20, and at <= 40 for a baseline of 90.
+ * OKLab vector distance expressed as 0..100 percent of the practical sRGB
+ * full-scale distance. In OKLab, black -> white is essentially distance 1.0,
+ * so multiplying DeltaE by 100 gives an intuitive percentage scale.
  */
-function rgbBrightness100(r, g, b) {
-  const y = 0.2126729 * srgbToLinear(r)
-    + 0.7151522 * srgbToLinear(g)
-    + 0.0721750 * srgbToLinear(b);
-  const delta = 6 / 29;
-  const fy = y > delta ** 3
-    ? Math.cbrt(y)
-    : y / (3 * delta * delta) + 4 / 29;
-  return clamp(116 * fy - 16, 0, 100);
+export function oklabDistancePercent(reference, current) {
+  const dL = current[0] - reference[0];
+  const da = current[1] - reference[1];
+  const db = current[2] - reference[2];
+  return clamp(Math.hypot(dL, da, db) * 100, 0, 100);
 }
 
-/** RGB 0..255 -> HSV hue plus RGB chroma percentage. */
-function rgbHueAndChroma(r, g, b) {
-  const rn = clamp(Number(r) || 0, 0, 255) / 255;
-  const gn = clamp(Number(g) || 0, 0, 255) / 255;
-  const bn = clamp(Number(b) || 0, 0, 255) / 255;
-  const max = Math.max(rn, gn, bn);
-  const min = Math.min(rn, gn, bn);
-  const delta = max - min;
-
-  let hue = 0;
-  if (delta > 1e-9) {
-    if (max === rn) hue = 60 * (((gn - bn) / delta) % 6);
-    else if (max === gn) hue = 60 * (((bn - rn) / delta) + 2);
-    else hue = 60 * (((rn - gn) / delta) + 4);
-    if (hue < 0) hue += 360;
-  }
-
-  return { hue, chromaPercent: delta * 100 };
-}
-
-function hueSector(hue, sectorDegrees) {
-  const sectorCount = Math.max(1, Math.round(360 / sectorDegrees));
-  // Center the 30-degree regions on 0°, 30°, 60°... rather than placing a
-  // hard boundary on those familiar hue angles. The red region therefore
-  // wraps cleanly around 345°..15°.
-  const normalized = ((hue % 360) + 360) % 360;
-  return Math.floor(((normalized + sectorDegrees / 2) % 360) / sectorDegrees) % sectorCount;
-}
-
-function patchColorSignature(colors, keyIndex, patchIndex, options) {
+function patchColorSignature(colors, keyIndex, patchIndex) {
   const offset = keyIndex * CHANNELS_PER_KEY + patchIndex * PATCH_STRIDE;
   const r = colors[offset];
   const g = colors[offset + 1];
   const b = colors[offset + 2];
-  const { hue, chromaPercent } = rgbHueAndChroma(r, g, b);
-  const neutral = chromaPercent < options.neutralChromaPercent;
   return {
     rgb: [r, g, b],
-    brightness: rgbBrightness100(r, g, b),
-    hue,
-    hueSector: neutral ? -1 : hueSector(hue, options.hueSectorDegrees),
-    neutral,
+    oklab: rgbToOklab(r, g, b),
   };
 }
 
-function keyPatchSignatures(colors, keyIndex, options) {
+function keyPatchSignatures(colors, keyIndex) {
   return Array.from(
     { length: PATCH_COUNT },
-    (_, patchIndex) => patchColorSignature(colors, keyIndex, patchIndex, options),
+    (_, patchIndex) => patchColorSignature(colors, keyIndex, patchIndex),
   );
 }
 
 function normalizeDetectionOptions(options = {}) {
-  const requestedSector = Number(options.hueSectorDegrees);
-  const hueSectorDegrees = Number.isFinite(requestedSector) && requestedSector > 0
-    ? clamp(requestedSector, 5, 180)
-    : HUE_SECTOR_DEGREES;
-  const requestedBrightness = Number(options.brightnessChangePoints);
-  const brightnessChangePoints = Number.isFinite(requestedBrightness)
-    ? clamp(requestedBrightness, 1, 100)
-    : BRIGHTNESS_CHANGE_POINTS;
-  const requestedNeutral = Number(options.neutralChromaPercent);
-  const neutralChromaPercent = Number.isFinite(requestedNeutral)
-    ? clamp(requestedNeutral, 0, 30)
-    : DEFAULT_NEUTRAL_CHROMA_PERCENT;
-  return { hueSectorDegrees, brightnessChangePoints, neutralChromaPercent };
+  const requestedWhite = Number(options.whiteChangePercent);
+  const requestedBlack = Number(options.blackChangePercent);
+  return {
+    whiteChangePercent: Number.isFinite(requestedWhite)
+      ? clamp(requestedWhite, 1, 100)
+      : DEFAULT_WHITE_CHANGE_PERCENT,
+    blackChangePercent: Number.isFinite(requestedBlack)
+      ? clamp(requestedBlack, 1, 100)
+      : DEFAULT_BLACK_CHANGE_PERCENT,
+  };
 }
 
 /**
- * A key sample is considered changed from its confirmed release state when either:
- *  1) that sample moves to a different 30° hue region, or
- *  2) its perceptual brightness moves by at least 50 points on a 0..100 scale.
- *
- * Every key has three independently evaluated samples. The key is active when
- * any one of those samples changes, so localized highlights on narrow black
- * keys are not diluted by averaging unchanged parts of the same key.
- *
- * Nearly achromatic colors are kept in one neutral region so tiny RGB noise on
- * white/black keys does not create a meaningless hue flip. Moving between the
- * neutral region and any chromatic hue region still counts as a color change.
+ * Each of the three samples on a key is compared with its own fixed release
+ * color as one OKLab vector. Hue, saturation, grayscale and brightness are no
+ * longer separate rules: every visual change contributes to one vector length.
  */
-function keyStateChanged(baselineSignature, currentSignature, options) {
-  const colorRegionChanged = baselineSignature.hueSector !== currentSignature.hueSector;
-  const brightnessChanged = Math.abs(currentSignature.brightness - baselineSignature.brightness)
-    >= options.brightnessChangePoints;
-  return colorRegionChanged || brightnessChanged;
+function keyStateChanged(baselineSignature, currentSignature, changePercent) {
+  return oklabDistancePercent(baselineSignature.oklab, currentSignature.oklab) >= changePercent;
 }
 
 /**
@@ -216,10 +184,10 @@ export class StreamingNoteDetector {
     };
     // Keep the three visible samples of every key independent. A piano-roll
     // note often covers only part of a black key; averaging the three samples
-    // together can dilute an otherwise obvious color/brightness change.
+    // together can dilute an otherwise obvious color-vector change.
     this.baselineSignatures = Array.from(
       { length: this.keyCount },
-      (_, keyIndex) => keyPatchSignatures(fixedBaselineColors, keyIndex, this.detectionOptions),
+      (_, keyIndex) => keyPatchSignatures(fixedBaselineColors, keyIndex),
     );
     this.validKeyMask = Array.isArray(options.validKeyMask) || ArrayBuffer.isView(options.validKeyMask)
       ? options.validKeyMask
@@ -245,15 +213,18 @@ export class StreamingNoteDetector {
       const state = this.states[keyIndex];
       const valid = !this.validKeyMask || this.validKeyMask[keyIndex] !== false;
       const currentSignatures = valid
-        ? keyPatchSignatures(colors, keyIndex, this.detectionOptions)
+        ? keyPatchSignatures(colors, keyIndex)
         : null;
       // White and black keys are both evaluated key-by-key and patch-by-patch.
       // One changed sample is sufficient because a falling note/highlight may
       // occupy only a narrow strip of the physical key in the source video.
+      const changePercent = this.keys[keyIndex].type === 'black'
+        ? this.detectionOptions.blackChangePercent
+        : this.detectionOptions.whiteChangePercent;
       const pressed = valid && currentSignatures.some((currentSignature, patchIndex) => keyStateChanged(
         this.baselineSignatures[keyIndex][patchIndex],
         currentSignature,
-        this.detectionOptions,
+        changePercent,
       ));
 
       if (!state.active && pressed) {

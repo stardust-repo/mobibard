@@ -6,15 +6,13 @@ import {
   createLineAnalysisProbes,
   detectKeyGeometry,
   formatTime,
-  isWhiteMidi,
-  midiNoteName,
   createLineProbeSampler,
   sampleKeyColors,
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
 } from './vision.js';
-import { StreamingNoteDetector } from './analysis.js?v=20260830-hue30-bright50';
+import { StreamingNoteDetector } from './analysis.js?v=20260830-oklab35';
 import { createMidiFile } from './midi.js';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js';
@@ -29,7 +27,7 @@ const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
   'playPause', 'jumpStart', 'prev5Frame', 'prevFrame', 'nextFrame', 'next5Frame', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent',
-  'leftmostNote', 'tempo', 'velocity', 'velocityValue', 'detectKeys', 'keyboardOrientationToggle', 'keyboardOrientationIcon', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
+  'tempo', 'velocity', 'velocityValue', 'detectKeys', 'keyboardOrientationToggle', 'keyboardOrientationIcon', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose',
 ].map(id => [id, document.getElementById(id)]));
@@ -66,7 +64,6 @@ const state = {
   geometry: null,
   keyMap: null,
   keyboardDetectionConfirmed: false,
-  noteManuallyChanged: false,
   dragMode: null,
   dragOriginalGuide: null,
   analyzing: false,
@@ -114,18 +111,6 @@ function downloadBlob(blob, fileName) {
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-function populateNoteOptions() {
-  elements.leftmostNote.innerHTML = '';
-  for (let midi = 0; midi <= 127; midi += 1) {
-    if (!isWhiteMidi(midi)) continue;
-    const option = document.createElement('option');
-    option.value = String(midi);
-    option.textContent = `${midiNoteName(midi)} · MIDI ${midi}`;
-    if (midi === 48) option.selected = true;
-    elements.leftmostNote.append(option);
-  }
 }
 
 function updateTimeLabel() {
@@ -308,7 +293,6 @@ function resetResults() {
 
 function updateControlAvailability() {
   const hasVideo = Boolean(state.track);
-  const hasKeys = Boolean(state.keyboardDetectionConfirmed && state.keyMap?.keys?.length);
   const locked = state.analyzing;
   elements.videoFile.disabled = locked || !state.mediabunny;
   elements.timeline.disabled = !hasVideo || locked;
@@ -323,7 +307,8 @@ function updateControlAvailability() {
   elements.analysisEnd.disabled = !hasVideo || locked;
   elements.setStartCurrent.disabled = !hasVideo || locked;
   elements.setEndCurrent.disabled = !hasVideo || locked;
-  elements.leftmostNote.disabled = !hasKeys || locked;
+  elements.whiteChangePercent.disabled = locked;
+  elements.blackChangePercent.disabled = locked;
   elements.detectKeys.disabled = !hasVideo || locked;
   elements.keyboardOrientationToggle.disabled = !hasVideo || locked;
   // Keep Analyze clickable after a video is loaded so an omitted keyboard-detection
@@ -1123,15 +1108,6 @@ function updateKeyboardStatus(message = '') {
     : t('keyboard.status_ok', { white: state.keyMap.whiteKeys.length, black: state.keyMap.blackKeys.length, baseline: baselineText });
 }
 
-function rebuildKeyMap() {
-  if (!state.keyboardDetectionConfirmed || !state.geometry) return;
-  state.keyMap = createKeyMap(state.geometry, Number(elements.leftmostNote.value));
-  resetResults();
-  updateKeyboardStatus();
-  drawOverlay();
-  updateControlAvailability();
-}
-
 function detectKeysFromGuides({ quiet = false } = {}) {
   if (!state.guide || !state.track) return false;
   const crop = getGuideCrop();
@@ -1139,8 +1115,7 @@ function detectKeysFromGuides({ quiet = false } = {}) {
   try {
     const roi = canonicalImageDataFromPreview(crop);
     state.geometry = detectKeyGeometry(roi);
-    if (!state.noteManuallyChanged) elements.leftmostNote.value = String(suggestLeftmostMidi(state.geometry));
-    state.keyMap = createKeyMap(state.geometry, Number(elements.leftmostNote.value));
+    state.keyMap = createKeyMap(state.geometry, suggestLeftmostMidi(state.geometry));
     if (!captureReleaseBaseline({ quiet: true })) throw new Error(t('error.baseline_missing'));
     state.keyboardDetectionConfirmed = true;
     resetResults();
@@ -1203,7 +1178,6 @@ function setupInitialGuides() {
   state.keyboardSide = 'bottom';
   state.guide = initialGuideForOrientation('horizontal');
   syncKeyboardSideFromGuide();
-  state.noteManuallyChanged = false;
   state.keyboardDetectionConfirmed = false;
   state.geometry = null;
   state.keyMap = null;
@@ -1223,7 +1197,6 @@ function setKeyboardOrientation(orientation) {
   pausePlayback();
   state.guide = initialGuideForOrientation(orientation);
   syncKeyboardSideFromGuide();
-  state.noteManuallyChanged = false;
   updateKeyboardOrientationButtons();
   invalidateKeyboardDetection(t('keyboard.detect_required'));
 }
@@ -1397,17 +1370,21 @@ function regenerateMidiFromCurrentNotes() {
   updateControlAvailability();
 }
 
+function normalizedChangePercent(element) {
+  const numeric = Number(element?.value);
+  const value = clamp(Math.round(Number.isFinite(numeric) ? numeric : 35), 1, 100);
+  if (element) element.value = String(value);
+  return value;
+}
+
 function analysisOptions() {
   return {
     velocity: currentVelocityMidi(),
     baselineColors: state.releaseBaselineColors,
-    // Fixed release-state comparison: 12 hue regions (30° each) plus an
-    // absolute 50-point brightness change on a perceptual 0..100 scale.
-    hueSectorDegrees: 30,
-    brightnessChangePoints: 50,
-    // White/black keys have no stable hue. Treat very low RGB chroma as one
-    // neutral region so tiny codec/noise tint does not flip hue sectors.
-    neutralChromaPercent: 6,
+    // Every sample is converted to OKLab and compared with its own fixed
+    // release color. White and black keys can use independent distance limits.
+    whiteChangePercent: normalizedChangePercent(elements.whiteChangePercent),
+    blackChangePercent: normalizedChangePercent(elements.blackChangePercent),
   };
 }
 
@@ -1590,10 +1567,15 @@ function initializeEvents() {
     if (!state.dragMode) elements.overlayCanvas.style.cursor = 'default';
   });
 
-  elements.leftmostNote.addEventListener('change', () => {
-    state.noteManuallyChanged = true;
-    invalidateKeyboardDetection(t('keyboard.detect_required'));
-  });
+  const onChangeThreshold = event => {
+    normalizedChangePercent(event.currentTarget);
+    if (state.notes.length || state.midiBlob) {
+      resetResults();
+      setProgress(0, t('progress.waiting'), state.keyboardDetectionConfirmed ? t('progress.detected_detail') : t('progress.idle_detail'));
+    }
+  };
+  elements.whiteChangePercent.addEventListener('change', onChangeThreshold);
+  elements.blackChangePercent.addEventListener('change', onChangeThreshold);
   elements.velocity.addEventListener('input', () => {
     elements.velocityValue.textContent = `${elements.velocity.value}%`;
     regenerateMidiFromCurrentNotes();
@@ -1657,7 +1639,6 @@ async function initialize() {
     if (!state.track && elements.fileName) elements.fileName.textContent = t('file.prompt');
   });
   setPlaybackUi();
-  populateNoteOptions();
   updateKeyboardOrientationButtons();
   initializeEvents();
   updateControlAvailability();
