@@ -6,7 +6,7 @@ const PATCH_STRIDE = 3; // R, G, B
 const CHANNELS_PER_KEY = PATCH_COUNT * PATCH_STRIDE;
 
 export const HUE_SECTOR_DEGREES = 30;
-export const BRIGHTNESS_CHANGE_POINTS = 33;
+export const BRIGHTNESS_CHANGE_POINTS = 50;
 const DEFAULT_NEUTRAL_CHROMA_PERCENT = 6;
 
 /**
@@ -88,7 +88,7 @@ function srgbToLinear(value) {
 /**
  * Perceptual lightness on a 0..100 scale (CIE L* from sRGB/D65).
  * This matches the UI notion used by the detector: a baseline of 20 changes
- * state at <= 0 or >= 53, and a baseline of 90 changes state at <= 57.
+ * state at >= 70 for a baseline of 20, and at <= 40 for a baseline of 90.
  */
 function rgbBrightness100(r, g, b) {
   const y = 0.2126729 * srgbToLinear(r)
@@ -172,7 +172,7 @@ function normalizeDetectionOptions(options = {}) {
 /**
  * A key sample is considered changed from its confirmed release state when either:
  *  1) that sample moves to a different 30° hue region, or
- *  2) its perceptual brightness moves by at least 33 points on a 0..100 scale.
+ *  2) its perceptual brightness moves by at least 50 points on a 0..100 scale.
  *
  * Every key has three independently evaluated samples. The key is active when
  * any one of those samples changes, so localized highlights on narrow black

@@ -14,7 +14,7 @@ import {
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
 } from './vision.js';
-import { StreamingNoteDetector } from './analysis.js?v=20260830-hue30-bright33';
+import { StreamingNoteDetector } from './analysis.js?v=20260830-hue30-bright50';
 import { createMidiFile } from './midi.js';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js';
@@ -1402,9 +1402,9 @@ function analysisOptions() {
     velocity: currentVelocityMidi(),
     baselineColors: state.releaseBaselineColors,
     // Fixed release-state comparison: 12 hue regions (30° each) plus an
-    // absolute 33-point brightness change on a perceptual 0..100 scale.
+    // absolute 50-point brightness change on a perceptual 0..100 scale.
     hueSectorDegrees: 30,
-    brightnessChangePoints: 33,
+    brightnessChangePoints: 50,
     // White/black keys have no stable hue. Treat very low RGB chroma as one
     // neutral region so tiny codec/noise tint does not flip hue sectors.
     neutralChromaPercent: 6,
