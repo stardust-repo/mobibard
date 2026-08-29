@@ -1,4 +1,4 @@
-import { onLanguageChange, t } from './language-manager.js?v=20260830-auto-range-v1';
+import { onLanguageChange, t } from './language-manager.js?v=20260830-auto-range-v2';
 
 const THEME_KEY = 'mobibard.player.theme';
 let initialized = false;

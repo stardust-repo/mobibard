@@ -78,3 +78,8 @@ The RollScriptor settings panel is initialized independently from the video/WebC
 ## 새 영상 선택 시 설정 초기화
 
 복원 기능이 아닌 일반 파일 선택으로 새 영상을 열면 이전 영상의 설정을 가져가지 않습니다. 검출 모드/방향, 흰·검 건반 변화량, 분석 시간, 노트 확장, BPM, Velocity, 검출 결과와 MIDI 결과를 새 영상 기준 기본값으로 초기화합니다. 마지막 작업 `복원`을 선택한 경우에만 저장된 설정을 되살립니다.
+
+
+### 2026-08-30 auto range refinement
+- 재생 중 현재 검출 표시가 중간 placeholder로 되돌아가며 깜빡이던 현상을 제거했습니다.
+- 분석 시간 자동 탐색은 88건반 존재 여부뿐 아니라 건반 검출 기준 프레임과의 OKLab 외형 유사도를 함께 사용하며, 페이드 인/아웃 구간에서는 더 안정적인 내부 지점으로 보정합니다.

@@ -14,11 +14,11 @@ import {
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
-} from './vision.js?v=20260830-auto-range-v1';
-import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-auto-range-v1';
+} from './vision.js?v=20260830-auto-range-v2';
+import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-auto-range-v2';
 import { createMidiFile } from './midi.js';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-auto-range-v1';
-import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-auto-range-v1';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-auto-range-v2';
+import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-auto-range-v2';
 
 const MEDIABUNNY_VERSION = '1.55.3';
 const MEDIABUNNY_URLS = [
@@ -739,14 +739,55 @@ function singleLineFlatKeyboardLooksPresent(imageData, geometry, lineY) {
   return whiteAccuracy >= 0.68 && blackAccuracy >= 0.68;
 }
 
+function percentile(values, ratio = 0.5) {
+  const finite = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!finite.length) return Infinity;
+  const index = clamp(Math.round((finite.length - 1) * clamp(ratio, 0, 1)), 0, finite.length - 1);
+  return finite[index];
+}
+
+function keyboardReferenceAppearanceTolerance() {
+  const options = currentChangeOptions();
+  // Range search should be substantially stricter than Note On detection.
+  // With the default 30/50 thresholds this is about 9.6%, which rejects most
+  // fade-in/out frames while still tolerating compression and a few active keys.
+  return clamp(Math.min(options.whiteChangePercent, options.blackChangePercent) * 0.32, 6, 12);
+}
+
+function keyboardAppearanceDistanceFromContext(context, crop) {
+  if (!state.releaseBaselineColors || !state.keyMap?.keys?.length || !state.geometry) return Infinity;
+  if (!state.liveChangeEvaluator || !state.liveProbeSampler) {
+    if (!prepareLiveDetection()) return Infinity;
+  }
+  try {
+    const colors = sampleKeyColorsFromContext(context, state.liveProbeSampler);
+    const result = state.liveChangeEvaluator(colors, currentChangeOptions());
+    const probes = createGuideAnalysisProbes(crop.canonicalWidth, crop.canonicalHeight, crop);
+    const distances = [];
+    for (let keyIndex = 0; keyIndex < probes.length; keyIndex += 1) {
+      if (probes[keyIndex]?.valid === false) continue;
+      const offset = keyIndex * PROBE_PATCH_COUNT;
+      for (let patchIndex = 0; patchIndex < PROBE_PATCH_COUNT; patchIndex += 1) {
+        distances.push(Number(result.patchDistancePercent[offset + patchIndex]));
+      }
+    }
+    // A percentile rather than max/mean makes the comparison insensitive to a
+    // handful of currently pressed/highlighted keys while a full-frame fade,
+    // which affects most of the keyboard, still produces a large distance.
+    return percentile(distances, 0.65);
+  } catch {
+    return Infinity;
+  }
+}
+
 async function inspectKeyboardPresenceAtTime(timeSeconds) {
-  if (!state.previewSink || !state.track || !state.guide) return { present: false, time: 0 };
+  if (!state.previewSink || !state.track || !state.guide) return { present: false, time: 0, appearanceDistance: Infinity };
   const crop = getGuideCrop();
-  if (!crop || crop.canonicalWidth < 40 || crop.canonicalHeight < 8) return { present: false, time: 0 };
+  if (!crop || crop.canonicalWidth < 40 || crop.canonicalHeight < 8) return { present: false, time: 0, appearanceDistance: Infinity };
   const requestedTime = clamp(Number(timeSeconds) || 0, 0, state.duration);
   try {
     const wrapped = await state.previewSink.getCanvas(state.timeOrigin + requestedTime);
-    if (!wrapped?.canvas) return { present: false, time: requestedTime };
+    if (!wrapped?.canvas) return { present: false, time: requestedTime, appearanceDistance: Infinity };
     const localTime = clamp((wrapped.timestamp ?? (state.timeOrigin + requestedTime)) - state.timeOrigin, 0, state.duration);
     const canvas = document.createElement('canvas');
     const context = drawCanonicalSource(
@@ -759,44 +800,56 @@ async function inspectKeyboardPresenceAtTime(timeSeconds) {
       crop.depthSign,
     );
     const roi = context.getImageData(0, 0, canvas.width, canvas.height);
+    let present = false;
     if (state.detectionMode === 'single') {
       const geometry = detectSingleLineKeyGeometry(roi, { expectedKeyCount: 88, lineY: crop.singleLineY });
-      if (geometry.keyCount !== 88) return { present: false, time: localTime };
-      // Single-line detection has an intentional 88-region fallback. For range
-      // discovery we therefore also require the expected white/black strip
-      // pattern, otherwise an intro/outro frame could be mistaken for a keyboard.
-      return { present: singleLineFlatKeyboardLooksPresent(roi, geometry, crop.singleLineY), time: localTime };
+      if (geometry.keyCount === 88) {
+        // Single-line detection has an intentional 88-region fallback. For range
+        // discovery we therefore also require the expected white/black strip
+        // pattern, otherwise an intro/outro frame could be mistaken for a keyboard.
+        present = singleLineFlatKeyboardLooksPresent(roi, geometry, crop.singleLineY);
+      }
+    } else if (crop.canonicalHeight >= 24) {
+      const geometry = detectKeyGeometry(roi);
+      const keyMap = createKeyMap(geometry, suggestLeftmostMidi(geometry));
+      const whiteConfidence = Number(geometry.diagnostics?.whiteConfidence ?? geometry.confidence ?? 0);
+      const referenceConfidence = Number(state.geometry?.diagnostics?.whiteConfidence ?? state.geometry?.confidence ?? 0.34);
+      const minimumConfidence = clamp(referenceConfidence * 0.55, 0.10, 0.24);
+      const referenceWidth = Math.max(1, Number(state.geometry?.nominalWhiteWidth) || Number(geometry.nominalWhiteWidth) || 1);
+      const widthRatio = Number(geometry.nominalWhiteWidth) / referenceWidth;
+      present = geometry.whiteCount === 52
+        && keyMap.keys.length === 88
+        && whiteConfidence >= minimumConfidence
+        && widthRatio >= 0.82
+        && widthRatio <= 1.18;
     }
-    if (crop.canonicalHeight < 24) return { present: false, time: localTime };
-    const geometry = detectKeyGeometry(roi);
-    const keyMap = createKeyMap(geometry, suggestLeftmostMidi(geometry));
-    const whiteConfidence = Number(geometry.diagnostics?.whiteConfidence ?? geometry.confidence ?? 0);
-    const referenceConfidence = Number(state.geometry?.diagnostics?.whiteConfidence ?? state.geometry?.confidence ?? 0.34);
-    const minimumConfidence = clamp(referenceConfidence * 0.55, 0.10, 0.24);
-    const referenceWidth = Math.max(1, Number(state.geometry?.nominalWhiteWidth) || Number(geometry.nominalWhiteWidth) || 1);
-    const widthRatio = Number(geometry.nominalWhiteWidth) / referenceWidth;
-    const present = geometry.whiteCount === 52
-      && keyMap.keys.length === 88
-      && whiteConfidence >= minimumConfidence
-      && widthRatio >= 0.82
-      && widthRatio <= 1.18;
-    return { present, time: localTime };
+    const appearanceDistance = present ? keyboardAppearanceDistanceFromContext(context, crop) : Infinity;
+    return { present, time: localTime, appearanceDistance };
   } catch {
-    return { present: false, time: requestedTime };
+    return { present: false, time: requestedTime, appearanceDistance: Infinity };
   }
 }
 
-async function keyboardPresenceIsStable(timeSeconds, direction = 1) {
-  const frame = 1 / Math.max(1, state.fps);
-  const first = await inspectKeyboardPresenceAtTime(timeSeconds);
-  if (!first.present) return { present: false, time: first.time };
-  const neighborTime = clamp(timeSeconds + Math.sign(direction || 1) * frame, 0, state.duration);
-  if (Math.abs(neighborTime - timeSeconds) < frame * 0.25) return first;
-  const second = await inspectKeyboardPresenceAtTime(neighborTime);
-  return second.present ? first : { present: false, time: first.time };
+function keyboardSampleMatches(sample, appearanceTolerance = null) {
+  if (!sample?.present) return false;
+  if (!Number.isFinite(appearanceTolerance)) return true;
+  return Number(sample.appearanceDistance) <= appearanceTolerance;
 }
 
-async function findKeyboardRangeBoundary(fromStart = true) {
+async function keyboardPresenceIsStable(timeSeconds, direction = 1, appearanceTolerance = null) {
+  const frame = 1 / Math.max(1, state.fps);
+  const first = await inspectKeyboardPresenceAtTime(timeSeconds);
+  if (!keyboardSampleMatches(first, appearanceTolerance)) return { ...first, present: false };
+  // Use two decoded frames rather than one so a single transition/compression
+  // frame cannot become the automatic analysis boundary.
+  const neighborOffset = Math.max(frame, Math.min(0.10, frame * 2));
+  const neighborTime = clamp(timeSeconds + Math.sign(direction || 1) * neighborOffset, 0, state.duration);
+  if (Math.abs(neighborTime - timeSeconds) < frame * 0.25) return first;
+  const second = await inspectKeyboardPresenceAtTime(neighborTime);
+  return keyboardSampleMatches(second, appearanceTolerance) ? first : { ...first, present: false };
+}
+
+async function findKeyboardRangeBoundaryWithTolerance(fromStart = true, appearanceTolerance = null) {
   const duration = Math.max(0, state.duration);
   const frame = 1 / Math.max(1, state.fps);
   const coarseStep = clamp(duration / 120, Math.max(frame, 0.25), 2.0);
@@ -809,32 +862,32 @@ async function findKeyboardRangeBoundary(fromStart = true) {
     const sampleTime = fromStart
       ? Math.min(duration, index * coarseStep)
       : Math.max(0, duration - index * coarseStep);
-    const sample = await keyboardPresenceIsStable(sampleTime, direction);
+    const sample = await keyboardPresenceIsStable(sampleTime, direction, appearanceTolerance);
     if (sample.present) {
-      let absent = previousPresent ? sampleTime : previousTime;
-      let present = sampleTime;
+      const absent = previousPresent ? sampleTime : previousTime;
+      const present = sampleTime;
       if (!previousPresent && index === 0) return sample.time;
       if (fromStart) {
         let low = Math.min(absent, present);
         let high = Math.max(absent, present);
         while (high - low > frame * 1.1) {
           const mid = (low + high) / 2;
-          const probe = await keyboardPresenceIsStable(mid, 1);
+          const probe = await keyboardPresenceIsStable(mid, 1, appearanceTolerance);
           if (probe.present) high = mid;
           else low = mid;
         }
-        const finalProbe = await keyboardPresenceIsStable(high, 1);
+        const finalProbe = await keyboardPresenceIsStable(high, 1, appearanceTolerance);
         return finalProbe.present ? finalProbe.time : high;
       }
       let low = Math.min(present, absent);
       let high = Math.max(present, absent);
       while (high - low > frame * 1.1) {
         const mid = (low + high) / 2;
-        const probe = await keyboardPresenceIsStable(mid, -1);
+        const probe = await keyboardPresenceIsStable(mid, -1, appearanceTolerance);
         if (probe.present) low = mid;
         else high = mid;
       }
-      const finalProbe = await keyboardPresenceIsStable(low, -1);
+      const finalProbe = await keyboardPresenceIsStable(low, -1, appearanceTolerance);
       return finalProbe.present ? finalProbe.time : low;
     }
     previousTime = sampleTime;
@@ -842,6 +895,69 @@ async function findKeyboardRangeBoundary(fromStart = true) {
     if ((fromStart && sampleTime >= duration) || (!fromStart && sampleTime <= 0)) break;
   }
   return null;
+}
+
+async function refineKeyboardBoundaryTowardReference(boundary, fromStart, looseTolerance) {
+  if (!Number.isFinite(boundary)) return boundary;
+  const frame = 1 / Math.max(1, state.fps);
+  const direction = fromStart ? 1 : -1;
+  // Look just inside the detected edge for a frame whose keyboard appearance is
+  // closer to the user's confirmed reference frame. This deliberately moves a
+  // start past a fade-in and an end before a fade-out, instead of hugging the
+  // first/last barely-recognisable 88-key frame.
+  const window = clamp(state.duration / 80, 0.5, 1.5);
+  const step = Math.max(frame * 2, window / 12);
+  const samples = [];
+  for (let offset = 0; offset <= window + 1e-6; offset += step) {
+    const time = clamp(boundary + direction * offset, 0, state.duration);
+    const sample = await inspectKeyboardPresenceAtTime(time);
+    if (sample.present && Number.isFinite(sample.appearanceDistance)) samples.push(sample);
+    if ((fromStart && time >= state.duration) || (!fromStart && time <= 0)) break;
+  }
+  if (!samples.length) return boundary;
+  const bestDistance = Math.min(...samples.map(sample => sample.appearanceDistance));
+  const strictTolerance = Math.min(looseTolerance, bestDistance + 2.5);
+  let selectedIndex = samples.findIndex(sample => sample.appearanceDistance <= strictTolerance);
+  if (selectedIndex < 0) return boundary;
+  const selected = samples[selectedIndex];
+  if (selectedIndex === 0) return selected.time;
+
+  const outer = samples[selectedIndex - 1].time;
+  const inner = selected.time;
+  if (fromStart) {
+    let low = Math.min(outer, inner);
+    let high = Math.max(outer, inner);
+    while (high - low > frame * 1.1) {
+      const mid = (low + high) / 2;
+      const probe = await keyboardPresenceIsStable(mid, 1, strictTolerance);
+      if (probe.present) high = mid;
+      else low = mid;
+    }
+    const finalProbe = await keyboardPresenceIsStable(high, 1, strictTolerance);
+    return finalProbe.present ? finalProbe.time : high;
+  }
+
+  let low = Math.min(outer, inner);
+  let high = Math.max(outer, inner);
+  while (high - low > frame * 1.1) {
+    const mid = (low + high) / 2;
+    const probe = await keyboardPresenceIsStable(mid, -1, strictTolerance);
+    if (probe.present) low = mid;
+    else high = mid;
+  }
+  const finalProbe = await keyboardPresenceIsStable(low, -1, strictTolerance);
+  return finalProbe.present ? finalProbe.time : low;
+}
+
+async function findKeyboardRangeBoundary(fromStart = true) {
+  const appearanceTolerance = keyboardReferenceAppearanceTolerance();
+  const matchedBoundary = await findKeyboardRangeBoundaryWithTolerance(fromStart, appearanceTolerance);
+  if (Number.isFinite(matchedBoundary)) {
+    return refineKeyboardBoundaryTowardReference(matchedBoundary, fromStart, appearanceTolerance);
+  }
+  // If the reference appearance cannot be matched (for example a heavily
+  // animated keyboard), retain the older 88-key-presence search as a fallback.
+  return findKeyboardRangeBoundaryWithTolerance(fromStart, null);
 }
 
 async function autoDetectAnalysisRange({ quiet = false } = {}) {
@@ -879,10 +995,15 @@ async function autoDetectAnalysisRange({ quiet = false } = {}) {
   }
 }
 
+function setCurrentChordDisplay(text, hasNotes = false) {
+  const nextText = String(text ?? '—');
+  if (elements.currentChord.textContent !== nextText) elements.currentChord.textContent = nextText;
+  elements.currentChord.classList.toggle('has-notes', Boolean(hasNotes));
+}
+
 function updateCurrentChord(time = state.previewTime) {
   if (!state.track) {
-    elements.currentChord.textContent = '—';
-    elements.currentChord.classList.remove('has-notes');
+    setCurrentChordDisplay('—', false);
     return;
   }
 
@@ -890,21 +1011,27 @@ function updateCurrentChord(time = state.previewTime) {
   // preview frame immediately. This uses the same OKLab comparator as full MIDI
   // analysis, so users can validate guides/thresholds before running analysis.
   const liveTolerance = Math.max(0.02, 1 / Math.max(1, state.fps) * 1.75);
-  const hasCurrentLiveFrame = state.keyboardDetectionConfirmed
-    && Array.isArray(state.liveKeyStates)
+  const hasLiveState = state.keyboardDetectionConfirmed && Array.isArray(state.liveKeyStates);
+  const hasCurrentLiveFrame = hasLiveState
     && Math.abs((Number(time) || 0) - state.liveDetectionTime) <= liveTolerance;
   if (hasCurrentLiveFrame && state.keyMap?.keys?.length) {
     const active = state.keyMap.keys
       .filter((key, keyIndex) => state.liveKeyStates[keyIndex])
       .sort((a, b) => a.midi - b.midi);
-    elements.currentChord.textContent = active.length ? active.map(key => key.name).join(' + ') : '—';
-    elements.currentChord.classList.toggle('has-notes', active.length > 0);
+    setCurrentChordDisplay(active.length ? active.map(key => key.name).join(' + ') : '—', active.length > 0);
     return;
   }
 
   if (!state.notes.length) {
-    elements.currentChord.textContent = t('transport.after_detection');
-    elements.currentChord.classList.remove('has-notes');
+    if (state.keyboardDetectionConfirmed) {
+      // renderPreview/requestPreview update the target time before the new frame
+      // has finished decoding. Keep the previous live result during that short
+      // gap instead of flashing the "after detection" placeholder every frame.
+      if (hasLiveState) return;
+      setCurrentChordDisplay('—', false);
+      return;
+    }
+    setCurrentChordDisplay(t('transport.after_detection'), false);
     return;
   }
 
@@ -917,8 +1044,7 @@ function updateCurrentChord(time = state.previewTime) {
     }
   }
   const active = [...activeByMidi.values()].sort((a, b) => a.midi - b.midi);
-  elements.currentChord.textContent = active.length ? active.map(note => note.name).join(' + ') : '—';
-  elements.currentChord.classList.toggle('has-notes', active.length > 0);
+  setCurrentChordDisplay(active.length ? active.map(note => note.name).join(' + ') : '—', active.length > 0);
 }
 
 function setPlaybackUi() {
