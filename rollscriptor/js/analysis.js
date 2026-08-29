@@ -6,7 +6,7 @@ const PATCH_STRIDE = 3; // R, G, B
 const CHANNELS_PER_KEY = PATCH_COUNT * PATCH_STRIDE;
 
 export const DEFAULT_WHITE_CHANGE_PERCENT = 35;
-export const DEFAULT_BLACK_CHANGE_PERCENT = 35;
+export const DEFAULT_BLACK_CHANGE_PERCENT = 50;
 
 /**
  * Compact per-frame storage. Each key keeps the averaged RGB of three small,
@@ -149,12 +149,54 @@ function normalizeDetectionOptions(options = {}) {
 }
 
 /**
- * Each of the three samples on a key is compared with its own fixed release
- * color as one OKLab vector. Hue, saturation, grayscale and brightness are no
- * longer separate rules: every visual change contributes to one vector length.
+ * Creates the exact key-by-key / patch-by-patch OKLab comparator used both by
+ * the live preview and by full-video MIDI analysis. Keeping this shared avoids
+ * the preview showing a different result from the actual note detector.
  */
-function keyStateChanged(baselineSignature, currentSignature, changePercent) {
-  return oklabDistancePercent(baselineSignature.oklab, currentSignature.oklab) >= changePercent;
+export function createKeyChangeEvaluator(keys, baselineColors, options = {}, validKeyMask = null) {
+  if (!Array.isArray(keys) || keys.length === 0) throw new Error(t('error.key_count_mismatch'));
+  const keyCount = keys.length;
+  if (!baselineColors || baselineColors.length !== keyCount * CHANNELS_PER_KEY) {
+    throw new Error(t('error.baseline_missing'));
+  }
+  const baselineSignatures = Array.from(
+    { length: keyCount },
+    (_, keyIndex) => keyPatchSignatures(baselineColors, keyIndex),
+  );
+  const baseOptions = normalizeDetectionOptions(options);
+  const mask = Array.isArray(validKeyMask) || ArrayBuffer.isView(validKeyMask) ? validKeyMask : null;
+
+  return (currentColors, optionOverrides = null) => {
+    if (!(currentColors instanceof Uint8Array) || currentColors.length !== keyCount * CHANNELS_PER_KEY) {
+      throw new Error(t('error.feature_size', { bytes: keyCount * CHANNELS_PER_KEY }));
+    }
+    const detectionOptions = optionOverrides
+      ? normalizeDetectionOptions({ ...baseOptions, ...optionOverrides })
+      : baseOptions;
+    const changed = new Array(keyCount).fill(false);
+    const maxDistancePercent = new Float32Array(keyCount);
+    const patchDistancePercent = new Float32Array(keyCount * PATCH_COUNT);
+
+    for (let keyIndex = 0; keyIndex < keyCount; keyIndex += 1) {
+      if (mask && mask[keyIndex] === false) continue;
+      const threshold = keys[keyIndex].type === 'black'
+        ? detectionOptions.blackChangePercent
+        : detectionOptions.whiteChangePercent;
+      const currentSignatures = keyPatchSignatures(currentColors, keyIndex);
+      let maximum = 0;
+      for (let patchIndex = 0; patchIndex < PATCH_COUNT; patchIndex += 1) {
+        const distance = oklabDistancePercent(
+          baselineSignatures[keyIndex][patchIndex].oklab,
+          currentSignatures[patchIndex].oklab,
+        );
+        patchDistancePercent[keyIndex * PATCH_COUNT + patchIndex] = distance;
+        maximum = Math.max(maximum, distance);
+        if (distance >= threshold) changed[keyIndex] = true;
+      }
+      maxDistancePercent[keyIndex] = maximum;
+    }
+    return { changed, maxDistancePercent, patchDistancePercent };
+  };
 }
 
 /**
@@ -182,16 +224,15 @@ export class StreamingNoteDetector {
       confidence: new Float32Array(this.keyCount * PATCH_COUNT).fill(1),
       source: 'setup-frame',
     };
-    // Keep the three visible samples of every key independent. A piano-roll
-    // note often covers only part of a black key; averaging the three samples
-    // together can dilute an otherwise obvious color-vector change.
-    this.baselineSignatures = Array.from(
-      { length: this.keyCount },
-      (_, keyIndex) => keyPatchSignatures(fixedBaselineColors, keyIndex),
-    );
     this.validKeyMask = Array.isArray(options.validKeyMask) || ArrayBuffer.isView(options.validKeyMask)
       ? options.validKeyMask
       : null;
+    this.evaluateChanges = createKeyChangeEvaluator(
+      this.keys,
+      fixedBaselineColors,
+      this.detectionOptions,
+      this.validKeyMask,
+    );
     this.states = Array.from({ length: this.keyCount }, () => ({ active: false, noteStart: 0 }));
     this.notes = [];
     this.frameCount = 0;
@@ -209,23 +250,10 @@ export class StreamingNoteDetector {
     const frameDuration = Math.max(0, Number(duration) || 0);
     this.finalTime = Math.max(this.finalTime, frameTime + frameDuration);
 
+    const frameDetection = this.evaluateChanges(colors);
     for (let keyIndex = 0; keyIndex < this.keyCount; keyIndex += 1) {
       const state = this.states[keyIndex];
-      const valid = !this.validKeyMask || this.validKeyMask[keyIndex] !== false;
-      const currentSignatures = valid
-        ? keyPatchSignatures(colors, keyIndex)
-        : null;
-      // White and black keys are both evaluated key-by-key and patch-by-patch.
-      // One changed sample is sufficient because a falling note/highlight may
-      // occupy only a narrow strip of the physical key in the source video.
-      const changePercent = this.keys[keyIndex].type === 'black'
-        ? this.detectionOptions.blackChangePercent
-        : this.detectionOptions.whiteChangePercent;
-      const pressed = valid && currentSignatures.some((currentSignature, patchIndex) => keyStateChanged(
-        this.baselineSignatures[keyIndex][patchIndex],
-        currentSignature,
-        changePercent,
-      ));
+      const pressed = frameDetection.changed[keyIndex];
 
       if (!state.active && pressed) {
         state.active = true;

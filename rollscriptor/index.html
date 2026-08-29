@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-ui11" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-ui12" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -107,8 +107,9 @@
       <div class="section-head keyboard-section-head">
         <div>
           <span class="step-number">2</span>
-          <h2 id="keyboardSectionTitle" data-i18n="keyboard.title">건반 인식 관련 설정</h2>
+          <h2 id="keyboardSectionTitle" data-i18n="keyboard.title">건반 인식 설정</h2>
         </div>
+        <p data-i18n="keyboard.description">인식선을 맞추고 변화량을 조정한 뒤 현재 프레임에서 건반을 검출합니다.</p>
       </div>
 
       <div id="previewStage" class="preview-stage is-empty" data-i18n-aria-label="preview.aria" aria-label="동영상 프레임과 건반 검출선">
@@ -124,44 +125,50 @@
         <div class="playback-row">
           <button id="playPause" class="transport-primary transport-icon-button" disabled type="button" aria-label="재생" title="재생">▶</button>
           <button id="jumpStart" class="compact-button transport-edge-button" disabled type="button" data-i18n-aria-label="transport.first" data-i18n-title="transport.first" aria-label="처음으로" title="처음으로">|◀</button>
-          <button id="prev5Frame" class="compact-button" disabled type="button" data-i18n="transport.prev_5_frame">−5F</button>
+          <button id="prevSecond" class="compact-button" disabled type="button" data-i18n="transport.prev_second">−1초</button>
           <button id="prevFrame" class="compact-button" disabled type="button" data-i18n="transport.prev_frame">−1F</button>
           <input id="timeline" type="range" min="0" max="1" value="0" step="0.001" disabled data-i18n-aria-label="transport.timeline" aria-label="영상 위치"/>
           <button id="nextFrame" class="compact-button" disabled type="button" data-i18n="transport.next_frame">+1F</button>
-          <button id="next5Frame" class="compact-button" disabled type="button" data-i18n="transport.next_5_frame">+5F</button>
+          <button id="nextSecond" class="compact-button" disabled type="button" data-i18n="transport.next_second">+1초</button>
           <button id="jumpEnd" class="compact-button transport-edge-button" disabled type="button" data-i18n-aria-label="transport.last" data-i18n-title="transport.last" aria-label="마지막으로" title="마지막으로">▶|</button>
           <output id="timeLabel">00:00.000 / 00:00.000</output>
         </div>
         <div class="current-chord" aria-live="polite">
           <span data-i18n="transport.current_chord">현재 검출 코드</span>
-          <strong id="currentChord" data-i18n="transport.after_analysis">분석 후 표시</strong>
+          <strong id="currentChord" data-i18n="transport.after_detection">건반 검출 후 표시</strong>
         </div>
       </div>
 
       <div class="keyboard-detection-card">
         <div class="keyboard-detection-toolbar">
           <div class="keyboard-detection-primary-actions">
-            <button id="keyboardOrientationToggle" class="soft-button orientation-toggle-button" type="button" disabled aria-pressed="false" data-i18n-aria-label="keyboard.orientation" aria-label="건반 방향">
-              <span id="keyboardOrientationIcon" class="orientation-toggle-icon" aria-hidden="true">━</span>
-              <span data-i18n="keyboard.orientation">건반 방향</span>
-            </button>
             <button id="detectKeys" type="button" class="primary-button detect-keys-button" disabled data-i18n="actions.detect_keys">건반 검출</button>
+            <div class="orientation-field">
+              <span data-i18n="keyboard.orientation">건반 방향</span>
+              <button id="keyboardOrientationToggle" class="soft-button orientation-toggle-button" type="button" disabled aria-pressed="false" aria-label="건반 방향: 수평">
+                <span id="keyboardOrientationText">수평</span>
+              </button>
+            </div>
             <label class="change-threshold-field">
-              <span data-i18n="settings.white_change">흰 변화량</span>
+              <span data-i18n="settings.white_change">흰 건반 변화량</span>
               <span class="percent-input"><input id="whiteChangePercent" type="number" min="1" max="100" step="1" value="35" inputmode="numeric"/><b>%</b></span>
             </label>
             <label class="change-threshold-field">
-              <span data-i18n="settings.black_change">검 변화량</span>
-              <span class="percent-input"><input id="blackChangePercent" type="number" min="1" max="100" step="1" value="35" inputmode="numeric"/><b>%</b></span>
+              <span data-i18n="settings.black_change">검 건반 변화량</span>
+              <span class="percent-input"><input id="blackChangePercent" type="number" min="1" max="100" step="1" value="50" inputmode="numeric"/><b>%</b></span>
             </label>
           </div>
         </div>
-        <p class="keyboard-detect-description" data-i18n="keyboard.description">건반 방향 버튼으로 인식선을 회전하고 흰·검 건반 인식선을 맞춘 뒤 건반을 검출합니다. 화면 중심을 기준으로 선의 위치에서 위·아래·좌·우를 자동 판별합니다.</p>
-        <div class="guide-summary keyboard-guide-summary">
-          <span><i class="guide-swatch white-guide"></i><strong data-i18n="guide.white_key">흰 건반</strong> <span data-i18n="guide.white_hint">청록 선을 드래그</span></span>
-          <span><i class="guide-swatch black-guide"></i><strong data-i18n="guide.black_key">검은 건반</strong> <span data-i18n="guide.black_hint">분홍 선을 드래그</span></span>
-          <span data-i18n="guide.box_hint">건반 검출 후 작은 박스로 실제 인식 영역을 표시합니다.</span>
-        </div>
+        <ul class="keyboard-help-list">
+          <li>
+            <span class="keyboard-help-copy" data-i18n="keyboard.help_setup">건반 방향과 변화량을 정하고, 두 인식선을 각 건반 몸통에 맞춥니다.</span>
+            <span class="keyboard-guide-legend" aria-label="건반 인식선">
+              <span><i class="guide-swatch white-guide" aria-hidden="true"></i><b data-i18n="guide.white_key">흰 건반</b></span>
+              <span><i class="guide-swatch black-guide" aria-hidden="true"></i><b data-i18n="guide.black_key">검은 건반</b></span>
+            </span>
+          </li>
+          <li data-i18n="keyboard.help_detect">건반이 눌리지 않은 프레임에서 건반 검출을 누릅니다. 이후 재생하거나 프레임을 이동하면 변화가 감지된 샘플 박스와 현재 검출 코드를 바로 확인할 수 있습니다.</li>
+        </ul>
         <div id="keyboardStatus" class="status-line keyboard-detection-status" data-i18n="keyboard.no_video">영상이 없습니다.</div>
         <div id="keyboardColorPalette" class="keyboard-color-palette" hidden>
           <div class="keyboard-color-palette-title" data-i18n="keyboard.detected_colors">검출 주요 색상</div>
@@ -244,20 +251,42 @@
 <dialog id="tutorialDialog" class="roll-tutorial-dialog" aria-labelledby="tutorialTitle">
   <div class="roll-tutorial-card">
     <header class="roll-tutorial-head">
-      <div><h2 id="tutorialTitle" data-i18n="tutorial.title">롤 스크립터 빠른 사용법</h2><p data-i18n="tutorial.subtitle">영상 준비부터 MIDI 저장까지 네 단계로 확인하세요.</p></div>
+      <div class="roll-tutorial-head-text">
+        <h2 id="tutorialTitle" data-i18n="tutorial.title">롤 스크립터 사용법</h2>
+        <span id="tutorialProgress" class="roll-tutorial-progress">1 / 4</span>
+      </div>
       <button id="tutorialClose" class="tutorial-close" type="button" data-i18n="tutorial.close">닫기</button>
     </header>
-    <ol class="roll-tutorial-steps">
-      <li><span>1</span><div><strong data-i18n="tutorial.step1_title">영상 준비</strong><p data-i18n="tutorial.step1_body">720p·30fps 이상, 88건반이 모두 보이고 건반을 가리는 연출이 적은 영상을 권장합니다.</p></div></li>
-      <li><span>2</span><div><strong data-i18n="tutorial.step2_title">건반 방향과 검출선 맞추기</strong><p data-i18n="tutorial.step2_body">수평 또는 수직을 고르고 인식선을 맞춥니다. 위·아래·좌·우는 선의 위치에서 자동 판별됩니다.</p></div></li>
-      <li><span>3</span><div><strong data-i18n="tutorial.step3_title">검출 결과 확인과 분석 설정</strong><p data-i18n="tutorial.step3_body">건반 검출 결과를 확인하고 시작·종료 시간, BPM, 벨로시티를 지정합니다.</p></div></li>
-      <li><span>4</span><div><strong data-i18n="tutorial.step4_title">분석하고 확인하기</strong><p data-i18n="tutorial.step4_body">영상 분석을 실행한 뒤 재생과 현재 검출 코드로 결과를 확인하고 MIDI를 다운로드합니다.</p></div></li>
-    </ol>
+    <div class="roll-tutorial-content">
+      <div id="tutorialVisual" class="roll-tutorial-visual" aria-hidden="true">
+        <span id="tutorialVisualStep" class="roll-tutorial-visual-step">1</span>
+        <strong id="tutorialVisualSymbol" class="roll-tutorial-visual-symbol">▶</strong>
+        <span id="tutorialVisualTitle" class="roll-tutorial-visual-title">영상 선택</span>
+      </div>
+      <div class="roll-tutorial-copy">
+        <span id="tutorialPart" class="roll-tutorial-part">영상 선택</span>
+        <h3 id="tutorialStepTitle" class="roll-tutorial-step-title">영상 준비</h3>
+        <p id="tutorialStepBody" class="roll-tutorial-body">720p·30fps 이상, 88건반이 모두 보이는 영상을 선택합니다.</p>
+        <p id="tutorialStepNote" class="roll-tutorial-note">건반을 가리는 이펙트나 노이즈가 적을수록 안정적입니다.</p>
+      </div>
+    </div>
+    <footer class="roll-tutorial-footer">
+      <div class="roll-tutorial-dots" role="group" data-i18n-aria-label="tutorial.pages" aria-label="튜토리얼 페이지">
+        <button class="roll-tutorial-dot active" type="button" data-tutorial-step="0" aria-current="step"></button>
+        <button class="roll-tutorial-dot" type="button" data-tutorial-step="1"></button>
+        <button class="roll-tutorial-dot" type="button" data-tutorial-step="2"></button>
+        <button class="roll-tutorial-dot" type="button" data-tutorial-step="3"></button>
+      </div>
+      <div class="roll-tutorial-nav">
+        <button id="tutorialPrev" class="roll-tutorial-prev" type="button" disabled>이전</button>
+        <button id="tutorialNext" class="roll-tutorial-next primary-button" type="button">다음</button>
+      </div>
+    </footer>
   </div>
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script type="module" src="./js/settings-menu.js?v=20260829-ui7"></script>
-<script type="module" src="./js/app.js?v=20260830-oklab35"></script>
+<script type="module" src="./js/app.js?v=20260830-live-preview"></script>
 </body>
 </html>

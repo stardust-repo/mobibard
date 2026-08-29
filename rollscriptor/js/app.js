@@ -12,7 +12,7 @@ import {
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
 } from './vision.js';
-import { StreamingNoteDetector } from './analysis.js?v=20260830-oklab35';
+import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-live-preview';
 import { createMidiFile } from './midi.js';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js';
@@ -25,11 +25,11 @@ const MEDIABUNNY_URLS = [
 
 const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
-  'playPause', 'jumpStart', 'prev5Frame', 'prevFrame', 'nextFrame', 'next5Frame', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
+  'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent',
-  'tempo', 'velocity', 'velocityValue', 'detectKeys', 'keyboardOrientationToggle', 'keyboardOrientationIcon', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
+  'tempo', 'velocity', 'velocityValue', 'detectKeys', 'keyboardOrientationToggle', 'keyboardOrientationText', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
-  'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose',
+  'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose', 'tutorialProgress', 'tutorialVisual', 'tutorialVisualStep', 'tutorialVisualSymbol', 'tutorialVisualTitle', 'tutorialPart', 'tutorialStepTitle', 'tutorialStepBody', 'tutorialStepNote', 'tutorialPrev', 'tutorialNext',
 ].map(id => [id, document.getElementById(id)]));
 
 const previewContext = elements.previewCanvas.getContext('2d', { willReadFrequently: true });
@@ -76,6 +76,12 @@ const state = {
   releaseBaselineColors: null,
   releaseBaselineTime: 0,
   detectedColorSummary: null,
+  liveChangeEvaluator: null,
+  liveProbeSampler: null,
+  liveCanonicalCanvas: null,
+  liveKeyStates: null,
+  livePatchDistancePercent: null,
+  liveDetectionTime: -1,
   videoWidth: 0,
   videoHeight: 0,
 };
@@ -205,8 +211,25 @@ function updateCurrentChord(time = state.previewTime) {
     elements.currentChord.classList.remove('has-notes');
     return;
   }
+
+  // Once keyboard detection is confirmed, show the exact result of the current
+  // preview frame immediately. This uses the same OKLab comparator as full MIDI
+  // analysis, so users can validate guides/thresholds before running analysis.
+  const liveTolerance = Math.max(0.02, 1 / Math.max(1, state.fps) * 1.75);
+  const hasCurrentLiveFrame = state.keyboardDetectionConfirmed
+    && Array.isArray(state.liveKeyStates)
+    && Math.abs((Number(time) || 0) - state.liveDetectionTime) <= liveTolerance;
+  if (hasCurrentLiveFrame && state.keyMap?.keys?.length) {
+    const active = state.keyMap.keys
+      .filter((key, keyIndex) => state.liveKeyStates[keyIndex])
+      .sort((a, b) => a.midi - b.midi);
+    elements.currentChord.textContent = active.length ? active.map(key => key.name).join(' + ') : '—';
+    elements.currentChord.classList.toggle('has-notes', active.length > 0);
+    return;
+  }
+
   if (!state.notes.length) {
-    elements.currentChord.textContent = t('transport.after_analysis');
+    elements.currentChord.textContent = t('transport.after_detection');
     elements.currentChord.classList.remove('has-notes');
     return;
   }
@@ -298,10 +321,10 @@ function updateControlAvailability() {
   elements.timeline.disabled = !hasVideo || locked;
   elements.playPause.disabled = !hasVideo || locked;
   elements.jumpStart.disabled = !hasVideo || locked;
-  elements.prev5Frame.disabled = !hasVideo || locked;
+  elements.prevSecond.disabled = !hasVideo || locked;
   elements.prevFrame.disabled = !hasVideo || locked;
   elements.nextFrame.disabled = !hasVideo || locked;
-  elements.next5Frame.disabled = !hasVideo || locked;
+  elements.nextSecond.disabled = !hasVideo || locked;
   elements.jumpEnd.disabled = !hasVideo || locked;
   elements.analysisStart.disabled = !hasVideo || locked;
   elements.analysisEnd.disabled = !hasVideo || locked;
@@ -317,6 +340,14 @@ function updateControlAvailability() {
   elements.downloadMidi.disabled = !state.midiBlob || locked;
 }
 
+function clearLiveDetection() {
+  state.liveChangeEvaluator = null;
+  state.liveProbeSampler = null;
+  state.liveKeyStates = null;
+  state.livePatchDistancePercent = null;
+  state.liveDetectionTime = -1;
+}
+
 function disposeCurrentInput() {
   pausePlayback();
   clearFrameCache();
@@ -328,6 +359,7 @@ function disposeCurrentInput() {
   state.releaseBaselineColors = null;
   state.releaseBaselineTime = 0;
   state.detectedColorSummary = null;
+  clearLiveDetection();
 }
 
 function setCanvasDimensions(width, height) {
@@ -446,9 +478,10 @@ function displayCachedFrame(frame) {
   state.previewFromFrameCache = true;
   elements.timeline.value = String(frame.time);
   updateTimeLabel();
-  updateCurrentChord(frame.time);
   previewContext.clearRect(0, 0, state.displayWidth, state.displayHeight);
   previewContext.drawImage(frame.canvas, 0, 0, state.displayWidth, state.displayHeight);
+  updateLiveDetectionFromPreview();
+  updateCurrentChord(frame.time);
   drawOverlay();
   return true;
 }
@@ -482,13 +515,11 @@ async function stepPreviewFrame(direction) {
   await renderPreview(state.previewTime + direction / Math.max(1, state.fps), true);
 }
 
-async function stepPreviewFrames(count) {
-  const amount = Math.trunc(Number(count) || 0);
+async function stepPreviewSeconds(seconds) {
+  const amount = Number(seconds) || 0;
   if (!amount || !state.track || state.analyzing) return;
-  const direction = amount > 0 ? 1 : -1;
-  for (let index = 0; index < Math.abs(amount); index += 1) {
-    await stepPreviewFrame(direction);
-  }
+  pausePlayback();
+  await renderPreview(state.previewFrameTime + amount, true);
 }
 
 async function jumpPreviewToBoundary(toEnd = false) {
@@ -518,6 +549,8 @@ async function renderPreview(timeSeconds, force = false) {
     state.previewFromFrameCache = false;
     previewContext.clearRect(0, 0, state.displayWidth, state.displayHeight);
     previewContext.drawImage(wrapped.canvas, 0, 0, state.displayWidth, state.displayHeight);
+    updateLiveDetectionFromPreview();
+    updateCurrentChord(state.previewFrameTime);
     drawOverlay();
     if (!state.playing && !state.analyzing) scheduleFrameCacheWarm(state.previewFrameTime);
   } catch (error) {
@@ -802,12 +835,20 @@ function drawDetectionAreas(context, crop, scale) {
         && note.start <= localPreviewTime + 1e-6 && note.end > localPreviewTime + 1e-6)
       .map(note => note.midi),
   );
+  const liveTolerance = Math.max(0.02, 1 / Math.max(1, state.fps) * 1.75);
+  const hasLiveDetection = Array.isArray(state.liveKeyStates)
+    && state.livePatchDistancePercent
+    && Math.abs(state.previewFrameTime - state.liveDetectionTime) <= liveTolerance;
+  const thresholds = currentChangeOptions();
 
   context.save();
-  for (const probe of displayProbes) {
+  for (let keyIndex = 0; keyIndex < displayProbes.length; keyIndex += 1) {
+    const probe = displayProbes[keyIndex];
     const isWhite = probe.key.type === 'white';
-    const active = activeMidi.has(probe.key.midi);
     const invalid = probe.valid === false;
+    const liveActive = hasLiveDetection ? Boolean(state.liveKeyStates[keyIndex]) : false;
+    const active = hasLiveDetection ? liveActive : activeMidi.has(probe.key.midi);
+    const threshold = isWhite ? thresholds.whiteChangePercent : thresholds.blackChangePercent;
     const canonicalBox = {
       x0: Math.min(...probe.patches.map(patch => patch.x0)),
       x1: Math.max(...probe.patches.map(patch => patch.x1)),
@@ -822,15 +863,34 @@ function drawDetectionAreas(context, crop, scale) {
       context.fillStyle = 'rgba(255,82,82,.32)';
       context.strokeStyle = 'rgba(255,105,105,.98)';
     } else if (isWhite) {
-      context.fillStyle = active ? 'rgba(85,216,255,.72)' : 'rgba(85,216,255,.32)';
+      context.fillStyle = active && !hasLiveDetection ? 'rgba(85,216,255,.72)' : 'rgba(85,216,255,.24)';
       context.strokeStyle = active ? 'rgba(190,245,255,1)' : 'rgba(85,216,255,.98)';
     } else {
-      context.fillStyle = active ? 'rgba(255,112,210,.76)' : 'rgba(255,112,210,.36)';
+      context.fillStyle = active && !hasLiveDetection ? 'rgba(255,112,210,.76)' : 'rgba(255,112,210,.28)';
       context.strokeStyle = active ? 'rgba(255,210,242,1)' : 'rgba(255,112,210,.98)';
     }
 
     context.lineWidth = Math.max(1.5, 1.35 * scale);
     context.fillRect(box.x0, box.y0, width, height);
+
+    // After keyboard detection, each of the three visible sample boxes lights
+    // up independently when its current OKLab vector distance crosses the same
+    // white/black threshold used by full analysis.
+    if (!invalid && hasLiveDetection) {
+      for (let patchIndex = 0; patchIndex < probe.patches.length; patchIndex += 1) {
+        const distance = state.livePatchDistancePercent[keyIndex * PROBE_PATCH_COUNT + patchIndex] || 0;
+        if (distance < threshold) continue;
+        const patchBox = canonicalRectToDisplay(probe.patches[patchIndex], crop);
+        context.fillStyle = isWhite ? 'rgba(85,216,255,.78)' : 'rgba(255,112,210,.82)';
+        context.fillRect(
+          patchBox.x0,
+          patchBox.y0,
+          Math.max(1, patchBox.x1 - patchBox.x0),
+          Math.max(1, patchBox.y1 - patchBox.y0),
+        );
+      }
+    }
+
     context.strokeRect(box.x0 + 0.5, box.y0 + 0.5, Math.max(0, width - 1), Math.max(0, height - 1));
 
     for (let patchIndex = 0; patchIndex < probe.patches.length - 1; patchIndex += 1) {
@@ -934,15 +994,15 @@ function cursorForMode(mode) {
 function updateKeyboardOrientationButtons() {
   const orientation = keyboardOrientationForSide(state.keyboardSide);
   const vertical = orientation === 'vertical';
+  const orientationName = t(vertical ? 'keyboard.orientation_vertical' : 'keyboard.orientation_horizontal');
   if (elements.keyboardOrientationToggle) {
     elements.keyboardOrientationToggle.dataset.keyboardOrientation = orientation;
     elements.keyboardOrientationToggle.setAttribute('aria-pressed', String(vertical));
-    const orientationName = t(vertical ? 'keyboard.orientation_vertical' : 'keyboard.orientation_horizontal');
     const accessibleLabel = `${t('keyboard.orientation')}: ${orientationName}`;
     elements.keyboardOrientationToggle.setAttribute('aria-label', accessibleLabel);
     elements.keyboardOrientationToggle.title = accessibleLabel;
   }
-  if (elements.keyboardOrientationIcon) elements.keyboardOrientationIcon.textContent = vertical ? '┃' : '━';
+  if (elements.keyboardOrientationText) elements.keyboardOrientationText.textContent = orientationName;
 }
 
 function invalidateKeyboardDetection(message = '') {
@@ -952,6 +1012,7 @@ function invalidateKeyboardDetection(message = '') {
   state.releaseBaselineColors = null;
   state.releaseBaselineTime = 0;
   state.detectedColorSummary = null;
+  clearLiveDetection();
   resetResults();
   updateKeyboardStatus(message || (state.track ? t('keyboard.detect_required') : ''));
   drawOverlay();
@@ -1039,6 +1100,74 @@ function renderDetectedKeyColors() {
   render(elements.blackKeyColors, summary.black);
 }
 
+function prepareLiveDetection() {
+  if (!state.keyboardDetectionConfirmed || !state.keyMap?.keys?.length || !state.geometry || !state.releaseBaselineColors) {
+    clearLiveDetection();
+    return false;
+  }
+  const crop = getGuideCrop();
+  if (!crop) {
+    clearLiveDetection();
+    return false;
+  }
+  const probes = createLineAnalysisProbes(
+    state.keyMap,
+    state.geometry.width,
+    state.geometry.height,
+    crop.canonicalWidth,
+    crop.canonicalHeight,
+    crop.whiteLineY,
+    crop.blackLineY,
+  );
+  const validKeyMask = probes.map(probe => probe.valid !== false);
+  state.liveProbeSampler = createLineProbeSampler(probes, crop.canonicalWidth, crop.canonicalHeight);
+  state.liveChangeEvaluator = createKeyChangeEvaluator(
+    state.keyMap.keys,
+    state.releaseBaselineColors,
+    currentChangeOptions(),
+    validKeyMask,
+  );
+  if (!state.liveCanonicalCanvas) state.liveCanonicalCanvas = document.createElement('canvas');
+  return true;
+}
+
+function updateLiveDetectionFromPreview() {
+  if (!state.keyboardDetectionConfirmed || !state.releaseBaselineColors || !state.keyMap?.keys?.length) {
+    state.liveKeyStates = null;
+    state.livePatchDistancePercent = null;
+    state.liveDetectionTime = -1;
+    return false;
+  }
+  if (!state.liveChangeEvaluator || !state.liveProbeSampler) {
+    if (!prepareLiveDetection()) return false;
+  }
+  const crop = getGuideCrop();
+  if (!crop) return false;
+  try {
+    const context = drawCanonicalSource(
+      elements.previewCanvas,
+      crop,
+      state.liveCanonicalCanvas,
+      crop.side,
+      crop.canonicalWidth,
+      crop.canonicalHeight,
+      crop.depthSign,
+    );
+    const colors = sampleKeyColorsFromContext(context, state.liveProbeSampler);
+    const result = state.liveChangeEvaluator(colors, currentChangeOptions());
+    state.liveKeyStates = result.changed;
+    state.livePatchDistancePercent = result.patchDistancePercent;
+    state.liveDetectionTime = state.previewFrameTime;
+    return true;
+  } catch (error) {
+    console.warn('live keyboard detection failed', error);
+    state.liveKeyStates = null;
+    state.livePatchDistancePercent = null;
+    state.liveDetectionTime = -1;
+    return false;
+  }
+}
+
 function captureReleaseBaseline({ quiet = false } = {}) {
   if (!state.keyMap?.keys?.length || !state.geometry || !state.guide) return false;
   const crop = getGuideCrop();
@@ -1118,7 +1247,10 @@ function detectKeysFromGuides({ quiet = false } = {}) {
     state.keyMap = createKeyMap(state.geometry, suggestLeftmostMidi(state.geometry));
     if (!captureReleaseBaseline({ quiet: true })) throw new Error(t('error.baseline_missing'));
     state.keyboardDetectionConfirmed = true;
+    prepareLiveDetection();
+    updateLiveDetectionFromPreview();
     resetResults();
+    updateCurrentChord(state.previewFrameTime);
     updateKeyboardStatus();
     updateKeyboardOrientationButtons();
     updateVideoQualityWarning();
@@ -1134,6 +1266,7 @@ function detectKeysFromGuides({ quiet = false } = {}) {
     state.releaseBaselineColors = null;
     state.releaseBaselineTime = 0;
     state.detectedColorSummary = null;
+    clearLiveDetection();
     resetResults();
     updateKeyboardStatus(t('keyboard.detect_failed_hint'));
     drawOverlay();
@@ -1370,11 +1503,27 @@ function regenerateMidiFromCurrentNotes() {
   updateControlAvailability();
 }
 
-function normalizedChangePercent(element) {
+function normalizedChangePercent(element, fallback = 35) {
   const numeric = Number(element?.value);
-  const value = clamp(Math.round(Number.isFinite(numeric) ? numeric : 35), 1, 100);
+  const value = clamp(Math.round(Number.isFinite(numeric) ? numeric : fallback), 1, 100);
   if (element) element.value = String(value);
   return value;
+}
+
+function currentChangeOptions({ normalize = false } = {}) {
+  const read = (element, fallback) => {
+    const numeric = Number(element?.value);
+    return clamp(Number.isFinite(numeric) ? numeric : fallback, 1, 100);
+  };
+  return normalize
+    ? {
+      whiteChangePercent: normalizedChangePercent(elements.whiteChangePercent, 35),
+      blackChangePercent: normalizedChangePercent(elements.blackChangePercent, 50),
+    }
+    : {
+      whiteChangePercent: read(elements.whiteChangePercent, 35),
+      blackChangePercent: read(elements.blackChangePercent, 50),
+    };
 }
 
 function analysisOptions() {
@@ -1383,8 +1532,7 @@ function analysisOptions() {
     baselineColors: state.releaseBaselineColors,
     // Every sample is converted to OKLab and compared with its own fixed
     // release color. White and black keys can use independent distance limits.
-    whiteChangePercent: normalizedChangePercent(elements.whiteChangePercent),
-    blackChangePercent: normalizedChangePercent(elements.blackChangePercent),
+    ...currentChangeOptions({ normalize: true }),
   };
 }
 
@@ -1515,6 +1663,40 @@ async function analyzeAllFrames() {
   }
 }
 
+const TUTORIAL_STEPS = Object.freeze([
+  { part: 'tutorial.step1_part', title: 'tutorial.step1_title', body: 'tutorial.step1_body', note: 'tutorial.step1_note', symbol: '▶' },
+  { part: 'tutorial.step2_part', title: 'tutorial.step2_title', body: 'tutorial.step2_body', note: 'tutorial.step2_note', symbol: '━' },
+  { part: 'tutorial.step3_part', title: 'tutorial.step3_title', body: 'tutorial.step3_body', note: 'tutorial.step3_note', symbol: '88' },
+  { part: 'tutorial.step4_part', title: 'tutorial.step4_title', body: 'tutorial.step4_body', note: 'tutorial.step4_note', symbol: 'MIDI' },
+]);
+let tutorialStepIndex = 0;
+
+function renderTutorialStep() {
+  if (!elements.tutorialDialog) return;
+  tutorialStepIndex = clamp(Math.trunc(tutorialStepIndex), 0, TUTORIAL_STEPS.length - 1);
+  const step = TUTORIAL_STEPS[tutorialStepIndex];
+  if (elements.tutorialProgress) elements.tutorialProgress.textContent = t('tutorial.progress', { current: tutorialStepIndex + 1, total: TUTORIAL_STEPS.length });
+  if (elements.tutorialVisual) elements.tutorialVisual.dataset.page = String(tutorialStepIndex + 1);
+  if (elements.tutorialVisualStep) elements.tutorialVisualStep.textContent = String(tutorialStepIndex + 1);
+  if (elements.tutorialVisualSymbol) elements.tutorialVisualSymbol.textContent = step.symbol;
+  if (elements.tutorialVisualTitle) elements.tutorialVisualTitle.textContent = t(step.part);
+  if (elements.tutorialPart) elements.tutorialPart.textContent = t(step.part);
+  if (elements.tutorialStepTitle) elements.tutorialStepTitle.textContent = t(step.title);
+  if (elements.tutorialStepBody) elements.tutorialStepBody.textContent = t(step.body);
+  if (elements.tutorialStepNote) elements.tutorialStepNote.textContent = t(step.note);
+  if (elements.tutorialPrev) {
+    elements.tutorialPrev.textContent = t('tutorial.prev');
+    elements.tutorialPrev.disabled = tutorialStepIndex === 0;
+  }
+  if (elements.tutorialNext) elements.tutorialNext.textContent = t(tutorialStepIndex === TUTORIAL_STEPS.length - 1 ? 'tutorial.finish' : 'tutorial.next');
+  document.querySelectorAll('[data-tutorial-step]').forEach((button, index) => {
+    const active = index === tutorialStepIndex;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-current', active ? 'step' : 'false');
+    button.setAttribute('aria-label', t('tutorial.jump', { step: index + 1 }));
+  });
+}
+
 function initializeEvents() {
   elements.videoFile.addEventListener('change', event => loadVideoFile(event.target.files?.[0]));
   for (const type of ['dragenter', 'dragover']) {
@@ -1553,10 +1735,10 @@ function initializeEvents() {
     normalizeAnalysisRange('end');
   });
   elements.jumpStart.addEventListener('click', () => { void jumpPreviewToBoundary(false); });
-  elements.prev5Frame.addEventListener('click', () => { void stepPreviewFrames(-5); });
+  elements.prevSecond.addEventListener('click', () => { void stepPreviewSeconds(-1); });
   elements.prevFrame.addEventListener('click', () => { void stepPreviewFrame(-1); });
   elements.nextFrame.addEventListener('click', () => { void stepPreviewFrame(1); });
-  elements.next5Frame.addEventListener('click', () => { void stepPreviewFrames(5); });
+  elements.nextSecond.addEventListener('click', () => { void stepPreviewSeconds(1); });
   elements.jumpEnd.addEventListener('click', () => { void jumpPreviewToBoundary(true); });
 
   elements.overlayCanvas.addEventListener('pointerdown', onOverlayPointerDown);
@@ -1568,10 +1750,15 @@ function initializeEvents() {
   });
 
   const onChangeThreshold = event => {
-    normalizedChangePercent(event.currentTarget);
+    normalizedChangePercent(event.currentTarget, event.currentTarget === elements.blackChangePercent ? 50 : 35);
     if (state.notes.length || state.midiBlob) {
       resetResults();
       setProgress(0, t('progress.waiting'), state.keyboardDetectionConfirmed ? t('progress.detected_detail') : t('progress.idle_detail'));
+    }
+    if (state.keyboardDetectionConfirmed) {
+      updateLiveDetectionFromPreview();
+      updateCurrentChord(state.previewFrameTime);
+      drawOverlay();
     }
   };
   elements.whiteChangePercent.addEventListener('change', onChangeThreshold);
@@ -1595,23 +1782,53 @@ function initializeEvents() {
   elements.downloadMidi.addEventListener('click', () => {
     if (state.midiBlob) downloadBlob(state.midiBlob, `${state.fileBaseName}.mid`);
   });
+  const closeTutorial = () => {
+    const dialog = elements.tutorialDialog;
+    if (!dialog) return;
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+  };
   elements.tutorialButton?.addEventListener('click', event => {
     event.preventDefault();
     event.stopPropagation();
     const dialog = elements.tutorialDialog;
     if (!dialog) return;
+    tutorialStepIndex = 0;
+    renderTutorialStep();
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');
+    requestAnimationFrame(() => elements.tutorialNext?.focus());
   });
-  elements.tutorialClose?.addEventListener('click', () => {
-    const dialog = elements.tutorialDialog;
-    if (!dialog) return;
-    if (typeof dialog.close === 'function') dialog.close();
-    else dialog.removeAttribute('open');
+  elements.tutorialClose?.addEventListener('click', closeTutorial);
+  elements.tutorialPrev?.addEventListener('click', () => {
+    if (tutorialStepIndex <= 0) return;
+    tutorialStepIndex -= 1;
+    renderTutorialStep();
+  });
+  elements.tutorialNext?.addEventListener('click', () => {
+    if (tutorialStepIndex >= TUTORIAL_STEPS.length - 1) { closeTutorial(); return; }
+    tutorialStepIndex += 1;
+    renderTutorialStep();
+  });
+  document.querySelectorAll('[data-tutorial-step]').forEach(button => {
+    button.addEventListener('click', () => {
+      tutorialStepIndex = Number(button.dataset.tutorialStep) || 0;
+      renderTutorialStep();
+    });
   });
   elements.tutorialDialog?.addEventListener('click', event => {
-    if (event.target !== elements.tutorialDialog) return;
-    if (typeof elements.tutorialDialog.close === 'function') elements.tutorialDialog.close();
+    if (event.target === elements.tutorialDialog) closeTutorial();
+  });
+  elements.tutorialDialog?.addEventListener('keydown', event => {
+    if (event.key === 'ArrowLeft' && tutorialStepIndex > 0) {
+      event.preventDefault();
+      tutorialStepIndex -= 1;
+      renderTutorialStep();
+    } else if (event.key === 'ArrowRight' && tutorialStepIndex < TUTORIAL_STEPS.length - 1) {
+      event.preventDefault();
+      tutorialStepIndex += 1;
+      renderTutorialStep();
+    }
   });
   window.addEventListener('beforeunload', disposeCurrentInput);
 }
@@ -1626,6 +1843,8 @@ async function initialize() {
     updateCurrentChord();
     updateKeyboardStatus();
     renderDetectedKeyColors();
+    updateKeyboardOrientationButtons();
+    renderTutorialStep();
     updateVideoQualityWarning();
     drawOverlay();
     if (!state.track && !elements.runtimeError.hidden) {
@@ -1641,6 +1860,7 @@ async function initialize() {
   setPlaybackUi();
   updateKeyboardOrientationButtons();
   initializeEvents();
+  renderTutorialStep();
   updateControlAvailability();
 
   if (!window.isSecureContext || !window.VideoDecoder) {

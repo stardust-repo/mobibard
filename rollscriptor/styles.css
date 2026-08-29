@@ -343,7 +343,7 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
 /* v5.2 RollScriptor three-step workflow + inferred four-side recognition */
 .keyboard-section-head { align-items: flex-start; }
 
-/* Transport: icon-only playback + boundary / 5-frame / 1-frame navigation. */
+/* Transport: icon-only playback + boundary / 1-second / 1-frame navigation. */
 .playback-row {
   grid-template-columns: auto auto auto auto minmax(120px, 1fr) auto auto auto auto;
   gap: 7px;
@@ -567,4 +567,276 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   .orientation-toggle-button { flex: 0 0 auto; }
   .detect-keys-button { flex: 1 1 140px; min-width: 0; }
   .change-threshold-field { flex: 1 1 calc(50% - 4px); justify-content: space-between; }
+}
+
+/* v5.2 RollScriptor compact keyboard help + paged tutorial */
+.orientation-field {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.orientation-toggle-button {
+  min-width: 68px;
+  min-height: 38px;
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 850;
+}
+.keyboard-help-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.keyboard-help-part {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.keyboard-help-part strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 850;
+}
+.keyboard-help-part p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.keyboard-detection-status { margin-top: 8px; }
+.keyboard-color-palette { margin-top: 8px; }
+
+.roll-tutorial-dialog {
+  width: min(820px, calc(100vw - 24px));
+  max-height: calc(100vh - 28px);
+  overflow: hidden;
+}
+.roll-tutorial-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 28px);
+}
+.roll-tutorial-head {
+  align-items: center;
+  padding: 17px 20px;
+}
+.roll-tutorial-head-text { min-width: 0; }
+.roll-tutorial-head h2 { font-size: 20px; }
+.roll-tutorial-progress {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.roll-tutorial-content {
+  min-height: 310px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(270px, .95fr);
+  gap: 20px;
+  padding: 20px;
+  overflow: auto;
+}
+.roll-tutorial-visual {
+  position: relative;
+  min-height: 270px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px),
+    var(--surface-2);
+  background-size: 28px 28px;
+}
+.roll-tutorial-visual::after {
+  content: "";
+  position: absolute;
+  inset: auto 10% 20% 10%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #55d8ff 0 48%, transparent 48% 52%, #ff70d2 52% 100%);
+  opacity: .72;
+}
+.roll-tutorial-visual-step {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 11px;
+  font-weight: 900;
+}
+.roll-tutorial-visual-symbol {
+  position: relative;
+  z-index: 1;
+  min-width: 82px;
+  min-height: 82px;
+  padding: 0 14px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -.04em;
+}
+.roll-tutorial-visual-title {
+  position: relative;
+  z-index: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+.roll-tutorial-copy { align-self: center; min-width: 0; }
+.roll-tutorial-part {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+.roll-tutorial-step-title {
+  margin: 0 0 9px;
+  font-size: 20px;
+  line-height: 1.35;
+}
+.roll-tutorial-body {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.75;
+  white-space: pre-line;
+}
+.roll-tutorial-note {
+  margin: 15px 0 0;
+  padding: 10px 11px;
+  border-left: 3px solid var(--accent);
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+.roll-tutorial-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 20px 17px;
+  border-top: 1px solid var(--line);
+}
+.roll-tutorial-dots { display: flex; align-items: center; gap: 7px; }
+.roll-tutorial-dot {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+  cursor: pointer;
+  transition: width .15s ease, background .15s ease;
+}
+.roll-tutorial-dot.active { width: 24px; background: var(--accent); }
+.roll-tutorial-nav { display: flex; gap: 8px; }
+.roll-tutorial-prev,
+.roll-tutorial-next {
+  min-height: 36px;
+  padding: 0 13px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.roll-tutorial-prev { border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.roll-tutorial-prev:disabled { opacity: .42; cursor: default; }
+.roll-tutorial-next { min-width: 72px; }
+
+@media (max-width: 620px) {
+  .keyboard-help-grid { grid-template-columns: 1fr; }
+  .orientation-field { flex: 0 0 auto; }
+  .orientation-toggle-button { min-width: 64px; }
+  .roll-tutorial-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); border-radius: 16px; }
+  .roll-tutorial-card { max-height: calc(100vh - 16px); }
+  .roll-tutorial-head { padding: 14px; }
+  .roll-tutorial-content { min-height: 0; grid-template-columns: 1fr; gap: 13px; padding: 14px; }
+  .roll-tutorial-visual { min-height: 170px; }
+  .roll-tutorial-visual-symbol { min-width: 68px; min-height: 68px; font-size: 20px; }
+  .roll-tutorial-copy { align-self: start; }
+  .roll-tutorial-step-title { font-size: 18px; }
+  .roll-tutorial-footer { padding: 12px 14px 14px; }
+}
+.roll-tutorial-visual::after { display: none; }
+.roll-tutorial-visual[data-page="2"]::after,
+.roll-tutorial-visual[data-page="3"]::after { display: block; }
+
+/* v5.2 RollScriptor concise recognition guide + live frame confirmation */
+.keyboard-help-list {
+  margin: 10px 0 0;
+  padding: 9px 12px 9px 27px;
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.keyboard-help-list li { padding-left: 1px; }
+.keyboard-help-list li::marker { color: var(--muted); }
+.keyboard-help-copy { display: inline; }
+.keyboard-guide-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 10px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.keyboard-guide-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.keyboard-guide-legend .guide-swatch {
+  width: 22px;
+  border-top-width: 4px;
+}
+.keyboard-guide-legend b {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 800;
+}
+@media (max-width: 620px) {
+  .keyboard-guide-legend {
+    display: flex;
+    width: fit-content;
+    margin: 5px 0 0;
+  }
 }
