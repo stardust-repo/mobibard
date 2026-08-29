@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-analysis-settings-v1" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-auto-range-v1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -85,6 +85,7 @@
           <span class="drop-copy">
             <strong data-i18n="file.select">영상 선택</strong>
             <span id="fileName" data-i18n="file.prompt">동영상 파일을 선택하거나 여기에 드롭하세요.</span>
+            <span id="videoInfo" class="video-file-info" hidden></span>
             <span class="video-requirements" data-i18n-aria-label="video.requirements_title" aria-label="권장 영상 조건">
               <b data-i18n="video.requirements_title">권장 영상 조건</b>
               <span class="requirement-list">
@@ -203,9 +204,12 @@
       </div>
 
       <div class="analysis-range settings-group">
-        <div class="group-title-row">
+        <div class="group-title-row analysis-range-title-row">
           <strong data-i18n="analysis.range">분석 시간</strong>
-          <output id="analysisRangeLabel">00:00.000 ~ 00:00.000</output>
+          <div class="analysis-range-title-actions">
+            <button id="autoDetectRange" class="soft-button auto-range-button" type="button" disabled data-i18n="analysis.auto_search" data-i18n-title="analysis.auto_search_help" title="건반 검출 결과를 기준으로 88건반이 보이는 시작·종료 지점을 자동으로 찾습니다.">자동 탐색</button>
+            <output id="analysisRangeLabel">00:00.000 ~ 00:00.000</output>
+          </div>
         </div>
         <div class="range-grid">
           <label class="field">
@@ -299,7 +303,7 @@
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script type="module" src="./js/settings-menu.js?v=20260830-analysis-settings-v1"></script>
-<script type="module" src="./js/app.js?v=20260830-analysis-settings-v1"></script>
+<script type="module" src="./js/settings-menu.js?v=20260830-auto-range-v1"></script>
+<script type="module" src="./js/app.js?v=20260830-auto-range-v1"></script>
 </body>
 </html>

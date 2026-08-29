@@ -14,11 +14,11 @@ import {
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
-} from './vision.js?v=20260830-note-expand-v1';
-import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-note-expand-v1';
+} from './vision.js?v=20260830-auto-range-v1';
+import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-auto-range-v1';
 import { createMidiFile } from './midi.js';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-note-expand-v1';
-import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-note-expand-v1';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-auto-range-v1';
+import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-auto-range-v1';
 
 const MEDIABUNNY_VERSION = '1.55.3';
 const MEDIABUNNY_URLS = [
@@ -27,9 +27,9 @@ const MEDIABUNNY_URLS = [
 ];
 
 const elements = Object.fromEntries([
-  'videoFile', 'fileDrop', 'fileName', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
+  'videoFile', 'fileDrop', 'fileName', 'videoInfo', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
   'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
-  'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent',
+  'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent', 'autoDetectRange',
   'tempo', 'velocity', 'velocityValue', 'noteExtensionFrames', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose', 'tutorialProgress', 'tutorialVisual', 'tutorialVisualStep', 'tutorialVisualSymbol', 'tutorialVisualTitle', 'tutorialPart', 'tutorialStepTitle', 'tutorialStepBody', 'tutorialStepNote', 'tutorialPrev', 'tutorialNext',
@@ -88,10 +88,13 @@ const state = {
   liveDetectionTime: -1,
   videoWidth: 0,
   videoHeight: 0,
+  videoScanMode: 'unknown',
   sessionSource: null,
   sessionRestoreCandidate: null,
   sessionSaveTimer: null,
   restoringSession: false,
+  analysisRangeSearching: false,
+  analysisRangeAutoInitialized: false,
 };
 
 function showToast(message, type = '') {
@@ -238,6 +241,7 @@ function currentSessionSnapshot() {
     blackChangePercent: currentChangeOptions().blackChangePercent,
     analysisStart: Number(elements.analysisStart?.value) || 0,
     analysisEnd: Number(elements.analysisEnd?.value) || state.duration,
+    analysisRangeAutoInitialized: Boolean(state.analysisRangeAutoInitialized),
     tempo: clamp(Number(elements.tempo?.value) || 120, 20, 300),
     velocity: clamp(Number(elements.velocity?.value) || 75, 1, 100),
     noteExtensionFrames: normalizedNoteExtensionFrames(elements.noteExtensionFrames?.value),
@@ -341,6 +345,9 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
   state.restoringSession = true;
   try {
     state.detectionMode = snapshot?.detectionMode === 'single' ? 'single' : 'dual';
+    state.analysisRangeAutoInitialized = snapshot.analysisRangeAutoInitialized === undefined
+      ? Boolean(snapshot.keyboardDetectionConfirmed)
+      : Boolean(snapshot.analysisRangeAutoInitialized);
     updateDetectionModeButton();
     elements.whiteChangePercent.value = String(clamp(Math.round(Number(snapshot.whiteChangePercent) || 30), 1, 100));
     elements.blackChangePercent.value = String(clamp(Math.round(Number(snapshot.blackChangePercent) || 50), 1, 100));
@@ -446,6 +453,151 @@ function updateTimeLabel() {
   elements.timeLabel.textContent = `${formatTime(state.previewTime)} / ${formatTime(state.duration)}`;
 }
 
+
+function toUint8Array(value) {
+  if (!value) return null;
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  return null;
+}
+
+function h264RbspFromNal(nal) {
+  const source = nal?.[0] != null && (nal[0] & 0x1f) === 7 ? nal.subarray(1) : nal;
+  if (!source?.length) return null;
+  const out = [];
+  for (let i = 0; i < source.length; i++) {
+    if (i >= 2 && source[i] === 0x03 && source[i - 1] === 0x00 && source[i - 2] === 0x00) continue;
+    out.push(source[i]);
+  }
+  return Uint8Array.from(out);
+}
+
+class H264BitReader {
+  constructor(bytes) { this.bytes = bytes; this.bit = 0; }
+  readBit() {
+    if (this.bit >= this.bytes.length * 8) throw new Error('H264 bitstream ended');
+    const value = (this.bytes[this.bit >> 3] >> (7 - (this.bit & 7))) & 1;
+    this.bit += 1;
+    return value;
+  }
+  readBits(count) {
+    let value = 0;
+    for (let i = 0; i < count; i++) value = value * 2 + this.readBit();
+    return value;
+  }
+  readUE() {
+    let zeros = 0;
+    while (this.readBit() === 0) {
+      zeros += 1;
+      if (zeros > 31) throw new Error('Invalid Exp-Golomb value');
+    }
+    return zeros ? (2 ** zeros - 1 + this.readBits(zeros)) : 0;
+  }
+  readSE() {
+    const code = this.readUE();
+    return code & 1 ? (code + 1) / 2 : -(code / 2);
+  }
+}
+
+function skipH264ScalingList(reader, size) {
+  let lastScale = 8;
+  let nextScale = 8;
+  for (let j = 0; j < size; j++) {
+    if (nextScale !== 0) {
+      const deltaScale = reader.readSE();
+      nextScale = (lastScale + deltaScale + 256) % 256;
+    }
+    lastScale = nextScale === 0 ? lastScale : nextScale;
+  }
+}
+
+function readH264FrameMbsOnlyFlag(description) {
+  const bytes = toUint8Array(description);
+  if (!bytes || bytes.length < 8 || bytes[0] !== 1) return null;
+  let offset = 5;
+  const spsCount = bytes[offset++] & 0x1f;
+  if (!spsCount || offset + 2 > bytes.length) return null;
+  const spsLength = (bytes[offset] << 8) | bytes[offset + 1];
+  offset += 2;
+  if (!spsLength || offset + spsLength > bytes.length) return null;
+  const rbsp = h264RbspFromNal(bytes.subarray(offset, offset + spsLength));
+  if (!rbsp) return null;
+  try {
+    const r = new H264BitReader(rbsp);
+    const profileIdc = r.readBits(8);
+    r.readBits(8); // constraint flags + reserved bits
+    r.readBits(8); // level_idc
+    r.readUE(); // seq_parameter_set_id
+    if ([100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135].includes(profileIdc)) {
+      const chromaFormatIdc = r.readUE();
+      if (chromaFormatIdc === 3) r.readBit();
+      r.readUE(); // bit_depth_luma_minus8
+      r.readUE(); // bit_depth_chroma_minus8
+      r.readBit(); // qpprime_y_zero_transform_bypass_flag
+      if (r.readBit()) {
+        const count = chromaFormatIdc !== 3 ? 8 : 12;
+        for (let i = 0; i < count; i++) if (r.readBit()) skipH264ScalingList(r, i < 6 ? 16 : 64);
+      }
+    }
+    r.readUE(); // log2_max_frame_num_minus4
+    const picOrderCntType = r.readUE();
+    if (picOrderCntType === 0) {
+      r.readUE();
+    } else if (picOrderCntType === 1) {
+      r.readBit();
+      r.readSE();
+      r.readSE();
+      const cycle = r.readUE();
+      for (let i = 0; i < cycle; i++) r.readSE();
+    }
+    r.readUE(); // max_num_ref_frames
+    r.readBit(); // gaps_in_frame_num_value_allowed_flag
+    r.readUE(); // pic_width_in_mbs_minus1
+    r.readUE(); // pic_height_in_map_units_minus1
+    return Boolean(r.readBit()); // frame_mbs_only_flag
+  } catch {
+    return null;
+  }
+}
+
+async function detectVideoScanMode(track) {
+  try {
+    const codec = await track.getCodec();
+    if (codec === 'vp8' || codec === 'vp9' || codec === 'av1') return 'progressive';
+    if (codec === 'avc') {
+      const config = await track.getDecoderConfig();
+      const frameMbsOnly = readH264FrameMbsOnlyFlag(config?.description);
+      if (frameMbsOnly === true) return 'progressive';
+      if (frameMbsOnly === false) return 'interlaced';
+    }
+  } catch { /* scan type is optional metadata */ }
+  return 'unknown';
+}
+
+function updateVideoInfo() {
+  const box = elements.videoInfo;
+  if (!box) return;
+  if (!state.track || !state.videoWidth || !state.videoHeight) {
+    box.hidden = true;
+    box.textContent = '';
+    return;
+  }
+  const fps = Number(state.fps).toFixed(state.fps < 10 ? 2 : (Math.abs(state.fps - Math.round(state.fps)) < 0.005 ? 0 : 2));
+  const scanLines = Math.round(Math.min(state.videoWidth, state.videoHeight));
+  const scan = state.videoScanMode === 'progressive'
+    ? `${scanLines}p`
+    : state.videoScanMode === 'interlaced'
+      ? `${scanLines}i`
+      : t('video.scan_unknown');
+  box.textContent = t('video.info_format', {
+    resolution: `${state.videoWidth}×${state.videoHeight}`,
+    scan,
+    fps,
+  });
+  box.hidden = false;
+}
+
 function updateVideoQualityWarning() {
   const box = elements.videoQualityWarning;
   if (!box) return;
@@ -527,6 +679,204 @@ function setAnalysisRangeDefaults() {
   elements.analysisStart.value = '0.000';
   elements.analysisEnd.value = state.duration.toFixed(3);
   updateAnalysisRangeLabel();
+}
+
+function resetRollscriptorSettingsForNewVideo() {
+  state.detectionMode = 'dual';
+  state.keyboardSide = 'bottom';
+  state.analysisRangeSearching = false;
+  state.analysisRangeAutoInitialized = false;
+  if (elements.whiteChangePercent) elements.whiteChangePercent.value = '30';
+  if (elements.blackChangePercent) elements.blackChangePercent.value = '50';
+  if (elements.noteExtensionFrames) elements.noteExtensionFrames.value = '0';
+  if (elements.tempo) elements.tempo.value = '120';
+  if (elements.velocity) elements.velocity.value = '75';
+  if (elements.velocityValue) elements.velocityValue.textContent = '75%';
+  updateDetectionModeButton();
+  updateKeyboardOrientationButtons();
+}
+
+function isWhiteMidiNumber(midi) {
+  return [0, 2, 4, 5, 7, 9, 11].includes(((midi % 12) + 12) % 12);
+}
+
+function average(values) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+}
+
+function singleLineFlatKeyboardLooksPresent(imageData, geometry, lineY) {
+  if (!imageData || !geometry?.keyBoundaries || geometry.keyBoundaries.length !== 89) return false;
+  const { width, height, data } = imageData;
+  const numericLineY = Number(lineY);
+  const centerY = clamp(Math.round(Number.isFinite(numericLineY) ? numericLineY : height / 2), 0, Math.max(0, height - 1));
+  const band = Math.max(1, Math.round(height * 0.10));
+  const whiteValues = [];
+  const blackValues = [];
+  for (let keyIndex = 0; keyIndex < 88; keyIndex += 1) {
+    const x0 = clamp(Math.floor(geometry.keyBoundaries[keyIndex]), 0, Math.max(0, width - 1));
+    const x1 = clamp(Math.ceil(geometry.keyBoundaries[keyIndex + 1]), x0 + 1, width);
+    const xs = [0.25, 0.5, 0.75].map(ratio => clamp(Math.round(x0 + (x1 - x0 - 1) * ratio), x0, Math.max(x0, x1 - 1)));
+    const ys = [-band, 0, band].map(offset => clamp(centerY + offset, 0, Math.max(0, height - 1)));
+    let sum = 0;
+    let count = 0;
+    for (const y of ys) {
+      for (const x of xs) {
+        const index = (y * width + x) * 4;
+        sum += data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+        count += 1;
+      }
+    }
+    const luminance = count ? sum / count : 0;
+    (isWhiteMidiNumber(21 + keyIndex) ? whiteValues : blackValues).push(luminance);
+  }
+  const whiteMean = average(whiteValues);
+  const blackMean = average(blackValues);
+  const separation = whiteMean - blackMean;
+  if (separation < 12) return false;
+  const midpoint = (whiteMean + blackMean) / 2;
+  const whiteAccuracy = whiteValues.filter(value => value > midpoint).length / Math.max(1, whiteValues.length);
+  const blackAccuracy = blackValues.filter(value => value < midpoint).length / Math.max(1, blackValues.length);
+  return whiteAccuracy >= 0.68 && blackAccuracy >= 0.68;
+}
+
+async function inspectKeyboardPresenceAtTime(timeSeconds) {
+  if (!state.previewSink || !state.track || !state.guide) return { present: false, time: 0 };
+  const crop = getGuideCrop();
+  if (!crop || crop.canonicalWidth < 40 || crop.canonicalHeight < 8) return { present: false, time: 0 };
+  const requestedTime = clamp(Number(timeSeconds) || 0, 0, state.duration);
+  try {
+    const wrapped = await state.previewSink.getCanvas(state.timeOrigin + requestedTime);
+    if (!wrapped?.canvas) return { present: false, time: requestedTime };
+    const localTime = clamp((wrapped.timestamp ?? (state.timeOrigin + requestedTime)) - state.timeOrigin, 0, state.duration);
+    const canvas = document.createElement('canvas');
+    const context = drawCanonicalSource(
+      wrapped.canvas,
+      crop,
+      canvas,
+      crop.side,
+      crop.canonicalWidth,
+      crop.canonicalHeight,
+      crop.depthSign,
+    );
+    const roi = context.getImageData(0, 0, canvas.width, canvas.height);
+    if (state.detectionMode === 'single') {
+      const geometry = detectSingleLineKeyGeometry(roi, { expectedKeyCount: 88, lineY: crop.singleLineY });
+      if (geometry.keyCount !== 88) return { present: false, time: localTime };
+      // Single-line detection has an intentional 88-region fallback. For range
+      // discovery we therefore also require the expected white/black strip
+      // pattern, otherwise an intro/outro frame could be mistaken for a keyboard.
+      return { present: singleLineFlatKeyboardLooksPresent(roi, geometry, crop.singleLineY), time: localTime };
+    }
+    if (crop.canonicalHeight < 24) return { present: false, time: localTime };
+    const geometry = detectKeyGeometry(roi);
+    const keyMap = createKeyMap(geometry, suggestLeftmostMidi(geometry));
+    const whiteConfidence = Number(geometry.diagnostics?.whiteConfidence ?? geometry.confidence ?? 0);
+    const referenceConfidence = Number(state.geometry?.diagnostics?.whiteConfidence ?? state.geometry?.confidence ?? 0.34);
+    const minimumConfidence = clamp(referenceConfidence * 0.55, 0.10, 0.24);
+    const referenceWidth = Math.max(1, Number(state.geometry?.nominalWhiteWidth) || Number(geometry.nominalWhiteWidth) || 1);
+    const widthRatio = Number(geometry.nominalWhiteWidth) / referenceWidth;
+    const present = geometry.whiteCount === 52
+      && keyMap.keys.length === 88
+      && whiteConfidence >= minimumConfidence
+      && widthRatio >= 0.82
+      && widthRatio <= 1.18;
+    return { present, time: localTime };
+  } catch {
+    return { present: false, time: requestedTime };
+  }
+}
+
+async function keyboardPresenceIsStable(timeSeconds, direction = 1) {
+  const frame = 1 / Math.max(1, state.fps);
+  const first = await inspectKeyboardPresenceAtTime(timeSeconds);
+  if (!first.present) return { present: false, time: first.time };
+  const neighborTime = clamp(timeSeconds + Math.sign(direction || 1) * frame, 0, state.duration);
+  if (Math.abs(neighborTime - timeSeconds) < frame * 0.25) return first;
+  const second = await inspectKeyboardPresenceAtTime(neighborTime);
+  return second.present ? first : { present: false, time: first.time };
+}
+
+async function findKeyboardRangeBoundary(fromStart = true) {
+  const duration = Math.max(0, state.duration);
+  const frame = 1 / Math.max(1, state.fps);
+  const coarseStep = clamp(duration / 120, Math.max(frame, 0.25), 2.0);
+  const direction = fromStart ? 1 : -1;
+  let previousTime = fromStart ? 0 : duration;
+  let previousPresent = false;
+  const limit = Math.ceil(duration / Math.max(frame, coarseStep)) + 2;
+
+  for (let index = 0; index < limit; index += 1) {
+    const sampleTime = fromStart
+      ? Math.min(duration, index * coarseStep)
+      : Math.max(0, duration - index * coarseStep);
+    const sample = await keyboardPresenceIsStable(sampleTime, direction);
+    if (sample.present) {
+      let absent = previousPresent ? sampleTime : previousTime;
+      let present = sampleTime;
+      if (!previousPresent && index === 0) return sample.time;
+      if (fromStart) {
+        let low = Math.min(absent, present);
+        let high = Math.max(absent, present);
+        while (high - low > frame * 1.1) {
+          const mid = (low + high) / 2;
+          const probe = await keyboardPresenceIsStable(mid, 1);
+          if (probe.present) high = mid;
+          else low = mid;
+        }
+        const finalProbe = await keyboardPresenceIsStable(high, 1);
+        return finalProbe.present ? finalProbe.time : high;
+      }
+      let low = Math.min(present, absent);
+      let high = Math.max(present, absent);
+      while (high - low > frame * 1.1) {
+        const mid = (low + high) / 2;
+        const probe = await keyboardPresenceIsStable(mid, -1);
+        if (probe.present) low = mid;
+        else high = mid;
+      }
+      const finalProbe = await keyboardPresenceIsStable(low, -1);
+      return finalProbe.present ? finalProbe.time : low;
+    }
+    previousTime = sampleTime;
+    previousPresent = sample.present;
+    if ((fromStart && sampleTime >= duration) || (!fromStart && sampleTime <= 0)) break;
+  }
+  return null;
+}
+
+async function autoDetectAnalysisRange({ quiet = false } = {}) {
+  if (!state.track || !state.keyboardDetectionConfirmed || state.analysisRangeSearching || state.analyzing) {
+    if (!quiet && !state.keyboardDetectionConfirmed) showToast(t('toast.auto_range_detect_required'), 'error');
+    return false;
+  }
+  pausePlayback();
+  clearFrameCache();
+  state.analysisRangeSearching = true;
+  updateControlAvailability();
+  if (!quiet) showToast(t('toast.auto_range_searching'));
+  try {
+    const start = await findKeyboardRangeBoundary(true);
+    const end = await findKeyboardRangeBoundary(false);
+    const minimum = minimumAnalysisRange();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end - start < minimum) {
+      if (!quiet) showToast(t('toast.auto_range_failed'), 'error');
+      return false;
+    }
+    elements.analysisStart.value = clamp(start, 0, state.duration).toFixed(3);
+    elements.analysisEnd.value = clamp(end, 0, state.duration).toFixed(3);
+    updateAnalysisRangeLabel();
+    resetResults();
+    scheduleRollscriptorSessionPersist();
+    if (!quiet) showToast(t('toast.auto_range_found', { start: formatTime(start), end: formatTime(end) }));
+    return true;
+  } catch (error) {
+    console.error('automatic analysis range detection failed', error);
+    if (!quiet) showToast(t('toast.auto_range_failed'), 'error');
+    return false;
+  } finally {
+    state.analysisRangeSearching = false;
+    updateControlAvailability();
+  }
 }
 
 function updateCurrentChord(time = state.previewTime) {
@@ -641,7 +991,7 @@ function resetResults() {
 
 function updateControlAvailability() {
   const hasVideo = Boolean(state.track);
-  const locked = state.analyzing;
+  const locked = state.analyzing || state.analysisRangeSearching;
   elements.videoFile.disabled = locked || !state.mediabunny;
   elements.timeline.disabled = !hasVideo || locked;
   elements.playPause.disabled = !hasVideo || locked;
@@ -655,6 +1005,10 @@ function updateControlAvailability() {
   elements.analysisEnd.disabled = !hasVideo || locked;
   elements.setStartCurrent.disabled = !hasVideo || locked;
   elements.setEndCurrent.disabled = !hasVideo || locked;
+  if (elements.autoDetectRange) {
+    elements.autoDetectRange.disabled = !hasVideo || !state.keyboardDetectionConfirmed || locked;
+    elements.autoDetectRange.textContent = t(state.analysisRangeSearching ? 'analysis.auto_searching' : 'analysis.auto_search');
+  }
   elements.whiteChangePercent.disabled = locked;
   elements.blackChangePercent.disabled = locked;
   if (elements.noteExtensionFrames) elements.noteExtensionFrames.disabled = locked;
@@ -731,7 +1085,7 @@ function cachedFrameCanvas(sourceCanvas, width, height) {
 }
 
 async function buildFrameCache(centerTime) {
-  if (!state.track || !state.mediabunny || state.playing || state.analyzing) return false;
+  if (!state.track || !state.mediabunny || state.playing || state.analyzing || state.analysisRangeSearching) return false;
   const token = ++state.frameCacheToken;
   const frameDuration = 1 / Math.max(1, state.fps);
   const radius = clamp(frameDuration * FRAME_CACHE_RADIUS_FRAMES, 0.05, 0.35);
@@ -773,7 +1127,7 @@ async function buildFrameCache(centerTime) {
 }
 
 function scheduleFrameCacheWarm(centerTime = state.previewFrameTime) {
-  if (!state.track || state.playing || state.analyzing) return;
+  if (!state.track || state.playing || state.analyzing || state.analysisRangeSearching) return;
   if (state.frameCacheTimer !== null) clearTimeout(state.frameCacheTimer);
   state.frameCacheTimer = setTimeout(() => {
     state.frameCacheTimer = null;
@@ -1699,6 +2053,7 @@ function detectKeysFromGuides({ quiet = false } = {}) {
     updateKeyboardStatus();
     updateKeyboardOrientationButtons();
     updateDetectionModeButton();
+    updateVideoInfo();
     updateVideoQualityWarning();
     drawOverlay();
     updateControlAvailability();
@@ -1896,17 +2251,26 @@ async function finishGuideDrag(event, cancelled = false) {
 }
 
 async function confirmKeyboardDetection() {
-  if (!state.track || state.analyzing) return;
+  if (!state.track || state.analyzing || state.analysisRangeSearching) return;
   pausePlayback();
   // Frame-cache canvases are intentionally downscaled. Detection and release-color
   // capture must use the exact decoded frame selected by the user.
   if (state.previewFromFrameCache) await renderPreview(state.previewFrameTime, true);
-  detectKeysFromGuides({ quiet: false });
+  const detected = detectKeysFromGuides({ quiet: false });
+  const shouldAutoFindRange = detected && !state.analysisRangeAutoInitialized;
+  if (shouldAutoFindRange) {
+    // Only the first successful keyboard detection for a freshly selected video
+    // automatically adjusts the range. Later detections leave the user's range
+    // untouched; the explicit Auto Search button remains available.
+    state.analysisRangeAutoInitialized = true;
+    await autoDetectAnalysisRange({ quiet: false });
+  }
   scheduleRollscriptorSessionPersist();
 }
 
 async function loadVideoFile(file, { restoreSnapshot = null, persistSession = true } = {}) {
-  if (!file || state.analyzing || !state.mediabunny) return;
+  if (!file || state.analyzing || state.analysisRangeSearching || !state.mediabunny) return;
+  if (!restoreSnapshot) resetRollscriptorSettingsForNewVideo();
   clearTimeout(state.sessionSaveTimer);
   state.sessionSaveTimer = null;
   pausePlayback();
@@ -1921,6 +2285,8 @@ async function loadVideoFile(file, { restoreSnapshot = null, persistSession = tr
   state.detectedColorSummary = null;
   state.videoWidth = 0;
   state.videoHeight = 0;
+  state.videoScanMode = 'unknown';
+  updateVideoInfo();
   updateVideoQualityWarning();
   state.fileBaseName = sanitizeBaseName(file.name);
   elements.fileName.textContent = file.name;
@@ -1954,6 +2320,8 @@ async function loadVideoFile(file, { restoreSnapshot = null, persistSession = tr
     state.endTimestamp = endTimestamp;
     state.duration = Math.max(0, endTimestamp - state.timeOrigin);
     state.fps = clamp(metrics?.bestGuessFrameRate || metrics?.averageFrameRate || 30, 1, 240);
+    state.videoScanMode = await detectVideoScanMode(track);
+    updateVideoInfo();
     updateVideoQualityWarning();
     state.previewTime = 0;
     state.previewFrameTime = 0;
@@ -1985,7 +2353,9 @@ async function loadVideoFile(file, { restoreSnapshot = null, persistSession = tr
     disposeCurrentInput();
     elements.previewStage.classList.add('is-empty');
     state.videoWidth = 0; state.videoHeight = 0;
+    state.videoScanMode = 'unknown';
     state.sessionSource = null;
+    updateVideoInfo();
     updateVideoQualityWarning();
     updateKeyboardStatus(t('error.open_video'));
     setProgress(0, t('progress.error'), error.message || String(error));
@@ -2251,6 +2621,7 @@ function initializeEvents() {
     elements.analysisEnd.value = state.previewTime.toFixed(3);
     normalizeAnalysisRange('end');
   });
+  elements.autoDetectRange?.addEventListener('click', () => { void autoDetectAnalysisRange({ quiet: false }); });
   elements.jumpStart.addEventListener('click', () => { void jumpPreviewToBoundary(false); });
   elements.prevSecond.addEventListener('click', () => { void stepPreviewSeconds(-1); });
   elements.prevFrame.addEventListener('click', () => { void stepPreviewFrame(-1); });
@@ -2379,7 +2750,9 @@ async function initialize() {
     updateKeyboardOrientationButtons();
     updateDetectionModeButton();
     renderTutorialStep();
+    updateVideoInfo();
     updateVideoQualityWarning();
+    updateControlAvailability();
     drawOverlay();
     if (!state.track && !elements.runtimeError.hidden) {
       elements.runtimeError.textContent = window.isSecureContext ? t('error.webcodecs') : t('error.secure_context');
