@@ -130,22 +130,11 @@ function hueSector(hue, sectorDegrees) {
   return Math.floor(((normalized + sectorDegrees / 2) % 360) / sectorDegrees) % sectorCount;
 }
 
-function averageKeyRgb(colors, keyIndex) {
-  const baseOffset = keyIndex * CHANNELS_PER_KEY;
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  for (let patchIndex = 0; patchIndex < PATCH_COUNT; patchIndex += 1) {
-    const offset = baseOffset + patchIndex * PATCH_STRIDE;
-    r += colors[offset];
-    g += colors[offset + 1];
-    b += colors[offset + 2];
-  }
-  return [r / PATCH_COUNT, g / PATCH_COUNT, b / PATCH_COUNT];
-}
-
-function keyColorSignature(colors, keyIndex, options) {
-  const [r, g, b] = averageKeyRgb(colors, keyIndex);
+function patchColorSignature(colors, keyIndex, patchIndex, options) {
+  const offset = keyIndex * CHANNELS_PER_KEY + patchIndex * PATCH_STRIDE;
+  const r = colors[offset];
+  const g = colors[offset + 1];
+  const b = colors[offset + 2];
   const { hue, chromaPercent } = rgbHueAndChroma(r, g, b);
   const neutral = chromaPercent < options.neutralChromaPercent;
   return {
@@ -155,6 +144,13 @@ function keyColorSignature(colors, keyIndex, options) {
     hueSector: neutral ? -1 : hueSector(hue, options.hueSectorDegrees),
     neutral,
   };
+}
+
+function keyPatchSignatures(colors, keyIndex, options) {
+  return Array.from(
+    { length: PATCH_COUNT },
+    (_, patchIndex) => patchColorSignature(colors, keyIndex, patchIndex, options),
+  );
 }
 
 function normalizeDetectionOptions(options = {}) {
@@ -174,9 +170,13 @@ function normalizeDetectionOptions(options = {}) {
 }
 
 /**
- * A key is considered changed from its confirmed release state when either:
- *  1) its representative color moves to a different 30° hue region, or
+ * A key sample is considered changed from its confirmed release state when either:
+ *  1) that sample moves to a different 30° hue region, or
  *  2) its perceptual brightness moves by at least 33 points on a 0..100 scale.
+ *
+ * Every key has three independently evaluated samples. The key is active when
+ * any one of those samples changes, so localized highlights on narrow black
+ * keys are not diluted by averaging unchanged parts of the same key.
  *
  * Nearly achromatic colors are kept in one neutral region so tiny RGB noise on
  * white/black keys does not create a meaningless hue flip. Moving between the
@@ -214,9 +214,12 @@ export class StreamingNoteDetector {
       confidence: new Float32Array(this.keyCount * PATCH_COUNT).fill(1),
       source: 'setup-frame',
     };
+    // Keep the three visible samples of every key independent. A piano-roll
+    // note often covers only part of a black key; averaging the three samples
+    // together can dilute an otherwise obvious color/brightness change.
     this.baselineSignatures = Array.from(
       { length: this.keyCount },
-      (_, keyIndex) => keyColorSignature(fixedBaselineColors, keyIndex, this.detectionOptions),
+      (_, keyIndex) => keyPatchSignatures(fixedBaselineColors, keyIndex, this.detectionOptions),
     );
     this.validKeyMask = Array.isArray(options.validKeyMask) || ArrayBuffer.isView(options.validKeyMask)
       ? options.validKeyMask
@@ -241,14 +244,17 @@ export class StreamingNoteDetector {
     for (let keyIndex = 0; keyIndex < this.keyCount; keyIndex += 1) {
       const state = this.states[keyIndex];
       const valid = !this.validKeyMask || this.validKeyMask[keyIndex] !== false;
-      const currentSignature = valid
-        ? keyColorSignature(colors, keyIndex, this.detectionOptions)
+      const currentSignatures = valid
+        ? keyPatchSignatures(colors, keyIndex, this.detectionOptions)
         : null;
-      const pressed = valid && keyStateChanged(
-        this.baselineSignatures[keyIndex],
+      // White and black keys are both evaluated key-by-key and patch-by-patch.
+      // One changed sample is sufficient because a falling note/highlight may
+      // occupy only a narrow strip of the physical key in the source video.
+      const pressed = valid && currentSignatures.some((currentSignature, patchIndex) => keyStateChanged(
+        this.baselineSignatures[keyIndex][patchIndex],
         currentSignature,
         this.detectionOptions,
-      );
+      ));
 
       if (!state.active && pressed) {
         state.active = true;

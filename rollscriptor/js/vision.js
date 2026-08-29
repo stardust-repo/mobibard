@@ -860,9 +860,10 @@ function safeProbeRect(x0, y0, x1, y1, width, height) {
 
 /**
  * Builds the exact color-sampling boxes shown on the two guide lines.
- * Each key uses a very small central area. Black-key boxes are valid only when
- * the visible guide line itself is safely inside the detected black-key body;
- * an invalid box is still drawn for feedback but is ignored by color sampling.
+ * Each key uses a very small central area. Black-key boxes are valid whenever
+ * the visible guide line crosses the detected black-key body. Their tiny sample
+ * rectangles are clipped to that body so the neighboring white key cannot leak
+ * into the black-key color sample.
  */
 export function createLineAnalysisProbes(
   keyMap,
@@ -891,22 +892,32 @@ export function createLineAnalysisProbes(
     const innerMargin = (1 - sampleFraction) * 0.5;
     const innerX0 = x0 + keyWidth * innerMargin;
     const innerX1 = x1 - keyWidth * innerMargin;
-    const sampleTop = centerY - halfHeight;
-    const sampleBottom = centerY + halfHeight;
+    let sampleTop = centerY - halfHeight;
+    let sampleBottom = centerY + halfHeight;
 
     let valid = true;
     if (key.type === 'black') {
       const bodyTop = clamp(key.y0 * scaleY, 0, Math.max(0, targetHeight - 1));
       const bodyBottom = clamp(key.y1 * scaleY, bodyTop + 1, targetHeight);
       const bodyHeight = Math.max(1, bodyBottom - bodyTop);
-      // Keep a deliberately generous distance from the black-key top and tip.
-      const bodyInset = Math.min(
-        Math.max(1, bodyHeight * 0.12),
-        Math.max(0, (bodyHeight - 1) / 2),
-      );
+      // The guide line itself is the user's confirmation point. Previously we
+      // rejected a black key unless the whole thin sample box stayed inside a
+      // generous 12% inset, which could silently disable clearly visible black
+      // keys near their tip. Accept the key whenever the guide center actually
+      // crosses the detected black-key body, then clip the tiny sample box to
+      // that body so it cannot bleed into the neighboring white key.
+      const bodyInset = Math.min(Math.max(0.35, bodyHeight * 0.02), Math.max(0, (bodyHeight - 1) / 2));
       const safeTop = bodyTop + bodyInset;
       const safeBottom = bodyBottom - bodyInset;
-      valid = sampleTop >= safeTop && sampleBottom <= safeBottom;
+      valid = centerY >= safeTop && centerY <= safeBottom;
+      if (valid) {
+        sampleTop = Math.max(sampleTop, safeTop);
+        sampleBottom = Math.min(sampleBottom, safeBottom);
+        if (sampleBottom <= sampleTop) {
+          sampleTop = Math.max(bodyTop, centerY - 0.5);
+          sampleBottom = Math.min(bodyBottom, centerY + 0.5);
+        }
+      }
     }
 
     const span = Math.max(1, innerX1 - innerX0);
