@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-ui13" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-ui16" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -165,18 +165,18 @@
           </li>
           <li data-i18n="keyboard.help_detect">건반이 눌리지 않은 프레임에서 건반 검출을 누릅니다. 이후 재생하거나 프레임을 이동하면 변화가 감지된 샘플 박스와 현재 검출 코드를 바로 확인할 수 있습니다.</li>
         </ul>
-        <div id="keyboardStatus" class="status-line keyboard-detection-status" data-i18n="keyboard.no_video">영상이 없습니다.</div>
-        <div id="keyboardColorPalette" class="keyboard-color-palette keyboard-detection-info" hidden>
+        <div id="keyboardColorPalette" class="keyboard-color-palette keyboard-detection-info">
           <div class="keyboard-color-palette-title" data-i18n="keyboard.detected_colors">검출선 정보</div>
-          <div class="keyboard-detection-code-row" aria-live="polite">
+          <div id="keyboardStatus" class="status-line keyboard-detection-status" data-i18n="keyboard.stage_video_required">먼저 영상을 선택해 주세요.</div>
+          <div class="keyboard-detection-code-row keyboard-detection-detail" aria-live="polite" hidden>
             <span class="keyboard-color-label" data-i18n="transport.current_chord">현재 검출 코드</span>
             <strong id="currentChord" data-i18n="transport.after_detection">건반 검출 후 표시</strong>
           </div>
-          <div class="keyboard-color-row">
+          <div class="keyboard-color-row keyboard-detection-detail" hidden>
             <span class="keyboard-color-label" data-i18n="keyboard.white_colors">흰 건반</span>
             <div id="whiteKeyColors" class="keyboard-color-chips"></div>
           </div>
-          <div class="keyboard-color-row">
+          <div class="keyboard-color-row keyboard-detection-detail" hidden>
             <span class="keyboard-color-label" data-i18n="keyboard.black_colors">검은 건반</span>
             <div id="blackKeyColors" class="keyboard-color-chips"></div>
           </div>
@@ -287,6 +287,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script type="module" src="./js/settings-menu.js?v=20260829-ui7"></script>
-<script type="module" src="./js/app.js?v=20260830-detection-info"></script>
+<script type="module" src="./js/app.js?v=20260830-detection-info-v4"></script>
 </body>
 </html>

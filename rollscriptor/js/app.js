@@ -12,7 +12,7 @@ import {
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
 } from './vision.js';
-import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-detection-info';
+import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-detection-info-v4';
 import { createMidiFile } from './midi.js';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js';
@@ -312,6 +312,7 @@ function resetResults() {
       : (state.keyboardDetectionConfirmed ? t('progress.detected_detail') : t('progress.idle_detail'));
     setProgress(0, t('progress.waiting'), detail);
   }
+  updateKeyboardStatus();
 }
 
 function updateControlAvailability() {
@@ -1014,7 +1015,7 @@ function invalidateKeyboardDetection(message = '') {
   state.detectedColorSummary = null;
   clearLiveDetection();
   resetResults();
-  updateKeyboardStatus(message || (state.track ? t('keyboard.detect_required') : ''));
+  updateKeyboardStatus(message || (state.track ? t('keyboard.stage_detect_required') : ''));
   drawOverlay();
   updateControlAvailability();
 }
@@ -1076,7 +1077,10 @@ function renderDetectedKeyColors() {
   const summary = state.detectedColorSummary;
   const hasDetection = Boolean(state.keyboardDetectionConfirmed);
   const hasColors = Boolean(summary && (summary.white.length || summary.black.length));
-  palette.hidden = !hasDetection;
+  palette.hidden = false;
+  palette.querySelectorAll('.keyboard-detection-detail').forEach((row) => {
+    row.hidden = !hasDetection;
+  });
   if (!hasDetection || !hasColors) {
     elements.whiteKeyColors.replaceChildren();
     elements.blackKeyColors.replaceChildren();
@@ -1204,18 +1208,25 @@ function captureReleaseBaseline({ quiet = false } = {}) {
 
 function updateKeyboardStatus(message = '') {
   renderDetectedKeyColors();
+
   if (message) {
     elements.keyboardStatus.textContent = message;
+    elements.keyboardStatus.dataset.stage = 'message';
     return;
   }
+
   if (!state.track || !state.guide) {
-    elements.keyboardStatus.textContent = t('keyboard.no_video');
+    elements.keyboardStatus.textContent = t('keyboard.stage_video_required');
+    elements.keyboardStatus.dataset.stage = 'video';
     return;
   }
+
   if (!state.keyboardDetectionConfirmed || !state.keyMap) {
-    elements.keyboardStatus.textContent = t('keyboard.detect_required');
+    elements.keyboardStatus.textContent = t('keyboard.stage_detect_required');
+    elements.keyboardStatus.dataset.stage = 'setup';
     return;
   }
+
   const crop = getGuideCrop();
   let invalidBlack = 0;
   if (crop && state.geometry) {
@@ -1230,12 +1241,35 @@ function updateKeyboardStatus(message = '') {
     );
     invalidBlack = probes.filter(probe => probe.key.type === 'black' && probe.valid === false).length;
   }
-  const baselineText = state.releaseBaselineColors
-    ? t('keyboard.baseline_fixed', { time: formatTime(state.releaseBaselineTime) })
-    : t('keyboard.baseline_none');
-  elements.keyboardStatus.textContent = invalidBlack
-    ? t('keyboard.status_invalid', { white: state.keyMap.whiteKeys.length, black: state.keyMap.blackKeys.length, invalid: invalidBlack, baseline: baselineText })
-    : t('keyboard.status_ok', { white: state.keyMap.whiteKeys.length, black: state.keyMap.blackKeys.length, baseline: baselineText });
+
+  const values = {
+    white: state.keyMap.whiteKeys.length,
+    black: state.keyMap.blackKeys.length,
+    invalid: invalidBlack,
+    time: formatTime(state.releaseBaselineTime),
+    count: formatNumber(state.notes.length),
+  };
+
+  if (state.analyzing) {
+    elements.keyboardStatus.textContent = t('keyboard.stage_analyzing', values);
+    elements.keyboardStatus.dataset.stage = 'analyzing';
+    return;
+  }
+
+  if (state.midiBlob) {
+    elements.keyboardStatus.textContent = t(
+      invalidBlack ? 'keyboard.stage_analyzed_invalid' : 'keyboard.stage_analyzed',
+      values,
+    );
+    elements.keyboardStatus.dataset.stage = 'analyzed';
+    return;
+  }
+
+  elements.keyboardStatus.textContent = t(
+    invalidBlack ? 'keyboard.stage_detected_invalid' : 'keyboard.stage_detected',
+    values,
+  );
+  elements.keyboardStatus.dataset.stage = 'detected';
 }
 
 function detectKeysFromGuides({ quiet = false } = {}) {
@@ -1332,7 +1366,7 @@ function setKeyboardOrientation(orientation) {
   state.guide = initialGuideForOrientation(orientation);
   syncKeyboardSideFromGuide();
   updateKeyboardOrientationButtons();
-  invalidateKeyboardDetection(t('keyboard.detect_required'));
+  invalidateKeyboardDetection(t('keyboard.stage_detect_required'));
 }
 
 function onOverlayPointerDown(event) {
@@ -1399,7 +1433,7 @@ async function finishGuideDrag(event, cancelled = false) {
   state.guide = normalizeGuide(state.guide);
   syncKeyboardSideFromGuide();
   updateKeyboardOrientationButtons();
-  invalidateKeyboardDetection(t('keyboard.detect_required'));
+  invalidateKeyboardDetection(t('keyboard.stage_detect_required'));
 }
 
 async function confirmKeyboardDetection() {
@@ -1544,6 +1578,7 @@ function setAnalysisBusy(busy) {
   elements.cancelAnalysis.disabled = false;
   elements.cancelAnalysis.textContent = t('actions.cancel');
   updateControlAvailability();
+  updateKeyboardStatus();
 }
 
 function updatePostProcessingProgress(info) {

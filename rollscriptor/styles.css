@@ -448,10 +448,14 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   border-top: 1px solid var(--line);
 }
 .keyboard-detection-status {
-  margin-top: 9px;
-  padding: 9px 10px;
-  border-radius: 9px;
-  background: var(--surface);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
 }
 .keyboard-color-palette {
   margin-top: 8px;
@@ -472,12 +476,11 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
 
 .keyboard-detection-code-row {
   min-width: 0;
-  display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
+  display: flex;
   align-items: baseline;
   gap: 8px;
-  padding-bottom: 7px;
-  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
 }
 .keyboard-detection-code-row strong {
   min-width: 0;
@@ -485,7 +488,10 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   font-size: 13px;
   font-weight: 850;
   letter-spacing: .01em;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 .keyboard-detection-code-row strong.has-notes { color: var(--cyan); }
 
@@ -632,7 +638,7 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   font-size: 10px;
   line-height: 1.55;
 }
-.keyboard-detection-status { margin-top: 8px; }
+
 .keyboard-color-palette { margin-top: 8px; }
 
 .roll-tutorial-dialog {
@@ -858,4 +864,19 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
     width: fit-content;
     margin: 5px 0 0;
   }
+}
+
+/* Detection guide info is state-driven: only the information needed at the current step is shown. */
+.keyboard-detection-detail[hidden] { display: none !important; }
+.keyboard-detection-status[data-stage="video"],
+.keyboard-detection-status[data-stage="setup"],
+.keyboard-detection-status[data-stage="message"] {
+  color: var(--muted);
+  font-weight: 700;
+}
+.keyboard-detection-status[data-stage="detected"],
+.keyboard-detection-status[data-stage="analyzing"],
+.keyboard-detection-status[data-stage="analyzed"] {
+  color: var(--text);
+  font-weight: 800;
 }
