@@ -1,4 +1,4 @@
-import { t } from './language-manager.js?v=20260830-site-nav1';
+import { t } from './language-manager.js?v=20260831-ja-labels1';
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
 const WHITE_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const WHITE_PCS = [0, 2, 4, 5, 7, 9, 11];

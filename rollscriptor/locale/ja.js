@@ -1,10 +1,10 @@
 export default {
   code: 'ja', htmlLang: 'ja', strings: {
-    'nav.veloscriptor': '벨로 스크립터', 'nav.simple_generator': '簡単ジェネレーター', 'nav.detail_generator': '詳細ジェネレーター',
+    'nav.veloscriptor': 'ヴェロスクリプター', 'nav.simple_generator': '簡単ジェネレーター', 'nav.detail_generator': '詳細ジェネレーター',
     'settings.menu': '設定',
     'site.title': 'モビバード v5.2',
     'ui.brand': 'モビバード', 'ui.recommended': 'おすすめサイト', 'ui.select_recommended': 'おすすめサイトを選択', 'ui.discord': 'Discord',
-    'site.map': "サイトマップ", 'site.simple': "簡単モード", 'site.player': "詳細モード", 'site.rollscriptor': "ロールスクリプター", 'site.veloscriptor': "벨로 스크립터",
+    'site.map': "サイトマップ", 'site.simple': "簡単モード", 'site.player': "詳細モード", 'site.rollscriptor': "ロールスクリプター", 'site.veloscriptor': "ヴェロスクリプター",
     'account.menu': 'アカウントメニュー', 'account.guest': 'ゲスト', 'theme.label': 'テーマ', 'theme.change': 'テーマ変更',
     'nav.products': '製品ナビゲーション', 'language.label': '言語', 'language.select': '言語を選択',
     'theme.toggle': 'テーマ変更', 'theme.to_light': 'ライトテーマに変更', 'theme.to_dark': 'ダークテーマに変更',

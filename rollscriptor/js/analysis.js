@@ -1,5 +1,5 @@
 import { clamp, PROBE_PATCH_COUNT } from './vision.js?v=20260830-site-nav1';
-import { t } from './language-manager.js?v=20260830-site-nav1';
+import { t } from './language-manager.js?v=20260831-ja-labels1';
 
 const PATCH_COUNT = PROBE_PATCH_COUNT;
 const PATCH_STRIDE = 3; // R, G, B

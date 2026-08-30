@@ -1,5 +1,5 @@
 import { makeOutputFileName, parseMidiForVelocity, patchMidiVelocities } from './midi.js?v=20260830-site-nav1';
-import { initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-site-nav1';
+import { initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260831-ja-labels1';
 
 const TARGET_SAMPLE_RATE = 16000;
 const AUTO_BASE_VELOCITY = 96;

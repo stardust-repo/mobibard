@@ -431,9 +431,9 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "site.simple": "簡単モード",
     "site.player": "詳細モード",
     "site.rollscriptor": "ロールスクリプター",
-    "site.veloscriptor": "벨로 스크립터",
+    "site.veloscriptor": "ヴェロスクリプター",
 
-    "site.mobibeats": "MobiBeats",
+    "site.mobibeats": "モビビーツ",
     "ui.empty_ch": "空のチャンネル",
     "ui.example": "例",
     "ui.expand": "展開する",

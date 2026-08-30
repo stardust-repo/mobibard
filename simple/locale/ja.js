@@ -47,7 +47,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ja"] = {
     "siteSimple": "簡単モード",
     "sitePlayer": "詳細モード",
     "siteRollscriptor": "ロールスクリプター",
-    "siteVeloscriptor": "벨로 스크립터",
+    "siteVeloscriptor": "ヴェロスクリプター",
     "mobibeats": "モビビーツ",
     "mobibeatsPreparing": "準備中",
     "mobibeatsLoading": "モビビーツを読み込んでいます。",

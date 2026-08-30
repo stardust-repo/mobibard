@@ -326,7 +326,7 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
   .page-shell { place-items:start stretch; padding:0 0 20px; }
   .converter { width:100%; padding:22px 16px; border-radius:16px; }
   .simple-title-row { grid-template-columns:1fr; gap:10px; }
-  .simple-mode-actions { grid-row:1; justify-content:flex-start; }
+  .simple-mode-actions { grid-row:1; width:100%; justify-content:flex-end; }
   .simple-title-row .title-block { grid-row:2; }
   .simple-section-head { align-items:flex-start; flex-direction:column; gap:5px; }
   .simple-section-head p { text-align:left; }

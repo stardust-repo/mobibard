@@ -17,7 +17,7 @@ import {
 } from './vision.js?v=20260830-site-nav1';
 import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260830-site-nav1';
 import { createMidiFile } from './midi.js?v=20260830-site-nav1';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-site-nav1';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260831-ja-labels1';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-site-nav1';
 
 const MEDIABUNNY_VERSION = '1.55.3';
