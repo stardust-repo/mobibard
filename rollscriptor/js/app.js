@@ -26,12 +26,17 @@ const MEDIABUNNY_URLS = [
   `https://unpkg.com/mediabunny@${MEDIABUNNY_VERSION}/dist/bundles/mediabunny.min.mjs`,
 ];
 
+const MIDI_PREVIEW_LOOKAHEAD_SEC = 0.7;
+const MIDI_PREVIEW_SCHEDULER_MS = 120;
+const MIDI_PREVIEW_BANK = 0;
+const MIDI_PREVIEW_PROGRAM = 0;
+
 const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'videoInfo', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
   'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent', 'autoDetectRange',
   'tempo', 'velocity', 'velocityValue', 'velocityLabelText', 'velocityUsageHint', 'audioVelocityToggle', 'audioVelocityText', 'noteExtensionFrames', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
-  'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
+  'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'midiPreviewControls', 'midiPreviewPlay', 'midiPreviewRewind', 'midiPreviewSlider', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose', 'tutorialProgress', 'tutorialVisual', 'tutorialVisualStep', 'tutorialVisualSymbol', 'tutorialVisualTitle', 'tutorialPart', 'tutorialStepTitle', 'tutorialStepBody', 'tutorialStepNote', 'tutorialPrev', 'tutorialNext',
 ].map(id => [id, document.getElementById(id)]));
 const noteExtensionButtons = Array.from(document.querySelectorAll('[data-note-extension]'));
@@ -102,6 +107,24 @@ const state = {
   audioVelocityEnabled: true,
   audioVelocityAnalyzing: false,
 };
+
+let midiPreviewAudioContext = null;
+let midiPreviewMasterGain = null;
+let midiPreviewSoundBank = null;
+let midiPreviewPreset = null;
+let midiPreviewPresetPromise = null;
+let midiPreviewPreparedNotes = null;
+let midiPreviewSchedule = null;
+let midiPreviewPlaying = false;
+let midiPreviewOffset = 0;
+let midiPreviewContextStart = 0;
+let midiPreviewOffsetStart = 0;
+let midiPreviewSchedulerTimer = 0;
+let midiPreviewProgressRaf = 0;
+let midiPreviewActiveSources = [];
+let midiPreviewScheduledIds = new Set();
+let midiPreviewSeekWasPlaying = false;
+let midiPreviewSeeking = false;
 
 function showToast(message, type = '') {
   elements.toast.textContent = message;
@@ -415,6 +438,7 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
           bpm: clamp(Number(elements.tempo.value) || 120, 20, 300),
         });
         elements.noteCountResult.textContent = formatNumber(state.notes.length);
+        refreshMidiPreviewSchedule({ preserveOffset: false });
       }
     }
 
@@ -1120,7 +1144,265 @@ function togglePlayback() {
   else startPlayback();
 }
 
+function midiPreviewDuration() {
+  return Math.max(0, Number(midiPreviewSchedule?.duration) || 0);
+}
+
+function updateMidiPreviewUi() {
+  if (!elements.midiPreviewPlay) return;
+  const label = t(midiPreviewPlaying ? 'transport.pause' : 'transport.play');
+  elements.midiPreviewPlay.textContent = midiPreviewPlaying ? '■' : '▶';
+  elements.midiPreviewPlay.setAttribute('aria-label', label);
+  elements.midiPreviewPlay.title = label;
+  if (elements.midiPreviewRewind) {
+    const firstLabel = t('transport.first');
+    elements.midiPreviewRewind.setAttribute('aria-label', firstLabel);
+    elements.midiPreviewRewind.title = firstLabel;
+  }
+}
+
+function setMidiPreviewSlider(value) {
+  if (!elements.midiPreviewSlider) return;
+  const duration = midiPreviewDuration();
+  const clamped = clamp(Number(value) || 0, 0, duration);
+  elements.midiPreviewSlider.value = String(Math.round(clamped * 100) / 100);
+}
+
+function getCurrentMidiPreviewOffset() {
+  if (!midiPreviewAudioContext || !midiPreviewPlaying) return midiPreviewOffset;
+  if (midiPreviewAudioContext.currentTime <= midiPreviewContextStart) return midiPreviewOffsetStart;
+  return clamp(
+    midiPreviewOffsetStart + (midiPreviewAudioContext.currentTime - midiPreviewContextStart),
+    0,
+    midiPreviewDuration(),
+  );
+}
+
+function stopMidiPreviewSources() {
+  const sources = midiPreviewActiveSources.splice(0);
+  const now = midiPreviewAudioContext?.currentTime || 0;
+  for (const item of sources) {
+    const gainParam = item?.gain?.gain;
+    if (midiPreviewAudioContext && gainParam) {
+      const fadeEnd = now + 0.012;
+      try {
+        if (typeof gainParam.cancelAndHoldAtTime === 'function') gainParam.cancelAndHoldAtTime(now);
+        else gainParam.cancelScheduledValues(now);
+        gainParam.linearRampToValueAtTime(0.0001, fadeEnd);
+      } catch { /* no-op */ }
+      try { item?.source?.stop(fadeEnd + 0.004); } catch { /* no-op */ }
+    } else {
+      try { item?.source?.stop(); } catch { /* no-op */ }
+    }
+  }
+  midiPreviewScheduledIds.clear();
+}
+
+function stopMidiPreview(updateOffset = true) {
+  if (midiPreviewSchedulerTimer) clearInterval(midiPreviewSchedulerTimer);
+  midiPreviewSchedulerTimer = 0;
+  if (midiPreviewProgressRaf) cancelAnimationFrame(midiPreviewProgressRaf);
+  midiPreviewProgressRaf = 0;
+  if (updateOffset && midiPreviewPlaying) midiPreviewOffset = getCurrentMidiPreviewOffset();
+  stopMidiPreviewSources();
+  midiPreviewPlaying = false;
+  setMidiPreviewSlider(midiPreviewOffset);
+  updateMidiPreviewUi();
+}
+
+function resetMidiPreview() {
+  stopMidiPreview(false);
+  midiPreviewSchedule = null;
+  midiPreviewPreparedNotes = null;
+  midiPreviewOffset = 0;
+  midiPreviewSeekWasPlaying = false;
+  midiPreviewSeeking = false;
+  if (elements.midiPreviewSlider) {
+    elements.midiPreviewSlider.min = '0';
+    elements.midiPreviewSlider.max = '0';
+    elements.midiPreviewSlider.value = '0';
+  }
+  updateMidiPreviewUi();
+}
+
+function refreshMidiPreviewSchedule({ preserveOffset = true } = {}) {
+  const previousOffset = preserveOffset
+    ? (midiPreviewPlaying ? getCurrentMidiPreviewOffset() : midiPreviewOffset)
+    : 0;
+  stopMidiPreview(false);
+  midiPreviewPreparedNotes = null;
+  const notes = state.notes
+    .map((note, index) => {
+      const start = Math.max(0, Number(note.start) || 0);
+      const end = Math.max(start, Number(note.end) || start);
+      const durationSec = end - start;
+      const velocity = clamp(Number(note.velocity) || 95, 1, 127);
+      return {
+        id: index,
+        part: 0,
+        midi: clamp(Math.round(Number(note.midi) || 0), 0, 127),
+        volume: clamp(velocity / 127 * 15, 0.01, 15),
+        start,
+        durationSec,
+      };
+    })
+    .filter(note => note.durationSec > 0.001);
+  const duration = notes.reduce((max, note) => Math.max(max, note.start + note.durationSec), 0);
+  midiPreviewSchedule = { notes, duration };
+  midiPreviewOffset = clamp(previousOffset, 0, duration);
+  if (elements.midiPreviewSlider) {
+    elements.midiPreviewSlider.min = '0';
+    elements.midiPreviewSlider.max = String(duration);
+    setMidiPreviewSlider(midiPreviewOffset);
+  }
+  updateMidiPreviewUi();
+}
+
+async function ensureMidiPreviewAudioContext() {
+  if (!midiPreviewAudioContext || midiPreviewAudioContext.state === 'closed') {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) throw new Error('Web Audio API is unavailable');
+    midiPreviewAudioContext = new AudioContextClass();
+    midiPreviewMasterGain = midiPreviewAudioContext.createGain();
+    midiPreviewMasterGain.gain.value = 0.44;
+    midiPreviewMasterGain.connect(midiPreviewAudioContext.destination);
+  }
+  if (midiPreviewAudioContext.state === 'suspended') await midiPreviewAudioContext.resume();
+  return midiPreviewAudioContext;
+}
+
+async function ensureMidiPreviewPreset() {
+  if (midiPreviewSoundBank && midiPreviewPreset) return midiPreviewPreset;
+  if (!midiPreviewPresetPromise) {
+    midiPreviewPresetPromise = (async () => {
+      const api = window.MabiSoundBank;
+      if (!api?.loadEmbeddedSoundBank || !api?.findPreset) throw new Error('Sound bank player is unavailable');
+      const soundBank = await api.loadEmbeddedSoundBank({ clearBase64: true });
+      const preset = api.findPreset(soundBank, MIDI_PREVIEW_PROGRAM, MIDI_PREVIEW_BANK);
+      if (!preset) throw new Error('Piano playback preset is unavailable');
+      midiPreviewSoundBank = soundBank;
+      midiPreviewPreset = preset;
+      return preset;
+    })().catch(error => {
+      midiPreviewPresetPromise = null;
+      throw error;
+    });
+  }
+  return midiPreviewPresetPromise;
+}
+
+function prepareMidiPreviewNotes() {
+  const api = window.MabiSoundBank;
+  if (!midiPreviewSchedule || !midiPreviewSoundBank || !midiPreviewPreset || !api?.prepareNotes) return [];
+  const prepared = api.prepareNotes(
+    midiPreviewAudioContext,
+    midiPreviewSoundBank,
+    midiPreviewPreset,
+    midiPreviewSchedule.notes || [],
+  );
+  for (let index = 0; index < prepared.length; index += 1) prepared[index].id = index;
+  midiPreviewPreparedNotes = prepared;
+  return prepared;
+}
+
+function scheduleMidiPreviewWindow() {
+  const api = window.MabiSoundBank;
+  if (!midiPreviewPlaying || !midiPreviewAudioContext || !midiPreviewSchedule || !midiPreviewPreparedNotes || !api?.schedulePreparedNotes) return;
+  const nowOffset = getCurrentMidiPreviewOffset();
+  const duration = midiPreviewDuration();
+  if (duration > 0 && nowOffset >= duration - 0.005) {
+    finishMidiPreview();
+    return;
+  }
+  const windowEnd = Math.min(duration, nowOffset + MIDI_PREVIEW_LOOKAHEAD_SEC);
+  api.schedulePreparedNotes(midiPreviewAudioContext, midiPreviewPreparedNotes, {
+    baseTime: midiPreviewContextStart,
+    fromSec: midiPreviewOffsetStart,
+    windowStart: nowOffset,
+    windowEnd,
+    destination: midiPreviewMasterGain,
+    activeSources: midiPreviewActiveSources,
+    scheduledIds: midiPreviewScheduledIds,
+    minLeadTime: 0.012,
+  });
+}
+
+function startMidiPreviewProgressLoop() {
+  if (midiPreviewProgressRaf) cancelAnimationFrame(midiPreviewProgressRaf);
+  const tick = () => {
+    if (!midiPreviewPlaying) return;
+    const duration = midiPreviewDuration();
+    midiPreviewOffset = getCurrentMidiPreviewOffset();
+    if (!midiPreviewSeeking) setMidiPreviewSlider(midiPreviewOffset);
+    if (duration > 0 && midiPreviewOffset >= duration - 0.005) {
+      finishMidiPreview();
+      return;
+    }
+    midiPreviewProgressRaf = requestAnimationFrame(tick);
+  };
+  midiPreviewProgressRaf = requestAnimationFrame(tick);
+}
+
+async function startMidiPreview() {
+  const duration = midiPreviewDuration();
+  if (!midiPreviewSchedule || !(midiPreviewSchedule.notes || []).length || duration <= 0) return;
+  try {
+    if (midiPreviewOffset >= duration - 0.005) midiPreviewOffset = 0;
+    await ensureMidiPreviewAudioContext();
+    await ensureMidiPreviewPreset();
+    if (!midiPreviewSchedule?.notes?.length || midiPreviewDuration() <= 0) return;
+    stopMidiPreview(false);
+    const prepared = prepareMidiPreviewNotes();
+    if (!prepared.length) throw new Error('No audible MIDI notes');
+    midiPreviewActiveSources = [];
+    midiPreviewScheduledIds = new Set();
+    midiPreviewOffsetStart = midiPreviewOffset;
+    midiPreviewContextStart = midiPreviewAudioContext.currentTime + 0.04;
+    midiPreviewPlaying = true;
+    updateMidiPreviewUi();
+    scheduleMidiPreviewWindow();
+    midiPreviewSchedulerTimer = setInterval(scheduleMidiPreviewWindow, MIDI_PREVIEW_SCHEDULER_MS);
+    startMidiPreviewProgressLoop();
+  } catch (error) {
+    stopMidiPreview(false);
+    console.error('[RollScriptor] MIDI preview failed', error);
+    showToast(t('toast.preview_error'), 'error');
+  }
+}
+
+function finishMidiPreview() {
+  const duration = midiPreviewDuration();
+  stopMidiPreview(false);
+  midiPreviewOffset = duration;
+  setMidiPreviewSlider(duration);
+}
+
+function toggleMidiPreview() {
+  if (midiPreviewPlaying) stopMidiPreview(true);
+  else void startMidiPreview();
+}
+
+function rewindMidiPreview() {
+  stopMidiPreview(false);
+  midiPreviewOffset = 0;
+  setMidiPreviewSlider(0);
+}
+
+function updateMidiPreviewSeekFromSlider() {
+  if (!elements.midiPreviewSlider) return;
+  midiPreviewOffset = clamp(Number(elements.midiPreviewSlider.value) || 0, 0, midiPreviewDuration());
+  setMidiPreviewSlider(midiPreviewOffset);
+}
+
+function finishMidiPreviewSeek() {
+  midiPreviewSeeking = false;
+  if (!midiPreviewSeekWasPlaying) return;
+  midiPreviewSeekWasPlaying = false;
+  void startMidiPreview();
+}
+
 function resetResults() {
+  resetMidiPreview();
   state.notes = [];
   state.rawNotes = [];
   state.analysisCompleted = false;
@@ -1130,6 +1412,9 @@ function resetResults() {
   elements.noteCountResult.textContent = '0';
   updateCurrentChord();
   elements.downloadMidi.disabled = true;
+  if (elements.midiPreviewPlay) elements.midiPreviewPlay.disabled = true;
+  if (elements.midiPreviewRewind) elements.midiPreviewRewind.disabled = true;
+  if (elements.midiPreviewSlider) elements.midiPreviewSlider.disabled = true;
   if (!state.analyzing) {
     const detail = !state.track
       ? t('progress.select_video')
@@ -1142,6 +1427,7 @@ function resetResults() {
 function updateControlAvailability() {
   const hasVideo = Boolean(state.track);
   const locked = state.analyzing || state.analysisRangeSearching || state.audioVelocityAnalyzing;
+  if (locked && midiPreviewPlaying) stopMidiPreview(true);
   elements.videoFile.disabled = locked || !state.mediabunny;
   elements.timeline.disabled = !hasVideo || locked;
   elements.playPause.disabled = !hasVideo || locked;
@@ -1171,6 +1457,10 @@ function updateControlAvailability() {
   // step can be explained with a toast instead of looking like a dead control.
   elements.analyzeVideo.disabled = !hasVideo || locked;
   elements.downloadMidi.disabled = !state.midiBlob || locked;
+  const midiPreviewReady = Boolean(midiPreviewSchedule?.notes?.length) && midiPreviewDuration() > 0;
+  if (elements.midiPreviewPlay) elements.midiPreviewPlay.disabled = !midiPreviewReady || locked;
+  if (elements.midiPreviewRewind) elements.midiPreviewRewind.disabled = !midiPreviewReady || locked;
+  if (elements.midiPreviewSlider) elements.midiPreviewSlider.disabled = !midiPreviewReady || locked;
   updateRestoreButton();
 }
 
@@ -1184,6 +1474,7 @@ function clearLiveDetection() {
 
 function disposeCurrentInput() {
   pausePlayback();
+  stopMidiPreview(false);
   clearFrameCache();
   state.previewToken += 1;
   try { state.input?.dispose(); } catch { /* no-op */ }
@@ -2582,6 +2873,7 @@ function regenerateMidiFromCurrentNotes({ recalculateVelocity = true } = {}) {
     bpm: clamp(Number(elements.tempo.value) || 120, 20, 300),
   });
   elements.noteCountResult.textContent = formatNumber(state.notes.length);
+  refreshMidiPreviewSchedule({ preserveOffset: true });
   updateCurrentChord();
   drawOverlay();
   updateControlAvailability();
@@ -2691,6 +2983,7 @@ function analysisOptions() {
 }
 
 function setAnalysisBusy(busy) {
+  if (busy && midiPreviewPlaying) stopMidiPreview(true);
   state.analyzing = busy;
   elements.cancelAnalysis.hidden = !busy;
   elements.analyzeVideo.hidden = busy;
@@ -3005,6 +3298,22 @@ function initializeEvents() {
   elements.downloadMidi.addEventListener('click', () => {
     if (state.midiBlob) downloadBlob(state.midiBlob, `${state.fileBaseName}.mid`);
   });
+  elements.midiPreviewPlay?.addEventListener('click', toggleMidiPreview);
+  elements.midiPreviewRewind?.addEventListener('click', rewindMidiPreview);
+  elements.midiPreviewSlider?.addEventListener('pointerdown', () => {
+    midiPreviewSeeking = true;
+    midiPreviewSeekWasPlaying = midiPreviewPlaying;
+    if (midiPreviewPlaying) stopMidiPreview(true);
+  });
+  elements.midiPreviewSlider?.addEventListener('input', () => {
+    if (midiPreviewPlaying) {
+      midiPreviewSeekWasPlaying = true;
+      stopMidiPreview(true);
+    }
+    updateMidiPreviewSeekFromSlider();
+  });
+  elements.midiPreviewSlider?.addEventListener('change', finishMidiPreviewSeek);
+  elements.midiPreviewSlider?.addEventListener('pointerup', () => setTimeout(finishMidiPreviewSeek, 0));
   const closeTutorial = () => {
     const dialog = elements.tutorialDialog;
     if (!dialog) return;
@@ -3062,6 +3371,7 @@ async function initialize() {
   initializeThemeUi();
   onLanguageChange(() => {
     setPlaybackUi();
+    updateMidiPreviewUi();
     updateAnalysisRangeLabel();
     updateCurrentChord();
     updateKeyboardStatus();
@@ -3086,6 +3396,7 @@ async function initialize() {
     updateRestoreButton();
   });
   setPlaybackUi();
+  updateMidiPreviewUi();
   updateKeyboardOrientationButtons();
   updateDetectionModeButton();
   updateAudioVelocityToggle();

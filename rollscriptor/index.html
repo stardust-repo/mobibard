@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-midi-layout-swap1" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-midi-preview1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -105,7 +105,7 @@
       <div id="runtimeError" class="runtime-error" hidden></div>
     </section>
 
-    <section class="workflow-section" aria-labelledby="videoAnalysisSectionTitle">
+    <section class="workflow-section video-analysis-section" aria-labelledby="videoAnalysisSectionTitle">
       <div class="section-head keyboard-section-head">
         <div>
           <span class="step-number">2</span>
@@ -137,6 +137,7 @@
         </div>
         <div class="analysis-range-inline">
           <strong data-i18n="analysis.range">분석 시간</strong>
+          <button id="autoDetectRange" class="soft-button auto-range-button" type="button" disabled data-i18n="analysis.auto_search" data-i18n-title="analysis.auto_search_help" title="건반 검출 결과를 기준으로 88건반이 보이는 시작·종료 지점을 자동으로 찾습니다.">자동 탐색</button>
           <div class="analysis-inline-time">
             <input id="analysisStart" type="number" min="0" step="0.001" value="0" disabled data-i18n-aria-label="analysis.start_seconds" aria-label="시작 (초)"/>
             <button id="setStartCurrent" class="soft-button" type="button" disabled data-i18n="analysis.current">현재</button>
@@ -146,7 +147,6 @@
             <input id="analysisEnd" type="number" min="0" step="0.001" value="0" disabled data-i18n-aria-label="analysis.end_seconds" aria-label="종료 (초)"/>
             <button id="setEndCurrent" class="soft-button" type="button" disabled data-i18n="analysis.current">현재</button>
           </div>
-          <button id="autoDetectRange" class="soft-button auto-range-button" type="button" disabled data-i18n="analysis.auto_search" data-i18n-title="analysis.auto_search_help" title="건반 검출 결과를 기준으로 88건반이 보이는 시작·종료 지점을 자동으로 찾습니다.">자동 탐색</button>
           <output id="analysisRangeLabel">00:00.000</output>
         </div>
       </div>
@@ -264,6 +264,13 @@
 
       <div class="midi-download-actions">
         <button id="downloadMidi" type="button" class="primary-button download-button" disabled data-i18n="actions.download">MIDI 다운로드</button>
+        <div id="midiPreviewControls" class="midi-preview-controls" role="group" data-i18n-aria-label="midi.preview" aria-label="MIDI 미리듣기">
+          <div class="midi-preview-actions">
+            <button id="midiPreviewPlay" type="button" class="soft-button midi-preview-icon-button" disabled data-i18n-aria-label="transport.play" data-i18n-title="transport.play" aria-label="재생" title="재생">▶</button>
+            <button id="midiPreviewRewind" type="button" class="soft-button midi-preview-icon-button" disabled data-i18n-aria-label="transport.first" data-i18n-title="transport.first" aria-label="처음으로" title="처음으로">|◀</button>
+          </div>
+          <input id="midiPreviewSlider" class="midi-preview-slider" type="range" min="0" max="0" step="0.01" value="0" disabled data-i18n-aria-label="midi.preview_position" aria-label="MIDI 미리듣기 위치"/>
+        </div>
       </div>
     </section>
   </section>
@@ -307,7 +314,10 @@
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
+<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
+<script src="../assets/default_sf3.js?v=20260819-115800"></script>
 <script type="module" src="./js/settings-menu.js?v=20260830-cleanup2"></script>
-<script type="module" src="./js/app.js?v=20260830-cleanup2"></script>
+<script type="module" src="./js/app.js?v=20260830-midi-preview1"></script>
 </body>
 </html>
