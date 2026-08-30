@@ -5,7 +5,7 @@ export default { code:'ko', htmlLang:'ko', strings:{
   'language.label':'언어', 'language.select':'언어 선택', 'theme.label':'테마', 'theme.change':'테마 변경', 'theme.to_light':'라이트 테마로 변경', 'theme.to_dark':'다크 테마로 변경',
   'nav.products':'제품 이동', 'nav.simple':'간단 생성기', 'nav.player':'상세 생성기', 'nav.rollscriptor':'롤 스크립터',
   'nav.midi_extract':"MIDI 추출",
-  'product.name':"벨로 스크립터", 'product.subtitle':'MIDI와 동일한 연주 음원을 비교해 노트별 벨로시티를 다시 계산합니다.', 'product.privacy':'파일은 서버로 전송되지 않고 이 브라우저 안에서만 처리됩니다.',
+  'product.name':"벨로 스크립터", 'product.subtitle':'MIDI와 동일한 연주 음원을 비교해 노트별 벨로시티를 다시 계산합니다.',
   'section.files_title':'파일 불러오기', 'section.files_description':'MIDI와 그 MIDI를 렌더링한 동일한 음원 파일을 선택합니다.',
   'file.midi_title':'MIDI 파일', 'file.midi_prompt':'MIDI를 선택하거나 여기에 드롭하세요.', 'file.midi_support':'MID · MIDI · KAR',
   'file.audio_title':'동일 음원 파일', 'file.audio_prompt':'음원을 선택하거나 여기에 드롭하세요.', 'file.audio_support':'브라우저가 재생할 수 있는 WAV · MP3 · M4A · OGG 등',

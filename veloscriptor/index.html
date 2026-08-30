@@ -20,7 +20,7 @@
   } catch (_) {}
 })();
 </script>
-<link href="./styles.css?v=20260831-player-header1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-player-header1" rel="stylesheet"/>
+<link href="./styles.css?v=20260831-cancel-red1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar veloscriptor-topbar">
@@ -68,12 +68,12 @@
 <div class="title-block">
 <h1 data-i18n="product.name" id="pageTitle">벨로 스크립터</h1>
 <p class="subtitle" data-i18n="product.subtitle">MIDI와 동일한 연주 음원을 비교해 노트별 벨로시티를 다시 계산합니다.</p>
+<p class="drum-note title-drum-note" data-i18n="settings.drums_preserved">채널 10의 드럼은 음계 주파수로 세기를 판정할 수 없으므로 원본 벨로시티를 유지합니다.</p>
 </div>
 <nav aria-label="제품 이동" class="mode-actions simple-mode-actions" data-i18n-aria-label="nav.products">
 <a class="mode-action-button" data-i18n="nav.midi_extract" href="https://muscriptor.kyutai.org/" rel="noopener noreferrer" target="_blank">MIDI 추출</a>
 </nav>
 </div>
-<p class="privacy-note"><span aria-hidden="true">●</span><span data-i18n="product.privacy">파일은 서버로 전송되지 않고 이 브라우저 안에서만 처리됩니다.</span></p>
 <section aria-labelledby="filesTitle" class="workflow-section simple-workflow-section">
 <div class="section-head simple-section-head">
 <div><span class="step-number">1</span><h2 data-i18n="section.files_title" id="filesTitle">파일 불러오기</h2></div>
@@ -106,11 +106,11 @@
 <div class="settings-grid">
 <label class="setting-card offset-setting">
 <span class="setting-title" data-i18n="settings.offset">오디오 시작 오프셋 (ms)</span>
-<input id="audioOffset" inputmode="numeric" max="10000" min="-10000" step="1" type="number" value="0"/>
+<input id="audioOffset" inputmode="numeric" max="10000" min="-10000" step="10" type="number" value="0"/>
 <small data-i18n="settings.offset_hint">음원의 첫 소리가 MIDI보다 늦으면 +값, 빠르면 −값을 입력합니다.</small>
 </label>
 </div>
-<p class="drum-note" data-i18n="settings.drums_preserved">채널 10의 드럼은 음계 주파수로 세기를 판정할 수 없으므로 원본 벨로시티를 유지합니다.</p>
+
 </div>
 <div class="analysis-action-grid">
 <button class="primary-button analysis-button" data-i18n="actions.analyze" disabled="" id="analyzeButton" type="button">볼륨 분석</button>

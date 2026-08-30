@@ -43,8 +43,6 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
 .subtitle { margin:8px 0 0; color:var(--muted); font-size:14px; line-height:1.55; }
 .mode-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
 .mode-action-button { min-height:36px; padding:0 12px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); color:var(--text); font-size:12px; font-weight:800; text-decoration:none; white-space:nowrap; }
-.privacy-note { margin:18px 0 0; padding:10px 12px; display:flex; align-items:center; gap:8px; border-radius:10px; background:var(--accent-soft); color:var(--muted); font-size:12px; }
-.privacy-note > span:first-child { color:var(--accent); font-size:8px; }
 .workflow-section { margin-top:24px; padding:22px; border:1px solid var(--line); border-radius:17px; background:var(--surface); }
 .section-head { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom:17px; }
 .section-head > div { min-width:0; display:flex; align-items:center; gap:10px; }
@@ -73,11 +71,15 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
 .toggle-button { width:100%; min-height:40px; font-weight:850; }
 .toggle-button.is-selected { border-color:var(--accent); background:var(--accent); color:var(--accent-text); }
 .drum-note { margin:11px 1px 0; color:var(--muted); font-size:10px; line-height:1.45; }
+.title-drum-note { margin:5px 0 0; font-size:11px; line-height:1.45; }
 .analysis-action-grid { display:grid; grid-template-columns:minmax(190px,.32fr) minmax(0,1fr); gap:10px; align-items:stretch; }
 .primary-button { border-color:var(--accent); background:var(--accent); color:var(--accent-text); font-weight:900; }
 .primary-button:hover:not(:disabled) { border-color:color-mix(in srgb,var(--accent) 72%,var(--text)); background:color-mix(in srgb,var(--accent) 88%,var(--surface)); }
 .analysis-button { min-height:100%; font-size:15px; }
 .analysis-button.is-cancel { border-color:color-mix(in srgb,var(--danger) 65%,var(--line)); background:color-mix(in srgb,var(--danger) 12%,var(--surface)); color:var(--danger); }
+.primary-button.analysis-button.is-cancel:hover:not(:disabled),
+.primary-button.analysis-button.is-cancel:focus-visible { border-color:#7f1d1d; background:#991b1b; color:#fff; }
+.primary-button.analysis-button.is-cancel:focus-visible { outline:2px solid color-mix(in srgb,#991b1b 38%,transparent); outline-offset:2px; }
 .analysis-status { min-width:0; padding:14px; border:1px solid var(--line); border-radius:13px; background:var(--surface-2); }
 .progress-track { height:7px; overflow:hidden; border-radius:999px; background:var(--surface-3); }
 #progressBar { width:0; height:100%; border-radius:inherit; background:var(--accent); transition:width .12s linear; }

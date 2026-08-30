@@ -1572,4 +1572,4 @@ button:disabled {
 }
 
 /* Shared header typography: regular weight in the top HUD. */
-.top-hud :is(button,select,strong,span,output,.score-value,.time-row){font-weight:400!important}
+.top-hud :is(button,select,strong,span,output,.score-value,.time-row){font-weight:600!important}

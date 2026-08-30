@@ -5,7 +5,7 @@ export default { code:'en', htmlLang:'en', strings:{
   'language.label':'Language', 'language.select':'Select language', 'theme.label':'Theme', 'theme.change':'Change theme', 'theme.to_light':'Switch to light theme', 'theme.to_dark':'Switch to dark theme',
   'nav.products':'Product navigation', 'nav.simple':'Simple Generator', 'nav.player':'Advanced Generator', 'nav.rollscriptor':'RollScriptor',
   'nav.midi_extract':"MIDI Extractor",
-  'product.name':"VeloScriptor", 'product.subtitle':'Recalculate note velocities by comparing a MIDI file with its matching rendered audio.', 'product.privacy':'Files never leave this browser and are not uploaded to a server.',
+  'product.name':"VeloScriptor", 'product.subtitle':'Recalculate note velocities by comparing a MIDI file with its matching rendered audio.',
   'section.files_title':'Load files', 'section.files_description':'Choose a MIDI file and the matching audio rendered from the same performance.',
   'file.midi_title':'MIDI file', 'file.midi_prompt':'Choose a MIDI file or drop it here.', 'file.midi_support':'MID · MIDI · KAR',
   'file.audio_title':'Matching audio', 'file.audio_prompt':'Choose the audio file or drop it here.', 'file.audio_support':'WAV · MP3 · M4A · OGG and other formats your browser can play',

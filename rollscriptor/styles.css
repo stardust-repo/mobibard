@@ -164,6 +164,13 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
 }
 .download-button { background: var(--surface); color: var(--text); }
 .danger-button { border-color: color-mix(in srgb, var(--danger) 60%, var(--line)); color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
+.danger-button:hover:not(:disabled),
+.danger-button:focus-visible {
+  border-color: #7f1d1d;
+  background: #991b1b;
+  color: #fff;
+}
+.danger-button:focus-visible { outline: 2px solid color-mix(in srgb, #991b1b 38%, transparent); outline-offset: 2px; }
 
 .analysis-status { margin-top: 14px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-2); }
 .progress-track { height: 6px; overflow: hidden; border-radius: 999px; background: var(--surface-3); }

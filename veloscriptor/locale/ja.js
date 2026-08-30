@@ -5,7 +5,7 @@ export default { code:'ja', htmlLang:'ja', strings:{
   'language.label':'言語', 'language.select':'言語を選択', 'theme.label':'テーマ', 'theme.change':'テーマ変更', 'theme.to_light':'ライトテーマに変更', 'theme.to_dark':'ダークテーマに変更',
   'nav.products':'製品移動', 'nav.simple':'かんたん生成', 'nav.player':'詳細生成', 'nav.rollscriptor':'ロールスクリプター',
   'nav.midi_extract':"MIDI抽出",
-  'product.name':"벨로 스크립터", 'product.subtitle':'MIDIと同じ演奏の音源を比較し、ノートごとのベロシティを再計算します。', 'product.privacy':'ファイルはサーバーへ送信されず、このブラウザー内だけで処理されます。',
+  'product.name':"벨로 스크립터", 'product.subtitle':'MIDIと同じ演奏の音源を比較し、ノートごとのベロシティを再計算します。',
   'section.files_title':'ファイル読み込み', 'section.files_description':'MIDIと、そのMIDIを同じ演奏で書き出した音源を選択します。',
   'file.midi_title':'MIDIファイル', 'file.midi_prompt':'MIDIを選択するか、ここへドロップしてください。', 'file.midi_support':'MID · MIDI · KAR',
   'file.audio_title':'同一音源ファイル', 'file.audio_prompt':'音源を選択するか、ここへドロップしてください。', 'file.audio_support':'ブラウザーで再生できるWAV · MP3 · M4A · OGGなど',

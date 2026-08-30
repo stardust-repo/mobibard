@@ -5,7 +5,7 @@ export default { code:'zh-TW', htmlLang:'zh-Hant', strings:{
   'language.label':'語言', 'language.select':'選擇語言', 'theme.label':'主題', 'theme.change':'切換主題', 'theme.to_light':'切換到淺色主題', 'theme.to_dark':'切換到深色主題',
   'nav.products':'產品導覽', 'nav.simple':'簡易產生器', 'nav.player':'詳細產生器', 'nav.rollscriptor':'RollScriptor',
   'nav.midi_extract':"MIDI 擷取",
-  'product.name':"VeloScriptor", 'product.subtitle':'將MIDI與同一演奏的音訊比較，重新計算每個音符的力度。', 'product.privacy':'檔案不會上傳到伺服器，只在目前瀏覽器中處理。',
+  'product.name':"VeloScriptor", 'product.subtitle':'將MIDI與同一演奏的音訊比較，重新計算每個音符的力度。',
   'section.files_title':'載入檔案', 'section.files_description':'選擇MIDI以及由同一演奏輸出的音訊檔案。',
   'file.midi_title':'MIDI檔案', 'file.midi_prompt':'選擇MIDI或拖放到這裡。', 'file.midi_support':'MID · MIDI · KAR',
   'file.audio_title':'相同音訊', 'file.audio_prompt':'選擇音訊或拖放到這裡。', 'file.audio_support':'瀏覽器可播放的WAV · MP3 · M4A · OGG等',

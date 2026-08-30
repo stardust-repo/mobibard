@@ -5,7 +5,7 @@ export default { code:'zh-CN', htmlLang:'zh-Hans', strings:{
   'language.label':'语言', 'language.select':'选择语言', 'theme.label':'主题', 'theme.change':'切换主题', 'theme.to_light':'切换到浅色主题', 'theme.to_dark':'切换到深色主题',
   'nav.products':'产品导航', 'nav.simple':'简易生成器', 'nav.player':'详细生成器', 'nav.rollscriptor':'RollScriptor',
   'nav.midi_extract':"MIDI 提取",
-  'product.name':"VeloScriptor", 'product.subtitle':'将MIDI与同一演奏的音频进行比较，重新计算每个音符的力度。', 'product.privacy':'文件不会上传到服务器，只在当前浏览器中处理。',
+  'product.name':"VeloScriptor", 'product.subtitle':'将MIDI与同一演奏的音频进行比较，重新计算每个音符的力度。',
   'section.files_title':'加载文件', 'section.files_description':'选择MIDI以及由同一演奏渲染出的音频文件。',
   'file.midi_title':'MIDI文件', 'file.midi_prompt':'选择MIDI或拖放到这里。', 'file.midi_support':'MID · MIDI · KAR',
   'file.audio_title':'匹配音频', 'file.audio_prompt':'选择音频或拖放到这里。', 'file.audio_support':'浏览器可播放的WAV · MP3 · M4A · OGG等',
