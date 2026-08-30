@@ -1,10 +1,11 @@
 <!-- 모비바드 | モビバード | Mobibard -->
 <!DOCTYPE html>
+
 <html data-theme="light" lang="ko">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<meta name="color-scheme" content="light dark"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="light dark" name="color-scheme"/>
 <title>모비바드 v5.2</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <link href="https://stardust-repo.github.io/mobibard/rollscriptor/?lang=ko" hreflang="ko" rel="alternate"/>
@@ -39,285 +40,275 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-analysis-button-stretch1" rel="stylesheet"/>
+<link href="./styles.css?v=20260831-common-nav1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-player-header1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
-  <div class="topbar-inner">
-    <a data-i18n-aria-label="site.title" aria-label="모비바드 v5.2" class="brand" href="../simple/index.html"><span aria-hidden="true" class="brand-mark"></span><span data-i18n="ui.brand">모비바드</span><span class="brand-version">v5.2</span></a>
-    <div class="top-actions">
-      <div data-i18n-aria-label="ui.recommended" aria-label="추천 사이트" class="header-links">
-        <select data-i18n-aria-label="ui.select_recommended" aria-label="추천 사이트 선택" class="midi-site-links" id="midiSiteLinks"><option data-i18n="ui.recommended" value="">추천 사이트</option><option value="https://bitmidi.com/">BitMidi</option><option value="https://www.classicalarchives.com/midi.html">ClassicalArchives</option><option value="https://ichigos.com/">Ichigo's</option><option value="https://josh.agarrado.net/music/anime/index.php">Josh's Anime</option><option value="http://www.midiex.net/">MIDIEX</option><option value="http://www.midisite.co.uk/">Midisite</option><option value="https://musescore.com/">MuseScore</option><option value="https://www.vgmusic.com/">VGMusic</option><option value="https://www.zophar.net/">Zophar's Domain</option></select>
-        <a data-i18n-aria-label="ui.discord" data-i18n-title="ui.discord" aria-label="디스코드" class="discord-link" href="https://discord.gg/qqwzCERZK5" rel="noopener noreferrer" target="_blank" title="디스코드"><img alt="" decoding="async" src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d7f4ef6498ac018f2c55_Symbol.svg"/></a>
-      </div>
-      <div class="account-menu-wrap settings-menu-wrap" id="settingsControl">
-        <button data-i18n-aria-label="settings.menu" data-i18n-title="settings.menu" aria-controls="settingsMenu" aria-expanded="false" aria-haspopup="dialog" aria-label="설정" class="settings-icon-button" id="settingsButton" popovertarget="settingsMenu" popovertargetaction="toggle" title="설정" type="button">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h7v2H3V6Zm11 0h7v2h-7V6Zm-4-2h4v6h-4V4ZM3 11h12v2H3v-2Zm16 0h2v2h-2v-2Zm-4-2h4v6h-4V9ZM3 16h4v2H3v-2Zm8 0h10v2H11v-2Zm-4-2h4v6H7v-6Z"/></svg>
-          <span class="sr-only" data-i18n="settings.menu">설정</span>
-        </button>
-        <div data-i18n-aria-label="settings.menu" aria-label="설정" aria-labelledby="settingsButton" class="account-menu-popover settings-menu-popover" id="settingsMenu" popover="auto" role="dialog">
-          <div class="settings-menu-header"><strong data-i18n="settings.menu">설정</strong></div>
-          <label class="account-menu-field" for="languageSelect"><span class="account-menu-field-label" data-i18n="language.label" id="languageLabel">언어</span><select id="languageSelect" class="language-select" data-i18n-aria-label="language.select" aria-label="언어 선택"><option value="ko">한국어</option><option value="ja">日本語</option><option value="en">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option></select></label>
-          <div class="account-menu-field"><span class="account-menu-field-label" data-i18n="theme.label" id="themeLabel">테마</span><button class="theme-menu-button" id="themeButton" title="테마 변경" type="button"><span aria-hidden="true" class="theme-menu-icon">◐</span><span data-i18n="theme.change">테마 변경</span></button></div>
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="topbar-inner">
+<details class="brand-site-map" data-current-site="rollscriptor"><summary class="brand-site-map-trigger brand"><span aria-hidden="true" class="brand-mark"></span><span class="brand-site-map-name" data-i18n="ui.brand">모비바드</span><span class="brand-version">v5.2</span><svg aria-hidden="true" class="brand-site-map-chevron" viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6"></path></svg></summary><nav aria-label="사이트 맵" class="brand-site-map-popover site-map-popover" data-common-site-map=""></nav></details>
+<div class="top-actions">
+<div aria-label="추천 사이트" class="header-links" data-i18n-aria-label="ui.recommended">
+<select aria-label="추천 사이트 선택" class="midi-site-links" data-common-recommended="" data-i18n-aria-label="ui.select_recommended" id="midiSiteLinks"><option data-i18n="ui.recommended" value="">추천 사이트</option>
+</select>
+
+<a aria-label="디스코드" class="discord-link" data-i18n-aria-label="ui.discord" data-i18n-title="ui.discord" href="https://discord.gg/qqwzCERZK5" rel="noopener noreferrer" target="_blank" title="디스코드"><img alt="" decoding="async" src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d7f4ef6498ac018f2c55_Symbol.svg"/></a>
+</div>
+<div class="account-menu-wrap settings-menu-wrap" id="settingsControl">
+<button aria-controls="settingsMenu" aria-expanded="false" aria-haspopup="dialog" aria-label="설정" class="settings-icon-button" data-i18n-aria-label="settings.menu" data-i18n-title="settings.menu" id="settingsButton" popovertarget="settingsMenu" popovertargetaction="toggle" title="설정" type="button">
+<svg aria-hidden="true" viewbox="0 0 24 24"><path d="M3 6h7v2H3V6Zm11 0h7v2h-7V6Zm-4-2h4v6h-4V4ZM3 11h12v2H3v-2Zm16 0h2v2h-2v-2Zm-4-2h4v6h-4V9ZM3 16h4v2H3v-2Zm8 0h10v2H11v-2Zm-4-2h4v6H7v-6Z"></path></svg>
+<span class="sr-only" data-i18n="settings.menu">설정</span>
+</button>
+<div aria-label="설정" aria-labelledby="settingsButton" class="account-menu-popover settings-menu-popover settings-two-row" data-i18n-aria-label="settings.menu" id="settingsMenu" popover="auto" role="dialog">
+<div class="settings-menu-header"><strong data-i18n="settings.menu">설정</strong></div>
+<label class="account-menu-field settings-row" for="languageSelect"><span class="account-menu-field-label" data-i18n="language.label" id="languageLabel">언어</span><select aria-label="언어 선택" class="language-select" data-i18n-aria-label="language.select" id="languageSelect"><option value="ko">한국어</option><option value="ja">日本語</option><option value="en">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option></select></label>
+<div class="account-menu-field settings-row"><span class="account-menu-field-label" data-i18n="theme.label" id="themeLabel">테마</span><button class="theme-menu-button" id="themeButton" title="테마 변경" type="button"><span aria-hidden="true" class="theme-menu-icon">◐</span><span data-i18n="theme.change">테마 변경</span></button></div>
+</div>
+</div>
+</div>
+</div>
 </header>
-
 <main class="page-shell">
-  <section class="converter" aria-labelledby="pageTitle">
-    <div class="title-row"><div class="title-block"><h1 id="pageTitle" data-i18n="product.name">롤 스크립터</h1><p class="subtitle" data-i18n="product.subtitle">피아노 롤 영상을 분석해 MIDI로 변환합니다.</p></div><div class="mode-actions" data-i18n-aria-label="nav.products" aria-label="제품 이동"><a class="mode-action-button" data-i18n="nav.simple_generator" href="../simple/index.html">간단 생성기</a><a class="mode-action-button" data-i18n="nav.detail_generator" href="../player/index.html">상세 생성기</a></div></div>
-
-    <section class="workflow-section" aria-labelledby="videoSectionTitle">
-      <div class="section-head">
-        <div>
-          <span class="step-number">1</span>
-          <h2 id="videoSectionTitle" data-i18n="video.title">영상 선택</h2>
-        </div>
-        <p data-i18n="video.description">분석할 피아노 롤 영상을 선택합니다.</p>
-      </div>
-
-      <div class="drop-zone" id="fileDrop">
-        <input id="videoFile" type="file" accept="video/*,.mkv,.webm,.mov,.mp4"/>
-        <label class="drop-zone-select" for="videoFile">
-          <span class="drop-icon" aria-hidden="true">＋</span>
-          <span class="drop-copy">
-            <strong data-i18n="file.select">영상 선택</strong>
-            <span id="fileName" data-i18n="file.prompt">동영상 파일을 선택하거나 여기에 드롭하세요.</span>
-            <span id="videoInfo" class="video-file-info" hidden></span>
-            <span class="video-requirements" data-i18n-aria-label="video.requirements_title" aria-label="권장 영상 조건">
-              <b data-i18n="video.requirements_title">권장 영상 조건</b>
-              <span class="requirement-list">
-                <span data-i18n="video.requirement_resolution">720p 이상</span>
-                <span data-i18n="video.requirement_fps">30fps 이상</span>
-                <span data-i18n="video.requirement_keys">88건반이 모두 보일 것</span>
-                <span data-i18n="video.requirement_clean">건반을 가리는 연출·노이즈 등이 적을 것</span>
-              </span>
-            </span>
-          </span>
-        </label>
-        <button id="restoreSession" class="restore-session-button" type="button" hidden></button>
-        <button id="tutorialButton" class="tutorial-button drop-tutorial-button" type="button" data-i18n="tutorial.open">튜토리얼</button>
-      </div>
-
-      <div id="videoQualityWarning" class="video-quality-warning" role="status" hidden></div>
-      <div id="runtimeError" class="runtime-error" hidden></div>
-    </section>
-
-    <section class="workflow-section video-analysis-section" aria-labelledby="videoAnalysisSectionTitle">
-      <div class="section-head keyboard-section-head">
-        <div>
-          <span class="step-number">2</span>
-          <h2 id="videoAnalysisSectionTitle" data-i18n="analysis.title">영상 분석 설정</h2>
-        </div>
-        <p data-i18n="analysis.description">건반 인식 기준과 분석 시간을 정한 뒤 영상을 분석합니다.</p>
-      </div>
-
-      <div id="previewStage" class="preview-stage is-empty" data-i18n-aria-label="preview.aria" aria-label="동영상 프레임과 건반 검출선">
-        <canvas id="previewCanvas"></canvas>
-        <canvas id="overlayCanvas"></canvas>
-        <div id="emptyPreview" class="empty-preview">
-          <strong data-i18n="preview.empty_title">피아노 롤 영상을 넣어주세요.</strong>
-          <span data-i18n="preview.empty_body">영상 위에서 건반 인식선의 방향과 위치를 조정할 수 있습니다.</span>
-        </div>
-      </div>
-
-      <div class="transport-card">
-        <div class="playback-row">
-          <button id="playPause" class="transport-primary transport-icon-button" disabled type="button" aria-label="재생" title="재생">▶</button>
-          <button id="jumpStart" class="compact-button transport-edge-button" disabled type="button" data-i18n-aria-label="transport.first" data-i18n-title="transport.first" aria-label="처음으로" title="처음으로">|◀</button>
-          <button id="prevSecond" class="compact-button" disabled type="button" data-i18n="transport.prev_second">−1초</button>
-          <button id="prevFrame" class="compact-button" disabled type="button" data-i18n="transport.prev_frame">−1F</button>
-          <input id="timeline" type="range" min="0" max="1" value="0" step="0.001" disabled data-i18n-aria-label="transport.timeline" aria-label="영상 위치"/>
-          <button id="nextFrame" class="compact-button" disabled type="button" data-i18n="transport.next_frame">+1F</button>
-          <button id="nextSecond" class="compact-button" disabled type="button" data-i18n="transport.next_second">+1초</button>
-          <button id="jumpEnd" class="compact-button transport-edge-button" disabled type="button" data-i18n-aria-label="transport.last" data-i18n-title="transport.last" aria-label="마지막으로" title="마지막으로">▶|</button>
-          <output id="timeLabel">00:00.000 / 00:00.000</output>
-        </div>
-        <div class="analysis-range-inline">
-          <strong data-i18n="analysis.range">분석 시간</strong>
-          <button id="autoDetectRange" class="soft-button auto-range-button" type="button" disabled data-i18n="analysis.auto_search" data-i18n-title="analysis.auto_search_help" title="건반 검출 결과를 기준으로 88건반이 보이는 시작·종료 지점을 자동으로 찾습니다.">자동 탐색</button>
-          <div class="analysis-inline-time">
-            <input id="analysisStart" type="number" min="0" step="0.001" value="0" disabled data-i18n-aria-label="analysis.start_seconds" aria-label="시작 (초)"/>
-            <button id="setStartCurrent" class="soft-button" type="button" disabled data-i18n="analysis.current">현재</button>
-          </div>
-          <span class="analysis-range-separator" aria-hidden="true">~</span>
-          <div class="analysis-inline-time">
-            <input id="analysisEnd" type="number" min="0" step="0.001" value="0" disabled data-i18n-aria-label="analysis.end_seconds" aria-label="종료 (초)"/>
-            <button id="setEndCurrent" class="soft-button" type="button" disabled data-i18n="analysis.current">현재</button>
-          </div>
-          <output id="analysisRangeLabel">00:00.000</output>
-        </div>
-      </div>
-
-      <div class="keyboard-detection-card">
-        <div class="keyboard-detection-toolbar">
-          <div class="keyboard-detection-primary-actions">
-            <button id="detectKeys" type="button" class="primary-button detect-keys-button" disabled data-i18n="actions.detect_keys">건반 검출</button>
-            <div class="detection-mode-field">
-              <button id="detectionModeToggle" class="soft-button detection-mode-toggle-button" type="button" disabled aria-pressed="false" aria-label="2선 모드">
-                <span id="detectionModeText">2선 모드</span>
-              </button>
-            </div>
-            <div class="orientation-field">
-              <span data-i18n="keyboard.orientation">건반 방향</span>
-              <button id="keyboardOrientationToggle" class="soft-button orientation-toggle-button" type="button" disabled aria-pressed="false" aria-label="건반 방향: 수평">
-                <span id="keyboardOrientationText">수평</span>
-              </button>
-            </div>
-            <label class="change-threshold-field">
-              <span data-i18n="settings.white_change">흰 건반 변화량</span>
-              <span class="percent-input"><input id="whiteChangePercent" type="number" min="1" max="100" step="1" value="30" inputmode="numeric"/><b>%</b></span>
-            </label>
-            <label class="change-threshold-field">
-              <span data-i18n="settings.black_change">검은 건반 변화량</span>
-              <span class="percent-input"><input id="blackChangePercent" type="number" min="1" max="100" step="1" value="50" inputmode="numeric"/><b>%</b></span>
-            </label>
-          </div>
-        </div>
-        <ul class="keyboard-help-list">
-          <li>
-            <span id="keyboardHelpSetup" class="keyboard-help-copy" data-i18n="keyboard.help_setup">건반 방향과 변화량을 정하고, 두 인식선을 각 건반 몸통에 맞춥니다.</span>
-            <span id="dualGuideLegend" class="keyboard-guide-legend" aria-label="건반 인식선">
-              <span><i class="guide-swatch white-guide" aria-hidden="true"></i><b data-i18n="guide.white_key">흰 건반</b></span>
-              <span><i class="guide-swatch black-guide" aria-hidden="true"></i><b data-i18n="guide.black_key">검은 건반</b></span>
-            </span>
-            <span id="singleGuideLegend" class="keyboard-guide-legend" aria-label="단일 건반 인식선" hidden>
-              <span><i class="guide-swatch single-guide" aria-hidden="true"></i><b data-i18n="guide.all_keys">전체 건반</b></span>
-            </span>
-          </li>
-          <li data-i18n="keyboard.help_detect">건반이 눌리지 않은 프레임에서 건반 검출을 누릅니다. 이후 재생하거나 프레임을 이동하면 변화가 감지된 샘플 박스와 현재 검출 코드를 바로 확인할 수 있습니다.</li>
-        </ul>
-        <div id="keyboardColorPalette" class="keyboard-color-palette keyboard-detection-info">
-          <div class="keyboard-color-palette-title" data-i18n="keyboard.detected_colors">검출선 정보</div>
-          <div id="keyboardStatus" class="status-line keyboard-detection-status" data-i18n="keyboard.stage_video_required">먼저 영상을 선택해 주세요.</div>
-          <div class="keyboard-detection-code-row keyboard-detection-detail" aria-live="polite" hidden>
-            <span class="keyboard-color-label" data-i18n="transport.current_chord">현재 검출 코드</span>
-            <strong id="currentChord" data-i18n="transport.after_detection">건반 검출 후 표시</strong>
-          </div>
-          <div class="keyboard-color-row keyboard-detection-detail" hidden>
-            <span class="keyboard-color-label" data-i18n="keyboard.white_colors">흰 건반</span>
-            <div id="whiteKeyColors" class="keyboard-color-chips"></div>
-          </div>
-          <div class="keyboard-color-row keyboard-detection-detail" hidden>
-            <span class="keyboard-color-label" data-i18n="keyboard.black_colors">검은 건반</span>
-            <div id="blackKeyColors" class="keyboard-color-chips"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="analysis-output-card video-analysis-output-card">
-        <div class="analysis-run-actions">
-          <button id="analyzeVideo" type="button" class="primary-button" disabled data-i18n="actions.analyze">영상 분석</button>
-          <button id="cancelAnalysis" type="button" class="danger-button" hidden data-i18n="actions.cancel">분석 중지</button>
-        </div>
-        <div class="analysis-status" aria-live="polite">
-          <div class="progress-track"><div id="progressBar"></div></div>
-          <div class="progress-copy">
-            <div>
-              <strong id="progressTitle" data-i18n="progress.waiting">대기 중</strong>
-              <span id="progressDetail" data-i18n="progress.select_video">영상을 선택하세요.</span>
-            </div>
-            <div class="result-count"><span data-i18n="progress.generated_notes">생성 노트</span><strong id="noteCountResult">0</strong></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="workflow-section" aria-labelledby="midiSectionTitle">
-      <div class="section-head">
-        <div>
-          <span class="step-number">3</span>
-          <h2 id="midiSectionTitle" data-i18n="midi.title">MIDI 다운로드</h2>
-        </div>
-        <p data-i18n="midi.description">분석된 노트에 길이, 템포, 벨로시티를 적용해 MIDI를 다시 계산하고 다운로드합니다.</p>
-      </div>
-
-      <div class="field-grid midi-settings settings-group compact-settings">
-        <label class="field tempo-field">
-          <span data-i18n="settings.tempo">템포 (BPM)</span>
-          <input id="tempo" type="number" min="20" max="300" step="1" value="120"/>
-        </label>
-        <div class="field note-extension-field">
-          <span data-i18n="settings.note_extension">노트 길이 확장 (프레임)</span>
-          <input id="noteExtensionFrames" type="hidden" value="0"/>
-          <div id="noteExtensionButtons" class="note-extension-buttons" role="group" data-i18n-aria-label="settings.note_extension" aria-label="노트 길이 확장 (프레임)" data-i18n-title="settings.note_extension_help" title="검출 전후의 빈 프레임으로 노트를 확장합니다.">
-            <button type="button" class="note-extension-option is-selected" data-note-extension="0" aria-pressed="true">0</button>
-            <button type="button" class="note-extension-option" data-note-extension="0.25" aria-pressed="false">0.25</button>
-            <button type="button" class="note-extension-option" data-note-extension="0.5" aria-pressed="false">0.5</button>
-            <button type="button" class="note-extension-option" data-note-extension="1" aria-pressed="false">1</button>
-          </div>
-        </div>
-        <div class="field audio-velocity-field">
-          <span data-i18n="settings.audio_velocity">오디오 볼륨 반영</span>
-          <button id="audioVelocityToggle" type="button" class="audio-velocity-toggle-button is-selected" aria-pressed="true" data-i18n-title="settings.audio_velocity_help" title="노트 시작 시점의 오디오에서 해당 음계 주파수의 Attack 크기를 분석해 벨로시티에 반영합니다.">
-            <span id="audioVelocityText" data-i18n="settings.audio_velocity_on">사용</span>
-          </button>
-        </div>
-        <label class="field velocity-field">
-          <span><span id="velocityLabelText" data-i18n="settings.velocity_audio">벨로시티 기준</span> <output id="velocityValue">75%</output></span>
-          <div class="range-control"><input id="velocity" type="range" min="1" max="100" step="1" value="75"/></div>
-          <small id="velocityUsageHint" class="velocity-usage-hint" data-i18n="settings.velocity_audio_hint">오디오에서 구한 노트별 세기를 이 값을 중심으로 반영합니다.</small>
-        </label>
-      </div>
-
-      <div class="midi-download-actions">
-        <button id="downloadMidi" type="button" class="primary-button download-button" disabled data-i18n="actions.download">MIDI 다운로드</button>
-        <div id="midiPreviewControls" class="midi-preview-controls" role="group" data-i18n-aria-label="midi.preview" aria-label="MIDI 미리듣기">
-          <div class="midi-preview-actions">
-            <button id="midiPreviewPlay" type="button" class="soft-button midi-preview-icon-button" disabled data-i18n-aria-label="transport.play" data-i18n-title="transport.play" aria-label="재생" title="재생">▶</button>
-            <button id="midiPreviewRewind" type="button" class="soft-button midi-preview-icon-button" disabled data-i18n-aria-label="transport.first" data-i18n-title="transport.first" aria-label="처음으로" title="처음으로">|◀</button>
-          </div>
-          <input id="midiPreviewSlider" class="midi-preview-slider" type="range" min="0" max="0" step="0.01" value="0" disabled data-i18n-aria-label="midi.preview_position" aria-label="MIDI 미리듣기 위치"/>
-        </div>
-      </div>
-    </section>
-  </section>
+<section aria-labelledby="pageTitle" class="converter">
+<div class="title-row"><div class="title-block"><h1 data-i18n="product.name" id="pageTitle">롤 스크립터</h1><p class="subtitle" data-i18n="product.subtitle">피아노 롤 영상을 분석해 MIDI로 변환합니다.</p></div></div>
+<section aria-labelledby="videoSectionTitle" class="workflow-section">
+<div class="section-head">
+<div>
+<span class="step-number">1</span>
+<h2 data-i18n="video.title" id="videoSectionTitle">영상 선택</h2>
+</div>
+<p data-i18n="video.description">분석할 피아노 롤 영상을 선택합니다.</p>
+</div>
+<div class="drop-zone" id="fileDrop">
+<input accept="video/*,.mkv,.webm,.mov,.mp4" id="videoFile" type="file"/>
+<label class="drop-zone-select" for="videoFile">
+<span aria-hidden="true" class="drop-icon">＋</span>
+<span class="drop-copy">
+<strong data-i18n="file.select">영상 선택</strong>
+<span data-i18n="file.prompt" id="fileName">동영상 파일을 선택하거나 여기에 드롭하세요.</span>
+<span class="video-file-info" hidden="" id="videoInfo"></span>
+<span aria-label="권장 영상 조건" class="video-requirements" data-i18n-aria-label="video.requirements_title">
+<b data-i18n="video.requirements_title">권장 영상 조건</b>
+<span class="requirement-list">
+<span data-i18n="video.requirement_resolution">720p 이상</span>
+<span data-i18n="video.requirement_fps">30fps 이상</span>
+<span data-i18n="video.requirement_keys">88건반이 모두 보일 것</span>
+<span data-i18n="video.requirement_clean">건반을 가리는 연출·노이즈 등이 적을 것</span>
+</span>
+</span>
+</span>
+</label>
+<button class="restore-session-button" hidden="" id="restoreSession" type="button"></button>
+<button class="tutorial-button drop-tutorial-button" data-i18n="tutorial.open" id="tutorialButton" type="button">튜토리얼</button>
+</div>
+<div class="video-quality-warning" hidden="" id="videoQualityWarning" role="status"></div>
+<div class="runtime-error" hidden="" id="runtimeError"></div>
+</section>
+<section aria-labelledby="videoAnalysisSectionTitle" class="workflow-section video-analysis-section">
+<div class="section-head keyboard-section-head">
+<div>
+<span class="step-number">2</span>
+<h2 data-i18n="analysis.title" id="videoAnalysisSectionTitle">영상 분석 설정</h2>
+</div>
+<p data-i18n="analysis.description">건반 인식 기준과 분석 시간을 정한 뒤 영상을 분석합니다.</p>
+</div>
+<div aria-label="동영상 프레임과 건반 검출선" class="preview-stage is-empty" data-i18n-aria-label="preview.aria" id="previewStage">
+<canvas id="previewCanvas"></canvas>
+<canvas id="overlayCanvas"></canvas>
+<div class="empty-preview" id="emptyPreview">
+<strong data-i18n="preview.empty_title">피아노 롤 영상을 넣어주세요.</strong>
+<span data-i18n="preview.empty_body">영상 위에서 건반 인식선의 방향과 위치를 조정할 수 있습니다.</span>
+</div>
+</div>
+<div class="transport-card">
+<div class="playback-row">
+<button aria-label="재생" class="transport-primary transport-icon-button" disabled="" id="playPause" title="재생" type="button">▶</button>
+<button aria-label="처음으로" class="compact-button transport-edge-button" data-i18n-aria-label="transport.first" data-i18n-title="transport.first" disabled="" id="jumpStart" title="처음으로" type="button">|◀</button>
+<button class="compact-button" data-i18n="transport.prev_second" disabled="" id="prevSecond" type="button">−1초</button>
+<button class="compact-button" data-i18n="transport.prev_frame" disabled="" id="prevFrame" type="button">−1F</button>
+<input aria-label="영상 위치" data-i18n-aria-label="transport.timeline" disabled="" id="timeline" max="1" min="0" step="0.001" type="range" value="0"/>
+<button class="compact-button" data-i18n="transport.next_frame" disabled="" id="nextFrame" type="button">+1F</button>
+<button class="compact-button" data-i18n="transport.next_second" disabled="" id="nextSecond" type="button">+1초</button>
+<button aria-label="마지막으로" class="compact-button transport-edge-button" data-i18n-aria-label="transport.last" data-i18n-title="transport.last" disabled="" id="jumpEnd" title="마지막으로" type="button">▶|</button>
+<output id="timeLabel">00:00.000 / 00:00.000</output>
+</div>
+<div class="analysis-range-inline">
+<strong data-i18n="analysis.range">분석 시간</strong>
+<button class="soft-button auto-range-button" data-i18n="analysis.auto_search" data-i18n-title="analysis.auto_search_help" disabled="" id="autoDetectRange" title="건반 검출 결과를 기준으로 88건반이 보이는 시작·종료 지점을 자동으로 찾습니다." type="button">자동 탐색</button>
+<div class="analysis-inline-time">
+<input aria-label="시작 (초)" data-i18n-aria-label="analysis.start_seconds" disabled="" id="analysisStart" min="0" step="0.001" type="number" value="0"/>
+<button class="soft-button" data-i18n="analysis.current" disabled="" id="setStartCurrent" type="button">현재</button>
+</div>
+<span aria-hidden="true" class="analysis-range-separator">~</span>
+<div class="analysis-inline-time">
+<input aria-label="종료 (초)" data-i18n-aria-label="analysis.end_seconds" disabled="" id="analysisEnd" min="0" step="0.001" type="number" value="0"/>
+<button class="soft-button" data-i18n="analysis.current" disabled="" id="setEndCurrent" type="button">현재</button>
+</div>
+<output id="analysisRangeLabel">00:00.000</output>
+</div>
+</div>
+<div class="keyboard-detection-card">
+<div class="keyboard-detection-toolbar">
+<div class="keyboard-detection-primary-actions">
+<button class="primary-button detect-keys-button" data-i18n="actions.detect_keys" disabled="" id="detectKeys" type="button">건반 검출</button>
+<div class="detection-mode-field">
+<button aria-label="2선 모드" aria-pressed="false" class="soft-button detection-mode-toggle-button" disabled="" id="detectionModeToggle" type="button">
+<span id="detectionModeText">2선 모드</span>
+</button>
+</div>
+<div class="orientation-field">
+<button aria-label="수평 건반" aria-pressed="false" class="soft-button orientation-toggle-button" disabled="" id="keyboardOrientationToggle" type="button">
+<span id="keyboardOrientationText">수평 건반</span>
+</button>
+</div>
+<div aria-label="변화량" class="change-threshold-group" data-i18n-aria-label="settings.change_amount" role="group">
+<span class="change-threshold-group-label" data-i18n="settings.change_amount">변화량</span>
+<label class="change-threshold-field">
+<span class="change-threshold-key-label" data-i18n="guide.white_key">흰 건반</span>
+<span class="percent-input"><input aria-label="흰 건반 변화량" data-i18n-aria-label="settings.white_change" id="whiteChangePercent" inputmode="numeric" max="100" min="1" step="1" type="number" value="20"/><b>%</b></span>
+</label>
+<label class="change-threshold-field">
+<span class="change-threshold-key-label" data-i18n="guide.black_key">검은 건반</span>
+<span class="percent-input"><input aria-label="검은 건반 변화량" data-i18n-aria-label="settings.black_change" id="blackChangePercent" inputmode="numeric" max="100" min="1" step="1" type="number" value="30"/><b>%</b></span>
+</label>
+</div>
+</div>
+</div>
+<ul class="keyboard-help-list">
+<li>
+<span class="keyboard-help-copy" data-i18n="keyboard.help_setup" id="keyboardHelpSetup">건반 방향과 변화량을 정하고, 두 인식선을 각 건반 몸통에 맞춥니다.</span>
+<span aria-label="건반 인식선" class="keyboard-guide-legend" id="dualGuideLegend">
+<span><i aria-hidden="true" class="guide-swatch white-guide"></i><b data-i18n="guide.white_key">흰 건반</b></span>
+<span><i aria-hidden="true" class="guide-swatch black-guide"></i><b data-i18n="guide.black_key">검은 건반</b></span>
+</span>
+<span aria-label="단일 건반 인식선" class="keyboard-guide-legend" hidden="" id="singleGuideLegend">
+<span><i aria-hidden="true" class="guide-swatch single-guide"></i><b data-i18n="guide.all_keys">전체 건반</b></span>
+</span>
+</li>
+<li data-i18n="keyboard.help_detect">건반이 눌리지 않은 프레임에서 건반 검출을 누릅니다. 이후 재생하거나 프레임을 이동하면 변화가 감지된 샘플 박스와 현재 검출 코드를 바로 확인할 수 있습니다.</li>
+</ul>
+<div class="keyboard-color-palette keyboard-detection-info" id="keyboardColorPalette">
+<div class="keyboard-color-palette-title" data-i18n="keyboard.detected_colors">검출선 정보</div>
+<div class="status-line keyboard-detection-status" data-i18n="keyboard.stage_video_required" id="keyboardStatus">먼저 영상을 선택해 주세요.</div>
+<div aria-live="polite" class="keyboard-detection-code-row keyboard-detection-detail" hidden="">
+<span class="keyboard-color-label" data-i18n="transport.current_chord">현재 검출 코드</span>
+<strong data-i18n="transport.after_detection" id="currentChord">건반 검출 후 표시</strong>
+</div>
+<div class="keyboard-color-row keyboard-detection-detail" hidden="">
+<span class="keyboard-color-label" data-i18n="keyboard.white_colors">흰 건반</span>
+<div class="keyboard-color-chips" id="whiteKeyColors"></div>
+</div>
+<div class="keyboard-color-row keyboard-detection-detail" hidden="">
+<span class="keyboard-color-label" data-i18n="keyboard.black_colors">검은 건반</span>
+<div class="keyboard-color-chips" id="blackKeyColors"></div>
+</div>
+</div>
+</div>
+<div class="analysis-output-card video-analysis-output-card">
+<div class="analysis-run-actions">
+<button class="primary-button" data-i18n="actions.analyze" disabled="" id="analyzeVideo" type="button">영상 분석</button>
+<button class="danger-button" data-i18n="actions.cancel" hidden="" id="cancelAnalysis" type="button">분석 중지</button>
+</div>
+<div aria-live="polite" class="analysis-status">
+<div class="progress-track"><div id="progressBar"></div></div>
+<div class="progress-copy">
+<div>
+<strong data-i18n="progress.waiting" id="progressTitle">대기 중</strong>
+<span data-i18n="progress.select_video" id="progressDetail">영상을 선택하세요.</span>
+</div>
+<div class="result-count"><span data-i18n="progress.generated_notes">생성 노트</span><strong id="noteCountResult">0</strong></div>
+</div>
+</div>
+</div>
+</section>
+<section aria-labelledby="midiSectionTitle" class="workflow-section">
+<div class="section-head">
+<div>
+<span class="step-number">3</span>
+<h2 data-i18n="midi.title" id="midiSectionTitle">MIDI 다운로드</h2>
+</div>
+<p data-i18n="midi.description">분석된 노트에 길이, 템포, 벨로시티를 적용해 MIDI를 다시 계산하고 다운로드합니다.</p>
+</div>
+<div class="field-grid midi-settings settings-group compact-settings">
+<label class="field tempo-field">
+<span data-i18n="settings.tempo">템포 (BPM)</span>
+<input id="tempo" max="300" min="20" step="1" type="number" value="120"/>
+</label>
+<div class="field note-extension-field">
+<span data-i18n="settings.note_extension">노트 길이 확장 (프레임)</span>
+<input id="noteExtensionFrames" type="hidden" value="0"/>
+<div aria-label="노트 길이 확장 (프레임)" class="note-extension-buttons" data-i18n-aria-label="settings.note_extension" data-i18n-title="settings.note_extension_help" id="noteExtensionButtons" role="group" title="검출 전후의 빈 프레임으로 노트를 확장합니다.">
+<button aria-pressed="true" class="note-extension-option is-selected" data-note-extension="0" type="button">0</button>
+<button aria-pressed="false" class="note-extension-option" data-note-extension="0.25" type="button">0.25</button>
+<button aria-pressed="false" class="note-extension-option" data-note-extension="0.5" type="button">0.5</button>
+<button aria-pressed="false" class="note-extension-option" data-note-extension="1" type="button">1</button>
+</div>
+</div>
+<div class="field audio-velocity-field">
+<span data-i18n="settings.audio_velocity">오디오 볼륨 반영</span>
+<button aria-pressed="true" class="audio-velocity-toggle-button is-selected" data-i18n-title="settings.audio_velocity_help" id="audioVelocityToggle" title="노트 시작 시점의 오디오에서 해당 음계 주파수의 Attack 크기를 분석해 벨로시티에 반영합니다." type="button">
+<span data-i18n="settings.audio_velocity_on" id="audioVelocityText">사용</span>
+</button>
+</div>
+<label class="field velocity-field">
+<span><span data-i18n="settings.velocity_audio" id="velocityLabelText">벨로시티 기준</span> <output id="velocityValue">75%</output></span>
+<div class="range-control"><input id="velocity" max="100" min="1" step="1" type="range" value="75"/></div>
+<small class="velocity-usage-hint" data-i18n="settings.velocity_audio_hint" id="velocityUsageHint">오디오에서 구한 노트별 세기를 이 값을 중심으로 반영합니다.</small>
+</label>
+</div>
+<div class="midi-download-actions">
+<button class="primary-button download-button" data-i18n="actions.download" disabled="" id="downloadMidi" type="button">MIDI 다운로드</button>
+<div aria-label="MIDI 미리듣기" class="midi-preview-controls" data-i18n-aria-label="midi.preview" id="midiPreviewControls" role="group">
+<div class="midi-preview-actions">
+<button aria-label="재생" class="soft-button midi-preview-icon-button" data-i18n-aria-label="transport.play" data-i18n-title="transport.play" disabled="" id="midiPreviewPlay" title="재생" type="button">▶</button>
+<button aria-label="처음으로" class="soft-button midi-preview-icon-button" data-i18n-aria-label="transport.first" data-i18n-title="transport.first" disabled="" id="midiPreviewRewind" title="처음으로" type="button">|◀</button>
+</div>
+<input aria-label="MIDI 미리듣기 위치" class="midi-preview-slider" data-i18n-aria-label="midi.preview_position" disabled="" id="midiPreviewSlider" max="0" min="0" step="0.01" type="range" value="0"/>
+</div>
+</div>
+</section>
+</section>
 </main>
-
-<dialog id="tutorialDialog" class="roll-tutorial-dialog" aria-labelledby="tutorialTitle">
-  <div class="roll-tutorial-card">
-    <header class="roll-tutorial-head">
-      <div class="roll-tutorial-head-text">
-        <h2 id="tutorialTitle" data-i18n="tutorial.title">롤 스크립터 사용법</h2>
-        <span id="tutorialProgress" class="roll-tutorial-progress">1 / 4</span>
-      </div>
-      <button id="tutorialClose" class="tutorial-close" type="button" data-i18n="tutorial.close">닫기</button>
-    </header>
-    <div class="roll-tutorial-content">
-      <div id="tutorialVisual" class="roll-tutorial-visual" aria-hidden="true">
-        <span id="tutorialVisualStep" class="roll-tutorial-visual-step">1</span>
-        <strong id="tutorialVisualSymbol" class="roll-tutorial-visual-symbol">▶</strong>
-        <span id="tutorialVisualTitle" class="roll-tutorial-visual-title">영상 선택</span>
-      </div>
-      <div class="roll-tutorial-copy">
-        <span id="tutorialPart" class="roll-tutorial-part">영상 선택</span>
-        <h3 id="tutorialStepTitle" class="roll-tutorial-step-title">영상 준비</h3>
-        <p id="tutorialStepBody" class="roll-tutorial-body">720p·30fps 이상, 88건반이 모두 보이는 영상을 선택합니다.</p>
-        <p id="tutorialStepNote" class="roll-tutorial-note">건반을 가리는 이펙트나 노이즈가 적을수록 안정적입니다.</p>
-      </div>
-    </div>
-    <footer class="roll-tutorial-footer">
-      <div class="roll-tutorial-dots" role="group" data-i18n-aria-label="tutorial.pages" aria-label="튜토리얼 페이지">
-        <button class="roll-tutorial-dot active" type="button" data-tutorial-step="0" aria-current="step"></button>
-        <button class="roll-tutorial-dot" type="button" data-tutorial-step="1"></button>
-        <button class="roll-tutorial-dot" type="button" data-tutorial-step="2"></button>
-        <button class="roll-tutorial-dot" type="button" data-tutorial-step="3"></button>
-      </div>
-      <div class="roll-tutorial-nav">
-        <button id="tutorialPrev" class="roll-tutorial-prev" type="button" disabled>이전</button>
-        <button id="tutorialNext" class="roll-tutorial-next primary-button" type="button">다음</button>
-      </div>
-    </footer>
-  </div>
+<dialog aria-labelledby="tutorialTitle" class="roll-tutorial-dialog" id="tutorialDialog">
+<div class="roll-tutorial-card">
+<header class="roll-tutorial-head">
+<div class="roll-tutorial-head-text">
+<h2 data-i18n="tutorial.title" id="tutorialTitle">롤 스크립터 사용법</h2>
+<span class="roll-tutorial-progress" id="tutorialProgress">1 / 4</span>
+</div>
+<button class="tutorial-close" data-i18n="tutorial.close" id="tutorialClose" type="button">닫기</button>
+</header>
+<div class="roll-tutorial-content">
+<div aria-hidden="true" class="roll-tutorial-visual" id="tutorialVisual">
+<span class="roll-tutorial-visual-step" id="tutorialVisualStep">1</span>
+<strong class="roll-tutorial-visual-symbol" id="tutorialVisualSymbol">▶</strong>
+<span class="roll-tutorial-visual-title" id="tutorialVisualTitle">영상 선택</span>
+</div>
+<div class="roll-tutorial-copy">
+<span class="roll-tutorial-part" id="tutorialPart">영상 선택</span>
+<h3 class="roll-tutorial-step-title" id="tutorialStepTitle">영상 준비</h3>
+<p class="roll-tutorial-body" id="tutorialStepBody">720p·30fps 이상, 88건반이 모두 보이는 영상을 선택합니다.</p>
+<p class="roll-tutorial-note" id="tutorialStepNote">건반을 가리는 이펙트나 노이즈가 적을수록 안정적입니다.</p>
+</div>
+</div>
+<footer class="roll-tutorial-footer">
+<div aria-label="튜토리얼 페이지" class="roll-tutorial-dots" data-i18n-aria-label="tutorial.pages" role="group">
+<button aria-current="step" class="roll-tutorial-dot active" data-tutorial-step="0" type="button"></button>
+<button class="roll-tutorial-dot" data-tutorial-step="1" type="button"></button>
+<button class="roll-tutorial-dot" data-tutorial-step="2" type="button"></button>
+<button class="roll-tutorial-dot" data-tutorial-step="3" type="button"></button>
+</div>
+<div class="roll-tutorial-nav">
+<button class="roll-tutorial-prev" disabled="" id="tutorialPrev" type="button">이전</button>
+<button class="roll-tutorial-next primary-button" id="tutorialNext" type="button">다음</button>
+</div>
+</footer>
+</div>
 </dialog>
-
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div aria-live="polite" class="toast" id="toast" role="status"></div>
 <script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
-<script type="module" src="./js/settings-menu.js?v=20260830-cleanup2"></script>
-<script type="module" src="./js/app.js?v=20260830-midi-preview1"></script>
+<script src="./js/settings-menu.js?v=20260830-site-nav1" type="module"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-common-nav2"></script><script src="./js/app.js?v=20260830-site-nav1" type="module"></script>
 </body>
 </html>

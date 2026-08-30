@@ -436,29 +436,51 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
 }
 .detect-keys-button { min-width: 126px; min-height: 38px; }
 
-.change-threshold-field {
+.change-threshold-group {
   min-height: 38px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+}
+.change-threshold-group-label {
   color: var(--muted);
   font-size: 10px;
   font-weight: 750;
-  white-space: nowrap;
 }
-.percent-input {
+.change-threshold-field {
   min-height: 38px;
   display: inline-flex;
   align-items: center;
+  gap: 2px;
   overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: 9px;
   background: var(--surface);
+  color: var(--text);
+  white-space: nowrap;
+  cursor: text;
+}
+.change-threshold-field:focus-within {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 10%, transparent);
+}
+.change-threshold-key-label {
+  padding-left: 9px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+.percent-input {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
 }
 .percent-input input[type="number"] {
-  width: 54px;
+  width: 50px;
   min-height: 36px;
-  padding: 6px 5px 6px 8px;
+  padding: 6px 2px 6px 4px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -469,10 +491,6 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   font-variant-numeric: tabular-nums;
 }
 .percent-input input[type="number"]:focus { outline: 0; }
-.percent-input:focus-within {
-  border-color: var(--text);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 10%, transparent);
-}
 .percent-input b {
   padding-right: 8px;
   color: var(--muted);
@@ -645,7 +663,8 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   .keyboard-detection-primary-actions { display: flex; }
   .orientation-toggle-button { flex: 0 0 auto; }
   .detect-keys-button { flex: 1 1 140px; min-width: 0; }
-  .change-threshold-field { flex: 1 1 calc(50% - 4px); justify-content: space-between; }
+  .change-threshold-group { flex: 1 1 100%; }
+  .change-threshold-field { flex: 1 1 0; min-width: 0; justify-content: space-between; }
 }
 
 /* v5.2 RollScriptor compact keyboard help + paged tutorial */
@@ -1191,6 +1210,7 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
 }
 .video-analysis-section .orientation-field,
 .video-analysis-section .detection-mode-field,
+.video-analysis-section .change-threshold-group,
 .video-analysis-section .change-threshold-field {
   min-height: 32px;
 }
@@ -1333,3 +1353,17 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   .midi-preview-controls { grid-template-columns: auto minmax(0, 1fr); gap: 6px; }
   .midi-preview-icon-button { width: 36px; min-width: 36px; min-height: 36px; }
 }
+
+/* 2026-08-31 unified site navigation */
+.site-map-wrap{position:relative;display:inline-flex;flex:0 0 auto}.site-map-wrap>summary{list-style:none}.site-map-wrap>summary::-webkit-details-marker{display:none}.site-map-button{box-sizing:border-box;min-height:36px;height:36px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);font-size:11px;font-weight:800;line-height:1;cursor:pointer;white-space:nowrap}.site-map-button:hover,.site-map-wrap[open]>.site-map-button{border-color:var(--line-strong);background:var(--hover)}.site-map-icon{width:16px;height:16px;display:block;fill:currentColor}.site-map-popover{position:absolute;top:calc(100% + 8px);right:0;z-index:1300;width:178px;padding:7px;display:grid;gap:3px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow)}.site-map-link{min-height:34px;padding:0 10px;display:flex;align-items:center;border-radius:8px;color:var(--text);font-size:12px;font-weight:750;text-decoration:none;white-space:nowrap}.site-map-link:hover{background:var(--hover)}@media(max-width:620px){.site-map-label{display:none}.site-map-button{width:34px;min-width:34px;height:34px;min-height:34px;padding:0}.site-map-popover{right:-40px}.rollscriptor-topbar .midi-site-links{max-width:96px!important}}
+@media(max-width:620px){.rollscriptor-topbar .midi-site-links{display:none!important}.rollscriptor-topbar .discord-link{display:inline-flex!important}}
+
+/* 2026-08-31 compact two-row settings menu */
+.rollscriptor-topbar .settings-menu-popover.settings-two-row{width:min(286px,calc(100vw - 20px));gap:7px;padding:11px 12px}
+.rollscriptor-topbar .settings-two-row .settings-menu-header{padding:0 1px 4px;margin:0 0 1px;border-bottom:1px solid var(--line)}
+.rollscriptor-topbar .settings-two-row .settings-row{display:grid;grid-template-columns:48px minmax(0,1fr);align-items:center;gap:10px;margin:0;padding:0;min-height:36px}
+.rollscriptor-topbar .settings-two-row .settings-row + .settings-row{margin-top:0}
+.rollscriptor-topbar .settings-two-row .account-menu-field-label{font-size:12px;font-weight:800;color:var(--muted);white-space:nowrap}
+.rollscriptor-topbar .settings-two-row .language-select,
+.rollscriptor-topbar .settings-two-row .theme-menu-button{width:100%;min-width:0;min-height:34px;height:34px;margin:0}
+.rollscriptor-topbar .settings-two-row .theme-menu-button{justify-content:flex-start;padding:0 10px}

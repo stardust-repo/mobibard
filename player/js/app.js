@@ -68,6 +68,7 @@
     metricsCache: { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], noteStatsSource: "", noteStats: [], tempoInput: "", tempoResult: null },
     pipelineCache: { sourceVersion: -1, stages: [] },
     tempoCleanCount: 0,
+    tempoOverrides: [],
     copySplitCache: { mml: "", maxChars: 0, searchPercent: 0, pages: null },
     copySplitPlan: { sourceVersion: -1, maxChars: 0, searchPercent: 0, geometrySignature: "", pages: null },
     channelDraft: null,
@@ -290,6 +291,7 @@
     state.options.channels = Array.from({ length: 6 }, (_, index) => makeChannelOptions(index));
     state.options.accompaniment = { genre: "", strength: "normal" };
     state.options.split = { maxChars: 2400, searchPercent: 50 };
+    state.tempoOverrides = [];
     state.manualEdited = false;
     state.activeWorkspaceTab = "copy";
     state.activeOptionFeature = "rest";
@@ -324,15 +326,7 @@
   }
 
   function buildHeaderActions() {
-    const topActions = document.querySelector(".player-top-actions");
-    if (!topActions) return;
-    const midiExtract = $("midiExtractBtn");
-    if (!midiExtract) return;
-    midiExtract.classList.add("wb4-midi-extract-button");
-    midiExtract.querySelector(".midi-extract-toolbar-icon")?.remove();
-    const group = el("div", "wb4-top-external", { "aria-label": t("external") });
-    group.append(midiExtract);
-    topActions.prepend(group);
+    // Header shortcuts are intentionally limited to Recommended, Site map, Discord and Account.
   }
 
   function buildTitle(canvas) {
@@ -342,22 +336,17 @@
     title.append(state.ui.titleName);
 
     const actions = el("div", "wb4-title-actions");
-    const mobibeat = $("rhythmGameBtn");
-    const rollscriptor = $("rollscriptorBtn");
+    const midiExtract = $("midiExtractBtn");
     const simple = $("simpleVersionBtn");
-    if (mobibeat) {
-      mobibeat.querySelector(".rhythm-game-toolbar-icon")?.remove();
-      const label = mobibeat.querySelector("span:last-child");
-      if (label) { label.removeAttribute("data-i18n"); label.textContent = t("mobibeat"); }
-      mobibeat.removeAttribute("data-i18n-title");
-      mobibeat.title = t("mobibeat");
-      actions.append(mobibeat);
+    if (midiExtract) {
+      midiExtract.className = "player-mode-action-button";
+      midiExtract.querySelector(".midi-extract-toolbar-icon")?.remove();
+      actions.append(midiExtract);
     }
-    if (rollscriptor) {
-      rollscriptor.className = "player-mode-action-button";
-      actions.append(rollscriptor);
+    if (simple) {
+      simple.className = "player-mode-action-button";
+      actions.append(simple);
     }
-    if (simple) actions.append(simple);
     row.append(title, actions);
     canvas.append(row);
   }
@@ -681,6 +670,7 @@
       leading: state.options.leading,
       fade: state.options.fade,
       tempo: state.options.tempo,
+      tempoOverrides: state.tempoOverrides,
       dynamics: state.options.dynamics,
       accompaniment: state.options.accompaniment
     };
@@ -848,6 +838,7 @@
       channelOptionsDirty: Boolean(state.channelOptionsDirty),
       instrumentDirty: Boolean(state.instrumentDirty),
       manualEdited: Boolean(state.manualEdited),
+      tempoOverrides: normalizeTempoOverrides(state.tempoOverrides),
       activeWorkspaceTab: state.activeWorkspaceTab || "copy",
       activeOptionFeature: state.activeOptionFeature || "rest",
       activeChannelView: Number(state.activeChannelView),
@@ -921,6 +912,7 @@
       state.lastApplySignature = "";
       state.lastResultMml = String(snapshot.resultMml || "");
       state.manualEdited = Boolean(snapshot.manualEdited);
+      state.tempoOverrides = normalizeTempoOverrides(snapshot.tempoOverrides);
       state.midiQuantizeDivision = Number(snapshot.midiQuantizeDivision) === 32 ? 32 : 64;
       resetPipelineCache();
       state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], noteStatsSource: "", noteStats: [], tempoInput: "", tempoResult: null };
@@ -960,6 +952,198 @@
       state.restoringSession = false;
     }
     scheduleSessionPersist(120);
+  }
+
+  const TEMPO_OVERRIDE_BEAT_EPSILON = 1e-6;
+
+  function normalizeOverrideBpm(value) {
+    const bpm = Math.round(Number(value));
+    return Math.max(32, Math.min(255, Number.isFinite(bpm) ? bpm : 120));
+  }
+
+  function normalizeOverrideBeat(value) {
+    const beat = Number(value);
+    if (!Number.isFinite(beat)) return 0;
+    return Math.round(Math.max(0, beat) * 1e6) / 1e6;
+  }
+
+  function normalizeTempoOverride(value = {}) {
+    const kind = value.kind === "start" ? "start" : "explicit";
+    const bpm = normalizeOverrideBpm(value.bpm);
+    if (kind === "start") {
+      return {
+        key: "start",
+        kind,
+        bpm,
+        part: -1,
+        beat: 0,
+        partOrdinal: -1,
+        globalOrdinal: -1
+      };
+    }
+    const part = Number.isInteger(Number(value.part)) ? Math.max(0, Math.min(5, Number(value.part))) : 0;
+    const beat = normalizeOverrideBeat(value.beat);
+    const partOrdinal = Number.isInteger(Number(value.partOrdinal)) ? Math.max(-1, Number(value.partOrdinal)) : -1;
+    const globalOrdinal = Number.isInteger(Number(value.globalOrdinal)) ? Math.max(-1, Number(value.globalOrdinal)) : -1;
+    const ordinalKey = partOrdinal >= 0 ? `p${partOrdinal}` : `g${globalOrdinal}`;
+    return {
+      key: `part${part}:beat${beat.toFixed(6)}:${ordinalKey}`,
+      kind,
+      bpm,
+      part,
+      beat,
+      partOrdinal,
+      globalOrdinal
+    };
+  }
+
+  function normalizeTempoOverrides(values = []) {
+    const unique = new Map();
+    for (const raw of Array.isArray(values) ? values : []) {
+      const normalized = normalizeTempoOverride(raw);
+      unique.set(normalized.key, normalized);
+    }
+    return Array.from(unique.values());
+  }
+
+  function parseTempoCommandData(mml) {
+    const parser = window.MabiMml?.parseMabinogiMml;
+    if (typeof parser !== "function") return { parsed: null, events: [] };
+    try {
+      const parsed = parser(String(mml || ""));
+      const events = [];
+      (parsed?.parts || []).forEach((partInfo, partIndex) => {
+        (partInfo?.tempos || []).forEach((tempo, partOrdinal) => {
+          const start = Number(tempo?.globalSourceStart);
+          const end = Number(tempo?.globalSourceEnd);
+          if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) return;
+          events.push({
+            ...tempo,
+            part: Number.isInteger(tempo?.part) ? tempo.part : partIndex,
+            beat: normalizeOverrideBeat(tempo?.beat),
+            partOrdinal,
+            globalOrdinal: -1,
+            globalSourceStart: start,
+            globalSourceEnd: end
+          });
+        });
+      });
+      events.sort((a, b) => a.globalSourceStart - b.globalSourceStart || a.globalSourceEnd - b.globalSourceEnd);
+      events.forEach((tempo, index) => { tempo.globalOrdinal = index; });
+      return { parsed, events };
+    } catch (_) {
+      return { parsed: null, events: [] };
+    }
+  }
+
+  function deriveTempoOverride(detail = {}) {
+    const marker = detail.marker || {};
+    const bpm = normalizeOverrideBpm(detail.bpm);
+    const beat = normalizeOverrideBeat(marker.beat);
+    if (!marker.explicit && beat <= TEMPO_OVERRIDE_BEAT_EPSILON) {
+      return normalizeTempoOverride({ kind: "start", bpm });
+    }
+
+    const part = Number.isInteger(Number(marker.part)) ? Math.max(0, Math.min(5, Number(marker.part))) : 0;
+    const start = Number(marker.globalSourceStart);
+    const { events } = parseTempoCommandData(detail.sourceBefore);
+    let target = events.find(tempo => Number.isInteger(start) && tempo.globalSourceStart === start) || null;
+    if (!target) {
+      const candidates = events.filter(tempo => tempo.part === part && Math.abs(tempo.beat - beat) <= TEMPO_OVERRIDE_BEAT_EPSILON);
+      target = candidates[0] || null;
+    }
+    return normalizeTempoOverride({
+      kind: "explicit",
+      bpm,
+      part,
+      beat,
+      partOrdinal: target?.partOrdinal ?? -1,
+      globalOrdinal: target?.globalOrdinal ?? -1
+    });
+  }
+
+  function findTempoOverrideTarget(override, events, usedStarts) {
+    const available = candidate => candidate && !usedStarts.has(candidate.globalSourceStart);
+    const samePartBeat = events.filter(tempo =>
+      tempo.part === override.part &&
+      Math.abs(tempo.beat - override.beat) <= TEMPO_OVERRIDE_BEAT_EPSILON &&
+      available(tempo)
+    );
+    if (override.partOrdinal >= 0) {
+      const exactAtBeat = samePartBeat.find(tempo => tempo.partOrdinal === override.partOrdinal);
+      if (exactAtBeat) return exactAtBeat;
+    }
+    if (samePartBeat.length) return samePartBeat[0];
+
+    if (override.partOrdinal >= 0) {
+      const byPartOrdinal = events.find(tempo => tempo.part === override.part && tempo.partOrdinal === override.partOrdinal && available(tempo));
+      if (byPartOrdinal) return byPartOrdinal;
+    }
+    if (override.globalOrdinal >= 0) {
+      const byGlobalOrdinal = events.find(tempo => tempo.globalOrdinal === override.globalOrdinal && available(tempo));
+      if (byGlobalOrdinal) return byGlobalOrdinal;
+    }
+    return null;
+  }
+
+  function applyTempoOverridesToMml(mml, values = state.tempoOverrides) {
+    let output = String(mml || "");
+    const overrides = normalizeTempoOverrides(values);
+    if (!output || !overrides.length) return output;
+
+    const { parsed, events } = parseTempoCommandData(output);
+    const replacements = new Map();
+    const usedStarts = new Set();
+    let startBpm = null;
+
+    for (const override of overrides) {
+      if (override.kind === "start") {
+        const effectiveStart = (parsed?.tempos || []).find(tempo =>
+          Boolean(tempo?.explicit) && Math.abs(Number(tempo?.beat) || 0) <= TEMPO_OVERRIDE_BEAT_EPSILON
+        );
+        const candidate = effectiveStart
+          ? events.find(tempo => tempo.globalSourceStart === Number(effectiveStart.globalSourceStart))
+          : null;
+        if (candidate && !usedStarts.has(candidate.globalSourceStart)) {
+          replacements.set(candidate.globalSourceStart, { ...candidate, bpm: override.bpm });
+          usedStarts.add(candidate.globalSourceStart);
+        } else {
+          startBpm = override.bpm;
+        }
+        continue;
+      }
+
+      const candidate = findTempoOverrideTarget(override, events, usedStarts);
+      if (!candidate) continue;
+      replacements.set(candidate.globalSourceStart, { ...candidate, bpm: override.bpm });
+      usedStarts.add(candidate.globalSourceStart);
+    }
+
+    const ordered = Array.from(replacements.values()).sort((a, b) => b.globalSourceStart - a.globalSourceStart);
+    for (const replacement of ordered) {
+      output = `${output.slice(0, replacement.globalSourceStart)}T${replacement.bpm}${output.slice(replacement.globalSourceEnd)}`;
+    }
+
+    if (startBpm != null) {
+      const header = output.match(/^\s*MML\s*@/i);
+      if (header) output = `${output.slice(0, header[0].length)}T${startBpm}${output.slice(header[0].length)}`;
+      else output = `MML@T${startBpm}${output.replace(/^\s*MML\s*@/i, "").replace(/;\s*$/, "")};`;
+    }
+    return output;
+  }
+
+  function recordTempoOverride(detail = {}) {
+    const override = deriveTempoOverride(detail);
+    state.tempoOverrides = normalizeTempoOverrides([...state.tempoOverrides, override]);
+    state.lastApplySignature = "";
+    state.manualEdited = true;
+    invalidateCopySplitPlan();
+    if (state.ui.manualBadge) state.ui.manualBadge.hidden = false;
+    markPlayerEdited();
+    scheduleChannelCountsUpdate();
+    scheduleCopyRowsRender();
+    scheduleOptionMetricsUpdate();
+    scheduleSessionPersist();
   }
 
   function scaleTempoCommands(mml, percent) {
@@ -1091,7 +1275,7 @@
     if ((fadeInSeconds > 0 || fadeOutSeconds > 0) && optimizer.applyFadeMml) {
       out = resultMml(optimizer.applyFadeMml(out, { partCount: 6, fadeInSeconds, fadeOutSeconds }), out);
     }
-    return out;
+    return applyTempoOverridesToMml(out, state.tempoOverrides);
   }
 
   function clearPendingPlaybackPreview() {
@@ -1168,7 +1352,7 @@
     if (!force && signature === state.lastApplySignature) return;
 
     const startedAt = performance.now();
-    const transformCalls = { dynamics: 0, rest: 0, volumeFixed: 0, volume: 0, octave: 0, accompaniment: 0, leading: 0, tempoClean: 0, tempoScale: 0, fade: 0 };
+    const transformCalls = { dynamics: 0, rest: 0, volumeFixed: 0, volume: 0, octave: 0, accompaniment: 0, leading: 0, tempoClean: 0, tempoScale: 0, fade: 0, tempoOverride: 0 };
     const diagnostics = { cacheHits: 0, stageDurations: {} };
     let out = String(state.sourceMml);
     let previousKey = `source:${state.sourceVersion}`;
@@ -1309,6 +1493,14 @@
         if ((fadeInSeconds <= 0 && fadeOutSeconds <= 0) || !optimizer.applyFadeMml) return input;
         transformCalls.fade += 1;
         return resultMml(optimizer.applyFadeMml(input, { partCount: 6, fadeInSeconds, fadeOutSeconds }), input);
+      }, diagnostics);
+      out = stage.output;
+      previousKey = stage.key;
+
+      stage = pipelineStage(stageIndex++, previousKey, "tempoOverride", state.tempoOverrides, out, input => {
+        if (!state.tempoOverrides.length) return input;
+        transformCalls.tempoOverride += 1;
+        return applyTempoOverridesToMml(input, state.tempoOverrides);
       }, diagnostics);
       out = stage.output;
 
@@ -2289,6 +2481,7 @@
 
   function installGlobalHandling() {
     window.addEventListener("mobibard:source-baseline", event => receiveSourceBaseline(event.detail || {}));
+    window.addEventListener("mobibard:tempo-edit-committed", event => recordTempoOverride(event.detail || {}));
     window.addEventListener("mobibard:midi-settings-dirty", () => {
       queueMicrotask(() => refreshInstrumentDirtyState());
     });
@@ -10800,6 +10993,22 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const source = normalizeMmlForDisplay(mainMml?.value || "");
       const updated = replaceTempoMarkerCommand(source, marker, bpm);
       setMainMml(updated);
+      try {
+        window.dispatchEvent(new CustomEvent("mobibard:tempo-edit-committed", {
+          detail: {
+            bpm,
+            beforeBpm,
+            sourceBefore: source,
+            marker: {
+              beat: Number(marker?.beat) || 0,
+              part: Number.isInteger(marker?.part) ? marker.part : -1,
+              explicit: Boolean(marker?.explicit),
+              globalSourceStart: Number.isFinite(marker?.globalSourceStart) ? marker.globalSourceStart : -1,
+              globalSourceEnd: Number.isFinite(marker?.globalSourceEnd) ? marker.globalSourceEnd : -1
+            }
+          }
+        }));
+      } catch (_) {}
       currentOffset = 0;
       showToast([i18nText("tempo.edit"), i18nText("tempo.changed", [formatTime(Math.max(0, Number(marker?.time) || 0)), beforeBpm, bpm])].filter(Boolean).join(": "), "info");
     } catch (err) {

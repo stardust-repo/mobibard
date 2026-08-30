@@ -1,4 +1,4 @@
-import { onLanguageChange, t } from './language-manager.js?v=20260830-cleanup2';
+import { onLanguageChange, t } from './language-manager.js?v=20260830-site-nav1';
 
 const THEME_KEY = 'mobibard.player.theme';
 let initialized = false;

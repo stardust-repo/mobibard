@@ -658,17 +658,6 @@ textarea:focus-visible,
 .options-field select,
 .options-field #pitchSpacingSelect { width: 100%; height: 36px; min-width: 0; padding: 0 26px 0 9px; }
 .options-menu-section-label { margin-top: 4px; padding-inline: 3px; }
-.theme-choice-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 5px 3px 6px; }
-.theme-menu .theme-choice-row button {
-  width: auto;
-  min-width: 0;
-  justify-content: center;
-  padding: 0 8px;
-  border: 1px solid var(--control-border);
-  background: var(--control-bg);
-  text-align: center;
-}
-.theme-menu .theme-choice-row button[aria-checked="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--control-bg)); }
 
 .corner-cell {
   position: relative;
@@ -4544,4 +4533,44 @@ button {
 .transport-control-group > button .shared-transport-icon {
   margin: 0;
   vertical-align: initial;
+}
+
+/* Match the shared settings theme control used by Simple/Player/RollScriptor/VeloScriptor. */
+.theme-menu .editor-theme-field {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+}
+.theme-menu .theme-menu-button {
+  box-sizing: border-box;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+  min-height: 36px;
+  height: 36px;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 9px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(31, 35, 42, .06);
+}
+.theme-menu .theme-menu-button:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--control-bg));
+}
+.theme-menu .theme-menu-icon {
+  flex: 0 0 auto;
+  font-size: 18px;
+  line-height: 1;
+  transform: translateY(-1px);
 }

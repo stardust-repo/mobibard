@@ -14,11 +14,11 @@ import {
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
-} from './vision.js?v=20260830-cleanup2';
-import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260830-cleanup2';
-import { createMidiFile } from './midi.js?v=20260830-cleanup2';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-cleanup2';
-import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-cleanup2';
+} from './vision.js?v=20260830-site-nav1';
+import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260830-site-nav1';
+import { createMidiFile } from './midi.js?v=20260830-site-nav1';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-site-nav1';
+import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-site-nav1';
 
 const MEDIABUNNY_VERSION = '1.55.3';
 const MEDIABUNNY_URLS = [
@@ -30,6 +30,9 @@ const MIDI_PREVIEW_LOOKAHEAD_SEC = 0.7;
 const MIDI_PREVIEW_SCHEDULER_MS = 120;
 const MIDI_PREVIEW_BANK = 0;
 const MIDI_PREVIEW_PROGRAM = 0;
+
+const DEFAULT_WHITE_CHANGE_PERCENT = 20;
+const DEFAULT_BLACK_CHANGE_PERCENT = 30;
 
 const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'videoInfo', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
@@ -380,8 +383,8 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
       ? Boolean(snapshot.keyboardDetectionConfirmed)
       : Boolean(snapshot.analysisRangeAutoInitialized);
     updateDetectionModeButton();
-    elements.whiteChangePercent.value = String(clamp(Math.round(Number(snapshot.whiteChangePercent) || 30), 1, 100));
-    elements.blackChangePercent.value = String(clamp(Math.round(Number(snapshot.blackChangePercent) || 50), 1, 100));
+    elements.whiteChangePercent.value = String(clamp(Math.round(Number(snapshot.whiteChangePercent) || DEFAULT_WHITE_CHANGE_PERCENT), 1, 100));
+    elements.blackChangePercent.value = String(clamp(Math.round(Number(snapshot.blackChangePercent) || DEFAULT_BLACK_CHANGE_PERCENT), 1, 100));
     elements.tempo.value = String(clamp(Math.round(Number(snapshot.tempo) || 120), 20, 300));
     elements.velocity.value = String(clamp(Math.round(Number(snapshot.velocity) || 75), 1, 100));
     elements.velocityValue.textContent = `${elements.velocity.value}%`;
@@ -730,8 +733,8 @@ function resetRollscriptorSettingsForNewVideo() {
   state.keyboardSide = 'bottom';
   state.analysisRangeSearching = false;
   state.analysisRangeAutoInitialized = false;
-  if (elements.whiteChangePercent) elements.whiteChangePercent.value = '30';
-  if (elements.blackChangePercent) elements.blackChangePercent.value = '50';
+  if (elements.whiteChangePercent) elements.whiteChangePercent.value = String(DEFAULT_WHITE_CHANGE_PERCENT);
+  if (elements.blackChangePercent) elements.blackChangePercent.value = String(DEFAULT_BLACK_CHANGE_PERCENT);
   syncNoteExtensionButtons(0);
   if (elements.tempo) elements.tempo.value = '120';
   if (elements.velocity) elements.velocity.value = '75';
@@ -795,7 +798,7 @@ function percentile(values, ratio = 0.5) {
 function keyboardReferenceAppearanceTolerance() {
   const options = currentChangeOptions();
   // Range search should be substantially stricter than Note On detection.
-  // With the default 30/50 thresholds this is about 9.6%, which rejects most
+  // With the default 20/30 thresholds this is about 6.4%, which rejects most
   // fade-in/out frames while still tolerating compression and a few active keys.
   return clamp(Math.min(options.whiteChangePercent, options.blackChangePercent) * 0.32, 6, 12);
 }
@@ -2919,7 +2922,7 @@ async function ensureAudioVelocityScores() {
   }
 }
 
-function normalizedChangePercent(element, fallback = 30) {
+function normalizedChangePercent(element, fallback = DEFAULT_WHITE_CHANGE_PERCENT) {
   const numeric = Number(element?.value);
   const value = clamp(Math.round(Number.isFinite(numeric) ? numeric : fallback), 1, 100);
   if (element) element.value = String(value);
@@ -2933,12 +2936,12 @@ function currentChangeOptions({ normalize = false } = {}) {
   };
   return normalize
     ? {
-      whiteChangePercent: normalizedChangePercent(elements.whiteChangePercent, 30),
-      blackChangePercent: normalizedChangePercent(elements.blackChangePercent, 50),
+      whiteChangePercent: normalizedChangePercent(elements.whiteChangePercent, DEFAULT_WHITE_CHANGE_PERCENT),
+      blackChangePercent: normalizedChangePercent(elements.blackChangePercent, DEFAULT_BLACK_CHANGE_PERCENT),
     }
     : {
-      whiteChangePercent: read(elements.whiteChangePercent, 30),
-      blackChangePercent: read(elements.blackChangePercent, 50),
+      whiteChangePercent: read(elements.whiteChangePercent, DEFAULT_WHITE_CHANGE_PERCENT),
+      blackChangePercent: read(elements.blackChangePercent, DEFAULT_BLACK_CHANGE_PERCENT),
     };
 }
 
@@ -3229,7 +3232,7 @@ function initializeEvents() {
   });
 
   const onChangeThreshold = event => {
-    normalizedChangePercent(event.currentTarget, event.currentTarget === elements.blackChangePercent ? 50 : 30);
+    normalizedChangePercent(event.currentTarget, event.currentTarget === elements.blackChangePercent ? DEFAULT_BLACK_CHANGE_PERCENT : DEFAULT_WHITE_CHANGE_PERCENT);
     if (state.notes.length || state.midiBlob) {
       resetResults();
       setProgress(0, t('progress.waiting'), state.keyboardDetectionConfirmed ? t('progress.detected_detail') : t('progress.idle_detail'));

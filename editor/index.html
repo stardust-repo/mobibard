@@ -9,14 +9,15 @@
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <title>모비바드 v5.2</title>
 <link href="../assets/favicon.ico" rel="icon"/>
-<link href="styles.css?v=5.2.0&amp;rev=20260829-v52" rel="stylesheet"/>
+<link href="styles.css?v=5.2.0&amp;rev=20260831-editor-theme-toggle1" rel="stylesheet"/>
+<link href="../plugins/common/site-navigation.css?v=20260831-player-header1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
 <body>
 <div data-context-area="app" id="app">
-<header class="topbar" data-context-area="topbar">
+<header class="topbar editor-topbar" data-context-area="topbar">
 <div class="topbar-main">
-<div class="brand"><span>모비바드</span><span class="brand-version">v5.2</span></div>
+<details class="brand-site-map" data-current-site="editor"><summary class="brand-site-map-trigger brand" aria-label="사이트 맵" title="사이트 맵"><span aria-hidden="true" class="brand-mark"></span><span class="brand-site-map-name">모비바드</span><span class="brand-version">v5.2</span><svg aria-hidden="true" class="brand-site-map-chevron" viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6"></path></svg></summary><nav aria-label="사이트 맵" class="brand-site-map-popover" data-common-site-map=""></nav></details>
 <div class="toolbar-group file-actions">
 <div class="file-control">
 <button aria-expanded="false" aria-haspopup="menu" id="fileButton" type="button">파일</button>
@@ -128,13 +129,11 @@
 <option value="zh-TW">中文(繁體)</option>
 </select>
 </label>
-<div class="options-menu-section-label">테마</div>
-<div aria-label="테마" class="theme-choice-row" role="group">
-<button aria-checked="false" data-theme-choice="light" role="radio" type="button">
-<span aria-hidden="true">☀</span><span>밝은 색상</span>
-</button>
-<button aria-checked="true" data-theme-choice="dark" role="radio" type="button">
-<span aria-hidden="true">☾</span><span>어두운 색상</span>
+<div class="options-field editor-theme-field">
+<span>테마</span>
+<button aria-label="테마 변경" class="theme-menu-button" id="themeToggleButton" title="테마 변경" type="button">
+<span aria-hidden="true" class="theme-menu-icon">◐</span>
+<span id="themeToggleButtonText">테마 변경</span>
 </button>
 </div>
 <label class="options-field">
@@ -352,6 +351,7 @@
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
 <script src="js/soundbank-player.js?v=5.1.0"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final46"></script>
-<script src="app.js?v=5.2.0&amp;rev=20260829-v52"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-common-nav2"></script>
+<script src="app.js?v=5.2.0&amp;rev=20260831-editor-theme-toggle1"></script>
 </body>
 </html>

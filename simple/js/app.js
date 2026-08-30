@@ -14,7 +14,7 @@
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
   const LOCALE_VERSION = "5.2.0";
-  const LOCALE_REVISION = "20260830-volume-mode2";
+  const LOCALE_REVISION = "20260830-site-nav1";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 
@@ -57,8 +57,13 @@
     convertStepDescription: $("convertStepDescription"),
     brandName: $("brandName"),
     midiExtractLink: $("midiExtractLink"),
-    rollscriptorLink: $("rollscriptorLink"),
     fullEditorLink: $("fullEditorLink"),
+    siteMapButton: $("siteMapButton"),
+    siteMapLabel: $("siteMapLabel"),
+    siteMapSimpleLink: $("siteMapSimpleLink"),
+    siteMapPlayerLink: $("siteMapPlayerLink"),
+    siteMapRollscriptorLink: $("siteMapRollscriptorLink"),
+    siteMapVeloscriptorLink: $("siteMapVeloscriptorLink"),
     discordLink: $("discordLink"),
     settingsControl: $("settingsControl"),
     settingsButton: $("settingsButton"),
@@ -304,9 +309,14 @@
     if (els.convertStepTitle) els.convertStepTitle.textContent = t("stepConvertTitle");
     if (els.convertStepDescription) els.convertStepDescription.textContent = t("stepConvertDescription");
     els.midiExtractLink.textContent = t("extract");
-    if (els.rollscriptorLink) { els.rollscriptorLink.textContent = t("rollscriptor"); els.rollscriptorLink.href = `../rollscriptor/index.html?lang=${encodeURIComponent(language)}`; }
     els.fullEditorLink.textContent = t("full");
     els.fullEditorLink.href = `../player/index.html?lang=${encodeURIComponent(language)}`;
+    if (els.siteMapButton) { els.siteMapButton.setAttribute("aria-label", t("siteMap")); els.siteMapButton.title = t("siteMap"); }
+    if (els.siteMapLabel) els.siteMapLabel.textContent = t("siteMap");
+    if (els.siteMapSimpleLink) { els.siteMapSimpleLink.textContent = t("siteSimple"); els.siteMapSimpleLink.href = `../simple/index.html?lang=${encodeURIComponent(language)}`; }
+    if (els.siteMapPlayerLink) { els.siteMapPlayerLink.textContent = t("sitePlayer"); els.siteMapPlayerLink.href = `../player/index.html?lang=${encodeURIComponent(language)}`; }
+    if (els.siteMapRollscriptorLink) { els.siteMapRollscriptorLink.textContent = t("siteRollscriptor"); els.siteMapRollscriptorLink.href = `../rollscriptor/index.html?lang=${encodeURIComponent(language)}`; }
+    if (els.siteMapVeloscriptorLink) { els.siteMapVeloscriptorLink.textContent = t("siteVeloscriptor"); els.siteMapVeloscriptorLink.href = `../veloscriptor/index.html?lang=${encodeURIComponent(language)}`; }
     els.discordLink.setAttribute("aria-label", t("discord"));
     els.discordLink.title = t("discord");
     els.settingsButton.setAttribute("aria-label", t("account"));

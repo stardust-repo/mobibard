@@ -1,0 +1,138 @@
+<!-- 모비바드 | モビバード | Mobibard -->
+<!DOCTYPE html>
+
+<html data-theme="light" lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<meta content="light dark" name="color-scheme"/>
+<title>모비바드 v5.2</title>
+<link href="../assets/favicon.ico" rel="icon"/>
+<link href="https://stardust-repo.github.io/mobibard/veloscriptor/?lang=ko" hreflang="ko" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/veloscriptor/?lang=ja" hreflang="ja" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/veloscriptor/?lang=en" hreflang="en" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/veloscriptor/?lang=zh-CN" hreflang="zh-CN" rel="alternate"/>
+<link href="https://stardust-repo.github.io/mobibard/veloscriptor/?lang=zh-TW" hreflang="zh-TW" rel="alternate"/>
+<script>
+(() => {
+  try {
+    document.documentElement.dataset.theme = localStorage.getItem('mobibard.player.theme') === 'dark' ? 'dark' : 'light';
+  } catch (_) {}
+})();
+</script>
+<link href="./styles.css?v=20260831-player-header1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-player-header1" rel="stylesheet"/>
+</head>
+<body>
+<header class="topbar veloscriptor-topbar">
+<div class="topbar-inner">
+<details class="brand-site-map" data-current-site="veloscriptor"><summary class="brand-site-map-trigger brand">
+<span aria-hidden="true" class="brand-mark"></span>
+<span class="brand-site-map-name" data-i18n="ui.brand">모비바드</span>
+<span class="brand-version">v5.2</span>
+<svg aria-hidden="true" class="brand-site-map-chevron" viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6"></path></svg></summary><nav aria-label="사이트 맵" class="brand-site-map-popover site-map-popover" data-common-site-map=""></nav></details>
+<div class="top-actions">
+<div aria-label="추천 사이트" class="header-links" data-i18n-aria-label="ui.recommended">
+<select aria-label="추천 사이트 선택" class="midi-site-links" data-common-recommended="" data-i18n-aria-label="ui.select_recommended" id="midiSiteLinks">
+<option data-i18n="ui.recommended" value="">추천 사이트</option>
+
+
+
+
+
+
+
+
+
+
+</select>
+
+<a aria-label="디스코드" class="discord-link" data-i18n-aria-label="ui.discord" data-i18n-title="ui.discord" href="https://discord.gg/qqwzCERZK5" rel="noopener noreferrer" target="_blank" title="디스코드"><img alt="" decoding="async" src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d7f4ef6498ac018f2c55_Symbol.svg"/></a>
+</div>
+<div class="settings-menu-wrap">
+<button aria-controls="settingsMenu" aria-expanded="false" aria-haspopup="dialog" aria-label="설정" class="settings-icon-button" data-i18n-aria-label="settings.menu" data-i18n-title="settings.menu" id="settingsButton" popovertarget="settingsMenu" popovertargetaction="toggle" title="설정" type="button">
+<svg aria-hidden="true" viewbox="0 0 24 24"><path d="M3 6h7v2H3V6Zm11 0h7v2h-7V6Zm-4-2h4v6h-4V4ZM3 11h12v2H3v-2Zm16 0h2v2h-2v-2Zm-4-2h4v6h-4V9ZM3 16h4v2H3v-2Zm8 0h10v2H11v-2Zm-4-2h4v6H7v-6Z"></path></svg>
+<span class="sr-only" data-i18n="settings.menu">설정</span>
+</button>
+<div aria-labelledby="settingsButton" class="settings-menu-popover settings-two-row" id="settingsMenu" popover="auto" role="dialog">
+<strong class="settings-menu-header-title" data-i18n="settings.menu">설정</strong>
+<label class="menu-field settings-row" for="languageSelect"><span data-i18n="language.label">언어</span><select aria-label="언어 선택" data-i18n-aria-label="language.select" id="languageSelect"><option value="ko">한국어</option><option value="ja">日本語</option><option value="en">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option></select></label>
+<div class="menu-field settings-row"><span data-i18n="theme.label">테마</span><button class="theme-button" id="themeButton" type="button"><span aria-hidden="true">◐</span><span data-i18n="theme.change">테마 변경</span></button></div>
+</div>
+</div>
+</div>
+</div>
+</header>
+<main class="page-shell">
+<section aria-labelledby="pageTitle" class="converter">
+<div class="title-row simple-title-row">
+<div class="title-block">
+<h1 data-i18n="product.name" id="pageTitle">벨로 스크립터</h1>
+<p class="subtitle" data-i18n="product.subtitle">MIDI와 동일한 연주 음원을 비교해 노트별 벨로시티를 다시 계산합니다.</p>
+</div>
+<nav aria-label="제품 이동" class="mode-actions simple-mode-actions" data-i18n-aria-label="nav.products">
+<a class="mode-action-button" data-i18n="nav.midi_extract" href="https://muscriptor.kyutai.org/" rel="noopener noreferrer" target="_blank">MIDI 추출</a>
+</nav>
+</div>
+<p class="privacy-note"><span aria-hidden="true">●</span><span data-i18n="product.privacy">파일은 서버로 전송되지 않고 이 브라우저 안에서만 처리됩니다.</span></p>
+<section aria-labelledby="filesTitle" class="workflow-section simple-workflow-section">
+<div class="section-head simple-section-head">
+<div><span class="step-number">1</span><h2 data-i18n="section.files_title" id="filesTitle">파일 불러오기</h2></div>
+<p data-i18n="section.files_description">MIDI와 그 MIDI를 렌더링한 동일한 음원 파일을 선택합니다.</p>
+</div>
+<div class="file-grid">
+<div class="file-drop" id="midiDrop">
+<input accept=".mid,.midi,.kar,audio/midi,audio/x-midi" id="midiFile" type="file"/>
+<label class="file-drop-label" for="midiFile">
+<span aria-hidden="true" class="file-icon">♫</span>
+<span class="file-copy"><strong data-i18n="file.midi_title">MIDI 파일</strong><span data-i18n="file.midi_prompt" id="midiFileName">MIDI를 선택하거나 여기에 드롭하세요.</span><small hidden="" id="midiInfo"></small><em data-i18n="file.midi_support">MID · MIDI · KAR</em></span>
+</label>
+</div>
+<div class="file-drop" id="audioDrop">
+<input accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.oga,.flac,.opus,.webm" id="audioFile" type="file"/>
+<label class="file-drop-label" for="audioFile">
+<span aria-hidden="true" class="file-icon">◖</span>
+<span class="file-copy"><strong data-i18n="file.audio_title">동일 음원 파일</strong><span data-i18n="file.audio_prompt" id="audioFileName">음원을 선택하거나 여기에 드롭하세요.</span><small hidden="" id="audioInfo"></small><em data-i18n="file.audio_support">브라우저가 재생할 수 있는 WAV · MP3 · M4A · OGG 등</em></span>
+</label>
+</div>
+</div>
+<div class="matching-notice"><strong data-i18n="file.matching_title">같은 연주가 필요합니다.</strong><span data-i18n="file.matching_notice">음원은 MIDI와 같은 템포·같은 편곡이어야 합니다. 앞부분 시작 시각만 다르면 아래 오프셋으로 맞출 수 있습니다.</span></div>
+</section>
+<section aria-labelledby="analysisTitle" class="workflow-section simple-workflow-section">
+<div class="section-head simple-section-head">
+<div><span class="step-number">2</span><h2 data-i18n="section.analysis_title" id="analysisTitle">분석과 결과</h2></div>
+<p data-i18n="section.analysis_description">각 노트 시작점의 기본음과 배음 Attack을 측정해 원본 MIDI의 벨로시티 바이트만 교체합니다.</p>
+</div>
+<div class="velo-analysis-options">
+<div class="settings-grid">
+<label class="setting-card offset-setting">
+<span class="setting-title" data-i18n="settings.offset">오디오 시작 오프셋 (ms)</span>
+<input id="audioOffset" inputmode="numeric" max="10000" min="-10000" step="1" type="number" value="0"/>
+<small data-i18n="settings.offset_hint">음원의 첫 소리가 MIDI보다 늦으면 +값, 빠르면 −값을 입력합니다.</small>
+</label>
+</div>
+<p class="drum-note" data-i18n="settings.drums_preserved">채널 10의 드럼은 음계 주파수로 세기를 판정할 수 없으므로 원본 벨로시티를 유지합니다.</p>
+</div>
+<div class="analysis-action-grid">
+<button class="primary-button analysis-button" data-i18n="actions.analyze" disabled="" id="analyzeButton" type="button">볼륨 분석</button>
+<div aria-live="polite" class="analysis-status" role="status">
+<div class="progress-track"><div id="progressBar"></div></div>
+<div class="progress-copy"><div><strong id="progressLabel">파일을 선택해 주세요.</strong><span id="progressDetail">MIDI와 동일 음원이 모두 필요합니다.</span></div><div class="result-count"><strong id="resultCount">0</strong><span data-i18n="result.notes">노트</span></div></div>
+</div>
+</div>
+<div class="result-panel" hidden="" id="resultPanel">
+<div class="result-heading"><div><strong data-i18n="result.title">분석 결과</strong><span id="resultSummary"></span></div><div class="result-legend"><span class="legend-original" data-i18n="result.original">원본</span><span class="legend-analyzed" data-i18n="result.analyzed">분석 후</span></div></div>
+<div class="stats-grid"><div><span data-i18n="result.original_stats">원본 벨로시티</span><strong id="resultOriginalStats"></strong></div><div><span data-i18n="result.new_stats">분석 후 벨로시티</span><strong id="resultNewStats"></strong></div></div>
+<div aria-label="원본과 분석 후 벨로시티 분포" class="velocity-histogram" data-i18n-aria-label="result.histogram_aria" id="histogram" role="img"></div>
+<div class="result-actions"><button class="primary-button" data-i18n="actions.download" disabled="" id="downloadMidi" type="button">MIDI 다운로드</button><button class="soft-button" data-i18n="actions.reset" disabled="" id="resetResult" type="button">결과 지우기</button></div>
+</div>
+<div class="runtime-error" hidden="" id="runtimeError"></div>
+</section>
+</section>
+</main>
+<div aria-live="polite" class="toast" id="toast" role="status"></div>
+<script src="../plugins/common/utils.js?v=5.1.0"></script>
+<script src="../plugins/formats/midi/midi-parser.js?v=5.1.0"></script>
+<script src="./js/settings-menu.js?v=20260830-site-nav1" type="module"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-common-nav2"></script><script src="./js/app.js?v=20260830-site-nav1" type="module"></script>
+</body>
+</html>

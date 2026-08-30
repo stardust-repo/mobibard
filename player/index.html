@@ -14,9 +14,9 @@
 <link href="https://stardust-repo.github.io/mobibard/player/?lang=zh-CN" hreflang="zh-CN" rel="alternate"/>
 <link href="https://stardust-repo.github.io/mobibard/player/?lang=zh-TW" hreflang="zh-TW" rel="alternate"/>
 <link href="https://stardust-repo.github.io/mobibard/player/" hreflang="x-default" rel="alternate"/>
-<link href="styles.css?v=5.2.0&amp;rev=20260830-volume-mode-ui3" rel="stylesheet"/>
+<link href="styles.css?v=20260831-site-nav2" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-player-header1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
-<link as="script" href="js/app.js?v=5.2.0&amp;rev=20260830-volume-mode-ui3" rel="preload"/>
+<link as="script" href="js/app.js?v=5.2.0&amp;rev=20260830-site-nav1" rel="preload"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 <script>
 (() => {
@@ -62,7 +62,7 @@
   document.documentElement.dataset.i18nPending = "true";
   const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
   if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "5.2.0");
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("rev", "20260830-volume-mode-ui3");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("rev", "20260830-site-nav1");
   document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
 })();
@@ -71,24 +71,26 @@
 <body class="player-ui">
 <header class="player-topbar">
 <div class="player-topbar-inner">
-<a aria-label="" class="player-brand" data-i18n-aria-label="ui.mobibard_version" href="./index.html">
+<details class="brand-site-map" data-current-site="player"><summary class="brand-site-map-trigger player-brand">
 <span aria-hidden="true" class="player-brand-mark"></span>
-<span data-i18n="ui.mobibard"></span><span class="player-brand-version">v5.2</span>
-</a>
+<span class="brand-site-map-name" data-i18n="ui.mobibard"></span><span class="player-brand-version">v5.2</span>
+<svg aria-hidden="true" class="brand-site-map-chevron" viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6"></path></svg></summary><nav aria-label="사이트 맵" class="brand-site-map-popover site-map-popover" data-common-site-map=""></nav></details>
 <div class="player-top-actions app-head-controls">
 <div aria-label="" class="header-links" data-i18n-aria-label="ui.recommend_links">
-<select aria-label="" class="midi-site-links" data-i18n-aria-label="ui.select_recommend" id="midiSiteLinks">
+<select aria-label="" class="midi-site-links" data-common-recommended="" data-i18n-aria-label="ui.select_recommend" id="midiSiteLinks">
 <option data-i18n="ui.recommend_links" value=""></option>
-<option value="https://bitmidi.com/">BitMidi</option>
-<option value="https://www.classicalarchives.com/midi.html">ClassicalArchives</option>
-<option value="https://ichigos.com/">Ichigo's</option>
-<option value="https://josh.agarrado.net/music/anime/index.php">Josh's Anime</option>
-<option value="http://www.midiex.net/">MIDIEX</option>
-<option value="http://www.midisite.co.uk/">Midisite</option>
-<option value="https://musescore.com/">MuseScore</option>
-<option value="https://www.vgmusic.com/">VGMusic</option>
-<option value="https://www.zophar.net/">Zophar's Domain</option>
+
+
+
+
+
+
+
+
+
+
 </select>
+
 <a aria-label="" class="discord-icon-button" data-i18n-aria-label="ui.discord" data-i18n-title="ui.discord" href="https://discord.gg/qqwzCERZK5" rel="noopener noreferrer" target="_blank" title="">
 <img alt="" decoding="async" src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d7f4ef6498ac018f2c55_Symbol.svg"/>
 </a>
@@ -129,9 +131,9 @@
 <section aria-label="" class="card menu-card" data-i18n-aria-label="mml.mabinogi_player">
 <div class="app-head">
 <div class="app-brand-line"><h1 class="app-main-title"><span data-i18n="mml.generator_title"></span></h1></div>
-<div class="player-mode-actions" aria-label="Mode navigation"><a class="player-mode-action-button" data-i18n="rollscriptor.label" data-i18n-title="rollscriptor.open" href="../rollscriptor/index.html" id="rollscriptorBtn" title="RollScriptor">롤 스크립터</a></div>
+<div aria-label="Mode navigation" class="player-mode-actions"><button class="player-mode-action-button" data-i18n-title="midi.extract" id="midiExtractBtn" title="" type="button"><span data-i18n="midi.extract"></span></button><a class="player-mode-action-button" data-i18n="simple.label" data-i18n-title="simple.open" href="../simple/index.html" id="simpleVersionBtn" title=""></a></div>
 </div>
-<div class="player-workflow-head" aria-labelledby="playerStep1Title"><div><span class="player-step-number">1</span><h2 id="playerStep1Title" data-i18n="workflow.load_title"></h2></div><p data-i18n="workflow.load_description"></p></div>
+<div aria-labelledby="playerStep1Title" class="player-workflow-head"><div><span class="player-step-number">1</span><h2 data-i18n="workflow.load_title" id="playerStep1Title"></h2></div><p data-i18n="workflow.load_description"></p></div>
 <div aria-label="" class="player-file-toolbar" data-i18n-aria-label="mml.file_ops">
 <div class="player-file-actions-left">
 <span class="toolbar-label" data-i18n="ui.load"></span>
@@ -144,13 +146,9 @@
 </div>
 <div aria-label="" class="player-file-actions-special" data-i18n-aria-label="game.midi_extraction">
 <button class="import-format-list mabi-supported-files-button player-supported-files-button" data-supported-files-button="" data-supported-files-context="player" type="button">지원 파일</button>
-<button class="midi-extract-toolbar-button" data-i18n-title="midi.extract" id="midiExtractBtn" title="" type="button">
-<span aria-hidden="true" class="midi-extract-toolbar-icon">♪</span><span data-i18n="midi.extract"></span>
-</button>
 <button aria-controls="rhythmGameLayer" aria-haspopup="dialog" class="rhythm-game-toolbar-button" data-i18n-title="game.open_mobibeat" id="rhythmGameBtn" title="" type="button">
 <span data-i18n="game.label"></span>
 </button>
-<a class="simple-version-toolbar-button" data-i18n="simple.label" data-i18n-title="simple.open" href="../simple/index.html" id="simpleVersionBtn" title=""></a>
 </div>
 <input accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,.txt,.mmi,.mml,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,text/plain,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98" data-music-format-input="" hidden="" id="midiFile" type="file"/>
 </div>
@@ -189,7 +187,6 @@
 <button class="mini-button control-reset-button soft-tool-button" data-i18n="ui.reset" id="volumeResetBtn" type="button"></button>
 </div>
 </div>
-
 <button class="tab-sound-btn soft-tool-button" data-i18n="snd.label" data-i18n-title="snd.configure_playback" id="partSoundBtn" title="" type="button"></button>
 </div>
 </div>
@@ -480,8 +477,8 @@
 </div>
 </form>
 </dialog>
-<script src="js/app.js?v=5.2.0&amp;rev=20260830-volume-mode-ui3"></script>
-<script src="js/language-manager.js?v=5.1.0&amp;rev=20260830-volume-mode-ui3"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-common-nav2"></script><script src="js/app.js?v=5.2.0&amp;rev=20260830-site-nav1"></script>
+<script src="js/language-manager.js?v=5.1.0&amp;rev=20260830-site-nav1"></script>
 <script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.0&amp;rev=20260820-022400"></script>

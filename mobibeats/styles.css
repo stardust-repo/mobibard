@@ -1570,3 +1570,6 @@ button:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Shared header typography: regular weight in the top HUD. */
+.top-hud :is(button,select,strong,span,output,.score-value,.time-row){font-weight:400!important}

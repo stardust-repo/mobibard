@@ -7,76 +7,57 @@ const SUPPORTED = Object.freeze({
   'zh-CN': { file: 'zh-CN.js', htmlLang: 'zh-Hans' },
   'zh-TW': { file: 'zh-TW.js', htmlLang: 'zh-Hant' },
 });
-const QUERY_KEYS = ['lang', 'language', 'locale'];
 const listeners = new Set();
 const cache = new Map();
 let activeLanguage = DEFAULT_LANGUAGE;
 let activeLocale = { strings: {} };
-let initialLanguagePromise = null;
+let initialPromise = null;
 
 export function normalizeLanguage(value) {
   const raw = String(value || '').trim().replace(/_/g, '-').toLowerCase();
-  if (!raw) return '';
   if (raw === 'ko' || raw.startsWith('ko-')) return 'ko';
   if (raw === 'ja' || raw.startsWith('ja-')) return 'ja';
   if (raw === 'en' || raw.startsWith('en-')) return 'en';
   if (raw === 'zh-cn' || raw === 'zh-hans' || raw.startsWith('zh-cn-') || raw.startsWith('zh-hans-')) return 'zh-CN';
   if (raw === 'zh-tw' || raw === 'zh-hant' || raw.startsWith('zh-tw-') || raw.startsWith('zh-hant-')) return 'zh-TW';
-  if (raw.startsWith('zh-')) return raw.includes('tw') || raw.includes('hk') || raw.includes('mo') || raw.includes('hant') ? 'zh-TW' : 'zh-CN';
+  if (raw.startsWith('zh-')) return /(?:tw|hk|mo|hant)/.test(raw) ? 'zh-TW' : 'zh-CN';
   return '';
 }
 
-function readQueryLanguage() {
+function initialLanguage() {
   try {
     const params = new URLSearchParams(location.search);
-    for (const key of QUERY_KEYS) {
-      if (!params.has(key)) continue;
-      const raw = params.get(key);
-      if (!raw || /^(?:auto|browser|system)$/i.test(raw)) return '';
-      return normalizeLanguage(raw);
+    for (const key of ['lang', 'language', 'locale']) {
+      const value = normalizeLanguage(params.get(key));
+      if (value) return value;
     }
+    const stored = normalizeLanguage(localStorage.getItem(LANGUAGE_KEY));
+    if (stored) return stored;
   } catch (_) {}
-  return '';
-}
-
-function readStoredLanguage() {
-  try { return normalizeLanguage(localStorage.getItem(LANGUAGE_KEY)); }
-  catch (_) { return ''; }
-}
-
-function detectBrowserLanguage() {
-  const candidates = Array.isArray(navigator.languages) && navigator.languages.length
-    ? navigator.languages
-    : [navigator.language || ''];
+  const candidates = Array.isArray(navigator.languages) && navigator.languages.length ? navigator.languages : [navigator.language || ''];
   for (const candidate of candidates) {
-    const normalized = normalizeLanguage(candidate);
-    if (SUPPORTED[normalized]) return normalized;
+    const value = normalizeLanguage(candidate);
+    if (value) return value;
   }
-  return '';
-}
-
-function resolveInitialLanguage() {
-  return readQueryLanguage() || readStoredLanguage() || detectBrowserLanguage() || DEFAULT_LANGUAGE;
+  return DEFAULT_LANGUAGE;
 }
 
 async function loadLocale(language) {
   const normalized = SUPPORTED[language] ? language : DEFAULT_LANGUAGE;
   if (cache.has(normalized)) return cache.get(normalized);
-  const config = SUPPORTED[normalized];
-  const module = await import(`../locale/${config.file}?v=20260830-site-nav1`);
-  const locale = module.default || module.locale || module;
-  if (!locale || typeof locale !== 'object' || !locale.strings) throw new Error(`Invalid RollScriptor locale: ${normalized}`);
+  const module = await import(`../locale/${SUPPORTED[normalized].file}?v=20260830-site-nav1`);
+  const locale = module.default || module;
+  if (!locale?.strings) throw new Error(`Invalid VeloScriptor locale: ${normalized}`);
   cache.set(normalized, locale);
   return locale;
 }
 
-function interpolate(text, values = {}) {
-  return String(text).replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => values[key] ?? '');
+function interpolate(value, replacements = {}) {
+  return String(value).replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => replacements[key] ?? '');
 }
 
-export function t(key, values = {}) {
-  const value = activeLocale?.strings?.[key];
-  return interpolate(value ?? key, values);
+export function t(key, replacements = {}) {
+  return interpolate(activeLocale?.strings?.[key] ?? key, replacements);
 }
 
 export function getLanguage() {
@@ -84,17 +65,17 @@ export function getLanguage() {
 }
 
 export function localizeDocument(root = document) {
-  root.querySelectorAll('[data-i18n]').forEach(node => {
-    const key = node.getAttribute('data-i18n');
-    if (key) node.textContent = t(key);
+  root.querySelectorAll('[data-i18n]').forEach(element => {
+    const key = element.getAttribute('data-i18n');
+    if (key) element.textContent = t(key);
   });
-  root.querySelectorAll('[data-i18n-aria-label]').forEach(node => {
-    const key = node.getAttribute('data-i18n-aria-label');
-    if (key) node.setAttribute('aria-label', t(key));
+  root.querySelectorAll('[data-i18n-title]').forEach(element => {
+    const key = element.getAttribute('data-i18n-title');
+    if (key) element.title = t(key);
   });
-  root.querySelectorAll('[data-i18n-title]').forEach(node => {
-    const key = node.getAttribute('data-i18n-title');
-    if (key) node.setAttribute('title', t(key));
+  root.querySelectorAll('[data-i18n-aria-label]').forEach(element => {
+    const key = element.getAttribute('data-i18n-aria-label');
+    if (key) element.setAttribute('aria-label', t(key));
   });
   document.title = t('site.title');
 }
@@ -126,14 +107,10 @@ export async function setLanguage(language, { persist = true, updateQuery = fals
   for (const listener of listeners) {
     try { listener(normalized, activeLocale); } catch (error) { console.error(error); }
   }
-  window.dispatchEvent(new CustomEvent('mobibard:rollscriptor-localechange', { detail: { language: normalized } }));
   return normalized;
 }
 
 export function initializeLanguage() {
-  if (!initialLanguagePromise) {
-    initialLanguagePromise = setLanguage(resolveInitialLanguage(), { persist: false, updateQuery: false });
-  }
-  return initialLanguagePromise;
+  if (!initialPromise) initialPromise = setLanguage(initialLanguage(), { persist: false });
+  return initialPromise;
 }
-

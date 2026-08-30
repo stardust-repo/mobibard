@@ -217,6 +217,8 @@
     themeButton: document.querySelector("#themeButton"),
     themeIcon: document.querySelector("#themeIcon"),
     themeMenu: document.querySelector("#themeMenu"),
+    themeToggleButton: document.querySelector("#themeToggleButton"),
+    themeToggleButtonText: document.querySelector("#themeToggleButtonText"),
     languageSelect: document.querySelector("#languageSelect"),
     googleAccountButton: document.querySelector("#googleAccountButton"),
     googleAccountMenu: document.querySelector("#googleAccountMenu"),
@@ -2289,9 +2291,14 @@
   }
 
   function updateThemeControls() {
-    elements.themeButton.title = `Guest 설정 · 현재 ${state.theme === "light" ? "밝은 색상" : "어두운 색상"}`;
-    for (const item of elements.themeMenu.querySelectorAll("[data-theme-choice]")) {
-      item.setAttribute("aria-checked", String(item.dataset.themeChoice === state.theme));
+    const currentThemeLabel = state.theme === "light" ? "밝은 색상" : "어두운 색상";
+    elements.themeButton.title = `Guest 설정 · 현재 ${currentThemeLabel}`;
+    if (elements.themeToggleButton) {
+      elements.themeToggleButton.title = `테마 변경 · 현재 ${currentThemeLabel}`;
+      elements.themeToggleButton.setAttribute("aria-label", `테마 변경 · 현재 ${currentThemeLabel}`);
+    }
+    if (elements.themeToggleButtonText) {
+      elements.themeToggleButtonText.textContent = "테마 변경";
     }
   }
 
@@ -2301,7 +2308,6 @@
     document.documentElement.dataset.theme = nextTheme;
     document.documentElement.style.colorScheme = nextTheme;
     updateThemeControls();
-    closeThemeMenu();
     if (persist) {
       try {
         window.localStorage.setItem("mobibard-theme", nextTheme);
@@ -12287,12 +12293,10 @@
       elements.themeMenu.hidden = !opening;
       elements.themeButton.setAttribute("aria-expanded", String(opening));
     });
-    elements.themeMenu.addEventListener("click", (event) => {
-      const item = event.target.closest("[data-theme-choice]");
-      if (!item) {
-        return;
-      }
-      applyTheme(item.dataset.themeChoice, { notify: true });
+    elements.themeToggleButton?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const nextTheme = state.theme === "dark" ? "light" : "dark";
+      applyTheme(nextTheme, { notify: true });
     });
     elements.googleLoginButton.addEventListener("click", () => {
       showToast("구글 로그인 연동 영역을 준비했습니다.");
