@@ -21,6 +21,7 @@
   const durationCandidateCache = new Map();
   const noteDurationCache = new Map();
   const restDurationCache = new Map();
+  const durationPlanCache = new Map();
 
   const isUsableInputLength = value => Number.isInteger(value) && value > 0;
   // Optimizer rendering is integer-unit based. Irregular source lengths are accepted and
@@ -3693,21 +3694,8 @@
     const key = `tail|${symbol}|${units}|${defaultUnits}`;
     if (noteDurationCache.has(key)) return noteDurationCache.get(key);
     if (units === 0) return "";
-    const candidates = getDurationCandidates(defaultUnits);
-    const dp = Array(units + 1).fill(null);
-    dp[0] = "";
-    for (let u = 1; u <= units; u++) {
-      let best = null;
-      for (const cand of candidates) {
-        if (cand.units > u || dp[u - cand.units] == null) continue;
-        const piece = `${symbol}${cand.suffix}`;
-        const text = cand.units === u ? piece : `${dp[u - cand.units]}&${piece}`;
-        if (best == null || text.length < best.length || (text.length === best.length && text < best)) best = text;
-      }
-      dp[u] = best;
-    }
-    const out = dp[units];
-    if (out == null) throw new Error(tr("mml.err_duration_render", [units]));
+    const plan = getDurationRenderPlan(units, defaultUnits, String(symbol).length, 1, "note");
+    const out = plan.map(suffix => `${symbol}${suffix}`).join("&");
     noteDurationCache.set(key, out);
     return out;
   }
@@ -3716,24 +3704,93 @@
     units = normalizeUnits(units);
     const key = `${units}|${defaultUnits}`;
     if (restDurationCache.has(key)) return restDurationCache.get(key);
-    const candidates = getDurationCandidates(defaultUnits);
-    const dp = Array(units + 1).fill(null);
-    dp[0] = "";
-    for (let u = 1; u <= units; u++) {
-      let best = null;
-      for (const cand of candidates) {
-        if (cand.units > u || dp[u - cand.units] == null) continue;
-        const piece = `r${cand.suffix}`;
-        const text = dp[u - cand.units] + piece;
-        if (best == null || text.length < best.length || (text.length === best.length && text < best)) best = text;
-      }
-      dp[u] = best;
-    }
-    const out = dp[units];
-    if (out == null) throw new Error(tr("mml.err_rest_render", [units]));
+    const plan = getDurationRenderPlan(units, defaultUnits, 1, 0, "rest");
+    const out = plan.map(suffix => `r${suffix}`).join("");
     restDurationCache.set(key, out);
     return out;
   }
+
+  // Duration candidates are all multiples of a small common quantum (currently 8 units).
+  // Solve only reachable states and retain a compact predecessor plan instead of repeatedly
+  // concatenating complete MML strings for every intermediate duration.
+  function getDurationRenderPlan(units, defaultUnits, symbolLength, separatorLength, kind) {
+    const candidates = getDurationCandidates(defaultUnits);
+    const quantum = durationCandidateQuantum(candidates);
+    if (units % quantum !== 0) {
+      const errorKey = kind === "rest" ? "mml.err_rest_render" : "mml.err_duration_render";
+      throw new Error(tr(errorKey, [units]));
+    }
+
+    const cacheKey = `${kind}|${units}|${defaultUnits}|${symbolLength}|${separatorLength}`;
+    const cached = durationPlanCache.get(cacheKey);
+    if (cached) return cached;
+
+    const scaledUnits = units / quantum;
+    const lengths = new Float64Array(scaledUnits + 1);
+    lengths.fill(Number.POSITIVE_INFINITY);
+    lengths[0] = 0;
+    const previous = new Int32Array(scaledUnits + 1);
+    previous.fill(-1);
+    const selected = new Int16Array(scaledUnits + 1);
+    selected.fill(-1);
+
+    for (let current = 1; current <= scaledUnits; current++) {
+      for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
+        const candidate = candidates[candidateIndex];
+        const candidateUnits = candidate.units / quantum;
+        const previousUnits = current - candidateUnits;
+        if (previousUnits < 0 || !Number.isFinite(lengths[previousUnits])) continue;
+        const candidateLength = lengths[previousUnits]
+          + symbolLength
+          + candidate.suffix.length
+          + (previousUnits > 0 ? separatorLength : 0);
+        if (candidateLength < lengths[current]) {
+          lengths[current] = candidateLength;
+          previous[current] = previousUnits;
+          selected[current] = candidateIndex;
+        }
+      }
+    }
+
+    if (!Number.isFinite(lengths[scaledUnits])) {
+      const errorKey = kind === "rest" ? "mml.err_rest_render" : "mml.err_duration_render";
+      throw new Error(tr(errorKey, [units]));
+    }
+
+    const reversed = [];
+    for (let cursor = scaledUnits; cursor > 0;) {
+      const candidateIndex = selected[cursor];
+      const previousUnits = previous[cursor];
+      if (candidateIndex < 0 || previousUnits < 0 || previousUnits >= cursor) {
+        const errorKey = kind === "rest" ? "mml.err_rest_render" : "mml.err_duration_render";
+        throw new Error(tr(errorKey, [units]));
+      }
+      reversed.push(candidates[candidateIndex].suffix);
+      cursor = previousUnits;
+    }
+
+    const plan = Object.freeze(reversed.reverse());
+    durationPlanCache.set(cacheKey, plan);
+    return plan;
+  }
+
+  function durationCandidateQuantum(candidates) {
+    let quantum = 0;
+    for (const candidate of candidates || []) quantum = greatestCommonDivisor(quantum, candidate.units);
+    return Math.max(1, quantum);
+  }
+
+  function greatestCommonDivisor(left, right) {
+    let a = Math.abs(Math.round(Number(left) || 0));
+    let b = Math.abs(Math.round(Number(right) || 0));
+    while (b) {
+      const next = a % b;
+      a = b;
+      b = next;
+    }
+    return a || 1;
+  }
+
 
   function getDurationCandidates(defaultUnits) {
     const key = String(defaultUnits);

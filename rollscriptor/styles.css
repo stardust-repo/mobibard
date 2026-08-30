@@ -1237,13 +1237,14 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   padding: 8px;
   grid-template-columns: minmax(138px, .55fr) minmax(260px, 2.45fr);
   gap: 8px;
-  align-items: center;
+  align-items: stretch;
 }
 .video-analysis-section .video-analysis-output-card .analysis-run-actions {
-  align-self: center;
+  align-self: stretch;
+  grid-auto-rows: 1fr;
 }
 .video-analysis-section .video-analysis-output-card .analysis-run-actions button {
-  height: auto;
+  height: 100%;
   min-height: 38px;
 }
 .video-analysis-section .video-analysis-output-card .analysis-status {
