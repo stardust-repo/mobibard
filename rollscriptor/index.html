@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-note-extension-fractions-v1" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-workflow-v2" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -105,13 +105,13 @@
       <div id="runtimeError" class="runtime-error" hidden></div>
     </section>
 
-    <section class="workflow-section" aria-labelledby="keyboardSectionTitle">
+    <section class="workflow-section" aria-labelledby="videoAnalysisSectionTitle">
       <div class="section-head keyboard-section-head">
         <div>
           <span class="step-number">2</span>
-          <h2 id="keyboardSectionTitle" data-i18n="keyboard.title">건반 인식 설정</h2>
+          <h2 id="videoAnalysisSectionTitle" data-i18n="analysis.title">영상 분석 설정</h2>
         </div>
-        <p data-i18n="keyboard.description">인식선을 맞추고 변화량을 조정한 뒤 현재 프레임에서 건반을 검출합니다.</p>
+        <p data-i18n="analysis.description">건반 인식 기준과 분석 시간을 정한 뒤 영상을 분석합니다.</p>
       </div>
 
       <div id="previewStage" class="preview-stage is-empty" data-i18n-aria-label="preview.aria" aria-label="동영상 프레임과 건반 검출선">
@@ -134,6 +134,20 @@
           <button id="nextSecond" class="compact-button" disabled type="button" data-i18n="transport.next_second">+1초</button>
           <button id="jumpEnd" class="compact-button transport-edge-button" disabled type="button" data-i18n-aria-label="transport.last" data-i18n-title="transport.last" aria-label="마지막으로" title="마지막으로">▶|</button>
           <output id="timeLabel">00:00.000 / 00:00.000</output>
+        </div>
+        <div class="analysis-range-inline">
+          <strong data-i18n="analysis.range">분석 시간</strong>
+          <div class="analysis-inline-time">
+            <input id="analysisStart" type="number" min="0" step="0.001" value="0" disabled data-i18n-aria-label="analysis.start_seconds" aria-label="시작 (초)"/>
+            <button id="setStartCurrent" class="soft-button" type="button" disabled data-i18n="analysis.current">현재</button>
+          </div>
+          <span class="analysis-range-separator" aria-hidden="true">~</span>
+          <div class="analysis-inline-time">
+            <input id="analysisEnd" type="number" min="0" step="0.001" value="0" disabled data-i18n-aria-label="analysis.end_seconds" aria-label="종료 (초)"/>
+            <button id="setEndCurrent" class="soft-button" type="button" disabled data-i18n="analysis.current">현재</button>
+          </div>
+          <button id="autoDetectRange" class="soft-button auto-range-button" type="button" disabled data-i18n="analysis.auto_search" data-i18n-title="analysis.auto_search_help" title="건반 검출 결과를 기준으로 88건반이 보이는 시작·종료 지점을 자동으로 찾습니다.">자동 탐색</button>
+          <output id="analysisRangeLabel">00:00.000</output>
         </div>
       </div>
 
@@ -192,41 +206,32 @@
           </div>
         </div>
       </div>
+
+      <div class="analysis-output-card video-analysis-output-card">
+        <div class="analysis-run-actions">
+          <button id="analyzeVideo" type="button" class="primary-button" disabled data-i18n="actions.analyze">영상 분석</button>
+          <button id="cancelAnalysis" type="button" class="danger-button" hidden data-i18n="actions.cancel">분석 중지</button>
+        </div>
+        <div class="analysis-status" aria-live="polite">
+          <div class="progress-track"><div id="progressBar"></div></div>
+          <div class="progress-copy">
+            <div>
+              <strong id="progressTitle" data-i18n="progress.waiting">대기 중</strong>
+              <span id="progressDetail" data-i18n="progress.select_video">영상을 선택하세요.</span>
+            </div>
+            <div class="result-count"><span data-i18n="progress.generated_notes">생성 노트</span><strong id="noteCountResult">0</strong></div>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <section class="workflow-section" aria-labelledby="analysisSectionTitle">
+    <section class="workflow-section" aria-labelledby="midiSectionTitle">
       <div class="section-head">
         <div>
           <span class="step-number">3</span>
-          <h2 id="analysisSectionTitle" data-i18n="analysis.title">영상 분석 설정</h2>
+          <h2 id="midiSectionTitle" data-i18n="midi.title">MIDI 다운로드</h2>
         </div>
-        <p data-i18n="analysis.description">분석 범위와 MIDI 설정을 지정한 뒤 영상을 분석하고 MIDI로 저장합니다.</p>
-      </div>
-
-      <div class="analysis-range settings-group">
-        <div class="group-title-row analysis-range-title-row">
-          <strong data-i18n="analysis.range">분석 시간</strong>
-          <div class="analysis-range-title-actions">
-            <button id="autoDetectRange" class="soft-button auto-range-button" type="button" disabled data-i18n="analysis.auto_search" data-i18n-title="analysis.auto_search_help" title="건반 검출 결과를 기준으로 88건반이 보이는 시작·종료 지점을 자동으로 찾습니다.">자동 탐색</button>
-            <output id="analysisRangeLabel">00:00.000 ~ 00:00.000</output>
-          </div>
-        </div>
-        <div class="range-grid">
-          <label class="field">
-            <span data-i18n="analysis.start_seconds">시작 (초)</span>
-            <div class="time-input-row">
-              <input id="analysisStart" type="number" min="0" step="0.001" value="0" disabled/>
-              <button id="setStartCurrent" class="soft-button" type="button" disabled data-i18n="analysis.current">현재</button>
-            </div>
-          </label>
-          <label class="field">
-            <span data-i18n="analysis.end_seconds">종료 (초)</span>
-            <div class="time-input-row">
-              <input id="analysisEnd" type="number" min="0" step="0.001" value="0" disabled/>
-              <button id="setEndCurrent" class="soft-button" type="button" disabled data-i18n="analysis.current">현재</button>
-            </div>
-          </label>
-        </div>
+        <p data-i18n="midi.description">분석된 노트에 길이, 템포, 벨로시티를 적용해 MIDI를 다시 계산하고 다운로드합니다.</p>
       </div>
 
       <div class="field-grid midi-settings settings-group compact-settings">
@@ -248,23 +253,15 @@
           <span><span data-i18n="settings.velocity">벨로시티</span> <output id="velocityValue">75%</output></span>
           <div class="range-control"><input id="velocity" type="range" min="1" max="100" step="1" value="75"/></div>
         </label>
+        <div class="field audio-velocity-field">
+          <span data-i18n="settings.audio_velocity">오디오 볼륨 반영</span>
+          <button id="audioVelocityToggle" type="button" class="audio-velocity-toggle-button" aria-pressed="false" data-i18n-title="settings.audio_velocity_help" title="노트 시작 시점의 오디오에서 해당 음계 주파수의 Attack 크기를 분석해 벨로시티에 반영합니다.">
+            <span id="audioVelocityText" data-i18n="settings.audio_velocity_off">사용 안 함</span>
+          </button>
+        </div>
       </div>
 
-      <div class="analysis-output-card">
-        <div class="analysis-run-actions">
-          <button id="analyzeVideo" type="button" class="primary-button" disabled data-i18n="actions.analyze">영상 분석</button>
-          <button id="cancelAnalysis" type="button" class="danger-button" hidden data-i18n="actions.cancel">분석 중지</button>
-        </div>
-        <div class="analysis-status" aria-live="polite">
-          <div class="progress-track"><div id="progressBar"></div></div>
-          <div class="progress-copy">
-            <div>
-              <strong id="progressTitle" data-i18n="progress.waiting">대기 중</strong>
-              <span id="progressDetail" data-i18n="progress.select_video">영상을 선택하세요.</span>
-            </div>
-            <div class="result-count"><span data-i18n="progress.generated_notes">생성 노트</span><strong id="noteCountResult">0</strong></div>
-          </div>
-        </div>
+      <div class="midi-download-actions">
         <button id="downloadMidi" type="button" class="primary-button download-button" disabled data-i18n="actions.download">MIDI 다운로드</button>
       </div>
     </section>
@@ -309,7 +306,7 @@
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script type="module" src="./js/settings-menu.js?v=20260830-auto-range-v2"></script>
-<script type="module" src="./js/app.js?v=20260830-note-extension-fractions-v1"></script>
+<script type="module" src="./js/settings-menu.js?v=20260830-workflow-v2"></script>
+<script type="module" src="./js/app.js?v=20260830-workflow-v2"></script>
 </body>
 </html>

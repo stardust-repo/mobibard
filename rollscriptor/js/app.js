@@ -14,11 +14,12 @@ import {
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
-} from './vision.js?v=20260830-auto-range-v2';
-import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-note-extension-fractions-v1';
+} from './vision.js?v=20260830-workflow-v2';
+import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext } from './analysis.js?v=20260830-workflow-v2';
+import { applyAudioVelocityLevels, estimateAudioVelocities } from './audio-velocity.js?v=20260830-audio-velocity-v1';
 import { createMidiFile } from './midi.js';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-auto-range-v2';
-import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-auto-range-v2';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-workflow-v2';
+import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-workflow-v2';
 
 const MEDIABUNNY_VERSION = '1.55.3';
 const MEDIABUNNY_URLS = [
@@ -30,7 +31,7 @@ const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'videoInfo', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
   'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent', 'autoDetectRange',
-  'tempo', 'velocity', 'velocityValue', 'noteExtensionFrames', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
+  'tempo', 'velocity', 'velocityValue', 'audioVelocityToggle', 'audioVelocityText', 'noteExtensionFrames', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose', 'tutorialProgress', 'tutorialVisual', 'tutorialVisualStep', 'tutorialVisualSymbol', 'tutorialVisualTitle', 'tutorialPart', 'tutorialStepTitle', 'tutorialStepBody', 'tutorialStepNote', 'tutorialPrev', 'tutorialNext',
 ].map(id => [id, document.getElementById(id)]));
@@ -43,6 +44,7 @@ const state = {
   mediabunny: null,
   input: null,
   track: null,
+  audioTrack: null,
   previewSink: null,
   displayWidth: 0,
   displayHeight: 0,
@@ -75,6 +77,8 @@ const state = {
   analysisAbort: false,
   midiBlob: null,
   notes: [],
+  rawNotes: [],
+  analysisCompleted: false,
   noteTimeOrigin: 0,
   noteTimeEnd: 0,
   fileBaseName: 'video-piano',
@@ -96,6 +100,8 @@ const state = {
   restoringSession: false,
   analysisRangeSearching: false,
   analysisRangeAutoInitialized: false,
+  audioVelocityEnabled: false,
+  audioVelocityAnalyzing: false,
 };
 
 function showToast(message, type = '') {
@@ -245,11 +251,13 @@ function currentSessionSnapshot() {
     analysisRangeAutoInitialized: Boolean(state.analysisRangeAutoInitialized),
     tempo: clamp(Number(elements.tempo?.value) || 120, 20, 300),
     velocity: clamp(Number(elements.velocity?.value) || 75, 1, 100),
+    audioVelocityEnabled: Boolean(state.audioVelocityEnabled),
     noteExtensionFrames: normalizedNoteExtensionFrames(elements.noteExtensionFrames?.value),
     keyboardDetectionConfirmed: Boolean(state.keyboardDetectionConfirmed),
     releaseBaselineTime: Number(state.releaseBaselineTime) || 0,
-    analysisCompleted: Boolean(state.midiBlob),
+    analysisCompleted: Boolean(state.analysisCompleted),
     notes: state.notes.map(note => ({ ...note })),
+    rawNotes: state.rawNotes.map(note => ({ ...note })),
     noteTimeOrigin: Number(state.noteTimeOrigin) || 0,
     noteTimeEnd: Number(state.noteTimeEnd) || 0,
   };
@@ -355,6 +363,8 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
     elements.tempo.value = String(clamp(Math.round(Number(snapshot.tempo) || 120), 20, 300));
     elements.velocity.value = String(clamp(Math.round(Number(snapshot.velocity) || 75), 1, 100));
     elements.velocityValue.textContent = `${elements.velocity.value}%`;
+    state.audioVelocityEnabled = Boolean(snapshot.audioVelocityEnabled);
+    updateAudioVelocityToggle();
     syncNoteExtensionButtons(snapshot.noteExtensionFrames);
 
     const gap = minimumAnalysisRange();
@@ -392,15 +402,21 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
     }
 
     const savedNotes = sanitizeRestoredNotes(snapshot.notes);
+    const savedRawNotes = sanitizeRestoredNotes(snapshot.rawNotes);
     if (snapshot.analysisCompleted) {
+      state.analysisCompleted = true;
+      state.rawNotes = savedRawNotes;
       state.notes = savedNotes;
       state.noteTimeOrigin = clamp(Number(snapshot.noteTimeOrigin) || 0, 0, state.duration);
       state.noteTimeEnd = clamp(Number(snapshot.noteTimeEnd) || state.duration, state.noteTimeOrigin, state.duration);
-      state.midiBlob = createMidiFile(state.notes, {
-        trackName: state.fileBaseName,
-        bpm: clamp(Number(elements.tempo.value) || 120, 20, 300),
-      });
-      elements.noteCountResult.textContent = formatNumber(state.notes.length);
+      if (state.rawNotes.length) regenerateMidiFromCurrentNotes({ recalculateVelocity: true });
+      else {
+        state.midiBlob = createMidiFile(state.notes, {
+          trackName: state.fileBaseName,
+          bpm: clamp(Number(elements.tempo.value) || 120, 20, 300),
+        });
+        elements.noteCountResult.textContent = formatNumber(state.notes.length);
+      }
     }
 
     const previewTime = clamp(Number(snapshot.previewTime) || 0, 0, state.duration);
@@ -410,7 +426,7 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
     drawOverlay();
     updateControlAvailability();
     if (snapshot.analysisCompleted) {
-      setProgress(1, t('progress.done'), t('progress.notes_made', { count: formatNumber(state.notes.length) }));
+      setProgress(1, t('progress.done'), t('progress.analysis_notes_ready', { count: formatNumber(state.notes.length) }));
     } else if (detectionRestored) {
       setProgress(0, t('progress.ready'), t('progress.detected_detail'));
     } else {
@@ -643,9 +659,13 @@ function readAnalysisRange(showError = false) {
 
 function updateAnalysisRangeLabel() {
   const range = readAnalysisRange(false);
-  elements.analysisRangeLabel.textContent = range
-    ? `${formatTime(range.start)} ~ ${formatTime(range.end)} · ${formatTime(range.duration)}`
-    : t('analysis.check_range');
+  if (range) {
+    elements.analysisRangeLabel.textContent = t('analysis.duration_value', { duration: formatTime(range.duration) });
+    elements.analysisRangeLabel.title = `${formatTime(range.start)} ~ ${formatTime(range.end)}`;
+  } else {
+    elements.analysisRangeLabel.textContent = t('analysis.check_range');
+    elements.analysisRangeLabel.removeAttribute('title');
+  }
 }
 
 function normalizeAnalysisRange(changed = '') {
@@ -693,6 +713,8 @@ function resetRollscriptorSettingsForNewVideo() {
   if (elements.tempo) elements.tempo.value = '120';
   if (elements.velocity) elements.velocity.value = '75';
   if (elements.velocityValue) elements.velocityValue.textContent = '75%';
+  state.audioVelocityEnabled = false;
+  updateAudioVelocityToggle();
   updateDetectionModeButton();
   updateKeyboardOrientationButtons();
 }
@@ -1101,6 +1123,8 @@ function togglePlayback() {
 
 function resetResults() {
   state.notes = [];
+  state.rawNotes = [];
+  state.analysisCompleted = false;
   state.noteTimeOrigin = 0;
   state.noteTimeEnd = 0;
   state.midiBlob = null;
@@ -1118,7 +1142,7 @@ function resetResults() {
 
 function updateControlAvailability() {
   const hasVideo = Boolean(state.track);
-  const locked = state.analyzing || state.analysisRangeSearching;
+  const locked = state.analyzing || state.analysisRangeSearching || state.audioVelocityAnalyzing;
   elements.videoFile.disabled = locked || !state.mediabunny;
   elements.timeline.disabled = !hasVideo || locked;
   elements.playPause.disabled = !hasVideo || locked;
@@ -1140,6 +1164,7 @@ function updateControlAvailability() {
   elements.blackChangePercent.disabled = locked;
   if (elements.noteExtensionFrames) elements.noteExtensionFrames.disabled = locked;
   for (const button of noteExtensionButtons) button.disabled = locked;
+  if (elements.audioVelocityToggle) elements.audioVelocityToggle.disabled = !hasVideo || locked;
   elements.detectKeys.disabled = !hasVideo || locked;
   elements.keyboardOrientationToggle.disabled = !hasVideo || locked;
   if (elements.detectionModeToggle) elements.detectionModeToggle.disabled = !hasVideo || locked;
@@ -1165,6 +1190,7 @@ function disposeCurrentInput() {
   try { state.input?.dispose(); } catch { /* no-op */ }
   state.input = null;
   state.track = null;
+  state.audioTrack = null;
   state.previewSink = null;
   state.releaseBaselineColors = null;
   state.releaseBaselineTime = 0;
@@ -2433,6 +2459,13 @@ async function loadVideoFile(file, { restoreSnapshot = null, persistSession = tr
     if (!track) throw new Error(t('error.no_video_track'));
     if (!await track.canDecode()) throw new Error(t('error.codec'));
     state.track = track;
+    state.audioTrack = null;
+    try {
+      const audioTrack = await input.getPrimaryAudioTrack();
+      if (audioTrack && await audioTrack.canDecode()) state.audioTrack = audioTrack;
+    } catch (error) {
+      console.warn('[RollScriptor] audio track unavailable', error);
+    }
 
     const [width, height, firstTimestamp, endTimestamp] = await Promise.all([
       track.getDisplayWidth(), track.getDisplayHeight(), track.getFirstTimestamp(), track.computeDuration(),
@@ -2497,15 +2530,95 @@ function currentVelocityMidi() {
   return Math.max(1, Math.min(127, Math.round(127 * velocityPercent / 100)));
 }
 
-function regenerateMidiFromCurrentNotes() {
-  if (!state.notes.length) return;
-  const velocity = currentVelocityMidi();
-  state.notes = state.notes.map(note => ({ ...note, velocity }));
+function updateAudioVelocityToggle() {
+  const button = elements.audioVelocityToggle;
+  if (!button) return;
+  const enabled = Boolean(state.audioVelocityEnabled);
+  button.classList.toggle('is-selected', enabled);
+  button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+  if (elements.audioVelocityText) elements.audioVelocityText.textContent = t(enabled ? 'settings.audio_velocity_on' : 'settings.audio_velocity_off');
+}
+
+function audioVelocitySourceNotes() {
+  return state.rawNotes.length ? state.rawNotes : state.notes;
+}
+
+function hasAudioVelocityScores(notes = audioVelocitySourceNotes()) {
+  return Boolean(notes.length) && notes.every(note => Number.isFinite(Number(note.audioVelocityDb)));
+}
+
+function rebuildNoteTimingFromAnalysis() {
+  if (!state.rawNotes.length) return state.notes.map(note => ({ ...note }));
+  const durationLimit = Math.max(0, state.noteTimeEnd - state.noteTimeOrigin);
+  return expandNotesByStoredFrameContext(state.rawNotes, normalizedNoteExtensionFrames())
+    .map(note => {
+      const start = clamp(Number(note.start) || 0, 0, durationLimit);
+      const end = clamp(Number(note.end) || start, start, durationLimit);
+      return { ...note, start, end, duration: Math.max(0, end - start) };
+    })
+    .filter(note => note.end > note.start);
+}
+
+function regenerateMidiFromCurrentNotes({ recalculateVelocity = true } = {}) {
+  if (!state.analysisCompleted && !state.notes.length && !state.rawNotes.length) return;
+  let nextNotes = rebuildNoteTimingFromAnalysis();
+  if (recalculateVelocity) {
+    if (state.audioVelocityEnabled && hasAudioVelocityScores(nextNotes)) {
+      nextNotes = applyAudioVelocityLevels(nextNotes, currentVelocityMidi());
+    } else {
+      const velocity = currentVelocityMidi();
+      nextNotes = nextNotes.map(note => ({ ...note, velocity }));
+    }
+  }
+  state.notes = nextNotes;
   state.midiBlob = createMidiFile(state.notes, {
     trackName: state.fileBaseName,
     bpm: clamp(Number(elements.tempo.value) || 120, 20, 300),
   });
+  elements.noteCountResult.textContent = formatNumber(state.notes.length);
+  updateCurrentChord();
+  drawOverlay();
   updateControlAvailability();
+}
+
+async function ensureAudioVelocityScores() {
+  const sourceIsRaw = state.rawNotes.length > 0;
+  const sourceNotes = sourceIsRaw ? state.rawNotes : state.notes;
+  if (!state.analysisCompleted || !sourceNotes.length) return false;
+  if (hasAudioVelocityScores(sourceNotes)) return true;
+  if (!state.audioTrack || !state.mediabunny?.AudioBufferSink) return false;
+
+  state.audioVelocityAnalyzing = true;
+  updateControlAvailability();
+  try {
+    setProgress(0.982, t('progress.audio_velocity'), t('progress.audio_velocity_start'));
+    const audioSink = new state.mediabunny.AudioBufferSink(state.audioTrack);
+    const audioResult = await estimateAudioVelocities(sourceNotes, {
+      sink: audioSink,
+      absoluteTimeOffset: state.timeOrigin + state.noteTimeOrigin,
+      baseVelocity: currentVelocityMidi(),
+      shouldAbort: () => false,
+      onProgress: (progress, current, total) => {
+        setProgress(0.982 + progress * 0.018, t('progress.audio_velocity'), t('progress.audio_velocity_detail', {
+          current: formatNumber(current),
+          total: formatNumber(total),
+        }));
+      },
+    });
+    if (!audioResult.completed) return false;
+    if (sourceIsRaw) state.rawNotes = audioResult.notes;
+    else state.notes = audioResult.notes;
+    regenerateMidiFromCurrentNotes({ recalculateVelocity: true });
+    setProgress(1, t('progress.done'), t('progress.notes_made_audio', { count: formatNumber(state.notes.length) }));
+    scheduleRollscriptorSessionPersist(100);
+    return true;
+  } catch (error) {
+    console.warn('[RollScriptor] audio velocity analysis failed', error);
+    return false;
+  } finally {
+    state.audioVelocityAnalyzing = false;
+    updateControlAvailability();
+  }
 }
 
 function normalizedChangePercent(element, fallback = 30) {
@@ -2556,7 +2669,8 @@ function analysisOptions() {
   return {
     velocity: currentVelocityMidi(),
     baselineColors: state.releaseBaselineColors,
-    noteExtensionFrames: normalizedNoteExtensionFrames(),
+    // Note length is a MIDI post-process setting. Keep frame analysis raw.
+    noteExtensionFrames: 0,
     // Every sample is converted to OKLab and compared with its own fixed
     // release color. White and black keys can use independent distance limits.
     ...currentChangeOptions({ normalize: true }),
@@ -2656,23 +2770,55 @@ async function analyzeAllFrames() {
     if (!frameCount) throw new Error(t('error.no_frames'));
 
     const result = detector.finish();
-    state.notes = result.notes
+    state.rawNotes = (result.rawNotes || [])
       .map(note => {
-        const end = Math.min(range.duration, note.end);
-        return { ...note, end, duration: Math.max(0, end - note.start) };
+        const end = Math.min(range.duration, Number(note.end) || 0);
+        return { ...note, end, duration: Math.max(0, end - (Number(note.start) || 0)) };
       })
       .filter(note => note.end > note.start);
     state.noteTimeOrigin = range.start;
     state.noteTimeEnd = range.end;
-    state.midiBlob = createMidiFile(state.notes, {
-      trackName: state.fileBaseName,
-      bpm: clamp(Number(elements.tempo.value) || 120, 20, 300),
-    });
-    elements.noteCountResult.textContent = formatNumber(state.notes.length);
-    updateCurrentChord();
-    drawOverlay();
-    setProgress(1, t('progress.done'), t('progress.notes_made', { count: formatNumber(state.notes.length) }));
-    showToast(state.notes.length ? t('toast.midi_done') : t('toast.no_notes'));
+    state.analysisCompleted = true;
+
+    let audioVelocityFallback = false;
+    if (state.audioVelocityEnabled && state.rawNotes.length) {
+      if (state.audioTrack && state.mediabunny?.AudioBufferSink) {
+        try {
+          setProgress(0.982, t('progress.audio_velocity'), t('progress.audio_velocity_start'));
+          const audioSink = new state.mediabunny.AudioBufferSink(state.audioTrack);
+          const audioResult = await estimateAudioVelocities(state.rawNotes, {
+            sink: audioSink,
+            absoluteTimeOffset: rangeStartTimestamp,
+            baseVelocity: currentVelocityMidi(),
+            shouldAbort: () => state.analysisAbort,
+            onProgress: (progress, current, total) => {
+              setProgress(0.982 + progress * 0.016, t('progress.audio_velocity'), t('progress.audio_velocity_detail', {
+                current: formatNumber(current),
+                total: formatNumber(total),
+              }));
+            },
+          });
+          if (state.analysisAbort) {
+            setProgress(0, t('progress.cancelled'), t('progress.cancelled_detail', { count: formatNumber(frameCount) }));
+            return;
+          }
+          if (audioResult.completed) {
+            state.rawNotes = audioResult.notes;
+          }
+        } catch (error) {
+          console.warn('[RollScriptor] audio velocity analysis failed', error);
+          audioVelocityFallback = true;
+        }
+      } else {
+        audioVelocityFallback = true;
+      }
+    }
+
+    regenerateMidiFromCurrentNotes({ recalculateVelocity: true });
+    setProgress(1, t('progress.done'), t('progress.analysis_notes_ready', { count: formatNumber(state.notes.length) }));
+    showToast(state.notes.length
+      ? t(audioVelocityFallback ? 'toast.audio_velocity_fallback' : 'toast.analysis_done')
+      : t('toast.no_notes'), audioVelocityFallback ? 'error' : '');
     scheduleRollscriptorSessionPersist(100);
   } catch (error) {
     console.error(error);
@@ -2793,11 +2939,31 @@ function initializeEvents() {
   elements.blackChangePercent.addEventListener('change', onChangeThreshold);
   elements.velocity.addEventListener('input', () => {
     elements.velocityValue.textContent = `${elements.velocity.value}%`;
-    regenerateMidiFromCurrentNotes();
+    regenerateMidiFromCurrentNotes({ recalculateVelocity: true });
     scheduleRollscriptorSessionPersist();
   });
   elements.tempo.addEventListener('change', () => {
-    regenerateMidiFromCurrentNotes();
+    regenerateMidiFromCurrentNotes({ recalculateVelocity: true });
+    scheduleRollscriptorSessionPersist();
+  });
+  elements.audioVelocityToggle?.addEventListener('click', async () => {
+    if (state.audioVelocityAnalyzing) return;
+    state.audioVelocityEnabled = !state.audioVelocityEnabled;
+    updateAudioVelocityToggle();
+    if (state.analysisCompleted) {
+      if (state.audioVelocityEnabled && !hasAudioVelocityScores()) {
+        const applied = await ensureAudioVelocityScores();
+        if (!applied) {
+          regenerateMidiFromCurrentNotes({ recalculateVelocity: true });
+          showToast(t('toast.audio_velocity_fallback'), 'error');
+          setProgress(1, t('progress.done'), t('progress.analysis_notes_ready', { count: formatNumber(state.notes.length) }));
+        } else {
+          showToast(t('toast.audio_velocity_applied'));
+        }
+      } else {
+        regenerateMidiFromCurrentNotes({ recalculateVelocity: true });
+      }
+    }
     scheduleRollscriptorSessionPersist();
   });
   for (const button of noteExtensionButtons) {
@@ -2805,10 +2971,7 @@ function initializeEvents() {
       const previous = normalizedNoteExtensionFrames();
       const selected = syncNoteExtensionButtons(button.dataset.noteExtension);
       if (selected === previous) return;
-      if (state.notes.length || state.midiBlob) {
-        resetResults();
-        setProgress(0, t('progress.ready'), state.keyboardDetectionConfirmed ? t('progress.detected_detail') : t('progress.ready_detail'));
-      }
+      if (state.analysisCompleted) regenerateMidiFromCurrentNotes({ recalculateVelocity: true });
       scheduleRollscriptorSessionPersist();
     });
   }
@@ -2892,6 +3055,7 @@ async function initialize() {
     renderDetectedKeyColors();
     updateKeyboardOrientationButtons();
     updateDetectionModeButton();
+    updateAudioVelocityToggle();
     renderTutorialStep();
     updateVideoInfo();
     updateVideoQualityWarning();
@@ -2900,9 +3064,9 @@ async function initialize() {
     if (!state.track && !elements.runtimeError.hidden) {
       elements.runtimeError.textContent = window.isSecureContext ? t('error.webcodecs') : t('error.secure_context');
       setProgress(0, t('progress.runtime_check'), elements.runtimeError.textContent);
-    } else if (!state.analyzing) {
+    } else if (!state.analyzing && !state.audioVelocityAnalyzing) {
       if (!state.track) setProgress(0, t('progress.waiting'), t('progress.select_video'));
-      else if (state.notes.length) setProgress(1, t('progress.done'), t('progress.notes_made', { count: formatNumber(state.notes.length) }));
+      else if (state.analysisCompleted) setProgress(1, t('progress.done'), state.notes.length ? t('progress.analysis_notes_ready', { count: formatNumber(state.notes.length) }) : t('toast.no_notes'));
       else setProgress(0, t('progress.ready'), t('progress.ready_detail'));
     }
     if (!state.track && elements.fileName) elements.fileName.textContent = t('file.prompt');
@@ -2911,6 +3075,7 @@ async function initialize() {
   setPlaybackUi();
   updateKeyboardOrientationButtons();
   updateDetectionModeButton();
+  updateAudioVelocityToggle();
   initializeEvents();
   renderTutorialStep();
   updateControlAvailability();

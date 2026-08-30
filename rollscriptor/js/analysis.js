@@ -1,5 +1,5 @@
 import { clamp, PROBE_PATCH_COUNT } from './vision.js';
-import { getLanguage, t } from './language-manager.js?v=20260830-auto-range-v2';
+import { getLanguage, t } from './language-manager.js?v=20260830-workflow-v2';
 
 const PATCH_COUNT = PROBE_PATCH_COUNT;
 const PATCH_STRIDE = 3; // R, G, B
@@ -210,7 +210,7 @@ export function createKeyChangeEvaluator(keys, baselineColors, options = {}, val
 }
 
 function stripFrameMetadata(note) {
-  const { _startFrame, _endFrame, ...clean } = note;
+  const { _startFrame, _endFrame, _leadFrameTime, _tailFrameTime, ...clean } = note;
   return clean;
 }
 
@@ -287,6 +287,69 @@ export function expandNotesByFrames(notes, frameStarts, finalTime, extensionFram
 }
 
 /**
+ * Re-applies note-length expansion from compact per-note frame-boundary
+ * context. The maximum UI extension is one frame, so keeping the immediately
+ * adjacent frame times on each raw note is enough to rebuild 0 / 0.25 / 0.5 /
+ * 1 frame expansion without decoding the video again.
+ */
+export function expandNotesByStoredFrameContext(notes, extensionFrames) {
+  const amount = normalizeNoteExtensionFrames(extensionFrames);
+  if (!Array.isArray(notes) || !notes.length) return [];
+  if (!amount) return notes.map(stripFrameMetadata);
+
+  const groups = new Map();
+  for (const note of notes) {
+    const key = Number(note.midi);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(note);
+  }
+
+  const expandedNotes = [];
+  for (const group of groups.values()) {
+    group.sort((a, b) => {
+      const af = Number(a._startFrame);
+      const bf = Number(b._startFrame);
+      if (Number.isFinite(af) && Number.isFinite(bf) && af !== bf) return af - bf;
+      return (Number(a.start) || 0) - (Number(b.start) || 0) || (Number(a.end) || 0) - (Number(b.end) || 0);
+    });
+
+    const expanded = group.map((note, index) => {
+      const rawStart = Math.max(0, Number(note.start) || 0);
+      const rawEnd = Math.max(rawStart, Number(note.end) || rawStart);
+      const leadTimeValue = Number(note._leadFrameTime);
+      const tailTimeValue = Number(note._tailFrameTime);
+      const leadTime = Number.isFinite(leadTimeValue) ? Math.min(rawStart, Math.max(0, leadTimeValue)) : rawStart;
+      const tailTime = Number.isFinite(tailTimeValue) ? Math.max(rawEnd, tailTimeValue) : rawEnd;
+      const previousRawEnd = index > 0 ? Math.max(0, Number(group[index - 1].end) || 0) : 0;
+      const nextRawStart = index + 1 < group.length ? Math.max(rawEnd, Number(group[index + 1].start) || rawEnd) : Number.POSITIVE_INFINITY;
+      return {
+        note,
+        start: Math.max(previousRawEnd, rawStart - ((rawStart - leadTime) * amount)),
+        end: Math.min(nextRawStart, rawEnd + ((tailTime - rawEnd) * amount)),
+      };
+    });
+
+    // When both neighboring notes expand into the same gap, the following note
+    // owns that shared area. Notes remain separate and are never merged.
+    for (let index = 1; index < expanded.length; index += 1) {
+      const previous = expanded[index - 1];
+      const current = expanded[index];
+      if (previous.end > current.start) previous.end = current.start;
+    }
+
+    for (const item of expanded) {
+      const clean = stripFrameMetadata(item.note);
+      const start = Math.max(0, item.start);
+      const end = Math.max(start, item.end);
+      expandedNotes.push({ ...clean, start, end, duration: end - start });
+    }
+  }
+
+  expandedNotes.sort((a, b) => a.start - b.start || a.midi - b.midi || a.end - b.end);
+  return expandedNotes;
+}
+
+/**
  * Stateful single-pass detector using the fixed release colors captured when
  * keyboard detection is confirmed. There is intentionally no temporal
  * smoothing/hysteresis: each decoded frame is compared directly with that
@@ -325,6 +388,7 @@ export class StreamingNoteDetector {
     );
     this.states = Array.from({ length: this.keyCount }, () => ({ active: false, noteStart: 0, noteStartFrame: 0 }));
     this.notes = [];
+    this.rawNotes = [];
     this.frameStarts = [];
     this.frameCount = 0;
     this.finalTime = 0;
@@ -392,11 +456,17 @@ export class StreamingNoteDetector {
         state.active = false;
       }
       this.notes.sort((a, b) => a.start - b.start || a.midi - b.midi || a.end - b.end);
-      this.notes = expandNotesByFrames(this.notes, this.frameStarts, this.finalTime, this.noteExtensionFrames);
+      this.rawNotes = this.notes.map(note => ({
+        ...note,
+        _leadFrameTime: frameBoundaryTime(this.frameStarts, this.finalTime, note._startFrame - 1),
+        _tailFrameTime: frameBoundaryTime(this.frameStarts, this.finalTime, note._endFrame + 1),
+      }));
+      this.notes = expandNotesByFrames(this.rawNotes, this.frameStarts, this.finalTime, this.noteExtensionFrames);
       this.finished = true;
     }
     return {
       notes: this.notes,
+      rawNotes: this.rawNotes.map(note => ({ ...note })),
       baselines: this.baselines,
       detectionOptions: this.detectionOptions,
       noteExtensionFrames: this.noteExtensionFrames,
