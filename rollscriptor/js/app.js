@@ -15,7 +15,7 @@ import {
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
 } from './vision.js?v=20260830-auto-range-v2';
-import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-auto-range-v2';
+import { StreamingNoteDetector, createKeyChangeEvaluator } from './analysis.js?v=20260830-note-extension-fractions-v1';
 import { createMidiFile } from './midi.js';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-auto-range-v2';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-auto-range-v2';
@@ -34,6 +34,7 @@ const elements = Object.fromEntries([
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose', 'tutorialProgress', 'tutorialVisual', 'tutorialVisualStep', 'tutorialVisualSymbol', 'tutorialVisualTitle', 'tutorialPart', 'tutorialStepTitle', 'tutorialStepBody', 'tutorialStepNote', 'tutorialPrev', 'tutorialNext',
 ].map(id => [id, document.getElementById(id)]));
+const noteExtensionButtons = Array.from(document.querySelectorAll('[data-note-extension]'));
 
 const previewContext = elements.previewCanvas.getContext('2d', { willReadFrequently: true });
 const overlayContext = elements.overlayCanvas.getContext('2d');
@@ -354,7 +355,7 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
     elements.tempo.value = String(clamp(Math.round(Number(snapshot.tempo) || 120), 20, 300));
     elements.velocity.value = String(clamp(Math.round(Number(snapshot.velocity) || 75), 1, 100));
     elements.velocityValue.textContent = `${elements.velocity.value}%`;
-    if (elements.noteExtensionFrames) elements.noteExtensionFrames.value = String(normalizedNoteExtensionFrames(snapshot.noteExtensionFrames));
+    syncNoteExtensionButtons(snapshot.noteExtensionFrames);
 
     const gap = minimumAnalysisRange();
     let start = clamp(Number(snapshot.analysisStart) || 0, 0, state.duration);
@@ -688,7 +689,7 @@ function resetRollscriptorSettingsForNewVideo() {
   state.analysisRangeAutoInitialized = false;
   if (elements.whiteChangePercent) elements.whiteChangePercent.value = '30';
   if (elements.blackChangePercent) elements.blackChangePercent.value = '50';
-  if (elements.noteExtensionFrames) elements.noteExtensionFrames.value = '0';
+  syncNoteExtensionButtons(0);
   if (elements.tempo) elements.tempo.value = '120';
   if (elements.velocity) elements.velocity.value = '75';
   if (elements.velocityValue) elements.velocityValue.textContent = '75%';
@@ -1138,6 +1139,7 @@ function updateControlAvailability() {
   elements.whiteChangePercent.disabled = locked;
   elements.blackChangePercent.disabled = locked;
   if (elements.noteExtensionFrames) elements.noteExtensionFrames.disabled = locked;
+  for (const button of noteExtensionButtons) button.disabled = locked;
   elements.detectKeys.disabled = !hasVideo || locked;
   elements.keyboardOrientationToggle.disabled = !hasVideo || locked;
   if (elements.detectionModeToggle) elements.detectionModeToggle.disabled = !hasVideo || locked;
@@ -2529,12 +2531,23 @@ function currentChangeOptions({ normalize = false } = {}) {
     };
 }
 
+const NOTE_EXTENSION_FRAME_OPTIONS = Object.freeze([0, 0.25, 0.5, 1]);
+
 function normalizedNoteExtensionFrames(value = elements.noteExtensionFrames?.value) {
   const numeric = Number(value);
-  const frames = Number.isFinite(numeric) ? Math.round(numeric) : 0;
-  const normalized = clamp(frames, 0, 999);
-  if (elements.noteExtensionFrames && value === elements.noteExtensionFrames.value) {
-    elements.noteExtensionFrames.value = String(normalized);
+  if (!Number.isFinite(numeric)) return 0;
+  return NOTE_EXTENSION_FRAME_OPTIONS.reduce((best, option) =>
+    Math.abs(option - numeric) < Math.abs(best - numeric) ? option : best
+  , NOTE_EXTENSION_FRAME_OPTIONS[0]);
+}
+
+function syncNoteExtensionButtons(value = elements.noteExtensionFrames?.value) {
+  const normalized = normalizedNoteExtensionFrames(value);
+  if (elements.noteExtensionFrames) elements.noteExtensionFrames.value = String(normalized);
+  for (const button of noteExtensionButtons) {
+    const selected = Number(button.dataset.noteExtension) === normalized;
+    button.classList.toggle('is-selected', selected);
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
   }
   return normalized;
 }
@@ -2787,14 +2800,18 @@ function initializeEvents() {
     regenerateMidiFromCurrentNotes();
     scheduleRollscriptorSessionPersist();
   });
-  elements.noteExtensionFrames?.addEventListener('change', event => {
-    normalizedNoteExtensionFrames(event.currentTarget.value);
-    if (state.notes.length || state.midiBlob) {
-      resetResults();
-      setProgress(0, t('progress.ready'), state.keyboardDetectionConfirmed ? t('progress.detected_detail') : t('progress.ready_detail'));
-    }
-    scheduleRollscriptorSessionPersist();
-  });
+  for (const button of noteExtensionButtons) {
+    button.addEventListener('click', () => {
+      const previous = normalizedNoteExtensionFrames();
+      const selected = syncNoteExtensionButtons(button.dataset.noteExtension);
+      if (selected === previous) return;
+      if (state.notes.length || state.midiBlob) {
+        resetResults();
+        setProgress(0, t('progress.ready'), state.keyboardDetectionConfirmed ? t('progress.detected_detail') : t('progress.ready_detail'));
+      }
+      scheduleRollscriptorSessionPersist();
+    });
+  }
   elements.detectionModeToggle?.addEventListener('click', () => {
     setDetectionMode(state.detectionMode === 'dual' ? 'single' : 'dual');
   });

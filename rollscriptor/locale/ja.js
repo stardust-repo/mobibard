@@ -39,7 +39,7 @@ export default {
     'keyboard.detect_failed_hint_single': '鍵盤の境界を検出できませんでした。1本の認識ラインが88鍵すべてを横切るように調整してください。', 'keyboard.detect_failed_hint': '鍵盤境界を検出できませんでした。白鍵/黒鍵のラインを鍵盤本体へ移動してください。',
     'analysis.title': '動画解析設定', 'analysis.description': '解析範囲とMIDI設定を指定し、動画を解析してMIDIとして保存します。', 'analysis.range': '解析時間',
     'analysis.start_seconds': '開始 (秒)', 'analysis.end_seconds': '終了 (秒)', 'analysis.current': '現在', 'analysis.auto_search': '自動探索', 'analysis.auto_searching': '探索中…', 'analysis.auto_search_help': '検出済みの鍵盤を基準に、88鍵が見える最初と最後の位置を探して解析時間を設定します。', 'analysis.invalid_range': '解析終了時間は開始時間より後にしてください。', 'analysis.check_range': '解析時間を確認してください。',
-    'settings.white_change': '白鍵変化量', 'settings.black_change': '黒鍵変化量', 'settings.tempo': 'テンポ (BPM)', 'settings.velocity': 'ベロシティ', 'settings.note_extension': 'ノート拡張（フレーム）', 'settings.note_extension_help': '検出ノートの前後にある未検出フレームへ拡張します。拡張が重なる場合は後続ノートを優先し、2つのノートは結合しません。',
+    'settings.white_change': '白鍵変化量', 'settings.black_change': '黒鍵変化量', 'settings.tempo': 'テンポ (BPM)', 'settings.velocity': 'ベロシティ', 'settings.note_extension': 'ノート長拡張（フレーム）', 'settings.note_extension_help': '0 / 0.25 / 0.5 / 1フレームから選択し、検出ノートを前後の未検出時間へ拡張します。拡張が重なる場合は後続ノートを優先し、2つのノートは結合しません。',
     'actions.detect_keys': '鍵盤検出', 'actions.analyze': '動画を解析', 'actions.cancel': '解析を停止', 'actions.cancel_requested': '停止要求中…', 'actions.download': 'MIDIをダウンロード',
     'progress.waiting': '待機中', 'progress.select_video': '動画を選択してください。', 'progress.generated_notes': '生成ノート',
     'progress.ready': '準備完了', 'progress.ready_detail': '横・縦と認識ラインを合わせて「鍵盤検出」を押してください。', 'progress.idle_detail': '鍵盤検出を完了してから動画解析を実行してください。', 'progress.detected_detail': '鍵盤検出完了 · 解析範囲とMIDI設定を確認して動画解析を実行してください。',

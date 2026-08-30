@@ -7,7 +7,7 @@
 1. 로컬 동영상 파일을 선택하거나 드롭합니다.
 2. 건반 방향을 수평/수직으로 선택하고 흰 건반/검은 건반 검출선을 실제 건반 위치에 맞춥니다.
 3. 건반이 눌리지 않은 프레임에서 건반을 검출해 기준색을 확정합니다.
-4. 첫 건반 검출 때 88건반이 보이는 시작/종료 시간을 한 번 자동 탐색하며, 이후 분석 시간의 `자동 탐색` 버튼으로 다시 찾을 수 있습니다. 노트 확장 프레임, BPM, Velocity를 설정하고 영상을 분석합니다.
+4. 첫 건반 검출 때 88건반이 보이는 시작/종료 시간을 한 번 자동 탐색하며, 이후 분석 시간의 `자동 탐색` 버튼으로 다시 찾을 수 있습니다. 노트 길이 확장(0 / 0.25 / 0.5 / 1 프레임), BPM, Velocity를 설정하고 영상을 분석합니다.
 5. 재생 위치와 현재 검출 코드를 확인한 뒤 MIDI 파일을 다운로드합니다.
 
 ## 구조
@@ -29,7 +29,7 @@ Mediabunny 1.55.3은 현재 CDN에서 런타임 로드합니다. 영상 파일 �
 The RollScriptor settings panel is initialized independently from the video/WebCodecs application. Language and theme controls therefore remain available even if media initialization fails. Language changes are applied immediately through the locale modules and persisted with the shared Mobibard language key; theme changes use the shared Mobibard theme key.
 ## 분석 최적화
 
-분석 프레임 전체를 CPU로 읽지 않고 흰/검 건반 검출선 주변의 얇은 두 영역만 읽으며, 디코딩 즉시 Note On/Off를 생성합니다. 2026-08-30 조정에서는 건반 검출 시점의 각 건반 3개 샘플 색상을 고정 기준으로 저장하고, 이후 모든 프레임의 같은 샘플을 OKLab 색 벡터로 변환해 기준색과의 유클리드 거리를 비교합니다. Hue/무채색/밝기 규칙은 별도로 사용하지 않습니다. 검정↔흰색에 가까운 OKLab 전체 거리를 100%로 환산하고, 흰 건반과 검은 건반의 변화 임계값은 UI에서 각각 설정하며 기본값은 흰 건반 30%, 검은 건반 50%입니다. 3개 샘플 중 하나라도 해당 건반 타입의 임계값 이상 변하면 건반 상태가 바뀐 것으로 판정합니다. 프레임 건너뛰기나 자동 시간축 보정은 사용하지 않습니다. 단, 노트 확장 옵션을 1프레임 이상으로 설정하면 같은 건반의 실제 검출 구간 앞뒤에 있는 미검출 프레임만 지정 수만큼 확장합니다. 확장끼리 겹치면 후행 노트의 선행 확장을 우선하고, 원래 분리 검출된 두 노트는 절대 하나로 합치지 않습니다.
+분석 프레임 전체를 CPU로 읽지 않고 흰/검 건반 검출선 주변의 얇은 두 영역만 읽으며, 디코딩 즉시 Note On/Off를 생성합니다. 2026-08-30 조정에서는 건반 검출 시점의 각 건반 3개 샘플 색상을 고정 기준으로 저장하고, 이후 모든 프레임의 같은 샘플을 OKLab 색 벡터로 변환해 기준색과의 유클리드 거리를 비교합니다. Hue/무채색/밝기 규칙은 별도로 사용하지 않습니다. 검정↔흰색에 가까운 OKLab 전체 거리를 100%로 환산하고, 흰 건반과 검은 건반의 변화 임계값은 UI에서 각각 설정하며 기본값은 흰 건반 30%, 검은 건반 50%입니다. 3개 샘플 중 하나라도 해당 건반 타입의 임계값 이상 변하면 건반 상태가 바뀐 것으로 판정합니다. 프레임 건너뛰기나 자동 시간축 보정은 사용하지 않습니다. 단, 노트 길이 확장은 0 / 0.25 / 0.5 / 1 프레임 중 하나를 선택하며, 같은 건반의 실제 검출 구간 앞뒤에 있는 미검출 시간만 선택한 양만큼 확장합니다. 확장끼리 겹치면 후행 노트의 선행 확장을 우선하고, 원래 분리 검출된 두 노트는 절대 하나로 합치지 않습니다.
 
 
 
@@ -55,10 +55,10 @@ The RollScriptor settings panel is initialized independently from the video/WebC
 - In 1-line mode, if key boundaries cannot be found reliably, the selected guide span is divided into 88 equal estimated regions and the UI marks the result as estimated. Vertical orientation now starts with the guide spanning the full video height.
 
 
-## 노트 확장
+## 노트 길이 확장
 
 - 기본값은 `0프레임`(사용 안 함)입니다.
-- 같은 건반에서 실제로 검출된 노트의 앞/뒤에 연속된 미검출 프레임만 설정한 수만큼 확장합니다.
+- 0 / 0.25 / 0.5 / 1 프레임 중 하나를 선택하며, 같은 건반에서 실제로 검출된 노트의 앞/뒤 미검출 시간만 해당 양만큼 확장합니다.
 - 선행 노트의 후행 확장과 후행 노트의 선행 확장이 만나거나 겹치면 후행 노트가 해당 구간을 우선 사용합니다.
 - 확장으로 빈 구간이 모두 채워져도 원래 따로 검출된 두 노트는 MIDI에서도 별개의 Note On/Off로 유지합니다.
 
@@ -77,7 +77,7 @@ The RollScriptor settings panel is initialized independently from the video/WebC
 
 ## 새 영상 선택 시 설정 초기화
 
-복원 기능이 아닌 일반 파일 선택으로 새 영상을 열면 이전 영상의 설정을 가져가지 않습니다. 검출 모드/방향, 흰·검 건반 변화량, 분석 시간, 노트 확장, BPM, Velocity, 검출 결과와 MIDI 결과를 새 영상 기준 기본값으로 초기화합니다. 마지막 작업 `복원`을 선택한 경우에만 저장된 설정을 되살립니다.
+복원 기능이 아닌 일반 파일 선택으로 새 영상을 열면 이전 영상의 설정을 가져가지 않습니다. 검출 모드/방향, 흰·검 건반 변화량, 분석 시간, 노트 길이 확장, BPM, Velocity, 검출 결과와 MIDI 결과를 새 영상 기준 기본값으로 초기화합니다. 마지막 작업 `복원`을 선택한 경우에만 저장된 설정을 되살립니다.
 
 
 ### 2026-08-30 auto range refinement

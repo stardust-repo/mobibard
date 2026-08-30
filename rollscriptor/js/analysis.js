@@ -8,12 +8,14 @@ const CHANNELS_PER_KEY = PATCH_COUNT * PATCH_STRIDE;
 export const DEFAULT_WHITE_CHANGE_PERCENT = 30;
 export const DEFAULT_BLACK_CHANGE_PERCENT = 50;
 export const DEFAULT_NOTE_EXTENSION_FRAMES = 0;
-export const MAX_NOTE_EXTENSION_FRAMES = 999;
+export const NOTE_EXTENSION_FRAME_OPTIONS = Object.freeze([0, 0.25, 0.5, 1]);
 
 function normalizeNoteExtensionFrames(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return DEFAULT_NOTE_EXTENSION_FRAMES;
-  return clamp(Math.round(numeric), 0, MAX_NOTE_EXTENSION_FRAMES);
+  return NOTE_EXTENSION_FRAME_OPTIONS.reduce((best, option) =>
+    Math.abs(option - numeric) < Math.abs(best - numeric) ? option : best
+  , DEFAULT_NOTE_EXTENSION_FRAMES);
 }
 
 /**
@@ -212,17 +214,27 @@ function stripFrameMetadata(note) {
   return clean;
 }
 
-function frameBoundaryTime(frameStarts, finalTime, frameIndex) {
+function frameBoundaryTime(frameStarts, finalTime, framePosition) {
   const count = frameStarts.length;
   if (!count) return 0;
-  const index = clamp(Math.round(Number(frameIndex) || 0), 0, count);
-  if (index >= count) return Math.max(frameStarts[count - 1], Number(finalTime) || 0);
-  return Math.max(0, Number(frameStarts[index]) || 0);
+
+  const position = clamp(Number(framePosition) || 0, 0, count);
+  const lowerIndex = Math.floor(position);
+  if (lowerIndex >= count) return Math.max(frameStarts[count - 1], Number(finalTime) || 0);
+
+  const lowerTime = Math.max(0, Number(frameStarts[lowerIndex]) || 0);
+  const fraction = position - lowerIndex;
+  if (fraction <= 0) return lowerTime;
+
+  const upperTime = lowerIndex + 1 < count
+    ? Math.max(lowerTime, Number(frameStarts[lowerIndex + 1]) || lowerTime)
+    : Math.max(lowerTime, Number(finalTime) || lowerTime);
+  return lowerTime + ((upperTime - lowerTime) * fraction);
 }
 
 /**
- * Expands each raw note into surrounding frames where that same key was not
- * detected. Raw note runs are never merged. If the tail expansion of an
+ * Expands each raw note into surrounding frame time where that same key was not
+ * detected. Fractional frame amounts are linearly interpolated between frame boundaries. Raw note runs are never merged. If the tail expansion of an
  * earlier note overlaps the lead expansion of the following note, the
  * following note owns the overlap and the earlier tail is clipped there.
  */

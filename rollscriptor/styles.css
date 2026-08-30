@@ -131,6 +131,19 @@ input[type="range"] { accent-color: var(--text); }
 .field { min-width: 0; display: grid; gap: 7px; color: var(--muted); font-size: 11px; }
 .field > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface); }
+.note-extension-buttons { min-height: 40px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.note-extension-option { min-width: 0; min-height: 40px; padding: 0 6px; font-variant-numeric: tabular-nums; }
+.note-extension-option.is-selected,
+.note-extension-option[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.note-extension-option.is-selected:hover:not(:disabled),
+.note-extension-option[aria-pressed="true"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  background: color-mix(in srgb, var(--accent) 88%, var(--surface));
+}
 .time-input-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; }
 .soft-button { background: var(--surface); }
 .range-control { min-height: 40px; display: flex; align-items: center; padding: 0 4px; }

@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-auto-range-v2" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-note-extension-fractions-v1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -230,10 +230,16 @@
       </div>
 
       <div class="field-grid midi-settings settings-group compact-settings">
-        <label class="field note-extension-field">
-          <span data-i18n="settings.note_extension">노트 확장 (프레임)</span>
-          <input id="noteExtensionFrames" type="number" min="0" max="999" step="1" value="0" inputmode="numeric" data-i18n-title="settings.note_extension_help" title="검출 전후의 빈 프레임으로 노트를 확장합니다."/>
-        </label>
+        <div class="field note-extension-field">
+          <span data-i18n="settings.note_extension">노트 길이 확장 (프레임)</span>
+          <input id="noteExtensionFrames" type="hidden" value="0"/>
+          <div id="noteExtensionButtons" class="note-extension-buttons" role="group" data-i18n-aria-label="settings.note_extension" aria-label="노트 길이 확장 (프레임)" data-i18n-title="settings.note_extension_help" title="검출 전후의 빈 프레임으로 노트를 확장합니다.">
+            <button type="button" class="note-extension-option is-selected" data-note-extension="0" aria-pressed="true">0</button>
+            <button type="button" class="note-extension-option" data-note-extension="0.25" aria-pressed="false">0.25</button>
+            <button type="button" class="note-extension-option" data-note-extension="0.5" aria-pressed="false">0.5</button>
+            <button type="button" class="note-extension-option" data-note-extension="1" aria-pressed="false">1</button>
+          </div>
+        </div>
         <label class="field">
           <span data-i18n="settings.tempo">템포 (BPM)</span>
           <input id="tempo" type="number" min="20" max="300" step="1" value="120"/>
@@ -304,6 +310,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script type="module" src="./js/settings-menu.js?v=20260830-auto-range-v2"></script>
-<script type="module" src="./js/app.js?v=20260830-auto-range-v2"></script>
+<script type="module" src="./js/app.js?v=20260830-note-extension-fractions-v1"></script>
 </body>
 </html>
