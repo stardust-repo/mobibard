@@ -40,7 +40,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260831-cancel-red1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
+<link href="./styles.css?v=20260831-detected-chord-colors1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -191,6 +191,7 @@
 <div class="status-line keyboard-detection-status" data-i18n="keyboard.stage_video_required" id="keyboardStatus">먼저 영상을 선택해 주세요.</div>
 <div aria-live="polite" class="keyboard-detection-code-row keyboard-detection-detail" hidden="">
 <span class="keyboard-color-label" data-i18n="transport.current_chord">현재 검출 코드</span>
+<span aria-label="검출된 건반 수" class="keyboard-chord-count" data-i18n-aria-label="transport.detected_count" id="currentChordCount">0</span>
 <strong data-i18n="transport.after_detection" id="currentChord">건반 검출 후 표시</strong>
 </div>
 <div class="keyboard-color-row keyboard-detection-detail" hidden="">
@@ -309,6 +310,6 @@
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
 <script src="./js/settings-menu.js?v=20260830-site-nav1" type="module"></script>
-<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260831-ja-labels1" type="module"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260831-detected-chord-colors1" type="module"></script>
 </body>
 </html>

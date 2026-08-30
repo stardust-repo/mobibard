@@ -14,7 +14,7 @@
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
   const LOCALE_VERSION = "5.2.0";
-  const LOCALE_REVISION = "20260830-site-nav1";
+  const LOCALE_REVISION = "20260831-simple-result-section1";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 
@@ -55,6 +55,8 @@
     sourceStepDescription: $("sourceStepDescription"),
     convertStepTitle: $("convertStepTitle"),
     convertStepDescription: $("convertStepDescription"),
+    resultStepTitle: $("resultStepTitle"),
+    resultStepDescription: $("resultStepDescription"),
     brandName: $("brandName"),
     midiExtractLink: $("midiExtractLink"),
     fullEditorLink: $("fullEditorLink"),
@@ -308,6 +310,8 @@
     if (els.sourceStepDescription) els.sourceStepDescription.textContent = t("stepSourceDescription");
     if (els.convertStepTitle) els.convertStepTitle.textContent = t("stepConvertTitle");
     if (els.convertStepDescription) els.convertStepDescription.textContent = t("stepConvertDescription");
+    if (els.resultStepTitle) els.resultStepTitle.textContent = t("stepResultTitle");
+    if (els.resultStepDescription) els.resultStepDescription.textContent = t("stepResultDescription");
     els.midiExtractLink.textContent = t("extract");
     els.fullEditorLink.textContent = t("full");
     els.fullEditorLink.href = `../player/index.html?lang=${encodeURIComponent(language)}`;

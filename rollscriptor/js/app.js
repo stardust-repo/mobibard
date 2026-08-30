@@ -36,7 +36,7 @@ const DEFAULT_BLACK_CHANGE_PERCENT = 30;
 
 const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'videoInfo', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
-  'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
+  'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'currentChordCount', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent', 'autoDetectRange',
   'tempo', 'velocity', 'velocityValue', 'velocityLabelText', 'velocityUsageHint', 'audioVelocityToggle', 'audioVelocityText', 'noteExtensionFrames', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'midiPreviewControls', 'midiPreviewPlay', 'midiPreviewRewind', 'midiPreviewSlider', 'toast', 'languageSelect',
@@ -1044,8 +1044,40 @@ async function autoDetectAnalysisRange({ quiet = false } = {}) {
   }
 }
 
-function setCurrentChordDisplay(text, hasNotes = false) {
-  const nextText = String(text ?? '—');
+function isBlackMidiNote(midi) {
+  const pitchClass = ((Number(midi) % 12) + 12) % 12;
+  return pitchClass === 1 || pitchClass === 3 || pitchClass === 6 || pitchClass === 8 || pitchClass === 10;
+}
+
+function setCurrentChordDisplay(value, hasNotes = false) {
+  const notes = Array.isArray(value) ? value : null;
+  const detectedCount = notes ? notes.length : 0;
+  if (elements.currentChordCount) elements.currentChordCount.textContent = String(detectedCount);
+
+  if (notes) {
+    const fragment = document.createDocumentFragment();
+    if (!notes.length) {
+      fragment.append(document.createTextNode('—'));
+    } else {
+      notes.forEach((note, index) => {
+        if (index > 0) {
+          const separator = document.createElement('span');
+          separator.className = 'keyboard-chord-separator';
+          separator.textContent = ' + ';
+          fragment.append(separator);
+        }
+        const token = document.createElement('span');
+        token.className = `keyboard-chord-note ${isBlackMidiNote(note?.midi) ? 'black-key' : 'white-key'}`;
+        token.textContent = String(note?.name || '');
+        fragment.append(token);
+      });
+    }
+    elements.currentChord.replaceChildren(fragment);
+    elements.currentChord.classList.toggle('has-notes', notes.length > 0);
+    return;
+  }
+
+  const nextText = String(value ?? '—');
   if (elements.currentChord.textContent !== nextText) elements.currentChord.textContent = nextText;
   elements.currentChord.classList.toggle('has-notes', Boolean(hasNotes));
 }
@@ -1067,7 +1099,7 @@ function updateCurrentChord(time = state.previewTime) {
     const active = state.keyMap.keys
       .filter((key, keyIndex) => state.liveKeyStates[keyIndex])
       .sort((a, b) => a.midi - b.midi);
-    setCurrentChordDisplay(active.length ? active.map(key => key.name).join(' + ') : '—', active.length > 0);
+    setCurrentChordDisplay(active);
     return;
   }
 
@@ -1077,7 +1109,7 @@ function updateCurrentChord(time = state.previewTime) {
       // has finished decoding. Keep the previous live result during that short
       // gap instead of flashing the "after detection" placeholder every frame.
       if (hasLiveState) return;
-      setCurrentChordDisplay('—', false);
+      setCurrentChordDisplay([]);
       return;
     }
     setCurrentChordDisplay(t('transport.after_detection'), false);
@@ -1093,7 +1125,7 @@ function updateCurrentChord(time = state.previewTime) {
     }
   }
   const active = [...activeByMidi.values()].sort((a, b) => a.midi - b.midi);
-  setCurrentChordDisplay(active.length ? active.map(note => note.name).join(' + ') : '—', active.length > 0);
+  setCurrentChordDisplay(active);
 }
 
 function setPlaybackUi() {

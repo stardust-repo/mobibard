@@ -560,7 +560,32 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   overflow-y: hidden;
   scrollbar-width: thin;
 }
-.keyboard-detection-code-row strong.has-notes { color: var(--cyan); }
+.keyboard-detection-code-row strong.has-notes { color: var(--text); }
+.keyboard-chord-count {
+  min-width: 22px;
+  height: 20px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.keyboard-detection-code-row strong.has-notes {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+}
+.keyboard-chord-note.white-key { color: var(--cyan); }
+.keyboard-chord-note.black-key { color: var(--pink); }
+.keyboard-chord-separator { color: var(--text); }
 
 .keyboard-color-row {
   min-width: 0;
