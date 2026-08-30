@@ -95,6 +95,8 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-CN"] = {
     "playbackPluginMissing": "无法加载 Simple 播放模块。",
     "soundbankMissing": "无法加载共享音色库模块。",
     "presetMissing": "找不到用于播放的乐器预设。（Bank {0} / Program {1}）",
+    "volumeFixed": "音量设置",
+    "volumeOriginal": "原始音量",
     "fadeInSeconds": "淡入 (秒)",
     "fadeOutSeconds": "淡出 (秒)",
     "tutorialOpen": "教程",

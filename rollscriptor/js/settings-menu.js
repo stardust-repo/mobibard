@@ -1,5 +1,5 @@
-import { getLanguage, initializeLanguage, setLanguage } from './language-manager.js?v=20260830-workflow-v2';
-import { initializeThemeUi } from './ui.js';
+import { getLanguage, initializeLanguage, setLanguage } from './language-manager.js?v=20260830-cleanup2';
+import { initializeThemeUi } from './ui.js?v=20260830-cleanup2';
 
 function initializePopover() {
   const button = document.getElementById('settingsButton');

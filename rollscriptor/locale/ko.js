@@ -41,7 +41,7 @@ export default {
     'analysis.title': '영상 분석 설정', 'analysis.description': '건반 인식 기준과 분석 시간을 정한 뒤 영상을 분석합니다.', 'analysis.range': '분석 시간', 'analysis.duration_value': '길이 {duration}', 'midi.title': 'MIDI 다운로드', 'midi.description': '분석된 노트에 길이, 템포, 벨로시티를 적용해 MIDI를 다시 계산하고 다운로드합니다.',
     'analysis.start_seconds': '시작 (초)', 'analysis.end_seconds': '종료 (초)', 'analysis.current': '현재', 'analysis.auto_search': '자동 탐색', 'analysis.auto_searching': '탐색 중…', 'analysis.auto_search_help': '건반 검출 결과를 기준으로 영상 앞뒤에서 88건반이 보이는 지점을 찾아 분석 시간을 설정합니다.', 'analysis.invalid_range': '분석 종료 시간은 시작 시간보다 뒤여야 합니다.', 'analysis.check_range': '분석 시간을 확인하세요.',
     'settings.white_change': '흰 건반 변화량', 'settings.black_change': '검은 건반 변화량', 'settings.tempo': '템포 (BPM)', 'settings.velocity': '벨로시티', 'settings.note_extension': '노트 길이 확장 (프레임)', 'settings.note_extension_help': '0 / 0.25 / 0.5 / 1 프레임 중 하나를 선택해 검출된 노트를 앞뒤의 미검출 시간으로 확장합니다. 확장이 겹치면 후행 노트가 우선하며 두 노트는 합쳐지지 않습니다.',
-    'settings.audio_velocity': '오디오 볼륨 반영', 'settings.audio_velocity_on': '사용', 'settings.audio_velocity_off': '사용 안 함', 'settings.audio_velocity_help': '노트 시작 전후의 오디오에서 해당 음계의 기본음과 배음 Attack 크기를 분석해 각 노트 벨로시티에 반영합니다. 벨로시티 슬라이더는 전체 기준 세기를 조절합니다.',
+    'settings.velocity_audio': '벨로시티 기준', 'settings.velocity_fixed': '고정 벨로시티', 'settings.velocity_audio_hint': '오디오에서 구한 노트별 세기를 이 값을 중심으로 반영합니다.', 'settings.velocity_fixed_hint': '모든 노트에 이 값을 동일하게 적용합니다.', 'settings.audio_velocity': '오디오 볼륨 반영', 'settings.audio_velocity_on': '사용', 'settings.audio_velocity_off': '사용 안 함', 'settings.audio_velocity_help': '노트 시작 전후의 오디오에서 해당 음계의 기본음과 배음 Attack 크기를 분석해 각 노트 벨로시티에 반영합니다. 벨로시티 슬라이더는 전체 기준 세기를 조절합니다.',
     'actions.detect_keys': '건반 검출', 'actions.analyze': '영상 분석', 'actions.cancel': '분석 중지', 'actions.cancel_requested': '중지 요청됨…', 'actions.download': 'MIDI 다운로드',
     'progress.waiting': '대기 중', 'progress.select_video': '영상을 선택하세요.', 'progress.generated_notes': '생성 노트',
     'progress.ready': '준비 완료', 'progress.ready_detail': '수평·수직 방향과 인식선을 맞춘 뒤 「건반 검출」을 눌러주세요.',
@@ -58,8 +58,7 @@ export default {
     'toast.audio_velocity_fallback': '오디오를 분석할 수 없어 기존 고정 벨로시티를 적용했습니다.', 'toast.audio_velocity_reanalyze': '오디오 볼륨 반영은 분석된 노트에서 바로 다시 계산할 수 있습니다.', 'toast.midi_done_audio': '오디오 볼륨을 반영한 MIDI 생성이 완료되었습니다.',
     'error.media_library': '영상 라이브러리를 불러오지 못했습니다.', 'error.unsupported_video': '지원되지 않거나 손상된 영상입니다.', 'error.no_video_track': '비디오 트랙을 찾지 못했습니다.', 'error.codec': '현재 브라우저가 이 영상 코덱을 디코딩할 수 없습니다.',
     'error.open_video': '영상을 열지 못했습니다.', 'error.no_frames': '분석 가능한 프레임이 없습니다.', 'error.webcodecs': '현재 브라우저에서 WebCodecs를 사용할 수 없습니다. 최신 Chrome 또는 Edge를 사용하세요.',
-    'error.secure_context': 'WebCodecs를 사용하려면 HTTPS 또는 localhost에서 페이지를 열어야 합니다.', 'error.library_load': '영상 처리 라이브러리를 불러오지 못했습니다.',
-    'error.feature_key_count': 'FeatureStore keyCount가 잘못되었습니다.', 'error.feature_size': '프레임 색상 데이터 크기가 {bytes}바이트여야 합니다.', 'error.key_count_mismatch': '키 개수와 분석 특징 개수가 다릅니다.', 'error.baseline_missing': '건반 조정 프레임에서 캡처한 기준색이 없습니다. 검출선을 다시 조정해 주세요.',
+    'error.secure_context': 'WebCodecs를 사용하려면 HTTPS 또는 localhost에서 페이지를 열어야 합니다.', 'error.library_load': '영상 처리 라이브러리를 불러오지 못했습니다.', 'error.feature_size': '프레임 색상 데이터 크기가 {bytes}바이트여야 합니다.', 'error.key_count_mismatch': '키 개수와 분석 특징 개수가 다릅니다.', 'error.baseline_missing': '건반 조정 프레임에서 캡처한 기준색이 없습니다. 검출선을 다시 조정해 주세요.',
     'error.region_small': '선택 영역이 너무 작습니다.', 'error.white_boundaries': '흰 건반 경계를 충분히 찾지 못했습니다. 다른 기준 프레임이나 수동 영역을 사용하세요.',
     'overlay.single': '전체 건반', 'overlay.white': '흰 건반', 'overlay.black': '검은 건반',
     'analysis.post_detail': '고정 기준색과 OKLab 변화량 비교 {processed} / {total} 프레임', 'analysis.post_done': '{count}개 노트를 생성했습니다.'

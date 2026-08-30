@@ -47,6 +47,7 @@
   const makeChannelOptions = index => ({
     restMode: "32",
     volumeDelta: 0,
+    volumeFixed: null,
     octaveDelta: 0,
     accompaniment: { analysis: index === 0, generation: index > 0 }
   });
@@ -122,6 +123,9 @@
       return {
         restMode: String(source.restMode || "keep"),
         volumeDelta: Math.max(-15, Math.min(15, Math.round(Number(source.volumeDelta) || 0))),
+        volumeFixed: source.volumeFixed === null || source.volumeFixed === undefined || source.volumeFixed === "" || String(source.volumeFixed).toLowerCase() === "keep"
+          ? null
+          : Math.max(0, Math.min(15, Math.round(Number(source.volumeFixed) || 0))),
         octaveDelta: Math.max(-7, Math.min(7, Math.round(Number(source.octaveDelta) || 0))),
         accompaniment: {
           analysis: Boolean(source.accompaniment?.analysis),
@@ -189,6 +193,7 @@
       channels: cloneChannelOptions(channels).map(channel => ({
         restMode: String(channel.restMode || "keep"),
         volumeDelta: Number(channel.volumeDelta) || 0,
+        volumeFixed: channel.volumeFixed == null ? null : Math.max(0, Math.min(15, Math.round(Number(channel.volumeFixed) || 0))),
         octaveDelta: Number(channel.octaveDelta) || 0,
         accompaniment: {
           analysis: Boolean(channel.accompaniment?.analysis),
@@ -214,20 +219,17 @@
 
   function syncChannelDraftControls() {
     const draft = ensureChannelDraft();
-    ["rest", "volume", "octave"].forEach(feature => {
+    ["rest", "octave"].forEach(feature => {
       const refs = state.ui.featureControls?.[feature];
       if (!refs) return;
       refs.channels?.forEach((control, index) => {
         const channel = draft.channels[index];
-        const value = feature === "rest"
-          ? channel?.restMode
-          : feature === "volume"
-            ? channel?.volumeDelta
-            : channel?.octaveDelta;
+        const value = feature === "rest" ? channel?.restMode : channel?.octaveDelta;
         control?.setValue?.(value);
       });
       syncFeatureBatchState(feature);
     });
+    syncVolumeModeControls();
     syncAccompanimentFeatureControls();
     scheduleOptionMetricsUpdate();
   }
@@ -271,6 +273,7 @@
       const target = state.channelDraft.channels[index] || makeChannelOptions(index);
       target.restMode = source.restMode;
       target.volumeDelta = source.volumeDelta;
+      target.volumeFixed = source.volumeFixed;
       target.octaveDelta = source.octaveDelta;
       target.accompaniment ||= {};
       target.accompaniment.analysis = source.accompaniment.analysis;
@@ -597,18 +600,23 @@
 
   function sliderNumber({ min, max, step, value, suffix = "", onChange }) {
     const wrap = el("div", "wb4-slider-number");
-    const range = el("input", "wb4-range", { type: "range", min, max, step, value });
-    const number = el("input", "wb4-number", { type: "number", min, max, step, value });
+    let currentMin = Number(min);
+    let currentMax = Number(max);
+    let currentStep = Number(step) || 1;
+    let currentValue = Number(value) || 0;
+    const range = el("input", "wb4-range", { type: "range", min: currentMin, max: currentMax, step: currentStep, value: currentValue });
+    const number = el("input", "wb4-number", { type: "number", min: currentMin, max: currentMax, step: currentStep, value: currentValue });
     const suffixNode = suffix ? el("span", "wb4-number-suffix", { text: suffix }) : null;
     const normalize = raw => {
       let next = Number(raw);
-      if (!Number.isFinite(next)) next = Number(value);
-      next = Math.max(Number(min), Math.min(Number(max), next));
-      if (Number(step) >= 1) next = Math.round(next / Number(step)) * Number(step);
+      if (!Number.isFinite(next)) next = currentValue;
+      next = Math.max(currentMin, Math.min(currentMax, next));
+      if (currentStep >= 1) next = Math.round(next / currentStep) * currentStep;
       return next;
     };
     const setValue = (raw, { silent = true, mixed = false } = {}) => {
       const next = normalize(raw);
+      currentValue = next;
       // 채널 값이 서로 다른 상태에서는 일괄 슬라이더의 thumb를 특정 채널 값으로 끌고 가지 않는다.
       // 숫자 칸만 mixed 상태로 비우고, 사용자가 일괄 슬라이더를 직접 움직였을 때만 새 값이 된다.
       if (!mixed) {
@@ -621,9 +629,25 @@
       number.placeholder = mixed ? t("mixedValues") : "";
       if (!silent) onChange(next);
     };
+    const setBounds = ({ min: nextMin, max: nextMax, step: nextStep = currentStep } = {}) => {
+      currentMin = Number(nextMin);
+      currentMax = Number(nextMax);
+      currentStep = Number(nextStep) || 1;
+      range.min = number.min = String(currentMin);
+      range.max = number.max = String(currentMax);
+      range.step = number.step = String(currentStep);
+    };
     range.addEventListener("input", () => setValue(range.value, { silent: false }));
     number.addEventListener("change", () => setValue(number.value, { silent: false }));
     wrap.setValue = setValue;
+    wrap.setBounds = setBounds;
+    wrap.setDisabled = disabled => {
+      const next = Boolean(disabled);
+      range.disabled = next;
+      number.disabled = next;
+      wrap.classList.toggle("is-disabled", next);
+      wrap.setAttribute("aria-disabled", next ? "true" : "false");
+    };
     wrap._range = range;
     wrap._number = number;
     wrap.append(range, number);
@@ -863,6 +887,7 @@
       const channel = target.channels[index] || makeChannelOptions(index);
       channel.restMode = source.restMode;
       channel.volumeDelta = source.volumeDelta;
+      channel.volumeFixed = source.volumeFixed;
       channel.octaveDelta = source.octaveDelta;
       channel.accompaniment ||= {};
       channel.accompaniment.analysis = Boolean(source.accompaniment?.analysis);
@@ -1027,7 +1052,14 @@
         partModes: previewRestModes
       }), out);
     }
-    const previewVolumeDeltas = channels.map(channel => Number(channel.volumeDelta) || 0);
+    const previewFixedVolumes = channels.map(channel => channel.volumeFixed == null ? null : Number(channel.volumeFixed));
+    if (optimizer.setVolumesMml && previewFixedVolumes.some(volume => volume != null)) {
+      out = resultMml(optimizer.setVolumesMml(out, {
+        partCount: 6,
+        partVolumes: previewFixedVolumes
+      }), out);
+    }
+    const previewVolumeDeltas = channels.map(channel => channel.volumeFixed == null ? (Number(channel.volumeDelta) || 0) : 0);
     if (optimizer.adjustVolumesMml && previewVolumeDeltas.some(delta => delta !== 0)) {
       out = resultMml(optimizer.adjustVolumesMml(out, {
         partCount: 6,
@@ -1136,7 +1168,7 @@
     if (!force && signature === state.lastApplySignature) return;
 
     const startedAt = performance.now();
-    const transformCalls = { dynamics: 0, rest: 0, volume: 0, octave: 0, accompaniment: 0, leading: 0, tempoClean: 0, tempoScale: 0, fade: 0 };
+    const transformCalls = { dynamics: 0, rest: 0, volumeFixed: 0, volume: 0, octave: 0, accompaniment: 0, leading: 0, tempoClean: 0, tempoScale: 0, fade: 0 };
     const diagnostics = { cacheHits: 0, stageDurations: {} };
     let out = String(state.sourceMml);
     let previousKey = `source:${state.sourceVersion}`;
@@ -1207,7 +1239,19 @@
       out = stage.output;
       previousKey = stage.key;
 
-      const volumeDeltas = state.options.channels.map(channel => Number(channel.volumeDelta) || 0);
+      const fixedVolumes = state.options.channels.map(channel => channel.volumeFixed == null ? null : Number(channel.volumeFixed));
+      stage = pipelineStage(stageIndex++, previousKey, "volumeFixed", fixedVolumes, out, input => {
+        if (!optimizer.setVolumesMml || !fixedVolumes.some(volume => volume != null)) return input;
+        transformCalls.volumeFixed += 1;
+        return resultMml(optimizer.setVolumesMml(input, {
+          partCount: 6,
+          partVolumes: fixedVolumes
+        }), input);
+      }, diagnostics);
+      out = stage.output;
+      previousKey = stage.key;
+
+      const volumeDeltas = state.options.channels.map(channel => channel.volumeFixed == null ? (Number(channel.volumeDelta) || 0) : 0);
       stage = pipelineStage(stageIndex++, previousKey, "volume", volumeDeltas, out, input => {
         if (!optimizer.adjustVolumesMml || !volumeDeltas.some(delta => delta !== 0)) return input;
         transformCalls.volume += 1;
@@ -1564,6 +1608,7 @@
       const index = Number(node.dataset.wb8ChannelIndex);
       node.textContent = index < 0 ? t("applyAll") : channelLabel(index);
     });
+    document.querySelectorAll('.wb16-volume-mode-button').forEach(node => node.refreshText?.());
     if (state.ui.titleName) state.ui.titleName.textContent = appText("mml.generator_title", "MML 생성기");
     if (state.ui.fileName && !state.ui.fileName.dataset.hasFile) state.ui.fileName.textContent = t("noFile");
     state.ui.channelTabGroups?.forEach(group => group.forEach(button => {
@@ -1600,6 +1645,7 @@
     updateTempoCleanButton();
     state.ui.leadingControl?.setSuffix?.(t("seconds"));
     syncVolumeGenerationControls();
+    syncVolumeModeControls();
     syncAccompanimentFeatureControls();
     scheduleChannelCountsUpdate();
     scheduleCopyRowsRender();
@@ -2450,17 +2496,24 @@
     const source = String($("mainMml")?.value || "");
     const draft = ensureChannelDraft().channels;
     const adjustments = draft.map((channel, index) => Number(channel.volumeDelta || 0) - Number(state.options.channels[index]?.volumeDelta || 0));
+    const fixed = draft.map(channel => channel.volumeFixed == null ? "keep" : String(channel.volumeFixed));
     const cacheKey = `${source}
-#draft-volume:${adjustments.join(",")}`;
+#draft-volume:${adjustments.join(",")}
+#draft-fixed:${fixed.join(",")}`;
     if (state.metricsCache.volumeSource === cacheKey && state.metricsCache.volume.length === 6) return state.metricsCache.volume;
     const baseStats = getNoteMetricStats(source);
     const rows = baseStats.map((stats, index) => {
       if (!stats?.total) return { total: 0, items: [] };
       const counts = new Map();
-      const delta = adjustments[index] || 0;
-      for (const [baseVolume, count] of stats.volumeCounts || []) {
-        const volume = Math.max(0, Math.min(15, Math.round(Number(baseVolume) + delta)));
-        counts.set(volume, (counts.get(volume) || 0) + Number(count || 0));
+      const fixedVolume = draft[index]?.volumeFixed;
+      if (fixedVolume != null) {
+        counts.set(Math.max(0, Math.min(15, Math.round(Number(fixedVolume) || 0))), stats.total);
+      } else {
+        const delta = adjustments[index] || 0;
+        for (const [baseVolume, count] of stats.volumeCounts || []) {
+          const volume = Math.max(0, Math.min(15, Math.round(Number(baseVolume) + delta)));
+          counts.set(volume, (counts.get(volume) || 0) + Number(count || 0));
+        }
       }
       return {
         total: stats.total,
@@ -2559,13 +2612,13 @@
   }
 
   function syncFeatureBatchState(feature) {
+    if (feature === "volume") {
+      syncVolumeModeControls();
+      return;
+    }
     const refs = state.ui.featureControls?.[feature];
     if (!refs) return;
-    const getter = feature === "rest"
-      ? channel => channel.restMode
-      : feature === "volume"
-        ? channel => channel.volumeDelta
-        : channel => channel.octaveDelta;
+    const getter = feature === "rest" ? channel => channel.restMode : channel => channel.octaveDelta;
     const values = ensureChannelDraft().channels.map(getter);
     const value = { value: values[0], mixed: values.some(item => String(item) !== String(values[0])) };
     refs.batch?.setValue(value.value, { mixed: value.mixed });
@@ -2643,6 +2696,79 @@
     return panel;
   }
 
+  function volumeModeOf(channel) {
+    return channel?.volumeFixed == null ? "original" : "fixed";
+  }
+
+  function wb16VolumeModeButton(initialMode, onChange) {
+    const button = el("button", "wb4-segment wb16-volume-mode-button", { type: "button" });
+    let mode = initialMode === "fixed" ? "fixed" : "original";
+    let mixed = false;
+    const render = () => {
+      button.dataset.mode = mixed ? "mixed" : mode;
+      button.classList.toggle("active", !mixed && mode === "fixed");
+      button.classList.toggle("is-mixed", mixed);
+      button.textContent = mixed ? t("volumeModeMixed") : (mode === "fixed" ? t("volumeFixedMode") : t("volumeOriginal"));
+      button.setAttribute("aria-pressed", !mixed && mode === "fixed" ? "true" : "false");
+      const helpKey = mixed ? "volumeModeMixedHelp" : (mode === "fixed" ? "volumeFixedModeHelp" : "volumeOriginalHelp");
+      const help = t(helpKey);
+      button.title = help;
+      button.setAttribute("aria-label", help);
+    };
+    button.setMode = (nextMode, { silent = true, isMixed = false } = {}) => {
+      mixed = Boolean(isMixed);
+      if (!mixed) mode = nextMode === "fixed" ? "fixed" : "original";
+      render();
+      if (!silent && !mixed) onChange(mode);
+    };
+    button.addEventListener("click", () => {
+      const next = mixed ? "fixed" : (mode === "fixed" ? "original" : "fixed");
+      button.setMode(next, { silent: false });
+    });
+    button.refreshText = render;
+    render();
+    return button;
+  }
+
+  function wb16VolumeOptionListRow({ index = -1, control, metric = null }) {
+    const row = el("div", `wb8-option-list-row wb9-option-list-row wb16-volume-row ${index < 0 ? "wb8-option-list-all wb9-option-list-all wb16-volume-batch-row" : `wb8-option-list-channel wb8-option-list-channel-${index} wb13-volume-metric-row`}`.trim(), {
+      style: index < 0 ? "--wb8-channel-color:var(--wb4-accent)" : `--wb8-channel-color:var(--part${index})`
+    });
+    if (metric?.badge || metric?.detail) {
+      const metricRow = el("div", "wb13-option-metric-top wb16-volume-metric-top");
+      if (metric.badge) metricRow.append(metric.badge);
+      if (metric.detail) metricRow.append(metric.detail);
+      row.append(metricRow);
+    }
+    const label = el("div", "wb8-option-list-label wb9-option-list-label");
+    label.append(el("strong", "wb9-option-channel-name", {
+      text: index < 0 ? t("applyAll") : channelLabel(index),
+      "data-wb8-channel-index": index
+    }));
+    const body = el("div", "wb8-option-list-control wb9-option-list-control wb16-volume-slider-cell");
+    body.append(control.slider);
+    row.append(label, control.modeButton, body);
+    return row;
+  }
+
+  function syncVolumeModeControls() {
+    const refs = state.ui.featureControls?.volume;
+    if (!refs) return;
+    const channels = ensureChannelDraft().channels;
+    refs.channels?.forEach((control, index) => control?.sync?.(channels[index]));
+    if (!refs.batch) return;
+    const modes = channels.map(volumeModeOf);
+    const mixedMode = modes.some(mode => mode !== modes[0]);
+    if (mixedMode) {
+      refs.batch.setMixedMode?.();
+      return;
+    }
+    const fixed = modes[0] === "fixed";
+    const values = channels.map(channel => fixed ? Number(channel.volumeFixed) : Number(channel.volumeDelta) || 0);
+    const mixedValue = values.some(value => String(value) !== String(values[0]));
+    refs.batch.syncMode?.(fixed ? "fixed" : "original", values[0], mixedValue);
+  }
+
   function buildVolumeFeaturePanel() {
     const panel = el("section", "wb8-feature-panel wb9-feature-panel wb8-volume-feature wb9-volume-feature", { role: "tabpanel", hidden: true, "data-option-feature-panel": "volume" });
     const channels = ensureChannelDraft().channels;
@@ -2650,32 +2776,91 @@
     state.ui.volumeBatchMetric = null;
     state.ui.featureControls.volume = { channels: [] };
 
-    const common = commonValue(channel => channel.volumeDelta);
-    const batch = sliderNumber({ min: -15, max: 15, step: 1, value: common.value, onChange: value => {
-      channels.forEach(channel => { channel.volumeDelta = value; });
-      state.ui.featureControls.volume.channels.forEach(control => control.setValue(value));
-      syncFeatureBatchState("volume");
-      markChannelOptionsDirty();
-      scheduleOptionMetricsUpdate();
-    }});
-    batch.setValue(common.value, { mixed: common.mixed });
-    state.ui.featureControls.volume.batch = batch;
-    panel.append(wb9OptionListRow({ index: -1, control: batch }));
-
-    channels.forEach((channel, index) => {
-      const control = sliderNumber({ min: -15, max: 15, step: 1, value: channel.volumeDelta, onChange: value => {
-        channel.volumeDelta = value;
-        syncFeatureBatchState("volume");
+    const makeCombinedControl = (channel, index) => {
+      const isBatch = index < 0;
+      let lastFixedValue = channel?.volumeFixed == null ? 10 : Math.max(0, Math.min(15, Math.round(Number(channel.volumeFixed) || 0)));
+      let currentMode = volumeModeOf(channel);
+      const modeButton = wb16VolumeModeButton(currentMode, nextMode => {
+        if (isBatch) {
+          const nextFixed = nextMode === "fixed";
+          const targetValue = Math.max(0, Math.min(15, Math.round(Number(lastFixedValue) || 10)));
+          channels.forEach(item => { item.volumeFixed = nextFixed ? targetValue : null; });
+        } else {
+          channel.volumeFixed = nextMode === "fixed" ? lastFixedValue : null;
+        }
+        syncVolumeModeControls();
         markChannelOptionsDirty();
         scheduleOptionMetricsUpdate();
-      }});
-      const metric = {
-        detail: el("div", "wb9-volume-distribution wb13-volume-channel-distribution")
+      });
+
+      const initialValue = currentMode === "fixed" ? lastFixedValue : (Number(channel?.volumeDelta) || 0);
+      const slider = sliderNumber({
+        min: currentMode === "fixed" ? 0 : -15,
+        max: 15,
+        step: 1,
+        value: initialValue,
+        onChange: value => {
+          if (isBatch) {
+            const modes = channels.map(volumeModeOf);
+            if (modes.some(mode => mode !== modes[0])) return;
+            if (modes[0] === "fixed") {
+              lastFixedValue = Math.max(0, Math.min(15, Math.round(Number(value) || 0)));
+              channels.forEach(item => { item.volumeFixed = lastFixedValue; });
+            } else {
+              channels.forEach(item => { item.volumeDelta = Math.max(-15, Math.min(15, Math.round(Number(value) || 0))); });
+            }
+          } else if (channel.volumeFixed != null) {
+            lastFixedValue = Math.max(0, Math.min(15, Math.round(Number(value) || 0)));
+            channel.volumeFixed = lastFixedValue;
+          } else {
+            channel.volumeDelta = Math.max(-15, Math.min(15, Math.round(Number(value) || 0)));
+          }
+          syncVolumeModeControls();
+          markChannelOptionsDirty();
+          scheduleOptionMetricsUpdate();
+        }
+      });
+
+      const control = {
+        modeButton,
+        slider,
+        sync(item) {
+          currentMode = volumeModeOf(item);
+          if (currentMode === "fixed") lastFixedValue = Math.max(0, Math.min(15, Math.round(Number(item.volumeFixed) || 0)));
+          modeButton.setMode(currentMode);
+          slider.setBounds({ min: currentMode === "fixed" ? 0 : -15, max: 15, step: 1 });
+          slider.setDisabled(false);
+          slider.setValue(currentMode === "fixed" ? lastFixedValue : (Number(item.volumeDelta) || 0));
+        },
+        syncMode(mode, value, mixedValue = false) {
+          currentMode = mode === "fixed" ? "fixed" : "original";
+          if (currentMode === "fixed" && !mixedValue) lastFixedValue = Math.max(0, Math.min(15, Math.round(Number(value) || 0)));
+          modeButton.setMode(currentMode);
+          slider.setBounds({ min: currentMode === "fixed" ? 0 : -15, max: 15, step: 1 });
+          slider.setDisabled(false);
+          slider.setValue(value, { mixed: mixedValue });
+        },
+        setMixedMode() {
+          modeButton.setMode("original", { isMixed: true });
+          slider.setDisabled(true);
+          slider.setValue(0, { mixed: true });
+        }
       };
+      return control;
+    };
+
+    const batchControl = makeCombinedControl({ volumeFixed: null, volumeDelta: 0 }, -1);
+    state.ui.featureControls.volume.batch = batchControl;
+    panel.append(wb16VolumeOptionListRow({ index: -1, control: batchControl }));
+
+    channels.forEach((channel, index) => {
+      const control = makeCombinedControl(channel, index);
+      const metric = { detail: el("div", "wb9-volume-distribution wb13-volume-channel-distribution") };
       state.ui.featureControls.volume.channels.push(control);
       state.ui.volumeMetricNodes.push(metric);
-      panel.append(wb9OptionListRow({ index, control, metric, extraClass: "wb13-volume-metric-row", metricPlacement: "top" }));
+      panel.append(wb16VolumeOptionListRow({ index, control, metric }));
     });
+    syncVolumeModeControls();
     return panel;
   }
 

@@ -1747,6 +1747,69 @@
   }
 
 
+  function setVolumesMml(text, options = {}) {
+    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const partVolumes = Array.from({ length: partCount }, (_, index) => {
+      const raw = Array.isArray(options.partVolumes) ? options.partVolumes[index] : options.volume;
+      if (raw === null || raw === undefined || raw === "" || String(raw).toLowerCase() === "keep") return null;
+      const value = Number(raw);
+      if (!Number.isFinite(value)) throw new Error(tr("vol.err_number"));
+      return clamp(Math.round(value), 0, 15);
+    });
+    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
+    while (sourceParts.length < partCount) sourceParts.push("");
+
+    const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
+    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
+    const hasAnyContent = parsedParts.some(p => p.events.length || p.tempos.length || String(p.raw || "").trim());
+
+    let touchedNotes = 0;
+    let changedNotes = 0;
+    const outputParts = [];
+
+    for (let i = 0; i < partCount; i++) {
+      const fixedVolume = partVolumes[i];
+      if (fixedVolume == null) {
+        outputParts.push(sourceParts[i] || "");
+        continue;
+      }
+
+      let events = parsedParts[i].events.map(ev => {
+        if (ev.type !== "note") return { ...ev };
+        const beforeVolume = clamp(ev.volume, 0, 15);
+        touchedNotes++;
+        if (beforeVolume !== fixedVolume) changedNotes++;
+        return { ...ev, volume: fixedVolume };
+      });
+
+      events = mergeAdjacentRests(events);
+      if (i === 0) events = injectTempoEvents(events, tempoMap);
+
+      outputParts.push(renderPart(events, {
+        isMelody: i === 0,
+        startTempo: tempoMap[0]?.bpm || DEFAULT_TEMPO,
+        forceHeader: i === 0 && hasAnyContent,
+        partIndex: i
+      }));
+    }
+
+    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+    const before = countPartChars(sourceParts);
+    const after = countPartChars(outputParts);
+    return {
+      mml,
+      parts: outputParts,
+      before,
+      after,
+      saved: before - after,
+      partVolumes,
+      touchedNotes,
+      changedNotes,
+      tempoMap
+    };
+  }
+
+
 
   function buildTempoSecondIndex(tempoMap) {
     const beatUnits = durationUnits(4, 0);
@@ -3727,5 +3790,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = Object.freeze({ version: "5.1.0", optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, applyFadeMml, transposeOctavesMml, splitMmlPages });
+  window.MabiOptimizer = Object.freeze({ version: "5.1.0", optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, setVolumesMml, applyFadeMml, transposeOctavesMml, splitMmlPages });
 })();

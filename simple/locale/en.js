@@ -95,6 +95,8 @@ window.__MOBIBARD_SIMPLE_LOCALES__["en"] = {
     "playbackPluginMissing": "Could not load the Simple playback module.",
     "soundbankMissing": "Could not load the shared sound bank module.",
     "presetMissing": "Could not find a playback instrument preset. (Bank {0} / Program {1})",
+    "volumeFixed": "Volume setting",
+    "volumeOriginal": "Original",
     "fadeInSeconds": "Fade In (sec)",
     "fadeOutSeconds": "Fade Out (sec)",
     "tutorialOpen": "Tutorial",

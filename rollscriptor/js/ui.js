@@ -1,4 +1,4 @@
-import { onLanguageChange, t } from './language-manager.js?v=20260830-workflow-v2';
+import { onLanguageChange, t } from './language-manager.js?v=20260830-cleanup2';
 
 const THEME_KEY = 'mobibard.player.theme';
 let initialized = false;

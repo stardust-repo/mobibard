@@ -14,7 +14,7 @@
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
   const LOCALE_VERSION = "5.2.0";
-  const LOCALE_REVISION = "20260829-v52";
+  const LOCALE_REVISION = "20260830-volume-mode2";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 
@@ -30,6 +30,8 @@
     restLabel: $("restLabel"),
     restOptions: $("restOptions"),
     allRestButton: $("allRestButton"),
+    volumeFixedLabel: $("volumeFixedLabel"),
+    volumeFixedOptions: $("volumeFixedOptions"),
     fadeInLabel: $("fadeInLabel"),
     fadeInOptions: $("fadeInOptions"),
     fadeOutLabel: $("fadeOutLabel"),
@@ -87,6 +89,7 @@
   let selectedQuantize = 64;
   let selectedFadeIn = 0;
   let selectedFadeOut = 0;
+  let selectedFixedVolume = null;
   let currentMml = "";
   let resultPages = [];
   let conversionSerial = 0;
@@ -324,6 +327,9 @@
       els.restOptions.querySelector(`[data-rest="${denom}"]`).textContent = t(`rest${denom}`);
     }
     els.allRestButton.textContent = t("all");
+    if (els.volumeFixedLabel) els.volumeFixedLabel.textContent = t("volumeFixed");
+    const keepVolumeButton = els.volumeFixedOptions?.querySelector('[data-volume-fixed="keep"]');
+    if (keepVolumeButton) keepVolumeButton.textContent = t("volumeOriginal");
     els.fadeInLabel.textContent = t("fadeInSeconds");
     els.fadeOutLabel.textContent = t("fadeOutSeconds");
     if (els.tutorialButton) els.tutorialButton.textContent = t("tutorialOpen");
@@ -412,6 +418,18 @@
     if (refresh) requestConversion();
   }
 
+  function selectFixedVolumeOption(value, refresh = true) {
+    const raw = String(value ?? "keep");
+    selectedFixedVolume = raw === "keep" ? null : Math.max(0, Math.min(15, Math.round(Number(raw) || 0)));
+    els.volumeFixedOptions?.querySelectorAll("[data-volume-fixed]").forEach(button => {
+      const buttonValue = button.dataset.volumeFixed === "keep" ? null : Number(button.dataset.volumeFixed);
+      const active = buttonValue === selectedFixedVolume;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    if (refresh) requestConversion();
+  }
+
   function selectFadeOption(kind, value, refresh = true) {
     const seconds = [0, 1, 2, 4].includes(Number(value)) ? Number(value) : 0;
     const wrap = kind === "in" ? els.fadeInOptions : els.fadeOutOptions;
@@ -484,6 +502,15 @@
     return window.MabiOptimizer.addLeadingSilenceMml(mml, {
       partCount: 3,
       beats: GENERATED_MML_LEADING_SILENCE_SECONDS * 2
+    }).mml;
+  }
+
+  function applyFixedVolume(mml) {
+    const setVolumes = window.MabiOptimizer?.setVolumesMml;
+    if (selectedFixedVolume == null || typeof setVolumes !== "function") return mml;
+    return setVolumes(mml, {
+      partCount: 3,
+      partVolumes: [selectedFixedVolume, selectedFixedVolume, selectedFixedVolume]
     }).mml;
   }
 
@@ -560,7 +587,8 @@
       const simplifiedMml = applyTempoSimplification(converted.mml);
       const cleanedMml = applyRestRemoval(simplifiedMml);
       const alignedMml = alignGeneratedMmlStart(cleanedMml);
-      const fadedMml = applySimpleFade(alignedMml);
+      const fixedVolumeMml = applyFixedVolume(alignedMml);
+      const fadedMml = applySimpleFade(fixedVolumeMml);
       if (token !== conversionSerial) return;
 
       currentMml = fadedMml;
@@ -1092,6 +1120,10 @@
     const button = event.target.closest("[data-rest]");
     if (!button) return;
     selectRestOption(button.dataset.rest, true);
+  });
+  els.volumeFixedOptions?.addEventListener("click", event => {
+    const button = event.target.closest("[data-volume-fixed]");
+    if (button) selectFixedVolumeOption(button.dataset.volumeFixed, true);
   });
   els.fadeInOptions?.addEventListener("click", event => {
     const button = event.target.closest("[data-fade-in]");

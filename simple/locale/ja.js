@@ -95,6 +95,8 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ja"] = {
     "playbackPluginMissing": "Simpleの再生モジュールを読み込めませんでした。",
     "soundbankMissing": "共通サウンドバンクモジュールを読み込めませんでした。",
     "presetMissing": "再生用の楽器プリセットが見つかりませんでした。（Bank {0} / Program {1}）",
+    "volumeFixed": "音量設定",
+    "volumeOriginal": "元の音量",
     "fadeInSeconds": "フェードイン (秒)",
     "fadeOutSeconds": "フェードアウト (秒)",
     "tutorialOpen": "チュートリアル",

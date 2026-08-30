@@ -39,7 +39,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260830-workflow-v2" rel="stylesheet"/>
+<link href="./styles.css?v=20260830-midi-layout-swap1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -235,6 +235,10 @@
       </div>
 
       <div class="field-grid midi-settings settings-group compact-settings">
+        <label class="field tempo-field">
+          <span data-i18n="settings.tempo">템포 (BPM)</span>
+          <input id="tempo" type="number" min="20" max="300" step="1" value="120"/>
+        </label>
         <div class="field note-extension-field">
           <span data-i18n="settings.note_extension">노트 길이 확장 (프레임)</span>
           <input id="noteExtensionFrames" type="hidden" value="0"/>
@@ -245,20 +249,17 @@
             <button type="button" class="note-extension-option" data-note-extension="1" aria-pressed="false">1</button>
           </div>
         </div>
-        <label class="field">
-          <span data-i18n="settings.tempo">템포 (BPM)</span>
-          <input id="tempo" type="number" min="20" max="300" step="1" value="120"/>
-        </label>
-        <label class="field velocity-field">
-          <span><span data-i18n="settings.velocity">벨로시티</span> <output id="velocityValue">75%</output></span>
-          <div class="range-control"><input id="velocity" type="range" min="1" max="100" step="1" value="75"/></div>
-        </label>
         <div class="field audio-velocity-field">
           <span data-i18n="settings.audio_velocity">오디오 볼륨 반영</span>
-          <button id="audioVelocityToggle" type="button" class="audio-velocity-toggle-button" aria-pressed="false" data-i18n-title="settings.audio_velocity_help" title="노트 시작 시점의 오디오에서 해당 음계 주파수의 Attack 크기를 분석해 벨로시티에 반영합니다.">
-            <span id="audioVelocityText" data-i18n="settings.audio_velocity_off">사용 안 함</span>
+          <button id="audioVelocityToggle" type="button" class="audio-velocity-toggle-button is-selected" aria-pressed="true" data-i18n-title="settings.audio_velocity_help" title="노트 시작 시점의 오디오에서 해당 음계 주파수의 Attack 크기를 분석해 벨로시티에 반영합니다.">
+            <span id="audioVelocityText" data-i18n="settings.audio_velocity_on">사용</span>
           </button>
         </div>
+        <label class="field velocity-field">
+          <span><span id="velocityLabelText" data-i18n="settings.velocity_audio">벨로시티 기준</span> <output id="velocityValue">75%</output></span>
+          <div class="range-control"><input id="velocity" type="range" min="1" max="100" step="1" value="75"/></div>
+          <small id="velocityUsageHint" class="velocity-usage-hint" data-i18n="settings.velocity_audio_hint">오디오에서 구한 노트별 세기를 이 값을 중심으로 반영합니다.</small>
+        </label>
       </div>
 
       <div class="midi-download-actions">
@@ -306,7 +307,7 @@
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script type="module" src="./js/settings-menu.js?v=20260830-workflow-v2"></script>
-<script type="module" src="./js/app.js?v=20260830-workflow-v2"></script>
+<script type="module" src="./js/settings-menu.js?v=20260830-cleanup2"></script>
+<script type="module" src="./js/app.js?v=20260830-cleanup2"></script>
 </body>
 </html>

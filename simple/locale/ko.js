@@ -95,6 +95,8 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ko"] = {
     "playbackPluginMissing": "Simple 재생 모듈을 불러오지 못했습니다.",
     "soundbankMissing": "공용 사운드뱅크 모듈을 불러오지 못했습니다.",
     "presetMissing": "재생용 악기 프리셋을 찾지 못했습니다. (Bank {0} / Program {1})",
+    "volumeFixed": "볼륨 설정",
+    "volumeOriginal": "원본",
     "fadeInSeconds": "페이드 인 (초)",
     "fadeOutSeconds": "페이드 아웃 (초)",
     "tutorialOpen": "튜토리얼",

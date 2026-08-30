@@ -14,12 +14,11 @@ import {
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
-} from './vision.js?v=20260830-workflow-v2';
-import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext } from './analysis.js?v=20260830-workflow-v2';
-import { applyAudioVelocityLevels, estimateAudioVelocities } from './audio-velocity.js?v=20260830-audio-velocity-v1';
-import { createMidiFile } from './midi.js';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-workflow-v2';
-import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-workflow-v2';
+} from './vision.js?v=20260830-cleanup2';
+import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260830-cleanup2';
+import { createMidiFile } from './midi.js?v=20260830-cleanup2';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260830-cleanup2';
+import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-cleanup2';
 
 const MEDIABUNNY_VERSION = '1.55.3';
 const MEDIABUNNY_URLS = [
@@ -31,7 +30,7 @@ const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'videoInfo', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
   'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent', 'autoDetectRange',
-  'tempo', 'velocity', 'velocityValue', 'audioVelocityToggle', 'audioVelocityText', 'noteExtensionFrames', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
+  'tempo', 'velocity', 'velocityValue', 'velocityLabelText', 'velocityUsageHint', 'audioVelocityToggle', 'audioVelocityText', 'noteExtensionFrames', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose', 'tutorialProgress', 'tutorialVisual', 'tutorialVisualStep', 'tutorialVisualSymbol', 'tutorialVisualTitle', 'tutorialPart', 'tutorialStepTitle', 'tutorialStepBody', 'tutorialStepNote', 'tutorialPrev', 'tutorialNext',
 ].map(id => [id, document.getElementById(id)]));
@@ -100,7 +99,7 @@ const state = {
   restoringSession: false,
   analysisRangeSearching: false,
   analysisRangeAutoInitialized: false,
-  audioVelocityEnabled: false,
+  audioVelocityEnabled: true,
   audioVelocityAnalyzing: false,
 };
 
@@ -363,7 +362,7 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
     elements.tempo.value = String(clamp(Math.round(Number(snapshot.tempo) || 120), 20, 300));
     elements.velocity.value = String(clamp(Math.round(Number(snapshot.velocity) || 75), 1, 100));
     elements.velocityValue.textContent = `${elements.velocity.value}%`;
-    state.audioVelocityEnabled = Boolean(snapshot.audioVelocityEnabled);
+    state.audioVelocityEnabled = snapshot.audioVelocityEnabled === undefined ? true : Boolean(snapshot.audioVelocityEnabled);
     updateAudioVelocityToggle();
     syncNoteExtensionButtons(snapshot.noteExtensionFrames);
 
@@ -713,7 +712,7 @@ function resetRollscriptorSettingsForNewVideo() {
   if (elements.tempo) elements.tempo.value = '120';
   if (elements.velocity) elements.velocity.value = '75';
   if (elements.velocityValue) elements.velocityValue.textContent = '75%';
-  state.audioVelocityEnabled = false;
+  state.audioVelocityEnabled = true;
   updateAudioVelocityToggle();
   updateDetectionModeButton();
   updateKeyboardOrientationButtons();
@@ -2481,6 +2480,7 @@ async function loadVideoFile(file, { restoreSnapshot = null, persistSession = tr
     state.endTimestamp = endTimestamp;
     state.duration = Math.max(0, endTimestamp - state.timeOrigin);
     state.fps = clamp(metrics?.bestGuessFrameRate || metrics?.averageFrameRate || 30, 1, 240);
+    if (!restoreSnapshot) syncNoteExtensionButtons(defaultNoteExtensionForFps(state.fps));
     state.videoScanMode = await detectVideoScanMode(track);
     updateVideoInfo();
     updateVideoQualityWarning();
@@ -2532,11 +2532,17 @@ function currentVelocityMidi() {
 
 function updateAudioVelocityToggle() {
   const button = elements.audioVelocityToggle;
-  if (!button) return;
   const enabled = Boolean(state.audioVelocityEnabled);
-  button.classList.toggle('is-selected', enabled);
-  button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+  if (button) {
+    button.classList.toggle('is-selected', enabled);
+    button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+  }
   if (elements.audioVelocityText) elements.audioVelocityText.textContent = t(enabled ? 'settings.audio_velocity_on' : 'settings.audio_velocity_off');
+  const velocityLabelKey = enabled ? 'settings.velocity_audio' : 'settings.velocity_fixed';
+  const velocityHintKey = enabled ? 'settings.velocity_audio_hint' : 'settings.velocity_fixed_hint';
+  if (elements.velocityLabelText) elements.velocityLabelText.textContent = t(velocityLabelKey);
+  if (elements.velocityUsageHint) elements.velocityUsageHint.textContent = t(velocityHintKey);
+  if (elements.velocity) elements.velocity.setAttribute('aria-label', t(velocityLabelKey));
 }
 
 function audioVelocitySourceNotes() {
@@ -2645,6 +2651,13 @@ function currentChangeOptions({ normalize = false } = {}) {
 }
 
 const NOTE_EXTENSION_FRAME_OPTIONS = Object.freeze([0, 0.25, 0.5, 1]);
+
+function defaultNoteExtensionForFps(fps = state.fps) {
+  const rate = Number(fps);
+  if (!Number.isFinite(rate)) return 0;
+  // Treat common nominal 29.97/30fps sources as 30fps. 60fps and faster stay at zero.
+  return rate <= 30.5 ? 0.5 : 0;
+}
 
 function normalizedNoteExtensionFrames(value = elements.noteExtensionFrames?.value) {
   const numeric = Number(value);

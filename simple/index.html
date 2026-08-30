@@ -60,12 +60,12 @@
     const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
     if (localeUrl.protocol !== "file:") {
       localeUrl.searchParams.set("v", "5.2.0");
-      localeUrl.searchParams.set("rev", "20260829-v52b");
+      localeUrl.searchParams.set("rev", "20260830-volume-mode2");
     }
     document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   })();
   </script>
-<link href="./styles.css?v=5.2.0&amp;rev=20260829-v52b" rel="stylesheet"/>
+<link href="./styles.css?v=5.2.0&amp;rev=20260830-volume-mode2" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
 <body>
@@ -184,6 +184,18 @@
 <button aria-checked="false" class="segment" data-rest="8" role="radio" type="button">8박</button>
 <button aria-checked="false" class="segment" data-rest="4" role="radio" type="button">4박</button>
 <button aria-checked="false" class="segment" data-rest="all" id="allRestButton" role="radio" type="button">모두</button>
+</div>
+</div>
+<div class="option-block option-block-volume-fixed">
+<span class="option-label" id="volumeFixedLabel">볼륨 설정</span>
+<div aria-labelledby="volumeFixedLabel" class="segmented volume-fixed-options" id="volumeFixedOptions" role="radiogroup">
+<button aria-checked="true" class="segment active" data-volume-fixed="keep" role="radio" type="button">원본</button>
+<button aria-checked="false" class="segment" data-volume-fixed="8" role="radio" type="button">8</button>
+<button aria-checked="false" class="segment" data-volume-fixed="9" role="radio" type="button">9</button>
+<button aria-checked="false" class="segment" data-volume-fixed="10" role="radio" type="button">10</button>
+<button aria-checked="false" class="segment" data-volume-fixed="11" role="radio" type="button">11</button>
+<button aria-checked="false" class="segment" data-volume-fixed="12" role="radio" type="button">12</button>
+<button aria-checked="false" class="segment" data-volume-fixed="13" role="radio" type="button">13</button>
 </div>
 </div>
 <div class="simple-fade-row">
@@ -315,7 +327,7 @@
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
 <script src="../plugins/common/midi-to-mml.js?v=5.1.0&amp;rev=20260823-final6"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final46"></script>
-<script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260824-final39"></script>
+<script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260830-volume-mode2"></script>
 <script src="../plugins/common/mml-parser.js?v=5.1.0"></script>
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
@@ -325,7 +337,7 @@
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260823-final2" type="module"></script>
-<script src="./js/app.js?v=5.2.0&amp;rev=20260829-v52b"></script>
+<script src="./js/app.js?v=5.2.0&amp;rev=20260830-volume-mode2"></script>
 <script src="./enhancements.js?v=5.1.0&amp;rev=20260823-final18"></script>
 </body>
 </html>
