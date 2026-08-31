@@ -1,5 +1,18 @@
-import { getLanguage, initializeLanguage, setLanguage } from './language-manager.js?v=20260831-ja-labels1';
-import { initializeThemeUi } from './ui.js?v=20260830-site-nav1';
+import { getLanguage, initializeLanguage, onLanguageChange, setLanguage, t } from './language-manager.js?v=20260831-account-menu1';
+import { initializeThemeUi } from './ui.js?v=20260831-account-menu1';
+import { initializeGoogleAccountMenu } from '../../plugins/google/google-account-menu.js?v=20260831-account-menu1';
+
+let accountController = null;
+let toastTimer = 0;
+
+function notify(message, tone = 'info') {
+  const toast = document.getElementById('toast');
+  if (!toast || !message) return;
+  clearTimeout(toastTimer);
+  toast.textContent = String(message);
+  toast.className = `toast show ${tone === 'error' ? 'error' : ''}`.trim();
+  toastTimer = window.setTimeout(() => { toast.className = 'toast'; }, 2800);
+}
 
 function initializePopover() {
   const button = document.getElementById('settingsButton');
@@ -15,17 +28,15 @@ function initializePopover() {
       try { open = menu.matches(':popover-open'); } catch (_) {}
     }
     button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) void accountController?.refreshProfile(false);
   };
 
   if (hasNativePopover) {
-    // popovertarget on the button performs the actual open/close operation.
-    // This event only mirrors state for accessibility; opening does not depend on this JS.
     menu.addEventListener('toggle', syncExpanded);
     syncExpanded();
     return;
   }
 
-  // Fallback for browsers without the Popover API.
   const close = () => {
     menu.classList.remove('is-open');
     button.setAttribute('aria-expanded', 'false');
@@ -80,6 +91,8 @@ async function initializeSettingsControls() {
   }
 
   initializeThemeUi();
+  accountController = initializeGoogleAccountMenu({ t, notify });
+  onLanguageChange(() => accountController?.refreshText());
 }
 
 function initialize() {

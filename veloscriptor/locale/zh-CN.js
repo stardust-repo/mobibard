@@ -2,6 +2,7 @@ export default { code:'zh-CN', htmlLang:'zh-Hans', strings:{
   'site.title':'Mobibard v5.2', 'ui.brand':'Mobibard', 'settings.menu':'设置',
   'ui.recommended':"推荐网站", 'ui.select_recommended':"选择推荐网站", 'ui.discord':"Discord",
   'site.map':"站点地图", 'site.simple':"简易模式", 'site.player':"详细模式", 'site.rollscriptor':"RollScriptor", 'site.veloscriptor':"VeloScriptor",
+  'account.user': 'Google 用户', 'auth.login': '登录', 'auth.logout': '退出登录', 'google.login': '登录Google账号', 'google.logout': '退出Google账号', 'google.connect_help': '使用Google账号登录。', 'google.logout_help': '退出Google账号。', 'google.login_wait': '正在登录Google...', 'google.connected': 'Google已连接', 'google.logout_done': '已退出Google', 'google.login_fail_short': 'Google登录失败', 'google.client_id_missing': '尚未配置Google OAuth Client ID。',
   'language.label':'语言', 'language.select':'选择语言', 'theme.label':'主题', 'theme.change':'切换主题', 'theme.to_light':'切换到浅色主题', 'theme.to_dark':'切换到深色主题',
   'nav.products':'产品导航', 'nav.simple':'简易生成器', 'nav.player':'详细生成器', 'nav.rollscriptor':'RollScriptor',
   'nav.midi_extract':"MIDI 提取",

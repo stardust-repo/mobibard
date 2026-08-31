@@ -6,6 +6,7 @@ export default {
     'ui.brand': 'Mobibard', 'ui.recommended': 'Recommended', 'ui.select_recommended': 'Select a recommended site', 'ui.discord': 'Discord',
     'site.map': "Site map", 'site.simple': "Simple mode", 'site.player': "Detailed mode", 'site.rollscriptor': "RollScriptor", 'site.veloscriptor': "VeloScriptor",
     'account.menu': 'Account menu', 'account.guest': 'Guest', 'theme.label': 'Theme', 'theme.change': 'Change theme',
+    'account.user': 'Google user', 'auth.login': 'Log in', 'auth.logout': 'Log out', 'google.login': 'Log in with Google account', 'google.logout': 'Log out of Google account', 'google.connect_help': 'Log in with your Google account.', 'google.logout_help': 'Log out of your Google account.', 'google.login_wait': 'Logging in to Google...', 'google.connected': 'Google connected', 'google.logout_done': 'Logged out of Google', 'google.login_fail_short': 'Google login failed', 'google.client_id_missing': 'The Google OAuth Client ID is not configured.',
     'nav.products': 'Product navigation',
     'language.label': 'Language', 'language.select': 'Select language',
     'theme.toggle': 'Change theme', 'theme.to_light': 'Switch to light theme', 'theme.to_dark': 'Switch to dark theme',

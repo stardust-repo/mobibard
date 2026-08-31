@@ -6,6 +6,7 @@ export default {
     'ui.brand': '모비바드', 'ui.recommended': '추천 사이트', 'ui.select_recommended': '추천 사이트 선택', 'ui.discord': '디스코드',
     'site.map': "사이트 맵", 'site.simple': "간편 모드", 'site.player': "상세 모드", 'site.rollscriptor': "롤 스크립터", 'site.veloscriptor': "벨로 스크립터",
     'account.menu': '계정 메뉴', 'account.guest': '게스트', 'theme.label': '테마', 'theme.change': '테마 변경',
+    'account.user': 'Google 사용자', 'auth.login': '로그인', 'auth.logout': '로그아웃', 'google.login': 'Google 계정 로그인', 'google.logout': 'Google 계정 로그아웃', 'google.connect_help': 'Google 계정으로 로그인합니다.', 'google.logout_help': 'Google 계정에서 로그아웃합니다.', 'google.login_wait': '구글 로그인 중...', 'google.connected': '구글 연동됨', 'google.logout_done': '구글 로그아웃됨', 'google.login_fail_short': '구글 로그인 실패', 'google.client_id_missing': 'Google OAuth Client ID가 설정되지 않았습니다.',
     'nav.products': '제품 이동',
     'language.label': '언어', 'language.select': '언어 선택',
     'theme.toggle': '테마 변경', 'theme.to_light': '라이트 테마로 변경', 'theme.to_dark': '다크 테마로 변경',

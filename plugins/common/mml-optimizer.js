@@ -2187,8 +2187,23 @@
   function splitMmlPages(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const maxChars = Math.max(200, Math.round(Number(options.maxChars || options.maxPartChars || 2400)));
-    // 이전의 "200자 안쪽" 탐색 범위를, 요청대로 목표 글자 수의 절반으로 둔다.
-    const searchSlackChars = Math.max(0, Math.round(Number(options.searchSlackChars ?? (maxChars / 2))));
+    // 분할 탐색은 마지막 허용 위치에서 뒤→앞으로 진행한다.
+    // searchEndPercent는 "앞에서부터 몇 % 지점까지 탐색할지"를 뜻한다.
+    // 예: 80이면 maxChars 2,400 기준 약 1,920자 지점까지 역방향 탐색한다.
+    // 기존 searchSlackChars 옵션은 외부/이전 호출부 호환을 위해 계속 지원한다.
+    const requestedSearchEndPercent = Number(options.searchEndPercent);
+    const hasSearchEndPercent = options.searchEndPercent !== undefined
+      && options.searchEndPercent !== null
+      && Number.isFinite(requestedSearchEndPercent);
+    const searchEndPercent = hasSearchEndPercent
+      ? Math.max(0, Math.min(100, requestedSearchEndPercent))
+      : null;
+    const searchSlackChars = hasSearchEndPercent
+      ? Math.max(0, maxChars - Math.round(maxChars * searchEndPercent / 100))
+      : Math.max(0, Math.round(Number(options.searchSlackChars ?? (maxChars / 2))));
+    const searchMinChars = hasSearchEndPercent
+      ? Math.round(maxChars * searchEndPercent / 100)
+      : Math.max(0, maxChars - searchSlackChars);
     // 공통 공백 길이 평가는 2박을 상한으로 둔다. 기존 minCommonSilenceBeats 옵션명도 하위 호환한다.
     const maxCommonSilenceUnits = Math.max(0, Math.round(Number(options.maxCommonSilenceBeats ?? options.minCommonSilenceBeats ?? 2) * durationUnits(4, 0)));
     const maxPages = Math.max(1, Math.min(200, Math.round(Number(options.maxPages || 120))));
@@ -2321,7 +2336,8 @@
       const cut = choosePageCut(parsedParts, tempoMap, pageStart, totalUnits, {
         partCount,
         maxChars,
-        searchSlackChars,
+        searchMinChars,
+        strictSearchEnd: hasSearchEndPercent,
         maxCommonSilenceUnits
       });
 
@@ -2374,7 +2390,7 @@
   }
 
   function choosePageCut(parsedParts, tempoMap, pageStart, totalUnits, options) {
-    const { partCount, maxChars, searchSlackChars, maxCommonSilenceUnits } = options;
+    const { partCount, maxChars, searchMinChars, strictSearchEnd, maxCommonSilenceUnits } = options;
     const measureCache = new Map();
     const measure = (end) => {
       const key = String(Math.round(end));
@@ -2440,16 +2456,20 @@
     }
 
     const bestEnd = Math.max(pageStart + 1, Math.min(candidateEnds[bestIdx], totalUnits));
-    const lowerTarget = Math.max(0, maxChars - searchSlackChars);
+    const lowerTarget = Math.max(0, Math.min(maxChars, Math.round(Number(searchMinChars) || 0)));
     const bestMeasure = measure(bestEnd);
     const targetReachable = bestMeasure.maxLen >= lowerTarget;
 
-    // 사용자가 지정한 탐색 폭은 글자 수 기준이다. 예: 2400자/50%이면
-    // 실제 렌더링이 1200자 이상이 되는 지점부터 마지막 허용 지점까지 탐색한다.
+    // 탐색 종료 %는 앞에서부터의 지점이다. 예: 2400자/80%이면
+    // 실제 렌더링이 약 1920자 이상이 되는 지점까지만 뒤에서 앞으로 탐색한다.
     const minSearchEnd = targetReachable
       ? findEarliestCandidateAtLeastLength(measure, candidateEnds, bestIdx, lowerTarget)
       : null;
-    const searchStart = targetReachable && minSearchEnd ? minSearchEnd : pageStart + 1;
+    // 새 % 기반 옵션은 지정 종료 지점보다 앞쪽으로 탐색 범위를 넓히지 않는다.
+    // (구 searchSlackChars 호출은 기존 동작을 유지해 하위 호환한다.)
+    const searchStart = targetReachable && minSearchEnd
+      ? minSearchEnd
+      : (strictSearchEnd ? bestEnd : pageStart + 1);
     const searchEnd = bestEnd;
 
     // 1순위: 마지막 허용 위치에서 탐색 시작점까지 뒤에서 앞으로 한 번 훑는다.

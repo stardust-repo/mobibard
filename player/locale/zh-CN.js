@@ -676,6 +676,6 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "tutorial.step5.note": "声道按钮可单独静音；播放速度、输出音量和音色用于试听确认。",
     "tutorial.step6.title": "6. 复制乐谱",
     "tutorial.step6.body": "在“乐谱复制”中，可以一次复制完整 MML，也可以按字符限制逐页复制分割后的乐谱。",
-    "tutorial.step6.note": "默认限制为每个声道 2,400 个字符。“分割搜索位置”决定从限制位置向前多远寻找共同休止区间。"
+    "tutorial.step6.note": "默认限制为每个声道 2,400 个字符。“分割搜索位置”表示从限制位置反向搜索时，最远搜索到从开头计算的百分比位置。"
   }
 };

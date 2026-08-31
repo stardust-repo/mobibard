@@ -544,7 +544,10 @@
     }
     const split = window.MabiOptimizer.splitMmlPages(mml, {
       partCount: 3,
-      maxChars: MAX_SPLIT_CHARS
+      maxChars: MAX_SPLIT_CHARS,
+      // Player와 동일한 의미: 마지막 허용 위치에서 뒤로 탐색하되
+      // 앞에서부터 50% 지점까지만 탐색한다.
+      searchEndPercent: 50
     });
     return Array.isArray(split?.pages) && split.pages.length
       ? split.pages

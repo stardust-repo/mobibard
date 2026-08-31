@@ -676,6 +676,6 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "tutorial.step5.note": "Channel buttons mute individual parts. Speed, output volume, and sound settings are for playback preview.",
     "tutorial.step6.title": "6. Copy the score",
     "tutorial.step6.body": "In Score Copy, copy the full MML at once or copy split pages that fit the character limit.",
-    "tutorial.step6.note": "The default limit is 2,400 characters per channel. Split Search Range controls how far back from the limit the splitter searches for a shared rest."
+    "tutorial.step6.note": "The default limit is 2,400 characters per channel. Split Search Point sets how far back the reverse search may go, measured as a percentage from the start (for example, 80% means search from the limit back to the 80% point)."
   }
 };

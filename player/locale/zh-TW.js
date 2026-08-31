@@ -676,6 +676,6 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "tutorial.step5.note": "聲道按鈕可個別靜音；播放速度、輸出音量與音色用於試聽確認。",
     "tutorial.step6.title": "6. 複製樂譜",
     "tutorial.step6.body": "在「樂譜複製」中，可以一次複製完整 MML，也可以依字數限制逐頁複製分割後的樂譜。",
-    "tutorial.step6.note": "預設限制為每個聲道 2,400 個字元。「分割搜尋位置」決定從限制位置往前多遠尋找共同休止區間。"
+    "tutorial.step6.note": "預設限制為每個聲道 2,400 個字元。「分割搜尋位置」表示從限制位置反向搜尋時，最遠搜尋到從開頭計算的百分比位置。"
   }
 };

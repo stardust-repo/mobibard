@@ -1,4 +1,4 @@
-import { onLanguageChange, t } from './language-manager.js?v=20260831-ja-labels1';
+import { onLanguageChange, t } from './language-manager.js?v=20260831-account-menu1';
 
 const THEME_KEY = 'mobibard.player.theme';
 let initialized = false;

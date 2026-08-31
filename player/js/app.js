@@ -1654,7 +1654,7 @@
     const result = window.MabiOptimizer.splitMmlPages(input, {
       partCount: 6,
       maxChars,
-      searchSlackChars: Math.round(maxChars * searchPercent / 100),
+      searchEndPercent: searchPercent,
       maxCommonSilenceBeats: 2,
       preferredPages: canReusePlan ? plan.pages : undefined
     });

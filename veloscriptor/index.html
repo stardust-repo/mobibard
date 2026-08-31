@@ -20,7 +20,7 @@
   } catch (_) {}
 })();
 </script>
-<link href="./styles.css?v=20260831-preview-crossfade1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
+<link href="./styles.css?v=20260831-account-menu1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar veloscriptor-topbar">
@@ -48,15 +48,16 @@
 
 <a aria-label="디스코드" class="discord-link" data-i18n-aria-label="ui.discord" data-i18n-title="ui.discord" href="https://discord.gg/qqwzCERZK5" rel="noopener noreferrer" target="_blank" title="디스코드"><img alt="" decoding="async" src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d7f4ef6498ac018f2c55_Symbol.svg"/></a>
 </div>
-<div class="settings-menu-wrap">
-<button aria-controls="settingsMenu" aria-expanded="false" aria-haspopup="dialog" aria-label="설정" class="settings-icon-button" data-i18n-aria-label="settings.menu" data-i18n-title="settings.menu" id="settingsButton" popovertarget="settingsMenu" popovertargetaction="toggle" title="설정" type="button">
-<svg aria-hidden="true" viewbox="0 0 24 24"><path d="M3 6h7v2H3V6Zm11 0h7v2h-7V6Zm-4-2h4v6h-4V4ZM3 11h12v2H3v-2Zm16 0h2v2h-2v-2Zm-4-2h4v6h-4V9ZM3 16h4v2H3v-2Zm8 0h10v2H11v-2Zm-4-2h4v6H7v-6Z"></path></svg>
-<span class="sr-only" data-i18n="settings.menu">설정</span>
+<div class="account-menu-wrap settings-menu-wrap" id="settingsControl">
+<button aria-controls="settingsMenu" aria-expanded="false" aria-haspopup="dialog" aria-label="계정 메뉴" class="account-avatar-button" data-connected="false" data-i18n-aria-label="account.menu" data-i18n-title="account.menu" id="settingsButton" popovertarget="settingsMenu" popovertargetaction="toggle" title="계정 메뉴" type="button">
+<img alt="" class="account-avatar-image" decoding="async" id="accountAvatarImg" referrerpolicy="no-referrer" src="../assets/icons/guest-user.svg?v=5.1.0&amp;rev=20260818-205217"/>
 </button>
-<div aria-labelledby="settingsButton" class="settings-menu-popover settings-two-row" id="settingsMenu" popover="auto" role="dialog">
-<strong class="settings-menu-header-title" data-i18n="settings.menu">설정</strong>
-<label class="menu-field settings-row" for="languageSelect"><span data-i18n="language.label">언어</span><select aria-label="언어 선택" data-i18n-aria-label="language.select" id="languageSelect"><option value="ko">한국어</option><option value="ja">日本語</option><option value="en">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option></select></label>
-<div class="menu-field settings-row"><span data-i18n="theme.label">테마</span><button class="theme-button" id="themeButton" type="button"><span aria-hidden="true">◐</span><span data-i18n="theme.change">테마 변경</span></button></div>
+<div aria-label="계정 메뉴" aria-labelledby="settingsButton" class="account-menu-popover settings-menu-popover settings-account-menu" data-i18n-aria-label="account.menu" id="settingsMenu" popover="auto" role="dialog">
+<div class="account-menu-header"><div class="account-menu-identity"><strong data-i18n="account.guest" id="accountMenuName">게스트</strong><span class="account-menu-email" hidden="" id="accountMenuEmail"></span></div></div>
+<button aria-label="Google 계정 로그인" class="account-login-button google-login-button" data-i18n-aria-label="google.login" id="googleLoginBtn" type="button"><span aria-hidden="true" class="google-icon-badge"><img alt="" class="google-g-icon" decoding="async" src="../assets/icons/google-g.png"/></span><span class="google-login-label" data-i18n="auth.login">로그인</span></button>
+<div aria-hidden="true" class="account-menu-divider"></div>
+<label class="account-menu-field" for="languageSelect"><span class="account-menu-field-label" data-i18n="language.label" id="languageLabel">언어</span><select aria-label="언어 선택" class="language-select" data-i18n-aria-label="language.select" id="languageSelect"><option value="ko">한국어</option><option value="ja">日本語</option><option value="en">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option></select></label>
+<div class="account-menu-field"><span class="account-menu-field-label" data-i18n="theme.label" id="themeLabel">테마</span><button class="theme-button theme-menu-button" id="themeButton" type="button"><span aria-hidden="true" class="theme-menu-icon">◐</span><span data-i18n="theme.change">테마 변경</span></button></div>
 </div>
 </div>
 </div>
@@ -137,7 +138,8 @@
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
 <script src="../plugins/common/utils.js?v=5.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.0"></script>
-<script src="./js/settings-menu.js?v=20260831-preview-crossfade1" type="module"></script>
-<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260831-preview-crossfade1" type="module"></script>
+<script src="../plugins/google/google-config.js?v=5.1.0"></script>
+<script src="./js/settings-menu.js?v=20260831-account-menu1" type="module"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260831-account-menu1" type="module"></script>
 </body>
 </html>

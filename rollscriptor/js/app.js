@@ -14,11 +14,11 @@ import {
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
-} from './vision.js?v=20260830-site-nav1';
-import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260830-site-nav1';
+} from './vision.js?v=20260831-account-menu1';
+import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260831-account-menu1';
 import { createMidiFile } from './midi.js?v=20260830-site-nav1';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260831-ja-labels1';
-import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260830-site-nav1';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260831-account-menu1';
+import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260831-account-menu1';
 
 const MEDIABUNNY_VERSION = '1.55.3';
 const MEDIABUNNY_URLS = [
