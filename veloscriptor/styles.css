@@ -369,3 +369,67 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
 @media(max-width:560px){
   .veloscriptor-topbar + .page-shell{max-width:none;padding:0 0 20px}
 }
+
+
+/* 2026-08-31 resilient mobile settings popover + source/MIDI preview crossfade */
+.veloscriptor-topbar .settings-menu-popover {
+  box-sizing: border-box;
+  top: 68px;
+  right: max(10px, calc((100vw - 980px) / 2 + 10px));
+  bottom: auto;
+  left: auto;
+  margin: 0;
+  max-width: calc(100vw - 20px);
+  max-width: calc(100dvw - 20px);
+  max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
+  overflow: auto;
+}
+.preview-compare {
+  margin-top: 12px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: auto minmax(260px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.preview-button { min-width: 104px; min-height: 34px; padding-inline: 11px; font-size: 11px; font-weight: 850; }
+.preview-button.is-playing { border-color: color-mix(in srgb,var(--danger) 58%,var(--line)); color: var(--danger); }
+.preview-mix {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(88px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.preview-mix input[type="range"] { min-width: 0; height: 20px; margin: 0; accent-color: var(--accent); }
+.preview-time { min-width: 78px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+@media (max-width: 620px) {
+  .veloscriptor-topbar .settings-menu-popover {
+    top: 64px;
+    right: 8px;
+    bottom: auto;
+    left: auto;
+    width: min(286px, calc(100vw - 16px));
+    width: min(286px, calc(100dvw - 16px));
+    max-width: calc(100vw - 16px);
+    max-width: calc(100dvw - 16px);
+    max-height: calc(100vh - 76px);
+    max-height: calc(100dvh - 76px);
+  }
+  .veloscriptor-topbar .settings-two-row .settings-row,
+  .veloscriptor-topbar .settings-two-row .settings-row > * { min-width: 0; }
+  .preview-compare { grid-template-columns: 1fr; gap: 7px; }
+  .preview-button { width: 100%; }
+  .preview-time { width: 100%; text-align: center; }
+}
+@media (max-width: 380px) {
+  .preview-mix { grid-template-columns: auto minmax(62px, 1fr) auto; gap: 6px; font-size: 9px; }
+}

@@ -34,6 +34,16 @@ export default { code:'ja', htmlLang:'ja', strings:{
   'result.summary':'音源解析 {analyzed} · 実変更 {changed} · ドラム維持 {drums} · 範囲外/無音 {skipped}',
   'result.histogram_aria':'元と解析後のベロシティ分布', 'result.histogram_original_title':'元 {min}～{max}: {count}', 'result.histogram_analyzed_title':'解析後 {min}～{max}: {count}',
   'toast.duration_mismatch':'MIDIの長さ{midi}と音源の長さ{audio}に大きな差があります。同じ編曲か確認してください。', 'toast.midi_loaded':'MIDIノートを{count}個読み込みました。', 'toast.audio_loaded':'同一音源を選択しました。', 'toast.analysis_done':'音量反映済みMIDIを準備しました。', 'toast.downloaded':'MIDIをダウンロードしました。',
+  'preview.play':'同時プレビュー',
+  'preview.stop':'プレビュー停止',
+  'preview.loading':'プレビュー準備中…',
+  'preview.midi':'ベロシティMIDI',
+  'preview.source':'元ソース',
+  'preview.mix_aria':'左はベロシティMIDI、右は元ソースになるようにクロスフェード',
+  'error.preview':'プレビュー中にエラーが発生しました。',
+  'error.preview_engine':'MIDIプレビューエンジンを読み込めませんでした。',
+  'error.preview_required':'解析済みMIDIと元の音源が必要です。',
+  'error.preview_no_notes':'プレビューできるMIDIノートがありません。',
   'error.no_notes':'MIDIにNote Onイベントがありません。', 'error.midi_open':'MIDIファイルを開けませんでした。', 'error.web_audio':'このブラウザーはWeb Audioに対応していません。', 'error.audio_decode':'このブラウザーでは選択した音源コーデックをデコードできません。',
   'error.analysis':'音量解析中にエラーが発生しました。', 'error.files_required':'MIDIと同一音源を両方選択してください。', 'error.no_melodic_notes':'解析できる音程ノートがありません。ドラムだけのMIDIには対応していません。'
 }};

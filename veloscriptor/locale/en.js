@@ -35,6 +35,16 @@ export default { code:'en', htmlLang:'en', strings:{
   'result.histogram_aria':'Original and analyzed velocity distribution',
   'result.histogram_original_title':'Original {min}–{max}: {count}', 'result.histogram_analyzed_title':'Analyzed {min}–{max}: {count}',
   'toast.duration_mismatch':'MIDI duration {midi} and audio duration {audio} differ substantially. Check that they are the same arrangement.', 'toast.midi_loaded':'Loaded {count} MIDI notes.', 'toast.audio_loaded':'Matching audio selected.', 'toast.analysis_done':'The audio-velocity MIDI is ready.', 'toast.downloaded':'MIDI downloaded.',
+  'preview.play':'Compare preview',
+  'preview.stop':'Stop preview',
+  'preview.loading':'Preparing preview…',
+  'preview.midi':'Velocity MIDI',
+  'preview.source':'Original source',
+  'preview.mix_aria':'Crossfade from velocity MIDI on the left to the original source on the right',
+  'error.preview':'An error occurred during preview.',
+  'error.preview_engine':'Could not load the MIDI preview engine.',
+  'error.preview_required':'The analyzed MIDI result and original audio are required.',
+  'error.preview_no_notes':'There are no MIDI notes to preview.',
   'error.no_notes':'No Note On events were found in the MIDI.', 'error.midi_open':'Could not open the MIDI file.', 'error.web_audio':'This browser does not support Web Audio.', 'error.audio_decode':'This browser could not decode the selected audio codec.',
   'error.analysis':'An error occurred during volume analysis.', 'error.files_required':'Choose both the MIDI and matching audio.', 'error.no_melodic_notes':'There are no pitched notes to analyze. Drum-only MIDI files are not supported.'
 }};

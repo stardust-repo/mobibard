@@ -1,5 +1,5 @@
-import { makeOutputFileName, parseMidiForVelocity, patchMidiVelocities } from './midi.js?v=20260830-site-nav1';
-import { initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260831-ja-labels1';
+import { buildMidiPlaybackNotes, makeOutputFileName, parseMidiForVelocity, patchMidiVelocities } from './midi.js?v=20260831-preview-crossfade1';
+import { initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260831-preview-crossfade1';
 
 const TARGET_SAMPLE_RATE = 16000;
 const AUTO_BASE_VELOCITY = 96;
@@ -17,6 +17,20 @@ const state = {
   analyzing: false,
   taskId: 0,
   worker: null,
+  preview: {
+    player: null,
+    schedule: null,
+    audioBuffer: null,
+    originalGain: null,
+    originalSource: null,
+    playing: false,
+    startTime: 0,
+    duration: 0,
+    nextNoteIndex: 0,
+    schedulerTimer: 0,
+    uiTimer: 0,
+    token: 0,
+  },
   statusKey: 'status.select_files',
   statusValues: {},
   statusDetailKey: 'status.select_files_detail',
@@ -27,7 +41,7 @@ const ids = [
   'midiFile', 'audioFile', 'midiDrop', 'audioDrop', 'midiFileName', 'audioFileName', 'midiInfo', 'audioInfo',
   'audioOffset', 'midiSiteLinks', 'analyzeButton', 'progressBar', 'progressLabel', 'progressDetail',
   'resultCount', 'resultPanel', 'resultSummary', 'resultOriginalStats', 'resultNewStats', 'histogram',
-  'downloadMidi', 'resetResult', 'runtimeError', 'toast',
+  'downloadMidi', 'resetResult', 'previewButton', 'previewButtonLabel', 'previewMix', 'previewTime', 'runtimeError', 'toast',
 ];
 const elements = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 
@@ -73,7 +87,211 @@ function showToast(message, error = false) {
   toastTimer = window.setTimeout(() => elements.toast.classList.remove('show'), 2600);
 }
 
+const previewScriptPromises = new Map();
+
+function loadPreviewScript(relativeUrl) {
+  const url = new URL(relativeUrl, import.meta.url).href;
+  if (previewScriptPromises.has(url)) return previewScriptPromises.get(url);
+  const promise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.async = true;
+    script.addEventListener('load', resolve, { once: true });
+    script.addEventListener('error', () => reject(new Error(t('error.preview_engine'))), { once: true });
+    document.head.append(script);
+  });
+  const retryable = promise.catch(error => {
+    previewScriptPromises.delete(url);
+    throw error;
+  });
+  previewScriptPromises.set(url, retryable);
+  return retryable;
+}
+
+async function ensurePreviewEngine() {
+  if (globalThis.MobibardEditorSoundBank?.Player) return globalThis.MobibardEditorSoundBank;
+  await loadPreviewScript('../../plugins/formats/soundbank/soundbank.js?v=5.1.0');
+  await loadPreviewScript('../../assets/default_sf3.js?v=20260819-115800');
+  await loadPreviewScript('../../editor/js/soundbank-player.js?v=5.1.0');
+  if (!globalThis.MobibardEditorSoundBank?.Player) throw new Error(t('error.preview_engine'));
+  return globalThis.MobibardEditorSoundBank;
+}
+
+function formatPreviewTime(seconds) {
+  const value = Math.max(0, Number(seconds) || 0);
+  const minutes = Math.floor(value / 60);
+  const wholeSeconds = Math.floor(value - minutes * 60);
+  return `${minutes}:${String(wholeSeconds).padStart(2, '0')}`;
+}
+
+function updatePreviewTime(current = 0, duration = state.preview.duration || 0) {
+  if (!elements.previewTime) return;
+  elements.previewTime.textContent = `${formatPreviewTime(current)} / ${formatPreviewTime(duration)}`;
+}
+
+function updatePreviewButton() {
+  if (!elements.previewButton || !elements.previewButtonLabel) return;
+  elements.previewButton.disabled = !state.outputBytes || !state.audioFile || state.analyzing;
+  elements.previewButton.classList.toggle('is-playing', state.preview.playing);
+  elements.previewButtonLabel.textContent = t(state.preview.playing ? 'preview.stop' : 'preview.play');
+}
+
+function previewMixGains() {
+  const position = Math.min(1, Math.max(0, (Number(elements.previewMix?.value) || 0) / 100));
+  return {
+    midi: position >= 1 ? 0 : Math.cos(position * Math.PI / 2),
+    source: position <= 0 ? 0 : Math.sin(position * Math.PI / 2),
+  };
+}
+
+function applyPreviewMix() {
+  const gains = previewMixGains();
+  state.preview.player?.setVolume(gains.midi);
+  const context = state.preview.player?.context;
+  const gainNode = state.preview.originalGain;
+  if (!context || !gainNode) return;
+  const at = context.currentTime;
+  const parameter = gainNode.gain;
+  parameter.cancelScheduledValues(at);
+  parameter.setValueAtTime(parameter.value, at);
+  parameter.linearRampToValueAtTime(gains.source, at + 0.02);
+}
+
+function stopPreview({ keepEndTime = false } = {}) {
+  const preview = state.preview;
+  preview.token += 1;
+  preview.playing = false;
+  if (preview.schedulerTimer) window.clearInterval(preview.schedulerTimer);
+  if (preview.uiTimer) window.clearInterval(preview.uiTimer);
+  preview.schedulerTimer = 0;
+  preview.uiTimer = 0;
+  if (preview.originalSource) {
+    try { preview.originalSource.stop(); } catch (_) {}
+    try { preview.originalSource.disconnect(); } catch (_) {}
+    preview.originalSource = null;
+  }
+  preview.player?.stopAll();
+  preview.nextNoteIndex = 0;
+  updatePreviewButton();
+  updatePreviewTime(keepEndTime ? preview.duration : 0, preview.duration);
+}
+
+function schedulePreviewMidiWindow() {
+  const preview = state.preview;
+  const player = preview.player;
+  const context = player?.context;
+  const notes = preview.schedule?.notes || [];
+  if (!preview.playing || !context) return;
+  const now = context.currentTime;
+  const horizon = now + 1.8;
+  while (preview.nextNoteIndex < notes.length) {
+    const note = notes[preview.nextNoteIndex];
+    const nominalStart = preview.startTime + note.start;
+    if (nominalStart > horizon) break;
+    preview.nextNoteIndex += 1;
+    const nominalEnd = nominalStart + note.durationSec;
+    if (nominalEnd <= now + 0.004) continue;
+    const when = Math.max(nominalStart, now + 0.006);
+    const duration = Math.max(0.02, nominalEnd - when);
+    player.playNote(note.midi, note.velocity, when, duration, {
+      program: note.program,
+      bank: note.bank,
+    });
+  }
+}
+
+async function startPreview() {
+  if (state.preview.playing) {
+    stopPreview();
+    return;
+  }
+  if (!state.outputBytes || !state.audioFile) {
+    showToast(t('error.preview_required'), true);
+    return;
+  }
+
+  const preview = state.preview;
+  const token = ++preview.token;
+  elements.previewButton.disabled = true;
+  elements.previewButtonLabel.textContent = t('preview.loading');
+  updatePreviewTime(0, 0);
+
+  try {
+    const engine = await ensurePreviewEngine();
+    if (token !== preview.token) return;
+    if (!preview.player) preview.player = new engine.Player({ volume: previewMixGains().midi });
+    await preview.player.ensureReady();
+    if (token !== preview.token) return;
+
+    preview.schedule = preview.schedule || buildMidiPlaybackNotes(state.outputBytes);
+    if (!preview.schedule.notes.length) throw new Error(t('error.preview_no_notes'));
+    const context = preview.player.context;
+    if (!context) throw new Error(t('error.web_audio'));
+
+    const cachedBuffer = state.audioCache?.file === state.audioFile ? state.audioCache.buffer : null;
+    if (cachedBuffer) {
+      preview.audioBuffer = cachedBuffer;
+    } else if (!preview.audioBuffer) {
+      const bytes = await state.audioFile.arrayBuffer();
+      preview.audioBuffer = await context.decodeAudioData(bytes.slice(0));
+    }
+    if (token !== preview.token) return;
+    if (!preview.audioBuffer) throw new Error(t('error.audio_decode'));
+
+    const firstNotes = preview.schedule.notes.filter(note => note.start <= 2.5);
+    if (firstNotes.length) await preview.player.preloadPitches(firstNotes);
+    if (token !== preview.token) return;
+
+    stopPreview();
+    preview.token = token;
+    preview.playing = true;
+    preview.schedule = preview.schedule || buildMidiPlaybackNotes(state.outputBytes);
+    preview.nextNoteIndex = 0;
+    preview.startTime = context.currentTime + 0.08;
+
+    if (!preview.originalGain) {
+      preview.originalGain = context.createGain();
+      preview.originalGain.connect(context.destination);
+    }
+    const source = context.createBufferSource();
+    source.buffer = preview.audioBuffer;
+    source.connect(preview.originalGain);
+    preview.originalSource = source;
+
+    const offsetSeconds = Math.min(10, Math.max(-10, (Number(elements.audioOffset.value) || 0) / 1000));
+    const sourceStartDelay = Math.max(0, -offsetSeconds);
+    const sourceOffset = Math.max(0, offsetSeconds);
+    const sourceDuration = Math.max(0, preview.audioBuffer.duration - sourceOffset) + sourceStartDelay;
+    preview.duration = Math.max(preview.schedule.durationSeconds || 0, sourceDuration);
+    applyPreviewMix();
+    updatePreviewButton();
+    updatePreviewTime(0, preview.duration);
+
+    if (sourceOffset < preview.audioBuffer.duration) {
+      source.start(preview.startTime + sourceStartDelay, sourceOffset);
+    }
+    schedulePreviewMidiWindow();
+    preview.schedulerTimer = window.setInterval(schedulePreviewMidiWindow, 180);
+    preview.uiTimer = window.setInterval(() => {
+      if (!preview.playing) return;
+      const current = Math.max(0, context.currentTime - preview.startTime);
+      updatePreviewTime(Math.min(current, preview.duration), preview.duration);
+      if (current >= preview.duration + 0.08) stopPreview({ keepEndTime: true });
+    }, 100);
+  } catch (error) {
+    if (token !== preview.token) return;
+    console.error(error);
+    stopPreview();
+    showToast(error?.message || t('error.preview'), true);
+  } finally {
+    if (token === preview.token && !preview.playing) updatePreviewButton();
+  }
+}
+
 function clearResult() {
+  stopPreview();
+  state.preview.schedule = null;
+  state.preview.audioBuffer = null;
   state.outputBytes = null;
   state.outputName = '';
   state.velocityMap = null;
@@ -83,6 +301,8 @@ function clearResult() {
   elements.resetResult.disabled = true;
   elements.resultCount.textContent = '0';
   elements.histogram.replaceChildren();
+  updatePreviewButton();
+  updatePreviewTime(0, 0);
 }
 
 function updateReadyState({ refreshStatus = true } = {}) {
@@ -202,7 +422,7 @@ async function decodeAudio(file, taskId) {
 
   setStatus('status.resampling', 'status.resampling_detail');
   const samples = await mixAndResample(buffer, TARGET_SAMPLE_RATE, taskId, fraction => setProgress(12 + fraction * 24));
-  const cache = { file, samples, sampleRate: TARGET_SAMPLE_RATE, duration: buffer.duration, channels: buffer.numberOfChannels };
+  const cache = { file, samples, sampleRate: TARGET_SAMPLE_RATE, duration: buffer.duration, channels: buffer.numberOfChannels, buffer };
   state.audioCache = cache;
   updateAudioUi();
   const midiDuration = Number(state.midi?.durationSeconds) || 0;
@@ -387,6 +607,12 @@ function renderResult(resultMessage, patched) {
   elements.resultPanel.hidden = false;
   elements.downloadMidi.disabled = false;
   elements.resetResult.disabled = false;
+  if (!state.preview.audioBuffer && state.audioCache?.file === state.audioFile) state.preview.audioBuffer = state.audioCache.buffer;
+  if (!state.preview.playing) {
+    state.preview.duration = Math.max(Number(state.midi?.durationSeconds) || 0, Number(state.audioCache?.duration) || 0);
+    updatePreviewTime(0, state.preview.duration);
+  }
+  updatePreviewButton();
 }
 
 async function startAnalysis() {
@@ -449,6 +675,7 @@ async function startAnalysis() {
       elements.midiFile.disabled = false;
       elements.audioFile.disabled = false;
       updateReadyState({ refreshStatus: false });
+      updatePreviewButton();
     }
   }
 }
@@ -465,6 +692,7 @@ function cancelAnalysis() {
   elements.audioFile.disabled = false;
   setProgress(0);
   updateReadyState({ refreshStatus: false });
+  updatePreviewButton();
   setStatus('status.cancelled', 'status.cancelled_detail');
 }
 
@@ -493,6 +721,7 @@ function rerenderLocalizedState() {
   updateAudioUi();
   renderStatus();
   elements.analyzeButton.textContent = t(state.analyzing ? 'actions.cancel' : 'actions.analyze');
+  updatePreviewButton();
   if (state.summary && state.velocityMap) {
     const resultMessage = {
       results: [...state.velocityMap].map(([index, velocity]) => ({ index, velocity, analyzed: true })),
@@ -521,9 +750,13 @@ async function initialize() {
   elements.analyzeButton.addEventListener('click', startAnalysis);
   elements.downloadMidi.addEventListener('click', downloadResult);
   elements.resetResult.addEventListener('click', resetResult);
+  elements.previewButton.addEventListener('click', startPreview);
+  elements.previewMix.addEventListener('input', applyPreviewMix);
   updateMidiUi();
   updateAudioUi();
   updateReadyState();
+  updatePreviewButton();
+  updatePreviewTime(0, 0);
   onLanguageChange(rerenderLocalizedState);
 }
 

@@ -1348,8 +1348,7 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
 }
 
 .video-analysis-section .keyboard-help-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 16px;
+  grid-template-columns: 1fr;
 }
 .video-analysis-section .keyboard-color-palette {
   grid-template-columns: auto minmax(0, 1fr);
@@ -1399,3 +1398,57 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
 .rollscriptor-topbar .settings-two-row .language-select,
 .rollscriptor-topbar .settings-two-row .theme-menu-button{width:100%;min-width:0;min-height:34px;height:34px;margin:0}
 .rollscriptor-topbar .settings-two-row .theme-menu-button{justify-content:flex-start;padding:0 10px}
+
+
+/* 2026-08-31 mobile settings layer + tutorial placement */
+.rollscriptor-topbar .settings-menu-popover {
+  box-sizing: border-box;
+  top: 70px;
+  right: max(10px, calc((100vw - 980px) / 2 + 12px));
+  bottom: auto;
+  left: auto;
+  margin: 0;
+  max-width: calc(100vw - 20px);
+  max-width: calc(100dvw - 20px);
+}
+@media (max-width: 620px) {
+  .rollscriptor-topbar .settings-menu-popover {
+    top: 64px;
+    right: 8px;
+    bottom: auto;
+    left: auto;
+    width: min(286px, calc(100vw - 16px));
+    width: min(286px, calc(100dvw - 16px));
+    max-width: calc(100vw - 16px);
+    max-width: calc(100dvw - 16px);
+    max-height: calc(100vh - 76px);
+    max-height: calc(100dvh - 76px);
+  }
+  .rollscriptor-topbar .settings-two-row .settings-row { min-width: 0; }
+  .rollscriptor-topbar .settings-two-row .settings-row > * { min-width: 0; }
+}
+@media (max-width: 520px) {
+  .drop-zone { position: relative; }
+  .drop-zone-select {
+    box-sizing: border-box;
+    width: 100%;
+    padding-right: 104px;
+  }
+  .drop-tutorial-button {
+    position: absolute;
+    top: 11px;
+    right: 11px;
+    z-index: 2;
+    margin: 0;
+  }
+  .restore-session-button {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+    margin: 6px 0 0;
+  }
+}
+@media (max-width: 360px) {
+  .drop-zone-select { padding-right: 92px; }
+  .drop-tutorial-button { top: 10px; right: 10px; padding-inline: 9px; font-size: 11px; }
+}

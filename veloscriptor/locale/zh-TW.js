@@ -28,6 +28,16 @@ export default { code:'zh-TW', htmlLang:'zh-Hant', strings:{
   'result.summary':'已分析 {analyzed} · 實際變更 {changed} · 保留鼓音 {drums} · 超出範圍/靜音 {skipped}', 'result.histogram_aria':'原始與分析後力度分布',
   'result.histogram_original_title':'原始 {min}~{max}: {count}', 'result.histogram_analyzed_title':'分析後 {min}~{max}: {count}',
   'toast.duration_mismatch':'MIDI長度{midi}與音訊長度{audio}差異較大，請確認是否為同一編曲。', 'toast.midi_loaded':'已讀取{count}個MIDI音符。', 'toast.audio_loaded':'已選擇相同音訊。', 'toast.analysis_done':'已產生套用音訊力度的MIDI。', 'toast.downloaded':'MIDI已下載。',
+  'preview.play':'同步試聽',
+  'preview.stop':'停止試聽',
+  'preview.loading':'正在準備試聽…',
+  'preview.midi':'力度 MIDI',
+  'preview.source':'原始音源',
+  'preview.mix_aria':'向左為力度 MIDI，向右為原始音源的交叉淡化',
+  'error.preview':'試聽時發生錯誤。',
+  'error.preview_engine':'無法載入 MIDI 試聽引擎。',
+  'error.preview_required':'需要分析後的 MIDI 結果和原始音源。',
+  'error.preview_no_notes':'沒有可試聽的 MIDI 音符。',
   'error.no_notes':'MIDI中沒有Note On事件。', 'error.midi_open':'無法開啟MIDI檔案。', 'error.web_audio':'此瀏覽器不支援Web Audio。', 'error.audio_decode':'此瀏覽器無法解碼所選音訊編碼。',
   'error.analysis':'音量分析時發生錯誤。', 'error.files_required':'請選擇MIDI和相同音訊。', 'error.no_melodic_notes':'沒有可分析的有音高音符，不支援只有鼓音的MIDI。'
 }};

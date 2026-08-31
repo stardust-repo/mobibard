@@ -35,6 +35,16 @@ export default { code:'ko', htmlLang:'ko', strings:{
   'result.histogram_aria':'원본과 분석 후 벨로시티 분포',
   'result.histogram_original_title':'원본 {min}~{max}: {count}개', 'result.histogram_analyzed_title':'분석 후 {min}~{max}: {count}개',
   'toast.duration_mismatch':'MIDI 길이 {midi}와 음원 길이 {audio}의 차이가 큽니다. 같은 편곡인지 확인해 주세요.', 'toast.midi_loaded':'MIDI {count}개 노트를 불러왔습니다.', 'toast.audio_loaded':'동일 음원 파일을 선택했습니다.', 'toast.analysis_done':'오디오 볼륨을 반영한 MIDI가 준비되었습니다.', 'toast.downloaded':'MIDI 파일을 다운로드했습니다.',
+  'preview.play':'동시 미리듣기',
+  'preview.stop':'미리듣기 중지',
+  'preview.loading':'미리듣기 준비 중…',
+  'preview.midi':'벨로시티 MIDI',
+  'preview.source':'원본 소스',
+  'preview.mix_aria':'왼쪽은 벨로시티 MIDI, 오른쪽은 원본 소스가 들리도록 크로스페이드',
+  'error.preview':'미리듣기 중 오류가 발생했습니다.',
+  'error.preview_engine':'MIDI 미리듣기 엔진을 불러오지 못했습니다.',
+  'error.preview_required':'분석 결과와 원본 음원이 필요합니다.',
+  'error.preview_no_notes':'미리듣기할 MIDI 노트가 없습니다.',
   'error.no_notes':'MIDI에서 Note On 이벤트를 찾지 못했습니다.', 'error.midi_open':'MIDI 파일을 열지 못했습니다.', 'error.web_audio':'이 브라우저는 Web Audio를 지원하지 않습니다.', 'error.audio_decode':'이 브라우저에서 해당 음원 코덱을 디코딩하지 못했습니다.',
   'error.analysis':'볼륨 분석 중 오류가 발생했습니다.', 'error.files_required':'MIDI와 동일 음원을 모두 선택해 주세요.', 'error.no_melodic_notes':'분석할 음계 노트가 없습니다. 드럼 채널만 있는 MIDI는 지원하지 않습니다.'
 }};

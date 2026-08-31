@@ -297,6 +297,56 @@ export function parseMidiForVelocity(source) {
   };
 }
 
+export function buildMidiPlaybackNotes(source) {
+  const parser = globalThis.MabiMidiParser;
+  if (!parser?.parse) throw new Error('MIDI playback parser is not available.');
+  const document = parser.parse(source, { closeOpenNotes: true, type2Policy: 'first' });
+  const tempos = (document.tempoEvents || []).map((event, order) => {
+    const bpm = Number(event?.bpm);
+    const mpqn = Number(event?.mpqn) || (Number.isFinite(bpm) && bpm > 0 ? Math.round(60000000 / bpm) : DEFAULT_TEMPO_MPQN);
+    return {
+      tick: Math.max(0, Number(event?.tick) || 0),
+      mpqn: Math.max(1, mpqn),
+      trackIndex: Number(event?.trackIndex) || 0,
+      order: Number(event?.eventOrder) || order,
+    };
+  });
+  const converter = createTickConverter(Number(document.divisionRaw) || 480, tempos);
+  const notes = [];
+  let durationSeconds = 0;
+
+  for (const note of document.notes || []) {
+    const start = converter.tickToSeconds(note.startTick);
+    const end = converter.tickToSeconds(note.endTick);
+    const durationSec = Math.max(0.025, end - start);
+    const channel = clampInt(note.channel, 0, 15, 0);
+    const isDrum = channel === 9;
+    const rawBank = Number.isFinite(Number(note.bank))
+      ? Number(note.bank)
+      : (clampInt(note.bankMsb, 0, 127, 0) * 128 + clampInt(note.bankLsb, 0, 127, 0));
+    const velocity = clampInt(note.effectiveVelocity ?? note.velocity, 1, 127, 96);
+    const program = clampInt(note.program, 0, 127, 0);
+    const bank = isDrum ? 128 : clampInt(rawBank, 0, 16383, 0);
+    notes.push({
+      start,
+      durationSec,
+      midi: clampInt(note.midi, 0, 127, 60),
+      velocity,
+      sourceVelocity: clampInt(note.velocity, 1, 127, velocity),
+      channel,
+      program,
+      bank,
+      instrumentProgram: program,
+      instrumentBank: bank,
+      pitch: clampInt(note.midi, 0, 127, 60),
+    });
+    durationSeconds = Math.max(durationSeconds, start + durationSec);
+  }
+
+  notes.sort((left, right) => left.start - right.start || left.channel - right.channel || left.midi - right.midi);
+  return { notes, durationSeconds: Math.max(durationSeconds, converter.tickToSeconds(document.durationTicks || 0)) };
+}
+
 export function patchMidiVelocities(parsed, velocityValues) {
   if (!parsed?.bytes || !Array.isArray(parsed.noteEvents)) throw new Error('MIDI data is not ready.');
   const output = parsed.bytes.slice();

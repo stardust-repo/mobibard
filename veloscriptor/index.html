@@ -20,7 +20,7 @@
   } catch (_) {}
 })();
 </script>
-<link href="./styles.css?v=20260831-mobile-action-ja1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
+<link href="./styles.css?v=20260831-preview-crossfade1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar veloscriptor-topbar">
@@ -123,6 +123,11 @@
 <div class="result-heading"><div><strong data-i18n="result.title">분석 결과</strong><span id="resultSummary"></span></div><div class="result-legend"><span class="legend-original" data-i18n="result.original">원본</span><span class="legend-analyzed" data-i18n="result.analyzed">분석 후</span></div></div>
 <div class="stats-grid"><div><span data-i18n="result.original_stats">원본 벨로시티</span><strong id="resultOriginalStats"></strong></div><div><span data-i18n="result.new_stats">분석 후 벨로시티</span><strong id="resultNewStats"></strong></div></div>
 <div aria-label="원본과 분석 후 벨로시티 분포" class="velocity-histogram" data-i18n-aria-label="result.histogram_aria" id="histogram" role="img"></div>
+<div class="preview-compare" id="previewCompare">
+<button class="soft-button preview-button" disabled="" id="previewButton" type="button"><span data-i18n="preview.play" id="previewButtonLabel">동시 미리듣기</span></button>
+<label class="preview-mix" for="previewMix"><span data-i18n="preview.midi">벨로시티 MIDI</span><input aria-label="벨로시티 MIDI와 원본 소스 크로스페이드" data-i18n-aria-label="preview.mix_aria" id="previewMix" max="100" min="0" step="1" type="range" value="50"/><span data-i18n="preview.source">원본 소스</span></label>
+<output aria-live="off" class="preview-time" id="previewTime">0:00 / 0:00</output>
+</div>
 <div class="result-actions"><button class="primary-button" data-i18n="actions.download" disabled="" id="downloadMidi" type="button">MIDI 다운로드</button><button class="soft-button" data-i18n="actions.reset" disabled="" id="resetResult" type="button">결과 지우기</button></div>
 </div>
 <div class="runtime-error" hidden="" id="runtimeError"></div>
@@ -132,7 +137,7 @@
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
 <script src="../plugins/common/utils.js?v=5.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.0"></script>
-<script src="./js/settings-menu.js?v=20260830-site-nav1" type="module"></script>
-<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260831-mobile-action-ja1" type="module"></script>
+<script src="./js/settings-menu.js?v=20260831-preview-crossfade1" type="module"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260831-preview-crossfade1" type="module"></script>
 </body>
 </html>
