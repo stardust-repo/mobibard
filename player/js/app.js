@@ -12112,6 +12112,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       accent: getCanvasCssVar("--accent", dark ? "#818cf8" : "#4f46e5"),
       tempo: getCanvasCssVar("--wb4-tempo", "#23865b"),
       tempoActive: getCanvasCssVar("--wb4-tempo-active", "#3abf7c"),
+      tempoLabelBg: getCanvasCssVar("--wb4-tempo-label-bg", dark ? "rgba(35, 134, 91, .18)" : "rgba(35, 134, 91, .12)"),
+      tempoLabelActiveBg: getCanvasCssVar("--wb4-tempo-label-active-bg", dark ? "rgba(58, 191, 124, .22)" : "rgba(58, 191, 124, .16)"),
       splitMarker: getCanvasCssVar("--score-split-marker", dark ? "#f472b6" : "#e11d8d"),
       splitMarkerBg: getCanvasCssVar("--score-split-marker-bg", dark ? "rgba(244, 114, 182, .18)" : "rgba(225, 29, 141, .13)"),
       splitMarkerText: getCanvasCssVar("--score-split-marker-text", dark ? "#fce7f3" : "#9d174d"),
@@ -12280,19 +12282,17 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const drawHeight = hovered ? labelHeight + 2 : labelHeight;
       if (hovered) {
         ctx.shadowColor = lineColor;
-        ctx.shadowBlur = 9;
+        ctx.shadowBlur = 6;
         ctx.shadowOffsetY = 1;
       }
-      ctx.fillStyle = lineColor;
-      drawRoundRect(ctx, labelX, labelY, drawWidth, drawHeight, hovered ? 10 : 8);
+      ctx.fillStyle = active ? colors.tempoLabelActiveBg : colors.tempoLabelBg;
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = hovered ? 1.6 : 1.15;
+      drawRoundRect(ctx, labelX, labelY, drawWidth, drawHeight, hovered ? 7 : 5);
       ctx.fill();
-      if (hovered) {
-        ctx.shadowColor = "transparent";
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
-        ctx.stroke();
-      }
-      ctx.fillStyle = "#ffffff";
+      ctx.shadowColor = "transparent";
+      ctx.stroke();
+      ctx.fillStyle = lineColor;
       ctx.fillText(label, baseLabelX + 6, baseLabelY + labelHeight / 2 + 0.25);
       ctx.restore();
     }

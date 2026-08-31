@@ -3705,8 +3705,14 @@ html[data-i18n-pending="true"] .app-main-title { visibility: hidden; }
   --wb4-accent-weak: var(--accent-weak, #eef2ff);
   --wb4-tempo: #23865b;
   --wb4-tempo-active: #3abf7c;
+  --wb4-tempo-label-bg: rgba(35, 134, 91, .12);
+  --wb4-tempo-label-active-bg: rgba(58, 191, 124, .16);
   --wb4-playhead: #ef4444;
   --wb4-shadow: 0 18px 48px rgba(15, 23, 42, .07);
+}
+:root[data-theme="dark"] {
+  --wb4-tempo-label-bg: rgba(35, 134, 91, .18);
+  --wb4-tempo-label-active-bg: rgba(58, 191, 124, .22);
 }
 
 html[data-player-layout="player-ui"] main {
