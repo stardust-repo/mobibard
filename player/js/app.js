@@ -71,6 +71,8 @@
     tempoOverrides: [],
     copySplitCache: { mml: "", maxChars: 0, searchPercent: 0, pages: null },
     copySplitPlan: { sourceVersion: -1, maxChars: 0, searchPercent: 0, geometrySignature: "", pages: null },
+    scoreSplitMarkerCache: { mml: "", maxChars: 0, searchPercent: 0, markers: [] },
+    scoreSplitMarkerRevision: 0,
     channelDraft: null,
     channelOptionsDirty: false,
     instrumentDirty: false,
@@ -490,6 +492,36 @@
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   }
 
+  function renderTimelineScoreSplitMarkers(duration) {
+    const layer = state.ui.timelineSplitMarkers;
+    if (!layer) return;
+    const max = Math.max(0, Number(duration) || 0);
+    const signature = `${Number(state.scoreSplitMarkerRevision) || 0}|${max.toFixed(4)}`;
+    if (layer.dataset.renderSignature === signature) return;
+    layer.dataset.renderSignature = signature;
+    layer.replaceChildren();
+    if (!(max > 0)) return;
+
+    let markers = [];
+    try { markers = getScoreSplitMarkers(); } catch (_) { markers = []; }
+    if (!Array.isArray(markers) || !markers.length) return;
+
+    const fragment = document.createDocumentFragment();
+    for (const marker of markers) {
+      const time = Math.max(0, Number(marker?.time) || 0);
+      if (time > max + 1e-7) continue;
+      const percent = Math.max(0, Math.min(100, time / max * 100));
+      const line = el("span", "wb4-timeline-split-marker", {
+        style: `left:${percent}%`,
+        title: String(marker?.label || `S${marker?.id || 1}`)
+      });
+      line.dataset.scoreSplitId = String(marker?.id || "");
+      line.dataset.scoreSplitTime = String(time);
+      fragment.append(line);
+    }
+    layer.append(fragment);
+  }
+
   function prepareTimeline(seekRow) {
     const progressWrap = seekRow?.querySelector(".progress-wrap");
     const progressSlider = $("progressSlider");
@@ -516,7 +548,8 @@
     state.ui.playheadTrack = el("div", "wb4-timeline-playhead-track", { "aria-hidden": "true" });
     state.ui.playheadTrack.append(state.ui.playhead);
     state.ui.timelineActivityCanvas = el("canvas", "wb4-timeline-activity", { id: "timelineActivityCanvas", "aria-hidden": "true" });
-    progressWrap.prepend(grid, state.ui.timelineActivityCanvas, tickLabels);
+    state.ui.timelineSplitMarkers = el("div", "wb4-timeline-split-markers", { "aria-hidden": "true" });
+    progressWrap.prepend(grid, state.ui.timelineActivityCanvas, state.ui.timelineSplitMarkers, tickLabels);
     progressWrap.append(state.ui.playheadTrack);
     state.ui.progressSlider = progressSlider;
 
@@ -547,6 +580,7 @@
       progressWrap.classList.toggle("disabled", progressSlider.disabled || max <= 0);
       if (state.ui.playheadLabel) state.ui.playheadLabel.textContent = formatClock(value);
       state.ui.timelineTicks?.forEach((node, index) => { node.textContent = formatClock(max * (index / 4)); });
+      renderTimelineScoreSplitMarkers(max);
       window.requestAnimationFrame(sync);
     };
     window.requestAnimationFrame(sync);
@@ -1595,6 +1629,8 @@
   function invalidateCopySplitPlan() {
     state.copySplitCache = { mml: "", maxChars: 0, searchPercent: 0, pages: null };
     state.copySplitPlan = { sourceVersion: -1, maxChars: 0, searchPercent: 0, geometrySignature: "", pages: null };
+    state.scoreSplitMarkerCache = { mml: "", maxChars: 0, searchPercent: 0, markers: [] };
+    state.scoreSplitMarkerRevision = (Number(state.scoreSplitMarkerRevision) || 0) + 1;
   }
 
   function copySplitGeometrySignature() {
@@ -1669,6 +1705,91 @@
         .filter(page => Number.isFinite(page.start) && Number.isFinite(page.end) && Number.isFinite(page.nextStart))
     };
     return pages;
+  }
+
+  const SCORE_SPLIT_UNITS_PER_BEAT = 256;
+
+  function getScoreSplitMarkers() {
+    const mml = String($("mainMml")?.value || "");
+    const maxChars = Math.max(200, Math.min(5000, Math.round(Number(state.options.split.maxChars) || 2400)));
+    const searchPercent = [50, 60, 70, 80, 90].includes(Number(state.options.split.searchPercent))
+      ? Number(state.options.split.searchPercent)
+      : 50;
+    const cached = state.scoreSplitMarkerCache;
+    if (cached?.mml === mml && cached.maxChars === maxChars && cached.searchPercent === searchPercent && Array.isArray(cached.markers)) {
+      return cached.markers;
+    }
+
+    let pages = [];
+    try { pages = splitPagesForCopy(mml); } catch (_) { pages = []; }
+    if (!Array.isArray(pages) || pages.length <= 1) {
+      state.scoreSplitMarkerCache = { mml, maxChars, searchPercent, markers: [] };
+      return [];
+    }
+
+    const sourceParts = normalizeMainToParts(mml);
+    let detailedParts = [];
+    try { detailedParts = window.MabiMml?.splitMmlPartsDetailed?.(mml)?.slice(0, 6) || []; } catch (_) { detailedParts = []; }
+    while (detailedParts.length < 6) {
+      const index = detailedParts.length;
+      detailedParts.push({ text: sourceParts[index] || "", sourceStart: 0, sourceEnd: 0 });
+    }
+
+    const markers = [];
+    for (let index = 0; index < pages.length - 1; index++) {
+      const page = pages[index] || {};
+      const units = Number(page.end);
+      if (!Number.isFinite(units) || units < 0) continue;
+      const beat = units / SCORE_SPLIT_UNITS_PER_BEAT;
+      const sourcePositions = Array.from({ length: 6 }, (_, partIndex) => {
+        const textLength = String(sourceParts[partIndex] || "").length;
+        const direct = Number(page?.sourcePositions?.[partIndex]);
+        if (Number.isFinite(direct) && direct >= 0) return Math.max(0, Math.min(textLength, Math.round(direct)));
+        return textLength;
+      });
+      const mainPositions = sourcePositions.map((position, partIndex) => {
+        const offset = Math.max(0, Number(detailedParts[partIndex]?.sourceStart) || 0);
+        return Math.max(0, Math.min(mml.length, offset + position));
+      });
+      const directTime = Number(page.endSeconds);
+      const time = Number.isFinite(directTime) ? Math.max(0, directTime) : Math.max(0, beat * 0.5);
+      markers.push({ id: index + 1, label: `S${index + 1}`, units, beat, time, partPositions: sourcePositions, mainPositions });
+    }
+
+    state.scoreSplitMarkerCache = { mml, maxChars, searchPercent, markers };
+    return markers;
+  }
+
+  function getCodeScoreSplitMarkers(partIndex = null) {
+    const markers = getScoreSplitMarkers();
+    if (!markers.length) return [];
+    const mml = String($("mainMml")?.value || "");
+    const sourceParts = normalizeMainToParts(mml);
+    if (Number.isInteger(partIndex) && partIndex >= 0 && partIndex < 6) {
+      const partText = String(sourceParts[partIndex] || "");
+      if (!partText) return [];
+      return markers.map(marker => ({
+        ...marker,
+        position: Math.max(0, Math.min(partText.length, Number(marker.partPositions?.[partIndex]) || 0)),
+        partIndex
+      }));
+    }
+    const out = [];
+    for (const marker of markers) {
+      for (let channel = 0; channel < Math.min(6, marker.mainPositions?.length || 0); channel++) {
+        if (!String(sourceParts[channel] || "")) continue;
+        out.push({
+          ...marker,
+          position: Math.max(0, Math.min(mml.length, Number(marker.mainPositions[channel]) || 0)),
+          partIndex: channel
+        });
+      }
+    }
+    return out;
+  }
+
+  function refreshScoreSplitMarkerPresentation() {
+    try { window.dispatchEvent(new CustomEvent("mobibard:score-split-markers-changed")); } catch (_) {}
   }
 
   function renderCopyItem(title, detail, button) {
@@ -3527,6 +3648,7 @@
       invalidateCopySplitPlan();
       markPlayerEdited();
       scheduleCopyRowsRender();
+      refreshScoreSplitMarkerPresentation();
     });
     limitLabel.append(limitInput);
     const searchLabel = el("label", "wb4-split-control");
@@ -3536,6 +3658,7 @@
       invalidateCopySplitPlan();
       markPlayerEdited();
       scheduleCopyRowsRender();
+      refreshScoreSplitMarkerPresentation();
     }, "wb4-split-search");
     searchSelect.id = "splitSearchPercent";
     searchLabel.append(searchSelect);
@@ -3700,6 +3823,9 @@
     get activeChannel() { return state.activeChannel; },
     applyFromSource,
     activateChannel,
+    activateWorkspaceTab,
+    getScoreSplitMarkers,
+    getCodeScoreSplitMarkers,
     showToast
   });
 })();
@@ -4121,6 +4247,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   let pianoRollRefreshSettleTimer = 0;
   let pianoRollResizeObserver = null;
   let pianoRollHoveredTempoMarker = null;
+  let pianoRollHoveredSplitMarker = null;
   let selectedTempoMarker = null;
   let tempoEditResumePlayback = false;
   let tempoEditResumeOffset = 0;
@@ -4596,6 +4723,12 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (midiConvertDialog?.open) scheduleMidiInstrumentListHeightSync();
       requestPianoRollRefresh(true);
     });
+    window.addEventListener("mobibard:score-split-markers-changed", () => {
+      mainHighlightRenderSignature = "";
+      partHighlightRenderSignatures = Array.from({ length: 6 }, () => "");
+      updateVisibleHighlight();
+      requestPianoRollRefresh(true);
+    });
     partSoundDialog?.addEventListener("close", () => stopMidiPreview());
     themeToggleBtn?.addEventListener("click", toggleTheme);
     mainMml.addEventListener("paste", handleEditorMmlPaste);
@@ -4605,6 +4738,12 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       syncPartsFromMain({ generatedByPlayerUi });
     });
     mainMml.addEventListener("scroll", syncHighlightScroll);
+    mainMmlHighlight?.addEventListener("click", handleCodeScoreSplitMarkerClick);
+    mainMmlHighlight?.addEventListener("keydown", handleCodeScoreSplitMarkerKeydown);
+    partMmlHighlights.forEach(highlight => {
+      highlight?.addEventListener("click", handleCodeScoreSplitMarkerClick);
+      highlight?.addEventListener("keydown", handleCodeScoreSplitMarkerKeydown);
+    });
     partTexts.forEach((t, i) => {
       t.addEventListener("paste", handleEditorMmlPaste);
       t.addEventListener("input", () => {
@@ -4898,6 +5037,14 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       return;
     }
 
+    const splitMarker = findPianoRollSplitMarkerAtEvent(event);
+    if (splitMarker) {
+      event.preventDefault();
+      event.stopPropagation();
+      navigateToScoreSplitMarker(splitMarker, { openCode: true });
+      return;
+    }
+
     // 템포 가로선은 순수 표시 요소다. 왼쪽의 T숫자 라벨만 편집 버튼으로 동작한다.
     const marker = findPianoRollTempoMarkerAtEvent(event);
     if (marker) {
@@ -4911,18 +5058,60 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
   function handlePianoRollPointerMove(event) {
     const toggleControl = event?.target?.closest?.(".piano-roll-corner");
-    const marker = toggleControl ? null : findPianoRollTempoMarkerAtEvent(event);
-    if (marker === pianoRollHoveredTempoMarker) return;
-    pianoRollHoveredTempoMarker = marker;
-    pianoRoll?.classList.toggle("tempo-label-hover", Boolean(marker));
+    const splitMarker = toggleControl ? null : findPianoRollSplitMarkerAtEvent(event);
+    const tempoMarker = (toggleControl || splitMarker) ? null : findPianoRollTempoMarkerAtEvent(event);
+    if (splitMarker === pianoRollHoveredSplitMarker && tempoMarker === pianoRollHoveredTempoMarker) return;
+    pianoRollHoveredSplitMarker = splitMarker;
+    pianoRollHoveredTempoMarker = tempoMarker;
+    pianoRoll?.classList.toggle("split-label-hover", Boolean(splitMarker));
+    pianoRoll?.classList.toggle("tempo-label-hover", Boolean(tempoMarker));
     requestPianoRollRefresh(false);
   }
 
   function clearPianoRollTempoHover() {
-    if (!pianoRollHoveredTempoMarker) return;
+    if (!pianoRollHoveredTempoMarker && !pianoRollHoveredSplitMarker) return;
     pianoRollHoveredTempoMarker = null;
-    pianoRoll?.classList.remove("tempo-label-hover");
+    pianoRollHoveredSplitMarker = null;
+    pianoRoll?.classList.remove("tempo-label-hover", "split-label-hover");
     requestPianoRollRefresh(false);
+  }
+
+  function findPianoRollSplitMarkerAtEvent(event) {
+    if (playbackSourceOverride || playbackMidiOriginalOverride) return null;
+    const stage = pianoRoll?.querySelector?.(".piano-roll-stage");
+    const markers = getScoreSplitMarkers();
+    if (!stage || !markers.length) return null;
+
+    const rect = stage.getBoundingClientRect();
+    const x = Number(event?.clientX) - rect.left;
+    const y = Number(event?.clientY) - rect.top;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > rect.width || y < 0 || y > rect.height) return null;
+
+    const keyHeight = Math.min(getPianoRollKeyHeight(), Math.max(18, rect.height * 0.72));
+    const fallAreaHeight = Math.max(12, rect.height - keyHeight);
+    if (y > fallAreaHeight + 7) return null;
+
+    const duration = scheduleCache?.duration || Number(progressSlider?.max) || 0;
+    const current = Math.max(0, Math.min(duration || Infinity, Number(currentOffset) || 0));
+    const fallWindow = pianoRollExpanded ? PIANO_ROLL_FALL_WINDOW_EXPANDED : PIANO_ROLL_FALL_WINDOW_COLLAPSED;
+    const pxPerSec = fallAreaHeight / fallWindow;
+    const visibleEnd = current + fallWindow;
+
+    for (const marker of markers) {
+      const time = Math.max(0, Number(marker?.time) || 0);
+      if (time < current - 0.03 || time > visibleEnd + 0.03) continue;
+      const rawY = fallAreaHeight - ((time - current) * pxPerSec);
+      if (rawY < -1 || rawY > fallAreaHeight + 1) continue;
+      const lineY = Math.max(0.5, Math.min(fallAreaHeight - 0.5, Math.round(rawY) + 0.5));
+      const label = String(marker?.label || `S${marker?.id || 1}`);
+      const labelWidth = measurePianoRollSplitLabelWidth(label);
+      const labelHeight = 17;
+      const labelX = Math.max(4, rect.width - labelWidth - 5);
+      const labelY = Math.max(2, Math.min(fallAreaHeight - labelHeight - 2, lineY - labelHeight - 2));
+      const labelHit = x >= labelX - 4 && x <= labelX + labelWidth + 4 && y >= labelY - 4 && y <= labelY + labelHeight + 4;
+      if (labelHit) return marker;
+    }
+    return null;
   }
 
   function findPianoRollTempoMarkerAtEvent(event) {
@@ -11534,6 +11723,95 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return Number.isInteger(index) && index >= 0 && index < 6 ? index : -1;
   }
 
+  function getScoreSplitMarkers() {
+    try {
+      const markers = window.MobibardPlayerLayout?.getScoreSplitMarkers?.();
+      return Array.isArray(markers) ? markers : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function getCodeScoreSplitMarkers(partIndex = null) {
+    try {
+      const markers = window.MobibardPlayerLayout?.getCodeScoreSplitMarkers?.(partIndex);
+      return Array.isArray(markers) ? markers : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function scoreSplitMarkerSignature(markers) {
+    return (markers || []).map(marker => `${marker.id}:${marker.partIndex ?? -1}:${marker.position ?? ""}:${Math.round((Number(marker.time) || 0) * 1000)}`).join("|");
+  }
+
+  function scoreSplitMarkerById(id) {
+    const numeric = Math.max(1, Math.round(Number(id) || 1));
+    return getScoreSplitMarkers().find(marker => Number(marker?.id) === numeric) || null;
+  }
+
+  function scrollVisibleCodeToScoreSplitMarker(markerId) {
+    const id = Math.max(1, Math.round(Number(markerId) || 1));
+    updateVisibleHighlight();
+    const partIndex = getActiveEditorPartIndex();
+    const highlight = partIndex >= 0 ? partMmlHighlights[partIndex] : mainMmlHighlight;
+    const textarea = partIndex >= 0 ? partTexts[partIndex] : mainMml;
+    if (!highlight || !textarea) return;
+    const candidates = Array.from(highlight.querySelectorAll(`.mml-split-marker[data-score-split-id="${id}"]`));
+    if (!candidates.length) return;
+    let target = candidates[0];
+    if (partIndex < 0) {
+      const activeChannel = Number(window.MobibardPlayerLayout?.activeChannel);
+      if (Number.isInteger(activeChannel) && activeChannel >= 0) {
+        target = candidates.find(item => Number(item.dataset.scoreSplitPart) === activeChannel) || target;
+      }
+    }
+    textarea.scrollTop = Math.max(0, Number(target.offsetTop) - textarea.clientHeight * 0.38);
+    textarea.scrollLeft = Math.max(0, Number(target.offsetLeft) - textarea.clientWidth * 0.28);
+    if (partIndex >= 0) syncPartHighlightScroll(partIndex);
+    else syncHighlightScroll();
+    target.classList.add("is-target");
+    window.setTimeout(() => target.classList.remove("is-target"), 900);
+  }
+
+  function navigateToScoreSplitMarker(marker, { openCode = false } = {}) {
+    if (!marker) return;
+    const duration = Math.max(0, Number(scheduleCache?.duration) || Number(progressSlider?.max) || 0);
+    if (!playbackSourceOverride && !playbackMidiOriginalOverride && duration > 0) {
+      const time = Math.max(0, Math.min(duration, Number(marker.time) || 0));
+      progressSlider.value = String(quantizePlaybackTime(time));
+      handleSeekInput(true);
+    }
+    requestPianoRollRefresh(true);
+    if (!openCode) return;
+    window.MobibardPlayerLayout?.activateWorkspaceTab?.("code");
+    requestAnimationFrame(() => {
+      updateVisibleHighlight();
+      scrollVisibleCodeToScoreSplitMarker(marker.id);
+    });
+  }
+
+  function handleCodeScoreSplitMarkerClick(event) {
+    const target = event?.target?.closest?.(".mml-split-marker");
+    if (!target) return;
+    const marker = scoreSplitMarkerById(Number(target.dataset.scoreSplitId));
+    if (!marker) return;
+    event.preventDefault();
+    event.stopPropagation();
+    navigateToScoreSplitMarker(marker, { openCode: false });
+  }
+
+  function handleCodeScoreSplitMarkerKeydown(event) {
+    if (event?.key !== "Enter" && event?.key !== " ") return;
+    const target = event?.target?.closest?.(".mml-split-marker");
+    if (!target) return;
+    const marker = scoreSplitMarkerById(Number(target.dataset.scoreSplitId));
+    if (!marker) return;
+    event.preventDefault();
+    event.stopPropagation();
+    navigateToScoreSplitMarker(marker, { openCode: false });
+  }
+
   function codeRangeSignature(ranges) {
     return (ranges || []).map(range => `${range.start}:${range.end}`).join("|");
   }
@@ -11551,9 +11829,10 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
   function updateMainHighlight() {
     if (!mainMmlHighlight || activeTabName !== "main") return;
-    const signature = `${editorContentVersion}|${codeRangeSignature(activePlaybackMainRanges)}`;
+    const splitMarkers = getCodeScoreSplitMarkers(null);
+    const signature = `${editorContentVersion}|${codeRangeSignature(activePlaybackMainRanges)}|${scoreSplitMarkerSignature(splitMarkers)}`;
     if (signature !== mainHighlightRenderSignature) {
-      mainMmlHighlight.innerHTML = renderColoredMml(mainMml.value, activePlaybackMainRanges) + "\n";
+      mainMmlHighlight.innerHTML = renderColoredMml(mainMml.value, activePlaybackMainRanges, splitMarkers) + "\n";
       mainHighlightRenderSignature = signature;
     }
     syncHighlightScroll();
@@ -11570,9 +11849,10 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const highlight = partMmlHighlights[index];
     const textarea = partTexts[index];
     if (!highlight || !textarea) return;
-    const signature = `${editorContentVersion}|${codeRangeSignature(activePlaybackPartRanges[index] || [])}`;
+    const splitMarkers = getCodeScoreSplitMarkers(index);
+    const signature = `${editorContentVersion}|${codeRangeSignature(activePlaybackPartRanges[index] || [])}|${scoreSplitMarkerSignature(splitMarkers)}`;
     if (signature !== partHighlightRenderSignatures[index]) {
-      highlight.innerHTML = renderPartWithErrors(textarea.value, activePlaybackPartRanges[index] || []) + "\n";
+      highlight.innerHTML = renderPartWithErrors(textarea.value, activePlaybackPartRanges[index] || [], splitMarkers) + "\n";
       partHighlightRenderSignatures[index] = signature;
     }
     syncPartHighlightScroll(index);
@@ -11725,6 +12005,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   function buildPianoRollDataSignature(notes, duration) {
     const first = notes[0] || null;
     const last = notes[notes.length - 1] || null;
+    const splitOptions = window.MobibardPlayerLayout?.options?.split || {};
     return [
       scheduleCacheVersion,
       notes.length,
@@ -11734,6 +12015,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       Math.round(Number(pianoRollCanvas?.clientWidth) || 0),
       Math.round(Number(pianoRollCanvas?.clientHeight) || 0),
       document.documentElement.dataset.theme || "light",
+      `${editorContentVersion}:${splitOptions.maxChars || 2400}:${splitOptions.searchPercent || 50}`,
       first ? `${Math.round(first.start * 1000)}:${first.midi}:${first.part}` : "-",
       last ? `${Math.round(last.start * 1000)}:${last.midi}:${last.part}` : "-"
     ].join("|");
@@ -11816,8 +12098,11 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       dark,
       line: getCanvasCssVar("--line", dark ? "#334155" : "#d1d5db"),
       accent: getCanvasCssVar("--accent", dark ? "#818cf8" : "#4f46e5"),
-      tempo: getCanvasCssVar("--tempo", dark ? "#a78bfa" : "#7c3aed"),
-      tempoActive: getCanvasCssVar("--tempo-active", dark ? "#22c55e" : "#16a34a"),
+      tempo: getCanvasCssVar("--wb4-tempo", "#23865b"),
+      tempoActive: getCanvasCssVar("--wb4-tempo-active", "#3abf7c"),
+      splitMarker: getCanvasCssVar("--score-split-marker", dark ? "#f472b6" : "#e11d8d"),
+      splitMarkerBg: getCanvasCssVar("--score-split-marker-bg", dark ? "rgba(244, 114, 182, .18)" : "rgba(225, 29, 141, .13)"),
+      splitMarkerText: getCanvasCssVar("--score-split-marker-text", dark ? "#fce7f3" : "#9d174d"),
       activeLine: getCanvasCssVar("--active-code-line", dark ? "rgba(74, 222, 128, 0.95)" : "rgba(22, 163, 74, 0.92)"),
       mutedLine: dark ? "rgba(226, 232, 240, 0.82)" : "rgba(51, 65, 85, 0.72)",
       mutedMark: dark ? "rgba(248, 250, 252, 0.88)" : "rgba(30, 41, 59, 0.78)",
@@ -12034,6 +12319,66 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     ctx.restore();
   }
 
+  function measurePianoRollSplitLabelWidth(label) {
+    const text = String(label || "S1");
+    const fallback = Math.max(27, 7 * text.length + 12);
+    if (!(pianoRollCanvas instanceof HTMLCanvasElement)) return fallback;
+    const ctx = pianoRollCanvas.getContext("2d");
+    if (!ctx) return fallback;
+    ctx.save();
+    ctx.font = `950 10px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const width = Math.ceil(ctx.measureText(text).width) + 12;
+    ctx.restore();
+    return Math.max(27, width);
+  }
+
+  function drawPianoRollCanvasSplitMarkers(ctx, width, fallAreaHeight, markers, current, visibleEnd, pxPerSec, colors) {
+    if (!Array.isArray(markers) || !markers.length) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, width, fallAreaHeight);
+    ctx.clip();
+    for (const marker of markers) {
+      const time = Math.max(0, Number(marker?.time) || 0);
+      if (time < current - 0.03 || time > visibleEnd + 0.03) continue;
+      const rawY = fallAreaHeight - ((time - current) * pxPerSec);
+      if (rawY < -1 || rawY > fallAreaHeight + 1) continue;
+      const y = Math.max(0.5, Math.min(fallAreaHeight - 0.5, Math.round(rawY) + 0.5));
+      const hovered = Number(pianoRollHoveredSplitMarker?.id) === Number(marker?.id);
+      ctx.save();
+      ctx.globalAlpha = hovered ? 1 : 0.78;
+      ctx.strokeStyle = colors.splitMarker;
+      ctx.lineWidth = hovered ? 2.4 : 1.8;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+      ctx.restore();
+
+      const label = String(marker?.label || `S${marker?.id || 1}`);
+      const labelWidth = measurePianoRollSplitLabelWidth(label);
+      const labelHeight = 17;
+      const labelX = Math.max(4, width - labelWidth - 5);
+      const labelY = Math.max(2, Math.min(fallAreaHeight - labelHeight - 2, y - labelHeight - 2));
+      ctx.save();
+      ctx.globalAlpha = hovered ? 1 : 0.94;
+      ctx.fillStyle = colors.splitMarkerBg;
+      ctx.strokeStyle = colors.splitMarker;
+      ctx.lineWidth = hovered ? 1.8 : 1.25;
+      drawRoundRect(ctx, labelX, labelY, labelWidth, labelHeight, 5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = colors.splitMarkerText;
+      ctx.font = `950 10px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, labelX + labelWidth / 2, labelY + labelHeight / 2 + 0.25);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   function drawMutedPianoKeyMark(ctx, x, y, width, height, colors) {
     if (width < 3 || height < 6) return;
     ctx.save();
@@ -12198,6 +12543,16 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       pxPerSec,
       colors
     );
+    drawPianoRollCanvasSplitMarkers(
+      ctx,
+      width,
+      fallAreaHeight,
+      (!playbackSourceOverride && !playbackMidiOriginalOverride) ? getScoreSplitMarkers() : [],
+      current,
+      visibleEnd,
+      pxPerSec,
+      colors
+    );
     drawPianoRollCanvasKeyboard(ctx, width, fallAreaHeight, keyHeight, keyLayout, pianoRollKeyMin, pianoRollKeyMax, activeKeyParts, colors);
 
     ctx.save();
@@ -12327,7 +12682,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return `${main}#${parts}`;
   }
 
-  function renderColoredMml(text, activeRanges = []) {
+  function renderColoredMml(text, activeRanges = [], splitMarkers = []) {
     const s = normalizeMmlForDisplay(text);
     const classes = createClassBuckets(s.length);
     const at = s.indexOf("@");
@@ -12355,10 +12710,10 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     });
 
     for (const range of activeRanges || []) addRangeClass(classes, range.start, range.end, "mml-active-code");
-    return renderClassedText(s, classes);
+    return renderClassedText(s, classes, splitMarkers);
   }
 
-  function renderPartWithErrors(part, activeRanges = []) {
+  function renderPartWithErrors(part, activeRanges = [], splitMarkers = []) {
     const text = String(part || "");
     const classes = createClassBuckets(text.length);
     const invalid = findInvalidPartChars(text);
@@ -12368,7 +12723,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const tempoRanges = findTempoHighlightRanges(text, invalid);
     for (const range of tempoRanges) addRangeClass(classes, range.start, range.end, "tempo-code");
     for (const range of activeRanges || []) addRangeClass(classes, range.start, range.end, "mml-active-code");
-    return renderClassedText(text, classes);
+    return renderClassedText(text, classes, splitMarkers);
   }
 
   function createClassBuckets(length) {
@@ -12384,26 +12739,57 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     }
   }
 
-  function renderClassedText(text, classes) {
+  function renderScoreSplitMarker(marker) {
+    const id = Math.max(1, Math.round(Number(marker?.id) || 1));
+    const partIndex = Number.isInteger(marker?.partIndex) ? marker.partIndex : -1;
+    const time = Math.max(0, Number(marker?.time) || 0);
+    const label = escapeHtml(String(marker?.label || `S${id}`));
+    const title = escapeHtml(`${label} · ${formatTime(time)}`);
+    return `<span class="mml-split-marker" data-score-split-id="${id}" data-score-split-part="${partIndex}" data-score-split-time="${time}" title="${title}" role="button" tabindex="0" aria-label="${title}"><span class="mml-split-marker-label">${label}</span></span>`;
+  }
+
+  function renderClassedText(text, classes, splitMarkers = []) {
     const s = String(text || "");
     if (!s) return "";
+    const markerMap = new Map();
+    for (const marker of splitMarkers || []) {
+      const position = Math.max(0, Math.min(s.length, Math.round(Number(marker?.position) || 0)));
+      if (!markerMap.has(position)) markerMap.set(position, []);
+      markerMap.get(position).push(marker);
+    }
+    for (const list of markerMap.values()) {
+      list.sort((a, b) => Number(a?.id || 0) - Number(b?.id || 0) || Number(a?.partIndex || 0) - Number(b?.partIndex || 0));
+    }
+
     let out = "";
     let runStart = 0;
     let runKey = (classes[0] || []).join(" ");
-
     const flush = (to) => {
+      if (to <= runStart) return;
       const chunk = escapeHtml(s.slice(runStart, to));
       out += runKey ? `<span class="${runKey}">${chunk}</span>` : chunk;
+      runStart = to;
+    };
+    const appendMarkers = position => {
+      const list = markerMap.get(position);
+      if (!list?.length) return;
+      for (const marker of list) out += renderScoreSplitMarker(marker);
     };
 
+    appendMarkers(0);
     for (let i = 1; i < s.length; i++) {
+      if (markerMap.has(i)) {
+        flush(i);
+        appendMarkers(i);
+        runKey = (classes[i] || []).join(" ");
+      }
       const key = (classes[i] || []).join(" ");
       if (key === runKey) continue;
       flush(i);
-      runStart = i;
       runKey = key;
     }
     flush(s.length);
+    appendMarkers(s.length);
     return out;
   }
 

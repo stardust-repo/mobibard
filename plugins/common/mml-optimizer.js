@@ -2214,6 +2214,7 @@
     const sourceLengths = sourceParts.map(part => String(part || "").length);
     const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
     const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
+    const splitTempoSecondIndex = buildTempoSecondIndex(tempoMap);
     const totalUnits = Math.max(
       0,
       ...parsedParts.map(p => partMusicalEnd(p.events)),
@@ -2253,6 +2254,10 @@
           start,
           end,
           nextStart,
+          startSeconds: secondsAtUnits(splitTempoSecondIndex, start),
+          endSeconds: secondsAtUnits(splitTempoSecondIndex, end),
+          nextStartSeconds: secondsAtUnits(splitTempoSecondIndex, nextStart),
+          sourcePositions: locateSplitSourcePositions(parsedParts, end),
           skippedUnits: Math.max(0, nextStart - end),
           reason: "cached-boundary",
           warning: ""
@@ -2289,6 +2294,10 @@
           start: 0,
           end: totalUnits,
           nextStart: totalUnits,
+          startSeconds: 0,
+          endSeconds: secondsAtUnits(splitTempoSecondIndex, totalUnits),
+          nextStartSeconds: secondsAtUnits(splitTempoSecondIndex, totalUnits),
+          sourcePositions: locateSplitSourcePositions(parsedParts, totalUnits),
           skippedUnits: 0,
           reason: "within-limit",
           warning: ""
@@ -2314,6 +2323,10 @@
           start: 0,
           end: 0,
           nextStart: 0,
+          startSeconds: 0,
+          endSeconds: 0,
+          nextStartSeconds: 0,
+          sourcePositions: locateSplitSourcePositions(parsedParts, 0),
           skippedUnits: 0,
           reason: "empty",
           warning: ""
@@ -2360,6 +2373,10 @@
         start: pageStart,
         end: pageEnd,
         nextStart,
+        startSeconds: secondsAtUnits(splitTempoSecondIndex, pageStart),
+        endSeconds: secondsAtUnits(splitTempoSecondIndex, pageEnd),
+        nextStartSeconds: secondsAtUnits(splitTempoSecondIndex, nextStart),
+        sourcePositions: locateSplitSourcePositions(parsedParts, pageEnd),
         skippedUnits: Math.max(0, nextStart - pageEnd),
         reason: cut.reason,
         warning: cut.warning || ""
@@ -2387,6 +2404,43 @@
       totalUnits,
       warnings
     };
+  }
+
+  function locateSplitSourcePositions(parsedParts, boundaryUnits) {
+    const target = Math.max(0, Math.round(Number(boundaryUnits) || 0));
+    return Array.from(parsedParts || []).map(part => {
+      const rawLength = String(part?.raw || "").length;
+      const anchors = [];
+      for (const event of part?.events || []) {
+        const start = Math.max(0, Number(event?.start) || 0);
+        const duration = Math.max(0, Number(event?.duration) || 0);
+        const sourceStart = Number(event?.sourceStart);
+        if (!Number.isFinite(sourceStart) || sourceStart < 0) continue;
+        anchors.push({
+          pos: start,
+          end: start + duration,
+          sourceStart: Math.min(rawLength, Math.round(sourceStart)),
+          sourceEnd: Math.min(rawLength, Math.max(0, Math.round(Number(event?.sourceEnd) || sourceStart)))
+        });
+      }
+      for (const tempo of part?.tempos || []) {
+        const sourceStart = Number(tempo?.sourceStart);
+        if (!Number.isFinite(sourceStart) || sourceStart < 0) continue;
+        const pos = Math.max(0, Number(tempo?.pos) || 0);
+        anchors.push({
+          pos,
+          end: pos,
+          sourceStart: Math.min(rawLength, Math.round(sourceStart)),
+          sourceEnd: Math.min(rawLength, Math.max(0, Math.round(Number(tempo?.sourceEnd) || sourceStart)))
+        });
+      }
+      anchors.sort((a, b) => a.pos - b.pos || a.sourceStart - b.sourceStart || a.sourceEnd - b.sourceEnd);
+      const crossing = anchors.find(anchor => anchor.pos < target - EPS && anchor.end > target + EPS);
+      if (crossing) return crossing.sourceStart;
+      const next = anchors.find(anchor => anchor.pos >= target - EPS);
+      if (next) return next.sourceStart;
+      return rawLength;
+    });
   }
 
   function choosePageCut(parsedParts, tempoMap, pageStart, totalUnits, options) {
@@ -2876,11 +2930,13 @@
     };
     const readNoteToken = () => {
       skipSpace();
+      const sourceStart = i;
       const ch = s[i]?.toLowerCase();
       if (!(ch in NOTE_BASE) && ch !== "r" && ch !== "n") return null;
       if (ch === "r") {
         i++;
-        return { kind: "rest", duration: readLengthUnits() };
+        const duration = readLengthUnits();
+        return { kind: "rest", duration, sourceStart, sourceEnd: i };
       }
       if (ch === "n") {
         i++;
@@ -2888,8 +2944,8 @@
         if (!num) fail(tr("mml.err_n_required"));
         if (num.value < 0 || num.value > 127) fail(tr("mml.err_n_range", [num.value]));
         const duration = durationUnitsFromBase(defaultUnits, readDotsCount());
-        if (num.value === 0) return { kind: "rest", duration };
-        return { kind: "note", midi: num.value, duration, volume };
+        if (num.value === 0) return { kind: "rest", duration, sourceStart, sourceEnd: i };
+        return { kind: "note", midi: num.value, duration, volume, sourceStart, sourceEnd: i };
       }
       i++;
       let semitone = NOTE_BASE[ch];
@@ -2897,7 +2953,7 @@
       else if (s[i] === "-") { semitone--; i++; }
       const midi = (octave + 1) * 12 + semitone;
       const duration = readLengthUnits();
-      return { kind: "note", midi, duration, volume };
+      return { kind: "note", midi, duration, volume, sourceStart, sourceEnd: i };
     };
     const appendToken = token => {
       if (!Number.isFinite(token.duration) || token.duration <= 0) {
@@ -2909,14 +2965,17 @@
         if (!lastTieTarget) fail(tr("mml.err_tie_before"));
         if (lastTieTarget.kind !== token.kind || lastTieTarget.midi !== token.midi) fail(tr("mml.err_tie_same"));
         lastTieTarget.event.duration += token.duration;
+        if (Number.isFinite(token.sourceEnd)) lastTieTarget.event.sourceEnd = Math.max(Number(lastTieTarget.event.sourceEnd) || 0, token.sourceEnd);
         pos += token.duration;
         pendingTie = false;
         return;
       }
 
+      const sourceStart = Number.isFinite(token.sourceStart) ? token.sourceStart : -1;
+      const sourceEnd = Number.isFinite(token.sourceEnd) ? token.sourceEnd : sourceStart;
       const ev = token.kind === "note"
-        ? { type: "note", start: pos, duration: token.duration, midi: token.midi, volume: token.volume }
-        : { type: "rest", start: pos, duration: token.duration };
+        ? { type: "note", start: pos, duration: token.duration, midi: token.midi, volume: token.volume, sourceStart, sourceEnd }
+        : { type: "rest", start: pos, duration: token.duration, sourceStart, sourceEnd };
       events.push(ev);
       pos += token.duration;
       lastTieTarget = { kind: token.kind, midi: token.midi, event: ev };

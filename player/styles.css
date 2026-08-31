@@ -3704,6 +3704,7 @@ html[data-i18n-pending="true"] .app-main-title { visibility: hidden; }
   --wb4-accent: var(--accent, #4f46e5);
   --wb4-accent-weak: var(--accent-weak, #eef2ff);
   --wb4-tempo: #23865b;
+  --wb4-tempo-active: #3abf7c;
   --wb4-playhead: #ef4444;
   --wb4-shadow: 0 18px 48px rgba(15, 23, 42, .07);
 }
@@ -4042,7 +4043,7 @@ html[data-player-layout="player-ui"] main {
 }
 .wb4-tempo-timeline .tempo-marker.active {
   top: 0;
-  border-left-color: #3abf7c;
+  border-left-color: var(--wb4-tempo-active);
   filter: none;
 }
 .wb4-tempo-timeline .tempo-marker.active .tempo-marker-label {
@@ -7393,7 +7394,7 @@ html[data-player-layout="player-ui"] main {
   pointer-events: none;
 }
 .player-ui .wb4-tempo-timeline .tempo-marker.active::after {
-  background: #3abf7c;
+  background: var(--wb4-tempo-active);
 }
 .player-ui .wb4-timeline-playhead-track .wb4-timeline-playhead {
   width: 0 !important;
@@ -9652,4 +9653,129 @@ html[data-player-layout="player-ui"][data-player-ui-booting="true"] main > :not(
   background: var(--panel) !important;
   box-shadow: 0 0 0 3px var(--accent-weak), 0 4px 14px var(--panel-shadow) !important;
   filter: none !important;
+}
+
+/* 2026-09-01 score split markers shared by piano roll and code editor */
+:root {
+  --score-split-marker: #e11d8d;
+  --score-split-marker-bg: rgba(225, 29, 141, 0.13);
+  --score-split-marker-text: #9d174d;
+}
+:root[data-theme="dark"] {
+  --score-split-marker: #f472b6;
+  --score-split-marker-bg: rgba(244, 114, 182, 0.18);
+  --score-split-marker-text: #fce7f3;
+}
+
+.player-ui .wb4-tempo-timeline .wb4-timeline-split-markers {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  left: var(--wb4-timeline-side-padding, 0px);
+  right: var(--wb4-timeline-side-padding, 0px);
+  overflow: hidden;
+  pointer-events: none;
+}
+.player-ui .wb4-tempo-timeline .wb4-timeline-split-marker {
+  position: absolute;
+  top: 17px;
+  bottom: 17px;
+  width: 0;
+  transform: translateX(-1px);
+  border-left: 2px dashed var(--score-split-marker);
+  opacity: 0.84;
+  filter: drop-shadow(0 0 1px color-mix(in srgb, var(--score-split-marker) 48%, transparent));
+  pointer-events: none;
+}
+.player-ui .wb4-tempo-timeline .wb4-timeline-split-marker::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: -4px;
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid var(--score-split-marker);
+}
+.player-ui .piano-roll.split-label-hover .piano-roll-stage {
+  border-color: color-mix(in srgb, var(--score-split-marker), var(--line) 42%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--score-split-marker) 12%, transparent), 0 8px 18px var(--panel-shadow);
+}
+.player-ui .wb6-channel-code-editor .mml-highlight {
+  /* auto keeps ordinary syntax text below the textarea, while positioned S markers can rise above it. */
+  z-index: auto !important;
+  pointer-events: none !important;
+}
+.player-ui .wb6-channel-code-editor textarea.highlight-source {
+  z-index: 1 !important;
+}
+.player-ui .wb6-channel-code-editor .mml-split-marker {
+  position: relative;
+  z-index: 5;
+  display: inline-block;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  vertical-align: baseline;
+  color: var(--score-split-marker);
+  pointer-events: auto;
+}
+.player-ui .wb6-channel-code-editor .mml-split-marker::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  bottom: -0.28em;
+  height: 1.62em;
+  border-left: 2px dashed var(--score-split-marker);
+  opacity: 0.76;
+  pointer-events: none;
+}
+.player-ui .wb6-channel-code-editor .mml-split-marker-label {
+  position: absolute;
+  left: 0;
+  bottom: 1.08em;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  min-width: 19px;
+  padding: 1px 3px;
+  border: 1px solid var(--score-split-marker);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--score-split-marker) 12%, var(--input-bg));
+  color: var(--score-split-marker-text);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+  font: 900 8px/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.player-ui .wb6-channel-code-editor .mml-split-marker-label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid var(--score-split-marker);
+  pointer-events: none;
+}
+.player-ui .wb6-channel-code-editor .mml-split-marker:hover::before,
+.player-ui .wb6-channel-code-editor .mml-split-marker:focus-visible::before,
+.player-ui .wb6-channel-code-editor .mml-split-marker.is-target::before {
+  border-left-width: 3px;
+  opacity: 1;
+}
+.player-ui .wb6-channel-code-editor .mml-split-marker:hover .mml-split-marker-label,
+.player-ui .wb6-channel-code-editor .mml-split-marker:focus-visible .mml-split-marker-label,
+.player-ui .wb6-channel-code-editor .mml-split-marker.is-target .mml-split-marker-label {
+  background: color-mix(in srgb, var(--score-split-marker) 22%, var(--input-bg));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--score-split-marker) 18%, transparent), 0 2px 5px rgba(15, 23, 42, 0.18);
+}
+.player-ui .wb6-channel-code-editor .mml-split-marker:focus-visible {
+  outline: none;
 }
