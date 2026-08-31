@@ -496,15 +496,23 @@
     const layer = state.ui.timelineSplitMarkers;
     if (!layer) return;
     const max = Math.max(0, Number(duration) || 0);
-    const signature = `${Number(state.scoreSplitMarkerRevision) || 0}|${max.toFixed(4)}`;
+
+    // 슬라이스 위치는 MML의 문자 구성에 따라 달라질 수 있다. 볼륨/옥타브 같은
+    // 편집은 재생시간을 바꾸지 않더라도 2400자 분할 경계를 바꿀 수 있으므로,
+    // 전체 길이만으로 렌더 캐시를 판단하면 타임라인에 이전 S 위치가 남는다.
+    let markers = [];
+    try { markers = getScoreSplitMarkers(); } catch (_) { markers = []; }
+    if (!Array.isArray(markers)) markers = [];
+    const markerSignature = markers.map(marker => [
+      Math.max(1, Math.round(Number(marker?.id) || 1)),
+      Math.round(Math.max(0, Number(marker?.time) || 0) * 10000),
+      Math.round(Math.max(0, Number(marker?.units) || 0))
+    ].join(":")).join("|");
+    const signature = `${Number(state.scoreSplitMarkerRevision) || 0}|${max.toFixed(4)}|${markerSignature}`;
     if (layer.dataset.renderSignature === signature) return;
     layer.dataset.renderSignature = signature;
     layer.replaceChildren();
-    if (!(max > 0)) return;
-
-    let markers = [];
-    try { markers = getScoreSplitMarkers(); } catch (_) { markers = []; }
-    if (!Array.isArray(markers) || !markers.length) return;
+    if (!(max > 0) || !markers.length) return;
 
     const fragment = document.createDocumentFragment();
     for (const marker of markers) {
@@ -3784,12 +3792,16 @@
     state.manualEdited = false;
     if (state.ui.manualBadge) state.ui.manualBadge.hidden = true;
     if (changed) {
+      // 프로그램 적용 결과가 곡의 길이를 유지해도 MML 문자 수와 슬라이스 경계는
+      // 달라질 수 있다. 수동 입력과 동일하게 분할 계획/표시 캐시를 폐기한다.
+      invalidateCopySplitPlan();
       state.applying = true;
       mainMml.dataset.playerUiApply = "1";
       mainMml.value = next;
       mainMml.dispatchEvent(new Event("input", { bubbles: true }));
       delete mainMml.dataset.playerUiApply;
       state.applying = false;
+      refreshScoreSplitMarkerPresentation();
     }
     if (changed) {
       scheduleCopyRowsRender();
