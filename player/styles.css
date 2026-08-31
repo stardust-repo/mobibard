@@ -9634,3 +9634,22 @@ html[data-player-layout="player-ui"][data-player-ui-booting="true"] main > :not(
   background: color-mix(in srgb, var(--wb4-accent) 7%, var(--wb4-surface)) !important;
   color: var(--wb4-text) !important;
 }
+
+/* 2026-08-31 account button surface parity with Simple */
+.player-ui .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button,
+.player-ui .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button:hover,
+.player-ui .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button:active,
+.player-ui .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button:focus-visible {
+  border-color: var(--line) !important;
+  background: var(--panel) !important;
+  box-shadow: 0 2px 8px var(--panel-shadow) !important;
+  filter: none !important;
+}
+.player-ui .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button[aria-expanded="true"],
+.player-ui .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button[aria-expanded="true"]:hover,
+.player-ui .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button[aria-expanded="true"]:active {
+  border-color: var(--accent) !important;
+  background: var(--panel) !important;
+  box-shadow: 0 0 0 3px var(--accent-weak), 0 4px 14px var(--panel-shadow) !important;
+  filter: none !important;
+}
