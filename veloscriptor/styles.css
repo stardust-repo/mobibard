@@ -293,7 +293,7 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
 .simple-section-head p { max-width:480px; margin:0; color:var(--muted); font-size:12px; line-height:1.55; text-align:right; }
 .file-grid { gap: 10px; }
 .file-drop { border-radius: 16px; background: var(--surface-2); }
-.file-drop-label { min-height: 174px; padding: 22px; }
+.file-drop-label { min-height: 132px; padding: 16px; }
 .matching-notice { margin-top: 10px; }
 .velo-analysis-options {
   display: flex;
