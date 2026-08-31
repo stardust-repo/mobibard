@@ -1590,3 +1590,25 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
     width:min(282px,calc(100dvw - 16px));
   }
 }
+
+/* 2026-08-31 logged-in avatar fill parity with Player */
+.rollscriptor-topbar #settingsButton[data-connected="true"].account-avatar-button,
+.rollscriptor-topbar #settingsButton[data-connected="true"].account-avatar-button:hover,
+.rollscriptor-topbar #settingsButton[data-connected="true"].account-avatar-button:active,
+.rollscriptor-topbar #settingsButton[data-connected="true"].account-avatar-button:focus-visible,
+.rollscriptor-topbar #settingsButton[data-connected="true"].account-avatar-button[aria-expanded="true"] {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.rollscriptor-topbar #settingsButton[data-connected="true"] .account-avatar-image {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  flex: 1 1 auto !important;
+  border-radius: 0 !important;
+  object-fit: cover !important;
+}

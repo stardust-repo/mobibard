@@ -575,3 +575,25 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
     width:min(282px,calc(100dvw - 16px));
   }
 }
+
+/* 2026-08-31 logged-in avatar fill parity with Player */
+.veloscriptor-topbar #settingsButton[data-connected="true"].account-avatar-button,
+.veloscriptor-topbar #settingsButton[data-connected="true"].account-avatar-button:hover,
+.veloscriptor-topbar #settingsButton[data-connected="true"].account-avatar-button:active,
+.veloscriptor-topbar #settingsButton[data-connected="true"].account-avatar-button:focus-visible,
+.veloscriptor-topbar #settingsButton[data-connected="true"].account-avatar-button[aria-expanded="true"] {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.veloscriptor-topbar #settingsButton[data-connected="true"] .account-avatar-image {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  flex: 1 1 auto !important;
+  border-radius: 0 !important;
+  object-fit: cover !important;
+}
