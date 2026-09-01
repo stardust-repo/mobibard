@@ -40,7 +40,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260901-roll-tutorial2" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
+<link href="./styles.css?v=20260901-roll-tutorial3" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -308,12 +308,38 @@
 <div class="roll-tutorial-progress-mock"><i></i></div>
 <div class="roll-tutorial-analysis-meta"><span data-i18n="progress.generated_notes">생성 노트</span><b>1,284</b></div>
 </div>
-<div class="roll-tutorial-midi-mock">
-<div class="roll-tutorial-midi-row"><span data-i18n="settings.tempo">템포 (BPM)</span><b>120</b></div>
-<div class="roll-tutorial-midi-row"><span data-i18n="settings.velocity">벨로시티</span><b>100</b></div>
-<div class="roll-tutorial-midi-row"><span data-i18n="settings.note_extension">노트 길이 확장 (프레임)</span><b>0.5 F</b></div>
-<div class="roll-tutorial-midi-preview"><span aria-hidden="true" class="roll-tutorial-midi-play">▶</span><i><span></span></i></div>
+<div class="roll-tutorial-midi-screen">
+<div class="roll-tutorial-midi-screen-head">
+<span class="roll-tutorial-midi-screen-step">3</span>
+<strong data-i18n="midi.title">MIDI 다운로드</strong>
+</div>
+<div class="roll-tutorial-midi-settings">
+<div class="roll-tutorial-midi-field">
+<span data-i18n="settings.tempo">템포 (BPM)</span>
+<b class="roll-tutorial-midi-input">120</b>
+</div>
+<div class="roll-tutorial-midi-field roll-tutorial-midi-extension-field">
+<span data-i18n="settings.note_extension">노트 길이 확장 (프레임)</span>
+<div class="roll-tutorial-midi-extension-buttons"><i>0</i><i>0.25</i><i class="active">0.5</i><i>1</i></div>
+</div>
+<div class="roll-tutorial-midi-field">
+<span data-i18n="settings.audio_velocity">오디오 볼륨 반영</span>
+<b class="roll-tutorial-midi-toggle" data-i18n="settings.audio_velocity_on">사용</b>
+</div>
+<div class="roll-tutorial-midi-field roll-tutorial-midi-velocity-field">
+<span><em data-i18n="settings.velocity_audio">벨로시티 기준</em><b>75%</b></span>
+<div class="roll-tutorial-midi-slider"><i></i><b></b></div>
+<small data-i18n="settings.velocity_audio_hint">오디오에서 구한 노트별 세기를 이 값을 중심으로 반영합니다.</small>
+</div>
+</div>
+<div class="roll-tutorial-midi-actions">
 <div class="roll-tutorial-midi-download" data-i18n="actions.download">MIDI 다운로드</div>
+<div aria-label="MIDI 미리듣기" class="roll-tutorial-midi-preview" data-i18n-aria-label="midi.preview">
+<span aria-hidden="true" class="roll-tutorial-midi-play">▶</span>
+<span aria-hidden="true" class="roll-tutorial-midi-rewind">|◀</span>
+<i><span></span></i>
+</div>
+</div>
 </div>
 </div>
 <div class="roll-tutorial-copy">

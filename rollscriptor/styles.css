@@ -1810,9 +1810,9 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
 }
 
 .roll-tutorial-analysis-mock,
-.roll-tutorial-midi-mock {
+.roll-tutorial-midi-screen {
   display: none;
-  width: min(100%, 430px);
+  width: min(100%, 470px);
   align-self: center;
   justify-self: center;
   border: 1px solid var(--line-strong);
@@ -1821,7 +1821,7 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   box-shadow: var(--shadow);
 }
 .roll-tutorial-visual[data-kind="analyze"] .roll-tutorial-analysis-mock,
-.roll-tutorial-visual[data-kind="midi"] .roll-tutorial-midi-mock {
+.roll-tutorial-visual[data-kind="midi"] .roll-tutorial-midi-screen {
   display: block;
 }
 .roll-tutorial-analysis-mock { padding: 20px; }
@@ -1863,67 +1863,196 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   line-height: 1;
 }
 
-.roll-tutorial-midi-mock { padding: 15px; }
-.roll-tutorial-midi-row {
+/* Page 6: faithful miniature of the real MIDI section, rather than a generic mock. */
+.roll-tutorial-midi-screen { padding: 15px; }
+.roll-tutorial-midi-screen-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.roll-tutorial-midi-screen-step {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 900;
+}
+.roll-tutorial-midi-screen-head strong {
+  font-size: 14px;
+  letter-spacing: -.02em;
+}
+.roll-tutorial-midi-settings {
+  display: grid;
+  grid-template-columns: minmax(105px, .64fr) minmax(190px, 1.36fr);
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-2);
+}
+.roll-tutorial-midi-field {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+}
+.roll-tutorial-midi-field > span {
+  min-height: 13px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 3px;
-  border-bottom: 1px solid var(--line);
-  font-size: 11px;
+  gap: 6px;
 }
-.roll-tutorial-midi-row span { color: var(--muted); font-weight: 750; }
-.roll-tutorial-midi-row b {
-  min-width: 72px;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
-  text-align: right;
-}
-.roll-tutorial-midi-preview {
-  display: grid;
-  grid-template-columns: 34px 1fr;
-  gap: 10px;
+.roll-tutorial-midi-field em { font-style: normal; }
+.roll-tutorial-midi-input,
+.roll-tutorial-midi-toggle {
+  min-height: 34px;
+  display: flex;
   align-items: center;
-  padding: 14px 2px 11px;
-}
-.roll-tutorial-midi-play {
-  width: 34px;
-  height: 34px;
-  padding: 0;
+  padding: 0 9px;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--text);
+  font-size: 11px;
+  font-weight: 750;
 }
-.roll-tutorial-midi-preview i {
+.roll-tutorial-midi-toggle {
+  justify-content: center;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 850;
+}
+.roll-tutorial-midi-extension-buttons {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.roll-tutorial-midi-extension-buttons i {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 750;
+}
+.roll-tutorial-midi-extension-buttons i.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.roll-tutorial-midi-velocity-field > span b {
+  color: var(--text);
+  font-size: 10px;
+}
+.roll-tutorial-midi-velocity-field small {
+  min-height: 20px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.roll-tutorial-midi-slider {
   position: relative;
-  height: 6px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+.roll-tutorial-midi-slider > i {
+  width: 100%;
+  height: 4px;
   border-radius: 999px;
   background: var(--line-strong);
 }
-.roll-tutorial-midi-preview i span {
+.roll-tutorial-midi-slider > b {
   position: absolute;
-  left: 34%;
+  left: 73%;
   top: 50%;
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border: 3px solid var(--surface-2);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+.roll-tutorial-midi-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+}
+.roll-tutorial-midi-download {
+  min-width: 145px;
+  min-height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+  font-size: 10px;
+  font-weight: 850;
+}
+.roll-tutorial-midi-preview {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 34px 34px minmax(80px, 1fr);
+  gap: 6px;
+  align-items: center;
+  padding: 0;
+}
+.roll-tutorial-midi-play,
+.roll-tutorial-midi-rewind {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 800;
+}
+.roll-tutorial-midi-preview > i {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.roll-tutorial-midi-preview > i span {
+  position: absolute;
+  left: 37%;
+  top: 50%;
+  width: 13px;
+  height: 13px;
   transform: translate(-50%, -50%);
   border: 3px solid var(--surface);
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 1px var(--line-strong);
-}
-.roll-tutorial-midi-download {
-  padding: 10px 12px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: var(--accent-text);
-  text-align: center;
-  font-size: 11px;
-  font-weight: 900;
 }
 
 @media (max-width: 620px) {
@@ -1942,9 +2071,20 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
     padding: 6px;
   }
   .roll-tutorial-analysis-mock,
-  .roll-tutorial-midi-mock {
-    width: min(100%, 380px);
+  .roll-tutorial-midi-screen {
+    width: min(100%, 400px);
   }
   .roll-tutorial-analysis-mock { padding: 15px; }
-  .roll-tutorial-midi-mock { padding: 11px; }
+  .roll-tutorial-midi-screen { padding: 10px; }
+  .roll-tutorial-midi-settings {
+    grid-template-columns: minmax(82px, .62fr) minmax(155px, 1.38fr);
+    gap: 6px;
+    padding: 9px;
+  }
+  .roll-tutorial-midi-field { gap: 4px; font-size: 8px; }
+  .roll-tutorial-midi-input, .roll-tutorial-midi-toggle, .roll-tutorial-midi-extension-buttons { min-height: 30px; }
+  .roll-tutorial-midi-actions { gap: 6px; }
+  .roll-tutorial-midi-download { min-width: 118px; min-height: 34px; }
+  .roll-tutorial-midi-preview { grid-template-columns: 30px 30px minmax(60px,1fr); gap: 4px; }
+  .roll-tutorial-midi-play, .roll-tutorial-midi-rewind { width: 30px; height: 30px; }
 }
