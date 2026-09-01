@@ -2088,3 +2088,55 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   .roll-tutorial-midi-preview { grid-template-columns: 30px 30px minmax(60px,1fr); gap: 4px; }
   .roll-tutorial-midi-play, .roll-tutorial-midi-rewind { width: 30px; height: 30px; }
 }
+
+/* 2026-09-01: keep tutorial preview content intact on narrow/mobile viewports. */
+@media (max-width: 620px) {
+  .roll-tutorial-dialog {
+    max-height: calc(100dvh - 12px);
+  }
+  .roll-tutorial-card {
+    max-height: calc(100dvh - 12px);
+  }
+  .roll-tutorial-head,
+  .roll-tutorial-footer {
+    flex: 0 0 auto;
+  }
+  .roll-tutorial-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-auto-rows: max-content;
+    align-content: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .roll-tutorial-visual {
+    width: 100%;
+    align-self: start;
+  }
+  .roll-tutorial-visual[data-kind="analyze"] {
+    min-height: 225px;
+  }
+  .roll-tutorial-visual[data-kind="midi"] {
+    min-height: 292px;
+  }
+}
+
+@media (max-width: 360px) {
+  .roll-tutorial-midi-settings {
+    grid-template-columns: minmax(68px, .62fr) minmax(122px, 1.38fr);
+  }
+  .roll-tutorial-midi-download {
+    min-width: 100px;
+  }
+  .roll-tutorial-midi-preview {
+    grid-template-columns: 28px 28px minmax(44px, 1fr);
+  }
+  .roll-tutorial-midi-play,
+  .roll-tutorial-midi-rewind {
+    width: 28px;
+    height: 28px;
+  }
+}
+
