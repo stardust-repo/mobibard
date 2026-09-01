@@ -40,7 +40,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260831-avatar-fill1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
+<link href="./styles.css?v=20260901-roll-tutorial2" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -275,21 +275,52 @@
 <header class="roll-tutorial-head">
 <div class="roll-tutorial-head-text">
 <h2 data-i18n="tutorial.title" id="tutorialTitle">롤 스크립터 사용법</h2>
-<span class="roll-tutorial-progress" id="tutorialProgress">1 / 4</span>
+<span class="roll-tutorial-progress" id="tutorialProgress">1 / 6</span>
 </div>
 <button class="tutorial-close" data-i18n="tutorial.close" id="tutorialClose" type="button">닫기</button>
 </header>
 <div class="roll-tutorial-content">
-<div aria-hidden="true" class="roll-tutorial-visual" id="tutorialVisual">
+<div aria-hidden="true" class="roll-tutorial-visual" data-kind="video" id="tutorialVisual">
 <span class="roll-tutorial-visual-step" id="tutorialVisualStep">1</span>
-<strong class="roll-tutorial-visual-symbol" id="tutorialVisualSymbol">▶</strong>
-<span class="roll-tutorial-visual-title" id="tutorialVisualTitle">영상 선택</span>
+<div class="roll-tutorial-sample-frame">
+<img alt="" class="roll-tutorial-sample-image roll-tutorial-sample-clean" decoding="async" src="./assets/tutorial/sample-clean.webp?v=20260901-tutorial2"/>
+<img alt="" class="roll-tutorial-sample-image roll-tutorial-sample-active" decoding="async" src="./assets/tutorial/sample-active.webp?v=20260901-tutorial2"/>
+<span class="roll-tutorial-sample-spec">1280×720 · 30fps</span>
+<div class="roll-tutorial-guide-overlay">
+<i class="roll-tutorial-guide-line white"></i>
+<i class="roll-tutorial-guide-line black"></i>
+<span class="roll-tutorial-guide-label white" data-i18n="guide.white_key">흰 건반</span>
+<span class="roll-tutorial-guide-label black" data-i18n="guide.black_key">검은 건반</span>
+</div>
+<div class="roll-tutorial-detect-overlay">
+<div class="roll-tutorial-key-grid"></div>
+<span class="roll-tutorial-detect-badge"><b>88</b><span data-i18n="actions.detect_keys">건반 검출</span></span>
+</div>
+<div class="roll-tutorial-threshold-overlay">
+<span><b data-i18n="guide.white_key">흰 건반</b><strong>20%</strong></span>
+<span><b data-i18n="guide.black_key">검은 건반</b><strong>30%</strong></span>
+<div class="roll-tutorial-chord-chip"><span data-i18n="transport.current_chord">현재 검출 코드</span><b>C4 · E4 · G4</b></div>
+</div>
+</div>
+<div class="roll-tutorial-analysis-mock">
+<div class="roll-tutorial-mock-head"><span data-i18n="analysis.range">분석 시간</span><b>00:00.500 ~ 03:42.000</b></div>
+<strong data-i18n="progress.frame_analysis">프레임 분석</strong>
+<div class="roll-tutorial-progress-mock"><i></i></div>
+<div class="roll-tutorial-analysis-meta"><span data-i18n="progress.generated_notes">생성 노트</span><b>1,284</b></div>
+</div>
+<div class="roll-tutorial-midi-mock">
+<div class="roll-tutorial-midi-row"><span data-i18n="settings.tempo">템포 (BPM)</span><b>120</b></div>
+<div class="roll-tutorial-midi-row"><span data-i18n="settings.velocity">벨로시티</span><b>100</b></div>
+<div class="roll-tutorial-midi-row"><span data-i18n="settings.note_extension">노트 길이 확장 (프레임)</span><b>0.5 F</b></div>
+<div class="roll-tutorial-midi-preview"><span aria-hidden="true" class="roll-tutorial-midi-play">▶</span><i><span></span></i></div>
+<div class="roll-tutorial-midi-download" data-i18n="actions.download">MIDI 다운로드</div>
+</div>
 </div>
 <div class="roll-tutorial-copy">
 <span class="roll-tutorial-part" id="tutorialPart">영상 선택</span>
-<h3 class="roll-tutorial-step-title" id="tutorialStepTitle">영상 준비</h3>
-<p class="roll-tutorial-body" id="tutorialStepBody">720p·30fps 이상, 88건반이 모두 보이는 영상을 선택합니다.</p>
-<p class="roll-tutorial-note" id="tutorialStepNote">건반을 가리는 이펙트나 노이즈가 적을수록 안정적입니다.</p>
+<h3 class="roll-tutorial-step-title" id="tutorialStepTitle">분석하기 좋은 영상 준비</h3>
+<p class="roll-tutorial-body" id="tutorialStepBody">720p·30fps 이상이며 88건반 전체가 한 화면에 보이는 피아노 롤 영상을 선택합니다.</p>
+<p class="roll-tutorial-note" id="tutorialStepNote">건반이 화면 밖으로 잘리지 않고, 건반 위를 가리는 이펙트나 UI가 적을수록 안정적으로 인식됩니다.</p>
 </div>
 </div>
 <footer class="roll-tutorial-footer">
@@ -298,6 +329,8 @@
 <button class="roll-tutorial-dot" data-tutorial-step="1" type="button"></button>
 <button class="roll-tutorial-dot" data-tutorial-step="2" type="button"></button>
 <button class="roll-tutorial-dot" data-tutorial-step="3" type="button"></button>
+<button class="roll-tutorial-dot" data-tutorial-step="4" type="button"></button>
+<button class="roll-tutorial-dot" data-tutorial-step="5" type="button"></button>
 </div>
 <div class="roll-tutorial-nav">
 <button class="roll-tutorial-prev" disabled="" id="tutorialPrev" type="button">이전</button>
@@ -312,6 +345,6 @@
 <script src="../assets/default_sf3.js?v=20260819-115800"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="./js/settings-menu.js?v=20260831-account-menu1" type="module"></script>
-<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260831-account-menu1" type="module"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260901-roll-tutorial2" type="module"></script>
 </body>
 </html>

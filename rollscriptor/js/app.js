@@ -3172,10 +3172,12 @@ async function analyzeAllFrames() {
 }
 
 const TUTORIAL_STEPS = Object.freeze([
-  { part: 'tutorial.step1_part', title: 'tutorial.step1_title', body: 'tutorial.step1_body', note: 'tutorial.step1_note', symbol: '▶' },
-  { part: 'tutorial.step2_part', title: 'tutorial.step2_title', body: 'tutorial.step2_body', note: 'tutorial.step2_note', symbol: '━' },
-  { part: 'tutorial.step3_part', title: 'tutorial.step3_title', body: 'tutorial.step3_body', note: 'tutorial.step3_note', symbol: '88' },
-  { part: 'tutorial.step4_part', title: 'tutorial.step4_title', body: 'tutorial.step4_body', note: 'tutorial.step4_note', symbol: 'MIDI' },
+  { part: 'tutorial.step1_part', title: 'tutorial.step1_title', body: 'tutorial.step1_body', note: 'tutorial.step1_note', visual: 'video' },
+  { part: 'tutorial.step2_part', title: 'tutorial.step2_title', body: 'tutorial.step2_body', note: 'tutorial.step2_note', visual: 'guides' },
+  { part: 'tutorial.step3_part', title: 'tutorial.step3_title', body: 'tutorial.step3_body', note: 'tutorial.step3_note', visual: 'detect' },
+  { part: 'tutorial.step4_part', title: 'tutorial.step4_title', body: 'tutorial.step4_body', note: 'tutorial.step4_note', visual: 'threshold' },
+  { part: 'tutorial.step5_part', title: 'tutorial.step5_title', body: 'tutorial.step5_body', note: 'tutorial.step5_note', visual: 'analyze' },
+  { part: 'tutorial.step6_part', title: 'tutorial.step6_title', body: 'tutorial.step6_body', note: 'tutorial.step6_note', visual: 'midi' },
 ]);
 let tutorialStepIndex = 0;
 
@@ -3184,10 +3186,11 @@ function renderTutorialStep() {
   tutorialStepIndex = clamp(Math.trunc(tutorialStepIndex), 0, TUTORIAL_STEPS.length - 1);
   const step = TUTORIAL_STEPS[tutorialStepIndex];
   if (elements.tutorialProgress) elements.tutorialProgress.textContent = t('tutorial.progress', { current: tutorialStepIndex + 1, total: TUTORIAL_STEPS.length });
-  if (elements.tutorialVisual) elements.tutorialVisual.dataset.page = String(tutorialStepIndex + 1);
+  if (elements.tutorialVisual) {
+    elements.tutorialVisual.dataset.page = String(tutorialStepIndex + 1);
+    elements.tutorialVisual.dataset.kind = step.visual || 'video';
+  }
   if (elements.tutorialVisualStep) elements.tutorialVisualStep.textContent = String(tutorialStepIndex + 1);
-  if (elements.tutorialVisualSymbol) elements.tutorialVisualSymbol.textContent = step.symbol;
-  if (elements.tutorialVisualTitle) elements.tutorialVisualTitle.textContent = t(step.part);
   if (elements.tutorialPart) elements.tutorialPart.textContent = t(step.part);
   if (elements.tutorialStepTitle) elements.tutorialStepTitle.textContent = t(step.title);
   if (elements.tutorialStepBody) elements.tutorialStepBody.textContent = t(step.body);
