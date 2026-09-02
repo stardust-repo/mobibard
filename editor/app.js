@@ -12166,6 +12166,54 @@
     return target instanceof Element && Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
   }
 
+  function isActuallyVisiblePopupElement(element) {
+    if (!(element instanceof Element)) return false;
+    if (typeof HTMLDialogElement !== "undefined" && element instanceof HTMLDialogElement && element.open) return true;
+    if (element.hidden || element.closest("[hidden]")) return false;
+    const style = window.getComputedStyle(element);
+    if (style.display === "none" || style.visibility === "hidden") return false;
+    return element.getClientRects().length > 0;
+  }
+
+  function isPopupLikeUiOpen() {
+    const candidates = document.querySelectorAll([
+      "dialog[open]",
+      ".popup-backdrop",
+      "[role='dialog']",
+      "[role='menu']",
+      ".brand-site-map[open]",
+    ].join(","));
+    return [...candidates].some(isActuallyVisiblePopupElement);
+  }
+
+  function handleGlobalShiftSelectAllShortcut(event) {
+    if (
+      event.defaultPrevented
+      || !event.shiftKey
+      || event.ctrlKey
+      || event.metaKey
+      || event.altKey
+      || !(event.code === "KeyA" || String(event.key || "").toLowerCase() === "a")
+      || isPopupLikeUiOpen()
+    ) {
+      return false;
+    }
+
+    let handled = false;
+    if (isMidiReferenceActive()) {
+      selectAllMidiNotes();
+      handled = true;
+    } else if (state.activePanel === "notes" && getActiveChannel()) {
+      selectAllNotes();
+      handled = true;
+    }
+
+    if (!handled) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
   function handleEditModeShortcut(event) {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isTextEntryTarget(event.target)) {
       return false;
@@ -12231,6 +12279,7 @@
 
   function bindEvents() {
     document.addEventListener("keydown", handleHistoryShortcut, true);
+    document.addEventListener("keydown", handleGlobalShiftSelectAllShortcut, true);
     elements.fileButton.addEventListener("click", (event) => {
       event.stopPropagation();
       const opening = elements.fileMenu.hidden;
@@ -12565,11 +12614,6 @@
           state.midiSelectedNoteKeys.size ? copySelectedMidiNotes() : copyActiveMidiInstrument();
           return;
         }
-        if (!commandKey && !event.altKey && event.shiftKey && key === "a") {
-          event.preventDefault();
-          selectAllMidiNotes();
-          return;
-        }
         if (event.key === "Escape") {
           clearMidiSelection();
           updateMidiReferenceUI();
@@ -12592,11 +12636,6 @@
       if (commandKey && key === "v") {
         event.preventDefault();
         pasteNotesFromClipboard();
-        return;
-      }
-      if (!commandKey && !event.altKey && event.shiftKey && key === "a") {
-        event.preventDefault();
-        selectAllNotes();
         return;
       }
       if (event.key === "Delete" || event.key === "Backspace") {
