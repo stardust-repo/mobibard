@@ -2,7 +2,7 @@ export default { code:'zh-TW', htmlLang:'zh-Hant', strings:{
   'site.title':'Mobibard v5.2', 'ui.brand':'Mobibard', 'settings.menu':'設定',
   'ui.recommended':"推薦網站", 'ui.select_recommended':"選擇推薦網站", 'ui.discord':"Discord",
   'site.map':"網站地圖", 'site.simple':"簡易模式", 'site.player':"詳細模式", 'site.rollscriptor':"RollScriptor", 'site.veloscriptor':"VeloScriptor",
-  'account.user': 'Google 使用者', 'auth.login': '登入', 'auth.logout': '退出登入', 'google.login': '登入Google 帳號', 'google.logout': '退出Google 帳號', 'google.connect_help': '使用Google 帳號登入。', 'google.logout_help': '退出Google 帳號。', 'google.login_wait': '正在登入Google...', 'google.connected': 'Google已連線', 'google.logout_done': '已退出Google', 'google.login_fail_short': 'Google 登入失敗', 'google.client_id_missing': '尚未設定Google OAuth Client ID。',
+  'account.menu': '帳戶選單', 'account.guest': '訪客', 'account.user': 'Google 使用者', 'auth.login': '登入', 'auth.logout': '退出登入', 'google.login': '登入Google 帳號', 'google.logout': '退出Google 帳號', 'google.connect_help': '使用Google 帳號登入。', 'google.logout_help': '退出Google 帳號。', 'google.login_wait': '正在登入Google...', 'google.connected': 'Google已連線', 'google.logout_done': '已退出Google', 'google.login_fail_short': 'Google 登入失敗', 'google.client_id_missing': '尚未設定Google OAuth Client ID。',
   'language.label':'語言', 'language.select':'選擇語言', 'theme.label':'主題', 'theme.change':'切換主題', 'theme.to_light':'切換到淺色主題', 'theme.to_dark':'切換到深色主題',
   'nav.products':'產品導覽', 'nav.simple':'簡易產生器', 'nav.player':'詳細產生器', 'nav.rollscriptor':'RollScriptor',
   'nav.midi_extract':"MIDI 擷取",

@@ -2,7 +2,7 @@ export default { code:'ja', htmlLang:'ja', strings:{
   'site.title':'モビバード v5.2', 'ui.brand':'モビバード', 'settings.menu':'設定',
   'ui.recommended':"おすすめサイト", 'ui.select_recommended':"おすすめサイトを選択", 'ui.discord':"Discord",
   'site.map':"サイトマップ", 'site.simple':"簡単モード", 'site.player':"詳細モード", 'site.rollscriptor':"ロールスクリプター", 'site.veloscriptor':"ヴェロスクリプター",
-  'account.user': 'Google ユーザー', 'auth.login': 'ログイン', 'auth.logout': 'ログアウト', 'google.login': 'Googleアカウントでログイン', 'google.logout': 'Googleアカウントからログアウト', 'google.connect_help': 'Googleアカウントでログインします。', 'google.logout_help': 'Googleアカウントからログアウトします。', 'google.login_wait': 'Googleにログインしています...', 'google.connected': 'Google連携済み', 'google.logout_done': 'Googleからログアウトしました', 'google.login_fail_short': 'Googleログイン失敗', 'google.client_id_missing': 'Google OAuth Client IDが設定されていません。',
+  'account.menu': 'アカウントメニュー', 'account.guest': 'ゲスト', 'account.user': 'Google ユーザー', 'auth.login': 'ログイン', 'auth.logout': 'ログアウト', 'google.login': 'Googleアカウントでログイン', 'google.logout': 'Googleアカウントからログアウト', 'google.connect_help': 'Googleアカウントでログインします。', 'google.logout_help': 'Googleアカウントからログアウトします。', 'google.login_wait': 'Googleにログインしています...', 'google.connected': 'Google連携済み', 'google.logout_done': 'Googleからログアウトしました', 'google.login_fail_short': 'Googleログイン失敗', 'google.client_id_missing': 'Google OAuth Client IDが設定されていません。',
   'language.label':'言語', 'language.select':'言語を選択', 'theme.label':'テーマ', 'theme.change':'テーマ変更', 'theme.to_light':'ライトテーマに変更', 'theme.to_dark':'ダークテーマに変更',
   'nav.products':'製品移動', 'nav.simple':'かんたん生成', 'nav.player':'詳細生成', 'nav.rollscriptor':'ロールスクリプター',
   'nav.midi_extract':"MIDI抽出",

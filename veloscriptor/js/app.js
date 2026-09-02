@@ -1,5 +1,5 @@
 import { buildMidiPlaybackNotes, makeOutputFileName, parseMidiForVelocity, patchMidiVelocities } from './midi.js?v=20260831-preview-crossfade1';
-import { initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260831-account-menu1';
+import { initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260903-guest-locale1';
 
 const TARGET_SAMPLE_RATE = 16000;
 const AUTO_BASE_VELOCITY = 96;
