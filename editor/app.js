@@ -109,9 +109,11 @@
       measureGrid: "#5b6372",
       beatGrid: "#414753",
       minorGrid: "#2c3038",
-      selectedStroke: "#ffffff",
+      selectedStroke: "#00c8ff",
+      selectedHalo: "rgba(0,200,255,0.42)",
+      selectedOverlay: "rgba(0,200,255,0.22)",
       noteStroke: "#ffffff",
-      selectedShine: "rgba(255,255,255,0.18)",
+      selectedShine: "rgba(190,243,255,0.48)",
       resizeHandle: "rgba(15,18,24,0.72)",
       resizeHandleLine: "rgba(255,255,255,0.9)",
       marqueeFill: "rgba(122, 162, 247, 0.12)",
@@ -134,9 +136,11 @@
       measureGrid: "#4d5b6d",
       beatGrid: "#7c8898",
       minorGrid: "#c5ccd5",
-      selectedStroke: "#ffffff",
+      selectedStroke: "#009fce",
+      selectedHalo: "rgba(0,159,206,0.40)",
+      selectedOverlay: "rgba(0,174,224,0.20)",
       noteStroke: "#ffffff",
-      selectedShine: "rgba(255,255,255,0.58)",
+      selectedShine: "rgba(0,159,206,0.32)",
       resizeHandle: "rgba(18,28,41,0.82)",
       resizeHandleLine: "rgba(255,255,255,0.98)",
       marqueeFill: "rgba(35, 89, 185, 0.16)",
@@ -2430,6 +2434,7 @@
     const visibleEndBeat = Math.max(visibleStartBeat, xToBeat(visibleRight) + CONFIG.minimumNoteBeat);
     const noteRefs = getVisibleMidiNoteRefs(visibleStartBeat, visibleEndBeat);
     const activeGroupId = state.midiReference.activeGroupId;
+    const hasMidiSelection = state.midiSelectedNoteKeys.size > 0;
 
     context.save();
     // Two inexpensive passes keep the active source channel visually above all siblings
@@ -2463,7 +2468,8 @@
         const selected = state.midiSelectedNoteKeys.has(midiSelectionKey(group.id, note.id));
         const color = getMidiGroupColor(group, groupIndex);
         const baseAlpha = active ? 0.99 : 0.70;
-        context.globalAlpha = group.muted ? baseAlpha * 0.46 : baseAlpha;
+        const selectionDim = hasMidiSelection && !selected ? 0.75 : 1;
+        context.globalAlpha = (group.muted ? baseAlpha * 0.46 : baseAlpha) * selectionDim;
         if (active) {
           context.fillStyle = "rgba(0,0,0,.26)";
           context.fillRect(x + 2, y + 2, width, Math.max(1, height - 1));
@@ -2476,10 +2482,24 @@
           context.fillStyle = "rgba(0,0,0,.20)";
           context.fillRect(x + 2, y + height - 2, Math.max(0, width - 2), 2);
         }
-        context.globalAlpha = selected ? 1 : (group.muted ? baseAlpha * 0.46 : baseAlpha);
-        context.strokeStyle = selected ? theme.selectedStroke : (color || theme.midiReferenceStroke);
-        context.lineWidth = selected ? 2.5 : (active ? 1.5 : 1);
-        context.strokeRect(x + 1.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
+        if (selected) {
+          context.save();
+          context.globalAlpha = 1;
+          context.fillStyle = theme.selectedOverlay;
+          context.fillRect(x + 1, y, width, height);
+          context.strokeStyle = theme.selectedHalo;
+          context.lineWidth = 5;
+          context.strokeRect(x + 1.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
+          context.strokeStyle = theme.selectedStroke;
+          context.lineWidth = 2.5;
+          context.strokeRect(x + 1.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
+          context.restore();
+        } else {
+          context.globalAlpha = (group.muted ? baseAlpha * 0.46 : baseAlpha) * selectionDim;
+          context.strokeStyle = color || theme.midiReferenceStroke;
+          context.lineWidth = active ? 1.5 : 1;
+          context.strokeRect(x + 1.5, y + 0.5, Math.max(1, width - 1), Math.max(1, height - 1));
+        }
       }
     }
     context.restore();
@@ -2707,6 +2727,7 @@
       const color = getChannelColor(channel, channelIndex);
       const noteBorderColor = darkenHexColor(color);
       const isActive = state.activePanel === "notes" && channelIndex === state.activeChannel;
+      const hasActiveSelection = isActive && state.selectedNoteIds.size > 0;
       // Keep overlaps visible, while giving the active channel a dense foreground presence.
       const baseAlpha = isActive ? 0.99 : 0.70;
       const channelAlpha = channel.muted ? baseAlpha * 0.46 : baseAlpha;
@@ -2740,7 +2761,8 @@
         const widthValue = Math.max(5, endX - x - 1);
         const selected = isActive && state.selectedNoteIds.has(note.id);
         const noteVolume = getNoteVolume(note);
-        context.globalAlpha = channelAlpha * (0.62 + noteVolume / 15 * 0.36);
+        const selectionDim = hasActiveSelection && !selected ? 0.75 : 1;
+        context.globalAlpha = channelAlpha * (0.62 + noteVolume / 15 * 0.36) * selectionDim;
 
         if (isActive) {
           // Cheap bevel/shadow treatment: no canvas blur, so dense projects stay fast.
@@ -2755,11 +2777,26 @@
           context.fillStyle = "rgba(0,0,0,.20)";
           context.fillRect(x + 2, y + heightValue - 2, Math.max(0, widthValue - 2), 2);
         }
-        context.strokeStyle = noteBorderColor;
-        context.lineWidth = selected ? 2.5 : (isActive ? 1.5 : 1);
-        context.strokeRect(x + 1.5, y + 0.5, widthValue - 1, heightValue - 1);
+        if (selected) {
+          context.save();
+          context.globalAlpha = 1;
+          context.fillStyle = theme.selectedOverlay;
+          context.fillRect(x + 1, y, widthValue, heightValue);
+          context.strokeStyle = theme.selectedHalo;
+          context.lineWidth = 5;
+          context.strokeRect(x + 1.5, y + 0.5, widthValue - 1, heightValue - 1);
+          context.strokeStyle = theme.selectedStroke;
+          context.lineWidth = 2.5;
+          context.strokeRect(x + 1.5, y + 0.5, widthValue - 1, heightValue - 1);
+          context.restore();
+        } else {
+          context.strokeStyle = noteBorderColor;
+          context.lineWidth = isActive ? 1.5 : 1;
+          context.strokeRect(x + 1.5, y + 0.5, widthValue - 1, heightValue - 1);
+        }
 
         if (selected) {
+          context.globalAlpha = 1;
           context.fillStyle = theme.selectedShine;
           context.fillRect(x + 3, y + 2, Math.max(0, widthValue - 4), 3);
           const handleWidth = Math.min(4, Math.max(2, Math.floor(widthValue / 4)));
