@@ -11243,8 +11243,7 @@
   }
 
   function moveToTimelineStart() {
-    stopPlayback(false);
-    setPlayheadBeat(0);
+    seekPlayheadBeat(0);
     elements.rollViewport.scrollLeft = 0;
     updatePlayheadVisual();
     drawTimeline();
