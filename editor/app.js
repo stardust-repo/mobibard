@@ -178,6 +178,7 @@
     editDeleteButton: document.querySelector("#editDeleteButton"),
     editNoteVolumeButton: document.querySelector("#editNoteVolumeButton"),
     fileExportButton: document.querySelector("#fileExportButton"),
+    supportedFilesMenuButton: document.querySelector("#supportedFilesMenuButton"),
     mmlImportButton: document.querySelector("#mmlImportButton"),
     newButton: document.querySelector("#newButton"),
     openButton: document.querySelector("#openButton"),
@@ -203,7 +204,6 @@
     playbackRateValue: document.querySelector("#playbackRateValue"),
     playbackRateResetButton: document.querySelector("#playbackRateResetButton"),
     measureSpaceButton: document.querySelector("#measureSpaceButton"),
-    beatSpaceButton: document.querySelector("#beatSpaceButton"),
     snapSelect: document.querySelector("#snapSelect"),
     noteVolumeDisplaySelect: document.querySelector("#noteVolumeDisplaySelect"),
     pitchSpacingSelect: document.querySelector("#pitchSpacingSelect"),
@@ -363,8 +363,8 @@
     timeEditDialog: document.querySelector("#timeEditDialog"),
     timeEditTitle: document.querySelector("#timeEditTitle"),
     timeEditPosition: document.querySelector("#timeEditPosition"),
-    timeEditAmountInput: document.querySelector("#timeEditAmountInput"),
-    timeEditUnitLabel: document.querySelector("#timeEditUnitLabel"),
+    timeEditMeasureInput: document.querySelector("#timeEditMeasureInput"),
+    timeEditBeatInput: document.querySelector("#timeEditBeatInput"),
     timeEditCloseButton: document.querySelector("#timeEditCloseButton"),
     timeEditCancelButton: document.querySelector("#timeEditCancelButton"),
     timeEditInsertButton: document.querySelector("#timeEditInsertButton"),
@@ -421,6 +421,7 @@
     collapsedMidiDocumentIds: new Set(),
     collapsedChannelGroups: { edit: false, source: false },
     editTool: "note",
+    shiftToolHeld: false,
     selectedNoteIds: new Set(),
     nextNoteId: 1,
     dirty: false,
@@ -431,7 +432,7 @@
     tempoDrag: null,
     tempoTouchTap: null,
     tempoEditor: { mode: null, tempoId: null, beat: 0 },
-    timeEdit: { unit: "measure", beat: 0 },
+    timeEdit: { beat: 0 },
     suppressContextMenuUntil: 0,
     suppressNextContextMenu: false,
     playhead: {
@@ -2335,8 +2336,24 @@
     updateDirtyState();
   }
 
+  function getEffectiveEditTool(event = null) {
+    const shiftHeld = event && typeof event.shiftKey === "boolean"
+      ? Boolean(event.shiftKey)
+      : Boolean(state.shiftToolHeld);
+    if (!shiftHeld) return state.editTool;
+    return state.editTool === "select" ? "note" : "select";
+  }
+
+  function setShiftToolHeld(held) {
+    const next = Boolean(held);
+    if (state.shiftToolHeld === next) return false;
+    state.shiftToolHeld = next;
+    updateEditToolControls();
+    return true;
+  }
+
   function updateEditToolControls() {
-    const selecting = state.editTool === "select";
+    const selecting = getEffectiveEditTool() === "select";
     elements.noteToolButton?.setAttribute("aria-pressed", String(!selecting));
     elements.selectToolButton?.setAttribute("aria-pressed", String(selecting));
     elements.rollViewport?.classList.toggle("select-tool-active", selecting);
@@ -2924,12 +2941,13 @@
     context.font = "700 10px sans-serif";
     for (const marker of visibleTempoMarkers) {
       drawRoundedRect(context, marker.labelX, marker.labelY, marker.labelWidth, marker.labelHeight, 3);
-      context.fillStyle = state.theme === "light" ? "#11603f" : "#176845";
+      const tempoAccent = state.theme === "light" ? "#23865b" : "#72e2a8";
+      context.fillStyle = state.theme === "light" ? "rgba(35, 134, 91, 0.10)" : "rgba(58, 191, 124, 0.14)";
       context.fill();
-      context.strokeStyle = state.theme === "light" ? "#23865b" : "#72e2a8";
+      context.strokeStyle = tempoAccent;
       context.lineWidth = 1;
       context.stroke();
-      context.fillStyle = "#f4fff8";
+      context.fillStyle = tempoAccent;
       context.textBaseline = "middle";
       context.fillText(marker.label, marker.labelX + 6, marker.labelY + marker.labelHeight / 2 + 0.5);
     }
@@ -3024,6 +3042,73 @@
     if (preview) previewNotesAtPlayhead(state.playhead.beat);
   }
 
+  function restartRunningPlaybackAtBeat(beat) {
+    if (!state.playback.running || !audioEngine.context) return false;
+
+    const endBeat = getPlaybackEndBeat();
+    const targetBeat = clamp(Number(beat) || 0, 0, endBeat);
+    state.playhead.beat = targetBeat;
+    updatePlayheadVisual();
+    drawTimeline();
+    updatePlaybackTimeInfo(targetBeat);
+
+    if (targetBeat >= endBeat - 1e-7) {
+      stopPlayback(false);
+      return true;
+    }
+
+    window.clearTimeout(state.playback.schedulerTimer);
+    state.playback.schedulerTimer = 0;
+    state.playback.scrollAnimation = null;
+    state.playback.lastTimelineDrawAt = 0;
+    stopScheduledAudioClips();
+    audioEngine.stopAll();
+    clearPlaybackKeyboardPitches();
+
+    state.playback.startBeat = targetBeat;
+    state.playback.endBeat = endBeat;
+    const midiDocument = isMidiReferenceActive() ? getActiveMidiDocument() : null;
+    state.playback.tempoMap = midiDocument
+      ? ensureMidiPlaybackCache(midiDocument)?.tempoMap || createTempoTimeMap(midiDocument.tempoEvents || [])
+      : createTempoTimeMap();
+    state.playback.startSeconds = beatToSecondsFromMap(targetBeat, state.playback.tempoMap);
+    state.playback.endSeconds = beatToSecondsFromMap(endBeat, state.playback.tempoMap);
+
+    const playbackNotes = preparePlaybackSchedule(targetBeat);
+    const hasPlayableAudio = state.audioClips.some((clip) => (
+      !clip.muted
+      && getAudioClipEndBeat(clip) > targetBeat + 1e-7
+      && Boolean(getAudioRuntime(clip.id)?.audioBuffer)
+    ));
+    if (!playbackNotes.length && !hasPlayableAudio) {
+      stopPlayback(false);
+      return true;
+    }
+
+    const scheduleDelay = 0.025;
+    state.playback.audioStartTime = audioEngine.context.currentTime + scheduleDelay;
+    state.playback.startedAt = performance.now() + scheduleDelay * 1000;
+    scheduleAudioClipsForPlayback();
+    if (playbackNotes.length) schedulePlaybackLookahead();
+    updatePlayButton();
+    return true;
+  }
+
+  function seekPlayheadBeat(beat, { preview = false } = {}) {
+    const targetBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
+    if (state.playback.running && audioEngine.context) {
+      restartRunningPlaybackAtBeat(targetBeat);
+      return;
+    }
+    if (state.playback.loading) {
+      stopPlayback(false);
+      setPlayheadBeat(targetBeat, { preview: false });
+      window.setTimeout(() => startPlayback(), 0);
+      return;
+    }
+    setPlayheadBeat(targetBeat, { preview });
+  }
+
   function timelineRawBeatFromPointer(event) {
     const rect = elements.timelineCanvas.getBoundingClientRect();
     const absoluteX = event.clientX - rect.left + elements.rollViewport.scrollLeft;
@@ -3089,6 +3174,23 @@
     return nearest;
   }
 
+  function handleTimelineDoubleClick(event) {
+    if (event.button !== 0) return;
+    const rawBeat = timelineRawBeatFromPointer(event);
+    if (rawBeat < 0) return;
+    const tempo = findTempoMarkerFromPointer(event);
+    const beat = timelineBeatFromPointer(event);
+    seekPlayheadBeat(tempo?.beat ?? beat);
+    if (isMidiReferenceActive()) {
+      showToast(tempo ? `MIDI 템포 ${tempo.bpm} · 읽기 전용` : "MIDI 템포 맵은 읽기 전용입니다.");
+      event.preventDefault();
+      return;
+    }
+    if (tempo) openTempoEditor(tempo);
+    else openTempoEditor(null, { beat });
+    event.preventDefault();
+  }
+
   function handleTimelinePointerDown(event) {
     if (event.button !== 0) {
       return;
@@ -3138,7 +3240,7 @@
 
     state.playhead.pointerId = event.pointerId;
     trySetPointerCapture(elements.timelineCanvas, event.pointerId);
-    setPlayheadBeat(timelineBeatFromPointer(event), { stop: true });
+    setPlayheadBeat(timelineBeatFromPointer(event), { preview: false });
     event.preventDefault();
   }
 
@@ -3240,12 +3342,22 @@
     if (state.playhead.pointerId !== event.pointerId) {
       return;
     }
+    const targetBeat = state.playhead.beat;
     state.playhead.pointerId = null;
     try {
       elements.timelineCanvas.releasePointerCapture(event.pointerId);
     } catch {
       // Pointer capture may already be released.
     }
+    if (event.type === "pointercancel") {
+      if (state.playback.running && audioEngine.context) {
+        const elapsedSeconds = Math.max(0, audioEngine.context.currentTime - state.playback.audioStartTime);
+        const timelineSeconds = state.playback.startSeconds + elapsedSeconds * Math.max(0.01, Number(state.playbackRate) || 1);
+        setPlayheadBeat(getPlaybackVisualBeat(secondsToBeatFromMap(timelineSeconds, state.playback.tempoMap)));
+      }
+      return;
+    }
+    if (state.playback.running || state.playback.loading) seekPlayheadBeat(targetBeat);
   }
 
 
@@ -7005,7 +7117,7 @@
     if (Number.isFinite(Number(pointerId))) {
       try { elements.rollCanvas.releasePointerCapture(pointerId); } catch {}
     }
-    elements.rollCanvas.style.cursor = state.editTool === "select" || state.activePanel !== "notes" ? "default" : "crosshair";
+    elements.rollCanvas.style.cursor = getEffectiveEditTool() === "select" || state.activePanel !== "notes" ? "default" : "crosshair";
     shrinkTimelineToContent();
     drawRoll();
     updateChannelInfo();
@@ -7583,22 +7695,32 @@
     return noteRight >= left && noteLeft <= right && noteBottom >= top && noteTop <= bottom;
   }
 
-  function updateMarqueeSelection(interaction) {
+  function applyMarqueeSelectionMode(baseSelection, matchingIds, event = null, fallbackMode = "replace") {
+    const additive = Boolean(event?.ctrlKey || event?.metaKey) || (!event && fallbackMode === "add");
+    const nextSelection = additive ? new Set(baseSelection) : new Set();
+    for (const id of matchingIds) nextSelection.add(id);
+    return nextSelection;
+  }
+
+  function updateMarqueeSelection(interaction, event = null) {
     const left = Math.min(interaction.startX, interaction.currentX);
     const right = Math.max(interaction.startX, interaction.currentX);
     const top = Math.min(interaction.startY, interaction.currentY);
     const bottom = Math.max(interaction.startY, interaction.currentY);
-    const nextSelection = new Set(interaction.baseSelection);
+    const matchingIds = [];
     for (const note of getActiveChannel().notes) {
-      if (noteIntersectsBox(note, left, top, right, bottom)) {
-        nextSelection.add(note.id);
-      }
+      if (noteIntersectsBox(note, left, top, right, bottom)) matchingIds.push(note.id);
     }
-    state.selectedNoteIds = nextSelection;
+    state.selectedNoteIds = applyMarqueeSelectionMode(
+      interaction.baseSelection,
+      matchingIds,
+      event,
+      interaction.initialSelectionMode,
+    );
   }
 
   function beginMarqueeSelection(event, point) {
-    const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+    const initialSelectionMode = event.ctrlKey || event.metaKey ? "add" : "replace";
     state.interaction = {
       type: "marquee",
       pointerId: event.pointerId,
@@ -7607,7 +7729,8 @@
       startY: point.y,
       currentX: Math.max(point.x, beatToX(0)),
       currentY: point.y,
-      baseSelection: additive ? new Set(state.selectedNoteIds) : new Set(),
+      baseSelection: new Set(state.selectedNoteIds),
+      initialSelectionMode,
       moved: false,
       selectionStarted: false,
     };
@@ -7661,32 +7784,36 @@
     return bounds.right >= left && bounds.left <= right && bounds.bottom >= top && bounds.top <= bottom;
   }
 
-  function updateMidiMarqueeSelection(interaction) {
+  function updateMidiMarqueeSelection(interaction, event = null) {
     const left = Math.min(interaction.startX, interaction.currentX);
     const right = Math.max(interaction.startX, interaction.currentX);
     const top = Math.min(interaction.startY, interaction.currentY);
     const bottom = Math.max(interaction.startY, interaction.currentY);
     const activeGroup = getMidiGroupById(interaction.groupId);
-    const next = new Set(interaction.additive ? interaction.baseSelection : []);
-    if (!activeGroup || activeGroup.visible === false || getActiveMidiDocument()?.visible === false) {
-      state.midiSelectedNoteKeys = next;
-      return;
-    }
-    const startBeat = Math.max(0, xToBeat(left) - CONFIG.minimumNoteBeat);
-    const endBeat = Math.max(startBeat, xToBeat(right) + CONFIG.minimumNoteBeat);
-    for (const [groupIndex, noteIndex] of getVisibleMidiNoteRefs(startBeat, endBeat)) {
-      const group = state.midiReference.groups[groupIndex];
-      if (!group || String(group.id) !== String(activeGroup.id)) continue;
-      const note = group.notes[noteIndex];
-      if (note && noteRefIntersectsBox(note, left, top, right, bottom)) {
-        next.add(midiSelectionKey(activeGroup.id, note.id));
+    const matchingKeys = [];
+    if (activeGroup && activeGroup.visible !== false && getActiveMidiDocument()?.visible !== false) {
+      const startBeat = Math.max(0, xToBeat(left) - CONFIG.minimumNoteBeat);
+      const endBeat = Math.max(startBeat, xToBeat(right) + CONFIG.minimumNoteBeat);
+      for (const [groupIndex, noteIndex] of getVisibleMidiNoteRefs(startBeat, endBeat)) {
+        const group = state.midiReference.groups[groupIndex];
+        if (!group || String(group.id) !== String(activeGroup.id)) continue;
+        const note = group.notes[noteIndex];
+        if (note && noteRefIntersectsBox(note, left, top, right, bottom)) {
+          matchingKeys.push(midiSelectionKey(activeGroup.id, note.id));
+        }
       }
     }
-    state.midiSelectedNoteKeys = next;
+    state.midiSelectedNoteKeys = applyMarqueeSelectionMode(
+      interaction.baseSelection,
+      matchingKeys,
+      event,
+      interaction.initialSelectionMode,
+    );
   }
 
   function handleMidiRollPointerDown(event) {
     const point = pointerToRoll(event);
+    const effectiveEditTool = getEffectiveEditTool(event);
     const hit = findMidiNoteAt(point.x, point.y);
     if (event.button === 2) {
       if (hit) {
@@ -7698,7 +7825,7 @@
         renderChannelTabs();
         drawRoll();
       } else if (xToBeat(point.x) >= 0 && getMidiGroupById()) {
-        const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+        const initialSelectionMode = event.ctrlKey || event.metaKey ? "add" : "replace";
         state.interaction = {
           type: "midi-marquee",
           pointerId: event.pointerId,
@@ -7708,8 +7835,8 @@
           startY: point.y,
           currentX: point.x,
           currentY: point.y,
-          baseSelection: additive ? new Set(state.midiSelectedNoteKeys) : new Set(),
-          additive,
+          baseSelection: new Set(state.midiSelectedNoteKeys),
+          initialSelectionMode,
           moved: false,
         };
         trySetPointerCapture(elements.rollCanvas, event.pointerId);
@@ -7723,7 +7850,7 @@
       const key = midiSelectionKey(hit.group.id, hit.note.id);
       if (switchedGroup) {
         selectOnlyMidiNote(hit.group.id, hit.note.id);
-      } else if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      } else if (event.ctrlKey || event.metaKey) {
         if (state.midiSelectedNoteKeys.has(key)) state.midiSelectedNoteKeys.delete(key);
         else state.midiSelectedNoteKeys.add(key);
       } else {
@@ -7736,8 +7863,8 @@
     } else {
       const beat = xToBeat(point.x);
       const activeGroup = getMidiGroupById();
-      if (beat >= 0 && state.editTool === "select" && activeGroup) {
-        const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+      if (beat >= 0 && effectiveEditTool === "select" && activeGroup) {
+        const initialSelectionMode = event.ctrlKey || event.metaKey ? "add" : "replace";
         state.interaction = {
           type: "midi-marquee",
           pointerId: event.pointerId,
@@ -7747,8 +7874,8 @@
           startY: point.y,
           currentX: point.x,
           currentY: point.y,
-          baseSelection: additive ? new Set(state.midiSelectedNoteKeys) : new Set(),
-          additive,
+          baseSelection: new Set(state.midiSelectedNoteKeys),
+          initialSelectionMode,
           moved: false,
         };
         trySetPointerCapture(elements.rollCanvas, event.pointerId);
@@ -7775,6 +7902,11 @@
     }
 
     elements.rollViewport.focus();
+    if (Boolean(event.shiftKey) !== Boolean(state.shiftToolHeld)) {
+      state.shiftToolHeld = Boolean(event.shiftKey);
+      updateEditToolControls();
+    }
+    const effectiveEditTool = getEffectiveEditTool(event);
     if (isMidiReferenceActive()) {
       handleMidiRollPointerDown(event);
       return;
@@ -7789,7 +7921,7 @@
     if (state.activePanel === "none") {
       const point = pointerToRoll(event);
       const beat = xToBeat(point.x);
-      if (event.button === 0 && state.editTool === "select") {
+      if (event.button === 0 && effectiveEditTool === "select") {
         const otherChannelHit = findOtherVisibleChannelNoteHitAt(point.x, point.y, -1);
         if (otherChannelHit) {
           selectChannel(otherChannelHit.channelIndex);
@@ -7809,8 +7941,8 @@
     }
     const point = pointerToRoll(event);
     const pointBeat = xToBeat(point.x);
-    const additive = event.ctrlKey || event.metaKey || event.shiftKey;
-    const touchSelectionMode = state.editTool === "select" && event.button === 0;
+    const additive = event.ctrlKey || event.metaKey;
+    const touchSelectionMode = effectiveEditTool === "select" && event.button === 0;
 
     let noteHit = findNoteHitAt(point.x, point.y);
     // 선택 도구에서 아무 노트도 선택되지 않았다면, 현재 채널 뒤에 비쳐 보이는
@@ -7963,7 +8095,7 @@
       }
       trySetPointerCapture(elements.rollCanvas, event.pointerId);
     } else if (pointBeat >= 0) {
-      if (state.editTool === "select") {
+      if (effectiveEditTool === "select") {
         beginMarqueeSelection(event, point);
       } else {
         // 노트 도구의 빈 편집 영역 클릭/드래그는 현재 음표 단위로 노트를 배치합니다.
@@ -7993,7 +8125,7 @@
         ? "ew-resize"
         : noteHit?.part === "body"
           ? "grab"
-          : state.editTool === "select" ? "default" : "crosshair";
+          : getEffectiveEditTool() === "select" ? "default" : "crosshair";
       return;
     }
 
@@ -8060,7 +8192,7 @@
         state.interaction.moved = true;
         state.suppressContextMenuUntil = performance.now() + 600;
         closeContextMenu();
-        updateMidiMarqueeSelection(state.interaction);
+        updateMidiMarqueeSelection(state.interaction, event);
         event?.preventDefault();
       }
       updateMidiSelectionUI();
@@ -8079,7 +8211,7 @@
         state.interaction.moved = true;
         state.suppressContextMenuUntil = performance.now() + 600;
         closeContextMenu();
-        updateMarqueeSelection(state.interaction);
+        updateMarqueeSelection(state.interaction, event);
         event?.preventDefault();
       }
     } else if (state.interaction.type === "resize-note") {
@@ -8269,7 +8401,7 @@
     }
 
     state.interaction = null;
-    elements.rollCanvas.style.cursor = isMidiReferenceActive() || state.editTool === "select" ? "default" : "crosshair";
+    elements.rollCanvas.style.cursor = isMidiReferenceActive() || getEffectiveEditTool() === "select" ? "default" : "crosshair";
     try {
       elements.rollCanvas.releasePointerCapture(event.pointerId);
     } catch {
@@ -9859,19 +9991,52 @@
     if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = true;
   }
 
-  function openTimeEditDialog(unit = "measure") {
-    const normalizedUnit = unit === "beat" ? "beat" : "measure";
-    state.timeEdit = { unit: normalizedUnit, beat: clamp(Number(state.playhead.beat) || 0, 0, getTotalBeats()) };
-    if (elements.timeEditTitle) elements.timeEditTitle.textContent = normalizedUnit === "measure" ? "마디 공간 편집" : "박자 공간 편집";
+  function openTimeEditDialog({ beat = state.playhead.beat } = {}) {
+    state.timeEdit = { beat: clamp(Number(beat) || 0, 0, getTotalBeats()) };
+    if (elements.timeEditTitle) elements.timeEditTitle.textContent = "마디 편집";
     if (elements.timeEditPosition) elements.timeEditPosition.textContent = `빨간 재생선 ${state.timeEdit.beat.toFixed(3)} beat 기준`;
-    if (elements.timeEditUnitLabel) elements.timeEditUnitLabel.textContent = normalizedUnit === "measure" ? "마디" : "박자";
-    if (elements.timeEditAmountInput) {
-      elements.timeEditAmountInput.value = "1";
-      elements.timeEditAmountInput.min = "1";
-      elements.timeEditAmountInput.step = "1";
-    }
+    if (elements.timeEditMeasureInput) elements.timeEditMeasureInput.value = "1";
+    if (elements.timeEditBeatInput) elements.timeEditBeatInput.value = "";
     if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = false;
-    requestAnimationFrame(() => elements.timeEditAmountInput?.focus());
+    requestAnimationFrame(() => {
+      elements.timeEditMeasureInput?.focus();
+      elements.timeEditMeasureInput?.select();
+    });
+  }
+
+  function getTimeEditAmount() {
+    const measures = Math.max(0, Math.floor(Number(elements.timeEditMeasureInput?.value) || 0));
+    const rawSubdivision = String(elements.timeEditBeatInput?.value ?? "").trim();
+    const subdivisions = rawSubdivision === ""
+      ? 0
+      : clamp(Math.floor(Number(rawSubdivision) || 0), 1, 63);
+    return {
+      measures,
+      subdivisions,
+      amountBeats: measures * CONFIG.beatsPerMeasure + subdivisions * CONFIG.minimumNoteBeat,
+    };
+  }
+
+  function describeTimeEditAmount(measures, subdivisions) {
+    const parts = [];
+    if (measures) parts.push(`${measures}마디`);
+    if (subdivisions) parts.push(`${subdivisions}/64 박자`);
+    return parts.join(" ") || "0박자";
+  }
+
+  function normalizeTimeEditSubdivisionInput({ clampValue = false } = {}) {
+    const input = elements.timeEditBeatInput;
+    if (!input) return 0;
+    const raw = String(input.value ?? "").trim();
+    if (raw === "") return 0;
+    const parsed = Math.floor(Number(raw));
+    if (!Number.isFinite(parsed)) {
+      input.value = "";
+      return 0;
+    }
+    const normalized = clamp(parsed, 1, 63);
+    if (clampValue || normalized !== parsed) input.value = String(normalized);
+    return normalized;
   }
 
   function trimNoteToBeat(note, targetEndBeat) {
@@ -9906,13 +10071,12 @@
     state.tempos.sort((a, b) => a.beat - b.beat || a.id - b.id);
     state.timelineBeats = Math.max(getTotalBeats() + amount, getPersistentContentEndBeat() + getSnapBeat());
     ensureTimelineFitsViewport();
-    markDirty(state.timeEdit.unit === "measure" ? "마디 공간 추가" : "박자 공간 추가");
+    markDirty("마디/박자 공간 추가");
     renderChannelTabs();
     renderChannelEditor();
     resizeAndDraw();
     updateChannelInfo();
     closeTimeEditDialog();
-    showToast(`${state.timeEdit.unit === "measure" ? "마디" : "박자"} 공간을 추가했습니다.`);
     return true;
   }
 
@@ -9976,20 +10140,31 @@
     state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, getTotalBeats() - amount);
     shrinkTimelineToContent();
     ensureTimelineFitsViewport();
-    markDirty(state.timeEdit.unit === "measure" ? "마디 공간 삭제" : "박자 공간 삭제");
+    markDirty("마디/박자 공간 삭제");
     renderChannelTabs();
     renderChannelEditor();
     resizeAndDraw();
     updateChannelInfo();
     closeTimeEditDialog();
-    showToast(`${state.timeEdit.unit === "measure" ? "마디" : "박자"} 공간을 삭제했습니다.`);
     return true;
   }
 
   function applyTimeEdit(action) {
-    const amountCount = Math.max(1, Math.floor(Number(elements.timeEditAmountInput?.value) || 1));
-    const amountBeats = state.timeEdit.unit === "measure" ? amountCount * CONFIG.beatsPerMeasure : amountCount;
-    return action === "delete" ? deleteTrackSpaceAtPlayhead(amountBeats) : insertTrackSpaceAtPlayhead(amountBeats);
+    normalizeTimeEditSubdivisionInput({ clampValue: true });
+    const { measures, subdivisions, amountBeats } = getTimeEditAmount();
+    if (amountBeats <= 0) {
+      showToast("추가하거나 삭제할 마디 또는 1/64 박자를 입력하세요.");
+      elements.timeEditMeasureInput?.focus();
+      return false;
+    }
+    const resumePlayback = state.playback.running || state.playback.loading;
+    if (resumePlayback) stopPlayback(false);
+    const applied = action === "delete" ? deleteTrackSpaceAtPlayhead(amountBeats) : insertTrackSpaceAtPlayhead(amountBeats);
+    if (applied) {
+      showToast(`${describeTimeEditAmount(measures, subdivisions)} 공간을 ${action === "delete" ? "삭제" : "추가"}했습니다.`);
+      if (resumePlayback) window.setTimeout(() => startPlayback(), 0);
+    }
+    return applied;
   }
 
   function closeTempoEditor() {
@@ -10969,10 +11144,12 @@
     }
 
     const visualBeat = getPlaybackVisualBeat(currentBeat);
-    state.playhead.beat = visualBeat;
     updatePlaybackKeyboardPitches(currentBeat);
-    updatePagedPlaybackScroll(now, visualBeat);
-    updatePlayheadVisual();
+    if (state.playhead.pointerId === null) {
+      state.playhead.beat = visualBeat;
+      updatePagedPlaybackScroll(now, visualBeat);
+      updatePlayheadVisual();
+    }
     if (now - state.playback.lastTimelineDrawAt >= 32) {
       state.playback.lastTimelineDrawAt = now;
       drawTimeline();
@@ -11372,6 +11549,7 @@
     state.activeChannel = 0;
     state.activePanel = "notes";
     state.editTool = "note";
+    state.shiftToolHeld = false;
     state.playhead.beat = 0;
     stopRollDragAutoScroll();
     state.interaction = null;
@@ -11614,6 +11792,11 @@
       closeContextMenu();
       return;
     }
+    if (area.name === "timeline") {
+      // Right-click actions should always show exactly which timeline position they target.
+      // If playback is active, seek there without leaving playback stopped.
+      seekPlayheadBeat(timelineBeatFromPointer(event));
+    }
     if (area.name === "piano-roll" && !isMidiReferenceActive()) {
       const point = pointerToRoll(event);
       if (!findNoteAt(point.x, point.y)) {
@@ -11712,16 +11895,18 @@
     registerContextMenu("timeline", ({ event }) => {
       const beat = timelineBeatFromPointer(event);
       const tempo = findTempoMarkerFromPointer(event);
+      const timeEditItem = { label: "마디/박자 공간 편집", action: () => openTimeEditDialog({ beat }) };
       if (isMidiReferenceActive()) {
         return [
           tempo
             ? { label: `MIDI 템포 ${tempo.bpm} · 읽기 전용`, disabled: true }
             : { label: "MIDI 템포 맵 · 읽기 전용", disabled: true },
-          { label: "재생선을 여기에 놓기", action: () => setPlayheadBeat(tempo?.beat ?? beat, { stop: true }) },
+          timeEditItem,
+          "separator",
           {
             label: "0 마디 시작으로 이동",
             action: () => {
-              setPlayheadBeat(0, { stop: true });
+              seekPlayheadBeat(0);
               elements.rollViewport.scrollLeft = 0;
             },
           },
@@ -11733,7 +11918,7 @@
           { label: "템포 값 변경", action: () => editTempo(tempo) },
           { label: "위치 고정 · 이동/삭제 불가", disabled: true },
           "separator",
-          { label: "재생선을 0번에 놓기", action: () => setPlayheadBeat(0, { stop: true }) },
+          timeEditItem,
         ];
       }
       if (tempo) {
@@ -11742,16 +11927,17 @@
           { label: "템포 값 변경", action: () => editTempo(tempo) },
           { label: "템포 삭제", danger: true, action: () => deleteTempo(tempo) },
           "separator",
-          { label: "재생선을 여기에 놓기", action: () => setPlayheadBeat(tempo.beat, { stop: true }) },
+          timeEditItem,
         ];
       }
       return [
         { label: `${beat.toFixed(3)} beat에 템포 추가`, disabled: beat <= 0, action: () => addTempoAtBeat(beat) },
-        { label: "재생선을 여기에 놓기", action: () => setPlayheadBeat(beat, { stop: true }) },
+        timeEditItem,
+        "separator",
         {
           label: "0 마디 시작으로 이동",
           action: () => {
-            setPlayheadBeat(0, { stop: true });
+            seekPlayheadBeat(0);
             elements.rollViewport.scrollLeft = 0;
           },
         },
@@ -12081,6 +12267,7 @@
     elements.editDeleteButton.addEventListener("click", () => { closeEditMenu(); deleteCurrentSelection(); });
     elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openNoteVolumeDialog(); });
     elements.fileExportButton.addEventListener("click", () => { closeFileMenu(); exportCurrentContextAsMml(); });
+    elements.supportedFilesMenuButton?.addEventListener("click", closeFileMenu);
     elements.newButton.addEventListener("click", () => {
       closeFileMenu();
       resetProject();
@@ -12328,6 +12515,7 @@
     }, { passive: true });
     elements.pianoSection?.addEventListener("wheel", handlePianoRollAltWheelZoom, { passive: false });
     elements.timelineCanvas.addEventListener("pointerdown", handleTimelinePointerDown);
+    elements.timelineCanvas.addEventListener("dblclick", handleTimelineDoubleClick);
     elements.timelineCanvas.addEventListener("pointermove", handleTimelinePointerMove);
     elements.timelineCanvas.addEventListener("pointerup", handleTimelinePointerUp);
     elements.timelineCanvas.addEventListener("pointercancel", handleTimelinePointerUp);
@@ -12555,18 +12743,32 @@
     elements.tempoEditorCancelButton?.addEventListener("click", closeTempoEditor);
     elements.tempoEditorApplyButton?.addEventListener("click", applyTempoEditor);
     elements.tempoEditorDeleteButton?.addEventListener("click", deleteTempoFromEditor);
-    elements.measureSpaceButton?.addEventListener("click", () => openTimeEditDialog("measure"));
-    elements.beatSpaceButton?.addEventListener("click", () => openTimeEditDialog("beat"));
+    elements.measureSpaceButton?.addEventListener("click", () => openTimeEditDialog());
     elements.timeEditCloseButton?.addEventListener("click", closeTimeEditDialog);
     elements.timeEditCancelButton?.addEventListener("click", closeTimeEditDialog);
     elements.timeEditInsertButton?.addEventListener("click", () => applyTimeEdit("insert"));
     elements.timeEditDeleteButton?.addEventListener("click", () => applyTimeEdit("delete"));
-    elements.timeEditAmountInput?.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        applyTimeEdit("insert");
+    elements.timeEditBeatInput?.addEventListener("input", () => {
+      const input = elements.timeEditBeatInput;
+      if (!input || input.value === "") return;
+      const parsed = Math.floor(Number(input.value));
+      if (!Number.isFinite(parsed)) {
+        input.value = "";
+        return;
       }
+      if (parsed < 1) input.value = "1";
+      else if (parsed > 63) input.value = "63";
+      else if (String(parsed) !== input.value) input.value = String(parsed);
     });
+    elements.timeEditBeatInput?.addEventListener("blur", () => normalizeTimeEditSubdivisionInput({ clampValue: true }));
+    for (const input of [elements.timeEditMeasureInput, elements.timeEditBeatInput]) {
+      input?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          applyTimeEdit("insert");
+        }
+      });
+    }
     elements.timeEditBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.timeEditBackdrop) closeTimeEditDialog();
     });
@@ -12618,6 +12820,9 @@
       }
     });
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Shift" && !isTextEntryTarget(event.target)) {
+        setShiftToolHeld(true);
+      }
       if (handleEditModeShortcut(event) || handleZoomShortcut(event) || handlePlaybackShortcut(event)) {
         return;
       }
@@ -12678,6 +12883,9 @@
         openFilePickerInput(elements.fileInput);
       }
     });
+    document.addEventListener("keyup", (event) => {
+      if (event.key === "Shift") setShiftToolHeld(false);
+    });
 
     window.addEventListener("resize", () => {
       resizeAndDraw();
@@ -12699,6 +12907,7 @@
       layoutObserver.observe(elements.rollViewport);
     }
     window.addEventListener("blur", () => {
+      setShiftToolHeld(false);
       releaseKeyboardVoice(true);
       clearEditorPitchPreview(true);
     });

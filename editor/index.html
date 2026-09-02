@@ -9,7 +9,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <title>모비바드 v5.2</title>
 <link href="../assets/favicon.ico" rel="icon"/>
-<link href="styles.css?v=5.2.0&amp;rev=20260831-editor-theme-toggle1" rel="stylesheet"/>
+<link href="styles.css?v=5.2.0&amp;rev=20260903-editor-shift-tool1" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -27,7 +27,9 @@
 <button id="saveButton" role="menuitem" type="button">저장</button>
 <div class="file-menu-separator" role="separator"></div>
 <button id="audioOpenButton" role="menuitem" type="button">오디오 불러오기</button>
-<div class="file-menu-separator" role="separator"></div><button id="fileExportButton" role="menuitem" type="button">MML 내보내기</button></div>
+<div class="file-menu-separator" role="separator"></div>
+<button data-supported-files-button data-supported-files-context="editor" id="supportedFilesMenuButton" role="menuitem" type="button">지원 파일</button>
+<button id="fileExportButton" role="menuitem" type="button">MML 내보내기</button></div>
 </div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button">되돌리기</button><button id="editRedoButton" role="menuitem" type="button">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button">복사</button><button id="editCutButton" role="menuitem" type="button">잘라내기</button><button id="editPasteButton" role="menuitem" type="button">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button">삭제</button><button id="editNoteVolumeButton" role="menuitem" type="button">노트 볼륨</button></div></div>
 <input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98" hidden="" id="fileInput" data-music-format-input type="file"/>
 <input accept="text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle" hidden="" id="mmlImportFileInput" type="file"/>
@@ -66,16 +68,15 @@
 <button class="vertical-range-reset" id="playbackRateResetButton" type="button">초기화</button>
 </div>
 </div>
-<div aria-label="트랙 공간 편집" class="timeline-space-control" role="group">
-<button aria-label="마디 공간 편집" class="transport-utility-icon-button" id="measureSpaceButton" title="빨간 재생선 기준으로 마디 공간 추가/삭제" type="button">🎼</button>
-<button aria-label="박자 공간 편집" class="transport-utility-icon-button" id="beatSpaceButton" title="빨간 재생선 기준으로 박자 공간 추가/삭제" type="button">🎵</button>
+<div aria-label="마디 및 박자 편집" class="timeline-space-control" role="group">
+<button aria-label="마디 및 박자 공간 편집" class="transport-utility-button time-edit-open-button" id="measureSpaceButton" title="빨간 재생선 기준으로 마디/박자 공간 추가 또는 삭제" type="button">마디</button>
 </div>
 </div>
 <div class="toolbar-spacer"></div>
 <div class="toolbar-group view-actions">
-<button class="mabi-supported-files-button" data-supported-files-button data-supported-files-context="editor" type="button">지원 파일</button><div aria-label="피아노롤 조작 도구" class="edit-tool-control" role="group">
-<button aria-pressed="true" id="noteToolButton" title="터치 또는 왼쪽 클릭으로 노트를 배치합니다." type="button">노트</button>
-<button aria-pressed="false" id="selectToolButton" title="터치 또는 왼쪽 드래그로 범위를 선택합니다." type="button">선택</button>
+<div aria-label="피아노롤 조작 도구" class="edit-tool-control" role="group">
+<button aria-pressed="true" id="noteToolButton" title="터치 또는 왼쪽 클릭으로 노트를 배치합니다. Shift를 누르는 동안 선택 도구로 전환합니다." type="button">노트</button>
+<button aria-pressed="false" id="selectToolButton" title="터치 또는 왼쪽 드래그로 범위를 선택합니다. Shift를 누르는 동안 노트 도구로 전환합니다." type="button">선택</button>
 </div>
 <label class="compact-field compact-field-select-only">
 <select aria-label="편집 단위" id="snapSelect" title="숫자키 1~7로 음표 단위를 변경합니다.">
@@ -280,11 +281,11 @@
 </div><div class="popup-backdrop" hidden="" id="midiTransferBackdrop"><section aria-label="원본 채널 복사" aria-modal="true" class="transfer-dialog" id="midiTransferDialog" role="dialog"><div class="transfer-dialog-header"><div><strong>채널 복사</strong><span id="midiTransferSourceLabel">원본 자료</span></div><button aria-label="닫기" class="channel-mute-close" id="midiTransferCloseButton" type="button">×</button></div><p class="transfer-dialog-help">편집 영역에 새 채널로 복사할 악기를 선택하세요. 화음처럼 노트가 겹치는 악기는 편집 채널의 단선율 규칙에 맞게 필요한 만큼 여러 채널로 자동 분리됩니다.</p><div class="midi-transfer-selection-actions"><button id="midiTransferSelectAllButton" type="button">모두 선택</button><button id="midiTransferClearAllButton" type="button">모두 선택 해제</button></div><div class="midi-transfer-channel-list" id="midiTransferChannelList"></div><div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="midiTransferSummary"></div><button id="midiTransferCancelButton" type="button">취소</button><button id="midiTransferApplyButton" type="button">복사</button></div></section></div><div class="popup-backdrop" hidden="" id="noteVolumeBackdrop"><section aria-label="노트 볼륨 수정" aria-modal="true" class="note-volume-dialog" id="noteVolumeDialog" role="dialog"><div class="transfer-dialog-header"><div><strong>노트 볼륨</strong><span id="noteVolumeSelectionLabel">선택 노트</span></div><button aria-label="닫기" class="channel-mute-close" id="noteVolumeCloseButton" type="button">×</button></div><label class="note-volume-slider-row"><span>마비노기 볼륨</span><input aria-label="노트 볼륨 0에서 15" id="noteVolumeSlider" max="15" min="0" step="1" type="range" value="15"/><strong id="noteVolumeValue">V15</strong></label><p class="transfer-dialog-help">V0은 무음이며 V1은 MIDI velocity 1에 대응합니다. V2~V15는 나머지 velocity 범위를 균등하게 나눕니다.</p><div class="transfer-dialog-actions"><button id="noteVolumeCancelButton" type="button">취소</button><button id="noteVolumeApplyButton" type="button">적용</button></div></section></div><div class="popup-backdrop" hidden="" id="timeEditBackdrop">
 <section aria-label="트랙 공간 편집" aria-modal="true" class="time-edit-dialog" id="timeEditDialog" role="dialog">
 <div class="tempo-editor-header">
-<div><strong id="timeEditTitle">마디 공간 편집</strong><span id="timeEditPosition">빨간 재생선 기준</span></div>
+<div><strong id="timeEditTitle">마디 편집</strong><span id="timeEditPosition">빨간 재생선 기준</span></div>
 <button aria-label="닫기" class="channel-mute-close" id="timeEditCloseButton" type="button">×</button>
 </div>
-<label class="time-edit-field"><span>수량</span><span class="time-edit-number"><input aria-label="추가 또는 삭제할 수량" id="timeEditAmountInput" inputmode="numeric" min="1" step="1" type="number" value="1"/><strong id="timeEditUnitLabel">마디</strong></span></label>
-<p class="tempo-editor-help">원본 가져오기 파일과 오디오는 그대로 두고, 편집 채널과 편집 템포만 빨간 재생선 위치를 기준으로 이동합니다.</p>
+<div class="time-edit-field time-edit-combined-field"><span>편집할 길이</span><div class="time-edit-units-row"><label class="time-edit-number"><input aria-label="편집할 마디 수" id="timeEditMeasureInput" inputmode="numeric" min="0" step="1" type="number" value="1"/><strong>마디</strong></label><label class="time-edit-number time-edit-fraction-number"><input aria-label="편집할 64분할 박자 수 (1부터 63)" id="timeEditBeatInput" inputmode="numeric" max="63" min="1" step="1" type="number" value=""/><strong>/64 박자</strong></label></div></div>
+<p class="tempo-editor-help">왼쪽은 마디 단위, 오른쪽은 한 마디를 64등분한 잔여 길이(1/64~63/64)를 지정합니다. 64/64는 왼쪽의 1마디로 입력하세요. 원본 가져오기 파일과 오디오는 그대로 두고, 편집 채널과 편집 템포만 빨간 재생선 위치를 기준으로 이동합니다.</p>
 <div class="time-edit-actions"><button class="danger-button" id="timeEditDeleteButton" type="button">삭제</button><span></span><button id="timeEditCancelButton" type="button">취소</button><button id="timeEditInsertButton" type="button">추가</button></div>
 </section>
 </div>
@@ -352,6 +353,6 @@
 <script src="js/soundbank-player.js?v=5.1.0"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final46"></script>
 <script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script>
-<script src="app.js?v=5.2.0&amp;rev=20260831-editor-theme-toggle1"></script>
+<script src="app.js?v=5.2.0&amp;rev=20260903-editor-shift-tool1"></script>
 </body>
 </html>
