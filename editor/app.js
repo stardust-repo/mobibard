@@ -1051,6 +1051,14 @@
       || isDrumInstrumentName(group?.programName || group?.name);
   }
 
+  function compareMidiGroupsWithDrumsLast(left, right) {
+    const leftDrums = isMidiGroupDrums(left);
+    const rightDrums = isMidiGroupDrums(right);
+    if (leftDrums !== rightDrums) return leftDrums ? 1 : -1;
+    return clamp(Math.round(Number(left?.program) || 0), 0, 127) - clamp(Math.round(Number(right?.program) || 0), 0, 127)
+      || Math.max(0, Number(left?.trackIndex) || 0) - Math.max(0, Number(right?.trackIndex) || 0);
+  }
+
   function getInstrumentProgramFromName(name) {
     const normalized = String(name || "").trim();
     if (isDrumInstrumentName(normalized)) return 0;
@@ -4905,7 +4913,7 @@
         notes: mergeMidiInstrumentNotes(group.rawNotes),
       };
     }).filter((group) => group.notes.length)
-      .sort((left, right) => left.program - right.program || left.trackIndex - right.trackIndex);
+      .sort(compareMidiGroupsWithDrumsLast);
     groups.forEach((group, index) => {
       group.colorIndex = index;
       group.id = `midi-instrument-${group.channels.includes(9) ? "drums" : group.program}-${index + 1}`;
@@ -5023,7 +5031,7 @@
         };
       })
       .filter((group) => group.notes.length)
-      .sort((left, right) => left.program - right.program || left.trackIndex - right.trackIndex);
+      .sort(compareMidiGroupsWithDrumsLast);
 
     groups.forEach((group, index) => {
       group.colorIndex = index;
@@ -5705,7 +5713,9 @@
     fileName = parsed?.fileName || "",
     ignoreSingle64thOverlap = true,
   } = {}) {
-    const groups = (parsed?.groups || []).filter((group) => Array.isArray(group?.notes) && group.notes.length);
+    const groups = (parsed?.groups || [])
+      .filter((group) => Array.isArray(group?.notes) && group.notes.length)
+      .sort(compareMidiGroupsWithDrumsLast);
     if (!groups.length) return { channelCount: 0, instrumentCount: 0, noteCount: 0 };
 
     const sourceTitle = stripMidiFileExtension(fileName || parsed?.fileName || parsed?.title || "불러온 파일") || "불러온 파일";
@@ -6174,7 +6184,9 @@
   }
 
   function copyMidiGroupsToNewEditorChannels(groups, { document = getActiveMidiDocument(), closeDialog = false } = {}) {
-    const validGroups = (groups || []).filter((group) => Array.isArray(group?.notes) && group.notes.length);
+    const validGroups = (groups || [])
+      .filter((group) => Array.isArray(group?.notes) && group.notes.length)
+      .sort(compareMidiGroupsWithDrumsLast);
     if (!validGroups.length) {
       showToast("복사할 원본 악기 채널이 없습니다.");
       return false;
