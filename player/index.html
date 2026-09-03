@@ -14,9 +14,9 @@
 <link href="https://stardust-repo.github.io/mobibard/player/?lang=zh-CN" hreflang="zh-CN" rel="alternate"/>
 <link href="https://stardust-repo.github.io/mobibard/player/?lang=zh-TW" hreflang="zh-TW" rel="alternate"/>
 <link href="https://stardust-repo.github.io/mobibard/player/" hreflang="x-default" rel="alternate"/>
-<link href="styles.css?v=20260901-pianoroll-tempo-label-outline1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
+<link href="styles.css?v=20260903-player-control-align2" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
-<link as="script" href="js/app.js?v=5.2.0&amp;rev=20260901-pianoroll-tempo-label-outline1" rel="preload"/>
+<link as="script" href="js/app.js?v=5.2.0&amp;rev=20260903-player-control-center1" rel="preload"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("mobibard.player.theme")==="dark"?"dark":"light";}catch(_){document.documentElement.dataset.theme="light";}</script>
 <script>
 (() => {
@@ -62,7 +62,7 @@
   document.documentElement.dataset.i18nPending = "true";
   const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
   if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("v", "5.2.0");
-  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("rev", "20260831-split-search-point1");
+  if (localeUrl.protocol !== "file:") localeUrl.searchParams.set("rev", "20260903-player-control-center1");
   document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   window.setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
 })();
@@ -162,21 +162,8 @@
 </div>
 <div aria-label="" class="quick-controls" data-i18n-aria-label="vol.speed">
 <div class="compact-control-wrap">
-<button aria-controls="speedControlPopover" aria-expanded="false" aria-haspopup="dialog" class="compact-value-button" id="speedControlButton" type="button">
-<span data-i18n="play.speed"></span><strong id="speedValue">1.00x</strong>
-</button>
-<div aria-labelledby="speedControlButton" class="control-popover value-control-popover" hidden="" id="speedControlPopover" role="dialog">
-<div class="vertical-slider-scale">
-<span aria-hidden="true">1.50x</span>
-<input aria-label="" class="speed vertical-slider" data-i18n-aria-label="play.speed" id="speedSlider" max="1.5" min="0.75" step="0.01" type="range" value="1"/>
-<span aria-hidden="true">0.75x</span>
-</div>
-<button class="mini-button control-reset-button soft-tool-button" data-i18n="ui.reset" id="speedResetBtn" type="button"></button>
-</div>
-</div>
-<div class="compact-control-wrap">
 <button aria-controls="volumeControlPopover" aria-expanded="false" aria-haspopup="dialog" class="compact-value-button" id="volumeControlButton" type="button">
-<span data-i18n="vol.label"></span><strong id="volumeValue">100%</strong>
+<span aria-hidden="true" class="compact-control-emoji" id="volumeControlIcon">🔊</span><strong id="volumeValue">100%</strong>
 </button>
 <div aria-labelledby="volumeControlButton" class="control-popover value-control-popover" hidden="" id="volumeControlPopover" role="dialog">
 <div class="vertical-slider-scale">
@@ -185,6 +172,19 @@
 <span aria-hidden="true">0%</span>
 </div>
 <button class="mini-button control-reset-button soft-tool-button" data-i18n="ui.reset" id="volumeResetBtn" type="button"></button>
+</div>
+</div>
+<div class="compact-control-wrap">
+<button aria-controls="speedControlPopover" aria-expanded="false" aria-haspopup="dialog" class="compact-value-button" id="speedControlButton" type="button">
+<span aria-hidden="true" class="compact-control-emoji">⏱️</span><strong id="speedValue">1.00x</strong>
+</button>
+<div aria-labelledby="speedControlButton" class="control-popover value-control-popover" hidden="" id="speedControlPopover" role="dialog">
+<div class="vertical-slider-scale">
+<span aria-hidden="true">1.50x</span>
+<input aria-label="" class="speed vertical-slider" data-i18n-aria-label="play.speed" id="speedSlider" max="1.5" min="0.75" step="0.01" type="range" value="1"/>
+<span aria-hidden="true">0.75x</span>
+</div>
+<button class="mini-button control-reset-button soft-tool-button" data-i18n="ui.reset" id="speedResetBtn" type="button"></button>
 </div>
 </div>
 <button class="tab-sound-btn soft-tool-button" data-i18n="snd.label" data-i18n-title="snd.configure_playback" id="partSoundBtn" title="" type="button"></button>
@@ -477,7 +477,7 @@
 </div>
 </form>
 </dialog>
-<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="js/app.js?v=5.2.0&amp;rev=20260901-pianoroll-tempo-label-outline1"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="js/app.js?v=5.2.0&amp;rev=20260903-player-control-center1"></script>
 <script src="js/language-manager.js?v=5.1.0&amp;rev=20260830-site-nav1"></script>
 <script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>

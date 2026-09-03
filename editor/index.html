@@ -9,7 +9,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <title>모비바드 v5.2</title>
 <link href="../assets/favicon.ico" rel="icon"/>
-<link href="styles.css?v=5.2.0&amp;rev=20260903-editor-shift-tool1" rel="stylesheet"/>
+<link href="styles.css?v=5.2.0&amp;rev=20260903-editor-control-align2" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -45,10 +45,9 @@
 </div>
 <span class="playback-time" id="playbackTime" title="현재 재생 위치 / 전체 재생 시간">0:00.000 / 0:00.000</span>
 <div class="volume-control">
-<button aria-expanded="false" aria-haspopup="dialog" class="transport-utility-button" id="volumeButton" title="전체 재생 볼륨 조절" type="button">볼륨 100</button>
+<button aria-expanded="false" aria-haspopup="dialog" aria-label="전체 재생 볼륨 100%" class="transport-utility-button" id="volumeButton" title="전체 재생 볼륨 조절" type="button"><span aria-hidden="true" class="transport-utility-icon">🔊</span><span class="transport-utility-value">100</span></button>
 <div aria-label="전체 재생 볼륨" class="vertical-range-menu volume-menu" hidden="" id="volumeMenu" role="dialog">
 <label class="vertical-range-control">
-<span class="vertical-range-title">볼륨</span>
 <span class="vertical-range-limit">150%</span>
 <input aria-label="전체 볼륨" class="vertical-range-input" id="volumeSlider" max="150" min="0" orient="vertical" step="1" type="range" value="100"/>
 <span class="vertical-range-limit">0%</span>
@@ -57,10 +56,9 @@
 </div>
 </div>
 <div class="playback-rate-control">
-<button aria-expanded="false" aria-haspopup="dialog" class="transport-utility-button" id="playbackRateButton" title="재생 배속 조절" type="button">배속 1×</button>
+<button aria-expanded="false" aria-haspopup="dialog" aria-label="재생 배속 1×" class="transport-utility-button" id="playbackRateButton" title="재생 배속 조절" type="button"><span aria-hidden="true" class="transport-utility-icon">⏱️</span><span class="transport-utility-value">1×</span></button>
 <div aria-label="재생 배속" class="vertical-range-menu playback-rate-menu" hidden="" id="playbackRateMenu" role="dialog">
 <label class="vertical-range-control">
-<span class="vertical-range-title">배속</span>
 <span class="vertical-range-limit">1.5×</span>
 <input aria-label="재생 배속" class="vertical-range-input" id="playbackRateSlider" max="1.5" min="0.75" orient="vertical" step="0.05" type="range" value="1"/>
 <span class="vertical-range-limit">0.75×</span>
@@ -90,10 +88,9 @@
 </select>
 </label>
 <div class="zoom-control">
-<button aria-expanded="false" aria-haspopup="dialog" class="transport-utility-button" id="zoomButton" title="확대 배율 조절 (Shift+휠, - / = 키 지원)" type="button">배율 100</button>
+<button aria-expanded="false" aria-haspopup="dialog" aria-label="확대 배율 100%" class="transport-utility-button" id="zoomButton" title="확대 배율 조절 (Shift+휠, - / = 키 지원)" type="button"><span aria-hidden="true" class="transport-utility-icon">🔍</span><span class="transport-utility-value">100</span></button>
 <div aria-label="확대 배율" class="vertical-range-menu zoom-menu" hidden="" id="zoomMenu" role="dialog">
 <label class="vertical-range-control">
-<span class="vertical-range-title">배율</span>
 <span class="vertical-range-limit" id="zoomMaxLabel">500%</span>
 <input aria-label="확대 배율" class="vertical-range-input" id="zoomSlider" max="8" min="0" orient="vertical" step="1" type="range" value="4"/>
 <span class="vertical-range-limit" id="zoomMinLabel">30%</span>
@@ -353,6 +350,6 @@
 <script src="js/soundbank-player.js?v=5.1.0"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final46"></script>
 <script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script>
-<script src="app.js?v=5.2.0&amp;rev=20260903-editor-jump-start-keep-play1"></script>
+<script src="app.js?v=5.2.0&amp;rev=20260903-editor-control-center1"></script>
 </body>
 </html>

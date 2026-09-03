@@ -763,6 +763,18 @@
     return `#${component(1)}${component(3)}${component(5)}`;
   }
 
+  function lightenHexColor(color, amount = 0.46) {
+    const normalized = isValidChannelColor(color) ? normalizeChannelColor(color) : "#808080";
+    const strength = clamp(Number(amount) || 0, 0, 0.9);
+    const component = (offset) => {
+      const value = parseInt(normalized.slice(offset, offset + 2), 16);
+      return Math.round(value + (255 - value) * strength)
+        .toString(16)
+        .padStart(2, "0");
+    };
+    return `#${component(1)}${component(3)}${component(5)}`;
+  }
+
   function getMidiGroupColor(group, fallbackIndex = 0) {
     return isValidChannelColor(group?.color)
       ? normalizeChannelColor(group.color)
@@ -2037,7 +2049,10 @@
     if (elements.volumeSlider) elements.volumeSlider.value = String(percent);
     if (elements.volumeValue) elements.volumeValue.textContent = `${percent}%`;
     if (elements.volumeButton) {
-      elements.volumeButton.textContent = percent === 0 ? "볼륨 0" : `볼륨 ${percent}`;
+      const muted = percent === 0;
+      elements.volumeButton.innerHTML = `<span aria-hidden="true" class="transport-utility-icon">${muted ? "🔇" : "🔊"}</span><span class="transport-utility-value">${percent}</span>`;
+      elements.volumeButton.classList.toggle("volume-muted", muted);
+      elements.volumeButton.setAttribute("aria-label", `전체 재생 볼륨 ${percent}%`);
       elements.volumeButton.title = `전체 재생 볼륨 ${percent}%`;
     }
   }
@@ -2074,7 +2089,8 @@
     if (elements.playbackRateSlider) elements.playbackRateSlider.value = String(normalized);
     if (elements.playbackRateValue) elements.playbackRateValue.textContent = label;
     if (elements.playbackRateButton) {
-      elements.playbackRateButton.textContent = `배속 ${label}`;
+      elements.playbackRateButton.innerHTML = `<span aria-hidden="true" class="transport-utility-icon">⏱️</span><span class="transport-utility-value">${label}</span>`;
+      elements.playbackRateButton.setAttribute("aria-label", `재생 배속 ${label}`);
       elements.playbackRateButton.title = `재생 배속 ${label}`;
     }
   }
@@ -2733,7 +2749,11 @@
     for (const channelIndex of visibleChannels) {
       const channel = state.channels[channelIndex];
       const color = getChannelColor(channel, channelIndex);
-      const noteBorderColor = darkenHexColor(color);
+      // Dark mode needs the note edge to move away from the dark canvas, not toward it.
+      // Light mode keeps the existing darker edge so channel colors preserve their embossed look.
+      const noteBorderColor = state.theme === "dark"
+        ? lightenHexColor(color)
+        : darkenHexColor(color);
       const isActive = state.activePanel === "notes" && channelIndex === state.activeChannel;
       const hasActiveSelection = isActive && state.selectedNoteIds.size > 0;
       // Keep overlaps visible, while giving the active channel a dense foreground presence.
@@ -2829,10 +2849,10 @@
           context.textBaseline = "bottom";
           context.lineJoin = "round";
           context.lineWidth = 2;
-          context.strokeStyle = state.theme === "light"
-            ? "rgba(255,255,255,.94)"
-            : "rgba(0,0,0,.82)";
-          context.fillStyle = state.theme === "light" ? "#101923" : "#ffffff";
+          // In dark mode use the inverse treatment: dark glyph with a bright outline.
+          // This keeps V labels readable against both the canvas and saturated channel colors.
+          context.strokeStyle = "rgba(255,255,255,.94)";
+          context.fillStyle = "#101923";
           const volumeTextX = x + 1;
           const volumeTextY = y - 1;
           context.strokeText(volumeLabel, volumeTextX, volumeTextY);
@@ -9789,6 +9809,76 @@
     return true;
   }
 
+  async function insertPasteNotesFromClipboard() {
+    if (isMidiReferenceActive()) {
+      showToast("MIDI 탭은 읽기 전용입니다. 일반 채널을 선택한 뒤 삽입하세요.");
+      return false;
+    }
+    const payload = await getNodeClipboardPayload();
+    if (!payload) {
+      showToast("삽입할 노트 정보가 없습니다.");
+      return false;
+    }
+    const channel = getActiveChannel();
+    const targetOrigin = clamp(snapBeat(state.playhead.beat), 0, getTotalBeats());
+    const insertBeats = Math.max(
+      CONFIG.minimumNoteBeat,
+      ...payload.notes.map((note) => Math.max(0, Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat)),
+    );
+    const pasted = payload.notes.map((note, index) => ({
+      id: state.nextNoteId + index,
+      pitch: clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch),
+      startBeat: Number((targetOrigin + Math.max(0, Number(note.startBeat) || 0)).toFixed(6)),
+      durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat).toFixed(6)),
+      velocity: normalizeNoteDynamics(note).velocity,
+      volume: normalizeNoteDynamics(note).volume,
+    }));
+    if (!canPlaceMonophonicNotes(pasted, [])) {
+      showToast("복사한 노트끼리 서로 겹쳐 있어 단선율 채널에 삽입할 수 없습니다.");
+      return false;
+    }
+
+    // Insert semantics: create time only in the active channel. Notes beginning at/after
+    // the playhead move right by the clipboard span. A held note crossing the insertion
+    // point follows the same rule as the measure-space editor and is trimmed to the cursor.
+    const kept = [];
+    for (const note of channel.notes || []) {
+      const start = Number(note.startBeat) || 0;
+      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      if (start >= targetOrigin - 1e-7) {
+        note.startBeat = Number((start + insertBeats).toFixed(6));
+        kept.push(note);
+      } else if (end > targetOrigin + 1e-7) {
+        if (trimNoteToBeat(note, targetOrigin)) kept.push(note);
+        else state.selectedNoteIds.delete(note.id);
+      } else {
+        kept.push(note);
+      }
+    }
+    channel.notes = kept;
+
+    clearNoteSelection();
+    state.nextNoteId += pasted.length;
+    pasted.forEach((note) => state.selectedNoteIds.add(note.id));
+    channel.notes.push(...pasted);
+    channel.notes.sort(compareNotesByTimeline);
+    channel.visible = true;
+    state.channelNoteRuntime.delete(String(channel.id));
+
+    state.timelineBeats = Math.max(
+      getTotalBeats(),
+      getPersistentContentEndBeat() + getSnapBeat(),
+      targetOrigin + insertBeats + getSnapBeat(),
+    );
+    ensureTimelineFitsViewport();
+    markDirty("노트 삽입 붙여넣기");
+    resizeAndDraw();
+    renderChannelTabs();
+    updateChannelInfo();
+    showToast(`${pasted.length}개 노트를 ${channel.name}에 삽입했습니다.`);
+    return true;
+  }
+
   async function exportNotesAsMml(notes, { label = "노트", tempos = getSortedTempos(), originBeat = null } = {}) {
     if (!notes.length) {
       showToast(`내보낼 ${label}가 없습니다.`);
@@ -10621,7 +10711,8 @@
     if (elements.zoomMaxLabel) elements.zoomMaxLabel.textContent = `${maxPercent}%`;
     if (elements.zoomValue) elements.zoomValue.textContent = `${percent}%`;
     if (elements.zoomButton) {
-      elements.zoomButton.textContent = `배율 ${percent}`;
+      elements.zoomButton.innerHTML = `<span aria-hidden="true" class="transport-utility-icon">🔍</span><span class="transport-utility-value">${percent}</span>`;
+      elements.zoomButton.setAttribute("aria-label", `확대 배율 ${percent}%`);
       elements.zoomButton.title = `확대 배율 ${percent}% (Shift+휠, - / = 키 지원)`;
     }
   }
@@ -12686,6 +12777,11 @@
         pasteNotesFromClipboard();
         return;
       }
+      if (commandKey && (key === "b" || event.code === "KeyB")) {
+        event.preventDefault();
+        insertPasteNotesFromClipboard();
+        return;
+      }
       if (event.key === "Delete" || event.key === "Backspace") {
         if (deleteSelectedNote()) {
           event.preventDefault();
@@ -12938,6 +13034,11 @@
         if (key === "v") {
           event.preventDefault();
           void pasteNotesFromClipboard();
+          return;
+        }
+        if (key === "b" || event.code === "KeyB") {
+          event.preventDefault();
+          void insertPasteNotesFromClipboard();
           return;
         }
       }

@@ -4623,3 +4623,174 @@ button {
   border-color: #174b70;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2), 0 1px 4px rgba(25, 69, 104, .24);
 }
+
+/* 2026-09 stronger active-channel identity: cyan = current selection, channel color = identity. */
+:root {
+  --channel-selection-accent: #00c8ff;
+  --channel-selection-bg: rgba(0, 200, 255, .12);
+  --channel-selection-border: rgba(0, 200, 255, .62);
+}
+:root[data-theme="light"] {
+  --channel-selection-accent: #009fce;
+  --channel-selection-bg: rgba(0, 159, 206, .11);
+  --channel-selection-border: rgba(0, 121, 158, .58);
+}
+
+.channel-tab-item.channel-tree-channel-item.active,
+.channel-tab-item.channel-tree-channel-item.active:hover {
+  position: relative;
+  background: color-mix(in srgb, var(--channel-selection-accent) 12%, var(--control-bg)) !important;
+  border-color: var(--channel-selection-border) !important;
+  box-shadow:
+    inset 5px 0 0 var(--channel-selection-accent),
+    inset 0 0 0 1px color-mix(in srgb, var(--channel-selection-accent) 24%, transparent) !important;
+}
+.channel-tab-item.channel-tree-channel-item.active .channel-tab-main,
+.channel-tab-item.channel-tree-channel-item.active:hover .channel-tab-main {
+  color: var(--text) !important;
+  font-weight: 800 !important;
+  background: transparent !important;
+}
+.channel-tab-item.channel-tree-channel-item.active .channel-tree-label {
+  font-weight: 800 !important;
+}
+.channel-tab-item.channel-tree-channel-item.active .channel-tab-main::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--channel-color);
+  box-shadow: none;
+}
+
+/* 2026-09 utility controls: icons carry meaning; popup headers are intentionally omitted. */
+#volumeButton,
+#zoomButton,
+#playbackRateButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+.transport-utility-icon {
+  flex: 0 0 auto;
+  font-size: 13px;
+  line-height: 1;
+}
+.transport-utility-value {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+#volumeButton.volume-muted,
+#volumeButton.volume-muted:hover:not(:disabled),
+#volumeButton.volume-muted[aria-expanded="true"] {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 65%, var(--control-border));
+  background: color-mix(in srgb, var(--danger) 10%, var(--control-bg));
+}
+.vertical-range-control {
+  grid-template-rows: auto 92px auto;
+}
+@media (pointer: coarse) {
+  .vertical-range-control {
+    grid-template-rows: auto 104px auto;
+  }
+}
+
+
+/* 2026-09-03 utility control spacing: match Player emoji/value treatment. */
+#volumeButton,
+#zoomButton,
+#playbackRateButton {
+  gap: 2px;
+}
+#volumeButton .transport-utility-icon,
+#zoomButton .transport-utility-icon,
+#playbackRateButton .transport-utility-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+
+/* 2026-09-03 utility control visual centering: keep enlarged emoji/value optically centered. */
+#volumeButton,
+#zoomButton,
+#playbackRateButton {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  place-content: center;
+  place-items: center;
+  column-gap: 2px;
+  line-height: 1;
+}
+#volumeButton .transport-utility-icon,
+#zoomButton .transport-utility-icon,
+#playbackRateButton .transport-utility-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  padding: 0;
+  font-size: 17px;
+  line-height: 19px;
+  text-align: center;
+  vertical-align: middle;
+  transform: translateY(-0.5px);
+}
+#volumeButton .transport-utility-value,
+#zoomButton .transport-utility-value,
+#playbackRateButton .transport-utility-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 19px;
+  margin: 0;
+  padding: 0;
+  line-height: 19px;
+  text-align: center;
+}
+
+/* 2026-09-03 utility control optical centering refinement. */
+#volumeButton,
+#zoomButton,
+#playbackRateButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding-inline: 6px;
+  line-height: 1;
+}
+#volumeButton .transport-utility-icon,
+#zoomButton .transport-utility-icon,
+#playbackRateButton .transport-utility-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  padding: 0;
+  font-size: 17px;
+  line-height: 19px;
+  text-align: center;
+  transform: translate(-1px, -0.5px);
+}
+#volumeButton .transport-utility-value,
+#zoomButton .transport-utility-value,
+#playbackRateButton .transport-utility-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 19px;
+  margin: 0;
+  padding: 0;
+  line-height: 19px;
+  text-align: center;
+  transform: translateX(-1px);
+}

@@ -610,7 +610,10 @@
       const button = el("button", "wb4-segment", { type: "button", text: label, "aria-pressed": value === current ? "true" : "false" });
       button.dataset.value = String(value);
       button.classList.toggle("active", value === current);
-      button.addEventListener("click", () => setValue(value, { silent: false }));
+      button.addEventListener("click", () => {
+        if (button.getAttribute("aria-disabled") === "true") return;
+        setValue(value, { silent: false });
+      });
       buttons.set(String(value), button);
       wrap.append(button);
     });
@@ -1597,6 +1600,73 @@
     }, 1500);
   }
 
+  function setUnavailableReason(node, unavailable, reasonKey = "") {
+    if (!node) return;
+    const locked = Boolean(unavailable);
+    node.classList.toggle("is-reason-disabled", locked);
+    if (locked) {
+      node.dataset.disabledReason = String(reasonKey || "");
+      node.setAttribute("aria-disabled", "true");
+      const message = reasonKey ? t(reasonKey) : "";
+      if (message) {
+        node.title = message;
+        node.dataset.disabledReasonTitle = "1";
+      }
+    } else {
+      delete node.dataset.disabledReason;
+      node.classList.remove("is-reason-disabled");
+      if (node.getAttribute("aria-disabled") === "true") node.removeAttribute("aria-disabled");
+      if (node.dataset.disabledReasonTitle === "1") node.removeAttribute("title");
+      delete node.dataset.disabledReasonTitle;
+    }
+  }
+
+  function refreshUnavailableReasonTitles() {
+    document.querySelectorAll("[data-disabled-reason]").forEach(node => {
+      const key = String(node.dataset.disabledReason || "");
+      if (!key) return;
+      const message = t(key);
+      if (message) {
+        node.title = message;
+        node.dataset.disabledReasonTitle = "1";
+      }
+    });
+    document.querySelectorAll(".wb9-target-disabled-hint").forEach(node => {
+      node.textContent = t("genreSelectFirstShort");
+    });
+  }
+
+  function installUnavailableReasonGuard() {
+    if (state.ui.unavailableReasonGuardInstalled) return;
+    state.ui.unavailableReasonGuardInstalled = true;
+    const reasonNode = target => target?.closest?.('[data-disabled-reason][aria-disabled="true"]') || null;
+    const notify = node => {
+      const key = String(node?.dataset?.disabledReason || "");
+      if (key) showToast(t(key), "info");
+    };
+    document.addEventListener("pointerdown", event => {
+      const node = reasonNode(event.target);
+      if (!node) return;
+      event.preventDefault();
+      event.stopPropagation();
+      notify(node);
+    }, true);
+    document.addEventListener("click", event => {
+      const node = reasonNode(event.target);
+      if (!node) return;
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+    document.addEventListener("keydown", event => {
+      const node = reasonNode(event.target);
+      if (!node) return;
+      if (["Tab", "Shift", "Control", "Alt", "Meta", "Escape"].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      notify(node);
+    }, true);
+  }
+
   function trackScoreCopy() {
     const event = { name: "score_copy", params: { page: "player", copy_scope: "split" } };
     try {
@@ -2017,8 +2087,9 @@
     document.querySelectorAll(".wb9-target-channel").forEach((button, index) => {
       const normalized = Math.max(0, Math.min(5, index % 6));
       button.textContent = shortLabels[normalized];
-      button.title = channelLabel(normalized);
+      button.title = button.getAttribute("aria-disabled") === "true" ? t("unavailableDynamics") : channelLabel(normalized);
     });
+    refreshUnavailableReasonTitles();
 
     document.querySelectorAll(".wb9-accompaniment-channel-control").forEach(control => {
       const labels = control.querySelectorAll(".wb4-toggle-row span");
@@ -2040,6 +2111,8 @@
     if (!checkbox) return;
     const available = Boolean(state.originalPreviewAvailable);
     checkbox.disabled = !available;
+    const originalLabel = checkbox.closest(".wb6-original-label") || checkbox.parentElement;
+    setUnavailableReason(originalLabel, !available, "unavailableOriginal");
     checkbox.title = available ? "" : wb6t("originalUnavailable");
     if (!available && checkbox.checked) checkbox.checked = false;
     const requested = available && Boolean(checkbox.checked);
@@ -2104,10 +2177,12 @@
     if (!control) return;
     control.setValue(String(state.midiQuantizeDivision), { silent: true });
     control.querySelectorAll("button").forEach(button => {
-      button.disabled = !state.midiQuantizeAvailable;
-      button.title = state.midiQuantizeAvailable ? "" : wb6t("noInstrumentSource");
+      button.disabled = false;
+      setUnavailableReason(button, !state.midiQuantizeAvailable, "unavailableQuantize");
+      button.title = state.midiQuantizeAvailable ? "" : t("unavailableQuantize");
     });
     control.classList.toggle("is-disabled", !state.midiQuantizeAvailable);
+    control.setAttribute("aria-disabled", state.midiQuantizeAvailable ? "false" : "true");
   }
 
   function scheduleChannelCountsUpdate() {
@@ -2333,6 +2408,7 @@
 
   function buildShell() {
     document.body.classList.add("player-ui");
+    installUnavailableReasonGuard();
     state.activeWorkspaceTab = "copy";
     state.activeChannelView = 0;
     state.originalPreview = false;
@@ -2402,7 +2478,7 @@
     );
     if (state.ui.tutorialImage) {
       state.ui.tutorialImage.hidden = false;
-      state.ui.tutorialImage.src = `assets/tutorial/${folder}/${step.image}?rev=20260824-final42`;
+      state.ui.tutorialImage.src = `assets/tutorial/${folder}/${step.image}?rev=20260903-player-disabled-feedback1`;
       state.ui.tutorialImage.alt = tutorialFormat("tutorial.image_alt", [title], `${title} screen example`);
     }
     if (state.ui.tutorialImageFallback) state.ui.tutorialImageFallback.hidden = true;
@@ -2423,7 +2499,7 @@
     const next = TUTORIAL_STEPS[tutorialStepIndex + 1];
     if (next) {
       const preload = new Image();
-      preload.src = `assets/tutorial/${folder}/${next.image}?rev=20260824-final42`;
+      preload.src = `assets/tutorial/${folder}/${next.image}?rev=20260903-player-disabled-feedback1`;
     }
   }
 
@@ -3225,10 +3301,12 @@
     input.indeterminate = values.some(Boolean) && !values.every(Boolean);
   }
 
-  function setToggleDisabled(toggle, disabled) {
+  function setToggleDisabled(toggle, disabled, reasonKey = "") {
     if (!toggle?._input) return;
-    toggle._input.disabled = Boolean(disabled);
-    toggle.classList.toggle("is-disabled", Boolean(disabled));
+    const locked = Boolean(disabled);
+    toggle._input.disabled = locked;
+    toggle.classList.toggle("is-disabled", locked);
+    setUnavailableReason(toggle, locked, reasonKey);
   }
 
   function syncAccompanimentFeatureControls() {
@@ -3241,12 +3319,13 @@
     if (refs.genre) refs.genre.value = accompanimentOption.genre;
     if (refs.strength) {
       refs.strength.value = accompanimentOption.strength;
-      refs.strength.disabled = disabled;
+      refs.strength.disabled = false;
+      setUnavailableReason(refs.strength, disabled, "unavailableAccompaniment");
     }
     wb9SetMixedToggle(refs.batch?.analysis, channels.map(item => item.accompaniment.analysis));
     wb9SetMixedToggle(refs.batch?.generation, channels.map(item => item.accompaniment.generation));
-    setToggleDisabled(refs.batch?.analysis, disabled);
-    setToggleDisabled(refs.batch?.generation, disabled);
+    setToggleDisabled(refs.batch?.analysis, disabled, "unavailableAccompaniment");
+    setToggleDisabled(refs.batch?.generation, disabled, "unavailableAccompaniment");
     refs.channels?.forEach((control, index) => {
       const accompaniment = channels[index]?.accompaniment;
       if (!accompaniment) return;
@@ -3254,8 +3333,8 @@
       control.analysis._input.indeterminate = false;
       control.generation._input.checked = Boolean(accompaniment.generation);
       control.generation._input.indeterminate = false;
-      setToggleDisabled(control.analysis, disabled);
-      setToggleDisabled(control.generation, disabled);
+      setToggleDisabled(control.analysis, disabled, "unavailableAccompaniment");
+      setToggleDisabled(control.generation, disabled, "unavailableAccompaniment");
     });
     refs.panel?.classList.toggle("is-genre-unselected", disabled);
   }
@@ -3383,12 +3462,14 @@
     const quickControls = state.ui.playbackQuickControls;
     const transportActions = state.ui.playbackTransportActions;
     const speedWrap = state.ui.playbackSpeedWrap;
+    const volumeWrap = state.ui.playbackVolumeWrap;
     if (!channels || !quickControls || !transportActions) return;
     const narrow = window.matchMedia?.("(max-width: 620px)")?.matches ?? window.innerWidth <= 620;
     if (narrow) {
       if (channels.parentElement !== transportActions) transportActions.append(channels);
     } else if (channels.parentElement !== quickControls) {
-      if (speedWrap?.parentElement === quickControls) quickControls.insertBefore(channels, speedWrap);
+      if (volumeWrap?.parentElement === quickControls) quickControls.insertBefore(channels, volumeWrap);
+      else if (speedWrap?.parentElement === quickControls) quickControls.insertBefore(channels, speedWrap);
       else quickControls.prepend(channels);
     }
     channels.classList.toggle("is-mobile-transport", narrow);
@@ -3448,11 +3529,15 @@
       state.ui.playbackQuickControls = quickControls;
       state.ui.playbackTransportActions = transportActions;
       state.ui.playbackSpeedWrap = speedWrap;
-      quickControls.insertBefore(channels, speedWrap);
+      state.ui.playbackVolumeWrap = volumeWrap;
+      if (volumeWrap?.parentElement === quickControls) quickControls.insertBefore(channels, volumeWrap);
+      else if (speedWrap?.parentElement === quickControls) quickControls.insertBefore(channels, speedWrap);
+      else quickControls.prepend(channels);
     }
     if (quickControls && soundButton) {
       soundButton.classList.add("wb9-sound-button");
-      if (volumeWrap?.parentElement === quickControls) volumeWrap.after(soundButton);
+      if (speedWrap?.parentElement === quickControls) speedWrap.after(soundButton);
+      else if (volumeWrap?.parentElement === quickControls) volumeWrap.after(soundButton);
       else quickControls.append(soundButton);
     }
     if (loopLabel) {
@@ -3488,6 +3573,7 @@
   function createTargetChannelButtons(values, onChange, className = "") {
     const wrap = el("div", `wb9-target-channels ${className}`.trim(), { role: "group", "aria-label": t("channelApply") });
     const buttons = [];
+    const disabledHint = el("span", "wb9-target-disabled-hint", { text: t("genreSelectFirstShort"), hidden: true, "aria-hidden": "true" });
     const labels = [t("melShort"), "1", "2", "3", "4", "5"];
     const sync = () => buttons.forEach((button, index) => {
       const active = Boolean(values[index]);
@@ -3504,7 +3590,7 @@
         style: `--wb9-channel-color:var(--part${index})`
       });
       button.addEventListener("click", () => {
-        if (button.disabled) return;
+        if (button.getAttribute("aria-disabled") === "true") return;
         values[index] = !values[index];
         sync();
         onChange(values.slice());
@@ -3512,11 +3598,20 @@
       wrap.append(button);
       buttons.push(button);
     }
+    wrap.append(disabledHint);
     wrap._buttons = buttons;
+    wrap._disabledHint = disabledHint;
     wrap.sync = sync;
-    wrap.setDisabled = disabled => {
-      buttons.forEach(button => { button.disabled = Boolean(disabled); });
-      wrap.classList.toggle("is-disabled", Boolean(disabled));
+    wrap.setDisabled = (disabled, reasonKey = "unavailableDynamics") => {
+      const locked = Boolean(disabled);
+      buttons.forEach((button, index) => {
+        button.disabled = false;
+        setUnavailableReason(button, locked, reasonKey);
+        if (!locked) button.title = channelLabel(index);
+      });
+      setUnavailableReason(wrap, locked, reasonKey);
+      wrap.classList.toggle("is-disabled", locked);
+      disabledHint.hidden = !locked;
     };
     sync();
     return wrap;
@@ -3528,9 +3623,10 @@
     const disabled = !state.options.dynamics.genre;
     refs.genre.value = state.options.dynamics.genre;
     refs.strength.value = state.options.dynamics.strength;
-    refs.strength.disabled = disabled;
+    refs.strength.disabled = false;
+    setUnavailableReason(refs.strength, disabled, "unavailableDynamics");
     refs.channels.sync();
-    refs.channels.setDisabled(disabled);
+    refs.channels.setDisabled(disabled, "unavailableDynamics");
     refs.wrap.classList.toggle("is-genre-unselected", disabled);
   }
 
@@ -4146,6 +4242,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const speedSlider = $("speedSlider");
   const speedValue = $("speedValue");
   const volumeControlButton = $("volumeControlButton");
+  const volumeControlIcon = $("volumeControlIcon");
   const volumeControlPopover = $("volumeControlPopover");
   const volumeResetBtn = $("volumeResetBtn");
   const volumeSlider = $("volumeSlider");
@@ -11279,6 +11376,11 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     playbackSpeed = Math.max(0.75, Math.min(1.5, Number.isFinite(raw) ? raw : 1));
     speedSlider.value = playbackSpeed.toFixed(2).replace(/\.00$/, "");
     if (speedValue) speedValue.textContent = `${playbackSpeed.toFixed(2)}x`;
+    if (speedControlButton) {
+      const label = `${i18nText("play.speed")} ${playbackSpeed.toFixed(2)}x`;
+      speedControlButton.setAttribute("aria-label", label);
+      speedControlButton.title = label;
+    }
     writePref("speed", playbackSpeed.toFixed(2));
     if (wasPlaying && restartPlaying && Math.abs(oldSpeed - playbackSpeed) > 0.0001) {
       clearTimeout(seekRestartTimer);
@@ -11304,8 +11406,12 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     volumeValue.textContent = `${percent}%`;
     if (volumeControlButton) {
       const muted = percent === 0;
+      if (volumeControlIcon) volumeControlIcon.textContent = muted ? "🔇" : "🔊";
       volumeControlButton.classList.toggle("volume-muted", muted);
       volumeControlButton.setAttribute("aria-pressed", muted ? "true" : "false");
+      const label = `${i18nText("vol.label")} ${percent}%`;
+      volumeControlButton.setAttribute("aria-label", label);
+      volumeControlButton.title = label;
     }
     writePref("volume", String(percent));
     if (masterGain && audioCtx && audioCtx.state !== "closed") {

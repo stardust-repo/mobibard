@@ -9785,3 +9785,291 @@ html[data-player-layout="player-ui"][data-player-ui-booting="true"] main > :not(
 .player-ui .wb6-channel-code-editor .mml-split-marker:focus-visible {
   outline: none;
 }
+
+/* 2026-09 compact playback controls: emoji conveys control type, value stays numeric. */
+.compact-value-button {
+  justify-content: center;
+}
+.compact-value-button .compact-control-emoji {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
+}
+.compact-value-button .compact-control-emoji + strong {
+  min-width: 40px;
+}
+
+/* 2026-09-03 player availability feedback + darker-theme channel visibility */
+:root[data-theme="dark"] .player-ui .wb6-channel-count {
+  border-left-color: color-mix(in srgb, var(--wb6-channel-color) 30%, var(--wb4-line));
+  background: color-mix(in srgb, var(--wb6-channel-color) 21%, var(--wb4-surface));
+}
+:root[data-theme="dark"] .player-ui .wb6-channel-count-name {
+  color: color-mix(in srgb, var(--wb6-channel-color) 86%, #ffffff 14%);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .24);
+}
+:root[data-theme="dark"] .player-ui .wb6-channel-count-value {
+  color: color-mix(in srgb, var(--wb4-text) 92%, #ffffff 8%);
+}
+
+.player-ui [data-disabled-reason][aria-disabled="true"] {
+  cursor: not-allowed !important;
+}
+.player-ui select.is-reason-disabled,
+.player-ui button.is-reason-disabled {
+  opacity: .48;
+  filter: saturate(.62);
+}
+.player-ui .wb4-toggle-row.is-reason-disabled input:disabled,
+.player-ui .wb6-original-label.is-reason-disabled input:disabled {
+  pointer-events: none;
+}
+.player-ui .wb6-original-label.is-reason-disabled {
+  opacity: .52;
+  cursor: not-allowed;
+}
+
+.player-ui .wb9-target-channels {
+  position: relative;
+}
+.player-ui .wb9-target-channels.is-disabled .wb9-target-channel {
+  opacity: .24 !important;
+  filter: grayscale(.72) saturate(.45) !important;
+  border-style: dashed;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+}
+.player-ui .wb9-target-disabled-hint {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border: 1px dashed color-mix(in srgb, var(--wb4-muted) 48%, var(--wb4-line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--wb4-surface) 86%, transparent);
+  color: var(--wb4-muted);
+  font-size: 9.5px;
+  font-weight: 850;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+:root[data-theme="dark"] .player-ui .wb9-target-disabled-hint {
+  background: color-mix(in srgb, var(--wb4-surface) 78%, transparent);
+  color: color-mix(in srgb, var(--wb4-muted) 90%, #ffffff 10%);
+}
+:root[data-theme="dark"] .player-ui .wb9-target-channel:not(.is-reason-disabled) {
+  border-color: color-mix(in srgb, var(--wb9-channel-color) 58%, var(--wb4-line));
+  background: color-mix(in srgb, var(--wb9-channel-color) 10%, var(--wb4-surface));
+  color: color-mix(in srgb, var(--wb9-channel-color) 88%, #ffffff 12%);
+}
+:root[data-theme="dark"] .player-ui .wb9-target-channel.active:not(.is-reason-disabled) {
+  background: color-mix(in srgb, var(--wb9-channel-color) 28%, var(--wb4-surface));
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--wb9-channel-color) 90%, #ffffff 10%);
+}
+.player-ui .wb9-target-disabled-hint[hidden] {
+  display: none !important;
+}
+.player-ui .wb4-segment.is-reason-disabled:hover:not(.active) {
+  background: transparent !important;
+  color: var(--wb4-muted) !important;
+}
+.player-ui button.is-reason-disabled:hover {
+  transform: none !important;
+}
+
+
+/* 2026-09-03 compact control spacing: larger emoji, nearly flush numeric value. */
+.player-ui .compact-value-button {
+  gap: 2px;
+}
+.player-ui .compact-value-button .compact-control-emoji {
+  font-size: 17px;
+  line-height: 1;
+}
+.player-ui .compact-value-button .compact-control-emoji + strong {
+  min-width: 0;
+  text-align: left;
+}
+
+
+/* 2026-09-03 control visual centering: center enlarged emoji and numeric value as one unit. */
+.player-ui .compact-value-button {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  place-content: center;
+  place-items: center;
+  column-gap: 2px;
+  line-height: 1;
+}
+.player-ui .compact-value-button .compact-control-emoji {
+  display: inline-grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  padding: 0;
+  font-size: 17px;
+  line-height: 19px;
+  text-align: center;
+  vertical-align: middle;
+  transform: translateY(-0.5px);
+}
+.player-ui .compact-value-button .compact-control-emoji + strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 19px;
+  margin: 0;
+  padding: 0;
+  line-height: 19px;
+  text-align: center;
+}
+
+/* 2026-09-03 control alignment refinement + compact slider/popover + bulk action colors. */
+.player-ui #volumeControlButton,
+.player-ui #speedControlButton {
+  box-sizing: border-box;
+  width: 76px;
+  min-width: 76px;
+  max-width: 76px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding-inline: 7px;
+  line-height: 1;
+}
+.player-ui #volumeControlButton .compact-control-emoji,
+.player-ui #speedControlButton .compact-control-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  padding: 0;
+  font-size: 17px;
+  line-height: 19px;
+  text-align: center;
+  transform: translate(-1px, -0.5px);
+}
+.player-ui #volumeControlButton .compact-control-emoji + strong,
+.player-ui #speedControlButton .compact-control-emoji + strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 19px;
+  margin: 0;
+  padding: 0;
+  line-height: 19px;
+  text-align: center;
+  transform: translateX(-1px);
+}
+.player-ui #volumeControlPopover,
+.player-ui #speedControlPopover {
+  box-sizing: border-box;
+  width: 76px;
+  min-width: 76px;
+  max-width: 76px;
+  padding-inline: 8px;
+}
+.player-ui #volumeControlPopover .vertical-slider-scale,
+.player-ui #speedControlPopover .vertical-slider-scale {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding-inline: 0;
+}
+
+.midi-bulk-assign-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.midi-bulk-assign-actions > button {
+  width: auto;
+  min-width: 68px;
+  max-width: none;
+  padding-inline: 12px;
+}
+#midiBulkCancelBtn {
+  color: #ffffff;
+  border: 1px solid #475569;
+  background: #64748b;
+}
+#midiBulkCancelBtn:hover:not(:disabled) {
+  color: #ffffff;
+  border-color: #334155;
+  background: #475569;
+}
+#midiBulkClearBtn,
+#midiBulkClearBtn.primary,
+#midiBulkClearBtn.primary.danger {
+  color: #ffffff;
+  border: 1px solid #1d4ed8;
+  background: #2563eb;
+}
+#midiBulkClearBtn:hover:not(:disabled) {
+  color: #ffffff;
+  border-color: #1e40af;
+  background: #1d4ed8;
+}
+#midiBulkSelectBtn,
+#midiBulkSelectBtn.primary {
+  color: #ffffff;
+  border: 1px solid #15803d;
+  background: #16a34a;
+}
+#midiBulkSelectBtn:hover:not(:disabled) {
+  color: #ffffff;
+  border-color: #166534;
+  background: #15803d;
+}
+:root[data-theme="dark"] #midiBulkCancelBtn {
+  color: #0f172a;
+  border-color: #e2e8f0;
+  background: #cbd5e1;
+}
+:root[data-theme="dark"] #midiBulkCancelBtn:hover:not(:disabled) {
+  color: #0f172a;
+  border-color: #f8fafc;
+  background: #e2e8f0;
+}
+:root[data-theme="dark"] #midiBulkClearBtn,
+:root[data-theme="dark"] #midiBulkClearBtn.primary,
+:root[data-theme="dark"] #midiBulkClearBtn.primary.danger {
+  color: #ffffff;
+  border-color: #60a5fa;
+  background: #3b82f6;
+}
+:root[data-theme="dark"] #midiBulkClearBtn:hover:not(:disabled) {
+  color: #ffffff;
+  border-color: #93c5fd;
+  background: #2563eb;
+}
+:root[data-theme="dark"] #midiBulkSelectBtn,
+:root[data-theme="dark"] #midiBulkSelectBtn.primary {
+  color: #052e16;
+  border-color: #4ade80;
+  background: #22c55e;
+}
+:root[data-theme="dark"] #midiBulkSelectBtn:hover:not(:disabled) {
+  color: #052e16;
+  border-color: #86efac;
+  background: #4ade80;
+}
+@media (max-width: 480px) {
+  .midi-bulk-assign-actions > button {
+    min-width: 62px;
+    padding-inline: 10px;
+  }
+}
