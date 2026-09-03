@@ -7251,6 +7251,128 @@
     return true;
   }
 
+  function removeRestsBetweenSelectedNotes() {
+    const channel = state.activePanel === "notes" && !isMidiReferenceActive() ? getActiveChannel() : null;
+    if (!channel?.notes?.length) return false;
+
+    const selectedIds = state.selectedNoteIds;
+    if (selectedIds.size < 2) return false;
+
+    const ordered = sortNoteIntervals(channel.notes);
+    const runs = [];
+    let currentRun = [];
+
+    for (const note of ordered) {
+      if (selectedIds.has(note.id)) {
+        currentRun.push(note);
+        continue;
+      }
+      if (currentRun.length >= 2) runs.push(currentRun);
+      currentRun = [];
+    }
+    if (currentRun.length >= 2) runs.push(currentRun);
+
+    if (!runs.length) {
+      showToast("서로 연속해서 선택된 노트가 없습니다.");
+      return true;
+    }
+
+    let removedBeats = 0;
+    let changedRunCount = 0;
+
+    for (const run of runs) {
+      let runChanged = false;
+      let runRemovedBeats = 0;
+      let previousEnd = Number(run[0].startBeat)
+        + Math.max(CONFIG.minimumNoteBeat, Number(run[0].durationBeat) || CONFIG.minimumNoteBeat);
+
+      for (let index = 1; index < run.length; index += 1) {
+        const note = run[index];
+        const originalStart = Math.max(0, Number(note.startBeat) || 0);
+        const duration = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        const shiftedStart = originalStart - runRemovedBeats;
+        const gap = shiftedStart - previousEnd;
+
+        if (gap > 1e-7) {
+          runRemovedBeats += gap;
+          removedBeats += gap;
+          runChanged = true;
+        }
+
+        note.startBeat = Number(Math.max(0, originalStart - runRemovedBeats).toFixed(6));
+        previousEnd = Math.max(previousEnd, note.startBeat + duration);
+      }
+
+      if (runChanged) changedRunCount += 1;
+    }
+
+    if (removedBeats <= 1e-7) {
+      showToast("연속 선택된 노트 사이에 제거할 빈 공간이 없습니다.");
+      return true;
+    }
+
+    state.channelNoteRuntime.delete(String(channel.id));
+    markDirty("연속 선택 구간 쉼표 제거");
+    shrinkTimelineToContent();
+    drawRoll();
+    updateChannelInfo();
+    showToast(`연속 선택 ${changedRunCount}구간의 빈 공간 ${Number(removedBeats.toFixed(3))} beat를 제거했습니다.`);
+    return true;
+  }
+
+  function extendSelectedNotesToSide(direction) {
+    const channel = state.activePanel === "notes" && !isMidiReferenceActive() ? getActiveChannel() : null;
+    if (!channel?.notes?.length || !state.selectedNoteIds.size) return false;
+
+    const selected = getSelectedNotes(channel);
+    if (!selected.length) return false;
+    const minStart = Math.min(...selected.map((note) => Number(note.startBeat) || 0));
+    const maxStart = Math.max(...selected.map((note) => Number(note.startBeat) || 0));
+    const beforeCount = state.selectedNoteIds.size;
+
+    for (const note of channel.notes) {
+      const start = Number(note.startBeat) || 0;
+      if (direction < 0 ? start < minStart - 1e-7 : start > maxStart + 1e-7) {
+        state.selectedNoteIds.add(note.id);
+      }
+    }
+
+    drawRoll();
+    updateChannelInfo();
+    if (state.selectedNoteIds.size === beforeCount) {
+      showToast(direction < 0 ? "선택된 노트보다 왼쪽에 노트가 없습니다." : "선택된 노트보다 오른쪽에 노트가 없습니다.");
+    }
+    return true;
+  }
+
+  function shiftSelectedNotesByOctave(direction) {
+    const channel = state.activePanel === "notes" && !isMidiReferenceActive() ? getActiveChannel() : null;
+    if (!channel?.notes?.length || !state.selectedNoteIds.size) return false;
+
+    const selected = getSelectedNotes(channel);
+    if (!selected.length) return false;
+    const lowest = Math.min(...selected.map((note) => Number(note.pitch) || CONFIG.minPitch));
+    const highest = Math.max(...selected.map((note) => Number(note.pitch) || CONFIG.minPitch));
+    const semitones = direction > 0
+      ? Math.min(12, CONFIG.maxPitch - highest)
+      : -Math.min(12, lowest - CONFIG.minPitch);
+
+    if (!semitones) {
+      showToast(direction > 0 ? "선택 노트를 더 올릴 수 없습니다." : "선택 노트를 더 내릴 수 없습니다.");
+      return true;
+    }
+
+    for (const note of selected) note.pitch += semitones;
+    state.channelNoteRuntime.delete(String(channel.id));
+    markDirty(direction > 0 ? "선택 노트 옥타브 올리기" : "선택 노트 옥타브 내리기");
+    drawRoll();
+    updateChannelInfo();
+    if (Math.abs(semitones) < 12) {
+      showToast(`음역 한계까지 ${Math.abs(semitones)}반음 ${semitones > 0 ? "올렸습니다" : "내렸습니다"}.`);
+    }
+    return true;
+  }
+
 
   function selectChannel(index) {
     setSidebarTab("channels");
@@ -7674,11 +7796,12 @@
   }
 
   function canAutoExtendRollInteraction() {
-    return Boolean(isRollInteractionDragActive() && state.interaction && [
-      "create",
-      "move-selection",
-      "resize-note",
-    ].includes(state.interaction.type));
+    return Boolean(
+      isRollInteractionDragActive()
+      && state.interaction
+      && ["create", "move-selection", "resize-note"].includes(state.interaction.type)
+      && !(state.interaction.type === "move-selection" && state.interaction.verticalOnly),
+    );
   }
 
   function ensureTimelineForDragPointer(clientX) {
@@ -7729,7 +7852,11 @@
       return;
     }
 
-    const delta = isRollInteractionDragActive()
+    const horizontalDragAllowed = !(
+      state.interaction?.type === "move-selection"
+      && state.interaction.verticalOnly
+    );
+    const delta = isRollInteractionDragActive() && horizontalDragAllowed
       ? getDragAutoScrollDelta(state.dragAutoScroll.clientX)
       : 0;
     if (Math.abs(delta) > 0.01) {
@@ -8137,6 +8264,7 @@
           previewOriginalPitch: existing.pitch,
           lastPreviewPitch: existing.pitch,
           dragStarted: false,
+          verticalOnly: Boolean(event.shiftKey),
           toggleSelectionOnTap: touchSelectionMode && wasSelected,
           clickedNoteId: existing.id,
           selectedIds: new Set(selected.map((note) => note.id)),
@@ -8347,18 +8475,21 @@
       }
       interaction.dragStarted = true;
 
-      const rawAnchorBeat = xToBeat(point.x) - interaction.pointerBeatOffset;
-      const rawRequestedDeltaBeat = rawAnchorBeat - interaction.anchorOriginalStartBeat;
-      const magneticDeltaBeat = snapMoveDeltaDirectionally(rawRequestedDeltaBeat, interaction);
-      const snappedAnchorBeat = snapBeat(rawAnchorBeat);
-      const requestedDeltaBeat = magneticDeltaBeat == null
-        ? snappedAnchorBeat - interaction.anchorOriginalStartBeat
-        : magneticDeltaBeat;
-      const deltaBeat = clamp(
-        requestedDeltaBeat,
-        -interaction.minStartBeat,
-        getTotalBeats() - interaction.maxEndBeat,
-      );
+      let deltaBeat = 0;
+      if (!interaction.verticalOnly) {
+        const rawAnchorBeat = xToBeat(point.x) - interaction.pointerBeatOffset;
+        const rawRequestedDeltaBeat = rawAnchorBeat - interaction.anchorOriginalStartBeat;
+        const magneticDeltaBeat = snapMoveDeltaDirectionally(rawRequestedDeltaBeat, interaction);
+        const snappedAnchorBeat = snapBeat(rawAnchorBeat);
+        const requestedDeltaBeat = magneticDeltaBeat == null
+          ? snappedAnchorBeat - interaction.anchorOriginalStartBeat
+          : magneticDeltaBeat;
+        deltaBeat = clamp(
+          requestedDeltaBeat,
+          -interaction.minStartBeat,
+          getTotalBeats() - interaction.maxEndBeat,
+        );
+      }
       const requestedPitchDelta = -Math.round((point.y - interaction.startY) / getRowHeight());
       const pitchDelta = clamp(
         requestedPitchDelta,
@@ -12382,6 +12513,62 @@
     return true;
   }
 
+  function handleGlobalSelectedNoteShortcut(event) {
+    if (
+      event.defaultPrevented
+      || event.altKey
+      || isPopupLikeUiOpen()
+      || isTextEntryTarget(event.target)
+      || state.activePanel !== "notes"
+      || isMidiReferenceActive()
+      || !getActiveChannel()
+    ) {
+      return false;
+    }
+
+    const selectedCount = getSelectedNotes().length;
+    const key = String(event.key || "");
+    const commandKey = event.ctrlKey || event.metaKey;
+
+    if (
+      selectedCount >= 2
+      && event.shiftKey
+      && !commandKey
+      && (key === "Delete" || key === "Backspace")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      removeRestsBetweenSelectedNotes();
+      return true;
+    }
+
+    if (
+      selectedCount >= 1
+      && commandKey
+      && !event.shiftKey
+      && (key === "ArrowLeft" || key === "ArrowRight")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      extendSelectedNotesToSide(key === "ArrowLeft" ? -1 : 1);
+      return true;
+    }
+
+    if (
+      selectedCount >= 1
+      && event.shiftKey
+      && !commandKey
+      && (key === "ArrowUp" || key === "ArrowDown")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      shiftSelectedNotesByOctave(key === "ArrowUp" ? 1 : -1);
+      return true;
+    }
+
+    return false;
+  }
+
   function handleEditModeShortcut(event) {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isTextEntryTarget(event.target)) {
       return false;
@@ -12448,6 +12635,7 @@
   function bindEvents() {
     document.addEventListener("keydown", handleHistoryShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectAllShortcut, true);
+    document.addEventListener("keydown", handleGlobalSelectedNoteShortcut, true);
     document.addEventListener("wheel", handleGlobalTrackZoomWheel, { capture: true, passive: false });
     elements.fileButton.addEventListener("click", (event) => {
       event.stopPropagation();
