@@ -7277,46 +7277,42 @@
       return true;
     }
 
-    let removedBeats = 0;
+    let filledBeats = 0;
     let changedRunCount = 0;
 
     for (const run of runs) {
       let runChanged = false;
-      let runRemovedBeats = 0;
-      let previousEnd = Number(run[0].startBeat)
-        + Math.max(CONFIG.minimumNoteBeat, Number(run[0].durationBeat) || CONFIG.minimumNoteBeat);
 
-      for (let index = 1; index < run.length; index += 1) {
+      for (let index = 0; index < run.length - 1; index += 1) {
         const note = run[index];
-        const originalStart = Math.max(0, Number(note.startBeat) || 0);
+        const nextNote = run[index + 1];
+        const start = Math.max(0, Number(note.startBeat) || 0);
         const duration = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-        const shiftedStart = originalStart - runRemovedBeats;
-        const gap = shiftedStart - previousEnd;
+        const nextStart = Math.max(0, Number(nextNote.startBeat) || 0);
+        const end = start + duration;
+        const gap = nextStart - end;
 
-        if (gap > 1e-7) {
-          runRemovedBeats += gap;
-          removedBeats += gap;
-          runChanged = true;
-        }
+        if (gap <= 1e-7) continue;
 
-        note.startBeat = Number(Math.max(0, originalStart - runRemovedBeats).toFixed(6));
-        previousEnd = Math.max(previousEnd, note.startBeat + duration);
+        note.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, nextStart - start).toFixed(6));
+        filledBeats += gap;
+        runChanged = true;
       }
 
       if (runChanged) changedRunCount += 1;
     }
 
-    if (removedBeats <= 1e-7) {
-      showToast("연속 선택된 노트 사이에 제거할 빈 공간이 없습니다.");
+    if (filledBeats <= 1e-7) {
+      showToast("연속 선택된 노트 사이에 메울 쉼표가 없습니다.");
       return true;
     }
 
     state.channelNoteRuntime.delete(String(channel.id));
-    markDirty("연속 선택 구간 쉼표 제거");
+    markDirty("연속 선택 구간 쉼표 메우기");
     shrinkTimelineToContent();
     drawRoll();
     updateChannelInfo();
-    showToast(`연속 선택 ${changedRunCount}구간의 빈 공간 ${Number(removedBeats.toFixed(3))} beat를 제거했습니다.`);
+    showToast(`연속 선택 ${changedRunCount}구간에서 앞 노트를 늘려 쉼표 ${Number(filledBeats.toFixed(3))} beat를 메웠습니다.`);
     return true;
   }
 
@@ -7353,12 +7349,15 @@
     if (!selected.length) return false;
     const lowest = Math.min(...selected.map((note) => Number(note.pitch) || CONFIG.minPitch));
     const highest = Math.max(...selected.map((note) => Number(note.pitch) || CONFIG.minPitch));
-    const semitones = direction > 0
-      ? Math.min(12, CONFIG.maxPitch - highest)
-      : -Math.min(12, lowest - CONFIG.minPitch);
+    const canMoveFullOctave = direction > 0
+      ? highest + 12 <= CONFIG.maxPitch
+      : lowest - 12 >= CONFIG.minPitch;
+    const semitones = canMoveFullOctave ? (direction > 0 ? 12 : -12) : 0;
 
     if (!semitones) {
-      showToast(direction > 0 ? "선택 노트를 더 올릴 수 없습니다." : "선택 노트를 더 내릴 수 없습니다.");
+      showToast(direction > 0
+        ? "선택 노트를 한 옥타브 더 올릴 수 없습니다."
+        : "선택 노트를 한 옥타브 더 내릴 수 없습니다.");
       return true;
     }
 
@@ -7367,9 +7366,6 @@
     markDirty(direction > 0 ? "선택 노트 옥타브 올리기" : "선택 노트 옥타브 내리기");
     drawRoll();
     updateChannelInfo();
-    if (Math.abs(semitones) < 12) {
-      showToast(`음역 한계까지 ${Math.abs(semitones)}반음 ${semitones > 0 ? "올렸습니다" : "내렸습니다"}.`);
-    }
     return true;
   }
 
@@ -7891,7 +7887,19 @@
     return noteRight >= left && noteLeft <= right && noteBottom >= top && noteTop <= bottom;
   }
 
-  function applyMarqueeSelectionMode(baseSelection, matchingIds, event = null, fallbackMode = "replace") {
+  function applyMarqueeSelectionMode(baseSelection, matchingIds, event = null, fallbackMode = "toggle") {
+    // Marquee selection is an XOR gesture: every note currently inside the
+    // drag box is toggled against the selection state captured when the drag
+    // started. Using that immutable base prevents repeated pointer-move events
+    // from flipping the same note back and forth while the box is adjusted.
+    if (fallbackMode === "toggle") {
+      const nextSelection = new Set(baseSelection);
+      for (const id of matchingIds) {
+        if (baseSelection.has(id)) nextSelection.delete(id);
+        else nextSelection.add(id);
+      }
+      return nextSelection;
+    }
     const additive = Boolean(event?.ctrlKey || event?.metaKey) || (!event && fallbackMode === "add");
     const nextSelection = additive ? new Set(baseSelection) : new Set();
     for (const id of matchingIds) nextSelection.add(id);
@@ -7915,8 +7923,8 @@
     );
   }
 
-  function beginMarqueeSelection(event, point) {
-    const initialSelectionMode = event.ctrlKey || event.metaKey ? "add" : "replace";
+  function beginMarqueeSelection(event, point, options = {}) {
+    const initialSelectionMode = options.initialSelectionMode || "toggle";
     state.interaction = {
       type: "marquee",
       pointerId: event.pointerId,
@@ -7927,6 +7935,7 @@
       currentY: point.y,
       baseSelection: new Set(state.selectedNoteIds),
       initialSelectionMode,
+      tapToggleNoteId: options.tapToggleNoteId ?? null,
       moved: false,
       selectionStarted: false,
     };
@@ -8190,16 +8199,26 @@
       }
 
       const wasSelected = state.selectedNoteIds.has(existing.id);
-      if (!wasSelected) {
-        if (touchSelectionMode) {
-          state.selectedNoteIds.add(existing.id);
-        } else {
-          selectOnlyNote(existing.id);
-        }
-      }
-      previewEditorPitch(existing.pitch, { holdVisual: true });
 
-      if (noteHit.part === "left-resize" || noteHit.part === "right-resize") {
+      // In Select mode, dragging from any note body is the same XOR marquee
+      // gesture as dragging from empty space. The clicked note itself is also
+      // toggled on a simple tap, based on the selection state at pointer-down.
+      if (touchSelectionMode && noteHit.part === "body") {
+        beginMarqueeSelection(event, point, {
+          initialSelectionMode: "toggle",
+          tapToggleNoteId: existing.id,
+        });
+      } else {
+        if (!wasSelected) {
+          if (touchSelectionMode) {
+            state.selectedNoteIds.add(existing.id);
+          } else {
+            selectOnlyNote(existing.id);
+          }
+        }
+        previewEditorPitch(existing.pitch, { holdVisual: true });
+
+        if (noteHit.part === "left-resize" || noteHit.part === "right-resize") {
         const snapUnit = getSnapBeat();
         state.interaction = {
           type: "resize-note",
@@ -8289,8 +8308,9 @@
           lastValidDeltaBeat: 0,
           lastValidPitchDelta: 0,
         };
+        }
+        trySetPointerCapture(elements.rollCanvas, event.pointerId);
       }
-      trySetPointerCapture(elements.rollCanvas, event.pointerId);
     } else if (pointBeat >= 0) {
       if (effectiveEditTool === "select") {
         beginMarqueeSelection(event, point);
@@ -8596,7 +8616,16 @@
       state.suppressContextMenuUntil = performance.now() + 600;
       closeContextMenu();
     } else if (interaction.type === "marquee") {
-      clearNoteSelection();
+      if (interaction.tapToggleNoteId != null) {
+        state.selectedNoteIds = new Set(interaction.baseSelection);
+        if (interaction.baseSelection.has(interaction.tapToggleNoteId)) {
+          state.selectedNoteIds.delete(interaction.tapToggleNoteId);
+        } else {
+          state.selectedNoteIds.add(interaction.tapToggleNoteId);
+        }
+      } else {
+        clearNoteSelection();
+      }
       closeContextMenu();
     }
 
