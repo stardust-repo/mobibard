@@ -425,7 +425,7 @@
     collapsedMidiDocumentIds: new Set(),
     collapsedChannelGroups: { edit: false, source: false },
     editTool: "note",
-    shiftToolHeld: false,
+    ctrlToolHeld: false,
     selectedNoteIds: new Set(),
     nextNoteId: 1,
     dirty: false,
@@ -2365,17 +2365,17 @@
   }
 
   function getEffectiveEditTool(event = null) {
-    const shiftHeld = event && typeof event.shiftKey === "boolean"
-      ? Boolean(event.shiftKey)
-      : Boolean(state.shiftToolHeld);
-    if (!shiftHeld) return state.editTool;
+    const ctrlHeld = event && typeof event.ctrlKey === "boolean"
+      ? Boolean(event.ctrlKey)
+      : Boolean(state.ctrlToolHeld);
+    if (!ctrlHeld) return state.editTool;
     return state.editTool === "select" ? "note" : "select";
   }
 
-  function setShiftToolHeld(held) {
+  function setCtrlToolHeld(held) {
     const next = Boolean(held);
-    if (state.shiftToolHeld === next) return false;
-    state.shiftToolHeld = next;
+    if (state.ctrlToolHeld === next) return false;
+    state.ctrlToolHeld = next;
     updateEditToolControls();
     return true;
   }
@@ -7971,8 +7971,8 @@
     }
 
     elements.rollViewport.focus();
-    if (Boolean(event.shiftKey) !== Boolean(state.shiftToolHeld)) {
-      state.shiftToolHeld = Boolean(event.shiftKey);
+    if (Boolean(event.ctrlKey) !== Boolean(state.ctrlToolHeld)) {
+      state.ctrlToolHeld = Boolean(event.ctrlKey);
       updateEditToolControls();
     }
     const effectiveEditTool = getEffectiveEditTool(event);
@@ -10647,20 +10647,12 @@
     return true;
   }
 
-  function handlePianoRollAltWheelZoom(event) {
-    if (event.ctrlKey || event.metaKey) return false;
-    const selectedNotes = getEditableAltWheelSelectedNotes();
-    // Zoom moved from Alt+wheel to Shift+wheel. Alt+wheel remains the
-    // selected-note volume gesture so the two operations no longer compete.
-    const isZoomGesture = event.shiftKey && !event.altKey;
-    const isVolumeGesture = event.altKey && !event.shiftKey && selectedNotes.length > 0;
-    if (!isZoomGesture && !isVolumeGesture) return false;
+  function consumeEditorWheelGesture(event, mode, applyStep, { onChanged = null } = {}) {
     const delta = getNormalizedWheelDelta(event);
     if (!delta) return false;
     event.preventDefault();
     event.stopPropagation();
 
-    const mode = isVolumeGesture ? "volume" : "zoom";
     const now = performance.now();
     const direction = Math.sign(delta);
     const previousDirection = Math.sign(state.zoomWheel.accumulatedDelta);
@@ -10684,15 +10676,52 @@
     if (now - state.zoomWheel.lastStepAt < 55) return true;
 
     const stepDirection = state.zoomWheel.accumulatedDelta < 0 ? 1 : -1;
-    const changed = mode === "volume"
-      ? adjustSelectedNoteVolumesByStep(stepDirection, now)
-      : changeZoom(stepDirection, { anchor: "pointer", clientX: event.clientX });
+    const changed = Boolean(applyStep(stepDirection, now));
     state.zoomWheel.lastStepAt = now;
     state.zoomWheel.accumulatedDelta = 0;
-    if (changed) {
-      elements.rollViewport?.focus({ preventScroll: true });
+    if (changed && typeof onChanged === "function") {
+      onChanged();
     }
     return true;
+  }
+
+  function handleGlobalTrackZoomWheel(event) {
+    // Ctrl/Cmd + wheel is reserved for editor track zoom. Chromium-class
+    // browsers (and trackpad pinch gestures) may otherwise interpret this as
+    // page zoom, so consume it at the document capture phase before the
+    // browser can act on it.
+    const commandWheel = event.ctrlKey || event.metaKey;
+    if (!commandWheel || event.altKey) return false;
+
+    // Browser/page zoom must never win for Ctrl/Cmd + wheel, even when a popup
+    // is open. Popups simply suppress the editor zoom step while the gesture
+    // itself remains consumed.
+    event.preventDefault();
+    event.stopPropagation();
+    if (isPopupLikeUiOpen()) return true;
+
+    const targetInPianoSection = event.target instanceof Node
+      && Boolean(elements.pianoSection?.contains(event.target));
+    return consumeEditorWheelGesture(event, "zoom", (stepDirection) => changeZoom(
+      stepDirection,
+      targetInPianoSection
+        ? { anchor: "pointer", clientX: event.clientX }
+        : { anchor: "center" },
+    ));
+  }
+
+  function handlePianoRollAltWheelZoom(event) {
+    // Ctrl/Cmd+wheel is handled globally by handleGlobalTrackZoomWheel().
+    // Alt+wheel remains local to the piano roll for selected-note volume.
+    if (event.ctrlKey || event.metaKey || !event.altKey) return false;
+    const selectedNotes = getEditableAltWheelSelectedNotes();
+    if (!selectedNotes.length) return false;
+    return consumeEditorWheelGesture(
+      event,
+      "volume",
+      (stepDirection, now) => adjustSelectedNoteVolumesByStep(stepDirection, now),
+      { onChanged: () => elements.rollViewport?.focus({ preventScroll: true }) },
+    );
   }
 
   function updateZoomLabel() {
@@ -10713,7 +10742,7 @@
     if (elements.zoomButton) {
       elements.zoomButton.innerHTML = `<span aria-hidden="true" class="transport-utility-icon">🔍</span><span class="transport-utility-value">${percent}</span>`;
       elements.zoomButton.setAttribute("aria-label", `확대 배율 ${percent}%`);
-      elements.zoomButton.title = `확대 배율 ${percent}% (Shift+휠, - / = 키 지원)`;
+      elements.zoomButton.title = `확대 배율 ${percent}% (Ctrl+휠, - / = 키 지원)`;
     }
   }
 
@@ -11688,7 +11717,7 @@
     state.activeChannel = 0;
     state.activePanel = "notes";
     state.editTool = "note";
-    state.shiftToolHeld = false;
+    state.ctrlToolHeld = false;
     state.playhead.beat = 0;
     stopRollDragAutoScroll();
     state.interaction = null;
@@ -12325,13 +12354,13 @@
     return [...candidates].some(isActuallyVisiblePopupElement);
   }
 
-  function handleGlobalShiftSelectAllShortcut(event) {
+  function handleGlobalSelectAllShortcut(event) {
+    const commandKey = event.ctrlKey || event.metaKey;
     if (
       event.defaultPrevented
-      || !event.shiftKey
-      || event.ctrlKey
-      || event.metaKey
+      || !commandKey
       || event.altKey
+      || event.shiftKey
       || !(event.code === "KeyA" || String(event.key || "").toLowerCase() === "a")
       || isPopupLikeUiOpen()
     ) {
@@ -12418,7 +12447,8 @@
 
   function bindEvents() {
     document.addEventListener("keydown", handleHistoryShortcut, true);
-    document.addEventListener("keydown", handleGlobalShiftSelectAllShortcut, true);
+    document.addEventListener("keydown", handleGlobalSelectAllShortcut, true);
+    document.addEventListener("wheel", handleGlobalTrackZoomWheel, { capture: true, passive: false });
     elements.fileButton.addEventListener("click", (event) => {
       event.stopPropagation();
       const opening = elements.fileMenu.hidden;
@@ -13003,8 +13033,8 @@
       }
     });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Shift" && !isTextEntryTarget(event.target)) {
-        setShiftToolHeld(true);
+      if (event.key === "Control" && !isTextEntryTarget(event.target)) {
+        setCtrlToolHeld(true);
       }
       if (handleEditModeShortcut(event) || handleZoomShortcut(event) || handlePlaybackShortcut(event)) {
         return;
@@ -13072,7 +13102,7 @@
       }
     });
     document.addEventListener("keyup", (event) => {
-      if (event.key === "Shift") setShiftToolHeld(false);
+      if (event.key === "Control") setCtrlToolHeld(false);
     });
 
     window.addEventListener("resize", () => {
@@ -13095,7 +13125,7 @@
       layoutObserver.observe(elements.rollViewport);
     }
     window.addEventListener("blur", () => {
-      setShiftToolHeld(false);
+      setCtrlToolHeld(false);
       releaseKeyboardVoice(true);
       clearEditorPitchPreview(true);
     });

@@ -73,8 +73,8 @@
 <div class="toolbar-spacer"></div>
 <div class="toolbar-group view-actions">
 <div aria-label="피아노롤 조작 도구" class="edit-tool-control" role="group">
-<button aria-pressed="true" id="noteToolButton" title="터치 또는 왼쪽 클릭으로 노트를 배치합니다. Shift를 누르는 동안 선택 도구로 전환합니다." type="button">노트</button>
-<button aria-pressed="false" id="selectToolButton" title="터치 또는 왼쪽 드래그로 범위를 선택합니다. Shift를 누르는 동안 노트 도구로 전환합니다." type="button">선택</button>
+<button aria-pressed="true" id="noteToolButton" title="터치 또는 왼쪽 클릭으로 노트를 배치합니다. Ctrl을 누르는 동안 선택 도구로 전환합니다." type="button">노트</button>
+<button aria-pressed="false" id="selectToolButton" title="터치 또는 왼쪽 드래그로 범위를 선택합니다. Ctrl을 누르는 동안 노트 도구로 전환합니다." type="button">선택</button>
 </div>
 <label class="compact-field compact-field-select-only">
 <select aria-label="편집 단위" id="snapSelect" title="숫자키 1~7로 음표 단위를 변경합니다.">
@@ -88,7 +88,7 @@
 </select>
 </label>
 <div class="zoom-control">
-<button aria-expanded="false" aria-haspopup="dialog" aria-label="확대 배율 100%" class="transport-utility-button" id="zoomButton" title="확대 배율 조절 (Shift+휠, - / = 키 지원)" type="button"><span aria-hidden="true" class="transport-utility-icon">🔍</span><span class="transport-utility-value">100</span></button>
+<button aria-expanded="false" aria-haspopup="dialog" aria-label="확대 배율 100%" class="transport-utility-button" id="zoomButton" title="확대 배율 조절 (Ctrl+휠, - / = 키 지원)" type="button"><span aria-hidden="true" class="transport-utility-icon">🔍</span><span class="transport-utility-value">100</span></button>
 <div aria-label="확대 배율" class="vertical-range-menu zoom-menu" hidden="" id="zoomMenu" role="dialog">
 <label class="vertical-range-control">
 <span class="vertical-range-limit" id="zoomMaxLabel">500%</span>
@@ -350,6 +350,6 @@
 <script src="js/soundbank-player.js?v=5.1.0"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final46"></script>
 <script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script>
-<script src="app.js?v=5.2.0&amp;rev=20260903-editor-control-center1"></script>
+<script src="app.js?v=5.2.0&amp;rev=20260903-editor-global-wheel1-ctrlwheel1"></script>
 </body>
 </html>
