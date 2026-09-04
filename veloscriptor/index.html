@@ -20,7 +20,7 @@
   } catch (_) {}
 })();
 </script>
-<link href="./styles.css?v=20260901-file-box-compact1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
+<link href="./styles.css?v=20260905-preview-layout1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar veloscriptor-topbar">
@@ -124,12 +124,17 @@
 <div class="result-heading"><div><strong data-i18n="result.title">분석 결과</strong><span id="resultSummary"></span></div><div class="result-legend"><span class="legend-original" data-i18n="result.original">원본</span><span class="legend-analyzed" data-i18n="result.analyzed">분석 후</span></div></div>
 <div class="stats-grid"><div><span data-i18n="result.original_stats">원본 벨로시티</span><strong id="resultOriginalStats"></strong></div><div><span data-i18n="result.new_stats">분석 후 벨로시티</span><strong id="resultNewStats"></strong></div></div>
 <div aria-label="원본과 분석 후 벨로시티 분포" class="velocity-histogram" data-i18n-aria-label="result.histogram_aria" id="histogram" role="img"></div>
-<div class="preview-compare" id="previewCompare">
-<button class="soft-button preview-button" disabled="" id="previewButton" type="button"><span data-i18n="preview.play" id="previewButtonLabel">동시 미리듣기</span></button>
-<label class="preview-mix" for="previewMix"><span data-i18n="preview.midi">벨로시티 MIDI</span><input aria-label="벨로시티 MIDI와 원본 소스 크로스페이드" data-i18n-aria-label="preview.mix_aria" id="previewMix" max="100" min="0" step="1" type="range" value="50"/><span data-i18n="preview.source">원본 소스</span></label>
-<output aria-live="off" class="preview-time" id="previewTime">0:00 / 0:00</output>
+<div class="result-actions velo-preview-download-actions">
+<button class="primary-button download-button" data-i18n="actions.download" disabled="" id="downloadMidi" type="button">MIDI 다운로드</button>
+<div aria-label="원본과 변환 MIDI 미리듣기" class="velo-preview-controls" id="previewControls" role="group">
+<div class="velo-preview-actions">
+<button aria-label="미리듣기" class="soft-button velo-preview-icon-button" data-i18n-aria-label="preview.play" data-i18n-title="preview.play" disabled="" id="previewButton" title="미리듣기" type="button"><span aria-hidden="true" id="previewButtonLabel">▶</span></button>
+<button aria-label="처음으로" class="soft-button velo-preview-icon-button" data-i18n-aria-label="preview.rewind" data-i18n-title="preview.rewind" disabled="" id="previewRewind" title="처음으로" type="button">|◀</button>
 </div>
-<div class="result-actions"><button class="primary-button" data-i18n="actions.download" disabled="" id="downloadMidi" type="button">MIDI 다운로드</button><button class="soft-button" data-i18n="actions.reset" disabled="" id="resetResult" type="button">결과 지우기</button></div>
+<input aria-label="미리듣기 위치" class="velo-preview-slider" data-i18n-aria-label="preview.position_aria" disabled="" id="previewSlider" max="0" min="0" step="0.01" type="range" value="0"/>
+<input aria-label="벨로시티 MIDI와 원본 소스 크로스페이드" class="velo-preview-mix-slider" data-i18n-aria-label="preview.mix_aria" data-i18n-title="preview.mix_aria" disabled="" id="previewMix" max="100" min="0" step="1" title="왼쪽: 벨로시티 MIDI · 오른쪽: 원본 소스" type="range" value="50"/>
+</div>
+</div>
 </div>
 <div class="runtime-error" hidden="" id="runtimeError"></div>
 </section>
@@ -140,6 +145,6 @@
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.0"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="./js/settings-menu.js?v=20260903-guest-locale1" type="module"></script>
-<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260903-guest-locale1" type="module"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260905-preview-layout2" type="module"></script>
 </body>
 </html>

@@ -39,7 +39,7 @@ const elements = Object.fromEntries([
   'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'currentChordCount', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent', 'autoDetectRange',
   'tempo', 'velocity', 'velocityValue', 'velocityLabelText', 'velocityUsageHint', 'audioVelocityToggle', 'audioVelocityText', 'noteExtensionFrames', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
-  'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'midiPreviewControls', 'midiPreviewPlay', 'midiPreviewRewind', 'midiPreviewSlider', 'toast', 'languageSelect',
+  'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'midiPreviewControls', 'midiPreviewPlay', 'midiPreviewRewind', 'midiPreviewSlider', 'midiPreviewMix', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose', 'tutorialProgress', 'tutorialVisual', 'tutorialVisualStep', 'tutorialVisualSymbol', 'tutorialVisualTitle', 'tutorialPart', 'tutorialStepTitle', 'tutorialStepBody', 'tutorialStepNote', 'tutorialPrev', 'tutorialNext',
 ].map(id => [id, document.getElementById(id)]));
 const noteExtensionButtons = Array.from(document.querySelectorAll('[data-note-extension]'));
@@ -52,6 +52,7 @@ const state = {
   input: null,
   track: null,
   audioTrack: null,
+  sourceFile: null,
   previewSink: null,
   displayWidth: 0,
   displayHeight: 0,
@@ -128,6 +129,14 @@ let midiPreviewActiveSources = [];
 let midiPreviewScheduledIds = new Set();
 let midiPreviewSeekWasPlaying = false;
 let midiPreviewSeeking = false;
+let midiPreviewOriginalMedia = null;
+let midiPreviewOriginalMediaSource = null;
+let midiPreviewOriginalGain = null;
+let midiPreviewOriginalObjectUrl = '';
+let midiPreviewOriginalFile = null;
+let midiPreviewOriginalMediaReady = null;
+let midiPreviewOriginalUnavailableNotified = false;
+const MIDI_PREVIEW_OUTPUT_LEVEL = 0.44;
 
 function showToast(message, type = '') {
   elements.toast.textContent = message;
@@ -1179,6 +1188,163 @@ function togglePlayback() {
   else startPlayback();
 }
 
+function disposeMidiPreviewOriginalMedia() {
+  if (midiPreviewOriginalMedia) {
+    try { midiPreviewOriginalMedia.pause(); } catch { /* no-op */ }
+    try { midiPreviewOriginalMedia.removeAttribute('src'); midiPreviewOriginalMedia.load(); } catch { /* no-op */ }
+  }
+  try { midiPreviewOriginalMediaSource?.disconnect(); } catch { /* no-op */ }
+  try { midiPreviewOriginalGain?.disconnect(); } catch { /* no-op */ }
+  if (midiPreviewOriginalObjectUrl) {
+    try { URL.revokeObjectURL(midiPreviewOriginalObjectUrl); } catch { /* no-op */ }
+  }
+  midiPreviewOriginalMedia = null;
+  midiPreviewOriginalMediaSource = null;
+  midiPreviewOriginalGain = null;
+  midiPreviewOriginalObjectUrl = '';
+  midiPreviewOriginalFile = null;
+  midiPreviewOriginalMediaReady = null;
+  midiPreviewOriginalUnavailableNotified = false;
+}
+
+function prepareMidiPreviewOriginalMedia(file) {
+  if (!file || !state.audioTrack) {
+    disposeMidiPreviewOriginalMedia();
+    return null;
+  }
+  if (midiPreviewOriginalMedia && midiPreviewOriginalFile === file) return midiPreviewOriginalMedia;
+  disposeMidiPreviewOriginalMedia();
+  const media = document.createElement('video');
+  media.preload = 'auto';
+  media.playsInline = true;
+  media.controls = false;
+  media.muted = false;
+  media.volume = 1;
+  midiPreviewOriginalObjectUrl = URL.createObjectURL(file);
+  media.src = midiPreviewOriginalObjectUrl;
+  midiPreviewOriginalMedia = media;
+  midiPreviewOriginalFile = file;
+  midiPreviewOriginalMediaReady = new Promise((resolve, reject) => {
+    if (media.readyState >= 1) { resolve(media); return; }
+    let timeoutId = 0;
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      media.removeEventListener('loadedmetadata', onReady);
+      media.removeEventListener('error', onError);
+    };
+    const onReady = () => { cleanup(); resolve(media); };
+    const onError = () => { cleanup(); reject(new Error('Original audio preview is unavailable')); };
+    timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Original audio preview metadata timed out'));
+    }, 4000);
+    media.addEventListener('loadedmetadata', onReady, { once: true });
+    media.addEventListener('error', onError, { once: true });
+    media.load();
+  }).catch(error => {
+    console.warn('[RollScriptor] original preview media unavailable', error);
+    return null;
+  });
+  return media;
+}
+
+function primeMidiPreviewOriginalMedia() {
+  if (!state.audioTrack || !state.sourceFile) return;
+  const media = prepareMidiPreviewOriginalMedia(state.sourceFile);
+  if (!media || !media.paused) return;
+  const previousMuted = media.muted;
+  media.muted = true;
+  try {
+    const playPromise = media.play();
+    if (playPromise && typeof playPromise.then === 'function') {
+      playPromise.then(() => {
+        try { media.pause(); } catch { /* no-op */ }
+        media.muted = previousMuted;
+      }).catch(() => { media.muted = previousMuted; });
+    } else {
+      try { media.pause(); } catch { /* no-op */ }
+      media.muted = previousMuted;
+    }
+  } catch {
+    media.muted = previousMuted;
+  }
+}
+
+async function ensureMidiPreviewOriginalMedia() {
+  if (!state.audioTrack || !state.sourceFile) return null;
+  const media = prepareMidiPreviewOriginalMedia(state.sourceFile);
+  if (!media) return null;
+  const readyMedia = await (midiPreviewOriginalMediaReady || Promise.resolve(media));
+  if (!readyMedia || !midiPreviewAudioContext) return null;
+  if (!midiPreviewOriginalMediaSource) {
+    try {
+      midiPreviewOriginalMediaSource = midiPreviewAudioContext.createMediaElementSource(readyMedia);
+      midiPreviewOriginalGain = midiPreviewAudioContext.createGain();
+      midiPreviewOriginalGain.gain.value = 0;
+      midiPreviewOriginalMediaSource.connect(midiPreviewOriginalGain);
+      midiPreviewOriginalGain.connect(midiPreviewAudioContext.destination);
+    } catch (error) {
+      console.warn('[RollScriptor] could not attach original audio to preview context', error);
+      return null;
+    }
+  }
+  return readyMedia;
+}
+
+function midiPreviewMixGains() {
+  const position = clamp((Number(elements.midiPreviewMix?.value) || 0) / 100, 0, 1);
+  return {
+    source: position >= 1 ? 0 : Math.cos(position * Math.PI / 2),
+    midi: position <= 0 ? 0 : Math.sin(position * Math.PI / 2),
+  };
+}
+
+function applyMidiPreviewMix({ immediate = false } = {}) {
+  const gains = midiPreviewMixGains();
+  const context = midiPreviewAudioContext;
+  const at = context?.currentTime || 0;
+  const update = (param, value) => {
+    if (!param) return;
+    const target = Math.max(0, value * MIDI_PREVIEW_OUTPUT_LEVEL);
+    if (!context || immediate) {
+      param.value = target;
+      return;
+    }
+    try {
+      param.cancelScheduledValues(at);
+      param.setValueAtTime(param.value, at);
+      param.linearRampToValueAtTime(target, at + 0.02);
+    } catch { param.value = target; }
+  };
+  update(midiPreviewMasterGain?.gain, gains.midi);
+  update(midiPreviewOriginalGain?.gain, gains.source);
+}
+
+function updateMidiPreviewMixAvailability(locked = false) {
+  if (!elements.midiPreviewMix) return;
+  const ready = Boolean(midiPreviewSchedule?.notes?.length && midiPreviewDuration() > 0);
+  const sourceReady = Boolean(state.audioTrack && state.sourceFile && !midiPreviewOriginalUnavailableNotified);
+  elements.midiPreviewMix.disabled = locked || !ready || !sourceReady;
+  if (!sourceReady) elements.midiPreviewMix.value = '100';
+}
+
+function pauseMidiPreviewOriginalMedia() {
+  if (!midiPreviewOriginalMedia) return;
+  try { midiPreviewOriginalMedia.pause(); } catch { /* no-op */ }
+}
+
+async function seekMidiPreviewOriginalMedia(offset) {
+  const media = await ensureMidiPreviewOriginalMedia();
+  if (!media) return null;
+  const sourceTime = Math.max(0, state.noteTimeOrigin + clamp(Number(offset) || 0, 0, midiPreviewDuration()));
+  const maximum = Number.isFinite(media.duration) && media.duration > 0 ? Math.max(0, media.duration - 0.001) : sourceTime;
+  const target = Math.min(sourceTime, maximum);
+  if (Math.abs((Number(media.currentTime) || 0) - target) > 0.025) {
+    try { media.currentTime = target; } catch { /* no-op */ }
+  }
+  return media;
+}
+
 function midiPreviewDuration() {
   return Math.max(0, Number(midiPreviewSchedule?.duration) || 0);
 }
@@ -1240,6 +1406,7 @@ function stopMidiPreview(updateOffset = true) {
   midiPreviewProgressRaf = 0;
   if (updateOffset && midiPreviewPlaying) midiPreviewOffset = getCurrentMidiPreviewOffset();
   stopMidiPreviewSources();
+  pauseMidiPreviewOriginalMedia();
   midiPreviewPlaying = false;
   setMidiPreviewSlider(midiPreviewOffset);
   updateMidiPreviewUi();
@@ -1257,6 +1424,7 @@ function resetMidiPreview() {
     elements.midiPreviewSlider.max = '0';
     elements.midiPreviewSlider.value = '0';
   }
+  updateMidiPreviewMixAvailability();
   updateMidiPreviewUi();
 }
 
@@ -1290,6 +1458,7 @@ function refreshMidiPreviewSchedule({ preserveOffset = true } = {}) {
     elements.midiPreviewSlider.max = String(duration);
     setMidiPreviewSlider(midiPreviewOffset);
   }
+  updateMidiPreviewMixAvailability();
   updateMidiPreviewUi();
 }
 
@@ -1299,10 +1468,11 @@ async function ensureMidiPreviewAudioContext() {
     if (!AudioContextClass) throw new Error('Web Audio API is unavailable');
     midiPreviewAudioContext = new AudioContextClass();
     midiPreviewMasterGain = midiPreviewAudioContext.createGain();
-    midiPreviewMasterGain.gain.value = 0.44;
+    midiPreviewMasterGain.gain.value = MIDI_PREVIEW_OUTPUT_LEVEL;
     midiPreviewMasterGain.connect(midiPreviewAudioContext.destination);
   }
   if (midiPreviewAudioContext.state === 'suspended') await midiPreviewAudioContext.resume();
+  applyMidiPreviewMix({ immediate: true });
   return midiPreviewAudioContext;
 }
 
@@ -1369,6 +1539,13 @@ function startMidiPreviewProgressLoop() {
     const duration = midiPreviewDuration();
     midiPreviewOffset = getCurrentMidiPreviewOffset();
     if (!midiPreviewSeeking) setMidiPreviewSlider(midiPreviewOffset);
+    if (midiPreviewOriginalMedia && !midiPreviewOriginalMedia.paused) {
+      const expectedSourceTime = Math.max(0, state.noteTimeOrigin + midiPreviewOffset);
+      const drift = Math.abs((Number(midiPreviewOriginalMedia.currentTime) || 0) - expectedSourceTime);
+      if (drift > 0.20 && (!Number.isFinite(midiPreviewOriginalMedia.duration) || expectedSourceTime < midiPreviewOriginalMedia.duration)) {
+        try { midiPreviewOriginalMedia.currentTime = expectedSourceTime; } catch { /* no-op */ }
+      }
+    }
     if (duration > 0 && midiPreviewOffset >= duration - 0.005) {
       finishMidiPreview();
       return;
@@ -1384,6 +1561,16 @@ async function startMidiPreview() {
   try {
     if (midiPreviewOffset >= duration - 0.005) midiPreviewOffset = 0;
     await ensureMidiPreviewAudioContext();
+    const originalMedia = await seekMidiPreviewOriginalMedia(midiPreviewOffset);
+    if (!originalMedia && state.audioTrack && state.sourceFile) {
+      midiPreviewOriginalUnavailableNotified = true;
+      if (elements.midiPreviewMix) {
+        elements.midiPreviewMix.value = '100';
+        elements.midiPreviewMix.disabled = true;
+      }
+      applyMidiPreviewMix({ immediate: true });
+      showToast(t('toast.original_preview_unavailable'), 'error');
+    }
     await ensureMidiPreviewPreset();
     if (!midiPreviewSchedule?.notes?.length || midiPreviewDuration() <= 0) return;
     stopMidiPreview(false);
@@ -1394,7 +1581,26 @@ async function startMidiPreview() {
     midiPreviewOffsetStart = midiPreviewOffset;
     midiPreviewContextStart = midiPreviewAudioContext.currentTime + 0.04;
     midiPreviewPlaying = true;
+    applyMidiPreviewMix({ immediate: true });
     updateMidiPreviewUi();
+    if (originalMedia && midiPreviewMixGains().source > 0.0001) {
+      const waitMs = Math.max(0, Math.round((midiPreviewContextStart - midiPreviewAudioContext.currentTime) * 1000));
+      window.setTimeout(() => {
+        if (!midiPreviewPlaying || originalMedia !== midiPreviewOriginalMedia) return;
+        originalMedia.play().catch(error => {
+          console.warn('[RollScriptor] original audio preview play failed', error);
+          if (!midiPreviewOriginalUnavailableNotified) {
+            midiPreviewOriginalUnavailableNotified = true;
+            showToast(t('toast.original_preview_unavailable'), 'error');
+          }
+          if (elements.midiPreviewMix) {
+            elements.midiPreviewMix.value = '100';
+            elements.midiPreviewMix.disabled = true;
+          }
+          applyMidiPreviewMix();
+        });
+      }, waitMs);
+    }
     scheduleMidiPreviewWindow();
     midiPreviewSchedulerTimer = setInterval(scheduleMidiPreviewWindow, MIDI_PREVIEW_SCHEDULER_MS);
     startMidiPreviewProgressLoop();
@@ -1496,6 +1702,7 @@ function updateControlAvailability() {
   if (elements.midiPreviewPlay) elements.midiPreviewPlay.disabled = !midiPreviewReady || locked;
   if (elements.midiPreviewRewind) elements.midiPreviewRewind.disabled = !midiPreviewReady || locked;
   if (elements.midiPreviewSlider) elements.midiPreviewSlider.disabled = !midiPreviewReady || locked;
+  updateMidiPreviewMixAvailability(locked);
   updateRestoreButton();
 }
 
@@ -1516,6 +1723,8 @@ function disposeCurrentInput() {
   state.input = null;
   state.track = null;
   state.audioTrack = null;
+  state.sourceFile = null;
+  disposeMidiPreviewOriginalMedia();
   state.previewSink = null;
   state.releaseBaselineColors = null;
   state.releaseBaselineTime = 0;
@@ -2791,6 +3000,11 @@ async function loadVideoFile(file, { restoreSnapshot = null, persistSession = tr
     } catch (error) {
       console.warn('[RollScriptor] audio track unavailable', error);
     }
+    state.sourceFile = file;
+    if (state.audioTrack) {
+      if (elements.midiPreviewMix) elements.midiPreviewMix.value = '50';
+      prepareMidiPreviewOriginalMedia(file);
+    }
 
     const [width, height, firstTimestamp, endTimestamp] = await Promise.all([
       track.getDisplayWidth(), track.getDisplayHeight(), track.getFirstTimestamp(), track.computeDuration(),
@@ -3336,7 +3550,10 @@ function initializeEvents() {
   elements.downloadMidi.addEventListener('click', () => {
     if (state.midiBlob) downloadBlob(state.midiBlob, `${state.fileBaseName}.mid`);
   });
-  elements.midiPreviewPlay?.addEventListener('click', toggleMidiPreview);
+  elements.midiPreviewPlay?.addEventListener('click', () => {
+    if (!midiPreviewPlaying) primeMidiPreviewOriginalMedia();
+    toggleMidiPreview();
+  });
   elements.midiPreviewRewind?.addEventListener('click', rewindMidiPreview);
   elements.midiPreviewSlider?.addEventListener('pointerdown', () => {
     midiPreviewSeeking = true;
@@ -3352,6 +3569,12 @@ function initializeEvents() {
   });
   elements.midiPreviewSlider?.addEventListener('change', finishMidiPreviewSeek);
   elements.midiPreviewSlider?.addEventListener('pointerup', () => setTimeout(finishMidiPreviewSeek, 0));
+  elements.midiPreviewMix?.addEventListener('input', () => {
+    applyMidiPreviewMix();
+    if (midiPreviewPlaying && midiPreviewMixGains().source > 0.0001 && midiPreviewOriginalMedia?.paused) {
+      void seekMidiPreviewOriginalMedia(getCurrentMidiPreviewOffset()).then(media => media?.play().catch(() => {}));
+    }
+  });
   const closeTutorial = () => {
     const dialog = elements.tutorialDialog;
     if (!dialog) return;
