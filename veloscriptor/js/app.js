@@ -524,7 +524,7 @@ async function mixAndResample(buffer, targetRate, taskId, onProgress) {
 
 function runWorker(audio, taskId) {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL('./audio-worker.js?v=20260830-site-nav1', import.meta.url));
+    const worker = new Worker(new URL('./audio-worker.js?v=20260905-joint-velocity1', import.meta.url));
     state.worker = worker;
     worker.addEventListener('message', event => {
       if (taskId !== state.taskId) return;

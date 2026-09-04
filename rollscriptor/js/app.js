@@ -15,7 +15,7 @@ import {
   PROBE_PATCH_COUNT,
   suggestLeftmostMidi,
 } from './vision.js?v=20260831-account-menu1';
-import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260831-account-menu1';
+import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260905-joint-velocity1';
 import { createMidiFile } from './midi.js?v=20260830-site-nav1';
 import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260905-workflow-step3-1';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260831-account-menu1';

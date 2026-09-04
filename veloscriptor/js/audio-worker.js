@@ -4,6 +4,11 @@ const SEARCH_OFFSETS = Object.freeze([-0.035, -0.012, 0.012, 0.038, 0.067, 0.098
 const PRE_OFFSET_SECONDS = -0.105;
 const HARMONIC_WEIGHTS = Object.freeze([1, 0.5, 0.28, 0.16]);
 const TUNING_MULTIPLIERS = Object.freeze([0.997, 1, 1.003]);
+const JOINT_ONSET_TOLERANCE_SECONDS = 0.02;
+const JOINT_BIN_TOLERANCE_CENTS = 12;
+const JOINT_HARMONIC_AMPLITUDE_PROFILE = Object.freeze([1, 0.52, 0.30, 0.18]);
+const JOINT_REGULARIZATION = 0.18;
+const JOINT_ITERATIONS = 32;
 const hannCache = new Map();
 
 function clamp(value, min, max) {
@@ -99,6 +104,167 @@ function estimateLevelDb(samples, sampleRate, onsetSeconds, midi) {
   return 20 * Math.log10(cleaned);
 }
 
+
+function centsDistance(left, right) {
+  if (!(left > 0 && right > 0)) return Infinity;
+  return Math.abs(1200 * Math.log2(left / right));
+}
+
+function createJointBins(midis, sampleRate) {
+  const bins = [];
+  const nyquist = sampleRate * 0.49;
+  for (let noteIndex = 0; noteIndex < midis.length; noteIndex += 1) {
+    const fundamental = midiToFrequency(midis[noteIndex]);
+    for (let harmonicIndex = 0; harmonicIndex < JOINT_HARMONIC_AMPLITUDE_PROFILE.length; harmonicIndex += 1) {
+      const frequency = fundamental * (harmonicIndex + 1);
+      if (!(frequency > 0 && frequency < nyquist)) break;
+      let target = null;
+      for (const bin of bins) {
+        if (centsDistance(bin.frequency, frequency) <= JOINT_BIN_TOLERANCE_CENTS) {
+          target = bin;
+          break;
+        }
+      }
+      if (!target) {
+        target = { frequency, weightSum: 0, weightedFrequency: 0, coefficients: new Float64Array(midis.length) };
+        bins.push(target);
+      }
+      const harmonicAmplitude = JOINT_HARMONIC_AMPLITUDE_PROFILE[harmonicIndex];
+      const coefficient = harmonicAmplitude * harmonicAmplitude;
+      target.coefficients[noteIndex] += coefficient;
+      target.weightSum += coefficient;
+      target.weightedFrequency += frequency * coefficient;
+      target.frequency = target.weightedFrequency / Math.max(1e-9, target.weightSum);
+    }
+  }
+  return bins.sort((left, right) => left.frequency - right.frequency);
+}
+
+function tunedAmplitude(samples, startIndex, hann, sampleRate, frequency) {
+  let best = 0;
+  for (const tuning of TUNING_MULTIPLIERS) {
+    best = Math.max(best, sinusoidAmplitude(samples, startIndex, hann, sampleRate, frequency * tuning));
+  }
+  return best;
+}
+
+function cleanedBinPower(samples, sampleRate, onsetSeconds, frequency, hann) {
+  let attack = 0;
+  for (const offset of SEARCH_OFFSETS) {
+    const start = Math.round((onsetSeconds + offset) * sampleRate);
+    attack = Math.max(attack, tunedAmplitude(samples, start, hann, sampleRate, frequency));
+  }
+  const preStart = Math.round((onsetSeconds + PRE_OFFSET_SECONDS) * sampleRate);
+  const pre = tunedAmplitude(samples, preStart, hann, sampleRate, frequency);
+  const cleaned = Math.max(1e-8, attack - pre * 0.62);
+  return cleaned * cleaned;
+}
+
+function solveJointPowers(matrixRows, observations, priors) {
+  const noteCount = priors.length;
+  if (!noteCount) return new Float64Array(0);
+  const values = Float64Array.from(priors, value => Math.max(1e-12, Number(value) || 0));
+  const fitted = new Float64Array(observations.length);
+  const rebuildFitted = () => {
+    fitted.fill(0);
+    for (let row = 0; row < matrixRows.length; row += 1) {
+      const coefficients = matrixRows[row];
+      let sum = 0;
+      for (let noteIndex = 0; noteIndex < noteCount; noteIndex += 1) sum += coefficients[noteIndex] * values[noteIndex];
+      fitted[row] = sum;
+    }
+  };
+  rebuildFitted();
+
+  for (let iteration = 0; iteration < JOINT_ITERATIONS; iteration += 1) {
+    for (let noteIndex = 0; noteIndex < noteCount; noteIndex += 1) {
+      let numerator = JOINT_REGULARIZATION * priors[noteIndex];
+      let denominator = JOINT_REGULARIZATION;
+      for (let row = 0; row < matrixRows.length; row += 1) {
+        const coefficient = matrixRows[row][noteIndex];
+        if (!(coefficient > 0)) continue;
+        const residualWithoutCurrent = observations[row] - (fitted[row] - coefficient * values[noteIndex]);
+        numerator += coefficient * residualWithoutCurrent;
+        denominator += coefficient * coefficient;
+      }
+      const next = Math.max(1e-12, numerator / Math.max(1e-9, denominator));
+      const delta = next - values[noteIndex];
+      if (Math.abs(delta) < 1e-14) continue;
+      values[noteIndex] = next;
+      for (let row = 0; row < matrixRows.length; row += 1) {
+        const coefficient = matrixRows[row][noteIndex];
+        if (coefficient) fitted[row] += coefficient * delta;
+      }
+    }
+  }
+  return values;
+}
+
+function estimateJointLevelsDb(samples, sampleRate, onsetSeconds, midis) {
+  const uniqueMidis = [...new Set(midis.map(Number).filter(Number.isFinite))].sort((a, b) => a - b);
+  if (!uniqueMidis.length) return new Map();
+  if (uniqueMidis.length === 1) return new Map([[uniqueMidis[0], estimateLevelDb(samples, sampleRate, onsetSeconds, uniqueMidis[0])]]);
+
+  const minimumFundamental = Math.min(...uniqueMidis.map(midiToFrequency));
+  const windowSeconds = clamp(4 / minimumFundamental, WINDOW_MIN_SECONDS, WINDOW_MAX_SECONDS);
+  const hann = getHann(windowSeconds * sampleRate);
+  const bins = createJointBins(uniqueMidis, sampleRate);
+  if (bins.length < uniqueMidis.length) {
+    return new Map(uniqueMidis.map(midi => [midi, estimateLevelDb(samples, sampleRate, onsetSeconds, midi)]));
+  }
+
+  const observations = bins.map(bin => cleanedBinPower(samples, sampleRate, onsetSeconds, bin.frequency, hann));
+  const priors = uniqueMidis.map(midi => {
+    const levelDb = estimateLevelDb(samples, sampleRate, onsetSeconds, midi);
+    return Number.isFinite(levelDb) ? 10 ** (levelDb / 10) : 1e-12;
+  });
+  const solved = solveJointPowers(bins.map(bin => bin.coefficients), observations, priors);
+  const exclusiveEstimates = Array.from({ length: uniqueMidis.length }, () => []);
+  const hasExclusiveFundamental = new Array(uniqueMidis.length).fill(false);
+  for (let row = 0; row < bins.length; row += 1) {
+    const contributors = [];
+    for (let noteIndex = 0; noteIndex < uniqueMidis.length; noteIndex += 1) {
+      if (bins[row].coefficients[noteIndex] > 0) contributors.push(noteIndex);
+    }
+    if (contributors.length !== 1) continue;
+    const noteIndex = contributors[0];
+    const coefficient = bins[row].coefficients[noteIndex];
+    const estimate = Math.sqrt(Math.max(1e-12, observations[row]) / Math.max(1e-9, coefficient));
+    if (Number.isFinite(estimate)) exclusiveEstimates[noteIndex].push(estimate);
+    if (coefficient > 0.85) hasExclusiveFundamental[noteIndex] = true;
+  }
+
+  const levels = new Map();
+  for (let index = 0; index < uniqueMidis.length; index += 1) {
+    const priorAmplitude = Math.sqrt(Math.max(1e-12, priors[index]));
+    const exclusive = exclusiveEstimates[index];
+    let sourceAmplitude;
+    if (exclusive.length) {
+      const exclusiveAmplitude = median(exclusive);
+      const confidence = hasExclusiveFundamental[index] ? 0.90 : (exclusive.length >= 2 ? 0.78 : 0.45);
+      sourceAmplitude = priorAmplitude * (1 - confidence) + exclusiveAmplitude * confidence;
+    } else {
+      const solvedAmplitude = Math.sqrt(Math.max(1e-12, solved[index]));
+      sourceAmplitude = priorAmplitude * 0.72 + solvedAmplitude * 0.28;
+    }
+    levels.set(uniqueMidis[index], 20 * Math.log10(Math.max(1e-8, sourceAmplitude)));
+  }
+  return levels;
+}
+
+function clusterPitchGroupsByOnset(groups) {
+  const clusters = [];
+  let current = null;
+  for (const group of groups) {
+    if (!current || group.onset - current.startOnset > JOINT_ONSET_TOLERANCE_SECONDS) {
+      current = { startOnset: group.onset, groups: [] };
+      clusters.push(current);
+    }
+    current.groups.push(group);
+  }
+  return clusters;
+}
+
 function instrumentKey(note) {
   return `${note.channel}:${note.bankMsb || 0}:${note.bankLsb || 0}:${note.program || 0}`;
 }
@@ -148,26 +314,36 @@ function analyze(message) {
   }
 
   const groups = [...uniqueGroups.values()].sort((left, right) => left.onset - right.onset || left.midi - right.midi);
+  const clusters = clusterPitchGroupsByOnset(groups);
   const levelByNoteId = new Map();
   let outsideCount = 0;
   let silentCount = 0;
+  let completedGroups = 0;
   const progressStep = Math.max(1, Math.floor(groups.length / 120));
 
-  for (let index = 0; index < groups.length; index += 1) {
-    const group = groups[index];
-    let level = Number.NaN;
-    if (group.onset >= -0.02 && group.onset <= duration + 0.02) {
-      level = estimateLevelDb(samples, sampleRate, group.onset, group.midi);
+  for (const cluster of clusters) {
+    const validGroups = cluster.groups.filter(group => group.onset >= -0.02 && group.onset <= duration + 0.02);
+    for (const group of cluster.groups) {
+      if (!validGroups.includes(group)) outsideCount += group.noteIds.length;
+    }
+
+    let jointLevels = new Map();
+    if (validGroups.length) {
+      const onset = validGroups.reduce((sum, group) => sum + group.onset, 0) / validGroups.length;
+      jointLevels = estimateJointLevelsDb(samples, sampleRate, onset, validGroups.map(group => group.midi));
+    }
+
+    for (const group of cluster.groups) {
+      let level = validGroups.includes(group) ? jointLevels.get(group.midi) : Number.NaN;
       if (Number.isFinite(level) && level < -95) {
         silentCount += group.noteIds.length;
         level = Number.NaN;
       }
-    } else {
-      outsideCount += group.noteIds.length;
-    }
-    for (const noteId of group.noteIds) levelByNoteId.set(noteId, level);
-    if (index % progressStep === 0 || index === groups.length - 1) {
-      postMessage({ type: 'progress', completed: index + 1, total: groups.length });
+      for (const noteId of group.noteIds) levelByNoteId.set(noteId, level);
+      completedGroups += 1;
+      if (completedGroups % progressStep === 0 || completedGroups === groups.length) {
+        postMessage({ type: 'progress', completed: completedGroups, total: groups.length });
+      }
     }
   }
 
@@ -255,6 +431,7 @@ function analyze(message) {
       maxVelocity: analyzedCount ? maxVelocity : null,
       averageVelocity: analyzedCount ? velocitySum / analyzedCount : null,
       uniqueAnalysisCount: groups.length,
+      jointClusterCount: clusters.length,
     },
   });
 }

@@ -422,6 +422,12 @@ const ATTACK_SEARCH_AFTER_SECONDS = 0.11;
 const ATTACK_STEP_SECONDS = 0.009;
 const MAX_NOTES_PER_BATCH = 192;
 const MAX_BATCH_SPAN_SECONDS = 18;
+const JOINT_ONSET_TOLERANCE_SECONDS = 0.02;
+const JOINT_BIN_TOLERANCE_CENTS = 12;
+const JOINT_HARMONIC_AMPLITUDE_PROFILE = Object.freeze([1, 0.52, 0.30, 0.18]);
+const JOINT_TUNING_MULTIPLIERS = Object.freeze([0.997, 1, 1.003]);
+const JOINT_REGULARIZATION = 0.18;
+const JOINT_ITERATIONS = 32;
 
 function clampNumber(value, min, max) {
   const numeric = Number(value);
@@ -506,12 +512,12 @@ function harmonicStrength(samples, startIndex, hann, sampleRate, midi) {
   return best;
 }
 
-export function estimateVelocityLevelDb(samples, midi, sampleRate = TARGET_SAMPLE_RATE) {
+export function estimateVelocityLevelDb(samples, midi, sampleRate = TARGET_SAMPLE_RATE, onsetSeconds = WINDOW_BEFORE_SECONDS) {
   if (!samples?.length) return -120;
   const windowLength = Math.max(48, Math.round(ANALYSIS_WINDOW_SECONDS * sampleRate));
   if (samples.length < windowLength) return -120;
   const hann = createHann(windowLength);
-  const onsetIndex = Math.round(WINDOW_BEFORE_SECONDS * sampleRate);
+  const onsetIndex = Math.round(Math.max(0, Number(onsetSeconds) || 0) * sampleRate);
   const searchStart = Math.max(0, onsetIndex - Math.round(ATTACK_SEARCH_BEFORE_SECONDS * sampleRate));
   const searchEnd = Math.min(samples.length - windowLength, onsetIndex + Math.round(ATTACK_SEARCH_AFTER_SECONDS * sampleRate));
   const step = Math.max(1, Math.round(ATTACK_STEP_SECONDS * sampleRate));
@@ -527,6 +533,173 @@ export function estimateVelocityLevelDb(samples, midi, sampleRate = TARGET_SAMPL
   const preStrength = harmonicStrength(samples, Math.min(preStart, samples.length - windowLength), hann, sampleRate, midi);
   const cleanedStrength = Math.max(1e-7, attackStrength - preStrength * 0.55);
   return 20 * Math.log10(cleanedStrength);
+}
+
+function centsDistance(left, right) {
+  if (!(left > 0 && right > 0)) return Infinity;
+  return Math.abs(1200 * Math.log2(left / right));
+}
+
+function createJointBins(midis, sampleRate) {
+  const bins = [];
+  const nyquist = sampleRate * 0.49;
+  for (let noteIndex = 0; noteIndex < midis.length; noteIndex += 1) {
+    const fundamental = midiToFrequency(midis[noteIndex]);
+    for (let harmonicIndex = 0; harmonicIndex < JOINT_HARMONIC_AMPLITUDE_PROFILE.length; harmonicIndex += 1) {
+      const frequency = fundamental * (harmonicIndex + 1);
+      if (!(frequency > 0 && frequency < nyquist)) break;
+      let target = null;
+      for (const bin of bins) {
+        if (centsDistance(bin.frequency, frequency) <= JOINT_BIN_TOLERANCE_CENTS) {
+          target = bin;
+          break;
+        }
+      }
+      if (!target) {
+        target = { frequency, weightSum: 0, weightedFrequency: 0, coefficients: new Float64Array(midis.length) };
+        bins.push(target);
+      }
+      const harmonicAmplitude = JOINT_HARMONIC_AMPLITUDE_PROFILE[harmonicIndex];
+      const coefficient = harmonicAmplitude * harmonicAmplitude;
+      target.coefficients[noteIndex] += coefficient;
+      target.weightSum += coefficient;
+      target.weightedFrequency += frequency * coefficient;
+      target.frequency = target.weightedFrequency / Math.max(1e-9, target.weightSum);
+    }
+  }
+  return bins.sort((left, right) => left.frequency - right.frequency);
+}
+
+function tunedAmplitude(samples, startIndex, hann, sampleRate, frequency) {
+  let best = 0;
+  for (const tuning of JOINT_TUNING_MULTIPLIERS) {
+    best = Math.max(best, sinusoidAmplitude(samples, startIndex, hann, sampleRate, frequency * tuning));
+  }
+  return best;
+}
+
+function cleanedJointBinPower(samples, sampleRate, onsetSecondsList, frequency, hann) {
+  const step = Math.max(1, Math.round(ATTACK_STEP_SECONDS * sampleRate));
+  let attack = 0;
+  for (const onsetSeconds of onsetSecondsList) {
+    const onsetIndex = Math.round(Math.max(0, onsetSeconds) * sampleRate);
+    const searchStart = Math.max(0, onsetIndex - Math.round(ATTACK_SEARCH_BEFORE_SECONDS * sampleRate));
+    const searchEnd = Math.min(samples.length - hann.length, onsetIndex + Math.round(ATTACK_SEARCH_AFTER_SECONDS * sampleRate));
+    for (let start = searchStart; start <= searchEnd; start += step) {
+      attack = Math.max(attack, tunedAmplitude(samples, start, hann, sampleRate, frequency));
+    }
+  }
+  const earliestOnset = Math.min(...onsetSecondsList);
+  const preIndex = Math.max(0, Math.round((earliestOnset - 0.065) * sampleRate));
+  const preStart = Math.min(preIndex, Math.max(0, samples.length - hann.length));
+  const pre = tunedAmplitude(samples, preStart, hann, sampleRate, frequency);
+  const cleaned = Math.max(1e-7, attack - pre * 0.55);
+  return cleaned * cleaned;
+}
+
+function solveJointPowers(matrixRows, observations, priors) {
+  const noteCount = priors.length;
+  const values = Float64Array.from(priors, value => Math.max(1e-12, Number(value) || 0));
+  const fitted = new Float64Array(observations.length);
+  for (let row = 0; row < matrixRows.length; row += 1) {
+    let sum = 0;
+    for (let noteIndex = 0; noteIndex < noteCount; noteIndex += 1) sum += matrixRows[row][noteIndex] * values[noteIndex];
+    fitted[row] = sum;
+  }
+  for (let iteration = 0; iteration < JOINT_ITERATIONS; iteration += 1) {
+    for (let noteIndex = 0; noteIndex < noteCount; noteIndex += 1) {
+      let numerator = JOINT_REGULARIZATION * priors[noteIndex];
+      let denominator = JOINT_REGULARIZATION;
+      for (let row = 0; row < matrixRows.length; row += 1) {
+        const coefficient = matrixRows[row][noteIndex];
+        if (!(coefficient > 0)) continue;
+        const residualWithoutCurrent = observations[row] - (fitted[row] - coefficient * values[noteIndex]);
+        numerator += coefficient * residualWithoutCurrent;
+        denominator += coefficient * coefficient;
+      }
+      const next = Math.max(1e-12, numerator / Math.max(1e-9, denominator));
+      const delta = next - values[noteIndex];
+      if (Math.abs(delta) < 1e-14) continue;
+      values[noteIndex] = next;
+      for (let row = 0; row < matrixRows.length; row += 1) {
+        const coefficient = matrixRows[row][noteIndex];
+        if (coefficient) fitted[row] += coefficient * delta;
+      }
+    }
+  }
+  return values;
+}
+
+function estimateJointVelocityLevelsDb(samples, noteSpecs, sampleRate = TARGET_SAMPLE_RATE) {
+  const byMidi = new Map();
+  for (const spec of noteSpecs) {
+    const midi = Number(spec.midi);
+    if (!Number.isFinite(midi)) continue;
+    if (!byMidi.has(midi)) byMidi.set(midi, []);
+    byMidi.get(midi).push(Math.max(0, Number(spec.onsetSeconds) || 0));
+  }
+  const midis = [...byMidi.keys()].sort((a, b) => a - b);
+  if (!midis.length) return new Map();
+  const onsetByMidi = new Map([...byMidi].map(([midi, values]) => [midi, values.reduce((sum, value) => sum + value, 0) / values.length]));
+  if (midis.length === 1) {
+    const midi = midis[0];
+    return new Map([[midi, estimateVelocityLevelDb(samples, midi, sampleRate, onsetByMidi.get(midi))]]);
+  }
+
+  const minimumFundamental = Math.min(...midis.map(midiToFrequency));
+  const windowSeconds = clampNumber(4 / minimumFundamental, 0.045, 0.12);
+  const hann = createHann(Math.max(64, Math.round(windowSeconds * sampleRate)));
+  if (samples.length < hann.length) {
+    return new Map(midis.map(midi => [midi, estimateVelocityLevelDb(samples, midi, sampleRate, onsetByMidi.get(midi))]));
+  }
+  const bins = createJointBins(midis, sampleRate);
+  if (bins.length < midis.length) {
+    return new Map(midis.map(midi => [midi, estimateVelocityLevelDb(samples, midi, sampleRate, onsetByMidi.get(midi))]));
+  }
+
+  const observations = bins.map(bin => {
+    const onsetSecondsList = [];
+    for (let noteIndex = 0; noteIndex < midis.length; noteIndex += 1) {
+      if (bin.coefficients[noteIndex] > 0) onsetSecondsList.push(onsetByMidi.get(midis[noteIndex]));
+    }
+    return cleanedJointBinPower(samples, sampleRate, onsetSecondsList, bin.frequency, hann);
+  });
+  const priors = midis.map(midi => {
+    const levelDb = estimateVelocityLevelDb(samples, midi, sampleRate, onsetByMidi.get(midi));
+    return Number.isFinite(levelDb) ? 10 ** (levelDb / 10) : 1e-12;
+  });
+  const solved = solveJointPowers(bins.map(bin => bin.coefficients), observations, priors);
+  const exclusiveEstimates = Array.from({ length: midis.length }, () => []);
+  const hasExclusiveFundamental = new Array(midis.length).fill(false);
+  for (let row = 0; row < bins.length; row += 1) {
+    const contributors = [];
+    for (let noteIndex = 0; noteIndex < midis.length; noteIndex += 1) {
+      if (bins[row].coefficients[noteIndex] > 0) contributors.push(noteIndex);
+    }
+    if (contributors.length !== 1) continue;
+    const noteIndex = contributors[0];
+    const coefficient = bins[row].coefficients[noteIndex];
+    const estimate = Math.sqrt(Math.max(1e-12, observations[row]) / Math.max(1e-9, coefficient));
+    if (Number.isFinite(estimate)) exclusiveEstimates[noteIndex].push(estimate);
+    if (coefficient > 0.85) hasExclusiveFundamental[noteIndex] = true;
+  }
+
+  const levels = new Map();
+  for (let index = 0; index < midis.length; index += 1) {
+    const priorAmplitude = Math.sqrt(Math.max(1e-12, priors[index]));
+    const exclusive = exclusiveEstimates[index].filter(Number.isFinite).sort((a, b) => a - b);
+    let sourceAmplitude;
+    if (exclusive.length) {
+      const exclusiveAmplitude = quantile(exclusive, 0.5);
+      const confidence = hasExclusiveFundamental[index] ? 0.90 : (exclusive.length >= 2 ? 0.78 : 0.45);
+      sourceAmplitude = priorAmplitude * (1 - confidence) + exclusiveAmplitude * confidence;
+    } else {
+      const solvedAmplitude = Math.sqrt(Math.max(1e-12, solved[index]));
+      sourceAmplitude = priorAmplitude * 0.72 + solvedAmplitude * 0.28;
+    }
+    levels.set(midis[index], 20 * Math.log10(Math.max(1e-8, sourceAmplitude)));
+  }
+  return levels;
 }
 
 export function applyAudioVelocityLevels(notes, baseVelocity = 95) {
@@ -553,16 +726,34 @@ export function applyAudioVelocityLevels(notes, baseVelocity = 95) {
   });
 }
 
-function createAnalysisWindows(notes, absoluteTimeOffset) {
-  return notes.map((note, localIndex) => {
-    const onset = absoluteTimeOffset + Math.max(0, Number(note.start) || 0);
-    const sampleCount = Math.ceil((WINDOW_BEFORE_SECONDS + WINDOW_AFTER_SECONDS) * TARGET_SAMPLE_RATE);
+function clusterIndexedNotesByOnset(indexed) {
+  const groups = [];
+  let current = null;
+  for (const entry of indexed) {
+    const start = Math.max(0, Number(entry.note.start) || 0);
+    if (!current || start - current.start > JOINT_ONSET_TOLERANCE_SECONDS) {
+      current = { start, entries: [] };
+      groups.push(current);
+    }
+    current.entries.push(entry);
+  }
+  return groups;
+}
+
+function createAnalysisWindows(groups, absoluteTimeOffset) {
+  return groups.map((group, localIndex) => {
+    const onsets = group.entries.map(entry => absoluteTimeOffset + Math.max(0, Number(entry.note.start) || 0));
+    const minimumOnset = Math.min(...onsets);
+    const maximumOnset = Math.max(...onsets);
+    const start = minimumOnset - WINDOW_BEFORE_SECONDS;
+    const end = maximumOnset + WINDOW_AFTER_SECONDS;
+    const sampleCount = Math.max(1, Math.ceil((end - start) * TARGET_SAMPLE_RATE));
     return {
       localIndex,
-      midi: Number(note.midi),
-      onset,
-      start: onset - WINDOW_BEFORE_SECONDS,
-      end: onset + WINDOW_AFTER_SECONDS,
+      entries: group.entries,
+      onsetTimes: onsets,
+      start,
+      end,
       samples: new Float32Array(sampleCount),
     };
   });
@@ -602,19 +793,23 @@ function copyBufferIntoWindow(window, wrapped) {
   }
 }
 
-function makeBatches(sortedEntries) {
+function makeGroupBatches(groups) {
   const batches = [];
   let current = [];
   let firstStart = 0;
-  for (const entry of sortedEntries) {
-    const start = Number(entry.note.start) || 0;
+  let noteCount = 0;
+  for (const group of groups) {
+    const start = group.start;
     const spanTooLarge = current.length && start - firstStart > MAX_BATCH_SPAN_SECONDS;
-    if (current.length >= MAX_NOTES_PER_BATCH || spanTooLarge) {
+    const countTooLarge = current.length && noteCount + group.entries.length > MAX_NOTES_PER_BATCH;
+    if (spanTooLarge || countTooLarge) {
       batches.push(current);
       current = [];
+      noteCount = 0;
     }
     if (!current.length) firstStart = start;
-    current.push(entry);
+    current.push(group);
+    noteCount += group.entries.length;
   }
   if (current.length) batches.push(current);
   return batches;
@@ -637,7 +832,8 @@ export async function estimateAudioVelocities(notes, options = {}) {
   const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
 
   const indexed = notes.map((note, index) => ({ note, index })).sort((a, b) => a.note.start - b.note.start || a.index - b.index);
-  const batches = makeBatches(indexed);
+  const onsetGroups = clusterIndexedNotesByOnset(indexed);
+  const batches = makeGroupBatches(onsetGroups);
   const levelsByIndex = new Float64Array(notes.length);
   levelsByIndex.fill(Number.NaN);
   let analyzedCount = 0;
@@ -646,7 +842,7 @@ export async function estimateAudioVelocities(notes, options = {}) {
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
     if (shouldAbort()) break;
     const batch = batches[batchIndex];
-    const windows = createAnalysisWindows(batch.map(entry => entry.note), absoluteTimeOffset);
+    const windows = createAnalysisWindows(batch, absoluteTimeOffset);
     const firstWindow = windows[0];
     const lastWindow = windows[windows.length - 1];
 
@@ -662,10 +858,17 @@ export async function estimateAudioVelocities(notes, options = {}) {
     }
     if (shouldAbort()) break;
 
-    for (let localIndex = 0; localIndex < windows.length; localIndex += 1) {
-      const entry = batch[localIndex];
-      levelsByIndex[entry.index] = estimateVelocityLevelDb(windows[localIndex].samples, entry.note.midi, TARGET_SAMPLE_RATE);
-      analyzedCount += 1;
+    for (const window of windows) {
+      const specs = window.entries.map((entry, index) => ({
+        midi: Number(entry.note.midi),
+        onsetSeconds: window.onsetTimes[index] - window.start,
+      }));
+      const levelsByMidi = estimateJointVelocityLevelsDb(window.samples, specs, TARGET_SAMPLE_RATE);
+      for (let index = 0; index < window.entries.length; index += 1) {
+        const entry = window.entries[index];
+        levelsByIndex[entry.index] = levelsByMidi.get(Number(entry.note.midi));
+        analyzedCount += 1;
+      }
     }
     onProgress((batchIndex + 1) / batches.length, analyzedCount, notes.length);
     await new Promise(resolve => setTimeout(resolve, 0));
