@@ -45,7 +45,7 @@ function initialLanguage() {
 async function loadLocale(language) {
   const normalized = SUPPORTED[language] ? language : DEFAULT_LANGUAGE;
   if (cache.has(normalized)) return cache.get(normalized);
-  const module = await import(`../locale/${SUPPORTED[normalized].file}?v=20260903-guest-locale1`);
+  const module = await import(`../locale/${SUPPORTED[normalized].file}?v=20260905-workflow-step3-1`);
   const locale = module.default || module;
   if (!locale?.strings) throw new Error(`Invalid VeloScriptor locale: ${normalized}`);
   cache.set(normalized, locale);

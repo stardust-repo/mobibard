@@ -20,7 +20,7 @@
   } catch (_) {}
 })();
 </script>
-<link href="./styles.css?v=20260905-preview-layout1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
+<link href="./styles.css?v=20260905-workflow-step3-1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar veloscriptor-topbar">
@@ -100,7 +100,7 @@
 </section>
 <section aria-labelledby="analysisTitle" class="workflow-section simple-workflow-section">
 <div class="section-head simple-section-head">
-<div><span class="step-number">2</span><h2 data-i18n="section.analysis_title" id="analysisTitle">분석과 결과</h2></div>
+<div><span class="step-number">2</span><h2 data-i18n="section.analysis_title" id="analysisTitle">볼륨 분석</h2></div>
 <p data-i18n="section.analysis_description">각 노트 시작점의 기본음과 배음 Attack을 측정해 원본 MIDI의 벨로시티 바이트만 교체합니다.</p>
 </div>
 <div class="velo-analysis-options">
@@ -111,7 +111,6 @@
 <small data-i18n="settings.offset_hint">음원의 첫 소리가 MIDI보다 늦으면 +값, 빠르면 −값을 입력합니다.</small>
 </label>
 </div>
-
 </div>
 <div class="analysis-action-grid">
 <button class="primary-button analysis-button" data-i18n="actions.analyze" disabled="" id="analyzeButton" type="button">볼륨 분석</button>
@@ -120,11 +119,19 @@
 <div class="progress-copy"><div><strong id="progressLabel">파일을 선택해 주세요.</strong><span id="progressDetail">MIDI와 동일 음원이 모두 필요합니다.</span></div><div class="result-count"><strong id="resultCount">0</strong><span data-i18n="result.notes">노트</span></div></div>
 </div>
 </div>
+<div class="runtime-error" hidden="" id="runtimeError"></div>
+</section>
+<section aria-labelledby="downloadTitle" class="workflow-section simple-workflow-section velo-download-section">
+<div class="section-head simple-section-head">
+<div><span class="step-number">3</span><h2 data-i18n="section.download_title" id="downloadTitle">MIDI 다운로드</h2></div>
+<p data-i18n="section.download_description">볼륨 분석 결과를 확인하고 원본과 비교해 들은 뒤 MIDI를 다운로드합니다.</p>
+</div>
 <div class="result-panel" hidden="" id="resultPanel">
 <div class="result-heading"><div><strong data-i18n="result.title">분석 결과</strong><span id="resultSummary"></span></div><div class="result-legend"><span class="legend-original" data-i18n="result.original">원본</span><span class="legend-analyzed" data-i18n="result.analyzed">분석 후</span></div></div>
 <div class="stats-grid"><div><span data-i18n="result.original_stats">원본 벨로시티</span><strong id="resultOriginalStats"></strong></div><div><span data-i18n="result.new_stats">분석 후 벨로시티</span><strong id="resultNewStats"></strong></div></div>
 <div aria-label="원본과 분석 후 벨로시티 분포" class="velocity-histogram" data-i18n-aria-label="result.histogram_aria" id="histogram" role="img"></div>
-<div class="result-actions velo-preview-download-actions">
+</div>
+<div class="result-actions velo-preview-download-actions" id="resultActions">
 <button class="primary-button download-button" data-i18n="actions.download" disabled="" id="downloadMidi" type="button">MIDI 다운로드</button>
 <div aria-label="원본과 변환 MIDI 미리듣기" class="velo-preview-controls" id="previewControls" role="group">
 <div class="velo-preview-actions">
@@ -132,11 +139,13 @@
 <button aria-label="처음으로" class="soft-button velo-preview-icon-button" data-i18n-aria-label="preview.rewind" data-i18n-title="preview.rewind" disabled="" id="previewRewind" title="처음으로" type="button">|◀</button>
 </div>
 <input aria-label="미리듣기 위치" class="velo-preview-slider" data-i18n-aria-label="preview.position_aria" disabled="" id="previewSlider" max="0" min="0" step="0.01" type="range" value="0"/>
-<input aria-label="벨로시티 MIDI와 원본 소스 크로스페이드" class="velo-preview-mix-slider" data-i18n-aria-label="preview.mix_aria" data-i18n-title="preview.mix_aria" disabled="" id="previewMix" max="100" min="0" step="1" title="왼쪽: 벨로시티 MIDI · 오른쪽: 원본 소스" type="range" value="50"/>
+<div class="velo-preview-mix-control">
+<span class="velo-preview-mix-label" data-i18n="preview.mix_midi">MIDI</span>
+<input aria-label="MIDI와 원본 크로스페이드" class="velo-preview-mix-slider" data-i18n-aria-label="preview.mix_aria" data-i18n-title="preview.mix_aria" disabled="" id="previewMix" max="100" min="0" step="1" title="왼쪽: MIDI · 오른쪽: 원본" type="range" value="50"/>
+<span class="velo-preview-mix-label" data-i18n="preview.mix_original">원본</span>
 </div>
 </div>
 </div>
-<div class="runtime-error" hidden="" id="runtimeError"></div>
 </section>
 </section>
 </main>
@@ -144,7 +153,7 @@
 <script src="../plugins/common/utils.js?v=5.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.0"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
-<script src="./js/settings-menu.js?v=20260903-guest-locale1" type="module"></script>
-<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260905-preview-layout2" type="module"></script>
+<script src="./js/settings-menu.js?v=20260905-workflow-step3-1" type="module"></script>
+<script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script><script src="./js/app.js?v=20260905-workflow-step3-1" type="module"></script>
 </body>
 </html>

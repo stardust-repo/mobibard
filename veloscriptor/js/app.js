@@ -1,5 +1,5 @@
 import { buildMidiPlaybackNotes, makeOutputFileName, parseMidiForVelocity, patchMidiVelocities } from './midi.js?v=20260831-preview-crossfade1';
-import { initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260903-guest-locale1';
+import { initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260905-workflow-step3-1';
 
 const TARGET_SAMPLE_RATE = 16000;
 const AUTO_BASE_VELOCITY = 96;
@@ -44,7 +44,7 @@ const state = {
 const ids = [
   'midiFile', 'audioFile', 'midiDrop', 'audioDrop', 'midiFileName', 'audioFileName', 'midiInfo', 'audioInfo',
   'audioOffset', 'midiSiteLinks', 'analyzeButton', 'progressBar', 'progressLabel', 'progressDetail',
-  'resultCount', 'resultPanel', 'resultSummary', 'resultOriginalStats', 'resultNewStats', 'histogram',
+  'resultCount', 'resultPanel', 'resultActions', 'resultSummary', 'resultOriginalStats', 'resultNewStats', 'histogram',
   'downloadMidi', 'previewControls', 'previewButton', 'previewButtonLabel', 'previewRewind', 'previewSlider', 'previewMix', 'runtimeError', 'toast',
 ];
 const elements = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));

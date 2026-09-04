@@ -17,7 +17,7 @@ import {
 } from './vision.js?v=20260831-account-menu1';
 import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260831-account-menu1';
 import { createMidiFile } from './midi.js?v=20260830-site-nav1';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260831-account-menu1';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260905-workflow-step3-1';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260831-account-menu1';
 
 const MEDIABUNNY_VERSION = '1.55.3';
@@ -1294,8 +1294,8 @@ async function ensureMidiPreviewOriginalMedia() {
 function midiPreviewMixGains() {
   const position = clamp((Number(elements.midiPreviewMix?.value) || 0) / 100, 0, 1);
   return {
-    source: position >= 1 ? 0 : Math.cos(position * Math.PI / 2),
-    midi: position <= 0 ? 0 : Math.sin(position * Math.PI / 2),
+    midi: position >= 1 ? 0 : Math.cos(position * Math.PI / 2),
+    source: position <= 0 ? 0 : Math.sin(position * Math.PI / 2),
   };
 }
 
@@ -1325,7 +1325,7 @@ function updateMidiPreviewMixAvailability(locked = false) {
   const ready = Boolean(midiPreviewSchedule?.notes?.length && midiPreviewDuration() > 0);
   const sourceReady = Boolean(state.audioTrack && state.sourceFile && !midiPreviewOriginalUnavailableNotified);
   elements.midiPreviewMix.disabled = locked || !ready || !sourceReady;
-  if (!sourceReady) elements.midiPreviewMix.value = '100';
+  if (!sourceReady) elements.midiPreviewMix.value = '0';
 }
 
 function pauseMidiPreviewOriginalMedia() {

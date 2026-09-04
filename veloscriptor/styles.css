@@ -110,7 +110,7 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
 .histogram-bar.is-original { background:var(--line-strong); }
 .histogram-bar.is-analyzed { background:var(--accent); }
 .histogram-label { color:var(--muted); font-size:8px; text-align:center; font-variant-numeric:tabular-nums; }
-.result-actions { margin-top:12px; display:flex; align-items:center; justify-content:flex-start; gap:10px; }
+.result-actions { margin-top:10px; display:flex; align-items:center; justify-content:flex-start; gap:10px; }
 .soft-button { background:var(--surface); }
 .runtime-error { margin-top:12px; padding:10px 12px; border:1px solid color-mix(in srgb,var(--danger) 55%,var(--line)); border-radius:10px; color:var(--danger); font-size:12px; }
 .toast { position:fixed; left:50%; bottom:22px; z-index:100; max-width:min(520px,calc(100vw - 28px)); padding:10px 14px; border:1px solid var(--line-strong); border-radius:10px; background:color-mix(in srgb,var(--surface) 96%,transparent); color:var(--text); box-shadow:0 12px 32px rgba(0,0,0,.18); opacity:0; transform:translate(-50%,10px); pointer-events:none; transition:.18s ease; font-size:12px; }
@@ -394,7 +394,7 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
   min-width: 0;
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: auto minmax(120px,1fr) minmax(68px,86px);
+  grid-template-columns: auto minmax(120px,1fr) minmax(118px,148px);
   align-items: center;
   gap: 8px;
 }
@@ -417,7 +417,22 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
   accent-color:var(--accent);
   cursor:pointer;
 }
-.velo-preview-mix-slider { max-width:86px; }
+.velo-preview-mix-control {
+  min-width:0;
+  display:grid;
+  grid-template-columns:auto minmax(48px,1fr) auto;
+  align-items:center;
+  gap:4px;
+}
+.velo-preview-mix-label {
+  color:var(--muted);
+  font-size:10px;
+  font-weight:800;
+  line-height:1;
+  white-space:nowrap;
+}
+.velo-preview-mix-slider { max-width:none; }
+.velo-preview-mix-control:has(.velo-preview-mix-slider:disabled) .velo-preview-mix-label { opacity:.45; }
 .velo-preview-slider:disabled,
 .velo-preview-mix-slider:disabled { opacity:.35; cursor:default; }
 @media (max-width:620px) {
@@ -437,12 +452,12 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
   .veloscriptor-topbar .settings-two-row .settings-row > * { min-width:0; }
   .velo-preview-download-actions { align-items:stretch; }
   .velo-preview-download-actions .download-button { min-width:150px; }
-  .velo-preview-controls { grid-template-columns:auto minmax(90px,1fr) minmax(62px,76px); }
+  .velo-preview-controls { grid-template-columns:auto minmax(78px,1fr) minmax(116px,140px); }
 }
 @media (max-width:430px) {
   .velo-preview-download-actions { flex-direction:column; }
   .velo-preview-download-actions .download-button { width:100%; }
-  .velo-preview-controls { width:100%; grid-template-columns:auto minmax(0,1fr) minmax(58px,72px); }
+  .velo-preview-controls { width:100%; grid-template-columns:auto minmax(0,1fr) minmax(112px,136px); }
 }
 
 /* 2026-08-31 Player-style account + settings menu */
@@ -608,3 +623,7 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
   border-radius: 0 !important;
   object-fit: cover !important;
 }
+
+/* 2026-09-05: Step 3 MIDI download stays visible before analysis. */
+.velo-download-section .velo-preview-download-actions { margin-top: 12px; }
+.velo-download-section .result-panel + .velo-preview-download-actions { margin-top: 12px; }
