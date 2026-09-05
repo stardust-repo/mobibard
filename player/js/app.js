@@ -3104,10 +3104,13 @@
     let mixed = false;
     const render = () => {
       button.dataset.mode = mixed ? "mixed" : mode;
-      button.classList.toggle("active", !mixed && mode === "fixed");
+      // Visual treatment is intentionally inverted: Original uses the accented/selected
+      // appearance while Fixed uses the quieter button appearance. The mode behavior itself
+      // is unchanged.
+      button.classList.toggle("active", !mixed && mode === "original");
       button.classList.toggle("is-mixed", mixed);
       button.textContent = mixed ? t("volumeModeMixed") : (mode === "fixed" ? t("volumeFixedMode") : t("volumeOriginal"));
-      button.setAttribute("aria-pressed", !mixed && mode === "fixed" ? "true" : "false");
+      button.setAttribute("aria-pressed", !mixed && mode === "original" ? "true" : "false");
       const helpKey = mixed ? "volumeModeMixedHelp" : (mode === "fixed" ? "volumeFixedModeHelp" : "volumeOriginalHelp");
       const help = t(helpKey);
       button.title = help;

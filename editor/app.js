@@ -53,6 +53,10 @@
 
   function openFilePickerInput(input) {
     if (!input || input.disabled) return;
+    // Always clear the native file value before opening the picker. Browsers do not
+    // fire change when the exact same file is selected twice unless the value was reset first.
+    // This also makes every import pass start from a fresh dialog/state path.
+    try { input.value = ""; } catch {}
     const groupedPicker = window.MabiSupportedFilesUi?.openFileInput;
     if (typeof groupedPicker === "function") {
       void groupedPicker(input);
@@ -166,6 +170,10 @@
     pianoSection: document.querySelector(".piano-section"),
     historyPanel: document.querySelector("#historyPanel"),
     historyCornerToggle: document.querySelector("#historyCornerToggle"),
+    sidebarCollapsedRail: document.querySelector("#sidebarCollapsedRail"),
+    collapsedAddChannelButton: document.querySelector("#collapsedAddChannelButton"),
+    collapsedDeleteChannelsButton: document.querySelector("#collapsedDeleteChannelsButton"),
+    collapsedChannelList: document.querySelector("#collapsedChannelList"),
     historyUndoButton: document.querySelector("#historyUndoButton"),
     historyRedoButton: document.querySelector("#historyRedoButton"),
     historyList: document.querySelector("#historyList"),
@@ -229,7 +237,10 @@
     googleLoginButton: document.querySelector("#googleLoginButton"),
     noteToolButton: document.querySelector("#noteToolButton"),
     selectToolButton: document.querySelector("#selectToolButton"),
+    overviewTimelineCanvas: document.querySelector("#overviewTimelineCanvas"),
     timelineCanvas: document.querySelector("#timelineCanvas"),
+    timelineTempoReadout: document.querySelector("#timelineTempoReadout"),
+    timelineTempoValue: document.querySelector("#timelineTempoValue"),
     keyboardCanvas: document.querySelector("#keyboardCanvas"),
     rollViewport: document.querySelector("#rollViewport"),
     rollSpacer: document.querySelector("#rollSpacer"),
@@ -261,10 +272,8 @@
     channelTitle: document.querySelector("#channelTitle"),
     channelColorInput: document.querySelector("#channelColorInput"),
     dirtyIndicator: document.querySelector("#dirtyIndicator"),
-    infoChannel: document.querySelector("#infoChannel"),
-    infoNoteCount: document.querySelector("#infoNoteCount"),
-    infoLength: document.querySelector("#infoLength"),
-    infoSelection: document.querySelector("#infoSelection"),
+    infoCharCount: document.querySelector("#infoCharCount"),
+    infoSelectionCount: document.querySelector("#infoSelectionCount"),
     noteChannelView: document.querySelector("#noteChannelView"),
     midiReferenceView: document.querySelector("#midiReferenceView"),
     midiReferenceStatus: document.querySelector("#midiReferenceStatus"),
@@ -334,6 +343,26 @@
     channelDeleteClearAllButton: document.querySelector("#channelDeleteClearAllButton"),
     channelDeleteList: document.querySelector("#channelDeleteList"),
     channelDeleteSummary: document.querySelector("#channelDeleteSummary"),
+    channelEditBackdrop: document.querySelector("#channelEditBackdrop"),
+    channelEditDialog: document.querySelector("#channelEditDialog"),
+    channelEditCloseButton: document.querySelector("#channelEditCloseButton"),
+    channelEditCancelButton: document.querySelector("#channelEditCancelButton"),
+    channelEditApplyButton: document.querySelector("#channelEditApplyButton"),
+    channelEditNameInput: document.querySelector("#channelEditNameInput"),
+    channelEditInstrumentSelect: document.querySelector("#channelEditInstrumentSelect"),
+    channelEditColorInput: document.querySelector("#channelEditColorInput"),
+    channelEditTargetLabel: document.querySelector("#channelEditTargetLabel"),
+    audioEditBackdrop: document.querySelector("#audioEditBackdrop"),
+    audioEditDialog: document.querySelector("#audioEditDialog"),
+    audioEditCloseButton: document.querySelector("#audioEditCloseButton"),
+    audioEditCancelButton: document.querySelector("#audioEditCancelButton"),
+    audioEditApplyButton: document.querySelector("#audioEditApplyButton"),
+    audioEditNameInput: document.querySelector("#audioEditNameInput"),
+    audioEditColorInput: document.querySelector("#audioEditColorInput"),
+    audioEditOffsetInput: document.querySelector("#audioEditOffsetInput"),
+    audioEditRateInput: document.querySelector("#audioEditRateInput"),
+    audioEditVolumeInput: document.querySelector("#audioEditVolumeInput"),
+    audioEditTargetLabel: document.querySelector("#audioEditTargetLabel"),
     midiTransferBackdrop: document.querySelector("#midiTransferBackdrop"),
     midiTransferDialog: document.querySelector("#midiTransferDialog"),
     midiTransferCloseButton: document.querySelector("#midiTransferCloseButton"),
@@ -537,7 +566,18 @@
       startY: 0,
       dragging: false,
       sourceElement: null,
+      container: null,
       previewOrder: [],
+    },
+    channelEdit: {
+      channelId: null,
+      lastClickChannelId: null,
+      lastClickAt: 0,
+    },
+    audioEdit: {
+      clipId: null,
+      lastClickClipId: null,
+      lastClickAt: 0,
     },
     customScrollDrag: null,
     longPress: null,
@@ -1319,6 +1359,7 @@
     drawRoll();
     updatePlayheadVisual();
     drawTimeline();
+    drawOverviewTimeline();
     return true;
   }
 
@@ -1355,6 +1396,7 @@
     drawRoll();
     updatePlayheadVisual();
     drawTimeline();
+    drawOverviewTimeline();
     updatePlaybackTimeInfo();
     return true;
   }
@@ -2293,7 +2335,8 @@
       : !notesActive || !getActiveChannel()?.notes?.length);
     elements.editDeleteButton.disabled = midiActive || (audioActive ? !getActiveAudioClip() : !notesActive || !state.selectedNoteIds.size);
     if (elements.editNoteVolumeButton) elements.editNoteVolumeButton.disabled = midiActive || audioActive || !notesActive || !state.selectedNoteIds.size;
-    elements.fileExportButton.disabled = !hasCopySource;
+    // MML 내보내기는 현재 선택/활성 패널/노트 유무와 관계없이 항상 열 수 있습니다.
+    elements.fileExportButton.disabled = false;
   }
 
   function closeFileMenu() {
@@ -2429,11 +2472,14 @@
 
     const rootStyle = getComputedStyle(document.documentElement);
     const configuredKeyboardWidth = Number.parseFloat(rootStyle.getPropertyValue("--keyboard-width")) || 52;
-    const configuredTimelineHeight = Number.parseFloat(rootStyle.getPropertyValue("--timeline-height")) || 34;
+    const configuredTimelineHeight = Number.parseFloat(rootStyle.getPropertyValue("--timeline-height")) || 38;
+    const configuredOverviewHeight = Number.parseFloat(rootStyle.getPropertyValue("--overview-timeline-height")) || 30;
     const keyboardWidth = Math.max(1, Math.round(configuredKeyboardWidth));
     const timelineWidth = Math.max(1, Math.round(elements.rollViewport.clientWidth));
     const keyboardHeight = Math.max(1, Math.round(elements.rollViewport.clientHeight));
     const timelineHeight = Math.max(1, Math.round(configuredTimelineHeight));
+    const overviewHeight = Math.max(1, Math.round(configuredOverviewHeight));
+    if (elements.overviewTimelineCanvas) resizeCanvas(elements.overviewTimelineCanvas, keyboardWidth + timelineWidth, overviewHeight);
     resizeCanvas(elements.timelineCanvas, timelineWidth, timelineHeight);
     resizeCanvas(elements.keyboardCanvas, keyboardWidth, keyboardHeight);
 
@@ -2933,12 +2979,212 @@
     context.closePath();
   }
 
+  let overviewTimelineContentVersion = 0;
+  let overviewTimelineActivityCache = null;
+  let overviewTimelineDrag = null;
+
+  function invalidateOverviewTimelineActivity() {
+    overviewTimelineContentVersion += 1;
+    overviewTimelineActivityCache = null;
+  }
+
+  function getOverviewTimelineActivityData() {
+    if (
+      overviewTimelineActivityCache?.version === overviewTimelineContentVersion
+      && overviewTimelineActivityCache.channelsRef === state.channels
+      && overviewTimelineActivityCache.audioClipsRef === state.audioClips
+    ) {
+      return overviewTimelineActivityCache;
+    }
+    let lastNoteEnd = 0;
+    const visibleChannels = [];
+    state.channels.forEach((channel, index) => {
+      const intervals = [];
+      for (const note of channel.notes || []) {
+        const start = Math.max(0, Number(note.startBeat) || 0);
+        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        lastNoteEnd = Math.max(lastNoteEnd, end);
+        if (visibleChannels.length < 12) intervals.push({ start, end });
+      }
+      if (intervals.length && visibleChannels.length < 12) {
+        intervals.sort((a, b) => a.start - b.start || a.end - b.end);
+        visibleChannels.push({ channel, index, intervals });
+      }
+    });
+    const lastAudioEnd = state.audioClips.reduce(
+      (maximum, clip) => Math.max(maximum, getAudioClipEndBeat(clip)),
+      0,
+    );
+    overviewTimelineActivityCache = {
+      version: overviewTimelineContentVersion,
+      channelsRef: state.channels,
+      audioClipsRef: state.audioClips,
+      endBeat: Math.max(CONFIG.beatsPerMeasure, lastNoteEnd, lastAudioEnd),
+      visibleChannels,
+    };
+    return overviewTimelineActivityCache;
+  }
+
+  function getOverviewTimelineEndBeat() {
+    return getOverviewTimelineActivityData().endBeat;
+  }
+
+  function drawOverviewTimeline() {
+    const canvas = elements.overviewTimelineCanvas;
+    if (!(canvas instanceof HTMLCanvasElement)) return;
+    const context = canvas.getContext("2d");
+    const width = Math.max(1, canvas.clientWidth || 1);
+    const height = Math.max(1, canvas.clientHeight || 30);
+    const theme = getCanvasTheme();
+    const overviewData = getOverviewTimelineActivityData();
+    const endBeat = overviewData.endBeat;
+
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = theme.timelineBackground;
+    context.fillRect(0, 0, width, height);
+
+    // A few quiet global guides make the compact overview readable without
+    // turning it into a second detailed ruler.
+    context.strokeStyle = state.theme === "light" ? "rgba(70,85,104,.20)" : "rgba(210,220,232,.13)";
+    context.lineWidth = 1;
+    for (const ratio of [0.25, 0.5, 0.75]) {
+      const x = Math.round(width * ratio) + 0.5;
+      context.beginPath();
+      context.moveTo(x, 0);
+      context.lineTo(x, height);
+      context.stroke();
+    }
+
+    const visibleChannels = overviewData.visibleChannels;
+    // The overview now matches the sidebar-tab height, so use the extra vertical room
+    // to give the (up to) twelve channel lanes a little more breathing space.
+    const lanePitch = Math.max(2.1, Math.min(3.15, (height - 6) / 12));
+    const usedHeight = visibleChannels.length * lanePitch;
+    const top = Math.max(1, (height - usedHeight) / 2);
+    const lineWidth = Math.max(1.3, Math.min(1.85, lanePitch * 0.62));
+    const mergeGapPx = 0.85;
+
+    context.lineCap = "round";
+    for (let lane = 0; lane < visibleChannels.length; lane += 1) {
+      const { channel, index, intervals } = visibleChannels[lane];
+      const y = top + lanePitch * (lane + 0.5);
+      context.strokeStyle = getChannelColor(channel, index);
+      context.globalAlpha = channel.muted ? 0.28 : (channel.visible === false ? 0.42 : 0.92);
+      context.lineWidth = lineWidth;
+      context.beginPath();
+      let pendingStart = -1;
+      let pendingEnd = -1;
+      const flush = () => {
+        if (pendingStart < 0) return;
+        const x1 = clamp(pendingStart, 0, width);
+        const x2 = clamp(Math.max(x1 + 0.8, pendingEnd), 0, width);
+        context.moveTo(x1, y);
+        context.lineTo(x2, y);
+        pendingStart = -1;
+        pendingEnd = -1;
+      };
+      for (const interval of intervals) {
+        const x1 = clamp(interval.start / endBeat * width, 0, width);
+        const x2 = clamp(interval.end / endBeat * width, 0, width);
+        if (pendingStart < 0) {
+          pendingStart = x1;
+          pendingEnd = x2;
+        } else if (x1 <= pendingEnd + mergeGapPx) {
+          pendingEnd = Math.max(pendingEnd, x2);
+        } else {
+          flush();
+          pendingStart = x1;
+          pendingEnd = x2;
+        }
+      }
+      flush();
+      context.stroke();
+    }
+    context.globalAlpha = 1;
+
+    // Show the currently visible roll window inside the full-song overview.
+    const visibleStartBeat = clamp(xToBeat(elements.rollViewport.scrollLeft), 0, endBeat);
+    const visibleEndBeat = clamp(
+      xToBeat(elements.rollViewport.scrollLeft + elements.rollViewport.clientWidth),
+      visibleStartBeat,
+      endBeat,
+    );
+    const viewX = visibleStartBeat / endBeat * width;
+    const viewWidth = Math.max(1, (visibleEndBeat - visibleStartBeat) / endBeat * width);
+    context.fillStyle = state.theme === "light" ? "rgba(0,159,206,.055)" : "rgba(0,200,255,.065)";
+    context.fillRect(viewX, 0, viewWidth, height);
+    context.strokeStyle = state.theme === "light" ? "rgba(0,159,206,.35)" : "rgba(0,200,255,.38)";
+    context.lineWidth = 1;
+    context.strokeRect(Math.round(viewX) + 0.5, 0.5, Math.max(1, Math.round(viewWidth) - 1), Math.max(1, height - 1));
+
+    const playheadX = clamp(state.playhead.beat / endBeat * width, 0, width);
+    context.strokeStyle = "rgba(255,78,96,.96)";
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.moveTo(Math.round(playheadX) + 0.5, 0);
+    context.lineTo(Math.round(playheadX) + 0.5, height);
+    context.stroke();
+  }
+
+  function overviewTimelineBeatFromPointer(event) {
+    const canvas = elements.overviewTimelineCanvas;
+    if (!canvas) return 0;
+    const rect = canvas.getBoundingClientRect();
+    const ratio = clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+    return ratio * getOverviewTimelineEndBeat();
+  }
+
+  function navigateOverviewTimelineFromPointer(event) {
+    const targetBeat = overviewTimelineBeatFromPointer(event);
+    const targetX = beatToX(targetBeat);
+    elements.rollViewport.scrollLeft = clamp(
+      targetX - elements.rollViewport.clientWidth / 2,
+      0,
+      getMaxScrollLeft(),
+    );
+    // The overview is a viewport navigator only. The red playback line keeps its
+    // current beat while the visible piano-roll window moves underneath it.
+    updateCustomScrollbars();
+    drawRoll();
+    drawTimeline();
+    return targetBeat;
+  }
+
+  function handleOverviewTimelinePointerDown(event) {
+    if (event.button !== 0 || !elements.overviewTimelineCanvas) return;
+    overviewTimelineDrag = { pointerId: event.pointerId };
+    trySetPointerCapture(elements.overviewTimelineCanvas, event.pointerId);
+    navigateOverviewTimelineFromPointer(event);
+    event.preventDefault();
+  }
+
+  function handleOverviewTimelinePointerMove(event) {
+    if (overviewTimelineDrag?.pointerId !== event.pointerId) return;
+    navigateOverviewTimelineFromPointer(event);
+    event.preventDefault();
+  }
+
+  function handleOverviewTimelinePointerUp(event) {
+    if (overviewTimelineDrag?.pointerId !== event.pointerId) return;
+    overviewTimelineDrag = null;
+    try {
+      elements.overviewTimelineCanvas?.releasePointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture may already have been released.
+    }
+    if (event.type !== "pointercancel") navigateOverviewTimelineFromPointer(event);
+    event.preventDefault();
+  }
+
   function drawTimeline() {
     const context = elements.timelineCanvas.getContext("2d");
     const width = elements.timelineCanvas.clientWidth;
     const height = elements.timelineCanvas.clientHeight || 51;
     const scrollLeft = elements.rollViewport.scrollLeft;
     const theme = getCanvasTheme();
+    const currentTempo = getTempoAtBeat(clamp(Number(state.playhead.beat) || 0, 0, getTotalBeats()));
+    if (elements.timelineTempoValue) elements.timelineTempoValue.textContent = String(currentTempo);
+    if (elements.timelineTempoReadout) elements.timelineTempoReadout.title = `현재 템포 ${currentTempo} BPM`;
     const drawingUnit = getVisibleGridUnit();
     const firstVisibleBeat = Math.max(0, xToBeat(scrollLeft) - drawingUnit);
     const lastVisibleBeat = Math.min(getTotalBeats(), xToBeat(scrollLeft + width) + drawingUnit);
@@ -3018,6 +3264,7 @@
     }
     context.textBaseline = "alphabetic";
     context.lineWidth = 1;
+    drawOverviewTimeline();
   }
 
   function updatePlayheadVisual() {
@@ -3816,8 +4063,13 @@
     }
   }
 
+  function getChannelDragContainer() {
+    return state.channelDrag.container || elements.channelTabs || null;
+  }
+
   function clearChannelDropIndicators() {
-    elements.channelTabs?.querySelectorAll(".channel-tree-item[data-channel-id]").forEach((item) => {
+    const container = getChannelDragContainer();
+    container?.querySelectorAll("[data-channel-id]").forEach((item) => {
       item.classList.remove("drop-before", "drop-after");
       item.classList.toggle(
         "dragging",
@@ -3827,9 +4079,9 @@
     });
   }
 
-  function getChannelPreviewOrderIds() {
-    if (!elements.channelTabs) return [];
-    return [...elements.channelTabs.querySelectorAll(".channel-tree-item[data-channel-id]")]
+  function getChannelPreviewOrderIds(container = getChannelDragContainer()) {
+    if (!container) return [];
+    return [...container.querySelectorAll("[data-channel-id]")]
       .map((item) => String(item.dataset.channelId || ""))
       .filter(Boolean);
   }
@@ -3889,16 +4141,17 @@
 
   function updateChannelDragPreview(event) {
     const drag = state.channelDrag;
-    if (!drag.dragging || !elements.channelTabs || !drag.sourceElement) return;
-    const treeRect = elements.channelTabs.getBoundingClientRect();
+    const container = getChannelDragContainer();
+    if (!drag.dragging || !container || !drag.sourceElement) return;
+    const treeRect = container.getBoundingClientRect();
     if (event.clientY < treeRect.top + 42) {
-      elements.channelTabs.scrollTop -= 14;
+      container.scrollTop -= 14;
     } else if (event.clientY > treeRect.bottom - 42) {
-      elements.channelTabs.scrollTop += 14;
+      container.scrollTop += 14;
     }
 
     const sourceElement = drag.sourceElement;
-    const channelItems = [...elements.channelTabs.querySelectorAll(".channel-tree-item[data-channel-id]")]
+    const channelItems = [...container.querySelectorAll("[data-channel-id]")]
       .filter((item) => item !== sourceElement);
 
     let beforeElement = null;
@@ -3911,13 +4164,13 @@
     }
 
     if (beforeElement) {
-      elements.channelTabs.insertBefore(sourceElement, beforeElement);
+      container.insertBefore(sourceElement, beforeElement);
     } else {
-      // 음악 채널의 최하단은 오디오 행 바로 앞입니다. 오디오가 없으면 목록 끝까지 이동합니다.
-      const firstAudioItem = elements.channelTabs.querySelector(".audio-source-item");
-      elements.channelTabs.insertBefore(sourceElement, firstAudioItem || null);
+      // 펼친 목록과 접힌 레일 모두 음악 채널은 오디오 항목보다 위에 유지합니다.
+      const firstAudioItem = container.querySelector("[data-audio-clip-id]");
+      container.insertBefore(sourceElement, firstAudioItem || null);
     }
-    drag.previewOrder = getChannelPreviewOrderIds();
+    drag.previewOrder = getChannelPreviewOrderIds(container);
     clearChannelDropIndicators();
   }
 
@@ -3926,6 +4179,7 @@
     state.channelDrag.pointerId = null;
     state.channelDrag.dragging = false;
     state.channelDrag.sourceElement = null;
+    state.channelDrag.container = null;
     state.channelDrag.previewOrder = [];
   }
 
@@ -3939,7 +4193,7 @@
     return true;
   }
 
-  function beginChannelPointerDrag(event, channelId, item) {
+  function beginChannelPointerDrag(event, channelId, item, container = elements.channelTabs) {
     if (
       event.button !== 0
       || event.target.closest(".channel-tree-action, .channel-tree-expander")
@@ -3950,7 +4204,8 @@
     state.channelDrag.startY = event.clientY;
     state.channelDrag.dragging = false;
     state.channelDrag.sourceElement = item;
-    state.channelDrag.previewOrder = getChannelPreviewOrderIds();
+    state.channelDrag.container = container || item.parentElement || elements.channelTabs;
+    state.channelDrag.previewOrder = getChannelPreviewOrderIds(state.channelDrag.container);
     trySetPointerCapture(item, event.pointerId);
   }
 
@@ -3981,7 +4236,14 @@
     }
 
     const index = state.channels.findIndex((channel) => String(channel.id) === String(sourceId));
-    if (index >= 0) selectChannel(index);
+    if (index < 0) return;
+    const now = performance.now();
+    const doubleClick = state.channelEdit.lastClickChannelId === String(sourceId)
+      && now - state.channelEdit.lastClickAt <= 360;
+    state.channelEdit.lastClickChannelId = doubleClick ? null : String(sourceId);
+    state.channelEdit.lastClickAt = doubleClick ? 0 : now;
+    if (doubleClick) openChannelEditDialog(sourceId);
+    else selectChannel(index);
   }
 
 
@@ -4002,6 +4264,7 @@
       color: getAudioClipColor(raw, index),
       visible: raw?.visible !== false,
       muted: Boolean(raw?.muted),
+      lane: clamp(Math.round(Number(raw?.lane ?? raw?.row ?? (index % 3)) || 0), 0, 2),
       startBeat,
       durationBeat,
       sourceDurationSeconds: Math.max(0, Number(raw?.sourceDurationSeconds) || 0),
@@ -4067,6 +4330,10 @@
     renderChannelTabs();
     renderChannelEditor();
     renderAudioLane();
+    // 노트는 캔버스에 그려지므로 state만 비우면 선택 하이라이트가 화면에 남습니다.
+    // 오디오 선택 즉시 피아노롤도 다시 그려 양쪽 선택이 동시에 보이지 않게 합니다.
+    drawRoll();
+    updateChannelInfo();
     updatePlayheadVisual();
     return true;
   }
@@ -4341,18 +4608,39 @@
     return getAudioClipsInDisplayOrder({ visibleOnly: true });
   }
 
+  function getAudioLaneMetrics() {
+    const laneHeight = Math.max(1, elements.audioLaneViewport?.clientHeight || 58);
+    const padding = 2;
+    const gap = 2;
+    const blockHeight = Math.max(12, Math.floor((laneHeight - padding * 2 - gap * 2) / 3));
+    const usedHeight = blockHeight * 3 + gap * 2;
+    const topPadding = Math.max(1, Math.floor((laneHeight - usedHeight) / 2));
+    return { laneHeight, gap, blockHeight, topPadding };
+  }
+
+  function getAudioLaneRowFromClientY(clientY) {
+    const rect = elements.audioLaneViewport?.getBoundingClientRect();
+    if (!rect) return 0;
+    const relativeY = clamp(Number(clientY) - rect.top, 0, Math.max(0, rect.height - 0.001));
+    return clamp(Math.floor(relativeY / Math.max(1, rect.height) * 3), 0, 2);
+  }
+
   function updateAudioClipVerticalOrder() {
     if (!elements.audioLaneContent || !elements.audioLaneViewport) return;
-    const rowHeight = matchMedia("(pointer: coarse)").matches ? 32 : 27;
+    const { laneHeight, gap, blockHeight, topPadding } = getAudioLaneMetrics();
     const ordered = getVisibleAudioClipsInDisplayOrder();
-    const contentHeight = Math.max(elements.audioLaneViewport.clientHeight || 0, ordered.length * rowHeight + 6);
-    elements.audioLaneContent.style.height = `${contentHeight}px`;
-    ordered.forEach(({ clip }, rowIndex) => {
+    elements.audioLaneContent.style.height = `${laneHeight}px`;
+    ordered.forEach(({ clip, sourceIndex }, orderIndex) => {
       const element = Array.from(elements.audioLaneContent.children).find((item) => String(item.dataset?.audioClipId) === String(clip.id));
       if (!element) return;
-      element.style.top = `${3 + rowIndex * rowHeight}px`;
-      element.style.height = `${Math.max(20, rowHeight - 5)}px`;
-      element.style.zIndex = String(ordered.length - rowIndex);
+      const lane = clamp(Math.round(Number(clip.lane) || 0), 0, 2);
+      clip.lane = lane;
+      element.style.top = `${topPadding + lane * (blockHeight + gap)}px`;
+      element.style.height = `${blockHeight}px`;
+      const active = String(clip.id) === String(state.activeAudioClipId || "");
+      // getAudioClipsInDisplayOrder()는 시작 시간이 늦은 블록부터 반환합니다.
+      // 따라서 앞쪽 항목에 더 높은 z-index를 줘 뒤에 배치된 오디오가 위에 보이게 합니다.
+      element.style.zIndex = String(active ? 1000 : 100 + (ordered.length - orderIndex));
     });
   }
 
@@ -4395,6 +4683,8 @@
         state.activeAudioClipId = clip.id;
         clearNoteSelection();
         clearMidiSelection();
+        drawRoll();
+        updateChannelInfo();
         elements.audioLaneContent.querySelectorAll(".audio-clip-block.active").forEach((item) => item.classList.remove("active"));
         block.classList.add("active");
         renderChannelTabs();
@@ -4408,6 +4698,7 @@
           originalStartBeat: clip.startBeat,
           originalDurationBeat: clip.durationBeat,
           originalEndBeat: getAudioClipEndBeat(clip),
+          originalLane: clamp(Math.round(Number(clip.lane) || 0), 0, 2),
           pointerBeatOffset: pointerBeat - clip.startBeat,
           moved: false,
           element: block,
@@ -4433,6 +4724,7 @@
           const nextStart = Math.max(0, snapBeatToUnit(pointerBeat - interaction.pointerBeatOffset, unit));
           clip.startBeat = nextStart;
           clip.durationBeat = interaction.originalDurationBeat;
+          clip.lane = getAudioLaneRowFromClientY(event.clientY);
         } else if (interaction.mode === "left") {
           const nextStart = clamp(snapBeatToUnit(pointerBeat, unit), 0, interaction.originalEndBeat - CONFIG.minimumNoteBeat);
           clip.startBeat = nextStart;
@@ -4443,7 +4735,11 @@
           clip.durationBeat = Math.max(CONFIG.minimumNoteBeat, nextEnd - interaction.originalStartBeat);
         }
         interaction.moved = true;
-        extendTimelineToBeat(getAudioClipEndBeat(clip) + CONFIG.minimumNoteBeat);
+        // 오디오의 위치/길이가 바뀌는 즉시 전체 타임라인의 끝 추정과 축척도 갱신합니다.
+        // state.audioClips 배열 참조는 그대로이므로 캐시를 명시적으로 무효화해야 합니다.
+        invalidateOverviewTimelineActivity();
+        const timelineExtended = extendTimelineToBeat(getAudioClipEndBeat(clip) + CONFIG.minimumNoteBeat);
+        if (!timelineExtended) drawOverviewTimeline();
         block.style.left = `${beatToX(clip.startBeat)}px`;
         block.style.width = `${Math.max(8, clip.durationBeat * getQuarterWidth())}px`;
         updateAudioLaneTransform();
@@ -4463,13 +4759,24 @@
         }
         renderAudioLane();
         updateAudioSourceInspector();
+        if (!interaction.moved && event.type !== "pointercancel") handleAudioEditActivation(clip.id, { select: false });
       };
       block.addEventListener("pointerup", finish);
       block.addEventListener("pointercancel", finish);
       elements.audioLaneContent.append(block);
     });
     updateAudioClipVerticalOrder();
-    elements.audioLaneLabel.textContent = state.audioClips.length ? `오디오 ${state.audioClips.length}` : "오디오";
+    if (elements.audioLaneLabel) {
+      const label = document.createElement("span");
+      label.textContent = "오디오";
+      if (state.audioClips.length) {
+        const count = document.createElement("strong");
+        count.textContent = String(state.audioClips.length);
+        elements.audioLaneLabel.replaceChildren(label, count);
+      } else {
+        elements.audioLaneLabel.replaceChildren(label);
+      }
+    }
   }
 
   function renderChannelMuteMixer() {
@@ -4493,6 +4800,62 @@
     if (elements.channelMuteBackdrop) elements.channelMuteBackdrop.hidden = true;
   }
 
+  function renderCollapsedChannelRail() {
+    const list = elements.collapsedChannelList;
+    if (!list) return;
+    list.replaceChildren();
+    state.channels.forEach((channel, index) => {
+      const active = state.activePanel === "notes" && index === state.activeChannel;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `sidebar-rail-channel${active ? " active" : ""}${channel.muted ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}`;
+      button.style.setProperty("--channel-color", getChannelColor(channel, index));
+      button.textContent = String(index + 1);
+      button.title = channel.name;
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", String(active));
+      button.setAttribute("aria-label", `${index + 1}번 채널 ${channel.name}`);
+      button.dataset.channelId = String(channel.id);
+      button.dataset.channelIndex = String(index);
+      // 펼친 채널 행과 완전히 같은 우클릭 메뉴를 사용합니다.
+      button.dataset.contextArea = "channel-tab";
+      button.addEventListener("pointerdown", (event) => beginChannelPointerDrag(event, channel.id, button, list));
+      button.addEventListener("pointermove", moveChannelPointerDrag);
+      button.addEventListener("pointerup", endChannelPointerDrag);
+      button.addEventListener("pointercancel", () => { cancelChannelPointerDrag(); });
+      button.addEventListener("click", (event) => {
+        // Pointer clicks are handled by endChannelPointerDrag so a drag does not also activate a stale index.
+        if (event.detail === 0) {
+          const nextIndex = state.channels.findIndex((item) => String(item.id) === String(channel.id));
+          if (nextIndex >= 0) selectChannel(nextIndex);
+        }
+      });
+      list.append(button);
+    });
+
+    // 접힌 상태에서도 펼친 채널 목록과 동일하게 오디오 항목을 이어서 표시합니다.
+    getAudioClipsInDisplayOrder().forEach(({ clip, sourceIndex: clipIndex }, audioIndex) => {
+      const active = state.activePanel === "audio" && String(state.activeAudioClipId) === String(clip.id);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `sidebar-rail-channel sidebar-rail-audio${active ? " active" : ""}${clip.muted ? " is-muted" : ""}${clip.visible === false ? " is-hidden" : ""}`;
+      button.style.setProperty("--channel-color", getAudioClipColor(clip, clipIndex));
+      button.textContent = `♫${audioIndex + 1}`;
+      button.title = clip.title;
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", String(active));
+      button.setAttribute("aria-label", `오디오 ${audioIndex + 1} ${clip.title}`);
+      button.dataset.audioClipId = String(clip.id);
+      button.dataset.contextArea = "audio-source";
+      button.addEventListener("click", () => handleAudioEditActivation(clip.id));
+      list.append(button);
+    });
+
+    if (elements.collapsedDeleteChannelsButton) {
+      elements.collapsedDeleteChannelsButton.disabled = state.channels.length <= 1;
+    }
+  }
+
   function renderChannelTabs() {
     if (!elements.channelTabs) return;
     elements.channelTabs.replaceChildren();
@@ -4505,7 +4868,7 @@
       button.setAttribute("aria-label", label);
       button.title = title;
       button.textContent = kind === "visibility"
-        ? (active ? "👁" : "🙈")
+        ? "👁"
         : (active ? "🔇" : "🔊");
       button.addEventListener("pointerdown", (event) => event.stopPropagation());
       button.addEventListener("click", (event) => {
@@ -4584,7 +4947,7 @@
       label.className = "channel-tree-label channel-tab-label";
       label.textContent = clip.title;
       main.append(label);
-      main.addEventListener("click", () => selectAudioClip(clip.id));
+      main.addEventListener("click", () => handleAudioEditActivation(clip.id));
 
       const actions = document.createElement("div");
       actions.className = "channel-tree-actions";
@@ -4614,7 +4977,80 @@
     elements.clearChannelButton.disabled = state.activePanel !== "notes";
     elements.copyChannelButton.disabled = state.activePanel !== "notes";
     elements.pasteChannelButton.disabled = state.activePanel !== "notes";
+    renderCollapsedChannelRail();
     updateEditMenuState();
+  }
+
+  function openChannelEditDialog(channelId) {
+    const index = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
+    if (index < 0 || !elements.channelEditBackdrop) return false;
+    selectChannel(index);
+    const channel = state.channels[index];
+    state.channelEdit.channelId = String(channel.id);
+    if (elements.channelEditInstrumentSelect && !elements.channelEditInstrumentSelect.options.length && elements.channelInstrumentSelect) {
+      elements.channelEditInstrumentSelect.innerHTML = elements.channelInstrumentSelect.innerHTML;
+    }
+    if (elements.channelEditNameInput) elements.channelEditNameInput.value = channel.name;
+    if (elements.channelEditColorInput) elements.channelEditColorInput.value = getChannelColor(channel, index);
+    if (elements.channelEditTargetLabel) elements.channelEditTargetLabel.textContent = `${index + 1}번 채널`;
+    if (elements.channelEditInstrumentSelect) {
+      const instrumentName = String(channel.instrument || "Acoustic Grand Piano");
+      const matchedProgram = GM_PROGRAM_NAMES.findIndex((name) => name === instrumentName);
+      elements.channelEditInstrumentSelect.value = isDrumInstrumentName(instrumentName) ? "drums" : String(matchedProgram >= 0 ? matchedProgram : 0);
+    }
+    elements.channelEditBackdrop.hidden = false;
+    requestAnimationFrame(() => {
+      elements.channelEditNameInput?.focus();
+      elements.channelEditNameInput?.select();
+    });
+    return true;
+  }
+
+  function closeChannelEditDialog() {
+    if (elements.channelEditBackdrop) elements.channelEditBackdrop.hidden = true;
+    state.channelEdit.channelId = null;
+  }
+
+  function applyChannelEditDialog() {
+    const channelId = state.channelEdit.channelId;
+    const index = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
+    if (index < 0) {
+      closeChannelEditDialog();
+      return false;
+    }
+    const channel = state.channels[index];
+    const requestedName = String(elements.channelEditNameInput?.value || "").trim();
+    if (!requestedName) {
+      showToast("채널 이름은 비워둘 수 없습니다.");
+      elements.channelEditNameInput?.focus();
+      return false;
+    }
+    const nextName = makeUniqueChannelName(requestedName, channel.id);
+    const requestedColor = String(elements.channelEditColorInput?.value || "").toLowerCase();
+    const nextColor = isValidChannelColor(requestedColor) ? requestedColor : getChannelColor(channel, index);
+    const selectedValue = String(elements.channelEditInstrumentSelect?.value || "0");
+    const program = clamp(Math.round(Number(selectedValue) || 0), 0, GM_PROGRAM_NAMES.length - 1);
+    const nextInstrument = selectedValue === "drums" ? "Drums" : (GM_PROGRAM_NAMES[program] || GM_PROGRAM_NAMES[0]);
+    const changed = channel.name !== nextName || channel.color !== nextColor || channel.instrument !== nextInstrument;
+    if (!changed) {
+      closeChannelEditDialog();
+      return true;
+    }
+    channel.name = nextName;
+    channel.color = nextColor;
+    channel.instrument = nextInstrument;
+    if (selectedValue !== "drums" && typeof audioEngine.prepareProgram === "function") {
+      void audioEngine.prepareProgram(program, 0).catch((error) => console.warn("악기 음원 준비 실패", error));
+    }
+    markDirty("채널 정보 변경");
+    renderChannelTabs();
+    renderChannelEditor();
+    renderChannelMuteMixer();
+    drawRoll();
+    closeChannelEditDialog();
+    if (nextName !== requestedName) showToast(`중복되지 않도록 이름을 ${nextName}(으)로 변경했습니다.`);
+    else showToast(`${nextName} 채널 정보를 변경했습니다.`);
+    return true;
   }
 
   function renderChannelEditor() {
@@ -4786,6 +5222,98 @@
     );
     renderMidiInstrumentList();
     updateEditMenuState();
+  }
+
+  function handleAudioEditActivation(clipId, { select = true } = {}) {
+    const safeId = String(clipId || "");
+    if (!safeId) return false;
+    const now = performance.now();
+    const doubleClick = state.audioEdit.lastClickClipId === safeId
+      && now - state.audioEdit.lastClickAt <= 360;
+    state.audioEdit.lastClickClipId = doubleClick ? null : safeId;
+    state.audioEdit.lastClickAt = doubleClick ? 0 : now;
+    if (doubleClick) return openAudioEditDialog(safeId);
+    if (select) return selectAudioClip(safeId);
+    return false;
+  }
+
+  function openAudioEditDialog(clipId = state.activeAudioClipId) {
+    const clip = state.audioClips.find((item) => String(item.id) === String(clipId));
+    if (!clip || !elements.audioEditBackdrop) return false;
+    selectAudioClip(clip.id);
+    state.audioEdit.clipId = String(clip.id);
+    const index = state.audioClips.indexOf(clip);
+    if (elements.audioEditNameInput) elements.audioEditNameInput.value = clip.title;
+    if (elements.audioEditColorInput) elements.audioEditColorInput.value = getAudioClipColor(clip, index);
+    if (elements.audioEditOffsetInput) {
+      elements.audioEditOffsetInput.max = String(Math.max(0, Number(clip.sourceDurationSeconds) || 0));
+      elements.audioEditOffsetInput.value = String(Math.round((Number(clip.sourceOffsetSeconds) || 0) * 100) / 100);
+    }
+    if (elements.audioEditRateInput) elements.audioEditRateInput.value = String(Math.round(clamp(Number(clip.playbackRate) || 1, 0.25, 4) * 100) / 100);
+    if (elements.audioEditVolumeInput) elements.audioEditVolumeInput.value = String(Math.round(clamp(Number(clip.volume) || 0, 0, 1) * 100));
+    if (elements.audioEditTargetLabel) elements.audioEditTargetLabel.textContent = clip.fileName || clip.title;
+    elements.audioEditBackdrop.hidden = false;
+    requestAnimationFrame(() => {
+      elements.audioEditNameInput?.focus();
+      elements.audioEditNameInput?.select();
+    });
+    return true;
+  }
+
+  function closeAudioEditDialog() {
+    if (elements.audioEditBackdrop) elements.audioEditBackdrop.hidden = true;
+    state.audioEdit.clipId = null;
+  }
+
+  function applyAudioEditDialog() {
+    const clip = state.audioClips.find((item) => String(item.id) === String(state.audioEdit.clipId));
+    if (!clip) {
+      closeAudioEditDialog();
+      return false;
+    }
+    const requestedName = String(elements.audioEditNameInput?.value || "").trim();
+    if (!requestedName) {
+      showToast("오디오 이름은 비워둘 수 없습니다.");
+      elements.audioEditNameInput?.focus();
+      return false;
+    }
+    const index = state.audioClips.indexOf(clip);
+    const requestedColor = String(elements.audioEditColorInput?.value || "").toLowerCase();
+    const nextColor = isValidChannelColor(requestedColor) ? requestedColor : getAudioClipColor(clip, index);
+    const maxOffset = Math.max(0, Number(clip.sourceDurationSeconds) || 0);
+    const nextOffset = clamp(Number(elements.audioEditOffsetInput?.value) || 0, 0, maxOffset);
+    const nextRate = clamp(Number(elements.audioEditRateInput?.value) || 1, 0.25, 4);
+    const nextVolume = clamp((Number(elements.audioEditVolumeInput?.value) || 0) / 100, 0, 1);
+    const nextName = requestedName.slice(0, 80);
+    const changed = clip.title !== nextName
+      || clip.color !== nextColor
+      || Math.abs((Number(clip.sourceOffsetSeconds) || 0) - nextOffset) > 1e-7
+      || Math.abs((Number(clip.playbackRate) || 1) - nextRate) > 1e-7
+      || Math.abs((Number(clip.volume) || 0) - nextVolume) > 1e-7;
+    if (!changed) {
+      closeAudioEditDialog();
+      return true;
+    }
+    const wasPlaying = state.playback.running || state.playback.loading;
+    const resumeBeat = state.playhead.beat;
+    clip.title = nextName;
+    clip.color = nextColor;
+    clip.sourceOffsetSeconds = nextOffset;
+    clip.playbackRate = nextRate;
+    clip.volume = nextVolume;
+    if (wasPlaying) {
+      stopPlayback(false);
+      state.playhead.beat = resumeBeat;
+      window.setTimeout(() => startPlayback(), 0);
+    }
+    markDirty("오디오 정보 변경");
+    renderChannelTabs();
+    renderChannelEditor();
+    renderAudioLane();
+    updateAudioSourceInspector();
+    closeAudioEditDialog();
+    showToast(`${clip.title} 오디오 정보를 변경했습니다.`);
+    return true;
   }
 
   function setDirtyWithoutHistory() {
@@ -5181,7 +5709,7 @@
   function getCurrentUnifiedTextParsed() {
     if (state.midiImport.kind !== "text") return null;
     const format = state.midiImport.textFormat;
-    if (format === "3mle" || format === "mmi") {
+    if (["mml", "3mle", "mmi"].includes(format) && state.midiImport.textCandidates.length) {
       const selected = getMidiImportSelectedTextCandidates();
       if (!selected.length) return null;
       return parseMmlCandidateParts(selected, 64);
@@ -5203,7 +5731,7 @@
     } else {
       const format = state.midiImport.textFormat;
       const parsed = getCurrentUnifiedTextParsed();
-      if (format === "3mle" || format === "mmi") {
+      if (["mml", "3mle", "mmi"].includes(format) && state.midiImport.textCandidates.length) {
         entries.push(
           `채널 ${state.midiImport.textCandidates.length}개`,
           `선택 ${state.midiImport.selectedTextIndexes.size}개`,
@@ -5250,7 +5778,9 @@
     if (!elements.midiImportSelectionList) return;
     elements.midiImportSelectionList.replaceChildren();
     const isMidi = state.midiImport.kind === "midi";
-    const isSelectableText = state.midiImport.kind === "text" && ["3mle", "mmi"].includes(state.midiImport.textFormat);
+    const isSelectableText = state.midiImport.kind === "text"
+      && ["mml", "3mle", "mmi"].includes(state.midiImport.textFormat)
+      && state.midiImport.textCandidates.length > 0;
     const selectable = isMidi || isSelectableText;
     if (elements.midiImportSelectionActions) elements.midiImportSelectionActions.hidden = !isMidi;
     if (elements.midiImportTextSelectionActions) elements.midiImportTextSelectionActions.hidden = !isSelectableText;
@@ -5358,7 +5888,7 @@
       const division = Number(elements.midiImportQuantize?.value) === 32 ? 32 : 64;
       const overlapLabel = elements.midiImportIgnoreSingle64thOverlap?.checked !== false ? " · 1/64 겹침 무시" : "";
       setMidiImportStatus(`${selected}/${state.midiImport.preview.groups.length}개 악기 선택 · ${division}박 양자화${overlapLabel}`);
-    } else if (isText && ["3mle", "mmi"].includes(state.midiImport.textFormat)) {
+    } else if (isText && ["mml", "3mle", "mmi"].includes(state.midiImport.textFormat) && state.midiImport.textCandidates.length) {
       setMidiImportStatus(`${state.midiImport.selectedTextIndexes.size}/${state.midiImport.textCandidates.length}개 채널 선택 · 선택한 채널만 편집 영역에 가져옵니다.`);
     } else if (isText && textParsed) {
       setMidiImportStatus(`${textParsed.noteParts?.length || 0}개 음성 · ${textParsed.noteCount || 0}개 노트를 편집 영역에 가져옵니다.`);
@@ -5480,7 +6010,11 @@
         state.midiImport.selectedTextIndexes = new Set(candidates.map((_, index) => index));
         state.midiImport.textParsed = parseMmlCandidateParts(candidates, 64);
       } else {
-        state.midiImport.textParsed = parseMmlText(text, { quantize: 64 });
+        const candidates = extractGenericMmlPartCandidates(text);
+        if (!candidates.length) throw new Error("MML 파일에서 채널을 찾지 못했습니다.");
+        state.midiImport.textCandidates = candidates;
+        state.midiImport.selectedTextIndexes = new Set(candidates.map((_, index) => index));
+        state.midiImport.textParsed = parseMmlCandidateParts(candidates, 64);
         if (!state.midiImport.textParsed?.noteCount) throw new Error("MML 파일에서 연주 가능한 노트를 찾지 못했습니다.");
       }
       state.midiImport.busy = false;
@@ -6352,28 +6886,18 @@
         elements.noteVolumeButton.textContent = "V";
         elements.noteVolumeButton.title = "채널을 선택한 뒤 노트 볼륨을 수정할 수 있습니다.";
       }
+      if (elements.infoCharCount) elements.infoCharCount.textContent = "0";
+      if (elements.infoSelectionCount) elements.infoSelectionCount.textContent = "0";
       updatePlaybackTimeInfo();
       updateEditMenuState();
       return;
     }
-    const lastBeat = channel.notes.reduce(
-      (maximum, note) => Math.max(maximum, note.startBeat + note.durationBeat),
-      0,
-    );
-    const lastSeconds = beatToSeconds(lastBeat);
     const selected = getSelectedNotes();
-
-    elements.infoChannel.textContent = `${channel.name}${channel.muted ? " · 음소거" : ""}${channel.visible === false ? " · 숨김" : ""}`;
-    elements.infoNoteCount.textContent = String(channel.notes.length);
-    elements.infoLength.textContent = formatSeconds(lastSeconds);
-    if (selected.length === 1) {
-      const [note] = selected;
-      elements.infoSelection.textContent = `${noteLabel(note.pitch)} / ${note.startBeat.toFixed(3)} beat`;
-    } else if (selected.length > 1) {
-      elements.infoSelection.textContent = `${selected.length}개 선택`;
-    } else {
-      elements.infoSelection.textContent = "없음";
+    if (elements.infoCharCount) {
+      elements.infoCharCount.textContent = getMmlChannelCharacterCount(channel).toLocaleString();
+      elements.infoCharCount.title = "현재 채널 단독 MML 기준 글자 수(템포 명령 제외)";
     }
+    if (elements.infoSelectionCount) elements.infoSelectionCount.textContent = selected.length.toLocaleString();
     if (elements.noteVolumeButton) {
       elements.noteVolumeButton.disabled = selected.length === 0;
       if (selected.length === 1) {
@@ -6667,9 +7191,9 @@
   function setHistoryCollapsed(collapsed) {
     state.history.collapsed = Boolean(collapsed);
     elements.appContent.classList.toggle("history-collapsed", state.history.collapsed);
-    if (elements.sidePanel) elements.sidePanel.hidden = state.history.collapsed;
+    if (elements.sidePanel) elements.sidePanel.hidden = false;
     if (elements.historyCornerToggle) {
-      elements.historyCornerToggle.textContent = state.history.collapsed ? "패널 열기" : "패널 닫기";
+      elements.historyCornerToggle.textContent = state.history.collapsed ? "›" : "‹";
       elements.historyCornerToggle.dataset.state = state.history.collapsed ? "closed" : "open";
       elements.historyCornerToggle.title = state.history.collapsed ? "왼쪽 패널 열기" : "왼쪽 패널 닫기";
       elements.historyCornerToggle.setAttribute("aria-label", elements.historyCornerToggle.title);
@@ -6693,6 +7217,7 @@
 
   function restoreHistorySnapshot(snapshot) {
     const data = JSON.parse(snapshot);
+    invalidateOverviewTimelineActivity();
     const scrollLeft = elements.rollViewport.scrollLeft;
     const scrollTop = elements.rollViewport.scrollTop;
     const activeChannelId = getActiveChannel()?.id ?? null;
@@ -6865,6 +7390,7 @@
 
   function markDirty(label = "편집") {
     state.channelNoteRuntime.clear();
+    invalidateOverviewTimelineActivity();
     commitHistorySnapshot(label);
     state.dirty = true;
     updateDirtyState();
@@ -7235,8 +7761,16 @@
   }
 
   function selectOnlyNote(noteId) {
+    const audioWasActive = state.activePanel === "audio" || state.activeAudioClipId != null;
+    state.activePanel = "notes";
+    state.activeAudioClipId = null;
     clearNoteSelection();
     state.selectedNoteIds.add(noteId);
+    if (audioWasActive) {
+      renderChannelTabs();
+      renderChannelEditor();
+      renderAudioLane();
+    }
   }
 
   function selectAllNotes() {
@@ -8117,11 +8651,14 @@
       return;
     }
     if (state.activePanel === "audio") {
-      const point = pointerToRoll(event);
-      const beat = xToBeat(point.x);
-      if (beat >= 0) setPlayheadBeat(clamp(snapBeat(beat), 0, getTotalBeats()), { stop: true });
-      event.preventDefault();
-      return;
+      // 피아노롤에서 작업을 시작하면 오디오 선택을 해제하고 노트 편집으로 즉시 전환합니다.
+      // 두 종류가 동시에 선택된 채 남아 노트 편집이 잠기는 상태를 만들지 않습니다.
+      state.activePanel = "notes";
+      state.activeAudioClipId = null;
+      clearMidiSelection();
+      renderChannelTabs();
+      renderChannelEditor();
+      renderAudioLane();
     }
     if (state.activePanel === "none") {
       const point = pointerToRoll(event);
@@ -8486,6 +9023,10 @@
       interaction.moved = interaction.moved
         || Math.abs(interaction.note.startBeat - interaction.originalStartBeat) > 1e-7
         || Math.abs(interaction.note.durationBeat - interaction.originalDurationBeat) > 1e-7;
+      if (interaction.moved) {
+        invalidateOverviewTimelineActivity();
+        drawOverviewTimeline();
+      }
       elements.rollCanvas.style.cursor = "ew-resize";
     } else if (state.interaction.type === "move-selection") {
       const interaction = state.interaction;
@@ -8537,6 +9078,10 @@
         previewEditorPitch(previewPitch, { holdVisual: true });
       }
       interaction.moved = interaction.moved || Math.abs(appliedDeltaBeat) > 1e-7 || appliedPitchDelta !== 0;
+      if (interaction.moved && Math.abs(appliedDeltaBeat) > 1e-7) {
+        invalidateOverviewTimelineActivity();
+        drawOverviewTimeline();
+      }
       elements.rollCanvas.style.cursor = "grabbing";
     }
 
@@ -8638,6 +9183,7 @@
     }
     shrinkTimelineToContent();
     drawRoll();
+    drawOverviewTimeline();
     updateChannelInfo();
   }
 
@@ -9413,6 +9959,20 @@
     }));
   }
 
+  function extractGenericMmlPartCandidates(text) {
+    const body = extractMmlBody(text);
+    return body.split(",")
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .slice(0, 32)
+      .map((value, index) => ({
+        channelNumber: index + 1,
+        label: `채널 ${index + 1}`,
+        name: `채널 ${index + 1}`,
+        value,
+      }));
+  }
+
   function parseMmlCandidateParts(candidates, quantize = 64) {
     const parsedParts = (candidates || []).map((candidate, partIndex) => ({
       ...parseMmlPart(candidate.value, partIndex),
@@ -9627,6 +10187,10 @@
         openMmlImportDialog({ text, fileName: file.name || "" });
       } else {
         state.mmlImport.sourceFileName = file.name || "";
+        state.mmlImport.parsed = null;
+        state.mmlImport.format = "mml";
+        state.mmlImport.candidates = [];
+        state.mmlImport.selectedCandidateIndexes = new Set();
         state.mmlImport.candidateSignature = "";
         elements.mmlImportSourceLabel.textContent = file.name || "3MLE / MabiIcco / MML 파일";
         elements.mmlImportText.value = text;
@@ -10076,21 +10640,109 @@
       : false;
   }
 
+  let mmlExportSelectionQueue = [];
+
   function getMmlExportSelectedChannels() {
     if (!elements.mmlExportChannelList) return [];
-    const selectedIds = new Set(
+    const checkedIds = new Set(
       [...elements.mmlExportChannelList.querySelectorAll('input[type="checkbox"]:checked')]
         .map((input) => String(input.value || "")),
     );
-    return state.channels.filter((channel) => selectedIds.has(String(channel.id)) && channel.notes?.length);
+    mmlExportSelectionQueue = mmlExportSelectionQueue.filter((id) => checkedIds.has(String(id)));
+    for (const input of elements.mmlExportChannelList.querySelectorAll('input[type="checkbox"]:checked')) {
+      const id = String(input.value || "");
+      if (!mmlExportSelectionQueue.includes(id)) mmlExportSelectionQueue.push(id);
+    }
+    const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
+    return mmlExportSelectionQueue
+      .map((id) => channelById.get(String(id)))
+      .filter((channel) => channel?.notes?.length);
+  }
+
+  function getMmlChannelCharacterCount(channel, { includeTempo = false, tempos = getSortedTempos(), exportEndBeat = null } = {}) {
+    if (!channel?.notes?.length) return 0;
+    const normalized = channel.notes.map((note) => ({
+      ...note,
+      startBeat: Math.max(0, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat)),
+      durationBeat: Math.max(CONFIG.minimumNoteBeat, snapBeatToUnit(note.durationBeat, CONFIG.minimumNoteBeat)),
+    }));
+    const partitioned = partitionNotesIntoMmlVoices(normalized);
+    const channelEndBeat = normalized.reduce(
+      (maximum, note) => Math.max(maximum, note.startBeat + note.durationBeat),
+      0,
+    );
+    const safeExportEndBeat = Math.max(channelEndBeat, Number(exportEndBeat) || 0);
+    const voices = partitioned
+      .map((voice, voiceIndex) => (
+        includeTempo && voiceIndex === 0
+          ? buildTempoIntegratedNoteVoiceMml(voice, tempos, 0, safeExportEndBeat)
+          : buildNoteVoiceMml(voice, 0)
+      ))
+      .filter(Boolean);
+    return voices.length ? `MML@${voices.join(",")};`.length : 0;
+  }
+
+  function getMmlExportEndBeat(channels) {
+    return (channels || []).reduce((maximum, channel) => (
+      Math.max(
+        maximum,
+        ...(channel?.notes || []).map((note) => (
+          Math.max(0, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat))
+          + Math.max(CONFIG.minimumNoteBeat, snapBeatToUnit(note.durationBeat, CONFIG.minimumNoteBeat))
+        )),
+      )
+    ), 0);
+  }
+
+  function syncMmlExportSelectionIndicators() {
+    if (!elements.mmlExportChannelList) return;
+    const selectedChannels = getMmlExportSelectedChannels();
+    const firstSelectedId = selectedChannels.length ? String(selectedChannels[0].id) : null;
+    const exportEndBeat = getMmlExportEndBeat(selectedChannels);
+    const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
+    const orderById = new Map(mmlExportSelectionQueue.map((id, index) => [String(id), index + 1]));
+    elements.mmlExportChannelList.querySelectorAll('.mml-export-channel-row').forEach((row) => {
+      const checkbox = row.querySelector('input[type="checkbox"]');
+      const order = row.querySelector('.mml-export-order');
+      const detail = row.querySelector('.mml-export-channel-info small');
+      const id = String(checkbox?.value || "");
+      const channel = channelById.get(id);
+      const selectedOrder = checkbox?.checked ? orderById.get(id) : null;
+      row.classList.toggle("selected", Boolean(selectedOrder));
+      if (order) {
+        order.textContent = selectedOrder ? String(selectedOrder) : "";
+        order.classList.toggle("filled", Boolean(selectedOrder));
+        order.setAttribute("aria-label", selectedOrder ? `내보내기 ${selectedOrder}번째` : "선택 순서");
+      }
+      if (detail && channel?.notes?.length) {
+        const includesTempo = id === firstSelectedId;
+        const characterCount = getMmlChannelCharacterCount(channel, {
+          includeTempo: includesTempo,
+          exportEndBeat,
+        });
+        detail.textContent = `${characterCount.toLocaleString()}자${includesTempo ? " (템포 포함)" : ""} · ${channel.notes.length.toLocaleString()}개 노트`;
+        detail.title = includesTempo
+          ? "첫 번째 선택 채널의 실제 MML 기준 글자 수(템포 명령 포함)"
+          : "채널 단독 MML 기준 글자 수(템포 명령 제외)";
+      }
+    });
+  }
+
+  function setMmlExportCheckboxChecked(checkbox, checked) {
+    if (!checkbox || checkbox.disabled) return;
+    const id = String(checkbox.value || "");
+    checkbox.checked = Boolean(checked);
+    mmlExportSelectionQueue = mmlExportSelectionQueue.filter((item) => String(item) !== id);
+    if (checkbox.checked) mmlExportSelectionQueue.push(id);
   }
 
   function updateMmlExportDialogState() {
     const selected = getMmlExportSelectedChannels();
     const exportableCount = state.channels.filter((channel) => channel.notes?.length).length;
+    syncMmlExportSelectionIndicators();
     if (elements.mmlExportSummary) {
       elements.mmlExportSummary.textContent = selected.length
-        ? `${selected.length}개 채널 선택`
+        ? `${selected.length}개 채널 선택 · 체크 순서대로 내보냅니다.`
         : (exportableCount ? "선택된 채널이 없습니다." : "내보낼 노트가 있는 채널이 없습니다.");
     }
     if (elements.mmlExportApplyButton) elements.mmlExportApplyButton.disabled = selected.length === 0;
@@ -10099,10 +10751,15 @@
   function renderMmlExportChannelList() {
     if (!elements.mmlExportChannelList) return;
     elements.mmlExportChannelList.replaceChildren();
+    mmlExportSelectionQueue = [];
     state.channels.forEach((channel, index) => {
       const row = document.createElement("label");
       row.className = "mml-export-channel-row";
       row.style.setProperty("--channel-color", getChannelColor(channel, index));
+
+      const order = document.createElement("span");
+      order.className = "mml-export-order";
+      order.setAttribute("aria-label", "선택 순서");
 
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
@@ -10115,12 +10772,20 @@
       const name = document.createElement("strong");
       name.textContent = channel.name || `Ch${index + 1}`;
       const detail = document.createElement("small");
-      detail.textContent = channel.notes?.length ? `${channel.notes.length}개 노트` : "빈 채널";
+      if (channel.notes?.length) {
+        const characterCount = getMmlChannelCharacterCount(channel);
+        detail.textContent = `${characterCount.toLocaleString()}자 · ${channel.notes.length.toLocaleString()}개 노트`;
+        detail.title = "채널 단독 MML 기준 글자 수(템포 명령 제외)";
+      } else {
+        detail.textContent = "빈 채널";
+      }
       info.append(name, detail);
 
-      row.append(checkbox, info);
+      row.append(order, checkbox, info);
       checkbox.addEventListener("change", () => {
-        row.classList.toggle("selected", checkbox.checked);
+        const id = String(checkbox.value || "");
+        mmlExportSelectionQueue = mmlExportSelectionQueue.filter((item) => String(item) !== id);
+        if (checkbox.checked) mmlExportSelectionQueue.push(id);
         updateMmlExportDialogState();
       });
       elements.mmlExportChannelList.append(row);
@@ -10129,10 +10794,6 @@
   }
 
   function openMmlExportDialog() {
-    if (state.activePanel === "audio") {
-      showToast("오디오는 MML로 내보낼 수 없습니다.");
-      return false;
-    }
     closeFileMenu();
     closeEditMenu();
     closeContextMenu();
@@ -10148,37 +10809,124 @@
   function closeMmlExportDialog() {
     if (elements.mmlExportBackdrop) elements.mmlExportBackdrop.hidden = true;
     if (elements.mmlExportChannelList) elements.mmlExportChannelList.replaceChildren();
+    mmlExportSelectionQueue = [];
     updateMmlExportDialogState();
+  }
+
+  function appendDurationTokens(output, symbol, durationBeat, { tied = false } = {}) {
+    const tokens = beatLengthToMmlTokens(durationBeat, symbol);
+    tokens.forEach((token, index) => output.push((tied || index > 0 ? "&" : "") + token));
+    return tokens.length > 0;
+  }
+
+  function buildTempoIntegratedNoteVoiceMml(notes, tempos, originBeat, endBeat) {
+    const sortedNotes = notes.slice().sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch);
+    const sortedTempos = tempos.slice().sort((left, right) => left.beat - right.beat);
+    const tempoEvents = sortedTempos.filter((tempo) => tempo.beat > originBeat + 1e-7 && tempo.beat <= endBeat + 1e-7);
+    const output = [`t${getTempoAtBeatFromCollection(originBeat, sortedTempos)}`];
+    let cursorBeat = originBeat;
+    let tempoIndex = 0;
+    let octave = null;
+    let velocity = null;
+
+    const emitTempoEventsThrough = (targetBeat) => {
+      while (tempoIndex < tempoEvents.length && tempoEvents[tempoIndex].beat <= targetBeat + 1e-7) {
+        const tempo = tempoEvents[tempoIndex];
+        if (tempo.beat > cursorBeat + 1e-7) {
+          output.push(...beatLengthToMmlTokens(tempo.beat - cursorBeat, "r"));
+          cursorBeat = tempo.beat;
+        }
+        output.push(`t${tempo.bpm}`);
+        tempoIndex += 1;
+      }
+      if (targetBeat > cursorBeat + 1e-7) {
+        output.push(...beatLengthToMmlTokens(targetBeat - cursorBeat, "r"));
+        cursorBeat = targetBeat;
+      }
+    };
+
+    for (const note of sortedNotes) {
+      const startBeat = Math.max(originBeat, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat));
+      const noteEndBeat = Math.max(
+        startBeat + CONFIG.minimumNoteBeat,
+        snapBeatToUnit(note.startBeat + note.durationBeat, CONFIG.minimumNoteBeat),
+      );
+      emitTempoEventsThrough(startBeat);
+
+      const nextOctave = clamp(Math.floor(note.pitch / 12) - 1, 0, 8);
+      if (nextOctave !== octave) {
+        output.push(`o${nextOctave}`);
+        octave = nextOctave;
+      }
+      const nextVelocity = getNoteVolume(note);
+      if (nextVelocity !== velocity) {
+        output.push(`v${nextVelocity}`);
+        velocity = nextVelocity;
+      }
+      const pitchName = MML_PITCH_NAMES[((note.pitch % 12) + 12) % 12];
+      let segmentStart = startBeat;
+      let tied = false;
+      while (tempoIndex < tempoEvents.length && tempoEvents[tempoIndex].beat < noteEndBeat - 1e-7) {
+        const tempo = tempoEvents[tempoIndex];
+        if (tempo.beat > segmentStart + 1e-7) {
+          if (appendDurationTokens(output, pitchName, tempo.beat - segmentStart, { tied })) tied = true;
+          segmentStart = tempo.beat;
+          cursorBeat = tempo.beat;
+        }
+        output.push(`t${tempo.bpm}`);
+        tempoIndex += 1;
+      }
+      if (noteEndBeat > segmentStart + 1e-7) {
+        appendDurationTokens(output, pitchName, noteEndBeat - segmentStart, { tied });
+      }
+      cursorBeat = noteEndBeat;
+    }
+
+    // If the first selected channel ends before a later global tempo change,
+    // advance this same voice with rests so the tempo command still lives in
+    // the first selected channel instead of creating a hidden tempo-only voice.
+    while (tempoIndex < tempoEvents.length) {
+      const tempo = tempoEvents[tempoIndex];
+      if (tempo.beat > cursorBeat + 1e-7) {
+        output.push(...beatLengthToMmlTokens(tempo.beat - cursorBeat, "r"));
+        cursorBeat = tempo.beat;
+      }
+      output.push(`t${tempo.bpm}`);
+      tempoIndex += 1;
+    }
+    return output.join("");
   }
 
   function channelsToMml(channels, { tempos = getSortedTempos(), originBeat = 0 } = {}) {
     const selectedChannels = (channels || []).filter((channel) => channel?.notes?.length);
     if (!selectedChannels.length) return "";
     const firstBeat = Math.max(0, Number(originBeat) || 0);
-    const voices = [];
-    let endBeat = firstBeat;
-
-    for (const channel of selectedChannels) {
+    const prepared = selectedChannels.map((channel) => {
       const normalized = channel.notes.map((note) => ({
         ...note,
         startBeat: Math.max(0, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat)),
         durationBeat: Math.max(CONFIG.minimumNoteBeat, snapBeatToUnit(note.durationBeat, CONFIG.minimumNoteBeat)),
       }));
-      endBeat = Math.max(endBeat, ...normalized.map((note) => note.startBeat + note.durationBeat));
-      partitionNotesIntoMmlVoices(normalized)
-        .map((voice) => buildNoteVoiceMml(voice, firstBeat))
-        .filter(Boolean)
-        .forEach((voiceMml) => voices.push(voiceMml));
-    }
+      return {
+        channel,
+        normalized,
+        voices: partitionNotesIntoMmlVoices(normalized),
+        endBeat: normalized.reduce((maximum, note) => Math.max(maximum, note.startBeat + note.durationBeat), firstBeat),
+      };
+    });
+    const endBeat = prepared.reduce((maximum, entry) => Math.max(maximum, entry.endBeat), firstBeat);
+    const voices = [];
 
-    if (!voices.length) return "";
-    const tempoChanges = tempos.filter((tempo) => tempo.beat > firstBeat + 1e-7 && tempo.beat <= endBeat + 1e-7);
-    if (tempoChanges.length) {
-      voices.unshift(buildTempoVoiceMml(tempos, firstBeat, endBeat));
-    } else {
-      voices[0] = `t${getTempoAtBeatFromCollection(firstBeat, tempos)}${voices[0]}`;
-    }
-    return `MML@${voices.join(",")};`;
+    prepared.forEach((entry, channelIndex) => {
+      entry.voices.forEach((voice, voiceIndex) => {
+        const voiceMml = channelIndex === 0 && voiceIndex === 0
+          ? buildTempoIntegratedNoteVoiceMml(voice, tempos, firstBeat, endBeat)
+          : buildNoteVoiceMml(voice, firstBeat);
+        if (voiceMml) voices.push(voiceMml);
+      });
+    });
+
+    return voices.length ? `MML@${voices.join(",")};` : "";
   }
 
   async function applyMmlExportSelection() {
@@ -10198,7 +10946,7 @@
       return false;
     }
     closeMmlExportDialog();
-    showToast(`${channels.length}개 채널을 MML로 내보냈습니다.`);
+    showToast(`${channels.length}개 채널을 선택 순서대로 MML로 내보냈습니다.`);
     return true;
   }
 
@@ -10295,7 +11043,7 @@
     if (elements.timeEditTitle) elements.timeEditTitle.textContent = "마디 편집";
     if (elements.timeEditPosition) elements.timeEditPosition.textContent = `빨간 재생선 ${state.timeEdit.beat.toFixed(3)} beat 기준`;
     if (elements.timeEditMeasureInput) elements.timeEditMeasureInput.value = "1";
-    if (elements.timeEditBeatInput) elements.timeEditBeatInput.value = "";
+    if (elements.timeEditBeatInput) elements.timeEditBeatInput.value = "0";
     if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = false;
     requestAnimationFrame(() => {
       elements.timeEditMeasureInput?.focus();
@@ -10308,7 +11056,7 @@
     const rawSubdivision = String(elements.timeEditBeatInput?.value ?? "").trim();
     const subdivisions = rawSubdivision === ""
       ? 0
-      : clamp(Math.floor(Number(rawSubdivision) || 0), 1, 63);
+      : clamp(Math.floor(Number(rawSubdivision) || 0), 0, 63);
     return {
       measures,
       subdivisions,
@@ -10323,17 +11071,38 @@
     return parts.join(" ") || "0박자";
   }
 
+  function normalizeTimeEditMeasureInput({ clampValue = false } = {}) {
+    const input = elements.timeEditMeasureInput;
+    if (!input) return 0;
+    const raw = String(input.value ?? "").trim();
+    if (raw === "") {
+      if (clampValue) input.value = "0";
+      return 0;
+    }
+    const parsed = Math.floor(Number(raw));
+    if (!Number.isFinite(parsed)) {
+      input.value = clampValue ? "0" : "";
+      return 0;
+    }
+    const normalized = Math.max(0, parsed);
+    if (clampValue || normalized !== parsed) input.value = String(normalized);
+    return normalized;
+  }
+
   function normalizeTimeEditSubdivisionInput({ clampValue = false } = {}) {
     const input = elements.timeEditBeatInput;
     if (!input) return 0;
     const raw = String(input.value ?? "").trim();
-    if (raw === "") return 0;
-    const parsed = Math.floor(Number(raw));
-    if (!Number.isFinite(parsed)) {
-      input.value = "";
+    if (raw === "") {
+      if (clampValue) input.value = "0";
       return 0;
     }
-    const normalized = clamp(parsed, 1, 63);
+    const parsed = Math.floor(Number(raw));
+    if (!Number.isFinite(parsed)) {
+      input.value = clampValue ? "0" : "";
+      return 0;
+    }
+    const normalized = clamp(parsed, 0, 63);
     if (clampValue || normalized !== parsed) input.value = String(normalized);
     return normalized;
   }
@@ -10449,6 +11218,7 @@
   }
 
   function applyTimeEdit(action) {
+    normalizeTimeEditMeasureInput({ clampValue: true });
     normalizeTimeEditSubdivisionInput({ clampValue: true });
     const { measures, subdivisions, amountBeats } = getTimeEditAmount();
     if (amountBeats <= 0) {
@@ -11531,7 +12301,7 @@
 
   function moveToTimelineEnd() {
     stopPlayback(false);
-    const endBeat = getPlaybackEndBeat();
+    const endBeat = Math.max(getPlaybackEndBeat(), getPersistentContentEndBeat());
     setPlayheadBeat(endBeat);
     const viewportWidth = elements.rollViewport.clientWidth;
     const rightPadding = Math.min(96, Math.max(36, viewportWidth * 0.12));
@@ -12199,6 +12969,43 @@
     closeContextMenu();
   }
 
+  function getSelectedSamePitchMergeInfo() {
+    if (isMidiReferenceActive() || state.activePanel !== "notes") return null;
+    const channel = getActiveChannel();
+    const selected = sortNoteIntervals(getSelectedNotes(channel));
+    if (!channel || selected.length < 2) return null;
+    const pitch = Number(selected[0].pitch);
+    if (!selected.every((note) => Number(note.pitch) === pitch)) return null;
+    const startBeat = Math.min(...selected.map((note) => Number(note.startBeat) || 0));
+    const endBeat = Math.max(...selected.map((note) => (Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat)));
+    const selectedIds = new Set(selected.map((note) => note.id));
+    const span = { startBeat, durationBeat: Math.max(CONFIG.minimumNoteBeat, endBeat - startBeat) };
+    const blocking = channel.notes.filter((note) => !selectedIds.has(note.id) && noteIntervalsOverlap(note, span));
+    return { channel, selected, pitch, startBeat, endBeat, selectedIds, blocking };
+  }
+
+  function mergeSelectedSamePitchNotes() {
+    const info = getSelectedSamePitchMergeInfo();
+    if (!info) return false;
+    if (info.blocking.length) {
+      showToast("합칠 범위에 선택되지 않은 노트가 있어 합칠 수 없습니다.");
+      return true;
+    }
+    const survivor = info.selected[0];
+    survivor.startBeat = Number(info.startBeat.toFixed(6));
+    survivor.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, info.endBeat - info.startBeat).toFixed(6));
+    const removeIds = new Set(info.selected.slice(1).map((note) => note.id));
+    info.channel.notes = info.channel.notes.filter((note) => !removeIds.has(note.id));
+    state.selectedNoteIds = new Set([survivor.id]);
+    state.channelNoteRuntime.delete(String(info.channel.id));
+    markDirty("선택 노트 합침");
+    shrinkTimelineToContent();
+    drawRoll();
+    updateChannelInfo();
+    showToast(`${info.selected.length}개의 ${noteLabel(info.pitch)} 노트를 하나로 합쳤습니다.`);
+    return true;
+  }
+
   function registerDefaultContextMenus() {
     const commonItems = () => [
       { label: "새 파일", action: resetProject },
@@ -12314,11 +13121,13 @@
         drawRoll();
         updateChannelInfo();
       }
+      const mergeInfo = getSelectedSamePitchMergeInfo();
       return [
         { label: "선택 노트 복사", action: copySelectedNotes },
         { label: "선택 노트 잘라내기", action: cutSelectedNotes },
         { label: "재생선 위치에 붙여넣기", action: pasteNotesFromClipboard },
         { label: "선택 노트 볼륨 수정", action: openNoteVolumeDialog },
+        ...(mergeInfo ? [{ label: `같은 음 ${mergeInfo.selected.length}개 합침`, action: mergeSelectedSamePitchNotes }] : []),
         "separator",
         {
           label: state.selectedNoteIds.size > 1 ? `선택 노트 ${state.selectedNoteIds.size}개 삭제` : "선택 노트 삭제",
@@ -12327,6 +13136,20 @@
         },
       ];
     });
+
+    const buildAudioContextItems = ({ event = null } = {}) => {
+      const audioTarget = event?.target?.closest?.("[data-audio-clip-id]");
+      if (audioTarget?.dataset?.audioClipId) selectAudioClip(audioTarget.dataset.audioClipId);
+      const clip = getActiveAudioClip();
+      return [
+        { label: "오디오 추가", action: () => openFilePickerInput(elements.audioFileInput) },
+        { label: "선택 오디오 편집", disabled: !clip, action: () => clip && openAudioEditDialog(clip.id) },
+        "separator",
+        { label: "선택 오디오 삭제", disabled: !clip, danger: true, action: () => clip && requestDeleteAudioClip(clip.id) },
+      ];
+    };
+    registerContextMenu("audio-lane", buildAudioContextItems);
+    registerContextMenu("audio-source", buildAudioContextItems);
 
     registerContextMenu("channel-panel", () => [
       { label: "채널 추가", action: addChannel },
@@ -12816,16 +13639,15 @@
     elements.mmlExportCancelButton?.addEventListener("click", closeMmlExportDialog);
     elements.mmlExportSelectAllButton?.addEventListener("click", () => {
       elements.mmlExportChannelList?.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach((checkbox) => {
-        checkbox.checked = true;
-        checkbox.closest(".mml-export-channel-row")?.classList.add("selected");
+        if (!checkbox.checked) setMmlExportCheckboxChecked(checkbox, true);
       });
       updateMmlExportDialogState();
     });
     elements.mmlExportClearAllButton?.addEventListener("click", () => {
       elements.mmlExportChannelList?.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
         checkbox.checked = false;
-        checkbox.closest(".mml-export-channel-row")?.classList.remove("selected");
       });
+      mmlExportSelectionQueue = [];
       updateMmlExportDialogState();
     });
     elements.mmlExportApplyButton?.addEventListener("click", applyMmlExportSelection);
@@ -12949,6 +13771,10 @@
       scheduleAutosave(1200);
     }, { passive: true });
     elements.pianoSection?.addEventListener("wheel", handlePianoRollAltWheelZoom, { passive: false });
+    elements.overviewTimelineCanvas?.addEventListener("pointerdown", handleOverviewTimelinePointerDown);
+    elements.overviewTimelineCanvas?.addEventListener("pointermove", handleOverviewTimelinePointerMove);
+    elements.overviewTimelineCanvas?.addEventListener("pointerup", handleOverviewTimelinePointerUp);
+    elements.overviewTimelineCanvas?.addEventListener("pointercancel", handleOverviewTimelinePointerUp);
     elements.timelineCanvas.addEventListener("pointerdown", handleTimelinePointerDown);
     elements.timelineCanvas.addEventListener("dblclick", handleTimelineDoubleClick);
     elements.timelineCanvas.addEventListener("pointermove", handleTimelinePointerMove);
@@ -13048,7 +13874,36 @@
     });
 
     elements.addChannelButton.addEventListener("click", addChannel);
+    elements.collapsedAddChannelButton?.addEventListener("click", addChannel);
     elements.deleteChannelsButton?.addEventListener("click", openChannelDeleteDialog);
+    elements.collapsedDeleteChannelsButton?.addEventListener("click", openChannelDeleteDialog);
+    elements.channelEditCloseButton?.addEventListener("click", closeChannelEditDialog);
+    elements.audioEditCloseButton?.addEventListener("click", closeAudioEditDialog);
+    elements.audioEditCancelButton?.addEventListener("click", closeAudioEditDialog);
+    elements.audioEditApplyButton?.addEventListener("click", applyAudioEditDialog);
+    elements.audioEditBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.audioEditBackdrop) closeAudioEditDialog();
+    });
+    elements.audioEditNameInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyAudioEditDialog();
+      }
+    });
+    bindRecommendedColorPalette(elements.audioEditColorInput);
+
+    elements.channelEditCancelButton?.addEventListener("click", closeChannelEditDialog);
+    elements.channelEditApplyButton?.addEventListener("click", applyChannelEditDialog);
+    elements.channelEditBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.channelEditBackdrop) closeChannelEditDialog();
+    });
+    elements.channelEditNameInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyChannelEditDialog();
+      }
+    });
+    bindRecommendedColorPalette(elements.channelEditColorInput);
     elements.copyChannelButton.addEventListener("click", copyActiveChannelNotes);
     elements.pasteChannelButton.addEventListener("click", pasteNotesFromClipboard);
     elements.noteVolumeButton?.addEventListener("click", openNoteVolumeDialog);
@@ -13186,10 +14041,11 @@
         input.value = "";
         return;
       }
-      if (parsed < 1) input.value = "1";
+      if (parsed < 0) input.value = "0";
       else if (parsed > 63) input.value = "63";
       else if (String(parsed) !== input.value) input.value = String(parsed);
     });
+    elements.timeEditMeasureInput?.addEventListener("blur", () => normalizeTimeEditMeasureInput({ clampValue: true }));
     elements.timeEditBeatInput?.addEventListener("blur", () => normalizeTimeEditSubdivisionInput({ clampValue: true }));
     for (const input of [elements.timeEditMeasureInput, elements.timeEditBeatInput]) {
       input?.addEventListener("keydown", (event) => {
@@ -13297,6 +14153,7 @@
         closeThemeMenu();
         closeGoogleAccountMenu();
         closeChannelMuteMixer();
+        closeChannelEditDialog();
         closeVolumeMenu();
         closeZoomMenu();
         closePlaybackRateMenu();

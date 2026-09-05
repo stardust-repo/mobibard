@@ -4794,3 +4794,745 @@ button {
   text-align: center;
   transform: translateX(-1px);
 }
+
+/* 2026-09-06 export queue, compact sidebar toggle, and overview timeline ---- */
+:root {
+  --sidebar-collapse-width: 48px;
+  --overview-timeline-height: var(--sidebar-tab-height, 38px);
+  --timeline-height: var(--sidebar-tab-height, 38px);
+}
+
+/* Sidebar: keep the collapse control beside History, and leave only its
+   narrow column visible when the panel is folded. */
+.side-panel-tabs {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--sidebar-collapse-width) !important;
+}
+.side-panel-toggle {
+  box-sizing: border-box;
+  width: var(--sidebar-collapse-width);
+  min-width: var(--sidebar-collapse-width);
+  max-width: var(--sidebar-collapse-width);
+  height: var(--sidebar-tab-height);
+  min-height: var(--sidebar-tab-height);
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-left: 2px solid var(--line-soft);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--panel-2) 74%, var(--panel));
+  color: var(--muted);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+.side-panel-toggle:hover,
+.side-panel-toggle:focus-visible {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 12%, var(--control-hover));
+}
+.side-panel-toggle[data-state="closed"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+.sidebar-collapsed-rail {
+  display: none;
+}
+.app-content.history-collapsed .sidebar-collapsed-rail {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 5px 4px;
+  overflow: hidden;
+  border-top: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel-2) 54%, var(--panel));
+}
+.sidebar-rail-action {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  font-weight: 900;
+  line-height: 1;
+}
+.sidebar-rail-add {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--control-bg));
+  color: var(--accent);
+  font-size: 21px;
+}
+.sidebar-rail-delete {
+  border-color: color-mix(in srgb, var(--danger) 48%, var(--control-border));
+  background: color-mix(in srgb, var(--danger) 9%, var(--control-bg));
+  font-size: 16px;
+}
+.sidebar-rail-action:disabled { opacity: .38; }
+.sidebar-rail-channel-list {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+}
+.sidebar-rail-channel-list::-webkit-scrollbar { width: 0; height: 0; }
+.sidebar-rail-channel {
+  --channel-color: var(--accent);
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  height: 29px;
+  min-height: 29px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--channel-color) 50%, var(--control-border));
+  border-left: 4px solid var(--channel-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--channel-color) 7%, var(--control-bg));
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.sidebar-rail-channel:hover {
+  background: color-mix(in srgb, var(--channel-color) 15%, var(--control-hover));
+}
+.sidebar-rail-channel.active {
+  border-color: color-mix(in srgb, var(--channel-color) 82%, var(--focus));
+  border-left-color: var(--channel-color);
+  background: color-mix(in srgb, var(--channel-color) 24%, var(--control-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--channel-color) 34%, transparent);
+}
+.sidebar-rail-channel.is-muted { opacity: .64; }
+.sidebar-rail-channel.is-hidden { opacity: .5; }
+.app-content.history-collapsed .editor-body {
+  grid-template-columns: var(--sidebar-collapse-width) minmax(0, 1fr) !important;
+}
+/* Keep the piano/editor workspace in the remaining right-hand column.
+   Older collapse rules moved it into column 1, which is now only the toggle strip. */
+.app-content.history-collapsed .piano-section {
+  grid-column: 2 !important;
+}
+.app-content.history-collapsed .side-panel {
+  display: grid !important;
+  width: var(--sidebar-collapse-width);
+  min-width: var(--sidebar-collapse-width);
+  max-width: var(--sidebar-collapse-width);
+  grid-template-rows: var(--sidebar-tab-height) minmax(0, 1fr);
+  overflow: hidden;
+}
+.app-content.history-collapsed .side-panel-tabs {
+  grid-template-columns: var(--sidebar-collapse-width) !important;
+}
+.app-content.history-collapsed .side-panel-tab,
+.app-content.history-collapsed .side-panel > .side-panel-view {
+  display: none !important;
+}
+.app-content.history-collapsed .side-panel-toggle {
+  grid-column: 1;
+  border-left: 0;
+}
+
+/* Piano header: compact whole-song activity overview above the 38px tempo
+   ruler.  The overview is intentionally dense; up to twelve channel lanes
+   are painted by canvas code. */
+.piano-section {
+  grid-template-rows: var(--overview-timeline-height) var(--timeline-height) minmax(0, 1fr) var(--audio-lane-height) var(--scrollbar-size) !important;
+}
+.overview-timeline-corner,
+.timeline-corner,
+.overview-scrollbar-gutter {
+  background: var(--header-cell-bg);
+}
+.overview-timeline-corner {
+  display: none;
+}
+.overview-timeline {
+  grid-column: 1 / 3;
+  grid-row: 1;
+  width: 100%;
+  height: var(--overview-timeline-height);
+  display: block;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  background: var(--header-cell-bg);
+}
+.overview-scrollbar-gutter {
+  grid-column: 3;
+  grid-row: 1;
+  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-soft);
+}
+.timeline-corner {
+  grid-column: 1;
+  grid-row: 2;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.timeline-tempo-readout {
+  box-sizing: border-box;
+  display: grid;
+  place-content: center;
+  gap: 0;
+  text-align: center;
+  background: color-mix(in srgb, var(--panel-2) 84%, var(--danger) 4%);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.timeline-tempo-readout span {
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 1;
+}
+.timeline-tempo-readout strong {
+  color: #66d17a;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+.timeline { grid-column: 2; grid-row: 2; }
+.top-scrollbar-gutter { grid-column: 3; grid-row: 2; }
+.keyboard { grid-column: 1; grid-row: 3; }
+.roll-viewport { grid-column: 2; grid-row: 3; }
+.vertical-scrollbar { grid-column: 3; grid-row: 3; }
+.audio-lane-label { grid-column: 1; grid-row: 4; }
+.audio-lane-viewport { grid-column: 2; grid-row: 4; }
+.audio-lane-gutter { grid-column: 3; grid-row: 4; }
+.keyboard-scrollbar-gutter { grid-column: 1; grid-row: 5; }
+.horizontal-scrollbar { grid-column: 2; grid-row: 5; }
+.scrollbar-corner { grid-column: 3; grid-row: 5; }
+
+/* MML export: fixed empty queue slot before the checkbox, populated with the
+   click order once a channel is selected. */
+.mml-export-channel-row {
+  grid-template-columns: 22px 24px minmax(0, 1fr) !important;
+  gap: 6px !important;
+}
+.mml-export-order {
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.mml-export-order.filled {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--control-bg));
+  color: var(--accent);
+}
+
+@media (pointer: coarse), (max-width: 700px) {
+  :root {
+    --sidebar-collapse-width: 50px;
+  }
+  .side-panel-toggle { font-size: 23px; }
+  .sidebar-rail-action { height: 34px; min-height: 34px; }
+  .sidebar-rail-channel { height: 31px; min-height: 31px; }
+  .mml-export-channel-row { grid-template-columns: 22px 26px minmax(0, 1fr) !important; }
+}
+.side-panel-tabs > .side-panel-tab:nth-child(2) { border-right: 0; }
+
+
+/* 2026-09-06 fixed50: collapsed channel reorder, visible rail scrollbar, channel editor popup */
+.channel-side-panel,
+.channel-panel.channel-side-panel {
+  grid-template-rows: var(--sidebar-tab-height) minmax(96px, 1fr) auto !important;
+}
+.channel-tree-toolbar {
+  box-sizing: border-box;
+  height: var(--sidebar-tab-height);
+  min-height: var(--sidebar-tab-height);
+  padding: 4px 7px;
+}
+.sidebar-rail-channel-list {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 58%, transparent) transparent;
+  padding-right: 1px;
+}
+.sidebar-rail-channel-list::-webkit-scrollbar { width: 6px; height: 6px; }
+.sidebar-rail-channel-list::-webkit-scrollbar-track { background: transparent; }
+.sidebar-rail-channel-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 58%, transparent);
+}
+.sidebar-rail-channel.dragging {
+  opacity: .38;
+  cursor: grabbing;
+}
+.sidebar-rail-channel {
+  touch-action: none;
+  cursor: grab;
+}
+.channel-tree-item[data-channel-id] { cursor: grab; }
+.channel-tree-item[data-channel-id].dragging { cursor: grabbing; }
+
+.channel-edit-dialog {
+  width: min(460px, calc(100vw - 24px));
+}
+.channel-edit-fields {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px 6px;
+}
+.channel-edit-field {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.channel-edit-field > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.channel-edit-field input[type="text"],
+.channel-edit-field select {
+  width: 100%;
+  min-width: 0;
+}
+.channel-edit-color-field input[type="color"] {
+  width: 56px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  cursor: pointer;
+}
+.channel-edit-color-field input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.channel-edit-color-field input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 4px; }
+.channel-edit-color-field input[type="color"]::-moz-color-swatch { border: 0; border-radius: 4px; }
+@media (pointer: coarse), (max-width: 700px) {
+  .channel-tree-toolbar { padding-block: 4px; }
+  .channel-edit-field { grid-template-columns: 56px minmax(0, 1fr); }
+}
+
+
+/* fixed51: hidden state keeps the same eye glyph and adds a clear red slash. */
+.channel-tree-visibility {
+  position: relative;
+  overflow: visible;
+}
+.channel-tree-visibility[aria-pressed="false"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 17px;
+  height: 2px;
+  border-radius: 999px;
+  background: #ff4d5f;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #28070b 55%, transparent);
+  transform: translate(-50%, -50%) rotate(-42deg);
+  pointer-events: none;
+}
+
+
+/* fixed51: the audio strip keeps its existing height but is permanently split into three rows. */
+.audio-lane-viewport {
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+}
+.audio-lane-viewport::-webkit-scrollbar { display: none !important; }
+.audio-lane-content {
+  height: 100% !important;
+  min-height: 100% !important;
+}
+.audio-clip-block {
+  min-height: 12px;
+  border-radius: 3px;
+  box-shadow: 1px 1px 0 rgba(0,0,0,.28);
+}
+.audio-clip-main {
+  gap: 3px;
+  padding-inline: 4px;
+  font-size: 8px;
+  line-height: 1;
+}
+.audio-clip-main small { font-size: 7px; }
+.audio-clip-block.active {
+  outline: 0;
+  border-color: #ffffff;
+  background: color-mix(in srgb, var(--audio-clip-color) 78%, var(--panel-2));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--focus) 54%, transparent),
+    0 0 0 1px #ffffff inset,
+    1px 2px 0 rgba(0,0,0,.30);
+}
+.audio-clip-block.active .audio-clip-main {
+  background: linear-gradient(to bottom, rgba(255,255,255,.22), transparent 45%, rgba(0,0,0,.10));
+}
+.audio-clip-block.active .audio-clip-handle {
+  background: color-mix(in srgb, var(--audio-clip-color) 46%, #ffffff 54%);
+}
+.audio-lane-label {
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1;
+}
+.audio-lane-label > span { font-size: 9px; }
+.audio-lane-label > strong {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+
+.audio-edit-dialog { width: min(460px, calc(100vw - 24px)); }
+.audio-edit-number {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--control-border);
+  border-radius: var(--popup-control-radius, 6px);
+  background: var(--control-bg);
+}
+.audio-edit-number input[type="number"] {
+  min-width: 0;
+  width: 100%;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+.audio-edit-number small {
+  padding-right: 9px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+#tempoEditorCancelButton {
+  width: 58px;
+  min-width: 58px;
+  padding-inline: 8px;
+}
+#tempoEditorApplyButton {
+  width: 74px;
+  min-width: 74px;
+  padding-inline: 12px;
+}
+@media (pointer: coarse) {
+  #tempoEditorCancelButton { width: 62px; min-width: 62px; }
+  #tempoEditorApplyButton { width: 80px; min-width: 80px; }
+}
+
+
+/* fixed52: selection parity, collapsed audio list, audio overlap readability. */
+:root[data-theme="light"] .timeline-tempo-readout strong { color: #238447; }
+
+.sidebar-rail-audio {
+  border-left-style: double;
+  font-size: 9px;
+  letter-spacing: -0.5px;
+}
+
+/* Three-row audio blocks remain the same lane height; only text placement and opacity change. */
+.audio-clip-block {
+  opacity: .80;
+}
+.audio-clip-main {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px;
+  padding: 0 3px 1px;
+  overflow: hidden;
+}
+.audio-clip-main span,
+.audio-clip-main small {
+  display: block;
+  min-width: 0;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+.audio-clip-main small { white-space: nowrap; }
+.audio-clip-block.active { opacity: .97; }
+.audio-clip-block.is-muted { opacity: .58; }
+.audio-clip-block.dragging { opacity: .70; }
+
+/* fixed53: audio selection uses the same cyan selection language as channels. */
+.channel-tree-item.audio-source-item.active,
+.channel-tree-item.audio-source-item.active:hover {
+  position: relative;
+  background: color-mix(in srgb, var(--channel-selection-accent) 12%, var(--control-bg)) !important;
+  border-color: var(--channel-selection-border) !important;
+  box-shadow:
+    inset 5px 0 0 var(--channel-selection-accent),
+    inset 0 0 0 1px color-mix(in srgb, var(--channel-selection-accent) 24%, transparent) !important;
+}
+.channel-tree-item.audio-source-item.active .channel-tab-main,
+.channel-tree-item.audio-source-item.active:hover .channel-tab-main {
+  color: var(--text) !important;
+  font-weight: 800 !important;
+  background: transparent !important;
+}
+.channel-tree-item.audio-source-item.active .channel-tree-label {
+  font-weight: 800 !important;
+}
+
+/* 접힌 레일은 채널/오디오 구분 없이 선택된 항목을 같은 파란색으로 표시합니다. */
+.sidebar-rail-channel.active,
+.sidebar-rail-channel.active:hover {
+  border-color: var(--channel-selection-border) !important;
+  border-left-color: var(--channel-selection-accent) !important;
+  background: color-mix(in srgb, var(--channel-selection-accent) 18%, var(--control-bg)) !important;
+  box-shadow:
+    inset 4px 0 0 var(--channel-selection-accent),
+    inset 0 0 0 1px color-mix(in srgb, var(--channel-selection-accent) 24%, transparent) !important;
+}
+
+/* fixed54: compact bottom inspector aligned to the audio-lane top edge. */
+.channel-inspector,
+.channel-detail-row.channel-inspector {
+  box-sizing: border-box;
+  height: calc(var(--audio-lane-height) + var(--scrollbar-size)) !important;
+  min-height: calc(var(--audio-lane-height) + var(--scrollbar-size)) !important;
+  max-height: calc(var(--audio-lane-height) + var(--scrollbar-size)) !important;
+  overflow: hidden !important;
+}
+.channel-inspector .channel-body,
+.channel-inspector .audio-source-view {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+.channel-legacy-controls,
+.audio-legacy-controls {
+  display: none !important;
+}
+
+.channel-inspector .compact-channel-inspector {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: 32px 20px;
+  align-content: center;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 8px !important;
+}
+.channel-inspector .compact-channel-instrument {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+.channel-inspector .compact-channel-instrument > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+.channel-inspector .compact-channel-instrument select {
+  height: 30px;
+  min-height: 30px;
+}
+.channel-inspector .compact-channel-summary {
+  min-width: 0;
+  width: 100%;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  gap: 12px !important;
+  padding: 0 2px !important;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 20px;
+}
+.channel-inspector .compact-channel-summary > span {
+  min-width: 0;
+  white-space: nowrap;
+}
+.channel-inspector .compact-channel-summary strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.channel-inspector .source-detail-toolbar.compact-audio-inspector {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(72px, 1.25fr) !important;
+  align-content: center;
+  align-items: end;
+  gap: 5px !important;
+  padding: 7px 8px !important;
+}
+.channel-inspector .compact-audio-inspector .audio-clip-settings {
+  display: contents !important;
+}
+.channel-inspector .compact-audio-inspector .audio-clip-settings > label {
+  min-width: 0;
+  gap: 2px;
+}
+.channel-inspector .compact-audio-inspector .audio-setting-input {
+  height: 28px;
+}
+.channel-inspector .compact-audio-volume {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 31px;
+  grid-template-rows: auto 28px;
+  align-items: center;
+  gap: 2px 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.channel-inspector .compact-audio-volume > span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 750;
+}
+.channel-inspector .compact-audio-volume input[type="range"] {
+  grid-column: 1;
+  grid-row: 2;
+  width: 100%;
+  min-width: 0;
+}
+.channel-inspector .compact-audio-volume output {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 8px;
+  text-align: right;
+}
+
+/* The expanded + control is intentionally a small square, matching the trash tool. */
+.channel-tree-toolbar {
+  grid-template-columns: 30px 30px !important;
+  justify-content: start;
+}
+.channel-tree-add-button {
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  display: inline-grid;
+  place-items: center;
+  font-size: 18px !important;
+  line-height: 1;
+}
+
+/* fixed54: time-space dialog action language. */
+.time-edit-delete-button {
+  border-color: color-mix(in srgb, #4f8fe8 72%, var(--control-border)) !important;
+  background: color-mix(in srgb, #4f8fe8 22%, var(--control-bg)) !important;
+  color: color-mix(in srgb, #a8d2ff 86%, var(--text)) !important;
+  font-weight: 800;
+}
+.time-edit-delete-button:hover:not(:disabled) {
+  background: color-mix(in srgb, #4f8fe8 34%, var(--control-hover)) !important;
+}
+.time-edit-insert-button {
+  border-color: color-mix(in srgb, #22c55e 72%, var(--control-border)) !important;
+  background: color-mix(in srgb, #22c55e 22%, var(--control-bg)) !important;
+  color: color-mix(in srgb, #a7f3c0 86%, var(--text)) !important;
+  font-weight: 800;
+}
+.time-edit-insert-button:hover:not(:disabled) {
+  background: color-mix(in srgb, #22c55e 34%, var(--control-hover)) !important;
+}
+:root[data-theme="light"] .time-edit-delete-button {
+  color: #174f97 !important;
+  background: color-mix(in srgb, #4f8fe8 16%, #ffffff) !important;
+}
+:root[data-theme="light"] .time-edit-insert-button {
+  color: #15783a !important;
+  background: color-mix(in srgb, #22c55e 15%, #ffffff) !important;
+}
+.channel-inspector .compact-channel-summary > span:first-child {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* fixed55: keep audio text fully inside the compact three-row blocks. */
+.audio-clip-block {
+  box-sizing: border-box !important;
+}
+.audio-clip-main {
+  box-sizing: border-box !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: start !important;
+  align-content: start !important;
+  gap: 2px !important;
+  padding: 1px 3px 0 !important;
+  overflow: hidden !important;
+  font-size: 9px !important;
+  line-height: 10px !important;
+}
+.audio-clip-main span,
+.audio-clip-main small {
+  display: block !important;
+  min-width: 0 !important;
+  height: 10px !important;
+  max-height: 10px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 10px !important;
+  transform: none !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  vertical-align: top !important;
+}
+.audio-clip-main small {
+  font-size: 8px !important;
+}
