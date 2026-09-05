@@ -2474,12 +2474,14 @@
     const configuredKeyboardWidth = Number.parseFloat(rootStyle.getPropertyValue("--keyboard-width")) || 52;
     const configuredTimelineHeight = Number.parseFloat(rootStyle.getPropertyValue("--timeline-height")) || 38;
     const configuredOverviewHeight = Number.parseFloat(rootStyle.getPropertyValue("--overview-timeline-height")) || 30;
+    const configuredScrollbarSize = Number.parseFloat(rootStyle.getPropertyValue("--scrollbar-size")) || 12;
     const keyboardWidth = Math.max(1, Math.round(configuredKeyboardWidth));
     const timelineWidth = Math.max(1, Math.round(elements.rollViewport.clientWidth));
     const keyboardHeight = Math.max(1, Math.round(elements.rollViewport.clientHeight));
     const timelineHeight = Math.max(1, Math.round(configuredTimelineHeight));
     const overviewHeight = Math.max(1, Math.round(configuredOverviewHeight));
-    if (elements.overviewTimelineCanvas) resizeCanvas(elements.overviewTimelineCanvas, keyboardWidth + timelineWidth, overviewHeight);
+    const overviewWidth = keyboardWidth + timelineWidth + Math.max(0, Math.round(configuredScrollbarSize));
+    if (elements.overviewTimelineCanvas) resizeCanvas(elements.overviewTimelineCanvas, overviewWidth, overviewHeight);
     resizeCanvas(elements.timelineCanvas, timelineWidth, timelineHeight);
     resizeCanvas(elements.keyboardCanvas, keyboardWidth, keyboardHeight);
 
@@ -3110,12 +3112,26 @@
       endBeat,
     );
     const viewX = visibleStartBeat / endBeat * width;
-    const viewWidth = Math.max(1, (visibleEndBeat - visibleStartBeat) / endBeat * width);
-    context.fillStyle = state.theme === "light" ? "rgba(0,159,206,.055)" : "rgba(0,200,255,.065)";
-    context.fillRect(viewX, 0, viewWidth, height);
-    context.strokeStyle = state.theme === "light" ? "rgba(0,159,206,.35)" : "rgba(0,200,255,.38)";
+    const viewWidth = Math.max(2, (visibleEndBeat - visibleStartBeat) / endBeat * width);
+    const isLightOverview = state.theme === "light";
+    const viewBoxX = clamp(viewX, 0, Math.max(0, width - 1));
+    const viewBoxWidth = Math.max(2, Math.min(viewWidth, width - viewBoxX));
+
+    // Distinguish the visible roll window mainly by fill color. Keep the outline
+    // thin so the overview does not feel boxed-in, while retaining enough contrast
+    // in both light and dark themes.
+    context.save();
+    context.fillStyle = isLightOverview ? "rgba(18,112,232,.20)" : "rgba(0,200,255,.14)";
+    context.fillRect(viewBoxX, 0, viewBoxWidth, height);
+    context.strokeStyle = isLightOverview ? "rgba(0,88,205,.88)" : "rgba(70,220,255,.82)";
     context.lineWidth = 1;
-    context.strokeRect(Math.round(viewX) + 0.5, 0.5, Math.max(1, Math.round(viewWidth) - 1), Math.max(1, height - 1));
+    context.strokeRect(
+      Math.round(viewBoxX) + 0.5,
+      0.5,
+      Math.max(1, Math.round(viewBoxWidth) - 1),
+      Math.max(1, height - 1),
+    );
+    context.restore();
 
     const playheadX = clamp(state.playhead.beat / endBeat * width, 0, width);
     context.strokeStyle = "rgba(255,78,96,.96)";
