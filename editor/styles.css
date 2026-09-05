@@ -5597,3 +5597,34 @@ button {
 :root[data-theme="light"] .recommended-color-swatch {
   border-color: color-mix(in srgb, var(--swatch-color) 78%, #243244);
 }
+
+
+/* fixed60: pure Hue in edit popups + slightly less transparent left-list backgrounds. */
+.channel-tab-item.channel-tree-channel-item:not(.active),
+.channel-tree-item.audio-source-item:not(.active) {
+  background: color-mix(in srgb, var(--channel-color) 13%, var(--control-bg)) !important;
+}
+.channel-tab-item.channel-tree-channel-item:not(.active):hover,
+.channel-tree-item.audio-source-item:not(.active):hover {
+  background: color-mix(in srgb, var(--channel-color) 19%, var(--control-hover)) !important;
+}
+.sidebar-rail-channel:not(.active) {
+  background: color-mix(in srgb, var(--channel-color) 12%, var(--control-bg)) !important;
+}
+.sidebar-rail-channel:not(.active):hover {
+  background: color-mix(in srgb, var(--channel-color) 18%, var(--control-hover)) !important;
+}
+:root[data-theme="light"] .channel-tab-item.channel-tree-channel-item:not(.active),
+:root[data-theme="light"] .channel-tree-item.audio-source-item:not(.active) {
+  background: color-mix(in srgb, var(--channel-color) 14%, #f3f6fa) !important;
+}
+:root[data-theme="light"] .channel-tab-item.channel-tree-channel-item:not(.active):hover,
+:root[data-theme="light"] .channel-tree-item.audio-source-item:not(.active):hover {
+  background: color-mix(in srgb, var(--channel-color) 20%, #edf2f7) !important;
+}
+:root[data-theme="light"] .sidebar-rail-channel:not(.active) {
+  background: color-mix(in srgb, var(--channel-color) 13%, #f3f6fa) !important;
+}
+:root[data-theme="light"] .sidebar-rail-channel:not(.active):hover {
+  background: color-mix(in srgb, var(--channel-color) 19%, #edf2f7) !important;
+}

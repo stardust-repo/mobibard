@@ -821,11 +821,21 @@
     return normalizeHue(control?.dataset?.hue, fallback);
   }
 
+  function hueControlUsesPureColor(control) {
+    // 편집 팝업은 저장되는 Hue 그 자체를 고르는 곳이므로 테마 명도 보정을 하지 않습니다.
+    // 실제 채널/노트/오디오에 적용될 때만 getThemeHueColor()로 테마에 맞춰 표시합니다.
+    return control === elements.channelEditColorInput || control === elements.audioEditColorInput;
+  }
+
+  function getHueControlDisplayColor(control, hue) {
+    return hueControlUsesPureColor(control) ? getPureHueColor(hue) : getThemeHueColor(hue);
+  }
+
   function setHueControlValue(control, hue, { dispatch = false } = {}) {
     if (!control) return;
     const normalizedHue = normalizeHue(hue);
     control.dataset.hue = String(normalizedHue);
-    control.style.setProperty("--channel-current-color", getThemeHueColor(normalizedHue));
+    control.style.setProperty("--channel-current-color", getHueControlDisplayColor(control, normalizedHue));
     control.title = `색상 Hue ${normalizedHue}°`;
     control.setAttribute("aria-label", `색상 Hue ${normalizedHue}도`);
     if (dispatch) control.dispatchEvent(new Event("change", { bubbles: true }));
@@ -833,8 +843,11 @@
 
   function refreshHuePaletteTheme() {
     if (!hueColorPalette) return;
+    const pure = hueControlUsesPureColor(activeHueColorControl);
     hueColorPalette.querySelectorAll(".recommended-color-swatch[data-hue]").forEach((button) => {
-      button.style.setProperty("--swatch-color", getThemeHueColor(button.dataset.hue));
+      button.style.setProperty("--swatch-color", pure
+        ? getPureHueColor(button.dataset.hue)
+        : getThemeHueColor(button.dataset.hue));
     });
   }
 
