@@ -67,35 +67,9 @@
 
   const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
   const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
-  // Recommended channel palette: pure, high-saturation hues at 30° intervals.
-  const CHANNEL_COLORS = [
-    "#ff0000", //   0° red
-    "#ff8000", //  30° orange
-    "#ffff00", //  60° yellow
-    "#80ff00", //  90° chartreuse
-    "#00ff00", // 120° green
-    "#00ff80", // 150° spring green
-    "#00ffff", // 180° cyan
-    "#0080ff", // 210° azure
-    "#0000ff", // 240° blue
-    "#8000ff", // 270° violet
-    "#ff00ff", // 300° magenta
-    "#ff0080", // 330° rose
-  ];
-  const LEGACY_CHANNEL_COLOR_MAP = new Map([
-    ["#e75555", "#ff0000"],
-    ["#e79e55", "#ff8000"],
-    ["#e7e755", "#ffff00"],
-    ["#9ee755", "#80ff00"],
-    ["#55e755", "#00ff00"],
-    ["#55e79e", "#00ff80"],
-    ["#55e7e7", "#00ffff"],
-    ["#559ee7", "#0080ff"],
-    ["#5555e7", "#0000ff"],
-    ["#9e55e7", "#8000ff"],
-    ["#e755e7", "#ff00ff"],
-    ["#e7559e", "#ff0080"],
-  ]);
+  // Color data is hue-only. Every editable color is stored as 0..359 degrees.
+  // Saturation/lightness are presentation details derived from the current theme.
+  const CHANNEL_HUES = Array.from({ length: 12 }, (_, index) => index * 30);
   const SOURCE_ROOT_COLOR = "#7f8998";
   const AUTOSAVE_DB_NAME = "mobibard-autosave";
   const AUTOSAVE_DB_VERSION = 1;
@@ -778,47 +752,54 @@
     }
   }
 
-  function isValidChannelColor(value) {
-    return /^#[0-9a-f]{6}$/i.test(String(value || ""));
+  function normalizeHue(value, fallback = 0) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return ((Math.round(Number(fallback) || 0) % 360) + 360) % 360;
+    return ((Math.round(number) % 360) + 360) % 360;
   }
 
-  function normalizeChannelColor(value) {
-    const normalized = String(value || "").toLowerCase();
-    return LEGACY_CHANNEL_COLOR_MAP.get(normalized) || normalized;
+  function getDefaultHue(index = 0) {
+    return CHANNEL_HUES[((Math.round(Number(index) || 0) % CHANNEL_HUES.length) + CHANNEL_HUES.length) % CHANNEL_HUES.length];
   }
 
-  function getChannelColor(channel, fallbackIndex = 0) {
-    return isValidChannelColor(channel?.color)
-      ? normalizeChannelColor(channel.color)
-      : CHANNEL_COLORS[fallbackIndex % CHANNEL_COLORS.length];
+  function getThemeHueColor(hue, tone = "base") {
+    const normalizedHue = normalizeHue(hue);
+    const lightTheme = state.theme === "light";
+    const toneConfig = lightTheme
+      ? {
+        base: [88, 42],
+        edge: [92, 29],
+        bright: [92, 54],
+        soft: [74, 50],
+      }
+      : {
+        base: [92, 61],
+        edge: [95, 76],
+        bright: [96, 70],
+        soft: [78, 56],
+      };
+    const [saturation, lightness] = toneConfig[tone] || toneConfig.base;
+    return `hsl(${normalizedHue} ${saturation}% ${lightness}%)`;
   }
 
-  function darkenHexColor(color, amount = 0.46) {
-    const normalized = isValidChannelColor(color) ? normalizeChannelColor(color) : "#808080";
-    const strength = clamp(Number(amount) || 0, 0, 0.9);
-    const keep = 1 - strength;
-    const component = (offset) => Math.round(parseInt(normalized.slice(offset, offset + 2), 16) * keep)
-      .toString(16)
-      .padStart(2, "0");
-    return `#${component(1)}${component(3)}${component(5)}`;
+  function getPureHueColor(hue) {
+    return `hsl(${normalizeHue(hue)} 100% 50%)`;
   }
 
-  function lightenHexColor(color, amount = 0.46) {
-    const normalized = isValidChannelColor(color) ? normalizeChannelColor(color) : "#808080";
-    const strength = clamp(Number(amount) || 0, 0, 0.9);
-    const component = (offset) => {
-      const value = parseInt(normalized.slice(offset, offset + 2), 16);
-      return Math.round(value + (255 - value) * strength)
-        .toString(16)
-        .padStart(2, "0");
-    };
-    return `#${component(1)}${component(3)}${component(5)}`;
+  function getChannelHue(channel, fallbackIndex = 0) {
+    return Number.isFinite(Number(channel?.hue)) ? normalizeHue(channel.hue) : getDefaultHue(fallbackIndex);
   }
 
-  function getMidiGroupColor(group, fallbackIndex = 0) {
-    return isValidChannelColor(group?.color)
-      ? normalizeChannelColor(group.color)
-      : CHANNEL_COLORS[(Number(group?.colorIndex) || fallbackIndex) % CHANNEL_COLORS.length];
+  function getChannelColor(channel, fallbackIndex = 0, tone = "base") {
+    return getThemeHueColor(getChannelHue(channel, fallbackIndex), tone);
+  }
+
+  function getMidiGroupHue(group, fallbackIndex = 0) {
+    return Number.isFinite(Number(group?.hue)) ? normalizeHue(group.hue) : getDefaultHue(fallbackIndex);
+  }
+
+  function getMidiGroupColor(group, fallbackIndex = 0, tone = "base") {
+    return getThemeHueColor(getMidiGroupHue(group, fallbackIndex), tone);
   }
 
   function getMidiGroupDisplayName(group, fallback = "악기 채널") {
@@ -831,71 +812,127 @@
     return `#${program + 1} · ${group.programName || group.name || GM_PROGRAM_NAMES[program] || fallback}`;
   }
 
-  let activeColorPaletteInput = null;
-  let colorPaletteMenu = null;
+  let activeHueColorControl = null;
+  let hueColorPalette = null;
+  let hueColorRange = null;
+  let hueColorValue = null;
 
-  function closeRecommendedColorPalette() {
-    if (!colorPaletteMenu) return;
-    colorPaletteMenu.hidden = true;
-    activeColorPaletteInput = null;
+  function getHueControlValue(control, fallback = 0) {
+    return normalizeHue(control?.dataset?.hue, fallback);
   }
 
-  function ensureRecommendedColorPalette() {
-    if (colorPaletteMenu) return colorPaletteMenu;
+  function setHueControlValue(control, hue, { dispatch = false } = {}) {
+    if (!control) return;
+    const normalizedHue = normalizeHue(hue);
+    control.dataset.hue = String(normalizedHue);
+    control.style.setProperty("--channel-current-color", getThemeHueColor(normalizedHue));
+    control.title = `색상 Hue ${normalizedHue}°`;
+    control.setAttribute("aria-label", `색상 Hue ${normalizedHue}도`);
+    if (dispatch) control.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function refreshHuePaletteTheme() {
+    if (!hueColorPalette) return;
+    hueColorPalette.querySelectorAll(".recommended-color-swatch[data-hue]").forEach((button) => {
+      button.style.setProperty("--swatch-color", getThemeHueColor(button.dataset.hue));
+    });
+  }
+
+  function closeHueColorPalette() {
+    if (!hueColorPalette) return;
+    hueColorPalette.hidden = true;
+    activeHueColorControl = null;
+  }
+
+  function ensureHueColorPalette() {
+    if (hueColorPalette) return hueColorPalette;
     const menu = document.createElement("div");
-    menu.className = "recommended-color-palette";
+    menu.className = "recommended-color-palette hue-color-palette";
     menu.hidden = true;
     menu.setAttribute("role", "dialog");
-    menu.setAttribute("aria-label", "추천 채널 색상");
+    menu.setAttribute("aria-label", "Hue 색상 선택");
+
     const title = document.createElement("div");
     title.className = "recommended-color-palette-title";
-    title.textContent = "추천 색상";
+    title.textContent = "색상";
+
     const grid = document.createElement("div");
     grid.className = "recommended-color-grid";
-    CHANNEL_COLORS.forEach((color, index) => {
+    CHANNEL_HUES.forEach((hue, index) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "recommended-color-swatch";
-      button.style.setProperty("--swatch-color", color);
-      button.title = `${index + 1} · ${color}`;
-      button.setAttribute("aria-label", `추천 색상 ${index + 1}`);
+      button.dataset.hue = String(hue);
+      button.style.setProperty("--swatch-color", getThemeHueColor(hue));
+      button.title = `${hue}°`;
+      button.setAttribute("aria-label", `Hue ${hue}도`);
       button.addEventListener("click", () => {
-        const input = activeColorPaletteInput;
-        if (!input) return;
-        input.value = color;
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-        closeRecommendedColorPalette();
+        const control = activeHueColorControl;
+        if (!control) return;
+        setHueControlValue(control, hue, { dispatch: true });
+        closeHueColorPalette();
       });
       grid.append(button);
     });
-    const custom = document.createElement("button");
-    custom.type = "button";
-    custom.className = "recommended-color-custom";
-    custom.textContent = "직접 선택…";
-    custom.addEventListener("click", () => {
-      const input = activeColorPaletteInput;
-      closeRecommendedColorPalette();
-      if (input && !input.disabled) input.click();
+
+    const hueWrap = document.createElement("div");
+    hueWrap.className = "recommended-hue-control";
+    const hueHeader = document.createElement("div");
+    hueHeader.className = "recommended-hue-header";
+    const hueLabel = document.createElement("span");
+    hueLabel.textContent = "HSL Hue";
+    const hueOutput = document.createElement("output");
+    hueOutput.textContent = "0°";
+    hueHeader.append(hueLabel, hueOutput);
+
+    const range = document.createElement("input");
+    range.type = "range";
+    range.className = "recommended-hue-range";
+    range.min = "0";
+    range.max = "359";
+    range.step = "1";
+    range.value = "0";
+    range.setAttribute("aria-label", "Hue 0도에서 359도");
+    range.addEventListener("input", () => {
+      const hue = normalizeHue(range.value);
+      hueOutput.textContent = `${hue}°`;
+      if (activeHueColorControl) setHueControlValue(activeHueColorControl, hue);
     });
-    menu.append(title, grid, custom);
+    range.addEventListener("change", () => {
+      const control = activeHueColorControl;
+      if (!control) return;
+      const hue = normalizeHue(range.value);
+      hueOutput.textContent = `${hue}°`;
+      setHueControlValue(control, hue, { dispatch: true });
+    });
+    hueWrap.append(hueHeader, range);
+
+    menu.append(title, grid, hueWrap);
     document.body.append(menu);
-    colorPaletteMenu = menu;
+    hueColorPalette = menu;
+    hueColorRange = range;
+    hueColorValue = hueOutput;
+
     document.addEventListener("pointerdown", (event) => {
       if (menu.hidden) return;
-      if (menu.contains(event.target) || event.target === activeColorPaletteInput) return;
-      closeRecommendedColorPalette();
+      if (menu.contains(event.target) || event.target === activeHueColorControl) return;
+      closeHueColorPalette();
     });
     return menu;
   }
 
-  function openRecommendedColorPalette(input) {
-    if (!input || input.disabled) return false;
-    const menu = ensureRecommendedColorPalette();
-    activeColorPaletteInput = input;
-    const rect = input.getBoundingClientRect();
+  function openHueColorPalette(control) {
+    if (!control || control.disabled) return false;
+    const menu = ensureHueColorPalette();
+    activeHueColorControl = control;
+    refreshHuePaletteTheme();
+    const currentHue = getHueControlValue(control);
+    if (hueColorRange) hueColorRange.value = String(currentHue);
+    if (hueColorValue) hueColorValue.textContent = `${currentHue}°`;
+    const rect = control.getBoundingClientRect();
     menu.hidden = false;
     const width = menu.offsetWidth || 196;
-    const height = menu.offsetHeight || 118;
+    const height = menu.offsetHeight || 146;
     const left = clamp(rect.left, 6, Math.max(6, window.innerWidth - width - 6));
     const below = rect.bottom + 6;
     const top = below + height <= window.innerHeight - 6 ? below : Math.max(6, rect.top - height - 6);
@@ -904,49 +941,43 @@
     return true;
   }
 
-  function bindRecommendedColorPalette(input) {
-    if (!input) return;
-    input.addEventListener("pointerdown", (event) => {
-      if (input.disabled) return;
+  function bindHueColorPalette(control) {
+    if (!control) return;
+    control.addEventListener("click", (event) => {
+      if (control.disabled) return;
       event.preventDefault();
       event.stopPropagation();
-      openRecommendedColorPalette(input);
-    });
-    input.addEventListener("click", (event) => {
-      // Trusted clicks come from the visible color chip and open the 12-color palette.
-      // Programmatic input.click() from “직접 선택…” stays available for the native picker.
-      if (!event.isTrusted || input.disabled) return;
-      event.preventDefault();
-      event.stopPropagation();
-      openRecommendedColorPalette(input);
+      openHueColorPalette(control);
     });
   }
 
-  function updateSourceColorControl(color, editable = false) {
-    const normalized = isValidChannelColor(color) ? String(color).toLowerCase() : SOURCE_ROOT_COLOR;
-    elements.midiSourceIdentity?.style.setProperty("--channel-current-color", normalized);
-    elements.midiSourceColorInput?.closest(".source-color-control")?.style.setProperty("--channel-current-color", normalized);
+  function updateSourceColorControl(hue, editable = false) {
+    const displayColor = editable ? getThemeHueColor(hue) : SOURCE_ROOT_COLOR;
+    elements.midiSourceIdentity?.style.setProperty("--channel-current-color", displayColor);
+    elements.midiSourceColorInput?.closest(".source-color-control")?.style.setProperty("--channel-current-color", displayColor);
     if (elements.midiSourceColorInput) {
-      elements.midiSourceColorInput.value = normalized;
+      if (editable) setHueControlValue(elements.midiSourceColorInput, hue);
       elements.midiSourceColorInput.disabled = !editable;
-      elements.midiSourceColorInput.title = editable ? "악기 채널 색상 변경" : "원본 루트 색상은 고정됩니다.";
+      elements.midiSourceColorInput.title = editable ? `악기 채널 색상 · Hue ${normalizeHue(hue)}°` : "원본 루트 색상은 고정됩니다.";
     }
     elements.midiSourceIdentity?.classList.toggle("source-root-identity", !editable);
   }
 
-  function updateChannelColorControl(color) {
-    const normalized = isValidChannelColor(color) ? String(color).toLowerCase() : CHANNEL_COLORS[0];
+  function updateChannelColorControl(hue) {
+    const normalizedHue = normalizeHue(hue);
+    const displayColor = getThemeHueColor(normalizedHue);
     const identity = elements.channelColorInput?.closest(".channel-identity-control");
     const control = elements.channelColorInput?.closest(".channel-color-control");
-    identity?.style.setProperty("--channel-current-color", normalized);
-    control?.style.setProperty("--channel-current-color", normalized);
+    identity?.style.setProperty("--channel-current-color", displayColor);
+    control?.style.setProperty("--channel-current-color", displayColor);
+    setHueControlValue(elements.channelColorInput, normalizedHue);
   }
 
   function createDefaultChannel(id, fallbackIndex = 0) {
     return {
       id,
       name: `Ch${id}`,
-      color: CHANNEL_COLORS[fallbackIndex % CHANNEL_COLORS.length],
+      hue: getDefaultHue(fallbackIndex),
       muted: false,
       visible: true,
       instrument: "Acoustic Grand Piano",
@@ -1193,8 +1224,7 @@
           programName: String(group.programName || GM_PROGRAM_NAMES[Number(group.program) || 0] || "Unknown"),
           visible: group.visible !== false,
           muted: Boolean(group.muted),
-          color: getMidiGroupColor(group, groupIndex),
-          colorIndex: Math.max(0, Number(group.colorIndex) || groupIndex),
+          hue: getMidiGroupHue(group, groupIndex),
           notes: Array.isArray(group.notes)
             ? group.notes.map((note, noteIndex) => ({
               id: Number(note.id) || noteIndex + 1,
@@ -2387,6 +2417,12 @@
         // Storage can be unavailable in private or restricted environments.
       }
     }
+    if (elements.channelTabs) {
+      renderChannelTabs();
+      renderAudioLane();
+      renderChannelEditor();
+      refreshHuePaletteTheme();
+    }
     if (elements.rollCanvas.style.width) {
       drawRoll();
       drawTimeline();
@@ -2799,9 +2835,7 @@
       const color = getChannelColor(channel, channelIndex);
       // Dark mode needs the note edge to move away from the dark canvas, not toward it.
       // Light mode keeps the existing darker edge so channel colors preserve their embossed look.
-      const noteBorderColor = state.theme === "dark"
-        ? lightenHexColor(color)
-        : darkenHexColor(color);
+      const noteBorderColor = getChannelColor(channel, channelIndex, "edge");
       const isActive = state.activePanel === "notes" && channelIndex === state.activeChannel;
       const hasActiveSelection = isActive && state.selectedNoteIds.size > 0;
       // Keep overlaps visible, while giving the active channel a dense foreground presence.
@@ -4263,10 +4297,12 @@
   }
 
 
-  function getAudioClipColor(clip, fallbackIndex = 0) {
-    return isValidChannelColor(clip?.color)
-      ? normalizeChannelColor(clip.color)
-      : CHANNEL_COLORS[fallbackIndex % CHANNEL_COLORS.length];
+  function getAudioClipHue(clip, fallbackIndex = 0) {
+    return Number.isFinite(Number(clip?.hue)) ? normalizeHue(clip.hue) : getDefaultHue(fallbackIndex);
+  }
+
+  function getAudioClipColor(clip, fallbackIndex = 0, tone = "base") {
+    return getThemeHueColor(getAudioClipHue(clip, fallbackIndex), tone);
   }
 
   function normalizeAudioClip(raw, index = 0) {
@@ -4277,7 +4313,7 @@
       title: String(raw?.title || raw?.fileName || `오디오 ${index + 1}`),
       fileName: String(raw?.fileName || raw?.title || `오디오 ${index + 1}`),
       mimeType: String(raw?.mimeType || "audio/*"),
-      color: getAudioClipColor(raw, index),
+      hue: getAudioClipHue(raw, index),
       visible: raw?.visible !== false,
       muted: Boolean(raw?.muted),
       lane: clamp(Math.round(Number(raw?.lane ?? raw?.row ?? (index % 3)) || 0), 0, 2),
@@ -4312,10 +4348,11 @@
   function updateAudioSourceInspector() {
     const clip = getActiveAudioClip();
     if (!clip) return;
-    const color = getAudioClipColor(clip, state.audioClips.indexOf(clip));
-    elements.audioSourceIdentity?.style.setProperty("--channel-current-color", color);
-    elements.audioSourceColorInput?.closest(".source-color-control")?.style.setProperty("--channel-current-color", color);
-    if (elements.audioSourceColorInput) elements.audioSourceColorInput.value = color;
+    const hue = getAudioClipHue(clip, state.audioClips.indexOf(clip));
+    const displayColor = getThemeHueColor(hue);
+    elements.audioSourceIdentity?.style.setProperty("--channel-current-color", displayColor);
+    elements.audioSourceColorInput?.closest(".source-color-control")?.style.setProperty("--channel-current-color", displayColor);
+    setHueControlValue(elements.audioSourceColorInput, hue);
     if (elements.audioSourceNameInput) elements.audioSourceNameInput.value = clip.title;
     if (elements.audioSourceOffsetInput) {
       elements.audioSourceOffsetInput.max = String(Math.max(0, Number(clip.sourceDurationSeconds) || 0));
@@ -4383,12 +4420,12 @@
     return true;
   }
 
-  function setAudioClipColor(clipId, color, { commit = true } = {}) {
+  function setAudioClipHue(clipId, hue, { commit = true } = {}) {
     const clip = state.audioClips.find((item) => String(item.id) === String(clipId));
-    if (!clip || !isValidChannelColor(color)) return false;
-    const normalized = String(color).toLowerCase();
-    if (clip.color === normalized) return false;
-    clip.color = normalized;
+    if (!clip) return false;
+    const normalizedHue = normalizeHue(hue, getAudioClipHue(clip, state.audioClips.indexOf(clip)));
+    if (clip.hue === normalizedHue) return false;
+    clip.hue = normalizedHue;
     if (commit) markDirty("오디오 색상 변경");
     else setDirtyWithoutHistory();
     renderChannelTabs();
@@ -4457,7 +4494,7 @@
         title: file.name.replace(/\.[^.]+$/, "") || file.name,
         fileName: file.name,
         mimeType: file.type || "audio/*",
-        color: getAudioClipColor(null, state.audioClips.length),
+        hue: getDefaultHue(state.audioClips.length),
         startBeat,
         durationBeat: audioDurationToBeatLength(startBeat, decoded.duration),
         sourceDurationSeconds: decoded.duration,
@@ -5007,7 +5044,7 @@
       elements.channelEditInstrumentSelect.innerHTML = elements.channelInstrumentSelect.innerHTML;
     }
     if (elements.channelEditNameInput) elements.channelEditNameInput.value = channel.name;
-    if (elements.channelEditColorInput) elements.channelEditColorInput.value = getChannelColor(channel, index);
+    setHueControlValue(elements.channelEditColorInput, getChannelHue(channel, index));
     if (elements.channelEditTargetLabel) elements.channelEditTargetLabel.textContent = `${index + 1}번 채널`;
     if (elements.channelEditInstrumentSelect) {
       const instrumentName = String(channel.instrument || "Acoustic Grand Piano");
@@ -5042,18 +5079,17 @@
       return false;
     }
     const nextName = makeUniqueChannelName(requestedName, channel.id);
-    const requestedColor = String(elements.channelEditColorInput?.value || "").toLowerCase();
-    const nextColor = isValidChannelColor(requestedColor) ? requestedColor : getChannelColor(channel, index);
+    const nextHue = getHueControlValue(elements.channelEditColorInput, getChannelHue(channel, index));
     const selectedValue = String(elements.channelEditInstrumentSelect?.value || "0");
     const program = clamp(Math.round(Number(selectedValue) || 0), 0, GM_PROGRAM_NAMES.length - 1);
     const nextInstrument = selectedValue === "drums" ? "Drums" : (GM_PROGRAM_NAMES[program] || GM_PROGRAM_NAMES[0]);
-    const changed = channel.name !== nextName || channel.color !== nextColor || channel.instrument !== nextInstrument;
+    const changed = channel.name !== nextName || channel.hue !== nextHue || channel.instrument !== nextInstrument;
     if (!changed) {
       closeChannelEditDialog();
       return true;
     }
     channel.name = nextName;
-    channel.color = nextColor;
+    channel.hue = nextHue;
     channel.instrument = nextInstrument;
     if (selectedValue !== "drums" && typeof audioEngine.prepareProgram === "function") {
       void audioEngine.prepareProgram(program, 0).catch((error) => console.warn("악기 음원 준비 실패", error));
@@ -5100,9 +5136,8 @@
     if (elements.channelNameInput.value !== channel.name) {
       elements.channelNameInput.value = channel.name;
     }
-    const activeColor = getChannelColor(channel, state.activeChannel);
-    elements.channelColorInput.value = activeColor;
-    updateChannelColorControl(activeColor);
+    const activeHue = getChannelHue(channel, state.activeChannel);
+    updateChannelColorControl(activeHue);
     if (elements.channelInstrumentSelect) {
       const instrumentName = String(channel.instrument || "Acoustic Grand Piano");
       const matchedProgram = GM_PROGRAM_NAMES.findIndex((name) => name === instrumentName);
@@ -5226,7 +5261,7 @@
       elements.midiInfoSelection.textContent = selected.length ? `${selected.length}개 선택` : "없음";
     }
     updateSourceColorControl(
-      activeGroup ? getMidiGroupColor(activeGroup, activeGroupIndex) : SOURCE_ROOT_COLOR,
+      activeGroup ? getMidiGroupHue(activeGroup, activeGroupIndex) : 0,
       Boolean(activeGroup),
     );
     const tempoCount = reference.tempoEvents?.length || 0;
@@ -5260,7 +5295,7 @@
     state.audioEdit.clipId = String(clip.id);
     const index = state.audioClips.indexOf(clip);
     if (elements.audioEditNameInput) elements.audioEditNameInput.value = clip.title;
-    if (elements.audioEditColorInput) elements.audioEditColorInput.value = getAudioClipColor(clip, index);
+    setHueControlValue(elements.audioEditColorInput, getAudioClipHue(clip, index));
     if (elements.audioEditOffsetInput) {
       elements.audioEditOffsetInput.max = String(Math.max(0, Number(clip.sourceDurationSeconds) || 0));
       elements.audioEditOffsetInput.value = String(Math.round((Number(clip.sourceOffsetSeconds) || 0) * 100) / 100);
@@ -5294,15 +5329,14 @@
       return false;
     }
     const index = state.audioClips.indexOf(clip);
-    const requestedColor = String(elements.audioEditColorInput?.value || "").toLowerCase();
-    const nextColor = isValidChannelColor(requestedColor) ? requestedColor : getAudioClipColor(clip, index);
+    const nextHue = getHueControlValue(elements.audioEditColorInput, getAudioClipHue(clip, index));
     const maxOffset = Math.max(0, Number(clip.sourceDurationSeconds) || 0);
     const nextOffset = clamp(Number(elements.audioEditOffsetInput?.value) || 0, 0, maxOffset);
     const nextRate = clamp(Number(elements.audioEditRateInput?.value) || 1, 0.25, 4);
     const nextVolume = clamp((Number(elements.audioEditVolumeInput?.value) || 0) / 100, 0, 1);
     const nextName = requestedName.slice(0, 80);
     const changed = clip.title !== nextName
-      || clip.color !== nextColor
+      || clip.hue !== nextHue
       || Math.abs((Number(clip.sourceOffsetSeconds) || 0) - nextOffset) > 1e-7
       || Math.abs((Number(clip.playbackRate) || 1) - nextRate) > 1e-7
       || Math.abs((Number(clip.volume) || 0) - nextVolume) > 1e-7;
@@ -5313,7 +5347,7 @@
     const wasPlaying = state.playback.running || state.playback.loading;
     const resumeBeat = state.playhead.beat;
     clip.title = nextName;
-    clip.color = nextColor;
+    clip.hue = nextHue;
     clip.sourceOffsetSeconds = nextOffset;
     clip.playbackRate = nextRate;
     clip.volume = nextVolume;
@@ -5435,8 +5469,7 @@
           sourceTracks: new Set(),
           visible: group.visible !== false,
           muted: Boolean(group.muted),
-          color: getMidiGroupColor(group, groupIndex),
-          colorIndex: groupIndex,
+          hue: getMidiGroupHue(group, groupIndex),
           rawNotes: [],
         };
         instrumentMap.set(key, merged);
@@ -5472,14 +5505,13 @@
         programName: group.programName,
         visible: group.visible,
         muted: group.muted,
-        color: isValidChannelColor(group.color) ? group.color : CHANNEL_COLORS[index % CHANNEL_COLORS.length],
-        colorIndex: index,
+        hue: getMidiGroupHue(group, index),
         notes: mergeMidiInstrumentNotes(group.rawNotes),
       };
     }).filter((group) => group.notes.length)
       .sort(compareMidiGroupsWithDrumsLast);
     groups.forEach((group, index) => {
-      group.colorIndex = index;
+      group.hue = getDefaultHue(index);
       group.id = `midi-instrument-${group.channels.includes(9) ? "drums" : group.program}-${index + 1}`;
     });
     source.groups = groups;
@@ -5560,7 +5592,7 @@
           programName,
           visible: true,
           muted: false,
-          colorIndex: instruments.size,
+          hue: getDefaultHue(instruments.size),
           rawNotes: [],
         };
         instruments.set(key, instrument);
@@ -5590,7 +5622,7 @@
           programName: instrument.programName,
           visible: true,
           muted: false,
-          colorIndex: index,
+          hue: getDefaultHue(index),
           notes,
         };
       })
@@ -5598,7 +5630,7 @@
       .sort(compareMidiGroupsWithDrumsLast);
 
     groups.forEach((group, index) => {
-      group.colorIndex = index;
+      group.hue = getDefaultHue(index);
       group.id = `midi-instrument-${group.channel === 9 ? "drums" : group.program}-${index + 1}`;
     });
 
@@ -6296,7 +6328,7 @@
       state.projectName = sourceTitle;
     }
 
-    const colorByInstrument = new Map();
+    const hueByInstrument = new Map();
     const createdChannels = [];
     let noteCount = 0;
 
@@ -6304,17 +6336,17 @@
       const instrumentKey = isMidiGroupDrums(group)
         ? "drums"
         : `program-${clamp(Math.round(Number(group?.program) || 0), 0, 127)}`;
-      if (!colorByInstrument.has(instrumentKey)) {
-        colorByInstrument.set(instrumentKey, getMidiGroupColor(group, groupIndex));
+      if (!hueByInstrument.has(instrumentKey)) {
+        hueByInstrument.set(instrumentKey, getMidiGroupHue(group, groupIndex));
       }
-      const copyColor = colorByInstrument.get(instrumentKey);
+      const copyHue = hueByInstrument.get(instrumentKey);
       const voices = splitNotesIntoMonophonicVoices(group.notes || [], { ignoreSingle64thOverlap });
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {
           voiceIndex,
           voiceCount: voices.length,
-          copyColor,
+          copyHue,
         });
         state.channels.push(channel);
         state.channelNoteRuntime.delete(String(channel.id));
@@ -6696,6 +6728,23 @@
     return true;
   }
 
+  function setMidiGroupHue(documentId, groupId, hue, { commit = true } = {}) {
+    const document = state.midiDocuments.find((item) => String(item.id) === String(documentId));
+    const group = document?.groups?.find((item) => String(item.id) === String(groupId));
+    if (!group) return false;
+    const index = Math.max(0, (document.groups || []).indexOf(group));
+    const normalizedHue = normalizeHue(hue, getMidiGroupHue(group, index));
+    if (group.hue === normalizedHue) return false;
+    group.hue = normalizedHue;
+    if (commit) setDirtyWithoutHistory();
+    renderChannelTabs();
+    updateMidiReferenceUI();
+    drawRoll();
+    drawOverviewTimeline();
+    scheduleAutosave(120);
+    return true;
+  }
+
   async function copyMidiNotesToClipboard(items, { originBeat = null, label = "MIDI 노트" } = {}) {
     const notes = items.map((item) => item.note || item);
     return copyNotesToNodeClipboard(notes, {
@@ -6728,13 +6777,13 @@
     return (document.groups || []).filter((group) => selectedIds.has(String(group.id)));
   }
 
-  function makeEditorChannelFromMidiVoice(group, notes, { voiceIndex = 0, voiceCount = 1, copyColor = null } = {}) {
+  function makeEditorChannelFromMidiVoice(group, notes, { voiceIndex = 0, voiceCount = 1, copyHue = null } = {}) {
     const id = nextChannelId();
     const channel = createDefaultChannel(id, state.channels.length);
     const voiceSuffix = voiceCount > 1 ? ` (${voiceIndex + 1})` : "";
     const requestedName = `${getMidiGroupDisplayName(group, "악기 채널")}${voiceSuffix}`;
     channel.name = makeUniqueChannelName(requestedName, channel.id);
-    channel.color = isValidChannelColor(copyColor) ? normalizeChannelColor(copyColor) : getMidiGroupColor(group, state.channels.length);
+    channel.hue = Number.isFinite(Number(copyHue)) ? normalizeHue(copyHue) : getMidiGroupHue(group, state.channels.length);
     const program = clamp(Math.round(Number(group?.program) || 0), 0, 127);
     channel.instrument = isMidiGroupDrums(group) ? "Drums" : (GM_PROGRAM_NAMES[program] || GM_PROGRAM_NAMES[0]);
     channel.notes = (notes || []).map((note) => {
@@ -6762,22 +6811,22 @@
       return false;
     }
     const createdChannels = [];
-    const colorByInstrument = new Map();
+    const hueByInstrument = new Map();
     let copiedNotes = 0;
     for (const group of validGroups) {
       const sourceIndex = Math.max(0, (document?.groups || []).indexOf(group));
       const instrumentKey = isMidiGroupDrums(group) ? "drums" : `program-${clamp(Math.round(Number(group?.program) || 0), 0, 127)}`;
-      if (!colorByInstrument.has(instrumentKey)) {
-        colorByInstrument.set(instrumentKey, getMidiGroupColor(group, sourceIndex));
+      if (!hueByInstrument.has(instrumentKey)) {
+        hueByInstrument.set(instrumentKey, getMidiGroupHue(group, sourceIndex));
       }
-      const copyColor = colorByInstrument.get(instrumentKey);
+      const copyHue = hueByInstrument.get(instrumentKey);
       const voices = splitNotesIntoMonophonicVoices(group.notes || []);
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {
           voiceIndex,
           voiceCount: voices.length,
-          copyColor,
+          copyHue,
         });
         state.channels.push(channel);
         state.channelNoteRuntime.delete(String(channel.id));
@@ -6998,7 +7047,7 @@
       channels: state.channels.map((channel) => ({
         id: channel.id,
         name: channel.name,
-        color: getChannelColor(channel),
+        hue: getChannelHue(channel),
         instrument: channel.instrument,
         notes: channel.notes.map((note) => ({ ...note })),
       })),
@@ -7256,7 +7305,7 @@
         return {
         id: channelId,
         name: String(channel.name || `Ch${channelId}`),
-        color: getChannelColor(channel, index),
+        hue: getChannelHue(channel, index),
         muted: mutedByChannelId.get(String(channelId)) || false,
         visible: visibleByChannelId.has(String(channelId)) ? visibleByChannelId.get(String(channelId)) : true,
         instrument: String(channel.instrument || "Acoustic Grand Piano"),
@@ -8079,7 +8128,7 @@
         : currentName;
       channel.name = makeUniqueChannelName(requestedName, channel.id, usedNames);
       usedNames.add(channel.name.toLocaleLowerCase());
-      channel.color = getChannelColor(channel, index);
+      channel.hue = getChannelHue(channel, index);
       channel.muted = Boolean(channel.muted);
       channel.visible = channel.visible !== false;
     });
@@ -12334,7 +12383,7 @@
   function serializeProject() {
     return {
       format: "mml-piano-roll-project",
-      version: 21,
+      version: 22,
       projectName: state.projectName,
       snapValue: state.snapValue,
       rowHeight: state.rowHeight,
@@ -12345,7 +12394,8 @@
       nextAudioClipId: state.nextAudioClipId,
       channels: state.channels,
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
-      // v21: 지원 음악 파일은 공통 플러그인을 거쳐 불러오는 즉시 일반 편집 채널로 변환됩니다.
+      // v22: 채널/오디오 색상은 hue(0..359)만 저장하며 실제 밝기는 테마에서 결정합니다.
+      // 지원 음악 파일은 공통 플러그인을 거쳐 불러오는 즉시 일반 편집 채널로 변환됩니다.
       midiDocuments: [],
       audioClips: state.audioClips.map((clip) => ({ ...clip, assetAvailable: Boolean(getAudioRuntime(clip.id)?.audioBuffer) })),
       editor: {
@@ -12454,7 +12504,7 @@
     state.channels = data.channels.map((channel, index) => ({
       id: Number(channel.id) || index + 1,
       name: String(channel.name || `Ch${Number(channel.id) || index + 1}`),
-      color: getChannelColor(channel, index),
+      hue: getChannelHue(channel, index),
       muted: Boolean(channel.muted),
       visible: channel.visible !== false,
       instrument: String(channel.instrument || "Acoustic Grand Piano"),
@@ -13269,16 +13319,12 @@
     }
   }
 
-  function setChannelColor(index, color, { commit = true } = {}) {
+  function setChannelHue(index, hue, { commit = true } = {}) {
     const channel = state.channels[index];
-    if (!channel || !isValidChannelColor(color)) {
-      return false;
-    }
-    const normalized = String(color).toLowerCase();
-    if (channel.color === normalized) {
-      return false;
-    }
-    channel.color = normalized;
+    if (!channel) return false;
+    const normalizedHue = normalizeHue(hue, getChannelHue(channel, index));
+    if (channel.hue === normalizedHue) return false;
+    channel.hue = normalizedHue;
     if (commit) {
       markDirty("채널 색상 변경");
     } else {
@@ -13287,15 +13333,15 @@
     }
     renderChannelTabs();
     renderChannelMuteMixer();
-    elements.channelColorInput.value = normalized;
-    updateChannelColorControl(normalized);
+    updateChannelColorControl(normalizedHue);
     drawRoll();
+    drawOverviewTimeline();
     return true;
   }
 
   function openChannelColorPicker(index) {
     selectChannel(index);
-    elements.channelColorInput.click();
+    openHueColorPalette(elements.channelColorInput);
   }
 
 
@@ -13906,7 +13952,7 @@
         applyAudioEditDialog();
       }
     });
-    bindRecommendedColorPalette(elements.audioEditColorInput);
+    bindHueColorPalette(elements.audioEditColorInput);
 
     elements.channelEditCancelButton?.addEventListener("click", closeChannelEditDialog);
     elements.channelEditApplyButton?.addEventListener("click", applyChannelEditDialog);
@@ -13919,7 +13965,7 @@
         applyChannelEditDialog();
       }
     });
-    bindRecommendedColorPalette(elements.channelEditColorInput);
+    bindHueColorPalette(elements.channelEditColorInput);
     elements.copyChannelButton.addEventListener("click", copyActiveChannelNotes);
     elements.pasteChannelButton.addEventListener("click", pasteNotesFromClipboard);
     elements.noteVolumeButton?.addEventListener("click", openNoteVolumeDialog);
@@ -13937,9 +13983,9 @@
       }
     });
     elements.channelColorInput.addEventListener("change", () => {
-      setChannelColor(state.activeChannel, elements.channelColorInput.value, { commit: true });
+      setChannelHue(state.activeChannel, getHueControlValue(elements.channelColorInput), { commit: true });
     });
-    bindRecommendedColorPalette(elements.channelColorInput);
+    bindHueColorPalette(elements.channelColorInput);
     elements.channelInstrumentSelect?.addEventListener("change", () => {
       const channel = getActiveChannel();
       if (!channel) return;
@@ -13963,7 +14009,7 @@
         updateMidiReferenceUI();
         return;
       }
-      setMidiGroupColor(document.id, group.id, elements.midiSourceColorInput.value, { commit: true });
+      setMidiGroupHue(document.id, group.id, getHueControlValue(elements.midiSourceColorInput), { commit: true });
     });
     elements.midiSourceNameInput?.addEventListener("change", () => {
       if (state.midiReference.activeGroupId) {
@@ -13978,7 +14024,7 @@
         elements.midiSourceNameInput.blur();
       }
     });
-    bindRecommendedColorPalette(elements.midiSourceColorInput);
+    bindHueColorPalette(elements.midiSourceColorInput);
     elements.audioSourceNameInput?.addEventListener("change", () => renameActiveAudioTitle(elements.audioSourceNameInput.value));
     elements.audioSourceNameInput?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -13988,9 +14034,9 @@
     });
     elements.audioSourceColorInput?.addEventListener("change", () => {
       const clip = getActiveAudioClip();
-      if (clip) setAudioClipColor(clip.id, elements.audioSourceColorInput.value, { commit: true });
+      if (clip) setAudioClipHue(clip.id, getHueControlValue(elements.audioSourceColorInput), { commit: true });
     });
-    bindRecommendedColorPalette(elements.audioSourceColorInput);
+    bindHueColorPalette(elements.audioSourceColorInput);
     elements.audioSourceOffsetInput?.addEventListener("change", () => {
       updateAudioClipSettings(getActiveAudioClip(), { offsetSeconds: elements.audioSourceOffsetInput.value, commit: true });
     });
@@ -14355,7 +14401,7 @@
       openNoteVolumeDialog,
       velocityToMmlVolume,
       mmlVolumeToVelocity,
-      setChannelColor,
+      setChannelHue,
       addTempoAtBeat,
       editTempo,
       deleteTempo,

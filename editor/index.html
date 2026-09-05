@@ -9,7 +9,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <title>모비바드 v5.2</title>
 <link href="../assets/favicon.ico" rel="icon"/>
-<link href="styles.css?v=5.2.10&amp;rev=20260906-overview-full-width1" rel="stylesheet"/>
+<link href="styles.css?v=5.2.9" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -175,7 +175,7 @@
 <div class="channel-body note-channel-body" id="noteChannelView">
 <div class="channel-detail-toolbar compact-channel-inspector" data-context-area="channel-info">
 <div aria-hidden="true" class="channel-legacy-controls">
-<div class="channel-identity-control" title="채널 색상과 이름"><label class="channel-color-control channel-color-icon" title="현재 채널 색상"><span class="visually-hidden">색상</span><input aria-label="현재 채널 색상" id="channelColorInput" type="color" value="#78a9ff"/></label><label class="channel-name-control"><input aria-label="채널 이름" id="channelNameInput" maxlength="40" type="text" value="Ch1"/></label></div>
+<div class="channel-identity-control" title="채널 색상과 이름"><label class="channel-color-control channel-color-icon" title="현재 채널 색상"><span class="visually-hidden">색상</span><input aria-label="현재 채널 색상" class="hue-color-button" data-hue="210" id="channelColorInput" type="button" value=""/></label><label class="channel-name-control"><input aria-label="채널 이름" id="channelNameInput" maxlength="40" type="text" value="Ch1"/></label></div>
 <div class="channel-inspector-actions"><button id="copyChannelButton" type="button">복사</button><button id="pasteChannelButton" type="button">붙여넣기</button><button aria-label="선택 노트 볼륨" disabled="" id="noteVolumeButton" title="선택 노트 볼륨 수정" type="button">V</button><button id="clearChannelButton" type="button">비우기</button><button aria-label="선택한 채널 삭제" class="trash-button" id="deleteChannelButton" title="선택한 채널 삭제" type="button">🗑</button></div>
 <span class="visually-hidden" id="channelTitle">Ch1</span><span class="dirty-indicator" hidden="" id="dirtyIndicator">수정됨</span>
 </div>
@@ -185,7 +185,7 @@
 </div>
 <div aria-hidden="true" class="midi-reference-view" data-context-area="midi-reference" hidden="" id="midiReferenceView">
 <div class="channel-detail-toolbar source-detail-toolbar">
-<div class="channel-identity-control source-identity-control" id="midiSourceIdentity" title="원본 자료 또는 악기 채널 정보"><label class="channel-color-control channel-color-icon source-color-control" title="악기 채널 색상"><span class="visually-hidden">색상</span><input aria-label="원본 악기 채널 색상" id="midiSourceColorInput" type="color" value="#78a9ff"/></label><label class="channel-name-control source-name-control"><input aria-label="원본 자료 또는 악기 채널 이름" id="midiSourceNameInput" type="text" value="원본 자료"/></label></div><label class="channel-instrument-control source-instrument-control" hidden="" id="midiSourceInstrumentControl"><input aria-label="원본 악기 정보" id="midiSourceInstrumentInfo" readonly="" type="text" value=""/></label>
+<div class="channel-identity-control source-identity-control" id="midiSourceIdentity" title="원본 자료 또는 악기 채널 정보"><label class="channel-color-control channel-color-icon source-color-control" title="악기 채널 색상"><span class="visually-hidden">색상</span><input aria-label="원본 악기 채널 색상" class="hue-color-button" data-hue="210" id="midiSourceColorInput" type="button" value=""/></label><label class="channel-name-control source-name-control"><input aria-label="원본 자료 또는 악기 채널 이름" id="midiSourceNameInput" type="text" value="원본 자료"/></label></div><label class="channel-instrument-control source-instrument-control" hidden="" id="midiSourceInstrumentControl"><input aria-label="원본 악기 정보" id="midiSourceInstrumentInfo" readonly="" type="text" value=""/></label>
 <div class="channel-inspector-actions source-inspector-actions"><button aria-label="선택한 원본 자료 삭제" class="trash-button" disabled="" id="midiReferenceClearButton" title="선택한 원본 자료 삭제" type="button">🗑</button><button class="midi-transfer-open-button" disabled="" id="midiTransferButton" title="원본 채널을 새 편집 채널로 복사" type="button">채널 복사</button></div>
 <div aria-label="현재 원본 자료 요약" class="channel-summary source-summary"><span id="midiInfoTitle">원본 자료</span><span>노트 <strong id="midiInfoNoteCount">0</strong></span><span>길이 <strong id="midiInfoLength">0:00.000</strong></span><span>선택 <strong id="midiInfoSelection">없음</strong></span></div>
 </div>
@@ -195,7 +195,7 @@
 <div aria-hidden="true" class="audio-source-view" data-context-area="audio-source" hidden="" id="audioSourceView">
 <div class="channel-detail-toolbar source-detail-toolbar compact-audio-inspector">
 <div aria-hidden="true" class="audio-legacy-controls">
-<div class="channel-identity-control source-identity-control" id="audioSourceIdentity" title="오디오 원본 정보"><label class="channel-color-control channel-color-icon source-color-control" title="오디오 색상"><span class="visually-hidden">색상</span><input aria-label="오디오 색상" id="audioSourceColorInput" type="color" value="#e58c5a"/></label><label class="channel-name-control source-name-control"><input aria-label="오디오 제목" id="audioSourceNameInput" type="text" value="오디오"/></label></div>
+<div class="channel-identity-control source-identity-control" id="audioSourceIdentity" title="오디오 원본 정보"><label class="channel-color-control channel-color-icon source-color-control" title="오디오 색상"><span class="visually-hidden">색상</span><input aria-label="오디오 색상" class="hue-color-button" data-hue="30" id="audioSourceColorInput" type="button" value=""/></label><label class="channel-name-control source-name-control"><input aria-label="오디오 제목" id="audioSourceNameInput" type="text" value="오디오"/></label></div>
 <button aria-label="선택한 오디오 삭제" class="trash-button" disabled="" id="audioSourceDeleteButton" title="선택한 오디오 삭제" type="button">🗑</button>
 <div aria-label="현재 오디오 요약" class="channel-summary source-summary"><span id="audioInfoTitle">오디오</span><span>시작 <strong id="audioInfoStart">0.000 beat</strong></span><span>끝 <strong id="audioInfoEnd">0.000 beat</strong></span><span>길이 <strong id="audioInfoDuration">0:00.000</strong></span></div>
 </div>
@@ -296,7 +296,7 @@
 <div class="channel-edit-fields">
 <label class="channel-edit-field"><span>이름</span><input aria-label="채널 이름" id="channelEditNameInput" maxlength="40" type="text"/></label>
 <label class="channel-edit-field"><span>악기</span><select aria-label="채널 악기" id="channelEditInstrumentSelect"></select></label>
-<label class="channel-edit-field channel-edit-color-field"><span>색상</span><input aria-label="채널 색상" id="channelEditColorInput" type="color" value="#78a9ff"/></label>
+<label class="channel-edit-field channel-edit-color-field"><span>색상</span><input aria-label="채널 색상" class="hue-color-button" data-hue="210" id="channelEditColorInput" type="button" value=""/></label>
 </div>
 <p class="transfer-dialog-help">채널 목록을 더블 클릭하면 이 창을 다시 열 수 있습니다.</p>
 <div class="transfer-dialog-actions"><button id="channelEditCancelButton" type="button">취소</button><button id="channelEditApplyButton" type="button">적용</button></div>
@@ -307,7 +307,7 @@
 <div class="transfer-dialog-header"><div><strong>오디오 수정</strong><span id="audioEditTargetLabel">선택 오디오</span></div><button aria-label="닫기" class="channel-mute-close" id="audioEditCloseButton" type="button">×</button></div>
 <div class="channel-edit-fields audio-edit-fields">
 <label class="channel-edit-field"><span>이름</span><input aria-label="오디오 이름" id="audioEditNameInput" maxlength="80" type="text"/></label>
-<label class="channel-edit-field channel-edit-color-field"><span>색상</span><input aria-label="오디오 색상" id="audioEditColorInput" type="color" value="#e58c5a"/></label>
+<label class="channel-edit-field channel-edit-color-field"><span>색상</span><input aria-label="오디오 색상" class="hue-color-button" data-hue="30" id="audioEditColorInput" type="button" value=""/></label>
 <label class="channel-edit-field"><span>오프셋</span><span class="audio-edit-number"><input aria-label="오디오 시작 오프셋 초" id="audioEditOffsetInput" inputmode="decimal" min="0" step="0.01" type="number" value="0"/><small>초</small></span></label>
 <label class="channel-edit-field"><span>배속</span><span class="audio-edit-number"><input aria-label="오디오 개별 배속" id="audioEditRateInput" inputmode="decimal" max="4" min="0.25" step="0.05" type="number" value="1"/><small>×</small></span></label>
 <label class="channel-edit-field"><span>볼륨</span><span class="audio-edit-number"><input aria-label="오디오 볼륨 퍼센트" id="audioEditVolumeInput" inputmode="numeric" max="100" min="0" step="1" type="number" value="30"/><small>%</small></span></label>
@@ -389,6 +389,6 @@
 <script src="js/soundbank-player.js?v=5.1.0"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final46"></script>
 <script src="../plugins/common/site-navigation.js?v=20260831-ja-labels1"></script>
-<script src="app.js?v=5.2.10&amp;rev=20260906-overview-full-width1"></script>
+<script src="app.js?v=5.2.9"></script>
 </body>
 </html>

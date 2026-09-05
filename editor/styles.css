@@ -46,6 +46,8 @@
   --scroll-track: #20242b;
   --scroll-thumb: #656f80;
   --scroll-thumb-hover: #7c88a0;
+  --fallback-channel-color: hsl(210 92% 61%);
+  --fallback-audio-color: hsl(30 92% 61%);
 }
 
 :root[data-theme="light"] {
@@ -89,6 +91,8 @@
   --scroll-track: #d9dfe7;
   --scroll-thumb: #8e9aaa;
   --scroll-thumb-hover: #6f7d8f;
+  --fallback-channel-color: hsl(210 88% 42%);
+  --fallback-audio-color: hsl(30 88% 42%);
 }
 
 * { box-sizing: border-box; }
@@ -462,7 +466,7 @@ textarea:focus-visible,
 #channelMuteMixerButton { position: relative; }
 #channelMuteMixerButton[data-count]:not([data-count=""])::after { content: attr(data-count); position: absolute; right: -3px; top: -4px; min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 800; box-shadow: 0 0 0 2px var(--panel); }
 .channel-tabs { min-width: 0; flex: 1 1 auto; display: flex; align-items: end; gap: 4px; padding: 6px 8px 0; overflow-x: auto; overflow-y: hidden; touch-action: pan-x; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
-.channel-tab-item { --channel-color: #78a9ff; flex: 0 0 auto; min-width: 100px; max-width: 180px; height: 36px; position: relative; border-radius: 8px 8px 0 0; }
+.channel-tab-item { --channel-color: var(--fallback-channel-color); flex: 0 0 auto; min-width: 100px; max-width: 180px; height: 36px; position: relative; border-radius: 8px 8px 0 0; }
 .channel-tab-item.dragging { opacity: .42; }
 .channel-tab { width: 100%; min-width: 0; height: 36px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-radius: 8px 8px 0 0; border-bottom-color: transparent; color: var(--muted); white-space: nowrap; overflow: hidden; touch-action: none; }
 .channel-tab-color { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--channel-color); box-shadow: 0 0 0 1px rgba(255,255,255,.32); }
@@ -481,7 +485,7 @@ textarea:focus-visible,
 .channel-name-control,
 .channel-color-control { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .channel-name-control input { width: min(190px, 28vw); height: 34px; padding: 0 9px; }
-.channel-color-control input[type="color"] { width: 38px; height: 32px; padding: 2px; cursor: pointer; }
+.channel-color-control .hue-color-button { width: 38px; height: 32px; padding: 2px; cursor: pointer; }
 .channel-summary { min-width: max-content; display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .channel-summary strong { color: var(--text); font-weight: 700; }
 .channel-detail-spacer { flex: 1 1 auto; min-width: 8px; }
@@ -522,7 +526,7 @@ textarea:focus-visible,
 .midi-instrument-item.active { outline: 2px solid var(--focus); outline-offset: -1px; }
 .midi-instrument-item.is-hidden { opacity: .48; }
 .midi-instrument-item input { width: 18px; height: 18px; margin: 0; }
-.midi-instrument-color { width: 9px; height: 9px; border-radius: 50%; background: var(--midi-color, #78a9ff); flex: 0 0 auto; }
+.midi-instrument-color { width: 9px; height: 9px; border-radius: 50%; background: var(--midi-color, var(--fallback-channel-color)); flex: 0 0 auto; }
 .midi-instrument-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .midi-instrument-count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .midi-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 12px; }
@@ -721,7 +725,7 @@ textarea:focus-visible,
 .channel-name-control { gap: 5px; }
 .channel-name-control input { width: min(168px, 25vw); height: 36px; }
 .channel-color-control { gap: 0; }
-.channel-color-icon input[type="color"] {
+.channel-color-icon .hue-color-button {
   width: 38px;
   min-width: 38px;
   height: 36px;
@@ -788,7 +792,7 @@ textarea:focus-visible,
   .channel-body,
   .channel-detail-toolbar { height: 56px; min-height: 56px; }
   .channel-detail-toolbar > button,
-  .channel-color-icon input[type="color"],
+  .channel-color-icon .hue-color-button,
   .trash-button { height: 40px; min-height: 40px; }
   .mml-editor-dialog { height: min(620px, 86vh); }
 }
@@ -910,7 +914,7 @@ textarea:focus-visible,
   touch-action: pan-x;
 }
 .midi-instrument-tab {
-  --midi-color: #78a9ff;
+  --midi-color: var(--fallback-channel-color);
   flex: 0 0 auto;
   max-width: 220px;
   height: 34px;
@@ -1088,7 +1092,7 @@ button {
 .channel-tabs::-webkit-scrollbar { height: 5px; }
 
 .channel-tab-item {
-  --channel-color: #78a9ff;
+  --channel-color: var(--fallback-channel-color);
   flex: 0 0 auto;
   min-width: 68px;
   max-width: 132px;
@@ -1164,7 +1168,7 @@ button {
 }
 .channel-detail-toolbar > button { min-height: 30px; height: 30px; padding-inline: 7px; font-size: 11px; }
 .channel-name-control input { width: min(132px, 20vw); height: 30px; padding-inline: 7px; font-size: 11px; }
-.channel-color-control input[type="color"] { width: 32px; height: 30px; }
+.channel-color-control .hue-color-button { width: 32px; height: 30px; }
 .trash-button { width: 32px; min-width: 32px; font-size: 14px; }
 .channel-summary { gap: 7px; font-size: 11px; }
 
@@ -1235,7 +1239,7 @@ button {
   .channel-body,
   .channel-detail-toolbar { height: 48px; min-height: 48px; }
   .channel-detail-toolbar > button,
-  .channel-color-icon input[type="color"],
+  .channel-color-icon .hue-color-button,
   .trash-button { height: 34px; min-height: 34px; }
   
   .midi-instrument-tab { height: 100%; min-height: 0; }
@@ -1548,7 +1552,7 @@ button {
   border-right: 1px solid var(--control-border);
   background: color-mix(in srgb, var(--panel-2) 58%, var(--control-bg));
 }
-.channel-identity-control .channel-color-control input[type="color"] {
+.channel-identity-control .channel-color-control .hue-color-button {
   width: 31px !important;
   min-width: 31px;
   height: 30px !important;
@@ -1557,15 +1561,6 @@ button {
   border-radius: 0;
   background: transparent;
   cursor: pointer;
-}
-.channel-identity-control .channel-color-control input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-.channel-identity-control .channel-color-control input[type="color"]::-webkit-color-swatch {
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: 3px;
-}
-.channel-identity-control .channel-color-control input[type="color"]::-moz-color-swatch {
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: 3px;
 }
 .channel-identity-control .channel-name-control input {
   width: min(132px, 20vw);
@@ -1827,7 +1822,7 @@ button {
   }
   .channel-identity-control { height: 34px; }
   .channel-identity-control .channel-color-control,
-  .channel-identity-control .channel-color-control input[type="color"] {
+  .channel-identity-control .channel-color-control .hue-color-button {
     width: 34px !important;
     min-width: 34px;
     height: 34px !important;
@@ -1943,10 +1938,10 @@ button {
 .channel-identity-control .channel-color-control {
   position: relative;
   overflow: hidden;
-  background: var(--channel-current-color, #78a9ff) !important;
+  background: var(--channel-current-color, var(--fallback-channel-color)) !important;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .22);
 }
-.channel-identity-control .channel-color-control input[type="color"] {
+.channel-identity-control .channel-color-control .hue-color-button {
   position: absolute;
   inset: 0;
   width: 100% !important;
@@ -3424,7 +3419,7 @@ button {
   background: var(--source-root-color) !important;
   filter: saturate(.35);
 }
-.source-root-identity .source-color-control input[type="color"] {
+.source-root-identity .source-color-control .hue-color-button {
   cursor: default !important;
 }
 
@@ -3575,7 +3570,7 @@ button {
   will-change: transform;
 }
 .audio-clip-block {
-  --audio-clip-color: #e58c5a;
+  --audio-clip-color: var(--fallback-audio-color);
   position: absolute;
   top: 8px;
   height: calc(var(--audio-lane-height) - 16px);
@@ -3638,7 +3633,7 @@ button {
   background: var(--panel);
 }
 .audio-source-view[hidden] { display: none !important; }
-.channel-tree-item.audio-source-item { --channel-color: #e58c5a; }
+.channel-tree-item.audio-source-item { --channel-color: var(--fallback-audio-color); }
 .channel-tree-item.audio-source-item .channel-tree-main::before {
   content: "♫";
   flex: 0 0 auto;
@@ -3745,7 +3740,7 @@ button {
 }
 
 
-/* 2026-08 recommended 12-color palette */
+/* Hue-only palette: 12 quick hues + continuous 0..359 HSL Hue bar. */
 .recommended-color-palette {
   position: fixed;
   z-index: 1900;
@@ -3767,7 +3762,25 @@ button {
 .recommended-color-swatch:hover, .recommended-color-swatch:focus-visible {
   transform: scale(1.08); outline: 2px solid var(--focus); outline-offset: 1px;
 }
-.recommended-color-custom { width: 100%; min-height: 30px; margin-top: 7px; padding: 3px 8px; font-size: 11px; }
+.recommended-hue-control { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--menu-border); }
+.recommended-hue-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; color: var(--muted); font-size: 10px; font-weight: 700; }
+.recommended-hue-header output { color: var(--text); font-variant-numeric: tabular-nums; }
+.recommended-hue-range {
+  display: block; width: 100%; height: 16px; margin: 0; padding: 0; border: 0; border-radius: 4px;
+  appearance: none; -webkit-appearance: none; cursor: ew-resize;
+  background: linear-gradient(90deg, #f00 0%, #ff0 16.666%, #0f0 33.333%, #0ff 50%, #00f 66.666%, #f0f 83.333%, #f00 100%);
+}
+.recommended-hue-range::-webkit-slider-runnable-track { height: 16px; border-radius: 4px; background: transparent; }
+.recommended-hue-range::-webkit-slider-thumb {
+  width: 8px; height: 20px; margin-top: -2px; border: 2px solid #fff; border-radius: 3px;
+  appearance: none; -webkit-appearance: none; background: transparent; box-shadow: 0 0 0 1px rgba(0,0,0,.72), 0 1px 4px rgba(0,0,0,.42);
+}
+.recommended-hue-range::-moz-range-track { height: 16px; border: 0; border-radius: 4px; background: transparent; }
+.recommended-hue-range::-moz-range-thumb {
+  width: 6px; height: 18px; border: 2px solid #fff; border-radius: 3px;
+  background: transparent; box-shadow: 0 0 0 1px rgba(0,0,0,.72), 0 1px 4px rgba(0,0,0,.42);
+}
+.hue-color-button { color: transparent !important; text-shadow: none !important; }
 
 /* 2026-08 source channel copy + compact instrument controls -------------- */
 .channel-instrument-control {
@@ -5120,7 +5133,7 @@ button {
   width: 100%;
   min-width: 0;
 }
-.channel-edit-color-field input[type="color"] {
+.channel-edit-color-field .hue-color-button {
   width: 56px;
   height: 34px;
   padding: 2px;
@@ -5129,9 +5142,6 @@ button {
   background: var(--control-bg);
   cursor: pointer;
 }
-.channel-edit-color-field input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-.channel-edit-color-field input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 4px; }
-.channel-edit-color-field input[type="color"]::-moz-color-swatch { border: 0; border-radius: 4px; }
 @media (pointer: coarse), (max-width: 700px) {
   .channel-tree-toolbar { padding-block: 4px; }
   .channel-edit-field { grid-template-columns: 56px minmax(0, 1fr); }
@@ -5565,4 +5575,25 @@ button {
   box-shadow:
     inset 4px 0 0 #0b74de,
     inset 0 0 0 1px rgba(0, 82, 184, .34) !important;
+}
+
+
+/* v5.2.9 hue-only color system ------------------------------------------ */
+.hue-color-button {
+  cursor: pointer;
+  background: var(--channel-current-color, hsl(210 90% 55%)) !important;
+  border: 1px solid color-mix(in srgb, var(--channel-current-color, hsl(210 90% 55%)) 72%, var(--control-border)) !important;
+}
+.hue-color-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.channel-edit-color-field .hue-color-button {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  border-radius: 5px;
+}
+:root[data-theme="light"] .recommended-color-swatch {
+  border-color: color-mix(in srgb, var(--swatch-color) 78%, #243244);
 }
