@@ -7446,8 +7446,9 @@
 
   function updateDirtyState() {
     elements.dirtyIndicator.hidden = !state.dirty;
-    // Firebase/GA의 자동 page_title 수집이 곡명/프로젝트명으로 분산되지 않도록 브라우저 제목은 항상 고정합니다.
-    if (document.title !== "MobiBard Editor") document.title = "MobiBard Editor";
+    // 다른 MobiBard 제품과 동일하게 제품명이 아닌 언어별 브랜드명으로 고정합니다.
+    const brandTitle = i18nText("모비바드 v5.3");
+    if (document.title !== brandTitle) document.title = brandTitle;
   }
 
   function captureHistorySnapshot() {
