@@ -2269,11 +2269,17 @@
 
   function loadStoredTheme() {
     try {
-      const stored = window.localStorage.getItem("mobibard-theme")
+      const shared = window.localStorage.getItem("mobibard.player.theme");
+      if (shared === "light" || shared === "dark") return shared;
+      const legacy = window.localStorage.getItem("mobibard-theme")
         ?? window.localStorage.getItem("mml-editor-theme");
-      return stored === "light" ? "light" : "dark";
+      const migrated = legacy === "dark" ? "dark" : "light";
+      if (legacy === "light" || legacy === "dark") {
+        window.localStorage.setItem("mobibard.player.theme", migrated);
+      }
+      return migrated;
     } catch {
-      return "dark";
+      return "light";
     }
   }
 
@@ -2465,7 +2471,14 @@
 
   function loadStoredLanguage() {
     try {
-      return normalizeLanguage(window.localStorage.getItem("mobibard-language") || "ko");
+      const shared = window.localStorage.getItem("mobibard.player.language");
+      if (shared) return normalizeLanguage(shared);
+      const legacy = window.localStorage.getItem("mobibard-language");
+      if (legacy) {
+        window.localStorage.setItem("mobibard.player.language", legacy);
+        return normalizeLanguage(legacy);
+      }
+      return "ko";
     } catch {
       return "ko";
     }
@@ -2493,7 +2506,7 @@
     } else {
       document.documentElement.lang = nextLanguage;
       if (persist) {
-        try { window.localStorage.setItem("mobibard-language", nextLanguage); } catch {}
+        try { window.localStorage.setItem("mobibard.player.language", nextLanguage); } catch {}
       }
       if (notify) {
         const label = elements.languageSelect?.selectedOptions?.[0]?.textContent || nextLanguage;
@@ -2706,7 +2719,7 @@
     updateThemeControls();
     if (persist) {
       try {
-        window.localStorage.setItem("mobibard-theme", nextTheme);
+        window.localStorage.setItem("mobibard.player.theme", nextTheme);
       } catch {
         // Storage can be unavailable in private or restricted environments.
       }

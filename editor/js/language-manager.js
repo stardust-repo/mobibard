@@ -1,10 +1,11 @@
 (() => {
   "use strict";
 
-  const PREF_KEY = "mobibard-language";
+  const PREF_KEY = "mobibard.player.language";
+  const LEGACY_PREF_KEY = "mobibard-language";
   const DEFAULT_LANGUAGE = "ko";
   const LOCALE_VERSION = "5.3.0";
-  const LOCALE_REVISION = "20260907-editor79";
+  const LOCALE_REVISION = "20260907-editor81-shared-settings1";
   const SUPPORTED = Object.freeze({
     ko: { file: "ko.js", htmlLang: "ko" },
     ja: { file: "ja.js", htmlLang: "ja" },
@@ -44,8 +45,18 @@
   };
 
   function readCachedLanguage() {
-    try { return localStorage.getItem(PREF_KEY) || ""; }
-    catch (_) { return ""; }
+    try {
+      const shared = localStorage.getItem(PREF_KEY) || "";
+      if (shared) return shared;
+      const legacy = localStorage.getItem(LEGACY_PREF_KEY) || "";
+      if (legacy) {
+        localStorage.setItem(PREF_KEY, legacy);
+        return legacy;
+      }
+      return "";
+    } catch (_) {
+      return "";
+    }
   }
 
   function writeCachedLanguage(language) {
