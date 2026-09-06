@@ -167,6 +167,21 @@ async function requestAccessToken() {
   });
 }
 
+export function isGoogleAccountConnected() {
+  return isConnected() || restoreTokenCache();
+}
+
+export function getGoogleAccessToken() {
+  if (!isConnected()) restoreTokenCache();
+  return isConnected() ? accessToken : '';
+}
+
+export async function ensureGoogleAccessToken() {
+  if (isConnected() || restoreTokenCache()) return accessToken;
+  const token = await requestAccessToken();
+  return token;
+}
+
 async function loadProfile(force = false) {
   if (!isConnected()) return null;
   const token = accessToken;
@@ -214,6 +229,7 @@ export function initializeGoogleAccountMenu({
   buttonId = 'settingsButton',
   menuId = 'settingsMenu',
   avatarId = 'accountAvatarImg',
+  avatarIds = [],
   nameId = 'accountMenuName',
   emailId = 'accountMenuEmail',
   loginButtonId = 'googleLoginBtn',
@@ -223,6 +239,7 @@ export function initializeGoogleAccountMenu({
   const button = document.getElementById(buttonId);
   const menu = document.getElementById(menuId);
   const avatar = document.getElementById(avatarId);
+  const avatars = Array.from(new Set([avatar, ...[].concat(avatarIds || []).map(id => document.getElementById(id))].filter(Boolean)));
   const name = document.getElementById(nameId);
   const email = document.getElementById(emailId);
   const loginButton = document.getElementById(loginButtonId);
@@ -245,10 +262,12 @@ export function initializeGoogleAccountMenu({
       email.textContent = emailText;
       email.hidden = !emailText;
     }
-    if (avatar) {
+    if (avatars.length) {
       const target = photo || GUEST_AVATAR_URL;
-      if (avatar.getAttribute('src') !== target) avatar.src = target;
-      avatar.alt = '';
+      avatars.forEach(node => {
+        if (node.getAttribute('src') !== target) node.src = target;
+        node.alt = '';
+      });
     }
     if (button) {
       button.dataset.connected = connected ? 'true' : 'false';
@@ -299,10 +318,11 @@ export function initializeGoogleAccountMenu({
     }
   };
 
-  const handleAvatarError = () => {
-    if (!avatar) return;
-    const current = avatar.getAttribute('src') || '';
-    if (current !== GUEST_AVATAR_URL) avatar.src = GUEST_AVATAR_URL;
+  const handleAvatarError = (event) => {
+    const node = event?.currentTarget;
+    if (!node) return;
+    const current = node.getAttribute('src') || '';
+    if (current !== GUEST_AVATAR_URL) node.src = GUEST_AVATAR_URL;
   };
 
   const handleStorage = event => {
@@ -313,7 +333,7 @@ export function initializeGoogleAccountMenu({
   };
 
   loginButton?.addEventListener('click', handleLoginClick);
-  avatar?.addEventListener('error', handleAvatarError);
+  avatars.forEach(node => node.addEventListener('error', handleAvatarError));
   window.addEventListener('storage', handleStorage);
 
   if (readAutoReconnect() && restoreTokenCache()) {
@@ -331,7 +351,7 @@ export function initializeGoogleAccountMenu({
     destroy() {
       destroyed = true;
       loginButton?.removeEventListener('click', handleLoginClick);
-      avatar?.removeEventListener('error', handleAvatarError);
+      avatars.forEach(node => node.removeEventListener('error', handleAvatarError));
       window.removeEventListener('storage', handleStorage);
       clearExpiryTimer();
     },

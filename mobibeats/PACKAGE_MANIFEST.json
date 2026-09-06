@@ -1,10 +1,10 @@
 {
   "name": "MobiBeats",
   "display_name": "모비비트",
-  "version": "5.1.0",
+  "version": "5.3.0",
   "type": "repository-integrated-static-webpage",
   "deployment_root": "repository-root",
-  "updated_utc": "2026-08-19T07:31:06Z",
+  "updated_utc": "2026-09-06T14:31:39Z",
   "entry": "index.html",
   "files": [
     {
@@ -14,35 +14,35 @@
     },
     {
       "path": "README.md",
-      "size": 2934,
-      "sha256": "3440f349c12b6f787dd6ef6c8c76ff4ba19177fc0718db8457f97a1d93aaea20"
+      "size": 2334,
+      "sha256": "e6aae595453ea117552c003f7a618afa066b48b5ad22bf1920c7c30615f1654c"
     },
     {
       "path": "index.html",
-      "size": 15907,
-      "sha256": "5c9c3ab0fe1ed3e4dc325e0315c74be4d9359c63956ee0a03a53f568c837a91e"
+      "size": 16015,
+      "sha256": "424e109f689cc3fc529ef064988d830f688681692ef8f00f0c7d8120d87cb275"
     },
     {
       "path": "js/game.js",
       "size": 112756,
-      "sha256": "9399b406bfe93839c3009cde26eac3f8a369aea11d005e79cd271a4e9e17c5f6"
+      "sha256": "6b73232191e09fd28bb21ea180e89a6df2aa121e41d3b26ad18c3d97c51bb82a"
     },
     {
       "path": "js/runtime.js",
       "size": 1901,
-      "sha256": "adee6c6324fe8d3ab38ebe1d9c362f14de0a169d7d7581ea66b80ca6dd047270"
+      "sha256": "1ab39a75c688029f095fcb21f9f1ccc571eb1f89a54787d39d9f9efe52acef9c"
     },
     {
       "path": "styles.css",
-      "size": 31391,
-      "sha256": "46bff89bbc7a67d9fbc3c0569e0b804ba5a961751bf477aef9e3ec0fd14059e8"
+      "size": 31395,
+      "sha256": "7d26a4cd34b82c535fc6881953f8f1d99c1c5608902a3cf84e23f6e89214ede9"
     }
   ],
   "shared_dependencies": [
     {
       "path": "../assets/default_sf3.js",
-      "size": 13438899,
-      "sha256": "2a5452f0b40cc15fc3866b84be50c6507fe2381859c6abd8984f9081079cdf0a"
+      "size": 3852327,
+      "sha256": "e6be8b1758073733637263afd420a277545d8d1ad8ed524b9de3fa5fe53681ee"
     },
     {
       "path": "../assets/favicon.ico",
@@ -57,32 +57,27 @@
     {
       "path": "../plugins/common/utils.js",
       "size": 21911,
-      "sha256": "9c4cc7ef27ce9833d63441d3a372e75bd0898c261fe258e7dcca53f5019c65da"
+      "sha256": "9747340d0a7c97acf3d1be26e7d3649b04a6d81fd1ded0778a9d0ca8fb89fc04"
     },
     {
       "path": "../plugins/common/mml-parser.js",
       "size": 25494,
-      "sha256": "1da4a0c02f8b058a24979e09663ea370a2c45329b6034b39079030474281ea29"
+      "sha256": "40b036ec05e262a0081c8e3753ad77c3605e22141266dd898037ce0b2ec441ec"
     },
     {
       "path": "../plugins/formats/midi/midi-parser.js",
-      "size": 22299,
-      "sha256": "e83f626dffd080fec088b5321d7f812dd33dcf48a969a798c4bd83a9c6b682b1"
+      "size": 24285,
+      "sha256": "8c60cfd02f1b0227c6ca325b54a41986bb08818d7e808717b1d7686534436e12"
     },
     {
       "path": "../plugins/formats/soundbank/soundbank.js",
-      "size": 42998,
-      "sha256": "1bd20e6e1e62eb4f1666235e94624c3b79098f0a52012d56f794f46c7058b053"
-    },
-    {
-      "path": "../assets/licenses/FluidR3Mono_GM_LICENSE.md",
-      "size": 3301,
-      "sha256": "a9a221bd0419b92456575418b848e5ef550c522eec38fabdcc4a1606b92658aa"
+      "size": 51805,
+      "sha256": "885f30ca5d11d5c77d9a7445207b5833028ed7ba88e9c185741598c4208d2b58"
     },
     {
       "path": "../THIRD-PARTY-NOTICES.md",
-      "size": 7297,
-      "sha256": "f737924720b4d73fe072f4ae620b129aae4d6ce0a731f6c3cf54b3869fb0f6f1"
+      "size": 6480,
+      "sha256": "00900bb7df73266ab12b944f38cfc972c39bd7ea71b5ecdc311a00b627cfdf13"
     }
   ]
 }

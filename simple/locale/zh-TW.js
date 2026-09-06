@@ -6,7 +6,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-TW"] = {
   "strings": {
     "title": "MML 簡易產生器",
     "brand": "Mobibard",
-    "browserTitle": "Mobibard v5.2",
+    "browserTitle": "Mobibard v5.3",
     "subtitle": "載入檔案後，即可快速轉換為固定 3 聲道 MML。",
     "stepSourceTitle": "載入檔案",
     "stepSourceDescription": "選擇 MIDI 或樂譜檔案，或貼上 MML，載入要轉換的原始內容。",

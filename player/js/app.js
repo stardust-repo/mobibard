@@ -987,6 +987,22 @@
       activateWorkspaceTab(["copy", "instrument", "channel", "code"].includes(snapshot.activeWorkspaceTab) ? snapshot.activeWorkspaceTab : "copy");
       if (state.activeWorkspaceTab === "channel") activateOptionFeature(state.activeOptionFeature);
       if (state.ui.manualBadge) state.ui.manualBadge.hidden = !state.manualEdited;
+
+      // A saved result string can be slightly older than the saved option state
+      // (for example when the page closes immediately after toggling tempo cleanup).
+      // Rebuild non-manual sessions from the original source + restored options so
+      // tempo cleanup, tempo scaling and the other deterministic stages are restored
+      // exactly as if the source had just been loaded. Manual code edits are the one
+      // exception: their saved result is intentional and must remain byte-for-byte.
+      if (!state.manualEdited) {
+        state.lastApplySignature = "";
+        applyFromSource({ force: true });
+      } else {
+        const restoredAnalysis = getTempoCleanupAnalysis(String(mainMml?.value || state.sourceMml));
+        state.tempoCleanCount = Math.max(0, Number(restoredAnalysis?.removedCount) || 0);
+        updateTempoCleanButton();
+      }
+
       clearPendingPlaybackPreview();
       scheduleChannelCountsUpdate();
       scheduleCopyRowsRender();
@@ -3947,7 +3963,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   window.__MOBIBARD_PLAYER_APP_STARTED__ = true;
   "use strict";
 
-  const DEFAULT_SOUND_BANK_FILE_NAME = String(window.MOBIBARD_DEFAULT_SF3_NAME || "FluidR3Mono_GM_compact.sf3");
+  const DEFAULT_SOUND_BANK_FILE_NAME = String(window.MOBIBARD_DEFAULT_SF3_NAME || "MobiBard_Instruments.sf3");
   const PART_LABEL_KEYS = ["part.melody", "part.harmony1", "part.harmony2", "part.harmony3", "part.harmony4", "part.harmony5"];
   const PART_LABELS = new Proxy(PART_LABEL_KEYS, {
     get(target, property, receiver) {
@@ -9715,7 +9731,40 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       : null;
   }
 
+  function resolveDefaultMappedPreviewPreset(preview) {
+    const mapper = window.MobibardDefaultInstrumentMap;
+    if (!mapper?.resolveRequest) return null;
+    const previewMidi = Number.isFinite(Number(preview?.midi))
+      ? Math.trunc(Number(preview.midi))
+      : (Number.isFinite(Number(preview?.drumMidi))
+        ? Math.trunc(Number(preview.drumMidi))
+        : (Number.isFinite(Number(preview?.notes?.[0]?.midi)) ? Math.trunc(Number(preview.notes[0].midi)) : null));
+    const target = mapper.resolveRequest({
+      program: preview?.program,
+      preset: preview?.program,
+      bank: preview?.isBeat ? 128 : 0,
+      midi: previewMidi,
+      drumMidi: previewMidi,
+      isDrum: Boolean(preview?.isBeat),
+      isBeat: Boolean(preview?.isBeat),
+      instrumentName: preview?.instrumentName || preview?.programText || preview?.name || "",
+    });
+    const bank = soundFont?.isEmbeddedDefault ? soundFont : defaultSoundFont;
+    const presets = Array.isArray(bank?.presets) ? bank.presets : [];
+    const preset = presets.find(item => Number(item?.bank) === 0 && Number(item?.preset) === Number(target?.preset))
+      || presets.find(item => Number(item?.bank) === 0 && Number(item?.preset) === 0)
+      || presets[0]
+      || null;
+    return preset && bank
+      ? { soundBank: bank, preset, isDrum: false, fallbackSoundBank: null, fallbackPreset: null }
+      : null;
+  }
+
   function resolvePreviewPreset(preview) {
+    if (soundFontIsDefault) {
+      const mapped = resolveDefaultMappedPreviewPreset(preview);
+      if (mapped) return mapped;
+    }
     return resolveMidiBankPreset(
       preview?.bankMsb,
       preview?.bankLsb,
@@ -9820,6 +9869,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const groupMap = new Map((groups || []).map(g => [String(g.id), g]));
     const count = clampInt(Number(partCount) || 6, 1, 6);
     const instrumentMap = window.MobibardInstrumentMap;
+    const defaultInstrumentMap = window.MobibardDefaultInstrumentMap;
 
     for (let i = 0; i < count; i++) {
       const channel = exportChannels?.[i];
@@ -9828,9 +9878,11 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         : [];
       if (!selected.length) continue;
 
-      // 설정 파일이 로드되어 있으면 선택된 모든 MIDI 악기의 노트 수를 합산해
-      // 14개 마비노기 악기 중 가장 비중이 큰 대표 음색을 고른다.
-      const mappedTarget = instrumentMap?.chooseTarget?.(selected);
+      // 기본 SoundFont는 MobiBard 전용 14개 프리셋(0~13)에 직접 매핑한다.
+      // 사용자 SoundFont에서는 기존 GM 기반 악기 배정 규칙을 그대로 유지한다.
+      const mappedTarget = soundFontIsDefault
+        ? defaultInstrumentMap?.chooseTarget?.(selected)
+        : instrumentMap?.chooseTarget?.(selected);
       if (mappedTarget?.presetKey) {
         keys[i] = sanitizePresetKey(mappedTarget.presetKey);
         continue;

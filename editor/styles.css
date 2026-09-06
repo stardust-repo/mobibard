@@ -878,6 +878,25 @@ textarea:focus-visible,
   background: #ff374c;
 }
 .playhead::after { display: none; }
+.playhead-time-label {
+  position: absolute;
+  z-index: 2;
+  top: 1px;
+  left: 50%;
+  min-width: 42px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  transform: translateX(-50%);
+  background: #ff374c;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.playhead::before { top: 18px; }
 
 .channel-tab-item.midi-document-tab-item {
   --channel-color: #3f9ad8;
@@ -5627,4 +5646,604 @@ button {
 }
 :root[data-theme="light"] .sidebar-rail-channel:not(.active):hover {
   background: color-mix(in srgb, var(--channel-color) 19%, #edf2f7) !important;
+}
+
+/* fixed61: channel merge + Player-style top-right actions. */
+.channel-tree-toolbar {
+  grid-template-columns: repeat(3, 30px) !important;
+  justify-content: start;
+}
+.channel-tree-merge-button,
+.channel-tree-add-button,
+.channel-tree-delete-button {
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  display: inline-grid;
+  place-items: center;
+}
+.channel-tree-merge-button {
+  border-color: color-mix(in srgb, #3b82f6 55%, var(--control-border));
+  background: color-mix(in srgb, #3b82f6 11%, var(--control-bg));
+  color: color-mix(in srgb, #60a5fa 86%, var(--text));
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+}
+.channel-tree-merge-button:hover:not(:disabled) {
+  background: color-mix(in srgb, #3b82f6 20%, var(--control-hover));
+}
+.channel-tree-merge-button:disabled { opacity: .38; }
+.channel-merge-dialog { width: min(500px, calc(100vw - 24px)); }
+.channel-merge-list { max-height: min(330px, 42vh); overflow: auto; }
+.channel-merge-row { border-left: 4px solid var(--channel-color); }
+.channel-merge-settings {
+  display: grid;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 70%, var(--panel));
+}
+.channel-merge-setting {
+  display: grid;
+  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.channel-merge-setting > strong { color: var(--muted); font-size: 11px; }
+.channel-merge-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.channel-merge-options button {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.channel-merge-options button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 22%, var(--control-bg));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+#channelMergeApplyButton:not(:disabled) {
+  border-color: color-mix(in srgb, #22c55e 68%, var(--control-border));
+  background: color-mix(in srgb, #22c55e 20%, var(--control-bg));
+  color: color-mix(in srgb, #b8f7ca 84%, var(--text));
+  font-weight: 850;
+}
+:root[data-theme="light"] #channelMergeApplyButton:not(:disabled) { color: #126a32; }
+
+.editor-topbar .account-actions {
+  min-width: 0;
+  gap: 6px;
+  align-items: center;
+}
+.editor-header-icon-button,
+.editor-topbar .account-actions .account-avatar-button {
+  box-sizing: border-box;
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  padding: 0 !important;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+  background: var(--panel) !important;
+  color: var(--text);
+  box-shadow: 0 2px 8px var(--panel-shadow, var(--shadow));
+  text-decoration: none;
+  overflow: hidden;
+  flex: 0 0 36px;
+}
+.editor-header-icon-button:hover,
+.editor-topbar .account-actions .account-avatar-button:hover {
+  border-color: color-mix(in srgb, var(--accent), var(--line) 56%) !important;
+  background: var(--control-hover) !important;
+}
+.editor-header-icon-button:focus-visible,
+.editor-topbar .account-actions .account-avatar-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 75%, transparent);
+  outline-offset: 2px;
+}
+.editor-info-button { font-size: 19px; font-weight: 900; line-height: 1; }
+.editor-discord-button img { width: 21px; height: 21px; display: block; object-fit: contain; }
+.editor-topbar .account-actions .account-avatar-button[aria-expanded="true"] {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-weak), 0 4px 14px var(--panel-shadow, var(--shadow));
+}
+.editor-topbar .account-actions .guest-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 0;
+  object-fit: contain;
+}
+.options-recommended-field { margin-top: 2px; }
+.options-recommended-field select { min-width: 0; width: 100%; }
+
+.shortcut-help-dialog { width: min(720px, calc(100vw - 24px)); max-height: min(760px, calc(100vh - 28px)); overflow: hidden; }
+.shortcut-help-grid {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 2px 1px 8px;
+}
+.shortcut-help-grid section {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 72%, var(--panel));
+}
+.shortcut-help-grid h3 { margin: 0 0 7px; font-size: 12px; }
+.shortcut-help-grid dl { margin: 0; display: grid; gap: 5px; }
+.shortcut-help-grid dl > div { display: grid; grid-template-columns: minmax(116px, 43%) minmax(0, 1fr); gap: 8px; align-items: start; }
+.shortcut-help-grid dt {
+  padding: 3px 6px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+.shortcut-help-grid dd { margin: 0; padding-top: 3px; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
+#shortcutHelpDoneButton { min-width: 82px; }
+
+@media (max-width: 620px) {
+  .shortcut-help-grid { grid-template-columns: 1fr; }
+  .channel-merge-setting { grid-template-columns: 1fr; gap: 5px; }
+  .editor-topbar .account-actions { gap: 4px; }
+  .editor-header-icon-button,
+  .editor-topbar .account-actions .account-avatar-button {
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    flex-basis: 34px;
+  }
+}
+
+
+/* fixed62: converging channel-merge icon + Player-like note-volume counts. */
+.channel-tree-merge-button { font-size: 0; }
+.channel-tree-merge-button .channel-merge-icon {
+  width: 19px;
+  height: 19px;
+  display: block;
+  overflow: visible;
+}
+.channel-tree-merge-button .channel-merge-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.note-volume-count-box {
+  display: grid;
+  gap: 7px;
+  margin: 0 16px 10px;
+  padding: 9px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--input-bg);
+}
+.note-volume-count-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+.note-volume-count-row > span {
+  padding-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+.note-volume-count-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+.note-volume-count-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 66px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: var(--control-bg);
+  font-size: 11.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.note-volume-count-chip em { color: var(--text); font-style: normal; }
+.note-volume-count-chip strong { color: var(--accent); font-size: 12px; }
+.note-volume-count-chip.is-empty { color: var(--muted); opacity: .7; }
+:root[data-theme="light"] .note-volume-count-box { background: #f7f9fc; }
+
+/* fixed63: match Player Discord brand button */
+.editor-topbar .account-actions .editor-discord-button {
+  border-color: #5865F2 !important;
+  background: #5865F2 !important;
+  color: #fff !important;
+  transition: transform .14s ease, filter .14s ease, box-shadow .14s ease, border-color .14s ease, background-color .14s ease;
+}
+.editor-topbar .account-actions .editor-discord-button:hover {
+  border-color: #5865F2 !important;
+  background: #5865F2 !important;
+  filter: brightness(1.08);
+  transform: none;
+}
+.editor-topbar .account-actions .editor-discord-button:active {
+  transform: translateY(0);
+}
+.editor-topbar .account-actions .editor-discord-button:focus-visible {
+  outline: 3px solid rgba(88, 101, 242, .28);
+  outline-offset: 2px;
+}
+
+/* fixed64: shared compact header, flat popups, shared merge icon, SoundFont settings. */
+
+/* Hover feedback is color-only: no vertical lift on buttons or button-like header links. */
+button:hover,
+[role="button"]:hover,
+a[class*="button"]:hover {
+  transform: none !important;
+}
+.editor-topbar .account-actions .editor-discord-button:hover { transform: none !important; }
+
+/* Keep the brand-to-file gap compact without changing the rest of the toolbar spacing. */
+.editor-topbar .brand { margin-right: -3px; }
+.editor-topbar .account-actions { gap: 3px; }
+@media (max-width: 620px) {
+  .editor-topbar .account-actions { gap: 2px; }
+}
+
+/* Playback navigation + time + volume + rate are one compact visual unit. */
+.playback-compact-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-2) 76%, var(--control-bg));
+}
+.playback-compact-box .transport-control-group {
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+}
+.playback-compact-box .transport-control-group > button {
+  min-height: 28px;
+  height: 28px;
+}
+.playback-compact-box .transport-control-group .transport-edge-button {
+  width: 27px;
+  min-width: 27px;
+  padding-inline: 2px;
+}
+.playback-compact-box .transport-control-group .transport-main-button {
+  width: 32px;
+  min-width: 32px;
+  padding-inline: 2px;
+}
+.playback-compact-box .playback-time {
+  min-width: 112px;
+  height: 28px;
+  padding-inline: 4px;
+  border: 0;
+  border-left: 1px solid var(--control-border);
+  border-right: 1px solid var(--control-border);
+  border-radius: 0;
+  background: transparent;
+  font-size: 10px;
+}
+.playback-compact-box #volumeButton,
+.playback-compact-box #playbackRateButton {
+  width: 49px;
+  min-width: 49px;
+  max-width: 49px;
+  min-height: 28px;
+  height: 28px;
+  padding-inline: 2px;
+  border-color: transparent;
+  background: transparent;
+}
+.playback-compact-box #volumeButton:hover,
+.playback-compact-box #playbackRateButton:hover { background: var(--control-hover); }
+@media (max-width: 900px) {
+  .playback-compact-box .playback-time { min-width: 104px; font-size: 9.5px; }
+  .playback-compact-box #volumeButton,
+  .playback-compact-box #playbackRateButton { width: 46px; min-width: 46px; max-width: 46px; }
+}
+
+/* First-party shared merge icon lives in the root assets/icons folder. */
+.channel-tree-merge-button .channel-merge-icon {
+  width: 19px;
+  height: 19px;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Merge option area is flat rather than a rounded card. */
+.channel-merge-settings {
+  margin-top: 7px;
+  padding: 5px 14px 7px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* History is displayed newest-first, but numbering represents chronological edit order. */
+.history-list li { counter-increment: history-step -1; }
+
+/* All Editor popups keep only the divider immediately below the title/header. */
+.popup-backdrop > section :is(
+  .transfer-dialog-summary,
+  .transfer-dialog-actions,
+  .tempo-editor-actions,
+  .time-edit-actions,
+  .midi-import-summary,
+  .midi-import-midi-controls,
+  .midi-import-selection-actions,
+  .midi-import-selection-list,
+  .mml-import-options,
+  .mml-import-status,
+  .midi-transfer-selection-actions,
+  .mml-export-selection-actions
+) {
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+}
+.popup-backdrop > section > :is(.transfer-dialog-header, .tempo-editor-header) {
+  border-bottom: 1px solid var(--line) !important;
+}
+
+/* Guest-menu SoundFont entry and its settings popup. */
+.editor-soundfont-menu-field > button {
+  min-width: 0;
+  width: 100%;
+  justify-content: flex-start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-soundfont-menu-field > button span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-soundfont-dialog { width: min(460px, calc(100vw - 24px)); }
+.editor-soundfont-body {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+.editor-soundfont-current {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.editor-soundfont-current > span { color: var(--muted); font-size: 11px; font-weight: 800; }
+.editor-soundfont-current > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.editor-soundfont-body p { margin: 0; color: var(--muted); font-size: 10.5px; line-height: 1.5; }
+.editor-soundfont-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.editor-soundfont-buttons button { flex: 1 1 120px; }
+.editor-soundfont-menu-field > button {
+  min-height: 32px;
+  padding-inline: 8px !important;
+  border: 1px solid var(--control-border) !important;
+  border-radius: 7px !important;
+  background: var(--control-bg) !important;
+  color: var(--text) !important;
+}
+.editor-soundfont-menu-field > button:hover { background: var(--control-hover) !important; }
+
+
+/* Shared merge icon is loaded directly from the first-party root assets/icons folder. */
+.channel-tree-merge-button .channel-merge-icon {
+  width: 19px;
+  height: 19px;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  background: none !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+}
+
+/* fixed69: light-theme button contrast, flat explanatory text, roomier shortcut help. */
+
+/* Light theme: neutral buttons use a consistently darker label. */
+:root[data-theme="light"] button:not(:disabled) {
+  color: #101a28;
+}
+:root[data-theme="light"] button:hover:not(:disabled) {
+  color: #07111d;
+}
+:root[data-theme="light"] :is(
+  .file-menu button,
+  .theme-menu button,
+  .account-menu button,
+  .context-menu button,
+  .channel-merge-options button,
+  .mml-import-source-actions button,
+  .mml-import-channel-header button,
+  .midi-import-inline-selection-actions button,
+  .midi-import-preview-actions button,
+  .midi-import-text-selection-actions button
+) {
+  color: #1b2a3d;
+  font-weight: 700;
+}
+:root[data-theme="light"] .channel-merge-options button[aria-pressed="true"] {
+  color: #062d59;
+  font-weight: 850;
+}
+
+/* Filled semantic buttons keep high-contrast text instead of inheriting the neutral light-theme label. */
+:root[data-theme="light"] .danger-button,
+:root[data-theme="light"] .danger-button:hover:not(:disabled) {
+  color: #ffffff !important;
+}
+:root[data-theme="light"] .time-edit-delete-button {
+  color: #0c448b !important;
+}
+:root[data-theme="light"] .time-edit-insert-button,
+:root[data-theme="light"] #channelMergeApplyButton:not(:disabled) {
+  color: #0b652d !important;
+}
+:root[data-theme="light"] .editor-topbar .account-actions .editor-discord-button {
+  color: #ffffff !important;
+}
+
+/* Explanatory copy in popups is plain text: no tinted plate behind it. */
+.popup-backdrop > section :is(
+  .transfer-dialog-help,
+  .transfer-dialog-summary,
+  .tempo-editor-help,
+  .midi-import-help,
+  .midi-import-summary,
+  .mml-import-status,
+  .midi-import-status,
+  .midi-import-selection-info
+) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+:root[data-theme="light"] .transfer-dialog-summary,
+:root[data-theme="light"] .midi-import-summary {
+  background: transparent !important;
+}
+.editor-soundfont-body p {
+  background: transparent !important;
+}
+
+/* Shortcut help: remove card crowding and make key/description rows breathe. */
+.shortcut-help-dialog {
+  width: min(800px, calc(100vw - 28px));
+  max-height: min(780px, calc(100vh - 28px));
+}
+.shortcut-help-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  row-gap: 20px;
+  padding: 16px 18px 18px;
+  scrollbar-gutter: stable;
+}
+.shortcut-help-grid section {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.shortcut-help-grid h3 {
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 850;
+  letter-spacing: .01em;
+}
+.shortcut-help-grid dl {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.shortcut-help-grid dl > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(146px, 42%) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+.shortcut-help-grid dt {
+  justify-self: start;
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 850;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.shortcut-help-grid dd {
+  margin: 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+:root[data-theme="light"] .shortcut-help-grid dt {
+  border-color: #9aa8ba;
+  background: #f7f9fc;
+  color: #101a28;
+}
+:root[data-theme="light"] .shortcut-help-grid dd {
+  color: #3f4f63;
+}
+#shortcutHelpDoneButton { min-width: 76px; }
+
+@media (max-width: 700px) {
+  .shortcut-help-dialog { width: min(620px, calc(100vw - 18px)); }
+  .shortcut-help-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 14px 14px 16px;
+  }
+  .shortcut-help-grid dl > div {
+    grid-template-columns: minmax(132px, 40%) minmax(0, 1fr);
+    gap: 10px;
+  }
+}
+@media (max-width: 430px) {
+  .shortcut-help-grid dl > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .shortcut-help-grid dt { white-space: normal; }
+}
+
+/* Legacy/import summary tiles inside popup layers also stay flat. */
+.popup-backdrop > section .midi-import-summary > span {
+  background: transparent !important;
+  box-shadow: none !important;
 }

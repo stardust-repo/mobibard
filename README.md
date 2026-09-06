@@ -1,4 +1,4 @@
-# 모비바드 v5.2
+# 모비바드 v5.3
 
 마지막 갱신: 2026-08-30 KST
 
@@ -21,7 +21,7 @@
 - 음가·음높이·조표·박자 등 악보 포맷 사이에서 반복되던 계산을 공용 기보 유틸리티로 통합했습니다.
 - 압축 해제, XML 해석, 바이트 변환 등 포맷별로 중복되던 기반 기능은 공용 유틸리티를 사용합니다.
 - Finale·Guitar Pro·보컬 포맷의 확장자별 중복 등록 스크립트를 포맷군별 단일 등록 파일로 정리했습니다.
-- SF2·SF3·DLS 해석과 샘플 준비는 공용 SoundBank 계층을 사용합니다. 네 제품의 `assets/default_sf3.js`에는 `FluidR3Mono_GM_compact.sf3`가 내장되며 저작권·MIT 라이선스는 `assets/licenses/FluidR3Mono_GM_LICENSE.md`에 보존합니다. Compact 음원은 사용자 제공 FluidR3Mono_GM.sf3의 샘플 구조를 유지하고 Ogg Vorbis VBR q=0으로 재인코딩한 경량 기본 음원입니다.
+- SF2·SF3·DLS 해석과 샘플 준비는 공용 SoundBank 계층을 사용합니다. `assets/default_sf3.js`에는 자체 제작 `MobiBard_Instruments.sf3`가 내장되며 Piano·Chalumeau·Flute·Harp·Lute·Mandolin·Violin·Xylophone·MusicBox·Guitar·Harmonica·Cat·BigDrum·Cymbals의 14개 전용 프리셋을 제공합니다.
 - MUSX, MNX, MSCZ, MSCX 입력을 추가했습니다. 각 형식은 표준 MIDI로 정규화된 뒤 동일한 공용 MIDI 파서를 사용합니다.
 - 배포에 사용되지 않는 Guitar Pro 개발 소스와 테스트 전용 코드·샘플은 최종 패키지에서 제외했습니다.
 - 지원 파일 팝업의 제목을 버튼과 같은 `지원 파일`로 통일하고, 글꼴의 × 문자를 사용하던 닫기 버튼을 중앙 정렬된 SVG 아이콘으로 교체했습니다.
@@ -36,7 +36,7 @@
 
 ## 변경된 프로젝트
 
-| 프로젝트 | v5.2 UI 기준 |
+| 프로젝트 | v5.3 UI 기준 |
 |---|---|
 | Simple | 최대 3채널 간편 변환, Player와 동일한 전체 화면 MobiBeats 연동, 명확한 처음 이동 아이콘, 본문 `지원 음악 파일 → MML` 문구 제거 |
 | Player | 새 입력 시 하부 작업 초기화, MIDI 최초 채널 자동 적용, draft 재생 미리보기, 저장/복사 미적용 경고, 실제 편집 후에만 마지막 상태 기록/복원, 악기/채널 옵션 UI 및 모바일 정렬 최종 정비 |

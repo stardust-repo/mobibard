@@ -25,6 +25,25 @@
     return presets[0] || null;
   }
 
+  function resolvePresetRequest(soundBank, program = 0, bank = 0, midi = null, exactPreset = false) {
+    const safeProgram = clamp(Math.round(Number(program) || 0), 0, 127);
+    const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
+    if (exactPreset || !soundBank?.isEmbeddedDefault) return { program: safeProgram, bank: safeBank };
+    const mapper = window.MobibardDefaultInstrumentMap;
+    if (!mapper?.resolveRequest) return { program: safeProgram, bank: safeBank };
+    const target = mapper.resolveRequest({
+      program: safeProgram,
+      preset: safeProgram,
+      bank: safeBank,
+      midi: Number.isFinite(Number(midi)) ? Math.trunc(Number(midi)) : null,
+      isDrum: safeBank === 128,
+    });
+    return {
+      program: clamp(Math.round(Number(target?.preset) || 0), 0, 127),
+      bank: 0,
+    };
+  }
+
   function findExactZone(soundFont, midi, velocity) {
     if (!soundFont || !Array.isArray(soundFont.zones)) return null;
     for (const zone of soundFont.zones) {
@@ -218,41 +237,86 @@
       return this.preparePromise;
     }
 
+    clearSoundBankCaches() {
+      this.soundFonts.clear();
+      this.bufferCache.clear();
+      this.zoneCache.clear();
+      this.zoneOutputCache.clear();
+      this.preparePromise = null;
+    }
+
+    async useSoundBank(source, options = {}) {
+      const shared = window.MabiSoundBank;
+      if (!shared) throw new Error("SoundBank 플러그인을 사용할 수 없습니다.");
+      let parsed = source;
+      if (source && typeof source.arrayBuffer === "function") {
+        if (typeof shared.parseSoundBankFile !== "function") throw new Error("SoundBank 파일 파서를 사용할 수 없습니다.");
+        parsed = await shared.parseSoundBankFile(source, options);
+      } else if (source instanceof ArrayBuffer || ArrayBuffer.isView(source)) {
+        if (typeof shared.parseSoundBank !== "function") throw new Error("SoundBank 파서를 사용할 수 없습니다.");
+        parsed = await shared.parseSoundBank(source, options);
+      }
+      if (!parsed || !Array.isArray(parsed.presets) || !parsed.presets.length) {
+        throw new Error("재생 가능한 SoundBank 프리셋이 없습니다.");
+      }
+      this.stopAll();
+      this.clearSoundBankCaches();
+      this.soundBank = parsed;
+      const preset = selectSharedPreset(this.soundBank, this.presetNumber, this.bankNumber);
+      this.soundFont = adaptSharedPreset(this.soundBank, preset);
+      this.soundFonts.set(`${this.soundFont.bank}:${this.soundFont.preset}`, this.soundFont);
+      this.soundFonts.set(`${this.bankNumber}:${this.presetNumber}`, this.soundFont);
+      this.preparePromise = Promise.resolve(this.soundFont);
+      const label = String(options?.label || this.soundBank.fileName || "SoundBank");
+      this.emitStatus(`${label} · ${this.soundFont.presetName}`, "ready");
+      return this.soundFont;
+    }
+
+    async restoreDefaultSoundBank() {
+      this.stopAll();
+      this.clearSoundBankCaches();
+      this.soundBank = null;
+      this.soundFont = null;
+      this.emitStatus("공용 SF3 음원 준비", "loading");
+      return this.prepare();
+    }
+
     async ensureReady() {
       await this.resume();
       await this.prepare();
       return this;
     }
 
-    getSoundFont(program = this.presetNumber, bank = this.bankNumber) {
+    getSoundFont(program = this.presetNumber, bank = this.bankNumber, midi = null, exactPreset = false) {
       if (!this.soundBank || !this.soundFont) return null;
       const safeProgram = clamp(Math.round(Number(program) || 0), 0, 127);
       const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
-      const key = `${safeBank}:${safeProgram}`;
+      const resolved = resolvePresetRequest(this.soundBank, safeProgram, safeBank, midi, exactPreset);
+      const key = `${resolved.bank}:${resolved.program}`;
       if (this.soundFonts.has(key)) return this.soundFonts.get(key);
       try {
-        const preset = selectSharedPreset(this.soundBank, safeProgram, safeBank);
+        const preset = selectSharedPreset(this.soundBank, resolved.program, resolved.bank);
         const parsed = adaptSharedPreset(this.soundBank, preset);
         this.soundFonts.set(`${parsed.bank}:${parsed.preset}`, parsed);
         this.soundFonts.set(key, parsed);
         return parsed;
       } catch {
-        // Missing percussion must not silently turn into the initial melodic preset.
-        if (safeBank === 128) return null;
+        // User SoundFonts keep the old rule: a missing percussion bank stays silent.
+        if (!this.soundBank?.isEmbeddedDefault && safeBank === 128) return null;
         return this.soundFont;
       }
     }
 
-    async prepareProgram(program = 0, bank = 0) {
+    async prepareProgram(program = 0, bank = 0, options = null) {
       await this.ensureReady();
-      const parsed = this.getSoundFont(program, bank);
+      const parsed = this.getSoundFont(program, bank, null, Boolean(options?.exactPreset));
       await new Promise((resolve) => setTimeout(resolve, 0));
       return parsed;
     }
 
-    findZone(midi, velocity, program = this.presetNumber, bank = this.bankNumber) {
+    findZone(midi, velocity, program = this.presetNumber, bank = this.bankNumber, exactPreset = false) {
       const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
-      const soundFont = this.getSoundFont(program, safeBank);
+      const soundFont = this.getSoundFont(program, safeBank, midi, exactPreset);
       if (!soundFont) return null;
       const cacheKey = `${safeBank}:${soundFont.bank}:${soundFont.preset}:${Math.round(midi)}:${Math.floor(clamp(velocity, 0, 127) / 16)}`;
       if (this.zoneCache.has(cacheKey)) {
@@ -299,9 +363,10 @@
         const velocity = typeof item === "number" ? 100 : clamp(Number(item?.velocity) || 100, 1, 127);
         const program = typeof item === "number" ? this.presetNumber : clamp(Number(item?.instrumentProgram) || 0, 0, 127);
         const bank = typeof item === "number" ? this.bankNumber : clamp(Number(item?.instrumentBank) || 0, 0, 16383);
+        const exactPreset = typeof item === "number" ? false : Boolean(item?.instrumentExactPreset);
         if (!Number.isFinite(pitch)) continue;
-        const soundFont = this.getSoundFont(program, bank);
-        const zone = this.findZone(pitch, velocity, program, bank);
+        const soundFont = this.getSoundFont(program, bank, pitch, exactPreset);
+        const zone = this.findZone(pitch, velocity, program, bank, exactPreset);
         if (zone) zones.set(`${soundFont?.bank || 0}:${soundFont?.preset || program}:${zone.sampleId}`, zone);
       }
       const pending = [...zones.values()].filter((zone) => !this.bufferCache.has(zone.sampleId));
@@ -360,12 +425,12 @@
       return buffer;
     }
 
-    createSf2Voice(midi, velocity, when, duration, program = this.presetNumber, bank = this.bankNumber, gainScale = 1) {
+    createSf2Voice(midi, velocity, when, duration, program = this.presetNumber, bank = this.bankNumber, gainScale = 1, exactPreset = false) {
       const context = this.ensureContext();
       const safeGainScale = Number.isFinite(Number(gainScale))
         ? clamp(Number(gainScale), 0, 1.5)
         : 1;
-      const zone = this.findZone(midi, velocity, program, bank);
+      const zone = this.findZone(midi, velocity, program, bank, exactPreset);
       if (!zone) {
         // A missing drum key should stay silent rather than become a pitched synth.
         if (clamp(Math.round(Number(bank) || 0), 0, 16383) === 128) return null;
@@ -560,8 +625,9 @@
       const gainScale = Number.isFinite(Number(options?.gainScale))
         ? clamp(Number(options.gainScale), 0, 1.5)
         : 1;
+      const exactPreset = Boolean(options?.exactPreset);
       if (this.soundFont) {
-        return this.createSf2Voice(midi, velocity, startAt, duration, program, bank, gainScale);
+        return this.createSf2Voice(midi, velocity, startAt, duration, program, bank, gainScale, exactPreset);
       }
       return this.createFallbackVoice(midi, velocity, startAt, duration, gainScale);
     }

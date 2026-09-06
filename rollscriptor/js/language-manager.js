@@ -63,7 +63,7 @@ async function loadLocale(language) {
   const normalized = SUPPORTED[language] ? language : DEFAULT_LANGUAGE;
   if (cache.has(normalized)) return cache.get(normalized);
   const config = SUPPORTED[normalized];
-  const module = await import(`../locale/${config.file}?v=20260905-workflow-step3-1`);
+  const module = await import(`../locale/${config.file}?v=20260906-locale-prune1`);
   const locale = module.default || module.locale || module;
   if (!locale || typeof locale !== 'object' || !locale.strings) throw new Error(`Invalid RollScriptor locale: ${normalized}`);
   cache.set(normalized, locale);

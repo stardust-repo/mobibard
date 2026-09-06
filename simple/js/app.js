@@ -14,7 +14,7 @@
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
   const LOCALE_VERSION = "5.2.0";
-  const LOCALE_REVISION = "20260831-simple-result-section1";
+  const LOCALE_REVISION = "20260906-locale-prune1";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 

@@ -1,0 +1,186 @@
+:root {
+  color-scheme: dark;
+  --bg: #11151c;
+  --panel: #181e28;
+  --panel-hover: #202838;
+  --text: #edf3ff;
+  --muted: #9ca9bc;
+  --border: #2a3445;
+  --accent: #5b9dff;
+  --accent-soft: rgba(91, 157, 255, .13);
+  --shadow: 0 18px 50px rgba(0, 0, 0, .18);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panel-hover: #f8fbff;
+  --text: #172033;
+  --muted: #637087;
+  --border: #d9e1ec;
+  --accent: #1769d2;
+  --accent-soft: rgba(23, 105, 210, .09);
+  --shadow: 0 16px 42px rgba(38, 55, 78, .08);
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, Pretendard, "Noto Sans KR", "Noto Sans JP", "Segoe UI", sans-serif;
+}
+a { color: inherit; }
+button, select { font: inherit; }
+.home-shell {
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 48px 0 34px;
+}
+.hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 0 2px 26px;
+}
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.eyebrow span { opacity: .82; }
+h1 {
+  margin: 0;
+  font-size: clamp(34px, 5vw, 56px);
+  line-height: .98;
+  letter-spacing: -.045em;
+}
+.hero-copy {
+  max-width: 700px;
+  margin: 15px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.65;
+}
+.language-control {
+  display: grid;
+  gap: 6px;
+  min-width: 142px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.language-control select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0 32px 0 11px;
+  background: var(--panel);
+  color: var(--text);
+  outline: none;
+}
+.language-control select:focus { border-color: var(--accent); }
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.product-card {
+  position: relative;
+  min-width: 0;
+  min-height: 218px;
+  display: flex;
+  flex-direction: column;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  transition: background-color .16s ease, border-color .16s ease;
+}
+.product-card:hover,
+.product-card:focus-visible {
+  background: var(--panel-hover);
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  outline: none;
+}
+.product-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.product-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 21px;
+  font-weight: 800;
+}
+.product-kind {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.product-name {
+  margin: 20px 0 7px;
+  font-size: 21px;
+  line-height: 1.2;
+  letter-spacing: -.025em;
+}
+.alpha-badge {
+  display: inline-flex;
+  margin-left: 7px;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  vertical-align: 3px;
+}
+.product-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.product-open {
+  margin-top: auto;
+  padding-top: 18px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+}
+.home-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 25px 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 900px) {
+  .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .home-shell { width: min(100% - 24px, 1180px); padding-top: 28px; }
+  .hero { align-items: stretch; flex-direction: column; gap: 18px; }
+  .language-control { width: 150px; }
+  .product-grid { grid-template-columns: 1fr; }
+  .product-card { min-height: 188px; }
+  .home-footer { flex-direction: column; gap: 4px; }
+}

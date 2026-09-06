@@ -1485,8 +1485,6 @@ button{
   transition: background .14s ease, color .14s ease, border-color .14s ease, box-shadow .14s ease, transform .14s ease, filter .14s ease;
 }
 button:not(:disabled):hover{
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--panel-shadow);
   filter: brightness(1.02);
 }
 button:not(.primary):not(:disabled):hover {
@@ -1684,8 +1682,6 @@ iframe[src*="apis.google.com/picker"] {
 #midiExtractBtn.midi-extract-toolbar-button:hover {
   color: #fff;
   filter: brightness(1.08);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px color-mix(in srgb, #6955df 36%, transparent), 0 1px 0 rgba(255,255,255,.28) inset;
 }
 #midiExtractBtn.midi-extract-toolbar-button:active { transform: translateY(0); }
 #midiExtractBtn.midi-extract-toolbar-button:focus-visible {
@@ -1729,8 +1725,6 @@ iframe[src*="apis.google.com/picker"] {
 #rhythmGameBtn.rhythm-game-toolbar-button:hover {
   color: #fff;
   filter: brightness(1.09);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px color-mix(in srgb, #0f766e 38%, transparent), 0 1px 0 rgba(255,255,255,.28) inset;
 }
 #rhythmGameBtn.rhythm-game-toolbar-button:active { transform: translateY(0); }
 #rhythmGameBtn.rhythm-game-toolbar-button:focus-visible {
@@ -1764,8 +1758,6 @@ iframe[src*="apis.google.com/picker"] {
 .simple-version-toolbar-button:hover {
   color: #fff;
   filter: brightness(1.08);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px color-mix(in srgb, #e11d48 38%, transparent), 0 1px 0 rgba(255,255,255,.28) inset;
 }
 .simple-version-toolbar-button:active { transform: translateY(0); }
 .simple-version-toolbar-button:focus-visible {
@@ -3114,8 +3106,6 @@ button.soft-tool-button.soft-tool-button:not(:disabled):active {
   border-color: var(--accent);
   background: var(--control-hover);
   color: var(--text);
-  box-shadow: 0 3px 8px var(--panel-shadow);
-  transform: translateY(-1px);
 }
 .player-file-actions-special > .import-format-list.mabi-supported-files-button:active {
   box-shadow: 0 1px 2px var(--panel-shadow);
@@ -8929,10 +8919,10 @@ body.player-ui > main {
   transition: transform .14s ease, filter .14s ease, box-shadow .14s ease, border-color .14s ease, background-color .14s ease !important;
 }
 .player-ui .player-topbar .discord-icon-button:hover {
-  transform: translateY(-1px) !important;
+  transform: none !important;
 }
 .player-ui .player-topbar #accountMenuButton[data-connected="false"].account-avatar-button[aria-expanded="false"]:hover {
-  transform: translateY(-1px) !important;
+  transform: none !important;
 }
 .player-ui .player-topbar .discord-icon-button:active {
   transform: translateY(0) !important;
@@ -10072,4 +10062,11 @@ html[data-player-layout="player-ui"][data-player-ui-booting="true"] main > :not(
     min-width: 62px;
     padding-inline: 10px;
   }
+}
+
+/* fixed64: hover feedback is color-only; buttons no longer lift vertically. */
+button:hover,
+[role="button"]:hover,
+a[class*="button"]:hover {
+  transform: none !important;
 }

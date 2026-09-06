@@ -18,7 +18,7 @@
     schedulePreparedNotes,
   } = window.MobiBeatsPlugins;
 
-  const APP_VERSION = "5.1.0";
+  const APP_VERSION = "5.3.0";
   const PART_LABELS = ["멜로디", "화음1", "화음2", "화음3", "화음4", "화음5"];
   const KEY_CONFIGS = {
     4: [

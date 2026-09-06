@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION_LABEL = "v5.2";
+  const APP_VERSION_LABEL = "v5.3";
 
   const CONFIG = {
     defaultChannelCount: 1,
@@ -136,7 +136,6 @@
 
   const elements = {
     app: document.querySelector("#app"),
-    workspace: document.querySelector(".workspace"),
     appContent: document.querySelector(".app-content"),
     sidePanel: document.querySelector("#sidePanel"),
     sidebarChannelsTab: document.querySelector("#sidebarChannelsTab"),
@@ -144,7 +143,6 @@
     pianoSection: document.querySelector(".piano-section"),
     historyPanel: document.querySelector("#historyPanel"),
     historyCornerToggle: document.querySelector("#historyCornerToggle"),
-    sidebarCollapsedRail: document.querySelector("#sidebarCollapsedRail"),
     collapsedAddChannelButton: document.querySelector("#collapsedAddChannelButton"),
     collapsedDeleteChannelsButton: document.querySelector("#collapsedDeleteChannelsButton"),
     collapsedChannelList: document.querySelector("#collapsedChannelList"),
@@ -164,6 +162,8 @@
     editDeleteButton: document.querySelector("#editDeleteButton"),
     editNoteVolumeButton: document.querySelector("#editNoteVolumeButton"),
     fileExportButton: document.querySelector("#fileExportButton"),
+    midiExportButton: document.querySelector("#midiExportButton"),
+    midiExtractButton: document.querySelector("#midiExtractButton"),
     supportedFilesMenuButton: document.querySelector("#supportedFilesMenuButton"),
     mmlImportButton: document.querySelector("#mmlImportButton"),
     newButton: document.querySelector("#newButton"),
@@ -201,14 +201,26 @@
     zoomValue: document.querySelector("#zoomValue"),
     zoomResetButton: document.querySelector("#zoomResetButton"),
     themeButton: document.querySelector("#themeButton"),
-    themeIcon: document.querySelector("#themeIcon"),
     themeMenu: document.querySelector("#themeMenu"),
     themeToggleButton: document.querySelector("#themeToggleButton"),
     themeToggleButtonText: document.querySelector("#themeToggleButtonText"),
     languageSelect: document.querySelector("#languageSelect"),
+    editorRecommendedLinks: document.querySelector("#editorRecommendedLinks"),
+    editorSoundFontSettingsButton: document.querySelector("#editorSoundFontSettingsButton"),
+    editorSoundFontMenuLabel: document.querySelector("#editorSoundFontMenuLabel"),
+    editorSoundFontBackdrop: document.querySelector("#editorSoundFontBackdrop"),
+    editorSoundFontCloseButton: document.querySelector("#editorSoundFontCloseButton"),
+    editorSoundFontDoneButton: document.querySelector("#editorSoundFontDoneButton"),
+    editorSoundFontCurrentName: document.querySelector("#editorSoundFontCurrentName"),
+    editorSoundFontFileInput: document.querySelector("#editorSoundFontFileInput"),
+    editorSoundFontLoadButton: document.querySelector("#editorSoundFontLoadButton"),
+    editorSoundFontResetButton: document.querySelector("#editorSoundFontResetButton"),
+    shortcutHelpButton: document.querySelector("#shortcutHelpButton"),
+    shortcutHelpBackdrop: document.querySelector("#shortcutHelpBackdrop"),
+    shortcutHelpCloseButton: document.querySelector("#shortcutHelpCloseButton"),
+    shortcutHelpDoneButton: document.querySelector("#shortcutHelpDoneButton"),
     googleAccountButton: document.querySelector("#googleAccountButton"),
     googleAccountMenu: document.querySelector("#googleAccountMenu"),
-    googleLoginButton: document.querySelector("#googleLoginButton"),
     noteToolButton: document.querySelector("#noteToolButton"),
     selectToolButton: document.querySelector("#selectToolButton"),
     overviewTimelineCanvas: document.querySelector("#overviewTimelineCanvas"),
@@ -220,13 +232,14 @@
     rollSpacer: document.querySelector("#rollSpacer"),
     rollCanvas: document.querySelector("#rollCanvas"),
     playhead: document.querySelector("#playhead"),
+    playheadTimeLabel: document.querySelector("#playheadTimeLabel"),
     horizontalScrollBar: document.querySelector("#horizontalScrollBar"),
     horizontalScrollThumb: document.querySelector("#horizontalScrollThumb"),
     verticalScrollBar: document.querySelector("#verticalScrollBar"),
     verticalScrollThumb: document.querySelector("#verticalScrollThumb"),
-    verticalSplitter: document.querySelector("#verticalSplitter"),
     channelPanel: document.querySelector("#channelPanel"),
     channelTabs: document.querySelector("#channelTabs"),
+    mergeChannelsButton: document.querySelector("#mergeChannelsButton"),
     addChannelButton: document.querySelector("#addChannelButton"),
     deleteChannelsButton: document.querySelector("#deleteChannelsButton"),
     copyChannelButton: document.querySelector("#copyChannelButton"),
@@ -236,12 +249,7 @@
     channelInstrumentSelect: document.querySelector("#channelInstrumentSelect"),
     deleteChannelButton: document.querySelector("#deleteChannelButton"),
     clearChannelButton: document.querySelector("#clearChannelButton"),
-    channelMuteMixerButton: document.querySelector("#channelMuteMixerButton"),
     channelMuteBackdrop: document.querySelector("#channelMuteBackdrop"),
-    channelMuteMixer: document.querySelector("#channelMuteMixer"),
-    channelMuteMixerCloseButton: document.querySelector("#channelMuteMixerCloseButton"),
-    muteAllChannelsButton: document.querySelector("#muteAllChannelsButton"),
-    unmuteAllChannelsButton: document.querySelector("#unmuteAllChannelsButton"),
     channelMuteList: document.querySelector("#channelMuteList"),
     channelTitle: document.querySelector("#channelTitle"),
     channelColorInput: document.querySelector("#channelColorInput"),
@@ -261,7 +269,6 @@
     midiCopyInstrumentButton: document.querySelector("#midiCopyInstrumentButton"),
     midiTransferButton: document.querySelector("#midiTransferButton"),
     mmlImportBackdrop: document.querySelector("#mmlImportBackdrop"),
-    mmlImportDialog: document.querySelector("#mmlImportDialog"),
     mmlImportCloseButton: document.querySelector("#mmlImportCloseButton"),
     mmlImportCancelButton: document.querySelector("#mmlImportCancelButton"),
     mmlImportApplyButton: document.querySelector("#mmlImportApplyButton"),
@@ -277,7 +284,6 @@
     mmlImportSelectAllButton: document.querySelector("#mmlImportSelectAllButton"),
     mmlImportClearSelectionButton: document.querySelector("#mmlImportClearSelectionButton"),
     midiImportBackdrop: document.querySelector("#midiImportBackdrop"),
-    midiImportDialog: document.querySelector("#midiImportDialog"),
     midiImportTitle: document.querySelector("#midiImportTitle"),
     midiImportSourceLabel: document.querySelector("#midiImportSourceLabel"),
     midiImportSummary: document.querySelector("#midiImportSummary"),
@@ -300,7 +306,6 @@
     midiImportApplyButton: document.querySelector("#midiImportApplyButton"),
     midiImportNewButton: document.querySelector("#midiImportNewButton"),
     mmlExportBackdrop: document.querySelector("#mmlExportBackdrop"),
-    mmlExportDialog: document.querySelector("#mmlExportDialog"),
     mmlExportCloseButton: document.querySelector("#mmlExportCloseButton"),
     mmlExportSelectAllButton: document.querySelector("#mmlExportSelectAllButton"),
     mmlExportClearAllButton: document.querySelector("#mmlExportClearAllButton"),
@@ -308,8 +313,17 @@
     mmlExportSummary: document.querySelector("#mmlExportSummary"),
     mmlExportCancelButton: document.querySelector("#mmlExportCancelButton"),
     mmlExportApplyButton: document.querySelector("#mmlExportApplyButton"),
+    channelMergeBackdrop: document.querySelector("#channelMergeBackdrop"),
+    channelMergeCloseButton: document.querySelector("#channelMergeCloseButton"),
+    channelMergeCancelButton: document.querySelector("#channelMergeCancelButton"),
+    channelMergeApplyButton: document.querySelector("#channelMergeApplyButton"),
+    channelMergeSelectAllButton: document.querySelector("#channelMergeSelectAllButton"),
+    channelMergeClearAllButton: document.querySelector("#channelMergeClearAllButton"),
+    channelMergeList: document.querySelector("#channelMergeList"),
+    channelMergeSummary: document.querySelector("#channelMergeSummary"),
+    channelMergeRoleOptions: document.querySelector("#channelMergeRoleOptions"),
+    channelMergeOverlapOptions: document.querySelector("#channelMergeOverlapOptions"),
     channelDeleteBackdrop: document.querySelector("#channelDeleteBackdrop"),
-    channelDeleteDialog: document.querySelector("#channelDeleteDialog"),
     channelDeleteCloseButton: document.querySelector("#channelDeleteCloseButton"),
     channelDeleteCancelButton: document.querySelector("#channelDeleteCancelButton"),
     channelDeleteApplyButton: document.querySelector("#channelDeleteApplyButton"),
@@ -318,7 +332,6 @@
     channelDeleteList: document.querySelector("#channelDeleteList"),
     channelDeleteSummary: document.querySelector("#channelDeleteSummary"),
     channelEditBackdrop: document.querySelector("#channelEditBackdrop"),
-    channelEditDialog: document.querySelector("#channelEditDialog"),
     channelEditCloseButton: document.querySelector("#channelEditCloseButton"),
     channelEditCancelButton: document.querySelector("#channelEditCancelButton"),
     channelEditApplyButton: document.querySelector("#channelEditApplyButton"),
@@ -327,7 +340,6 @@
     channelEditColorInput: document.querySelector("#channelEditColorInput"),
     channelEditTargetLabel: document.querySelector("#channelEditTargetLabel"),
     audioEditBackdrop: document.querySelector("#audioEditBackdrop"),
-    audioEditDialog: document.querySelector("#audioEditDialog"),
     audioEditCloseButton: document.querySelector("#audioEditCloseButton"),
     audioEditCancelButton: document.querySelector("#audioEditCancelButton"),
     audioEditApplyButton: document.querySelector("#audioEditApplyButton"),
@@ -338,27 +350,24 @@
     audioEditVolumeInput: document.querySelector("#audioEditVolumeInput"),
     audioEditTargetLabel: document.querySelector("#audioEditTargetLabel"),
     midiTransferBackdrop: document.querySelector("#midiTransferBackdrop"),
-    midiTransferDialog: document.querySelector("#midiTransferDialog"),
     midiTransferCloseButton: document.querySelector("#midiTransferCloseButton"),
     midiTransferCancelButton: document.querySelector("#midiTransferCancelButton"),
     midiTransferApplyButton: document.querySelector("#midiTransferApplyButton"),
     midiTransferSourceLabel: document.querySelector("#midiTransferSourceLabel"),
-    midiTransferSourceMode: document.querySelector("#midiTransferSourceMode"),
-    midiTransferConflictMode: document.querySelector("#midiTransferConflictMode"),
     midiTransferChannelList: document.querySelector("#midiTransferChannelList"),
     midiTransferSummary: document.querySelector("#midiTransferSummary"),
     midiTransferSelectAllButton: document.querySelector("#midiTransferSelectAllButton"),
     midiTransferClearAllButton: document.querySelector("#midiTransferClearAllButton"),
     noteVolumeBackdrop: document.querySelector("#noteVolumeBackdrop"),
-    noteVolumeDialog: document.querySelector("#noteVolumeDialog"),
     noteVolumeCloseButton: document.querySelector("#noteVolumeCloseButton"),
     noteVolumeCancelButton: document.querySelector("#noteVolumeCancelButton"),
     noteVolumeApplyButton: document.querySelector("#noteVolumeApplyButton"),
     noteVolumeSlider: document.querySelector("#noteVolumeSlider"),
     noteVolumeValue: document.querySelector("#noteVolumeValue"),
     noteVolumeSelectionLabel: document.querySelector("#noteVolumeSelectionLabel"),
+    noteVolumeCurrentCounts: document.querySelector("#noteVolumeCurrentCounts"),
+    noteVolumeTargetCounts: document.querySelector("#noteVolumeTargetCounts"),
     tempoEditorBackdrop: document.querySelector("#tempoEditorBackdrop"),
-    tempoEditorDialog: document.querySelector("#tempoEditorDialog"),
     tempoEditorTitle: document.querySelector("#tempoEditorTitle"),
     tempoEditorPosition: document.querySelector("#tempoEditorPosition"),
     tempoBpmInput: document.querySelector("#tempoBpmInput"),
@@ -367,7 +376,6 @@
     tempoEditorApplyButton: document.querySelector("#tempoEditorApplyButton"),
     tempoEditorDeleteButton: document.querySelector("#tempoEditorDeleteButton"),
     timeEditBackdrop: document.querySelector("#timeEditBackdrop"),
-    timeEditDialog: document.querySelector("#timeEditDialog"),
     timeEditTitle: document.querySelector("#timeEditTitle"),
     timeEditPosition: document.querySelector("#timeEditPosition"),
     timeEditMeasureInput: document.querySelector("#timeEditMeasureInput"),
@@ -427,6 +435,7 @@
     sidebarTab: "channels",
     collapsedMidiDocumentIds: new Set(),
     collapsedChannelGroups: { edit: false, source: false },
+    channelMerge: { role: "high", overlapMode: "half" },
     editTool: "note",
     ctrlToolHeld: false,
     selectedNoteIds: new Set(),
@@ -553,6 +562,11 @@
       lastClickClipId: null,
       lastClickAt: 0,
     },
+    noteVolumeDoubleClick: {
+      noteId: null,
+      lastClickAt: 0,
+      selectedIds: new Set(),
+    },
     customScrollDrag: null,
     longPress: null,
     masterVolume: 1,
@@ -612,6 +626,9 @@
     volume: state.masterVolume,
     onStatus: () => {},
   });
+  let editorSoundFontName = "기본 음색";
+  let editorSoundFontBusy = false;
+  let editorInstrumentOptionsSignature = "";
 
   function openAutosaveDatabase() {
     return new Promise((resolve, reject) => {
@@ -993,7 +1010,10 @@
       hue: getDefaultHue(fallbackIndex),
       muted: false,
       visible: true,
-      instrument: "Acoustic Grand Piano",
+      instrument: "Piano",
+      instrumentProgram: 0,
+      instrumentBank: 0,
+      instrumentExactPreset: true,
       notes: [],
     };
   }
@@ -1165,11 +1185,167 @@
   }
 
   function getChannelInstrumentProgram(channel) {
+    const stored = Number(channel?.instrumentProgram);
+    if (Number.isFinite(stored)) return clamp(Math.round(stored), 0, 127);
     return getInstrumentProgramFromName(channel?.instrument);
   }
 
   function getChannelInstrumentBank(channel) {
+    const stored = Number(channel?.instrumentBank);
+    if (Number.isFinite(stored)) return clamp(Math.round(stored), 0, 16383);
     return isDrumInstrumentName(channel?.instrument) ? 128 : 0;
+  }
+
+  function getChannelInstrumentExactPreset(channel) {
+    return channel?.instrumentExactPreset === true;
+  }
+
+  function isChannelPercussionInstrument(channel) {
+    const bank = getChannelInstrumentBank(channel);
+    const program = getChannelInstrumentProgram(channel);
+    if (bank === 128 || isDrumInstrumentName(channel?.instrument)) return true;
+    return isEditorUsingEmbeddedDefaultSoundBank() && bank === 0 && (program === 12 || program === 13);
+  }
+
+  function editorPresetKey(bank = 0, program = 0) {
+    return `${clamp(Math.round(Number(bank) || 0), 0, 16383)}:${clamp(Math.round(Number(program) || 0), 0, 127)}`;
+  }
+
+  function parseEditorPresetKey(value) {
+    const match = String(value || "").match(/^(\d+):(\d+)$/);
+    if (!match) return { bank: 0, program: 0 };
+    return {
+      bank: clamp(Math.round(Number(match[1]) || 0), 0, 16383),
+      program: clamp(Math.round(Number(match[2]) || 0), 0, 127),
+    };
+  }
+
+  function getEditorSoundBankPresets() {
+    const soundBank = audioEngine?.soundBank;
+    if (!soundBank || !Array.isArray(soundBank.presets)) return [];
+    const seen = new Set();
+    return soundBank.presets
+      .filter((preset) => preset && Array.isArray(preset.regions) && preset.regions.length)
+      .slice()
+      .sort((left, right) => (
+        Number(left.bank || 0) - Number(right.bank || 0)
+        || Number(left.preset || 0) - Number(right.preset || 0)
+        || String(left.name || "").localeCompare(String(right.name || ""))
+      ))
+      .filter((preset) => {
+        const key = editorPresetKey(preset.bank, preset.preset);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  function findEditorSoundBankPreset(bank = 0, program = 0) {
+    const targetKey = editorPresetKey(bank, program);
+    return getEditorSoundBankPresets().find((preset) => editorPresetKey(preset.bank, preset.preset) === targetKey) || null;
+  }
+
+  function formatEditorPresetLabel(preset) {
+    const bank = clamp(Math.round(Number(preset?.bank) || 0), 0, 16383);
+    const program = clamp(Math.round(Number(preset?.preset) || 0), 0, 127);
+    const name = String(preset?.name || `Preset ${program + 1}`).trim();
+    const number = String(program + 1).padStart(3, "0");
+    return bank === 0 ? `${number} ${name}` : `Bank ${bank} · ${number} ${name}`;
+  }
+
+  function setChannelInstrumentPreset(channel, preset) {
+    if (!channel || !preset) return false;
+    channel.instrumentProgram = clamp(Math.round(Number(preset.preset) || 0), 0, 127);
+    channel.instrumentBank = clamp(Math.round(Number(preset.bank) || 0), 0, 16383);
+    channel.instrumentExactPreset = true;
+    channel.instrument = String(preset.name || `Preset ${channel.instrumentProgram + 1}`).trim();
+    return true;
+  }
+
+  function isEditorUsingEmbeddedDefaultSoundBank() {
+    if (audioEngine?.soundBank) return Boolean(audioEngine.soundBank.isEmbeddedDefault);
+    return editorSoundFontName === "기본 음색";
+  }
+
+  function chooseDefaultPresetForMidiGroup(group, notes = []) {
+    const mapper = window.MobibardDefaultInstrumentMap;
+    if (!mapper?.resolveRequest) return { bank: 0, program: 0, name: "Piano" };
+    if (isMidiGroupDrums(group)) {
+      const counts = new Map();
+      for (const note of Array.isArray(notes) ? notes : []) {
+        const target = mapper.resolveRequest({ isDrum: true, bank: 128, channel: 9, midi: Number(note?.pitch) });
+        const key = editorPresetKey(target?.bank, target?.preset);
+        const current = counts.get(key) || { target, count: 0 };
+        current.count += 1;
+        counts.set(key, current);
+      }
+      const best = [...counts.values()].sort((left, right) => (
+        right.count - left.count
+        || Number(left.target?.priority || 0) - Number(right.target?.priority || 0)
+      ))[0]?.target || mapper.resolveRequest({ isDrum: true, bank: 128 });
+      return {
+        bank: clamp(Math.round(Number(best?.bank) || 0), 0, 16383),
+        program: clamp(Math.round(Number(best?.preset) || 0), 0, 127),
+        name: String(best?.name || "Piano"),
+      };
+    }
+    const target = mapper.resolveRequest({
+      program: clamp(Math.round(Number(group?.program) || 0), 0, 127),
+      bank: 0,
+      instrumentName: group?.programName || group?.name || "",
+    });
+    return {
+      bank: clamp(Math.round(Number(target?.bank) || 0), 0, 16383),
+      program: clamp(Math.round(Number(target?.preset) || 0), 0, 127),
+      name: String(target?.name || "Piano"),
+    };
+  }
+
+  function resolveMidiGroupEditorPreset(group, notes = []) {
+    const presets = getEditorSoundBankPresets();
+    const fallback = presets[0] || null;
+    if (isEditorUsingEmbeddedDefaultSoundBank()) {
+      const mapped = chooseDefaultPresetForMidiGroup(group, notes);
+      return findEditorSoundBankPreset(mapped.bank, mapped.program) || {
+        bank: mapped.bank,
+        preset: mapped.program,
+        name: mapped.name,
+        regions: [],
+      };
+    }
+    const requestedBank = isMidiGroupDrums(group) ? 128 : 0;
+    const requestedProgram = isMidiGroupDrums(group) ? 0 : clamp(Math.round(Number(group?.program) || 0), 0, 127);
+    return findEditorSoundBankPreset(requestedBank, requestedProgram)
+      || findEditorSoundBankPreset(0, requestedProgram)
+      || fallback;
+  }
+
+  function reconcileEditorChannelsWithSoundBank() {
+    const presets = getEditorSoundBankPresets();
+    if (!presets.length) return false;
+    const first = presets[0];
+    let changed = false;
+    for (const channel of state.channels) {
+      let preset = findEditorSoundBankPreset(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
+      if (!preset && isEditorUsingEmbeddedDefaultSoundBank()) {
+        const legacyProgram = getChannelInstrumentProgram(channel);
+        const legacyIsDrums = isDrumInstrumentName(channel?.instrument) || getChannelInstrumentBank(channel) === 128;
+        const mapped = chooseDefaultPresetForMidiGroup({
+          program: legacyProgram,
+          bank: legacyIsDrums ? 128 : 0,
+          channel: legacyIsDrums ? 9 : 0,
+          programName: channel?.instrument || "",
+          name: channel?.instrument || "",
+        }, channel?.notes || []);
+        if (mapped) preset = findEditorSoundBankPreset(mapped.bank, mapped.program);
+      }
+      preset ||= first;
+      const before = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
+      const beforeName = String(channel.instrument || "");
+      setChannelInstrumentPreset(channel, preset);
+      if (before !== editorPresetKey(channel.instrumentBank, channel.instrumentProgram) || beforeName !== channel.instrument) changed = true;
+    }
+    return changed;
   }
 
   function normalizeMidiSourceType(value) {
@@ -2282,21 +2458,34 @@
     }
   }
 
+  function i18nText(key, values = []) {
+    return window.MobibardI18n?.t?.(key, values) || String(key);
+  }
+
   function applyLanguage(language, { persist = true, notify = false } = {}) {
     const nextLanguage = normalizeLanguage(language);
     state.language = nextLanguage;
-    document.documentElement.lang = nextLanguage;
-    if (elements.languageSelect) {
-      elements.languageSelect.value = nextLanguage;
-    }
-    if (persist) {
-      try {
-        window.localStorage.setItem("mobibard-language", nextLanguage);
-      } catch {}
-    }
-    if (notify) {
-      const label = elements.languageSelect?.selectedOptions?.[0]?.textContent || nextLanguage;
-      showToast(`언어 설정을 ${label}(으)로 저장했습니다.`);
+    if (elements.languageSelect) elements.languageSelect.value = nextLanguage;
+    const manager = window.MobibardI18n;
+    if (manager?.setLanguage) {
+      void manager.setLanguage(nextLanguage, { persist, source: notify ? "user" : "app" }).then((applied) => {
+        state.language = normalizeLanguage(applied || nextLanguage);
+        if (elements.languageSelect) elements.languageSelect.value = state.language;
+        window.MobibardSiteNavigation?.refresh?.();
+        if (notify) {
+          const label = elements.languageSelect?.selectedOptions?.[0]?.textContent || state.language;
+          showToast(i18nText("editor.language_saved", [label]));
+        }
+      }).catch((error) => console.error("Editor locale change failed", error));
+    } else {
+      document.documentElement.lang = nextLanguage;
+      if (persist) {
+        try { window.localStorage.setItem("mobibard-language", nextLanguage); } catch {}
+      }
+      if (notify) {
+        const label = elements.languageSelect?.selectedOptions?.[0]?.textContent || nextLanguage;
+        showToast(`언어 설정을 ${label}(으)로 저장했습니다.`);
+      }
     }
     return nextLanguage;
   }
@@ -2378,8 +2567,9 @@
       : !notesActive || !getActiveChannel()?.notes?.length);
     elements.editDeleteButton.disabled = midiActive || (audioActive ? !getActiveAudioClip() : !notesActive || !state.selectedNoteIds.size);
     if (elements.editNoteVolumeButton) elements.editNoteVolumeButton.disabled = midiActive || audioActive || !notesActive || !state.selectedNoteIds.size;
-    // MML 내보내기는 현재 선택/활성 패널/노트 유무와 관계없이 항상 열 수 있습니다.
+    // MML/MIDI 내보내기는 현재 선택/활성 패널/노트 유무와 관계없이 항상 사용할 수 있습니다.
     elements.fileExportButton.disabled = false;
+    if (elements.midiExportButton) elements.midiExportButton.disabled = false;
   }
 
   function closeFileMenu() {
@@ -2398,6 +2588,85 @@
     elements.themeButton.setAttribute("aria-expanded", "false");
   }
 
+  function updateEditorSoundFontUi(message = "") {
+    const label = message || editorSoundFontName || "기본 음색";
+    if (elements.editorSoundFontCurrentName) elements.editorSoundFontCurrentName.textContent = label;
+    if (elements.editorSoundFontMenuLabel) elements.editorSoundFontMenuLabel.textContent = label;
+    if (elements.editorSoundFontSettingsButton) {
+      elements.editorSoundFontSettingsButton.title = `사운드폰트 설정 · ${label}`;
+    }
+  }
+
+  function setEditorSoundFontBusy(busy) {
+    editorSoundFontBusy = Boolean(busy);
+    if (elements.editorSoundFontLoadButton) elements.editorSoundFontLoadButton.disabled = editorSoundFontBusy;
+    if (elements.editorSoundFontResetButton) elements.editorSoundFontResetButton.disabled = editorSoundFontBusy;
+  }
+
+  function openEditorSoundFontDialog() {
+    if (!elements.editorSoundFontBackdrop) return;
+    closeThemeMenu();
+    updateEditorSoundFontUi();
+    elements.editorSoundFontBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.editorSoundFontLoadButton?.focus());
+  }
+
+  function closeEditorSoundFontDialog() {
+    if (!elements.editorSoundFontBackdrop) return;
+    elements.editorSoundFontBackdrop.hidden = true;
+  }
+
+  async function loadEditorSoundFontFile(file) {
+    if (!file || editorSoundFontBusy) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    setEditorSoundFontBusy(true);
+    updateEditorSoundFontUi("불러오는 중…");
+    try {
+      await audioEngine.useSoundBank(file, { label: file.name || "SoundBank" });
+      editorSoundFontName = String(file.name || "SoundBank");
+      reconcileEditorChannelsWithSoundBank();
+      populateChannelInstrumentSelect();
+      renderChannelEditor();
+      renderChannelTabs();
+      updateEditorSoundFontUi();
+      showToast(`${editorSoundFontName} 사운드폰트를 적용했습니다.`);
+      return true;
+    } catch (error) {
+      console.error("Editor SoundFont load failed", error);
+      updateEditorSoundFontUi();
+      showToast(`사운드폰트를 불러오지 못했습니다: ${error?.message || error}`, "error");
+      return false;
+    } finally {
+      if (elements.editorSoundFontFileInput) elements.editorSoundFontFileInput.value = "";
+      setEditorSoundFontBusy(false);
+    }
+  }
+
+  async function restoreEditorDefaultSoundFont() {
+    if (editorSoundFontBusy) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    setEditorSoundFontBusy(true);
+    updateEditorSoundFontUi("기본 음색 준비 중…");
+    try {
+      await audioEngine.restoreDefaultSoundBank();
+      editorSoundFontName = "기본 음색";
+      reconcileEditorChannelsWithSoundBank();
+      populateChannelInstrumentSelect();
+      renderChannelEditor();
+      renderChannelTabs();
+      updateEditorSoundFontUi();
+      showToast("기본 사운드폰트로 복원했습니다.");
+      return true;
+    } catch (error) {
+      console.error("Editor default SoundFont restore failed", error);
+      updateEditorSoundFontUi();
+      showToast(`기본 사운드폰트를 복원하지 못했습니다: ${error?.message || error}`, "error");
+      return false;
+    } finally {
+      setEditorSoundFontBusy(false);
+    }
+  }
+
   function closeGoogleAccountMenu() {
     if (elements.googleAccountMenu) {
       elements.googleAccountMenu.hidden = true;
@@ -2407,7 +2676,6 @@
 
   function updateThemeControls() {
     const currentThemeLabel = state.theme === "light" ? "밝은 색상" : "어두운 색상";
-    elements.themeButton.title = `Guest 설정 · 현재 ${currentThemeLabel}`;
     if (elements.themeToggleButton) {
       elements.themeToggleButton.title = `테마 변경 · 현재 ${currentThemeLabel}`;
       elements.themeToggleButton.setAttribute("aria-label", `테마 변경 · 현재 ${currentThemeLabel}`);
@@ -3330,7 +3598,26 @@
     drawOverviewTimeline();
   }
 
+  function getPlayheadDisplaySeconds(currentBeat = state.playhead.beat) {
+    const safeBeat = clamp(Number(currentBeat) || 0, 0, getTotalBeats());
+    const playbackActive = state.playback.running || state.playback.loading;
+    const timelineSeconds = playbackActive
+      ? beatToSecondsFromMap(safeBeat, state.playback.tempoMap)
+      : beatToSeconds(safeBeat);
+    return timelineSeconds / Math.max(0.01, Number(state.playbackRate) || 1);
+  }
+
+  function formatPlayheadClock(seconds) {
+    const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainingSeconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+  }
+
   function updatePlayheadVisual() {
+    if (elements.playheadTimeLabel) {
+      elements.playheadTimeLabel.textContent = formatPlayheadClock(getPlayheadDisplaySeconds());
+    }
     const visibleX = getAlignedVisiblePlayheadX();
     const pianoRect = elements.pianoSection.getBoundingClientRect();
     const rollRect = elements.rollViewport.getBoundingClientRect();
@@ -3381,7 +3668,13 @@
         for (const note of channel.notes || []) {
           if (note.startBeat <= safeBeat + 1e-7 && note.startBeat + note.durationBeat > safeBeat + 1e-7) {
             const velocity = getNotePlaybackVelocity(note);
-            if (velocity > 0) notes.push({ pitch: note.pitch, velocity, program: getChannelInstrumentProgram(channel), bank: getChannelInstrumentBank(channel) });
+            if (velocity > 0) notes.push({
+              pitch: note.pitch,
+              velocity,
+              program: getChannelInstrumentProgram(channel),
+              bank: getChannelInstrumentBank(channel),
+              exactPreset: getChannelInstrumentExactPreset(channel),
+            });
           }
         }
       }
@@ -3397,6 +3690,7 @@
         program: note.program,
         bank: note.bank || 0,
         gainScale,
+        exactPreset: Boolean(note.exactPreset),
       });
     }
     return audible.length;
@@ -4015,7 +4309,7 @@
       const previewChannel = state.activePanel === "notes" ? getActiveChannel() : null;
       const previewProgram = previewChannel ? getChannelInstrumentProgram(previewChannel) : 0;
       const previewBank = previewChannel ? getChannelInstrumentBank(previewChannel) : 0;
-      state.keyboard.voice = audioEngine.playNote(pitch, 108, null, null, { program: previewProgram, bank: previewBank });
+      state.keyboard.voice = audioEngine.playNote(pitch, 108, null, null, { program: previewProgram, bank: previewBank, exactPreset: Boolean(previewChannel) });
     } catch (error) {
       console.error(error);
       if (token === state.keyboard.requestToken) {
@@ -4049,7 +4343,7 @@
       const previewChannel = state.activePanel === "notes" ? getActiveChannel() : null;
       const previewProgram = previewChannel ? getChannelInstrumentProgram(previewChannel) : 0;
       const previewBank = previewChannel ? getChannelInstrumentBank(previewChannel) : 0;
-      state.keyboard.previewVoice = audioEngine.playNote(safePitch, 104, null, 0.14, { program: previewProgram, bank: previewBank });
+      state.keyboard.previewVoice = audioEngine.playNote(safePitch, 104, null, 0.14, { program: previewProgram, bank: previewBank, exactPreset: Boolean(previewChannel) });
     } catch (error) {
       console.error(error);
     }
@@ -5038,6 +5332,7 @@
     });
 
     elements.addChannelButton.disabled = false;
+    if (elements.mergeChannelsButton) elements.mergeChannelsButton.disabled = state.channels.length < 2;
     if (elements.deleteChannelsButton) elements.deleteChannelsButton.disabled = state.channels.length <= 1;
     elements.deleteChannelButton.disabled = state.activePanel !== "notes" || state.channels.length <= 1;
     elements.clearChannelButton.disabled = state.activePanel !== "notes";
@@ -5053,16 +5348,12 @@
     selectChannel(index);
     const channel = state.channels[index];
     state.channelEdit.channelId = String(channel.id);
-    if (elements.channelEditInstrumentSelect && !elements.channelEditInstrumentSelect.options.length && elements.channelInstrumentSelect) {
-      elements.channelEditInstrumentSelect.innerHTML = elements.channelInstrumentSelect.innerHTML;
-    }
+    populateChannelInstrumentSelect();
     if (elements.channelEditNameInput) elements.channelEditNameInput.value = channel.name;
     setHueControlValue(elements.channelEditColorInput, getChannelHue(channel, index));
     if (elements.channelEditTargetLabel) elements.channelEditTargetLabel.textContent = `${index + 1}번 채널`;
     if (elements.channelEditInstrumentSelect) {
-      const instrumentName = String(channel.instrument || "Acoustic Grand Piano");
-      const matchedProgram = GM_PROGRAM_NAMES.findIndex((name) => name === instrumentName);
-      elements.channelEditInstrumentSelect.value = isDrumInstrumentName(instrumentName) ? "drums" : String(matchedProgram >= 0 ? matchedProgram : 0);
+      elements.channelEditInstrumentSelect.value = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
     }
     elements.channelEditBackdrop.hidden = false;
     requestAnimationFrame(() => {
@@ -5093,19 +5384,32 @@
     }
     const nextName = makeUniqueChannelName(requestedName, channel.id);
     const nextHue = getHueControlValue(elements.channelEditColorInput, getChannelHue(channel, index));
-    const selectedValue = String(elements.channelEditInstrumentSelect?.value || "0");
-    const program = clamp(Math.round(Number(selectedValue) || 0), 0, GM_PROGRAM_NAMES.length - 1);
-    const nextInstrument = selectedValue === "drums" ? "Drums" : (GM_PROGRAM_NAMES[program] || GM_PROGRAM_NAMES[0]);
-    const changed = channel.name !== nextName || channel.hue !== nextHue || channel.instrument !== nextInstrument;
+    const selectedValue = String(elements.channelEditInstrumentSelect?.value || "0:0");
+    const selectedKey = parseEditorPresetKey(selectedValue);
+    const selectedPreset = findEditorSoundBankPreset(selectedKey.bank, selectedKey.program) || getEditorSoundBankPresets()[0] || null;
+    const nextInstrument = String(selectedPreset?.name || channel.instrument || "Piano");
+    const nextProgram = selectedPreset ? clamp(Math.round(Number(selectedPreset.preset) || 0), 0, 127) : getChannelInstrumentProgram(channel);
+    const nextBank = selectedPreset ? clamp(Math.round(Number(selectedPreset.bank) || 0), 0, 16383) : getChannelInstrumentBank(channel);
+    const changed = channel.name !== nextName
+      || channel.hue !== nextHue
+      || channel.instrument !== nextInstrument
+      || getChannelInstrumentProgram(channel) !== nextProgram
+      || getChannelInstrumentBank(channel) !== nextBank;
     if (!changed) {
       closeChannelEditDialog();
       return true;
     }
     channel.name = nextName;
     channel.hue = nextHue;
-    channel.instrument = nextInstrument;
-    if (selectedValue !== "drums" && typeof audioEngine.prepareProgram === "function") {
-      void audioEngine.prepareProgram(program, 0).catch((error) => console.warn("악기 음원 준비 실패", error));
+    if (selectedPreset) setChannelInstrumentPreset(channel, selectedPreset);
+    else {
+      channel.instrument = nextInstrument;
+      channel.instrumentProgram = nextProgram;
+      channel.instrumentBank = nextBank;
+      channel.instrumentExactPreset = true;
+    }
+    if (typeof audioEngine.prepareProgram === "function") {
+      void audioEngine.prepareProgram(nextProgram, nextBank, { exactPreset: true }).catch((error) => console.warn("악기 음원 준비 실패", error));
     }
     markDirty("채널 정보 변경");
     renderChannelTabs();
@@ -5152,9 +5456,8 @@
     const activeHue = getChannelHue(channel, state.activeChannel);
     updateChannelColorControl(activeHue);
     if (elements.channelInstrumentSelect) {
-      const instrumentName = String(channel.instrument || "Acoustic Grand Piano");
-      const matchedProgram = GM_PROGRAM_NAMES.findIndex((name) => name === instrumentName);
-      elements.channelInstrumentSelect.value = isDrumInstrumentName(instrumentName) ? "drums" : String(matchedProgram >= 0 ? matchedProgram : 0);
+      populateChannelInstrumentSelect();
+      elements.channelInstrumentSelect.value = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
     }
     updateChannelInfo();
   }
@@ -6258,6 +6561,7 @@
       voices.forEach((notes, voiceIndex) => {
         descriptors.push({
           name: voices.length > 1 ? `${group.name} ${voiceIndex + 1}` : group.name,
+          group,
           notes,
         });
       });
@@ -6283,6 +6587,8 @@
       const baseName = `${stripMidiFileExtension(parsed.fileName || parsed.title)} · ${descriptor.name}`;
       channel.name = makeUniqueChannelName(baseName, channel.id, untouchedNames);
       untouchedNames.add(channel.name.toLocaleLowerCase());
+      const descriptorPreset = resolveMidiGroupEditorPreset(descriptor.group, descriptor.notes);
+      if (descriptorPreset) setChannelInstrumentPreset(channel, descriptorPreset);
       channel.notes = descriptor.notes.map((note) => {
         const dynamics = normalizeNoteDynamics(note);
         noteCount += 1;
@@ -6797,8 +7103,8 @@
     const requestedName = `${getMidiGroupDisplayName(group, "악기 채널")}${voiceSuffix}`;
     channel.name = makeUniqueChannelName(requestedName, channel.id);
     channel.hue = Number.isFinite(Number(copyHue)) ? normalizeHue(copyHue) : getMidiGroupHue(group, state.channels.length);
-    const program = clamp(Math.round(Number(group?.program) || 0), 0, 127);
-    channel.instrument = isMidiGroupDrums(group) ? "Drums" : (GM_PROGRAM_NAMES[program] || GM_PROGRAM_NAMES[0]);
+    const sourcePreset = resolveMidiGroupEditorPreset(group, notes);
+    if (sourcePreset) setChannelInstrumentPreset(channel, sourcePreset);
     channel.notes = (notes || []).map((note) => {
       const dynamics = normalizeNoteDynamics(note);
       return {
@@ -6994,6 +7300,50 @@
     updateEditMenuState();
   }
 
+  function getNoteVolumeCounts(notes) {
+    const counts = new Map();
+    for (const note of notes || []) {
+      const volume = getNoteVolume(note);
+      counts.set(volume, (counts.get(volume) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((left, right) => right[0] - left[0])
+      .map(([volume, count]) => ({ volume, count }));
+  }
+
+  function renderNoteVolumeCountChips(node, items) {
+    if (!node) return;
+    node.replaceChildren();
+    const values = Array.isArray(items) ? items : [];
+    if (!values.length) {
+      const empty = document.createElement("span");
+      empty.className = "note-volume-count-chip is-empty";
+      empty.textContent = "V-";
+      node.append(empty);
+      return;
+    }
+    for (const { volume, count } of values) {
+      const chip = document.createElement("span");
+      chip.className = "note-volume-count-chip";
+      const label = document.createElement("em");
+      label.textContent = `V${volume}`;
+      const amount = document.createElement("strong");
+      amount.textContent = `× ${Number(count).toLocaleString()}`;
+      chip.append(label, amount);
+      node.append(chip);
+    }
+  }
+
+  function updateNoteVolumeDialogCounts() {
+    const selected = getSelectedNotes();
+    renderNoteVolumeCountChips(elements.noteVolumeCurrentCounts, getNoteVolumeCounts(selected));
+    const targetVolume = clamp(Math.round(Number(elements.noteVolumeSlider?.value) || 0), 0, 15);
+    renderNoteVolumeCountChips(
+      elements.noteVolumeTargetCounts,
+      selected.length ? [{ volume: targetVolume, count: selected.length }] : [],
+    );
+  }
+
   function openNoteVolumeDialog() {
     if (state.activePanel === "audio") {
       showToast("오디오에는 노트 볼륨 기능을 사용할 수 없습니다.");
@@ -7016,6 +7366,7 @@
     elements.noteVolumeSlider.value = String(initial);
     elements.noteVolumeValue.textContent = unique.size === 1 ? `V${initial}` : `혼합 → V${initial}`;
     elements.noteVolumeSelectionLabel.textContent = `${selected.length}개 선택 노트`;
+    updateNoteVolumeDialogCounts();
     elements.noteVolumeBackdrop.hidden = false;
     requestAnimationFrame(() => elements.noteVolumeSlider.focus());
     return true;
@@ -7062,6 +7413,9 @@
         name: channel.name,
         hue: getChannelHue(channel),
         instrument: channel.instrument,
+        instrumentProgram: getChannelInstrumentProgram(channel),
+        instrumentBank: getChannelInstrumentBank(channel),
+        instrumentExactPreset: getChannelInstrumentExactPreset(channel),
         notes: channel.notes.map((note) => ({ ...note })),
       })),
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
@@ -7128,6 +7482,7 @@
     const entries = getOrderedHistoryEntries();
     const currentIndex = state.history.undoStack.length;
     const newestFirst = entries.map((entry, index) => ({ entry, index })).reverse();
+    elements.historyList.style.counterReset = `history-step ${entries.length + 1}`;
     elements.historyList.replaceChildren();
     newestFirst.forEach(({ entry, index }) => {
       const item = document.createElement("li");
@@ -7321,7 +7676,10 @@
         hue: getChannelHue(channel, index),
         muted: mutedByChannelId.get(String(channelId)) || false,
         visible: visibleByChannelId.has(String(channelId)) ? visibleByChannelId.get(String(channelId)) : true,
-        instrument: String(channel.instrument || "Acoustic Grand Piano"),
+        instrument: String(channel.instrument || "Piano"),
+        instrumentProgram: clamp(Math.round(Number(channel.instrumentProgram ?? getInstrumentProgramFromName(channel.instrument)) || 0), 0, 127),
+        instrumentBank: clamp(Math.round(Number(channel.instrumentBank ?? (isDrumInstrumentName(channel.instrument) ? 128 : 0)) || 0), 0, 16383),
+        instrumentExactPreset: channel.instrumentExactPreset === true,
         notes: normalizeMonophonicNotes(channel.notes.map((note) => ({
           id: Number(note.id),
           pitch: clamp(Number(note.pitch), CONFIG.minPitch, CONFIG.maxPitch),
@@ -7488,9 +7846,10 @@
     const playbackActive = state.playback.running || state.playback.loading;
     const endBeat = playbackActive ? state.playback.endBeat : getPlaybackEndBeat();
     const rate = Math.max(0.01, Number(state.playbackRate) || 1);
-    const currentSeconds = (playbackActive
-      ? beatToSecondsFromMap(clamp(Number(currentBeat) || 0, 0, getTotalBeats()), state.playback.tempoMap)
-      : beatToSeconds(clamp(Number(currentBeat) || 0, 0, getTotalBeats()))) / rate;
+    const currentSeconds = getPlayheadDisplaySeconds(currentBeat);
+    if (elements.playheadTimeLabel) {
+      elements.playheadTimeLabel.textContent = formatPlayheadClock(currentSeconds);
+    }
     const totalSeconds = (playbackActive
       ? state.playback.endSeconds
       : beatToSeconds(endBeat)) / rate;
@@ -8163,6 +8522,256 @@
     return true;
   }
 
+  function normalizeChannelMergeRole(value) {
+    const role = String(value || "auto").toLowerCase();
+    return ["auto", "high", "low"].includes(role) ? role : "auto";
+  }
+
+  function normalizeChannelMergeOverlapMode(value) {
+    const mode = String(value || "all").toLowerCase();
+    return ["all", "half", "none"].includes(mode) ? mode : "all";
+  }
+
+  function getCheckedChannelMergeIds() {
+    if (!elements.channelMergeList) return [];
+    return [...elements.channelMergeList.querySelectorAll('input[type="checkbox"]:checked')]
+      .map((input) => String(input.value));
+  }
+
+  function getSelectedChannelMergeChannels() {
+    const ids = new Set(getCheckedChannelMergeIds());
+    return state.channels.filter((channel) => ids.has(String(channel.id)));
+  }
+
+  function updateChannelMergeOptionButtons() {
+    const role = normalizeChannelMergeRole(state.channelMerge?.role);
+    const overlapMode = normalizeChannelMergeOverlapMode(state.channelMerge?.overlapMode);
+    elements.channelMergeRoleOptions?.querySelectorAll("[data-merge-role]").forEach((button) => {
+      const active = button.dataset.mergeRole === role;
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    elements.channelMergeOverlapOptions?.querySelectorAll("[data-merge-overlap]").forEach((button) => {
+      const active = button.dataset.mergeOverlap === overlapMode;
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+
+  function updateChannelMergeSummary() {
+    const channels = getSelectedChannelMergeChannels();
+    const noteCount = channels.reduce((sum, channel) => sum + (channel.notes?.length || 0), 0);
+    const roleLabels = { auto: "자동", high: "고음", low: "저음" };
+    const overlapLabels = { all: "모두", half: "절반", none: "안함" };
+    const role = normalizeChannelMergeRole(state.channelMerge?.role);
+    const overlapMode = normalizeChannelMergeOverlapMode(state.channelMerge?.overlapMode);
+    if (elements.channelMergeSummary) {
+      elements.channelMergeSummary.textContent = channels.length < 2
+        ? "2개 이상의 채널을 선택하세요."
+        : `${channels.length}개 채널 · ${noteCount}노트 · ${roleLabels[role]} / ${overlapLabels[overlapMode]}`;
+    }
+    if (elements.channelMergeApplyButton) {
+      elements.channelMergeApplyButton.disabled = channels.length < 2 || noteCount < 1;
+    }
+  }
+
+  function renderChannelMergeDialog() {
+    if (!elements.channelMergeList) return false;
+    elements.channelMergeList.replaceChildren();
+    state.channels.forEach((channel, index) => {
+      const row = document.createElement("label");
+      row.className = "midi-transfer-channel-row channel-merge-row";
+      row.style.setProperty("--channel-color", getChannelColor(channel, index));
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = String(channel.id);
+      checkbox.checked = false;
+      checkbox.setAttribute("aria-label", `${channel.name} 병합 선택`);
+      const text = document.createElement("span");
+      text.className = "midi-transfer-channel-name";
+      text.textContent = `${channel.name} · ${channel.notes?.length || 0}노트`;
+      row.append(checkbox, text);
+      checkbox.addEventListener("change", updateChannelMergeSummary);
+      elements.channelMergeList.append(row);
+    });
+    state.channelMerge.role = "high";
+    state.channelMerge.overlapMode = "half";
+    updateChannelMergeOptionButtons();
+    updateChannelMergeSummary();
+    return true;
+  }
+
+  function openChannelMergeDialog() {
+    if (state.channels.length < 2) {
+      showToast("병합할 채널이 2개 이상 필요합니다.");
+      return false;
+    }
+    if (!renderChannelMergeDialog()) return false;
+    elements.channelMergeBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.channelMergeList.querySelector('input[type="checkbox"]')?.focus());
+    return true;
+  }
+
+  function closeChannelMergeDialog() {
+    if (elements.channelMergeBackdrop) elements.channelMergeBackdrop.hidden = true;
+  }
+
+  function setAllChannelMergeChecked(checked) {
+    if (!elements.channelMergeList) return;
+    elements.channelMergeList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.checked = Boolean(checked);
+    });
+    updateChannelMergeSummary();
+  }
+
+  function setChannelMergeRole(role) {
+    state.channelMerge.role = normalizeChannelMergeRole(role);
+    updateChannelMergeOptionButtons();
+    updateChannelMergeSummary();
+  }
+
+  function setChannelMergeOverlapMode(mode) {
+    state.channelMerge.overlapMode = normalizeChannelMergeOverlapMode(mode);
+    updateChannelMergeOptionButtons();
+    updateChannelMergeSummary();
+  }
+
+  function chooseChannelMergeNoteCandidate(group, role, previousPitch = null) {
+    const notes = [...(group || [])];
+    if (!notes.length) return null;
+    const strength = (note) => getNotePlaybackVelocity(note);
+    if (role === "high") {
+      notes.sort((left, right) => right.pitch - left.pitch || strength(right) - strength(left) || right.durationBeat - left.durationBeat || left.sourceIndex - right.sourceIndex);
+      return notes[0];
+    }
+    if (role === "low") {
+      notes.sort((left, right) => left.pitch - right.pitch || strength(right) - strength(left) || right.durationBeat - left.durationBeat || left.sourceIndex - right.sourceIndex);
+      return notes[0];
+    }
+    const sortedPitches = notes.map((note) => note.pitch).sort((a, b) => a - b);
+    const middle = Math.floor(sortedPitches.length / 2);
+    const medianPitch = sortedPitches.length % 2
+      ? sortedPitches[middle]
+      : (sortedPitches[middle - 1] + sortedPitches[middle]) * 0.5;
+    const targetPitch = Number.isFinite(Number(previousPitch)) ? Number(previousPitch) : medianPitch;
+    notes.sort((left, right) => (
+      Math.abs(left.pitch - targetPitch) - Math.abs(right.pitch - targetPitch)
+      || strength(right) - strength(left)
+      || right.durationBeat - left.durationBeat
+      || left.sourceIndex - right.sourceIndex
+      || left.pitch - right.pitch
+    ));
+    return notes[0];
+  }
+
+  function mergeEditorChannelsToSingleVoice(channels, { role = "auto", overlapMode = "all" } = {}) {
+    const normalizedRole = normalizeChannelMergeRole(role);
+    const normalizedOverlapMode = normalizeChannelMergeOverlapMode(overlapMode);
+    const exactNotes = new Map();
+    (channels || []).forEach((channel, sourceIndex) => {
+      (channel.notes || []).forEach((raw) => {
+        const dynamics = normalizeNoteDynamics(raw);
+        const startBeat = Math.max(0, Number(raw.startBeat) || 0);
+        const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(raw.durationBeat) || CONFIG.minimumNoteBeat);
+        const pitch = clamp(Math.round(Number(raw.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+        const candidate = {
+          pitch,
+          startBeat: Number(startBeat.toFixed(6)),
+          durationBeat: Number(durationBeat.toFixed(6)),
+          velocity: dynamics.velocity,
+          volume: dynamics.volume,
+          sourceIndex,
+        };
+        const endBeat = candidate.startBeat + candidate.durationBeat;
+        const key = `${candidate.pitch}|${candidate.startBeat.toFixed(6)}|${endBeat.toFixed(6)}`;
+        const current = exactNotes.get(key);
+        if (!current || getNotePlaybackVelocity(candidate) > getNotePlaybackVelocity(current)) exactNotes.set(key, candidate);
+      });
+    });
+    const notes = [...exactNotes.values()].sort((left, right) => (
+      left.startBeat - right.startBeat
+      || left.pitch - right.pitch
+      || right.durationBeat - left.durationBeat
+      || left.sourceIndex - right.sourceIndex
+    ));
+    if (!notes.length) return [];
+
+    const startGroups = [];
+    for (const note of notes) {
+      const key = note.startBeat.toFixed(6);
+      const last = startGroups[startGroups.length - 1];
+      if (!last || last.key !== key) startGroups.push({ key, startBeat: note.startBeat, notes: [note] });
+      else last.notes.push(note);
+    }
+
+    const output = [];
+    let previousPitch = null;
+    for (const group of startGroups) {
+      const candidate = chooseChannelMergeNoteCandidate(group.notes, normalizedRole, previousPitch);
+      if (!candidate) continue;
+      const startBeat = candidate.startBeat;
+      const active = output[output.length - 1];
+      if (active) {
+        const activeEnd = active.startBeat + active.durationBeat;
+        if (startBeat < activeEnd - 1e-7) {
+          if (normalizedOverlapMode === "none") continue;
+          if (normalizedOverlapMode === "half") {
+            const halfPoint = active.startBeat + active.durationBeat * 0.5;
+            if (startBeat < halfPoint - 1e-7) continue;
+          }
+          const trimmedDuration = startBeat - active.startBeat;
+          if (trimmedDuration >= CONFIG.minimumNoteBeat - 1e-7) {
+            active.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, trimmedDuration).toFixed(6));
+          } else {
+            output.pop();
+          }
+        }
+      }
+      output.push({
+        pitch: candidate.pitch,
+        startBeat: candidate.startBeat,
+        durationBeat: candidate.durationBeat,
+        velocity: candidate.velocity,
+        volume: candidate.volume,
+      });
+      previousPitch = candidate.pitch;
+    }
+    return output;
+  }
+
+  function applyChannelMergeSelection() {
+    const channels = getSelectedChannelMergeChannels();
+    if (channels.length < 2) return false;
+    const mergedNotes = mergeEditorChannelsToSingleVoice(channels, state.channelMerge);
+    if (!mergedNotes.length) {
+      showToast("선택한 채널에서 병합할 노트를 찾지 못했습니다.");
+      return false;
+    }
+    const id = nextChannelId();
+    const channel = createDefaultChannel(id, state.channels.length);
+    const source = channels[0];
+    channel.name = makeUniqueChannelName("병합 채널", channel.id);
+    channel.hue = getChannelHue(source, state.channels.indexOf(source));
+    channel.instrument = source?.instrument || channel.instrument;
+    channel.instrumentProgram = getChannelInstrumentProgram(source);
+    channel.instrumentBank = getChannelInstrumentBank(source);
+    channel.instrumentExactPreset = getChannelInstrumentExactPreset(source);
+    channel.notes = mergedNotes.map((note) => ({ ...note, id: state.nextNoteId++ }));
+    channel.visible = true;
+    channel.muted = false;
+    state.channels.push(channel);
+    state.activePanel = "notes";
+    state.activeChannel = state.channels.length - 1;
+    state.activeAudioClipId = null;
+    clearNoteSelection();
+    closeChannelMergeDialog();
+    markDirty(`채널 ${channels.length}개 병합`);
+    renderChannelTabs();
+    renderChannelEditor();
+    shrinkTimelineToContent();
+    drawRoll();
+    showToast(`${channels.length}개 채널을 ${channel.name}으로 병합했습니다. (${channel.notes.length}노트)`);
+    return true;
+  }
+
   function getCheckedChannelDeleteIds() {
     if (!elements.channelDeleteList) return [];
     return [...elements.channelDeleteList.querySelectorAll('input[type="checkbox"]:checked')]
@@ -8775,6 +9384,44 @@
       }
     }
     const existing = noteHit?.note || null;
+
+    // A selected note can be double-clicked to edit the volume of the whole current selection.
+    // Select mode normally toggles a note on the first tap, so preserve the first-click selection
+    // and restore it on the second click before opening the volume dialog.
+    if (event.button === 0 && existing && !additive) {
+      const tracker = state.noteVolumeDoubleClick;
+      const now = performance.now();
+      const isSecondClick = tracker.noteId === existing.id
+        && now - tracker.lastClickAt <= 420
+        && tracker.selectedIds instanceof Set
+        && tracker.selectedIds.has(existing.id);
+      if (isSecondClick) {
+        state.selectedNoteIds = new Set(tracker.selectedIds);
+        tracker.noteId = null;
+        tracker.lastClickAt = 0;
+        tracker.selectedIds = new Set();
+        state.activePanel = "notes";
+        state.activeAudioClipId = null;
+        state.interaction = null;
+        state.suppressNextRollPointerUp = event.pointerId;
+        endEditorPitchPreview();
+        drawRoll();
+        updateChannelInfo();
+        openNoteVolumeDialog();
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (state.selectedNoteIds.has(existing.id)) {
+        tracker.noteId = existing.id;
+        tracker.lastClickAt = now;
+        tracker.selectedIds = new Set(state.selectedNoteIds);
+      } else if (tracker.noteId !== existing.id || now - tracker.lastClickAt > 420) {
+        tracker.noteId = null;
+        tracker.lastClickAt = 0;
+        tracker.selectedIds = new Set();
+      }
+    }
 
     if (getActiveChannel()?.visible === false && event.button === 0 && pointBeat >= 0 && !existing) {
       showToast("숨긴 채널은 표시 버튼을 켠 뒤 편집할 수 있습니다.");
@@ -10301,6 +10948,39 @@
     } catch {
       showToast("클립보드를 읽을 수 없습니다. 내용을 직접 붙여넣으세요.");
       elements.mmlImportText.focus();
+      return false;
+    }
+  }
+
+  function isClipboardMmlCode(value) {
+    const text = String(value || "").replace(/^\uFEFF/, "").trim();
+    if (!text) return false;
+    try {
+      if (/MML\s*@/i.test(text)) {
+        const parsed = parseMmlText(text, { quantize: 64 });
+        return Boolean(parsed?.noteCount || parsed?.explicitTempoCount);
+      }
+      const body = extractMmlBody(text);
+      const parts = body.split(",").map((part) => String(part || "").trim()).filter(Boolean);
+      return Boolean(parts.length && parts.every((part) => looksLikeMmlPart(part)));
+    } catch {
+      return false;
+    }
+  }
+
+  async function pasteMmlFromClipboardShortcut() {
+    try {
+      if (!navigator.clipboard?.readText) throw new Error("clipboard unavailable");
+      const text = await navigator.clipboard.readText();
+      if (!isClipboardMmlCode(text)) {
+        showToast("클립보드에서 MML 코드를 찾지 못했습니다.");
+        return false;
+      }
+      openMmlImportDialog({ text, fileName: "" });
+      if (elements.mmlImportSourceLabel) elements.mmlImportSourceLabel.textContent = "클립보드 MML";
+      return true;
+    } catch {
+      showToast("클립보드를 읽을 수 없습니다. MML 불러오기 창에서 직접 붙여넣으세요.");
       return false;
     }
   }
@@ -11883,6 +12563,7 @@
           sourceId: channel.id,
           instrumentProgram: getChannelInstrumentProgram(channel),
           instrumentBank: getChannelInstrumentBank(channel),
+          instrumentExactPreset: getChannelInstrumentExactPreset(channel),
         });
       }
     }
@@ -11940,6 +12621,7 @@
     const voice = audioEngine.playNote(note.pitch, playbackVelocity, startAt, duration, {
       program: clamp(Number(note.instrumentProgram) || 0, 0, 127),
       bank: clamp(Number(note.instrumentBank) || 0, 0, 16383),
+      exactPreset: Boolean(note.instrumentExactPreset),
       gainScale: state.playback.autoGainScale,
     });
     trackPlaybackVoice(note, voice);
@@ -12396,7 +13078,7 @@
   function serializeProject() {
     return {
       format: "mml-piano-roll-project",
-      version: 22,
+      version: 23,
       projectName: state.projectName,
       snapValue: state.snapValue,
       rowHeight: state.rowHeight,
@@ -12407,7 +13089,7 @@
       nextAudioClipId: state.nextAudioClipId,
       channels: state.channels,
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
-      // v22: 채널/오디오 색상은 hue(0..359)만 저장하며 실제 밝기는 테마에서 결정합니다.
+      // v23: 채널 악기는 현재 SoundFont의 실제 Bank/Preset을 저장하고, 색상은 hue(0..359)만 저장합니다.
       // 지원 음악 파일은 공통 플러그인을 거쳐 불러오는 즉시 일반 편집 채널로 변환됩니다.
       midiDocuments: [],
       audioClips: state.audioClips.map((clip) => ({ ...clip, assetAvailable: Boolean(getAudioRuntime(clip.id)?.audioBuffer) })),
@@ -12427,22 +13109,92 @@
     };
   }
 
+  function markProjectSaved({ notify = true, message = "프로젝트를 저장했습니다." } = {}) {
+    state.dirty = false;
+    updateDirtyState();
+    scheduleAutosave(0);
+    if (notify && message) showToast(message);
+  }
+
   function saveProject() {
     shrinkTimelineToContent();
     const data = JSON.stringify(serializeProject(), null, 2);
     const blob = new Blob([data], { type: "application/json;charset=utf-8" });
     const link = document.createElement("a");
-    const safeName = (state.projectName || "mobibard-project").replace(/[\\/:*?"<>|]/g, "_");
+    const safeName = (state.projectName || "mobibard-project").replace(/[\/:*?"<>|]/g, "_");
     link.href = URL.createObjectURL(blob);
     link.download = `${safeName}.mmlproj.json`;
     document.body.append(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(link.href);
-    state.dirty = false;
-    updateDirtyState();
-    scheduleAutosave(0);
-    showToast("프로젝트를 저장했습니다.");
+    markProjectSaved();
+  }
+
+
+  function exportProjectAsMidi() {
+    const buildMidi = window.MabiMusicFormats?.buildMidi;
+    if (typeof buildMidi !== "function") {
+      showToast("MIDI 내보내기 모듈을 사용할 수 없습니다.");
+      return false;
+    }
+
+    const ppq = 480;
+    const tempoEvents = getSortedTempos().map((tempo) => ({
+      tick: Math.max(0, Math.round((Number(tempo.beat) || 0) * ppq)),
+      bpm: clamp(Math.round(Number(tempo.bpm) || 120), CONFIG.minTempo, CONFIG.maxTempo),
+    }));
+    if (!tempoEvents.length || tempoEvents[0].tick > 0) {
+      tempoEvents.unshift({ tick: 0, bpm: 120 });
+    }
+
+    const tracks = state.channels.map((channel, channelIndex) => {
+      const isDrums = isChannelPercussionInstrument(channel);
+      const program = getChannelInstrumentProgram(channel);
+      return {
+        name: String(channel?.name || `Ch${channelIndex + 1}`),
+        program,
+        isDrums,
+        notes: (Array.isArray(channel?.notes) ? channel.notes : []).map((note) => ({
+          startTick: Math.max(0, Math.round((Number(note.startBeat) || 0) * ppq)),
+          durationTick: Math.max(1, Math.round(Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat) * ppq)),
+          pitch: clamp(Math.round(Number(note.pitch) || 60), 0, 127),
+          velocity: Math.max(1, getNotePlaybackVelocity(note)),
+        })),
+      };
+    });
+
+    try {
+      const bytes = buildMidi({
+        ppq,
+        title: String(state.projectName || "Mobibard Editor"),
+        tempoEvents,
+        timeSignatures: [{ tick: 0, numerator: CONFIG.beatsPerMeasure, denominator: 4 }],
+        tracks,
+      });
+      const blob = new Blob([bytes], { type: "audio/midi" });
+      const safeName = (state.projectName || "mobibard-project").replace(/[\/:*?"<>|]/g, "_");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${safeName}.mid`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      const noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
+      showToast(`MIDI로 내보냈습니다. · ${tracks.length}개 채널 · ${noteCount}개 노트`);
+      return true;
+    } catch (error) {
+      console.error("MIDI export failed", error);
+      showToast("MIDI 파일을 만들지 못했습니다.");
+      return false;
+    }
+  }
+
+  function openMidiExtractionSupport() {
+    window.open("https://muscriptor.kyutai.org/", "_blank", "noopener,noreferrer");
+    return true;
   }
 
   async function loadProjectFromFile(file, { notify = true } = {}) {
@@ -12520,7 +13272,10 @@
       hue: getChannelHue(channel, index),
       muted: Boolean(channel.muted),
       visible: channel.visible !== false,
-      instrument: String(channel.instrument || "Acoustic Grand Piano"),
+      instrument: String(channel.instrument || "Piano"),
+      instrumentProgram: clamp(Math.round(Number(channel.instrumentProgram ?? getInstrumentProgramFromName(channel.instrument)) || 0), 0, 127),
+      instrumentBank: clamp(Math.round(Number(channel.instrumentBank ?? (isDrumInstrumentName(channel.instrument) ? 128 : 0)) || 0), 0, 16383),
+      instrumentExactPreset: channel.instrumentExactPreset === true,
       notes: normalizeMonophonicNotes(channel.notes.map((note) => {
         const startBeat = clamp(
           Number(note.startBeat),
@@ -12657,6 +13412,10 @@
     state.tempoDrag = null;
     state.dirty = false;
 
+    if (getEditorSoundBankPresets().length) {
+      reconcileEditorChannelsWithSoundBank();
+      populateChannelInstrumentSelect();
+    }
     elements.snapSelect.value = String(state.snapValue);
     elements.pitchSpacingSelect.value = String(state.rowHeight);
     renderAll();
@@ -12758,6 +13517,19 @@
     initializeHistory();
     scheduleAutosave(0);
     if (notify) showToast("새 프로젝트를 만들었습니다.");
+  }
+
+  async function requestNewProject({ notify = true } = {}) {
+    if (state.dirty) {
+      const confirmed = await showConfirmDialog({
+        title: "새 파일",
+        message: "저장되지 않은 변경사항이 있습니다. 정말 새 파일을 만들까요? 현재 변경사항은 사라집니다.",
+        confirmLabel: "새 파일",
+      });
+      if (!confirmed) return false;
+    }
+    resetProject({ notify });
+    return true;
   }
 
   function showConfirmDialog({ title = "확인", message = "계속할까요?", confirmLabel = "확인" } = {}) {
@@ -13048,46 +13820,81 @@
     closeContextMenu();
   }
 
-  function getSelectedSamePitchMergeInfo() {
+  function getSelectedSamePitchMergePlan() {
     if (isMidiReferenceActive() || state.activePanel !== "notes") return null;
     const channel = getActiveChannel();
-    const selected = sortNoteIntervals(getSelectedNotes(channel));
-    if (!channel || selected.length < 2) return null;
-    const pitch = Number(selected[0].pitch);
-    if (!selected.every((note) => Number(note.pitch) === pitch)) return null;
-    const startBeat = Math.min(...selected.map((note) => Number(note.startBeat) || 0));
-    const endBeat = Math.max(...selected.map((note) => (Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat)));
-    const selectedIds = new Set(selected.map((note) => note.id));
-    const span = { startBeat, durationBeat: Math.max(CONFIG.minimumNoteBeat, endBeat - startBeat) };
-    const blocking = channel.notes.filter((note) => !selectedIds.has(note.id) && noteIntervalsOverlap(note, span));
-    return { channel, selected, pitch, startBeat, endBeat, selectedIds, blocking };
+    if (!channel || state.selectedNoteIds.size < 2) return null;
+
+    const selectedIds = new Set(state.selectedNoteIds);
+    const ordered = sortNoteIntervals(channel.notes);
+    const groups = [];
+    let current = [];
+
+    const flush = () => {
+      if (current.length >= 2) groups.push(current);
+      current = [];
+    };
+
+    // Only neighboring selected notes in the channel's actual timeline order may
+    // be joined. An unselected note or a different pitch splits the run, so a
+    // non-mergeable section never prevents other mergeable runs from succeeding.
+    for (const note of ordered) {
+      if (!selectedIds.has(note.id)) {
+        flush();
+        continue;
+      }
+      if (!current.length || Number(current[0].pitch) === Number(note.pitch)) {
+        current.push(note);
+      } else {
+        flush();
+        current = [note];
+      }
+    }
+    flush();
+
+    if (!groups.length) return null;
+    return {
+      channel,
+      groups,
+      selectedIds,
+      mergeNoteCount: groups.reduce((sum, group) => sum + group.length, 0),
+    };
   }
 
   function mergeSelectedSamePitchNotes() {
-    const info = getSelectedSamePitchMergeInfo();
-    if (!info) return false;
-    if (info.blocking.length) {
-      showToast("합칠 범위에 선택되지 않은 노트가 있어 합칠 수 없습니다.");
-      return true;
+    const plan = getSelectedSamePitchMergePlan();
+    if (!plan) return false;
+
+    const removeIds = new Set();
+    const nextSelection = new Set(plan.selectedIds);
+    for (const group of plan.groups) {
+      const survivor = group[0];
+      const startBeat = Math.min(...group.map((note) => Number(note.startBeat) || 0));
+      const endBeat = Math.max(...group.map((note) =>
+        (Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat)
+      ));
+      survivor.startBeat = Number(startBeat.toFixed(6));
+      survivor.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, endBeat - startBeat).toFixed(6));
+      for (const note of group.slice(1)) {
+        removeIds.add(note.id);
+        nextSelection.delete(note.id);
+      }
     }
-    const survivor = info.selected[0];
-    survivor.startBeat = Number(info.startBeat.toFixed(6));
-    survivor.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, info.endBeat - info.startBeat).toFixed(6));
-    const removeIds = new Set(info.selected.slice(1).map((note) => note.id));
-    info.channel.notes = info.channel.notes.filter((note) => !removeIds.has(note.id));
-    state.selectedNoteIds = new Set([survivor.id]);
-    state.channelNoteRuntime.delete(String(info.channel.id));
+
+    plan.channel.notes = plan.channel.notes.filter((note) => !removeIds.has(note.id));
+    state.selectedNoteIds = nextSelection;
+    state.channelNoteRuntime.delete(String(plan.channel.id));
     markDirty("선택 노트 합침");
     shrinkTimelineToContent();
     drawRoll();
     updateChannelInfo();
-    showToast(`${info.selected.length}개의 ${noteLabel(info.pitch)} 노트를 하나로 합쳤습니다.`);
+    showToast(i18nText("연속된 같은 음 {0}개를 {1}개 노트로 합쳤습니다.", [plan.mergeNoteCount, plan.groups.length]));
     return true;
   }
 
   function registerDefaultContextMenus() {
     const commonItems = () => [
-      { label: "새 파일", action: resetProject },
+      { label: "새 파일", action: () => requestNewProject() },
       { label: "불러오기", action: () => openFilePickerInput(elements.fileInput) },
       { label: "저장", action: saveProject },
     ];
@@ -13200,13 +14007,13 @@
         drawRoll();
         updateChannelInfo();
       }
-      const mergeInfo = getSelectedSamePitchMergeInfo();
+      const mergePlan = getSelectedSamePitchMergePlan();
       return [
         { label: "선택 노트 복사", action: copySelectedNotes },
         { label: "선택 노트 잘라내기", action: cutSelectedNotes },
         { label: "재생선 위치에 붙여넣기", action: pasteNotesFromClipboard },
         { label: "선택 노트 볼륨 수정", action: openNoteVolumeDialog },
-        ...(mergeInfo ? [{ label: `같은 음 ${mergeInfo.selected.length}개 합침`, action: mergeSelectedSamePitchNotes }] : []),
+        ...(mergePlan ? [{ label: i18nText("같은 음 {0}개 합침", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         "separator",
         {
           label: state.selectedNoteIds.size > 1 ? `선택 노트 ${state.selectedNoteIds.size}개 삭제` : "선택 노트 삭제",
@@ -13559,6 +14366,34 @@
     }, CONFIG.manualScrollSnapDelay);
   }
 
+  function openShortcutHelpDialog() {
+    closeFileMenu();
+    closeEditMenu();
+    closeThemeMenu();
+    closeGoogleAccountMenu();
+    closeVolumeMenu();
+    closeZoomMenu();
+    closePlaybackRateMenu();
+    if (!elements.shortcutHelpBackdrop) return false;
+    elements.shortcutHelpBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.shortcutHelpCloseButton?.focus());
+    return true;
+  }
+
+  function closeShortcutHelpDialog() {
+    if (elements.shortcutHelpBackdrop) elements.shortcutHelpBackdrop.hidden = true;
+  }
+
+  function openSelectedRecommendedLink() {
+    const select = elements.editorRecommendedLinks;
+    if (!select) return false;
+    const value = String(select.value || "").trim();
+    select.value = "";
+    if (!/^https?:\/\//i.test(value)) return false;
+    window.open(value, "_blank", "noopener,noreferrer");
+    return true;
+  }
+
   function bindEvents() {
     document.addEventListener("keydown", handleHistoryShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectAllShortcut, true);
@@ -13600,10 +14435,12 @@
     elements.editDeleteButton.addEventListener("click", () => { closeEditMenu(); deleteCurrentSelection(); });
     elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openNoteVolumeDialog(); });
     elements.fileExportButton.addEventListener("click", () => { closeFileMenu(); exportCurrentContextAsMml(); });
+    elements.midiExportButton?.addEventListener("click", () => { closeFileMenu(); exportProjectAsMidi(); });
+    elements.midiExtractButton?.addEventListener("click", () => { closeFileMenu(); openMidiExtractionSupport(); });
     elements.supportedFilesMenuButton?.addEventListener("click", closeFileMenu);
     elements.newButton.addEventListener("click", () => {
       closeFileMenu();
-      resetProject();
+      requestNewProject();
     });
     elements.openButton.addEventListener("click", () => {
       closeFileMenu();
@@ -13817,11 +14654,37 @@
       const nextTheme = state.theme === "dark" ? "light" : "dark";
       applyTheme(nextTheme, { notify: true });
     });
-    elements.googleLoginButton.addEventListener("click", () => {
-      showToast("구글 로그인 연동 영역을 준비했습니다.");
-    });
     elements.languageSelect.addEventListener("change", () => {
       applyLanguage(elements.languageSelect.value, { notify: true });
+    });
+    elements.editorRecommendedLinks?.addEventListener("change", openSelectedRecommendedLink);
+    elements.editorSoundFontSettingsButton?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openEditorSoundFontDialog();
+    });
+    elements.editorSoundFontCloseButton?.addEventListener("click", closeEditorSoundFontDialog);
+    elements.editorSoundFontDoneButton?.addEventListener("click", closeEditorSoundFontDialog);
+    elements.editorSoundFontBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.editorSoundFontBackdrop) closeEditorSoundFontDialog();
+    });
+    elements.editorSoundFontLoadButton?.addEventListener("click", () => {
+      if (!elements.editorSoundFontFileInput || editorSoundFontBusy) return;
+      elements.editorSoundFontFileInput.value = "";
+      openFilePickerInput(elements.editorSoundFontFileInput);
+    });
+    elements.editorSoundFontFileInput?.addEventListener("change", () => {
+      const file = elements.editorSoundFontFileInput?.files?.[0];
+      if (file) void loadEditorSoundFontFile(file);
+    });
+    elements.editorSoundFontResetButton?.addEventListener("click", () => { void restoreEditorDefaultSoundFont(); });
+    elements.shortcutHelpButton?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openShortcutHelpDialog();
+    });
+    elements.shortcutHelpCloseButton?.addEventListener("click", closeShortcutHelpDialog);
+    elements.shortcutHelpDoneButton?.addEventListener("click", closeShortcutHelpDialog);
+    elements.shortcutHelpBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.shortcutHelpBackdrop) closeShortcutHelpDialog();
     });
 
     elements.horizontalScrollBar.addEventListener("pointerdown", (event) => beginCustomScrollbarDrag("x", event));
@@ -13948,6 +14811,7 @@
       }
     });
 
+    elements.mergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
     elements.addChannelButton.addEventListener("click", addChannel);
     elements.collapsedAddChannelButton?.addEventListener("click", addChannel);
     elements.deleteChannelsButton?.addEventListener("click", openChannelDeleteDialog);
@@ -14002,18 +14866,25 @@
     elements.channelInstrumentSelect?.addEventListener("change", () => {
       const channel = getActiveChannel();
       if (!channel) return;
-      const selectedValue = String(elements.channelInstrumentSelect.value || "0");
-      const program = clamp(Math.round(Number(selectedValue) || 0), 0, GM_PROGRAM_NAMES.length - 1);
-      const nextInstrument = selectedValue === "drums" ? "Drums" : (GM_PROGRAM_NAMES[program] || GM_PROGRAM_NAMES[0]);
-      if (channel.instrument === nextInstrument) return;
-      channel.instrument = nextInstrument;
+      const selected = parseEditorPresetKey(elements.channelInstrumentSelect.value);
+      const preset = findEditorSoundBankPreset(selected.bank, selected.program);
+      if (!preset) {
+        populateChannelInstrumentSelect();
+        renderChannelEditor();
+        return;
+      }
+      const before = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
+      const nextKey = editorPresetKey(preset.bank, preset.preset);
+      if (before === nextKey && String(channel.instrument || "") === String(preset.name || "")) return;
+      setChannelInstrumentPreset(channel, preset);
       if (typeof audioEngine.prepareProgram === "function") {
-        void audioEngine.prepareProgram(program, 0).catch((error) => console.warn("악기 음원 준비 실패", error));
+        void audioEngine.prepareProgram(channel.instrumentProgram, channel.instrumentBank, { exactPreset: true })
+          .catch((error) => console.warn("악기 음원 준비 실패", error));
       }
       markDirty("채널 악기 변경");
       renderChannelTabs();
       updateChannelInfo();
-      showToast(`${channel.name} 악기를 ${nextInstrument}(으)로 변경했습니다.`);
+      showToast(`${channel.name} 악기를 ${channel.instrument}(으)로 변경했습니다.`);
     });
     elements.midiSourceColorInput?.addEventListener("change", () => {
       const document = getActiveMidiDocument();
@@ -14072,6 +14943,20 @@
     });
 
     elements.midiReferenceLoadButton.addEventListener("click", () => openFilePickerInput(elements.midiFileInput));
+    elements.channelMergeCloseButton?.addEventListener("click", closeChannelMergeDialog);
+    elements.channelMergeCancelButton?.addEventListener("click", closeChannelMergeDialog);
+    elements.channelMergeApplyButton?.addEventListener("click", applyChannelMergeSelection);
+    elements.channelMergeSelectAllButton?.addEventListener("click", () => setAllChannelMergeChecked(true));
+    elements.channelMergeClearAllButton?.addEventListener("click", () => setAllChannelMergeChecked(false));
+    elements.channelMergeRoleOptions?.querySelectorAll("[data-merge-role]").forEach((button) => {
+      button.addEventListener("click", () => setChannelMergeRole(button.dataset.mergeRole));
+    });
+    elements.channelMergeOverlapOptions?.querySelectorAll("[data-merge-overlap]").forEach((button) => {
+      button.addEventListener("click", () => setChannelMergeOverlapMode(button.dataset.mergeOverlap));
+    });
+    elements.channelMergeBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.channelMergeBackdrop) closeChannelMergeDialog();
+    });
     elements.channelDeleteCloseButton?.addEventListener("click", closeChannelDeleteDialog);
     elements.channelDeleteCancelButton?.addEventListener("click", closeChannelDeleteDialog);
     elements.channelDeleteApplyButton?.addEventListener("click", applyChannelDeleteSelection);
@@ -14095,6 +14980,7 @@
     elements.noteVolumeApplyButton?.addEventListener("click", applySelectedNoteVolume);
     elements.noteVolumeSlider?.addEventListener("input", () => {
       elements.noteVolumeValue.textContent = `V${clamp(Math.round(Number(elements.noteVolumeSlider.value) || 0), 0, 15)}`;
+      updateNoteVolumeDialogCounts();
     });
     elements.noteVolumeBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.noteVolumeBackdrop) closeNoteVolumeDialog();
@@ -14191,9 +15077,25 @@
       // 채널 트리/버튼에 포커스가 있어도 채널 간 노트 복사·붙여넣기 단축키는 계속 동작합니다.
       const commandKey = event.ctrlKey || event.metaKey;
       const key = String(event.key || "").toLowerCase();
+
+      // Ctrl/Cmd + Shift + V: 클립보드의 MML 코드를 전용 불러오기 창으로 보냅니다.
       if (
         !event.defaultPrevented
         && commandKey
+        && event.shiftKey
+        && !event.altKey
+        && key === "v"
+        && !isTextEntryTarget(event.target)
+      ) {
+        event.preventDefault();
+        void pasteMmlFromClipboardShortcut();
+        return;
+      }
+
+      if (
+        !event.defaultPrevented
+        && commandKey
+        && !event.shiftKey
         && !event.altKey
         && !isTextEntryTarget(event.target)
         && state.activePanel === "notes"
@@ -14228,7 +15130,10 @@
         closeThemeMenu();
         closeGoogleAccountMenu();
         closeChannelMuteMixer();
+        closeChannelMergeDialog();
         closeChannelEditDialog();
+        closeEditorSoundFontDialog();
+        closeShortcutHelpDialog();
         closeVolumeMenu();
         closeZoomMenu();
         closePlaybackRateMenu();
@@ -14298,31 +15203,37 @@
 
 
   function populateChannelInstrumentSelect() {
-    if (!elements.channelInstrumentSelect || elements.channelInstrumentSelect.options.length) return;
-    const families = ["Piano", "Chromatic Percussion", "Organ", "Guitar", "Bass", "Strings", "Ensemble", "Brass", "Reed", "Pipe", "Synth Lead", "Synth Pad", "Synth Effects", "Ethnic", "Percussive", "Sound Effects"];
-    const drumGroup = document.createElement("optgroup");
-    drumGroup.label = "Drums / Percussion";
-    const drumOption = document.createElement("option");
-    drumOption.value = "drums";
-    drumOption.textContent = "Drums (GM Channel 10)";
-    drumGroup.append(drumOption);
-    elements.channelInstrumentSelect.append(drumGroup);
-    GM_PROGRAM_NAMES.forEach((name, program) => {
-      if (program % 8 === 0) {
-        const group = document.createElement("optgroup");
-        group.label = families[Math.floor(program / 8)] || `Program ${program + 1}-${program + 8}`;
-        elements.channelInstrumentSelect.append(group);
+    const selects = [elements.channelInstrumentSelect, elements.channelEditInstrumentSelect].filter(Boolean);
+    if (!selects.length) return;
+    const presets = getEditorSoundBankPresets();
+    const signature = presets.length
+      ? presets.map((preset) => `${editorPresetKey(preset.bank, preset.preset)}:${String(preset.name || "")}`).join("|")
+      : "loading";
+    if (signature === editorInstrumentOptionsSignature && selects.every((select) => select.options.length)) return;
+    editorInstrumentOptionsSignature = signature;
+    for (const select of selects) {
+      const previousValue = String(select.value || "");
+      select.replaceChildren();
+      if (!presets.length) {
+        const option = new Option(i18nText("기본 음색 준비 중…"), "0:0");
+        option.disabled = true;
+        select.add(option);
+        select.disabled = true;
+        continue;
       }
-      const option = document.createElement("option");
-      option.value = String(program);
-      option.textContent = `${program + 1}. ${name}`;
-      elements.channelInstrumentSelect.lastElementChild.append(option);
-    });
+      select.disabled = false;
+      for (const preset of presets) {
+        const bank = clamp(Math.round(Number(preset.bank) || 0), 0, 16383);
+        select.add(new Option(formatEditorPresetLabel(preset), editorPresetKey(bank, preset.preset)));
+      }
+      if ([...select.options].some((option) => option.value === previousValue)) select.value = previousValue;
+    }
   }
 
   async function initialize() {
+    try { await window.MobibardI18n?.ready; } catch (error) { console.error("Editor locale initialization failed", error); }
     populateChannelInstrumentSelect();
-    state.language = loadStoredLanguage();
+    state.language = normalizeLanguage(window.MobibardI18n?.language || loadStoredLanguage());
     applyLanguage(state.language, { persist: false });
     state.theme = loadStoredTheme();
     applyTheme(state.theme, { persist: false });
@@ -14352,11 +15263,21 @@
       scheduleAutosave(0);
     }
 
-    const prepareAudio = () => audioEngine.prepare();
+    const prepareAudio = async () => {
+      try {
+        await audioEngine.prepare();
+        reconcileEditorChannelsWithSoundBank();
+        populateChannelInstrumentSelect();
+        renderChannelEditor();
+        renderChannelTabs();
+      } catch (error) {
+        console.error("Editor default SoundFont preparation failed", error);
+      }
+    };
     if (typeof window.requestIdleCallback === "function") {
-      window.requestIdleCallback(prepareAudio, { timeout: 700 });
+      window.requestIdleCallback(() => { void prepareAudio(); }, { timeout: 700 });
     } else {
-      window.setTimeout(prepareAudio, 250);
+      window.setTimeout(() => { void prepareAudio(); }, 250);
     }
 
     // 추후 메뉴를 교체할 때 사용할 수 있도록 공개합니다.
@@ -14364,6 +15285,10 @@
       state,
       registerContextMenu,
       serializeProject,
+      loadProjectFromFile,
+      markProjectSaved,
+      showToast,
+      closeFileMenu,
       renderAll,
       ensureRollRenderBuffer,
       audioEngine,
@@ -14478,6 +15403,7 @@
       requestDeleteAudioClip,
     };
     window.Mobibard = window.MMLEditor;
+    window.dispatchEvent(new CustomEvent("mobibard:editorready", { detail: { editor: window.MMLEditor } }));
   }
 
   initialize().catch((error) => {

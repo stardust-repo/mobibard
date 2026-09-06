@@ -1,10 +1,10 @@
 (() => {
   "use strict";
 
-  const PREF_KEY = "mobibard.player.language";
-  const DEFAULT_LANGUAGE = "en";
-  const LOCALE_VERSION = "5.1.0";
-  const LOCALE_REVISION = "20260906-locale-prune1";
+  const PREF_KEY = "mobibard-language";
+  const DEFAULT_LANGUAGE = "ko";
+  const LOCALE_VERSION = "5.3.0";
+  const LOCALE_REVISION = "20260906-midi-export1";
   const SUPPORTED = Object.freeze({
     ko: { file: "ko.js", htmlLang: "ko" },
     ja: { file: "ja.js", htmlLang: "ja" },
@@ -135,7 +135,24 @@
     if (!data || typeof data !== "object" || !data.strings || typeof data.strings !== "object" || Array.isArray(data.strings)) {
       throw new Error(`Invalid locale data: ${normalized}`);
     }
-    return { ...data, code: normalized, strings: data.strings };
+    const rawPatterns = data.patterns && typeof data.patterns === "object" && !Array.isArray(data.patterns) ? data.patterns : {};
+    const compiledPatterns = Object.entries(rawPatterns).map(([source, target]) => {
+      const names = [];
+      let cursor = 0;
+      let pattern = "";
+      const matcher = /\{(\d+)\}/g;
+      let match;
+      while ((match = matcher.exec(source))) {
+        pattern += source.slice(cursor, match.index).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        pattern += "(.+?)";
+        names.push(Number(match[1]));
+        cursor = match.index + match[0].length;
+      }
+      pattern += source.slice(cursor).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const literalLength = source.replace(/\{\d+\}/g, "").length;
+      return { source, target: String(target), names, regex: new RegExp(`^${pattern}$`), literalLength };
+    }).sort((a, b) => (b.literalLength - a.literalLength) || (b.source.length - a.source.length));
+    return { ...data, code: normalized, strings: data.strings, patterns: rawPatterns, compiledPatterns };
   }
 
   function buildLocaleUrl(file) {
@@ -257,18 +274,35 @@
     }
   }
 
+  function translatePattern(source) {
+    const patterns = activeLocale?.compiledPatterns || [];
+    for (const item of patterns) {
+      const match = String(source).match(item.regex);
+      if (!match) continue;
+      const values = {};
+      item.names.forEach((name, index) => { values[name] = match[index + 1] ?? ""; });
+      return String(item.target).replace(/\{(\d+)\}/g, (_, index) => values[Number(index)] ?? "");
+    }
+    return null;
+  }
+
   function translateString(text) {
     const source = String(text == null ? "" : text);
     if (!source) return source;
     if (Object.prototype.hasOwnProperty.call(activeLocale?.strings || {}, source)) {
       return translateCore(source);
     }
+    const directPattern = translatePattern(source);
+    if (directPattern != null) return directPattern;
     const leading = source.match(/^\s*/)?.[0] || "";
     const trailing = source.match(/\s*$/)?.[0] || "";
     const coreEnd = source.length - trailing.length;
     const core = source.slice(leading.length, coreEnd);
     if (!core) return source;
-    return leading + translateCore(core) + trailing;
+    const direct = translateCore(core);
+    if (direct !== core) return leading + direct + trailing;
+    const patterned = translatePattern(core);
+    return patterned == null ? source : leading + patterned + trailing;
   }
 
   function shouldSkipNode(node) {

@@ -6,7 +6,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ko"] = {
   "strings": {
     "title": "MML 간편 생성기",
     "brand": "모비바드",
-    "browserTitle": "모비바드 v5.2",
+    "browserTitle": "모비바드 v5.3",
     "subtitle": "파일을 넣으면 3채널 MML로 바로 변환합니다.",
     "stepSourceTitle": "파일 불러오기",
     "stepSourceDescription": "MIDI·악보 파일을 선택하거나 MML을 붙여넣어 변환할 원본을 불러옵니다.",

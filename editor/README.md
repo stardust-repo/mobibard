@@ -2,7 +2,7 @@
 
 마지막 갱신: 2026-08-24 KST
 
-출시 검증: v5.1 final46. Editor 편집 기능은 유지하며 공용 포맷 계층에 VGM/VGZ, GYM, S98 입력을 추가했습니다. 정규화 기준은 현재 배포 소스와 `plugins/formats/NORMALIZATION_RULES.md`를 따릅니다.
+출시 검증: v5.3 alpha. Editor 편집 기능은 유지하며 공용 포맷 계층에 VGM/VGZ, GYM, S98 입력을 추가했습니다. 정규화 기준은 현재 배포 소스와 `plugins/formats/NORMALIZATION_RULES.md`를 따릅니다.
 
 ## 목적
 
@@ -32,7 +32,7 @@ MML 채널과 참조 연주 파일을 피아노롤에서 시각적으로 편집�
 
 ## 재생과 화면
 
-- SF2·SF3·DLS와 `assets/default_sf3.js`에 내장된 `FluidR3Mono_GM_compact.sf3`를 공용 SoundBank 계층에서 사용합니다.
+- SF2·SF3·DLS와 `assets/default_sf3.js`에 내장된 자체 제작 `MobiBard_Instruments.sf3` 14프리셋을 공용 SoundBank 계층에서 사용합니다.
 - `editor/js/soundbank-player.js`가 공용 SoundBank 모델을 Editor의 실시간 재생기에 연결합니다.
 - 상단 지원 파일 버튼은 노트·선택 도구 묶음의 왼쪽에 있습니다.
 - 확대·축소, 가로·세로 스크롤, 재생 위치 추적, 채널 트리 키보드 이동을 지원합니다.

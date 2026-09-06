@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "5.1.0";
+  const VERSION = "5.3.0";
 
   function requireApi(name, value, methods) {
     if (!value || methods.some(method => typeof value[method] !== "function")) {
