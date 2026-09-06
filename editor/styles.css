@@ -6024,6 +6024,42 @@ a[class*="button"]:hover {
 }
 
 /* Guest-menu SoundFont entry and its settings popup. */
+
+.editor-soundfont-downloads {
+  display: grid;
+  gap: 6px;
+  padding-top: 2px;
+}
+.editor-soundfont-downloads > span {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+.editor-soundfont-downloads > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.editor-soundfont-downloads a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+.editor-soundfont-downloads a:hover,
+.editor-soundfont-downloads a:focus-visible {
+  background: var(--control-hover);
+}
+
 .editor-soundfont-menu-field > button {
   min-width: 0;
   width: 100%;
@@ -6405,4 +6441,23 @@ a[class*="button"]:hover {
   max-height: none !important;
   border-radius: 0 !important;
   object-fit: cover !important;
+}
+
+
+/* fixed83: keep Firebase page_title stable; show the loaded source filename in the channel toolbar. */
+.channel-tree-toolbar {
+  grid-template-columns: minmax(0, 1fr) repeat(3, 30px) !important;
+  justify-content: stretch !important;
+}
+.channel-tree-loaded-file {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  align-self: center;
+  padding: 0 5px 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 30px;
+  user-select: text;
 }

@@ -22,6 +22,7 @@
 - 압축 해제, XML 해석, 바이트 변환 등 포맷별로 중복되던 기반 기능은 공용 유틸리티를 사용합니다.
 - Finale·Guitar Pro·보컬 포맷의 확장자별 중복 등록 스크립트를 포맷군별 단일 등록 파일로 정리했습니다.
 - SF2·SF3·DLS 해석과 샘플 준비는 공용 SoundBank 계층을 사용합니다. `assets/default_sf3.js`에는 자체 제작 `MobiBard_Instruments.sf3`가 내장되며 Piano·Chalumeau·Flute·Harp·Lute·Mandolin·Violin·Xylophone·MusicBox·Guitar·Harmonica·Cat·BigDrum·Cymbals의 14개 전용 프리셋을 제공합니다.
+- 동일한 기본 음색을 `assets/MobiBard_Instruments.sf3` 원본과 `assets/MobiBard_Instruments.dls` 호환 버전으로 함께 제공합니다. DLS는 SF3의 14개 프리셋, 57개 샘플, 키 범위, 루프, 튜닝 및 음량 감쇠 정보를 DLS Level 2 구조로 변환한 PCM 버전입니다. 두 파일 모두 개인·상업적 이용, 복사, 수정, 변환, 재배포, 미러링 및 웹에서의 직접 링크를 제한 없이 허용하며 출처 표기나 별도 허가가 필요하지 않습니다. Player와 Editor의 사운드폰트 설정 팝업에서도 SF3/DLS를 바로 다운로드할 수 있습니다. 자세한 자유 이용 안내는 `assets/MobiBard_Instruments_LICENSE.txt`를 참고합니다.
 - MUSX, MNX, MSCZ, MSCX 입력을 추가했습니다. 각 형식은 표준 MIDI로 정규화된 뒤 동일한 공용 MIDI 파서를 사용합니다.
 - 배포에 사용되지 않는 Guitar Pro 개발 소스와 테스트 전용 코드·샘플은 최종 패키지에서 제외했습니다.
 - 지원 파일 팝업의 제목을 버튼과 같은 `지원 파일`로 통일하고, 글꼴의 × 문자를 사용하던 닫기 버튼을 중앙 정렬된 SVG 아이콘으로 교체했습니다.

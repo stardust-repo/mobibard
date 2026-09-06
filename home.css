@@ -59,8 +59,13 @@ h1 {
   line-height: .98;
   letter-spacing: -.045em;
 }
+.hero > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .hero-copy {
-  max-width: 700px;
+  width: 100%;
+  max-width: none;
   margin: 15px 0 0;
   color: var(--muted);
   font-size: 16px;
@@ -183,4 +188,77 @@ h1 {
   .product-grid { grid-template-columns: 1fr; }
   .product-card { min-height: 188px; }
   .home-footer { flex-direction: column; gap: 4px; }
+}
+
+.soundfont-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  margin-top: 14px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.soundfont-copy { flex: 1 1 auto; min-width: 0; }
+.soundfont-kicker {
+  margin: 0 0 7px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.soundfont-card h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+  letter-spacing: -.02em;
+}
+.soundfont-description,
+.soundfont-license {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.soundfont-license { font-size: 12px; }
+.soundfont-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 150px;
+}
+.soundfont-link {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.soundfont-link:hover,
+.soundfont-link:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+.soundfont-link.primary {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+@media (max-width: 760px) {
+  .soundfont-card { align-items: stretch; flex-direction: column; gap: 16px; }
+  .soundfont-actions { min-width: 0; }
+  .soundfont-link { width: 100%; }
 }

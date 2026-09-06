@@ -239,6 +239,7 @@
     verticalScrollThumb: document.querySelector("#verticalScrollThumb"),
     channelPanel: document.querySelector("#channelPanel"),
     channelTabs: document.querySelector("#channelTabs"),
+    loadedFileName: document.querySelector("#loadedFileName"),
     mergeChannelsButton: document.querySelector("#mergeChannelsButton"),
     addChannelButton: document.querySelector("#addChannelButton"),
     deleteChannelsButton: document.querySelector("#deleteChannelsButton"),
@@ -429,6 +430,7 @@
 
   const state = {
     projectName: "새 프로젝트",
+    loadedFileName: "",
     snapValue: 4,
     rowHeight: CONFIG.defaultRowHeight,
     zoom: 1,
@@ -757,7 +759,10 @@
         name: "자동 저장.mmlproj.json",
         text: async () => JSON.stringify(snapshot.data),
       };
-      await loadProjectFromFile(virtualFile, { notify: false });
+      await loadProjectFromFile(virtualFile, {
+        notify: false,
+        loadedFileName: snapshot.data?.editor?.loadedFileName || "",
+      });
       await restoreAutosaveAudioAssets(snapshot.audioAssets);
       state.autosave.lastSavedAt = Number(snapshot.savedAt) || Date.now();
       state.autosave.pendingChanges = false;
@@ -2740,7 +2745,15 @@
     }
   }
 
+  function renderLoadedFileName() {
+    if (!elements.loadedFileName) return;
+    const fileName = String(state.loadedFileName || "").trim();
+    elements.loadedFileName.textContent = fileName;
+    elements.loadedFileName.title = fileName;
+  }
+
   function renderAll() {
+    renderLoadedFileName();
     renderChannelTabs();
     renderChannelEditor();
     renderHistoryPanel();
@@ -6673,6 +6686,7 @@
       state.channels = [];
       state.activeChannel = 0;
       state.projectName = sourceTitle;
+      state.loadedFileName = String(fileName || parsed?.fileName || "").trim();
     }
 
     const hueByInstrument = new Map();
@@ -6777,6 +6791,7 @@
         state.channels = [];
         state.activeChannel = 0;
         state.projectName = String(fileName || importLabel).replace(/\.(?:mml|3mle|mmi|txt)$/i, "") || importLabel;
+        state.loadedFileName = String(fileName || "").trim();
       }
       state.mmlImport.sourceFileName = fileName;
       const importedChannelIds = [];
@@ -7431,7 +7446,8 @@
 
   function updateDirtyState() {
     elements.dirtyIndicator.hidden = !state.dirty;
-    document.title = `${state.dirty ? "● " : ""}${state.projectName} - 모비바드 ${APP_VERSION_LABEL}`;
+    // Firebase/GA의 자동 page_title 수집이 곡명/프로젝트명으로 분산되지 않도록 브라우저 제목은 항상 고정합니다.
+    if (document.title !== "MobiBard Editor") document.title = "MobiBard Editor";
   }
 
   function captureHistorySnapshot() {
@@ -13401,7 +13417,7 @@
   function serializeProject() {
     return {
       format: "mml-piano-roll-project",
-      version: 23,
+      version: 24,
       projectName: state.projectName,
       snapValue: state.snapValue,
       rowHeight: state.rowHeight,
@@ -13417,6 +13433,7 @@
       midiDocuments: [],
       audioClips: state.audioClips.map((clip) => ({ ...clip, assetAvailable: Boolean(getAudioRuntime(clip.id)?.audioBuffer) })),
       editor: {
+        loadedFileName: state.loadedFileName,
         activeChannel: state.activeChannel,
         activePanel: state.activePanel,
         activeMidiDocumentId: state.activeMidiDocumentId,
@@ -13520,7 +13537,7 @@
     return true;
   }
 
-  async function loadProjectFromFile(file, { notify = true } = {}) {
+  async function loadProjectFromFile(file, { notify = true, loadedFileName = null } = {}) {
     state.channelNoteRuntime.clear();
     state.audioRuntime.clear();
     state.collapsedMidiDocumentIds.clear();
@@ -13532,6 +13549,9 @@
     clearEditorPitchPreview(true);
 
     state.projectName = data.projectName || file.name.replace(/\.(mmlproj\.)?json$/i, "");
+    state.loadedFileName = loadedFileName == null
+      ? String(file?.name || "").trim()
+      : String(loadedFileName || "").trim();
     state.snapValue = [1, 2, 4, 8, 16, 32, 64].includes(Number(data.snapValue)) ? Number(data.snapValue) : 4;
     state.rowHeight = normalizeRowHeight(data.rowHeight);
     state.zoom = normalizeZoom(data.zoom);
@@ -13801,6 +13821,7 @@
     releaseKeyboardVoice(true);
     clearEditorPitchPreview(true);
     state.projectName = "새 프로젝트";
+    state.loadedFileName = "";
     state.snapValue = 4;
     state.rowHeight = CONFIG.defaultRowHeight;
     state.zoom = 1;

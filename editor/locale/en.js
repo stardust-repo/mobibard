@@ -339,6 +339,8 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "빈 채널": "Empty channel",
     "빨간 재생선 기준": "At red playhead",
     "빨간 재생선 기준으로 마디/박자 공간 추가 또는 삭제": "Add or remove measure/beat space at the red playhead",
+    "SF3 다운로드": "Download SF3",
+    "DLS 다운로드": "Download DLS",
     "사운드폰트": "SoundFont",
     "사운드폰트 설정": "SoundFont settings",
     "사이트 맵": "Site map",

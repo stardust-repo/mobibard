@@ -1,0 +1,38 @@
+MobiBard Instruments SF3 / DLS - Free Use Notice
+=================================================
+
+Files:
+- MobiBard_Instruments.sf3
+- MobiBard_Instruments.dls
+
+위 두 파일은 누구나 목적 제한 없이 자유롭게 사용할 수 있습니다.
+개인 및 상업적 이용, 복사, 수정, 변환, 편집, 번들 포함, 재배포, 미러링,
+웹 페이지나 게시물에서의 직접 링크를 모두 허용합니다.
+출처 표기나 별도 허가 요청은 필요하지 않으며, 동일 조건 배포 의무도 없습니다.
+
+DLS 파일은 위 SF3의 음색 데이터를 호환용 DLS 형식으로 변환한 버전이며
+동일한 자유 이용 조건을 적용합니다.
+
+가능한 범위에서 권리자는 이 파일들에 대한 권리를 포기합니다.
+법률상 권리 포기가 허용되지 않는 범위에서는 누구에게나 전 세계적이고,
+영구적이며, 취소 불가능하고, 무상이며, 목적 제한 없는 사용 권한을 부여합니다.
+
+두 파일은 어떠한 보증 없이 "있는 그대로" 제공됩니다.
+
+---
+
+These two files may be freely used for any purpose without restriction.
+Personal and commercial use, copying, modification, conversion, editing,
+bundling, redistribution, mirroring, and direct linking from websites or posts
+are all permitted. Attribution and separate permission are not required, and
+there is no share-alike requirement.
+
+The DLS file is a compatible DLS-format conversion of the SF3 sound data and is
+provided under the same free-use terms.
+
+To the extent legally possible, the rights holder waives all rights in these
+files. Where such waiver is not legally possible, everyone is granted a
+worldwide, perpetual, irrevocable, royalty-free, unrestricted license to use
+them for any purpose.
+
+The files are provided "as is", without warranty of any kind.

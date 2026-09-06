@@ -2252,6 +2252,43 @@ body.rhythm-game-open { overflow: hidden; }
   white-space: nowrap;
 }
 
+
+.soundfont-download-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 9px;
+}
+.soundfont-download-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+.soundfont-download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--button-bg, var(--panel));
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.soundfont-download-button:hover,
+.soundfont-download-button:focus-visible {
+  border-color: var(--accent);
+  background: var(--hover, var(--input-bg));
+}
+
 .mml-dialog[open] {
   max-height: calc(100dvh - 20px);
   overflow: hidden;
@@ -10069,4 +10106,9 @@ button:hover,
 [role="button"]:hover,
 a[class*="button"]:hover {
   transform: none !important;
+}
+
+@media (max-width: 640px) {
+  .soundfont-download-row { grid-template-columns: 1fr; gap: 6px; }
+  .soundfont-download-control { grid-template-columns: 1fr 1fr; }
 }
