@@ -310,9 +310,14 @@
     mmlExportSelectAllButton: document.querySelector("#mmlExportSelectAllButton"),
     mmlExportClearAllButton: document.querySelector("#mmlExportClearAllButton"),
     mmlExportChannelList: document.querySelector("#mmlExportChannelList"),
+    mmlExportCopyPanel: document.querySelector("#mmlExportCopyPanel"),
+    mmlExportFullCopyDetail: document.querySelector("#mmlExportFullCopyDetail"),
+    mmlExportCopyAllButton: document.querySelector("#mmlExportCopyAllButton"),
+    mmlExportSplitSummary: document.querySelector("#mmlExportSplitSummary"),
+    mmlExportSplitLimitInput: document.querySelector("#mmlExportSplitLimitInput"),
+    mmlExportSplitButtons: document.querySelector("#mmlExportSplitButtons"),
     mmlExportSummary: document.querySelector("#mmlExportSummary"),
     mmlExportCancelButton: document.querySelector("#mmlExportCancelButton"),
-    mmlExportApplyButton: document.querySelector("#mmlExportApplyButton"),
     channelMergeBackdrop: document.querySelector("#channelMergeBackdrop"),
     channelMergeCloseButton: document.querySelector("#channelMergeCloseButton"),
     channelMergeCancelButton: document.querySelector("#channelMergeCancelButton"),
@@ -1759,8 +1764,16 @@
     return snapBeatToUnit(beat, getSnapBeat());
   }
 
-  function getPlaybackVisualBeat(beat) {
-    return snapBeatToUnit(beat, CONFIG.minimumNoteBeat, "floor");
+  function getPlaybackVisualBeat(beat, { snapWhenStopped = true } = {}) {
+    const safeBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
+    // Playback must track the audio clock continuously. Quantizing the visual beat
+    // here made the red playhead jump one 1/64-note cell at a time, which becomes
+    // very noticeable at high zoom. Keep the continuous beat while playback is
+    // active and only quantize once playback is stopped.
+    if (state.playback.running || state.playback.loading || !snapWhenStopped) {
+      return safeBeat;
+    }
+    return snapBeatToUnit(safeBeat, CONFIG.minimumNoteBeat, "floor");
   }
 
   function getMaxScrollLeft() {
@@ -3261,7 +3274,9 @@
 
 
   function getAlignedVisiblePlayheadX() {
-    return Math.round(beatToX(state.playhead.beat) - elements.rollViewport.scrollLeft);
+    // Preserve sub-pixel X while playing. CSS transforms can render fractional
+    // pixels smoothly; rounding here caused a second, pixel-sized stepping layer.
+    return beatToX(state.playhead.beat) - elements.rollViewport.scrollLeft;
   }
 
   function getTempoMarkerScreenGeometry(tempo) {
@@ -3633,7 +3648,7 @@
     const bottom = (audioRect?.bottom || rollRect.bottom) - pianoRect.top;
     elements.playhead.style.top = `${Math.round(top)}px`;
     elements.playhead.style.height = `${Math.max(0, Math.round(bottom - top))}px`;
-    elements.playhead.style.transform = `translateX(${Math.round(left) - 1}px)`;
+    elements.playhead.style.transform = `translate3d(${left - 1}px, 0, 0)`;
   }
 
   function previewNotesAtPlayhead(beat) {
@@ -9320,6 +9335,16 @@
       return;
     }
 
+    // When a note context menu is open, the first left click on the piano-roll
+    // is only a dismissal gesture. Do not let that same click create, move,
+    // resize, seek, or alter note selection.
+    if (event.button === 0 && elements.contextMenu && !elements.contextMenu.hidden) {
+      closeContextMenu();
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     if (event.button === 2 && isCancelableNoteInteraction()) {
       cancelCurrentNoteInteraction();
       event.preventDefault();
@@ -11399,6 +11424,14 @@
   }
 
   let mmlExportSelectionQueue = [];
+  const MML_EXPORT_SPLIT_DEFAULT_CHARS = 2400;
+  const MML_EXPORT_SPLIT_MAX_PAGES = 200;
+  let mmlExportSplitMaxChars = MML_EXPORT_SPLIT_DEFAULT_CHARS;
+  let mmlExportCopyState = { mml: "", pages: [] };
+
+  function normalizeMmlExportSplitMaxChars(value) {
+    return Math.max(200, Math.min(5000, Math.round(Number(value) || MML_EXPORT_SPLIT_DEFAULT_CHARS)));
+  }
 
   function getMmlExportSelectedChannels() {
     if (!elements.mmlExportChannelList) return [];
@@ -11452,6 +11485,276 @@
     ), 0);
   }
 
+  function splitMmlPartsForExport(mml) {
+    const source = String(mml || "").trim();
+    const match = source.match(/^MML@([\s\S]*);$/i);
+    if (!match) return [];
+    return match[1].split(",");
+  }
+
+  function getMmlExportPartLengths(mml) {
+    return splitMmlPartsForExport(mml).map((part) => String(part || "").length);
+  }
+
+  function getMmlExportMaxPartLength(mml) {
+    const lengths = getMmlExportPartLengths(mml);
+    return lengths.length ? Math.max(...lengths) : 0;
+  }
+
+  function formatMmlExportPartLengths(page) {
+    const lengths = Array.isArray(page?.lengths) && page.lengths.length
+      ? page.lengths
+      : getMmlExportPartLengths(page?.mml || "");
+    const visible = lengths
+      .map((length, index) => ({ length: Number(length) || 0, index }))
+      .filter((item) => item.length > 0)
+      .map((item) => i18nText("mml_export.part_length", [item.index + 1, item.length.toLocaleString()]));
+    return visible.join(" · ") || i18nText("mml_export.part_length", [1, "0"]);
+  }
+
+  function channelsToMmlRange(channels, startBeat, endBeat, tempos = getSortedTempos()) {
+    const start = Math.max(0, Number(startBeat) || 0);
+    const end = Math.max(start + CONFIG.minimumNoteBeat, Number(endBeat) || start + CONFIG.minimumNoteBeat);
+    const fullVoices = [];
+    for (const channel of (channels || []).filter((item) => item?.notes?.length)) {
+      const normalized = channel.notes.map((note) => ({
+        ...note,
+        startBeat: Math.max(0, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat)),
+        durationBeat: Math.max(CONFIG.minimumNoteBeat, snapBeatToUnit(note.durationBeat, CONFIG.minimumNoteBeat)),
+      }));
+      partitionNotesIntoMmlVoices(normalized).forEach((voice) => fullVoices.push(voice));
+    }
+    if (!fullVoices.length) return "";
+
+    const rendered = fullVoices.map((voice, voiceIndex) => {
+      const clipped = voice.flatMap((note) => {
+        const noteStart = Math.max(0, Number(note.startBeat) || 0);
+        const noteEnd = noteStart + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        if (noteEnd <= start + 1e-7 || noteStart >= end - 1e-7) return [];
+        const clippedStart = Math.max(start, noteStart);
+        const clippedEnd = Math.min(end, noteEnd);
+        if (clippedEnd <= clippedStart + 1e-7) return [];
+        return [{
+          ...note,
+          startBeat: Number(clippedStart.toFixed(6)),
+          durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, clippedEnd - clippedStart).toFixed(6)),
+        }];
+      });
+      if (voiceIndex === 0) return buildTempoIntegratedNoteVoiceMml(clipped, tempos, start, end);
+      return clipped.length ? buildNoteVoiceMml(clipped, start) : "";
+    });
+    return `MML@${rendered.join(",")};`;
+  }
+
+  function buildMmlExportSplitCandidates(channels, tempos, totalEndBeat) {
+    const candidates = new Set([0, Number(totalEndBeat) || 0]);
+    for (const channel of channels || []) {
+      for (const note of channel?.notes || []) {
+        const start = Math.max(0, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat));
+        const end = start + Math.max(CONFIG.minimumNoteBeat, snapBeatToUnit(note.durationBeat, CONFIG.minimumNoteBeat));
+        if (start > 1e-7 && start < totalEndBeat - 1e-7) candidates.add(Number(start.toFixed(6)));
+        if (end > 1e-7 && end < totalEndBeat - 1e-7) candidates.add(Number(end.toFixed(6)));
+      }
+    }
+    for (const tempo of tempos || []) {
+      const beat = Math.max(0, snapBeatToUnit(tempo.beat, CONFIG.minimumNoteBeat));
+      if (beat > 1e-7 && beat < totalEndBeat - 1e-7) candidates.add(Number(beat.toFixed(6)));
+    }
+    return [...candidates]
+      .filter((beat) => Number.isFinite(beat) && beat >= 0 && beat <= totalEndBeat + 1e-7)
+      .sort((a, b) => a - b);
+  }
+
+  function splitMmlExportPages(channels, fullMml) {
+    const source = String(fullMml || "");
+    if (!source) return [];
+    const sourceParts = splitMmlPartsForExport(source);
+    const sourceLengths = sourceParts.map((part) => String(part || "").length);
+    const sourceMax = sourceLengths.length ? Math.max(...sourceLengths) : 0;
+    if (sourceMax <= mmlExportSplitMaxChars) {
+      return [{ index: 1, mml: source, parts: sourceParts, lengths: sourceLengths, maxPartLength: sourceMax }];
+    }
+
+    if (sourceParts.length <= 6 && window.MabiOptimizer?.splitMmlPages) {
+      try {
+        const result = window.MabiOptimizer.splitMmlPages(source, {
+          partCount: Math.max(1, sourceParts.length),
+          maxChars: mmlExportSplitMaxChars,
+          searchEndPercent: 50,
+          maxCommonSilenceBeats: 2,
+        });
+        if (Array.isArray(result?.pages) && result.pages.length) {
+          return result.pages.map((page, index) => {
+            const parts = Array.isArray(page.parts) ? page.parts.slice() : splitMmlPartsForExport(page.mml);
+            const lengths = Array.isArray(page.lengths) ? page.lengths.slice() : parts.map((part) => String(part || "").length);
+            return {
+              ...page,
+              index: index + 1,
+              parts,
+              lengths,
+              maxPartLength: Number(page.maxPartLength) || (lengths.length ? Math.max(...lengths) : 0),
+            };
+          });
+        }
+      } catch (error) {
+        console.warn("Editor MML split fallback", error);
+      }
+    }
+
+    const tempos = getSortedTempos();
+    const totalEndBeat = getMmlExportEndBeat(channels);
+    if (!(totalEndBeat > 0)) {
+      return [{ index: 1, mml: source, parts: sourceParts, lengths: sourceLengths, maxPartLength: sourceMax }];
+    }
+
+    const candidates = buildMmlExportSplitCandidates(channels, tempos, totalEndBeat);
+    const pages = [];
+    let pageStart = 0;
+    let guard = 0;
+
+    while (pageStart < totalEndBeat - 1e-7 && guard++ < MML_EXPORT_SPLIT_MAX_PAGES) {
+      const firstIndex = candidates.findIndex((beat) => beat > pageStart + 1e-7);
+      if (firstIndex < 0) break;
+      let low = firstIndex;
+      let high = candidates.length - 1;
+      let bestIndex = -1;
+      let bestMml = "";
+      let bestLengths = [];
+      const cache = new Map();
+
+      const renderAt = (index) => {
+        if (cache.has(index)) return cache.get(index);
+        const endBeat = candidates[index];
+        const mml = channelsToMmlRange(channels, pageStart, endBeat, tempos);
+        const lengths = getMmlExportPartLengths(mml);
+        const maxPartLength = lengths.length ? Math.max(...lengths) : 0;
+        const result = { mml, lengths, maxPartLength };
+        cache.set(index, result);
+        return result;
+      };
+
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const rendered = renderAt(mid);
+        if (rendered.mml && rendered.maxPartLength <= mmlExportSplitMaxChars) {
+          bestIndex = mid;
+          bestMml = rendered.mml;
+          bestLengths = rendered.lengths;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+
+      if (bestIndex < 0) {
+        bestIndex = firstIndex;
+        const rendered = renderAt(bestIndex);
+        bestMml = rendered.mml;
+        bestLengths = rendered.lengths;
+      }
+
+      const pageEnd = Math.max(pageStart + CONFIG.minimumNoteBeat, candidates[bestIndex]);
+      if (!bestMml) bestMml = channelsToMmlRange(channels, pageStart, pageEnd, tempos);
+      if (!bestLengths.length) bestLengths = getMmlExportPartLengths(bestMml);
+      const maxPartLength = bestLengths.length ? Math.max(...bestLengths) : 0;
+      pages.push({
+        index: pages.length + 1,
+        mml: bestMml,
+        parts: splitMmlPartsForExport(bestMml),
+        lengths: bestLengths,
+        maxPartLength,
+        startBeat: pageStart,
+        endBeat: pageEnd,
+      });
+      if (pageEnd <= pageStart + 1e-7) break;
+      pageStart = pageEnd;
+    }
+
+    if (!pages.length || pageStart < totalEndBeat - 1e-7) {
+      return [{ index: 1, mml: source, parts: sourceParts, lengths: sourceLengths, maxPartLength: sourceMax }];
+    }
+    return pages;
+  }
+
+  async function copyMmlExportText(text, button, successMessage) {
+    const copied = await writeTextToClipboard(text);
+    if (!copied) {
+      showToast(i18nText("mml_export.copy_failed"));
+      return false;
+    }
+    if (button) {
+      const original = button.textContent;
+      button.textContent = i18nText("copied");
+      button.classList.add("copied");
+      window.setTimeout(() => {
+        if (!button.isConnected) return;
+        button.textContent = original;
+        button.classList.remove("copied");
+      }, 1200);
+    }
+    showToast(successMessage);
+    return true;
+  }
+
+  function renderMmlExportCopyActions(selectedChannels) {
+    const channels = (selectedChannels || []).filter((channel) => channel?.notes?.length);
+    if (!channels.length) {
+      mmlExportCopyState = { mml: "", pages: [] };
+      if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = true;
+      if (elements.mmlExportCopyAllButton) elements.mmlExportCopyAllButton.disabled = true;
+      if (elements.mmlExportSplitButtons) elements.mmlExportSplitButtons.replaceChildren();
+      return;
+    }
+
+    const mml = channelsToMml(channels, { originBeat: 0 });
+    const parts = splitMmlPartsForExport(mml);
+    const maxPartLength = getMmlExportMaxPartLength(mml);
+    const pages = splitMmlExportPages(channels, mml);
+    mmlExportCopyState = { mml, pages };
+
+    if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = false;
+    if (elements.mmlExportCopyAllButton) elements.mmlExportCopyAllButton.disabled = !mml;
+    if (elements.mmlExportFullCopyDetail) {
+      elements.mmlExportFullCopyDetail.textContent = i18nText("mml_export.full_detail", [parts.length, maxPartLength.toLocaleString()]);
+    }
+    if (elements.mmlExportSplitSummary) {
+      elements.mmlExportSplitSummary.textContent = pages.length > 1
+        ? i18nText("mml_export.split_detail", [mmlExportSplitMaxChars.toLocaleString(), pages.length])
+        : i18nText("mml_export.split_not_needed", [maxPartLength.toLocaleString()]);
+    }
+    if (elements.mmlExportSplitLimitInput && document.activeElement !== elements.mmlExportSplitLimitInput) {
+      elements.mmlExportSplitLimitInput.value = String(mmlExportSplitMaxChars);
+    }
+    if (elements.mmlExportSplitButtons) {
+      elements.mmlExportSplitButtons.replaceChildren();
+      pages.forEach((page, index) => {
+        const row = document.createElement("div");
+        row.className = "mml-export-page-copy-row";
+        const meta = document.createElement("div");
+        meta.className = "mml-export-page-copy-meta";
+        const title = document.createElement("strong");
+        title.textContent = i18nText("mml_export.page_label", [index + 1]);
+        const detail = document.createElement("small");
+        detail.textContent = formatMmlExportPartLengths(page);
+        meta.append(title, detail);
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "mml-export-page-copy-button";
+        button.textContent = i18nText("copy");
+        const longest = Number(page.maxPartLength) || getMmlExportMaxPartLength(page.mml);
+        button.title = i18nText("mml_export.page_detail", [index + 1, longest.toLocaleString()]);
+        button.addEventListener("click", () => void copyMmlExportText(
+          page.mml,
+          button,
+          i18nText("mml_export.split_copied", [index + 1]),
+        ));
+        row.append(meta, button);
+        elements.mmlExportSplitButtons.append(row);
+      });
+    }
+  }
+
   function syncMmlExportSelectionIndicators() {
     if (!elements.mmlExportChannelList) return;
     const selectedChannels = getMmlExportSelectedChannels();
@@ -11500,10 +11803,10 @@
     syncMmlExportSelectionIndicators();
     if (elements.mmlExportSummary) {
       elements.mmlExportSummary.textContent = selected.length
-        ? `${selected.length}개 채널 선택 · 체크 순서대로 내보냅니다.`
+        ? i18nText("mml_export.selection_summary", [selected.length])
         : (exportableCount ? "선택된 채널이 없습니다." : "내보낼 노트가 있는 채널이 없습니다.");
     }
-    if (elements.mmlExportApplyButton) elements.mmlExportApplyButton.disabled = selected.length === 0;
+    renderMmlExportCopyActions(selected);
   }
 
   function renderMmlExportChannelList() {
@@ -11567,8 +11870,11 @@
   function closeMmlExportDialog() {
     if (elements.mmlExportBackdrop) elements.mmlExportBackdrop.hidden = true;
     if (elements.mmlExportChannelList) elements.mmlExportChannelList.replaceChildren();
+    if (elements.mmlExportSplitButtons) elements.mmlExportSplitButtons.replaceChildren();
+    if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = true;
     mmlExportSelectionQueue = [];
-    updateMmlExportDialogState();
+    mmlExportCopyState = { mml: "", pages: [] };
+    if (elements.mmlExportSummary) elements.mmlExportSummary.textContent = "선택된 채널이 없습니다.";
   }
 
   function appendDurationTokens(output, symbol, durationBeat, { tied = false } = {}) {
@@ -11693,19 +11999,16 @@
       updateMmlExportDialogState();
       return false;
     }
-    const mml = channelsToMml(channels, { originBeat: 0 });
+    const mml = mmlExportCopyState.mml || channelsToMml(channels, { originBeat: 0 });
     if (!mml) {
       showToast("내보낼 노트가 없습니다.");
       return false;
     }
-    const copied = await writeTextToClipboard(mml);
-    if (!copied) {
-      showToast("클립보드에 내보내지 못했습니다.");
-      return false;
-    }
-    closeMmlExportDialog();
-    showToast(`${channels.length}개 채널을 선택 순서대로 MML로 내보냈습니다.`);
-    return true;
+    return copyMmlExportText(
+      mml,
+      elements.mmlExportCopyAllButton,
+      i18nText("mml_export.full_copied", [channels.length]),
+    );
   }
 
   function exportCurrentContextAsMml() {
@@ -12933,10 +13236,9 @@
       const progress = clamp((now - animation.startedAt) / animation.duration, 0, 1);
       const eased = easeInOutCubic(progress);
       const interpolated = animation.from + (animation.to - animation.from) * eased;
-      elements.rollViewport.scrollLeft = snapScrollLeftToBeatUnit(
-        interpolated,
-        CONFIG.minimumNoteBeat,
-      );
+      // Do not quantize every animation frame. The destination may stay aligned
+      // to the 1/64 grid, but intermediate scroll positions must remain continuous.
+      elements.rollViewport.scrollLeft = clamp(interpolated, 0, getMaxScrollLeft());
       if (progress >= 1) {
         state.playback.scrollAnimation = null;
       }
@@ -13002,7 +13304,7 @@
       return;
     }
 
-    const visualBeat = getPlaybackVisualBeat(currentBeat);
+    const visualBeat = getPlaybackVisualBeat(currentBeat, { snapWhenStopped: false });
     updatePlaybackKeyboardPitches(currentBeat);
     if (state.playhead.pointerId === null) {
       state.playhead.beat = visualBeat;
@@ -13018,6 +13320,8 @@
   }
 
   function stopPlayback(resetToStart = false) {
+    const wasPlaybackActive = state.playback.running || state.playback.loading;
+    const stoppedBeat = state.playhead.beat;
     state.playback.requestToken += 1;
     state.playback.loading = false;
     state.playback.running = false;
@@ -13038,6 +13342,12 @@
       setPlayheadBeat(0);
       elements.rollViewport.scrollLeft = 0;
     } else {
+      // While stopped, keep the editor cursor on the existing 1/64-note grid.
+      // This preserves deterministic edit/select positions without forcing the
+      // moving playback line to jump between those cells.
+      if (wasPlaybackActive) {
+        state.playhead.beat = getPlaybackVisualBeat(stoppedBeat);
+      }
       updatePlayheadVisual();
       drawTimeline();
       updatePlaybackTimeInfo();
@@ -14015,6 +14325,9 @@
         { label: "선택 노트 볼륨 수정", action: openNoteVolumeDialog },
         ...(mergePlan ? [{ label: i18nText("같은 음 {0}개 합침", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         "separator",
+        { label: "왼쪽으로 선택 확장 (Ctrl + ←)", action: () => extendSelectedNotesToSide(-1) },
+        { label: "오른쪽으로 선택 확장 (Ctrl + →)", action: () => extendSelectedNotesToSide(1) },
+        "separator",
         {
           label: state.selectedNoteIds.size > 1 ? `선택 노트 ${state.selectedNoteIds.size}개 삭제` : "선택 노트 삭제",
           danger: true,
@@ -14562,7 +14875,12 @@
       mmlExportSelectionQueue = [];
       updateMmlExportDialogState();
     });
-    elements.mmlExportApplyButton?.addEventListener("click", applyMmlExportSelection);
+    elements.mmlExportSplitLimitInput?.addEventListener("change", () => {
+      mmlExportSplitMaxChars = normalizeMmlExportSplitMaxChars(elements.mmlExportSplitLimitInput.value);
+      elements.mmlExportSplitLimitInput.value = String(mmlExportSplitMaxChars);
+      updateMmlExportDialogState();
+    });
+    elements.mmlExportCopyAllButton?.addEventListener("click", applyMmlExportSelection);
     elements.mmlExportBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.mmlExportBackdrop) closeMmlExportDialog();
     });

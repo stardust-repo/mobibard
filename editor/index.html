@@ -9,7 +9,7 @@
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <title>모비바드 v5.3</title>
 <link href="../assets/favicon.ico" rel="icon"/>
-<link href="styles.css?v=5.2.21" rel="stylesheet"/>
+<link href="styles.css?v=5.2.21&amp;rev=20260907-editor79" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -291,10 +291,23 @@
 </div>
 <div class="popup-backdrop" hidden="" id="mmlExportBackdrop">
 <section aria-label="MML 내보내기" aria-modal="true" class="transfer-dialog mml-export-dialog" id="mmlExportDialog" role="dialog">
-<div class="transfer-dialog-header"><div><strong>MML 내보내기</strong><span>체크한 순서대로 채널을 내보냅니다.</span></div><button aria-label="닫기" class="channel-mute-close" id="mmlExportCloseButton" type="button">×</button></div>
+<div class="transfer-dialog-header"><div><strong>MML 내보내기</strong><span data-i18n="mml_export.selection_hint">체크한 순서대로 채널을 복사합니다.</span></div><button aria-label="닫기" class="channel-mute-close" id="mmlExportCloseButton" type="button">×</button></div>
 <div class="mml-export-selection-actions"><button id="mmlExportSelectAllButton" type="button">모두 선택</button><button id="mmlExportClearAllButton" type="button">모두 해제</button></div>
 <div class="mml-export-channel-list" id="mmlExportChannelList"></div>
-<div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="mmlExportSummary">선택된 채널이 없습니다.</div><button id="mmlExportCancelButton" type="button">취소</button><button disabled="" id="mmlExportApplyButton" type="button">내보내기</button></div>
+<div class="mml-export-copy-panel" hidden="" id="mmlExportCopyPanel">
+<div class="mml-export-copy-row">
+<div class="mml-export-copy-meta"><strong data-i18n="mml_export.copy_all">전체 복사</strong><small id="mmlExportFullCopyDetail">선택된 채널이 없습니다.</small></div>
+<button data-i18n="copy" disabled="" id="mmlExportCopyAllButton" type="button">복사</button>
+</div>
+<div class="mml-export-split-block">
+<div class="mml-export-split-head">
+<div class="mml-export-copy-meta"><strong data-i18n="mml_export.copy_split">분할 복사</strong><small id="mmlExportSplitSummary">2,400자 기준으로 나눕니다.</small></div>
+<label class="mml-export-split-limit"><span data-i18n="mml_export.split_limit">분할 글자</span><input aria-label="분할할 최대 글자 수" id="mmlExportSplitLimitInput" inputmode="numeric" max="5000" min="200" step="50" type="number" value="2400"/></label>
+</div>
+<div class="mml-export-split-buttons" id="mmlExportSplitButtons"></div>
+</div>
+</div>
+<div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="mmlExportSummary">선택된 채널이 없습니다.</div><button data-i18n="close" id="mmlExportCancelButton" type="button">닫기</button></div>
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="channelMergeBackdrop">
@@ -402,6 +415,7 @@
 <div class="context-menu" hidden="" id="contextMenu" role="menu"></div>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
 <script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
+<script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260907-editor-export-copy1"></script>
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/notation/notation-utils.js?v=5.1.0"></script>
@@ -438,7 +452,7 @@
 <script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
-<script src="../assets/default_sf3.js?v=20260907-mobibard14-v12"></script>
+<script src="../assets/default_sf3.js?v=20260907-mobibard15-user3"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
 <script src="js/soundbank-player.js?v=5.3.0&amp;rev=20260907-dynamic-presets1"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final46"></script>
@@ -446,8 +460,8 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260823-final8" type="module"></script>
-<script src="js/language-manager.js?v=5.3.0&amp;rev=20260906-merge-playhead1"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260907-dynamic-presets1"></script>
-<script src="js/account-drive.js?v=5.3.0&amp;rev=20260906-editor-drive1" type="module"></script>
+<script src="js/language-manager.js?v=5.3.0&amp;rev=20260907-editor79"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260907-editor79"></script>
+<script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>
