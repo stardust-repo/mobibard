@@ -292,7 +292,6 @@
     midiImportQuantize: document.querySelector("#midiImportQuantize"),
     midiImportIgnoreSingle64thOverlap: document.querySelector("#midiImportIgnoreSingle64thOverlap"),
     midiImportMidiControls: document.querySelector("#midiImportMidiControls"),
-    midiImportPreviewSelectedButton: document.querySelector("#midiImportPreviewSelectedButton"),
     midiImportPreviewAllButton: document.querySelector("#midiImportPreviewAllButton"),
     midiImportSelectionActions: document.querySelector("#midiImportSelectionActions"),
     midiImportTextSelectionActions: document.querySelector("#midiImportTextSelectionActions"),
@@ -6213,8 +6212,11 @@
         previewButton.type = "button";
         const previewKey = `group:${group.id}`;
         previewButton.className = "midi-import-row-preview";
-        if (state.midiImport.previewingKey === previewKey) setTransportButtonContent(previewButton, { icon: "stop", label: "정지" });
-        else setTransportButtonContent(previewButton, { icon: "play", label: "듣기" });
+        const previewPlaying = state.midiImport.previewingKey === previewKey;
+        setTransportButtonContent(previewButton, { icon: previewPlaying ? "stop" : "play" });
+        const previewActionLabel = i18nText(previewPlaying ? "stop" : "play");
+        previewButton.setAttribute("aria-label", previewActionLabel);
+        previewButton.title = previewActionLabel;
         previewButton.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -6273,12 +6275,6 @@
     if (elements.midiImportMidiControls) elements.midiImportMidiControls.hidden = !isMidi;
     if (elements.midiImportApplyButton) elements.midiImportApplyButton.disabled = !ready;
     if (elements.midiImportNewButton) elements.midiImportNewButton.disabled = !ready;
-    if (elements.midiImportPreviewSelectedButton) {
-      const selectedReady = midiReady && getMidiImportSelectedGroups().length > 0;
-      elements.midiImportPreviewSelectedButton.disabled = !selectedReady;
-      if (state.midiImport.previewingKey === "selected") setTransportButtonContent(elements.midiImportPreviewSelectedButton, { icon: "stop", label: "선택 정지" });
-      else setTransportButtonContent(elements.midiImportPreviewSelectedButton, { icon: "play", label: "선택 듣기" });
-    }
     if (elements.midiImportPreviewAllButton) {
       elements.midiImportPreviewAllButton.disabled = !midiReady;
       if (state.midiImport.previewingKey === "all") setTransportButtonContent(elements.midiImportPreviewAllButton, { icon: "stop", label: "원본 정지" });
@@ -7851,6 +7847,7 @@
   }
 
   function handleHistoryShortcut(event) {
+    if (isModalPopupOpen()) return false;
     if (!(event.ctrlKey || event.metaKey) || event.altKey) {
       return false;
     }
@@ -14567,6 +14564,21 @@
     return [...candidates].some(isActuallyVisiblePopupElement);
   }
 
+  function isModalPopupOpen() {
+    return [...document.querySelectorAll(".popup-backdrop")].some(isActuallyVisiblePopupElement);
+  }
+
+  function handleModalBackgroundKeyGuard(event) {
+    const openBackdrops = [...document.querySelectorAll(".popup-backdrop")].filter(isActuallyVisiblePopupElement);
+    if (!openBackdrops.length) return false;
+    const target = event.target;
+    if (target instanceof Node && openBackdrops.some((backdrop) => backdrop.contains(target))) return false;
+    if (event.key === "Escape") return false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return true;
+  }
+
   function handleGlobalSelectAllShortcut(event) {
     const commandKey = event.ctrlKey || event.metaKey;
     if (
@@ -14652,6 +14664,7 @@
   }
 
   function handleEditModeShortcut(event) {
+    if (isModalPopupOpen()) return false;
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isTextEntryTarget(event.target)) {
       return false;
     }
@@ -14666,6 +14679,7 @@
   }
 
   function handleZoomShortcut(event) {
+    if (isModalPopupOpen()) return false;
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isTextEntryTarget(event.target)) {
       return false;
     }
@@ -14686,6 +14700,7 @@
   }
 
   function handlePlaybackShortcut(event) {
+    if (isModalPopupOpen()) return false;
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isTextEntryTarget(event.target)) {
       return false;
     }
@@ -14743,6 +14758,7 @@
   }
 
   function bindEvents() {
+    document.addEventListener("keydown", handleModalBackgroundKeyGuard, true);
     document.addEventListener("keydown", handleHistoryShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectAllShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectedNoteShortcut, true);
@@ -14860,10 +14876,6 @@
           setMidiImportStatus(error instanceof Error ? error.message : "양자화를 다시 적용하지 못했습니다.", { error: true });
         }
       }
-    });
-    elements.midiImportPreviewSelectedButton?.addEventListener("click", () => {
-      const ids = getMidiImportSelectedGroups().map((group) => String(group.id));
-      if (ids.length) previewMidiImportGroups(ids, "selected");
     });
     elements.midiImportPreviewAllButton?.addEventListener("click", () => previewMidiImportGroups(null, "all"));
     elements.midiImportSelectAllButton?.addEventListener("click", () => {
@@ -15420,6 +15432,31 @@
       }
     });
     document.addEventListener("keydown", (event) => {
+      if (isModalPopupOpen()) {
+        if (event.key === "Escape" && !event.defaultPrevented) {
+          event.preventDefault();
+          closeContextMenu();
+          closeFileMenu();
+          closeEditMenu();
+          closeThemeMenu();
+          closeGoogleAccountMenu();
+          closeChannelMuteMixer();
+          closeChannelMergeDialog();
+          closeChannelEditDialog();
+          closeEditorSoundFontDialog();
+          closeShortcutHelpDialog();
+          closeVolumeMenu();
+          closeZoomMenu();
+          closePlaybackRateMenu();
+          closeMmlImportDialog();
+          closeMidiImportDialog();
+          closeMidiTransferDialog();
+          closeNoteVolumeDialog();
+          closeTempoEditor();
+          closeTimeEditDialog();
+        }
+        return;
+      }
       if (event.key === "Control" && !isTextEntryTarget(event.target)) {
         setCtrlToolHeld(true);
       }

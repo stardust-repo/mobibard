@@ -6461,3 +6461,39 @@ a[class*="button"]:hover {
   line-height: 30px;
   user-select: text;
 }
+
+
+/* fixed91: MIDI import preview cleanup, roomier channel list. */
+.unified-import-dialog {
+  height: min(680px, calc(100dvh - 24px));
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+}
+.unified-import-dialog .midi-import-selection-list {
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+  padding-bottom: 4px;
+}
+.unified-import-dialog .midi-import-row-preview {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 !important;
+  line-height: 0;
+}
+.unified-import-dialog .midi-import-row-preview .shared-transport-icon {
+  width: 17px;
+  height: 17px;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .unified-import-dialog {
+    height: min(620px, calc(100dvh - 16px));
+  }
+  .unified-import-dialog .midi-import-row-preview {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+  }
+}
