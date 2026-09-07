@@ -5,7 +5,7 @@
   const utils = root.MabiUtils;
   if (!utils) throw new Error("utils.js must be loaded before midi-parser.js");
 
-  const VERSION = "5.1.0";
+  const VERSION = "5.1.1";
   const DEFAULT_PPQ = 480;
   const DEFAULT_TEMPO = 120;
 
@@ -205,6 +205,7 @@
     let tick = 0;
     let runningStatus = null;
     let eventOrder = 0;
+    let midiPort = 0;
     const meta = document.trackMeta[trackIndex];
 
     while (reader.pos < end && reader.remaining() > 0) {
@@ -225,7 +226,11 @@
         const length = reader.readVarLen();
         const data = reader.readBytes(length);
         const base = { tick, trackIndex, eventOrder };
-        if (type === 0x51 && data.length === 3) {
+        if (type === 0x21 && data.length >= 1) {
+          midiPort = clampInt(data[0], 0, 127, 0);
+          meta.midiPort = midiPort;
+          document.midiPortEvents.push({ ...base, port: midiPort });
+        } else if (type === 0x51 && data.length === 3) {
           const mpqn = (data[0] << 16) | (data[1] << 8) | data[2];
           if (mpqn > 0) document.tempoEvents.push({ ...base, bpm: 60000000 / mpqn, mpqn });
         } else if (type === 0x58 && data.length >= 2) {
@@ -268,7 +273,7 @@
       const data1 = reader.readU8();
       const needsSecond = command !== 0xc0 && command !== 0xd0;
       const data2 = needsSecond ? reader.readU8() : 0;
-      const base = { tick, trackIndex, eventOrder, channel };
+      const base = { tick, trackIndex, eventOrder, port: midiPort, channel };
 
       if (command === 0x80) {
         document.channelEvents.push({ ...base, kind: "noteOff", midi: data1, velocity: data2 });
@@ -301,63 +306,84 @@
   }
 
   function buildNotes(document, translate, options = {}) {
-    const currentProgram = Array(16).fill(0);
-    const pendingBankMsb = Array(16).fill(0);
-    const pendingBankLsb = Array(16).fill(0);
-    const activeBankMsb = Array(16).fill(0);
-    const activeBankLsb = Array(16).fill(0);
-    const channelVolume = Array(16).fill(127);
-    const channelExpression = Array(16).fill(127);
-    const channelPan = Array(16).fill(64);
+    const channelStates = new Map();
     const open = new Map();
     const notes = [];
+
+    const stateFor = (port, channel) => {
+      const safePort = clampInt(port, 0, 127, 0);
+      const safeChannel = clampInt(channel, 0, 15, 0);
+      const key = `${safePort}:${safeChannel}`;
+      let state = channelStates.get(key);
+      if (!state) {
+        state = {
+          port: safePort,
+          channel: safeChannel,
+          currentProgram: 0,
+          pendingBankMsb: 0,
+          pendingBankLsb: 0,
+          activeBankMsb: 0,
+          activeBankLsb: 0,
+          volume: 127,
+          expression: 127,
+          pan: 64,
+        };
+        channelStates.set(key, state);
+      }
+      return state;
+    };
 
     const events = [...document.channelEvents].sort((left, right) => left.tick - right.tick
       || left.trackIndex - right.trackIndex
       || left.eventOrder - right.eventOrder);
 
     for (const event of events) {
+      const port = clampInt(event.port, 0, 127, 0);
       const channel = clampInt(event.channel, 0, 15, 0);
+      const state = stateFor(port, channel);
+      const portInfo = getPortChannelInfo(document, port, channel);
       if (event.kind === "bankMsb") {
-        pendingBankMsb[channel] = normalizeBank(event.value);
+        state.pendingBankMsb = normalizeBank(event.value);
         continue;
       }
       if (event.kind === "bankLsb") {
-        pendingBankLsb[channel] = normalizeBank(event.value);
+        state.pendingBankLsb = normalizeBank(event.value);
         continue;
       }
       if (event.kind === "program") {
-        currentProgram[channel] = normalizeProgram(event.value);
-        activeBankMsb[channel] = pendingBankMsb[channel];
-        activeBankLsb[channel] = pendingBankLsb[channel];
-        const info = document.channelInfo[channel];
-        info.programs.add(currentProgram[channel]);
-        info.bankPrograms.add(`${activeBankMsb[channel]}:${activeBankLsb[channel]}:${currentProgram[channel]}`);
+        state.currentProgram = normalizeProgram(event.value);
+        state.activeBankMsb = state.pendingBankMsb;
+        state.activeBankLsb = state.pendingBankLsb;
+        for (const info of [document.channelInfo[channel], portInfo]) {
+          info.programs.add(state.currentProgram);
+          info.bankPrograms.add(`${state.activeBankMsb}:${state.activeBankLsb}:${state.currentProgram}`);
+        }
         continue;
       }
       if (event.kind === "control") {
-        if (event.controller === 7) channelVolume[channel] = clampInt(event.value, 0, 127, 127);
-        else if (event.controller === 11) channelExpression[channel] = clampInt(event.value, 0, 127, 127);
-        else if (event.controller === 10) channelPan[channel] = clampInt(event.value, 0, 127, 64);
+        if (event.controller === 7) state.volume = clampInt(event.value, 0, 127, 127);
+        else if (event.controller === 11) state.expression = clampInt(event.value, 0, 127, 127);
+        else if (event.controller === 10) state.pan = clampInt(event.value, 0, 127, 64);
         continue;
       }
 
       const midi = clampInt(event.midi, 0, 127, 0);
-      const key = `${channel}:${midi}`;
+      const key = `${port}:${channel}:${midi}`;
       if (event.kind === "noteOn") {
         if (!open.has(key)) open.set(key, []);
         open.get(key).push({
           tick: event.tick,
           velocity: clampInt(event.velocity, 1, 127, 1),
-          volume: channelVolume[channel],
-          expression: channelExpression[channel],
-          pan: channelPan[channel],
+          volume: state.volume,
+          expression: state.expression,
+          pan: state.pan,
+          port,
           channel,
           midi,
           trackIndex: event.trackIndex,
-          program: currentProgram[channel],
-          bankMsb: activeBankMsb[channel],
-          bankLsb: activeBankLsb[channel],
+          program: state.currentProgram,
+          bankMsb: state.activeBankMsb,
+          bankLsb: state.activeBankLsb,
         });
         continue;
       }
@@ -383,6 +409,7 @@
         expression: started.expression,
         pan: started.pan,
         releaseVelocity: clampInt(event.velocity, 0, 127, 0),
+        port: started.port,
         channel,
         trackIndex: started.trackIndex,
         program: started.program,
@@ -393,6 +420,7 @@
         instrumentMetaName: meta.instrumentName || "",
       });
       registerNoteChannel(document.channelInfo[channel], channel, midi, started.trackIndex, meta);
+      registerNoteChannel(getPortChannelInfo(document, started.port, channel), channel, midi, started.trackIndex, meta);
     }
 
     if (open.size) {
@@ -417,6 +445,7 @@
             expression: item.expression ?? 127,
             pan: item.pan ?? 64,
             releaseVelocity: 0,
+            port: item.port,
             channel: item.channel,
             trackIndex: item.trackIndex,
             program: item.program,
@@ -428,6 +457,7 @@
             synthesizedNoteOff: true,
           });
           registerNoteChannel(document.channelInfo[item.channel], item.channel, item.midi, item.trackIndex, meta);
+          registerNoteChannel(getPortChannelInfo(document, item.port, item.channel), item.channel, item.midi, item.trackIndex, meta);
         }
       }
       for (const [trackIndex, count] of [...missingByTrack.entries()].sort((left, right) => left[0] - right[0])) {
@@ -438,9 +468,32 @@
 
     notes.sort((left, right) => left.startTick - right.startTick
       || left.midi - right.midi
+      || (left.port || 0) - (right.port || 0)
       || left.channel - right.channel
       || left.trackIndex - right.trackIndex);
     return notes;
+  }
+
+  function getPortChannelInfo(document, port, channel) {
+    const safePort = clampInt(port, 0, 127, 0);
+    const safeChannel = clampInt(channel, 0, 15, 0);
+    const key = `${safePort}:${safeChannel}`;
+    let info = document.portChannelInfo[key];
+    if (!info) {
+      info = {
+        port: safePort,
+        channel: safeChannel,
+        noteCount: 0,
+        programs: new Set(),
+        bankPrograms: new Set(),
+        tracks: new Set(),
+        trackNames: new Set(),
+        instrumentNames: new Set(),
+        drumNotes: new Set(),
+      };
+      document.portChannelInfo[key] = info;
+    }
+    return info;
   }
 
   function registerNoteChannel(info, channel, midi, trackIndex, meta) {
@@ -496,8 +549,10 @@
       channelPressureEvents: [],
       sysexEvents: [],
       systemEvents: [],
+      midiPortEvents: [],
       channelEvents: [],
       warnings: [],
+      portChannelInfo: Object.create(null),
       channelInfo: Array.from({ length: 16 }, () => ({
         noteCount: 0,
         programs: new Set(),
@@ -507,7 +562,7 @@
         instrumentNames: new Set(),
         drumNotes: new Set(),
       })),
-      trackMeta: Array.from({ length: requestedTrackCount }, () => ({ trackName: "", instrumentName: "" })),
+      trackMeta: Array.from({ length: requestedTrackCount }, () => ({ trackName: "", instrumentName: "", midiPort: 0 })),
       trackEndTicks: Array(requestedTrackCount).fill(0),
       metadata: {
         macBinary: Boolean(container.macBinary),

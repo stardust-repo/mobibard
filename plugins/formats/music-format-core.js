@@ -341,7 +341,7 @@
     return Math.max(1, Math.min(999, bpm));
   }
 
-  function buildMidi({ ppq = DEFAULT_PPQ, title = "Converted", tempoEvents = [], timeSignatures = [], keySignatures = [], tracks = [] } = {}) {
+  function buildMidi({ ppq = DEFAULT_PPQ, title = "Converted", tempoEvents = [], timeSignatures = [], keySignatures = [], tracks = [], mergeMetaIntoFirstTrack = false } = {}) {
     const division = clampInt(ppq, 24, 32767, DEFAULT_PPQ);
     const metaEvents = [{ tick: 0, order: 0, bytes: textMeta(0x03, title) }];
     const normalizedTempos = tempoEvents.length ? tempoEvents : [{ tick: 0, bpm: 120 }];
@@ -382,7 +382,7 @@
       return midiChunk("MTrk", payload);
     }
 
-    const chunks = [serializeTrack(metaEvents)];
+    const dataTrackEvents = [];
     let nextMelodicChannel = 0;
     for (let trackIndex = 0; trackIndex < tracks.length; trackIndex++) {
       const track = tracks[trackIndex] || {};
@@ -394,8 +394,19 @@
         if (nextMelodicChannel === 9) nextMelodicChannel++;
         if (nextMelodicChannel > 15) nextMelodicChannel = 0;
       }
-      const events = [{ tick: 0, order: 0, bytes: textMeta(0x03, track.name || `Track ${trackIndex + 1}`) }];
-      if (!track.isDrums) events.push({ tick: 0, order: 1, bytes: [0xc0 | channel, clampInt(track.program, 0, 127, 0)] });
+      const events = [];
+      if (track.omitName !== true) events.push({ tick: 0, order: -2, bytes: textMeta(0x03, track.name || `Track ${trackIndex + 1}`) });
+      if (Number.isFinite(Number(track.midiPort))) {
+        events.push({ tick: 0, order: -3, bytes: [0xff, 0x21, 0x01, clampInt(track.midiPort, 0, 127, 0)] });
+      }
+      if (!track.isDrums && track.suppressInitialProgram !== true) {
+        if (Number.isFinite(Number(track.bank))) {
+          const bank = clampInt(track.bank, 0, 16383, 0);
+          events.push({ tick: 0, order: -1, bytes: [0xb0 | channel, 0x00, (bank >>> 7) & 0x7f] });
+          events.push({ tick: 0, order: -1, bytes: [0xb0 | channel, 0x20, bank & 0x7f] });
+        }
+        events.push({ tick: 0, order: 0, bytes: [0xc0 | channel, clampInt(track.program, 0, 127, 0)] });
+      }
       if (Number.isFinite(Number(track.volume))) {
         events.push({ tick: 0, order: 2, bytes: [0xb0 | channel, 0x07, clampInt(track.volume, 0, 127, DEFAULT_VELOCITY)] });
       }
@@ -415,9 +426,15 @@
       }
       for (const change of track.programChanges || []) {
         const changeChannel = Number.isFinite(Number(change.channel)) ? clampInt(change.channel, 0, 15, channel) : channel;
+        const changeTick = Math.max(0, Math.round(numberValue(change.tick ?? change.position, 0)));
+        if (Number.isFinite(Number(change.bank))) {
+          const bank = clampInt(change.bank, 0, 16383, 0);
+          events.push({ tick: changeTick, order: 3, bytes: [0xb0 | changeChannel, 0x00, (bank >>> 7) & 0x7f] });
+          events.push({ tick: changeTick, order: 3, bytes: [0xb0 | changeChannel, 0x20, bank & 0x7f] });
+        }
         events.push({
-          tick: Math.max(0, Math.round(numberValue(change.tick ?? change.position, 0))),
-          order: 2,
+          tick: changeTick,
+          order: 3,
           bytes: [0xc0 | changeChannel, clampInt(change.program ?? change.value, 0, 127, 0)],
         });
       }
@@ -450,11 +467,21 @@
         events.push({ tick: end, order: 2, bytes: [0x80 | noteChannel, pitch, 0] });
         if (note.lyric) events.push({ tick: start, order: 3, bytes: textMeta(0x05, note.lyric) });
       }
-      chunks.push(serializeTrack(events));
+      dataTrackEvents.push(events);
+    }
+
+    let chunks;
+    let format;
+    if (mergeMetaIntoFirstTrack && dataTrackEvents.length) {
+      chunks = dataTrackEvents.map((events, index) => serializeTrack(index === 0 ? [...metaEvents, ...events] : events));
+      format = chunks.length === 1 ? 0 : 1;
+    } else {
+      chunks = [serializeTrack(metaEvents), ...dataTrackEvents.map(serializeTrack)];
+      format = 1;
     }
 
     const headerPayload = [];
-    pushUint16(headerPayload, 1);
+    pushUint16(headerPayload, format);
     pushUint16(headerPayload, chunks.length);
     pushUint16(headerPayload, division);
     return new Uint8Array([...midiChunk("MThd", headerPayload), ...chunks.flat()]);
@@ -587,7 +614,7 @@
   }
 
   const api = Object.freeze({
-    version: "5.1.0",
+    version: "5.1.1",
     registerFormat,
     findFormat,
     isSupported,

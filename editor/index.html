@@ -66,7 +66,7 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260907-semantic-keys1";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260907-fixed92";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260907-soundbank-label2" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260907-fixed92" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -345,7 +345,7 @@
 </div>
 <textarea aria-label="불러올 3MLE, MabiIcco 또는 MML 텍스트" data-i18n-aria-label="mml.text_import" id="mmlImportText" placeholder="MML@t120o4v15c4d4e4,...; · 3MLE(.mml) [Channel1] · MabiIcco(.mmi) 파일 내용" data-i18n-placeholder="mml.import_example"></textarea>
 <section class="mml-import-channel-section" hidden="" id="mmlImportChannelSection">
-<div class="mml-import-channel-header"><div><strong id="mmlImportChannelTitle" data-i18n="mml.channel_select">3MLE 채널 선택</strong><span data-i18n="channel.select_up_6">한 번에 최대 6개 채널을 선택할 수 있습니다.</span></div><div><button id="mmlImportSelectAllButton" type="button" data-i18n="selection.first_6">처음 6개 선택</button><button id="mmlImportClearSelectionButton" type="button" data-i18n="action.clear_all">전부 해제</button></div></div>
+<div class="mml-import-channel-header"><div><strong id="mmlImportChannelTitle" data-i18n="mml.channel_select">3MLE 채널 선택</strong><span data-i18n="channel.no_limit">Editor에서는 감지된 채널을 제한 없이 선택할 수 있습니다.</span></div><div><button id="mmlImportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="mmlImportClearSelectionButton" type="button" data-i18n="action.clear_all">전부 해제</button></div></div>
 <div class="mml-import-channel-list" id="mmlImportChannelList"></div>
 </section>
 <div class="mml-import-options mml-import-simple-options">
@@ -502,9 +502,9 @@
 <script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
 <script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260907-editor-export-copy1"></script>
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
-<script src="../plugins/formats/midi/midi-parser.js?v=5.1.0&amp;rev=20260820-022400"></script>
+<script src="../plugins/formats/midi/midi-parser.js?v=5.1.1&amp;rev=20260907-fixed92"></script>
 <script src="../plugins/formats/notation/notation-utils.js?v=5.1.0"></script>
-<script src="../plugins/formats/music-format-core.js?v=5.1.0&amp;rev=20260824-final44"></script>
+<script src="../plugins/formats/music-format-core.js?v=5.1.1&amp;rev=20260907-fixed92"></script>
 <script src="../plugins/formats/console-gm-normalizer.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/xsf/xsf-container.js?v=5.1.0&amp;rev=20260819-195600"></script>
 <script src="../plugins/formats/playstation/playstation-sequence.js?v=5.1.0&amp;rev=20260820-003400"></script>
@@ -545,7 +545,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260907-semantic-keys1"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260907-fixed92"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

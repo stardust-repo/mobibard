@@ -270,6 +270,7 @@
     midiCopyInstrumentButton: document.querySelector("#midiCopyInstrumentButton"),
     midiTransferButton: document.querySelector("#midiTransferButton"),
     mmlImportBackdrop: document.querySelector("#mmlImportBackdrop"),
+    mmlImportDialog: document.querySelector("#mmlImportDialog"),
     mmlImportCloseButton: document.querySelector("#mmlImportCloseButton"),
     mmlImportCancelButton: document.querySelector("#mmlImportCancelButton"),
     mmlImportApplyButton: document.querySelector("#mmlImportApplyButton"),
@@ -10633,31 +10634,152 @@
     return cleanedName ? `${channelLabel} · ${cleanedName}` : channelLabel;
   }
 
+  const MABIICCO_TPQN = 96;
+  const MABIICCO_PART_ROLES = ["Melody", "Chord 1", "Chord 2", "Song"];
+
+  function extractMabiIccoScoreSection(text) {
+    const source = String(text || "");
+    const header = /^\s*\[mml-score\]\s*$/im.exec(source);
+    if (!header) return source;
+    const start = header.index + header[0].length;
+    const nextHeader = /^\s*\[[^\]]+\]\s*$/gim;
+    nextHeader.lastIndex = start;
+    const next = nextHeader.exec(source);
+    return source.slice(start, next ? next.index : source.length);
+  }
+
+  function readMabiIccoLineValue(block, key) {
+    const escaped = String(key || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = new RegExp(`(?:^|\\r?\\n)\\s*${escaped}\\s*=\\s*([^\\r\\n]*)`, "i").exec(String(block || ""));
+    return match ? String(match[1] || "").trim() : "";
+  }
+
+  function readMabiIccoInteger(block, key, fallback = 0) {
+    const raw = readMabiIccoLineValue(block, key);
+    const value = Number.parseInt(raw, 10);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function readMabiIccoBoolean(block, key, fallback = true) {
+    const raw = readMabiIccoLineValue(block, key).toLowerCase();
+    if (raw === "true") return true;
+    if (raw === "false") return false;
+    return fallback;
+  }
+
+  function extractMabiIccoGlobalTempoEvents(scoreSection) {
+    const raw = readMabiIccoLineValue(scoreSection, "tempo");
+    if (!raw) return [];
+    const events = [];
+    for (const item of raw.split(",")) {
+      const match = /^\s*(-?\d+)\s*T\s*(\d+)\s*$/i.exec(item);
+      if (!match) continue;
+      const tick = Math.max(0, Number(match[1]) || 0);
+      const bpm = clamp(Math.round(Number(match[2]) || 120), CONFIG.minTempo, CONFIG.maxTempo);
+      events.push({
+        beat: tick / MABIICCO_TPQN,
+        bpm,
+        partIndex: -1,
+        order: events.length,
+      });
+    }
+    return events.sort((left, right) => left.beat - right.beat || left.order - right.order);
+  }
+
+  function looksLikeMabiIccoPart(value) {
+    const source = normalizeMmiLegacyLengthsInPart(cleanupMmiMmlValue(value));
+    if (!source) return false;
+    try {
+      const parsed = parseMmlPart(source, 0);
+      return Boolean(parsed.notes.length || parsed.tempos.length || /r/i.test(source));
+    } catch {
+      return false;
+    }
+  }
+
+  function extractStructuredMabiIccoTrackCandidates(text) {
+    const scoreSection = extractMabiIccoScoreSection(text);
+    const trackPattern = /(?:^|\r?\n)\s*mml-track\s*=\s*(MML\s*@[\s\S]*?;)\s*(?=\r?\n|$)/gi;
+    const matches = [];
+    let match;
+    while ((match = trackPattern.exec(scoreSection))) {
+      matches.push({
+        index: match.index,
+        end: trackPattern.lastIndex,
+        mml: String(match[1] || ""),
+      });
+    }
+    if (!matches.length) return [];
+
+    const globalTempoEvents = extractMabiIccoGlobalTempoEvents(scoreSection);
+    const candidates = [];
+    let commonStartOffset = 0;
+    let previousTrackEnd = 0;
+
+    matches.forEach((trackMatch, trackIndex) => {
+      const prelude = scoreSection.slice(previousTrackEnd, trackMatch.index);
+      const startOffsetMatches = [...prelude.matchAll(/(?:^|\r?\n)\s*startOffset\s*=\s*(-?\d+)/gi)];
+      if (startOffsetMatches.length) {
+        commonStartOffset = Math.max(0, Number(startOffsetMatches[startOffsetMatches.length - 1][1]) || 0);
+      }
+      const startDeltaMatches = [...prelude.matchAll(/(?:^|\r?\n)\s*startDelta\s*=\s*(-?\d+)/gi)];
+      const startSongDeltaMatches = [...prelude.matchAll(/(?:^|\r?\n)\s*startSongDelta\s*=\s*(-?\d+)/gi)];
+      const startDelta = startDeltaMatches.length ? Number(startDeltaMatches[startDeltaMatches.length - 1][1]) || 0 : 0;
+      const startSongDelta = startSongDeltaMatches.length ? Number(startSongDeltaMatches[startSongDeltaMatches.length - 1][1]) || 0 : 0;
+
+      const nextTrackIndex = matches[trackIndex + 1]?.index ?? scoreSection.length;
+      const propertyBlock = scoreSection.slice(trackMatch.end, nextTrackIndex);
+      const trackNumber = trackIndex + 1;
+      const trackName = cleanupMmiNameValue(readMabiIccoLineValue(propertyBlock, "name"));
+      const program = readMabiIccoInteger(propertyBlock, "program", 0);
+      const songProgram = readMabiIccoInteger(propertyBlock, "songProgram", -1);
+      const panpot = clamp(readMabiIccoInteger(propertyBlock, "panpot", 64), 0, 127);
+      const rawVolume = readMabiIccoLineValue(propertyBlock, "volume") || readMabiIccoLineValue(propertyBlock, "volumn");
+      const parsedVolume = Number.parseInt(rawVolume, 10);
+      const volume = clamp(Number.isFinite(parsedVolume) ? parsedVolume : 100, 0, 127);
+      const visible = readMabiIccoBoolean(propertyBlock, "visible", true);
+      const mmlBody = cleanupMmiMmlValue(trackMatch.mml);
+      const parts = mmlBody.split(",");
+
+      for (let partIndex = 0; partIndex < Math.max(4, parts.length); partIndex += 1) {
+        const cleaned = normalizeMmiLegacyLengthsInPart(cleanupMmiMmlValue(parts[partIndex] || ""));
+        if (!cleaned || !looksLikeMabiIccoPart(cleaned)) continue;
+        const role = MABIICCO_PART_ROLES[partIndex] || `Part ${partIndex + 1}`;
+        const displayTrackName = trackName || `Track ${trackNumber}`;
+        const partProgram = partIndex === 3 && songProgram >= 0 ? songProgram : program;
+        const startTick = Math.max(0, commonStartOffset + (partIndex === 3 ? startSongDelta : startDelta));
+        candidates.push({
+          channelNumber: candidates.length + 1,
+          label: `${displayTrackName} · ${role}`,
+          name: `${displayTrackName} · ${role}`,
+          value: cleaned,
+          mmiTrackNumber: trackNumber,
+          mmiTrackName: trackName,
+          mmiPartIndex: partIndex,
+          mmiPartRole: role,
+          mmiProgram: program,
+          mmiSongProgram: songProgram,
+          mmiPartProgram: partProgram,
+          mmiPanpot: panpot,
+          mmiVolume: volume,
+          mmiVisible: visible,
+          mmiStartTick: startTick,
+          mmiGlobalTempoEvents: globalTempoEvents,
+        });
+      }
+      previousTrackEnd = trackMatch.end;
+    });
+
+    return candidates;
+  }
+
   function extractMabiIccoMmlPartCandidates(text) {
     const source = String(text || "");
-    const nameMarkers = extractMmiNameMarkers(source);
-    const fullRecords = [];
-    const fullPattern = /MML\s*@([\s\S]*?)\s*;/gi;
-    let match;
-    let channelIndex = 0;
-    while ((match = fullPattern.exec(source))) {
-      const parts = String(match[1] || "").split(",");
-      for (const part of parts) {
-        channelIndex += 1;
-        const cleaned = cleanupMmiMmlValue(part);
-        if (!cleaned || !looksLikeMmlPart(cleaned)) continue;
-        const name = nameMarkers[channelIndex - 1]?.name || findMmiNameForCandidate(match.index, nameMarkers, channelIndex - 1);
-        fullRecords.push({
-          channelNumber: channelIndex,
-          label: formatMmiChannelLabel(channelIndex, name),
-          name,
-          value: normalizeMmiLegacyLengthsInPart(cleaned),
-        });
-        if (fullRecords.length >= 32) return fullRecords;
-      }
-    }
-    if (fullRecords.length) return fullRecords;
+    const structured = extractStructuredMabiIccoTrackCandidates(source);
+    if (structured.length) return structured;
 
+    // Legacy/non-standard MMI fallback: keep broad compatibility, but do not impose a channel limit.
+    const nameMarkers = extractMmiNameMarkers(source);
     const found = [];
     const seen = new Set();
     const addCandidate = (rawValue, position = 0) => {
@@ -10665,35 +10787,33 @@
       if (!cleaned) return;
       const parts = cleaned.includes(",") ? cleaned.split(",") : [cleaned];
       for (const part of parts) {
-        const candidate = cleanupMmiMmlValue(part);
-        if (!looksLikeMmlPart(candidate)) continue;
-        const normalized = normalizeMmiLegacyLengthsInPart(candidate);
-        const key = normalized.toLowerCase();
+        const candidate = normalizeMmiLegacyLengthsInPart(cleanupMmiMmlValue(part));
+        if (!candidate || !looksLikeMabiIccoPart(candidate)) continue;
+        const key = candidate.toLowerCase();
         if (seen.has(key)) continue;
         seen.add(key);
         found.push({
           position,
-          value: normalized,
+          value: candidate,
           name: findMmiNameForCandidate(position, nameMarkers, found.length),
         });
       }
     };
 
-    const keyedPattern = /(?:^|[\s<{,;])(?:[A-Za-z0-9_:-]*(?:mml|melody|chord|song|part|track)[A-Za-z0-9_:-]*)\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\r\n<>]+))/gim;
-    while ((match = keyedPattern.exec(source))) addCandidate(match[1] ?? match[2] ?? match[3] ?? "", match.index);
-    const directMmlTagPattern = /<([A-Za-z0-9_:-]*mml[A-Za-z0-9_:-]*)\b[^>]*>([\s\S]*?)<\/\1>/gim;
-    while ((match = directMmlTagPattern.exec(source))) addCandidate(match[2] || "", match.index);
-    const taggedPattern = /<([A-Za-z0-9_:-]*(?:melody|chord|song|part|track)[A-Za-z0-9_:-]*)\b[^>]*>([\s\S]*?)<\/\1>/gim;
-    while ((match = taggedPattern.exec(source))) addCandidate(match[2] || "", match.index);
-    const stringPattern = /<string\b[^>]*>([\s\S]*?)<\/string>/gim;
-    while ((match = stringPattern.exec(source))) addCandidate(match[1] || "", match.index);
-    if (found.length < 6) {
-      const linePattern = /^\s*([^\r\n=:#<>]{1,20000})\s*$/gm;
-      while ((match = linePattern.exec(source))) addCandidate(match[1] || "", match.index);
+    const fullPattern = /MML\s*@([\s\S]*?)\s*;/gi;
+    let match;
+    while ((match = fullPattern.exec(source))) addCandidate(match[1] || "", match.index);
+    if (!found.length) {
+      const keyedPattern = /(?:^|[\s<{,;])(?:[A-Za-z0-9_:-]*(?:mml|melody|chord|song|part|track)[A-Za-z0-9_:-]*)\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\r\n<>]+))/gim;
+      while ((match = keyedPattern.exec(source))) addCandidate(match[1] ?? match[2] ?? match[3] ?? "", match.index);
+      const directMmlTagPattern = /<([A-Za-z0-9_:-]*mml[A-Za-z0-9_:-]*)\b[^>]*>([\s\S]*?)<\/\1>/gim;
+      while ((match = directMmlTagPattern.exec(source))) addCandidate(match[2] || "", match.index);
+      const taggedPattern = /<([A-Za-z0-9_:-]*(?:melody|chord|song|part|track)[A-Za-z0-9_:-]*)\b[^>]*>([\s\S]*?)<\/\1>/gim;
+      while ((match = taggedPattern.exec(source))) addCandidate(match[2] || "", match.index);
     }
 
     found.sort((left, right) => left.position - right.position);
-    return found.slice(0, 32).map((candidate, index) => ({
+    return found.map((candidate, index) => ({
       channelNumber: index + 1,
       label: formatMmiChannelLabel(index + 1, candidate.name),
       name: candidate.name,
@@ -10726,7 +10846,6 @@
         name,
         value: code,
       });
-      if (candidates.length >= 32) break;
     }
     const tempo = extractThreeMleGlobalTempo(source);
     if (!tempo) return candidates;
@@ -10741,7 +10860,6 @@
     return body.split(",")
       .map((value) => String(value || "").trim())
       .filter(Boolean)
-      .slice(0, 32)
       .map((value, index) => ({
         channelNumber: index + 1,
         label: `채널 ${index + 1}`,
@@ -10751,16 +10869,32 @@
   }
 
   function parseMmlCandidateParts(candidates, quantize = 64) {
-    const parsedParts = (candidates || []).map((candidate, partIndex) => ({
-      ...parseMmlPart(candidate.value, partIndex),
-      importName: candidate.name || candidate.label || `3MLE ${partIndex + 1}`,
-    }));
+    const sourceCandidates = candidates || [];
+    const parsedParts = sourceCandidates.map((candidate, partIndex) => {
+      const parsed = parseMmlPart(candidate.value, partIndex);
+      const startOffsetBeat = Math.max(0, Number(candidate.mmiStartTick) || 0) / MABIICCO_TPQN;
+      if (startOffsetBeat > 0) {
+        parsed.notes = parsed.notes.map((note) => ({ ...note, startBeat: note.startBeat + startOffsetBeat }));
+        parsed.tempos = parsed.tempos.map((tempo) => ({ ...tempo, beat: tempo.beat + startOffsetBeat }));
+        parsed.durationBeat += startOffsetBeat;
+      }
+      return {
+        ...parsed,
+        ...candidate,
+        importName: candidate.name || candidate.label || `3MLE ${partIndex + 1}`,
+      };
+    });
     const noteParts = parsedParts.map((part) => ({
       ...part,
       notes: quantizeMmlPartNotes(part.notes, quantize),
     })).filter((part) => part.notes.length);
-    const explicitTempoCount = parsedParts.reduce((count, part) => count + part.tempos.length, 0);
-    const tempos = quantizeMmlTempoEvents(parsedParts, quantize);
+    const mmiGlobalTempoEvents = sourceCandidates.find((candidate) => Array.isArray(candidate.mmiGlobalTempoEvents) && candidate.mmiGlobalTempoEvents.length)?.mmiGlobalTempoEvents || [];
+    const explicitTempoCount = mmiGlobalTempoEvents.length
+      ? mmiGlobalTempoEvents.length
+      : parsedParts.reduce((count, part) => count + part.tempos.length, 0);
+    const tempos = mmiGlobalTempoEvents.length
+      ? quantizeMmlTempoEvents([{ tempos: mmiGlobalTempoEvents }], quantize)
+      : quantizeMmlTempoEvents(parsedParts, quantize);
     const noteCount = noteParts.reduce((count, part) => count + part.notes.length, 0);
     const endBeat = Math.max(
       0,
@@ -10769,7 +10903,7 @@
     );
     return {
       quantize: Number(quantize) === 32 ? 32 : 64,
-      rawPartCount: candidates.length,
+      rawPartCount: sourceCandidates.length,
       noteParts,
       tempos,
       explicitTempoCount,
@@ -10805,7 +10939,7 @@
     }
     const signature = candidates.map((candidate) => `${candidate.label}\u0000${candidate.value}`).join("\u0001");
     if (state.mmlImport.candidateSignature !== signature) {
-      state.mmlImport.selectedCandidateIndexes = new Set(candidates.slice(0, 6).map((_, index) => index));
+      state.mmlImport.selectedCandidateIndexes = new Set(candidates.map((_, index) => index));
       state.mmlImport.candidateSignature = signature;
     } else {
       state.mmlImport.selectedCandidateIndexes = new Set(
@@ -10833,11 +10967,12 @@
     if (!elements.mmlImportChannelSection || !elements.mmlImportChannelList) return;
     const isSelectableProject = ["3mle", "mmi"].includes(state.mmlImport.format);
     elements.mmlImportChannelSection.hidden = !isSelectableProject;
+    elements.mmlImportDialog?.classList.toggle("has-channel-selection", isSelectableProject);
     elements.mmlImportChannelList.replaceChildren();
     if (!isSelectableProject) return;
     const selectedCount = state.mmlImport.selectedCandidateIndexes.size;
     const formatLabel = state.mmlImport.format === "mmi" ? "MabiIcco" : "3MLE";
-    elements.mmlImportChannelTitle.textContent = `${formatLabel} 채널 선택 (${selectedCount}/6)`;
+    elements.mmlImportChannelTitle.textContent = `${formatLabel} 채널 선택 (${selectedCount}/${state.mmlImport.candidates.length})`;
     state.mmlImport.candidates.forEach((candidate, index) => {
       const row = document.createElement("label");
       row.className = "mml-import-channel-row";
@@ -10851,7 +10986,19 @@
       const title = document.createElement("strong");
       title.textContent = candidate.label;
       const meta = document.createElement("small");
-      meta.textContent = `${candidate.value.length}자`;
+      if (state.mmlImport.format === "mmi" && Number.isFinite(Number(candidate.mmiTrackNumber))) {
+        const details = [
+          `${candidate.value.length}자`,
+          `Track ${candidate.mmiTrackNumber}`,
+          candidate.mmiPartRole || "",
+          Number.isFinite(Number(candidate.mmiPartProgram)) ? `Program ${candidate.mmiPartProgram}` : "",
+          Number.isFinite(Number(candidate.mmiVolume)) ? `Volume ${candidate.mmiVolume}` : "",
+          Number.isFinite(Number(candidate.mmiPanpot)) ? `Pan ${candidate.mmiPanpot}` : "",
+        ].filter(Boolean);
+        meta.textContent = details.join(" · ");
+      } else {
+        meta.textContent = `${candidate.value.length}자`;
+      }
       const preview = document.createElement("code");
       preview.textContent = candidate.value.length > 120 ? `${candidate.value.slice(0, 120)}…` : candidate.value;
       main.append(title, meta);
@@ -10859,11 +11006,6 @@
       checkbox.addEventListener("change", () => {
         const next = new Set(state.mmlImport.selectedCandidateIndexes);
         if (checkbox.checked) {
-          if (next.size >= 6) {
-            checkbox.checked = false;
-            showToast("3MLE·MabiIcco 채널은 한 번에 최대 6개까지 선택할 수 있습니다.");
-            return;
-          }
           next.add(index);
         } else {
           next.delete(index);
@@ -11043,7 +11185,12 @@
     const requestedName = String(part.importName || "").trim() || `${getMmlImportBaseName()} ${partNumber}`;
     channel.name = makeUniqueChannelName(requestedName, channel.id);
     channel.notes = part.notes.map((note) => ({ ...note, id: state.nextNoteId++ }));
-    channel.visible = true;
+    if (Number.isFinite(Number(part.mmiTrackNumber))) {
+      channel.hue = getDefaultHue(Math.max(0, Number(part.mmiTrackNumber) - 1));
+      channel.visible = part.mmiVisible !== false;
+    } else {
+      channel.visible = true;
+    }
     return channel;
   }
 
@@ -13470,10 +13617,214 @@
   }
 
 
+  const MIDI_EXPORT_MELODIC_CHANNELS = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15]);
+
+  function midiExportSamePitchOverlap(leftNotes, rightNotes) {
+    const byPitch = (notes) => {
+      const map = new Map();
+      for (const note of notes || []) {
+        const pitch = clamp(Math.round(Number(note.pitch) || 60), 0, 127);
+        if (!map.has(pitch)) map.set(pitch, []);
+        map.get(pitch).push(note);
+      }
+      for (const list of map.values()) list.sort((a, b) => a.startTick - b.startTick || a.endTick - b.endTick);
+      return map;
+    };
+    const leftByPitch = byPitch(leftNotes);
+    const rightByPitch = byPitch(rightNotes);
+    for (const [pitch, left] of leftByPitch) {
+      const right = rightByPitch.get(pitch);
+      if (!right?.length) continue;
+      let i = 0;
+      let j = 0;
+      while (i < left.length && j < right.length) {
+        const a = left[i];
+        const b = right[j];
+        if (a.endTick <= b.startTick) i += 1;
+        else if (b.endTick <= a.startTick) j += 1;
+        else return true;
+      }
+    }
+    return false;
+  }
+
+  function splitMidiExportActivityBlocks(lane) {
+    const notes = (lane.notes || []).slice().sort((a, b) => a.startTick - b.startTick || a.endTick - b.endTick || a.pitch - b.pitch);
+    const blocks = [];
+    let current = null;
+    for (const note of notes) {
+      if (!current || note.startTick > current.endTick) {
+        current = {
+          signature: lane.signature,
+          isDrums: lane.isDrums,
+          program: lane.program,
+          bank: lane.bank,
+          names: lane.names.slice(),
+          notes: [],
+          startTick: note.startTick,
+          endTick: note.endTick,
+        };
+        blocks.push(current);
+      }
+      current.notes.push(note);
+      current.endTick = Math.max(current.endTick, note.endTick);
+    }
+    return blocks;
+  }
+
+  function packMidiExportActivityBlocks(blocks) {
+    const lanes = [];
+    for (const block of blocks.slice().sort((a, b) => a.startTick - b.startTick || a.endTick - b.endTick || a.signature.localeCompare(b.signature))) {
+      const available = lanes.filter(lane => lane.endTick <= block.startTick);
+      let target = available.find(lane => lane.lastSignature === block.signature) || null;
+      if (!target && available.length) {
+        target = available.slice().sort((a, b) => b.endTick - a.endTick)[0];
+      }
+      if (!target) {
+        target = { isDrums: block.isDrums, segments: [], startTick: block.startTick, endTick: block.endTick, lastSignature: "" };
+        lanes.push(target);
+      }
+      target.segments.push(block);
+      target.startTick = Math.min(target.startTick, block.startTick);
+      target.endTick = Math.max(target.endTick, block.endTick);
+      target.lastSignature = block.signature;
+    }
+    return lanes;
+  }
+
+  function buildEditorMidiPacking(ppq = 480) {
+    const parts = state.channels.map((channel, channelIndex) => {
+      const isDrums = isChannelPercussionInstrument(channel);
+      const program = getChannelInstrumentProgram(channel);
+      const bank = getChannelInstrumentBank(channel);
+      const useFixedDefaultPercussionPitch = isEditorUsingEmbeddedDefaultSoundBank() && bank === 0 && (program === 12 || program === 13);
+      const fixedPercussionPitch = useFixedDefaultPercussionPitch ? (program === 12 ? 36 : 49) : null;
+      const notes = (Array.isArray(channel?.notes) ? channel.notes : []).map((note) => {
+        const startTick = Math.max(0, Math.round((Number(note.startBeat) || 0) * ppq));
+        const durationTick = Math.max(1, Math.round(Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat) * ppq));
+        return {
+          startTick,
+          durationTick,
+          endTick: startTick + durationTick,
+          pitch: fixedPercussionPitch == null ? clamp(Math.round(Number(note.pitch) || 60), 0, 127) : fixedPercussionPitch,
+          velocity: Math.max(1, getNotePlaybackVelocity(note)),
+        };
+      }).sort((a, b) => a.startTick - b.startTick || a.pitch - b.pitch || a.endTick - b.endTick);
+      if (!notes.length) return null;
+      return {
+        sourceIndex: channelIndex,
+        name: String(channel?.name || `Ch${channelIndex + 1}`),
+        isDrums,
+        program,
+        bank,
+        signature: isDrums ? "drums" : `${bank}:${program}`,
+        notes,
+        startTick: notes[0].startTick,
+        endTick: Math.max(...notes.map(note => note.endTick)),
+      };
+    }).filter(Boolean);
+
+    // Same-instrument Editor channels can share one MIDI channel as long as
+    // overlapping equal pitches cannot make Note-Off events ambiguous.
+    const instrumentLanes = [];
+    for (const part of parts.slice().sort((a, b) => a.signature.localeCompare(b.signature) || a.startTick - b.startTick || a.sourceIndex - b.sourceIndex)) {
+      let target = null;
+      for (const lane of instrumentLanes) {
+        if (lane.signature !== part.signature) continue;
+        if (midiExportSamePitchOverlap(lane.notes, part.notes)) continue;
+        target = lane;
+        break;
+      }
+      if (!target) {
+        target = {
+          signature: part.signature,
+          isDrums: part.isDrums,
+          program: part.program,
+          bank: part.bank,
+          names: [],
+          notes: [],
+          startTick: part.startTick,
+          endTick: part.endTick,
+        };
+        instrumentLanes.push(target);
+      }
+      target.names.push(part.name);
+      target.notes.push(...part.notes);
+      target.notes.sort((a, b) => a.startTick - b.startTick || a.pitch - b.pitch || a.endTick - b.endTick);
+      target.startTick = Math.min(target.startTick, part.startTick);
+      target.endTick = Math.max(target.endTick, part.endTick);
+    }
+
+    // Split long instrument lanes at true silent gaps. This lets another
+    // instrument reuse the same MIDI channel during the gap, then restores the
+    // original program when that instrument returns. This is tighter than using
+    // only each lane's first/last note range.
+    const activityBlocks = instrumentLanes.flatMap(splitMidiExportActivityBlocks);
+    const melodicLanes = packMidiExportActivityBlocks(activityBlocks.filter(block => !block.isDrums));
+    const drumLanes = packMidiExportActivityBlocks(activityBlocks.filter(block => block.isDrums));
+    const packedLanes = [...melodicLanes, ...drumLanes];
+
+    const portCount = Math.max(1, Math.ceil(melodicLanes.length / MIDI_EXPORT_MELODIC_CHANNELS.length), drumLanes.length);
+    if (portCount > 128) {
+      throw new Error(i18nText("midi.export_port_limit", [portCount]));
+    }
+
+    const physicalTracks = Array.from({ length: portCount }, (_, port) => ({
+      name: port === 0 ? String(state.projectName || "MobiBard Editor") : `MobiBard Extension ${port + 1}`,
+      midiPort: port,
+      omitName: port === 0,
+      suppressInitialProgram: true,
+      channel: 0,
+      notes: [],
+      programChanges: [],
+    }));
+
+    melodicLanes.forEach((lane, index) => {
+      const port = Math.floor(index / MIDI_EXPORT_MELODIC_CHANNELS.length);
+      const channel = MIDI_EXPORT_MELODIC_CHANNELS[index % MIDI_EXPORT_MELODIC_CHANNELS.length];
+      const track = physicalTracks[port];
+      let previousSignature = null;
+      lane.segments.sort((a, b) => a.startTick - b.startTick).forEach(segment => {
+        if (segment.signature !== previousSignature) {
+          track.programChanges.push({
+            tick: segment.startTick,
+            channel,
+            program: segment.program,
+            bank: segment.bank,
+          });
+          previousSignature = segment.signature;
+        }
+        for (const note of segment.notes) track.notes.push({ ...note, channel });
+      });
+    });
+
+    drumLanes.forEach((lane, index) => {
+      const track = physicalTracks[index];
+      const channel = 9;
+      for (const segment of lane.segments) {
+        for (const note of segment.notes) track.notes.push({ ...note, channel });
+      }
+    });
+
+    for (const track of physicalTracks) {
+      track.notes.sort((a, b) => a.startTick - b.startTick || a.channel - b.channel || a.pitch - b.pitch);
+      track.programChanges.sort((a, b) => a.tick - b.tick || a.channel - b.channel);
+    }
+
+    return {
+      editorChannelCount: parts.length,
+      midiChannelCount: packedLanes.length,
+      portCount,
+      extended: portCount > 1,
+      physicalTracks,
+      noteCount: parts.reduce((sum, part) => sum + part.notes.length, 0),
+    };
+  }
+
   function exportProjectAsMidi() {
     const buildMidi = window.MabiMusicFormats?.buildMidi;
     if (typeof buildMidi !== "function") {
-      showToast("MIDI 내보내기 모듈을 사용할 수 없습니다.");
+      showToast(i18nText("midi.export_module_unavailable"));
       return false;
     }
 
@@ -13486,29 +13837,20 @@
       tempoEvents.unshift({ tick: 0, bpm: 120 });
     }
 
-    const tracks = state.channels.map((channel, channelIndex) => {
-      const isDrums = isChannelPercussionInstrument(channel);
-      const program = getChannelInstrumentProgram(channel);
-      return {
-        name: String(channel?.name || `Ch${channelIndex + 1}`),
-        program,
-        isDrums,
-        notes: (Array.isArray(channel?.notes) ? channel.notes : []).map((note) => ({
-          startTick: Math.max(0, Math.round((Number(note.startBeat) || 0) * ppq)),
-          durationTick: Math.max(1, Math.round(Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat) * ppq)),
-          pitch: clamp(Math.round(Number(note.pitch) || 60), 0, 127),
-          velocity: Math.max(1, getNotePlaybackVelocity(note)),
-        })),
-      };
-    });
-
+    let packing;
     try {
+      packing = buildEditorMidiPacking(ppq);
+      if (!packing.noteCount) {
+        showToast(i18nText("midi.export_no_notes"));
+        return false;
+      }
       const bytes = buildMidi({
         ppq,
-        title: String(state.projectName || "Mobibard Editor"),
+        title: String(state.projectName || "MobiBard Editor"),
         tempoEvents,
         timeSignatures: [{ tick: 0, numerator: CONFIG.beatsPerMeasure, denominator: 4 }],
-        tracks,
+        tracks: packing.physicalTracks,
+        mergeMetaIntoFirstTrack: true,
       });
       const blob = new Blob([bytes], { type: "audio/midi" });
       const safeName = (state.projectName || "mobibard-project").replace(/[\/:*?"<>|]/g, "_");
@@ -13520,12 +13862,15 @@
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      const noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
-      showToast(`MIDI로 내보냈습니다. · ${tracks.length}개 채널 · ${noteCount}개 노트`);
+      if (packing.extended) {
+        showToast(i18nText("midi.export_extended", [packing.portCount, packing.midiChannelCount]));
+      } else {
+        showToast(i18nText("midi.export_standard", [packing.midiChannelCount, packing.noteCount]));
+      }
       return true;
     } catch (error) {
       console.error("MIDI export failed", error);
-      showToast("MIDI 파일을 만들지 못했습니다.");
+      showToast(i18nText("midi.fail_create_file"));
       return false;
     }
   }
@@ -14825,7 +15170,7 @@
     elements.mmlImportText?.addEventListener("input", scheduleMmlImportPreview);
     elements.mmlImportApplyTempo?.addEventListener("change", updateMmlImportPreview);
     elements.mmlImportSelectAllButton?.addEventListener("click", () => {
-      state.mmlImport.selectedCandidateIndexes = new Set(state.mmlImport.candidates.slice(0, 6).map((_, index) => index));
+      state.mmlImport.selectedCandidateIndexes = new Set(state.mmlImport.candidates.map((_, index) => index));
       updateMmlImportPreview();
     });
     elements.mmlImportClearSelectionButton?.addEventListener("click", () => {

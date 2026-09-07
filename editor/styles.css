@@ -6497,3 +6497,65 @@ a[class*="button"]:hover {
     min-height: 34px;
   }
 }
+
+/* fixed92: unlimited Editor channel import; keep import actions visible. */
+.mml-import-dialog {
+  height: min(760px, calc(100dvh - 24px));
+  min-height: 0;
+}
+.mml-import-dialog.has-channel-selection {
+  grid-template-rows: auto auto minmax(82px, .38fr) minmax(0, 1fr) auto auto auto;
+}
+.mml-import-dialog:not(.has-channel-selection) {
+  grid-template-rows: auto auto minmax(150px, 1fr) auto auto auto;
+}
+.mml-import-dialog.has-channel-selection #mmlImportText {
+  min-height: 0;
+  height: 100%;
+  resize: none;
+}
+.mml-import-dialog .mml-import-channel-section {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.mml-import-dialog .mml-import-channel-section[hidden] { display: none; }
+.mml-import-dialog .mml-import-channel-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+  overflow-y: auto;
+}
+.mml-import-dialog > .transfer-dialog-actions,
+.unified-import-dialog > .unified-import-actions {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  background: var(--menu-bg);
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .mml-import-dialog {
+    height: min(700px, calc(100dvh - 16px));
+  }
+  .mml-import-dialog.has-channel-selection {
+    grid-template-rows: auto auto minmax(72px, .3fr) minmax(0, 1fr) auto auto auto;
+  }
+}
+
+/* fixed92: keep unified file-import actions pinned to the last grid row even
+   when the optional text-selection row is hidden. */
+.unified-import-dialog {
+  min-height: 0;
+  overflow: hidden;
+}
+.unified-import-dialog .midi-import-selection-list {
+  grid-row: 5;
+  min-height: 0;
+  overflow-y: auto;
+}
+.unified-import-dialog > .unified-import-actions {
+  grid-row: 6;
+  align-self: stretch;
+}

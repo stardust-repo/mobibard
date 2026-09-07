@@ -744,7 +744,7 @@
 
     if (!mml || !window.MabiMml?.parseMabinogiMml || !window.MabiMml?.buildSchedule) return;
     try {
-      const parsed = window.MabiMml.parseMabinogiMml(mml);
+      const parsed = window.MabiMml.parseMabinogiMml(mml, { maxParts: 6, padToParts: 6 });
       const schedule = window.MabiMml.buildSchedule(parsed);
       playbackSchedule = schedule;
       const duration = Math.max(0, Number(schedule.duration) || 0);
@@ -966,7 +966,7 @@
       else text = `MML@${text.replace(/;\s*$/, "")},,;`;
     }
     if (!/;\s*$/.test(text)) text += ";";
-    if (window.MabiMml?.parseMabinogiMml) window.MabiMml.parseMabinogiMml(text);
+    if (window.MabiMml?.parseMabinogiMml) window.MabiMml.parseMabinogiMml(text, { maxParts: 6, padToParts: 6 });
     return text;
   }
 

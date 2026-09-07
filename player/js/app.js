@@ -1068,10 +1068,10 @@
   }
 
   function parseTempoCommandData(mml) {
-    const parser = window.MabiMml?.parseMabinogiMml;
-    if (typeof parser !== "function") return { parsed: null, events: [] };
+    const sharedParser = window.MabiMml?.parseMabinogiMml;
+    if (typeof sharedParser !== "function") return { parsed: null, events: [] };
     try {
-      const parsed = parser(String(mml || ""));
+      const parsed = sharedParser(String(mml || ""), { maxParts: 6, padToParts: 6 });
       const events = [];
       (parsed?.parts || []).forEach((partInfo, partIndex) => {
         (partInfo?.tempos || []).forEach((tempo, partOrdinal) => {
@@ -4181,7 +4181,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     ...options,
     ignoreSingle64thOverlap: true,
   });
-  const { parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths } = window.MabiMml;
+  const { parseMabinogiMml: parseSharedMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths } = window.MabiMml;
+  const parseMabinogiMml = (text) => parseSharedMabinogiMml(text, { maxParts: 6, padToParts: 6 });
   const { optimizeMml, addLeadingSilenceMml } = window.MabiOptimizer;
   const { parseSoundBank, loadEmbeddedSoundBank, prepareNotes, prepareDrumNotes, schedulePreparedNotes } = window.MabiSoundBank;
 

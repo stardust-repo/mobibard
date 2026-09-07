@@ -40,12 +40,28 @@
   const approxDurationPlanCache = new Map();
   const EPS = 1e-9;
 
-function parseMabinogiMml(text) {
+function parseMabinogiMml(text, options = {}) {
   if (!String(text || "").trim()) throw new Error(tr("mml.err_empty"));
   if (/\[|\]/.test(text)) throw new Error(tr("mml.err_brackets_parts"));
   const partInfos = splitMmlPartsDetailed(text);
-  if (partInfos.length > 6) throw new Error(tr("mml.err_max_parts"));
-  while (partInfos.length < 6) partInfos.push({ text: "", sourceStart: 0, sourceEnd: 0, rawStart: 0, rawEnd: 0 });
+
+  // Shared parser policy: do not impose an application channel/part limit.
+  // Apps with a UI/runtime limit (for example Player/Simple) must opt into it.
+  const requestedMaxParts = Number(options.maxParts);
+  const maxParts = Number.isFinite(requestedMaxParts) && requestedMaxParts > 0
+    ? Math.floor(requestedMaxParts)
+    : Infinity;
+  if (partInfos.length > maxParts) {
+    if (maxParts === 6) throw new Error(tr("mml.err_max_parts"));
+    throw new Error(`이 앱은 최대 ${maxParts}파트까지 사용할 수 있습니다.`);
+  }
+  const requestedPad = Number(options.padToParts);
+  const padToParts = Number.isFinite(requestedPad) && requestedPad > 0
+    ? Math.min(maxParts, Math.floor(requestedPad))
+    : 0;
+  while (partInfos.length < padToParts) {
+    partInfos.push({ text: "", sourceStart: 0, sourceEnd: 0, rawStart: 0, rawEnd: 0 });
+  }
   const parsedParts = partInfos.map((p, i) => parseMmlPart(p.text, i, { globalOffset: p.sourceStart }));
   const tempos = [{ beat: 0, bpm: 120, part: -1, order: -1, explicit: false, sourceStart: -1, sourceEnd: -1, globalSourceStart: -1, globalSourceEnd: -1 }];
   for (const p of parsedParts) tempos.push(...p.tempos);
@@ -619,5 +635,5 @@ function renderApproxNumericToken(core, targetUnits, isRest) {
 
 
 
-  window.MabiMml = Object.freeze({ version: "5.1.0", parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, beatToSeconds, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths });
+  window.MabiMml = Object.freeze({ version: "5.1.1", parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, beatToSeconds, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths });
 })();

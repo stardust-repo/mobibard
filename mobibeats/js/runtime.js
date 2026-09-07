@@ -43,7 +43,7 @@
     clampInt: utils.clampInt,
     shortError: utils.shortError,
     base64ToUint8Array: utils.base64ToUint8Array,
-    parseMabinogiMml: mml.parseMabinogiMml,
+    parseMabinogiMml: (text) => mml.parseMabinogiMml(text, { maxParts: 6, padToParts: 6 }),
     buildSchedule: mml.buildSchedule,
     composeMml: mml.composeMml,
     parseMidi,

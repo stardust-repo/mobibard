@@ -540,7 +540,7 @@
     if (!mml) throw new Error(tx("noMml"));
     let channelCount = 0;
     try {
-      const parsed = window.MabiMml?.parseMabinogiMml?.(mml);
+      const parsed = window.MabiMml?.parseMabinogiMml?.(mml, { maxParts: 6, padToParts: 6 });
       channelCount = (parsed?.parts || []).filter(part => (part?.notes || []).some(note => Number(note?.volume ?? 8) > 0)).length;
     } catch (_) {}
     return {
