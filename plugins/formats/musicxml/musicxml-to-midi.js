@@ -90,16 +90,18 @@
     const partSources = rootName === "score-timewise" ? collectTimewiseParts(root) : collectPartwiseParts(root);
     if (!partSources.length) throw new Error(tr("xml.err_parts_missing", [name]));
 
-    const usedChannels = new Set();
+    const usedEndpoints = new Set();
     const allNotes = [];
     const tempoEvents = [{ tick: 0, bpm: DEFAULT_TEMPO }];
     const tracks = [];
 
     partSources.forEach((source, index) => {
       const info = normalizePartInfo(partInfo.get(source.id) || {}, source.id, index);
-      const channel = pickMidiChannel(info, index, usedChannels);
+      const endpoint = pickMidiEndpoint(info, index, usedEndpoints);
+      const channel = endpoint.channel;
+      const midiPort = endpoint.midiPort;
       const program = pickMidiProgram(info);
-      const parsedPart = parsePartMeasures(source.measures, { ...info, channel, program, trackIndex: index + 1 }, tempoEvents);
+      const parsedPart = parsePartMeasures(source.measures, { ...info, channel, midiPort, program, trackIndex: index + 1 }, tempoEvents);
       const mergedNotes = mergeTiedNotes(parsedPart.notes);
       if (mergedNotes.length) {
         tracks.push({
@@ -107,6 +109,7 @@
           name: info.name || `Part ${index + 1}`,
           instrumentName: info.instrumentName || info.name || `Part ${index + 1}`,
           channel,
+          midiPort,
           program,
           notes: mergedNotes
         });
@@ -191,20 +194,26 @@
     };
   }
 
-  function pickMidiChannel(info, index, usedChannels) {
-    if (info.percussion) return 9;
+  function pickMidiEndpoint(info, index, usedEndpoints) {
+    if (info.percussion) return { channel: 9, midiPort: 0 };
     const requested = info.midiChannel;
-    if (Number.isInteger(requested) && requested >= 0 && requested < 16 && requested !== 9 && !usedChannels.has(requested)) {
-      usedChannels.add(requested);
-      return requested;
+    const requestedKey = Number.isInteger(requested) && requested >= 0 && requested < 16 && requested !== 9 ? `0:${requested}` : "";
+    if (requestedKey && !usedEndpoints.has(requestedKey)) {
+      usedEndpoints.add(requestedKey);
+      return { channel: requested, midiPort: 0 };
     }
-    for (const ch of midiParser.melodicChannels) {
-      if (!usedChannels.has(ch)) {
-        usedChannels.add(ch);
-        return ch;
+    let slot = Math.max(0, Math.trunc(Number(index) || 0));
+    while (slot < midiParser.melodicChannels.length * 128) {
+      const midiPort = Math.floor(slot / midiParser.melodicChannels.length);
+      const channel = midiParser.melodicChannels[slot % midiParser.melodicChannels.length];
+      const key = `${midiPort}:${channel}`;
+      if (!usedEndpoints.has(key)) {
+        usedEndpoints.add(key);
+        return { channel, midiPort };
       }
+      slot++;
     }
-    return midiParser.defaultMelodicChannel(index);
+    throw new Error("MusicXML 파트 수가 MIDI Port 표현 범위를 초과했습니다.");
   }
 
   function pickMidiProgram(info) {
@@ -521,7 +530,9 @@
   function buildPartTrack(part) {
     const ch = Math.max(0, Math.min(15, Number(part.channel) || 0));
     const program = Math.max(0, Math.min(127, Number(part.program) || 0));
+    const midiPort = Math.max(0, Math.min(127, Number(part.midiPort) || 0));
     const events = [
+      { tick: 0, order: -4, data: [0xff, 0x21, 0x01, midiPort] },
       { tick: 0, order: -3, data: metaTextEvent(0x03, part.name || "MusicXML Part") },
       { tick: 0, order: -2, data: metaTextEvent(0x04, part.instrumentName || part.name || "MusicXML Instrument") },
       { tick: 0, order: -1, data: [0xc0 | ch, program] }

@@ -375,7 +375,7 @@
         tracks.push({
           name: spec.name,
           program: spec.program,
-          channel: spec.isDrums ? 9 : (Number.isFinite(spec.channel) ? spec.channel : root.MabiMidiParser.defaultMelodicChannel(staffIndex)),
+          channel: spec.isDrums ? 9 : (Number.isFinite(spec.channel) ? spec.channel : undefined),
           isDrums: spec.isDrums,
           notes,
         });

@@ -33,9 +33,15 @@
 
   const MELODIC_CHANNELS = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15]);
 
-  function defaultMelodicChannel(index) {
+  function defaultMelodicEndpoint(index) {
     const safeIndex = Math.max(0, Math.trunc(Number(index) || 0));
-    return MELODIC_CHANNELS[safeIndex % MELODIC_CHANNELS.length];
+    const midiPort = Math.floor(safeIndex / MELODIC_CHANNELS.length);
+    if (midiPort > 127) throw new Error("MIDI Port 메타 이벤트의 표현 범위(0~127)를 초과했습니다.");
+    return { midiPort, channel: MELODIC_CHANNELS[safeIndex % MELODIC_CHANNELS.length] };
+  }
+
+  function defaultMelodicChannel(index) {
+    return defaultMelodicEndpoint(index).channel;
   }
 
   function formatMessage(key, values = [], translate = null) {
@@ -611,6 +617,7 @@
     normalizeBank,
     melodicChannels: MELODIC_CHANNELS,
     defaultMelodicChannel,
+    defaultMelodicEndpoint,
     decodeMetaText,
   });
 })();

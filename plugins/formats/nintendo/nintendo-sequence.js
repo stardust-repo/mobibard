@@ -544,6 +544,14 @@
     let psgProgramMappedCount = 0;
     let proprietaryBankCollapsedCount = 0;
     const profileInstruments = info.bankProfile?.instruments || [];
+    let melodicGroupIndex = 0;
+    const melodicEndpoint = () => {
+      const index = melodicGroupIndex++;
+      const channels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15];
+      const midiPort = Math.floor(index / channels.length);
+      if (midiPort > 127) throw new Error("Nintendo 변환 채널 수가 MIDI Port 표현 범위를 초과했습니다.");
+      return { channel: channels[index % channels.length], midiPort };
+    };
 
     for (const source of parsedTracks) {
       for (const note of source.notes) {
@@ -561,10 +569,12 @@
           if (instrumentType === 0x10) typeName = "Drumset";
           else if (instrumentType === 0x02) typeName = "PSG Wave → GM Square Lead";
           else if (instrumentType === 0x03) typeName = "PSG Noise → GM Percussion";
+          const endpoint = isDrums ? { channel: 9, midiPort: 0 } : melodicEndpoint();
           group = {
             name: `Nintendo Track ${source.trackIndex + 1} · ${typeName}`,
             program: normalizedProgram,
-            channel: source.trackIndex % 16,
+            channel: endpoint.channel,
+            midiPort: endpoint.midiPort,
             isDrums,
             notes: [],
             controlChanges: [],

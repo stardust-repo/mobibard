@@ -26,21 +26,28 @@
   };
   const rowEvent = () => ({ note: null, noteOff: false, instrument: null, volume: null, effect: null, param: 0 });
 
-  function midiChannelFor(index) {
-    let channel = index % 15;
-    if (channel >= 9) channel++;
-    return channel;
+  function midiEndpointFor(index) {
+    const safeIndex = Math.max(0, Math.trunc(Number(index) || 0));
+    const slot = safeIndex % 15;
+    const channel = slot >= 9 ? slot + 1 : slot;
+    const midiPort = Math.floor(safeIndex / 15);
+    if (midiPort > 127) throw new Error("Tracker 채널 수가 MIDI Port 표현 범위를 초과했습니다.");
+    return { channel, midiPort };
   }
 
   function buildSong(song, fileName) {
     const ppq = 480;
     const channels = Math.max(1, song.channels || 1);
-    const tracks = Array.from({ length: channels }, (_, index) => ({
-      name: `Tracker Ch ${index + 1}`,
-      channel: midiChannelFor(index),
-      notes: [],
-      programChanges: [],
-    }));
+    const tracks = Array.from({ length: channels }, (_, index) => {
+      const endpoint = midiEndpointFor(index);
+      return {
+        name: `Tracker Ch ${index + 1}`,
+        channel: endpoint.channel,
+        midiPort: endpoint.midiPort,
+        notes: [],
+        programChanges: [],
+      };
+    });
     const active = Array.from({ length: channels }, () => null);
     const currentInstrument = Array.from({ length: channels }, () => 1);
     const currentVolume = Array.from({ length: channels }, () => 48);

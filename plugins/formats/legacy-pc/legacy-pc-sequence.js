@@ -266,7 +266,7 @@
     const trackCount = le32(bytes, 0x30);
     const bpm = clamp(le32(bytes, 0x38), 20, 400, 120);
     let pos = revised ? 0x388 : 0x308;
-    if (!trackCount || trackCount > 120 || pos >= bytes.length) throw new Error("HMP 트랙 헤더가 올바르지 않습니다.");
+    if (!trackCount || pos >= bytes.length) throw new Error("HMP 트랙 헤더가 올바르지 않습니다.");
     const channels = makeChannels();
     const tempoEvents = [{ tick: 0, bpm }];
     let parsedTracks = 0;
@@ -298,7 +298,6 @@
       if (found < 0) break;
       offsets.push(found);
       pos = found + marker.length;
-      if (offsets.length >= 120) break;
     }
     return offsets;
   }

@@ -81,9 +81,10 @@
     return [0xff, type & 0x7f, ...vlq(encoded.length), ...encoded];
   }
 
-  function midiTrack(events, name, endTick = 0) {
+  function midiTrack(events, name, endTick = 0, midiPort = 0) {
     let serial = 0;
     const source = [...events];
+    source.push({ tick: 0, priority: -30, order: serial++, bytes: [0xff, 0x21, 0x01, clamp(midiPort, 0, 127)] });
     if (name) source.push({ tick: 0, priority: -20, order: serial++, bytes: textMeta(0x03, name) });
     source.sort((left, right) => (left.tick - right.tick)
       || ((left.priority || 0) - (right.priority || 0))
@@ -329,9 +330,10 @@
   function parseTrack(view, seqOffset, header, trackIndex, context, options) {
     const start = seqOffset + header.trackOffsets[trackIndex];
     const limit = seqOffset + header.totalSize;
-    const melodicChannel = root.MabiMidiParser?.defaultMelodicChannel
-      ? root.MabiMidiParser.defaultMelodicChannel(trackIndex)
-      : MELODIC_CHANNELS[trackIndex % MELODIC_CHANNELS.length];
+    const melodicEndpoint = root.MabiMidiParser?.defaultMelodicEndpoint
+      ? root.MabiMidiParser.defaultMelodicEndpoint(trackIndex)
+      : { channel: MELODIC_CHANNELS[trackIndex % MELODIC_CHANNELS.length], midiPort: Math.floor(trackIndex / MELODIC_CHANNELS.length) };
+    const melodicChannel = melodicEndpoint.channel;
     const state = {
       pc: start,
       tick: 0,
@@ -871,6 +873,7 @@
       truncatedLoopCount: state.truncatedLoopCount,
       unsupportedOpcodes: state.unsupportedOpcodes,
       startOffset: header.trackOffsets[trackIndex],
+      midiPort: melodicEndpoint.midiPort,
     };
   }
 
@@ -900,7 +903,7 @@
     const chunks = [...midiHeader(1, parsedTracks.length, PPQ)];
     for (let index = 0; index < parsedTracks.length; index++) {
       const track = parsedTracks[index];
-      chunks.push(...midiTrack(track.events, `AKAO Track ${index + 1}`, track.endTick));
+      chunks.push(...midiTrack(track.events, `AKAO Track ${index + 1}`, track.endTick, track.midiPort));
     }
 
     const eventCount = parsedTracks.reduce((sum, track) => sum + track.eventCount, 0);

@@ -681,7 +681,7 @@
           if (sourceNote.tieStart) activeTies.set(tieKey, note);
         }
       }
-      if (notes.length) tracks.push({ name: `Staff ${staff}`, program: 0, channel: root.MabiMidiParser.defaultMelodicChannel(staffIndex), notes });
+      if (notes.length) tracks.push({ name: `Staff ${staff}`, program: 0, channel: undefined, notes });
     });
 
     if (!tracks.length) throw new FinaleMusError("MUS 악보에서 재생 가능한 음표를 찾지 못했습니다.", "mus.no_notes");

@@ -383,21 +383,36 @@
     }
 
     const dataTrackEvents = [];
-    let nextMelodicChannel = 0;
+    const melodicChannels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15];
+    let nextMelodicSlot = 0;
+    const automaticEndpoint = slot => {
+      const safeSlot = Math.max(0, Math.trunc(Number(slot) || 0));
+      const midiPort = Math.floor(safeSlot / melodicChannels.length);
+      if (midiPort > 127) throw new Error("MIDI Port 메타 이벤트의 표현 범위(0~127)를 초과했습니다.");
+      return { midiPort, channel: melodicChannels[safeSlot % melodicChannels.length] };
+    };
     for (let trackIndex = 0; trackIndex < tracks.length; trackIndex++) {
       const track = tracks[trackIndex] || {};
-      let channel = Number.isFinite(Number(track.channel)) ? clampInt(track.channel, 0, 15, 0) : nextMelodicChannel;
-      if (track.isDrums) channel = 9;
-      if (channel === 9 && !track.isDrums) channel = 10;
-      if (!Number.isFinite(Number(track.channel)) && !track.isDrums) {
-        nextMelodicChannel = channel + 1;
-        if (nextMelodicChannel === 9) nextMelodicChannel++;
-        if (nextMelodicChannel > 15) nextMelodicChannel = 0;
+      const hasExplicitChannel = Number.isFinite(Number(track.channel));
+      const hasExplicitPort = Number.isFinite(Number(track.midiPort));
+      let channel;
+      let midiPort;
+      if (track.isDrums) {
+        channel = 9;
+        midiPort = hasExplicitPort ? clampInt(track.midiPort, 0, 127, 0) : 0;
+      } else if (hasExplicitChannel) {
+        channel = clampInt(track.channel, 0, 15, 0);
+        if (channel === 9) channel = 10;
+        midiPort = hasExplicitPort ? clampInt(track.midiPort, 0, 127, 0) : 0;
+      } else {
+        const endpoint = automaticEndpoint(nextMelodicSlot++);
+        channel = endpoint.channel;
+        midiPort = hasExplicitPort ? clampInt(track.midiPort, 0, 127, endpoint.midiPort) : endpoint.midiPort;
       }
       const events = [];
       if (track.omitName !== true) events.push({ tick: 0, order: -2, bytes: textMeta(0x03, track.name || `Track ${trackIndex + 1}`) });
-      if (Number.isFinite(Number(track.midiPort))) {
-        events.push({ tick: 0, order: -3, bytes: [0xff, 0x21, 0x01, clampInt(track.midiPort, 0, 127, 0)] });
+      if (midiPort > 0 || hasExplicitPort) {
+        events.push({ tick: 0, order: -3, bytes: [0xff, 0x21, 0x01, midiPort] });
       }
       if (!track.isDrums && track.suppressInitialProgram !== true) {
         if (Number.isFinite(Number(track.bank))) {

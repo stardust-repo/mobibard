@@ -30,16 +30,21 @@
   function makeChannelAllocator() {
     let index = 0;
     return () => {
-      const channel = MELODIC_CHANNELS[index % MELODIC_CHANNELS.length];
+      const midiPort = Math.floor(index / MELODIC_CHANNELS.length);
+      if (midiPort > 127) throw new Error("칩 음성 수가 MIDI Port 표현 범위를 초과했습니다.");
+      const endpoint = { channel: MELODIC_CHANNELS[index % MELODIC_CHANNELS.length], midiPort };
       index++;
-      return channel;
+      return endpoint;
     };
   }
 
-  function makeTrack(name, channel, program = 80) {
+  function makeTrack(name, endpoint, program = 80) {
+    const channel = typeof endpoint === "object" ? endpoint.channel : endpoint;
+    const midiPort = typeof endpoint === "object" ? endpoint.midiPort : 0;
     return {
       name,
       channel,
+      midiPort,
       program,
       notes: [],
       controlChanges: [],
@@ -677,7 +682,7 @@
 
   function parseS98Devices(bytes, version) {
     if (version >= 3) {
-      const count = Math.min(64, le32(bytes, 0x1c));
+      const count = le32(bytes, 0x1c);
       if (!count) return [{ type: 4, clock: 7987200, pan: 0 }];
       if (0x20 + count * 16 > bytes.length) throw new Error("S98 장치 정보가 파일 끝에서 잘렸습니다.");
       const devices = [];
@@ -689,7 +694,7 @@
     }
     if (version === 2) {
       const devices = [];
-      for (let offset = 0x20; offset + 16 <= bytes.length && devices.length < 64; offset += 16) {
+      for (let offset = 0x20; offset + 16 <= bytes.length; offset += 16) {
         const type = le32(bytes, offset);
         if (!type) break;
         devices.push({ type, clock: le32(bytes, offset + 4), pan: 0 });

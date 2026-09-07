@@ -53,7 +53,7 @@ function parseGp5(bytes) {
   }
   skip(42);
   const measureCount=i32(), trackCount=i32();
-  if(measureCount<0 || trackCount<0 || measureCount>100000 || trackCount>512) throw new Error("GP5 마디/트랙 수가 올바르지 않습니다.");
+  if(measureCount<0 || trackCount<0 || measureCount>100000) throw new Error("GP5 마디/트랙 수가 올바르지 않습니다.");
   const measureHeaders=[];
   let ts={numerator:4,denominator:4};
   for(let i=0;i<measureCount;i++){
