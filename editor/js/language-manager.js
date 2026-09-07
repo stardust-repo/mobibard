@@ -5,7 +5,8 @@
   const LEGACY_PREF_KEY = "mobibard-language";
   const DEFAULT_LANGUAGE = "ko";
   const LOCALE_VERSION = "5.3.0";
-  const LOCALE_REVISION = "20260907-soundbank-label2";
+  const LOCALE_REVISION = "20260907-semantic-keys1";
+  const KEY_PATTERN = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*$/;
   const SUPPORTED = Object.freeze({
     ko: { file: "ko.js", htmlLang: "ko" },
     ja: { file: "ja.js", htmlLang: "ja" },
@@ -29,12 +30,16 @@
     ...Object.keys(EXPLICIT_ATTRIBUTE_MARKERS).map((marker) => `${marker}-args`)
   ];
   const SKIP_SELECTOR = "script,style,textarea,pre,code,kbd,samp,[data-i18n-skip],[data-i18n]";
+
   const localeCache = new Map();
   const localeLoadPromises = new Map();
   const textSourceCache = new WeakMap();
   const attributeSourceCache = new WeakMap();
+  let sourceLocale = null;
+  let sourceStringKeys = new Map();
+  let sourcePatternMatchers = [];
   let activeLanguage = DEFAULT_LANGUAGE;
-  let activeLocale = { strings: {} };
+  let activeLocale = { strings: {}, patterns: {} };
   let observer = null;
   let applying = false;
 
@@ -43,6 +48,12 @@
     confirm: typeof window.confirm === "function" ? window.confirm.bind(window) : null,
     prompt: typeof window.prompt === "function" ? window.prompt.bind(window) : null
   };
+
+  function assertKey(key, section, language) {
+    if (!KEY_PATTERN.test(String(key || ""))) {
+      throw new Error(`Invalid i18n key in ${language}/${section}: ${String(key)}`);
+    }
+  }
 
   function readCachedLanguage() {
     try {
@@ -82,7 +93,6 @@
     let params;
     try { params = new URL(window.location.href).searchParams; }
     catch (_) { return { mode: "auto", key: "", raw: "", language: "" }; }
-
     for (const key of LANGUAGE_QUERY_KEYS) {
       if (!params.has(key)) continue;
       const raw = String(params.get(key) || "").trim();
@@ -126,50 +136,28 @@
     return DEFAULT_LANGUAGE;
   }
 
-  function resolveAutomaticLanguage() {
-    return normalizeLanguage(readCachedLanguage()) || detectBrowserLanguage() || DEFAULT_LANGUAGE;
-  }
-
   function resolveInitialLanguage() {
     const query = readLanguageQuery();
-    if (query.mode === "fixed") {
-      return { language: query.language, source: query.language === DEFAULT_LANGUAGE && !normalizeLanguage(query.raw) ? "query-fallback" : "query" };
-    }
+    if (query.mode === "fixed") return { language: query.language, source: "query" };
     const bootstrapped = normalizeLanguage(window.__MOBIBARD_INITIAL_LANGUAGE__);
-    if (bootstrapped && SUPPORTED[bootstrapped]) {
-      return { language: bootstrapped, source: "bootstrap" };
-    }
-    return { language: resolveAutomaticLanguage(), source: "auto" };
+    if (bootstrapped && SUPPORTED[bootstrapped]) return { language: bootstrapped, source: "bootstrap" };
+    const cached = normalizeLanguage(readCachedLanguage());
+    if (cached && SUPPORTED[cached]) return { language: cached, source: "preference" };
+    return { language: detectBrowserLanguage() || DEFAULT_LANGUAGE, source: "browser" };
   }
 
   function validateLocaleData(data, normalized) {
     if (!data || typeof data !== "object" || !data.strings || typeof data.strings !== "object" || Array.isArray(data.strings)) {
       throw new Error(`Invalid locale data: ${normalized}`);
     }
-    const rawPatterns = data.patterns && typeof data.patterns === "object" && !Array.isArray(data.patterns) ? data.patterns : {};
-    const compiledPatterns = Object.entries(rawPatterns).map(([source, target]) => {
-      const names = [];
-      let cursor = 0;
-      let pattern = "";
-      const matcher = /\{(\d+)\}/g;
-      let match;
-      while ((match = matcher.exec(source))) {
-        pattern += source.slice(cursor, match.index).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        pattern += "(.+?)";
-        names.push(Number(match[1]));
-        cursor = match.index + match[0].length;
-      }
-      pattern += source.slice(cursor).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const literalLength = source.replace(/\{\d+\}/g, "").length;
-      return { source, target: String(target), names, regex: new RegExp(`^${pattern}$`), literalLength };
-    }).sort((a, b) => (b.literalLength - a.literalLength) || (b.source.length - a.source.length));
-    return { ...data, code: normalized, strings: data.strings, patterns: rawPatterns, compiledPatterns };
+    const patterns = data.patterns && typeof data.patterns === "object" && !Array.isArray(data.patterns) ? data.patterns : {};
+    Object.keys(data.strings).forEach((key) => assertKey(key, "strings", normalized));
+    Object.keys(patterns).forEach((key) => assertKey(key, "patterns", normalized));
+    return { ...data, code: normalized, strings: data.strings, patterns };
   }
 
   function buildLocaleUrl(file) {
     const url = new URL(`locale/${file}`, document.baseURI);
-    // Query strings are useful for deployed cache invalidation, but can make
-    // local file loading inconsistent across browsers and operating systems.
     if (url.protocol !== "file:") {
       url.searchParams.set("v", LOCALE_VERSION);
       url.searchParams.set("rev", LOCALE_REVISION);
@@ -182,22 +170,17 @@
     if (localeCache.has(normalized)) return localeCache.get(normalized);
     if (localeLoadPromises.has(normalized)) return localeLoadPromises.get(normalized);
 
+    const existing = window.__MOBIBARD_LOCALES__?.[normalized];
+    if (existing) {
+      const locale = validateLocaleData(existing, normalized);
+      localeCache.set(normalized, locale);
+      return locale;
+    }
+
     const config = SUPPORTED[normalized] || SUPPORTED[DEFAULT_LANGUAGE];
     const promise = new Promise((resolve, reject) => {
-      const existing = window.__MOBIBARD_LOCALES__?.[normalized];
-      if (existing) {
-        try {
-          const locale = validateLocaleData(existing, normalized);
-          localeCache.set(normalized, locale);
-          resolve(locale);
-        } catch (error) {
-          reject(error);
-        }
-        return;
-      }
-
       const script = document.createElement("script");
-      script.async = true;
+      script.async = false;
       script.charset = "utf-8";
       script.dataset.mobibardLocale = normalized;
       script.src = buildLocaleUrl(config.file);
@@ -221,26 +204,53 @@
     });
 
     localeLoadPromises.set(normalized, promise);
-    try {
-      return await promise;
-    } finally {
-      localeLoadPromises.delete(normalized);
+    try { return await promise; }
+    finally { localeLoadPromises.delete(normalized); }
+  }
+
+  function compileTemplateMatcher(template, key) {
+    const names = [];
+    let cursor = 0;
+    let pattern = "";
+    const matcher = /\{(\d+)\}/g;
+    let match;
+    while ((match = matcher.exec(template))) {
+      pattern += template.slice(cursor, match.index).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      pattern += "(.+?)";
+      names.push(Number(match[1]));
+      cursor = match.index + match[0].length;
     }
+    pattern += template.slice(cursor).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return {
+      key,
+      names,
+      regex: new RegExp(`^${pattern}$`),
+      literalLength: template.replace(/\{\d+\}/g, "").length
+    };
+  }
+
+  function rebuildSourceIndexes(locale) {
+    sourceLocale = locale;
+    sourceStringKeys = new Map();
+    for (const [key, value] of Object.entries(locale.strings || {})) {
+      const text = String(value);
+      if (!sourceStringKeys.has(text) || key.length < sourceStringKeys.get(text).length) {
+        sourceStringKeys.set(text, key);
+      }
+    }
+    sourcePatternMatchers = Object.entries(locale.patterns || {})
+      .map(([key, template]) => compileTemplateMatcher(String(template), key))
+      .sort((a, b) => (b.literalLength - a.literalLength) || (a.key.length - b.key.length));
   }
 
   function applyTemplate(template, values) {
     return String(template).replace(/\{(\d+)\}/g, (_, index) => values[Number(index)] ?? "");
   }
 
-  function translateCore(text, locale = activeLocale) {
-    const source = String(text == null ? "" : text);
-    if (!source) return source;
-    const direct = locale?.strings?.[source];
-    return typeof direct === "string" ? direct : source;
-  }
-
   function translateKey(key, values = []) {
-    const template = activeLocale?.strings?.[String(key)] ?? String(key);
+    const id = String(key || "");
+    if (!KEY_PATTERN.test(id)) return id;
+    const template = activeLocale?.strings?.[id] ?? activeLocale?.patterns?.[id] ?? sourceLocale?.strings?.[id] ?? sourceLocale?.patterns?.[id] ?? id;
     const normalizedValues = Array.isArray(values)
       ? values
       : Object.keys(values || {}).reduce((list, name) => {
@@ -248,6 +258,34 @@
           return list;
         }, []);
     return applyTemplate(template, normalizedValues);
+  }
+
+  function translateSourceCore(source) {
+    const exactKey = sourceStringKeys.get(source);
+    if (exactKey) return translateKey(exactKey);
+    for (const item of sourcePatternMatchers) {
+      const match = String(source).match(item.regex);
+      if (!match) continue;
+      const values = [];
+      item.names.forEach((name, index) => { values[name] = match[index + 1] ?? ""; });
+      return translateKey(item.key, values);
+    }
+    return source;
+  }
+
+  function translateString(text) {
+    const source = String(text == null ? "" : text);
+    if (!source) return source;
+    if (KEY_PATTERN.test(source) && (activeLocale?.strings?.[source] != null || activeLocale?.patterns?.[source] != null)) {
+      return translateKey(source);
+    }
+    const leading = source.match(/^\s*/)?.[0] || "";
+    const trailing = source.match(/\s*$/)?.[0] || "";
+    const coreEnd = source.length - trailing.length;
+    const core = source.slice(leading.length, coreEnd);
+    if (!core) return source;
+    const translated = translateSourceCore(core);
+    return translated === core ? source : leading + translated + trailing;
   }
 
   function parseExplicitArgs(raw) {
@@ -277,43 +315,8 @@
 
   function applyExplicitSubtree(root) {
     if (!root) return;
-    if (root.nodeType === Node.ELEMENT_NODE && root.matches?.(EXPLICIT_SELECTOR)) {
-      applyExplicitElement(root);
-    }
-    if (root.querySelectorAll) {
-      root.querySelectorAll(EXPLICIT_SELECTOR).forEach(applyExplicitElement);
-    }
-  }
-
-  function translatePattern(source) {
-    const patterns = activeLocale?.compiledPatterns || [];
-    for (const item of patterns) {
-      const match = String(source).match(item.regex);
-      if (!match) continue;
-      const values = {};
-      item.names.forEach((name, index) => { values[name] = match[index + 1] ?? ""; });
-      return String(item.target).replace(/\{(\d+)\}/g, (_, index) => values[Number(index)] ?? "");
-    }
-    return null;
-  }
-
-  function translateString(text) {
-    const source = String(text == null ? "" : text);
-    if (!source) return source;
-    if (Object.prototype.hasOwnProperty.call(activeLocale?.strings || {}, source)) {
-      return translateCore(source);
-    }
-    const directPattern = translatePattern(source);
-    if (directPattern != null) return directPattern;
-    const leading = source.match(/^\s*/)?.[0] || "";
-    const trailing = source.match(/\s*$/)?.[0] || "";
-    const coreEnd = source.length - trailing.length;
-    const core = source.slice(leading.length, coreEnd);
-    if (!core) return source;
-    const direct = translateCore(core);
-    if (direct !== core) return leading + direct + trailing;
-    const patterned = translatePattern(core);
-    return patterned == null ? source : leading + patterned + trailing;
+    if (root.nodeType === Node.ELEMENT_NODE && root.matches?.(EXPLICIT_SELECTOR)) applyExplicitElement(root);
+    if (root.querySelectorAll) root.querySelectorAll(EXPLICIT_SELECTOR).forEach(applyExplicitElement);
   }
 
   function shouldSkipNode(node) {
@@ -383,13 +386,9 @@
     observer = new MutationObserver((records) => {
       if (applying) return;
       for (const record of records) {
-        if (record.type === "characterData") {
-          translateTextNode(record.target, false);
-        } else if (record.type === "attributes") {
-          translateElementAttributes(record.target, false);
-        } else if (record.type === "childList") {
-          record.addedNodes.forEach((node) => translateSubtree(node, false));
-        }
+        if (record.type === "characterData") translateTextNode(record.target, false);
+        else if (record.type === "attributes") translateElementAttributes(record.target, false);
+        else if (record.type === "childList") record.addedNodes.forEach((node) => translateSubtree(node, false));
       }
     });
     observer.observe(document.documentElement, {
@@ -413,32 +412,34 @@
     document.documentElement.lang = SUPPORTED[language]?.htmlLang || SUPPORTED[DEFAULT_LANGUAGE].htmlLang;
   }
 
+  function activateLocale(language, locale, canonical, source = "app") {
+    activeLanguage = language;
+    activeLocale = locale;
+    if (sourceLocale !== canonical) rebuildSourceIndexes(canonical);
+    updateLanguageUi(language);
+    translateSubtree(document.documentElement, true);
+    window.dispatchEvent(new CustomEvent("mobibard:localechange", {
+      detail: { language, source }
+    }));
+    return language;
+  }
+
   async function setLanguage(language, options = {}) {
     if (options.source === "user") clearLanguageQuery();
     const requested = normalizeLanguage(language) || DEFAULT_LANGUAGE;
     let resolved = requested;
+    let canonical;
     let locale;
     try {
-      locale = await loadLocale(requested);
+      [canonical, locale] = await Promise.all([loadLocale(DEFAULT_LANGUAGE), loadLocale(requested)]);
     } catch (error) {
       console.warn(error);
       resolved = DEFAULT_LANGUAGE;
-      try {
-        locale = await loadLocale(DEFAULT_LANGUAGE);
-      } catch (fallbackError) {
-        console.error(fallbackError);
-        locale = { code: DEFAULT_LANGUAGE, strings: {} };
-      }
+      canonical = await loadLocale(DEFAULT_LANGUAGE);
+      locale = canonical;
     }
-    activeLanguage = resolved;
-    activeLocale = locale;
     if (options.persist !== false) writeCachedLanguage(resolved);
-    updateLanguageUi(resolved);
-    translateSubtree(document.documentElement, true);
-    window.dispatchEvent(new CustomEvent("mobibard:localechange", {
-      detail: { language: resolved, requested, source: options.source || "app" }
-    }));
-    return resolved;
+    return activateLocale(resolved, locale, canonical, options.source || "app");
   }
 
   async function syncFromPreference(options = {}) {
@@ -448,30 +449,63 @@
       ? query.language
       : (cached || detectBrowserLanguage() || DEFAULT_LANGUAGE);
     if (query.mode !== "fixed" && !cached) writeCachedLanguage(preferred);
-    if (preferred === activeLanguage && localeCache.has(preferred)) {
-      updateLanguageUi(preferred);
-      return preferred;
-    }
     return setLanguage(preferred, {
       persist: false,
       source: query.mode === "fixed" ? "query" : (options.source || "preference")
     });
   }
 
+  function afterDomReady(callback) {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", callback, { once: true });
+    } else {
+      callback();
+    }
+  }
+
   async function initialize() {
     const initial = resolveInitialLanguage();
-    if ((initial.source === "auto" || initial.source === "bootstrap") && !normalizeLanguage(readCachedLanguage())) {
-      writeCachedLanguage(initial.language);
-    }
+    const cached = normalizeLanguage(readCachedLanguage());
+    if (!cached && initial.source !== "query") writeCachedLanguage(initial.language);
     installDialogTranslation();
+
+    // The bootstrap in <head> preloads Korean + selected locale before the body,
+    // so the normal path is synchronous and the observer is active while HTML parses.
     try {
-      // The selected locale is bootstrapped in <head>. Keep key-backed elements
-      // blank until that catalog is applied, so translation keys never flash.
+      const preloadedCanonical = window.__MOBIBARD_LOCALES__?.[DEFAULT_LANGUAGE];
+      const preloadedActive = window.__MOBIBARD_LOCALES__?.[initial.language];
+      if (preloadedCanonical && preloadedActive) {
+        const canonical = validateLocaleData(preloadedCanonical, DEFAULT_LANGUAGE);
+        const locale = validateLocaleData(preloadedActive, initial.language);
+        localeCache.set(DEFAULT_LANGUAGE, canonical);
+        localeCache.set(initial.language, locale);
+        activeLanguage = initial.language;
+        activeLocale = locale;
+        rebuildSourceIndexes(canonical);
+        updateLanguageUi(initial.language);
+        installObserver();
+        return await new Promise((resolve) => {
+          afterDomReady(() => {
+            translateSubtree(document.documentElement, true);
+            updateLanguageUi(initial.language);
+            document.documentElement.removeAttribute("data-i18n-pending");
+            if (window.__MOBIBARD_I18N_FAILSAFE__) clearTimeout(window.__MOBIBARD_I18N_FAILSAFE__);
+            window.dispatchEvent(new CustomEvent("mobibard:localechange", {
+              detail: { language: initial.language, source: initial.source }
+            }));
+            resolve(initial.language);
+          });
+        });
+      }
+
       const resolved = await setLanguage(initial.language, { persist: false, source: initial.source });
       installObserver();
+      await new Promise((resolve) => afterDomReady(resolve));
+      translateSubtree(document.documentElement, true);
       return resolved;
     } finally {
       document.documentElement.removeAttribute("data-i18n-pending");
+      if (window.__MOBIBARD_I18N_FAILSAFE__) clearTimeout(window.__MOBIBARD_I18N_FAILSAFE__);
     }
   }
 

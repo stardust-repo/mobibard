@@ -118,4 +118,12 @@ async function initFirebaseAnalytics() {
   }
 }
 
-void initFirebaseAnalytics();
+async function startFirebaseAnalyticsAfterLocale() {
+  try {
+    const ready = window.MobibardI18n?.ready;
+    if (ready && typeof ready.then === "function") await ready;
+  } catch (_) {}
+  await initFirebaseAnalytics();
+}
+
+void startFirebaseAnalyticsAfterLocale();

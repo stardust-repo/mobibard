@@ -47,3 +47,10 @@ editor/js/soundbank-player.js
 assets/default_sf3.js
 assets/icons/
 ```
+## 다국어 처리
+
+- 공용 규칙은 `../plugins/common/I18N_SPEC.md`를 따릅니다.
+- Editor locale의 `strings`와 `patterns` key는 영어 semantic key만 사용하며 5개 언어가 동일한 key 집합을 유지합니다.
+- `<head>`에서 URL/공용 저장 설정/브라우저 언어를 먼저 결정하고 한국어 기준 catalog와 선택 catalog를 앱 및 Analytics보다 먼저 준비합니다.
+- 정적 HTML은 읽을 수 있는 한국어 fallback 본문과 `data-i18n` semantic key를 함께 사용합니다. 새 동적 문구는 `MobibardI18n.t(key)`를 사용합니다.
+

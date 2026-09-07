@@ -7447,7 +7447,7 @@
   function updateDirtyState() {
     elements.dirtyIndicator.hidden = !state.dirty;
     // 다른 MobiBard 제품과 동일하게 제품명이 아닌 언어별 브랜드명으로 고정합니다.
-    const brandTitle = i18nText("모비바드 v5.3");
+    const brandTitle = i18nText("app.title");
     if (document.title !== brandTitle) document.title = brandTitle;
   }
 
@@ -14233,7 +14233,7 @@
     shrinkTimelineToContent();
     drawRoll();
     updateChannelInfo();
-    showToast(i18nText("연속된 같은 음 {0}개를 {1}개 노트로 합쳤습니다.", [plan.mergeNoteCount, plan.groups.length]));
+    showToast(i18nText("note.merge_same_pitch", [plan.mergeNoteCount, plan.groups.length]));
     return true;
   }
 
@@ -14358,7 +14358,7 @@
         { label: "선택 노트 잘라내기", action: cutSelectedNotes },
         { label: "재생선 위치에 붙여넣기", action: pasteNotesFromClipboard },
         { label: "선택 노트 볼륨 수정", action: openNoteVolumeDialog },
-        ...(mergePlan ? [{ label: i18nText("같은 음 {0}개 합침", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
+        ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         "separator",
         { label: "왼쪽으로 선택 확장 (Ctrl + ←)", action: () => extendSelectedNotesToSide(-1) },
         { label: "오른쪽으로 선택 확장 (Ctrl + →)", action: () => extendSelectedNotesToSide(1) },
@@ -15568,7 +15568,7 @@
       const previousValue = String(select.value || "");
       select.replaceChildren();
       if (!presets.length) {
-        const option = new Option(i18nText("기본 음색 준비 중…"), "0:0");
+        const option = new Option(i18nText("ui.ready_default_sounds"), "0:0");
         option.disabled = true;
         select.add(option);
         select.disabled = true;
