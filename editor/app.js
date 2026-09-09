@@ -854,7 +854,9 @@
       || String(group.programName || group.name || "").toLowerCase() === "drums";
     if (isDrums) return `Ch10 · ${group.programName || group.name || "Drums"}`;
     const program = clamp(Math.round(Number(group.program) || 0), 0, 127);
-    return `#${program + 1} · ${group.programName || group.name || GM_PROGRAM_NAMES[program] || fallback}`;
+    const bank = getMidiGroupBank(group);
+    const bankPrefix = bank > 0 ? `B${bank} · ` : "";
+    return `${bankPrefix}#${program + 1} · ${group.programName || group.name || GM_PROGRAM_NAMES[program] || fallback}`;
   }
 
   let activeHueColorControl = null;
@@ -1195,11 +1197,28 @@
       || isDrumInstrumentName(group?.programName || group?.name);
   }
 
+  function getMidiGroupBank(group) {
+    if (isMidiGroupDrums(group)) return 128;
+    const explicit = Number(group?.bank);
+    if (Number.isFinite(explicit)) return clamp(Math.round(explicit), 0, 16383);
+    const bankMsb = clamp(Math.round(Number(group?.bankMsb) || 0), 0, 127);
+    const bankLsb = clamp(Math.round(Number(group?.bankLsb) || 0), 0, 127);
+    return bankMsb * 128 + bankLsb;
+  }
+
+  function getMidiGroupInstrumentKey(group) {
+    if (isMidiGroupDrums(group)) return "drums";
+    const bank = getMidiGroupBank(group);
+    const program = clamp(Math.round(Number(group?.program) || 0), 0, 127);
+    return `bank-${bank}-program-${program}`;
+  }
+
   function compareMidiGroupsWithDrumsLast(left, right) {
     const leftDrums = isMidiGroupDrums(left);
     const rightDrums = isMidiGroupDrums(right);
     if (leftDrums !== rightDrums) return leftDrums ? 1 : -1;
-    return clamp(Math.round(Number(left?.program) || 0), 0, 127) - clamp(Math.round(Number(right?.program) || 0), 0, 127)
+    return getMidiGroupBank(left) - getMidiGroupBank(right)
+      || clamp(Math.round(Number(left?.program) || 0), 0, 127) - clamp(Math.round(Number(right?.program) || 0), 0, 127)
       || Math.max(0, Number(left?.trackIndex) || 0) - Math.max(0, Number(right?.trackIndex) || 0);
   }
 
@@ -1319,6 +1338,9 @@
     }
     const target = mapper.resolveRequest({
       program: clamp(Math.round(Number(group?.program) || 0), 0, 127),
+      // The embedded MobiBard bank maps melodic instruments by GM program.
+      // Preserve source bank metadata for grouping/custom banks, but do not let bank 128
+      // accidentally classify a melodic source as percussion in the default mapper.
       bank: 0,
       instrumentName: group?.programName || group?.name || "",
     });
@@ -1341,7 +1363,7 @@
         regions: [],
       };
     }
-    const requestedBank = isMidiGroupDrums(group) ? 128 : 0;
+    const requestedBank = getMidiGroupBank(group);
     const requestedProgram = isMidiGroupDrums(group) ? 0 : clamp(Math.round(Number(group?.program) || 0), 0, 127);
     return findEditorSoundBankPreset(requestedBank, requestedProgram)
       || findEditorSoundBankPreset(0, requestedProgram)
@@ -1436,7 +1458,21 @@
           name: String(group.name || `MIDI 악기 ${groupIndex + 1}`),
           trackName: String(group.trackName || ""),
           trackIndex: Math.max(0, Number(group.trackIndex) || 0),
+          sourceTrackIndices: Array.isArray(group.sourceTrackIndices)
+            ? [...new Set(group.sourceTrackIndices.map((value) => Math.max(0, Math.round(Number(value) || 0))))]
+            : [Math.max(0, Number(group.trackIndex) || 0)],
+          sourceTracks: Array.isArray(group.sourceTracks) ? group.sourceTracks.map((value) => String(value || "")) : [],
+          port: clamp(Math.round(Number(group.port) || 0), 0, 127),
+          ports: Array.isArray(group.ports)
+            ? [...new Set(group.ports.map((value) => clamp(Math.round(Number(value) || 0), 0, 127)))]
+            : [clamp(Math.round(Number(group.port) || 0), 0, 127)],
           channel: clamp(Math.round(Number(group.channel) || 0), 0, 15),
+          channels: Array.isArray(group.channels)
+            ? [...new Set(group.channels.map((value) => clamp(Math.round(Number(value) || 0), 0, 15)))]
+            : [clamp(Math.round(Number(group.channel) || 0), 0, 15)],
+          bankMsb: clamp(Math.round(Number(group.bankMsb) || 0), 0, 127),
+          bankLsb: clamp(Math.round(Number(group.bankLsb) || 0), 0, 127),
+          bank: isMidiGroupDrums(group) ? 128 : getMidiGroupBank(group),
           program: clamp(Math.round(Number(group.program) || 0), 0, 127),
           programName: String(group.programName || GM_PROGRAM_NAMES[Number(group.program) || 0] || "Unknown"),
           visible: group.visible !== false,
@@ -1448,6 +1484,24 @@
               pitch: clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch),
               startBeat: Math.max(0, Number(note.startBeat) || 0),
               durationBeat: Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat),
+              rawStartBeat: Number.isFinite(Number(note.rawStartBeat))
+                ? Math.max(0, Number(note.rawStartBeat))
+                : Math.max(0, Number(note.startBeat) || 0),
+              rawEndBeat: Number.isFinite(Number(note.rawEndBeat))
+                ? Math.max(Number(note.rawStartBeat) || 0, Number(note.rawEndBeat))
+                : Math.max(0, Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat),
+              sourceTrackIndex: Math.max(0, Math.round(Number(note.sourceTrackIndex ?? note.trackIndex) || 0)),
+              sourceTrackIndices: Array.isArray(note.sourceTrackIndices)
+                ? [...new Set(note.sourceTrackIndices.map((value) => Math.max(0, Math.round(Number(value) || 0))))]
+                : [Math.max(0, Math.round(Number(note.sourceTrackIndex ?? note.trackIndex) || 0))],
+              sourcePort: clamp(Math.round(Number(note.sourcePort ?? note.port) || 0), 0, 127),
+              sourcePorts: Array.isArray(note.sourcePorts)
+                ? [...new Set(note.sourcePorts.map((value) => clamp(Math.round(Number(value) || 0), 0, 127)))]
+                : [clamp(Math.round(Number(note.sourcePort ?? note.port) || 0), 0, 127)],
+              sourceChannel: clamp(Math.round(Number(note.sourceChannel ?? note.channel) || 0), 0, 15),
+              sourceChannels: Array.isArray(note.sourceChannels)
+                ? [...new Set(note.sourceChannels.map((value) => clamp(Math.round(Number(value) || 0), 0, 15)))]
+                : [clamp(Math.round(Number(note.sourceChannel ?? note.channel) || 0), 0, 15)],
               velocity: normalizeNoteDynamics(note).velocity,
               volume: normalizeNoteDynamics(note).volume,
             }))
@@ -1987,7 +2041,7 @@
           source: "midi",
           sourceId: group.id,
           instrumentProgram: clamp(Number(group.program) || 0, 0, 127),
-          instrumentBank: isMidiGroupDrums(group) ? 128 : 0,
+          instrumentBank: getMidiGroupBank(group),
         });
       }
     }
@@ -3747,7 +3801,7 @@
                 pitch: note.pitch,
                 velocity: clamp(Math.round(Number(note.velocity) || 100), 1, 127),
                 program: clamp(Number(group.program) || 0, 0, 127),
-                bank: isMidiGroupDrums(group) ? 128 : 0,
+                bank: getMidiGroupBank(group),
               });
             }
           }
@@ -5937,31 +5991,86 @@
     });
   }
 
+  function getMidiNoteRawStartBeat(note) {
+    const raw = Number(note?.rawStartBeat);
+    if (Number.isFinite(raw)) return Math.max(0, raw);
+    return Math.max(0, Number(note?.startBeat) || 0);
+  }
+
+  function getMidiNoteRawEndBeat(note) {
+    const start = getMidiNoteRawStartBeat(note);
+    const raw = Number(note?.rawEndBeat);
+    if (Number.isFinite(raw)) return Math.max(start + 1e-9, raw);
+    const duration = Math.max(1e-9, Number(note?.durationBeat) || CONFIG.minimumNoteBeat);
+    return start + duration;
+  }
+
   function mergeMidiInstrumentNotes(rawNotes) {
     const duplicateMap = new Map();
     for (const note of rawNotes) {
-      const key = `${note.pitch}:${Number(note.startBeat).toFixed(6)}:${Number(note.durationBeat).toFixed(6)}`;
+      const rawStartBeat = getMidiNoteRawStartBeat(note);
+      const rawEndBeat = getMidiNoteRawEndBeat(note);
+      // Only collapse true MIDI duplicates. Notes that merely land in the same quantized
+      // cell stay separate so raw-timing voice assignment can distinguish them later.
+      const key = `${note.pitch}:${rawStartBeat.toFixed(9)}:${rawEndBeat.toFixed(9)}`;
       let merged = duplicateMap.get(key);
       if (!merged) {
         merged = {
           pitch: note.pitch,
           startBeat: note.startBeat,
           durationBeat: note.durationBeat,
+          rawStartBeat,
+          rawEndBeat,
           velocities: [],
+          sourceTrackIndices: new Set(),
+          sourcePorts: new Set(),
+          sourceChannels: new Set(),
+          primaryTrackIndex: Math.max(0, Math.round(Number(note.sourceTrackIndex ?? note.trackIndex) || 0)),
+          primaryPort: clamp(Math.round(Number(note.sourcePort ?? note.port) || 0), 0, 127),
+          primaryChannel: clamp(Math.round(Number(note.sourceChannel ?? note.channel) || 0), 0, 15),
+          program: clamp(Math.round(Number(note.program) || 0), 0, 127),
+          bankMsb: clamp(Math.round(Number(note.bankMsb) || 0), 0, 127),
+          bankLsb: clamp(Math.round(Number(note.bankLsb) || 0), 0, 127),
+          bank: clamp(Math.round(Number(note.bank) || 0), 0, 16383),
         };
         duplicateMap.set(key, merged);
       }
       merged.velocities.push(note.velocity);
+      const trackIndex = Math.max(0, Math.round(Number(note.sourceTrackIndex ?? note.trackIndex) || 0));
+      const port = clamp(Math.round(Number(note.sourcePort ?? note.port) || 0), 0, 127);
+      const channel = clamp(Math.round(Number(note.sourceChannel ?? note.channel) || 0), 0, 15);
+      merged.sourceTrackIndices.add(trackIndex);
+      merged.sourcePorts.add(port);
+      merged.sourceChannels.add(channel);
+      if (trackIndex < merged.primaryTrackIndex) {
+        merged.primaryTrackIndex = trackIndex;
+        merged.primaryPort = port;
+        merged.primaryChannel = channel;
+      }
     }
     const merged = Array.from(duplicateMap.values())
       .map((note, index) => ({
         id: index + 1,
         pitch: note.pitch,
-        startBeat: Number(note.startBeat.toFixed(6)),
-        durationBeat: Number(note.durationBeat.toFixed(6)),
+        startBeat: Number(Number(note.startBeat).toFixed(6)),
+        durationBeat: Number(Number(note.durationBeat).toFixed(6)),
+        rawStartBeat: Number(note.rawStartBeat.toFixed(9)),
+        rawEndBeat: Number(note.rawEndBeat.toFixed(9)),
+        sourceTrackIndex: note.primaryTrackIndex,
+        sourceTrackIndices: [...note.sourceTrackIndices].sort((a, b) => a - b),
+        sourcePort: note.primaryPort,
+        sourcePorts: [...note.sourcePorts].sort((a, b) => a - b),
+        sourceChannel: note.primaryChannel,
+        sourceChannels: [...note.sourceChannels].sort((a, b) => a - b),
+        program: note.program,
+        bankMsb: note.bankMsb,
+        bankLsb: note.bankLsb,
+        bank: note.bank,
         velocity: evaluateMergedMidiVelocity(note.velocities),
       }))
-      .sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch || left.durationBeat - right.durationBeat)
+      .sort((left, right) => getMidiNoteRawStartBeat(left) - getMidiNoteRawStartBeat(right)
+        || left.pitch - right.pitch
+        || getMidiNoteRawEndBeat(left) - getMidiNoteRawEndBeat(right))
       .map((note, index) => ({ ...note, id: index + 1 }));
     return reevaluateMidiInstrumentVelocities(merged).map((note) => ({
       ...note,
@@ -5983,17 +6092,26 @@
         : [clamp(Math.round(Number(group.channel) || 0), 0, 15)];
       const drums = channels.includes(9) || String(group.programName || group.name).toLowerCase() === "drums";
       const program = drums ? 0 : clamp(Math.round(Number(group.program) || 0), 0, 127);
-      const key = drums ? "drums" : `program-${program}`;
+      const bank = drums ? 128 : getMidiGroupBank(group);
+      const bankMsb = drums ? 0 : clamp(Math.round(Number(group.bankMsb) || Math.floor(bank / 128)), 0, 127);
+      const bankLsb = drums ? 0 : clamp(Math.round(Number(group.bankLsb) || (bank % 128)), 0, 127);
+      const key = drums ? "drums" : `bank-${bank}-program-${program}`;
       let merged = instrumentMap.get(key);
       if (!merged) {
         merged = {
-          id: `midi-instrument-${drums ? "drums" : program}`,
+          id: `midi-instrument-${drums ? "drums" : `${bank}-${program}`}`,
           name: drums ? "Drums" : (GM_PROGRAM_NAMES[program] || `Program ${program + 1}`),
           programName: drums ? "Drums" : (GM_PROGRAM_NAMES[program] || `Program ${program + 1}`),
           program,
+          bank,
+          bankMsb,
+          bankLsb,
           channel: channels[0] ?? 0,
           channels: new Set(),
+          port: clamp(Math.round(Number(group.port) || 0), 0, 127),
+          ports: new Set(),
           trackIndex: Math.max(0, Number(group.trackIndex) || 0),
+          sourceTrackIndices: new Set(),
           sourceTracks: new Set(),
           visible: group.visible !== false,
           muted: Boolean(group.muted),
@@ -6007,28 +6125,61 @@
         merged.trackIndex = Math.min(merged.trackIndex, Math.max(0, Number(group.trackIndex) || 0));
       }
       channels.forEach((channel) => merged.channels.add(channel));
+      const ports = Array.isArray(group.ports) && group.ports.length ? group.ports : [group.port ?? 0];
+      ports.forEach((port) => merged.ports.add(clamp(Math.round(Number(port) || 0), 0, 127)));
       const tracks = Array.isArray(group.sourceTracks) ? group.sourceTracks : [group.trackName].filter(Boolean);
       tracks.forEach((track) => merged.sourceTracks.add(String(track)));
+      const trackIndices = Array.isArray(group.sourceTrackIndices) && group.sourceTrackIndices.length
+        ? group.sourceTrackIndices
+        : [group.trackIndex ?? 0];
+      trackIndices.forEach((trackIndex) => merged.sourceTrackIndices.add(Math.max(0, Math.round(Number(trackIndex) || 0))));
       for (const note of group.notes || []) {
+        const rawStartBeat = getMidiNoteRawStartBeat(note);
+        const rawEndBeat = getMidiNoteRawEndBeat(note);
+        const startBeat = Math.max(0, snapBeatToUnit(rawStartBeat, quantizeUnit));
+        const endBeat = Math.max(startBeat + quantizeUnit, snapBeatToUnit(rawEndBeat, quantizeUnit));
+        const sourceTrackIndex = Math.max(0, Math.round(Number(note.sourceTrackIndex ?? group.trackIndex) || 0));
+        const sourcePort = clamp(Math.round(Number(note.sourcePort ?? group.port) || 0), 0, 127);
+        const sourceChannel = clamp(Math.round(Number(note.sourceChannel ?? group.channel) || 0), 0, 15);
         merged.rawNotes.push({
           pitch: clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch),
-          startBeat: Number(Math.max(0, snapBeatToUnit(Number(note.startBeat) || 0, quantizeUnit)).toFixed(6)),
-          durationBeat: Number(Math.max(quantizeUnit, snapBeatToUnit(Number(note.durationBeat) || quantizeUnit, quantizeUnit)).toFixed(6)),
+          startBeat: Number(startBeat.toFixed(6)),
+          durationBeat: Number((endBeat - startBeat).toFixed(6)),
+          rawStartBeat,
+          rawEndBeat,
           velocity: clamp(Math.round(Number(note.velocity) || 100), 1, 127),
+          sourceTrackIndex,
+          sourceTrackIndices: Array.isArray(note.sourceTrackIndices) ? note.sourceTrackIndices : [sourceTrackIndex],
+          sourcePort,
+          sourcePorts: Array.isArray(note.sourcePorts) ? note.sourcePorts : [sourcePort],
+          sourceChannel,
+          sourceChannels: Array.isArray(note.sourceChannels) ? note.sourceChannels : [sourceChannel],
+          program,
+          bankMsb,
+          bankLsb,
+          bank: drums ? 128 : bank,
         });
       }
     }
     const groups = [...instrumentMap.values()].map((group, index) => {
       const channels = [...group.channels].sort((a, b) => a - b);
+      const ports = [...group.ports].sort((a, b) => a - b);
       const sourceTracks = [...group.sourceTracks];
+      const sourceTrackIndices = [...group.sourceTrackIndices].sort((a, b) => a - b);
       return {
         id: `${group.id}-${index + 1}`,
         name: group.name,
         trackName: sourceTracks.join(", "),
         sourceTracks,
+        sourceTrackIndices,
         trackIndex: group.trackIndex,
+        port: ports[0] ?? group.port ?? 0,
+        ports,
         channel: channels[0] ?? 0,
         channels,
+        bank: group.bank,
+        bankMsb: group.bankMsb,
+        bankLsb: group.bankLsb,
         program: group.program,
         programName: group.programName,
         visible: group.visible,
@@ -6040,7 +6191,7 @@
       .sort(compareMidiGroupsWithDrumsLast);
     groups.forEach((group, index) => {
       group.hue = getDefaultHue(index);
-      group.id = `midi-instrument-${group.channels.includes(9) ? "drums" : group.program}-${index + 1}`;
+      group.id = `midi-instrument-${isMidiGroupDrums(group) ? "drums" : `${getMidiGroupBank(group)}-${group.program}`}-${index + 1}`;
     });
     source.groups = groups;
     source.activeGroupId = groups.some((group) => String(group.id) === String(source.activeGroupId))
@@ -6081,18 +6232,39 @@
       const endBeat = Math.max(startBeat + quantizeUnit, snapBeatToUnit(rawEndBeat, quantizeUnit));
       const trackIndex = Math.max(0, Number(note.trackIndex) || 0);
       const trackName = String(note.trackName || note.instrumentMetaName || `Track ${trackIndex + 1}`);
+      const port = clamp(Math.round(Number(note.port) || 0), 0, 127);
       const channel = clamp(Math.round(Number(note.channel) || 0), 0, 15);
-      const program = channel === 9 ? 0 : clamp(Math.round(Number(note.program) || 0), 0, 127);
+      const isDrums = channel === 9;
+      const program = isDrums ? 0 : clamp(Math.round(Number(note.program) || 0), 0, 127);
+      const bankMsb = clamp(Math.round(Number(note.bankMsb) || 0), 0, 127);
+      const bankLsb = clamp(Math.round(Number(note.bankLsb) || 0), 0, 127);
+      const bank = isDrums ? 128 : clamp(
+        Math.round(Number.isFinite(Number(note.bank)) ? Number(note.bank) : bankMsb * 128 + bankLsb),
+        0,
+        16383,
+      );
       return {
         trackIndex,
         trackName,
         instrumentName: String(note.instrumentMetaName || ""),
+        port,
         channel,
         program,
+        bank,
+        bankMsb,
+        bankLsb,
         pitch: clamp(Math.round(Number(note.midi ?? note.pitch) || 60), 0, 127),
+        rawStartBeat: Number(rawStartBeat.toFixed(9)),
+        rawEndBeat: Number(rawEndBeat.toFixed(9)),
         startBeat: Number(startBeat.toFixed(6)),
         durationBeat: Number((endBeat - startBeat).toFixed(6)),
         velocity: clamp(Math.round(Number(note.effectiveVelocity ?? note.velocity) || 64), 1, 127),
+        sourceTrackIndex: trackIndex,
+        sourceTrackIndices: [trackIndex],
+        sourcePort: port,
+        sourcePorts: [port],
+        sourceChannel: channel,
+        sourceChannels: [channel],
       };
     });
 
@@ -6103,18 +6275,24 @@
     const instruments = new Map();
     for (const note of rawNotes) {
       const isDrums = note.channel === 9;
-      const key = isDrums ? "drums" : `program-${note.program}`;
+      const key = isDrums ? "drums" : `bank-${note.bank}-program-${note.program}`;
       let instrument = instruments.get(key);
       if (!instrument) {
         const programName = isDrums ? "Drums" : (GM_PROGRAM_NAMES[note.program] || `Program ${note.program + 1}`);
         instrument = {
           key,
-          id: `midi-instrument-${isDrums ? "drums" : note.program}`,
+          id: `midi-instrument-${isDrums ? "drums" : `${note.bank}-${note.program}`}`,
           name: programName,
           trackName: "",
           trackIndex: note.trackIndex,
+          sourceTrackIndices: new Set(),
+          port: note.port,
+          ports: new Set(),
           channel: note.channel,
           channels: new Set(),
+          bank: isDrums ? 128 : note.bank,
+          bankMsb: note.bankMsb,
+          bankLsb: note.bankLsb,
           sourceTracks: new Set(),
           program: isDrums ? 0 : note.program,
           programName,
@@ -6126,6 +6304,8 @@
         instruments.set(key, instrument);
       }
       instrument.trackIndex = Math.min(instrument.trackIndex, note.trackIndex);
+      instrument.sourceTrackIndices.add(note.trackIndex);
+      instrument.ports.add(note.port);
       instrument.channels.add(note.channel);
       instrument.sourceTracks.add(note.trackName || `Track ${note.trackIndex + 1}`);
       instrument.rawNotes.push(note);
@@ -6137,15 +6317,23 @@
         const notes = mergeMidiInstrumentNotes(instrument.rawNotes);
         mergedDuplicateCount += instrument.rawNotes.length - notes.length;
         const sourceTracks = Array.from(instrument.sourceTracks);
+        const sourceTrackIndices = Array.from(instrument.sourceTrackIndices).sort((left, right) => left - right);
+        const ports = Array.from(instrument.ports).sort((left, right) => left - right);
         const channels = Array.from(instrument.channels).sort((left, right) => left - right);
         return {
           id: `${instrument.id}-${index + 1}`,
           name: instrument.programName,
           trackName: sourceTracks.join(", "),
           sourceTracks,
+          sourceTrackIndices,
           trackIndex: instrument.trackIndex,
+          port: ports[0] ?? 0,
+          ports,
           channel: channels[0] ?? 0,
           channels,
+          bank: instrument.bank,
+          bankMsb: instrument.bankMsb,
+          bankLsb: instrument.bankLsb,
           program: instrument.program,
           programName: instrument.programName,
           visible: true,
@@ -6159,7 +6347,7 @@
 
     groups.forEach((group, index) => {
       group.hue = getDefaultHue(index);
-      group.id = `midi-instrument-${group.channel === 9 ? "drums" : group.program}-${index + 1}`;
+      group.id = `midi-instrument-${isMidiGroupDrums(group) ? "drums" : `${getMidiGroupBank(group)}-${group.program}`}-${index + 1}`;
     });
 
     const durationBeats = Math.max(
@@ -6195,7 +6383,7 @@
       muted: false,
       groups,
       activeGroupId: groups[0]?.id || null,
-      message: `${groups.length}개 악기 채널과 ${totalNotes}개 노트를 1/${quantizeDivision} 음표 단위로 읽었습니다.${mergedDuplicateCount ? ` 중복 노트 ${mergedDuplicateCount}개를 병합했습니다.` : ""}`,
+      message: `${groups.length}개 악기 채널과 ${totalNotes}개 노트를 1/${quantizeDivision} 음표 단위로 읽었습니다.${mergedDuplicateCount ? ` 실제 중복 노트 ${mergedDuplicateCount}개를 병합했습니다.` : ""}`,
       parserWarnings: [...(midi.warnings || [])],
       containerMetadata: { ...(midi.metadata || {}) },
     };
@@ -6630,7 +6818,7 @@
             startSeconds: beatToSecondsInTempoMap(startBeat, tempoMap),
             endSeconds: beatToSecondsInTempoMap(endBeat, tempoMap),
             program: clamp(Number(group.program) || 0, 0, 127),
-            bank: isMidiGroupDrums(group) ? 128 : 0,
+            bank: getMidiGroupBank(group),
           });
         });
       });
@@ -6699,74 +6887,209 @@
     };
   }
 
-  function getIgnorableEditorOverlapPlan(voice, note) {
-    if (!voice?.notes?.length) return null;
-    const previous = voice.notes[voice.notes.length - 1];
-    const previousStart = Number(previous.startBeat) || 0;
-    const previousEnd = previousStart + Math.max(CONFIG.minimumNoteBeat, Number(previous.durationBeat) || CONFIG.minimumNoteBeat);
-    const nextStart = Number(note.startBeat) || 0;
-    const plan = getIgnorableSequentialOverlapTrim(
-      previousStart,
-      previousEnd,
-      nextStart,
-      CONFIG.minimumNoteBeat,
-      CONFIG.minimumNoteBeat,
-    );
-    return plan ? { previous, durationBeat: plan.trimmedDuration } : null;
+  function getMidiVoiceSourceTrack(note) {
+    const value = Number(note?.sourceTrackIndex ?? note?.trackIndex);
+    return Number.isFinite(value) ? Math.max(0, Math.round(value)) : null;
   }
 
-  function applyIgnorableEditorOverlapPlan(plan) {
-    if (!plan?.previous) return;
-    plan.previous.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, plan.durationBeat).toFixed(6));
+  function getMidiVoiceSourcePort(note) {
+    const value = Number(note?.sourcePort ?? note?.port);
+    return Number.isFinite(value) ? clamp(Math.round(value), 0, 127) : null;
   }
 
-  function splitNotesIntoMonophonicVoices(notes, { ignoreSingle64thOverlap = true } = {}) {
+  function getMidiVoiceSourceChannel(note) {
+    const value = Number(note?.sourceChannel ?? note?.channel);
+    return Number.isFinite(value) ? clamp(Math.round(value), 0, 15) : null;
+  }
+
+  function canAssignRawMidiNoteToVoice(voice, note, ignoreSingle64thOverlap) {
+    const start = getMidiNoteRawStartBeat(note);
+    if (voice.endBeat <= start + 1e-9) return true;
+    if (!ignoreSingle64thOverlap || start <= voice.lastStartBeat + 1e-9) return false;
+    // Small overlaps in source MIDI are usually pedal/release or tick-boundary artifacts.
+    // Treat up to one editor 1/64 cell as sequential, but never collapse true simultaneity.
+    return voice.endBeat - start <= CONFIG.minimumNoteBeat + 1e-7;
+  }
+
+  function scoreRawMidiVoiceAssignment(voice, note) {
+    const start = getMidiNoteRawStartBeat(note);
+    const pitch = clamp(Math.round(Number(note?.pitch) || 60), 0, 127);
+    const pitchDistance = voice.lastPitch == null ? 0 : Math.abs(voice.lastPitch - pitch);
+    const rangeCenter = voice.minPitch == null || voice.maxPitch == null
+      ? pitch
+      : (voice.minPitch + voice.maxPitch) / 2;
+    let score = pitchDistance + Math.abs(rangeCenter - pitch) * 0.08;
+
+    const sourceTrack = getMidiVoiceSourceTrack(note);
+    if (sourceTrack != null && voice.lastSourceTrack != null) {
+      score += sourceTrack === voice.lastSourceTrack ? -28 : 8;
+    }
+    const sourcePort = getMidiVoiceSourcePort(note);
+    const sourceChannel = getMidiVoiceSourceChannel(note);
+    if (sourcePort != null && sourceChannel != null && voice.lastSourcePort != null && voice.lastSourceChannel != null) {
+      score += sourcePort === voice.lastSourcePort && sourceChannel === voice.lastSourceChannel ? -12 : 4;
+    }
+
+    // When affinity is otherwise similar, prefer the voice that ended more recently.
+    score += Math.min(8, Math.max(0, start - voice.endBeat)) * 0.35;
+    return score;
+  }
+
+  function appendRawMidiNoteToVoice(voice, note) {
+    const start = getMidiNoteRawStartBeat(note);
+    const end = getMidiNoteRawEndBeat(note);
+    const pitch = clamp(Math.round(Number(note?.pitch) || 60), 0, 127);
+    voice.notes.push({ ...note });
+    voice.lastStartBeat = start;
+    voice.endBeat = end;
+    voice.lastPitch = pitch;
+    voice.minPitch = voice.minPitch == null ? pitch : Math.min(voice.minPitch, pitch);
+    voice.maxPitch = voice.maxPitch == null ? pitch : Math.max(voice.maxPitch, pitch);
+    voice.lastSourceTrack = getMidiVoiceSourceTrack(note);
+    voice.lastSourcePort = getMidiVoiceSourcePort(note);
+    voice.lastSourceChannel = getMidiVoiceSourceChannel(note);
+  }
+
+  function chooseQuantizedMidiCollisionRepresentative(candidates, startBeat) {
+    return candidates.slice().sort((left, right) => (
+      Math.abs(getMidiNoteRawStartBeat(left) - startBeat) - Math.abs(getMidiNoteRawStartBeat(right) - startBeat)
+      || (Number(right.velocity) || 0) - (Number(left.velocity) || 0)
+      || (getMidiNoteRawEndBeat(right) - getMidiNoteRawStartBeat(right)) - (getMidiNoteRawEndBeat(left) - getMidiNoteRawStartBeat(left))
+      || (Number(left.pitch) || 0) - (Number(right.pitch) || 0)
+    ))[0];
+  }
+
+  function quantizeMidiVoiceForEditor(notes, quantizeUnit) {
+    const unit = Math.max(CONFIG.minimumNoteBeat, Number(quantizeUnit) || CONFIG.minimumNoteBeat);
+    const buckets = new Map();
+    for (const note of notes || []) {
+      const rawStart = getMidiNoteRawStartBeat(note);
+      const rawEnd = getMidiNoteRawEndBeat(note);
+      const startBeat = Math.max(0, snapBeatToUnit(rawStart, unit));
+      const endBeat = Math.max(startBeat + unit, snapBeatToUnit(rawEnd, unit));
+      const key = startBeat.toFixed(9);
+      if (!buckets.has(key)) buckets.set(key, { startBeat, candidates: [] });
+      buckets.get(key).candidates.push({ ...note, startBeat, durationBeat: endBeat - startBeat });
+    }
+
+    let collisionCount = 0;
+    const quantized = [...buckets.values()]
+      .sort((left, right) => left.startBeat - right.startBeat)
+      .map((bucket) => {
+        collisionCount += Math.max(0, bucket.candidates.length - 1);
+        const selected = chooseQuantizedMidiCollisionRepresentative(bucket.candidates, bucket.startBeat);
+        return {
+          ...selected,
+          startBeat: Number(bucket.startBeat.toFixed(6)),
+          durationBeat: Number(Math.max(unit, Number(selected.durationBeat) || unit).toFixed(6)),
+        };
+      });
+
+    // Raw-timing voices are monophonic. If quantization expands a note over the next
+    // grid onset, shorten it instead of creating another editor channel.
+    for (let index = 0; index < quantized.length - 1; index += 1) {
+      const note = quantized[index];
+      const next = quantized[index + 1];
+      const endBeat = note.startBeat + Math.max(unit, Number(note.durationBeat) || unit);
+      if (endBeat > next.startBeat + 1e-7) {
+        note.durationBeat = Number(Math.max(unit, next.startBeat - note.startBeat).toFixed(6));
+      }
+    }
+    return { notes: quantized, collisionCount };
+  }
+
+  function splitNotesIntoMonophonicVoices(notes, {
+    ignoreSingle64thOverlap = true,
+    quantizeUnit = CONFIG.minimumNoteBeat,
+  } = {}) {
     const sorted = (notes || []).map((note) => ({ ...note })).sort((left, right) => (
-      left.startBeat - right.startBeat
+      getMidiNoteRawStartBeat(left) - getMidiNoteRawStartBeat(right)
+      || getMidiNoteRawEndBeat(left) - getMidiNoteRawEndBeat(right)
       || left.pitch - right.pitch
-      || left.durationBeat - right.durationBeat
+      || (getMidiVoiceSourceTrack(left) ?? 0) - (getMidiVoiceSourceTrack(right) ?? 0)
     ));
     const voices = [];
-    for (const note of sorted) {
-      const start = Number(note.startBeat) || 0;
-      let bestIndex = -1;
-      let bestDistance = Infinity;
-      let bestOverlapPlan = null;
-      for (let index = 0; index < voices.length; index += 1) {
-        const voice = voices[index];
-        let overlapPlan = null;
-        if (voice.endBeat > start + 1e-7) {
-          overlapPlan = ignoreSingle64thOverlap ? getIgnorableEditorOverlapPlan(voice, note) : null;
-          if (!overlapPlan) continue;
-        }
-        const distance = voice.lastPitch == null ? 0 : Math.abs(voice.lastPitch - note.pitch);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestIndex = index;
-          bestOverlapPlan = overlapPlan;
-        }
+
+    // Process notes with the same source onset as a batch. Pairing the whole onset at once
+    // avoids note-sort order from stealing the best existing voice from a neighboring pitch.
+    for (let cursor = 0; cursor < sorted.length;) {
+      const batchStart = getMidiNoteRawStartBeat(sorted[cursor]);
+      const batch = [];
+      while (cursor < sorted.length && Math.abs(getMidiNoteRawStartBeat(sorted[cursor]) - batchStart) <= 1e-9) {
+        batch.push(sorted[cursor]);
+        cursor += 1;
       }
-      if (bestIndex < 0) {
-        bestIndex = voices.length;
-        voices.push({ notes: [], endBeat: 0, lastPitch: null });
-        bestOverlapPlan = null;
+
+      const availableVoiceIndexes = new Set();
+      voices.forEach((voice, voiceIndex) => {
+        if (batch.some((note) => canAssignRawMidiNoteToVoice(voice, note, ignoreSingle64thOverlap))) {
+          availableVoiceIndexes.add(voiceIndex);
+        }
+      });
+      const remainingNoteIndexes = new Set(batch.map((_, noteIndex) => noteIndex));
+
+      while (availableVoiceIndexes.size && remainingNoteIndexes.size) {
+        let best = null;
+        for (const noteIndex of remainingNoteIndexes) {
+          const note = batch[noteIndex];
+          for (const voiceIndex of availableVoiceIndexes) {
+            const voice = voices[voiceIndex];
+            if (!canAssignRawMidiNoteToVoice(voice, note, ignoreSingle64thOverlap)) continue;
+            const score = scoreRawMidiVoiceAssignment(voice, note);
+            const pitchDistance = voice.lastPitch == null ? 0 : Math.abs(voice.lastPitch - Number(note.pitch));
+            const candidate = { score, pitchDistance, voiceIndex, noteIndex };
+            if (!best
+              || candidate.score < best.score - 1e-9
+              || (Math.abs(candidate.score - best.score) <= 1e-9 && candidate.pitchDistance < best.pitchDistance)
+              || (Math.abs(candidate.score - best.score) <= 1e-9 && candidate.pitchDistance === best.pitchDistance && candidate.voiceIndex < best.voiceIndex)
+              || (Math.abs(candidate.score - best.score) <= 1e-9 && candidate.pitchDistance === best.pitchDistance && candidate.voiceIndex === best.voiceIndex && candidate.noteIndex < best.noteIndex)) {
+              best = candidate;
+            }
+          }
+        }
+        if (!best) break;
+        appendRawMidiNoteToVoice(voices[best.voiceIndex], batch[best.noteIndex]);
+        availableVoiceIndexes.delete(best.voiceIndex);
+        remainingNoteIndexes.delete(best.noteIndex);
       }
-      const voice = voices[bestIndex];
-      // One 64th-note-or-smaller overlap is treated as a quantization boundary error,
-      // so the pair stays in the same monophonic voice instead of creating a new one.
-      applyIgnorableEditorOverlapPlan(bestOverlapPlan);
-      const resolvedStart = Number(note.startBeat) || 0;
-      voice.notes.push(note);
-      voice.endBeat = resolvedStart + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-      voice.lastPitch = note.pitch;
+
+      [...remainingNoteIndexes]
+        .sort((leftIndex, rightIndex) => Number(batch[leftIndex].pitch) - Number(batch[rightIndex].pitch))
+        .forEach((noteIndex) => {
+          const voice = {
+            notes: [],
+            lastStartBeat: -Infinity,
+            endBeat: 0,
+            lastPitch: null,
+            minPitch: null,
+            maxPitch: null,
+            lastSourceTrack: null,
+            lastSourcePort: null,
+            lastSourceChannel: null,
+          };
+          appendRawMidiNoteToVoice(voice, batch[noteIndex]);
+          voices.push(voice);
+        });
     }
-    return voices.map((voice) => voice.notes);
+
+    let quantizationCollisionCount = 0;
+    const result = voices.map((voice) => {
+      const quantized = quantizeMidiVoiceForEditor(voice.notes, quantizeUnit);
+      quantizationCollisionCount += quantized.collisionCount;
+      return quantized.notes;
+    }).filter((voiceNotes) => voiceNotes.length);
+    Object.defineProperty(result, "quantizationCollisionCount", {
+      value: quantizationCollisionCount,
+      enumerable: false,
+      configurable: true,
+    });
+    return result;
   }
 
   function overwriteEditorChannelsFromMidiDocument(parsed) {
     const descriptors = [];
     for (const group of parsed.groups || []) {
-      const voices = splitNotesIntoMonophonicVoices(group.notes || []);
+      const voices = splitNotesIntoMonophonicVoices(group.notes || [], { quantizeUnit: 4 / (Number(parsed?.quantizeDivision) === 32 ? 32 : 64) });
       voices.forEach((notes, voiceIndex) => {
         descriptors.push({
           name: voices.length > 1 ? `${group.name} ${voiceIndex + 1}` : group.name,
@@ -6862,14 +7185,15 @@
     let noteCount = 0;
 
     groups.forEach((group, groupIndex) => {
-      const instrumentKey = isMidiGroupDrums(group)
-        ? "drums"
-        : `program-${clamp(Math.round(Number(group?.program) || 0), 0, 127)}`;
+      const instrumentKey = getMidiGroupInstrumentKey(group);
       if (!hueByInstrument.has(instrumentKey)) {
         hueByInstrument.set(instrumentKey, getMidiGroupHue(group, groupIndex));
       }
       const copyHue = hueByInstrument.get(instrumentKey);
-      const voices = splitNotesIntoMonophonicVoices(group.notes || [], { ignoreSingle64thOverlap });
+      const voices = splitNotesIntoMonophonicVoices(group.notes || [], {
+        ignoreSingle64thOverlap,
+        quantizeUnit: 4 / (Number(parsed?.quantizeDivision) === 32 ? 32 : 64),
+      });
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {
@@ -7345,12 +7669,12 @@
     let copiedNotes = 0;
     for (const group of validGroups) {
       const sourceIndex = Math.max(0, (document?.groups || []).indexOf(group));
-      const instrumentKey = isMidiGroupDrums(group) ? "drums" : `program-${clamp(Math.round(Number(group?.program) || 0), 0, 127)}`;
+      const instrumentKey = getMidiGroupInstrumentKey(group);
       if (!hueByInstrument.has(instrumentKey)) {
         hueByInstrument.set(instrumentKey, getMidiGroupHue(group, sourceIndex));
       }
       const copyHue = hueByInstrument.get(instrumentKey);
-      const voices = splitNotesIntoMonophonicVoices(group.notes || []);
+      const voices = splitNotesIntoMonophonicVoices(group.notes || [], { quantizeUnit: 4 / (Number(document?.quantizeDivision) === 32 ? 32 : 64) });
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {
