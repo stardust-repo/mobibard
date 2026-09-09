@@ -4615,11 +4615,11 @@ button {
   font-weight: 800;
 }
 .timeline-space-control .measure-space-icon-button {
-  width: 31px;
-  min-width: 31px;
-  max-width: 31px;
-  height: 31px;
-  min-height: 31px;
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  height: 32px;
+  min-height: 32px;
   padding: 0;
   overflow: visible;
   border: 0 !important;
@@ -4635,8 +4635,9 @@ button {
 }
 .timeline-space-control .measure-space-icon-button img {
   display: block;
-  width: 31px;
-  height: 31px;
+  width: 26px;
+  height: 26px;
+  margin: auto;
   object-fit: contain;
   pointer-events: none;
   user-select: none;
@@ -6637,18 +6638,18 @@ a[class*="button"]:hover {
   align-self: center;
   display: inline-grid;
   place-items: center;
-  width: 30px;
-  min-width: 30px;
-  max-width: 30px;
-  height: 30px;
-  min-height: 30px;
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  height: 32px;
+  min-height: 32px;
   margin-block: auto;
   line-height: 0;
   vertical-align: middle;
 }
 .timeline-space-control .measure-space-icon-button img {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   margin: 0;
 }
 .note-split-field {
@@ -6787,8 +6788,8 @@ a[class*="button"]:hover {
 }
 .timeline-space-control .measure-space-icon-button img {
   display: block;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   margin: 0;
   object-fit: contain;
   opacity: 1;
