@@ -6762,3 +6762,49 @@ a[class*="button"]:hover {
   opacity: .90;
   filter: brightness(1.16) saturate(.88);
 }
+
+/* fixed102: standalone measure artwork on native 32px toolbar buttons */
+.timeline-space-control .measure-space-icon-button {
+  box-sizing: border-box;
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--control-border) !important;
+  border-radius: 7px;
+  background: var(--control-bg) !important;
+  box-shadow: none !important;
+}
+.timeline-space-control .measure-space-icon-button:hover,
+.timeline-space-control .measure-space-icon-button:focus-visible {
+  border: 1px solid var(--control-border) !important;
+  background: var(--control-hover) !important;
+  box-shadow: none !important;
+}
+.timeline-space-control .measure-space-icon-button img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  object-fit: contain;
+  opacity: 1;
+  filter: none;
+  pointer-events: none;
+  user-select: none;
+  transition: filter .12s ease, transform .12s ease;
+}
+.timeline-space-control .measure-space-icon-button:hover img,
+.timeline-space-control .measure-space-icon-button:focus-visible img {
+  opacity: 1;
+  filter: brightness(1.04) saturate(1.08);
+}
+.timeline-space-control .measure-space-icon-button:active img {
+  opacity: 1;
+  filter: brightness(.94) saturate(1.05);
+  transform: translateY(1px) scale(.98);
+}
+
