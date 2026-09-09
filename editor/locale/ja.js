@@ -34,7 +34,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "mml_export.copy_split": "分割コピー",
     "mml_export.split_limit": "分割文字数",
     "mml_export.page_label": "{0}番譜面",
-    "mml_export.part_length": "パート{0} {1}文字",
+    "mml_export.part_length": "{0}文字",
     "mml_export.full_detail": "{0}パート · 最長{1}文字",
     "mml_export.split_detail": "{0}文字基準 · {1}譜面",
     "mml_export.split_not_needed": "分割不要 · 最長{0}文字",

@@ -34,7 +34,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "mml_export.copy_split": "분할 복사",
     "mml_export.split_limit": "분할 글자",
     "mml_export.page_label": "{0}번 악보",
-    "mml_export.part_length": "성부 {0} {1}자",
+    "mml_export.part_length": "{0}자",
     "mml_export.full_detail": "{0}개 성부 · 최장 {1}자",
     "mml_export.split_detail": "{0}자 기준 · {1}개 악보",
     "mml_export.split_not_needed": "분할 불필요 · 최장 {0}자",

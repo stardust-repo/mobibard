@@ -34,7 +34,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "mml_export.copy_split": "分割複製",
     "mml_export.split_limit": "分割字數",
     "mml_export.page_label": "第{0}份樂譜",
-    "mml_export.part_length": "聲部{0} {1}字",
+    "mml_export.part_length": "{0}字",
     "mml_export.full_detail": "{0}個聲部 · 最長{1}字",
     "mml_export.split_detail": "以{0}字為限 · {1}份樂譜",
     "mml_export.split_not_needed": "無需分割 · 最長{0}字",

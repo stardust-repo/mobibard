@@ -2859,6 +2859,15 @@ button {
   touch-action: none;
 }
 .channel-tree-main:hover { background: color-mix(in srgb, var(--channel-color) 9%, transparent) !important; }
+.channel-tree-main:focus,
+.channel-tree-main:focus-visible,
+.channel-tree-item .channel-tab-main:focus,
+.channel-tree-item .channel-tab-main:focus-visible,
+.channel-tree-item .midi-instrument-tab:focus,
+.channel-tree-item .midi-instrument-tab:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
 .channel-tree-label,
 .channel-tree-item .channel-tab-label,
 .channel-tree-item .midi-instrument-tab-label {
@@ -6404,11 +6413,13 @@ a[class*="button"]:hover {
 }
 .mml-export-split-limit {
   flex: 0 0 auto;
-  display: grid;
-  gap: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
   font-size: 9px;
   font-weight: 800;
+  white-space: nowrap;
 }
 .mml-export-split-limit input {
   box-sizing: border-box;
@@ -6484,7 +6495,7 @@ a[class*="button"]:hover {
   .mml-export-copy-row { grid-template-columns: minmax(0, 1fr); }
   .mml-export-split-head { align-items: stretch; flex-direction: column; }
   .mml-export-split-limit { width: 100%; }
-  .mml-export-split-limit input { width: 100%; }
+  .mml-export-split-limit input { flex: 1 1 auto; width: auto; min-width: 0; }
   #mmlExportCopyAllButton { width: 100%; }
   .mml-export-page-copy-row { grid-template-columns: minmax(0, 1fr) auto; }
 }

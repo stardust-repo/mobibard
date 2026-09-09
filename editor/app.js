@@ -4682,8 +4682,19 @@
       && now - state.channelEdit.lastClickAt <= 360;
     state.channelEdit.lastClickChannelId = doubleClick ? null : String(sourceId);
     state.channelEdit.lastClickAt = doubleClick ? 0 : now;
-    if (doubleClick) openChannelEditDialog(sourceId);
-    else selectChannel(index);
+    if (doubleClick) {
+      openChannelEditDialog(sourceId);
+    } else {
+      selectChannel(index);
+      // 채널 목록을 마우스/터치로 선택하면 renderChannelTabs()로 기존 버튼이 교체되어
+      // 포커스가 document로 빠질 수 있습니다. 선택한 채널 버튼에 포커스를 복원해
+      // 바로 ↑/↓ 키로 이전/다음 채널을 계속 선택할 수 있게 합니다.
+      requestAnimationFrame(() => {
+        const restored = findChannelTreeItemByIdentity({ kind: "channel", id: String(sourceId) });
+        restored?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
+        restored?.scrollIntoView({ block: "nearest" });
+      });
+    }
   }
 
 
@@ -11848,10 +11859,10 @@
       ? page.lengths
       : getMmlExportPartLengths(page?.mml || "");
     const visible = lengths
-      .map((length, index) => ({ length: Number(length) || 0, index }))
-      .filter((item) => item.length > 0)
-      .map((item) => i18nText("mml_export.part_length", [item.index + 1, item.length.toLocaleString()]));
-    return visible.join(" · ") || i18nText("mml_export.part_length", [1, "0"]);
+      .map((length) => Number(length) || 0)
+      .filter((length) => length > 0)
+      .map((length) => i18nText("mml_export.part_length", [length.toLocaleString()]));
+    return visible.join(", ") || i18nText("mml_export.part_length", ["0"]);
   }
 
   function channelsToMmlRange(channels, startBeat, endBeat, tempos = getSortedTempos()) {

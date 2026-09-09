@@ -34,7 +34,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "mml_export.copy_split": "Split copy",
     "mml_export.split_limit": "Split chars",
     "mml_export.page_label": "Score {0}",
-    "mml_export.part_length": "Part {0} {1} chars",
+    "mml_export.part_length": "{0} chars",
     "mml_export.full_detail": "{0} parts · longest {1} chars",
     "mml_export.split_detail": "{0}-char limit · {1} scores",
     "mml_export.split_not_needed": "No split needed · longest {0} chars",
