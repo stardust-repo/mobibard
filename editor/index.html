@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260909-fixed103" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260909-fixed104" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -464,7 +464,7 @@
 <button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="timeEditCloseButton" type="button">×</button>
 </div>
 <div class="time-edit-field time-edit-combined-field"><span data-i18n="ui.length_edit">편집할 길이</span><div class="time-edit-units-row"><label class="time-edit-number"><input aria-label="편집할 마디 수" data-i18n-aria-label="timeline.measure_edit" id="timeEditMeasureInput" inputmode="numeric" min="0" step="1" type="number" value="1"/><strong data-i18n="timeline.measure">마디</strong></label><label class="time-edit-number time-edit-fraction-number"><input aria-label="편집할 64분할 박자 수 (0부터 63)" data-i18n-aria-label="note.64th_units_edit" id="timeEditBeatInput" inputmode="numeric" max="63" min="0" step="1" type="number" value="0"/><strong data-i18n="timeline.64_beat">/64 박자</strong></label></div></div>
-<div class="time-edit-actions"><button id="timeEditCancelButton" type="button" data-i18n="cancel">취소</button><span></span><button class="time-edit-delete-button" id="timeEditDeleteButton" type="button" data-i18n="action.delete">삭제</button><button class="time-edit-insert-button" id="timeEditInsertButton" type="button" data-i18n="action.add">추가</button></div>
+<div class="time-edit-actions"><label class="time-edit-scope-toggle"><input id="timeEditSelectedChannelOnly" type="checkbox"/><span data-i18n="channel.selected_only">선택 채널만</span></label><span class="time-edit-actions-spacer"></span><button id="timeEditCancelButton" type="button" data-i18n="cancel">취소</button><button class="time-edit-delete-button" id="timeEditDeleteButton" type="button" data-i18n="action.delete">삭제</button><button class="time-edit-insert-button" id="timeEditInsertButton" type="button" data-i18n="action.add">추가</button></div>
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="tempoEditorBackdrop">
@@ -562,7 +562,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260909-fixed95"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260909-fixed97"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

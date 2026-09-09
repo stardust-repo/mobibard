@@ -395,6 +395,7 @@
     timeEditPosition: document.querySelector("#timeEditPosition"),
     timeEditMeasureInput: document.querySelector("#timeEditMeasureInput"),
     timeEditBeatInput: document.querySelector("#timeEditBeatInput"),
+    timeEditSelectedChannelOnly: document.querySelector("#timeEditSelectedChannelOnly"),
     timeEditCloseButton: document.querySelector("#timeEditCloseButton"),
     timeEditCancelButton: document.querySelector("#timeEditCancelButton"),
     timeEditInsertButton: document.querySelector("#timeEditInsertButton"),
@@ -5297,11 +5298,105 @@
     }
   }
 
+  const channelActionSweep = {
+    active: false,
+    pointerId: null,
+    kind: "",
+    targetValue: null,
+    visitedActionKeys: new Set(),
+  };
+
+  function resetChannelActionSweep({ releaseCapture = false } = {}) {
+    if (releaseCapture && elements.channelTabs && channelActionSweep.pointerId !== null) {
+      try {
+        if (elements.channelTabs.hasPointerCapture?.(channelActionSweep.pointerId)) {
+          elements.channelTabs.releasePointerCapture(channelActionSweep.pointerId);
+        }
+      } catch {}
+    }
+    channelActionSweep.active = false;
+    channelActionSweep.pointerId = null;
+    channelActionSweep.kind = "";
+    channelActionSweep.targetValue = null;
+    channelActionSweep.visitedActionKeys.clear();
+  }
+
+  function getChannelSweepActionAt(clientX, clientY) {
+    const hit = document.elementFromPoint(clientX, clientY);
+    const action = hit?.closest?.(".channel-tree-channel-item .channel-tree-action[data-channel-sweep-kind]");
+    if (!action || !elements.channelTabs?.contains(action)) return null;
+    return action;
+  }
+
+  function applyChannelSweepAction(action) {
+    if (!action) return false;
+    const kind = String(action.dataset.channelSweepKind || "");
+    const channelId = String(action.dataset.channelSweepId || "");
+    if (!kind || !channelId) return false;
+    if (channelActionSweep.active && kind !== channelActionSweep.kind) return false;
+
+    const actionKey = `${kind}:${channelId}`;
+    // 한 번의 누름/터치 제스처 동안 같은 채널 버튼은 딱 한 번만 변경합니다.
+    // 렌더링 과정에서 현재 버튼 DOM이 교체되어도 방문 기록은 제스처가 끝날 때까지 유지됩니다.
+    if (channelActionSweep.visitedActionKeys.has(actionKey)) return false;
+    channelActionSweep.visitedActionKeys.add(actionKey);
+
+    const channel = getChannelById(channelId);
+    if (!channel) return false;
+    if (kind === "visibility") {
+      const targetVisible = channelActionSweep.targetValue === null
+        ? channel.visible === false
+        : Boolean(channelActionSweep.targetValue);
+      if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetVisible;
+      return setChannelVisibleById(channel.id, targetVisible, { notify: false });
+    }
+    if (kind === "mute") {
+      const targetMuted = channelActionSweep.targetValue === null
+        ? !channel.muted
+        : Boolean(channelActionSweep.targetValue);
+      if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetMuted;
+      return setChannelMutedById(channel.id, targetMuted, { notify: false });
+    }
+    return false;
+  }
+
+  function beginChannelActionSweep(event, action) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const kind = String(action?.dataset.channelSweepKind || "");
+    if (!kind || !elements.channelTabs) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    resetChannelActionSweep();
+    channelActionSweep.active = true;
+    channelActionSweep.pointerId = event.pointerId;
+    channelActionSweep.kind = kind;
+    try { elements.channelTabs.setPointerCapture?.(event.pointerId); } catch {}
+    applyChannelSweepAction(action);
+  }
+
+  function moveChannelActionSweep(event) {
+    if (!channelActionSweep.active || event.pointerId !== channelActionSweep.pointerId) return;
+    event.preventDefault();
+    const action = getChannelSweepActionAt(event.clientX, event.clientY);
+    if (!action || String(action.dataset.channelSweepKind || "") !== channelActionSweep.kind) {
+      return;
+    }
+    applyChannelSweepAction(action);
+  }
+
+  function endChannelActionSweep(event) {
+    if (!channelActionSweep.active || event.pointerId !== channelActionSweep.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    resetChannelActionSweep({ releaseCapture: true });
+  }
+
   function renderChannelTabs() {
     if (!elements.channelTabs) return;
     elements.channelTabs.replaceChildren();
 
-    const createAction = ({ kind, active, label, title, onClick }) => {
+    const createAction = ({ kind, active, label, title, onClick, sweep = false, sweepId = "" }) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = `channel-tree-action channel-tree-${kind}`;
@@ -5311,11 +5406,23 @@
       button.textContent = kind === "visibility"
         ? "👁"
         : (active ? "🔇" : "🔊");
-      button.addEventListener("pointerdown", (event) => event.stopPropagation());
-      button.addEventListener("click", (event) => {
-        event.stopPropagation();
-        onClick?.();
-      });
+      if (sweep) {
+        button.dataset.channelSweepKind = kind;
+        button.dataset.channelSweepId = String(sweepId);
+        button.addEventListener("pointerdown", (event) => beginChannelActionSweep(event, button));
+        button.addEventListener("click", (event) => {
+          // 포인터 클릭은 pointerdown에서 이미 처리합니다. 키보드 활성화(click detail=0)는 기존 동작을 유지합니다.
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.detail === 0) onClick?.();
+        });
+      } else {
+        button.addEventListener("pointerdown", (event) => event.stopPropagation());
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          onClick?.();
+        });
+      }
       return button;
     };
 
@@ -5351,6 +5458,8 @@
           label: `${channel.name} ${channel.visible === false ? "표시" : "숨김"}`,
           title: channel.visible === false ? "피아노롤에 표시" : "피아노롤에서 숨기기",
           onClick: () => setChannelVisibleById(channel.id, channel.visible === false),
+          sweep: true,
+          sweepId: channel.id,
         }),
         createAction({
           kind: "mute",
@@ -5358,6 +5467,8 @@
           label: `${channel.name} ${channel.muted ? "음소거 해제" : "음소거"}`,
           title: channel.muted ? "음소거 해제" : "음소거",
           onClick: () => setChannelMutedById(channel.id, !channel.muted),
+          sweep: true,
+          sweepId: channel.id,
         }),
       );
       item.append(main, actions);
@@ -12480,40 +12591,51 @@
     state.timeEdit = { beat: 0, scope: "all", channelId: null, preferredAction: null };
   }
 
+  function updateTimeEditScopeUi() {
+    const targetChannel = state.channels.find((channel) => String(channel.id) === String(state.timeEdit?.channelId))
+      || getActiveChannel()
+      || null;
+    const channelScopeAvailable = Boolean(targetChannel) && !isMidiReferenceActive();
+    if (elements.timeEditSelectedChannelOnly) {
+      elements.timeEditSelectedChannelOnly.disabled = !channelScopeAvailable;
+      if (!channelScopeAvailable) elements.timeEditSelectedChannelOnly.checked = false;
+    }
+    const channelScoped = Boolean(elements.timeEditSelectedChannelOnly?.checked) && channelScopeAvailable;
+    state.timeEdit.scope = channelScoped ? "channel" : "all";
+    state.timeEdit.channelId = targetChannel?.id ?? null;
+    if (elements.timeEditPosition) {
+      elements.timeEditPosition.textContent = channelScoped
+        ? i18nText("channel.playhead_basis", [targetChannel.name, state.timeEdit.beat.toFixed(3)])
+        : i18nText("timeline.playhead_basis", [state.timeEdit.beat.toFixed(3)]);
+    }
+  }
+
   function openTimeEditDialog({ beat = state.playhead.beat, scope = "all", channelId = null, preferredAction = null } = {}) {
-    const targetChannel = scope === "channel"
-      ? state.channels.find((channel) => String(channel.id) === String(channelId ?? getActiveChannel()?.id))
-      : null;
-    if (scope === "channel" && !targetChannel) return false;
+    const targetChannel = state.channels.find((channel) => String(channel.id) === String(channelId ?? getActiveChannel()?.id)) || null;
     const normalizedAction = preferredAction === "insert" || preferredAction === "delete" ? preferredAction : null;
+    const channelScoped = scope === "channel" && Boolean(targetChannel) && !isMidiReferenceActive();
     state.timeEdit = {
       beat: clamp(Number(beat) || 0, 0, getTotalBeats()),
-      scope: scope === "channel" ? "channel" : "all",
+      scope: channelScoped ? "channel" : "all",
       channelId: targetChannel?.id ?? null,
       preferredAction: normalizedAction,
     };
     if (elements.timeEditTitle) {
-      elements.timeEditTitle.textContent = state.timeEdit.scope === "channel"
-        ? normalizedAction === "insert"
-          ? i18nText("channel.measure_add")
-          : normalizedAction === "delete"
-            ? i18nText("channel.measure_delete")
-            : i18nText("channel.measure_edit")
-        : normalizedAction === "insert"
-          ? i18nText("timeline.add_measure_beat")
-          : normalizedAction === "delete"
-            ? i18nText("timeline.delete_measure_beat")
-            : i18nText("timeline.edit_measure");
+      elements.timeEditTitle.textContent = normalizedAction === "insert"
+        ? i18nText("timeline.add_measure_beat")
+        : normalizedAction === "delete"
+          ? i18nText("timeline.delete_measure_beat")
+          : i18nText("timeline.edit_measure");
     }
-    if (elements.timeEditPosition) {
-      elements.timeEditPosition.textContent = state.timeEdit.scope === "channel"
-        ? i18nText("channel.playhead_basis", [targetChannel.name, state.timeEdit.beat.toFixed(3)])
-        : i18nText("timeline.playhead_basis", [state.timeEdit.beat.toFixed(3)]);
+    if (elements.timeEditSelectedChannelOnly) {
+      elements.timeEditSelectedChannelOnly.checked = channelScoped;
     }
+    updateTimeEditScopeUi();
     if (elements.timeEditMeasureInput) elements.timeEditMeasureInput.value = "1";
     if (elements.timeEditBeatInput) elements.timeEditBeatInput.value = "0";
-    if (elements.timeEditInsertButton) elements.timeEditInsertButton.hidden = normalizedAction === "delete";
-    if (elements.timeEditDeleteButton) elements.timeEditDeleteButton.hidden = normalizedAction === "insert";
+    // 추가/삭제를 하나의 팝업에 통합합니다. 메뉴에서 어느 동작으로 열었는지는 Enter 기본 동작에만 사용합니다.
+    if (elements.timeEditInsertButton) elements.timeEditInsertButton.hidden = false;
+    if (elements.timeEditDeleteButton) elements.timeEditDeleteButton.hidden = false;
     if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = false;
     requestAnimationFrame(() => {
       elements.timeEditMeasureInput?.focus();
@@ -15132,15 +15254,23 @@
       const selectedChannel = getActiveChannel();
       const selectedChannelMeasureItems = [
         {
-          label: i18nText("channel.measure_add"),
-          disabled: !selectedChannel || isMidiReferenceActive(),
-          action: () => openTimeEditDialog({ beat, scope: "channel", channelId: selectedChannel?.id, preferredAction: "insert" }),
+          label: i18nText("timeline.add_measure_beat"),
+          action: () => openTimeEditDialog({
+            beat,
+            scope: selectedChannel && !isMidiReferenceActive() ? "channel" : "all",
+            channelId: selectedChannel?.id,
+            preferredAction: "insert",
+          }),
         },
         {
-          label: i18nText("channel.measure_delete"),
-          disabled: !selectedChannel || isMidiReferenceActive(),
+          label: i18nText("timeline.delete_measure_beat"),
           danger: true,
-          action: () => openTimeEditDialog({ beat, scope: "channel", channelId: selectedChannel?.id, preferredAction: "delete" }),
+          action: () => openTimeEditDialog({
+            beat,
+            scope: selectedChannel && !isMidiReferenceActive() ? "channel" : "all",
+            channelId: selectedChannel?.id,
+            preferredAction: "delete",
+          }),
         },
       ];
       const trimBeforeItem = {
@@ -15261,14 +15391,31 @@
       }
       const point = pointerToRoll(event);
       const clicked = findNoteAt(point.x, point.y);
+      const contextBeat = clamp(snapBeat(xToBeat(point.x)), 0, getTotalBeats());
       const channelTools = [
         { label: i18nText("timeline.add_measure_beat"), action: () => openTimeEditDialog({ beat: state.playhead.beat, scope: "channel", channelId: getActiveChannel()?.id, preferredAction: "insert" }) },
         { label: i18nText("timeline.delete_measure_beat"), danger: true, action: () => openTimeEditDialog({ beat: state.playhead.beat, scope: "channel", channelId: getActiveChannel()?.id, preferredAction: "delete" }) },
+      ];
+      const trimTools = [
+        {
+          label: i18nText("timeline.trim_before"),
+          disabled: contextBeat <= 0,
+          danger: true,
+          action: () => deleteTimelineBeforeBeat(contextBeat),
+        },
+        {
+          label: i18nText("timeline.trim_after"),
+          disabled: contextBeat >= getTotalBeats() - CONFIG.minimumNoteBeat,
+          danger: true,
+          action: () => deleteTimelineAfterBeat(contextBeat),
+        },
       ];
       if (!clicked) {
         return [
           ...(state.noteClipboard?.notes?.length ? [{ label: i18nText("note.paste_playhead"), action: pasteNotesFromClipboard }, "separator"] : []),
           ...channelTools,
+          "separator",
+          ...trimTools,
         ];
       }
       if (!state.selectedNoteIds.has(clicked.id)) {
@@ -15292,6 +15439,8 @@
           danger: true,
           action: deleteSelectedNote,
         },
+        "separator",
+        ...trimTools,
       ];
     });
 
@@ -15878,6 +16027,10 @@
     elements.sidebarChannelsTab?.addEventListener("click", () => setSidebarTab("channels"));
     elements.sidebarHistoryTab?.addEventListener("click", () => setSidebarTab("history"));
     elements.channelTabs?.addEventListener("keydown", handleChannelTreeArrowNavigation);
+    elements.channelTabs?.addEventListener("pointermove", moveChannelActionSweep);
+    elements.channelTabs?.addEventListener("pointerup", endChannelActionSweep);
+    elements.channelTabs?.addEventListener("pointercancel", endChannelActionSweep);
+    elements.channelTabs?.addEventListener("lostpointercapture", () => resetChannelActionSweep());
     elements.historyList?.addEventListener("keydown", handleHistoryArrowNavigation);
     elements.historyUndoButton.addEventListener("click", () => undoHistory());
     elements.historyRedoButton.addEventListener("click", () => redoHistory());
@@ -16310,6 +16463,7 @@
     elements.timeEditCancelButton?.addEventListener("click", closeTimeEditDialog);
     elements.timeEditInsertButton?.addEventListener("click", () => applyTimeEdit("insert"));
     elements.timeEditDeleteButton?.addEventListener("click", () => applyTimeEdit("delete"));
+    elements.timeEditSelectedChannelOnly?.addEventListener("change", updateTimeEditScopeUi);
     elements.timeEditBeatInput?.addEventListener("input", () => {
       const input = elements.timeEditBeatInput;
       if (!input || input.value === "") return;

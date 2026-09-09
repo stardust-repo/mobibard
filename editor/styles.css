@@ -2894,6 +2894,10 @@ button {
   font-size: 12px;
   line-height: 1;
 }
+.channel-tree-action {
+  touch-action: none;
+  user-select: none;
+}
 .channel-tree-action:hover,
 .channel-tree-expander:hover { color: var(--text); background: var(--control-hover); }
 .channel-tree-visibility[aria-pressed="true"] { color: #7fd5a9; }
@@ -3905,12 +3909,36 @@ button {
 .time-edit-number strong { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .time-edit-actions {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
   gap: 8px;
   padding: 10px 12px 12px;
   border-top: 1px solid var(--line);
 }
 .time-edit-actions button { min-height: 36px; }
+.time-edit-scope-toggle {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.time-edit-scope-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.time-edit-scope-toggle:has(input:disabled) {
+  opacity: .45;
+  cursor: default;
+}
+.time-edit-actions-spacer { min-width: 0; }
 :root[data-theme="light"] .time-edit-dialog { background: #fff; }
 @media (pointer: coarse) {
   .transport-utility-icon-button { width: 32px; min-width: 32px; max-width: 32px; height: 32px; min-height: 32px; font-size: 16px; }
