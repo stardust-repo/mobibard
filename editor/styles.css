@@ -533,11 +533,11 @@ textarea:focus-visible,
 .midi-summary strong { color: var(--text); }
 
 .context-menu { position: fixed; z-index: 1600; min-width: 210px; max-width: calc(100vw - 12px); padding: 6px; border: 1px solid var(--menu-border); border-radius: 10px; background: var(--menu-bg); box-shadow: 0 14px 38px var(--shadow); backdrop-filter: blur(10px); }
-.context-menu button { width: 100%; min-height: 38px; display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent; text-align: left; }
+.context-menu button { width: 100%; min-height: 38px; display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent; text-align: left; font-weight: 400; }
 .context-menu button:hover { background: var(--menu-hover); }
 .context-menu button.danger { color: #ff9aa5; }
 .context-menu .menu-separator { height: 1px; margin: 5px 3px; background: var(--line); }
-.context-menu .menu-label { padding: 5px 8px 4px; color: var(--muted); font-size: 11px; }
+.context-menu .menu-label { margin: -1px -1px 5px; padding: 8px 9px 7px; border-bottom: 1px solid var(--line); border-radius: 7px 7px 3px 3px; background: color-mix(in srgb, var(--control-bg) 72%, transparent); color: var(--text); font-size: 12px; font-weight: 800; letter-spacing: .015em; }
 
 .confirm-dialog { width: min(420px, calc(100vw - 28px)); padding: 0; border: 1px solid var(--menu-border); border-radius: 13px; background: var(--panel-2); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.45); }
 .confirm-dialog::backdrop { background: rgba(0,0,0,.48); backdrop-filter: blur(2px); }
@@ -4614,6 +4614,41 @@ button {
   padding-inline: 10px;
   font-weight: 800;
 }
+.timeline-space-control .measure-space-icon-button {
+  width: 31px;
+  min-width: 31px;
+  max-width: 31px;
+  height: 31px;
+  min-height: 31px;
+  padding: 0;
+  overflow: visible;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.timeline-space-control .measure-space-icon-button:hover,
+.timeline-space-control .measure-space-icon-button:focus-visible {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.timeline-space-control .measure-space-icon-button img {
+  display: block;
+  width: 31px;
+  height: 31px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  transition: filter .12s ease, opacity .12s ease;
+}
+.timeline-space-control .measure-space-icon-button:hover img,
+.timeline-space-control .measure-space-icon-button:focus-visible img {
+  filter: brightness(1.08) saturate(1.08);
+}
+.timeline-space-control .measure-space-icon-button:active img {
+  filter: brightness(.94) saturate(1.02);
+}
 .time-edit-dialog { width: min(430px, 100%); }
 .time-edit-combined-field {
   grid-template-columns: auto minmax(0, 1fr);
@@ -6558,4 +6593,171 @@ a[class*="button"]:hover {
 .unified-import-dialog > .unified-import-actions {
   grid-row: 6;
   align-self: stretch;
+}
+
+/* fixed95: selected-note split ------------------------------------------------ */
+.note-split-dialog {
+  width: min(430px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--control-border);
+  border-radius: 13px;
+  background: var(--panel-2);
+  box-shadow: 0 18px 46px rgba(0,0,0,.42);
+}
+.note-split-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 18px 16px 10px;
+  color: var(--text);
+  font-size: 12px;
+}
+.note-split-field select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text);
+  padding-inline: 10px;
+  font-weight: 800;
+}
+.note-split-actions { grid-template-columns: auto 1fr auto; }
+:root[data-theme="light"] .note-split-dialog { background: #fff; }
+
+
+/* fixed99: centered measure buttons and note split preview */
+.timeline-space-control {
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+}
+.timeline-space-control .measure-space-icon-button {
+  align-self: center;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  min-width: 30px;
+  max-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  margin-block: auto;
+  line-height: 0;
+  vertical-align: middle;
+}
+.timeline-space-control .measure-space-icon-button img {
+  width: 30px;
+  height: 30px;
+  margin: 0;
+}
+.note-split-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 6px;
+}
+.note-split-number {
+  justify-self: stretch;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.note-split-number input {
+  min-width: 0;
+  width: 100%;
+  text-align: right;
+}
+.note-split-preview {
+  margin: 8px 14px 4px;
+  padding: 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 84%, var(--control-bg));
+}
+.note-split-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.note-split-preview-header strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.note-split-preview-measure {
+  position: relative;
+  height: 54px;
+  overflow: hidden;
+  border-inline: 2px solid color-mix(in srgb, var(--text) 68%, transparent);
+  background: color-mix(in srgb, var(--panel-2) 92%, var(--control-bg));
+}
+.note-split-preview-measure::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 1px;
+  background: color-mix(in srgb, var(--muted) 62%, transparent);
+}
+.note-split-preview-note-row {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  top: 16px;
+  height: 22px;
+}
+.note-split-preview-note {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-block: 1px solid color-mix(in srgb, var(--accent) 82%, #0000);
+  background: color-mix(in srgb, var(--accent) 72%, transparent);
+}
+.note-split-preview-cut {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 0;
+  border-left: 1px dashed color-mix(in srgb, #fff 78%, var(--accent));
+  transform: translateX(-.5px);
+  pointer-events: none;
+}
+.note-split-preview-measure.invalid .note-split-preview-note-row { opacity: .2; }
+
+
+/* fixed100: context hierarchy and brighter measure icon states */
+.context-menu .menu-label {
+  color: var(--text);
+  font-weight: 800;
+}
+.context-menu button {
+  font-weight: 400;
+}
+.timeline-space-control .measure-space-icon-button img {
+  opacity: .90;
+  filter: brightness(1.24) saturate(.82);
+  transition: filter .14s ease, opacity .14s ease, transform .14s ease;
+}
+.timeline-space-control .measure-space-icon-button:hover img,
+.timeline-space-control .measure-space-icon-button:focus-visible img {
+  opacity: 1;
+  filter: brightness(.94) saturate(1.55) contrast(1.08);
+}
+.timeline-space-control .measure-space-icon-button:active img {
+  opacity: 1;
+  filter: brightness(.86) saturate(1.62) contrast(1.12);
+  transform: translateY(1px);
+}
+
+
+/* fixed101: flatter context header and slightly calmer measure icons */
+.context-menu .menu-label {
+  border-radius: 0;
+}
+.timeline-space-control .measure-space-icon-button img {
+  opacity: .90;
+  filter: brightness(1.16) saturate(.88);
 }

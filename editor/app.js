@@ -189,7 +189,8 @@
     playbackRateSlider: document.querySelector("#playbackRateSlider"),
     playbackRateValue: document.querySelector("#playbackRateValue"),
     playbackRateResetButton: document.querySelector("#playbackRateResetButton"),
-    measureSpaceButton: document.querySelector("#measureSpaceButton"),
+    measureSpaceInsertButton: document.querySelector("#measureSpaceInsertButton"),
+    measureSpaceDeleteButton: document.querySelector("#measureSpaceDeleteButton"),
     snapSelect: document.querySelector("#snapSelect"),
     noteVolumeDisplaySelect: document.querySelector("#noteVolumeDisplaySelect"),
     pitchSpacingSelect: document.querySelector("#pitchSpacingSelect"),
@@ -373,6 +374,14 @@
     noteVolumeSelectionLabel: document.querySelector("#noteVolumeSelectionLabel"),
     noteVolumeCurrentCounts: document.querySelector("#noteVolumeCurrentCounts"),
     noteVolumeTargetCounts: document.querySelector("#noteVolumeTargetCounts"),
+    noteSplitBackdrop: document.querySelector("#noteSplitBackdrop"),
+    noteSplitCloseButton: document.querySelector("#noteSplitCloseButton"),
+    noteSplitCancelButton: document.querySelector("#noteSplitCancelButton"),
+    noteSplitApplyButton: document.querySelector("#noteSplitApplyButton"),
+    noteSplitUnitInput: document.querySelector("#noteSplitUnitInput"),
+    noteSplitSelectionLabel: document.querySelector("#noteSplitSelectionLabel"),
+    noteSplitPreviewMeasure: document.querySelector("#noteSplitPreviewMeasure"),
+    noteSplitPreviewLabel: document.querySelector("#noteSplitPreviewLabel"),
     tempoEditorBackdrop: document.querySelector("#tempoEditorBackdrop"),
     tempoEditorTitle: document.querySelector("#tempoEditorTitle"),
     tempoEditorPosition: document.querySelector("#tempoEditorPosition"),
@@ -455,7 +464,7 @@
     tempoDrag: null,
     tempoTouchTap: null,
     tempoEditor: { mode: null, tempoId: null, beat: 0 },
-    timeEdit: { beat: 0 },
+    timeEdit: { beat: 0, scope: "all", channelId: null, preferredAction: null },
     suppressContextMenuUntil: 0,
     suppressNextContextMenu: false,
     playhead: {
@@ -577,7 +586,7 @@
     customScrollDrag: null,
     longPress: null,
     masterVolume: 1,
-    noteVolumeDisplay: "all",
+    noteVolumeDisplay: "selected",
     playbackRate: 1,
     rollSurface: {
       originX: 0,
@@ -2300,14 +2309,15 @@
   }
 
   function normalizeNoteVolumeDisplay(value) {
-    return value === "selected" || value === "none" ? value : "all";
+    if (value === "all" || value === "selected" || value === "none") return value;
+    return "selected";
   }
 
   function loadStoredNoteVolumeDisplay() {
     try {
       return normalizeNoteVolumeDisplay(window.localStorage.getItem("mobibard-note-volume-display"));
     } catch {
-      return "all";
+      return "selected";
     }
   }
 
@@ -3355,18 +3365,18 @@
       return overviewTimelineActivityCache;
     }
     let lastNoteEnd = 0;
-    const visibleChannels = [];
+    const channelActivities = [];
     state.channels.forEach((channel, index) => {
       const intervals = [];
       for (const note of channel.notes || []) {
         const start = Math.max(0, Number(note.startBeat) || 0);
         const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
         lastNoteEnd = Math.max(lastNoteEnd, end);
-        if (visibleChannels.length < 12) intervals.push({ start, end });
+        intervals.push({ start, end });
       }
-      if (intervals.length && visibleChannels.length < 12) {
+      if (intervals.length) {
         intervals.sort((a, b) => a.start - b.start || a.end - b.end);
-        visibleChannels.push({ channel, index, intervals });
+        channelActivities.push({ channel, index, intervals });
       }
     });
     const lastAudioEnd = state.audioClips.reduce(
@@ -3378,7 +3388,7 @@
       channelsRef: state.channels,
       audioClipsRef: state.audioClips,
       endBeat: Math.max(CONFIG.beatsPerMeasure, lastNoteEnd, lastAudioEnd),
-      visibleChannels,
+      channelActivities,
     };
     return overviewTimelineActivityCache;
   }
@@ -3413,31 +3423,62 @@
       context.stroke();
     }
 
-    const visibleChannels = overviewData.visibleChannels;
-    // The overview now matches the sidebar-tab height, so use the extra vertical room
-    // to give the (up to) twelve channel lanes a little more breathing space.
+    const channelActivities = overviewData.channelActivities || [];
+    const activeChannelId = getActiveChannel()?.id ?? null;
+    const firstTwelve = channelActivities.slice(0, 12);
+    const activeEntry = activeChannelId == null
+      ? null
+      : channelActivities.find((entry) => String(entry.channel?.id) === String(activeChannelId)) || null;
+    let visibleChannels = firstTwelve;
+    if (activeEntry && !firstTwelve.includes(activeEntry)) {
+      visibleChannels = [
+        ...channelActivities.filter((entry) => entry !== activeEntry).slice(0, 11),
+        activeEntry,
+      ];
+    }
+    // The selected channel is always represented when it has notes. If it lies
+    // outside the leading twelve channels, it replaces the twelfth overview lane.
     const lanePitch = Math.max(2.1, Math.min(3.15, (height - 6) / 12));
     const usedHeight = visibleChannels.length * lanePitch;
     const top = Math.max(1, (height - usedHeight) / 2);
     const lineWidth = Math.max(1.3, Math.min(1.85, lanePitch * 0.62));
     const mergeGapPx = 0.85;
+    const laneIndexByEntry = new Map(visibleChannels.map((entry, lane) => [entry, lane]));
+    const drawOrder = [
+      ...visibleChannels.filter((entry) => String(entry.channel?.id) !== String(activeChannelId)),
+      ...visibleChannels.filter((entry) => String(entry.channel?.id) === String(activeChannelId)),
+    ];
 
-    context.lineCap = "round";
-    for (let lane = 0; lane < visibleChannels.length; lane += 1) {
-      const { channel, index, intervals } = visibleChannels[lane];
+    context.lineCap = "butt";
+    for (const entry of drawOrder) {
+      const lane = laneIndexByEntry.get(entry) ?? 0;
+      const { channel, index, intervals } = entry;
+      const isActiveChannel = activeChannelId != null && String(channel?.id) === String(activeChannelId);
       const y = top + lanePitch * (lane + 0.5);
-      context.strokeStyle = getChannelColor(channel, index);
+      const barHeight = isActiveChannel ? lineWidth * 2 : lineWidth;
+      const barColor = getChannelColor(channel, index);
+      const borderColor = state.theme === "light" ? "rgba(74,88,106,.68)" : "rgba(244,248,252,.72)";
       context.globalAlpha = channel.muted ? 0.28 : (channel.visible === false ? 0.42 : 0.92);
-      context.lineWidth = lineWidth;
-      context.beginPath();
       let pendingStart = -1;
       let pendingEnd = -1;
       const flush = () => {
         if (pendingStart < 0) return;
         const x1 = clamp(pendingStart, 0, width);
         const x2 = clamp(Math.max(x1 + 0.8, pendingEnd), 0, width);
-        context.moveTo(x1, y);
-        context.lineTo(x2, y);
+        const segmentWidth = Math.max(0.8, x2 - x1);
+        const yTop = y - barHeight / 2;
+        context.fillStyle = barColor;
+        context.fillRect(x1, yTop, segmentWidth, barHeight);
+        if (isActiveChannel) {
+          context.strokeStyle = borderColor;
+          context.lineWidth = 1;
+          context.beginPath();
+          context.moveTo(x1, Math.round(yTop) + 0.5);
+          context.lineTo(x1 + segmentWidth, Math.round(yTop) + 0.5);
+          context.moveTo(x1, Math.round(yTop + barHeight) - 0.5);
+          context.lineTo(x1 + segmentWidth, Math.round(yTop + barHeight) - 0.5);
+          context.stroke();
+        }
         pendingStart = -1;
         pendingEnd = -1;
       };
@@ -3456,7 +3497,6 @@
         }
       }
       flush();
-      context.stroke();
     }
     context.globalAlpha = 1;
 
@@ -7469,12 +7509,23 @@
   }
 
   function createHistoryEntry(snapshot, label = "편집") {
+    const activeChannel = getActiveChannel();
     return {
       id: state.history.nextId++,
       snapshot,
       label: String(label || "편집"),
+      channelId: activeChannel?.id ?? null,
+      restorePlayheadBeat: null,
       createdAt: Date.now(),
     };
+  }
+
+  function rememberCurrentHistoryPlayhead(beat = state.playhead.beat) {
+    if (!state.history.currentEntry) return false;
+    const value = Number(beat);
+    if (!Number.isFinite(value)) return false;
+    state.history.currentEntry.restorePlayheadBeat = Math.max(0, value);
+    return true;
   }
 
   function initializeHistory(label = "시작") {
@@ -7531,6 +7582,7 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = `history-item${index === currentIndex ? " current" : ""}${index > currentIndex ? " future" : ""}`;
+      button.dataset.contextArea = "history-item";
       button.dataset.historyIndex = String(index);
       button.title = `${entry.label}`;
       if (index === currentIndex) {
@@ -7690,14 +7742,18 @@
     }
   }
 
-  function restoreHistorySnapshot(snapshot) {
+  function restoreHistorySnapshot(snapshot, restorePlayheadBeat = null) {
     const data = JSON.parse(snapshot);
     invalidateOverviewTimelineActivity();
     const scrollLeft = elements.rollViewport.scrollLeft;
     const scrollTop = elements.rollViewport.scrollTop;
     const activeChannelId = getActiveChannel()?.id ?? null;
     const activeChannelIndex = state.activeChannel;
-    const playheadBeat = state.playhead.beat;
+    const currentPlayheadBeat = state.playhead.beat;
+    const requestedPlayheadBeat = Number(restorePlayheadBeat);
+    const playheadBeat = Number.isFinite(requestedPlayheadBeat)
+      ? Math.max(0, requestedPlayheadBeat)
+      : currentPlayheadBeat;
     const mutedByChannelId = new Map(state.channels.map((channel) => [String(channel.id), Boolean(channel.muted)]));
     const visibleByChannelId = new Map(state.channels.map((channel) => [String(channel.id), channel.visible !== false]));
     const mutedByAudioId = new Map(state.audioClips.map((clip) => [String(clip.id), Boolean(clip.muted)]));
@@ -7806,7 +7862,7 @@
     state.history.undoStack = entries.slice(0, safeIndex);
     state.history.currentEntry = entries[safeIndex];
     state.history.redoStack = entries.slice(safeIndex + 1).reverse();
-    restoreHistorySnapshot(state.history.currentEntry.snapshot);
+    restoreHistorySnapshot(state.history.currentEntry.snapshot, state.history.currentEntry.restorePlayheadBeat);
     renderHistoryPanel();
     showToast(`${safeIndex + 1}번째 편집 상태로 이동했습니다.`);
     return true;
@@ -7822,7 +7878,7 @@
       state.history.redoStack.push(state.history.currentEntry);
     }
     state.history.currentEntry = previousEntry;
-    restoreHistorySnapshot(previousEntry.snapshot);
+    restoreHistorySnapshot(previousEntry.snapshot, previousEntry.restorePlayheadBeat);
     renderHistoryPanel();
     if (notify) showToast("편집을 되돌렸습니다.");
     return true;
@@ -7841,7 +7897,7 @@
       state.history.undoStack.splice(0, state.history.undoStack.length - CONFIG.historyLimit);
     }
     state.history.currentEntry = nextEntry;
-    restoreHistorySnapshot(nextEntry.snapshot);
+    restoreHistorySnapshot(nextEntry.snapshot, nextEntry.restorePlayheadBeat);
     renderHistoryPanel();
     if (notify) showToast("편집을 다시 실행했습니다.");
     return true;
@@ -12269,21 +12325,201 @@
     showToast(`${channel.name}을 비웠습니다.`);
   }
 
-  function closeTimeEditDialog() {
-    if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = true;
+  function parseNoteSplitUnit(rawValue) {
+    const raw = String(rawValue ?? "").trim();
+    if (!/^\d+$/.test(raw)) return null;
+    const units = Number(raw);
+    if (!Number.isInteger(units) || units < 1 || units > 64) return null;
+    return {
+      token: String(units),
+      units,
+      unitBeat: units * CONFIG.minimumNoteBeat,
+    };
   }
 
-  function openTimeEditDialog({ beat = state.playhead.beat } = {}) {
-    state.timeEdit = { beat: clamp(Number(beat) || 0, 0, getTotalBeats()) };
-    if (elements.timeEditTitle) elements.timeEditTitle.textContent = "마디 편집";
-    if (elements.timeEditPosition) elements.timeEditPosition.textContent = `빨간 재생선 ${state.timeEdit.beat.toFixed(3)} beat 기준`;
+  function updateNoteSplitPreview() {
+    const preview = elements.noteSplitPreviewMeasure;
+    const label = elements.noteSplitPreviewLabel;
+    if (!preview) return;
+    preview.replaceChildren();
+    const parsed = parseNoteSplitUnit(elements.noteSplitUnitInput?.value);
+    const row = document.createElement("div");
+    row.className = "note-split-preview-note-row";
+    const note = document.createElement("div");
+    note.className = "note-split-preview-note";
+    row.append(note);
+    preview.append(row);
+    if (!parsed) {
+      preview.classList.add("invalid");
+      if (label) label.textContent = i18nText("note.split_input_hint");
+      return;
+    }
+    preview.classList.remove("invalid");
+    const total = CONFIG.beatsPerMeasure;
+    for (let beat = parsed.unitBeat; beat < total - 1e-7; beat += parsed.unitBeat) {
+      const cut = document.createElement("span");
+      cut.className = "note-split-preview-cut";
+      cut.style.left = `${clamp((beat / total) * 100, 0, 100)}%`;
+      note.append(cut);
+    }
+    if (label) label.textContent = `${parsed.units}${i18nText("note.split_suffix")}`;
+  }
+
+  function normalizeNoteSplitInput({ fallback = false } = {}) {
+    const input = elements.noteSplitUnitInput;
+    if (!input) return null;
+    const parsed = parseNoteSplitUnit(input.value);
+    if (parsed) {
+      input.value = parsed.token;
+      return parsed;
+    }
+    if (fallback) {
+      input.value = "32";
+      return parseNoteSplitUnit("32");
+    }
+    return null;
+  }
+
+  function closeNoteSplitDialog() {
+    if (elements.noteSplitBackdrop) elements.noteSplitBackdrop.hidden = true;
+  }
+
+  function openNoteSplitDialog() {
+    const selected = getSelectedNotes();
+    if (!selected.length) {
+      showToast(i18nText("note.split_need_selection"));
+      return false;
+    }
+    if (elements.noteSplitSelectionLabel) {
+      elements.noteSplitSelectionLabel.textContent = i18nText("note.split_selected_count", [selected.length]);
+    }
+    if (elements.noteSplitUnitInput) elements.noteSplitUnitInput.value = "32";
+    updateNoteSplitPreview();
+    if (elements.noteSplitBackdrop) elements.noteSplitBackdrop.hidden = false;
+    requestAnimationFrame(() => {
+      elements.noteSplitUnitInput?.focus();
+      elements.noteSplitUnitInput?.select();
+    });
+    return true;
+  }
+
+  function applySplitSelectedNotes() {
+    const channel = getActiveChannel();
+    const selectedIds = new Set(state.selectedNoteIds);
+    if (!channel || !selectedIds.size) {
+      closeNoteSplitDialog();
+      return false;
+    }
+    const parsedUnit = normalizeNoteSplitInput();
+    if (!parsedUnit) {
+      showToast(i18nText("note.split_invalid_unit"));
+      elements.noteSplitUnitInput?.focus();
+      elements.noteSplitUnitInput?.select();
+      return false;
+    }
+    const unit = parsedUnit.unitBeat;
+    const nextNotes = [];
+    const nextSelection = new Set();
+    let sourceCount = 0;
+    let createdCount = 0;
+    for (const note of channel.notes || []) {
+      if (!selectedIds.has(note.id)) {
+        nextNotes.push(note);
+        continue;
+      }
+      sourceCount += 1;
+      const duration = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      if (duration <= unit + 1e-7) {
+        nextNotes.push(note);
+        nextSelection.add(note.id);
+        createdCount += 1;
+        continue;
+      }
+      const pieceDurations = [];
+      let remaining = duration;
+      while (remaining > unit + 1e-7) {
+        pieceDurations.push(unit);
+        remaining -= unit;
+      }
+      if (remaining >= CONFIG.minimumNoteBeat - 1e-7) {
+        pieceDurations.push(remaining);
+      } else if (remaining > 1e-7 && pieceDurations.length) {
+        pieceDurations[pieceDurations.length - 1] += remaining;
+      }
+      let cursor = Number(note.startBeat) || 0;
+      pieceDurations.forEach((pieceDuration, index) => {
+        const piece = {
+          ...note,
+          id: index === 0 ? note.id : state.nextNoteId++,
+          startBeat: Number(cursor.toFixed(6)),
+          durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, pieceDuration).toFixed(6)),
+        };
+        nextNotes.push(piece);
+        nextSelection.add(piece.id);
+        cursor += pieceDuration;
+        createdCount += 1;
+      });
+    }
+    if (createdCount <= sourceCount) {
+      showToast(i18nText("note.split_no_change"));
+      return false;
+    }
+    channel.notes = nextNotes.sort(compareNotesByTimeline);
+    state.selectedNoteIds = nextSelection;
+    state.channelNoteRuntime.delete(String(channel.id));
+    closeNoteSplitDialog();
+    markDirty(i18nText("history.note_split"));
+    drawRoll();
+    updateChannelInfo();
+    showToast(i18nText("note.split_done", [sourceCount, createdCount]));
+    return true;
+  }
+
+  function closeTimeEditDialog() {
+    if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = true;
+    state.timeEdit = { beat: 0, scope: "all", channelId: null, preferredAction: null };
+  }
+
+  function openTimeEditDialog({ beat = state.playhead.beat, scope = "all", channelId = null, preferredAction = null } = {}) {
+    const targetChannel = scope === "channel"
+      ? state.channels.find((channel) => String(channel.id) === String(channelId ?? getActiveChannel()?.id))
+      : null;
+    if (scope === "channel" && !targetChannel) return false;
+    const normalizedAction = preferredAction === "insert" || preferredAction === "delete" ? preferredAction : null;
+    state.timeEdit = {
+      beat: clamp(Number(beat) || 0, 0, getTotalBeats()),
+      scope: scope === "channel" ? "channel" : "all",
+      channelId: targetChannel?.id ?? null,
+      preferredAction: normalizedAction,
+    };
+    if (elements.timeEditTitle) {
+      elements.timeEditTitle.textContent = state.timeEdit.scope === "channel"
+        ? normalizedAction === "insert"
+          ? i18nText("channel.measure_add")
+          : normalizedAction === "delete"
+            ? i18nText("channel.measure_delete")
+            : i18nText("channel.measure_edit")
+        : normalizedAction === "insert"
+          ? i18nText("timeline.add_measure_beat")
+          : normalizedAction === "delete"
+            ? i18nText("timeline.delete_measure_beat")
+            : i18nText("timeline.edit_measure");
+    }
+    if (elements.timeEditPosition) {
+      elements.timeEditPosition.textContent = state.timeEdit.scope === "channel"
+        ? i18nText("channel.playhead_basis", [targetChannel.name, state.timeEdit.beat.toFixed(3)])
+        : i18nText("timeline.playhead_basis", [state.timeEdit.beat.toFixed(3)]);
+    }
     if (elements.timeEditMeasureInput) elements.timeEditMeasureInput.value = "1";
     if (elements.timeEditBeatInput) elements.timeEditBeatInput.value = "0";
+    if (elements.timeEditInsertButton) elements.timeEditInsertButton.hidden = normalizedAction === "delete";
+    if (elements.timeEditDeleteButton) elements.timeEditDeleteButton.hidden = normalizedAction === "insert";
     if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = false;
     requestAnimationFrame(() => {
       elements.timeEditMeasureInput?.focus();
       elements.timeEditMeasureInput?.select();
     });
+    return true;
   }
 
   function getTimeEditAmount() {
@@ -12374,7 +12610,7 @@
     state.tempos.sort((a, b) => a.beat - b.beat || a.id - b.id);
     state.timelineBeats = Math.max(getTotalBeats() + amount, getPersistentContentEndBeat() + getSnapBeat());
     ensureTimelineFitsViewport();
-    markDirty("마디/박자 공간 추가");
+    markDirty(i18nText("timeline.add_measure_beat"));
     renderChannelTabs();
     renderChannelEditor();
     resizeAndDraw();
@@ -12443,7 +12679,111 @@
     state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, getTotalBeats() - amount);
     shrinkTimelineToContent();
     ensureTimelineFitsViewport();
-    markDirty("마디/박자 공간 삭제");
+    markDirty(i18nText("timeline.delete_measure_beat"));
+    renderChannelTabs();
+    renderChannelEditor();
+    resizeAndDraw();
+    updateChannelInfo();
+    closeTimeEditDialog();
+    return true;
+  }
+
+  function getTimeEditChannel() {
+    if (state.timeEdit?.scope !== "channel") return null;
+    return state.channels.find((channel) => String(channel.id) === String(state.timeEdit.channelId)) || null;
+  }
+
+  function insertChannelSpaceAtPlayhead(amountBeats) {
+    const channel = getTimeEditChannel();
+    if (!channel) return false;
+    const amount = Math.max(CONFIG.minimumNoteBeat, Number(amountBeats) || 0);
+    const cursor = clamp(Number(state.timeEdit?.beat ?? state.playhead.beat) || 0, 0, getTotalBeats());
+    const kept = [];
+    let changed = false;
+    for (const note of channel.notes || []) {
+      const start = Number(note.startBeat) || 0;
+      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      if (start >= cursor - 1e-7) {
+        note.startBeat = Number((start + amount).toFixed(6));
+        kept.push(note);
+        changed = true;
+      } else if (end > cursor + 1e-7) {
+        if (trimNoteToBeat(note, cursor)) {
+          kept.push(note);
+          changed = true;
+        } else {
+          state.selectedNoteIds.delete(note.id);
+          changed = true;
+        }
+      } else kept.push(note);
+    }
+    if (!changed) {
+      showToast(i18nText("channel.space_no_notes"));
+      return false;
+    }
+    channel.notes = kept;
+    state.channelNoteRuntime.delete(String(channel.id));
+    state.timelineBeats = Math.max(
+      getTotalBeats(),
+      getPersistentContentEndBeat() + Math.max(getSnapBeat(), CONFIG.minimumNoteBeat),
+    );
+    ensureTimelineFitsViewport();
+    markDirty(i18nText("history.channel_space_add"));
+    renderChannelTabs();
+    renderChannelEditor();
+    resizeAndDraw();
+    updateChannelInfo();
+    closeTimeEditDialog();
+    return true;
+  }
+
+  function deleteChannelSpaceAtPlayhead(amountBeats) {
+    const channel = getTimeEditChannel();
+    if (!channel) return false;
+    const amount = Math.max(CONFIG.minimumNoteBeat, Number(amountBeats) || 0);
+    const cursor = clamp(Number(state.timeEdit?.beat ?? state.playhead.beat) || 0, 0, getTotalBeats());
+    const cutEnd = cursor + amount;
+    const nextNotes = [];
+    let changed = false;
+    for (const note of channel.notes || []) {
+      const start = Number(note.startBeat) || 0;
+      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      if (end <= cursor + 1e-7) {
+        nextNotes.push(note);
+      } else if (start >= cutEnd - 1e-7) {
+        note.startBeat = Number(Math.max(0, start - amount).toFixed(6));
+        nextNotes.push(note);
+        changed = true;
+      } else if (start < cursor - 1e-7 && end > cutEnd + 1e-7) {
+        note.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, end - start - amount).toFixed(6));
+        nextNotes.push(note);
+        changed = true;
+      } else if (start < cursor - 1e-7) {
+        if (trimNoteToBeat(note, cursor)) nextNotes.push(note);
+        else state.selectedNoteIds.delete(note.id);
+        changed = true;
+      } else if (end > cutEnd + 1e-7) {
+        const nextDuration = end - cutEnd;
+        if (nextDuration >= CONFIG.minimumNoteBeat - 1e-7) {
+          note.startBeat = Number(cursor.toFixed(6));
+          note.durationBeat = Number(nextDuration.toFixed(6));
+          nextNotes.push(note);
+        } else state.selectedNoteIds.delete(note.id);
+        changed = true;
+      } else {
+        state.selectedNoteIds.delete(note.id);
+        changed = true;
+      }
+    }
+    if (!changed) {
+      showToast(i18nText("channel.space_no_notes"));
+      return false;
+    }
+    channel.notes = nextNotes;
+    state.channelNoteRuntime.delete(String(channel.id));
+    shrinkTimelineToContent();
+    ensureTimelineFitsViewport();
+    markDirty(i18nText("history.channel_space_delete"));
     renderChannelTabs();
     renderChannelEditor();
     resizeAndDraw();
@@ -12463,9 +12803,15 @@
     }
     const resumePlayback = state.playback.running || state.playback.loading;
     if (resumePlayback) stopPlayback(false);
-    const applied = action === "delete" ? deleteTrackSpaceAtPlayhead(amountBeats) : insertTrackSpaceAtPlayhead(amountBeats);
+    const channelScoped = state.timeEdit?.scope === "channel";
+    const applied = action === "delete"
+      ? (channelScoped ? deleteChannelSpaceAtPlayhead(amountBeats) : deleteTrackSpaceAtPlayhead(amountBeats))
+      : (channelScoped ? insertChannelSpaceAtPlayhead(amountBeats) : insertTrackSpaceAtPlayhead(amountBeats));
     if (applied) {
-      showToast(`${describeTimeEditAmount(measures, subdivisions)} 공간을 ${action === "delete" ? "삭제" : "추가"}했습니다.`);
+      const actionLabel = action === "delete" ? i18nText("action.delete") : i18nText("action.add");
+      showToast(channelScoped
+        ? i18nText("channel.space_edited", [describeTimeEditAmount(measures, subdivisions), actionLabel])
+        : i18nText("timeline.space_edited", [describeTimeEditAmount(measures, subdivisions), actionLabel]));
       if (resumePlayback) window.setTimeout(() => startPlayback(), 0);
     }
     return applied;
@@ -14302,7 +14648,7 @@
 
   function shouldUseLongPress(target) {
     return Boolean(target?.closest?.(
-      "#timelineCanvas, #rollCanvas, #keyboardCanvas, .channel-tab-item, [data-context-area='midi-instrument'], .channel-detail-toolbar, #channelPanel",
+      "#timelineCanvas, #rollCanvas, #keyboardCanvas, .channel-tab-item, .history-item, [data-context-area='midi-instrument'], .channel-detail-toolbar, #channelPanel",
     ));
   }
 
@@ -14416,6 +14762,10 @@
       return;
     }
     const area = resolveContextArea(event.target);
+    if (area.name === "topbar") {
+      closeContextMenu();
+      return;
+    }
     if (
       (area.name === "piano-roll" && xToBeat(pointerToRoll(event).x) < 0) ||
       (area.name === "timeline" && timelineRawBeatFromPointer(event) < 0)
@@ -14433,27 +14783,65 @@
       // If playback is active, seek there without leaving playback stopped.
       seekPlayheadBeat(timelineBeatFromPointer(event));
     }
+    if (area.name === "piano-roll") {
+      const point = pointerToRoll(event);
+      const clicked = !isMidiReferenceActive() ? findNoteAt(point.x, point.y) : null;
+      const preserveSelectedNotePlayhead = Boolean(clicked && state.selectedNoteIds.has(clicked.id));
+      // Empty space and unselected notes target the snapped right-click position.
+      // A context click on an already-selected note keeps the existing playhead so
+      // note-only operations do not unexpectedly change the editing cursor.
+      if (!preserveSelectedNotePlayhead) {
+        seekPlayheadBeat(clamp(snapBeat(xToBeat(point.x)), 0, getTotalBeats()));
+      }
+    }
     if (area.name === "piano-roll" && !isMidiReferenceActive()) {
       const point = pointerToRoll(event);
       if (!findNoteAt(point.x, point.y)) {
         clearNoteSelection();
         drawRoll();
         updateChannelInfo();
-        closeContextMenu();
-        return;
       }
     }
     const factory = contextMenuRegistry.get(area.name) || contextMenuRegistry.get("app");
     const items = factory?.({ event, area, state }) || [];
-    renderContextMenu(items, event.clientX, event.clientY, area.name);
+    renderContextMenu(items, event.clientX, event.clientY, area.name, event);
   }
 
-  function renderContextMenu(items, x, y, areaName) {
+  function getContextMenuTitle(areaName, event = null) {
+    if (areaName === "piano-roll") {
+      if (isMidiReferenceActive()) return i18nText("context.source_notes");
+      const point = event ? pointerToRoll(event) : null;
+      const clicked = point ? findNoteAt(point.x, point.y) : null;
+      return i18nText(clicked ? "context.note_edit" : "context.channel_roll");
+    }
+    const keyByArea = {
+      app: "context.editor",
+      "piano-section": "context.piano_nav",
+      timeline: "context.timeline",
+      keyboard: "context.keyboard",
+      "overview-timeline": "context.overview",
+      "audio-lane": "context.audio_track",
+      "audio-source": "context.audio_source",
+      "channel-panel": "context.channel_list",
+      "channel-tabs": "context.channel_list",
+      "channel-tab": "context.channel_item",
+      "midi-reference-tab": "context.source_data_item",
+      "midi-reference": "context.source_data",
+      "midi-instrument": "context.source_instrument",
+      "channel-info": "context.channel_info",
+      history: "context.history",
+      "history-item": "context.history_item",
+      splitter: "context.layout",
+    };
+    return i18nText(keyByArea[areaName] || "context.editor");
+  }
+
+  function renderContextMenu(items, x, y, areaName, event = null) {
     elements.contextMenu.replaceChildren();
 
     const label = document.createElement("div");
     label.className = "menu-label";
-    label.textContent = `영역: ${areaName}`;
+    label.textContent = getContextMenuTitle(areaName, event);
     elements.contextMenu.append(label);
 
     for (const item of items) {
@@ -14579,6 +14967,147 @@
     return true;
   }
 
+  function deleteTimelineBeforeBeat(beat) {
+    const cutBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
+    if (cutBeat < CONFIG.minimumNoteBeat - 1e-7) {
+      showToast(i18nText("timeline.trim_nothing_before"));
+      return false;
+    }
+    rememberCurrentHistoryPlayhead(state.playhead.beat);
+    const resumePlayback = state.playback.running || state.playback.loading;
+    if (resumePlayback) stopPlayback(false);
+
+    // Keep audio placement consistent with the global timeline crop. Clips that
+    // cross the cut keep only their right-hand portion and advance source offset.
+    const tempoMapBeforeCut = createTempoTimeMap();
+    const nextAudioClips = [];
+    for (const clip of state.audioClips) {
+      const start = Math.max(0, Number(clip.startBeat) || 0);
+      const end = getAudioClipEndBeat(clip);
+      if (end <= cutBeat + 1e-7) {
+        if (String(state.activeAudioClipId) === String(clip.id)) state.activeAudioClipId = null;
+        continue;
+      }
+      if (start < cutBeat - 1e-7) {
+        const elapsedTimelineSeconds = Math.max(0,
+          beatToSecondsInTempoMap(cutBeat, tempoMapBeforeCut)
+          - beatToSecondsInTempoMap(start, tempoMapBeforeCut));
+        clip.sourceOffsetSeconds = Math.min(
+          Math.max(0, Number(clip.sourceDurationSeconds) || Infinity),
+          Math.max(0, Number(clip.sourceOffsetSeconds) || 0)
+            + elapsedTimelineSeconds * Math.max(0.01, Number(clip.playbackRate) || 1),
+        );
+        clip.durationBeat = Math.max(CONFIG.minimumNoteBeat, end - cutBeat);
+        clip.startBeat = 0;
+      } else {
+        clip.startBeat = Number(Math.max(0, start - cutBeat).toFixed(6));
+      }
+      nextAudioClips.push(clip);
+    }
+    state.audioClips = nextAudioClips;
+    if (!state.activeAudioClipId && state.activePanel === "audio") state.activePanel = "notes";
+
+    state.timeEdit = { beat: 0, scope: "all", channelId: null, preferredAction: "delete" };
+    const applied = deleteTrackSpaceAtPlayhead(cutBeat);
+    if (!applied) return false;
+    setPlayheadBeat(0, { stop: false });
+    rememberCurrentHistoryPlayhead(0);
+    elements.rollViewport.scrollLeft = 0;
+    showToast(i18nText("timeline.trim_before_done"));
+    if (resumePlayback) window.setTimeout(() => startPlayback(), 0);
+    return true;
+  }
+
+  function deleteTimelineAfterBeat(beat) {
+    const cursor = clamp(Number(beat) || 0, 0, getTotalBeats());
+    const totalBeats = getTotalBeats();
+    if (totalBeats - cursor < CONFIG.minimumNoteBeat - 1e-7) {
+      showToast(i18nText("timeline.trim_nothing_after"));
+      return false;
+    }
+    rememberCurrentHistoryPlayhead(state.playhead.beat);
+    const resumePlayback = state.playback.running || state.playback.loading;
+    if (resumePlayback) stopPlayback(false);
+    for (const channel of state.channels) {
+      const nextNotes = [];
+      for (const note of channel.notes || []) {
+        const start = Number(note.startBeat) || 0;
+        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        if (start >= cursor - 1e-7) {
+          state.selectedNoteIds.delete(note.id);
+          continue;
+        }
+        if (end > cursor + 1e-7) {
+          if (!trimNoteToBeat(note, cursor)) {
+            state.selectedNoteIds.delete(note.id);
+            continue;
+          }
+        }
+        nextNotes.push(note);
+      }
+      channel.notes = nextNotes;
+      state.channelNoteRuntime.delete(String(channel.id));
+    }
+    const nextAudioClips = [];
+    for (const clip of state.audioClips) {
+      const start = Math.max(0, Number(clip.startBeat) || 0);
+      const end = getAudioClipEndBeat(clip);
+      if (start >= cursor - 1e-7) {
+        if (String(state.activeAudioClipId) === String(clip.id)) state.activeAudioClipId = null;
+        continue;
+      }
+      if (end > cursor + 1e-7) {
+        clip.durationBeat = Math.max(CONFIG.minimumNoteBeat, cursor - start);
+      }
+      nextAudioClips.push(clip);
+    }
+    state.audioClips = nextAudioClips;
+    if (!state.activeAudioClipId && state.activePanel === "audio") state.activePanel = "notes";
+
+    state.tempos = state.tempos.filter((tempo) => tempo.fixed || Number(tempo.beat) < cursor - 1e-7);
+    state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, Number(cursor.toFixed(6)));
+    if (state.playhead.beat > cursor) state.playhead.beat = cursor;
+    ensureTimelineFitsViewport();
+    markDirty(i18nText("history.timeline_trim_after"));
+    rememberCurrentHistoryPlayhead(state.playhead.beat);
+    renderChannelTabs();
+    renderChannelEditor();
+    resizeAndDraw();
+    updateChannelInfo();
+    showToast(i18nText("timeline.trim_after_done"));
+    if (resumePlayback) window.setTimeout(() => startPlayback(), 0);
+    return true;
+  }
+
+  function historyEntryChannelIndex(entry) {
+    if (entry?.channelId == null) return -1;
+    return state.channels.findIndex((channel) => String(channel.id) === String(entry.channelId));
+  }
+
+  function viewHistoryEntryChannel(entry) {
+    const channelIndex = historyEntryChannelIndex(entry);
+    if (channelIndex < 0) return false;
+    selectChannel(channelIndex);
+    setSidebarTab("channels");
+    requestAnimationFrame(() => {
+      const target = [...(elements.channelTabs?.querySelectorAll("[data-channel-id]") || [])]
+        .find((item) => String(item.dataset.channelId) === String(entry.channelId));
+      target?.scrollIntoView({ block: "nearest" });
+      target?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
+    });
+    return true;
+  }
+
+  function movePlayheadToLastMeasure() {
+    const total = Math.max(CONFIG.beatsPerMeasure, getTotalBeats());
+    const lastMeasureBeat = Math.max(0, Math.floor((total - 1e-7) / CONFIG.beatsPerMeasure) * CONFIG.beatsPerMeasure);
+    seekPlayheadBeat(lastMeasureBeat);
+    if (elements.rollViewport) {
+      const targetLeft = Math.max(0, beatToX(lastMeasureBeat) - Math.max(0, elements.rollViewport.clientWidth * 0.25));
+      elements.rollViewport.scrollLeft = targetLeft;
+    }
+  }
+
   function registerDefaultContextMenus() {
     const commonItems = () => [
       { label: "새 파일", action: () => requestNewProject() },
@@ -14587,37 +15116,63 @@
     ];
 
     registerContextMenu("app", commonItems);
-    registerContextMenu("topbar", commonItems);
     registerContextMenu("piano-section", () => [
-      { label: "45% 전체 보기", action: () => { setZoom(0.45); elements.rollViewport.scrollLeft = 0; } },
-      { label: "100% 확대", action: () => setZoom(1) },
-      "separator",
       {
-        label: "첫 위치로 이동",
+        label: i18nText("timeline.move_first_measure"),
         action: () => {
           setPlayheadBeat(0, { stop: true });
           elements.rollViewport.scrollLeft = 0;
         },
       },
+      { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
     ]);
     registerContextMenu("timeline", ({ event }) => {
       const beat = timelineBeatFromPointer(event);
       const tempo = findTempoMarkerFromPointer(event);
-      const timeEditItem = { label: "마디/박자 공간 편집", action: () => openTimeEditDialog({ beat }) };
+      const selectedChannel = getActiveChannel();
+      const selectedChannelMeasureItems = [
+        {
+          label: i18nText("channel.measure_add"),
+          disabled: !selectedChannel || isMidiReferenceActive(),
+          action: () => openTimeEditDialog({ beat, scope: "channel", channelId: selectedChannel?.id, preferredAction: "insert" }),
+        },
+        {
+          label: i18nText("channel.measure_delete"),
+          disabled: !selectedChannel || isMidiReferenceActive(),
+          danger: true,
+          action: () => openTimeEditDialog({ beat, scope: "channel", channelId: selectedChannel?.id, preferredAction: "delete" }),
+        },
+      ];
+      const trimBeforeItem = {
+        label: i18nText("timeline.trim_before"),
+        disabled: beat <= 0,
+        danger: true,
+        action: () => deleteTimelineBeforeBeat(beat),
+      };
+      const trimAfterItem = {
+        label: i18nText("timeline.trim_after"),
+        disabled: beat >= getTotalBeats() - CONFIG.minimumNoteBeat,
+        danger: true,
+        action: () => deleteTimelineAfterBeat(beat),
+      };
       if (isMidiReferenceActive()) {
         return [
           tempo
             ? { label: `MIDI 템포 ${tempo.bpm} · 읽기 전용`, disabled: true }
             : { label: "MIDI 템포 맵 · 읽기 전용", disabled: true },
-          timeEditItem,
+          ...selectedChannelMeasureItems,
+          "separator",
+          trimBeforeItem,
+          trimAfterItem,
           "separator",
           {
-            label: "0 마디 시작으로 이동",
+            label: i18nText("timeline.move_first_measure"),
             action: () => {
               seekPlayheadBeat(0);
               elements.rollViewport.scrollLeft = 0;
             },
           },
+          { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
         ];
       }
       if (tempo?.fixed) {
@@ -14626,7 +15181,16 @@
           { label: "템포 값 변경", action: () => editTempo(tempo) },
           { label: "위치 고정 · 이동/삭제 불가", disabled: true },
           "separator",
-          timeEditItem,
+          ...selectedChannelMeasureItems,
+          "separator",
+          trimBeforeItem,
+          trimAfterItem,
+          "separator",
+          {
+            label: i18nText("timeline.move_first_measure"),
+            action: () => { seekPlayheadBeat(0); elements.rollViewport.scrollLeft = 0; },
+          },
+          { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
         ];
       }
       if (tempo) {
@@ -14635,20 +15199,33 @@
           { label: "템포 값 변경", action: () => editTempo(tempo) },
           { label: "템포 삭제", danger: true, action: () => deleteTempo(tempo) },
           "separator",
-          timeEditItem,
+          ...selectedChannelMeasureItems,
+          "separator",
+          trimBeforeItem,
+          trimAfterItem,
+          "separator",
+          {
+            label: i18nText("timeline.move_first_measure"),
+            action: () => { seekPlayheadBeat(0); elements.rollViewport.scrollLeft = 0; },
+          },
+          { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
         ];
       }
       return [
-        { label: `${beat.toFixed(3)} beat에 템포 추가`, disabled: beat <= 0, action: () => addTempoAtBeat(beat) },
-        timeEditItem,
+        { label: i18nText("timeline.add_tempo_measure"), disabled: beat <= 0, action: () => addTempoAtBeat(beat) },
+        ...selectedChannelMeasureItems,
+        "separator",
+        trimBeforeItem,
+        trimAfterItem,
         "separator",
         {
-          label: "0 마디 시작으로 이동",
+          label: i18nText("timeline.move_first_measure"),
           action: () => {
             seekPlayheadBeat(0);
             elements.rollViewport.scrollLeft = 0;
           },
         },
+        { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
       ];
     });
     registerContextMenu("keyboard", ({ event }) => {
@@ -14684,10 +15261,15 @@
       }
       const point = pointerToRoll(event);
       const clicked = findNoteAt(point.x, point.y);
+      const channelTools = [
+        { label: i18nText("timeline.add_measure_beat"), action: () => openTimeEditDialog({ beat: state.playhead.beat, scope: "channel", channelId: getActiveChannel()?.id, preferredAction: "insert" }) },
+        { label: i18nText("timeline.delete_measure_beat"), danger: true, action: () => openTimeEditDialog({ beat: state.playhead.beat, scope: "channel", channelId: getActiveChannel()?.id, preferredAction: "delete" }) },
+      ];
       if (!clicked) {
-        return state.noteClipboard?.notes?.length
-          ? [{ label: "재생선 위치에 붙여넣기", action: pasteNotesFromClipboard }]
-          : [];
+        return [
+          ...(state.noteClipboard?.notes?.length ? [{ label: i18nText("note.paste_playhead"), action: pasteNotesFromClipboard }, "separator"] : []),
+          ...channelTools,
+        ];
       }
       if (!state.selectedNoteIds.has(clicked.id)) {
         selectOnlyNote(clicked.id);
@@ -14696,17 +15278,17 @@
       }
       const mergePlan = getSelectedSamePitchMergePlan();
       return [
-        { label: "선택 노트 복사", action: copySelectedNotes },
-        { label: "선택 노트 잘라내기", action: cutSelectedNotes },
-        { label: "재생선 위치에 붙여넣기", action: pasteNotesFromClipboard },
-        { label: "선택 노트 볼륨 수정", action: openNoteVolumeDialog },
+        { label: i18nText("context.action.note_copy"), action: copySelectedNotes },
+        { label: i18nText("context.action.note_cut"), action: cutSelectedNotes },
+        { label: i18nText("context.action.note_volume_edit"), action: openNoteVolumeDialog },
+        { label: i18nText("context.action.note_split"), action: openNoteSplitDialog },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         "separator",
-        { label: "왼쪽으로 선택 확장 (Ctrl + ←)", action: () => extendSelectedNotesToSide(-1) },
-        { label: "오른쪽으로 선택 확장 (Ctrl + →)", action: () => extendSelectedNotesToSide(1) },
+        { label: i18nText("context.action.note_extend_left"), action: () => extendSelectedNotesToSide(-1) },
+        { label: i18nText("context.action.note_extend_right"), action: () => extendSelectedNotesToSide(1) },
         "separator",
         {
-          label: state.selectedNoteIds.size > 1 ? `선택 노트 ${state.selectedNoteIds.size}개 삭제` : "선택 노트 삭제",
+          label: i18nText("context.action.note_delete"),
           danger: true,
           action: deleteSelectedNote,
         },
@@ -14727,31 +15309,24 @@
     registerContextMenu("audio-lane", buildAudioContextItems);
     registerContextMenu("audio-source", buildAudioContextItems);
 
-    registerContextMenu("channel-panel", () => [
-      { label: "채널 추가", action: addChannel },
-      { label: "현재 채널 전체 복사", disabled: !getActiveChannel()?.notes.length, action: copyActiveChannelNotes },
-      { label: "재생선 위치에 붙여넣기", action: pasteNotesFromClipboard },
+    const channelListContextItems = () => [
+      { label: i18nText("channel.merge"), disabled: state.channels.length < 2, action: openChannelMergeDialog },
+      { label: i18nText("channel.add"), action: addChannel },
+      { label: i18nText("channel.delete"), danger: true, action: openChannelDeleteDialog },
       "separator",
-      { label: "현재 채널 삭제", danger: true, action: () => requestDeleteChannel(state.activeChannel) },
-      { label: "현재 채널 비우기", danger: true, action: clearActiveChannel },
-      { label: "첫 채널로 이동", action: () => selectChannel(0) },
-    ]);
-    registerContextMenu("channel-tabs", () => [
-      { label: "채널 추가", action: addChannel },
-      { label: "이름 초기화", action: () => renameChannel(state.activeChannel, defaultChannelName(getActiveChannel())) },
-      { label: "히스토리 보기", action: () => setSidebarTab("history") },
-    ]);
+      { label: i18nText("channel.go_first"), disabled: !state.channels.length, action: () => selectChannel(0) },
+      { label: i18nText("channel.go_last"), disabled: !state.channels.length, action: () => selectChannel(Math.max(0, state.channels.length - 1)) },
+    ];
+    registerContextMenu("channel-panel", channelListContextItems);
+    registerContextMenu("channel-tabs", channelListContextItems);
     registerContextMenu("channel-tab", ({ area }) => {
       const index = Number(area.element.dataset.channelIndex);
       const channel = state.channels[index];
       return [
-        { label: "이 채널 선택", action: () => selectChannel(index) },
-        { label: channel?.visible === false ? "피아노롤에 표시" : "피아노롤에서 숨기기", action: () => channel && setChannelVisibleById(channel.id, channel.visible === false) },
-        { label: "채널 이름 변경", action: () => promptRenameChannel(index) },
-        { label: "채널 색상 변경", action: () => openChannelColorPicker(index) },
+        { label: i18nText("channel.edit_2"), action: () => channel && openChannelEditDialog(channel.id) },
         { label: "채널 전체 노트 복사", disabled: !channel?.notes.length, action: () => { selectChannel(index); copyActiveChannelNotes(); } },
         { label: "채널 전체 노트 잘라내기", disabled: !channel?.notes.length, action: () => { selectChannel(index); cutActiveChannelNotes(); } },
-        { label: "재생선 위치에 붙여넣기", action: () => { selectChannel(index); pasteNotesFromClipboard(); } },
+        { label: channel?.visible === false ? i18nText("context.action.note_show") : i18nText("context.action.note_hide"), action: () => channel && setChannelVisibleById(channel.id, channel.visible === false) },
         { label: channel?.muted ? "음소거 해제" : "음소거", action: () => channel && setChannelMutedById(channel.id, !channel.muted) },
         "separator",
         { label: "채널 비우기", danger: true, action: () => { selectChannel(index); clearActiveChannel(); } },
@@ -14789,9 +15364,25 @@
     });
 
     registerContextMenu("channel-info", () => [
-      { label: "정보 새로고침", action: updateChannelInfo },
-      { label: "현재 채널 이름 변경", action: () => promptRenameChannel(state.activeChannel) },
+      { label: i18nText("channel.edit_2"), action: () => { const channel = getActiveChannel(); if (channel) openChannelEditDialog(channel.id); } },
     ]);
+    registerContextMenu("history", () => [
+      { label: i18nText("history.undo"), disabled: state.history.undoStack.length === 0, action: () => undoHistory() },
+      { label: i18nText("history.redo"), disabled: state.history.redoStack.length === 0, action: () => redoHistory() },
+    ]);
+    registerContextMenu("history-item", ({ area }) => {
+      const index = Number(area.element.dataset.historyIndex);
+      const entries = getOrderedHistoryEntries();
+      const entry = entries[index];
+      const currentIndex = state.history.undoStack.length;
+      return [
+        {
+          label: i18nText("context.action.go_history"),
+          disabled: !entry || index === currentIndex,
+          action: () => entry && jumpToHistoryIndex(index),
+        },
+      ];
+    });
     registerContextMenu("splitter", () => []);
   }
 
@@ -15695,11 +16286,26 @@
     elements.noteVolumeBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.noteVolumeBackdrop) closeNoteVolumeDialog();
     });
+    elements.noteSplitCloseButton?.addEventListener("click", closeNoteSplitDialog);
+    elements.noteSplitCancelButton?.addEventListener("click", closeNoteSplitDialog);
+    elements.noteSplitApplyButton?.addEventListener("click", applySplitSelectedNotes);
+    elements.noteSplitUnitInput?.addEventListener("input", updateNoteSplitPreview);
+    elements.noteSplitUnitInput?.addEventListener("blur", () => {
+      normalizeNoteSplitInput({ fallback: true });
+      updateNoteSplitPreview();
+    });
+    elements.noteSplitUnitInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { event.preventDefault(); applySplitSelectedNotes(); }
+    });
+    elements.noteSplitBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.noteSplitBackdrop) closeNoteSplitDialog();
+    });
     elements.tempoEditorCloseButton?.addEventListener("click", closeTempoEditor);
     elements.tempoEditorCancelButton?.addEventListener("click", closeTempoEditor);
     elements.tempoEditorApplyButton?.addEventListener("click", applyTempoEditor);
     elements.tempoEditorDeleteButton?.addEventListener("click", deleteTempoFromEditor);
-    elements.measureSpaceButton?.addEventListener("click", () => openTimeEditDialog());
+    elements.measureSpaceInsertButton?.addEventListener("click", () => openTimeEditDialog({ preferredAction: "insert" }));
+    elements.measureSpaceDeleteButton?.addEventListener("click", () => openTimeEditDialog({ preferredAction: "delete" }));
     elements.timeEditCloseButton?.addEventListener("click", closeTimeEditDialog);
     elements.timeEditCancelButton?.addEventListener("click", closeTimeEditDialog);
     elements.timeEditInsertButton?.addEventListener("click", () => applyTimeEdit("insert"));
@@ -15722,7 +16328,7 @@
       input?.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
-          applyTimeEdit("insert");
+          applyTimeEdit(state.timeEdit?.preferredAction === "delete" ? "delete" : "insert");
         }
       });
     }
@@ -15797,6 +16403,8 @@
           closeMidiImportDialog();
           closeMidiTransferDialog();
           closeNoteVolumeDialog();
+          closeNoteSplitDialog();
+          closeChannelShiftDialog();
           closeTempoEditor();
           closeTimeEditDialog();
         }
@@ -15876,6 +16484,8 @@
         closeMidiImportDialog();
         closeMidiTransferDialog();
         closeNoteVolumeDialog();
+        closeNoteSplitDialog();
+        closeChannelShiftDialog();
         closeTempoEditor();
         closeTimeEditDialog();
       }
