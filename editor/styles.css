@@ -533,7 +533,7 @@ textarea:focus-visible,
 .midi-summary strong { color: var(--text); }
 
 .context-menu { position: fixed; z-index: 1600; min-width: 210px; max-width: calc(100vw - 12px); padding: 6px; border: 1px solid var(--menu-border); border-radius: 10px; background: var(--menu-bg); box-shadow: 0 14px 38px var(--shadow); backdrop-filter: blur(10px); }
-.context-menu button { width: 100%; min-height: 38px; display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent; text-align: left; font-weight: 400; }
+.context-menu button { width: 100%; min-height: 38px; display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent; text-align: left; font-size: 13px; font-weight: 400; }
 .context-menu button:hover { background: var(--menu-hover); }
 .context-menu button.danger { color: #ff9aa5; }
 .context-menu .menu-separator { height: 1px; margin: 5px 3px; background: var(--line); }
@@ -5526,15 +5526,15 @@ button {
   line-height: 1;
 }
 
-/* fixed54: time-space dialog action language. */
+/* fixed105: measure delete is a destructive action, so use the shared danger red language. */
 .time-edit-delete-button {
-  border-color: color-mix(in srgb, #4f8fe8 72%, var(--control-border)) !important;
-  background: color-mix(in srgb, #4f8fe8 22%, var(--control-bg)) !important;
-  color: color-mix(in srgb, #a8d2ff 86%, var(--text)) !important;
+  border-color: color-mix(in srgb, var(--danger) 72%, var(--control-border)) !important;
+  background: color-mix(in srgb, var(--danger) 22%, var(--control-bg)) !important;
+  color: color-mix(in srgb, #ffd5da 88%, var(--text)) !important;
   font-weight: 800;
 }
 .time-edit-delete-button:hover:not(:disabled) {
-  background: color-mix(in srgb, #4f8fe8 34%, var(--control-hover)) !important;
+  background: color-mix(in srgb, var(--danger) 36%, var(--control-hover)) !important;
 }
 .time-edit-insert-button {
   border-color: color-mix(in srgb, #22c55e 72%, var(--control-border)) !important;
@@ -5546,8 +5546,9 @@ button {
   background: color-mix(in srgb, #22c55e 34%, var(--control-hover)) !important;
 }
 :root[data-theme="light"] .time-edit-delete-button {
-  color: #174f97 !important;
-  background: color-mix(in srgb, #4f8fe8 16%, #ffffff) !important;
+  color: #a51f34 !important;
+  border-color: color-mix(in srgb, var(--danger) 66%, var(--control-border)) !important;
+  background: color-mix(in srgb, var(--danger) 15%, #ffffff) !important;
 }
 :root[data-theme="light"] .time-edit-insert-button {
   color: #15783a !important;
@@ -6192,7 +6193,7 @@ a[class*="button"]:hover {
   color: #ffffff !important;
 }
 :root[data-theme="light"] .time-edit-delete-button {
-  color: #0c448b !important;
+  color: #9b2034 !important;
 }
 :root[data-theme="light"] .time-edit-insert-button,
 :root[data-theme="light"] #channelMergeApplyButton:not(:disabled) {
