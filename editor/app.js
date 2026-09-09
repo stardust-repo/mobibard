@@ -3262,10 +3262,11 @@
           context.textBaseline = "bottom";
           context.lineJoin = "round";
           context.lineWidth = 2;
-          // In dark mode use the inverse treatment: dark glyph with a bright outline.
-          // This keeps V labels readable against both the canvas and saturated channel colors.
-          context.strokeStyle = "rgba(255,255,255,.94)";
-          context.fillStyle = "#101923";
+          // Keep the V label readable across both themes:
+          // dark theme = white glyph with black outline, light theme = dark glyph with white outline.
+          const darkThemeVolumeLabel = state.theme !== "light";
+          context.strokeStyle = darkThemeVolumeLabel ? "rgba(0,0,0,.96)" : "rgba(255,255,255,.94)";
+          context.fillStyle = darkThemeVolumeLabel ? "#ffffff" : "#101923";
           const volumeTextX = x + 1;
           const volumeTextY = y - 1;
           context.strokeText(volumeLabel, volumeTextX, volumeTextY);
@@ -12613,11 +12614,11 @@
   function openTimeEditDialog({ beat = state.playhead.beat, scope = "all", channelId = null, preferredAction = null } = {}) {
     const targetChannel = state.channels.find((channel) => String(channel.id) === String(channelId ?? getActiveChannel()?.id)) || null;
     const normalizedAction = preferredAction === "insert" || preferredAction === "delete" ? preferredAction : null;
-    const channelScoped = scope === "channel" && Boolean(targetChannel) && !isMidiReferenceActive();
+    const channelScopeAvailable = Boolean(targetChannel) && !isMidiReferenceActive();
     state.timeEdit = {
       beat: clamp(Number(beat) || 0, 0, getTotalBeats()),
-      scope: channelScoped ? "channel" : "all",
-      channelId: targetChannel?.id ?? null,
+      scope: "all",
+      channelId: channelScopeAvailable ? targetChannel.id : null,
       preferredAction: normalizedAction,
     };
     if (elements.timeEditTitle) {
@@ -12628,7 +12629,7 @@
           : i18nText("timeline.edit_measure");
     }
     if (elements.timeEditSelectedChannelOnly) {
-      elements.timeEditSelectedChannelOnly.checked = channelScoped;
+      elements.timeEditSelectedChannelOnly.checked = false;
     }
     updateTimeEditScopeUi();
     if (elements.timeEditMeasureInput) elements.timeEditMeasureInput.value = "1";
@@ -15250,7 +15251,9 @@
     ]);
     registerContextMenu("timeline", ({ event }) => {
       const beat = timelineBeatFromPointer(event);
-      const tempo = findTempoMarkerFromPointer(event);
+      const markerTempo = findTempoMarkerFromPointer(event);
+      const tempoAtBeat = getSortedTempos().find((item) => Math.abs((Number(item.beat) || 0) - beat) < 1e-7) || null;
+      const tempo = markerTempo || tempoAtBeat;
       const selectedChannel = getActiveChannel();
       const selectedChannelMeasureItems = [
         {
@@ -15307,8 +15310,7 @@
       }
       if (tempo?.fixed) {
         return [
-          { label: `0번 · ${tempo.bpm}`, disabled: true },
-          { label: "템포 값 변경", action: () => editTempo(tempo) },
+          { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
           { label: "위치 고정 · 이동/삭제 불가", disabled: true },
           "separator",
           ...selectedChannelMeasureItems,
@@ -15325,9 +15327,8 @@
       }
       if (tempo) {
         return [
-          { label: `${tempo.bpm}`, disabled: true },
-          { label: "템포 값 변경", action: () => editTempo(tempo) },
-          { label: "템포 삭제", danger: true, action: () => deleteTempo(tempo) },
+          { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
+          { label: i18nText("tempo.delete"), danger: true, action: () => deleteTempo(tempo) },
           "separator",
           ...selectedChannelMeasureItems,
           "separator",
@@ -15380,6 +15381,8 @@
         },
         { label: `${noteLabel(pitch)} 행으로 이동`, action: () => { elements.rollViewport.scrollTop = pitchToY(pitch); } },
         { label: "중앙 C로 이동", action: () => { elements.rollViewport.scrollTop = Math.max(0, pitchToY(60) - 120); } },
+        "separator",
+        { label: i18nText("soundbank.change"), action: openEditorSoundFontDialog },
       ];
     });
     registerContextMenu("piano-roll", ({ event }) => {
@@ -15412,7 +15415,9 @@
       ];
       if (!clicked) {
         return [
-          ...(state.noteClipboard?.notes?.length ? [{ label: i18nText("note.paste_playhead"), action: pasteNotesFromClipboard }, "separator"] : []),
+          { label: i18nText("channel.select_all_note"), disabled: !getActiveChannel()?.notes?.length, action: selectAllNotes },
+          ...(state.noteClipboard?.notes?.length ? [{ label: i18nText("note.paste_playhead"), action: pasteNotesFromClipboard }] : []),
+          "separator",
           ...channelTools,
           "separator",
           ...trimTools,
@@ -15439,8 +15444,6 @@
           danger: true,
           action: deleteSelectedNote,
         },
-        "separator",
-        ...trimTools,
       ];
     });
 
@@ -15473,8 +15476,8 @@
       const channel = state.channels[index];
       return [
         { label: i18nText("channel.edit_2"), action: () => channel && openChannelEditDialog(channel.id) },
-        { label: "채널 전체 노트 복사", disabled: !channel?.notes.length, action: () => { selectChannel(index); copyActiveChannelNotes(); } },
-        { label: "채널 전체 노트 잘라내기", disabled: !channel?.notes.length, action: () => { selectChannel(index); cutActiveChannelNotes(); } },
+        { label: i18nText("channel.copy_all_note"), disabled: !channel?.notes.length, action: () => { selectChannel(index); copyActiveChannelNotes(); } },
+        { label: i18nText("channel.cut_all_note"), disabled: !channel?.notes.length, action: () => { selectChannel(index); cutActiveChannelNotes(); } },
         { label: channel?.visible === false ? i18nText("context.action.note_show") : i18nText("context.action.note_hide"), action: () => channel && setChannelVisibleById(channel.id, channel.visible === false) },
         { label: channel?.muted ? "음소거 해제" : "음소거", action: () => channel && setChannelMutedById(channel.id, !channel.muted) },
         "separator",
@@ -15514,6 +15517,8 @@
 
     registerContextMenu("channel-info", () => [
       { label: i18nText("channel.edit_2"), action: () => { const channel = getActiveChannel(); if (channel) openChannelEditDialog(channel.id); } },
+      "separator",
+      { label: i18nText("soundbank.change"), action: openEditorSoundFontDialog },
     ]);
     registerContextMenu("history", () => [
       { label: i18nText("history.undo"), disabled: state.history.undoStack.length === 0, action: () => undoHistory() },
@@ -15666,12 +15671,29 @@
 
   function handleGlobalSelectAllShortcut(event) {
     const commandKey = event.ctrlKey || event.metaKey;
+    const selectAllCommand = commandKey
+      && !event.altKey
+      && !event.shiftKey
+      && (event.code === "KeyA" || String(event.key || "").toLowerCase() === "a");
+
+    // Context/File/Edit menus and the shortcut-help popup are keyboard-modal for
+    // Ctrl/Cmd+A. Skipping the editor shortcut alone would let the browser's
+    // native Select All highlight the menu/popup text. Consume it completely.
+    const blockSelectAll = [
+      elements.contextMenu,
+      elements.fileMenu,
+      elements.editMenu,
+      elements.shortcutHelpBackdrop,
+    ].some(isActuallyVisiblePopupElement);
+    if (selectAllCommand && blockSelectAll) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return true;
+    }
+
     if (
       event.defaultPrevented
-      || !commandKey
-      || event.altKey
-      || event.shiftKey
-      || !(event.code === "KeyA" || String(event.key || "").toLowerCase() === "a")
+      || !selectAllCommand
       || isPopupLikeUiOpen()
     ) {
       return false;
