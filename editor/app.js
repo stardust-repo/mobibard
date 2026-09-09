@@ -390,6 +390,13 @@
     tempoEditorCancelButton: document.querySelector("#tempoEditorCancelButton"),
     tempoEditorApplyButton: document.querySelector("#tempoEditorApplyButton"),
     tempoEditorDeleteButton: document.querySelector("#tempoEditorDeleteButton"),
+    tempoSimplifyBackdrop: document.querySelector("#tempoSimplifyBackdrop"),
+    tempoSimplifyThresholdInput: document.querySelector("#tempoSimplifyThresholdInput"),
+    tempoSimplifyPreserveExtrema: document.querySelector("#tempoSimplifyPreserveExtrema"),
+    tempoSimplifySummary: document.querySelector("#tempoSimplifySummary"),
+    tempoSimplifyCloseButton: document.querySelector("#tempoSimplifyCloseButton"),
+    tempoSimplifyCancelButton: document.querySelector("#tempoSimplifyCancelButton"),
+    tempoSimplifyApplyButton: document.querySelector("#tempoSimplifyApplyButton"),
     timeEditBackdrop: document.querySelector("#timeEditBackdrop"),
     timeEditTitle: document.querySelector("#timeEditTitle"),
     timeEditPosition: document.querySelector("#timeEditPosition"),
@@ -465,6 +472,7 @@
     tempoDrag: null,
     tempoTouchTap: null,
     tempoEditor: { mode: null, tempoId: null, beat: 0 },
+    tempoSimplify: { maxBpmDeltaExclusive: 5, preserveExtrema: true },
     timeEdit: { beat: 0, scope: "all", channelId: null, preferredAction: null },
     suppressContextMenuUntil: 0,
     suppressNextContextMenu: false,
@@ -13084,6 +13092,171 @@
   }
 
 
+  function closeTempoSimplifyDialog() {
+    if (elements.tempoSimplifyBackdrop) elements.tempoSimplifyBackdrop.hidden = true;
+  }
+
+  function getFirstEditorNoteBeat() {
+    let firstBeat = Infinity;
+    for (const channel of state.channels || []) {
+      for (const note of channel.notes || []) {
+        const beat = Number(note.startBeat);
+        if (Number.isFinite(beat)) firstBeat = Math.min(firstBeat, Math.max(0, beat));
+      }
+    }
+    return Number.isFinite(firstBeat) ? firstBeat : 0;
+  }
+
+  function analyzeTempoSimplification({ maxBpmDeltaExclusive = 5, preserveExtrema = true } = {}) {
+    const threshold = Math.max(1, Number(maxBpmDeltaExclusive) || 5);
+    const source = [...(state.tempos || [])]
+      .map((tempo) => ({ ...tempo, beat: Math.max(0, Number(tempo.beat) || 0), bpm: Number(tempo.bpm) || 120 }))
+      .sort((left, right) => left.beat - right.beat || (Number(left.id) || 0) - (Number(right.id) || 0));
+
+    const grouped = [];
+    for (const tempo of source) {
+      let group = grouped[grouped.length - 1];
+      if (!group || Math.abs(group.beat - tempo.beat) > 1e-7) {
+        group = { beat: tempo.beat, tempos: [] };
+        grouped.push(group);
+      }
+      group.tempos.push(tempo);
+    }
+
+    const timeline = grouped.map((group) => {
+      const winner = group.tempos[group.tempos.length - 1];
+      return {
+        beat: group.beat,
+        bpm: winner.bpm,
+        fixed: group.tempos.some((tempo) => Boolean(tempo.fixed)),
+        tempos: group.tempos,
+      };
+    });
+
+    if (!timeline.length) {
+      return { removedIds: new Set(), removedCount: 0, beforeCount: 0, afterCount: 0, minBpm: 120, maxBpm: 120 };
+    }
+
+    // Player와 동일하게 선행 무음용 T120 -> 첫 노트 위치의 실제 템포 복원은
+    // 음악적 템포 비교 기준에서 제외합니다.
+    const firstNoteBeat = getFirstEditorNoteBeat();
+    const firstTempo = timeline[0] || null;
+    const nextTempo = timeline[1] || null;
+    const hasLeadingDefaultTempoPadding = Boolean(
+      firstTempo
+      && Math.abs(firstTempo.beat) < 1e-7
+      && firstTempo.bpm === 120
+      && firstNoteBeat > 1e-7
+      && nextTempo
+      && Math.abs(nextTempo.beat - firstNoteBeat) < 1e-7
+    );
+
+    const comparisonTimeline = hasLeadingDefaultTempoPadding ? timeline.slice(1) : timeline;
+    const comparisonBpms = comparisonTimeline.length
+      ? comparisonTimeline.map((tempo) => tempo.bpm)
+      : timeline.map((tempo) => tempo.bpm);
+    const minBpm = Math.min(...comparisonBpms);
+    const maxBpm = Math.max(...comparisonBpms);
+    const removedGroups = [];
+    let previousRetained = null;
+
+    for (let index = 0; index < timeline.length; index++) {
+      const tempo = timeline[index];
+      if (hasLeadingDefaultTempoPadding && index === 0) continue;
+      if (!previousRetained) {
+        previousRetained = tempo;
+        continue;
+      }
+      const isExtrema = Boolean(preserveExtrema) && (tempo.bpm === minBpm || tempo.bpm === maxBpm);
+      const isSmallChange = Math.abs(tempo.bpm - previousRetained.bpm) < threshold;
+      if (!tempo.fixed && !isExtrema && isSmallChange) {
+        removedGroups.push(tempo);
+        continue;
+      }
+      previousRetained = tempo;
+    }
+
+    const removedIds = new Set();
+    for (const group of removedGroups) {
+      for (const tempo of group.tempos || []) {
+        if (!tempo.fixed) removedIds.add(String(tempo.id));
+      }
+    }
+    return {
+      removedIds,
+      removedCount: removedIds.size,
+      beforeCount: source.length,
+      afterCount: Math.max(0, source.length - removedIds.size),
+      minBpm,
+      maxBpm,
+      maxBpmDeltaExclusive: threshold,
+      preserveExtrema: Boolean(preserveExtrema),
+      ignoredLeadingDefaultTempoForComparison: hasLeadingDefaultTempoPadding,
+    };
+  }
+
+  function readTempoSimplifyOptionsFromUi() {
+    const rawThreshold = Number(elements.tempoSimplifyThresholdInput?.value);
+    const threshold = Number.isFinite(rawThreshold) ? Math.round(rawThreshold) : 5;
+    return {
+      maxBpmDeltaExclusive: clamp(threshold, 1, 255),
+      preserveExtrema: elements.tempoSimplifyPreserveExtrema?.checked !== false,
+    };
+  }
+
+  function updateTempoSimplifySummary() {
+    if (!elements.tempoSimplifySummary) return;
+    const options = readTempoSimplifyOptionsFromUi();
+    const analysis = analyzeTempoSimplification(options);
+    elements.tempoSimplifySummary.textContent = i18nText("tempo.simplify_preview", [
+      analysis.beforeCount.toLocaleString(document.documentElement.lang || undefined),
+      analysis.afterCount.toLocaleString(document.documentElement.lang || undefined),
+      analysis.removedCount.toLocaleString(document.documentElement.lang || undefined),
+    ]);
+  }
+
+  function openTempoSimplifyDialog() {
+    if (isMidiReferenceActive()) {
+      showToast(i18nText("midi.tempo_tab_readonly"));
+      return false;
+    }
+    if (!elements.tempoSimplifyBackdrop) return false;
+    const options = state.tempoSimplify || { maxBpmDeltaExclusive: 5, preserveExtrema: true };
+    elements.tempoSimplifyThresholdInput.value = String(Math.max(1, Math.round(Number(options.maxBpmDeltaExclusive) || 5)));
+    elements.tempoSimplifyPreserveExtrema.checked = options.preserveExtrema !== false;
+    updateTempoSimplifySummary();
+    elements.tempoSimplifyBackdrop.hidden = false;
+    requestAnimationFrame(() => {
+      elements.tempoSimplifyThresholdInput?.focus();
+      elements.tempoSimplifyThresholdInput?.select();
+    });
+    return true;
+  }
+
+  function applyTempoSimplification() {
+    const options = readTempoSimplifyOptionsFromUi();
+    if (elements.tempoSimplifyThresholdInput) elements.tempoSimplifyThresholdInput.value = String(options.maxBpmDeltaExclusive);
+    state.tempoSimplify = { ...options };
+    const analysis = analyzeTempoSimplification(options);
+    if (!analysis.removedCount) {
+      updateTempoSimplifySummary();
+      showToast(i18nText("tempo.simplify_no_changes"));
+      return false;
+    }
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    state.tempos = state.tempos.filter((tempo) => !analysis.removedIds.has(String(tempo.id)));
+    closeTempoSimplifyDialog();
+    shrinkTimelineToContent();
+    markDirty(i18nText("history.tempo_simplify"));
+    drawRoll();
+    drawTimeline();
+    updateChannelInfo();
+    updatePlaybackTimeInfo();
+    showToast(i18nText("tempo.simplify_done", [analysis.removedCount.toLocaleString(document.documentElement.lang || undefined)]));
+    return true;
+  }
+
+
   const ROW_HEIGHT_OPTIONS = [8, 10, 12, 14, 16];
 
   function normalizeRowHeight(value) {
@@ -15266,6 +15439,10 @@
       const tempoAtBeat = getSortedTempos().find((item) => Math.abs((Number(item.beat) || 0) - beat) < 1e-7) || null;
       const tempo = markerTempo || tempoAtBeat;
       const selectedChannel = getActiveChannel();
+      const tempoSimplifyItem = {
+        label: i18nText("tempo.simplify"),
+        action: openTempoSimplifyDialog,
+      };
       const selectedChannelMeasureItems = [
         {
           label: i18nText("timeline.add_measure_beat"),
@@ -15323,6 +15500,7 @@
         return [
           { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
           { label: "위치 고정 · 이동/삭제 불가", disabled: true },
+          tempoSimplifyItem,
           "separator",
           ...selectedChannelMeasureItems,
           "separator",
@@ -15340,6 +15518,7 @@
         return [
           { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
           { label: i18nText("tempo.delete"), danger: true, action: () => deleteTempo(tempo) },
+          tempoSimplifyItem,
           "separator",
           ...selectedChannelMeasureItems,
           "separator",
@@ -15355,6 +15534,7 @@
       }
       return [
         { label: i18nText("timeline.add_tempo_measure"), disabled: beat <= 0, action: () => addTempoAtBeat(beat) },
+        tempoSimplifyItem,
         ...selectedChannelMeasureItems,
         "separator",
         trimBeforeItem,
@@ -16490,6 +16670,22 @@
     elements.tempoEditorCancelButton?.addEventListener("click", closeTempoEditor);
     elements.tempoEditorApplyButton?.addEventListener("click", applyTempoEditor);
     elements.tempoEditorDeleteButton?.addEventListener("click", deleteTempoFromEditor);
+    elements.tempoSimplifyCloseButton?.addEventListener("click", closeTempoSimplifyDialog);
+    elements.tempoSimplifyCancelButton?.addEventListener("click", closeTempoSimplifyDialog);
+    elements.tempoSimplifyApplyButton?.addEventListener("click", applyTempoSimplification);
+    elements.tempoSimplifyThresholdInput?.addEventListener("input", updateTempoSimplifySummary);
+    elements.tempoSimplifyPreserveExtrema?.addEventListener("change", updateTempoSimplifySummary);
+    elements.tempoSimplifyThresholdInput?.addEventListener("blur", () => {
+      const options = readTempoSimplifyOptionsFromUi();
+      if (elements.tempoSimplifyThresholdInput) elements.tempoSimplifyThresholdInput.value = String(options.maxBpmDeltaExclusive);
+      updateTempoSimplifySummary();
+    });
+    elements.tempoSimplifyThresholdInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { event.preventDefault(); applyTempoSimplification(); }
+    });
+    elements.tempoSimplifyBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.tempoSimplifyBackdrop) closeTempoSimplifyDialog();
+    });
     elements.measureSpaceInsertButton?.addEventListener("click", () => openTimeEditDialog({ preferredAction: "insert" }));
     elements.measureSpaceDeleteButton?.addEventListener("click", () => openTimeEditDialog({ preferredAction: "delete" }));
     elements.timeEditCloseButton?.addEventListener("click", closeTimeEditDialog);
@@ -16593,6 +16789,7 @@
           closeNoteSplitDialog();
           closeChannelShiftDialog();
           closeTempoEditor();
+          closeTempoSimplifyDialog();
           closeTimeEditDialog();
         }
         return;
@@ -16674,6 +16871,7 @@
         closeNoteSplitDialog();
         closeChannelShiftDialog();
         closeTempoEditor();
+        closeTempoSimplifyDialog();
         closeTimeEditDialog();
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {

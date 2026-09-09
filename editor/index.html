@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260909-mml-export-layout1";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260909-tempo-simplify1";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.3.0&amp;rev=20260909-mml-export-layout1"></script>
+<script src="js/language-manager.js?v=5.3.0&amp;rev=20260909-tempo-simplify1"></script>
 <title data-i18n="app.title">모비바드 v5.3</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260909-channel-arrow-focus1" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260909-tempo-simplify1" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -478,6 +478,19 @@
 <div class="tempo-editor-actions"><button class="danger-button" hidden="" id="tempoEditorDeleteButton" type="button" data-i18n="action.delete">삭제</button><span></span><button id="tempoEditorCancelButton" type="button" data-i18n="cancel">취소</button><button id="tempoEditorApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
 </div>
+<div class="popup-backdrop" hidden="" id="tempoSimplifyBackdrop">
+<section aria-label="템포 간소화" data-i18n-aria-label="tempo.simplify" aria-modal="true" class="tempo-editor-dialog tempo-simplify-dialog" id="tempoSimplifyDialog" role="dialog">
+<div class="tempo-editor-header">
+<div><strong data-i18n="tempo.simplify">템포 간소화</strong><span data-i18n="tempo.simplify_player_default">Player 기본값 · BPM 차이 5 미만 · 최저/최고 유지</span></div>
+<button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="tempoSimplifyCloseButton" type="button">×</button>
+</div>
+<label class="tempo-editor-field tempo-simplify-threshold-field"><span data-i18n="tempo.simplify_threshold">제거 기준</span><input aria-label="템포 BPM 차이 제거 기준" data-i18n-aria-label="tempo.simplify_threshold_aria" id="tempoSimplifyThresholdInput" inputmode="numeric" max="255" min="1" step="1" type="number" value="5"/><strong data-i18n="tempo.simplify_threshold_suffix">BPM 미만</strong></label>
+<label class="tempo-simplify-option"><input checked="" id="tempoSimplifyPreserveExtrema" type="checkbox"/><span data-i18n="tempo.simplify_preserve_extrema">최저/최고 템포 유지</span></label>
+<p class="tempo-editor-help" data-i18n="tempo.simplify_help">직전 유지 템포와의 BPM 차이가 기준보다 작은 템포를 제거합니다. 위치 간격과 관계없이 비교합니다.</p>
+<div class="tempo-simplify-summary" id="tempoSimplifySummary">0개 → 0개 (0개 삭제)</div>
+<div class="tempo-editor-actions tempo-simplify-actions"><span></span><span></span><button id="tempoSimplifyCancelButton" type="button" data-i18n="cancel">취소</button><button id="tempoSimplifyApplyButton" type="button" data-i18n="action.apply">적용</button></div>
+</section>
+</div>
 <div class="popup-backdrop" hidden="" id="editorSoundFontBackdrop">
 <section aria-label="사운드폰트 설정" data-i18n-aria-label="soundbank.settings" aria-modal="true" class="transfer-dialog editor-soundfont-dialog" id="editorSoundFontDialog" role="dialog">
 <div class="transfer-dialog-header"><div><strong data-i18n="soundbank.text">사운드폰트</strong><span data-i18n="playback.sound_bank">Editor 재생에 사용할 음색 파일을 설정합니다.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="editorSoundFontCloseButton" type="button">×</button></div>
@@ -562,7 +575,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260909-mml-export-channel-arrow1"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260909-tempo-simplify1"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

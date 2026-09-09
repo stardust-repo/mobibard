@@ -2057,6 +2057,31 @@ button {
 :root[data-theme="light"] .tempo-editor-dialog { background: #fff; }
 :root[data-theme="light"] .tempo-editor-header { background: #edf3f8; }
 
+.tempo-simplify-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px 10px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  user-select: none;
+}
+.tempo-simplify-option input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.tempo-simplify-summary {
+  margin: 0 16px 14px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--control-bg) 82%, transparent);
+  color: var(--muted);
+  text-align: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.tempo-simplify-actions { grid-template-columns: 1fr 1fr auto auto; }
+
 @media (pointer: coarse) {
   .transport-control-group .transport-edge-button { width: 34px; min-width: 34px; }
   .transport-control-group .transport-main-button { min-width: 72px; }
