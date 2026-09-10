@@ -49,6 +49,8 @@
     longPressMoveTolerance: 12,
     // UI currently exposes a fixed 3-channel cap, while the packing logic accepts any N >= 1.
     midiImportMaxChannelsPerInstrument: 3,
+    // Newly created editor channels start note entry at MML volume V10.
+    defaultNewChannelNoteVolume: 10,
   };
 
   const { getIgnorableSequentialOverlapTrim } = window.MabiUtils;
@@ -1048,6 +1050,7 @@
       instrumentProgram: 0,
       instrumentBank: 0,
       instrumentExactPreset: true,
+      defaultNoteVolume: CONFIG.defaultNewChannelNoteVolume,
       notes: [],
     };
   }
@@ -8159,6 +8162,11 @@
         instrumentProgram: getChannelInstrumentProgram(channel),
         instrumentBank: getChannelInstrumentBank(channel),
         instrumentExactPreset: getChannelInstrumentExactPreset(channel),
+        defaultNoteVolume: clamp(
+          Math.round(Number(channel.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || CONFIG.defaultNewChannelNoteVolume),
+          0,
+          15,
+        ),
         notes: channel.notes.map((note) => ({ ...note })),
       })),
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
@@ -8439,6 +8447,11 @@
         instrumentProgram: clamp(Math.round(Number(channel.instrumentProgram ?? getInstrumentProgramFromName(channel.instrument)) || 0), 0, 127),
         instrumentBank: clamp(Math.round(Number(channel.instrumentBank ?? (isDrumInstrumentName(channel.instrument) ? 128 : 0)) || 0), 0, 16383),
         instrumentExactPreset: channel.instrumentExactPreset === true,
+        defaultNoteVolume: clamp(
+          Math.round(Number(channel.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || CONFIG.defaultNewChannelNoteVolume),
+          0,
+          15,
+        ),
         notes: normalizeMonophonicNotes(channel.notes.map((note) => ({
           id: Number(note.id),
           pitch: clamp(Number(note.pitch), CONFIG.minPitch, CONFIG.maxPitch),
@@ -9263,6 +9276,11 @@
       channel.hue = getChannelHue(channel, index);
       channel.muted = Boolean(channel.muted);
       channel.visible = channel.visible !== false;
+      channel.defaultNoteVolume = clamp(
+        Math.round(Number(channel.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || CONFIG.defaultNewChannelNoteVolume),
+        0,
+        15,
+      );
     });
   }
 
@@ -10619,15 +10637,20 @@
     }
     if (interaction.type === "create") {
       const draft = interaction.draft;
+      const channel = getActiveChannel();
+      const defaultVolume = clamp(
+        Math.round(Number(channel?.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || CONFIG.defaultNewChannelNoteVolume),
+        0,
+        15,
+      );
       const note = {
         id: state.nextNoteId++,
         pitch: draft.pitch,
         startBeat: Number(draft.startBeat.toFixed(6)),
         durationBeat: Number(draft.durationBeat.toFixed(6)),
-        velocity: 127,
-        volume: 15,
+        velocity: mmlVolumeToVelocity(defaultVolume),
+        volume: defaultVolume,
       };
-      const channel = getActiveChannel();
       channel.notes.push(note);
       resolveDirectEditOverlaps(channel, new Set([note.id]));
       selectOnlyNote(note.id);
@@ -15145,6 +15168,11 @@
       instrumentProgram: clamp(Math.round(Number(channel.instrumentProgram ?? getInstrumentProgramFromName(channel.instrument)) || 0), 0, 127),
       instrumentBank: clamp(Math.round(Number(channel.instrumentBank ?? (isDrumInstrumentName(channel.instrument) ? 128 : 0)) || 0), 0, 16383),
       instrumentExactPreset: channel.instrumentExactPreset === true,
+      defaultNoteVolume: clamp(
+        Math.round(Number(channel.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || CONFIG.defaultNewChannelNoteVolume),
+        0,
+        15,
+      ),
       notes: normalizeMonophonicNotes(channel.notes.map((note) => {
         const startBeat = clamp(
           Number(note.startBeat),
