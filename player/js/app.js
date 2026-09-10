@@ -318,6 +318,7 @@
   const playLayout = menuCard?.querySelector(".play-layout");
   const retained = {
     copy: $("copyBtn"),
+    audio: $("audioSaveBtn"),
     save: $("saveBtn"),
     driveSave: $("googleDriveSaveBtn")
   };
@@ -3733,9 +3734,19 @@
     const meta = el("div", "copy-meta");
     meta.append(el("strong", "copy-title", { text: t("copyAll") }), el("span", "copy-detail", { text: partDetail(fullParts) }));
     const actions = el("div", "wb8-full-copy-actions");
+    const audio = retained.audio;
     const save = retained.save;
     const drive = retained.driveSave;
     const copyButton = retained.copy;
+    if (audio) {
+      audio.removeAttribute("data-i18n");
+      // This first layout IIFE is built before the Player application scope exists.
+      // Use the layout-local i18n helper here instead of the later app-only i18nText().
+      audio.textContent = appText("audio.export_ogg", "오디오 저장");
+      audio.className = "copy-button wb4-copy-button wb9-save-copy-button";
+      audio.title = appText("audio.export_ogg_hint", "44.1 kHz OGG 오디오로 저장");
+      actions.append(audio);
+    }
     if (save) {
       save.removeAttribute("data-i18n");
       save.textContent = t("saveFile");
@@ -4283,6 +4294,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const pianoRollToggleLabel = $("pianoRollToggleLabel");
   const playInfo = $("playInfo");
   const copyBtn = $("copyBtn");
+  const audioSaveBtn = $("audioSaveBtn");
   const pasteBtn = $("pasteBtn");
   const pasteMmlDialog = $("pasteMmlDialog");
   const pasteMmlForm = $("pasteMmlForm");
@@ -4757,6 +4769,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     });
     pasteMmlDialog?.addEventListener("close", () => {
       if (pasteMmlStatus) pasteMmlStatus.textContent = "";
+    });
+    audioSaveBtn?.addEventListener("click", async () => {
+      if (await runPlayerUiBeforeAction("audio")) void exportCurrentMmlAudioOgg();
     });
     saveBtn.addEventListener("click", async () => {
       if (await runPlayerUiBeforeAction("save")) void saveVisibleMml();
@@ -10744,6 +10759,77 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     }
 
     return editorAnalysisCache;
+  }
+
+  let audioOggExportBusy = false;
+
+  function defaultAudioSaveFileName() {
+    const source = String(defaultLocalSaveFileName() || "mobibard-player.txt");
+    return source.replace(/\.[^.]+$/, "") + ".ogg";
+  }
+
+  async function exportCurrentMmlAudioOgg() {
+    if (audioOggExportBusy) return false;
+    const exporter = window.MobibardAudioExport;
+    if (!exporter?.renderAndDownloadOgg) {
+      showToast(i18nText("audio.export_failed"), "error");
+      return false;
+    }
+
+    audioOggExportBusy = true;
+    const oldText = audioSaveBtn?.textContent || "";
+    if (audioSaveBtn) {
+      audioSaveBtn.disabled = true;
+      audioSaveBtn.textContent = i18nText("audio.exporting_ogg");
+    }
+    showToast(i18nText("audio.exporting_ogg"), "info");
+
+    try {
+      await loadDefaultSf2IfNeeded();
+      normalizeTextareaCommands(mainMml);
+      const schedule = getEditorDerivedState({ needSchedule: true }).schedule;
+      const duration = Math.max(0, Number(schedule?.duration) || 0);
+      if (!schedule || !(schedule.notes || []).length || duration <= 0) {
+        throw new Error(i18nText("mml.no_notes"));
+      }
+
+      await exporter.renderAndDownloadOgg({
+        fileName: defaultAudioSaveFileName(),
+        durationSec: duration,
+        tailSec: 0.18,
+        vbrQuality: 5,
+        render: async (context) => {
+          const prepared = prepareNotesWithPartPresets(context, schedule.notes || []);
+          if (!prepared.length) throw new Error(i18nText("mml.no_audible"));
+          const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
+          const master = context.createGain();
+          master.gain.value = 1;
+          master.connect(context.destination);
+          schedulePreparedNotes(context, prepared, {
+            baseTime: 0.01,
+            fromSec: 0,
+            windowStart: 0,
+            windowEnd: duration + 0.001,
+            destination: master,
+            minLeadTime: 0.005,
+            playbackSpeed: 1,
+            gainScale,
+          });
+        },
+      });
+      showToast(i18nText("audio.export_done"));
+      return true;
+    } catch (error) {
+      console.error("OGG audio export failed", error);
+      showToast(`${i18nText("audio.export_failed")} ${shortError(error)}`.trim(), "error");
+      return false;
+    } finally {
+      audioOggExportBusy = false;
+      if (audioSaveBtn) {
+        audioSaveBtn.disabled = false;
+        audioSaveBtn.textContent = oldText || i18nText("audio.export_ogg");
+      }
+    }
   }
 
   function createScheduleFromEditor() {

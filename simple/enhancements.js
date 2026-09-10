@@ -45,6 +45,7 @@
     pasteCancel: $("pasteCancelButton"),
     pasteApply: $("pasteApplyButton"),
     rewindButton: $("rewindButton"),
+    audioSaveButton: $("audioSaveAllButton"),
     localSaveButton: $("localSaveAllButton"),
     googleSaveButton: $("googleSaveAllButton"),
     results: $("results")
@@ -55,7 +56,8 @@
       recommended: "추천 사이트", mobibeats: "모비비트", account: "계정", guest: "게스트",
       login: "로그인", logout: "로그아웃", googleFile: "구글 파일", paste: "붙여넣기",
       pasteTitle: "MML 붙여넣기", pasteHint: "MML 코드를 붙여넣으면 바로 불러옵니다.",
-      cancel: "취소", load: "불러오기", localSave: "로컬 저장", googleSave: "구글 저장",
+      cancel: "취소", load: "불러오기", audioSave: "오디오 저장", localSave: "로컬 저장", googleSave: "구글 저장",
+      audioExporting: "OGG 오디오 생성 중...", audioSaved: "44.1 kHz OGG 오디오를 저장했습니다.", audioExportFailed: "오디오 저장에 실패했습니다.",
       rewind: "처음으로", close: "닫기", loginRequired: "Google 로그인이 필요합니다.",
       googleConnecting: "Google 로그인 중...", googleConnected: "Google에 연결되었습니다.", googleDisconnected: "Google 연결을 해제했습니다.",
       googleLoginFailed: "Google 로그인에 실패했습니다.", googleLoadFailed: "Google 파일을 불러오지 못했습니다.",
@@ -71,7 +73,8 @@
       recommended: "Recommended", mobibeats: "MobiBeats", account: "Account", guest: "Guest",
       login: "Sign in", logout: "Sign out", googleFile: "Google file", paste: "Paste",
       pasteTitle: "Paste MML", pasteHint: "Paste MML code to load it immediately.",
-      cancel: "Cancel", load: "Load", localSave: "Local save", googleSave: "Google save",
+      cancel: "Cancel", load: "Load", audioSave: "Save audio", localSave: "Local save", googleSave: "Google save",
+      audioExporting: "Creating OGG audio...", audioSaved: "Saved 44.1 kHz OGG audio.", audioExportFailed: "Could not save audio.",
       rewind: "Back to start", close: "Close", loginRequired: "Google sign-in is required.",
       googleConnecting: "Signing in to Google...", googleConnected: "Connected to Google.", googleDisconnected: "Disconnected from Google.",
       googleLoginFailed: "Google sign-in failed.", googleLoadFailed: "Could not load the Google file.",
@@ -147,6 +150,7 @@
     if (els.settingsMenu) els.settingsMenu.setAttribute("aria-label", tx("account"));
     if (els.googleFileButton) els.googleFileButton.textContent = tx("googleFile");
     if (els.pasteButton) els.pasteButton.textContent = tx("paste");
+    if (els.audioSaveButton) els.audioSaveButton.textContent = tx("audioSave");
     if (els.localSaveButton) els.localSaveButton.textContent = tx("localSave");
     if (els.googleSaveButton) els.googleSaveButton.textContent = tx("googleSave");
     if (els.rewindButton) {
@@ -166,6 +170,7 @@
 
   function updateSaveButtons() {
     const hasMml = Boolean(bridge()?.getCurrentMml?.());
+    if (els.audioSaveButton) els.audioSaveButton.disabled = !hasMml;
     if (els.localSaveButton) els.localSaveButton.disabled = !hasMml;
     if (els.googleSaveButton) els.googleSaveButton.disabled = !hasMml;
   }
@@ -668,6 +673,27 @@
     if (data.type === "MML_RHYTHM_CLOSE") closeRhythmGameLayer();
   }
 
+  async function saveAudioOgg() {
+    if (!els.audioSaveButton || els.audioSaveButton.disabled) return;
+    const api = bridge();
+    if (!api?.exportCurrentAudio) {
+      showToast(tx("audioExportFailed"), "error");
+      return;
+    }
+    const originalText = els.audioSaveButton.textContent;
+    els.audioSaveButton.disabled = true;
+    els.audioSaveButton.textContent = tx("audioExporting");
+    try {
+      await api.exportCurrentAudio();
+      showToast(tx("audioSaved"));
+    } catch (error) {
+      showToast(`${tx("audioExportFailed")} ${shortError(error)}`.trim(), "error");
+    } finally {
+      els.audioSaveButton.textContent = originalText || tx("audioSave");
+      updateSaveButtons();
+    }
+  }
+
   els.midiSiteLinks?.addEventListener("change", () => {
     const url = String(els.midiSiteLinks.value || "");
     els.midiSiteLinks.value = "";
@@ -679,6 +705,7 @@
   els.pasteClose?.addEventListener("click", closePasteDialog);
   els.pasteCancel?.addEventListener("click", closePasteDialog);
   els.pasteForm?.addEventListener("submit", applyPaste);
+  els.audioSaveButton?.addEventListener("click", () => void saveAudioOgg());
   els.localSaveButton?.addEventListener("click", saveLocal);
   els.googleSaveButton?.addEventListener("click", () => void saveGoogle());
   els.mobibeatsLink?.addEventListener("click", openRhythmGameLayer);

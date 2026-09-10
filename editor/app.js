@@ -167,6 +167,7 @@
     editNoteVolumeButton: document.querySelector("#editNoteVolumeButton"),
     fileExportButton: document.querySelector("#fileExportButton"),
     midiExportButton: document.querySelector("#midiExportButton"),
+    audioExportButton: document.querySelector("#audioExportButton"),
     midiExtractButton: document.querySelector("#midiExtractButton"),
     supportedFilesMenuButton: document.querySelector("#supportedFilesMenuButton"),
     mmlImportButton: document.querySelector("#mmlImportButton"),
@@ -14823,6 +14824,135 @@
   }
 
 
+  let audioOggExportBusy = false;
+
+  function collectProjectAudioExportNotes() {
+    const tempoMap = createTempoTimeMap();
+    const notes = [];
+    for (const channel of state.channels || []) {
+      for (const note of channel.notes || []) {
+        const velocity = getNotePlaybackVelocity(note);
+        if (velocity <= 0 || Number(note.durationBeat) <= 0) continue;
+        const startBeat = Math.max(0, Number(note.startBeat) || 0);
+        const endBeat = startBeat + Math.max(0, Number(note.durationBeat) || 0);
+        const startSeconds = beatToSecondsFromMap(startBeat, tempoMap);
+        const endSeconds = beatToSecondsFromMap(endBeat, tempoMap);
+        if (!(endSeconds > startSeconds + 0.0001)) continue;
+        notes.push({
+          id: note.id,
+          pitch: clamp(Math.round(Number(note.pitch) || 60), 0, 127),
+          velocity,
+          volume: getNoteVolume(note),
+          startBeat,
+          endBeat,
+          startSeconds,
+          endSeconds,
+          source: "channel",
+          sourceId: channel.id,
+          instrumentProgram: getChannelInstrumentProgram(channel),
+          instrumentBank: getChannelInstrumentBank(channel),
+          instrumentExactPreset: getChannelInstrumentExactPreset(channel),
+        });
+      }
+    }
+    notes.sort((left, right) => left.startSeconds - right.startSeconds || left.pitch - right.pitch);
+    return notes;
+  }
+
+  function configureOfflineEditorEngine(context, notes) {
+    const offlineEngine = new EditorSoundBankPlayer({
+      bankNumber: 0,
+      presetNumber: 0,
+      volume: 1,
+      maxVoices: Math.max(256, (notes?.length || 0) + 32),
+      onStatus: () => {},
+    });
+    offlineEngine.context = context;
+    offlineEngine.masterGain = context.createGain();
+    offlineEngine.masterGain.gain.value = 1;
+    offlineEngine.compressor = context.createDynamicsCompressor();
+    offlineEngine.compressor.threshold.value = -12;
+    offlineEngine.compressor.knee.value = 16;
+    offlineEngine.compressor.ratio.value = 4;
+    offlineEngine.compressor.attack.value = 0.003;
+    offlineEngine.compressor.release.value = 0.2;
+    offlineEngine.masterGain.connect(offlineEngine.compressor);
+    offlineEngine.compressor.connect(context.destination);
+    offlineEngine.soundBank = audioEngine.soundBank;
+    offlineEngine.soundFont = audioEngine.soundFont;
+    offlineEngine.soundFonts = new Map(audioEngine.soundFonts || []);
+    offlineEngine.preparePromise = Promise.resolve(offlineEngine.soundFont);
+    offlineEngine.mode = audioEngine.mode;
+    return offlineEngine;
+  }
+
+  function editorAudioExportFileName() {
+    const safeName = (state.projectName || "mobibard-project").replace(/[\/:*?"<>|]/g, "_").trim() || "mobibard-project";
+    return `${safeName}.ogg`;
+  }
+
+  async function exportProjectAsAudioOgg() {
+    if (audioOggExportBusy) return false;
+    const exporter = window.MobibardAudioExport;
+    if (!exporter?.renderAndDownloadOgg) {
+      showToast(i18nText("audio.export_failed"));
+      return false;
+    }
+
+    const notes = collectProjectAudioExportNotes();
+    if (!notes.length) {
+      showToast(i18nText("audio.export_no_notes"));
+      return false;
+    }
+    const duration = notes.reduce((maximum, note) => Math.max(maximum, note.endSeconds), 0);
+    if (!(duration > 0)) {
+      showToast(i18nText("audio.export_no_notes"));
+      return false;
+    }
+
+    audioOggExportBusy = true;
+    if (elements.audioExportButton) elements.audioExportButton.disabled = true;
+    showToast(i18nText("audio.exporting_ogg"));
+    try {
+      await audioEngine.prepare();
+      const autoGainScale = computePlaybackAutoGainScale(notes, { windowStart: 0, windowEnd: duration });
+      await exporter.renderAndDownloadOgg({
+        fileName: editorAudioExportFileName(),
+        durationSec: duration,
+        tailSec: 3.65,
+        vbrQuality: 5,
+        render: async (context) => {
+          const offlineEngine = configureOfflineEditorEngine(context, notes);
+          for (let index = 0; index < notes.length; index += 1) {
+            const note = notes[index];
+            offlineEngine.playNote(
+              note.pitch,
+              note.velocity,
+              0.01 + note.startSeconds,
+              Math.max(0.003, note.endSeconds - note.startSeconds),
+              {
+                program: clamp(Number(note.instrumentProgram) || 0, 0, 127),
+                bank: clamp(Number(note.instrumentBank) || 0, 0, 16383),
+                exactPreset: Boolean(note.instrumentExactPreset),
+                gainScale: autoGainScale,
+              },
+            );
+            if (index > 0 && index % 512 === 0) await new Promise(resolve => window.setTimeout(resolve, 0));
+          }
+        },
+      });
+      showToast(i18nText("audio.export_done"));
+      return true;
+    } catch (error) {
+      console.error("Editor OGG audio export failed", error);
+      showToast(`${i18nText("audio.export_failed")} ${String(error?.message || error || "")}`.trim());
+      return false;
+    } finally {
+      audioOggExportBusy = false;
+      if (elements.audioExportButton) elements.audioExportButton.disabled = false;
+    }
+  }
+
   const MIDI_EXPORT_MELODIC_CHANNELS = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15]);
 
   function midiExportSamePitchOverlap(leftNotes, rightNotes) {
@@ -16656,6 +16786,7 @@
     elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openNoteVolumeDialog(); });
     elements.fileExportButton.addEventListener("click", () => { closeFileMenu(); exportCurrentContextAsMml(); });
     elements.midiExportButton?.addEventListener("click", () => { closeFileMenu(); exportProjectAsMidi(); });
+    elements.audioExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsAudioOgg(); });
     elements.midiExtractButton?.addEventListener("click", () => { closeFileMenu(); openMidiExtractionSupport(); });
     elements.supportedFilesMenuButton?.addEventListener("click", closeFileMenu);
     elements.newButton.addEventListener("click", () => {

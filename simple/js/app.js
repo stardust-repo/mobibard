@@ -1077,11 +1077,55 @@
     return `${base}.txt`;
   }
 
+  function currentSuggestedAudioName() {
+    return currentSuggestedName().replace(/\.[^.]+$/, ".ogg");
+  }
+
+  async function exportCurrentAudio() {
+    const exporter = window.MobibardAudioExport;
+    const playbackApi = window.MobibardSimplePlayback;
+    if (!exporter?.renderAndDownloadOgg) throw new Error("OGG audio exporter is unavailable.");
+    if (!currentMml) throw new Error(t("noMml"));
+
+    let schedule = playbackSchedule;
+    if (!schedule) {
+      const parsed = window.MabiMml?.parseMabinogiMml?.(currentMml, { maxParts: 6, padToParts: 6 });
+      schedule = parsed && window.MabiMml?.buildSchedule?.(parsed);
+    }
+    const duration = Math.max(0, Number(schedule?.duration) || 0);
+    if (!schedule || !(schedule.notes || []).length || duration <= 0) throw new Error(t("noAudiblePlayback"));
+
+    await ensureFixedPlaybackPreset();
+    return exporter.renderAndDownloadOgg({
+      fileName: currentSuggestedAudioName(),
+      durationSec: duration,
+      tailSec: 0.18,
+      vbrQuality: 5,
+      render: async (context) => {
+        const prepared = playbackApi.prepareNotes(context, playbackSoundFont, fixedPlaybackPreset, schedule.notes || []);
+        if (!prepared.length) throw new Error(t("noAudiblePlayback"));
+        const master = context.createGain();
+        master.gain.value = 0.44;
+        master.connect(context.destination);
+        playbackApi.schedulePreparedNotes(context, prepared, {
+          baseTime: 0.01,
+          fromSec: 0,
+          windowStart: 0,
+          windowEnd: duration + 0.001,
+          destination: master,
+          minLeadTime: 0.005,
+          playbackSpeed: 1,
+        });
+      },
+    });
+  }
+
   window.MobibardSimpleBridge = {
     selectFile,
     loadPastedMml,
     getCurrentMml: () => currentMml,
     getSuggestedName: currentSuggestedName,
+    exportCurrentAudio,
     rewindPlayback,
     stopPlayback: () => stopPlayback(true),
     showToast,

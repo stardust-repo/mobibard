@@ -15,8 +15,8 @@
   ].map(([label, url]) => Object.freeze({ label, url })));
 
   const SITE_MAP = Object.freeze([
-    { id: 'simple', href: '../simple/index.html', labels: { ko: '간편 모드', ja: '簡単モード', en: 'Simple mode', 'zh-CN': '简易模式', 'zh-TW': '簡易模式' } },
-    { id: 'player', href: '../player/index.html', labels: { ko: '상세 모드', ja: '詳細モード', en: 'Detailed mode', 'zh-CN': '详细模式', 'zh-TW': '詳細模式' } },
+    { id: 'simple', href: '../simple/index.html', labels: { ko: 'MML 간편 생성기', ja: 'MML簡単ジェネレーター', en: 'MML Simple Generator', 'zh-CN': 'MML 简易生成器', 'zh-TW': 'MML 簡易產生器' } },
+    { id: 'player', href: '../player/index.html', labels: { ko: 'MML 상세 생성기', ja: 'MML詳細ジェネレーター', en: 'MML Detailed Generator', 'zh-CN': 'MML 详细生成器', 'zh-TW': 'MML 詳細產生器' } },
     { id: 'editor', href: '../editor/index.html', labels: { ko: '에디터 (alpha)', ja: 'エディター (alpha)', en: 'Editor (alpha)', 'zh-CN': '编辑器 (alpha)', 'zh-TW': '編輯器 (alpha)' } },
     { id: 'rollscriptor', href: '../rollscriptor/index.html', labels: { ko: '롤 스크립터', ja: 'ロールスクリプター', en: 'RollScriptor', 'zh-CN': 'RollScriptor', 'zh-TW': 'RollScriptor' } },
     { id: 'veloscriptor', href: '../veloscriptor/index.html', labels: { ko: '벨로 스크립터', ja: 'ヴェロスクリプター', en: 'VeloScriptor', 'zh-CN': 'VeloScriptor', 'zh-TW': 'VeloScriptor' } },

@@ -60,7 +60,7 @@
     const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
     if (localeUrl.protocol !== "file:") {
       localeUrl.searchParams.set("v", "5.2.0");
-      localeUrl.searchParams.set("rev", "20260830-volume-mode2");
+      localeUrl.searchParams.set("rev", "20260910-audio-ogg1");
     }
     document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   })();
@@ -239,6 +239,7 @@
 <span class="copy-detail" id="fullScoreDetail"></span>
 </div>
 <div class="full-score-actions">
+<button class="copy-button" id="audioSaveAllButton" type="button">오디오 저장</button>
 <button class="copy-button" id="localSaveAllButton" type="button">로컬 저장</button>
 <button class="copy-button" id="googleSaveAllButton" type="button">구글 저장</button>
 <button class="copy-button" id="copyAllButton" type="button">복사</button>
@@ -332,13 +333,14 @@
 <script src="../plugins/common/mml-parser.js?v=5.1.1"></script>
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
 <script src="../assets/default_sf3.js?v=20260907-mobibard16-cleaned"></script>
+<script src="../plugins/common/audio-export.js?v=1.0.1&amp;rev=20260910-ogg44100-1"></script>
 <script src="./js/playback.js?v=5.1.0"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="../plugins/common/site-navigation.js?v=20260907-editor-order3"></script><script src="./js/app.js?v=5.2.0&amp;rev=20260907-fixed92"></script>
-<script src="./enhancements.js?v=5.1.0&amp;rev=20260907-fixed92"></script>
+<script src="../plugins/common/site-navigation.js?v=20260910-product-names1"></script><script src="./js/app.js?v=5.3.0&amp;rev=20260910-audio-ogg1"></script>
+<script src="./enhancements.js?v=5.3.0&amp;rev=20260910-audio-ogg1"></script>
 </body>
 </html>
