@@ -17132,13 +17132,8 @@
       updateAudioClipSettings(getActiveAudioClip(), { playbackRate: elements.audioSourceRateInput.value, commit: true });
     });
     elements.audioSourceDeleteButton?.addEventListener("click", () => requestDeleteAudioClip());
-    elements.audioLaneViewport?.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || event.target.closest(".audio-clip-block")) return;
-      const rect = elements.audioLaneViewport.getBoundingClientRect();
-      const beat = xToBeat(event.clientX - rect.left + elements.rollViewport.scrollLeft);
-      if (beat >= 0) setPlayheadBeat(clamp(snapBeat(beat), 0, getTotalBeats()), { stop: true });
-      event.preventDefault();
-    });
+    // The audio placement lane is not a transport/seek surface.
+    // Clicking its empty area must never stop playback or move the playhead.
 
     elements.midiReferenceLoadButton.addEventListener("click", () => openFilePickerInput(elements.midiFileInput));
     elements.channelMergeCloseButton?.addEventListener("click", closeChannelMergeDialog);
