@@ -104,6 +104,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "midi.err_selected_no_notes": "選択した楽器に音符がありません。",
     "midi.err_smpte": "SMPTE方式のMIDIには対応していません。PPQ/TPQN方式で書き出してください。",
     "midi.err_track_header": "トラック{0}にMTrkヘッダーがありません。",
+    "midi.limit_channels": "楽器ごとに最大{0}チャンネル",
     "midi.note_count": "音符{0}個",
     "midi.part_default": "パート {0}",
     "midi.program_number": "プログラム {0}",

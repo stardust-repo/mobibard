@@ -47,6 +47,8 @@
     rollBufferGuardRatio: 0.22,
     longPressDurationMs: 560,
     longPressMoveTolerance: 12,
+    // UI currently exposes a fixed 3-channel cap, while the packing logic accepts any N >= 1.
+    midiImportMaxChannelsPerInstrument: 3,
   };
 
   const { getIgnorableSequentialOverlapTrim } = window.MabiUtils;
@@ -293,6 +295,8 @@
     midiImportTargetMode: document.querySelector("#midiImportTargetMode"),
     midiImportQuantize: document.querySelector("#midiImportQuantize"),
     midiImportIgnoreSingle64thOverlap: document.querySelector("#midiImportIgnoreSingle64thOverlap"),
+    midiImportLimitChannelsPerInstrument: document.querySelector("#midiImportLimitChannelsPerInstrument"),
+    midiImportChannelLimitLabel: document.querySelector("#midiImportChannelLimitLabel"),
     midiImportMidiControls: document.querySelector("#midiImportMidiControls"),
     midiImportPreviewAllButton: document.querySelector("#midiImportPreviewAllButton"),
     midiImportSelectionActions: document.querySelector("#midiImportSelectionActions"),
@@ -6458,6 +6462,9 @@
     if (elements.midiImportIgnoreSingle64thOverlap) {
       elements.midiImportIgnoreSingle64thOverlap.checked = true;
     }
+    if (elements.midiImportLimitChannelsPerInstrument) {
+      elements.midiImportLimitChannelsPerInstrument.checked = false;
+    }
   }
 
   function getMidiImportSelectedGroups(preview = state.midiImport.preview) {
@@ -6633,6 +6640,9 @@
     }
     if (elements.midiImportSourceLabel) elements.midiImportSourceLabel.textContent = state.midiImport.fileName || "파일을 선택하세요.";
     if (elements.midiImportMidiControls) elements.midiImportMidiControls.hidden = !isMidi;
+    if (elements.midiImportChannelLimitLabel) {
+      elements.midiImportChannelLimitLabel.textContent = i18nText("midi.limit_channels", [CONFIG.midiImportMaxChannelsPerInstrument]);
+    }
     if (elements.midiImportApplyButton) elements.midiImportApplyButton.disabled = !ready;
     if (elements.midiImportNewButton) elements.midiImportNewButton.disabled = !ready;
     if (elements.midiImportPreviewAllButton) {
@@ -6648,7 +6658,10 @@
       const selected = getMidiImportSelectedGroups().length;
       const division = Number(elements.midiImportQuantize?.value) === 32 ? 32 : 64;
       const overlapLabel = elements.midiImportIgnoreSingle64thOverlap?.checked !== false ? " · 1/64 겹침 무시" : "";
-      setMidiImportStatus(`${selected}/${state.midiImport.preview.groups.length}개 악기 선택 · ${division}박 양자화${overlapLabel}`);
+      const channelLimitLabel = elements.midiImportLimitChannelsPerInstrument?.checked
+        ? ` · ${i18nText("midi.limit_channels", [CONFIG.midiImportMaxChannelsPerInstrument])}`
+        : "";
+      setMidiImportStatus(`${selected}/${state.midiImport.preview.groups.length}개 악기 선택 · ${division}박 양자화${overlapLabel}${channelLimitLabel}`);
     } else if (isText && ["mml", "3mle", "mmi"].includes(state.midiImport.textFormat) && state.midiImport.textCandidates.length) {
       setMidiImportStatus(`${state.midiImport.selectedTextIndexes.size}/${state.midiImport.textCandidates.length}개 채널 선택 · 선택한 채널만 편집 영역에 가져옵니다.`);
     } else if (isText && textParsed) {
@@ -7086,6 +7099,176 @@
     return result;
   }
 
+  function getMidiPackedVoicePitchCenter(notes) {
+    const pitches = (notes || [])
+      .map((note) => Number(note?.pitch))
+      .filter(Number.isFinite)
+      .sort((left, right) => left - right);
+    if (!pitches.length) return 60;
+    const middle = Math.floor(pitches.length / 2);
+    return pitches.length % 2
+      ? pitches[middle]
+      : (pitches[middle - 1] + pitches[middle]) / 2;
+  }
+
+  function getMidiPackedVoicePreferredTargets(voices, targetCount) {
+    const count = Math.max(1, Math.round(Number(targetCount) || 1));
+    const ranked = (voices || []).map((voice, sourceVoiceIndex) => ({
+      sourceVoiceIndex,
+      pitchCenter: getMidiPackedVoicePitchCenter(voice),
+    })).sort((left, right) => (
+      right.pitchCenter - left.pitchCenter
+      || left.sourceVoiceIndex - right.sourceVoiceIndex
+    ));
+    const preferred = new Map();
+    ranked.forEach((item, rank) => {
+      const targetIndex = ranked.length <= 1 || count <= 1
+        ? 0
+        : Math.round((rank / (ranked.length - 1)) * (count - 1));
+      preferred.set(item.sourceVoiceIndex, targetIndex);
+    });
+    return preferred;
+  }
+
+  function findMidiPackedVoiceReferenceNote(target, pitch) {
+    const references = target?.referenceNotes || [];
+    let best = null;
+    let bestDistance = Infinity;
+    for (const note of references) {
+      const distance = Math.abs((Number(note?.pitch) || 60) - pitch);
+      if (distance < bestDistance) {
+        best = note;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
+  function scoreMidiPackedVoiceTarget(target, targetIndex, targetCount, item, onsetInfo, preferredTargets) {
+    const note = item.note;
+    const pitch = clamp(Math.round(Number(note?.pitch) || 60), 0, 127);
+    const reference = findMidiPackedVoiceReferenceNote(target, pitch);
+    const pitchDistance = reference ? Math.abs((Number(reference.pitch) || 60) - pitch) : 0;
+    const overlapCount = target?.activeNotes?.length || 0;
+    const sameOnsetCount = onsetInfo.assignedCounts[targetIndex] || 0;
+    const sourcePreferred = preferredTargets.get(item.sourceVoiceIndex) ?? 0;
+    const targetPosition = targetCount <= 1 ? 0.5 : targetIndex / (targetCount - 1);
+    const pitchPosition = onsetInfo.maxPitch > onsetInfo.minPitch
+      ? (onsetInfo.maxPitch - pitch) / (onsetInfo.maxPitch - onsetInfo.minPitch)
+      : targetPosition;
+    const pitchLaneDistance = Math.abs(targetPosition - pitchPosition);
+    const preferredDistance = Math.abs(targetIndex - sourcePreferred);
+
+    let sourceAffinity = 0;
+    const sourceTrack = getMidiVoiceSourceTrack(note);
+    const sourcePort = getMidiVoiceSourcePort(note);
+    const sourceChannel = getMidiVoiceSourceChannel(note);
+    if (reference) {
+      const referenceTrack = getMidiVoiceSourceTrack(reference);
+      if (sourceTrack != null && referenceTrack != null) sourceAffinity += sourceTrack === referenceTrack ? -22 : 5;
+      const referencePort = getMidiVoiceSourcePort(reference);
+      const referenceChannel = getMidiVoiceSourceChannel(reference);
+      if (sourcePort != null && sourceChannel != null && referencePort != null && referenceChannel != null) {
+        sourceAffinity += sourcePort === referencePort && sourceChannel === referenceChannel ? -10 : 3;
+      }
+    }
+
+    // This follows the Player's two-stage idea: free/unused channels win first, then an
+    // already-busy channel is accepted instead of dropping a note. The strong same-onset
+    // and overlap costs spread a chord across N channels before stacking additional notes.
+    return sameOnsetCount * 10000
+      + overlapCount * 1200
+      + pitchLaneDistance * 90
+      + preferredDistance * 18
+      + pitchDistance * 2.4
+      + sourceAffinity
+      + target.notes.length * 0.002;
+  }
+
+  function packMidiVoicesToMaxChannels(voices, maxVoiceCount) {
+    const sourceVoices = (voices || []).filter((voice) => Array.isArray(voice) && voice.length);
+    const requestedCount = Math.max(1, Math.round(Number(maxVoiceCount) || 1));
+    if (sourceVoices.length <= requestedCount) return sourceVoices;
+
+    const targetCount = Math.min(requestedCount, sourceVoices.length);
+    const targets = Array.from({ length: targetCount }, () => ({
+      notes: [],
+      activeNotes: [],
+      referenceNotes: [],
+      currentOnsetNotes: [],
+    }));
+    const preferredTargets = getMidiPackedVoicePreferredTargets(sourceVoices, targetCount);
+    const items = sourceVoices.flatMap((voice, sourceVoiceIndex) => voice.map((note, sourceNoteIndex) => ({
+      note: { ...note },
+      sourceVoiceIndex,
+      sourceNoteIndex,
+    }))).sort((left, right) => (
+      Number(left.note.startBeat) - Number(right.note.startBeat)
+      || Number(right.note.pitch) - Number(left.note.pitch)
+      || left.sourceVoiceIndex - right.sourceVoiceIndex
+      || left.sourceNoteIndex - right.sourceNoteIndex
+    ));
+
+    for (let cursor = 0; cursor < items.length;) {
+      const startBeat = Number(items[cursor].note.startBeat) || 0;
+      const batch = [];
+      while (cursor < items.length && Math.abs((Number(items[cursor].note.startBeat) || 0) - startBeat) <= 1e-9) {
+        batch.push(items[cursor]);
+        cursor += 1;
+      }
+      const pitches = batch.map((item) => clamp(Math.round(Number(item.note.pitch) || 60), 0, 127));
+      const onsetInfo = {
+        minPitch: Math.min(...pitches),
+        maxPitch: Math.max(...pitches),
+        assignedCounts: Array(targetCount).fill(0),
+      };
+      targets.forEach((target) => {
+        target.activeNotes = target.activeNotes.filter((note) => (
+          (Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat) > startBeat + 1e-9
+        ));
+        target.currentOnsetNotes = [];
+      });
+
+      const remaining = batch.slice();
+      while (remaining.length) {
+        let best = null;
+        for (let noteIndex = 0; noteIndex < remaining.length; noteIndex += 1) {
+          const item = remaining[noteIndex];
+          for (let targetIndex = 0; targetIndex < targetCount; targetIndex += 1) {
+            const score = scoreMidiPackedVoiceTarget(targets[targetIndex], targetIndex, targetCount, item, onsetInfo, preferredTargets);
+            const candidate = { score, noteIndex, targetIndex };
+            if (!best
+              || candidate.score < best.score - 1e-9
+              || (Math.abs(candidate.score - best.score) <= 1e-9 && candidate.targetIndex < best.targetIndex)
+              || (Math.abs(candidate.score - best.score) <= 1e-9 && candidate.targetIndex === best.targetIndex && candidate.noteIndex < best.noteIndex)) {
+              best = candidate;
+            }
+          }
+        }
+        const [chosen] = remaining.splice(best.noteIndex, 1);
+        targets[best.targetIndex].notes.push(chosen.note);
+        targets[best.targetIndex].currentOnsetNotes.push(chosen.note);
+        onsetInfo.assignedCounts[best.targetIndex] += 1;
+      }
+      targets.forEach((target) => {
+        if (target.currentOnsetNotes.length) target.referenceNotes = target.currentOnsetNotes.slice();
+        target.activeNotes.push(...target.currentOnsetNotes);
+      });
+    }
+
+    const packed = targets.map((target) => target.notes.sort((left, right) => (
+      Number(left.startBeat) - Number(right.startBeat)
+      || Number(left.durationBeat) - Number(right.durationBeat)
+      || Number(left.pitch) - Number(right.pitch)
+    ))).filter((voice) => voice.length);
+    Object.defineProperties(packed, {
+      sourceVoiceCount: { value: sourceVoices.length, enumerable: false, configurable: true },
+      packedVoiceCount: { value: packed.length, enumerable: false, configurable: true },
+      quantizationCollisionCount: { value: Number(voices?.quantizationCollisionCount) || 0, enumerable: false, configurable: true },
+    });
+    return packed;
+  }
+
   function overwriteEditorChannelsFromMidiDocument(parsed) {
     const descriptors = [];
     for (const group of parsed.groups || []) {
@@ -7165,6 +7348,7 @@
     openNew = false,
     fileName = parsed?.fileName || "",
     ignoreSingle64thOverlap = true,
+    maxChannelsPerInstrument = 0,
   } = {}) {
     const groups = (parsed?.groups || [])
       .filter((group) => Array.isArray(group?.notes) && group.notes.length)
@@ -7183,6 +7367,8 @@
     const hueByInstrument = new Map();
     const createdChannels = [];
     let noteCount = 0;
+    let limitedInstrumentCount = 0;
+    let channelsBeforeLimit = 0;
 
     groups.forEach((group, groupIndex) => {
       const instrumentKey = getMidiGroupInstrumentKey(group);
@@ -7190,10 +7376,17 @@
         hueByInstrument.set(instrumentKey, getMidiGroupHue(group, groupIndex));
       }
       const copyHue = hueByInstrument.get(instrumentKey);
-      const voices = splitNotesIntoMonophonicVoices(group.notes || [], {
+      let voices = splitNotesIntoMonophonicVoices(group.notes || [], {
         ignoreSingle64thOverlap,
         quantizeUnit: 4 / (Number(parsed?.quantizeDivision) === 32 ? 32 : 64),
       });
+      const uncappedVoiceCount = voices.length;
+      const channelLimit = Math.max(0, Math.round(Number(maxChannelsPerInstrument) || 0));
+      if (channelLimit > 0 && voices.length > channelLimit) {
+        channelsBeforeLimit += uncappedVoiceCount;
+        voices = packMidiVoicesToMaxChannels(voices, channelLimit);
+        limitedInstrumentCount += 1;
+      }
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {
@@ -7239,7 +7432,14 @@
     clearNoteSelection();
     clearMidiSelection();
     state.channelNoteRuntime.clear();
-    return { channelCount: createdChannels.length, instrumentCount: groups.length, noteCount };
+    return {
+      channelCount: createdChannels.length,
+      instrumentCount: groups.length,
+      noteCount,
+      limitedInstrumentCount,
+      channelsBeforeLimit,
+      maxChannelsPerInstrument: Math.max(0, Math.round(Number(maxChannelsPerInstrument) || 0)),
+    };
   }
 
   async function applyMidiImport(action = "add") {
@@ -7260,6 +7460,9 @@
           openNew,
           fileName,
           ignoreSingle64thOverlap: elements.midiImportIgnoreSingle64thOverlap?.checked !== false,
+          maxChannelsPerInstrument: elements.midiImportLimitChannelsPerInstrument?.checked
+            ? CONFIG.midiImportMaxChannelsPerInstrument
+            : 0,
         });
         if (!imported.channelCount) throw new Error("가져올 노트가 있는 악기를 하나 이상 선택하세요.");
         markDirty(`${state.midiImport.sourceLabel || "MIDI"} ${openNew ? "새로 열기" : "추가"}`);
@@ -7270,7 +7473,10 @@
         closeMidiImportDialog();
         renderAll();
         resizeAndDraw();
-        showToast(`${stripMidiFileExtension(fileName)}에서 선택한 악기 ${imported.instrumentCount}개를 ${imported.channelCount}개 편집 채널로 ${openNew ? "새로 열었습니다." : "추가했습니다."}`);
+        const limitToast = imported.limitedInstrumentCount > 0
+          ? ` · ${imported.limitedInstrumentCount}개 악기를 최대 ${imported.maxChannelsPerInstrument}채널로 압축`
+          : "";
+        showToast(`${stripMidiFileExtension(fileName)}에서 선택한 악기 ${imported.instrumentCount}개를 ${imported.channelCount}개 편집 채널로 ${openNew ? "새로 열었습니다." : "추가했습니다."}${limitToast}`);
         return true;
       }
 
@@ -16490,6 +16696,7 @@
     });
     elements.midiImportTargetMode?.addEventListener("change", updateMidiImportDialog);
     elements.midiImportIgnoreSingle64thOverlap?.addEventListener("change", updateMidiImportDialog);
+    elements.midiImportLimitChannelsPerInstrument?.addEventListener("change", updateMidiImportDialog);
     elements.midiImportQuantize?.addEventListener("change", () => {
       if (state.midiImport.kind === "midi" && state.midiImport.midiBuffer && !state.midiImport.busy) {
         try { reparseMidiImportPreview(); }

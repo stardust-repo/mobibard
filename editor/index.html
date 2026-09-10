@@ -72,7 +72,7 @@
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.3.0&amp;rev=20260909-tempo-simplify1"></script>
+<script src="js/language-manager.js?v=5.3.0&amp;rev=20260910-midi-cap1"></script>
 <title data-i18n="app.title">모비바드 v5.3</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260909-tempo-simplify1" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260910-midi-import-toolbar2" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -367,6 +367,7 @@
 <div class="midi-import-selection-actions midi-import-inline-selection-actions" id="midiImportSelectionActions"><button id="midiImportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiImportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
 <select aria-label="MIDI 양자화" data-i18n-aria-label="midi.quantize" id="midiImportQuantize"><option selected="" value="64" data-i18n="ui.1_64_quantize">64박 양자화</option><option value="32" data-i18n="ui.1_32_quantize">32박 양자화</option></select>
 <label class="midi-import-overlap-option"><input checked="" id="midiImportIgnoreSingle64thOverlap" type="checkbox"/><span data-i18n="ui.ignore_1_64">64박 겹침 무시</span></label>
+<label class="midi-import-overlap-option midi-import-channel-limit-option"><input id="midiImportLimitChannelsPerInstrument" type="checkbox"/><span id="midiImportChannelLimitLabel">악기당 최대 3채널</span></label>
 <div class="midi-import-preview-actions"><button class="midi-import-source-preview" id="midiImportPreviewAllButton" type="button"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span><span class="transport-button-label" data-i18n="ui.preview_source">원본 듣기</span></button></div>
 </div>
 <div class="midi-import-selection-actions midi-import-text-selection-actions" hidden="" id="midiImportTextSelectionActions"><button id="midiImportTextSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiImportTextClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
@@ -575,7 +576,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260910-midi-voice1"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260910-midi-cap1"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

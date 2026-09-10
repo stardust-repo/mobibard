@@ -104,6 +104,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "midi.err_selected_no_notes": "선택한 악기에서 노트를 찾지 못했습니다.",
     "midi.err_smpte": "SMPTE 방식 MIDI는 지원하지 않습니다. PPQ/TPQN 방식으로 내보내 주세요.",
     "midi.err_track_header": "{0}번 트랙에서 MTrk 헤더를 찾지 못했습니다.",
+    "midi.limit_channels": "악기당 최대 {0}채널",
     "midi.note_count": "노트 {0}개",
     "midi.part_default": "파트 {0}",
     "midi.program_number": "프로그램 {0}",

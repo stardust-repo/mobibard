@@ -6873,3 +6873,128 @@ a[class*="button"]:hover {
   transform: translateY(1px) scale(.98);
 }
 
+/* 2026-09-10 MIDI import toolbar compaction -------------------------------- */
+.unified-import-dialog .midi-import-midi-controls {
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 4px;
+  padding-inline: 12px;
+}
+
+/* Treat the select/clear pair as one compact segmented control. */
+.unified-import-dialog .midi-import-inline-selection-actions {
+  flex: 0 0 auto;
+  gap: 0;
+  margin: 0;
+}
+.unified-import-dialog .midi-import-inline-selection-actions button + button {
+  margin-left: -1px;
+}
+.unified-import-dialog .midi-import-inline-selection-actions button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.unified-import-dialog .midi-import-inline-selection-actions button:last-child {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* The quantize selector only needs enough width for the label and chevron. */
+.unified-import-dialog .midi-import-midi-controls #midiImportQuantize {
+  flex: 0 0 108px;
+  width: 108px;
+  min-width: 108px;
+  max-width: 108px;
+  padding-left: 7px;
+  padding-right: 22px;
+}
+
+.unified-import-dialog .midi-import-overlap-option {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding-inline: 6px;
+  gap: 4px;
+}
+.unified-import-dialog .midi-import-overlap-option input {
+  width: 15px;
+  height: 15px;
+}
+
+.unified-import-dialog .midi-import-preview-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+  gap: 0;
+}
+.unified-import-dialog .midi-import-source-preview {
+  min-width: 0;
+  padding-inline: 8px;
+}
+
+@media (pointer: coarse), (max-width: 700px) {
+  .unified-import-dialog .midi-import-midi-controls {
+    flex-wrap: nowrap !important;
+    gap: 3px;
+  }
+  .unified-import-dialog .midi-import-midi-controls #midiImportQuantize {
+    flex-basis: 104px;
+    width: 104px;
+    min-width: 104px;
+    max-width: 104px;
+  }
+}
+@media (max-width: 480px) {
+  .unified-import-dialog .midi-import-midi-controls {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  .unified-import-dialog .midi-import-inline-selection-actions,
+  .unified-import-dialog .midi-import-midi-controls #midiImportQuantize,
+  .unified-import-dialog .midi-import-preview-actions {
+    order: initial;
+  }
+  .unified-import-dialog .midi-import-preview-actions {
+    width: auto;
+    margin-left: auto;
+  }
+}
+
+/* 2026-09-10 MIDI import toolbar alignment fix 2 ---------------------------
+   The generic .midi-import-selection-actions rule adds popup-row padding.
+   The select/clear pair lives inside the MIDI toolbar, so remove that inherited
+   padding entirely and keep it aligned with the controls to its right. */
+.unified-import-dialog .midi-import-midi-controls > .midi-import-inline-selection-actions {
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 30px;
+  height: 30px;
+  align-self: center;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0 !important;
+}
+.unified-import-dialog .midi-import-midi-controls > .midi-import-inline-selection-actions button {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  height: 30px;
+  min-height: 30px;
+  margin: 0;
+  padding-inline: 7px;
+  line-height: 28px;
+}
+.unified-import-dialog .midi-import-midi-controls > .midi-import-inline-selection-actions button + button {
+  margin-left: -1px;
+}
+
+@media (pointer: coarse), (max-width: 700px) {
+  .unified-import-dialog .midi-import-midi-controls > .midi-import-inline-selection-actions {
+    min-height: 34px;
+    height: 34px;
+  }
+  .unified-import-dialog .midi-import-midi-controls > .midi-import-inline-selection-actions button {
+    height: 34px;
+    min-height: 34px;
+    line-height: 32px;
+  }
+}

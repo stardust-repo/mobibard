@@ -104,6 +104,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "midi.err_selected_no_notes": "No notes were found for the selected instruments.",
     "midi.err_smpte": "SMPTE-timed MIDI is not supported. Export using PPQ/TPQN timing.",
     "midi.err_track_header": "MTrk header was not found in track {0}.",
+    "midi.limit_channels": "Max {0} channels per instrument",
     "midi.note_count": "{0} notes",
     "midi.part_default": "Part {0}",
     "midi.program_number": "Program {0}",

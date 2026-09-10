@@ -104,6 +104,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "midi.err_selected_no_notes": "所选乐器中没有找到音符。",
     "midi.err_smpte": "不支持 SMPTE 计时的 MIDI。请使用 PPQ/TPQN 方式导出。",
     "midi.err_track_header": "在第 {0} 轨中找不到 MTrk 头。",
+    "midi.limit_channels": "每种乐器最多 {0} 个通道",
     "midi.note_count": "{0} 个音符",
     "midi.part_default": "声部 {0}",
     "midi.program_number": "程序 {0}",
