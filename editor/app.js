@@ -16648,6 +16648,8 @@
         { label: `${noteLabel(pitch)} 행으로 이동`, action: () => { elements.rollViewport.scrollTop = pitchToY(pitch); } },
         { label: "중앙 C로 이동", action: () => { elements.rollViewport.scrollTop = Math.max(0, pitchToY(60) - 120); } },
         "separator",
+        { label: `${noteLabel(pitch)} 노트 선택에 추가`, disabled: isMidiReferenceActive() || state.activePanel !== "notes", action: () => selectNotesByKeyboardPitch(pitch) },
+        "separator",
         { label: i18nText("soundbank.change"), action: openEditorSoundFontDialog },
       ];
     });
