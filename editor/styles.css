@@ -7009,3 +7009,110 @@ a[class*="button"]:hover {
     line-height: 32px;
   }
 }
+
+/* 2026-09 compact selected-note trill conversion options -------------------- */
+.note-trill-dialog {
+  width: min(520px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--control-border);
+  border-radius: 13px;
+  background: var(--panel-2);
+  box-shadow: 0 18px 46px rgba(0,0,0,.42);
+}
+.note-trill-options {
+  display: grid;
+  gap: 7px;
+  padding: 12px 14px 4px;
+}
+.note-trill-option-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  color: var(--text);
+  font-size: 12px;
+}
+.note-trill-option-row > span {
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.note-trill-inline-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.note-trill-inline-controls select {
+  min-width: 86px;
+  max-width: 154px;
+  padding-inline: 8px 24px;
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text);
+}
+#noteTrillDynamicsSelect { min-width: 132px; max-width: 180px; }
+.note-trill-check,
+.note-trill-subcontrol {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+  user-select: none;
+  white-space: nowrap;
+}
+.note-trill-check { cursor: pointer; }
+.note-trill-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.note-trill-subcontrol > span { color: var(--muted); }
+.note-trill-subcontrol.is-disabled { opacity: .46; }
+.note-trill-subcontrol select { min-width: 74px; max-width: 92px; }
+.note-trill-help { padding-top: 5px; }
+.note-trill-actions { grid-template-columns: auto 1fr auto; }
+:root[data-theme="light"] .note-trill-dialog { background: #fff; }
+
+@media (max-width: 520px) {
+  .note-trill-option-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .note-trill-inline-controls select { flex: 1 1 96px; max-width: none; }
+  #noteTrillDynamicsSelect { flex-basis: 150px; max-width: none; }
+}
+
+/* 2026-09-13: compact channel action spacing and collapsed merge shortcut. */
+.channel-tree-toolbar {
+  column-gap: 3px !important;
+}
+/* 2026-09-13: tighter spacing for the collapsed channel rail. */
+.app-content.history-collapsed .sidebar-collapsed-rail {
+  gap: 2px;
+}
+.app-content.history-collapsed .sidebar-rail-channel-list {
+  gap: 2px;
+  padding-top: 1px;
+}
+
+.sidebar-rail-merge {
+  border-color: color-mix(in srgb, #3b82f6 55%, var(--control-border));
+  background: color-mix(in srgb, #3b82f6 11%, var(--control-bg));
+  color: color-mix(in srgb, #60a5fa 86%, var(--text));
+}
+.sidebar-rail-merge:hover:not(:disabled) {
+  background: color-mix(in srgb, #3b82f6 20%, var(--control-hover));
+}
+.sidebar-rail-merge .channel-merge-icon {
+  width: 19px;
+  height: 19px;
+  display: block;
+  pointer-events: none;
+}

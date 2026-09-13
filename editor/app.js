@@ -147,6 +147,7 @@
     pianoSection: document.querySelector(".piano-section"),
     historyPanel: document.querySelector("#historyPanel"),
     historyCornerToggle: document.querySelector("#historyCornerToggle"),
+    collapsedMergeChannelsButton: document.querySelector("#collapsedMergeChannelsButton"),
     collapsedAddChannelButton: document.querySelector("#collapsedAddChannelButton"),
     collapsedDeleteChannelsButton: document.querySelector("#collapsedDeleteChannelsButton"),
     collapsedChannelList: document.querySelector("#collapsedChannelList"),
@@ -378,6 +379,7 @@
     noteVolumeApplyButton: document.querySelector("#noteVolumeApplyButton"),
     noteVolumeSlider: document.querySelector("#noteVolumeSlider"),
     noteVolumeValue: document.querySelector("#noteVolumeValue"),
+    noteVolumeDialogTitle: document.querySelector("#noteVolumeDialogTitle"),
     noteVolumeSelectionLabel: document.querySelector("#noteVolumeSelectionLabel"),
     noteVolumeCurrentCounts: document.querySelector("#noteVolumeCurrentCounts"),
     noteVolumeTargetCounts: document.querySelector("#noteVolumeTargetCounts"),
@@ -389,6 +391,20 @@
     noteSplitSelectionLabel: document.querySelector("#noteSplitSelectionLabel"),
     noteSplitPreviewMeasure: document.querySelector("#noteSplitPreviewMeasure"),
     noteSplitPreviewLabel: document.querySelector("#noteSplitPreviewLabel"),
+    noteTrillBackdrop: document.querySelector("#noteTrillBackdrop"),
+    noteTrillSelectionLabel: document.querySelector("#noteTrillSelectionLabel"),
+    noteTrillDirectionSelect: document.querySelector("#noteTrillDirectionSelect"),
+    noteTrillIntervalSelect: document.querySelector("#noteTrillIntervalSelect"),
+    noteTrillStartDivisionSelect: document.querySelector("#noteTrillStartDivisionSelect"),
+    noteTrillGradualSpeed: document.querySelector("#noteTrillGradualSpeed"),
+    noteTrillEndDivisionSelect: document.querySelector("#noteTrillEndDivisionSelect"),
+    noteTrillDynamicsSelect: document.querySelector("#noteTrillDynamicsSelect"),
+    noteTrillVolumeRangeSelect: document.querySelector("#noteTrillVolumeRangeSelect"),
+    noteTrillStartNoteSelect: document.querySelector("#noteTrillStartNoteSelect"),
+    noteTrillEndOnBase: document.querySelector("#noteTrillEndOnBase"),
+    noteTrillCloseButton: document.querySelector("#noteTrillCloseButton"),
+    noteTrillCancelButton: document.querySelector("#noteTrillCancelButton"),
+    noteTrillApplyButton: document.querySelector("#noteTrillApplyButton"),
     tempoEditorBackdrop: document.querySelector("#tempoEditorBackdrop"),
     tempoEditorTitle: document.querySelector("#tempoEditorTitle"),
     tempoEditorPosition: document.querySelector("#tempoEditorPosition"),
@@ -481,6 +497,17 @@
     tempoTouchTap: null,
     tempoEditor: { mode: null, tempoId: null, beat: 0 },
     tempoSimplify: { maxBpmDeltaExclusive: 5, preserveExtrema: true },
+    trillOptions: {
+      direction: "up",
+      intervalSemitones: 2,
+      startDivision: 32,
+      gradualSpeed: false,
+      endDivision: 32,
+      dynamics: "preserve",
+      volumeRange: 3,
+      startWith: "base",
+      endOnBase: true,
+    },
     timeEdit: { beat: 0, scope: "all", channelId: null, preferredAction: null },
     suppressContextMenuUntil: 0,
     suppressNextContextMenu: false,
@@ -604,6 +631,7 @@
     longPress: null,
     masterVolume: 1,
     noteVolumeDisplay: "selected",
+    noteVolumeDialogScope: "selected",
     playbackRate: 1,
     rollSurface: {
       originX: 0,
@@ -2679,7 +2707,9 @@
       ? !activeMidiGroup?.notes?.length
       : !notesActive || !getActiveChannel()?.notes?.length);
     elements.editDeleteButton.disabled = midiActive || (audioActive ? !getActiveAudioClip() : !notesActive || !state.selectedNoteIds.size);
-    if (elements.editNoteVolumeButton) elements.editNoteVolumeButton.disabled = midiActive || audioActive || !notesActive || !state.selectedNoteIds.size;
+    if (elements.editNoteVolumeButton) {
+      elements.editNoteVolumeButton.disabled = !state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length > 0);
+    }
     // MML/MIDI 내보내기는 현재 선택/활성 패널/노트 유무와 관계없이 항상 사용할 수 있습니다.
     elements.fileExportButton.disabled = false;
     if (elements.midiExportButton) elements.midiExportButton.disabled = false;
@@ -3271,9 +3301,9 @@
           continue;
         }
         const widthValue = Math.max(5, endX - x - 1);
-        const selected = isActive && state.selectedNoteIds.has(note.id);
+        const selected = state.selectedNoteIds.has(note.id);
         const noteVolume = getNoteVolume(note);
-        const selectionDim = hasActiveSelection && !selected ? 0.75 : 1;
+        const selectionDim = isActive && hasActiveSelection && !selected ? 0.75 : 1;
         context.globalAlpha = channelAlpha * (0.62 + noteVolume / 15 * 0.36) * selectionDim;
 
         if (isActive) {
@@ -3311,13 +3341,15 @@
           context.globalAlpha = 1;
           context.fillStyle = theme.selectedShine;
           context.fillRect(x + 3, y + 2, Math.max(0, widthValue - 4), 3);
-          const handleWidth = Math.min(4, Math.max(2, Math.floor(widthValue / 4)));
-          context.fillStyle = theme.resizeHandle;
-          context.fillRect(x + 1, y + 1, handleWidth, Math.max(1, heightValue - 2));
-          context.fillRect(x + 1 + widthValue - handleWidth, y + 1, handleWidth, Math.max(1, heightValue - 2));
-          context.fillStyle = theme.resizeHandleLine;
-          context.fillRect(x + 2, y + 4, 1, Math.max(1, heightValue - 8));
-          context.fillRect(x + widthValue - 1, y + 4, 1, Math.max(1, heightValue - 8));
+          if (isActive) {
+            const handleWidth = Math.min(4, Math.max(2, Math.floor(widthValue / 4)));
+            context.fillStyle = theme.resizeHandle;
+            context.fillRect(x + 1, y + 1, handleWidth, Math.max(1, heightValue - 2));
+            context.fillRect(x + 1 + widthValue - handleWidth, y + 1, handleWidth, Math.max(1, heightValue - 2));
+            context.fillStyle = theme.resizeHandleLine;
+            context.fillRect(x + 2, y + 4, 1, Math.max(1, heightValue - 8));
+            context.fillRect(x + widthValue - 1, y + 4, 1, Math.max(1, heightValue - 8));
+          }
         }
         if (shouldDrawNoteVolumeLabel(isActive)) {
           // 마비노기 볼륨은 노트 시작점의 왼쪽 위 바깥에 표시합니다.
@@ -4531,6 +4563,22 @@
     drawKeyboard();
   }
 
+  function selectNotesByKeyboardPitch(pitch) {
+    if (isMidiReferenceActive() || state.activePanel !== "notes") return false;
+    const safePitch = clamp(Math.round(Number(pitch) || CONFIG.minPitch), CONFIG.minPitch, CONFIG.maxPitch);
+    const channel = getActiveChannel();
+    // Ctrl/Cmd + piano key is additive: keep the current selection and append
+    // every matching-pitch note from the active channel.
+    for (const note of channel?.notes || []) {
+      if (Math.round(Number(note.pitch) || CONFIG.minPitch) === safePitch) {
+        state.selectedNoteIds.add(note.id);
+      }
+    }
+    drawRoll();
+    updateChannelInfo();
+    return true;
+  }
+
   function handleKeyboardPointerDown(event) {
     if (event.button !== 0) {
       return;
@@ -4539,6 +4587,9 @@
     trySetPointerCapture(elements.keyboardCanvas, event.pointerId);
     const pitch = keyboardPitchFromPointer(event);
     state.keyboard.hoverPitch = pitch;
+    if (event.ctrlKey || event.metaKey) {
+      selectNotesByKeyboardPitch(pitch);
+    }
     previewKeyboardPitch(pitch);
     event.preventDefault();
   }
@@ -5376,6 +5427,9 @@
       list.append(button);
     });
 
+    if (elements.collapsedMergeChannelsButton) {
+      elements.collapsedMergeChannelsButton.disabled = state.channels.length < 2;
+    }
     if (elements.collapsedDeleteChannelsButton) {
       elements.collapsedDeleteChannelsButton.disabled = state.channels.length <= 1;
     }
@@ -8096,70 +8150,99 @@
     }
   }
 
+  function getAllEditorNotes() {
+    return state.channels.flatMap((channel) => Array.isArray(channel?.notes) ? channel.notes : []);
+  }
+
+  function getNoteVolumeDialogNotes() {
+    return state.noteVolumeDialogScope === "all" ? getAllEditorNotes() : getSelectedNotes();
+  }
+
   function updateNoteVolumeDialogCounts() {
-    const selected = getSelectedNotes();
-    renderNoteVolumeCountChips(elements.noteVolumeCurrentCounts, getNoteVolumeCounts(selected));
+    const notes = getNoteVolumeDialogNotes();
+    renderNoteVolumeCountChips(elements.noteVolumeCurrentCounts, getNoteVolumeCounts(notes));
     const targetVolume = clamp(Math.round(Number(elements.noteVolumeSlider?.value) || 0), 0, 15);
     renderNoteVolumeCountChips(
       elements.noteVolumeTargetCounts,
-      selected.length ? [{ volume: targetVolume, count: selected.length }] : [],
+      notes.length ? [{ volume: targetVolume, count: notes.length }] : [],
     );
   }
 
-  function openNoteVolumeDialog() {
-    if (state.activePanel === "audio") {
-      showToast("오디오에는 노트 볼륨 기능을 사용할 수 없습니다.");
+  function openNoteVolumeDialog(options = null) {
+    const scope = options?.scope === "all" ? "all" : "selected";
+    if (scope === "selected") {
+      if (state.activePanel === "audio") {
+        showToast("오디오에는 노트 볼륨 기능을 사용할 수 없습니다.");
+        return false;
+      }
+      if (isMidiReferenceActive()) {
+        showToast("MIDI 노트는 읽기 전용입니다.");
+        return false;
+      }
+    }
+    state.noteVolumeDialogScope = scope;
+    const notes = scope === "all" ? getAllEditorNotes() : getSelectedNotes();
+    if (!notes.length) {
+      showToast(scope === "all" ? i18nText("volume.no_editor_notes") : "볼륨을 수정할 노트를 선택하세요.");
       return false;
     }
-    if (isMidiReferenceActive()) {
-      showToast("MIDI 노트는 읽기 전용입니다.");
-      return false;
-    }
-    const selected = getSelectedNotes();
-    if (!selected.length) {
-      showToast("볼륨을 수정할 노트를 선택하세요.");
-      return false;
-    }
-    const volumes = selected.map((note) => getNoteVolume(note));
+    const volumes = notes.map((note) => getNoteVolume(note));
     const unique = new Set(volumes);
     const initial = unique.size === 1
       ? volumes[0]
       : Math.round(volumes.reduce((sum, value) => sum + value, 0) / volumes.length);
     elements.noteVolumeSlider.value = String(initial);
     elements.noteVolumeValue.textContent = unique.size === 1 ? `V${initial}` : `혼합 → V${initial}`;
-    elements.noteVolumeSelectionLabel.textContent = `${selected.length}개 선택 노트`;
+    if (elements.noteVolumeDialogTitle) {
+      elements.noteVolumeDialogTitle.textContent = scope === "all" ? i18nText("volume.edit_all_notes") : i18nText("note.volume");
+    }
+    elements.noteVolumeSelectionLabel.textContent = scope === "all"
+      ? i18nText("volume.all_channels_note_count", [notes.length.toLocaleString()])
+      : `${notes.length}개 선택 노트`;
+    elements.noteVolumeBackdrop?.querySelector("#noteVolumeDialog")?.setAttribute(
+      "aria-label",
+      scope === "all" ? i18nText("volume.edit_all_notes") : i18nText("note.edit_volume"),
+    );
     updateNoteVolumeDialogCounts();
     elements.noteVolumeBackdrop.hidden = false;
     requestAnimationFrame(() => elements.noteVolumeSlider.focus());
     return true;
   }
 
+  function openAllNoteVolumeDialog() {
+    return openNoteVolumeDialog({ scope: "all" });
+  }
+
   function closeNoteVolumeDialog() {
     if (elements.noteVolumeBackdrop) elements.noteVolumeBackdrop.hidden = true;
+    state.noteVolumeDialogScope = "selected";
   }
 
   function applySelectedNoteVolume() {
-    const selected = getSelectedNotes();
-    if (!selected.length) {
+    const scope = state.noteVolumeDialogScope;
+    const notes = getNoteVolumeDialogNotes();
+    if (!notes.length) {
       closeNoteVolumeDialog();
       return false;
     }
     const volume = clamp(Math.round(Number(elements.noteVolumeSlider.value) || 0), 0, 15);
     const velocity = mmlVolumeToVelocity(volume);
-    if (selected.every((note) => getNoteVolume(note) === volume)) {
+    if (notes.every((note) => getNoteVolume(note) === volume)) {
       closeNoteVolumeDialog();
       return false;
     }
-    for (const note of selected) {
+    for (const note of notes) {
       note.volume = volume;
       note.velocity = velocity;
     }
+    const changedCount = notes.length;
     closeNoteVolumeDialog();
-    state.channelNoteRuntime.delete(String(getActiveChannel()?.id));
-    markDirty("노트 볼륨 변경");
+    markDirty(scope === "all" ? "모든 볼륨 수정" : "노트 볼륨 변경");
     drawRoll();
     updateChannelInfo();
-    showToast(`${selected.length}개 노트의 볼륨을 V${volume}(으)로 변경했습니다.`);
+    showToast(scope === "all"
+      ? i18nText("volume.all_changed", [changedCount.toLocaleString(), volume])
+      : `${changedCount}개 노트의 볼륨을 V${volume}(으)로 변경했습니다.`);
     return true;
   }
 
@@ -13714,6 +13797,32 @@
     return tempo ? deleteTempo(tempo) : false;
   }
 
+  function getNonInitialTempos() {
+    return state.tempos.filter((item) => Math.abs(Number(item?.beat) || 0) > 1e-7);
+  }
+
+  function deleteAllNonInitialTempos() {
+    if (isMidiReferenceActive()) {
+      showToast("MIDI 탭의 템포는 읽기 전용입니다.");
+      return false;
+    }
+    const removable = getNonInitialTempos();
+    if (!removable.length) {
+      showToast(i18nText("tempo.delete_all_none"));
+      return false;
+    }
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    state.tempos = state.tempos.filter((item) => Math.abs(Number(item?.beat) || 0) <= 1e-7);
+    closeTempoEditor();
+    markDirty("모든 템포 삭제");
+    shrinkTimelineToContent();
+    drawRoll();
+    drawTimeline();
+    updateChannelInfo();
+    showToast(i18nText("tempo.delete_all_done", [removable.length.toLocaleString()]));
+    return true;
+  }
+
 
   function closeTempoSimplifyDialog() {
     if (elements.tempoSimplifyBackdrop) elements.tempoSimplifyBackdrop.hidden = true;
@@ -16049,7 +16158,149 @@
     return true;
   }
 
-  function convertSelectedNotesToTrill() {
+  function closeNoteTrillDialog() {
+    if (elements.noteTrillBackdrop) elements.noteTrillBackdrop.hidden = true;
+  }
+
+  function normalizeTrillDivision(value, fallback = 32) {
+    const division = Math.round(Number(value) || fallback);
+    return [16, 32, 64].includes(division) ? division : fallback;
+  }
+
+  function readNoteTrillOptionsFromUi() {
+    const direction = elements.noteTrillDirectionSelect?.value === "down" ? "down" : "up";
+    const intervalSemitones = Number(elements.noteTrillIntervalSelect?.value) === 1 ? 1 : 2;
+    const startDivision = normalizeTrillDivision(elements.noteTrillStartDivisionSelect?.value, 32);
+    const endDivision = normalizeTrillDivision(elements.noteTrillEndDivisionSelect?.value, startDivision);
+    const gradualSpeed = Boolean(elements.noteTrillGradualSpeed?.checked);
+    const dynamicsValue = String(elements.noteTrillDynamicsSelect?.value || "preserve");
+    const dynamics = ["preserve", "crescendo", "decrescendo", "swell"].includes(dynamicsValue)
+      ? dynamicsValue
+      : "preserve";
+    const volumeRange = clamp(Math.round(Number(elements.noteTrillVolumeRangeSelect?.value) || 3), 1, 5);
+    const startWith = elements.noteTrillStartNoteSelect?.value === "neighbor" ? "neighbor" : "base";
+    return {
+      direction,
+      intervalSemitones,
+      startDivision,
+      gradualSpeed,
+      endDivision,
+      dynamics,
+      volumeRange,
+      startWith,
+      endOnBase: elements.noteTrillEndOnBase?.checked !== false,
+    };
+  }
+
+  function updateNoteTrillOptionAvailability() {
+    const gradualSpeed = Boolean(elements.noteTrillGradualSpeed?.checked);
+    if (elements.noteTrillEndDivisionSelect) elements.noteTrillEndDivisionSelect.disabled = !gradualSpeed;
+    const dynamicsEnabled = String(elements.noteTrillDynamicsSelect?.value || "preserve") !== "preserve";
+    if (elements.noteTrillVolumeRangeSelect) elements.noteTrillVolumeRangeSelect.disabled = !dynamicsEnabled;
+    elements.noteTrillEndDivisionSelect?.closest(".note-trill-subcontrol")?.classList.toggle("is-disabled", !gradualSpeed);
+    elements.noteTrillVolumeRangeSelect?.closest(".note-trill-subcontrol")?.classList.toggle("is-disabled", !dynamicsEnabled);
+  }
+
+  function openNoteTrillDialog() {
+    const selected = getSelectedNotes();
+    if (!selected.length) {
+      showToast(i18nText("note.trill_need_selection"));
+      return false;
+    }
+    const options = state.trillOptions || {};
+    if (elements.noteTrillSelectionLabel) {
+      elements.noteTrillSelectionLabel.textContent = i18nText("note.trill_selected_count", [selected.length]);
+    }
+    if (elements.noteTrillDirectionSelect) elements.noteTrillDirectionSelect.value = options.direction === "down" ? "down" : "up";
+    if (elements.noteTrillIntervalSelect) elements.noteTrillIntervalSelect.value = String(Number(options.intervalSemitones) === 1 ? 1 : 2);
+    if (elements.noteTrillStartDivisionSelect) elements.noteTrillStartDivisionSelect.value = String(normalizeTrillDivision(options.startDivision, 32));
+    if (elements.noteTrillGradualSpeed) elements.noteTrillGradualSpeed.checked = Boolean(options.gradualSpeed);
+    if (elements.noteTrillEndDivisionSelect) elements.noteTrillEndDivisionSelect.value = String(normalizeTrillDivision(options.endDivision, 32));
+    if (elements.noteTrillDynamicsSelect) {
+      const value = String(options.dynamics || "preserve");
+      elements.noteTrillDynamicsSelect.value = ["preserve", "crescendo", "decrescendo", "swell"].includes(value) ? value : "preserve";
+    }
+    if (elements.noteTrillVolumeRangeSelect) elements.noteTrillVolumeRangeSelect.value = String(clamp(Math.round(Number(options.volumeRange) || 3), 1, 5));
+    if (elements.noteTrillStartNoteSelect) elements.noteTrillStartNoteSelect.value = options.startWith === "neighbor" ? "neighbor" : "base";
+    if (elements.noteTrillEndOnBase) elements.noteTrillEndOnBase.checked = options.endOnBase !== false;
+    updateNoteTrillOptionAvailability();
+    if (elements.noteTrillBackdrop) elements.noteTrillBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.noteTrillDirectionSelect?.focus());
+    return true;
+  }
+
+  function buildTrillSegmentDurations(durationBeat, options) {
+    const minimum = CONFIG.minimumNoteBeat;
+    const duration = Math.max(minimum, Number(durationBeat) || minimum);
+    const startUnit = Math.max(minimum, 4 / normalizeTrillDivision(options.startDivision, 32));
+    const endUnit = Math.max(minimum, 4 / normalizeTrillDivision(options.endDivision, options.startDivision || 32));
+    const durations = [];
+    let cursor = 0;
+    let remaining = duration;
+    let guard = 0;
+
+    while (remaining > 1e-7 && guard < 4096) {
+      guard += 1;
+      const progress = duration > minimum ? clamp(cursor / duration, 0, 1) : 0;
+      const interpolated = options.gradualSpeed
+        ? startUnit + (endUnit - startUnit) * progress
+        : startUnit;
+      const unit = Math.max(minimum, Math.round(interpolated / minimum) * minimum);
+      let piece = Math.min(unit, remaining);
+      const leftover = remaining - piece;
+      if (leftover > 1e-7 && leftover < minimum - 1e-7) {
+        piece = remaining;
+      }
+      if (piece < minimum - 1e-7) {
+        if (durations.length) durations[durations.length - 1] += remaining;
+        else durations.push(remaining);
+        remaining = 0;
+        break;
+      }
+      durations.push(piece);
+      remaining -= piece;
+      cursor += piece;
+    }
+    if (remaining > 1e-7 && durations.length) durations[durations.length - 1] += remaining;
+    // When slowing down, a short tail remainder would otherwise make the final
+    // attack suddenly fast again. Fold that tail into the previous note so the
+    // generated rhythm keeps moving in the requested direction.
+    if (options.gradualSpeed && endUnit > startUnit + 1e-7) {
+      while (durations.length >= 2 && durations[durations.length - 1] < durations[durations.length - 2] - 1e-7) {
+        durations[durations.length - 2] += durations.pop();
+      }
+    }
+    return durations.map((value) => Number(value.toFixed(6)));
+  }
+
+  function getTrillNeighborPitch(basePitch, options) {
+    const interval = Number(options.intervalSemitones) === 1 ? 1 : 2;
+    const direction = options.direction === "down" ? -1 : 1;
+    let candidate = basePitch + direction * interval;
+    if (candidate < CONFIG.minPitch || candidate > CONFIG.maxPitch) {
+      candidate = basePitch - direction * interval;
+    }
+    return clamp(candidate, CONFIG.minPitch, CONFIG.maxPitch);
+  }
+
+  function getTrillSegmentVolume(baseVolume, options, progress) {
+    const source = clamp(Math.round(Number(baseVolume) || 0), 0, 15);
+    const range = clamp(Math.round(Number(options.volumeRange) || 3), 1, 5);
+    const p = clamp(Number(progress) || 0, 0, 1);
+    if (options.dynamics === "crescendo") {
+      return clamp(source + Math.round(range * p), 0, 15);
+    }
+    if (options.dynamics === "decrescendo") {
+      return clamp(source - Math.round(range * p), 0, 15);
+    }
+    if (options.dynamics === "swell") {
+      const factor = 1 - 4 * Math.abs(p - 0.5); // -1 → +1 → -1
+      return clamp(source + Math.round(range * factor), 0, 15);
+    }
+    return source;
+  }
+
+  function convertSelectedNotesToTrill(options = state.trillOptions || {}) {
     if (isMidiReferenceActive() || state.activePanel !== "notes") return false;
     const channel = getActiveChannel();
     if (!channel?.notes?.length || !state.selectedNoteIds.size) return false;
@@ -16057,7 +16308,6 @@
     const selectedIds = new Set(state.selectedNoteIds);
     const nextNotes = [];
     const nextSelection = new Set();
-    const trillUnit = CONFIG.minimumNoteBeat;
     let convertedCount = 0;
 
     for (const note of channel.notes) {
@@ -16067,35 +16317,57 @@
       }
 
       const startBeat = Math.max(0, Number(note.startBeat) || 0);
-      const durationBeat = Math.max(trillUnit, Number(note.durationBeat) || trillUnit);
-      const segmentCount = Math.floor((durationBeat + 1e-7) / trillUnit);
-      if (segmentCount < 2) {
+      const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      const pieceDurations = buildTrillSegmentDurations(durationBeat, options);
+      if (pieceDurations.length < 2) {
         nextNotes.push(note);
         nextSelection.add(note.id);
         continue;
       }
 
-      const endBeat = startBeat + durationBeat;
       const basePitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
-      const neighborPitch = basePitch < CONFIG.maxPitch ? basePitch + 1 : basePitch - 1;
+      const neighborPitch = getTrillNeighborPitch(basePitch, options);
+      const baseVolume = getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume);
+      const originalTrillSegmentCount = pieceDurations.length;
+      const trillDurations = pieceDurations.slice();
+      // "원음으로 끝내기"가 마지막 두 타격을 같은 원음으로 만들 경우에는
+      // 마지막 원음을 다시 어택하지 않고 직전 원음의 길이만 늘립니다.
+      if (options.endOnBase !== false && trillDurations.length >= 2) {
+        const previousIndex = trillDurations.length - 2;
+        const previousAlternateIndex = previousIndex + (options.startWith === "neighbor" ? 1 : 0);
+        const previousPitch = previousAlternateIndex % 2 === 0 ? basePitch : neighborPitch;
+        if (previousPitch === basePitch) {
+          trillDurations[previousIndex] = Number((trillDurations[previousIndex] + trillDurations[previousIndex + 1]).toFixed(6));
+          trillDurations.pop();
+        }
+      }
+      let cursor = startBeat;
       convertedCount += 1;
 
-      for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
-        const segmentStart = startBeat + segmentIndex * trillUnit;
-        const segmentEnd = segmentIndex === segmentCount - 1
-          ? endBeat
-          : Math.min(endBeat, segmentStart + trillUnit);
+      trillDurations.forEach((pieceDuration, segmentIndex) => {
         const segmentId = segmentIndex === 0 ? note.id : state.nextNoteId++;
+        // If the final base attack was folded into the previous note, keep that
+        // previous segment's original dynamics value while only extending its length.
+        const progress = originalTrillSegmentCount > 1 ? segmentIndex / (originalTrillSegmentCount - 1) : 0;
+        const alternateIndex = segmentIndex + (options.startWith === "neighbor" ? 1 : 0);
+        let pitch = alternateIndex % 2 === 0 ? basePitch : neighborPitch;
+        if (options.endOnBase !== false && segmentIndex === trillDurations.length - 1) pitch = basePitch;
         const segment = {
           ...note,
           id: segmentId,
-          pitch: segmentIndex % 2 === 0 ? basePitch : neighborPitch,
-          startBeat: Number(segmentStart.toFixed(6)),
-          durationBeat: Number(Math.max(trillUnit, segmentEnd - segmentStart).toFixed(6)),
+          pitch,
+          startBeat: Number(cursor.toFixed(6)),
+          durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, pieceDuration).toFixed(6)),
         };
+        if (options.dynamics && options.dynamics !== "preserve") {
+          const volume = getTrillSegmentVolume(baseVolume, options, progress);
+          segment.volume = volume;
+          segment.velocity = mmlVolumeToVelocity(volume);
+        }
         nextNotes.push(segment);
         nextSelection.add(segmentId);
-      }
+        cursor += pieceDuration;
+      });
     }
 
     if (!convertedCount) {
@@ -16107,12 +16379,20 @@
     const survivingIds = new Set(channel.notes.map((note) => note.id));
     state.selectedNoteIds = new Set([...nextSelection].filter((noteId) => survivingIds.has(noteId)));
     state.channelNoteRuntime.delete(String(channel.id));
-    markDirty("선택 노트 트릴 변환");
+    markDirty(i18nText("history.note_trill"));
     shrinkTimelineToContent();
     drawRoll();
     updateChannelInfo();
     showToast(i18nText("note.trill_done", [convertedCount]));
     return true;
+  }
+
+  function applySelectedNotesToTrill() {
+    const options = readNoteTrillOptionsFromUi();
+    state.trillOptions = { ...options };
+    const changed = convertSelectedNotesToTrill(options);
+    if (changed) closeNoteTrillDialog();
+    return changed;
   }
 
   function deleteTimelineBeforeBeat(beat) {
@@ -16284,6 +16564,12 @@
         label: i18nText("tempo.simplify"),
         action: openTempoSimplifyDialog,
       };
+      const deleteAllTemposItem = {
+        label: i18nText("tempo.delete_all_except_initial"),
+        disabled: getNonInitialTempos().length === 0,
+        danger: true,
+        action: deleteAllNonInitialTempos,
+      };
       const selectedChannelMeasureItems = [
         {
           label: i18nText("timeline.add_measure_beat"),
@@ -16341,6 +16627,7 @@
         return [
           { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
           tempoSimplifyItem,
+          deleteAllTemposItem,
           "separator",
           ...selectedChannelMeasureItems,
           "separator",
@@ -16359,6 +16646,7 @@
           { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
           { label: i18nText("tempo.delete"), danger: true, action: () => deleteTempo(tempo) },
           tempoSimplifyItem,
+          deleteAllTemposItem,
           "separator",
           ...selectedChannelMeasureItems,
           "separator",
@@ -16375,6 +16663,7 @@
       return [
         { label: i18nText("timeline.add_tempo_measure"), disabled: beat <= 0, action: () => addTempoAtBeat(beat) },
         tempoSimplifyItem,
+        deleteAllTemposItem,
         ...selectedChannelMeasureItems,
         "separator",
         trimBeforeItem,
@@ -16465,7 +16754,7 @@
         { label: i18nText("context.action.note_cut"), action: cutSelectedNotes },
         { label: i18nText("context.action.note_volume_edit"), action: openNoteVolumeDialog },
         { label: i18nText("context.action.note_split"), action: openNoteSplitDialog },
-        { label: i18nText("context.action.note_trill"), action: convertSelectedNotesToTrill },
+        { label: i18nText("context.action.note_trill"), action: openNoteTrillDialog },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         "separator",
         { label: i18nText("context.action.note_extend_left"), action: () => extendSelectedNotesToSide(-1) },
@@ -16936,7 +17225,7 @@
     elements.editPasteButton.addEventListener("click", () => { closeEditMenu(); pasteNotesFromClipboard(); });
     elements.editSelectAllButton.addEventListener("click", () => { closeEditMenu(); selectAllCurrentContext(); });
     elements.editDeleteButton.addEventListener("click", () => { closeEditMenu(); deleteCurrentSelection(); });
-    elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openNoteVolumeDialog(); });
+    elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openAllNoteVolumeDialog(); });
     elements.fileExportButton.addEventListener("click", () => { closeFileMenu(); exportCurrentContextAsMml(); });
     elements.midiExportButton?.addEventListener("click", () => { closeFileMenu(); exportProjectAsMidi(); });
     elements.audioExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsAudioOgg(); });
@@ -17323,6 +17612,7 @@
 
     elements.mergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
     elements.addChannelButton.addEventListener("click", addChannel);
+    elements.collapsedMergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
     elements.collapsedAddChannelButton?.addEventListener("click", addChannel);
     elements.deleteChannelsButton?.addEventListener("click", openChannelDeleteDialog);
     elements.collapsedDeleteChannelsButton?.addEventListener("click", openChannelDeleteDialog);
@@ -17504,6 +17794,14 @@
     elements.noteSplitBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.noteSplitBackdrop) closeNoteSplitDialog();
     });
+    elements.noteTrillCloseButton?.addEventListener("click", closeNoteTrillDialog);
+    elements.noteTrillCancelButton?.addEventListener("click", closeNoteTrillDialog);
+    elements.noteTrillApplyButton?.addEventListener("click", applySelectedNotesToTrill);
+    elements.noteTrillGradualSpeed?.addEventListener("change", updateNoteTrillOptionAvailability);
+    elements.noteTrillDynamicsSelect?.addEventListener("change", updateNoteTrillOptionAvailability);
+    elements.noteTrillBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.noteTrillBackdrop) closeNoteTrillDialog();
+    });
     elements.tempoEditorCloseButton?.addEventListener("click", closeTempoEditor);
     elements.tempoEditorCancelButton?.addEventListener("click", closeTempoEditor);
     elements.tempoEditorApplyButton?.addEventListener("click", applyTempoEditor);
@@ -17625,6 +17923,7 @@
           closeMidiTransferDialog();
           closeNoteVolumeDialog();
           closeNoteSplitDialog();
+          closeNoteTrillDialog();
           closeChannelShiftDialog();
           closeTempoEditor();
           closeTempoSimplifyDialog();
@@ -17707,6 +18006,7 @@
         closeMidiTransferDialog();
         closeNoteVolumeDialog();
         closeNoteSplitDialog();
+        closeNoteTrillDialog();
         closeChannelShiftDialog();
         closeTempoEditor();
         closeTempoSimplifyDialog();
