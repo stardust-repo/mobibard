@@ -12636,31 +12636,12 @@
       return [{ index: 1, mml: source, parts: sourceParts, lengths: sourceLengths, maxPartLength: sourceMax }];
     }
 
-    if (sourceParts.length <= 6 && window.MabiOptimizer?.splitMmlPages) {
-      try {
-        const result = window.MabiOptimizer.splitMmlPages(source, {
-          partCount: Math.max(1, sourceParts.length),
-          maxChars: mmlExportSplitMaxChars,
-          searchEndPercent: 50,
-          maxCommonSilenceBeats: 2,
-        });
-        if (Array.isArray(result?.pages) && result.pages.length) {
-          return result.pages.map((page, index) => {
-            const parts = Array.isArray(page.parts) ? page.parts.slice() : splitMmlPartsForExport(page.mml);
-            const lengths = Array.isArray(page.lengths) ? page.lengths.slice() : parts.map((part) => String(part || "").length);
-            return {
-              ...page,
-              index: index + 1,
-              parts,
-              lengths,
-              maxPartLength: Number(page.maxPartLength) || (lengths.length ? Math.max(...lengths) : 0),
-            };
-          });
-        }
-      } catch (error) {
-        console.warn("Editor MML split fallback", error);
-      }
-    }
+    // Editor의 분할 복사는 이미 생성된 MML의 실제 글자 수를 기준으로 해야 한다.
+    // 공용 MML optimizer는 파싱 후 다시 렌더링하면서 l 명령 등을 사용해 원문을
+    // 압축할 수 있어서, 원본 파트가 제한을 넘더라도 "한 페이지"로 판단할 수 있다.
+    // (예: 실제 Editor 출력 2,400자 초과 -> optimizer 재렌더 후 2,400자 미만)
+    // 따라서 Editor에서는 선택 채널의 원본 노트 타임라인을 직접 분할하고,
+    // 각 구간을 Editor와 동일한 MML 렌더러로 다시 만들어 제한을 검사한다.
 
     const tempos = getSortedTempos();
     const totalEndBeat = getMmlExportEndBeat(channels);
