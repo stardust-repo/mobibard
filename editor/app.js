@@ -473,6 +473,7 @@
     nextNoteId: 1,
     dirty: false,
     channels: createDefaultChannels(),
+    soloChannelIds: new Set(),
     tempos: createDefaultTempos(),
     nextTempoId: 2,
     interaction: null,
@@ -3241,7 +3242,7 @@
       const hasActiveSelection = isActive && state.selectedNoteIds.size > 0;
       // Keep overlaps visible, while giving the active channel a dense foreground presence.
       const baseAlpha = isActive ? 0.99 : 0.70;
-      const channelAlpha = channel.muted ? baseAlpha * 0.46 : baseAlpha;
+      const channelAlpha = isChannelEffectivelyMuted(channel) ? baseAlpha * 0.46 : baseAlpha;
       context.globalAlpha = channelAlpha;
 
       const notesInView = getVisibleChannelNotes(
@@ -3324,7 +3325,7 @@
           const volumeLabel = `V${noteVolume}`;
           const volumeFontSize = clamp(Math.floor(heightValue - 1), 6, 9);
           context.save();
-          context.globalAlpha = channel.muted
+          context.globalAlpha = isChannelEffectivelyMuted(channel)
             ? (isActive ? 0.54 : 0.34)
             : (isActive ? 0.96 : 0.62);
           context.font = `700 ${volumeFontSize}px system-ui, sans-serif`;
@@ -3530,7 +3531,7 @@
       const barHeight = isActiveChannel ? lineWidth * 2 : lineWidth;
       const barColor = getChannelColor(channel, index);
       const borderColor = state.theme === "light" ? "rgba(74,88,106,.68)" : "rgba(244,248,252,.72)";
-      context.globalAlpha = channel.muted ? 0.28 : (channel.visible === false ? 0.42 : 0.92);
+      context.globalAlpha = isChannelEffectivelyMuted(channel) ? 0.28 : (channel.visible === false ? 0.42 : 0.92);
       let pendingStart = -1;
       let pendingEnd = -1;
       const flush = () => {
@@ -3817,7 +3818,7 @@
       }
     } else {
       for (const channel of state.channels) {
-        if (channel.muted) continue;
+        if (isChannelEffectivelyMuted(channel)) continue;
         for (const note of channel.notes || []) {
           if (note.startBeat <= safeBeat + 1e-7 && note.startBeat + note.durationBeat > safeBeat + 1e-7) {
             const velocity = getNotePlaybackVelocity(note);
@@ -5332,7 +5333,7 @@
       const active = state.activePanel === "notes" && index === state.activeChannel;
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `sidebar-rail-channel${active ? " active" : ""}${channel.muted ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}`;
+      button.className = `sidebar-rail-channel${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}${isChannelSolo(channel) ? " is-solo" : ""}`;
       button.style.setProperty("--channel-color", getChannelColor(channel, index));
       button.textContent = String(index + 1);
       button.title = channel.name;
@@ -5478,16 +5479,23 @@
     if (!elements.channelTabs) return;
     elements.channelTabs.replaceChildren();
 
-    const createAction = ({ kind, active, label, title, onClick, sweep = false, sweepId = "" }) => {
+    const createAction = ({ kind, active, label, title, onClick, onContextMenu = null, sweep = false, sweepId = "", solo = false }) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `channel-tree-action channel-tree-${kind}`;
-      button.setAttribute("aria-pressed", String(Boolean(active)));
+      button.className = `channel-tree-action channel-tree-${kind}${solo ? " is-solo" : ""}`;
+      button.setAttribute("aria-pressed", String(Boolean(solo || active)));
       button.setAttribute("aria-label", label);
       button.title = title;
       button.textContent = kind === "visibility"
         ? "👁"
-        : (active ? "🔇" : "🔊");
+        : (solo ? "S" : (active ? "🔇" : "🔊"));
+      if (typeof onContextMenu === "function") {
+        button.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onContextMenu(event);
+        });
+      }
       if (sweep) {
         button.dataset.channelSweepKind = kind;
         button.dataset.channelSweepId = String(sweepId);
@@ -5513,7 +5521,8 @@
     state.channels.forEach((channel, index) => {
       const active = state.activePanel === "notes" && index === state.activeChannel;
       const item = document.createElement("div");
-      item.className = `channel-tab-item channel-tree-item channel-tree-channel-item${active ? " active" : ""}${channel.muted ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}`;
+      const channelSolo = isChannelSolo(channel);
+      item.className = `channel-tab-item channel-tree-item channel-tree-channel-item${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}`;
       item.style.setProperty("--channel-color", getChannelColor(channel, index));
       item.dataset.channelIndex = String(index);
       item.dataset.channelId = String(channel.id);
@@ -5546,10 +5555,18 @@
         createAction({
           kind: "mute",
           active: channel.muted,
-          label: `${channel.name} ${channel.muted ? "음소거 해제" : "음소거"}`,
-          title: channel.muted ? "음소거 해제" : "음소거",
-          onClick: () => setChannelMutedById(channel.id, !channel.muted),
-          sweep: true,
+          solo: channelSolo,
+          label: channelSolo
+            ? `${channel.name} 싱글 해제`
+            : `${channel.name} ${channel.muted ? "음소거 해제" : "음소거"}`,
+          title: channelSolo
+            ? "싱글 해제"
+            : `${channel.muted ? "음소거 해제" : "음소거"} · 오른쪽 클릭: 싱글`,
+          onClick: () => channelSolo
+            ? setChannelSoloById(channel.id, false)
+            : setChannelMutedById(channel.id, !channel.muted),
+          onContextMenu: () => setChannelSoloById(channel.id, !channelSolo),
+          sweep: !channelSolo,
           sweepId: channel.id,
         }),
       );
@@ -9169,6 +9186,65 @@
     return state.channels.find((channel) => String(channel.id) === String(channelId)) || null;
   }
 
+  function isChannelSolo(channelOrId) {
+    const channelId = typeof channelOrId === "object" && channelOrId
+      ? channelOrId.id
+      : channelOrId;
+    return state.soloChannelIds.has(String(channelId));
+  }
+
+  function pruneSoloChannelIds() {
+    const validIds = new Set(state.channels.map((channel) => String(channel.id)));
+    for (const channelId of [...state.soloChannelIds]) {
+      if (!validIds.has(String(channelId))) state.soloChannelIds.delete(String(channelId));
+    }
+    return state.soloChannelIds.size;
+  }
+
+  function isChannelEffectivelyMuted(channel) {
+    if (!channel) return true;
+    pruneSoloChannelIds();
+    if (state.soloChannelIds.size) return !isChannelSolo(channel);
+    return Boolean(channel.muted);
+  }
+
+  function captureChannelAudibleStates() {
+    return new Map(state.channels.map((channel) => [String(channel.id), !isChannelEffectivelyMuted(channel)]));
+  }
+
+  function refreshChannelPlaybackForAudibleStateChange(beforeAudible) {
+    if (!(state.playback.running || state.playback.loading)) return;
+    for (const channel of state.channels) {
+      const key = String(channel.id);
+      const wasAudible = Boolean(beforeAudible?.get(key));
+      const isAudible = !isChannelEffectivelyMuted(channel);
+      if (wasAudible === isAudible) continue;
+      if (isAudible) schedulePlaybackCatchupForSource(channel.id, { source: "channel" });
+      else releasePlaybackVoicesForSource(channel.id, { source: "channel" });
+    }
+    refreshPlaybackVisualsAfterMuteChange();
+  }
+
+  function setChannelSoloById(channelId, solo, { notify = true } = {}) {
+    const channel = getChannelById(channelId);
+    if (!channel) return false;
+    const key = String(channel.id);
+    const nextSolo = Boolean(solo);
+    if (state.soloChannelIds.has(key) === nextSolo) return false;
+
+    const beforeAudible = captureChannelAudibleStates();
+    if (nextSolo) state.soloChannelIds.add(key);
+    else state.soloChannelIds.delete(key);
+    refreshChannelPlaybackForAudibleStateChange(beforeAudible);
+
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    if (notify) showToast(`${channel.name} ${nextSolo ? "싱글" : "싱글 해제"}`);
+    return true;
+  }
+
   function setChannelVisibleById(channelId, visible, { notify = true } = {}) {
     const channel = getChannelById(channelId);
     const nextVisible = Boolean(visible);
@@ -9187,18 +9263,12 @@
     const channel = getChannelById(channelId);
     const nextMuted = Boolean(muted);
     if (!channel || channel.muted === nextMuted) return false;
+    const beforeAudible = captureChannelAudibleStates();
     channel.muted = nextMuted;
     setDirtyWithoutHistory();
 
-    // 재생 자체를 정지/재시작하지 않고 해당 채널의 음원만 갱신합니다.
-    if (state.playback.running || state.playback.loading) {
-      if (channel.muted) {
-        releasePlaybackVoicesForSource(channel.id, { source: "channel" });
-      } else {
-        schedulePlaybackCatchupForSource(channel.id, { source: "channel" });
-      }
-      refreshPlaybackVisualsAfterMuteChange();
-    }
+    // 싱글 모드가 켜져 있으면 실제 들리는 상태를 기준으로 재생 음원만 갱신합니다.
+    refreshChannelPlaybackForAudibleStateChange(beforeAudible);
 
     renderChannelTabs();
     renderChannelEditor();
@@ -9210,19 +9280,16 @@
 
   function setAllChannelsMuted(muted, { notify = true } = {}) {
     const nextMuted = Boolean(muted);
+    const beforeAudible = captureChannelAudibleStates();
     let changed = false;
     for (const channel of state.channels) {
       if (channel.muted === nextMuted) continue;
       channel.muted = nextMuted;
       changed = true;
-      if (state.playback.running || state.playback.loading) {
-        if (nextMuted) releasePlaybackVoicesForSource(channel.id, { source: "channel" });
-        else schedulePlaybackCatchupForSource(channel.id, { source: "channel" });
-      }
     }
     if (!changed) return false;
     setDirtyWithoutHistory();
-    if (state.playback.running || state.playback.loading) refreshPlaybackVisualsAfterMuteChange();
+    refreshChannelPlaybackForAudibleStateChange(beforeAudible);
     renderChannelTabs();
     renderChannelEditor();
     drawRoll();
@@ -9618,6 +9685,7 @@
     if (!ids.size) return false;
     const activeId = getActiveChannel()?.id;
     const activeOldIndex = state.activeChannel;
+    for (const channelId of ids) state.soloChannelIds.delete(String(channelId));
     state.channels = state.channels.filter((channel) => !ids.has(String(channel.id)));
     if (!state.channels.length) {
       state.channels = createDefaultChannels(1);
@@ -9643,6 +9711,7 @@
     const targetIndex = clamp(index, 0, state.channels.length - 1);
     const channel = state.channels[targetIndex];
     const activeChannelId = getActiveChannel()?.id;
+    state.soloChannelIds.delete(String(channel.id));
     state.channels.splice(targetIndex, 1);
     if (!state.channels.length) {
       state.channels = createDefaultChannels(1);
@@ -14232,7 +14301,7 @@
     }
     const notes = [];
     for (const channel of state.channels) {
-      if (!includeMuted && channel.muted) continue;
+      if (!includeMuted && isChannelEffectivelyMuted(channel)) continue;
       for (const note of channel.notes) {
         if (note.startBeat + note.durationBeat <= startBeat + 1e-7) continue;
         notes.push({
@@ -14267,7 +14336,7 @@
       return Boolean(group && !group.muted);
     }
     const channel = getChannelById(note.sourceId);
-    return Boolean(channel && !channel.muted);
+    return Boolean(channel && !isChannelEffectivelyMuted(channel));
   }
 
   function trackPlaybackVoice(note, voice) {
@@ -15217,6 +15286,7 @@
   }
 
   async function loadProjectFromFile(file, { notify = true, loadedFileName = null } = {}) {
+    state.soloChannelIds.clear();
     state.channelNoteRuntime.clear();
     state.audioRuntime.clear();
     state.collapsedMidiDocumentIds.clear();
@@ -15498,6 +15568,7 @@
   }
 
   function resetProject({ notify = true } = {}) {
+    state.soloChannelIds.clear();
     state.channelNoteRuntime.clear();
     state.collapsedMidiDocumentIds.clear();
     state.collapsedChannelGroups = { edit: false, source: false };
@@ -15756,6 +15827,22 @@
       closeContextMenu();
       return;
     }
+
+    // 채널 음소거 버튼의 오른쪽 클릭은 일반 컨텍스트 메뉴 대신 싱글(Solo) 토글로 사용합니다.
+    // document 캡처 단계에서 처리해 채널 항목 컨텍스트 메뉴가 뒤이어 열리지 않게 합니다.
+    const channelMuteButton = event.target?.closest?.(".channel-tree-channel-item .channel-tree-mute");
+    if (channelMuteButton) {
+      const channelItem = channelMuteButton.closest(".channel-tree-channel-item");
+      const channelId = channelItem?.dataset?.channelId;
+      if (channelId) {
+        event.stopPropagation();
+        resetChannelActionSweep({ releaseCapture: true });
+        closeContextMenu();
+        setChannelSoloById(channelId, !isChannelSolo(channelId));
+        return;
+      }
+    }
+
     const area = resolveContextArea(event.target);
     if (area.name === "topbar") {
       closeContextMenu();
@@ -15959,6 +16046,72 @@
     drawRoll();
     updateChannelInfo();
     showToast(i18nText("note.merge_same_pitch", [plan.mergeNoteCount, plan.groups.length]));
+    return true;
+  }
+
+  function convertSelectedNotesToTrill() {
+    if (isMidiReferenceActive() || state.activePanel !== "notes") return false;
+    const channel = getActiveChannel();
+    if (!channel?.notes?.length || !state.selectedNoteIds.size) return false;
+
+    const selectedIds = new Set(state.selectedNoteIds);
+    const nextNotes = [];
+    const nextSelection = new Set();
+    const trillUnit = CONFIG.minimumNoteBeat;
+    let convertedCount = 0;
+
+    for (const note of channel.notes) {
+      if (!selectedIds.has(note.id)) {
+        nextNotes.push(note);
+        continue;
+      }
+
+      const startBeat = Math.max(0, Number(note.startBeat) || 0);
+      const durationBeat = Math.max(trillUnit, Number(note.durationBeat) || trillUnit);
+      const segmentCount = Math.floor((durationBeat + 1e-7) / trillUnit);
+      if (segmentCount < 2) {
+        nextNotes.push(note);
+        nextSelection.add(note.id);
+        continue;
+      }
+
+      const endBeat = startBeat + durationBeat;
+      const basePitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+      const neighborPitch = basePitch < CONFIG.maxPitch ? basePitch + 1 : basePitch - 1;
+      convertedCount += 1;
+
+      for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
+        const segmentStart = startBeat + segmentIndex * trillUnit;
+        const segmentEnd = segmentIndex === segmentCount - 1
+          ? endBeat
+          : Math.min(endBeat, segmentStart + trillUnit);
+        const segmentId = segmentIndex === 0 ? note.id : state.nextNoteId++;
+        const segment = {
+          ...note,
+          id: segmentId,
+          pitch: segmentIndex % 2 === 0 ? basePitch : neighborPitch,
+          startBeat: Number(segmentStart.toFixed(6)),
+          durationBeat: Number(Math.max(trillUnit, segmentEnd - segmentStart).toFixed(6)),
+        };
+        nextNotes.push(segment);
+        nextSelection.add(segmentId);
+      }
+    }
+
+    if (!convertedCount) {
+      showToast(i18nText("note.trill_no_change"));
+      return false;
+    }
+
+    channel.notes = normalizeMonophonicNotes(nextNotes);
+    const survivingIds = new Set(channel.notes.map((note) => note.id));
+    state.selectedNoteIds = new Set([...nextSelection].filter((noteId) => survivingIds.has(noteId)));
+    state.channelNoteRuntime.delete(String(channel.id));
+    markDirty("선택 노트 트릴 변환");
+    shrinkTimelineToContent();
+    drawRoll();
+    updateChannelInfo();
+    showToast(i18nText("note.trill_done", [convertedCount]));
     return true;
   }
 
@@ -16187,7 +16340,6 @@
       if (tempo?.fixed) {
         return [
           { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
-          { label: "위치 고정 · 이동/삭제 불가", disabled: true },
           tempoSimplifyItem,
           "separator",
           ...selectedChannelMeasureItems,
@@ -16313,6 +16465,7 @@
         { label: i18nText("context.action.note_cut"), action: cutSelectedNotes },
         { label: i18nText("context.action.note_volume_edit"), action: openNoteVolumeDialog },
         { label: i18nText("context.action.note_split"), action: openNoteSplitDialog },
+        { label: i18nText("context.action.note_trill"), action: convertSelectedNotesToTrill },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         "separator",
         { label: i18nText("context.action.note_extend_left"), action: () => extendSelectedNotesToSide(-1) },

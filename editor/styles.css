@@ -2941,6 +2941,16 @@ button {
   background: color-mix(in srgb, var(--danger) 13%, var(--control-bg));
   color: #ff9ba6;
 }
+.channel-tree-mute.is-solo {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 17%, var(--control-bg));
+  color: #9fe1ff;
+  font-size: 12px;
+  font-weight: 900;
+}
+.channel-tree-channel-item.is-solo {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 78%, transparent);
+}
 .channel-tree-expander {
   flex: 0 0 22px;
   width: 22px;
@@ -3122,6 +3132,7 @@ button {
 }
 :root[data-theme="light"] .channel-tree-visibility[aria-pressed="true"] { color: #176c49; }
 :root[data-theme="light"] .channel-tree-mute[aria-pressed="true"] { color: #a32637; }
+:root[data-theme="light"] .channel-tree-mute.is-solo { color: #0b5d88; }
 
 @media (max-width: 900px) {
   :root { --sidebar-width: clamp(214px, 29vw, 248px); }
