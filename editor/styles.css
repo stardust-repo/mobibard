@@ -6672,36 +6672,6 @@ a[class*="button"]:hover {
   align-self: stretch;
 }
 
-/* fixed95: selected-note split ------------------------------------------------ */
-.note-split-dialog {
-  width: min(430px, 100%);
-  overflow: hidden;
-  border: 1px solid var(--control-border);
-  border-radius: 13px;
-  background: var(--panel-2);
-  box-shadow: 0 18px 46px rgba(0,0,0,.42);
-}
-.note-split-field {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  padding: 18px 16px 10px;
-  color: var(--text);
-  font-size: 12px;
-}
-.note-split-field select {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--control-border);
-  background: var(--control-bg);
-  color: var(--text);
-  padding-inline: 10px;
-  font-weight: 800;
-}
-.note-split-actions { grid-template-columns: auto 1fr auto; }
-:root[data-theme="light"] .note-split-dialog { background: #fff; }
-
 
 /* fixed99: centered measure buttons and note split preview */
 .timeline-space-control {
@@ -6727,83 +6697,6 @@ a[class*="button"]:hover {
   height: 26px;
   margin: 0;
 }
-.note-split-field {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px 6px;
-}
-.note-split-number {
-  justify-self: stretch;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-.note-split-number input {
-  min-width: 0;
-  width: 100%;
-  text-align: right;
-}
-.note-split-preview {
-  margin: 8px 14px 4px;
-  padding: 10px;
-  border: 1px solid var(--control-border);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--panel-2) 84%, var(--control-bg));
-}
-.note-split-preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-  color: var(--muted);
-  font-size: 11px;
-}
-.note-split-preview-header strong {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-.note-split-preview-measure {
-  position: relative;
-  height: 54px;
-  overflow: hidden;
-  border-inline: 2px solid color-mix(in srgb, var(--text) 68%, transparent);
-  background: color-mix(in srgb, var(--panel-2) 92%, var(--control-bg));
-}
-.note-split-preview-measure::before {
-  content: "";
-  position: absolute;
-  left: 0; right: 0; top: 50%;
-  height: 1px;
-  background: color-mix(in srgb, var(--muted) 62%, transparent);
-}
-.note-split-preview-note-row {
-  position: absolute;
-  z-index: 1;
-  left: 0;
-  right: 0;
-  top: 16px;
-  height: 22px;
-}
-.note-split-preview-note {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-block: 1px solid color-mix(in srgb, var(--accent) 82%, #0000);
-  background: color-mix(in srgb, var(--accent) 72%, transparent);
-}
-.note-split-preview-cut {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 0;
-  border-left: 1px dashed color-mix(in srgb, #fff 78%, var(--accent));
-  transform: translateX(-.5px);
-  pointer-events: none;
-}
-.note-split-preview-measure.invalid .note-split-preview-note-row { opacity: .2; }
-
 
 /* fixed100: context hierarchy and brighter measure icon states */
 .context-menu .menu-label {
@@ -7010,9 +6903,9 @@ a[class*="button"]:hover {
   }
 }
 
-/* 2026-09 compact selected-note trill conversion options -------------------- */
+/* 2026-09 unified note trill/repeat conversion options ------------------------- */
 .note-trill-dialog {
-  width: min(520px, 100%);
+  width: min(540px, 100%);
   overflow: hidden;
   border: 1px solid var(--control-border);
   border-radius: 13px;
@@ -7038,6 +6931,7 @@ a[class*="button"]:hover {
   font-weight: 700;
   white-space: nowrap;
 }
+.note-trill-option-row.is-disabled { opacity: .46; }
 .note-trill-inline-controls {
   min-width: 0;
   display: flex;
@@ -7053,6 +6947,9 @@ a[class*="button"]:hover {
   background: var(--control-bg);
   color: var(--text);
 }
+#noteTrillDirectionSelect { min-width: 118px; }
+#noteTrillStartDivisionSelect,
+#noteTrillEndDivisionSelect { min-width: 82px; max-width: 96px; }
 #noteTrillDynamicsSelect { min-width: 132px; max-width: 180px; }
 .note-trill-check,
 .note-trill-subcontrol {
@@ -7075,8 +6972,87 @@ a[class*="button"]:hover {
 }
 .note-trill-subcontrol > span { color: var(--muted); }
 .note-trill-subcontrol.is-disabled { opacity: .46; }
-.note-trill-subcontrol select { min-width: 74px; max-width: 92px; }
-.note-trill-help { padding-top: 5px; }
+.note-trill-subcontrol select { min-width: 74px; max-width: 96px; }
+#noteTrillIntervalSelect:disabled { opacity: .46; }
+.note-trill-preview {
+  margin: 8px 14px 5px;
+  padding: 9px 10px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 84%, var(--control-bg));
+}
+.note-trill-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.note-trill-preview-header strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.note-trill-preview-grid {
+  display: grid;
+  gap: 3px;
+  min-height: 31px;
+}
+.note-trill-preview-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-height: 27px;
+}
+.note-trill-preview-pitch {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.note-trill-preview-lane {
+  position: relative;
+  height: 25px;
+  overflow: hidden;
+  border-inline: 1px solid color-mix(in srgb, var(--text) 52%, transparent);
+  background:
+    linear-gradient(to right,
+      transparent 0,
+      transparent calc(25% - 1px),
+      color-mix(in srgb, var(--muted) 32%, transparent) calc(25% - 1px),
+      color-mix(in srgb, var(--muted) 32%, transparent) 25%,
+      transparent 25%,
+      transparent calc(50% - 1px),
+      color-mix(in srgb, var(--muted) 32%, transparent) calc(50% - 1px),
+      color-mix(in srgb, var(--muted) 32%, transparent) 50%,
+      transparent 50%,
+      transparent calc(75% - 1px),
+      color-mix(in srgb, var(--muted) 32%, transparent) calc(75% - 1px),
+      color-mix(in srgb, var(--muted) 32%, transparent) 75%,
+      transparent 75%),
+    color-mix(in srgb, var(--panel-2) 92%, var(--control-bg));
+}
+.note-trill-preview-note {
+  position: absolute;
+  top: 3px;
+  height: 19px;
+  min-width: 2px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 80%, var(--text) 20%);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 78%, transparent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(0,0,0,.75);
+  white-space: nowrap;
+}
 .note-trill-actions { grid-template-columns: auto 1fr auto; }
 :root[data-theme="light"] .note-trill-dialog { background: #fff; }
 
@@ -7087,6 +7063,7 @@ a[class*="button"]:hover {
   }
   .note-trill-inline-controls select { flex: 1 1 96px; max-width: none; }
   #noteTrillDynamicsSelect { flex-basis: 150px; max-width: none; }
+  .note-trill-preview-row { grid-template-columns: 34px minmax(0, 1fr); }
 }
 
 /* 2026-09-13: compact channel action spacing and collapsed merge shortcut. */

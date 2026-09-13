@@ -383,14 +383,6 @@
     noteVolumeSelectionLabel: document.querySelector("#noteVolumeSelectionLabel"),
     noteVolumeCurrentCounts: document.querySelector("#noteVolumeCurrentCounts"),
     noteVolumeTargetCounts: document.querySelector("#noteVolumeTargetCounts"),
-    noteSplitBackdrop: document.querySelector("#noteSplitBackdrop"),
-    noteSplitCloseButton: document.querySelector("#noteSplitCloseButton"),
-    noteSplitCancelButton: document.querySelector("#noteSplitCancelButton"),
-    noteSplitApplyButton: document.querySelector("#noteSplitApplyButton"),
-    noteSplitUnitInput: document.querySelector("#noteSplitUnitInput"),
-    noteSplitSelectionLabel: document.querySelector("#noteSplitSelectionLabel"),
-    noteSplitPreviewMeasure: document.querySelector("#noteSplitPreviewMeasure"),
-    noteSplitPreviewLabel: document.querySelector("#noteSplitPreviewLabel"),
     noteTrillBackdrop: document.querySelector("#noteTrillBackdrop"),
     noteTrillSelectionLabel: document.querySelector("#noteTrillSelectionLabel"),
     noteTrillDirectionSelect: document.querySelector("#noteTrillDirectionSelect"),
@@ -402,6 +394,8 @@
     noteTrillVolumeRangeSelect: document.querySelector("#noteTrillVolumeRangeSelect"),
     noteTrillStartNoteSelect: document.querySelector("#noteTrillStartNoteSelect"),
     noteTrillEndOnBase: document.querySelector("#noteTrillEndOnBase"),
+    noteTrillStartEndRow: document.querySelector("#noteTrillStartEndRow"),
+    noteTrillPreviewGrid: document.querySelector("#noteTrillPreviewGrid"),
     noteTrillCloseButton: document.querySelector("#noteTrillCloseButton"),
     noteTrillCancelButton: document.querySelector("#noteTrillCancelButton"),
     noteTrillApplyButton: document.querySelector("#noteTrillApplyButton"),
@@ -500,9 +494,9 @@
     trillOptions: {
       direction: "up",
       intervalSemitones: 2,
-      startDivision: 32,
+      startDivision: "1/32",
       gradualSpeed: false,
-      endDivision: 32,
+      endDivision: "1/32",
       dynamics: "preserve",
       volumeRange: 3,
       startWith: "base",
@@ -13162,155 +13156,6 @@
     showToast(`${channel.name}을 비웠습니다.`);
   }
 
-  function parseNoteSplitUnit(rawValue) {
-    const raw = String(rawValue ?? "").trim();
-    if (!/^\d+$/.test(raw)) return null;
-    const units = Number(raw);
-    if (!Number.isInteger(units) || units < 1 || units > 64) return null;
-    return {
-      token: String(units),
-      units,
-      unitBeat: units * CONFIG.minimumNoteBeat,
-    };
-  }
-
-  function updateNoteSplitPreview() {
-    const preview = elements.noteSplitPreviewMeasure;
-    const label = elements.noteSplitPreviewLabel;
-    if (!preview) return;
-    preview.replaceChildren();
-    const parsed = parseNoteSplitUnit(elements.noteSplitUnitInput?.value);
-    const row = document.createElement("div");
-    row.className = "note-split-preview-note-row";
-    const note = document.createElement("div");
-    note.className = "note-split-preview-note";
-    row.append(note);
-    preview.append(row);
-    if (!parsed) {
-      preview.classList.add("invalid");
-      if (label) label.textContent = i18nText("note.split_input_hint");
-      return;
-    }
-    preview.classList.remove("invalid");
-    const total = CONFIG.beatsPerMeasure;
-    for (let beat = parsed.unitBeat; beat < total - 1e-7; beat += parsed.unitBeat) {
-      const cut = document.createElement("span");
-      cut.className = "note-split-preview-cut";
-      cut.style.left = `${clamp((beat / total) * 100, 0, 100)}%`;
-      note.append(cut);
-    }
-    if (label) label.textContent = `${parsed.units}${i18nText("note.split_suffix")}`;
-  }
-
-  function normalizeNoteSplitInput({ fallback = false } = {}) {
-    const input = elements.noteSplitUnitInput;
-    if (!input) return null;
-    const parsed = parseNoteSplitUnit(input.value);
-    if (parsed) {
-      input.value = parsed.token;
-      return parsed;
-    }
-    if (fallback) {
-      input.value = "32";
-      return parseNoteSplitUnit("32");
-    }
-    return null;
-  }
-
-  function closeNoteSplitDialog() {
-    if (elements.noteSplitBackdrop) elements.noteSplitBackdrop.hidden = true;
-  }
-
-  function openNoteSplitDialog() {
-    const selected = getSelectedNotes();
-    if (!selected.length) {
-      showToast(i18nText("note.split_need_selection"));
-      return false;
-    }
-    if (elements.noteSplitSelectionLabel) {
-      elements.noteSplitSelectionLabel.textContent = i18nText("note.split_selected_count", [selected.length]);
-    }
-    if (elements.noteSplitUnitInput) elements.noteSplitUnitInput.value = "32";
-    updateNoteSplitPreview();
-    if (elements.noteSplitBackdrop) elements.noteSplitBackdrop.hidden = false;
-    requestAnimationFrame(() => {
-      elements.noteSplitUnitInput?.focus();
-      elements.noteSplitUnitInput?.select();
-    });
-    return true;
-  }
-
-  function applySplitSelectedNotes() {
-    const channel = getActiveChannel();
-    const selectedIds = new Set(state.selectedNoteIds);
-    if (!channel || !selectedIds.size) {
-      closeNoteSplitDialog();
-      return false;
-    }
-    const parsedUnit = normalizeNoteSplitInput();
-    if (!parsedUnit) {
-      showToast(i18nText("note.split_invalid_unit"));
-      elements.noteSplitUnitInput?.focus();
-      elements.noteSplitUnitInput?.select();
-      return false;
-    }
-    const unit = parsedUnit.unitBeat;
-    const nextNotes = [];
-    const nextSelection = new Set();
-    let sourceCount = 0;
-    let createdCount = 0;
-    for (const note of channel.notes || []) {
-      if (!selectedIds.has(note.id)) {
-        nextNotes.push(note);
-        continue;
-      }
-      sourceCount += 1;
-      const duration = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-      if (duration <= unit + 1e-7) {
-        nextNotes.push(note);
-        nextSelection.add(note.id);
-        createdCount += 1;
-        continue;
-      }
-      const pieceDurations = [];
-      let remaining = duration;
-      while (remaining > unit + 1e-7) {
-        pieceDurations.push(unit);
-        remaining -= unit;
-      }
-      if (remaining >= CONFIG.minimumNoteBeat - 1e-7) {
-        pieceDurations.push(remaining);
-      } else if (remaining > 1e-7 && pieceDurations.length) {
-        pieceDurations[pieceDurations.length - 1] += remaining;
-      }
-      let cursor = Number(note.startBeat) || 0;
-      pieceDurations.forEach((pieceDuration, index) => {
-        const piece = {
-          ...note,
-          id: index === 0 ? note.id : state.nextNoteId++,
-          startBeat: Number(cursor.toFixed(6)),
-          durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, pieceDuration).toFixed(6)),
-        };
-        nextNotes.push(piece);
-        nextSelection.add(piece.id);
-        cursor += pieceDuration;
-        createdCount += 1;
-      });
-    }
-    if (createdCount <= sourceCount) {
-      showToast(i18nText("note.split_no_change"));
-      return false;
-    }
-    channel.notes = nextNotes.sort(compareNotesByTimeline);
-    state.selectedNoteIds = nextSelection;
-    state.channelNoteRuntime.delete(String(channel.id));
-    closeNoteSplitDialog();
-    markDirty(i18nText("history.note_split"));
-    drawRoll();
-    updateChannelInfo();
-    showToast(i18nText("note.split_done", [sourceCount, createdCount]));
-    return true;
-  }
 
   function closeTimeEditDialog() {
     if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = true;
@@ -16162,15 +16007,39 @@
     if (elements.noteTrillBackdrop) elements.noteTrillBackdrop.hidden = true;
   }
 
-  function normalizeTrillDivision(value, fallback = 32) {
-    const division = Math.round(Number(value) || fallback);
-    return [16, 32, 64].includes(division) ? division : fallback;
+  const TRILL_RATE_BEATS = Object.freeze({
+    "1/4": 1,
+    "1.5/8": 0.75,
+    "1/8": 0.5,
+    "1.5/16": 0.375,
+    "1/16": 0.25,
+    "1.5/32": 0.1875,
+    "1/32": 0.125,
+    "1/64": CONFIG.minimumNoteBeat,
+  });
+
+  function normalizeTrillDivision(value, fallback = "1/32") {
+    const raw = String(value ?? "").trim();
+    if (Object.prototype.hasOwnProperty.call(TRILL_RATE_BEATS, raw)) return raw;
+    // Keep old project/runtime values such as 16/32/64 compatible.
+    const numeric = Math.round(Number(raw) || 0);
+    const legacy = `1/${numeric}`;
+    if (Object.prototype.hasOwnProperty.call(TRILL_RATE_BEATS, legacy)) return legacy;
+    const safeFallback = String(fallback ?? "1/32");
+    if (Object.prototype.hasOwnProperty.call(TRILL_RATE_BEATS, safeFallback)) return safeFallback;
+    const legacyFallback = `1/${Math.round(Number(fallback) || 32)}`;
+    return Object.prototype.hasOwnProperty.call(TRILL_RATE_BEATS, legacyFallback) ? legacyFallback : "1/32";
+  }
+
+  function trillDivisionBeat(value, fallback = "1/32") {
+    return Math.max(CONFIG.minimumNoteBeat, Number(TRILL_RATE_BEATS[normalizeTrillDivision(value, fallback)]) || 0.125);
   }
 
   function readNoteTrillOptionsFromUi() {
-    const direction = elements.noteTrillDirectionSelect?.value === "down" ? "down" : "up";
+    const directionValue = String(elements.noteTrillDirectionSelect?.value || "up");
+    const direction = ["repeat", "up", "down"].includes(directionValue) ? directionValue : "up";
     const intervalSemitones = Number(elements.noteTrillIntervalSelect?.value) === 1 ? 1 : 2;
-    const startDivision = normalizeTrillDivision(elements.noteTrillStartDivisionSelect?.value, 32);
+    const startDivision = normalizeTrillDivision(elements.noteTrillStartDivisionSelect?.value, "1/32");
     const endDivision = normalizeTrillDivision(elements.noteTrillEndDivisionSelect?.value, startDivision);
     const gradualSpeed = Boolean(elements.noteTrillGradualSpeed?.checked);
     const dynamicsValue = String(elements.noteTrillDynamicsSelect?.value || "preserve");
@@ -16193,12 +16062,19 @@
   }
 
   function updateNoteTrillOptionAvailability() {
+    const repeatOnly = String(elements.noteTrillDirectionSelect?.value || "up") === "repeat";
+    if (elements.noteTrillIntervalSelect) elements.noteTrillIntervalSelect.disabled = repeatOnly;
+    if (elements.noteTrillStartNoteSelect) elements.noteTrillStartNoteSelect.disabled = repeatOnly;
+    if (elements.noteTrillEndOnBase) elements.noteTrillEndOnBase.disabled = repeatOnly;
+    elements.noteTrillStartEndRow?.classList.toggle("is-disabled", repeatOnly);
+
     const gradualSpeed = Boolean(elements.noteTrillGradualSpeed?.checked);
     if (elements.noteTrillEndDivisionSelect) elements.noteTrillEndDivisionSelect.disabled = !gradualSpeed;
     const dynamicsEnabled = String(elements.noteTrillDynamicsSelect?.value || "preserve") !== "preserve";
     if (elements.noteTrillVolumeRangeSelect) elements.noteTrillVolumeRangeSelect.disabled = !dynamicsEnabled;
     elements.noteTrillEndDivisionSelect?.closest(".note-trill-subcontrol")?.classList.toggle("is-disabled", !gradualSpeed);
     elements.noteTrillVolumeRangeSelect?.closest(".note-trill-subcontrol")?.classList.toggle("is-disabled", !dynamicsEnabled);
+    updateNoteTrillPreview();
   }
 
   function openNoteTrillDialog() {
@@ -16211,11 +16087,12 @@
     if (elements.noteTrillSelectionLabel) {
       elements.noteTrillSelectionLabel.textContent = i18nText("note.trill_selected_count", [selected.length]);
     }
-    if (elements.noteTrillDirectionSelect) elements.noteTrillDirectionSelect.value = options.direction === "down" ? "down" : "up";
+    const direction = ["repeat", "up", "down"].includes(String(options.direction)) ? String(options.direction) : "up";
+    if (elements.noteTrillDirectionSelect) elements.noteTrillDirectionSelect.value = direction;
     if (elements.noteTrillIntervalSelect) elements.noteTrillIntervalSelect.value = String(Number(options.intervalSemitones) === 1 ? 1 : 2);
-    if (elements.noteTrillStartDivisionSelect) elements.noteTrillStartDivisionSelect.value = String(normalizeTrillDivision(options.startDivision, 32));
+    if (elements.noteTrillStartDivisionSelect) elements.noteTrillStartDivisionSelect.value = normalizeTrillDivision(options.startDivision, "1/32");
     if (elements.noteTrillGradualSpeed) elements.noteTrillGradualSpeed.checked = Boolean(options.gradualSpeed);
-    if (elements.noteTrillEndDivisionSelect) elements.noteTrillEndDivisionSelect.value = String(normalizeTrillDivision(options.endDivision, 32));
+    if (elements.noteTrillEndDivisionSelect) elements.noteTrillEndDivisionSelect.value = normalizeTrillDivision(options.endDivision, options.startDivision || "1/32");
     if (elements.noteTrillDynamicsSelect) {
       const value = String(options.dynamics || "preserve");
       elements.noteTrillDynamicsSelect.value = ["preserve", "crescendo", "decrescendo", "swell"].includes(value) ? value : "preserve";
@@ -16232,8 +16109,8 @@
   function buildTrillSegmentDurations(durationBeat, options) {
     const minimum = CONFIG.minimumNoteBeat;
     const duration = Math.max(minimum, Number(durationBeat) || minimum);
-    const startUnit = Math.max(minimum, 4 / normalizeTrillDivision(options.startDivision, 32));
-    const endUnit = Math.max(minimum, 4 / normalizeTrillDivision(options.endDivision, options.startDivision || 32));
+    const startUnit = trillDivisionBeat(options.startDivision, "1/32");
+    const endUnit = trillDivisionBeat(options.endDivision, options.startDivision || "1/32");
     const durations = [];
     let cursor = 0;
     let remaining = duration;
@@ -16245,6 +16122,9 @@
       const interpolated = options.gradualSpeed
         ? startUnit + (endUnit - startUnit) * progress
         : startUnit;
+      // The editor resolves note positions/durations at 1/64. Dotted 1/32 and
+      // longer dotted values are exact multiples of this unit; gradual ramps are
+      // rounded to the same grid so the result remains editable.
       const unit = Math.max(minimum, Math.round(interpolated / minimum) * minimum);
       let piece = Math.min(unit, remaining);
       const leftover = remaining - piece;
@@ -16262,9 +16142,6 @@
       cursor += piece;
     }
     if (remaining > 1e-7 && durations.length) durations[durations.length - 1] += remaining;
-    // When slowing down, a short tail remainder would otherwise make the final
-    // attack suddenly fast again. Fold that tail into the previous note so the
-    // generated rhythm keeps moving in the requested direction.
     if (options.gradualSpeed && endUnit > startUnit + 1e-7) {
       while (durations.length >= 2 && durations[durations.length - 1] < durations[durations.length - 2] - 1e-7) {
         durations[durations.length - 2] += durations.pop();
@@ -16274,6 +16151,7 @@
   }
 
   function getTrillNeighborPitch(basePitch, options) {
+    if (options.direction === "repeat") return basePitch;
     const interval = Number(options.intervalSemitones) === 1 ? 1 : 2;
     const direction = options.direction === "down" ? -1 : 1;
     let candidate = basePitch + direction * interval;
@@ -16300,6 +16178,96 @@
     return source;
   }
 
+  function buildTrillPattern(durationBeat, basePitch, baseVolume, options) {
+    const pieceDurations = buildTrillSegmentDurations(durationBeat, options);
+    if (!pieceDurations.length) return [];
+    const repeatOnly = options.direction === "repeat";
+    const neighborPitch = repeatOnly ? basePitch : getTrillNeighborPitch(basePitch, options);
+    const originalSegmentCount = pieceDurations.length;
+    const durations = pieceDurations.slice();
+
+    // When forcing a trill to end on the base pitch would create two adjacent
+    // base attacks, extend the previous base note instead of retriggering it.
+    if (!repeatOnly && options.endOnBase !== false && durations.length >= 2) {
+      const previousIndex = durations.length - 2;
+      const previousAlternateIndex = previousIndex + (options.startWith === "neighbor" ? 1 : 0);
+      const previousPitch = previousAlternateIndex % 2 === 0 ? basePitch : neighborPitch;
+      if (previousPitch === basePitch) {
+        durations[previousIndex] = Number((durations[previousIndex] + durations[previousIndex + 1]).toFixed(6));
+        durations.pop();
+      }
+    }
+
+    return durations.map((pieceDuration, segmentIndex) => {
+      const progress = originalSegmentCount > 1 ? segmentIndex / (originalSegmentCount - 1) : 0;
+      let pitch = basePitch;
+      if (!repeatOnly) {
+        const alternateIndex = segmentIndex + (options.startWith === "neighbor" ? 1 : 0);
+        pitch = alternateIndex % 2 === 0 ? basePitch : neighborPitch;
+        if (options.endOnBase !== false && segmentIndex === durations.length - 1) pitch = basePitch;
+      }
+      const volume = options.dynamics && options.dynamics !== "preserve"
+        ? getTrillSegmentVolume(baseVolume, options, progress)
+        : baseVolume;
+      return {
+        durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, pieceDuration).toFixed(6)),
+        pitch,
+        volume,
+        progress,
+      };
+    });
+  }
+
+  function updateNoteTrillPreview() {
+    const grid = elements.noteTrillPreviewGrid;
+    if (!grid) return;
+    grid.replaceChildren();
+
+    const options = readNoteTrillOptionsFromUi();
+    const selected = getSelectedNotes();
+    const sampleNote = selected[0] || null;
+    const basePitch = clamp(Math.round(Number(sampleNote?.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+    const baseVolume = getNoteVolume(sampleNote || {}, CONFIG.defaultNewChannelNoteVolume);
+    const pattern = buildTrillPattern(CONFIG.beatsPerMeasure, basePitch, baseVolume, options);
+    const repeatOnly = options.direction === "repeat";
+    const neighborPitch = repeatOnly ? basePitch : getTrillNeighborPitch(basePitch, options);
+    const pitches = repeatOnly
+      ? [basePitch]
+      : (neighborPitch > basePitch ? [neighborPitch, basePitch] : [basePitch, neighborPitch]);
+    const lanes = new Map();
+
+    for (const pitch of pitches) {
+      const row = document.createElement("div");
+      row.className = "note-trill-preview-row";
+      const label = document.createElement("span");
+      label.className = "note-trill-preview-pitch";
+      label.textContent = noteLabel(pitch);
+      const lane = document.createElement("div");
+      lane.className = "note-trill-preview-lane";
+      row.append(label, lane);
+      grid.append(row);
+      lanes.set(pitch, lane);
+    }
+
+    let cursor = 0;
+    const total = CONFIG.beatsPerMeasure;
+    for (const segment of pattern) {
+      const lane = lanes.get(segment.pitch) || lanes.get(basePitch);
+      if (!lane) continue;
+      const note = document.createElement("div");
+      note.className = "note-trill-preview-note";
+      const leftPercent = clamp((cursor / total) * 100, 0, 100);
+      const widthPercent = clamp((segment.durationBeat / total) * 100, 0, 100 - leftPercent);
+      note.style.left = `${leftPercent}%`;
+      note.style.width = `max(2px, calc(${widthPercent}% - 1px))`;
+      note.style.opacity = String(0.34 + (clamp(segment.volume, 0, 15) / 15) * 0.66);
+      note.title = `${noteLabel(segment.pitch)} · V${segment.volume}`;
+      if (widthPercent >= 8) note.textContent = `V${segment.volume}`;
+      lane.append(note);
+      cursor += segment.durationBeat;
+    }
+  }
+
   function convertSelectedNotesToTrill(options = state.trillOptions || {}) {
     if (isMidiReferenceActive() || state.activePanel !== "notes") return false;
     const channel = getActiveChannel();
@@ -16318,55 +16286,33 @@
 
       const startBeat = Math.max(0, Number(note.startBeat) || 0);
       const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-      const pieceDurations = buildTrillSegmentDurations(durationBeat, options);
-      if (pieceDurations.length < 2) {
+      const basePitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+      const baseVolume = getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume);
+      const pattern = buildTrillPattern(durationBeat, basePitch, baseVolume, options);
+      if (pattern.length < 2) {
         nextNotes.push(note);
         nextSelection.add(note.id);
         continue;
       }
 
-      const basePitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
-      const neighborPitch = getTrillNeighborPitch(basePitch, options);
-      const baseVolume = getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume);
-      const originalTrillSegmentCount = pieceDurations.length;
-      const trillDurations = pieceDurations.slice();
-      // "원음으로 끝내기"가 마지막 두 타격을 같은 원음으로 만들 경우에는
-      // 마지막 원음을 다시 어택하지 않고 직전 원음의 길이만 늘립니다.
-      if (options.endOnBase !== false && trillDurations.length >= 2) {
-        const previousIndex = trillDurations.length - 2;
-        const previousAlternateIndex = previousIndex + (options.startWith === "neighbor" ? 1 : 0);
-        const previousPitch = previousAlternateIndex % 2 === 0 ? basePitch : neighborPitch;
-        if (previousPitch === basePitch) {
-          trillDurations[previousIndex] = Number((trillDurations[previousIndex] + trillDurations[previousIndex + 1]).toFixed(6));
-          trillDurations.pop();
-        }
-      }
       let cursor = startBeat;
       convertedCount += 1;
-
-      trillDurations.forEach((pieceDuration, segmentIndex) => {
+      pattern.forEach((patternNote, segmentIndex) => {
         const segmentId = segmentIndex === 0 ? note.id : state.nextNoteId++;
-        // If the final base attack was folded into the previous note, keep that
-        // previous segment's original dynamics value while only extending its length.
-        const progress = originalTrillSegmentCount > 1 ? segmentIndex / (originalTrillSegmentCount - 1) : 0;
-        const alternateIndex = segmentIndex + (options.startWith === "neighbor" ? 1 : 0);
-        let pitch = alternateIndex % 2 === 0 ? basePitch : neighborPitch;
-        if (options.endOnBase !== false && segmentIndex === trillDurations.length - 1) pitch = basePitch;
         const segment = {
           ...note,
           id: segmentId,
-          pitch,
+          pitch: patternNote.pitch,
           startBeat: Number(cursor.toFixed(6)),
-          durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, pieceDuration).toFixed(6)),
+          durationBeat: patternNote.durationBeat,
         };
         if (options.dynamics && options.dynamics !== "preserve") {
-          const volume = getTrillSegmentVolume(baseVolume, options, progress);
-          segment.volume = volume;
-          segment.velocity = mmlVolumeToVelocity(volume);
+          segment.volume = patternNote.volume;
+          segment.velocity = mmlVolumeToVelocity(patternNote.volume);
         }
         nextNotes.push(segment);
         nextSelection.add(segmentId);
-        cursor += pieceDuration;
+        cursor += patternNote.durationBeat;
       });
     }
 
@@ -16753,7 +16699,6 @@
         { label: i18nText("context.action.note_copy"), action: copySelectedNotes },
         { label: i18nText("context.action.note_cut"), action: cutSelectedNotes },
         { label: i18nText("context.action.note_volume_edit"), action: openNoteVolumeDialog },
-        { label: i18nText("context.action.note_split"), action: openNoteSplitDialog },
         { label: i18nText("context.action.note_trill"), action: openNoteTrillDialog },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         "separator",
@@ -17780,25 +17725,20 @@
     elements.noteVolumeBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.noteVolumeBackdrop) closeNoteVolumeDialog();
     });
-    elements.noteSplitCloseButton?.addEventListener("click", closeNoteSplitDialog);
-    elements.noteSplitCancelButton?.addEventListener("click", closeNoteSplitDialog);
-    elements.noteSplitApplyButton?.addEventListener("click", applySplitSelectedNotes);
-    elements.noteSplitUnitInput?.addEventListener("input", updateNoteSplitPreview);
-    elements.noteSplitUnitInput?.addEventListener("blur", () => {
-      normalizeNoteSplitInput({ fallback: true });
-      updateNoteSplitPreview();
-    });
-    elements.noteSplitUnitInput?.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") { event.preventDefault(); applySplitSelectedNotes(); }
-    });
-    elements.noteSplitBackdrop?.addEventListener("pointerdown", (event) => {
-      if (event.target === elements.noteSplitBackdrop) closeNoteSplitDialog();
-    });
     elements.noteTrillCloseButton?.addEventListener("click", closeNoteTrillDialog);
     elements.noteTrillCancelButton?.addEventListener("click", closeNoteTrillDialog);
     elements.noteTrillApplyButton?.addEventListener("click", applySelectedNotesToTrill);
-    elements.noteTrillGradualSpeed?.addEventListener("change", updateNoteTrillOptionAvailability);
-    elements.noteTrillDynamicsSelect?.addEventListener("change", updateNoteTrillOptionAvailability);
+    [
+      elements.noteTrillDirectionSelect,
+      elements.noteTrillIntervalSelect,
+      elements.noteTrillStartDivisionSelect,
+      elements.noteTrillGradualSpeed,
+      elements.noteTrillEndDivisionSelect,
+      elements.noteTrillDynamicsSelect,
+      elements.noteTrillVolumeRangeSelect,
+      elements.noteTrillStartNoteSelect,
+      elements.noteTrillEndOnBase,
+    ].forEach((control) => control?.addEventListener("change", updateNoteTrillOptionAvailability));
     elements.noteTrillBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.noteTrillBackdrop) closeNoteTrillDialog();
     });
@@ -17922,7 +17862,6 @@
           closeMidiImportDialog();
           closeMidiTransferDialog();
           closeNoteVolumeDialog();
-          closeNoteSplitDialog();
           closeNoteTrillDialog();
           closeChannelShiftDialog();
           closeTempoEditor();
@@ -18005,7 +17944,6 @@
         closeMidiImportDialog();
         closeMidiTransferDialog();
         closeNoteVolumeDialog();
-        closeNoteSplitDialog();
         closeNoteTrillDialog();
         closeChannelShiftDialog();
         closeTempoEditor();
