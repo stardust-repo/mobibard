@@ -377,6 +377,8 @@
     noteVolumeCloseButton: document.querySelector("#noteVolumeCloseButton"),
     noteVolumeCancelButton: document.querySelector("#noteVolumeCancelButton"),
     noteVolumeApplyButton: document.querySelector("#noteVolumeApplyButton"),
+    noteVolumeFixedMode: document.querySelector("#noteVolumeFixedMode"),
+    noteVolumeControlLabel: document.querySelector("#noteVolumeControlLabel"),
     noteVolumeSlider: document.querySelector("#noteVolumeSlider"),
     noteVolumeValue: document.querySelector("#noteVolumeValue"),
     noteVolumeDialogTitle: document.querySelector("#noteVolumeDialogTitle"),
@@ -8152,14 +8154,69 @@
     return state.noteVolumeDialogScope === "all" ? getAllEditorNotes() : getSelectedNotes();
   }
 
+  function isNoteVolumeFixedMode() {
+    return Boolean(elements.noteVolumeFixedMode?.checked);
+  }
+
+  function formatNoteVolumeDelta(value) {
+    const delta = clamp(Math.round(Number(value) || 0), -15, 15);
+    if (delta > 0) return `+${delta}`;
+    if (delta < 0) return `${delta}`;
+    return "±0";
+  }
+
+  function getNoteVolumeDialogTargetVolume(note) {
+    const sliderValue = Math.round(Number(elements.noteVolumeSlider?.value) || 0);
+    if (isNoteVolumeFixedMode()) return clamp(sliderValue, 0, 15);
+    return clamp(getNoteVolume(note) + clamp(sliderValue, -15, 15), 0, 15);
+  }
+
+  function updateNoteVolumeDialogControl() {
+    const fixed = isNoteVolumeFixedMode();
+    if (elements.noteVolumeControlLabel) {
+      const labelKey = fixed ? "volume.fixed_value" : "volume.relative_adjust";
+      elements.noteVolumeControlLabel.dataset.i18n = labelKey;
+      elements.noteVolumeControlLabel.textContent = i18nText(labelKey);
+    }
+    const value = Math.round(Number(elements.noteVolumeSlider?.value) || 0);
+    if (elements.noteVolumeValue) {
+      elements.noteVolumeValue.textContent = fixed
+        ? `V${clamp(value, 0, 15)}`
+        : formatNoteVolumeDelta(value);
+    }
+  }
+
+  function configureNoteVolumeSliderForMode(resetValue = true) {
+    if (!elements.noteVolumeSlider) return;
+    const notes = getNoteVolumeDialogNotes();
+    const fixed = isNoteVolumeFixedMode();
+    if (fixed) {
+      elements.noteVolumeSlider.min = "0";
+      elements.noteVolumeSlider.max = "15";
+      elements.noteVolumeSlider.step = "1";
+      if (resetValue) {
+        const volumes = notes.map((note) => getNoteVolume(note));
+        const unique = new Set(volumes);
+        const initial = unique.size === 1
+          ? (volumes[0] ?? CONFIG.defaultNewChannelNoteVolume)
+          : Math.round(volumes.reduce((sum, value) => sum + value, 0) / Math.max(1, volumes.length));
+        elements.noteVolumeSlider.value = String(clamp(initial, 0, 15));
+      }
+    } else {
+      elements.noteVolumeSlider.min = "-15";
+      elements.noteVolumeSlider.max = "15";
+      elements.noteVolumeSlider.step = "1";
+      if (resetValue) elements.noteVolumeSlider.value = "0";
+    }
+    updateNoteVolumeDialogControl();
+    updateNoteVolumeDialogCounts();
+  }
+
   function updateNoteVolumeDialogCounts() {
     const notes = getNoteVolumeDialogNotes();
     renderNoteVolumeCountChips(elements.noteVolumeCurrentCounts, getNoteVolumeCounts(notes));
-    const targetVolume = clamp(Math.round(Number(elements.noteVolumeSlider?.value) || 0), 0, 15);
-    renderNoteVolumeCountChips(
-      elements.noteVolumeTargetCounts,
-      notes.length ? [{ volume: targetVolume, count: notes.length }] : [],
-    );
+    const targets = notes.map((note) => ({ volume: getNoteVolumeDialogTargetVolume(note) }));
+    renderNoteVolumeCountChips(elements.noteVolumeTargetCounts, getNoteVolumeCounts(targets));
   }
 
   function openNoteVolumeDialog(options = null) {
@@ -8180,13 +8237,9 @@
       showToast(scope === "all" ? i18nText("volume.no_editor_notes") : "볼륨을 수정할 노트를 선택하세요.");
       return false;
     }
-    const volumes = notes.map((note) => getNoteVolume(note));
-    const unique = new Set(volumes);
-    const initial = unique.size === 1
-      ? volumes[0]
-      : Math.round(volumes.reduce((sum, value) => sum + value, 0) / volumes.length);
-    elements.noteVolumeSlider.value = String(initial);
-    elements.noteVolumeValue.textContent = unique.size === 1 ? `V${initial}` : `혼합 → V${initial}`;
+    // Default behavior is relative adjustment: each note keeps its own volume relationship.
+    if (elements.noteVolumeFixedMode) elements.noteVolumeFixedMode.checked = false;
+    configureNoteVolumeSliderForMode(true);
     if (elements.noteVolumeDialogTitle) {
       elements.noteVolumeDialogTitle.textContent = scope === "all" ? i18nText("volume.edit_all_notes") : i18nText("note.volume");
     }
@@ -8219,24 +8272,34 @@
       closeNoteVolumeDialog();
       return false;
     }
-    const volume = clamp(Math.round(Number(elements.noteVolumeSlider.value) || 0), 0, 15);
-    const velocity = mmlVolumeToVelocity(volume);
-    if (notes.every((note) => getNoteVolume(note) === volume)) {
-      closeNoteVolumeDialog();
-      return false;
-    }
+    const fixed = isNoteVolumeFixedMode();
+    const sliderValue = Math.round(Number(elements.noteVolumeSlider?.value) || 0);
+    const fixedVolume = clamp(sliderValue, 0, 15);
+    const delta = clamp(sliderValue, -15, 15);
+    let changedCount = 0;
     for (const note of notes) {
-      note.volume = volume;
-      note.velocity = velocity;
+      const before = getNoteVolume(note);
+      const nextVolume = fixed ? fixedVolume : clamp(before + delta, 0, 15);
+      if (nextVolume === before) continue;
+      note.volume = nextVolume;
+      note.velocity = mmlVolumeToVelocity(nextVolume);
+      changedCount += 1;
     }
-    const changedCount = notes.length;
     closeNoteVolumeDialog();
+    if (!changedCount) return false;
     markDirty(scope === "all" ? "모든 볼륨 수정" : "노트 볼륨 변경");
     drawRoll();
     updateChannelInfo();
-    showToast(scope === "all"
-      ? i18nText("volume.all_changed", [changedCount.toLocaleString(), volume])
-      : `${changedCount}개 노트의 볼륨을 V${volume}(으)로 변경했습니다.`);
+    if (fixed) {
+      showToast(scope === "all"
+        ? i18nText("volume.all_fixed", [changedCount.toLocaleString(), fixedVolume])
+        : i18nText("volume.selected_fixed", [changedCount.toLocaleString(), fixedVolume]));
+    } else {
+      const deltaText = formatNoteVolumeDelta(delta);
+      showToast(scope === "all"
+        ? i18nText("volume.all_adjusted", [changedCount.toLocaleString(), deltaText])
+        : i18nText("volume.selected_adjusted", [changedCount.toLocaleString(), deltaText]));
+    }
     return true;
   }
 
@@ -17701,8 +17764,9 @@
     elements.noteVolumeCloseButton?.addEventListener("click", closeNoteVolumeDialog);
     elements.noteVolumeCancelButton?.addEventListener("click", closeNoteVolumeDialog);
     elements.noteVolumeApplyButton?.addEventListener("click", applySelectedNoteVolume);
+    elements.noteVolumeFixedMode?.addEventListener("change", () => configureNoteVolumeSliderForMode(true));
     elements.noteVolumeSlider?.addEventListener("input", () => {
-      elements.noteVolumeValue.textContent = `V${clamp(Math.round(Number(elements.noteVolumeSlider.value) || 0), 0, 15)}`;
+      updateNoteVolumeDialogControl();
       updateNoteVolumeDialogCounts();
     });
     elements.noteVolumeBackdrop?.addEventListener("pointerdown", (event) => {

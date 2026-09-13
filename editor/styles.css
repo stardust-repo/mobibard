@@ -1795,6 +1795,20 @@ button {
   background: color-mix(in srgb, var(--accent) 22%, var(--control-bg));
   font-weight: 800;
 }
+.note-volume-mode-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 16px 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.note-volume-mode-row input {
+  margin: 0;
+  accent-color: var(--accent);
+}
 .note-volume-slider-row {
   display: grid;
   grid-template-columns: auto minmax(120px, 1fr) 54px;
