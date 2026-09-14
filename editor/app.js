@@ -354,6 +354,14 @@
     channelEditInstrumentSelect: document.querySelector("#channelEditInstrumentSelect"),
     channelEditColorInput: document.querySelector("#channelEditColorInput"),
     channelEditTargetLabel: document.querySelector("#channelEditTargetLabel"),
+    channelMmlBackdrop: document.querySelector("#channelMmlBackdrop"),
+    channelMmlDialog: document.querySelector("#channelMmlDialog"),
+    channelMmlTargetLabel: document.querySelector("#channelMmlTargetLabel"),
+    channelMmlText: document.querySelector("#channelMmlText"),
+    channelMmlStatus: document.querySelector("#channelMmlStatus"),
+    channelMmlCloseButton: document.querySelector("#channelMmlCloseButton"),
+    channelMmlCancelButton: document.querySelector("#channelMmlCancelButton"),
+    channelMmlApplyButton: document.querySelector("#channelMmlApplyButton"),
     audioEditBackdrop: document.querySelector("#audioEditBackdrop"),
     audioEditCloseButton: document.querySelector("#audioEditCloseButton"),
     audioEditCancelButton: document.querySelector("#audioEditCancelButton"),
@@ -655,6 +663,11 @@
       channelId: null,
       lastClickChannelId: null,
       lastClickAt: 0,
+    },
+    channelMmlEdit: {
+      channelId: null,
+      parseTimer: 0,
+      parsed: null,
     },
     audioEdit: {
       clipId: null,
@@ -5932,16 +5945,22 @@
     if (!elements.channelTabs) return;
     elements.channelTabs.replaceChildren();
 
-    const createAction = ({ kind, active, label, title, onClick, onContextMenu = null, sweep = false, sweepId = "", solo = false }) => {
+    const createAction = ({ kind, active, label, title, onClick, onContextMenu = null, sweep = false, sweepId = "", solo = false, textContent = null }) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = `channel-tree-action channel-tree-${kind}${solo ? " is-solo" : ""}`;
       button.setAttribute("aria-pressed", String(Boolean(solo || active)));
       button.setAttribute("aria-label", label);
       button.title = title;
-      button.textContent = kind === "visibility"
-        ? "👁"
-        : (solo ? "S" : (active ? "🔇" : "🔊"));
+      const glyph = document.createElement("span");
+      glyph.className = "channel-tree-action-glyph";
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.textContent = textContent != null
+        ? String(textContent)
+        : (kind === "visibility"
+          ? "👁"
+          : (solo ? "S" : (active ? "🔇" : "🔊")));
+      button.append(glyph);
       if (typeof onContextMenu === "function") {
         button.addEventListener("contextmenu", (event) => {
           event.preventDefault();
@@ -5996,6 +6015,14 @@
       const actions = document.createElement("div");
       actions.className = "channel-tree-actions";
       actions.append(
+        createAction({
+          kind: "mml",
+          active: false,
+          label: i18nText("channel.mml_button_aria", [channel.name]),
+          title: i18nText("channel.mml_button_title"),
+          textContent: "M",
+          onClick: () => openChannelMmlDialog(channel.id),
+        }),
         createAction({
           kind: "visibility",
           active: channel.visible !== false,
@@ -6110,6 +6137,116 @@
   function closeChannelEditDialog() {
     if (elements.channelEditBackdrop) elements.channelEditBackdrop.hidden = true;
     state.channelEdit.channelId = null;
+  }
+
+
+  function channelToEditableMml(channel) {
+    if (!channel?.notes?.length) return "MML@;";
+    const normalized = channel.notes.map((note) => ({
+      ...note,
+      startBeat: Math.max(0, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat)),
+      durationBeat: Math.max(CONFIG.minimumNoteBeat, snapBeatToUnit(note.durationBeat, CONFIG.minimumNoteBeat)),
+    }));
+    const voices = partitionNotesIntoMmlVoices(normalized)
+      .map((voice) => buildNoteVoiceMml(voice, 0, { applyTimelineFade: false }))
+      .filter(Boolean);
+    return `MML@${voices.join(",")};`;
+  }
+
+  function setChannelMmlStatus(message, { error = false } = {}) {
+    if (!elements.channelMmlStatus) return;
+    elements.channelMmlStatus.textContent = String(message || "");
+    elements.channelMmlStatus.classList.toggle("error", Boolean(error));
+  }
+
+  function updateChannelMmlPreview() {
+    if (!elements.channelMmlText) return null;
+    const source = String(elements.channelMmlText.value || "");
+    try {
+      const parsed = parseMmlText(source, { quantize: 64 });
+      state.channelMmlEdit.parsed = parsed;
+      if (parsed.noteParts.length > 1) {
+        setChannelMmlStatus(i18nText("channel.mml_status_multi"), { error: true });
+        if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
+        return parsed;
+      }
+      const details = [
+        i18nText("channel.mml_status_notes", [parsed.noteCount]),
+        i18nText("channel.mml_status_chars", [source.length]),
+      ];
+      if (parsed.explicitTempoCount) details.push(i18nText("channel.mml_status_tempo_ignored"));
+      if (parsed.skippedPitchCount) details.push(i18nText("channel.mml_status_pitch_skipped", [parsed.skippedPitchCount]));
+      if (parsed.unsupportedTokenCount) details.push(i18nText("channel.mml_status_unsupported", [parsed.unsupportedTokenCount]));
+      setChannelMmlStatus(details.join(" · "));
+      if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = false;
+      return parsed;
+    } catch (error) {
+      state.channelMmlEdit.parsed = null;
+      setChannelMmlStatus(error instanceof Error ? error.message : i18nText("channel.mml_status_invalid"), { error: true });
+      if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
+      return null;
+    }
+  }
+
+  function scheduleChannelMmlPreview() {
+    window.clearTimeout(state.channelMmlEdit.parseTimer);
+    state.channelMmlEdit.parseTimer = window.setTimeout(updateChannelMmlPreview, 80);
+  }
+
+  function openChannelMmlDialog(channelId) {
+    const index = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
+    if (index < 0 || !elements.channelMmlBackdrop || !elements.channelMmlText) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    selectChannel(index);
+    const channel = state.channels[index];
+    state.channelMmlEdit.channelId = String(channel.id);
+    state.channelMmlEdit.parsed = null;
+    window.clearTimeout(state.channelMmlEdit.parseTimer);
+    state.channelMmlEdit.parseTimer = 0;
+    if (elements.channelMmlTargetLabel) elements.channelMmlTargetLabel.textContent = channel.name;
+    elements.channelMmlText.value = channelToEditableMml(channel);
+    elements.channelMmlBackdrop.hidden = false;
+    closeContextMenu();
+    closeFileMenu();
+    closeEditMenu();
+    updateChannelMmlPreview();
+    requestAnimationFrame(() => {
+      elements.channelMmlText?.focus();
+      elements.channelMmlText?.setSelectionRange?.(0, 0);
+    });
+    return true;
+  }
+
+  function closeChannelMmlDialog() {
+    window.clearTimeout(state.channelMmlEdit.parseTimer);
+    state.channelMmlEdit.parseTimer = 0;
+    state.channelMmlEdit.channelId = null;
+    state.channelMmlEdit.parsed = null;
+    if (elements.channelMmlBackdrop) elements.channelMmlBackdrop.hidden = true;
+  }
+
+  function applyChannelMmlDialog() {
+    const channelId = state.channelMmlEdit.channelId;
+    const channel = state.channels.find((entry) => String(entry.id) === String(channelId));
+    if (!channel) {
+      closeChannelMmlDialog();
+      return false;
+    }
+    const parsed = updateChannelMmlPreview();
+    if (!parsed || parsed.noteParts.length > 1) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    const notes = parsed.noteParts[0]?.notes || [];
+    channel.notes = notes.map((note) => ({ ...note, id: state.nextNoteId++ }));
+    clearNoteSelection();
+    clearMidiSelection();
+    state.channelNoteRuntime.clear();
+    markDirty(i18nText("channel.mml_history"));
+    shrinkTimelineToContent();
+    ensureTimelineFitsViewport();
+    renderAll();
+    closeChannelMmlDialog();
+    showToast(i18nText("channel.mml_applied", [channel.name, notes.length]));
+    return true;
   }
 
   function applyChannelEditDialog() {
@@ -12622,7 +12759,7 @@
     return voices.map((voice) => voice.notes);
   }
 
-  function buildNoteVoiceMml(notes, originBeat) {
+  function buildNoteVoiceMml(notes, originBeat, { applyTimelineFade = true } = {}) {
     let cursorBeat = originBeat;
     let octave = null;
     let velocity = null;
@@ -12641,7 +12778,9 @@
         output.push(`o${nextOctave}`);
         octave = nextOctave;
       }
-      const nextVelocity = getTimelineFadedNoteVolume(note, Number.isFinite(Number(note.fadeReferenceBeat)) ? Number(note.fadeReferenceBeat) : startBeat);
+      const nextVelocity = applyTimelineFade
+        ? getTimelineFadedNoteVolume(note, Number.isFinite(Number(note.fadeReferenceBeat)) ? Number(note.fadeReferenceBeat) : startBeat)
+        : normalizeNoteDynamics(note, 8).volume;
       if (nextVelocity !== velocity) {
         output.push(`v${nextVelocity}`);
         velocity = nextVelocity;
@@ -18598,6 +18737,19 @@
       }
     });
     bindHueColorPalette(elements.channelEditColorInput);
+    elements.channelMmlCloseButton?.addEventListener("click", closeChannelMmlDialog);
+    elements.channelMmlCancelButton?.addEventListener("click", closeChannelMmlDialog);
+    elements.channelMmlApplyButton?.addEventListener("click", applyChannelMmlDialog);
+    elements.channelMmlBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.channelMmlBackdrop) closeChannelMmlDialog();
+    });
+    elements.channelMmlText?.addEventListener("input", scheduleChannelMmlPreview);
+    elements.channelMmlText?.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        applyChannelMmlDialog();
+      }
+    });
     elements.copyChannelButton.addEventListener("click", copyActiveChannelNotes);
     elements.pasteChannelButton.addEventListener("click", pasteNotesFromClipboard);
     elements.noteVolumeButton?.addEventListener("click", openNoteVolumeDialog);
@@ -18898,6 +19050,7 @@
           closeChannelMuteMixer();
           closeChannelMergeDialog();
           closeChannelEditDialog();
+          closeChannelMmlDialog();
           closeEditorSoundFontDialog();
           closeShortcutHelpDialog();
           closeVolumeMenu();
@@ -18981,6 +19134,7 @@
         closeChannelMuteMixer();
         closeChannelMergeDialog();
         closeChannelEditDialog();
+        closeChannelMmlDialog();
         closeEditorSoundFontDialog();
         closeShortcutHelpDialog();
         closeVolumeMenu();
