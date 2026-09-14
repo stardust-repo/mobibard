@@ -40,7 +40,7 @@
     }
   })();
 </script>
-<link href="./styles.css?v=20260905-workflow-step3-1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
+<link href="./styles.css?v=20260914-keyrange-auto2" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 </head>
 <body>
 <header class="topbar rollscriptor-topbar">
@@ -134,7 +134,7 @@
 </div>
 <div class="analysis-range-inline">
 <strong data-i18n="analysis.range">분석 시간</strong>
-<button class="soft-button auto-range-button" data-i18n="analysis.auto_search" data-i18n-title="analysis.auto_search_help" disabled="" id="autoDetectRange" title="건반 검출 결과를 기준으로 88건반이 보이는 시작·종료 지점을 자동으로 찾습니다." type="button">자동 탐색</button>
+<button class="soft-button auto-range-button" data-i18n="analysis.auto_search" data-i18n-title="analysis.auto_search_help" disabled="" id="autoDetectRange" title="건반 검출 결과를 기준으로 설정한 건반 범위가 보이는 시작·종료 지점을 자동으로 찾습니다." type="button">자동 탐색</button>
 <div class="analysis-inline-time">
 <input aria-label="시작 (초)" data-i18n-aria-label="analysis.start_seconds" disabled="" id="analysisStart" min="0" step="0.001" type="number" value="0"/>
 <button class="soft-button" data-i18n="analysis.current" disabled="" id="setStartCurrent" type="button">현재</button>
@@ -145,6 +145,20 @@
 <button class="soft-button" data-i18n="analysis.current" disabled="" id="setEndCurrent" type="button">현재</button>
 </div>
 <output id="analysisRangeLabel">00:00.000</output>
+</div>
+<div class="keyboard-range-inline">
+<strong data-i18n="keyboard.range">건반 범위</strong>
+<button class="soft-button auto-range-button keyboard-range-auto-button" data-i18n="keyboard.auto_search" data-i18n-title="keyboard.auto_search_help" disabled="" id="autoDetectKeyboardRange" title="현재 프레임의 건반 개수와 흰/검 배열을 분석해 시작~끝 건반 범위를 자동으로 제안합니다." type="button">자동 탐색</button>
+<label class="keyboard-range-field">
+<select aria-label="시작 건반" data-i18n-aria-label="keyboard.range_start_aria" disabled="" id="keyboardStartMidi"></select>
+<span data-i18n="keyboard.range_start">시작</span>
+</label>
+<span aria-hidden="true" class="analysis-range-separator">~</span>
+<label class="keyboard-range-field">
+<select aria-label="끝 건반" data-i18n-aria-label="keyboard.range_end_aria" disabled="" id="keyboardEndMidi"></select>
+<span data-i18n="keyboard.range_end">끝</span>
+</label>
+<output id="keyboardRangeLabel">88건반 · A0 ~ C8</output>
 </div>
 </div>
 <div class="keyboard-detection-card">
@@ -377,6 +391,6 @@
 <script src="../assets/default_sf3.js?v=20260907-mobibard16-cleaned"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="./js/settings-menu.js?v=20260905-workflow-step3-1" type="module"></script>
-<script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script><script src="./js/app.js?v=20260906-locale-prune1" type="module"></script>
+<script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script><script src="./js/app.js?v=20260914-keyrange-auto2" type="module"></script>
 </body>
 </html>

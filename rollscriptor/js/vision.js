@@ -785,15 +785,16 @@ function nearestWhiteMidiWithPitchClass(pitchClass, around = 48) {
 
 /**
  * Detects a flat chromatic keyboard from one guide line. This mode is for
- * piano-roll videos where all 88 keys are drawn as simple white/black strips
+ * piano-roll videos where the configured keys are drawn as simple white/black strips
  * instead of a traditional raised black-key silhouette. Boundaries are found
- * from color/edge changes around the selected line, while the expected 88-key
+ * from color/edge changes around the selected line, while the expected key
  * count keeps the result stable when adjacent white keys have weak borders.
  */
 export function detectSingleLineKeyGeometry(imageData, options = {}) {
   const { width, height, data } = imageData;
-  if (width < 88 || height < 8) throw new Error(t('error.region_small'));
-  const expectedKeyCount = clamp(Math.round(Number(options.expectedKeyCount) || 88), 12, 128);
+  const expectedKeyCount = clamp(Math.round(Number(options.expectedKeyCount) || 88), 2, 128);
+  if (width < Math.max(24, expectedKeyCount) || height < 8) throw new Error(t('error.region_small'));
+  const startMidi = clamp(Math.round(Number(options.startMidi) || 21), 0, Math.max(0, 127 - expectedKeyCount + 1));
   const requestedLineY = Number(options.lineY);
   const centerY = clamp(Number.isFinite(requestedLineY) ? requestedLineY : height / 2, 0, Math.max(0, height - 1));
   const halfBand = Math.max(1, Math.round(height * 0.16));
@@ -820,11 +821,11 @@ export function detectSingleLineKeyGeometry(imageData, options = {}) {
   const nominalWidth = width / expectedKeyCount;
   const detected = buildWhiteBoundaries(score, width, nominalWidth, expectedKeyCount);
 
-  // In one-line mode the visual keyboard is expected to contain 88 equal
+  // In one-line mode the visual keyboard is expected to contain the configured number of
   // chromatic strips. Some videos deliberately draw almost no borders at all,
   // so edge detection can have too little evidence even though the keyboard is
   // perfectly usable. In that case keep working by evenly dividing the selected
-  // guide span into 88 regions and mark the geometry as estimated.
+  // guide span into the configured number of regions and mark the geometry as estimated.
   const minimumObservedBoundaries = Math.max(8, Math.round(expectedKeyCount * 0.20));
   const boundaryCountMismatch = detected.boundaries.length !== expectedKeyCount + 1;
   const insufficientBoundaryEvidence = boundaryCountMismatch
@@ -842,8 +843,8 @@ export function detectSingleLineKeyGeometry(imageData, options = {}) {
     height,
     keyBoundaries,
     keyCount: expectedKeyCount,
-    whiteCount: Array.from({ length: expectedKeyCount }, (_, index) => isWhiteMidi(21 + index)).filter(Boolean).length,
-    detectedBlackCount: Array.from({ length: expectedKeyCount }, (_, index) => !isWhiteMidi(21 + index)).filter(Boolean).length,
+    whiteCount: Array.from({ length: expectedKeyCount }, (_, index) => isWhiteMidi(startMidi + index)).filter(Boolean).length,
+    detectedBlackCount: Array.from({ length: expectedKeyCount }, (_, index) => !isWhiteMidi(startMidi + index)).filter(Boolean).length,
     nominalKeyWidth: nominalWidth,
     confidence: insufficientBoundaryEvidence ? 0 : detected.confidence,
     boundariesEstimated: insufficientBoundaryEvidence,
@@ -855,7 +856,7 @@ export function detectSingleLineKeyGeometry(imageData, options = {}) {
   };
 }
 
-/** Creates the 88-key A0..C8 map used by one-line flat-keyboard detection. */
+/** Creates the chromatic map used by one-line flat-keyboard detection. */
 export function createSingleLineKeyMap(geometry, startMidi = 21) {
   const boundaries = geometry?.keyBoundaries;
   const keyCount = Math.max(0, Math.min(boundaries?.length ? boundaries.length - 1 : 0, 128));
@@ -891,6 +892,119 @@ export function suggestLeftmostMidi(geometry) {
   if (geometry.whiteCount === 52) return 21; // Full 88-key piano: A0 to C8.
   const pitchClass = WHITE_PCS[geometry.inferredLeftmostWhiteIndex] ?? 0;
   return nearestWhiteMidiWithPitchClass(pitchClass, 48);
+}
+
+export function createKeyMapForRange(geometry, requestedStartMidi = 21, requestedEndMidi = 108) {
+  let rangeStart = clamp(Math.round(Number(requestedStartMidi) || 21), 0, 127);
+  let rangeEnd = clamp(Math.round(Number(requestedEndMidi) || 108), 0, 127);
+  if (rangeEnd < rangeStart) [rangeStart, rangeEnd] = [rangeEnd, rangeStart];
+
+  const expectedWhiteMidis = [];
+  for (let midi = rangeStart; midi <= rangeEnd; midi += 1) {
+    if (isWhiteMidi(midi)) expectedWhiteMidis.push(midi);
+  }
+
+  const whiteKeys = [];
+  const whiteCount = Math.min(geometry.whiteCount, expectedWhiteMidis.length);
+  for (let index = 0; index < whiteCount; index += 1) {
+    const midi = expectedWhiteMidis[index];
+    whiteKeys.push({
+      id: `w-${index}`,
+      type: 'white',
+      visualIndex: index,
+      midi,
+      name: midiNoteName(midi),
+      x0: geometry.whiteBoundaries[index],
+      x1: geometry.whiteBoundaries[index + 1],
+      y0: 0,
+      y1: geometry.height,
+    });
+  }
+
+  const blackKeys = [];
+  for (let gap = 0; gap < whiteKeys.length - 1; gap += 1) {
+    const left = whiteKeys[gap];
+    const right = whiteKeys[gap + 1];
+    if (right.midi - left.midi !== 2) continue;
+    const blackMidi = left.midi + 1;
+    if (blackMidi < rangeStart || blackMidi > rangeEnd) continue;
+    const boundary = geometry.whiteBoundaries[gap + 1];
+    const localWhiteWidth = Math.min(left.x1 - left.x0, right.x1 - right.x0);
+    const detected = geometry.blackGaps[gap];
+    const fallbackWidth = Math.max(3, localWhiteWidth * 0.56);
+    const x0 = detected ? detected.x0 : boundary - fallbackWidth / 2;
+    const x1 = detected ? detected.x1 : boundary + fallbackWidth / 2;
+    blackKeys.push({
+      id: `b-${gap}`,
+      type: 'black',
+      visualIndex: gap,
+      midi: blackMidi,
+      name: midiNoteName(blackMidi),
+      x0: clamp(x0, 0, geometry.width),
+      x1: clamp(x1, 0, geometry.width),
+      y0: detected?.y0 ?? Math.round(geometry.height * 0.04),
+      y1: detected?.y1 ?? geometry.blackHeight,
+      detected: Boolean(detected),
+    });
+  }
+
+  // Most physical keyboards begin/end on white keys. For an explicitly chosen
+  // black-key edge, create a conservative edge probe from the adjacent white key
+  // so the selected MIDI range can still be represented.
+  const firstWhite = whiteKeys[0];
+  if (firstWhite && !isWhiteMidi(rangeStart) && firstWhite.midi === rangeStart + 1) {
+    const localWhiteWidth = Math.max(3, firstWhite.x1 - firstWhite.x0);
+    const width = Math.max(3, localWhiteWidth * 0.56);
+    blackKeys.push({
+      id: 'b-edge-start',
+      type: 'black',
+      visualIndex: -1,
+      midi: rangeStart,
+      name: midiNoteName(rangeStart),
+      x0: clamp(firstWhite.x0, 0, geometry.width),
+      x1: clamp(firstWhite.x0 + width, 0, geometry.width),
+      y0: Math.round(geometry.height * 0.04),
+      y1: geometry.blackHeight,
+      detected: false,
+    });
+  }
+  const lastWhite = whiteKeys[whiteKeys.length - 1];
+  if (lastWhite && !isWhiteMidi(rangeEnd) && lastWhite.midi === rangeEnd - 1) {
+    const localWhiteWidth = Math.max(3, lastWhite.x1 - lastWhite.x0);
+    const width = Math.max(3, localWhiteWidth * 0.56);
+    blackKeys.push({
+      id: 'b-edge-end',
+      type: 'black',
+      visualIndex: whiteKeys.length - 1,
+      midi: rangeEnd,
+      name: midiNoteName(rangeEnd),
+      x0: clamp(lastWhite.x1 - width, 0, geometry.width),
+      x1: clamp(lastWhite.x1, 0, geometry.width),
+      y0: Math.round(geometry.height * 0.04),
+      y1: geometry.blackHeight,
+      detected: false,
+    });
+  }
+
+  const keys = [...whiteKeys, ...blackKeys]
+    .filter(key => key.midi >= rangeStart && key.midi <= rangeEnd)
+    .sort((a, b) => a.midi - b.midi);
+  const firstExpectedWhite = expectedWhiteMidis[0];
+  const visualPitchClass = WHITE_PCS[geometry.inferredLeftmostWhiteIndex];
+  const pitchMismatch = Number.isFinite(firstExpectedWhite)
+    && firstExpectedWhite % 12 !== visualPitchClass
+    && geometry.inferredPitchConfidence >= 0.58;
+  return {
+    startMidi: rangeStart,
+    endMidi: rangeEnd,
+    whiteKeys,
+    blackKeys,
+    keys,
+    pitchMismatch,
+    rangeMismatch: geometry.whiteCount !== expectedWhiteMidis.length || keys.length !== (rangeEnd - rangeStart + 1),
+    expectedWhiteCount: expectedWhiteMidis.length,
+    inferredLeftmostName: geometry.inferredLeftmostWhiteName,
+  };
 }
 
 /** Converts the visual key geometry into MIDI-numbered white and black keys. */

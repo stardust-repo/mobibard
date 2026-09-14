@@ -2,22 +2,22 @@ import {
   autoDetectKeyboardRegion,
   clamp,
   cropImageData,
-  createKeyMap,
+  createKeyMapForRange,
   createLineAnalysisProbes,
   createSingleLineAnalysisProbes,
   createSingleLineKeyMap,
   detectKeyGeometry,
   detectSingleLineKeyGeometry,
   formatTime,
+  midiNoteName,
   createLineProbeSampler,
   sampleKeyColors,
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
-  suggestLeftmostMidi,
-} from './vision.js?v=20260831-account-menu1';
+} from './vision.js?v=20260914-keyrange-auto2';
 import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260905-joint-velocity1';
 import { createMidiFile } from './midi.js?v=20260830-site-nav1';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260906-locale-prune1';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260914-keyrange-auto2';
 import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260831-account-menu1';
 
 const MEDIABUNNY_VERSION = '1.55.3';
@@ -33,11 +33,14 @@ const MIDI_PREVIEW_PROGRAM = 0;
 
 const DEFAULT_WHITE_CHANGE_PERCENT = 20;
 const DEFAULT_BLACK_CHANGE_PERCENT = 30;
+const DEFAULT_KEYBOARD_START_MIDI = 21; // A0
+const DEFAULT_KEYBOARD_END_MIDI = 108; // C8
 
 const elements = Object.fromEntries([
   'videoFile', 'fileDrop', 'fileName', 'videoInfo', 'restoreSession', 'runtimeError', 'previewStage', 'previewCanvas', 'overlayCanvas',
   'playPause', 'jumpStart', 'prevSecond', 'prevFrame', 'nextFrame', 'nextSecond', 'jumpEnd', 'timeline', 'timeLabel', 'currentChord', 'currentChordCount', 'keyboardStatus',
   'analysisStart', 'analysisEnd', 'analysisRangeLabel', 'setStartCurrent', 'setEndCurrent', 'autoDetectRange',
+  'keyboardStartMidi', 'keyboardEndMidi', 'keyboardRangeLabel', 'autoDetectKeyboardRange',
   'tempo', 'velocity', 'velocityValue', 'velocityLabelText', 'velocityUsageHint', 'audioVelocityToggle', 'audioVelocityText', 'noteExtensionFrames', 'detectKeys', 'detectionModeToggle', 'detectionModeText', 'keyboardOrientationToggle', 'keyboardOrientationText', 'keyboardHelpSetup', 'dualGuideLegend', 'singleGuideLegend', 'whiteChangePercent', 'blackChangePercent', 'keyboardColorPalette', 'whiteKeyColors', 'blackKeyColors', 'analyzeVideo', 'cancelAnalysis', 'progressBar',
   'progressTitle', 'progressDetail', 'noteCountResult', 'downloadMidi', 'midiPreviewControls', 'midiPreviewPlay', 'midiPreviewRewind', 'midiPreviewSlider', 'midiPreviewMix', 'toast', 'languageSelect',
   'videoQualityWarning', 'tutorialButton', 'tutorialDialog', 'tutorialClose', 'tutorialProgress', 'tutorialVisual', 'tutorialVisualStep', 'tutorialVisualSymbol', 'tutorialVisualTitle', 'tutorialPart', 'tutorialStepTitle', 'tutorialStepBody', 'tutorialStepNote', 'tutorialPrev', 'tutorialNext',
@@ -107,6 +110,7 @@ const state = {
   sessionSaveTimer: null,
   restoringSession: false,
   analysisRangeSearching: false,
+  keyboardRangeSearching: false,
   analysisRangeAutoInitialized: false,
   audioVelocityEnabled: true,
   audioVelocityAnalyzing: false,
@@ -283,6 +287,8 @@ function currentSessionSnapshot() {
     analysisStart: Number(elements.analysisStart?.value) || 0,
     analysisEnd: Number(elements.analysisEnd?.value) || state.duration,
     analysisRangeAutoInitialized: Boolean(state.analysisRangeAutoInitialized),
+    keyboardStartMidi: currentKeyboardRange().startMidi,
+    keyboardEndMidi: currentKeyboardRange().endMidi,
     tempo: clamp(Number(elements.tempo?.value) || 120, 20, 300),
     velocity: clamp(Number(elements.velocity?.value) || 75, 1, 100),
     audioVelocityEnabled: Boolean(state.audioVelocityEnabled),
@@ -400,6 +406,11 @@ async function applyRollscriptorSessionSnapshot(snapshot) {
     state.audioVelocityEnabled = snapshot.audioVelocityEnabled === undefined ? true : Boolean(snapshot.audioVelocityEnabled);
     updateAudioVelocityToggle();
     syncNoteExtensionButtons(snapshot.noteExtensionFrames);
+    setKeyboardRangeValues(
+      snapshot.keyboardStartMidi ?? DEFAULT_KEYBOARD_START_MIDI,
+      snapshot.keyboardEndMidi ?? DEFAULT_KEYBOARD_END_MIDI,
+      { invalidate: false },
+    );
 
     const gap = minimumAnalysisRange();
     let start = clamp(Number(snapshot.analysisStart) || 0, 0, state.duration);
@@ -741,9 +752,11 @@ function resetRollscriptorSettingsForNewVideo() {
   state.detectionMode = 'dual';
   state.keyboardSide = 'bottom';
   state.analysisRangeSearching = false;
+  state.keyboardRangeSearching = false;
   state.analysisRangeAutoInitialized = false;
   if (elements.whiteChangePercent) elements.whiteChangePercent.value = String(DEFAULT_WHITE_CHANGE_PERCENT);
   if (elements.blackChangePercent) elements.blackChangePercent.value = String(DEFAULT_BLACK_CHANGE_PERCENT);
+  setKeyboardRangeValues(DEFAULT_KEYBOARD_START_MIDI, DEFAULT_KEYBOARD_END_MIDI, { invalidate: false });
   syncNoteExtensionButtons(0);
   if (elements.tempo) elements.tempo.value = '120';
   if (elements.velocity) elements.velocity.value = '75';
@@ -754,6 +767,162 @@ function resetRollscriptorSettingsForNewVideo() {
   updateKeyboardOrientationButtons();
 }
 
+function populateKeyboardRangeOptions() {
+  if (!elements.keyboardStartMidi || !elements.keyboardEndMidi) return;
+  const makeOptions = select => {
+    select.replaceChildren();
+    for (let midi = DEFAULT_KEYBOARD_START_MIDI; midi <= DEFAULT_KEYBOARD_END_MIDI; midi += 1) {
+      const option = document.createElement('option');
+      option.value = String(midi);
+      option.textContent = midiNoteName(midi);
+      select.append(option);
+    }
+  };
+  makeOptions(elements.keyboardStartMidi);
+  makeOptions(elements.keyboardEndMidi);
+  setKeyboardRangeValues(DEFAULT_KEYBOARD_START_MIDI, DEFAULT_KEYBOARD_END_MIDI, { invalidate: false });
+}
+
+function currentKeyboardRange() {
+  let startMidi = clamp(Math.round(Number(elements.keyboardStartMidi?.value) || DEFAULT_KEYBOARD_START_MIDI), DEFAULT_KEYBOARD_START_MIDI, DEFAULT_KEYBOARD_END_MIDI);
+  let endMidi = clamp(Math.round(Number(elements.keyboardEndMidi?.value) || DEFAULT_KEYBOARD_END_MIDI), DEFAULT_KEYBOARD_START_MIDI, DEFAULT_KEYBOARD_END_MIDI);
+  if (endMidi < startMidi) [startMidi, endMidi] = [endMidi, startMidi];
+  let whiteCount = 0;
+  for (let midi = startMidi; midi <= endMidi; midi += 1) {
+    if (isWhiteMidiNumber(midi)) whiteCount += 1;
+  }
+  return {
+    startMidi,
+    endMidi,
+    keyCount: endMidi - startMidi + 1,
+    whiteCount,
+    startName: midiNoteName(startMidi),
+    endName: midiNoteName(endMidi),
+  };
+}
+
+function updateKeyboardRangeLabel() {
+  if (!elements.keyboardRangeLabel) return;
+  const range = currentKeyboardRange();
+  elements.keyboardRangeLabel.textContent = t('keyboard.range_summary', {
+    count: range.keyCount,
+    start: range.startName,
+    end: range.endName,
+  });
+}
+
+
+const WHITE_MIDI_PITCH_CLASSES = [0, 2, 4, 5, 7, 9, 11];
+
+function endMidiForWhiteCount(startMidi, whiteCount) {
+  let midi = startMidi;
+  let remaining = Math.max(1, Math.round(Number(whiteCount) || 1)) - 1;
+  while (remaining > 0 && midi < DEFAULT_KEYBOARD_END_MIDI) {
+    midi += 1;
+    if (isWhiteMidiNumber(midi)) remaining -= 1;
+  }
+  return remaining === 0 ? midi : null;
+}
+
+function suggestKeyboardRangeFromGeometry(geometry) {
+  const whiteCount = Math.max(0, Math.round(Number(geometry?.whiteCount) || 0));
+  if (whiteCount < 2) return null;
+  if (whiteCount === 52) {
+    return { startMidi: DEFAULT_KEYBOARD_START_MIDI, endMidi: DEFAULT_KEYBOARD_END_MIDI, whiteCount, confidence: 1 };
+  }
+
+  const current = currentKeyboardRange();
+  const currentCenter = (current.startMidi + current.endMidi) / 2;
+  const inferredIndex = Math.round(Number(geometry?.inferredLeftmostWhiteIndex));
+  const inferredPitchClass = Number.isFinite(inferredIndex) ? WHITE_MIDI_PITCH_CLASSES[inferredIndex] : null;
+  const pitchConfidence = clamp(Number(geometry?.inferredPitchConfidence) || 0, 0, 1);
+  const reliablePitch = Number.isFinite(inferredPitchClass) && pitchConfidence >= 0.52;
+  const candidates = [];
+
+  for (let startMidi = DEFAULT_KEYBOARD_START_MIDI; startMidi <= DEFAULT_KEYBOARD_END_MIDI; startMidi += 1) {
+    if (!isWhiteMidiNumber(startMidi)) continue;
+    if (reliablePitch && ((startMidi % 12) + 12) % 12 !== inferredPitchClass) continue;
+    const endMidi = endMidiForWhiteCount(startMidi, whiteCount);
+    if (!Number.isFinite(endMidi) || endMidi > DEFAULT_KEYBOARD_END_MIDI) continue;
+    const center = (startMidi + endMidi) / 2;
+    const centerDistance = Math.abs(center - currentCenter);
+    const endpointDistance = Math.abs(startMidi - current.startMidi) + Math.abs(endMidi - current.endMidi);
+    candidates.push({
+      startMidi,
+      endMidi,
+      score: centerDistance * 2 + endpointDistance * 0.18,
+    });
+  }
+  candidates.sort((a, b) => a.score - b.score || a.startMidi - b.startMidi);
+  const best = candidates[0];
+  return best ? { ...best, whiteCount, confidence: pitchConfidence } : null;
+}
+
+async function autoDetectKeyboardRange({ quiet = false } = {}) {
+  if (!state.track || !state.guide || state.analyzing || state.analysisRangeSearching || state.keyboardRangeSearching) return false;
+  pausePlayback();
+  state.keyboardRangeSearching = true;
+  updateControlAvailability();
+  if (!quiet) showToast(t('toast.key_range_searching'));
+  try {
+    // Range detection must use the exact frame selected by the user, not a downscaled cache frame.
+    if (state.previewFromFrameCache) await renderPreview(state.previewFrameTime, true);
+    const crop = getGuideCrop();
+    if (!crop || crop.canonicalWidth < 40 || crop.canonicalHeight < 24) throw new Error('keyboard range crop too small');
+    const roi = canonicalImageDataFromPreview(crop);
+    const geometry = detectKeyGeometry(roi);
+    const suggestion = suggestKeyboardRangeFromGeometry(geometry);
+    if (!suggestion) throw new Error('keyboard range suggestion unavailable');
+    const range = setKeyboardRangeValues(suggestion.startMidi, suggestion.endMidi, { invalidate: true });
+    state.analysisRangeAutoInitialized = false;
+    scheduleRollscriptorSessionPersist();
+    if (!quiet) {
+      showToast(t('toast.key_range_found', {
+        start: range.startName,
+        end: range.endName,
+        count: range.keyCount,
+      }));
+    }
+    return true;
+  } catch (error) {
+    console.error('automatic keyboard range detection failed', error);
+    if (!quiet) showToast(t('toast.key_range_failed'), 'error');
+    return false;
+  } finally {
+    state.keyboardRangeSearching = false;
+    updateControlAvailability();
+  }
+}
+
+function setKeyboardRangeValues(startValue, endValue, { invalidate = true, changed = '' } = {}) {
+  if (!elements.keyboardStartMidi || !elements.keyboardEndMidi) return currentKeyboardRange();
+  let startMidi = clamp(Math.round(Number(startValue) || DEFAULT_KEYBOARD_START_MIDI), DEFAULT_KEYBOARD_START_MIDI, DEFAULT_KEYBOARD_END_MIDI);
+  let endMidi = clamp(Math.round(Number(endValue) || DEFAULT_KEYBOARD_END_MIDI), DEFAULT_KEYBOARD_START_MIDI, DEFAULT_KEYBOARD_END_MIDI);
+  if (startMidi >= endMidi) {
+    if (changed === 'start') {
+      if (startMidi < DEFAULT_KEYBOARD_END_MIDI) endMidi = startMidi + 1;
+      else startMidi = endMidi - 1;
+    } else if (changed === 'end') {
+      if (endMidi > DEFAULT_KEYBOARD_START_MIDI) startMidi = endMidi - 1;
+      else endMidi = startMidi + 1;
+    } else if (startMidi === endMidi) {
+      if (endMidi < DEFAULT_KEYBOARD_END_MIDI) endMidi += 1;
+      else startMidi -= 1;
+    } else {
+      [startMidi, endMidi] = [endMidi, startMidi];
+    }
+  }
+  elements.keyboardStartMidi.value = String(startMidi);
+  elements.keyboardEndMidi.value = String(endMidi);
+  updateKeyboardRangeLabel();
+  if (invalidate && state.track) {
+    invalidateKeyboardDetection(t('keyboard.stage_detect_required'));
+    state.analysisRangeAutoInitialized = false;
+    scheduleRollscriptorSessionPersist();
+  }
+  return currentKeyboardRange();
+}
+
 function isWhiteMidiNumber(midi) {
   return [0, 2, 4, 5, 7, 9, 11].includes(((midi % 12) + 12) % 12);
 }
@@ -762,15 +931,15 @@ function average(values) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 }
 
-function singleLineFlatKeyboardLooksPresent(imageData, geometry, lineY) {
-  if (!imageData || !geometry?.keyBoundaries || geometry.keyBoundaries.length !== 89) return false;
+function singleLineFlatKeyboardLooksPresent(imageData, geometry, lineY, range = currentKeyboardRange()) {
+  if (!imageData || !geometry?.keyBoundaries || geometry.keyBoundaries.length !== range.keyCount + 1) return false;
   const { width, height, data } = imageData;
   const numericLineY = Number(lineY);
   const centerY = clamp(Math.round(Number.isFinite(numericLineY) ? numericLineY : height / 2), 0, Math.max(0, height - 1));
   const band = Math.max(1, Math.round(height * 0.10));
   const whiteValues = [];
   const blackValues = [];
-  for (let keyIndex = 0; keyIndex < 88; keyIndex += 1) {
+  for (let keyIndex = 0; keyIndex < range.keyCount; keyIndex += 1) {
     const x0 = clamp(Math.floor(geometry.keyBoundaries[keyIndex]), 0, Math.max(0, width - 1));
     const x1 = clamp(Math.ceil(geometry.keyBoundaries[keyIndex + 1]), x0 + 1, width);
     const xs = [0.25, 0.5, 0.75].map(ratio => clamp(Math.round(x0 + (x1 - x0 - 1) * ratio), x0, Math.max(x0, x1 - 1)));
@@ -785,7 +954,7 @@ function singleLineFlatKeyboardLooksPresent(imageData, geometry, lineY) {
       }
     }
     const luminance = count ? sum / count : 0;
-    (isWhiteMidiNumber(21 + keyIndex) ? whiteValues : blackValues).push(luminance);
+    (isWhiteMidiNumber(range.startMidi + keyIndex) ? whiteValues : blackValues).push(luminance);
   }
   const whiteMean = average(whiteValues);
   const blackMean = average(blackValues);
@@ -859,24 +1028,30 @@ async function inspectKeyboardPresenceAtTime(timeSeconds) {
     );
     const roi = context.getImageData(0, 0, canvas.width, canvas.height);
     let present = false;
+    const range = currentKeyboardRange();
     if (state.detectionMode === 'single') {
-      const geometry = detectSingleLineKeyGeometry(roi, { expectedKeyCount: 88, lineY: crop.singleLineY });
-      if (geometry.keyCount === 88) {
-        // Single-line detection has an intentional 88-region fallback. For range
-        // discovery we therefore also require the expected white/black strip
+      const geometry = detectSingleLineKeyGeometry(roi, {
+        expectedKeyCount: range.keyCount,
+        startMidi: range.startMidi,
+        lineY: crop.singleLineY,
+      });
+      if (geometry.keyCount === range.keyCount) {
+        // Single-line detection has an intentional equal-region fallback. For range
+        // discovery we therefore also require the configured white/black strip
         // pattern, otherwise an intro/outro frame could be mistaken for a keyboard.
-        present = singleLineFlatKeyboardLooksPresent(roi, geometry, crop.singleLineY);
+        present = singleLineFlatKeyboardLooksPresent(roi, geometry, crop.singleLineY, range);
       }
     } else if (crop.canonicalHeight >= 24) {
       const geometry = detectKeyGeometry(roi);
-      const keyMap = createKeyMap(geometry, suggestLeftmostMidi(geometry));
+      const keyMap = createKeyMapForRange(geometry, range.startMidi, range.endMidi);
       const whiteConfidence = Number(geometry.diagnostics?.whiteConfidence ?? geometry.confidence ?? 0);
       const referenceConfidence = Number(state.geometry?.diagnostics?.whiteConfidence ?? state.geometry?.confidence ?? 0.34);
       const minimumConfidence = clamp(referenceConfidence * 0.55, 0.10, 0.24);
       const referenceWidth = Math.max(1, Number(state.geometry?.nominalWhiteWidth) || Number(geometry.nominalWhiteWidth) || 1);
       const widthRatio = Number(geometry.nominalWhiteWidth) / referenceWidth;
-      present = geometry.whiteCount === 52
-        && keyMap.keys.length === 88
+      present = geometry.whiteCount === range.whiteCount
+        && keyMap.keys.length === range.keyCount
+        && !keyMap.rangeMismatch
         && whiteConfidence >= minimumConfidence
         && widthRatio >= 0.82
         && widthRatio <= 1.18;
@@ -962,7 +1137,7 @@ async function refineKeyboardBoundaryTowardReference(boundary, fromStart, looseT
   // Look just inside the detected edge for a frame whose keyboard appearance is
   // closer to the user's confirmed reference frame. This deliberately moves a
   // start past a fade-in and an end before a fade-out, instead of hugging the
-  // first/last barely-recognisable 88-key frame.
+  // first/last barely-recognisable configured-key-range frame.
   const window = clamp(state.duration / 80, 0.5, 1.5);
   const step = Math.max(frame * 2, window / 12);
   const samples = [];
@@ -1014,7 +1189,7 @@ async function findKeyboardRangeBoundary(fromStart = true) {
     return refineKeyboardBoundaryTowardReference(matchedBoundary, fromStart, appearanceTolerance);
   }
   // If the reference appearance cannot be matched (for example a heavily
-  // animated keyboard), retain the older 88-key-presence search as a fallback.
+  // animated keyboard), retain the older key-range-presence search as a fallback.
   return findKeyboardRangeBoundaryWithTolerance(fromStart, null);
 }
 
@@ -1667,7 +1842,7 @@ function resetResults() {
 
 function updateControlAvailability() {
   const hasVideo = Boolean(state.track);
-  const locked = state.analyzing || state.analysisRangeSearching || state.audioVelocityAnalyzing;
+  const locked = state.analyzing || state.analysisRangeSearching || state.keyboardRangeSearching || state.audioVelocityAnalyzing;
   if (locked && midiPreviewPlaying) stopMidiPreview(true);
   elements.videoFile.disabled = locked || !state.mediabunny;
   elements.timeline.disabled = !hasVideo || locked;
@@ -1680,6 +1855,12 @@ function updateControlAvailability() {
   elements.jumpEnd.disabled = !hasVideo || locked;
   elements.analysisStart.disabled = !hasVideo || locked;
   elements.analysisEnd.disabled = !hasVideo || locked;
+  if (elements.keyboardStartMidi) elements.keyboardStartMidi.disabled = !hasVideo || locked;
+  if (elements.keyboardEndMidi) elements.keyboardEndMidi.disabled = !hasVideo || locked;
+  if (elements.autoDetectKeyboardRange) {
+    elements.autoDetectKeyboardRange.disabled = !hasVideo || locked;
+    elements.autoDetectKeyboardRange.textContent = t(state.keyboardRangeSearching ? 'keyboard.auto_searching' : 'keyboard.auto_search');
+  }
   elements.setStartCurrent.disabled = !hasVideo || locked;
   elements.setEndCurrent.disabled = !hasVideo || locked;
   if (elements.autoDetectRange) {
@@ -2683,6 +2864,7 @@ function updateKeyboardStatus(message = '') {
     invalid: invalidBlack,
     time: formatTime(state.releaseBaselineTime),
     count: formatNumber(state.notes.length),
+    keys: formatNumber(state.keyMap.keys.length),
   };
   const estimatedBoundaries = Boolean(state.geometry?.boundariesEstimated);
 
@@ -2721,16 +2903,21 @@ function detectKeysFromGuides({ quiet = false } = {}) {
   if (!crop || crop.canonicalWidth < 40 || crop.canonicalHeight < 8) return false;
   try {
     const roi = canonicalImageDataFromPreview(crop);
+    const range = currentKeyboardRange();
     if (state.detectionMode === 'single') {
       state.geometry = detectSingleLineKeyGeometry(roi, {
-        expectedKeyCount: 88,
+        expectedKeyCount: range.keyCount,
+        startMidi: range.startMidi,
         lineY: crop.singleLineY,
       });
-      state.keyMap = createSingleLineKeyMap(state.geometry, 21);
+      state.keyMap = createSingleLineKeyMap(state.geometry, range.startMidi);
     } else {
       if (crop.canonicalHeight < 24) throw new Error(t('error.region_small'));
       state.geometry = detectKeyGeometry(roi);
-      state.keyMap = createKeyMap(state.geometry, suggestLeftmostMidi(state.geometry));
+      state.keyMap = createKeyMapForRange(state.geometry, range.startMidi, range.endMidi);
+      if (state.keyMap.rangeMismatch) {
+        throw new Error(t('error.key_range_mismatch', { expected: range.whiteCount, detected: state.geometry.whiteCount }));
+      }
     }
     if (!captureReleaseBaseline({ quiet: true })) throw new Error(t('error.baseline_missing'));
     state.keyboardDetectionConfirmed = true;
@@ -2746,7 +2933,10 @@ function detectKeysFromGuides({ quiet = false } = {}) {
     drawOverlay();
     updateControlAvailability();
     if (!quiet) {
-      showToast(t(state.geometry?.boundariesEstimated ? 'toast.detect_estimated' : 'toast.detect_updated'));
+      showToast(t(
+        state.geometry?.boundariesEstimated ? 'toast.detect_estimated' : 'toast.detect_updated',
+        { count: currentKeyboardRange().keyCount },
+      ));
     }
     return true;
   } catch (error) {
@@ -2939,7 +3129,7 @@ async function finishGuideDrag(event, cancelled = false) {
 }
 
 async function confirmKeyboardDetection() {
-  if (!state.track || state.analyzing || state.analysisRangeSearching) return;
+  if (!state.track || state.analyzing || state.analysisRangeSearching || state.keyboardRangeSearching) return;
   pausePlayback();
   // Frame-cache canvases are intentionally downscaled. Detection and release-color
   // capture must use the exact decoded frame selected by the user.
@@ -2957,7 +3147,7 @@ async function confirmKeyboardDetection() {
 }
 
 async function loadVideoFile(file, { restoreSnapshot = null, persistSession = true } = {}) {
-  if (!file || state.analyzing || state.analysisRangeSearching || !state.mediabunny) return;
+  if (!file || state.analyzing || state.analysisRangeSearching || state.keyboardRangeSearching || !state.mediabunny) return;
   if (!restoreSnapshot) resetRollscriptorSettingsForNewVideo();
   clearTimeout(state.sessionSaveTimer);
   state.sessionSaveTimer = null;
@@ -3452,6 +3642,13 @@ function initializeEvents() {
     pausePlayback();
     requestPreview(event.target.value);
   });
+  elements.keyboardStartMidi?.addEventListener('change', event => {
+    setKeyboardRangeValues(event.currentTarget.value, elements.keyboardEndMidi.value, { changed: 'start' });
+  });
+  elements.keyboardEndMidi?.addEventListener('change', event => {
+    setKeyboardRangeValues(elements.keyboardStartMidi.value, event.currentTarget.value, { changed: 'end' });
+  });
+  elements.autoDetectKeyboardRange?.addEventListener('click', () => { void autoDetectKeyboardRange({ quiet: false }); });
   elements.analysisStart.addEventListener('change', () => normalizeAnalysisRange('start'));
   elements.analysisEnd.addEventListener('change', () => normalizeAnalysisRange('end'));
   elements.analysisStart.addEventListener('input', updateAnalysisRangeLabel);
@@ -3634,6 +3831,7 @@ async function initialize() {
     setPlaybackUi();
     updateMidiPreviewUi();
     updateAnalysisRangeLabel();
+    updateKeyboardRangeLabel();
     updateCurrentChord();
     updateKeyboardStatus();
     renderDetectedKeyColors();
@@ -3656,6 +3854,7 @@ async function initialize() {
     if (!state.track && elements.fileName) elements.fileName.textContent = t('file.prompt');
     updateRestoreButton();
   });
+  populateKeyboardRangeOptions();
   setPlaybackUi();
   updateMidiPreviewUi();
   updateKeyboardOrientationButtons();
