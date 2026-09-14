@@ -358,6 +358,7 @@
     channelMmlDialog: document.querySelector("#channelMmlDialog"),
     channelMmlTargetLabel: document.querySelector("#channelMmlTargetLabel"),
     channelMmlText: document.querySelector("#channelMmlText"),
+    channelMmlIncludeTempo: document.querySelector("#channelMmlIncludeTempo"),
     channelMmlStatus: document.querySelector("#channelMmlStatus"),
     channelMmlCloseButton: document.querySelector("#channelMmlCloseButton"),
     channelMmlCancelButton: document.querySelector("#channelMmlCancelButton"),
@@ -668,6 +669,7 @@
       channelId: null,
       parseTimer: 0,
       parsed: null,
+      includeTempo: true,
     },
     audioEdit: {
       clipId: null,
@@ -6140,17 +6142,76 @@
   }
 
 
-  function channelToEditableMml(channel) {
-    if (!channel?.notes?.length) return "MML@;";
-    const normalized = channel.notes.map((note) => ({
+  function normalizeMmlCommandCase(text) {
+    return String(text || "").replace(/[A-Za-z]/g, (character) => {
+      const lower = character.toLowerCase();
+      if ("tolv".includes(lower)) return lower.toUpperCase();
+      if ("rnabcdefg".includes(lower)) return lower;
+      return character;
+    });
+  }
+
+  function normalizeMmlTextCase(text) {
+    const source = String(text || "");
+    const wrapper = source.match(/^(\s*)MML\s*@([\s\S]*?)(;?)(\s*)$/i);
+    if (wrapper) {
+      const parts = wrapper[2].split(",").map((part) => normalizeMmlCommandCase(part));
+      return `${wrapper[1]}MML@${parts.join(",")};${wrapper[4]}`;
+    }
+    return normalizeMmlCommandCase(source);
+  }
+
+  function normalizeMmlImportTextareaCase() {
+    const textarea = elements.mmlImportText;
+    if (!textarea) return false;
+    const source = String(textarea.value || "");
+    const fileName = String(state.mmlImport.sourceFileName || "");
+    const extension = (fileName.match(/\.([^.]+)$/)?.[1] || "").toLowerCase();
+    const isThreeMle = !/^\s*MML\s*@/i.test(source) && /^\s*\[Channel\s*\d+\]\s*$/im.test(source);
+    const isMabiIccoText = /^\s*\[mml-score\]\s*$/im.test(source) || /(?:^|\r?\n)\s*mml-track\s*=/i.test(source);
+    if (extension === "mmi" || isThreeMle || isMabiIccoText) return false;
+    const normalized = normalizeMmlTextCase(source);
+    if (normalized === source) return false;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    textarea.value = normalized;
+    try { textarea.setSelectionRange(start, end); } catch {}
+    return true;
+  }
+
+  function normalizeChannelMmlTextareaCase() {
+    const textarea = elements.channelMmlText;
+    if (!textarea) return;
+    const before = String(textarea.value || "");
+    const after = normalizeMmlCommandCase(before);
+    if (before === after) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    textarea.value = after;
+    try { textarea.setSelectionRange(start, end); } catch {}
+  }
+
+  function channelToEditableMml(channel, { includeTempo = false, sourceNotes = null } = {}) {
+    const inputNotes = Array.isArray(sourceNotes) ? sourceNotes : (channel?.notes || []);
+    if (!inputNotes.length) {
+      if (!includeTempo) return "";
+      const tempos = getSortedTempos();
+      return normalizeMmlCommandCase(`t${getTempoAtBeatFromCollection(0, tempos)}`);
+    }
+    const normalized = inputNotes.map((note) => ({
       ...note,
       startBeat: Math.max(0, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat)),
       durationBeat: Math.max(CONFIG.minimumNoteBeat, snapBeatToUnit(note.durationBeat, CONFIG.minimumNoteBeat)),
     }));
-    const voices = partitionNotesIntoMmlVoices(normalized)
-      .map((voice) => buildNoteVoiceMml(voice, 0, { applyTimelineFade: false }))
+    const voices = partitionNotesIntoMmlVoices(normalized);
+    const endBeat = normalized.reduce((maximum, note) => Math.max(maximum, note.startBeat + note.durationBeat), 0);
+    const tempos = getSortedTempos();
+    const rendered = voices
+      .map((voice, voiceIndex) => (includeTempo && voiceIndex === 0
+        ? buildTempoIntegratedNoteVoiceMml(voice, tempos, 0, endBeat, { applyTimelineFade: false })
+        : buildNoteVoiceMml(voice, 0, { applyTimelineFade: false })))
       .filter(Boolean);
-    return `MML@${voices.join(",")};`;
+    return normalizeMmlCommandCase(rendered.join(","));
   }
 
   function setChannelMmlStatus(message, { error = false } = {}) {
@@ -6161,7 +6222,9 @@
 
   function updateChannelMmlPreview() {
     if (!elements.channelMmlText) return null;
+    normalizeChannelMmlTextareaCase();
     const source = String(elements.channelMmlText.value || "");
+    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
     try {
       const parsed = parseMmlText(source, { quantize: 64 });
       state.channelMmlEdit.parsed = parsed;
@@ -6174,7 +6237,11 @@
         i18nText("channel.mml_status_notes", [parsed.noteCount]),
         i18nText("channel.mml_status_chars", [source.length]),
       ];
-      if (parsed.explicitTempoCount) details.push(i18nText("channel.mml_status_tempo_ignored"));
+      if (parsed.explicitTempoCount) {
+        details.push(includeTempo
+          ? i18nText("channel.mml_status_tempo_included", [parsed.explicitTempoCount])
+          : i18nText("channel.mml_status_tempo_ignored"));
+      }
       if (parsed.skippedPitchCount) details.push(i18nText("channel.mml_status_pitch_skipped", [parsed.skippedPitchCount]));
       if (parsed.unsupportedTokenCount) details.push(i18nText("channel.mml_status_unsupported", [parsed.unsupportedTokenCount]));
       setChannelMmlStatus(details.join(" · "));
@@ -6193,6 +6260,22 @@
     state.channelMmlEdit.parseTimer = window.setTimeout(updateChannelMmlPreview, 80);
   }
 
+  function refreshChannelMmlTempoOption() {
+    const channelId = state.channelMmlEdit.channelId;
+    const channel = state.channels.find((entry) => String(entry.id) === String(channelId));
+    if (!channel || !elements.channelMmlText) return false;
+    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
+    state.channelMmlEdit.includeTempo = includeTempo;
+    let sourceNotes = null;
+    try {
+      const parsed = parseMmlText(String(elements.channelMmlText.value || ""), { quantize: 64 });
+      if (parsed.noteParts.length <= 1) sourceNotes = parsed.noteParts[0]?.notes || [];
+    } catch {}
+    elements.channelMmlText.value = channelToEditableMml(channel, { includeTempo, sourceNotes });
+    updateChannelMmlPreview();
+    return true;
+  }
+
   function openChannelMmlDialog(channelId) {
     const index = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
     if (index < 0 || !elements.channelMmlBackdrop || !elements.channelMmlText) return false;
@@ -6204,7 +6287,10 @@
     window.clearTimeout(state.channelMmlEdit.parseTimer);
     state.channelMmlEdit.parseTimer = 0;
     if (elements.channelMmlTargetLabel) elements.channelMmlTargetLabel.textContent = channel.name;
-    elements.channelMmlText.value = channelToEditableMml(channel);
+    if (elements.channelMmlIncludeTempo) elements.channelMmlIncludeTempo.checked = state.channelMmlEdit.includeTempo !== false;
+    elements.channelMmlText.value = channelToEditableMml(channel, {
+      includeTempo: Boolean(elements.channelMmlIncludeTempo?.checked),
+    });
     elements.channelMmlBackdrop.hidden = false;
     closeContextMenu();
     closeFileMenu();
@@ -6235,8 +6321,18 @@
     const parsed = updateChannelMmlPreview();
     if (!parsed || parsed.noteParts.length > 1) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
+    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
     const notes = parsed.noteParts[0]?.notes || [];
     channel.notes = notes.map((note) => ({ ...note, id: state.nextNoteId++ }));
+    if (includeTempo && parsed.explicitTempoCount) {
+      state.tempos = parsed.tempos.map((tempo, index) => ({
+        id: index + 1,
+        beat: Number(tempo.beat.toFixed(6)),
+        bpm: clamp(Math.round(tempo.bpm), CONFIG.minTempo, CONFIG.maxTempo),
+        fixed: index === 0,
+      }));
+      state.nextTempoId = state.tempos.length + 1;
+    }
     clearNoteSelection();
     clearMidiSelection();
     state.channelNoteRuntime.clear();
@@ -12512,6 +12608,7 @@
   function updateMmlImportPreview() {
     window.clearTimeout(state.mmlImport.parseTimer);
     state.mmlImport.parseTimer = 0;
+    normalizeMmlImportTextareaCase();
     const source = elements.mmlImportText?.value || "";
     if (!source.trim()) {
       state.mmlImport.parsed = null;
@@ -12835,7 +12932,7 @@
     } else if (voices.length) {
       voices[0] = `t${getTempoAtBeatFromCollection(firstBeat, tempos)}${voices[0]}`;
     }
-    return `MML@${voices.join(",")};`;
+    return normalizeMmlTextCase(`MML@${voices.join(",")};`);
   }
 
   const NOTE_CLIPBOARD_FORMAT = "mobibard-note-clipboard";
@@ -13212,7 +13309,7 @@
       if (voiceIndex === 0) return buildTempoIntegratedNoteVoiceMml(clipped, tempos, start, end);
       return clipped.length ? buildNoteVoiceMml(clipped, start) : "";
     });
-    return `MML@${rendered.join(",")};`;
+    return normalizeMmlTextCase(`MML@${rendered.join(",")};`);
   }
 
   function buildMmlExportSplitCandidates(channels, tempos, totalEndBeat) {
@@ -13327,7 +13424,7 @@
   }
 
   async function copyMmlExportText(text, button, successMessage) {
-    const copied = await writeTextToClipboard(text);
+    const copied = await writeTextToClipboard(normalizeMmlTextCase(text));
     if (!copied) {
       showToast(i18nText("mml_export.copy_failed"));
       return false;
@@ -13533,7 +13630,7 @@
     return tokens.length > 0;
   }
 
-  function buildTempoIntegratedNoteVoiceMml(notes, tempos, originBeat, endBeat) {
+  function buildTempoIntegratedNoteVoiceMml(notes, tempos, originBeat, endBeat, { applyTimelineFade = true } = {}) {
     const sortedNotes = notes.slice().sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch);
     const sortedTempos = tempos.slice().sort((left, right) => left.beat - right.beat);
     const tempoEvents = sortedTempos.filter((tempo) => tempo.beat > originBeat + 1e-7 && tempo.beat <= endBeat + 1e-7);
@@ -13572,7 +13669,9 @@
         output.push(`o${nextOctave}`);
         octave = nextOctave;
       }
-      const nextVelocity = getTimelineFadedNoteVolume(note, Number.isFinite(Number(note.fadeReferenceBeat)) ? Number(note.fadeReferenceBeat) : startBeat);
+      const nextVelocity = applyTimelineFade
+        ? getTimelineFadedNoteVolume(note, Number.isFinite(Number(note.fadeReferenceBeat)) ? Number(note.fadeReferenceBeat) : startBeat)
+        : normalizeNoteDynamics(note, 8).volume;
       if (nextVelocity !== velocity) {
         output.push(`v${nextVelocity}`);
         velocity = nextVelocity;
@@ -13640,7 +13739,7 @@
       });
     });
 
-    return voices.length ? `MML@${voices.join(",")};` : "";
+    return voices.length ? normalizeMmlTextCase(`MML@${voices.join(",")};`) : "";
   }
 
   async function applyMmlExportSelection() {
@@ -18743,7 +18842,11 @@
     elements.channelMmlBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.channelMmlBackdrop) closeChannelMmlDialog();
     });
-    elements.channelMmlText?.addEventListener("input", scheduleChannelMmlPreview);
+    elements.channelMmlText?.addEventListener("input", () => {
+      normalizeChannelMmlTextareaCase();
+      scheduleChannelMmlPreview();
+    });
+    elements.channelMmlIncludeTempo?.addEventListener("change", refreshChannelMmlTempoOption);
     elements.channelMmlText?.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();

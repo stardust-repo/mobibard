@@ -7539,3 +7539,53 @@ a[class*="button"]:hover {
   font-size: 12px;
   font-weight: 900;
 }
+
+
+/* 2026-09-14: requested fixed-white measure controls and readable time tooltip in light theme. */
+.timeline-space-control .measure-space-icon-button,
+.timeline-space-control .measure-space-icon-button:visited {
+  background: #ffffff !important;
+  border-color: #c2cad5 !important;
+}
+.timeline-space-control .measure-space-icon-button:hover,
+.timeline-space-control .measure-space-icon-button:focus-visible {
+  background: #f2f5f8 !important;
+  border-color: #aeb9c7 !important;
+}
+.timeline-space-control .measure-space-icon-button:active {
+  background: #e8edf3 !important;
+}
+:root[data-theme="light"] .timeline-hover-tooltip {
+  background: #ffffff !important;
+  color: #15202d !important;
+  border-color: #8f9bab !important;
+  box-shadow: 0 3px 12px rgba(32, 45, 61, .22) !important;
+}
+
+/* 2026-09-14: single-channel MML editor options. */
+.channel-mml-options {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10px 14px 0;
+}
+.channel-mml-tempo-option {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--control-bg));
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.channel-mml-tempo-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
