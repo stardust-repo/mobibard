@@ -18239,6 +18239,31 @@
     return true;
   }
 
+  function handleChannelCreateDeleteShortcut(event) {
+    const key = String(event.key || "").toLowerCase();
+    const altOnly = event.altKey && !event.ctrlKey && !event.metaKey;
+    if (
+      event.defaultPrevented
+      || !altOnly
+      || key !== "t"
+      || isPopupLikeUiOpen()
+      || isTextEntryTarget(event.target)
+      || isMidiReferenceActive()
+    ) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.shiftKey) {
+      void requestDeleteChannel(state.activeChannel);
+    } else {
+      addChannel();
+    }
+    return true;
+  }
+
   function handleGlobalSelectedNoteShortcut(event) {
     if (
       event.defaultPrevented
@@ -18406,6 +18431,7 @@
 
   function bindEvents() {
     document.addEventListener("keydown", handleModalBackgroundKeyGuard, true);
+    document.addEventListener("keydown", handleChannelCreateDeleteShortcut, true);
     document.addEventListener("keydown", handleHistoryShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectAllShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectedNoteShortcut, true);
