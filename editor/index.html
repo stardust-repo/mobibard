@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260914-same-volume1";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260914-fade-popup-polish1";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.3.0&amp;rev=20260914-same-volume1"></script>
+<script src="js/language-manager.js?v=5.3.0&amp;rev=20260914-fade-popup-polish1"></script>
 <title data-i18n="app.title">모비바드 v5.3</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260914-volume-relative-fix1" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260914-popup-center-actions1" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -322,6 +322,7 @@
 <div aria-hidden="true" class="scrollbar-gutter overview-scrollbar-gutter"></div>
 <div aria-label="현재 재생선 위치의 템포" data-i18n-aria-label="tempo.playhead" class="timeline-corner timeline-tempo-readout" id="timelineTempoReadout"><span>BPM</span><strong id="timelineTempoValue">120</strong></div>
 <canvas class="timeline" data-context-area="timeline" id="timelineCanvas"></canvas>
+<div class="timeline-hover-tooltip" hidden="" id="timelineHoverTooltip">00:00.0</div>
 <div aria-hidden="true" class="scrollbar-gutter top-scrollbar-gutter"></div>
 <canvas class="keyboard" data-context-area="keyboard" id="keyboardCanvas"></canvas>
 <div class="roll-viewport" data-context-area="piano-roll" id="rollViewport" tabindex="0"><div aria-hidden="true" class="roll-spacer" id="rollSpacer"></div><canvas id="rollCanvas"></canvas></div>
@@ -452,7 +453,7 @@
 </div>
 <div class="note-trill-options">
 <div class="note-trill-option-row"><span data-i18n="note.trill_pitch_motion">음 이동</span><div class="note-trill-inline-controls"><select id="noteTrillDirectionSelect" aria-label="음 이동" data-i18n-aria-label="note.trill_direction"><option value="repeat" data-i18n="note.trill_repeat">이동없이 반복</option><option value="up" data-i18n="note.trill_up" selected>위쪽</option><option value="down" data-i18n="note.trill_down">아래쪽</option></select><select id="noteTrillIntervalSelect" aria-label="음정 간격" data-i18n-aria-label="note.trill_interval"><option value="1" data-i18n="note.trill_semitone">반음</option><option value="2" data-i18n="note.trill_whole_tone" selected>온음</option></select></div></div>
-<div class="note-trill-option-row"><span data-i18n="note.trill_speed">속도</span><div class="note-trill-inline-controls"><select id="noteTrillStartDivisionSelect" aria-label="시작 속도" data-i18n-aria-label="note.trill_start_speed"><option value="1/4">1/4</option><option value="1.5/8">1.5/8</option><option value="1/8">1/8</option><option value="1.5/16">1.5/16</option><option value="1/16">1/16</option><option value="1.5/32">1.5/32</option><option value="1/32" selected>1/32</option><option value="1/64">1/64</option></select><label class="note-trill-check"><input id="noteTrillGradualSpeed" type="checkbox"/><span data-i18n="note.trill_gradual_speed">점진 변화</span></label><label class="note-trill-subcontrol is-disabled"><span aria-hidden="true">→</span><select id="noteTrillEndDivisionSelect" aria-label="끝 속도" data-i18n-aria-label="note.trill_end_speed" disabled><option value="1/4">1/4</option><option value="1.5/8">1.5/8</option><option value="1/8">1/8</option><option value="1.5/16">1.5/16</option><option value="1/16">1/16</option><option value="1.5/32">1.5/32</option><option value="1/32" selected>1/32</option><option value="1/64">1/64</option></select></label></div></div>
+<div class="note-trill-option-row"><span data-i18n="note.trill_speed">노트 간격</span><div class="note-trill-inline-controls"><select id="noteTrillStartDivisionSelect" aria-label="시작 노트 간격" data-i18n-aria-label="note.trill_start_speed"><option value="1/4">1/4</option><option value="1.5/8">1.5/8</option><option value="1/8">1/8</option><option value="1.5/16">1.5/16</option><option value="1/16">1/16</option><option value="1.5/32">1.5/32</option><option value="1/32" selected>1/32</option><option value="1/64">1/64</option></select><label class="note-trill-check"><input id="noteTrillGradualSpeed" type="checkbox"/><span data-i18n="note.trill_gradual_speed">점진 변화</span></label><label class="note-trill-subcontrol is-disabled"><span aria-hidden="true">→</span><select id="noteTrillEndDivisionSelect" aria-label="끝 노트 간격" data-i18n-aria-label="note.trill_end_speed" disabled><option value="1/4">1/4</option><option value="1.5/8">1.5/8</option><option value="1/8">1/8</option><option value="1.5/16">1.5/16</option><option value="1/16">1/16</option><option value="1.5/32">1.5/32</option><option value="1/32" selected>1/32</option><option value="1/64">1/64</option></select></label></div></div>
 <div class="note-trill-option-row"><span data-i18n="note.trill_dynamics">강약</span><div class="note-trill-inline-controls"><select id="noteTrillDynamicsSelect" aria-label="강약 변화" data-i18n-aria-label="note.trill_dynamics"><option value="preserve" data-i18n="note.trill_dynamics_keep">원래 유지</option><option value="crescendo" data-i18n="note.trill_dynamics_up">점점 강하게</option><option value="decrescendo" data-i18n="note.trill_dynamics_down">점점 약하게</option><option value="swell" data-i18n="note.trill_dynamics_swell">약→강→약</option></select><label class="note-trill-subcontrol is-disabled"><span data-i18n="note.trill_volume_range">변화 폭</span><select id="noteTrillVolumeRangeSelect" aria-label="강약 변화 폭" data-i18n-aria-label="note.trill_volume_range" disabled><option value="1">V1</option><option value="2">V2</option><option value="3" selected>V3</option><option value="4">V4</option><option value="5">V5</option></select></label></div></div>
 <div class="note-trill-option-row" id="noteTrillStartEndRow"><span data-i18n="note.trill_start_end">시작 · 끝</span><div class="note-trill-inline-controls"><select id="noteTrillStartNoteSelect" aria-label="시작음" data-i18n-aria-label="note.trill_start_note"><option value="base" data-i18n="note.trill_start_base">원음부터</option><option value="neighbor" data-i18n="note.trill_start_neighbor">인접음부터</option></select><label class="note-trill-check"><input id="noteTrillEndOnBase" type="checkbox" checked/><span data-i18n="note.trill_end_base">원음으로 끝내기</span></label></div></div>
 </div>
@@ -463,6 +464,28 @@
 <div class="tempo-editor-actions note-trill-actions"><button id="noteTrillCancelButton" type="button" data-i18n="cancel">취소</button><span></span><button id="noteTrillApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
 </div>
+<div class="popup-backdrop" hidden="" id="notePerformanceBackdrop">
+<section aria-label="노트 글리산도/스트럼 변환" data-i18n-aria-label="note.performance_title" aria-modal="true" class="note-trill-dialog note-performance-dialog" id="notePerformanceDialog" role="dialog">
+<div class="tempo-editor-header">
+<div><strong data-i18n="note.performance_title">노트 글리산도/스트럼 변환</strong><span id="notePerformanceSelectionLabel" data-i18n="selection.text">선택 노트</span></div>
+<button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="notePerformanceCloseButton" type="button">×</button>
+</div>
+<div class="note-trill-options">
+<div class="note-trill-option-row"><span data-i18n="note.performance_mode">연주 방식</span><div class="note-trill-inline-controls"><select id="notePerformanceModeSelect" aria-label="연주 방식" data-i18n-aria-label="note.performance_mode"><option value="glissando" data-i18n="note.performance_mode_glissando">글리산도</option><option value="strum" data-i18n="note.performance_mode_strum">스트럼</option></select></div></div>
+<div class="note-trill-option-row" id="notePerformanceDirectionRow"><span data-i18n="note.performance_direction">방향</span><div class="note-trill-inline-controls"><select id="notePerformanceDirectionSelect" aria-label="연주 방향" data-i18n-aria-label="note.performance_direction"><option value="up" data-i18n="note.performance_direction_up">낮은음 → 높은음</option><option value="down" data-i18n="note.performance_direction_down">높은음 → 낮은음</option></select></div></div>
+<div class="note-trill-option-row"><span data-i18n="note.performance_speed">노트 간격</span><div class="note-trill-inline-controls"><select id="notePerformanceSpeedSelect" aria-label="노트 간격" data-i18n-aria-label="note.performance_speed"><option value="1/4">1/4</option><option value="1.5/8">1.5/8</option><option value="1/8">1/8</option><option value="1.5/16">1.5/16</option><option value="1/16">1/16</option><option value="1.5/32">1.5/32</option><option value="1/32" selected>1/32</option><option value="1/64">1/64</option></select></div></div>
+<div class="note-trill-option-row" id="notePerformanceStepRow"><span data-i18n="note.performance_step">음정 간격</span><div class="note-trill-inline-controls"><select id="notePerformanceStepSelect" aria-label="글리산도 음정 간격" data-i18n-aria-label="note.performance_step"><option value="1" data-i18n="note.trill_semitone">반음</option><option value="2" data-i18n="note.trill_whole_tone">온음</option></select></div></div>
+<div class="note-trill-option-row" id="notePerformanceRangeRow"><span data-i18n="note.performance_range">글리산도 범위</span><div class="note-trill-inline-controls"><select id="notePerformanceRangeModeSelect" aria-label="글리산도 범위 지정 방식" data-i18n-aria-label="note.performance_range_mode"><option value="amount" data-i18n="note.performance_range_mode_amount">범위로 지정</option><option value="target" data-i18n="note.performance_range_mode_target">도착 음으로 지정</option></select><select id="notePerformanceRangeSelect" aria-label="글리산도 범위" data-i18n-aria-label="note.performance_range"><option value="5" data-i18n="note.performance_range_fourth">완전4도</option><option value="7" data-i18n="note.performance_range_fifth">완전5도</option><option value="12" data-i18n="note.performance_range_octave" selected>1옥타브</option><option value="24" data-i18n="note.performance_range_two_octaves">2옥타브</option></select><select id="notePerformanceTargetPitchSelect" aria-label="글리산도 도착 음" data-i18n-aria-label="note.performance_target_pitch" hidden></select></div></div>
+<div class="note-trill-option-row"><span data-i18n="note.trill_dynamics">강약</span><div class="note-trill-inline-controls"><select id="notePerformanceDynamicsSelect" aria-label="강약 변화" data-i18n-aria-label="note.trill_dynamics"><option value="preserve" data-i18n="note.trill_dynamics_keep">원래 유지</option><option value="crescendo" data-i18n="note.trill_dynamics_up">점점 강하게</option><option value="decrescendo" data-i18n="note.trill_dynamics_down">점점 약하게</option><option value="swell" data-i18n="note.trill_dynamics_swell">약→강→약</option></select><label class="note-trill-subcontrol is-disabled"><span data-i18n="note.trill_volume_range">변화 폭</span><select id="notePerformanceVolumeRangeSelect" aria-label="강약 변화 폭" data-i18n-aria-label="note.trill_volume_range" disabled><option value="1">V1</option><option value="2">V2</option><option value="3" selected>V3</option><option value="4">V4</option><option value="5">V5</option></select></label></div></div>
+</div>
+<p class="transfer-dialog-help note-performance-help" id="notePerformanceHelp" data-i18n="note.performance_help_glissando">선택한 각 노트를 시작음으로 삼아 지정 범위까지 연속 음으로 훑습니다.</p>
+<div class="note-trill-preview note-performance-preview" aria-label="연주 패턴 미리보기" data-i18n-aria-label="note.performance_preview">
+<div class="note-trill-preview-header"><span data-i18n="note.performance_preview">미리보기</span><strong data-i18n="note.trill_preview_whole">온음표 1개</strong></div>
+<div class="note-trill-preview-grid" id="notePerformancePreviewGrid"></div>
+</div>
+<div class="tempo-editor-actions note-trill-actions"><button id="notePerformanceCancelButton" type="button" data-i18n="cancel">취소</button><span></span><button id="notePerformanceApplyButton" type="button" data-i18n="action.apply">적용</button></div>
+</section>
+</div>
 <div class="popup-backdrop" hidden="" id="timeEditBackdrop">
 <section aria-label="마디 편집" data-i18n-aria-label="ui.edit_track_space" aria-modal="true" class="time-edit-dialog" id="timeEditDialog" role="dialog">
 <div class="tempo-editor-header">
@@ -471,6 +494,17 @@
 </div>
 <div class="time-edit-field time-edit-combined-field"><span data-i18n="ui.length_edit">편집할 길이</span><div class="time-edit-units-row"><label class="time-edit-number"><input aria-label="편집할 마디 수" data-i18n-aria-label="timeline.measure_edit" id="timeEditMeasureInput" inputmode="numeric" min="0" step="1" type="number" value="1"/><strong data-i18n="timeline.measure">마디</strong></label><label class="time-edit-number time-edit-fraction-number"><input aria-label="편집할 64분할 박자 수 (0부터 63)" data-i18n-aria-label="note.64th_units_edit" id="timeEditBeatInput" inputmode="numeric" max="63" min="0" step="1" type="number" value="0"/><strong data-i18n="timeline.64_beat">/64 박자</strong></label></div></div>
 <div class="time-edit-actions"><label class="time-edit-scope-toggle"><input id="timeEditSelectedChannelOnly" type="checkbox"/><span data-i18n="channel.selected_only">선택 채널만</span></label><span class="time-edit-actions-spacer"></span><button id="timeEditCancelButton" type="button" data-i18n="cancel">취소</button><button class="time-edit-delete-button" id="timeEditDeleteButton" type="button" data-i18n="action.delete">삭제</button><button class="time-edit-insert-button" id="timeEditInsertButton" type="button" data-i18n="action.add">추가</button></div>
+</section>
+</div>
+<div class="popup-backdrop" hidden="" id="timelineFadeBackdrop">
+<section aria-label="페이드 인/아웃 설정" data-i18n-aria-label="timeline.fade_settings" aria-modal="true" class="tempo-editor-dialog fade-editor-dialog" id="timelineFadeDialog" role="dialog">
+<div class="tempo-editor-header"><div><strong data-i18n="timeline.fade_settings">페이드 인/아웃 설정</strong><span id="timelineFadePosition">0.000 beat</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="timelineFadeCloseButton" type="button">×</button></div>
+<div class="fade-editor-options">
+<div class="fade-editor-option-row"><span data-i18n="timeline.fade_type">종류</span><div class="fade-editor-type-checks"><label class="fade-editor-check"><input checked id="timelineFadeTypeIn" type="checkbox"/><span data-i18n="timeline.fade_in">페이드 인</span></label><label class="fade-editor-check"><input id="timelineFadeTypeOut" type="checkbox"/><span data-i18n="timeline.fade_out">페이드 아웃</span></label></div></div>
+<label class="fade-editor-option-row"><span data-i18n="timeline.fade_duration">지속 시간</span><span class="fade-editor-number"><input id="timelineFadeDuration" inputmode="decimal" step="0.5" type="number" value="2.0"/><small data-i18n="ui.sec">초</small></span></label>
+</div>
+<p class="tempo-editor-help fade-editor-help" data-i18n="timeline.fade_help">설치한 위치부터 지정한 시간 동안 페이드가 진행됩니다. 원본 노트 볼륨은 변경하지 않습니다.</p>
+<div class="tempo-editor-actions fade-editor-actions"><button class="danger-button" hidden="" id="timelineFadeDeleteButton" type="button" data-i18n="action.delete">삭제</button><span></span><button id="timelineFadeCancelButton" type="button" data-i18n="cancel">취소</button><button id="timelineFadeApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="tempoEditorBackdrop">
@@ -582,7 +616,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260914-volume-relative-fix1"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260914-popup-center-actions1"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

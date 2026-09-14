@@ -7107,3 +7107,316 @@ a[class*="button"]:hover {
   display: block;
   pointer-events: none;
 }
+
+/* 2026-09 note performance pattern conversion -------------------------------- */
+.note-performance-dialog {
+  width: min(560px, calc(100vw - 28px));
+}
+.note-performance-help {
+  margin: 8px 0 10px;
+}
+.note-performance-preview .note-trill-preview-grid {
+  max-height: 230px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.note-performance-dialog .note-trill-option-row.is-disabled { opacity: .46; }
+
+.note-performance-omission-row .note-performance-omission {
+  min-height: 25px;
+}
+.note-performance-omission-row .note-trill-preview-note {
+  border-style: dashed;
+  opacity: .62;
+}
+
+
+/* 2026-09-14: keep every Editor popup/menu operable on short-height displays. */
+.popup-backdrop {
+  box-sizing: border-box;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: auto;
+}
+.popup-backdrop > section {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: calc(100vw - max(14px, env(safe-area-inset-left)) - max(14px, env(safe-area-inset-right))) !important;
+  scrollbar-gutter: auto;
+}
+.confirm-dialog {
+  box-sizing: border-box;
+  max-height: calc(100vh - 20px);
+  max-height: calc(100dvh - 20px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.file-menu,
+.theme-menu,
+.account-menu,
+.vertical-range-menu,
+.context-menu {
+  box-sizing: border-box;
+  max-height: calc(100vh - var(--topbar-height) - 8px);
+  max-height: calc(100dvh - var(--topbar-height) - 8px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.context-menu {
+  max-height: calc(100vh - 8px);
+  max-height: calc(100dvh - 8px);
+}
+
+@media (max-height: 720px) {
+  .popup-backdrop {
+    place-items: center;
+    padding-top: max(7px, env(safe-area-inset-top));
+    padding-bottom: max(7px, env(safe-area-inset-bottom));
+    scrollbar-gutter: auto;
+  }
+  .popup-backdrop > section {
+    max-height: calc(100vh - 14px) !important;
+    max-height: calc(100dvh - 14px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: auto;
+  }
+  .popup-backdrop > section > :is(.transfer-dialog-header, .tempo-editor-header) {
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    background: inherit;
+  }
+  .popup-backdrop > section > :is(.transfer-dialog-actions, .tempo-editor-actions, .time-edit-actions) {
+    position: sticky;
+    bottom: 0;
+    z-index: 11;
+    background: inherit;
+  }
+  .note-trill-preview,
+  .note-performance-preview {
+    margin-top: 6px;
+    margin-bottom: 4px;
+  }
+  .note-performance-preview .note-trill-preview-grid {
+    max-height: 112px;
+  }
+  .shortcut-help-dialog,
+  .editor-soundfont-dialog,
+  .mml-import-dialog,
+  .unified-import-dialog,
+  .mml-export-dialog {
+    max-height: calc(100vh - 14px) !important;
+    max-height: calc(100dvh - 14px) !important;
+  }
+}
+
+@media (max-height: 520px) {
+  .popup-backdrop {
+    padding-top: max(4px, env(safe-area-inset-top));
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+  }
+  .popup-backdrop > section {
+    max-height: calc(100vh - 8px) !important;
+    max-height: calc(100dvh - 8px) !important;
+  }
+  .note-trill-options { padding-top: 8px; gap: 4px; }
+  .note-trill-option-row { min-height: 30px; }
+  .note-trill-preview { padding-top: 6px; padding-bottom: 7px; }
+  .vertical-range-control { grid-template-rows: auto auto 72px auto auto; }
+  .vertical-range-input { height: 72px; }
+}
+
+/* 2026-09-14: timeline fade marker + hover time. Popup itself intentionally reuses the stock tempo editor form. */
+.timeline-hover-tooltip {
+  position: absolute;
+  z-index: 45;
+  pointer-events: none;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--control-border) 85%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--panel-bg, #171a20) 94%, transparent);
+  color: var(--text);
+  box-shadow: 0 3px 12px rgba(0,0,0,.26);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 2026-09-14: fade marker settings dialog aligned with Editor setting popups. */
+.fade-editor-dialog {
+  width: min(360px, 100%);
+  justify-self: center;
+  margin-inline: auto;
+}
+.fade-editor-options {
+  display: grid;
+  gap: 8px;
+  padding: 13px 16px 7px;
+}
+.fade-editor-option-row {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  color: var(--text);
+  font-size: 12px;
+}
+.fade-editor-option-row > span:first-child {
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.fade-editor-type-checks {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 8px;
+}
+.fade-editor-check {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.fade-editor-check input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.fade-editor-number {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.fade-editor-number input {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  appearance: auto;
+  -moz-appearance: auto;
+}
+.fade-editor-number small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.fade-editor-help { padding-top: 6px; }
+.fade-editor-actions {
+  display: grid;
+  grid-template-columns: 64px 1fr 64px 64px;
+  align-items: center;
+  gap: 8px;
+}
+.fade-editor-actions > span { min-width: 0; }
+.fade-editor-actions #timelineFadeDeleteButton,
+.fade-editor-actions #timelineFadeCancelButton,
+.fade-editor-actions #timelineFadeApplyButton {
+  box-sizing: border-box;
+  width: 64px;
+  min-width: 64px;
+  padding-inline: 10px;
+}
+@media (max-width: 420px) {
+  .fade-editor-options { padding-inline: 14px; }
+  .fade-editor-option-row { grid-template-columns: 58px minmax(0, 1fr); gap: 8px; }
+  .fade-editor-type-checks { gap: 5px; }
+  .fade-editor-actions { grid-template-columns: 58px 1fr 58px 58px; gap: 6px; }
+  .fade-editor-actions #timelineFadeDeleteButton,
+  .fade-editor-actions #timelineFadeCancelButton,
+  .fade-editor-actions #timelineFadeApplyButton {
+    width: 58px;
+    min-width: 58px;
+    padding-inline: 8px;
+  }
+}
+
+/* Popup backdrops no longer reserve one-sided scrollbar gutters; all dialogs stay centered. */
+#timelineFadeBackdrop { scrollbar-gutter: auto; }
+
+
+/* 2026-09-14: centered popup layout + non-reserved scrollbar width. */
+.popup-backdrop,
+.popup-backdrop > section,
+.popup-backdrop > section * {
+  scrollbar-gutter: auto !important;
+}
+
+@media (max-height: 720px) {
+  .popup-backdrop {
+    place-items: center !important;
+  }
+  .popup-backdrop > section {
+    /* The scrollbar lives inside the existing dialog box; never widen the dialog for it. */
+    max-height: calc(100vh - 14px) !important;
+    max-height: calc(100dvh - 14px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+}
+
+@media (max-height: 520px) {
+  .popup-backdrop {
+    place-items: center !important;
+  }
+}
+
+/* Tempo/Fade editors share one right-aligned, equal-width action layout. */
+#tempoEditorDialog .tempo-editor-actions,
+#timelineFadeDialog .fade-editor-actions {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px !important;
+}
+#tempoEditorDialog .tempo-editor-actions > span,
+#timelineFadeDialog .fade-editor-actions > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#tempoEditorDialog .tempo-editor-actions > button:not(.channel-mute-close),
+#timelineFadeDialog .fade-editor-actions > button:not(.channel-mute-close) {
+  box-sizing: border-box;
+  flex: 0 0 68px;
+  width: 68px !important;
+  min-width: 68px !important;
+  max-width: 68px !important;
+  padding-inline: 8px !important;
+}
+@media (max-width: 420px) {
+  #tempoEditorDialog .tempo-editor-actions,
+  #timelineFadeDialog .fade-editor-actions {
+    gap: 6px !important;
+  }
+  #tempoEditorDialog .tempo-editor-actions > button:not(.channel-mute-close),
+  #timelineFadeDialog .fade-editor-actions > button:not(.channel-mute-close) {
+    flex-basis: 60px;
+    width: 60px !important;
+    min-width: 60px !important;
+    max-width: 60px !important;
+    padding-inline: 6px !important;
+  }
+}

@@ -401,6 +401,35 @@
     noteTrillCloseButton: document.querySelector("#noteTrillCloseButton"),
     noteTrillCancelButton: document.querySelector("#noteTrillCancelButton"),
     noteTrillApplyButton: document.querySelector("#noteTrillApplyButton"),
+    notePerformanceBackdrop: document.querySelector("#notePerformanceBackdrop"),
+    notePerformanceSelectionLabel: document.querySelector("#notePerformanceSelectionLabel"),
+    notePerformanceModeSelect: document.querySelector("#notePerformanceModeSelect"),
+    notePerformanceDirectionSelect: document.querySelector("#notePerformanceDirectionSelect"),
+    notePerformanceSpeedSelect: document.querySelector("#notePerformanceSpeedSelect"),
+    notePerformanceStepSelect: document.querySelector("#notePerformanceStepSelect"),
+    notePerformanceRangeModeSelect: document.querySelector("#notePerformanceRangeModeSelect"),
+    notePerformanceRangeSelect: document.querySelector("#notePerformanceRangeSelect"),
+    notePerformanceTargetPitchSelect: document.querySelector("#notePerformanceTargetPitchSelect"),
+    notePerformanceDynamicsSelect: document.querySelector("#notePerformanceDynamicsSelect"),
+    notePerformanceVolumeRangeSelect: document.querySelector("#notePerformanceVolumeRangeSelect"),
+    notePerformanceDirectionRow: document.querySelector("#notePerformanceDirectionRow"),
+    notePerformanceStepRow: document.querySelector("#notePerformanceStepRow"),
+    notePerformanceRangeRow: document.querySelector("#notePerformanceRangeRow"),
+    notePerformancePreviewGrid: document.querySelector("#notePerformancePreviewGrid"),
+    notePerformanceHelp: document.querySelector("#notePerformanceHelp"),
+    notePerformanceCloseButton: document.querySelector("#notePerformanceCloseButton"),
+    notePerformanceCancelButton: document.querySelector("#notePerformanceCancelButton"),
+    notePerformanceApplyButton: document.querySelector("#notePerformanceApplyButton"),
+    timelineFadeBackdrop: document.querySelector("#timelineFadeBackdrop"),
+    timelineFadePosition: document.querySelector("#timelineFadePosition"),
+    timelineFadeTypeIn: document.querySelector("#timelineFadeTypeIn"),
+    timelineFadeTypeOut: document.querySelector("#timelineFadeTypeOut"),
+    timelineFadeDuration: document.querySelector("#timelineFadeDuration"),
+    timelineFadeCloseButton: document.querySelector("#timelineFadeCloseButton"),
+    timelineFadeCancelButton: document.querySelector("#timelineFadeCancelButton"),
+    timelineFadeDeleteButton: document.querySelector("#timelineFadeDeleteButton"),
+    timelineFadeApplyButton: document.querySelector("#timelineFadeApplyButton"),
+    timelineHoverTooltip: document.querySelector("#timelineHoverTooltip"),
     tempoEditorBackdrop: document.querySelector("#tempoEditorBackdrop"),
     tempoEditorTitle: document.querySelector("#tempoEditorTitle"),
     tempoEditorPosition: document.querySelector("#tempoEditorPosition"),
@@ -491,8 +520,11 @@
     interaction: null,
     tempoDrag: null,
     tempoTouchTap: null,
+    fadeDrag: null,
+    fadeTouchTap: null,
     tempoEditor: { mode: null, tempoId: null, beat: 0 },
     tempoSimplify: { maxBpmDeltaExclusive: 5, preserveExtrema: true },
+    timelineFades: [],
     trillOptions: {
       direction: "up",
       intervalSemitones: 2,
@@ -503,6 +535,17 @@
       volumeRange: 3,
       startWith: "base",
       endOnBase: true,
+    },
+    performanceOptions: {
+      mode: "glissando",
+      direction: "up",
+      speed: "1/32",
+      stepSemitones: 1,
+      rangeMode: "amount",
+      rangeSemitones: 12,
+      targetPitch: null,
+      dynamics: "preserve",
+      volumeRange: 3,
     },
     timeEdit: { beat: 0, scope: "all", channelId: null, preferredAction: null },
     suppressContextMenuUntil: 0,
@@ -1610,6 +1653,139 @@
     return mmlVolumeToVelocity(volume);
   }
 
+  function timelineFadeSourceList(value = state.timelineFades) {
+    if (Array.isArray(value)) return value;
+    if (Array.isArray(value?.markers)) return value.markers;
+    const legacy = [];
+    if (value?.fadeIn?.enabled) legacy.push({ id: 1, type: "in", startBeat: Number(value.fadeIn.startBeat) || 0, durationBeat: Math.max(CONFIG.minimumNoteBeat, (Number(value.fadeIn.endBeat) || 0) - (Number(value.fadeIn.startBeat) || 0)) });
+    if (value?.fadeOut?.enabled) legacy.push({ id: 2, type: "out", startBeat: Number(value.fadeOut.startBeat) || 0, durationBeat: Math.max(CONFIG.minimumNoteBeat, (Number(value.fadeOut.endBeat) || 0) - (Number(value.fadeOut.startBeat) || 0)) });
+    return legacy;
+  }
+
+  function timelineFadeTempoMap(tempoCollection = null) {
+    return createTempoTimeMap(Array.isArray(tempoCollection) ? tempoCollection : null);
+  }
+
+  function timelineFadeBeatToSeconds(beat, tempoCollection = null) {
+    return beatToSecondsInTempoMap(Math.max(0, Number(beat) || 0), timelineFadeTempoMap(tempoCollection));
+  }
+
+  function timelineFadeSecondsToBeat(seconds, tempoCollection = null) {
+    const targetSeconds = Math.max(0, Number(seconds) || 0);
+    const map = timelineFadeTempoMap(tempoCollection);
+    if (!map.length) return targetSeconds * 2;
+    let low = 0;
+    let high = map.length - 1;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (map[middle].startSeconds <= targetSeconds + 1e-9) low = middle;
+      else high = middle - 1;
+    }
+    const segment = map[low];
+    return Math.max(0, segment.startBeat + Math.max(0, targetSeconds - segment.startSeconds) * segment.bpm / 60);
+  }
+
+  function normalizeTimelineFadeSeconds(value, fallback = 2) {
+    const numeric = Number(value);
+    const safe = Number.isFinite(numeric) ? numeric : fallback;
+    return Math.max(0.1, Math.round(safe * 10) / 10);
+  }
+
+  function timelineFadeDurationSecondsFromBeats(startBeat, durationBeat, tempoCollection = null) {
+    const start = Math.max(0, Number(startBeat) || 0);
+    const duration = Math.max(CONFIG.minimumNoteBeat, Number(durationBeat) || CONFIG.minimumNoteBeat);
+    return normalizeTimelineFadeSeconds(
+      timelineFadeBeatToSeconds(start + duration, tempoCollection) - timelineFadeBeatToSeconds(start, tempoCollection),
+      0.1,
+    );
+  }
+
+  function normalizeTimelineFadeEvent(fade, fallbackId = 1, tempoCollection = null) {
+    const type = String(fade?.type || "").toLowerCase() === "out" ? "out" : "in";
+    const startBeat = snapBeatToUnit(Math.max(0, Number(fade?.startBeat) || 0), CONFIG.minimumNoteBeat);
+    const rawSeconds = Number(fade?.durationSeconds);
+    const rawDurationBeat = Number(fade?.durationBeat);
+    const legacyEnd = Number(fade?.endBeat);
+    let durationSeconds;
+    if (Number.isFinite(rawSeconds)) {
+      durationSeconds = normalizeTimelineFadeSeconds(rawSeconds);
+    } else {
+      const durationBeat = Number.isFinite(rawDurationBeat)
+        ? rawDurationBeat
+        : (Number.isFinite(legacyEnd) ? legacyEnd - startBeat : CONFIG.beatsPerMeasure);
+      durationSeconds = timelineFadeDurationSecondsFromBeats(startBeat, durationBeat, tempoCollection);
+    }
+    return { id: Math.max(1, Math.round(Number(fade?.id) || fallbackId)), type, startBeat, durationSeconds };
+  }
+
+  function normalizeTimelineFades(value = state.timelineFades, tempoCollection = null) {
+    const used = new Set();
+    let nextId = 1;
+    return timelineFadeSourceList(value).map((fade) => {
+      while (used.has(nextId)) nextId += 1;
+      let next = normalizeTimelineFadeEvent(fade, nextId, tempoCollection);
+      if (used.has(next.id)) next = { ...next, id: nextId };
+      used.add(next.id);
+      nextId = Math.max(nextId + 1, next.id + 1);
+      return next;
+    }).sort((a,b) => a.startBeat - b.startBeat || a.id - b.id);
+  }
+
+  function getTimelineFadeEndBeat(fade, tempoCollection = null) {
+    const normalized = normalizeTimelineFadeEvent(fade, Number(fade?.id) || 1, tempoCollection);
+    const startSeconds = timelineFadeBeatToSeconds(normalized.startBeat, tempoCollection);
+    return timelineFadeSecondsToBeat(startSeconds + normalized.durationSeconds, tempoCollection);
+  }
+
+  function getRawTimelineFadeEndBeat(value, tempoCollection = null) {
+    return timelineFadeSourceList(value).reduce((max, fade) => {
+      const normalized = normalizeTimelineFadeEvent(fade, 1, tempoCollection);
+      return Math.max(max, getTimelineFadeEndBeat(normalized, tempoCollection));
+    }, 0);
+  }
+
+  function getNextTimelineFadeId() {
+    return normalizeTimelineFades().reduce((max, fade) => Math.max(max, Number(fade.id) || 0), 0) + 1;
+  }
+
+  function getTimelineFadeAtBeat(beat, tolerance = CONFIG.minimumNoteBeat / 2 + 1e-7) {
+    const target = Math.max(0, Number(beat) || 0);
+    return normalizeTimelineFades().find((fade) => Math.abs(fade.startBeat - target) <= tolerance) || null;
+  }
+
+  function getTimelineFadeById(id) {
+    return normalizeTimelineFades().find((fade) => String(fade.id) === String(id)) || null;
+  }
+
+  function getTimelineFadeFactorAtBeat(beat) {
+    const safeBeat = Math.max(0, Number(beat) || 0);
+    let active = null;
+    for (const fade of normalizeTimelineFades()) {
+      if (fade.startBeat > safeBeat + 1e-7) break;
+      active = fade;
+    }
+    if (!active) return 1;
+    const beatSeconds = timelineFadeBeatToSeconds(safeBeat);
+    const startSeconds = timelineFadeBeatToSeconds(active.startBeat);
+    const endSeconds = startSeconds + active.durationSeconds;
+    if (beatSeconds >= endSeconds - 1e-7) return active.type === "in" ? 1 : 0;
+    const progress = clamp((beatSeconds - startSeconds) / Math.max(0.1, active.durationSeconds), 0, 1);
+    return active.type === "in" ? progress : 1 - progress;
+  }
+
+  function getTimelineFadedNoteVolume(note, beat = note?.startBeat) {
+    const baseVolume = getNoteVolume(note);
+    const factor = getTimelineFadeFactorAtBeat(beat);
+    return clamp(Math.round(baseVolume * factor), 0, 15);
+  }
+
+  function getNotePlaybackVelocityForVolume(note, volume) {
+    const safeVolume = clamp(Math.round(Number(volume) || 0), 0, 15);
+    if (safeVolume <= 0) return 0;
+    if (safeVolume === getNoteVolume(note)) return getNotePlaybackVelocity(note);
+    return mmlVolumeToVelocity(safeVolume);
+  }
+
   function normalizeNoteDynamics(note, fallbackVolume = 15) {
     const volume = getNoteVolume(note, fallbackVolume);
     const rawVelocity = Number(note?.velocity);
@@ -1654,7 +1830,9 @@
       (maximum, tempo) => Math.max(maximum, tempo.beat),
       0,
     );
-    return Math.max(lastNoteEnd, lastTempoBeat, lastAudioEnd);
+    const fades = normalizeTimelineFades();
+    const lastFadeBeat = fades.reduce((maximum, fade) => Math.max(maximum, getTimelineFadeEndBeat(fade)), 0);
+    return Math.max(lastNoteEnd, lastTempoBeat, lastAudioEnd, lastFadeBeat);
   }
 
   function getProjectContentEndBeat() {
@@ -1711,7 +1889,7 @@
   }
 
   function shrinkTimelineToContent() {
-    if (state.playback.running || state.playback.loading || state.interaction || state.tempoDrag) {
+    if (state.playback.running || state.playback.loading || state.interaction || state.tempoDrag || state.fadeDrag) {
       return false;
     }
     const targetBeats = getMinimumTimelineBeats();
@@ -3433,6 +3611,23 @@
     };
   }
 
+  function getTimelineFadeMarkerScreenGeometry(fade) {
+    const normalized = normalizeTimelineFadeEvent(fade, Number(fade?.id) || 1);
+    const lineX = Math.round(beatToX(normalized.startBeat) - elements.rollViewport.scrollLeft) + 0.5;
+    const label = normalized.type === "out" ? "OUT" : "IN";
+    const labelWidth = Math.max(30, 13 + label.length * 6.2);
+    const canvasWidth = elements.timelineCanvas.clientWidth;
+    const labelX = clamp(lineX + 5, 2, Math.max(2, canvasWidth - labelWidth - 2));
+    return {
+      lineX,
+      label,
+      labelX,
+      labelY: 2,
+      labelWidth,
+      labelHeight: 14,
+    };
+  }
+
   function drawRoundedRect(context, x, y, width, height, radius) {
     const safeRadius = Math.min(radius, width / 2, height / 2);
     context.beginPath();
@@ -3523,6 +3718,22 @@
       context.lineTo(x, height);
       context.stroke();
     }
+
+    const overviewFades = normalizeTimelineFades();
+    const drawOverviewFade = (fade) => {
+      if (!(endBeat > 0)) return;
+      const x1 = clamp(fade.startBeat / endBeat * width, 0, width);
+      const x2 = clamp(getTimelineFadeEndBeat(fade) / endBeat * width, 0, width);
+      if (x2 <= x1) return;
+      const gradient = context.createLinearGradient(x1, 0, x2, 0);
+      if (fade.type === "in") {
+        gradient.addColorStop(0, "rgba(82,173,255,.03)"); gradient.addColorStop(1, "rgba(82,173,255,.25)");
+      } else {
+        gradient.addColorStop(0, "rgba(255,133,104,.25)"); gradient.addColorStop(1, "rgba(255,133,104,.03)");
+      }
+      context.fillStyle = gradient; context.fillRect(x1, 0, Math.max(1, x2 - x1), height);
+    };
+    overviewFades.forEach(drawOverviewFade);
 
     const channelActivities = overviewData.channelActivities || [];
     const activeChannelId = getActiveChannel()?.id ?? null;
@@ -3689,6 +3900,31 @@
     event.preventDefault();
   }
 
+  function drawTimelineFadeOverlay(context, width, height, scrollLeft) {
+    for (const fade of normalizeTimelineFades()) {
+      const x1 = beatToX(fade.startBeat) - scrollLeft;
+      const x2 = beatToX(getTimelineFadeEndBeat(fade)) - scrollLeft;
+      if (x2 < 0 || x1 > width || x2 <= x1) continue;
+      const left = Math.max(0, x1);
+      const right = Math.min(width, x2);
+      const gradient = context.createLinearGradient(x1, 0, x2, 0);
+      if (fade.type === "in") { gradient.addColorStop(0, "rgba(82,173,255,.03)"); gradient.addColorStop(1, "rgba(82,173,255,.22)"); }
+      else { gradient.addColorStop(0, "rgba(255,133,104,.22)"); gradient.addColorStop(1, "rgba(255,133,104,.03)"); }
+      context.save();
+      context.fillStyle = gradient;
+      context.fillRect(left, 0, Math.max(0, right-left), height);
+      context.strokeStyle = fade.type === "in" ? "rgba(98,190,255,.92)" : "rgba(255,151,118,.92)";
+      context.lineWidth = 2;
+      if (x1 >= -1 && x1 <= width + 1) {
+        context.beginPath();
+        context.moveTo(Math.round(x1)+.5, 0);
+        context.lineTo(Math.round(x1)+.5, height);
+        context.stroke();
+      }
+      context.restore();
+    }
+  }
+
   function drawTimeline() {
     const context = elements.timelineCanvas.getContext("2d");
     const width = elements.timelineCanvas.clientWidth;
@@ -3731,6 +3967,14 @@
       context.stroke();
     }
     context.setLineDash([]);
+    drawTimelineFadeOverlay(context, width, height, scrollLeft);
+
+    const visibleFadeMarkers = [];
+    for (const fade of normalizeTimelineFades()) {
+      const marker = getTimelineFadeMarkerScreenGeometry(fade);
+      if (marker.lineX < -marker.labelWidth - 8 || marker.lineX > width + marker.labelWidth + 8) continue;
+      visibleFadeMarkers.push({ fade, marker });
+    }
 
     const visibleTempoMarkers = [];
     for (const tempo of getSortedTempos()) {
@@ -3763,6 +4007,24 @@
     context.textBaseline = "alphabetic";
 
     context.font = "700 10px sans-serif";
+    for (const { fade, marker } of visibleFadeMarkers) {
+      drawRoundedRect(context, marker.labelX, marker.labelY, marker.labelWidth, marker.labelHeight, 3);
+      const accent = fade.type === "in"
+        ? (state.theme === "light" ? "#267ba8" : "#8bd7ff")
+        : (state.theme === "light" ? "#b65f43" : "#ffb39a");
+      context.fillStyle = fade.type === "in"
+        ? (state.theme === "light" ? "rgba(45, 150, 205, .11)" : "rgba(82, 173, 255, .16)")
+        : (state.theme === "light" ? "rgba(192, 91, 58, .10)" : "rgba(255, 133, 104, .15)");
+      context.fill();
+      context.strokeStyle = accent;
+      context.lineWidth = 1;
+      context.stroke();
+      context.fillStyle = accent;
+      context.textBaseline = "middle";
+      context.fillText(marker.label, marker.labelX + 6, marker.labelY + marker.labelHeight / 2 + 0.5);
+    }
+
+    context.font = "700 10px sans-serif";
     for (const marker of visibleTempoMarkers) {
       drawRoundedRect(context, marker.labelX, marker.labelY, marker.labelWidth, marker.labelHeight, 3);
       const tempoAccent = state.theme === "light" ? "#23865b" : "#72e2a8";
@@ -3778,6 +4040,48 @@
     context.textBaseline = "alphabetic";
     context.lineWidth = 1;
     drawOverviewTimeline();
+  }
+
+  function formatTimelineHoverClock(seconds) {
+    const safe = Math.max(0, Number(seconds) || 0);
+    const minutes = Math.floor(safe / 60);
+    const remain = safe - minutes * 60;
+    return `${String(minutes).padStart(2, "0")}:${remain.toFixed(1).padStart(4, "0")}`;
+  }
+
+  function showTimelineHoverTooltip(event, beat) {
+    const tooltip = elements.timelineHoverTooltip;
+    const host = elements.timelineCanvas?.closest?.(".piano-section");
+    if (!tooltip || !host) return;
+    const safeBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
+    tooltip.textContent = formatTimelineHoverClock(beatToSeconds(safeBeat));
+    tooltip.hidden = false;
+    const hostRect = host.getBoundingClientRect();
+    const width = tooltip.offsetWidth || 68;
+    const left = clamp(event.clientX - hostRect.left - width / 2, 4, Math.max(4, hostRect.width - width - 4));
+    const top = clamp(event.clientY - hostRect.top - 30, 4, Math.max(4, hostRect.height - 28));
+    tooltip.style.left = `${Math.round(left)}px`;
+    tooltip.style.top = `${Math.round(top)}px`;
+  }
+
+  function hideTimelineHoverTooltip() {
+    if (elements.timelineHoverTooltip) elements.timelineHoverTooltip.hidden = true;
+  }
+
+  function handleTimelineHover(event) {
+    showTimelineHoverTooltip(event, timelineBeatFromPointer(event));
+  }
+
+  function handleOverviewTimelineHover(event) {
+    showTimelineHoverTooltip(event, overviewTimelineBeatFromPointer(event));
+  }
+
+  function handleHorizontalTrackHover(event) {
+    const bar = elements.horizontalScrollBar;
+    if (!bar) return;
+    const rect = bar.getBoundingClientRect();
+    const ratio = clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+    showTimelineHoverTooltip(event, ratio * getTotalBeats());
   }
 
   function getPlayheadDisplaySeconds(currentBeat = state.playhead.beat) {
@@ -4025,13 +4329,42 @@
     return nearest;
   }
 
+  function findTimelineFadeMarkerFromPointer(event) {
+    const rect = elements.timelineCanvas.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
+    const touchLike = event.pointerType === "touch" || event.pointerType === "pen";
+    const padding = touchLike ? 8 : 2;
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const fade of normalizeTimelineFades()) {
+      const marker = getTimelineFadeMarkerScreenGeometry(fade);
+      const onLabel = pointerX >= marker.labelX - padding
+        && pointerX <= marker.labelX + marker.labelWidth + padding
+        && pointerY >= marker.labelY - padding
+        && pointerY <= marker.labelY + marker.labelHeight + padding;
+      const distance = Math.abs(pointerX - marker.lineX);
+      if (onLabel && distance < nearestDistance) {
+        nearest = fade;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
   function handleTimelineDoubleClick(event) {
     if (event.button !== 0) return;
     const rawBeat = timelineRawBeatFromPointer(event);
     if (rawBeat < 0) return;
-    const tempo = findTempoMarkerFromPointer(event);
+    const fade = findTimelineFadeMarkerFromPointer(event);
+    const tempo = fade ? null : findTempoMarkerFromPointer(event);
     const beat = timelineBeatFromPointer(event);
-    seekPlayheadBeat(tempo?.beat ?? beat);
+    seekPlayheadBeat(fade?.startBeat ?? tempo?.beat ?? beat);
+    if (fade) {
+      openTimelineFadeDialog(fade.startBeat, fade);
+      event.preventDefault();
+      return;
+    }
     if (isMidiReferenceActive()) {
       showToast(tempo ? `MIDI 템포 ${tempo.bpm} · 읽기 전용` : "MIDI 템포 맵은 읽기 전용입니다.");
       event.preventDefault();
@@ -4047,8 +4380,27 @@
       return;
     }
     const rawBeat = timelineRawBeatFromPointer(event);
-    const tempo = rawBeat >= 0 ? findTempoMarkerFromPointer(event) : null;
+    const fade = rawBeat >= 0 ? findTimelineFadeMarkerFromPointer(event) : null;
+    const tempo = rawBeat >= 0 && !fade ? findTempoMarkerFromPointer(event) : null;
     const touchLike = event.pointerType === "touch" || event.pointerType === "pen";
+
+    if (fade) {
+      setPlayheadBeat(fade.startBeat, { stop: true });
+      state.fadeDrag = {
+        pointerId: event.pointerId,
+        fadeId: fade.id,
+        originalBeat: fade.startBeat,
+        moved: false,
+        pointerType: event.pointerType || "mouse",
+        startX: event.clientX,
+        startY: event.clientY,
+        dragStarted: !touchLike,
+      };
+      trySetPointerCapture(elements.timelineCanvas, event.pointerId);
+      elements.timelineCanvas.style.cursor = touchLike ? "pointer" : "ew-resize";
+      event.preventDefault();
+      return;
+    }
 
     if (tempo) {
       setPlayheadBeat(tempo.beat, { stop: true });
@@ -4096,6 +4448,33 @@
   }
 
   function handleTimelinePointerMove(event) {
+    if (state.fadeDrag?.pointerId === event.pointerId) {
+      const drag = state.fadeDrag;
+      const touchLike = drag.pointerType === "touch" || drag.pointerType === "pen";
+      if (touchLike && !drag.dragStarted) {
+        const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+        if (distance <= CONFIG.longPressMoveTolerance) { event.preventDefault(); return; }
+        drag.dragStarted = true;
+        elements.timelineCanvas.style.cursor = "ew-resize";
+      }
+      scrollTimelineDuringDrag(event);
+      const targetBeat = clamp(timelineBeatFromPointer(event), 0, getTotalBeats());
+      const current = getTimelineFadeById(drag.fadeId);
+      if (current && !getTimelineFadeAtBeat(targetBeat, 1e-7)) {
+        if (Math.abs(current.startBeat - targetBeat) > 1e-7) {
+          state.timelineFades = normalizeTimelineFades().map((fade) =>
+            String(fade.id) === String(drag.fadeId) ? { ...fade, startBeat: Number(targetBeat.toFixed(6)) } : fade
+          );
+          drag.moved = true;
+          drawTimeline();
+          updateChannelInfo();
+          if (elements.mmlExportBackdrop && !elements.mmlExportBackdrop.hidden) updateMmlExportDialogState();
+        }
+      }
+      event.preventDefault();
+      return;
+    }
+
     if (state.tempoTouchTap?.pointerId === event.pointerId) {
       const distance = Math.hypot(
         event.clientX - state.tempoTouchTap.startX,
@@ -4148,13 +4527,37 @@
       return;
     }
 
-    const hoverTempo = findTempoMarkerFromPointer(event);
-    elements.timelineCanvas.style.cursor = hoverTempo
-      ? (isMidiReferenceActive() || hoverTempo.fixed ? "pointer" : "ew-resize")
-      : "default";
+    const hoverFade = findTimelineFadeMarkerFromPointer(event);
+    const hoverTempo = hoverFade ? null : findTempoMarkerFromPointer(event);
+    elements.timelineCanvas.style.cursor = hoverFade
+      ? "ew-resize"
+      : hoverTempo
+        ? (isMidiReferenceActive() || hoverTempo.fixed ? "pointer" : "ew-resize")
+        : "default";
   }
 
   function handleTimelinePointerUp(event) {
+    if (state.fadeDrag?.pointerId === event.pointerId) {
+      const drag = state.fadeDrag;
+      const moved = drag.moved;
+      const touchLike = drag.pointerType === "touch" || drag.pointerType === "pen";
+      const fade = getTimelineFadeById(drag.fadeId);
+      state.fadeDrag = null;
+      elements.timelineCanvas.style.cursor = "default";
+      try { elements.timelineCanvas.releasePointerCapture(event.pointerId); } catch {}
+      if (moved) {
+        markDirty(i18nText("history.timeline_fade"));
+        shrinkTimelineToContent();
+        drawRoll();
+        drawTimeline();
+        updateChannelInfo();
+        if (elements.mmlExportBackdrop && !elements.mmlExportBackdrop.hidden) updateMmlExportDialogState();
+      } else if (touchLike && event.type !== "pointercancel" && fade) {
+        openTimelineFadeDialog(fade.startBeat, fade);
+      }
+      return;
+    }
+
     if (state.tempoTouchTap?.pointerId === event.pointerId) {
       const tap = state.tempoTouchTap;
       state.tempoTouchTap = null;
@@ -8328,6 +8731,7 @@
         notes: channel.notes.map((note) => ({ ...note })),
       })),
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
+      timelineFades: normalizeTimelineFades(),
       audioClips: state.audioClips.map((clip) => ({ ...clip })),
       nextNoteId: state.nextNoteId,
       nextTempoId: state.nextTempoId,
@@ -8633,6 +9037,7 @@
       if (!state.tempos.some((tempo) => Math.abs(tempo.beat) < 1e-7)) {
         state.tempos.unshift({ id: 1, beat: 0, bpm: 120, fixed: true });
       }
+      state.timelineFades = normalizeTimelineFades(data.timelineFades || state.timelineFades);
       state.audioClips = (Array.isArray(data.audioClips) ? data.audioClips : []).map((clip, index) => {
         const normalized = normalizeAudioClip(clip, index);
         normalized.muted = mutedByAudioId.has(String(normalized.id)) ? mutedByAudioId.get(String(normalized.id)) : normalized.muted;
@@ -12236,7 +12641,7 @@
         output.push(`o${nextOctave}`);
         octave = nextOctave;
       }
-      const nextVelocity = getNoteVolume(note);
+      const nextVelocity = getTimelineFadedNoteVolume(note, Number.isFinite(Number(note.fadeReferenceBeat)) ? Number(note.fadeReferenceBeat) : startBeat);
       if (nextVelocity !== velocity) {
         output.push(`v${nextVelocity}`);
         velocity = nextVelocity;
@@ -12660,6 +13065,7 @@
         if (clippedEnd <= clippedStart + 1e-7) return [];
         return [{
           ...note,
+          fadeReferenceBeat: Number.isFinite(Number(note.fadeReferenceBeat)) ? Number(note.fadeReferenceBeat) : noteStart,
           startBeat: Number(clippedStart.toFixed(6)),
           durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, clippedEnd - clippedStart).toFixed(6)),
         }];
@@ -13027,7 +13433,7 @@
         output.push(`o${nextOctave}`);
         octave = nextOctave;
       }
-      const nextVelocity = getNoteVolume(note);
+      const nextVelocity = getTimelineFadedNoteVolume(note, Number.isFinite(Number(note.fadeReferenceBeat)) ? Number(note.fadeReferenceBeat) : startBeat);
       if (nextVelocity !== velocity) {
         output.push(`v${nextVelocity}`);
         velocity = nextVelocity;
@@ -13322,6 +13728,28 @@
     return true;
   }
 
+  function shiftTimelineFadesForInsert(cursorBeat, amountBeats) {
+    const cursor = Math.max(0, Number(cursorBeat) || 0);
+    const amount = Math.max(0, Number(amountBeats) || 0);
+    if (!(amount > 0)) return;
+    state.timelineFades = normalizeTimelineFades().map((fade) => ({ ...fade, startBeat: fade.startBeat >= cursor - 1e-7 ? fade.startBeat + amount : fade.startBeat }));
+  }
+
+  function shiftTimelineFadesForDelete(cursorBeat, amountBeats) {
+    const cursor = Math.max(0, Number(cursorBeat) || 0);
+    const amount = Math.max(0, Number(amountBeats) || 0);
+    if (!(amount > 0)) return;
+    const cutEnd = cursor + amount;
+    const mapBeat = (beat) => beat <= cursor + 1e-7 ? beat : (beat >= cutEnd - 1e-7 ? Math.max(0, beat - amount) : cursor);
+    state.timelineFades = normalizeTimelineFades().flatMap((fade) => {
+      const start = mapBeat(fade.startBeat);
+      const end = mapBeat(getTimelineFadeEndBeat(fade));
+      if (end <= start + 1e-7) return [];
+      const durationSeconds = normalizeTimelineFadeSeconds(timelineFadeBeatToSeconds(end) - timelineFadeBeatToSeconds(start), 0.1);
+      return [{ ...fade, startBeat: start, durationSeconds }];
+    });
+  }
+
   function insertTrackSpaceAtPlayhead(amountBeats) {
     const amount = Math.max(CONFIG.minimumNoteBeat, Number(amountBeats) || 0);
     const cursor = clamp(Number(state.timeEdit?.beat ?? state.playhead.beat) || 0, 0, getTotalBeats());
@@ -13345,6 +13773,7 @@
       if (!tempo.fixed && tempo.beat >= cursor - 1e-7) tempo.beat = Number((tempo.beat + amount).toFixed(6));
     }
     state.tempos.sort((a, b) => a.beat - b.beat || a.id - b.id);
+    shiftTimelineFadesForInsert(cursor, amount);
     state.timelineBeats = Math.max(getTotalBeats() + amount, getPersistentContentEndBeat() + getSnapBeat());
     ensureTimelineFitsViewport();
     markDirty(i18nText("timeline.add_measure_beat"));
@@ -13413,6 +13842,7 @@
         : { id: state.nextTempoId++, beat: Number(cursor.toFixed(6)), bpm: bpmAfterCut, fixed: false });
     }
     state.tempos = [...fixedTempos, ...tempoByBeat.values()].sort((a, b) => a.beat - b.beat || a.id - b.id);
+    shiftTimelineFadesForDelete(cursor, amount);
     state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, getTotalBeats() - amount);
     shrinkTimelineToContent();
     ensureTimelineFitsViewport();
@@ -13552,6 +13982,104 @@
       if (resumePlayback) window.setTimeout(() => startPlayback(), 0);
     }
     return applied;
+  }
+
+  let timelineFadeEditor = { fadeId: null, beat: 0 };
+
+  function closeTimelineFadeDialog() {
+    if (elements.timelineFadeBackdrop) elements.timelineFadeBackdrop.hidden = true;
+    timelineFadeEditor = { fadeId: null, beat: 0 };
+  }
+
+  function timelineFadeFieldValue(input, fallback = 0) {
+    const value = Number(input?.value);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function setTimelineFadeTypeControls(type) {
+    const isOut = type === "out";
+    if (elements.timelineFadeTypeIn) elements.timelineFadeTypeIn.checked = !isOut;
+    if (elements.timelineFadeTypeOut) elements.timelineFadeTypeOut.checked = isOut;
+  }
+
+  function getTimelineFadeTypeFromControls() {
+    return elements.timelineFadeTypeOut?.checked ? "out" : "in";
+  }
+
+  function handleTimelineFadeTypeChange(event) {
+    if (event?.target === elements.timelineFadeTypeIn) {
+      if (elements.timelineFadeTypeIn.checked) elements.timelineFadeTypeOut.checked = false;
+      else if (!elements.timelineFadeTypeOut?.checked) elements.timelineFadeTypeIn.checked = true;
+    } else if (event?.target === elements.timelineFadeTypeOut) {
+      if (elements.timelineFadeTypeOut.checked) elements.timelineFadeTypeIn.checked = false;
+      else if (!elements.timelineFadeTypeIn?.checked) elements.timelineFadeTypeOut.checked = true;
+    }
+  }
+
+  function normalizeTimelineFadeDurationInput({ commit = false } = {}) {
+    if (!elements.timelineFadeDuration) return 2;
+    const value = normalizeTimelineFadeSeconds(timelineFadeFieldValue(elements.timelineFadeDuration, 2), 2);
+    if (commit) elements.timelineFadeDuration.value = value.toFixed(1);
+    return value;
+  }
+
+  function readTimelineFadeDialog() {
+    return normalizeTimelineFadeEvent({
+      id: timelineFadeEditor.fadeId || getNextTimelineFadeId(),
+      type: getTimelineFadeTypeFromControls(),
+      startBeat: Math.max(0, Number(timelineFadeEditor.beat) || 0),
+      durationSeconds: normalizeTimelineFadeDurationInput(),
+    }, timelineFadeEditor.fadeId || getNextTimelineFadeId());
+  }
+
+  function openTimelineFadeDialog(contextBeat = state.playhead.beat, sourceFade = null) {
+    if (!elements.timelineFadeBackdrop) return false;
+    const beat = snapBeatToUnit(Math.max(0, Number(contextBeat) || 0), CONFIG.minimumNoteBeat);
+    const source = sourceFade ? normalizeTimelineFadeEvent(sourceFade, sourceFade.id || 1) : getTimelineFadeAtBeat(beat);
+    timelineFadeEditor = { fadeId: source?.id ?? null, beat: source?.startBeat ?? beat };
+    if (elements.timelineFadePosition) elements.timelineFadePosition.textContent = `${timelineFadeEditor.beat.toFixed(3)} beat`;
+    setTimelineFadeTypeControls(source?.type || "in");
+    if (elements.timelineFadeDuration) elements.timelineFadeDuration.value = normalizeTimelineFadeSeconds(source?.durationSeconds, 2).toFixed(1);
+    if (elements.timelineFadeDeleteButton) elements.timelineFadeDeleteButton.hidden = !source;
+    elements.timelineFadeBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.timelineFadeDuration?.focus());
+    return true;
+  }
+
+  function applyTimelineFadeDialog() {
+    normalizeTimelineFadeDurationInput({ commit: true });
+    const next = readTimelineFadeDialog();
+    const before = JSON.stringify(normalizeTimelineFades());
+    const remaining = normalizeTimelineFades().filter((fade) => {
+      if (timelineFadeEditor.fadeId != null && String(fade.id) === String(timelineFadeEditor.fadeId)) return false;
+      return Math.abs(fade.startBeat - next.startBeat) > 1e-7;
+    });
+    state.timelineFades = normalizeTimelineFades([...remaining, next]);
+    state.timelineBeats = Math.max(getTotalBeats(), getTimelineFadeEndBeat(next));
+    closeTimelineFadeDialog();
+    if (JSON.stringify(state.timelineFades) === before) return false;
+    markDirty(i18nText("history.timeline_fade"));
+    resizeAndDraw(); updateChannelInfo();
+    if (elements.mmlExportBackdrop && !elements.mmlExportBackdrop.hidden) updateMmlExportDialogState();
+    showToast(i18nText("timeline.fade_applied"));
+    return true;
+  }
+
+  function deleteTimelineFadeById(fadeId, { closeDialog = false } = {}) {
+    if (fadeId == null) return false;
+    const before = normalizeTimelineFades().length;
+    state.timelineFades = normalizeTimelineFades().filter((fade) => String(fade.id) !== String(fadeId));
+    if (closeDialog) closeTimelineFadeDialog();
+    if (state.timelineFades.length === before) return false;
+    markDirty(i18nText("history.timeline_fade"));
+    resizeAndDraw(); updateChannelInfo();
+    if (elements.mmlExportBackdrop && !elements.mmlExportBackdrop.hidden) updateMmlExportDialogState();
+    showToast(i18nText("timeline.fade_deleted"));
+    return true;
+  }
+
+  function deleteTimelineFadeFromDialog() {
+    return deleteTimelineFadeById(timelineFadeEditor.fadeId, { closeDialog: true });
   }
 
   function closeTempoEditor() {
@@ -14302,11 +14830,12 @@
       if (!includeMuted && isChannelEffectivelyMuted(channel)) continue;
       for (const note of channel.notes) {
         if (note.startBeat + note.durationBeat <= startBeat + 1e-7) continue;
+        const fadedVolume = getTimelineFadedNoteVolume(note);
         notes.push({
           id: note.id,
           pitch: note.pitch,
-          velocity: getNotePlaybackVelocity(note),
-          volume: getNoteVolume(note),
+          velocity: getNotePlaybackVelocityForVolume(note, fadedVolume),
+          volume: fadedVolume,
           startBeat: note.startBeat,
           durationBeat: note.durationBeat,
           endBeat: note.startBeat + note.durationBeat,
@@ -14836,7 +15365,7 @@
   function serializeProject() {
     return {
       format: "mml-piano-roll-project",
-      version: 24,
+      version: 26,
       projectName: state.projectName,
       snapValue: state.snapValue,
       rowHeight: state.rowHeight,
@@ -14847,6 +15376,8 @@
       nextAudioClipId: state.nextAudioClipId,
       channels: state.channels,
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
+      timelineFades: normalizeTimelineFades(),
+      // v26: 페이드는 타임라인 마커(type/startBeat/durationBeat) 배열로 저장하며 원본 노트 볼륨은 변경하지 않습니다.
       // v23: 채널 악기는 현재 SoundFont의 실제 Bank/Preset을 저장하고, 색상은 hue(0..359)만 저장합니다.
       // 지원 음악 파일은 공통 플러그인을 거쳐 불러오는 즉시 일반 편집 채널로 변환됩니다.
       midiDocuments: [],
@@ -14898,7 +15429,8 @@
     const notes = [];
     for (const channel of state.channels || []) {
       for (const note of channel.notes || []) {
-        const velocity = getNotePlaybackVelocity(note);
+        const fadedVolume = getTimelineFadedNoteVolume(note);
+        const velocity = getNotePlaybackVelocityForVolume(note, fadedVolume);
         if (velocity <= 0 || Number(note.durationBeat) <= 0) continue;
         const startBeat = Math.max(0, Number(note.startBeat) || 0);
         const endBeat = startBeat + Math.max(0, Number(note.durationBeat) || 0);
@@ -14909,7 +15441,7 @@
           id: note.id,
           pitch: clamp(Math.round(Number(note.pitch) || 60), 0, 127),
           velocity,
-          volume: getNoteVolume(note),
+          volume: fadedVolume,
           startBeat,
           endBeat,
           startSeconds,
@@ -15103,6 +15635,9 @@
       const useFixedDefaultPercussionPitch = isEditorUsingEmbeddedDefaultSoundBank() && bank === 0 && (program === 12 || program === 13);
       const fixedPercussionPitch = useFixedDefaultPercussionPitch ? (program === 12 ? 36 : 49) : null;
       const notes = (Array.isArray(channel?.notes) ? channel.notes : []).map((note) => {
+        const fadedVolume = getTimelineFadedNoteVolume(note);
+        const fadedVelocity = getNotePlaybackVelocityForVolume(note, fadedVolume);
+        if (fadedVelocity <= 0) return null;
         const startTick = Math.max(0, Math.round((Number(note.startBeat) || 0) * ppq));
         const durationTick = Math.max(1, Math.round(Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat) * ppq));
         return {
@@ -15110,9 +15645,9 @@
           durationTick,
           endTick: startTick + durationTick,
           pitch: fixedPercussionPitch == null ? clamp(Math.round(Number(note.pitch) || 60), 0, 127) : fixedPercussionPitch,
-          velocity: Math.max(1, getNotePlaybackVelocity(note)),
+          velocity: fadedVelocity,
         };
-      }).sort((a, b) => a.startTick - b.startTick || a.pitch - b.pitch || a.endTick - b.endTick);
+      }).filter(Boolean).sort((a, b) => a.startTick - b.startTick || a.pitch - b.pitch || a.endTick - b.endTick);
       if (!notes.length) return null;
       return {
         sourceIndex: channelIndex,
@@ -15349,6 +15884,7 @@
       )),
       ...(Array.isArray(data.tempos) ? data.tempos.map((tempo) => Math.max(0, Number(tempo.beat) || 0)) : []),
       ...state.audioClips.map((clip) => getAudioClipEndBeat(clip)),
+      getRawTimelineFadeEndBeat(data.timelineFades, data.tempos),
       Math.max(0, Number(data.editor?.playheadBeat) || 0),
     );
     state.timelineBeats = Math.max(
@@ -15356,6 +15892,7 @@
       Number(data.editor?.timelineBeats) || 0,
       loadedContentEndBeat + CONFIG.minimumNoteBeat,
     );
+    state.timelineFades = normalizeTimelineFades(data.timelineFades || [], data.tempos);
     state.channels = data.channels.map((channel, index) => ({
       id: Number(channel.id) || index + 1,
       name: String(channel.name || `Ch${Number(channel.id) || index + 1}`),
@@ -15505,6 +16042,7 @@
     stopRollDragAutoScroll();
     state.interaction = null;
     state.tempoDrag = null;
+    state.fadeDrag = null;
     state.dirty = false;
 
     if (getEditorSoundBankPresets().length) {
@@ -15587,11 +16125,13 @@
     stopRollDragAutoScroll();
     state.interaction = null;
     state.tempoDrag = null;
+    state.fadeDrag = null;
     clearNoteSelection();
     state.nextNoteId = 1;
     state.nextTempoId = 2;
     state.channels = createDefaultChannels();
     state.tempos = createDefaultTempos();
+    state.timelineFades = [];
     state.midiDocuments = [];
     state.activeMidiDocumentId = null;
     state.nextMidiDocumentId = 1;
@@ -15689,6 +16229,15 @@
       try { elements.rollCanvas.releasePointerCapture(pointerId); } catch {}
       state.suppressNextRollPointerUp = pointerId;
       drawRoll();
+      updateChannelInfo();
+    }
+    if (state.fadeDrag?.pointerId === pointerId) {
+      state.timelineFades = normalizeTimelineFades().map((fade) =>
+        String(fade.id) === String(state.fadeDrag.fadeId) ? { ...fade, startBeat: state.fadeDrag.originalBeat } : fade
+      );
+      state.fadeDrag = null;
+      try { elements.timelineCanvas.releasePointerCapture(pointerId); } catch {}
+      drawTimeline();
       updateChannelInfo();
     }
     if (state.tempoDrag?.pointerId === pointerId) {
@@ -16385,6 +16934,397 @@
     return changed;
   }
 
+  function closeNotePerformanceDialog() {
+    if (elements.notePerformanceBackdrop) elements.notePerformanceBackdrop.hidden = true;
+  }
+
+  function normalizePerformanceMode(value) {
+    const mode = String(value || "glissando");
+    return ["glissando", "strum"].includes(mode) ? mode : "glissando";
+  }
+
+  function readNotePerformanceOptionsFromUi() {
+    const mode = normalizePerformanceMode(elements.notePerformanceModeSelect?.value);
+    const directionValue = String(elements.notePerformanceDirectionSelect?.value || "up");
+    const direction = directionValue === "down" ? "down" : "up";
+    const speed = normalizeTrillDivision(elements.notePerformanceSpeedSelect?.value, "1/32");
+    const stepSemitones = Number(elements.notePerformanceStepSelect?.value) === 2 ? 2 : 1;
+    const rangeModeValue = String(elements.notePerformanceRangeModeSelect?.value || "amount");
+    const rangeMode = rangeModeValue === "target" ? "target" : "amount";
+    const rangeRaw = Math.round(Number(elements.notePerformanceRangeSelect?.value) || 12);
+    const rangeSemitones = [5, 7, 12, 24].includes(rangeRaw) ? rangeRaw : 12;
+    const targetPitch = clamp(Math.round(Number(elements.notePerformanceTargetPitchSelect?.value) || 72), CONFIG.minPitch, CONFIG.maxPitch);
+    const dynamicsValue = String(elements.notePerformanceDynamicsSelect?.value || "preserve");
+    const dynamics = ["preserve", "crescendo", "decrescendo", "swell"].includes(dynamicsValue)
+      ? dynamicsValue
+      : "preserve";
+    const volumeRange = clamp(Math.round(Number(elements.notePerformanceVolumeRangeSelect?.value) || 3), 1, 5);
+    return { mode, direction, speed, stepSemitones, rangeMode, rangeSemitones, targetPitch, dynamics, volumeRange };
+  }
+
+  function performanceModeHelpKey(mode) {
+    if (mode === "strum") return "note.performance_help_strum";
+    return "note.performance_help_glissando";
+  }
+
+  function ensureNotePerformanceTargetPitchOptions() {
+    const select = elements.notePerformanceTargetPitchSelect;
+    if (!select || select.options.length) return;
+    for (let pitch = CONFIG.minPitch; pitch <= CONFIG.maxPitch; pitch += 1) {
+      const option = document.createElement("option");
+      option.value = String(pitch);
+      option.textContent = noteLabel(pitch);
+      select.append(option);
+    }
+  }
+
+  function updateNotePerformanceOptionAvailability() {
+    const options = readNotePerformanceOptionsFromUi();
+    const isGlissando = options.mode === "glissando";
+    const targetMode = isGlissando && options.rangeMode === "target";
+    if (elements.notePerformanceDirectionSelect) elements.notePerformanceDirectionSelect.disabled = targetMode;
+    if (elements.notePerformanceStepSelect) elements.notePerformanceStepSelect.disabled = !isGlissando;
+    if (elements.notePerformanceRangeModeSelect) elements.notePerformanceRangeModeSelect.disabled = !isGlissando;
+    if (elements.notePerformanceRangeSelect) {
+      elements.notePerformanceRangeSelect.disabled = !isGlissando || targetMode;
+      elements.notePerformanceRangeSelect.hidden = targetMode;
+    }
+    if (elements.notePerformanceTargetPitchSelect) {
+      elements.notePerformanceTargetPitchSelect.disabled = !targetMode;
+      elements.notePerformanceTargetPitchSelect.hidden = !targetMode;
+    }
+    elements.notePerformanceDirectionRow?.classList.toggle("is-disabled", targetMode);
+    elements.notePerformanceStepRow?.classList.toggle("is-disabled", !isGlissando);
+    elements.notePerformanceRangeRow?.classList.toggle("is-disabled", !isGlissando);
+    const dynamicsEnabled = options.dynamics !== "preserve";
+    if (elements.notePerformanceVolumeRangeSelect) elements.notePerformanceVolumeRangeSelect.disabled = !dynamicsEnabled;
+    elements.notePerformanceVolumeRangeSelect?.closest(".note-trill-subcontrol")?.classList.toggle("is-disabled", !dynamicsEnabled);
+    if (elements.notePerformanceHelp) {
+      const helpKey = targetMode ? "note.performance_help_glissando_target" : performanceModeHelpKey(options.mode);
+      elements.notePerformanceHelp.textContent = i18nText(helpKey);
+    }
+    updateNotePerformancePreview();
+  }
+
+  function openNotePerformanceDialog() {
+    const selected = getSelectedNotes();
+    if (!selected.length) {
+      showToast(i18nText("note.performance_need_selection"));
+      return false;
+    }
+    const options = state.performanceOptions || {};
+    ensureNotePerformanceTargetPitchOptions();
+    if (elements.notePerformanceSelectionLabel) {
+      elements.notePerformanceSelectionLabel.textContent = i18nText("note.performance_selected_count", [selected.length]);
+    }
+    if (elements.notePerformanceModeSelect) elements.notePerformanceModeSelect.value = normalizePerformanceMode(options.mode);
+    if (elements.notePerformanceDirectionSelect) elements.notePerformanceDirectionSelect.value = options.direction === "down" ? "down" : "up";
+    if (elements.notePerformanceSpeedSelect) elements.notePerformanceSpeedSelect.value = normalizeTrillDivision(options.speed, "1/32");
+    if (elements.notePerformanceStepSelect) elements.notePerformanceStepSelect.value = String(Number(options.stepSemitones) === 2 ? 2 : 1);
+    if (elements.notePerformanceRangeModeSelect) elements.notePerformanceRangeModeSelect.value = options.rangeMode === "target" ? "target" : "amount";
+    if (elements.notePerformanceRangeSelect) {
+      const range = [5, 7, 12, 24].includes(Number(options.rangeSemitones)) ? Number(options.rangeSemitones) : 12;
+      elements.notePerformanceRangeSelect.value = String(range);
+    }
+    if (elements.notePerformanceTargetPitchSelect) {
+      const firstPitch = clamp(Math.round(Number(selected[0]?.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+      const fallbackTarget = clamp(firstPitch + (options.direction === "down" ? -12 : 12), CONFIG.minPitch, CONFIG.maxPitch);
+      const hasTargetPitch = options.targetPitch !== null
+        && options.targetPitch !== undefined
+        && options.targetPitch !== ""
+        && Number.isFinite(Number(options.targetPitch));
+      const targetPitch = hasTargetPitch
+        ? clamp(Math.round(Number(options.targetPitch)), CONFIG.minPitch, CONFIG.maxPitch)
+        : fallbackTarget;
+      elements.notePerformanceTargetPitchSelect.value = String(targetPitch);
+    }
+    if (elements.notePerformanceDynamicsSelect) {
+      const dynamics = ["preserve", "crescendo", "decrescendo", "swell"].includes(String(options.dynamics)) ? String(options.dynamics) : "preserve";
+      elements.notePerformanceDynamicsSelect.value = dynamics;
+    }
+    if (elements.notePerformanceVolumeRangeSelect) elements.notePerformanceVolumeRangeSelect.value = String(clamp(Math.round(Number(options.volumeRange) || 3), 1, 5));
+    updateNotePerformanceOptionAvailability();
+    if (elements.notePerformanceBackdrop) elements.notePerformanceBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.notePerformanceModeSelect?.focus());
+    return true;
+  }
+
+  function getPerformanceVolume(baseVolume, options, progress) {
+    return getTrillSegmentVolume(baseVolume, options, progress);
+  }
+
+  function buildGlissandoPitchSequence(basePitch, options) {
+    const base = clamp(Math.round(Number(basePitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+    const step = Number(options.stepSemitones) === 2 ? 2 : 1;
+    let targetPitch;
+    if (options.rangeMode === "target") {
+      targetPitch = clamp(Math.round(Number(options.targetPitch) || base), CONFIG.minPitch, CONFIG.maxPitch);
+    } else {
+      const direction = options.direction === "down" ? -1 : 1;
+      const range = Math.max(step, Math.round(Number(options.rangeSemitones) || 12));
+      targetPitch = clamp(base + direction * range, CONFIG.minPitch, CONFIG.maxPitch);
+    }
+    if (targetPitch === base) return [base];
+    const direction = targetPitch > base ? 1 : -1;
+    const pitches = [base];
+    let cursor = base;
+    let guard = 0;
+    while (cursor !== targetPitch && guard < 512) {
+      const candidate = cursor + direction * step;
+      cursor = direction > 0 ? Math.min(candidate, targetPitch) : Math.max(candidate, targetPitch);
+      pitches.push(clamp(cursor, CONFIG.minPitch, CONFIG.maxPitch));
+      guard += 1;
+    }
+    return pitches;
+  }
+
+  function buildGlissandoPattern(durationBeat, basePitch, baseVolume, options) {
+    const duration = Math.max(CONFIG.minimumNoteBeat, Number(durationBeat) || CONFIG.minimumNoteBeat);
+    const unit = trillDivisionBeat(options.speed, "1/32");
+    const pitches = buildGlissandoPitchSequence(basePitch, options);
+    const segments = [];
+    let cursor = 0;
+    let stepIndex = 0;
+    while (cursor < duration - 1e-7) {
+      const remaining = duration - cursor;
+      const pitch = pitches[Math.min(stepIndex, pitches.length - 1)];
+      let piece = Math.min(unit, remaining);
+      if (stepIndex >= pitches.length - 1) piece = remaining;
+      if (piece < CONFIG.minimumNoteBeat - 1e-7 && segments.length) {
+        segments[segments.length - 1].durationBeat = Number((segments[segments.length - 1].durationBeat + piece).toFixed(6));
+        break;
+      }
+      const progress = duration > CONFIG.minimumNoteBeat ? clamp(cursor / duration, 0, 1) : 0;
+      segments.push({
+        pitch,
+        volume: options.dynamics === "preserve" ? baseVolume : getPerformanceVolume(baseVolume, options, progress),
+        durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, piece).toFixed(6)),
+      });
+      cursor += piece;
+      stepIndex += 1;
+      if (stepIndex > 512) break;
+    }
+    return segments;
+  }
+
+  function buildPitchOrder(notes, direction = "up") {
+    const ascending = [...notes].sort((a, b) => Number(a.pitch) - Number(b.pitch));
+    if (!ascending.length) return [];
+    return direction === "down" ? ascending.slice().reverse() : ascending;
+  }
+
+  function buildPerformancePreviewPattern(options) {
+    const sampleNotes = [
+      { pitch: 60, volume: 9 },
+      { pitch: 64, volume: 10 },
+      { pitch: 67, volume: 11 },
+    ];
+    const total = CONFIG.beatsPerMeasure;
+    const unit = trillDivisionBeat(options.speed, "1/32");
+    if (options.mode === "glissando") {
+      return buildGlissandoPattern(total, 60, 10, options).map((note, index, array) => ({
+        ...note,
+        startBeat: array.slice(0, index).reduce((sum, item) => sum + item.durationBeat, 0),
+      }));
+    }
+    if (options.mode === "strum") {
+      const ordered = buildPitchOrder(sampleNotes, options.direction);
+      return ordered.map((note, index) => ({
+        pitch: note.pitch,
+        volume: options.dynamics === "preserve" ? note.volume : getPerformanceVolume(note.volume, options, ordered.length > 1 ? index / (ordered.length - 1) : 0),
+        startBeat: index * unit,
+        durationBeat: unit,
+      }));
+    }
+    return [];
+  }
+
+  function updateNotePerformancePreview() {
+    const grid = elements.notePerformancePreviewGrid;
+    if (!grid) return;
+    grid.replaceChildren();
+    const options = readNotePerformanceOptionsFromUi();
+    const pattern = buildPerformancePreviewPattern(options);
+    if (!pattern.length) return;
+
+    const total = options.mode === "strum"
+      ? Math.max(CONFIG.minimumNoteBeat, ...pattern.map((note) => note.startBeat + note.durationBeat))
+      : CONFIG.beatsPerMeasure;
+    const sequencePitches = [...new Set(pattern.map((note) => note.pitch))];
+    const allPitches = [...sequencePitches].sort((a, b) => b - a);
+    let pitches = allPitches;
+    let omittedPitchSet = new Set();
+    if (options.mode === "glissando" && allPitches.length > 2) {
+      pitches = [allPitches[0], allPitches[allPitches.length - 1]];
+      omittedPitchSet = new Set(allPitches.slice(1, -1));
+    }
+
+    const lanes = new Map();
+    let omissionLane = null;
+    const appendPitchRow = (pitch) => {
+      const row = document.createElement("div");
+      row.className = "note-trill-preview-row";
+      const label = document.createElement("span");
+      label.className = "note-trill-preview-pitch";
+      label.textContent = noteLabel(pitch);
+      const lane = document.createElement("div");
+      lane.className = "note-trill-preview-lane";
+      row.append(label, lane);
+      grid.append(row);
+      lanes.set(pitch, lane);
+    };
+
+    if (options.mode === "glissando" && omittedPitchSet.size) {
+      appendPitchRow(pitches[0]);
+      const omissionRow = document.createElement("div");
+      omissionRow.className = "note-trill-preview-row note-performance-omission-row";
+      const omissionLabel = document.createElement("span");
+      omissionLabel.className = "note-trill-preview-pitch";
+      omissionLabel.textContent = "⋯";
+      omissionLane = document.createElement("div");
+      omissionLane.className = "note-trill-preview-lane note-performance-omission";
+      omissionRow.append(omissionLabel, omissionLane);
+      grid.append(omissionRow);
+      appendPitchRow(pitches[1]);
+    } else {
+      for (const pitch of pitches.slice(0, 3)) appendPitchRow(pitch);
+    }
+
+    const appendPreviewNote = (lane, startBeat, durationBeat, volume, title = "") => {
+      if (!lane) return;
+      const note = document.createElement("div");
+      note.className = "note-trill-preview-note";
+      const leftPercent = clamp((startBeat / total) * 100, 0, 100);
+      const widthPercent = clamp((durationBeat / total) * 100, 0, 100 - leftPercent);
+      note.style.left = `${leftPercent}%`;
+      note.style.width = `max(2px, calc(${widthPercent}% - 1px))`;
+      note.style.opacity = String(0.34 + (clamp(volume, 0, 15) / 15) * 0.66);
+      if (title) note.title = title;
+      lane.append(note);
+    };
+
+    for (const segment of pattern) {
+      const lane = lanes.get(segment.pitch);
+      if (!lane) continue;
+      appendPreviewNote(lane, segment.startBeat, segment.durationBeat, segment.volume, `V${segment.volume}`);
+    }
+
+    if (omissionLane && omittedPitchSet.size) {
+      const omittedSegments = pattern.filter((segment) => omittedPitchSet.has(segment.pitch));
+      if (omittedSegments.length) {
+        const omittedStart = Math.min(...omittedSegments.map((segment) => segment.startBeat));
+        const omittedEnd = Math.max(...omittedSegments.map((segment) => segment.startBeat + segment.durationBeat));
+        const averageVolume = omittedSegments.reduce((sum, segment) => sum + segment.volume, 0) / omittedSegments.length;
+        appendPreviewNote(
+          omissionLane,
+          omittedStart,
+          Math.max(CONFIG.minimumNoteBeat, omittedEnd - omittedStart),
+          averageVolume,
+          `${omittedSegments.length} notes omitted`,
+        );
+      }
+    }
+  }
+
+  function convertSelectedNotesToPerformance(options = state.performanceOptions || {}) {
+    if (isMidiReferenceActive() || state.activePanel !== "notes") return false;
+    const channel = getActiveChannel();
+    if (!channel?.notes?.length || !state.selectedNoteIds.size) return false;
+    const selected = getSelectedNotes(channel);
+    if (!selected.length) return false;
+    const mode = normalizePerformanceMode(options.mode);
+    const selectedIds = new Set(selected.map((note) => note.id));
+    const nextNotes = channel.notes.filter((note) => !selectedIds.has(note.id));
+    const nextSelection = new Set();
+    let convertedCount = 0;
+
+    if (mode === "glissando") {
+      for (const note of selected) {
+        const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        const basePitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+        const baseVolume = getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume);
+        const pattern = buildGlissandoPattern(durationBeat, basePitch, baseVolume, options);
+        if (pattern.length < 2) {
+          nextNotes.push(note);
+          nextSelection.add(note.id);
+          continue;
+        }
+        convertedCount += 1;
+        let cursor = Math.max(0, Number(note.startBeat) || 0);
+        pattern.forEach((part, index) => {
+          const id = index === 0 ? note.id : state.nextNoteId++;
+          const segment = {
+            ...note,
+            id,
+            pitch: part.pitch,
+            startBeat: Number(cursor.toFixed(6)),
+            durationBeat: Number(part.durationBeat.toFixed(6)),
+          };
+          if (options.dynamics !== "preserve") {
+            segment.volume = part.volume;
+            segment.velocity = mmlVolumeToVelocity(part.volume);
+          }
+          nextNotes.push(segment);
+          nextSelection.add(id);
+          cursor += part.durationBeat;
+        });
+      }
+    } else if (mode === "strum") {
+      if (selected.length < 2) {
+        showToast(i18nText("note.performance_need_multiple"));
+        return false;
+      }
+      const ordered = buildPitchOrder(selected, options.direction);
+      const unit = trillDivisionBeat(options.speed, "1/32");
+      const startBeat = Math.min(...selected.map((note) => Math.max(0, Number(note.startBeat) || 0)));
+      const originalEnd = Math.max(...selected.map((note) => Math.max(0, Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat)));
+      ordered.forEach((note, index) => {
+        const progress = ordered.length > 1 ? index / (ordered.length - 1) : 0;
+        const volume = options.dynamics === "preserve"
+          ? getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume)
+          : getPerformanceVolume(getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume), options, progress);
+        const noteStart = startBeat + index * unit;
+        const nextStart = startBeat + (index + 1) * unit;
+        const durationBeat = index === ordered.length - 1
+          ? Math.max(CONFIG.minimumNoteBeat, originalEnd - noteStart)
+          : Math.max(CONFIG.minimumNoteBeat, nextStart - noteStart);
+        const segment = {
+          ...note,
+          startBeat: Number(noteStart.toFixed(6)),
+          durationBeat: Number(durationBeat.toFixed(6)),
+          volume,
+          velocity: mmlVolumeToVelocity(volume),
+        };
+        nextNotes.push(segment);
+        nextSelection.add(segment.id);
+      });
+      convertedCount = selected.length;
+    }
+
+    if (!convertedCount) {
+      showToast(i18nText("note.performance_no_change"));
+      return false;
+    }
+    channel.notes = normalizeMonophonicNotes(nextNotes);
+    const survivingIds = new Set(channel.notes.map((note) => note.id));
+    state.selectedNoteIds = new Set([...nextSelection].filter((noteId) => survivingIds.has(noteId)));
+    state.channelNoteRuntime.delete(String(channel.id));
+    markDirty(i18nText("history.note_performance"));
+    shrinkTimelineToContent();
+    drawRoll();
+    updateChannelInfo();
+    showToast(i18nText("note.performance_done", [i18nText(`note.performance_mode_${mode}`)]));
+    return true;
+  }
+
+  function applySelectedNotesToPerformance() {
+    const options = readNotePerformanceOptionsFromUi();
+    state.performanceOptions = { ...options };
+    const changed = convertSelectedNotesToPerformance(options);
+    if (changed) closeNotePerformanceDialog();
+    return changed;
+  }
+
   function deleteTimelineBeforeBeat(beat) {
     const cutBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
     if (cutBeat < CONFIG.minimumNoteBeat - 1e-7) {
@@ -16483,6 +17423,13 @@
     if (!state.activeAudioClipId && state.activePanel === "audio") state.activePanel = "notes";
 
     state.tempos = state.tempos.filter((tempo) => tempo.fixed || Number(tempo.beat) < cursor - 1e-7);
+    state.timelineFades = normalizeTimelineFades().flatMap((fade) => {
+      if (fade.startBeat >= cursor - 1e-7) return [];
+      const end = Math.min(getTimelineFadeEndBeat(fade), cursor);
+      if (end <= fade.startBeat + 1e-7) return [];
+      const durationSeconds = normalizeTimelineFadeSeconds(timelineFadeBeatToSeconds(end) - timelineFadeBeatToSeconds(fade.startBeat), 0.1);
+      return [{ ...fade, durationSeconds }];
+    });
     state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, Number(cursor.toFixed(6)));
     if (state.playhead.beat > cursor) state.playhead.beat = cursor;
     ensureTimelineFitsViewport();
@@ -16560,6 +17507,15 @@
         danger: true,
         action: deleteAllNonInitialTempos,
       };
+      const existingFade = findTimelineFadeMarkerFromPointer(event) || getTimelineFadeAtBeat(beat);
+      const fadeItems = existingFade
+        ? [
+            { label: i18nText("timeline.fade_change"), action: () => openTimelineFadeDialog(beat, existingFade) },
+            { label: i18nText("timeline.fade_delete"), danger: true, action: () => deleteTimelineFadeById(existingFade.id) },
+          ]
+        : [
+            { label: i18nText("timeline.fade_add"), action: () => openTimelineFadeDialog(beat, null) },
+          ];
       const selectedChannelMeasureItems = [
         {
           label: i18nText("timeline.add_measure_beat"),
@@ -16619,6 +17575,8 @@
           tempoSimplifyItem,
           deleteAllTemposItem,
           "separator",
+          ...fadeItems,
+          "separator",
           ...selectedChannelMeasureItems,
           "separator",
           trimBeforeItem,
@@ -16638,6 +17596,8 @@
           tempoSimplifyItem,
           deleteAllTemposItem,
           "separator",
+          ...fadeItems,
+          "separator",
           ...selectedChannelMeasureItems,
           "separator",
           trimBeforeItem,
@@ -16654,6 +17614,9 @@
         { label: i18nText("timeline.add_tempo_measure"), disabled: beat <= 0, action: () => addTempoAtBeat(beat) },
         tempoSimplifyItem,
         deleteAllTemposItem,
+        "separator",
+        ...fadeItems,
+        "separator",
         ...selectedChannelMeasureItems,
         "separator",
         trimBeforeItem,
@@ -16746,6 +17709,7 @@
         { label: i18nText("context.action.note_cut"), action: cutSelectedNotes },
         { label: i18nText("context.action.note_volume_edit"), action: openNoteVolumeDialog },
         { label: i18nText("context.action.note_trill"), action: openNoteTrillDialog },
+        { label: i18nText("context.action.note_performance"), action: openNotePerformanceDialog },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         "separator",
         { label: i18nText("context.action.note_extend_left"), action: () => extendSelectedNotesToSide(-1) },
@@ -17133,12 +18097,12 @@
 
   function scheduleManualScrollSnap() {
     window.clearTimeout(state.viewportScroll.snapTimer);
-    if (state.playback.running || state.playback.loading || state.playhead.pointerId !== null || state.tempoDrag || state.interaction) {
+    if (state.playback.running || state.playback.loading || state.playhead.pointerId !== null || state.tempoDrag || state.fadeDrag || state.interaction) {
       return;
     }
     state.viewportScroll.snapTimer = window.setTimeout(() => {
       state.viewportScroll.snapTimer = 0;
-      if (state.playback.running || state.playback.loading || state.playhead.pointerId !== null || state.tempoDrag || state.interaction) {
+      if (state.playback.running || state.playback.loading || state.playhead.pointerId !== null || state.tempoDrag || state.fadeDrag || state.interaction) {
         return;
       }
       const snapped = snapScrollLeftToBeatUnit(elements.rollViewport.scrollLeft, getSnapBeat());
@@ -17789,6 +18753,40 @@
     elements.noteTrillBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.noteTrillBackdrop) closeNoteTrillDialog();
     });
+    elements.notePerformanceCloseButton?.addEventListener("click", closeNotePerformanceDialog);
+    elements.notePerformanceCancelButton?.addEventListener("click", closeNotePerformanceDialog);
+    elements.notePerformanceApplyButton?.addEventListener("click", applySelectedNotesToPerformance);
+    [
+      elements.notePerformanceModeSelect,
+      elements.notePerformanceDirectionSelect,
+      elements.notePerformanceSpeedSelect,
+      elements.notePerformanceStepSelect,
+      elements.notePerformanceRangeModeSelect,
+      elements.notePerformanceRangeSelect,
+      elements.notePerformanceTargetPitchSelect,
+      elements.notePerformanceDynamicsSelect,
+      elements.notePerformanceVolumeRangeSelect,
+    ].forEach((control) => control?.addEventListener("change", updateNotePerformanceOptionAvailability));
+    elements.notePerformanceBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.notePerformanceBackdrop) closeNotePerformanceDialog();
+    });
+    elements.timelineFadeCloseButton?.addEventListener("click", closeTimelineFadeDialog);
+    elements.timelineFadeCancelButton?.addEventListener("click", closeTimelineFadeDialog);
+    elements.timelineFadeApplyButton?.addEventListener("click", applyTimelineFadeDialog);
+    elements.timelineFadeDeleteButton?.addEventListener("click", deleteTimelineFadeFromDialog);
+    [elements.timelineFadeTypeIn, elements.timelineFadeTypeOut].forEach((control) => {
+      control?.addEventListener("change", handleTimelineFadeTypeChange);
+    });
+    elements.timelineFadeDuration?.addEventListener("blur", () => normalizeTimelineFadeDurationInput({ commit: true }));
+    elements.timelineFadeBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.timelineFadeBackdrop) closeTimelineFadeDialog();
+    });
+    elements.timelineCanvas?.addEventListener("pointermove", handleTimelineHover);
+    elements.timelineCanvas?.addEventListener("pointerleave", hideTimelineHoverTooltip);
+    elements.overviewTimelineCanvas?.addEventListener("pointermove", handleOverviewTimelineHover);
+    elements.overviewTimelineCanvas?.addEventListener("pointerleave", hideTimelineHoverTooltip);
+    elements.horizontalScrollBar?.addEventListener("pointermove", handleHorizontalTrackHover);
+    elements.horizontalScrollBar?.addEventListener("pointerleave", hideTimelineHoverTooltip);
     elements.tempoEditorCloseButton?.addEventListener("click", closeTempoEditor);
     elements.tempoEditorCancelButton?.addEventListener("click", closeTempoEditor);
     elements.tempoEditorApplyButton?.addEventListener("click", applyTempoEditor);
@@ -17910,6 +18908,7 @@
           closeMidiTransferDialog();
           closeNoteVolumeDialog();
           closeNoteTrillDialog();
+          closeNotePerformanceDialog();
           closeChannelShiftDialog();
           closeTempoEditor();
           closeTempoSimplifyDialog();
@@ -17992,6 +18991,7 @@
         closeMidiTransferDialog();
         closeNoteVolumeDialog();
         closeNoteTrillDialog();
+        closeNotePerformanceDialog();
         closeChannelShiftDialog();
         closeTempoEditor();
         closeTempoSimplifyDialog();
