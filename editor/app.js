@@ -1801,6 +1801,15 @@
     return mmlVolumeToVelocity(safeVolume);
   }
 
+  // Player playback treats MML V0~V15 as the actual note loudness source.
+  // Use the same V -> velocity mapping for SoundFont region selection while
+  // the final audible gain is calculated directly from the V value.
+  function mmlVolumeToPlayerPlaybackVelocity(value) {
+    const volume = clamp(Math.round(Number(value) || 0), 0, 15);
+    if (volume <= 0) return 0;
+    return clamp(Math.max(1, Math.round(volume / 15 * 127)), 1, 127);
+  }
+
   function normalizeNoteDynamics(note, fallbackVolume = 15) {
     const volume = getNoteVolume(note, fallbackVolume);
     const rawVelocity = Number(note?.velocity);
@@ -15072,7 +15081,7 @@
         notes.push({
           id: note.id,
           pitch: note.pitch,
-          velocity: getNotePlaybackVelocityForVolume(note, fadedVolume),
+          velocity: mmlVolumeToPlayerPlaybackVelocity(fadedVolume),
           volume: fadedVolume,
           startBeat: note.startBeat,
           durationBeat: note.durationBeat,
@@ -15141,6 +15150,7 @@
       bank: clamp(Number(note.instrumentBank) || 0, 0, 16383),
       exactPreset: Boolean(note.instrumentExactPreset),
       gainScale: state.playback.autoGainScale,
+      mmlVolume: Number.isFinite(Number(note.volume)) ? Number(note.volume) : null,
     });
     trackPlaybackVoice(note, voice);
     return true;
@@ -15668,7 +15678,7 @@
     for (const channel of state.channels || []) {
       for (const note of channel.notes || []) {
         const fadedVolume = getTimelineFadedNoteVolume(note);
-        const velocity = getNotePlaybackVelocityForVolume(note, fadedVolume);
+        const velocity = mmlVolumeToPlayerPlaybackVelocity(fadedVolume);
         if (velocity <= 0 || Number(note.durationBeat) <= 0) continue;
         const startBeat = Math.max(0, Number(note.startBeat) || 0);
         const endBeat = startBeat + Math.max(0, Number(note.durationBeat) || 0);
@@ -15772,6 +15782,7 @@
                 bank: clamp(Number(note.instrumentBank) || 0, 0, 16383),
                 exactPreset: Boolean(note.instrumentExactPreset),
                 gainScale: autoGainScale,
+                mmlVolume: Number.isFinite(Number(note.volume)) ? Number(note.volume) : null,
               },
             );
             if (index > 0 && index % 512 === 0) await new Promise(resolve => window.setTimeout(resolve, 0));
@@ -18320,15 +18331,30 @@
     return true;
   }
 
+  function isPlaybackShortcutInstrumentSelect(target) {
+    return target === elements.channelInstrumentSelect;
+  }
+
   function handlePlaybackShortcut(event) {
     if (isModalPopupOpen()) return false;
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isTextEntryTarget(event.target)) {
-      return false;
-    }
     if (event.code !== "Space") {
       return false;
     }
+    const instrumentSelectFocused = isPlaybackShortcutInstrumentSelect(event.target);
+    if (
+      event.defaultPrevented
+      || event.ctrlKey
+      || event.metaKey
+      || event.altKey
+      || (isTextEntryTarget(event.target) && !instrumentSelectFocused)
+    ) {
+      return false;
+    }
     event.preventDefault();
+    if (instrumentSelectFocused && event.target instanceof HTMLElement) {
+      event.target.blur();
+      elements.rollViewport?.focus?.({ preventScroll: true });
+    }
     state.playback.running || state.playback.loading ? stopPlayback(false) : startPlayback();
     return true;
   }
@@ -18873,6 +18899,9 @@
       setChannelHue(state.activeChannel, getHueControlValue(elements.channelColorInput), { commit: true });
     });
     bindHueColorPalette(elements.channelColorInput);
+    // 악기 콤보박스가 포커스를 유지한 상태에서도 Space는 재생/정지 단축키로 우선 처리합니다.
+    // 방향키 등 일반 select 조작은 그대로 유지하고 Space를 누를 때만 포커스를 피아노롤로 돌립니다.
+    elements.channelInstrumentSelect?.addEventListener("keydown", handlePlaybackShortcut);
     elements.channelInstrumentSelect?.addEventListener("change", () => {
       const channel = getActiveChannel();
       if (!channel) return;
