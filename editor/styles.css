@@ -5354,6 +5354,11 @@ button {
   line-height: 1;
 }
 .audio-lane-label > span { font-size: 9px; }
+.audio-lane-label > .audio-lane-icon {
+  font-size: 17px;
+  line-height: 1;
+  letter-spacing: 0;
+}
 .audio-lane-label > strong {
   color: var(--text);
   font-size: 11px;

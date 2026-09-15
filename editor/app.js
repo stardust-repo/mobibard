@@ -5767,7 +5767,9 @@
     updateAudioClipVerticalOrder();
     if (elements.audioLaneLabel) {
       const label = document.createElement("span");
-      label.textContent = "오디오";
+      label.className = "audio-lane-icon";
+      label.textContent = "🎵";
+      label.setAttribute("aria-hidden", "true");
       if (state.audioClips.length) {
         const count = document.createElement("strong");
         count.textContent = String(state.audioClips.length);
