@@ -18239,6 +18239,25 @@
     return true;
   }
 
+  function handleNewProjectShortcut(event) {
+    const key = String(event.key || "").toLowerCase();
+    const altOnly = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+    if (
+      event.defaultPrevented
+      || !altOnly
+      || key !== "n"
+      || isPopupLikeUiOpen()
+    ) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    closeFileMenu();
+    void requestNewProject();
+    return true;
+  }
+
   function handleChannelCreateDeleteShortcut(event) {
     const key = String(event.key || "").toLowerCase();
     const altOnly = event.altKey && !event.ctrlKey && !event.metaKey;
@@ -18431,6 +18450,7 @@
 
   function bindEvents() {
     document.addEventListener("keydown", handleModalBackgroundKeyGuard, true);
+    document.addEventListener("keydown", handleNewProjectShortcut, true);
     document.addEventListener("keydown", handleChannelCreateDeleteShortcut, true);
     document.addEventListener("keydown", handleHistoryShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectAllShortcut, true);
