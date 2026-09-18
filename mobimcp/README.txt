@@ -1,17 +1,27 @@
-마비노기 모바일 악보 웹 테스트
+마비노기 모바일 악보 웹 테스트 v2
 
-1. 마비노기 모바일 실행 + 캐릭터 접속
-2. 게임 설정에서 MM AI Agent Activation ON
-3. start_bridge.cmd 실행
-4. index.html을 HTTPS 사이트에 업로드
-5. 웹에서 '앱 접근 승인 및 연결 확인' 클릭
-6. 브라우저가 localhost/loopback 접근 권한을 물으면 허용
-7. '악보 목록 불러오기' 클릭
+기존 버전의 HTTPS GitHub Pages -> localhost fetch가 브라우저에서 실패하는 경우를 위해
+두 가지 방식을 제공합니다.
 
-웹페이지는 EXE를 직접 실행하지 않습니다.
-브라우저 승인으로 허용되는 것은 HTTPS 사이트 -> 127.0.0.1 브리지 통신입니다.
-브리지는 127.0.0.1:17891 에만 열리며 읽기 전용 API 2개만 노출합니다:
-- /api/status
-- /api/music-scores
+[필수]
+1. 마비노기 모바일 실행
+2. 캐릭터 접속
+3. 게임 설정에서 MM AI Agent Activation ON
+4. start_bridge_v2.cmd 실행
+5. GitHub Pages의 index.html을 이 버전으로 교체
 
-악보 API는 MabinogiMobile_CLI.exe get_music_scores 를 호출합니다.
+[방식 1]
+"브라우저 권한 방식 테스트"
+- Chrome Local Network Access를 통해
+  https://stardust-repo.github.io -> http://127.0.0.1:17891 로 fetch
+- 브라우저 환경에 따라 권한창이 뜰 수 있음
+
+[방식 2 - 권장 fallback]
+"팝업 방식으로 악보 불러오기"
+- 사용자의 버튼 클릭으로 localhost 브리지 페이지를 새 창으로 직접 염
+- 로컬 브리지가 MabinogiMobile_CLI.exe get_music_scores 실행
+- 결과를 window.postMessage로 GitHub Pages에 전달
+- cross-origin fetch / CORS / LNA 직접 요청에 의존하지 않음
+
+브리지는 127.0.0.1에만 바인딩됩니다.
+relay 결과는 https://stardust-repo.github.io 로만 보낼 수 있게 제한했습니다.

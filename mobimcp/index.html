@@ -5,36 +5,45 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>마비노기 모바일 악보 목록</title>
 <style>
-body{margin:0;background:#111318;color:#f5f7fa;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
-main{width:min(960px,calc(100% - 32px));margin:auto;padding:48px 0 72px}
-h1{margin:0 0 8px;font-size:36px}.sub{color:#aeb6c4;line-height:1.6}
-.card{background:#1a1e26;border:1px solid #2c3340;border-radius:16px;padding:18px;margin:16px 0}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input,button{font:inherit}input{flex:1;min-width:240px;padding:11px 12px;border-radius:10px;border:1px solid #394250;background:#11151b;color:inherit}
-button{padding:11px 14px;border:0;border-radius:10px;font-weight:700;cursor:pointer}
-.primary{background:#f5f7fa;color:#111318}.secondary{background:#2b3340;color:#fff}button:disabled{opacity:.45;cursor:default}
-.status{white-space:pre-wrap;margin-top:12px;background:#12161d;border:1px solid #2b3340;border-radius:10px;padding:12px;line-height:1.5}
+:root{font-family:system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:#101217;color:#f4f6f8}
+main{width:min(980px,calc(100% - 32px));margin:auto;padding:44px 0 72px}
+h1{margin:0 0 8px;font-size:36px}.sub{margin:0 0 22px;color:#aab2c0;line-height:1.65}
+.card{background:#191d25;border:1px solid #2c3340;border-radius:16px;padding:18px;margin:14px 0}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+button,input{font:inherit}button{border:0;border-radius:10px;padding:11px 14px;font-weight:700;cursor:pointer}
+button.primary{background:#f5f7fa;color:#111318}button.secondary{background:#2c3440;color:#fff}button:disabled{opacity:.45;cursor:default}
+input{padding:11px 12px;border:1px solid #394250;border-radius:10px;background:#11151b;color:#fff;min-width:240px}
+.status{white-space:pre-wrap;background:#11151b;border:1px solid #303846;border-radius:10px;padding:12px;margin-top:12px;line-height:1.55}
 .ok{border-color:#39794f}.warn{border-color:#8b6d35}.err{border-color:#8d4343}
-.toolbar{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
-.score{background:#13171e;border:1px solid #2a313c;border-radius:12px;padding:14px}.score h3{margin:0 0 10px;font-size:16px;overflow-wrap:anywhere}
-.badges{display:flex;gap:6px;flex-wrap:wrap}.badge{font-size:12px;background:#242b35;padding:4px 7px;border-radius:999px;color:#cfd6e1}
+.score{background:#12161d;border:1px solid #29313c;border-radius:12px;padding:14px}.score h3{margin:0 0 10px;font-size:16px;overflow-wrap:anywhere}
+.badges{display:flex;gap:6px;flex-wrap:wrap}.badge{font-size:12px;background:#242b35;color:#cfd6e1;padding:4px 7px;border-radius:999px}
 .empty{padding:28px;text-align:center;color:#8d96a6;border:1px dashed #343d49;border-radius:12px}
-code{background:#10141a;padding:2px 6px;border-radius:6px}
+code{background:#0e1116;padding:2px 5px;border-radius:5px}
+.small{font-size:13px;color:#9ea7b5;line-height:1.55}
 </style>
 </head>
 <body>
 <main>
 <h1>마비노기 모바일 악보 목록</h1>
-<p class="sub">외부 HTTPS 웹페이지에서 로컬 브리지 접근 권한을 확인한 뒤 <code>get_music_scores</code>를 호출합니다.</p>
+<p class="sub">
+  이 페이지는 두 가지 연결 방식을 지원합니다.
+  Chrome의 Local Network Access 직접 연결이 실패하면, 버튼 클릭으로 localhost 브리지를 팝업으로 열어 결과를 되돌려 받습니다.
+</p>
 
 <section class="card">
   <div class="row">
-    <input id="bridge" value="http://127.0.0.1:17891">
-    <button id="connect" class="primary">앱 접근 승인 및 연결 확인</button>
-    <button id="load" class="secondary" disabled>악보 목록 불러오기</button>
+    <button id="directBtn" class="primary">1. 브라우저 권한 방식 테스트</button>
+    <button id="popupBtn" class="secondary">2. 팝업 방식으로 악보 불러오기</button>
   </div>
   <div id="status" class="status">연결 전입니다.</div>
+  <p class="small">
+    팝업 방식은 GitHub Pages → localhost의 cross-origin fetch를 사용하지 않습니다.
+    사용자 클릭으로 <code>http://127.0.0.1:17891/relay</code>를 연 뒤,
+    로컬 브리지가 <code>get_music_scores</code>를 실행하고 <code>postMessage</code>로 결과만 이 페이지에 돌려줍니다.
+  </p>
 </section>
 
 <section class="card">
@@ -45,83 +54,217 @@ code{background:#10141a;padding:2px 6px;border-radius:6px}
       <span id="count">0개</span>
     </div>
   </div>
-  <div id="scores" class="empty">연결 후 악보 목록을 불러오세요.</div>
+  <div id="scores" class="empty">아직 악보 목록을 불러오지 않았습니다.</div>
 </section>
 
 <section class="card">
-  <strong>주의</strong>
-  <p class="sub">브라우저 권한은 웹사이트가 <code>127.0.0.1</code>에 접근하는 권한입니다. 웹페이지가 EXE를 직접 실행하는 권한은 아닙니다. PC에서 동봉된 로컬 브리지가 실행 중이어야 합니다.</p>
+  <strong>진단 정보</strong>
+  <div id="diag" class="status"></div>
 </section>
 </main>
-<script>
-const $=id=>document.getElementById(id);
-const statusEl=$('status'), loadBtn=$('load'), filter=$('filter'), scores=$('scores'), count=$('count');
-let all=[];
 
-function setStatus(t,k=''){statusEl.className='status '+k;statusEl.textContent=t}
-async function permState(){
-  if(!navigator.permissions?.query)return 'unsupported';
-  for(const name of ['loopback-network','local-network-access']){
-    try{const r=await navigator.permissions.query({name});return name+':'+r.state}catch(e){}
+<script>
+(() => {
+  const BRIDGE = 'http://127.0.0.1:17891';
+  const EXPECTED_BRIDGE_ORIGIN = 'http://127.0.0.1:17891';
+  const $ = id => document.getElementById(id);
+  const status = $('status'), diag = $('diag'), filter = $('filter'), scores = $('scores'), count = $('count');
+  let allScores = [];
+  let relayWindow = null;
+
+  function setStatus(text, cls='') {
+    status.className = 'status' + (cls ? ' '+cls : '');
+    status.textContent = text;
   }
-  return 'unsupported';
-}
-function mkRequest(url){
-  try{return new Request(url,{method:'GET',mode:'cors',cache:'no-store',targetAddressSpace:'loopback'})}
-  catch(e){return new Request(url,{method:'GET',mode:'cors',cache:'no-store'})}
-}
-async function api(path){
-  const base=$('bridge').value.trim().replace(/\/+$/,'');
-  const r=await fetch(mkRequest(base+path));
-  const text=await r.text();
-  let data; try{data=JSON.parse(text)}catch(e){data={raw:text}}
-  if(!r.ok){const x=new Error('HTTP '+r.status);x.data=data;throw x}
-  return data;
-}
-function extract(data){
-  if(Array.isArray(data))return data;
-  if(Array.isArray(data?.body))return data.body;
-  if(typeof data?.body==='string'){try{const x=JSON.parse(data.body);if(Array.isArray(x))return x}catch(e){}}
-  if(Array.isArray(data?.result))return data.result;
-  if(Array.isArray(data?.scores))return data.scores;
-  return [];
-}
-function loc(v){return {inventory:'가방',account_storage:'계정 창고',character_storage:'캐릭터 창고'}[v]||v||'위치 미상'}
-function render(){
-  const q=filter.value.trim().toLowerCase();
-  const rows=all.filter(x=>String(x.DisplayTitle||'').toLowerCase().includes(q));
-  count.textContent=rows.length+'개';
-  if(!rows.length){scores.className='empty';scores.textContent=all.length?'검색 결과가 없습니다.':'보유 악보가 없습니다.';return}
-  scores.className='list';scores.innerHTML='';
-  for(const s of rows){
-    const a=document.createElement('article');a.className='score';
-    const h=document.createElement('h3');h.textContent=s.DisplayTitle||'(제목 없음)';a.appendChild(h);
-    const b=document.createElement('div');b.className='badges';
-    [loc(s.Location),s.IsCopyingAllowed?'복사 가능':'복사 불가',s.IsLocked?'잠금':'잠금 없음'].forEach(v=>{
-      const x=document.createElement('span');x.className='badge';x.textContent=v;b.appendChild(x)
-    });
-    a.appendChild(b);scores.appendChild(a)
+
+  async function permissionInfo() {
+    const out = [];
+    out.push('page origin: ' + location.origin);
+    out.push('secure context: ' + window.isSecureContext);
+    out.push('user agent: ' + navigator.userAgent);
+
+    if (!navigator.permissions?.query) {
+      out.push('Permissions API: unsupported');
+      return out;
+    }
+
+    for (const name of ['loopback-network','local-network','local-network-access']) {
+      try {
+        const p = await navigator.permissions.query({name});
+        out.push(name + ': ' + p.state);
+      } catch (e) {
+        out.push(name + ': unsupported (' + e.name + ')');
+      }
+    }
+    return out;
   }
-}
-$('connect').onclick=async()=>{
-  $('connect').disabled=true;loadBtn.disabled=true;
-  setStatus('브라우저 권한 상태: '+await permState()+'\n로컬 브리지 연결을 시도합니다. 브라우저가 로컬/loopback 접근을 물으면 허용하세요.','warn');
-  try{
-    const d=await api('/api/status');
-    setStatus('연결 성공\n브라우저 권한 상태: '+await permState()+'\n'+JSON.stringify(d,null,2),'ok');
-    loadBtn.disabled=false;filter.disabled=false;
-  }catch(e){
-    setStatus('연결 실패: '+e.message+(e.data?'\n'+JSON.stringify(e.data,null,2):'')+'\n\n브리지 미실행 / 권한 거부 / 게임 미실행 / AI Agent Activation OFF / 비-HTTPS 페이지 여부를 확인하세요.','err')
-  }finally{$('connect').disabled=false}
-};
-loadBtn.onclick=async()=>{
-  loadBtn.disabled=true;setStatus('get_music_scores 호출 중...','warn');
-  try{const d=await api('/api/music-scores');all=extract(d);render();setStatus('악보 목록 로드 성공: '+all.length+'개','ok')}
-  catch(e){setStatus('악보 목록 호출 실패: '+e.message+(e.data?'\n'+JSON.stringify(e.data,null,2):''),'err')}
-  finally{loadBtn.disabled=false}
-};
-filter.oninput=render;
-if(!window.isSecureContext)setStatus('주의: 외부 웹에서 사용하려면 HTTPS로 서비스하는 것이 필요합니다. 현재 secure context가 아닙니다.','warn');
+
+  function locate(v) {
+    return {
+      inventory: '가방',
+      account_storage: '계정 창고',
+      character_storage: '캐릭터 창고'
+    }[v] || v || '위치 미상';
+  }
+
+  function extractScores(data) {
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.body)) return data.body;
+    if (typeof data?.body === 'string') {
+      try {
+        const x = JSON.parse(data.body);
+        if (Array.isArray(x)) return x;
+      } catch {}
+    }
+    if (Array.isArray(data?.result)) return data.result;
+    if (Array.isArray(data?.scores)) return data.scores;
+    return [];
+  }
+
+  function render() {
+    const q = filter.value.trim().toLowerCase();
+    const rows = allScores.filter(x => String(x.DisplayTitle || '').toLowerCase().includes(q));
+    count.textContent = rows.length + '개';
+
+    if (!rows.length) {
+      scores.className = 'empty';
+      scores.textContent = allScores.length ? '검색 결과가 없습니다.' : '보유 악보가 없습니다.';
+      return;
+    }
+
+    scores.className = 'list';
+    scores.innerHTML = '';
+    for (const s of rows) {
+      const article = document.createElement('article');
+      article.className = 'score';
+
+      const h3 = document.createElement('h3');
+      h3.textContent = s.DisplayTitle || '(제목 없음)';
+      article.appendChild(h3);
+
+      const badges = document.createElement('div');
+      badges.className = 'badges';
+      [
+        locate(s.Location),
+        s.IsCopyingAllowed ? '복사 가능' : '복사 불가',
+        s.IsLocked ? '잠금' : '잠금 없음'
+      ].forEach(text => {
+        const b = document.createElement('span');
+        b.className = 'badge';
+        b.textContent = text;
+        badges.appendChild(b);
+      });
+
+      article.appendChild(badges);
+      scores.appendChild(article);
+    }
+  }
+
+  async function directFetch(path) {
+    const url = BRIDGE + path;
+    let req;
+
+    try {
+      req = new Request(url, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-store',
+        targetAddressSpace: 'loopback'
+      });
+    } catch {
+      req = new Request(url, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-store'
+      });
+    }
+
+    const response = await fetch(req);
+    const text = await response.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = {raw:text}; }
+
+    if (!response.ok) {
+      const e = new Error('HTTP ' + response.status);
+      e.data = data;
+      throw e;
+    }
+    return data;
+  }
+
+  async function refreshDiag(extra='') {
+    const rows = await permissionInfo();
+    if (extra) rows.push(extra);
+    diag.textContent = rows.join('\n');
+  }
+
+  $('directBtn').addEventListener('click', async () => {
+    $('directBtn').disabled = true;
+    setStatus('Chrome Local Network Access 직접 연결을 시도합니다.\n권한 창이 뜨면 허용하세요.', 'warn');
+    await refreshDiag('direct fetch: attempting');
+
+    try {
+      await directFetch('/api/ping');
+      const data = await directFetch('/api/music-scores');
+      allScores = extractScores(data);
+      filter.disabled = false;
+      render();
+      setStatus('직접 연결 성공 · 악보 ' + allScores.length + '개', 'ok');
+      await refreshDiag('direct fetch: success');
+    } catch (e) {
+      const detail = e?.data ? '\n' + JSON.stringify(e.data,null,2) : '';
+      setStatus(
+        '직접 연결 실패: ' + e.name + ': ' + e.message + detail +
+        '\n\n아래 "팝업 방식으로 악보 불러오기"를 사용하세요.',
+        'err'
+      );
+      await refreshDiag('direct fetch: failed - ' + e.name + ': ' + e.message);
+    } finally {
+      $('directBtn').disabled = false;
+    }
+  });
+
+  $('popupBtn').addEventListener('click', async () => {
+    const relayUrl = BRIDGE + '/relay?origin=' + encodeURIComponent(location.origin);
+    setStatus('로컬 브리지 팝업을 여는 중입니다...', 'warn');
+
+    relayWindow = window.open(relayUrl, 'mabiLocalRelay', 'width=520,height=340');
+
+    if (!relayWindow) {
+      setStatus('팝업이 차단되었습니다. 이 사이트의 팝업을 허용한 뒤 다시 눌러주세요.', 'err');
+      return;
+    }
+
+    setTimeout(() => {
+      if (status.textContent.includes('여는 중')) {
+        setStatus(
+          '팝업은 열렸지만 아직 결과가 없습니다.\n' +
+          '팝업에 "연결 실패"가 보이는지, 또는 start_bridge_v2.cmd가 실행 중인지 확인하세요.',
+          'warn'
+        );
+      }
+    }, 5000);
+  });
+
+  window.addEventListener('message', (event) => {
+    if (event.origin !== EXPECTED_BRIDGE_ORIGIN) return;
+    if (!event.data || event.data.type !== 'mabi-music-scores') return;
+
+    if (event.data.ok) {
+      allScores = extractScores(event.data.data);
+      filter.disabled = false;
+      render();
+      setStatus('팝업 브리지 연결 성공 · 악보 ' + allScores.length + '개', 'ok');
+      refreshDiag('popup relay: success');
+    } else {
+      setStatus('팝업 브리지 호출 실패:\n' + JSON.stringify(event.data.error,null,2), 'err');
+      refreshDiag('popup relay: failed');
+    }
+  });
+
+  filter.addEventListener('input', render);
+  refreshDiag();
+})();
 </script>
 </body>
 </html>
