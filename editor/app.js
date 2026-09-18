@@ -10800,21 +10800,26 @@
   }
 
   function applyMarqueeSelectionMode(baseSelection, matchingIds, event = null, fallbackMode = "toggle") {
-    // Marquee selection is an XOR gesture: every note currently inside the
-    // drag box is toggled against the selection state captured when the drag
-    // started. Using that immutable base prevents repeated pointer-move events
-    // from flipping the same note back and forth while the box is adjusted.
-    if (fallbackMode === "toggle") {
+    // Keep the selection rule fixed for the whole gesture. This prevents notes
+    // from being inverted merely because the drag rectangle passes over an
+    // already-selected note.
+    if (fallbackMode === "add") {
       const nextSelection = new Set(baseSelection);
-      for (const id of matchingIds) {
-        if (baseSelection.has(id)) nextSelection.delete(id);
-        else nextSelection.add(id);
-      }
+      for (const id of matchingIds) nextSelection.add(id);
       return nextSelection;
     }
-    const additive = Boolean(event?.ctrlKey || event?.metaKey) || (!event && fallbackMode === "add");
-    const nextSelection = additive ? new Set(baseSelection) : new Set();
-    for (const id of matchingIds) nextSelection.add(id);
+    if (fallbackMode === "replace") {
+      const nextSelection = new Set();
+      for (const id of matchingIds) nextSelection.add(id);
+      return nextSelection;
+    }
+
+    // Legacy Select-tool drag without Shift remains XOR/toggle.
+    const nextSelection = new Set(baseSelection);
+    for (const id of matchingIds) {
+      if (baseSelection.has(id)) nextSelection.delete(id);
+      else nextSelection.add(id);
+    }
     return nextSelection;
   }
 
@@ -10848,6 +10853,7 @@
       baseSelection: new Set(state.selectedNoteIds),
       initialSelectionMode,
       tapToggleNoteId: options.tapToggleNoteId ?? null,
+      preserveSelectionOnTap: Boolean(options.preserveSelectionOnTap),
       moved: false,
       selectionStarted: false,
     };
@@ -11130,8 +11136,18 @@
       return;
     }
 
-    // 오른쪽 드래그는 빈 영역의 범위 선택에만 사용합니다. 노트 위의 우클릭은 노트 메뉴를 엽니다.
+    // 노트 도구에서는 오른쪽 드래그를 언제나 새 범위 선택으로 시작합니다.
+    // Shift+오른쪽 드래그는 기존 선택을 유지한 채 범위 안의 노트를 추가합니다.
+    // 단순 우클릭(드래그 없음)은 기존 선택을 보존해 컨텍스트 메뉴 동작을 유지합니다.
     if (event.button === 2) {
+      if (pointBeat >= 0 && effectiveEditTool !== "select") {
+        beginMarqueeSelection(event, point, {
+          initialSelectionMode: event.shiftKey ? "add" : "replace",
+          preserveSelectionOnTap: true,
+        });
+        startRollDragAutoScroll(event.clientX, event.clientY);
+        return;
+      }
       if (existing) {
         if (!state.selectedNoteIds.has(existing.id)) {
           selectOnlyNote(existing.id);
@@ -11139,7 +11155,10 @@
           updateChannelInfo();
         }
       } else if (pointBeat >= 0) {
-        beginMarqueeSelection(event, point);
+        beginMarqueeSelection(event, point, {
+          initialSelectionMode: event.shiftKey ? "add" : "toggle",
+          preserveSelectionOnTap: true,
+        });
       } else {
         clearNoteSelection();
         drawRoll();
@@ -11163,12 +11182,12 @@
 
       const wasSelected = state.selectedNoteIds.has(existing.id);
 
-      // In Select mode, dragging from any note body is the same XOR marquee
-      // gesture as dragging from empty space. The clicked note itself is also
-      // toggled on a simple tap, based on the selection state at pointer-down.
+      // In Select mode, the normal drag keeps the existing XOR behavior.
+      // Holding Shift changes it to additive selection only: selected notes are
+      // never removed when the drag rectangle crosses them.
       if (touchSelectionMode && noteHit.part === "body") {
         beginMarqueeSelection(event, point, {
-          initialSelectionMode: "toggle",
+          initialSelectionMode: event.shiftKey ? "add" : "toggle",
           tapToggleNoteId: existing.id,
         });
       } else {
@@ -11290,7 +11309,9 @@
       }
     } else if (pointBeat >= 0) {
       if (effectiveEditTool === "select") {
-        beginMarqueeSelection(event, point);
+        beginMarqueeSelection(event, point, {
+          initialSelectionMode: event.shiftKey ? "add" : "toggle",
+        });
       } else {
         // 노트 도구의 빈 편집 영역 클릭/드래그는 현재 음표 단위로 노트를 배치합니다.
         beginNoteCreation(event, point, pointBeat);
@@ -11655,13 +11676,19 @@
       state.suppressContextMenuUntil = performance.now() + 600;
       closeContextMenu();
     } else if (interaction.type === "marquee") {
-      if (interaction.tapToggleNoteId != null) {
+      if (interaction.preserveSelectionOnTap) {
         state.selectedNoteIds = new Set(interaction.baseSelection);
-        if (interaction.baseSelection.has(interaction.tapToggleNoteId)) {
+      } else if (interaction.tapToggleNoteId != null) {
+        state.selectedNoteIds = new Set(interaction.baseSelection);
+        if (interaction.initialSelectionMode === "add") {
+          state.selectedNoteIds.add(interaction.tapToggleNoteId);
+        } else if (interaction.baseSelection.has(interaction.tapToggleNoteId)) {
           state.selectedNoteIds.delete(interaction.tapToggleNoteId);
         } else {
           state.selectedNoteIds.add(interaction.tapToggleNoteId);
         }
+      } else if (interaction.initialSelectionMode === "add") {
+        state.selectedNoteIds = new Set(interaction.baseSelection);
       } else {
         clearNoteSelection();
       }
