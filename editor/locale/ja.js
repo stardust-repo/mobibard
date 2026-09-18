@@ -230,7 +230,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "ui.ctrl_cmd_wheel": "Ctrl/Cmd + ホイール",
     "soundbank.configure_playback": "Editor再生用サウンドフォント設定",
     "playback.sound_bank": "Editorの再生に使う音色ファイルを設定します。",
-    "shortcut.keyboard_controls": "Editorで使用できるキーボード操作です。",
+    "shortcut.keyboard_controls": "Editorで使用できるキーボード・マウス操作です。",
     "account.google_account_logout": "Googleアカウントからログアウト",
     "account.google_account_login": "Googleアカウントでログイン",
     "account.google_login": "Googleログイン",

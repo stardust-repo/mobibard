@@ -230,7 +230,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "ui.ctrl_cmd_wheel": "Ctrl/Cmd + 滾輪",
     "soundbank.configure_playback": "設定 Editor 播放 SoundFont",
     "playback.sound_bank": "選擇 Editor 播放使用的音色檔案。",
-    "shortcut.keyboard_controls": "Editor 中可用的鍵盤操作。",
+    "shortcut.keyboard_controls": "Editor 中可用的鍵盤與滑鼠操作。",
     "account.google_account_logout": "退出Google 帳號",
     "account.google_account_login": "登入Google 帳號",
     "account.google_login": "Google 登入",

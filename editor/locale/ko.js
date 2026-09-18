@@ -230,7 +230,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "ui.ctrl_cmd_wheel": "Ctrl/Cmd + 휠",
     "soundbank.configure_playback": "Editor 재생 사운드폰트 설정",
     "playback.sound_bank": "Editor 재생에 사용할 음색 파일을 설정합니다.",
-    "shortcut.keyboard_controls": "Editor에서 사용할 수 있는 키보드 조작입니다.",
+    "shortcut.keyboard_controls": "Editor에서 사용할 수 있는 키보드·마우스 조작입니다.",
     "account.google_account_logout": "Google 계정 로그아웃",
     "account.google_account_login": "Google 계정 로그인",
     "account.google_login": "Google 로그인",

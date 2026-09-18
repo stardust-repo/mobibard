@@ -230,7 +230,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "ui.ctrl_cmd_wheel": "Ctrl/Cmd + wheel",
     "soundbank.configure_playback": "Configure Editor playback SoundFont",
     "playback.sound_bank": "Choose the sound bank used for Editor playback.",
-    "shortcut.keyboard_controls": "Keyboard controls available in Editor.",
+    "shortcut.keyboard_controls": "Keyboard and mouse controls available in Editor.",
     "account.google_account_logout": "Log out of Google account",
     "account.google_account_login": "Log in with Google account",
     "account.google_login": "Google login",

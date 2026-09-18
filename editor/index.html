@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260914-fade-popup-polish1";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260919-shortcut-audit1";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.3.0&amp;rev=20260914-mml-case-allpaths1"></script>
+<script src="js/language-manager.js?v=5.3.0&amp;rev=20260919-shortcut-audit1"></script>
 <title data-i18n="app.title">모비바드 v5.3</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -556,13 +556,14 @@
 </div>
 <div class="popup-backdrop" hidden="" id="shortcutHelpBackdrop">
 <section aria-label="에디터 단축키" data-i18n-aria-label="shortcut.editor" aria-modal="true" class="transfer-dialog shortcut-help-dialog" id="shortcutHelpDialog" role="dialog">
-<div class="transfer-dialog-header"><div><strong data-i18n="shortcut.text">단축키</strong><span data-i18n="shortcut.keyboard_controls">Editor에서 사용할 수 있는 키보드 조작입니다.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="shortcutHelpCloseButton" type="button">×</button></div>
+<div class="transfer-dialog-header"><div><strong data-i18n="shortcut.text">단축키</strong><span data-i18n="shortcut.keyboard_controls">Editor에서 사용할 수 있는 키보드·마우스 조작입니다.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="shortcutHelpCloseButton" type="button">×</button></div>
 <div class="shortcut-help-grid">
 <section><h3 data-i18n="history.file">파일 · 기록</h3><dl><div><dt>Alt + N</dt><dd>새 파일</dd></div><div><dt>Ctrl/Cmd + O</dt><dd>파일 불러오기</dd></div><div><dt>Ctrl/Cmd + S</dt><dd>프로젝트 저장</dd></div><div><dt>Ctrl/Cmd + Z</dt><dd>되돌리기</dd></div><div><dt>Ctrl/Cmd + Y</dt><dd>다시 적용</dd></div><div><dt>Ctrl/Cmd + Shift + Z</dt><dd>다시 적용</dd></div></dl></section>
-<section><h3 data-i18n="selection.edit">선택 · 클립보드</h3><dl><div><dt>Ctrl/Cmd + A</dt><dd>현재 노트 전체 선택</dd></div><div><dt>Ctrl/Cmd + 피아노 건반</dt><dd>선택 채널의 해당 음 노트를 기존 선택에 추가</dd></div><div><dt>Ctrl/Cmd + C</dt><dd>선택 노트 복사</dd></div><div><dt>Ctrl/Cmd + X</dt><dd>선택 노트 잘라내기</dd></div><div><dt>Ctrl/Cmd + V</dt><dd>노트 붙여넣기</dd></div><div><dt>Ctrl/Cmd + Shift + V</dt><dd>클립보드 MML 불러오기</dd></div><div><dt>Ctrl/Cmd + B</dt><dd>삽입 붙여넣기</dd></div><div><dt>Delete / Backspace</dt><dd>선택 노트 또는 오디오 삭제</dd></div><div><dt>Esc</dt><dd>선택·작업·팝업 취소</dd></div></dl></section>
-<section><h3 data-i18n="note.adjustment">선택 노트 편집</h3><dl><div><dt>Shift + ↑ / ↓</dt><dd>선택 노트를 한 옥타브 이동</dd></div><div><dt>Ctrl/Cmd + ← / →</dt><dd>선택 노트를 왼쪽/오른쪽까지 연장</dd></div><div><dt>Shift + Delete</dt><dd>선택 노트 사이의 쉼표 공간 제거</dd></div><div><dt>Alt + 휠</dt><dd>선택 노트 볼륨 조절</dd></div></dl></section>
-<section><h3 data-i18n="playback.view">도구 · 재생 · 화면</h3><dl><div><dt>Alt + T</dt><dd>새 채널 추가</dd></div><div><dt>Alt + Shift + T</dt><dd>선택 채널 삭제</dd></div><div><dt>Ctrl</dt><dd>누르는 동안 노트/선택 도구 임시 전환</dd></div><div><dt>Space</dt><dd>재생 / 정지</dd></div><div><dt>1 ~ 7</dt><dd>편집 단위 1/1 ~ 1/64 선택</dd></div><div><dt>+ / -</dt><dd>피아노롤 확대 / 축소</dd></div><div><dt>Ctrl/Cmd + 휠</dt><dd>포인터 위치 기준 확대 / 축소</dd></div><div><dt>↑ / ↓ · Home / End</dt><dd>채널/히스토리 목록 키보드 이동</dd></div></dl></section>
-<section><h3 data-i18n="ui.input_dialogs">입력 · 팝업</h3><dl><div><dt>Ctrl/Cmd + Enter</dt><dd>MML 불러오기 입력 내용을 바로 적용</dd></div><div><dt>Enter</dt><dd>채널/오디오/템포 수정값 적용</dd></div><div><dt>Enter</dt><dd>마디 추가/삭제 팝업에서 입력한 길이 적용</dd></div><div><dt>Esc</dt><dd>열린 메뉴·팝업을 닫고 현재 작업 취소</dd></div></dl></section>
+<section><h3 data-i18n="selection.edit">선택 · 클립보드</h3><dl><div><dt>Ctrl/Cmd + A</dt><dd>현재 채널 또는 원본 MIDI의 모든 노트 선택</dd></div><div><dt>Ctrl/Cmd + C</dt><dd>선택 노트 복사 (원본 MIDI에서는 선택 노트/악기 복사)</dd></div><div><dt>Ctrl/Cmd + X</dt><dd>선택 노트 잘라내기</dd></div><div><dt>Ctrl/Cmd + V</dt><dd>재생선 위치에 노트 붙여넣기</dd></div><div><dt>Ctrl/Cmd + B</dt><dd>재생선 위치에 공간을 삽입하며 붙여넣기</dd></div><div><dt>Ctrl/Cmd + Shift + V</dt><dd>클립보드의 MML 코드 불러오기</dd></div><div><dt>Delete / Backspace</dt><dd>선택 노트 또는 선택 오디오 삭제</dd></div><div><dt>Esc</dt><dd>선택·작업 취소 또는 열린 메뉴·팝업 닫기</dd></div></dl></section>
+<section><h3>선택 · 마우스</h3><dl><div><dt>Ctrl/Cmd + 노트 클릭</dt><dd>해당 노트의 선택 상태 반전</dd></div><div><dt>Ctrl/Cmd + 피아노 건반</dt><dd>선택 채널의 같은 음 노트를 기존 선택에 추가</dd></div><div><dt>선택 도구 + 왼쪽 드래그</dt><dd>범위 안 노트의 선택 상태 반전</dd></div><div><dt>Shift + 선택 도구 드래그</dt><dd>기존 선택을 유지하고 범위 안 노트만 추가</dd></div><div><dt>노트 도구 + 오른쪽 드래그</dt><dd>기존 선택과 무관하게 새 범위 선택</dd></div><div><dt>Shift + 노트 도구 오른쪽 드래그</dt><dd>기존 선택을 유지하고 범위 안 노트만 추가</dd></div><div><dt>선택 노트 더블 클릭</dt><dd>현재 선택 노트의 볼륨 수정 창 열기</dd></div></dl></section>
+<section><h3 data-i18n="note.adjustment">선택 노트 편집</h3><dl><div><dt>Shift + ↑ / ↓</dt><dd>선택 노트를 한 옥타브 위/아래로 이동</dd></div><div><dt>Ctrl/Cmd + ← / →</dt><dd>선택 범위를 왼쪽/오른쪽의 모든 노트까지 확장</dd></div><div><dt>Shift + Delete / Backspace</dt><dd>연속 선택된 노트 사이의 쉼표 공간 제거</dd></div><div><dt>Alt + 휠</dt><dd>선택 노트 볼륨 단계 조절</dd></div><div><dt>여러 노트 선택 + Shift + 양끝 드래그</dt><dd>선택된 모든 노트를 각자 가능한 범위까지 독립적으로 길이 조절</dd></div><div><dt>노트 도구 + Shift + 본문 드래그</dt><dd>선택 노트를 음높이 방향으로만 이동</dd></div></dl></section>
+<section><h3 data-i18n="playback.view">도구 · 재생 · 화면</h3><dl><div><dt>Alt + T</dt><dd>새 채널 추가</dd></div><div><dt>Alt + Shift + T</dt><dd>선택 채널 삭제</dd></div><div><dt>Ctrl</dt><dd>누르는 동안 노트/선택 도구 임시 전환</dd></div><div><dt>Space</dt><dd>재생 / 정지</dd></div><div><dt>1 ~ 7</dt><dd>편집 단위 1/1 ~ 1/64 선택</dd></div><div><dt>+ / -</dt><dd>피아노롤 확대 / 축소</dd></div><div><dt>Ctrl/Cmd + 휠</dt><dd>피아노롤에서는 포인터 위치 기준 확대 / 축소</dd></div><div><dt>↑ / ↓ · Home / End</dt><dd>채널/히스토리 목록 키보드 이동</dd></div></dl></section>
+<section><h3 data-i18n="ui.input_dialogs">입력 · 팝업</h3><dl><div><dt>Ctrl/Cmd + Enter</dt><dd>MML 불러오기 또는 채널 MML 입력 내용 적용</dd></div><div><dt>Enter</dt><dd>채널·오디오 이름 및 편집 팝업의 입력값 적용</dd></div><div><dt>Enter</dt><dd>템포 또는 마디 추가/삭제 입력값 적용</dd></div><div><dt>Esc</dt><dd>열린 메뉴·팝업을 닫고 현재 작업 취소</dd></div></dl></section>
 </div>
 <div class="transfer-dialog-actions"><button id="shortcutHelpDoneButton" type="button" data-i18n="ui.ok">확인</button></div>
 </section>
