@@ -9453,6 +9453,53 @@
     return notes.slice().sort(compareNotesByTimeline);
   }
 
+  function buildIndependentResizeOriginals(channel, selectedNotes) {
+    const ordered = sortNoteIntervals(channel?.notes || []);
+    const indexById = new Map(ordered.map((note, index) => [String(note.id), index]));
+    const totalBeats = getTotalBeats();
+    return (selectedNotes || []).map((note) => {
+      const startBeat = Math.max(0, Number(note.startBeat) || 0);
+      const durationBeat = Math.max(
+        CONFIG.minimumNoteBeat,
+        Number(note.durationBeat) || CONFIG.minimumNoteBeat,
+      );
+      const endBeat = startBeat + durationBeat;
+      const orderedIndex = indexById.get(String(note.id));
+      const previous = Number.isInteger(orderedIndex) && orderedIndex > 0
+        ? ordered[orderedIndex - 1]
+        : null;
+      const following = Number.isInteger(orderedIndex) && orderedIndex < ordered.length - 1
+        ? ordered[orderedIndex + 1]
+        : null;
+      const previousEndBeat = previous
+        ? (Number(previous.startBeat) || 0) + Math.max(
+          CONFIG.minimumNoteBeat,
+          Number(previous.durationBeat) || CONFIG.minimumNoteBeat,
+        )
+        : 0;
+      const followingStartBeat = following
+        ? Math.max(0, Number(following.startBeat) || 0)
+        : totalBeats;
+
+      // Shift-resize is intentionally non-destructive: each selected note is
+      // clamped against its own immediate neighbours instead of overwriting them.
+      // Math.min/Math.max with the original edge also keeps legacy overlapping
+      // data stationary at delta 0 rather than forcing a jump on pointer-down.
+      return {
+        note,
+        startBeat,
+        durationBeat,
+        endBeat,
+        minStartBeat: Math.min(startBeat, Math.max(0, previousEndBeat)),
+        maxStartBeat: Math.max(0, endBeat - CONFIG.minimumNoteBeat),
+        minEndBeat: Math.min(totalBeats, startBeat + CONFIG.minimumNoteBeat),
+        maxEndBeat: following
+          ? Math.max(endBeat, Math.min(totalBeats, followingStartBeat))
+          : Number.POSITIVE_INFINITY,
+      };
+    });
+  }
+
   function canPlaceMonophonicNotes(candidateNotes, blockingNotes = []) {
     const candidates = sortNoteIntervals(candidateNotes);
     for (let index = 1; index < candidates.length; index += 1) {
@@ -9718,8 +9765,15 @@
         original.note.durationBeat = original.durationBeat;
       }
     } else if (interaction.type === "resize-note" && interaction.note) {
-      interaction.note.startBeat = interaction.originalStartBeat;
-      interaction.note.durationBeat = interaction.originalDurationBeat;
+      if (interaction.multiResize && Array.isArray(interaction.resizeOriginals)) {
+        for (const original of interaction.resizeOriginals) {
+          original.note.startBeat = original.startBeat;
+          original.note.durationBeat = original.durationBeat;
+        }
+      } else {
+        interaction.note.startBeat = interaction.originalStartBeat;
+        interaction.note.durationBeat = interaction.originalDurationBeat;
+      }
     }
 
     const pointerId = interaction.pointerId;
@@ -11129,6 +11183,15 @@
 
         if (noteHit.part === "left-resize" || noteHit.part === "right-resize") {
         const snapUnit = getSnapBeat();
+        const selectedForResize = getSelectedNotes();
+        const multiResize = Boolean(
+          event.shiftKey
+          && selectedForResize.length > 1
+          && state.selectedNoteIds.has(existing.id)
+        );
+        const resizeIgnoredIds = multiResize
+          ? new Set(selectedForResize.map((note) => note.id))
+          : new Set([existing.id]);
         state.interaction = {
           type: "resize-note",
           pointerId: event.pointerId,
@@ -11138,6 +11201,10 @@
           startX: point.x,
           moved: false,
           snapUnit,
+          multiResize,
+          resizeOriginals: multiResize
+            ? buildIndependentResizeOriginals(getActiveChannel(), selectedForResize)
+            : null,
           originalStartBeat: existing.startBeat,
           originalDurationBeat: existing.durationBeat,
           originalEndBeat: existing.startBeat + existing.durationBeat,
@@ -11148,7 +11215,7 @@
               getActiveChannel(),
               existing.startBeat,
               existing.startBeat + existing.durationBeat,
-              new Set([existing.id]),
+              resizeIgnoredIds,
             );
             return {
               magnetPrecedingEnds: directional.precedingEnds,
@@ -11161,6 +11228,7 @@
           magnetLatchedBeat: null,
           lastValidStartBeat: existing.startBeat,
           lastValidDurationBeat: existing.durationBeat,
+          lastValidResizeDeltaBeat: 0,
           pointerBeatOffset: xToBeat(point.x) - (
             noteHit.part === "left-resize"
               ? existing.startBeat
@@ -11361,40 +11429,81 @@
         ? snapBeatToUnit(rawEdgeBeat, interaction.snapUnit)
         : magneticEdgeBeat;
 
-      let candidateStartBeat = interaction.note.startBeat;
-      let candidateDurationBeat = interaction.note.durationBeat;
-      if (interaction.edge === "left") {
-        // Do NOT quantize the resize limit to the edit unit.  The original note may
-        // be shorter than the active unit (e.g. original 1/8 while editing in 1/4),
-        // and its exact original edge must remain reachable.
-        const maximumStartBeat = Math.max(
-          0,
-          interaction.originalEndBeat - interaction.minimumDurationBeat,
-        );
-        candidateStartBeat = clamp(snappedEdgeBeat, 0, maximumStartBeat);
-        candidateDurationBeat = interaction.originalEndBeat - candidateStartBeat;
-      } else {
-        const minimumEndBeat = Math.min(
-          getTotalBeats(),
-          interaction.originalStartBeat + interaction.minimumDurationBeat,
-        );
-        const targetEndBeat = clamp(snappedEdgeBeat, minimumEndBeat, getTotalBeats());
-        candidateStartBeat = interaction.originalStartBeat;
-        candidateDurationBeat = targetEndBeat - interaction.originalStartBeat;
-      }
-      const candidate = {
-        ...interaction.note,
-        startBeat: Number(candidateStartBeat.toFixed(6)),
-        durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, candidateDurationBeat).toFixed(6)),
-      };
-      interaction.note.startBeat = candidate.startBeat;
-      interaction.note.durationBeat = candidate.durationBeat;
-      interaction.lastValidStartBeat = candidate.startBeat;
-      interaction.lastValidDurationBeat = candidate.durationBeat;
+      if (interaction.multiResize && Array.isArray(interaction.resizeOriginals)) {
+        const anchorOriginalEdgeBeat = interaction.edge === "left"
+          ? interaction.originalStartBeat
+          : interaction.originalEndBeat;
+        const requestedDeltaBeat = snappedEdgeBeat - anchorOriginalEdgeBeat;
+        let groupChanged = false;
 
-      interaction.moved = interaction.moved
-        || Math.abs(interaction.note.startBeat - interaction.originalStartBeat) > 1e-7
-        || Math.abs(interaction.note.durationBeat - interaction.originalDurationBeat) > 1e-7;
+        for (const original of interaction.resizeOriginals) {
+          let nextStartBeat = original.startBeat;
+          let nextEndBeat = original.endBeat;
+          if (interaction.edge === "left") {
+            nextStartBeat = clamp(
+              original.startBeat + requestedDeltaBeat,
+              original.minStartBeat,
+              original.maxStartBeat,
+            );
+          } else {
+            const maximumEndBeat = Number.isFinite(original.maxEndBeat)
+              ? Math.min(getTotalBeats(), original.maxEndBeat)
+              : getTotalBeats();
+            nextEndBeat = clamp(
+              original.endBeat + requestedDeltaBeat,
+              original.minEndBeat,
+              maximumEndBeat,
+            );
+          }
+          const nextDurationBeat = Math.max(
+            CONFIG.minimumNoteBeat,
+            nextEndBeat - nextStartBeat,
+          );
+          original.note.startBeat = Number(nextStartBeat.toFixed(6));
+          original.note.durationBeat = Number(nextDurationBeat.toFixed(6));
+          groupChanged = groupChanged
+            || Math.abs(original.note.startBeat - original.startBeat) > 1e-7
+            || Math.abs(original.note.durationBeat - original.durationBeat) > 1e-7;
+        }
+
+        interaction.lastValidResizeDeltaBeat = requestedDeltaBeat;
+        interaction.moved = interaction.moved || groupChanged;
+      } else {
+        let candidateStartBeat = interaction.note.startBeat;
+        let candidateDurationBeat = interaction.note.durationBeat;
+        if (interaction.edge === "left") {
+          // Do NOT quantize the resize limit to the edit unit.  The original note may
+          // be shorter than the active unit (e.g. original 1/8 while editing in 1/4),
+          // and its exact original edge must remain reachable.
+          const maximumStartBeat = Math.max(
+            0,
+            interaction.originalEndBeat - interaction.minimumDurationBeat,
+          );
+          candidateStartBeat = clamp(snappedEdgeBeat, 0, maximumStartBeat);
+          candidateDurationBeat = interaction.originalEndBeat - candidateStartBeat;
+        } else {
+          const minimumEndBeat = Math.min(
+            getTotalBeats(),
+            interaction.originalStartBeat + interaction.minimumDurationBeat,
+          );
+          const targetEndBeat = clamp(snappedEdgeBeat, minimumEndBeat, getTotalBeats());
+          candidateStartBeat = interaction.originalStartBeat;
+          candidateDurationBeat = targetEndBeat - interaction.originalStartBeat;
+        }
+        const candidate = {
+          ...interaction.note,
+          startBeat: Number(candidateStartBeat.toFixed(6)),
+          durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, candidateDurationBeat).toFixed(6)),
+        };
+        interaction.note.startBeat = candidate.startBeat;
+        interaction.note.durationBeat = candidate.durationBeat;
+        interaction.lastValidStartBeat = candidate.startBeat;
+        interaction.lastValidDurationBeat = candidate.durationBeat;
+
+        interaction.moved = interaction.moved
+          || Math.abs(interaction.note.startBeat - interaction.originalStartBeat) > 1e-7
+          || Math.abs(interaction.note.durationBeat - interaction.originalDurationBeat) > 1e-7;
+      }
       if (interaction.moved) {
         invalidateOverviewTimelineActivity();
         drawOverviewTimeline();
@@ -11520,9 +11629,17 @@
     ) {
       const channel = getActiveChannel();
       const editedIds = interaction.type === "resize-note"
-        ? new Set([interaction.note.id])
+        ? interaction.multiResize
+          ? new Set((interaction.resizeOriginals || []).map((original) => original.note.id))
+          : new Set([interaction.note.id])
         : new Set((interaction.originals || []).map((original) => original.note.id));
-      resolveDirectEditOverlaps(channel, editedIds);
+      if (interaction.type === "resize-note" && interaction.multiResize) {
+        // Group Shift-resize already clamps every note against its own neighbours,
+        // so do not apply the normal overwrite cleanup to surrounding notes.
+        state.channelNoteRuntime.delete(String(channel.id));
+      } else {
+        resolveDirectEditOverlaps(channel, editedIds);
+      }
       markDirty(interaction.type === "resize-note" ? "노트 길이 변경" : "노트 이동");
     } else if (interaction.type === "move-selection" && interaction.toggleSelectionOnTap) {
       state.selectedNoteIds.delete(interaction.clickedNoteId);
@@ -12947,27 +13064,51 @@
   }
 
   const NOTE_CLIPBOARD_FORMAT = "mobibard-note-clipboard";
+  const NOTE_CLIPBOARD_STORAGE_KEY = "mobibard.editor.note-clipboard.v1";
+  let suppressNativeNoteClipboardEvent = false;
+
+  function copyTextWithLegacyCommand(value) {
+    const previousFocus = document.activeElement;
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    textarea.style.opacity = "0";
+    document.body.append(textarea);
+    textarea.focus({ preventScroll: true });
+    textarea.select();
+    let copied = false;
+    suppressNativeNoteClipboardEvent = true;
+    try {
+      copied = document.execCommand("copy");
+    } catch {} finally {
+      suppressNativeNoteClipboardEvent = false;
+      textarea.remove();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        try { previousFocus.focus({ preventScroll: true }); } catch {}
+      }
+    }
+    return copied;
+  }
 
   async function writeTextToClipboard(text) {
     const value = String(text || "");
     if (!value) return false;
+
+    // execCommand is deprecated, but it still provides the most compatible synchronous
+    // fallback for user-triggered copy actions on browsers/pages where the async Clipboard
+    // API is unavailable or permission-gated. Try it while the user gesture is still active.
+    if (copyTextWithLegacyCommand(value)) return true;
+
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(value);
         return true;
       }
     } catch {}
-    const textarea = document.createElement("textarea");
-    textarea.value = value;
-    textarea.setAttribute("readonly", "");
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    document.body.append(textarea);
-    textarea.select();
-    let copied = false;
-    try { copied = document.execCommand("copy"); } catch {}
-    textarea.remove();
-    return copied;
+    return false;
   }
 
   function createNodeClipboardPayload(notes, { originBeat = null, label = "노트", source = "editor" } = {}) {
@@ -13002,56 +13143,117 @@
     );
   }
 
-  async function copyNotesToNodeClipboard(notes, options = {}) {
-    const payload = createNodeClipboardPayload(notes, options);
-    if (!payload) {
-      showToast(`복사할 ${options.label || "노트"}가 없습니다.`);
-      return false;
-    }
-    state.noteClipboard = payload;
-    updateEditMenuState();
-    renderChannelTabs();
-    // 브라우저 클립보드에는 MML이 아니라 모비바드 노트 데이터(JSON)를 기록합니다.
-    // 파일 환경에서 권한이 거부되어도 내부 클립보드는 정상 동작합니다.
-    writeTextToClipboard(JSON.stringify(payload)).catch(() => {});
-    showToast(`${payload.label}을 복사했습니다.`);
-    return true;
-  }
-
-  async function readNodeClipboardFromSystem() {
+  function parseNodeClipboardText(text) {
     try {
-      if (!navigator.clipboard?.readText) return null;
-      const text = await navigator.clipboard.readText();
-      const payload = JSON.parse(text);
+      const payload = JSON.parse(String(text || ""));
       return isValidNodeClipboardPayload(payload) ? payload : null;
     } catch {
       return null;
     }
   }
 
-  async function getNodeClipboardPayload() {
-    if (isValidNodeClipboardPayload(state.noteClipboard)) {
-      return state.noteClipboard;
+  function persistNodeClipboardPayload(payload) {
+    if (!isValidNodeClipboardPayload(payload)) return false;
+    try {
+      window.localStorage.setItem(NOTE_CLIPBOARD_STORAGE_KEY, JSON.stringify(payload));
+      return true;
+    } catch {
+      return false;
     }
-    const external = await readNodeClipboardFromSystem();
-    if (external) {
-      state.noteClipboard = external;
-      updateEditMenuState();
-      return external;
-    }
-    return null;
   }
 
-  async function pasteNotesFromClipboard() {
+  function readNodeClipboardFromSharedStorage() {
+    try {
+      return parseNodeClipboardText(window.localStorage.getItem(NOTE_CLIPBOARD_STORAGE_KEY));
+    } catch {
+      return null;
+    }
+  }
+
+  function rememberNodeClipboardPayload(payload, { persist = true, render = true } = {}) {
+    if (!isValidNodeClipboardPayload(payload)) return false;
+    state.noteClipboard = payload;
+    if (persist) persistNodeClipboardPayload(payload);
+    if (render) {
+      updateEditMenuState();
+      renderChannelTabs();
+    }
+    return true;
+  }
+
+  function writeNodeClipboardToEvent(event, payload) {
+    if (!event?.clipboardData || !isValidNodeClipboardPayload(payload)) return false;
+    try {
+      event.clipboardData.setData("text/plain", JSON.stringify(payload));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function copyNotesToNodeClipboard(notes, options = {}) {
+    const payload = createNodeClipboardPayload(notes, options);
+    if (!payload) {
+      showToast(`복사할 ${options.label || "노트"}가 없습니다.`);
+      return false;
+    }
+    rememberNodeClipboardPayload(payload);
+    // 메뉴/버튼에서 실행된 복사도 OS 공용 클립보드에 기록을 시도합니다.
+    // Ctrl/Cmd+C는 아래 ClipboardEvent 경로가 직접 clipboardData에 기록하므로
+    // 브라우저 간 복사에서도 navigator.clipboard 권한에 덜 의존합니다.
+    void writeTextToClipboard(JSON.stringify(payload));
+    showToast(`${payload.label}을 복사했습니다.`);
+    return true;
+  }
+
+  async function readNodeClipboardFromSystem() {
+    try {
+      if (!navigator.clipboard?.readText) return { readable: false, payload: null };
+      const text = await navigator.clipboard.readText();
+      return { readable: true, payload: parseNodeClipboardText(text) };
+    } catch {
+      return { readable: false, payload: null };
+    }
+  }
+
+  async function getNodeClipboardPayload() {
+    // 시스템 클립보드가 읽히는 환경에서는 항상 최신 OS 클립보드를 우선합니다.
+    // 예전에는 state.noteClipboard를 먼저 사용해서 한 번 붙여넣은 뒤 다른 창에서
+    // 새 노트를 복사해도 최초 복사본이 계속 붙는 문제가 있었습니다.
+    const systemClipboard = await readNodeClipboardFromSystem();
+    if (systemClipboard.readable) {
+      if (systemClipboard.payload) rememberNodeClipboardPayload(systemClipboard.payload);
+      return systemClipboard.payload;
+    }
+
+    // Clipboard API 읽기 권한이 없는 경우에는 같은 브라우저/같은 origin의 다른
+    // 창에서 갱신되는 localStorage 공유본을 다음 우선순위로 사용합니다.
+    const shared = readNodeClipboardFromSharedStorage();
+    if (isValidNodeClipboardPayload(shared)) {
+      const sharedTime = Number(shared.copiedAt) || 0;
+      const localTime = Number(state.noteClipboard?.copiedAt) || 0;
+      if (!isValidNodeClipboardPayload(state.noteClipboard) || sharedTime >= localTime) {
+        rememberNodeClipboardPayload(shared, { persist: false });
+        return shared;
+      }
+    }
+
+    return isValidNodeClipboardPayload(state.noteClipboard) ? state.noteClipboard : null;
+  }
+
+  async function pasteNotesFromClipboard(payloadOverride = null) {
     if (isMidiReferenceActive()) {
       showToast("MIDI 탭은 읽기 전용입니다. 일반 채널을 선택한 뒤 붙여넣으세요.");
       return false;
     }
-    const payload = await getNodeClipboardPayload();
+    const payload = isValidNodeClipboardPayload(payloadOverride)
+      ? payloadOverride
+      : await getNodeClipboardPayload();
     if (!payload) {
       showToast("붙여넣을 노트 정보가 없습니다.");
       return false;
     }
+    if (payloadOverride) rememberNodeClipboardPayload(payload, { persist: true });
     const channel = getActiveChannel();
     const targetOrigin = clamp(snapBeat(state.playhead.beat), 0, getTotalBeats());
     const requiredEndBeat = Math.max(
@@ -13092,12 +13294,14 @@
     return true;
   }
 
-  async function insertPasteNotesFromClipboard() {
+  async function insertPasteNotesFromClipboard(payloadOverride = null) {
     if (isMidiReferenceActive()) {
       showToast("MIDI 탭은 읽기 전용입니다. 일반 채널을 선택한 뒤 삽입하세요.");
       return false;
     }
-    const payload = await getNodeClipboardPayload();
+    const payload = isValidNodeClipboardPayload(payloadOverride)
+      ? payloadOverride
+      : await getNodeClipboardPayload();
     if (!payload) {
       showToast("삽입할 노트 정보가 없습니다.");
       return false;
@@ -13160,6 +13364,70 @@
     updateChannelInfo();
     showToast(`${pasted.length}개 노트를 ${channel.name}에 삽입했습니다.`);
     return true;
+  }
+
+  function canHandleNativeNodeClipboardEvent(event) {
+    return Boolean(
+      !suppressNativeNoteClipboardEvent
+      && !event?.defaultPrevented
+      && !isPopupLikeUiOpen()
+      && !isTextEntryTarget(event.target)
+      && state.activePanel === "notes"
+      && !isMidiReferenceActive()
+      && getActiveChannel()
+    );
+  }
+
+  function handleNativeNodeCopyEvent(event) {
+    if (!canHandleNativeNodeClipboardEvent(event)) return false;
+    const selected = getSelectedNotes().sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch);
+    if (!selected.length) return false;
+
+    const payload = createNodeClipboardPayload(selected, { label: `선택 노트 ${selected.length}개`, source: "editor" });
+    if (!payload || !writeNodeClipboardToEvent(event, payload)) return false;
+
+    event.preventDefault();
+    rememberNodeClipboardPayload(payload);
+    showToast(`${payload.label}을 복사했습니다.`);
+    return true;
+  }
+
+  function handleNativeNodeCutEvent(event) {
+    if (!canHandleNativeNodeClipboardEvent(event)) return false;
+    const selected = getSelectedNotes().sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch);
+    if (!selected.length) return false;
+
+    const payload = createNodeClipboardPayload(selected, { label: `선택 노트 ${selected.length}개`, source: "editor" });
+    if (!payload || !writeNodeClipboardToEvent(event, payload)) return false;
+
+    event.preventDefault();
+    rememberNodeClipboardPayload(payload);
+    deleteSelectedNote("노트 잘라내기");
+    showToast(`${selected.length}개 노트를 잘라냈습니다.`);
+    return true;
+  }
+
+  function handleNativeNodePasteEvent(event) {
+    if (!canHandleNativeNodeClipboardEvent(event)) return false;
+    const text = event.clipboardData?.getData?.("text/plain");
+    const payload = parseNodeClipboardText(text);
+    if (!payload) return false;
+
+    event.preventDefault();
+    rememberNodeClipboardPayload(payload);
+    void pasteNotesFromClipboard(payload);
+    return true;
+  }
+
+  function handleNodeClipboardStorageEvent(event) {
+    if (event.key !== NOTE_CLIPBOARD_STORAGE_KEY || !event.newValue) return;
+    const payload = parseNodeClipboardText(event.newValue);
+    if (!payload) return;
+    const incomingTime = Number(payload.copiedAt) || 0;
+    const currentTime = Number(state.noteClipboard?.copiedAt) || 0;
+    if (!isValidNodeClipboardPayload(state.noteClipboard) || incomingTime >= currentTime) {
+      rememberNodeClipboardPayload(payload, { persist: false });
+    }
   }
 
   async function exportNotesAsMml(notes, { label = "노트", tempos = getSortedTempos(), originBeat = null } = {}) {
@@ -18839,21 +19107,9 @@
         }
         return;
       }
-      if (commandKey && key === "c") {
-        event.preventDefault();
-        copySelectedNotes();
-        return;
-      }
-      if (commandKey && key === "x") {
-        event.preventDefault();
-        cutSelectedNotes();
-        return;
-      }
-      if (commandKey && key === "v") {
-        event.preventDefault();
-        pasteNotesFromClipboard();
-        return;
-      }
+      // Ctrl/Cmd+C/X/V는 실제 ClipboardEvent에서 처리합니다. 키다운에서 먼저
+      // preventDefault하면 일부 브라우저에서 copy/paste 이벤트 자체가 발생하지 않아
+      // 다른 창/다른 브라우저의 OS 클립보드와 동기화되지 않을 수 있습니다.
       if (commandKey && (key === "b" || event.code === "KeyB")) {
         event.preventDefault();
         insertPasteNotesFromClipboard();
@@ -19218,6 +19474,11 @@
         closeGoogleAccountMenu();
       }
     });
+    document.addEventListener("copy", handleNativeNodeCopyEvent);
+    document.addEventListener("cut", handleNativeNodeCutEvent);
+    document.addEventListener("paste", handleNativeNodePasteEvent);
+    window.addEventListener("storage", handleNodeClipboardStorageEvent);
+
     document.addEventListener("keydown", (event) => {
       if (isModalPopupOpen()) {
         if (event.key === "Escape" && !event.defaultPrevented) {
@@ -19282,27 +19543,11 @@
         && !isTextEntryTarget(event.target)
         && state.activePanel === "notes"
         && !isMidiReferenceActive()
+        && (key === "b" || event.code === "KeyB")
       ) {
-        if (key === "c") {
-          event.preventDefault();
-          void copySelectedNotes();
-          return;
-        }
-        if (key === "x") {
-          event.preventDefault();
-          void cutSelectedNotes();
-          return;
-        }
-        if (key === "v") {
-          event.preventDefault();
-          void pasteNotesFromClipboard();
-          return;
-        }
-        if (key === "b" || event.code === "KeyB") {
-          event.preventDefault();
-          void insertPasteNotesFromClipboard();
-          return;
-        }
+        event.preventDefault();
+        void insertPasteNotesFromClipboard();
+        return;
       }
 
       if (event.key === "Escape") {
@@ -19430,6 +19675,7 @@
     setNoteVolumeDisplay(state.noteVolumeDisplay, { persist: false });
     state.playbackRate = loadStoredPlaybackRate();
     setPlaybackRate(state.playbackRate, { persist: false, restart: false });
+    state.noteClipboard = readNodeClipboardFromSharedStorage();
     registerDefaultContextMenus();
     bindEvents();
     initializeSplitter();
