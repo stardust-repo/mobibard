@@ -4,6 +4,10 @@
   const clamp = window.MabiUtils?.clamp;
   if (typeof clamp !== "function") throw new Error("utils.js must be loaded before this Editor script");
 
+  function i18nText(key, values = []) {
+    return window.MobibardI18n?.t?.(key, values) || String(key);
+  }
+
   function normalizeSharedRange(value) {
     const source = Array.isArray(value) ? value : [0, 127];
     const rawLow = Number(source[0]);
@@ -61,7 +65,7 @@
 
   function adaptSharedPreset(soundBank, preset) {
     if (!soundBank || !preset) {
-      throw new Error("재생 가능한 SoundBank 프리셋이 없습니다.");
+      throw new Error(i18nText("soundbank.no_playable_preset"));
     }
     const zones = (Array.isArray(preset.regions) ? preset.regions : []).map((region, index) => {
       const sample = region?.sample;
@@ -110,7 +114,7 @@
     }).filter(Boolean);
 
     if (!zones.length) {
-      throw new Error("선택한 SoundBank 프리셋에 샘플 영역이 없습니다.");
+      throw new Error(i18nText("soundbank.no_sample_region"));
     }
 
     return {
@@ -155,7 +159,7 @@
       }
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) {
-        throw new Error("이 브라우저는 Web Audio를 지원하지 않습니다.");
+        throw new Error(i18nText("soundbank.web_audio_unsupported"));
       }
       this.context = new AudioContextClass({ latencyHint: "interactive" });
       this.masterGain = this.context.createGain();
@@ -207,30 +211,30 @@
       this.preparePromise = (async () => {
         const soundBankApi = window.MabiSoundBank;
         if (!soundBankApi?.loadEmbeddedSoundBank) {
-          this.emitStatus("기본 신시사이저", "fallback");
+          this.emitStatus(i18nText("soundbank.basic_synth"), "fallback");
           return null;
         }
 
         try {
-          this.emitStatus("공용 SF3 음원 준비 0%", "loading");
+          this.emitStatus(i18nText("soundbank.shared_sf3_progress", [0]), "loading");
           this.soundBank = await soundBankApi.loadEmbeddedSoundBank({
             clearBase64: true,
             onProgress: (progress) => {
               const percent = Math.min(99, Math.round(progress * 100));
-              this.emitStatus(`공용 SF3 음원 준비 ${percent}%`, "loading");
+              this.emitStatus(i18nText("soundbank.shared_sf3_progress", [percent]), "loading");
             },
           });
           const preset = selectSharedPreset(this.soundBank, this.presetNumber, this.bankNumber);
           this.soundFont = adaptSharedPreset(this.soundBank, preset);
           this.soundFonts.set(`${this.soundFont.bank}:${this.soundFont.preset}`, this.soundFont);
           this.soundFonts.set(`${this.bankNumber}:${this.presetNumber}`, this.soundFont);
-          this.emitStatus(`${this.soundBank.fileName || "공용 SF3"} · ${this.soundFont.presetName}`, "ready");
+          this.emitStatus(`${this.soundBank.fileName || i18nText("soundbank.shared_sf3")} · ${this.soundFont.presetName}`, "ready");
           return this.soundFont;
         } catch (error) {
           console.error("SoundFont initialization failed", error);
           this.soundBank = null;
           this.soundFont = null;
-          this.emitStatus("기본 신시사이저", "fallback");
+          this.emitStatus(i18nText("soundbank.basic_synth"), "fallback");
           return null;
         }
       })();
@@ -247,17 +251,17 @@
 
     async useSoundBank(source, options = {}) {
       const shared = window.MabiSoundBank;
-      if (!shared) throw new Error("SoundBank 플러그인을 사용할 수 없습니다.");
+      if (!shared) throw new Error(i18nText("soundbank.plugin_unavailable"));
       let parsed = source;
       if (source && typeof source.arrayBuffer === "function") {
-        if (typeof shared.parseSoundBankFile !== "function") throw new Error("SoundBank 파일 파서를 사용할 수 없습니다.");
+        if (typeof shared.parseSoundBankFile !== "function") throw new Error(i18nText("soundbank.file_parser_unavailable"));
         parsed = await shared.parseSoundBankFile(source, options);
       } else if (source instanceof ArrayBuffer || ArrayBuffer.isView(source)) {
-        if (typeof shared.parseSoundBank !== "function") throw new Error("SoundBank 파서를 사용할 수 없습니다.");
+        if (typeof shared.parseSoundBank !== "function") throw new Error(i18nText("soundbank.parser_unavailable"));
         parsed = await shared.parseSoundBank(source, options);
       }
       if (!parsed || !Array.isArray(parsed.presets) || !parsed.presets.length) {
-        throw new Error("재생 가능한 SoundBank 프리셋이 없습니다.");
+        throw new Error(i18nText("soundbank.no_playable_preset"));
       }
       this.stopAll();
       this.clearSoundBankCaches();
@@ -277,7 +281,7 @@
       this.clearSoundBankCaches();
       this.soundBank = null;
       this.soundFont = null;
-      this.emitStatus("공용 SF3 음원 준비", "loading");
+      this.emitStatus(i18nText("soundbank.shared_sf3_preparing"), "loading");
       return this.prepare();
     }
 
@@ -418,7 +422,7 @@
       const context = this.ensureContext();
       const soundBank = zone.soundBank || this.soundBank;
       if (!soundBank?.getBufferForSample || !zone.sample) {
-        throw new Error("SoundBank 샘플 버퍼를 만들 수 없습니다.");
+        throw new Error(i18nText("soundbank.sample_buffer_unavailable"));
       }
       const buffer = soundBank.getBufferForSample(context, zone.sample);
       this.bufferCache.set(zone.sampleId, buffer);

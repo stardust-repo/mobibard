@@ -1,4 +1,4 @@
-import { getLanguage, initializeLanguage, onLanguageChange, setLanguage, t } from './language-manager.js?v=20260906-locale-prune1';
+import { getLanguage, initializeLanguage, onLanguageChange, setLanguage, t } from './language-manager.js?v=20260919-locale-sync1';
 import { initializeThemeUi } from './ui.js?v=20260831-account-menu1';
 import { initializeGoogleAccountMenu } from '../../plugins/google/google-account-menu.js?v=20260831-account-menu1';
 

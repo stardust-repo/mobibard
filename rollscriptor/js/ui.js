@@ -1,4 +1,4 @@
-import { onLanguageChange, t } from './language-manager.js?v=20260906-locale-prune1';
+import { onLanguageChange, t } from './language-manager.js?v=20260919-locale-sync1';
 
 const THEME_KEY = 'mobibard.player.theme';
 let initialized = false;

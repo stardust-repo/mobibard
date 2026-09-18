@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260919-shortcut-audit1";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260919-shift-note-move1";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.3.0&amp;rev=20260919-shortcut-audit1"></script>
+<script src="js/language-manager.js?v=5.3.0&amp;rev=20260919-shift-note-move1"></script>
 <title data-i18n="app.title">모비바드 v5.3</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -114,7 +114,7 @@
 <button id="saveButton" role="menuitem" type="button" data-i18n="file.save">저장</button>
 <button id="googleDriveSaveButton" role="menuitem" type="button" data-i18n="drive.save_google">Google 저장</button>
 <button id="fileExportButton" role="menuitem" type="button" data-i18n="mml.export">MML 내보내기</button>
-<button id="midiExportButton" role="menuitem" type="button">MIDI 내보내기</button>
+<button id="midiExportButton" role="menuitem" type="button" data-i18n="midi.export">MIDI 내보내기</button>
 <button id="audioExportButton" role="menuitem" type="button" data-i18n="audio.export_ogg">오디오 내보내기</button>
 <div class="file-menu-separator" role="separator"></div>
 <button data-supported-files-button data-supported-files-context="editor" id="supportedFilesMenuButton" role="menuitem" type="button" data-i18n="file.supported">지원 파일</button>
@@ -203,7 +203,7 @@
 <div class="options-profile-row">
 <img alt="" class="options-profile-avatar" id="accountAvatarImg" referrerpolicy="no-referrer" src="../assets/icons/guest-user.svg?v=5.1.0&amp;rev=20260818-205217"/>
 <div>
-<strong id="accountMenuName">Guest</strong>
+<strong id="accountMenuName" data-i18n="account.guest">게스트</strong>
 <span class="account-menu-email" hidden="" id="accountMenuEmail"></span>
 </div>
 </div>
@@ -272,7 +272,7 @@
 <div aria-label="채널 빠른 선택 목록" data-i18n-aria-label="channel.quick_select" class="sidebar-rail-channel-list" id="collapsedChannelList" role="listbox"></div>
 </div>
 <section aria-label="채널 목록" data-i18n-aria-label="channel.list" class="side-panel-view channel-panel channel-side-panel" data-context-area="channel-panel" id="channelPanel" role="tabpanel">
-<div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명"></span><button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="채널 추가" data-i18n-aria-label="channel.add" class="channel-tree-add-button" id="addChannelButton" title="채널 추가" data-i18n-title="channel.add" type="button">＋</button><button aria-label="채널 선택 삭제" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 채널 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button></div>
+<div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명" data-i18n-aria-label="ui.loaded_file_name"></span><button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="채널 추가" data-i18n-aria-label="channel.add" class="channel-tree-add-button" id="addChannelButton" title="채널 추가" data-i18n-title="channel.add" type="button">＋</button><button aria-label="채널 선택 삭제" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 채널 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button></div>
 <div aria-label="채널 목록" data-i18n-aria-label="channel.list" class="channel-tabs channel-tree" data-context-area="channel-tabs" id="channelTabs" role="tree"></div>
 <div class="channel-detail-row channel-inspector">
 <div class="channel-body note-channel-body" id="noteChannelView">
@@ -370,7 +370,7 @@
 <div class="midi-import-selection-actions midi-import-inline-selection-actions" id="midiImportSelectionActions"><button id="midiImportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiImportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
 <select aria-label="MIDI 양자화" data-i18n-aria-label="midi.quantize" id="midiImportQuantize"><option selected="" value="64" data-i18n="ui.1_64_quantize">64박 양자화</option><option value="32" data-i18n="ui.1_32_quantize">32박 양자화</option></select>
 <label class="midi-import-overlap-option"><input checked="" id="midiImportIgnoreSingle64thOverlap" type="checkbox"/><span data-i18n="ui.ignore_1_64">64박 겹침 무시</span></label>
-<label class="midi-import-overlap-option midi-import-channel-limit-option"><input id="midiImportLimitChannelsPerInstrument" type="checkbox"/><span id="midiImportChannelLimitLabel">악기당 최대 3채널</span></label>
+<label class="midi-import-overlap-option midi-import-channel-limit-option"><input id="midiImportLimitChannelsPerInstrument" type="checkbox"/><span id="midiImportChannelLimitLabel" data-i18n="midi.limit_channels" data-i18n-args="[3]">악기당 최대 3채널</span></label>
 <div class="midi-import-preview-actions"><button class="midi-import-source-preview" id="midiImportPreviewAllButton" type="button"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span><span class="transport-button-label" data-i18n="ui.preview_source">원본 듣기</span></button></div>
 </div>
 <div class="midi-import-selection-actions midi-import-text-selection-actions" hidden="" id="midiImportTextSelectionActions"><button id="midiImportTextSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiImportTextClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
@@ -390,8 +390,8 @@
 </div>
 <div class="mml-export-split-block">
 <div class="mml-export-split-head">
-<div class="mml-export-copy-meta"><strong data-i18n="mml_export.copy_split">분할 복사</strong><small id="mmlExportSplitSummary">2,400자 기준으로 나눕니다.</small></div>
-<label class="mml-export-split-limit"><span data-i18n="mml_export.split_limit">분할 글자</span><input aria-label="분할할 최대 글자 수" id="mmlExportSplitLimitInput" inputmode="numeric" max="5000" min="200" step="50" type="number" value="2400"/></label>
+<div class="mml-export-copy-meta"><strong data-i18n="mml_export.copy_split">분할 복사</strong><small id="mmlExportSplitSummary" data-i18n="mml_export.split_hint">2,400자 기준으로 나눕니다.</small></div>
+<label class="mml-export-split-limit"><span data-i18n="mml_export.split_limit">분할 글자</span><input aria-label="분할할 최대 글자 수" data-i18n-aria-label="mml_export.split_limit_aria" id="mmlExportSplitLimitInput" inputmode="numeric" max="5000" min="200" step="50" type="number" value="2400"/></label>
 </div>
 <div class="mml-export-split-buttons" id="mmlExportSplitButtons"></div>
 </div>
@@ -537,7 +537,7 @@
 <label class="tempo-editor-field tempo-simplify-threshold-field"><span data-i18n="tempo.simplify_threshold">제거 기준</span><input aria-label="템포 BPM 차이 제거 기준" data-i18n-aria-label="tempo.simplify_threshold_aria" id="tempoSimplifyThresholdInput" inputmode="numeric" max="255" min="1" step="1" type="number" value="5"/><strong data-i18n="tempo.simplify_threshold_suffix">BPM 미만</strong></label>
 <label class="tempo-simplify-option"><input checked="" id="tempoSimplifyPreserveExtrema" type="checkbox"/><span data-i18n="tempo.simplify_preserve_extrema">최저/최고 템포 유지</span></label>
 <p class="tempo-editor-help" data-i18n="tempo.simplify_help">직전 유지 템포와의 BPM 차이가 기준보다 작은 템포를 제거합니다. 위치 간격과 관계없이 비교합니다.</p>
-<div class="tempo-simplify-summary" id="tempoSimplifySummary">0개 → 0개 (0개 삭제)</div>
+<div class="tempo-simplify-summary" data-i18n="tempo.simplify_preview" data-i18n-args="[0,0,0]" id="tempoSimplifySummary">0개 → 0개 (0개 삭제)</div>
 <div class="tempo-editor-actions tempo-simplify-actions"><span></span><span></span><button id="tempoSimplifyCancelButton" type="button" data-i18n="cancel">취소</button><button id="tempoSimplifyApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
 </div>
@@ -558,12 +558,12 @@
 <section aria-label="에디터 단축키" data-i18n-aria-label="shortcut.editor" aria-modal="true" class="transfer-dialog shortcut-help-dialog" id="shortcutHelpDialog" role="dialog">
 <div class="transfer-dialog-header"><div><strong data-i18n="shortcut.text">단축키</strong><span data-i18n="shortcut.keyboard_controls">Editor에서 사용할 수 있는 키보드·마우스 조작입니다.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="shortcutHelpCloseButton" type="button">×</button></div>
 <div class="shortcut-help-grid">
-<section><h3 data-i18n="history.file">파일 · 기록</h3><dl><div><dt>Alt + N</dt><dd>새 파일</dd></div><div><dt>Ctrl/Cmd + O</dt><dd>파일 불러오기</dd></div><div><dt>Ctrl/Cmd + S</dt><dd>프로젝트 저장</dd></div><div><dt>Ctrl/Cmd + Z</dt><dd>되돌리기</dd></div><div><dt>Ctrl/Cmd + Y</dt><dd>다시 적용</dd></div><div><dt>Ctrl/Cmd + Shift + Z</dt><dd>다시 적용</dd></div></dl></section>
-<section><h3 data-i18n="selection.edit">선택 · 클립보드</h3><dl><div><dt>Ctrl/Cmd + A</dt><dd>현재 채널 또는 원본 MIDI의 모든 노트 선택</dd></div><div><dt>Ctrl/Cmd + C</dt><dd>선택 노트 복사 (원본 MIDI에서는 선택 노트/악기 복사)</dd></div><div><dt>Ctrl/Cmd + X</dt><dd>선택 노트 잘라내기</dd></div><div><dt>Ctrl/Cmd + V</dt><dd>재생선 위치에 노트 붙여넣기</dd></div><div><dt>Ctrl/Cmd + B</dt><dd>재생선 위치에 공간을 삽입하며 붙여넣기</dd></div><div><dt>Ctrl/Cmd + Shift + V</dt><dd>클립보드의 MML 코드 불러오기</dd></div><div><dt>Delete / Backspace</dt><dd>선택 노트 또는 선택 오디오 삭제</dd></div><div><dt>Esc</dt><dd>선택·작업 취소 또는 열린 메뉴·팝업 닫기</dd></div></dl></section>
-<section><h3>선택 · 마우스</h3><dl><div><dt>Ctrl/Cmd + 노트 클릭</dt><dd>해당 노트의 선택 상태 반전</dd></div><div><dt>Ctrl/Cmd + 피아노 건반</dt><dd>선택 채널의 같은 음 노트를 기존 선택에 추가</dd></div><div><dt>선택 도구 + 왼쪽 드래그</dt><dd>범위 안 노트의 선택 상태 반전</dd></div><div><dt>Shift + 선택 도구 드래그</dt><dd>기존 선택을 유지하고 범위 안 노트만 추가</dd></div><div><dt>노트 도구 + 오른쪽 드래그</dt><dd>기존 선택과 무관하게 새 범위 선택</dd></div><div><dt>Shift + 노트 도구 오른쪽 드래그</dt><dd>기존 선택을 유지하고 범위 안 노트만 추가</dd></div><div><dt>선택 노트 더블 클릭</dt><dd>현재 선택 노트의 볼륨 수정 창 열기</dd></div></dl></section>
-<section><h3 data-i18n="note.adjustment">선택 노트 편집</h3><dl><div><dt>Shift + ↑ / ↓</dt><dd>선택 노트를 한 옥타브 위/아래로 이동</dd></div><div><dt>Ctrl/Cmd + ← / →</dt><dd>선택 범위를 왼쪽/오른쪽의 모든 노트까지 확장</dd></div><div><dt>Shift + Delete / Backspace</dt><dd>연속 선택된 노트 사이의 쉼표 공간 제거</dd></div><div><dt>Alt + 휠</dt><dd>선택 노트 볼륨 단계 조절</dd></div><div><dt>여러 노트 선택 + Shift + 양끝 드래그</dt><dd>선택된 모든 노트를 각자 가능한 범위까지 독립적으로 길이 조절</dd></div><div><dt>노트 도구 + Shift + 본문 드래그</dt><dd>선택 노트를 음높이 방향으로만 이동</dd></div></dl></section>
-<section><h3 data-i18n="playback.view">도구 · 재생 · 화면</h3><dl><div><dt>Alt + T</dt><dd>새 채널 추가</dd></div><div><dt>Alt + Shift + T</dt><dd>선택 채널 삭제</dd></div><div><dt>Ctrl</dt><dd>누르는 동안 노트/선택 도구 임시 전환</dd></div><div><dt>Space</dt><dd>재생 / 정지</dd></div><div><dt>1 ~ 7</dt><dd>편집 단위 1/1 ~ 1/64 선택</dd></div><div><dt>+ / -</dt><dd>피아노롤 확대 / 축소</dd></div><div><dt>Ctrl/Cmd + 휠</dt><dd>피아노롤에서는 포인터 위치 기준 확대 / 축소</dd></div><div><dt>↑ / ↓ · Home / End</dt><dd>채널/히스토리 목록 키보드 이동</dd></div></dl></section>
-<section><h3 data-i18n="ui.input_dialogs">입력 · 팝업</h3><dl><div><dt>Ctrl/Cmd + Enter</dt><dd>MML 불러오기 또는 채널 MML 입력 내용 적용</dd></div><div><dt>Enter</dt><dd>채널·오디오 이름 및 편집 팝업의 입력값 적용</dd></div><div><dt>Enter</dt><dd>템포 또는 마디 추가/삭제 입력값 적용</dd></div><div><dt>Esc</dt><dd>열린 메뉴·팝업을 닫고 현재 작업 취소</dd></div></dl></section>
+<section><h3 data-i18n="history.file">파일 · 기록</h3><dl><div><dt>Alt + N</dt><dd data-i18n="shortcut.help.new_file">새 파일</dd></div><div><dt>Ctrl/Cmd + O</dt><dd data-i18n="shortcut.help.open_file">파일 불러오기</dd></div><div><dt>Ctrl/Cmd + S</dt><dd data-i18n="shortcut.help.save_project">프로젝트 저장</dd></div><div><dt>Ctrl/Cmd + Z</dt><dd data-i18n="shortcut.help.undo">되돌리기</dd></div><div><dt>Ctrl/Cmd + Y</dt><dd data-i18n="shortcut.help.redo">다시 적용</dd></div><div><dt>Ctrl/Cmd + Shift + Z</dt><dd data-i18n="shortcut.help.redo">다시 적용</dd></div></dl></section>
+<section><h3 data-i18n="selection.edit">선택 · 클립보드</h3><dl><div><dt>Ctrl/Cmd + A</dt><dd data-i18n="shortcut.help.select_all_notes">현재 채널 또는 원본 MIDI의 모든 노트 선택</dd></div><div><dt>Ctrl/Cmd + C</dt><dd data-i18n="shortcut.help.copy_notes">선택 노트 복사 (원본 MIDI에서는 선택 노트/악기 복사)</dd></div><div><dt>Ctrl/Cmd + X</dt><dd data-i18n="shortcut.help.cut_notes">선택 노트 잘라내기</dd></div><div><dt>Ctrl/Cmd + V</dt><dd data-i18n="shortcut.help.paste_notes">재생선 위치에 노트 붙여넣기</dd></div><div><dt>Ctrl/Cmd + B</dt><dd data-i18n="shortcut.help.insert_paste">재생선 위치에 공간을 삽입하며 붙여넣기</dd></div><div><dt>Ctrl/Cmd + Shift + V</dt><dd data-i18n="shortcut.help.import_mml_clipboard">클립보드의 MML 코드 불러오기</dd></div><div><dt>Delete / Backspace</dt><dd data-i18n="shortcut.help.delete_selection">선택 노트 또는 선택 오디오 삭제</dd></div><div><dt>Esc</dt><dd data-i18n="shortcut.help.escape_cancel">선택·작업 취소 또는 열린 메뉴·팝업 닫기</dd></div></dl></section>
+<section><h3 data-i18n="shortcut.help.selection_mouse">선택 · 마우스</h3><dl><div><dt data-i18n="shortcut.help.ctrl_note_click_key">Ctrl/Cmd + 노트 클릭</dt><dd data-i18n="shortcut.help.ctrl_note_click">해당 노트의 선택 상태 반전</dd></div><div><dt data-i18n="shortcut.help.ctrl_piano_key_key">Ctrl/Cmd + 피아노 건반</dt><dd data-i18n="shortcut.help.ctrl_piano_key">선택 채널의 같은 음 노트를 기존 선택에 추가</dd></div><div><dt data-i18n="shortcut.help.select_drag_key">선택 모드 + 드래그</dt><dd data-i18n="shortcut.help.select_drag">범위 안 노트의 선택 상태 반전</dd></div><div><dt data-i18n="shortcut.help.note_right_drag_key">노트 모드 + 오른쪽 드래그</dt><dd data-i18n="shortcut.help.note_right_drag">기존 선택과 무관하게 새 범위 선택</dd></div><div><dt data-i18n="shortcut.help.shift_drag_key">Shift + 드래그</dt><dd data-i18n="shortcut.help.shift_drag">기존 선택을 유지하고 범위 안 노트를 추가</dd></div><div><dt data-i18n="shortcut.help.note_double_click_key">선택 노트 더블 클릭</dt><dd data-i18n="shortcut.help.note_double_click">현재 선택 노트의 볼륨 수정 창 열기</dd></div></dl></section>
+<section><h3 data-i18n="note.adjustment">선택 노트 편집</h3><dl><div><dt>Shift + ↑ / ↓</dt><dd data-i18n="shortcut.help.octave_move">선택 노트를 한 옥타브 위/아래로 이동</dd></div><div><dt>Ctrl/Cmd + ← / →</dt><dd data-i18n="shortcut.help.extend_selection">선택 범위를 왼쪽/오른쪽의 모든 노트까지 확장</dd></div><div><dt>Shift + Delete / Backspace</dt><dd data-i18n="shortcut.help.remove_gaps">연속 선택된 노트 사이의 쉼표 공간 제거</dd></div><div><dt>Alt + 휠</dt><dd data-i18n="shortcut.help.volume_wheel">선택 노트 볼륨 단계 조절</dd></div><div><dt data-i18n="shortcut.help.multi_resize_key">Shift + 노트 양끝 드래그</dt><dd data-i18n="shortcut.help.multi_resize">선택된 모든 노트를 각자 가능한 범위까지 독립적으로 길이 조절</dd></div><div><dt data-i18n="shortcut.help.pitch_only_drag_key">Shift + 노트 이동</dt><dd data-i18n="shortcut.help.pitch_only_drag">선택 노트의 좌우 위치는 고정하고 위/아래(음높이)로만 이동</dd></div></dl></section>
+<section><h3 data-i18n="playback.view">도구 · 재생 · 화면</h3><dl><div><dt>Alt + T</dt><dd data-i18n="shortcut.help.add_channel">새 채널 추가</dd></div><div><dt>Alt + Shift + T</dt><dd data-i18n="shortcut.help.delete_channel">선택 채널 삭제</dd></div><div><dt>Ctrl</dt><dd data-i18n="shortcut.help.ctrl_temp_tool">누르는 동안 노트/선택 모드 임시 전환</dd></div><div><dt>Space</dt><dd data-i18n="shortcut.help.play_stop">재생 / 정지</dd></div><div><dt>1 ~ 7</dt><dd data-i18n="shortcut.help.grid_keys">편집 단위 1/1 ~ 1/64 선택</dd></div><div><dt>+ / -</dt><dd data-i18n="shortcut.help.zoom_keys">피아노롤 확대 / 축소</dd></div><div><dt>Ctrl/Cmd + 휠</dt><dd data-i18n="shortcut.help.ctrl_wheel_zoom">피아노롤에서는 포인터 위치 기준 확대 / 축소</dd></div><div><dt>↑ / ↓ · Home / End</dt><dd data-i18n="shortcut.help.list_nav">채널/히스토리 목록 키보드 이동</dd></div></dl></section>
+<section><h3 data-i18n="ui.input_dialogs">입력 · 팝업</h3><dl><div><dt>Ctrl/Cmd + Enter</dt><dd data-i18n="shortcut.help.apply_mml">MML 불러오기 또는 채널 MML 입력 내용 적용</dd></div><div><dt>Enter</dt><dd data-i18n="shortcut.help.apply_edit_dialog">채널·오디오 이름 및 편집 팝업의 입력값 적용</dd></div><div><dt>Enter</dt><dd data-i18n="shortcut.help.apply_tempo_measure">템포 또는 마디 추가/삭제 입력값 적용</dd></div><div><dt>Esc</dt><dd data-i18n="shortcut.help.close_popup">열린 메뉴·팝업을 닫고 현재 작업 취소</dd></div></dl></section>
 </div>
 <div class="transfer-dialog-actions"><button id="shortcutHelpDoneButton" type="button" data-i18n="ui.ok">확인</button></div>
 </section>
@@ -621,13 +621,13 @@
 <script src="../assets/default_sf3.js?v=20260907-mobibard16-cleaned"></script>
 <script src="../plugins/common/audio-export.js?v=1.0.1&amp;rev=20260910-ogg44100-1"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
-<script src="js/soundbank-player.js?v=5.3.0&amp;rev=20260907-dynamic-presets1"></script>
+<script src="js/soundbank-player.js?v=5.3.0&amp;rev=20260919-shift-note-move1"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final46"></script>
 <script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260919-selection-drag2"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260919-shift-note-move2"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

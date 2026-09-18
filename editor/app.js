@@ -1546,7 +1546,7 @@
       groups: Array.isArray(reference.groups)
         ? reference.groups.map((group, groupIndex) => ({
           id: String(group.id || `midi-group-${groupIndex + 1}`),
-          name: String(group.name || `MIDI 악기 ${groupIndex + 1}`),
+          name: String(group.name || i18nText("midi.default_instrument_name", [groupIndex + 1])),
           trackName: String(group.trackName || ""),
           trackIndex: Math.max(0, Number(group.trackIndex) || 0),
           sourceTrackIndices: Array.isArray(group.sourceTrackIndices)
@@ -2801,12 +2801,39 @@
     return window.MobibardI18n?.t?.(key, values) || String(key);
   }
 
+  function refreshLocaleDependentUi() {
+    state.language = normalizeLanguage(window.MobibardI18n?.language || state.language);
+    if (elements.languageSelect) elements.languageSelect.value = state.language;
+    updateVolumeControls();
+    updatePlaybackRateControl();
+    updateThemeControls();
+    updateEditorSoundFontUi();
+    renderAll();
+    updateMidiReferenceUI();
+    updateEditMenuState();
+    if (elements.midiImportBackdrop && !elements.midiImportBackdrop.hidden) updateMidiImportDialog();
+    if (elements.midiTransferBackdrop && !elements.midiTransferBackdrop.hidden) renderMidiTransferDialog();
+    if (elements.channelMergeBackdrop && !elements.channelMergeBackdrop.hidden) renderChannelMergeDialog();
+    if (elements.channelDeleteBackdrop && !elements.channelDeleteBackdrop.hidden) renderChannelDeleteDialog();
+    if (elements.mmlExportBackdrop && !elements.mmlExportBackdrop.hidden) updateMmlExportDialogState();
+    if (elements.noteVolumeBackdrop && !elements.noteVolumeBackdrop.hidden) {
+      updateNoteVolumeDialogControl();
+      updateNoteVolumeDialogCounts();
+    }
+    if (elements.tempoSimplifyBackdrop && !elements.tempoSimplifyBackdrop.hidden) updateTempoSimplifySummary();
+    window.MobibardSiteNavigation?.refresh?.();
+  }
+
   function applyLanguage(language, { persist = true, notify = false } = {}) {
     const nextLanguage = normalizeLanguage(language);
     state.language = nextLanguage;
     if (elements.languageSelect) elements.languageSelect.value = nextLanguage;
     const manager = window.MobibardI18n;
     if (manager?.setLanguage) {
+      if (!persist && !notify && normalizeLanguage(manager.language) === nextLanguage) {
+        window.MobibardSiteNavigation?.refresh?.();
+        return nextLanguage;
+      }
       void manager.setLanguage(nextLanguage, { persist, source: notify ? "user" : "app" }).then((applied) => {
         state.language = normalizeLanguage(applied || nextLanguage);
         if (elements.languageSelect) elements.languageSelect.value = state.language;
@@ -5362,7 +5389,7 @@
       state.playhead.beat = beat;
       window.setTimeout(() => startPlayback(), 0);
     }
-    if (notify) showToast(`${clip.title} ${clip.muted ? "음소거" : "음소거 해제"}`);
+    if (notify) showToast(i18nText(clip.muted ? "ui.mute_2" : "ui.unmute_2", [clip.title]));
     return true;
   }
 
@@ -5657,12 +5684,12 @@
       block.style.left = `${beatToX(clip.startBeat)}px`;
       block.style.width = `${Math.max(8, getAudioClipEndBeat(clip) * getQuarterWidth() - clip.startBeat * getQuarterWidth())}px`;
       block.dataset.audioClipId = String(clip.id);
-      block.title = `${clip.title} · ${clip.startBeat.toFixed(3)} ~ ${getAudioClipEndBeat(clip).toFixed(3)} beat${clip.assetAvailable === false ? " · 음원 다시 불러오기 필요" : ""}`;
+      block.title = i18nText("audio.block_tooltip", [clip.title, clip.startBeat.toFixed(3), getAudioClipEndBeat(clip).toFixed(3), clip.assetAvailable === false ? i18nText("audio.source_needs_reloading") : ""]);
 
       const leftHandle = document.createElement("button");
       leftHandle.type = "button";
       leftHandle.className = "audio-clip-handle audio-clip-left-handle";
-      leftHandle.setAttribute("aria-label", `${clip.title} 시작점 조절`);
+      leftHandle.setAttribute("aria-label", i18nText("ui.adjust_start", [clip.title]));
       const main = document.createElement("div");
       main.className = "audio-clip-main";
       const title = document.createElement("span");
@@ -5673,7 +5700,7 @@
       const rightHandle = document.createElement("button");
       rightHandle.type = "button";
       rightHandle.className = "audio-clip-handle audio-clip-right-handle";
-      rightHandle.setAttribute("aria-label", `${clip.title} 끝점 조절`);
+      rightHandle.setAttribute("aria-label", i18nText("ui.adjust_end", [clip.title]));
       block.append(leftHandle, main, rightHandle);
 
       const begin = (event, mode) => {
@@ -6039,8 +6066,8 @@
         createAction({
           kind: "visibility",
           active: channel.visible !== false,
-          label: `${channel.name} ${channel.visible === false ? "표시" : "숨김"}`,
-          title: channel.visible === false ? "피아노롤에 표시" : "피아노롤에서 숨기기",
+          label: i18nText(channel.visible === false ? "ui.show_2" : "ui.hide_3", [channel.name]),
+          title: i18nText(channel.visible === false ? "ui.show_piano_roll" : "ui.hide_piano_roll"),
           onClick: () => setChannelVisibleById(channel.id, channel.visible === false),
           sweep: true,
           sweepId: channel.id,
@@ -6050,11 +6077,11 @@
           active: channel.muted,
           solo: channelSolo,
           label: channelSolo
-            ? `${channel.name} 싱글 해제`
-            : `${channel.name} ${channel.muted ? "음소거 해제" : "음소거"}`,
+            ? i18nText("channel.solo_off_named", [channel.name])
+            : i18nText(channel.muted ? "ui.unmute_2" : "ui.mute_2", [channel.name]),
           title: channelSolo
-            ? "싱글 해제"
-            : `${channel.muted ? "음소거 해제" : "음소거"} · 오른쪽 클릭: 싱글`,
+            ? i18nText("channel.solo_off")
+            : i18nText("channel.mute_context_solo", [i18nText(channel.muted ? "ui.unmute" : "ui.mute")]),
           onClick: () => channelSolo
             ? setChannelSoloById(channel.id, false)
             : setChannelMutedById(channel.id, !channel.muted),
@@ -6099,15 +6126,15 @@
         createAction({
           kind: "visibility",
           active: clip.visible !== false,
-          label: `${clip.title} ${clip.visible === false ? "표시" : "숨김"}`,
-          title: clip.visible === false ? "오디오 블록 표시" : "오디오 블록 숨기기",
+          label: i18nText(clip.visible === false ? "ui.show_2" : "ui.hide_3", [clip.title]),
+          title: i18nText(clip.visible === false ? "audio.show_block" : "audio.hide_block"),
           onClick: () => setAudioClipVisible(clip.id, clip.visible === false),
         }),
         createAction({
           kind: "mute",
           active: clip.muted,
-          label: `${clip.title} ${clip.muted ? "음소거 해제" : "음소거"}`,
-          title: clip.muted ? "오디오 음소거 해제" : "오디오 음소거",
+          label: i18nText(clip.muted ? "ui.unmute_2" : "ui.mute_2", [clip.title]),
+          title: i18nText(clip.muted ? "audio.unmute" : "audio.mute"),
           onClick: () => setAudioClipMuted(clip.id, !clip.muted),
         }),
       );
@@ -6546,7 +6573,7 @@
     }
     elements.midiCopyInstrumentButton.disabled = !activeGroup?.notes.length;
     elements.midiCopySelectedButton.disabled = !selected.length;
-    elements.midiInfoFormat.textContent = hasSource ? `${reference.sourceLabel || "원본"} · ${reference.format ? `SMF ${reference.format}` : "읽기 전용"}` : "없음";
+    elements.midiInfoFormat.textContent = hasSource ? `${reference.sourceLabel || i18nText("ui.source_short")} · ${reference.format ? `SMF ${reference.format}` : i18nText("ui.readonly")}` : i18nText("common.none");
     elements.midiInfoTrackCount.textContent = String(reference.trackCount || 0);
     elements.midiInfoInstrumentCount.textContent = String(reference.groups.length);
     if (elements.midiInfoTitle) elements.midiInfoTitle.textContent = title;
@@ -6571,8 +6598,8 @@
     const tempoCount = reference.tempoEvents?.length || 0;
     setMidiReferenceStatus(
       document
-        ? (hasSource ? `${reference.groups.length}악기 · ${totalNotes}노트 · 템포 ${tempoCount}` : "원본 채널 없음")
-        : "원본 자료 없음",
+        ? (hasSource ? i18nText("midi.status_summary", [reference.groups.length, totalNotes, tempoCount]) : i18nText("channel.there_no_source"))
+        : i18nText("ui.no_source"),
       document ? "ready" : "",
     );
     renderMidiInstrumentList();
@@ -7105,7 +7132,7 @@
       muted: false,
       groups,
       activeGroupId: groups[0]?.id || null,
-      message: `${groups.length}개 악기 채널과 ${totalNotes}개 노트를 1/${quantizeDivision} 음표 단위로 읽었습니다.${mergedDuplicateCount ? ` 실제 중복 노트 ${mergedDuplicateCount}개를 병합했습니다.` : ""}`,
+      message: i18nText("midi.import_read_summary", [groups.length, totalNotes, quantizeDivision]) + (mergedDuplicateCount ? i18nText("midi.import_merged_duplicates", [mergedDuplicateCount]) : ""),
       parserWarnings: [...(midi.warnings || [])],
       containerMetadata: { ...(midi.metadata || {}) },
     };
@@ -7215,7 +7242,7 @@
         const noteCount = preview.groups.reduce((sum, group) => sum + (group.notes?.length || 0), 0);
         const tempoCount = preview.tempoEvents?.length || 0;
         const durationSeconds = beatToSecondsInTempoMap(preview.durationBeats, createTempoTimeMap(preview.tempoEvents || []));
-        entries.push(`악기 ${preview.groups.length}개`, `노트 ${noteCount}개`, `템포 ${tempoCount}개`, `길이 ${formatSeconds(durationSeconds)}`);
+        entries.push(`악기 ${preview.groups.length}개`, `노트 ${noteCount}개`, `템포 ${tempoCount}개`, i18nText("ui.duration_value", [formatSeconds(durationSeconds)]));
       }
     } else {
       const format = state.midiImport.textFormat;
@@ -7285,13 +7312,13 @@
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = state.midiImport.selectedGroupIds.has(String(group.id));
-        checkbox.setAttribute("aria-label", `${getMidiGroupDisplayName(group)} 가져오기`);
+        checkbox.setAttribute("aria-label", i18nText("ui.import", [getMidiGroupDisplayName(group)]));
         const info = document.createElement("div");
         info.className = "midi-import-selection-info";
         const title = document.createElement("strong");
-        title.textContent = getMidiGroupDisplayName(group, `악기 ${index + 1}`);
+        title.textContent = getMidiGroupDisplayName(group, i18nText("midi.default_instrument_name", [index + 1]));
         const meta = document.createElement("small");
-        meta.textContent = `${group.notes?.length || 0}노트${group.trackName ? ` · ${group.trackName}` : ""}`;
+        meta.textContent = `${i18nText("note.format_3", [group.notes?.length || 0])}${group.trackName ? ` · ${group.trackName}` : ""}`;
         info.append(title, meta);
         const previewButton = document.createElement("button");
         previewButton.type = "button";
@@ -7324,13 +7351,13 @@
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.checked = state.midiImport.selectedTextIndexes.has(index);
-      checkbox.setAttribute("aria-label", `${candidate.label} 가져오기`);
+      checkbox.setAttribute("aria-label", i18nText("ui.import", [candidate.label]));
       const info = document.createElement("div");
       info.className = "midi-import-selection-info";
       const title = document.createElement("strong");
       title.textContent = candidate.label;
       const meta = document.createElement("small");
-      meta.textContent = `${candidate.value?.length || 0}자`;
+      meta.textContent = i18nText("ui.chars_3", [candidate.value?.length || 0]);
       info.append(title, meta);
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) state.midiImport.selectedTextIndexes.add(index);
@@ -7353,10 +7380,10 @@
 
     if (elements.midiImportTitle) {
       elements.midiImportTitle.textContent = isMidi
-        ? `${state.midiImport.sourceLabel || "MIDI"} 불러오기`
-        : `${textFormat} 불러오기`;
+        ? i18nText("ui.import_2", [state.midiImport.sourceLabel || "MIDI"])
+        : i18nText("ui.import_2", [textFormat]);
     }
-    if (elements.midiImportSourceLabel) elements.midiImportSourceLabel.textContent = state.midiImport.fileName || "파일을 선택하세요.";
+    if (elements.midiImportSourceLabel) elements.midiImportSourceLabel.textContent = state.midiImport.fileName || i18nText("file.select");
     if (elements.midiImportMidiControls) elements.midiImportMidiControls.hidden = !isMidi;
     if (elements.midiImportChannelLimitLabel) {
       elements.midiImportChannelLimitLabel.textContent = i18nText("midi.limit_channels", [CONFIG.midiImportMaxChannelsPerInstrument]);
@@ -7365,8 +7392,8 @@
     if (elements.midiImportNewButton) elements.midiImportNewButton.disabled = !ready;
     if (elements.midiImportPreviewAllButton) {
       elements.midiImportPreviewAllButton.disabled = !midiReady;
-      if (state.midiImport.previewingKey === "all") setTransportButtonContent(elements.midiImportPreviewAllButton, { icon: "stop", label: "원본 정지" });
-      else setTransportButtonContent(elements.midiImportPreviewAllButton, { icon: "play", label: "원본 듣기" });
+      if (state.midiImport.previewingKey === "all") setTransportButtonContent(elements.midiImportPreviewAllButton, { icon: "stop", label: i18nText("ui.stop_source") });
+      else setTransportButtonContent(elements.midiImportPreviewAllButton, { icon: "play", label: i18nText("ui.preview_source") });
     }
     updateMidiImportSummary();
     renderMidiImportSelectionList();
@@ -7375,11 +7402,11 @@
     if (isMidi && state.midiImport.preview) {
       const selected = getMidiImportSelectedGroups().length;
       const division = Number(elements.midiImportQuantize?.value) === 32 ? 32 : 64;
-      const overlapLabel = elements.midiImportIgnoreSingle64thOverlap?.checked !== false ? " · 1/64 겹침 무시" : "";
+      const statusKey = elements.midiImportIgnoreSingle64thOverlap?.checked !== false ? "instrument.quantize_overlap" : "instrument.quantize_summary";
       const channelLimitLabel = elements.midiImportLimitChannelsPerInstrument?.checked
         ? ` · ${i18nText("midi.limit_channels", [CONFIG.midiImportMaxChannelsPerInstrument])}`
         : "";
-      setMidiImportStatus(`${selected}/${state.midiImport.preview.groups.length}개 악기 선택 · ${division}박 양자화${overlapLabel}${channelLimitLabel}`);
+      setMidiImportStatus(i18nText(statusKey, [selected, state.midiImport.preview.groups.length, division]) + channelLimitLabel);
     } else if (isText && ["mml", "3mle", "mmi"].includes(state.midiImport.textFormat) && state.midiImport.textCandidates.length) {
       setMidiImportStatus(`${state.midiImport.selectedTextIndexes.size}/${state.midiImport.textCandidates.length}개 채널 선택 · 선택한 채널만 편집 영역에 가져옵니다.`);
     } else if (isText && textParsed) {
@@ -7442,7 +7469,7 @@
     state.midiImport.sourceLabel = source.sourceLabel;
     if (elements.midiImportQuantize) elements.midiImportQuantize.value = "64";
     openMidiImportDialog();
-    setMidiImportStatus(`${source.sourceLabel} 파일을 분석하고 있습니다.`);
+    setMidiImportStatus(i18nText("file.analyzing_named", [source.sourceLabel]));
     try {
       const converted = await convertImportFileToMidiBuffer(file);
       state.midiImport.fileName = converted.fileName;
@@ -8192,7 +8219,7 @@
         renderAll();
         resizeAndDraw();
         const limitToast = imported.limitedInstrumentCount > 0
-          ? ` · ${imported.limitedInstrumentCount}개 악기를 최대 ${imported.maxChannelsPerInstrument}채널로 압축`
+          ? i18nText("midi.limit_channels_applied", [imported.limitedInstrumentCount, imported.maxChannelsPerInstrument])
           : "";
         showToast(`${stripMidiFileExtension(fileName)}에서 선택한 악기 ${imported.instrumentCount}개를 ${imported.channelCount}개 편집 채널로 ${openNew ? "새로 열었습니다." : "추가했습니다."}${limitToast}`);
         return true;
@@ -8292,7 +8319,7 @@
         fileName: converted.fileName,
       });
       if (!imported.channelCount) throw new Error("가져올 노트가 없습니다.");
-      markDirty(`${converted.sourceLabel} 추가`);
+      markDirty(i18nText("history.source_add", [converted.sourceLabel]));
       shrinkTimelineToContent();
       ensureTimelineFitsViewport();
       renderAll();
@@ -8386,7 +8413,7 @@
     if (!document || !group) return false;
     const confirmed = await showConfirmDialog({
       title: "원본 채널 삭제",
-      message: `${getMidiGroupDisplayName(group)} 채널 정보만 삭제할까요?\n원본 문서의 다른 채널은 유지됩니다.`,
+      message: i18nText("midi.delete_group_confirm", [getMidiGroupDisplayName(group)]),
       confirmLabel: "삭제",
     });
     return confirmed ? deleteMidiGroup(document.id, group.id) : false;
@@ -8559,7 +8586,7 @@
     const id = nextChannelId();
     const channel = createDefaultChannel(id, state.channels.length);
     const voiceSuffix = voiceCount > 1 ? ` (${voiceIndex + 1})` : "";
-    const requestedName = `${getMidiGroupDisplayName(group, "악기 채널")}${voiceSuffix}`;
+    const requestedName = `${getMidiGroupDisplayName(group, i18nText("channel.instrument_3"))}${voiceSuffix}`;
     channel.name = makeUniqueChannelName(requestedName, channel.id);
     channel.hue = Number.isFinite(Number(copyHue)) ? normalizeHue(copyHue) : getMidiGroupHue(group, state.channels.length);
     const sourcePreset = resolveMidiGroupEditorPreset(group, notes);
@@ -10084,7 +10111,7 @@
     renderChannelEditor();
     drawRoll();
     updateChannelInfo();
-    if (notify) showToast(`${channel.name} ${nextSolo ? "싱글" : "싱글 해제"}`);
+    if (notify) showToast(i18nText(nextSolo ? "channel.solo_on_named" : "channel.solo_off_named", [channel.name]));
     return true;
   }
 
@@ -10098,7 +10125,7 @@
     renderChannelEditor();
     drawRoll();
     updateChannelInfo();
-    if (notify) showToast(`${channel.name}을 ${channel.visible ? "표시" : "숨김"} 처리했습니다.`);
+    if (notify) showToast(i18nText(channel.visible ? "ui.showed" : "ui.hid", [channel.name]));
     return true;
   }
 
@@ -10117,7 +10144,7 @@
     renderChannelEditor();
     drawRoll();
     updateChannelInfo();
-    if (notify) showToast(`${channel.name} ${channel.muted ? "음소거" : "음소거 해제"}`);
+    if (notify) showToast(i18nText(channel.muted ? "ui.mute_2" : "ui.unmute_2", [channel.name]));
     return true;
   }
 
@@ -10137,7 +10164,7 @@
     renderChannelEditor();
     drawRoll();
     updateChannelInfo();
-    if (notify) showToast(nextMuted ? "모든 채널을 음소거했습니다." : "모든 채널의 음소거를 해제했습니다.");
+    if (notify) showToast(i18nText(nextMuted ? "channel.mute_all" : "channel.unmute_all"));
     return true;
   }
 
@@ -10452,7 +10479,7 @@
     state.activeAudioClipId = null;
     clearNoteSelection();
     closeChannelMergeDialog();
-    markDirty(`채널 ${channels.length}개 병합`);
+    markDirty(i18nText("history.channel_merge_count", [channels.length]));
     renderChannelTabs();
     renderChannelEditor();
     shrinkTimelineToContent();
@@ -10473,10 +10500,10 @@
     const invalid = ids.length === 0;
     if (elements.channelDeleteSummary) {
       elements.channelDeleteSummary.textContent = ids.length === 0
-        ? "삭제할 채널을 선택하세요."
+        ? i18nText("channel.delete_summary_select")
         : remaining <= 0
-          ? `${ids.length}개 채널 삭제 · 빈 채널 1개 자동 생성`
-          : `${ids.length}개 채널 삭제 · ${remaining}개 채널 유지`;
+          ? i18nText("channel.delete_summary_auto", [ids.length])
+          : i18nText("channel.delete_summary_remaining", [ids.length, remaining]);
     }
     if (elements.channelDeleteApplyButton) elements.channelDeleteApplyButton.disabled = invalid;
   }
@@ -10492,7 +10519,7 @@
       checkbox.type = "checkbox";
       checkbox.value = String(channel.id);
       checkbox.checked = false;
-      checkbox.setAttribute("aria-label", `${channel.name} 삭제 선택`);
+      checkbox.setAttribute("aria-label", i18nText("channel.delete_select_aria", [channel.name]));
       const text = document.createElement("span");
       text.className = "midi-transfer-channel-name";
       text.textContent = `${channel.name} · ${channel.notes?.length || 0}노트`;
@@ -10540,7 +10567,7 @@
     state.activeChannel = nextIndex;
     clearNoteSelection();
     closeChannelDeleteDialog();
-    markDirty(`채널 ${ids.size}개 삭제`);
+    markDirty(i18nText("history.channel_delete_count", [ids.size]));
     renderChannelTabs();
     renderChannelEditor();
     shrinkTimelineToContent();
@@ -10580,7 +10607,7 @@
     const channel = state.channels[targetIndex];
     const confirmed = await showConfirmDialog({
       title: "채널 삭제",
-      message: `${channel.name} 채널을 삭제할까요?\n노트 내용도 함께 삭제됩니다.`,
+      message: i18nText("channel.delete_confirm", [channel.name]),
       confirmLabel: "삭제",
     });
     return confirmed ? deleteChannel(targetIndex) : false;
@@ -11182,12 +11209,12 @@
 
       const wasSelected = state.selectedNoteIds.has(existing.id);
 
-      // In Select mode, the normal drag keeps the existing XOR behavior.
-      // Holding Shift changes it to additive selection only: selected notes are
-      // never removed when the drag rectangle crosses them.
-      if (touchSelectionMode && noteHit.part === "body") {
+      // In Select mode, a normal body drag keeps the existing XOR marquee behavior.
+      // Shift + dragging the note body is shared with Note mode: it moves the
+      // selected notes vertically (pitch only) while keeping their time positions fixed.
+      if (touchSelectionMode && noteHit.part === "body" && !event.shiftKey) {
         beginMarqueeSelection(event, point, {
-          initialSelectionMode: event.shiftKey ? "add" : "toggle",
+          initialSelectionMode: "toggle",
           tapToggleNoteId: existing.id,
         });
       } else {
@@ -16743,7 +16770,7 @@
     }
     const confirmed = await showConfirmDialog({
       title: "원본 자료 삭제",
-      message: `${document.title || document.fileName || "선택한 원본 자료"} 전체를 삭제할까요?`,
+      message: i18nText("source.delete_confirm", [document.title || document.fileName || i18nText("selection.source_data")]),
       confirmLabel: "삭제",
     });
     return confirmed ? clearMidiReference() : false;
@@ -18198,10 +18225,10 @@
             }
           },
         },
-        { label: `${noteLabel(pitch)} 행으로 이동`, action: () => { elements.rollViewport.scrollTop = pitchToY(pitch); } },
+        { label: i18nText("piano.go_row", [noteLabel(pitch)]), action: () => { elements.rollViewport.scrollTop = pitchToY(pitch); } },
         { label: "중앙 C로 이동", action: () => { elements.rollViewport.scrollTop = Math.max(0, pitchToY(60) - 120); } },
         "separator",
-        { label: `${noteLabel(pitch)} 노트 선택에 추가`, disabled: isMidiReferenceActive() || state.activePanel !== "notes", action: () => selectNotesByKeyboardPitch(pitch) },
+        { label: i18nText("piano.add_pitch_selection", [noteLabel(pitch)]), disabled: isMidiReferenceActive() || state.activePanel !== "notes", action: () => selectNotesByKeyboardPitch(pitch) },
         "separator",
         { label: i18nText("soundbank.change"), action: openEditorSoundFontDialog },
       ];
@@ -18380,7 +18407,7 @@
     renderChannelTabs();
     renderChannelEditor();
     if (uniqueName !== trimmed) {
-      showToast(`중복되지 않도록 이름을 ${uniqueName}(으)로 변경했습니다.`);
+      showToast(i18nText("ui.renamed_avoid_duplicate", [uniqueName]));
     }
     return true;
   }
@@ -18390,7 +18417,7 @@
     if (!current) {
       return;
     }
-    const result = window.prompt("채널 이름", current);
+    const result = window.prompt(i18nText("channel.name"), current);
     if (result != null) {
       renameChannel(index, result);
     }
@@ -19254,7 +19281,7 @@
       markDirty("채널 악기 변경");
       renderChannelTabs();
       updateChannelInfo();
-      showToast(`${channel.name} 악기를 ${channel.instrument}(으)로 변경했습니다.`);
+      showToast(i18nText("instrument.change", [channel.name, channel.instrument]));
     });
     elements.midiSourceColorInput?.addEventListener("change", () => {
       const document = getActiveMidiDocument();
@@ -19693,6 +19720,7 @@
     try { await window.MobibardI18n?.ready; } catch (error) { console.error("Editor locale initialization failed", error); }
     populateChannelInstrumentSelect();
     state.language = normalizeLanguage(window.MobibardI18n?.language || loadStoredLanguage());
+    window.addEventListener("mobibard:localechange", refreshLocaleDependentUi);
     applyLanguage(state.language, { persist: false });
     state.theme = loadStoredTheme();
     applyTheme(state.theme, { persist: false });
