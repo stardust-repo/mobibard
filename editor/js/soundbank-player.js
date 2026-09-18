@@ -425,7 +425,7 @@
       return buffer;
     }
 
-    createSf2Voice(midi, velocity, when, duration, program = this.presetNumber, bank = this.bankNumber, gainScale = 1, exactPreset = false) {
+    createSf2Voice(midi, velocity, when, duration, program = this.presetNumber, bank = this.bankNumber, gainScale = 1, exactPreset = false, mmlVolume = null) {
       const context = this.ensureContext();
       const safeGainScale = Number.isFinite(Number(gainScale))
         ? clamp(Number(gainScale), 0, 1.5)
@@ -434,7 +434,7 @@
       if (!zone) {
         // A missing drum key should stay silent rather than become a pitched synth.
         if (clamp(Math.round(Number(bank) || 0), 0, 16383) === 128) return null;
-        return this.createFallbackVoice(midi, velocity, when, duration, safeGainScale);
+        return this.createFallbackVoice(midi, velocity, when, duration, safeGainScale, mmlVolume);
       }
 
       this.enforceVoiceLimit(when);
@@ -443,7 +443,12 @@
       const outputNode = this.getZoneOutput(zone);
       const buffer = this.getSampleBuffer(zone);
       const centsFromRoot = (midi - zone.rootKey) * zone.scaleTuning - zone.pitchCorrection + zone.coarseTune * 100 + zone.fineTune;
-      const peak = clamp((velocity / 127) ** 1.5 * zone.gain * 0.9 * safeGainScale, 0.0001, 1.2);
+      const hasMmlVolume = Number.isFinite(Number(mmlVolume));
+      const mmlVolumeLevel = hasMmlVolume ? clamp(Number(mmlVolume), 0, 15) : null;
+      const peakBase = hasMmlVolume
+        ? Math.pow(mmlVolumeLevel / 15, 1.6) * zone.gain * safeGainScale
+        : Math.pow(velocity / 127, 1.5) * zone.gain * 0.9 * safeGainScale;
+      const peak = clamp(peakBase, 0.0001, 1.2);
       const sustain = peak * 10 ** (-zone.sustainAttenuation / 200);
       const attack = clamp(zone.attack, 0.003, 0.25);
       const decay = clamp(zone.decay, 0.03, 8);
@@ -528,7 +533,7 @@
       return voice;
     }
 
-    createFallbackVoice(midi, velocity, when, duration, gainScale = 1) {
+    createFallbackVoice(midi, velocity, when, duration, gainScale = 1, mmlVolume = null) {
       const context = this.ensureContext();
       const safeGainScale = Number.isFinite(Number(gainScale))
         ? clamp(Number(gainScale), 0, 1.5)
@@ -539,7 +544,12 @@
       const oscillatorA = context.createOscillator();
       const oscillatorB = context.createOscillator();
       const frequency = 440 * 2 ** ((midi - 69) / 12);
-      const peak = clamp((velocity / 127) ** 1.4 * 0.24 * safeGainScale, 0.0001, 0.3);
+      const hasMmlVolume = Number.isFinite(Number(mmlVolume));
+      const mmlVolumeLevel = hasMmlVolume ? clamp(Number(mmlVolume), 0, 15) : null;
+      const peakBase = hasMmlVolume
+        ? Math.pow(mmlVolumeLevel / 15, 1.6) * 0.24 * safeGainScale
+        : Math.pow(velocity / 127, 1.4) * 0.24 * safeGainScale;
+      const peak = clamp(peakBase, 0.0001, 0.3);
       const release = 0.32;
 
       oscillatorA.type = "triangle";
@@ -626,10 +636,13 @@
         ? clamp(Number(options.gainScale), 0, 1.5)
         : 1;
       const exactPreset = Boolean(options?.exactPreset);
+      const rawMmlVolume = Number(options?.mmlVolume);
+      const mmlVolume = Number.isFinite(rawMmlVolume) ? clamp(rawMmlVolume, 0, 15) : null;
+      if (mmlVolume != null && mmlVolume <= 0) return null;
       if (this.soundFont) {
-        return this.createSf2Voice(midi, velocity, startAt, duration, program, bank, gainScale, exactPreset);
+        return this.createSf2Voice(midi, velocity, startAt, duration, program, bank, gainScale, exactPreset, mmlVolume);
       }
-      return this.createFallbackVoice(midi, velocity, startAt, duration, gainScale);
+      return this.createFallbackVoice(midi, velocity, startAt, duration, gainScale, mmlVolume);
     }
 
     stopAll(time = null) {

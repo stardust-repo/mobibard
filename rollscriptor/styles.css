@@ -2164,3 +2164,75 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   }
 }
 
+
+/* v20260914: configurable visible keyboard range + automatic suggestion. */
+.keyboard-range-inline {
+  display: grid;
+  grid-template-columns: auto auto minmax(118px, 1fr) auto minmax(118px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+.keyboard-range-inline > strong {
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.keyboard-range-auto-button {
+  min-height: 29px;
+  padding-inline: 10px;
+}
+.keyboard-range-field {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(82px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.keyboard-range-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 29px;
+  padding: 3px 26px 3px 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.keyboard-range-inline > output {
+  min-width: 126px;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 920px) {
+  .keyboard-range-inline {
+    grid-template-columns: auto auto minmax(105px, 1fr) auto minmax(105px, 1fr);
+  }
+  .keyboard-range-inline > output {
+    grid-column: 3 / -1;
+  }
+}
+@media (max-width: 680px) {
+  .keyboard-range-inline {
+    grid-template-columns: auto auto minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 7px;
+  }
+  .keyboard-range-inline > output {
+    grid-column: 3 / -1;
+  }
+}
+@media (max-width: 480px) {
+  .keyboard-range-inline {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+  .keyboard-range-inline > strong { grid-column: 1; grid-row: 1; }
+  .keyboard-range-auto-button { grid-column: 2 / -1; grid-row: 1; justify-self: end; }
+  .keyboard-range-field { grid-template-columns: minmax(0, 1fr) 30px; }
+  .keyboard-range-field:first-of-type { grid-column: 1; grid-row: 2; }
+  .keyboard-range-inline > .analysis-range-separator { grid-column: 2; grid-row: 2; display: inline; }
+  .keyboard-range-field:last-of-type { grid-column: 3; grid-row: 2; }
+  .keyboard-range-inline > output { grid-column: 1 / -1; grid-row: 3; text-align: right; }
+}
