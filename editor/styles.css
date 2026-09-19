@@ -5007,7 +5007,7 @@ button {
   gap: 4px;
   padding: 5px 4px;
   overflow: hidden;
-  border-top: 1px solid var(--line-soft);
+  border-top: 0;
   background: color-mix(in srgb, var(--panel-2) 54%, var(--panel));
 }
 .sidebar-rail-action {
@@ -5101,6 +5101,7 @@ button {
 }
 .app-content.history-collapsed .side-panel-tabs {
   grid-template-columns: var(--sidebar-collapse-width) !important;
+  border-bottom: 0;
 }
 .app-content.history-collapsed .side-panel-tab,
 .app-content.history-collapsed .side-panel > .side-panel-view {
