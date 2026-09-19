@@ -382,10 +382,16 @@
     return Boolean(file && window.MabiMusicFormats?.isSupported(file.name || "", file.type || ""));
   }
 
-  async function normalizeSourceToMidiBytes(file, sourceBytes) {
+  async function normalizeSourceToMidiBytes(file, sourceBytes, options = {}) {
     if (!window.MabiMusicFormats?.convertBytes) throw new Error(t("failed", ["Music format plugins are unavailable"]));
-    const converted = await window.MabiMusicFormats.convertBytes(sourceBytes, file.name || "music", file.type || "");
+    const converted = await window.MabiMusicFormats.convertBytes(sourceBytes, file.name || "music", file.type || "", options);
     return converted.midiBytes;
+  }
+
+  async function chooseMbtImportOptions(file) {
+    if (!window.MobibardMbt?.isMbtFile?.(file?.name || "")) return {};
+    const mode = await window.MobibardMbt.choosePackingMode({ language });
+    return mode ? { mbtPackingMode: mode } : null;
   }
 
   async function selectFile(file) {
@@ -403,9 +409,11 @@
       return;
     }
     try {
+      const importOptions = await chooseMbtImportOptions(file);
+      if (importOptions == null || selectToken !== fileSelectionSerial) return;
       const buffer = await file.arrayBuffer();
       const sourceBytes = new Uint8Array(buffer);
-      const midiBytes = await normalizeSourceToMidiBytes(file, sourceBytes);
+      const midiBytes = await normalizeSourceToMidiBytes(file, sourceBytes, importOptions);
       if (selectToken !== fileSelectionSerial) return;
       selectedFile = file;
       selectedBytes = midiBytes instanceof Uint8Array ? midiBytes : new Uint8Array(midiBytes || []);

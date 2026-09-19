@@ -2406,6 +2406,8 @@ button {
 }
 .mml-import-source-actions {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 7px;
   padding: 10px 14px 7px;
 }
@@ -7593,4 +7595,304 @@ a[class*="button"]:hover {
   height: 18px;
   margin: 0;
   accent-color: var(--accent);
+}
+
+
+/* 2026-09: unified MML / 3MLE / MabiIcco import controls. */
+.mml-import-tempo-inline {
+  grid-column: auto;
+  margin-left: auto;
+  min-height: 34px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+.mml-import-footer-actions {
+  min-height: 44px;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 7px 12px 8px;
+}
+.mml-import-footer-actions .mml-import-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 auto 0 0;
+  padding: 0 8px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9.5px;
+  line-height: 1.3;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mml-import-footer-actions .mml-import-status.error {
+  color: color-mix(in srgb, var(--danger) 82%, var(--text));
+  background: transparent;
+}
+.mml-import-footer-actions button {
+  flex: 0 0 auto;
+  min-width: 68px;
+  min-height: 30px;
+  height: 30px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+.mml-import-dialog.has-channel-selection {
+  grid-template-rows: auto auto minmax(82px, .38fr) minmax(0, 1fr) auto;
+}
+.mml-import-dialog:not(.has-channel-selection) {
+  grid-template-rows: auto auto minmax(150px, 1fr) auto;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .mml-import-tempo-inline {
+    margin-left: 0;
+    min-height: 38px;
+  }
+  .mml-import-footer-actions {
+    gap: 4px;
+    padding: 5px 8px 6px;
+  }
+  .mml-import-footer-actions .mml-import-status {
+    font-size: 8.5px;
+    padding-right: 4px;
+  }
+  .mml-import-footer-actions button {
+    min-width: 54px;
+    min-height: 30px;
+    height: 30px;
+    padding-inline: 6px;
+  }
+  .mml-import-dialog.has-channel-selection {
+    grid-template-rows: auto auto minmax(72px, .3fr) minmax(0, 1fr) auto;
+  }
+}
+
+/* 2026-09-19 unified import dialog: one layout for MIDI/KAR and MML-family. */
+.unified-import-dialog {
+  width: min(700px, calc(100vw - 24px));
+  height: min(680px, calc(100dvh - 24px));
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto !important;
+}
+.unified-import-dialog .transfer-dialog-header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.unified-import-dialog #midiImportTitle {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+.unified-import-dialog #midiImportSourceLabel {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  max-width: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.unified-import-row-label {
+  flex: 0 0 auto;
+  min-width: 34px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+.unified-import-dialog .unified-import-options-row {
+  display: flex;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 6px;
+  min-height: 43px;
+  padding: 6px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--line-soft);
+  scrollbar-width: thin;
+}
+.unified-import-dialog .unified-import-options-row[hidden] { display: none !important; }
+.unified-import-dialog .unified-import-options-row > button,
+.unified-import-dialog .unified-import-options-row > select,
+.unified-import-dialog .unified-import-options-row > label {
+  flex: 0 0 auto;
+}
+.unified-import-dialog .unified-import-options-row > button {
+  height: 30px;
+  min-height: 30px;
+  padding-inline: 9px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.unified-import-dialog .unified-import-options-row #midiImportQuantize {
+  width: 108px;
+  min-width: 108px;
+  max-width: 108px;
+}
+.unified-import-dialog .unified-import-options-row .midi-import-overlap-option {
+  min-height: 30px;
+  padding-inline: 5px;
+  white-space: nowrap;
+}
+.unified-import-text-source {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(76px, 124px);
+  gap: 6px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.unified-import-text-source[hidden] { display: none !important; }
+.unified-import-text-source-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.unified-import-text-source-actions button {
+  min-height: 30px;
+  height: 30px;
+  padding-inline: 9px;
+  font-size: 10px;
+}
+#midiImportTextInput {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 76px;
+  resize: vertical;
+  padding: 8px 9px;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--control-bg);
+  font: 11px/1.45 "Cascadia Mono", Consolas, monospace;
+}
+#midiImportTextInput:focus {
+  outline: 1px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border));
+}
+.unified-import-channel-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-height: 42px;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+.unified-import-channel-toolbar .midi-import-inline-selection-actions {
+  flex: 0 0 auto;
+  padding: 0 !important;
+  margin: 0 !important;
+  gap: 0;
+}
+.unified-import-channel-toolbar .midi-import-inline-selection-actions button {
+  height: 30px;
+  min-height: 30px;
+  padding-inline: 7px;
+  font-size: 10px;
+  line-height: 28px;
+}
+.unified-import-channel-toolbar .midi-import-inline-selection-actions button + button { margin-left: -1px; }
+.unified-import-channel-toolbar .midi-import-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+.unified-import-channel-toolbar .midi-import-summary > span {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.unified-import-channel-toolbar .midi-import-summary > span[data-separator="true"]::after {
+  content: " ·";
+  color: var(--muted);
+}
+.unified-import-channel-toolbar .midi-import-preview-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.unified-import-channel-toolbar .midi-import-source-preview {
+  height: 30px;
+  min-height: 30px;
+  padding-inline: 8px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.unified-import-dialog .midi-import-selection-list {
+  grid-row: auto !important;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 3px 12px 6px;
+}
+.unified-import-dialog > .unified-import-actions {
+  grid-row: auto !important;
+}
+.unified-import-dialog .text-import-selection-row {
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  cursor: default;
+}
+
+@media (pointer: coarse), (max-width: 700px) {
+  .unified-import-dialog {
+    width: min(680px, calc(100vw - 16px));
+    height: min(640px, calc(100dvh - 16px));
+  }
+  .unified-import-dialog .unified-import-options-row,
+  .unified-import-channel-toolbar {
+    padding-inline: 9px;
+  }
+  .unified-import-channel-toolbar .midi-import-summary {
+    font-size: 8.5px;
+  }
+}
+@media (max-width: 520px) {
+  .unified-import-dialog .transfer-dialog-header { gap: 5px; }
+  .unified-import-dialog #midiImportSourceLabel { max-width: 36%; }
+  .unified-import-row-label { min-width: 28px; }
+  .unified-import-channel-toolbar { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+  .unified-import-channel-toolbar .midi-import-summary { flex: 0 0 auto; }
+}
+
+/* Unified music import: format-specific controls live in the same MIDI/KAR option row. */
+.unified-import-dialog .midi-import-midi-controls #midiImportMbtPacking {
+  flex: 0 0 122px;
+  width: 122px;
+  min-width: 122px;
+  max-width: 122px;
+  min-height: 30px;
+  padding-left: 7px;
+  padding-right: 22px;
+}
+.unified-import-dialog .midi-import-midi-controls #midiImportMbtPacking[hidden] { display: none; }
+@media (max-width: 480px) {
+  .unified-import-dialog .midi-import-midi-controls #midiImportMbtPacking {
+    flex: 0 0 116px;
+    width: 116px;
+    min-width: 116px;
+    max-width: 116px;
+  }
 }

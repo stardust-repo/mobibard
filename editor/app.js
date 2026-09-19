@@ -171,15 +171,12 @@
     audioExportButton: document.querySelector("#audioExportButton"),
     midiExtractButton: document.querySelector("#midiExtractButton"),
     supportedFilesMenuButton: document.querySelector("#supportedFilesMenuButton"),
-    mmlImportButton: document.querySelector("#mmlImportButton"),
     newButton: document.querySelector("#newButton"),
     openButton: document.querySelector("#openButton"),
     saveButton: document.querySelector("#saveButton"),
     midiOpenButton: document.querySelector("#midiOpenButton"),
     audioOpenButton: document.querySelector("#audioOpenButton"),
     fileInput: document.querySelector("#fileInput"),
-    mmlImportFileInput: document.querySelector("#mmlImportFileInput"),
-    midiFileInput: document.querySelector("#midiFileInput"),
     audioFileInput: document.querySelector("#audioFileInput"),
     jumpStartButton: document.querySelector("#jumpStartButton"),
     playButton: document.querySelector("#playButton"),
@@ -276,40 +273,27 @@
     midiCopySelectedButton: document.querySelector("#midiCopySelectedButton"),
     midiCopyInstrumentButton: document.querySelector("#midiCopyInstrumentButton"),
     midiTransferButton: document.querySelector("#midiTransferButton"),
-    mmlImportBackdrop: document.querySelector("#mmlImportBackdrop"),
-    mmlImportDialog: document.querySelector("#mmlImportDialog"),
-    mmlImportCloseButton: document.querySelector("#mmlImportCloseButton"),
-    mmlImportCancelButton: document.querySelector("#mmlImportCancelButton"),
-    mmlImportApplyButton: document.querySelector("#mmlImportApplyButton"),
-    mmlImportChooseFileButton: document.querySelector("#mmlImportChooseFileButton"),
-    mmlImportPasteButton: document.querySelector("#mmlImportPasteButton"),
-    mmlImportText: document.querySelector("#mmlImportText"),
-    mmlImportApplyTempo: document.querySelector("#mmlImportApplyTempo"),
-    mmlImportStatus: document.querySelector("#mmlImportStatus"),
-    mmlImportSourceLabel: document.querySelector("#mmlImportSourceLabel"),
-    mmlImportChannelSection: document.querySelector("#mmlImportChannelSection"),
-    mmlImportChannelTitle: document.querySelector("#mmlImportChannelTitle"),
-    mmlImportChannelList: document.querySelector("#mmlImportChannelList"),
-    mmlImportSelectAllButton: document.querySelector("#mmlImportSelectAllButton"),
-    mmlImportClearSelectionButton: document.querySelector("#mmlImportClearSelectionButton"),
     midiImportBackdrop: document.querySelector("#midiImportBackdrop"),
     midiImportTitle: document.querySelector("#midiImportTitle"),
     midiImportSourceLabel: document.querySelector("#midiImportSourceLabel"),
     midiImportSummary: document.querySelector("#midiImportSummary"),
-    midiImportTargetMode: document.querySelector("#midiImportTargetMode"),
     midiImportQuantize: document.querySelector("#midiImportQuantize"),
     midiImportIgnoreSingle64thOverlap: document.querySelector("#midiImportIgnoreSingle64thOverlap"),
     midiImportLimitChannelsPerInstrument: document.querySelector("#midiImportLimitChannelsPerInstrument"),
     midiImportChannelLimitLabel: document.querySelector("#midiImportChannelLimitLabel"),
+    midiImportMbtPacking: document.querySelector("#midiImportMbtPacking"),
     midiImportMidiControls: document.querySelector("#midiImportMidiControls"),
+    midiImportChooseFileButton: document.querySelector("#midiImportChooseFileButton"),
+    midiImportTextSourcePanel: document.querySelector("#midiImportTextSourcePanel"),
+    midiImportTextChooseFileButton: document.querySelector("#midiImportTextChooseFileButton"),
+    midiImportPasteButton: document.querySelector("#midiImportPasteButton"),
+    midiImportTextInput: document.querySelector("#midiImportTextInput"),
+    midiImportChannelToolbar: document.querySelector("#midiImportChannelToolbar"),
     midiImportPreviewAllButton: document.querySelector("#midiImportPreviewAllButton"),
     midiImportSelectionActions: document.querySelector("#midiImportSelectionActions"),
-    midiImportTextSelectionActions: document.querySelector("#midiImportTextSelectionActions"),
     midiImportSelectionList: document.querySelector("#midiImportSelectionList"),
     midiImportSelectAllButton: document.querySelector("#midiImportSelectAllButton"),
     midiImportClearAllButton: document.querySelector("#midiImportClearAllButton"),
-    midiImportTextSelectAllButton: document.querySelector("#midiImportTextSelectAllButton"),
-    midiImportTextClearAllButton: document.querySelector("#midiImportTextClearAllButton"),
     midiImportStatus: document.querySelector("#midiImportStatus"),
     midiImportCloseButton: document.querySelector("#midiImportCloseButton"),
     midiImportCancelButton: document.querySelector("#midiImportCancelButton"),
@@ -619,20 +603,13 @@
       volumeHistoryEntryId: null,
       lastVolumeEditAt: 0,
     },
-    mmlImport: {
-      parseTimer: 0,
-      parsed: null,
-      sourceFileName: "",
-      format: "mml",
-      candidates: [],
-      selectedCandidateIndexes: new Set(),
-      candidateSignature: "",
-    },
     midiImport: {
       fileName: "",
       sourceType: "midi",
       sourceLabel: "MIDI",
       kind: "midi",
+      sourceFile: null,
+      mbtPackingMode: "byInstrument",
       midiBuffer: null,
       preview: null,
       text: "",
@@ -643,6 +620,9 @@
       selectedTextIndexes: new Set(),
       previewingKey: "",
       previewStopTimer: 0,
+      previewTimers: [],
+      previewVoices: new Set(),
+      textParseTimer: 0,
       busy: false,
     },
     dragAutoScroll: {
@@ -744,6 +724,29 @@
   let editorSoundFontName = "기본 음색";
   let editorSoundFontBusy = false;
   let editorInstrumentOptionsSignature = "";
+
+  function unlockEditorAudioFromGesture() {
+    try {
+      const pending = typeof audioEngine.unlockFromGesture === "function"
+        ? audioEngine.unlockFromGesture()
+        : audioEngine.resume();
+      if (pending && typeof pending.catch === "function") {
+        pending.catch((error) => console.warn("Editor audio unlock failed", error));
+      }
+      return pending;
+    } catch (error) {
+      console.warn("Editor audio unlock failed", error);
+      return null;
+    }
+  }
+
+  async function ensureEditorAudioReady() {
+    const context = audioEngine.ensureContext();
+    await audioEngine.resume();
+    await audioEngine.ensureReady();
+    if (audioEngine.context?.state !== "running") await audioEngine.resume();
+    return audioEngine.context || context;
+  }
 
   function openAutosaveDatabase() {
     return new Promise((resolve, reject) => {
@@ -2251,6 +2254,20 @@
     }
     const segment = map[low];
     return segment.startSeconds + Math.max(0, targetBeat - segment.startBeat) * 60 / segment.bpm;
+  }
+
+  function secondsToBeatInTempoMap(seconds, map) {
+    const targetSeconds = Math.max(0, Number(seconds) || 0);
+    if (!Array.isArray(map) || !map.length) return targetSeconds * 2;
+    let low = 0;
+    let high = map.length - 1;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (map[middle].startSeconds <= targetSeconds + 1e-9) low = middle;
+      else high = middle - 1;
+    }
+    const segment = map[low];
+    return Math.max(0, segment.startBeat + Math.max(0, targetSeconds - segment.startSeconds) * segment.bpm / 60);
   }
 
   function buildMidiPlaybackCache(midiDocument) {
@@ -4915,37 +4932,110 @@
   }
 
 
+  const EDITOR_AUDITION_LEAD_SECONDS = 0.045;
+  const EDITOR_AUDITION_MIN_HOLD_SECONDS = 0.18;
+  const EDITOR_NOTE_AUDITION_SECONDS = 0.24;
+
+  function getEditorAuditionOptions(channel = null) {
+    const target = channel || (state.activePanel === "notes" ? getActiveChannel() : null);
+    return {
+      program: target ? getChannelInstrumentProgram(target) : 0,
+      bank: target ? getChannelInstrumentBank(target) : 0,
+      exactPreset: target ? getChannelInstrumentExactPreset(target) : false,
+      // Interactive audition is intentionally independent from the edited note's V value.
+      // Use a full, stable audition level so a selected quiet note is still clearly audible.
+      mmlVolume: 15,
+    };
+  }
+
+  function releaseAuditionVoice(voice, releaseSeconds = 0.08) {
+    if (!voice || voice.ended) return false;
+    const context = audioEngine.context;
+    const now = context?.currentTime || 0;
+    const startedAt = Number(voice.startedAt);
+    const minimumReleaseAt = Number.isFinite(startedAt)
+      ? startedAt + EDITOR_AUDITION_MIN_HOLD_SECONDS
+      : now;
+    voice.release(Math.max(now, minimumReleaseAt), releaseSeconds);
+    return true;
+  }
+
+  function playEditorAuditionPitch(pitch, {
+    duration = null,
+    velocity = 108,
+    instrumentOptions = null,
+    gainScale = 1,
+    mmlVolume = 15,
+  } = {}) {
+    unlockEditorAudioFromGesture();
+    const context = audioEngine.ensureContext();
+    const safePitch = clamp(Math.round(Number(pitch) || CONFIG.minPitch), CONFIG.minPitch, CONFIG.maxPitch);
+    const safeVelocity = clamp(Math.round(Number(velocity) || 108), 1, 127);
+    const baseOptions = instrumentOptions && typeof instrumentOptions === "object"
+      ? {
+          program: clamp(Math.round(Number(instrumentOptions.program) || 0), 0, 127),
+          bank: clamp(Math.round(Number(instrumentOptions.bank) || 0), 0, 16383),
+          exactPreset: Boolean(instrumentOptions.exactPreset),
+        }
+      : getEditorAuditionOptions();
+    const options = {
+      ...baseOptions,
+      gainScale: clamp(Number(gainScale) || 1, 0.05, 1.5),
+      mmlVolume: clamp(Number(mmlVolume) || 15, 1, 15),
+    };
+
+    // Decode/create the first sample buffer before choosing the start timestamp.
+    // Otherwise the requested start time can already be in the past by the time a
+    // first-click sample is ready, which made short auditions nearly inaudible.
+    if (audioEngine.soundFont && typeof audioEngine.findZone === "function" && typeof audioEngine.getSampleBuffer === "function") {
+      try {
+        const zone = audioEngine.findZone(
+          safePitch,
+          safeVelocity,
+          options.program,
+          options.bank,
+          options.exactPreset,
+        );
+        if (zone) audioEngine.getSampleBuffer(zone);
+      } catch (error) {
+        console.warn("Editor audition sample preload failed", error);
+      }
+    }
+
+    const startAt = context.currentTime + EDITOR_AUDITION_LEAD_SECONDS;
+    const voice = audioEngine.playNote(safePitch, safeVelocity, startAt, duration, options);
+    if (!audioEngine.soundFont && audioEngine.mode === "loading") {
+      void audioEngine.prepare().catch((error) => console.warn("Editor SoundBank preparation failed", error));
+    }
+    return voice;
+  }
+
   function releaseKeyboardVoice(fast = false) {
     state.keyboard.requestToken += 1;
     if (state.keyboard.voice) {
-      const context = audioEngine.context;
-      state.keyboard.voice.release(context?.currentTime || 0, fast ? 0.04 : 0.16);
+      releaseAuditionVoice(state.keyboard.voice, fast ? 0.035 : 0.08);
       state.keyboard.voice = null;
     }
     state.keyboard.pressedPitch = null;
     drawKeyboard();
   }
 
-  async function previewKeyboardPitch(pitch) {
+  function previewKeyboardPitch(pitch) {
     const token = ++state.keyboard.requestToken;
     if (state.keyboard.voice) {
-      const context = audioEngine.context;
-      state.keyboard.voice.release(context?.currentTime || 0, 0.06);
+      releaseAuditionVoice(state.keyboard.voice, 0.045);
       state.keyboard.voice = null;
     }
     state.keyboard.pressedPitch = pitch;
     drawKeyboard();
 
     try {
-      audioEngine.ensureContext();
-      await audioEngine.ensureReady();
+      const voice = playEditorAuditionPitch(pitch, { velocity: 112 });
       if (token !== state.keyboard.requestToken || state.keyboard.pressedPitch !== pitch) {
+        releaseAuditionVoice(voice, 0.035);
         return;
       }
-      const previewChannel = state.activePanel === "notes" ? getActiveChannel() : null;
-      const previewProgram = previewChannel ? getChannelInstrumentProgram(previewChannel) : 0;
-      const previewBank = previewChannel ? getChannelInstrumentBank(previewChannel) : 0;
-      state.keyboard.voice = audioEngine.playNote(pitch, 108, null, null, { program: previewProgram, bank: previewBank, exactPreset: Boolean(previewChannel) });
+      state.keyboard.voice = voice;
     } catch (error) {
       console.error(error);
       if (token === state.keyboard.requestToken) {
@@ -4955,7 +5045,7 @@
     }
   }
 
-  async function previewEditorPitch(pitch, { holdVisual = true } = {}) {
+  function previewEditorPitch(pitch, { holdVisual = true } = {}) {
     const safePitch = clamp(Math.round(Number(pitch) || CONFIG.minPitch), CONFIG.minPitch, CONFIG.maxPitch);
     window.clearTimeout(state.keyboard.previewTimer);
     state.keyboard.previewTimer = 0;
@@ -4963,23 +5053,17 @@
     state.keyboard.previewStartedAt = performance.now();
     drawKeyboard();
 
-    const token = ++state.keyboard.previewRequestToken;
+    ++state.keyboard.previewRequestToken;
     if (state.keyboard.previewVoice) {
-      const context = audioEngine.context;
-      state.keyboard.previewVoice.release(context?.currentTime || 0, 0.04);
+      releaseAuditionVoice(state.keyboard.previewVoice, 0.04);
       state.keyboard.previewVoice = null;
     }
 
     try {
-      audioEngine.ensureContext();
-      await audioEngine.ensureReady();
-      if (token !== state.keyboard.previewRequestToken) {
-        return;
-      }
-      const previewChannel = state.activePanel === "notes" ? getActiveChannel() : null;
-      const previewProgram = previewChannel ? getChannelInstrumentProgram(previewChannel) : 0;
-      const previewBank = previewChannel ? getChannelInstrumentBank(previewChannel) : 0;
-      state.keyboard.previewVoice = audioEngine.playNote(safePitch, 104, null, 0.14, { program: previewProgram, bank: previewBank, exactPreset: Boolean(previewChannel) });
+      state.keyboard.previewVoice = playEditorAuditionPitch(safePitch, {
+        velocity: 108,
+        duration: EDITOR_NOTE_AUDITION_SECONDS,
+      });
     } catch (error) {
       console.error(error);
     }
@@ -5006,8 +5090,7 @@
     state.keyboard.previewRequestToken += 1;
     state.keyboard.previewPitch = null;
     if (state.keyboard.previewVoice) {
-      const context = audioEngine.context;
-      state.keyboard.previewVoice.release(context?.currentTime || 0, fast ? 0.03 : 0.08);
+      releaseAuditionVoice(state.keyboard.previewVoice, fast ? 0.03 : 0.07);
       state.keyboard.previewVoice = null;
     }
     drawKeyboard();
@@ -6199,24 +6282,6 @@
     return normalizeMmlCommandCase(source);
   }
 
-  function normalizeMmlImportTextareaCase() {
-    const textarea = elements.mmlImportText;
-    if (!textarea) return false;
-    const source = String(textarea.value || "");
-    const fileName = String(state.mmlImport.sourceFileName || "");
-    const extension = (fileName.match(/\.([^.]+)$/)?.[1] || "").toLowerCase();
-    const isThreeMle = !/^\s*MML\s*@/i.test(source) && /^\s*\[Channel\s*\d+\]\s*$/im.test(source);
-    const isMabiIccoText = /^\s*\[mml-score\]\s*$/im.test(source) || /(?:^|\r?\n)\s*mml-track\s*=/i.test(source);
-    if (extension === "mmi" || isThreeMle || isMabiIccoText) return false;
-    const normalized = normalizeMmlTextCase(source);
-    if (normalized === source) return false;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    textarea.value = normalized;
-    try { textarea.setSelectionRange(start, end); } catch {}
-    return true;
-  }
-
   function normalizeChannelMmlTextareaCase() {
     const textarea = elements.channelMmlText;
     if (!textarea) return;
@@ -7154,9 +7219,24 @@
     return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
   }
 
-  async function convertImportFileToMidiBuffer(file) {
+  function isMbtImportFileName(fileName = state.midiImport.fileName) {
+    return Boolean(window.MobibardMbt?.isMbtFile?.(String(fileName || "")));
+  }
+
+  function normalizeMbtImportPackingMode(value) {
+    return window.MobibardMbt?.normalizePackingMode?.(value) || (value === "compact" ? "compact" : "byInstrument");
+  }
+
+  function getMbtImportOptions(fileName = state.midiImport.fileName) {
+    if (!isMbtImportFileName(fileName)) return {};
+    const mode = normalizeMbtImportPackingMode(elements.midiImportMbtPacking?.value || state.midiImport.mbtPackingMode || "byInstrument");
+    state.midiImport.mbtPackingMode = mode;
+    return { mbtPackingMode: mode };
+  }
+
+  async function convertImportFileToMidiBuffer(file, options = {}) {
     if (!window.MabiMusicFormats?.convertFile) throw new Error("음악 포맷 플러그인을 불러오지 못했습니다.");
-    const converted = await window.MabiMusicFormats.convertFile(file);
+    const converted = await window.MabiMusicFormats.convertFile(file, options);
     return {
       fileName: String(file.name || "Music"),
       sourceType: converted.sourceType,
@@ -7173,17 +7253,23 @@
 
   function getUnifiedTextFormatLabel(format = state.midiImport.textFormat) {
     if (format === "3mle") return "3MLE";
-    if (format === "mmi") return "MMI";
+    if (format === "mmi") return "MabiIcco / MMI";
     return "MML";
   }
 
   function stopMidiImportPreview({ update = true } = {}) {
     window.clearTimeout(state.midiImport.previewStopTimer);
     state.midiImport.previewStopTimer = 0;
-    if (state.midiImport.previewingKey) {
-      audioEngine.stopAll();
-      state.midiImport.previewingKey = "";
+    for (const timer of state.midiImport.previewTimers || []) window.clearTimeout(timer);
+    state.midiImport.previewTimers = [];
+    const context = audioEngine.context;
+    const now = context?.currentTime || 0;
+    for (const voice of state.midiImport.previewVoices || []) {
+      if (!voice || voice.ended) continue;
+      try { voice.release?.(now, 0.035); } catch {}
     }
+    state.midiImport.previewVoices = new Set();
+    state.midiImport.previewingKey = "";
     if (update && elements.midiImportBackdrop && !elements.midiImportBackdrop.hidden) {
       updateMidiImportDialog();
     }
@@ -7191,10 +7277,14 @@
 
   function resetMidiImportState() {
     stopMidiImportPreview({ update: false });
+    window.clearTimeout(state.midiImport.textParseTimer);
+    state.midiImport.textParseTimer = 0;
     state.midiImport.fileName = "";
     state.midiImport.sourceType = "midi";
     state.midiImport.sourceLabel = "MIDI";
     state.midiImport.kind = "midi";
+    state.midiImport.sourceFile = null;
+    state.midiImport.mbtPackingMode = normalizeMbtImportPackingMode(window.MobibardMbt?.readStoredPackingMode?.() || "byInstrument");
     state.midiImport.midiBuffer = null;
     state.midiImport.preview = null;
     state.midiImport.text = "";
@@ -7204,12 +7294,9 @@
     state.midiImport.selectedGroupIds = new Set();
     state.midiImport.selectedTextIndexes = new Set();
     state.midiImport.busy = false;
-    if (elements.midiImportIgnoreSingle64thOverlap) {
-      elements.midiImportIgnoreSingle64thOverlap.checked = true;
-    }
-    if (elements.midiImportLimitChannelsPerInstrument) {
-      elements.midiImportLimitChannelsPerInstrument.checked = false;
-    }
+    if (elements.midiImportTextInput) elements.midiImportTextInput.value = "";
+    if (elements.midiImportIgnoreSingle64thOverlap) elements.midiImportIgnoreSingle64thOverlap.checked = true;
+    if (elements.midiImportLimitChannelsPerInstrument) elements.midiImportLimitChannelsPerInstrument.checked = false;
   }
 
   function getMidiImportSelectedGroups(preview = state.midiImport.preview) {
@@ -7222,15 +7309,40 @@
     return (state.midiImport.textCandidates || []).filter((_, index) => state.midiImport.selectedTextIndexes.has(index));
   }
 
-  function getCurrentUnifiedTextParsed() {
+  function getUnifiedTextParsedWithGlobalTempo(indexes = null) {
     if (state.midiImport.kind !== "text") return null;
-    const format = state.midiImport.textFormat;
-    if (["mml", "3mle", "mmi"].includes(format) && state.midiImport.textCandidates.length) {
-      const selected = getMidiImportSelectedTextCandidates();
-      if (!selected.length) return null;
-      return parseMmlCandidateParts(selected, 64);
-    }
-    return state.midiImport.textParsed;
+    const allCandidates = state.midiImport.textCandidates || [];
+    if (!allCandidates.length) return state.midiImport.textParsed;
+
+    // Tempo is a file-wide timeline property for imported MML-family formats.
+    // Always build it from every source channel, even when the user previews/imports
+    // only a subset of channels. Notes remain limited to the requested selection.
+    const fullParsed = state.midiImport.textParsed || parseMmlCandidateParts(allCandidates, 64);
+    const selectedIndexes = Array.isArray(indexes)
+      ? indexes.map((value) => Math.max(0, Math.trunc(Number(value) || 0)))
+      : [...state.midiImport.selectedTextIndexes];
+    const selectedCandidates = selectedIndexes
+      .map((index) => allCandidates[index])
+      .filter(Boolean);
+    if (!selectedCandidates.length) return null;
+
+    const selectedParsed = parseMmlCandidateParts(selectedCandidates, 64);
+    const globalTempos = (fullParsed?.tempos || []).map((tempo) => ({ ...tempo }));
+    const selectedEndBeat = Math.max(
+      0,
+      ...selectedParsed.noteParts.flatMap((part) => part.notes.map((note) => note.startBeat + note.durationBeat)),
+      ...globalTempos.map((tempo) => Number(tempo.beat) || 0),
+    );
+    return {
+      ...selectedParsed,
+      tempos: globalTempos,
+      explicitTempoCount: Number(fullParsed?.explicitTempoCount) || 0,
+      endBeat: Number(selectedEndBeat.toFixed(6)),
+    };
+  }
+
+  function getCurrentUnifiedTextParsed() {
+    return getUnifiedTextParsedWithGlobalTempo();
   }
 
   function updateMidiImportSummary() {
@@ -7242,25 +7354,31 @@
         const noteCount = preview.groups.reduce((sum, group) => sum + (group.notes?.length || 0), 0);
         const tempoCount = preview.tempoEvents?.length || 0;
         const durationSeconds = beatToSecondsInTempoMap(preview.durationBeats, createTempoTimeMap(preview.tempoEvents || []));
-        entries.push(`악기 ${preview.groups.length}개`, `노트 ${noteCount}개`, `템포 ${tempoCount}개`, i18nText("ui.duration_value", [formatSeconds(durationSeconds)]));
+        entries.push(
+          i18nText("import.summary_instruments", [preview.groups.length]),
+          i18nText("import.summary_notes", [noteCount]),
+          i18nText("import.summary_tempos", [tempoCount]),
+          i18nText("ui.duration_value", [formatSeconds(durationSeconds)]),
+        );
       }
     } else {
-      const format = state.midiImport.textFormat;
-      const parsed = getCurrentUnifiedTextParsed();
-      if (["mml", "3mle", "mmi"].includes(format) && state.midiImport.textCandidates.length) {
+      const parsed = state.midiImport.textParsed;
+      if (parsed) {
+        const tempoMap = createTempoTimeMap(parsed.tempos || []);
+        const durationSeconds = beatToSecondsInTempoMap(parsed.endBeat || 0, tempoMap);
         entries.push(
-          `채널 ${state.midiImport.textCandidates.length}개`,
-          `선택 ${state.midiImport.selectedTextIndexes.size}개`,
-          `노트 ${parsed?.noteCount || 0}개`,
+          i18nText("import.summary_channels", [state.midiImport.textCandidates.length]),
+          i18nText("import.summary_notes", [parsed.noteCount || 0]),
+          i18nText("import.summary_tempos", [parsed.explicitTempoCount || 0]),
+          i18nText("ui.duration_value", [formatSeconds(durationSeconds)]),
         );
-      } else if (parsed) {
-        entries.push(`음성 ${parsed.noteParts?.length || 0}개`, `노트 ${parsed.noteCount || 0}개`, `템포 ${parsed.explicitTempoCount || 0}개`);
       }
     }
     const fragment = document.createDocumentFragment();
-    entries.forEach((text) => {
+    entries.forEach((text, index) => {
       const item = document.createElement("span");
       item.textContent = text;
+      if (index < entries.length - 1) item.dataset.separator = "true";
       fragment.append(item);
     });
     elements.midiImportSummary.replaceChildren(fragment);
@@ -7298,8 +7416,7 @@
       && ["mml", "3mle", "mmi"].includes(state.midiImport.textFormat)
       && state.midiImport.textCandidates.length > 0;
     const selectable = isMidi || isSelectableText;
-    if (elements.midiImportSelectionActions) elements.midiImportSelectionActions.hidden = !isMidi;
-    if (elements.midiImportTextSelectionActions) elements.midiImportTextSelectionActions.hidden = !isSelectableText;
+    if (elements.midiImportSelectionActions) elements.midiImportSelectionActions.hidden = !selectable;
     elements.midiImportSelectionList.hidden = !selectable;
     if (!selectable) return;
 
@@ -7332,7 +7449,7 @@
         previewButton.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
-          previewMidiImportGroups([String(group.id)], previewKey);
+          void previewMidiImportGroups([String(group.id)], previewKey);
         });
         checkbox.addEventListener("change", () => {
           if (checkbox.checked) state.midiImport.selectedGroupIds.add(String(group.id));
@@ -7346,7 +7463,7 @@
     }
 
     state.midiImport.textCandidates.forEach((candidate, index) => {
-      const row = document.createElement("label");
+      const row = document.createElement("div");
       row.className = "midi-import-selection-row text-import-selection-row";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
@@ -7356,15 +7473,49 @@
       info.className = "midi-import-selection-info";
       const title = document.createElement("strong");
       title.textContent = candidate.label;
+      const parsedOne = parseMmlCandidateParts([candidate], 64);
+      const tempoMap = createTempoTimeMap(parsedOne.tempos || []);
+      const durationSeconds = beatToSecondsInTempoMap(parsedOne.endBeat || 0, tempoMap);
+      let instrumentLabel = i18nText("import.instrument_unspecified");
+      if (Number.isFinite(Number(candidate.mmiPartProgram))) {
+        const requestedProgram = clamp(Math.round(Number(candidate.mmiPartProgram) || 0), 0, 127);
+        const resolvedPreset = resolveMidiGroupEditorPreset({
+          program: requestedProgram,
+          bank: 0,
+          channel: 0,
+          programName: GM_PROGRAM_NAMES[requestedProgram] || `Program ${requestedProgram + 1}`,
+          name: candidate.name || candidate.label || "",
+        }, parsedOne.noteParts?.[0]?.notes || []);
+        instrumentLabel = resolvedPreset?.name || GM_PROGRAM_NAMES[requestedProgram] || `Program ${requestedProgram + 1}`;
+      }
       const meta = document.createElement("small");
-      meta.textContent = i18nText("ui.chars_3", [candidate.value?.length || 0]);
+      meta.textContent = [
+        instrumentLabel,
+        i18nText("import.summary_notes", [parsedOne.noteCount || 0]),
+        i18nText("import.summary_tempos", [parsedOne.explicitTempoCount || 0]),
+        i18nText("ui.duration_value", [formatSeconds(durationSeconds)]),
+      ].join(" · ");
       info.append(title, meta);
+      const previewButton = document.createElement("button");
+      previewButton.type = "button";
+      previewButton.className = "midi-import-row-preview";
+      const previewKey = `text:${index}`;
+      const previewPlaying = state.midiImport.previewingKey === previewKey;
+      setTransportButtonContent(previewButton, { icon: previewPlaying ? "stop" : "play" });
+      const previewActionLabel = i18nText(previewPlaying ? "stop" : "play");
+      previewButton.setAttribute("aria-label", previewActionLabel);
+      previewButton.title = previewActionLabel;
+      previewButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void previewMidiImportGroups([index], previewKey);
+      });
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) state.midiImport.selectedTextIndexes.add(index);
         else state.midiImport.selectedTextIndexes.delete(index);
         updateMidiImportDialog();
       });
-      row.append(checkbox, info);
+      row.append(checkbox, info, previewButton);
       elements.midiImportSelectionList.append(row);
     });
   }
@@ -7376,22 +7527,35 @@
     const midiReady = isMidi && Boolean(state.midiImport.midiBuffer && state.midiImport.preview && !state.midiImport.busy);
     const textParsed = isText ? getCurrentUnifiedTextParsed() : null;
     const textReady = isText && Boolean(textParsed?.noteCount) && !state.midiImport.busy;
-    const ready = midiReady ? getMidiImportSelectedGroups().length > 0 : textReady;
+    const ready = isMidi ? (midiReady && getMidiImportSelectedGroups().length > 0) : textReady;
 
     if (elements.midiImportTitle) {
       elements.midiImportTitle.textContent = isMidi
         ? i18nText("ui.import_2", [state.midiImport.sourceLabel || "MIDI"])
         : i18nText("ui.import_2", [textFormat]);
     }
-    if (elements.midiImportSourceLabel) elements.midiImportSourceLabel.textContent = state.midiImport.fileName || i18nText("file.select");
+    if (elements.midiImportSourceLabel) {
+      elements.midiImportSourceLabel.textContent = state.midiImport.fileName || (isText ? i18nText("mml.clipboard_2") : i18nText("file.select"));
+      elements.midiImportSourceLabel.title = state.midiImport.fileName || "";
+    }
     if (elements.midiImportMidiControls) elements.midiImportMidiControls.hidden = !isMidi;
+    if (elements.midiImportMbtPacking) {
+      const showMbtPacking = isMidi && isMbtImportFileName();
+      elements.midiImportMbtPacking.hidden = !showMbtPacking;
+      if (showMbtPacking) elements.midiImportMbtPacking.value = normalizeMbtImportPackingMode(state.midiImport.mbtPackingMode);
+    }
+    if (elements.midiImportTextSourcePanel) elements.midiImportTextSourcePanel.hidden = !isText;
+    if (elements.midiImportTextInput && isText && elements.midiImportTextInput.value !== state.midiImport.text) {
+      elements.midiImportTextInput.value = state.midiImport.text || "";
+    }
     if (elements.midiImportChannelLimitLabel) {
       elements.midiImportChannelLimitLabel.textContent = i18nText("midi.limit_channels", [CONFIG.midiImportMaxChannelsPerInstrument]);
     }
     if (elements.midiImportApplyButton) elements.midiImportApplyButton.disabled = !ready;
     if (elements.midiImportNewButton) elements.midiImportNewButton.disabled = !ready;
     if (elements.midiImportPreviewAllButton) {
-      elements.midiImportPreviewAllButton.disabled = !midiReady;
+      const previewReady = isMidi ? midiReady : Boolean(textParsed?.noteCount && !state.midiImport.busy);
+      elements.midiImportPreviewAllButton.disabled = !previewReady;
       if (state.midiImport.previewingKey === "all") setTransportButtonContent(elements.midiImportPreviewAllButton, { icon: "stop", label: i18nText("ui.stop_source") });
       else setTransportButtonContent(elements.midiImportPreviewAllButton, { icon: "play", label: i18nText("ui.preview_source") });
     }
@@ -7407,10 +7571,10 @@
         ? ` · ${i18nText("midi.limit_channels", [CONFIG.midiImportMaxChannelsPerInstrument])}`
         : "";
       setMidiImportStatus(i18nText(statusKey, [selected, state.midiImport.preview.groups.length, division]) + channelLimitLabel);
-    } else if (isText && ["mml", "3mle", "mmi"].includes(state.midiImport.textFormat) && state.midiImport.textCandidates.length) {
-      setMidiImportStatus(`${state.midiImport.selectedTextIndexes.size}/${state.midiImport.textCandidates.length}개 채널 선택 · 선택한 채널만 편집 영역에 가져옵니다.`);
-    } else if (isText && textParsed) {
-      setMidiImportStatus(`${textParsed.noteParts?.length || 0}개 음성 · ${textParsed.noteCount || 0}개 노트를 편집 영역에 가져옵니다.`);
+    } else if (isText && state.midiImport.textCandidates.length) {
+      setMidiImportStatus(i18nText("import.selected_channels_status", [state.midiImport.selectedTextIndexes.size, state.midiImport.textCandidates.length]));
+    } else if (isText) {
+      setMidiImportStatus(i18nText("mml.enter_content_inspect"));
     }
   }
 
@@ -7464,14 +7628,19 @@
     const source = getImportSourceInfo(file);
     state.midiImport.busy = true;
     state.midiImport.kind = "midi";
+    state.midiImport.sourceFile = file;
     state.midiImport.fileName = source.fileName;
     state.midiImport.sourceType = source.sourceType;
     state.midiImport.sourceLabel = source.sourceLabel;
     if (elements.midiImportQuantize) elements.midiImportQuantize.value = "64";
+    if (isMbtImportFileName(source.fileName)) {
+      state.midiImport.mbtPackingMode = normalizeMbtImportPackingMode(window.MobibardMbt?.readStoredPackingMode?.() || "byInstrument");
+      if (elements.midiImportMbtPacking) elements.midiImportMbtPacking.value = state.midiImport.mbtPackingMode;
+    }
     openMidiImportDialog();
     setMidiImportStatus(i18nText("file.analyzing_named", [source.sourceLabel]));
     try {
-      const converted = await convertImportFileToMidiBuffer(file);
+      const converted = await convertImportFileToMidiBuffer(file, getMbtImportOptions(source.fileName));
       state.midiImport.fileName = converted.fileName;
       state.midiImport.sourceType = converted.sourceType;
       state.midiImport.sourceLabel = converted.sourceLabel;
@@ -7498,6 +7667,41 @@
     }
   }
 
+  async function reprepareMbtImportFromSharedOptions() {
+    const file = state.midiImport.sourceFile;
+    if (!file || !isMbtImportFileName(state.midiImport.fileName) || state.midiImport.busy) return false;
+    stopMidiImportPreview({ update: false });
+    state.midiImport.busy = true;
+    state.midiImport.mbtPackingMode = normalizeMbtImportPackingMode(elements.midiImportMbtPacking?.value || state.midiImport.mbtPackingMode);
+    updateMidiImportDialog();
+    setMidiImportStatus(i18nText("file.analyzing_named", [state.midiImport.sourceLabel || "MBT"]));
+    try {
+      const converted = await convertImportFileToMidiBuffer(file, getMbtImportOptions(file.name || state.midiImport.fileName));
+      state.midiImport.midiBuffer = converted.midiBuffer;
+      state.midiImport.sourceType = converted.sourceType;
+      state.midiImport.sourceLabel = converted.sourceLabel;
+      const quantizeDivision = Number(elements.midiImportQuantize?.value) === 32 ? 32 : 64;
+      const preview = parseMidiArrayBuffer(converted.midiBuffer, converted.fileName, {
+        quantizeDivision,
+        sourceType: converted.sourceType,
+        sourceLabel: converted.sourceLabel,
+      });
+      state.midiImport.preview = preview;
+      state.midiImport.selectedGroupIds = new Set(preview.groups.map((group) => String(group.id)));
+      state.midiImport.busy = false;
+      updateMidiImportDialog();
+      return true;
+    } catch (error) {
+      state.midiImport.busy = false;
+      state.midiImport.midiBuffer = null;
+      state.midiImport.preview = null;
+      updateMidiImportDialog();
+      setMidiImportStatus(error instanceof Error ? error.message : i18nText("mml.fail_read_file"), { error: true });
+      console.error(error);
+      return false;
+    }
+  }
+
   function detectCompatibleTextFormat(fileName, text) {
     const extension = (String(fileName || "").match(/\.([^.]+)$/)?.[1] || "").toLowerCase();
     if (extension === "mmi") return "mmi";
@@ -7505,36 +7709,78 @@
     return "mml";
   }
 
+  function setUnifiedTextImportContent(text, fileName = "") {
+    const sourceText = String(text || "").replace(/^\uFEFF/, "");
+    const format = detectCompatibleTextFormat(fileName, sourceText);
+    const candidates = format === "mmi"
+      ? extractMabiIccoMmlPartCandidates(sourceText)
+      : format === "3mle"
+        ? extractThreeMleMmlPartCandidates(sourceText)
+        : extractGenericMmlPartCandidates(sourceText);
+    state.midiImport.kind = "text";
+    state.midiImport.fileName = String(fileName || "");
+    state.midiImport.text = sourceText;
+    state.midiImport.textFormat = format;
+    state.midiImport.textCandidates = candidates;
+    state.midiImport.selectedTextIndexes = new Set(candidates.map((_, index) => index));
+    state.midiImport.textParsed = candidates.length ? parseMmlCandidateParts(candidates, 64) : null;
+    if (elements.midiImportTextInput && elements.midiImportTextInput.value !== sourceText) elements.midiImportTextInput.value = sourceText;
+    return state.midiImport.textParsed;
+  }
+
+  function reparseUnifiedTextImport({ preserveSelection = true } = {}) {
+    if (state.midiImport.kind !== "text") return null;
+    const selectedBefore = preserveSelection ? new Set(state.midiImport.selectedTextIndexes) : new Set();
+    const sourceText = elements.midiImportTextInput?.value ?? state.midiImport.text ?? "";
+    const fileName = state.midiImport.fileName || "";
+    const format = detectCompatibleTextFormat(fileName, sourceText);
+    const candidates = format === "mmi"
+      ? extractMabiIccoMmlPartCandidates(sourceText)
+      : format === "3mle"
+        ? extractThreeMleMmlPartCandidates(sourceText)
+        : extractGenericMmlPartCandidates(sourceText);
+    state.midiImport.text = String(sourceText || "");
+    state.midiImport.textFormat = format;
+    state.midiImport.textCandidates = candidates;
+    if (preserveSelection && selectedBefore.size) {
+      state.midiImport.selectedTextIndexes = new Set([...selectedBefore].filter((index) => index >= 0 && index < candidates.length));
+    } else {
+      state.midiImport.selectedTextIndexes = new Set(candidates.map((_, index) => index));
+    }
+    state.midiImport.textParsed = candidates.length ? parseMmlCandidateParts(candidates, 64) : null;
+    updateMidiImportDialog();
+    return state.midiImport.textParsed;
+  }
+
+  function scheduleUnifiedTextImportParse() {
+    window.clearTimeout(state.midiImport.textParseTimer);
+    state.midiImport.textParseTimer = window.setTimeout(() => {
+      try {
+        reparseUnifiedTextImport({ preserveSelection: false });
+      } catch (error) {
+        state.midiImport.textParsed = null;
+        updateMidiImportDialog();
+        setMidiImportStatus(error instanceof Error ? error.message : i18nText("mml.fail_parse"), { error: true });
+      }
+    }, 90);
+  }
+
   async function prepareCompatibleTextImportFile(file) {
     if (!file || state.midiImport.busy) return false;
     resetMidiImportState();
     state.midiImport.busy = true;
     state.midiImport.kind = "text";
-    state.midiImport.fileName = file.name || "호환 파일";
+    state.midiImport.fileName = file.name || "";
     openMidiImportDialog();
-    setMidiImportStatus("호환 파일을 분석하고 있습니다.");
+    setMidiImportStatus(i18nText("file.analyzing"));
     try {
       const text = decodeTextFileBytes(await file.arrayBuffer()).replace(/^\uFEFF/, "");
-      const format = detectCompatibleTextFormat(file.name, text);
-      state.midiImport.text = text;
-      state.midiImport.textFormat = format;
-      state.midiImport.textCandidates = [];
-      state.midiImport.selectedTextIndexes = new Set();
-      if (format === "3mle" || format === "mmi") {
-        const candidates = format === "mmi"
-          ? extractMabiIccoMmlPartCandidates(text)
-          : extractThreeMleMmlPartCandidates(text);
-        if (!candidates.length) throw new Error(`${format === "mmi" ? "MabiIcco" : "3MLE"} 파일에서 연주 가능한 채널을 찾지 못했습니다.`);
-        state.midiImport.textCandidates = candidates;
-        state.midiImport.selectedTextIndexes = new Set(candidates.map((_, index) => index));
-        state.midiImport.textParsed = parseMmlCandidateParts(candidates, 64);
-      } else {
-        const candidates = extractGenericMmlPartCandidates(text);
-        if (!candidates.length) throw new Error("MML 파일에서 채널을 찾지 못했습니다.");
-        state.midiImport.textCandidates = candidates;
-        state.midiImport.selectedTextIndexes = new Set(candidates.map((_, index) => index));
-        state.midiImport.textParsed = parseMmlCandidateParts(candidates, 64);
-        if (!state.midiImport.textParsed?.noteCount) throw new Error("MML 파일에서 연주 가능한 노트를 찾지 못했습니다.");
+      const parsed = setUnifiedTextImportContent(text, file.name || "");
+      if (!state.midiImport.textCandidates.length) {
+        throw new Error(i18nText("mml.no_channel_found"));
+      }
+      if (!parsed?.noteCount) {
+        throw new Error(i18nText("note.there_no_import"));
       }
       state.midiImport.busy = false;
       updateMidiImportDialog();
@@ -7542,15 +7788,19 @@
     } catch (error) {
       state.midiImport.busy = false;
       state.midiImport.textParsed = null;
-      setMidiImportStatus(error instanceof Error ? error.message : "호환 파일을 읽지 못했습니다.", { error: true });
       updateMidiImportDialog();
+      setMidiImportStatus(error instanceof Error ? error.message : i18nText("mml.fail_read_file"), { error: true });
       console.error(error);
       return false;
     }
   }
 
-  async function previewMidiImportGroups(groupIds = null, previewKey = "all") {
-    if (state.midiImport.kind !== "midi" || !state.midiImport.preview || state.midiImport.busy) return false;
+  async function previewMidiImportGroups(selection = null, previewKey = "all") {
+    const isMidi = state.midiImport.kind === "midi";
+    const isText = state.midiImport.kind === "text";
+    if (state.midiImport.busy || (!isMidi && !isText)) return false;
+    if (isMidi && !state.midiImport.preview) return false;
+    if (isText && !state.midiImport.textCandidates.length) return false;
     if (state.midiImport.previewingKey === previewKey) {
       stopMidiImportPreview();
       return true;
@@ -7558,69 +7808,189 @@
     stopMidiImportPreview({ update: false });
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     try {
-      audioEngine.ensureContext();
-      await audioEngine.resume();
-      await audioEngine.ensureReady();
-      const preview = state.midiImport.preview;
-      const wanted = groupIds ? new Set(groupIds.map(String)) : null;
-      const groups = (preview.groups || []).filter((group) => !wanted || wanted.has(String(group.id)));
-      const tempoMap = createTempoTimeMap(preview.tempoEvents || []);
+      // Import previews intentionally use the same immediate audition path that is
+      // already proven to work for piano keys and note clicks.  The older path
+      // created hundreds of WebAudio voices up front at future timestamps; on some
+      // browsers those voices were effectively silent even though transport playback
+      // worked.  Here we only arm lightweight JS timers and create each voice close
+      // to the moment it must actually sound.
+      unlockEditorAudioFromGesture();
+      await ensureEditorAudioReady();
+
+      let tempoEvents = [];
       const notes = [];
-      groups.forEach((group) => {
-        (group.notes || []).forEach((note) => {
-          const startBeat = Math.max(0, Number(note.startBeat) || 0);
-          const endBeat = startBeat + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-          notes.push({
-            pitch: note.pitch,
-            velocity: getNotePlaybackVelocity(note),
-            startSeconds: beatToSecondsInTempoMap(startBeat, tempoMap),
-            endSeconds: beatToSecondsInTempoMap(endBeat, tempoMap),
-            program: clamp(Number(group.program) || 0, 0, 127),
-            bank: getMidiGroupBank(group),
+      if (isMidi) {
+        const preview = state.midiImport.preview;
+        const wanted = Array.isArray(selection) ? new Set(selection.map(String)) : null;
+        const groups = (preview.groups || []).filter((group) => !wanted || wanted.has(String(group.id)));
+        tempoEvents = preview.tempoEvents || [];
+        const tempoMap = createTempoTimeMap(tempoEvents);
+        groups.forEach((group) => {
+          const resolvedPreset = resolveMidiGroupEditorPreset(group, group.notes || []);
+          const program = resolvedPreset
+            ? clamp(Math.round(Number(resolvedPreset.preset) || 0), 0, 127)
+            : clamp(Number(group.program) || 0, 0, 127);
+          const bank = resolvedPreset
+            ? clamp(Math.round(Number(resolvedPreset.bank) || 0), 0, 16383)
+            : getMidiGroupBank(group);
+          (group.notes || []).forEach((note) => {
+            const startBeat = Math.max(0, Number(note.startBeat) || 0);
+            const endBeat = startBeat + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+            notes.push({
+              pitch: note.pitch,
+              velocity: getNotePlaybackVelocity(note),
+              startSeconds: beatToSecondsInTempoMap(startBeat, tempoMap),
+              endSeconds: beatToSecondsInTempoMap(endBeat, tempoMap),
+              program,
+              bank,
+              exactPreset: Boolean(resolvedPreset),
+            });
           });
         });
-      });
+      } else {
+        const indexes = Array.isArray(selection)
+          ? selection.map((value) => Math.max(0, Math.trunc(Number(value) || 0)))
+          : state.midiImport.textCandidates.map((_, index) => index);
+        const parsed = getUnifiedTextParsedWithGlobalTempo(indexes);
+        if (!parsed) return false;
+        tempoEvents = parsed.tempos || [];
+        const tempoMap = createTempoTimeMap(tempoEvents);
+        parsed.noteParts.forEach((part) => {
+          const requestedProgram = clamp(Math.round(Number(part.mmiPartProgram) || 0), 0, 127);
+          const pseudoGroup = {
+            program: requestedProgram,
+            bank: 0,
+            channel: 0,
+            programName: part.instrumentName || "",
+            name: part.label || "",
+          };
+          const resolvedPreset = resolveMidiGroupEditorPreset(pseudoGroup, part.notes || []);
+          const program = resolvedPreset
+            ? clamp(Math.round(Number(resolvedPreset.preset) || 0), 0, 127)
+            : requestedProgram;
+          const bank = resolvedPreset
+            ? clamp(Math.round(Number(resolvedPreset.bank) || 0), 0, 16383)
+            : 0;
+          (part.notes || []).forEach((note) => {
+            const startBeat = Math.max(0, Number(note.startBeat) || 0);
+            const endBeat = startBeat + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+            notes.push({
+              pitch: note.pitch,
+              velocity: getNotePlaybackVelocity(note),
+              startSeconds: beatToSecondsInTempoMap(startBeat, tempoMap),
+              endSeconds: beatToSecondsInTempoMap(endBeat, tempoMap),
+              program,
+              bank,
+              exactPreset: Boolean(resolvedPreset),
+            });
+          });
+        });
+      }
+
       notes.sort((a, b) => a.startSeconds - b.startSeconds || a.pitch - b.pitch);
       if (!notes.length) {
-        showToast("미리 들을 노트가 없습니다.");
+        showToast(i18nText("note.there_no_preview"));
         return false;
       }
+
       const firstSeconds = notes[0].startSeconds;
       const previewLength = 8;
       const lastSeconds = firstSeconds + previewLength;
-      const context = audioEngine.context;
-      const startAt = context.currentTime + 0.05;
-      const gainScale = computePlaybackAutoGainScale(notes, {
-        windowStart: firstSeconds,
-        windowEnd: lastSeconds,
-      });
-      let scheduled = 0;
-      for (const note of notes) {
-        if (note.startSeconds > lastSeconds) break;
-        if (note.endSeconds <= firstSeconds || note.velocity <= 0) continue;
-        const offset = Math.max(0, note.startSeconds - firstSeconds);
-        const duration = Math.min(previewLength - offset, Math.max(0.03, note.endSeconds - Math.max(firstSeconds, note.startSeconds)));
-        if (duration <= 0.01) continue;
-        audioEngine.playNote(note.pitch, note.velocity, startAt + offset, duration, {
+      const previewNotes = notes.filter((note) => (
+        note.startSeconds <= lastSeconds
+        && note.endSeconds > firstSeconds
+        && note.velocity > 0
+      ));
+      if (!previewNotes.length) {
+        showToast(i18nText("midi.err_preview_silent"));
+        return false;
+      }
+
+      // Warm the exact presets/buffers before arming timers, but do not schedule
+      // future AudioBufferSourceNodes here.  This keeps the actual sound creation
+      // on the known-good audition code path.
+      const programKeys = new Map();
+      for (const note of previewNotes) {
+        programKeys.set(`${note.bank}:${note.program}:${note.exactPreset ? 1 : 0}`, {
           program: note.program,
           bank: note.bank,
-          gainScale,
+          exactPreset: Boolean(note.exactPreset),
         });
-        scheduled += 1;
-        if (scheduled >= 360) break;
       }
+      if (typeof audioEngine.prepareProgram === "function") {
+        for (const item of programKeys.values()) {
+          await audioEngine.prepareProgram(item.program, item.bank, { exactPreset: item.exactPreset });
+        }
+      }
+      if (typeof audioEngine.preloadPitches === "function") {
+        await audioEngine.preloadPitches(previewNotes.map((note) => ({
+          pitch: note.pitch,
+          velocity: note.velocity,
+          instrumentProgram: note.program,
+          instrumentBank: note.bank,
+          instrumentExactPreset: Boolean(note.exactPreset),
+        })));
+      }
+
+      const gainScale = computePlaybackAutoGainScale(previewNotes, { windowStart: firstSeconds, windowEnd: lastSeconds });
       state.midiImport.previewingKey = previewKey;
-      state.midiImport.previewStopTimer = window.setTimeout(() => stopMidiImportPreview(), Math.round((previewLength + 0.15) * 1000));
+      state.midiImport.previewTimers = [];
+      state.midiImport.previewVoices = new Set();
+
+      let armed = 0;
+      const startPreviewNote = (note) => {
+        if (state.midiImport.previewingKey !== previewKey) return;
+        const audibleStart = Math.max(firstSeconds, note.startSeconds);
+        const maxDuration = Math.max(0.05, previewLength - Math.max(0, audibleStart - firstSeconds));
+        const duration = Math.min(maxDuration, Math.max(0.05, note.endSeconds - audibleStart));
+        try {
+          const voice = playEditorAuditionPitch(note.pitch, {
+            duration,
+            velocity: Math.max(72, note.velocity),
+            instrumentOptions: {
+              program: note.program,
+              bank: note.bank,
+              exactPreset: Boolean(note.exactPreset),
+            },
+            gainScale,
+            mmlVolume: 15,
+          });
+          if (voice) state.midiImport.previewVoices.add(voice);
+        } catch (error) {
+          console.warn("Import preview note failed", error);
+        }
+      };
+
+      for (const note of previewNotes) {
+        if (armed >= 360) break;
+        const offsetMs = Math.max(0, Math.round((Math.max(firstSeconds, note.startSeconds) - firstSeconds) * 1000));
+        if (offsetMs <= 4) {
+          startPreviewNote(note);
+        } else {
+          const timer = window.setTimeout(() => startPreviewNote(note), offsetMs);
+          state.midiImport.previewTimers.push(timer);
+        }
+        armed += 1;
+      }
+      if (!armed) {
+        state.midiImport.previewingKey = "";
+        showToast(i18nText("midi.err_preview_silent"));
+        return false;
+      }
+
+      state.midiImport.previewStopTimer = window.setTimeout(
+        () => stopMidiImportPreview(),
+        Math.round((previewLength + 0.55) * 1000),
+      );
       updateMidiImportDialog();
       return true;
     } catch (error) {
       console.error(error);
       stopMidiImportPreview();
-      showToast("원본 미리듣기를 시작하지 못했습니다.");
+      showToast(i18nText("error.fail_start_source"));
       return false;
     }
   }
-
 
   function cloneMidiImportSelection() {
     const preview = state.midiImport.preview;
@@ -8187,6 +8557,32 @@
     };
   }
 
+  function remapMmlParsedToProjectTempo(parsed) {
+    if (!parsed) return parsed;
+    const sourceMap = createTempoTimeMap(parsed.tempos || []);
+    const projectMap = createTempoTimeMap(state.tempos || []);
+    const noteParts = (parsed.noteParts || []).map((part) => ({
+      ...part,
+      notes: (part.notes || []).map((note) => {
+        const sourceStart = Math.max(0, Number(note.startBeat) || 0);
+        const sourceEnd = sourceStart + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        const startSeconds = beatToSecondsInTempoMap(sourceStart, sourceMap);
+        const endSeconds = beatToSecondsInTempoMap(sourceEnd, sourceMap);
+        const targetStartRaw = secondsToBeatInTempoMap(startSeconds, projectMap);
+        const targetEndRaw = secondsToBeatInTempoMap(endSeconds, projectMap);
+        const targetStart = Math.max(0, snapBeatToUnit(targetStartRaw, CONFIG.minimumNoteBeat));
+        const targetEnd = Math.max(targetStart + CONFIG.minimumNoteBeat, snapBeatToUnit(targetEndRaw, CONFIG.minimumNoteBeat));
+        return {
+          ...note,
+          startBeat: Number(targetStart.toFixed(6)),
+          durationBeat: Number((targetEnd - targetStart).toFixed(6)),
+        };
+      }),
+    }));
+    const endBeat = Math.max(0, ...noteParts.flatMap((part) => part.notes.map((note) => note.startBeat + note.durationBeat)));
+    return { ...parsed, noteParts, endBeat: Number(endBeat.toFixed(6)) };
+  }
+
   async function applyMidiImport(action = "add") {
     if (state.midiImport.busy) return false;
     const openNew = action === "new";
@@ -8200,7 +8596,7 @@
 
       if (kind === "midi") {
         const parsed = cloneMidiImportSelection();
-        if (!parsed?.groups?.length) throw new Error("가져올 악기를 하나 이상 선택하세요.");
+        if (!parsed?.groups?.length) throw new Error(i18nText("instrument.select_least_one"));
         const imported = importMidiSelectionAsEditableChannels(parsed, {
           openNew,
           fileName,
@@ -8209,8 +8605,8 @@
             ? CONFIG.midiImportMaxChannelsPerInstrument
             : 0,
         });
-        if (!imported.channelCount) throw new Error("가져올 노트가 있는 악기를 하나 이상 선택하세요.");
-        markDirty(`${state.midiImport.sourceLabel || "MIDI"} ${openNew ? "새로 열기" : "추가"}`);
+        if (!imported.channelCount) throw new Error(i18nText("note.select_least_one"));
+        markDirty(`${state.midiImport.sourceLabel || "MIDI"} ${i18nText(openNew ? "ui.open_new" : "action.add")}`);
         shrinkTimelineToContent();
         ensureTimelineFitsViewport();
         state.playhead.beat = clamp(state.playhead.beat, 0, getTotalBeats());
@@ -8225,18 +8621,38 @@
         return true;
       }
 
-      const parsed = getCurrentUnifiedTextParsed();
-      if (!parsed?.noteCount) throw new Error("가져올 채널을 하나 이상 선택하세요.");
+      const sourceParsed = getCurrentUnifiedTextParsed();
+      if (!sourceParsed?.noteCount) throw new Error(i18nText("channel.select_least_one"));
       const format = state.midiImport.textFormat;
       const importLabel = getUnifiedTextFormatLabel(format);
+      let parsed = sourceParsed;
+
       if (openNew) {
         resetProject({ notify: false });
         state.channels = [];
         state.activeChannel = 0;
         state.projectName = String(fileName || importLabel).replace(/\.(?:mml|3mle|mmi|txt)$/i, "") || importLabel;
         state.loadedFileName = String(fileName || "").trim();
+        const sourceTempos = Array.isArray(parsed.tempos) && parsed.tempos.length ? parsed.tempos : [{ beat: 0, bpm: 120 }];
+        state.tempos = sourceTempos.map((tempo, index) => ({
+          id: index + 1,
+          beat: Number((Number(tempo.beat) || 0).toFixed(6)),
+          bpm: clamp(Math.round(Number(tempo.bpm) || 120), CONFIG.minTempo, CONFIG.maxTempo),
+          fixed: index === 0,
+        }));
+        if (!state.tempos.length || Math.abs(state.tempos[0].beat) > 1e-7) {
+          state.tempos.unshift({ id: 1, beat: 0, bpm: 120, fixed: true });
+        }
+        state.tempos.forEach((tempo, index) => {
+          tempo.id = index + 1;
+          tempo.fixed = index === 0;
+          if (index === 0) tempo.beat = 0;
+        });
+        state.nextTempoId = state.tempos.length + 1;
+      } else {
+        parsed = remapMmlParsedToProjectTempo(parsed);
       }
-      state.mmlImport.sourceFileName = fileName;
+
       const importedChannelIds = [];
       parsed.noteParts.forEach((part, partIndex) => {
         const channel = createImportedChannel(part, partIndex + 1);
@@ -8244,33 +8660,24 @@
         importedChannelIds.push(channel.id);
       });
       if (!state.channels.length) state.channels = createDefaultChannels();
-      if (openNew && parsed.explicitTempoCount) {
-        state.tempos = parsed.tempos.map((tempo, index) => ({
-          id: index + 1,
-          beat: Number(tempo.beat.toFixed(6)),
-          bpm: clamp(Math.round(tempo.bpm), CONFIG.minTempo, CONFIG.maxTempo),
-          fixed: index === 0,
-        }));
-        state.nextTempoId = state.tempos.length + 1;
-      }
       state.activePanel = "notes";
       const firstIndex = state.channels.findIndex((channel) => channel.id === importedChannelIds[0]);
       state.activeChannel = firstIndex >= 0 ? firstIndex : 0;
       clearNoteSelection();
       clearMidiSelection();
       state.channelNoteRuntime.clear();
-      markDirty(`${importLabel} ${openNew ? "새로 열기" : "추가"}`);
+      markDirty(`${importLabel} ${i18nText(openNew ? "ui.open_new" : "action.add")}`);
       shrinkTimelineToContent();
       ensureTimelineFitsViewport();
       state.midiImport.busy = false;
       closeMidiImportDialog();
       renderAll();
       resizeAndDraw();
-      showToast(`${importLabel}에서 ${parsed.noteParts.length}개 채널을 ${openNew ? "새 프로젝트로 열었습니다." : "추가했습니다."}`);
+      showToast(i18nText(openNew ? "mml.opened_new_channels" : "channel.add_edit", [importLabel, parsed.noteParts.length]));
       return true;
     } catch (error) {
       state.midiImport.busy = false;
-      const message = error instanceof Error ? error.message : "파일을 불러오지 못했습니다.";
+      const message = error instanceof Error ? error.message : i18nText("mml.fail_read_file");
       updateMidiImportDialog();
       setMidiImportStatus(message, { error: true });
       console.error(error);
@@ -8285,6 +8692,7 @@
     if (["json", "mmlproj"].includes(extension) || /\.mmlproj\.json$/i.test(name)) {
       try {
         await loadProjectFromFile(file);
+        if (elements.midiImportBackdrop && !elements.midiImportBackdrop.hidden) closeMidiImportDialog();
         return true;
       } catch (error) {
         console.error(error);
@@ -8308,7 +8716,8 @@
       return prepareMidiImportFile(file);
     }
     try {
-      const converted = await convertImportFileToMidiBuffer(file);
+      const importOptions = isMbtImportFileName(file.name || "") ? { mbtPackingMode: normalizeMbtImportPackingMode(window.MobibardMbt?.readStoredPackingMode?.() || "byInstrument") } : {};
+      const converted = await convertImportFileToMidiBuffer(file, importOptions || {});
       const parsed = parseMidiArrayBuffer(converted.midiBuffer, converted.fileName, {
         quantizeDivision: options.quantizeDivision,
         sourceType: converted.sourceType,
@@ -12628,14 +13037,19 @@
   function extractGenericMmlPartCandidates(text) {
     const body = extractMmlBody(text);
     return body.split(",")
-      .map((value) => String(value || "").trim())
-      .filter(Boolean)
       .map((value, index) => ({
+        value: String(value || "").trim(),
         channelNumber: index + 1,
-        label: `채널 ${index + 1}`,
-        name: `채널 ${index + 1}`,
-        value,
-      }));
+      }))
+      .filter((candidate) => Boolean(candidate.value))
+      .map((candidate) => {
+        const label = i18nText("mml.channel_number", [candidate.channelNumber]);
+        return {
+          ...candidate,
+          label,
+          name: label,
+        };
+      });
   }
 
   function parseMmlCandidateParts(candidates, quantize = 64) {
@@ -12684,215 +13098,35 @@
     };
   }
 
-  function analyzeMmlImportSource(source) {
-    const text = String(source || "").replace(/^\uFEFF/, "");
-    const fileName = String(state.mmlImport.sourceFileName || "");
-    const extension = (fileName.match(/\.([^.]+)$/)?.[1] || "").toLowerCase();
-    const isThreeMle = !/^\s*MML\s*@/i.test(text) && /^\s*\[Channel\s*\d+\]\s*$/im.test(text);
-    const isMmi = extension === "mmi";
-    if (!isThreeMle && !isMmi) {
-      state.mmlImport.format = "mml";
-      state.mmlImport.candidates = [];
-      state.mmlImport.selectedCandidateIndexes = new Set();
-      state.mmlImport.candidateSignature = "";
-      return parseMmlText(text, { quantize: 64 });
-    }
-
-    const format = isMmi ? "mmi" : "3mle";
-    const candidates = isMmi
-      ? extractMabiIccoMmlPartCandidates(text)
-      : extractThreeMleMmlPartCandidates(text);
-    if (!candidates.length) {
-      throw new Error(isMmi
-        ? "MMI 파일에서 연주 가능한 MML 채널을 찾지 못했습니다."
-        : "3MLE 파일에서 연주 가능한 [ChannelN] 채널을 찾지 못했습니다.");
-    }
-    const signature = candidates.map((candidate) => `${candidate.label}\u0000${candidate.value}`).join("\u0001");
-    if (state.mmlImport.candidateSignature !== signature) {
-      state.mmlImport.selectedCandidateIndexes = new Set(candidates.map((_, index) => index));
-      state.mmlImport.candidateSignature = signature;
-    } else {
-      state.mmlImport.selectedCandidateIndexes = new Set(
-        [...state.mmlImport.selectedCandidateIndexes].filter((index) => index >= 0 && index < candidates.length),
-      );
-    }
-    state.mmlImport.format = format;
-    state.mmlImport.candidates = candidates;
-    const selected = candidates.filter((_, index) => state.mmlImport.selectedCandidateIndexes.has(index));
-    return parseMmlCandidateParts(selected, 64);
-  }
-
   function getMmlImportBaseName() {
-    const fileName = String(state.mmlImport.sourceFileName || "").trim();
-    return (fileName ? fileName.replace(/\.(?:mml|3mle|mmi|txt)$/i, "") : "MML").trim() || "MML";
-  }
-
-  function setMmlImportStatus(message, { error = false } = {}) {
-    if (!elements.mmlImportStatus) return;
-    elements.mmlImportStatus.textContent = message;
-    elements.mmlImportStatus.classList.toggle("error", error);
-  }
-
-  function renderMmlImportChannelList() {
-    if (!elements.mmlImportChannelSection || !elements.mmlImportChannelList) return;
-    const isSelectableProject = ["3mle", "mmi"].includes(state.mmlImport.format);
-    elements.mmlImportChannelSection.hidden = !isSelectableProject;
-    elements.mmlImportDialog?.classList.toggle("has-channel-selection", isSelectableProject);
-    elements.mmlImportChannelList.replaceChildren();
-    if (!isSelectableProject) return;
-    const selectedCount = state.mmlImport.selectedCandidateIndexes.size;
-    const formatLabel = state.mmlImport.format === "mmi" ? "MabiIcco" : "3MLE";
-    elements.mmlImportChannelTitle.textContent = `${formatLabel} 채널 선택 (${selectedCount}/${state.mmlImport.candidates.length})`;
-    state.mmlImport.candidates.forEach((candidate, index) => {
-      const row = document.createElement("label");
-      row.className = "mml-import-channel-row";
-      row.classList.toggle("selected", state.mmlImport.selectedCandidateIndexes.has(index));
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = state.mmlImport.selectedCandidateIndexes.has(index);
-      checkbox.setAttribute("aria-label", `${candidate.label} 선택`);
-      const main = document.createElement("span");
-      main.className = "mml-import-channel-main";
-      const title = document.createElement("strong");
-      title.textContent = candidate.label;
-      const meta = document.createElement("small");
-      if (state.mmlImport.format === "mmi" && Number.isFinite(Number(candidate.mmiTrackNumber))) {
-        const details = [
-          `${candidate.value.length}자`,
-          `Track ${candidate.mmiTrackNumber}`,
-          candidate.mmiPartRole || "",
-          Number.isFinite(Number(candidate.mmiPartProgram)) ? `Program ${candidate.mmiPartProgram}` : "",
-          Number.isFinite(Number(candidate.mmiVolume)) ? `Volume ${candidate.mmiVolume}` : "",
-          Number.isFinite(Number(candidate.mmiPanpot)) ? `Pan ${candidate.mmiPanpot}` : "",
-        ].filter(Boolean);
-        meta.textContent = details.join(" · ");
-      } else {
-        meta.textContent = `${candidate.value.length}자`;
-      }
-      const preview = document.createElement("code");
-      preview.textContent = candidate.value.length > 120 ? `${candidate.value.slice(0, 120)}…` : candidate.value;
-      main.append(title, meta);
-      row.append(checkbox, main, preview);
-      checkbox.addEventListener("change", () => {
-        const next = new Set(state.mmlImport.selectedCandidateIndexes);
-        if (checkbox.checked) {
-          next.add(index);
-        } else {
-          next.delete(index);
-        }
-        state.mmlImport.selectedCandidateIndexes = next;
-        updateMmlImportPreview();
-      });
-      elements.mmlImportChannelList.append(row);
-    });
-  }
-
-  function updateMmlImportPreview() {
-    window.clearTimeout(state.mmlImport.parseTimer);
-    state.mmlImport.parseTimer = 0;
-    normalizeMmlImportTextareaCase();
-    const source = elements.mmlImportText?.value || "";
-    if (!source.trim()) {
-      state.mmlImport.parsed = null;
-      state.mmlImport.format = "mml";
-      state.mmlImport.candidates = [];
-      state.mmlImport.selectedCandidateIndexes = new Set();
-      renderMmlImportChannelList();
-      elements.mmlImportApplyButton.disabled = true;
-      elements.mmlImportApplyTempo.disabled = true;
-      setMmlImportStatus("3MLE, MabiIcco 또는 MML 내용을 입력하면 채널·노트·템포 정보를 확인합니다.");
-      return null;
-    }
-    try {
-      const parsed = analyzeMmlImportSource(source);
-      state.mmlImport.parsed = parsed;
-      renderMmlImportChannelList();
-      const details = [
-        state.mmlImport.format === "mml" ? `MML 음성 ${parsed.noteParts.length}개` : `${state.mmlImport.format === "mmi" ? "MabiIcco" : "3MLE"} 선택 ${state.mmlImport.selectedCandidateIndexes.size}개`,
-        `노트 ${parsed.noteCount}개`,
-        "1/64 음표 변환",
-        `${parsed.noteParts.length}개 새 편집 채널 추가`,
-      ];
-      if (parsed.explicitTempoCount) details.push(`템포 ${parsed.explicitTempoCount}개 감지`);
-      if (parsed.skippedPitchCount) details.push(`음역 밖 ${parsed.skippedPitchCount}개 제외`);
-      if (parsed.unsupportedTokenCount) details.push(`미지원 표기 ${parsed.unsupportedTokenCount}개 무시`);
-      const canApply = parsed.noteCount > 0 || (parsed.explicitTempoCount > 0 && elements.mmlImportApplyTempo?.checked);
-      elements.mmlImportApplyButton.disabled = !canApply;
-      elements.mmlImportApplyTempo.disabled = parsed.explicitTempoCount === 0;
-      setMmlImportStatus(details.join(" · "));
-      return parsed;
-    } catch (error) {
-      state.mmlImport.parsed = null;
-      renderMmlImportChannelList();
-      elements.mmlImportApplyButton.disabled = true;
-      elements.mmlImportApplyTempo.disabled = true;
-      setMmlImportStatus(error instanceof Error ? error.message : "MML을 해석하지 못했습니다.", { error: true });
-      return null;
-    }
-  }
-
-  function scheduleMmlImportPreview() {
-    window.clearTimeout(state.mmlImport.parseTimer);
-    state.mmlImport.parseTimer = window.setTimeout(updateMmlImportPreview, 90);
+    const fileName = String(state.midiImport.fileName || "").trim();
+    return (fileName ? fileName.replace(/\.(?:mml|3mle|mmi|txt)$/i, "") : getUnifiedTextFormatLabel()).trim() || "MML";
   }
 
   function openMmlImportDialog({ text = "", fileName = "" } = {}) {
-    closeFileMenu();
-    closeEditMenu();
-    closeContextMenu();
-    closeThemeMenu();
-    closeVolumeMenu();
-    closeZoomMenu();
-    closePlaybackRateMenu();
-    state.mmlImport.sourceFileName = String(fileName || "");
-    state.mmlImport.parsed = null;
-    state.mmlImport.format = "mml";
-    state.mmlImport.candidates = [];
-    state.mmlImport.selectedCandidateIndexes = new Set();
-    state.mmlImport.candidateSignature = "";
-    elements.mmlImportText.value = String(text || "");
-    elements.mmlImportApplyTempo.checked = true;
-    elements.mmlImportSourceLabel.textContent = fileName || "텍스트를 붙여넣거나 파일을 선택하세요.";
-    elements.mmlImportBackdrop.hidden = false;
-    updateMmlImportPreview();
-    requestAnimationFrame(() => elements.mmlImportText.focus());
+    resetMidiImportState();
+    state.midiImport.kind = "text";
+    state.midiImport.fileName = String(fileName || "");
+    const sourceText = String(text || "");
+    if (sourceText.trim()) {
+      setUnifiedTextImportContent(sourceText, fileName);
+    } else {
+      state.midiImport.text = "";
+      state.midiImport.textFormat = "mml";
+      state.midiImport.textCandidates = [];
+      state.midiImport.textParsed = null;
+      state.midiImport.selectedTextIndexes = new Set();
+    }
+    openMidiImportDialog();
+    requestAnimationFrame(() => elements.midiImportTextInput?.focus());
   }
 
   function closeMmlImportDialog() {
-    if (!elements.mmlImportBackdrop) return;
-    window.clearTimeout(state.mmlImport.parseTimer);
-    state.mmlImport.parseTimer = 0;
-    state.mmlImport.parsed = null;
-    state.mmlImport.candidates = [];
-    state.mmlImport.selectedCandidateIndexes = new Set();
-    state.mmlImport.candidateSignature = "";
-    elements.mmlImportBackdrop.hidden = true;
+    closeMidiImportDialog();
   }
 
   async function loadMmlImportFile(file) {
-    if (!file) return false;
-    try {
-      const text = decodeTextFileBytes(await file.arrayBuffer()).replace(/^\uFEFF/, "");
-      if (elements.mmlImportBackdrop.hidden) {
-        openMmlImportDialog({ text, fileName: file.name || "" });
-      } else {
-        state.mmlImport.sourceFileName = file.name || "";
-        state.mmlImport.parsed = null;
-        state.mmlImport.format = "mml";
-        state.mmlImport.candidates = [];
-        state.mmlImport.selectedCandidateIndexes = new Set();
-        state.mmlImport.candidateSignature = "";
-        elements.mmlImportSourceLabel.textContent = file.name || "3MLE / MabiIcco / MML 파일";
-        elements.mmlImportText.value = text;
-        updateMmlImportPreview();
-        elements.mmlImportText.focus();
-      }
-      return true;
-    } catch (error) {
-      console.error(error);
-      showToast("3MLE, MabiIcco 또는 MML 파일을 읽지 못했습니다.");
-      return false;
-    }
+    return prepareCompatibleTextImportFile(file);
   }
 
   async function pasteMmlImportTextFromClipboard() {
@@ -12900,19 +13134,15 @@
       if (!navigator.clipboard?.readText) throw new Error("clipboard unavailable");
       const text = await navigator.clipboard.readText();
       if (!String(text || "").trim()) {
-        showToast("클립보드에 MML 텍스트가 없습니다.");
+        showToast(i18nText("mml.there_no_text"));
         return false;
       }
-      state.mmlImport.sourceFileName = "";
-      state.mmlImport.candidateSignature = "";
-      elements.mmlImportSourceLabel.textContent = "클립보드 3MLE / MabiIcco / MML";
-      elements.mmlImportText.value = text;
-      updateMmlImportPreview();
-      elements.mmlImportText.focus();
+      openMmlImportDialog({ text, fileName: "" });
+      if (elements.midiImportSourceLabel) elements.midiImportSourceLabel.textContent = i18nText("mml.clipboard_2");
       return true;
     } catch {
-      showToast("클립보드를 읽을 수 없습니다. 내용을 직접 붙여넣으세요.");
-      elements.mmlImportText.focus();
+      showToast(i18nText("mml.fail_read_clipboard"));
+      elements.midiImportTextInput?.focus();
       return false;
     }
   }
@@ -12938,14 +13168,14 @@
       if (!navigator.clipboard?.readText) throw new Error("clipboard unavailable");
       const text = await navigator.clipboard.readText();
       if (!isClipboardMmlCode(text)) {
-        showToast("클립보드에서 MML 코드를 찾지 못했습니다.");
+        showToast(i18nText("mml.no_code_found"));
         return false;
       }
       openMmlImportDialog({ text, fileName: "" });
-      if (elements.mmlImportSourceLabel) elements.mmlImportSourceLabel.textContent = "클립보드 MML";
+      if (elements.midiImportSourceLabel) elements.midiImportSourceLabel.textContent = i18nText("mml.clipboard_2");
       return true;
     } catch {
-      showToast("클립보드를 읽을 수 없습니다. MML 불러오기 창에서 직접 붙여넣으세요.");
+      showToast(i18nText("mml.fail_read_clipboard"));
       return false;
     }
   }
@@ -12956,6 +13186,17 @@
     const requestedName = String(part.importName || "").trim() || `${getMmlImportBaseName()} ${partNumber}`;
     channel.name = makeUniqueChannelName(requestedName, channel.id);
     channel.notes = part.notes.map((note) => ({ ...note, id: state.nextNoteId++ }));
+    if (Number.isFinite(Number(part.mmiPartProgram))) {
+      const requestedProgram = clamp(Math.round(Number(part.mmiPartProgram) || 0), 0, 127);
+      const resolvedPreset = resolveMidiGroupEditorPreset({
+        program: requestedProgram,
+        bank: 0,
+        channel: 0,
+        programName: GM_PROGRAM_NAMES[requestedProgram] || `Program ${requestedProgram + 1}`,
+        name: part.importName || part.name || "",
+      }, channel.notes);
+      if (resolvedPreset) setChannelInstrumentPreset(channel, resolvedPreset);
+    }
     if (Number.isFinite(Number(part.mmiTrackNumber))) {
       channel.hue = getDefaultHue(Math.max(0, Number(part.mmiTrackNumber) - 1));
       channel.visible = part.mmiVisible !== false;
@@ -12965,47 +13206,8 @@
     return channel;
   }
 
-  function applyMmlImport() {
-    const parsed = updateMmlImportPreview();
-    if (!parsed) return false;
-    const applyTempo = Boolean(elements.mmlImportApplyTempo?.checked && parsed.explicitTempoCount);
-    if (!parsed.noteCount && !applyTempo) {
-      showToast("불러올 노트나 템포가 없습니다.");
-      return false;
-    }
-    if (state.playback.running || state.playback.loading) stopPlayback(false);
-    const format = state.mmlImport.format;
-    const importedChannelIds = [];
-    parsed.noteParts.forEach((part, partIndex) => {
-      const channel = createImportedChannel(part, partIndex + 1);
-      state.channels.push(channel);
-      importedChannelIds.push(channel.id);
-    });
-    if (applyTempo) {
-      state.tempos = parsed.tempos.map((tempo, index) => ({
-        id: index + 1,
-        beat: Number(tempo.beat.toFixed(6)),
-        bpm: clamp(Math.round(tempo.bpm), CONFIG.minTempo, CONFIG.maxTempo),
-        fixed: index === 0,
-      }));
-      state.nextTempoId = state.tempos.length + 1;
-    }
-    state.activePanel = "notes";
-    if (importedChannelIds.length) {
-      const activeIndex = state.channels.findIndex((channel) => channel.id === importedChannelIds[0]);
-      if (activeIndex >= 0) state.activeChannel = activeIndex;
-    }
-    clearNoteSelection();
-    clearMidiSelection();
-    state.channelNoteRuntime.clear();
-    const importLabel = format === "mmi" ? "MabiIcco" : format === "3mle" ? "3MLE" : "MML";
-    markDirty(`${importLabel} 불러오기`);
-    shrinkTimelineToContent();
-    ensureTimelineFitsViewport();
-    renderAll();
-    closeMmlImportDialog();
-    showToast(`${importLabel}에서 ${parsed.noteCount}개 노트를 새 편집 채널로 불러왔습니다.`);
-    return true;
+  function applyMmlImport(action = "add") {
+    return applyMidiImport(action);
   }
 
   const MML_PITCH_NAMES = ["c", "c+", "d", "d+", "e", "f", "f+", "g", "g+", "a", "a+", "b"];
@@ -18215,11 +18417,9 @@
       return [
         {
           label: `${noteLabel(pitch)} 미리 듣기`,
-          action: async () => {
+          action: () => {
             try {
-              audioEngine.ensureContext();
-              await audioEngine.ensureReady();
-              audioEngine.playNote(pitch, 108, null, 0.75);
+              playEditorAuditionPitch(pitch, { velocity: 108, duration: 0.75 });
             } catch (error) {
               showToast(error instanceof Error ? error.message : "소리를 재생하지 못했습니다.");
             }
@@ -18773,6 +18973,12 @@
   }
 
   function bindEvents() {
+    // Unlock Web Audio in the capture phase, before any async click/pointer handler
+    // can lose the browser's transient user activation. This single path serves
+    // piano keys, note audition, playback, and import previews.
+    document.addEventListener("pointerdown", unlockEditorAudioFromGesture, { capture: true, passive: true });
+    document.addEventListener("touchstart", unlockEditorAudioFromGesture, { capture: true, passive: true });
+    document.addEventListener("keydown", (event) => { if (!event.repeat) unlockEditorAudioFromGesture(); }, true);
     document.addEventListener("keydown", handleModalBackgroundKeyGuard, true);
     document.addEventListener("keydown", handleNewProjectShortcut, true);
     document.addEventListener("keydown", handleChannelCreateDeleteShortcut, true);
@@ -18828,40 +19034,6 @@
       closeFileMenu();
       openFilePickerInput(elements.fileInput);
     });
-    elements.mmlImportButton?.addEventListener("click", () => {
-      openMmlImportDialog();
-    });
-    elements.mmlImportChooseFileButton?.addEventListener("click", () => {
-      openFilePickerInput(elements.mmlImportFileInput);
-    });
-    elements.mmlImportPasteButton?.addEventListener("click", pasteMmlImportTextFromClipboard);
-    elements.mmlImportFileInput?.addEventListener("change", async () => {
-      const [file] = elements.mmlImportFileInput.files || [];
-      elements.mmlImportFileInput.value = "";
-      if (file) await loadMmlImportFile(file);
-    });
-    elements.mmlImportText?.addEventListener("input", scheduleMmlImportPreview);
-    elements.mmlImportApplyTempo?.addEventListener("change", updateMmlImportPreview);
-    elements.mmlImportSelectAllButton?.addEventListener("click", () => {
-      state.mmlImport.selectedCandidateIndexes = new Set(state.mmlImport.candidates.map((_, index) => index));
-      updateMmlImportPreview();
-    });
-    elements.mmlImportClearSelectionButton?.addEventListener("click", () => {
-      state.mmlImport.selectedCandidateIndexes = new Set();
-      updateMmlImportPreview();
-    });
-    elements.mmlImportCloseButton?.addEventListener("click", closeMmlImportDialog);
-    elements.mmlImportCancelButton?.addEventListener("click", closeMmlImportDialog);
-    elements.mmlImportApplyButton?.addEventListener("click", applyMmlImport);
-    elements.mmlImportBackdrop?.addEventListener("pointerdown", (event) => {
-      if (event.target === elements.mmlImportBackdrop) closeMmlImportDialog();
-    });
-    elements.mmlImportText?.addEventListener("keydown", (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-        event.preventDefault();
-        applyMmlImport();
-      }
-    });
     elements.saveButton.addEventListener("click", () => {
       closeFileMenu();
       saveProject();
@@ -18869,11 +19041,6 @@
     elements.midiOpenButton?.addEventListener("click", () => {
       closeFileMenu();
       openFilePickerInput(elements.fileInput);
-    });
-    elements.midiFileInput?.addEventListener("change", async () => {
-      const [file] = elements.midiFileInput.files || [];
-      elements.midiFileInput.value = "";
-      if (file) await prepareMidiImportFile(file);
     });
     elements.audioOpenButton?.addEventListener("click", () => {
       closeFileMenu();
@@ -18884,9 +19051,15 @@
       elements.audioFileInput.value = "";
       if (file) await importAudioFile(file);
     });
-    elements.midiImportTargetMode?.addEventListener("change", updateMidiImportDialog);
+    // The import dialog uses the exact same picker/input as File > Import so the
+    // supported-format list never depends on which format opened the dialog first.
+    elements.midiImportChooseFileButton?.addEventListener("click", () => openFilePickerInput(elements.fileInput));
+    elements.midiImportTextChooseFileButton?.addEventListener("click", () => openFilePickerInput(elements.fileInput));
+    elements.midiImportPasteButton?.addEventListener("click", () => { void pasteMmlImportTextFromClipboard(); });
+    elements.midiImportTextInput?.addEventListener("input", scheduleUnifiedTextImportParse);
     elements.midiImportIgnoreSingle64thOverlap?.addEventListener("change", updateMidiImportDialog);
     elements.midiImportLimitChannelsPerInstrument?.addEventListener("change", updateMidiImportDialog);
+    elements.midiImportMbtPacking?.addEventListener("change", () => { void reprepareMbtImportFromSharedOptions(); });
     elements.midiImportQuantize?.addEventListener("change", () => {
       if (state.midiImport.kind === "midi" && state.midiImport.midiBuffer && !state.midiImport.busy) {
         try { reparseMidiImportPreview(); }
@@ -18896,7 +19069,7 @@
         }
       }
     });
-    elements.midiImportPreviewAllButton?.addEventListener("click", () => previewMidiImportGroups(null, "all"));
+    elements.midiImportPreviewAllButton?.addEventListener("click", () => { void previewMidiImportGroups(null, "all"); });
     elements.midiImportSelectAllButton?.addEventListener("click", () => {
       if (state.midiImport.kind === "midi") {
         state.midiImport.selectedGroupIds = new Set((state.midiImport.preview?.groups || []).map((group) => String(group.id)));
@@ -18908,14 +19081,6 @@
     elements.midiImportClearAllButton?.addEventListener("click", () => {
       if (state.midiImport.kind === "midi") state.midiImport.selectedGroupIds = new Set();
       else state.midiImport.selectedTextIndexes = new Set();
-      updateMidiImportDialog();
-    });
-    elements.midiImportTextSelectAllButton?.addEventListener("click", () => {
-      state.midiImport.selectedTextIndexes = new Set((state.midiImport.textCandidates || []).map((_, index) => index));
-      updateMidiImportDialog();
-    });
-    elements.midiImportTextClearAllButton?.addEventListener("click", () => {
-      state.midiImport.selectedTextIndexes = new Set();
       updateMidiImportDialog();
     });
     elements.midiImportCloseButton?.addEventListener("click", () => closeMidiImportDialog());
@@ -19334,7 +19499,7 @@
     // The audio placement lane is not a transport/seek surface.
     // Clicking its empty area must never stop playback or move the playhead.
 
-    elements.midiReferenceLoadButton.addEventListener("click", () => openFilePickerInput(elements.midiFileInput));
+    elements.midiReferenceLoadButton.addEventListener("click", () => openFilePickerInput(elements.fileInput));
     elements.channelMergeCloseButton?.addEventListener("click", closeChannelMergeDialog);
     elements.channelMergeCancelButton?.addEventListener("click", closeChannelMergeDialog);
     elements.channelMergeApplyButton?.addEventListener("click", applyChannelMergeSelection);
@@ -19762,11 +19927,9 @@
         console.error("Editor default SoundFont preparation failed", error);
       }
     };
-    if (typeof window.requestIdleCallback === "function") {
-      window.requestIdleCallback(() => { void prepareAudio(); }, { timeout: 700 });
-    } else {
-      window.setTimeout(() => { void prepareAudio(); }, 250);
-    }
+    // Parsing yields between chunks, so start it now instead of waiting for an idle
+    // callback that may not run before the user's first audition click.
+    void prepareAudio();
 
     // 추후 메뉴를 교체할 때 사용할 수 있도록 공개합니다.
     window.MMLEditor = {
@@ -19815,13 +19978,11 @@
       adjustSelectedNoteVolumesByStep,
       findOtherVisibleChannelNoteHitAt,
       parseMmlText,
-      analyzeMmlImportSource,
       extractThreeMleMmlPartCandidates,
       extractMabiIccoMmlPartCandidates,
       normalizeMmiLegacyLengthsInPart,
       openMmlImportDialog,
       closeMmlImportDialog,
-      updateMmlImportPreview,
       applyMmlImport,
       openMidiTransferDialog,
       openNoteVolumeDialog,

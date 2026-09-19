@@ -72,7 +72,7 @@
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.3.0&amp;rev=20260919-shift-note-move1"></script>
+<script src="js/language-manager.js?v=5.3.0&amp;rev=20260919-import-unified-v2"></script>
 <title data-i18n="app.title">모비바드 v5.3</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260915-audio-lane-emoji1" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260920-import-unified3" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -120,9 +120,7 @@
 <button data-supported-files-button data-supported-files-context="editor" id="supportedFilesMenuButton" role="menuitem" type="button" data-i18n="file.supported">지원 파일</button>
 <button id="midiExtractButton" role="menuitem" title="MuScriptor: Music to MIDI and Sheet Music" type="button" data-i18n="extract">MIDI 추출</button></div>
 </div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button" data-i18n="menu.edit">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button" data-i18n="history.undo">되돌리기</button><button id="editRedoButton" role="menuitem" type="button" data-i18n="history.redo">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button" data-i18n="copy">복사</button><button id="editCutButton" role="menuitem" type="button" data-i18n="action.cut">잘라내기</button><button id="editPasteButton" role="menuitem" type="button" data-i18n="paste">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button" data-i18n="selection.all">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button" data-i18n="action.delete">삭제</button><button id="editNoteVolumeButton" role="menuitem" type="button" data-i18n="volume.edit_all_notes">모든 볼륨 수정</button></div></div>
-<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98" hidden="" id="fileInput" data-music-format-input type="file"/>
-<input accept="text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle" hidden="" id="mmlImportFileInput" type="file"/>
-<input accept="audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98" hidden="" id="midiFileInput" data-music-format-input type="file"/>
+<input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,.mbt,application/x-mobibard-mbt,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98" hidden="" id="fileInput" data-music-format-input type="file"/>
 <input accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm" hidden="" id="audioFileInput" type="file"/>
 </div>
 <div class="toolbar-separator"></div>
@@ -337,43 +335,28 @@
 </section>
 </div></main></div>
 </div>
-<div class="popup-backdrop" hidden="" id="mmlImportBackdrop">
-<section aria-label="3MLE, MabiIcco 또는 MML 불러오기" data-i18n-aria-label="mml.import_3mle" aria-modal="true" class="mml-import-dialog" id="mmlImportDialog" role="dialog">
-<div class="transfer-dialog-header">
-<div><strong data-i18n="mml.import">3MLE / MabiIcco / MML 불러오기</strong><span id="mmlImportSourceLabel" data-i18n="file.paste_text">텍스트를 붙여넣거나 파일을 선택하세요.</span></div>
-<button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="mmlImportCloseButton" type="button">×</button>
-</div>
-<div class="mml-import-source-actions">
-<button id="mmlImportChooseFileButton" type="button" data-i18n="file.text">파일 선택</button>
-<button id="mmlImportPasteButton" type="button" data-i18n="clipboard.paste">클립보드 붙여넣기</button>
-</div>
-<textarea aria-label="불러올 3MLE, MabiIcco 또는 MML 텍스트" data-i18n-aria-label="mml.text_import" id="mmlImportText" placeholder="MML@t120o4v15c4d4e4,...; · 3MLE(.mml) [Channel1] · MabiIcco(.mmi) 파일 내용" data-i18n-placeholder="mml.import_example"></textarea>
-<section class="mml-import-channel-section" hidden="" id="mmlImportChannelSection">
-<div class="mml-import-channel-header"><div><strong id="mmlImportChannelTitle" data-i18n="mml.channel_select">3MLE 채널 선택</strong><span data-i18n="channel.no_limit">Editor에서는 감지된 채널을 제한 없이 선택할 수 있습니다.</span></div><div><button id="mmlImportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="mmlImportClearSelectionButton" type="button" data-i18n="action.clear_all">전부 해제</button></div></div>
-<div class="mml-import-channel-list" id="mmlImportChannelList"></div>
-</section>
-<div class="mml-import-options mml-import-simple-options">
-<label class="mml-import-tempo-option"><input checked="" id="mmlImportApplyTempo" type="checkbox"/><span data-i18n="tempo.file_project">파일의 템포를 프로젝트에 적용</span></label>
-</div>
-<div aria-live="polite" class="mml-import-status" id="mmlImportStatus" data-i18n="mml.add_new_edit">MML은 새 편집 채널로 추가되며, 3MLE·MabiIcco 파일은 필요한 채널을 선택해 불러옵니다.</div>
-<div class="transfer-dialog-actions"><button id="mmlImportCancelButton" type="button" data-i18n="cancel">취소</button><button id="mmlImportApplyButton" type="button" data-i18n="load">불러오기</button></div>
-</section>
-</div>
 <div class="popup-backdrop" hidden="" id="midiImportBackdrop">
 <section aria-label="파일 불러오기" data-i18n-aria-label="ui.load_source_2" aria-modal="true" class="midi-import-dialog unified-import-dialog" id="midiImportDialog" role="dialog">
 <div class="transfer-dialog-header">
-<div><strong id="midiImportTitle" data-i18n="load">불러오기</strong><span id="midiImportSourceLabel" data-i18n="file.analyzing">파일을 분석하고 있습니다.</span></div>
+<div><strong id="midiImportTitle" data-i18n="load">불러오기</strong><span id="midiImportSourceLabel" data-i18n="file.select">파일 선택</span></div>
 <button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="midiImportCloseButton" type="button">×</button>
 </div>
-<div class="midi-import-summary" id="midiImportSummary"></div>
-<div class="midi-import-midi-controls" id="midiImportMidiControls">
-<div class="midi-import-selection-actions midi-import-inline-selection-actions" id="midiImportSelectionActions"><button id="midiImportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiImportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+<div class="midi-import-midi-controls unified-import-options-row" id="midiImportMidiControls">
+<button id="midiImportChooseFileButton" type="button" data-i18n="file.text">파일 선택</button>
 <select aria-label="MIDI 양자화" data-i18n-aria-label="midi.quantize" id="midiImportQuantize"><option selected="" value="64" data-i18n="ui.1_64_quantize">64박 양자화</option><option value="32" data-i18n="ui.1_32_quantize">32박 양자화</option></select>
 <label class="midi-import-overlap-option"><input checked="" id="midiImportIgnoreSingle64thOverlap" type="checkbox"/><span data-i18n="ui.ignore_1_64">64박 겹침 무시</span></label>
 <label class="midi-import-overlap-option midi-import-channel-limit-option"><input id="midiImportLimitChannelsPerInstrument" type="checkbox"/><span id="midiImportChannelLimitLabel" data-i18n="midi.limit_channels" data-i18n-args="[3]">악기당 최대 3채널</span></label>
+<select aria-label="MBT 채널 구성" data-i18n-aria-label="mbt.packing_aria" hidden="" id="midiImportMbtPacking"><option value="byInstrument" data-i18n="mbt.packing_by_instrument">악기별 채널</option><option value="compact" data-i18n="mbt.packing_compact">최소 채널</option></select>
+</div>
+<div class="unified-import-text-source" hidden="" id="midiImportTextSourcePanel">
+<div class="unified-import-text-source-actions"><button id="midiImportTextChooseFileButton" type="button" data-i18n="file.text">파일 선택</button><button id="midiImportPasteButton" type="button" data-i18n="clipboard.paste">클립보드 붙여넣기</button></div>
+<textarea aria-label="불러올 3MLE, MabiIcco 또는 MML 텍스트" data-i18n-aria-label="mml.text_import" id="midiImportTextInput" placeholder="MML@t120o4v15c4d4e4,...; · 3MLE(.mml) [Channel1] · MabiIcco(.mmi) 파일 내용" data-i18n-placeholder="mml.import_example"></textarea>
+</div>
+<div class="unified-import-channel-toolbar" id="midiImportChannelToolbar">
+<div class="midi-import-selection-actions midi-import-inline-selection-actions" id="midiImportSelectionActions"><button id="midiImportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiImportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+<div class="midi-import-summary" id="midiImportSummary"></div>
 <div class="midi-import-preview-actions"><button class="midi-import-source-preview" id="midiImportPreviewAllButton" type="button"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span><span class="transport-button-label" data-i18n="ui.preview_source">원본 듣기</span></button></div>
 </div>
-<div class="midi-import-selection-actions midi-import-text-selection-actions" hidden="" id="midiImportTextSelectionActions"><button id="midiImportTextSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiImportTextClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
 <div class="midi-import-selection-list" id="midiImportSelectionList"></div>
 <div class="transfer-dialog-actions unified-import-actions"><div aria-live="polite" class="midi-import-status" id="midiImportStatus" data-i18n="selection.items_import">불러올 항목을 선택하세요.</div><button id="midiImportCancelButton" type="button" data-i18n="cancel">취소</button><button id="midiImportApplyButton" type="button" data-i18n="action.add">추가</button><button id="midiImportNewButton" type="button" data-i18n="ui.open_new">새로 열기</button></div>
 </section>
@@ -606,6 +589,7 @@
 <script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
+<script src="../plugins/formats/mbt/format-mbt.js?v=1.0.2&amp;rev=20260920-mbt-extension-only"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
@@ -621,13 +605,13 @@
 <script src="../assets/default_sf3.js?v=20260907-mobibard16-cleaned"></script>
 <script src="../plugins/common/audio-export.js?v=1.0.1&amp;rev=20260910-ogg44100-1"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
-<script src="js/soundbank-player.js?v=5.3.0&amp;rev=20260919-shift-note-move1"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.0&amp;rev=20260824-final46"></script>
+<script src="js/soundbank-player.js?v=5.3.0&amp;rev=20260920-audio-recover2"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20260920-unified-picker"></script>
 <script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260919-shift-note-move2"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260920-import-tempo-global2"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

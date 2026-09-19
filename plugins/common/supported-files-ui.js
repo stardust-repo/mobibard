@@ -19,6 +19,7 @@
       commonNote: "음표·템포·박자는 MIDI로 변환해 가져옵니다. 각 프로그램 고유의 레이아웃, 가사 발음, 보컬 표현과 기타 주법 일부는 단순화될 수 있습니다.",
       pickerAll: "지원 파일",
       pickerMidi: "MIDI · KAR",
+      pickerMbt: "MOBIBARD AI · MBT",
       pickerPlayStation: "PlayStation",
       pickerNintendo: "Nintendo",
       pickerSega: "Sega",
@@ -55,6 +56,7 @@
       commonNote: "音符・テンポ・拍子をMIDIへ変換して読み込みます。固有のレイアウト、発音、ボーカル表現や奏法の一部は簡略化される場合があります。",
       pickerAll: "対応ファイル",
       pickerMidi: "MIDI・KAR",
+      pickerMbt: "MOBIBARD AI・MBT",
       pickerPlayStation: "PlayStation",
       pickerNintendo: "Nintendo",
       pickerSega: "Sega",
@@ -91,6 +93,7 @@
       commonNote: "Notes, tempo and time signatures are converted through MIDI. App-specific layout, phonemes, vocal expression and some playing techniques may be simplified.",
       pickerAll: "Supported files",
       pickerMidi: "MIDI · KAR",
+      pickerMbt: "MOBIBARD AI · MBT",
       pickerPlayStation: "PlayStation",
       pickerNintendo: "Nintendo",
       pickerSega: "Sega",
@@ -127,6 +130,7 @@
       commonNote: "音符、速度和拍号会先转换为 MIDI。各软件特有的排版、音素、歌声表现及部分演奏技法可能会被简化。",
       pickerAll: "支持文件",
       pickerMidi: "MIDI · KAR",
+      pickerMbt: "MOBIBARD AI · MBT",
       pickerPlayStation: "PlayStation",
       pickerNintendo: "Nintendo",
       pickerSega: "Sega",
@@ -163,6 +167,7 @@
       commonNote: "音符、速度與拍號會先轉換為 MIDI。各軟體特有的版面、音素、歌聲表現及部分演奏技法可能會被簡化。",
       pickerAll: "支援檔案",
       pickerMidi: "MIDI · KAR",
+      pickerMbt: "MOBIBARD AI · MBT",
       pickerPlayStation: "PlayStation",
       pickerNintendo: "Nintendo",
       pickerSega: "Sega",
@@ -203,6 +208,7 @@
 
   const PICKER_GROUPS = Object.freeze([
     { id: "midi", labelKey: "pickerMidi", formatIds: ["midi"], includeMacBinary: true, mimeType: "audio/midi" },
+    { id: "mbt", labelKey: "pickerMbt", formatIds: ["mobibard-mbt"], mimeType: "application/x-mobibard-mbt" },
     { id: "legacy-pc", labelKey: "pickerLegacyPc", formatIds: ["xmi", "hmp", "hmi"], mimeType: "application/octet-stream" },
     { id: "tracker", labelKey: "pickerTracker", formatIds: ["tracker-module"], mimeType: "application/octet-stream" },
     { id: "musicxml", labelKey: "pickerMusicXml", formatIds: ["musicxml"], mimeType: "application/xml" },
@@ -585,7 +591,7 @@
   else mount();
 
   window.MabiSupportedFilesUi = Object.freeze({
-    version: "5.1.0",
+    version: "5.1.1",
     mount,
     syncMusicFormatInputs,
     buildPickerTypes,

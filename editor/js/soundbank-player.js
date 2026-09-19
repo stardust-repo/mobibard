@@ -153,7 +153,19 @@
       this.onStatus?.({ label, mode });
     }
 
+    resetClosedContext() {
+      if (!this.context || this.context.state !== "closed") return false;
+      this.context = null;
+      this.masterGain = null;
+      this.compressor = null;
+      this.bufferCache.clear();
+      this.zoneOutputCache.clear();
+      this.voices.clear();
+      return true;
+    }
+
     ensureContext() {
+      this.resetClosedContext();
       if (this.context) {
         return this.context;
       }
@@ -175,10 +187,39 @@
       return this.context;
     }
 
-    async resume() {
+    unlockFromGesture() {
       const context = this.ensureContext();
+      let resumePromise = Promise.resolve(context);
+      if (context.state !== "running") {
+        try {
+          resumePromise = Promise.resolve(context.resume()).then(() => context);
+        } catch (error) {
+          resumePromise = Promise.reject(error);
+        }
+      }
+
+      // Safari/iOS and some Chromium builds need an actual source node started
+      // inside the user gesture before later async SoundBank work can make sound.
+      try {
+        const buffer = context.createBuffer(1, 1, Math.max(8000, Number(context.sampleRate) || 44100));
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.masterGain || context.destination);
+        source.start(0);
+        source.addEventListener?.("ended", () => { try { source.disconnect(); } catch {} }, { once: true });
+      } catch {}
+      return resumePromise;
+    }
+
+    async resume() {
+      let context = this.ensureContext();
       if (context.state !== "running") {
         await context.resume();
+      }
+      if (context.state !== "running") {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (context.state === "closed") context = this.ensureContext();
+        if (context.state !== "running") await context.resume();
       }
       return context;
     }

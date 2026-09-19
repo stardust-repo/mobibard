@@ -7218,12 +7218,18 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return type === "application/x-3mle" || type === "application/vnd.3mle";
   }
 
-  async function buildPluginMidiImport(bytes, name = "Music", mimeType = "") {
+  async function chooseMbtImportOptions(name = "") {
+    if (!window.MobibardMbt?.isMbtFile?.(name)) return {};
+    const mode = await window.MobibardMbt.choosePackingMode({ language: document.documentElement.lang });
+    return mode ? { mbtPackingMode: mode } : null;
+  }
+
+  async function buildPluginMidiImport(bytes, name = "Music", mimeType = "", options = {}) {
     if (!window.MabiMusicFormats?.convertBytes) {
       throw new Error("음악 포맷 플러그인을 불러오지 못했습니다.");
     }
     await ensureMusicFormatRuntime(name, mimeType, bytes);
-    const converted = await window.MabiMusicFormats.convertBytes(bytes, name, mimeType);
+    const converted = await window.MabiMusicFormats.convertBytes(bytes, name, mimeType, options);
     const midiBytes = converted.midiBytes;
     const overview = analyzeMidi(midiBytes, name);
     return {
@@ -7280,7 +7286,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (window.MabiMusicFormats?.isSupported(name, mimeType)) {
-      const importData = await buildPluginMidiImport(bytes, name, mimeType);
+      const importOptions = await chooseMbtImportOptions(name);
+      if (importOptions == null) return;
+      const importData = await buildPluginMidiImport(bytes, name, mimeType, importOptions);
       googleDriveMmlFileName = "";
       openMidiConvertDialog(importData);
       showToast(i18nText("drive.midi_loaded"), "info");
@@ -7953,8 +7961,10 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       stopMidiPreview();
       stopPlayback(false);
       if (window.MabiMusicFormats?.isSupported(name, file.type || "")) {
+        const importOptions = await chooseMbtImportOptions(name);
+        if (importOptions == null) return;
         const bytes = new Uint8Array(await file.arrayBuffer());
-        const importData = await buildPluginMidiImport(bytes, name, file.type || "");
+        const importData = await buildPluginMidiImport(bytes, name, file.type || "", importOptions);
         openMidiConvertDialog(importData);
       } else if (ext === "mmi") {
         const bytes = new Uint8Array(await file.arrayBuffer());

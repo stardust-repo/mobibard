@@ -9,6 +9,7 @@
 
 ## 입력과 변환
 
+- MOBIBARD AI/학습 결과 `.mbt`(MBT1)를 직접 불러옵니다. 읽을 때 `악기별로 구분` 또는 `악기 구분 없이 최대한 압축(단, 음정 악기와 북·심벌즈 무음정 악기는 서로 다른 채널 풀)` 채널 배치를 선택한 뒤 기존 MIDI→MML 변환 경로를 사용합니다.
 - MIDI/KAR, XMI/HMP/HMI, Tracker(MOD/S3M/XM/IT), PlayStation/Nintendo/Sega 시퀀스와 VGM/VGZ·GYM·S98 사운드칩 로그, MusicXML/MNX/Finale/MuseScore/Guitar Pro, VOCALOID/UTAU/OpenUtau/Synthesizer V/CeVIO 계열을 공용 포맷 계층으로 처리합니다.
 - `.bin`·`.macbin` Classic Mac 컨테이너는 내부 형식을 공용 계층이 자동 판별합니다.
 - 공용 MIDI→MML 변환기로 최대 3채널을 생성합니다.
