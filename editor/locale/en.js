@@ -87,6 +87,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "file.analyzing_named": "Analyzing {0} file.",
     "midi.limit_channels_applied": " · compressed {0} instruments to max {1} channels each",
     "history.source_add": "Add {0}",
+    "channel.delete_summary_count": "Selected channels: {0}",
     "channel.delete_summary_select": "Select channels to delete.",
     "channel.delete_summary_auto": "Delete {0} channels · create 1 empty channel",
     "channel.delete_summary_remaining": "Delete {0} channels · keep {1} channels",

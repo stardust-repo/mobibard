@@ -87,6 +87,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "file.analyzing_named": "正在分析 {0} 檔案。",
     "midi.limit_channels_applied": " · 將 {0} 個樂器壓縮為每個最多 {1} 個頻道",
     "history.source_add": "新增 {0}",
+    "channel.delete_summary_count": "已選頻道：{0}個",
     "channel.delete_summary_select": "請選擇要刪除的頻道。",
     "channel.delete_summary_auto": "刪除 {0} 個頻道 · 自動建立 1 個空頻道",
     "channel.delete_summary_remaining": "刪除 {0} 個頻道 · 保留 {1} 個頻道",

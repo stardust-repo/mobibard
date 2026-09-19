@@ -87,6 +87,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "file.analyzing_named": "正在分析 {0} 文件。",
     "midi.limit_channels_applied": " · 将 {0} 个乐器压缩到每个最多 {1} 个频道",
     "history.source_add": "添加 {0}",
+    "channel.delete_summary_count": "已选频道：{0}个",
     "channel.delete_summary_select": "请选择要删除的频道。",
     "channel.delete_summary_auto": "删除 {0} 个频道 · 自动创建 1 个空频道",
     "channel.delete_summary_remaining": "删除 {0} 个频道 · 保留 {1} 个频道",

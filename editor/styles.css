@@ -7471,19 +7471,20 @@ a[class*="button"]:hover {
   outline-offset: 1px;
 }
 .channel-mml-status {
-  min-height: 31px;
-  margin: 0 14px;
-  padding: 7px 9px;
-  border: 1px solid var(--line-soft);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--accent) 5%, var(--control-bg));
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--muted);
   font-size: 11px;
-  line-height: 1.45;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .channel-mml-status.error {
-  border-color: color-mix(in srgb, var(--danger) 62%, var(--control-border));
-  background: color-mix(in srgb, var(--danger) 8%, var(--control-bg));
   color: color-mix(in srgb, var(--danger) 78%, var(--text));
 }
 .channel-mml-help { padding-top: 8px; }
@@ -7574,9 +7575,11 @@ a[class*="button"]:hover {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  gap: 8px;
   padding: 10px 14px 0;
 }
 .channel-mml-tempo-option {
+  flex: 0 0 auto;
   min-height: 32px;
   display: inline-flex;
   align-items: center;

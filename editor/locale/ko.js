@@ -87,6 +87,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "file.analyzing_named": "{0} 파일을 분석하고 있습니다.",
     "midi.limit_channels_applied": " · {0}개 악기를 최대 {1}채널로 압축",
     "history.source_add": "{0} 추가",
+    "channel.delete_summary_count": "선택한 채널: {0}개",
     "channel.delete_summary_select": "삭제할 채널을 선택하세요.",
     "channel.delete_summary_auto": "{0}개 채널 삭제 · 빈 채널 1개 자동 생성",
     "channel.delete_summary_remaining": "{0}개 채널 삭제 · {1}개 채널 유지",

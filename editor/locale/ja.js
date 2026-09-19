@@ -87,6 +87,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "file.analyzing_named": "{0} ファイルを解析しています。",
     "midi.limit_channels_applied": " · {0}個の楽器を最大{1}チャンネルに圧縮",
     "history.source_add": "{0}を追加",
+    "channel.delete_summary_count": "選択したチャンネル: {0}個",
     "channel.delete_summary_select": "削除するチャンネルを選択してください。",
     "channel.delete_summary_auto": "{0}チャンネル削除 · 空チャンネルを1つ自動作成",
     "channel.delete_summary_remaining": "{0}チャンネル削除 · {1}チャンネルを維持",

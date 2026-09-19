@@ -721,7 +721,8 @@
     volume: state.masterVolume,
     onStatus: () => {},
   });
-  let editorSoundFontName = "기본 음색";
+  // Empty name means the embedded/default SoundFont; display text is resolved from the active locale.
+  let editorSoundFontName = "";
   let editorSoundFontBusy = false;
   let editorInstrumentOptionsSignature = "";
 
@@ -1405,7 +1406,7 @@
 
   function isEditorUsingEmbeddedDefaultSoundBank() {
     if (audioEngine?.soundBank) return Boolean(audioEngine.soundBank.isEmbeddedDefault);
-    return editorSoundFontName === "기본 음색";
+    return !editorSoundFontName;
   }
 
   function chooseDefaultPresetForMidiGroup(group, notes = []) {
@@ -2974,11 +2975,11 @@
   }
 
   function updateEditorSoundFontUi(message = "") {
-    const label = message || editorSoundFontName || "기본 음색";
+    const label = message || editorSoundFontName || i18nText("soundbank.default");
     if (elements.editorSoundFontCurrentName) elements.editorSoundFontCurrentName.textContent = label;
     if (elements.editorSoundFontMenuLabel) elements.editorSoundFontMenuLabel.textContent = label;
     if (elements.editorSoundFontSettingsButton) {
-      elements.editorSoundFontSettingsButton.title = `사운드폰트 설정 · ${label}`;
+      elements.editorSoundFontSettingsButton.title = i18nText("soundbank.settings_2", [label]);
     }
   }
 
@@ -3005,7 +3006,7 @@
     if (!file || editorSoundFontBusy) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     setEditorSoundFontBusy(true);
-    updateEditorSoundFontUi("불러오는 중…");
+    updateEditorSoundFontUi(i18nText("ui.load"));
     try {
       await audioEngine.useSoundBank(file, { label: file.name || "SoundBank" });
       editorSoundFontName = String(file.name || "SoundBank");
@@ -3014,12 +3015,12 @@
       renderChannelEditor();
       renderChannelTabs();
       updateEditorSoundFontUi();
-      showToast(`${editorSoundFontName} 사운드폰트를 적용했습니다.`);
+      showToast(i18nText("soundbank.applied", [editorSoundFontName]));
       return true;
     } catch (error) {
       console.error("Editor SoundFont load failed", error);
       updateEditorSoundFontUi();
-      showToast(`사운드폰트를 불러오지 못했습니다: ${error?.message || error}`, "error");
+      showToast(i18nText("soundbank.fail_load", [error?.message || error]), "error");
       return false;
     } finally {
       if (elements.editorSoundFontFileInput) elements.editorSoundFontFileInput.value = "";
@@ -3031,21 +3032,21 @@
     if (editorSoundFontBusy) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     setEditorSoundFontBusy(true);
-    updateEditorSoundFontUi("기본 음색 준비 중…");
+    updateEditorSoundFontUi(i18nText("ui.ready_default_sounds"));
     try {
       await audioEngine.restoreDefaultSoundBank();
-      editorSoundFontName = "기본 음색";
+      editorSoundFontName = "";
       reconcileEditorChannelsWithSoundBank();
       populateChannelInstrumentSelect();
       renderChannelEditor();
       renderChannelTabs();
       updateEditorSoundFontUi();
-      showToast("기본 사운드폰트로 복원했습니다.");
+      showToast(i18nText("soundbank.restored_default"));
       return true;
     } catch (error) {
       console.error("Editor default SoundFont restore failed", error);
       updateEditorSoundFontUi();
-      showToast(`기본 사운드폰트를 복원하지 못했습니다: ${error?.message || error}`, "error");
+      showToast(i18nText("soundbank.fail_restore_default", [error?.message || error]), "error");
       return false;
     } finally {
       setEditorSoundFontBusy(false);
@@ -6282,16 +6283,35 @@
     return normalizeMmlCommandCase(source);
   }
 
-  function normalizeChannelMmlTextareaCase() {
-    const textarea = elements.channelMmlText;
-    if (!textarea) return;
+  function normalizeMmlTextareaValue(textarea, normalizer = normalizeMmlTextCase) {
+    if (!textarea || typeof normalizer !== "function") return false;
     const before = String(textarea.value || "");
-    const after = normalizeMmlCommandCase(before);
-    if (before === after) return;
+    const after = String(normalizer(before) || "");
+    if (before === after) return false;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
+    const scrollTop = textarea.scrollTop;
+    const scrollLeft = textarea.scrollLeft;
     textarea.value = after;
     try { textarea.setSelectionRange(start, end); } catch {}
+    textarea.scrollTop = scrollTop;
+    textarea.scrollLeft = scrollLeft;
+    return true;
+  }
+
+  function normalizeChannelMmlTextareaCase() {
+    return normalizeMmlTextareaValue(elements.channelMmlText, normalizeMmlCommandCase);
+  }
+
+  function normalizeUnifiedMmlImportTextareaCase() {
+    const textarea = elements.midiImportTextInput;
+    if (!textarea) return false;
+    const source = String(textarea.value || "");
+    // 3MLE/MMI wrappers can contain case-sensitive metadata. Only normalize the
+    // whole visible field when it is actually plain MML. Their extracted MML
+    // channel values are normalized separately by the parser/output paths.
+    if (detectCompatibleTextFormat(state.midiImport.fileName || "", source) !== "mml") return false;
+    return normalizeMmlTextareaValue(textarea, normalizeMmlTextCase);
   }
 
   function channelToEditableMml(channel, { includeTempo = false, sourceNotes = null } = {}) {
@@ -7710,8 +7730,9 @@
   }
 
   function setUnifiedTextImportContent(text, fileName = "") {
-    const sourceText = String(text || "").replace(/^\uFEFF/, "");
-    const format = detectCompatibleTextFormat(fileName, sourceText);
+    const rawSourceText = String(text || "").replace(/^\uFEFF/, "");
+    const format = detectCompatibleTextFormat(fileName, rawSourceText);
+    const sourceText = format === "mml" ? normalizeMmlTextCase(rawSourceText) : rawSourceText;
     const candidates = format === "mmi"
       ? extractMabiIccoMmlPartCandidates(sourceText)
       : format === "3mle"
@@ -7731,6 +7752,7 @@
   function reparseUnifiedTextImport({ preserveSelection = true } = {}) {
     if (state.midiImport.kind !== "text") return null;
     const selectedBefore = preserveSelection ? new Set(state.midiImport.selectedTextIndexes) : new Set();
+    normalizeUnifiedMmlImportTextareaCase();
     const sourceText = elements.midiImportTextInput?.value ?? state.midiImport.text ?? "";
     const fileName = state.midiImport.fileName || "";
     const format = detectCompatibleTextFormat(fileName, sourceText);
@@ -10905,16 +10927,10 @@
 
   function updateChannelDeleteSummary() {
     const ids = getCheckedChannelDeleteIds();
-    const remaining = state.channels.length - ids.length;
-    const invalid = ids.length === 0;
     if (elements.channelDeleteSummary) {
-      elements.channelDeleteSummary.textContent = ids.length === 0
-        ? i18nText("channel.delete_summary_select")
-        : remaining <= 0
-          ? i18nText("channel.delete_summary_auto", [ids.length])
-          : i18nText("channel.delete_summary_remaining", [ids.length, remaining]);
+      elements.channelDeleteSummary.textContent = i18nText("channel.delete_summary_count", [ids.length]);
     }
-    if (elements.channelDeleteApplyButton) elements.channelDeleteApplyButton.disabled = invalid;
+    if (elements.channelDeleteApplyButton) elements.channelDeleteApplyButton.disabled = ids.length === 0;
   }
 
   function renderChannelDeleteDialog() {
@@ -14427,9 +14443,10 @@
     updateTimeEditScopeUi();
     if (elements.timeEditMeasureInput) elements.timeEditMeasureInput.value = "1";
     if (elements.timeEditBeatInput) elements.timeEditBeatInput.value = "0";
-    // 추가/삭제를 하나의 팝업에 통합합니다. 메뉴에서 어느 동작으로 열었는지는 Enter 기본 동작에만 사용합니다.
-    if (elements.timeEditInsertButton) elements.timeEditInsertButton.hidden = false;
-    if (elements.timeEditDeleteButton) elements.timeEditDeleteButton.hidden = false;
+    // 마디 추가/삭제 버튼은 각각 자신에게 맞는 동작만 보여 줍니다.
+    // 일반적인 "마디 편집" 진입(preferredAction 없음)에서만 두 동작을 모두 제공합니다.
+    if (elements.timeEditInsertButton) elements.timeEditInsertButton.hidden = normalizedAction === "delete";
+    if (elements.timeEditDeleteButton) elements.timeEditDeleteButton.hidden = normalizedAction === "insert";
     if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = false;
     requestAnimationFrame(() => {
       elements.timeEditMeasureInput?.focus();
@@ -19056,7 +19073,10 @@
     elements.midiImportChooseFileButton?.addEventListener("click", () => openFilePickerInput(elements.fileInput));
     elements.midiImportTextChooseFileButton?.addEventListener("click", () => openFilePickerInput(elements.fileInput));
     elements.midiImportPasteButton?.addEventListener("click", () => { void pasteMmlImportTextFromClipboard(); });
-    elements.midiImportTextInput?.addEventListener("input", scheduleUnifiedTextImportParse);
+    elements.midiImportTextInput?.addEventListener("input", () => {
+      normalizeUnifiedMmlImportTextareaCase();
+      scheduleUnifiedTextImportParse();
+    });
     elements.midiImportIgnoreSingle64thOverlap?.addEventListener("change", updateMidiImportDialog);
     elements.midiImportLimitChannelsPerInstrument?.addEventListener("change", updateMidiImportDialog);
     elements.midiImportMbtPacking?.addEventListener("change", () => { void reprepareMbtImportFromSharedOptions(); });
