@@ -145,8 +145,10 @@
     sidePanel: document.querySelector("#sidePanel"),
     sidebarChannelsTab: document.querySelector("#sidebarChannelsTab"),
     sidebarHistoryTab: document.querySelector("#sidebarHistoryTab"),
+    sidebarThanksTab: document.querySelector("#sidebarThanksTab"),
     pianoSection: document.querySelector(".piano-section"),
     historyPanel: document.querySelector("#historyPanel"),
+    specialThanksPanel: document.querySelector("#specialThanksPanel"),
     historyCornerToggle: document.querySelector("#historyCornerToggle"),
     collapsedMergeChannelsButton: document.querySelector("#collapsedMergeChannelsButton"),
     collapsedAddChannelButton: document.querySelector("#collapsedAddChannelButton"),
@@ -361,6 +363,7 @@
     channelMmlTargetLabel: document.querySelector("#channelMmlTargetLabel"),
     channelMmlText: document.querySelector("#channelMmlText"),
     channelMmlIncludeTempo: document.querySelector("#channelMmlIncludeTempo"),
+    channelMmlOptimizedView: document.querySelector("#channelMmlOptimizedView"),
     channelMmlStatus: document.querySelector("#channelMmlStatus"),
     channelMmlCloseButton: document.querySelector("#channelMmlCloseButton"),
     channelMmlCancelButton: document.querySelector("#channelMmlCancelButton"),
@@ -726,6 +729,8 @@
       parseTimer: 0,
       parsed: null,
       includeTempo: true,
+      optimizedView: false,
+      standardText: "",
     },
     audioEdit: {
       clipId: null,
@@ -6684,6 +6689,19 @@
     }
   }
 
+  function optimizeChannelEditableMmlBody(body) {
+    const source = normalizeMmlCommandCase(String(body || "").trim());
+    if (!source) return "";
+    const optimized = optimizeEditorExportMml(`MML@${source};`);
+    const parts = splitMmlPartsForExport(optimized);
+    return parts.length ? normalizeMmlCommandCase(parts.join(",")) : source;
+  }
+
+  function channelToDisplayedMml(channel, { includeTempo = false, sourceNotes = null, optimized = false } = {}) {
+    const source = channelToEditableMml(channel, { includeTempo, sourceNotes });
+    return optimized ? optimizeChannelEditableMmlBody(source) : source;
+  }
+
   function normalizeMmlTextareaValue(textarea, normalizer = normalizeMmlTextCase) {
     if (!textarea || typeof normalizer !== "function") return false;
     const before = String(textarea.value || "");
@@ -6789,13 +6807,40 @@
     const channel = state.channels.find((entry) => String(entry.id) === String(channelId));
     if (!channel || !elements.channelMmlText) return false;
     const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
+    const optimized = Boolean(elements.channelMmlOptimizedView?.checked);
     state.channelMmlEdit.includeTempo = includeTempo;
     let sourceNotes = null;
+    const sourceForParse = optimized
+      ? String(state.channelMmlEdit.standardText || "")
+      : String(elements.channelMmlText.value || "");
     try {
-      const parsed = parseMmlText(String(elements.channelMmlText.value || ""), { quantize: 64 });
+      const parsed = parseMmlText(sourceForParse, { quantize: 64 });
       if (parsed.noteParts.length <= 1) sourceNotes = parsed.noteParts[0]?.notes || [];
     } catch {}
-    elements.channelMmlText.value = channelToEditableMml(channel, { includeTempo, sourceNotes });
+    state.channelMmlEdit.standardText = channelToEditableMml(channel, { includeTempo, sourceNotes });
+    state.channelMmlEdit.optimizedView = optimized;
+    elements.channelMmlText.readOnly = optimized;
+    elements.channelMmlText.value = optimized
+      ? optimizeChannelEditableMmlBody(state.channelMmlEdit.standardText)
+      : state.channelMmlEdit.standardText;
+    updateChannelMmlPreview();
+    return true;
+  }
+
+  function refreshChannelMmlOptimizedView() {
+    if (!elements.channelMmlText) return false;
+    const optimized = Boolean(elements.channelMmlOptimizedView?.checked);
+    if (optimized) {
+      normalizeChannelMmlTextareaCase();
+      state.channelMmlEdit.standardText = String(elements.channelMmlText.value || "");
+      state.channelMmlEdit.optimizedView = true;
+      elements.channelMmlText.readOnly = true;
+      elements.channelMmlText.value = optimizeChannelEditableMmlBody(state.channelMmlEdit.standardText);
+    } else {
+      state.channelMmlEdit.optimizedView = false;
+      elements.channelMmlText.readOnly = false;
+      elements.channelMmlText.value = String(state.channelMmlEdit.standardText || "");
+    }
     updateChannelMmlPreview();
     return true;
   }
@@ -6812,9 +6857,14 @@
     state.channelMmlEdit.parseTimer = 0;
     if (elements.channelMmlTargetLabel) elements.channelMmlTargetLabel.textContent = channel.name;
     if (elements.channelMmlIncludeTempo) elements.channelMmlIncludeTempo.checked = state.channelMmlEdit.includeTempo !== false;
-    elements.channelMmlText.value = channelToEditableMml(channel, {
+    if (elements.channelMmlOptimizedView) elements.channelMmlOptimizedView.checked = false;
+    state.channelMmlEdit.optimizedView = false;
+    elements.channelMmlText.readOnly = false;
+    state.channelMmlEdit.standardText = channelToDisplayedMml(channel, {
       includeTempo: Boolean(elements.channelMmlIncludeTempo?.checked),
+      optimized: false,
     });
+    elements.channelMmlText.value = state.channelMmlEdit.standardText;
     elements.channelMmlBackdrop.hidden = false;
     closeContextMenu();
     closeFileMenu();
@@ -6832,6 +6882,9 @@
     state.channelMmlEdit.parseTimer = 0;
     state.channelMmlEdit.channelId = null;
     state.channelMmlEdit.parsed = null;
+    state.channelMmlEdit.optimizedView = false;
+    state.channelMmlEdit.standardText = "";
+    if (elements.channelMmlText) elements.channelMmlText.readOnly = false;
     if (elements.channelMmlBackdrop) elements.channelMmlBackdrop.hidden = true;
   }
 
@@ -10455,26 +10508,33 @@
   }
 
   function setSidebarTab(tab, { persist = true, focus = false } = {}) {
-    const nextTab = tab === "history" ? "history" : "channels";
+    const nextTab = tab === "history" ? "history" : (tab === "thanks" ? "thanks" : "channels");
     state.sidebarTab = nextTab;
     const channelsActive = nextTab === "channels";
+    const historyActive = nextTab === "history";
+    const thanksActive = nextTab === "thanks";
     elements.sidebarChannelsTab?.classList.toggle("active", channelsActive);
-    elements.sidebarHistoryTab?.classList.toggle("active", !channelsActive);
+    elements.sidebarHistoryTab?.classList.toggle("active", historyActive);
+    elements.sidebarThanksTab?.classList.toggle("active", thanksActive);
     elements.sidebarChannelsTab?.setAttribute("aria-selected", String(channelsActive));
-    elements.sidebarHistoryTab?.setAttribute("aria-selected", String(!channelsActive));
+    elements.sidebarHistoryTab?.setAttribute("aria-selected", String(historyActive));
+    elements.sidebarThanksTab?.setAttribute("aria-selected", String(thanksActive));
     if (elements.channelPanel) elements.channelPanel.hidden = !channelsActive;
-    if (elements.historyPanel) elements.historyPanel.hidden = channelsActive;
+    if (elements.historyPanel) elements.historyPanel.hidden = !historyActive;
+    if (elements.specialThanksPanel) elements.specialThanksPanel.hidden = !thanksActive;
     if (persist) {
       try { window.localStorage.setItem("mobibard-sidebar-tab", nextTab); } catch {}
       scheduleAutosave(500);
     }
-    if (focus) (channelsActive ? elements.sidebarChannelsTab : elements.sidebarHistoryTab)?.focus();
+    if (focus) ({ channels: elements.sidebarChannelsTab, history: elements.sidebarHistoryTab, thanks: elements.sidebarThanksTab }[nextTab])?.focus();
     requestAnimationFrame(resizeAndDraw);
   }
 
   function loadStoredSidebarTab() {
-    try { return window.localStorage.getItem("mobibard-sidebar-tab") === "history" ? "history" : "channels"; }
-    catch { return "channels"; }
+    try {
+      const stored = window.localStorage.getItem("mobibard-sidebar-tab");
+      return stored === "history" || stored === "thanks" ? stored : "channels";
+    } catch { return "channels"; }
   }
 
   function setHistoryCollapsed(collapsed) {
@@ -18823,7 +18883,9 @@
         .map(String)
         .filter((id) => validMidiIds.has(id)),
     );
-    state.sidebarTab = data.editor?.sidebarTab === "history" ? "history" : "channels";
+    state.sidebarTab = data.editor?.sidebarTab === "history" || data.editor?.sidebarTab === "thanks"
+      ? data.editor.sidebarTab
+      : "channels";
     clearNoteSelection();
     stopRollDragAutoScroll();
     state.interaction = null;
@@ -21540,6 +21602,7 @@
     elements.historyCornerToggle.addEventListener("click", () => setHistoryCollapsed(!state.history.collapsed));
     elements.sidebarChannelsTab?.addEventListener("click", () => setSidebarTab("channels"));
     elements.sidebarHistoryTab?.addEventListener("click", () => setSidebarTab("history"));
+    elements.sidebarThanksTab?.addEventListener("click", () => setSidebarTab("thanks"));
     elements.channelTabs?.addEventListener("keydown", handleChannelTreeArrowNavigation);
     elements.channelTabs?.addEventListener("pointermove", moveChannelActionSweep);
     elements.channelTabs?.addEventListener("pointerup", endChannelActionSweep);
@@ -21808,9 +21871,13 @@
     });
     elements.channelMmlText?.addEventListener("input", () => {
       normalizeChannelMmlTextareaCase();
+      if (!state.channelMmlEdit.optimizedView) {
+        state.channelMmlEdit.standardText = String(elements.channelMmlText.value || "");
+      }
       scheduleChannelMmlPreview();
     });
     elements.channelMmlIncludeTempo?.addEventListener("change", refreshChannelMmlTempoOption);
+    elements.channelMmlOptimizedView?.addEventListener("change", refreshChannelMmlOptimizedView);
     elements.channelMmlText?.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();

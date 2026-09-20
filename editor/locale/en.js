@@ -486,6 +486,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "channel.mml_text_aria": "Current channel MML",
     "channel.mml_help": "Edit only the current channel MML body. When Include tempo is enabled, timeline tempo commands are shown and applied too; fade remains a timeline setting. T/O/L/V use uppercase, while notes and r/n use lowercase.",
     "channel.mml_include_tempo": "Include tempo",
+    "channel.mml_optimized_view": "View optimized MML",
     "channel.mml_status_multi": "A single editor channel cannot contain multiple comma-separated voices.",
     "channel.mml_status_notes": "{0} notes",
     "channel.mml_status_chars": "{0} chars",

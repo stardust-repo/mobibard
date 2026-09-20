@@ -261,6 +261,7 @@
 <div aria-label="왼쪽 패널" data-i18n-aria-label="ui.left_panel" class="side-panel-tabs" role="tablist">
 <button aria-controls="channelPanel" aria-selected="true" class="side-panel-tab active" id="sidebarChannelsTab" role="tab" type="button" data-i18n="channel.label">채널</button>
 <button aria-controls="historyPanel" aria-selected="false" class="side-panel-tab" id="sidebarHistoryTab" role="tab" type="button" data-i18n="history.text">히스토리</button>
+<button aria-controls="specialThanksPanel" aria-label="Special Thanks" aria-selected="false" class="side-panel-tab side-panel-special-tab" id="sidebarThanksTab" role="tab" title="Special Thanks" type="button">★</button>
 <button aria-label="왼쪽 패널 닫기" data-i18n-aria-label="ui.close_left_panel" aria-pressed="false" class="side-panel-toggle" data-state="open" id="historyCornerToggle" title="왼쪽 패널 닫기" data-i18n-title="ui.close_left_panel" type="button">‹</button>
 </div>
 <div aria-label="접힌 채널 빠른 선택" data-i18n-aria-label="channel.collapsed_quick_select" class="sidebar-collapsed-rail" id="sidebarCollapsedRail">
@@ -373,6 +374,17 @@
 <div aria-label="되돌리기 및 다시 실행" data-i18n-aria-label="history.undo_redo" class="history-actions" role="group"><button id="historyUndoButton" title="되돌리기 (Ctrl+Z)" data-i18n-title="history.undo_hint" type="button" data-i18n="history.undo_icon">↶ 되돌리기</button><button id="historyRedoButton" title="다시 적용 (Ctrl+Y)" data-i18n-title="history.redo_hint" type="button" data-i18n="history.redo_icon">↷ 다시적용</button></div>
 <ol aria-label="최신순 편집 기록" data-i18n-aria-label="history.edit_newest_first" class="history-list" id="historyList"></ol>
 </section>
+<section aria-label="Special Thanks" class="side-panel-view special-thanks-panel" hidden id="specialThanksPanel" role="tabpanel">
+<div class="special-thanks-content">
+<h2>SPECIAL THANKS</h2>
+<p class="special-thanks-intro">큰 도움을 주신분들</p>
+<ul class="special-thanks-list">
+<li><span class="special-thanks-server">던컨</span><span class="special-thanks-name">탕속의고기</span></li>
+<li><span class="special-thanks-server">던컨</span><span class="special-thanks-name">쏘닉</span></li>
+<li><span class="special-thanks-server">던컨</span><span class="special-thanks-name">메굼잉</span></li>
+</ul>
+</div>
+</section>
 </aside>
 <section class="piano-section" data-context-area="piano-section">
 <div aria-hidden="true" class="overview-timeline-corner"></div>
@@ -466,7 +478,7 @@
 <div class="popup-backdrop" hidden="" id="channelMmlBackdrop">
 <section aria-label="채널 MML 편집" data-i18n-aria-label="channel.mml_edit" aria-modal="true" class="transfer-dialog channel-mml-dialog" id="channelMmlDialog" role="dialog">
 <div class="transfer-dialog-header"><div><strong data-i18n="channel.mml_edit">채널 MML 편집</strong><span id="channelMmlTargetLabel" data-i18n="channel.text">현재 채널</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelMmlCloseButton" type="button">×</button></div>
-<div class="channel-mml-options"><label class="channel-mml-tempo-option"><input checked="" id="channelMmlIncludeTempo" type="checkbox"/><span data-i18n="channel.mml_include_tempo">템포 포함</span></label><div aria-live="polite" class="channel-mml-status" id="channelMmlStatus"></div></div>
+<div class="channel-mml-options"><label class="channel-mml-tempo-option"><input checked="" id="channelMmlIncludeTempo" type="checkbox"/><span data-i18n="channel.mml_include_tempo">템포 포함</span></label><label class="channel-mml-tempo-option channel-mml-optimize-option"><input id="channelMmlOptimizedView" type="checkbox"/><span data-i18n="channel.mml_optimized_view">최적화 MML 보기</span></label><div aria-live="polite" class="channel-mml-status" id="channelMmlStatus"></div></div>
 <div class="channel-mml-editor"><textarea aria-label="현재 채널 MML" data-i18n-aria-label="channel.mml_text_aria" id="channelMmlText" spellcheck="false"></textarea></div>
 <p class="transfer-dialog-help channel-mml-help" data-i18n="channel.mml_help">현재 채널의 MML 본문만 편집합니다. 템포 포함을 켜면 타임라인 템포도 함께 표시·적용하며, 페이드는 타임라인 설정을 유지합니다. T/O/L/V는 대문자, 음표·r/n은 소문자로 정리됩니다.</p>
 <div class="transfer-dialog-actions"><button id="channelMmlCancelButton" type="button" data-i18n="cancel">취소</button><button id="channelMmlApplyButton" type="button" data-i18n="action.apply">적용</button></div>

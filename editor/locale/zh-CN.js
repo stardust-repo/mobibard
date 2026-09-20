@@ -486,6 +486,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "channel.mml_text_aria": "当前频道 MML",
     "channel.mml_help": "这里只编辑当前频道的 MML 正文。启用“包含速度”后，会同时显示并应用时间轴速度；淡入淡出仍保留为时间轴设置。T/O/L/V 使用大写，音符与 r/n 使用小写。",
     "channel.mml_include_tempo": "包含速度",
+    "channel.mml_optimized_view": "查看优化 MML",
     "channel.mml_status_multi": "单个编辑频道不能使用逗号分隔的多个声部。",
     "channel.mml_status_notes": "{0} 个音符",
     "channel.mml_status_chars": "{0} 字符",

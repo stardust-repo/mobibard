@@ -486,6 +486,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "channel.mml_text_aria": "現在のチャンネルMML",
     "channel.mml_help": "現在のチャンネルのMML本文だけを編集します。「テンポを含む」をオンにするとタイムラインのテンポも表示・適用します。フェードはタイムライン設定を維持します。T/O/L/Vは大文字、音符とr/nは小文字に整形されます。",
     "channel.mml_include_tempo": "テンポを含む",
+    "channel.mml_optimized_view": "最適化MMLを表示",
     "channel.mml_status_multi": "1つの編集チャンネルでカンマ区切りの複数声部は使用できません。",
     "channel.mml_status_notes": "ノート {0}個",
     "channel.mml_status_chars": "{0}文字",

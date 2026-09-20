@@ -486,6 +486,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "channel.mml_text_aria": "현재 채널 MML",
     "channel.mml_help": "현재 채널의 MML 본문만 편집합니다. 템포 포함을 켜면 타임라인 템포도 함께 표시·적용하며, 페이드는 타임라인 설정을 유지합니다. T/O/L/V는 대문자, 음표·r/n은 소문자로 정리됩니다.",
     "channel.mml_include_tempo": "템포 포함",
+    "channel.mml_optimized_view": "최적화 MML 보기",
     "channel.mml_status_multi": "한 채널 편집에서는 쉼표로 여러 성부를 나눌 수 없습니다.",
     "channel.mml_status_notes": "노트 {0}개",
     "channel.mml_status_chars": "{0}자",
