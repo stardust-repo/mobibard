@@ -80,6 +80,7 @@
   const AUTOSAVE_STORE_NAME = "snapshots";
   const AUTOSAVE_KEY = "latest";
   const AUTOSAVE_FALLBACK_KEY = "mobibard-autosave-fallback";
+  const IMPORT_CHANNEL_COLOR_MODE_KEY = "mobibard-import-channel-color-mode";
 
   const CANVAS_THEME = {
     dark: {
@@ -281,6 +282,7 @@
     midiImportIgnoreSingle64thOverlap: document.querySelector("#midiImportIgnoreSingle64thOverlap"),
     midiImportLimitChannelsPerInstrument: document.querySelector("#midiImportLimitChannelsPerInstrument"),
     midiImportChannelLimitLabel: document.querySelector("#midiImportChannelLimitLabel"),
+    importChannelColorMode: document.querySelector("#importChannelColorMode"),
     midiImportMbtPacking: document.querySelector("#midiImportMbtPacking"),
     midiImportMidiControls: document.querySelector("#midiImportMidiControls"),
     midiImportChooseFileButton: document.querySelector("#midiImportChooseFileButton"),
@@ -325,6 +327,7 @@
     channelMergeModeControls: document.querySelector("#channelMergeModeControls"),
     channelMergeModeRoleOptions: document.querySelector("#channelMergeModeRoleOptions"),
     channelMergeOverlapSlider: document.querySelector("#channelMergeOverlapSlider"),
+    channelMergeExcludeChannelSelect: document.querySelector("#channelMergeExcludeChannelSelect"),
     channelMergeModeCancelButton: document.querySelector("#channelMergeModeCancelButton"),
     channelMergeModeApplyButton: document.querySelector("#channelMergeModeApplyButton"),
     noteEditModePanel: document.querySelector("#noteEditModePanel"),
@@ -516,6 +519,7 @@
       role: "auto",
       overlapMode: "all",
       overlapAmount: 1,
+      excludeOverlapChannelIds: new Set(),
       candidatePool: [],
       selectedCandidateKeys: new Set(),
       previewNotes: [],
@@ -656,6 +660,7 @@
       kind: "midi",
       sourceFile: null,
       mbtPackingMode: "byInstrument",
+      colorMode: "channel",
       midiBuffer: null,
       preview: null,
       text: "",
@@ -2670,6 +2675,28 @@
     }
   }
 
+  function normalizeImportChannelColorMode(value) {
+    return String(value || "").trim().toLowerCase() === "instrument" ? "instrument" : "channel";
+  }
+
+  function loadStoredImportChannelColorMode() {
+    try {
+      return normalizeImportChannelColorMode(window.localStorage.getItem(IMPORT_CHANNEL_COLOR_MODE_KEY));
+    } catch {
+      return "channel";
+    }
+  }
+
+  function setImportChannelColorMode(value, { persist = true } = {}) {
+    const mode = normalizeImportChannelColorMode(value);
+    state.midiImport.colorMode = mode;
+    if (elements.importChannelColorMode) elements.importChannelColorMode.value = mode;
+    if (persist) {
+      try { window.localStorage.setItem(IMPORT_CHANNEL_COLOR_MODE_KEY, mode); } catch {}
+    }
+    return mode;
+  }
+
   function normalizeNoteVolumeDisplay(value) {
     if (value === "all" || value === "selected" || value === "none") return value;
     return "selected";
@@ -3771,11 +3798,16 @@
       context.globalAlpha = 1;
     }
 
-    if (state.interaction?.type === "marquee" || state.interaction?.type === "midi-marquee") {
-      const left = Math.min(state.interaction.startX, state.interaction.currentX);
-      const top = Math.min(state.interaction.startY, state.interaction.currentY);
-      const boxWidth = Math.abs(state.interaction.currentX - state.interaction.startX);
-      const boxHeight = Math.abs(state.interaction.currentY - state.interaction.startY);
+    const activeMarquee = state.interaction?.type === "marquee" || state.interaction?.type === "midi-marquee"
+      ? state.interaction
+      : (isChannelMergeModeActive() && mergeCandidateSweep.active && mergeCandidateSweep.moved
+        ? mergeCandidateSweep
+        : null);
+    if (activeMarquee) {
+      const left = Math.min(activeMarquee.startX, activeMarquee.currentX);
+      const top = Math.min(activeMarquee.startY, activeMarquee.currentY);
+      const boxWidth = Math.abs(activeMarquee.currentX - activeMarquee.startX);
+      const boxHeight = Math.abs(activeMarquee.currentY - activeMarquee.startY);
       context.fillStyle = theme.marqueeFill;
       context.fillRect(left, top, boxWidth, boxHeight);
       context.strokeStyle = theme.marqueeStroke;
@@ -4126,6 +4158,42 @@
     }
   }
 
+  function drawSelectedChannelVolumeNotesOnTimeline(context, width, height, scrollLeft, firstVisibleBeat, lastVisibleBeat) {
+    if (state.activePanel !== "notes") return;
+    const channel = getActiveChannel();
+    if (!channel || !Array.isArray(channel.notes) || !channel.notes.length) return;
+    const channelIndex = Math.max(0, state.channels.indexOf(channel));
+    const color = getChannelColor(channel, channelIndex, "bright");
+    const bottomY = Math.max(2, height - 2);
+    const topY = Math.min(bottomY, 3);
+    const verticalRange = Math.max(1, bottomY - topY);
+    context.save();
+    context.strokeStyle = color;
+    context.lineWidth = 2.25;
+    context.globalAlpha = state.theme === "light" ? 0.76 : 0.82;
+    context.lineCap = "butt";
+    for (const note of channel.notes) {
+      const startBeat = Math.max(0, Number(note?.startBeat) || 0);
+      const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(note?.durationBeat) || CONFIG.minimumNoteBeat);
+      const endBeat = startBeat + durationBeat;
+      if (endBeat < firstVisibleBeat - 1e-7 || startBeat > lastVisibleBeat + 1e-7) continue;
+      const startX = beatToX(startBeat) - scrollLeft;
+      const endX = beatToX(endBeat) - scrollLeft;
+      const x1 = clamp(startX, -2, width + 2);
+      const x2 = clamp(endX, -2, width + 2);
+      if (x2 <= -2 || x1 >= width + 2 || x2 - x1 <= 0.25) continue;
+      const volume = clamp(getNoteVolume(note), 0, 15);
+      // Draw volume as a horizontal note-length line: V0 sits at the bottom,
+      // V15 at the top, with the intermediate values spaced linearly between them.
+      const y = Math.round(bottomY - verticalRange * (volume / 15)) + 0.5;
+      context.beginPath();
+      context.moveTo(x1, y);
+      context.lineTo(x2, y);
+      context.stroke();
+    }
+    context.restore();
+  }
+
   function drawTimeline() {
     const context = elements.timelineCanvas.getContext("2d");
     const width = elements.timelineCanvas.clientWidth;
@@ -4169,6 +4237,7 @@
     }
     context.setLineDash([]);
     drawTimelineFadeOverlay(context, width, height, scrollLeft);
+    drawSelectedChannelVolumeNotesOnTimeline(context, width, height, scrollLeft, firstVisibleBeat, lastVisibleBeat);
 
     const visibleFadeMarkers = [];
     for (const fade of normalizeTimelineFades()) {
@@ -6254,7 +6323,8 @@
       const channelSolo = isChannelSolo(channel);
       const mergeTarget = isChannelMergeModeActive() && String(channel.id) === String(state.channelMerge.targetChannelId);
       const mergeSource = isChannelMergeModeActive() && state.channelMerge.sourceChannelIds?.has(String(channel.id));
-      item.className = `channel-tab-item channel-tree-item channel-tree-channel-item${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}${mergeTarget ? " is-merge-target" : ""}${mergeSource ? " is-merge-source" : ""}`;
+      const mergeMask = isChannelMergeModeActive() && getChannelMergeExcludeOverlapChannelIds().has(String(channel.id));
+      item.className = `channel-tab-item channel-tree-item channel-tree-channel-item${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}${mergeTarget ? " is-merge-target" : ""}${mergeSource ? " is-merge-source" : ""}${mergeMask ? " is-merge-mask" : ""}`;
       item.style.setProperty("--channel-color", getChannelColor(channel, index));
       item.dataset.channelIndex = String(index);
       item.dataset.channelId = String(channel.id);
@@ -6271,22 +6341,48 @@
       label.className = "channel-tree-label channel-tab-label";
       label.textContent = channel.name;
       main.append(label);
-      if (mergeTarget || mergeSource) {
+      if (mergeTarget) {
         const badge = document.createElement("span");
-        badge.className = `channel-merge-badge ${mergeTarget ? "target" : "source"}`;
-        badge.textContent = mergeTarget ? i18nText("merge.target_short") : "✓";
+        badge.className = "channel-merge-badge target";
+        badge.textContent = i18nText("merge.target_short");
         main.append(badge);
       }
       main.addEventListener("click", (event) => {
         if (!isChannelMergeModeActive()) return;
         event.preventDefault();
         event.stopPropagation();
-        toggleChannelMergeSource(channel.id);
       });
 
       const actions = document.createElement("div");
       actions.className = "channel-tree-actions";
+
+      let mergeRoleGroup = null;
+      if (isChannelMergeModeActive() && !mergeTarget) {
+        mergeRoleGroup = document.createElement("div");
+        mergeRoleGroup.className = "channel-merge-role-toggle-group";
+        mergeRoleGroup.setAttribute("role", "group");
+        mergeRoleGroup.setAttribute("aria-label", `${channel.name} 병합 역할`);
+        mergeRoleGroup.append(
+          createAction({
+            kind: "merge-include",
+            active: mergeSource,
+            label: i18nText(mergeSource ? "merge.include_clear_named" : "merge.include_set_named", [channel.name]),
+            title: i18nText(mergeSource ? "merge.include_clear_named" : "merge.include_set_named", [channel.name]),
+            textContent: "✓",
+            onClick: () => toggleChannelMergeSource(channel.id),
+          }),
+          createAction({
+            kind: "merge-exclude",
+            active: mergeMask,
+            label: i18nText(mergeMask ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [channel.name]),
+            title: i18nText(mergeMask ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [channel.name]),
+            textContent: "×",
+            onClick: () => toggleChannelMergeExcludeOverlapChannel(channel.id),
+          }),
+        );
+      }
       actions.append(
+        ...(mergeRoleGroup ? [mergeRoleGroup] : []),
         createAction({
           kind: "mml",
           active: false,
@@ -7594,7 +7690,6 @@
       groups.forEach((group, index) => {
         const row = document.createElement("div");
         row.className = "midi-import-selection-row";
-        row.style.setProperty("--channel-color", getMidiGroupColor(group, index));
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = state.midiImport.selectedGroupIds.has(String(group.id));
@@ -7719,6 +7814,9 @@
     }
     if (elements.midiImportChannelLimitLabel) {
       elements.midiImportChannelLimitLabel.textContent = i18nText("midi.limit_channels", [CONFIG.midiImportMaxChannelsPerInstrument]);
+    }
+    if (elements.importChannelColorMode) {
+      elements.importChannelColorMode.value = normalizeImportChannelColorMode(state.midiImport.colorMode);
     }
     if (elements.midiImportApplyButton) elements.midiImportApplyButton.disabled = !ready;
     if (elements.midiImportNewButton) elements.midiImportNewButton.disabled = !ready;
@@ -8635,6 +8733,7 @@
     fileName = parsed?.fileName || "",
     ignoreSingle64thOverlap = true,
     maxChannelsPerInstrument = 0,
+    colorMode = state.midiImport.colorMode,
   } = {}) {
     const groups = (parsed?.groups || [])
       .filter((group) => Array.isArray(group?.notes) && group.notes.length)
@@ -8650,6 +8749,7 @@
       state.loadedFileName = String(fileName || parsed?.fileName || "").trim();
     }
 
+    const normalizedColorMode = normalizeImportChannelColorMode(colorMode);
     const hueByInstrument = new Map();
     const createdChannels = [];
     let noteCount = 0;
@@ -8658,10 +8758,10 @@
 
     groups.forEach((group, groupIndex) => {
       const instrumentKey = getMidiGroupInstrumentKey(group);
-      if (!hueByInstrument.has(instrumentKey)) {
+      if (normalizedColorMode === "instrument" && !hueByInstrument.has(instrumentKey)) {
         hueByInstrument.set(instrumentKey, getMidiGroupHue(group, groupIndex));
       }
-      const copyHue = hueByInstrument.get(instrumentKey);
+      const instrumentHue = hueByInstrument.get(instrumentKey);
       let voices = splitNotesIntoMonophonicVoices(group.notes || [], {
         ignoreSingle64thOverlap,
         quantizeUnit: 4 / (Number(parsed?.quantizeDivision) === 32 ? 32 : 64),
@@ -8675,10 +8775,13 @@
       }
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
+        const channelHue = normalizedColorMode === "instrument"
+          ? instrumentHue
+          : getDefaultHue(state.channels.length);
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {
           voiceIndex,
           voiceCount: voices.length,
-          copyHue,
+          copyHue: channelHue,
         });
         state.channels.push(channel);
         state.channelNoteRuntime.delete(String(channel.id));
@@ -8775,6 +8878,7 @@
           maxChannelsPerInstrument: elements.midiImportLimitChannelsPerInstrument?.checked
             ? CONFIG.midiImportMaxChannelsPerInstrument
             : 0,
+          colorMode: state.midiImport.colorMode,
         });
         if (!imported.channelCount) throw new Error(i18nText("note.select_least_one"));
         markDirty(`${state.midiImport.sourceLabel || "MIDI"} ${i18nText(openNew ? "ui.open_new" : "action.add")}`);
@@ -8825,8 +8929,19 @@
       }
 
       const importedChannelIds = [];
+      const importColorMode = normalizeImportChannelColorMode(state.midiImport.colorMode);
+      const hueByImportedInstrument = new Map();
       parsed.noteParts.forEach((part, partIndex) => {
         const channel = createImportedChannel(part, partIndex + 1);
+        if (importColorMode === "instrument") {
+          const instrumentKey = `${getChannelInstrumentBank(channel)}:${getChannelInstrumentProgram(channel)}`;
+          if (!hueByImportedInstrument.has(instrumentKey)) {
+            hueByImportedInstrument.set(instrumentKey, getDefaultHue(hueByImportedInstrument.size));
+          }
+          channel.hue = hueByImportedInstrument.get(instrumentKey);
+        } else {
+          channel.hue = getDefaultHue(state.channels.length);
+        }
         state.channels.push(channel);
         importedChannelIds.push(channel.id);
       });
@@ -9473,6 +9588,17 @@
     renderNoteVolumeCountChips(elements.noteVolumeTargetCounts, getNoteVolumeCounts(targets));
   }
 
+  function updateChannelDefaultNoteVolumeFromNotes(channel, notes) {
+    if (!channel || !Array.isArray(notes) || !notes.length) return false;
+    const volumes = [...new Set(notes.map((note) => clamp(getNoteVolume(note), 0, 15)))];
+    if (volumes.length !== 1) return false;
+    const nextVolume = volumes[0];
+    if (channel.defaultNoteVolume === nextVolume) return false;
+    channel.defaultNoteVolume = nextVolume;
+    return true;
+  }
+
+
   function openNoteVolumeDialog(options = null) {
     const scope = options?.scope === "all" ? "all" : "selected";
     if (scope === "selected") {
@@ -9539,10 +9665,21 @@
       note.velocity = mmlVolumeToVelocity(nextVolume);
       changedCount += 1;
     }
+    let defaultVolumeChanged = false;
+    if (scope === "selected") {
+      defaultVolumeChanged = updateChannelDefaultNoteVolumeFromNotes(getActiveChannel(), notes);
+    } else {
+      for (const channel of state.channels) {
+        defaultVolumeChanged = updateChannelDefaultNoteVolumeFromNotes(channel, channel.notes || []) || defaultVolumeChanged;
+      }
+    }
     closeNoteVolumeDialog();
-    if (!changedCount) return false;
-    markDirty(scope === "all" ? "모든 볼륨 수정" : "노트 볼륨 변경");
+    if (!changedCount && !defaultVolumeChanged) return false;
+    markDirty(!changedCount && defaultVolumeChanged
+      ? "새 노트 볼륨 설정"
+      : scope === "all" ? "모든 볼륨 수정" : "노트 볼륨 변경");
     drawRoll();
+    drawTimeline();
     updateChannelInfo();
     if (fixed) {
       showToast(scope === "all"
@@ -10596,8 +10733,7 @@
 
   function selectChannel(index) {
     if (isChannelMergeModeActive()) {
-      const channel = state.channels[clamp(index, 0, state.channels.length - 1)];
-      if (channel) toggleChannelMergeSource(channel.id);
+      // Merge membership is controlled explicitly by the ✓ / × role buttons.
       return true;
     }
     setSidebarTab("channels");
@@ -10848,7 +10984,12 @@
     const ids = state.channelMerge.sourceChannelIds instanceof Set
       ? state.channelMerge.sourceChannelIds
       : new Set();
-    return state.channels.filter((channel) => ids.has(String(channel.id)) && String(channel.id) !== String(state.channelMerge.targetChannelId));
+    const targetId = String(state.channelMerge.targetChannelId);
+    const excludeIds = getChannelMergeExcludeOverlapChannelIds();
+    return state.channels.filter((channel) => {
+      const id = String(channel.id);
+      return ids.has(id) && id !== targetId && !excludeIds.has(id);
+    });
   }
 
   function normalizeChannelMergeOverlapAmount(value) {
@@ -10935,6 +11076,45 @@
     return leftStart < rightEnd - 1e-7 && rightStart < leftEnd - 1e-7;
   }
 
+  function getChannelMergeExcludeOverlapChannelIds() {
+    const targetId = String(state.channelMerge?.targetChannelId ?? "");
+    const rawIds = state.channelMerge?.excludeOverlapChannelIds instanceof Set
+      ? state.channelMerge.excludeOverlapChannelIds
+      : new Set();
+    return new Set([...rawIds].map(String).filter((id) => (
+      id
+      && id !== targetId
+      && state.channels.some((channel) => String(channel.id) === id)
+    )));
+  }
+
+  function isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool = state.channelMerge?.candidatePool) {
+    if (!candidate) return false;
+    const excludeIds = getChannelMergeExcludeOverlapChannelIds();
+    if (!excludeIds.size) return false;
+    const candidateChannelId = String(candidate.sourceChannelId ?? "");
+    const targetId = String(state.channelMerge?.targetChannelId ?? "");
+    // Excluded channels are pure masks: they never become part of the merge result.
+    // A source candidate is blocked when its time range overlaps a note in ANY mask channel.
+    if (candidateChannelId === targetId) return false;
+    if (excludeIds.has(candidateChannelId)) return true;
+    return (pool || []).some((reference) => (
+      excludeIds.has(String(reference.sourceChannelId ?? ""))
+      && channelMergeCandidatesOverlap(candidate, reference)
+    ));
+  }
+
+  function filterBlockedChannelMergeCandidateKeys(pool, selectedKeys) {
+    const selected = selectedKeys instanceof Set ? new Set(selectedKeys) : new Set();
+    if (!getChannelMergeExcludeOverlapChannelIds().size) return selected;
+    for (const candidate of pool || []) {
+      if (selected.has(candidate._mergeCandidateKey) && isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool)) {
+        selected.delete(candidate._mergeCandidateKey);
+      }
+    }
+    return selected;
+  }
+
   function restoreUncontestedTargetMergeCandidates(pool, selectedKeys) {
     if (!isChannelMergeModeActive()) return selectedKeys instanceof Set ? selectedKeys : new Set();
     const targetId = String(state.channelMerge.targetChannelId);
@@ -10995,6 +11175,10 @@
   }
 
   function refreshChannelMergePreviewFromSelection({ markModified = false } = {}) {
+    state.channelMerge.selectedCandidateKeys = filterBlockedChannelMergeCandidateKeys(
+      state.channelMerge.candidatePool,
+      state.channelMerge.selectedCandidateKeys,
+    );
     state.channelMerge.selectedCandidateKeys = restoreUncontestedTargetMergeCandidates(
       state.channelMerge.candidatePool,
       state.channelMerge.selectedCandidateKeys,
@@ -11022,7 +11206,10 @@
         String(target.id),
         ...sources.map((channel) => String(channel.id)),
       ]);
-      const automaticPool = pool.filter((note) => automaticChannelIds.has(String(note.sourceChannelId)));
+      const automaticPool = pool.filter((note) => (
+        automaticChannelIds.has(String(note.sourceChannelId))
+        && !isChannelMergeCandidateBlockedByOverlapChannel(note, pool)
+      ));
       state.channelMerge.selectedCandidateKeys = chooseAutomaticChannelMergeCandidateKeys(
         automaticPool,
         state.channelMerge.role,
@@ -11030,11 +11217,16 @@
       );
     } else {
       const validKeys = new Set(pool.map((note) => note._mergeCandidateKey));
-      state.channelMerge.selectedCandidateKeys = new Set(
-        [...state.channelMerge.selectedCandidateKeys].filter((key) => validKeys.has(key)),
+      state.channelMerge.selectedCandidateKeys = filterBlockedChannelMergeCandidateKeys(
+        pool,
+        new Set([...state.channelMerge.selectedCandidateKeys].filter((key) => validKeys.has(key))),
       );
     }
     return refreshChannelMergePreviewFromSelection({ markModified });
+  }
+
+  function updateChannelMergeExcludeChannelSelect() {
+    // Exclusion is now selected directly per channel with the × buttons.
   }
 
   function updateChannelMergeModeUi() {
@@ -11046,6 +11238,7 @@
     if (normalInstrument) normalInstrument.hidden = active;
     if (normalSummary) normalSummary.hidden = active;
     if (!active) return;
+    updateChannelMergeExcludeChannelSelect();
     elements.channelMergeModeRoleOptions?.querySelectorAll("[data-merge-mode-role]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.mergeModeRole === state.channelMerge.role));
     });
@@ -11078,6 +11271,7 @@
     state.channelMerge.role = "auto";
     state.channelMerge.overlapMode = "all";
     state.channelMerge.overlapAmount = 1;
+    state.channelMerge.excludeOverlapChannelIds = new Set();
     state.channelMerge.candidatePool = [];
     state.channelMerge.selectedCandidateKeys = new Set();
     state.channelMerge.previewNotes = [];
@@ -11122,9 +11316,11 @@
 
   function cancelChannelMergeMode({ silent = false } = {}) {
     if (!isChannelMergeModeActive()) return false;
+    resetMergeCandidateSweep({ releaseCapture: true });
     state.channelMerge.active = false;
     state.channelMerge.targetChannelId = null;
     state.channelMerge.sourceChannelIds = new Set();
+    state.channelMerge.excludeOverlapChannelIds = new Set();
     state.channelMerge.candidatePool = [];
     state.channelMerge.selectedCandidateKeys = new Set();
     state.channelMerge.previewNotes = [];
@@ -11144,8 +11340,18 @@
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     const id = String(channelId);
     if (id === String(state.channelMerge.targetChannelId)) return false;
+    const excludeIds = state.channelMerge.excludeOverlapChannelIds instanceof Set
+      ? state.channelMerge.excludeOverlapChannelIds
+      : new Set();
     const ids = state.channelMerge.sourceChannelIds;
-    if (ids.has(id)) ids.delete(id); else ids.add(id);
+    if (ids.has(id)) {
+      ids.delete(id);
+    } else {
+      // Clicking ✓ switches this channel from exclusion-mask role to merge-source role.
+      excludeIds.delete(id);
+      state.channelMerge.excludeOverlapChannelIds = excludeIds;
+      ids.add(id);
+    }
     state.channelMerge.previewModified = false;
     rebuildChannelMergePreview({ resetCandidates: true });
     renderChannelTabs();
@@ -11172,6 +11378,30 @@
     state.channelMerge.overlapAmount = normalized;
     state.channelMerge.previewModified = false;
     rebuildChannelMergePreview({ resetCandidates: true });
+    return true;
+  }
+
+  function toggleChannelMergeExcludeOverlapChannel(channelId) {
+    if (!isChannelMergeModeActive()) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    const id = String(channelId ?? "");
+    const targetId = String(state.channelMerge.targetChannelId ?? "");
+    if (!id || id === targetId || !state.channels.some((channel) => String(channel.id) === id)) return false;
+    if (!(state.channelMerge.excludeOverlapChannelIds instanceof Set)) {
+      state.channelMerge.excludeOverlapChannelIds = new Set();
+    }
+    const ids = state.channelMerge.excludeOverlapChannelIds;
+    if (ids.has(id)) {
+      ids.delete(id);
+    } else {
+      ids.add(id);
+      // One channel cannot be both a merge source and an exclusion mask.
+      state.channelMerge.sourceChannelIds?.delete(id);
+    }
+    state.channelMerge.previewModified = false;
+    rebuildChannelMergePreview({ resetCandidates: true });
+    renderChannelTabs();
+    updateChannelMergeModeUi();
     return true;
   }
 
@@ -11247,11 +11477,25 @@
     return null;
   }
 
-  function toggleChannelMergeCandidate(candidateKey) {
+  function findChannelMergeCandidateHitAt(x, y) {
+    if (!isChannelMergeModeActive()) return null;
+    const previewHit = findMergePreviewNoteHitAt(x, y);
+    let candidate = previewHit?.note?._mergeCandidateKey
+      ? state.channelMerge.candidatePool.find((note) => note._mergeCandidateKey === previewHit.note._mergeCandidateKey)
+      : null;
+    if (!candidate) candidate = findChannelMergeRawCandidateHitAt(x, y);
+    return candidate || null;
+  }
+
+  function toggleChannelMergeCandidate(candidateKey, { silentBlocked = false } = {}) {
     if (!isChannelMergeModeActive() || !candidateKey) return false;
     const pool = state.channelMerge.candidatePool || [];
     const candidate = pool.find((note) => note._mergeCandidateKey === candidateKey);
     if (!candidate) return false;
+    if (isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool)) {
+      if (!silentBlocked) showToast(i18nText("merge.exclude_overlap_blocked"));
+      return false;
+    }
     const selected = state.channelMerge.selectedCandidateKeys instanceof Set
       ? new Set(state.channelMerge.selectedCandidateKeys)
       : new Set();
@@ -11269,23 +11513,196 @@
     return true;
   }
 
+  // Merge-mode drag uses the same rectangle gesture users already know from normal
+  // note selection.  The notes inside the box are XOR/toggled as one batch when the
+  // pointer is released; merely crossing a note with the pointer no longer toggles it.
+  const mergeCandidateSweep = {
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    currentY: 0,
+    moved: false,
+    baseSelection: new Set(),
+  };
+
+  function resetMergeCandidateSweep({ releaseCapture = false } = {}) {
+    if (releaseCapture && mergeCandidateSweep.pointerId != null && elements.rollCanvas) {
+      try {
+        if (elements.rollCanvas.hasPointerCapture?.(mergeCandidateSweep.pointerId)) {
+          elements.rollCanvas.releasePointerCapture(mergeCandidateSweep.pointerId);
+        }
+      } catch {}
+    }
+    mergeCandidateSweep.active = false;
+    mergeCandidateSweep.pointerId = null;
+    mergeCandidateSweep.startX = 0;
+    mergeCandidateSweep.startY = 0;
+    mergeCandidateSweep.currentX = 0;
+    mergeCandidateSweep.currentY = 0;
+    mergeCandidateSweep.moved = false;
+    mergeCandidateSweep.baseSelection = new Set();
+  }
+
+  function getVisibleChannelMergeCandidatePool() {
+    if (!isChannelMergeModeActive()) return [];
+    const visibleChannelIds = new Set(
+      state.channels
+        .filter((channel) => channel.visible !== false)
+        .map((channel) => String(channel.id)),
+    );
+    return (state.channelMerge.candidatePool || []).filter((candidate) => (
+      visibleChannelIds.has(String(candidate.sourceChannelId ?? ""))
+    ));
+  }
+
+  function resolveChannelMergeSelectionStartConflicts(pool, selectedKeys) {
+    const selected = selectedKeys instanceof Set ? new Set(selectedKeys) : new Set();
+    const selectedNotes = (pool || [])
+      .filter((note) => selected.has(note._mergeCandidateKey))
+      .sort((left, right) => (
+        left.startBeat - right.startBeat
+        || left.pitch - right.pitch
+        || right.durationBeat - left.durationBeat
+        || left.sourceIndex - right.sourceIndex
+      ));
+    if (!selectedNotes.length) return selected;
+
+    const resolved = new Set();
+    const overlapAmount = normalizeChannelMergeOverlapAmount(state.channelMerge.overlapAmount);
+    let previous = null;
+    let previousPitch = null;
+    let index = 0;
+    while (index < selectedNotes.length) {
+      const startBeat = selectedNotes[index].startBeat;
+      const group = [];
+      while (index < selectedNotes.length && Math.abs(selectedNotes[index].startBeat - startBeat) < 1e-7) {
+        group.push(selectedNotes[index]);
+        index += 1;
+      }
+      const winner = chooseChannelMergeNoteCandidate(group, state.channelMerge.role, previousPitch);
+      if (!winner) continue;
+      if (previous) {
+        const previousEnd = previous.startBeat + previous.durationBeat;
+        if (winner.startBeat < previousEnd - 1e-7) {
+          const earliestAllowedStart = previous.startBeat + previous.durationBeat * (1 - overlapAmount);
+          if (winner.startBeat < earliestAllowedStart - 1e-7) continue;
+        }
+      }
+      resolved.add(winner._mergeCandidateKey);
+      previous = winner;
+      previousPitch = winner.pitch;
+    }
+    return resolved;
+  }
+
+  function applyMergeCandidateMarqueeSelection() {
+    if (!mergeCandidateSweep.active || !mergeCandidateSweep.moved) return false;
+    const left = Math.min(mergeCandidateSweep.startX, mergeCandidateSweep.currentX);
+    const right = Math.max(mergeCandidateSweep.startX, mergeCandidateSweep.currentX);
+    const top = Math.min(mergeCandidateSweep.startY, mergeCandidateSweep.currentY);
+    const bottom = Math.max(mergeCandidateSweep.startY, mergeCandidateSweep.currentY);
+    const pool = state.channelMerge.candidatePool || [];
+    const matching = getVisibleChannelMergeCandidatePool().filter((candidate) => (
+      noteIntersectsBox(candidate, left, top, right, bottom)
+    ));
+    if (!matching.length) return false;
+
+    const base = mergeCandidateSweep.baseSelection instanceof Set
+      ? mergeCandidateSweep.baseSelection
+      : new Set();
+    let selected = new Set(base);
+    let changed = false;
+    for (const candidate of matching) {
+      const key = candidate._mergeCandidateKey;
+      if (!key) continue;
+      if (base.has(key)) {
+        selected.delete(key);
+        changed = true;
+        continue;
+      }
+      if (isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool)) continue;
+      selected.add(key);
+      changed = true;
+    }
+    if (!changed) return false;
+
+    // A rectangle can catch several voices that begin at exactly the same beat.
+    // Resolve that collision with the currently selected Auto/High/Low candidate rule
+    // instead of letting pointer traversal order decide the winner.
+    selected = resolveChannelMergeSelectionStartConflicts(pool, selected);
+    state.channelMerge.selectedCandidateKeys = selected;
+    refreshChannelMergePreviewFromSelection({ markModified: true });
+    return true;
+  }
+
+  function beginMergeCandidateSweep(event, point) {
+    resetMergeCandidateSweep();
+    mergeCandidateSweep.active = true;
+    mergeCandidateSweep.pointerId = event.pointerId;
+    mergeCandidateSweep.startX = Math.max(point?.x ?? 0, beatToX(0));
+    mergeCandidateSweep.startY = point?.y ?? 0;
+    mergeCandidateSweep.currentX = mergeCandidateSweep.startX;
+    mergeCandidateSweep.currentY = mergeCandidateSweep.startY;
+    mergeCandidateSweep.baseSelection = new Set(state.channelMerge.selectedCandidateKeys || []);
+    trySetPointerCapture(elements.rollCanvas, event.pointerId);
+    drawRoll();
+  }
+
+  function moveMergeCandidateSweep(event) {
+    if (!mergeCandidateSweep.active || mergeCandidateSweep.pointerId !== event.pointerId) return false;
+    const point = pointerToRoll(event);
+    mergeCandidateSweep.currentX = Math.max(point.x, beatToX(0));
+    mergeCandidateSweep.currentY = point.y;
+    if (
+      Math.abs(mergeCandidateSweep.currentX - mergeCandidateSweep.startX) >= 3
+      || Math.abs(mergeCandidateSweep.currentY - mergeCandidateSweep.startY) >= 3
+    ) {
+      mergeCandidateSweep.moved = true;
+      state.suppressContextMenuUntil = performance.now() + 600;
+      closeContextMenu();
+    }
+    elements.rollCanvas.style.cursor = "crosshair";
+    drawRoll();
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  function endMergeCandidateSweep(event) {
+    if (!mergeCandidateSweep.active || mergeCandidateSweep.pointerId !== event.pointerId) return false;
+    const point = pointerToRoll(event);
+    mergeCandidateSweep.currentX = Math.max(point.x, beatToX(0));
+    mergeCandidateSweep.currentY = point.y;
+    const moved = mergeCandidateSweep.moved;
+    if (moved) {
+      applyMergeCandidateMarqueeSelection();
+    } else {
+      const candidate = findChannelMergeCandidateHitAt(point.x, point.y);
+      if (candidate?._mergeCandidateKey) {
+        toggleChannelMergeCandidate(candidate._mergeCandidateKey, { silentBlocked: false });
+        previewEditorPitch(candidate.pitch, { holdVisual: false });
+      }
+    }
+    endEditorPitchPreview();
+    resetMergeCandidateSweep({ releaseCapture: true });
+    elements.rollCanvas.style.cursor = "crosshair";
+    drawRoll();
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
   function handleMergePreviewPointerDown(event) {
     if (!isChannelMergeModeActive() || event.button !== 0) return false;
     const point = pointerToRoll(event);
-    const previewHit = findMergePreviewNoteHitAt(point.x, point.y);
-    let candidate = previewHit?.note?._mergeCandidateKey
-      ? state.channelMerge.candidatePool.find((note) => note._mergeCandidateKey === previewHit.note._mergeCandidateKey)
-      : null;
-    if (!candidate) candidate = findChannelMergeRawCandidateHitAt(point.x, point.y);
 
-    if (candidate) {
-      toggleChannelMergeCandidate(candidate._mergeCandidateKey);
-      previewEditorPitch(candidate.pitch, { holdVisual: false });
-    } else {
-      const beat = xToBeat(point.x);
-      if (beat >= 0) setPlayheadBeat(clamp(snapBeat(beat), 0, getTotalBeats()), { stop: true, preview: false });
-    }
+    // Merge mode owns the whole left-drag gesture: draw a rectangle and XOR the
+    // candidates inside it.  The playhead is intentionally not moved here.
+    beginMergeCandidateSweep(event, point);
 
+    elements.rollCanvas.style.cursor = "crosshair";
     event.preventDefault();
     event.stopPropagation();
     return true;
@@ -12817,6 +13234,10 @@
   }
 
   function handleRollPointerMove(event) {
+    if (isChannelMergeModeActive() && mergeCandidateSweep.active) {
+      moveMergeCandidateSweep(event);
+      return;
+    }
     if (state.interaction && state.interaction.pointerId !== event.pointerId) {
       return;
     }
@@ -12831,6 +13252,10 @@
   }
 
   function handleRollPointerUp(event) {
+    if (isChannelMergeModeActive() && mergeCandidateSweep.active) {
+      endMergeCandidateSweep(event);
+      return;
+    }
     if (state.suppressNextRollPointerUp === event.pointerId) {
       state.suppressNextRollPointerUp = null;
       event.preventDefault();
@@ -12933,6 +13358,7 @@
     }
     shrinkTimelineToContent();
     drawRoll();
+    drawTimeline();
     drawOverviewTimeline();
     updateChannelInfo();
   }
@@ -16155,6 +16581,7 @@
       return false;
     }
 
+    updateChannelDefaultNoteVolumeFromNotes(channel, selected);
     state.channelNoteRuntime.delete(String(channel.id));
     const selectionSignature = `${channel.id}:${selected.map((note) => note.id).sort((a, b) => a - b).join(",")}`;
     const canMergeWithCurrentHistory = (
@@ -16173,6 +16600,7 @@
     state.zoomWheel.lastVolumeEditAt = now;
 
     drawRoll();
+    drawTimeline();
     updateChannelInfo();
     const volumes = [...new Set(selected.map((note) => getNoteVolume(note)))];
     showToast(volumes.length === 1
@@ -20373,6 +20801,9 @@
     });
     elements.midiImportCloseButton?.addEventListener("click", () => closeMidiImportDialog());
     elements.midiImportCancelButton?.addEventListener("click", () => closeMidiImportDialog());
+    elements.importChannelColorMode?.addEventListener("change", () => {
+      setImportChannelColorMode(elements.importChannelColorMode.value);
+    });
     elements.midiImportApplyButton?.addEventListener("click", () => applyMidiImport("add"));
     elements.midiImportNewButton?.addEventListener("click", () => applyMidiImport("new"));
     elements.midiImportBackdrop?.addEventListener("pointerdown", (event) => {
@@ -21193,6 +21624,7 @@
     setNoteVolumeDisplay(state.noteVolumeDisplay, { persist: false });
     state.playbackRate = loadStoredPlaybackRate();
     setPlaybackRate(state.playbackRate, { persist: false, restart: false });
+    setImportChannelColorMode(loadStoredImportChannelColorMode(), { persist: false });
     state.noteClipboard = readNodeClipboardFromSharedStorage();
     registerDefaultContextMenus();
     bindEvents();
