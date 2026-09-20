@@ -166,6 +166,7 @@
     editPasteButton: document.querySelector("#editPasteButton"),
     editSelectAllButton: document.querySelector("#editSelectAllButton"),
     editDeleteButton: document.querySelector("#editDeleteButton"),
+    editRestCleanupButton: document.querySelector("#editRestCleanupButton"),
     editNoteVolumeButton: document.querySelector("#editNoteVolumeButton"),
     fileExportButton: document.querySelector("#fileExportButton"),
     midiExportButton: document.querySelector("#midiExportButton"),
@@ -395,6 +396,29 @@
     noteVolumeSelectionLabel: document.querySelector("#noteVolumeSelectionLabel"),
     noteVolumeCurrentCounts: document.querySelector("#noteVolumeCurrentCounts"),
     noteVolumeTargetCounts: document.querySelector("#noteVolumeTargetCounts"),
+    channelVolumeBackdrop: document.querySelector("#channelVolumeBackdrop"),
+    channelVolumeCloseButton: document.querySelector("#channelVolumeCloseButton"),
+    channelVolumeCancelButton: document.querySelector("#channelVolumeCancelButton"),
+    channelVolumeApplyButton: document.querySelector("#channelVolumeApplyButton"),
+    channelVolumeSelectAllButton: document.querySelector("#channelVolumeSelectAllButton"),
+    channelVolumeClearAllButton: document.querySelector("#channelVolumeClearAllButton"),
+    channelVolumeList: document.querySelector("#channelVolumeList"),
+    channelVolumeSummary: document.querySelector("#channelVolumeSummary"),
+    channelVolumeFixedMode: document.querySelector("#channelVolumeFixedMode"),
+    channelVolumeControlLabel: document.querySelector("#channelVolumeControlLabel"),
+    channelVolumeSlider: document.querySelector("#channelVolumeSlider"),
+    channelVolumeValue: document.querySelector("#channelVolumeValue"),
+    channelVolumeCurrentCounts: document.querySelector("#channelVolumeCurrentCounts"),
+    channelVolumeTargetCounts: document.querySelector("#channelVolumeTargetCounts"),
+    restCleanupBackdrop: document.querySelector("#restCleanupBackdrop"),
+    restCleanupCloseButton: document.querySelector("#restCleanupCloseButton"),
+    restCleanupCancelButton: document.querySelector("#restCleanupCancelButton"),
+    restCleanupApplyButton: document.querySelector("#restCleanupApplyButton"),
+    restCleanupSelectAllButton: document.querySelector("#restCleanupSelectAllButton"),
+    restCleanupClearAllButton: document.querySelector("#restCleanupClearAllButton"),
+    restCleanupChannelList: document.querySelector("#restCleanupChannelList"),
+    restCleanupModeOptions: document.querySelector("#restCleanupModeOptions"),
+    restCleanupPreview: document.querySelector("#restCleanupPreview"),
     noteTrillDirectionSelect: document.querySelector("#noteTrillDirectionSelect"),
     noteTrillIntervalSelect: document.querySelector("#noteTrillIntervalSelect"),
     noteTrillStartDivisionSelect: document.querySelector("#noteTrillStartDivisionSelect"),
@@ -521,6 +545,7 @@
       overlapAmount: 1,
       excludeOverlapChannelIds: new Set(),
       candidatePool: [],
+      runtimeCache: null,
       selectedCandidateKeys: new Set(),
       previewNotes: [],
       previewModified: false,
@@ -716,7 +741,7 @@
     longPress: null,
     masterVolume: 1,
     noteVolumeDisplay: "selected",
-    noteVolumeDialogScope: "selected",
+    restCleanup: { mode: "32" },
     playbackRate: 1,
     rollSurface: {
       originX: 0,
@@ -3024,9 +3049,9 @@
       ? !activeMidiGroup?.notes?.length
       : !notesActive || !getActiveChannel()?.notes?.length);
     elements.editDeleteButton.disabled = midiActive || (audioActive ? !getActiveAudioClip() : !notesActive || !state.selectedNoteIds.size);
-    if (elements.editNoteVolumeButton) {
-      elements.editNoteVolumeButton.disabled = !state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length > 0);
-    }
+    const hasEditorNotes = state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length > 0);
+    if (elements.editRestCleanupButton) elements.editRestCleanupButton.disabled = !hasEditorNotes;
+    if (elements.editNoteVolumeButton) elements.editNoteVolumeButton.disabled = !hasEditorNotes;
     // MML/MIDI 내보내기는 현재 선택/활성 패널/노트 유무와 관계없이 항상 사용할 수 있습니다.
     elements.fileExportButton.disabled = false;
     if (elements.midiExportButton) elements.midiExportButton.disabled = false;
@@ -3493,13 +3518,17 @@
     const pool = state.channelMerge?.candidatePool || [];
     if (!pool.length) return;
 
+    const runtime = getChannelMergeRuntimeCache(pool);
+    const visualCandidates = runtime.exclusionVisualCandidates || [];
+    if (!visualCandidates.length) return;
     const rowHeight = getRowHeight();
-    for (const candidate of pool) {
+    const brightRed = "#ff374c"; // Same bright red family as the current playhead.
+    const brightRedHatch = "rgba(255,55,76,.94)";
+
+    for (const candidate of visualCandidates) {
+      const key = candidate._mergeCandidateKey;
       const sourceChannelId = String(candidate.sourceChannelId ?? "");
-      const isExcludeReference = excludeIds.has(sourceChannelId);
-      const isBlockedCandidate = !isExcludeReference
-        && isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool);
-      if (!isExcludeReference && !isBlockedCandidate) continue;
+      const isExcludeReference = runtime.excludeReferenceKeys.has(key);
 
       const channelIndex = Number.isInteger(candidate.sourceIndex)
         ? candidate.sourceIndex
@@ -3514,62 +3543,44 @@
       if (y + heightValue < visibleTop || y > visibleBottom) continue;
       const widthValue = Math.max(5, endX - x - 1);
 
+      // X-reference notes and candidates blocked by them use the same bright-red
+      // hatch as the playhead, so unavailable notes are obvious at a glance.
       context.save();
-      if (isExcludeReference) {
-        // X channels are the reference notes that make same-pitch overlaps unavailable.
-        // Preserve the underlying channel color and add a strong red X treatment on top.
-        context.globalAlpha = 1;
-        context.fillStyle = state.theme === "light" ? "rgba(185,28,28,.15)" : "rgba(248,113,113,.13)";
-        context.fillRect(x + 1, y, widthValue, heightValue);
-        context.strokeStyle = state.theme === "light" ? "#b91c1c" : "#f87171";
-        context.lineWidth = 2.2;
-        context.strokeRect(x + 1.5, y + 0.5, Math.max(1, widthValue - 1), Math.max(1, heightValue - 1));
-        const inset = Math.min(4, Math.max(2, heightValue * 0.22));
-        context.lineWidth = 1.7;
+      context.globalAlpha = 1;
+      context.fillStyle = isExcludeReference ? "rgba(255,55,76,.16)" : "rgba(255,55,76,.10)";
+      context.fillRect(x + 1, y, widthValue, heightValue);
+      context.beginPath();
+      context.rect(x + 1, y, widthValue, heightValue);
+      context.clip();
+      context.strokeStyle = brightRedHatch;
+      context.lineWidth = isExcludeReference ? 1.7 : 1.45;
+      const spacing = 6;
+      for (let offset = -heightValue; offset < widthValue + heightValue; offset += spacing) {
         context.beginPath();
-        context.moveTo(x + 1 + inset, y + inset);
-        context.lineTo(x + 1 + widthValue - inset, y + heightValue - inset);
-        context.moveTo(x + 1 + widthValue - inset, y + inset);
-        context.lineTo(x + 1 + inset, y + heightValue - inset);
+        context.moveTo(x + 1 + offset, y + heightValue);
+        context.lineTo(x + 1 + offset + heightValue, y);
         context.stroke();
-        if (widthValue >= 20 && heightValue >= 8) {
-          context.font = `800 ${Math.min(10, Math.max(7, heightValue - 2))}px system-ui, sans-serif`;
-          context.textAlign = "center";
-          context.textBaseline = "middle";
-          context.lineWidth = 2.5;
-          context.strokeStyle = state.theme === "light" ? "rgba(255,255,255,.95)" : "rgba(20,8,8,.92)";
-          context.fillStyle = state.theme === "light" ? "#991b1b" : "#fecaca";
-          const cx = x + 1 + widthValue / 2;
-          const cy = y + heightValue / 2;
-          context.strokeText("X", cx, cy);
-          context.fillText("X", cx, cy);
-        }
-      } else {
-        // Candidates rejected by an X-channel same-pitch overlap stay visible but are
-        // clearly disabled, so users can immediately see why they cannot be selected.
-        context.globalAlpha = 1;
-        context.fillStyle = state.theme === "light" ? "rgba(127,29,29,.20)" : "rgba(69,10,10,.34)";
-        context.fillRect(x + 1, y, widthValue, heightValue);
-        context.beginPath();
-        context.rect(x + 1, y, widthValue, heightValue);
-        context.clip();
-        context.strokeStyle = state.theme === "light" ? "rgba(153,27,27,.68)" : "rgba(252,165,165,.66)";
-        context.lineWidth = 1.2;
-        const spacing = 6;
-        for (let offset = -heightValue; offset < widthValue + heightValue; offset += spacing) {
-          context.beginPath();
-          context.moveTo(x + 1 + offset, y + heightValue);
-          context.lineTo(x + 1 + offset + heightValue, y);
-          context.stroke();
-        }
-        context.restore();
-        context.save();
-        context.globalAlpha = 1;
-        context.strokeStyle = state.theme === "light" ? "#7f1d1d" : "#fca5a5";
-        context.lineWidth = 1.5;
-        context.setLineDash([3, 2]);
-        context.strokeRect(x + 1.5, y + 0.5, Math.max(1, widthValue - 1), Math.max(1, heightValue - 1));
-        context.setLineDash([]);
+      }
+      context.restore();
+
+      context.save();
+      context.globalAlpha = 1;
+      context.strokeStyle = brightRed;
+      context.lineWidth = isExcludeReference ? 2.2 : 1.7;
+      if (!isExcludeReference) context.setLineDash([3, 2]);
+      context.strokeRect(x + 1.5, y + 0.5, Math.max(1, widthValue - 1), Math.max(1, heightValue - 1));
+      context.setLineDash([]);
+      if (isExcludeReference && widthValue >= 20 && heightValue >= 8) {
+        context.font = `800 ${Math.min(10, Math.max(7, heightValue - 2))}px system-ui, sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.lineWidth = 2.6;
+        context.strokeStyle = state.theme === "light" ? "rgba(255,255,255,.96)" : "rgba(35,6,10,.94)";
+        context.fillStyle = brightRed;
+        const cx = x + 1 + widthValue / 2;
+        const cy = y + heightValue / 2;
+        context.strokeText("X", cx, cy);
+        context.fillText("X", cx, cy);
       }
       context.restore();
     }
@@ -6622,6 +6633,57 @@
     return normalizeMmlCommandCase(source);
   }
 
+  function optimizeEditorExportMml(mml) {
+    const source = normalizeMmlTextCase(String(mml || "").trim());
+    if (!source) return "";
+    const optimize = window.MabiOptimizer?.optimizeMml;
+    if (typeof optimize !== "function") return source;
+    const sourceParts = splitMmlPartsForExport(source);
+    if (!sourceParts.length) return source;
+
+    try {
+      if (sourceParts.length <= 6) {
+        const result = optimize(source, { partCount: Math.max(1, sourceParts.length) });
+        let optimized = normalizeMmlTextCase(String(result?.mml || source));
+        if (!/(?:^|[^a-z])t\s*\d+/i.test(sourceParts.join(","))) {
+          const parts = splitMmlPartsForExport(optimized);
+          if (parts.length) {
+            parts[0] = String(parts[0] || "").replace(/^T120/i, "");
+            optimized = normalizeMmlTextCase(`MML@${parts.join(",")};`);
+          }
+        }
+        return optimized;
+      }
+
+      // The shared optimizer supports up to six parts at once. Editor projects can
+      // contain more voices, so optimize the first six exactly like Player and then
+      // compact every remaining part independently without introducing a synthetic
+      // T120 that could override the global tempo from the first part.
+      const optimizedParts = [];
+      const firstGroup = `MML@${sourceParts.slice(0, 6).join(",")};`;
+      const firstResult = optimize(firstGroup, { partCount: 6 });
+      const firstParts = splitMmlPartsForExport(String(firstResult?.mml || firstGroup));
+      if (!sourceParts.slice(0, 6).some((part) => /(?:^|[^a-z])t\s*\d+/i.test(part)) && firstParts.length) {
+        firstParts[0] = String(firstParts[0] || "").replace(/^T120/i, "");
+      }
+      optimizedParts.push(...sourceParts.slice(0, 6).map((part, index) => firstParts[index] ?? part));
+
+      for (const part of sourceParts.slice(6)) {
+        const wrapped = `MML@${part};`;
+        const result = optimize(wrapped, { partCount: 1 });
+        let optimizedPart = splitMmlPartsForExport(String(result?.mml || wrapped))[0] ?? part;
+        if (!/(?:^|[^a-z])t\s*\d+/i.test(part)) {
+          optimizedPart = optimizedPart.replace(/^t120/i, "");
+        }
+        optimizedParts.push(optimizedPart);
+      }
+      return normalizeMmlTextCase(`MML@${optimizedParts.join(",")};`);
+    } catch (error) {
+      console.warn("MML export optimizer failed; using editor render output.", error);
+      return source;
+    }
+  }
+
   function normalizeMmlTextareaValue(textarea, normalizer = normalizeMmlTextCase) {
     if (!textarea || typeof normalizer !== "function") return false;
     const before = String(textarea.value || "");
@@ -9610,12 +9672,8 @@
     }
   }
 
-  function getAllEditorNotes() {
-    return state.channels.flatMap((channel) => Array.isArray(channel?.notes) ? channel.notes : []);
-  }
-
   function getNoteVolumeDialogNotes() {
-    return state.noteVolumeDialogScope === "all" ? getAllEditorNotes() : getSelectedNotes();
+    return getSelectedNotes();
   }
 
   function isNoteVolumeFixedMode() {
@@ -9693,56 +9751,42 @@
     return true;
   }
 
-
-  function openNoteVolumeDialog(options = null) {
-    const scope = options?.scope === "all" ? "all" : "selected";
-    if (scope === "selected") {
-      if (state.activePanel === "audio") {
-        showToast("오디오에는 노트 볼륨 기능을 사용할 수 없습니다.");
-        return false;
-      }
-      if (isMidiReferenceActive()) {
-        showToast("MIDI 노트는 읽기 전용입니다.");
-        return false;
-      }
-    }
-    state.noteVolumeDialogScope = scope;
-    const notes = scope === "all" ? getAllEditorNotes() : getSelectedNotes();
-    if (!notes.length) {
-      showToast(scope === "all" ? i18nText("volume.no_editor_notes") : "볼륨을 수정할 노트를 선택하세요.");
+  function openNoteVolumeDialog() {
+    if (state.activePanel === "audio") {
+      showToast("오디오에는 노트 볼륨 기능을 사용할 수 없습니다.");
       return false;
     }
-    // Default behavior is relative adjustment: each note keeps its own volume relationship.
+    if (isMidiReferenceActive()) {
+      showToast("MIDI 노트는 읽기 전용입니다.");
+      return false;
+    }
+    const notes = getSelectedNotes();
+    if (!notes.length) {
+      showToast("볼륨을 수정할 노트를 선택하세요.");
+      return false;
+    }
     if (elements.noteVolumeFixedMode) elements.noteVolumeFixedMode.checked = false;
     configureNoteVolumeSliderForMode(true);
     if (elements.noteVolumeDialogTitle) {
-      elements.noteVolumeDialogTitle.textContent = scope === "all" ? i18nText("volume.edit_all_notes") : i18nText("note.volume");
+      elements.noteVolumeDialogTitle.dataset.i18n = "note.volume";
+      elements.noteVolumeDialogTitle.textContent = i18nText("note.volume");
     }
-    elements.noteVolumeSelectionLabel.textContent = scope === "all"
-      ? i18nText("volume.all_channels_note_count", [notes.length.toLocaleString()])
-      : `${notes.length}개 선택 노트`;
-    elements.noteVolumeBackdrop?.querySelector("#noteVolumeDialog")?.setAttribute(
-      "aria-label",
-      scope === "all" ? i18nText("volume.edit_all_notes") : i18nText("note.edit_volume"),
-    );
+    if (elements.noteVolumeSelectionLabel) {
+      elements.noteVolumeSelectionLabel.textContent = `${notes.length}개 선택 노트`;
+    }
+    elements.noteVolumeBackdrop?.querySelector("#noteVolumeDialog")?.setAttribute("aria-label", i18nText("note.edit_volume"));
     updateNoteVolumeDialogCounts();
     elements.noteVolumeBackdrop.hidden = false;
     requestAnimationFrame(() => elements.noteVolumeSlider.focus());
     return true;
   }
 
-  function openAllNoteVolumeDialog() {
-    return openNoteVolumeDialog({ scope: "all" });
-  }
-
   function closeNoteVolumeDialog() {
     if (elements.noteVolumeBackdrop) elements.noteVolumeBackdrop.hidden = true;
-    state.noteVolumeDialogScope = "selected";
   }
 
   function applySelectedNoteVolume() {
-    const scope = state.noteVolumeDialogScope;
-    const notes = getNoteVolumeDialogNotes();
+    const notes = getSelectedNotes();
     if (!notes.length) {
       closeNoteVolumeDialog();
       return false;
@@ -9760,32 +9804,436 @@
       note.velocity = mmlVolumeToVelocity(nextVolume);
       changedCount += 1;
     }
-    let defaultVolumeChanged = false;
-    if (scope === "selected") {
-      defaultVolumeChanged = updateChannelDefaultNoteVolumeFromNotes(getActiveChannel(), notes);
-    } else {
-      for (const channel of state.channels) {
-        defaultVolumeChanged = updateChannelDefaultNoteVolumeFromNotes(channel, channel.notes || []) || defaultVolumeChanged;
-      }
-    }
+    const defaultVolumeChanged = updateChannelDefaultNoteVolumeFromNotes(getActiveChannel(), notes);
     closeNoteVolumeDialog();
     if (!changedCount && !defaultVolumeChanged) return false;
-    markDirty(!changedCount && defaultVolumeChanged
-      ? "새 노트 볼륨 설정"
-      : scope === "all" ? "모든 볼륨 수정" : "노트 볼륨 변경");
+    markDirty(!changedCount && defaultVolumeChanged ? "새 노트 볼륨 설정" : "노트 볼륨 변경");
     drawRoll();
     drawTimeline();
     updateChannelInfo();
     if (fixed) {
-      showToast(scope === "all"
-        ? i18nText("volume.all_fixed", [changedCount.toLocaleString(), fixedVolume])
-        : i18nText("volume.selected_fixed", [changedCount.toLocaleString(), fixedVolume]));
+      showToast(i18nText("volume.selected_fixed", [changedCount.toLocaleString(), fixedVolume]));
     } else {
-      const deltaText = formatNoteVolumeDelta(delta);
-      showToast(scope === "all"
-        ? i18nText("volume.all_adjusted", [changedCount.toLocaleString(), deltaText])
-        : i18nText("volume.selected_adjusted", [changedCount.toLocaleString(), deltaText]));
+      showToast(i18nText("volume.selected_adjusted", [changedCount.toLocaleString(), formatNoteVolumeDelta(delta)]));
     }
+    return true;
+  }
+
+  function getCheckedChannelVolumeIds() {
+    if (!elements.channelVolumeList) return [];
+    return [...elements.channelVolumeList.querySelectorAll('input[type="checkbox"]:checked')]
+      .map((input) => String(input.value));
+  }
+
+  function getChannelVolumeChannels() {
+    const ids = new Set(getCheckedChannelVolumeIds());
+    return state.channels.filter((channel) => ids.has(String(channel.id)) && Array.isArray(channel.notes) && channel.notes.length);
+  }
+
+  function getChannelVolumeNotes() {
+    return getChannelVolumeChannels().flatMap((channel) => channel.notes || []);
+  }
+
+  function isChannelVolumeFixedMode() {
+    return Boolean(elements.channelVolumeFixedMode?.checked);
+  }
+
+  function getChannelVolumeTargetVolume(note) {
+    const sliderValue = Math.round(Number(elements.channelVolumeSlider?.value) || 0);
+    if (isChannelVolumeFixedMode()) return clamp(sliderValue, 0, 15);
+    return clamp(getNoteVolume(note) + clamp(sliderValue, -15, 15), 0, 15);
+  }
+
+  function updateChannelVolumeControl() {
+    const fixed = isChannelVolumeFixedMode();
+    if (elements.channelVolumeControlLabel) {
+      const labelKey = fixed ? "volume.fixed_value" : "volume.relative_adjust";
+      elements.channelVolumeControlLabel.dataset.i18n = labelKey;
+      elements.channelVolumeControlLabel.textContent = i18nText(labelKey);
+    }
+    const value = Math.round(Number(elements.channelVolumeSlider?.value) || 0);
+    if (elements.channelVolumeValue) {
+      elements.channelVolumeValue.textContent = fixed ? `V${clamp(value, 0, 15)}` : formatNoteVolumeDelta(value);
+    }
+  }
+
+  function updateChannelVolumeSummary() {
+    const channels = getChannelVolumeChannels();
+    const noteCount = channels.reduce((sum, channel) => sum + (channel.notes?.length || 0), 0);
+    if (elements.channelVolumeSummary) {
+      elements.channelVolumeSummary.textContent = i18nText("volume.channel_summary", [channels.length.toLocaleString(), noteCount.toLocaleString()]);
+    }
+    if (elements.channelVolumeApplyButton) elements.channelVolumeApplyButton.disabled = channels.length === 0 || noteCount === 0;
+  }
+
+  function updateChannelVolumeCounts() {
+    const notes = getChannelVolumeNotes();
+    renderNoteVolumeCountChips(elements.channelVolumeCurrentCounts, getNoteVolumeCounts(notes));
+    const targets = notes.map((note) => ({ volume: getChannelVolumeTargetVolume(note) }));
+    renderNoteVolumeCountChips(elements.channelVolumeTargetCounts, getNoteVolumeCounts(targets));
+    updateChannelVolumeSummary();
+  }
+
+  function configureChannelVolumeSliderForMode(resetValue = true) {
+    if (!elements.channelVolumeSlider) return;
+    const notes = getChannelVolumeNotes();
+    const fixed = isChannelVolumeFixedMode();
+    if (fixed) {
+      elements.channelVolumeSlider.min = "0";
+      elements.channelVolumeSlider.max = "15";
+      elements.channelVolumeSlider.step = "1";
+      if (resetValue) {
+        const volumes = notes.map((note) => getNoteVolume(note));
+        const unique = new Set(volumes);
+        const initial = unique.size === 1
+          ? (volumes[0] ?? CONFIG.defaultNewChannelNoteVolume)
+          : Math.round(volumes.reduce((sum, value) => sum + value, 0) / Math.max(1, volumes.length));
+        elements.channelVolumeSlider.value = String(clamp(initial, 0, 15));
+      }
+    } else {
+      elements.channelVolumeSlider.min = "-15";
+      elements.channelVolumeSlider.max = "15";
+      elements.channelVolumeSlider.step = "1";
+      if (resetValue) elements.channelVolumeSlider.value = "0";
+    }
+    updateChannelVolumeControl();
+    updateChannelVolumeCounts();
+  }
+
+  function renderChannelVolumeDialog() {
+    if (!elements.channelVolumeList) return false;
+    elements.channelVolumeList.replaceChildren();
+    state.channels.forEach((channel, index) => {
+      const row = document.createElement("label");
+      row.className = "midi-transfer-channel-row channel-delete-row channel-volume-row";
+      row.style.setProperty("--channel-color", getChannelColor(channel, index));
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = String(channel.id);
+      const noteCount = channel.notes?.length || 0;
+      checkbox.checked = noteCount > 0;
+      checkbox.disabled = noteCount === 0;
+      const text = document.createElement("span");
+      text.className = "midi-transfer-channel-name";
+      text.textContent = `${channel.name} · ${noteCount}노트`;
+      row.append(checkbox, text);
+      checkbox.addEventListener("change", () => updateChannelVolumeCounts());
+      elements.channelVolumeList.append(row);
+    });
+    updateChannelVolumeSummary();
+    return true;
+  }
+
+  function setAllChannelVolumeChecked(checked) {
+    if (!elements.channelVolumeList) return;
+    elements.channelVolumeList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      if (!input.disabled) input.checked = Boolean(checked);
+    });
+    updateChannelVolumeCounts();
+  }
+
+  function openChannelVolumeDialog() {
+    const hasNotes = state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length);
+    if (!hasNotes) {
+      showToast(i18nText("volume.no_editor_notes"));
+      return false;
+    }
+    closeEditMenu();
+    closeFileMenu();
+    closeContextMenu();
+    if (!renderChannelVolumeDialog()) return false;
+    if (elements.channelVolumeFixedMode) elements.channelVolumeFixedMode.checked = false;
+    configureChannelVolumeSliderForMode(true);
+    elements.channelVolumeBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.channelVolumeList?.querySelector('input[type="checkbox"]:not(:disabled)')?.focus());
+    return true;
+  }
+
+  function closeChannelVolumeDialog() {
+    if (elements.channelVolumeBackdrop) elements.channelVolumeBackdrop.hidden = true;
+  }
+
+  function applyChannelVolume() {
+    const channels = getChannelVolumeChannels();
+    if (!channels.length) return false;
+    const fixed = isChannelVolumeFixedMode();
+    const sliderValue = Math.round(Number(elements.channelVolumeSlider?.value) || 0);
+    const fixedVolume = clamp(sliderValue, 0, 15);
+    const delta = clamp(sliderValue, -15, 15);
+    let changedCount = 0;
+    let defaultVolumeChanged = false;
+    for (const channel of channels) {
+      for (const note of channel.notes || []) {
+        const before = getNoteVolume(note);
+        const nextVolume = fixed ? fixedVolume : clamp(before + delta, 0, 15);
+        if (nextVolume === before) continue;
+        note.volume = nextVolume;
+        note.velocity = mmlVolumeToVelocity(nextVolume);
+        changedCount += 1;
+      }
+      defaultVolumeChanged = updateChannelDefaultNoteVolumeFromNotes(channel, channel.notes || []) || defaultVolumeChanged;
+    }
+    closeChannelVolumeDialog();
+    if (!changedCount && !defaultVolumeChanged) return false;
+    markDirty(i18nText("volume.edit_channels"));
+    drawRoll();
+    drawTimeline();
+    updateChannelInfo();
+    if (fixed) {
+      showToast(i18nText("volume.channels_fixed", [channels.length.toLocaleString(), changedCount.toLocaleString(), fixedVolume]));
+    } else {
+      showToast(i18nText("volume.channels_adjusted", [channels.length.toLocaleString(), changedCount.toLocaleString(), formatNoteVolumeDelta(delta)]));
+    }
+    return true;
+  }
+
+  function normalizeRestCleanupMode(value) {
+    const mode = String(value || "32").toLowerCase();
+    return ["64", "32", "16", "8", "4", "all"].includes(mode) ? mode : "32";
+  }
+
+  function getRestCleanupThresholdBeat(mode = state.restCleanup.mode) {
+    const normalized = normalizeRestCleanupMode(mode);
+    return normalized === "all" ? Infinity : 4 / Number(normalized);
+  }
+
+  function getCheckedRestCleanupChannelIds() {
+    if (!elements.restCleanupChannelList) return [];
+    return [...elements.restCleanupChannelList.querySelectorAll('input[type="checkbox"]:checked')]
+      .map((input) => String(input.value));
+  }
+
+  function getRestCleanupChannels() {
+    const ids = new Set(getCheckedRestCleanupChannelIds());
+    return state.channels.filter((channel) => ids.has(String(channel.id)) && Array.isArray(channel.notes) && channel.notes.length);
+  }
+
+  function renderRestCleanupChannelList() {
+    if (!elements.restCleanupChannelList) return false;
+    elements.restCleanupChannelList.replaceChildren();
+    const activeId = getActiveChannel()?.id;
+    let checkedOne = false;
+    state.channels.forEach((channel, index) => {
+      const row = document.createElement("label");
+      row.className = "midi-transfer-channel-row channel-delete-row rest-cleanup-channel-row";
+      row.style.setProperty("--channel-color", getChannelColor(channel, index));
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = String(channel.id);
+      const noteCount = channel.notes?.length || 0;
+      checkbox.disabled = noteCount === 0;
+      checkbox.checked = noteCount > 0 && String(channel.id) === String(activeId);
+      checkedOne = checkedOne || checkbox.checked;
+      const text = document.createElement("span");
+      text.className = "midi-transfer-channel-name";
+      text.textContent = `${channel.name} · ${noteCount}노트`;
+      row.append(checkbox, text);
+      checkbox.addEventListener("change", syncRestCleanupDialog);
+      elements.restCleanupChannelList.append(row);
+    });
+    if (!checkedOne) {
+      const first = elements.restCleanupChannelList.querySelector('input[type="checkbox"]:not(:disabled)');
+      if (first) first.checked = true;
+    }
+    return true;
+  }
+
+  function setAllRestCleanupChecked(checked) {
+    if (!elements.restCleanupChannelList) return;
+    elements.restCleanupChannelList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      if (!input.disabled) input.checked = Boolean(checked);
+    });
+    syncRestCleanupDialog();
+  }
+
+  function getRestCleanupOptimizerOptions(mode = state.restCleanup.mode) {
+    const normalized = normalizeRestCleanupMode(mode);
+    return normalized === "all"
+      ? { partCount: 1, all: true }
+      : { partCount: 1, denom: Number(normalized) };
+  }
+
+  function restCleanupUnitsToBeats(units) {
+    return Math.max(0, Number(units) || 0) * CONFIG.minimumNoteBeat / 16;
+  }
+
+  function runPlayerRestCleanupOnVoice(voice, mode = state.restCleanup.mode, { parseResult = false } = {}) {
+    const trim = window.MabiOptimizer?.trimShortRestsMml;
+    if (typeof trim !== "function" || !Array.isArray(voice) || !voice.length) return null;
+    const body = buildNoteVoiceMml(voice, 0, { applyTimelineFade: false });
+    if (!body) return { count: 0, beats: 0, parsedNotes: [] };
+    try {
+      const result = trim(`MML@${body};`, getRestCleanupOptimizerOptions(mode));
+      const count = Math.max(0, Number(result?.removed) || 0);
+      const beats = restCleanupUnitsToBeats(result?.removedUnits);
+      let parsedNotes = null;
+      if (parseResult && count > 0) {
+        const parsed = parseMmlText(String(result?.mml || ""), { quantize: 64 });
+        parsedNotes = parsed.noteParts[0]?.notes || [];
+      }
+      return { count, beats, parsedNotes };
+    } catch (error) {
+      console.warn("Player-style rest cleanup failed for a voice.", error);
+      return null;
+    }
+  }
+
+  function analyzeRestCleanupChannel(channel, mode = state.restCleanup.mode) {
+    if (!channel?.notes?.length) return { count: 0, beats: 0 };
+    let count = 0;
+    let beats = 0;
+    const voices = partitionNotesIntoMmlVoices(channel.notes || []);
+    for (const voice of voices) {
+      const result = runPlayerRestCleanupOnVoice(voice, mode);
+      if (result) {
+        count += result.count;
+        beats += result.beats;
+        continue;
+      }
+      const threshold = getRestCleanupThresholdBeat(mode);
+      for (let index = 0; index + 1 < voice.length; index += 1) {
+        const current = voice[index];
+        const next = voice[index + 1];
+        const currentEnd = Math.max(0, Number(current.startBeat) || 0)
+          + Math.max(CONFIG.minimumNoteBeat, Number(current.durationBeat) || CONFIG.minimumNoteBeat);
+        const gap = Math.max(0, (Number(next.startBeat) || 0) - currentEnd);
+        if (!(gap > 1e-7) || (Number.isFinite(threshold) && gap > threshold + 1e-7)) continue;
+        count += 1;
+        beats += gap;
+      }
+    }
+    return { count, beats };
+  }
+
+  function analyzeRestCleanup(mode = state.restCleanup.mode) {
+    const channels = getRestCleanupChannels();
+    return channels.reduce((summary, channel) => {
+      const result = analyzeRestCleanupChannel(channel, mode);
+      summary.count += result.count;
+      summary.beats += result.beats;
+      summary.channelCount += result.count ? 1 : 0;
+      return summary;
+    }, { count: 0, beats: 0, channelCount: 0, targetChannelCount: channels.length });
+  }
+
+  function formatRestCleanupBeats(value) {
+    const numeric = Math.max(0, Number(value) || 0);
+    return Number(numeric.toFixed(4)).toLocaleString(document.documentElement.lang || undefined, { maximumFractionDigits: 4 });
+  }
+
+  function syncRestCleanupDialog() {
+    const mode = normalizeRestCleanupMode(state.restCleanup.mode);
+    state.restCleanup.mode = mode;
+    elements.restCleanupModeOptions?.querySelectorAll("[data-rest-cleanup-mode]").forEach((button) => {
+      const active = button.dataset.restCleanupMode === mode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    const channels = getRestCleanupChannels();
+    const analysis = analyzeRestCleanup(mode);
+    if (elements.restCleanupPreview) {
+      elements.restCleanupPreview.textContent = !channels.length
+        ? i18nText("rest_cleanup.preview_select_channel")
+        : analysis.count
+          ? i18nText("rest_cleanup.preview_channels", [channels.length.toLocaleString(), analysis.count.toLocaleString(), formatRestCleanupBeats(analysis.beats)])
+          : i18nText("rest_cleanup.preview_none");
+    }
+    if (elements.restCleanupApplyButton) elements.restCleanupApplyButton.disabled = channels.length === 0 || analysis.count === 0;
+    return analysis;
+  }
+
+  function openRestCleanupDialog() {
+    const hasNotes = state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length);
+    if (!hasNotes) {
+      showToast(i18nText("rest_cleanup.no_notes"));
+      return false;
+    }
+    state.restCleanup.mode = normalizeRestCleanupMode(state.restCleanup.mode);
+    closeEditMenu();
+    closeFileMenu();
+    closeContextMenu();
+    renderRestCleanupChannelList();
+    syncRestCleanupDialog();
+    if (elements.restCleanupBackdrop) elements.restCleanupBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.restCleanupChannelList?.querySelector('input[type="checkbox"]:checked')?.focus());
+    return true;
+  }
+
+  function closeRestCleanupDialog() {
+    if (elements.restCleanupBackdrop) elements.restCleanupBackdrop.hidden = true;
+  }
+
+  function applyRestCleanupToChannel(channel, mode = state.restCleanup.mode) {
+    if (!channel?.notes?.length) return { count: 0, beats: 0 };
+    let count = 0;
+    let beats = 0;
+    const voices = partitionNotesIntoMmlVoices(channel.notes || []);
+    for (const voice of voices) {
+      const result = runPlayerRestCleanupOnVoice(voice, mode, { parseResult: true });
+      if (result && result.count > 0 && Array.isArray(result.parsedNotes) && result.parsedNotes.length === voice.length) {
+        let compatible = true;
+        for (let index = 0; index < voice.length; index += 1) {
+          if (Math.round(Number(result.parsedNotes[index]?.pitch)) !== Math.round(Number(voice[index]?.pitch))) {
+            compatible = false;
+            break;
+          }
+        }
+        if (compatible) {
+          for (let index = 0; index < voice.length; index += 1) {
+            const parsedNote = result.parsedNotes[index];
+            voice[index].durationBeat = Number(Math.max(
+              CONFIG.minimumNoteBeat,
+              Number(parsedNote.durationBeat) || CONFIG.minimumNoteBeat,
+            ).toFixed(6));
+          }
+          count += result.count;
+          beats += result.beats;
+          continue;
+        }
+      } else if (result && result.count === 0) {
+        continue;
+      }
+
+      const threshold = getRestCleanupThresholdBeat(mode);
+      for (let index = 0; index + 1 < voice.length; index += 1) {
+        const current = voice[index];
+        const next = voice[index + 1];
+        const currentStart = Math.max(0, Number(current.startBeat) || 0);
+        const currentEnd = currentStart + Math.max(CONFIG.minimumNoteBeat, Number(current.durationBeat) || CONFIG.minimumNoteBeat);
+        const nextStart = Math.max(0, Number(next.startBeat) || 0);
+        const gap = nextStart - currentEnd;
+        if (!(gap > 1e-7) || (Number.isFinite(threshold) && gap > threshold + 1e-7)) continue;
+        current.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, nextStart - currentStart).toFixed(6));
+        count += 1;
+        beats += gap;
+      }
+    }
+    return { count, beats };
+  }
+
+  function applyRestCleanup() {
+    const mode = normalizeRestCleanupMode(state.restCleanup.mode);
+    const channels = getRestCleanupChannels();
+    if (!channels.length) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    let count = 0;
+    let beats = 0;
+    for (const channel of channels) {
+      const result = applyRestCleanupToChannel(channel, mode);
+      count += result.count;
+      beats += result.beats;
+    }
+    if (!count) {
+      syncRestCleanupDialog();
+      return false;
+    }
+    clearNoteSelection();
+    clearMidiSelection();
+    state.channelNoteRuntime.clear();
+    markDirty(i18nText("rest_cleanup.history"));
+    renderAll();
+    closeRestCleanupDialog();
+    showToast(i18nText("rest_cleanup.applied_channels", [channels.length.toLocaleString(), count.toLocaleString(), formatRestCleanupBeats(beats)]));
     return true;
   }
 
@@ -11133,6 +11581,103 @@
     ));
   }
 
+
+  function buildChannelMergeRuntimeCache(pool = state.channelMerge?.candidatePool || []) {
+    const excludeIds = getChannelMergeExcludeOverlapChannelIds();
+    const excludeKey = [...excludeIds].sort().join("|");
+    const candidateByKey = new Map();
+    const candidatesByStartKey = new Map();
+    const excludeReferenceKeys = new Set();
+    const blockedCandidateKeys = new Set();
+    const referencesByPitch = new Map();
+
+    for (const candidate of pool || []) {
+      const key = candidate?._mergeCandidateKey;
+      if (!key) continue;
+      candidateByKey.set(key, candidate);
+      const startKey = Number(candidate.startBeat || 0).toFixed(6);
+      if (!candidatesByStartKey.has(startKey)) candidatesByStartKey.set(startKey, []);
+      candidatesByStartKey.get(startKey).push(candidate);
+      if (!excludeIds.has(String(candidate.sourceChannelId ?? ""))) continue;
+      excludeReferenceKeys.add(key);
+      const pitch = Number(candidate.pitch);
+      if (!referencesByPitch.has(pitch)) referencesByPitch.set(pitch, []);
+      referencesByPitch.get(pitch).push(candidate);
+    }
+
+    // Build a compact interval index per pitch. Because the merge pool is already
+    // timeline-sorted, each pitch list is also sorted by startBeat. Prefix max-end
+    // lets us answer "does any X-note of this pitch overlap?" in O(log n).
+    const referenceIntervalIndexByPitch = new Map();
+    for (const [pitch, refs] of referencesByPitch) {
+      const starts = new Float64Array(refs.length);
+      const prefixMaxEnds = new Float64Array(refs.length);
+      let maxEnd = -Infinity;
+      for (let index = 0; index < refs.length; index += 1) {
+        const ref = refs[index];
+        const start = Number(ref.startBeat) || 0;
+        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(ref.durationBeat) || CONFIG.minimumNoteBeat);
+        starts[index] = start;
+        maxEnd = Math.max(maxEnd, end);
+        prefixMaxEnds[index] = maxEnd;
+      }
+      referenceIntervalIndexByPitch.set(pitch, { starts, prefixMaxEnds });
+    }
+
+    const targetId = String(state.channelMerge?.targetChannelId ?? "");
+    const overlapsReference = (candidate) => {
+      const index = referenceIntervalIndexByPitch.get(Number(candidate.pitch));
+      if (!index?.starts?.length) return false;
+      const start = Number(candidate.startBeat) || 0;
+      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(candidate.durationBeat) || CONFIG.minimumNoteBeat);
+      // Find the last reference whose start is strictly before this candidate's end.
+      let low = 0;
+      let high = index.starts.length;
+      const limit = end - 1e-7;
+      while (low < high) {
+        const mid = (low + high) >> 1;
+        if (index.starts[mid] < limit) low = mid + 1;
+        else high = mid;
+      }
+      const last = low - 1;
+      return last >= 0 && index.prefixMaxEnds[last] > start + 1e-7;
+    };
+
+    for (const candidate of pool || []) {
+      const key = candidate?._mergeCandidateKey;
+      if (!key) continue;
+      const sourceId = String(candidate.sourceChannelId ?? "");
+      if (sourceId === targetId) continue;
+      if (excludeIds.has(sourceId) || overlapsReference(candidate)) {
+        blockedCandidateKeys.add(key);
+      }
+    }
+
+    const exclusionVisualCandidates = (pool || []).filter((candidate) => {
+      const key = candidate?._mergeCandidateKey;
+      return key && (excludeReferenceKeys.has(key) || blockedCandidateKeys.has(key));
+    });
+
+    return {
+      pool,
+      excludeKey,
+      candidateByKey,
+      candidatesByStartKey,
+      excludeReferenceKeys,
+      blockedCandidateKeys,
+      exclusionVisualCandidates,
+    };
+  }
+
+  function getChannelMergeRuntimeCache(pool = state.channelMerge?.candidatePool || []) {
+    const excludeKey = [...getChannelMergeExcludeOverlapChannelIds()].sort().join("|");
+    const cached = state.channelMerge?.runtimeCache;
+    if (cached?.pool === pool && cached.excludeKey === excludeKey) return cached;
+    const next = buildChannelMergeRuntimeCache(pool);
+    if (state.channelMerge) state.channelMerge.runtimeCache = next;
+    return next;
+  }
+
   function chooseAutomaticChannelMergeCandidateKeys(pool, role, overlapAmount) {
     const selected = new Set();
     const groups = [];
@@ -11195,28 +11740,15 @@
 
   function isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool = state.channelMerge?.candidatePool) {
     if (!candidate) return false;
-    const excludeIds = getChannelMergeExcludeOverlapChannelIds();
-    if (!excludeIds.size) return false;
-    const candidateChannelId = String(candidate.sourceChannelId ?? "");
-    const targetId = String(state.channelMerge?.targetChannelId ?? "");
-    // Excluded channels are references for notes already used by earlier merges.
-    // The excluded channel itself never becomes part of this merge. Source notes
-    // are removed only when a same-pitch note overlaps in an X channel.
-    if (candidateChannelId === targetId) return false;
-    if (excludeIds.has(candidateChannelId)) return true;
-    return (pool || []).some((reference) => (
-      excludeIds.has(String(reference.sourceChannelId ?? ""))
-      && channelMergeCandidateMatchesUsedNote(candidate, reference)
-    ));
+    return getChannelMergeRuntimeCache(pool).blockedCandidateKeys.has(candidate._mergeCandidateKey);
   }
 
   function filterBlockedChannelMergeCandidateKeys(pool, selectedKeys) {
     const selected = selectedKeys instanceof Set ? new Set(selectedKeys) : new Set();
-    if (!getChannelMergeExcludeOverlapChannelIds().size) return selected;
-    for (const candidate of pool || []) {
-      if (selected.has(candidate._mergeCandidateKey) && isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool)) {
-        selected.delete(candidate._mergeCandidateKey);
-      }
+    const blocked = getChannelMergeRuntimeCache(pool).blockedCandidateKeys;
+    if (!blocked.size || !selected.size) return selected;
+    for (const key of selected) {
+      if (blocked.has(key)) selected.delete(key);
     }
     return selected;
   }
@@ -11230,13 +11762,40 @@
       && String(note.sourceChannelId) !== targetId
     ));
 
+    // Build one timeline interval index instead of scanning every selected external
+    // note again for every target note. This removes another O(target × selected) hot path.
+    const starts = new Float64Array(selectedExternal.length);
+    const prefixMaxEnds = new Float64Array(selectedExternal.length);
+    let maxEnd = -Infinity;
+    for (let index = 0; index < selectedExternal.length; index += 1) {
+      const external = selectedExternal[index];
+      const start = Number(external.startBeat) || 0;
+      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(external.durationBeat) || CONFIG.minimumNoteBeat);
+      starts[index] = start;
+      maxEnd = Math.max(maxEnd, end);
+      prefixMaxEnds[index] = maxEnd;
+    }
+    const overlapsAnySelectedExternal = (note) => {
+      if (!starts.length) return false;
+      const start = Number(note.startBeat) || 0;
+      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      let low = 0;
+      let high = starts.length;
+      const limit = end - 1e-7;
+      while (low < high) {
+        const mid = (low + high) >> 1;
+        if (starts[mid] < limit) low = mid + 1;
+        else high = mid;
+      }
+      const last = low - 1;
+      return last >= 0 && prefixMaxEnds[last] > start + 1e-7;
+    };
+
     // The target channel's own notes are the merge baseline. They may stay deselected
-    // while another selected channel actually overlaps them, but once that conflict
-    // disappears they must automatically return to the merge preview.
+    // while another selected channel overlaps them, but return when that conflict ends.
     for (const note of pool || []) {
       if (String(note.sourceChannelId) !== targetId || selected.has(note._mergeCandidateKey)) continue;
-      const hasSelectedExternalOverlap = selectedExternal.some((other) => channelMergeCandidatesOverlap(note, other));
-      if (!hasSelectedExternalOverlap) selected.add(note._mergeCandidateKey);
+      if (!overlapsAnySelectedExternal(note)) selected.add(note._mergeCandidateKey);
     }
     return selected;
   }
@@ -11245,7 +11804,8 @@
     const chosen = (pool || []).filter((note) => selectedKeys?.has(note._mergeCandidateKey));
     if (!chosen.length) return [];
     const byStart = [];
-    for (const note of chosen.sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch)) {
+    // candidatePool is already timeline-sorted, and Array.filter preserves order.
+    for (const note of chosen) {
       const key = note.startBeat.toFixed(6);
       const last = byStart[byStart.length - 1];
       if (!last || last.key !== key) byStart.push({ key, notes: [note] });
@@ -11300,21 +11860,25 @@
     return true;
   }
 
-  function rebuildChannelMergePreview({ markModified = false, resetCandidates = true } = {}) {
+  function rebuildChannelMergePreview({ markModified = false, resetCandidates = true, reusePool = false } = {}) {
     if (!isChannelMergeModeActive()) return false;
     const target = getChannelMergeTarget();
     if (!target) return false;
     const sources = getChannelMergeSources();
-    const pool = buildChannelMergeCandidatePool();
+    const existingPool = state.channelMerge.candidatePool || [];
+    const pool = reusePool && existingPool.length ? existingPool : buildChannelMergeCandidatePool();
     state.channelMerge.candidatePool = pool;
+    // Rebuilds lazily only when the pool or X-channel set actually changed.
+    getChannelMergeRuntimeCache(pool);
     if (resetCandidates || !(state.channelMerge.selectedCandidateKeys instanceof Set)) {
       const automaticChannelIds = new Set([
         String(target.id),
         ...sources.map((channel) => String(channel.id)),
       ]);
+      const blockedKeys = getChannelMergeRuntimeCache(pool).blockedCandidateKeys;
       const automaticPool = pool.filter((note) => (
         automaticChannelIds.has(String(note.sourceChannelId))
-        && !isChannelMergeCandidateBlockedByOverlapChannel(note, pool)
+        && !blockedKeys.has(note._mergeCandidateKey)
       ));
       state.channelMerge.selectedCandidateKeys = chooseAutomaticChannelMergeCandidateKeys(
         automaticPool,
@@ -11379,6 +11943,7 @@
     state.channelMerge.overlapAmount = 1;
     state.channelMerge.excludeOverlapChannelIds = new Set();
     state.channelMerge.candidatePool = [];
+    state.channelMerge.runtimeCache = null;
     state.channelMerge.selectedCandidateKeys = new Set();
     state.channelMerge.previewNotes = [];
     state.channelMerge.previewModified = false;
@@ -11390,6 +11955,7 @@
     // notes start selected by default and are shown as the initial merge preview.
     const initialCandidatePool = buildChannelMergeCandidatePool();
     state.channelMerge.candidatePool = initialCandidatePool;
+    state.channelMerge.runtimeCache = buildChannelMergeRuntimeCache(initialCandidatePool);
     state.channelMerge.selectedCandidateKeys = restoreUncontestedTargetMergeCandidates(
       initialCandidatePool,
       new Set(
@@ -11428,6 +11994,7 @@
     state.channelMerge.sourceChannelIds = new Set();
     state.channelMerge.excludeOverlapChannelIds = new Set();
     state.channelMerge.candidatePool = [];
+    state.channelMerge.runtimeCache = null;
     state.channelMerge.selectedCandidateKeys = new Set();
     state.channelMerge.previewNotes = [];
     state.channelMerge.previewModified = false;
@@ -11459,7 +12026,7 @@
       ids.add(id);
     }
     state.channelMerge.previewModified = false;
-    rebuildChannelMergePreview({ resetCandidates: true });
+    rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
     renderChannelTabs();
     return true;
   }
@@ -11471,7 +12038,7 @@
     if (normalized === state.channelMerge.role) return false;
     state.channelMerge.role = normalized;
     state.channelMerge.previewModified = false;
-    rebuildChannelMergePreview({ resetCandidates: true });
+    rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
     renderChannelTabs();
     return true;
   }
@@ -11483,7 +12050,7 @@
     if (Math.abs(normalized - state.channelMerge.overlapAmount) < 1e-7) return false;
     state.channelMerge.overlapAmount = normalized;
     state.channelMerge.previewModified = false;
-    rebuildChannelMergePreview({ resetCandidates: true });
+    rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
     return true;
   }
 
@@ -11505,7 +12072,7 @@
       state.channelMerge.sourceChannelIds?.delete(id);
     }
     state.channelMerge.previewModified = false;
-    rebuildChannelMergePreview({ resetCandidates: true });
+    rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
     renderChannelTabs();
     updateChannelMergeModeUi();
     return true;
@@ -11577,7 +12144,7 @@
       const hit = findNoteHitAt(x, y, channelIndex);
       if (!hit) continue;
       const key = makeChannelMergeCandidateKey(channel, hit.note);
-      const candidate = state.channelMerge.candidatePool.find((note) => note._mergeCandidateKey === key);
+      const candidate = getChannelMergeRuntimeCache().candidateByKey.get(key);
       if (candidate) return candidate;
     }
     return null;
@@ -11587,7 +12154,7 @@
     if (!isChannelMergeModeActive()) return null;
     const previewHit = findMergePreviewNoteHitAt(x, y);
     let candidate = previewHit?.note?._mergeCandidateKey
-      ? state.channelMerge.candidatePool.find((note) => note._mergeCandidateKey === previewHit.note._mergeCandidateKey)
+      ? getChannelMergeRuntimeCache().candidateByKey.get(previewHit.note._mergeCandidateKey)
       : null;
     if (!candidate) candidate = findChannelMergeRawCandidateHitAt(x, y);
     return candidate || null;
@@ -11596,7 +12163,8 @@
   function toggleChannelMergeCandidate(candidateKey, { silentBlocked = false } = {}) {
     if (!isChannelMergeModeActive() || !candidateKey) return false;
     const pool = state.channelMerge.candidatePool || [];
-    const candidate = pool.find((note) => note._mergeCandidateKey === candidateKey);
+    const runtime = getChannelMergeRuntimeCache(pool);
+    const candidate = runtime.candidateByKey.get(candidateKey);
     if (!candidate) return false;
     if (isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool)) {
       if (!silentBlocked) showToast(i18nText("merge.exclude_overlap_blocked"));
@@ -11608,9 +12176,9 @@
     if (selected.has(candidateKey)) {
       selected.delete(candidateKey);
     } else {
-      for (const other of pool) {
-        if (other._mergeCandidateKey === candidateKey) continue;
-        if (Math.abs(other.startBeat - candidate.startBeat) < 1e-7) selected.delete(other._mergeCandidateKey);
+      const sameStart = runtime.candidatesByStartKey.get(Number(candidate.startBeat || 0).toFixed(6)) || [];
+      for (const other of sameStart) {
+        if (other._mergeCandidateKey !== candidateKey) selected.delete(other._mergeCandidateKey);
       }
       selected.add(candidateKey);
     }
@@ -11632,9 +12200,14 @@
     currentY: 0,
     moved: false,
     baseSelection: new Set(),
+    drawFrame: null,
   };
 
   function resetMergeCandidateSweep({ releaseCapture = false } = {}) {
+    if (mergeCandidateSweep.drawFrame != null) {
+      cancelAnimationFrame(mergeCandidateSweep.drawFrame);
+      mergeCandidateSweep.drawFrame = null;
+    }
     if (releaseCapture && mergeCandidateSweep.pointerId != null && elements.rollCanvas) {
       try {
         if (elements.rollCanvas.hasPointerCapture?.(mergeCandidateSweep.pointerId)) {
@@ -11651,6 +12224,15 @@
     mergeCandidateSweep.currentY = 0;
     mergeCandidateSweep.moved = false;
     mergeCandidateSweep.baseSelection = new Set();
+    mergeCandidateSweep.drawFrame = null;
+  }
+
+  function scheduleMergeCandidateSweepDraw() {
+    if (mergeCandidateSweep.drawFrame != null) return;
+    mergeCandidateSweep.drawFrame = requestAnimationFrame(() => {
+      mergeCandidateSweep.drawFrame = null;
+      if (mergeCandidateSweep.active) drawRoll();
+    });
   }
 
   function getVisibleChannelMergeCandidatePool() {
@@ -11773,7 +12355,7 @@
       closeContextMenu();
     }
     elements.rollCanvas.style.cursor = "crosshair";
-    drawRoll();
+    scheduleMergeCandidateSweepDraw();
     event.preventDefault();
     event.stopPropagation();
     return true;
@@ -14650,7 +15232,7 @@
     } else if (voices.length) {
       voices[0] = `t${getTempoAtBeatFromCollection(firstBeat, tempos)}${voices[0]}`;
     }
-    return normalizeMmlTextCase(`MML@${voices.join(",")};`);
+    return optimizeEditorExportMml(`MML@${voices.join(",")};`);
   }
 
   const NOTE_CLIPBOARD_FORMAT = "mobibard-note-clipboard";
@@ -15104,7 +15686,8 @@
           : buildNoteVoiceMml(voice, 0)
       ))
       .filter(Boolean);
-    return voices.length ? `MML@${voices.join(",")};`.length : 0;
+    if (!voices.length) return 0;
+    return optimizeEditorExportMml(`MML@${voices.join(",")};`).length;
   }
 
   function getMmlExportEndBeat(channels) {
@@ -15178,7 +15761,7 @@
       if (voiceIndex === 0) return buildTempoIntegratedNoteVoiceMml(clipped, tempos, start, end);
       return clipped.length ? buildNoteVoiceMml(clipped, start) : "";
     });
-    return normalizeMmlTextCase(`MML@${rendered.join(",")};`);
+    return optimizeEditorExportMml(`MML@${rendered.join(",")};`);
   }
 
   function buildMmlExportSplitCandidates(channels, tempos, totalEndBeat) {
@@ -15210,12 +15793,9 @@
       return [{ index: 1, mml: source, parts: sourceParts, lengths: sourceLengths, maxPartLength: sourceMax }];
     }
 
-    // Editor의 분할 복사는 이미 생성된 MML의 실제 글자 수를 기준으로 해야 한다.
-    // 공용 MML optimizer는 파싱 후 다시 렌더링하면서 l 명령 등을 사용해 원문을
-    // 압축할 수 있어서, 원본 파트가 제한을 넘더라도 "한 페이지"로 판단할 수 있다.
-    // (예: 실제 Editor 출력 2,400자 초과 -> optimizer 재렌더 후 2,400자 미만)
-    // 따라서 Editor에서는 선택 채널의 원본 노트 타임라인을 직접 분할하고,
-    // 각 구간을 Editor와 동일한 MML 렌더러로 다시 만들어 제한을 검사한다.
+    // 분할 기준도 최종 복사본과 동일한 공용 MML optimizer 결과를 사용한다.
+    // 각 후보 구간은 Editor 노트 타임라인에서 다시 렌더링한 뒤 최적화하고,
+    // 그 최종 글자 수가 제한 안에 들어오는 가장 긴 구간을 선택한다.
 
     const tempos = getSortedTempos();
     const totalEndBeat = getMmlExportEndBeat(channels);
@@ -15608,7 +16188,7 @@
       });
     });
 
-    return voices.length ? normalizeMmlTextCase(`MML@${voices.join(",")};`) : "";
+    return voices.length ? optimizeEditorExportMml(`MML@${voices.join(",")};`) : "";
   }
 
   async function applyMmlExportSelection() {
@@ -20848,7 +21428,8 @@
     elements.editPasteButton.addEventListener("click", () => { closeEditMenu(); pasteNotesFromClipboard(); });
     elements.editSelectAllButton.addEventListener("click", () => { closeEditMenu(); selectAllCurrentContext(); });
     elements.editDeleteButton.addEventListener("click", () => { closeEditMenu(); deleteCurrentSelection(); });
-    elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openAllNoteVolumeDialog(); });
+    elements.editRestCleanupButton?.addEventListener("click", () => { closeEditMenu(); openRestCleanupDialog(); });
+    elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openChannelVolumeDialog(); });
     elements.fileExportButton.addEventListener("click", () => { closeFileMenu(); exportCurrentContextAsMml(); });
     elements.midiExportButton?.addEventListener("click", () => { closeFileMenu(); exportProjectAsMidi(); });
     elements.audioExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsAudioOgg(); });
@@ -21385,6 +21966,33 @@
     elements.noteVolumeBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.noteVolumeBackdrop) closeNoteVolumeDialog();
     });
+    elements.channelVolumeCloseButton?.addEventListener("click", closeChannelVolumeDialog);
+    elements.channelVolumeCancelButton?.addEventListener("click", closeChannelVolumeDialog);
+    elements.channelVolumeApplyButton?.addEventListener("click", applyChannelVolume);
+    elements.channelVolumeSelectAllButton?.addEventListener("click", () => setAllChannelVolumeChecked(true));
+    elements.channelVolumeClearAllButton?.addEventListener("click", () => setAllChannelVolumeChecked(false));
+    elements.channelVolumeFixedMode?.addEventListener("change", () => configureChannelVolumeSliderForMode(true));
+    elements.channelVolumeSlider?.addEventListener("input", () => {
+      updateChannelVolumeControl();
+      updateChannelVolumeCounts();
+    });
+    elements.channelVolumeBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.channelVolumeBackdrop) closeChannelVolumeDialog();
+    });
+    elements.restCleanupCloseButton?.addEventListener("click", closeRestCleanupDialog);
+    elements.restCleanupCancelButton?.addEventListener("click", closeRestCleanupDialog);
+    elements.restCleanupApplyButton?.addEventListener("click", applyRestCleanup);
+    elements.restCleanupSelectAllButton?.addEventListener("click", () => setAllRestCleanupChecked(true));
+    elements.restCleanupClearAllButton?.addEventListener("click", () => setAllRestCleanupChecked(false));
+    elements.restCleanupModeOptions?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-rest-cleanup-mode]");
+      if (!button) return;
+      state.restCleanup.mode = normalizeRestCleanupMode(button.dataset.restCleanupMode);
+      syncRestCleanupDialog();
+    });
+    elements.restCleanupBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.restCleanupBackdrop) closeRestCleanupDialog();
+    });
     elements.noteEditModeCancelButton?.addEventListener("click", () => cancelNoteEditMode());
     elements.noteEditModeApplyButton?.addEventListener("click", applyNoteEditMode);
     [
@@ -21566,6 +22174,7 @@
           closeMidiImportDialog();
           closeMidiTransferDialog();
           closeNoteVolumeDialog();
+          closeRestCleanupDialog();
           if (isNoteEditModeActive()) cancelNoteEditMode();
           closeChannelShiftDialog();
           closeTempoEditor();
@@ -21633,6 +22242,7 @@
         closeMidiImportDialog();
         closeMidiTransferDialog();
         closeNoteVolumeDialog();
+        closeRestCleanupDialog();
         if (isNoteEditModeActive()) cancelNoteEditMode();
         closeChannelShiftDialog();
         closeTempoEditor();
