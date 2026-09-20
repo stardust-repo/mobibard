@@ -3486,6 +3486,95 @@
     return [...noteById.values()].sort(compareNotesByTimeline);
   }
 
+  function drawChannelMergeExclusionOverlays(context, visibleLeft, visibleTop, visibleRight, visibleBottom) {
+    if (!isChannelMergeModeActive()) return;
+    const excludeIds = getChannelMergeExcludeOverlapChannelIds();
+    if (!excludeIds.size) return;
+    const pool = state.channelMerge?.candidatePool || [];
+    if (!pool.length) return;
+
+    const rowHeight = getRowHeight();
+    for (const candidate of pool) {
+      const sourceChannelId = String(candidate.sourceChannelId ?? "");
+      const isExcludeReference = excludeIds.has(sourceChannelId);
+      const isBlockedCandidate = !isExcludeReference
+        && isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool);
+      if (!isExcludeReference && !isBlockedCandidate) continue;
+
+      const channelIndex = Number.isInteger(candidate.sourceIndex)
+        ? candidate.sourceIndex
+        : state.channels.findIndex((channel) => String(channel.id) === sourceChannelId);
+      if (channelIndex < 0 || state.channels[channelIndex]?.visible === false) continue;
+      const isActive = state.activePanel === "notes" && channelIndex === state.activeChannel;
+      const x = beatToX(candidate.startBeat);
+      const endX = beatToX(candidate.startBeat + candidate.durationBeat);
+      if (endX < visibleLeft || x > visibleRight) continue;
+      const y = pitchToY(candidate.pitch) + (isActive ? 1 : 3);
+      const heightValue = Math.max(3, rowHeight - (isActive ? 2 : 6));
+      if (y + heightValue < visibleTop || y > visibleBottom) continue;
+      const widthValue = Math.max(5, endX - x - 1);
+
+      context.save();
+      if (isExcludeReference) {
+        // X channels are the reference notes that make same-pitch overlaps unavailable.
+        // Preserve the underlying channel color and add a strong red X treatment on top.
+        context.globalAlpha = 1;
+        context.fillStyle = state.theme === "light" ? "rgba(185,28,28,.15)" : "rgba(248,113,113,.13)";
+        context.fillRect(x + 1, y, widthValue, heightValue);
+        context.strokeStyle = state.theme === "light" ? "#b91c1c" : "#f87171";
+        context.lineWidth = 2.2;
+        context.strokeRect(x + 1.5, y + 0.5, Math.max(1, widthValue - 1), Math.max(1, heightValue - 1));
+        const inset = Math.min(4, Math.max(2, heightValue * 0.22));
+        context.lineWidth = 1.7;
+        context.beginPath();
+        context.moveTo(x + 1 + inset, y + inset);
+        context.lineTo(x + 1 + widthValue - inset, y + heightValue - inset);
+        context.moveTo(x + 1 + widthValue - inset, y + inset);
+        context.lineTo(x + 1 + inset, y + heightValue - inset);
+        context.stroke();
+        if (widthValue >= 20 && heightValue >= 8) {
+          context.font = `800 ${Math.min(10, Math.max(7, heightValue - 2))}px system-ui, sans-serif`;
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.lineWidth = 2.5;
+          context.strokeStyle = state.theme === "light" ? "rgba(255,255,255,.95)" : "rgba(20,8,8,.92)";
+          context.fillStyle = state.theme === "light" ? "#991b1b" : "#fecaca";
+          const cx = x + 1 + widthValue / 2;
+          const cy = y + heightValue / 2;
+          context.strokeText("X", cx, cy);
+          context.fillText("X", cx, cy);
+        }
+      } else {
+        // Candidates rejected by an X-channel same-pitch overlap stay visible but are
+        // clearly disabled, so users can immediately see why they cannot be selected.
+        context.globalAlpha = 1;
+        context.fillStyle = state.theme === "light" ? "rgba(127,29,29,.20)" : "rgba(69,10,10,.34)";
+        context.fillRect(x + 1, y, widthValue, heightValue);
+        context.beginPath();
+        context.rect(x + 1, y, widthValue, heightValue);
+        context.clip();
+        context.strokeStyle = state.theme === "light" ? "rgba(153,27,27,.68)" : "rgba(252,165,165,.66)";
+        context.lineWidth = 1.2;
+        const spacing = 6;
+        for (let offset = -heightValue; offset < widthValue + heightValue; offset += spacing) {
+          context.beginPath();
+          context.moveTo(x + 1 + offset, y + heightValue);
+          context.lineTo(x + 1 + offset + heightValue, y);
+          context.stroke();
+        }
+        context.restore();
+        context.save();
+        context.globalAlpha = 1;
+        context.strokeStyle = state.theme === "light" ? "#7f1d1d" : "#fca5a5";
+        context.lineWidth = 1.5;
+        context.setLineDash([3, 2]);
+        context.strokeRect(x + 1.5, y + 0.5, Math.max(1, widthValue - 1), Math.max(1, heightValue - 1));
+        context.setLineDash([]);
+      }
+      context.restore();
+    }
+  }
+
   function drawRoll() {
     const context = elements.rollCanvas.getContext("2d");
     const viewportWidth = Math.max(1, state.rollSurface.width || elements.rollCanvas.clientWidth);
@@ -3697,6 +3786,10 @@
       }
     }
     context.globalAlpha = 1;
+
+    // In merge mode, make X-channel reference notes and the same-pitch candidates
+    // they block visible before drawing the merge preview overlay.
+    drawChannelMergeExclusionOverlays(context, visibleLeft, visibleTop, visibleRight, visibleBottom);
 
     if (isChannelMergeModeActive()) {
       // Keep the target channel's original notes visually distinct from notes selected
@@ -11532,6 +11625,7 @@
   const mergeCandidateSweep = {
     active: false,
     pointerId: null,
+    pointerButton: 0,
     startX: 0,
     startY: 0,
     currentX: 0,
@@ -11550,6 +11644,7 @@
     }
     mergeCandidateSweep.active = false;
     mergeCandidateSweep.pointerId = null;
+    mergeCandidateSweep.pointerButton = 0;
     mergeCandidateSweep.startX = 0;
     mergeCandidateSweep.startY = 0;
     mergeCandidateSweep.currentX = 0;
@@ -11654,6 +11749,7 @@
     resetMergeCandidateSweep();
     mergeCandidateSweep.active = true;
     mergeCandidateSweep.pointerId = event.pointerId;
+    mergeCandidateSweep.pointerButton = event.button;
     mergeCandidateSweep.startX = Math.max(point?.x ?? 0, beatToX(0));
     mergeCandidateSweep.startY = point?.y ?? 0;
     mergeCandidateSweep.currentX = mergeCandidateSweep.startX;
@@ -11689,9 +11785,12 @@
     mergeCandidateSweep.currentX = Math.max(point.x, beatToX(0));
     mergeCandidateSweep.currentY = point.y;
     const moved = mergeCandidateSweep.moved;
+    const pointerButton = mergeCandidateSweep.pointerButton;
     if (moved) {
       applyMergeCandidateMarqueeSelection();
-    } else {
+    } else if (pointerButton === 0) {
+      // Preserve the existing left-click single-note toggle.  A plain right click
+      // is intentionally a no-op; only right-button DRAG performs marquee invert.
       const candidate = findChannelMergeCandidateHitAt(point.x, point.y);
       if (candidate?._mergeCandidateKey) {
         toggleChannelMergeCandidate(candidate._mergeCandidateKey, { silentBlocked: false });
@@ -11708,11 +11807,12 @@
   }
 
   function handleMergePreviewPointerDown(event) {
-    if (!isChannelMergeModeActive() || event.button !== 0) return false;
+    if (!isChannelMergeModeActive() || (event.button !== 0 && event.button !== 2)) return false;
     const point = pointerToRoll(event);
 
-    // Merge mode owns the whole left-drag gesture: draw a rectangle and XOR the
-    // candidates inside it.  The playhead is intentionally not moved here.
+    // Merge mode owns both left- and right-button drag gestures: draw a rectangle
+    // and XOR the candidates inside it.  The playhead is intentionally not moved.
+    // A plain right click is a no-op; only a real right-button drag applies XOR.
     beginMergeCandidateSweep(event, point);
 
     elements.rollCanvas.style.cursor = "crosshair";
@@ -12575,8 +12675,10 @@
 
   function handleRollPointerDown(event) {
     if (isChannelMergeModeActive()) {
-      if (event.button === 0) { handleMergePreviewPointerDown(event); return; }
-      if (event.button === 2) { event.preventDefault(); return; }
+      if (event.button === 0 || event.button === 2) {
+        handleMergePreviewPointerDown(event);
+        return;
+      }
     }
     if (isNoteEditModeActive() && event.button === 2) {
       event.preventDefault();
