@@ -4163,14 +4163,16 @@
     const channel = getActiveChannel();
     if (!channel || !Array.isArray(channel.notes) || !channel.notes.length) return;
     const channelIndex = Math.max(0, state.channels.indexOf(channel));
-    const color = getChannelColor(channel, channelIndex, "bright");
+    // Match the stronger channel tone used by the overview track bar so
+    // saturated/primary hues stay visible against the tempo timeline.
+    const color = getChannelColor(channel, channelIndex, "base");
     const bottomY = Math.max(2, height - 2);
     const topY = Math.min(bottomY, 3);
     const verticalRange = Math.max(1, bottomY - topY);
     context.save();
     context.strokeStyle = color;
-    context.lineWidth = 2.25;
-    context.globalAlpha = state.theme === "light" ? 0.76 : 0.82;
+    context.lineWidth = 2.4;
+    context.globalAlpha = 0.92;
     context.lineCap = "butt";
     for (const note of channel.notes) {
       const startBeat = Math.max(0, Number(note?.startBeat) || 0);
@@ -11088,19 +11090,30 @@
     )));
   }
 
+  function channelMergeCandidateMatchesUsedNote(candidate, reference) {
+    if (!candidate || !reference) return false;
+    // X channels are not broad time masks. They represent notes that have already
+    // been used by a previous merge. Only the SAME pitch is considered used, and
+    // only while the two note ranges actually overlap. Other pitches at the same
+    // time must remain available for the next merge pass.
+    if (Number(candidate.pitch) !== Number(reference.pitch)) return false;
+    return channelMergeCandidatesOverlap(candidate, reference);
+  }
+
   function isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool = state.channelMerge?.candidatePool) {
     if (!candidate) return false;
     const excludeIds = getChannelMergeExcludeOverlapChannelIds();
     if (!excludeIds.size) return false;
     const candidateChannelId = String(candidate.sourceChannelId ?? "");
     const targetId = String(state.channelMerge?.targetChannelId ?? "");
-    // Excluded channels are pure masks: they never become part of the merge result.
-    // A source candidate is blocked when its time range overlaps a note in ANY mask channel.
+    // Excluded channels are references for notes already used by earlier merges.
+    // The excluded channel itself never becomes part of this merge. Source notes
+    // are removed only when a same-pitch note overlaps in an X channel.
     if (candidateChannelId === targetId) return false;
     if (excludeIds.has(candidateChannelId)) return true;
     return (pool || []).some((reference) => (
       excludeIds.has(String(reference.sourceChannelId ?? ""))
-      && channelMergeCandidatesOverlap(candidate, reference)
+      && channelMergeCandidateMatchesUsedNote(candidate, reference)
     ));
   }
 
