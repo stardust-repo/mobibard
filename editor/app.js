@@ -322,6 +322,11 @@
     channelMergeSummary: document.querySelector("#channelMergeSummary"),
     channelMergeRoleOptions: document.querySelector("#channelMergeRoleOptions"),
     channelMergeOverlapOptions: document.querySelector("#channelMergeOverlapOptions"),
+    channelMergeModeControls: document.querySelector("#channelMergeModeControls"),
+    channelMergeModeRoleOptions: document.querySelector("#channelMergeModeRoleOptions"),
+    channelMergeOverlapSlider: document.querySelector("#channelMergeOverlapSlider"),
+    channelMergeModeCancelButton: document.querySelector("#channelMergeModeCancelButton"),
+    channelMergeModeApplyButton: document.querySelector("#channelMergeModeApplyButton"),
     channelDeleteBackdrop: document.querySelector("#channelDeleteBackdrop"),
     channelDeleteCloseButton: document.querySelector("#channelDeleteCloseButton"),
     channelDeleteCancelButton: document.querySelector("#channelDeleteCancelButton"),
@@ -500,7 +505,20 @@
     sidebarTab: "channels",
     collapsedMidiDocumentIds: new Set(),
     collapsedChannelGroups: { edit: false, source: false },
-    channelMerge: { role: "high", overlapMode: "half" },
+    channelMerge: {
+      active: false,
+      targetChannelId: null,
+      sourceChannelIds: new Set(),
+      role: "auto",
+      overlapMode: "all",
+      overlapAmount: 1,
+      candidatePool: [],
+      selectedCandidateKeys: new Set(),
+      previewNotes: [],
+      previewModified: false,
+      selectedPreviewIds: new Set(),
+      nextPreviewId: 1,
+    },
     editTool: "note",
     ctrlToolHeld: false,
     selectedNoteIds: new Set(),
@@ -2282,7 +2300,7 @@
         const startBeat = Math.max(0, Number(note.startBeat) || 0);
         const endBeat = startBeat + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
         notes.push({
-          id: note.id,
+          id: note.id ?? note._mergePreviewId,
           pitch: note.pitch,
           velocity: getNotePlaybackVelocity(note),
           volume: getNoteVolume(note),
@@ -3624,6 +3642,55 @@
     }
     context.globalAlpha = 1;
 
+    if (isChannelMergeModeActive()) {
+      // Keep the target channel's original notes visually distinct from notes selected
+      // from other channels. Original target notes use violet; added merge candidates
+      // use cyan. Both remain hatched so they are clearly preview-only notes.
+      const targetId = String(state.channelMerge.targetChannelId ?? "");
+      for (const note of state.channelMerge.previewNotes || []) {
+        const isTargetOriginal = String(note._mergeSourceChannelId ?? "") === targetId;
+        const previewColor = isTargetOriginal
+          ? (state.theme === "light" ? "#7c3aed" : "#a78bfa")
+          : (state.theme === "light" ? "#0891b2" : "#22d3ee");
+        const previewBorder = isTargetOriginal
+          ? (state.theme === "light" ? "#4c1d95" : "#ede9fe")
+          : (state.theme === "light" ? "#075985" : "#a5f3fc");
+        const previewHatch = isTargetOriginal
+          ? (state.theme === "light" ? "rgba(255,255,255,.86)" : "rgba(38,20,68,.80)")
+          : (state.theme === "light" ? "rgba(255,255,255,.82)" : "rgba(5,28,34,.78)");
+        const x = beatToX(note.startBeat);
+        const endX = beatToX(note.startBeat + note.durationBeat);
+        if (endX < visibleLeft || x > visibleRight) continue;
+        const y = pitchToY(note.pitch) + 1;
+        const heightValue = Math.max(4, getRowHeight() - 2);
+        if (y + heightValue < visibleTop || y > visibleBottom) continue;
+        const widthValue = Math.max(5, endX - x - 1);
+        context.save();
+        context.globalAlpha = 0.92;
+        context.fillStyle = previewColor;
+        context.fillRect(x + 1, y, widthValue, heightValue);
+        context.beginPath();
+        context.rect(x + 1, y, widthValue, heightValue);
+        context.clip();
+        context.strokeStyle = previewHatch;
+        context.lineWidth = 1.4;
+        const spacing = 7;
+        for (let offset = -heightValue; offset < widthValue + heightValue; offset += spacing) {
+          context.beginPath();
+          context.moveTo(x + 1 + offset, y + heightValue);
+          context.lineTo(x + 1 + offset + heightValue, y);
+          context.stroke();
+        }
+        context.restore();
+        context.save();
+        context.globalAlpha = 1;
+        context.strokeStyle = previewBorder;
+        context.lineWidth = 2;
+        context.strokeRect(x + 1.5, y + 0.5, Math.max(1, widthValue - 1), Math.max(1, heightValue - 1));
+        context.restore();
+      }
+    }
+
     if (!isMidiReferenceActive() && state.interaction?.type === "create") {
       const draft = state.interaction.draft;
       const draftX = beatToX(draft.startBeat);
@@ -4299,7 +4366,7 @@
     state.playback.endSeconds = beatToSecondsFromMap(endBeat, state.playback.tempoMap);
 
     const playbackNotes = preparePlaybackSchedule(targetBeat);
-    const hasPlayableAudio = state.audioClips.some((clip) => (
+    const hasPlayableAudio = !isChannelMergeModeActive() && state.audioClips.some((clip) => (
       !clip.muted
       && getAudioClipEndBeat(clip) > targetBeat + 1e-7
       && Boolean(getAudioRuntime(clip.id)?.audioBuffer)
@@ -4312,7 +4379,8 @@
     const scheduleDelay = 0.025;
     state.playback.audioStartTime = audioEngine.context.currentTime + scheduleDelay;
     state.playback.startedAt = performance.now() + scheduleDelay * 1000;
-    scheduleAudioClipsForPlayback();
+    if (!isChannelMergeModeActive()) scheduleAudioClipsForPlayback();
+    else stopScheduledAudioClips();
     if (playbackNotes.length) schedulePlaybackLookahead();
     updatePlayButton();
     return true;
@@ -5290,6 +5358,7 @@
   }
 
   function beginChannelPointerDrag(event, channelId, item, container = elements.channelTabs) {
+    if (isChannelMergeModeActive()) return;
     if (
       event.button !== 0
       || event.target.closest(".channel-tree-action, .channel-tree-expander")
@@ -6118,7 +6187,9 @@
       const active = state.activePanel === "notes" && index === state.activeChannel;
       const item = document.createElement("div");
       const channelSolo = isChannelSolo(channel);
-      item.className = `channel-tab-item channel-tree-item channel-tree-channel-item${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}`;
+      const mergeTarget = isChannelMergeModeActive() && String(channel.id) === String(state.channelMerge.targetChannelId);
+      const mergeSource = isChannelMergeModeActive() && state.channelMerge.sourceChannelIds?.has(String(channel.id));
+      item.className = `channel-tab-item channel-tree-item channel-tree-channel-item${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}${mergeTarget ? " is-merge-target" : ""}${mergeSource ? " is-merge-source" : ""}`;
       item.style.setProperty("--channel-color", getChannelColor(channel, index));
       item.dataset.channelIndex = String(index);
       item.dataset.channelId = String(channel.id);
@@ -6135,6 +6206,18 @@
       label.className = "channel-tree-label channel-tab-label";
       label.textContent = channel.name;
       main.append(label);
+      if (mergeTarget || mergeSource) {
+        const badge = document.createElement("span");
+        badge.className = `channel-merge-badge ${mergeTarget ? "target" : "source"}`;
+        badge.textContent = mergeTarget ? i18nText("merge.target_short") : "✓";
+        main.append(badge);
+      }
+      main.addEventListener("click", (event) => {
+        if (!isChannelMergeModeActive()) return;
+        event.preventDefault();
+        event.stopPropagation();
+        toggleChannelMergeSource(channel.id);
+      });
 
       const actions = document.createElement("div");
       actions.className = "channel-tree-actions";
@@ -6560,6 +6643,7 @@
       elements.channelInstrumentSelect.value = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
     }
     updateChannelInfo();
+    updateChannelMergeModeUi();
   }
 
   function setMidiReferenceStatus(label, mode = "") {
@@ -10434,6 +10518,11 @@
 
 
   function selectChannel(index) {
+    if (isChannelMergeModeActive()) {
+      const channel = state.channels[clamp(index, 0, state.channels.length - 1)];
+      if (channel) toggleChannelMergeSource(channel.id);
+      return true;
+    }
     setSidebarTab("channels");
     const nextIndex = clamp(index, 0, state.channels.length - 1);
     // 채널 선택은 항상 하나를 유지합니다. 같은 채널을 다시 눌러도 선택 해제하지 않습니다.
@@ -10669,6 +10758,480 @@
     return true;
   }
 
+  function isChannelMergeModeActive() {
+    return Boolean(state.channelMerge?.active && state.channelMerge?.targetChannelId != null);
+  }
+
+  function getChannelMergeTarget() {
+    return isChannelMergeModeActive() ? getChannelById(state.channelMerge.targetChannelId) : null;
+  }
+
+  function getChannelMergeSources() {
+    if (!isChannelMergeModeActive()) return [];
+    const ids = state.channelMerge.sourceChannelIds instanceof Set
+      ? state.channelMerge.sourceChannelIds
+      : new Set();
+    return state.channels.filter((channel) => ids.has(String(channel.id)) && String(channel.id) !== String(state.channelMerge.targetChannelId));
+  }
+
+  function normalizeChannelMergeOverlapAmount(value) {
+    const numeric = Number(value);
+    return clamp(Number.isFinite(numeric) ? numeric : 1, 0, 1);
+  }
+
+  function makeChannelMergeCandidateKey(channel, note, noteIndex = 0) {
+    const channelId = String(channel?.id ?? "");
+    const noteId = note?.id != null ? String(note.id) : `idx-${noteIndex}`;
+    return `${channelId}:${noteId}`;
+  }
+
+  function buildChannelMergeCandidatePool() {
+    if (!isChannelMergeModeActive()) return [];
+    const target = getChannelMergeTarget();
+    if (!target) return [];
+    // Keep every project channel in the candidate pool. The checked source channels
+    // only define which channels participate in automatic recalculation; manual
+    // candidate picking on the piano roll may use notes from any visible channel.
+    const channels = state.channels;
+    const pool = [];
+    channels.forEach((channel, sourceIndex) => {
+      (channel.notes || []).forEach((raw, noteIndex) => {
+        const dynamics = normalizeNoteDynamics(raw);
+        const startBeat = Math.max(0, Number(raw.startBeat) || 0);
+        const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(raw.durationBeat) || CONFIG.minimumNoteBeat);
+        pool.push({
+          pitch: clamp(Math.round(Number(raw.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch),
+          startBeat: Number(startBeat.toFixed(6)),
+          durationBeat: Number(durationBeat.toFixed(6)),
+          velocity: dynamics.velocity,
+          volume: dynamics.volume,
+          sourceIndex,
+          sourceChannelId: String(channel.id),
+          sourceNoteId: raw.id,
+          _mergeCandidateKey: makeChannelMergeCandidateKey(channel, raw, noteIndex),
+        });
+      });
+    });
+    return pool.sort((left, right) => (
+      left.startBeat - right.startBeat
+      || left.pitch - right.pitch
+      || right.durationBeat - left.durationBeat
+      || left.sourceIndex - right.sourceIndex
+    ));
+  }
+
+  function chooseAutomaticChannelMergeCandidateKeys(pool, role, overlapAmount) {
+    const selected = new Set();
+    const groups = [];
+    for (const note of pool || []) {
+      const key = note.startBeat.toFixed(6);
+      const last = groups[groups.length - 1];
+      if (!last || last.key !== key) groups.push({ key, startBeat: note.startBeat, notes: [note] });
+      else last.notes.push(note);
+    }
+    const amount = normalizeChannelMergeOverlapAmount(overlapAmount);
+    let previous = null;
+    let previousPitch = null;
+    for (const group of groups) {
+      const candidate = chooseChannelMergeNoteCandidate(group.notes, normalizeChannelMergeRole(role), previousPitch);
+      if (!candidate) continue;
+      if (previous) {
+        const previousEnd = previous.startBeat + previous.durationBeat;
+        if (candidate.startBeat < previousEnd - 1e-7) {
+          const earliestAllowedStart = previous.startBeat + previous.durationBeat * (1 - amount);
+          if (candidate.startBeat < earliestAllowedStart - 1e-7) continue;
+        }
+      }
+      selected.add(candidate._mergeCandidateKey);
+      previous = candidate;
+      previousPitch = candidate.pitch;
+    }
+    return selected;
+  }
+
+  function channelMergeCandidatesOverlap(left, right) {
+    if (!left || !right) return false;
+    const leftStart = Number(left.startBeat) || 0;
+    const rightStart = Number(right.startBeat) || 0;
+    const leftEnd = leftStart + Math.max(CONFIG.minimumNoteBeat, Number(left.durationBeat) || CONFIG.minimumNoteBeat);
+    const rightEnd = rightStart + Math.max(CONFIG.minimumNoteBeat, Number(right.durationBeat) || CONFIG.minimumNoteBeat);
+    return leftStart < rightEnd - 1e-7 && rightStart < leftEnd - 1e-7;
+  }
+
+  function restoreUncontestedTargetMergeCandidates(pool, selectedKeys) {
+    if (!isChannelMergeModeActive()) return selectedKeys instanceof Set ? selectedKeys : new Set();
+    const targetId = String(state.channelMerge.targetChannelId);
+    const selected = selectedKeys instanceof Set ? new Set(selectedKeys) : new Set();
+    const selectedExternal = (pool || []).filter((note) => (
+      selected.has(note._mergeCandidateKey)
+      && String(note.sourceChannelId) !== targetId
+    ));
+
+    // The target channel's own notes are the merge baseline. They may stay deselected
+    // while another selected channel actually overlaps them, but once that conflict
+    // disappears they must automatically return to the merge preview.
+    for (const note of pool || []) {
+      if (String(note.sourceChannelId) !== targetId || selected.has(note._mergeCandidateKey)) continue;
+      const hasSelectedExternalOverlap = selectedExternal.some((other) => channelMergeCandidatesOverlap(note, other));
+      if (!hasSelectedExternalOverlap) selected.add(note._mergeCandidateKey);
+    }
+    return selected;
+  }
+
+  function materializeChannelMergePreview(pool, selectedKeys) {
+    const chosen = (pool || []).filter((note) => selectedKeys?.has(note._mergeCandidateKey));
+    if (!chosen.length) return [];
+    const byStart = [];
+    for (const note of chosen.sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch)) {
+      const key = note.startBeat.toFixed(6);
+      const last = byStart[byStart.length - 1];
+      if (!last || last.key !== key) byStart.push({ key, notes: [note] });
+      else last.notes.push(note);
+    }
+    const monophonic = byStart.map((group) => (
+      group.notes.length === 1
+        ? group.notes[0]
+        : chooseChannelMergeNoteCandidate(group.notes, state.channelMerge.role, null)
+    )).filter(Boolean);
+    const output = [];
+    for (let index = 0; index < monophonic.length; index += 1) {
+      const candidate = monophonic[index];
+      const next = monophonic[index + 1] || null;
+      let durationBeat = candidate.durationBeat;
+      if (next && next.startBeat < candidate.startBeat + durationBeat - 1e-7) {
+        const available = next.startBeat - candidate.startBeat;
+        if (available < CONFIG.minimumNoteBeat - 1e-7) continue;
+        durationBeat = Math.min(durationBeat, available);
+      }
+      output.push({
+        ...normalizeNoteDynamics(candidate),
+        _mergePreviewId: state.channelMerge.nextPreviewId++,
+        _mergeCandidateKey: candidate._mergeCandidateKey,
+        _mergeSourceChannelId: candidate.sourceChannelId,
+        _mergeSourceNoteId: candidate.sourceNoteId,
+        pitch: candidate.pitch,
+        startBeat: Number(candidate.startBeat.toFixed(6)),
+        durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, durationBeat).toFixed(6)),
+      });
+    }
+    return output;
+  }
+
+  function refreshChannelMergePreviewFromSelection({ markModified = false } = {}) {
+    state.channelMerge.selectedCandidateKeys = restoreUncontestedTargetMergeCandidates(
+      state.channelMerge.candidatePool,
+      state.channelMerge.selectedCandidateKeys,
+    );
+    state.channelMerge.previewNotes = materializeChannelMergePreview(
+      state.channelMerge.candidatePool,
+      state.channelMerge.selectedCandidateKeys,
+    );
+    state.channelMerge.previewModified = Boolean(markModified);
+    state.channelMerge.selectedPreviewIds = new Set();
+    updateChannelMergeModeUi();
+    drawRoll();
+    return true;
+  }
+
+  function rebuildChannelMergePreview({ markModified = false, resetCandidates = true } = {}) {
+    if (!isChannelMergeModeActive()) return false;
+    const target = getChannelMergeTarget();
+    if (!target) return false;
+    const sources = getChannelMergeSources();
+    const pool = buildChannelMergeCandidatePool();
+    state.channelMerge.candidatePool = pool;
+    if (resetCandidates || !(state.channelMerge.selectedCandidateKeys instanceof Set)) {
+      const automaticChannelIds = new Set([
+        String(target.id),
+        ...sources.map((channel) => String(channel.id)),
+      ]);
+      const automaticPool = pool.filter((note) => automaticChannelIds.has(String(note.sourceChannelId)));
+      state.channelMerge.selectedCandidateKeys = chooseAutomaticChannelMergeCandidateKeys(
+        automaticPool,
+        state.channelMerge.role,
+        state.channelMerge.overlapAmount,
+      );
+    } else {
+      const validKeys = new Set(pool.map((note) => note._mergeCandidateKey));
+      state.channelMerge.selectedCandidateKeys = new Set(
+        [...state.channelMerge.selectedCandidateKeys].filter((key) => validKeys.has(key)),
+      );
+    }
+    return refreshChannelMergePreviewFromSelection({ markModified });
+  }
+
+  function updateChannelMergeModeUi() {
+    const active = isChannelMergeModeActive();
+    document.body.classList.toggle("merge-mode-active", active);
+    if (elements.channelMergeModeControls) elements.channelMergeModeControls.hidden = !active;
+    const normalInstrument = elements.channelInstrumentSelect?.closest?.(".channel-instrument-control");
+    const normalSummary = elements.infoCharCount?.closest?.(".channel-summary");
+    if (normalInstrument) normalInstrument.hidden = active;
+    if (normalSummary) normalSummary.hidden = active;
+    if (!active) return;
+    elements.channelMergeModeRoleOptions?.querySelectorAll("[data-merge-mode-role]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.mergeModeRole === state.channelMerge.role));
+    });
+    if (elements.channelMergeOverlapSlider) {
+      elements.channelMergeOverlapSlider.value = String(Math.round(normalizeChannelMergeOverlapAmount(state.channelMerge.overlapAmount) * 100));
+    }
+    if (elements.channelMergeModeApplyButton) {
+      const targetId = String(state.channelMerge.targetChannelId);
+      const hasExternalCandidate = (state.channelMerge.previewNotes || []).some(
+        (note) => String(note._mergeSourceChannelId) !== targetId,
+      );
+      elements.channelMergeModeApplyButton.disabled = !hasExternalCandidate || !state.channelMerge.previewNotes.length;
+    }
+  }
+
+  function enterChannelMergeMode(channelId = null) {
+    if (state.channels.length < 2) {
+      showToast(i18nText("channel.select_least_two_merge"));
+      return false;
+    }
+    const target = getChannelById(channelId ?? getActiveChannel()?.id);
+    if (!target) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    setSidebarTab("channels");
+    setHistoryCollapsed(false);
+    state.channelMerge.active = true;
+    state.channelMerge.targetChannelId = String(target.id);
+    state.channelMerge.sourceChannelIds = new Set();
+    state.channelMerge.role = "auto";
+    state.channelMerge.overlapMode = "all";
+    state.channelMerge.overlapAmount = 1;
+    state.channelMerge.candidatePool = [];
+    state.channelMerge.selectedCandidateKeys = new Set();
+    state.channelMerge.previewNotes = [];
+    state.channelMerge.previewModified = false;
+    state.channelMerge.selectedPreviewIds = new Set();
+    state.channelMerge.nextPreviewId = 1;
+
+    // Build the full candidate pool immediately so merge candidates can be toggled
+    // before any source channel checkbox is selected. The target channel's existing
+    // notes start selected by default and are shown as the initial merge preview.
+    const initialCandidatePool = buildChannelMergeCandidatePool();
+    state.channelMerge.candidatePool = initialCandidatePool;
+    state.channelMerge.selectedCandidateKeys = restoreUncontestedTargetMergeCandidates(
+      initialCandidatePool,
+      new Set(
+        initialCandidatePool
+          .filter((note) => String(note.sourceChannelId) === String(target.id))
+          .map((note) => note._mergeCandidateKey),
+      ),
+    );
+    state.channelMerge.previewNotes = materializeChannelMergePreview(
+      state.channelMerge.candidatePool,
+      state.channelMerge.selectedCandidateKeys,
+    );
+
+    const targetIndex = state.channels.findIndex((channel) => String(channel.id) === String(target.id));
+    state.activePanel = "notes";
+    state.activeChannel = Math.max(0, targetIndex);
+    state.activeAudioClipId = null;
+    clearNoteSelection();
+    clearMidiSelection();
+    closeContextMenu();
+    closeFileMenu();
+    closeEditMenu();
+    renderChannelTabs();
+    renderChannelEditor();
+    updateChannelMergeModeUi();
+    drawRoll();
+    showToast(i18nText("merge.mode_started", [target.name]));
+    return true;
+  }
+
+  function cancelChannelMergeMode({ silent = false } = {}) {
+    if (!isChannelMergeModeActive()) return false;
+    state.channelMerge.active = false;
+    state.channelMerge.targetChannelId = null;
+    state.channelMerge.sourceChannelIds = new Set();
+    state.channelMerge.candidatePool = [];
+    state.channelMerge.selectedCandidateKeys = new Set();
+    state.channelMerge.previewNotes = [];
+    state.channelMerge.previewModified = false;
+    state.channelMerge.selectedPreviewIds = new Set();
+    state.interaction = null;
+    updateChannelMergeModeUi();
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    if (!silent) showToast(i18nText("merge.mode_cancelled"));
+    return true;
+  }
+
+  function toggleChannelMergeSource(channelId) {
+    if (!isChannelMergeModeActive()) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    const id = String(channelId);
+    if (id === String(state.channelMerge.targetChannelId)) return false;
+    const ids = state.channelMerge.sourceChannelIds;
+    if (ids.has(id)) ids.delete(id); else ids.add(id);
+    state.channelMerge.previewModified = false;
+    rebuildChannelMergePreview({ resetCandidates: true });
+    renderChannelTabs();
+    return true;
+  }
+
+  function setChannelMergeModeRole(role) {
+    if (!isChannelMergeModeActive()) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    const normalized = normalizeChannelMergeRole(role);
+    if (normalized === state.channelMerge.role) return false;
+    state.channelMerge.role = normalized;
+    state.channelMerge.previewModified = false;
+    rebuildChannelMergePreview({ resetCandidates: true });
+    renderChannelTabs();
+    return true;
+  }
+
+  function setChannelMergeOverlapAmount(value) {
+    if (!isChannelMergeModeActive()) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    const normalized = normalizeChannelMergeOverlapAmount(value);
+    if (Math.abs(normalized - state.channelMerge.overlapAmount) < 1e-7) return false;
+    state.channelMerge.overlapAmount = normalized;
+    state.channelMerge.previewModified = false;
+    rebuildChannelMergePreview({ resetCandidates: true });
+    return true;
+  }
+
+  function applyChannelMergeMode() {
+    if (!isChannelMergeModeActive()) return false;
+    const target = getChannelMergeTarget();
+    if (!target || !state.channelMerge.previewNotes.length) return false;
+    const targetId = String(target.id);
+    const mergedSourceIds = new Set(
+      state.channelMerge.previewNotes
+        .map((note) => String(note._mergeSourceChannelId))
+        .filter((channelId) => channelId && channelId !== targetId),
+    );
+    if (!mergedSourceIds.size) return false;
+    const finalNotes = state.channelMerge.previewNotes
+      .map((note) => ({
+        id: state.nextNoteId++,
+        pitch: note.pitch,
+        startBeat: Number(note.startBeat.toFixed(6)),
+        durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, note.durationBeat).toFixed(6)),
+        velocity: note.velocity,
+        volume: note.volume,
+      }))
+      .sort(compareNotesByTimeline);
+    target.notes = finalNotes;
+    state.channelNoteRuntime.delete(String(target.id));
+    const sourceCount = mergedSourceIds.size;
+    const targetName = target.name;
+    cancelChannelMergeMode({ silent: true });
+    markDirty(i18nText("history.channel_merge_count", [sourceCount + 1]));
+    shrinkTimelineToContent();
+    renderAll();
+    showToast(i18nText("merge.mode_applied", [sourceCount, targetName, finalNotes.length]));
+    return true;
+  }
+
+  function findMergePreviewNoteHitAt(x, y) {
+    if (!isChannelMergeModeActive()) return null;
+    const notes = state.channelMerge.previewNotes || [];
+    const rowHeight = getRowHeight();
+    for (let index = notes.length - 1; index >= 0; index -= 1) {
+      const note = notes[index];
+      const left = beatToX(note.startBeat) + 1;
+      const right = beatToX(note.startBeat + note.durationBeat) - 1;
+      const top = pitchToY(note.pitch) + 1;
+      const bottom = top + Math.max(3, rowHeight - 2);
+      if (x < left || x > right || y < top || y > bottom) continue;
+      return { note, part: "body" };
+    }
+    return null;
+  }
+
+  function findChannelMergeRawCandidateHitAt(x, y) {
+    if (!isChannelMergeModeActive()) return null;
+    // Manual candidate picking is intentionally broader than the checked source
+    // channels: every note that is currently visible on the piano roll is eligible.
+    const indices = state.channels
+      .map((channel, channelIndex) => ({ channel, channelIndex }))
+      .filter(({ channel }) => channel.visible !== false)
+      .sort((left, right) => {
+        const leftActive = left.channelIndex === state.activeChannel ? 1 : 0;
+        const rightActive = right.channelIndex === state.activeChannel ? 1 : 0;
+        return leftActive - rightActive || left.channelIndex - right.channelIndex;
+      })
+      .reverse();
+    for (const { channel, channelIndex } of indices) {
+      const hit = findNoteHitAt(x, y, channelIndex);
+      if (!hit) continue;
+      const key = makeChannelMergeCandidateKey(channel, hit.note);
+      const candidate = state.channelMerge.candidatePool.find((note) => note._mergeCandidateKey === key);
+      if (candidate) return candidate;
+    }
+    return null;
+  }
+
+  function toggleChannelMergeCandidate(candidateKey) {
+    if (!isChannelMergeModeActive() || !candidateKey) return false;
+    const pool = state.channelMerge.candidatePool || [];
+    const candidate = pool.find((note) => note._mergeCandidateKey === candidateKey);
+    if (!candidate) return false;
+    const selected = state.channelMerge.selectedCandidateKeys instanceof Set
+      ? new Set(state.channelMerge.selectedCandidateKeys)
+      : new Set();
+    if (selected.has(candidateKey)) {
+      selected.delete(candidateKey);
+    } else {
+      for (const other of pool) {
+        if (other._mergeCandidateKey === candidateKey) continue;
+        if (Math.abs(other.startBeat - candidate.startBeat) < 1e-7) selected.delete(other._mergeCandidateKey);
+      }
+      selected.add(candidateKey);
+    }
+    state.channelMerge.selectedCandidateKeys = selected;
+    refreshChannelMergePreviewFromSelection({ markModified: true });
+    return true;
+  }
+
+  function handleMergePreviewPointerDown(event) {
+    if (!isChannelMergeModeActive() || event.button !== 0) return false;
+    const point = pointerToRoll(event);
+    const previewHit = findMergePreviewNoteHitAt(point.x, point.y);
+    let candidate = previewHit?.note?._mergeCandidateKey
+      ? state.channelMerge.candidatePool.find((note) => note._mergeCandidateKey === previewHit.note._mergeCandidateKey)
+      : null;
+    if (!candidate) candidate = findChannelMergeRawCandidateHitAt(point.x, point.y);
+
+    if (candidate) {
+      toggleChannelMergeCandidate(candidate._mergeCandidateKey);
+      previewEditorPitch(candidate.pitch, { holdVisual: false });
+    } else {
+      const beat = xToBeat(point.x);
+      if (beat >= 0) setPlayheadBeat(clamp(snapBeat(beat), 0, getTotalBeats()), { stop: true, preview: false });
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  function handleMergeModeContextGuard(event) {
+    if (!isChannelMergeModeActive()) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closeContextMenu();
+  }
+
+  function handleMergeModeKeyGuard(event) {
+    if (!isChannelMergeModeActive()) return;
+    if (event.key === "Escape") {
+      event.preventDefault(); event.stopImmediatePropagation(); cancelChannelMergeMode(); return;
+    }
+    if (event.code === "Space" && !event.ctrlKey && !event.metaKey && !event.altKey) return;
+    const target = event.target;
+    if (target?.closest?.("#channelMergeModeControls, .playback-compact-box")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
   function normalizeChannelMergeRole(value) {
     const role = String(value || "auto").toLowerCase();
     return ["auto", "high", "low"].includes(role) ? role : "auto";
@@ -10747,6 +11310,8 @@
   }
 
   function openChannelMergeDialog() {
+    return enterChannelMergeMode(getActiveChannel()?.id);
+    /* legacy dialog retained for backward code compatibility
     if (state.channels.length < 2) {
       showToast("병합할 채널이 2개 이상 필요합니다.");
       return false;
@@ -10755,6 +11320,7 @@
     elements.channelMergeBackdrop.hidden = false;
     requestAnimationFrame(() => elements.channelMergeList.querySelector('input[type="checkbox"]')?.focus());
     return true;
+    */
   }
 
   function closeChannelMergeDialog() {
@@ -11465,6 +12031,10 @@
   }
 
   function handleRollPointerDown(event) {
+    if (isChannelMergeModeActive()) {
+      if (event.button === 0) { handleMergePreviewPointerDown(event); return; }
+      if (event.button === 2) { event.preventDefault(); return; }
+    }
     if (event.button !== 0 && event.button !== 2) {
       return;
     }
@@ -11782,6 +12352,10 @@
   }
 
   function updateRollInteractionAtPoint(point, event = null) {
+    if (isChannelMergeModeActive()) {
+      elements.rollCanvas.style.cursor = "pointer";
+      return;
+    }
     if (!state.interaction) {
       if (isMidiReferenceActive()) {
         elements.rollCanvas.style.cursor = findMidiNoteAt(point.x, point.y) ? "pointer" : "default";
@@ -15526,6 +16100,13 @@
 
 
   function getPlaybackEndBeat() {
+    if (isChannelMergeModeActive()) {
+      const previewEnd = (state.channelMerge.previewNotes || []).reduce(
+        (maximum, note) => Math.max(maximum, note.startBeat + note.durationBeat),
+        0,
+      );
+      return clamp(previewEnd, 0, getTotalBeats());
+    }
     const lastAudioEnd = state.audioClips
       .filter((clip) => !clip.muted && Boolean(getAudioRuntime(clip.id)?.audioBuffer))
       .reduce((maximum, clip) => Math.max(maximum, getAudioClipEndBeat(clip)), 0);
@@ -15616,9 +16197,34 @@
       ));
     }
     const notes = [];
+    const mergeActive = isChannelMergeModeActive();
+    if (mergeActive) {
+      const target = getChannelMergeTarget();
+      if (!target) return [];
+      for (const note of state.channelMerge.previewNotes || []) {
+        if (note.startBeat + note.durationBeat <= startBeat + 1e-7) continue;
+        const fadedVolume = getTimelineFadedNoteVolume(note);
+        notes.push({
+          id: `merge-${note._mergeCandidateKey || note._mergePreviewId}`,
+          pitch: note.pitch,
+          velocity: mmlVolumeToPlayerPlaybackVelocity(fadedVolume),
+          volume: fadedVolume,
+          startBeat: note.startBeat,
+          durationBeat: note.durationBeat,
+          endBeat: note.startBeat + note.durationBeat,
+          source: "merge-preview",
+          sourceId: target.id,
+          instrumentProgram: getChannelInstrumentProgram(target),
+          instrumentBank: getChannelInstrumentBank(target),
+          instrumentExactPreset: getChannelInstrumentExactPreset(target),
+        });
+      }
+      return notes.sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch);
+    }
     for (const channel of state.channels) {
       if (!includeMuted && isChannelEffectivelyMuted(channel)) continue;
-      for (const note of channel.notes) {
+      const playbackChannelNotes = channel.notes;
+      for (const note of playbackChannelNotes) {
         if (note.startBeat + note.durationBeat <= startBeat + 1e-7) continue;
         const fadedVolume = getTimelineFadedNoteVolume(note);
         notes.push({
@@ -15646,6 +16252,7 @@
 
   function isPlaybackNoteCurrentlyAudible(note) {
     if (!note) return false;
+    if (note.source === "merge-preview") return isChannelMergeModeActive();
     if (note.source === "midi") {
       const document = getActiveMidiDocument();
       if (!document || document.muted) return false;
@@ -15904,7 +16511,7 @@
     state.playback.scrollAnimation = null;
     state.playback.lastTimelineDrawAt = 0;
     const playbackNotes = preparePlaybackSchedule(startBeat);
-    const hasPlayableAudio = state.audioClips.some((clip) => (
+    const hasPlayableAudio = !isChannelMergeModeActive() && state.audioClips.some((clip) => (
       !clip.muted
       && getAudioClipEndBeat(clip) > startBeat + 1e-7
       && Boolean(getAudioRuntime(clip.id)?.audioBuffer)
@@ -15935,7 +16542,8 @@
       state.playback.loading = false;
       state.playback.running = true;
       updatePlayButton();
-      scheduleAudioClipsForPlayback();
+      if (!isChannelMergeModeActive()) scheduleAudioClipsForPlayback();
+      else stopScheduledAudioClips();
       if (playbackNotes.length) schedulePlaybackLookahead();
       state.playback.animationFrame = requestAnimationFrame(playbackFrame);
     } catch (error) {
@@ -16139,7 +16747,9 @@
 
   function moveToTimelineEnd() {
     stopPlayback(false);
-    const endBeat = Math.max(getPlaybackEndBeat(), getPersistentContentEndBeat());
+    const endBeat = isChannelMergeModeActive()
+      ? getPlaybackEndBeat()
+      : Math.max(getPlaybackEndBeat(), getPersistentContentEndBeat());
     setPlayheadBeat(endBeat);
     const viewportWidth = elements.rollViewport.clientWidth;
     const rightPadding = Math.min(96, Math.max(36, viewportWidth * 0.12));
@@ -18541,6 +19151,7 @@
       const index = Number(area.element.dataset.channelIndex);
       const channel = state.channels[index];
       return [
+        { label: i18nText("channel.merge"), disabled: state.channels.length < 2, action: () => channel && enterChannelMergeMode(channel.id) },
         { label: i18nText("channel.edit_2"), action: () => channel && openChannelEditDialog(channel.id) },
         { label: i18nText("channel.copy_all_note"), disabled: !channel?.notes.length, action: () => { selectChannel(index); copyActiveChannelNotes(); } },
         { label: i18nText("channel.cut_all_note"), disabled: !channel?.notes.length, action: () => { selectChannel(index); cutActiveChannelNotes(); } },
@@ -18996,6 +19607,8 @@
     document.addEventListener("pointerdown", unlockEditorAudioFromGesture, { capture: true, passive: true });
     document.addEventListener("touchstart", unlockEditorAudioFromGesture, { capture: true, passive: true });
     document.addEventListener("keydown", (event) => { if (!event.repeat) unlockEditorAudioFromGesture(); }, true);
+    document.addEventListener("keydown", handleMergeModeKeyGuard, true);
+    document.addEventListener("contextmenu", handleMergeModeContextGuard, true);
     document.addEventListener("keydown", handleModalBackgroundKeyGuard, true);
     document.addEventListener("keydown", handleNewProjectShortcut, true);
     document.addEventListener("keydown", handleChannelCreateDeleteShortcut, true);
@@ -19531,6 +20144,14 @@
     elements.channelMergeOverlapOptions?.querySelectorAll("[data-merge-overlap]").forEach((button) => {
       button.addEventListener("click", () => setChannelMergeOverlapMode(button.dataset.mergeOverlap));
     });
+    elements.channelMergeModeRoleOptions?.querySelectorAll("[data-merge-mode-role]").forEach((button) => {
+      button.addEventListener("click", () => setChannelMergeModeRole(button.dataset.mergeModeRole));
+    });
+    elements.channelMergeOverlapSlider?.addEventListener("input", () => {
+      setChannelMergeOverlapAmount(Number(elements.channelMergeOverlapSlider.value) / 100);
+    });
+    elements.channelMergeModeCancelButton?.addEventListener("click", () => cancelChannelMergeMode());
+    elements.channelMergeModeApplyButton?.addEventListener("click", applyChannelMergeMode);
     elements.channelMergeBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.channelMergeBackdrop) closeChannelMergeDialog();
     });

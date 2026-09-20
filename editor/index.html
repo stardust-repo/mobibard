@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260920-collapsed-toggle-border2" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260920-merge-mode8" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -282,6 +282,26 @@
 </div>
 <label class="channel-instrument-control compact-channel-instrument"><span data-i18n="instrument.text">악기</span><select aria-label="현재 채널 악기" data-i18n-aria-label="channel.instrument_2" id="channelInstrumentSelect"></select></label>
 <div aria-label="현재 채널 요약" data-i18n-aria-label="channel.summary" class="channel-summary compact-channel-summary"><span>글자수 <strong id="infoCharCount">0</strong></span><span>선택개수 <strong id="infoSelectionCount">0</strong></span></div>
+<div class="channel-merge-mode-controls" id="channelMergeModeControls" hidden>
+  <div class="channel-merge-mode-main-row">
+    <strong class="channel-merge-mode-title" data-i18n="merge.candidates">병합 후보</strong>
+    <div class="channel-merge-mode-role-options" id="channelMergeModeRoleOptions" role="group" aria-label="병합 후보" data-i18n-aria-label="merge.candidates">
+      <button type="button" data-merge-mode-role="auto" data-i18n="ui.auto">자동</button>
+      <button type="button" data-merge-mode-role="high" data-i18n="ui.high">고음</button>
+      <button type="button" data-merge-mode-role="low" data-i18n="ui.low">저음</button>
+    </div>
+    <div class="channel-merge-mode-actions">
+      <button class="merge-cancel-button" type="button" id="channelMergeModeCancelButton" data-i18n="cancel">취소</button>
+      <button class="merge-apply-button" type="button" id="channelMergeModeApplyButton" data-i18n="ui.merge">병합</button>
+    </div>
+  </div>
+  <div class="channel-merge-overlap-row">
+    <strong data-i18n="merge.note_overlap">노트 겹침</strong>
+    <span data-i18n="merge.none">안함</span>
+    <input id="channelMergeOverlapSlider" type="range" min="0" max="100" step="1" value="100" aria-label="노트 겹침" data-i18n-aria-label="merge.note_overlap"/>
+    <span data-i18n="merge.maximum">최대</span>
+  </div>
+</div>
 </div>
 </div>
 <div aria-hidden="true" class="midi-reference-view" data-context-area="midi-reference" hidden="" id="midiReferenceView">
@@ -380,18 +400,6 @@
 </div>
 </div>
 <div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="mmlExportSummary" data-i18n="channel.no_selected">선택된 채널이 없습니다.</div><button data-i18n="close" id="mmlExportCancelButton" type="button">닫기</button></div>
-</section>
-</div>
-<div class="popup-backdrop" hidden="" id="channelMergeBackdrop">
-<section aria-label="편집 채널 병합" data-i18n-aria-label="channel.merge_edit" aria-modal="true" class="transfer-dialog channel-merge-dialog" id="channelMergeDialog" role="dialog">
-<div class="transfer-dialog-header"><div><strong data-i18n="channel.merge">채널 병합</strong><span data-i18n="channel.merge_selected_one">선택한 채널을 새 단선율 채널 하나로 병합합니다.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelMergeCloseButton" type="button">×</button></div>
-<div class="midi-transfer-selection-actions"><button id="channelMergeSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelMergeClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
-<div class="midi-transfer-channel-list channel-merge-list" id="channelMergeList"></div>
-<div class="channel-merge-settings">
-<div class="channel-merge-setting"><strong data-i18n="note.priority">노트 배치</strong><div class="channel-merge-options" id="channelMergeRoleOptions" role="group" aria-label="노트 배치 방식" data-i18n-aria-label="note.priority_mode"><button aria-pressed="false" data-merge-role="auto" type="button" data-i18n="ui.auto">자동</button><button aria-pressed="true" data-merge-role="high" type="button" data-i18n="ui.high">고음</button><button aria-pressed="false" data-merge-role="low" type="button" data-i18n="ui.low">저음</button></div></div>
-<div class="channel-merge-setting"><strong data-i18n="ui.overlap_merge">노트 겹침 병합</strong><div class="channel-merge-options" id="channelMergeOverlapOptions" role="group" aria-label="노트 겹침 병합 방식" data-i18n-aria-label="ui.overlap_merge_mode"><button aria-pressed="false" data-merge-overlap="all" type="button" data-i18n="all">모두</button><button aria-pressed="true" data-merge-overlap="half" type="button" data-i18n="ui.half">절반</button><button aria-pressed="false" data-merge-overlap="none" type="button" data-i18n="ui.none">안함</button></div></div>
-</div>
-<div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="channelMergeSummary" data-i18n="channel.select_least_two">2개 이상의 채널을 선택하세요.</div><button id="channelMergeCancelButton" type="button" data-i18n="cancel">취소</button><button disabled="" id="channelMergeApplyButton" type="button" data-i18n="ui.merge">병합</button></div>
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="channelDeleteBackdrop">
@@ -609,7 +617,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260920-mml-case-live1"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260920-merge-mode8"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

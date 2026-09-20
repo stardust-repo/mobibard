@@ -7900,3 +7900,282 @@ a[class*="button"]:hover {
     max-width: 116px;
   }
 }
+
+
+/* 2026-09-20 interactive channel merge mode */
+.channel-merge-mode-controls {
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: nowrap;
+}
+.channel-merge-mode-title {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.channel-merge-mode-role-options {
+  display: inline-flex;
+  gap: 3px;
+}
+.channel-merge-mode-role-options button,
+.channel-merge-mode-actions button {
+  min-height: 25px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2, rgba(127,127,127,.09));
+  color: var(--text);
+  font-size: 10px;
+}
+.channel-merge-mode-role-options button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.channel-merge-mode-actions { margin-left: auto; display: inline-flex; gap: 4px; }
+#channelMergeModeApplyButton:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 70%, var(--border)); }
+.channel-tree-channel-item.is-merge-target .channel-tree-main {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.channel-tree-channel-item.is-merge-source .channel-tree-main {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.channel-merge-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.channel-merge-badge.target { border-color: var(--accent); }
+body.merge-mode-active .channel-tree-channel-item .channel-tree-actions,
+body.merge-mode-active .channel-tree-toolbar,
+body.merge-mode-active .side-panel-tabs,
+body.merge-mode-active #channelInstrumentSelect,
+body.merge-mode-active .top-menu button:not(#playButton),
+body.merge-mode-active .app-toolbar button:not(#playButton),
+body.merge-mode-active #editToolControls,
+body.merge-mode-active #tempoLane,
+body.merge-mode-active #audioLaneViewport {
+  pointer-events: none !important;
+  opacity: .45;
+}
+body.merge-mode-active .compact-channel-instrument,
+body.merge-mode-active .compact-channel-summary {
+  display: none !important;
+}
+body.merge-mode-active .channel-tree-channel-item .channel-tree-main { cursor: pointer; }
+body.merge-mode-active .channel-tree-channel-item.is-merge-target .channel-tree-main { cursor: default; }
+@media (max-width: 760px) {
+  .channel-merge-mode-controls { gap: 4px; flex-wrap: wrap; }
+  .channel-merge-mode-actions { margin-left: 0; }
+}
+
+/* Merge mode is intentionally modal without a popup: only preview playback, source selection, preview editing, and merge controls stay interactive. */
+body.merge-mode-active button,
+body.merge-mode-active input,
+body.merge-mode-active select,
+body.merge-mode-active textarea {
+  pointer-events: none !important;
+}
+body.merge-mode-active button { opacity: .42; }
+body.merge-mode-active #playButton,
+body.merge-mode-active #jumpStartButton,
+body.merge-mode-active #jumpEndButton,
+body.merge-mode-active #volumeButton,
+body.merge-mode-active #playbackRateButton,
+body.merge-mode-active #volumeMenu button,
+body.merge-mode-active #volumeMenu input,
+body.merge-mode-active #playbackRateMenu button,
+body.merge-mode-active #playbackRateMenu input,
+body.merge-mode-active #channelMergeModeControls button,
+body.merge-mode-active .channel-tree-channel-item .channel-tree-main {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+body.merge-mode-active #rollCanvas { pointer-events: auto !important; }
+body.merge-mode-active .channel-tree-channel-item .channel-tree-actions { opacity: .34; }
+
+/* 2026-09-20 merge mode v3: candidate-based preview controls. */
+.channel-merge-mode-controls {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+}
+.channel-merge-mode-main-row,
+.channel-merge-overlap-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.channel-merge-mode-main-row { gap: 6px; }
+.channel-merge-overlap-row {
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.channel-merge-overlap-row > strong {
+  color: var(--text);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.channel-merge-overlap-row > span { white-space: nowrap; }
+#channelMergeOverlapSlider {
+  flex: 1 1 140px;
+  min-width: 90px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.channel-merge-mode-role-options button,
+.channel-merge-mode-actions button {
+  min-height: 27px;
+  padding: 4px 10px;
+  border-width: 1.5px;
+  border-color: color-mix(in srgb, var(--control-border) 72%, var(--text));
+  background: color-mix(in srgb, var(--control-bg) 88%, var(--text) 12%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
+  font-weight: 750;
+}
+.channel-merge-mode-role-options button:hover,
+.channel-merge-mode-actions button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--control-bg));
+}
+.channel-merge-mode-role-options button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 34%, var(--control-bg));
+  color: var(--text);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent), inset 0 1px 0 color-mix(in srgb, #fff 16%, transparent);
+}
+#channelMergeModeCancelButton {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--control-border));
+}
+#channelMergeModeApplyButton:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 28%, var(--control-bg));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+body.merge-mode-active #channelMergeModeControls input {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+@media (max-width: 760px) {
+  .channel-merge-mode-main-row { flex-wrap: wrap; }
+  .channel-merge-mode-actions { margin-left: auto; }
+  .channel-merge-overlap-row { width: 100%; }
+}
+
+
+/* 2026-09-20 merge mode polish: breathing room, topbar-like controls, target badge priority. */
+body.merge-mode-active .channel-merge-mode-controls {
+  padding-top: 8px;
+}
+body.merge-mode-active .channel-merge-mode-role-options button,
+body.merge-mode-active .channel-merge-mode-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: var(--control-bg);
+  color: var(--text);
+  box-shadow: none;
+}
+body.merge-mode-active .channel-merge-mode-role-options button:hover,
+body.merge-mode-active .channel-merge-mode-actions button:hover:not(:disabled) {
+  background: var(--control-hover);
+  border-color: var(--control-border);
+}
+body.merge-mode-active .channel-merge-mode-role-options button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--control-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 52%, transparent);
+}
+body.merge-mode-active #channelMergeModeCancelButton {
+  border-color: color-mix(in srgb, var(--danger) 62%, var(--control-border));
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, var(--control-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+body.merge-mode-active .channel-tree-channel-item .channel-tree-label {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body.merge-mode-active .channel-tree-channel-item .channel-merge-badge {
+  flex: 0 0 auto;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+body.merge-mode-active .channel-tree-channel-item .channel-merge-badge.target {
+  min-width: 34px;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* 2026-09-20 merge mode polish 2: separate target color and add spacing below inspector divider. */
+body.merge-mode-active .channel-merge-mode-controls {
+  margin-top: 6px;
+  padding-top: 0;
+}
+body.merge-mode-active .channel-tree-channel-item.is-merge-target .channel-tree-main {
+  outline-color: #f59e0b;
+}
+body.merge-mode-active .channel-tree-channel-item .channel-merge-badge.target {
+  border-color: #fbbf24;
+  background: #d97706;
+  color: #fffaf0;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #f59e0b 34%, transparent);
+}
+:root[data-theme="light"] body.merge-mode-active .channel-tree-channel-item.is-merge-target .channel-tree-main {
+  outline-color: #b45309;
+}
+:root[data-theme="light"] body.merge-mode-active .channel-tree-channel-item .channel-merge-badge.target {
+  border-color: #b45309;
+  background: #c76a08;
+  color: #fff;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #b45309 22%, transparent);
+}
+
+/* 2026-09-20 merge mode polish 3: playhead-colored target badge and real space below the inspector divider. */
+body.merge-mode-active .channel-inspector .compact-channel-inspector {
+  grid-template-rows: minmax(0, 1fr) !important;
+  align-content: stretch !important;
+  align-items: start !important;
+  padding: 12px 8px 2px !important;
+}
+body.merge-mode-active .channel-merge-mode-controls {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+body.merge-mode-active .channel-tree-channel-item.is-merge-target .channel-tree-main,
+:root[data-theme="light"] body.merge-mode-active .channel-tree-channel-item.is-merge-target .channel-tree-main {
+  outline-color: rgba(255, 55, 76, .98) !important;
+}
+body.merge-mode-active .channel-tree-channel-item .channel-merge-badge.target,
+:root[data-theme="light"] body.merge-mode-active .channel-tree-channel-item .channel-merge-badge.target {
+  border-color: #ff374c !important;
+  background: #ff374c !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 1px rgba(255, 55, 76, .30), 0 0 7px rgba(255, 55, 76, .28) !important;
+}
