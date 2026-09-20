@@ -327,6 +327,15 @@
     channelMergeOverlapSlider: document.querySelector("#channelMergeOverlapSlider"),
     channelMergeModeCancelButton: document.querySelector("#channelMergeModeCancelButton"),
     channelMergeModeApplyButton: document.querySelector("#channelMergeModeApplyButton"),
+    noteEditModePanel: document.querySelector("#noteEditModePanel"),
+    noteEditModeTitle: document.querySelector("#noteEditModeTitle"),
+    noteEditModeSelectionLabel: document.querySelector("#noteEditModeSelectionLabel"),
+    noteEditModeTrillOptions: document.querySelector("#noteEditModeTrillOptions"),
+    noteEditModeGlissandoOptions: document.querySelector("#noteEditModeGlissandoOptions"),
+    noteEditModeArpeggioOptions: document.querySelector("#noteEditModeArpeggioOptions"),
+    noteEditModeHelp: document.querySelector("#noteEditModeHelp"),
+    noteEditModeCancelButton: document.querySelector("#noteEditModeCancelButton"),
+    noteEditModeApplyButton: document.querySelector("#noteEditModeApplyButton"),
     channelDeleteBackdrop: document.querySelector("#channelDeleteBackdrop"),
     channelDeleteCloseButton: document.querySelector("#channelDeleteCloseButton"),
     channelDeleteCancelButton: document.querySelector("#channelDeleteCancelButton"),
@@ -383,8 +392,6 @@
     noteVolumeSelectionLabel: document.querySelector("#noteVolumeSelectionLabel"),
     noteVolumeCurrentCounts: document.querySelector("#noteVolumeCurrentCounts"),
     noteVolumeTargetCounts: document.querySelector("#noteVolumeTargetCounts"),
-    noteTrillBackdrop: document.querySelector("#noteTrillBackdrop"),
-    noteTrillSelectionLabel: document.querySelector("#noteTrillSelectionLabel"),
     noteTrillDirectionSelect: document.querySelector("#noteTrillDirectionSelect"),
     noteTrillIntervalSelect: document.querySelector("#noteTrillIntervalSelect"),
     noteTrillStartDivisionSelect: document.querySelector("#noteTrillStartDivisionSelect"),
@@ -394,13 +401,6 @@
     noteTrillVolumeRangeSelect: document.querySelector("#noteTrillVolumeRangeSelect"),
     noteTrillStartNoteSelect: document.querySelector("#noteTrillStartNoteSelect"),
     noteTrillEndOnBase: document.querySelector("#noteTrillEndOnBase"),
-    noteTrillStartEndRow: document.querySelector("#noteTrillStartEndRow"),
-    noteTrillPreviewGrid: document.querySelector("#noteTrillPreviewGrid"),
-    noteTrillCloseButton: document.querySelector("#noteTrillCloseButton"),
-    noteTrillCancelButton: document.querySelector("#noteTrillCancelButton"),
-    noteTrillApplyButton: document.querySelector("#noteTrillApplyButton"),
-    notePerformanceBackdrop: document.querySelector("#notePerformanceBackdrop"),
-    notePerformanceSelectionLabel: document.querySelector("#notePerformanceSelectionLabel"),
     notePerformanceModeSelect: document.querySelector("#notePerformanceModeSelect"),
     notePerformanceDirectionSelect: document.querySelector("#notePerformanceDirectionSelect"),
     notePerformanceSpeedSelect: document.querySelector("#notePerformanceSpeedSelect"),
@@ -413,11 +413,15 @@
     notePerformanceDirectionRow: document.querySelector("#notePerformanceDirectionRow"),
     notePerformanceStepRow: document.querySelector("#notePerformanceStepRow"),
     notePerformanceRangeRow: document.querySelector("#notePerformanceRangeRow"),
-    notePerformancePreviewGrid: document.querySelector("#notePerformancePreviewGrid"),
-    notePerformanceHelp: document.querySelector("#notePerformanceHelp"),
-    notePerformanceCloseButton: document.querySelector("#notePerformanceCloseButton"),
-    notePerformanceCancelButton: document.querySelector("#notePerformanceCancelButton"),
-    notePerformanceApplyButton: document.querySelector("#notePerformanceApplyButton"),
+    noteArpeggioSourceSelect: document.querySelector("#noteArpeggioSourceSelect"),
+    noteArpeggioChordSelect: document.querySelector("#noteArpeggioChordSelect"),
+    noteArpeggioScaleSelect: document.querySelector("#noteArpeggioScaleSelect"),
+    noteArpeggioChordRow: document.querySelector("#noteArpeggioChordRow"),
+    noteArpeggioScaleRow: document.querySelector("#noteArpeggioScaleRow"),
+    noteArpeggioDirectionSelect: document.querySelector("#noteArpeggioDirectionSelect"),
+    noteArpeggioSpeedSelect: document.querySelector("#noteArpeggioSpeedSelect"),
+    noteArpeggioDynamicsSelect: document.querySelector("#noteArpeggioDynamicsSelect"),
+    noteArpeggioVolumeRangeSelect: document.querySelector("#noteArpeggioVolumeRangeSelect"),
     timelineFadeBackdrop: document.querySelector("#timelineFadeBackdrop"),
     timelineFadePosition: document.querySelector("#timelineFadePosition"),
     timelineFadeTypeIn: document.querySelector("#timelineFadeTypeIn"),
@@ -519,6 +523,21 @@
       selectedPreviewIds: new Set(),
       nextPreviewId: 1,
     },
+    noteEditMode: {
+      active: false,
+      type: null,
+      channelId: null,
+      sourceNoteIds: new Set(),
+      originalChannelNotes: [],
+      originalSelectedNoteIds: new Set(),
+      originalNextNoteId: 1,
+      originalTimelineBeats: CONFIG.beatsPerMeasure,
+      previewNotes: [],
+      previewRevision: 0,
+      controlPitches: new Map(),
+      arpeggioDirectPitches: [],
+      arpeggioDirectPitchesBySource: new Map(),
+    },
     editTool: "note",
     ctrlToolHeld: false,
     selectedNoteIds: new Set(),
@@ -555,6 +574,15 @@
       rangeMode: "amount",
       rangeSemitones: 12,
       targetPitch: null,
+      dynamics: "preserve",
+      volumeRange: 3,
+    },
+    arpeggioOptions: {
+      sourceMode: "selected",
+      chordType: "major",
+      scaleType: "major",
+      direction: "up",
+      speed: "1/16",
       dynamics: "preserve",
       volumeRange: 3,
     },
@@ -843,7 +871,7 @@
   }
 
   async function saveAutosaveNow() {
-    if (state.autosave.restoring) return false;
+    if (state.autosave.restoring || isNoteEditModeActive()) return false;
     window.clearTimeout(state.autosave.timer);
     state.autosave.timer = 0;
     if (state.autosave.saving) {
@@ -2856,6 +2884,7 @@
       updateNoteVolumeDialogControl();
       updateNoteVolumeDialogCounts();
     }
+    if (isNoteEditModeActive()) updateNoteEditModeUi();
     if (elements.tempoSimplifyBackdrop && !elements.tempoSimplifyBackdrop.hidden) updateTempoSimplifySummary();
     window.MobibardSiteNavigation?.refresh?.();
   }
@@ -3689,6 +3718,42 @@
         context.strokeRect(x + 1.5, y + 0.5, Math.max(1, widthValue - 1), Math.max(1, heightValue - 1));
         context.restore();
       }
+    }
+
+    if (isNoteEditModeActive()) {
+      const previewFill = state.theme === "light" ? "rgba(245,158,11,.46)" : "rgba(251,191,36,.42)";
+      const previewBorder = state.theme === "light" ? "#b45309" : "#fde68a";
+      const previewHatch = state.theme === "light" ? "rgba(120,53,15,.72)" : "rgba(255,255,255,.72)";
+      for (const note of state.noteEditMode.previewNotes || []) {
+        const x = beatToX(note.startBeat);
+        const endX = beatToX(note.startBeat + note.durationBeat);
+        if (endX < visibleLeft || x > visibleRight) continue;
+        const y = pitchToY(note.pitch) + 1;
+        const heightValue = Math.max(4, getRowHeight() - 2);
+        if (y + heightValue < visibleTop || y > visibleBottom) continue;
+        const widthValue = Math.max(5, endX - x - 1);
+        context.save();
+        context.fillStyle = previewFill;
+        context.fillRect(x + 1, y, widthValue, heightValue);
+        context.beginPath();
+        context.rect(x + 1, y, widthValue, heightValue);
+        context.clip();
+        context.strokeStyle = previewHatch;
+        context.lineWidth = 1.25;
+        for (let offset = -heightValue; offset < widthValue + heightValue; offset += 7) {
+          context.beginPath();
+          context.moveTo(x + 1 + offset, y + heightValue);
+          context.lineTo(x + 1 + offset + heightValue, y);
+          context.stroke();
+        }
+        context.restore();
+        context.save();
+        context.strokeStyle = previewBorder;
+        context.lineWidth = 2;
+        context.strokeRect(x + 1.5, y + 0.5, Math.max(1, widthValue - 1), Math.max(1, heightValue - 1));
+        context.restore();
+      }
+      drawNoteEditControlNotes(context, visibleLeft, visibleTop, visibleRight, visibleBottom);
     }
 
     if (!isMidiReferenceActive() && state.interaction?.type === "create") {
@@ -10292,7 +10357,7 @@
   }
 
   function isCancelableNoteInteraction(interaction = state.interaction) {
-    return Boolean(interaction && ["create", "move-selection", "resize-note"].includes(interaction.type));
+    return Boolean(interaction && ["create", "move-selection", "resize-note", "note-edit-control"].includes(interaction.type));
   }
 
   function cancelCurrentNoteInteraction() {
@@ -10316,6 +10381,18 @@
         interaction.note.startBeat = interaction.originalStartBeat;
         interaction.note.durationBeat = interaction.originalDurationBeat;
       }
+    } else if (interaction.type === "note-edit-control") {
+      if (interaction.controlKind === "glissando-target") {
+        ensureGlissandoTargetControlPitches().set(interaction.sourceId, interaction.originalPitch);
+      } else if (interaction.controlKind === "arpeggio-pitch") {
+        const map = ensureArpeggioDirectControlPitches();
+        const pitches = Array.isArray(map.get(interaction.sourceId)) ? [...map.get(interaction.sourceId)] : [];
+        if (interaction.controlIndex >= 0 && interaction.controlIndex < pitches.length) {
+          pitches[interaction.controlIndex] = interaction.originalPitch;
+          map.set(interaction.sourceId, pitches);
+        }
+      }
+      rebuildNoteEditPreview({ draw: false });
     }
 
     const pointerId = interaction.pointerId;
@@ -10985,6 +11062,7 @@
   }
 
   function enterChannelMergeMode(channelId = null) {
+    if (isNoteEditModeActive()) return false;
     if (state.channels.length < 2) {
       showToast(i18nText("channel.select_least_two_merge"));
       return false;
@@ -11214,20 +11292,24 @@
   }
 
   function handleMergeModeContextGuard(event) {
-    if (!isChannelMergeModeActive()) return;
+    if (!isChannelMergeModeActive() && !isNoteEditModeActive()) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     closeContextMenu();
   }
 
   function handleMergeModeKeyGuard(event) {
-    if (!isChannelMergeModeActive()) return;
+    if (!isChannelMergeModeActive() && !isNoteEditModeActive()) return;
     if (event.key === "Escape") {
-      event.preventDefault(); event.stopImmediatePropagation(); cancelChannelMergeMode(); return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (isNoteEditModeActive()) cancelNoteEditMode();
+      else cancelChannelMergeMode();
+      return;
     }
     if (event.code === "Space" && !event.ctrlKey && !event.metaKey && !event.altKey) return;
     const target = event.target;
-    if (target?.closest?.("#channelMergeModeControls, .playback-compact-box")) return;
+    if (target?.closest?.("#channelMergeModeControls, #noteEditModePanel, .playback-compact-box")) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   }
@@ -12030,10 +12112,46 @@
     event.preventDefault();
   }
 
+  function getNoteEditModeMoveDeltaBounds(originals, blockingNotes) {
+    let minimum = -Infinity;
+    let maximum = Infinity;
+    for (const original of originals || []) {
+      const start = Number(original.startBeat) || 0;
+      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(original.durationBeat) || CONFIG.minimumNoteBeat);
+      for (const blocker of blockingNotes || []) {
+        const blockerStart = Number(blocker.startBeat) || 0;
+        const blockerEnd = blockerStart + Math.max(CONFIG.minimumNoteBeat, Number(blocker.durationBeat) || CONFIG.minimumNoteBeat);
+        if (blockerEnd <= start + 1e-7) minimum = Math.max(minimum, blockerEnd - start);
+        else if (blockerStart >= end - 1e-7) maximum = Math.min(maximum, blockerStart - end);
+      }
+    }
+    return {
+      minimum: Number.isFinite(minimum) ? minimum : -Infinity,
+      maximum: Number.isFinite(maximum) ? maximum : Infinity,
+    };
+  }
+
+  function getNoteEditModeResizeBounds(interaction) {
+    let minimumStartBeat = 0;
+    let maximumEndBeat = getTotalBeats();
+    for (const blocker of interaction?.blockingNotes || []) {
+      const blockerStart = Number(blocker.startBeat) || 0;
+      const blockerEnd = blockerStart + Math.max(CONFIG.minimumNoteBeat, Number(blocker.durationBeat) || CONFIG.minimumNoteBeat);
+      if (blockerEnd <= interaction.originalStartBeat + 1e-7) minimumStartBeat = Math.max(minimumStartBeat, blockerEnd);
+      if (blockerStart >= interaction.originalEndBeat - 1e-7) maximumEndBeat = Math.min(maximumEndBeat, blockerStart);
+    }
+    return { minimumStartBeat, maximumEndBeat };
+  }
+
   function handleRollPointerDown(event) {
     if (isChannelMergeModeActive()) {
       if (event.button === 0) { handleMergePreviewPointerDown(event); return; }
       if (event.button === 2) { event.preventDefault(); return; }
+    }
+    if (isNoteEditModeActive() && event.button === 2) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
     }
     if (event.button !== 0 && event.button !== 2) {
       return;
@@ -12061,7 +12179,7 @@
       state.ctrlToolHeld = Boolean(event.ctrlKey);
       updateEditToolControls();
     }
-    const effectiveEditTool = getEffectiveEditTool(event);
+    const effectiveEditTool = isNoteEditModeActive() ? "note" : getEffectiveEditTool(event);
     if (isMidiReferenceActive()) {
       handleMidiRollPointerDown(event);
       return;
@@ -12102,7 +12220,42 @@
     const additive = event.ctrlKey || event.metaKey;
     const touchSelectionMode = effectiveEditTool === "select" && event.button === 0;
 
+    if (isNoteEditModeActive() && event.button === 0) {
+      const controlHit = findNoteEditControlHitAt(point.x, point.y);
+      if (controlHit) {
+        const control = controlHit.control;
+        state.interaction = {
+          type: "note-edit-control",
+          pointerId: event.pointerId,
+          pointerButton: event.button,
+          controlKey: control.key,
+          controlKind: control.kind,
+          sourceId: control.sourceId ?? null,
+          controlIndex: Number.isFinite(Number(control.index)) ? Number(control.index) : -1,
+          originalPitch: control.pitch,
+          lastPitch: control.pitch,
+          moved: false,
+        };
+        previewEditorPitch(control.pitch, { holdVisual: true });
+        trySetPointerCapture(elements.rollCanvas, event.pointerId);
+        elements.rollCanvas.style.cursor = "ns-resize";
+        drawRoll();
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+
     let noteHit = findNoteHitAt(point.x, point.y);
+    if (isNoteEditModeActive()) {
+      const sourceIds = state.noteEditMode.sourceNoteIds instanceof Set ? state.noteEditMode.sourceNoteIds : new Set();
+      if (!noteHit || !sourceIds.has(noteHit.note?.id)) {
+        if (pointBeat >= 0) setPlayheadBeat(clamp(snapBeat(pointBeat), 0, getTotalBeats()), { stop: true, preview: false });
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
     // 선택 도구에서 아무 노트도 선택되지 않았다면, 현재 채널 뒤에 비쳐 보이는
     // 다른 편집 채널의 노트를 직접 눌러 그 채널로 이동할 수 있습니다.
     if (touchSelectionMode && state.selectedNoteIds.size === 0 && !noteHit) {
@@ -12117,7 +12270,7 @@
     // A selected note can be double-clicked to edit the volume of the whole current selection.
     // Select mode normally toggles a note on the first tap, so preserve the first-click selection
     // and restore it on the second click before opening the volume dialog.
-    if (event.button === 0 && existing && !additive) {
+    if (event.button === 0 && existing && !additive && !isNoteEditModeActive()) {
       const tracker = state.noteVolumeDoubleClick;
       const now = performance.now();
       const isSecondClick = tracker.noteId === existing.id
@@ -12330,6 +12483,11 @@
         trySetPointerCapture(elements.rollCanvas, event.pointerId);
       }
     } else if (pointBeat >= 0) {
+      if (isNoteEditModeActive()) {
+        setPlayheadBeat(clamp(snapBeat(pointBeat), 0, getTotalBeats()), { stop: true, preview: false });
+        event.preventDefault();
+        return;
+      }
       if (effectiveEditTool === "select") {
         beginMarqueeSelection(event, point, {
           initialSelectionMode: event.shiftKey ? "add" : "toggle",
@@ -12361,6 +12519,11 @@
         elements.rollCanvas.style.cursor = findMidiNoteAt(point.x, point.y) ? "pointer" : "default";
         return;
       }
+      const controlHit = isNoteEditModeActive() ? findNoteEditControlHitAt(point.x, point.y) : null;
+      if (controlHit) {
+        elements.rollCanvas.style.cursor = "ns-resize";
+        return;
+      }
       const noteHit = findNoteHitAt(point.x, point.y);
       elements.rollCanvas.style.cursor = noteHit?.part === "left-resize" || noteHit?.part === "right-resize"
         ? "ew-resize"
@@ -12370,7 +12533,22 @@
       return;
     }
 
-    if (state.interaction.type === "create") {
+    if (state.interaction.type === "note-edit-control") {
+      const interaction = state.interaction;
+      const nextPitch = yToPitch(point.y);
+      if (nextPitch !== interaction.lastPitch) {
+        updateNoteEditControlPitch({
+          kind: interaction.controlKind,
+          sourceId: interaction.sourceId,
+          index: interaction.controlIndex,
+        }, nextPitch);
+        interaction.lastPitch = nextPitch;
+        interaction.moved = interaction.moved || nextPitch !== interaction.originalPitch;
+        previewEditorPitch(nextPitch, { holdVisual: true });
+        rebuildNoteEditPreview({ draw: false });
+      }
+      elements.rollCanvas.style.cursor = "ns-resize";
+    } else if (state.interaction.type === "create") {
       if (!state.interaction.dragStarted && Math.hypot(
         point.x - state.interaction.startX,
         point.y - state.interaction.startY,
@@ -12537,6 +12715,16 @@
           candidateStartBeat = interaction.originalStartBeat;
           candidateDurationBeat = targetEndBeat - interaction.originalStartBeat;
         }
+        if (isNoteEditModeActive()) {
+          const bounds = getNoteEditModeResizeBounds(interaction);
+          if (interaction.edge === "left") {
+            candidateStartBeat = Math.max(candidateStartBeat, bounds.minimumStartBeat);
+            candidateDurationBeat = interaction.originalEndBeat - candidateStartBeat;
+          } else {
+            const candidateEndBeat = Math.min(candidateStartBeat + candidateDurationBeat, bounds.maximumEndBeat);
+            candidateDurationBeat = candidateEndBeat - candidateStartBeat;
+          }
+        }
         const candidate = {
           ...interaction.note,
           startBeat: Number(candidateStartBeat.toFixed(6)),
@@ -12578,6 +12766,10 @@
           -interaction.minStartBeat,
           getTotalBeats() - interaction.maxEndBeat,
         );
+        if (isNoteEditModeActive()) {
+          const bounds = getNoteEditModeMoveDeltaBounds(interaction.originals, interaction.blockingNotes);
+          deltaBeat = clamp(deltaBeat, bounds.minimum, bounds.maximum);
+        }
       }
       const requestedPitchDelta = -Math.round((point.y - interaction.startY) / getRowHeight());
       const pitchDelta = clamp(
@@ -12613,6 +12805,9 @@
       elements.rollCanvas.style.cursor = "grabbing";
     }
 
+    if (isNoteEditModeActive() && state.interaction?.moved && ["move-selection", "resize-note"].includes(state.interaction.type)) {
+      rebuildNoteEditPreview({ draw: false });
+    }
     drawRoll();
     if (state.interaction?.type === "marquee") {
       updateChannelInfo();
@@ -12680,14 +12875,22 @@
           ? new Set((interaction.resizeOriginals || []).map((original) => original.note.id))
           : new Set([interaction.note.id])
         : new Set((interaction.originals || []).map((original) => original.note.id));
-      if (interaction.type === "resize-note" && interaction.multiResize) {
-        // Group Shift-resize already clamps every note against its own neighbours,
-        // so do not apply the normal overwrite cleanup to surrounding notes.
+      if (isNoteEditModeActive()) {
+        // Direct note-edit modes are a temporary editing session. Source-note edits
+        // only rebuild the striped preview; the project history is committed once
+        // when the user presses Apply.
         state.channelNoteRuntime.delete(String(channel.id));
+        rebuildNoteEditPreview({ draw: false });
       } else {
-        resolveDirectEditOverlaps(channel, editedIds);
+        if (interaction.type === "resize-note" && interaction.multiResize) {
+          // Group Shift-resize already clamps every note against its own neighbours,
+          // so do not apply the normal overwrite cleanup to surrounding notes.
+          state.channelNoteRuntime.delete(String(channel.id));
+        } else {
+          resolveDirectEditOverlaps(channel, editedIds);
+        }
+        markDirty(interaction.type === "resize-note" ? "노트 길이 변경" : "노트 이동");
       }
-      markDirty(interaction.type === "resize-note" ? "노트 길이 변경" : "노트 이동");
     } else if (interaction.type === "move-selection" && interaction.toggleSelectionOnTap) {
       state.selectedNoteIds.delete(interaction.clickedNoteId);
     } else if (interaction.type === "midi-marquee" && interaction.moved) {
@@ -16107,6 +16310,31 @@
       );
       return clamp(previewEnd, 0, getTotalBeats());
     }
+    if (isNoteEditModeActive()) {
+      const sourceIdSet = state.noteEditMode.sourceNoteIds instanceof Set
+        ? state.noteEditMode.sourceNoteIds
+        : new Set();
+      const editChannelId = String(state.noteEditMode.channelId || "");
+      let lastNoteEnd = 0;
+      for (const channel of state.channels) {
+        for (const note of channel.notes || []) {
+          if (String(channel.id) === editChannelId && sourceIdSet.has(note.id)) continue;
+          lastNoteEnd = Math.max(lastNoteEnd, Number(note.startBeat || 0) + Number(note.durationBeat || 0));
+        }
+      }
+      const previewEnd = (state.noteEditMode.previewNotes || []).reduce(
+        (maximum, note) => Math.max(maximum, Number(note.startBeat || 0) + Number(note.durationBeat || 0)),
+        0,
+      );
+      const lastAudioEnd = state.audioClips
+        .filter((clip) => !clip.muted && Boolean(getAudioRuntime(clip.id)?.audioBuffer))
+        .reduce((maximum, clip) => Math.max(maximum, getAudioClipEndBeat(clip)), 0);
+      const lastTempoBeat = state.tempos.reduce(
+        (maximum, tempo) => tempo.fixed ? maximum : Math.max(maximum, tempo.beat),
+        0,
+      );
+      return clamp(Math.max(lastNoteEnd, previewEnd, lastAudioEnd, lastTempoBeat), 0, getTotalBeats());
+    }
     const lastAudioEnd = state.audioClips
       .filter((clip) => !clip.muted && Boolean(getAudioRuntime(clip.id)?.audioBuffer))
       .reduce((maximum, clip) => Math.max(maximum, getAudioClipEndBeat(clip)), 0);
@@ -16221,10 +16449,17 @@
       }
       return notes.sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch);
     }
+    const noteEditActive = isNoteEditModeActive();
+    const noteEditChannel = noteEditActive ? getNoteEditModeChannel() : null;
+    const noteEditChannelId = String(noteEditChannel?.id || "");
+    const sourceIdSet = noteEditActive && state.noteEditMode.sourceNoteIds instanceof Set
+      ? state.noteEditMode.sourceNoteIds
+      : new Set();
     for (const channel of state.channels) {
       if (!includeMuted && isChannelEffectivelyMuted(channel)) continue;
       const playbackChannelNotes = channel.notes;
       for (const note of playbackChannelNotes) {
+        if (noteEditActive && String(channel.id) === noteEditChannelId && sourceIdSet.has(note.id)) continue;
         if (note.startBeat + note.durationBeat <= startBeat + 1e-7) continue;
         const fadedVolume = getTimelineFadedNoteVolume(note);
         notes.push({
@@ -16243,6 +16478,27 @@
         });
       }
     }
+    if (noteEditActive && noteEditChannel && (includeMuted || !isChannelEffectivelyMuted(noteEditChannel))) {
+      let previewIndex = 0;
+      for (const note of state.noteEditMode.previewNotes || []) {
+        if (note.startBeat + note.durationBeat <= startBeat + 1e-7) continue;
+        const fadedVolume = getTimelineFadedNoteVolume(note);
+        notes.push({
+          id: `note-edit-${state.noteEditMode.previewRevision}-${previewIndex++}`,
+          pitch: note.pitch,
+          velocity: mmlVolumeToPlayerPlaybackVelocity(fadedVolume),
+          volume: fadedVolume,
+          startBeat: note.startBeat,
+          durationBeat: note.durationBeat,
+          endBeat: note.startBeat + note.durationBeat,
+          source: "note-edit-preview",
+          sourceId: noteEditChannel.id,
+          instrumentProgram: getChannelInstrumentProgram(noteEditChannel),
+          instrumentBank: getChannelInstrumentBank(noteEditChannel),
+          instrumentExactPreset: getChannelInstrumentExactPreset(noteEditChannel),
+        });
+      }
+    }
     return notes.sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch);
   }
 
@@ -16253,6 +16509,11 @@
   function isPlaybackNoteCurrentlyAudible(note) {
     if (!note) return false;
     if (note.source === "merge-preview") return isChannelMergeModeActive();
+    if (note.source === "note-edit-preview") {
+      if (!isNoteEditModeActive()) return false;
+      const channel = getChannelById(note.sourceId);
+      return Boolean(channel && !isChannelEffectivelyMuted(channel));
+    }
     if (note.source === "midi") {
       const document = getActiveMidiDocument();
       if (!document || document.muted) return false;
@@ -17998,8 +18259,585 @@
     return true;
   }
 
-  function closeNoteTrillDialog() {
-    if (elements.noteTrillBackdrop) elements.noteTrillBackdrop.hidden = true;
+  function isNoteEditModeActive(type = null) {
+    const active = Boolean(state.noteEditMode?.active && state.noteEditMode?.channelId != null && state.noteEditMode?.type);
+    if (!active || type == null) return active;
+    return String(state.noteEditMode.type) === String(type);
+  }
+
+  function getNoteEditModeChannel() {
+    return isNoteEditModeActive() ? getChannelById(state.noteEditMode.channelId) : null;
+  }
+
+  function getNoteEditModeSourceNotes() {
+    const channel = getNoteEditModeChannel();
+    if (!channel) return [];
+    const ids = state.noteEditMode.sourceNoteIds instanceof Set ? state.noteEditMode.sourceNoteIds : new Set();
+    return channel.notes.filter((note) => ids.has(note.id)).sort(compareNotesByTimeline);
+  }
+
+  function isNoteEditModeSourceNote(note) {
+    return Boolean(isNoteEditModeActive() && note && state.noteEditMode.sourceNoteIds?.has(note.id));
+  }
+
+  function resetNoteEditControlState() {
+    state.noteEditMode.controlPitches = new Map();
+    state.noteEditMode.arpeggioDirectPitches = [];
+    state.noteEditMode.arpeggioDirectPitchesBySource = new Map();
+  }
+
+  function getDefaultGlissandoTargetPitch(note = null) {
+    const uiValue = elements.notePerformanceTargetPitchSelect?.value;
+    const uiPitch = uiValue == null || uiValue === "" ? Number.NaN : Number(uiValue);
+    if (Number.isFinite(uiPitch)) return clamp(Math.round(uiPitch), CONFIG.minPitch, CONFIG.maxPitch);
+    const savedValue = state.performanceOptions?.targetPitch;
+    const savedPitch = savedValue == null || savedValue === "" ? Number.NaN : Number(savedValue);
+    if (Number.isFinite(savedPitch)) return clamp(Math.round(savedPitch), CONFIG.minPitch, CONFIG.maxPitch);
+    const base = clamp(Math.round(Number(note?.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+    const direction = state.performanceOptions?.direction === "down" ? -1 : 1;
+    return clamp(base + direction * 12, CONFIG.minPitch, CONFIG.maxPitch);
+  }
+
+  function ensureGlissandoTargetControlPitches({ reset = false, defaultPitch = null } = {}) {
+    if (!(state.noteEditMode.controlPitches instanceof Map) || reset) {
+      state.noteEditMode.controlPitches = new Map();
+    }
+    const map = state.noteEditMode.controlPitches;
+    const sourceNotes = getNoteEditModeSourceNotes();
+    const sourceIds = new Set(sourceNotes.map((note) => note.id));
+    for (const key of [...map.keys()]) {
+      if (!sourceIds.has(key)) map.delete(key);
+    }
+    for (const note of sourceNotes) {
+      if (map.has(note.id) && !reset) continue;
+      const pitch = defaultPitch == null ? getDefaultGlissandoTargetPitch(note) : defaultPitch;
+      map.set(note.id, clamp(Math.round(Number(pitch) || note.pitch || 60), CONFIG.minPitch, CONFIG.maxPitch));
+    }
+    return map;
+  }
+
+  function setAllGlissandoTargetControlPitches(pitch) {
+    const target = clamp(Math.round(Number(pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+    const map = ensureGlissandoTargetControlPitches();
+    for (const note of getNoteEditModeSourceNotes()) map.set(note.id, target);
+    return map;
+  }
+
+  function getDefaultArpeggioDirectControlPitch(note = null) {
+    const root = clamp(Math.round(Number(note?.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+    return root + 12 <= CONFIG.maxPitch ? root + 12 : Math.max(CONFIG.minPitch, root - 12);
+  }
+
+  function ensureArpeggioDirectControlPitches({ reset = false } = {}) {
+    if (!(state.noteEditMode.arpeggioDirectPitchesBySource instanceof Map) || reset) {
+      state.noteEditMode.arpeggioDirectPitchesBySource = new Map();
+    }
+    const map = state.noteEditMode.arpeggioDirectPitchesBySource;
+    const sourceNotes = getNoteEditModeSourceNotes();
+    const sourceIds = new Set(sourceNotes.map((note) => note.id));
+    for (const key of [...map.keys()]) {
+      if (!sourceIds.has(key)) map.delete(key);
+    }
+    for (const note of sourceNotes) {
+      const existing = map.get(note.id);
+      if (!reset && Array.isArray(existing) && existing.length) {
+        map.set(note.id, existing.map((pitch) => clamp(Math.round(Number(pitch) || note.pitch || 60), CONFIG.minPitch, CONFIG.maxPitch)));
+        continue;
+      }
+      map.set(note.id, [getDefaultArpeggioDirectControlPitch(note)]);
+    }
+    return map;
+  }
+
+  function getArpeggioDirectPitchesForSource(note) {
+    if (!note) return [];
+    const root = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+    const map = ensureArpeggioDirectControlPitches();
+    const controls = Array.isArray(map.get(note.id)) ? map.get(note.id) : [];
+    return [root, ...controls.map((pitch) => clamp(Math.round(Number(pitch) || root), CONFIG.minPitch, CONFIG.maxPitch))];
+  }
+
+  function getNoteEditModeControlNotes() {
+    if (!isNoteEditModeActive()) return [];
+    const sourceNotes = getNoteEditModeSourceNotes();
+    if (!sourceNotes.length) return [];
+
+    if (isNoteEditModeActive("glissando") && state.performanceOptions?.rangeMode === "target") {
+      const map = ensureGlissandoTargetControlPitches();
+      return sourceNotes.map((note, index) => ({
+        key: `glissando:${note.id}`,
+        kind: "glissando-target",
+        sourceId: note.id,
+        sourceNote: note,
+        index,
+        beat: Math.max(0, Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat),
+        pitch: clamp(Math.round(Number(map.get(note.id)) || note.pitch || 60), CONFIG.minPitch, CONFIG.maxPitch),
+      }));
+    }
+
+    if (isNoteEditModeActive("arpeggio") && state.arpeggioOptions?.sourceMode === "selected") {
+      const map = ensureArpeggioDirectControlPitches();
+      return sourceNotes.flatMap((note) => {
+        const pitches = Array.isArray(map.get(note.id)) ? map.get(note.id) : [getDefaultArpeggioDirectControlPitch(note)];
+        const endBeat = Math.max(0, Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        return pitches.map((pitch, index) => ({
+          key: `arpeggio:${note.id}:${index}`,
+          kind: "arpeggio-pitch",
+          sourceId: note.id,
+          sourceNote: note,
+          index,
+          beat: endBeat,
+          xOffsetPx: 12 + index * 20,
+          pitch: clamp(Math.round(Number(pitch) || note.pitch || 60), CONFIG.minPitch, CONFIG.maxPitch),
+        }));
+      });
+    }
+    return [];
+  }
+
+  function getNoteEditControlBounds(control) {
+    const centerX = clamp(
+      beatToX(Number(control?.beat) || 0) + (Number(control?.xOffsetPx) || 0),
+      beatToX(0) + 8,
+      Math.max(beatToX(0) + 8, getRollWidth() - 8),
+    );
+    const rowHeight = getRowHeight();
+    const width = clamp(getQuarterWidth() * 0.28, 15, 24);
+    const height = Math.max(7, rowHeight - 2);
+    const top = pitchToY(control?.pitch ?? 60) + (rowHeight - height) * 0.5;
+    return {
+      left: centerX - width * 0.5,
+      right: centerX + width * 0.5,
+      top,
+      bottom: top + height,
+      width,
+      height,
+      centerX,
+      centerY: top + height * 0.5,
+    };
+  }
+
+  function findNoteEditControlHitAt(x, y) {
+    if (!isNoteEditModeActive()) return null;
+    const controls = getNoteEditModeControlNotes();
+    for (let index = controls.length - 1; index >= 0; index -= 1) {
+      const control = controls[index];
+      const bounds = getNoteEditControlBounds(control);
+      const padding = 4;
+      if (x >= bounds.left - padding && x <= bounds.right + padding && y >= bounds.top - padding && y <= bounds.bottom + padding) {
+        return { control, bounds };
+      }
+    }
+    return null;
+  }
+
+  function updateNoteEditControlPitch(control, pitch) {
+    if (!control || !isNoteEditModeActive()) return false;
+    const nextPitch = clamp(Math.round(Number(pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+    if (control.kind === "glissando-target") {
+      const map = ensureGlissandoTargetControlPitches();
+      map.set(control.sourceId, nextPitch);
+      return true;
+    }
+    if (control.kind === "arpeggio-pitch") {
+      const map = ensureArpeggioDirectControlPitches();
+      const pitches = Array.isArray(map.get(control.sourceId)) ? [...map.get(control.sourceId)] : [];
+      if (control.index < 0 || control.index >= pitches.length) return false;
+      pitches[control.index] = nextPitch;
+      map.set(control.sourceId, pitches);
+      return true;
+    }
+    return false;
+  }
+
+  function drawNoteEditControlNotes(context, visibleLeft, visibleTop, visibleRight, visibleBottom) {
+    const controls = getNoteEditModeControlNotes();
+    if (!controls.length) return;
+    const light = state.theme === "light";
+    const lineColor = light ? "rgba(2,132,199,.52)" : "rgba(125,211,252,.60)";
+    const fillColor = light ? "rgba(14,165,233,.92)" : "rgba(14,165,233,.82)";
+    const activeFill = light ? "rgba(2,132,199,.98)" : "rgba(56,189,248,.96)";
+    const borderColor = light ? "#075985" : "#e0f2fe";
+    const textColor = light ? "#ffffff" : "#082f49";
+
+    context.save();
+    context.setLineDash([4, 4]);
+    context.strokeStyle = lineColor;
+    context.lineWidth = 1.25;
+    if (["glissando-target", "arpeggio-pitch"].includes(controls[0]?.kind)) {
+      for (const control of controls) {
+        const bounds = getNoteEditControlBounds(control);
+        const source = control.sourceNote;
+        if (!source) continue;
+        const sourceX = beatToX((Number(source.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(source.durationBeat) || CONFIG.minimumNoteBeat));
+        const sourceY = pitchToY(source.pitch) + getRowHeight() * 0.5;
+        context.beginPath();
+        context.moveTo(sourceX, sourceY);
+        context.lineTo(bounds.centerX, bounds.centerY);
+        context.stroke();
+      }
+    }
+    context.setLineDash([]);
+
+    for (const control of controls) {
+      const bounds = getNoteEditControlBounds(control);
+      if (bounds.right < visibleLeft || bounds.left > visibleRight || bounds.bottom < visibleTop || bounds.top > visibleBottom) continue;
+      const active = state.interaction?.type === "note-edit-control" && state.interaction.controlKey === control.key;
+      context.save();
+      context.shadowColor = light ? "rgba(2,132,199,.22)" : "rgba(56,189,248,.28)";
+      context.shadowBlur = active ? 8 : 4;
+      context.fillStyle = active ? activeFill : fillColor;
+      context.fillRect(bounds.left, bounds.top, bounds.width, bounds.height);
+      context.shadowBlur = 0;
+      context.strokeStyle = borderColor;
+      context.lineWidth = active ? 2.25 : 1.5;
+      context.strokeRect(bounds.left + 0.5, bounds.top + 0.5, Math.max(1, bounds.width - 1), Math.max(1, bounds.height - 1));
+      context.fillStyle = "rgba(255,255,255,.40)";
+      context.fillRect(bounds.left + 2, bounds.top + 2, Math.max(1, bounds.width - 4), 1.5);
+      context.fillStyle = textColor;
+      context.font = `900 ${clamp(Math.floor(bounds.height - 2), 7, 10)}px system-ui, sans-serif`;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(control.kind === "glissando-target" ? "↕" : "A", bounds.centerX, bounds.centerY + 0.5);
+      context.restore();
+    }
+    context.restore();
+  }
+
+  function noteEditModeHistoryLabel(type = state.noteEditMode?.type) {
+    if (type === "trill") return i18nText("history.note_trill");
+    if (type === "glissando") return i18nText("history.note_performance");
+    if (type === "arpeggio") return i18nText("history.note_arpeggio");
+    return i18nText("note.edit_mode_title");
+  }
+
+  function noteEditModeTitleKey(type = state.noteEditMode?.type) {
+    if (type === "trill") return "note.edit_mode_trill";
+    if (type === "glissando") return "note.edit_mode_glissando";
+    if (type === "arpeggio") return "note.edit_mode_arpeggio";
+    return "note.edit_mode_title";
+  }
+
+  function noteEditModeHelpKey(type = state.noteEditMode?.type) {
+    if (type === "trill") return "note.edit_mode_trill_help";
+    if (type === "glissando") return "note.edit_mode_glissando_help";
+    if (type === "arpeggio") return "note.edit_mode_arpeggio_help";
+    return "note.edit_mode_help";
+  }
+
+  function buildTrillEditModePreview(sourceNotes, options) {
+    const output = [];
+    for (const note of sourceNotes || []) {
+      const startBeat = Math.max(0, Number(note.startBeat) || 0);
+      const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      const basePitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+      const baseVolume = getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume);
+      const pattern = buildTrillPattern(durationBeat, basePitch, baseVolume, options);
+      let cursor = startBeat;
+      const usable = pattern.length ? pattern : [{ pitch: basePitch, volume: baseVolume, durationBeat }];
+      for (const part of usable) {
+        const volume = options.dynamics && options.dynamics !== "preserve" ? part.volume : baseVolume;
+        output.push({
+          _noteEditSourceId: note.id,
+          pitch: part.pitch,
+          startBeat: Number(cursor.toFixed(6)),
+          durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, part.durationBeat).toFixed(6)),
+          volume,
+          velocity: mmlVolumeToVelocity(volume),
+        });
+        cursor += part.durationBeat;
+      }
+    }
+    return output.sort(compareNotesByTimeline);
+  }
+
+  function buildGlissandoEditModePreview(sourceNotes, options) {
+    const output = [];
+    const glissOptions = { ...options, mode: "glissando" };
+    const targetMap = glissOptions.rangeMode === "target" ? ensureGlissandoTargetControlPitches() : null;
+    for (const note of sourceNotes || []) {
+      const startBeat = Math.max(0, Number(note.startBeat) || 0);
+      const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      const basePitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+      const baseVolume = getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume);
+      const noteOptions = targetMap
+        ? { ...glissOptions, targetPitch: targetMap.get(note.id) ?? glissOptions.targetPitch }
+        : glissOptions;
+      const pattern = buildGlissandoPattern(durationBeat, basePitch, baseVolume, noteOptions);
+      let cursor = startBeat;
+      const usable = pattern.length ? pattern : [{ pitch: basePitch, volume: baseVolume, durationBeat }];
+      for (const part of usable) {
+        const volume = noteOptions.dynamics !== "preserve" ? part.volume : baseVolume;
+        output.push({
+          _noteEditSourceId: note.id,
+          pitch: part.pitch,
+          startBeat: Number(cursor.toFixed(6)),
+          durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, part.durationBeat).toFixed(6)),
+          volume,
+          velocity: mmlVolumeToVelocity(volume),
+        });
+        cursor += part.durationBeat;
+      }
+    }
+    return output.sort(compareNotesByTimeline);
+  }
+
+  function buildArpeggioEditModePreview(sourceNotes, options) {
+    if (!sourceNotes?.length) return [];
+    const output = [];
+    for (const note of sourceNotes) {
+      const startBeat = Math.max(0, Number(note.startBeat) || 0);
+      const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      const basePitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+      const baseVolume = getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume);
+      const patternOptions = options?.sourceMode === "selected"
+        ? { ...options, directPitches: getArpeggioDirectPitchesForSource(note) }
+        : options;
+      const pattern = buildArpeggioPattern([note], durationBeat, patternOptions);
+      const usable = pattern.length ? pattern : [{ pitch: basePitch, volume: baseVolume, startBeat: 0, durationBeat, source: note }];
+      for (const part of usable) {
+        const volume = clamp(Math.round(Number(part.volume ?? baseVolume) || baseVolume), 0, 15);
+        output.push({
+          _noteEditSourceId: note.id,
+          pitch: part.pitch,
+          startBeat: Number((startBeat + (Number(part.startBeat) || 0)).toFixed(6)),
+          durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, Number(part.durationBeat) || CONFIG.minimumNoteBeat).toFixed(6)),
+          volume,
+          velocity: mmlVolumeToVelocity(volume),
+        });
+      }
+    }
+    return output.sort(compareNotesByTimeline);
+  }
+
+  function getNoteEditModeHandler(type = state.noteEditMode?.type) {
+    return NOTE_EDIT_MODE_HANDLERS?.[String(type || "")] || null;
+  }
+
+  function readCurrentNoteEditModeOptions() {
+    return getNoteEditModeHandler()?.readOptions?.() || {};
+  }
+
+  function rebuildNoteEditPreview({ draw = true } = {}) {
+    if (!isNoteEditModeActive()) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    const handler = getNoteEditModeHandler();
+    if (!handler) return false;
+    const sourceNotes = getNoteEditModeSourceNotes();
+    const options = handler.readOptions?.() || {};
+    const preview = handler.buildPreview?.(sourceNotes, options) || [];
+    state.noteEditMode.previewNotes = preview;
+    state.noteEditMode.previewRevision += 1;
+    if (elements.noteEditModeApplyButton) elements.noteEditModeApplyButton.disabled = !preview.length;
+    if (draw) drawRoll();
+    return true;
+  }
+
+  function updateNoteEditModeUi() {
+    const active = isNoteEditModeActive();
+    document.body.classList.toggle("note-edit-mode-active", active);
+    if (elements.noteEditModePanel) elements.noteEditModePanel.hidden = !active;
+    if (!active) return;
+    const type = state.noteEditMode.type;
+    if (elements.noteEditModeTrillOptions) elements.noteEditModeTrillOptions.hidden = type !== "trill";
+    if (elements.noteEditModeGlissandoOptions) elements.noteEditModeGlissandoOptions.hidden = type !== "glissando";
+    if (elements.noteEditModeArpeggioOptions) elements.noteEditModeArpeggioOptions.hidden = type !== "arpeggio";
+    if (elements.noteEditModeTitle) elements.noteEditModeTitle.textContent = i18nText(noteEditModeTitleKey(type));
+    if (elements.noteEditModeSelectionLabel) elements.noteEditModeSelectionLabel.textContent = i18nText("note.edit_mode_source_count", [state.noteEditMode.sourceNoteIds?.size || 0]);
+    if (elements.noteEditModeHelp) elements.noteEditModeHelp.textContent = i18nText(noteEditModeHelpKey(type));
+    if (elements.noteEditModeApplyButton) elements.noteEditModeApplyButton.disabled = !state.noteEditMode.previewNotes.length;
+  }
+
+  function configureTrillEditModeControls() {
+    const options = state.trillOptions || {};
+    if (elements.noteTrillDirectionSelect) elements.noteTrillDirectionSelect.value = ["repeat", "up", "down"].includes(String(options.direction)) ? String(options.direction) : "up";
+    if (elements.noteTrillIntervalSelect) elements.noteTrillIntervalSelect.value = String(Number(options.intervalSemitones) === 1 ? 1 : 2);
+    if (elements.noteTrillStartDivisionSelect) elements.noteTrillStartDivisionSelect.value = normalizeTrillDivision(options.startDivision, "1/32");
+    if (elements.noteTrillGradualSpeed) elements.noteTrillGradualSpeed.checked = Boolean(options.gradualSpeed);
+    if (elements.noteTrillEndDivisionSelect) elements.noteTrillEndDivisionSelect.value = normalizeTrillDivision(options.endDivision, options.startDivision || "1/32");
+    if (elements.noteTrillDynamicsSelect) elements.noteTrillDynamicsSelect.value = ["preserve", "crescendo", "decrescendo", "swell"].includes(options.dynamics) ? options.dynamics : "preserve";
+    if (elements.noteTrillVolumeRangeSelect) elements.noteTrillVolumeRangeSelect.value = String(clamp(Math.round(Number(options.volumeRange) || 3), 1, 5));
+    if (elements.noteTrillStartNoteSelect) elements.noteTrillStartNoteSelect.value = options.startWith === "neighbor" ? "neighbor" : "base";
+    if (elements.noteTrillEndOnBase) elements.noteTrillEndOnBase.checked = options.endOnBase !== false;
+    updateNoteTrillOptionAvailability();
+  }
+
+  function configureGlissandoEditModeControls() {
+    const options = { ...(state.performanceOptions || {}), mode: "glissando" };
+    ensureNotePerformanceTargetPitchOptions();
+    if (elements.notePerformanceModeSelect) elements.notePerformanceModeSelect.value = "glissando";
+    if (elements.notePerformanceDirectionSelect) elements.notePerformanceDirectionSelect.value = options.direction === "down" ? "down" : "up";
+    if (elements.notePerformanceSpeedSelect) elements.notePerformanceSpeedSelect.value = normalizeTrillDivision(options.speed, "1/32");
+    if (elements.notePerformanceStepSelect) elements.notePerformanceStepSelect.value = String(Number(options.stepSemitones) === 2 ? 2 : 1);
+    if (elements.notePerformanceRangeModeSelect) elements.notePerformanceRangeModeSelect.value = options.rangeMode === "target" ? "target" : "amount";
+    if (elements.notePerformanceRangeSelect) elements.notePerformanceRangeSelect.value = String([5, 7, 12, 24].includes(Number(options.rangeSemitones)) ? Number(options.rangeSemitones) : 12);
+    if (elements.notePerformanceTargetPitchSelect) {
+      const source = getNoteEditModeSourceNotes()[0];
+      const fallback = clamp((source?.pitch || 60) + (options.direction === "down" ? -12 : 12), CONFIG.minPitch, CONFIG.maxPitch);
+      elements.notePerformanceTargetPitchSelect.value = String(clamp(Math.round(Number(options.targetPitch) || fallback), CONFIG.minPitch, CONFIG.maxPitch));
+    }
+    if (elements.notePerformanceDynamicsSelect) elements.notePerformanceDynamicsSelect.value = ["preserve", "crescendo", "decrescendo", "swell"].includes(options.dynamics) ? options.dynamics : "preserve";
+    if (elements.notePerformanceVolumeRangeSelect) elements.notePerformanceVolumeRangeSelect.value = String(clamp(Math.round(Number(options.volumeRange) || 3), 1, 5));
+    updateNotePerformanceOptionAvailability();
+  }
+
+  function configureArpeggioEditModeControls() {
+    const options = state.arpeggioOptions || {};
+    const sourceMode = ["selected", "chord", "scale"].includes(options.sourceMode) ? options.sourceMode : "selected";
+    if (elements.noteArpeggioSourceSelect) elements.noteArpeggioSourceSelect.value = sourceMode;
+    if (elements.noteArpeggioChordSelect) elements.noteArpeggioChordSelect.value = normalizeArpeggioChordType(options.chordType);
+    if (elements.noteArpeggioScaleSelect) elements.noteArpeggioScaleSelect.value = normalizeArpeggioScaleType(options.scaleType);
+    if (elements.noteArpeggioDirectionSelect) elements.noteArpeggioDirectionSelect.value = normalizeArpeggioDirection(options.direction);
+    if (elements.noteArpeggioSpeedSelect) elements.noteArpeggioSpeedSelect.value = normalizeTrillDivision(options.speed, "1/16");
+    if (elements.noteArpeggioDynamicsSelect) elements.noteArpeggioDynamicsSelect.value = ["preserve", "crescendo", "decrescendo", "swell"].includes(options.dynamics) ? options.dynamics : "preserve";
+    if (elements.noteArpeggioVolumeRangeSelect) elements.noteArpeggioVolumeRangeSelect.value = String(clamp(Math.round(Number(options.volumeRange) || 3), 1, 5));
+    updateNoteArpeggioOptionAvailability();
+  }
+
+  const NOTE_EDIT_MODE_HANDLERS = Object.freeze({
+    trill: Object.freeze({
+      configure: configureTrillEditModeControls,
+      readOptions: readNoteTrillOptionsFromUi,
+      buildPreview: buildTrillEditModePreview,
+      saveOptions(options) { state.trillOptions = { ...options }; },
+    }),
+    glissando: Object.freeze({
+      configure: configureGlissandoEditModeControls,
+      readOptions() { return { ...readNotePerformanceOptionsFromUi(), mode: "glissando" }; },
+      buildPreview: buildGlissandoEditModePreview,
+      saveOptions(options) { state.performanceOptions = { ...options, mode: "glissando" }; },
+    }),
+    arpeggio: Object.freeze({
+      configure: configureArpeggioEditModeControls,
+      readOptions: readNoteArpeggioOptionsFromUi,
+      buildPreview: buildArpeggioEditModePreview,
+      saveOptions(options) { state.arpeggioOptions = { ...options }; },
+    }),
+  });
+
+  function enterNoteEditMode(type) {
+    const normalizedType = String(type || "");
+    const handler = getNoteEditModeHandler(normalizedType);
+    if (!handler || isMidiReferenceActive() || state.activePanel !== "notes" || isChannelMergeModeActive() || isNoteEditModeActive()) return false;
+    const channel = getActiveChannel();
+    const selected = getSelectedNotes(channel);
+    if (!channel || !selected.length) {
+      showToast(i18nText(normalizedType === "trill" ? "note.trill_need_selection" : normalizedType === "glissando" ? "note.performance_need_selection" : "note.arpeggio_need_selection"));
+      return false;
+    }
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    setSidebarTab("channels");
+    setHistoryCollapsed(false);
+    state.noteEditMode.active = true;
+    state.noteEditMode.type = normalizedType;
+    state.noteEditMode.channelId = String(channel.id);
+    state.noteEditMode.sourceNoteIds = new Set(selected.map((note) => note.id));
+    state.noteEditMode.originalChannelNotes = channel.notes.map((note) => ({ ...note }));
+    state.noteEditMode.originalSelectedNoteIds = new Set(state.selectedNoteIds);
+    state.noteEditMode.originalNextNoteId = state.nextNoteId;
+    state.noteEditMode.originalTimelineBeats = getTotalBeats();
+    state.noteEditMode.previewNotes = [];
+    state.noteEditMode.previewRevision = 0;
+    resetNoteEditControlState();
+    closeContextMenu();
+    closeFileMenu();
+    closeEditMenu();
+    handler.configure?.();
+    updateNoteEditModeUi();
+    rebuildNoteEditPreview();
+    renderChannelEditor();
+    requestAnimationFrame(() => elements.noteEditModePanel?.querySelector("select, input, button")?.focus({ preventScroll: true }));
+    return true;
+  }
+
+  function cancelNoteEditMode({ silent = false } = {}) {
+    if (!isNoteEditModeActive()) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    const channel = getNoteEditModeChannel();
+    if (channel) {
+      channel.notes = state.noteEditMode.originalChannelNotes.map((note) => ({ ...note }));
+      state.channelNoteRuntime.delete(String(channel.id));
+    }
+    state.nextNoteId = state.noteEditMode.originalNextNoteId;
+    state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, Number(state.noteEditMode.originalTimelineBeats) || CONFIG.beatsPerMeasure);
+    state.selectedNoteIds = new Set(state.noteEditMode.originalSelectedNoteIds || []);
+    state.noteEditMode.active = false;
+    state.noteEditMode.type = null;
+    state.noteEditMode.channelId = null;
+    state.noteEditMode.sourceNoteIds = new Set();
+    state.noteEditMode.originalChannelNotes = [];
+    state.noteEditMode.originalSelectedNoteIds = new Set();
+    state.noteEditMode.originalTimelineBeats = getTotalBeats();
+    state.noteEditMode.previewNotes = [];
+    resetNoteEditControlState();
+    state.interaction = null;
+    updateNoteEditModeUi();
+    resizeRollSurface();
+    renderChannelEditor();
+    drawRoll();
+    drawTimeline();
+    drawOverviewTimeline();
+    updateChannelInfo();
+    if (state.autosave.pendingChanges) scheduleAutosave(120);
+    if (!silent) showToast(i18nText("note.edit_mode_cancelled"));
+    return true;
+  }
+
+  function applyNoteEditMode() {
+    if (!isNoteEditModeActive()) return false;
+    const channel = getNoteEditModeChannel();
+    const sourceNotes = getNoteEditModeSourceNotes();
+    const preview = (state.noteEditMode.previewNotes || []).map((note) => ({ ...note }));
+    if (!channel || !sourceNotes.length || !preview.length) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    const sourceIds = new Set(state.noteEditMode.sourceNoteIds);
+    const firstSource = sourceNotes[0];
+    const sourceById = new Map(sourceNotes.map((note) => [note.id, note]));
+    const reusedSourceIds = new Set();
+    const untouched = channel.notes.filter((note) => !sourceIds.has(note.id));
+    const nextSelection = new Set();
+    const transformed = preview.map((raw) => {
+      const source = sourceById.get(raw._noteEditSourceId) || firstSource;
+      const reuseOriginalId = sourceIds.has(source.id) && !reusedSourceIds.has(source.id);
+      const id = reuseOriginalId ? source.id : state.nextNoteId++;
+      if (reuseOriginalId) reusedSourceIds.add(source.id);
+      const volume = clamp(Math.round(Number(raw.volume ?? getNoteVolume(source, CONFIG.defaultNewChannelNoteVolume)) || 0), 0, 15);
+      nextSelection.add(id);
+      return {
+        ...source,
+        id,
+        pitch: clamp(Math.round(Number(raw.pitch) || source.pitch), CONFIG.minPitch, CONFIG.maxPitch),
+        startBeat: Number(Math.max(0, Number(raw.startBeat) || 0).toFixed(6)),
+        durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, Number(raw.durationBeat) || CONFIG.minimumNoteBeat).toFixed(6)),
+        volume,
+        velocity: mmlVolumeToVelocity(volume),
+      };
+    });
+    channel.notes = normalizeMonophonicNotes([...untouched, ...transformed]);
+    const survivingIds = new Set(channel.notes.map((note) => note.id));
+    state.selectedNoteIds = new Set([...nextSelection].filter((id) => survivingIds.has(id)));
+    state.channelNoteRuntime.delete(String(channel.id));
+    const appliedType = state.noteEditMode.type;
+    const handler = getNoteEditModeHandler(appliedType);
+    handler?.saveOptions?.(handler.readOptions?.() || {});
+    state.noteEditMode.active = false;
+    state.noteEditMode.type = null;
+    state.noteEditMode.channelId = null;
+    state.noteEditMode.sourceNoteIds = new Set();
+    state.noteEditMode.originalChannelNotes = [];
+    state.noteEditMode.originalSelectedNoteIds = new Set();
+    state.noteEditMode.originalTimelineBeats = getTotalBeats();
+    state.noteEditMode.previewNotes = [];
+    resetNoteEditControlState();
+    state.interaction = null;
+    updateNoteEditModeUi();
+    markDirty(noteEditModeHistoryLabel(appliedType));
+    shrinkTimelineToContent();
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    showToast(i18nText("note.edit_mode_applied"));
+    return true;
   }
 
   const TRILL_RATE_BEATS = Object.freeze({
@@ -18061,45 +18899,16 @@
     if (elements.noteTrillIntervalSelect) elements.noteTrillIntervalSelect.disabled = repeatOnly;
     if (elements.noteTrillStartNoteSelect) elements.noteTrillStartNoteSelect.disabled = repeatOnly;
     if (elements.noteTrillEndOnBase) elements.noteTrillEndOnBase.disabled = repeatOnly;
-    elements.noteTrillStartEndRow?.classList.toggle("is-disabled", repeatOnly);
-
     const gradualSpeed = Boolean(elements.noteTrillGradualSpeed?.checked);
     if (elements.noteTrillEndDivisionSelect) elements.noteTrillEndDivisionSelect.disabled = !gradualSpeed;
     const dynamicsEnabled = String(elements.noteTrillDynamicsSelect?.value || "preserve") !== "preserve";
     if (elements.noteTrillVolumeRangeSelect) elements.noteTrillVolumeRangeSelect.disabled = !dynamicsEnabled;
-    elements.noteTrillEndDivisionSelect?.closest(".note-trill-subcontrol")?.classList.toggle("is-disabled", !gradualSpeed);
-    elements.noteTrillVolumeRangeSelect?.closest(".note-trill-subcontrol")?.classList.toggle("is-disabled", !dynamicsEnabled);
-    updateNoteTrillPreview();
+    if (isNoteEditModeActive("trill")) {
+      state.trillOptions = { ...readNoteTrillOptionsFromUi() };
+      rebuildNoteEditPreview();
+    }
   }
 
-  function openNoteTrillDialog() {
-    const selected = getSelectedNotes();
-    if (!selected.length) {
-      showToast(i18nText("note.trill_need_selection"));
-      return false;
-    }
-    const options = state.trillOptions || {};
-    if (elements.noteTrillSelectionLabel) {
-      elements.noteTrillSelectionLabel.textContent = i18nText("note.trill_selected_count", [selected.length]);
-    }
-    const direction = ["repeat", "up", "down"].includes(String(options.direction)) ? String(options.direction) : "up";
-    if (elements.noteTrillDirectionSelect) elements.noteTrillDirectionSelect.value = direction;
-    if (elements.noteTrillIntervalSelect) elements.noteTrillIntervalSelect.value = String(Number(options.intervalSemitones) === 1 ? 1 : 2);
-    if (elements.noteTrillStartDivisionSelect) elements.noteTrillStartDivisionSelect.value = normalizeTrillDivision(options.startDivision, "1/32");
-    if (elements.noteTrillGradualSpeed) elements.noteTrillGradualSpeed.checked = Boolean(options.gradualSpeed);
-    if (elements.noteTrillEndDivisionSelect) elements.noteTrillEndDivisionSelect.value = normalizeTrillDivision(options.endDivision, options.startDivision || "1/32");
-    if (elements.noteTrillDynamicsSelect) {
-      const value = String(options.dynamics || "preserve");
-      elements.noteTrillDynamicsSelect.value = ["preserve", "crescendo", "decrescendo", "swell"].includes(value) ? value : "preserve";
-    }
-    if (elements.noteTrillVolumeRangeSelect) elements.noteTrillVolumeRangeSelect.value = String(clamp(Math.round(Number(options.volumeRange) || 3), 1, 5));
-    if (elements.noteTrillStartNoteSelect) elements.noteTrillStartNoteSelect.value = options.startWith === "neighbor" ? "neighbor" : "base";
-    if (elements.noteTrillEndOnBase) elements.noteTrillEndOnBase.checked = options.endOnBase !== false;
-    updateNoteTrillOptionAvailability();
-    if (elements.noteTrillBackdrop) elements.noteTrillBackdrop.hidden = false;
-    requestAnimationFrame(() => elements.noteTrillDirectionSelect?.focus());
-    return true;
-  }
 
   function buildTrillSegmentDurations(durationBeat, options) {
     const minimum = CONFIG.minimumNoteBeat;
@@ -18213,132 +19022,6 @@
     });
   }
 
-  function updateNoteTrillPreview() {
-    const grid = elements.noteTrillPreviewGrid;
-    if (!grid) return;
-    grid.replaceChildren();
-
-    const options = readNoteTrillOptionsFromUi();
-    const selected = getSelectedNotes();
-    const sampleNote = selected[0] || null;
-    const basePitch = clamp(Math.round(Number(sampleNote?.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
-    const baseVolume = getNoteVolume(sampleNote || {}, CONFIG.defaultNewChannelNoteVolume);
-    const pattern = buildTrillPattern(CONFIG.beatsPerMeasure, basePitch, baseVolume, options);
-    const repeatOnly = options.direction === "repeat";
-    const neighborPitch = repeatOnly ? basePitch : getTrillNeighborPitch(basePitch, options);
-    const pitches = repeatOnly
-      ? [basePitch]
-      : (neighborPitch > basePitch ? [neighborPitch, basePitch] : [basePitch, neighborPitch]);
-    const lanes = new Map();
-
-    for (const pitch of pitches) {
-      const row = document.createElement("div");
-      row.className = "note-trill-preview-row";
-      const label = document.createElement("span");
-      label.className = "note-trill-preview-pitch";
-      label.textContent = noteLabel(pitch);
-      const lane = document.createElement("div");
-      lane.className = "note-trill-preview-lane";
-      row.append(label, lane);
-      grid.append(row);
-      lanes.set(pitch, lane);
-    }
-
-    let cursor = 0;
-    const total = CONFIG.beatsPerMeasure;
-    for (const segment of pattern) {
-      const lane = lanes.get(segment.pitch) || lanes.get(basePitch);
-      if (!lane) continue;
-      const note = document.createElement("div");
-      note.className = "note-trill-preview-note";
-      const leftPercent = clamp((cursor / total) * 100, 0, 100);
-      const widthPercent = clamp((segment.durationBeat / total) * 100, 0, 100 - leftPercent);
-      note.style.left = `${leftPercent}%`;
-      note.style.width = `max(2px, calc(${widthPercent}% - 1px))`;
-      note.style.opacity = String(0.34 + (clamp(segment.volume, 0, 15) / 15) * 0.66);
-      note.title = `${noteLabel(segment.pitch)} · V${segment.volume}`;
-      if (widthPercent >= 8) note.textContent = `V${segment.volume}`;
-      lane.append(note);
-      cursor += segment.durationBeat;
-    }
-  }
-
-  function convertSelectedNotesToTrill(options = state.trillOptions || {}) {
-    if (isMidiReferenceActive() || state.activePanel !== "notes") return false;
-    const channel = getActiveChannel();
-    if (!channel?.notes?.length || !state.selectedNoteIds.size) return false;
-
-    const selectedIds = new Set(state.selectedNoteIds);
-    const nextNotes = [];
-    const nextSelection = new Set();
-    let convertedCount = 0;
-
-    for (const note of channel.notes) {
-      if (!selectedIds.has(note.id)) {
-        nextNotes.push(note);
-        continue;
-      }
-
-      const startBeat = Math.max(0, Number(note.startBeat) || 0);
-      const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-      const basePitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
-      const baseVolume = getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume);
-      const pattern = buildTrillPattern(durationBeat, basePitch, baseVolume, options);
-      if (pattern.length < 2) {
-        nextNotes.push(note);
-        nextSelection.add(note.id);
-        continue;
-      }
-
-      let cursor = startBeat;
-      convertedCount += 1;
-      pattern.forEach((patternNote, segmentIndex) => {
-        const segmentId = segmentIndex === 0 ? note.id : state.nextNoteId++;
-        const segment = {
-          ...note,
-          id: segmentId,
-          pitch: patternNote.pitch,
-          startBeat: Number(cursor.toFixed(6)),
-          durationBeat: patternNote.durationBeat,
-        };
-        if (options.dynamics && options.dynamics !== "preserve") {
-          segment.volume = patternNote.volume;
-          segment.velocity = mmlVolumeToVelocity(patternNote.volume);
-        }
-        nextNotes.push(segment);
-        nextSelection.add(segmentId);
-        cursor += patternNote.durationBeat;
-      });
-    }
-
-    if (!convertedCount) {
-      showToast(i18nText("note.trill_no_change"));
-      return false;
-    }
-
-    channel.notes = normalizeMonophonicNotes(nextNotes);
-    const survivingIds = new Set(channel.notes.map((note) => note.id));
-    state.selectedNoteIds = new Set([...nextSelection].filter((noteId) => survivingIds.has(noteId)));
-    state.channelNoteRuntime.delete(String(channel.id));
-    markDirty(i18nText("history.note_trill"));
-    shrinkTimelineToContent();
-    drawRoll();
-    updateChannelInfo();
-    showToast(i18nText("note.trill_done", [convertedCount]));
-    return true;
-  }
-
-  function applySelectedNotesToTrill() {
-    const options = readNoteTrillOptionsFromUi();
-    state.trillOptions = { ...options };
-    const changed = convertSelectedNotesToTrill(options);
-    if (changed) closeNoteTrillDialog();
-    return changed;
-  }
-
-  function closeNotePerformanceDialog() {
-    if (elements.notePerformanceBackdrop) elements.notePerformanceBackdrop.hidden = true;
-  }
 
   function normalizePerformanceMode(value) {
     const mode = String(value || "glissando");
@@ -18346,7 +19029,7 @@
   }
 
   function readNotePerformanceOptionsFromUi() {
-    const mode = normalizePerformanceMode(elements.notePerformanceModeSelect?.value);
+    const mode = "glissando";
     const directionValue = String(elements.notePerformanceDirectionSelect?.value || "up");
     const direction = directionValue === "down" ? "down" : "up";
     const speed = normalizeTrillDivision(elements.notePerformanceSpeedSelect?.value, "1/32");
@@ -18381,75 +19064,21 @@
   }
 
   function updateNotePerformanceOptionAvailability() {
-    const options = readNotePerformanceOptionsFromUi();
-    const isGlissando = options.mode === "glissando";
-    const targetMode = isGlissando && options.rangeMode === "target";
+    const options = { ...readNotePerformanceOptionsFromUi(), mode: "glissando" };
+    const targetMode = options.rangeMode === "target";
+    if (elements.notePerformanceModeSelect) elements.notePerformanceModeSelect.value = "glissando";
     if (elements.notePerformanceDirectionSelect) elements.notePerformanceDirectionSelect.disabled = targetMode;
-    if (elements.notePerformanceStepSelect) elements.notePerformanceStepSelect.disabled = !isGlissando;
-    if (elements.notePerformanceRangeModeSelect) elements.notePerformanceRangeModeSelect.disabled = !isGlissando;
-    if (elements.notePerformanceRangeSelect) {
-      elements.notePerformanceRangeSelect.disabled = !isGlissando || targetMode;
-      elements.notePerformanceRangeSelect.hidden = targetMode;
-    }
-    if (elements.notePerformanceTargetPitchSelect) {
-      elements.notePerformanceTargetPitchSelect.disabled = !targetMode;
-      elements.notePerformanceTargetPitchSelect.hidden = !targetMode;
-    }
-    elements.notePerformanceDirectionRow?.classList.toggle("is-disabled", targetMode);
-    elements.notePerformanceStepRow?.classList.toggle("is-disabled", !isGlissando);
-    elements.notePerformanceRangeRow?.classList.toggle("is-disabled", !isGlissando);
+    if (elements.notePerformanceRangeSelect) { elements.notePerformanceRangeSelect.disabled = targetMode; elements.notePerformanceRangeSelect.hidden = targetMode; }
+    if (elements.notePerformanceTargetPitchSelect) { elements.notePerformanceTargetPitchSelect.disabled = !targetMode; elements.notePerformanceTargetPitchSelect.hidden = !targetMode; }
     const dynamicsEnabled = options.dynamics !== "preserve";
     if (elements.notePerformanceVolumeRangeSelect) elements.notePerformanceVolumeRangeSelect.disabled = !dynamicsEnabled;
-    elements.notePerformanceVolumeRangeSelect?.closest(".note-trill-subcontrol")?.classList.toggle("is-disabled", !dynamicsEnabled);
-    if (elements.notePerformanceHelp) {
-      const helpKey = targetMode ? "note.performance_help_glissando_target" : performanceModeHelpKey(options.mode);
-      elements.notePerformanceHelp.textContent = i18nText(helpKey);
+    if (isNoteEditModeActive("glissando")) {
+      state.performanceOptions = { ...options };
+      if (targetMode) ensureGlissandoTargetControlPitches();
+      rebuildNoteEditPreview();
     }
-    updateNotePerformancePreview();
   }
 
-  function openNotePerformanceDialog() {
-    const selected = getSelectedNotes();
-    if (!selected.length) {
-      showToast(i18nText("note.performance_need_selection"));
-      return false;
-    }
-    const options = state.performanceOptions || {};
-    ensureNotePerformanceTargetPitchOptions();
-    if (elements.notePerformanceSelectionLabel) {
-      elements.notePerformanceSelectionLabel.textContent = i18nText("note.performance_selected_count", [selected.length]);
-    }
-    if (elements.notePerformanceModeSelect) elements.notePerformanceModeSelect.value = normalizePerformanceMode(options.mode);
-    if (elements.notePerformanceDirectionSelect) elements.notePerformanceDirectionSelect.value = options.direction === "down" ? "down" : "up";
-    if (elements.notePerformanceSpeedSelect) elements.notePerformanceSpeedSelect.value = normalizeTrillDivision(options.speed, "1/32");
-    if (elements.notePerformanceStepSelect) elements.notePerformanceStepSelect.value = String(Number(options.stepSemitones) === 2 ? 2 : 1);
-    if (elements.notePerformanceRangeModeSelect) elements.notePerformanceRangeModeSelect.value = options.rangeMode === "target" ? "target" : "amount";
-    if (elements.notePerformanceRangeSelect) {
-      const range = [5, 7, 12, 24].includes(Number(options.rangeSemitones)) ? Number(options.rangeSemitones) : 12;
-      elements.notePerformanceRangeSelect.value = String(range);
-    }
-    if (elements.notePerformanceTargetPitchSelect) {
-      const firstPitch = clamp(Math.round(Number(selected[0]?.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
-      const fallbackTarget = clamp(firstPitch + (options.direction === "down" ? -12 : 12), CONFIG.minPitch, CONFIG.maxPitch);
-      const hasTargetPitch = options.targetPitch !== null
-        && options.targetPitch !== undefined
-        && options.targetPitch !== ""
-        && Number.isFinite(Number(options.targetPitch));
-      const targetPitch = hasTargetPitch
-        ? clamp(Math.round(Number(options.targetPitch)), CONFIG.minPitch, CONFIG.maxPitch)
-        : fallbackTarget;
-      elements.notePerformanceTargetPitchSelect.value = String(targetPitch);
-    }
-    if (elements.notePerformanceDynamicsSelect) {
-      const dynamics = ["preserve", "crescendo", "decrescendo", "swell"].includes(String(options.dynamics)) ? String(options.dynamics) : "preserve";
-      elements.notePerformanceDynamicsSelect.value = dynamics;
-    }
-    if (elements.notePerformanceVolumeRangeSelect) elements.notePerformanceVolumeRangeSelect.value = String(clamp(Math.round(Number(options.volumeRange) || 3), 1, 5));
-    updateNotePerformanceOptionAvailability();
-    if (elements.notePerformanceBackdrop) elements.notePerformanceBackdrop.hidden = false;
-    requestAnimationFrame(() => elements.notePerformanceModeSelect?.focus());
-    return true;
-  }
 
   function getPerformanceVolume(baseVolume, options, progress) {
     return getTrillSegmentVolume(baseVolume, options, progress);
@@ -18480,31 +19109,99 @@
     return pitches;
   }
 
+  function buildGlissandoSegmentDurations(durationBeat, unitBeat, pitchCount = 1) {
+    const duration = Math.max(CONFIG.minimumNoteBeat, Number(durationBeat) || CONFIG.minimumNoteBeat);
+    const unit = Math.max(CONFIG.minimumNoteBeat, Number(unitBeat) || CONFIG.minimumNoteBeat);
+    const durations = [];
+    let cursor = 0;
+    while (cursor < duration - 1e-7 && durations.length < 4096) {
+      const remaining = duration - cursor;
+      const piece = Math.min(unit, remaining);
+      if (piece < CONFIG.minimumNoteBeat - 1e-7 && durations.length) {
+        durations[durations.length - 1] = Number((durations[durations.length - 1] + piece).toFixed(6));
+        cursor = duration;
+        break;
+      }
+      durations.push(Number(Math.max(CONFIG.minimumNoteBeat, piece).toFixed(6)));
+      cursor += piece;
+    }
+    if (!durations.length) durations.push(Number(duration.toFixed(6)));
+
+    // If the requested interval is longer than the whole source note, a normal
+    // one-slot result cannot express both the source and destination pitches.
+    // When the source note can physically hold two minimum notes, split it once
+    // so a direct-target glissando still has a visible start and destination.
+    if (pitchCount > 1 && durations.length === 1 && duration >= CONFIG.minimumNoteBeat * 2 - 1e-7) {
+      const first = Math.max(CONFIG.minimumNoteBeat, duration * 0.5);
+      const second = Math.max(CONFIG.minimumNoteBeat, duration - first);
+      durations.splice(0, 1, Number(first.toFixed(6)), Number(second.toFixed(6)));
+    }
+    return durations;
+  }
+
+  function fitGlissandoPitchPathToSlots(pitches, slotCount) {
+    const path = Array.isArray(pitches) && pitches.length ? pitches : [60];
+    const count = Math.max(1, Math.round(Number(slotCount) || 1));
+    if (path.length === 1) return Array.from({ length: count }, () => path[0]);
+    if (count === 1) return [path[0]];
+    if (path.length <= count) {
+      return path.concat(Array.from({ length: count - path.length }, () => path[path.length - 1]));
+    }
+
+    // There are more legal scale steps than temporal slots. Sample the full path
+    // evenly instead of walking only the first N notes; this preserves the selected
+    // semitone/whole-tone scale while guaranteeing that the final slot reaches the
+    // requested destination. The skipped indices become the intentional jumps.
+    const sampled = [];
+    let previousIndex = -1;
+    for (let index = 0; index < count; index += 1) {
+      if (index === 0) {
+        sampled.push(path[0]);
+        previousIndex = 0;
+        continue;
+      }
+      if (index === count - 1) {
+        sampled.push(path[path.length - 1]);
+        previousIndex = path.length - 1;
+        continue;
+      }
+      const idealIndex = Math.round(index * (path.length - 1) / (count - 1));
+      const minimumIndex = previousIndex + 1;
+      const maximumIndex = path.length - (count - index);
+      const pathIndex = clamp(idealIndex, minimumIndex, maximumIndex);
+      sampled.push(path[pathIndex]);
+      previousIndex = pathIndex;
+    }
+    return sampled;
+  }
+
   function buildGlissandoPattern(durationBeat, basePitch, baseVolume, options) {
     const duration = Math.max(CONFIG.minimumNoteBeat, Number(durationBeat) || CONFIG.minimumNoteBeat);
     const unit = trillDivisionBeat(options.speed, "1/32");
-    const pitches = buildGlissandoPitchSequence(basePitch, options);
+    const pitchPath = buildGlissandoPitchSequence(basePitch, options);
+    const durations = buildGlissandoSegmentDurations(duration, unit, pitchPath.length);
+    const fittedPitches = fitGlissandoPitchPathToSlots(pitchPath, durations.length);
     const segments = [];
-    let cursor = 0;
-    let stepIndex = 0;
-    while (cursor < duration - 1e-7) {
-      const remaining = duration - cursor;
-      const pitch = pitches[Math.min(stepIndex, pitches.length - 1)];
-      let piece = Math.min(unit, remaining);
-      if (stepIndex >= pitches.length - 1) piece = remaining;
-      if (piece < CONFIG.minimumNoteBeat - 1e-7 && segments.length) {
-        segments[segments.length - 1].durationBeat = Number((segments[segments.length - 1].durationBeat + piece).toFixed(6));
-        break;
+    for (let index = 0; index < durations.length; index += 1) {
+      const piece = durations[index];
+      const progress = durations.length > 1 ? index / (durations.length - 1) : 0;
+      const pitch = fittedPitches[Math.min(index, fittedPitches.length - 1)];
+      const volume = options.dynamics === "preserve" ? baseVolume : getPerformanceVolume(baseVolume, options, progress);
+      const previous = segments[segments.length - 1];
+
+      // A glissando is about hearing the pitch movement, not repeatedly retriggering
+      // the destination pitch. If the pitch path reaches its last note before the
+      // source duration ends, keep the remaining time as one held destination note.
+      if (previous && previous.pitch === pitch) {
+        previous.durationBeat = Number((previous.durationBeat + Math.max(CONFIG.minimumNoteBeat, piece)).toFixed(6));
+        continue;
       }
-      const progress = duration > CONFIG.minimumNoteBeat ? clamp(cursor / duration, 0, 1) : 0;
+
       segments.push({
         pitch,
-        volume: options.dynamics === "preserve" ? baseVolume : getPerformanceVolume(baseVolume, options, progress),
+        volume,
         durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, piece).toFixed(6)),
       });
-      cursor += piece;
-      stepIndex += 1;
-      if (stepIndex > 512) break;
     }
     return segments;
   }
@@ -18515,217 +19212,165 @@
     return direction === "down" ? ascending.slice().reverse() : ascending;
   }
 
-  function buildPerformancePreviewPattern(options) {
-    const sampleNotes = [
-      { pitch: 60, volume: 9 },
-      { pitch: 64, volume: 10 },
-      { pitch: 67, volume: 11 },
-    ];
-    const total = CONFIG.beatsPerMeasure;
-    const unit = trillDivisionBeat(options.speed, "1/32");
-    if (options.mode === "glissando") {
-      return buildGlissandoPattern(total, 60, 10, options).map((note, index, array) => ({
-        ...note,
-        startBeat: array.slice(0, index).reduce((sum, item) => sum + item.durationBeat, 0),
-      }));
-    }
-    if (options.mode === "strum") {
-      const ordered = buildPitchOrder(sampleNotes, options.direction);
-      return ordered.map((note, index) => ({
-        pitch: note.pitch,
-        volume: options.dynamics === "preserve" ? note.volume : getPerformanceVolume(note.volume, options, ordered.length > 1 ? index / (ordered.length - 1) : 0),
-        startBeat: index * unit,
-        durationBeat: unit,
-      }));
-    }
-    return [];
+
+  function normalizeArpeggioDirection(value) {
+    const normalized = String(value || "up");
+    return ["up", "down", "updown", "downup"].includes(normalized) ? normalized : "up";
   }
 
-  function updateNotePerformancePreview() {
-    const grid = elements.notePerformancePreviewGrid;
-    if (!grid) return;
-    grid.replaceChildren();
-    const options = readNotePerformanceOptionsFromUi();
-    const pattern = buildPerformancePreviewPattern(options);
-    if (!pattern.length) return;
+  function readNoteArpeggioOptionsFromUi() {
+    const sourceValue = String(elements.noteArpeggioSourceSelect?.value || "selected");
+    const sourceMode = ["selected", "chord", "scale"].includes(sourceValue) ? sourceValue : "selected";
+    const chordType = normalizeArpeggioChordType(elements.noteArpeggioChordSelect?.value);
+    const scaleType = normalizeArpeggioScaleType(elements.noteArpeggioScaleSelect?.value);
+    const direction = normalizeArpeggioDirection(elements.noteArpeggioDirectionSelect?.value);
+    const speed = normalizeTrillDivision(elements.noteArpeggioSpeedSelect?.value, "1/16");
+    const dynamicsValue = String(elements.noteArpeggioDynamicsSelect?.value || "preserve");
+    const dynamics = ["preserve", "crescendo", "decrescendo", "swell"].includes(dynamicsValue)
+      ? dynamicsValue
+      : "preserve";
+    const volumeRange = clamp(Math.round(Number(elements.noteArpeggioVolumeRangeSelect?.value) || 3), 1, 5);
+    return { sourceMode, chordType, scaleType, direction, speed, dynamics, volumeRange };
+  }
 
-    const total = options.mode === "strum"
-      ? Math.max(CONFIG.minimumNoteBeat, ...pattern.map((note) => note.startBeat + note.durationBeat))
-      : CONFIG.beatsPerMeasure;
-    const sequencePitches = [...new Set(pattern.map((note) => note.pitch))];
-    const allPitches = [...sequencePitches].sort((a, b) => b - a);
-    let pitches = allPitches;
-    let omittedPitchSet = new Set();
-    if (options.mode === "glissando" && allPitches.length > 2) {
-      pitches = [allPitches[0], allPitches[allPitches.length - 1]];
-      omittedPitchSet = new Set(allPitches.slice(1, -1));
-    }
 
-    const lanes = new Map();
-    let omissionLane = null;
-    const appendPitchRow = (pitch) => {
-      const row = document.createElement("div");
-      row.className = "note-trill-preview-row";
-      const label = document.createElement("span");
-      label.className = "note-trill-preview-pitch";
-      label.textContent = noteLabel(pitch);
-      const lane = document.createElement("div");
-      lane.className = "note-trill-preview-lane";
-      row.append(label, lane);
-      grid.append(row);
-      lanes.set(pitch, lane);
-    };
-
-    if (options.mode === "glissando" && omittedPitchSet.size) {
-      appendPitchRow(pitches[0]);
-      const omissionRow = document.createElement("div");
-      omissionRow.className = "note-trill-preview-row note-performance-omission-row";
-      const omissionLabel = document.createElement("span");
-      omissionLabel.className = "note-trill-preview-pitch";
-      omissionLabel.textContent = "⋯";
-      omissionLane = document.createElement("div");
-      omissionLane.className = "note-trill-preview-lane note-performance-omission";
-      omissionRow.append(omissionLabel, omissionLane);
-      grid.append(omissionRow);
-      appendPitchRow(pitches[1]);
-    } else {
-      for (const pitch of pitches.slice(0, 3)) appendPitchRow(pitch);
-    }
-
-    const appendPreviewNote = (lane, startBeat, durationBeat, volume, title = "") => {
-      if (!lane) return;
-      const note = document.createElement("div");
-      note.className = "note-trill-preview-note";
-      const leftPercent = clamp((startBeat / total) * 100, 0, 100);
-      const widthPercent = clamp((durationBeat / total) * 100, 0, 100 - leftPercent);
-      note.style.left = `${leftPercent}%`;
-      note.style.width = `max(2px, calc(${widthPercent}% - 1px))`;
-      note.style.opacity = String(0.34 + (clamp(volume, 0, 15) / 15) * 0.66);
-      if (title) note.title = title;
-      lane.append(note);
-    };
-
-    for (const segment of pattern) {
-      const lane = lanes.get(segment.pitch);
-      if (!lane) continue;
-      appendPreviewNote(lane, segment.startBeat, segment.durationBeat, segment.volume, `V${segment.volume}`);
-    }
-
-    if (omissionLane && omittedPitchSet.size) {
-      const omittedSegments = pattern.filter((segment) => omittedPitchSet.has(segment.pitch));
-      if (omittedSegments.length) {
-        const omittedStart = Math.min(...omittedSegments.map((segment) => segment.startBeat));
-        const omittedEnd = Math.max(...omittedSegments.map((segment) => segment.startBeat + segment.durationBeat));
-        const averageVolume = omittedSegments.reduce((sum, segment) => sum + segment.volume, 0) / omittedSegments.length;
-        appendPreviewNote(
-          omissionLane,
-          omittedStart,
-          Math.max(CONFIG.minimumNoteBeat, omittedEnd - omittedStart),
-          averageVolume,
-          `${omittedSegments.length} notes omitted`,
-        );
-      }
+  function updateNoteArpeggioOptionAvailability() {
+    const options = readNoteArpeggioOptionsFromUi();
+    if (elements.noteArpeggioChordRow) elements.noteArpeggioChordRow.hidden = options.sourceMode !== "chord";
+    if (elements.noteArpeggioScaleRow) elements.noteArpeggioScaleRow.hidden = options.sourceMode !== "scale";
+    const dynamicsEnabled = options.dynamics !== "preserve";
+    if (elements.noteArpeggioVolumeRangeSelect) elements.noteArpeggioVolumeRangeSelect.disabled = !dynamicsEnabled;
+    if (isNoteEditModeActive("arpeggio")) {
+      state.arpeggioOptions = { ...options };
+      if (options.sourceMode === "selected") ensureArpeggioDirectControlPitches();
+      rebuildNoteEditPreview();
     }
   }
 
-  function convertSelectedNotesToPerformance(options = state.performanceOptions || {}) {
-    if (isMidiReferenceActive() || state.activePanel !== "notes") return false;
-    const channel = getActiveChannel();
-    if (!channel?.notes?.length || !state.selectedNoteIds.size) return false;
-    const selected = getSelectedNotes(channel);
-    if (!selected.length) return false;
-    const mode = normalizePerformanceMode(options.mode);
-    const selectedIds = new Set(selected.map((note) => note.id));
-    const nextNotes = channel.notes.filter((note) => !selectedIds.has(note.id));
-    const nextSelection = new Set();
-    let convertedCount = 0;
 
-    if (mode === "glissando") {
-      for (const note of selected) {
-        const durationBeat = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-        const basePitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
-        const baseVolume = getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume);
-        const pattern = buildGlissandoPattern(durationBeat, basePitch, baseVolume, options);
-        if (pattern.length < 2) {
-          nextNotes.push(note);
-          nextSelection.add(note.id);
-          continue;
-        }
-        convertedCount += 1;
-        let cursor = Math.max(0, Number(note.startBeat) || 0);
-        pattern.forEach((part, index) => {
-          const id = index === 0 ? note.id : state.nextNoteId++;
-          const segment = {
-            ...note,
-            id,
-            pitch: part.pitch,
-            startBeat: Number(cursor.toFixed(6)),
-            durationBeat: Number(part.durationBeat.toFixed(6)),
-          };
-          if (options.dynamics !== "preserve") {
-            segment.volume = part.volume;
-            segment.velocity = mmlVolumeToVelocity(part.volume);
-          }
-          nextNotes.push(segment);
-          nextSelection.add(id);
-          cursor += part.durationBeat;
-        });
-      }
-    } else if (mode === "strum") {
-      if (selected.length < 2) {
-        showToast(i18nText("note.performance_need_multiple"));
-        return false;
-      }
-      const ordered = buildPitchOrder(selected, options.direction);
-      const unit = trillDivisionBeat(options.speed, "1/32");
-      const startBeat = Math.min(...selected.map((note) => Math.max(0, Number(note.startBeat) || 0)));
-      const originalEnd = Math.max(...selected.map((note) => Math.max(0, Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat)));
-      ordered.forEach((note, index) => {
-        const progress = ordered.length > 1 ? index / (ordered.length - 1) : 0;
-        const volume = options.dynamics === "preserve"
-          ? getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume)
-          : getPerformanceVolume(getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume), options, progress);
-        const noteStart = startBeat + index * unit;
-        const nextStart = startBeat + (index + 1) * unit;
-        const durationBeat = index === ordered.length - 1
-          ? Math.max(CONFIG.minimumNoteBeat, originalEnd - noteStart)
-          : Math.max(CONFIG.minimumNoteBeat, nextStart - noteStart);
-        const segment = {
-          ...note,
-          startBeat: Number(noteStart.toFixed(6)),
-          durationBeat: Number(durationBeat.toFixed(6)),
-          volume,
-          velocity: mmlVolumeToVelocity(volume),
-        };
-        nextNotes.push(segment);
-        nextSelection.add(segment.id);
+  const ARPEGGIO_CHORD_INTERVALS = Object.freeze({
+    major: [0, 4, 7],
+    minor: [0, 3, 7],
+    sus2: [0, 2, 7],
+    sus4: [0, 5, 7],
+    dim: [0, 3, 6],
+    aug: [0, 4, 8],
+    "7": [0, 4, 7, 10],
+    maj7: [0, 4, 7, 11],
+    min7: [0, 3, 7, 10],
+  });
+
+  const ARPEGGIO_SCALE_INTERVALS = Object.freeze({
+    major: [0, 2, 4, 5, 7, 9, 11],
+    natural_minor: [0, 2, 3, 5, 7, 8, 10],
+    harmonic_minor: [0, 2, 3, 5, 7, 8, 11],
+    major_pentatonic: [0, 2, 4, 7, 9],
+    minor_pentatonic: [0, 3, 5, 7, 10],
+    chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  });
+
+  function normalizeArpeggioChordType(value) {
+    const key = String(value || "major");
+    return Object.prototype.hasOwnProperty.call(ARPEGGIO_CHORD_INTERVALS, key) ? key : "major";
+  }
+
+  function normalizeArpeggioScaleType(value) {
+    const key = String(value || "major");
+    return Object.prototype.hasOwnProperty.call(ARPEGGIO_SCALE_INTERVALS, key) ? key : "major";
+  }
+
+  function buildArpeggioSourceMaterial(notes, options = {}) {
+    const source = [...(notes || [])].sort(compareNotesByTimeline);
+    if (!source.length) return [];
+    const sourceMode = ["selected", "chord", "scale"].includes(options.sourceMode) ? options.sourceMode : "selected";
+    const rootSource = source.reduce((best, note) => {
+      if (!best) return note;
+      const pitch = Math.round(Number(note.pitch) || 60);
+      const bestPitch = Math.round(Number(best.pitch) || 60);
+      return pitch < bestPitch ? note : best;
+    }, null) || source[0];
+    const rootPitch = clamp(Math.round(Number(rootSource.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+    const baseVolume = Math.round(source.reduce((sum, note) => sum + getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume), 0) / Math.max(1, source.length));
+
+    if (sourceMode === "selected") {
+      const directPitches = Array.isArray(options.directPitches) && options.directPitches.length
+        ? options.directPitches
+        : source.map((note) => note.pitch);
+      return directPitches.map((rawPitch, index) => {
+        const pitch = clamp(Math.round(Number(rawPitch) || rootPitch), CONFIG.minPitch, CONFIG.maxPitch);
+        const sourceNote = source[index % source.length] || rootSource;
+        return { ...sourceNote, pitch, volume: baseVolume, velocity: mmlVolumeToVelocity(baseVolume) };
       });
-      convertedCount = selected.length;
     }
 
-    if (!convertedCount) {
-      showToast(i18nText("note.performance_no_change"));
-      return false;
-    }
-    channel.notes = normalizeMonophonicNotes(nextNotes);
-    const survivingIds = new Set(channel.notes.map((note) => note.id));
-    state.selectedNoteIds = new Set([...nextSelection].filter((noteId) => survivingIds.has(noteId)));
-    state.channelNoteRuntime.delete(String(channel.id));
-    markDirty(i18nText("history.note_performance"));
-    shrinkTimelineToContent();
-    drawRoll();
-    updateChannelInfo();
-    showToast(i18nText("note.performance_done", [i18nText(`note.performance_mode_${mode}`)]));
-    return true;
+    const intervals = sourceMode === "scale"
+      ? ARPEGGIO_SCALE_INTERVALS[normalizeArpeggioScaleType(options.scaleType)]
+      : ARPEGGIO_CHORD_INTERVALS[normalizeArpeggioChordType(options.chordType)];
+    return intervals
+      .map((interval) => rootPitch + interval)
+      .filter((pitch) => pitch >= CONFIG.minPitch && pitch <= CONFIG.maxPitch)
+      .map((pitch) => ({ ...rootSource, pitch, volume: baseVolume, velocity: mmlVolumeToVelocity(baseVolume) }));
   }
 
-  function applySelectedNotesToPerformance() {
-    const options = readNotePerformanceOptionsFromUi();
-    state.performanceOptions = { ...options };
-    const changed = convertSelectedNotesToPerformance(options);
-    if (changed) closeNotePerformanceDialog();
-    return changed;
+  function buildArpeggioPitchOrder(notes, direction = "up") {
+    const pitchMap = new Map();
+    for (const note of notes || []) {
+      const pitch = clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch);
+      const volume = getNoteVolume(note, CONFIG.defaultNewChannelNoteVolume);
+      const entry = pitchMap.get(pitch) || { pitch, volumeTotal: 0, count: 0, source: note };
+      entry.volumeTotal += volume;
+      entry.count += 1;
+      pitchMap.set(pitch, entry);
+    }
+    const ascending = [...pitchMap.values()]
+      .map((entry) => ({
+        pitch: entry.pitch,
+        volume: clamp(Math.round(entry.volumeTotal / Math.max(1, entry.count)), 0, 15),
+        source: entry.source,
+      }))
+      .sort((a, b) => a.pitch - b.pitch);
+    if (ascending.length <= 1) return ascending;
+    const down = ascending.slice().reverse();
+    const normalized = normalizeArpeggioDirection(direction);
+    if (normalized === "down") return down;
+    if (normalized === "updown") return ascending.concat(ascending.slice(1, -1).reverse());
+    if (normalized === "downup") return down.concat(down.slice(1, -1).reverse());
+    return ascending;
   }
+
+  function buildArpeggioPattern(notes, totalDurationBeat, options = {}) {
+    const material = buildArpeggioSourceMaterial(notes, options);
+    const order = buildArpeggioPitchOrder(material, options.direction);
+    if (order.length < 2) return [];
+    const duration = Math.max(CONFIG.minimumNoteBeat, Number(totalDurationBeat) || CONFIG.minimumNoteBeat);
+    const unit = Math.max(CONFIG.minimumNoteBeat, trillDivisionBeat(options.speed, "1/16"));
+    const segments = [];
+    let cursor = 0;
+    let index = 0;
+    while (cursor < duration - 1e-7 && index < 4096) {
+      const source = order[index % order.length];
+      const piece = Math.min(unit, duration - cursor);
+      if (piece < CONFIG.minimumNoteBeat - 1e-7 && segments.length) {
+        segments[segments.length - 1].durationBeat = Number((segments[segments.length - 1].durationBeat + piece).toFixed(6));
+        break;
+      }
+      const progress = duration > CONFIG.minimumNoteBeat ? clamp(cursor / duration, 0, 1) : 0;
+      const volume = options.dynamics === "preserve"
+        ? source.volume
+        : getPerformanceVolume(source.volume, options, progress);
+      segments.push({
+        pitch: source.pitch,
+        volume,
+        startBeat: Number(cursor.toFixed(6)),
+        durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, piece).toFixed(6)),
+        source: source.source,
+      });
+      cursor += piece;
+      index += 1;
+    }
+    return segments;
+  }
+
 
   function deleteTimelineBeforeBeat(beat) {
     const cutBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
@@ -19108,8 +19753,9 @@
         { label: i18nText("context.action.note_copy"), action: copySelectedNotes },
         { label: i18nText("context.action.note_cut"), action: cutSelectedNotes },
         { label: i18nText("context.action.note_volume_edit"), action: openNoteVolumeDialog },
-        { label: i18nText("context.action.note_trill"), action: openNoteTrillDialog },
-        { label: i18nText("context.action.note_performance"), action: openNotePerformanceDialog },
+        { label: i18nText("context.action.note_trill"), action: () => enterNoteEditMode("trill") },
+        { label: i18nText("context.action.note_performance"), action: () => enterNoteEditMode("glissando") },
+        { label: i18nText("context.action.note_arpeggio"), action: () => enterNoteEditMode("arpeggio") },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         "separator",
         { label: i18nText("context.action.note_extend_left"), action: () => extendSelectedNotesToSide(-1) },
@@ -19531,22 +20177,28 @@
     return target === elements.channelInstrumentSelect;
   }
 
+  function isPlaybackShortcutNoteEditControl(target) {
+    return Boolean(isNoteEditModeActive() && target instanceof Element && target.closest("#noteEditModePanel"));
+  }
+
   function handlePlaybackShortcut(event) {
     if (isModalPopupOpen()) return false;
     if (event.code !== "Space") {
       return false;
     }
     const instrumentSelectFocused = isPlaybackShortcutInstrumentSelect(event.target);
+    const noteEditControlFocused = isPlaybackShortcutNoteEditControl(event.target);
     if (
       event.defaultPrevented
       || event.ctrlKey
       || event.metaKey
       || event.altKey
-      || (isTextEntryTarget(event.target) && !instrumentSelectFocused)
+      || (isTextEntryTarget(event.target) && !instrumentSelectFocused && !noteEditControlFocused)
     ) {
       return false;
     }
     event.preventDefault();
+    if (event.repeat) return true;
     if (instrumentSelectFocused && event.target instanceof HTMLElement) {
       event.target.blur();
       elements.rollViewport?.focus?.({ preventScroll: true });
@@ -19607,6 +20259,9 @@
     document.addEventListener("pointerdown", unlockEditorAudioFromGesture, { capture: true, passive: true });
     document.addEventListener("touchstart", unlockEditorAudioFromGesture, { capture: true, passive: true });
     document.addEventListener("keydown", (event) => { if (!event.repeat) unlockEditorAudioFromGesture(); }, true);
+    // Capture Space before focused select/checkbox/button controls can consume it.
+    // In note edit mode this keeps playback start/stop available regardless of panel focus.
+    document.addEventListener("keydown", handlePlaybackShortcut, true);
     document.addEventListener("keydown", handleMergeModeKeyGuard, true);
     document.addEventListener("contextmenu", handleMergeModeContextGuard, true);
     document.addEventListener("keydown", handleModalBackgroundKeyGuard, true);
@@ -20184,9 +20839,8 @@
     elements.noteVolumeBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.noteVolumeBackdrop) closeNoteVolumeDialog();
     });
-    elements.noteTrillCloseButton?.addEventListener("click", closeNoteTrillDialog);
-    elements.noteTrillCancelButton?.addEventListener("click", closeNoteTrillDialog);
-    elements.noteTrillApplyButton?.addEventListener("click", applySelectedNotesToTrill);
+    elements.noteEditModeCancelButton?.addEventListener("click", () => cancelNoteEditMode());
+    elements.noteEditModeApplyButton?.addEventListener("click", applyNoteEditMode);
     [
       elements.noteTrillDirectionSelect,
       elements.noteTrillIntervalSelect,
@@ -20198,12 +20852,6 @@
       elements.noteTrillStartNoteSelect,
       elements.noteTrillEndOnBase,
     ].forEach((control) => control?.addEventListener("change", updateNoteTrillOptionAvailability));
-    elements.noteTrillBackdrop?.addEventListener("pointerdown", (event) => {
-      if (event.target === elements.noteTrillBackdrop) closeNoteTrillDialog();
-    });
-    elements.notePerformanceCloseButton?.addEventListener("click", closeNotePerformanceDialog);
-    elements.notePerformanceCancelButton?.addEventListener("click", closeNotePerformanceDialog);
-    elements.notePerformanceApplyButton?.addEventListener("click", applySelectedNotesToPerformance);
     [
       elements.notePerformanceModeSelect,
       elements.notePerformanceDirectionSelect,
@@ -20211,13 +20859,24 @@
       elements.notePerformanceStepSelect,
       elements.notePerformanceRangeModeSelect,
       elements.notePerformanceRangeSelect,
-      elements.notePerformanceTargetPitchSelect,
       elements.notePerformanceDynamicsSelect,
       elements.notePerformanceVolumeRangeSelect,
     ].forEach((control) => control?.addEventListener("change", updateNotePerformanceOptionAvailability));
-    elements.notePerformanceBackdrop?.addEventListener("pointerdown", (event) => {
-      if (event.target === elements.notePerformanceBackdrop) closeNotePerformanceDialog();
+    elements.notePerformanceTargetPitchSelect?.addEventListener("change", () => {
+      if (isNoteEditModeActive("glissando") && elements.notePerformanceRangeModeSelect?.value === "target") {
+        setAllGlissandoTargetControlPitches(elements.notePerformanceTargetPitchSelect.value);
+      }
+      updateNotePerformanceOptionAvailability();
     });
+    [
+      elements.noteArpeggioSourceSelect,
+      elements.noteArpeggioChordSelect,
+      elements.noteArpeggioScaleSelect,
+      elements.noteArpeggioDirectionSelect,
+      elements.noteArpeggioSpeedSelect,
+      elements.noteArpeggioDynamicsSelect,
+      elements.noteArpeggioVolumeRangeSelect,
+    ].forEach((control) => control?.addEventListener("change", updateNoteArpeggioOptionAvailability));
     elements.timelineFadeCloseButton?.addEventListener("click", closeTimelineFadeDialog);
     elements.timelineFadeCancelButton?.addEventListener("click", closeTimelineFadeDialog);
     elements.timelineFadeApplyButton?.addEventListener("click", applyTimelineFadeDialog);
@@ -20361,8 +21020,7 @@
           closeMidiImportDialog();
           closeMidiTransferDialog();
           closeNoteVolumeDialog();
-          closeNoteTrillDialog();
-          closeNotePerformanceDialog();
+          if (isNoteEditModeActive()) cancelNoteEditMode();
           closeChannelShiftDialog();
           closeTempoEditor();
           closeTempoSimplifyDialog();
@@ -20429,8 +21087,7 @@
         closeMidiImportDialog();
         closeMidiTransferDialog();
         closeNoteVolumeDialog();
-        closeNoteTrillDialog();
-        closeNotePerformanceDialog();
+        if (isNoteEditModeActive()) cancelNoteEditMode();
         closeChannelShiftDialog();
         closeTempoEditor();
         closeTempoSimplifyDialog();
