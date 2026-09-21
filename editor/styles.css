@@ -9167,3 +9167,78 @@ body.merge-mode-active #channelMergeModeApplyButton:disabled {
     max-width: 132px;
   }
 }
+
+/* 2026-09-21: expanded channel toolbar actions visually match collapsed rail actions.
+   Only the horizontal width differs between the two layouts. */
+.channel-tree-toolbar {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.channel-tree-merge-button,
+.channel-tree-add-button,
+.channel-tree-delete-button {
+  box-sizing: border-box;
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  padding: 0 !important;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 7px !important;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* Merge: same palette and icon treatment as the collapsed merge action. */
+.channel-tree-merge-button {
+  border-color: color-mix(in srgb, #3b82f6 55%, var(--control-border));
+  background: color-mix(in srgb, #3b82f6 11%, var(--control-bg));
+  color: color-mix(in srgb, #60a5fa 86%, var(--text));
+  font-size: 0;
+}
+.channel-tree-merge-button:hover:not(:disabled) {
+  background: color-mix(in srgb, #3b82f6 20%, var(--control-hover));
+}
+.channel-tree-merge-button .channel-merge-icon {
+  width: 19px;
+  height: 19px;
+  display: block;
+  pointer-events: none;
+  overflow: visible;
+  color: inherit;
+}
+.channel-tree-merge-button .channel-merge-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Add: same accent palette and glyph size as the collapsed add action. */
+.channel-tree-add-button {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--control-bg));
+  color: var(--accent);
+  font-size: 21px;
+}
+
+/* Delete: same danger palette and emoji size as the collapsed delete action. */
+.channel-tree-delete-button {
+  border-color: color-mix(in srgb, var(--danger) 48%, var(--control-border));
+  background: color-mix(in srgb, var(--danger) 9%, var(--control-bg));
+  color: var(--text);
+  font-size: 16px;
+}
+.channel-tree-delete-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 18%, var(--control-hover));
+}
+.channel-tree-merge-button:disabled,
+.channel-tree-add-button:disabled,
+.channel-tree-delete-button:disabled {
+  opacity: .38;
+}
