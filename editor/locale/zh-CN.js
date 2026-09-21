@@ -6,8 +6,9 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
   "strings": {
     "import.channel_color": "通道颜色",
     "import.channel_color_aria": "导入通道颜色方式",
-    "import.color_by_channel": "按通道着色",
-    "import.color_by_instrument": "按乐器着色",
+    "import.note_min_length": "音符最短长度",
+    "import.color_by_channel": "每个通道不同颜色",
+    "import.color_by_instrument": "每种乐器不同颜色",
     "merge.rule": "合并规则",
     "merge.candidates": "合并候选",
     "merge.note_overlap": "音符重叠",

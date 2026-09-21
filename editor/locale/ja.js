@@ -6,8 +6,9 @@ window.__MOBIBARD_LOCALES__["ja"] = {
   "strings": {
     "import.channel_color": "チャンネル色",
     "import.channel_color_aria": "読み込み時のチャンネル色基準",
-    "import.color_by_channel": "チャンネルごとに色分け",
-    "import.color_by_instrument": "楽器ごとに色分け",
+    "import.note_min_length": "ノート最小長",
+    "import.color_by_channel": "チャンネルごとに別の色",
+    "import.color_by_instrument": "楽器ごとに別の色",
     "merge.rule": "結合ルール",
     "merge.candidates": "結合候補",
     "merge.note_overlap": "ノート重なり",

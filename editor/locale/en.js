@@ -6,8 +6,9 @@ window.__MOBIBARD_LOCALES__["en"] = {
   "strings": {
     "import.channel_color": "Channel color",
     "import.channel_color_aria": "Imported channel color mode",
-    "import.color_by_channel": "Color by channel",
-    "import.color_by_instrument": "Color by instrument",
+    "import.note_min_length": "Minimum note length",
+    "import.color_by_channel": "Different color per channel",
+    "import.color_by_instrument": "Different color per instrument",
     "merge.rule": "Merge rule",
     "merge.candidates": "Merge candidates",
     "merge.note_overlap": "Note overlap",

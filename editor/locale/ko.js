@@ -6,8 +6,9 @@ window.__MOBIBARD_LOCALES__["ko"] = {
   "strings": {
     "import.channel_color": "채널 색상",
     "import.channel_color_aria": "불러오기 채널 색상 기준",
-    "import.color_by_channel": "채널마다 색상",
-    "import.color_by_instrument": "악기마다 색상",
+    "import.note_min_length": "노트 최소길이",
+    "import.color_by_channel": "채널마다 다른 색",
+    "import.color_by_instrument": "악기마다 다른 색",
     "merge.rule": "병합 규칙",
     "merge.candidates": "병합 후보",
     "merge.note_overlap": "노트 겹침",

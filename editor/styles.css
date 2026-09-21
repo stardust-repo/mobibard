@@ -4219,7 +4219,7 @@ button {
 
 /* 2026-08 compact unified MIDI/MusicXML import dialog ---------------------- */
 .unified-import-dialog {
-  width: min(620px, calc(100vw - 24px));
+  width: min(600px, calc(100vw - 24px));
   grid-template-rows: auto auto auto auto minmax(104px, 1fr) auto;
   border-radius: 10px;
 }
@@ -9116,4 +9116,54 @@ body.merge-mode-active #channelMergeModeApplyButton:disabled {
 .channel-volume-count-heading span:first-child,
 .channel-volume-count-heading span:last-child {
   text-align: left;
+}
+
+
+/* 2026-09 compact import channel-color control in the options row -------- */
+.unified-import-dialog .midi-import-midi-controls .import-channel-color-mode {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.unified-import-dialog .midi-import-midi-controls .import-channel-color-mode select {
+  width: auto;
+  min-width: 86px;
+  max-width: 96px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 22px 0 7px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--control-bg);
+  font-size: 10px;
+  font-weight: 700;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .unified-import-dialog { width: min(590px, calc(100vw - 16px)); }
+  .unified-import-dialog .midi-import-midi-controls .import-channel-color-mode select {
+    height: 34px;
+    min-height: 34px;
+  }
+}
+
+/* 2026-09-21 import select headers ---------------------------------------- */
+.unified-import-dialog .midi-import-midi-controls .import-channel-color-mode {
+  gap: 0;
+}
+.unified-import-dialog .midi-import-midi-controls .import-channel-color-mode select {
+  min-width: 126px;
+  max-width: 136px;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .unified-import-dialog .midi-import-midi-controls .import-channel-color-mode select {
+    min-width: 122px;
+    max-width: 132px;
+  }
 }

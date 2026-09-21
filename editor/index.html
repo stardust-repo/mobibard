@@ -411,9 +411,10 @@
 </div>
 <div class="midi-import-midi-controls unified-import-options-row" id="midiImportMidiControls">
 <button id="midiImportChooseFileButton" type="button" data-i18n="file.text">파일 선택</button>
-<select aria-label="MIDI 양자화" data-i18n-aria-label="midi.quantize" id="midiImportQuantize"><option selected="" value="64" data-i18n="ui.1_64_quantize">64박 양자화</option><option value="32" data-i18n="ui.1_32_quantize">32박 양자화</option></select>
+<select aria-label="MIDI 양자화" data-i18n-aria-label="midi.quantize" id="midiImportQuantize"><option value="" disabled data-i18n="import.note_min_length">노트 최소길이</option><option selected="" value="64" data-i18n="ui.1_64_quantize">64박 양자화</option><option value="32" data-i18n="ui.1_32_quantize">32박 양자화</option></select>
 <label class="midi-import-overlap-option"><input checked="" id="midiImportIgnoreSingle64thOverlap" type="checkbox"/><span data-i18n="ui.ignore_1_64">64박 겹침 무시</span></label>
 <label class="midi-import-overlap-option midi-import-channel-limit-option"><input id="midiImportLimitChannelsPerInstrument" type="checkbox"/><span id="midiImportChannelLimitLabel" data-i18n="midi.limit_channels" data-i18n-args="[3]">악기당 최대 3채널</span></label>
+<label class="import-channel-color-mode"><select aria-label="불러오기 채널 색상 기준" data-i18n-aria-label="import.channel_color_aria" id="importChannelColorMode"><option value="" disabled data-i18n="import.channel_color">채널 색상</option><option value="channel" data-i18n="import.color_by_channel">채널마다 다른 색</option><option value="instrument" data-i18n="import.color_by_instrument">악기마다 다른 색</option></select></label>
 <select aria-label="MBT 채널 구성" data-i18n-aria-label="mbt.packing_aria" hidden="" id="midiImportMbtPacking"><option value="byInstrument" data-i18n="mbt.packing_by_instrument">악기별 채널</option><option value="compact" data-i18n="mbt.packing_compact">최소 채널</option></select>
 </div>
 <div class="unified-import-text-source" hidden="" id="midiImportTextSourcePanel">
@@ -422,7 +423,6 @@
 </div>
 <div class="unified-import-channel-toolbar" id="midiImportChannelToolbar">
 <div class="midi-import-selection-actions midi-import-inline-selection-actions" id="midiImportSelectionActions"><button id="midiImportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiImportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
-<label class="import-channel-color-mode"><span data-i18n="import.channel_color">채널 색상</span><select aria-label="불러오기 채널 색상 기준" data-i18n-aria-label="import.channel_color_aria" id="importChannelColorMode"><option value="channel" data-i18n="import.color_by_channel">채널마다 색상</option><option value="instrument" data-i18n="import.color_by_instrument">악기마다 색상</option></select></label>
 <div class="midi-import-summary" id="midiImportSummary"></div>
 <div class="midi-import-preview-actions"><button class="midi-import-source-preview" id="midiImportPreviewAllButton" type="button"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span><span class="transport-button-label" data-i18n="ui.preview_source">원본 듣기</span></button></div>
 </div>
