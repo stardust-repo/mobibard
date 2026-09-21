@@ -8407,7 +8407,6 @@ body.merge-mode-active #rollCanvas { cursor: crosshair !important; }
   margin: 0;
   padding: 11px 0 7px 100px;
   border: 0;
-  border-top: 1px solid var(--line-soft);
   border-radius: 0;
   background: transparent;
   color: var(--text);
@@ -8729,4 +8728,392 @@ body.merge-mode-active #rollCanvas { cursor: crosshair !important; }
 }
 :root[data-theme="light"] .special-thanks-intro {
   color: #32955f;
+}
+
+/* 2026-09-21 batch polish: channel-scope dialogs mirror the import dialog's pinned-footer grid. */
+.channel-scope-options-dialog,
+.rest-cleanup-dialog.channel-scope-options-dialog {
+  width: min(600px, calc(100vw - 28px));
+  height: min(760px, calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.channel-scope-options-dialog > .channel-scope-options-top,
+.rest-cleanup-dialog.channel-scope-options-dialog > .channel-scope-options-top {
+  min-height: 0;
+  overflow: visible;
+}
+.channel-scope-list-section {
+  min-height: 0;
+  overflow: hidden;
+  flex: none;
+}
+.channel-scope-scroll-list.midi-transfer-channel-list,
+.channel-volume-list.channel-scope-scroll-list,
+.rest-cleanup-channel-list.channel-scope-scroll-list {
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.channel-scope-options-dialog > .transfer-dialog-actions,
+.rest-cleanup-dialog.channel-scope-options-dialog > .rest-cleanup-actions {
+  position: relative;
+  z-index: 2;
+  align-self: stretch;
+  background: var(--menu-bg);
+}
+@media (max-height: 620px) {
+  .channel-scope-options-dialog,
+  .rest-cleanup-dialog.channel-scope-options-dialog {
+    height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px);
+  }
+  .channel-volume-options { padding-top: 2px; }
+  .channel-volume-options .channel-volume-slider-row { padding-top: 7px; padding-bottom: 6px; }
+  .channel-volume-help.transfer-dialog-help { padding-bottom: 5px; }
+  .rest-cleanup-dialog .rest-cleanup-body.channel-scope-options-top { padding-top: 0; }
+}
+@media (max-width: 560px) {
+  .channel-scope-options-dialog,
+  .rest-cleanup-dialog.channel-scope-options-dialog {
+    width: min(600px, calc(100vw - 14px));
+    height: calc(100dvh - 14px);
+    max-height: calc(100dvh - 14px);
+  }
+}
+
+/* Rest cleanup rows: channel name may ellipsize, affected-rest count never does. */
+.rest-cleanup-channel-row {
+  grid-template-columns: 28px minmax(0, 1fr) max-content;
+}
+.rest-cleanup-affected-count {
+  justify-self: end;
+  min-width: max-content;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.channel-volume-row {
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+
+/* Merge mode: overlap is fixed at maximum internally; footer actions occupy the former overlap row. */
+.channel-merge-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: 6px;
+}
+.channel-merge-action-row .channel-merge-mode-actions {
+  margin-left: auto;
+}
+@media (max-width: 760px) {
+  .channel-merge-action-row { width: 100%; }
+}
+
+
+/* 2026-09-21 popup/merge polish: compact comparison, rigid rest rows, balanced merge controls. */
+.rest-cleanup-channel-row {
+  display: grid !important;
+  grid-template-columns: 28px minmax(0, 1fr) max-content !important;
+  align-items: center !important;
+  width: 100%;
+  min-width: 0;
+}
+.rest-cleanup-channel-row > input[type="checkbox"] { grid-column: 1; }
+.rest-cleanup-channel-row > .midi-transfer-channel-name {
+  grid-column: 2;
+  min-width: 0;
+  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rest-cleanup-channel-row > .rest-cleanup-affected-count {
+  grid-column: 3;
+  justify-self: end;
+  align-self: center;
+  min-width: max-content;
+  max-width: none;
+  white-space: nowrap;
+  overflow: visible;
+  text-align: right;
+}
+
+.channel-volume-count-box {
+  gap: 5px;
+  padding: 7px 9px;
+}
+.channel-volume-count-heading {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.channel-volume-count-heading span:first-child { text-align: left; }
+.channel-volume-count-heading span:last-child { text-align: right; }
+.channel-volume-count-heading b { color: var(--muted); font-size: 10px; }
+.channel-volume-compare-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.channel-volume-compare-item {
+  display: inline-grid;
+  grid-template-columns: auto auto auto auto;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: 7px;
+  background: var(--control-bg);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.channel-volume-compare-item em {
+  color: var(--text);
+  font-style: normal;
+  font-weight: 900;
+}
+.channel-volume-compare-before { color: var(--text); }
+.channel-volume-compare-arrow { color: var(--muted); font-size: 10px; }
+.channel-volume-compare-after { color: #ff374c; font-size: 10.5px; font-weight: 900; }
+.channel-volume-compare-item.is-empty { color: var(--muted); opacity: .7; }
+
+body.merge-mode-active .channel-merge-mode-main-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+body.merge-mode-active .channel-merge-mode-role-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  min-width: 0;
+  gap: 4px;
+}
+body.merge-mode-active .channel-merge-mode-role-options button {
+  width: 100%;
+  min-width: 0;
+}
+body.merge-mode-active .channel-merge-action-row {
+  width: 100%;
+  justify-content: stretch;
+}
+body.merge-mode-active .channel-merge-action-row .channel-merge-mode-actions {
+  width: 100%;
+  margin-left: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+body.merge-mode-active .channel-merge-mode-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-weight: 850;
+  box-shadow: none;
+}
+body.merge-mode-active #channelMergeModeCancelButton {
+  border-color: color-mix(in srgb, var(--muted) 66%, var(--control-border));
+  background: var(--control-bg);
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 18%, var(--control-bg));
+  box-shadow: none;
+}
+
+
+/* 2026-09-21 volume comparison colors + merge action alignment */
+.channel-volume-count-heading .channel-volume-heading-before,
+.channel-volume-compare-before {
+  color: var(--accent);
+}
+.channel-volume-count-heading .channel-volume-heading-arrow,
+.channel-volume-compare-arrow {
+  color: var(--text);
+}
+.channel-volume-count-heading .channel-volume-heading-after,
+.channel-volume-compare-after {
+  color: #4ade80;
+}
+:root[data-theme="light"] .channel-volume-count-heading .channel-volume-heading-after,
+:root[data-theme="light"] .channel-volume-compare-after {
+  color: #16a34a;
+}
+.channel-volume-count-heading .channel-volume-heading-before,
+.channel-volume-count-heading .channel-volume-heading-after,
+.channel-volume-count-heading .channel-volume-heading-arrow {
+  font-weight: 900;
+}
+
+body.merge-mode-active .channel-merge-action-row {
+  min-height: 26px;
+  height: 26px;
+  align-items: center;
+  overflow: visible;
+}
+body.merge-mode-active .channel-merge-action-row .channel-merge-mode-actions {
+  height: 26px;
+  align-items: stretch;
+}
+body.merge-mode-active .channel-merge-mode-actions button {
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 8px;
+  line-height: 24px;
+  border-radius: 6px;
+  font-weight: 850;
+}
+body.merge-mode-active #channelMergeModeCancelButton {
+  border-color: color-mix(in srgb, var(--muted) 66%, var(--control-border));
+  background: var(--control-bg);
+  color: var(--text);
+  box-shadow: none;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 18%, var(--control-bg));
+  color: var(--text);
+  box-shadow: none;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 86%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 24%, var(--control-bg));
+}
+
+/* 2026-09-21: merge spacing + definite blue apply button; channel-volume V0 protection option. */
+.channel-volume-options .channel-volume-protect-row {
+  display: flex;
+  width: fit-content;
+  margin-top: 5px;
+}
+body.merge-mode-active .channel-inspector .compact-channel-inspector {
+  padding: 5px 8px 6px !important;
+}
+body.merge-mode-active .channel-merge-mode-controls {
+  gap: 4px !important;
+}
+body.merge-mode-active .channel-merge-action-row {
+  margin-bottom: 2px;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled) {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent) !important;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 88%, #fff 12%) !important;
+  background: color-mix(in srgb, var(--accent) 88%, #fff 12%) !important;
+  color: #fff !important;
+}
+
+
+/* 2026-09-21: inline V0 protection option, silent-note timeline cue, merge apply state parity. */
+.channel-volume-mode-options-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.channel-volume-mode-options-row .channel-volume-mode-row,
+.channel-volume-mode-options-row .channel-volume-protect-row {
+  margin-top: 4px;
+  width: auto;
+  flex: 0 0 auto;
+}
+.channel-volume-mode-options-row .channel-volume-protect-row {
+  margin-left: auto;
+}
+@media (max-width: 520px) {
+  .channel-volume-mode-options-row {
+    gap: 8px 14px;
+  }
+  .channel-volume-mode-options-row .channel-volume-protect-row {
+    margin-left: 0;
+  }
+}
+
+/* Merge apply must look exactly like the direct note-edit Apply button when enabled. */
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border)) !important;
+  background: color-mix(in srgb, var(--accent) 18%, var(--control-bg)) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+  cursor: pointer;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border)) !important;
+  background: color-mix(in srgb, var(--accent) 18%, var(--control-bg)) !important;
+  color: var(--text) !important;
+}
+/* Disabled state follows the editor's ordinary disabled-button treatment. */
+body.merge-mode-active #channelMergeModeApplyButton:disabled {
+  border-color: var(--control-border) !important;
+  background: var(--control-bg) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  opacity: .45 !important;
+  cursor: default !important;
+}
+:root[data-theme="light"] body.merge-mode-active #channelMergeModeApplyButton:disabled {
+  opacity: .62 !important;
+  color: #536173 !important;
+}
+
+/* 2026-09-21: keep channel-volume mode toggles side-by-side, left aligned. */
+.channel-volume-mode-options-row {
+  justify-content: flex-start;
+}
+.channel-volume-mode-options-row .channel-volume-protect-row {
+  margin-left: 0 !important;
+}
+
+/* 2026-09-21: tighten the gap where the rest-cleanup separator was removed. */
+.rest-cleanup-dialog .rest-cleanup-section:first-child {
+  padding-bottom: 6px;
+}
+.rest-cleanup-dialog .rest-cleanup-preview {
+  padding-top: 5px;
+}
+
+/* 2026-09-21 channel volume comparison heading: keep compact and left-aligned */
+.channel-volume-count-heading {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 5px;
+  width: auto;
+  max-width: 100%;
+}
+.channel-volume-count-heading span:first-child,
+.channel-volume-count-heading span:last-child {
+  text-align: left;
 }

@@ -128,7 +128,7 @@
         volumeDelta: Math.max(-15, Math.min(15, Math.round(Number(source.volumeDelta) || 0))),
         volumeFixed: source.volumeFixed === null || source.volumeFixed === undefined || source.volumeFixed === "" || String(source.volumeFixed).toLowerCase() === "keep"
           ? null
-          : Math.max(0, Math.min(15, Math.round(Number(source.volumeFixed) || 0))),
+          : Math.max(1, Math.min(15, Math.round(Number(source.volumeFixed) || 1))),
         octaveDelta: Math.max(-7, Math.min(7, Math.round(Number(source.octaveDelta) || 0))),
         accompaniment: {
           analysis: Boolean(source.accompaniment?.analysis),
@@ -196,7 +196,7 @@
       channels: cloneChannelOptions(channels).map(channel => ({
         restMode: String(channel.restMode || "keep"),
         volumeDelta: Number(channel.volumeDelta) || 0,
-        volumeFixed: channel.volumeFixed == null ? null : Math.max(0, Math.min(15, Math.round(Number(channel.volumeFixed) || 0))),
+        volumeFixed: channel.volumeFixed == null ? null : Math.max(1, Math.min(15, Math.round(Number(channel.volumeFixed) || 1))),
         octaveDelta: Number(channel.octaveDelta) || 0,
         accompaniment: {
           analysis: Boolean(channel.accompaniment?.analysis),
@@ -1302,14 +1302,16 @@
     if (optimizer.setVolumesMml && previewFixedVolumes.some(volume => volume != null)) {
       out = resultMml(optimizer.setVolumesMml(out, {
         partCount: 6,
-        partVolumes: previewFixedVolumes
+        partVolumes: previewFixedVolumes,
+        preserveZeroMinOne: true
       }), out);
     }
     const previewVolumeDeltas = channels.map(channel => channel.volumeFixed == null ? (Number(channel.volumeDelta) || 0) : 0);
     if (optimizer.adjustVolumesMml && previewVolumeDeltas.some(delta => delta !== 0)) {
       out = resultMml(optimizer.adjustVolumesMml(out, {
         partCount: 6,
-        partDeltas: previewVolumeDeltas
+        partDeltas: previewVolumeDeltas,
+        preserveZeroMinOne: true
       }), out);
     }
     const previewOctaveDeltas = channels.map(channel => Number(channel.octaveDelta) || 0);
@@ -1491,7 +1493,8 @@
         transformCalls.volumeFixed += 1;
         return resultMml(optimizer.setVolumesMml(input, {
           partCount: 6,
-          partVolumes: fixedVolumes
+          partVolumes: fixedVolumes,
+          preserveZeroMinOne: true
         }), input);
       }, diagnostics);
       out = stage.output;
@@ -1503,7 +1506,8 @@
         transformCalls.volume += 1;
         return resultMml(optimizer.adjustVolumesMml(input, {
           partCount: 6,
-          partDeltas: volumeDeltas
+          partDeltas: volumeDeltas,
+          preserveZeroMinOne: true
         }), input);
       }, diagnostics);
       out = stage.output;
@@ -2922,11 +2926,19 @@
       const counts = new Map();
       const fixedVolume = draft[index]?.volumeFixed;
       if (fixedVolume != null) {
-        counts.set(Math.max(0, Math.min(15, Math.round(Number(fixedVolume) || 0))), stats.total);
+        const target = Math.max(1, Math.min(15, Math.round(Number(fixedVolume) || 1)));
+        for (const [baseVolume, count] of stats.volumeCounts || []) {
+          const sourceVolume = Math.max(0, Math.min(15, Math.round(Number(baseVolume) || 0)));
+          const volume = sourceVolume === 0 ? 0 : target;
+          counts.set(volume, (counts.get(volume) || 0) + Number(count || 0));
+        }
       } else {
         const delta = adjustments[index] || 0;
         for (const [baseVolume, count] of stats.volumeCounts || []) {
-          const volume = Math.max(0, Math.min(15, Math.round(Number(baseVolume) + delta)));
+          const sourceVolume = Math.max(0, Math.min(15, Math.round(Number(baseVolume) || 0)));
+          const volume = sourceVolume === 0
+            ? 0
+            : Math.max(1, Math.min(15, Math.round(sourceVolume + delta)));
           counts.set(volume, (counts.get(volume) || 0) + Number(count || 0));
         }
       }
@@ -3196,12 +3208,12 @@
 
     const makeCombinedControl = (channel, index) => {
       const isBatch = index < 0;
-      let lastFixedValue = channel?.volumeFixed == null ? 10 : Math.max(0, Math.min(15, Math.round(Number(channel.volumeFixed) || 0)));
+      let lastFixedValue = channel?.volumeFixed == null ? 10 : Math.max(1, Math.min(15, Math.round(Number(channel.volumeFixed) || 1)));
       let currentMode = volumeModeOf(channel);
       const modeButton = wb16VolumeModeButton(currentMode, nextMode => {
         if (isBatch) {
           const nextFixed = nextMode === "fixed";
-          const targetValue = Math.max(0, Math.min(15, Math.round(Number(lastFixedValue) || 10)));
+          const targetValue = Math.max(1, Math.min(15, Math.round(Number(lastFixedValue) || 10)));
           channels.forEach(item => { item.volumeFixed = nextFixed ? targetValue : null; });
         } else {
           channel.volumeFixed = nextMode === "fixed" ? lastFixedValue : null;
@@ -3213,7 +3225,7 @@
 
       const initialValue = currentMode === "fixed" ? lastFixedValue : (Number(channel?.volumeDelta) || 0);
       const slider = sliderNumber({
-        min: currentMode === "fixed" ? 0 : -15,
+        min: currentMode === "fixed" ? 1 : -15,
         max: 15,
         step: 1,
         value: initialValue,
@@ -3222,13 +3234,13 @@
             const modes = channels.map(volumeModeOf);
             if (modes.some(mode => mode !== modes[0])) return;
             if (modes[0] === "fixed") {
-              lastFixedValue = Math.max(0, Math.min(15, Math.round(Number(value) || 0)));
+              lastFixedValue = Math.max(1, Math.min(15, Math.round(Number(value) || 1)));
               channels.forEach(item => { item.volumeFixed = lastFixedValue; });
             } else {
               channels.forEach(item => { item.volumeDelta = Math.max(-15, Math.min(15, Math.round(Number(value) || 0))); });
             }
           } else if (channel.volumeFixed != null) {
-            lastFixedValue = Math.max(0, Math.min(15, Math.round(Number(value) || 0)));
+            lastFixedValue = Math.max(1, Math.min(15, Math.round(Number(value) || 1)));
             channel.volumeFixed = lastFixedValue;
           } else {
             channel.volumeDelta = Math.max(-15, Math.min(15, Math.round(Number(value) || 0)));
@@ -3244,17 +3256,17 @@
         slider,
         sync(item) {
           currentMode = volumeModeOf(item);
-          if (currentMode === "fixed") lastFixedValue = Math.max(0, Math.min(15, Math.round(Number(item.volumeFixed) || 0)));
+          if (currentMode === "fixed") lastFixedValue = Math.max(1, Math.min(15, Math.round(Number(item.volumeFixed) || 1)));
           modeButton.setMode(currentMode);
-          slider.setBounds({ min: currentMode === "fixed" ? 0 : -15, max: 15, step: 1 });
+          slider.setBounds({ min: currentMode === "fixed" ? 1 : -15, max: 15, step: 1 });
           slider.setDisabled(false);
           slider.setValue(currentMode === "fixed" ? lastFixedValue : (Number(item.volumeDelta) || 0));
         },
         syncMode(mode, value, mixedValue = false) {
           currentMode = mode === "fixed" ? "fixed" : "original";
-          if (currentMode === "fixed" && !mixedValue) lastFixedValue = Math.max(0, Math.min(15, Math.round(Number(value) || 0)));
+          if (currentMode === "fixed" && !mixedValue) lastFixedValue = Math.max(1, Math.min(15, Math.round(Number(value) || 1)));
           modeButton.setMode(currentMode);
-          slider.setBounds({ min: currentMode === "fixed" ? 0 : -15, max: 15, step: 1 });
+          slider.setBounds({ min: currentMode === "fixed" ? 1 : -15, max: 15, step: 1 });
           slider.setDisabled(false);
           slider.setValue(value, { mixed: mixedValue });
         },

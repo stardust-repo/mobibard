@@ -532,7 +532,8 @@
     if (selectedFixedVolume == null || typeof setVolumes !== "function") return mml;
     return setVolumes(mml, {
       partCount: 3,
-      partVolumes: [selectedFixedVolume, selectedFixedVolume, selectedFixedVolume]
+      partVolumes: [selectedFixedVolume, selectedFixedVolume, selectedFixedVolume],
+      preserveZeroMinOne: true
     }).mml;
   }
 

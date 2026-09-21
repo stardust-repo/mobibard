@@ -326,16 +326,12 @@
       <button type="button" data-merge-mode-role="high" data-i18n="ui.high">고음</button>
       <button type="button" data-merge-mode-role="low" data-i18n="ui.low">저음</button>
     </div>
+  </div>
+  <div class="channel-merge-action-row">
     <div class="channel-merge-mode-actions">
       <button class="merge-cancel-button" type="button" id="channelMergeModeCancelButton" data-i18n="cancel">취소</button>
       <button class="merge-apply-button" type="button" id="channelMergeModeApplyButton" data-i18n="ui.merge">병합</button>
     </div>
-  </div>
-  <div class="channel-merge-overlap-row">
-    <strong data-i18n="merge.note_overlap">노트 겹침</strong>
-    <span data-i18n="merge.none">안함</span>
-    <input id="channelMergeOverlapSlider" type="range" min="0" max="100" step="1" value="100" aria-label="노트 겹침" data-i18n-aria-label="merge.note_overlap"/>
-    <span data-i18n="merge.maximum">최대</span>
   </div>
   <div class="channel-merge-exclude-row">
     <strong data-i18n="merge.exclude_overlap">사용된 노트 제외</strong>
@@ -478,9 +474,8 @@
 <div class="popup-backdrop" hidden="" id="channelMmlBackdrop">
 <section aria-label="채널 MML 편집" data-i18n-aria-label="channel.mml_edit" aria-modal="true" class="transfer-dialog channel-mml-dialog" id="channelMmlDialog" role="dialog">
 <div class="transfer-dialog-header"><div><strong data-i18n="channel.mml_edit">채널 MML 편집</strong><span id="channelMmlTargetLabel" data-i18n="channel.text">현재 채널</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelMmlCloseButton" type="button">×</button></div>
-<div class="channel-mml-options"><label class="channel-mml-tempo-option"><input checked="" id="channelMmlIncludeTempo" type="checkbox"/><span data-i18n="channel.mml_include_tempo">템포 포함</span></label><label class="channel-mml-tempo-option channel-mml-optimize-option"><input id="channelMmlOptimizedView" type="checkbox"/><span data-i18n="channel.mml_optimized_view">최적화 MML 보기</span></label><div aria-live="polite" class="channel-mml-status" id="channelMmlStatus"></div></div>
+<div class="channel-mml-options"><label class="channel-mml-tempo-option"><input checked="" id="channelMmlIncludeTempo" type="checkbox"/><span data-i18n="channel.mml_include_tempo">템포 포함</span></label><label class="channel-mml-tempo-option channel-mml-optimize-option"><input checked="" id="channelMmlOptimizedView" type="checkbox"/><span data-i18n="channel.mml_optimized_view">최적화 MML 보기</span></label><div aria-live="polite" class="channel-mml-status" id="channelMmlStatus"></div></div>
 <div class="channel-mml-editor"><textarea aria-label="현재 채널 MML" data-i18n-aria-label="channel.mml_text_aria" id="channelMmlText" spellcheck="false"></textarea></div>
-<p class="transfer-dialog-help channel-mml-help" data-i18n="channel.mml_help">현재 채널의 MML 본문만 편집합니다. 템포 포함을 켜면 타임라인 템포도 함께 표시·적용하며, 페이드는 타임라인 설정을 유지합니다. T/O/L/V는 대문자, 음표·r/n은 소문자로 정리됩니다.</p>
 <div class="transfer-dialog-actions"><button id="channelMmlCancelButton" type="button" data-i18n="cancel">취소</button><button id="channelMmlApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
 </div>
@@ -502,10 +497,15 @@
 <section aria-label="볼륨 수정" data-i18n-aria-label="volume.edit_channels" aria-modal="true" class="transfer-dialog channel-volume-dialog channel-scope-options-dialog" id="channelVolumeDialog" role="dialog">
   <div class="transfer-dialog-header"><div><strong data-i18n="volume.edit_channels">볼륨 수정</strong><span data-i18n="volume.select_channels">수정할 채널을 선택하세요.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelVolumeCloseButton" type="button">×</button></div>
   <div class="channel-volume-options channel-scope-options-top">
-    <label class="note-volume-mode-row channel-volume-mode-row"><input id="channelVolumeFixedMode" type="checkbox"/><span data-i18n="volume.fixed_mode">동일 볼륨으로 변경</span></label>
+    <div class="channel-volume-mode-options-row">
+      <label class="note-volume-mode-row channel-volume-mode-row"><input id="channelVolumeFixedMode" type="checkbox"/><span data-i18n="volume.fixed_mode">동일 볼륨으로 변경</span></label>
+      <label class="note-volume-mode-row channel-volume-protect-row"><input id="channelVolumeProtectV0" type="checkbox" checked/><span data-i18n="volume.protect_v0_min_v1">기존 V0 유지 · 최소 V1</span></label>
+    </div>
     <label class="note-volume-slider-row channel-volume-slider-row"><span id="channelVolumeControlLabel" data-i18n="volume.relative_adjust">볼륨 증감</span><input aria-label="채널 노트 볼륨 조절" data-i18n-aria-label="volume.adjust_aria" id="channelVolumeSlider" max="15" min="-15" step="1" type="range" value="0"/><strong id="channelVolumeValue">±0</strong></label>
-    <div class="note-volume-count-box channel-volume-count-box"><div class="note-volume-count-row"><span data-i18n="ui.text">현재</span><div class="note-volume-count-grid" id="channelVolumeCurrentCounts"></div></div><div class="note-volume-count-row"><span data-i18n="ui.change">변경 후</span><div class="note-volume-count-grid" id="channelVolumeTargetCounts"></div></div></div>
-    <p class="transfer-dialog-help channel-volume-help" data-i18n="midi.v0_silent_v1">V0은 무음이며 V1은 MIDI velocity 1에 대응합니다. V2~V15는 나머지 velocity 범위를 균등하게 나눕니다.</p>
+    <div class="note-volume-count-box channel-volume-count-box" aria-label="볼륨 변경 비교">
+      <div class="channel-volume-count-heading"><span class="channel-volume-heading-before" data-i18n="ui.text">현재</span><b class="channel-volume-heading-arrow" aria-hidden="true">&gt;</b><span class="channel-volume-heading-after" data-i18n="ui.change_short">변경</span></div>
+      <div class="channel-volume-compare-grid" id="channelVolumeComparison"></div>
+    </div>
   </div>
   <div class="channel-scope-list-section channel-volume-list-section">
     <div class="midi-transfer-selection-actions channel-scope-list-toolbar"><span class="channel-scope-list-label" data-i18n="volume.select_channels">수정할 채널을 선택하세요.</span><button id="channelVolumeSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelVolumeClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
@@ -520,7 +520,6 @@
   <div class="rest-cleanup-body channel-scope-options-top">
     <div class="rest-cleanup-section"><strong data-i18n="rest_cleanup.threshold">제거할 쉼표</strong><div class="rest-cleanup-segments rest-cleanup-thresholds" id="restCleanupModeOptions" role="group" aria-label="제거할 쉼표" data-i18n-aria-label="rest_cleanup.threshold"><button type="button" data-rest-cleanup-mode="64" data-i18n="rest_cleanup.64">1/64 이하</button><button class="active" type="button" data-rest-cleanup-mode="32" data-i18n="rest_cleanup.32">1/32 이하</button><button type="button" data-rest-cleanup-mode="16" data-i18n="rest_cleanup.16">1/16 이하</button><button type="button" data-rest-cleanup-mode="8" data-i18n="rest_cleanup.8">1/8 이하</button><button type="button" data-rest-cleanup-mode="4" data-i18n="rest_cleanup.4">1/4 이하</button><button type="button" data-rest-cleanup-mode="all" data-i18n="rest_cleanup.all">모두</button></div></div>
     <p class="rest-cleanup-preview" id="restCleanupPreview"></p>
-    <p class="transfer-dialog-help rest-cleanup-help" data-i18n="rest_cleanup.help">Player와 같은 방식으로, 조건에 맞는 쉼표를 제거하고 바로 앞 노트를 다음 노트 시작까지 늘립니다. 곡 시작 전의 공백은 유지됩니다.</p>
   </div>
   <div class="channel-scope-list-section rest-cleanup-list-section">
     <div class="midi-transfer-selection-actions channel-scope-list-toolbar"><span class="rest-cleanup-channel-label channel-scope-list-label" data-i18n="rest_cleanup.select_channels">정리할 채널을 선택하세요.</span><button id="restCleanupSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="restCleanupClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>

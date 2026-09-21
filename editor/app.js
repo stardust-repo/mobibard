@@ -408,11 +408,11 @@
     channelVolumeList: document.querySelector("#channelVolumeList"),
     channelVolumeSummary: document.querySelector("#channelVolumeSummary"),
     channelVolumeFixedMode: document.querySelector("#channelVolumeFixedMode"),
+    channelVolumeProtectV0: document.querySelector("#channelVolumeProtectV0"),
     channelVolumeControlLabel: document.querySelector("#channelVolumeControlLabel"),
     channelVolumeSlider: document.querySelector("#channelVolumeSlider"),
     channelVolumeValue: document.querySelector("#channelVolumeValue"),
-    channelVolumeCurrentCounts: document.querySelector("#channelVolumeCurrentCounts"),
-    channelVolumeTargetCounts: document.querySelector("#channelVolumeTargetCounts"),
+    channelVolumeComparison: document.querySelector("#channelVolumeComparison"),
     restCleanupBackdrop: document.querySelector("#restCleanupBackdrop"),
     restCleanupCloseButton: document.querySelector("#restCleanupCloseButton"),
     restCleanupCancelButton: document.querySelector("#restCleanupCancelButton"),
@@ -4296,7 +4296,18 @@
       const volume = clamp(getNoteVolume(note), 0, 15);
       // Draw volume as a horizontal note-length line: V0 sits at the bottom,
       // V15 at the top, with the intermediate values spaced linearly between them.
+      // V0 is silent, so render it as a lighter dashed line to distinguish it
+      // visually from audible notes while preserving the channel color.
       const y = Math.round(bottomY - verticalRange * (volume / 15)) + 0.5;
+      if (volume === 0) {
+        context.globalAlpha = 0.38;
+        context.lineWidth = 1.7;
+        context.setLineDash([4, 3]);
+      } else {
+        context.globalAlpha = 0.92;
+        context.lineWidth = 2.4;
+        context.setLineDash([]);
+      }
       context.beginPath();
       context.moveTo(x1, y);
       context.lineTo(x2, y);
@@ -4736,6 +4747,11 @@
 
   function handleTimelineDoubleClick(event) {
     if (event.button !== 0) return;
+    if (isChannelMergeModeActive()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const rawBeat = timelineRawBeatFromPointer(event);
     if (rawBeat < 0) return;
     const fade = findTimelineFadeMarkerFromPointer(event);
@@ -6857,14 +6873,14 @@
     state.channelMmlEdit.parseTimer = 0;
     if (elements.channelMmlTargetLabel) elements.channelMmlTargetLabel.textContent = channel.name;
     if (elements.channelMmlIncludeTempo) elements.channelMmlIncludeTempo.checked = state.channelMmlEdit.includeTempo !== false;
-    if (elements.channelMmlOptimizedView) elements.channelMmlOptimizedView.checked = false;
-    state.channelMmlEdit.optimizedView = false;
-    elements.channelMmlText.readOnly = false;
+    if (elements.channelMmlOptimizedView) elements.channelMmlOptimizedView.checked = true;
+    state.channelMmlEdit.optimizedView = true;
+    elements.channelMmlText.readOnly = true;
     state.channelMmlEdit.standardText = channelToDisplayedMml(channel, {
       includeTempo: Boolean(elements.channelMmlIncludeTempo?.checked),
       optimized: false,
     });
-    elements.channelMmlText.value = state.channelMmlEdit.standardText;
+    elements.channelMmlText.value = optimizeChannelEditableMmlBody(state.channelMmlEdit.standardText);
     elements.channelMmlBackdrop.hidden = false;
     closeContextMenu();
     closeFileMenu();
@@ -9725,6 +9741,38 @@
     }
   }
 
+  function renderChannelVolumeComparison(node, currentItems, targetItems) {
+    if (!node) return;
+    node.replaceChildren();
+    const current = new Map((Array.isArray(currentItems) ? currentItems : []).map(({ volume, count }) => [Number(volume), Number(count) || 0]));
+    const target = new Map((Array.isArray(targetItems) ? targetItems : []).map(({ volume, count }) => [Number(volume), Number(count) || 0]));
+    const volumes = [...new Set([...current.keys(), ...target.keys()])].sort((a, b) => b - a);
+    if (!volumes.length) {
+      const empty = document.createElement("span");
+      empty.className = "channel-volume-compare-item is-empty";
+      empty.textContent = "V-";
+      node.append(empty);
+      return;
+    }
+    for (const volume of volumes) {
+      const item = document.createElement("span");
+      item.className = "channel-volume-compare-item";
+      const label = document.createElement("em");
+      label.textContent = `V${volume}`;
+      const before = document.createElement("span");
+      before.className = "channel-volume-compare-before";
+      before.textContent = `× ${Number(current.get(volume) || 0).toLocaleString()}`;
+      const arrow = document.createElement("b");
+      arrow.className = "channel-volume-compare-arrow";
+      arrow.textContent = ">";
+      const after = document.createElement("strong");
+      after.className = "channel-volume-compare-after";
+      after.textContent = Number(target.get(volume) || 0).toLocaleString();
+      item.append(label, before, arrow, after);
+      node.append(item);
+    }
+  }
+
   function getNoteVolumeDialogNotes() {
     return getSelectedNotes();
   }
@@ -9891,10 +9939,25 @@
     return Boolean(elements.channelVolumeFixedMode?.checked);
   }
 
+  function isChannelVolumeProtectV0Mode() {
+    return elements.channelVolumeProtectV0 ? Boolean(elements.channelVolumeProtectV0.checked) : true;
+  }
+
+  function resolveChannelVolumeTarget(beforeVolume, rawTarget) {
+    const before = clamp(Math.round(Number(beforeVolume) || 0), 0, 15);
+    const target = clamp(Math.round(Number(rawTarget) || 0), 0, 15);
+    if (!isChannelVolumeProtectV0Mode()) return target;
+    if (before === 0) return 0;
+    return Math.max(1, target);
+  }
+
   function getChannelVolumeTargetVolume(note) {
+    const before = getNoteVolume(note);
     const sliderValue = Math.round(Number(elements.channelVolumeSlider?.value) || 0);
-    if (isChannelVolumeFixedMode()) return clamp(sliderValue, 0, 15);
-    return clamp(getNoteVolume(note) + clamp(sliderValue, -15, 15), 0, 15);
+    const rawTarget = isChannelVolumeFixedMode()
+      ? clamp(sliderValue, 0, 15)
+      : clamp(before + clamp(sliderValue, -15, 15), 0, 15);
+    return resolveChannelVolumeTarget(before, rawTarget);
   }
 
   function updateChannelVolumeControl() {
@@ -9921,9 +9984,10 @@
 
   function updateChannelVolumeCounts() {
     const notes = getChannelVolumeNotes();
-    renderNoteVolumeCountChips(elements.channelVolumeCurrentCounts, getNoteVolumeCounts(notes));
+    const currentCounts = getNoteVolumeCounts(notes);
     const targets = notes.map((note) => ({ volume: getChannelVolumeTargetVolume(note) }));
-    renderNoteVolumeCountChips(elements.channelVolumeTargetCounts, getNoteVolumeCounts(targets));
+    const targetCounts = getNoteVolumeCounts(targets);
+    renderChannelVolumeComparison(elements.channelVolumeComparison, currentCounts, targetCounts);
     updateChannelVolumeSummary();
   }
 
@@ -9932,7 +9996,8 @@
     const notes = getChannelVolumeNotes();
     const fixed = isChannelVolumeFixedMode();
     if (fixed) {
-      elements.channelVolumeSlider.min = "0";
+      const minimum = isChannelVolumeProtectV0Mode() ? 1 : 0;
+      elements.channelVolumeSlider.min = String(minimum);
       elements.channelVolumeSlider.max = "15";
       elements.channelVolumeSlider.step = "1";
       if (resetValue) {
@@ -9941,7 +10006,9 @@
         const initial = unique.size === 1
           ? (volumes[0] ?? CONFIG.defaultNewChannelNoteVolume)
           : Math.round(volumes.reduce((sum, value) => sum + value, 0) / Math.max(1, volumes.length));
-        elements.channelVolumeSlider.value = String(clamp(initial, 0, 15));
+        elements.channelVolumeSlider.value = String(clamp(initial, minimum, 15));
+      } else {
+        elements.channelVolumeSlider.value = String(clamp(Number(elements.channelVolumeSlider.value) || minimum, minimum, 15));
       }
     } else {
       elements.channelVolumeSlider.min = "-15";
@@ -9968,7 +10035,7 @@
       checkbox.disabled = noteCount === 0;
       const text = document.createElement("span");
       text.className = "midi-transfer-channel-name";
-      text.textContent = `${channel.name} · ${noteCount}노트`;
+      text.textContent = channel.name;
       row.append(checkbox, text);
       checkbox.addEventListener("change", () => updateChannelVolumeCounts());
       elements.channelVolumeList.append(row);
@@ -9996,6 +10063,7 @@
     closeContextMenu();
     if (!renderChannelVolumeDialog()) return false;
     if (elements.channelVolumeFixedMode) elements.channelVolumeFixedMode.checked = false;
+    if (elements.channelVolumeProtectV0) elements.channelVolumeProtectV0.checked = true;
     configureChannelVolumeSliderForMode(true);
     elements.channelVolumeBackdrop.hidden = false;
     requestAnimationFrame(() => elements.channelVolumeList?.querySelector('input[type="checkbox"]:not(:disabled)')?.focus());
@@ -10018,7 +10086,8 @@
     for (const channel of channels) {
       for (const note of channel.notes || []) {
         const before = getNoteVolume(note);
-        const nextVolume = fixed ? fixedVolume : clamp(before + delta, 0, 15);
+        const rawTarget = fixed ? fixedVolume : clamp(before + delta, 0, 15);
+        const nextVolume = resolveChannelVolumeTarget(before, rawTarget);
         if (nextVolume === before) continue;
         note.volume = nextVolume;
         note.velocity = mmlVolumeToVelocity(nextVolume);
@@ -10079,8 +10148,13 @@
       checkedOne = checkedOne || checkbox.checked;
       const text = document.createElement("span");
       text.className = "midi-transfer-channel-name";
-      text.textContent = `${channel.name} · ${noteCount}노트`;
-      row.append(checkbox, text);
+      text.textContent = channel.name;
+      const affected = document.createElement("span");
+      affected.className = "rest-cleanup-affected-count";
+      affected.dataset.restCleanupCountFor = String(channel.id);
+      affected.textContent = "0";
+      row.dataset.channelId = String(channel.id);
+      row.append(checkbox, text, affected);
       checkbox.addEventListener("change", syncRestCleanupDialog);
       elements.restCleanupChannelList.append(row);
     });
@@ -10183,12 +10257,26 @@
       button.setAttribute("aria-pressed", active ? "true" : "false");
     });
     const channels = getRestCleanupChannels();
-    const analysis = analyzeRestCleanup(mode);
+    const selectedIds = new Set(channels.map((channel) => String(channel.id)));
+    const perChannel = new Map();
+    const analysis = { count: 0, beats: 0, channelCount: 0, targetChannelCount: channels.length };
+    for (const channel of state.channels) {
+      const result = analyzeRestCleanupChannel(channel, mode);
+      perChannel.set(String(channel.id), result);
+      if (!selectedIds.has(String(channel.id))) continue;
+      analysis.count += result.count;
+      analysis.beats += result.beats;
+      if (result.count) analysis.channelCount += 1;
+    }
+    elements.restCleanupChannelList?.querySelectorAll("[data-rest-cleanup-count-for]").forEach((node) => {
+      const result = perChannel.get(String(node.dataset.restCleanupCountFor)) || { count: 0 };
+      node.textContent = i18nText("rest_cleanup.row_affected", [Number(result.count || 0).toLocaleString()]);
+    });
     if (elements.restCleanupPreview) {
       elements.restCleanupPreview.textContent = !channels.length
         ? i18nText("rest_cleanup.preview_select_channel")
         : analysis.count
-          ? i18nText("rest_cleanup.preview_channels", [channels.length.toLocaleString(), analysis.count.toLocaleString(), formatRestCleanupBeats(analysis.beats)])
+          ? i18nText("rest_cleanup.preview_channels", [channels.length.toLocaleString(), analysis.count.toLocaleString()])
           : i18nText("rest_cleanup.preview_none");
     }
     if (elements.restCleanupApplyButton) elements.restCleanupApplyButton.disabled = channels.length === 0 || analysis.count === 0;
@@ -11943,7 +12031,7 @@
       state.channelMerge.selectedCandidateKeys = chooseAutomaticChannelMergeCandidateKeys(
         automaticPool,
         state.channelMerge.role,
-        state.channelMerge.overlapAmount,
+        1,
       );
     } else {
       const validKeys = new Set(pool.map((note) => note._mergeCandidateKey));
@@ -12097,6 +12185,7 @@
     const normalized = normalizeChannelMergeRole(role);
     if (normalized === state.channelMerge.role) return false;
     state.channelMerge.role = normalized;
+    state.channelMerge.overlapAmount = 1;
     state.channelMerge.previewModified = false;
     rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
     renderChannelTabs();
@@ -12320,7 +12409,7 @@
     if (!selectedNotes.length) return selected;
 
     const resolved = new Set();
-    const overlapAmount = normalizeChannelMergeOverlapAmount(state.channelMerge.overlapAmount);
+    const overlapAmount = 1;
     let previous = null;
     let previousPitch = null;
     let index = 0;
@@ -22039,6 +22128,7 @@
     elements.channelVolumeSelectAllButton?.addEventListener("click", () => setAllChannelVolumeChecked(true));
     elements.channelVolumeClearAllButton?.addEventListener("click", () => setAllChannelVolumeChecked(false));
     elements.channelVolumeFixedMode?.addEventListener("change", () => configureChannelVolumeSliderForMode(true));
+    elements.channelVolumeProtectV0?.addEventListener("change", () => configureChannelVolumeSliderForMode(false));
     elements.channelVolumeSlider?.addEventListener("input", () => {
       updateChannelVolumeControl();
       updateChannelVolumeCounts();
