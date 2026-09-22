@@ -409,7 +409,8 @@ input[type="range"] { width:100%; accent-color:var(--accent); }
   font-size:14px;
   line-height:1;
 }
-.velo-preview-icon-button.is-playing { border-color:color-mix(in srgb,var(--danger) 58%,var(--line)); color:var(--danger); }
+.velo-preview-icon-button.is-playing { border-color:var(--danger); background:var(--danger); color:#fff; }
+.velo-preview-icon-button.is-playing:hover:not(:disabled) { border-color:var(--danger); background:var(--danger); color:#fff; }
 .velo-preview-slider,
 .velo-preview-mix-slider {
   width:100%;

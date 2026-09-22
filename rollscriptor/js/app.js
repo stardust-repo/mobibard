@@ -1314,6 +1314,7 @@ function updateCurrentChord(time = state.previewTime) {
 
 function setPlaybackUi() {
   const label = state.playing ? t('transport.pause') : t('transport.play');
+  elements.playPause.classList.toggle('is-playing', state.playing);
   elements.playPause.textContent = state.playing ? '■' : '▶';
   elements.playPause.setAttribute('aria-label', label);
   elements.playPause.title = label;
@@ -1527,6 +1528,7 @@ function midiPreviewDuration() {
 function updateMidiPreviewUi() {
   if (!elements.midiPreviewPlay) return;
   const label = t(midiPreviewPlaying ? 'transport.pause' : 'transport.play');
+  elements.midiPreviewPlay.classList.toggle('is-playing', midiPreviewPlaying);
   elements.midiPreviewPlay.textContent = midiPreviewPlaying ? '■' : '▶';
   elements.midiPreviewPlay.setAttribute('aria-label', label);
   elements.midiPreviewPlay.title = label;

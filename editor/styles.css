@@ -215,6 +215,13 @@ textarea:focus-visible,
 .toolbar-separator { flex: 0 0 1px; width: 1px; height: 28px; margin: 0 3px; background: var(--line); }
 .transport-edge-button { min-width: 38px; padding-inline: 8px; font-variant-numeric: tabular-nums; }
 .transport-main-button { min-width: 78px; }
+.transport-main-button.is-playing {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+.transport-main-button.is-playing:hover { background: var(--danger); }
+.transport-main-button.is-playing .shared-transport-icon { filter: invert(1); }
 .shared-transport-icon {
   display: inline-block;
   width: 18px;
@@ -2071,27 +2078,55 @@ button {
 :root[data-theme="light"] .tempo-editor-dialog { background: #fff; }
 :root[data-theme="light"] .tempo-editor-header { background: #edf3f8; }
 
+.tempo-simplify-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 10px;
+}
 .tempo-simplify-option {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 16px 10px;
+  padding: 0;
   color: var(--text);
   font-size: 12px;
   font-weight: 650;
   cursor: pointer;
   user-select: none;
+  white-space: nowrap;
 }
 .tempo-simplify-option input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.tempo-simplify-threshold-field {
+  grid-template-columns: 62px auto;
+  gap: 7px;
+  padding: 0;
+  white-space: nowrap;
+}
+.tempo-simplify-threshold-field input {
+  width: 62px;
+  height: 36px;
+  padding-inline: 7px;
+  font-size: 16px;
+}
+.tempo-simplify-dialog .tempo-editor-help {
+  white-space: pre-line;
+  line-height: 1.5;
+  padding-top: 0;
+}
 .tempo-simplify-summary {
-  margin: 0 16px 14px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--control-bg) 82%, transparent);
+  margin: 0 16px 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--muted);
-  text-align: center;
-  font-size: 11px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.35;
   font-variant-numeric: tabular-nums;
 }
 .tempo-simplify-actions { grid-template-columns: 1fr 1fr auto auto; }
@@ -4219,7 +4254,7 @@ button {
 
 /* 2026-08 compact unified MIDI/MusicXML import dialog ---------------------- */
 .unified-import-dialog {
-  width: min(620px, calc(100vw - 24px));
+  width: min(600px, calc(100vw - 24px));
   grid-template-rows: auto auto auto auto minmax(104px, 1fr) auto;
   border-radius: 10px;
 }
@@ -8407,7 +8442,6 @@ body.merge-mode-active #rollCanvas { cursor: crosshair !important; }
   margin: 0;
   padding: 11px 0 7px 100px;
   border: 0;
-  border-top: 1px solid var(--line-soft);
   border-radius: 0;
   background: transparent;
   color: var(--text);
@@ -8729,4 +8763,742 @@ body.merge-mode-active #rollCanvas { cursor: crosshair !important; }
 }
 :root[data-theme="light"] .special-thanks-intro {
   color: #32955f;
+}
+
+/* 2026-09-21 batch polish: channel-scope dialogs mirror the import dialog's pinned-footer grid. */
+.channel-scope-options-dialog,
+.rest-cleanup-dialog.channel-scope-options-dialog {
+  width: min(600px, calc(100vw - 28px));
+  height: min(760px, calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.channel-scope-options-dialog > .channel-scope-options-top,
+.rest-cleanup-dialog.channel-scope-options-dialog > .channel-scope-options-top {
+  min-height: 0;
+  overflow: visible;
+}
+.channel-scope-list-section {
+  min-height: 0;
+  overflow: hidden;
+  flex: none;
+}
+.channel-scope-scroll-list.midi-transfer-channel-list,
+.channel-volume-list.channel-scope-scroll-list,
+.rest-cleanup-channel-list.channel-scope-scroll-list {
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.channel-scope-options-dialog > .transfer-dialog-actions,
+.rest-cleanup-dialog.channel-scope-options-dialog > .rest-cleanup-actions {
+  position: relative;
+  z-index: 2;
+  align-self: stretch;
+  background: var(--menu-bg);
+}
+@media (max-height: 620px) {
+  .channel-scope-options-dialog,
+  .rest-cleanup-dialog.channel-scope-options-dialog {
+    height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px);
+  }
+  .channel-volume-options { padding-top: 2px; }
+  .channel-volume-options .channel-volume-slider-row { padding-top: 7px; padding-bottom: 6px; }
+  .channel-volume-help.transfer-dialog-help { padding-bottom: 5px; }
+  .rest-cleanup-dialog .rest-cleanup-body.channel-scope-options-top { padding-top: 0; }
+}
+@media (max-width: 560px) {
+  .channel-scope-options-dialog,
+  .rest-cleanup-dialog.channel-scope-options-dialog {
+    width: min(600px, calc(100vw - 14px));
+    height: calc(100dvh - 14px);
+    max-height: calc(100dvh - 14px);
+  }
+}
+
+/* Rest cleanup rows: channel name may ellipsize, affected-rest count never does. */
+.rest-cleanup-channel-row {
+  grid-template-columns: 28px minmax(0, 1fr) max-content;
+}
+.rest-cleanup-affected-count {
+  justify-self: end;
+  min-width: max-content;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.channel-volume-row {
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+
+/* Merge mode: overlap is fixed at maximum internally; footer actions occupy the former overlap row. */
+.channel-merge-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: 6px;
+}
+.channel-merge-action-row .channel-merge-mode-actions {
+  margin-left: auto;
+}
+@media (max-width: 760px) {
+  .channel-merge-action-row { width: 100%; }
+}
+
+
+/* 2026-09-21 popup/merge polish: compact comparison, rigid rest rows, balanced merge controls. */
+.rest-cleanup-channel-row {
+  display: grid !important;
+  grid-template-columns: 28px minmax(0, 1fr) max-content !important;
+  align-items: center !important;
+  width: 100%;
+  min-width: 0;
+}
+.rest-cleanup-channel-row > input[type="checkbox"] { grid-column: 1; }
+.rest-cleanup-channel-row > .midi-transfer-channel-name {
+  grid-column: 2;
+  min-width: 0;
+  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rest-cleanup-channel-row > .rest-cleanup-affected-count {
+  grid-column: 3;
+  justify-self: end;
+  align-self: center;
+  min-width: max-content;
+  max-width: none;
+  white-space: nowrap;
+  overflow: visible;
+  text-align: right;
+}
+
+.channel-volume-count-box {
+  gap: 5px;
+  padding: 7px 9px;
+}
+.channel-volume-count-heading {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.channel-volume-count-heading span:first-child { text-align: left; }
+.channel-volume-count-heading span:last-child { text-align: right; }
+.channel-volume-count-heading b { color: var(--muted); font-size: 10px; }
+.channel-volume-compare-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.channel-volume-compare-item {
+  display: inline-grid;
+  grid-template-columns: auto auto auto auto;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: 7px;
+  background: var(--control-bg);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.channel-volume-compare-item em {
+  color: var(--text);
+  font-style: normal;
+  font-weight: 900;
+}
+.channel-volume-compare-before { color: var(--text); }
+.channel-volume-compare-arrow { color: var(--muted); font-size: 10px; }
+.channel-volume-compare-after { color: #ff374c; font-size: 10.5px; font-weight: 900; }
+.channel-volume-compare-item.is-empty { color: var(--muted); opacity: .7; }
+
+body.merge-mode-active .channel-merge-mode-main-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+body.merge-mode-active .channel-merge-mode-role-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  min-width: 0;
+  gap: 4px;
+}
+body.merge-mode-active .channel-merge-mode-role-options button {
+  width: 100%;
+  min-width: 0;
+}
+body.merge-mode-active .channel-merge-action-row {
+  width: 100%;
+  justify-content: stretch;
+}
+body.merge-mode-active .channel-merge-action-row .channel-merge-mode-actions {
+  width: 100%;
+  margin-left: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+body.merge-mode-active .channel-merge-mode-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-weight: 850;
+  box-shadow: none;
+}
+body.merge-mode-active #channelMergeModeCancelButton {
+  border-color: color-mix(in srgb, var(--muted) 66%, var(--control-border));
+  background: var(--control-bg);
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 18%, var(--control-bg));
+  box-shadow: none;
+}
+
+
+/* 2026-09-21 volume comparison colors + merge action alignment */
+.channel-volume-count-heading .channel-volume-heading-before,
+.channel-volume-compare-before {
+  color: var(--accent);
+}
+.channel-volume-count-heading .channel-volume-heading-arrow,
+.channel-volume-compare-arrow {
+  color: var(--text);
+}
+.channel-volume-count-heading .channel-volume-heading-after,
+.channel-volume-compare-after {
+  color: #4ade80;
+}
+:root[data-theme="light"] .channel-volume-count-heading .channel-volume-heading-after,
+:root[data-theme="light"] .channel-volume-compare-after {
+  color: #16a34a;
+}
+.channel-volume-count-heading .channel-volume-heading-before,
+.channel-volume-count-heading .channel-volume-heading-after,
+.channel-volume-count-heading .channel-volume-heading-arrow {
+  font-weight: 900;
+}
+
+body.merge-mode-active .channel-merge-action-row {
+  min-height: 26px;
+  height: 26px;
+  align-items: center;
+  overflow: visible;
+}
+body.merge-mode-active .channel-merge-action-row .channel-merge-mode-actions {
+  height: 26px;
+  align-items: stretch;
+}
+body.merge-mode-active .channel-merge-mode-actions button {
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 8px;
+  line-height: 24px;
+  border-radius: 6px;
+  font-weight: 850;
+}
+body.merge-mode-active #channelMergeModeCancelButton {
+  border-color: color-mix(in srgb, var(--muted) 66%, var(--control-border));
+  background: var(--control-bg);
+  color: var(--text);
+  box-shadow: none;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 18%, var(--control-bg));
+  color: var(--text);
+  box-shadow: none;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 86%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 24%, var(--control-bg));
+}
+
+/* 2026-09-21: merge spacing + definite blue apply button; channel-volume V0 protection option. */
+.channel-volume-options .channel-volume-protect-row {
+  display: flex;
+  width: fit-content;
+  margin-top: 5px;
+}
+body.merge-mode-active .channel-inspector .compact-channel-inspector {
+  padding: 5px 8px 6px !important;
+}
+body.merge-mode-active .channel-merge-mode-controls {
+  gap: 4px !important;
+}
+body.merge-mode-active .channel-merge-action-row {
+  margin-bottom: 2px;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled) {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent) !important;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 88%, #fff 12%) !important;
+  background: color-mix(in srgb, var(--accent) 88%, #fff 12%) !important;
+  color: #fff !important;
+}
+
+
+/* 2026-09-21: inline V0 protection option, silent-note timeline cue, merge apply state parity. */
+.channel-volume-mode-options-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.channel-volume-mode-options-row .channel-volume-mode-row,
+.channel-volume-mode-options-row .channel-volume-protect-row {
+  margin-top: 4px;
+  width: auto;
+  flex: 0 0 auto;
+}
+.channel-volume-mode-options-row .channel-volume-protect-row {
+  margin-left: auto;
+}
+@media (max-width: 520px) {
+  .channel-volume-mode-options-row {
+    gap: 8px 14px;
+  }
+  .channel-volume-mode-options-row .channel-volume-protect-row {
+    margin-left: 0;
+  }
+}
+
+/* Merge apply must look exactly like the direct note-edit Apply button when enabled. */
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border)) !important;
+  background: color-mix(in srgb, var(--accent) 18%, var(--control-bg)) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+  cursor: pointer;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--control-border)) !important;
+  background: color-mix(in srgb, var(--accent) 18%, var(--control-bg)) !important;
+  color: var(--text) !important;
+}
+/* Disabled state follows the editor's ordinary disabled-button treatment. */
+body.merge-mode-active #channelMergeModeApplyButton:disabled {
+  border-color: var(--control-border) !important;
+  background: var(--control-bg) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  opacity: .45 !important;
+  cursor: default !important;
+}
+:root[data-theme="light"] body.merge-mode-active #channelMergeModeApplyButton:disabled {
+  opacity: .62 !important;
+  color: #536173 !important;
+}
+
+/* 2026-09-21: keep channel-volume mode toggles side-by-side, left aligned. */
+.channel-volume-mode-options-row {
+  justify-content: flex-start;
+}
+.channel-volume-mode-options-row .channel-volume-protect-row {
+  margin-left: 0 !important;
+}
+
+/* 2026-09-21: tighten the gap where the rest-cleanup separator was removed. */
+.rest-cleanup-dialog .rest-cleanup-section:first-child {
+  padding-bottom: 6px;
+}
+.rest-cleanup-dialog .rest-cleanup-preview {
+  padding-top: 5px;
+}
+
+/* 2026-09-21 channel volume comparison heading: keep compact and left-aligned */
+.channel-volume-count-heading {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 5px;
+  width: auto;
+  max-width: 100%;
+}
+.channel-volume-count-heading span:first-child,
+.channel-volume-count-heading span:last-child {
+  text-align: left;
+}
+
+
+/* 2026-09 compact import channel-color control in the options row -------- */
+.unified-import-dialog .midi-import-midi-controls .import-channel-color-mode {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.unified-import-dialog .midi-import-midi-controls .import-channel-color-mode select {
+  width: auto;
+  min-width: 86px;
+  max-width: 96px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 22px 0 7px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--control-bg);
+  font-size: 10px;
+  font-weight: 700;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .unified-import-dialog { width: min(590px, calc(100vw - 16px)); }
+  .unified-import-dialog .midi-import-midi-controls .import-channel-color-mode select {
+    height: 34px;
+    min-height: 34px;
+  }
+}
+
+/* 2026-09-21 import select headers ---------------------------------------- */
+.unified-import-dialog .midi-import-midi-controls .import-channel-color-mode {
+  gap: 0;
+}
+.unified-import-dialog .midi-import-midi-controls .import-channel-color-mode select {
+  min-width: 126px;
+  max-width: 136px;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .unified-import-dialog .midi-import-midi-controls .import-channel-color-mode select {
+    min-width: 122px;
+    max-width: 132px;
+  }
+}
+
+/* 2026-09-21: expanded channel toolbar actions visually match collapsed rail actions.
+   Only the horizontal width differs between the two layouts. */
+.channel-tree-toolbar {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.channel-tree-merge-button,
+.channel-tree-add-button,
+.channel-tree-delete-button {
+  box-sizing: border-box;
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  padding: 0 !important;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 7px !important;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* Merge: same palette and icon treatment as the collapsed merge action. */
+.channel-tree-merge-button {
+  border-color: color-mix(in srgb, #3b82f6 55%, var(--control-border));
+  background: color-mix(in srgb, #3b82f6 11%, var(--control-bg));
+  color: color-mix(in srgb, #60a5fa 86%, var(--text));
+  font-size: 0;
+}
+.channel-tree-merge-button:hover:not(:disabled) {
+  background: color-mix(in srgb, #3b82f6 20%, var(--control-hover));
+}
+.channel-tree-merge-button .channel-merge-icon {
+  width: 19px;
+  height: 19px;
+  display: block;
+  pointer-events: none;
+  overflow: visible;
+  color: inherit;
+}
+.channel-tree-merge-button .channel-merge-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Add: same accent palette and glyph size as the collapsed add action. */
+.channel-tree-add-button {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--control-bg));
+  color: var(--accent);
+  font-size: 21px;
+}
+
+/* Delete: same danger palette and emoji size as the collapsed delete action. */
+.channel-tree-delete-button {
+  border-color: color-mix(in srgb, var(--danger) 48%, var(--control-border));
+  background: color-mix(in srgb, var(--danger) 9%, var(--control-bg));
+  color: var(--text);
+  font-size: 16px;
+}
+.channel-tree-delete-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 18%, var(--control-hover));
+}
+.channel-tree-merge-button:disabled,
+.channel-tree-add-button:disabled,
+.channel-tree-delete-button:disabled {
+  opacity: .38;
+}
+
+
+/* 2026-09-22: time-signature editor */
+.time-signature-editor-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 10px;
+  padding: 16px 16px 10px;
+}
+.time-signature-editor-field > label { display: grid; gap: 5px; min-width: 0; color: var(--muted); font-size: 11px; font-weight: 700; }
+.time-signature-editor-field > strong { align-self: center; padding-top: 15px; color: var(--text); font-size: 20px; }
+.time-signature-editor-field select {
+  width: 100%; min-width: 0; height: var(--popup-control-height); padding: 0 26px 0 9px;
+  border: 1px solid var(--control-border); border-radius: 7px; background: var(--control-bg); color: var(--text);
+  text-align: center; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+#timeSignatureDialog .tempo-editor-actions { display: flex !important; align-items: center; justify-content: flex-end; gap: 8px !important; }
+#timeSignatureDialog .tempo-editor-actions > span { flex: 1 1 auto; min-width: 0; }
+#timeSignatureDialog .tempo-editor-actions > button:not(.channel-mute-close) { box-sizing: border-box; flex: 0 0 68px; width: 68px; min-width: 68px; max-width: 68px; }
+@media (max-width: 420px) {
+  #timeSignatureDialog .tempo-editor-actions > button:not(.channel-mute-close) { flex-basis: 60px; width: 60px; min-width: 60px; max-width: 60px; }
+}
+
+/* 2026-09-22 timeline / sidebar height and time-signature presentation polish. */
+:root {
+  --sidebar-tab-height: 48px;
+  --overview-timeline-height: 48px;
+  --timeline-height: 48px;
+}
+
+/* Channel, History and Special Thanks use the same menu-bar height. */
+.channel-tree-toolbar,
+.side-panel .history-actions,
+.special-thanks-header {
+  box-sizing: border-box;
+  height: var(--sidebar-tab-height) !important;
+  min-height: var(--sidebar-tab-height) !important;
+  max-height: var(--sidebar-tab-height) !important;
+}
+.side-panel .history-actions {
+  padding: 6px;
+}
+
+.special-thanks-panel {
+  display: grid;
+  grid-template-rows: var(--sidebar-tab-height) minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+.special-thanks-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel-2) 66%, var(--panel));
+}
+.special-thanks-header h2 {
+  margin: 0;
+  color: #ffd24f;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+.special-thanks-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 18px 20px;
+}
+.special-thanks-intro { margin-top: 2px; }
+:root[data-theme="light"] .special-thanks-header {
+  background: #e7edf4;
+}
+:root[data-theme="light"] .special-thanks-header h2 {
+  color: #c99613;
+}
+
+/* Compact, label-free time-signature fraction control. */
+.time-signature-editor-field {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 10px;
+}
+.time-signature-editor-field > strong {
+  align-self: center;
+  padding-top: 0;
+  color: var(--text);
+  font-size: 20px;
+}
+.time-signature-editor-field > select,
+.time-signature-number-stepper {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: var(--popup-control-height);
+  min-height: var(--popup-control-height);
+}
+.time-signature-editor-field > select {
+  padding: 0 26px 0 9px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--popup-control-radius);
+  background: var(--control-bg);
+  color: var(--text);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.time-signature-number-stepper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  overflow: hidden;
+  border: 1px solid var(--control-border);
+  border-radius: var(--popup-control-radius);
+  background: var(--control-bg);
+}
+.time-signature-number-stepper #timeSignatureNumerator {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: calc(var(--popup-control-height) - 2px);
+  min-height: 0;
+  padding: 0 5px 0 9px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.time-signature-number-stepper #timeSignatureNumerator::-webkit-outer-spin-button,
+.time-signature-number-stepper #timeSignatureNumerator::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+.time-signature-step-buttons {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  border-left: 1px solid var(--control-border);
+}
+#timeSignatureDialog .time-signature-step-buttons > button {
+  box-sizing: border-box;
+  width: 23px;
+  min-width: 23px;
+  max-width: 23px;
+  height: calc((var(--popup-control-height) - 2px) / 2);
+  min-height: 0;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--panel-2) 70%, var(--control-bg));
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1;
+}
+#timeSignatureDialog .time-signature-step-buttons > button + button {
+  border-top: 1px solid var(--control-border);
+}
+#timeSignatureDialog .time-signature-step-buttons > button:hover {
+  color: var(--text);
+  background: var(--control-hover);
+}
+.time-signature-number-stepper:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+@media (pointer: coarse), (max-width: 700px) {
+  :root {
+    --sidebar-tab-height: 52px;
+    --overview-timeline-height: 52px;
+    --timeline-height: 52px;
+  }
+}
+
+
+/* 2026-09-22: timeline/dialog follow-up polish. */
+.special-thanks-list .special-thanks-all {
+  margin-top: 4px;
+}
+.special-thanks-list .special-thanks-all .special-thanks-name {
+  font-weight: 900;
+}
+
+/* Tempo, fade and measure-edit positions sit beside their titles. */
+#tempoEditorDialog .tempo-editor-header > div,
+#timelineFadeDialog .tempo-editor-header > div,
+#timeEditDialog .tempo-editor-header > div,
+#timeSignatureDialog .tempo-editor-header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+#tempoEditorDialog .tempo-editor-header > div > strong,
+#timelineFadeDialog .tempo-editor-header > div > strong,
+#timeEditDialog .tempo-editor-header > div > strong,
+#timeSignatureDialog .tempo-editor-header > div > strong {
+  flex: 0 0 auto;
+}
+#tempoEditorDialog .tempo-editor-header > div > span,
+#timelineFadeDialog .tempo-editor-header > div > span,
+#timeEditDialog .tempo-editor-header > div > span,
+#timeSignatureDialog .tempo-editor-header > div > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.special-thanks-list .special-thanks-all .special-thanks-name {
+  font-size: 16px;
+  line-height: 1.35;
 }

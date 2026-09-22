@@ -403,6 +403,12 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   font-size: 16px;
   line-height: 1;
 }
+.transport-primary.transport-icon-button.is-playing {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+.transport-primary.transport-icon-button.is-playing:hover:not(:disabled) { background: var(--danger); color: #fff; }
 .transport-edge-button { min-width: 42px; padding-inline: 7px; }
 
 /* Keyboard detection controls, guide help, and detection result form one unit. */
@@ -1113,6 +1119,12 @@ input[type="number"], select { width: 100%; min-height: 40px; padding: 7px 10px;
   font-size: 14px;
   line-height: 1;
 }
+.midi-preview-icon-button.is-playing {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+.midi-preview-icon-button.is-playing:hover:not(:disabled) { background: var(--danger); color: #fff; }
 .midi-preview-slider {
   width: 100%;
   min-width: 0;

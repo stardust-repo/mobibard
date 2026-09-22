@@ -408,11 +408,11 @@
     channelVolumeList: document.querySelector("#channelVolumeList"),
     channelVolumeSummary: document.querySelector("#channelVolumeSummary"),
     channelVolumeFixedMode: document.querySelector("#channelVolumeFixedMode"),
+    channelVolumeProtectV0: document.querySelector("#channelVolumeProtectV0"),
     channelVolumeControlLabel: document.querySelector("#channelVolumeControlLabel"),
     channelVolumeSlider: document.querySelector("#channelVolumeSlider"),
     channelVolumeValue: document.querySelector("#channelVolumeValue"),
-    channelVolumeCurrentCounts: document.querySelector("#channelVolumeCurrentCounts"),
-    channelVolumeTargetCounts: document.querySelector("#channelVolumeTargetCounts"),
+    channelVolumeComparison: document.querySelector("#channelVolumeComparison"),
     restCleanupBackdrop: document.querySelector("#restCleanupBackdrop"),
     restCleanupCloseButton: document.querySelector("#restCleanupCloseButton"),
     restCleanupCancelButton: document.querySelector("#restCleanupCancelButton"),
@@ -461,6 +461,16 @@
     timelineFadeCancelButton: document.querySelector("#timelineFadeCancelButton"),
     timelineFadeDeleteButton: document.querySelector("#timelineFadeDeleteButton"),
     timelineFadeApplyButton: document.querySelector("#timelineFadeApplyButton"),
+    timeSignatureBackdrop: document.querySelector("#timeSignatureBackdrop"),
+    timeSignaturePosition: document.querySelector("#timeSignaturePosition"),
+    timeSignatureNumerator: document.querySelector("#timeSignatureNumerator"),
+    timeSignatureNumeratorUp: document.querySelector("#timeSignatureNumeratorUp"),
+    timeSignatureNumeratorDown: document.querySelector("#timeSignatureNumeratorDown"),
+    timeSignatureDenominator: document.querySelector("#timeSignatureDenominator"),
+    timeSignatureCloseButton: document.querySelector("#timeSignatureCloseButton"),
+    timeSignatureCancelButton: document.querySelector("#timeSignatureCancelButton"),
+    timeSignatureDeleteButton: document.querySelector("#timeSignatureDeleteButton"),
+    timeSignatureApplyButton: document.querySelector("#timeSignatureApplyButton"),
     timelineHoverTooltip: document.querySelector("#timelineHoverTooltip"),
     tempoEditorBackdrop: document.querySelector("#tempoEditorBackdrop"),
     tempoEditorTitle: document.querySelector("#tempoEditorTitle"),
@@ -579,6 +589,9 @@
     soloChannelIds: new Set(),
     tempos: createDefaultTempos(),
     nextTempoId: 2,
+    timeSignatures: createDefaultTimeSignatures(),
+    nextTimeSignatureId: 2,
+    timeSignatureEditor: { timeSignatureId: null, beat: 0 },
     interaction: null,
     tempoDrag: null,
     tempoTouchTap: null,
@@ -1230,6 +1243,119 @@
 
   function createDefaultTempos() {
     return [{ id: 1, beat: 0, bpm: 120, fixed: true }];
+  }
+
+  function createDefaultTimeSignatures() {
+    return [{ id: 1, beat: 0, numerator: 4, denominator: 4, fixed: true }];
+  }
+
+  function normalizeTimeSignatureDenominator(value) {
+    const allowed = [1, 2, 4, 8, 16, 32, 64];
+    const numeric = Math.max(1, Math.round(Number(value) || 4));
+    return allowed.reduce((best, candidate) => (Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best), 4);
+  }
+
+  function normalizeTimeSignatureEvent(value, fallbackId = 1) {
+    return {
+      id: Math.max(1, Math.round(Number(value?.id) || fallbackId)),
+      beat: Number(Math.max(0, Number(value?.beat) || 0).toFixed(6)),
+      numerator: clamp(Math.round(Number(value?.numerator) || 4), 1, 64),
+      denominator: normalizeTimeSignatureDenominator(value?.denominator),
+      fixed: Boolean(value?.fixed),
+    };
+  }
+
+  function normalizeTimeSignatures(value = state.timeSignatures) {
+    const source = Array.isArray(value) ? value : [];
+    const byBeat = new Map();
+    let fallbackId = 1;
+    for (const raw of source) {
+      const item = normalizeTimeSignatureEvent(raw, fallbackId++);
+      byBeat.set(item.beat.toFixed(6), item);
+    }
+    if (!byBeat.has("0.000000")) {
+      byBeat.set("0.000000", createDefaultTimeSignatures()[0]);
+    }
+    const result = [...byBeat.values()].sort((a, b) => a.beat - b.beat || a.id - b.id);
+    const initial = result.find((item) => Math.abs(item.beat) < 1e-7);
+    if (initial) { initial.beat = 0; initial.fixed = true; }
+    return result;
+  }
+
+  function getSortedTimeSignatures() {
+    return normalizeTimeSignatures();
+  }
+
+  function getTimeSignatureAtBeat(beat) {
+    const target = Math.max(0, Number(beat) || 0);
+    const sorted = getSortedTimeSignatures();
+    let current = sorted[0] || createDefaultTimeSignatures()[0];
+    for (const signature of sorted) {
+      if (signature.beat > target + 1e-7) break;
+      current = signature;
+    }
+    return current;
+  }
+
+  function getTimeSignatureAtExactBeat(beat, tolerance = CONFIG.minimumNoteBeat / 2 + 1e-7) {
+    const target = Math.max(0, Number(beat) || 0);
+    return getSortedTimeSignatures().find((signature) => Math.abs(signature.beat - target) <= tolerance) || null;
+  }
+
+  function getTimeSignatureBeatUnit(signature) {
+    return 4 / normalizeTimeSignatureDenominator(signature?.denominator);
+  }
+
+  function getTimeSignatureMeasureLength(signature) {
+    return clamp(Math.round(Number(signature?.numerator) || 4), 1, 64) * getTimeSignatureBeatUnit(signature);
+  }
+
+  function getNextTimeSignatureId() {
+    return Math.max(state.nextTimeSignatureId || 2, getSortedTimeSignatures().reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
+  }
+
+  function getTimeSignatureGridLines(startBeat = 0, endBeat = getTotalBeats()) {
+    const start = Math.max(0, Number(startBeat) || 0);
+    const end = Math.max(start, Number(endBeat) || 0);
+    const signatures = getSortedTimeSignatures();
+    const measures = [];
+    const beats = [];
+    let measureIndexStart = 0;
+    const quarterWidth = getQuarterWidth();
+    for (let index = 0; index < signatures.length; index += 1) {
+      const signature = signatures[index];
+      const segmentStart = signature.beat;
+      const segmentEnd = index + 1 < signatures.length ? signatures[index + 1].beat : end + 1;
+      const beatUnit = getTimeSignatureBeatUnit(signature);
+      const measureLength = getTimeSignatureMeasureLength(signature);
+      if (segmentEnd >= start - 1e-7 && segmentStart <= end + 1e-7) {
+        const firstMeasure = Math.max(0, Math.floor((start - segmentStart) / measureLength) - 1);
+        const lastMeasure = Math.max(firstMeasure, Math.ceil((Math.min(end, segmentEnd) - segmentStart) / measureLength) + 1);
+        const measurePixelSpacing = measureLength * quarterWidth;
+        const measureStride = Math.max(1, Math.ceil(8 / Math.max(0.01, measurePixelSpacing)));
+        for (let m = firstMeasure; m <= lastMeasure; m += 1) {
+          if (m % measureStride !== 0) continue;
+          const beat = segmentStart + m * measureLength;
+          if (beat < start - 1e-7 || beat > end + 1e-7 || beat >= segmentEnd - 1e-7) continue;
+          measures.push({ beat, index: measureIndexStart + m, signature });
+        }
+        if (beatUnit * quarterWidth >= 7) {
+          const firstBeat = Math.max(0, Math.floor((start - segmentStart) / beatUnit) - 1);
+          const lastBeat = Math.max(firstBeat, Math.ceil((Math.min(end, segmentEnd) - segmentStart) / beatUnit) + 1);
+          for (let b = firstBeat; b <= lastBeat; b += 1) {
+            const beat = segmentStart + b * beatUnit;
+            if (beat < start - 1e-7 || beat > end + 1e-7 || beat >= segmentEnd - 1e-7) continue;
+            if (Math.abs((beat - segmentStart) / measureLength - Math.round((beat - segmentStart) / measureLength)) < 1e-7) continue;
+            beats.push({ beat, signature });
+          }
+        }
+      }
+      if (index + 1 < signatures.length) {
+        const duration = Math.max(0, segmentEnd - segmentStart);
+        measureIndexStart += Math.max(1, Math.ceil(duration / measureLength - 1e-9));
+      }
+    }
+    return { measures, beats };
   }
 
   const GM_PROGRAM_NAMES = [
@@ -1941,7 +2067,8 @@
     );
     const fades = normalizeTimelineFades();
     const lastFadeBeat = fades.reduce((maximum, fade) => Math.max(maximum, getTimelineFadeEndBeat(fade)), 0);
-    return Math.max(lastNoteEnd, lastTempoBeat, lastAudioEnd, lastFadeBeat);
+    const lastTimeSignatureBeat = getSortedTimeSignatures().reduce((maximum, signature) => Math.max(maximum, signature.beat), 0);
+    return Math.max(lastNoteEnd, lastTempoBeat, lastAudioEnd, lastFadeBeat, lastTimeSignatureBeat);
   }
 
   function getProjectContentEndBeat() {
@@ -3658,16 +3785,16 @@
     const firstGridIndex = Math.max(0, Math.floor(visibleStartBeat / drawingUnit));
     const lastGridIndex = Math.ceil(visibleEndBeat / drawingUnit);
 
+    // Minor guides remain zoom-dependent; time-signature beat/measure lines are
+    // painted in a separate pass so odd meters such as 3/8 or 5/16 do not need
+    // to align to the global quarter-note grid.
     for (let index = firstGridIndex; index <= lastGridIndex; index += 1) {
       const beat = index * drawingUnit;
       const x = Math.round(beatToX(beat)) + 0.5;
-      const isMeasure = Math.abs(beat % CONFIG.beatsPerMeasure) < 1e-7;
-      const isBeat = Math.abs(beat % 1) < 1e-7;
       const isThirtySecondBoundary = Math.abs(beat / 0.125 - Math.round(beat / 0.125)) < 1e-7;
-      const isSixtyFourthSubdivision = Math.abs(drawingUnit - CONFIG.minimumNoteBeat) < 1e-7
-        && !isThirtySecondBoundary;
-      context.strokeStyle = isMeasure ? theme.measureGrid : isBeat ? theme.beatGrid : theme.minorGrid;
-      context.lineWidth = isMeasure ? 1.5 : 1;
+      const isSixtyFourthSubdivision = Math.abs(drawingUnit - CONFIG.minimumNoteBeat) < 1e-7 && !isThirtySecondBoundary;
+      context.strokeStyle = theme.minorGrid;
+      context.lineWidth = 1;
       context.setLineDash(isSixtyFourthSubdivision ? [2, 3] : []);
       context.beginPath();
       context.moveTo(x, visibleTop);
@@ -3675,6 +3802,25 @@
       context.stroke();
     }
     context.setLineDash([]);
+    const signatureGrid = getTimeSignatureGridLines(visibleStartBeat, visibleEndBeat);
+    for (const line of signatureGrid.beats) {
+      const x = Math.round(beatToX(line.beat)) + 0.5;
+      context.strokeStyle = theme.beatGrid;
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(x, visibleTop);
+      context.lineTo(x, visibleBottom);
+      context.stroke();
+    }
+    for (const line of signatureGrid.measures) {
+      const x = Math.round(beatToX(line.beat)) + 0.5;
+      context.strokeStyle = theme.measureGrid;
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.moveTo(x, visibleTop);
+      context.lineTo(x, visibleBottom);
+      context.stroke();
+    }
 
     drawMidiReferenceNotes(context, visibleLeft, visibleTop, visibleRight, visibleBottom);
 
@@ -3936,38 +4082,61 @@
     return beatToX(state.playhead.beat) - elements.rollViewport.scrollLeft;
   }
 
+  function getTimelineLaneLayout(height = elements.timelineCanvas?.clientHeight || 48) {
+    const safeHeight = Math.max(42, Number(height) || 48);
+    const rowHeight = safeHeight / 3;
+    const labelHeight = Math.max(12, Math.min(14, Math.floor(rowHeight) - 2));
+    return {
+      height: safeHeight,
+      rowHeight,
+      measureY: 2,
+      tempoY: Math.round(rowHeight) + 1,
+      thirdY: Math.round(rowHeight * 2) + 1,
+      labelHeight,
+    };
+  }
+
   function getTempoMarkerScreenGeometry(tempo) {
     const lineX = Math.round(beatToX(tempo.beat) - elements.rollViewport.scrollLeft) + 0.5;
     const label = `${tempo.bpm}`;
     const labelWidth = Math.max(30, 13 + label.length * 6.5);
     const canvasWidth = elements.timelineCanvas.clientWidth;
     const labelX = clamp(lineX + 5, 2, Math.max(2, canvasWidth - labelWidth - 2));
-    const canvasHeight = elements.timelineCanvas.clientHeight || 51;
-    return {
-      lineX,
-      label,
-      labelX,
-      labelY: Math.max(20, canvasHeight - 16),
-      labelWidth,
-      labelHeight: 14,
-    };
+    const lane = getTimelineLaneLayout();
+    return { lineX, label, labelX, labelY: lane.tempoY, labelWidth, labelHeight: lane.labelHeight };
   }
 
   function getTimelineFadeMarkerScreenGeometry(fade) {
     const normalized = normalizeTimelineFadeEvent(fade, Number(fade?.id) || 1);
     const lineX = Math.round(beatToX(normalized.startBeat) - elements.rollViewport.scrollLeft) + 0.5;
     const label = normalized.type === "out" ? "OUT" : "IN";
-    const labelWidth = Math.max(30, 13 + label.length * 6.2);
+    const labelWidth = Math.max(28, 11 + label.length * 6.0);
     const canvasWidth = elements.timelineCanvas.clientWidth;
-    const labelX = clamp(lineX + 5, 2, Math.max(2, canvasWidth - labelWidth - 2));
-    return {
-      lineX,
-      label,
-      labelX,
-      labelY: 2,
-      labelWidth,
-      labelHeight: 14,
-    };
+    // Leave the small time-signature pentagon at the exact beat position free.
+    const labelX = clamp(lineX + 9, 2, Math.max(2, canvasWidth - labelWidth - 2));
+    const lane = getTimelineLaneLayout();
+    return { lineX, label, labelX, labelY: lane.thirdY, labelWidth, labelHeight: lane.labelHeight };
+  }
+
+  function getTimeSignatureMarkerScreenGeometry(signature) {
+    const normalized = normalizeTimeSignatureEvent(signature, Number(signature?.id) || 1);
+    const lineX = Math.round(beatToX(normalized.beat) - elements.rollViewport.scrollLeft) + 0.5;
+    const lane = getTimelineLaneLayout();
+    const markerWidth = 12;
+    const markerHeight = Math.max(10, lane.labelHeight - 1);
+    const markerX = Math.round(lineX - markerWidth / 2);
+    const markerY = lane.thirdY + Math.max(0, Math.floor((lane.labelHeight - markerHeight) / 2));
+    return { lineX, markerX, markerY, markerWidth, markerHeight };
+  }
+
+  function drawDownPentagon(context, x, y, width, height) {
+    context.beginPath();
+    context.moveTo(x + 1, y);
+    context.lineTo(x + width - 1, y);
+    context.lineTo(x + width, y + height * 0.54);
+    context.lineTo(x + width / 2, y + height);
+    context.lineTo(x, y + height * 0.54);
+    context.closePath();
   }
 
   function drawRoundedRect(context, x, y, width, height, radius) {
@@ -4258,6 +4427,7 @@
       context.strokeStyle = fade.type === "in" ? "rgba(98,190,255,.92)" : "rgba(255,151,118,.92)";
       context.lineWidth = 2;
       if (x1 >= -1 && x1 <= width + 1) {
+        const lane = getTimelineLaneLayout(height);
         context.beginPath();
         context.moveTo(Math.round(x1)+.5, 0);
         context.lineTo(Math.round(x1)+.5, height);
@@ -4296,7 +4466,18 @@
       const volume = clamp(getNoteVolume(note), 0, 15);
       // Draw volume as a horizontal note-length line: V0 sits at the bottom,
       // V15 at the top, with the intermediate values spaced linearly between them.
+      // V0 is silent, so render it as a lighter dashed line to distinguish it
+      // visually from audible notes while preserving the channel color.
       const y = Math.round(bottomY - verticalRange * (volume / 15)) + 0.5;
+      if (volume === 0) {
+        context.globalAlpha = 0.38;
+        context.lineWidth = 1.7;
+        context.setLineDash([4, 3]);
+      } else {
+        context.globalAlpha = 0.92;
+        context.lineWidth = 2.4;
+        context.setLineDash([]);
+      }
       context.beginPath();
       context.moveTo(x1, y);
       context.lineTo(x2, y);
@@ -4333,13 +4514,10 @@
     for (let index = firstGridIndex; index <= lastGridIndex; index += 1) {
       const beat = index * drawingUnit;
       const x = Math.round(beatToX(beat) - scrollLeft) + 0.5;
-      const isMeasure = Math.abs(beat % CONFIG.beatsPerMeasure) < 1e-7;
-      const isBeat = Math.abs(beat % 1) < 1e-7;
       const isThirtySecondBoundary = Math.abs(beat / 0.125 - Math.round(beat / 0.125)) < 1e-7;
-      const isSixtyFourthSubdivision = Math.abs(drawingUnit - CONFIG.minimumNoteBeat) < 1e-7
-        && !isThirtySecondBoundary;
-      context.strokeStyle = isMeasure ? theme.timelineMeasure : isBeat ? theme.timelineBeat : theme.minorGrid;
-      context.lineWidth = isMeasure ? 1.5 : 1;
+      const isSixtyFourthSubdivision = Math.abs(drawingUnit - CONFIG.minimumNoteBeat) < 1e-7 && !isThirtySecondBoundary;
+      context.strokeStyle = theme.minorGrid;
+      context.lineWidth = 1;
       context.setLineDash(isSixtyFourthSubdivision ? [2, 3] : []);
       context.beginPath();
       context.moveTo(x, 0);
@@ -4347,6 +4525,19 @@
       context.stroke();
     }
     context.setLineDash([]);
+    const signatureGrid = getTimeSignatureGridLines(firstVisibleBeat, lastVisibleBeat);
+    for (const line of signatureGrid.beats) {
+      const x = Math.round(beatToX(line.beat) - scrollLeft) + 0.5;
+      context.strokeStyle = theme.timelineBeat;
+      context.lineWidth = 1;
+      context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke();
+    }
+    for (const line of signatureGrid.measures) {
+      const x = Math.round(beatToX(line.beat) - scrollLeft) + 0.5;
+      context.strokeStyle = theme.timelineMeasure;
+      context.lineWidth = 1.5;
+      context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke();
+    }
     drawTimelineFadeOverlay(context, width, height, scrollLeft);
     drawSelectedChannelVolumeNotesOnTimeline(context, width, height, scrollLeft, firstVisibleBeat, lastVisibleBeat);
 
@@ -4357,6 +4548,13 @@
       visibleFadeMarkers.push({ fade, marker });
     }
 
+    const visibleTimeSignatureMarkers = [];
+    for (const signature of getSortedTimeSignatures()) {
+      const marker = getTimeSignatureMarkerScreenGeometry(signature);
+      if (marker.markerX + marker.markerWidth < -8 || marker.markerX > width + 8) continue;
+      visibleTimeSignatureMarkers.push({ signature, marker });
+    }
+
     const visibleTempoMarkers = [];
     for (const tempo of getSortedTempos()) {
       const marker = getTempoMarkerScreenGeometry(tempo);
@@ -4365,7 +4563,7 @@
       }
       visibleTempoMarkers.push(marker);
       context.strokeStyle = "#2ea86f";
-      context.lineWidth = 3;
+      context.lineWidth = 2;
       context.beginPath();
       context.moveTo(marker.lineX, 0);
       context.lineTo(marker.lineX, height);
@@ -4375,17 +4573,27 @@
     context.font = "700 11px sans-serif";
     context.textBaseline = "top";
     context.lineJoin = "round";
-    const firstMeasureBeat = Math.ceil(firstVisibleBeat / CONFIG.beatsPerMeasure) * CONFIG.beatsPerMeasure;
-    for (let beat = firstMeasureBeat; beat <= lastVisibleBeat; beat += CONFIG.beatsPerMeasure) {
-      const x = Math.round(beatToX(beat) - scrollLeft);
-      const label = String(Math.floor(beat / CONFIG.beatsPerMeasure));
+    for (const line of signatureGrid.measures) {
+      const x = Math.round(beatToX(line.beat) - scrollLeft);
+      const label = String(line.index);
       context.lineWidth = 3;
       context.strokeStyle = theme.measureTextOutline;
-      context.strokeText(label, x + 4, 2);
+      const lane = getTimelineLaneLayout(height);
+      context.strokeText(label, x + 4, lane.measureY);
       context.fillStyle = theme.measureText;
-      context.fillText(label, x + 4, 2);
+      context.fillText(label, x + 4, lane.measureY);
     }
     context.textBaseline = "alphabetic";
+
+    for (const { marker } of visibleTimeSignatureMarkers) {
+      const accent = state.theme === "light" ? "#6542a6" : "#c5b0ff";
+      drawDownPentagon(context, marker.markerX, marker.markerY, marker.markerWidth, marker.markerHeight);
+      context.fillStyle = state.theme === "light" ? "rgba(101,66,166,.18)" : "rgba(197,176,255,.22)";
+      context.fill();
+      context.strokeStyle = accent;
+      context.lineWidth = 1.25;
+      context.stroke();
+    }
 
     context.font = "700 10px sans-serif";
     for (const { fade, marker } of visibleFadeMarkers) {
@@ -4734,8 +4942,33 @@
     return nearest;
   }
 
+  function findTimeSignatureMarkerFromPointer(event) {
+    const rect = elements.timelineCanvas.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
+    const touchLike = event.pointerType === "touch" || event.pointerType === "pen";
+    const padding = touchLike ? 8 : 2;
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const signature of getSortedTimeSignatures()) {
+      const marker = getTimeSignatureMarkerScreenGeometry(signature);
+      const onMarker = pointerX >= marker.markerX - padding
+        && pointerX <= marker.markerX + marker.markerWidth + padding
+        && pointerY >= marker.markerY - padding
+        && pointerY <= marker.markerY + marker.markerHeight + padding;
+      const distance = Math.abs(pointerX - marker.lineX);
+      if (onMarker && distance < nearestDistance) { nearest = signature; nearestDistance = distance; }
+    }
+    return nearest;
+  }
+
   function handleTimelineDoubleClick(event) {
     if (event.button !== 0) return;
+    if (isChannelMergeModeActive()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     const rawBeat = timelineRawBeatFromPointer(event);
     if (rawBeat < 0) return;
     const fade = findTimelineFadeMarkerFromPointer(event);
@@ -6857,14 +7090,14 @@
     state.channelMmlEdit.parseTimer = 0;
     if (elements.channelMmlTargetLabel) elements.channelMmlTargetLabel.textContent = channel.name;
     if (elements.channelMmlIncludeTempo) elements.channelMmlIncludeTempo.checked = state.channelMmlEdit.includeTempo !== false;
-    if (elements.channelMmlOptimizedView) elements.channelMmlOptimizedView.checked = false;
-    state.channelMmlEdit.optimizedView = false;
-    elements.channelMmlText.readOnly = false;
+    if (elements.channelMmlOptimizedView) elements.channelMmlOptimizedView.checked = true;
+    state.channelMmlEdit.optimizedView = true;
+    elements.channelMmlText.readOnly = true;
     state.channelMmlEdit.standardText = channelToDisplayedMml(channel, {
       includeTempo: Boolean(elements.channelMmlIncludeTempo?.checked),
       optimized: false,
     });
-    elements.channelMmlText.value = state.channelMmlEdit.standardText;
+    elements.channelMmlText.value = optimizeChannelEditableMmlBody(state.channelMmlEdit.standardText);
     elements.channelMmlBackdrop.hidden = false;
     closeContextMenu();
     closeFileMenu();
@@ -9725,6 +9958,38 @@
     }
   }
 
+  function renderChannelVolumeComparison(node, currentItems, targetItems) {
+    if (!node) return;
+    node.replaceChildren();
+    const current = new Map((Array.isArray(currentItems) ? currentItems : []).map(({ volume, count }) => [Number(volume), Number(count) || 0]));
+    const target = new Map((Array.isArray(targetItems) ? targetItems : []).map(({ volume, count }) => [Number(volume), Number(count) || 0]));
+    const volumes = [...new Set([...current.keys(), ...target.keys()])].sort((a, b) => b - a);
+    if (!volumes.length) {
+      const empty = document.createElement("span");
+      empty.className = "channel-volume-compare-item is-empty";
+      empty.textContent = "V-";
+      node.append(empty);
+      return;
+    }
+    for (const volume of volumes) {
+      const item = document.createElement("span");
+      item.className = "channel-volume-compare-item";
+      const label = document.createElement("em");
+      label.textContent = `V${volume}`;
+      const before = document.createElement("span");
+      before.className = "channel-volume-compare-before";
+      before.textContent = `× ${Number(current.get(volume) || 0).toLocaleString()}`;
+      const arrow = document.createElement("b");
+      arrow.className = "channel-volume-compare-arrow";
+      arrow.textContent = ">";
+      const after = document.createElement("strong");
+      after.className = "channel-volume-compare-after";
+      after.textContent = Number(target.get(volume) || 0).toLocaleString();
+      item.append(label, before, arrow, after);
+      node.append(item);
+    }
+  }
+
   function getNoteVolumeDialogNotes() {
     return getSelectedNotes();
   }
@@ -9891,10 +10156,25 @@
     return Boolean(elements.channelVolumeFixedMode?.checked);
   }
 
+  function isChannelVolumeProtectV0Mode() {
+    return elements.channelVolumeProtectV0 ? Boolean(elements.channelVolumeProtectV0.checked) : true;
+  }
+
+  function resolveChannelVolumeTarget(beforeVolume, rawTarget) {
+    const before = clamp(Math.round(Number(beforeVolume) || 0), 0, 15);
+    const target = clamp(Math.round(Number(rawTarget) || 0), 0, 15);
+    if (!isChannelVolumeProtectV0Mode()) return target;
+    if (before === 0) return 0;
+    return Math.max(1, target);
+  }
+
   function getChannelVolumeTargetVolume(note) {
+    const before = getNoteVolume(note);
     const sliderValue = Math.round(Number(elements.channelVolumeSlider?.value) || 0);
-    if (isChannelVolumeFixedMode()) return clamp(sliderValue, 0, 15);
-    return clamp(getNoteVolume(note) + clamp(sliderValue, -15, 15), 0, 15);
+    const rawTarget = isChannelVolumeFixedMode()
+      ? clamp(sliderValue, 0, 15)
+      : clamp(before + clamp(sliderValue, -15, 15), 0, 15);
+    return resolveChannelVolumeTarget(before, rawTarget);
   }
 
   function updateChannelVolumeControl() {
@@ -9921,9 +10201,10 @@
 
   function updateChannelVolumeCounts() {
     const notes = getChannelVolumeNotes();
-    renderNoteVolumeCountChips(elements.channelVolumeCurrentCounts, getNoteVolumeCounts(notes));
+    const currentCounts = getNoteVolumeCounts(notes);
     const targets = notes.map((note) => ({ volume: getChannelVolumeTargetVolume(note) }));
-    renderNoteVolumeCountChips(elements.channelVolumeTargetCounts, getNoteVolumeCounts(targets));
+    const targetCounts = getNoteVolumeCounts(targets);
+    renderChannelVolumeComparison(elements.channelVolumeComparison, currentCounts, targetCounts);
     updateChannelVolumeSummary();
   }
 
@@ -9932,7 +10213,8 @@
     const notes = getChannelVolumeNotes();
     const fixed = isChannelVolumeFixedMode();
     if (fixed) {
-      elements.channelVolumeSlider.min = "0";
+      const minimum = isChannelVolumeProtectV0Mode() ? 1 : 0;
+      elements.channelVolumeSlider.min = String(minimum);
       elements.channelVolumeSlider.max = "15";
       elements.channelVolumeSlider.step = "1";
       if (resetValue) {
@@ -9941,7 +10223,9 @@
         const initial = unique.size === 1
           ? (volumes[0] ?? CONFIG.defaultNewChannelNoteVolume)
           : Math.round(volumes.reduce((sum, value) => sum + value, 0) / Math.max(1, volumes.length));
-        elements.channelVolumeSlider.value = String(clamp(initial, 0, 15));
+        elements.channelVolumeSlider.value = String(clamp(initial, minimum, 15));
+      } else {
+        elements.channelVolumeSlider.value = String(clamp(Number(elements.channelVolumeSlider.value) || minimum, minimum, 15));
       }
     } else {
       elements.channelVolumeSlider.min = "-15";
@@ -9968,7 +10252,7 @@
       checkbox.disabled = noteCount === 0;
       const text = document.createElement("span");
       text.className = "midi-transfer-channel-name";
-      text.textContent = `${channel.name} · ${noteCount}노트`;
+      text.textContent = channel.name;
       row.append(checkbox, text);
       checkbox.addEventListener("change", () => updateChannelVolumeCounts());
       elements.channelVolumeList.append(row);
@@ -9996,6 +10280,7 @@
     closeContextMenu();
     if (!renderChannelVolumeDialog()) return false;
     if (elements.channelVolumeFixedMode) elements.channelVolumeFixedMode.checked = false;
+    if (elements.channelVolumeProtectV0) elements.channelVolumeProtectV0.checked = true;
     configureChannelVolumeSliderForMode(true);
     elements.channelVolumeBackdrop.hidden = false;
     requestAnimationFrame(() => elements.channelVolumeList?.querySelector('input[type="checkbox"]:not(:disabled)')?.focus());
@@ -10018,7 +10303,8 @@
     for (const channel of channels) {
       for (const note of channel.notes || []) {
         const before = getNoteVolume(note);
-        const nextVolume = fixed ? fixedVolume : clamp(before + delta, 0, 15);
+        const rawTarget = fixed ? fixedVolume : clamp(before + delta, 0, 15);
+        const nextVolume = resolveChannelVolumeTarget(before, rawTarget);
         if (nextVolume === before) continue;
         note.volume = nextVolume;
         note.velocity = mmlVolumeToVelocity(nextVolume);
@@ -10079,8 +10365,13 @@
       checkedOne = checkedOne || checkbox.checked;
       const text = document.createElement("span");
       text.className = "midi-transfer-channel-name";
-      text.textContent = `${channel.name} · ${noteCount}노트`;
-      row.append(checkbox, text);
+      text.textContent = channel.name;
+      const affected = document.createElement("span");
+      affected.className = "rest-cleanup-affected-count";
+      affected.dataset.restCleanupCountFor = String(channel.id);
+      affected.textContent = "0";
+      row.dataset.channelId = String(channel.id);
+      row.append(checkbox, text, affected);
       checkbox.addEventListener("change", syncRestCleanupDialog);
       elements.restCleanupChannelList.append(row);
     });
@@ -10183,12 +10474,26 @@
       button.setAttribute("aria-pressed", active ? "true" : "false");
     });
     const channels = getRestCleanupChannels();
-    const analysis = analyzeRestCleanup(mode);
+    const selectedIds = new Set(channels.map((channel) => String(channel.id)));
+    const perChannel = new Map();
+    const analysis = { count: 0, beats: 0, channelCount: 0, targetChannelCount: channels.length };
+    for (const channel of state.channels) {
+      const result = analyzeRestCleanupChannel(channel, mode);
+      perChannel.set(String(channel.id), result);
+      if (!selectedIds.has(String(channel.id))) continue;
+      analysis.count += result.count;
+      analysis.beats += result.beats;
+      if (result.count) analysis.channelCount += 1;
+    }
+    elements.restCleanupChannelList?.querySelectorAll("[data-rest-cleanup-count-for]").forEach((node) => {
+      const result = perChannel.get(String(node.dataset.restCleanupCountFor)) || { count: 0 };
+      node.textContent = i18nText("rest_cleanup.row_affected", [Number(result.count || 0).toLocaleString()]);
+    });
     if (elements.restCleanupPreview) {
       elements.restCleanupPreview.textContent = !channels.length
         ? i18nText("rest_cleanup.preview_select_channel")
         : analysis.count
-          ? i18nText("rest_cleanup.preview_channels", [channels.length.toLocaleString(), analysis.count.toLocaleString(), formatRestCleanupBeats(analysis.beats)])
+          ? i18nText("rest_cleanup.preview_channels", [channels.length.toLocaleString(), analysis.count.toLocaleString()])
           : i18nText("rest_cleanup.preview_none");
     }
     if (elements.restCleanupApplyButton) elements.restCleanupApplyButton.disabled = channels.length === 0 || analysis.count === 0;
@@ -10315,10 +10620,12 @@
         notes: channel.notes.map((note) => ({ ...note })),
       })),
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
+      timeSignatures: getSortedTimeSignatures().map((signature) => ({ ...signature })),
       timelineFades: normalizeTimelineFades(),
       audioClips: state.audioClips.map((clip) => ({ ...clip })),
       nextNoteId: state.nextNoteId,
       nextTempoId: state.nextTempoId,
+      nextTimeSignatureId: state.nextTimeSignatureId,
       nextAudioClipId: state.nextAudioClipId,
     });
   }
@@ -10629,6 +10936,8 @@
         state.tempos.unshift({ id: 1, beat: 0, bpm: 120, fixed: true });
       }
       state.timelineFades = normalizeTimelineFades(data.timelineFades || state.timelineFades);
+      state.timeSignatures = normalizeTimeSignatures(data.timeSignatures || state.timeSignatures);
+      state.nextTimeSignatureId = Math.max(2, Number(data.nextTimeSignatureId) || 2, state.timeSignatures.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
       state.audioClips = (Array.isArray(data.audioClips) ? data.audioClips : []).map((clip, index) => {
         const normalized = normalizeAudioClip(clip, index);
         normalized.muted = mutedByAudioId.has(String(normalized.id)) ? mutedByAudioId.get(String(normalized.id)) : normalized.muted;
@@ -11943,7 +12252,7 @@
       state.channelMerge.selectedCandidateKeys = chooseAutomaticChannelMergeCandidateKeys(
         automaticPool,
         state.channelMerge.role,
-        state.channelMerge.overlapAmount,
+        1,
       );
     } else {
       const validKeys = new Set(pool.map((note) => note._mergeCandidateKey));
@@ -12097,6 +12406,7 @@
     const normalized = normalizeChannelMergeRole(role);
     if (normalized === state.channelMerge.role) return false;
     state.channelMerge.role = normalized;
+    state.channelMerge.overlapAmount = 1;
     state.channelMerge.previewModified = false;
     rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
     renderChannelTabs();
@@ -12320,7 +12630,7 @@
     if (!selectedNotes.length) return selected;
 
     const resolved = new Set();
-    const overlapAmount = normalizeChannelMergeOverlapAmount(state.channelMerge.overlapAmount);
+    const overlapAmount = 1;
     let previous = null;
     let previousPitch = null;
     let index = 0;
@@ -16372,9 +16682,10 @@
     state.timeEdit.scope = channelScoped ? "channel" : "all";
     state.timeEdit.channelId = targetChannel?.id ?? null;
     if (elements.timeEditPosition) {
-      elements.timeEditPosition.textContent = channelScoped
-        ? i18nText("channel.playhead_basis", [targetChannel.name, state.timeEdit.beat.toFixed(3)])
-        : i18nText("timeline.playhead_basis", [state.timeEdit.beat.toFixed(3)]);
+      const timeLabel = formatSeconds(beatToSeconds(state.timeEdit.beat));
+      elements.timeEditPosition.textContent = channelScoped && targetChannel
+        ? `${targetChannel.name} · ${timeLabel}`
+        : timeLabel;
     }
   }
 
@@ -16419,10 +16730,11 @@
     const subdivisions = rawSubdivision === ""
       ? 0
       : clamp(Math.floor(Number(rawSubdivision) || 0), 0, 63);
+    const measureLength = getTimeSignatureMeasureLength(getTimeSignatureAtBeat(state.timeEdit?.beat ?? state.playhead.beat));
     return {
       measures,
       subdivisions,
-      amountBeats: measures * CONFIG.beatsPerMeasure + subdivisions * CONFIG.minimumNoteBeat,
+      amountBeats: measures * measureLength + subdivisions * CONFIG.minimumNoteBeat,
     };
   }
 
@@ -16483,6 +16795,41 @@
     state.timelineFades = normalizeTimelineFades().map((fade) => ({ ...fade, startBeat: fade.startBeat >= cursor - 1e-7 ? fade.startBeat + amount : fade.startBeat }));
   }
 
+  function shiftTimeSignaturesForInsert(cursorBeat, amountBeats) {
+    const cursor = Math.max(0, Number(cursorBeat) || 0);
+    const amount = Math.max(0, Number(amountBeats) || 0);
+    if (!(amount > 0)) return;
+    state.timeSignatures = normalizeTimeSignatures(getSortedTimeSignatures().map((signature) => (
+      !signature.fixed && signature.beat >= cursor - 1e-7
+        ? { ...signature, beat: Number((signature.beat + amount).toFixed(6)) }
+        : signature
+    )));
+  }
+
+  function shiftTimeSignaturesForDelete(cursorBeat, amountBeats) {
+    const cursor = Math.max(0, Number(cursorBeat) || 0);
+    const amount = Math.max(0, Number(amountBeats) || 0);
+    if (!(amount > 0)) return;
+    const cutEnd = cursor + amount;
+    const beforeCut = getTimeSignatureAtBeat(cursor);
+    const afterCut = getTimeSignatureAtBeat(cutEnd + 1e-8);
+    const remaining = getSortedTimeSignatures().flatMap((signature) => {
+      if (signature.fixed) return [{ ...signature, beat: 0, fixed: true }];
+      if (signature.beat >= cursor - 1e-7 && signature.beat < cutEnd - 1e-7) return [];
+      if (signature.beat >= cutEnd - 1e-7) return [{ ...signature, beat: Number(Math.max(0, signature.beat - amount).toFixed(6)) }];
+      return [signature];
+    });
+    if (cursor <= 1e-7) {
+      const later = remaining.filter((signature) => !signature.fixed && signature.beat > 1e-7);
+      remaining.length = 0;
+      remaining.push({ id: 1, beat: 0, numerator: afterCut.numerator, denominator: afterCut.denominator, fixed: true }, ...later);
+    } else if (beforeCut.numerator !== afterCut.numerator || beforeCut.denominator !== afterCut.denominator) {
+      remaining.push({ id: getNextTimeSignatureId(), beat: Number(cursor.toFixed(6)), numerator: afterCut.numerator, denominator: afterCut.denominator, fixed: false });
+      state.nextTimeSignatureId += 1;
+    }
+    state.timeSignatures = normalizeTimeSignatures(remaining);
+  }
+
   function shiftTimelineFadesForDelete(cursorBeat, amountBeats) {
     const cursor = Math.max(0, Number(cursorBeat) || 0);
     const amount = Math.max(0, Number(amountBeats) || 0);
@@ -16522,6 +16869,7 @@
     }
     state.tempos.sort((a, b) => a.beat - b.beat || a.id - b.id);
     shiftTimelineFadesForInsert(cursor, amount);
+    shiftTimeSignaturesForInsert(cursor, amount);
     state.timelineBeats = Math.max(getTotalBeats() + amount, getPersistentContentEndBeat() + getSnapBeat());
     ensureTimelineFitsViewport();
     markDirty(i18nText("timeline.add_measure_beat"));
@@ -16591,6 +16939,7 @@
     }
     state.tempos = [...fixedTempos, ...tempoByBeat.values()].sort((a, b) => a.beat - b.beat || a.id - b.id);
     shiftTimelineFadesForDelete(cursor, amount);
+    shiftTimeSignaturesForDelete(cursor, amount);
     state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, getTotalBeats() - amount);
     shrinkTimelineToContent();
     ensureTimelineFitsViewport();
@@ -16785,7 +17134,7 @@
     const beat = snapBeatToUnit(Math.max(0, Number(contextBeat) || 0), CONFIG.minimumNoteBeat);
     const source = sourceFade ? normalizeTimelineFadeEvent(sourceFade, sourceFade.id || 1) : getTimelineFadeAtBeat(beat);
     timelineFadeEditor = { fadeId: source?.id ?? null, beat: source?.startBeat ?? beat };
-    if (elements.timelineFadePosition) elements.timelineFadePosition.textContent = `${timelineFadeEditor.beat.toFixed(3)} beat`;
+    if (elements.timelineFadePosition) elements.timelineFadePosition.textContent = formatSeconds(beatToSeconds(timelineFadeEditor.beat));
     setTimelineFadeTypeControls(source?.type || "in");
     if (elements.timelineFadeDuration) elements.timelineFadeDuration.value = normalizeTimelineFadeSeconds(source?.durationSeconds, 2).toFixed(1);
     if (elements.timelineFadeDeleteButton) elements.timelineFadeDeleteButton.hidden = !source;
@@ -16830,6 +17179,97 @@
     return deleteTimelineFadeById(timelineFadeEditor.fadeId, { closeDialog: true });
   }
 
+  function deleteAllTimelineFades() {
+    const count = normalizeTimelineFades().length;
+    if (!count) { showToast(i18nText("timeline.fade_delete_all_none")); return false; }
+    state.timelineFades = [];
+    markDirty(i18nText("history.timeline_fade"));
+    resizeAndDraw(); updateChannelInfo();
+    showToast(i18nText("timeline.fade_delete_all_done", [count]));
+    return true;
+  }
+
+  function setTimeSignatureNumeratorInput(value) {
+    const next = clamp(Math.round(Number(value) || 4), 1, 64);
+    if (elements.timeSignatureNumerator) elements.timeSignatureNumerator.value = String(next);
+    return next;
+  }
+
+  function adjustTimeSignatureNumerator(delta) {
+    return setTimeSignatureNumeratorInput((Number(elements.timeSignatureNumerator?.value) || 4) + Number(delta || 0));
+  }
+
+  function openTimeSignatureDialog(contextBeat = state.playhead.beat, sourceSignature = null) {
+    if (!elements.timeSignatureBackdrop) return false;
+    const beat = snapBeatToUnit(Math.max(0, Number(contextBeat) || 0), CONFIG.minimumNoteBeat);
+    const exactSource = sourceSignature
+      ? normalizeTimeSignatureEvent(sourceSignature, sourceSignature.id || 1)
+      : getTimeSignatureAtExactBeat(beat);
+    const inherited = exactSource || getTimeSignatureAtBeat(beat);
+    state.timeSignatureEditor = { timeSignatureId: exactSource?.id ?? null, beat: exactSource?.beat ?? beat };
+    if (elements.timeSignaturePosition) elements.timeSignaturePosition.textContent = formatSeconds(beatToSeconds(state.timeSignatureEditor.beat));
+    setTimeSignatureNumeratorInput(inherited?.numerator || 4);
+    if (elements.timeSignatureDenominator) elements.timeSignatureDenominator.value = String(inherited?.denominator || 4);
+    if (elements.timeSignatureDeleteButton) elements.timeSignatureDeleteButton.hidden = !exactSource || Boolean(exactSource.fixed);
+    elements.timeSignatureBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.timeSignatureNumerator?.focus());
+    return true;
+  }
+
+  function closeTimeSignatureDialog() {
+    if (elements.timeSignatureBackdrop) elements.timeSignatureBackdrop.hidden = true;
+    state.timeSignatureEditor = { timeSignatureId: null, beat: 0 };
+  }
+
+  function applyTimeSignatureDialog() {
+    const numerator = setTimeSignatureNumeratorInput(elements.timeSignatureNumerator?.value);
+    const denominator = normalizeTimeSignatureDenominator(elements.timeSignatureDenominator?.value);
+    const editor = state.timeSignatureEditor || { timeSignatureId: null, beat: 0 };
+    const current = editor.timeSignatureId == null ? null : getSortedTimeSignatures().find((item) => String(item.id) === String(editor.timeSignatureId));
+    const next = normalizeTimeSignatureEvent({
+      id: current?.id || getNextTimeSignatureId(),
+      beat: current?.beat ?? editor.beat,
+      numerator, denominator, fixed: Boolean(current?.fixed),
+    }, getNextTimeSignatureId());
+    const before = JSON.stringify(getSortedTimeSignatures());
+    const remaining = getSortedTimeSignatures().filter((item) => String(item.id) !== String(current?.id) && Math.abs(item.beat - next.beat) > 1e-7);
+    state.timeSignatures = normalizeTimeSignatures([...remaining, next]);
+    state.nextTimeSignatureId = Math.max(state.nextTimeSignatureId, next.id + 1);
+    state.timelineBeats = Math.max(getTotalBeats(), next.beat + CONFIG.minimumNoteBeat);
+    closeTimeSignatureDialog();
+    if (JSON.stringify(state.timeSignatures) === before) return false;
+    markDirty(i18nText("history.time_signature"));
+    resizeAndDraw(); updateChannelInfo();
+    showToast(i18nText("timeline.time_signature_applied", [`${numerator}/${denominator}`]));
+    return true;
+  }
+
+  function deleteTimeSignatureById(id, { closeDialog = false } = {}) {
+    const target = getSortedTimeSignatures().find((item) => String(item.id) === String(id));
+    if (!target || target.fixed) return false;
+    state.timeSignatures = normalizeTimeSignatures(getSortedTimeSignatures().filter((item) => String(item.id) !== String(id)));
+    if (closeDialog) closeTimeSignatureDialog();
+    markDirty(i18nText("history.time_signature"));
+    resizeAndDraw(); updateChannelInfo();
+    showToast(i18nText("timeline.time_signature_deleted"));
+    return true;
+  }
+
+  function deleteTimeSignatureFromDialog() {
+    return deleteTimeSignatureById(state.timeSignatureEditor?.timeSignatureId, { closeDialog: true });
+  }
+
+  function deleteAllNonInitialTimeSignatures() {
+    const count = getSortedTimeSignatures().filter((item) => !item.fixed && item.beat > 1e-7).length;
+    if (!count) { showToast(i18nText("timeline.time_signature_delete_all_none")); return false; }
+    const initial = getSortedTimeSignatures().find((item) => item.fixed || Math.abs(item.beat) < 1e-7) || createDefaultTimeSignatures()[0];
+    state.timeSignatures = normalizeTimeSignatures([{ ...initial, beat: 0, fixed: true }]);
+    markDirty(i18nText("history.time_signature"));
+    resizeAndDraw(); updateChannelInfo();
+    showToast(i18nText("timeline.time_signature_delete_all_done", [count]));
+    return true;
+  }
+
   function closeTempoEditor() {
     if (!elements.tempoEditorBackdrop) return;
     elements.tempoEditorBackdrop.hidden = true;
@@ -16861,7 +17301,7 @@
       beat: Number(targetBeat.toFixed(6)),
     };
     elements.tempoEditorTitle.textContent = adding ? "템포 추가" : "템포 수정";
-    elements.tempoEditorPosition.textContent = `${targetBeat.toFixed(3)} beat`;
+    elements.tempoEditorPosition.textContent = formatSeconds(beatToSeconds(targetBeat));
     elements.tempoBpmInput.value = String(adding ? getTempoAtBeat(targetBeat) : tempo.bpm);
     elements.tempoEditorDeleteButton.hidden = adding || Boolean(tempo?.fixed) || targetBeat === 0;
     elements.tempoEditorBackdrop.hidden = false;
@@ -17464,6 +17904,7 @@
   }
 
   function updatePlayButton() {
+    elements.playButton.classList.toggle("is-playing", state.playback.running);
     if (state.playback.loading) {
       elements.playButton.setAttribute("aria-pressed", "true");
       elements.playButton.setAttribute("aria-label", "재생 준비");
@@ -18210,17 +18651,19 @@
   function serializeProject() {
     return {
       format: "mml-piano-roll-project",
-      version: 26,
+      version: 27,
       projectName: state.projectName,
       snapValue: state.snapValue,
       rowHeight: state.rowHeight,
       zoom: state.zoom,
       nextNoteId: state.nextNoteId,
       nextTempoId: state.nextTempoId,
+      nextTimeSignatureId: state.nextTimeSignatureId,
       nextMidiDocumentId: state.nextMidiDocumentId,
       nextAudioClipId: state.nextAudioClipId,
       channels: state.channels,
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
+      timeSignatures: getSortedTimeSignatures().map((signature) => ({ ...signature })),
       timelineFades: normalizeTimelineFades(),
       // v26: 페이드는 타임라인 마커(type/startBeat/durationBeat) 배열로 저장하며 원본 노트 볼륨은 변경하지 않습니다.
       // v23: 채널 악기는 현재 SoundFont의 실제 Bank/Preset을 저장하고, 색상은 hue(0..359)만 저장합니다.
@@ -18632,7 +19075,11 @@
         ppq,
         title: String(state.projectName || "MobiBard Editor"),
         tempoEvents,
-        timeSignatures: [{ tick: 0, numerator: CONFIG.beatsPerMeasure, denominator: 4 }],
+        timeSignatures: getSortedTimeSignatures().map((signature) => ({
+          tick: Math.max(0, Math.round(signature.beat * ppq)),
+          numerator: signature.numerator,
+          denominator: signature.denominator,
+        })),
         tracks: packing.physicalTracks,
         mergeMetaIntoFirstTrack: true,
       });
@@ -18729,6 +19176,7 @@
         Math.max(0, Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || 0)
       )),
       ...(Array.isArray(data.tempos) ? data.tempos.map((tempo) => Math.max(0, Number(tempo.beat) || 0)) : []),
+      ...(Array.isArray(data.timeSignatures) ? data.timeSignatures.map((signature) => Math.max(0, Number(signature.beat) || 0)) : []),
       ...state.audioClips.map((clip) => getAudioClipEndBeat(clip)),
       getRawTimelineFadeEndBeat(data.timelineFades, data.tempos),
       Math.max(0, Number(data.editor?.playheadBeat) || 0),
@@ -18739,6 +19187,8 @@
       loadedContentEndBeat + CONFIG.minimumNoteBeat,
     );
     state.timelineFades = normalizeTimelineFades(data.timelineFades || [], data.tempos);
+    state.timeSignatures = normalizeTimeSignatures(data.timeSignatures || createDefaultTimeSignatures());
+    state.nextTimeSignatureId = Math.max(2, Number(data.nextTimeSignatureId) || 2, state.timeSignatures.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
     state.channels = data.channels.map((channel, index) => ({
       id: Number(channel.id) || index + 1,
       name: String(channel.name || `Ch${Number(channel.id) || index + 1}`),
@@ -18977,8 +19427,11 @@
     clearNoteSelection();
     state.nextNoteId = 1;
     state.nextTempoId = 2;
+    state.nextTimeSignatureId = 2;
     state.channels = createDefaultChannels();
     state.tempos = createDefaultTempos();
+    state.timeSignatures = createDefaultTimeSignatures();
+    state.timeSignatureEditor = { timeSignatureId: null, beat: 0 };
     state.timelineFades = [];
     state.midiDocuments = [];
     state.activeMidiDocumentId = null;
@@ -20655,6 +21108,7 @@
     if (!state.activeAudioClipId && state.activePanel === "audio") state.activePanel = "notes";
 
     state.tempos = state.tempos.filter((tempo) => tempo.fixed || Number(tempo.beat) < cursor - 1e-7);
+    state.timeSignatures = normalizeTimeSignatures(getSortedTimeSignatures().filter((signature) => signature.fixed || Number(signature.beat) < cursor - 1e-7));
     state.timelineFades = normalizeTimelineFades().flatMap((fade) => {
       if (fade.startBeat >= cursor - 1e-7) return [];
       const end = Math.min(getTimelineFadeEndBeat(fade), cursor);
@@ -20697,7 +21151,11 @@
 
   function movePlayheadToLastMeasure() {
     const total = Math.max(CONFIG.beatsPerMeasure, getTotalBeats());
-    const lastMeasureBeat = Math.max(0, Math.floor((total - 1e-7) / CONFIG.beatsPerMeasure) * CONFIG.beatsPerMeasure);
+    const signature = getTimeSignatureAtBeat(Math.max(0, total - 1e-7));
+    const sorted = getSortedTimeSignatures();
+    const segmentStart = signature?.beat || 0;
+    const measureLength = getTimeSignatureMeasureLength(signature);
+    const lastMeasureBeat = Math.max(segmentStart, segmentStart + Math.floor(Math.max(0, total - segmentStart - 1e-7) / measureLength) * measureLength);
     seekPlayheadBeat(lastMeasureBeat);
     if (elements.rollViewport) {
       const targetLeft = Math.max(0, beatToX(lastMeasureBeat) - Math.max(0, elements.rollViewport.clientWidth * 0.25));
@@ -20744,9 +21202,22 @@
         ? [
             { label: i18nText("timeline.fade_change"), action: () => openTimelineFadeDialog(beat, existingFade) },
             { label: i18nText("timeline.fade_delete"), danger: true, action: () => deleteTimelineFadeById(existingFade.id) },
+            { label: i18nText("timeline.fade_delete_all"), disabled: normalizeTimelineFades().length === 0, danger: true, action: deleteAllTimelineFades },
           ]
         : [
             { label: i18nText("timeline.fade_add"), action: () => openTimelineFadeDialog(beat, null) },
+            { label: i18nText("timeline.fade_delete_all"), disabled: normalizeTimelineFades().length === 0, danger: true, action: deleteAllTimelineFades },
+          ];
+      const existingTimeSignature = findTimeSignatureMarkerFromPointer(event) || getTimeSignatureAtExactBeat(beat);
+      const timeSignatureItems = existingTimeSignature
+        ? [
+            { label: i18nText(existingTimeSignature.fixed ? "timeline.time_signature_change" : "timeline.time_signature_change"), action: () => openTimeSignatureDialog(beat, existingTimeSignature) },
+            { label: i18nText("timeline.time_signature_delete"), disabled: Boolean(existingTimeSignature.fixed), danger: true, action: () => deleteTimeSignatureById(existingTimeSignature.id) },
+            { label: i18nText("timeline.time_signature_delete_all"), disabled: getSortedTimeSignatures().filter((item) => !item.fixed && item.beat > 1e-7).length === 0, danger: true, action: deleteAllNonInitialTimeSignatures },
+          ]
+        : [
+            { label: i18nText("timeline.time_signature_add"), action: () => openTimeSignatureDialog(beat, null) },
+            { label: i18nText("timeline.time_signature_delete_all"), disabled: getSortedTimeSignatures().filter((item) => !item.fixed && item.beat > 1e-7).length === 0, danger: true, action: deleteAllNonInitialTimeSignatures },
           ];
       const selectedChannelMeasureItems = [
         {
@@ -20807,6 +21278,8 @@
           tempoSimplifyItem,
           deleteAllTemposItem,
           "separator",
+          ...timeSignatureItems,
+          "separator",
           ...fadeItems,
           "separator",
           ...selectedChannelMeasureItems,
@@ -20828,6 +21301,8 @@
           tempoSimplifyItem,
           deleteAllTemposItem,
           "separator",
+          ...timeSignatureItems,
+          "separator",
           ...fadeItems,
           "separator",
           ...selectedChannelMeasureItems,
@@ -20846,6 +21321,8 @@
         { label: i18nText("timeline.add_tempo_measure"), disabled: beat <= 0, action: () => addTempoAtBeat(beat) },
         tempoSimplifyItem,
         deleteAllTemposItem,
+        "separator",
+        ...timeSignatureItems,
         "separator",
         ...fadeItems,
         "separator",
@@ -22039,6 +22516,7 @@
     elements.channelVolumeSelectAllButton?.addEventListener("click", () => setAllChannelVolumeChecked(true));
     elements.channelVolumeClearAllButton?.addEventListener("click", () => setAllChannelVolumeChecked(false));
     elements.channelVolumeFixedMode?.addEventListener("change", () => configureChannelVolumeSliderForMode(true));
+    elements.channelVolumeProtectV0?.addEventListener("change", () => configureChannelVolumeSliderForMode(false));
     elements.channelVolumeSlider?.addEventListener("input", () => {
       updateChannelVolumeControl();
       updateChannelVolumeCounts();
@@ -22108,6 +22586,16 @@
     elements.timelineFadeDuration?.addEventListener("blur", () => normalizeTimelineFadeDurationInput({ commit: true }));
     elements.timelineFadeBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.timelineFadeBackdrop) closeTimelineFadeDialog();
+    });
+    elements.timeSignatureCloseButton?.addEventListener("click", closeTimeSignatureDialog);
+    elements.timeSignatureCancelButton?.addEventListener("click", closeTimeSignatureDialog);
+    elements.timeSignatureApplyButton?.addEventListener("click", applyTimeSignatureDialog);
+    elements.timeSignatureDeleteButton?.addEventListener("click", deleteTimeSignatureFromDialog);
+    elements.timeSignatureNumeratorUp?.addEventListener("click", () => adjustTimeSignatureNumerator(1));
+    elements.timeSignatureNumeratorDown?.addEventListener("click", () => adjustTimeSignatureNumerator(-1));
+    elements.timeSignatureNumerator?.addEventListener("change", () => setTimeSignatureNumeratorInput(elements.timeSignatureNumerator.value));
+    elements.timeSignatureBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.timeSignatureBackdrop) closeTimeSignatureDialog();
     });
     elements.timelineCanvas?.addEventListener("pointermove", handleTimelineHover);
     elements.timelineCanvas?.addEventListener("pointerleave", hideTimelineHoverTooltip);

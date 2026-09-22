@@ -1676,6 +1676,7 @@
 
   function adjustVolumesMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const preserveZeroMinOne = Boolean(options.preserveZeroMinOne);
     const partDeltas = Array.isArray(options.partDeltas)
       ? Array.from({ length: partCount }, (_, index) => {
           const value = Number(options.partDeltas[index] ?? 0);
@@ -1711,7 +1712,10 @@
         if (ev.type !== "note") return { ...ev };
         const beforeVolume = clamp(ev.volume, 0, 15);
         const unclamped = beforeVolume + partDelta;
-        const afterVolume = clamp(unclamped, 0, 15);
+        let afterVolume = clamp(unclamped, 0, 15);
+        if (preserveZeroMinOne) {
+          afterVolume = beforeVolume === 0 ? 0 : Math.max(1, afterVolume);
+        }
         touchedNotes++;
         if (afterVolume !== beforeVolume) changedNotes++;
         if (afterVolume !== unclamped) clampedNotes++;
@@ -1750,6 +1754,7 @@
 
   function setVolumesMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const preserveZeroMinOne = Boolean(options.preserveZeroMinOne);
     const partVolumes = Array.from({ length: partCount }, (_, index) => {
       const raw = Array.isArray(options.partVolumes) ? options.partVolumes[index] : options.volume;
       if (raw === null || raw === undefined || raw === "" || String(raw).toLowerCase() === "keep") return null;
@@ -1778,9 +1783,12 @@
       let events = parsedParts[i].events.map(ev => {
         if (ev.type !== "note") return { ...ev };
         const beforeVolume = clamp(ev.volume, 0, 15);
+        const afterVolume = preserveZeroMinOne
+          ? (beforeVolume === 0 ? 0 : Math.max(1, fixedVolume))
+          : fixedVolume;
         touchedNotes++;
-        if (beforeVolume !== fixedVolume) changedNotes++;
-        return { ...ev, volume: fixedVolume };
+        if (beforeVolume !== afterVolume) changedNotes++;
+        return { ...ev, volume: afterVolume };
       });
 
       events = mergeAdjacentRests(events);

@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260921-rest-opt1" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260922-timesig-tempo-fix6" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260831-header-semibold1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -326,16 +326,12 @@
       <button type="button" data-merge-mode-role="high" data-i18n="ui.high">고음</button>
       <button type="button" data-merge-mode-role="low" data-i18n="ui.low">저음</button>
     </div>
+  </div>
+  <div class="channel-merge-action-row">
     <div class="channel-merge-mode-actions">
       <button class="merge-cancel-button" type="button" id="channelMergeModeCancelButton" data-i18n="cancel">취소</button>
       <button class="merge-apply-button" type="button" id="channelMergeModeApplyButton" data-i18n="ui.merge">병합</button>
     </div>
-  </div>
-  <div class="channel-merge-overlap-row">
-    <strong data-i18n="merge.note_overlap">노트 겹침</strong>
-    <span data-i18n="merge.none">안함</span>
-    <input id="channelMergeOverlapSlider" type="range" min="0" max="100" step="1" value="100" aria-label="노트 겹침" data-i18n-aria-label="merge.note_overlap"/>
-    <span data-i18n="merge.maximum">최대</span>
   </div>
   <div class="channel-merge-exclude-row">
     <strong data-i18n="merge.exclude_overlap">사용된 노트 제외</strong>
@@ -375,13 +371,15 @@
 <ol aria-label="최신순 편집 기록" data-i18n-aria-label="history.edit_newest_first" class="history-list" id="historyList"></ol>
 </section>
 <section aria-label="Special Thanks" class="side-panel-view special-thanks-panel" hidden id="specialThanksPanel" role="tabpanel">
+<div class="special-thanks-header"><h2>SPECIAL THANKS</h2></div>
 <div class="special-thanks-content">
-<h2>SPECIAL THANKS</h2>
 <p class="special-thanks-intro">큰 도움을 주신분들</p>
 <ul class="special-thanks-list">
 <li><span class="special-thanks-server">던컨</span><span class="special-thanks-name">탕속의고기</span></li>
 <li><span class="special-thanks-server">던컨</span><span class="special-thanks-name">쏘닉</span></li>
 <li><span class="special-thanks-server">던컨</span><span class="special-thanks-name">메굼잉</span></li>
+<li><span class="special-thanks-server">던컨</span><span class="special-thanks-name">루나비앙카</span></li>
+<li class="special-thanks-all"><span class="special-thanks-name">관심 가져주신 모든분!</span></li>
 </ul>
 </div>
 </section>
@@ -415,9 +413,10 @@
 </div>
 <div class="midi-import-midi-controls unified-import-options-row" id="midiImportMidiControls">
 <button id="midiImportChooseFileButton" type="button" data-i18n="file.text">파일 선택</button>
-<select aria-label="MIDI 양자화" data-i18n-aria-label="midi.quantize" id="midiImportQuantize"><option selected="" value="64" data-i18n="ui.1_64_quantize">64박 양자화</option><option value="32" data-i18n="ui.1_32_quantize">32박 양자화</option></select>
+<select aria-label="MIDI 양자화" data-i18n-aria-label="midi.quantize" id="midiImportQuantize"><option value="" disabled data-i18n="import.note_min_length">노트 최소길이</option><option selected="" value="64" data-i18n="ui.1_64_quantize">64박 양자화</option><option value="32" data-i18n="ui.1_32_quantize">32박 양자화</option></select>
 <label class="midi-import-overlap-option"><input checked="" id="midiImportIgnoreSingle64thOverlap" type="checkbox"/><span data-i18n="ui.ignore_1_64">64박 겹침 무시</span></label>
 <label class="midi-import-overlap-option midi-import-channel-limit-option"><input id="midiImportLimitChannelsPerInstrument" type="checkbox"/><span id="midiImportChannelLimitLabel" data-i18n="midi.limit_channels" data-i18n-args="[3]">악기당 최대 3채널</span></label>
+<label class="import-channel-color-mode"><select aria-label="불러오기 채널 색상 기준" data-i18n-aria-label="import.channel_color_aria" id="importChannelColorMode"><option value="" disabled data-i18n="import.channel_color">채널 색상</option><option value="channel" data-i18n="import.color_by_channel">채널마다 다른 색</option><option value="instrument" data-i18n="import.color_by_instrument">악기마다 다른 색</option></select></label>
 <select aria-label="MBT 채널 구성" data-i18n-aria-label="mbt.packing_aria" hidden="" id="midiImportMbtPacking"><option value="byInstrument" data-i18n="mbt.packing_by_instrument">악기별 채널</option><option value="compact" data-i18n="mbt.packing_compact">최소 채널</option></select>
 </div>
 <div class="unified-import-text-source" hidden="" id="midiImportTextSourcePanel">
@@ -426,7 +425,6 @@
 </div>
 <div class="unified-import-channel-toolbar" id="midiImportChannelToolbar">
 <div class="midi-import-selection-actions midi-import-inline-selection-actions" id="midiImportSelectionActions"><button id="midiImportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiImportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
-<label class="import-channel-color-mode"><span data-i18n="import.channel_color">채널 색상</span><select aria-label="불러오기 채널 색상 기준" data-i18n-aria-label="import.channel_color_aria" id="importChannelColorMode"><option value="channel" data-i18n="import.color_by_channel">채널마다 색상</option><option value="instrument" data-i18n="import.color_by_instrument">악기마다 색상</option></select></label>
 <div class="midi-import-summary" id="midiImportSummary"></div>
 <div class="midi-import-preview-actions"><button class="midi-import-source-preview" id="midiImportPreviewAllButton" type="button"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span><span class="transport-button-label" data-i18n="ui.preview_source">원본 듣기</span></button></div>
 </div>
@@ -478,9 +476,8 @@
 <div class="popup-backdrop" hidden="" id="channelMmlBackdrop">
 <section aria-label="채널 MML 편집" data-i18n-aria-label="channel.mml_edit" aria-modal="true" class="transfer-dialog channel-mml-dialog" id="channelMmlDialog" role="dialog">
 <div class="transfer-dialog-header"><div><strong data-i18n="channel.mml_edit">채널 MML 편집</strong><span id="channelMmlTargetLabel" data-i18n="channel.text">현재 채널</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelMmlCloseButton" type="button">×</button></div>
-<div class="channel-mml-options"><label class="channel-mml-tempo-option"><input checked="" id="channelMmlIncludeTempo" type="checkbox"/><span data-i18n="channel.mml_include_tempo">템포 포함</span></label><label class="channel-mml-tempo-option channel-mml-optimize-option"><input id="channelMmlOptimizedView" type="checkbox"/><span data-i18n="channel.mml_optimized_view">최적화 MML 보기</span></label><div aria-live="polite" class="channel-mml-status" id="channelMmlStatus"></div></div>
+<div class="channel-mml-options"><label class="channel-mml-tempo-option"><input checked="" id="channelMmlIncludeTempo" type="checkbox"/><span data-i18n="channel.mml_include_tempo">템포 포함</span></label><label class="channel-mml-tempo-option channel-mml-optimize-option"><input checked="" id="channelMmlOptimizedView" type="checkbox"/><span data-i18n="channel.mml_optimized_view">최적화 MML 보기</span></label><div aria-live="polite" class="channel-mml-status" id="channelMmlStatus"></div></div>
 <div class="channel-mml-editor"><textarea aria-label="현재 채널 MML" data-i18n-aria-label="channel.mml_text_aria" id="channelMmlText" spellcheck="false"></textarea></div>
-<p class="transfer-dialog-help channel-mml-help" data-i18n="channel.mml_help">현재 채널의 MML 본문만 편집합니다. 템포 포함을 켜면 타임라인 템포도 함께 표시·적용하며, 페이드는 타임라인 설정을 유지합니다. T/O/L/V는 대문자, 음표·r/n은 소문자로 정리됩니다.</p>
 <div class="transfer-dialog-actions"><button id="channelMmlCancelButton" type="button" data-i18n="cancel">취소</button><button id="channelMmlApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
 </div>
@@ -502,10 +499,15 @@
 <section aria-label="볼륨 수정" data-i18n-aria-label="volume.edit_channels" aria-modal="true" class="transfer-dialog channel-volume-dialog channel-scope-options-dialog" id="channelVolumeDialog" role="dialog">
   <div class="transfer-dialog-header"><div><strong data-i18n="volume.edit_channels">볼륨 수정</strong><span data-i18n="volume.select_channels">수정할 채널을 선택하세요.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelVolumeCloseButton" type="button">×</button></div>
   <div class="channel-volume-options channel-scope-options-top">
-    <label class="note-volume-mode-row channel-volume-mode-row"><input id="channelVolumeFixedMode" type="checkbox"/><span data-i18n="volume.fixed_mode">동일 볼륨으로 변경</span></label>
+    <div class="channel-volume-mode-options-row">
+      <label class="note-volume-mode-row channel-volume-mode-row"><input id="channelVolumeFixedMode" type="checkbox"/><span data-i18n="volume.fixed_mode">동일 볼륨으로 변경</span></label>
+      <label class="note-volume-mode-row channel-volume-protect-row"><input id="channelVolumeProtectV0" type="checkbox" checked/><span data-i18n="volume.protect_v0_min_v1">기존 V0 유지 · 최소 V1</span></label>
+    </div>
     <label class="note-volume-slider-row channel-volume-slider-row"><span id="channelVolumeControlLabel" data-i18n="volume.relative_adjust">볼륨 증감</span><input aria-label="채널 노트 볼륨 조절" data-i18n-aria-label="volume.adjust_aria" id="channelVolumeSlider" max="15" min="-15" step="1" type="range" value="0"/><strong id="channelVolumeValue">±0</strong></label>
-    <div class="note-volume-count-box channel-volume-count-box"><div class="note-volume-count-row"><span data-i18n="ui.text">현재</span><div class="note-volume-count-grid" id="channelVolumeCurrentCounts"></div></div><div class="note-volume-count-row"><span data-i18n="ui.change">변경 후</span><div class="note-volume-count-grid" id="channelVolumeTargetCounts"></div></div></div>
-    <p class="transfer-dialog-help channel-volume-help" data-i18n="midi.v0_silent_v1">V0은 무음이며 V1은 MIDI velocity 1에 대응합니다. V2~V15는 나머지 velocity 범위를 균등하게 나눕니다.</p>
+    <div class="note-volume-count-box channel-volume-count-box" aria-label="볼륨 변경 비교">
+      <div class="channel-volume-count-heading"><span class="channel-volume-heading-before" data-i18n="ui.text">현재</span><b class="channel-volume-heading-arrow" aria-hidden="true">&gt;</b><span class="channel-volume-heading-after" data-i18n="ui.change_short">변경</span></div>
+      <div class="channel-volume-compare-grid" id="channelVolumeComparison"></div>
+    </div>
   </div>
   <div class="channel-scope-list-section channel-volume-list-section">
     <div class="midi-transfer-selection-actions channel-scope-list-toolbar"><span class="channel-scope-list-label" data-i18n="volume.select_channels">수정할 채널을 선택하세요.</span><button id="channelVolumeSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelVolumeClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
@@ -520,7 +522,6 @@
   <div class="rest-cleanup-body channel-scope-options-top">
     <div class="rest-cleanup-section"><strong data-i18n="rest_cleanup.threshold">제거할 쉼표</strong><div class="rest-cleanup-segments rest-cleanup-thresholds" id="restCleanupModeOptions" role="group" aria-label="제거할 쉼표" data-i18n-aria-label="rest_cleanup.threshold"><button type="button" data-rest-cleanup-mode="64" data-i18n="rest_cleanup.64">1/64 이하</button><button class="active" type="button" data-rest-cleanup-mode="32" data-i18n="rest_cleanup.32">1/32 이하</button><button type="button" data-rest-cleanup-mode="16" data-i18n="rest_cleanup.16">1/16 이하</button><button type="button" data-rest-cleanup-mode="8" data-i18n="rest_cleanup.8">1/8 이하</button><button type="button" data-rest-cleanup-mode="4" data-i18n="rest_cleanup.4">1/4 이하</button><button type="button" data-rest-cleanup-mode="all" data-i18n="rest_cleanup.all">모두</button></div></div>
     <p class="rest-cleanup-preview" id="restCleanupPreview"></p>
-    <p class="transfer-dialog-help rest-cleanup-help" data-i18n="rest_cleanup.help">Player와 같은 방식으로, 조건에 맞는 쉼표를 제거하고 바로 앞 노트를 다음 노트 시작까지 늘립니다. 곡 시작 전의 공백은 유지됩니다.</p>
   </div>
   <div class="channel-scope-list-section rest-cleanup-list-section">
     <div class="midi-transfer-selection-actions channel-scope-list-toolbar"><span class="rest-cleanup-channel-label channel-scope-list-label" data-i18n="rest_cleanup.select_channels">정리할 채널을 선택하세요.</span><button id="restCleanupSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="restCleanupClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
@@ -532,7 +533,7 @@
 <div class="popup-backdrop" hidden="" id="timeEditBackdrop">
 <section aria-label="마디 편집" data-i18n-aria-label="ui.edit_track_space" aria-modal="true" class="time-edit-dialog" id="timeEditDialog" role="dialog">
 <div class="tempo-editor-header">
-<div><strong id="timeEditTitle" data-i18n="timeline.edit_measure">마디 편집</strong><span id="timeEditPosition" data-i18n="ui.red_playhead">빨간 재생선 기준</span></div>
+<div><strong id="timeEditTitle" data-i18n="timeline.edit_measure">마디 편집</strong><span id="timeEditPosition">0:00.000</span></div>
 <button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="timeEditCloseButton" type="button">×</button>
 </div>
 <div class="time-edit-field time-edit-combined-field"><span data-i18n="ui.length_edit">편집할 길이</span><div class="time-edit-units-row"><label class="time-edit-number"><input aria-label="편집할 마디 수" data-i18n-aria-label="timeline.measure_edit" id="timeEditMeasureInput" inputmode="numeric" min="0" step="1" type="number" value="1"/><strong data-i18n="timeline.measure">마디</strong></label><label class="time-edit-number time-edit-fraction-number"><input aria-label="편집할 64분할 박자 수 (0부터 63)" data-i18n-aria-label="note.64th_units_edit" id="timeEditBeatInput" inputmode="numeric" max="63" min="0" step="1" type="number" value="0"/><strong data-i18n="timeline.64_beat">/64 박자</strong></label></div></div>
@@ -541,7 +542,7 @@
 </div>
 <div class="popup-backdrop" hidden="" id="timelineFadeBackdrop">
 <section aria-label="페이드 인/아웃 설정" data-i18n-aria-label="timeline.fade_settings" aria-modal="true" class="tempo-editor-dialog fade-editor-dialog" id="timelineFadeDialog" role="dialog">
-<div class="tempo-editor-header"><div><strong data-i18n="timeline.fade_settings">페이드 인/아웃 설정</strong><span id="timelineFadePosition">0.000 beat</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="timelineFadeCloseButton" type="button">×</button></div>
+<div class="tempo-editor-header"><div><strong data-i18n="timeline.fade_settings">페이드 인/아웃 설정</strong><span id="timelineFadePosition">0:00.000</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="timelineFadeCloseButton" type="button">×</button></div>
 <div class="fade-editor-options">
 <div class="fade-editor-option-row"><span data-i18n="timeline.fade_type">종류</span><div class="fade-editor-type-checks"><label class="fade-editor-check"><input checked id="timelineFadeTypeIn" type="checkbox"/><span data-i18n="timeline.fade_in">페이드 인</span></label><label class="fade-editor-check"><input id="timelineFadeTypeOut" type="checkbox"/><span data-i18n="timeline.fade_out">페이드 아웃</span></label></div></div>
 <label class="fade-editor-option-row"><span data-i18n="timeline.fade_duration">지속 시간</span><span class="fade-editor-number"><input id="timelineFadeDuration" inputmode="decimal" step="0.5" type="number" value="2.0"/><small data-i18n="ui.sec">초</small></span></label>
@@ -550,10 +551,25 @@
 <div class="tempo-editor-actions fade-editor-actions"><button class="danger-button" hidden="" id="timelineFadeDeleteButton" type="button" data-i18n="action.delete">삭제</button><span></span><button id="timelineFadeCancelButton" type="button" data-i18n="cancel">취소</button><button id="timelineFadeApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
 </div>
+<div class="popup-backdrop" hidden="" id="timeSignatureBackdrop">
+<section aria-label="박자표 설정" data-i18n-aria-label="timeline.time_signature_settings" aria-modal="true" class="tempo-editor-dialog time-signature-dialog" id="timeSignatureDialog" role="dialog">
+<div class="tempo-editor-header"><div><strong data-i18n="timeline.time_signature_settings">박자표 설정</strong><span id="timeSignaturePosition">0.000</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="timeSignatureCloseButton" type="button">×</button></div>
+<div class="time-signature-editor-field">
+<div class="time-signature-number-stepper">
+<input id="timeSignatureNumerator" aria-label="박자표 분자" data-i18n-aria-label="timeline.time_signature_numerator" inputmode="numeric" min="1" max="64" step="1" type="number" value="4"/>
+<span class="time-signature-step-buttons" aria-hidden="false"><button aria-label="분자 1 증가" id="timeSignatureNumeratorUp" tabindex="-1" type="button">▲</button><button aria-label="분자 1 감소" id="timeSignatureNumeratorDown" tabindex="-1" type="button">▼</button></span>
+</div>
+<strong aria-hidden="true">/</strong>
+<select id="timeSignatureDenominator" aria-label="박자표 분모" data-i18n-aria-label="timeline.time_signature_denominator"><option value="1">1</option><option value="2">2</option><option value="4" selected>4</option><option value="8">8</option><option value="16">16</option><option value="32">32</option><option value="64">64</option></select>
+</div>
+<p class="tempo-editor-help" data-i18n="timeline.time_signature_help">이 위치부터 선택한 박자표 기준으로 피아노롤의 박선과 마디선을 표시합니다.</p>
+<div class="tempo-editor-actions"><button class="danger-button" hidden="" id="timeSignatureDeleteButton" type="button" data-i18n="action.delete">삭제</button><span></span><button id="timeSignatureCancelButton" type="button" data-i18n="cancel">취소</button><button id="timeSignatureApplyButton" type="button" data-i18n="action.apply">적용</button></div>
+</section>
+</div>
 <div class="popup-backdrop" hidden="" id="tempoEditorBackdrop">
 <section aria-label="템포 편집" data-i18n-aria-label="tempo.edit_2" aria-modal="true" class="tempo-editor-dialog" id="tempoEditorDialog" role="dialog">
 <div class="tempo-editor-header">
-<div><strong id="tempoEditorTitle" data-i18n="tempo.edit">템포 수정</strong><span id="tempoEditorPosition">0 beat</span></div>
+<div><strong id="tempoEditorTitle" data-i18n="tempo.edit">템포 수정</strong><span id="tempoEditorPosition">0:00.000</span></div>
 <button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="tempoEditorCloseButton" type="button">×</button>
 </div>
 <label class="tempo-editor-field"><span data-i18n="tempo.label">템포</span><input aria-label="템포 값" data-i18n-aria-label="tempo.value" id="tempoBpmInput" inputmode="numeric" max="255" min="32" step="1" type="number" value="120"/><strong>BPM</strong></label>
@@ -564,13 +580,15 @@
 <div class="popup-backdrop" hidden="" id="tempoSimplifyBackdrop">
 <section aria-label="템포 간소화" data-i18n-aria-label="tempo.simplify" aria-modal="true" class="tempo-editor-dialog tempo-simplify-dialog" id="tempoSimplifyDialog" role="dialog">
 <div class="tempo-editor-header">
-<div><strong data-i18n="tempo.simplify">템포 간소화</strong><span data-i18n="tempo.simplify_player_default">Player 기본값 · BPM 차이 5 미만 · 최저/최고 유지</span></div>
+<div><strong data-i18n="tempo.simplify">템포 간소화</strong></div>
 <button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="tempoSimplifyCloseButton" type="button">×</button>
 </div>
-<label class="tempo-editor-field tempo-simplify-threshold-field"><span data-i18n="tempo.simplify_threshold">제거 기준</span><input aria-label="템포 BPM 차이 제거 기준" data-i18n-aria-label="tempo.simplify_threshold_aria" id="tempoSimplifyThresholdInput" inputmode="numeric" max="255" min="1" step="1" type="number" value="5"/><strong data-i18n="tempo.simplify_threshold_suffix">BPM 미만</strong></label>
+<div class="tempo-simplify-control-row">
 <label class="tempo-simplify-option"><input checked="" id="tempoSimplifyPreserveExtrema" type="checkbox"/><span data-i18n="tempo.simplify_preserve_extrema">최저/최고 템포 유지</span></label>
-<p class="tempo-editor-help" data-i18n="tempo.simplify_help">직전 유지 템포와의 BPM 차이가 기준보다 작은 템포를 제거합니다. 위치 간격과 관계없이 비교합니다.</p>
+<label class="tempo-editor-field tempo-simplify-threshold-field"><input aria-label="템포 BPM 차이 제거 기준" data-i18n-aria-label="tempo.simplify_threshold_aria" id="tempoSimplifyThresholdInput" inputmode="numeric" max="255" min="1" step="1" type="number" value="5"/><strong data-i18n="tempo.simplify_threshold_suffix">BPM 미만</strong></label>
+</div>
 <div class="tempo-simplify-summary" data-i18n="tempo.simplify_preview" data-i18n-args="[0,0,0]" id="tempoSimplifySummary">0개 → 0개 (0개 삭제)</div>
+<p class="tempo-editor-help" data-i18n="tempo.simplify_help">직전 유지 템포와 BPM 차이가 기준값(기본 5) 미만인 템포를 제거하며 위치 간격은 비교하지 않습니다. 최저/최고 템포 유지를 켜면 곡의 최저·최고 템포는 남깁니다.</p>
 <div class="tempo-editor-actions tempo-simplify-actions"><span></span><span></span><button id="tempoSimplifyCancelButton" type="button" data-i18n="cancel">취소</button><button id="tempoSimplifyApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
 </div>
@@ -661,7 +679,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260921-rest-opt1"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260922-timesig-tempo-fix6"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

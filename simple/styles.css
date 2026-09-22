@@ -10,6 +10,7 @@
   --accent: #20242b;
   --accent-text: #ffffff;
   --hover: #eef1f4;
+  --danger: #c93f54;
   --shadow: 0 18px 50px rgba(31, 35, 42, 0.08);
   --radius: 16px;
 }
@@ -26,6 +27,7 @@
   --accent: #f2f4f7;
   --accent-text: #16191e;
   --hover: #282d34;
+  --danger: #ff6f80;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
 }
 
@@ -607,7 +609,14 @@ h1 {
 }
 .icon-playback-button.is-playing .simple-stop-icon {
   display: block;
+  filter: invert(1);
 }
+.icon-playback-button.is-playing {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+.icon-playback-button.is-playing:hover:not(:disabled) { background: var(--danger); }
 
 .full-score-actions {
   display: flex;
