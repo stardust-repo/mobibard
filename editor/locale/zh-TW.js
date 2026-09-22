@@ -1337,6 +1337,8 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "timeline.time_signature_delete_all_done": "已刪除 {0} 個附加拍號。",
     "timeline.time_signature_applied": "已套用拍號 {0}。",
     "timeline.time_signature_deleted": "已刪除拍號。",
+    "timeline.time_signature_hover": "拍號 {0}/{1}",
+    "timeline.time_signature_fixed": "起始拍號的位置固定。",
     "history.time_signature": "拍號設定",
     "timeline.fade_deleted": "已刪除淡入淡出設定。",
     "timeline.fade_type": "種類",

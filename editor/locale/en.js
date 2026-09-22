@@ -1337,6 +1337,8 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "timeline.time_signature_delete_all_done": "Deleted {0} additional time signatures.",
     "timeline.time_signature_applied": "Applied time signature {0}.",
     "timeline.time_signature_deleted": "Time signature deleted.",
+    "timeline.time_signature_hover": "Time signature {0}/{1}",
+    "timeline.time_signature_fixed": "The initial time signature position is fixed.",
     "history.time_signature": "Time signature",
     "timeline.fade_deleted": "Fade setting deleted.",
     "timeline.fade_type": "Type",

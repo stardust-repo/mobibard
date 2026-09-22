@@ -595,6 +595,7 @@
     interaction: null,
     tempoDrag: null,
     tempoTouchTap: null,
+    timeSignatureDrag: null,
     fadeDrag: null,
     fadeTouchTap: null,
     tempoEditor: { mode: null, tempoId: null, beat: 0 },
@@ -4638,12 +4639,12 @@
     return `${String(minutes).padStart(2, "0")}:${remain.toFixed(1).padStart(4, "0")}`;
   }
 
-  function showTimelineHoverTooltip(event, beat) {
+  function showTimelineHoverTooltip(event, beat, text = "") {
     const tooltip = elements.timelineHoverTooltip;
     const host = elements.timelineCanvas?.closest?.(".piano-section");
     if (!tooltip || !host) return;
     const safeBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
-    tooltip.textContent = formatTimelineHoverClock(beatToSeconds(safeBeat));
+    tooltip.textContent = text || formatTimelineHoverClock(beatToSeconds(safeBeat));
     tooltip.hidden = false;
     const hostRect = host.getBoundingClientRect();
     const width = tooltip.offsetWidth || 68;
@@ -4658,6 +4659,15 @@
   }
 
   function handleTimelineHover(event) {
+    const signature = findTimeSignatureMarkerFromPointer(event);
+    if (signature) {
+      showTimelineHoverTooltip(
+        event,
+        signature.beat,
+        `${signature.numerator}/${signature.denominator}`,
+      );
+      return;
+    }
     showTimelineHoverTooltip(event, timelineBeatFromPointer(event));
   }
 
@@ -4995,9 +5005,33 @@
       return;
     }
     const rawBeat = timelineRawBeatFromPointer(event);
-    const fade = rawBeat >= 0 ? findTimelineFadeMarkerFromPointer(event) : null;
-    const tempo = rawBeat >= 0 && !fade ? findTempoMarkerFromPointer(event) : null;
+    const timeSignature = rawBeat >= 0 ? findTimeSignatureMarkerFromPointer(event) : null;
+    const fade = rawBeat >= 0 && !timeSignature ? findTimelineFadeMarkerFromPointer(event) : null;
+    const tempo = rawBeat >= 0 && !timeSignature && !fade ? findTempoMarkerFromPointer(event) : null;
     const touchLike = event.pointerType === "touch" || event.pointerType === "pen";
+
+    if (timeSignature) {
+      setPlayheadBeat(timeSignature.beat, { stop: true });
+      if (timeSignature.fixed) {
+        if (!touchLike) showToast(i18nText("timeline.time_signature_fixed"));
+        event.preventDefault();
+        return;
+      }
+      state.timeSignatureDrag = {
+        pointerId: event.pointerId,
+        timeSignatureId: timeSignature.id,
+        originalBeat: timeSignature.beat,
+        moved: false,
+        pointerType: event.pointerType || "mouse",
+        startX: event.clientX,
+        startY: event.clientY,
+        dragStarted: !touchLike,
+      };
+      trySetPointerCapture(elements.timelineCanvas, event.pointerId);
+      elements.timelineCanvas.style.cursor = touchLike ? "pointer" : "ew-resize";
+      event.preventDefault();
+      return;
+    }
 
     if (fade) {
       setPlayheadBeat(fade.startBeat, { stop: true });
@@ -5063,6 +5097,40 @@
   }
 
   function handleTimelinePointerMove(event) {
+    if (state.timeSignatureDrag?.pointerId === event.pointerId) {
+      const drag = state.timeSignatureDrag;
+      const touchLike = drag.pointerType === "touch" || drag.pointerType === "pen";
+      if (touchLike && !drag.dragStarted) {
+        const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+        if (distance <= CONFIG.longPressMoveTolerance) { event.preventDefault(); return; }
+        drag.dragStarted = true;
+        elements.timelineCanvas.style.cursor = "ew-resize";
+      }
+      scrollTimelineDuringDrag(event);
+      const current = getSortedTimeSignatures().find((item) => String(item.id) === String(drag.timeSignatureId));
+      if (!current || current.fixed) {
+        event.preventDefault();
+        return;
+      }
+      const minimumBeat = getSnapBeat();
+      const targetBeat = clamp(timelineBeatFromPointer(event), minimumBeat, getTotalBeats());
+      const occupied = getSortedTimeSignatures().some((item) => (
+        String(item.id) !== String(drag.timeSignatureId)
+        && Math.abs(Number(item.beat) - targetBeat) <= 1e-7
+      ));
+      if (!occupied && Math.abs(current.beat - targetBeat) > 1e-7) {
+        state.timeSignatures = normalizeTimeSignatures(state.timeSignatures.map((signature) => (
+          String(signature.id) === String(drag.timeSignatureId)
+            ? { ...signature, beat: Number(targetBeat.toFixed(6)), fixed: false }
+            : signature
+        )));
+        drag.moved = true;
+        drawTimeline();
+      }
+      event.preventDefault();
+      return;
+    }
+
     if (state.fadeDrag?.pointerId === event.pointerId) {
       const drag = state.fadeDrag;
       const touchLike = drag.pointerType === "touch" || drag.pointerType === "pen";
@@ -5142,16 +5210,52 @@
       return;
     }
 
-    const hoverFade = findTimelineFadeMarkerFromPointer(event);
-    const hoverTempo = hoverFade ? null : findTempoMarkerFromPointer(event);
-    elements.timelineCanvas.style.cursor = hoverFade
-      ? "ew-resize"
-      : hoverTempo
-        ? (isMidiReferenceActive() || hoverTempo.fixed ? "pointer" : "ew-resize")
-        : "default";
+    const hoverTimeSignature = findTimeSignatureMarkerFromPointer(event);
+    const hoverFade = hoverTimeSignature ? null : findTimelineFadeMarkerFromPointer(event);
+    const hoverTempo = hoverTimeSignature || hoverFade ? null : findTempoMarkerFromPointer(event);
+    elements.timelineCanvas.style.cursor = hoverTimeSignature
+      ? (hoverTimeSignature.fixed ? "pointer" : "ew-resize")
+      : hoverFade
+        ? "ew-resize"
+        : hoverTempo
+          ? (isMidiReferenceActive() || hoverTempo.fixed ? "pointer" : "ew-resize")
+          : "default";
   }
 
   function handleTimelinePointerUp(event) {
+    if (state.timeSignatureDrag?.pointerId === event.pointerId) {
+      const drag = state.timeSignatureDrag;
+      const moved = drag.moved;
+      const touchLike = drag.pointerType === "touch" || drag.pointerType === "pen";
+      const current = getSortedTimeSignatures().find((item) => String(item.id) === String(drag.timeSignatureId));
+      state.timeSignatureDrag = null;
+      elements.timelineCanvas.style.cursor = "default";
+      try { elements.timelineCanvas.releasePointerCapture(event.pointerId); } catch {}
+
+      if (event.type === "pointercancel") {
+        if (moved) {
+          state.timeSignatures = normalizeTimeSignatures(state.timeSignatures.map((signature) => (
+            String(signature.id) === String(drag.timeSignatureId)
+              ? { ...signature, beat: Number(drag.originalBeat.toFixed(6)), fixed: false }
+              : signature
+          )));
+          drawTimeline();
+        }
+        return;
+      }
+
+      if (moved) {
+        markDirty(i18nText("history.time_signature"));
+        shrinkTimelineToContent();
+        drawRoll();
+        drawTimeline();
+        updateChannelInfo();
+      } else if (touchLike && current) {
+        openTimeSignatureDialog(current.beat, current);
+      }
+      return;
+    }
+
     if (state.fadeDrag?.pointerId === event.pointerId) {
       const drag = state.fadeDrag;
       const moved = drag.moved;

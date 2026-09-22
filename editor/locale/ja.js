@@ -1337,6 +1337,8 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "timeline.time_signature_delete_all_done": "追加拍子記号 {0} 件を削除しました。",
     "timeline.time_signature_applied": "拍子記号 {0} を適用しました。",
     "timeline.time_signature_deleted": "拍子記号を削除しました。",
+    "timeline.time_signature_hover": "拍子記号 {0}/{1}",
+    "timeline.time_signature_fixed": "先頭の拍子記号の位置は固定されています。",
     "history.time_signature": "拍子記号設定",
     "timeline.fade_deleted": "フェード設定を削除しました。",
     "timeline.fade_type": "種類",

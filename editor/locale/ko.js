@@ -1337,6 +1337,8 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "timeline.time_signature_delete_all_done": "추가 박자표 {0}개를 모두 삭제했습니다.",
     "timeline.time_signature_applied": "박자표 {0}을(를) 적용했습니다.",
     "timeline.time_signature_deleted": "박자표를 삭제했습니다.",
+    "timeline.time_signature_hover": "{1}분의 {0}박 ({0}/{1})",
+    "timeline.time_signature_fixed": "첫 박자표는 위치가 고정되어 있습니다.",
     "history.time_signature": "박자표 설정",
     "timeline.fade_deleted": "페이드 설정을 삭제했습니다.",
     "timeline.fade_type": "종류",
