@@ -1,9 +1,11 @@
 window.__MOBIBARD_LOCALES__ = window.__MOBIBARD_LOCALES__ || {};
 window.__MOBIBARD_LOCALES__["zh-CN"] = {
   "code": "zh-CN",
-  "name": "中文(简体)",
+  "name": "简体中文",
   "htmlLang": "zh-Hans",
   "strings": {
+    "special_thanks.major_help": "给予我们大力帮助的各位",
+    "special_thanks.everyone_interested": "所有关注过我们的朋友！",
     "import.channel_color": "通道颜色",
     "import.channel_color_aria": "导入通道颜色方式",
     "import.note_min_length": "音符最短长度",
@@ -684,7 +686,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "ui.piano_roll_tools": "钢琴卷帘工具",
     "zoom.piano_roll_out": "放大 / 缩小钢琴卷帘",
     "channel.no_limit": "Editor 可不限数量选择检测到的频道。",
-    "ui.korean": "韩语",
+    "ui.korean": "한국어",
     "ui.clear_2": "解除",
     "ui.strings": "弦乐",
     "ui.text": "当前",

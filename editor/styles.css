@@ -8733,6 +8733,9 @@ body.merge-mode-active #rollCanvas { cursor: crosshair !important; }
   font-size: 12px;
   font-weight: 900;
 }
+.special-thanks-list li:not(.special-thanks-all) .special-thanks-name {
+  font-size: 14px;
+}
 .channel-mml-optimize-option {
   background: color-mix(in srgb, var(--accent) 8%, var(--control-bg));
 }

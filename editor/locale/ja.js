@@ -4,6 +4,8 @@ window.__MOBIBARD_LOCALES__["ja"] = {
   "name": "日本語",
   "htmlLang": "ja",
   "strings": {
+    "special_thanks.major_help": "多大なご協力をいただいた皆さん",
+    "special_thanks.everyone_interested": "関心を寄せてくださったすべての皆さん！",
     "import.channel_color": "チャンネル色",
     "import.channel_color_aria": "読み込み時のチャンネル色基準",
     "import.note_min_length": "ノート最小長",
@@ -684,7 +686,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "ui.piano_roll_tools": "ピアノロール操作ツール",
     "zoom.piano_roll_out": "ピアノロールを拡大 / 縮小",
     "channel.no_limit": "Editorでは検出されたチャンネルを制限なく選択できます。",
-    "ui.korean": "韓国語",
+    "ui.korean": "한국어",
     "ui.clear_2": "解除",
     "ui.strings": "弦",
     "ui.text": "現在",

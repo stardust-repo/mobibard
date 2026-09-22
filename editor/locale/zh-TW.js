@@ -1,9 +1,11 @@
 window.__MOBIBARD_LOCALES__ = window.__MOBIBARD_LOCALES__ || {};
 window.__MOBIBARD_LOCALES__["zh-TW"] = {
   "code": "zh-TW",
-  "name": "中文(繁體)",
+  "name": "繁體中文",
   "htmlLang": "zh-Hant",
   "strings": {
+    "special_thanks.major_help": "給予我們大力幫助的各位",
+    "special_thanks.everyone_interested": "所有關注過我們的朋友！",
     "import.channel_color": "頻道顏色",
     "import.channel_color_aria": "匯入頻道顏色方式",
     "import.note_min_length": "音符最短長度",
@@ -684,7 +686,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "ui.piano_roll_tools": "鋼琴捲軸工具",
     "zoom.piano_roll_out": "放大 / 縮小鋼琴捲軸",
     "channel.no_limit": "Editor 可不限數量選擇偵測到的頻道。",
-    "ui.korean": "韓文",
+    "ui.korean": "한국어",
     "ui.clear_2": "解除",
     "ui.strings": "絃樂",
     "ui.text": "目前",

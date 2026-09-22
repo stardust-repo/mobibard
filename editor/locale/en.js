@@ -4,6 +4,8 @@ window.__MOBIBARD_LOCALES__["en"] = {
   "name": "English",
   "htmlLang": "en",
   "strings": {
+    "special_thanks.major_help": "Those who helped us greatly",
+    "special_thanks.everyone_interested": "Everyone who showed interest!",
     "import.channel_color": "Channel color",
     "import.channel_color_aria": "Imported channel color mode",
     "import.note_min_length": "Minimum note length",
@@ -684,7 +686,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "ui.piano_roll_tools": "Piano-roll tools",
     "zoom.piano_roll_out": "Zoom piano roll in / out",
     "channel.no_limit": "Editor can select all detected channels.",
-    "ui.korean": "Korean",
+    "ui.korean": "한국어",
     "ui.clear_2": "Clear",
     "ui.strings": "Strings",
     "ui.text": "Current",

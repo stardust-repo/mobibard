@@ -4,6 +4,8 @@ window.__MOBIBARD_LOCALES__["ko"] = {
   "name": "한국어",
   "htmlLang": "ko",
   "strings": {
+    "special_thanks.major_help": "큰 도움을 주신 분들",
+    "special_thanks.everyone_interested": "관심 가져주신 모든 분!",
     "import.channel_color": "채널 색상",
     "import.channel_color_aria": "불러오기 채널 색상 기준",
     "import.note_min_length": "노트 최소길이",
