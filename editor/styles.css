@@ -9502,3 +9502,38 @@ body.merge-mode-active #channelMergeModeApplyButton:disabled {
   font-size: 16px;
   line-height: 1.35;
 }
+
+/* 2026-09-22 history list visibility pass: retain original spacing/flat list layout */
+.history-item {
+  color: var(--text);
+  font-weight: 600;
+}
+.history-item::before {
+  background: color-mix(in srgb, var(--accent) 16%, var(--control-bg));
+  color: color-mix(in srgb, var(--accent) 72%, var(--text));
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--control-border));
+  font-weight: 800;
+}
+.history-item.current {
+  color: var(--text);
+  font-weight: 800;
+}
+.history-item.future {
+  opacity: .82;
+  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+}
+:root[data-theme="light"] .history-item {
+  color: #172536;
+}
+:root[data-theme="light"] .history-item::before {
+  background: #dce8f8;
+  color: #174f97;
+  border-color: #8ba8ca;
+}
+:root[data-theme="light"] .history-item.current {
+  color: #07111d;
+}
+:root[data-theme="light"] .history-item.future {
+  opacity: .86;
+  color: #435268;
+}
