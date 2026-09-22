@@ -163,7 +163,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "mml_export.part_length": "{0} chars",
     "mml_export.full_detail": "{0} parts · longest {1} chars",
     "mml_export.split_detail": "{0}-char limit · {1} scores",
-    "mml_export.split_not_needed": "No split needed · longest {0} chars",
+    "mml_export.split_not_needed": "No split needed",
     "mml_export.page_copy": "Copy {0}",
     "mml_export.page_detail": "Score {0} · longest {1} chars",
     "mml_export.copy_failed": "Could not copy to the clipboard.",

@@ -163,7 +163,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "mml_export.part_length": "{0}자",
     "mml_export.full_detail": "{0}개 성부 · 최장 {1}자",
     "mml_export.split_detail": "{0}자 기준 · {1}개 악보",
-    "mml_export.split_not_needed": "분할 불필요 · 최장 {0}자",
+    "mml_export.split_not_needed": "분할 불필요",
     "mml_export.page_copy": "{0}번 복사",
     "mml_export.page_detail": "{0}번 악보 · 최장 {1}자",
     "mml_export.copy_failed": "클립보드에 복사하지 못했습니다.",

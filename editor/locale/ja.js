@@ -163,7 +163,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "mml_export.part_length": "{0}文字",
     "mml_export.full_detail": "{0}パート · 最長{1}文字",
     "mml_export.split_detail": "{0}文字基準 · {1}譜面",
-    "mml_export.split_not_needed": "分割不要 · 最長{0}文字",
+    "mml_export.split_not_needed": "分割不要",
     "mml_export.page_copy": "{0}番をコピー",
     "mml_export.page_detail": "{0}番譜面 · 最長{1}文字",
     "mml_export.copy_failed": "クリップボードにコピーできませんでした。",

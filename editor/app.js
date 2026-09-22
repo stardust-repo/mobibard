@@ -16203,6 +16203,19 @@
     return visible.join(", ") || i18nText("mml_export.part_length", ["0"]);
   }
 
+  function formatMmlExportChannelLengths(channels) {
+    const selected = (channels || []).filter((channel) => channel?.notes?.length);
+    if (!selected.length) return "";
+    const exportEndBeat = getMmlExportEndBeat(selected);
+    return selected.map((channel, index) => {
+      const characterCount = getMmlChannelCharacterCount(channel, {
+        includeTempo: index === 0,
+        exportEndBeat,
+      });
+      return i18nText("mml_export.part_length", [characterCount.toLocaleString()]);
+    }).join(", ");
+  }
+
   function channelsToMmlRange(channels, startBeat, endBeat, tempos = getSortedTempos()) {
     const start = Math.max(0, Number(startBeat) || 0);
     const end = Math.max(start + CONFIG.minimumNoteBeat, Number(endBeat) || start + CONFIG.minimumNoteBeat);
@@ -16372,32 +16385,34 @@
       mmlExportCopyState = { mml: "", pages: [] };
       if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = true;
       if (elements.mmlExportCopyAllButton) elements.mmlExportCopyAllButton.disabled = true;
-      if (elements.mmlExportSplitButtons) elements.mmlExportSplitButtons.replaceChildren();
+      if (elements.mmlExportSplitButtons) {
+        elements.mmlExportSplitButtons.replaceChildren();
+        elements.mmlExportSplitButtons.hidden = true;
+      }
       return;
     }
 
     const mml = channelsToMml(channels, { originBeat: 0 });
-    const parts = splitMmlPartsForExport(mml);
-    const maxPartLength = getMmlExportMaxPartLength(mml);
     const pages = splitMmlExportPages(channels, mml);
     mmlExportCopyState = { mml, pages };
 
     if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = false;
     if (elements.mmlExportCopyAllButton) elements.mmlExportCopyAllButton.disabled = !mml;
     if (elements.mmlExportFullCopyDetail) {
-      elements.mmlExportFullCopyDetail.textContent = i18nText("mml_export.full_detail", [parts.length, maxPartLength.toLocaleString()]);
+      elements.mmlExportFullCopyDetail.textContent = formatMmlExportChannelLengths(channels);
     }
     if (elements.mmlExportSplitSummary) {
       elements.mmlExportSplitSummary.textContent = pages.length > 1
         ? i18nText("mml_export.split_detail", [mmlExportSplitMaxChars.toLocaleString(), pages.length])
-        : i18nText("mml_export.split_not_needed", [maxPartLength.toLocaleString()]);
+        : i18nText("mml_export.split_not_needed");
     }
     if (elements.mmlExportSplitLimitInput && document.activeElement !== elements.mmlExportSplitLimitInput) {
       elements.mmlExportSplitLimitInput.value = String(mmlExportSplitMaxChars);
     }
     if (elements.mmlExportSplitButtons) {
       elements.mmlExportSplitButtons.replaceChildren();
-      pages.forEach((page, index) => {
+      elements.mmlExportSplitButtons.hidden = pages.length <= 1;
+      if (pages.length > 1) pages.forEach((page, index) => {
         const row = document.createElement("div");
         row.className = "mml-export-page-copy-row";
         const meta = document.createElement("div");
@@ -16412,8 +16427,7 @@
         button.type = "button";
         button.className = "mml-export-page-copy-button";
         button.textContent = i18nText("copy");
-        const longest = Number(page.maxPartLength) || getMmlExportMaxPartLength(page.mml);
-        button.title = i18nText("mml_export.page_detail", [index + 1, longest.toLocaleString()]);
+        button.title = i18nText("mml_export.page_label", [index + 1]);
         button.addEventListener("click", () => void copyMmlExportText(
           page.mml,
           button,
@@ -16540,7 +16554,10 @@
   function closeMmlExportDialog() {
     if (elements.mmlExportBackdrop) elements.mmlExportBackdrop.hidden = true;
     if (elements.mmlExportChannelList) elements.mmlExportChannelList.replaceChildren();
-    if (elements.mmlExportSplitButtons) elements.mmlExportSplitButtons.replaceChildren();
+    if (elements.mmlExportSplitButtons) {
+      elements.mmlExportSplitButtons.replaceChildren();
+      elements.mmlExportSplitButtons.hidden = true;
+    }
     if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = true;
     mmlExportSelectionQueue = [];
     mmlExportCopyState = { mml: "", pages: [] };

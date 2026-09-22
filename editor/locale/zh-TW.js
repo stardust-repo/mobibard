@@ -163,7 +163,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "mml_export.part_length": "{0}字",
     "mml_export.full_detail": "{0}個聲部 · 最長{1}字",
     "mml_export.split_detail": "以{0}字為限 · {1}份樂譜",
-    "mml_export.split_not_needed": "無需分割 · 最長{0}字",
+    "mml_export.split_not_needed": "無需分割",
     "mml_export.page_copy": "複製第{0}份",
     "mml_export.page_detail": "第{0}份樂譜 · 最長{1}字",
     "mml_export.copy_failed": "無法複製到剪貼簿。",

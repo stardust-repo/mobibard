@@ -6483,14 +6483,16 @@ a[class*="button"]:hover {
 .mml-export-split-head {
   min-width: 0;
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 .mml-export-copy-meta {
   min-width: 0;
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 8px;
 }
 .mml-export-copy-meta strong {
   color: var(--text);
@@ -6538,6 +6540,7 @@ a[class*="button"]:hover {
   border-color: color-mix(in srgb, #22c55e 66%, var(--control-border));
   background: color-mix(in srgb, #22c55e 16%, var(--control-bg));
 }
+.mml-export-split-buttons[hidden] { display: none !important; }
 .mml-export-split-buttons {
   width: 100%;
   max-height: 190px;
@@ -6554,10 +6557,13 @@ a[class*="button"]:hover {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  padding: 7px 8px;
-  border: 1px solid color-mix(in srgb, var(--control-border) 88%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 70%, var(--control-bg));
+  padding: 5px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.mml-export-page-copy-row + .mml-export-page-copy-row {
+  border-top: 1px solid var(--line-soft);
 }
 .mml-export-page-copy-meta {
   min-width: 0;

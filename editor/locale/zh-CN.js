@@ -163,7 +163,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "mml_export.part_length": "{0}字",
     "mml_export.full_detail": "{0}个声部 · 最长{1}字",
     "mml_export.split_detail": "按{0}字限制 · {1}份乐谱",
-    "mml_export.split_not_needed": "无需分割 · 最长{0}字",
+    "mml_export.split_not_needed": "无需分割",
     "mml_export.page_copy": "复制第{0}份",
     "mml_export.page_detail": "第{0}份乐谱 · 最长{1}字",
     "mml_export.copy_failed": "无法复制到剪贴板。",
