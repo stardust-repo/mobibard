@@ -144,9 +144,16 @@
     appContent: document.querySelector(".app-content"),
     sidePanel: document.querySelector("#sidePanel"),
     sidebarChannelsTab: document.querySelector("#sidebarChannelsTab"),
+    sidebarShortcutsTab: document.querySelector("#sidebarShortcutsTab"),
     sidebarHistoryTab: document.querySelector("#sidebarHistoryTab"),
     sidebarThanksTab: document.querySelector("#sidebarThanksTab"),
     pianoSection: document.querySelector(".piano-section"),
+    shortcutPanel: document.querySelector("#shortcutPanel"),
+    shortcutSearchInput: document.querySelector("#shortcutSearchInput"),
+    shortcutSearchResults: document.querySelector("#shortcutSearchResults"),
+    shortcutSearchResultList: document.querySelector("#shortcutSearchResultList"),
+    shortcutSearchEmpty: document.querySelector("#shortcutSearchEmpty"),
+    shortcutGroups: document.querySelector("#shortcutGroups"),
     historyPanel: document.querySelector("#historyPanel"),
     specialThanksPanel: document.querySelector("#specialThanksPanel"),
     historyCornerToggle: document.querySelector("#historyCornerToggle"),
@@ -223,10 +230,6 @@
     editorSoundFontFileInput: document.querySelector("#editorSoundFontFileInput"),
     editorSoundFontLoadButton: document.querySelector("#editorSoundFontLoadButton"),
     editorSoundFontResetButton: document.querySelector("#editorSoundFontResetButton"),
-    shortcutHelpButton: document.querySelector("#shortcutHelpButton"),
-    shortcutHelpBackdrop: document.querySelector("#shortcutHelpBackdrop"),
-    shortcutHelpCloseButton: document.querySelector("#shortcutHelpCloseButton"),
-    shortcutHelpDoneButton: document.querySelector("#shortcutHelpDoneButton"),
     googleAccountButton: document.querySelector("#googleAccountButton"),
     googleAccountMenu: document.querySelector("#googleAccountMenu"),
     noteToolButton: document.querySelector("#noteToolButton"),
@@ -3071,6 +3074,8 @@
     }
     if (isNoteEditModeActive()) updateNoteEditModeUi();
     if (elements.tempoSimplifyBackdrop && !elements.tempoSimplifyBackdrop.hidden) updateTempoSimplifySummary();
+    renderShortcutKeycaps();
+    updateShortcutSearchResults();
     window.MobibardSiteNavigation?.refresh?.();
   }
 
@@ -3088,6 +3093,7 @@
         state.language = normalizeLanguage(applied || nextLanguage);
         if (elements.languageSelect) elements.languageSelect.value = state.language;
         window.MobibardSiteNavigation?.refresh?.();
+        updateShortcutSearchResults();
         if (notify) {
           const label = elements.languageSelect?.selectedOptions?.[0]?.textContent || state.language;
           showToast(i18nText("editor.language_saved", [label]));
@@ -10919,32 +10925,38 @@
   }
 
   function setSidebarTab(tab, { persist = true, focus = false } = {}) {
-    const nextTab = tab === "history" ? "history" : (tab === "thanks" ? "thanks" : "channels");
+    const validTabs = new Set(["channels", "shortcuts", "history", "thanks"]);
+    const nextTab = validTabs.has(tab) ? tab : "channels";
     state.sidebarTab = nextTab;
     const channelsActive = nextTab === "channels";
+    const shortcutsActive = nextTab === "shortcuts";
     const historyActive = nextTab === "history";
     const thanksActive = nextTab === "thanks";
     elements.sidebarChannelsTab?.classList.toggle("active", channelsActive);
+    elements.sidebarShortcutsTab?.classList.toggle("active", shortcutsActive);
     elements.sidebarHistoryTab?.classList.toggle("active", historyActive);
     elements.sidebarThanksTab?.classList.toggle("active", thanksActive);
     elements.sidebarChannelsTab?.setAttribute("aria-selected", String(channelsActive));
+    elements.sidebarShortcutsTab?.setAttribute("aria-selected", String(shortcutsActive));
     elements.sidebarHistoryTab?.setAttribute("aria-selected", String(historyActive));
     elements.sidebarThanksTab?.setAttribute("aria-selected", String(thanksActive));
     if (elements.channelPanel) elements.channelPanel.hidden = !channelsActive;
+    if (elements.shortcutPanel) elements.shortcutPanel.hidden = !shortcutsActive;
     if (elements.historyPanel) elements.historyPanel.hidden = !historyActive;
     if (elements.specialThanksPanel) elements.specialThanksPanel.hidden = !thanksActive;
     if (persist) {
       try { window.localStorage.setItem("mobibard-sidebar-tab", nextTab); } catch {}
       scheduleAutosave(500);
     }
-    if (focus) ({ channels: elements.sidebarChannelsTab, history: elements.sidebarHistoryTab, thanks: elements.sidebarThanksTab }[nextTab])?.focus();
+    if (focus) ({ channels: elements.sidebarChannelsTab, shortcuts: elements.sidebarShortcutsTab, history: elements.sidebarHistoryTab, thanks: elements.sidebarThanksTab }[nextTab])?.focus();
+    if (shortcutsActive && elements.shortcutSearchInput?.value) updateShortcutSearchResults();
     requestAnimationFrame(resizeAndDraw);
   }
 
   function loadStoredSidebarTab() {
     try {
       const stored = window.localStorage.getItem("mobibard-sidebar-tab");
-      return stored === "history" || stored === "thanks" ? stored : "channels";
+      return ["channels", "shortcuts", "history", "thanks"].includes(stored) ? stored : "channels";
     } catch { return "channels"; }
   }
 
@@ -19454,7 +19466,7 @@
         .map(String)
         .filter((id) => validMidiIds.has(id)),
     );
-    state.sidebarTab = data.editor?.sidebarTab === "history" || data.editor?.sidebarTab === "thanks"
+    state.sidebarTab = ["channels", "shortcuts", "history", "thanks"].includes(data.editor?.sidebarTab)
       ? data.editor.sidebarTab
       : "channels";
     clearNoteSelection();
@@ -21782,14 +21794,12 @@
       && !event.shiftKey
       && (event.code === "KeyA" || String(event.key || "").toLowerCase() === "a");
 
-    // Context/File/Edit menus and the shortcut-help popup are keyboard-modal for
-    // Ctrl/Cmd+A. Skipping the editor shortcut alone would let the browser's
-    // native Select All highlight the menu/popup text. Consume it completely.
+    // Context/File/Edit menus are keyboard-modal for Ctrl/Cmd+A.
+    // Consume the command so the browser does not select menu text.
     const blockSelectAll = [
       elements.contextMenu,
       elements.fileMenu,
       elements.editMenu,
-      elements.shortcutHelpBackdrop,
     ].some(isActuallyVisiblePopupElement);
     if (selectAllCommand && blockSelectAll) {
       event.preventDefault();
@@ -21800,6 +21810,7 @@
     if (
       event.defaultPrevented
       || !selectAllCommand
+      || isTextEntryTarget(event.target)
       || isPopupLikeUiOpen()
     ) {
       return false;
@@ -22007,22 +22018,87 @@
     }, CONFIG.manualScrollSnapDelay);
   }
 
-  function openShortcutHelpDialog() {
-    closeFileMenu();
-    closeEditMenu();
-    closeThemeMenu();
-    closeGoogleAccountMenu();
-    closeVolumeMenu();
-    closeZoomMenu();
-    closePlaybackRateMenu();
-    if (!elements.shortcutHelpBackdrop) return false;
-    elements.shortcutHelpBackdrop.hidden = false;
-    requestAnimationFrame(() => elements.shortcutHelpCloseButton?.focus());
-    return true;
+
+
+  function shortcutKeycapParts(label) {
+    const text = String(label || "").trim();
+    if (!text) return [];
+    // Slash-delimited alternatives stay in one keycap (Ctrl/Cmd, Delete / Backspace, etc.).
+    // Only actual combination/range separators become standalone separators.
+    const spaced = text.split(/(\s+\+\s+|\s+·\s+|\s+~\s+)/).filter(Boolean);
+    const parts = [];
+    for (const item of spaced) {
+      if (/^\s+(?:\+|·|~)\s+$/.test(item)) {
+        parts.push({ type: "separator", text: item.trim() });
+        continue;
+      }
+      parts.push({ type: "key", text: item.trim() });
+    }
+    return parts;
   }
 
-  function closeShortcutHelpDialog() {
-    if (elements.shortcutHelpBackdrop) elements.shortcutHelpBackdrop.hidden = true;
+  function renderShortcutKeycaps() {
+    if (!elements.shortcutGroups) return;
+    for (const term of elements.shortcutGroups.querySelectorAll(".shortcut-entry dt")) {
+      const label = String(term.textContent || "").trim();
+      if (!label) continue;
+      term.setAttribute("aria-label", label);
+      const fragment = document.createDocumentFragment();
+      for (const part of shortcutKeycapParts(label)) {
+        const span = document.createElement("span");
+        if (part.type === "separator") {
+          span.className = "shortcut-key-separator";
+          span.setAttribute("aria-hidden", "true");
+        } else {
+          span.className = "shortcut-keycap";
+          if (/^(?:ctrl(?:\s*\/\s*cmd)?|control|cmd(?:\s*\/\s*ctrl)?|command|⌘|alt|option|shift|meta)$/i.test(part.text)) {
+            span.classList.add("is-modifier");
+          }
+        }
+        span.textContent = part.text;
+        fragment.append(span);
+      }
+      term.replaceChildren(fragment);
+    }
+  }
+
+  function updateShortcutSearchResults() {
+    const input = elements.shortcutSearchInput;
+    const results = elements.shortcutSearchResults;
+    const list = elements.shortcutSearchResultList;
+    const empty = elements.shortcutSearchEmpty;
+    const groups = elements.shortcutGroups;
+    if (!input || !results || !list || !groups) return;
+
+    const query = String(input.value || "").trim().toLocaleLowerCase();
+    list.replaceChildren();
+    groups.hidden = Boolean(query);
+    if (!query) {
+      results.hidden = true;
+      if (empty) empty.hidden = true;
+      return;
+    }
+
+    let matchCount = 0;
+    for (const entry of groups.querySelectorAll(".shortcut-entry")) {
+      const description = entry.querySelector("dd");
+      if (!description || !description.textContent.toLocaleLowerCase().includes(query)) continue;
+      const key = entry.querySelector("dt");
+      const row = document.createElement("div");
+      row.className = "shortcut-search-result";
+      if (key) row.append(key.cloneNode(true));
+      row.append(description.cloneNode(true));
+      list.append(row);
+      matchCount += 1;
+    }
+    results.hidden = false;
+    if (empty) empty.hidden = matchCount > 0;
+  }
+
+  function clearShortcutSearch() {
+    if (!elements.shortcutSearchInput) return;
+    elements.shortcutSearchInput.value = "";
+    updateShortcutSearchResults();
   }
 
   function openSelectedRecommendedLink() {
@@ -22199,8 +22275,11 @@
 
     elements.historyCornerToggle.addEventListener("click", () => setHistoryCollapsed(!state.history.collapsed));
     elements.sidebarChannelsTab?.addEventListener("click", () => setSidebarTab("channels"));
+    elements.sidebarShortcutsTab?.addEventListener("click", () => setSidebarTab("shortcuts"));
     elements.sidebarHistoryTab?.addEventListener("click", () => setSidebarTab("history"));
     elements.sidebarThanksTab?.addEventListener("click", () => setSidebarTab("thanks"));
+    elements.shortcutSearchInput?.addEventListener("input", updateShortcutSearchResults);
+    elements.shortcutSearchInput?.addEventListener("search", updateShortcutSearchResults);
     elements.channelTabs?.addEventListener("keydown", handleChannelTreeArrowNavigation);
     elements.channelTabs?.addEventListener("pointermove", moveChannelActionSweep);
     elements.channelTabs?.addEventListener("pointerup", endChannelActionSweep);
@@ -22306,15 +22385,6 @@
       if (file) void loadEditorSoundFontFile(file);
     });
     elements.editorSoundFontResetButton?.addEventListener("click", () => { void restoreEditorDefaultSoundFont(); });
-    elements.shortcutHelpButton?.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openShortcutHelpDialog();
-    });
-    elements.shortcutHelpCloseButton?.addEventListener("click", closeShortcutHelpDialog);
-    elements.shortcutHelpDoneButton?.addEventListener("click", closeShortcutHelpDialog);
-    elements.shortcutHelpBackdrop?.addEventListener("pointerdown", (event) => {
-      if (event.target === elements.shortcutHelpBackdrop) closeShortcutHelpDialog();
-    });
 
     elements.horizontalScrollBar.addEventListener("pointerdown", (event) => beginCustomScrollbarDrag("x", event));
     elements.horizontalScrollBar.addEventListener("pointermove", moveCustomScrollbarDrag);
@@ -23031,6 +23101,8 @@
     bindEvents();
     initializeSplitter();
     setSidebarTab(loadStoredSidebarTab(), { persist: false });
+    renderShortcutKeycaps();
+    updateShortcutSearchResults();
     setHistoryCollapsed(loadHistoryCollapsedState());
     updateEditToolControls();
 
