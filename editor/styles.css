@@ -10084,3 +10084,20 @@ body.merge-mode-active #channelMergeModeApplyButton:disabled {
   border-bottom: 0 !important;
   box-shadow: none !important;
 }
+
+/* 2026-09-24 merge mode usability: keep visibility and channel settings available. */
+body.merge-mode-active .channel-tree-channel-item .channel-tree-visibility,
+body.merge-mode-active #channelEditBackdrop button,
+body.merge-mode-active #channelEditBackdrop input,
+body.merge-mode-active #channelEditBackdrop select,
+body.merge-mode-active #channelEditBackdrop textarea {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+body.merge-mode-active .channel-tree-channel-item.is-hidden .channel-tree-merge-include,
+body.merge-mode-active .channel-tree-channel-item.is-hidden .channel-tree-merge-exclude {
+  opacity: .34 !important;
+}
+body.merge-mode-active .channel-tree-channel-item .channel-tree-actions {
+  pointer-events: auto !important;
+}

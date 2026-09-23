@@ -6633,10 +6633,17 @@
     pointerId: null,
     kind: "",
     targetValue: null,
+    lastClientX: 0,
+    lastClientY: 0,
+    scrollFrame: null,
     visitedActionKeys: new Set(),
   };
 
   function resetChannelActionSweep({ releaseCapture = false } = {}) {
+    if (channelActionSweep.scrollFrame != null) {
+      cancelAnimationFrame(channelActionSweep.scrollFrame);
+      channelActionSweep.scrollFrame = null;
+    }
     if (releaseCapture && elements.channelTabs && channelActionSweep.pointerId !== null) {
       try {
         if (elements.channelTabs.hasPointerCapture?.(channelActionSweep.pointerId)) {
@@ -6648,6 +6655,8 @@
     channelActionSweep.pointerId = null;
     channelActionSweep.kind = "";
     channelActionSweep.targetValue = null;
+    channelActionSweep.lastClientX = 0;
+    channelActionSweep.lastClientY = 0;
     channelActionSweep.visitedActionKeys.clear();
   }
 
@@ -6687,6 +6696,40 @@
       if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetMuted;
       return setChannelMutedById(channel.id, targetMuted, { notify: false });
     }
+    if ((kind === "merge-include" || kind === "merge-exclude") && isChannelMergeModeActive()) {
+      const id = String(channel.id);
+      const targetId = String(state.channelMerge.targetChannelId ?? "");
+      // Hidden channels are deliberately excluded from merge sweep selection.
+      if (id === targetId || channel.visible === false) return false;
+      if (!(state.channelMerge.sourceChannelIds instanceof Set)) state.channelMerge.sourceChannelIds = new Set();
+      if (!(state.channelMerge.excludeOverlapChannelIds instanceof Set)) state.channelMerge.excludeOverlapChannelIds = new Set();
+      const sources = state.channelMerge.sourceChannelIds;
+      const excludes = state.channelMerge.excludeOverlapChannelIds;
+      const currentActive = kind === "merge-include" ? sources.has(id) : excludes.has(id);
+      const targetActive = channelActionSweep.targetValue === null
+        ? !currentActive
+        : Boolean(channelActionSweep.targetValue);
+      if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetActive;
+      if (currentActive === targetActive) return false;
+      if (kind === "merge-include") {
+        if (targetActive) {
+          excludes.delete(id);
+          sources.add(id);
+        } else {
+          sources.delete(id);
+        }
+      } else if (targetActive) {
+        sources.delete(id);
+        excludes.add(id);
+      } else {
+        excludes.delete(id);
+      }
+      state.channelMerge.runtimeCache = null;
+      state.channelMerge.previewModified = false;
+      rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
+      renderChannelTabs();
+      return true;
+    }
     return false;
   }
 
@@ -6701,6 +6744,8 @@
     channelActionSweep.active = true;
     channelActionSweep.pointerId = event.pointerId;
     channelActionSweep.kind = kind;
+    channelActionSweep.lastClientX = event.clientX;
+    channelActionSweep.lastClientY = event.clientY;
     try { elements.channelTabs.setPointerCapture?.(event.pointerId); } catch {}
     applyChannelSweepAction(action);
   }
@@ -6708,11 +6753,24 @@
   function moveChannelActionSweep(event) {
     if (!channelActionSweep.active || event.pointerId !== channelActionSweep.pointerId) return;
     event.preventDefault();
+    channelActionSweep.lastClientX = event.clientX;
+    channelActionSweep.lastClientY = event.clientY;
     const action = getChannelSweepActionAt(event.clientX, event.clientY);
     if (!action || String(action.dataset.channelSweepKind || "") !== channelActionSweep.kind) {
       return;
     }
     applyChannelSweepAction(action);
+  }
+
+  function continueChannelActionSweepAfterScroll() {
+    if (!channelActionSweep.active || channelActionSweep.scrollFrame != null) return;
+    channelActionSweep.scrollFrame = requestAnimationFrame(() => {
+      channelActionSweep.scrollFrame = null;
+      if (!channelActionSweep.active) return;
+      const action = getChannelSweepActionAt(channelActionSweep.lastClientX, channelActionSweep.lastClientY);
+      if (!action || String(action.dataset.channelSweepKind || "") !== channelActionSweep.kind) return;
+      applyChannelSweepAction(action);
+    });
   }
 
   function endChannelActionSweep(event) {
@@ -6806,6 +6864,12 @@
         event.preventDefault();
         event.stopPropagation();
       });
+      main.addEventListener("dblclick", (event) => {
+        if (!isChannelMergeModeActive()) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openChannelEditDialog(channel.id);
+      });
 
       const actions = document.createElement("div");
       actions.className = "channel-tree-actions";
@@ -6824,6 +6888,8 @@
             title: i18nText(mergeSource ? "merge.include_clear_named" : "merge.include_set_named", [channel.name]),
             textContent: "✓",
             onClick: () => toggleChannelMergeSource(channel.id),
+            sweep: true,
+            sweepId: channel.id,
           }),
           createAction({
             kind: "merge-exclude",
@@ -6832,8 +6898,13 @@
             title: i18nText(mergeMask ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [channel.name]),
             textContent: "×",
             onClick: () => toggleChannelMergeExcludeOverlapChannel(channel.id),
+            sweep: true,
+            sweepId: channel.id,
           }),
         );
+        if (channel.visible === false) {
+          mergeRoleGroup.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+        }
       }
       actions.append(
         ...(mergeRoleGroup ? [mergeRoleGroup] : []),
@@ -11882,6 +11953,21 @@
     if (!channel || channel.visible === nextVisible) return false;
     channel.visible = nextVisible;
     setDirtyWithoutHistory();
+    if (isChannelMergeModeActive() && !nextVisible && String(channel.id) !== String(state.channelMerge.targetChannelId)) {
+      const hiddenId = String(channel.id);
+      state.channelMerge.sourceChannelIds?.delete(hiddenId);
+      state.channelMerge.excludeOverlapChannelIds?.delete(hiddenId);
+      if (state.channelMerge.selectedCandidateKeys instanceof Set) {
+        const runtime = getChannelMergeRuntimeCache(state.channelMerge.candidatePool || []);
+        state.channelMerge.selectedCandidateKeys = new Set(
+          [...state.channelMerge.selectedCandidateKeys].filter((key) => (
+            String(runtime.candidateByKey.get(key)?.sourceChannelId ?? "") !== hiddenId
+          )),
+        );
+      }
+      state.channelMerge.runtimeCache = null;
+      refreshChannelMergePreviewFromSelection({ markModified: state.channelMerge.previewModified });
+    }
     renderChannelTabs();
     renderChannelEditor();
     drawRoll();
@@ -12016,7 +12102,7 @@
     const excludeIds = getChannelMergeExcludeOverlapChannelIds();
     return state.channels.filter((channel) => {
       const id = String(channel.id);
-      return ids.has(id) && id !== targetId && !excludeIds.has(id);
+      return channel.visible !== false && ids.has(id) && id !== targetId && !excludeIds.has(id);
     });
   }
 
@@ -12209,7 +12295,7 @@
     return new Set([...rawIds].map(String).filter((id) => (
       id
       && id !== targetId
-      && state.channels.some((channel) => String(channel.id) === id)
+      && state.channels.some((channel) => String(channel.id) === id && channel.visible !== false)
     )));
   }
 
@@ -12497,7 +12583,8 @@
     if (!isChannelMergeModeActive()) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     const id = String(channelId);
-    if (id === String(state.channelMerge.targetChannelId)) return false;
+    const channel = getChannelById(id);
+    if (!channel || channel.visible === false || id === String(state.channelMerge.targetChannelId)) return false;
     const excludeIds = state.channelMerge.excludeOverlapChannelIds instanceof Set
       ? state.channelMerge.excludeOverlapChannelIds
       : new Set();
@@ -12545,7 +12632,8 @@
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     const id = String(channelId ?? "");
     const targetId = String(state.channelMerge.targetChannelId ?? "");
-    if (!id || id === targetId || !state.channels.some((channel) => String(channel.id) === id)) return false;
+    const channel = getChannelById(id);
+    if (!id || !channel || channel.visible === false || id === targetId) return false;
     if (!(state.channelMerge.excludeOverlapChannelIds instanceof Set)) {
       state.channelMerge.excludeOverlapChannelIds = new Set();
     }
@@ -12652,6 +12740,8 @@
     const runtime = getChannelMergeRuntimeCache(pool);
     const candidate = runtime.candidateByKey.get(candidateKey);
     if (!candidate) return false;
+    const sourceChannel = getChannelById(candidate.sourceChannelId);
+    if (sourceChannel?.visible === false && String(candidate.sourceChannelId) !== String(state.channelMerge.targetChannelId)) return false;
     if (isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool)) {
       if (!silentBlocked) showToast(i18nText("merge.exclude_overlap_blocked"));
       return false;
@@ -12898,16 +12988,18 @@
 
   function handleMergeModeKeyGuard(event) {
     if (!isChannelMergeModeActive() && !isNoteEditModeActive()) return;
+    const target = event.target;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (isNoteEditModeActive()) cancelNoteEditMode();
+      if (isChannelMergeModeActive() && target?.closest?.("#channelEditBackdrop")) {
+        closeChannelEditDialog();
+      } else if (isNoteEditModeActive()) cancelNoteEditMode();
       else cancelChannelMergeMode();
       return;
     }
     if (event.code === "Space" && !event.ctrlKey && !event.metaKey && !event.altKey) return;
-    const target = event.target;
-    if (target?.closest?.("#channelMergeModeControls, #noteEditModePanel, .playback-compact-box")) return;
+    if (target?.closest?.("#channelMergeModeControls, #channelEditBackdrop, #noteEditModePanel, .playback-compact-box")) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   }
@@ -22284,6 +22376,7 @@
     elements.channelTabs?.addEventListener("pointermove", moveChannelActionSweep);
     elements.channelTabs?.addEventListener("pointerup", endChannelActionSweep);
     elements.channelTabs?.addEventListener("pointercancel", endChannelActionSweep);
+    elements.channelTabs?.addEventListener("scroll", continueChannelActionSweepAfterScroll, { passive: true });
     elements.channelTabs?.addEventListener("lostpointercapture", () => resetChannelActionSweep());
     elements.historyList?.addEventListener("keydown", handleHistoryArrowNavigation);
     elements.historyUndoButton.addEventListener("click", () => undoHistory());
