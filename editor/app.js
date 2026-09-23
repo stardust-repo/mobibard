@@ -19084,7 +19084,7 @@
 
   function saveProject() {
     shrinkTimelineToContent();
-    const data = JSON.stringify(serializeProject(), null, 2);
+    const data = JSON.stringify(serializeProject());
     const blob = new Blob([data], { type: "application/json;charset=utf-8" });
     const link = document.createElement("a");
     const safeName = (state.projectName || "mobibard-project").replace(/[\/:*?"<>|]/g, "_");

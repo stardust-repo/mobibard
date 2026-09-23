@@ -328,7 +328,7 @@ async function handleGoogleSave() {
     const folder = await ensureProjectFolder();
     const existing = await findProjectFile(folder.id, fileName);
     if (existing?.id && !window.confirm(t('editor.drive.overwrite', [fileName]))) return;
-    const content = JSON.stringify(api.serializeProject(), null, 2);
+    const content = JSON.stringify(api.serializeProject());
     await uploadProject({ folderId: folder.id, fileName, content, overwriteId: existing?.id || '' });
     api.markProjectSaved?.({ notify: false });
     showToast(t('editor.drive.saved'));
