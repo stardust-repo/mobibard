@@ -965,13 +965,14 @@
     if (!snapshot?.data) return false;
     state.autosave.restoring = true;
     try {
+      const decodedAutosave = decodeProjectStorage(snapshot.data);
       const virtualFile = {
         name: "자동 저장.mmlproj.json",
         text: async () => JSON.stringify(snapshot.data),
       };
       await loadProjectFromFile(virtualFile, {
         notify: false,
-        loadedFileName: snapshot.data?.editor?.loadedFileName || "",
+        loadedFileName: decodedAutosave?.editor?.loadedFileName || "",
       });
       await restoreAutosaveAudioAssets(snapshot.audioAssets);
       state.autosave.lastSavedAt = Number(snapshot.savedAt) || Date.now();
@@ -13959,9 +13960,10 @@
     }
     const existing = noteHit?.note || null;
 
-    // A selected note can be double-clicked to edit the volume of the whole current selection.
-    // Select mode normally toggles a note on the first tap, so preserve the first-click selection
-    // and restore it on the second click before opening the volume dialog.
+    // Double-click always opens note settings. If the note was not selected on the
+    // first click, remember a single-note selection so the second click can select it
+    // and immediately open the same settings dialog. Existing multi-selection keeps
+    // the previous behavior: double-clicking one of those notes edits the whole selection.
     if (event.button === 0 && existing && !additive && !isNoteEditModeActive()) {
       const tracker = state.noteVolumeDoubleClick;
       const now = performance.now();
@@ -13986,15 +13988,11 @@
         event.stopPropagation();
         return;
       }
-      if (state.selectedNoteIds.has(existing.id)) {
-        tracker.noteId = existing.id;
-        tracker.lastClickAt = now;
-        tracker.selectedIds = new Set(state.selectedNoteIds);
-      } else if (tracker.noteId !== existing.id || now - tracker.lastClickAt > 420) {
-        tracker.noteId = null;
-        tracker.lastClickAt = 0;
-        tracker.selectedIds = new Set();
-      }
+      tracker.noteId = existing.id;
+      tracker.lastClickAt = now;
+      tracker.selectedIds = state.selectedNoteIds.has(existing.id)
+        ? new Set(state.selectedNoteIds)
+        : new Set([existing.id]);
     }
 
     if (getActiveChannel()?.visible === false && event.button === 0 && pointBeat >= 0 && !existing) {
@@ -18873,10 +18871,173 @@
   }
 
 
-  function serializeProject() {
+  // Project storage codec v2.
+  // Repeated object arrays use a shared schema registry. Each distinct field-name
+  // list is stored once for the entire file, while records contain positional values.
+  // This keeps JSON self-describing and extensible without repeating property names.
+  const PROJECT_STORAGE_ENCODING = "schema-rows-v2";
+  const PROJECT_STORAGE_SCHEMA = "$s";
+  const PROJECT_STORAGE_ROWS = "$r";
+
+  function isPlainStorageObject(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  function getStorageSchemaIndex(fields, context) {
+    const key = JSON.stringify(fields);
+    if (context.schemaIndex.has(key)) return context.schemaIndex.get(key);
+    const index = context.schemas.length;
+    context.schemas.push(fields);
+    context.schemaIndex.set(key, index);
+    return index;
+  }
+
+  function encodeSchemaRows(value, context) {
+    if (Array.isArray(value)) {
+      if (value.length > 0 && value.every(isPlainStorageObject)) {
+        const fields = [];
+        const seen = new Set();
+        for (const record of value) {
+          for (const key of Object.keys(record)) {
+            if (seen.has(key)) continue;
+            seen.add(key);
+            fields.push(key);
+          }
+        }
+        const schemaIndex = getStorageSchemaIndex(fields, context);
+        return {
+          [PROJECT_STORAGE_SCHEMA]: schemaIndex,
+          [PROJECT_STORAGE_ROWS]: value.map((record) => fields.map((field) => (
+            Object.prototype.hasOwnProperty.call(record, field)
+              ? encodeSchemaRows(record[field], context)
+              : null
+          ))),
+        };
+      }
+      return value.map((item) => encodeSchemaRows(item, context));
+    }
+    if (isPlainStorageObject(value)) {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, encodeSchemaRows(item, context)]));
+    }
+    return value;
+  }
+
+  function decodeSchemaRows(value, schemas) {
+    if (Array.isArray(value)) return value.map((item) => decodeSchemaRows(item, schemas));
+    if (!isPlainStorageObject(value)) return value;
+    const schemaIndex = Number(value[PROJECT_STORAGE_SCHEMA]);
+    const rows = value[PROJECT_STORAGE_ROWS];
+    const fields = Number.isInteger(schemaIndex) ? schemas?.[schemaIndex] : null;
+    if (
+      Array.isArray(fields)
+      && Array.isArray(rows)
+      && Object.keys(value).length === 2
+      && fields.every((field) => typeof field === "string")
+      && rows.every(Array.isArray)
+    ) {
+      return rows.map((row) => {
+        const record = {};
+        for (let index = 0; index < fields.length; index += 1) {
+          record[fields[index]] = decodeSchemaRows(index < row.length ? row[index] : null, schemas);
+        }
+        return record;
+      });
+    }
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, decodeSchemaRows(item, schemas)]));
+  }
+
+  function encodeProjectStorage(project) {
+    const context = { schemas: [], schemaIndex: new Map() };
+    const data = encodeSchemaRows(project, context);
     return {
       format: "mml-piano-roll-project",
-      version: 27,
+      version: 28,
+      encoding: PROJECT_STORAGE_ENCODING,
+      schemas: context.schemas,
+      data,
+    };
+  }
+
+  function decodeProjectStorage(storage) {
+    if (
+      storage?.format === "mml-piano-roll-project"
+      && storage?.encoding === PROJECT_STORAGE_ENCODING
+      && Array.isArray(storage?.schemas)
+      && storage?.data
+    ) {
+      const decoded = decodeSchemaRows(storage.data, storage.schemas);
+      if (decoded && typeof decoded === "object") {
+        decoded.format = storage.format;
+        decoded.version = Number(storage.version) || 28;
+      }
+      return decoded;
+    }
+    return storage;
+  }
+
+  function serializeHistoryEntry(entry) {
+    if (!entry || typeof entry !== "object") return null;
+    let snapshot = null;
+    try {
+      snapshot = typeof entry.snapshot === "string" ? JSON.parse(entry.snapshot) : entry.snapshot;
+    } catch {
+      return null;
+    }
+    if (!snapshot || typeof snapshot !== "object") return null;
+    return {
+      id: Number(entry.id) || 0,
+      label: String(entry.label || "편집"),
+      channelId: entry.channelId ?? null,
+      restorePlayheadBeat: Number.isFinite(Number(entry.restorePlayheadBeat)) ? Number(entry.restorePlayheadBeat) : null,
+      createdAt: Number(entry.createdAt) || 0,
+      snapshot,
+    };
+  }
+
+  function serializeHistoryState() {
+    return {
+      version: 1,
+      nextId: Math.max(1, Number(state.history.nextId) || 1),
+      undo: state.history.undoStack.map(serializeHistoryEntry).filter(Boolean),
+      current: serializeHistoryEntry(state.history.currentEntry),
+      redo: state.history.redoStack.map(serializeHistoryEntry).filter(Boolean),
+    };
+  }
+
+  function deserializeHistoryEntry(entry) {
+    if (!entry || typeof entry !== "object" || !entry.snapshot || typeof entry.snapshot !== "object") return null;
+    return {
+      id: Math.max(1, Number(entry.id) || 1),
+      snapshot: JSON.stringify(entry.snapshot),
+      label: String(entry.label || "편집"),
+      channelId: entry.channelId ?? null,
+      restorePlayheadBeat: Number.isFinite(Number(entry.restorePlayheadBeat)) ? Math.max(0, Number(entry.restorePlayheadBeat)) : null,
+      createdAt: Number(entry.createdAt) || Date.now(),
+    };
+  }
+
+  function restoreSavedHistory(savedHistory) {
+    if (!savedHistory || typeof savedHistory !== "object") return false;
+    const undo = (Array.isArray(savedHistory.undo) ? savedHistory.undo : []).map(deserializeHistoryEntry).filter(Boolean);
+    const redo = (Array.isArray(savedHistory.redo) ? savedHistory.redo : []).map(deserializeHistoryEntry).filter(Boolean);
+    const current = deserializeHistoryEntry(savedHistory.current);
+    if (!current) return false;
+    const limitedUndo = undo.slice(-CONFIG.historyLimit);
+    const limitedRedo = redo.slice(-CONFIG.historyLimit);
+    state.history.undoStack = limitedUndo;
+    state.history.redoStack = limitedRedo;
+    state.history.currentEntry = current;
+    const maximumId = [current, ...limitedUndo, ...limitedRedo].reduce((maximum, entry) => Math.max(maximum, Number(entry.id) || 0), 0);
+    state.history.nextId = Math.max(maximumId + 1, Number(savedHistory.nextId) || 1);
+    state.history.restoring = false;
+    renderHistoryPanel();
+    return true;
+  }
+
+  function serializeProject() {
+    const project = {
       projectName: state.projectName,
       snapValue: state.snapValue,
       rowHeight: state.rowHeight,
@@ -18895,6 +19056,7 @@
       // 지원 음악 파일은 공통 플러그인을 거쳐 불러오는 즉시 일반 편집 채널로 변환됩니다.
       midiDocuments: [],
       audioClips: state.audioClips.map((clip) => ({ ...clip, assetAvailable: Boolean(getAudioRuntime(clip.id)?.audioBuffer) })),
+      history: serializeHistoryState(),
       editor: {
         loadedFileName: state.loadedFileName,
         activeChannel: state.activeChannel,
@@ -18910,6 +19072,7 @@
         collapsedMidiDocumentIds: Array.from(state.collapsedMidiDocumentIds),
       },
     };
+    return encodeProjectStorage(project);
   }
 
   function markProjectSaved({ notify = true, message = "프로젝트를 저장했습니다." } = {}) {
@@ -19342,7 +19505,8 @@
     state.audioRuntime.clear();
     state.collapsedMidiDocumentIds.clear();
     const text = await file.text();
-    const data = JSON.parse(text);
+    const storage = JSON.parse(text);
+    const data = decodeProjectStorage(storage);
     validateProject(data);
     stopPlayback(false);
     releaseKeyboardVoice(true);
@@ -19576,7 +19740,7 @@
     elements.pitchSpacingSelect.value = String(state.rowHeight);
     renderAll();
     setSidebarTab(state.sidebarTab, { persist: false });
-    initializeHistory();
+    if (!restoreSavedHistory(data.history)) initializeHistory();
 
     requestAnimationFrame(() => {
       const savedScrollLeft = Math.max(0, Number(data.editor?.scrollLeft) || 0);
@@ -19932,6 +20096,19 @@
       }
       closeContextMenu();
       return;
+    }
+    if (area.name === "piano-roll" && !isMidiReferenceActive() && state.selectedNoteIds.size > 0) {
+      const point = pointerToRoll(event);
+      if (!findNoteAt(point.x, point.y)) {
+        // The first empty-space right click is selection cancel only. Do not seek
+        // the playhead or open the piano-roll menu on the same gesture.
+        clearNoteSelection();
+        drawRoll();
+        updateChannelInfo();
+        event.stopPropagation();
+        closeContextMenu();
+        return;
+      }
     }
     if (area.name === "timeline") {
       // Right-click actions should always show exactly which timeline position they target.
