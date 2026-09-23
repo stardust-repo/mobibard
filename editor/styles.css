@@ -5832,15 +5832,15 @@ button {
   place-items: center;
 }
 .channel-tree-merge-button {
-  border-color: color-mix(in srgb, #3b82f6 55%, var(--control-border));
-  background: color-mix(in srgb, #3b82f6 11%, var(--control-bg));
-  color: color-mix(in srgb, #60a5fa 86%, var(--text));
+  border-color: color-mix(in srgb, #10b981 55%, var(--control-border));
+  background: color-mix(in srgb, #10b981 11%, var(--control-bg));
+  color: color-mix(in srgb, #34d399 86%, var(--text));
   font-size: 17px;
   font-weight: 900;
   line-height: 1;
 }
 .channel-tree-merge-button:hover:not(:disabled) {
-  background: color-mix(in srgb, #3b82f6 20%, var(--control-hover));
+  background: color-mix(in srgb, #10b981 20%, var(--control-hover));
 }
 .channel-tree-merge-button:disabled { opacity: .38; }
 .channel-merge-dialog { width: min(500px, calc(100vw - 24px)); }
@@ -6979,12 +6979,12 @@ a[class*="button"]:hover {
 }
 
 .sidebar-rail-merge {
-  border-color: color-mix(in srgb, #3b82f6 55%, var(--control-border));
-  background: color-mix(in srgb, #3b82f6 11%, var(--control-bg));
-  color: color-mix(in srgb, #60a5fa 86%, var(--text));
+  border-color: color-mix(in srgb, #10b981 55%, var(--control-border));
+  background: color-mix(in srgb, #10b981 11%, var(--control-bg));
+  color: color-mix(in srgb, #34d399 86%, var(--text));
 }
 .sidebar-rail-merge:hover:not(:disabled) {
-  background: color-mix(in srgb, #3b82f6 20%, var(--control-hover));
+  background: color-mix(in srgb, #10b981 20%, var(--control-hover));
 }
 .sidebar-rail-merge .channel-merge-icon {
   width: 19px;
@@ -9238,13 +9238,13 @@ body.merge-mode-active #channelMergeModeApplyButton:disabled {
 
 /* Merge: same palette and icon treatment as the collapsed merge action. */
 .channel-tree-merge-button {
-  border-color: color-mix(in srgb, #3b82f6 55%, var(--control-border));
-  background: color-mix(in srgb, #3b82f6 11%, var(--control-bg));
-  color: color-mix(in srgb, #60a5fa 86%, var(--text));
+  border-color: color-mix(in srgb, #10b981 55%, var(--control-border));
+  background: color-mix(in srgb, #10b981 11%, var(--control-bg));
+  color: color-mix(in srgb, #34d399 86%, var(--text));
   font-size: 0;
 }
 .channel-tree-merge-button:hover:not(:disabled) {
-  background: color-mix(in srgb, #3b82f6 20%, var(--control-hover));
+  background: color-mix(in srgb, #10b981 20%, var(--control-hover));
 }
 .channel-tree-merge-button .channel-merge-icon {
   width: 19px;
