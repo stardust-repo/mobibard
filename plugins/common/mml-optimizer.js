@@ -3506,7 +3506,8 @@
     let currentOctave = initOctave;
     const chunks = [`${options.isMelody ? `T${options.startTempo || DEFAULT_TEMPO}` : ""}V${initVolume}O${initOctave}L${initialL.label}`];
 
-    for (const ev of events) {
+    for (let eventIndex = 0; eventIndex < events.length; eventIndex++) {
+      const ev = events[eventIndex];
       if (ev.type === "tempo") {
         const tempo = renderTempoList(ev.preTempos);
         if (tempo) chunks.push(tempo);
@@ -3526,7 +3527,7 @@
           command += `V${vol}`;
           currentVolume = vol;
         }
-        const pitch = renderPitch(ev.midi, currentOctave);
+        const pitch = renderPitchWithBoundaryOptimization(events, eventIndex, currentOctave);
         command += pitch.prefix;
         currentOctave = pitch.octave;
         chunks.push(renderNoteDuration(command + pitch.symbol, pitch.symbol, ev.duration, initialL.units));
@@ -3636,7 +3637,8 @@
     let currentOctave = state.initOctave;
     const decorated = [];
 
-    for (const ev of events) {
+    for (let eventIndex = 0; eventIndex < events.length; eventIndex++) {
+      const ev = events[eventIndex];
       if (ev.type === "tempo") {
         decorated.push({ type: "tempo", pre: renderTempoList(ev.preTempos) });
         continue;
@@ -3652,7 +3654,7 @@
         command += `V${vol}`;
         currentVolume = vol;
       }
-      const pitch = renderPitch(ev.midi, currentOctave);
+      const pitch = renderPitchWithBoundaryOptimization(events, eventIndex, currentOctave);
       command += pitch.prefix;
       currentOctave = pitch.octave;
       decorated.push({
@@ -3745,6 +3747,51 @@
     candidates.push({ prefix: `O${targetOctave}`, symbol, octave: targetOctave });
     candidates.sort((a, b) => (a.prefix.length + a.symbol.length) - (b.prefix.length + b.symbol.length) || a.prefix.localeCompare(b.prefix));
     return candidates[0];
+  }
+
+  function renderBoundaryAliasPitch(midi, currentOctave) {
+    const targetOctave = midiToOctave(midi);
+    const pitchClass = ((midi % 12) + 12) % 12;
+
+    // Crossing B -> C upward can be written as b+ without changing the current octave.
+    if (pitchClass === 0 && targetOctave === currentOctave + 1) {
+      return { prefix: "", symbol: "b+", octave: currentOctave };
+    }
+    // Crossing C -> B downward can be written as c- without changing the current octave.
+    if (pitchClass === 11 && targetOctave === currentOctave - 1) {
+      return { prefix: "", symbol: "c-", octave: currentOctave };
+    }
+    return null;
+  }
+
+  function findNextNoteEvent(events, startIndex) {
+    for (let index = startIndex + 1; index < events.length; index++) {
+      if (events[index]?.type === "note") return events[index];
+    }
+    return null;
+  }
+
+  function pitchRenderLength(pitch) {
+    return String(pitch?.prefix || "").length + String(pitch?.symbol || "").length;
+  }
+
+  function renderPitchWithBoundaryOptimization(events, eventIndex, currentOctave) {
+    const ev = events[eventIndex];
+    const natural = renderPitch(ev.midi, currentOctave);
+    const alias = renderBoundaryAliasPitch(ev.midi, currentOctave);
+    if (!alias) return natural;
+
+    // b+ / c- costs the same as >c / <b for this note. Use it only when keeping
+    // the current octave makes the next sounding note strictly shorter. Rests and
+    // tempo commands do not affect octave state, so they are intentionally skipped.
+    const nextNote = findNextNoteEvent(events, eventIndex);
+    if (!nextNote) return natural;
+
+    const naturalNext = renderPitch(nextNote.midi, natural.octave);
+    const aliasNext = renderPitch(nextNote.midi, alias.octave);
+    const naturalCost = pitchRenderLength(natural) + pitchRenderLength(naturalNext);
+    const aliasCost = pitchRenderLength(alias) + pitchRenderLength(aliasNext);
+    return aliasCost < naturalCost ? alias : natural;
   }
 
   function midiToOctave(midi) {
@@ -3934,5 +3981,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = Object.freeze({ version: "5.1.0", optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, setVolumesMml, applyFadeMml, transposeOctavesMml, splitMmlPages });
+  window.MabiOptimizer = Object.freeze({ version: "5.1.1", optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, setVolumesMml, applyFadeMml, transposeOctavesMml, splitMmlPages });
 })();
