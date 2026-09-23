@@ -13000,7 +13000,7 @@
       return;
     }
     if (event.code === "Space" && !event.ctrlKey && !event.metaKey && !event.altKey) return;
-    if (target?.closest?.("#channelMergeModeControls, #channelEditBackdrop, #noteEditModePanel, .playback-compact-box")) return;
+    if (target?.closest?.("#channelMergeModeControls, #channelEditBackdrop, .recommended-color-palette, #noteEditModePanel, .playback-compact-box")) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   }
@@ -22309,24 +22309,37 @@
   function renderShortcutKeycaps() {
     if (!elements.shortcutGroups) return;
     for (const term of elements.shortcutGroups.querySelectorAll(".shortcut-entry dt")) {
-      const label = String(term.textContent || "").trim();
-      if (!label) continue;
-      term.setAttribute("aria-label", label);
+      const configuredLines = String(term.dataset.shortcutLines || "")
+        .split("|")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const alreadyRendered = Boolean(term.querySelector(".shortcut-key-line"));
+      const fallbackLabel = String(alreadyRendered ? (term.dataset.shortcutLabel || term.textContent || "") : (term.textContent || "")).trim();
+      const labels = configuredLines.length ? configuredLines : (fallbackLabel ? [fallbackLabel] : []);
+      if (!labels.length) continue;
+      if (!configuredLines.length) term.dataset.shortcutLabel = labels[0];
+      term.setAttribute("aria-label", labels.join(" / "));
       const fragment = document.createDocumentFragment();
-      for (const part of shortcutKeycapParts(label)) {
-        const span = document.createElement("span");
-        if (part.type === "separator") {
-          span.className = "shortcut-key-separator";
-          span.setAttribute("aria-hidden", "true");
-        } else {
-          span.className = "shortcut-keycap";
-          if (/^(?:ctrl(?:\s*\/\s*cmd)?|control|cmd(?:\s*\/\s*ctrl)?|command|⌘|alt|option|shift|meta)$/i.test(part.text)) {
-            span.classList.add("is-modifier");
+      labels.forEach((label, lineIndex) => {
+        const line = document.createElement("span");
+        line.className = "shortcut-key-line";
+        line.dataset.shortcutLine = String(lineIndex + 1);
+        for (const part of shortcutKeycapParts(label)) {
+          const span = document.createElement("span");
+          if (part.type === "separator") {
+            span.className = "shortcut-key-separator";
+            span.setAttribute("aria-hidden", "true");
+          } else {
+            span.className = "shortcut-keycap";
+            if (/^(?:ctrl(?:\s*\/\s*cmd)?|control|cmd(?:\s*\/\s*ctrl)?|command|⌘|alt|option|shift|meta)$/i.test(part.text)) {
+              span.classList.add("is-modifier");
+            }
           }
+          span.textContent = part.text;
+          line.append(span);
         }
-        span.textContent = part.text;
-        fragment.append(span);
-      }
+        fragment.append(line);
+      });
       term.replaceChildren(fragment);
     }
   }

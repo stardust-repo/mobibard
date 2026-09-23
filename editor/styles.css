@@ -10101,3 +10101,53 @@ body.merge-mode-active .channel-tree-channel-item.is-hidden .channel-tree-merge-
 body.merge-mode-active .channel-tree-channel-item .channel-tree-actions {
   pointer-events: auto !important;
 }
+
+
+/* 2026-09-24 shortcut/channel/merge refinement. */
+/* Loaded source name may use the toolbar's full height: show two lines, then ellipsize. */
+.channel-tree-loaded-file {
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  max-height: 2.5em;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: normal !important;
+  line-height: 1.25 !important;
+  align-self: center;
+}
+
+/* Multiple shortcuts for one action are stacked above one shared description. */
+.shortcut-search-result dt,
+.shortcut-group dt {
+  display: grid !important;
+  justify-items: start;
+  gap: 5px !important;
+}
+.shortcut-key-line {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Merge mode keeps only the controls that matter in the channel row. */
+body.merge-mode-active .channel-tree-channel-item .channel-tree-mml,
+body.merge-mode-active .channel-tree-channel-item .channel-tree-mute {
+  display: none !important;
+}
+
+/* The channel edit color control opens a document-level palette; keep that palette interactive in merge mode. */
+body.merge-mode-active .recommended-color-palette,
+body.merge-mode-active .recommended-color-palette button,
+body.merge-mode-active .recommended-color-palette input,
+body.merge-mode-active .recommended-color-palette output {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+.channel-tree-loaded-file {
+  overflow-wrap: anywhere !important;
+  word-break: break-word;
+}
