@@ -1,4 +1,9 @@
-/* guitarpro-parser 1.2.0 GP3 subset, Apache-2.0. Local classic-script bundle. */
+/*
+ * guitarpro-parser 1.2.0 GP3 subset.
+ * Copyright 2026 Emilien Bevierre. Licensed under Apache-2.0.
+ * Adapted/modified for MobiBard as a browser classic-script subset.
+ * See ./LICENSE and ../../../../../THIRD-PARTY-NOTICES.md.
+ */
 (() => {
 "use strict";
 const SHARP_NAMES = { 0: 'C', 1: 'C#', 2: 'D', 3: 'D#', 4: 'E', 5: 'F', 6: 'F#', 7: 'G', 8: 'G#', 9: 'A', 10: 'A#', 11: 'B' };

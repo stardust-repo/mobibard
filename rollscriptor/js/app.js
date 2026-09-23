@@ -21,10 +21,10 @@ import { getLanguage, initializeLanguage, onLanguageChange, t } from './language
 import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260831-account-menu1';
 
 const MEDIABUNNY_VERSION = '1.55.3';
-const MEDIABUNNY_URLS = [
-  `https://cdn.jsdelivr.net/npm/mediabunny@${MEDIABUNNY_VERSION}/dist/bundles/mediabunny.min.mjs`,
-  `https://unpkg.com/mediabunny@${MEDIABUNNY_VERSION}/dist/bundles/mediabunny.min.mjs`,
-];
+const MEDIABUNNY_LOCAL_URL = new URL(
+  `../../plugins/vendor/mediabunny/${MEDIABUNNY_VERSION}/mediabunny.min.mjs`,
+  import.meta.url,
+).href;
 
 const MIDI_PREVIEW_LOOKAHEAD_SEC = 0.7;
 const MIDI_PREVIEW_SCHEDULER_MS = 120;
@@ -1924,12 +1924,12 @@ function setCanvasDimensions(width, height) {
 }
 
 async function loadMediabunny() {
-  let lastError = null;
-  for (const url of MEDIABUNNY_URLS) {
-    try { return await import(url); }
-    catch (error) { lastError = error; }
+  try {
+    return await import(MEDIABUNNY_LOCAL_URL);
+  } catch (error) {
+    console.error('[MobiBard] Bundled Mediabunny failed to load.', error);
+    throw error ?? new Error(t('error.media_library'));
   }
-  throw lastError ?? new Error(t('error.media_library'));
 }
 
 const FRAME_CACHE_RADIUS_FRAMES = 8;

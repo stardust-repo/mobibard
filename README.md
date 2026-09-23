@@ -1,6 +1,6 @@
 # 모비바드 v5.3
 
-마지막 갱신: 2026-08-30 KST
+마지막 갱신: 2026-09-23 KST
 
 
 모비바드는 브라우저에서 실행되는 음악 파일 변환·MML 생성·피아노롤 편집·리듬게임 도구 모음입니다. 이 문서는 저장소 전체에 공통 적용된 구조와 이번 갱신에서 영향을 받은 프로젝트만 요약합니다. 각 제품의 현재 구현 상태는 해당 폴더의 `README.md`를 기준으로 확인합니다.
@@ -9,6 +9,7 @@
 
 - 루트 `plugins/`에는 여러 제품이 공유하는 코드만 남겼습니다. 제품 전용 연결부는 각 제품의 `js/` 폴더로 이동했습니다.
 - 공용 기능은 `common`, 파일·음원 규격 처리는 `formats`, Google·Firebase 연동은 `google`로 구분했습니다.
+- 외부 브라우저 런타임 라이브러리는 `plugins/vendor/`에 버전 고정으로 관리합니다. RollScriptor의 Mediabunny 1.55.3과 OGG 내보내기의 wasm-media-encoders 0.7.0은 `plugins/vendor/`에 함께 배포되며 실행 중 외부 CDN을 사용하지 않습니다. 관련 라이선스·소스 출처는 `THIRD-PARTY-NOTICES.md`와 각 vendor 폴더에 함께 보존합니다.
 - 공용 다국어 규칙은 `plugins/common/I18N_SPEC.md`를 기준으로 합니다. Locale key는 짧은 영어 semantic key만 사용하며, 초기 언어 결정/적용은 페이지 본문·Firebase Analytics 등 일반 스크립트보다 우선합니다.
 - `.mid`, `.midi`, `.kar`는 하나의 공용 MIDI 포맷으로 처리하며 KAR의 가사·텍스트 메타 이벤트도 공용 MIDI 파서 결과에 보존합니다.
 - PlayStation 계열은 PS1 `.seq`·`.sep`, PS2 `.sq`·`.bq`와 PSF1/PSF2 xSF 컨테이너를 공용 MIDI로 정규화합니다. Sony SEQ/SQ의 전용 Bank Select는 별도 VAB/HD/BD 음색 파일 없이도 GM SoundFont에서 재생되도록 Bank 0으로 정규화하고, 채널 10의 비표준 타악기 Key는 GM 타악기 영역으로 재배치합니다. PSF 컨테이너는 내부의 표준 MIDI·Sony SEQ·PS2 SQ·SquareSoft AKAO v1.0/v2를 탐색하며, AKAO v1.0/v2의 12개 드럼 슬롯도 GM 타악기로 변환합니다. 이미 표준 MIDI로 내장된 데이터는 원래 Bank/Program을 보존합니다. MiniPSF의 외부 라이브러리나 게임 고유 드라이버가 필요한 경우에는 단독 파일만으로 변환이 제한될 수 있습니다. PSFLIB/PSF1LIB/PSF2LIB 및 NCSFLIB/2SFLIB 같은 의존 라이브러리는 사용자 연주파일 선택 목록에는 표시하지 않습니다.

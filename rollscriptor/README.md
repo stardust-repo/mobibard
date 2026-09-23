@@ -21,7 +21,7 @@
 
 영상 프레임 디코딩, 건반 색상 분석, 노트 생성, MIDI 생성은 브라우저 클라이언트에서 처리합니다. WebCodecs가 필요하므로 HTTPS 또는 localhost 환경과 최신 Chromium 계열 브라우저를 권장합니다.
 
-Mediabunny 1.55.3은 현재 CDN에서 런타임 로드합니다. 영상 파일 자체는 Mediabunny CDN이나 별도 분석 서버로 업로드하지 않습니다.
+Mediabunny 1.55.3은 `plugins/vendor/mediabunny/1.55.3/`에 동봉된 고정 버전만 로드하며 실행 중 외부 CDN을 사용하지 않습니다. 영상 파일 자체도 별도 분석 서버로 업로드하지 않고 브라우저 안에서 처리합니다. 라이선스와 소스 출처는 루트 `THIRD-PARTY-NOTICES.md` 및 vendor 폴더에 보존합니다.
 
 
 ## Settings menu

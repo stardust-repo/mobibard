@@ -1,12 +1,15 @@
 (() => {
   "use strict";
 
-  const VERSION = "1.0.1";
+  const VERSION = "1.0.3";
   const SAMPLE_RATE = 44100;
   const CHANNELS = 2;
   const ENCODER_VERSION = "0.7.0";
-  const ENCODER_SCRIPT_URL = `https://cdn.jsdelivr.net/npm/wasm-media-encoders@${ENCODER_VERSION}/dist/umd/WasmMediaEncoder.min.js`;
-  const OGG_WASM_URL = `https://cdn.jsdelivr.net/npm/wasm-media-encoders@${ENCODER_VERSION}/wasm/ogg.wasm`;
+  const CURRENT_SCRIPT_URL = document.currentScript?.src ? new URL(document.currentScript.src) : null;
+  const COMMON_BASE_URL = CURRENT_SCRIPT_URL ? new URL("./", CURRENT_SCRIPT_URL) : new URL("../plugins/common/", window.location.href);
+  const VENDOR_BASE_URL = new URL("../vendor/", COMMON_BASE_URL);
+  const LOCAL_ENCODER_SCRIPT_URL = new URL(`wasm-media-encoders/${ENCODER_VERSION}/WasmMediaEncoder.min.js`, VENDOR_BASE_URL).href;
+  const LOCAL_OGG_WASM_URL = new URL(`wasm-media-encoders/${ENCODER_VERSION}/ogg.wasm`, VENDOR_BASE_URL).href;
   let encoderLibraryPromise = null;
 
   function clamp(value, min, max) {
@@ -20,48 +23,42 @@
     });
   }
 
+  async function appendEncoderScript(url) {
+    const existing = Array.from(document.querySelectorAll('script[data-mobibard-ogg-encoder="1"]'))
+      .find(node => node.src === url && node.dataset.mobibardOggState !== "error");
+    if (existing?.dataset.mobibardOggState === "loaded" && window.WasmMediaEncoder) return window.WasmMediaEncoder;
+    if (existing) {
+      return new Promise((resolve, reject) => {
+        existing.addEventListener("load", () => window.WasmMediaEncoder ? resolve(window.WasmMediaEncoder) : reject(new Error("OGG encoder did not initialize.")), { once: true });
+        existing.addEventListener("error", () => reject(new Error(`Could not load OGG encoder: ${url}`)), { once: true });
+      });
+    }
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = url;
+      script.async = true;
+      script.dataset.mobibardOggEncoder = "1";
+      script.dataset.mobibardOggState = "loading";
+      script.addEventListener("load", () => {
+        script.dataset.mobibardOggState = "loaded";
+        if (window.WasmMediaEncoder) resolve(window.WasmMediaEncoder);
+        else reject(new Error("OGG encoder did not initialize."));
+      }, { once: true });
+      script.addEventListener("error", () => {
+        script.dataset.mobibardOggState = "error";
+        script.remove();
+        reject(new Error(`Could not load OGG encoder: ${url}`));
+      }, { once: true });
+      document.head.append(script);
+    });
+  }
+
   function loadEncoderLibrary() {
     if (window.WasmMediaEncoder?.createEncoder || window.WasmMediaEncoder?.createOggEncoder) {
       return Promise.resolve(window.WasmMediaEncoder);
     }
     if (encoderLibraryPromise) return encoderLibraryPromise;
-    encoderLibraryPromise = new Promise((resolve, reject) => {
-      let script = document.querySelector('script[data-mobibard-ogg-encoder="1"]');
-      if (script?.dataset.mobibardOggState === "error") {
-        script.remove();
-        script = null;
-      }
-      const resolveLoaded = () => {
-        if (script) script.dataset.mobibardOggState = "loaded";
-        if (window.WasmMediaEncoder) resolve(window.WasmMediaEncoder);
-        else reject(new Error("OGG encoder did not initialize."));
-      };
-      const rejectLoad = () => {
-        if (script) {
-          script.dataset.mobibardOggState = "error";
-          script.remove();
-        }
-        reject(new Error("Could not load the OGG encoder."));
-      };
-      if (script) {
-        if (script.dataset.mobibardOggState === "loaded") {
-          resolveLoaded();
-          return;
-        }
-        script.addEventListener("load", resolveLoaded, { once: true });
-        script.addEventListener("error", rejectLoad, { once: true });
-        return;
-      }
-      script = document.createElement("script");
-      script.src = ENCODER_SCRIPT_URL;
-      script.async = true;
-      script.crossOrigin = "anonymous";
-      script.dataset.mobibardOggEncoder = "1";
-      script.dataset.mobibardOggState = "loading";
-      script.addEventListener("load", resolveLoaded, { once: true });
-      script.addEventListener("error", rejectLoad, { once: true });
-      document.head.append(script);
-    }).catch(error => {
+    encoderLibraryPromise = appendEncoderScript(LOCAL_ENCODER_SCRIPT_URL).catch(error => {
       encoderLibraryPromise = null;
       throw error;
     });
@@ -71,12 +68,9 @@
   async function createOggEncoder() {
     const library = await loadEncoderLibrary();
     if (typeof library.createEncoder === "function") {
-      return library.createEncoder("audio/ogg", OGG_WASM_URL);
+      return library.createEncoder("audio/ogg", LOCAL_OGG_WASM_URL);
     }
-    if (typeof library.createOggEncoder === "function") {
-      return library.createOggEncoder();
-    }
-    throw new Error("OGG encoder is unavailable.");
+    throw new Error("Bundled OGG encoder API is unavailable.");
   }
 
   function estimateLastAudibleFrame(audioBuffer, threshold = 0.00001, paddingSeconds = 0.08) {

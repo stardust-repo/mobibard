@@ -1,7 +1,8 @@
 /*
  * parse-gp5 adaptation for MobiBard.
- * Based on juliangruber/parse-gp5 (MIT).
- * Only score timing, tracks, tuning, notes, tempo and time signatures are emitted.
+ * Copyright (c) 2017 Julian Gruber. Licensed under MIT.
+ * Modified for MobiBard; only score timing, tracks, tuning, notes, tempo and
+ * time signatures are emitted. See ./LICENSE and ../../../../../THIRD-PARTY-NOTICES.md.
  */
 function parseGp5(bytes) {
   let buf = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
