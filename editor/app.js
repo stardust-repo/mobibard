@@ -9681,6 +9681,119 @@
     button.replaceChildren(...nodes);
   }
 
+  // 체크박스 목록 공통 조작: 왼쪽 버튼을 누른 채 같은 체크 열을 위/아래로
+  // 드래그하면 시작 체크박스에서 결정된 선택/해제 상태를 지나가는 항목에 적용합니다.
+  // 키보드 조작은 기존 change 이벤트를 그대로 사용합니다.
+  const checkboxLeftDragState = {
+    active: false,
+    pointerId: null,
+    container: null,
+    checked: false,
+    touched: new Set(),
+    clickGuard: null,
+    deferChange: false,
+    onVisualChange: null,
+    onCommit: null,
+    changed: false,
+  };
+
+  function applyLeftDragCheckbox(checkbox) {
+    const drag = checkboxLeftDragState;
+    if (!drag.active || !checkbox || checkbox.disabled || !drag.container?.contains(checkbox)) return;
+    if (drag.touched.has(checkbox)) return;
+    drag.touched.add(checkbox);
+    if (checkbox.checked === drag.checked) return;
+    checkbox.checked = drag.checked;
+    drag.changed = true;
+    if (drag.deferChange) {
+      drag.onVisualChange?.(checkbox, drag.checked);
+    } else {
+      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+
+  function finishLeftDragCheckbox({ clearClickGuard = false } = {}) {
+    const drag = checkboxLeftDragState;
+    const shouldCommit = Boolean(drag.active && drag.changed);
+    const onCommit = drag.onCommit;
+    drag.active = false;
+    drag.pointerId = null;
+    drag.container = null;
+    drag.touched.clear();
+    drag.deferChange = false;
+    drag.onVisualChange = null;
+    drag.onCommit = null;
+    drag.changed = false;
+    if (clearClickGuard) drag.clickGuard = null;
+    if (shouldCommit) onCommit?.();
+  }
+
+  function installLeftDragCheckboxSelection(container, options = {}) {
+    if (!container) return;
+    container._leftDragCheckboxOptions = {
+      deferChange: Boolean(options.deferChange),
+      onVisualChange: typeof options.onVisualChange === "function" ? options.onVisualChange : null,
+      onCommit: typeof options.onCommit === "function" ? options.onCommit : null,
+    };
+    if (container.dataset.leftDragCheckboxSelection === "1") return;
+    container.dataset.leftDragCheckboxSelection = "1";
+
+    container.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const checkbox = event.target?.closest?.('input[type="checkbox"]');
+      if (!checkbox || checkbox.disabled || !container.contains(checkbox)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const options = container._leftDragCheckboxOptions || {};
+      checkboxLeftDragState.active = true;
+      checkboxLeftDragState.pointerId = event.pointerId;
+      checkboxLeftDragState.container = container;
+      checkboxLeftDragState.checked = !checkbox.checked;
+      checkboxLeftDragState.touched = new Set();
+      checkboxLeftDragState.clickGuard = checkbox;
+      checkboxLeftDragState.deferChange = Boolean(options.deferChange);
+      checkboxLeftDragState.onVisualChange = options.onVisualChange || null;
+      checkboxLeftDragState.onCommit = options.onCommit || null;
+      checkboxLeftDragState.changed = false;
+      applyLeftDragCheckbox(checkbox);
+    }, true);
+
+    // pointerdown에서 직접 상태를 적용했으므로 뒤따르는 마우스 click의
+    // 기본 checkbox 토글을 막아 두 번 뒤집히지 않게 합니다.
+    container.addEventListener("click", (event) => {
+      const checkbox = event.target?.closest?.('input[type="checkbox"]');
+      if (!checkbox || event.detail === 0) return;
+      if (checkboxLeftDragState.clickGuard !== checkbox) return;
+      event.preventDefault();
+      event.stopPropagation();
+      checkboxLeftDragState.clickGuard = null;
+    }, true);
+  }
+
+  document.addEventListener("pointermove", (event) => {
+    const drag = checkboxLeftDragState;
+    if (!drag.active || (drag.pointerId != null && event.pointerId !== drag.pointerId)) return;
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    const checkbox = hit?.closest?.('input[type="checkbox"]');
+    applyLeftDragCheckbox(checkbox);
+  }, true);
+
+  document.addEventListener("pointerup", (event) => {
+    if (!checkboxLeftDragState.active) return;
+    if (checkboxLeftDragState.pointerId != null && event.pointerId !== checkboxLeftDragState.pointerId) return;
+    const guarded = checkboxLeftDragState.clickGuard;
+    finishLeftDragCheckbox();
+    // pointerup 뒤에 이어지는 click까지만 막고, 바깥에서 놓아 click이 생기지
+    // 않은 경우에는 다음 조작을 방해하지 않도록 즉시 가드를 정리합니다.
+    window.setTimeout(() => {
+      if (!checkboxLeftDragState.active && checkboxLeftDragState.clickGuard === guarded) {
+        checkboxLeftDragState.clickGuard = null;
+      }
+    }, 0);
+  }, true);
+  document.addEventListener("pointercancel", () => finishLeftDragCheckbox({ clearClickGuard: true }), true);
+  window.addEventListener("blur", () => finishLeftDragCheckbox({ clearClickGuard: true }));
+
   function renderMidiImportSelectionList() {
     if (!elements.midiImportSelectionList) return;
     elements.midiImportSelectionList.replaceChildren();
@@ -9726,11 +9839,12 @@
         checkbox.addEventListener("change", () => {
           if (checkbox.checked) state.midiImport.selectedGroupIds.add(String(group.id));
           else state.midiImport.selectedGroupIds.delete(String(group.id));
-          updateMidiImportDialog();
+          updateMidiImportDialog({ renderSelection: false });
         });
         row.append(checkbox, info, previewButton);
         elements.midiImportSelectionList.append(row);
       });
+      installLeftDragCheckboxSelection(elements.midiImportSelectionList);
       return;
     }
 
@@ -9785,14 +9899,15 @@
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) state.midiImport.selectedTextIndexes.add(index);
         else state.midiImport.selectedTextIndexes.delete(index);
-        updateMidiImportDialog();
+        updateMidiImportDialog({ renderSelection: false });
       });
       row.append(checkbox, info, previewButton);
       elements.midiImportSelectionList.append(row);
     });
+    installLeftDragCheckboxSelection(elements.midiImportSelectionList);
   }
 
-  function updateMidiImportDialog() {
+  function updateMidiImportDialog({ renderSelection = true } = {}) {
     const isMidi = state.midiImport.kind === "midi";
     const isText = state.midiImport.kind === "text";
     const textFormat = getUnifiedTextFormatLabel();
@@ -9835,7 +9950,7 @@
       else setTransportButtonContent(elements.midiImportPreviewAllButton, { icon: "play", label: i18nText("ui.preview_source") });
     }
     updateMidiImportSummary();
-    renderMidiImportSelectionList();
+    if (renderSelection) renderMidiImportSelectionList();
 
     if (state.midiImport.busy) return;
     if (isMidi && state.midiImport.preview) {
@@ -11748,6 +11863,36 @@
     return true;
   }
 
+  let channelVolumeCountCache = new Map();
+
+  function rebuildChannelVolumeCountCache() {
+    channelVolumeCountCache = new Map();
+    for (const channel of state.channels) {
+      const counts = Array(16).fill(0);
+      for (const note of channel.notes || []) counts[getNoteVolume(note)] += 1;
+      channelVolumeCountCache.set(String(channel.id), counts);
+    }
+  }
+
+  function getSelectedChannelVolumeCounts() {
+    if (!channelVolumeCountCache.size) rebuildChannelVolumeCountCache();
+    const selectedIds = new Set(getCheckedChannelVolumeIds());
+    const counts = Array(16).fill(0);
+    for (const id of selectedIds) {
+      const source = channelVolumeCountCache.get(String(id));
+      if (!source) continue;
+      for (let volume = 0; volume <= 15; volume += 1) counts[volume] += Number(source[volume]) || 0;
+    }
+    return counts;
+  }
+
+  function volumeCountArrayToItems(counts) {
+    return (counts || [])
+      .map((count, volume) => ({ volume, count: Number(count) || 0 }))
+      .filter((item) => item.count > 0)
+      .sort((left, right) => right.volume - left.volume);
+  }
+
   function getCheckedChannelVolumeIds() {
     if (!elements.channelVolumeList) return [];
     return [...elements.channelVolumeList.querySelectorAll('input[type="checkbox"]:checked')]
@@ -11779,13 +11924,17 @@
     return Math.max(1, target);
   }
 
-  function getChannelVolumeTargetVolume(note) {
-    const before = getNoteVolume(note);
+  function getChannelVolumeTargetFromVolume(beforeVolume) {
+    const before = clamp(Math.round(Number(beforeVolume) || 0), 0, 15);
     const sliderValue = Math.round(Number(elements.channelVolumeSlider?.value) || 0);
     const rawTarget = isChannelVolumeFixedMode()
       ? clamp(sliderValue, 0, 15)
       : clamp(before + clamp(sliderValue, -15, 15), 0, 15);
     return resolveChannelVolumeTarget(before, rawTarget);
+  }
+
+  function getChannelVolumeTargetVolume(note) {
+    return getChannelVolumeTargetFromVolume(getNoteVolume(note));
   }
 
   function updateChannelVolumeControl() {
@@ -11811,11 +11960,18 @@
   }
 
   function updateChannelVolumeCounts() {
-    const notes = getChannelVolumeNotes();
-    const currentCounts = getNoteVolumeCounts(notes);
-    const targets = notes.map((note) => ({ volume: getChannelVolumeTargetVolume(note) }));
-    const targetCounts = getNoteVolumeCounts(targets);
-    renderChannelVolumeComparison(elements.channelVolumeComparison, currentCounts, targetCounts);
+    const currentArray = getSelectedChannelVolumeCounts();
+    const targetArray = Array(16).fill(0);
+    for (let volume = 0; volume <= 15; volume += 1) {
+      const count = Number(currentArray[volume]) || 0;
+      if (!count) continue;
+      targetArray[getChannelVolumeTargetFromVolume(volume)] += count;
+    }
+    renderChannelVolumeComparison(
+      elements.channelVolumeComparison,
+      volumeCountArrayToItems(currentArray),
+      volumeCountArrayToItems(targetArray),
+    );
     updateChannelVolumeSummary();
   }
 
@@ -11850,6 +12006,7 @@
 
   function renderChannelVolumeDialog() {
     if (!elements.channelVolumeList) return false;
+    rebuildChannelVolumeCountCache();
     elements.channelVolumeList.replaceChildren();
     state.channels.forEach((channel, index) => {
       const row = document.createElement("label");
@@ -11867,6 +12024,10 @@
       row.append(checkbox, text);
       checkbox.addEventListener("change", () => updateChannelVolumeCounts());
       elements.channelVolumeList.append(row);
+    });
+    installLeftDragCheckboxSelection(elements.channelVolumeList, {
+      deferChange: true,
+      onCommit: updateChannelVolumeCounts,
     });
     updateChannelVolumeSummary();
     return true;
@@ -11937,6 +12098,25 @@
     return true;
   }
 
+  let restCleanupAnalysisCache = { mode: null, perChannel: new Map() };
+
+  function invalidateRestCleanupAnalysisCache() {
+    restCleanupAnalysisCache = { mode: null, perChannel: new Map() };
+  }
+
+  function getRestCleanupAnalysisByChannel(mode = state.restCleanup.mode) {
+    const normalized = normalizeRestCleanupMode(mode);
+    if (restCleanupAnalysisCache.mode === normalized && restCleanupAnalysisCache.perChannel.size) {
+      return restCleanupAnalysisCache.perChannel;
+    }
+    const perChannel = new Map();
+    for (const channel of state.channels) {
+      perChannel.set(String(channel.id), analyzeRestCleanupChannel(channel, normalized));
+    }
+    restCleanupAnalysisCache = { mode: normalized, perChannel };
+    return perChannel;
+  }
+
   function normalizeRestCleanupMode(value) {
     const mode = String(value || "32").toLowerCase();
     return ["64", "32", "16", "8", "4", "all"].includes(mode) ? mode : "32";
@@ -11985,6 +12165,10 @@
       row.append(checkbox, text, affected);
       checkbox.addEventListener("change", syncRestCleanupDialog);
       elements.restCleanupChannelList.append(row);
+    });
+    installLeftDragCheckboxSelection(elements.restCleanupChannelList, {
+      deferChange: true,
+      onCommit: syncRestCleanupDialog,
     });
     if (!checkedOne) {
       const first = elements.restCleanupChannelList.querySelector('input[type="checkbox"]:not(:disabled)');
@@ -12086,11 +12270,10 @@
     });
     const channels = getRestCleanupChannels();
     const selectedIds = new Set(channels.map((channel) => String(channel.id)));
-    const perChannel = new Map();
+    const perChannel = getRestCleanupAnalysisByChannel(mode);
     const analysis = { count: 0, beats: 0, channelCount: 0, targetChannelCount: channels.length };
     for (const channel of state.channels) {
-      const result = analyzeRestCleanupChannel(channel, mode);
-      perChannel.set(String(channel.id), result);
+      const result = perChannel.get(String(channel.id)) || { count: 0, beats: 0 };
       if (!selectedIds.has(String(channel.id))) continue;
       analysis.count += result.count;
       analysis.beats += result.beats;
@@ -12122,6 +12305,7 @@
     closeFileMenu();
     closeContextMenu();
     renderRestCleanupChannelList();
+    invalidateRestCleanupAnalysisCache();
     syncRestCleanupDialog();
     if (elements.restCleanupBackdrop) elements.restCleanupBackdrop.hidden = false;
     requestAnimationFrame(() => elements.restCleanupChannelList?.querySelector('input[type="checkbox"]:checked')?.focus());
@@ -18575,6 +18759,38 @@
     if (checkbox.checked) mmlExportSelectionQueue.push(id);
   }
 
+  function syncMmlExportSelectionVisualOnly() {
+    if (!elements.mmlExportChannelList) return;
+    const checkedInputs = [...elements.mmlExportChannelList.querySelectorAll('input[type="checkbox"]:checked')];
+    const checkedIds = new Set(checkedInputs.map((input) => String(input.value || "")));
+    mmlExportSelectionQueue = mmlExportSelectionQueue.filter((id) => checkedIds.has(String(id)));
+    for (const input of checkedInputs) {
+      const id = String(input.value || "");
+      if (!mmlExportSelectionQueue.includes(id)) mmlExportSelectionQueue.push(id);
+    }
+    const orderById = new Map(mmlExportSelectionQueue.map((id, index) => [String(id), index + 1]));
+    elements.mmlExportChannelList.querySelectorAll('.mml-export-channel-row').forEach((row) => {
+      const checkbox = row.querySelector('input[type="checkbox"]');
+      const order = row.querySelector('.mml-export-order');
+      const id = String(checkbox?.value || "");
+      const selectedOrder = checkbox?.checked ? orderById.get(id) : null;
+      row.classList.toggle("selected", Boolean(selectedOrder));
+      if (order) {
+        order.textContent = selectedOrder ? String(selectedOrder) : "";
+        order.classList.toggle("filled", Boolean(selectedOrder));
+        order.setAttribute("aria-label", selectedOrder ? `내보내기 ${selectedOrder}번째` : "선택 순서");
+      }
+    });
+    if (elements.mmlExportSummary) {
+      const exportableCount = state.channels.filter((channel) => channel.notes?.length).length;
+      elements.mmlExportSummary.textContent = checkedInputs.length
+        ? i18nText("mml_export.selection_summary", [checkedInputs.length])
+        : (exportableCount ? "선택된 채널이 없습니다." : "내보낼 노트가 있는 채널이 없습니다.");
+    }
+    if (elements.mmlExportCopyAllButton) elements.mmlExportCopyAllButton.disabled = true;
+    elements.mmlExportSplitButtons?.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+  }
+
   function updateMmlExportDialogState() {
     const selected = getMmlExportSelectedChannels();
     const exportableCount = state.channels.filter((channel) => channel.notes?.length).length;
@@ -18622,12 +18838,18 @@
 
       row.append(order, checkbox, info);
       checkbox.addEventListener("change", () => {
-        const id = String(checkbox.value || "");
-        mmlExportSelectionQueue = mmlExportSelectionQueue.filter((item) => String(item) !== id);
-        if (checkbox.checked) mmlExportSelectionQueue.push(id);
+        setMmlExportCheckboxChecked(checkbox, checkbox.checked);
         updateMmlExportDialogState();
       });
       elements.mmlExportChannelList.append(row);
+    });
+    installLeftDragCheckboxSelection(elements.mmlExportChannelList, {
+      deferChange: true,
+      onVisualChange: (checkbox) => {
+        setMmlExportCheckboxChecked(checkbox, checkbox.checked);
+        syncMmlExportSelectionVisualOnly();
+      },
+      onCommit: updateMmlExportDialogState,
     });
     updateMmlExportDialogState();
   }

@@ -10858,3 +10858,59 @@ body.channel-delete-mode-active #confirmDialog button {
 .sidebar-rail-group.drop-group-after {
   box-shadow: inset 0 -3px 0 #22c55e, inset 0 0 0 1px color-mix(in srgb, #22c55e 28%, transparent) !important;
 }
+
+
+/* 2026-09-26: compact channel-scope selection toolbars + flush channel lists. */
+.channel-volume-dialog .channel-scope-list-toolbar.midi-transfer-selection-actions,
+.rest-cleanup-dialog .channel-scope-list-toolbar.midi-transfer-selection-actions {
+  justify-content: flex-start;
+  min-height: 36px;
+  gap: 6px;
+  padding: 4px 14px 3px;
+}
+.channel-volume-dialog .channel-scope-list-label,
+.rest-cleanup-dialog .channel-scope-list-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0 0 0 4px;
+  text-align: left;
+}
+.channel-volume-list.channel-scope-scroll-list.midi-transfer-channel-list,
+.rest-cleanup-channel-list.channel-scope-scroll-list.midi-transfer-channel-list {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.channel-volume-list .channel-volume-row:first-child,
+.rest-cleanup-channel-list .rest-cleanup-channel-row:first-child {
+  margin-top: 0;
+}
+.channel-volume-list .channel-volume-row:last-child,
+.rest-cleanup-channel-list .rest-cleanup-channel-row:last-child {
+  margin-bottom: 0;
+}
+@media (max-width: 560px) {
+  .channel-volume-dialog .channel-scope-list-toolbar.midi-transfer-selection-actions,
+  .rest-cleanup-dialog .channel-scope-list-toolbar.midi-transfer-selection-actions {
+    flex-wrap: nowrap;
+    row-gap: 0;
+  }
+  .channel-volume-dialog .channel-scope-list-label,
+  .rest-cleanup-dialog .channel-scope-list-label,
+  .rest-cleanup-dialog .rest-cleanup-channel-label {
+    flex: 0 1 auto;
+    margin-left: 4px;
+    white-space: nowrap;
+  }
+}
+
+/* 2026-09-26: denser channel rows in import/export/rest/volume pickers. */
+.unified-import-dialog .midi-import-selection-row {
+  margin-top: 2px;
+}
+.mml-export-channel-row {
+  margin-top: 2.5px;
+}
+.channel-volume-list .channel-volume-row,
+.rest-cleanup-channel-list .rest-cleanup-channel-row {
+  margin-top: 3px;
+}

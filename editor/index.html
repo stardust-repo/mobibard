@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260926-group-entry-direction-fix" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260926-checkbox-drag-deferred-perf-gap" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -562,7 +562,7 @@
     </div>
   </div>
   <div class="channel-scope-list-section channel-volume-list-section">
-    <div class="midi-transfer-selection-actions channel-scope-list-toolbar"><span class="channel-scope-list-label" data-i18n="volume.select_channels">수정할 채널을 선택하세요.</span><button id="channelVolumeSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelVolumeClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+    <div class="midi-transfer-selection-actions channel-scope-list-toolbar"><button id="channelVolumeSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelVolumeClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button><span class="channel-scope-list-label" data-i18n="volume.select_channels">수정할 채널을 선택하세요.</span></div>
     <div class="midi-transfer-channel-list channel-volume-list channel-scope-scroll-list" id="channelVolumeList"></div>
   </div>
   <div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="channelVolumeSummary"></div><button id="channelVolumeCancelButton" type="button" data-i18n="cancel">취소</button><button id="channelVolumeApplyButton" type="button" data-i18n="action.apply">적용</button></div>
@@ -576,7 +576,7 @@
     <p class="rest-cleanup-preview" id="restCleanupPreview"></p>
   </div>
   <div class="channel-scope-list-section rest-cleanup-list-section">
-    <div class="midi-transfer-selection-actions channel-scope-list-toolbar"><span class="rest-cleanup-channel-label channel-scope-list-label" data-i18n="rest_cleanup.select_channels">정리할 채널을 선택하세요.</span><button id="restCleanupSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="restCleanupClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+    <div class="midi-transfer-selection-actions channel-scope-list-toolbar"><button id="restCleanupSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="restCleanupClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button><span class="rest-cleanup-channel-label channel-scope-list-label" data-i18n="rest_cleanup.select_channels">정리할 채널을 선택하세요.</span></div>
     <div class="midi-transfer-channel-list rest-cleanup-channel-list channel-scope-scroll-list" id="restCleanupChannelList"></div>
   </div>
   <div class="transfer-dialog-actions rest-cleanup-actions"><button id="restCleanupCancelButton" type="button" data-i18n="cancel">취소</button><button id="restCleanupApplyButton" type="button" data-i18n="action.apply">적용</button></div>
@@ -718,7 +718,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260926-group-entry-direction-fix"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260926-checkbox-drag-deferred-perf-gap"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>
