@@ -10914,3 +10914,35 @@ body.channel-delete-mode-active #confirmDialog button {
 .rest-cleanup-channel-list .rest-cleanup-channel-row {
   margin-top: 3px;
 }
+
+/* 2026-09-26: make selected groups use the exact same blue selection language as channels. */
+.channel-group-item.active,
+.channel-group-item.active:hover {
+  background: color-mix(in srgb, var(--channel-selection-accent) 12%, var(--control-bg)) !important;
+  border-color: var(--channel-selection-border) !important;
+  border-left-color: var(--channel-selection-accent) !important;
+  box-shadow:
+    inset 5px 0 0 var(--channel-selection-accent),
+    inset 0 0 0 1px color-mix(in srgb, var(--channel-selection-accent) 24%, transparent) !important;
+}
+.channel-group-item.active .channel-group-main,
+.channel-group-item.active:hover .channel-group-main,
+.channel-group-item.active .channel-group-label {
+  color: var(--text) !important;
+  font-weight: 900 !important;
+}
+:root[data-theme="light"] .channel-group-item.active,
+:root[data-theme="light"] .channel-group-item.active:hover {
+  background: color-mix(in srgb, #1681ed 22%, #f7fbff) !important;
+  border-color: #0b74de !important;
+  border-left-color: #0b74de !important;
+  box-shadow:
+    inset 5px 0 0 #0b74de,
+    inset 0 0 0 1px rgba(0, 82, 184, .34),
+    0 0 0 1px rgba(11, 116, 222, .10) !important;
+}
+:root[data-theme="light"] .channel-group-item.active .channel-group-main,
+:root[data-theme="light"] .channel-group-item.active:hover .channel-group-main,
+:root[data-theme="light"] .channel-group-item.active .channel-group-label {
+  color: #063d73 !important;
+}

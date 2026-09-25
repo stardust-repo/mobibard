@@ -13523,7 +13523,16 @@
     }
     setSidebarTab("channels");
     const nextIndex = clamp(index, 0, state.channels.length - 1);
+    const nextChannel = state.channels[nextIndex] || null;
+    const parentGroup = nextChannel ? getChannelGroupForChannel(nextChannel) : null;
+    // 프로그램적으로 채널을 선택했을 때도(예: Ctrl+노트 클릭) 채널이 접힌
+    // 그룹 안에 숨어 있지 않도록 자동으로 펼칩니다.
+    if (parentGroup?.collapsed) {
+      parentGroup.collapsed = false;
+      setDirtyWithoutHistory();
+    }
     // 채널 선택은 항상 하나를 유지합니다. 같은 채널을 다시 눌러도 선택 해제하지 않습니다.
+    // 그룹이 선택된 상태였다면 그룹 선택을 해제하고 이 채널로 선택 포커스를 넘깁니다.
     state.activePanel = "notes";
     state.activeAudioClipId = null;
     state.selectedChannelGroupId = null;
@@ -13534,6 +13543,15 @@
     renderChannelTabs();
     renderChannelEditor();
     resizeAndDraw();
+    // 피아노롤에서 노트로 채널을 고른 경우에도 왼쪽 목록에서 현재 채널이
+    // 바로 보이도록 최소 범위만 스크롤합니다. 포커스는 빼앗지 않습니다.
+    if (nextChannel?.id != null) {
+      const selectedId = String(nextChannel.id);
+      requestAnimationFrame(() => {
+        const node = elements.channelTabs?.querySelector(`[data-channel-id="${CSS.escape(selectedId)}"]`);
+        node?.scrollIntoView({ block: "nearest" });
+      });
+    }
     scheduleAutosave(250);
     return true;
   }
@@ -15614,7 +15632,11 @@
     return findNoteHitAt(x, y, channelIndex)?.note || null;
   }
 
-  function findOtherVisibleChannelNoteHitAt(x, y, excludedChannelIndex = state.activeChannel) {
+  function findOtherVisibleChannelNoteHitAt(
+    x,
+    y,
+    excludedChannelIndex = state.selectedChannelGroupId == null ? state.activeChannel : -1,
+  ) {
     // 채널은 낮은 인덱스부터 그려지므로 마지막에 그려진 채널부터 역순으로 찾습니다.
     for (let channelIndex = state.channels.length - 1; channelIndex >= 0; channelIndex -= 1) {
       if (channelIndex === excludedChannelIndex || !isChannelEffectivelyVisible(state.channels[channelIndex])) {
@@ -16115,7 +16137,18 @@
       }
     }
 
-    let noteHit = findNoteHitAt(point.x, point.y);
+    let noteHit = null;
+    // 그룹이 선택된 상태에서 선택 도구(Ctrl 전환 포함)로 노트를 누르면,
+    // stale activeChannel을 기준으로 처리하지 않고 실제 클릭한 노트의 채널로
+    // 선택을 이동합니다. 이때 selectChannel()이 접힌 부모 그룹도 자동으로 펼칩니다.
+    if (touchSelectionMode && state.selectedChannelGroupId != null) {
+      const groupChannelHit = findOtherVisibleChannelNoteHitAt(point.x, point.y, -1);
+      if (groupChannelHit) {
+        selectChannel(groupChannelHit.channelIndex);
+        noteHit = groupChannelHit.hit;
+      }
+    }
+    if (!noteHit) noteHit = findNoteHitAt(point.x, point.y);
     if (isNoteEditModeActive()) {
       const sourceIds = state.noteEditMode.sourceNoteIds instanceof Set ? state.noteEditMode.sourceNoteIds : new Set();
       if (!noteHit || !sourceIds.has(noteHit.note?.id)) {
