@@ -10768,3 +10768,93 @@ body.channel-delete-mode-active #keyboardCanvas {
     grid-template-columns: 56px minmax(0, 1fr);
   }
 }
+
+
+/* 2026-09-26: per-group accent edge + strict delete-mode UI lockdown. */
+.channel-group-item.active,
+.channel-group-item.active:hover {
+  background: color-mix(in srgb, var(--group-accent) 44%, var(--control-bg)) !important;
+  border-color: color-mix(in srgb, var(--group-edge, var(--group-accent)) 76%, var(--focus)) !important;
+  border-left-color: var(--group-edge, var(--group-accent)) !important;
+  box-shadow:
+    inset 5px 0 0 var(--group-edge, var(--group-accent)),
+    inset 0 0 0 1px color-mix(in srgb, var(--group-edge, var(--group-accent)) 28%, transparent) !important;
+}
+:root[data-theme="light"] .channel-group-item.active,
+:root[data-theme="light"] .channel-group-item.active:hover {
+  background: color-mix(in srgb, var(--group-accent) 36%, #f7fbff) !important;
+  border-color: color-mix(in srgb, var(--group-edge, var(--group-accent)) 74%, #53677e) !important;
+  border-left-color: var(--group-edge, var(--group-accent)) !important;
+  box-shadow:
+    inset 5px 0 0 var(--group-edge, var(--group-accent)),
+    inset 0 0 0 1px color-mix(in srgb, var(--group-edge, var(--group-accent)) 30%, transparent) !important;
+}
+
+/* Delete mode follows the same modal locking pattern as merge mode.
+   Keep only playback, channel/group inspection and delete check controls interactive. */
+body.channel-delete-mode-active .channel-tree-toolbar,
+body.channel-delete-mode-active .side-panel-tabs,
+body.channel-delete-mode-active #channelInstrumentSelect,
+body.channel-delete-mode-active .top-menu button:not(#playButton),
+body.channel-delete-mode-active .app-toolbar button:not(#playButton),
+body.channel-delete-mode-active #editToolControls,
+body.channel-delete-mode-active #tempoLane,
+body.channel-delete-mode-active #audioLaneViewport,
+body.channel-delete-mode-active #historyCornerToggle,
+body.channel-delete-mode-active #sidebarCollapsedRail {
+  pointer-events: none !important;
+  opacity: .45;
+}
+body.channel-delete-mode-active button,
+body.channel-delete-mode-active input,
+body.channel-delete-mode-active select,
+body.channel-delete-mode-active textarea {
+  pointer-events: none !important;
+}
+body.channel-delete-mode-active button { opacity: .42; }
+body.channel-delete-mode-active #playButton,
+body.channel-delete-mode-active #jumpStartButton,
+body.channel-delete-mode-active #jumpEndButton,
+body.channel-delete-mode-active #volumeButton,
+body.channel-delete-mode-active #playbackRateButton,
+body.channel-delete-mode-active #volumeMenu button,
+body.channel-delete-mode-active #volumeMenu input,
+body.channel-delete-mode-active #playbackRateMenu button,
+body.channel-delete-mode-active #playbackRateMenu input,
+body.channel-delete-mode-active #channelDeleteModeCancelButton,
+body.channel-delete-mode-active #channelDeleteModeApplyButton,
+body.channel-delete-mode-active #channelTabs .channel-tree-channel-item .channel-tree-main,
+body.channel-delete-mode-active #channelTabs .channel-group-item .channel-tree-main,
+body.channel-delete-mode-active #channelTabs .channel-tree-delete-select,
+body.channel-delete-mode-active #channelTabs .channel-tree-group-delete {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+body.channel-delete-mode-active .channel-group-folder {
+  pointer-events: none !important;
+  opacity: .38 !important;
+  cursor: default !important;
+  background: transparent !important;
+}
+
+
+/* 2026-09-26: delete mode keeps confirmation dialogs operable. */
+body.channel-delete-mode-active #confirmDialog,
+body.channel-delete-mode-active #confirmDialog button {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+
+/* 2026-09-26 collapsed-rail group reorder parity. */
+.sidebar-rail-group.dragging-group,
+.sidebar-rail-channel.dragging-group-block {
+  opacity: .42;
+  pointer-events: none;
+  cursor: grabbing;
+}
+.sidebar-rail-group.drop-group-before {
+  box-shadow: inset 0 3px 0 #22c55e, inset 0 0 0 1px color-mix(in srgb, #22c55e 28%, transparent) !important;
+}
+.sidebar-rail-group.drop-group-after {
+  box-shadow: inset 0 -3px 0 #22c55e, inset 0 0 0 1px color-mix(in srgb, #22c55e 28%, transparent) !important;
+}

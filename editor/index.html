@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260926-delete-instrument-lock-info-width" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260926-group-entry-direction-fix" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -268,11 +268,11 @@
 <button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="sidebar-rail-action sidebar-rail-merge" id="collapsedMergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button>
 <button aria-label="채널 추가" data-i18n-aria-label="channel.add" class="sidebar-rail-action sidebar-rail-add" id="collapsedAddChannelButton" title="채널 추가" data-i18n-title="channel.add" type="button">＋</button>
 <button aria-label="그룹 추가" data-i18n-aria-label="group.create" class="sidebar-rail-action sidebar-rail-group-add" id="collapsedAddChannelGroupButton" title="그룹 추가" data-i18n-title="group.create" type="button">📁</button>
-<button aria-label="채널 선택 삭제" data-i18n-aria-label="channel.select_delete_2" class="sidebar-rail-action sidebar-rail-delete" id="collapsedDeleteChannelsButton" title="삭제할 채널 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button>
+<button aria-label="삭제할 채널/그룹 선택" data-i18n-aria-label="channel.select_delete_2" class="sidebar-rail-action sidebar-rail-delete" id="collapsedDeleteChannelsButton" title="삭제할 채널/그룹 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button>
 <div aria-label="채널 빠른 선택 목록" data-i18n-aria-label="channel.quick_select" class="sidebar-rail-channel-list" id="collapsedChannelList" role="listbox"></div>
 </div>
 <section aria-label="채널 목록" data-i18n-aria-label="channel.list" class="side-panel-view channel-panel channel-side-panel" data-context-area="channel-panel" id="channelPanel" role="tabpanel">
-<div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명" data-i18n-aria-label="ui.loaded_file_name"></span><button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="채널 추가" data-i18n-aria-label="channel.add" class="channel-tree-add-button" id="addChannelButton" title="채널 추가" data-i18n-title="channel.add" type="button">＋</button><button aria-label="그룹 추가" data-i18n-aria-label="group.create" class="channel-tree-group-button" id="addChannelGroupButton" title="그룹 추가" data-i18n-title="group.create" type="button">📁</button><button aria-label="채널 선택 삭제" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 채널 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button><button aria-label="삭제 선택 취소" data-i18n-aria-label="cancel" class="channel-delete-mode-cancel" id="channelDeleteModeCancelButton" hidden type="button">×</button><button aria-label="선택 삭제 적용" data-i18n-aria-label="action.delete" class="channel-delete-mode-apply" id="channelDeleteModeApplyButton" hidden type="button">✓</button></div>
+<div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명" data-i18n-aria-label="ui.loaded_file_name"></span><button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="채널 추가" data-i18n-aria-label="channel.add" class="channel-tree-add-button" id="addChannelButton" title="채널 추가" data-i18n-title="channel.add" type="button">＋</button><button aria-label="그룹 추가" data-i18n-aria-label="group.create" class="channel-tree-group-button" id="addChannelGroupButton" title="그룹 추가" data-i18n-title="group.create" type="button">📁</button><button aria-label="삭제할 채널/그룹 선택" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 채널/그룹 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button><button aria-label="삭제 선택 취소" data-i18n-aria-label="cancel" class="channel-delete-mode-cancel" id="channelDeleteModeCancelButton" hidden type="button">×</button><button aria-label="선택 삭제 적용" data-i18n-aria-label="action.delete" class="channel-delete-mode-apply" id="channelDeleteModeApplyButton" hidden type="button">✓</button></div>
 <section class="note-edit-mode-panel" id="noteEditModePanel" hidden>
   <div class="note-edit-mode-header">
     <strong id="noteEditModeTitle" data-i18n="note.edit_mode_title">노트 편집 모드</strong>
@@ -526,11 +526,11 @@
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="channelMmlBackdrop">
-<section aria-label="채널 MML 편집" data-i18n-aria-label="channel.mml_edit" aria-modal="true" class="transfer-dialog channel-mml-dialog" id="channelMmlDialog" role="dialog">
-<div class="transfer-dialog-header"><div><strong data-i18n="channel.mml_edit">채널 MML 편집</strong><span id="channelMmlTargetLabel" data-i18n="channel.text">현재 채널</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelMmlCloseButton" type="button">×</button></div>
+<section aria-label="채널 MML 보기" data-i18n-aria-label="channel.mml_view" aria-modal="true" class="transfer-dialog channel-mml-dialog" id="channelMmlDialog" role="dialog">
+<div class="transfer-dialog-header"><div><strong id="channelMmlDialogTitle" data-i18n="channel.mml_view">채널 MML 보기</strong><span id="channelMmlTargetLabel" data-i18n="channel.text">현재 채널</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelMmlCloseButton" type="button">×</button></div>
 <div class="channel-mml-options"><label class="channel-mml-tempo-option"><input checked="" id="channelMmlIncludeTempo" type="checkbox"/><span data-i18n="channel.mml_include_tempo">템포 포함</span></label><label class="channel-mml-tempo-option channel-mml-optimize-option"><input checked="" id="channelMmlOptimizedView" type="checkbox"/><span data-i18n="channel.mml_optimized_view">최적화 MML 보기</span></label><div aria-live="polite" class="channel-mml-status" id="channelMmlStatus"></div></div>
-<div class="channel-mml-editor"><textarea aria-label="현재 채널 MML" data-i18n-aria-label="channel.mml_text_aria" id="channelMmlText" spellcheck="false"></textarea></div>
-<div class="transfer-dialog-actions"><button id="channelMmlCancelButton" type="button" data-i18n="cancel">취소</button><button id="channelMmlApplyButton" type="button" data-i18n="action.apply">적용</button></div>
+<div class="channel-mml-editor"><textarea aria-label="현재 채널 MML" data-i18n-aria-label="channel.mml_text_aria" id="channelMmlText" readonly spellcheck="false"></textarea></div>
+<div class="transfer-dialog-actions"><button id="channelMmlCopyButton" type="button" data-i18n="action.copy">복사</button><button id="channelMmlCancelButton" type="button" data-i18n="close">닫기</button><button id="channelMmlApplyButton" type="button" hidden>적용</button></div>
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="audioEditBackdrop">
@@ -718,7 +718,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260926-delete-instrument-lock-info-width"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260926-group-entry-direction-fix"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

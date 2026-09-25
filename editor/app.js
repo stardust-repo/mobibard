@@ -385,6 +385,7 @@
     channelEditSoloButton: document.querySelector("#channelEditSoloButton"),
     channelMmlBackdrop: document.querySelector("#channelMmlBackdrop"),
     channelMmlDialog: document.querySelector("#channelMmlDialog"),
+    channelMmlDialogTitle: document.querySelector("#channelMmlDialogTitle"),
     channelMmlTargetLabel: document.querySelector("#channelMmlTargetLabel"),
     channelMmlText: document.querySelector("#channelMmlText"),
     channelMmlIncludeTempo: document.querySelector("#channelMmlIncludeTempo"),
@@ -392,6 +393,7 @@
     channelMmlStatus: document.querySelector("#channelMmlStatus"),
     channelMmlCloseButton: document.querySelector("#channelMmlCloseButton"),
     channelMmlCancelButton: document.querySelector("#channelMmlCancelButton"),
+    channelMmlCopyButton: document.querySelector("#channelMmlCopyButton"),
     channelMmlApplyButton: document.querySelector("#channelMmlApplyButton"),
     audioEditBackdrop: document.querySelector("#audioEditBackdrop"),
     audioEditCloseButton: document.querySelector("#audioEditCloseButton"),
@@ -769,6 +771,7 @@
       dropGroupId: null,
       dropChannelId: null,
       dropAfter: false,
+      dropSourceGroupEdgeBefore: false,
       lastPointerY: 0,
       direction: 0,
       directionExtremeY: 0,
@@ -776,6 +779,7 @@
     channelGroupDrag: {
       groupId: null,
       pointerId: null,
+      container: null,
       startX: 0,
       startY: 0,
       dragging: false,
@@ -805,7 +809,7 @@
       parseTimer: 0,
       parsed: null,
       includeTempo: true,
-      optimizedView: false,
+      optimizedView: true,
       standardText: "",
     },
     audioEdit: {
@@ -5971,7 +5975,7 @@
     const container = getChannelDragContainer();
     container?.classList.remove("drop-ungrouped-target");
     container?.querySelectorAll("[data-channel-id], [data-channel-group-id]").forEach((item) => {
-      item.classList.remove("drop-before", "drop-after", "drop-group-target");
+      item.classList.remove("drop-before", "drop-after", "drop-group-target", "drop-group-before", "drop-group-after");
       if (item.dataset.channelId != null) {
         item.classList.toggle(
           "dragging",
@@ -6042,17 +6046,96 @@
     return true;
   }
 
+  function buildUngroupedChannelEdgeTarget(groupNode, group, placeAfterGroup, { sourceGroupEdgeBefore = false } = {}) {
+    const sourceId = String(state.channelDrag.sourceId ?? "");
+    const members = getChannelGroupMembers(group).filter((channel) => String(channel.id) !== sourceId);
+    let channelId = null;
+    let after = false;
+    if (members.length) {
+      const anchor = placeAfterGroup ? members[members.length - 1] : members[0];
+      channelId = anchor?.id == null ? null : String(anchor.id);
+      after = Boolean(placeAfterGroup);
+    } else if (sourceGroupEdgeBefore) {
+      // When the dragged channel is the only member of the very first group,
+      // there is no member row above which we can anchor the ungrouped drop.
+      // Anchor to the first channel after the original group instead so the
+      // channel can be placed above the now-empty group without sending the
+      // group to an unrelated position. If there is no following channel, a
+      // null anchor naturally leaves the empty group after the extracted row.
+      const nextOutside = findChannelAfterTopLevelGroup(group?.id);
+      channelId = nextOutside?.id == null ? null : String(nextOutside.id);
+      after = false;
+    } else if (group?.beforeChannelId != null) {
+      channelId = String(group.beforeChannelId);
+      after = false;
+    }
+    return {
+      valid: true,
+      groupId: null,
+      channelId,
+      after,
+      element: groupNode,
+      kind: "group-edge",
+      edgeAfter: Boolean(placeAfterGroup),
+      sourceGroupEdgeBefore: Boolean(sourceGroupEdgeBefore),
+    };
+  }
+
   function buildChannelDragTargetFromNode(node, clientY) {
     const container = getChannelDragContainer();
     if (!node || !container || !container.contains(node)) return null;
     if (node.matches?.("[data-channel-group-id]")) {
+      const targetGroupId = String(node.dataset.channelGroupId || "");
+      const targetGroup = getChannelGroupById(targetGroupId);
+      const sourceChannel = getChannelById(state.channelDrag.sourceId);
+      const sourceGroupId = sourceChannel?.groupId == null ? null : String(sourceChannel.groupId);
+      if (targetGroup && sourceGroupId != null) {
+        const rect = node.getBoundingClientRect();
+        const midpoint = rect.top + rect.height / 2;
+        if (sourceGroupId === targetGroupId) {
+          // Pulling upward across the upper half of the source group's own
+          // header means "take this channel out above the group". This is
+          // especially important for the first group, where there is no row
+          // above the header that could otherwise become an ungrouped target.
+          if (state.channelDrag.direction < 0 && Number(clientY) < midpoint) {
+            return buildUngroupedChannelEdgeTarget(node, targetGroup, false, { sourceGroupEdgeBefore: true });
+          }
+        } else {
+          // When pulling a channel out of a group, crossing the near edge of an
+          // adjacent group means "outside the group" first. This creates a real
+          // ungrouped slot between consecutive groups instead of instantly
+          // swallowing the channel into the next/previous group. Moving farther
+          // into the opposite half of the header still allows intentional entry.
+          if (state.channelDrag.direction > 0 && Number(clientY) < midpoint) {
+            return buildUngroupedChannelEdgeTarget(node, targetGroup, false);
+          }
+          if (state.channelDrag.direction < 0 && Number(clientY) >= midpoint) {
+            return buildUngroupedChannelEdgeTarget(node, targetGroup, true);
+          }
+        }
+      }
+      // Entering a group should preserve the pointer's approach direction so
+      // the dragged row stays near the mouse instead of jumping to the far end
+      // of the folder. Downward entry (from above) inserts at the first member;
+      // upward entry (from below) inserts after the last member.
+      const rect = node.getBoundingClientRect();
+      const midpoint = rect.top + rect.height / 2;
+      const direction = Number(state.channelDrag.direction) || 0;
+      const insertAtStart = direction > 0 || (direction === 0 && Number(clientY) < midpoint);
+      const members = targetGroup
+        ? getChannelGroupMembers(targetGroup).filter((channel) => String(channel.id) !== String(state.channelDrag.sourceId))
+        : [];
+      const anchor = members.length
+        ? (insertAtStart ? members[0] : members[members.length - 1])
+        : null;
       return {
         valid: true,
-        groupId: String(node.dataset.channelGroupId),
-        channelId: null,
-        after: true,
+        groupId: targetGroupId,
+        channelId: anchor?.id == null ? null : String(anchor.id),
+        after: !insertAtStart,
         element: node,
         kind: "group",
+        groupInsertAtStart: insertAtStart,
       };
     }
     if (node.matches?.("[data-channel-id]")) {
@@ -6143,17 +6226,32 @@
       reference = target.after ? target.element.nextElementSibling : target.element;
       if (reference === sourceElement) reference = sourceElement.nextElementSibling;
     } else if (target.kind === "group" && target.element) {
-      // A folder body is a stable drop zone. Append after its currently rendered
-      // children, but skip the moving row when calculating the insertion slot.
-      reference = target.element.nextElementSibling;
-      while (reference) {
-        if (reference === sourceElement) {
+      if (target.groupInsertAtStart) {
+        // Entering from above: keep the dragged row next to the pointer by
+        // placing it immediately after the group header / before its first child.
+        reference = target.element.nextElementSibling;
+        if (reference === sourceElement) reference = reference.nextElementSibling;
+      } else {
+        // Entering from below: append after the group's currently rendered
+        // children, skipping the moving row while locating the end.
+        reference = target.element.nextElementSibling;
+        while (reference) {
+          if (reference === sourceElement) {
+            reference = reference.nextElementSibling;
+            continue;
+          }
+          if (!(reference.matches?.("[data-channel-id].is-group-child"))) break;
           reference = reference.nextElementSibling;
-          continue;
         }
-        if (!(reference.matches?.("[data-channel-id].is-group-child"))) break;
-        reference = reference.nextElementSibling;
       }
+    } else if (target.kind === "group-edge" && target.element) {
+      reference = target.edgeAfter ? target.element.nextElementSibling : target.element;
+      if (target.edgeAfter) {
+        while (reference && reference.matches?.("[data-channel-id].is-group-child")) {
+          reference = reference.nextElementSibling;
+        }
+      }
+      if (reference === sourceElement) reference = sourceElement.nextElementSibling;
     } else if (target.kind === "ungrouped") {
       reference = container.querySelector("[data-audio-clip-id]");
     }
@@ -6199,7 +6297,9 @@
     drag.dropGroupId = target.groupId ?? null;
     drag.dropChannelId = target.channelId ?? null;
     drag.dropAfter = Boolean(target.after);
+    drag.dropSourceGroupEdgeBefore = Boolean(target.sourceGroupEdgeBefore);
     if (target.kind === "group") target.element?.classList.add("drop-group-target");
+    else if (target.kind === "group-edge") target.element?.classList.add(target.edgeAfter ? "drop-group-after" : "drop-group-before");
     else if (target.kind === "channel") target.element?.classList.add(target.after ? "drop-after" : "drop-before");
     else container.classList.add("drop-ungrouped-target");
   }
@@ -6215,6 +6315,7 @@
     state.channelDrag.dropGroupId = null;
     state.channelDrag.dropChannelId = null;
     state.channelDrag.dropAfter = false;
+    state.channelDrag.dropSourceGroupEdgeBefore = false;
     state.channelDrag.lastPointerY = 0;
     state.channelDrag.direction = 0;
     state.channelDrag.directionExtremeY = 0;
@@ -6249,6 +6350,7 @@
     state.channelDrag.dropGroupId = null;
     state.channelDrag.dropChannelId = null;
     state.channelDrag.dropAfter = false;
+    state.channelDrag.dropSourceGroupEdgeBefore = false;
     state.channelDrag.lastPointerY = event.clientY;
     state.channelDrag.direction = 0;
     state.channelDrag.directionExtremeY = event.clientY;
@@ -6273,10 +6375,12 @@
     event.preventDefault();
   }
 
-  function commitChannelDragDrop(sourceId, { groupId = null, channelId = null, after = false } = {}) {
+  function commitChannelDragDrop(sourceId, { groupId = null, channelId = null, after = false, sourceGroupEdgeBefore = false } = {}) {
     const source = getChannelById(sourceId);
     if (!source) return false;
     const previousGroupId = source.groupId == null ? null : String(source.groupId);
+    const previousGroup = previousGroupId == null ? null : getChannelGroupById(previousGroupId);
+    const previousGroupMemberCount = previousGroup ? getChannelGroupMembers(previousGroup).length : 0;
     const targetGroup = groupId == null ? null : getChannelGroupById(groupId);
     const nextGroupId = targetGroup ? targetGroup.id : null;
     const activeChannelId = getActiveChannel()?.id;
@@ -6296,6 +6400,13 @@
 
     source.groupId = nextGroupId;
     if (targetGroup) targetGroup.beforeChannelId = null;
+    if (sourceGroupEdgeBefore && previousGroup && previousGroupMemberCount === 1 && nextGroupId == null) {
+      // Preserve the empty source group's visual position immediately after the
+      // extracted channel. Anchoring it before the following channel keeps a
+      // topmost one-channel group from jumping to the bottom when its channel
+      // is pulled out above it.
+      previousGroup.beforeChannelId = channelId == null ? null : channelId;
+    }
     withoutSource.splice(clamp(insertIndex, 0, withoutSource.length), 0, source);
     const afterOrder = withoutSource.map((channel) => String(channel.id));
     const orderChanged = beforeOrder.some((id, index) => id !== afterOrder[index]);
@@ -6333,6 +6444,7 @@
       groupId: drag.dropGroupId,
       channelId: drag.dropChannelId,
       after: drag.dropAfter,
+      sourceGroupEdgeBefore: drag.dropSourceGroupEdgeBefore,
     };
     try { drag.sourceElement?.releasePointerCapture(event.pointerId); } catch {}
     clearChannelDropIndicators();
@@ -6383,13 +6495,20 @@
     return true;
   }
 
-  function getRenderedGroupBlock(groupId) {
-    const container = elements.channelTabs;
+  function getChannelGroupDragContainer() {
+    return state.channelGroupDrag.container || elements.channelTabs || null;
+  }
+
+  function isRenderedGroupChildNode(node) {
+    return Boolean(node?.matches?.(".channel-tree-channel-item.is-group-child, .sidebar-rail-channel.is-group-child"));
+  }
+
+  function getRenderedGroupBlock(groupId, container = getChannelGroupDragContainer()) {
     const header = container?.querySelector(`[data-channel-group-id="${CSS.escape(String(groupId))}"]`);
     if (!header) return [];
     const result = [header];
     let node = header.nextElementSibling;
-    while (node?.matches?.(".channel-tree-channel-item.is-group-child")) {
+    while (isRenderedGroupChildNode(node)) {
       const channel = getChannelById(node.dataset.channelId);
       if (String(channel?.groupId ?? "") !== String(groupId)) break;
       result.push(node);
@@ -6402,6 +6521,7 @@
     const drag = state.channelGroupDrag;
     drag.groupId = null;
     drag.pointerId = null;
+    drag.container = null;
     drag.startX = 0;
     drag.startY = 0;
     drag.dragging = false;
@@ -6417,7 +6537,7 @@
   }
 
   function clearChannelGroupDragIndicators() {
-    elements.channelTabs?.querySelectorAll(".channel-group-item, .channel-tree-channel-item").forEach((node) => {
+    getChannelGroupDragContainer()?.querySelectorAll("[data-channel-group-id], [data-channel-id]").forEach((node) => {
       node.classList.remove("dragging-group", "dragging-group-block", "drop-group-before", "drop-group-after");
     });
   }
@@ -6432,7 +6552,7 @@
     return true;
   }
 
-  function beginChannelGroupPointerDrag(event, groupId, item) {
+  function beginChannelGroupPointerDrag(event, groupId, item, container = elements.channelTabs) {
     if (isChannelMergeModeActive() || isChannelDeleteModeActive()) return;
     if (event.button !== 0 || event.target.closest(".channel-tree-action, .channel-group-folder")) return;
     cancelChannelPointerDrag();
@@ -6440,11 +6560,12 @@
     const drag = state.channelGroupDrag;
     drag.groupId = String(groupId);
     drag.pointerId = event.pointerId;
+    drag.container = container || item.parentElement || elements.channelTabs;
     drag.startX = event.clientX;
     drag.startY = event.clientY;
     drag.dragging = false;
     drag.headerElement = item;
-    drag.blockElements = getRenderedGroupBlock(groupId);
+    drag.blockElements = getRenderedGroupBlock(groupId, drag.container);
     drag.targetKind = null;
     drag.targetId = null;
     drag.after = false;
@@ -6455,12 +6576,12 @@
   }
 
   function buildChannelGroupDragTargetFromNode(node, clientY) {
-    const container = elements.channelTabs;
+    const container = getChannelGroupDragContainer();
     if (!node || !container || !container.contains(node)) return null;
     if (node.matches?.("[data-channel-group-id]")) {
       const id = String(node.dataset.channelGroupId || "");
       if (!id || id === String(state.channelGroupDrag.groupId)) return null;
-      const block = getRenderedGroupBlock(id);
+      const block = getRenderedGroupBlock(id, container);
       const firstRect = node.getBoundingClientRect();
       const lastRect = block.length > 1 ? block[block.length - 1].getBoundingClientRect() : firstRect;
       const middle = (firstRect.top + lastRect.bottom) / 2;
@@ -6479,7 +6600,7 @@
   }
 
   function getChannelGroupDragGeometryTarget(clientY) {
-    const container = elements.channelTabs;
+    const container = getChannelGroupDragContainer();
     if (!container) return null;
     const y = Number(clientY);
     if (!Number.isFinite(y)) return null;
@@ -6495,7 +6616,7 @@
 
     const measured = candidates.map((node) => {
       if (node.matches?.("[data-channel-group-id]")) {
-        const block = getRenderedGroupBlock(node.dataset.channelGroupId).filter((child) => !moving.has(child));
+        const block = getRenderedGroupBlock(node.dataset.channelGroupId, container).filter((child) => !moving.has(child));
         const firstRect = node.getBoundingClientRect();
         const lastRect = block.length > 1 ? block[block.length - 1].getBoundingClientRect() : firstRect;
         return { node, top: firstRect.top, bottom: lastRect.bottom };
@@ -6520,7 +6641,7 @@
   }
 
   function resolveChannelGroupDragTarget(event) {
-    const container = elements.channelTabs;
+    const container = getChannelGroupDragContainer();
     if (!container) return null;
     const rect = container.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return null;
@@ -6541,11 +6662,12 @@
   }
 
   function getGroupTargetReference(target) {
-    if (!target?.element) return elements.channelTabs?.querySelector("[data-audio-clip-id]") || null;
+    const container = getChannelGroupDragContainer();
+    if (!target?.element) return container?.querySelector("[data-audio-clip-id]") || null;
     if (!target.after) return target.element;
     if (target.kind === "group") {
       let node = target.element.nextElementSibling;
-      while (node?.matches?.(".channel-tree-channel-item.is-group-child")) node = node.nextElementSibling;
+      while (isRenderedGroupChildNode(node)) node = node.nextElementSibling;
       return node;
     }
     return target.element.nextElementSibling;
@@ -6553,7 +6675,7 @@
 
   function moveChannelGroupPreview(target) {
     const drag = state.channelGroupDrag;
-    const container = elements.channelTabs;
+    const container = getChannelGroupDragContainer();
     if (!drag.dragging || !container || !target) return false;
     drag.blockElements = drag.blockElements.filter((node) => node?.isConnected);
     const reference = getGroupTargetReference(target);
@@ -6592,7 +6714,7 @@
     }
     if (!drag.dragging) return;
     updateChannelTreeDragDirection(drag, event.clientY);
-    const container = elements.channelTabs;
+    const container = getChannelGroupDragContainer();
     const rect = container?.getBoundingClientRect();
     if (rect) {
       if (event.clientY < rect.top + 42) container.scrollTop -= 14;
@@ -6677,6 +6799,7 @@
     clearChannelGroupDragIndicators();
     resetChannelGroupDragState();
     if (dragged) {
+      state.suppressCollapsedGroupClickUntil = performance.now() + 260;
       if (dropValid) commitChannelGroupDrag(groupId, target);
       else renderChannelTabs();
       return;
@@ -7312,7 +7435,16 @@
       groupButton.dataset.contextArea = "channel-group";
       groupButton.setAttribute("aria-label", `${group.name} 그룹`);
       groupButton.setAttribute("aria-selected", String(groupActive));
-      groupButton.addEventListener("click", () => { selectChannelGroup(group.id); toggleChannelGroupCollapsed(group.id); });
+      groupButton.addEventListener("pointerdown", (event) => beginChannelGroupPointerDrag(event, group.id, groupButton, list));
+      groupButton.addEventListener("click", (event) => {
+        if (performance.now() < Number(state.suppressCollapsedGroupClickUntil || 0)) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        selectChannelGroup(group.id);
+        toggleChannelGroupCollapsed(group.id);
+      });
       list.append(groupButton);
       if (!group.collapsed) {
         state.channels.forEach((member, memberIndex) => {
@@ -7332,8 +7464,30 @@
       groupButton.title = group.name;
       groupButton.dataset.channelGroupId = key;
       groupButton.dataset.contextArea = "channel-group";
-      groupButton.addEventListener("click", () => { selectChannelGroup(group.id); toggleChannelGroupCollapsed(group.id); });
+      groupButton.addEventListener("pointerdown", (event) => beginChannelGroupPointerDrag(event, group.id, groupButton, list));
+      groupButton.addEventListener("click", (event) => {
+        if (performance.now() < Number(state.suppressCollapsedGroupClickUntil || 0)) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        selectChannelGroup(group.id);
+        toggleChannelGroupCollapsed(group.id);
+      });
       list.append(groupButton);
+    });
+
+    // Keep empty-group visual anchors in the collapsed rail too, so group
+    // order matches the expanded channel tree after drag reordering.
+    state.channelGroups.forEach((group) => {
+      if (getChannelGroupMembers(group).length || group.beforeChannelId == null) return;
+      const groupNode = list.querySelector(`[data-channel-group-id="${CSS.escape(String(group.id))}"]`);
+      const anchorChannel = getChannelById(group.beforeChannelId);
+      let anchorNode = list.querySelector(`[data-channel-id="${CSS.escape(String(group.beforeChannelId))}"]`);
+      if (anchorChannel?.groupId != null) {
+        anchorNode = list.querySelector(`[data-channel-group-id="${CSS.escape(String(anchorChannel.groupId))}"]`) || anchorNode;
+      }
+      if (groupNode && anchorNode && groupNode !== anchorNode) list.insertBefore(groupNode, anchorNode);
     });
 
     getAudioClipsInDisplayOrder().forEach(({ clip, sourceIndex: clipIndex }, audioIndex) => {
@@ -7362,6 +7516,7 @@
     pointerId: null,
     button: 0,
     kind: "",
+    scope: "",
     targetValue: null,
     lastClientX: 0,
     lastClientY: 0,
@@ -7386,6 +7541,7 @@
     channelActionSweep.pointerId = null;
     channelActionSweep.button = 0;
     channelActionSweep.kind = "";
+    channelActionSweep.scope = "";
     channelActionSweep.targetValue = null;
     channelActionSweep.lastClientX = 0;
     channelActionSweep.lastClientY = 0;
@@ -7407,21 +7563,35 @@
       : (action.dataset.channelSweepKind || ""));
   }
 
+  function getChannelSweepScopeForAction(action) {
+    if (!action) return "";
+    return action.closest?.(".channel-group-item") ? "group" : "channel";
+  }
+
+  function isMixedChannelSweepKind(kind) {
+    return kind === "visibility" || kind === "mute" || kind === "visibility-solo" || kind === "mute-solo";
+  }
+
   function applyChannelSweepAction(action) {
     if (!action) return false;
     const kind = getChannelSweepKindForAction(action);
-    const channelId = String(action.dataset.channelSweepId || "");
-    if (!kind || !channelId) return false;
-    if (channelActionSweep.active && kind !== channelActionSweep.kind) return false;
+    const actionId = String(action.dataset.channelSweepId || "");
+    const actionScope = getChannelSweepScopeForAction(action);
+    const groupAction = actionScope === "group";
+    if (!kind || !actionId) return false;
+    if (channelActionSweep.active && (
+      kind !== channelActionSweep.kind
+      || (!isMixedChannelSweepKind(kind) && actionScope !== channelActionSweep.scope)
+    )) return false;
 
-    const actionKey = `${kind}:${channelId}`;
+    const actionKey = `${actionScope}:${kind}:${actionId}`;
     // 한 번의 누름/터치 제스처 동안 같은 대상 버튼은 딱 한 번만 변경합니다.
     // 렌더링 과정에서 현재 버튼 DOM이 교체되어도 방문 기록은 제스처가 끝날 때까지 유지됩니다.
     if (channelActionSweep.visitedActionKeys.has(actionKey)) return false;
     channelActionSweep.visitedActionKeys.add(actionKey);
 
     if (kind === "group-delete" && isChannelDeleteModeActive()) {
-      const group = getChannelGroupById(channelId);
+      const group = getChannelGroupById(actionId);
       if (!group) return false;
       const currentSelected = getGroupDeleteMode(group.id) === "group-only";
       const targetSelected = channelActionSweep.targetValue === null
@@ -7435,7 +7605,43 @@
       return true;
     }
 
-    const channel = getChannelById(channelId);
+    if (groupAction) {
+      const group = getChannelGroupById(actionId);
+      if (!group) return false;
+      if (kind === "visibility") {
+        const targetVisible = channelActionSweep.targetValue === null
+          ? group.visible === false
+          : Boolean(channelActionSweep.targetValue);
+        if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetVisible;
+        return setChannelGroupVisibleById(group.id, targetVisible, { notify: false });
+      }
+      if (kind === "mute") {
+        const targetMuted = channelActionSweep.targetValue === null
+          ? !group.muted
+          : Boolean(channelActionSweep.targetValue);
+        if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetMuted;
+        return setChannelGroupMutedById(group.id, targetMuted, { notify: false });
+      }
+      if (kind === "visibility-solo") {
+        const currentSolo = isChannelGroupVisibilitySolo(group);
+        const targetSolo = channelActionSweep.targetValue === null
+          ? !currentSolo
+          : Boolean(channelActionSweep.targetValue);
+        if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetSolo;
+        return setChannelGroupVisibilitySoloById(group.id, targetSolo, { notify: false });
+      }
+      if (kind === "mute-solo") {
+        const currentSolo = isChannelGroupSolo(group);
+        const targetSolo = channelActionSweep.targetValue === null
+          ? !currentSolo
+          : Boolean(channelActionSweep.targetValue);
+        if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetSolo;
+        return setChannelGroupSoloById(group.id, targetSolo, { notify: false });
+      }
+      return false;
+    }
+
+    const channel = getChannelById(actionId);
     if (!channel) return false;
     if (kind === "visibility") {
       const targetVisible = channelActionSweep.targetValue === null
@@ -7528,6 +7734,7 @@
     channelActionSweep.pointerId = event.pointerId;
     channelActionSweep.button = isRightButton ? 2 : 0;
     channelActionSweep.kind = kind;
+    channelActionSweep.scope = getChannelSweepScopeForAction(action);
     channelActionSweep.lastClientX = event.clientX;
     channelActionSweep.lastClientY = event.clientY;
     // Right-button S sweep owns the entire gesture. Suppress the browser/app
@@ -7550,7 +7757,9 @@
     channelActionSweep.lastClientX = event.clientX;
     channelActionSweep.lastClientY = event.clientY;
     const action = getChannelSweepActionAt(event.clientX, event.clientY);
-    if (!action || getChannelSweepKindForAction(action) !== channelActionSweep.kind) {
+    if (!action || getChannelSweepKindForAction(action) !== channelActionSweep.kind) return;
+    if (!isMixedChannelSweepKind(channelActionSweep.kind)
+      && getChannelSweepScopeForAction(action) !== channelActionSweep.scope) {
       return;
     }
     applyChannelSweepAction(action);
@@ -7563,6 +7772,8 @@
       if (!channelActionSweep.active) return;
       const action = getChannelSweepActionAt(channelActionSweep.lastClientX, channelActionSweep.lastClientY);
       if (!action || getChannelSweepKindForAction(action) !== channelActionSweep.kind) return;
+      if (!isMixedChannelSweepKind(channelActionSweep.kind)
+        && getChannelSweepScopeForAction(action) !== channelActionSweep.scope) return;
       applyChannelSweepAction(action);
     });
   }
@@ -7618,6 +7829,7 @@
   function renderChannelTabs() {
     if (!elements.channelTabs) return;
     elements.channelTabs.replaceChildren();
+    const deleteMode = isChannelDeleteModeActive();
 
     const createAction = ({ kind, active, label, title, onClick, onContextMenu = null, sweep = false, sweepId = "", rightSweepKind = "", solo = false, textContent = null, disabled = false }) => {
       const button = document.createElement("button");
@@ -7668,7 +7880,6 @@
       return button;
     };
 
-    const deleteMode = isChannelDeleteModeActive();
     // 삭제 모드에서는 채널/그룹을 선택해 노트를 확인할 수만 있고,
     // 악기 프리셋 자체는 변경할 수 없도록 콤보박스를 잠급니다.
     if (elements.channelInstrumentSelect) elements.channelInstrumentSelect.disabled = deleteMode;
@@ -7778,9 +7989,11 @@
       const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
       item.style.setProperty("--group-accent", getChannelGroupColor(group, groupIndex, "soft"));
       item.style.setProperty("--group-edge", getChannelGroupColor(group, groupIndex, "bright"));
+      // 채널 행과 동일하게 그룹의 왼쪽 강조선/선택선도 그룹 고유 hue를 사용합니다.
+      item.style.setProperty("--channel-color", getChannelGroupColor(group, groupIndex, "bright"));
       item.setAttribute("role", "treeitem"); item.setAttribute("aria-level", "1"); item.setAttribute("aria-expanded", String(deleteMode || !group.collapsed)); item.setAttribute("aria-selected", String(groupActive));
       const main = document.createElement("button"); main.type = "button"; main.className = "channel-tree-main channel-group-main";
-      const folder = document.createElement("span"); folder.className = "channel-group-folder"; folder.setAttribute("role", "button"); folder.tabIndex = 0; folder.setAttribute("aria-label", group.collapsed ? "그룹 펼치기" : "그룹 접기"); folder.textContent = group.collapsed && !deleteMode ? "📁" : "📂";
+      const folder = document.createElement("span"); folder.className = "channel-group-folder"; folder.setAttribute("role", "button"); folder.tabIndex = deleteMode ? -1 : 0; folder.setAttribute("aria-label", group.collapsed ? "그룹 펼치기" : "그룹 접기"); folder.setAttribute("aria-disabled", String(deleteMode)); folder.textContent = group.collapsed && !deleteMode ? "📁" : "📂";
       folder.addEventListener("pointerdown", (event) => event.stopPropagation());
       folder.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); if (!deleteMode) toggleChannelGroupCollapsed(group.id); });
       folder.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); if (!deleteMode) toggleChannelGroupCollapsed(group.id); } });
@@ -7830,8 +8043,8 @@
       } else {
         actions.append(
           createAction({ kind: "mml", active: false, disabled: !members.length, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) }),
-          createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? `${group.name} 표시 싱글 해제` : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? "표시 싱글 해제" : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), onContextMenu: () => setChannelGroupVisibilitySoloById(group.id, !visibilitySolo) }),
-          createAction({ kind: "mute", active: Boolean(group.muted), solo, label: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText(group.muted ? "group.unmute_named" : "group.mute_named", [group.name]), title: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText("channel.mute_context_solo", [i18nText(group.muted ? "ui.unmute" : "ui.mute")]), onClick: () => solo ? setChannelGroupSoloById(group.id, false) : setChannelGroupMutedById(group.id, !group.muted), onContextMenu: () => setChannelGroupSoloById(group.id, !solo) }),
+          createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? `${group.name} 표시 싱글 해제` : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? "표시 싱글 해제" : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), sweep: !visibilitySolo, sweepId: group.id, rightSweepKind: "visibility-solo" }),
+          createAction({ kind: "mute", active: Boolean(group.muted), solo, label: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText(group.muted ? "group.unmute_named" : "group.mute_named", [group.name]), title: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText("channel.mute_context_solo", [i18nText(group.muted ? "ui.unmute" : "ui.mute")]), onClick: () => solo ? setChannelGroupSoloById(group.id, false) : setChannelGroupMutedById(group.id, !group.muted), sweep: !solo, sweepId: group.id, rightSweepKind: "mute-solo" }),
         );
       }
       item.append(main, actions);
@@ -7889,7 +8102,13 @@
       item.dataset.audioClipId = String(clip.id); item.dataset.contextArea = "audio-source";
       item.setAttribute("role", "treeitem"); item.setAttribute("aria-level", "1"); item.setAttribute("aria-selected", String(active));
       const main = document.createElement("button"); main.type = "button"; main.className = "channel-tree-main channel-tab-main"; main.title = clip.fileName || clip.title;
-      const label = document.createElement("span"); label.className = "channel-tree-label channel-tab-label"; label.textContent = clip.title; main.append(label); main.addEventListener("click", () => handleAudioEditActivation(clip.id));
+      const label = document.createElement("span"); label.className = "channel-tree-label channel-tab-label"; label.textContent = clip.title; main.append(label);
+      if (deleteMode) {
+        main.disabled = true;
+        main.setAttribute("aria-disabled", "true");
+      } else {
+        main.addEventListener("click", () => handleAudioEditActivation(clip.id));
+      }
       const actions = document.createElement("div"); actions.className = "channel-tree-actions";
       if (!deleteMode) actions.append(
         createAction({ kind: "visibility", active: clip.visible !== false, label: i18nText(clip.visible === false ? "ui.show_2" : "ui.hide_3", [clip.title]), title: i18nText(clip.visible === false ? "audio.show_block" : "audio.hide_block"), onClick: () => setAudioClipVisible(clip.id, clip.visible === false) }),
@@ -8175,23 +8394,8 @@
   function openChannelGroupMmlDialog(groupId) {
     const group = getChannelGroupById(groupId);
     const channels = getChannelGroupMembers(group);
-    if (!group || !channels.length || !elements.channelMmlBackdrop || !elements.channelMmlText) return false;
-    if (state.playback.running || state.playback.loading) stopPlayback(false);
-    state.channelMmlEdit.channelId = null;
-    state.channelMmlEdit.groupId = String(group.id);
-    state.channelMmlEdit.viewOnly = true;
-    state.channelMmlEdit.parsed = null;
-    state.channelMmlEdit.optimizedView = true;
-    if (elements.channelMmlTargetLabel) elements.channelMmlTargetLabel.textContent = `${group.name} · ${channels.length}`;
-    if (elements.channelMmlIncludeTempo) elements.channelMmlIncludeTempo.closest("label")?.setAttribute("hidden", "");
-    if (elements.channelMmlOptimizedView) elements.channelMmlOptimizedView.closest("label")?.setAttribute("hidden", "");
-    if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.hidden = true;
-    elements.channelMmlText.readOnly = true;
-    elements.channelMmlText.value = channelsToMml(channels, { originBeat: 0 }) || "";
-    setChannelMmlStatus(i18nText("group.mml_summary", [channels.length]));
-    elements.channelMmlBackdrop.hidden = false;
-    requestAnimationFrame(() => elements.channelMmlText?.focus());
-    return true;
+    if (!group || !channels.length) return false;
+    return openMmlViewDialog({ group, channels });
   }
 
   function normalizeMmlCommandCase(text) {
@@ -8337,117 +8541,85 @@
     elements.channelMmlStatus.classList.toggle("error", Boolean(error));
   }
 
-  function updateChannelMmlPreview() {
-    if (!elements.channelMmlText) return null;
-    normalizeChannelMmlTextareaCase();
-    const source = String(elements.channelMmlText.value || "");
-    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
-    try {
-      const parsed = parseMmlText(source, { quantize: 64 });
-      state.channelMmlEdit.parsed = parsed;
-      if (parsed.noteParts.length > 1) {
-        setChannelMmlStatus(i18nText("channel.mml_status_multi"), { error: true });
-        if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
-        return parsed;
-      }
-      const details = [
-        i18nText("channel.mml_status_notes", [parsed.noteCount]),
-        i18nText("channel.mml_status_chars", [source.length]),
-      ];
-      if (parsed.explicitTempoCount) {
-        details.push(includeTempo
-          ? i18nText("channel.mml_status_tempo_included", [parsed.explicitTempoCount])
-          : i18nText("channel.mml_status_tempo_ignored"));
-      }
-      if (parsed.skippedPitchCount) details.push(i18nText("channel.mml_status_pitch_skipped", [parsed.skippedPitchCount]));
-      if (parsed.unsupportedTokenCount) details.push(i18nText("channel.mml_status_unsupported", [parsed.unsupportedTokenCount]));
-      setChannelMmlStatus(details.join(" · "));
-      if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = false;
-      return parsed;
-    } catch (error) {
-      state.channelMmlEdit.parsed = null;
-      setChannelMmlStatus(error instanceof Error ? error.message : i18nText("channel.mml_status_invalid"), { error: true });
-      if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
-      return null;
+  function getMmlViewDialogChannels() {
+    if (state.channelMmlEdit.groupId != null) {
+      const group = getChannelGroupById(state.channelMmlEdit.groupId);
+      return group ? getChannelGroupMembers(group) : [];
     }
+    if (state.channelMmlEdit.channelId != null) {
+      const channel = getChannelById(state.channelMmlEdit.channelId);
+      return channel ? [channel] : [];
+    }
+    return [];
   }
 
-  function scheduleChannelMmlPreview() {
-    window.clearTimeout(state.channelMmlEdit.parseTimer);
-    state.channelMmlEdit.parseTimer = window.setTimeout(updateChannelMmlPreview, 80);
-  }
-
-  function refreshChannelMmlTempoOption() {
-    const channelId = state.channelMmlEdit.channelId;
-    const channel = state.channels.find((entry) => String(entry.id) === String(channelId));
-    if (!channel || !elements.channelMmlText) return false;
+  function refreshChannelMmlView() {
+    if (!elements.channelMmlText) return false;
+    const channels = getMmlViewDialogChannels();
+    if (!channels.length) {
+      elements.channelMmlText.value = "";
+      setChannelMmlStatus("");
+      return false;
+    }
     const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
     const optimized = Boolean(elements.channelMmlOptimizedView?.checked);
     state.channelMmlEdit.includeTempo = includeTempo;
-    let sourceNotes = null;
-    const sourceForParse = optimized
-      ? String(state.channelMmlEdit.standardText || "")
-      : String(elements.channelMmlText.value || "");
-    try {
-      const parsed = parseMmlText(sourceForParse, { quantize: 64 });
-      if (parsed.noteParts.length <= 1) sourceNotes = parsed.noteParts[0]?.notes || [];
-    } catch {}
-    state.channelMmlEdit.standardText = channelToEditableMml(channel, { includeTempo, sourceNotes });
     state.channelMmlEdit.optimizedView = optimized;
-    elements.channelMmlText.readOnly = optimized;
-    elements.channelMmlText.value = optimized
-      ? optimizeChannelEditableMmlBody(state.channelMmlEdit.standardText)
+    state.channelMmlEdit.viewOnly = true;
+    state.channelMmlEdit.standardText = channelsToMml(channels, { originBeat: 0, includeTempo, optimized: false });
+    const displayed = optimized
+      ? channelsToMml(channels, { originBeat: 0, includeTempo, optimized: true })
       : state.channelMmlEdit.standardText;
-    updateChannelMmlPreview();
+    elements.channelMmlText.readOnly = true;
+    elements.channelMmlText.value = displayed || "";
+    const noteCount = channels.reduce((total, channel) => total + (channel.notes?.length || 0), 0);
+    const details = state.channelMmlEdit.groupId != null
+      ? [i18nText("group.mml_summary", [channels.length]), i18nText("channel.mml_status_notes", [noteCount]), i18nText("channel.mml_status_chars", [elements.channelMmlText.value.length])]
+      : [i18nText("channel.mml_status_notes", [noteCount]), i18nText("channel.mml_status_chars", [elements.channelMmlText.value.length])];
+    setChannelMmlStatus(details.join(" · "));
     return true;
+  }
+
+  function refreshChannelMmlTempoOption() {
+    return refreshChannelMmlView();
   }
 
   function refreshChannelMmlOptimizedView() {
-    if (!elements.channelMmlText) return false;
-    const optimized = Boolean(elements.channelMmlOptimizedView?.checked);
-    if (optimized) {
-      normalizeChannelMmlTextareaCase();
-      state.channelMmlEdit.standardText = String(elements.channelMmlText.value || "");
-      state.channelMmlEdit.optimizedView = true;
-      elements.channelMmlText.readOnly = true;
-      elements.channelMmlText.value = optimizeChannelEditableMmlBody(state.channelMmlEdit.standardText);
-    } else {
-      state.channelMmlEdit.optimizedView = false;
-      elements.channelMmlText.readOnly = false;
-      elements.channelMmlText.value = String(state.channelMmlEdit.standardText || "");
-    }
-    updateChannelMmlPreview();
-    return true;
+    return refreshChannelMmlView();
   }
 
-  function openChannelMmlDialog(channelId) {
-    const index = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
-    if (index < 0 || !elements.channelMmlBackdrop || !elements.channelMmlText) return false;
+  function openMmlViewDialog({ channel = null, group = null, channels = null } = {}) {
+    const list = Array.isArray(channels) ? channels.filter(Boolean) : (channel ? [channel] : []);
+    if (!list.length || !elements.channelMmlBackdrop || !elements.channelMmlText) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
-    selectChannel(index);
-    const channel = state.channels[index];
-    state.channelMmlEdit.channelId = String(channel.id);
-    state.channelMmlEdit.groupId = null;
-    state.channelMmlEdit.viewOnly = false;
-    state.channelMmlEdit.parsed = null;
     window.clearTimeout(state.channelMmlEdit.parseTimer);
     state.channelMmlEdit.parseTimer = 0;
-    if (elements.channelMmlTargetLabel) elements.channelMmlTargetLabel.textContent = channel.name;
-    if (elements.channelMmlIncludeTempo) { elements.channelMmlIncludeTempo.checked = state.channelMmlEdit.includeTempo !== false; elements.channelMmlIncludeTempo.closest("label")?.removeAttribute("hidden"); }
-    if (elements.channelMmlOptimizedView) { elements.channelMmlOptimizedView.checked = true; elements.channelMmlOptimizedView.closest("label")?.removeAttribute("hidden"); }
-    if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.hidden = false;
-    state.channelMmlEdit.optimizedView = true;
+    state.channelMmlEdit.channelId = channel ? String(channel.id) : null;
+    state.channelMmlEdit.groupId = group ? String(group.id) : null;
+    state.channelMmlEdit.viewOnly = true;
+    state.channelMmlEdit.parsed = null;
+    const title = group ? i18nText("group.mml_view") : i18nText("channel.mml_view");
+    if (elements.channelMmlDialogTitle) elements.channelMmlDialogTitle.textContent = title;
+    if (elements.channelMmlDialog) elements.channelMmlDialog.setAttribute("aria-label", title);
+    if (elements.channelMmlText) elements.channelMmlText.setAttribute("aria-label", `${title} 내용`);
+    if (elements.channelMmlTargetLabel) {
+      elements.channelMmlTargetLabel.textContent = group ? `${group.name} · ${list.length}` : channel.name;
+    }
+    if (elements.channelMmlIncludeTempo) {
+      elements.channelMmlIncludeTempo.checked = state.channelMmlEdit.includeTempo !== false;
+      elements.channelMmlIncludeTempo.closest("label")?.removeAttribute("hidden");
+    }
+    if (elements.channelMmlOptimizedView) {
+      elements.channelMmlOptimizedView.checked = state.channelMmlEdit.optimizedView !== false;
+      elements.channelMmlOptimizedView.closest("label")?.removeAttribute("hidden");
+    }
+    if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.hidden = true;
     elements.channelMmlText.readOnly = true;
-    state.channelMmlEdit.standardText = channelToDisplayedMml(channel, {
-      includeTempo: Boolean(elements.channelMmlIncludeTempo?.checked),
-      optimized: false,
-    });
-    elements.channelMmlText.value = optimizeChannelEditableMmlBody(state.channelMmlEdit.standardText);
     elements.channelMmlBackdrop.hidden = false;
     closeContextMenu();
     closeFileMenu();
     closeEditMenu();
-    updateChannelMmlPreview();
+    refreshChannelMmlView();
     requestAnimationFrame(() => {
       elements.channelMmlText?.focus();
       elements.channelMmlText?.setSelectionRange?.(0, 0);
@@ -8455,54 +8627,39 @@
     return true;
   }
 
+  function openChannelMmlDialog(channelId) {
+    const index = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
+    if (index < 0) return false;
+    selectChannel(index);
+    return openMmlViewDialog({ channel: state.channels[index] });
+  }
+
   function closeChannelMmlDialog() {
     window.clearTimeout(state.channelMmlEdit.parseTimer);
     state.channelMmlEdit.parseTimer = 0;
     state.channelMmlEdit.channelId = null;
     state.channelMmlEdit.groupId = null;
-    state.channelMmlEdit.viewOnly = false;
+    state.channelMmlEdit.viewOnly = true;
     state.channelMmlEdit.parsed = null;
-    state.channelMmlEdit.optimizedView = false;
     state.channelMmlEdit.standardText = "";
-    if (elements.channelMmlText) elements.channelMmlText.readOnly = false;
-    elements.channelMmlIncludeTempo?.closest("label")?.removeAttribute("hidden");
-    elements.channelMmlOptimizedView?.closest("label")?.removeAttribute("hidden");
-    if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.hidden = false;
+    if (elements.channelMmlText) {
+      elements.channelMmlText.readOnly = true;
+      elements.channelMmlText.value = "";
+    }
+    if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.hidden = true;
     if (elements.channelMmlBackdrop) elements.channelMmlBackdrop.hidden = true;
   }
 
+  async function copyChannelMmlDialogText() {
+    const value = String(elements.channelMmlText?.value || "");
+    if (!value) return false;
+    const copied = await writeTextToClipboard(value);
+    showToast(copied ? i18nText("channel.mml_copied") : i18nText("mml_export.copy_failed"));
+    return copied;
+  }
+
   function applyChannelMmlDialog() {
-    if (state.channelMmlEdit.viewOnly) { closeChannelMmlDialog(); return true; }
-    const channelId = state.channelMmlEdit.channelId;
-    const channel = state.channels.find((entry) => String(entry.id) === String(channelId));
-    if (!channel) {
-      closeChannelMmlDialog();
-      return false;
-    }
-    const parsed = updateChannelMmlPreview();
-    if (!parsed || parsed.noteParts.length > 1) return false;
-    if (state.playback.running || state.playback.loading) stopPlayback(false);
-    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
-    const notes = parsed.noteParts[0]?.notes || [];
-    channel.notes = notes.map((note) => ({ ...note, id: state.nextNoteId++ }));
-    if (includeTempo && parsed.explicitTempoCount) {
-      state.tempos = parsed.tempos.map((tempo, index) => ({
-        id: index + 1,
-        beat: Number(tempo.beat.toFixed(6)),
-        bpm: clamp(Math.round(tempo.bpm), CONFIG.minTempo, CONFIG.maxTempo),
-        fixed: index === 0,
-      }));
-      state.nextTempoId = state.tempos.length + 1;
-    }
-    clearNoteSelection();
-    clearMidiSelection();
-    state.channelNoteRuntime.clear();
-    markDirty(i18nText("channel.mml_history"));
-    shrinkTimelineToContent();
-    ensureTimelineFitsViewport();
-    renderAll();
     closeChannelMmlDialog();
-    showToast(i18nText("channel.mml_applied", [channel.name, notes.length]));
     return true;
   }
 
@@ -12278,6 +12435,7 @@
   }
 
   function setSidebarTab(tab, { persist = true, focus = false } = {}) {
+    if (isChannelDeleteModeActive() && tab !== "channels") return false;
     const validTabs = new Set(["channels", "shortcuts", "history", "thanks"]);
     const nextTab = validTabs.has(tab) ? tab : "channels";
     state.sidebarTab = nextTab;
@@ -12314,6 +12472,7 @@
   }
 
   function setHistoryCollapsed(collapsed) {
+    if (isChannelDeleteModeActive()) return false;
     state.history.collapsed = Boolean(collapsed);
     elements.appContent.classList.toggle("history-collapsed", state.history.collapsed);
     if (elements.sidePanel) elements.sidePanel.hidden = false;
@@ -13449,6 +13608,7 @@
     const beforeAudible = captureChannelAudibleStates();
     if (nextSolo) state.soloChannelIds.add(key);
     else state.soloChannelIds.delete(key);
+    setDirtyWithoutHistory();
     refreshChannelPlaybackForAudibleStateChange(beforeAudible);
 
     renderChannelTabs();
@@ -13464,17 +13624,13 @@
     if (!group) return false;
     const key = String(group.id);
     const nextSolo = Boolean(solo);
-    if (state.soloGroupIds.has(key) === nextSolo
-      && (!nextSolo || (state.soloGroupIds.size === 1 && state.soloChannelIds.size === 0))) return false;
+    if (state.soloGroupIds.has(key) === nextSolo) return false;
     const beforeAudible = captureChannelAudibleStates();
-    if (nextSolo) {
-      // Group Solo means exactly this group's channels are audible.
-      state.soloChannelIds.clear();
-      state.soloGroupIds.clear();
-      state.soloGroupIds.add(key);
-    } else {
-      state.soloGroupIds.delete(key);
-    }
+    // Keep group Solo additive, exactly like channel Solo, so right-drag can
+    // select or clear several groups in one gesture.
+    if (nextSolo) state.soloGroupIds.add(key);
+    else state.soloGroupIds.delete(key);
+    setDirtyWithoutHistory();
     refreshChannelPlaybackForAudibleStateChange(beforeAudible);
     renderChannelTabs(); renderChannelEditor(); drawRoll(); updateChannelInfo();
     if (notify) showToast(`${group.name} ${nextSolo ? i18nText("group.solo_on") : i18nText("group.solo_off")}`);
@@ -13489,6 +13645,7 @@
     if (state.visibilitySoloChannelIds.has(key) === nextSolo) return false;
     if (nextSolo) state.visibilitySoloChannelIds.add(key);
     else state.visibilitySoloChannelIds.delete(key);
+    setDirtyWithoutHistory();
     renderChannelTabs();
     renderChannelEditor();
     drawRoll();
@@ -13502,15 +13659,12 @@
     if (!group) return false;
     const key = String(group.id);
     const nextSolo = Boolean(solo);
-    if (state.visibilitySoloGroupIds.has(key) === nextSolo
-      && (!nextSolo || (state.visibilitySoloGroupIds.size === 1 && state.visibilitySoloChannelIds.size === 0))) return false;
-    if (nextSolo) {
-      state.visibilitySoloChannelIds.clear();
-      state.visibilitySoloGroupIds.clear();
-      state.visibilitySoloGroupIds.add(key);
-    } else {
-      state.visibilitySoloGroupIds.delete(key);
-    }
+    if (state.visibilitySoloGroupIds.has(key) === nextSolo) return false;
+    // Visibility Solo is additive for groups too, matching channel behavior and
+    // allowing several groups to be selected/cleared by right-button sweep.
+    if (nextSolo) state.visibilitySoloGroupIds.add(key);
+    else state.visibilitySoloGroupIds.delete(key);
+    setDirtyWithoutHistory();
     renderChannelTabs();
     renderChannelEditor();
     drawRoll();
@@ -13553,6 +13707,7 @@
   }
 
   function toggleChannelGroupCollapsed(groupId) {
+    if (isChannelDeleteModeActive()) return false;
     const group = getChannelGroupById(groupId);
     if (!group) return false;
     group.collapsed = !Boolean(group.collapsed);
@@ -14919,6 +15074,16 @@
     if (isCancelableNoteInteraction()) cancelCurrentNoteInteraction();
     clearNoteSelection();
     closeContextMenu();
+    closeFileMenu();
+    closeEditMenu();
+    closeThemeMenu();
+    closeGoogleAccountMenu();
+    closeVolumeMenu();
+    closeZoomMenu();
+    closePlaybackRateMenu();
+    // 병합 모드와 같은 모달형 UI 잠금 패턴을 사용합니다.
+    if (state.history.collapsed) setHistoryCollapsed(false);
+    setSidebarTab("channels", { persist: false, focus: false });
     state.channelDeleteMode.active = true;
     state.channelDeleteMode.selectedChannelIds = new Set();
     state.channelDeleteMode.groupModes = new Map();
@@ -18579,7 +18744,7 @@
     return output.join("");
   }
 
-  function channelsToMml(channels, { tempos = getSortedTempos(), originBeat = 0 } = {}) {
+  function channelsToMml(channels, { tempos = getSortedTempos(), originBeat = 0, includeTempo = true, optimized = true } = {}) {
     const selectedChannels = (channels || []).filter((channel) => channel?.notes?.length);
     if (!selectedChannels.length) return "";
     const firstBeat = Math.max(0, Number(originBeat) || 0);
@@ -18601,14 +18766,17 @@
 
     prepared.forEach((entry, channelIndex) => {
       entry.voices.forEach((voice, voiceIndex) => {
-        const voiceMml = channelIndex === 0 && voiceIndex === 0
+        const withTempo = includeTempo && channelIndex === 0 && voiceIndex === 0;
+        const voiceMml = withTempo
           ? buildTempoIntegratedNoteVoiceMml(voice, tempos, firstBeat, endBeat)
           : buildNoteVoiceMml(voice, firstBeat);
         if (voiceMml) voices.push(voiceMml);
       });
     });
 
-    return voices.length ? optimizeEditorExportMml(`MML@${voices.join(",")};`) : "";
+    if (!voices.length) return "";
+    const rendered = normalizeMmlTextCase(`MML@${voices.join(",")};`);
+    return optimized ? optimizeEditorExportMml(rendered) : rendered;
   }
 
   async function applyMmlExportSelection() {
@@ -20748,7 +20916,7 @@
     const data = encodeSchemaRows(project, context);
     return {
       format: "mml-piano-roll-project",
-      version: 29,
+      version: 30,
       encoding: PROJECT_STORAGE_ENCODING,
       schemas: context.schemas,
       data,
@@ -20765,7 +20933,7 @@
       const decoded = decodeSchemaRows(storage.data, storage.schemas);
       if (decoded && typeof decoded === "object") {
         decoded.format = storage.format;
-        decoded.version = Number(storage.version) || 29;
+        decoded.version = Number(storage.version) || 30;
       }
       return decoded;
     }
@@ -20843,8 +21011,24 @@
       nextMidiDocumentId: state.nextMidiDocumentId,
       nextAudioClipId: state.nextAudioClipId,
       nextChannelGroupId: state.nextChannelGroupId,
-      channelGroups: state.channelGroups.map((group) => ({ ...group })),
-      channels: state.channels,
+      channelGroups: state.channelGroups.map((group) => ({
+        ...group,
+        visible: group.visible !== false,
+        muted: Boolean(group.muted),
+        collapsed: Boolean(group.collapsed),
+      })),
+      channels: state.channels.map((channel) => ({
+        ...channel,
+        visible: channel.visible !== false,
+        muted: Boolean(channel.muted),
+        groupId: channel.groupId == null ? null : Number(channel.groupId),
+      })),
+      channelState: {
+        soloChannelIds: Array.from(state.soloChannelIds, String),
+        soloGroupIds: Array.from(state.soloGroupIds, String),
+        visibilitySoloChannelIds: Array.from(state.visibilitySoloChannelIds, String),
+        visibilitySoloGroupIds: Array.from(state.visibilitySoloGroupIds, String),
+      },
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
       timeSignatures: getSortedTimeSignatures().map((signature) => ({ ...signature })),
       timelineFades: normalizeTimelineFades(),
@@ -20857,6 +21041,7 @@
       editor: {
         loadedFileName: state.loadedFileName,
         activeChannel: state.activeChannel,
+        selectedChannelGroupId: state.selectedChannelGroupId,
         activePanel: state.activePanel,
         activeMidiDocumentId: state.activeMidiDocumentId,
         activeAudioClipId: state.activeAudioClipId,
@@ -21442,6 +21627,30 @@
     normalizeDefaultChannelNames();
     pruneEmptyChannelGroups();
 
+    const savedChannelState = data.channelState && typeof data.channelState === "object" ? data.channelState : {};
+    const validChannelIds = new Set(state.channels.map((channel) => String(channel.id)));
+    const validGroupIds = new Set(state.channelGroups.map((group) => String(group.id)));
+    state.soloChannelIds.clear();
+    state.soloGroupIds.clear();
+    state.visibilitySoloChannelIds.clear();
+    state.visibilitySoloGroupIds.clear();
+    for (const id of Array.isArray(savedChannelState.soloChannelIds) ? savedChannelState.soloChannelIds : []) {
+      if (validChannelIds.has(String(id))) state.soloChannelIds.add(String(id));
+    }
+    for (const id of Array.isArray(savedChannelState.soloGroupIds) ? savedChannelState.soloGroupIds : []) {
+      if (validGroupIds.has(String(id))) state.soloGroupIds.add(String(id));
+    }
+    for (const id of Array.isArray(savedChannelState.visibilitySoloChannelIds) ? savedChannelState.visibilitySoloChannelIds : []) {
+      if (validChannelIds.has(String(id))) state.visibilitySoloChannelIds.add(String(id));
+    }
+    for (const id of Array.isArray(savedChannelState.visibilitySoloGroupIds) ? savedChannelState.visibilitySoloGroupIds : []) {
+      if (validGroupIds.has(String(id))) state.visibilitySoloGroupIds.add(String(id));
+    }
+    const requestedGroupId = data.editor?.selectedChannelGroupId;
+    state.selectedChannelGroupId = requestedGroupId != null && validGroupIds.has(String(requestedGroupId))
+      ? String(requestedGroupId)
+      : null;
+
     // v21부터 지원 음악 파일의 별도 "원본 자료" 트리를 사용하지 않습니다.
     // 이전 프로젝트/자동저장에 남은 원본 악기는 데이터 손실 없이 일반 편집 채널로 1회 변환합니다.
     state.nextNoteId = Math.max(
@@ -21869,6 +22078,16 @@
 
   function openContextMenu(event) {
     event.preventDefault();
+    if (event.target?.closest?.(".popup-backdrop, dialog[open]")) {
+      event.stopPropagation();
+      closeContextMenu();
+      return;
+    }
+    if (isChannelDeleteModeActive()) {
+      event.stopPropagation();
+      closeContextMenu();
+      return;
+    }
     // A right-button visibility/mute S sweep is an editing gesture, not a
     // request to open the context menu. The contextmenu event is dispatched
     // after pointerup and may target a completely different element if the
@@ -23714,7 +23933,7 @@
       return [
         { label: i18nText("channel.merge"), disabled: state.channels.length < 2, action: () => channel && enterChannelMergeMode(channel.id) },
         { label: i18nText("channel.edit_2"), action: () => channel && openChannelEditDialog(channel.id) },
-        { label: i18nText("group.mml_view"), action: () => channel && openChannelMmlDialog(channel.id) },
+        { label: i18nText("channel.mml_view"), action: () => channel && openChannelMmlDialog(channel.id) },
         { label: i18nText("channel.copy_all_note"), disabled: !channel?.notes.length, action: () => { selectChannel(index); copyActiveChannelNotes(); } },
         { label: i18nText("channel.cut_all_note"), disabled: !channel?.notes.length, action: () => { selectChannel(index); cutActiveChannelNotes(); } },
         { label: channel?.visible === false ? i18nText("context.action.note_show") : i18nText("context.action.note_hide"), action: () => channel && setChannelVisibleById(channel.id, channel.visible === false) },
@@ -24760,25 +24979,13 @@
     bindHueColorPalette(elements.channelEditColorInput);
     elements.channelMmlCloseButton?.addEventListener("click", closeChannelMmlDialog);
     elements.channelMmlCancelButton?.addEventListener("click", closeChannelMmlDialog);
-    elements.channelMmlApplyButton?.addEventListener("click", applyChannelMmlDialog);
+    elements.channelMmlCopyButton?.addEventListener("click", () => { void copyChannelMmlDialogText(); });
+    elements.channelMmlApplyButton?.addEventListener("click", closeChannelMmlDialog);
     elements.channelMmlBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.channelMmlBackdrop) closeChannelMmlDialog();
     });
-    elements.channelMmlText?.addEventListener("input", () => {
-      normalizeChannelMmlTextareaCase();
-      if (!state.channelMmlEdit.optimizedView) {
-        state.channelMmlEdit.standardText = String(elements.channelMmlText.value || "");
-      }
-      scheduleChannelMmlPreview();
-    });
     elements.channelMmlIncludeTempo?.addEventListener("change", refreshChannelMmlTempoOption);
     elements.channelMmlOptimizedView?.addEventListener("change", refreshChannelMmlOptimizedView);
-    elements.channelMmlText?.addEventListener("keydown", (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-        event.preventDefault();
-        applyChannelMmlDialog();
-      }
-    });
     elements.copyChannelButton.addEventListener("click", copyActiveChannelNotes);
     elements.pasteChannelButton.addEventListener("click", pasteNotesFromClipboard);
     elements.noteVolumeButton?.addEventListener("click", openNoteVolumeDialog);
