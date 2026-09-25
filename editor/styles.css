@@ -7888,9 +7888,16 @@ body.merge-mode-active #volumeMenu input,
 body.merge-mode-active #playbackRateMenu button,
 body.merge-mode-active #playbackRateMenu input,
 body.merge-mode-active #channelMergeModeControls button,
-body.merge-mode-active .channel-tree-channel-item .channel-tree-main {
+body.merge-mode-active .channel-tree-channel-item .channel-tree-main,
+body.merge-mode-active .channel-group-item .channel-tree-visibility {
   pointer-events: auto !important;
   opacity: 1 !important;
+}
+/* Merge mode keeps the group visibility control interactive so the same
+   left-drag hide/show and right-drag visibility-S sweep used by the normal
+   channel tree remains available without unlocking the other group actions. */
+body.merge-mode-active .channel-group-item .channel-tree-visibility {
+  cursor: pointer;
 }
 body.merge-mode-active #rollCanvas { pointer-events: auto !important; }
 body.merge-mode-active .channel-tree-channel-item .channel-tree-actions { opacity: .34; }

@@ -8039,7 +8039,7 @@
         );
         actions.append(
           roleGroup,
-          createAction({ kind: "visibility", active: group.visible !== false, label: i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: i18nText(group.visible === false ? "group.show" : "group.hide"), onClick: () => setChannelGroupVisibleById(group.id, group.visible === false) }),
+          createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? `${group.name} 표시 싱글 해제` : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? "표시 싱글 해제" : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), sweep: !visibilitySolo, sweepId: group.id, rightSweepKind: "visibility-solo" }),
         );
       } else {
         actions.append(
@@ -14101,6 +14101,12 @@
     if (nextSolo) state.visibilitySoloGroupIds.add(key);
     else state.visibilitySoloGroupIds.delete(key);
     setDirtyWithoutHistory();
+    // 병합 모드에서도 표시 S는 단순한 시각 효과가 아니라 현재 병합 후보의
+    // 가시 범위를 바꾸므로, 선택된 소스 집합은 유지하되 미리보기만 즉시 다시 계산합니다.
+    if (isChannelMergeModeActive()) {
+      state.channelMerge.runtimeCache = null;
+      rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
+    }
     renderChannelTabs();
     renderChannelEditor();
     drawRoll();
