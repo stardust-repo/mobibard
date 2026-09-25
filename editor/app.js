@@ -394,6 +394,7 @@
     channelMmlCloseButton: document.querySelector("#channelMmlCloseButton"),
     channelMmlCancelButton: document.querySelector("#channelMmlCancelButton"),
     channelMmlCopyButton: document.querySelector("#channelMmlCopyButton"),
+    channelMmlPasteButton: document.querySelector("#channelMmlPasteButton"),
     channelMmlApplyButton: document.querySelector("#channelMmlApplyButton"),
     audioEditBackdrop: document.querySelector("#audioEditBackdrop"),
     audioEditCloseButton: document.querySelector("#audioEditCloseButton"),
@@ -8042,7 +8043,7 @@
         );
       } else {
         actions.append(
-          createAction({ kind: "mml", active: false, disabled: !members.length, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) }),
+          createAction({ kind: "mml", active: false, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) }),
           createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? `${group.name} 표시 싱글 해제` : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? "표시 싱글 해제" : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), sweep: !visibilitySolo, sweepId: group.id, rightSweepKind: "visibility-solo" }),
           createAction({ kind: "mute", active: Boolean(group.muted), solo, label: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText(group.muted ? "group.unmute_named" : "group.mute_named", [group.name]), title: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText("channel.mute_context_solo", [i18nText(group.muted ? "ui.unmute" : "ui.mute")]), onClick: () => solo ? setChannelGroupSoloById(group.id, false) : setChannelGroupMutedById(group.id, !group.muted), sweep: !solo, sweepId: group.id, rightSweepKind: "mute-solo" }),
         );
@@ -8393,9 +8394,9 @@
 
   function openChannelGroupMmlDialog(groupId) {
     const group = getChannelGroupById(groupId);
+    if (!group) return false;
     const channels = getChannelGroupMembers(group);
-    if (!group || !channels.length) return false;
-    return openMmlViewDialog({ group, channels });
+    return openMmlEditDialog({ group, channels });
   }
 
   function normalizeMmlCommandCase(text) {
@@ -8541,7 +8542,7 @@
     elements.channelMmlStatus.classList.toggle("error", Boolean(error));
   }
 
-  function getMmlViewDialogChannels() {
+  function getMmlEditDialogChannels() {
     if (state.channelMmlEdit.groupId != null) {
       const group = getChannelGroupById(state.channelMmlEdit.groupId);
       return group ? getChannelGroupMembers(group) : [];
@@ -8553,52 +8554,155 @@
     return [];
   }
 
-  function refreshChannelMmlView() {
+  function parseMmlEditorSource(source) {
+    const text = String(source || "");
+    const body = extractMmlBody(text);
+    const rawParts = String(body || "").split(",");
+    const editParts = rawParts.length === 1 && !String(rawParts[0] || "").trim()
+      ? []
+      : rawParts.map((part, partIndex) => {
+        const parsed = parseMmlPart(part, partIndex);
+        return {
+          ...parsed,
+          notes: quantizeMmlPartNotes(parsed.notes, 64),
+        };
+      });
+    const parsed = parseMmlText(text, { quantize: 64 });
+    return {
+      ...parsed,
+      editParts,
+      editPartCount: editParts.length,
+    };
+  }
+
+  function getMmlEditorTempChannels(parsed) {
+    return (parsed?.editParts || []).map((part, index) => ({
+      id: `mml-edit-${index}`,
+      notes: (part.notes || []).map((note) => ({ ...note })),
+    }));
+  }
+
+  function setChannelMmlTextareaValue(value, { selectStart = false } = {}) {
     if (!elements.channelMmlText) return false;
-    const channels = getMmlViewDialogChannels();
-    if (!channels.length) {
-      elements.channelMmlText.value = "";
-      setChannelMmlStatus("");
-      return false;
+    const normalized = normalizeMmlTextCase(String(value || ""));
+    elements.channelMmlText.value = normalized;
+    state.channelMmlEdit.standardText = normalized;
+    if (selectStart) {
+      try { elements.channelMmlText.setSelectionRange(0, 0); } catch {}
     }
-    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
-    const optimized = Boolean(elements.channelMmlOptimizedView?.checked);
-    state.channelMmlEdit.includeTempo = includeTempo;
-    state.channelMmlEdit.optimizedView = optimized;
-    state.channelMmlEdit.viewOnly = true;
-    state.channelMmlEdit.standardText = channelsToMml(channels, { originBeat: 0, includeTempo, optimized: false });
-    const displayed = optimized
-      ? channelsToMml(channels, { originBeat: 0, includeTempo, optimized: true })
-      : state.channelMmlEdit.standardText;
-    elements.channelMmlText.readOnly = true;
-    elements.channelMmlText.value = displayed || "";
-    const noteCount = channels.reduce((total, channel) => total + (channel.notes?.length || 0), 0);
-    const details = state.channelMmlEdit.groupId != null
-      ? [i18nText("group.mml_summary", [channels.length]), i18nText("channel.mml_status_notes", [noteCount]), i18nText("channel.mml_status_chars", [elements.channelMmlText.value.length])]
-      : [i18nText("channel.mml_status_notes", [noteCount]), i18nText("channel.mml_status_chars", [elements.channelMmlText.value.length])];
-    setChannelMmlStatus(details.join(" · "));
     return true;
   }
 
+  function updateChannelMmlPreview() {
+    if (!elements.channelMmlText) return null;
+    normalizeMmlTextareaValue(elements.channelMmlText, normalizeMmlTextCase);
+    const source = String(elements.channelMmlText.value || "");
+    state.channelMmlEdit.standardText = source;
+    if (!source.trim()) {
+      state.channelMmlEdit.parsed = null;
+      setChannelMmlStatus(i18nText("channel.mml_empty_hint"));
+      if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
+      return null;
+    }
+    try {
+      const parsed = parseMmlEditorSource(source);
+      state.channelMmlEdit.parsed = parsed;
+      const isGroup = state.channelMmlEdit.groupId != null;
+      if (!isGroup && parsed.editPartCount > 1) {
+        setChannelMmlStatus(i18nText("channel.mml_status_multi"), { error: true });
+        if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
+        return parsed;
+      }
+      const details = [];
+      if (isGroup) details.push(i18nText("group.mml_summary", [parsed.editPartCount]));
+      details.push(i18nText("channel.mml_status_notes", [parsed.noteCount]));
+      details.push(i18nText("channel.mml_status_chars", [source.length]));
+      if (parsed.explicitTempoCount) {
+        details.push(Boolean(elements.channelMmlIncludeTempo?.checked)
+          ? i18nText("channel.mml_status_tempo_included", [parsed.explicitTempoCount])
+          : i18nText("channel.mml_status_tempo_ignored"));
+      }
+      if (parsed.skippedPitchCount) details.push(i18nText("channel.mml_status_pitch_skipped", [parsed.skippedPitchCount]));
+      if (parsed.unsupportedTokenCount) details.push(i18nText("channel.mml_status_unsupported", [parsed.unsupportedTokenCount]));
+      setChannelMmlStatus(details.join(" · "));
+      if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = false;
+      return parsed;
+    } catch (error) {
+      state.channelMmlEdit.parsed = null;
+      setChannelMmlStatus(error instanceof Error ? error.message : i18nText("channel.mml_status_invalid"), { error: true });
+      if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
+      return null;
+    }
+  }
+
+  function scheduleChannelMmlPreview() {
+    window.clearTimeout(state.channelMmlEdit.parseTimer);
+    state.channelMmlEdit.parseTimer = window.setTimeout(updateChannelMmlPreview, 80);
+  }
+
+  function renderMmlEditorParsedSource(parsed, { includeTempo, optimized } = {}) {
+    const tempChannels = getMmlEditorTempChannels(parsed);
+    let rendered = "";
+    if (tempChannels.some((channel) => channel.notes?.length)) {
+      const tempoSource = parsed?.explicitTempoCount ? parsed.tempos : getSortedTempos();
+      rendered = channelsToMml(tempChannels, {
+        tempos: tempoSource,
+        originBeat: 0,
+        includeTempo: Boolean(includeTempo),
+        optimized: false,
+      });
+    } else if (includeTempo) {
+      const sourceTempo = parsed?.explicitTempoCount && parsed.tempos?.length
+        ? parsed.tempos[0].bpm
+        : getTempoAtBeatFromCollection(0, getSortedTempos());
+      rendered = `MML@T${sourceTempo};`;
+    }
+    return optimized && rendered ? optimizeEditorExportMml(rendered) : rendered;
+  }
+
   function refreshChannelMmlTempoOption() {
-    return refreshChannelMmlView();
+    if (!elements.channelMmlText) return false;
+    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
+    const optimized = Boolean(elements.channelMmlOptimizedView?.checked);
+    const source = String(elements.channelMmlText.value || state.channelMmlEdit.standardText || "");
+    let rendered = source;
+    try {
+      rendered = renderMmlEditorParsedSource(parseMmlEditorSource(source), { includeTempo, optimized });
+    } catch {}
+    state.channelMmlEdit.includeTempo = includeTempo;
+    state.channelMmlEdit.optimizedView = optimized;
+    setChannelMmlTextareaValue(rendered);
+    updateChannelMmlPreview();
+    return true;
   }
 
   function refreshChannelMmlOptimizedView() {
-    return refreshChannelMmlView();
+    if (!elements.channelMmlText) return false;
+    const optimized = Boolean(elements.channelMmlOptimizedView?.checked);
+    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
+    const source = String(elements.channelMmlText.value || state.channelMmlEdit.standardText || "");
+    let rendered = source;
+    try {
+      rendered = renderMmlEditorParsedSource(parseMmlEditorSource(source), { includeTempo, optimized });
+    } catch {}
+    state.channelMmlEdit.optimizedView = optimized;
+    state.channelMmlEdit.includeTempo = includeTempo;
+    setChannelMmlTextareaValue(rendered);
+    updateChannelMmlPreview();
+    return true;
   }
 
-  function openMmlViewDialog({ channel = null, group = null, channels = null } = {}) {
+  function openMmlEditDialog({ channel = null, group = null, channels = null } = {}) {
     const list = Array.isArray(channels) ? channels.filter(Boolean) : (channel ? [channel] : []);
-    if (!list.length || !elements.channelMmlBackdrop || !elements.channelMmlText) return false;
+    if ((!group && !list.length) || !elements.channelMmlBackdrop || !elements.channelMmlText) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     window.clearTimeout(state.channelMmlEdit.parseTimer);
     state.channelMmlEdit.parseTimer = 0;
     state.channelMmlEdit.channelId = channel ? String(channel.id) : null;
     state.channelMmlEdit.groupId = group ? String(group.id) : null;
-    state.channelMmlEdit.viewOnly = true;
+    state.channelMmlEdit.viewOnly = false;
     state.channelMmlEdit.parsed = null;
-    const title = group ? i18nText("group.mml_view") : i18nText("channel.mml_view");
+    const title = group ? i18nText("group.mml_view") : i18nText("channel.mml_edit");
     if (elements.channelMmlDialogTitle) elements.channelMmlDialogTitle.textContent = title;
     if (elements.channelMmlDialog) elements.channelMmlDialog.setAttribute("aria-label", title);
     if (elements.channelMmlText) elements.channelMmlText.setAttribute("aria-label", `${title} 내용`);
@@ -8613,13 +8717,30 @@
       elements.channelMmlOptimizedView.checked = state.channelMmlEdit.optimizedView !== false;
       elements.channelMmlOptimizedView.closest("label")?.removeAttribute("hidden");
     }
-    if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.hidden = true;
-    elements.channelMmlText.readOnly = true;
+    if (elements.channelMmlApplyButton) {
+      elements.channelMmlApplyButton.hidden = false;
+      elements.channelMmlApplyButton.disabled = false;
+    }
+    elements.channelMmlText.readOnly = false;
+    let standardText = channelsToMml(list, {
+      originBeat: 0,
+      includeTempo: Boolean(elements.channelMmlIncludeTempo?.checked),
+      optimized: false,
+    });
+    if (!standardText && !group && Boolean(elements.channelMmlIncludeTempo?.checked)) {
+      const bpm = getTempoAtBeatFromCollection(0, getSortedTempos());
+      standardText = `MML@T${bpm};`;
+    }
+    state.channelMmlEdit.standardText = standardText || "";
+    const displayed = elements.channelMmlOptimizedView?.checked && standardText
+      ? optimizeEditorExportMml(standardText)
+      : standardText;
+    elements.channelMmlText.value = displayed || "";
     elements.channelMmlBackdrop.hidden = false;
     closeContextMenu();
     closeFileMenu();
     closeEditMenu();
-    refreshChannelMmlView();
+    updateChannelMmlPreview();
     requestAnimationFrame(() => {
       elements.channelMmlText?.focus();
       elements.channelMmlText?.setSelectionRange?.(0, 0);
@@ -8631,7 +8752,7 @@
     const index = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
     if (index < 0) return false;
     selectChannel(index);
-    return openMmlViewDialog({ channel: state.channels[index] });
+    return openMmlEditDialog({ channel: state.channels[index] });
   }
 
   function closeChannelMmlDialog() {
@@ -8639,14 +8760,17 @@
     state.channelMmlEdit.parseTimer = 0;
     state.channelMmlEdit.channelId = null;
     state.channelMmlEdit.groupId = null;
-    state.channelMmlEdit.viewOnly = true;
+    state.channelMmlEdit.viewOnly = false;
     state.channelMmlEdit.parsed = null;
     state.channelMmlEdit.standardText = "";
     if (elements.channelMmlText) {
-      elements.channelMmlText.readOnly = true;
+      elements.channelMmlText.readOnly = false;
       elements.channelMmlText.value = "";
     }
-    if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.hidden = true;
+    if (elements.channelMmlApplyButton) {
+      elements.channelMmlApplyButton.hidden = false;
+      elements.channelMmlApplyButton.disabled = false;
+    }
     if (elements.channelMmlBackdrop) elements.channelMmlBackdrop.hidden = true;
   }
 
@@ -8658,8 +8782,118 @@
     return copied;
   }
 
+  async function pasteChannelMmlDialogText() {
+    if (!elements.channelMmlText) return false;
+    try {
+      if (!navigator.clipboard?.readText) throw new Error("clipboard unavailable");
+      const text = await navigator.clipboard.readText();
+      if (!String(text || "").length) {
+        showToast(i18nText("mml.there_no_text"));
+        return false;
+      }
+      const textarea = elements.channelMmlText;
+      const start = Number.isFinite(textarea.selectionStart) ? textarea.selectionStart : textarea.value.length;
+      const end = Number.isFinite(textarea.selectionEnd) ? textarea.selectionEnd : start;
+      textarea.setRangeText(String(text), start, end, "end");
+      normalizeMmlTextareaValue(textarea, normalizeMmlTextCase);
+      state.channelMmlEdit.standardText = String(textarea.value || "");
+      updateChannelMmlPreview();
+      textarea.focus();
+      showToast(i18nText("channel.mml_pasted"));
+      return true;
+    } catch {
+      showToast(i18nText("mml.fail_read_clipboard"));
+      elements.channelMmlText?.focus();
+      return false;
+    }
+  }
+
+  function createChannelForGroupMmlEdit(group, template, partIndex, insertIndex) {
+    const id = nextChannelId();
+    const channel = createDefaultChannel(id, state.channels.length);
+    channel.groupId = group.id;
+    channel.name = makeUniqueChannelName(`${group.name} ${partIndex + 1}`, channel.id);
+    channel.hue = getChannelGroupHue(group, state.channelGroups.indexOf(group));
+    if (template) {
+      channel.instrument = template.instrument;
+      channel.instrumentProgram = getChannelInstrumentProgram(template);
+      channel.instrumentBank = getChannelInstrumentBank(template);
+      channel.instrumentExactPreset = template.instrumentExactPreset !== false;
+      channel.defaultNoteVolume = clamp(
+        Math.round(Number(template.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || CONFIG.defaultNewChannelNoteVolume),
+        0,
+        15,
+      );
+    }
+    const safeInsertIndex = clamp(Number(insertIndex) || 0, 0, state.channels.length);
+    state.channels.splice(safeInsertIndex, 0, channel);
+    return channel;
+  }
+
   function applyChannelMmlDialog() {
+    const parsed = updateChannelMmlPreview();
+    if (!parsed) return false;
+    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
+    const group = state.channelMmlEdit.groupId != null ? getChannelGroupById(state.channelMmlEdit.groupId) : null;
+    const channel = state.channelMmlEdit.channelId != null ? getChannelById(state.channelMmlEdit.channelId) : null;
+    if (!group && !channel) {
+      closeChannelMmlDialog();
+      return false;
+    }
+    if (!group && parsed.editPartCount > 1) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    const activeChannelIdBeforeApply = state.channels[state.activeChannel]?.id ?? null;
+
+    if (group) {
+      const originalMembers = getChannelGroupMembers(group);
+      const targetParts = parsed.editParts || [];
+      const members = originalMembers.slice();
+      let insertIndex = originalMembers.length
+        ? state.channels.indexOf(originalMembers[originalMembers.length - 1]) + 1
+        : state.channels.length;
+      const template = originalMembers[0] || null;
+      while (members.length < targetParts.length) {
+        const created = createChannelForGroupMmlEdit(group, template, members.length, insertIndex);
+        members.push(created);
+        insertIndex += 1;
+      }
+      members.forEach((member, index) => {
+        const part = targetParts[index];
+        member.notes = (part?.notes || []).map((note) => ({ ...note, id: state.nextNoteId++ }));
+      });
+    } else {
+      const part = parsed.editParts[0];
+      channel.notes = (part?.notes || []).map((note) => ({ ...note, id: state.nextNoteId++ }));
+    }
+
+    if (includeTempo && parsed.explicitTempoCount) {
+      state.tempos = parsed.tempos.map((tempo, index) => ({
+        id: index + 1,
+        beat: Number(tempo.beat.toFixed(6)),
+        bpm: clamp(Math.round(tempo.bpm), CONFIG.minTempo, CONFIG.maxTempo),
+        fixed: index === 0,
+      }));
+      state.nextTempoId = state.tempos.length + 1;
+    }
+    if (activeChannelIdBeforeApply != null) {
+      const restoredIndex = state.channels.findIndex((entry) => String(entry.id) === String(activeChannelIdBeforeApply));
+      if (restoredIndex >= 0) state.activeChannel = restoredIndex;
+    }
+    clearNoteSelection();
+    clearMidiSelection();
+    state.channelNoteRuntime.clear();
+    markDirty(i18nText(group ? "group.mml_history" : "channel.mml_history"));
+    shrinkTimelineToContent();
+    ensureTimelineFitsViewport();
+    renderAll();
+    const targetName = group ? group.name : channel.name;
+    const noteCount = parsed.noteCount || 0;
     closeChannelMmlDialog();
+    if (group) {
+      showToast(i18nText("group.mml_applied", [targetName, parsed.editPartCount, noteCount]));
+    } else {
+      showToast(i18nText("channel.mml_applied", [targetName, noteCount]));
+    }
     return true;
   }
 
@@ -24205,7 +24439,7 @@
       const items = [
         { label: group.collapsed ? i18nText("group.expand") : i18nText("group.collapse"), action: () => toggleChannelGroupCollapsed(group.id) },
         { label: i18nText("group.edit"), action: () => openChannelGroupDialog(group.id) },
-        { label: i18nText("group.mml_view"), disabled: !members.length, action: () => openChannelGroupMmlDialog(group.id) },
+        { label: i18nText("group.mml_view"), action: () => openChannelGroupMmlDialog(group.id) },
         { label: group.visible === false ? i18nText("group.show") : i18nText("group.hide"), action: () => setChannelGroupVisibleById(group.id, group.visible === false) },
         { label: group.muted ? i18nText("ui.unmute") : i18nText("ui.mute"), action: () => setChannelGroupMutedById(group.id, !group.muted) },
         "separator",
@@ -25235,9 +25469,20 @@
     elements.channelMmlCloseButton?.addEventListener("click", closeChannelMmlDialog);
     elements.channelMmlCancelButton?.addEventListener("click", closeChannelMmlDialog);
     elements.channelMmlCopyButton?.addEventListener("click", () => { void copyChannelMmlDialogText(); });
-    elements.channelMmlApplyButton?.addEventListener("click", closeChannelMmlDialog);
+    elements.channelMmlPasteButton?.addEventListener("click", () => { void pasteChannelMmlDialogText(); });
+    elements.channelMmlApplyButton?.addEventListener("click", applyChannelMmlDialog);
     elements.channelMmlBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.channelMmlBackdrop) closeChannelMmlDialog();
+    });
+    elements.channelMmlText?.addEventListener("input", () => {
+      state.channelMmlEdit.standardText = String(elements.channelMmlText?.value || "");
+      scheduleChannelMmlPreview();
+    });
+    elements.channelMmlText?.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        applyChannelMmlDialog();
+      }
     });
     elements.channelMmlIncludeTempo?.addEventListener("change", refreshChannelMmlTempoOption);
     elements.channelMmlOptimizedView?.addEventListener("change", refreshChannelMmlOptimizedView);

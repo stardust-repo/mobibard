@@ -7286,6 +7286,28 @@ a[class*="button"]:hover {
   background: color-mix(in srgb, var(--accent) 14%, var(--control-hover)) !important;
   color: var(--text) !important;
 }
+
+.channel-mml-actions {
+  justify-content: space-between;
+  align-items: center;
+}
+.channel-mml-clipboard-actions,
+.channel-mml-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.channel-mml-clipboard-actions button:last-child {
+  border-color: var(--control-border);
+  background: var(--control-bg);
+  font-weight: inherit;
+}
+.channel-mml-confirm-actions button:last-child {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 22%, var(--control-bg));
+  font-weight: 800;
+}
+
 .channel-mml-dialog { width: min(680px, calc(100vw - 24px)); }
 .channel-mml-editor {
   min-height: 0;

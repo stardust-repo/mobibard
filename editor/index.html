@@ -66,7 +66,7 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260925-group-delete-refine";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260926-mml-empty-group-actions";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260926-group-selection-blue" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260926-mml-empty-group-actions" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -526,11 +526,11 @@
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="channelMmlBackdrop">
-<section aria-label="채널 MML 보기" data-i18n-aria-label="channel.mml_view" aria-modal="true" class="transfer-dialog channel-mml-dialog" id="channelMmlDialog" role="dialog">
-<div class="transfer-dialog-header"><div><strong id="channelMmlDialogTitle" data-i18n="channel.mml_view">채널 MML 보기</strong><span id="channelMmlTargetLabel" data-i18n="channel.text">현재 채널</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelMmlCloseButton" type="button">×</button></div>
+<section aria-label="채널 MML 편집" data-i18n-aria-label="channel.mml_edit" aria-modal="true" class="transfer-dialog channel-mml-dialog" id="channelMmlDialog" role="dialog">
+<div class="transfer-dialog-header"><div><strong id="channelMmlDialogTitle" data-i18n="channel.mml_edit">채널 MML 편집</strong><span id="channelMmlTargetLabel" data-i18n="channel.text">현재 채널</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelMmlCloseButton" type="button">×</button></div>
 <div class="channel-mml-options"><label class="channel-mml-tempo-option"><input checked="" id="channelMmlIncludeTempo" type="checkbox"/><span data-i18n="channel.mml_include_tempo">템포 포함</span></label><label class="channel-mml-tempo-option channel-mml-optimize-option"><input checked="" id="channelMmlOptimizedView" type="checkbox"/><span data-i18n="channel.mml_optimized_view">최적화 MML 보기</span></label><div aria-live="polite" class="channel-mml-status" id="channelMmlStatus"></div></div>
-<div class="channel-mml-editor"><textarea aria-label="현재 채널 MML" data-i18n-aria-label="channel.mml_text_aria" id="channelMmlText" readonly spellcheck="false"></textarea></div>
-<div class="transfer-dialog-actions"><button id="channelMmlCopyButton" type="button" data-i18n="action.copy">복사</button><button id="channelMmlCancelButton" type="button" data-i18n="close">닫기</button><button id="channelMmlApplyButton" type="button" hidden>적용</button></div>
+<div class="channel-mml-editor"><textarea aria-label="채널/그룹 MML 편집" data-i18n-aria-label="channel.mml_text_aria" id="channelMmlText" spellcheck="false"></textarea></div>
+<div class="transfer-dialog-actions channel-mml-actions"><div class="channel-mml-clipboard-actions"><button id="channelMmlCopyButton" type="button" data-i18n="channel.mml_copy_button">복사하기</button><button id="channelMmlPasteButton" type="button" data-i18n="paste">붙여넣기</button></div><div class="channel-mml-confirm-actions"><button id="channelMmlCancelButton" type="button" data-i18n="cancel">취소</button><button id="channelMmlApplyButton" type="button" data-i18n="action.apply">적용</button></div></div>
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="audioEditBackdrop">
@@ -718,7 +718,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260926-channel-auto-reveal"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260926-mml-empty-group-actions"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>
