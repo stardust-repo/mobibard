@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260923-mml-export-flat1";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20260925-group-delete-refine";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.3.0&amp;rev=20260920-channel-delete-summary1"></script>
+<script src="js/language-manager.js?v=5.3.0&amp;rev=20260926-group-delete-label"></script>
 <title data-i18n="app.title">모비바드 v5.3</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20260924-merge-mode-usability1" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20260926-delete-instrument-lock-info-width" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -267,11 +267,12 @@
 <div aria-label="접힌 채널 빠른 선택" data-i18n-aria-label="channel.collapsed_quick_select" class="sidebar-collapsed-rail" id="sidebarCollapsedRail">
 <button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="sidebar-rail-action sidebar-rail-merge" id="collapsedMergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button>
 <button aria-label="채널 추가" data-i18n-aria-label="channel.add" class="sidebar-rail-action sidebar-rail-add" id="collapsedAddChannelButton" title="채널 추가" data-i18n-title="channel.add" type="button">＋</button>
+<button aria-label="그룹 추가" data-i18n-aria-label="group.create" class="sidebar-rail-action sidebar-rail-group-add" id="collapsedAddChannelGroupButton" title="그룹 추가" data-i18n-title="group.create" type="button">📁</button>
 <button aria-label="채널 선택 삭제" data-i18n-aria-label="channel.select_delete_2" class="sidebar-rail-action sidebar-rail-delete" id="collapsedDeleteChannelsButton" title="삭제할 채널 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button>
 <div aria-label="채널 빠른 선택 목록" data-i18n-aria-label="channel.quick_select" class="sidebar-rail-channel-list" id="collapsedChannelList" role="listbox"></div>
 </div>
 <section aria-label="채널 목록" data-i18n-aria-label="channel.list" class="side-panel-view channel-panel channel-side-panel" data-context-area="channel-panel" id="channelPanel" role="tabpanel">
-<div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명" data-i18n-aria-label="ui.loaded_file_name"></span><button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="채널 추가" data-i18n-aria-label="channel.add" class="channel-tree-add-button" id="addChannelButton" title="채널 추가" data-i18n-title="channel.add" type="button">＋</button><button aria-label="채널 선택 삭제" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 채널 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button></div>
+<div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명" data-i18n-aria-label="ui.loaded_file_name"></span><button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="채널 추가" data-i18n-aria-label="channel.add" class="channel-tree-add-button" id="addChannelButton" title="채널 추가" data-i18n-title="channel.add" type="button">＋</button><button aria-label="그룹 추가" data-i18n-aria-label="group.create" class="channel-tree-group-button" id="addChannelGroupButton" title="그룹 추가" data-i18n-title="group.create" type="button">📁</button><button aria-label="채널 선택 삭제" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 채널 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button><button aria-label="삭제 선택 취소" data-i18n-aria-label="cancel" class="channel-delete-mode-cancel" id="channelDeleteModeCancelButton" hidden type="button">×</button><button aria-label="선택 삭제 적용" data-i18n-aria-label="action.delete" class="channel-delete-mode-apply" id="channelDeleteModeApplyButton" hidden type="button">✓</button></div>
 <section class="note-edit-mode-panel" id="noteEditModePanel" hidden>
   <div class="note-edit-mode-header">
     <strong id="noteEditModeTitle" data-i18n="note.edit_mode_title">노트 편집 모드</strong>
@@ -317,7 +318,7 @@
 <span class="visually-hidden" id="channelTitle">Ch1</span><span class="dirty-indicator" hidden="" id="dirtyIndicator" data-i18n="ui.modified">수정됨</span>
 </div>
 <label class="channel-instrument-control compact-channel-instrument"><span data-i18n="instrument.text">악기</span><select aria-label="현재 채널 악기" data-i18n-aria-label="channel.instrument_2" id="channelInstrumentSelect"></select></label>
-<div aria-label="현재 채널 요약" data-i18n-aria-label="channel.summary" class="channel-summary compact-channel-summary"><span>글자수 <strong id="infoCharCount">0</strong></span><span>선택개수 <strong id="infoSelectionCount">0</strong></span></div>
+<div aria-label="선택 그룹/채널 요약" data-i18n-aria-label="channel.summary" class="channel-summary compact-channel-summary"><span><span id="infoCharLabel">글자수</span> <strong id="infoCharCount">0</strong></span><span><span id="infoSelectionLabel">선택개수</span> <strong id="infoSelectionCount">0</strong></span></div>
 <div class="channel-merge-mode-controls" id="channelMergeModeControls" hidden>
   <div class="channel-merge-mode-main-row">
     <strong class="channel-merge-mode-title" data-i18n="merge.candidates">병합 후보</strong>
@@ -483,6 +484,18 @@
 <div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="channelDeleteSummary" data-i18n="channel.delete_summary_count" data-i18n-args="[0]">선택한 채널: 0개</div><button id="channelDeleteCancelButton" type="button" data-i18n="cancel">취소</button><button class="danger-button" disabled="" id="channelDeleteApplyButton" type="button" data-i18n="action.delete">삭제</button></div>
 </section>
 </div>
+<div class="popup-backdrop" hidden="" id="channelGroupBackdrop">
+<section aria-label="채널 그룹 편집" data-i18n-aria-label="group.edit" aria-modal="true" class="transfer-dialog channel-group-dialog" id="channelGroupDialog" role="dialog">
+<div class="transfer-dialog-header"><div><strong id="channelGroupDialogTitle" data-i18n="group.edit">그룹 편집</strong><span id="channelGroupTargetLabel" data-i18n="group.drag_members_help">채널은 목록에서 드래그하여 그룹에 넣거나 뺄 수 있습니다.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelGroupCloseButton" type="button">×</button></div>
+<div class="channel-edit-fields channel-group-fields">
+<label class="channel-edit-field"><span data-i18n="group.name">그룹명</span><input aria-label="그룹 이름" data-i18n-aria-label="group.name" id="channelGroupNameInput" maxlength="40" type="text"/></label>
+<label class="channel-edit-field"><span data-i18n="group.instrument_batch">악기 일괄 수정</span><select aria-label="그룹 악기 일괄 수정" data-i18n-aria-label="group.instrument_batch" id="channelGroupInstrumentSelect"><option value="" data-i18n="group.instrument_keep">변경 안 함</option></select></label>
+</div>
+<div class="channel-group-members-title" data-i18n="group.members">포함 채널</div><div class="midi-transfer-channel-list channel-group-member-list" id="channelGroupMemberList"></div>
+<p class="transfer-dialog-help" data-i18n="group.drag_members_help">채널은 목록에서 드래그하여 그룹에 넣거나 뺄 수 있습니다.</p>
+<div class="transfer-dialog-actions"><button id="channelGroupCancelButton" type="button" data-i18n="cancel">취소</button><button id="channelGroupApplyButton" type="button" data-i18n="action.apply">적용</button></div>
+</section>
+</div>
 <div class="popup-backdrop" hidden="" id="channelEditBackdrop">
 <section aria-label="채널 정보 수정" data-i18n-aria-label="channel.edit_2" aria-modal="true" class="transfer-dialog channel-edit-dialog" id="channelEditDialog" role="dialog">
 <div class="transfer-dialog-header"><div><strong data-i18n="channel.edit">채널 정보 수정</strong><span id="channelEditTargetLabel" data-i18n="channel.text">현재 채널</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelEditCloseButton" type="button">×</button></div>
@@ -491,7 +504,24 @@
 <label class="channel-edit-field"><span data-i18n="instrument.text">악기</span><select aria-label="채널 악기" data-i18n-aria-label="channel.instrument" id="channelEditInstrumentSelect"></select></label>
 <label class="channel-edit-field channel-edit-color-field"><span data-i18n="ui.color">색상</span><input aria-label="채널 색상" data-i18n-aria-label="channel.color_2" class="hue-color-button" data-hue="210" id="channelEditColorInput" type="button" value=""/></label>
 </div>
-<p class="transfer-dialog-help" data-i18n="channel.double_click_list">채널 목록을 더블 클릭하면 이 창을 다시 열 수 있습니다.</p>
+<div class="channel-edit-state-actions" id="channelEditStateActions">
+<div class="channel-edit-state-row">
+<span class="channel-edit-state-label">숨김</span>
+<div class="channel-edit-state-toggle" role="group" aria-label="숨김 상태">
+<button type="button" id="channelEditVisibilityNormalButton">표시</button>
+<button type="button" id="channelEditVisibilityButton">숨김</button>
+<button type="button" id="channelEditVisibilitySoloButton">싱글</button>
+</div>
+</div>
+<div class="channel-edit-state-row">
+<span class="channel-edit-state-label">음소거</span>
+<div class="channel-edit-state-toggle" role="group" aria-label="음소거 상태">
+<button type="button" id="channelEditMuteNormalButton">재생</button>
+<button type="button" id="channelEditMuteButton">음소거</button>
+<button type="button" id="channelEditSoloButton">싱글</button>
+</div>
+</div>
+</div>
 <div class="transfer-dialog-actions"><button id="channelEditCancelButton" type="button" data-i18n="cancel">취소</button><button id="channelEditApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
 </div>
@@ -559,7 +589,7 @@
 <button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="timeEditCloseButton" type="button">×</button>
 </div>
 <div class="time-edit-field time-edit-combined-field"><span data-i18n="ui.length_edit">편집할 길이</span><div class="time-edit-units-row"><label class="time-edit-number"><input aria-label="편집할 마디 수" data-i18n-aria-label="timeline.measure_edit" id="timeEditMeasureInput" inputmode="numeric" min="0" step="1" type="number" value="1"/><strong data-i18n="timeline.measure">마디</strong></label><label class="time-edit-number time-edit-fraction-number"><input aria-label="편집할 64분할 박자 수 (0부터 63)" data-i18n-aria-label="note.64th_units_edit" id="timeEditBeatInput" inputmode="numeric" max="63" min="0" step="1" type="number" value="0"/><strong data-i18n="timeline.64_beat">/64 박자</strong></label></div></div>
-<div class="time-edit-actions"><label class="time-edit-scope-toggle"><input id="timeEditSelectedChannelOnly" type="checkbox"/><span data-i18n="channel.selected_only">선택 채널만</span></label><span class="time-edit-actions-spacer"></span><button id="timeEditCancelButton" type="button" data-i18n="cancel">취소</button><button class="time-edit-delete-button" id="timeEditDeleteButton" type="button" data-i18n="action.delete">삭제</button><button class="time-edit-insert-button" id="timeEditInsertButton" type="button" data-i18n="action.add">추가</button></div>
+<div class="time-edit-actions"><label class="time-edit-scope-toggle"><input id="timeEditSelectedChannelOnly" type="checkbox"/><span data-i18n="group.selected_channel_or_group">선택 채널/그룹</span></label><span class="time-edit-actions-spacer"></span><button id="timeEditCancelButton" type="button" data-i18n="cancel">취소</button><button class="time-edit-delete-button" id="timeEditDeleteButton" type="button" data-i18n="action.delete">삭제</button><button class="time-edit-insert-button" id="timeEditInsertButton" type="button" data-i18n="action.add">추가</button></div>
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="timelineFadeBackdrop">
@@ -688,7 +718,7 @@
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="app.js?v=5.3.0&amp;rev=20260924-merge-mode-usability1"></script>
+<script src="app.js?v=5.3.0&amp;rev=20260926-delete-instrument-lock-info-width"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260907-avatar-fill1" type="module"></script>
 </body>
 </html>

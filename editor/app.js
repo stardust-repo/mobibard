@@ -159,6 +159,7 @@
     historyCornerToggle: document.querySelector("#historyCornerToggle"),
     collapsedMergeChannelsButton: document.querySelector("#collapsedMergeChannelsButton"),
     collapsedAddChannelButton: document.querySelector("#collapsedAddChannelButton"),
+    collapsedAddChannelGroupButton: document.querySelector("#collapsedAddChannelGroupButton"),
     collapsedDeleteChannelsButton: document.querySelector("#collapsedDeleteChannelsButton"),
     collapsedChannelList: document.querySelector("#collapsedChannelList"),
     historyUndoButton: document.querySelector("#historyUndoButton"),
@@ -252,8 +253,11 @@
     channelTabs: document.querySelector("#channelTabs"),
     loadedFileName: document.querySelector("#loadedFileName"),
     mergeChannelsButton: document.querySelector("#mergeChannelsButton"),
+    addChannelGroupButton: document.querySelector("#addChannelGroupButton"),
     addChannelButton: document.querySelector("#addChannelButton"),
     deleteChannelsButton: document.querySelector("#deleteChannelsButton"),
+    channelDeleteModeCancelButton: document.querySelector("#channelDeleteModeCancelButton"),
+    channelDeleteModeApplyButton: document.querySelector("#channelDeleteModeApplyButton"),
     copyChannelButton: document.querySelector("#copyChannelButton"),
     pasteChannelButton: document.querySelector("#pasteChannelButton"),
     noteVolumeButton: document.querySelector("#noteVolumeButton"),
@@ -266,7 +270,9 @@
     channelTitle: document.querySelector("#channelTitle"),
     channelColorInput: document.querySelector("#channelColorInput"),
     dirtyIndicator: document.querySelector("#dirtyIndicator"),
+    infoCharLabel: document.querySelector("#infoCharLabel"),
     infoCharCount: document.querySelector("#infoCharCount"),
+    infoSelectionLabel: document.querySelector("#infoSelectionLabel"),
     infoSelectionCount: document.querySelector("#infoSelectionCount"),
     noteChannelView: document.querySelector("#noteChannelView"),
     midiReferenceView: document.querySelector("#midiReferenceView"),
@@ -353,6 +359,15 @@
     channelDeleteClearAllButton: document.querySelector("#channelDeleteClearAllButton"),
     channelDeleteList: document.querySelector("#channelDeleteList"),
     channelDeleteSummary: document.querySelector("#channelDeleteSummary"),
+    channelGroupBackdrop: document.querySelector("#channelGroupBackdrop"),
+    channelGroupCloseButton: document.querySelector("#channelGroupCloseButton"),
+    channelGroupCancelButton: document.querySelector("#channelGroupCancelButton"),
+    channelGroupApplyButton: document.querySelector("#channelGroupApplyButton"),
+    channelGroupDialogTitle: document.querySelector("#channelGroupDialogTitle"),
+    channelGroupTargetLabel: document.querySelector("#channelGroupTargetLabel"),
+    channelGroupNameInput: document.querySelector("#channelGroupNameInput"),
+    channelGroupInstrumentSelect: document.querySelector("#channelGroupInstrumentSelect"),
+    channelGroupMemberList: document.querySelector("#channelGroupMemberList"),
     channelEditBackdrop: document.querySelector("#channelEditBackdrop"),
     channelEditCloseButton: document.querySelector("#channelEditCloseButton"),
     channelEditCancelButton: document.querySelector("#channelEditCancelButton"),
@@ -361,6 +376,13 @@
     channelEditInstrumentSelect: document.querySelector("#channelEditInstrumentSelect"),
     channelEditColorInput: document.querySelector("#channelEditColorInput"),
     channelEditTargetLabel: document.querySelector("#channelEditTargetLabel"),
+    channelEditStateActions: document.querySelector("#channelEditStateActions"),
+    channelEditVisibilityNormalButton: document.querySelector("#channelEditVisibilityNormalButton"),
+    channelEditVisibilityButton: document.querySelector("#channelEditVisibilityButton"),
+    channelEditVisibilitySoloButton: document.querySelector("#channelEditVisibilitySoloButton"),
+    channelEditMuteNormalButton: document.querySelector("#channelEditMuteNormalButton"),
+    channelEditMuteButton: document.querySelector("#channelEditMuteButton"),
+    channelEditSoloButton: document.querySelector("#channelEditSoloButton"),
     channelMmlBackdrop: document.querySelector("#channelMmlBackdrop"),
     channelMmlDialog: document.querySelector("#channelMmlDialog"),
     channelMmlTargetLabel: document.querySelector("#channelMmlTargetLabel"),
@@ -589,7 +611,15 @@
     nextNoteId: 1,
     dirty: false,
     channels: createDefaultChannels(),
+    channelGroups: [],
+    nextChannelGroupId: 1,
+    selectedChannelGroupId: null,
     soloChannelIds: new Set(),
+    soloGroupIds: new Set(),
+    visibilitySoloChannelIds: new Set(),
+    visibilitySoloGroupIds: new Set(),
+    channelGroupEdit: { groupId: null, mode: "create" },
+    channelDeleteMode: { active: false, selectedChannelIds: new Set(), groupModes: new Map() },
     tempos: createDefaultTempos(),
     nextTempoId: 2,
     timeSignatures: createDefaultTimeSignatures(),
@@ -635,7 +665,7 @@
       dynamics: "preserve",
       volumeRange: 3,
     },
-    timeEdit: { beat: 0, scope: "all", channelId: null, preferredAction: null },
+    timeEdit: { beat: 0, scope: "all", channelId: null, groupId: null, preferredAction: null },
     suppressContextMenuUntil: 0,
     suppressNextContextMenu: false,
     playhead: {
@@ -735,14 +765,43 @@
       sourceElement: null,
       container: null,
       previewOrder: [],
+      dropValid: false,
+      dropGroupId: null,
+      dropChannelId: null,
+      dropAfter: false,
+      lastPointerY: 0,
+      direction: 0,
+      directionExtremeY: 0,
+    },
+    channelGroupDrag: {
+      groupId: null,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      dragging: false,
+      headerElement: null,
+      blockElements: [],
+      targetKind: null,
+      targetId: null,
+      after: false,
+      dropValid: false,
+      lastPointerY: 0,
+      direction: 0,
+      directionExtremeY: 0,
     },
     channelEdit: {
       channelId: null,
+      groupId: null,
+      mode: "channel",
       lastClickChannelId: null,
       lastClickAt: 0,
+      lastClickGroupId: null,
+      lastClickGroupAt: 0,
     },
     channelMmlEdit: {
       channelId: null,
+      groupId: null,
+      viewOnly: false,
       parseTimer: 0,
       parsed: null,
       includeTempo: true,
@@ -1032,6 +1091,20 @@
     return getThemeHueColor(getChannelHue(channel, fallbackIndex), tone);
   }
 
+  function getChannelGroupHue(group, fallbackIndex = 0) {
+    return Number.isFinite(Number(group?.hue)) ? normalizeHue(group.hue) : getDefaultHue(fallbackIndex + 2);
+  }
+
+  function getChannelGroupColor(group, fallbackIndex = 0, tone = "soft") {
+    const hue = getChannelGroupHue(group, fallbackIndex);
+    const lightTheme = state.theme === "light";
+    const tones = lightTheme
+      ? { soft: [76, 34], bright: [88, 43], edge: [90, 27], base: [82, 37] }
+      : { soft: [76, 42], bright: [90, 54], edge: [92, 63], base: [84, 47] };
+    const [saturation, lightness] = tones[tone] || tones.soft;
+    return `hsl(${hue} ${saturation}% ${lightness}%)`;
+  }
+
   function getMidiGroupHue(group, fallbackIndex = 0) {
     return Number.isFinite(Number(group?.hue)) ? normalizeHue(group.hue) : getDefaultHue(fallbackIndex);
   }
@@ -1238,6 +1311,7 @@
       instrumentBank: 0,
       instrumentExactPreset: true,
       defaultNoteVolume: CONFIG.defaultNewChannelNoteVolume,
+      groupId: null,
       notes: [],
     };
   }
@@ -3061,6 +3135,7 @@
     updatePlaybackRateControl();
     updateThemeControls();
     updateEditorSoundFontUi();
+    populateChannelGroupInstrumentSelect();
     renderAll();
     updateMidiReferenceUI();
     updateEditMenuState();
@@ -3173,6 +3248,7 @@
 
   function updateEditMenuState() {
     if (!elements.editMenu) return;
+    const deleteLocked = isChannelDeleteModeActive();
     const midiActive = isMidiReferenceActive();
     const audioActive = state.activePanel === "audio";
     const notesActive = state.activePanel === "notes" && Boolean(getActiveChannel());
@@ -3180,18 +3256,18 @@
     const hasCopySource = audioActive ? false : (midiActive
       ? Boolean(state.midiSelectedNoteKeys.size || activeMidiGroup?.notes?.length)
       : notesActive && Boolean(state.selectedNoteIds.size || getActiveChannel()?.notes?.length));
-    elements.editUndoButton.disabled = state.history.undoStack.length === 0;
-    elements.editRedoButton.disabled = state.history.redoStack.length === 0;
+    elements.editUndoButton.disabled = deleteLocked || state.history.undoStack.length === 0;
+    elements.editRedoButton.disabled = deleteLocked || state.history.redoStack.length === 0;
     elements.editCopyButton.disabled = !hasCopySource;
-    elements.editCutButton.disabled = midiActive || audioActive || !hasCopySource;
-    elements.editPasteButton.disabled = midiActive || audioActive || !notesActive;
-    elements.editSelectAllButton.disabled = audioActive || (midiActive
+    elements.editCutButton.disabled = deleteLocked || midiActive || audioActive || !hasCopySource;
+    elements.editPasteButton.disabled = deleteLocked || midiActive || audioActive || !notesActive;
+    elements.editSelectAllButton.disabled = deleteLocked || audioActive || (midiActive
       ? !activeMidiGroup?.notes?.length
       : !notesActive || !getActiveChannel()?.notes?.length);
-    elements.editDeleteButton.disabled = midiActive || (audioActive ? !getActiveAudioClip() : !notesActive || !state.selectedNoteIds.size);
+    elements.editDeleteButton.disabled = deleteLocked || midiActive || (audioActive ? !getActiveAudioClip() : !notesActive || !state.selectedNoteIds.size);
     const hasEditorNotes = state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length > 0);
-    if (elements.editRestCleanupButton) elements.editRestCleanupButton.disabled = !hasEditorNotes;
-    if (elements.editNoteVolumeButton) elements.editNoteVolumeButton.disabled = !hasEditorNotes;
+    if (elements.editRestCleanupButton) elements.editRestCleanupButton.disabled = deleteLocked || !hasEditorNotes;
+    if (elements.editNoteVolumeButton) elements.editNoteVolumeButton.disabled = deleteLocked || !hasEditorNotes;
     // MML/MIDI 내보내기는 현재 선택/활성 패널/노트 유무와 관계없이 항상 사용할 수 있습니다.
     elements.fileExportButton.disabled = false;
     if (elements.midiExportButton) elements.midiExportButton.disabled = false;
@@ -3673,8 +3749,8 @@
       const channelIndex = Number.isInteger(candidate.sourceIndex)
         ? candidate.sourceIndex
         : state.channels.findIndex((channel) => String(channel.id) === sourceChannelId);
-      if (channelIndex < 0 || state.channels[channelIndex]?.visible === false) continue;
-      const isActive = state.activePanel === "notes" && channelIndex === state.activeChannel;
+      if (channelIndex < 0 || !isChannelEffectivelyVisible(state.channels[channelIndex])) continue;
+      const isActive = state.activePanel === "notes" && state.selectedChannelGroupId == null && channelIndex === state.activeChannel;
       const x = beatToX(candidate.startBeat);
       const endX = beatToX(candidate.startBeat + candidate.durationBeat);
       if (endX < visibleLeft || x > visibleRight) continue;
@@ -3835,16 +3911,16 @@
     const visibleChannels = isMidiReferenceActive()
       ? []
       : [...state.channels.keys()]
-        .filter((channelIndex) => state.channels[channelIndex]?.visible !== false)
+        .filter((channelIndex) => isChannelEffectivelyVisible(state.channels[channelIndex]))
         // Background channels first; the active channel is always painted last so it stays on top.
-        .sort((a, b) => Number(state.activePanel === "notes" && a === state.activeChannel) - Number(state.activePanel === "notes" && b === state.activeChannel));
+        .sort((a, b) => Number(state.activePanel === "notes" && state.selectedChannelGroupId == null && a === state.activeChannel) - Number(state.activePanel === "notes" && state.selectedChannelGroupId == null && b === state.activeChannel));
     for (const channelIndex of visibleChannels) {
       const channel = state.channels[channelIndex];
       const color = getChannelColor(channel, channelIndex);
       // Dark mode needs the note edge to move away from the dark canvas, not toward it.
       // Light mode keeps the existing darker edge so channel colors preserve their embossed look.
       const noteBorderColor = getChannelColor(channel, channelIndex, "edge");
-      const isActive = state.activePanel === "notes" && channelIndex === state.activeChannel;
+      const isActive = state.activePanel === "notes" && state.selectedChannelGroupId == null && channelIndex === state.activeChannel;
       const hasActiveSelection = isActive && state.selectedNoteIds.size > 0;
       // Keep overlaps visible, while giving the active channel a dense foreground presence.
       const baseAlpha = isActive ? 0.99 : 0.70;
@@ -4289,7 +4365,7 @@
       const barHeight = isActiveChannel ? lineWidth * 2 : lineWidth;
       const barColor = getChannelColor(channel, index);
       const borderColor = state.theme === "light" ? "rgba(74,88,106,.68)" : "rgba(244,248,252,.72)";
-      context.globalAlpha = isChannelEffectivelyMuted(channel) ? 0.28 : (channel.visible === false ? 0.42 : 0.92);
+      context.globalAlpha = isChannelEffectivelyMuted(channel) ? 0.28 : (!isChannelEffectivelyVisible(channel) ? 0.42 : 0.92);
       let pendingStart = -1;
       let pendingEnd = -1;
       const flush = () => {
@@ -4448,7 +4524,7 @@
   function drawSelectedChannelVolumeNotesOnTimeline(context, width, height, scrollLeft, firstVisibleBeat, lastVisibleBeat) {
     if (state.activePanel !== "notes") return;
     const channel = getActiveChannel();
-    if (!channel || !Array.isArray(channel.notes) || !channel.notes.length) return;
+    if (!channel || !isChannelEffectivelyVisible(channel) || !Array.isArray(channel.notes) || !channel.notes.length) return;
     const channelIndex = Math.max(0, state.channels.indexOf(channel));
     // Match the stronger channel tone used by the overview track bar so
     // saturated/primary hues stay visible against the tempo timeline.
@@ -4594,9 +4670,9 @@
     context.textBaseline = "alphabetic";
 
     for (const { marker } of visibleTimeSignatureMarkers) {
-      const accent = state.theme === "light" ? "#6542a6" : "#c5b0ff";
+      const accent = state.theme === "light" ? "#54368f" : "#efe9ff";
       drawDownPentagon(context, marker.markerX, marker.markerY, marker.markerWidth, marker.markerHeight);
-      context.fillStyle = state.theme === "light" ? "rgba(101,66,166,.18)" : "rgba(197,176,255,.22)";
+      context.fillStyle = state.theme === "light" ? "rgba(202, 180, 244, .83)" : "rgba(125, 103, 188, .81)";
       context.fill();
       context.strokeStyle = accent;
       context.lineWidth = 1.25;
@@ -4607,11 +4683,11 @@
     for (const { fade, marker } of visibleFadeMarkers) {
       drawRoundedRect(context, marker.labelX, marker.labelY, marker.labelWidth, marker.labelHeight, 3);
       const accent = fade.type === "in"
-        ? (state.theme === "light" ? "#267ba8" : "#8bd7ff")
-        : (state.theme === "light" ? "#b65f43" : "#ffb39a");
+        ? (state.theme === "light" ? "#165f86" : "#effaff")
+        : (state.theme === "light" ? "#8f422c" : "#fff1eb");
       context.fillStyle = fade.type === "in"
-        ? (state.theme === "light" ? "rgba(45, 150, 205, .11)" : "rgba(82, 173, 255, .16)")
-        : (state.theme === "light" ? "rgba(192, 91, 58, .10)" : "rgba(255, 133, 104, .15)");
+        ? (state.theme === "light" ? "rgba(151, 214, 244, .83)" : "rgba(84, 169, 224, .81)")
+        : (state.theme === "light" ? "rgba(246, 183, 160, .83)" : "rgba(224, 126, 96, .81)");
       context.fill();
       context.strokeStyle = accent;
       context.lineWidth = 1;
@@ -4624,8 +4700,8 @@
     context.font = "700 10px sans-serif";
     for (const marker of visibleTempoMarkers) {
       drawRoundedRect(context, marker.labelX, marker.labelY, marker.labelWidth, marker.labelHeight, 3);
-      const tempoAccent = state.theme === "light" ? "#23865b" : "#72e2a8";
-      context.fillStyle = state.theme === "light" ? "rgba(35, 134, 91, 0.10)" : "rgba(58, 191, 124, 0.14)";
+      const tempoAccent = state.theme === "light" ? "#176a47" : "#edfff5";
+      context.fillStyle = state.theme === "light" ? "rgba(143, 222, 181, .85)" : "rgba(69, 179, 122, .81)";
       context.fill();
       context.strokeStyle = tempoAccent;
       context.lineWidth = 1;
@@ -4981,6 +5057,11 @@
 
   function handleTimelineDoubleClick(event) {
     if (event.button !== 0) return;
+    if (isChannelDeleteModeActive()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (isChannelMergeModeActive()) {
       event.preventDefault();
       event.stopPropagation();
@@ -5008,6 +5089,13 @@
   }
 
   function handleTimelinePointerDown(event) {
+    if (isChannelDeleteModeActive()) {
+      // 삭제 모드에서는 템포/박자/페이드 등 타임라인 편집 입력을 잠급니다.
+      // 채널을 바꿔 노트를 확인하는 동작과 재생 컨트롤은 별도로 유지됩니다.
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.button !== 0) {
       return;
     }
@@ -5771,6 +5859,11 @@
   }
 
   function handleKeyboardPointerDown(event) {
+    if (isChannelDeleteModeActive()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.button !== 0) {
       return;
     }
@@ -5816,19 +5909,76 @@
     }
   }
 
+  const CHANNEL_TREE_DRAG_REVERSAL_HYSTERESIS = 7;
+
+  function updateChannelTreeDragDirection(drag, clientY) {
+    const y = Number(clientY);
+    if (!Number.isFinite(y)) return Number(drag?.direction) || 0;
+    if (!Number.isFinite(drag.lastPointerY)) drag.lastPointerY = y;
+    if (!Number.isFinite(drag.directionExtremeY)) drag.directionExtremeY = y;
+
+    if (!drag.direction) {
+      const delta = y - Number(drag.lastPointerY || y);
+      if (Math.abs(delta) >= 1) {
+        drag.direction = delta > 0 ? 1 : -1;
+        drag.directionExtremeY = y;
+      }
+      drag.lastPointerY = y;
+      return drag.direction;
+    }
+
+    if (drag.direction > 0) {
+      drag.directionExtremeY = Math.max(Number(drag.directionExtremeY), y);
+      if (y <= drag.directionExtremeY - CHANNEL_TREE_DRAG_REVERSAL_HYSTERESIS) {
+        drag.direction = -1;
+        drag.directionExtremeY = y;
+      }
+    } else {
+      drag.directionExtremeY = Math.min(Number(drag.directionExtremeY), y);
+      if (y >= drag.directionExtremeY + CHANNEL_TREE_DRAG_REVERSAL_HYSTERESIS) {
+        drag.direction = 1;
+        drag.directionExtremeY = y;
+      }
+    }
+    drag.lastPointerY = y;
+    return drag.direction;
+  }
+
+  function getLiveDomMoveDirection(container, movingNodes, referenceNode) {
+    if (!container) return 0;
+    const moving = new Set((Array.isArray(movingNodes) ? movingNodes : [movingNodes]).filter(Boolean));
+    if (!moving.size) return 0;
+    const children = [...container.children];
+    const firstMovingIndex = children.findIndex((node) => moving.has(node));
+    if (firstMovingIndex < 0) return 0;
+    const currentSlot = children.slice(0, firstMovingIndex).filter((node) => !moving.has(node)).length;
+    const remaining = children.filter((node) => !moving.has(node));
+    const desiredSlot = referenceNode == null ? remaining.length : remaining.indexOf(referenceNode);
+    if (desiredSlot < 0) return 0;
+    return Math.sign(desiredSlot - currentSlot);
+  }
+
+  function dragDirectionAllowsLiveMove(drag, moveDirection) {
+    if (!moveDirection || !drag?.direction) return true;
+    return Number(moveDirection) === Number(drag.direction);
+  }
+
   function getChannelDragContainer() {
     return state.channelDrag.container || elements.channelTabs || null;
   }
 
   function clearChannelDropIndicators() {
     const container = getChannelDragContainer();
-    container?.querySelectorAll("[data-channel-id]").forEach((item) => {
-      item.classList.remove("drop-before", "drop-after");
-      item.classList.toggle(
-        "dragging",
-        Boolean(state.channelDrag.dragging)
-          && item.dataset.channelId === String(state.channelDrag.sourceId),
-      );
+    container?.classList.remove("drop-ungrouped-target");
+    container?.querySelectorAll("[data-channel-id], [data-channel-group-id]").forEach((item) => {
+      item.classList.remove("drop-before", "drop-after", "drop-group-target");
+      if (item.dataset.channelId != null) {
+        item.classList.toggle(
+          "dragging",
+          Boolean(state.channelDrag.dragging)
+            && item.dataset.channelId === String(state.channelDrag.sourceId),
+        );
+      }
     });
   }
 
@@ -5892,39 +6042,166 @@
     return true;
   }
 
+  function buildChannelDragTargetFromNode(node, clientY) {
+    const container = getChannelDragContainer();
+    if (!node || !container || !container.contains(node)) return null;
+    if (node.matches?.("[data-channel-group-id]")) {
+      return {
+        valid: true,
+        groupId: String(node.dataset.channelGroupId),
+        channelId: null,
+        after: true,
+        element: node,
+        kind: "group",
+      };
+    }
+    if (node.matches?.("[data-channel-id]")) {
+      const channelId = String(node.dataset.channelId || "");
+      if (!channelId || channelId === String(state.channelDrag.sourceId)) return null;
+      const targetChannel = getChannelById(channelId);
+      const channelRect = node.getBoundingClientRect();
+      return {
+        valid: true,
+        groupId: targetChannel?.groupId == null ? null : String(targetChannel.groupId),
+        channelId,
+        after: Number(clientY) >= channelRect.top + channelRect.height / 2,
+        element: node,
+        kind: "channel",
+      };
+    }
+    return null;
+  }
+
+  function getChannelDragGeometryTarget(clientY) {
+    const container = getChannelDragContainer();
+    const sourceElement = state.channelDrag.sourceElement;
+    if (!container) return null;
+    const y = Number(clientY);
+    if (!Number.isFinite(y)) return null;
+    const candidates = [...container.children].filter((node) => (
+      node !== sourceElement
+      && (node.matches?.("[data-channel-group-id]") || node.matches?.("[data-channel-id]"))
+      && !node.matches?.(".dragging-group-block")
+    ));
+    if (!candidates.length) {
+      return { valid: true, groupId: null, channelId: null, after: true, element: null, kind: "ungrouped" };
+    }
+
+    const measured = candidates.map((node) => ({ node, rect: node.getBoundingClientRect() }));
+    const last = measured[measured.length - 1];
+    // Only the real space below the final row means "move to the end". During a
+    // live downward move the dragged row itself has pointer-events:none, so the
+    // pointer can briefly hit the container/gap. Treating every such gap as end
+    // made a one-row downward drag jump straight to the bottom.
+    if (y > last.rect.bottom) {
+      return { valid: true, groupId: null, channelId: null, after: true, element: null, kind: "ungrouped" };
+    }
+
+    let best = measured[0];
+    let bestDistance = Infinity;
+    for (const entry of measured) {
+      const r = entry.rect;
+      const distance = y < r.top ? r.top - y : (y > r.bottom ? y - r.bottom : 0);
+      if (distance < bestDistance) {
+        best = entry;
+        bestDistance = distance;
+        if (distance === 0) break;
+      }
+    }
+    return buildChannelDragTargetFromNode(best.node, y);
+  }
+
+  function getChannelDragDropTarget(event) {
+    const container = getChannelDragContainer();
+    if (!container) return null;
+    const rect = container.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return null;
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    if (hit && container.contains(hit)) {
+      const groupItem = hit.closest?.("[data-channel-group-id]");
+      if (groupItem && container.contains(groupItem)) {
+        const target = buildChannelDragTargetFromNode(groupItem, event.clientY);
+        if (target) return target;
+      }
+      const channelItem = hit.closest?.("[data-channel-id]");
+      if (channelItem && container.contains(channelItem)) {
+        const target = buildChannelDragTargetFromNode(channelItem, event.clientY);
+        if (target) return target;
+      }
+    }
+    return getChannelDragGeometryTarget(event.clientY);
+  }
+
+  function moveChannelDragPreviewElement(target) {
+    const drag = state.channelDrag;
+    const container = getChannelDragContainer();
+    const sourceElement = drag.sourceElement;
+    if (!target?.valid || !container || !sourceElement) return false;
+
+    let reference = null;
+    if (target.kind === "channel" && target.element && target.element !== sourceElement) {
+      reference = target.after ? target.element.nextElementSibling : target.element;
+      if (reference === sourceElement) reference = sourceElement.nextElementSibling;
+    } else if (target.kind === "group" && target.element) {
+      // A folder body is a stable drop zone. Append after its currently rendered
+      // children, but skip the moving row when calculating the insertion slot.
+      reference = target.element.nextElementSibling;
+      while (reference) {
+        if (reference === sourceElement) {
+          reference = reference.nextElementSibling;
+          continue;
+        }
+        if (!(reference.matches?.("[data-channel-id].is-group-child"))) break;
+        reference = reference.nextElementSibling;
+      }
+    } else if (target.kind === "ungrouped") {
+      reference = container.querySelector("[data-audio-clip-id]");
+    }
+
+    const moveDirection = getLiveDomMoveDirection(container, sourceElement, reference);
+    const groupedPreview = target.groupId != null;
+    const groupingChanged = sourceElement.classList.contains("is-group-child") !== groupedPreview;
+
+    // After a live DOM move, row geometry changes underneath the pointer. Without
+    // this direction lock the next pointermove can immediately request the exact
+    // opposite insertion and the row visibly shudders. A 7px reversal hysteresis
+    // in updateChannelTreeDragDirection makes genuine direction changes immediate
+    // enough while rejecting geometry-induced back-and-forth moves.
+    if (moveDirection && !dragDirectionAllowsLiveMove(drag, moveDirection)) return false;
+
+    sourceElement.classList.toggle("is-group-child", groupedPreview);
+    sourceElement.setAttribute("aria-level", groupedPreview ? "2" : "1");
+
+    if (moveDirection || groupingChanged) {
+      if (reference !== sourceElement && (moveDirection || reference)) {
+        container.insertBefore(sourceElement, reference || null);
+      }
+      drag.previewOrder = getChannelPreviewOrderIds(container);
+    }
+    return true;
+  }
+
   function updateChannelDragPreview(event) {
     const drag = state.channelDrag;
     const container = getChannelDragContainer();
     if (!drag.dragging || !container || !drag.sourceElement) return;
     const treeRect = container.getBoundingClientRect();
-    if (event.clientY < treeRect.top + 42) {
-      container.scrollTop -= 14;
-    } else if (event.clientY > treeRect.bottom - 42) {
-      container.scrollTop += 14;
-    }
+    if (event.clientY < treeRect.top + 42) container.scrollTop -= 14;
+    else if (event.clientY > treeRect.bottom - 42) container.scrollTop += 14;
 
-    const sourceElement = drag.sourceElement;
-    const channelItems = [...container.querySelectorAll("[data-channel-id]")]
-      .filter((item) => item !== sourceElement);
+    const target = getChannelDragDropTarget(event);
+    if (!target?.valid) return;
+    const accepted = moveChannelDragPreviewElement(target);
+    if (!accepted) return;
 
-    let beforeElement = null;
-    for (const item of channelItems) {
-      const rect = item.getBoundingClientRect();
-      if (event.clientY < rect.top + rect.height / 2) {
-        beforeElement = item;
-        break;
-      }
-    }
-
-    if (beforeElement) {
-      container.insertBefore(sourceElement, beforeElement);
-    } else {
-      // 펼친 목록과 접힌 레일 모두 음악 채널은 오디오 항목보다 위에 유지합니다.
-      const firstAudioItem = container.querySelector("[data-audio-clip-id]");
-      container.insertBefore(sourceElement, firstAudioItem || null);
-    }
-    drag.previewOrder = getChannelPreviewOrderIds(container);
     clearChannelDropIndicators();
+    drag.dropValid = true;
+    drag.dropGroupId = target.groupId ?? null;
+    drag.dropChannelId = target.channelId ?? null;
+    drag.dropAfter = Boolean(target.after);
+    if (target.kind === "group") target.element?.classList.add("drop-group-target");
+    else if (target.kind === "channel") target.element?.classList.add(target.after ? "drop-after" : "drop-before");
+    else container.classList.add("drop-ungrouped-target");
   }
 
   function resetChannelDragState() {
@@ -5934,24 +6211,32 @@
     state.channelDrag.sourceElement = null;
     state.channelDrag.container = null;
     state.channelDrag.previewOrder = [];
+    state.channelDrag.dropValid = false;
+    state.channelDrag.dropGroupId = null;
+    state.channelDrag.dropChannelId = null;
+    state.channelDrag.dropAfter = false;
+    state.channelDrag.lastPointerY = 0;
+    state.channelDrag.direction = 0;
+    state.channelDrag.directionExtremeY = 0;
   }
 
   function cancelChannelPointerDrag() {
     const drag = state.channelDrag;
-    if (!drag.sourceId || !drag.dragging) return false;
+    if (!drag.sourceId) return false;
     try { drag.sourceElement?.releasePointerCapture(drag.pointerId); } catch {}
+    clearChannelDropIndicators();
     resetChannelDragState();
-    // 실제 state.channels는 아직 바뀌지 않았으므로 다시 그리면 원래 순서가 그대로 복원됩니다.
     renderChannelTabs();
     return true;
   }
 
   function beginChannelPointerDrag(event, channelId, item, container = elements.channelTabs) {
-    if (isChannelMergeModeActive()) return;
+    if (isChannelMergeModeActive() || isChannelDeleteModeActive()) return;
     if (
       event.button !== 0
       || event.target.closest(".channel-tree-action, .channel-tree-expander")
     ) return;
+    activateChannelForPointerDrag(channelId);
     state.channelDrag.sourceId = String(channelId);
     state.channelDrag.pointerId = event.pointerId;
     state.channelDrag.startX = event.clientX;
@@ -5960,19 +6245,82 @@
     state.channelDrag.sourceElement = item;
     state.channelDrag.container = container || item.parentElement || elements.channelTabs;
     state.channelDrag.previewOrder = getChannelPreviewOrderIds(state.channelDrag.container);
-    trySetPointerCapture(item, event.pointerId);
+    state.channelDrag.dropValid = false;
+    state.channelDrag.dropGroupId = null;
+    state.channelDrag.dropChannelId = null;
+    state.channelDrag.dropAfter = false;
+    state.channelDrag.lastPointerY = event.clientY;
+    state.channelDrag.direction = 0;
+    state.channelDrag.directionExtremeY = event.clientY;
   }
 
   function moveChannelPointerDrag(event) {
     const drag = state.channelDrag;
     if (drag.pointerId !== event.pointerId || !drag.sourceId) return;
+    // Do not keep a stale drag alive after the primary button was released
+    // outside the channel tree/browser. The first move on re-entry cancels it.
+    if (event.pointerType === "mouse" && (event.buttons & 1) === 0) {
+      cancelChannelPointerDrag();
+      return;
+    }
     if (!drag.dragging && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 7) {
       drag.dragging = true;
       drag.sourceElement?.classList.add("dragging");
     }
     if (!drag.dragging) return;
+    updateChannelTreeDragDirection(drag, event.clientY);
     updateChannelDragPreview(event);
     event.preventDefault();
+  }
+
+  function commitChannelDragDrop(sourceId, { groupId = null, channelId = null, after = false } = {}) {
+    const source = getChannelById(sourceId);
+    if (!source) return false;
+    const previousGroupId = source.groupId == null ? null : String(source.groupId);
+    const targetGroup = groupId == null ? null : getChannelGroupById(groupId);
+    const nextGroupId = targetGroup ? targetGroup.id : null;
+    const activeChannelId = getActiveChannel()?.id;
+    const beforeOrder = state.channels.map((channel) => String(channel.id));
+    const withoutSource = state.channels.filter((channel) => String(channel.id) !== String(sourceId));
+    let insertIndex = withoutSource.length;
+
+    if (channelId != null) {
+      const targetIndex = withoutSource.findIndex((channel) => String(channel.id) === String(channelId));
+      if (targetIndex >= 0) insertIndex = targetIndex + (after ? 1 : 0);
+    } else if (targetGroup) {
+      const memberIndexes = withoutSource
+        .map((channel, index) => String(channel.groupId ?? "") === String(targetGroup.id) ? index : -1)
+        .filter((index) => index >= 0);
+      if (memberIndexes.length) insertIndex = Math.max(...memberIndexes) + 1;
+    }
+
+    source.groupId = nextGroupId;
+    if (targetGroup) targetGroup.beforeChannelId = null;
+    withoutSource.splice(clamp(insertIndex, 0, withoutSource.length), 0, source);
+    const afterOrder = withoutSource.map((channel) => String(channel.id));
+    const orderChanged = beforeOrder.some((id, index) => id !== afterOrder[index]);
+    const groupChanged = previousGroupId !== (nextGroupId == null ? null : String(nextGroupId));
+    if (!orderChanged && !groupChanged) {
+      renderChannelTabs();
+      return false;
+    }
+    state.channels = withoutSource;
+    if (activeChannelId != null) {
+      const activeIndex = state.channels.findIndex((channel) => String(channel.id) === String(activeChannelId));
+      if (activeIndex >= 0) state.activeChannel = activeIndex;
+    }
+    markDirty(i18nText("group.history_drag"));
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    if (groupChanged) {
+      showToast(targetGroup
+        ? i18nText("group.drag_into", [source.name, targetGroup.name])
+        : i18nText("group.drag_out", [source.name]));
+    } else {
+      showToast(`${source.name} 채널 순서를 변경했습니다.`);
+    }
+    return true;
   }
 
   function endChannelPointerDrag(event) {
@@ -5980,12 +6328,19 @@
     if (drag.pointerId !== event.pointerId || !drag.sourceId) return;
     const sourceId = drag.sourceId;
     const dragged = drag.dragging;
-    const previewOrder = dragged ? getChannelPreviewOrderIds() : [];
+    const drop = {
+      valid: drag.dropValid,
+      groupId: drag.dropGroupId,
+      channelId: drag.dropChannelId,
+      after: drag.dropAfter,
+    };
     try { drag.sourceElement?.releasePointerCapture(event.pointerId); } catch {}
+    clearChannelDropIndicators();
     resetChannelDragState();
 
     if (dragged) {
-      commitChannelPreviewOrder(previewOrder, sourceId);
+      if (drop.valid) commitChannelDragDrop(sourceId, drop);
+      else renderChannelTabs();
       return;
     }
 
@@ -6000,9 +6355,6 @@
       openChannelEditDialog(sourceId);
     } else {
       selectChannel(index);
-      // 채널 목록을 마우스/터치로 선택하면 renderChannelTabs()로 기존 버튼이 교체되어
-      // 포커스가 document로 빠질 수 있습니다. 선택한 채널 버튼에 포커스를 복원해
-      // 바로 ↑/↓ 키로 이전/다음 채널을 계속 선택할 수 있게 합니다.
       requestAnimationFrame(() => {
         const restored = findChannelTreeItemByIdentity({ kind: "channel", id: String(sourceId) });
         restored?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
@@ -6011,6 +6363,346 @@
     }
   }
 
+  function activateGroupForPointerDrag(groupId) {
+    const group = getChannelGroupById(groupId);
+    if (!group) return false;
+    state.activePanel = "notes";
+    state.activeAudioClipId = null;
+    state.selectedChannelGroupId = String(group.id);
+    clearNoteSelection();
+    clearMidiSelection();
+    elements.channelTabs?.querySelectorAll(".channel-tree-channel-item").forEach((node) => node.classList.remove("active"));
+    elements.channelTabs?.querySelectorAll(".channel-group-item").forEach((node) => {
+      const active = String(node.dataset.channelGroupId || "") === String(group.id);
+      node.classList.toggle("active", active);
+      node.setAttribute("aria-selected", String(active));
+    });
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    return true;
+  }
+
+  function getRenderedGroupBlock(groupId) {
+    const container = elements.channelTabs;
+    const header = container?.querySelector(`[data-channel-group-id="${CSS.escape(String(groupId))}"]`);
+    if (!header) return [];
+    const result = [header];
+    let node = header.nextElementSibling;
+    while (node?.matches?.(".channel-tree-channel-item.is-group-child")) {
+      const channel = getChannelById(node.dataset.channelId);
+      if (String(channel?.groupId ?? "") !== String(groupId)) break;
+      result.push(node);
+      node = node.nextElementSibling;
+    }
+    return result;
+  }
+
+  function resetChannelGroupDragState() {
+    const drag = state.channelGroupDrag;
+    drag.groupId = null;
+    drag.pointerId = null;
+    drag.startX = 0;
+    drag.startY = 0;
+    drag.dragging = false;
+    drag.headerElement = null;
+    drag.blockElements = [];
+    drag.targetKind = null;
+    drag.targetId = null;
+    drag.after = false;
+    drag.dropValid = false;
+    drag.lastPointerY = 0;
+    drag.direction = 0;
+    drag.directionExtremeY = 0;
+  }
+
+  function clearChannelGroupDragIndicators() {
+    elements.channelTabs?.querySelectorAll(".channel-group-item, .channel-tree-channel-item").forEach((node) => {
+      node.classList.remove("dragging-group", "dragging-group-block", "drop-group-before", "drop-group-after");
+    });
+  }
+
+  function cancelChannelGroupPointerDrag({ rerender = true } = {}) {
+    const drag = state.channelGroupDrag;
+    if (!drag.groupId) return false;
+    try { drag.headerElement?.releasePointerCapture?.(drag.pointerId); } catch {}
+    clearChannelGroupDragIndicators();
+    resetChannelGroupDragState();
+    if (rerender) renderChannelTabs();
+    return true;
+  }
+
+  function beginChannelGroupPointerDrag(event, groupId, item) {
+    if (isChannelMergeModeActive() || isChannelDeleteModeActive()) return;
+    if (event.button !== 0 || event.target.closest(".channel-tree-action, .channel-group-folder")) return;
+    cancelChannelPointerDrag();
+    activateGroupForPointerDrag(groupId);
+    const drag = state.channelGroupDrag;
+    drag.groupId = String(groupId);
+    drag.pointerId = event.pointerId;
+    drag.startX = event.clientX;
+    drag.startY = event.clientY;
+    drag.dragging = false;
+    drag.headerElement = item;
+    drag.blockElements = getRenderedGroupBlock(groupId);
+    drag.targetKind = null;
+    drag.targetId = null;
+    drag.after = false;
+    drag.dropValid = false;
+    drag.lastPointerY = event.clientY;
+    drag.direction = 0;
+    drag.directionExtremeY = event.clientY;
+  }
+
+  function buildChannelGroupDragTargetFromNode(node, clientY) {
+    const container = elements.channelTabs;
+    if (!node || !container || !container.contains(node)) return null;
+    if (node.matches?.("[data-channel-group-id]")) {
+      const id = String(node.dataset.channelGroupId || "");
+      if (!id || id === String(state.channelGroupDrag.groupId)) return null;
+      const block = getRenderedGroupBlock(id);
+      const firstRect = node.getBoundingClientRect();
+      const lastRect = block.length > 1 ? block[block.length - 1].getBoundingClientRect() : firstRect;
+      const middle = (firstRect.top + lastRect.bottom) / 2;
+      return { kind: "group", id, after: Number(clientY) >= middle, element: node };
+    }
+    if (node.matches?.("[data-channel-id]")) {
+      const channel = getChannelById(node.dataset.channelId);
+      if (channel?.groupId != null) {
+        const header = container.querySelector(`[data-channel-group-id="${CSS.escape(String(channel.groupId))}"]`);
+        return buildChannelGroupDragTargetFromNode(header, clientY);
+      }
+      const r = node.getBoundingClientRect();
+      return { kind: "channel", id: String(node.dataset.channelId || ""), after: Number(clientY) >= r.top + r.height / 2, element: node };
+    }
+    return null;
+  }
+
+  function getChannelGroupDragGeometryTarget(clientY) {
+    const container = elements.channelTabs;
+    if (!container) return null;
+    const y = Number(clientY);
+    if (!Number.isFinite(y)) return null;
+    const moving = new Set(state.channelGroupDrag.blockElements || []);
+    const candidates = [...container.children].filter((node) => {
+      if (moving.has(node)) return false;
+      if (node.matches?.("[data-channel-group-id]")) return true;
+      if (!node.matches?.("[data-channel-id]")) return false;
+      const channel = getChannelById(node.dataset.channelId);
+      return channel?.groupId == null;
+    });
+    if (!candidates.length) return { kind: "end", id: null, after: true, element: null };
+
+    const measured = candidates.map((node) => {
+      if (node.matches?.("[data-channel-group-id]")) {
+        const block = getRenderedGroupBlock(node.dataset.channelGroupId).filter((child) => !moving.has(child));
+        const firstRect = node.getBoundingClientRect();
+        const lastRect = block.length > 1 ? block[block.length - 1].getBoundingClientRect() : firstRect;
+        return { node, top: firstRect.top, bottom: lastRect.bottom };
+      }
+      const r = node.getBoundingClientRect();
+      return { node, top: r.top, bottom: r.bottom };
+    });
+    const last = measured[measured.length - 1];
+    if (y > last.bottom) return { kind: "end", id: null, after: true, element: null };
+
+    let best = measured[0];
+    let bestDistance = Infinity;
+    for (const entry of measured) {
+      const distance = y < entry.top ? entry.top - y : (y > entry.bottom ? y - entry.bottom : 0);
+      if (distance < bestDistance) {
+        best = entry;
+        bestDistance = distance;
+        if (distance === 0) break;
+      }
+    }
+    return buildChannelGroupDragTargetFromNode(best.node, y);
+  }
+
+  function resolveChannelGroupDragTarget(event) {
+    const container = elements.channelTabs;
+    if (!container) return null;
+    const rect = container.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return null;
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    if (hit && container.contains(hit)) {
+      const groupItem = hit.closest?.("[data-channel-group-id]");
+      if (groupItem && container.contains(groupItem)) {
+        const target = buildChannelGroupDragTargetFromNode(groupItem, event.clientY);
+        if (target) return target;
+      }
+      const channelItem = hit.closest?.("[data-channel-id]");
+      if (channelItem && container.contains(channelItem)) {
+        const target = buildChannelGroupDragTargetFromNode(channelItem, event.clientY);
+        if (target) return target;
+      }
+    }
+    return getChannelGroupDragGeometryTarget(event.clientY);
+  }
+
+  function getGroupTargetReference(target) {
+    if (!target?.element) return elements.channelTabs?.querySelector("[data-audio-clip-id]") || null;
+    if (!target.after) return target.element;
+    if (target.kind === "group") {
+      let node = target.element.nextElementSibling;
+      while (node?.matches?.(".channel-tree-channel-item.is-group-child")) node = node.nextElementSibling;
+      return node;
+    }
+    return target.element.nextElementSibling;
+  }
+
+  function moveChannelGroupPreview(target) {
+    const drag = state.channelGroupDrag;
+    const container = elements.channelTabs;
+    if (!drag.dragging || !container || !target) return false;
+    drag.blockElements = drag.blockElements.filter((node) => node?.isConnected);
+    const reference = getGroupTargetReference(target);
+    const moveDirection = getLiveDomMoveDirection(container, drag.blockElements, reference);
+    if (moveDirection && !dragDirectionAllowsLiveMove(drag, moveDirection)) return false;
+
+    // Avoid reinserting the same block on every pointermove. Besides saving a
+    // layout pass, this keeps hit-testing stable while crossing row boundaries.
+    if (moveDirection) {
+      for (const node of drag.blockElements) container.insertBefore(node, reference || null);
+    }
+    clearChannelGroupDragIndicators();
+    drag.headerElement?.classList.add("dragging-group");
+    drag.blockElements.forEach((node) => node?.classList.add("dragging-group-block"));
+    target.element?.classList.add(target.after ? "drop-group-after" : "drop-group-before");
+    drag.targetKind = target.kind;
+    drag.targetId = target.id;
+    drag.after = Boolean(target.after);
+    drag.dropValid = true;
+    return true;
+  }
+
+  function moveChannelGroupPointerDrag(event) {
+    const drag = state.channelGroupDrag;
+    if (drag.pointerId !== event.pointerId || !drag.groupId) return;
+    // Same stale-drag guard as channels: releasing the mouse outside the tree
+    // must never leave a group in a latched drag state.
+    if (event.pointerType === "mouse" && (event.buttons & 1) === 0) {
+      cancelChannelGroupPointerDrag();
+      return;
+    }
+    if (!drag.dragging && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 7) {
+      drag.dragging = true;
+      drag.blockElements.forEach((node) => node?.classList.add("dragging-group-block"));
+      drag.headerElement?.classList.add("dragging-group");
+    }
+    if (!drag.dragging) return;
+    updateChannelTreeDragDirection(drag, event.clientY);
+    const container = elements.channelTabs;
+    const rect = container?.getBoundingClientRect();
+    if (rect) {
+      if (event.clientY < rect.top + 42) container.scrollTop -= 14;
+      else if (event.clientY > rect.bottom - 42) container.scrollTop += 14;
+    }
+    const target = resolveChannelGroupDragTarget(event);
+    if (target) {
+      moveChannelGroupPreview(target);
+    } else {
+      clearChannelGroupDragIndicators();
+      drag.headerElement?.classList.add("dragging-group");
+      drag.blockElements.forEach((node) => node?.classList.add("dragging-group-block"));
+      drag.targetKind = null;
+      drag.targetId = null;
+      drag.after = false;
+      drag.dropValid = false;
+    }
+    event.preventDefault();
+  }
+
+  function findChannelAfterTopLevelGroup(groupId) {
+    const members = getChannelGroupMembers(groupId);
+    if (!members.length) return null;
+    const memberIds = new Set(members.map((channel) => String(channel.id)));
+    const lastIndex = state.channels.reduce((max, channel, index) => memberIds.has(String(channel.id)) ? index : max, -1);
+    for (let i = lastIndex + 1; i < state.channels.length; i += 1) {
+      const channel = state.channels[i];
+      if (!memberIds.has(String(channel.id))) return channel;
+    }
+    return null;
+  }
+
+  function commitChannelGroupDrag(groupId, { kind = "end", id = null, after = true } = {}) {
+    const group = getChannelGroupById(groupId);
+    if (!group) return false;
+    const members = getChannelGroupMembers(group);
+    const memberIds = new Set(members.map((channel) => String(channel.id)));
+    const beforeOrder = state.channels.map((channel) => String(channel.id));
+    if (!members.length) {
+      if (kind === "channel" && id) group.beforeChannelId = after ? (state.channels[state.channels.findIndex((c) => String(c.id) === String(id)) + 1]?.id ?? null) : id;
+      else if (kind === "group" && id) {
+        const targetMembers = getChannelGroupMembers(id);
+        if (targetMembers.length) group.beforeChannelId = after ? (findChannelAfterTopLevelGroup(id)?.id ?? null) : targetMembers[0].id;
+        else group.beforeChannelId = null;
+      } else group.beforeChannelId = null;
+      markDirty(i18nText("group.history_drag"));
+      renderChannelTabs();
+      return true;
+    }
+
+    const remaining = state.channels.filter((channel) => !memberIds.has(String(channel.id)));
+    let insertIndex = remaining.length;
+    if (kind === "channel" && id != null) {
+      const targetIndex = remaining.findIndex((channel) => String(channel.id) === String(id));
+      if (targetIndex >= 0) insertIndex = targetIndex + (after ? 1 : 0);
+    } else if (kind === "group" && id != null) {
+      const targetGroup = getChannelGroupById(id);
+      const targetMemberIds = new Set(getChannelGroupMembers(targetGroup).map((channel) => String(channel.id)));
+      const indexes = remaining.map((channel, index) => targetMemberIds.has(String(channel.id)) ? index : -1).filter((index) => index >= 0);
+      if (indexes.length) insertIndex = after ? Math.max(...indexes) + 1 : Math.min(...indexes);
+    }
+    remaining.splice(clamp(insertIndex, 0, remaining.length), 0, ...members);
+    const afterOrder = remaining.map((channel) => String(channel.id));
+    const changed = beforeOrder.some((value, index) => value !== afterOrder[index]);
+    group.beforeChannelId = null;
+    if (!changed) { renderChannelTabs(); return false; }
+    state.channels = remaining;
+    markDirty(i18nText("group.history_drag"));
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    return true;
+  }
+
+  function endChannelGroupPointerDrag(event) {
+    const drag = state.channelGroupDrag;
+    if (drag.pointerId !== event.pointerId || !drag.groupId) return;
+    const groupId = drag.groupId;
+    const dragged = drag.dragging;
+    const dropValid = drag.dropValid;
+    const target = { kind: drag.targetKind || "end", id: drag.targetId, after: drag.after };
+    clearChannelGroupDragIndicators();
+    resetChannelGroupDragState();
+    if (dragged) {
+      if (dropValid) commitChannelGroupDrag(groupId, target);
+      else renderChannelTabs();
+      return;
+    }
+
+    // Pointer capture on a moving group header used to swallow click/dblclick.
+    // Resolve selection/edit explicitly on pointer-up, like channel rows do.
+    const now = performance.now();
+    const doubleClick = state.channelEdit.lastClickGroupId === String(groupId)
+      && now - state.channelEdit.lastClickGroupAt <= 260;
+    state.channelEdit.lastClickGroupId = doubleClick ? null : String(groupId);
+    state.channelEdit.lastClickGroupAt = doubleClick ? 0 : now;
+    if (doubleClick) {
+      selectChannelGroup(groupId);
+      openChannelGroupDialog(groupId);
+    } else {
+      // A normal row click selects only. Folder open/close is owned by the
+      // visible folder icon.
+      selectChannelGroup(groupId);
+      requestAnimationFrame(() => {
+        const restored = elements.channelTabs?.querySelector(`[data-channel-group-id="${CSS.escape(String(groupId))}"]`);
+        restored?.querySelector(".channel-group-main")?.focus({ preventScroll: true });
+        restored?.scrollIntoView({ block: "nearest" });
+      });
+    }
+  }
 
   function getAudioClipHue(clip, fallbackIndex = 0) {
     return Number.isFinite(Number(clip?.hue)) ? normalizeHue(clip.hue) : getDefaultHue(fallbackIndex);
@@ -6574,11 +7266,12 @@
     const list = elements.collapsedChannelList;
     if (!list) return;
     list.replaceChildren();
-    state.channels.forEach((channel, index) => {
-      const active = state.activePanel === "notes" && index === state.activeChannel;
+
+    const appendChannelButton = (channel, index, { groupChild = false } = {}) => {
+      const active = state.activePanel === "notes" && state.selectedChannelGroupId == null && index === state.activeChannel;
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `sidebar-rail-channel${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}${isChannelSolo(channel) ? " is-solo" : ""}`;
+      button.className = `sidebar-rail-channel${groupChild ? " is-group-child" : ""}${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${!isChannelEffectivelyVisible(channel) ? " is-hidden" : ""}${isChannelSolo(channel) ? " is-solo" : ""}`;
       button.style.setProperty("--channel-color", getChannelColor(channel, index));
       button.textContent = String(index + 1);
       button.title = channel.name;
@@ -6587,23 +7280,62 @@
       button.setAttribute("aria-label", `${index + 1}번 채널 ${channel.name}`);
       button.dataset.channelId = String(channel.id);
       button.dataset.channelIndex = String(index);
-      // 펼친 채널 행과 완전히 같은 우클릭 메뉴를 사용합니다.
       button.dataset.contextArea = "channel-tab";
       button.addEventListener("pointerdown", (event) => beginChannelPointerDrag(event, channel.id, button, list));
       button.addEventListener("pointermove", moveChannelPointerDrag);
       button.addEventListener("pointerup", endChannelPointerDrag);
       button.addEventListener("pointercancel", () => { cancelChannelPointerDrag(); });
       button.addEventListener("click", (event) => {
-        // Pointer clicks are handled by endChannelPointerDrag so a drag does not also activate a stale index.
         if (event.detail === 0) {
           const nextIndex = state.channels.findIndex((item) => String(item.id) === String(channel.id));
           if (nextIndex >= 0) selectChannel(nextIndex);
         }
       });
       list.append(button);
+    };
+
+    const renderedGroups = new Set();
+    state.channels.forEach((channel, index) => {
+      const group = getChannelGroupForChannel(channel);
+      if (!group) { appendChannelButton(channel, index); return; }
+      const key = String(group.id);
+      if (renderedGroups.has(key)) return;
+      renderedGroups.add(key);
+      const groupButton = document.createElement("button");
+      groupButton.type = "button";
+      const groupActive = String(state.selectedChannelGroupId ?? "") === key;
+      groupButton.className = `sidebar-rail-channel sidebar-rail-group${groupActive ? " active" : ""}${group.visible === false ? " is-hidden" : ""}${group.muted ? " is-muted" : ""}`;
+      groupButton.style.setProperty("--group-accent", getChannelGroupColor(group, state.channelGroups.indexOf(group), "soft"));
+      groupButton.textContent = group.collapsed ? "📁" : "📂";
+      groupButton.title = group.name;
+      groupButton.dataset.channelGroupId = key;
+      groupButton.dataset.contextArea = "channel-group";
+      groupButton.setAttribute("aria-label", `${group.name} 그룹`);
+      groupButton.setAttribute("aria-selected", String(groupActive));
+      groupButton.addEventListener("click", () => { selectChannelGroup(group.id); toggleChannelGroupCollapsed(group.id); });
+      list.append(groupButton);
+      if (!group.collapsed) {
+        state.channels.forEach((member, memberIndex) => {
+          if (String(member.groupId ?? "") === key) appendChannelButton(member, memberIndex, { groupChild: true });
+        });
+      }
+    });
+    state.channelGroups.forEach((group) => {
+      const key = String(group.id);
+      if (renderedGroups.has(key)) return;
+      const groupButton = document.createElement("button");
+      groupButton.type = "button";
+      const groupActive = String(state.selectedChannelGroupId ?? "") === key;
+      groupButton.className = `sidebar-rail-channel sidebar-rail-group${groupActive ? " active" : ""}`;
+      groupButton.style.setProperty("--group-accent", getChannelGroupColor(group, state.channelGroups.indexOf(group), "soft"));
+      groupButton.textContent = group.collapsed ? "📁" : "📂";
+      groupButton.title = group.name;
+      groupButton.dataset.channelGroupId = key;
+      groupButton.dataset.contextArea = "channel-group";
+      groupButton.addEventListener("click", () => { selectChannelGroup(group.id); toggleChannelGroupCollapsed(group.id); });
+      list.append(groupButton);
     });
 
-    // 접힌 상태에서도 펼친 채널 목록과 동일하게 오디오 항목을 이어서 표시합니다.
     getAudioClipsInDisplayOrder().forEach(({ clip, sourceIndex: clipIndex }, audioIndex) => {
       const active = state.activePanel === "audio" && String(state.activeAudioClipId) === String(clip.id);
       const button = document.createElement("button");
@@ -6621,23 +7353,21 @@
       list.append(button);
     });
 
-    if (elements.collapsedMergeChannelsButton) {
-      elements.collapsedMergeChannelsButton.disabled = state.channels.length < 2;
-    }
-    if (elements.collapsedDeleteChannelsButton) {
-      elements.collapsedDeleteChannelsButton.disabled = state.channels.length <= 1;
-    }
+    if (elements.collapsedMergeChannelsButton) elements.collapsedMergeChannelsButton.disabled = state.channels.length < 2 || state.selectedChannelGroupId != null;
+    if (elements.collapsedDeleteChannelsButton) elements.collapsedDeleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length;
   }
 
   const channelActionSweep = {
     active: false,
     pointerId: null,
+    button: 0,
     kind: "",
     targetValue: null,
     lastClientX: 0,
     lastClientY: 0,
     scrollFrame: null,
     visitedActionKeys: new Set(),
+    touchedGroupIds: new Set(),
   };
 
   function resetChannelActionSweep({ releaseCapture = false } = {}) {
@@ -6654,32 +7384,56 @@
     }
     channelActionSweep.active = false;
     channelActionSweep.pointerId = null;
+    channelActionSweep.button = 0;
     channelActionSweep.kind = "";
     channelActionSweep.targetValue = null;
     channelActionSweep.lastClientX = 0;
     channelActionSweep.lastClientY = 0;
     channelActionSweep.visitedActionKeys.clear();
+    channelActionSweep.touchedGroupIds.clear();
   }
 
   function getChannelSweepActionAt(clientX, clientY) {
     const hit = document.elementFromPoint(clientX, clientY);
-    const action = hit?.closest?.(".channel-tree-channel-item .channel-tree-action[data-channel-sweep-kind]");
+    const action = hit?.closest?.(".channel-tree-channel-item .channel-tree-action[data-channel-sweep-kind], .channel-tree-channel-item .channel-tree-action[data-channel-right-sweep-kind], .channel-group-item .channel-tree-action[data-channel-sweep-kind], .channel-group-item .channel-tree-action[data-channel-right-sweep-kind]");
     if (!action || !elements.channelTabs?.contains(action)) return null;
     return action;
   }
 
+  function getChannelSweepKindForAction(action) {
+    if (!action) return "";
+    return String(channelActionSweep.button === 2
+      ? (action.dataset.channelRightSweepKind || "")
+      : (action.dataset.channelSweepKind || ""));
+  }
+
   function applyChannelSweepAction(action) {
     if (!action) return false;
-    const kind = String(action.dataset.channelSweepKind || "");
+    const kind = getChannelSweepKindForAction(action);
     const channelId = String(action.dataset.channelSweepId || "");
     if (!kind || !channelId) return false;
     if (channelActionSweep.active && kind !== channelActionSweep.kind) return false;
 
     const actionKey = `${kind}:${channelId}`;
-    // 한 번의 누름/터치 제스처 동안 같은 채널 버튼은 딱 한 번만 변경합니다.
+    // 한 번의 누름/터치 제스처 동안 같은 대상 버튼은 딱 한 번만 변경합니다.
     // 렌더링 과정에서 현재 버튼 DOM이 교체되어도 방문 기록은 제스처가 끝날 때까지 유지됩니다.
     if (channelActionSweep.visitedActionKeys.has(actionKey)) return false;
     channelActionSweep.visitedActionKeys.add(actionKey);
+
+    if (kind === "group-delete" && isChannelDeleteModeActive()) {
+      const group = getChannelGroupById(channelId);
+      if (!group) return false;
+      const currentSelected = getGroupDeleteMode(group.id) === "group-only";
+      const targetSelected = channelActionSweep.targetValue === null
+        ? !currentSelected
+        : Boolean(channelActionSweep.targetValue);
+      if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetSelected;
+      if (targetSelected) state.channelDeleteMode.groupModes.set(String(group.id), "group-only");
+      else state.channelDeleteMode.groupModes.delete(String(group.id));
+      channelActionSweep.touchedGroupIds.add(String(group.id));
+      renderChannelTabs();
+      return true;
+    }
 
     const channel = getChannelById(channelId);
     if (!channel) return false;
@@ -6697,11 +7451,35 @@
       if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetMuted;
       return setChannelMutedById(channel.id, targetMuted, { notify: false });
     }
+    if (kind === "visibility-solo") {
+      const currentSolo = isChannelVisibilitySolo(channel);
+      const targetSolo = channelActionSweep.targetValue === null
+        ? !currentSolo
+        : Boolean(channelActionSweep.targetValue);
+      if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetSolo;
+      return setChannelVisibilitySoloById(channel.id, targetSolo, { notify: false });
+    }
+    if (kind === "mute-solo") {
+      const currentSolo = isChannelSolo(channel);
+      const targetSolo = channelActionSweep.targetValue === null
+        ? !currentSolo
+        : Boolean(channelActionSweep.targetValue);
+      if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetSolo;
+      return setChannelSoloById(channel.id, targetSolo, { notify: false });
+    }
+    if (kind === "delete-select" && isChannelDeleteModeActive()) {
+      const currentSelected = state.channelDeleteMode.selectedChannelIds.has(String(channel.id));
+      const targetSelected = channelActionSweep.targetValue === null
+        ? !currentSelected
+        : Boolean(channelActionSweep.targetValue);
+      if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetSelected;
+      return setChannelDeleteSelection(channel.id, targetSelected, { render: true });
+    }
     if ((kind === "merge-include" || kind === "merge-exclude") && isChannelMergeModeActive()) {
       const id = String(channel.id);
       const targetId = String(state.channelMerge.targetChannelId ?? "");
       // Hidden channels are deliberately excluded from merge sweep selection.
-      if (id === targetId || channel.visible === false) return false;
+      if (id === targetId || !isChannelEffectivelyVisible(channel)) return false;
       if (!(state.channelMerge.sourceChannelIds instanceof Set)) state.channelMerge.sourceChannelIds = new Set();
       if (!(state.channelMerge.excludeOverlapChannelIds instanceof Set)) state.channelMerge.excludeOverlapChannelIds = new Set();
       const sources = state.channelMerge.sourceChannelIds;
@@ -6735,8 +7513,12 @@
   }
 
   function beginChannelActionSweep(event, action) {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    const kind = String(action?.dataset.channelSweepKind || "");
+    const isMouse = event.pointerType === "mouse";
+    const isRightButton = isMouse && event.button === 2;
+    if (isMouse && event.button !== 0 && event.button !== 2) return;
+    const kind = String(isRightButton
+      ? (action?.dataset.channelRightSweepKind || "")
+      : (action?.dataset.channelSweepKind || ""));
     if (!kind || !elements.channelTabs) return;
 
     event.preventDefault();
@@ -6744,9 +7526,17 @@
     resetChannelActionSweep();
     channelActionSweep.active = true;
     channelActionSweep.pointerId = event.pointerId;
+    channelActionSweep.button = isRightButton ? 2 : 0;
     channelActionSweep.kind = kind;
     channelActionSweep.lastClientX = event.clientX;
     channelActionSweep.lastClientY = event.clientY;
+    // Right-button S sweep owns the entire gesture. Suppress the browser/app
+    // context menu not only on the originating button, but also when the
+    // pointer is released outside the channel tree.
+    if (isRightButton) {
+      state.suppressContextMenuUntil = performance.now() + 650;
+      closeContextMenu();
+    }
     try { elements.channelTabs.setPointerCapture?.(event.pointerId); } catch {}
     applyChannelSweepAction(action);
   }
@@ -6754,10 +7544,13 @@
   function moveChannelActionSweep(event) {
     if (!channelActionSweep.active || event.pointerId !== channelActionSweep.pointerId) return;
     event.preventDefault();
+    if (channelActionSweep.button === 2) {
+      state.suppressContextMenuUntil = performance.now() + 650;
+    }
     channelActionSweep.lastClientX = event.clientX;
     channelActionSweep.lastClientY = event.clientY;
     const action = getChannelSweepActionAt(event.clientX, event.clientY);
-    if (!action || String(action.dataset.channelSweepKind || "") !== channelActionSweep.kind) {
+    if (!action || getChannelSweepKindForAction(action) !== channelActionSweep.kind) {
       return;
     }
     applyChannelSweepAction(action);
@@ -6769,7 +7562,7 @@
       channelActionSweep.scrollFrame = null;
       if (!channelActionSweep.active) return;
       const action = getChannelSweepActionAt(channelActionSweep.lastClientX, channelActionSweep.lastClientY);
-      if (!action || String(action.dataset.channelSweepKind || "") !== channelActionSweep.kind) return;
+      if (!action || getChannelSweepKindForAction(action) !== channelActionSweep.kind) return;
       applyChannelSweepAction(action);
     });
   }
@@ -6778,233 +7571,435 @@
     if (!channelActionSweep.active || event.pointerId !== channelActionSweep.pointerId) return;
     event.preventDefault();
     event.stopPropagation();
+    const kind = channelActionSweep.kind;
+    const wasRightSweep = channelActionSweep.button === 2;
+    const targetValue = Boolean(channelActionSweep.targetValue);
+    const touchedGroupIds = [...channelActionSweep.touchedGroupIds];
     resetChannelActionSweep({ releaseCapture: true });
+    if (wasRightSweep) {
+      state.suppressContextMenuUntil = performance.now() + 650;
+      closeContextMenu();
+    }
+    if (kind === "group-delete" && touchedGroupIds.length) {
+      const groups = touchedGroupIds.map((id) => getChannelGroupById(id)).filter(Boolean);
+      const label = groups.map((group) => group.name).join(", ");
+      void showConfirmDialog({
+        title: targetValue ? i18nText("group.delete_group_only") : i18nText("selection.clear"),
+        message: i18nText(targetValue ? "group.delete_members_select_prompt" : "group.delete_members_clear_prompt", [label]),
+        confirmLabel: i18nText(targetValue ? "group.delete_members_select_confirm" : "group.delete_members_clear_confirm"),
+      }).then((confirmed) => {
+        if (!confirmed) return;
+        for (const group of groups) {
+          for (const channel of getChannelGroupMembers(group)) {
+            const id = String(channel.id);
+            if (targetValue) state.channelDeleteMode.selectedChannelIds.add(id);
+            else state.channelDeleteMode.selectedChannelIds.delete(id);
+          }
+        }
+        if (isChannelDeleteModeActive()) renderChannelTabs();
+      });
+    }
   }
+
+  function cancelChannelActionSweep({ suppressContextMenu = null } = {}) {
+    if (!channelActionSweep.active) return false;
+    const wasRightSweep = channelActionSweep.button === 2;
+    const shouldSuppress = suppressContextMenu == null ? wasRightSweep : Boolean(suppressContextMenu);
+    resetChannelActionSweep({ releaseCapture: true });
+    if (shouldSuppress) {
+      state.suppressContextMenuUntil = performance.now() + 650;
+      closeContextMenu();
+    }
+    return true;
+  }
+
+  const channelGroupClickTimers = new Map();
 
   function renderChannelTabs() {
     if (!elements.channelTabs) return;
     elements.channelTabs.replaceChildren();
 
-    const createAction = ({ kind, active, label, title, onClick, onContextMenu = null, sweep = false, sweepId = "", solo = false, textContent = null }) => {
+    const createAction = ({ kind, active, label, title, onClick, onContextMenu = null, sweep = false, sweepId = "", rightSweepKind = "", solo = false, textContent = null, disabled = false }) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `channel-tree-action channel-tree-${kind}${solo ? " is-solo" : ""}`;
+      button.className = `channel-tree-action channel-tree-${kind}${solo ? " is-solo" : ""}${active ? " is-active" : ""}`;
       button.setAttribute("aria-pressed", String(Boolean(solo || active)));
       button.setAttribute("aria-label", label);
       button.title = title;
+      button.disabled = Boolean(disabled);
       const glyph = document.createElement("span");
       glyph.className = "channel-tree-action-glyph";
       glyph.setAttribute("aria-hidden", "true");
       glyph.textContent = textContent != null
         ? String(textContent)
-        : (kind === "visibility"
-          ? "👁"
-          : (solo ? "S" : (active ? "🔇" : "🔊")));
+        : (solo ? "S" : (kind === "visibility" ? "👁" : (active ? "🔇" : "🔊")));
       button.append(glyph);
-      if (typeof onContextMenu === "function") {
-        button.addEventListener("contextmenu", (event) => {
+      if (sweep) button.dataset.channelSweepKind = kind;
+      if (rightSweepKind) button.dataset.channelRightSweepKind = String(rightSweepKind);
+      if (sweep || rightSweepKind) button.dataset.channelSweepId = String(sweepId);
+      button.addEventListener("contextmenu", (event) => {
+        if (rightSweepKind) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        if (typeof onContextMenu === "function") {
           event.preventDefault();
           event.stopPropagation();
           onContextMenu(event);
+        }
+      });
+      if (sweep || rightSweepKind) {
+        button.addEventListener("pointerdown", (event) => {
+          const wantsRightSweep = event.pointerType === "mouse" && event.button === 2 && Boolean(rightSweepKind);
+          const wantsLeftSweep = event.button === 0 && Boolean(sweep);
+          if (wantsRightSweep || wantsLeftSweep) beginChannelActionSweep(event, button);
+          else event.stopPropagation();
         });
-      }
-      if (sweep) {
-        button.dataset.channelSweepKind = kind;
-        button.dataset.channelSweepId = String(sweepId);
-        button.addEventListener("pointerdown", (event) => beginChannelActionSweep(event, button));
         button.addEventListener("click", (event) => {
-          // 포인터 클릭은 pointerdown에서 이미 처리합니다. 키보드 활성화(click detail=0)는 기존 동작을 유지합니다.
           event.preventDefault();
           event.stopPropagation();
-          if (event.detail === 0) onClick?.();
+          if (!sweep || event.detail === 0) onClick?.();
         });
       } else {
         button.addEventListener("pointerdown", (event) => event.stopPropagation());
-        button.addEventListener("click", (event) => {
-          event.stopPropagation();
-          onClick?.();
-        });
+        button.addEventListener("click", (event) => { event.stopPropagation(); onClick?.(); });
       }
       return button;
     };
 
-    // 모든 음악 채널은 하나의 평면 편집 채널 목록으로 표시합니다.
-    // 지원 음악 파일은 불러오는 순간 공통 플러그인에서 MIDI로 정규화한 뒤 일반 편집 채널로 변환하므로 별도 원본 트리를 만들지 않습니다.
-    state.channels.forEach((channel, index) => {
-      const active = state.activePanel === "notes" && index === state.activeChannel;
+    const deleteMode = isChannelDeleteModeActive();
+    // 삭제 모드에서는 채널/그룹을 선택해 노트를 확인할 수만 있고,
+    // 악기 프리셋 자체는 변경할 수 없도록 콤보박스를 잠급니다.
+    if (elements.channelInstrumentSelect) elements.channelInstrumentSelect.disabled = deleteMode;
+    if (elements.channelEditInstrumentSelect) elements.channelEditInstrumentSelect.disabled = deleteMode;
+    const renderChannelItem = (channel, index, { groupChild = false } = {}) => {
+      const active = state.activePanel === "notes" && state.selectedChannelGroupId == null && index === state.activeChannel;
       const item = document.createElement("div");
       const channelSolo = isChannelSolo(channel);
+      const visibilitySolo = isChannelVisibilitySolo(channel);
       const mergeTarget = isChannelMergeModeActive() && String(channel.id) === String(state.channelMerge.targetChannelId);
       const mergeSource = isChannelMergeModeActive() && state.channelMerge.sourceChannelIds?.has(String(channel.id));
       const mergeMask = isChannelMergeModeActive() && getChannelMergeExcludeOverlapChannelIds().has(String(channel.id));
-      item.className = `channel-tab-item channel-tree-item channel-tree-channel-item${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${channel.visible === false ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}${mergeTarget ? " is-merge-target" : ""}${mergeSource ? " is-merge-source" : ""}${mergeMask ? " is-merge-mask" : ""}`;
+      const deleteSelected = deleteMode && state.channelDeleteMode.selectedChannelIds.has(String(channel.id));
+      const group = getChannelGroupForChannel(channel);
+      item.className = `channel-tab-item channel-tree-item channel-tree-channel-item${groupChild ? " is-group-child" : ""}${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${!isChannelEffectivelyVisible(channel) ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${mergeTarget ? " is-merge-target" : ""}${mergeSource ? " is-merge-source" : ""}${mergeMask ? " is-merge-mask" : ""}${deleteSelected ? " is-delete-selected" : ""}`;
       item.style.setProperty("--channel-color", getChannelColor(channel, index));
       item.dataset.channelIndex = String(index);
       item.dataset.channelId = String(channel.id);
       item.dataset.contextArea = "channel-tab";
       item.setAttribute("role", "treeitem");
-      item.setAttribute("aria-level", "1");
+      item.setAttribute("aria-level", groupChild ? "2" : "1");
       item.setAttribute("aria-selected", String(active));
 
       const main = document.createElement("button");
       main.type = "button";
       main.className = "channel-tree-main channel-tab-main";
-      main.title = `${channel.name} · 누르면 선택, 위아래로 드래그하면 순서 변경`;
+      main.title = deleteMode ? `${channel.name} · 채널 선택 및 노트 확인` : `${channel.name} · 누르면 선택, 위아래로 드래그하면 순서 변경`;
       const label = document.createElement("span");
       label.className = "channel-tree-label channel-tab-label";
       label.textContent = channel.name;
       main.append(label);
       if (mergeTarget) {
-        const badge = document.createElement("span");
-        badge.className = "channel-merge-badge target";
-        badge.textContent = i18nText("merge.target_short");
-        main.append(badge);
+        const badge = document.createElement("span"); badge.className = "channel-merge-badge target"; badge.textContent = i18nText("merge.target_short"); main.append(badge);
       }
-      main.addEventListener("click", (event) => {
-        if (!isChannelMergeModeActive()) return;
-        event.preventDefault();
-        event.stopPropagation();
-      });
-      main.addEventListener("dblclick", (event) => {
-        if (!isChannelMergeModeActive()) return;
-        event.preventDefault();
-        event.stopPropagation();
-        openChannelEditDialog(channel.id);
-      });
+      if (deleteMode) {
+        // 삭제 모드에서도 채널 행 자체는 평소처럼 선택만 변경합니다.
+        // 실제 삭제 선택은 오른쪽 체크 영역에서만 변경됩니다.
+        main.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          selectChannel(index);
+        });
+      } else {
+        main.addEventListener("click", (event) => {
+          if (!isChannelMergeModeActive()) return;
+          event.preventDefault(); event.stopPropagation();
+        });
+        main.addEventListener("dblclick", (event) => {
+          if (!isChannelMergeModeActive()) return;
+          event.preventDefault(); event.stopPropagation(); openChannelEditDialog(channel.id);
+        });
+      }
 
       const actions = document.createElement("div");
       actions.className = "channel-tree-actions";
-
-      let mergeRoleGroup = null;
-      if (isChannelMergeModeActive() && !mergeTarget) {
-        mergeRoleGroup = document.createElement("div");
-        mergeRoleGroup.className = "channel-merge-role-toggle-group";
-        mergeRoleGroup.setAttribute("role", "group");
-        mergeRoleGroup.setAttribute("aria-label", `${channel.name} 병합 역할`);
-        mergeRoleGroup.append(
-          createAction({
-            kind: "merge-include",
-            active: mergeSource,
-            label: i18nText(mergeSource ? "merge.include_clear_named" : "merge.include_set_named", [channel.name]),
-            title: i18nText(mergeSource ? "merge.include_clear_named" : "merge.include_set_named", [channel.name]),
-            textContent: "✓",
-            onClick: () => toggleChannelMergeSource(channel.id),
-            sweep: true,
-            sweepId: channel.id,
-          }),
-          createAction({
-            kind: "merge-exclude",
-            active: mergeMask,
-            label: i18nText(mergeMask ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [channel.name]),
-            title: i18nText(mergeMask ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [channel.name]),
-            textContent: "×",
-            onClick: () => toggleChannelMergeExcludeOverlapChannel(channel.id),
-            sweep: true,
-            sweepId: channel.id,
-          }),
-        );
-        if (channel.visible === false) {
-          mergeRoleGroup.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+      if (deleteMode) {
+        actions.append(createAction({
+          kind: "delete-select", active: deleteSelected,
+          label: i18nText("group.delete_channel_toggle", [channel.name]), title: i18nText("group.delete_channel_toggle", [channel.name]),
+          textContent: deleteSelected ? "✓" : "○", onClick: () => toggleChannelDeleteSelection(channel.id), sweep: true, sweepId: channel.id,
+        }));
+      } else {
+        let mergeRoleGroup = null;
+        if (isChannelMergeModeActive() && !mergeTarget) {
+          mergeRoleGroup = document.createElement("div");
+          mergeRoleGroup.className = "channel-merge-role-toggle-group";
+          mergeRoleGroup.setAttribute("role", "group");
+          mergeRoleGroup.setAttribute("aria-label", `${channel.name} 병합 역할`);
+          mergeRoleGroup.append(
+            createAction({ kind: "merge-include", active: mergeSource, label: i18nText(mergeSource ? "merge.include_clear_named" : "merge.include_set_named", [channel.name]), title: i18nText(mergeSource ? "merge.include_clear_named" : "merge.include_set_named", [channel.name]), textContent: "✓", onClick: () => toggleChannelMergeSource(channel.id), sweep: true, sweepId: channel.id }),
+            createAction({ kind: "merge-exclude", active: mergeMask, label: i18nText(mergeMask ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [channel.name]), title: i18nText(mergeMask ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [channel.name]), textContent: "×", onClick: () => toggleChannelMergeExcludeOverlapChannel(channel.id), sweep: true, sweepId: channel.id }),
+          );
+          if (!isChannelEffectivelyVisible(channel)) mergeRoleGroup.querySelectorAll("button").forEach((button) => { button.disabled = true; });
         }
+        actions.append(
+          ...(mergeRoleGroup ? [mergeRoleGroup] : []),
+          createAction({ kind: "mml", active: false, label: i18nText("channel.mml_button_aria", [channel.name]), title: i18nText("channel.mml_button_title"), textContent: "M", onClick: () => openChannelMmlDialog(channel.id) }),
+          createAction({ kind: "visibility", active: channel.visible !== false, solo: visibilitySolo, label: visibilitySolo ? `${channel.name} 표시 싱글 해제` : i18nText(channel.visible === false ? "ui.show_2" : "ui.hide_3", [channel.name]), title: visibilitySolo ? "표시 싱글 해제" : i18nText("channel.mute_context_solo", [i18nText(channel.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelVisibilitySoloById(channel.id, false) : setChannelVisibleById(channel.id, channel.visible === false), sweep: !visibilitySolo, sweepId: channel.id, rightSweepKind: "visibility-solo" }),
+          createAction({ kind: "mute", active: channel.muted, solo: channelSolo, label: channelSolo ? i18nText("channel.solo_off_named", [channel.name]) : i18nText(channel.muted ? "ui.unmute_2" : "ui.mute_2", [channel.name]), title: channelSolo ? i18nText("group.solo_off") : i18nText("channel.mute_context_solo", [i18nText(channel.muted ? "ui.unmute" : "ui.mute")]), onClick: () => channelSolo ? setChannelSoloById(channel.id, false) : setChannelMutedById(channel.id, !channel.muted), sweep: !channelSolo, sweepId: channel.id, rightSweepKind: "mute-solo" }),
+        );
       }
-      actions.append(
-        ...(mergeRoleGroup ? [mergeRoleGroup] : []),
-        createAction({
-          kind: "mml",
-          active: false,
-          label: i18nText("channel.mml_button_aria", [channel.name]),
-          title: i18nText("channel.mml_button_title"),
-          textContent: "M",
-          onClick: () => openChannelMmlDialog(channel.id),
-        }),
-        createAction({
-          kind: "visibility",
-          active: channel.visible !== false,
-          label: i18nText(channel.visible === false ? "ui.show_2" : "ui.hide_3", [channel.name]),
-          title: i18nText(channel.visible === false ? "ui.show_piano_roll" : "ui.hide_piano_roll"),
-          onClick: () => setChannelVisibleById(channel.id, channel.visible === false),
-          sweep: true,
-          sweepId: channel.id,
-        }),
-        createAction({
-          kind: "mute",
-          active: channel.muted,
-          solo: channelSolo,
-          label: channelSolo
-            ? i18nText("channel.solo_off_named", [channel.name])
-            : i18nText(channel.muted ? "ui.unmute_2" : "ui.mute_2", [channel.name]),
-          title: channelSolo
-            ? i18nText("channel.solo_off")
-            : i18nText("channel.mute_context_solo", [i18nText(channel.muted ? "ui.unmute" : "ui.mute")]),
-          onClick: () => channelSolo
-            ? setChannelSoloById(channel.id, false)
-            : setChannelMutedById(channel.id, !channel.muted),
-          onContextMenu: () => setChannelSoloById(channel.id, !channelSolo),
-          sweep: !channelSolo,
-          sweepId: channel.id,
-        }),
-      );
       item.append(main, actions);
-      item.addEventListener("pointerdown", (event) => beginChannelPointerDrag(event, channel.id, item));
-      item.addEventListener("pointermove", moveChannelPointerDrag);
-      item.addEventListener("pointerup", endChannelPointerDrag);
-      item.addEventListener("pointercancel", () => { cancelChannelPointerDrag(); });
+      if (!deleteMode) {
+        item.addEventListener("pointerdown", (event) => beginChannelPointerDrag(event, channel.id, item));
+        item.addEventListener("pointerup", endChannelPointerDrag);
+        item.addEventListener("pointercancel", () => { cancelChannelPointerDrag(); });
+        item.addEventListener("lostpointercapture", () => {
+          if (state.channelDrag.sourceId && state.channelDrag.sourceElement === item) cancelChannelPointerDrag();
+        });
+      }
       elements.channelTabs.append(item);
+    };
+
+    const renderGroupHeader = (group) => {
+      const members = getChannelGroupMembers(group);
+      const item = document.createElement("div");
+      const solo = isChannelGroupSolo(group);
+      const visibilitySolo = isChannelGroupVisibilitySolo(group);
+      const groupActive = String(state.selectedChannelGroupId ?? "") === String(group.id);
+      const mergeMode = isChannelMergeModeActive();
+      const mergeIncludeState = mergeMode ? getChannelMergeGroupRoleState(group, "include") : { members: [], active: false };
+      const mergeExcludeState = mergeMode ? getChannelMergeGroupRoleState(group, "exclude") : { members: [], active: false };
+      const stateName = deleteMode ? getGroupDeleteDisplayState(group.id) : "none";
+      item.className = `channel-tree-item channel-group-item${groupActive ? " active" : ""}${group.collapsed && !deleteMode ? " is-collapsed" : ""}${!isChannelGroupEffectivelyVisible(group) ? " is-hidden" : ""}${group.muted ? " is-muted" : ""}${solo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${deleteMode ? ` delete-state-${stateName}` : ""}`;
+      item.dataset.channelGroupId = String(group.id);
+      item.dataset.contextArea = "channel-group";
+      const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
+      item.style.setProperty("--group-accent", getChannelGroupColor(group, groupIndex, "soft"));
+      item.style.setProperty("--group-edge", getChannelGroupColor(group, groupIndex, "bright"));
+      item.setAttribute("role", "treeitem"); item.setAttribute("aria-level", "1"); item.setAttribute("aria-expanded", String(deleteMode || !group.collapsed)); item.setAttribute("aria-selected", String(groupActive));
+      const main = document.createElement("button"); main.type = "button"; main.className = "channel-tree-main channel-group-main";
+      const folder = document.createElement("span"); folder.className = "channel-group-folder"; folder.setAttribute("role", "button"); folder.tabIndex = 0; folder.setAttribute("aria-label", group.collapsed ? "그룹 펼치기" : "그룹 접기"); folder.textContent = group.collapsed && !deleteMode ? "📁" : "📂";
+      folder.addEventListener("pointerdown", (event) => event.stopPropagation());
+      folder.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); if (!deleteMode) toggleChannelGroupCollapsed(group.id); });
+      folder.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); if (!deleteMode) toggleChannelGroupCollapsed(group.id); } });
+      const label = document.createElement("span"); label.className = "channel-tree-label channel-group-label"; label.textContent = group.name;
+      const count = document.createElement("span"); count.className = "channel-group-count"; count.textContent = String(members.length);
+      main.append(folder, label, count);
+      main.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (deleteMode) {
+          // 그룹 행 클릭은 그룹 선택/정보 확인만 수행합니다.
+          // 그룹 삭제 선택은 오른쪽 체크 영역에서만 변경됩니다.
+          selectChannelGroup(group.id);
+          return;
+        }
+        if (mergeMode) {
+          group.collapsed = !Boolean(group.collapsed);
+          setDirtyWithoutHistory();
+          renderChannelTabs();
+          return;
+        }
+        // Mouse/touch selection is resolved in endChannelGroupPointerDrag so it
+        // remains reliable even while the DOM block is being reordered.
+        // Keyboard-generated click selects the group. Folder state changes only
+        // through the folder icon so accidental row clicks never fold/unfold it.
+        if (event.detail === 0) selectChannelGroup(group.id);
+      });
+      const actions = document.createElement("div"); actions.className = "channel-tree-actions channel-group-actions";
+      if (deleteMode) {
+        actions.append(
+          createAction({ kind: "group-delete", active: stateName === "group-only", label: i18nText("group.delete_group_only"), title: i18nText("group.delete_group_only"), textContent: stateName === "group-only" ? "✓" : "○", onClick: () => { void toggleChannelGroupDeleteSelection(group.id); }, sweep: true, sweepId: group.id }),
+        );
+      } else if (mergeMode) {
+        const roleGroup = document.createElement("div");
+        roleGroup.className = "channel-merge-role-toggle-group channel-group-merge-role-toggle-group";
+        roleGroup.setAttribute("role", "group");
+        roleGroup.setAttribute("aria-label", `${group.name} 병합 역할`);
+        const roleDisabled = group.visible === false || mergeIncludeState.members.length === 0;
+        roleGroup.append(
+          createAction({ kind: "merge-include", active: mergeIncludeState.active, disabled: roleDisabled, label: i18nText(mergeIncludeState.active ? "merge.include_clear_named" : "merge.include_set_named", [group.name]), title: i18nText(mergeIncludeState.active ? "merge.include_clear_named" : "merge.include_set_named", [group.name]), textContent: "✓", onClick: () => toggleChannelMergeGroupRole(group.id, "include") }),
+          createAction({ kind: "merge-exclude", active: mergeExcludeState.active, disabled: roleDisabled, label: i18nText(mergeExcludeState.active ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [group.name]), title: i18nText(mergeExcludeState.active ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [group.name]), textContent: "×", onClick: () => toggleChannelMergeGroupRole(group.id, "exclude") }),
+        );
+        actions.append(
+          roleGroup,
+          createAction({ kind: "visibility", active: group.visible !== false, label: i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: i18nText(group.visible === false ? "group.show" : "group.hide"), onClick: () => setChannelGroupVisibleById(group.id, group.visible === false) }),
+        );
+      } else {
+        actions.append(
+          createAction({ kind: "mml", active: false, disabled: !members.length, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) }),
+          createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? `${group.name} 표시 싱글 해제` : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? "표시 싱글 해제" : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), onContextMenu: () => setChannelGroupVisibilitySoloById(group.id, !visibilitySolo) }),
+          createAction({ kind: "mute", active: Boolean(group.muted), solo, label: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText(group.muted ? "group.unmute_named" : "group.mute_named", [group.name]), title: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText("channel.mute_context_solo", [i18nText(group.muted ? "ui.unmute" : "ui.mute")]), onClick: () => solo ? setChannelGroupSoloById(group.id, false) : setChannelGroupMutedById(group.id, !group.muted), onContextMenu: () => setChannelGroupSoloById(group.id, !solo) }),
+        );
+      }
+      item.append(main, actions);
+      if (!deleteMode && !mergeMode) {
+        item.addEventListener("pointerdown", (event) => beginChannelGroupPointerDrag(event, group.id, item));
+        item.addEventListener("pointerup", endChannelGroupPointerDrag);
+        item.addEventListener("pointercancel", () => cancelChannelGroupPointerDrag());
+        item.addEventListener("lostpointercapture", () => {
+          if (state.channelGroupDrag.groupId && state.channelGroupDrag.headerElement === item) cancelChannelGroupPointerDrag();
+        });
+      }
+      elements.channelTabs.append(item);
+    };
+
+    const renderedGroups = new Set();
+    state.channels.forEach((channel, index) => {
+      const group = getChannelGroupForChannel(channel);
+      if (!group) { renderChannelItem(channel, index); return; }
+      const key = String(group.id);
+      if (renderedGroups.has(key)) return;
+      renderedGroups.add(key);
+      renderGroupHeader(group);
+      if (deleteMode || !group.collapsed) {
+        state.channels.forEach((member, memberIndex) => {
+          if (String(member.groupId ?? "") === key) renderChannelItem(member, memberIndex, { groupChild: true });
+        });
+      }
+    });
+    // Empty groups are valid and remain visible so channels can be dragged into them.
+    state.channelGroups.forEach((group) => {
+      const key = String(group.id);
+      if (renderedGroups.has(key)) return;
+      renderedGroups.add(key);
+      renderGroupHeader(group);
     });
 
-    // 오디오는 불러오기 메뉴만 별도이지만 왼쪽에서는 별도 '원본 자료' 구역 없이 같은 목록에 둡니다.
+    // Empty groups keep an optional visual anchor so they can also be moved between channels.
+    state.channelGroups.forEach((group) => {
+      if (getChannelGroupMembers(group).length || group.beforeChannelId == null) return;
+      const groupNode = elements.channelTabs.querySelector(`[data-channel-group-id="${CSS.escape(String(group.id))}"]`);
+      const anchorChannel = getChannelById(group.beforeChannelId);
+      let anchorNode = elements.channelTabs.querySelector(`[data-channel-id="${CSS.escape(String(group.beforeChannelId))}"]`);
+      if (anchorChannel?.groupId != null) {
+        anchorNode = elements.channelTabs.querySelector(`[data-channel-group-id="${CSS.escape(String(anchorChannel.groupId))}"]`) || anchorNode;
+      }
+      if (groupNode && anchorNode && groupNode !== anchorNode) elements.channelTabs.insertBefore(groupNode, anchorNode);
+    });
+
+    // 오디오는 그룹 바깥의 별도 소스로 그대로 표시합니다.
     getAudioClipsInDisplayOrder().forEach(({ clip, sourceIndex: clipIndex }) => {
       const active = state.activePanel === "audio" && String(state.activeAudioClipId) === String(clip.id);
       const item = document.createElement("div");
       item.className = `channel-tree-item audio-source-item${active ? " active" : ""}${clip.muted ? " is-muted" : ""}${clip.visible === false ? " is-hidden" : ""}`;
       item.style.setProperty("--channel-color", getAudioClipColor(clip, clipIndex));
-      item.dataset.audioClipId = String(clip.id);
-      item.dataset.contextArea = "audio-source";
-      item.setAttribute("role", "treeitem");
-      item.setAttribute("aria-level", "1");
-      item.setAttribute("aria-selected", String(active));
-
-      const main = document.createElement("button");
-      main.type = "button";
-      main.className = "channel-tree-main channel-tab-main";
-      main.title = clip.fileName || clip.title;
-      const label = document.createElement("span");
-      label.className = "channel-tree-label channel-tab-label";
-      label.textContent = clip.title;
-      main.append(label);
-      main.addEventListener("click", () => handleAudioEditActivation(clip.id));
-
-      const actions = document.createElement("div");
-      actions.className = "channel-tree-actions";
-      actions.append(
-        createAction({
-          kind: "visibility",
-          active: clip.visible !== false,
-          label: i18nText(clip.visible === false ? "ui.show_2" : "ui.hide_3", [clip.title]),
-          title: i18nText(clip.visible === false ? "audio.show_block" : "audio.hide_block"),
-          onClick: () => setAudioClipVisible(clip.id, clip.visible === false),
-        }),
-        createAction({
-          kind: "mute",
-          active: clip.muted,
-          label: i18nText(clip.muted ? "ui.unmute_2" : "ui.mute_2", [clip.title]),
-          title: i18nText(clip.muted ? "audio.unmute" : "audio.mute"),
-          onClick: () => setAudioClipMuted(clip.id, !clip.muted),
-        }),
+      item.dataset.audioClipId = String(clip.id); item.dataset.contextArea = "audio-source";
+      item.setAttribute("role", "treeitem"); item.setAttribute("aria-level", "1"); item.setAttribute("aria-selected", String(active));
+      const main = document.createElement("button"); main.type = "button"; main.className = "channel-tree-main channel-tab-main"; main.title = clip.fileName || clip.title;
+      const label = document.createElement("span"); label.className = "channel-tree-label channel-tab-label"; label.textContent = clip.title; main.append(label); main.addEventListener("click", () => handleAudioEditActivation(clip.id));
+      const actions = document.createElement("div"); actions.className = "channel-tree-actions";
+      if (!deleteMode) actions.append(
+        createAction({ kind: "visibility", active: clip.visible !== false, label: i18nText(clip.visible === false ? "ui.show_2" : "ui.hide_3", [clip.title]), title: i18nText(clip.visible === false ? "audio.show_block" : "audio.hide_block"), onClick: () => setAudioClipVisible(clip.id, clip.visible === false) }),
+        createAction({ kind: "mute", active: clip.muted, label: i18nText(clip.muted ? "ui.unmute_2" : "ui.mute_2", [clip.title]), title: i18nText(clip.muted ? "audio.unmute" : "audio.mute"), onClick: () => setAudioClipMuted(clip.id, !clip.muted) }),
       );
-      item.append(main, actions);
-      elements.channelTabs.append(item);
+      item.append(main, actions); elements.channelTabs.append(item);
     });
 
-    elements.addChannelButton.disabled = false;
-    if (elements.mergeChannelsButton) elements.mergeChannelsButton.disabled = state.channels.length < 2;
-    if (elements.deleteChannelsButton) elements.deleteChannelsButton.disabled = state.channels.length <= 1;
-    elements.deleteChannelButton.disabled = state.activePanel !== "notes" || state.channels.length <= 1;
-    elements.clearChannelButton.disabled = state.activePanel !== "notes";
-    elements.copyChannelButton.disabled = state.activePanel !== "notes";
-    elements.pasteChannelButton.disabled = state.activePanel !== "notes";
+    elements.addChannelButton.disabled = deleteMode;
+    if (elements.addChannelGroupButton) { elements.addChannelGroupButton.disabled = deleteMode || isChannelMergeModeActive(); elements.addChannelGroupButton.hidden = deleteMode; }
+    if (elements.mergeChannelsButton) { elements.mergeChannelsButton.disabled = state.channels.length < 2 || deleteMode || state.selectedChannelGroupId != null; elements.mergeChannelsButton.hidden = deleteMode; }
+    if (elements.addChannelButton) elements.addChannelButton.hidden = deleteMode;
+    if (elements.deleteChannelsButton) { elements.deleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length; elements.deleteChannelsButton.hidden = deleteMode; }
+    if (elements.channelDeleteModeCancelButton) elements.channelDeleteModeCancelButton.hidden = !deleteMode;
+    if (elements.channelDeleteModeApplyButton) {
+      elements.channelDeleteModeApplyButton.hidden = !deleteMode;
+      const hasDelete = state.channelDeleteMode.selectedChannelIds.size > 0 || [...state.channelDeleteMode.groupModes.values()].some((mode) => mode !== "none");
+      elements.channelDeleteModeApplyButton.disabled = !hasDelete;
+    }
+    const hasSelectedChannel = state.activePanel === "notes" && state.selectedChannelGroupId == null && Boolean(getActiveChannel());
+    elements.deleteChannelButton.disabled = !hasSelectedChannel || state.channels.length <= 1;
+    elements.clearChannelButton.disabled = !hasSelectedChannel;
+    elements.copyChannelButton.disabled = !hasSelectedChannel;
+    elements.pasteChannelButton.disabled = !hasSelectedChannel;
     renderCollapsedChannelRail();
     updateEditMenuState();
+  }
+
+  function getChannelEditTargetState() {
+    if (state.channelEdit.mode === "group" && state.channelEdit.groupId != null) {
+      const group = getChannelGroupById(state.channelEdit.groupId);
+      return group ? {
+        kind: "group",
+        item: group,
+        solo: isChannelGroupSolo(group),
+        visibilitySolo: isChannelGroupVisibilitySolo(group),
+      } : null;
+    }
+    const channel = getChannelById(state.channelEdit.channelId);
+    return channel ? {
+      kind: "channel",
+      item: channel,
+      solo: isChannelSolo(channel),
+      visibilitySolo: isChannelVisibilitySolo(channel),
+    } : null;
+  }
+
+  function refreshChannelEditStateActions() {
+    const target = getChannelEditTargetState();
+    if (!elements.channelEditStateActions) return;
+    elements.channelEditStateActions.hidden = !target;
+    if (!target) return;
+
+    const visible = target.item.visible !== false;
+    const muted = Boolean(target.item.muted);
+    const visibilitySolo = Boolean(target.visibilitySolo);
+    const solo = Boolean(target.solo);
+
+    elements.channelEditVisibilityNormalButton?.classList.toggle("is-active", visible && !visibilitySolo);
+    elements.channelEditVisibilityButton?.classList.toggle("is-active", !visible && !visibilitySolo);
+    elements.channelEditVisibilitySoloButton?.classList.toggle("is-active", visibilitySolo);
+    elements.channelEditMuteNormalButton?.classList.toggle("is-active", !muted && !solo);
+    elements.channelEditMuteButton?.classList.toggle("is-active", muted && !solo);
+    elements.channelEditSoloButton?.classList.toggle("is-active", solo);
+  }
+
+  function setChannelEditTargetVisibilityMode(mode) {
+    const target = getChannelEditTargetState();
+    if (!target) return false;
+    const groupTarget = target.kind === "group";
+    let changed = false;
+    const setSolo = (value) => groupTarget
+      ? setChannelGroupVisibilitySoloById(target.item.id, value, { notify: false })
+      : setChannelVisibilitySoloById(target.item.id, value, { notify: false });
+    const setVisible = (value) => groupTarget
+      ? setChannelGroupVisibleById(target.item.id, value, { notify: false })
+      : setChannelVisibleById(target.item.id, value, { notify: false });
+
+    if (mode === "solo") {
+      if (target.item.visible === false) changed = setVisible(true) || changed;
+      changed = setSolo(true) || changed;
+    } else {
+      changed = setSolo(false) || changed;
+      changed = setVisible(mode !== "hidden") || changed;
+    }
+    refreshChannelEditStateActions();
+    return changed;
+  }
+
+  function setChannelEditTargetMuteMode(mode) {
+    const target = getChannelEditTargetState();
+    if (!target) return false;
+    const groupTarget = target.kind === "group";
+    let changed = false;
+    const setSolo = (value) => groupTarget
+      ? setChannelGroupSoloById(target.item.id, value, { notify: false })
+      : setChannelSoloById(target.item.id, value, { notify: false });
+    const setMuted = (value) => groupTarget
+      ? setChannelGroupMutedById(target.item.id, value, { notify: false })
+      : setChannelMutedById(target.item.id, value, { notify: false });
+
+    if (mode === "solo") {
+      if (target.item.muted) changed = setMuted(false) || changed;
+      changed = setSolo(true) || changed;
+    } else {
+      changed = setSolo(false) || changed;
+      changed = setMuted(mode === "muted") || changed;
+    }
+    refreshChannelEditStateActions();
+    return changed;
   }
 
   function openChannelEditDialog(channelId) {
@@ -7013,13 +8008,21 @@
     selectChannel(index);
     const channel = state.channels[index];
     state.channelEdit.channelId = String(channel.id);
-    populateChannelInstrumentSelect();
+    state.channelEdit.groupId = null;
+    state.channelEdit.mode = "channel";
+    configureInstrumentSelectForChannel(elements.channelEditInstrumentSelect, channel);
+    const sharedInstrumentLabel = elements.channelEditInstrumentSelect?.closest("label")?.querySelector("span");
+    if (sharedInstrumentLabel) sharedInstrumentLabel.textContent = i18nText("instrument.text");
+    if (elements.channelEditInstrumentSelect) elements.channelEditInstrumentSelect.setAttribute("aria-label", i18nText("channel.instrument"));
     if (elements.channelEditNameInput) elements.channelEditNameInput.value = channel.name;
     setHueControlValue(elements.channelEditColorInput, getChannelHue(channel, index));
     if (elements.channelEditTargetLabel) elements.channelEditTargetLabel.textContent = `${index + 1}번 채널`;
     if (elements.channelEditInstrumentSelect) {
       elements.channelEditInstrumentSelect.value = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
     }
+    const title = elements.channelEditBackdrop.querySelector(".transfer-dialog-header strong");
+    if (title) title.textContent = i18nText("channel.edit") || "채널 정보 수정";
+    refreshChannelEditStateActions();
     elements.channelEditBackdrop.hidden = false;
     requestAnimationFrame(() => {
       elements.channelEditNameInput?.focus();
@@ -7031,8 +8034,165 @@
   function closeChannelEditDialog() {
     if (elements.channelEditBackdrop) elements.channelEditBackdrop.hidden = true;
     state.channelEdit.channelId = null;
+    state.channelEdit.groupId = null;
+    state.channelEdit.mode = "channel";
   }
 
+  function makeUniqueChannelGroupName(name, exceptId = null) {
+    const base = String(name || "").trim() || i18nText("group.default_name");
+    const used = new Set(state.channelGroups.filter((group) => String(group.id) !== String(exceptId)).map((group) => String(group.name || "").trim().toLowerCase()));
+    if (!used.has(base.toLowerCase())) return base;
+    let index = 2;
+    while (used.has(`${base} ${index}`.toLowerCase())) index += 1;
+    return `${base} ${index}`;
+  }
+
+  function populateChannelGroupInstrumentSelect() {
+    const select = elements.channelGroupInstrumentSelect;
+    if (!select) return;
+    const previous = String(select.value || "");
+    select.replaceChildren();
+    select.add(new Option(i18nText("group.instrument_keep"), ""));
+    for (const preset of getEditorSoundBankPresets()) {
+      const bank = clamp(Math.round(Number(preset.bank) || 0), 0, 16383);
+      select.add(new Option(formatEditorPresetLabel(preset), editorPresetKey(bank, preset.preset)));
+    }
+    if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+    else select.value = "";
+  }
+
+  function renderChannelGroupMemberList() {
+    if (!elements.channelGroupMemberList) return;
+    elements.channelGroupMemberList.replaceChildren();
+    const group = getChannelGroupById(state.channelGroupEdit.groupId);
+    const members = group ? getChannelGroupMembers(group) : [];
+    if (!members.length) {
+      const empty = document.createElement("div");
+      empty.className = "channel-group-member-empty";
+      empty.textContent = i18nText("group.no_members");
+      elements.channelGroupMemberList.append(empty);
+      return;
+    }
+    members.forEach((channel, index) => {
+      const row = document.createElement("div");
+      row.className = "midi-transfer-channel-row channel-group-member-row is-readonly";
+      row.style.setProperty("--channel-color", getChannelColor(channel, state.channels.indexOf(channel)));
+      const marker = document.createElement("span");
+      marker.className = "channel-group-member-marker";
+      marker.textContent = String(index + 1);
+      const text = document.createElement("span");
+      text.textContent = channel.name;
+      row.append(marker, text);
+      elements.channelGroupMemberList.append(row);
+    });
+  }
+
+  function addChannelGroup() {
+    if (isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    const group = {
+      id: state.nextChannelGroupId++,
+      name: makeUniqueChannelGroupName(i18nText("group.default_name")),
+      collapsed: false,
+      visible: true,
+      muted: false,
+      hue: getDefaultHue(state.channelGroups.length + 2),
+      beforeChannelId: null,
+    };
+    state.channelGroups.push(group);
+    markDirty(i18nText("group.history_create"));
+    renderChannelTabs();
+    renderChannelEditor();
+    requestAnimationFrame(() => {
+      const item = elements.channelTabs?.querySelector(`[data-channel-group-id="${CSS.escape(String(group.id))}"]`);
+      item?.scrollIntoView({ block: "nearest" });
+      item?.querySelector(".channel-group-main")?.focus({ preventScroll: true });
+    });
+    showToast(i18nText("group.created", [group.name]));
+    return true;
+  }
+
+  function openChannelGroupDialog(groupId = null) {
+    if (!elements.channelEditBackdrop || groupId == null) return false;
+    const group = getChannelGroupById(groupId);
+    if (!group) return false;
+    state.channelEdit.channelId = null;
+    state.channelEdit.groupId = String(group.id);
+    state.channelEdit.mode = "group";
+    state.selectedChannelGroupId = String(group.id);
+    renderChannelTabs();
+    renderChannelEditor();
+    updateChannelInfo();
+    configureInstrumentSelectForGroup(elements.channelEditInstrumentSelect, group);
+    const sharedInstrumentLabel = elements.channelEditInstrumentSelect?.closest("label")?.querySelector("span");
+    if (sharedInstrumentLabel) sharedInstrumentLabel.textContent = i18nText("instrument.text");
+    if (elements.channelEditInstrumentSelect) elements.channelEditInstrumentSelect.setAttribute("aria-label", i18nText("instrument.text"));
+    if (elements.channelEditNameInput) elements.channelEditNameInput.value = group.name;
+    setHueControlValue(elements.channelEditColorInput, getChannelGroupHue(group, state.channelGroups.indexOf(group)));
+    if (elements.channelEditTargetLabel) elements.channelEditTargetLabel.textContent = `${group.name} · ${i18nText("group.edit")}`;
+    const title = elements.channelEditBackdrop.querySelector(".transfer-dialog-header strong");
+    if (title) title.textContent = i18nText("group.edit") || "그룹 정보 수정";
+    refreshChannelEditStateActions();
+    elements.channelEditBackdrop.hidden = false;
+    requestAnimationFrame(() => {
+      elements.channelEditNameInput?.focus();
+      elements.channelEditNameInput?.select();
+    });
+    return true;
+  }
+
+  function closeChannelGroupDialog() {
+    if (elements.channelGroupBackdrop) elements.channelGroupBackdrop.hidden = true;
+    state.channelGroupEdit = { groupId: null, mode: "create" };
+  }
+
+  function getSelectedChannelGroupDialogIds() {
+    const group = getChannelGroupById(state.channelGroupEdit.groupId);
+    return group ? getChannelGroupMembers(group).map((channel) => String(channel.id)) : [];
+  }
+
+  function applyChannelGroupDialog() {
+    const group = getChannelGroupById(state.channelGroupEdit.groupId);
+    if (!group) return false;
+    const requestedName = String(elements.channelGroupNameInput?.value || "").trim();
+    group.name = makeUniqueChannelGroupName(requestedName, group.id);
+
+    const selectedKey = String(elements.channelGroupInstrumentSelect?.value || "");
+    if (selectedKey) {
+      const parsed = parseEditorPresetKey(selectedKey);
+      const preset = findEditorSoundBankPreset(parsed.bank, parsed.program);
+      if (preset) {
+        for (const channel of getChannelGroupMembers(group)) setChannelInstrumentPreset(channel, preset);
+        if (typeof audioEngine.prepareProgram === "function") void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: true }).catch(() => {});
+      }
+    }
+    markDirty(i18nText("group.history_edit"));
+    renderChannelTabs(); renderChannelEditor(); renderChannelMuteMixer(); drawRoll();
+    closeChannelGroupDialog();
+    showToast(i18nText("group.updated", [group.name]));
+    return true;
+  }
+
+  function openChannelGroupMmlDialog(groupId) {
+    const group = getChannelGroupById(groupId);
+    const channels = getChannelGroupMembers(group);
+    if (!group || !channels.length || !elements.channelMmlBackdrop || !elements.channelMmlText) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    state.channelMmlEdit.channelId = null;
+    state.channelMmlEdit.groupId = String(group.id);
+    state.channelMmlEdit.viewOnly = true;
+    state.channelMmlEdit.parsed = null;
+    state.channelMmlEdit.optimizedView = true;
+    if (elements.channelMmlTargetLabel) elements.channelMmlTargetLabel.textContent = `${group.name} · ${channels.length}`;
+    if (elements.channelMmlIncludeTempo) elements.channelMmlIncludeTempo.closest("label")?.setAttribute("hidden", "");
+    if (elements.channelMmlOptimizedView) elements.channelMmlOptimizedView.closest("label")?.setAttribute("hidden", "");
+    if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.hidden = true;
+    elements.channelMmlText.readOnly = true;
+    elements.channelMmlText.value = channelsToMml(channels, { originBeat: 0 }) || "";
+    setChannelMmlStatus(i18nText("group.mml_summary", [channels.length]));
+    elements.channelMmlBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.channelMmlText?.focus());
+    return true;
+  }
 
   function normalizeMmlCommandCase(text) {
     return String(text || "").replace(/[A-Za-z]/g, (character) => {
@@ -7267,12 +8427,15 @@
     selectChannel(index);
     const channel = state.channels[index];
     state.channelMmlEdit.channelId = String(channel.id);
+    state.channelMmlEdit.groupId = null;
+    state.channelMmlEdit.viewOnly = false;
     state.channelMmlEdit.parsed = null;
     window.clearTimeout(state.channelMmlEdit.parseTimer);
     state.channelMmlEdit.parseTimer = 0;
     if (elements.channelMmlTargetLabel) elements.channelMmlTargetLabel.textContent = channel.name;
-    if (elements.channelMmlIncludeTempo) elements.channelMmlIncludeTempo.checked = state.channelMmlEdit.includeTempo !== false;
-    if (elements.channelMmlOptimizedView) elements.channelMmlOptimizedView.checked = true;
+    if (elements.channelMmlIncludeTempo) { elements.channelMmlIncludeTempo.checked = state.channelMmlEdit.includeTempo !== false; elements.channelMmlIncludeTempo.closest("label")?.removeAttribute("hidden"); }
+    if (elements.channelMmlOptimizedView) { elements.channelMmlOptimizedView.checked = true; elements.channelMmlOptimizedView.closest("label")?.removeAttribute("hidden"); }
+    if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.hidden = false;
     state.channelMmlEdit.optimizedView = true;
     elements.channelMmlText.readOnly = true;
     state.channelMmlEdit.standardText = channelToDisplayedMml(channel, {
@@ -7296,14 +8459,20 @@
     window.clearTimeout(state.channelMmlEdit.parseTimer);
     state.channelMmlEdit.parseTimer = 0;
     state.channelMmlEdit.channelId = null;
+    state.channelMmlEdit.groupId = null;
+    state.channelMmlEdit.viewOnly = false;
     state.channelMmlEdit.parsed = null;
     state.channelMmlEdit.optimizedView = false;
     state.channelMmlEdit.standardText = "";
     if (elements.channelMmlText) elements.channelMmlText.readOnly = false;
+    elements.channelMmlIncludeTempo?.closest("label")?.removeAttribute("hidden");
+    elements.channelMmlOptimizedView?.closest("label")?.removeAttribute("hidden");
+    if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.hidden = false;
     if (elements.channelMmlBackdrop) elements.channelMmlBackdrop.hidden = true;
   }
 
   function applyChannelMmlDialog() {
+    if (state.channelMmlEdit.viewOnly) { closeChannelMmlDialog(); return true; }
     const channelId = state.channelMmlEdit.channelId;
     const channel = state.channels.find((entry) => String(entry.id) === String(channelId));
     if (!channel) {
@@ -7338,6 +8507,53 @@
   }
 
   function applyChannelEditDialog() {
+    if (state.channelEdit.mode === "group" && state.channelEdit.groupId != null) {
+      const group = getChannelGroupById(state.channelEdit.groupId);
+      if (!group) { closeChannelEditDialog(); return false; }
+      const requestedName = String(elements.channelEditNameInput?.value || "").trim();
+      if (!requestedName) {
+        showToast(i18nText("group.name_required") || "그룹 이름은 비워둘 수 없습니다.");
+        elements.channelEditNameInput?.focus();
+        return false;
+      }
+      const nextName = makeUniqueChannelGroupName(requestedName, group.id);
+      const nextHue = getHueControlValue(elements.channelEditColorInput, getChannelGroupHue(group, state.channelGroups.indexOf(group)));
+      const selectedValue = String(elements.channelEditInstrumentSelect?.value || "");
+      let instrumentChanged = false;
+      if (selectedValue) {
+        const members = getChannelGroupMembers(group);
+        const alreadyUniform = members.length > 0 && members.every((channel) => (
+          editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel)) === selectedValue
+        ));
+        if (!alreadyUniform) {
+          const selectedKey = parseEditorPresetKey(selectedValue);
+          const selectedPreset = findEditorSoundBankPreset(selectedKey.bank, selectedKey.program);
+          if (selectedPreset) {
+            for (const channel of members) setChannelInstrumentPreset(channel, selectedPreset);
+            if (typeof audioEngine.prepareProgram === "function") {
+              void audioEngine.prepareProgram(selectedPreset.preset, selectedPreset.bank, { exactPreset: true }).catch((error) => console.warn("악기 음원 준비 실패", error));
+            }
+            instrumentChanged = true;
+          }
+        }
+      }
+      const changed = group.name !== nextName
+        || getChannelGroupHue(group, state.channelGroups.indexOf(group)) !== nextHue
+        || instrumentChanged;
+      if (!changed) { closeChannelEditDialog(); return true; }
+      group.name = nextName;
+      group.hue = nextHue;
+      markDirty(i18nText("group.history_edit"));
+      renderChannelTabs();
+      renderChannelEditor();
+      renderChannelMuteMixer();
+      drawRoll();
+      updateChannelInfo();
+      closeChannelEditDialog();
+      showToast(i18nText("group.updated", [group.name]));
+      return true;
+    }
+
     const channelId = state.channelEdit.channelId;
     const index = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
     if (index < 0) {
@@ -7364,10 +8580,7 @@
       || channel.instrument !== nextInstrument
       || getChannelInstrumentProgram(channel) !== nextProgram
       || getChannelInstrumentBank(channel) !== nextBank;
-    if (!changed) {
-      closeChannelEditDialog();
-      return true;
-    }
+    if (!changed) { closeChannelEditDialog(); return true; }
     channel.name = nextName;
     channel.hue = nextHue;
     if (selectedPreset) setChannelInstrumentPreset(channel, selectedPreset);
@@ -7394,7 +8607,9 @@
   function renderChannelEditor() {
     const midiActive = isMidiReferenceActive() && Boolean(getActiveMidiDocument());
     const audioActive = state.activePanel === "audio" && Boolean(getActiveAudioClip());
-    const notesActive = state.activePanel === "notes" && Boolean(getActiveChannel());
+    const selectedGroup = state.activePanel === "notes" ? getChannelGroupById(state.selectedChannelGroupId) : null;
+    const selectedChannel = state.activePanel === "notes" && !selectedGroup ? getActiveChannel() : null;
+    const notesActive = Boolean(selectedGroup || selectedChannel);
     elements.noteChannelView.hidden = !notesActive;
     elements.midiReferenceView.hidden = !midiActive;
     elements.midiReferenceView.setAttribute("aria-hidden", String(!midiActive));
@@ -7417,17 +8632,28 @@
       return;
     }
 
-    const channel = state.channels[state.activeChannel];
+    if (selectedGroup) {
+      elements.channelTitle.textContent = selectedGroup.name;
+      if (elements.channelNameInput.value !== selectedGroup.name) elements.channelNameInput.value = selectedGroup.name;
+      updateChannelColorControl(getChannelGroupHue(selectedGroup, state.channelGroups.indexOf(selectedGroup)));
+      configureInstrumentSelectForGroup(elements.channelInstrumentSelect, selectedGroup);
+      updateChannelInfo();
+      updateChannelMergeModeUi();
+      return;
+    }
+
+    const channel = selectedChannel;
+    if (!channel) {
+      updateEditMenuState();
+      return;
+    }
     elements.channelTitle.textContent = channel.name;
     if (elements.channelNameInput.value !== channel.name) {
       elements.channelNameInput.value = channel.name;
     }
     const activeHue = getChannelHue(channel, state.activeChannel);
     updateChannelColorControl(activeHue);
-    if (elements.channelInstrumentSelect) {
-      populateChannelInstrumentSelect();
-      elements.channelInstrumentSelect.value = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
-    }
+    configureInstrumentSelectForChannel(elements.channelInstrumentSelect, channel);
     updateChannelInfo();
     updateChannelMergeModeUi();
   }
@@ -9376,6 +10602,7 @@
 
     const normalizedColorMode = normalizeImportChannelColorMode(colorMode);
     const hueByInstrument = new Map();
+    const editorGroupByInstrument = new Map();
     const createdChannels = [];
     let noteCount = 0;
     let limitedInstrumentCount = 0;
@@ -9383,10 +10610,24 @@
 
     groups.forEach((group, groupIndex) => {
       const instrumentKey = getMidiGroupInstrumentKey(group);
-      if (normalizedColorMode === "instrument" && !hueByInstrument.has(instrumentKey)) {
+      if (!hueByInstrument.has(instrumentKey)) {
         hueByInstrument.set(instrumentKey, getMidiGroupHue(group, groupIndex));
       }
       const instrumentHue = hueByInstrument.get(instrumentKey);
+      let editorGroup = editorGroupByInstrument.get(instrumentKey);
+      if (!editorGroup) {
+        editorGroup = {
+          id: state.nextChannelGroupId++,
+          name: makeUniqueChannelGroupName(getMidiGroupDisplayName(group, i18nText("channel.instrument_3"))),
+          collapsed: false,
+          visible: true,
+          muted: false,
+          hue: instrumentHue,
+          beforeChannelId: null,
+        };
+        state.channelGroups.push(editorGroup);
+        editorGroupByInstrument.set(instrumentKey, editorGroup);
+      }
       let voices = splitNotesIntoMonophonicVoices(group.notes || [], {
         ignoreSingle64thOverlap,
         quantizeUnit: 4 / (Number(parsed?.quantizeDivision) === 32 ? 32 : 64),
@@ -9408,6 +10649,7 @@
           voiceCount: voices.length,
           copyHue: channelHue,
         });
+        channel.groupId = editorGroup.id;
         state.channels.push(channel);
         state.channelNoteRuntime.delete(String(channel.id));
         createdChannels.push(channel);
@@ -9448,7 +10690,7 @@
     state.channelNoteRuntime.clear();
     return {
       channelCount: createdChannels.length,
-      instrumentCount: groups.length,
+      instrumentCount: editorGroupByInstrument.size,
       noteCount,
       limitedInstrumentCount,
       channelsBeforeLimit,
@@ -10069,20 +11311,50 @@
   }
 
   function updateChannelInfo() {
-    const channel = state.activePanel === "notes" ? state.channels[state.activeChannel] : null;
+    const selectedGroup = state.activePanel === "notes" ? getChannelGroupById(state.selectedChannelGroupId) : null;
+    const channel = state.activePanel === "notes" && !selectedGroup ? state.channels[state.activeChannel] : null;
+
+    if (selectedGroup) {
+      const members = getChannelGroupMembers(selectedGroup);
+      const charCount = members.reduce((total, member) => total + getMmlChannelCharacterCount(member), 0);
+      if (elements.infoCharLabel) elements.infoCharLabel.textContent = "글자수";
+      if (elements.infoSelectionLabel) elements.infoSelectionLabel.textContent = "채널개수";
+      if (elements.infoCharCount) {
+        elements.infoCharCount.textContent = charCount.toLocaleString();
+        elements.infoCharCount.title = "그룹에 포함된 채널들의 MML 글자 수 합계(템포 명령 제외)";
+      }
+      if (elements.infoSelectionCount) {
+        elements.infoSelectionCount.textContent = members.length.toLocaleString();
+        elements.infoSelectionCount.title = "그룹에 포함된 채널 개수";
+      }
+      if (elements.noteVolumeButton) {
+        elements.noteVolumeButton.disabled = true;
+        elements.noteVolumeButton.textContent = "V";
+        elements.noteVolumeButton.title = "채널을 선택한 뒤 노트 볼륨을 수정할 수 있습니다.";
+      }
+      updatePlaybackTimeInfo();
+      updateEditMenuState();
+      return;
+    }
+
     if (!channel) {
       if (elements.noteVolumeButton) {
         elements.noteVolumeButton.disabled = true;
         elements.noteVolumeButton.textContent = "V";
         elements.noteVolumeButton.title = "채널을 선택한 뒤 노트 볼륨을 수정할 수 있습니다.";
       }
+      if (elements.infoCharLabel) elements.infoCharLabel.textContent = "글자수";
+      if (elements.infoSelectionLabel) elements.infoSelectionLabel.textContent = "선택개수";
       if (elements.infoCharCount) elements.infoCharCount.textContent = "0";
       if (elements.infoSelectionCount) elements.infoSelectionCount.textContent = "0";
       updatePlaybackTimeInfo();
       updateEditMenuState();
       return;
     }
+
     const selected = getSelectedNotes();
+    if (elements.infoCharLabel) elements.infoCharLabel.textContent = "글자수";
+    if (elements.infoSelectionLabel) elements.infoSelectionLabel.textContent = "선택개수";
     if (elements.infoCharCount) {
       elements.infoCharCount.textContent = getMmlChannelCharacterCount(channel).toLocaleString();
       elements.infoCharCount.title = "현재 채널 단독 MML 기준 글자 수(템포 명령 제외)";
@@ -10799,8 +12071,17 @@
           0,
           15,
         ),
+        groupId: channel.groupId ?? null,
         notes: channel.notes.map((note) => ({ ...note })),
       })),
+      channelGroups: state.channelGroups.map((group, index) => ({
+        id: group.id,
+        name: group.name,
+        collapsed: Boolean(group.collapsed),
+        hue: getChannelGroupHue(group, index),
+        beforeChannelId: group.beforeChannelId ?? null,
+      })),
+      nextChannelGroupId: state.nextChannelGroupId,
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
       timeSignatures: getSortedTimeSignatures().map((signature) => ({ ...signature })),
       timelineFades: normalizeTimelineFades(),
@@ -11073,6 +12354,8 @@
       : currentPlayheadBeat;
     const mutedByChannelId = new Map(state.channels.map((channel) => [String(channel.id), Boolean(channel.muted)]));
     const visibleByChannelId = new Map(state.channels.map((channel) => [String(channel.id), channel.visible !== false]));
+    const mutedByGroupId = new Map(state.channelGroups.map((group) => [String(group.id), Boolean(group.muted)]));
+    const visibleByGroupId = new Map(state.channelGroups.map((group) => [String(group.id), group.visible !== false]));
     const mutedByAudioId = new Map(state.audioClips.map((clip) => [String(clip.id), Boolean(clip.muted)]));
     const visibleByAudioId = new Map(state.audioClips.map((clip) => [String(clip.id), clip.visible !== false]));
 
@@ -11083,6 +12366,23 @@
 
     state.history.restoring = true;
     try {
+      state.selectedChannelGroupId = null;
+      state.channelGroups = (Array.isArray(data.channelGroups) ? data.channelGroups : []).map((group, index) => {
+        const id = Number(group.id) || index + 1;
+        return {
+          id,
+          name: String(group.name || `${i18nText("group.default_name")} ${index + 1}`),
+          collapsed: Boolean(group.collapsed),
+          hue: getChannelGroupHue(group, index),
+          beforeChannelId: group.beforeChannelId ?? null,
+          visible: visibleByGroupId.has(String(id)) ? visibleByGroupId.get(String(id)) : true,
+          muted: mutedByGroupId.get(String(id)) || false,
+        };
+      });
+      state.nextChannelGroupId = Math.max(1, Number(data.nextChannelGroupId) || 1, ...state.channelGroups.map((group) => Number(group.id) + 1));
+      state.soloGroupIds.clear();
+      state.visibilitySoloChannelIds.clear();
+      state.visibilitySoloGroupIds.clear();
       state.channels = data.channels.map((channel, index) => {
         const channelId = Number(channel.id) || index + 1;
         return {
@@ -11100,6 +12400,7 @@
           0,
           15,
         ),
+        groupId: channel.groupId == null ? null : Number(channel.groupId),
         notes: normalizeMonophonicNotes(channel.notes.map((note) => ({
           id: Number(note.id),
           pitch: clamp(Number(note.pitch), CONFIG.minPitch, CONFIG.maxPitch),
@@ -11113,6 +12414,8 @@
       if (!state.channels.length) {
         state.channels = createDefaultChannels(1);
       }
+      normalizeChannelGroupMemberships();
+      pruneEmptyChannelGroups();
       normalizeDefaultChannelNames();
       state.tempos = data.tempos.map((tempo) => ({
         id: Number(tempo.id),
@@ -11702,7 +13005,7 @@
 
   function selectAllNotes() {
     const channel = state.activePanel === "notes" ? getActiveChannel() : null;
-    if (!channel) return false;
+    if (!channel || !isChannelEffectivelyVisible(channel)) return false;
     clearNoteSelection();
     for (const note of channel.notes) {
       state.selectedNoteIds.add(note.id);
@@ -11831,6 +13134,45 @@
   }
 
 
+  function selectChannelGroup(groupId) {
+    if (isChannelMergeModeActive()) return true;
+    const group = getChannelGroupById(groupId);
+    if (!group) return false;
+    setSidebarTab("channels");
+    state.activePanel = "notes";
+    state.activeAudioClipId = null;
+    state.selectedChannelGroupId = String(group.id);
+    clearNoteSelection();
+    clearMidiSelection();
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    scheduleAutosave(250);
+    return true;
+  }
+
+  function activateChannelForPointerDrag(channelId) {
+    const index = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
+    if (index < 0) return false;
+    state.activePanel = "notes";
+    state.activeAudioClipId = null;
+    state.selectedChannelGroupId = null;
+    state.activeChannel = index;
+    clearNoteSelection();
+    clearMidiSelection();
+    elements.channelTabs?.querySelectorAll(".channel-tree-channel-item").forEach((node) => {
+      const active = String(node.dataset.channelId || "") === String(channelId);
+      node.classList.toggle("active", active);
+      node.setAttribute("aria-selected", String(active));
+    });
+    elements.channelTabs?.querySelectorAll(".channel-group-item").forEach((node) => node.classList.remove("active"));
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    return true;
+  }
+
   function selectChannel(index) {
     if (isChannelMergeModeActive()) {
       // Merge membership is controlled explicitly by the ✓ / × role buttons.
@@ -11841,6 +13183,7 @@
     // 채널 선택은 항상 하나를 유지합니다. 같은 채널을 다시 눌러도 선택 해제하지 않습니다.
     state.activePanel = "notes";
     state.activeAudioClipId = null;
+    state.selectedChannelGroupId = null;
     state.activeChannel = nextIndex;
     clearNoteSelection();
     clearMidiSelection();
@@ -11882,11 +13225,176 @@
   }
 
   function getActiveChannel() {
-    return state.channels[state.activeChannel];
+    if (state.activePanel === "notes" && state.selectedChannelGroupId != null) return null;
+    return state.channels[state.activeChannel] || null;
   }
 
   function getChannelById(channelId) {
     return state.channels.find((channel) => String(channel.id) === String(channelId)) || null;
+  }
+
+  function getChannelGroupById(groupId) {
+    return state.channelGroups.find((group) => String(group.id) === String(groupId)) || null;
+  }
+
+  function getChannelGroupForChannel(channelOrId) {
+    const channel = typeof channelOrId === "object" && channelOrId ? channelOrId : getChannelById(channelOrId);
+    if (!channel || channel.groupId == null) return null;
+    return getChannelGroupById(channel.groupId);
+  }
+
+  function getChannelGroupMembers(groupOrId) {
+    const group = typeof groupOrId === "object" && groupOrId ? groupOrId : getChannelGroupById(groupOrId);
+    if (!group) return [];
+    return state.channels.filter((channel) => String(channel.groupId ?? "") === String(group.id));
+  }
+
+  function getChannelGroupUniformInstrumentKey(groupOrId) {
+    const members = getChannelGroupMembers(groupOrId);
+    if (!members.length) return "";
+    const firstKey = editorPresetKey(getChannelInstrumentBank(members[0]), getChannelInstrumentProgram(members[0]));
+    return members.every((channel) => editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel)) === firstKey)
+      ? firstKey
+      : "";
+  }
+
+  function configureInstrumentSelectForGroup(select, groupOrId) {
+    if (!select) return "";
+    populateChannelInstrumentSelect();
+    for (let index = select.options.length - 1; index >= 0; index -= 1) {
+      if (String(select.options[index].value || "") === "") select.remove(index);
+    }
+    select.insertBefore(new Option(i18nText("group.instrument_keep"), ""), select.firstChild);
+    const uniformKey = getChannelGroupUniformInstrumentKey(groupOrId);
+    select.value = uniformKey && [...select.options].some((option) => option.value === uniformKey) ? uniformKey : "";
+    return select.value;
+  }
+
+  function configureInstrumentSelectForChannel(select, channel) {
+    if (!select || !channel) return false;
+    populateChannelInstrumentSelect();
+    for (let index = select.options.length - 1; index >= 0; index -= 1) {
+      if (String(select.options[index].value || "") === "") select.remove(index);
+    }
+    select.value = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
+    return true;
+  }
+
+  function getChannelMergeGroupEligibleMembers(groupOrId) {
+    if (!isChannelMergeModeActive()) return [];
+    const targetId = String(state.channelMerge.targetChannelId ?? "");
+    return getChannelGroupMembers(groupOrId).filter((channel) => (
+      String(channel.id) !== targetId && isChannelEffectivelyVisible(channel)
+    ));
+  }
+
+  function getChannelMergeGroupRoleState(groupOrId, role) {
+    const members = getChannelMergeGroupEligibleMembers(groupOrId);
+    const ids = role === "exclude"
+      ? (state.channelMerge.excludeOverlapChannelIds instanceof Set ? state.channelMerge.excludeOverlapChannelIds : new Set())
+      : (state.channelMerge.sourceChannelIds instanceof Set ? state.channelMerge.sourceChannelIds : new Set());
+    return {
+      members,
+      active: members.length > 0 && members.every((channel) => ids.has(String(channel.id))),
+    };
+  }
+
+  function toggleChannelMergeGroupRole(groupId, role) {
+    if (!isChannelMergeModeActive()) return false;
+    const group = getChannelGroupById(groupId);
+    if (!group || group.visible === false) return false;
+    if (!(state.channelMerge.sourceChannelIds instanceof Set)) state.channelMerge.sourceChannelIds = new Set();
+    if (!(state.channelMerge.excludeOverlapChannelIds instanceof Set)) state.channelMerge.excludeOverlapChannelIds = new Set();
+    const stateInfo = getChannelMergeGroupRoleState(group, role);
+    if (!stateInfo.members.length) return false;
+    const targetActive = !stateInfo.active;
+    const sources = state.channelMerge.sourceChannelIds;
+    const excludes = state.channelMerge.excludeOverlapChannelIds;
+    for (const channel of stateInfo.members) {
+      const id = String(channel.id);
+      if (role === "exclude") {
+        if (targetActive) { sources.delete(id); excludes.add(id); }
+        else excludes.delete(id);
+      } else {
+        if (targetActive) { excludes.delete(id); sources.add(id); }
+        else sources.delete(id);
+      }
+    }
+    state.channelMerge.runtimeCache = null;
+    state.channelMerge.previewModified = false;
+    rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
+    renderChannelTabs();
+    updateChannelMergeModeUi();
+    return true;
+  }
+
+  function normalizeChannelGroupMemberships() {
+    const valid = new Set(state.channelGroups.map((group) => String(group.id)));
+    let changed = false;
+    for (const channel of state.channels) {
+      if (channel.groupId != null && !valid.has(String(channel.groupId))) {
+        channel.groupId = null;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  function pruneEmptyChannelGroups() {
+    // Empty groups are valid editor objects (like an empty layer folder). Keep
+    // them until the user explicitly deletes the group; only repair invalid
+    // channel references and stale solo ids here.
+    const changed = normalizeChannelGroupMemberships();
+    const valid = new Set(state.channelGroups.map((group) => String(group.id)));
+    for (const id of [...state.soloGroupIds]) if (!valid.has(String(id))) state.soloGroupIds.delete(String(id));
+    for (const id of [...state.visibilitySoloGroupIds]) if (!valid.has(String(id))) state.visibilitySoloGroupIds.delete(String(id));
+    return changed;
+  }
+
+  function isChannelGroupSolo(groupOrId) {
+    const groupId = typeof groupOrId === "object" && groupOrId ? groupOrId.id : groupOrId;
+    return state.soloGroupIds.has(String(groupId));
+  }
+
+  function isChannelGroupVisibilitySolo(groupOrId) {
+    const groupId = typeof groupOrId === "object" && groupOrId ? groupOrId.id : groupOrId;
+    return state.visibilitySoloGroupIds.has(String(groupId));
+  }
+
+  function isChannelVisibilitySolo(channelOrId) {
+    const channelId = typeof channelOrId === "object" && channelOrId ? channelOrId.id : channelOrId;
+    return state.visibilitySoloChannelIds.has(String(channelId));
+  }
+
+  function pruneVisibilitySoloChannelIds() {
+    const validIds = new Set(state.channels.map((channel) => String(channel.id)));
+    for (const channelId of [...state.visibilitySoloChannelIds]) {
+      if (!validIds.has(String(channelId))) state.visibilitySoloChannelIds.delete(String(channelId));
+    }
+    return state.visibilitySoloChannelIds.size;
+  }
+
+  function isChannelEffectivelyVisible(channel) {
+    if (!channel) return false;
+    pruneVisibilitySoloChannelIds();
+    pruneEmptyChannelGroups();
+    const group = getChannelGroupForChannel(channel);
+    const hasSolo = state.visibilitySoloChannelIds.size > 0 || state.visibilitySoloGroupIds.size > 0;
+    if (hasSolo) return isChannelVisibilitySolo(channel) || (group && isChannelGroupVisibilitySolo(group));
+    if (channel.visible === false) return false;
+    return group ? group.visible !== false : true;
+  }
+
+  function isChannelGroupEffectivelyVisible(group) {
+    if (!group) return false;
+    pruneVisibilitySoloChannelIds();
+    pruneEmptyChannelGroups();
+    const hasSolo = state.visibilitySoloChannelIds.size > 0 || state.visibilitySoloGroupIds.size > 0;
+    if (hasSolo) {
+      if (isChannelGroupVisibilitySolo(group)) return true;
+      return getChannelGroupMembers(group).some((channel) => isChannelVisibilitySolo(channel));
+    }
+    return group.visible !== false;
   }
 
   function isChannelSolo(channelOrId) {
@@ -11907,8 +13415,11 @@
   function isChannelEffectivelyMuted(channel) {
     if (!channel) return true;
     pruneSoloChannelIds();
-    if (state.soloChannelIds.size) return !isChannelSolo(channel);
-    return Boolean(channel.muted);
+    pruneEmptyChannelGroups();
+    const group = getChannelGroupForChannel(channel);
+    const hasSolo = state.soloChannelIds.size > 0 || state.soloGroupIds.size > 0;
+    if (hasSolo) return !(isChannelSolo(channel) || (group && isChannelGroupSolo(group)));
+    return Boolean(channel.muted || group?.muted);
   }
 
   function captureChannelAudibleStates() {
@@ -11945,6 +13456,108 @@
     drawRoll();
     updateChannelInfo();
     if (notify) showToast(i18nText(nextSolo ? "channel.solo_on_named" : "channel.solo_off_named", [channel.name]));
+    return true;
+  }
+
+  function setChannelGroupSoloById(groupId, solo, { notify = true } = {}) {
+    const group = getChannelGroupById(groupId);
+    if (!group) return false;
+    const key = String(group.id);
+    const nextSolo = Boolean(solo);
+    if (state.soloGroupIds.has(key) === nextSolo
+      && (!nextSolo || (state.soloGroupIds.size === 1 && state.soloChannelIds.size === 0))) return false;
+    const beforeAudible = captureChannelAudibleStates();
+    if (nextSolo) {
+      // Group Solo means exactly this group's channels are audible.
+      state.soloChannelIds.clear();
+      state.soloGroupIds.clear();
+      state.soloGroupIds.add(key);
+    } else {
+      state.soloGroupIds.delete(key);
+    }
+    refreshChannelPlaybackForAudibleStateChange(beforeAudible);
+    renderChannelTabs(); renderChannelEditor(); drawRoll(); updateChannelInfo();
+    if (notify) showToast(`${group.name} ${nextSolo ? i18nText("group.solo_on") : i18nText("group.solo_off")}`);
+    return true;
+  }
+
+  function setChannelVisibilitySoloById(channelId, solo, { notify = true } = {}) {
+    const channel = getChannelById(channelId);
+    if (!channel) return false;
+    const key = String(channel.id);
+    const nextSolo = Boolean(solo);
+    if (state.visibilitySoloChannelIds.has(key) === nextSolo) return false;
+    if (nextSolo) state.visibilitySoloChannelIds.add(key);
+    else state.visibilitySoloChannelIds.delete(key);
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    if (notify) showToast(`${channel.name} 표시 싱글 ${nextSolo ? "켬" : "해제"}`);
+    return true;
+  }
+
+  function setChannelGroupVisibilitySoloById(groupId, solo, { notify = true } = {}) {
+    const group = getChannelGroupById(groupId);
+    if (!group) return false;
+    const key = String(group.id);
+    const nextSolo = Boolean(solo);
+    if (state.visibilitySoloGroupIds.has(key) === nextSolo
+      && (!nextSolo || (state.visibilitySoloGroupIds.size === 1 && state.visibilitySoloChannelIds.size === 0))) return false;
+    if (nextSolo) {
+      state.visibilitySoloChannelIds.clear();
+      state.visibilitySoloGroupIds.clear();
+      state.visibilitySoloGroupIds.add(key);
+    } else {
+      state.visibilitySoloGroupIds.delete(key);
+    }
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    if (notify) showToast(`${group.name} 표시 싱글 ${nextSolo ? "켬" : "해제"}`);
+    return true;
+  }
+
+  function setChannelGroupVisibleById(groupId, visible, { notify = true } = {}) {
+    const group = getChannelGroupById(groupId);
+    const nextVisible = Boolean(visible);
+    if (!group || group.visible === nextVisible) return false;
+    group.visible = nextVisible;
+    setDirtyWithoutHistory();
+    if (isChannelMergeModeActive() && !nextVisible) {
+      const memberIds = new Set(getChannelGroupMembers(group).map((channel) => String(channel.id)));
+      for (const id of memberIds) {
+        state.channelMerge.sourceChannelIds?.delete(id);
+        state.channelMerge.excludeOverlapChannelIds?.delete(id);
+      }
+      state.channelMerge.runtimeCache = null;
+      refreshChannelMergePreviewFromSelection({ markModified: state.channelMerge.previewModified });
+    }
+    renderChannelTabs(); renderChannelEditor(); drawRoll(); updateChannelInfo();
+    if (notify) showToast(`${group.name} ${nextVisible ? i18nText("ui.showed") : i18nText("ui.hid")}`);
+    return true;
+  }
+
+  function setChannelGroupMutedById(groupId, muted, { notify = true } = {}) {
+    const group = getChannelGroupById(groupId);
+    const nextMuted = Boolean(muted);
+    if (!group || Boolean(group.muted) === nextMuted) return false;
+    const beforeAudible = captureChannelAudibleStates();
+    group.muted = nextMuted;
+    setDirtyWithoutHistory();
+    refreshChannelPlaybackForAudibleStateChange(beforeAudible);
+    renderChannelTabs(); renderChannelEditor(); drawRoll(); updateChannelInfo();
+    if (notify) showToast(`${group.name} ${nextMuted ? i18nText("ui.mute") : i18nText("ui.unmute")}`);
+    return true;
+  }
+
+  function toggleChannelGroupCollapsed(groupId) {
+    const group = getChannelGroupById(groupId);
+    if (!group) return false;
+    group.collapsed = !Boolean(group.collapsed);
+    setDirtyWithoutHistory();
+    renderChannelTabs();
     return true;
   }
 
@@ -12103,7 +13716,7 @@
     const excludeIds = getChannelMergeExcludeOverlapChannelIds();
     return state.channels.filter((channel) => {
       const id = String(channel.id);
-      return channel.visible !== false && ids.has(id) && id !== targetId && !excludeIds.has(id);
+      return isChannelEffectivelyVisible(channel) && ids.has(id) && id !== targetId && !excludeIds.has(id);
     });
   }
 
@@ -12296,7 +13909,7 @@
     return new Set([...rawIds].map(String).filter((id) => (
       id
       && id !== targetId
-      && state.channels.some((channel) => String(channel.id) === id && channel.visible !== false)
+      && state.channels.some((channel) => String(channel.id) === id && isChannelEffectivelyVisible(channel))
     )));
   }
 
@@ -12585,7 +14198,7 @@
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     const id = String(channelId);
     const channel = getChannelById(id);
-    if (!channel || channel.visible === false || id === String(state.channelMerge.targetChannelId)) return false;
+    if (!channel || !isChannelEffectivelyVisible(channel) || id === String(state.channelMerge.targetChannelId)) return false;
     const excludeIds = state.channelMerge.excludeOverlapChannelIds instanceof Set
       ? state.channelMerge.excludeOverlapChannelIds
       : new Set();
@@ -12634,7 +14247,7 @@
     const id = String(channelId ?? "");
     const targetId = String(state.channelMerge.targetChannelId ?? "");
     const channel = getChannelById(id);
-    if (!id || !channel || channel.visible === false || id === targetId) return false;
+    if (!id || !channel || !isChannelEffectivelyVisible(channel) || id === targetId) return false;
     if (!(state.channelMerge.excludeOverlapChannelIds instanceof Set)) {
       state.channelMerge.excludeOverlapChannelIds = new Set();
     }
@@ -12708,7 +14321,7 @@
     // channels: every note that is currently visible on the piano roll is eligible.
     const indices = state.channels
       .map((channel, channelIndex) => ({ channel, channelIndex }))
-      .filter(({ channel }) => channel.visible !== false)
+      .filter(({ channel }) => isChannelEffectivelyVisible(channel))
       .sort((left, right) => {
         const leftActive = left.channelIndex === state.activeChannel ? 1 : 0;
         const rightActive = right.channelIndex === state.activeChannel ? 1 : 0;
@@ -12742,7 +14355,7 @@
     const candidate = runtime.candidateByKey.get(candidateKey);
     if (!candidate) return false;
     const sourceChannel = getChannelById(candidate.sourceChannelId);
-    if (sourceChannel?.visible === false && String(candidate.sourceChannelId) !== String(state.channelMerge.targetChannelId)) return false;
+    if (!isChannelEffectivelyVisible(sourceChannel) && String(candidate.sourceChannelId) !== String(state.channelMerge.targetChannelId)) return false;
     if (isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool)) {
       if (!silentBlocked) showToast(i18nText("merge.exclude_overlap_blocked"));
       return false;
@@ -12816,7 +14429,7 @@
     if (!isChannelMergeModeActive()) return [];
     const visibleChannelIds = new Set(
       state.channels
-        .filter((channel) => channel.visible !== false)
+        .filter((channel) => isChannelEffectivelyVisible(channel))
         .map((channel) => String(channel.id)),
     );
     return (state.channelMerge.candidatePool || []).filter((candidate) => (
@@ -12981,25 +14594,29 @@
   }
 
   function handleMergeModeContextGuard(event) {
-    if (!isChannelMergeModeActive() && !isNoteEditModeActive()) return;
+    if (!isChannelMergeModeActive() && !isNoteEditModeActive() && !isChannelDeleteModeActive()) return;
+    // 병합/노트편집/삭제 모드에서는 우클릭 메뉴를 열지 않습니다.
     event.preventDefault();
     event.stopImmediatePropagation();
     closeContextMenu();
   }
 
   function handleMergeModeKeyGuard(event) {
-    if (!isChannelMergeModeActive() && !isNoteEditModeActive()) return;
+    if (!isChannelMergeModeActive() && !isNoteEditModeActive() && !isChannelDeleteModeActive()) return;
     const target = event.target;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (isChannelMergeModeActive() && target?.closest?.("#channelEditBackdrop")) {
+      if (isChannelDeleteModeActive()) cancelChannelDeleteMode();
+      else if (isChannelMergeModeActive() && target?.closest?.("#channelEditBackdrop")) {
         closeChannelEditDialog();
       } else if (isNoteEditModeActive()) cancelNoteEditMode();
       else cancelChannelMergeMode();
       return;
     }
+    // 삭제 내용을 확인하면서 재생/정지는 계속 사용할 수 있습니다.
     if (event.code === "Space" && !event.ctrlKey && !event.metaKey && !event.altKey) return;
+    if (isChannelDeleteModeActive() && target?.closest?.("#channelTabs, .channel-tree-toolbar, .playback-compact-box")) return;
     if (target?.closest?.("#channelMergeModeControls, #channelEditBackdrop, .recommended-color-palette, #noteEditModePanel, .playback-compact-box")) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -13258,6 +14875,154 @@
     return true;
   }
 
+  function isChannelDeleteModeActive() {
+    return Boolean(state.channelDeleteMode?.active);
+  }
+
+  function getGroupDeleteMode(groupId) {
+    return state.channelDeleteMode?.groupModes?.has(String(groupId)) ? "group-only" : "none";
+  }
+
+  function getGroupDeleteDisplayState(groupId) {
+    return getGroupDeleteMode(groupId);
+  }
+
+  async function toggleChannelGroupDeleteSelection(groupId) {
+    const group = getChannelGroupById(groupId);
+    if (!group) return false;
+    const id = String(group.id);
+    const nextSelected = getGroupDeleteMode(id) === "none";
+    if (nextSelected) state.channelDeleteMode.groupModes.set(id, "group-only");
+    else state.channelDeleteMode.groupModes.delete(id);
+    renderChannelTabs();
+
+    const members = getChannelGroupMembers(group);
+    if (!members.length) return true;
+    const confirmed = await showConfirmDialog({
+      title: nextSelected ? i18nText("group.delete_group_only") : i18nText("selection.clear"),
+      message: i18nText(nextSelected ? "group.delete_members_select_prompt" : "group.delete_members_clear_prompt", [group.name]),
+      confirmLabel: i18nText(nextSelected ? "group.delete_members_select_confirm" : "group.delete_members_clear_confirm"),
+    });
+    if (confirmed) {
+      for (const channel of members) {
+        const channelId = String(channel.id);
+        if (nextSelected) state.channelDeleteMode.selectedChannelIds.add(channelId);
+        else state.channelDeleteMode.selectedChannelIds.delete(channelId);
+      }
+      renderChannelTabs();
+    }
+    return true;
+  }
+
+  function enterChannelDeleteMode() {
+    if (isChannelMergeModeActive()) cancelChannelMergeMode();
+    if (isCancelableNoteInteraction()) cancelCurrentNoteInteraction();
+    clearNoteSelection();
+    closeContextMenu();
+    state.channelDeleteMode.active = true;
+    state.channelDeleteMode.selectedChannelIds = new Set();
+    state.channelDeleteMode.groupModes = new Map();
+    document.body.classList.add("channel-delete-mode-active");
+    renderChannelTabs();
+    return true;
+  }
+
+  function enterChannelDeleteModeForChannel(channelId) {
+    enterChannelDeleteMode();
+    if (channelId != null) state.channelDeleteMode.selectedChannelIds.add(String(channelId));
+    renderChannelTabs();
+    return true;
+  }
+
+  function cancelChannelDeleteMode() {
+    state.channelDeleteMode.active = false;
+    state.channelDeleteMode.selectedChannelIds.clear();
+    state.channelDeleteMode.groupModes.clear();
+    document.body.classList.remove("channel-delete-mode-active");
+    renderChannelTabs();
+    return true;
+  }
+
+  function setChannelDeleteSelection(channelId, selected, { render = true } = {}) {
+    const id = String(channelId);
+    if (!getChannelById(id)) return false;
+    const next = Boolean(selected);
+    const current = state.channelDeleteMode.selectedChannelIds.has(id);
+    if (current === next) return false;
+    if (next) state.channelDeleteMode.selectedChannelIds.add(id);
+    else state.channelDeleteMode.selectedChannelIds.delete(id);
+    if (render) renderChannelTabs();
+    return true;
+  }
+
+  function toggleChannelDeleteSelection(channelId) {
+    const id = String(channelId);
+    return setChannelDeleteSelection(id, !state.channelDeleteMode.selectedChannelIds.has(id));
+  }
+
+  async function applyInlineChannelDeleteMode() {
+    if (!isChannelDeleteModeActive()) return false;
+    const deleteIds = new Set(state.channelDeleteMode.selectedChannelIds);
+    const removeGroupIds = new Set();
+    for (const group of state.channelGroups) {
+      if (getGroupDeleteMode(group.id) === "group-only") removeGroupIds.add(String(group.id));
+    }
+    if (!deleteIds.size && !removeGroupIds.size) {
+      showToast(i18nText("group.delete_nothing"));
+      return false;
+    }
+    if (deleteIds.size >= state.channels.length) {
+      showToast(i18nText("group.delete_keep_one"));
+      return false;
+    }
+
+    const confirmKey = deleteIds.size && removeGroupIds.size
+      ? "group.delete_confirm_channels_groups"
+      : deleteIds.size
+        ? "group.delete_confirm_channels"
+        : "group.delete_confirm_groups";
+    const confirmArgs = confirmKey === "group.delete_confirm_groups"
+      ? [removeGroupIds.size]
+      : [deleteIds.size, removeGroupIds.size];
+    const confirmed = await showConfirmDialog({
+      title: i18nText("group.delete_confirm_title"),
+      message: i18nText(confirmKey, confirmArgs),
+      confirmLabel: i18nText("action.delete"),
+    });
+    if (!confirmed || !isChannelDeleteModeActive()) return false;
+
+    const activeId = getActiveChannel()?.id;
+    const oldIndex = state.activeChannel;
+    for (const channel of state.channels) {
+      if (removeGroupIds.has(String(channel.groupId ?? "")) && !deleteIds.has(String(channel.id))) channel.groupId = null;
+    }
+    for (const id of deleteIds) {
+      state.soloChannelIds.delete(String(id));
+      state.visibilitySoloChannelIds.delete(String(id));
+    }
+    for (const id of removeGroupIds) {
+      state.soloGroupIds.delete(String(id));
+      state.visibilitySoloGroupIds.delete(String(id));
+    }
+    state.channels = state.channels.filter((channel) => !deleteIds.has(String(channel.id)));
+    state.channelGroups = state.channelGroups.filter((group) => !removeGroupIds.has(String(group.id)));
+    if (state.selectedChannelGroupId != null && removeGroupIds.has(String(state.selectedChannelGroupId))) state.selectedChannelGroupId = null;
+    pruneEmptyChannelGroups();
+    let nextIndex = state.channels.findIndex((channel) => String(channel.id) === String(activeId));
+    if (nextIndex < 0) nextIndex = clamp(oldIndex, 0, state.channels.length - 1);
+    state.activePanel = "notes";
+    state.activeChannel = nextIndex;
+    clearNoteSelection();
+    state.channelDeleteMode.active = false;
+    state.channelDeleteMode.selectedChannelIds.clear();
+    state.channelDeleteMode.groupModes.clear();
+    document.body.classList.remove("channel-delete-mode-active");
+    markDirty(i18nText("group.history_delete", [deleteIds.size, removeGroupIds.size]));
+    renderChannelTabs(); renderChannelEditor(); shrinkTimelineToContent(); drawRoll();
+    showToast(i18nText("group.delete_done", [deleteIds.size, removeGroupIds.size]));
+    return true;
+  }
+
   function getCheckedChannelDeleteIds() {
     if (!elements.channelDeleteList) return [];
     return [...elements.channelDeleteList.querySelectorAll('input[type="checkbox"]:checked')]
@@ -13319,7 +15084,10 @@
     if (!ids.size) return false;
     const activeId = getActiveChannel()?.id;
     const activeOldIndex = state.activeChannel;
-    for (const channelId of ids) state.soloChannelIds.delete(String(channelId));
+    for (const channelId of ids) {
+      state.soloChannelIds.delete(String(channelId));
+      state.visibilitySoloChannelIds.delete(String(channelId));
+    }
     state.channels = state.channels.filter((channel) => !ids.has(String(channel.id)));
     if (!state.channels.length) {
       state.channels = createDefaultChannels(1);
@@ -13340,12 +15108,68 @@
     return true;
   }
 
+
+  function deleteChannelByIdImmediate(channelId) {
+    const index = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
+    if (index < 0) return false;
+    return deleteChannel(index);
+  }
+
+  function deleteChannelGroupImmediate(groupId, { deleteChannels = false } = {}) {
+    const group = getChannelGroupById(groupId);
+    if (!group) return false;
+    const memberIds = new Set(getChannelGroupMembers(group).map((channel) => String(channel.id)));
+    const oldIndex = state.activeChannel;
+    const oldActiveId = state.channels[state.activeChannel]?.id ?? null;
+
+    if (deleteChannels) {
+      for (const id of memberIds) {
+        state.soloChannelIds.delete(String(id));
+        state.visibilitySoloChannelIds.delete(String(id));
+      }
+      state.channels = state.channels.filter((channel) => !memberIds.has(String(channel.id)));
+      if (!state.channels.length) {
+        state.channels = createDefaultChannels(1);
+        normalizeDefaultChannelNames();
+      }
+    } else {
+      for (const channel of state.channels) {
+        if (String(channel.groupId ?? "") === String(group.id)) channel.groupId = null;
+      }
+    }
+
+    state.soloGroupIds.delete(String(group.id));
+    state.visibilitySoloGroupIds.delete(String(group.id));
+    state.channelGroups = state.channelGroups.filter((item) => String(item.id) !== String(group.id));
+    if (String(state.selectedChannelGroupId ?? "") === String(group.id)) state.selectedChannelGroupId = null;
+    normalizeChannelGroupMemberships();
+
+    let nextIndex = oldActiveId == null
+      ? clamp(oldIndex, 0, state.channels.length - 1)
+      : state.channels.findIndex((channel) => String(channel.id) === String(oldActiveId));
+    if (nextIndex < 0) nextIndex = clamp(oldIndex, 0, state.channels.length - 1);
+    state.activePanel = "notes";
+    state.activeChannel = Math.max(0, nextIndex);
+    clearNoteSelection();
+    clearMidiSelection();
+    markDirty(deleteChannels
+      ? i18nText("group.delete_group_channels")
+      : i18nText("group.delete_group_only"));
+    renderChannelTabs();
+    renderChannelEditor();
+    shrinkTimelineToContent();
+    drawRoll();
+    updateChannelInfo();
+    return true;
+  }
+
   function deleteChannel(index = state.activeChannel) {
     state.activePanel = "notes";
     const targetIndex = clamp(index, 0, state.channels.length - 1);
     const channel = state.channels[targetIndex];
     const activeChannelId = getActiveChannel()?.id;
     state.soloChannelIds.delete(String(channel.id));
+    state.visibilitySoloChannelIds.delete(String(channel.id));
     state.channels.splice(targetIndex, 1);
     if (!state.channels.length) {
       state.channels = createDefaultChannels(1);
@@ -13369,12 +15193,7 @@
   async function requestDeleteChannel(index = state.activeChannel) {
     const targetIndex = clamp(index, 0, state.channels.length - 1);
     const channel = state.channels[targetIndex];
-    const confirmed = await showConfirmDialog({
-      title: "채널 삭제",
-      message: i18nText("channel.delete_confirm", [channel.name]),
-      confirmLabel: "삭제",
-    });
-    return confirmed ? deleteChannel(targetIndex) : false;
+    return channel ? enterChannelDeleteModeForChannel(channel.id) : false;
   }
 
   function getNoteBounds(note) {
@@ -13395,7 +15214,7 @@
 
   function findNoteHitAt(x, y, channelIndex = state.activeChannel) {
     const channel = state.channels[channelIndex];
-    if (!channel || channel.visible === false) {
+    if (!channel || !isChannelEffectivelyVisible(channel)) {
       return null;
     }
     const beat = Math.max(0, xToBeat(x));
@@ -13449,7 +15268,7 @@
   function findOtherVisibleChannelNoteHitAt(x, y, excludedChannelIndex = state.activeChannel) {
     // 채널은 낮은 인덱스부터 그려지므로 마지막에 그려진 채널부터 역순으로 찾습니다.
     for (let channelIndex = state.channels.length - 1; channelIndex >= 0; channelIndex -= 1) {
-      if (channelIndex === excludedChannelIndex || state.channels[channelIndex]?.visible === false) {
+      if (channelIndex === excludedChannelIndex || !isChannelEffectivelyVisible(state.channels[channelIndex])) {
         continue;
       }
       const hit = findNoteHitAt(x, y, channelIndex);
@@ -13835,6 +15654,14 @@
   }
 
   function handleRollPointerDown(event) {
+    if (isChannelDeleteModeActive()) {
+      // 삭제 모드에서는 피아노롤을 보기 전용으로 둡니다.
+      // 채널 선택은 사이드바 행에서 계속 바꿀 수 있지만 노트 생성/이동/선택/우클릭은 막습니다.
+      event.preventDefault();
+      event.stopPropagation();
+      closeContextMenu();
+      return;
+    }
     if (isChannelMergeModeActive()) {
       if (event.button === 0 || event.button === 2) {
         handleMergePreviewPointerDown(event);
@@ -13995,7 +15822,7 @@
         : new Set([existing.id]);
     }
 
-    if (getActiveChannel()?.visible === false && event.button === 0 && pointBeat >= 0 && !existing) {
+    if (!isChannelEffectivelyVisible(getActiveChannel()) && event.button === 0 && pointBeat >= 0 && !existing) {
       showToast("숨긴 채널은 표시 버튼을 켠 뒤 편집할 수 있습니다.");
       event.preventDefault();
       return;
@@ -16873,6 +18700,7 @@
 
   function clearActiveChannel() {
     const channel = getActiveChannel();
+    if (!channel) return false;
     if (!channel.notes.length) {
       showToast("현재 채널은 이미 비어 있습니다.");
       return;
@@ -16889,26 +18717,26 @@
 
   function closeTimeEditDialog() {
     if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = true;
-    state.timeEdit = { beat: 0, scope: "all", channelId: null, preferredAction: null };
+    state.timeEdit = { beat: 0, scope: "all", channelId: null, groupId: null, preferredAction: null };
   }
 
   function updateTimeEditScopeUi() {
-    const targetChannel = state.channels.find((channel) => String(channel.id) === String(state.timeEdit?.channelId))
-      || getActiveChannel()
-      || null;
-    const channelScopeAvailable = Boolean(targetChannel) && !isMidiReferenceActive();
+    const selectedGroup = getChannelGroupById(state.selectedChannelGroupId);
+    const targetChannel = state.channels.find((channel) => String(channel.id) === String(state.timeEdit?.channelId)) || getActiveChannel() || null;
+    const scopedAvailable = Boolean(selectedGroup || targetChannel) && !isMidiReferenceActive();
     if (elements.timeEditSelectedChannelOnly) {
-      elements.timeEditSelectedChannelOnly.disabled = !channelScopeAvailable;
-      if (!channelScopeAvailable) elements.timeEditSelectedChannelOnly.checked = false;
+      elements.timeEditSelectedChannelOnly.disabled = !scopedAvailable;
+      if (!scopedAvailable) elements.timeEditSelectedChannelOnly.checked = false;
     }
-    const channelScoped = Boolean(elements.timeEditSelectedChannelOnly?.checked) && channelScopeAvailable;
-    state.timeEdit.scope = channelScoped ? "channel" : "all";
-    state.timeEdit.channelId = targetChannel?.id ?? null;
+    const scoped = Boolean(elements.timeEditSelectedChannelOnly?.checked) && scopedAvailable;
+    const group = scoped ? (selectedGroup || getChannelGroupForChannel(targetChannel)) : null;
+    state.timeEdit.scope = scoped ? (group ? "group" : "channel") : "all";
+    state.timeEdit.channelId = group ? null : (targetChannel?.id ?? null);
+    state.timeEdit.groupId = group?.id ?? null;
     if (elements.timeEditPosition) {
       const timeLabel = formatSeconds(beatToSeconds(state.timeEdit.beat));
-      elements.timeEditPosition.textContent = channelScoped && targetChannel
-        ? `${targetChannel.name} · ${timeLabel}`
-        : timeLabel;
+      const scopeLabel = group?.name || targetChannel?.name || "";
+      elements.timeEditPosition.textContent = scoped && scopeLabel ? `${scopeLabel} · ${timeLabel}` : timeLabel;
     }
   }
 
@@ -16920,6 +18748,7 @@
       beat: clamp(Number(beat) || 0, 0, getTotalBeats()),
       scope: "all",
       channelId: channelScopeAvailable ? targetChannel.id : null,
+      groupId: null,
       preferredAction: normalizedAction,
     };
     if (elements.timeEditTitle) {
@@ -17175,107 +19004,73 @@
     return true;
   }
 
-  function getTimeEditChannel() {
-    if (state.timeEdit?.scope !== "channel") return null;
-    return state.channels.find((channel) => String(channel.id) === String(state.timeEdit.channelId)) || null;
+  function getTimeEditChannels() {
+    if (state.timeEdit?.scope === "group") return getChannelGroupMembers(state.timeEdit.groupId);
+    if (state.timeEdit?.scope === "channel") {
+      const channel = state.channels.find((item) => String(item.id) === String(state.timeEdit.channelId));
+      return channel ? [channel] : [];
+    }
+    return [];
   }
 
   function insertChannelSpaceAtPlayhead(amountBeats) {
-    const channel = getTimeEditChannel();
-    if (!channel) return false;
+    const channels = getTimeEditChannels();
+    if (!channels.length) return false;
     const amount = Math.max(CONFIG.minimumNoteBeat, Number(amountBeats) || 0);
     const cursor = clamp(Number(state.timeEdit?.beat ?? state.playhead.beat) || 0, 0, getTotalBeats());
-    const kept = [];
     let changed = false;
-    for (const note of channel.notes || []) {
-      const start = Number(note.startBeat) || 0;
-      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-      if (start >= cursor - 1e-7) {
-        note.startBeat = Number((start + amount).toFixed(6));
-        kept.push(note);
-        changed = true;
-      } else if (end > cursor + 1e-7) {
-        if (trimNoteToBeat(note, cursor)) {
-          kept.push(note);
-          changed = true;
-        } else {
-          state.selectedNoteIds.delete(note.id);
-          changed = true;
-        }
-      } else kept.push(note);
+    for (const channel of channels) {
+      const kept = [];
+      for (const note of channel.notes || []) {
+        const start = Number(note.startBeat) || 0;
+        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        if (start >= cursor - 1e-7) { note.startBeat = Number((start + amount).toFixed(6)); kept.push(note); changed = true; }
+        else if (end > cursor + 1e-7) {
+          if (trimNoteToBeat(note, cursor)) { kept.push(note); changed = true; }
+          else { state.selectedNoteIds.delete(note.id); changed = true; }
+        } else kept.push(note);
+      }
+      channel.notes = kept;
+      state.channelNoteRuntime.delete(String(channel.id));
     }
-    if (!changed) {
-      showToast(i18nText("channel.space_no_notes"));
-      return false;
-    }
-    channel.notes = kept;
-    state.channelNoteRuntime.delete(String(channel.id));
-    state.timelineBeats = Math.max(
-      getTotalBeats(),
-      getPersistentContentEndBeat() + Math.max(getSnapBeat(), CONFIG.minimumNoteBeat),
-    );
+    if (!changed) { showToast(i18nText("channel.space_no_notes")); return false; }
+    state.timelineBeats = Math.max(getTotalBeats(), getPersistentContentEndBeat() + Math.max(getSnapBeat(), CONFIG.minimumNoteBeat));
     ensureTimelineFitsViewport();
-    markDirty(i18nText("history.channel_space_add"));
-    renderChannelTabs();
-    renderChannelEditor();
-    resizeAndDraw();
-    updateChannelInfo();
-    closeTimeEditDialog();
+    markDirty(i18nText("group.history_space_add"));
+    renderChannelTabs(); renderChannelEditor(); resizeAndDraw(); updateChannelInfo(); closeTimeEditDialog();
     return true;
   }
 
   function deleteChannelSpaceAtPlayhead(amountBeats) {
-    const channel = getTimeEditChannel();
-    if (!channel) return false;
+    const channels = getTimeEditChannels();
+    if (!channels.length) return false;
     const amount = Math.max(CONFIG.minimumNoteBeat, Number(amountBeats) || 0);
     const cursor = clamp(Number(state.timeEdit?.beat ?? state.playhead.beat) || 0, 0, getTotalBeats());
     const cutEnd = cursor + amount;
-    const nextNotes = [];
     let changed = false;
-    for (const note of channel.notes || []) {
-      const start = Number(note.startBeat) || 0;
-      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-      if (end <= cursor + 1e-7) {
-        nextNotes.push(note);
-      } else if (start >= cutEnd - 1e-7) {
-        note.startBeat = Number(Math.max(0, start - amount).toFixed(6));
-        nextNotes.push(note);
-        changed = true;
-      } else if (start < cursor - 1e-7 && end > cutEnd + 1e-7) {
-        note.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, end - start - amount).toFixed(6));
-        nextNotes.push(note);
-        changed = true;
-      } else if (start < cursor - 1e-7) {
-        if (trimNoteToBeat(note, cursor)) nextNotes.push(note);
-        else state.selectedNoteIds.delete(note.id);
-        changed = true;
-      } else if (end > cutEnd + 1e-7) {
-        const nextDuration = end - cutEnd;
-        if (nextDuration >= CONFIG.minimumNoteBeat - 1e-7) {
-          note.startBeat = Number(cursor.toFixed(6));
-          note.durationBeat = Number(nextDuration.toFixed(6));
-          nextNotes.push(note);
-        } else state.selectedNoteIds.delete(note.id);
-        changed = true;
-      } else {
-        state.selectedNoteIds.delete(note.id);
-        changed = true;
+    for (const channel of channels) {
+      const nextNotes = [];
+      for (const note of channel.notes || []) {
+        const start = Number(note.startBeat) || 0;
+        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        if (end <= cursor + 1e-7) nextNotes.push(note);
+        else if (start >= cutEnd - 1e-7) { note.startBeat = Number(Math.max(0, start - amount).toFixed(6)); nextNotes.push(note); changed = true; }
+        else if (start < cursor - 1e-7 && end > cutEnd + 1e-7) { note.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, end - start - amount).toFixed(6)); nextNotes.push(note); changed = true; }
+        else if (start < cursor - 1e-7) { if (trimNoteToBeat(note, cursor)) nextNotes.push(note); else state.selectedNoteIds.delete(note.id); changed = true; }
+        else if (end > cutEnd + 1e-7) {
+          const nextDuration = end - cutEnd;
+          if (nextDuration >= CONFIG.minimumNoteBeat - 1e-7) { note.startBeat = Number(cursor.toFixed(6)); note.durationBeat = Number(nextDuration.toFixed(6)); nextNotes.push(note); }
+          else state.selectedNoteIds.delete(note.id);
+          changed = true;
+        } else { state.selectedNoteIds.delete(note.id); changed = true; }
       }
+      channel.notes = nextNotes;
+      state.channelNoteRuntime.delete(String(channel.id));
     }
-    if (!changed) {
-      showToast(i18nText("channel.space_no_notes"));
-      return false;
-    }
-    channel.notes = nextNotes;
-    state.channelNoteRuntime.delete(String(channel.id));
-    shrinkTimelineToContent();
-    ensureTimelineFitsViewport();
-    markDirty(i18nText("history.channel_space_delete"));
-    renderChannelTabs();
-    renderChannelEditor();
-    resizeAndDraw();
-    updateChannelInfo();
-    closeTimeEditDialog();
+    if (!changed) { showToast(i18nText("channel.space_no_notes")); return false; }
+    shrinkTimelineToContent(); ensureTimelineFitsViewport();
+    markDirty(i18nText("group.history_space_delete"));
+    renderChannelTabs(); renderChannelEditor(); resizeAndDraw(); updateChannelInfo(); closeTimeEditDialog();
     return true;
   }
 
@@ -17290,13 +19085,13 @@
     }
     const resumePlayback = state.playback.running || state.playback.loading;
     if (resumePlayback) stopPlayback(false);
-    const channelScoped = state.timeEdit?.scope === "channel";
+    const scoped = state.timeEdit?.scope === "channel" || state.timeEdit?.scope === "group";
     const applied = action === "delete"
-      ? (channelScoped ? deleteChannelSpaceAtPlayhead(amountBeats) : deleteTrackSpaceAtPlayhead(amountBeats))
-      : (channelScoped ? insertChannelSpaceAtPlayhead(amountBeats) : insertTrackSpaceAtPlayhead(amountBeats));
+      ? (scoped ? deleteChannelSpaceAtPlayhead(amountBeats) : deleteTrackSpaceAtPlayhead(amountBeats))
+      : (scoped ? insertChannelSpaceAtPlayhead(amountBeats) : insertTrackSpaceAtPlayhead(amountBeats));
     if (applied) {
       const actionLabel = action === "delete" ? i18nText("action.delete") : i18nText("action.add");
-      showToast(channelScoped
+      showToast(scoped
         ? i18nText("channel.space_edited", [describeTimeEditAmount(measures, subdivisions), actionLabel])
         : i18nText("timeline.space_edited", [describeTimeEditAmount(measures, subdivisions), actionLabel]));
       if (resumePlayback) window.setTimeout(() => startPlayback(), 0);
@@ -18953,7 +20748,7 @@
     const data = encodeSchemaRows(project, context);
     return {
       format: "mml-piano-roll-project",
-      version: 28,
+      version: 29,
       encoding: PROJECT_STORAGE_ENCODING,
       schemas: context.schemas,
       data,
@@ -18970,7 +20765,7 @@
       const decoded = decodeSchemaRows(storage.data, storage.schemas);
       if (decoded && typeof decoded === "object") {
         decoded.format = storage.format;
-        decoded.version = Number(storage.version) || 28;
+        decoded.version = Number(storage.version) || 29;
       }
       return decoded;
     }
@@ -19047,6 +20842,8 @@
       nextTimeSignatureId: state.nextTimeSignatureId,
       nextMidiDocumentId: state.nextMidiDocumentId,
       nextAudioClipId: state.nextAudioClipId,
+      nextChannelGroupId: state.nextChannelGroupId,
+      channelGroups: state.channelGroups.map((group) => ({ ...group })),
       channels: state.channels,
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
       timeSignatures: getSortedTimeSignatures().map((signature) => ({ ...signature })),
@@ -19501,6 +21298,14 @@
 
   async function loadProjectFromFile(file, { notify = true, loadedFileName = null } = {}) {
     state.soloChannelIds.clear();
+    state.soloGroupIds.clear();
+    state.visibilitySoloChannelIds.clear();
+    state.visibilitySoloGroupIds.clear();
+    state.channelGroups = [];
+    state.selectedChannelGroupId = null;
+    state.nextChannelGroupId = 1;
+    state.channelDeleteMode = { active: false, selectedChannelIds: new Set(), groupModes: new Map() };
+    document.body.classList.remove("channel-delete-mode-active");
     state.channelNoteRuntime.clear();
     state.audioRuntime.clear();
     state.collapsedMidiDocumentIds.clear();
@@ -19578,6 +21383,20 @@
     state.timelineFades = normalizeTimelineFades(data.timelineFades || [], data.tempos);
     state.timeSignatures = normalizeTimeSignatures(data.timeSignatures || createDefaultTimeSignatures());
     state.nextTimeSignatureId = Math.max(2, Number(data.nextTimeSignatureId) || 2, state.timeSignatures.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
+    state.selectedChannelGroupId = null;
+    state.channelGroups = (Array.isArray(data.channelGroups) ? data.channelGroups : []).map((group, index) => ({
+      id: Number(group.id) || index + 1,
+      name: String(group.name || `${i18nText("group.default_name")} ${index + 1}`),
+      collapsed: Boolean(group.collapsed),
+      hue: getChannelGroupHue(group, index),
+      beforeChannelId: group.beforeChannelId ?? null,
+      visible: group.visible !== false,
+      muted: Boolean(group.muted),
+    }));
+    state.nextChannelGroupId = Math.max(1, Number(data.nextChannelGroupId) || 1, ...state.channelGroups.map((group) => Number(group.id) + 1));
+    state.soloGroupIds.clear();
+    state.visibilitySoloChannelIds.clear();
+    state.visibilitySoloGroupIds.clear();
     state.channels = data.channels.map((channel, index) => ({
       id: Number(channel.id) || index + 1,
       name: String(channel.name || `Ch${Number(channel.id) || index + 1}`),
@@ -19593,6 +21412,7 @@
         0,
         15,
       ),
+      groupId: channel.groupId == null ? null : Number(channel.groupId),
       notes: normalizeMonophonicNotes(channel.notes.map((note) => {
         const startBeat = clamp(
           Number(note.startBeat),
@@ -19618,7 +21438,9 @@
     if (!state.channels.length) {
       state.channels = createDefaultChannels(1);
     }
+    normalizeChannelGroupMemberships();
     normalizeDefaultChannelNames();
+    pruneEmptyChannelGroups();
 
     // v21부터 지원 음악 파일의 별도 "원본 자료" 트리를 사용하지 않습니다.
     // 이전 프로젝트/자동저장에 남은 원본 악기는 데이터 손실 없이 일반 편집 채널로 1회 변환합니다.
@@ -19792,6 +21614,14 @@
 
   function resetProject({ notify = true } = {}) {
     state.soloChannelIds.clear();
+    state.soloGroupIds.clear();
+    state.visibilitySoloChannelIds.clear();
+    state.visibilitySoloGroupIds.clear();
+    state.channelGroups = [];
+    state.selectedChannelGroupId = null;
+    state.nextChannelGroupId = 1;
+    state.channelDeleteMode = { active: false, selectedChannelIds: new Set(), groupModes: new Map() };
+    document.body.classList.remove("channel-delete-mode-active");
     state.channelNoteRuntime.clear();
     state.collapsedMidiDocumentIds.clear();
     state.collapsedChannelGroups = { edit: false, source: false };
@@ -19951,7 +21781,7 @@
 
   function shouldUseLongPress(target) {
     return Boolean(target?.closest?.(
-      "#timelineCanvas, #rollCanvas, #keyboardCanvas, .channel-tab-item, .history-item, [data-context-area='midi-instrument'], .channel-detail-toolbar, #channelPanel",
+      "#timelineCanvas, #rollCanvas, #keyboardCanvas, .channel-tab-item, .channel-group-item, .history-item, [data-context-area='midi-instrument'], .channel-detail-toolbar, #channelPanel",
     ));
   }
 
@@ -20039,9 +21869,26 @@
 
   function openContextMenu(event) {
     event.preventDefault();
-    if (state.channelDrag.dragging) {
+    // A right-button visibility/mute S sweep is an editing gesture, not a
+    // request to open the context menu. The contextmenu event is dispatched
+    // after pointerup and may target a completely different element if the
+    // sweep ended outside the channel tree, so guard it globally.
+    if (channelActionSweep.active && channelActionSweep.button === 2) {
       event.stopPropagation();
-      cancelChannelPointerDrag();
+      state.suppressContextMenuUntil = performance.now() + 650;
+      closeContextMenu();
+      return;
+    }
+    if (state.suppressNextContextMenu || performance.now() < state.suppressContextMenuUntil) {
+      event.stopPropagation();
+      state.suppressNextContextMenu = false;
+      closeContextMenu();
+      return;
+    }
+    if (state.channelDrag.dragging || state.channelGroupDrag.dragging) {
+      event.stopPropagation();
+      if (state.channelDrag.dragging) cancelChannelPointerDrag();
+      if (state.channelGroupDrag.dragging) cancelChannelGroupPointerDrag();
       state.suppressNextContextMenu = false;
       closeContextMenu();
       return;
@@ -20055,14 +21902,19 @@
       closeContextMenu();
       return;
     }
-    if (state.suppressNextContextMenu) {
-      state.suppressNextContextMenu = false;
-      closeContextMenu();
-      return;
-    }
-    if (performance.now() < state.suppressContextMenuUntil) {
-      closeContextMenu();
-      return;
+    // 그룹 음소거 버튼도 채널과 동일하게 오른쪽 클릭 = Solo 입니다.
+    // 그룹 Solo는 해당 그룹 안의 채널만 들리도록 다른 Solo 상태를 정리합니다.
+    const groupMuteButton = event.target?.closest?.(".channel-group-item .channel-tree-mute");
+    if (groupMuteButton) {
+      const groupItem = groupMuteButton.closest(".channel-group-item");
+      const groupId = groupItem?.dataset?.channelGroupId;
+      if (groupId) {
+        event.stopPropagation();
+        resetChannelActionSweep({ releaseCapture: true });
+        closeContextMenu();
+        setChannelGroupSoloById(groupId, !isChannelGroupSolo(groupId));
+        return;
+      }
     }
 
     // 채널 음소거 버튼의 오른쪽 클릭은 일반 컨텍스트 메뉴 대신 싱글(Solo) 토글로 사용합니다.
@@ -20157,6 +22009,7 @@
       "channel-panel": "context.channel_list",
       "channel-tabs": "context.channel_list",
       "channel-tab": "context.channel_item",
+      "channel-group": "context.group_item",
       "midi-reference-tab": "context.source_data_item",
       "midi-reference": "context.source_data",
       "midi-instrument": "context.source_instrument",
@@ -21850,10 +23703,8 @@
     const channelListContextItems = () => [
       { label: i18nText("channel.merge"), disabled: state.channels.length < 2, action: openChannelMergeDialog },
       { label: i18nText("channel.add"), action: addChannel },
-      { label: i18nText("channel.delete"), danger: true, action: openChannelDeleteDialog },
-      "separator",
-      { label: i18nText("channel.go_first"), disabled: !state.channels.length, action: () => selectChannel(0) },
-      { label: i18nText("channel.go_last"), disabled: !state.channels.length, action: () => selectChannel(Math.max(0, state.channels.length - 1)) },
+      { label: i18nText("group.create"), action: addChannelGroup },
+      { label: i18nText("group.delete_channels_groups"), danger: true, action: () => enterChannelDeleteMode() },
     ];
     registerContextMenu("channel-panel", channelListContextItems);
     registerContextMenu("channel-tabs", channelListContextItems);
@@ -21863,14 +23714,37 @@
       return [
         { label: i18nText("channel.merge"), disabled: state.channels.length < 2, action: () => channel && enterChannelMergeMode(channel.id) },
         { label: i18nText("channel.edit_2"), action: () => channel && openChannelEditDialog(channel.id) },
+        { label: i18nText("group.mml_view"), action: () => channel && openChannelMmlDialog(channel.id) },
         { label: i18nText("channel.copy_all_note"), disabled: !channel?.notes.length, action: () => { selectChannel(index); copyActiveChannelNotes(); } },
         { label: i18nText("channel.cut_all_note"), disabled: !channel?.notes.length, action: () => { selectChannel(index); cutActiveChannelNotes(); } },
         { label: channel?.visible === false ? i18nText("context.action.note_show") : i18nText("context.action.note_hide"), action: () => channel && setChannelVisibleById(channel.id, channel.visible === false) },
-        { label: channel?.muted ? "음소거 해제" : "음소거", action: () => channel && setChannelMutedById(channel.id, !channel.muted) },
+        { label: channel?.muted ? i18nText("ui.unmute") : i18nText("ui.mute"), action: () => channel && setChannelMutedById(channel.id, !channel.muted) },
         "separator",
-        { label: "채널 비우기", danger: true, action: () => { selectChannel(index); clearActiveChannel(); } },
-        { label: "채널 삭제", danger: true, action: () => requestDeleteChannel(index) },
+        { label: i18nText("ui.clear"), danger: true, action: () => { selectChannel(index); clearActiveChannel(); } },
+        { label: i18nText("channel.delete"), danger: true, action: () => channel && deleteChannelByIdImmediate(channel.id) },
       ];
+    });
+    registerContextMenu("channel-group", ({ area }) => {
+      const group = getChannelGroupById(area.element.dataset.channelGroupId);
+      const members = group ? getChannelGroupMembers(group) : [];
+      if (!group) return [];
+      const items = [
+        { label: group.collapsed ? i18nText("group.expand") : i18nText("group.collapse"), action: () => toggleChannelGroupCollapsed(group.id) },
+        { label: i18nText("group.edit"), action: () => openChannelGroupDialog(group.id) },
+        { label: i18nText("group.mml_view"), disabled: !members.length, action: () => openChannelGroupMmlDialog(group.id) },
+        { label: group.visible === false ? i18nText("group.show") : i18nText("group.hide"), action: () => setChannelGroupVisibleById(group.id, group.visible === false) },
+        { label: group.muted ? i18nText("ui.unmute") : i18nText("ui.mute"), action: () => setChannelGroupMutedById(group.id, !group.muted) },
+        "separator",
+      ];
+      if (!members.length) {
+        items.push({ label: i18nText("group.delete"), danger: true, action: () => deleteChannelGroupImmediate(group.id, { deleteChannels: false }) });
+      } else {
+        items.push(
+          { label: i18nText("group.delete_group_only"), danger: true, action: () => deleteChannelGroupImmediate(group.id, { deleteChannels: false }) },
+          { label: i18nText("group.delete_group_channels"), danger: true, action: () => deleteChannelGroupImmediate(group.id, { deleteChannels: true }) },
+        );
+      }
+      return items;
     });
     registerContextMenu("midi-reference-tab", ({ area }) => {
       const documentId = area.element.dataset.midiDocumentId;
@@ -21902,11 +23776,17 @@
       ];
     });
 
-    registerContextMenu("channel-info", () => [
-      { label: i18nText("channel.edit_2"), action: () => { const channel = getActiveChannel(); if (channel) openChannelEditDialog(channel.id); } },
-      "separator",
-      { label: i18nText("soundbank.change"), action: openEditorSoundFontDialog },
-    ]);
+    registerContextMenu("channel-info", () => {
+      const group = getChannelGroupById(state.selectedChannelGroupId);
+      const channel = group ? null : getActiveChannel();
+      return [
+        group
+          ? { label: i18nText("group.edit"), action: () => openChannelGroupDialog(group.id) }
+          : { label: i18nText("channel.edit_2"), disabled: !channel, action: () => channel && openChannelEditDialog(channel.id) },
+        "separator",
+        { label: i18nText("soundbank.change"), action: openEditorSoundFontDialog },
+      ];
+    });
     registerContextMenu("history", () => [
       { label: i18nText("history.undo"), disabled: state.history.undoStack.length === 0, action: () => undoHistory() },
       { label: i18nText("history.redo"), disabled: state.history.redoStack.length === 0, action: () => redoHistory() },
@@ -22137,7 +24017,7 @@
     event.stopPropagation();
 
     if (event.shiftKey) {
-      void requestDeleteChannel(state.activeChannel);
+      enterChannelDeleteModeForChannel(getActiveChannel()?.id);
     } else {
       addChannel();
     }
@@ -22567,7 +24447,52 @@
     elements.channelTabs?.addEventListener("pointerup", endChannelActionSweep);
     elements.channelTabs?.addEventListener("pointercancel", endChannelActionSweep);
     elements.channelTabs?.addEventListener("scroll", continueChannelActionSweepAfterScroll, { passive: true });
-    elements.channelTabs?.addEventListener("lostpointercapture", () => resetChannelActionSweep());
+    elements.channelTabs?.addEventListener("lostpointercapture", () => cancelChannelActionSweep());
+    // Drag tracking lives on a stable global target. Channel/group DOM nodes are
+    // reordered live during dragging, so binding movement to those moving nodes
+    // can lose events and leave the interaction latched. Action sweeps use the
+    // same global fallback so releasing outside the channel tree always ends S mode.
+    window.addEventListener("pointermove", (event) => {
+      if (channelActionSweep.active && channelActionSweep.pointerId === event.pointerId) moveChannelActionSweep(event);
+      if (state.channelDrag.sourceId) moveChannelPointerDrag(event);
+      if (state.channelGroupDrag.groupId) moveChannelGroupPointerDrag(event);
+    }, true);
+    window.addEventListener("pointerup", (event) => {
+      if (channelActionSweep.active && channelActionSweep.pointerId === event.pointerId) {
+        endChannelActionSweep(event);
+      }
+      if (state.channelDrag.sourceId && state.channelDrag.pointerId === event.pointerId) {
+        if (state.channelDrag.dragging) endChannelPointerDrag(event);
+        else cancelChannelPointerDrag();
+      }
+      if (state.channelGroupDrag.groupId && state.channelGroupDrag.pointerId === event.pointerId) {
+        if (state.channelGroupDrag.dragging) endChannelGroupPointerDrag(event);
+        else cancelChannelGroupPointerDrag();
+      }
+    });
+    window.addEventListener("pointercancel", (event) => {
+      if (channelActionSweep.active && channelActionSweep.pointerId === event.pointerId) cancelChannelActionSweep();
+      if (state.channelDrag.sourceId && state.channelDrag.pointerId === event.pointerId) cancelChannelPointerDrag();
+      if (state.channelGroupDrag.groupId && state.channelGroupDrag.pointerId === event.pointerId) cancelChannelGroupPointerDrag();
+    });
+    window.addEventListener("blur", () => {
+      if (channelActionSweep.active) cancelChannelActionSweep();
+      if (state.channelDrag.sourceId) cancelChannelPointerDrag();
+      if (state.channelGroupDrag.groupId) cancelChannelGroupPointerDrag();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "hidden") return;
+      if (channelActionSweep.active) cancelChannelActionSweep();
+      if (state.channelDrag.sourceId) cancelChannelPointerDrag();
+      if (state.channelGroupDrag.groupId) cancelChannelGroupPointerDrag();
+    });
+    document.addEventListener("pointerdown", (event) => {
+      // A fresh pointerdown means the previous gesture is over. Always clear any
+      // stale action/channel/group drag before a new one begins.
+      if (channelActionSweep.active) cancelChannelActionSweep();
+      if (state.channelDrag.sourceId) cancelChannelPointerDrag();
+      if (state.channelGroupDrag.groupId) cancelChannelGroupPointerDrag();
+    }, true);
     elements.historyList?.addEventListener("keydown", handleHistoryArrowNavigation);
     elements.historyUndoButton.addEventListener("click", () => undoHistory());
     elements.historyRedoButton.addEventListener("click", () => redoHistory());
@@ -22782,11 +24707,24 @@
     });
 
     elements.mergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
+    elements.addChannelGroupButton?.addEventListener("click", addChannelGroup);
     elements.addChannelButton.addEventListener("click", addChannel);
     elements.collapsedMergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
     elements.collapsedAddChannelButton?.addEventListener("click", addChannel);
-    elements.deleteChannelsButton?.addEventListener("click", openChannelDeleteDialog);
-    elements.collapsedDeleteChannelsButton?.addEventListener("click", openChannelDeleteDialog);
+    elements.collapsedAddChannelGroupButton?.addEventListener("click", addChannelGroup);
+    elements.deleteChannelsButton?.addEventListener("click", enterChannelDeleteMode);
+    elements.collapsedDeleteChannelsButton?.addEventListener("click", () => {
+      setHistoryCollapsed(false);
+      setSidebarTab("channels");
+      enterChannelDeleteMode();
+    });
+    elements.channelDeleteModeCancelButton?.addEventListener("click", cancelChannelDeleteMode);
+    elements.channelDeleteModeApplyButton?.addEventListener("click", () => { void applyInlineChannelDeleteMode(); });
+    elements.channelGroupCloseButton?.addEventListener("click", closeChannelGroupDialog);
+    elements.channelGroupCancelButton?.addEventListener("click", closeChannelGroupDialog);
+    elements.channelGroupApplyButton?.addEventListener("click", applyChannelGroupDialog);
+    elements.channelGroupBackdrop?.addEventListener("pointerdown", (event) => { if (event.target === elements.channelGroupBackdrop) closeChannelGroupDialog(); });
+    elements.channelGroupNameInput?.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); applyChannelGroupDialog(); } });
     elements.channelEditCloseButton?.addEventListener("click", closeChannelEditDialog);
     elements.audioEditCloseButton?.addEventListener("click", closeAudioEditDialog);
     elements.audioEditCancelButton?.addEventListener("click", closeAudioEditDialog);
@@ -22804,6 +24742,12 @@
 
     elements.channelEditCancelButton?.addEventListener("click", closeChannelEditDialog);
     elements.channelEditApplyButton?.addEventListener("click", applyChannelEditDialog);
+    elements.channelEditVisibilityNormalButton?.addEventListener("click", () => setChannelEditTargetVisibilityMode("visible"));
+    elements.channelEditVisibilityButton?.addEventListener("click", () => setChannelEditTargetVisibilityMode("hidden"));
+    elements.channelEditVisibilitySoloButton?.addEventListener("click", () => setChannelEditTargetVisibilityMode("solo"));
+    elements.channelEditMuteNormalButton?.addEventListener("click", () => setChannelEditTargetMuteMode("normal"));
+    elements.channelEditMuteButton?.addEventListener("click", () => setChannelEditTargetMuteMode("muted"));
+    elements.channelEditSoloButton?.addEventListener("click", () => setChannelEditTargetMuteMode("solo"));
     elements.channelEditBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.channelEditBackdrop) closeChannelEditDialog();
     });
@@ -22838,11 +24782,26 @@
     elements.copyChannelButton.addEventListener("click", copyActiveChannelNotes);
     elements.pasteChannelButton.addEventListener("click", pasteNotesFromClipboard);
     elements.noteVolumeButton?.addEventListener("click", openNoteVolumeDialog);
-    elements.deleteChannelButton.addEventListener("click", () => requestDeleteChannel(state.activeChannel));
+    elements.deleteChannelButton.addEventListener("click", () => enterChannelDeleteModeForChannel(getActiveChannel()?.id));
     elements.clearChannelButton.addEventListener("click", clearActiveChannel);
     elements.channelNameInput.addEventListener("change", () => {
-      if (!renameChannel(state.activeChannel, elements.channelNameInput.value)) {
-        elements.channelNameInput.value = getActiveChannel().name;
+      const group = getChannelGroupById(state.selectedChannelGroupId);
+      if (group && state.activePanel === "notes") {
+        const requested = String(elements.channelNameInput.value || "").trim();
+        if (!requested) { elements.channelNameInput.value = group.name; return; }
+        const nextName = makeUniqueChannelGroupName(requested, group.id);
+        if (nextName !== group.name) {
+          group.name = nextName;
+          markDirty(i18nText("group.history_edit"));
+          renderChannelTabs();
+          renderChannelEditor();
+          updateChannelInfo();
+        }
+        return;
+      }
+      const channel = getActiveChannel();
+      if (!channel || !renameChannel(state.activeChannel, elements.channelNameInput.value)) {
+        if (channel) elements.channelNameInput.value = channel.name;
       }
     });
     elements.channelNameInput.addEventListener("keydown", (event) => {
@@ -22852,6 +24811,18 @@
       }
     });
     elements.channelColorInput.addEventListener("change", () => {
+      const group = getChannelGroupById(state.selectedChannelGroupId);
+      if (group && state.activePanel === "notes") {
+        const nextHue = getHueControlValue(elements.channelColorInput, getChannelGroupHue(group, state.channelGroups.indexOf(group)));
+        if (getChannelGroupHue(group, state.channelGroups.indexOf(group)) !== nextHue) {
+          group.hue = nextHue;
+          markDirty(i18nText("group.history_edit"));
+          renderChannelTabs();
+          renderChannelEditor();
+          drawRoll();
+        }
+        return;
+      }
       setChannelHue(state.activeChannel, getHueControlValue(elements.channelColorInput), { commit: true });
     });
     bindHueColorPalette(elements.channelColorInput);
@@ -22859,12 +24830,38 @@
     // 방향키 등 일반 select 조작은 그대로 유지하고 Space를 누를 때만 포커스를 피아노롤로 돌립니다.
     elements.channelInstrumentSelect?.addEventListener("keydown", handlePlaybackShortcut);
     elements.channelInstrumentSelect?.addEventListener("change", () => {
+      if (isChannelDeleteModeActive()) {
+        renderChannelEditor();
+        return;
+      }
+      const group = getChannelGroupById(state.selectedChannelGroupId);
+      if (group && state.activePanel === "notes") {
+        const selectedValue = String(elements.channelInstrumentSelect.value || "");
+        if (!selectedValue) return;
+        const selected = parseEditorPresetKey(selectedValue);
+        const preset = findEditorSoundBankPreset(selected.bank, selected.program);
+        if (!preset) { renderChannelEditor(); return; }
+        const members = getChannelGroupMembers(group);
+        const changedMembers = members.filter((channel) => editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel)) !== selectedValue);
+        if (!changedMembers.length) return;
+        for (const channel of changedMembers) setChannelInstrumentPreset(channel, preset);
+        if (typeof audioEngine.prepareProgram === "function") {
+          void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: true })
+            .catch((error) => console.warn("악기 음원 준비 실패", error));
+        }
+        markDirty(i18nText("group.history_edit"));
+        renderChannelTabs();
+        renderChannelEditor();
+        updateChannelInfo();
+        showToast(i18nText("instrument.change", [group.name, preset.name]));
+        return;
+      }
       const channel = getActiveChannel();
       if (!channel) return;
       const selected = parseEditorPresetKey(elements.channelInstrumentSelect.value);
       const preset = findEditorSoundBankPreset(selected.bank, selected.program);
       if (!preset) {
-        populateChannelInstrumentSelect();
+        configureInstrumentSelectForChannel(elements.channelInstrumentSelect, channel);
         renderChannelEditor();
         return;
       }
@@ -23192,6 +25189,7 @@
           closeGoogleAccountMenu();
           closeChannelMuteMixer();
           closeChannelMergeDialog();
+          closeChannelGroupDialog();
           closeChannelEditDialog();
           closeChannelMmlDialog();
           closeEditorSoundFontDialog();
@@ -23260,6 +25258,7 @@
         closeGoogleAccountMenu();
         closeChannelMuteMixer();
         closeChannelMergeDialog();
+        closeChannelGroupDialog();
         closeChannelEditDialog();
         closeChannelMmlDialog();
         closeEditorSoundFontDialog();
@@ -23277,6 +25276,7 @@
         closeTempoEditor();
         closeTempoSimplifyDialog();
         closeTimeEditDialog();
+        if (isChannelDeleteModeActive()) cancelChannelDeleteMode();
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
@@ -23313,11 +25313,14 @@
       layoutObserver.observe(elements.rollViewport);
     }
     window.addEventListener("blur", () => {
+      cancelChannelPointerDrag();
+      cancelChannelGroupPointerDrag();
       setCtrlToolHeld(false);
       releaseKeyboardVoice(true);
       clearEditorPitchPreview(true);
     });
     window.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") { cancelChannelPointerDrag(); cancelChannelGroupPointerDrag(); }
       if (document.visibilityState === "hidden" && state.autosave.pendingChanges) {
         void saveAutosaveNow();
       }
@@ -23367,6 +25370,7 @@
   async function initialize() {
     try { await window.MobibardI18n?.ready; } catch (error) { console.error("Editor locale initialization failed", error); }
     populateChannelInstrumentSelect();
+    populateChannelGroupInstrumentSelect();
     state.language = normalizeLanguage(window.MobibardI18n?.language || loadStoredLanguage());
     window.addEventListener("mobibard:localechange", refreshLocaleDependentUi);
     applyLanguage(state.language, { persist: false });
