@@ -676,6 +676,8 @@
       pointerId: null,
       previewBeat: -1,
       previewAt: 0,
+      layout: null,
+      clockText: "",
     },
     keyboard: {
       pointerId: null,
@@ -721,6 +723,10 @@
     viewportScroll: {
       snapTimer: 0,
       drawFrame: 0,
+      lastLeft: null,
+      lastTop: null,
+      pendingHorizontal: false,
+      pendingVertical: false,
     },
     zoomWheel: {
       accumulatedDelta: 0,
@@ -3518,6 +3524,7 @@
 
     updateCustomScrollbars();
     drawRoll();
+    invalidatePlayheadLayout();
     updatePlayheadVisual();
     drawTimeline();
     drawKeyboard();
@@ -4787,26 +4794,56 @@
     return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
   }
 
-  function updatePlayheadVisual() {
-    if (elements.playheadTimeLabel) {
-      elements.playheadTimeLabel.textContent = formatPlayheadClock(getPlayheadDisplaySeconds());
+  function invalidatePlayheadLayout() {
+    state.playhead.layout = null;
+  }
+
+  function getPlayheadLayout() {
+    const viewportWidth = elements.rollViewport?.clientWidth || 0;
+    const viewportHeight = elements.rollViewport?.clientHeight || 0;
+    const cached = state.playhead.layout;
+    if (
+      cached
+      && cached.viewportWidth === viewportWidth
+      && cached.viewportHeight === viewportHeight
+    ) {
+      return cached;
     }
-    const visibleX = getAlignedVisiblePlayheadX();
     const pianoRect = elements.pianoSection.getBoundingClientRect();
     const rollRect = elements.rollViewport.getBoundingClientRect();
     const timelineRect = elements.timelineCanvas.getBoundingClientRect();
-    const isVisible = visibleX >= -1 && visibleX <= elements.rollViewport.clientWidth + 1;
+    const audioRect = elements.audioLaneViewport?.getBoundingClientRect();
+    const top = timelineRect.top - pianoRect.top;
+    const bottom = (audioRect?.bottom || rollRect.bottom) - pianoRect.top;
+    const layout = {
+      viewportWidth,
+      viewportHeight,
+      leftOffset: rollRect.left - pianoRect.left,
+      top: Math.round(top),
+      height: Math.max(0, Math.round(bottom - top)),
+    };
+    state.playhead.layout = layout;
+    return layout;
+  }
+
+  function updatePlayheadVisual() {
+    if (elements.playheadTimeLabel) {
+      const clockText = formatPlayheadClock(getPlayheadDisplaySeconds());
+      if (clockText !== state.playhead.clockText) {
+        state.playhead.clockText = clockText;
+        elements.playheadTimeLabel.textContent = clockText;
+      }
+    }
+    const visibleX = getAlignedVisiblePlayheadX();
+    const layout = getPlayheadLayout();
+    const isVisible = visibleX >= -1 && visibleX <= layout.viewportWidth + 1;
     elements.playhead.hidden = !isVisible;
     if (!isVisible) {
       return;
     }
-    const left = rollRect.left - pianoRect.left + visibleX;
-    const top = timelineRect.top - pianoRect.top;
-    const audioRect = elements.audioLaneViewport?.getBoundingClientRect();
-    const bottom = (audioRect?.bottom || rollRect.bottom) - pianoRect.top;
-    elements.playhead.style.top = `${Math.round(top)}px`;
-    elements.playhead.style.height = `${Math.max(0, Math.round(bottom - top))}px`;
-    elements.playhead.style.transform = `translate3d(${left - 1}px, 0, 0)`;
+    elements.playhead.style.top = `${layout.top}px`;
+    elements.playhead.style.height = `${layout.height}px`;
+    elements.playhead.style.transform = `translate3d(${layout.leftOffset + visibleX - 1}px, 0, 0)`;
   }
 
   function previewNotesAtPlayhead(beat) {
@@ -7230,6 +7267,7 @@
 
   function renderAudioLane() {
     if (!elements.audioLaneContent || !elements.audioLaneViewport) return;
+    invalidatePlayheadLayout();
     elements.audioLaneContent.replaceChildren();
     updateAudioLaneTransform();
     const totalWidth = getRollWidth();
@@ -13152,7 +13190,11 @@
     const rate = Math.max(0.01, Number(state.playbackRate) || 1);
     const currentSeconds = getPlayheadDisplaySeconds(currentBeat);
     if (elements.playheadTimeLabel) {
-      elements.playheadTimeLabel.textContent = formatPlayheadClock(currentSeconds);
+      const clockText = formatPlayheadClock(currentSeconds);
+      if (clockText !== state.playhead.clockText) {
+        state.playhead.clockText = clockText;
+        elements.playheadTimeLabel.textContent = clockText;
+      }
     }
     const totalSeconds = (playbackActive
       ? state.playback.endSeconds
@@ -21227,6 +21269,8 @@
     audioEngine.stopAll();
     clearPlaybackKeyboardPitches();
     updatePlayButton();
+    // Persist the final viewport state after playback, never during automatic scrolling.
+    if (wasPlaybackActive) scheduleAutosave(1200);
     if (resetToStart) {
       setPlayheadBeat(0);
       elements.rollViewport.scrollLeft = 0;
@@ -24934,6 +24978,54 @@
     return true;
   }
 
+  function handleRollViewportScroll() {
+    const viewport = elements.rollViewport;
+    if (!viewport) return;
+
+    const left = Number(viewport.scrollLeft) || 0;
+    const top = Number(viewport.scrollTop) || 0;
+    const previousLeft = state.viewportScroll.lastLeft;
+    const previousTop = state.viewportScroll.lastTop;
+    const horizontalChanged = previousLeft == null || Math.abs(left - previousLeft) > 0.01;
+    const verticalChanged = previousTop == null || Math.abs(top - previousTop) > 0.01;
+    state.viewportScroll.lastLeft = left;
+    state.viewportScroll.lastTop = top;
+    state.viewportScroll.pendingHorizontal ||= horizontalChanged;
+    state.viewportScroll.pendingVertical ||= verticalChanged;
+
+    if (!state.viewportScroll.drawFrame) {
+      state.viewportScroll.drawFrame = requestAnimationFrame(() => {
+        state.viewportScroll.drawFrame = 0;
+        const drawHorizontal = state.viewportScroll.pendingHorizontal;
+        const drawVertical = state.viewportScroll.pendingVertical;
+        state.viewportScroll.pendingHorizontal = false;
+        state.viewportScroll.pendingVertical = false;
+
+        // Roll rendering is buffered, so only recenter the backing canvas when its guard is crossed.
+        ensureRollRenderBuffer(false);
+        const playbackActive = state.playback.running || state.playback.loading;
+        if (!playbackActive) {
+          if (drawHorizontal) {
+            updatePlayheadVisual();
+            drawTimeline();
+          }
+        }
+        if (drawVertical) {
+          drawKeyboard();
+        }
+        updateAudioLaneTransform();
+        updateCustomScrollbars();
+      });
+    }
+
+    // Playback auto-scroll is visual-only. Do not arm edit scroll snapping or serialize
+    // the whole project while audio is running; both can create avoidable main-thread stalls.
+    if (!(state.playback.running || state.playback.loading)) {
+      scheduleManualScrollSnap();
+      scheduleAutosave(1200);
+    }
+  }
+
   function bindEvents() {
     // Unlock Web Audio in the capture phase, before any async click/pointer handler
     // can lose the browser's transient user activation. This single path serves
@@ -25264,18 +25356,7 @@
     elements.verticalScrollBar.addEventListener("pointerup", endCustomScrollbarDrag);
     elements.verticalScrollBar.addEventListener("pointercancel", endCustomScrollbarDrag);
 
-    elements.rollViewport.addEventListener("scroll", () => {
-      // 캔버스를 화면보다 크게 미리 그려 둔 뒤 안전 여백을 벗어날 때만 즉시 재중앙화합니다.
-      // 따라서 빠른 세로 스크롤에서도 다음 프레임을 기다리는 빈 영역이 나타나지 않습니다.
-      ensureRollRenderBuffer(false);
-      updatePlayheadVisual();
-      drawTimeline();
-      drawKeyboard();
-      updateAudioLaneTransform();
-      updateCustomScrollbars();
-      scheduleManualScrollSnap();
-      scheduleAutosave(1200);
-    }, { passive: true });
+    elements.rollViewport.addEventListener("scroll", handleRollViewportScroll, { passive: true });
     elements.pianoSection?.addEventListener("wheel", handlePianoRollAltWheelZoom, { passive: false });
     elements.overviewTimelineCanvas?.addEventListener("pointerdown", handleOverviewTimelinePointerDown);
     elements.overviewTimelineCanvas?.addEventListener("pointermove", handleOverviewTimelinePointerMove);

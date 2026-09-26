@@ -441,17 +441,26 @@
     }
 
     enforceVoiceLimit(atTime = null) {
-      if (this.voices.size < this.maxVoices) {
+      const context = this.ensureContext();
+      const checkAt = atTime == null ? context.currentTime : Math.max(context.currentTime, Number(atTime) || 0);
+      const epsilon = 0.001;
+      // Voices scheduled for the future must not consume the polyphony budget yet.
+      // Count only voices that are actually alive at the instant the new note starts.
+      // releaseEndAt includes the short release tail so dense chords are still bounded.
+      const candidates = [...this.voices]
+        .filter((voice) => {
+          if (!voice || voice.ended) return false;
+          const startedAt = Number.isFinite(Number(voice.startedAt)) ? Number(voice.startedAt) : -Infinity;
+          const releaseEndAt = Number.isFinite(Number(voice.releaseEndAt)) ? Number(voice.releaseEndAt) : Infinity;
+          return startedAt <= checkAt + epsilon && releaseEndAt > checkAt + epsilon;
+        })
+        .sort((left, right) => (left.startedAt || 0) - (right.startedAt || 0));
+      if (candidates.length < this.maxVoices) {
         return;
       }
-      const context = this.ensureContext();
-      const releaseAt = atTime == null ? context.currentTime : Math.max(context.currentTime, atTime);
-      const candidates = [...this.voices]
-        .filter((voice) => !voice.ended)
-        .sort((left, right) => (left.startedAt || 0) - (right.startedAt || 0));
       const removeCount = Math.max(1, candidates.length - this.maxVoices + 1);
       for (let index = 0; index < removeCount; index += 1) {
-        candidates[index]?.release(releaseAt, 0.025);
+        candidates[index]?.release(checkAt, 0.025);
       }
     }
 
@@ -522,6 +531,7 @@
         gain,
         ended: false,
         releaseAt: Infinity,
+        releaseEndAt: Infinity,
         startedAt: when,
         release: (time = context.currentTime, releaseOverride = release) => {
           if (voice.ended) {
@@ -533,6 +543,7 @@
           }
           voice.releaseAt = releaseAt;
           const releaseSeconds = clamp(releaseOverride, 0.025, 3.5);
+          voice.releaseEndAt = releaseAt + releaseSeconds + 0.03;
           if (typeof gain.gain.cancelAndHoldAtTime === "function") {
             gain.gain.cancelAndHoldAtTime(releaseAt);
           } else {
@@ -551,6 +562,7 @@
           const stopAt = Math.max(context.currentTime, time);
           const fadeEnd = stopAt + 0.012;
           voice.releaseAt = Math.min(voice.releaseAt, stopAt);
+          voice.releaseEndAt = Math.min(voice.releaseEndAt, fadeEnd + 0.004);
           try {
             if (typeof gain.gain.cancelAndHoldAtTime === "function") {
               gain.gain.cancelAndHoldAtTime(stopAt);
@@ -620,6 +632,7 @@
         sourceB: oscillatorB,
         ended: false,
         releaseAt: Infinity,
+        releaseEndAt: Infinity,
         startedAt: when,
         release: (time = context.currentTime, releaseOverride = release) => {
           if (voice.ended) {
@@ -631,6 +644,7 @@
           }
           voice.releaseAt = releaseAt;
           const releaseSeconds = clamp(releaseOverride, 0.025, 1.5);
+          voice.releaseEndAt = releaseAt + releaseSeconds + 0.03;
           if (typeof gain.gain.cancelAndHoldAtTime === "function") {
             gain.gain.cancelAndHoldAtTime(releaseAt);
           } else {
@@ -645,6 +659,7 @@
           if (voice.ended) return;
           const stopAt = Math.max(context.currentTime, time);
           voice.releaseAt = Math.min(voice.releaseAt, stopAt);
+          voice.releaseEndAt = Math.min(voice.releaseEndAt, stopAt);
           try {
             gain.gain.cancelScheduledValues(stopAt);
             gain.gain.setValueAtTime(0.0001, stopAt);
