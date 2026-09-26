@@ -14371,7 +14371,7 @@
     const candidatesByStartKey = new Map();
     const excludeReferenceKeys = new Set();
     const blockedCandidateKeys = new Set();
-    const referencesByPitch = new Map();
+    const excludeReferenceStartKeysByPitch = new Map();
 
     for (const candidate of pool || []) {
       const key = candidate?._mergeCandidateKey;
@@ -14383,46 +14383,18 @@
       if (!excludeIds.has(String(candidate.sourceChannelId ?? ""))) continue;
       excludeReferenceKeys.add(key);
       const pitch = Number(candidate.pitch);
-      if (!referencesByPitch.has(pitch)) referencesByPitch.set(pitch, []);
-      referencesByPitch.get(pitch).push(candidate);
+      if (!excludeReferenceStartKeysByPitch.has(pitch)) excludeReferenceStartKeysByPitch.set(pitch, new Set());
+      excludeReferenceStartKeysByPitch.get(pitch).add(startKey);
     }
 
-    // Build a compact interval index per pitch. Because the merge pool is already
-    // timeline-sorted, each pitch list is also sorted by startBeat. Prefix max-end
-    // lets us answer "does any X-note of this pitch overlap?" in O(log n).
-    const referenceIntervalIndexByPitch = new Map();
-    for (const [pitch, refs] of referencesByPitch) {
-      const starts = new Float64Array(refs.length);
-      const prefixMaxEnds = new Float64Array(refs.length);
-      let maxEnd = -Infinity;
-      for (let index = 0; index < refs.length; index += 1) {
-        const ref = refs[index];
-        const start = Number(ref.startBeat) || 0;
-        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(ref.durationBeat) || CONFIG.minimumNoteBeat);
-        starts[index] = start;
-        maxEnd = Math.max(maxEnd, end);
-        prefixMaxEnds[index] = maxEnd;
-      }
-      referenceIntervalIndexByPitch.set(pitch, { starts, prefixMaxEnds });
-    }
-
+    // X/used-note exclusion is START based, not interval based. A candidate is
+    // considered already used only when an X-channel note has the same pitch and
+    // starts at the same beat. Overlap in the middle or tail must stay selectable.
     const targetId = String(state.channelMerge?.targetChannelId ?? "");
     const overlapsReference = (candidate) => {
-      const index = referenceIntervalIndexByPitch.get(Number(candidate.pitch));
-      if (!index?.starts?.length) return false;
-      const start = Number(candidate.startBeat) || 0;
-      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(candidate.durationBeat) || CONFIG.minimumNoteBeat);
-      // Find the last reference whose start is strictly before this candidate's end.
-      let low = 0;
-      let high = index.starts.length;
-      const limit = end - 1e-7;
-      while (low < high) {
-        const mid = (low + high) >> 1;
-        if (index.starts[mid] < limit) low = mid + 1;
-        else high = mid;
-      }
-      const last = low - 1;
-      return last >= 0 && index.prefixMaxEnds[last] > start + 1e-7;
+      const pitchStarts = excludeReferenceStartKeysByPitch.get(Number(candidate.pitch));
+      if (!pitchStarts?.size) return false;
+      return pitchStarts.has(Number(candidate.startBeat || 0).toFixed(6));
     };
 
     for (const candidate of pool || []) {
@@ -14512,12 +14484,10 @@
 
   function channelMergeCandidateMatchesUsedNote(candidate, reference) {
     if (!candidate || !reference) return false;
-    // X channels are not broad time masks. They represent notes that have already
-    // been used by a previous merge. Only the SAME pitch is considered used, and
-    // only while the two note ranges actually overlap. Other pitches at the same
-    // time must remain available for the next merge pass.
+    // Used-note exclusion is keyed by note onset. A note is considered already
+    // used only when pitch AND start beat match; interval-only overlap does not count.
     if (Number(candidate.pitch) !== Number(reference.pitch)) return false;
-    return channelMergeCandidatesOverlap(candidate, reference);
+    return Math.abs((Number(candidate.startBeat) || 0) - (Number(reference.startBeat) || 0)) < 1e-7;
   }
 
   function isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool = state.channelMerge?.candidatePool) {
@@ -14544,40 +14514,17 @@
       && String(note.sourceChannelId) !== targetId
     ));
 
-    // Build one timeline interval index instead of scanning every selected external
-    // note again for every target note. This removes another O(target × selected) hot path.
-    const starts = new Float64Array(selectedExternal.length);
-    const prefixMaxEnds = new Float64Array(selectedExternal.length);
-    let maxEnd = -Infinity;
-    for (let index = 0; index < selectedExternal.length; index += 1) {
-      const external = selectedExternal[index];
-      const start = Number(external.startBeat) || 0;
-      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(external.durationBeat) || CONFIG.minimumNoteBeat);
-      starts[index] = start;
-      maxEnd = Math.max(maxEnd, end);
-      prefixMaxEnds[index] = maxEnd;
-    }
-    const overlapsAnySelectedExternal = (note) => {
-      if (!starts.length) return false;
-      const start = Number(note.startBeat) || 0;
-      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
-      let low = 0;
-      let high = starts.length;
-      const limit = end - 1e-7;
-      while (low < high) {
-        const mid = (low + high) >> 1;
-        if (starts[mid] < limit) low = mid + 1;
-        else high = mid;
-      }
-      const last = low - 1;
-      return last >= 0 && prefixMaxEnds[last] > start + 1e-7;
-    };
+    // Target-note restoration follows the same onset rule as merge selection: only
+    // another selected note that starts at the same beat keeps the target note out.
+    // A later note may overlap the target's middle/tail and must not suppress it.
+    const selectedExternalStartKeys = new Set(
+      selectedExternal.map((note) => Number(note.startBeat || 0).toFixed(6)),
+    );
 
-    // The target channel's own notes are the merge baseline. They may stay deselected
-    // while another selected channel overlaps them, but return when that conflict ends.
     for (const note of pool || []) {
       if (String(note.sourceChannelId) !== targetId || selected.has(note._mergeCandidateKey)) continue;
-      if (!overlapsAnySelectedExternal(note)) selected.add(note._mergeCandidateKey);
+      const startKey = Number(note.startBeat || 0).toFixed(6);
+      if (!selectedExternalStartKeys.has(startKey)) selected.add(note._mergeCandidateKey);
     }
     return selected;
   }
