@@ -14,6 +14,7 @@
 
   const copy = {
     ko: {
+      brand: '모비바드',
       subtitle: '연주 파일 변환, MML 제작, 편집, 분석과 리듬 플레이를 브라우저 한 곳에서 이용할 수 있는 음악 도구 모음입니다.',
       language: '언어', open: '열기 →', footer: '모든 도구는 브라우저에서 실행됩니다.',
       soundfont: { kicker: '공개 음색 파일', title: 'MobiBard Instruments SF3 / DLS', description: '모비바드의 기본 음색을 원본 SF3와 호환용 DLS 파일로 제공합니다. 두 파일의 URL을 그대로 공유하거나 다른 프로젝트에서 직접 사용할 수 있습니다.', license: '개인·상업적 이용, 복사, 수정, 변환, 재배포, 미러링 및 직접 링크를 모두 자유롭게 허용합니다. 출처 표기나 별도 허가는 필요하지 않습니다.', downloadSf3: 'SF3 다운로드', downloadDls: 'DLS 다운로드', licenseLink: '자유 이용 안내' },
@@ -27,6 +28,7 @@
       ]
     },
     ja: {
+      brand: 'モビバード',
       subtitle: '演奏ファイルの変換、MML作成、編集、解析、リズムプレイをブラウザーで利用できる音楽ツール集です。',
       language: '言語', open: '開く →', footer: 'すべてのツールはブラウザー上で動作します。',
       soundfont: { kicker: '公開音色ファイル', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBardの標準音色をオリジナルSF3と互換用DLSファイルで提供します。どちらのファイルURLもそのまま共有したり、他のプロジェクトから直接利用できます。', license: '個人・商用利用、複製、改変、変換、再配布、ミラーリング、直接リンクをすべて自由に許可します。クレジット表記や個別の許可は不要です。', downloadSf3: 'SF3をダウンロード', downloadDls: 'DLSをダウンロード', licenseLink: '自由利用について' },
@@ -40,6 +42,7 @@
       ]
     },
     en: {
+      brand: 'Mobibard',
       subtitle: 'A browser-based music toolkit for converting performance files, creating and editing MML, analysis, and rhythm play.',
       language: 'Language', open: 'Open →', footer: 'All tools run in your browser.',
       soundfont: { kicker: 'Public sound files', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBard’s default sound set is provided as the original SF3 and a compatible DLS version. You may share either file URL as-is or use it directly in other projects.', license: 'Personal and commercial use, copying, modification, conversion, redistribution, mirroring, and direct linking are all freely permitted. No attribution or separate permission is required.', downloadSf3: 'Download SF3', downloadDls: 'Download DLS', licenseLink: 'Free-use notice' },
@@ -53,6 +56,7 @@
       ]
     },
     'zh-CN': {
+      brand: 'Mobibard',
       subtitle: '在浏览器中完成演奏文件转换、MML制作与编辑、分析以及节奏游戏的一组音乐工具。',
       language: '语言', open: '打开 →', footer: '所有工具均在浏览器中运行。',
       soundfont: { kicker: '公开音色文件', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBard默认音色提供原始SF3与兼容DLS两个版本。可以直接分享任一文件链接，也可以在其他项目中直接使用。', license: '允许自由用于个人或商业用途，也允许复制、修改、转换、再发布、镜像及直接链接。无需署名或另行取得许可。', downloadSf3: '下载SF3', downloadDls: '下载DLS', licenseLink: '自由使用说明' },
@@ -66,6 +70,7 @@
       ]
     },
     'zh-TW': {
+      brand: 'Mobibard',
       subtitle: '可在瀏覽器中完成演奏檔轉換、MML製作與編輯、分析及節奏遊戲的一組音樂工具。',
       language: '語言', open: '開啟 →', footer: '所有工具皆在瀏覽器中執行。',
       soundfont: { kicker: '公開音色檔案', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBard預設音色提供原始SF3與相容DLS兩個版本。可以直接分享任一檔案連結，也可以在其他專案中直接使用。', license: '允許自由用於個人或商業用途，也允許複製、修改、轉換、再散布、鏡像及直接連結。無需標示出處或另行取得許可。', downloadSf3: '下載SF3', downloadDls: '下載DLS', licenseLink: '自由使用說明' },
@@ -91,6 +96,7 @@
 
   const select = document.getElementById('languageSelect');
   const grid = document.getElementById('productGrid');
+  const homeTitle = document.getElementById('homeTitle');
   const subtitle = document.getElementById('homeSubtitle');
   const languageLabel = document.getElementById('languageLabel');
   const footerText = document.getElementById('footerText');
@@ -116,7 +122,9 @@
     const safe = supported.has(lang) ? lang : 'ko';
     const text = copy[safe];
     document.documentElement.lang = safe;
+    document.title = `${text.brand} v5.3`;
     select.value = safe;
+    homeTitle.textContent = text.brand;
     subtitle.textContent = text.subtitle;
     languageLabel.textContent = text.language;
     select.setAttribute('aria-label', text.language);
