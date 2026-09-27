@@ -169,6 +169,10 @@
     fileMenu: document.querySelector("#fileMenu"),
     editButton: document.querySelector("#editButton"),
     editMenu: document.querySelector("#editMenu"),
+    settingsButton: document.querySelector("#settingsButton"),
+    settingsMenu: document.querySelector("#settingsMenu"),
+    velocityLaneVisibleToggle: document.querySelector("#velocityLaneVisibleToggle"),
+    audioLaneVisibleToggle: document.querySelector("#audioLaneVisibleToggle"),
     editUndoButton: document.querySelector("#editUndoButton"),
     editRedoButton: document.querySelector("#editRedoButton"),
     editCopyButton: document.querySelector("#editCopyButton"),
@@ -243,6 +247,12 @@
     rollViewport: document.querySelector("#rollViewport"),
     rollSpacer: document.querySelector("#rollSpacer"),
     rollCanvas: document.querySelector("#rollCanvas"),
+    velocityLaneLabel: document.querySelector("#velocityLaneLabel"),
+    velocityLaneViewport: document.querySelector("#velocityLaneViewport"),
+    velocityLaneCanvas: document.querySelector("#velocityLaneCanvas"),
+    velocityLaneScopeToggle: document.querySelector("#velocityLaneScopeToggle"),
+    velocityLaneScopeButtons: Array.from(document.querySelectorAll("[data-velocity-scope]")),
+    velocityLaneTooltip: document.querySelector("#velocityLaneTooltip"),
     playhead: document.querySelector("#playhead"),
     playheadTimeLabel: document.querySelector("#playheadTimeLabel"),
     horizontalScrollBar: document.querySelector("#horizontalScrollBar"),
@@ -250,6 +260,13 @@
     verticalScrollBar: document.querySelector("#verticalScrollBar"),
     verticalScrollThumb: document.querySelector("#verticalScrollThumb"),
     channelPanel: document.querySelector("#channelPanel"),
+    channelBulkBar: document.querySelector("#channelBulkBar"),
+    channelBulkCounts: document.querySelector("#channelBulkCounts"),
+    channelBulkMmlButton: document.querySelector("#channelBulkMmlButton"),
+    channelBulkVisibilityButton: document.querySelector("#channelBulkVisibilityButton"),
+    channelBulkVisibilityGlyph: document.querySelector("#channelBulkVisibilityGlyph"),
+    channelBulkMuteButton: document.querySelector("#channelBulkMuteButton"),
+    channelBulkMuteGlyph: document.querySelector("#channelBulkMuteGlyph"),
     channelTabs: document.querySelector("#channelTabs"),
     loadedFileName: document.querySelector("#loadedFileName"),
     mergeChannelsButton: document.querySelector("#mergeChannelsButton"),
@@ -518,9 +535,11 @@
     timeEditBackdrop: document.querySelector("#timeEditBackdrop"),
     timeEditTitle: document.querySelector("#timeEditTitle"),
     timeEditPosition: document.querySelector("#timeEditPosition"),
+    timeEditLengthLabel: document.querySelector("#timeEditLengthLabel"),
     timeEditMeasureInput: document.querySelector("#timeEditMeasureInput"),
     timeEditBeatInput: document.querySelector("#timeEditBeatInput"),
     timeEditSelectedChannelOnly: document.querySelector("#timeEditSelectedChannelOnly"),
+    timeEditScopeLabel: document.querySelector("#timeEditScopeLabel"),
     timeEditCloseButton: document.querySelector("#timeEditCloseButton"),
     timeEditCancelButton: document.querySelector("#timeEditCancelButton"),
     timeEditInsertButton: document.querySelector("#timeEditInsertButton"),
@@ -554,6 +573,7 @@
     audioLaneLabel: document.querySelector("#audioLaneLabel"),
     audioLaneViewport: document.querySelector("#audioLaneViewport"),
     audioLaneContent: document.querySelector("#audioLaneContent"),
+    audioLaneGutter: document.querySelector(".audio-lane-gutter"),
     confirmDialog: document.querySelector("#confirmDialog"),
     confirmDialogTitle: document.querySelector("#confirmDialogTitle"),
     confirmDialogMessage: document.querySelector("#confirmDialogMessage"),
@@ -619,10 +639,12 @@
     selectedChannelGroupId: null,
     soloChannelIds: new Set(),
     soloGroupIds: new Set(),
+    soloAudioClipIds: new Set(),
     visibilitySoloChannelIds: new Set(),
     visibilitySoloGroupIds: new Set(),
+    visibilitySoloAudioClipIds: new Set(),
     channelGroupEdit: { groupId: null, mode: "create" },
-    channelDeleteMode: { active: false, selectedChannelIds: new Set(), groupModes: new Map() },
+    channelDeleteMode: { active: false, selectedChannelIds: new Set(), selectedAudioIds: new Set(), groupModes: new Map() },
     tempos: createDefaultTempos(),
     nextTempoId: 2,
     timeSignatures: createDefaultTimeSignatures(),
@@ -778,10 +800,26 @@
       dropGroupId: null,
       dropChannelId: null,
       dropAfter: false,
+      dropAudioId: null,
+      dropAudioAfter: false,
       dropSourceGroupEdgeBefore: false,
       lastPointerY: 0,
       direction: 0,
       directionExtremeY: 0,
+    },
+    audioTreeDrag: {
+      sourceId: null,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      lastPointerY: 0,
+      direction: 0,
+      directionExtremeY: 0,
+      dragging: false,
+      sourceElement: null,
+      container: null,
+      dropTarget: null,
+      previewNextAudioId: null,
     },
     channelGroupDrag: {
       groupId: null,
@@ -812,6 +850,7 @@
     channelMmlEdit: {
       channelId: null,
       groupId: null,
+      allChannels: false,
       viewOnly: false,
       parseTimer: 0,
       parsed: null,
@@ -833,6 +872,14 @@
     longPress: null,
     masterVolume: 1,
     noteVolumeDisplay: "selected",
+    audioLaneVisible: false,
+    velocityLaneVisible: false,
+    velocityLaneScope: "channel",
+    velocityLaneInteraction: null,
+    velocityLaneHitRegions: [],
+    velocityLaneRenderItems: [],
+    velocityLaneDrawRaf: 0,
+    velocityLaneWheelInteraction: null,
     restCleanup: { mode: "32" },
     playbackRate: 1,
     rollSurface: {
@@ -892,6 +939,91 @@
   // Empty name means the embedded/default SoundFont; display text is resolved from the active locale.
   let editorSoundFontName = "";
   let editorSoundFontBusy = false;
+
+  const EDITOR_SETTINGS_CACHE_DB = "mobibard-editor-settings-cache";
+  const EDITOR_SETTINGS_CACHE_STORE = "assets";
+  const EDITOR_SETTINGS_CACHE_VERSION = 1;
+  const EDITOR_SOUNDFONT_CACHE_KEY = "soundfont";
+
+  function openEditorSettingsCacheDb() {
+    if (!window.indexedDB) return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      const request = window.indexedDB.open(EDITOR_SETTINGS_CACHE_DB, EDITOR_SETTINGS_CACHE_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(EDITOR_SETTINGS_CACHE_STORE)) {
+          db.createObjectStore(EDITOR_SETTINGS_CACHE_STORE, { keyPath: "key" });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("Editor settings cache open failed"));
+    });
+  }
+
+  async function cacheEditorSoundFontFile(file) {
+    if (!file || typeof file.arrayBuffer !== "function") return false;
+    try {
+      const db = await openEditorSettingsCacheDb();
+      if (!db) return false;
+      const blob = typeof file.slice === "function" ? file.slice(0, file.size, file.type || "application/octet-stream") : new Blob([await file.arrayBuffer()], { type: file.type || "application/octet-stream" });
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(EDITOR_SETTINGS_CACHE_STORE, "readwrite");
+        tx.objectStore(EDITOR_SETTINGS_CACHE_STORE).put({
+          key: EDITOR_SOUNDFONT_CACHE_KEY,
+          name: String(file.name || "SoundBank"),
+          type: String(file.type || blob.type || "application/octet-stream"),
+          lastModified: Number(file.lastModified) || Date.now(),
+          blob,
+        });
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error || new Error("SoundFont cache write failed"));
+        tx.onabort = () => reject(tx.error || new Error("SoundFont cache write aborted"));
+      });
+      db.close();
+      return true;
+    } catch (error) {
+      console.warn("Editor SoundFont cache write failed", error);
+      return false;
+    }
+  }
+
+  async function loadCachedEditorSoundFontFile() {
+    try {
+      const db = await openEditorSettingsCacheDb();
+      if (!db) return null;
+      const record = await new Promise((resolve, reject) => {
+        const tx = db.transaction(EDITOR_SETTINGS_CACHE_STORE, "readonly");
+        const request = tx.objectStore(EDITOR_SETTINGS_CACHE_STORE).get(EDITOR_SOUNDFONT_CACHE_KEY);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error || new Error("SoundFont cache read failed"));
+      });
+      db.close();
+      if (!record?.blob) return null;
+      const blob = record.blob instanceof Blob ? record.blob : new Blob([record.blob], { type: record.type || "application/octet-stream" });
+      return { source: blob, name: String(record.name || "SoundBank"), lastModified: Number(record.lastModified) || 0 };
+    } catch (error) {
+      console.warn("Editor SoundFont cache read failed", error);
+      return null;
+    }
+  }
+
+  async function clearCachedEditorSoundFontFile() {
+    try {
+      const db = await openEditorSettingsCacheDb();
+      if (!db) return false;
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(EDITOR_SETTINGS_CACHE_STORE, "readwrite");
+        tx.objectStore(EDITOR_SETTINGS_CACHE_STORE).delete(EDITOR_SOUNDFONT_CACHE_KEY);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error || new Error("SoundFont cache delete failed"));
+      });
+      db.close();
+      return true;
+    } catch (error) {
+      console.warn("Editor SoundFont cache delete failed", error);
+      return false;
+    }
+  }
   let editorInstrumentOptionsSignature = "";
 
   function unlockEditorAudioFromGesture() {
@@ -2957,6 +3089,15 @@
     }
   }
 
+  function loadStoredRowHeight() {
+    try {
+      const raw = window.localStorage.getItem("mobibard-editor-pitch-spacing");
+      return raw == null ? CONFIG.defaultRowHeight : normalizeRowHeight(Number(raw));
+    } catch {
+      return CONFIG.defaultRowHeight;
+    }
+  }
+
   function setNoteVolumeDisplay(value, { persist = true } = {}) {
     state.noteVolumeDisplay = normalizeNoteVolumeDisplay(value);
     if (elements.noteVolumeDisplaySelect) {
@@ -2973,6 +3114,84 @@
     if (state.noteVolumeDisplay === "none") return false;
     if (state.noteVolumeDisplay === "selected") return Boolean(isActiveChannel);
     return true;
+  }
+
+  function normalizeVelocityLaneScope(value) {
+    return value === "group" || value === "all" ? value : "channel";
+  }
+
+  function loadStoredAudioLaneVisible() {
+    try {
+      const raw = window.localStorage.getItem("mobibard-audio-lane-visible");
+      return raw == null ? false : raw !== "0" && raw !== "false";
+    } catch {
+      return false;
+    }
+  }
+
+  function loadStoredVelocityLaneScope() {
+    try {
+      return normalizeVelocityLaneScope(window.localStorage.getItem("mobibard-velocity-lane-scope"));
+    } catch {
+      return "channel";
+    }
+  }
+
+  function loadStoredVelocityLaneVisible() {
+    try {
+      const raw = window.localStorage.getItem("mobibard-velocity-lane-visible");
+      return raw == null ? false : raw !== "0" && raw !== "false";
+    } catch {
+      return false;
+    }
+  }
+
+  function syncSettingsToggle(button, active) {
+    if (!button) return;
+    button.setAttribute("aria-checked", active ? "true" : "false");
+  }
+
+  function setAudioLaneVisible(visible, { persist = true, redraw = true } = {}) {
+    state.audioLaneVisible = Boolean(visible);
+    syncSettingsToggle(elements.audioLaneVisibleToggle, state.audioLaneVisible);
+    elements.pianoSection?.classList.toggle("audio-lane-hidden", !state.audioLaneVisible);
+    if (elements.audioLaneLabel) elements.audioLaneLabel.hidden = !state.audioLaneVisible;
+    if (elements.audioLaneViewport) elements.audioLaneViewport.hidden = !state.audioLaneVisible;
+    if (elements.audioLaneGutter) elements.audioLaneGutter.hidden = !state.audioLaneVisible;
+    if (persist) {
+      try { window.localStorage.setItem("mobibard-audio-lane-visible", state.audioLaneVisible ? "1" : "0"); } catch {}
+    }
+    invalidatePlayheadLayout();
+    if (redraw) requestAnimationFrame(resizeAndDraw);
+    return state.audioLaneVisible;
+  }
+
+  function setVelocityLaneVisible(visible, { persist = true, redraw = true } = {}) {
+    state.velocityLaneVisible = Boolean(visible);
+    syncSettingsToggle(elements.velocityLaneVisibleToggle, state.velocityLaneVisible);
+    elements.pianoSection?.classList.toggle("velocity-lane-hidden", !state.velocityLaneVisible);
+    if (elements.velocityLaneLabel) elements.velocityLaneLabel.hidden = !state.velocityLaneVisible;
+    if (elements.velocityLaneViewport) elements.velocityLaneViewport.hidden = !state.velocityLaneVisible;
+    const gutter = document.querySelector(".velocity-lane-gutter");
+    if (gutter) gutter.hidden = !state.velocityLaneVisible;
+    if (persist) {
+      try { window.localStorage.setItem("mobibard-velocity-lane-visible", state.velocityLaneVisible ? "1" : "0"); } catch {}
+    }
+    invalidatePlayheadLayout();
+    if (redraw) requestAnimationFrame(resizeAndDraw);
+    return state.velocityLaneVisible;
+  }
+
+  function setVelocityLaneScope(value, { persist = true, redraw = true } = {}) {
+    state.velocityLaneScope = normalizeVelocityLaneScope(value);
+    for (const button of elements.velocityLaneScopeButtons || []) {
+      button.setAttribute("aria-pressed", button.dataset.velocityScope === state.velocityLaneScope ? "true" : "false");
+    }
+    if (persist) {
+      try { window.localStorage.setItem("mobibard-velocity-lane-scope", state.velocityLaneScope); } catch {}
+    }
+    if (redraw) drawVelocityLane();
+    return state.velocityLaneScope;
   }
 
   function updateVolumeControls() {
@@ -3295,6 +3514,12 @@
     elements.editButton?.setAttribute("aria-expanded", "false");
   }
 
+  function closeSettingsMenu() {
+    if (!elements.settingsMenu) return;
+    elements.settingsMenu.hidden = true;
+    elements.settingsButton?.setAttribute("aria-expanded", "false");
+  }
+
   function closeThemeMenu() {
     elements.themeMenu.hidden = true;
     elements.themeButton.setAttribute("aria-expanded", "false");
@@ -3336,6 +3561,7 @@
     try {
       await audioEngine.useSoundBank(file, { label: file.name || "SoundBank" });
       editorSoundFontName = String(file.name || "SoundBank");
+      await cacheEditorSoundFontFile(file);
       reconcileEditorChannelsWithSoundBank();
       populateChannelInstrumentSelect();
       renderChannelEditor();
@@ -3362,6 +3588,7 @@
     try {
       await audioEngine.restoreDefaultSoundBank();
       editorSoundFontName = "";
+      await clearCachedEditorSoundFontFile();
       reconcileEditorChannelsWithSoundBank();
       populateChannelInstrumentSelect();
       renderChannelEditor();
@@ -3521,6 +3748,15 @@
     if (elements.overviewTimelineCanvas) resizeCanvas(elements.overviewTimelineCanvas, overviewWidth, overviewHeight);
     resizeCanvas(elements.timelineCanvas, timelineWidth, timelineHeight);
     resizeCanvas(elements.keyboardCanvas, keyboardWidth, keyboardHeight);
+    if (elements.velocityLaneCanvas && elements.velocityLaneViewport) {
+      const lanePixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+      resizeCanvas(
+        elements.velocityLaneCanvas,
+        Math.max(1, Math.round(elements.velocityLaneViewport.clientWidth)),
+        Math.max(1, Math.round(elements.velocityLaneViewport.clientHeight)),
+        lanePixelRatio,
+      );
+    }
 
     updateCustomScrollbars();
     drawRoll();
@@ -4169,8 +4405,671 @@
     }
 
     context.restore();
+    drawVelocityLane();
   }
 
+
+  function getVelocityLaneChannels() {
+    if (isMidiReferenceActive()) return [];
+    const scope = normalizeVelocityLaneScope(state.velocityLaneScope);
+    // “모두”는 선택 종류와 무관한 전역 범위입니다. 오디오 항목을 선택해도
+    // 전체 채널의 볼륨 정보는 계속 보여야 합니다.
+    if (scope === "all") return state.channels.slice();
+    // 현재 채널/그룹 범위는 실제 노트 항목을 선택한 경우에만 의미가 있습니다.
+    // 오디오 선택 상태에서는 이전 채널 정보를 잔존시키지 않습니다.
+    if (state.activePanel !== "notes") return [];
+    const active = getActiveChannel();
+    if (scope === "group") {
+      const group = getChannelGroupById(state.selectedChannelGroupId) || getChannelGroupForChannel(active);
+      const members = group ? getChannelGroupMembers(group) : [];
+      return members.length ? members : (active ? [active] : []);
+    }
+    return active ? [active] : [];
+  }
+
+  function getVelocityLaneEditableEntries({ visibleOnly = true } = {}) {
+    const channels = getVelocityLaneChannels();
+    const entries = [];
+    let firstBeat = -Infinity;
+    let lastBeat = Infinity;
+    if (visibleOnly && elements.velocityLaneViewport) {
+      const width = Math.max(1, elements.velocityLaneViewport.clientWidth || 1);
+      const scrollLeft = elements.rollViewport?.scrollLeft || 0;
+      const margin = Math.max(CONFIG.minimumNoteBeat, getVisibleGridUnit());
+      firstBeat = Math.max(0, xToBeat(scrollLeft) - margin);
+      lastBeat = Math.min(getTotalBeats(), xToBeat(scrollLeft + width) + margin);
+    }
+    for (const channel of channels) {
+      const channelIndex = Math.max(0, state.channels.indexOf(channel));
+      for (const note of channel.notes || []) {
+        const startBeat = Math.max(0, Number(note.startBeat) || 0);
+        if (startBeat < firstBeat - 1e-7 || startBeat > lastBeat + 1e-7) continue;
+        entries.push({ channel, channelIndex, note, startBeat });
+      }
+    }
+    entries.sort((left, right) => left.startBeat - right.startBeat || left.channelIndex - right.channelIndex || Number(left.note.id) - Number(right.note.id));
+    return entries;
+  }
+
+  function getVelocityLaneVerticalBounds(height) {
+    const safeHeight = Math.max(20, Number(height) || 20);
+    // Keep a small visual margin so V15/V0 do not touch the lane edges.
+    const padding = 7;
+    return { top: padding, bottom: Math.max(padding + 1, safeHeight - padding) };
+  }
+
+  function getVelocityLaneY(volume, height) {
+    const { top, bottom } = getVelocityLaneVerticalBounds(height);
+    return bottom - (bottom - top) * (clamp(Number(volume) || 0, 0, 15) / 15);
+  }
+
+  function getVelocityLaneVolumeFromClientY(clientY, rect = null) {
+    const laneRect = rect || elements.velocityLaneViewport?.getBoundingClientRect();
+    if (!laneRect) return 10;
+    const { top, bottom } = getVelocityLaneVerticalBounds(laneRect.height);
+    const localY = clamp(Number(clientY) - laneRect.top, top, bottom);
+    return clamp(Math.round((bottom - localY) / Math.max(1, bottom - top) * 15), 0, 15);
+  }
+
+  function getVelocityLaneBeatFromClientX(clientX, rect = null, scrollLeft = null) {
+    const laneRect = rect || elements.velocityLaneViewport?.getBoundingClientRect();
+    if (!laneRect) return 0;
+    const laneScrollLeft = scrollLeft == null ? (elements.rollViewport?.scrollLeft || 0) : scrollLeft;
+    return clamp(xToBeat((Number(clientX) - laneRect.left) + laneScrollLeft), 0, getTotalBeats());
+  }
+
+  function buildVelocityLaneRenderItems(width, firstBeat, lastBeat, scrollLeft) {
+    const channels = getVelocityLaneChannels();
+    const multiChannel = channels.length > 1;
+    // In All scope an audio selection should not make the previously selected
+    // channel look current; show the full data without a stale note highlight.
+    const noteSelectionActive = state.activePanel === "notes";
+    const activeChannel = noteSelectionActive ? getActiveChannel() : null;
+    const selectedGroupId = noteSelectionActive && state.selectedChannelGroupId != null
+      ? String(state.selectedChannelGroupId)
+      : null;
+    const items = [];
+    for (const channel of channels) {
+      const channelIndex = Math.max(0, state.channels.indexOf(channel));
+      const color = getChannelColor(channel, channelIndex, "base");
+      const isActive = channel === activeChannel && state.selectedChannelGroupId == null;
+      const inSelectedGroup = selectedGroupId != null && String(channel.groupId ?? "") === selectedGroupId;
+      const drawPriority = isActive ? 2 : (inSelectedGroup ? 1 : 0);
+      const muted = isChannelEffectivelyMuted(channel);
+      const notes = getVisibleChannelNotes(channel, firstBeat, lastBeat, channelIndex);
+      for (const note of notes) {
+        const x = Math.round(beatToX(note.startBeat) - scrollLeft) + 0.5;
+        const endX = Math.round(beatToX(note.startBeat + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat)) - scrollLeft) + 0.5;
+        if (endX < -6 || x > width + 6) continue;
+        items.push({
+          channel,
+          channelIndex,
+          note,
+          entry: { channel, channelIndex, note, startBeat: Math.max(0, Number(note.startBeat) || 0) },
+          color,
+          isActive,
+          inSelectedGroup,
+          drawPriority,
+          muted,
+          multiChannel,
+          selected: isActive && state.selectedNoteIds.has(note.id),
+          x,
+          endX,
+        });
+      }
+    }
+    // Paint the current selection last so it remains readable in Group/All scopes.
+    // JS sort is stable in modern browsers, preserving the existing time/channel order
+    // among items with the same selection priority.
+    items.sort((left, right) => (left.drawPriority || 0) - (right.drawPriority || 0));
+    return items;
+  }
+
+  function drawVelocityLane(renderItems = null) {
+    const canvas = elements.velocityLaneCanvas;
+    const viewport = elements.velocityLaneViewport;
+    if (!canvas || !viewport || !canvas.width || !canvas.height) return;
+    const context = canvas.getContext("2d");
+    const width = Math.max(1, canvas.clientWidth || viewport.clientWidth || 1);
+    const height = Math.max(1, canvas.clientHeight || viewport.clientHeight || 1);
+    const scrollLeft = elements.rollViewport?.scrollLeft || 0;
+    const theme = getCanvasTheme();
+    const firstBeat = Math.max(0, xToBeat(scrollLeft) - getVisibleGridUnit());
+    const lastBeat = Math.min(getTotalBeats(), xToBeat(scrollLeft + width) + getVisibleGridUnit());
+
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = state.theme === "light" ? "#f7f9fc" : "#16191f";
+    context.fillRect(0, 0, width, height);
+    const preRollRight = getPreRollWidth() - scrollLeft;
+    if (preRollRight > 0) {
+      context.fillStyle = theme.timelinePre;
+      context.fillRect(0, 0, Math.min(width, preRollRight), height);
+    }
+
+    for (const volume of [0, 5, 10, 15]) {
+      const y = Math.round(getVelocityLaneY(volume, height)) + 0.5;
+      const isGuide = volume === 5 || volume === 10;
+      context.save();
+      context.strokeStyle = volume === 0 || volume === 15
+        ? colorMixForCanvas(theme.timelineMeasure, 0.62)
+        : colorMixForCanvas(theme.timelineBeat, 0.52);
+      context.lineWidth = 1;
+      if (isGuide) context.setLineDash([3, 4]);
+      context.beginPath();
+      context.moveTo(0, y);
+      context.lineTo(width, y);
+      context.stroke();
+      context.restore();
+    }
+
+    // Keep the velocity lane visually quiet: only measure boundaries are vertical.
+    const signatureGrid = getTimeSignatureGridLines(firstBeat, lastBeat);
+    for (const line of signatureGrid.measures) {
+      const x = Math.round(beatToX(line.beat) - scrollLeft) + 0.5;
+      context.strokeStyle = colorMixForCanvas(theme.timelineMeasure, 0.58);
+      context.lineWidth = 1.2;
+      context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke();
+    }
+
+    const items = Array.isArray(renderItems)
+      ? renderItems
+      : buildVelocityLaneRenderItems(width, firstBeat, lastBeat, scrollLeft);
+    if (!Array.isArray(renderItems)) state.velocityLaneRenderItems = items;
+
+    state.velocityLaneHitRegions = [];
+    const bottom = getVelocityLaneY(0, height);
+    for (const item of items) {
+      const { channel, note, color, isActive, muted, multiChannel, selected, x, endX } = item;
+      const volume = getNoteVolume(note);
+      const y = getVelocityLaneY(volume, height);
+      const visibleStartX = Math.max(-2, x);
+      const visibleEndX = Math.min(width + 2, endX);
+      if (visibleEndX < -2 || visibleStartX > width + 2) continue;
+
+      state.velocityLaneHitRegions.push({
+        item,
+        x,
+        endX,
+        y,
+        bottom,
+        volume,
+      });
+
+      context.save();
+      // Note duration is a translucent, editable region. Its height represents velocity
+      // and its width mirrors the note duration, making long notes easier to grab.
+      const regionLeft = Math.min(visibleStartX, visibleEndX);
+      const regionWidth = Math.max(1, Math.abs(visibleEndX - visibleStartX));
+      const regionTop = Math.min(y, bottom);
+      const regionHeight = Math.max(1, Math.abs(bottom - y));
+      context.globalAlpha = muted ? 0.06 : selected ? 0.22 : (multiChannel ? 0.10 : 0.14);
+      context.fillStyle = color;
+      context.fillRect(regionLeft, regionTop, regionWidth, regionHeight);
+
+      // A subtle end edge keeps the duration readable without recreating a solid top line.
+      context.globalAlpha = muted ? 0.15 : (multiChannel ? 0.30 : 0.42);
+      context.strokeStyle = color;
+      context.lineWidth = selected ? 1.4 : 1;
+      context.beginPath();
+      context.moveTo(visibleEndX, y);
+      context.lineTo(visibleEndX, bottom);
+      context.stroke();
+
+      // Start stem remains the strongest visual/editing anchor.
+      context.globalAlpha = muted ? 0.28 : (multiChannel ? 0.66 : 0.9);
+      context.strokeStyle = color;
+      context.lineWidth = selected ? 4 : (isActive ? 3 : 2.2);
+      context.beginPath(); context.moveTo(x, bottom); context.lineTo(x, y); context.stroke();
+
+      context.globalAlpha = 1;
+      context.fillStyle = selected ? theme.selectedStroke : color;
+      context.beginPath(); context.arc(x, y, selected ? 4 : 3, 0, Math.PI * 2); context.fill();
+      if (selected) {
+        context.strokeStyle = state.theme === "light" ? "#ffffff" : "#071018";
+        context.lineWidth = 1.2;
+        context.stroke();
+      }
+      context.restore();
+    }
+  }
+
+  function colorMixForCanvas(color, alpha = 1) {
+    if (typeof color !== "string") return `rgba(127,137,152,${alpha})`;
+    if (color.startsWith("rgba(")) return color.replace(/rgba\(([^,]+),([^,]+),([^,]+),[^)]+\)/, `rgba($1,$2,$3,${alpha})`);
+    if (color.startsWith("rgb(")) return color.replace("rgb(", "rgba(").replace(")", `,${alpha})`);
+    return color;
+  }
+
+  function setVelocityLaneNoteVolume(entry, volume, interaction) {
+    const next = clamp(Math.round(Number(volume) || 0), 0, 15);
+    if (getNoteVolume(entry.note) === next) return false;
+    entry.note.volume = next;
+    entry.note.velocity = mmlVolumeToVelocity(next);
+    interaction.changed = true;
+    let bucket = interaction.changedByChannel.get(String(entry.channel.id));
+    if (!bucket) {
+      bucket = { channel: entry.channel, notes: new Map() };
+      interaction.changedByChannel.set(String(entry.channel.id), bucket);
+    }
+    bucket.notes.set(String(entry.note.id), entry.note);
+    const activeChannel = getActiveChannel();
+    if (activeChannel && String(activeChannel.id) === String(entry.channel.id)) interaction.timelineDirty = true;
+    return true;
+  }
+
+  function lowerBoundVelocityEntries(entries, beat) {
+    let low = 0;
+    let high = entries.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (entries[mid].startBeat < beat) low = mid + 1;
+      else high = mid;
+    }
+    return low;
+  }
+
+  function applyVelocityLaneSegment(interaction, fromBeat, fromVolume, toBeat, toVolume) {
+    const entries = interaction?.entries || [];
+    if (!entries.length) return false;
+    const quarterWidth = Math.max(1, getQuarterWidth());
+    const hitTolerance = Math.max(CONFIG.minimumNoteBeat / 8, 6 / quarterWidth);
+    const span = Math.abs(toBeat - fromBeat);
+    let changed = false;
+
+    // A click/vertical drag edits the nearest onset only. Use the sorted onset list
+    // directly instead of scanning every visible note on each pointermove.
+    if (span < hitTolerance * 0.35) {
+      const index = lowerBoundVelocityEntries(entries, toBeat);
+      let nearestBeat = null;
+      let nearestDistance = Infinity;
+      for (const candidateIndex of [index - 1, index]) {
+        const entry = entries[candidateIndex];
+        if (!entry) continue;
+        const distance = Math.abs(entry.startBeat - toBeat);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestBeat = entry.startBeat;
+        }
+      }
+      if (nearestBeat == null || nearestDistance > hitTolerance) return false;
+      let cursor = lowerBoundVelocityEntries(entries, nearestBeat - 1e-7);
+      while (cursor < entries.length && entries[cursor].startBeat <= nearestBeat + 1e-7) {
+        changed = setVelocityLaneNoteVolume(entries[cursor], toVolume, interaction) || changed;
+        cursor += 1;
+      }
+      return changed;
+    }
+
+    // Horizontal/diagonal painting follows the pointer segment. Only the onset slice
+    // crossed by this pointer segment is visited, keeping dense arrangements responsive.
+    const lowBeat = Math.min(fromBeat, toBeat);
+    const highBeat = Math.max(fromBeat, toBeat);
+    let cursor = lowerBoundVelocityEntries(entries, lowBeat - 1e-7);
+    while (cursor < entries.length) {
+      const entry = entries[cursor];
+      if (entry.startBeat > highBeat + 1e-7) break;
+      const ratio = clamp((entry.startBeat - fromBeat) / (toBeat - fromBeat), 0, 1);
+      const volume = Math.round(fromVolume + (toVolume - fromVolume) * ratio);
+      changed = setVelocityLaneNoteVolume(entry, volume, interaction) || changed;
+      cursor += 1;
+    }
+    return changed;
+  }
+
+  function applyVelocityLaneDurationSweep(interaction, fromBeat, fromVolume, toBeat, toVolume) {
+    const entries = interaction?.entries || [];
+    if (!entries.length) return false;
+    const lowBeat = Math.min(fromBeat, toBeat);
+    const highBeat = Math.max(fromBeat, toBeat);
+    const deltaBeat = toBeat - fromBeat;
+    const movingForward = deltaBeat >= 0;
+    let changed = false;
+    for (const entry of entries) {
+      const start = Number(entry.startBeat) || 0;
+      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(entry.note?.durationBeat) || CONFIG.minimumNoteBeat);
+      if (end < lowBeat - 1e-7 || start > highBeat + 1e-7) continue;
+      // Use the point where the pointer sweep most recently intersects this note's
+      // duration area. This makes the whole shaded duration region editable, not
+      // just the onset/vertical volume stem.
+      const touchBeat = movingForward
+        ? clamp(toBeat, start, end)
+        : clamp(toBeat, start, end);
+      const ratio = Math.abs(deltaBeat) < 1e-9 ? 1 : clamp((touchBeat - fromBeat) / deltaBeat, 0, 1);
+      const volume = Math.round(fromVolume + (toVolume - fromVolume) * ratio);
+      changed = setVelocityLaneNoteVolume(entry, volume, interaction) || changed;
+    }
+    return changed;
+  }
+
+  function showVelocityLaneTooltip(event, volume, rect = null) {
+    const tooltip = elements.velocityLaneTooltip;
+    const viewport = elements.velocityLaneViewport;
+    if (!tooltip || !viewport) return;
+    const laneRect = rect || viewport.getBoundingClientRect();
+    const localX = Number(event.clientX) - laneRect.left;
+    const localY = Number(event.clientY) - laneRect.top;
+    tooltip.textContent = `V${clamp(Math.round(Number(volume) || 0), 0, 15)}`;
+    tooltip.hidden = false;
+    const tooltipWidth = Math.max(24, tooltip.offsetWidth || 28);
+    const tooltipHeight = Math.max(16, tooltip.offsetHeight || 18);
+    const placeBelow = localY < tooltipHeight + 8;
+    tooltip.classList.toggle("is-below", placeBelow);
+    tooltip.style.left = `${clamp(localX, tooltipWidth / 2 + 2, Math.max(tooltipWidth / 2 + 2, laneRect.width - tooltipWidth / 2 - 2))}px`;
+    tooltip.style.top = placeBelow
+      ? `${clamp(localY + 3, 2, Math.max(2, laneRect.height - tooltipHeight - 2))}px`
+      : `${clamp(localY - 3, tooltipHeight + 2, Math.max(tooltipHeight + 2, laneRect.height - 2))}px`;
+  }
+
+  function hideVelocityLaneTooltip() {
+    if (elements.velocityLaneTooltip) elements.velocityLaneTooltip.hidden = true;
+  }
+
+  function getVelocityLaneHitRegionAt(clientX, clientY, rect = null) {
+    const viewport = elements.velocityLaneViewport;
+    if (!viewport) return null;
+    const laneRect = rect || viewport.getBoundingClientRect();
+    const localX = Number(clientX) - laneRect.left;
+    const localY = Number(clientY) - laneRect.top;
+    let best = null;
+    let bestDistance = Infinity;
+    let segmentBest = null;
+    let segmentDistance = Infinity;
+    for (const region of state.velocityLaneHitRegions || []) {
+      const minX = Math.min(region.x, region.endX) - 4;
+      const maxX = Math.max(region.x, region.endX) + 4;
+      const minY = Math.min(region.y, region.bottom) - 5;
+      const maxY = Math.max(region.y, region.bottom) + 5;
+      const onStem = Math.abs(localX - region.x) <= 6 && localY >= minY && localY <= maxY;
+      const onEndStem = Math.abs(localX - region.endX) <= 5 && localY >= minY && localY <= maxY;
+      const inDurationArea = localX >= minX && localX <= maxX && localY >= minY && localY <= maxY;
+      if (onStem || onEndStem || inDurationArea) {
+        const distance = onStem
+          ? Math.abs(localX - region.x) * 0.25
+          : onEndStem
+            ? 0.5 + Math.abs(localX - region.endX) * 0.25
+            : 2 + Math.abs(localY - region.y);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = region;
+        }
+      }
+      // If the pointer is anywhere inside a note's time span, treat that span as
+      // editable even when the pointer is above/below the painted velocity area.
+      // When spans overlap, prefer the velocity line closest to the pointer Y.
+      if (localX >= minX && localX <= maxX) {
+        const selectedBonus = region.item?.selected ? -8 : 0;
+        const activeBonus = region.item?.isActive ? -4 : 0;
+        const groupBonus = region.item?.inSelectedGroup ? -2 : 0;
+        const distance = Math.abs(localY - region.y) + selectedBonus + activeBonus + groupBonus;
+        if (distance < segmentDistance) {
+          segmentDistance = distance;
+          segmentBest = region;
+        }
+      }
+    }
+    return best || segmentBest;
+  }
+
+  function updateVelocityLaneHover(event) {
+    if (state.velocityLaneInteraction || !elements.velocityLaneViewport) return;
+    const rect = elements.velocityLaneViewport.getBoundingClientRect();
+    const region = getVelocityLaneHitRegionAt(event.clientX, event.clientY, rect);
+    if (region) showVelocityLaneTooltip(event, region.volume, rect);
+    else hideVelocityLaneTooltip();
+  }
+
+  function getVelocityLaneEntriesFromRenderItems(renderItems) {
+    return (renderItems || [])
+      .map((item) => item.entry)
+      .filter(Boolean)
+      .sort((left, right) => left.startBeat - right.startBeat || left.channelIndex - right.channelIndex || Number(left.note.id) - Number(right.note.id));
+  }
+
+  function scheduleVelocityLaneRollPreview(interaction) {
+    if (!interaction || interaction.rollPreviewTimer) return;
+    interaction.rollPreviewTimer = setTimeout(() => {
+      interaction.rollPreviewTimer = 0;
+      if (state.velocityLaneInteraction !== interaction && state.velocityLaneWheelInteraction !== interaction) return;
+      drawRoll();
+    }, 40);
+  }
+
+  function flushVelocityLaneMove(interaction) {
+    if (!interaction || state.velocityLaneInteraction !== interaction) return;
+    if (interaction.rafId) {
+      cancelAnimationFrame(interaction.rafId);
+      interaction.rafId = 0;
+    }
+    if (interaction.pendingClientX == null || interaction.pendingClientY == null) return;
+    const clientX = interaction.pendingClientX;
+    const clientY = interaction.pendingClientY;
+    interaction.pendingClientX = null;
+    interaction.pendingClientY = null;
+    const beat = getVelocityLaneBeatFromClientX(clientX, interaction.rect, interaction.scrollLeft);
+    const volume = getVelocityLaneVolumeFromClientY(clientY, interaction.rect);
+    let changed = false;
+
+    const movedX = Math.abs(clientX - interaction.startClientX);
+    if (interaction.directEntry && !interaction.painting && movedX < 9) {
+      changed = setVelocityLaneNoteVolume(interaction.directEntry, volume, interaction);
+      changed = applyVelocityLaneDurationSweep(interaction, interaction.lastBeat, interaction.lastVolume, beat, volume) || changed;
+      interaction.lastBeat = beat;
+    } else {
+      interaction.painting = true;
+      changed = applyVelocityLaneSegment(interaction, interaction.lastBeat, interaction.lastVolume, beat, volume) || changed;
+      changed = applyVelocityLaneDurationSweep(interaction, interaction.lastBeat, interaction.lastVolume, beat, volume) || changed;
+      interaction.lastBeat = beat;
+    }
+    interaction.lastVolume = volume;
+    showVelocityLaneTooltip({ clientX, clientY }, volume, interaction.rect);
+    if (changed) {
+      drawVelocityLane(interaction.renderItems);
+      scheduleVelocityLaneRollPreview(interaction);
+      if (interaction.timelineDirty) {
+        drawTimeline();
+        interaction.timelineDirty = false;
+      }
+    }
+  }
+
+  function beginVelocityLaneEdit(event) {
+    if (event.button !== 0 || !elements.velocityLaneCanvas || state.channelDeleteMode?.active || isChannelMergeModeActive()) return;
+    commitVelocityLaneWheelInteraction();
+    const rect = elements.velocityLaneViewport?.getBoundingClientRect();
+    if (!rect) return;
+    let renderItems = state.velocityLaneRenderItems || [];
+    if (!renderItems.length) {
+      drawVelocityLane();
+      renderItems = state.velocityLaneRenderItems || [];
+    }
+    const entries = getVelocityLaneEntriesFromRenderItems(renderItems);
+    if (!entries.length) return;
+    const hitRegion = getVelocityLaneHitRegionAt(event.clientX, event.clientY, rect);
+    const directEntry = hitRegion?.item?.entry || null;
+    const beat = directEntry
+      ? directEntry.startBeat
+      : getVelocityLaneBeatFromClientX(event.clientX, rect, elements.rollViewport?.scrollLeft || 0);
+    const volume = getVelocityLaneVolumeFromClientY(event.clientY, rect);
+    state.velocityLaneInteraction = {
+      pointerId: event.pointerId,
+      entries,
+      renderItems,
+      rect,
+      scrollLeft: elements.rollViewport?.scrollLeft || 0,
+      startClientX: event.clientX,
+      directEntry,
+      painting: false,
+      pendingClientX: null,
+      pendingClientY: null,
+      rafId: 0,
+      lastBeat: beat,
+      lastVolume: volume,
+      changed: false,
+      changedByChannel: new Map(),
+      timelineDirty: false,
+      rollPreviewTimer: 0,
+    };
+    let changedAtStart = directEntry
+      ? setVelocityLaneNoteVolume(directEntry, volume, state.velocityLaneInteraction)
+      : applyVelocityLaneSegment(state.velocityLaneInteraction, beat, volume, beat, volume);
+    changedAtStart = applyVelocityLaneDurationSweep(state.velocityLaneInteraction, beat, volume, beat, volume) || changedAtStart;
+    showVelocityLaneTooltip(event, volume, rect);
+    drawVelocityLane(renderItems);
+    if (changedAtStart) scheduleVelocityLaneRollPreview(state.velocityLaneInteraction);
+    if (state.velocityLaneInteraction.timelineDirty) {
+      drawTimeline();
+      state.velocityLaneInteraction.timelineDirty = false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function moveVelocityLaneEdit(event) {
+    const interaction = state.velocityLaneInteraction;
+    if (!interaction || interaction.pointerId !== event.pointerId) {
+      updateVelocityLaneHover(event);
+      return;
+    }
+    interaction.pendingClientX = event.clientX;
+    interaction.pendingClientY = event.clientY;
+    if (!interaction.rafId) {
+      interaction.rafId = requestAnimationFrame(() => flushVelocityLaneMove(interaction));
+    }
+    event.preventDefault();
+  }
+
+  function finishVelocityLaneChangedNotes(interaction) {
+    if (!interaction?.changed) return false;
+    for (const bucket of interaction.changedByChannel.values()) {
+      updateChannelDefaultNoteVolumeFromNotes(bucket.channel, [...bucket.notes.values()]);
+    }
+    return true;
+  }
+
+  function endVelocityLaneEdit(event) {
+    const interaction = state.velocityLaneInteraction;
+    if (!interaction || interaction.pointerId !== event.pointerId) return;
+    interaction.pendingClientX = event.clientX;
+    interaction.pendingClientY = event.clientY;
+    flushVelocityLaneMove(interaction);
+    if (interaction.rollPreviewTimer) { clearTimeout(interaction.rollPreviewTimer); interaction.rollPreviewTimer = 0; }
+    state.velocityLaneInteraction = null;
+    hideVelocityLaneTooltip();
+    if (finishVelocityLaneChangedNotes(interaction)) {
+      markDirty(i18nText("volume.editor_history"), { preserveNoteRuntime: true });
+      updateChannelInfo();
+    }
+    drawRoll();
+    drawTimeline();
+    event.preventDefault();
+  }
+
+  function commitVelocityLaneWheelInteraction() {
+    const interaction = state.velocityLaneWheelInteraction;
+    if (!interaction) return false;
+    if (interaction.timer) clearTimeout(interaction.timer);
+    if (interaction.rollPreviewTimer) { clearTimeout(interaction.rollPreviewTimer); interaction.rollPreviewTimer = 0; }
+    state.velocityLaneWheelInteraction = null;
+    if (!finishVelocityLaneChangedNotes(interaction)) return false;
+    markDirty(i18nText("volume.editor_history"), { preserveNoteRuntime: true });
+    updateChannelInfo();
+    drawRoll();
+    drawTimeline();
+    return true;
+  }
+
+  function scheduleVelocityLaneWheelCommit(interaction) {
+    if (!interaction || state.velocityLaneWheelInteraction !== interaction) return;
+    if (interaction.timer) clearTimeout(interaction.timer);
+    interaction.timer = setTimeout(() => commitVelocityLaneWheelInteraction(), 180);
+  }
+
+  function handleVelocityLaneWheel(event) {
+    if (state.velocityLaneInteraction || state.channelDeleteMode?.active || isChannelMergeModeActive()) return;
+    const rect = elements.velocityLaneViewport?.getBoundingClientRect();
+    if (!rect) return;
+    const region = getVelocityLaneHitRegionAt(event.clientX, event.clientY, rect);
+    if (!region?.item?.entry) return;
+
+    let interaction = state.velocityLaneWheelInteraction;
+    if (!interaction) {
+      interaction = {
+        changed: false,
+        changedByChannel: new Map(),
+        deltaCarry: 0,
+        timer: 0,
+        timelineDirty: false,
+        rollPreviewTimer: 0,
+      };
+      state.velocityLaneWheelInteraction = interaction;
+    }
+    const rawDelta = Number(event.deltaY || event.deltaX || 0);
+    if (!rawDelta) return;
+    const threshold = event.deltaMode === 1 ? 0.8 : 24;
+    interaction.deltaCarry += rawDelta;
+    if (Math.abs(interaction.deltaCarry) < threshold) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    const increase = interaction.deltaCarry < 0;
+    interaction.deltaCarry = 0;
+    const entry = region.item.entry;
+    const nextVolume = clamp(getNoteVolume(entry.note) + (increase ? 1 : -1), 0, 15);
+    if (setVelocityLaneNoteVolume(entry, nextVolume, interaction)) {
+      drawVelocityLane(state.velocityLaneRenderItems);
+      scheduleVelocityLaneRollPreview(interaction);
+      if (interaction.timelineDirty) {
+        drawTimeline();
+        interaction.timelineDirty = false;
+      }
+      showVelocityLaneTooltip(event, nextVolume, rect);
+      scheduleVelocityLaneWheelCommit(interaction);
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+
+  function handleVelocityLaneGlobalPointerMove(event) {
+    const interaction = state.velocityLaneInteraction;
+    if (!interaction || interaction.pointerId !== event.pointerId) return;
+    if (event.pointerType === "mouse" && (event.buttons & 1) === 0) {
+      endVelocityLaneEdit(event);
+      return;
+    }
+    if (event.target === elements.velocityLaneCanvas) return;
+    moveVelocityLaneEdit(event);
+  }
+
+  function handleVelocityLaneGlobalPointerEnd(event) {
+    const interaction = state.velocityLaneInteraction;
+    if (!interaction || interaction.pointerId !== event.pointerId) return;
+    endVelocityLaneEdit(event);
+  }
+
+
+  function handleVelocityLanePointerCancel(event) {
+    const interaction = state.velocityLaneInteraction;
+    if (!interaction || interaction.pointerId !== event.pointerId) return;
+    // Mouse pointercancel can be emitted while crossing/reparented UI surfaces.
+    // Keep the edit alive while the primary button is still down; pointerup/blur
+    // is the authoritative end signal. Touch/pen cancel ends normally.
+    if (event.pointerType === "mouse") return;
+    endVelocityLaneEdit(event);
+  }
+
+  function endVelocityLaneEditFromWindowLoss() {
+    const interaction = state.velocityLaneInteraction;
+    if (!interaction) return;
+    const fakeEvent = {
+      pointerId: interaction.pointerId,
+      clientX: interaction.pendingClientX ?? interaction.startClientX,
+      clientY: interaction.pendingClientY ?? interaction.rect.top + interaction.rect.height / 2,
+      preventDefault() {},
+    };
+    endVelocityLaneEdit(fakeEvent);
+  }
 
   function getAlignedVisiblePlayheadX() {
     // Preserve sub-pixel X while playing. CSS transforms can render fractional
@@ -4541,8 +5440,9 @@
     // Match the stronger channel tone used by the overview track bar so
     // saturated/primary hues stay visible against the tempo timeline.
     const color = getChannelColor(channel, channelIndex, "base");
-    const bottomY = Math.max(2, height - 2);
-    const topY = Math.min(bottomY, 3);
+    const timelineVolumePad = Math.max(1, height / 7);
+    const topY = timelineVolumePad;
+    const bottomY = Math.max(topY + 1, height - timelineVolumePad);
     const verticalRange = Math.max(1, bottomY - topY);
     context.save();
     context.strokeStyle = color;
@@ -4571,7 +5471,7 @@
         context.setLineDash([4, 3]);
       } else {
         context.globalAlpha = 0.92;
-        context.lineWidth = 2.4;
+        context.lineWidth = volume === 15 ? 3.8 : 2.4;
         context.setLineDash([]);
       }
       context.beginPath();
@@ -4812,9 +5712,10 @@
     const pianoRect = elements.pianoSection.getBoundingClientRect();
     const rollRect = elements.rollViewport.getBoundingClientRect();
     const timelineRect = elements.timelineCanvas.getBoundingClientRect();
-    const audioRect = elements.audioLaneViewport?.getBoundingClientRect();
+    const velocityRect = elements.velocityLaneViewport?.getBoundingClientRect();
+    const audioRect = state.audioLaneVisible ? elements.audioLaneViewport?.getBoundingClientRect() : null;
     const top = timelineRect.top - pianoRect.top;
-    const bottom = (audioRect?.bottom || rollRect.bottom) - pianoRect.top;
+    const bottom = (audioRect?.bottom || velocityRect?.bottom || rollRect.bottom) - pianoRect.top;
     const layout = {
       viewportWidth,
       viewportHeight,
@@ -4955,7 +5856,7 @@
 
     const playbackNotes = preparePlaybackSchedule(targetBeat);
     const hasPlayableAudio = !isChannelMergeModeActive() && state.audioClips.some((clip) => (
-      !clip.muted
+      !isAudioClipEffectivelyMuted(clip)
       && getAudioClipEndBeat(clip) > targetBeat + 1e-7
       && Boolean(getAudioRuntime(clip.id)?.audioBuffer)
     ));
@@ -6012,7 +6913,7 @@
   function clearChannelDropIndicators() {
     const container = getChannelDragContainer();
     container?.classList.remove("drop-ungrouped-target");
-    container?.querySelectorAll("[data-channel-id], [data-channel-group-id]").forEach((item) => {
+    container?.querySelectorAll("[data-channel-id], [data-audio-clip-id], [data-channel-group-id]").forEach((item) => {
       item.classList.remove("drop-before", "drop-after", "drop-group-target", "drop-group-before", "drop-group-after");
       if (item.dataset.channelId != null) {
         item.classList.toggle(
@@ -6107,15 +7008,46 @@
       channelId = String(group.beforeChannelId);
       after = false;
     }
+    const renderedBlock = getRenderedGroupBlock(group?.id, getChannelDragContainer());
+    const blockLast = renderedBlock[renderedBlock.length - 1] || groupNode;
+    const previewReference = placeAfterGroup ? (blockLast?.nextElementSibling || null) : groupNode;
     return {
       valid: true,
       groupId: null,
       channelId,
       after,
       element: groupNode,
+      previewReference,
       kind: "group-edge",
       edgeAfter: Boolean(placeAfterGroup),
       sourceGroupEdgeBefore: Boolean(sourceGroupEdgeBefore),
+    };
+  }
+
+  function buildChannelDragTargetFromAudioNode(node, clientY) {
+    if (!node?.matches?.("[data-audio-clip-id]")) return null;
+    const clip = state.audioClips.find((item) => String(item.id) === String(node.dataset.audioClipId));
+    const source = getChannelById(state.channelDrag.sourceId);
+    if (!clip || !source) return null;
+    const rect = node.getBoundingClientRect();
+    const audioAfter = Number(clientY) >= rect.top + rect.height / 2;
+    const targetGroupId = clip.groupId == null ? null : String(clip.groupId);
+    let channelId = clip.beforeChannelId == null ? null : String(clip.beforeChannelId);
+    // An audio row can itself be anchored to the dragged channel. Use the next
+    // real channel as the stable insertion anchor so the target does not vanish
+    // while the source channel is temporarily removed from the order.
+    if (channelId === String(source.id)) {
+      channelId = getNextChannelAnchorId(source, targetGroupId);
+    }
+    return {
+      valid: true,
+      groupId: targetGroupId,
+      channelId,
+      after: false,
+      audioId: String(clip.id),
+      audioAfter,
+      element: node,
+      kind: "audio",
     };
   }
 
@@ -6201,7 +7133,7 @@
     if (!Number.isFinite(y)) return null;
     const candidates = [...container.children].filter((node) => (
       node !== sourceElement
-      && (node.matches?.("[data-channel-group-id]") || node.matches?.("[data-channel-id]"))
+      && (node.matches?.("[data-channel-group-id]") || node.matches?.("[data-channel-id]") || node.matches?.("[data-audio-clip-id]"))
       && !node.matches?.(".dragging-group-block")
     ));
     if (!candidates.length) {
@@ -6229,6 +7161,7 @@
         if (distance === 0) break;
       }
     }
+    if (best.node.matches?.("[data-audio-clip-id]")) return buildChannelDragTargetFromAudioNode(best.node, y);
     return buildChannelDragTargetFromNode(best.node, y);
   }
 
@@ -6247,6 +7180,11 @@
       const channelItem = hit.closest?.("[data-channel-id]");
       if (channelItem && container.contains(channelItem)) {
         const target = buildChannelDragTargetFromNode(channelItem, event.clientY);
+        if (target) return target;
+      }
+      const audioItem = hit.closest?.("[data-audio-clip-id]");
+      if (audioItem && container.contains(audioItem)) {
+        const target = buildChannelDragTargetFromAudioNode(audioItem, event.clientY);
         if (target) return target;
       }
     }
@@ -6278,20 +7216,27 @@
             reference = reference.nextElementSibling;
             continue;
           }
-          if (!(reference.matches?.("[data-channel-id].is-group-child"))) break;
+          if (!isRenderedGroupChildNode(reference)) break;
           reference = reference.nextElementSibling;
         }
       }
     } else if (target.kind === "group-edge" && target.element) {
       reference = target.edgeAfter ? target.element.nextElementSibling : target.element;
       if (target.edgeAfter) {
-        while (reference && reference.matches?.("[data-channel-id].is-group-child")) {
+        while (reference && isRenderedGroupChildNode(reference)) {
           reference = reference.nextElementSibling;
         }
       }
       if (reference === sourceElement) reference = sourceElement.nextElementSibling;
+    } else if (target.kind === "audio" && target.element && target.element !== sourceElement) {
+      reference = target.audioAfter ? target.element.nextElementSibling : target.element;
+      if (reference === sourceElement) reference = sourceElement.nextElementSibling;
     } else if (target.kind === "ungrouped") {
-      reference = container.querySelector("[data-audio-clip-id]");
+      // Root/end means the real end of the mixed channel/audio tree. The old
+      // code forced the preview in front of the first audio row, which made a
+      // downward extraction from the final group reverse direction and get
+      // rejected by the drag hysteresis.
+      reference = null;
     }
 
     const moveDirection = getLiveDomMoveDirection(container, sourceElement, reference);
@@ -6335,10 +7280,13 @@
     drag.dropGroupId = target.groupId ?? null;
     drag.dropChannelId = target.channelId ?? null;
     drag.dropAfter = Boolean(target.after);
+    drag.dropAudioId = target.audioId ?? null;
+    drag.dropAudioAfter = Boolean(target.audioAfter);
     drag.dropSourceGroupEdgeBefore = Boolean(target.sourceGroupEdgeBefore);
     if (target.kind === "group") target.element?.classList.add("drop-group-target");
     else if (target.kind === "group-edge") target.element?.classList.add(target.edgeAfter ? "drop-group-after" : "drop-group-before");
     else if (target.kind === "channel") target.element?.classList.add(target.after ? "drop-after" : "drop-before");
+    else if (target.kind === "audio") target.element?.classList.add(target.audioAfter ? "drop-after" : "drop-before");
     else container.classList.add("drop-ungrouped-target");
   }
 
@@ -6353,6 +7301,8 @@
     state.channelDrag.dropGroupId = null;
     state.channelDrag.dropChannelId = null;
     state.channelDrag.dropAfter = false;
+    state.channelDrag.dropAudioId = null;
+    state.channelDrag.dropAudioAfter = false;
     state.channelDrag.dropSourceGroupEdgeBefore = false;
     state.channelDrag.lastPointerY = 0;
     state.channelDrag.direction = 0;
@@ -6388,6 +7338,8 @@
     state.channelDrag.dropGroupId = null;
     state.channelDrag.dropChannelId = null;
     state.channelDrag.dropAfter = false;
+    state.channelDrag.dropAudioId = null;
+    state.channelDrag.dropAudioAfter = false;
     state.channelDrag.dropSourceGroupEdgeBefore = false;
     state.channelDrag.lastPointerY = event.clientY;
     state.channelDrag.direction = 0;
@@ -6413,13 +7365,15 @@
     event.preventDefault();
   }
 
-  function commitChannelDragDrop(sourceId, { groupId = null, channelId = null, after = false, sourceGroupEdgeBefore = false } = {}) {
+  function commitChannelDragDrop(sourceId, { groupId = null, channelId = null, after = false, audioId = null, audioAfter = false, sourceGroupEdgeBefore = false } = {}) {
     const source = getChannelById(sourceId);
     if (!source) return false;
     const previousGroupId = source.groupId == null ? null : String(source.groupId);
     const previousGroup = previousGroupId == null ? null : getChannelGroupById(previousGroupId);
     const previousGroupMemberCount = previousGroup ? getChannelGroupMembers(previousGroup).length : 0;
     const targetGroup = groupId == null ? null : getChannelGroupById(groupId);
+    const targetAudio = audioId == null ? null : state.audioClips.find((clip) => String(clip.id) === String(audioId));
+    const targetAudioPreviousAnchor = targetAudio?.beforeChannelId == null ? null : String(targetAudio.beforeChannelId);
     const nextGroupId = targetGroup ? targetGroup.id : null;
     const activeChannelId = getActiveChannel()?.id;
     const beforeOrder = state.channels.map((channel) => String(channel.id));
@@ -6449,11 +7403,27 @@
     const afterOrder = withoutSource.map((channel) => String(channel.id));
     const orderChanged = beforeOrder.some((id, index) => id !== afterOrder[index]);
     const groupChanged = previousGroupId !== (nextGroupId == null ? null : String(nextGroupId));
-    if (!orderChanged && !groupChanged) {
+    const audioAnchorWillChange = Boolean(targetAudio) && (
+      (audioAfter && targetAudioPreviousAnchor !== String(source.id))
+      || (!audioAfter && targetAudioPreviousAnchor === String(source.id))
+    );
+    if (!orderChanged && !groupChanged && !audioAnchorWillChange) {
       renderChannelTabs();
       return false;
     }
     state.channels = withoutSource;
+    // Keep an exact channel/audio visual order when the channel is dropped on an
+    // audio leaf. Audio rows are anchored before a channel; anchoring the audio
+    // to the moved channel means the channel sits immediately after that audio.
+    // For a drop before the audio, clear a self-anchor so normal render order
+    // places the channel before the audio instead.
+    if (targetAudio) {
+      if (audioAfter) {
+        targetAudio.beforeChannelId = String(source.id);
+      } else if (String(targetAudio.beforeChannelId ?? "") === String(source.id)) {
+        targetAudio.beforeChannelId = getNextChannelAnchorId(source, targetAudio.groupId ?? null);
+      }
+    }
     if (activeChannelId != null) {
       const activeIndex = state.channels.findIndex((channel) => String(channel.id) === String(activeChannelId));
       if (activeIndex >= 0) state.activeChannel = activeIndex;
@@ -6482,6 +7452,8 @@
       groupId: drag.dropGroupId,
       channelId: drag.dropChannelId,
       after: drag.dropAfter,
+      audioId: drag.dropAudioId,
+      audioAfter: drag.dropAudioAfter,
       sourceGroupEdgeBefore: drag.dropSourceGroupEdgeBefore,
     };
     try { drag.sourceElement?.releasePointerCapture(event.pointerId); } catch {}
@@ -6538,7 +7510,7 @@
   }
 
   function isRenderedGroupChildNode(node) {
-    return Boolean(node?.matches?.(".channel-tree-channel-item.is-group-child, .sidebar-rail-channel.is-group-child"));
+    return Boolean(node?.matches?.(".channel-tree-channel-item.is-group-child, .audio-source-item.is-group-child, .sidebar-rail-channel.is-group-child"));
   }
 
   function getRenderedGroupBlock(groupId, container = getChannelGroupDragContainer()) {
@@ -6547,8 +7519,13 @@
     const result = [header];
     let node = header.nextElementSibling;
     while (isRenderedGroupChildNode(node)) {
-      const channel = getChannelById(node.dataset.channelId);
-      if (String(channel?.groupId ?? "") !== String(groupId)) break;
+      if (node.dataset.audioClipId != null) {
+        const clip = state.audioClips.find((item) => String(item.id) === String(node.dataset.audioClipId));
+        if (String(clip?.groupId ?? "") !== String(groupId)) break;
+      } else {
+        const channel = getChannelById(node.dataset.channelId);
+        if (String(channel?.groupId ?? "") !== String(groupId)) break;
+      }
       result.push(node);
       node = node.nextElementSibling;
     }
@@ -6892,7 +7869,370 @@
       volume: clamp(Number.isFinite(Number(raw?.volume)) ? Number(raw.volume) : 0.3, 0, 1),
       playbackRate: clamp(Number.isFinite(Number(raw?.playbackRate)) ? Number(raw.playbackRate) : 1, 0.25, 4),
       assetAvailable: raw?.assetAvailable !== false,
+      groupId: raw?.groupId == null || raw?.groupId === "" ? null : String(raw.groupId),
+      beforeChannelId: raw?.beforeChannelId == null || raw?.beforeChannelId === "" ? null : String(raw.beforeChannelId),
     };
+  }
+
+  function getAudioClipGroup(clipOrId) {
+    const clip = typeof clipOrId === "object" && clipOrId
+      ? clipOrId
+      : state.audioClips.find((item) => String(item.id) === String(clipOrId));
+    if (!clip || clip.groupId == null) return null;
+    return getChannelGroupById(clip.groupId);
+  }
+
+  function getChannelGroupAudioMembers(groupOrId) {
+    const groupId = typeof groupOrId === "object" && groupOrId ? groupOrId.id : groupOrId;
+    if (groupId == null) return [];
+    return state.audioClips.filter((clip) => String(clip.groupId ?? "") === String(groupId));
+  }
+
+  function normalizeAudioGroupMemberships() {
+    const validGroups = new Set(state.channelGroups.map((group) => String(group.id)));
+    const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
+    let changed = false;
+    for (const clip of state.audioClips) {
+      if (clip.groupId != null && !validGroups.has(String(clip.groupId))) {
+        clip.groupId = null;
+        changed = true;
+      }
+      if (clip.beforeChannelId != null) {
+        const anchor = channelById.get(String(clip.beforeChannelId));
+        if (!anchor || (clip.groupId != null && String(anchor.groupId ?? "") !== String(clip.groupId))) {
+          clip.beforeChannelId = null;
+          changed = true;
+        }
+      }
+    }
+    return changed;
+  }
+
+  function getNextChannelAnchorId(channel, groupId = channel?.groupId ?? null) {
+    if (!channel) return null;
+    const start = state.channels.findIndex((item) => String(item.id) === String(channel.id));
+    if (start < 0) return null;
+    for (let i = start + 1; i < state.channels.length; i += 1) {
+      const candidate = state.channels[i];
+      if (groupId == null) return String(candidate.id);
+      if (String(candidate.groupId ?? "") === String(groupId)) return String(candidate.id);
+      if (candidate.groupId == null) break;
+    }
+    return null;
+  }
+
+  function getRootAnchorBeforeGroup(group) {
+    const members = getChannelGroupMembers(group);
+    if (members.length) return String(members[0].id);
+    return group?.beforeChannelId == null ? null : String(group.beforeChannelId);
+  }
+
+  function activateAudioForPointerDrag(clipId) {
+    const clip = state.audioClips.find((item) => String(item.id) === String(clipId));
+    if (!clip) return false;
+    state.activePanel = "audio";
+    state.activeAudioClipId = clip.id;
+    state.selectedChannelGroupId = null;
+    clearNoteSelection();
+    clearMidiSelection();
+    elements.channelTabs?.querySelectorAll(".audio-source-item").forEach((node) => {
+      const active = String(node.dataset.audioClipId || "") === String(clipId);
+      node.classList.toggle("active", active);
+      node.setAttribute("aria-selected", String(active));
+    });
+    elements.channelTabs?.querySelectorAll(".channel-tree-channel-item, .channel-group-item").forEach((node) => {
+      node.classList.remove("active");
+      if (node.matches?.(".channel-tree-channel-item")) node.setAttribute("aria-selected", "false");
+    });
+    elements.audioLaneContent?.querySelectorAll(".audio-clip-block").forEach((node) => {
+      node.classList.toggle("active", String(node.dataset.audioClipId || "") === String(clipId));
+    });
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    return true;
+  }
+
+  function moveAudioTreePreviewElement(target) {
+    const drag = state.audioTreeDrag;
+    const container = drag.container || elements.channelTabs;
+    const sourceElement = drag.sourceElement;
+    if (!target || !container || !sourceElement) return false;
+
+    let reference = null;
+    if ((target.kind === "audio" || target.kind === "channel") && target.element && target.element !== sourceElement) {
+      reference = target.after ? target.element.nextElementSibling : target.element;
+      if (reference === sourceElement) reference = sourceElement.nextElementSibling;
+    } else if (target.kind === "group" && target.element) {
+      if (!target.after) {
+        reference = target.element.nextElementSibling;
+        if (reference === sourceElement) reference = reference.nextElementSibling;
+      } else {
+        reference = target.element.nextElementSibling;
+        while (reference) {
+          if (reference === sourceElement) {
+            reference = reference.nextElementSibling;
+            continue;
+          }
+          if (!isRenderedGroupChildNode(reference)) break;
+          reference = reference.nextElementSibling;
+        }
+      }
+    } else if (target.kind === "root" && target.element) {
+      if (target.edge === "after") {
+        reference = target.element.nextElementSibling;
+        while (reference) {
+          if (reference === sourceElement) {
+            reference = reference.nextElementSibling;
+            continue;
+          }
+          if (!isRenderedGroupChildNode(reference)) break;
+          reference = reference.nextElementSibling;
+        }
+      } else {
+        reference = target.element;
+      }
+      if (reference === sourceElement) reference = sourceElement.nextElementSibling;
+    } else if (target.kind === "root") {
+      reference = null;
+    }
+
+    const moveDirection = getLiveDomMoveDirection(container, sourceElement, reference);
+    const groupedPreview = target.groupId != null;
+    const groupingChanged = sourceElement.classList.contains("is-group-child") !== groupedPreview;
+    if (moveDirection && !dragDirectionAllowsLiveMove(drag, moveDirection)) return false;
+
+    sourceElement.classList.toggle("is-group-child", groupedPreview);
+    sourceElement.setAttribute("aria-level", groupedPreview ? "2" : "1");
+    if (moveDirection || groupingChanged) {
+      if (reference !== sourceElement && (moveDirection || reference)) {
+        container.insertBefore(sourceElement, reference || null);
+      } else if (reference == null && sourceElement !== container.lastElementChild) {
+        container.append(sourceElement);
+      }
+    }
+    return true;
+  }
+
+  function resetAudioTreeDrag() {
+    const drag = state.audioTreeDrag;
+    try { drag.sourceElement?.releasePointerCapture?.(drag.pointerId); } catch {}
+    drag.sourceElement?.classList.remove("dragging");
+    elements.channelTabs?.querySelectorAll(".drop-before, .drop-after, .drop-group-target, .drop-group-before, .drop-group-after").forEach((node) => {
+      node.classList.remove("drop-before", "drop-after", "drop-group-target", "drop-group-before", "drop-group-after");
+    });
+    drag.sourceId = null;
+    drag.pointerId = null;
+    drag.startX = 0;
+    drag.startY = 0;
+    drag.lastPointerY = 0;
+    drag.direction = 0;
+    drag.directionExtremeY = 0;
+    drag.dragging = false;
+    drag.sourceElement = null;
+    drag.container = null;
+    drag.dropTarget = null;
+    drag.previewNextAudioId = null;
+  }
+
+  function cancelAudioTreeDrag({ rerender = true } = {}) {
+    if (!state.audioTreeDrag.sourceId) return false;
+    resetAudioTreeDrag();
+    if (rerender) renderChannelTabs();
+    return true;
+  }
+
+  function buildAudioTreeTargetFromNode(node, clientY) {
+    if (!node) return null;
+    const source = state.audioClips.find((clip) => String(clip.id) === String(state.audioTreeDrag.sourceId));
+    if (!source) return null;
+    if (node.matches?.("[data-audio-clip-id]")) {
+      const target = state.audioClips.find((clip) => String(clip.id) === String(node.dataset.audioClipId));
+      if (!target || String(target.id) === String(source.id)) return null;
+      const rect = node.getBoundingClientRect();
+      return { kind: "audio", targetAudioId: String(target.id), groupId: target.groupId ?? null, beforeChannelId: target.beforeChannelId ?? null, after: Number(clientY) >= rect.top + rect.height / 2, element: node };
+    }
+    if (node.matches?.("[data-channel-id]")) {
+      const channel = getChannelById(node.dataset.channelId);
+      if (!channel) return null;
+      const rect = node.getBoundingClientRect();
+      const after = Number(clientY) >= rect.top + rect.height / 2;
+      return {
+        kind: "channel",
+        groupId: channel.groupId ?? null,
+        beforeChannelId: after ? getNextChannelAnchorId(channel, channel.groupId ?? null) : String(channel.id),
+        after,
+        element: node,
+      };
+    }
+    if (node.matches?.("[data-channel-group-id]")) {
+      const group = getChannelGroupById(node.dataset.channelGroupId);
+      if (!group) return null;
+      const rect = node.getBoundingClientRect();
+      const midpoint = rect.top + rect.height / 2;
+      const direction = Number(state.audioTreeDrag.direction) || 0;
+      const sourceGroupId = source.groupId == null ? null : String(source.groupId);
+      const targetGroupId = String(group.id);
+      if (sourceGroupId != null) {
+        if (sourceGroupId === targetGroupId && direction < 0 && Number(clientY) < midpoint) {
+          return { kind: "root", groupId: null, beforeChannelId: getRootAnchorBeforeGroup(group), after: false, element: node, edge: "before" };
+        }
+        if (sourceGroupId !== targetGroupId && direction > 0 && Number(clientY) < midpoint) {
+          return { kind: "root", groupId: null, beforeChannelId: getRootAnchorBeforeGroup(group), after: false, element: node, edge: "before" };
+        }
+        if (sourceGroupId !== targetGroupId && direction < 0 && Number(clientY) >= midpoint) {
+          return { kind: "root", groupId: null, beforeChannelId: findChannelAfterTopLevelGroup(group.id)?.id ?? null, after: true, element: node, edge: "after" };
+        }
+      }
+      const enterAtStart = direction > 0 || (direction === 0 && Number(clientY) < midpoint);
+      const firstMember = getChannelGroupMembers(group)[0] || null;
+      return { kind: "group", groupId: group.id, beforeChannelId: enterAtStart && firstMember ? String(firstMember.id) : null, after: !enterAtStart, element: node };
+    }
+    return null;
+  }
+
+  function resolveAudioTreeDragTarget(event) {
+    const container = state.audioTreeDrag.container || elements.channelTabs;
+    if (!container) return null;
+    const rect = container.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return null;
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    const item = hit?.closest?.("[data-audio-clip-id], [data-channel-id], [data-channel-group-id]");
+    if (item && container.contains(item)) {
+      const target = buildAudioTreeTargetFromNode(item, event.clientY);
+      if (target) return target;
+    }
+    const candidates = [...container.children].filter((node) => (
+      node !== state.audioTreeDrag.sourceElement
+      && (node.matches?.("[data-audio-clip-id]") || node.matches?.("[data-channel-id]") || node.matches?.("[data-channel-group-id]"))
+    ));
+    if (!candidates.length) return { kind: "root", groupId: null, beforeChannelId: null, after: true, element: null };
+    const y = Number(event.clientY);
+    const measured = candidates.map((node) => ({ node, rect: node.getBoundingClientRect() }));
+    if (y > measured[measured.length - 1].rect.bottom) return { kind: "root", groupId: null, beforeChannelId: null, after: true, element: null };
+    let best = measured[0];
+    let distance = Infinity;
+    for (const entry of measured) {
+      const d = y < entry.rect.top ? entry.rect.top - y : (y > entry.rect.bottom ? y - entry.rect.bottom : 0);
+      if (d < distance) { best = entry; distance = d; if (d === 0) break; }
+    }
+    return buildAudioTreeTargetFromNode(best.node, y);
+  }
+
+  function beginAudioTreeDrag(event, clipId, item, container = elements.channelTabs) {
+    if (isChannelMergeModeActive() || isChannelDeleteModeActive()) return;
+    if (event.button !== 0 || event.target.closest(".channel-tree-action")) return;
+    activateAudioForPointerDrag(clipId);
+    const drag = state.audioTreeDrag;
+    drag.sourceId = String(clipId);
+    drag.pointerId = event.pointerId;
+    drag.startX = event.clientX;
+    drag.startY = event.clientY;
+    drag.lastPointerY = event.clientY;
+    drag.direction = 0;
+    drag.directionExtremeY = event.clientY;
+    drag.dragging = false;
+    drag.sourceElement = item;
+    drag.container = container || item.parentElement || elements.channelTabs;
+    drag.dropTarget = null;
+    drag.previewNextAudioId = null;
+    // Match channel/group dragging: do not capture the pointer on the moving DOM row.
+    // Re-inserting a captured audio row during live preview can release capture and
+    // cancel the gesture. Movement/up are tracked on window instead.
+  }
+
+  function moveAudioTreeDrag(event) {
+    const drag = state.audioTreeDrag;
+    if (!drag.sourceId || drag.pointerId !== event.pointerId) return;
+    if (event.pointerType === "mouse" && (event.buttons & 1) === 0) { cancelAudioTreeDrag(); return; }
+    if (!drag.dragging && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 7) {
+      drag.dragging = true;
+      drag.sourceElement?.classList.add("dragging");
+    }
+    if (!drag.dragging) return;
+    updateChannelTreeDragDirection(drag, event.clientY);
+    const container = drag.container || elements.channelTabs;
+    const rect = container?.getBoundingClientRect();
+    if (rect) {
+      if (event.clientY < rect.top + 42) container.scrollTop -= 14;
+      else if (event.clientY > rect.bottom - 42) container.scrollTop += 14;
+    }
+    container?.querySelectorAll(".drop-before, .drop-after, .drop-group-target, .drop-group-before, .drop-group-after").forEach((node) => {
+      node.classList.remove("drop-before", "drop-after", "drop-group-target", "drop-group-before", "drop-group-after");
+    });
+    const target = resolveAudioTreeDragTarget(event);
+    if (target) {
+      moveAudioTreePreviewElement(target);
+      let nextNode = drag.sourceElement?.nextElementSibling || null;
+      while (nextNode && nextNode.dataset?.audioClipId == null) nextNode = nextNode.nextElementSibling;
+      drag.previewNextAudioId = nextNode?.dataset?.audioClipId == null ? null : String(nextNode.dataset.audioClipId);
+    }
+    drag.dropTarget = target;
+    if (target?.element) {
+      if (target.kind === "group") target.element.classList.add("drop-group-target");
+      else if (target.kind === "root" && target.edge) target.element.classList.add(target.edge === "after" ? "drop-group-after" : "drop-group-before");
+      else target.element.classList.add(target.after ? "drop-after" : "drop-before");
+    }
+    event.preventDefault();
+  }
+
+  function commitAudioTreeDrag(sourceId, target, { previewNextAudioId = null } = {}) {
+    const sourceIndex = state.audioClips.findIndex((clip) => String(clip.id) === String(sourceId));
+    if (sourceIndex < 0 || !target) return false;
+    const source = state.audioClips[sourceIndex];
+    const previousGroupId = source.groupId == null ? null : String(source.groupId);
+    const previousBefore = source.beforeChannelId == null ? null : String(source.beforeChannelId);
+    const remaining = state.audioClips.filter((clip) => String(clip.id) !== String(sourceId));
+    let insertIndex = remaining.length;
+    if (previewNextAudioId != null) {
+      const nextIndex = remaining.findIndex((clip) => String(clip.id) === String(previewNextAudioId));
+      if (nextIndex >= 0) insertIndex = nextIndex;
+    } else if (target.kind === "audio" && target.targetAudioId) {
+      const targetIndex = remaining.findIndex((clip) => String(clip.id) === String(target.targetAudioId));
+      if (targetIndex >= 0) insertIndex = targetIndex + (target.after ? 1 : 0);
+    } else if (target.kind === "group" && target.groupId != null) {
+      const groupIndexes = remaining
+        .map((clip, index) => String(clip.groupId ?? "") === String(target.groupId) ? index : -1)
+        .filter((index) => index >= 0);
+      if (groupIndexes.length) insertIndex = target.after ? Math.max(...groupIndexes) + 1 : Math.min(...groupIndexes);
+    }
+    source.groupId = target.groupId == null ? null : String(target.groupId);
+    source.beforeChannelId = target.beforeChannelId == null ? null : String(target.beforeChannelId);
+    if (source.groupId != null) {
+      const anchor = source.beforeChannelId == null ? null : getChannelById(source.beforeChannelId);
+      if (anchor && String(anchor.groupId ?? "") !== String(source.groupId)) source.beforeChannelId = null;
+    }
+    remaining.splice(clamp(insertIndex, 0, remaining.length), 0, source);
+    const orderChanged = state.audioClips.some((clip, index) => String(clip.id) !== String(remaining[index]?.id));
+    const groupChanged = previousGroupId !== (source.groupId == null ? null : String(source.groupId));
+    const anchorChanged = previousBefore !== (source.beforeChannelId == null ? null : String(source.beforeChannelId));
+    if (!orderChanged && !groupChanged && !anchorChanged) { renderChannelTabs(); return false; }
+    state.audioClips = remaining;
+    markDirty("오디오 목록 순서 변경");
+    renderChannelTabs();
+    renderChannelEditor();
+    renderAudioLane();
+    if (groupChanged) {
+      const group = source.groupId == null ? null : getChannelGroupById(source.groupId);
+      showToast(group ? `${source.title} 오디오를 ${group.name} 그룹으로 이동했습니다.` : `${source.title} 오디오를 그룹 밖으로 이동했습니다.`);
+    }
+    return true;
+  }
+
+  function endAudioTreeDrag(event) {
+    const drag = state.audioTreeDrag;
+    if (!drag.sourceId || drag.pointerId !== event.pointerId) return;
+    const sourceId = drag.sourceId;
+    const dragged = drag.dragging;
+    const target = drag.dropTarget;
+    const previewNextAudioId = drag.previewNextAudioId;
+    resetAudioTreeDrag();
+    if (dragged) {
+      if (target) commitAudioTreeDrag(sourceId, target, { previewNextAudioId });
+      else renderChannelTabs();
+      return;
+    }
+    handleAudioEditActivation(sourceId);
   }
 
   function getActiveAudioClip() {
@@ -6907,10 +8247,43 @@
     return state.audioRuntime.get(String(clipId)) || null;
   }
 
+  function updateAudioClipVisibleLabels() {
+    const viewport = elements.audioLaneViewport;
+    const content = elements.audioLaneContent;
+    if (!viewport || !content) return;
+    const scrollLeft = Math.max(0, Number(elements.rollViewport?.scrollLeft) || 0);
+    const viewportWidth = Math.max(1, Number(viewport.clientWidth) || 1);
+    const visibleRight = scrollLeft + viewportWidth;
+    content.querySelectorAll(".audio-clip-block").forEach((block) => {
+      const main = block.querySelector(".audio-clip-main");
+      if (!main) return;
+      const blockLeft = Number.parseFloat(block.style.left) || 0;
+      const blockWidth = Math.max(0, Number.parseFloat(block.style.width) || block.offsetWidth || 0);
+      if (blockWidth <= 0) return;
+      const blockRight = blockLeft + blockWidth;
+      const visibleStartInBlock = clamp(Math.max(blockLeft, scrollLeft) - blockLeft, 0, blockWidth);
+      const visibleEndInBlock = clamp(Math.min(blockRight, visibleRight) - blockLeft, 0, blockWidth);
+      const visibleWidth = Math.max(0, visibleEndInBlock - visibleStartInBlock);
+      if (visibleWidth < 18) {
+        main.style.visibility = "hidden";
+        return;
+      }
+      main.style.visibility = "visible";
+      // Keep both title (left) and status (right) inside the currently visible part
+      // of a long clip. The 9px inset clears the resize handles when an edge is visible.
+      const edgeInset = 9;
+      const left = Math.max(edgeInset, visibleStartInBlock + 3);
+      const right = Math.max(edgeInset, blockWidth - visibleEndInBlock + 3);
+      main.style.left = `${Math.round(left)}px`;
+      main.style.right = `${Math.round(right)}px`;
+    });
+  }
+
   function updateAudioLaneTransform() {
     if (!elements.audioLaneContent) return;
     elements.audioLaneContent.style.width = `${getRollWidth()}px`;
     elements.audioLaneContent.style.transform = `translateX(${-Math.round(elements.rollViewport?.scrollLeft || 0)}px)`;
+    updateAudioClipVisibleLabels();
   }
 
   function updateAudioSourceInspector() {
@@ -6947,12 +8320,16 @@
     state.activeAudioClipId = clip.id;
     clearNoteSelection();
     clearMidiSelection();
+    // Audio selection must not leave stale channel velocity information visible.
+    hideVelocityLaneTooltip();
+    state.velocityLaneHitRegions = [];
+    state.velocityLaneRenderItems = [];
     state.timelineBeats = Math.max(getMinimumTimelineBeats(), getAudioClipEndBeat(clip) + CONFIG.minimumNoteBeat);
     renderChannelTabs();
     renderChannelEditor();
     renderAudioLane();
     // 노트는 캔버스에 그려지므로 state만 비우면 선택 하이라이트가 화면에 남습니다.
-    // 오디오 선택 즉시 피아노롤도 다시 그려 양쪽 선택이 동시에 보이지 않게 합니다.
+    // 오디오 선택 즉시 피아노롤/볼륨 편집기도 다시 그려 이전 채널 정보가 남지 않게 합니다.
     drawRoll();
     updateChannelInfo();
     updatePlayheadVisual();
@@ -6970,21 +8347,56 @@
     return true;
   }
 
-  function setAudioClipMuted(clipId, muted, { notify = true } = {}) {
+  function setAudioClipVisibilitySoloById(clipId, solo, { notify = true } = {}) {
+    const clip = state.audioClips.find((item) => String(item.id) === String(clipId));
+    if (!clip) return false;
+    const key = String(clip.id);
+    const nextSolo = Boolean(solo);
+    if (state.visibilitySoloAudioClipIds.has(key) === nextSolo) return false;
+    if (nextSolo) state.visibilitySoloAudioClipIds.add(key);
+    else state.visibilitySoloAudioClipIds.delete(key);
+    setDirtyWithoutHistory();
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    renderAudioLane();
+    updateChannelInfo();
+    if (notify) showToast(`${clip.title} 표시 싱글 ${nextSolo ? "켬" : "해제"}`);
+    return true;
+  }
+
+  function setAudioClipMuted(clipId, muted, { notify = true, deferPlayback = false } = {}) {
     const clip = state.audioClips.find((item) => String(item.id) === String(clipId));
     if (!clip || clip.muted === Boolean(muted)) return false;
-    const wasPlaying = state.playback.running || state.playback.loading;
+    const beforeAudioAudible = captureAudioAudibleStates();
     clip.muted = Boolean(muted);
     setDirtyWithoutHistory();
     renderChannelTabs();
     renderAudioLane();
-    if (wasPlaying) {
-      const beat = state.playhead.beat;
-      stopPlayback(false);
-      state.playhead.beat = beat;
-      window.setTimeout(() => startPlayback(), 0);
-    }
+    if (!deferPlayback) refreshAudioPlaybackForAudibleStateChange(beforeAudioAudible);
     if (notify) showToast(i18nText(clip.muted ? "ui.mute_2" : "ui.unmute_2", [clip.title]));
+    return true;
+  }
+
+  function setAudioClipSoloById(clipId, solo, { notify = true, deferPlayback = false } = {}) {
+    const clip = state.audioClips.find((item) => String(item.id) === String(clipId));
+    if (!clip) return false;
+    const key = String(clip.id);
+    const nextSolo = Boolean(solo);
+    if (state.soloAudioClipIds.has(key) === nextSolo) return false;
+    const beforeChannelAudible = captureChannelAudibleStates();
+    const beforeAudioAudible = captureAudioAudibleStates();
+    if (nextSolo) state.soloAudioClipIds.add(key);
+    else state.soloAudioClipIds.delete(key);
+    setDirtyWithoutHistory();
+    refreshChannelPlaybackForAudibleStateChange(beforeChannelAudible);
+    if (!deferPlayback) refreshAudioPlaybackForAudibleStateChange(beforeAudioAudible);
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    renderAudioLane();
+    updateChannelInfo();
+    if (notify) showToast(`${clip.title} 싱글 ${nextSolo ? "켬" : "해제"}`);
     return true;
   }
 
@@ -7006,14 +8418,10 @@
   async function requestDeleteAudioClip(clipId = state.activeAudioClipId) {
     const clip = state.audioClips.find((item) => String(item.id) === String(clipId));
     if (!clip) return false;
-    const confirmed = await showConfirmDialog({
-      title: "오디오 삭제",
-      message: `${clip.title} 오디오를 삭제할까요?`,
-      confirmLabel: "삭제",
-    });
-    if (!confirmed) return false;
     const index = state.audioClips.indexOf(clip);
     state.audioClips.splice(index, 1);
+    state.soloAudioClipIds.delete(String(clip.id));
+    state.visibilitySoloAudioClipIds.delete(String(clip.id));
     if (String(state.activeAudioClipId) === String(clip.id)) {
       state.activeAudioClipId = null;
       state.activePanel = "notes";
@@ -7130,15 +8538,15 @@
     state.playback.audioSources = new Set();
   }
 
-  function scheduleAudioClipsForPlayback() {
+  function scheduleAudioClipsForPlayback({ startBeat = state.playback.startBeat, audioStartTime = state.playback.audioStartTime } = {}) {
     const context = audioEngine.context;
     if (!context) return 0;
     const globalRate = Math.max(0.01, Number(state.playbackRate) || 1);
-    const playbackStartSeconds = state.playback.startSeconds;
+    const playbackStartSeconds = beatToSecondsFromMap(Math.max(0, Number(startBeat) || 0), state.playback.tempoMap);
     let scheduled = 0;
     stopScheduledAudioClips();
     for (const clip of state.audioClips) {
-      if (clip.muted) continue;
+      if (isAudioClipEffectivelyMuted(clip)) continue;
       const runtime = getAudioRuntime(clip.id);
       const buffer = runtime?.audioBuffer;
       if (!buffer) continue;
@@ -7162,7 +8570,7 @@
       gain.gain.value = clamp(Number(clip.volume) || 0, 0, 1);
       source.connect(gain);
       gain.connect(audioEngine.masterGain || context.destination);
-      const startAt = state.playback.audioStartTime + Math.max(0, audibleStartSeconds - playbackStartSeconds) / globalRate;
+      const startAt = audioStartTime + Math.max(0, audibleStartSeconds - playbackStartSeconds) / globalRate;
       source.start(Math.max(context.currentTime + 0.004, startAt), sourceOffset, sourceDuration);
       source.onended = () => {
         state.playback.audioSources.delete(source);
@@ -7217,7 +8625,7 @@
   function getAudioClipsInDisplayOrder({ visibleOnly = false } = {}) {
     return state.audioClips
       .map((clip, sourceIndex) => ({ clip, sourceIndex }))
-      .filter(({ clip }) => !visibleOnly || clip.visible !== false)
+      .filter(({ clip }) => !visibleOnly || isAudioClipEffectivelyVisible(clip))
       .sort((left, right) => (
         (Number(right.clip.startBeat) || 0) - (Number(left.clip.startBeat) || 0)
         || getAudioClipEndBeat(right.clip) - getAudioClipEndBeat(left.clip)
@@ -7267,6 +8675,10 @@
 
   function renderAudioLane() {
     if (!elements.audioLaneContent || !elements.audioLaneViewport) return;
+    if (!state.audioLaneVisible) {
+      invalidatePlayheadLayout();
+      return;
+    }
     invalidatePlayheadLayout();
     elements.audioLaneContent.replaceChildren();
     updateAudioLaneTransform();
@@ -7275,11 +8687,12 @@
     const activeId = String(state.activeAudioClipId || "");
     getVisibleAudioClipsInDisplayOrder().forEach(({ clip, sourceIndex: index }) => {
       const block = document.createElement("div");
-      block.className = `audio-clip-block${String(clip.id) === activeId ? " active" : ""}${clip.muted ? " is-muted" : ""}${clip.assetAvailable === false ? " is-missing" : ""}`;
+      block.className = `audio-clip-block${String(clip.id) === activeId ? " active" : ""}${isAudioClipEffectivelyMuted(clip) ? " is-muted" : ""}${clip.assetAvailable === false ? " is-missing" : ""}`;
       block.style.setProperty("--audio-clip-color", getAudioClipColor(clip, index));
       block.style.left = `${beatToX(clip.startBeat)}px`;
       block.style.width = `${Math.max(8, getAudioClipEndBeat(clip) * getQuarterWidth() - clip.startBeat * getQuarterWidth())}px`;
       block.dataset.audioClipId = String(clip.id);
+      block.dataset.contextArea = "audio-source";
       block.title = i18nText("audio.block_tooltip", [clip.title, clip.startBeat.toFixed(3), getAudioClipEndBeat(clip).toFixed(3), clip.assetAvailable === false ? i18nText("audio.source_needs_reloading") : ""]);
 
       const leftHandle = document.createElement("button");
@@ -7388,6 +8801,7 @@
       elements.audioLaneContent.append(block);
     });
     updateAudioClipVerticalOrder();
+    updateAudioClipVisibleLabels();
     if (elements.audioLaneLabel) {
       const label = document.createElement("span");
       label.className = "audio-lane-icon";
@@ -7466,7 +8880,7 @@
       const groupButton = document.createElement("button");
       groupButton.type = "button";
       const groupActive = String(state.selectedChannelGroupId ?? "") === key;
-      groupButton.className = `sidebar-rail-channel sidebar-rail-group${groupActive ? " active" : ""}${group.visible === false ? " is-hidden" : ""}${group.muted ? " is-muted" : ""}`;
+      groupButton.className = `sidebar-rail-channel sidebar-rail-group${groupActive ? " active" : ""}${!isChannelGroupEffectivelyVisible(group) ? " is-hidden" : ""}${isChannelGroupEffectivelyMuted(group) ? " is-muted" : ""}`;
       groupButton.style.setProperty("--group-accent", getChannelGroupColor(group, state.channelGroups.indexOf(group), "soft"));
       groupButton.textContent = group.collapsed ? "📁" : "📂";
       groupButton.title = group.name;
@@ -7497,7 +8911,7 @@
       const groupButton = document.createElement("button");
       groupButton.type = "button";
       const groupActive = String(state.selectedChannelGroupId ?? "") === key;
-      groupButton.className = `sidebar-rail-channel sidebar-rail-group${groupActive ? " active" : ""}`;
+      groupButton.className = `sidebar-rail-channel sidebar-rail-group${groupActive ? " active" : ""}${!isChannelGroupEffectivelyVisible(group) ? " is-hidden" : ""}${isChannelGroupEffectivelyMuted(group) ? " is-muted" : ""}`;
       groupButton.style.setProperty("--group-accent", getChannelGroupColor(group, state.channelGroups.indexOf(group), "soft"));
       groupButton.textContent = group.collapsed ? "📁" : "📂";
       groupButton.title = group.name;
@@ -7529,25 +8943,47 @@
       if (groupNode && anchorNode && groupNode !== anchorNode) list.insertBefore(groupNode, anchorNode);
     });
 
-    getAudioClipsInDisplayOrder().forEach(({ clip, sourceIndex: clipIndex }, audioIndex) => {
+    state.audioClips.forEach((clip, clipIndex) => {
+      const group = getAudioClipGroup(clip);
+      if (group?.collapsed) return;
       const active = state.activePanel === "audio" && String(state.activeAudioClipId) === String(clip.id);
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `sidebar-rail-channel sidebar-rail-audio${active ? " active" : ""}${clip.muted ? " is-muted" : ""}${clip.visible === false ? " is-hidden" : ""}`;
+      button.className = `sidebar-rail-channel sidebar-rail-audio${group ? " is-group-child" : ""}${active ? " active" : ""}${isAudioClipEffectivelyMuted(clip) ? " is-muted" : ""}${!isAudioClipEffectivelyVisible(clip) ? " is-hidden" : ""}`;
       button.style.setProperty("--channel-color", getAudioClipColor(clip, clipIndex));
-      button.textContent = `♫${audioIndex + 1}`;
+      button.textContent = `♫${clipIndex + 1}`;
       button.title = clip.title;
       button.setAttribute("role", "option");
       button.setAttribute("aria-selected", String(active));
-      button.setAttribute("aria-label", `오디오 ${audioIndex + 1} ${clip.title}`);
+      button.setAttribute("aria-label", `오디오 ${clipIndex + 1} ${clip.title}`);
       button.dataset.audioClipId = String(clip.id);
       button.dataset.contextArea = "audio-source";
-      button.addEventListener("click", () => handleAudioEditActivation(clip.id));
+      button.addEventListener("pointerdown", (event) => beginAudioTreeDrag(event, clip.id, button, list));
+      button.addEventListener("click", (event) => { if (event.detail === 0) handleAudioEditActivation(clip.id); });
       list.append(button);
+      let reference = null;
+      if (group) {
+        if (clip.beforeChannelId != null) {
+          const anchor = getChannelById(clip.beforeChannelId);
+          if (String(anchor?.groupId ?? "") === String(group.id)) reference = list.querySelector(`[data-channel-id="${CSS.escape(String(anchor.id))}"]`);
+        }
+        if (!reference) {
+          const header = list.querySelector(`[data-channel-group-id="${CSS.escape(String(group.id))}"]`);
+          let cursor = header?.nextElementSibling || null;
+          while (cursor && isRenderedGroupChildNode(cursor) && cursor !== button) cursor = cursor.nextElementSibling;
+          reference = cursor;
+        }
+      } else if (clip.beforeChannelId != null) {
+        const anchor = getChannelById(clip.beforeChannelId);
+        reference = anchor?.groupId != null
+          ? list.querySelector(`[data-channel-group-id="${CSS.escape(String(anchor.groupId))}"]`)
+          : list.querySelector(`[data-channel-id="${CSS.escape(String(anchor?.id || ""))}"]`);
+      }
+      if (reference && reference !== button) list.insertBefore(button, reference);
     });
 
     if (elements.collapsedMergeChannelsButton) elements.collapsedMergeChannelsButton.disabled = state.channels.length < 2 || state.selectedChannelGroupId != null;
-    if (elements.collapsedDeleteChannelsButton) elements.collapsedDeleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length;
+    if (elements.collapsedDeleteChannelsButton) elements.collapsedDeleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length && !state.audioClips.length;
   }
 
   const channelActionSweep = {
@@ -7590,7 +9026,7 @@
 
   function getChannelSweepActionAt(clientX, clientY) {
     const hit = document.elementFromPoint(clientX, clientY);
-    const action = hit?.closest?.(".channel-tree-channel-item .channel-tree-action[data-channel-sweep-kind], .channel-tree-channel-item .channel-tree-action[data-channel-right-sweep-kind], .channel-group-item .channel-tree-action[data-channel-sweep-kind], .channel-group-item .channel-tree-action[data-channel-right-sweep-kind]");
+    const action = hit?.closest?.(".channel-tree-channel-item .channel-tree-action[data-channel-sweep-kind], .channel-tree-channel-item .channel-tree-action[data-channel-right-sweep-kind], .channel-group-item .channel-tree-action[data-channel-sweep-kind], .channel-group-item .channel-tree-action[data-channel-right-sweep-kind], .audio-source-item .channel-tree-action[data-channel-sweep-kind], .audio-source-item .channel-tree-action[data-channel-right-sweep-kind]");
     if (!action || !elements.channelTabs?.contains(action)) return null;
     return action;
   }
@@ -7604,11 +9040,12 @@
 
   function getChannelSweepScopeForAction(action) {
     if (!action) return "";
+    if (action.closest?.(".audio-source-item")) return "audio";
     return action.closest?.(".channel-group-item") ? "group" : "channel";
   }
 
   function isMixedChannelSweepKind(kind) {
-    return kind === "visibility" || kind === "mute" || kind === "visibility-solo" || kind === "mute-solo";
+    return kind === "visibility" || kind === "mute" || kind === "visibility-solo" || kind === "mute-solo" || kind === "delete-select";
   }
 
   function applyChannelSweepAction(action) {
@@ -7642,6 +9079,50 @@
       channelActionSweep.touchedGroupIds.add(String(group.id));
       renderChannelTabs();
       return true;
+    }
+
+    if (actionScope === "audio") {
+      const clip = state.audioClips.find((item) => String(item.id) === actionId);
+      if (!clip) return false;
+      if (kind === "visibility") {
+        const targetVisible = channelActionSweep.targetValue === null
+          ? clip.visible === false
+          : Boolean(channelActionSweep.targetValue);
+        if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetVisible;
+        return setAudioClipVisible(clip.id, targetVisible, { notify: false });
+      }
+      if (kind === "mute") {
+        const targetMuted = channelActionSweep.targetValue === null
+          ? !clip.muted
+          : Boolean(channelActionSweep.targetValue);
+        if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetMuted;
+        return setAudioClipMuted(clip.id, targetMuted, { notify: false });
+      }
+      if (kind === "visibility-solo") {
+        const currentSolo = isAudioClipVisibilitySolo(clip);
+        const targetSolo = channelActionSweep.targetValue === null
+          ? !currentSolo
+          : Boolean(channelActionSweep.targetValue);
+        if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetSolo;
+        return setAudioClipVisibilitySoloById(clip.id, targetSolo, { notify: false });
+      }
+      if (kind === "mute-solo") {
+        const currentSolo = isAudioClipSolo(clip);
+        const targetSolo = channelActionSweep.targetValue === null
+          ? !currentSolo
+          : Boolean(channelActionSweep.targetValue);
+        if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetSolo;
+        return setAudioClipSoloById(clip.id, targetSolo, { notify: false });
+      }
+      if (kind === "delete-select" && isChannelDeleteModeActive()) {
+        const currentSelected = state.channelDeleteMode.selectedAudioIds.has(String(clip.id));
+        const targetSelected = channelActionSweep.targetValue === null
+          ? !currentSelected
+          : Boolean(channelActionSweep.targetValue);
+        if (channelActionSweep.targetValue === null) channelActionSweep.targetValue = targetSelected;
+        return setAudioDeleteSelection(clip.id, targetSelected, { render: true });
+      }
+      return false;
     }
 
     if (groupAction) {
@@ -7845,6 +9326,11 @@
             if (targetValue) state.channelDeleteMode.selectedChannelIds.add(id);
             else state.channelDeleteMode.selectedChannelIds.delete(id);
           }
+          for (const clip of getChannelGroupAudioMembers(group)) {
+            const id = String(clip.id);
+            if (targetValue) state.channelDeleteMode.selectedAudioIds.add(id);
+            else state.channelDeleteMode.selectedAudioIds.delete(id);
+          }
         }
         if (isChannelDeleteModeActive()) renderChannelTabs();
       });
@@ -7865,10 +9351,121 @@
 
   const channelGroupClickTimers = new Map();
 
+  function setAllChannelTreeVisible(visible) {
+    const nextVisible = Boolean(visible);
+    const changed = state.channels.some((channel) => channel.visible !== nextVisible)
+      || state.channelGroups.some((group) => group.visible !== nextVisible)
+      || state.audioClips.some((clip) => clip.visible !== nextVisible)
+      || state.visibilitySoloChannelIds.size > 0
+      || state.visibilitySoloGroupIds.size > 0
+      || state.visibilitySoloAudioClipIds.size > 0;
+    if (!changed) return false;
+    state.visibilitySoloChannelIds.clear();
+    state.visibilitySoloGroupIds.clear();
+    state.visibilitySoloAudioClipIds.clear();
+    for (const channel of state.channels) channel.visible = nextVisible;
+    for (const group of state.channelGroups) group.visible = nextVisible;
+    for (const clip of state.audioClips) clip.visible = nextVisible;
+    setDirtyWithoutHistory();
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    renderAudioLane();
+    updateChannelInfo();
+    showToast(`${i18nText("volume.scope_all")} · ${i18nText(nextVisible ? "ui.showed" : "ui.hid")}`);
+    return true;
+  }
+
+  function setAllChannelTreeMuted(muted) {
+    const nextMuted = Boolean(muted);
+    const changed = state.channels.some((channel) => Boolean(channel.muted) !== nextMuted)
+      || state.channelGroups.some((group) => Boolean(group.muted) !== nextMuted)
+      || state.audioClips.some((clip) => Boolean(clip.muted) !== nextMuted)
+      || state.soloChannelIds.size > 0
+      || state.soloGroupIds.size > 0
+      || state.soloAudioClipIds.size > 0;
+    if (!changed) return false;
+    const beforeAudible = captureChannelAudibleStates();
+    const beforeAudioAudible = captureAudioAudibleStates();
+    state.soloChannelIds.clear();
+    state.soloGroupIds.clear();
+    state.soloAudioClipIds.clear();
+    for (const channel of state.channels) channel.muted = nextMuted;
+    for (const group of state.channelGroups) group.muted = nextMuted;
+    for (const clip of state.audioClips) clip.muted = nextMuted;
+    setDirtyWithoutHistory();
+    refreshChannelPlaybackForAudibleStateChange(beforeAudible);
+    refreshAudioPlaybackForAudibleStateChange(beforeAudioAudible);
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    renderAudioLane();
+    updateChannelInfo();
+    showToast(i18nText(nextMuted ? "channel.mute_all" : "channel.unmute_all"));
+    return true;
+  }
+
+  function updateChannelBulkBar() {
+    if (!elements.channelBulkBar) return;
+    // Match the fixed bulk actions to the three right-side action columns used by
+    // scrollable channel/group rows. The tree reserves a native scrollbar gutter,
+    // so measure it instead of assuming a platform-specific scrollbar width.
+    const channelScrollbarWidth = Math.max(0, (elements.channelTabs?.offsetWidth || 0) - (elements.channelTabs?.clientWidth || 0));
+    elements.channelBulkBar.style.setProperty("padding-left", "7px", "important");
+    elements.channelBulkBar.style.setProperty("padding-right", `${9 + channelScrollbarWidth}px`, "important");
+    const channelCount = state.channels.length;
+    const groupCount = state.channelGroups.length;
+    const audioCount = state.audioClips.length;
+    if (elements.channelBulkCounts) {
+      const countParts = [];
+      const isJapanese = state.language === "ja";
+      if (channelCount > 0) countParts.push(`${isJapanese ? "Ch" : i18nText("channel.label")} ${channelCount}`);
+      if (groupCount > 0) countParts.push(`${isJapanese ? "Gr" : i18nText("volume.scope_group_short")} ${groupCount}`);
+      if (audioCount > 0) countParts.push(`${isJapanese ? "Au" : i18nText("audio.label")} ${audioCount}`);
+      elements.channelBulkCounts.textContent = countParts.join(" · ");
+    }
+    const locked = isChannelDeleteModeActive() || isChannelMergeModeActive();
+    const allVisible = state.channels.every((channel) => channel.visible !== false)
+      && state.channelGroups.every((group) => group.visible !== false)
+      && state.audioClips.every((clip) => clip.visible !== false)
+      && state.visibilitySoloChannelIds.size === 0
+      && state.visibilitySoloGroupIds.size === 0
+      && state.visibilitySoloAudioClipIds.size === 0;
+    const allMuted = state.channels.every((channel) => Boolean(channel.muted))
+      && state.channelGroups.every((group) => Boolean(group.muted))
+      && state.audioClips.every((clip) => Boolean(clip.muted))
+      && state.soloChannelIds.size === 0
+      && state.soloGroupIds.size === 0
+      && state.soloAudioClipIds.size === 0;
+    if (elements.channelBulkMmlButton) {
+      elements.channelBulkMmlButton.disabled = locked || channelCount === 0;
+      elements.channelBulkMmlButton.title = i18nText("channel.mml_all_view");
+      elements.channelBulkMmlButton.setAttribute("aria-label", elements.channelBulkMmlButton.title);
+    }
+    if (elements.channelBulkVisibilityButton) {
+      elements.channelBulkVisibilityButton.disabled = locked || (channelCount === 0 && groupCount === 0 && state.audioClips.length === 0);
+      elements.channelBulkVisibilityButton.classList.toggle("is-active", allVisible);
+      elements.channelBulkVisibilityButton.setAttribute("aria-pressed", String(allVisible));
+      elements.channelBulkVisibilityButton.title = `${i18nText("volume.scope_all")} · ${i18nText(allVisible ? "ui.hide_2" : "ui.show")}`;
+      elements.channelBulkVisibilityButton.setAttribute("aria-label", elements.channelBulkVisibilityButton.title);
+    }
+    if (elements.channelBulkMuteButton) {
+      elements.channelBulkMuteButton.disabled = locked || (channelCount === 0 && groupCount === 0 && state.audioClips.length === 0);
+      elements.channelBulkMuteButton.classList.toggle("is-active", allMuted);
+      elements.channelBulkMuteButton.setAttribute("aria-pressed", String(allMuted));
+      elements.channelBulkMuteButton.title = `${i18nText("volume.scope_all")} · ${i18nText(allMuted ? "ui.unmute" : "ui.mute")}`;
+      elements.channelBulkMuteButton.setAttribute("aria-label", elements.channelBulkMuteButton.title);
+      if (elements.channelBulkMuteGlyph) elements.channelBulkMuteGlyph.textContent = allMuted ? "🔇" : "🔊";
+    }
+  }
+
   function renderChannelTabs() {
     if (!elements.channelTabs) return;
+    const preservedScrollTop = Number(elements.channelTabs.scrollTop) || 0;
+    const preservedScrollLeft = Number(elements.channelTabs.scrollLeft) || 0;
     elements.channelTabs.replaceChildren();
     const deleteMode = isChannelDeleteModeActive();
+    updateChannelBulkBar();
 
     const createAction = ({ kind, active, label, title, onClick, onContextMenu = null, sweep = false, sweepId = "", rightSweepKind = "", solo = false, textContent = null, disabled = false }) => {
       const button = document.createElement("button");
@@ -7933,7 +9530,7 @@
       const mergeMask = isChannelMergeModeActive() && getChannelMergeExcludeOverlapChannelIds().has(String(channel.id));
       const deleteSelected = deleteMode && state.channelDeleteMode.selectedChannelIds.has(String(channel.id));
       const group = getChannelGroupForChannel(channel);
-      item.className = `channel-tab-item channel-tree-item channel-tree-channel-item${groupChild ? " is-group-child" : ""}${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${!isChannelEffectivelyVisible(channel) ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${mergeTarget ? " is-merge-target" : ""}${mergeSource ? " is-merge-source" : ""}${mergeMask ? " is-merge-mask" : ""}${deleteSelected ? " is-delete-selected" : ""}`;
+      item.className = `channel-tab-item channel-tree-item channel-tree-leaf-item channel-tree-channel-item${groupChild ? " is-group-child" : ""}${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${!isChannelEffectivelyVisible(channel) ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${mergeTarget ? " is-merge-target" : ""}${mergeSource ? " is-merge-source" : ""}${mergeMask ? " is-merge-mask" : ""}${deleteSelected ? " is-delete-selected" : ""}`;
       item.style.setProperty("--channel-color", getChannelColor(channel, index));
       item.dataset.channelIndex = String(index);
       item.dataset.channelId = String(channel.id);
@@ -8022,7 +9619,7 @@
       const mergeIncludeState = mergeMode ? getChannelMergeGroupRoleState(group, "include") : { members: [], active: false };
       const mergeExcludeState = mergeMode ? getChannelMergeGroupRoleState(group, "exclude") : { members: [], active: false };
       const stateName = deleteMode ? getGroupDeleteDisplayState(group.id) : "none";
-      item.className = `channel-tree-item channel-group-item${groupActive ? " active" : ""}${group.collapsed && !deleteMode ? " is-collapsed" : ""}${!isChannelGroupEffectivelyVisible(group) ? " is-hidden" : ""}${group.muted ? " is-muted" : ""}${solo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${deleteMode ? ` delete-state-${stateName}` : ""}`;
+      item.className = `channel-tree-item channel-group-item${groupActive ? " active" : ""}${group.collapsed && !deleteMode ? " is-collapsed" : ""}${!isChannelGroupEffectivelyVisible(group) ? " is-hidden" : ""}${isChannelGroupEffectivelyMuted(group) ? " is-muted" : ""}${solo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${deleteMode ? ` delete-state-${stateName}` : ""}`;
       item.dataset.channelGroupId = String(group.id);
       item.dataset.contextArea = "channel-group";
       const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
@@ -8037,7 +9634,7 @@
       folder.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); if (!deleteMode) toggleChannelGroupCollapsed(group.id); });
       folder.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); if (!deleteMode) toggleChannelGroupCollapsed(group.id); } });
       const label = document.createElement("span"); label.className = "channel-tree-label channel-group-label"; label.textContent = group.name;
-      const count = document.createElement("span"); count.className = "channel-group-count"; count.textContent = String(members.length);
+      const count = document.createElement("span"); count.className = "channel-group-count"; count.textContent = String(members.length + getChannelGroupAudioMembers(group).length);
       main.append(folder, label, count);
       main.addEventListener("click", (event) => {
         event.preventDefault();
@@ -8132,46 +9729,133 @@
       if (groupNode && anchorNode && groupNode !== anchorNode) elements.channelTabs.insertBefore(groupNode, anchorNode);
     });
 
-    // 오디오는 그룹 바깥의 별도 소스로 그대로 표시합니다.
-    getAudioClipsInDisplayOrder().forEach(({ clip, sourceIndex: clipIndex }) => {
+    // 오디오도 채널과 동일한 트리 항목으로 취급합니다. groupId가 있으면
+    // 해당 그룹의 자식으로, beforeChannelId가 있으면 그 채널 앞에 배치합니다.
+    state.audioClips.forEach((clip, clipIndex) => {
+      const group = getAudioClipGroup(clip);
+      if (group && !deleteMode && group.collapsed) return;
+      const groupChild = Boolean(group);
       const active = state.activePanel === "audio" && String(state.activeAudioClipId) === String(clip.id);
+      const audioSolo = isAudioClipSolo(clip);
+      const audioVisibilitySolo = isAudioClipVisibilitySolo(clip);
+      const deleteSelected = deleteMode && state.channelDeleteMode.selectedAudioIds.has(String(clip.id));
       const item = document.createElement("div");
-      item.className = `channel-tree-item audio-source-item${active ? " active" : ""}${clip.muted ? " is-muted" : ""}${clip.visible === false ? " is-hidden" : ""}`;
+      item.className = `channel-tree-item channel-tree-leaf-item audio-source-item${groupChild ? " is-group-child" : ""}${active ? " active" : ""}${isAudioClipEffectivelyMuted(clip) ? " is-muted" : ""}${!isAudioClipEffectivelyVisible(clip) ? " is-hidden" : ""}${audioSolo ? " is-solo" : ""}${audioVisibilitySolo ? " is-visibility-solo" : ""}${deleteSelected ? " is-delete-selected" : ""}`;
       item.style.setProperty("--channel-color", getAudioClipColor(clip, clipIndex));
-      item.dataset.audioClipId = String(clip.id); item.dataset.contextArea = "audio-source";
-      item.setAttribute("role", "treeitem"); item.setAttribute("aria-level", "1"); item.setAttribute("aria-selected", String(active));
-      const main = document.createElement("button"); main.type = "button"; main.className = "channel-tree-main channel-tab-main"; main.title = clip.fileName || clip.title;
-      const label = document.createElement("span"); label.className = "channel-tree-label channel-tab-label"; label.textContent = clip.title; main.append(label);
+      item.dataset.audioClipId = String(clip.id);
+      item.dataset.contextArea = "audio-source";
+      item.setAttribute("role", "treeitem");
+      item.setAttribute("aria-level", groupChild ? "2" : "1");
+      item.setAttribute("aria-selected", String(active));
+      const main = document.createElement("button");
+      main.type = "button";
+      main.className = "channel-tree-main channel-tab-main";
+      main.title = deleteMode ? `${clip.title} · 오디오 선택 및 확인` : `${clip.title} · 누르면 선택, 위아래로 드래그하면 순서/그룹 변경`;
+      const label = document.createElement("span");
+      label.className = "channel-tree-label channel-tab-label";
+      label.textContent = clip.title;
+      main.append(label);
       if (deleteMode) {
-        main.disabled = true;
-        main.setAttribute("aria-disabled", "true");
-      } else {
-        main.addEventListener("click", () => handleAudioEditActivation(clip.id));
+        main.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          selectAudioClip(clip.id);
+        });
       }
-      const actions = document.createElement("div"); actions.className = "channel-tree-actions";
-      if (!deleteMode) actions.append(
-        createAction({ kind: "visibility", active: clip.visible !== false, label: i18nText(clip.visible === false ? "ui.show_2" : "ui.hide_3", [clip.title]), title: i18nText(clip.visible === false ? "audio.show_block" : "audio.hide_block"), onClick: () => setAudioClipVisible(clip.id, clip.visible === false) }),
-        createAction({ kind: "mute", active: clip.muted, label: i18nText(clip.muted ? "ui.unmute_2" : "ui.mute_2", [clip.title]), title: i18nText(clip.muted ? "audio.unmute" : "audio.mute"), onClick: () => setAudioClipMuted(clip.id, !clip.muted) }),
-      );
-      item.append(main, actions); elements.channelTabs.append(item);
+      const actions = document.createElement("div");
+      actions.className = "channel-tree-actions";
+      if (deleteMode) {
+        actions.append(createAction({
+          kind: "delete-select",
+          active: deleteSelected,
+          label: `${clip.title} 삭제 선택`,
+          title: `${clip.title} 삭제 선택`,
+          textContent: deleteSelected ? "✓" : "○",
+          onClick: () => toggleAudioDeleteSelection(clip.id),
+          sweep: true,
+          sweepId: clip.id,
+        }));
+      } else {
+        actions.append(
+          createAction({
+            kind: "visibility",
+            active: clip.visible !== false,
+            solo: audioVisibilitySolo,
+            label: audioVisibilitySolo ? `${clip.title} 표시 싱글 해제` : i18nText(clip.visible === false ? "ui.show_2" : "ui.hide_3", [clip.title]),
+            title: audioVisibilitySolo ? "표시 싱글 해제" : i18nText(clip.visible === false ? "audio.show_block" : "audio.hide_block"),
+            onClick: () => audioVisibilitySolo ? setAudioClipVisibilitySoloById(clip.id, false) : setAudioClipVisible(clip.id, clip.visible === false),
+            sweep: !audioVisibilitySolo,
+            sweepId: clip.id,
+            rightSweepKind: "visibility-solo",
+          }),
+          createAction({
+            kind: "mute",
+            active: clip.muted,
+            solo: audioSolo,
+            label: audioSolo ? `${clip.title} 싱글 해제` : i18nText(clip.muted ? "ui.unmute_2" : "ui.mute_2", [clip.title]),
+            title: audioSolo ? "싱글 해제" : i18nText(clip.muted ? "audio.unmute" : "audio.mute"),
+            onClick: () => audioSolo ? setAudioClipSoloById(clip.id, false) : setAudioClipMuted(clip.id, !clip.muted),
+            sweep: !audioSolo,
+            sweepId: clip.id,
+            rightSweepKind: "mute-solo",
+          }),
+        );
+      }
+      item.append(main, actions);
+      if (!deleteMode && !isChannelMergeModeActive()) {
+        item.addEventListener("pointerdown", (event) => beginAudioTreeDrag(event, clip.id, item));
+      }
+      elements.channelTabs.append(item);
+
+      let reference = null;
+      if (group) {
+        if (clip.beforeChannelId != null) {
+          const anchor = getChannelById(clip.beforeChannelId);
+          if (String(anchor?.groupId ?? "") === String(group.id)) {
+            reference = elements.channelTabs.querySelector(`[data-channel-id="${CSS.escape(String(anchor.id))}"]`);
+          }
+        }
+        if (!reference) {
+          const header = elements.channelTabs.querySelector(`[data-channel-group-id="${CSS.escape(String(group.id))}"]`);
+          let cursor = header?.nextElementSibling || null;
+          while (cursor && isRenderedGroupChildNode(cursor) && cursor !== item) cursor = cursor.nextElementSibling;
+          reference = cursor;
+        }
+      } else if (clip.beforeChannelId != null) {
+        const anchor = getChannelById(clip.beforeChannelId);
+        if (anchor?.groupId != null) {
+          reference = elements.channelTabs.querySelector(`[data-channel-group-id="${CSS.escape(String(anchor.groupId))}"]`);
+        } else if (anchor) {
+          reference = elements.channelTabs.querySelector(`[data-channel-id="${CSS.escape(String(anchor.id))}"]`);
+        }
+      }
+      if (reference && reference !== item) elements.channelTabs.insertBefore(item, reference);
     });
 
     elements.addChannelButton.disabled = deleteMode;
     if (elements.addChannelGroupButton) { elements.addChannelGroupButton.disabled = deleteMode || isChannelMergeModeActive(); elements.addChannelGroupButton.hidden = deleteMode; }
     if (elements.mergeChannelsButton) { elements.mergeChannelsButton.disabled = state.channels.length < 2 || deleteMode || state.selectedChannelGroupId != null; elements.mergeChannelsButton.hidden = deleteMode; }
     if (elements.addChannelButton) elements.addChannelButton.hidden = deleteMode;
-    if (elements.deleteChannelsButton) { elements.deleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length; elements.deleteChannelsButton.hidden = deleteMode; }
+    if (elements.deleteChannelsButton) { elements.deleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length && !state.audioClips.length; elements.deleteChannelsButton.hidden = deleteMode; }
     if (elements.channelDeleteModeCancelButton) elements.channelDeleteModeCancelButton.hidden = !deleteMode;
     if (elements.channelDeleteModeApplyButton) {
       elements.channelDeleteModeApplyButton.hidden = !deleteMode;
-      const hasDelete = state.channelDeleteMode.selectedChannelIds.size > 0 || [...state.channelDeleteMode.groupModes.values()].some((mode) => mode !== "none");
-      elements.channelDeleteModeApplyButton.disabled = !hasDelete;
+      elements.channelDeleteModeApplyButton.disabled = false;
     }
     const hasSelectedChannel = state.activePanel === "notes" && state.selectedChannelGroupId == null && Boolean(getActiveChannel());
     elements.deleteChannelButton.disabled = !hasSelectedChannel || state.channels.length <= 1;
     elements.clearChannelButton.disabled = !hasSelectedChannel;
     elements.copyChannelButton.disabled = !hasSelectedChannel;
     elements.pasteChannelButton.disabled = !hasSelectedChannel;
+    // Rebuilding the tree must never jump the user's working position. Visibility,
+    // mute and Solo sweeps all re-render this list, so restore the scroll offset
+    // synchronously before the next pointer move is hit-tested.
+    const maxScrollTop = Math.max(0, elements.channelTabs.scrollHeight - elements.channelTabs.clientHeight);
+    elements.channelTabs.scrollTop = clamp(preservedScrollTop, 0, maxScrollTop);
+    elements.channelTabs.scrollLeft = preservedScrollLeft;
+    // Re-measure after the rows exist; only now do we know whether the native
+    // scrollbar gutter is present, so the fixed bulk buttons can align exactly.
+    updateChannelBulkBar();
     renderCollapsedChannelRail();
     updateEditMenuState();
   }
@@ -8581,6 +10265,7 @@
   }
 
   function getMmlEditDialogChannels() {
+    if (state.channelMmlEdit.allChannels) return state.channels.slice();
     if (state.channelMmlEdit.groupId != null) {
       const group = getChannelGroupById(state.channelMmlEdit.groupId);
       return group ? getChannelGroupMembers(group) : [];
@@ -8646,13 +10331,14 @@
       const parsed = parseMmlEditorSource(source);
       state.channelMmlEdit.parsed = parsed;
       const isGroup = state.channelMmlEdit.groupId != null;
-      if (!isGroup && parsed.editPartCount > 1) {
+      const isAllChannels = Boolean(state.channelMmlEdit.allChannels);
+      if (!isGroup && !isAllChannels && parsed.editPartCount > 1) {
         setChannelMmlStatus(i18nText("channel.mml_status_multi"), { error: true });
         if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
         return parsed;
       }
       const details = [];
-      if (isGroup) details.push(i18nText("group.mml_summary", [parsed.editPartCount]));
+      if (isGroup || isAllChannels) details.push(i18nText("group.mml_summary", [parsed.editPartCount]));
       details.push(i18nText("channel.mml_status_notes", [parsed.noteCount]));
       details.push(i18nText("channel.mml_status_chars", [source.length]));
       if (parsed.explicitTempoCount) {
@@ -8730,7 +10416,7 @@
     return true;
   }
 
-  function openMmlEditDialog({ channel = null, group = null, channels = null } = {}) {
+  function openMmlEditDialog({ channel = null, group = null, channels = null, allChannels = false, viewOnly = false } = {}) {
     const list = Array.isArray(channels) ? channels.filter(Boolean) : (channel ? [channel] : []);
     if ((!group && !list.length) || !elements.channelMmlBackdrop || !elements.channelMmlText) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
@@ -8738,14 +10424,21 @@
     state.channelMmlEdit.parseTimer = 0;
     state.channelMmlEdit.channelId = channel ? String(channel.id) : null;
     state.channelMmlEdit.groupId = group ? String(group.id) : null;
-    state.channelMmlEdit.viewOnly = false;
+    state.channelMmlEdit.allChannels = Boolean(allChannels);
+    state.channelMmlEdit.viewOnly = Boolean(viewOnly);
     state.channelMmlEdit.parsed = null;
-    const title = group ? i18nText("group.mml_view") : i18nText("channel.mml_edit");
+    const title = allChannels && viewOnly
+      ? i18nText("channel.mml_all_view")
+      : (allChannels
+        ? `${i18nText("volume.scope_all")} · ${i18nText("channel.mml_edit")}`
+        : (group ? i18nText("group.mml_view") : i18nText("channel.mml_edit")));
     if (elements.channelMmlDialogTitle) elements.channelMmlDialogTitle.textContent = title;
     if (elements.channelMmlDialog) elements.channelMmlDialog.setAttribute("aria-label", title);
     if (elements.channelMmlText) elements.channelMmlText.setAttribute("aria-label", `${title} 내용`);
     if (elements.channelMmlTargetLabel) {
-      elements.channelMmlTargetLabel.textContent = group ? `${group.name} · ${list.length}` : channel.name;
+      elements.channelMmlTargetLabel.textContent = allChannels
+        ? `${i18nText("volume.scope_all")} · ${list.length}`
+        : (group ? `${group.name} · ${list.length}` : channel.name);
     }
     if (elements.channelMmlIncludeTempo) {
       elements.channelMmlIncludeTempo.checked = state.channelMmlEdit.includeTempo !== false;
@@ -8755,11 +10448,13 @@
       elements.channelMmlOptimizedView.checked = state.channelMmlEdit.optimizedView !== false;
       elements.channelMmlOptimizedView.closest("label")?.removeAttribute("hidden");
     }
+    if (elements.channelMmlPasteButton) elements.channelMmlPasteButton.hidden = Boolean(viewOnly);
+    if (elements.channelMmlCancelButton) elements.channelMmlCancelButton.hidden = Boolean(viewOnly);
     if (elements.channelMmlApplyButton) {
-      elements.channelMmlApplyButton.hidden = false;
-      elements.channelMmlApplyButton.disabled = false;
+      elements.channelMmlApplyButton.hidden = Boolean(viewOnly);
+      elements.channelMmlApplyButton.disabled = Boolean(viewOnly);
     }
-    elements.channelMmlText.readOnly = false;
+    elements.channelMmlText.readOnly = Boolean(viewOnly);
     let standardText = channelsToMml(list, {
       originBeat: 0,
       includeTempo: Boolean(elements.channelMmlIncludeTempo?.checked),
@@ -8793,11 +10488,17 @@
     return openMmlEditDialog({ channel: state.channels[index] });
   }
 
+  function openAllChannelsMmlDialog() {
+    if (!state.channels.length) return false;
+    return openMmlEditDialog({ channels: state.channels.slice(), allChannels: true, viewOnly: true });
+  }
+
   function closeChannelMmlDialog() {
     window.clearTimeout(state.channelMmlEdit.parseTimer);
     state.channelMmlEdit.parseTimer = 0;
     state.channelMmlEdit.channelId = null;
     state.channelMmlEdit.groupId = null;
+    state.channelMmlEdit.allChannels = false;
     state.channelMmlEdit.viewOnly = false;
     state.channelMmlEdit.parsed = null;
     state.channelMmlEdit.standardText = "";
@@ -8805,6 +10506,8 @@
       elements.channelMmlText.readOnly = false;
       elements.channelMmlText.value = "";
     }
+    if (elements.channelMmlPasteButton) elements.channelMmlPasteButton.hidden = false;
+    if (elements.channelMmlCancelButton) elements.channelMmlCancelButton.hidden = false;
     if (elements.channelMmlApplyButton) {
       elements.channelMmlApplyButton.hidden = false;
       elements.channelMmlApplyButton.disabled = false;
@@ -8821,7 +10524,7 @@
   }
 
   async function pasteChannelMmlDialogText() {
-    if (!elements.channelMmlText) return false;
+    if (state.channelMmlEdit.viewOnly || !elements.channelMmlText) return false;
     try {
       if (!navigator.clipboard?.readText) throw new Error("clipboard unavailable");
       const text = await navigator.clipboard.readText();
@@ -8868,21 +10571,54 @@
     return channel;
   }
 
+  function createChannelForAllMmlEdit(template, partIndex) {
+    const id = nextChannelId();
+    const channel = createDefaultChannel(id, state.channels.length);
+    channel.groupId = null;
+    channel.name = makeUniqueChannelName(`Ch${id}`, channel.id);
+    if (template) {
+      channel.instrument = template.instrument;
+      channel.instrumentProgram = getChannelInstrumentProgram(template);
+      channel.instrumentBank = getChannelInstrumentBank(template);
+      channel.instrumentExactPreset = template.instrumentExactPreset !== false;
+      channel.defaultNoteVolume = clamp(
+        Math.round(Number(template.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || CONFIG.defaultNewChannelNoteVolume),
+        0,
+        15,
+      );
+    }
+    state.channels.push(channel);
+    return channel;
+  }
+
   function applyChannelMmlDialog() {
+    if (state.channelMmlEdit.viewOnly) return false;
     const parsed = updateChannelMmlPreview();
     if (!parsed) return false;
     const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
+    const allChannels = Boolean(state.channelMmlEdit.allChannels);
     const group = state.channelMmlEdit.groupId != null ? getChannelGroupById(state.channelMmlEdit.groupId) : null;
     const channel = state.channelMmlEdit.channelId != null ? getChannelById(state.channelMmlEdit.channelId) : null;
-    if (!group && !channel) {
+    if (!allChannels && !group && !channel) {
       closeChannelMmlDialog();
       return false;
     }
-    if (!group && parsed.editPartCount > 1) return false;
+    if (!allChannels && !group && parsed.editPartCount > 1) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     const activeChannelIdBeforeApply = state.channels[state.activeChannel]?.id ?? null;
 
-    if (group) {
+    if (allChannels) {
+      const targetParts = parsed.editParts || [];
+      const members = state.channels.slice();
+      const template = members[0] || null;
+      while (members.length < targetParts.length) {
+        members.push(createChannelForAllMmlEdit(template, members.length));
+      }
+      members.forEach((member, index) => {
+        const part = targetParts[index];
+        member.notes = (part?.notes || []).map((note) => ({ ...note, id: state.nextNoteId++ }));
+      });
+    } else if (group) {
       const originalMembers = getChannelGroupMembers(group);
       const targetParts = parsed.editParts || [];
       const members = originalMembers.slice();
@@ -8924,7 +10660,7 @@
     shrinkTimelineToContent();
     ensureTimelineFitsViewport();
     renderAll();
-    const targetName = group ? group.name : channel.name;
+    const targetName = allChannels ? i18nText("volume.scope_all") : (group ? group.name : channel.name);
     const noteCount = parsed.noteCount || 0;
     closeChannelMmlDialog();
     if (group) {
@@ -12996,8 +14732,10 @@
       });
       state.nextChannelGroupId = Math.max(1, Number(data.nextChannelGroupId) || 1, ...state.channelGroups.map((group) => Number(group.id) + 1));
       state.soloGroupIds.clear();
+      state.soloAudioClipIds.clear();
       state.visibilitySoloChannelIds.clear();
       state.visibilitySoloGroupIds.clear();
+      state.visibilitySoloAudioClipIds.clear();
       state.channels = data.channels.map((channel, index) => {
         const channelId = Number(channel.id) || index + 1;
         return {
@@ -13166,8 +14904,8 @@
     return true;
   }
 
-  function markDirty(label = "편집") {
-    state.channelNoteRuntime.clear();
+  function markDirty(label = "편집", { preserveNoteRuntime = false } = {}) {
+    if (!preserveNoteRuntime) state.channelNoteRuntime.clear();
     invalidateOverviewTimelineActivity();
     commitHistorySnapshot(label);
     state.dirty = true;
@@ -13982,10 +15720,60 @@
     // them until the user explicitly deletes the group; only repair invalid
     // channel references and stale solo ids here.
     const changed = normalizeChannelGroupMemberships();
+    const audioChanged = normalizeAudioGroupMemberships();
     const valid = new Set(state.channelGroups.map((group) => String(group.id)));
     for (const id of [...state.soloGroupIds]) if (!valid.has(String(id))) state.soloGroupIds.delete(String(id));
     for (const id of [...state.visibilitySoloGroupIds]) if (!valid.has(String(id))) state.visibilitySoloGroupIds.delete(String(id));
-    return changed;
+    return changed || audioChanged;
+  }
+
+  function pruneAudioSoloIds() {
+    const validIds = new Set(state.audioClips.map((clip) => String(clip.id)));
+    for (const id of [...state.soloAudioClipIds]) if (!validIds.has(String(id))) state.soloAudioClipIds.delete(String(id));
+    for (const id of [...state.visibilitySoloAudioClipIds]) if (!validIds.has(String(id))) state.visibilitySoloAudioClipIds.delete(String(id));
+  }
+
+  function hasAnyVisibilitySoloState() {
+    pruneVisibilitySoloChannelIds();
+    pruneEmptyChannelGroups();
+    pruneAudioSoloIds();
+    return state.visibilitySoloChannelIds.size > 0
+      || state.visibilitySoloGroupIds.size > 0
+      || state.visibilitySoloAudioClipIds.size > 0;
+  }
+
+  function hasAnyMuteSoloState() {
+    pruneSoloChannelIds();
+    pruneEmptyChannelGroups();
+    pruneAudioSoloIds();
+    return state.soloChannelIds.size > 0
+      || state.soloGroupIds.size > 0
+      || state.soloAudioClipIds.size > 0;
+  }
+
+  function isAudioClipVisibilitySolo(clipOrId) {
+    const clipId = typeof clipOrId === "object" && clipOrId ? clipOrId.id : clipOrId;
+    return state.visibilitySoloAudioClipIds.has(String(clipId));
+  }
+
+  function isAudioClipSolo(clipOrId) {
+    const clipId = typeof clipOrId === "object" && clipOrId ? clipOrId.id : clipOrId;
+    return state.soloAudioClipIds.has(String(clipId));
+  }
+
+  function isAudioClipEffectivelyVisible(clip) {
+    if (!clip) return false;
+    const group = getAudioClipGroup(clip);
+    if (hasAnyVisibilitySoloState()) return isAudioClipVisibilitySolo(clip) || Boolean(group && isChannelGroupVisibilitySolo(group));
+    if (clip.visible === false) return false;
+    return group ? group.visible !== false : true;
+  }
+
+  function isAudioClipEffectivelyMuted(clip) {
+    if (!clip) return true;
+    const group = getAudioClipGroup(clip);
+    if (hasAnyMuteSoloState()) return !(isAudioClipSolo(clip) || Boolean(group && isChannelGroupSolo(group)));
+    return Boolean(clip.muted) || Boolean(group?.muted);
   }
 
   function isChannelGroupSolo(groupOrId) {
@@ -14016,7 +15804,7 @@
     pruneVisibilitySoloChannelIds();
     pruneEmptyChannelGroups();
     const group = getChannelGroupForChannel(channel);
-    const hasSolo = state.visibilitySoloChannelIds.size > 0 || state.visibilitySoloGroupIds.size > 0;
+    const hasSolo = hasAnyVisibilitySoloState();
     if (hasSolo) return isChannelVisibilitySolo(channel) || (group && isChannelGroupVisibilitySolo(group));
     if (channel.visible === false) return false;
     return group ? group.visible !== false : true;
@@ -14026,12 +15814,26 @@
     if (!group) return false;
     pruneVisibilitySoloChannelIds();
     pruneEmptyChannelGroups();
-    const hasSolo = state.visibilitySoloChannelIds.size > 0 || state.visibilitySoloGroupIds.size > 0;
+    const hasSolo = hasAnyVisibilitySoloState();
     if (hasSolo) {
       if (isChannelGroupVisibilitySolo(group)) return true;
-      return getChannelGroupMembers(group).some((channel) => isChannelVisibilitySolo(channel));
+      return getChannelGroupMembers(group).some((channel) => isChannelVisibilitySolo(channel))
+        || getChannelGroupAudioMembers(group).some((clip) => isAudioClipVisibilitySolo(clip));
     }
     return group.visible !== false;
+  }
+
+  function isChannelGroupEffectivelyMuted(group) {
+    if (!group) return true;
+    pruneSoloChannelIds();
+    pruneEmptyChannelGroups();
+    const hasSolo = hasAnyMuteSoloState();
+    if (hasSolo) {
+      if (isChannelGroupSolo(group)) return false;
+      return !(getChannelGroupMembers(group).some((channel) => isChannelSolo(channel))
+        || getChannelGroupAudioMembers(group).some((clip) => isAudioClipSolo(clip)));
+    }
+    return Boolean(group.muted);
   }
 
   function isChannelSolo(channelOrId) {
@@ -14054,13 +15856,34 @@
     pruneSoloChannelIds();
     pruneEmptyChannelGroups();
     const group = getChannelGroupForChannel(channel);
-    const hasSolo = state.soloChannelIds.size > 0 || state.soloGroupIds.size > 0;
+    const hasSolo = hasAnyMuteSoloState();
     if (hasSolo) return !(isChannelSolo(channel) || (group && isChannelGroupSolo(group)));
     return Boolean(channel.muted || group?.muted);
   }
 
   function captureChannelAudibleStates() {
     return new Map(state.channels.map((channel) => [String(channel.id), !isChannelEffectivelyMuted(channel)]));
+  }
+
+  function captureAudioAudibleStates() {
+    return new Map(state.audioClips.map((clip) => [String(clip.id), !isAudioClipEffectivelyMuted(clip)]));
+  }
+
+  function refreshAudioPlaybackForAudibleStateChange(beforeAudible) {
+    if (!(state.playback.running || state.playback.loading) || !audioEngine.context) return;
+    let changed = false;
+    for (const clip of state.audioClips) {
+      const key = String(clip.id);
+      if (Boolean(beforeAudible?.get(key)) !== !isAudioClipEffectivelyMuted(clip)) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) return;
+    scheduleAudioClipsForPlayback({
+      startBeat: state.playhead.beat,
+      audioStartTime: audioEngine.context.currentTime + 0.012,
+    });
   }
 
   function refreshChannelPlaybackForAudibleStateChange(beforeAudible) {
@@ -14084,14 +15907,17 @@
     if (state.soloChannelIds.has(key) === nextSolo) return false;
 
     const beforeAudible = captureChannelAudibleStates();
+    const beforeAudioAudible = captureAudioAudibleStates();
     if (nextSolo) state.soloChannelIds.add(key);
     else state.soloChannelIds.delete(key);
     setDirtyWithoutHistory();
     refreshChannelPlaybackForAudibleStateChange(beforeAudible);
+    refreshAudioPlaybackForAudibleStateChange(beforeAudioAudible);
 
     renderChannelTabs();
     renderChannelEditor();
     drawRoll();
+    renderAudioLane();
     updateChannelInfo();
     if (notify) showToast(i18nText(nextSolo ? "channel.solo_on_named" : "channel.solo_off_named", [channel.name]));
     return true;
@@ -14104,13 +15930,15 @@
     const nextSolo = Boolean(solo);
     if (state.soloGroupIds.has(key) === nextSolo) return false;
     const beforeAudible = captureChannelAudibleStates();
+    const beforeAudioAudible = captureAudioAudibleStates();
     // Keep group Solo additive, exactly like channel Solo, so right-drag can
     // select or clear several groups in one gesture.
     if (nextSolo) state.soloGroupIds.add(key);
     else state.soloGroupIds.delete(key);
     setDirtyWithoutHistory();
     refreshChannelPlaybackForAudibleStateChange(beforeAudible);
-    renderChannelTabs(); renderChannelEditor(); drawRoll(); updateChannelInfo();
+    refreshAudioPlaybackForAudibleStateChange(beforeAudioAudible);
+    renderChannelTabs(); renderChannelEditor(); drawRoll(); renderAudioLane(); updateChannelInfo();
     if (notify) showToast(`${group.name} ${nextSolo ? i18nText("group.solo_on") : i18nText("group.solo_off")}`);
     return true;
   }
@@ -14127,6 +15955,7 @@
     renderChannelTabs();
     renderChannelEditor();
     drawRoll();
+    renderAudioLane();
     updateChannelInfo();
     if (notify) showToast(`${channel.name} 표시 싱글 ${nextSolo ? "켬" : "해제"}`);
     return true;
@@ -14152,6 +15981,7 @@
     renderChannelTabs();
     renderChannelEditor();
     drawRoll();
+    renderAudioLane();
     updateChannelInfo();
     if (notify) showToast(`${group.name} 표시 싱글 ${nextSolo ? "켬" : "해제"}`);
     return true;
@@ -15483,7 +17313,8 @@
     renderChannelTabs();
 
     const members = getChannelGroupMembers(group);
-    if (!members.length) return true;
+    const audioMembers = getChannelGroupAudioMembers(group);
+    if (!members.length && !audioMembers.length) return true;
     const confirmed = await showConfirmDialog({
       title: nextSelected ? i18nText("group.delete_group_only") : i18nText("selection.clear"),
       message: i18nText(nextSelected ? "group.delete_members_select_prompt" : "group.delete_members_clear_prompt", [group.name]),
@@ -15494,6 +17325,11 @@
         const channelId = String(channel.id);
         if (nextSelected) state.channelDeleteMode.selectedChannelIds.add(channelId);
         else state.channelDeleteMode.selectedChannelIds.delete(channelId);
+      }
+      for (const clip of audioMembers) {
+        const clipId = String(clip.id);
+        if (nextSelected) state.channelDeleteMode.selectedAudioIds.add(clipId);
+        else state.channelDeleteMode.selectedAudioIds.delete(clipId);
       }
       renderChannelTabs();
     }
@@ -15517,6 +17353,7 @@
     setSidebarTab("channels", { persist: false, focus: false });
     state.channelDeleteMode.active = true;
     state.channelDeleteMode.selectedChannelIds = new Set();
+    state.channelDeleteMode.selectedAudioIds = new Set();
     state.channelDeleteMode.groupModes = new Map();
     document.body.classList.add("channel-delete-mode-active");
     renderChannelTabs();
@@ -15533,6 +17370,7 @@
   function cancelChannelDeleteMode() {
     state.channelDeleteMode.active = false;
     state.channelDeleteMode.selectedChannelIds.clear();
+    state.channelDeleteMode.selectedAudioIds.clear();
     state.channelDeleteMode.groupModes.clear();
     document.body.classList.remove("channel-delete-mode-active");
     renderChannelTabs();
@@ -15556,14 +17394,32 @@
     return setChannelDeleteSelection(id, !state.channelDeleteMode.selectedChannelIds.has(id));
   }
 
+  function setAudioDeleteSelection(clipId, selected, { render = true } = {}) {
+    const id = String(clipId);
+    if (!state.audioClips.some((clip) => String(clip.id) === id)) return false;
+    const next = Boolean(selected);
+    const current = state.channelDeleteMode.selectedAudioIds.has(id);
+    if (current === next) return false;
+    if (next) state.channelDeleteMode.selectedAudioIds.add(id);
+    else state.channelDeleteMode.selectedAudioIds.delete(id);
+    if (render) renderChannelTabs();
+    return true;
+  }
+
+  function toggleAudioDeleteSelection(clipId) {
+    const id = String(clipId);
+    return setAudioDeleteSelection(id, !state.channelDeleteMode.selectedAudioIds.has(id));
+  }
+
   async function applyInlineChannelDeleteMode() {
     if (!isChannelDeleteModeActive()) return false;
     const deleteIds = new Set(state.channelDeleteMode.selectedChannelIds);
+    const deleteAudioIds = new Set(state.channelDeleteMode.selectedAudioIds);
     const removeGroupIds = new Set();
     for (const group of state.channelGroups) {
       if (getGroupDeleteMode(group.id) === "group-only") removeGroupIds.add(String(group.id));
     }
-    if (!deleteIds.size && !removeGroupIds.size) {
+    if (!deleteIds.size && !deleteAudioIds.size && !removeGroupIds.size) {
       showToast(i18nText("group.delete_nothing"));
       return false;
     }
@@ -15572,17 +17428,9 @@
       return false;
     }
 
-    const confirmKey = deleteIds.size && removeGroupIds.size
-      ? "group.delete_confirm_channels_groups"
-      : deleteIds.size
-        ? "group.delete_confirm_channels"
-        : "group.delete_confirm_groups";
-    const confirmArgs = confirmKey === "group.delete_confirm_groups"
-      ? [removeGroupIds.size]
-      : [deleteIds.size, removeGroupIds.size];
     const confirmed = await showConfirmDialog({
       title: i18nText("group.delete_confirm_title"),
-      message: i18nText(confirmKey, confirmArgs),
+      message: i18nText("group.delete_confirm_items", [deleteIds.size, removeGroupIds.size, deleteAudioIds.size]),
       confirmLabel: i18nText("action.delete"),
     });
     if (!confirmed || !isChannelDeleteModeActive()) return false;
@@ -15592,30 +17440,49 @@
     for (const channel of state.channels) {
       if (removeGroupIds.has(String(channel.groupId ?? "")) && !deleteIds.has(String(channel.id))) channel.groupId = null;
     }
+    for (const clip of state.audioClips) {
+      if (removeGroupIds.has(String(clip.groupId ?? "")) && !deleteAudioIds.has(String(clip.id))) {
+        clip.groupId = null;
+        clip.beforeChannelId = null;
+      }
+    }
     for (const id of deleteIds) {
       state.soloChannelIds.delete(String(id));
       state.visibilitySoloChannelIds.delete(String(id));
+    }
+    for (const id of deleteAudioIds) {
+      state.soloAudioClipIds.delete(String(id));
+      state.visibilitySoloAudioClipIds.delete(String(id));
+      state.audioRuntime.delete(String(id));
     }
     for (const id of removeGroupIds) {
       state.soloGroupIds.delete(String(id));
       state.visibilitySoloGroupIds.delete(String(id));
     }
     state.channels = state.channels.filter((channel) => !deleteIds.has(String(channel.id)));
+    state.audioClips = state.audioClips.filter((clip) => !deleteAudioIds.has(String(clip.id)));
     state.channelGroups = state.channelGroups.filter((group) => !removeGroupIds.has(String(group.id)));
     if (state.selectedChannelGroupId != null && removeGroupIds.has(String(state.selectedChannelGroupId))) state.selectedChannelGroupId = null;
+    if (state.activeAudioClipId != null && deleteAudioIds.has(String(state.activeAudioClipId))) {
+      state.activeAudioClipId = null;
+      state.activePanel = "notes";
+    }
     pruneEmptyChannelGroups();
     let nextIndex = state.channels.findIndex((channel) => String(channel.id) === String(activeId));
     if (nextIndex < 0) nextIndex = clamp(oldIndex, 0, state.channels.length - 1);
-    state.activePanel = "notes";
-    state.activeChannel = nextIndex;
+    if (state.activePanel !== "audio") {
+      state.activePanel = "notes";
+      state.activeChannel = nextIndex;
+    }
     clearNoteSelection();
     state.channelDeleteMode.active = false;
     state.channelDeleteMode.selectedChannelIds.clear();
+    state.channelDeleteMode.selectedAudioIds.clear();
     state.channelDeleteMode.groupModes.clear();
     document.body.classList.remove("channel-delete-mode-active");
     markDirty(i18nText("group.history_delete", [deleteIds.size, removeGroupIds.size]));
-    renderChannelTabs(); renderChannelEditor(); shrinkTimelineToContent(); drawRoll();
-    showToast(i18nText("group.delete_done", [deleteIds.size, removeGroupIds.size]));
+    renderChannelTabs(); renderChannelEditor(); shrinkTimelineToContent(); drawRoll(); renderAudioLane();
+    showToast(i18nText("group.delete_done_items", [deleteIds.size, removeGroupIds.size, deleteAudioIds.size]));
     return true;
   }
 
@@ -15718,6 +17585,7 @@
     const oldIndex = state.activeChannel;
     const oldActiveId = state.channels[state.activeChannel]?.id ?? null;
 
+    const audioMembers = getChannelGroupAudioMembers(group);
     if (deleteChannels) {
       for (const id of memberIds) {
         state.soloChannelIds.delete(String(id));
@@ -15732,6 +17600,11 @@
       for (const channel of state.channels) {
         if (String(channel.groupId ?? "") === String(group.id)) channel.groupId = null;
       }
+    }
+
+    for (const clip of audioMembers) {
+      clip.groupId = null;
+      clip.beforeChannelId = null;
     }
 
     state.soloGroupIds.delete(String(group.id));
@@ -19375,19 +21248,25 @@
   function updateTimeEditScopeUi() {
     const selectedGroup = getChannelGroupById(state.selectedChannelGroupId);
     const targetChannel = state.channels.find((channel) => String(channel.id) === String(state.timeEdit?.channelId)) || getActiveChannel() || null;
+    const selectedType = selectedGroup ? "group" : "channel";
     const scopedAvailable = Boolean(selectedGroup || targetChannel) && !isMidiReferenceActive();
     if (elements.timeEditSelectedChannelOnly) {
       elements.timeEditSelectedChannelOnly.disabled = !scopedAvailable;
       if (!scopedAvailable) elements.timeEditSelectedChannelOnly.checked = false;
     }
+    if (elements.timeEditScopeLabel) {
+      const key = selectedType === "group" ? "group.selected" : "channel.selected";
+      elements.timeEditScopeLabel.dataset.i18n = key;
+      elements.timeEditScopeLabel.textContent = i18nText(key);
+    }
     const scoped = Boolean(elements.timeEditSelectedChannelOnly?.checked) && scopedAvailable;
-    const group = scoped ? (selectedGroup || getChannelGroupForChannel(targetChannel)) : null;
+    const group = scoped && selectedGroup ? selectedGroup : null;
     state.timeEdit.scope = scoped ? (group ? "group" : "channel") : "all";
-    state.timeEdit.channelId = group ? null : (targetChannel?.id ?? null);
+    state.timeEdit.channelId = scoped && !group ? (targetChannel?.id ?? null) : null;
     state.timeEdit.groupId = group?.id ?? null;
     if (elements.timeEditPosition) {
       const timeLabel = formatSeconds(beatToSeconds(state.timeEdit.beat));
-      const scopeLabel = group?.name || targetChannel?.name || "";
+      const scopeLabel = group?.name || (scoped ? targetChannel?.name : "") || "";
       elements.timeEditPosition.textContent = scoped && scopeLabel ? `${scopeLabel} · ${timeLabel}` : timeLabel;
     }
   }
@@ -19409,6 +21288,15 @@
         : normalizedAction === "delete"
           ? i18nText("timeline.delete_measure_beat")
           : i18nText("timeline.edit_measure");
+    }
+    if (elements.timeEditLengthLabel) {
+      const key = normalizedAction === "insert"
+        ? "timeline.length_to_add"
+        : normalizedAction === "delete"
+          ? "timeline.length_to_delete"
+          : "ui.length_edit";
+      elements.timeEditLengthLabel.dataset.i18n = key;
+      elements.timeEditLengthLabel.textContent = i18nText(key);
     }
     if (elements.timeEditSelectedChannelOnly) {
       elements.timeEditSelectedChannelOnly.checked = false;
@@ -20273,8 +22161,11 @@
     CONFIG.defaultRowHeight);
   }
 
-  function setRowHeight(value, { dirty = true } = {}) {
+  function setRowHeight(value, { dirty = true, persist = true } = {}) {
     const nextHeight = normalizeRowHeight(value);
+    if (persist) {
+      try { window.localStorage.setItem("mobibard-editor-pitch-spacing", String(nextHeight)); } catch {}
+    }
     if (nextHeight === state.rowHeight) {
       elements.pitchSpacingSelect.value = String(nextHeight);
       return false;
@@ -20621,7 +22512,7 @@
         0,
       );
       const lastAudioEnd = state.audioClips
-        .filter((clip) => !clip.muted && Boolean(getAudioRuntime(clip.id)?.audioBuffer))
+        .filter((clip) => !isAudioClipEffectivelyMuted(clip) && Boolean(getAudioRuntime(clip.id)?.audioBuffer))
         .reduce((maximum, clip) => Math.max(maximum, getAudioClipEndBeat(clip)), 0);
       const lastTempoBeat = state.tempos.reduce(
         (maximum, tempo) => tempo.fixed ? maximum : Math.max(maximum, tempo.beat),
@@ -20630,7 +22521,7 @@
       return clamp(Math.max(lastNoteEnd, previewEnd, lastAudioEnd, lastTempoBeat), 0, getTotalBeats());
     }
     const lastAudioEnd = state.audioClips
-      .filter((clip) => !clip.muted && Boolean(getAudioRuntime(clip.id)?.audioBuffer))
+      .filter((clip) => !isAudioClipEffectivelyMuted(clip) && Boolean(getAudioRuntime(clip.id)?.audioBuffer))
       .reduce((maximum, clip) => Math.max(maximum, getAudioClipEndBeat(clip)), 0);
     if (isMidiReferenceActive()) {
       const groups = getActiveMidiDocument()?.groups || [];
@@ -21067,7 +22958,7 @@
     state.playback.lastTimelineDrawAt = 0;
     const playbackNotes = preparePlaybackSchedule(startBeat);
     const hasPlayableAudio = !isChannelMergeModeActive() && state.audioClips.some((clip) => (
-      !clip.muted
+      !isAudioClipEffectivelyMuted(clip)
       && getAudioClipEndBeat(clip) > startBeat + 1e-7
       && Boolean(getAudioRuntime(clip.id)?.audioBuffer)
     ));
@@ -21402,7 +23293,7 @@
     const data = encodeSchemaRows(project, context);
     return {
       format: "mml-piano-roll-project",
-      version: 30,
+      version: 34,
       encoding: PROJECT_STORAGE_ENCODING,
       schemas: context.schemas,
       data,
@@ -21419,7 +23310,7 @@
       const decoded = decodeSchemaRows(storage.data, storage.schemas);
       if (decoded && typeof decoded === "object") {
         decoded.format = storage.format;
-        decoded.version = Number(storage.version) || 30;
+        decoded.version = Number(storage.version) || 31;
       }
       return decoded;
     }
@@ -21512,8 +23403,10 @@
       channelState: {
         soloChannelIds: Array.from(state.soloChannelIds, String),
         soloGroupIds: Array.from(state.soloGroupIds, String),
+        soloAudioClipIds: Array.from(state.soloAudioClipIds, String),
         visibilitySoloChannelIds: Array.from(state.visibilitySoloChannelIds, String),
         visibilitySoloGroupIds: Array.from(state.visibilitySoloGroupIds, String),
+        visibilitySoloAudioClipIds: Array.from(state.visibilitySoloAudioClipIds, String),
       },
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
       timeSignatures: getSortedTimeSignatures().map((signature) => ({ ...signature })),
@@ -21523,7 +23416,6 @@
       // 지원 음악 파일은 공통 플러그인을 거쳐 불러오는 즉시 일반 편집 채널로 변환됩니다.
       midiDocuments: [],
       audioClips: state.audioClips.map((clip) => ({ ...clip, assetAvailable: Boolean(getAudioRuntime(clip.id)?.audioBuffer) })),
-      history: serializeHistoryState(),
       editor: {
         loadedFileName: state.loadedFileName,
         activeChannel: state.activeChannel,
@@ -21536,6 +23428,9 @@
         scrollTop: elements.rollViewport.scrollTop,
         timelineBeats: getTotalBeats(),
         sidebarTab: state.sidebarTab,
+        audioLaneVisible: state.audioLaneVisible !== false,
+        velocityLaneVisible: state.velocityLaneVisible !== false,
+        velocityLaneScope: normalizeVelocityLaneScope(state.velocityLaneScope),
         collapsedChannelGroups: { ...state.collapsedChannelGroups },
         collapsedMidiDocumentIds: Array.from(state.collapsedMidiDocumentIds),
       },
@@ -21970,12 +23865,14 @@
   async function loadProjectFromFile(file, { notify = true, loadedFileName = null } = {}) {
     state.soloChannelIds.clear();
     state.soloGroupIds.clear();
+    state.soloAudioClipIds.clear();
     state.visibilitySoloChannelIds.clear();
     state.visibilitySoloGroupIds.clear();
+    state.visibilitySoloAudioClipIds.clear();
     state.channelGroups = [];
     state.selectedChannelGroupId = null;
     state.nextChannelGroupId = 1;
-    state.channelDeleteMode = { active: false, selectedChannelIds: new Set(), groupModes: new Map() };
+    state.channelDeleteMode = { active: false, selectedChannelIds: new Set(), selectedAudioIds: new Set(), groupModes: new Map() };
     document.body.classList.remove("channel-delete-mode-active");
     state.channelNoteRuntime.clear();
     state.audioRuntime.clear();
@@ -21995,6 +23892,13 @@
     state.snapValue = [1, 2, 4, 8, 16, 32, 64].includes(Number(data.snapValue)) ? Number(data.snapValue) : 4;
     state.rowHeight = normalizeRowHeight(data.rowHeight);
     state.zoom = normalizeZoom(data.zoom);
+    state.audioLaneVisible = data.editor?.audioLaneVisible == null
+      ? loadStoredAudioLaneVisible()
+      : data.editor.audioLaneVisible !== false;
+    state.velocityLaneVisible = data.editor?.velocityLaneVisible == null
+      ? loadStoredVelocityLaneVisible()
+      : data.editor.velocityLaneVisible !== false;
+    state.velocityLaneScope = normalizeVelocityLaneScope(data.editor?.velocityLaneScope || loadStoredVelocityLaneScope());
     const loadedMidiDocuments = Array.isArray(data.midiDocuments)
       ? data.midiDocuments
       : data.midiReference?.groups?.length
@@ -22066,8 +23970,10 @@
     }));
     state.nextChannelGroupId = Math.max(1, Number(data.nextChannelGroupId) || 1, ...state.channelGroups.map((group) => Number(group.id) + 1));
     state.soloGroupIds.clear();
+    state.soloAudioClipIds.clear();
     state.visibilitySoloChannelIds.clear();
     state.visibilitySoloGroupIds.clear();
+    state.visibilitySoloAudioClipIds.clear();
     state.channels = data.channels.map((channel, index) => ({
       id: Number(channel.id) || index + 1,
       name: String(channel.name || `Ch${Number(channel.id) || index + 1}`),
@@ -22116,21 +24022,30 @@
     const savedChannelState = data.channelState && typeof data.channelState === "object" ? data.channelState : {};
     const validChannelIds = new Set(state.channels.map((channel) => String(channel.id)));
     const validGroupIds = new Set(state.channelGroups.map((group) => String(group.id)));
+    const validAudioIds = new Set(state.audioClips.map((clip) => String(clip.id)));
     state.soloChannelIds.clear();
     state.soloGroupIds.clear();
+    state.soloAudioClipIds.clear();
     state.visibilitySoloChannelIds.clear();
     state.visibilitySoloGroupIds.clear();
+    state.visibilitySoloAudioClipIds.clear();
     for (const id of Array.isArray(savedChannelState.soloChannelIds) ? savedChannelState.soloChannelIds : []) {
       if (validChannelIds.has(String(id))) state.soloChannelIds.add(String(id));
     }
     for (const id of Array.isArray(savedChannelState.soloGroupIds) ? savedChannelState.soloGroupIds : []) {
       if (validGroupIds.has(String(id))) state.soloGroupIds.add(String(id));
     }
+    for (const id of Array.isArray(savedChannelState.soloAudioClipIds) ? savedChannelState.soloAudioClipIds : []) {
+      if (validAudioIds.has(String(id))) state.soloAudioClipIds.add(String(id));
+    }
     for (const id of Array.isArray(savedChannelState.visibilitySoloChannelIds) ? savedChannelState.visibilitySoloChannelIds : []) {
       if (validChannelIds.has(String(id))) state.visibilitySoloChannelIds.add(String(id));
     }
     for (const id of Array.isArray(savedChannelState.visibilitySoloGroupIds) ? savedChannelState.visibilitySoloGroupIds : []) {
       if (validGroupIds.has(String(id))) state.visibilitySoloGroupIds.add(String(id));
+    }
+    for (const id of Array.isArray(savedChannelState.visibilitySoloAudioClipIds) ? savedChannelState.visibilitySoloAudioClipIds : []) {
+      if (validAudioIds.has(String(id))) state.visibilitySoloAudioClipIds.add(String(id));
     }
     const requestedGroupId = data.editor?.selectedChannelGroupId;
     state.selectedChannelGroupId = requestedGroupId != null && validGroupIds.has(String(requestedGroupId))
@@ -22255,9 +24170,12 @@
     }
     elements.snapSelect.value = String(state.snapValue);
     elements.pitchSpacingSelect.value = String(state.rowHeight);
+    setAudioLaneVisible(state.audioLaneVisible, { persist: false, redraw: false });
+    setVelocityLaneVisible(state.velocityLaneVisible, { persist: false, redraw: false });
+    setVelocityLaneScope(state.velocityLaneScope, { persist: false, redraw: false });
     renderAll();
     setSidebarTab(state.sidebarTab, { persist: false });
-    if (!restoreSavedHistory(data.history)) initializeHistory();
+    initializeHistory();
 
     requestAnimationFrame(() => {
       const savedScrollLeft = Math.max(0, Number(data.editor?.scrollLeft) || 0);
@@ -22310,12 +24228,14 @@
   function resetProject({ notify = true } = {}) {
     state.soloChannelIds.clear();
     state.soloGroupIds.clear();
+    state.soloAudioClipIds.clear();
     state.visibilitySoloChannelIds.clear();
     state.visibilitySoloGroupIds.clear();
+    state.visibilitySoloAudioClipIds.clear();
     state.channelGroups = [];
     state.selectedChannelGroupId = null;
     state.nextChannelGroupId = 1;
-    state.channelDeleteMode = { active: false, selectedChannelIds: new Set(), groupModes: new Map() };
+    state.channelDeleteMode = { active: false, selectedChannelIds: new Set(), selectedAudioIds: new Set(), groupModes: new Map() };
     document.body.classList.remove("channel-delete-mode-active");
     state.channelNoteRuntime.clear();
     state.collapsedMidiDocumentIds.clear();
@@ -22590,10 +24510,11 @@
       closeContextMenu();
       return;
     }
-    if (state.channelDrag.dragging || state.channelGroupDrag.dragging) {
+    if (state.channelDrag.dragging || state.channelGroupDrag.dragging || state.audioTreeDrag.dragging) {
       event.stopPropagation();
       if (state.channelDrag.dragging) cancelChannelPointerDrag();
       if (state.channelGroupDrag.dragging) cancelChannelGroupPointerDrag();
+      if (state.audioTreeDrag.dragging) cancelAudioTreeDrag();
       state.suppressNextContextMenu = false;
       closeContextMenu();
       return;
@@ -22709,6 +24630,7 @@
       timeline: "context.timeline",
       keyboard: "context.keyboard",
       "overview-timeline": "context.overview",
+      "velocity-lane": "volume.editor",
       "audio-lane": "context.audio_track",
       "audio-source": "context.audio_source",
       "channel-panel": "context.channel_list",
@@ -24132,14 +26054,37 @@
 
     registerContextMenu("app", commonItems);
     registerContextMenu("piano-section", () => [
+      { label: i18nText("volume.edit_channels"), action: openChannelVolumeDialog },
+      "separator",
       {
-        label: i18nText("timeline.move_first_measure"),
-        action: () => {
-          setPlayheadBeat(0, { stop: true });
-          elements.rollViewport.scrollLeft = 0;
-        },
+        label: `${state.velocityLaneVisible !== false ? "✓ " : ""}${i18nText("volume.editor")}`,
+        action: () => setVelocityLaneVisible(!state.velocityLaneVisible),
       },
-      { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
+      {
+        label: `${state.audioLaneVisible !== false ? "✓ " : ""}${i18nText("settings.audio_track")}`,
+        action: () => setAudioLaneVisible(!state.audioLaneVisible),
+      },
+    ]);
+    registerContextMenu("overview-timeline", ({ event }) => {
+      const beat = overviewTimelineBeatFromPointer(event);
+      const snappedBeat = clamp(snapBeat(beat), 0, getTotalBeats());
+      return [
+        { label: i18nText("rest_cleanup.title"), action: openRestCleanupDialog },
+        { label: i18nText("volume.edit_channels"), action: openChannelVolumeDialog },
+        "separator",
+        { label: i18nText("timeline.move_playhead_here"), action: () => seekPlayheadBeat(snappedBeat) },
+        {
+          label: i18nText("timeline.move_first_measure"),
+          action: () => {
+            seekPlayheadBeat(0);
+            elements.rollViewport.scrollLeft = 0;
+          },
+        },
+        { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
+      ];
+    });
+    registerContextMenu("velocity-lane", () => [
+      { label: i18nText("volume.edit_channels"), action: openChannelVolumeDialog },
     ]);
     registerContextMenu("timeline", ({ event }) => {
       const beat = timelineBeatFromPointer(event);
@@ -24391,15 +26336,22 @@
       ];
     });
 
-    const buildAudioContextItems = ({ event = null } = {}) => {
+    const buildAudioContextItems = ({ event = null, area = null } = {}) => {
       const audioTarget = event?.target?.closest?.("[data-audio-clip-id]");
+      if (!audioTarget && area?.name === "audio-lane") {
+        return [{ label: i18nText("audio.add"), action: () => openFilePickerInput(elements.audioFileInput) }];
+      }
       if (audioTarget?.dataset?.audioClipId) selectAudioClip(audioTarget.dataset.audioClipId);
       const clip = getActiveAudioClip();
+      if (!clip) {
+        return [{ label: i18nText("audio.add"), action: () => openFilePickerInput(elements.audioFileInput) }];
+      }
       return [
-        { label: "오디오 추가", action: () => openFilePickerInput(elements.audioFileInput) },
-        { label: "선택 오디오 편집", disabled: !clip, action: () => clip && openAudioEditDialog(clip.id) },
+        { label: i18nText("audio.info_edit"), action: () => openAudioEditDialog(clip.id) },
+        { label: clip.visible === false ? i18nText("ui.show") : i18nText("ui.hide_2"), action: () => setAudioClipVisible(clip.id, clip.visible === false) },
+        { label: clip.muted ? i18nText("ui.unmute") : i18nText("ui.mute"), action: () => setAudioClipMuted(clip.id, !clip.muted) },
         "separator",
-        { label: "선택 오디오 삭제", disabled: !clip, danger: true, action: () => clip && requestDeleteAudioClip(clip.id) },
+        { label: i18nText("audio.delete"), danger: true, action: () => requestDeleteAudioClip(clip.id) },
       ];
     };
     registerContextMenu("audio-lane", buildAudioContextItems);
@@ -24409,7 +26361,7 @@
       { label: i18nText("channel.merge"), disabled: state.channels.length < 2, action: openChannelMergeDialog },
       { label: i18nText("channel.add"), action: addChannel },
       { label: i18nText("group.create"), action: addChannelGroup },
-      { label: i18nText("group.delete_channels_groups"), danger: true, action: () => enterChannelDeleteMode() },
+      { label: i18nText("channel.select_delete_2"), danger: true, action: () => enterChannelDeleteMode() },
     ];
     registerContextMenu("channel-panel", channelListContextItems);
     registerContextMenu("channel-tabs", channelListContextItems);
@@ -24425,7 +26377,7 @@
         { label: channel?.visible === false ? i18nText("context.action.note_show") : i18nText("context.action.note_hide"), action: () => channel && setChannelVisibleById(channel.id, channel.visible === false) },
         { label: channel?.muted ? i18nText("ui.unmute") : i18nText("ui.mute"), action: () => channel && setChannelMutedById(channel.id, !channel.muted) },
         "separator",
-        { label: i18nText("ui.clear"), danger: true, action: () => { selectChannel(index); clearActiveChannel(); } },
+        { label: i18nText("channel.delete_all_notes"), danger: true, action: () => { selectChannel(index); clearActiveChannel(); } },
         { label: i18nText("channel.delete"), danger: true, action: () => channel && deleteChannelByIdImmediate(channel.id) },
       ];
     });
@@ -24654,6 +26606,7 @@
       elements.contextMenu,
       elements.fileMenu,
       elements.editMenu,
+      elements.settingsMenu,
     ].some(isActuallyVisiblePopupElement);
     if (selectAllCommand && blockSelectAll) {
       event.preventDefault();
@@ -25013,6 +26966,7 @@
         if (drawVertical) {
           drawKeyboard();
         }
+        if (drawHorizontal) drawVelocityLane();
         updateAudioLaneTransform();
         updateCustomScrollbars();
       });
@@ -25049,6 +27003,7 @@
       event.stopPropagation();
       const opening = elements.fileMenu.hidden;
       closeEditMenu();
+      closeSettingsMenu();
       closeThemeMenu();
       closeGoogleAccountMenu();
       closeVolumeMenu();
@@ -25062,6 +27017,7 @@
       event.stopPropagation();
       const opening = elements.editMenu.hidden;
       closeFileMenu();
+      closeSettingsMenu();
       closeThemeMenu();
       closeGoogleAccountMenu();
       closeVolumeMenu();
@@ -25071,6 +27027,27 @@
       elements.editMenu.hidden = !opening;
       elements.editButton.setAttribute("aria-expanded", String(opening));
       if (opening) requestAnimationFrame(() => positionTopbarMenu(elements.editMenu, elements.editButton));
+    });
+    elements.settingsButton?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const opening = Boolean(elements.settingsMenu?.hidden);
+      closeFileMenu();
+      closeEditMenu();
+      closeThemeMenu();
+      closeGoogleAccountMenu();
+      closeVolumeMenu();
+      closeZoomMenu();
+      closePlaybackRateMenu();
+      if (!elements.settingsMenu) return;
+      elements.settingsMenu.hidden = !opening;
+      elements.settingsButton.setAttribute("aria-expanded", String(opening));
+      if (opening) requestAnimationFrame(() => positionTopbarMenu(elements.settingsMenu, elements.settingsButton));
+    });
+    elements.velocityLaneVisibleToggle?.addEventListener("click", () => {
+      setVelocityLaneVisible(!state.velocityLaneVisible);
+    });
+    elements.audioLaneVisibleToggle?.addEventListener("click", () => {
+      setAudioLaneVisible(!state.audioLaneVisible);
     });
     elements.editUndoButton.addEventListener("click", () => { closeEditMenu(); undoHistory(); });
     elements.editRedoButton.addEventListener("click", () => { closeEditMenu(); redoHistory(); });
@@ -25209,6 +27186,7 @@
       if (channelActionSweep.active && channelActionSweep.pointerId === event.pointerId) moveChannelActionSweep(event);
       if (state.channelDrag.sourceId) moveChannelPointerDrag(event);
       if (state.channelGroupDrag.groupId) moveChannelGroupPointerDrag(event);
+      if (state.audioTreeDrag.sourceId) moveAudioTreeDrag(event);
     }, true);
     window.addEventListener("pointerup", (event) => {
       if (channelActionSweep.active && channelActionSweep.pointerId === event.pointerId) {
@@ -25222,22 +27200,28 @@
         if (state.channelGroupDrag.dragging) endChannelGroupPointerDrag(event);
         else cancelChannelGroupPointerDrag();
       }
+      if (state.audioTreeDrag.sourceId && state.audioTreeDrag.pointerId === event.pointerId) {
+        endAudioTreeDrag(event);
+      }
     });
     window.addEventListener("pointercancel", (event) => {
       if (channelActionSweep.active && channelActionSweep.pointerId === event.pointerId) cancelChannelActionSweep();
       if (state.channelDrag.sourceId && state.channelDrag.pointerId === event.pointerId) cancelChannelPointerDrag();
       if (state.channelGroupDrag.groupId && state.channelGroupDrag.pointerId === event.pointerId) cancelChannelGroupPointerDrag();
+      if (state.audioTreeDrag.sourceId && state.audioTreeDrag.pointerId === event.pointerId) cancelAudioTreeDrag();
     });
     window.addEventListener("blur", () => {
       if (channelActionSweep.active) cancelChannelActionSweep();
       if (state.channelDrag.sourceId) cancelChannelPointerDrag();
       if (state.channelGroupDrag.groupId) cancelChannelGroupPointerDrag();
+      if (state.audioTreeDrag.sourceId) cancelAudioTreeDrag();
     });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState !== "hidden") return;
       if (channelActionSweep.active) cancelChannelActionSweep();
       if (state.channelDrag.sourceId) cancelChannelPointerDrag();
       if (state.channelGroupDrag.groupId) cancelChannelGroupPointerDrag();
+      if (state.audioTreeDrag.sourceId) cancelAudioTreeDrag();
     });
     document.addEventListener("pointerdown", (event) => {
       // A fresh pointerdown means the previous gesture is over. Always clear any
@@ -25245,6 +27229,7 @@
       if (channelActionSweep.active) cancelChannelActionSweep();
       if (state.channelDrag.sourceId) cancelChannelPointerDrag();
       if (state.channelGroupDrag.groupId) cancelChannelGroupPointerDrag();
+      if (state.audioTreeDrag.sourceId) cancelAudioTreeDrag();
     }, true);
     elements.historyList?.addEventListener("keydown", handleHistoryArrowNavigation);
     elements.historyUndoButton.addEventListener("click", () => undoHistory());
@@ -25304,6 +27289,22 @@
     elements.pitchSpacingSelect.addEventListener("change", () => {
       setRowHeight(Number(elements.pitchSpacingSelect.value));
     });
+    for (const button of elements.velocityLaneScopeButtons || []) {
+      button.addEventListener("click", () => setVelocityLaneScope(button.dataset.velocityScope));
+    }
+    elements.velocityLaneCanvas?.addEventListener("pointerdown", beginVelocityLaneEdit);
+    elements.velocityLaneCanvas?.addEventListener("pointermove", moveVelocityLaneEdit);
+    elements.velocityLaneCanvas?.addEventListener("pointerup", endVelocityLaneEdit);
+    elements.velocityLaneCanvas?.addEventListener("pointercancel", handleVelocityLanePointerCancel);
+    elements.velocityLaneCanvas?.addEventListener("wheel", handleVelocityLaneWheel, { passive: false });
+    elements.velocityLaneCanvas?.addEventListener("pointerleave", () => {
+      if (!state.velocityLaneInteraction) hideVelocityLaneTooltip();
+    });
+    window.addEventListener("pointermove", handleVelocityLaneGlobalPointerMove, true);
+    window.addEventListener("pointerup", handleVelocityLaneGlobalPointerEnd, true);
+    window.addEventListener("pointercancel", handleVelocityLanePointerCancel, true);
+    window.addEventListener("blur", endVelocityLaneEditFromWindowLoss);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") endVelocityLaneEditFromWindowLoss(); });
 
 
     elements.themeButton.addEventListener("click", (event) => {
@@ -25311,6 +27312,7 @@
       const opening = elements.themeMenu.hidden;
       closeFileMenu();
       closeEditMenu();
+      closeSettingsMenu();
       closeGoogleAccountMenu();
       closeVolumeMenu();
       closeZoomMenu();
@@ -25329,6 +27331,7 @@
     elements.editorRecommendedLinks?.addEventListener("change", openSelectedRecommendedLink);
     elements.editorSoundFontSettingsButton?.addEventListener("click", (event) => {
       event.stopPropagation();
+      closeSettingsMenu();
       openEditorSoundFontDialog();
     });
     elements.editorSoundFontCloseButton?.addEventListener("click", closeEditorSoundFontDialog);
@@ -25449,6 +27452,25 @@
     });
 
     elements.mergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
+    elements.channelBulkMmlButton?.addEventListener("click", openAllChannelsMmlDialog);
+    elements.channelBulkVisibilityButton?.addEventListener("click", () => {
+      const allVisible = state.channels.every((channel) => channel.visible !== false)
+        && state.channelGroups.every((group) => group.visible !== false)
+        && state.audioClips.every((clip) => clip.visible !== false)
+        && state.visibilitySoloChannelIds.size === 0
+        && state.visibilitySoloGroupIds.size === 0
+        && state.visibilitySoloAudioClipIds.size === 0;
+      setAllChannelTreeVisible(!allVisible);
+    });
+    elements.channelBulkMuteButton?.addEventListener("click", () => {
+      const allMuted = state.channels.every((channel) => Boolean(channel.muted))
+        && state.channelGroups.every((group) => Boolean(group.muted))
+        && state.audioClips.every((clip) => Boolean(clip.muted))
+        && state.soloChannelIds.size === 0
+        && state.soloGroupIds.size === 0
+        && state.soloAudioClipIds.size === 0;
+      setAllChannelTreeMuted(!allMuted);
+    });
     elements.addChannelGroupButton?.addEventListener("click", addChannelGroup);
     elements.addChannelButton.addEventListener("click", addChannel);
     elements.collapsedMergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
@@ -25509,11 +27531,12 @@
       if (event.target === elements.channelMmlBackdrop) closeChannelMmlDialog();
     });
     elements.channelMmlText?.addEventListener("input", () => {
+      if (state.channelMmlEdit.viewOnly) return;
       state.channelMmlEdit.standardText = String(elements.channelMmlText?.value || "");
       scheduleChannelMmlPreview();
     });
     elements.channelMmlText?.addEventListener("keydown", (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      if (!state.channelMmlEdit.viewOnly && (event.ctrlKey || event.metaKey) && event.key === "Enter") {
         event.preventDefault();
         applyChannelMmlDialog();
       }
@@ -25898,6 +27921,9 @@
       if (!elements.editMenu.hidden && !event.target.closest(".edit-control")) {
         closeEditMenu();
       }
+      if (elements.settingsMenu && !elements.settingsMenu.hidden && !event.target.closest(".settings-control")) {
+        closeSettingsMenu();
+      }
       if (!elements.themeMenu.hidden && !event.target.closest(".theme-control")) {
         closeThemeMenu();
       }
@@ -25926,6 +27952,7 @@
           closeContextMenu();
           closeFileMenu();
           closeEditMenu();
+          closeSettingsMenu();
           closeThemeMenu();
           closeGoogleAccountMenu();
           closeChannelMuteMixer();
@@ -25995,6 +28022,7 @@
         closeContextMenu();
         closeFileMenu();
         closeEditMenu();
+        closeSettingsMenu();
         closeThemeMenu();
         closeGoogleAccountMenu();
         closeChannelMuteMixer();
@@ -26121,6 +28149,14 @@
     setMasterVolume(state.masterVolume, { persist: false });
     state.noteVolumeDisplay = loadStoredNoteVolumeDisplay();
     setNoteVolumeDisplay(state.noteVolumeDisplay, { persist: false });
+    state.rowHeight = loadStoredRowHeight();
+    if (elements.pitchSpacingSelect) elements.pitchSpacingSelect.value = String(state.rowHeight);
+    state.audioLaneVisible = loadStoredAudioLaneVisible();
+    setAudioLaneVisible(state.audioLaneVisible, { persist: false, redraw: false });
+    state.velocityLaneVisible = loadStoredVelocityLaneVisible();
+    setVelocityLaneVisible(state.velocityLaneVisible, { persist: false, redraw: false });
+    state.velocityLaneScope = loadStoredVelocityLaneScope();
+    setVelocityLaneScope(state.velocityLaneScope, { persist: false, redraw: false });
     state.playbackRate = loadStoredPlaybackRate();
     setPlaybackRate(state.playbackRate, { persist: false, restart: false });
     setImportChannelColorMode(loadStoredImportChannelColorMode(), { persist: false });
@@ -26148,15 +28184,31 @@
     }
 
     const prepareAudio = async () => {
-      try {
-        await audioEngine.prepare();
-        reconcileEditorChannelsWithSoundBank();
-        populateChannelInstrumentSelect();
-        renderChannelEditor();
-        renderChannelTabs();
-      } catch (error) {
-        console.error("Editor default SoundFont preparation failed", error);
+      let ready = false;
+      const cachedSoundFont = await loadCachedEditorSoundFontFile();
+      if (cachedSoundFont?.source) {
+        try {
+          await audioEngine.useSoundBank(cachedSoundFont.source, { label: cachedSoundFont.name });
+          editorSoundFontName = cachedSoundFont.name;
+          updateEditorSoundFontUi();
+          ready = true;
+        } catch (error) {
+          console.warn("Cached Editor SoundFont restore failed; falling back to default", error);
+          await clearCachedEditorSoundFontFile();
+        }
       }
+      if (!ready) {
+        try {
+          await audioEngine.prepare();
+        } catch (error) {
+          console.error("Editor default SoundFont preparation failed", error);
+        }
+      }
+      reconcileEditorChannelsWithSoundBank();
+      populateChannelInstrumentSelect();
+      renderChannelEditor();
+      renderChannelTabs();
+      updateEditorSoundFontUi();
     };
     // Parsing yields between chunks, so start it now instead of waiting for an idle
     // callback that may not run before the user's first audition click.
@@ -26202,6 +28254,9 @@
       setMidiGroupVisibleByDocument,
       setMasterVolume,
       setNoteVolumeDisplay,
+      setAudioLaneVisible,
+      setVelocityLaneScope,
+      drawVelocityLane,
       setPlaybackRate,
       setZoom,
       changeZoom,
