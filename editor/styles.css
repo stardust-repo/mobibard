@@ -11804,3 +11804,64 @@ body.channel-delete-mode-active #channelDeleteModeApplyButton {
   content: none !important;
   display: none !important;
 }
+
+
+/* 2026-09-28: group rows use the same compact thickness as channel/audio rows. */
+.channel-group-item {
+  height: 27px !important;
+  min-height: 27px !important;
+  margin: 1px 0 !important;
+  padding: 1px 2px 1px 5px !important;
+  border-radius: 4px !important;
+}
+.channel-group-item .channel-group-main {
+  min-height: 23px !important;
+  height: 23px !important;
+  padding-block: 0 !important;
+}
+.channel-group-item .channel-group-folder {
+  height: 22px !important;
+  min-height: 22px !important;
+}
+
+
+/* 2026-09-28: optically center the folder emoji against the group label text. */
+.channel-group-item .channel-group-folder {
+  transform: translateY(-1px);
+}
+
+
+/* 2026-09-28: group names should read like normal channel rows.
+   Folder glyph + member count already provide the group hierarchy cue. */
+.channel-group-item .channel-group-main {
+  font-weight: 400 !important;
+  letter-spacing: normal !important;
+}
+.channel-group-item .channel-group-label {
+  font-size: 10px !important;
+  font-weight: 400 !important;
+}
+.channel-group-item.active .channel-group-main,
+.channel-group-item.active:hover .channel-group-main,
+.channel-group-item.active .channel-group-label {
+  font-weight: 400 !important;
+}
+
+/* 2026-09-28: group title typography must exactly follow normal channel titles. */
+.channel-group-item .channel-group-main {
+  font-weight: inherit !important;
+  letter-spacing: normal !important;
+}
+.channel-group-item .channel-group-label,
+.channel-group-item.active .channel-group-label,
+.channel-group-item.active:hover .channel-group-label {
+  font-size: 11px !important;
+  font-weight: 750 !important;
+}
+@media (max-width: 900px) {
+  .channel-group-item .channel-group-label,
+  .channel-group-item.active .channel-group-label,
+  .channel-group-item.active:hover .channel-group-label {
+    font-size: 10px !important;
+  }
+}

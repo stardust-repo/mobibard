@@ -3,7 +3,7 @@ import {
   ensureGoogleAccessToken,
   getGoogleAccessToken,
   isGoogleAccountConnected,
-} from '../../plugins/google/google-account-menu.js?v=20260906-editor-alpha1';
+} from '../../plugins/google/google-account-menu.js?v=20260928-account-preference1';
 
 const GOOGLE_CONFIG = window.MOBIBARD_GOOGLE_CONFIG || {};
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
@@ -16,6 +16,24 @@ let accountController = null;
 let pickerPromise = null;
 let pickerScriptPromise = null;
 let busy = false;
+
+let editorAccountPreferenceScope = 'guest';
+window.MobibardEditorAccountScope = editorAccountPreferenceScope;
+
+function publishEditorAccountPreferenceScope(snapshot = {}) {
+  const connected = Boolean(snapshot?.connected);
+  const emailAddress = String(snapshot?.emailAddress || '').trim().toLowerCase();
+  // While a restored token is still loading its profile, keep the current scope
+  // instead of briefly switching a signed-in user to the guest preference.
+  if (connected && !emailAddress) return;
+  const nextScope = connected ? `account:${encodeURIComponent(emailAddress)}` : 'guest';
+  window.MobibardEditorAccountScope = nextScope;
+  if (nextScope === editorAccountPreferenceScope) return;
+  editorAccountPreferenceScope = nextScope;
+  window.dispatchEvent(new CustomEvent('mobibard:editoraccountchange', {
+    detail: { scopeKey: nextScope, connected, emailAddress },
+  }));
+}
 
 function t(key, values = []) {
   const api = window.MobibardI18n;
@@ -365,6 +383,7 @@ function initializeAccount() {
     nameId: 'accountMenuName',
     emailId: 'accountMenuEmail',
     loginButtonId: 'googleLoginButton',
+    onAccountChange: publishEditorAccountPreferenceScope,
   });
 }
 

@@ -874,6 +874,7 @@
     noteVolumeDisplay: "selected",
     audioLaneVisible: false,
     velocityLaneVisible: false,
+    overviewTrackInfoVisible: true,
     velocityLaneScope: "channel",
     velocityLaneInteraction: null,
     velocityLaneHitRegions: [],
@@ -3146,6 +3147,57 @@
     }
   }
 
+  const OVERVIEW_TRACK_INFO_CACHE_KEY = "mobibard-overview-track-info-visible";
+  let overviewTrackInfoCacheScope = "guest";
+
+  function normalizeOverviewTrackInfoCacheScope(value) {
+    const scope = String(value || "").trim();
+    return scope.startsWith("account:") && scope.length > 8 ? scope : "guest";
+  }
+
+  function getOverviewTrackInfoCacheKey(scope = overviewTrackInfoCacheScope) {
+    const normalizedScope = normalizeOverviewTrackInfoCacheScope(scope);
+    return `${OVERVIEW_TRACK_INFO_CACHE_KEY}:${normalizedScope}`;
+  }
+
+  function loadStoredOverviewTrackInfoVisible(scope = overviewTrackInfoCacheScope) {
+    try {
+      const normalizedScope = normalizeOverviewTrackInfoCacheScope(scope);
+      let raw = window.localStorage.getItem(getOverviewTrackInfoCacheKey(normalizedScope));
+      // Migrate the pre-account cache only into the guest profile. New accounts
+      // intentionally start from the visible-by-default setting.
+      if (raw == null && normalizedScope === "guest") {
+        raw = window.localStorage.getItem(OVERVIEW_TRACK_INFO_CACHE_KEY);
+      }
+      return raw == null ? true : raw !== "0" && raw !== "false";
+    } catch {
+      return true;
+    }
+  }
+
+  function setOverviewTrackInfoVisible(visible, { persist = true, redraw = true } = {}) {
+    state.overviewTrackInfoVisible = Boolean(visible);
+    if (persist) {
+      try {
+        const value = state.overviewTrackInfoVisible ? "1" : "0";
+        window.localStorage.setItem(getOverviewTrackInfoCacheKey(), value);
+        // Keep the legacy guest key in sync for compatibility with older Editor builds.
+        if (overviewTrackInfoCacheScope === "guest") window.localStorage.setItem(OVERVIEW_TRACK_INFO_CACHE_KEY, value);
+      } catch {}
+    }
+    if (redraw) drawOverviewTimeline();
+    return state.overviewTrackInfoVisible;
+  }
+
+  function handleOverviewTrackInfoAccountChange(event) {
+    const nextScope = normalizeOverviewTrackInfoCacheScope(
+      event?.detail?.scopeKey || window.MobibardEditorAccountScope || "guest",
+    );
+    if (nextScope === overviewTrackInfoCacheScope) return;
+    overviewTrackInfoCacheScope = nextScope;
+    setOverviewTrackInfoVisible(loadStoredOverviewTrackInfoVisible(nextScope), { persist: false, redraw: true });
+  }
+
   function syncSettingsToggle(button, active) {
     if (!button) return;
     button.setAttribute("aria-checked", active ? "true" : "false");
@@ -5080,7 +5132,7 @@
   function getTimelineLaneLayout(height = elements.timelineCanvas?.clientHeight || 48) {
     const safeHeight = Math.max(42, Number(height) || 48);
     const rowHeight = safeHeight / 3;
-    const labelHeight = Math.max(12, Math.min(14, Math.floor(rowHeight) - 2));
+    const labelHeight = Math.max(13, Math.min(15, Math.floor(rowHeight) - 2));
     return {
       height: safeHeight,
       rowHeight,
@@ -5094,7 +5146,9 @@
   function getTempoMarkerScreenGeometry(tempo) {
     const lineX = Math.round(beatToX(tempo.beat) - elements.rollViewport.scrollLeft) + 0.5;
     const label = `${tempo.bpm}`;
-    const labelWidth = Math.max(30, 13 + label.length * 6.5);
+    // Give the BPM badge enough horizontal padding for bold digits and keep the
+    // hit area identical to the visible box.
+    const labelWidth = Math.max(28, 10 + label.length * 6.2);
     const canvasWidth = elements.timelineCanvas.clientWidth;
     const labelX = clamp(lineX + 5, 2, Math.max(2, canvasWidth - labelWidth - 2));
     const lane = getTimelineLaneLayout();
@@ -5105,7 +5159,9 @@
     const normalized = normalizeTimelineFadeEvent(fade, Number(fade?.id) || 1);
     const lineX = Math.round(beatToX(normalized.startBeat) - elements.rollViewport.scrollLeft) + 0.5;
     const label = normalized.type === "out" ? "OUT" : "IN";
-    const labelWidth = Math.max(28, 11 + label.length * 6.0);
+    // OUT needs a wider box than IN; the previous fixed-width approximation
+    // could let the final T escape the rounded rectangle on some fonts.
+    const labelWidth = label === "OUT" ? 31 : 24;
     const canvasWidth = elements.timelineCanvas.clientWidth;
     // Leave the small time-signature pentagon at the exact beat position free.
     const labelX = clamp(lineX + 9, 2, Math.max(2, canvasWidth - labelWidth - 2));
@@ -5226,20 +5282,7 @@
     }
 
     const overviewFades = normalizeTimelineFades();
-    const drawOverviewFade = (fade) => {
-      if (!(endBeat > 0)) return;
-      const x1 = clamp(fade.startBeat / endBeat * width, 0, width);
-      const x2 = clamp(getTimelineFadeEndBeat(fade) / endBeat * width, 0, width);
-      if (x2 <= x1) return;
-      const gradient = context.createLinearGradient(x1, 0, x2, 0);
-      if (fade.type === "in") {
-        gradient.addColorStop(0, "rgba(82,173,255,.03)"); gradient.addColorStop(1, "rgba(82,173,255,.25)");
-      } else {
-        gradient.addColorStop(0, "rgba(255,133,104,.25)"); gradient.addColorStop(1, "rgba(255,133,104,.03)");
-      }
-      context.fillStyle = gradient; context.fillRect(x1, 0, Math.max(1, x2 - x1), height);
-    };
-    overviewFades.forEach(drawOverviewFade);
+    const showTrackInfo = state.overviewTrackInfoVisible !== false;
 
     const channelActivities = overviewData.channelActivities || [];
     const activeChannelId = getActiveChannel()?.id ?? null;
@@ -5346,6 +5389,37 @@
       Math.max(1, height - 1),
     );
     context.restore();
+
+    if (showTrackInfo && endBeat > 0) {
+      // The overview is intentionally compact: tempo and fade information is
+      // represented by guide lines only. Detailed labels remain on the main timeline.
+      for (const tempo of getSortedTempos()) {
+        const x = clamp((Number(tempo.beat) || 0) / endBeat * width, 0, width);
+        context.save();
+        context.strokeStyle = state.theme === "light" ? "rgba(20,132,82,.78)" : "rgba(74,218,144,.78)";
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(Math.round(x) + .5, 0);
+        context.lineTo(Math.round(x) + .5, height);
+        context.stroke();
+        context.restore();
+      }
+
+      for (const fade of overviewFades) {
+        const x = clamp((Number(fade.startBeat) || 0) / endBeat * width, 0, width);
+        const isIn = fade.type === "in";
+        context.save();
+        context.strokeStyle = isIn
+          ? (state.theme === "light" ? "rgba(36,126,176,.88)" : "rgba(105,205,255,.90)")
+          : (state.theme === "light" ? "rgba(180,83,55,.88)" : "rgba(255,157,126,.90)");
+        context.lineWidth = 1.5;
+        context.beginPath();
+        context.moveTo(Math.round(x) + .5, 0);
+        context.lineTo(Math.round(x) + .5, height);
+        context.stroke();
+        context.restore();
+      }
+    }
 
     const playheadX = clamp(state.playhead.beat / endBeat * width, 0, width);
     context.strokeStyle = "rgba(255,78,96,.96)";
@@ -5606,7 +5680,8 @@
       context.stroke();
       context.fillStyle = accent;
       context.textBaseline = "middle";
-      context.fillText(marker.label, marker.labelX + 6, marker.labelY + marker.labelHeight / 2 + 0.5);
+      context.textAlign = "center";
+      context.fillText(marker.label, marker.labelX + marker.labelWidth / 2, marker.labelY + marker.labelHeight / 2 + 0.25);
     }
 
     context.font = "700 10px sans-serif";
@@ -5620,9 +5695,11 @@
       context.stroke();
       context.fillStyle = tempoAccent;
       context.textBaseline = "middle";
-      context.fillText(marker.label, marker.labelX + 6, marker.labelY + marker.labelHeight / 2 + 0.5);
+      context.textAlign = "center";
+      context.fillText(marker.label, marker.labelX + marker.labelWidth / 2, marker.labelY + marker.labelHeight / 2 + 0.25);
     }
     context.textBaseline = "alphabetic";
+    context.textAlign = "start";
     context.lineWidth = 1;
     drawOverviewTimeline();
   }
@@ -7824,21 +7901,26 @@
     // Resolve selection/edit explicitly on pointer-up, like channel rows do.
     const now = performance.now();
     const doubleClick = state.channelEdit.lastClickGroupId === String(groupId)
-      && now - state.channelEdit.lastClickGroupAt <= 260;
+      && now - state.channelEdit.lastClickGroupAt <= 360;
     state.channelEdit.lastClickGroupId = doubleClick ? null : String(groupId);
     state.channelEdit.lastClickGroupAt = doubleClick ? 0 : now;
     if (doubleClick) {
-      selectChannelGroup(groupId);
+      // Selection was already applied on pointer-down. Open the dialog directly
+      // on the second click so the first click never rebuilds/moves the tree.
+      // This is especially important for the last visible groups near the
+      // scroll boundary, where a render + scrollIntoView between clicks could
+      // move the row out from under the pointer and break double-click.
       openChannelGroupDialog(groupId);
     } else {
-      // A normal row click selects only. Folder open/close is owned by the
-      // visible folder icon.
-      selectChannelGroup(groupId);
-      requestAnimationFrame(() => {
-        const restored = elements.channelTabs?.querySelector(`[data-channel-group-id="${CSS.escape(String(groupId))}"]`);
-        restored?.querySelector(".channel-group-main")?.focus({ preventScroll: true });
-        restored?.scrollIntoView({ block: "nearest" });
-      });
+      // beginChannelGroupPointerDrag() already selected the group without
+      // rebuilding the channel tree. Keep that DOM in place until a potential
+      // second click arrives; only move keyboard focus, without scrolling.
+      state.activePanel = "notes";
+      state.activeAudioClipId = null;
+      state.selectedChannelGroupId = String(groupId);
+      scheduleAutosave(250);
+      const current = elements.channelTabs?.querySelector(`[data-channel-group-id="${CSS.escape(String(groupId))}"]`);
+      current?.querySelector(".channel-group-main")?.focus({ preventScroll: true });
     }
   }
 
@@ -26071,6 +26153,10 @@
       return [
         { label: i18nText("rest_cleanup.title"), action: openRestCleanupDialog },
         { label: i18nText("volume.edit_channels"), action: openChannelVolumeDialog },
+        {
+          label: i18nText(state.overviewTrackInfoVisible !== false ? "timeline.track_info_hide" : "timeline.track_info_show"),
+          action: () => setOverviewTrackInfoVisible(state.overviewTrackInfoVisible === false),
+        },
         "separator",
         { label: i18nText("timeline.move_playhead_here"), action: () => seekPlayheadBeat(snappedBeat) },
         {
@@ -26361,7 +26447,7 @@
       { label: i18nText("channel.merge"), disabled: state.channels.length < 2, action: openChannelMergeDialog },
       { label: i18nText("channel.add"), action: addChannel },
       { label: i18nText("group.create"), action: addChannelGroup },
-      { label: i18nText("channel.select_delete_2"), danger: true, action: () => enterChannelDeleteMode() },
+      { label: i18nText("group.delete_channels_groups"), danger: true, action: () => enterChannelDeleteMode() },
     ];
     registerContextMenu("channel-panel", channelListContextItems);
     registerContextMenu("channel-tabs", channelListContextItems);
@@ -28155,6 +28241,10 @@
     setAudioLaneVisible(state.audioLaneVisible, { persist: false, redraw: false });
     state.velocityLaneVisible = loadStoredVelocityLaneVisible();
     setVelocityLaneVisible(state.velocityLaneVisible, { persist: false, redraw: false });
+    overviewTrackInfoCacheScope = normalizeOverviewTrackInfoCacheScope(window.MobibardEditorAccountScope || "guest");
+    window.addEventListener("mobibard:editoraccountchange", handleOverviewTrackInfoAccountChange);
+    state.overviewTrackInfoVisible = loadStoredOverviewTrackInfoVisible(overviewTrackInfoCacheScope);
+    setOverviewTrackInfoVisible(state.overviewTrackInfoVisible, { persist: false, redraw: false });
     state.velocityLaneScope = loadStoredVelocityLaneScope();
     setVelocityLaneScope(state.velocityLaneScope, { persist: false, redraw: false });
     state.playbackRate = loadStoredPlaybackRate();
