@@ -3666,13 +3666,14 @@
   }
 
   function updateThemeControls() {
-    const currentThemeLabel = state.theme === "light" ? "밝은 색상" : "어두운 색상";
+    const currentThemeLabel = i18nText(state.theme === "light" ? "theme.light" : "theme.dark");
+    const themeChangeLabel = i18nText("theme.change", [currentThemeLabel]);
     if (elements.themeToggleButton) {
-      elements.themeToggleButton.title = `테마 변경 · 현재 ${currentThemeLabel}`;
-      elements.themeToggleButton.setAttribute("aria-label", `테마 변경 · 현재 ${currentThemeLabel}`);
+      elements.themeToggleButton.title = themeChangeLabel;
+      elements.themeToggleButton.setAttribute("aria-label", themeChangeLabel);
     }
     if (elements.themeToggleButtonText) {
-      elements.themeToggleButtonText.textContent = "테마 변경";
+      elements.themeToggleButtonText.textContent = i18nText("settings.theme_change");
     }
   }
 
@@ -3701,7 +3702,7 @@
       drawKeyboard();
     }
     if (notify) {
-      showToast(nextTheme === "light" ? "밝은 색상으로 변경했습니다." : "어두운 색상으로 변경했습니다.");
+      showToast(i18nText(nextTheme === "light" ? "theme.switched_light" : "theme.switched_dark"));
     }
   }
 
@@ -5268,18 +5269,6 @@
     context.clearRect(0, 0, width, height);
     context.fillStyle = theme.timelineBackground;
     context.fillRect(0, 0, width, height);
-
-    // A few quiet global guides make the compact overview readable without
-    // turning it into a second detailed ruler.
-    context.strokeStyle = state.theme === "light" ? "rgba(70,85,104,.20)" : "rgba(210,220,232,.13)";
-    context.lineWidth = 1;
-    for (const ratio of [0.25, 0.5, 0.75]) {
-      const x = Math.round(width * ratio) + 0.5;
-      context.beginPath();
-      context.moveTo(x, 0);
-      context.lineTo(x, height);
-      context.stroke();
-    }
 
     const overviewFades = normalizeTimelineFades();
     const showTrackInfo = state.overviewTrackInfoVisible !== false;
