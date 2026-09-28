@@ -233,6 +233,7 @@ export function initializeGoogleAccountMenu({
   nameId = 'accountMenuName',
   emailId = 'accountMenuEmail',
   loginButtonId = 'googleLoginBtn',
+  onAccountChange = () => {},
 } = {}) {
   if (typeof t !== 'function') throw new Error('initializeGoogleAccountMenu requires t()');
 
@@ -285,6 +286,14 @@ export function initializeGoogleAccountMenu({
         ? t(connected ? 'google.logout_help' : 'google.connect_help')
         : t('google.client_id_missing');
     }
+    try {
+      onAccountChange({
+        connected,
+        displayName: connected ? displayName : '',
+        emailAddress: connected ? emailText : '',
+        photoLink: connected ? photo : '',
+      });
+    } catch (_) {}
   };
 
   const refreshProfile = async force => {

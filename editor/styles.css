@@ -11804,3 +11804,28 @@ body.channel-delete-mode-active #channelDeleteModeApplyButton {
   content: none !important;
   display: none !important;
 }
+
+
+/* 2026-09-28: group rows use the same compact thickness as channel/audio rows. */
+.channel-group-item {
+  height: 27px !important;
+  min-height: 27px !important;
+  margin: 1px 0 !important;
+  padding: 1px 2px 1px 5px !important;
+  border-radius: 4px !important;
+}
+.channel-group-item .channel-group-main {
+  min-height: 23px !important;
+  height: 23px !important;
+  padding-block: 0 !important;
+}
+.channel-group-item .channel-group-folder {
+  height: 22px !important;
+  min-height: 22px !important;
+}
+
+
+/* 2026-09-28: optically center the folder emoji against the group label text. */
+.channel-group-item .channel-group-folder {
+  transform: translateY(-1px);
+}
