@@ -485,6 +485,8 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "audio.export_done": "44.1 kHz OGG 오디오를 저장했습니다.",
     "audio.export_failed": "오디오 내보내기에 실패했습니다.",
     "audio.export_no_notes": "내보낼 노트가 없습니다.",
+    "audio.export_ready_to_save": "오디오 생성이 완료되었습니다. 저장할 위치와 파일 이름을 선택하세요.",
+    "audio.save_file": "파일 저장",
     "audio.fade_in": "페이드 인 (초)",
     "audio.fade_out": "페이드 아웃 (초)",
     "nav.site_map": "사이트 맵",

@@ -69,6 +69,198 @@
     input.click();
   }
 
+  function canUseNativeSavePicker() {
+    return typeof window.showSaveFilePicker === "function" && window.isSecureContext !== false;
+  }
+
+  async function chooseNativeSaveTarget({ suggestedName, mimeType, extensions }) {
+    if (!canUseNativeSavePicker()) return { handle: null, cancelled: false };
+    try {
+      const accept = {};
+      accept[String(mimeType || "application/octet-stream")] = Array.isArray(extensions) ? extensions : [];
+      const handle = await window.showSaveFilePicker({
+        suggestedName: String(suggestedName || "download"),
+        types: [{ accept }],
+      });
+      return { handle, cancelled: false };
+    } catch (error) {
+      if (error?.name === "AbortError") return { handle: null, cancelled: true };
+      // Some embedded/non-secure environments expose the API but still reject it.
+      // Fall back to the browser's normal download path in that case.
+      console.warn("Native save picker unavailable; falling back to download.", error);
+      return { handle: null, cancelled: false };
+    }
+  }
+
+  function downloadBlobWithName(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = String(fileName || "download");
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  }
+
+  async function writeBlobToSaveTarget(blob, target, fallbackFileName) {
+    if (target?.cancelled) return false;
+    if (target?.handle) {
+      const writable = await target.handle.createWritable();
+      try {
+        await writable.write(blob);
+      } finally {
+        await writable.close();
+      }
+      return true;
+    }
+    downloadBlobWithName(blob, fallbackFileName);
+    return true;
+  }
+
+  function canUseNativeDirectoryPicker() {
+    return typeof window.showDirectoryPicker === "function" && window.isSecureContext !== false;
+  }
+
+  function normalizeAudioExportFileName(value, fallbackName) {
+    let name = String(value || "").trim();
+    if (!name) name = String(fallbackName || "mobibard-project.ogg").trim() || "mobibard-project.ogg";
+    name = name.replace(/[\\/:*?"<>|]/g, "_");
+    if (!/\.ogg$/i.test(name)) name += ".ogg";
+    return name;
+  }
+
+  // For audio export we intentionally choose only the destination directory first.
+  // showSaveFilePicker() creates/truncates the selected file as soon as the picker
+  // resolves, which leaves a 0-byte placeholder while a long render is running.
+  // A directory handle lets us ask the user first, render/encode second, and create
+  // or overwrite the actual .ogg file only after the final Blob is ready.
+  async function chooseAudioExportDestinationBeforeWork(defaultFileName) {
+    if (!canUseNativeDirectoryPicker()) {
+      return { directoryHandle: null, fileName: normalizeAudioExportFileName(defaultFileName, defaultFileName), cancelled: false };
+    }
+    let directoryHandle;
+    try {
+      directoryHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+    } catch (error) {
+      if (error?.name === "AbortError") return { directoryHandle: null, fileName: defaultFileName, cancelled: true };
+      console.warn("Native directory picker unavailable; falling back to download.", error);
+      return { directoryHandle: null, fileName: normalizeAudioExportFileName(defaultFileName, defaultFileName), cancelled: false };
+    }
+
+    const proposed = window.prompt(
+      i18nText("drive.save_name_prompt", [String(directoryHandle.name || "")]),
+      normalizeAudioExportFileName(defaultFileName, defaultFileName),
+    );
+    if (proposed === null) return { directoryHandle: null, fileName: defaultFileName, cancelled: true };
+    const fileName = normalizeAudioExportFileName(proposed, defaultFileName);
+
+    try {
+      await directoryHandle.getFileHandle(fileName);
+      if (!window.confirm(i18nText("editor.drive.overwrite", [fileName]))) {
+        return { directoryHandle: null, fileName, cancelled: true };
+      }
+    } catch (error) {
+      if (error?.name !== "NotFoundError") throw error;
+    }
+
+    return { directoryHandle, fileName, cancelled: false };
+  }
+
+  async function writeAudioBlobToChosenDestination(blob, destination) {
+    if (destination?.cancelled) return false;
+    if (destination?.directoryHandle) {
+      // Do not request/create the file handle until the final encoded Blob exists.
+      const handle = await destination.directoryHandle.getFileHandle(destination.fileName, { create: true });
+      const writable = await handle.createWritable();
+      try {
+        await writable.write(blob);
+      } finally {
+        await writable.close();
+      }
+      return true;
+    }
+    downloadBlobWithName(blob, destination?.fileName || "mobibard-project.ogg");
+    return true;
+  }
+
+  // A long render cannot safely keep the browser's transient user activation alive.
+  // Ask for the destination only after the final Blob exists, and open the native
+  // picker directly from the user's Save click so no empty placeholder sits on disk
+  // during rendering/encoding.
+  function chooseNativeSaveTargetAfterWork({ suggestedName, mimeType, extensions, title, message, confirmLabel }) {
+    if (!canUseNativeSavePicker()) return Promise.resolve({ handle: null, cancelled: false });
+    const dialog = elements.confirmDialog;
+    const confirmButton = elements.confirmDialogConfirm;
+    const cancelButton = elements.confirmDialogCancel;
+    if (!dialog || typeof dialog.showModal !== "function" || !confirmButton || !cancelButton) {
+      return chooseNativeSaveTarget({ suggestedName, mimeType, extensions });
+    }
+    if (dialog.open) dialog.close("cancel");
+    elements.confirmDialogTitle.textContent = String(title || i18nText("audio.export_ogg"));
+    elements.confirmDialogMessage.textContent = String(message || i18nText("audio.export_ready_to_save"));
+    confirmButton.textContent = String(confirmLabel || i18nText("audio.save_file"));
+    dialog.returnValue = "cancel";
+    const hadDangerClass = confirmButton.classList.contains("danger-button");
+    confirmButton.classList.remove("danger-button");
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const cleanup = () => {
+        confirmButton.removeEventListener("click", onConfirm, true);
+        cancelButton.removeEventListener("click", onCancel, true);
+        dialog.removeEventListener("cancel", onDialogCancel);
+        dialog.removeEventListener("close", onDialogClose);
+        confirmButton.disabled = false;
+        if (hadDangerClass) confirmButton.classList.add("danger-button");
+      };
+      const finish = (target) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(target);
+      };
+      const onConfirm = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        confirmButton.disabled = true;
+        const target = await chooseNativeSaveTarget({ suggestedName, mimeType, extensions });
+        confirmButton.disabled = false;
+        if (target.cancelled) {
+          // Cancelling the OS picker returns to the ready-to-save dialog so the
+          // rendered Blob remains available without forcing another render.
+          return;
+        }
+        dialog.returnValue = "confirm";
+        finish(target);
+        dialog.close("confirm");
+      };
+      const onCancel = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dialog.returnValue = "cancel";
+        finish({ handle: null, cancelled: true });
+        dialog.close("cancel");
+      };
+      const onDialogCancel = (event) => {
+        event.preventDefault();
+        dialog.returnValue = "cancel";
+        finish({ handle: null, cancelled: true });
+        dialog.close("cancel");
+      };
+      const onDialogClose = () => {
+        if (!settled) finish({ handle: null, cancelled: true });
+      };
+      confirmButton.addEventListener("click", onConfirm, true);
+      cancelButton.addEventListener("click", onCancel, true);
+      dialog.addEventListener("cancel", onDialogCancel);
+      dialog.addEventListener("close", onDialogClose);
+      dialog.showModal();
+      requestAnimationFrame(() => confirmButton.focus());
+    });
+  }
+
   const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
   const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
   // Color data is hue-only. Every editable color is stored as 0..359 degrees.
@@ -4649,8 +4841,8 @@
       });
 
       context.save();
-      // Note duration is a translucent, editable region. Its height represents velocity
-      // and its width mirrors the note duration, making long notes easier to grab.
+      // Note duration is a translucent visual region only. Editing is intentionally
+      // keyed to the onset X column so Group/All scopes remain unambiguous.
       const regionLeft = Math.min(visibleStartX, visibleEndX);
       const regionWidth = Math.max(1, Math.abs(visibleEndX - visibleStartX));
       const regionTop = Math.min(y, bottom);
@@ -4769,31 +4961,6 @@
     return changed;
   }
 
-  function applyVelocityLaneDurationSweep(interaction, fromBeat, fromVolume, toBeat, toVolume) {
-    const entries = interaction?.entries || [];
-    if (!entries.length) return false;
-    const lowBeat = Math.min(fromBeat, toBeat);
-    const highBeat = Math.max(fromBeat, toBeat);
-    const deltaBeat = toBeat - fromBeat;
-    const movingForward = deltaBeat >= 0;
-    let changed = false;
-    for (const entry of entries) {
-      const start = Number(entry.startBeat) || 0;
-      const end = start + Math.max(CONFIG.minimumNoteBeat, Number(entry.note?.durationBeat) || CONFIG.minimumNoteBeat);
-      if (end < lowBeat - 1e-7 || start > highBeat + 1e-7) continue;
-      // Use the point where the pointer sweep most recently intersects this note's
-      // duration area. This makes the whole shaded duration region editable, not
-      // just the onset/vertical volume stem.
-      const touchBeat = movingForward
-        ? clamp(toBeat, start, end)
-        : clamp(toBeat, start, end);
-      const ratio = Math.abs(deltaBeat) < 1e-9 ? 1 : clamp((touchBeat - fromBeat) / deltaBeat, 0, 1);
-      const volume = Math.round(fromVolume + (toVolume - fromVolume) * ratio);
-      changed = setVelocityLaneNoteVolume(entry, volume, interaction) || changed;
-    }
-    return changed;
-  }
-
   function showVelocityLaneTooltip(event, volume, rect = null) {
     const tooltip = elements.velocityLaneTooltip;
     const viewport = elements.velocityLaneViewport;
@@ -4825,42 +4992,63 @@
     const localY = Number(clientY) - laneRect.top;
     let best = null;
     let bestDistance = Infinity;
-    let segmentBest = null;
-    let segmentDistance = Infinity;
     for (const region of state.velocityLaneHitRegions || []) {
-      const minX = Math.min(region.x, region.endX) - 4;
-      const maxX = Math.max(region.x, region.endX) + 4;
-      const minY = Math.min(region.y, region.bottom) - 5;
-      const maxY = Math.max(region.y, region.bottom) + 5;
-      const onStem = Math.abs(localX - region.x) <= 6 && localY >= minY && localY <= maxY;
-      const onEndStem = Math.abs(localX - region.endX) <= 5 && localY >= minY && localY <= maxY;
-      const inDurationArea = localX >= minX && localX <= maxX && localY >= minY && localY <= maxY;
-      if (onStem || onEndStem || inDurationArea) {
-        const distance = onStem
-          ? Math.abs(localX - region.x) * 0.25
-          : onEndStem
-            ? 0.5 + Math.abs(localX - region.endX) * 0.25
-            : 2 + Math.abs(localY - region.y);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          best = region;
-        }
-      }
-      // If the pointer is anywhere inside a note's time span, treat that span as
-      // editable even when the pointer is above/below the painted velocity area.
-      // When spans overlap, prefer the velocity line closest to the pointer Y.
-      if (localX >= minX && localX <= maxX) {
-        const selectedBonus = region.item?.selected ? -8 : 0;
-        const activeBonus = region.item?.isActive ? -4 : 0;
-        const groupBonus = region.item?.inSelectedGroup ? -2 : 0;
-        const distance = Math.abs(localY - region.y) + selectedBonus + activeBonus + groupBonus;
-        if (distance < segmentDistance) {
-          segmentDistance = distance;
-          segmentBest = region;
-        }
+      // The editable hit area is the full-height vertical column at each onset bar.
+      // This keeps V0/low-volume bars just as easy to grab as tall bars while the
+      // translucent note-duration area remains display-only.
+      const xDistance = Math.abs(localX - region.x);
+      if (xDistance > 6) continue;
+
+      // When multiple channels share the same onset X, keep Y as a tie-breaker only;
+      // it never restricts the hit area vertically. Selected/active items get a small
+      // preference so Group/All editing stays predictable at coincident onsets.
+      const markerDistance = Math.abs(localY - region.y);
+      const selectedBonus = region.item?.selected ? -1.5 : 0;
+      const activeBonus = region.item?.isActive ? -0.75 : 0;
+      const distance = xDistance * 2 + markerDistance * 0.02 + selectedBonus + activeBonus;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = region;
       }
     }
-    return best || segmentBest;
+    return best;
+  }
+
+  function getVelocityLaneEntriesAtClientX(clientX, rect = null) {
+    const viewport = elements.velocityLaneViewport;
+    if (!viewport) return [];
+    const laneRect = rect || viewport.getBoundingClientRect();
+    const localX = Number(clientX) - laneRect.left;
+    let nearestRegion = null;
+    let nearestDistance = Infinity;
+    for (const region of state.velocityLaneHitRegions || []) {
+      const distance = Math.abs(localX - region.x);
+      if (distance > 6 || distance >= nearestDistance) continue;
+      nearestDistance = distance;
+      nearestRegion = region;
+    }
+    const targetBeat = Number(nearestRegion?.item?.entry?.startBeat);
+    if (!Number.isFinite(targetBeat)) return [];
+    const entries = [];
+    const seen = new Set();
+    for (const region of state.velocityLaneHitRegions || []) {
+      const entry = region?.item?.entry;
+      if (!entry || Math.abs(Number(entry.startBeat) - targetBeat) > 1e-7) continue;
+      const key = `${entry.channel?.id ?? ""}:${entry.note?.id ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push(entry);
+    }
+    entries.sort((left, right) => left.channelIndex - right.channelIndex || Number(left.note.id) - Number(right.note.id));
+    return entries;
+  }
+
+  function setVelocityLaneEntriesVolume(entries, volume, interaction) {
+    let changed = false;
+    for (const entry of entries || []) {
+      changed = setVelocityLaneNoteVolume(entry, volume, interaction) || changed;
+    }
+    return changed;
   }
 
   function updateVelocityLaneHover(event) {
@@ -4903,14 +5091,16 @@
     let changed = false;
 
     const movedX = Math.abs(clientX - interaction.startClientX);
-    if (interaction.directEntry && !interaction.painting && movedX < 9) {
-      changed = setVelocityLaneNoteVolume(interaction.directEntry, volume, interaction);
-      changed = applyVelocityLaneDurationSweep(interaction, interaction.lastBeat, interaction.lastVolume, beat, volume) || changed;
-      interaction.lastBeat = beat;
+    if (interaction.directEntries?.length && !interaction.painting && movedX < 9) {
+      // A vertical adjustment/click on an onset column applies to every bar that
+      // shares that X position, not just whichever channel happened to win hit-testing.
+      changed = setVelocityLaneEntriesVolume(interaction.directEntries, volume, interaction);
+      interaction.lastBeat = interaction.directEntries[0]?.startBeat ?? beat;
     } else {
+      // Dragging may begin in empty space. Once the pointer crosses onset columns,
+      // paint every crossed bar even though there was no direct bar under pointerdown.
       interaction.painting = true;
       changed = applyVelocityLaneSegment(interaction, interaction.lastBeat, interaction.lastVolume, beat, volume) || changed;
-      changed = applyVelocityLaneDurationSweep(interaction, interaction.lastBeat, interaction.lastVolume, beat, volume) || changed;
       interaction.lastBeat = beat;
     }
     interaction.lastVolume = volume;
@@ -4937,8 +5127,8 @@
     }
     const entries = getVelocityLaneEntriesFromRenderItems(renderItems);
     if (!entries.length) return;
-    const hitRegion = getVelocityLaneHitRegionAt(event.clientX, event.clientY, rect);
-    const directEntry = hitRegion?.item?.entry || null;
+    const directEntries = getVelocityLaneEntriesAtClientX(event.clientX, rect);
+    const directEntry = directEntries[0] || null;
     const beat = directEntry
       ? directEntry.startBeat
       : getVelocityLaneBeatFromClientX(event.clientX, rect, elements.rollViewport?.scrollLeft || 0);
@@ -4951,6 +5141,7 @@
       scrollLeft: elements.rollViewport?.scrollLeft || 0,
       startClientX: event.clientX,
       directEntry,
+      directEntries,
       painting: false,
       pendingClientX: null,
       pendingClientY: null,
@@ -4962,10 +5153,9 @@
       timelineDirty: false,
       rollPreviewTimer: 0,
     };
-    let changedAtStart = directEntry
-      ? setVelocityLaneNoteVolume(directEntry, volume, state.velocityLaneInteraction)
-      : applyVelocityLaneSegment(state.velocityLaneInteraction, beat, volume, beat, volume);
-    changedAtStart = applyVelocityLaneDurationSweep(state.velocityLaneInteraction, beat, volume, beat, volume) || changedAtStart;
+    const changedAtStart = directEntries.length
+      ? setVelocityLaneEntriesVolume(directEntries, volume, state.velocityLaneInteraction)
+      : false;
     showVelocityLaneTooltip(event, volume, rect);
     drawVelocityLane(renderItems);
     if (changedAtStart) scheduleVelocityLaneRollPreview(state.velocityLaneInteraction);
@@ -5042,7 +5232,8 @@
     const rect = elements.velocityLaneViewport?.getBoundingClientRect();
     if (!rect) return;
     const region = getVelocityLaneHitRegionAt(event.clientX, event.clientY, rect);
-    if (!region?.item?.entry) return;
+    const wheelEntries = getVelocityLaneEntriesAtClientX(event.clientX, rect);
+    if (!wheelEntries.length) return;
 
     let interaction = state.velocityLaneWheelInteraction;
     if (!interaction) {
@@ -5067,16 +5258,22 @@
     }
     const increase = interaction.deltaCarry < 0;
     interaction.deltaCarry = 0;
-    const entry = region.item.entry;
-    const nextVolume = clamp(getNoteVolume(entry.note) + (increase ? 1 : -1), 0, 15);
-    if (setVelocityLaneNoteVolume(entry, nextVolume, interaction)) {
+    let changed = false;
+    const representativeEntry = region?.item?.entry || wheelEntries[0];
+    let representativeVolume = representativeEntry ? getNoteVolume(representativeEntry.note) : 0;
+    for (const entry of wheelEntries) {
+      const nextVolume = clamp(getNoteVolume(entry.note) + (increase ? 1 : -1), 0, 15);
+      changed = setVelocityLaneNoteVolume(entry, nextVolume, interaction) || changed;
+      if (entry === representativeEntry) representativeVolume = nextVolume;
+    }
+    if (changed) {
       drawVelocityLane(state.velocityLaneRenderItems);
       scheduleVelocityLaneRollPreview(interaction);
       if (interaction.timelineDirty) {
         drawTimeline();
         interaction.timelineDirty = false;
       }
-      showVelocityLaneTooltip(event, nextVolume, rect);
+      showVelocityLaneTooltip(event, representativeVolume, rect);
       scheduleVelocityLaneWheelCommit(interaction);
     }
     event.preventDefault();
@@ -23509,26 +23706,36 @@
     return encodeProjectStorage(project);
   }
 
-  function markProjectSaved({ notify = true, message = "프로젝트를 저장했습니다." } = {}) {
+  function markProjectSaved({ notify = true, message = null } = {}) {
     state.dirty = false;
     updateDirtyState();
     scheduleAutosave(0);
-    if (notify && message) showToast(message);
+    const resolvedMessage = message == null ? i18nText("project.save_2") : message;
+    if (notify && resolvedMessage) showToast(resolvedMessage);
   }
 
-  function saveProject() {
+  async function saveProject() {
     shrinkTimelineToContent();
     const data = JSON.stringify(serializeProject());
     const blob = new Blob([data], { type: "application/json;charset=utf-8" });
-    const link = document.createElement("a");
     const safeName = (state.projectName || "mobibard-project").replace(/[\/:*?"<>|]/g, "_");
-    link.href = URL.createObjectURL(blob);
-    link.download = `${safeName}.mmlproj.json`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(link.href);
-    markProjectSaved();
+    const fileName = `${safeName}.mmlproj.json`;
+    const target = await chooseNativeSaveTarget({
+      suggestedName: fileName,
+      mimeType: "application/json",
+      extensions: [".json"],
+    });
+    if (target.cancelled) return false;
+    try {
+      const saved = await writeBlobToSaveTarget(blob, target, fileName);
+      if (!saved) return false;
+      markProjectSaved();
+      return true;
+    } catch (error) {
+      console.error("Project save failed", error);
+      showToast(String(error?.message || error || i18nText("project.save")));
+      return false;
+    }
   }
 
 
@@ -23573,7 +23780,8 @@
       bankNumber: 0,
       presetNumber: 0,
       volume: 1,
-      maxVoices: Math.max(256, (notes?.length || 0) + 32),
+      maxVoices: 256,
+      offlineRenderMode: true,
       onStatus: () => {},
     });
     offlineEngine.context = context;
@@ -23603,7 +23811,7 @@
   async function exportProjectAsAudioOgg() {
     if (audioOggExportBusy) return false;
     const exporter = window.MobibardAudioExport;
-    if (!exporter?.renderAndDownloadOgg) {
+    if (!exporter?.renderOgg || !exporter?.renderAndDownloadOgg) {
       showToast(i18nText("audio.export_failed"));
       return false;
     }
@@ -23619,17 +23827,32 @@
       return false;
     }
 
+    const defaultFileName = editorAudioExportFileName();
+    // Match Project Save / MIDI Export: ask for the final file name + location first.
+    // Only keep the returned file handle here; do not call createWritable() until the
+    // complete OGG Blob has finished rendering and encoding.
+    const destination = await chooseNativeSaveTarget({
+      suggestedName: defaultFileName,
+      mimeType: "audio/ogg",
+      extensions: [".ogg"],
+    });
+    if (destination.cancelled) return false;
+    const fileName = defaultFileName;
+
     audioOggExportBusy = true;
     if (elements.audioExportButton) elements.audioExportButton.disabled = true;
     showToast(i18nText("audio.exporting_ogg"));
     try {
       await audioEngine.prepare();
       const autoGainScale = computePlaybackAutoGainScale(notes, { windowStart: 0, windowEnd: duration });
-      await exporter.renderAndDownloadOgg({
-        fileName: editorAudioExportFileName(),
+      const renderOptions = {
+        fileName,
         durationSec: duration,
         tailSec: 3.65,
         vbrQuality: 5,
+        // Larger encoder chunks reduce JS↔WASM call overhead while preserving
+        // the same 44.1 kHz stereo/VBR output.
+        chunkFrames: 131072,
         render: async (context) => {
           const offlineEngine = configureOfflineEditorEngine(context, notes);
           for (let index = 0; index < notes.length; index += 1) {
@@ -23647,10 +23870,15 @@
                 mmlVolume: Number.isFinite(Number(note.volume)) ? Number(note.volume) : null,
               },
             );
-            if (index > 0 && index % 512 === 0) await new Promise(resolve => window.setTimeout(resolve, 0));
+            if (index > 0 && index % 2048 === 0) await new Promise(resolve => window.setTimeout(resolve, 0));
           }
         },
-      });
+      };
+      // Render + encode completely in memory first. Only after the final OGG Blob
+      // exists do we open the writable stream for the file chosen above.
+      const result = await exporter.renderOgg(renderOptions);
+      const saved = await writeBlobToSaveTarget(result.blob, destination, fileName);
+      if (!saved) return false;
       showToast(i18nText("audio.export_done"));
       return true;
     } catch (error) {
@@ -23870,7 +24098,7 @@
     };
   }
 
-  function exportProjectAsMidi() {
+  async function exportProjectAsMidi() {
     const buildMidi = window.MabiMusicFormats?.buildMidi;
     if (typeof buildMidi !== "function") {
       showToast(i18nText("midi.export_module_unavailable"));
@@ -23907,14 +24135,14 @@
       });
       const blob = new Blob([bytes], { type: "audio/midi" });
       const safeName = (state.projectName || "mobibard-project").replace(/[\/:*?"<>|]/g, "_");
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${safeName}.mid`;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      const fileName = `${safeName}.mid`;
+      const target = await chooseNativeSaveTarget({
+        suggestedName: fileName,
+        mimeType: "audio/midi",
+        extensions: [".mid", ".midi"],
+      });
+      if (target.cancelled) return false;
+      await writeBlobToSaveTarget(blob, target, fileName);
       if (packing.extended) {
         showToast(i18nText("midi.export_extended", [packing.portCount, packing.midiChannelCount]));
       } else {
@@ -26120,7 +26348,7 @@
     const commonItems = () => [
       { label: "새 파일", action: () => requestNewProject() },
       { label: "불러오기", action: () => openFilePickerInput(elements.fileInput) },
-      { label: "저장", action: saveProject },
+      { label: "저장", action: () => { void saveProject(); } },
     ];
 
     registerContextMenu("app", commonItems);
@@ -27134,7 +27362,7 @@
     elements.editRestCleanupButton?.addEventListener("click", () => { closeEditMenu(); openRestCleanupDialog(); });
     elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openChannelVolumeDialog(); });
     elements.fileExportButton.addEventListener("click", () => { closeFileMenu(); exportCurrentContextAsMml(); });
-    elements.midiExportButton?.addEventListener("click", () => { closeFileMenu(); exportProjectAsMidi(); });
+    elements.midiExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsMidi(); });
     elements.audioExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsAudioOgg(); });
     elements.midiExtractButton?.addEventListener("click", () => { closeFileMenu(); openMidiExtractionSupport(); });
     elements.supportedFilesMenuButton?.addEventListener("click", closeFileMenu);
@@ -27148,7 +27376,7 @@
     });
     elements.saveButton.addEventListener("click", () => {
       closeFileMenu();
-      saveProject();
+      void saveProject();
     });
     elements.midiOpenButton?.addEventListener("click", () => {
       closeFileMenu();
@@ -28125,7 +28353,7 @@
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         closeFileMenu();
-        saveProject();
+        void saveProject();
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o") {
         event.preventDefault();

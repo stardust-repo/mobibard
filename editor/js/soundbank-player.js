@@ -141,10 +141,17 @@
       this.bufferCache = new Map();
       this.zoneCache = new Map();
       this.zoneOutputCache = new Map();
+      // Offline audio export reuses resolved SoundFont/render parameters for
+      // repeated instrument/pitch/velocity-bucket combinations. This cache is
+      // context-local because it also stores the resolved AudioBuffer/output node.
+      this.offlineRenderTemplateCache = new Map();
       this.voices = new Set();
       this.volume = clamp(Number(options.volume ?? 1), 0, 1.5);
       const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
       this.maxVoices = Math.max(24, Number(options.maxVoices) || (coarsePointer ? 56 : 96));
+      // Offline export schedules the whole score before rendering starts. In that
+      // mode real-time polyphony bookkeeping is unnecessary and becomes O(N^2).
+      this.offlineRenderMode = Boolean(options.offlineRenderMode);
       this.mode = "loading";
     }
 
@@ -160,6 +167,7 @@
       this.compressor = null;
       this.bufferCache.clear();
       this.zoneOutputCache.clear();
+      this.offlineRenderTemplateCache.clear();
       this.voices.clear();
       return true;
     }
@@ -287,6 +295,7 @@
       this.bufferCache.clear();
       this.zoneCache.clear();
       this.zoneOutputCache.clear();
+      this.offlineRenderTemplateCache.clear();
       this.preparePromise = null;
     }
 
@@ -479,11 +488,169 @@
       return buffer;
     }
 
+    getOfflineRenderTemplate(midi, velocity, program = this.presetNumber, bank = this.bankNumber, exactPreset = false) {
+      const safeMidi = clamp(Math.round(Number(midi) || 60), 0, 127);
+      const safeVelocity = clamp(Number(velocity) || 0, 0, 127);
+      const safeProgram = clamp(Math.round(Number(program) || 0), 0, 127);
+      const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
+      const velocityBucket = Math.floor(safeVelocity / 16);
+      const cacheKey = `${safeBank}:${safeProgram}:${exactPreset ? 1 : 0}:${safeMidi}:${velocityBucket}`;
+      if (this.offlineRenderTemplateCache.has(cacheKey)) {
+        return this.offlineRenderTemplateCache.get(cacheKey);
+      }
+
+      const zone = this.findZone(safeMidi, safeVelocity, safeProgram, safeBank, exactPreset);
+      if (!zone) {
+        const missing = Object.freeze({ kind: safeBank === 128 ? "silent" : "fallback" });
+        this.offlineRenderTemplateCache.set(cacheKey, missing);
+        return missing;
+      }
+
+      const buffer = this.getSampleBuffer(zone);
+      const outputNode = this.getZoneOutput(zone);
+      const centsFromRoot = (safeMidi - zone.rootKey) * zone.scaleTuning - zone.pitchCorrection + zone.coarseTune * 100 + zone.fineTune;
+      let loopStart = null;
+      let loopEnd = null;
+      if (zone.loop) {
+        const resolvedLoop = window.MabiSoundBank?.resolveLoopFrames?.(zone.sample, zone.loopRegion, buffer);
+        if (resolvedLoop && resolvedLoop.endFrame > resolvedLoop.startFrame + 1) {
+          const loopRate = Math.max(8000, Number(buffer.sampleRate || zone.sampleRate) || 44100);
+          loopStart = resolvedLoop.startFrame / loopRate;
+          loopEnd = Math.max(loopStart + 0.001, resolvedLoop.endFrame / loopRate);
+        }
+      }
+
+      const template = Object.freeze({
+        kind: "sf2",
+        buffer,
+        outputNode,
+        playbackRate: 2 ** (centsFromRoot / 1200),
+        loopStart,
+        loopEnd,
+        zoneGain: zone.gain,
+        sustainRatio: 10 ** (-zone.sustainAttenuation / 200),
+        attack: clamp(zone.attack, 0.003, 0.25),
+        decay: clamp(zone.decay, 0.03, 8),
+        release: clamp(zone.release, 0.06, 3.5),
+      });
+      this.offlineRenderTemplateCache.set(cacheKey, template);
+      return template;
+    }
+
+    createOfflineSf2Voice(midi, velocity, when, duration, program = this.presetNumber, bank = this.bankNumber, gainScale = 1, exactPreset = false, mmlVolume = null) {
+      const context = this.ensureContext();
+      const safeGainScale = Number.isFinite(Number(gainScale))
+        ? clamp(Number(gainScale), 0, 1.5)
+        : 1;
+      const template = this.getOfflineRenderTemplate(midi, velocity, program, bank, exactPreset);
+      if (!template || template.kind === "silent") return null;
+      if (template.kind === "fallback") {
+        return this.createOfflineFallbackVoice(midi, velocity, when, duration, safeGainScale, mmlVolume);
+      }
+
+      const source = context.createBufferSource();
+      const gain = context.createGain();
+      const hasMmlVolume = Number.isFinite(Number(mmlVolume));
+      const mmlVolumeLevel = hasMmlVolume ? clamp(Number(mmlVolume), 0, 15) : null;
+      const peakBase = hasMmlVolume
+        ? Math.pow(mmlVolumeLevel / 15, 1.6) * template.zoneGain * safeGainScale
+        : Math.pow(velocity / 127, 1.5) * template.zoneGain * 0.9 * safeGainScale;
+      const peak = clamp(peakBase, 0.0001, 1.2);
+      const sustain = peak * template.sustainRatio;
+
+      source.buffer = template.buffer;
+      source.playbackRate.value = template.playbackRate;
+      if (template.loopStart != null && template.loopEnd != null) {
+        source.loop = true;
+        source.loopStart = template.loopStart;
+        source.loopEnd = template.loopEnd;
+      }
+
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(peak, when + template.attack);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, sustain), when + template.attack + template.decay);
+      source.connect(gain);
+      gain.connect(template.outputNode);
+      source.start(when);
+
+      if (Number.isFinite(duration) && duration > 0) {
+        const releaseAt = Math.max(context.currentTime, when + duration);
+        const releaseSeconds = template.release;
+        if (typeof gain.gain.cancelAndHoldAtTime === "function") {
+          gain.gain.cancelAndHoldAtTime(releaseAt);
+        } else {
+          gain.gain.cancelScheduledValues(releaseAt);
+          gain.gain.setValueAtTime(Math.max(0.0001, peak), releaseAt);
+        }
+        gain.gain.exponentialRampToValueAtTime(0.0001, releaseAt + releaseSeconds);
+        try { source.stop(releaseAt + releaseSeconds + 0.03); } catch {}
+      }
+
+      // Offline export never needs release/cancel bookkeeping after scheduling, so
+      // avoid allocating one voice object and two closures per note.
+      return source;
+    }
+
+    createOfflineFallbackVoice(midi, velocity, when, duration, gainScale = 1, mmlVolume = null) {
+      const context = this.ensureContext();
+      const safeGainScale = Number.isFinite(Number(gainScale))
+        ? clamp(Number(gainScale), 0, 1.5)
+        : 1;
+      const gain = context.createGain();
+      const filter = context.createBiquadFilter();
+      const oscillatorA = context.createOscillator();
+      const oscillatorB = context.createOscillator();
+      const frequency = 440 * 2 ** ((midi - 69) / 12);
+      const hasMmlVolume = Number.isFinite(Number(mmlVolume));
+      const mmlVolumeLevel = hasMmlVolume ? clamp(Number(mmlVolume), 0, 15) : null;
+      const peakBase = hasMmlVolume
+        ? Math.pow(mmlVolumeLevel / 15, 1.6) * 0.24 * safeGainScale
+        : Math.pow(velocity / 127, 1.4) * 0.24 * safeGainScale;
+      const peak = clamp(peakBase, 0.0001, 0.3);
+      const releaseSeconds = 0.32;
+
+      oscillatorA.type = "triangle";
+      oscillatorA.frequency.value = frequency;
+      oscillatorB.type = "sine";
+      oscillatorB.frequency.value = frequency * 2;
+      oscillatorB.detune.value = 2;
+      filter.type = "lowpass";
+      filter.frequency.value = Math.min(9000, 1800 + frequency * 5);
+      filter.Q.value = 0.7;
+
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(peak, when + 0.008);
+      gain.gain.exponentialRampToValueAtTime(peak * 0.32, when + 0.7);
+      oscillatorA.connect(filter);
+      oscillatorB.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain);
+      oscillatorA.start(when);
+      oscillatorB.start(when);
+
+      if (Number.isFinite(duration) && duration > 0) {
+        const releaseAt = Math.max(context.currentTime, when + duration);
+        if (typeof gain.gain.cancelAndHoldAtTime === "function") {
+          gain.gain.cancelAndHoldAtTime(releaseAt);
+        } else {
+          gain.gain.cancelScheduledValues(releaseAt);
+          gain.gain.setValueAtTime(Math.max(0.0001, peak), releaseAt);
+        }
+        gain.gain.exponentialRampToValueAtTime(0.0001, releaseAt + releaseSeconds);
+        try { oscillatorA.stop(releaseAt + releaseSeconds + 0.03); } catch {}
+        try { oscillatorB.stop(releaseAt + releaseSeconds + 0.03); } catch {}
+      }
+      return oscillatorA;
+    }
+
     createSf2Voice(midi, velocity, when, duration, program = this.presetNumber, bank = this.bankNumber, gainScale = 1, exactPreset = false, mmlVolume = null) {
       const context = this.ensureContext();
       const safeGainScale = Number.isFinite(Number(gainScale))
         ? clamp(Number(gainScale), 0, 1.5)
         : 1;
+      if (this.offlineRenderMode) {
+        return this.createOfflineSf2Voice(midi, velocity, when, duration, program, bank, safeGainScale, exactPreset, mmlVolume);
+      }
       const zone = this.findZone(midi, velocity, program, bank, exactPreset);
       if (!zone) {
         // A missing drum key should stay silent rather than become a pitched synth.
@@ -491,7 +658,7 @@
         return this.createFallbackVoice(midi, velocity, when, duration, safeGainScale, mmlVolume);
       }
 
-      this.enforceVoiceLimit(when);
+      if (!this.offlineRenderMode) this.enforceVoiceLimit(when);
       const source = context.createBufferSource();
       const gain = context.createGain();
       const outputNode = this.getZoneOutput(zone);
@@ -576,14 +743,16 @@
         },
       };
 
-      source.addEventListener("ended", () => {
-        voice.ended = true;
-        this.voices.delete(voice);
-        try { source.disconnect(); } catch {}
-        try { gain.disconnect(); } catch {}
-      }, { once: true });
+      if (!this.offlineRenderMode) {
+        source.addEventListener("ended", () => {
+          voice.ended = true;
+          this.voices.delete(voice);
+          try { source.disconnect(); } catch {}
+          try { gain.disconnect(); } catch {}
+        }, { once: true });
+      }
       source.start(when);
-      this.voices.add(voice);
+      if (!this.offlineRenderMode) this.voices.add(voice);
       if (Number.isFinite(duration) && duration > 0) {
         voice.release(when + duration);
       }
@@ -595,6 +764,9 @@
       const safeGainScale = Number.isFinite(Number(gainScale))
         ? clamp(Number(gainScale), 0, 1.5)
         : 1;
+      if (this.offlineRenderMode) {
+        return this.createOfflineFallbackVoice(midi, velocity, when, duration, safeGainScale, mmlVolume);
+      }
       this.enforceVoiceLimit(when);
       const gain = context.createGain();
       const filter = context.createBiquadFilter();
@@ -669,18 +841,20 @@
         },
       };
 
-      const cleanup = () => {
-        voice.ended = true;
-        this.voices.delete(voice);
-        try { oscillatorA.disconnect(); } catch {}
-        try { oscillatorB.disconnect(); } catch {}
-        try { filter.disconnect(); } catch {}
-        try { gain.disconnect(); } catch {}
-      };
-      oscillatorA.addEventListener("ended", cleanup, { once: true });
+      if (!this.offlineRenderMode) {
+        const cleanup = () => {
+          voice.ended = true;
+          this.voices.delete(voice);
+          try { oscillatorA.disconnect(); } catch {}
+          try { oscillatorB.disconnect(); } catch {}
+          try { filter.disconnect(); } catch {}
+          try { gain.disconnect(); } catch {}
+        };
+        oscillatorA.addEventListener("ended", cleanup, { once: true });
+      }
       oscillatorA.start(when);
       oscillatorB.start(when);
-      this.voices.add(voice);
+      if (!this.offlineRenderMode) this.voices.add(voice);
       if (Number.isFinite(duration) && duration > 0) {
         voice.release(when + duration);
       }

@@ -485,6 +485,8 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "audio.export_done": "44.1 kHz OGGオーディオを保存しました。",
     "audio.export_failed": "オーディオを書き出せませんでした。",
     "audio.export_no_notes": "書き出すノートがありません。",
+    "audio.export_ready_to_save": "オーディオの生成が完了しました。保存先とファイル名を選択してください。",
+    "audio.save_file": "ファイルを保存",
     "audio.fade_in": "フェードイン (秒)",
     "audio.fade_out": "フェードアウト (秒)",
     "nav.site_map": "サイトマップ",

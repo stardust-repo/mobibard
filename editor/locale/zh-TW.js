@@ -485,6 +485,8 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "audio.export_done": "已儲存 44.1 kHz OGG 音訊。",
     "audio.export_failed": "無法匯出音訊。",
     "audio.export_no_notes": "沒有可匯出的音符。",
+    "audio.export_ready_to_save": "音訊產生完成。請選擇儲存位置與檔案名稱。",
+    "audio.save_file": "儲存檔案",
     "audio.fade_in": "淡入 (秒)",
     "audio.fade_out": "淡出 (秒)",
     "nav.site_map": "網站地圖",
