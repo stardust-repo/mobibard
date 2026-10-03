@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20261003-unified-tree-v1" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20261003-timeline-part-wide-edit-v1" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -119,7 +119,7 @@
 <div class="file-menu-separator" role="separator"></div>
 <button data-supported-files-button data-supported-files-context="editor" id="supportedFilesMenuButton" role="menuitem" type="button" data-i18n="file.supported">지원 파일</button>
 <button id="midiExtractButton" role="menuitem" title="MuScriptor: Music to MIDI and Sheet Music" type="button" data-i18n="extract">MIDI 추출</button></div>
-</div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button" data-i18n="menu.edit">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button" data-i18n="history.undo">되돌리기</button><button id="editRedoButton" role="menuitem" type="button" data-i18n="history.redo">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button" data-i18n="copy">복사</button><button id="editCutButton" role="menuitem" type="button" data-i18n="action.cut">잘라내기</button><button id="editPasteButton" role="menuitem" type="button" data-i18n="paste">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button" data-i18n="selection.all">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button" data-i18n="action.delete">삭제</button><button id="editRestCleanupButton" role="menuitem" type="button" data-i18n="rest_cleanup.title">쉼표 정리</button><button id="editNoteVolumeButton" role="menuitem" type="button" data-i18n="volume.edit_channels">볼륨 수정</button></div></div><div class="settings-control"><button aria-expanded="false" aria-haspopup="dialog" id="settingsButton" type="button" data-i18n="menu.settings">설정</button><div class="file-menu settings-menu" hidden id="settingsMenu" role="dialog" aria-label="Editor 설정" data-i18n-aria-label="settings.editor"><button aria-checked="true" class="settings-toggle-row" id="velocityLaneVisibleToggle" role="menuitemcheckbox" type="button"><span aria-hidden="true" class="settings-check-mark">✓</span><span data-i18n="volume.editor">볼륨 편집기</span></button><button aria-checked="true" class="settings-toggle-row" id="audioLaneVisibleToggle" role="menuitemcheckbox" type="button"><span aria-hidden="true" class="settings-check-mark">✓</span><span data-i18n="settings.audio_track">오디오 트랙</span></button><div class="file-menu-separator" role="separator"></div><label class="settings-field"><span data-i18n="volume.labels">볼륨 표시</span><select id="noteVolumeDisplaySelect" title="피아노롤 노트의 볼륨(V0~V15) 표시 범위를 변경합니다." data-i18n-title="note.change_which_piano"><option value="all" data-i18n="ui.show_all">모두 표시</option><option selected value="selected" data-i18n="channel.selected_only">선택 채널만</option><option value="none" data-i18n="ui.hide">표시 안 함</option></select></label><label class="settings-field"><span data-i18n="ui.pitch_spacing">음계 두께</span><select id="pitchSpacingSelect" title="피아노롤 음계 두께를 변경합니다." data-i18n-title="ui.change_spacing_between"><option value="8">8px</option><option value="10">10px</option><option selected value="12">12px</option><option value="14">14px</option><option value="16">16px</option></select></label><div class="settings-field settings-soundfont-field"><span data-i18n="soundbank.text">사운드폰트</span><button aria-controls="editorSoundFontBackdrop" aria-haspopup="dialog" id="editorSoundFontSettingsButton" title="Editor 재생 사운드폰트 설정" data-i18n-title="soundbank.configure_playback" type="button"><span id="editorSoundFontMenuLabel" data-i18n="soundbank.default">기본 음색</span></button></div><label class="settings-field settings-language-field"><span data-i18n="language">언어</span><select aria-label="언어 설정" data-i18n-aria-label="settings.language_menu" id="languageSelect"><option value="ko">한국어</option><option value="ja">日本語</option><option value="en">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option></select></label><div class="settings-field settings-theme-field"><span data-i18n="settings.theme">테마</span><button aria-label="테마 변경" data-i18n-aria-label="theme" class="theme-menu-button" id="themeToggleButton" title="테마 변경" data-i18n-title="theme" type="button"><span aria-hidden="true" class="theme-menu-icon">◐</span><span id="themeToggleButtonText" data-i18n="theme">테마 변경</span></button></div></div></div>
+</div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button" data-i18n="menu.edit">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button" data-i18n="history.undo">되돌리기</button><button id="editRedoButton" role="menuitem" type="button" data-i18n="history.redo">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button" data-i18n="copy">복사</button><button id="editCutButton" role="menuitem" type="button" data-i18n="action.cut">잘라내기</button><button id="editPasteButton" role="menuitem" type="button" data-i18n="paste">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button" data-i18n="selection.all">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button" data-i18n="action.delete">삭제</button><button id="editRestCleanupButton" role="menuitem" type="button" data-i18n="rest_cleanup.title">쉼표 정리</button><button id="editNoteVolumeButton" role="menuitem" type="button" data-i18n="volume.edit_channels">볼륨 수정</button><button id="editAutoPartButton" role="menuitem" type="button" data-i18n="timeline.auto_part">파트 자동 설정</button></div></div><div class="settings-control"><button aria-expanded="false" aria-haspopup="dialog" id="settingsButton" type="button" data-i18n="menu.settings">설정</button><div class="file-menu settings-menu" hidden id="settingsMenu" role="dialog" aria-label="Editor 설정" data-i18n-aria-label="settings.editor"><button aria-checked="true" class="settings-toggle-row" id="velocityLaneVisibleToggle" role="menuitemcheckbox" type="button"><span aria-hidden="true" class="settings-check-mark">✓</span><span data-i18n="volume.editor">볼륨 편집기</span></button><button aria-checked="true" class="settings-toggle-row" id="audioLaneVisibleToggle" role="menuitemcheckbox" type="button"><span aria-hidden="true" class="settings-check-mark">✓</span><span data-i18n="settings.audio_track">오디오 트랙</span></button><div class="file-menu-separator" role="separator"></div><label class="settings-field"><span data-i18n="volume.labels">볼륨 표시</span><select id="noteVolumeDisplaySelect" title="피아노롤 노트의 볼륨(V0~V15) 표시 범위를 변경합니다." data-i18n-title="note.change_which_piano"><option value="all" data-i18n="ui.show_all">모두 표시</option><option selected value="selected" data-i18n="channel.selected_only">선택 채널만</option><option value="none" data-i18n="ui.hide">표시 안 함</option></select></label><label class="settings-field"><span data-i18n="ui.pitch_spacing">음계 두께</span><select id="pitchSpacingSelect" title="피아노롤 음계 두께를 변경합니다." data-i18n-title="ui.change_spacing_between"><option value="8">8px</option><option value="10">10px</option><option selected value="12">12px</option><option value="14">14px</option><option value="16">16px</option></select></label><div class="settings-field settings-soundfont-field"><span data-i18n="soundbank.text">사운드폰트</span><button aria-controls="editorSoundFontBackdrop" aria-haspopup="dialog" id="editorSoundFontSettingsButton" title="Editor 재생 사운드폰트 설정" data-i18n-title="soundbank.configure_playback" type="button"><span id="editorSoundFontMenuLabel" data-i18n="soundbank.default">기본 음색</span></button></div><label class="settings-field settings-language-field"><span data-i18n="language">언어</span><select aria-label="언어 설정" data-i18n-aria-label="settings.language_menu" id="languageSelect"><option value="ko">한국어</option><option value="ja">日本語</option><option value="en">English</option><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option></select></label><div class="settings-field settings-theme-field"><span data-i18n="settings.theme">테마</span><button aria-label="테마 변경" data-i18n-aria-label="theme" class="theme-menu-button" id="themeToggleButton" title="테마 변경" data-i18n-title="theme" type="button"><span aria-hidden="true" class="theme-menu-icon">◐</span><span id="themeToggleButtonText" data-i18n="theme">테마 변경</span></button></div></div></div>
 <input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,.mbt,application/x-mobibard-mbt,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98" hidden="" id="fileInput" data-music-format-input type="file"/>
 <input accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm" hidden="" id="audioFileInput" type="file"/>
 </div>
@@ -130,6 +130,7 @@
 <button aria-label="맨 처음으로 이동" data-i18n-aria-label="ui.go_start" class="transport-edge-button" id="jumpStartButton" title="맨 처음으로 이동" data-i18n-title="ui.go_start" type="button"><span class="shared-transport-icon shared-icon-first" aria-hidden="true"></span></button>
 <button aria-label="재생" data-i18n-aria-label="play" aria-pressed="false" class="transport-main-button" id="playButton" title="재생" data-i18n-title="play" type="button"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span></button>
 <button aria-label="맨 뒤로 이동" data-i18n-aria-label="ui.go_end" class="transport-edge-button" id="jumpEndButton" title="맨 뒤로 이동" data-i18n-title="ui.go_end" type="button"><span class="shared-transport-icon shared-icon-last" aria-hidden="true"></span></button>
+<button aria-label="반복 재생" data-i18n-aria-label="playback.loop" aria-pressed="false" class="transport-edge-button transport-loop-button" id="loopPlaybackButton" title="반복 재생" data-i18n-title="playback.loop" type="button"><span aria-hidden="true" class="transport-loop-glyph">↻</span></button>
 </div>
 <span class="playback-time" id="playbackTime" title="현재 재생 위치 / 전체 재생 시간" data-i18n-title="ui.position_total_duration">0:00.000 / 0:00.000</span>
 <div class="volume-control">
@@ -154,10 +155,6 @@
 <button class="vertical-range-reset" id="playbackRateResetButton" type="button" data-i18n="action.reset">초기화</button>
 </div>
 </div>
-</div>
-<div aria-label="마디 편집" data-i18n-aria-label="timeline.measure_beat_edit" class="timeline-space-control" role="group">
-<button aria-label="마디 추가" data-i18n-aria-label="timeline.add_measure_beat" class="transport-utility-button time-edit-open-button measure-space-icon-button" id="measureSpaceInsertButton" title="마디 추가" data-i18n-title="timeline.add_measure_beat" type="button"><img alt="" aria-hidden="true" src="../assets/icons/measure-insert.png?v=20260909-4"/></button>
-<button aria-label="마디 삭제" data-i18n-aria-label="timeline.delete_measure_beat" class="transport-utility-button time-edit-open-button measure-space-icon-button" id="measureSpaceDeleteButton" title="마디 삭제" data-i18n-title="timeline.delete_measure_beat" type="button"><img alt="" aria-hidden="true" src="../assets/icons/measure-delete.png?v=20260909-4"/></button>
 </div>
 </div>
 <div class="toolbar-spacer"></div>
@@ -218,6 +215,7 @@
 </header>
 <div class="app-content"><main class="workspace"><div class="editor-body">
 <aside aria-label="왼쪽 패널" data-i18n-aria-label="ui.left_panel" class="side-panel" id="sidePanel">
+<div class="edit-mode-titlebar" id="editModeTitlebar" hidden aria-live="polite"><strong id="editModeTitlebarTitle"></strong><span id="editModeTitlebarMeta"></span></div>
 <div aria-label="왼쪽 패널" data-i18n-aria-label="ui.left_panel" class="side-panel-tabs" role="tablist">
 <button aria-controls="channelPanel" aria-selected="true" class="side-panel-tab active" id="sidebarChannelsTab" role="tab" type="button" data-i18n="channel.label">채널</button>
 <button aria-controls="historyPanel" aria-selected="false" class="side-panel-tab" id="sidebarHistoryTab" role="tab" type="button" data-i18n="history.text">히스토리</button>
@@ -232,6 +230,34 @@
 <div aria-label="채널 빠른 선택 목록" data-i18n-aria-label="channel.quick_select" class="sidebar-rail-channel-list" id="collapsedChannelList" role="listbox"></div>
 </div>
 <section aria-label="채널 목록" data-i18n-aria-label="channel.list" class="side-panel-view channel-panel channel-side-panel" data-context-area="channel-panel" id="channelPanel" role="tabpanel">
+<section class="auto-part-inline-panel" id="autoPartPanel" hidden aria-label="파트 자동 설정" data-i18n-aria-label="timeline.auto_part">
+  <div class="auto-part-inline-header">
+    <strong data-i18n="timeline.auto_part">파트 자동 설정</strong>
+    <span data-i18n="timeline.auto_part_subtitle">MML 글자수를 기준으로 파트 경계를 자동 계산합니다.</span>
+  </div>
+  <div class="auto-part-inline-fields">
+    <label class="auto-part-inline-field"><span data-i18n="timeline.auto_part_chars">나눌 글자수</span><span class="auto-part-inline-input"><input aria-label="나눌 글자수" data-i18n-aria-label="timeline.auto_part_chars" id="autoPartCharsInput" inputmode="numeric" min="200" step="1" type="number" value="2400"/><strong data-i18n="ui.characters">자</strong></span></label>
+    <label class="auto-part-inline-field"><span data-i18n="timeline.auto_part_search_range">검색 범위</span><span class="auto-part-inline-input"><input aria-label="검색 범위" data-i18n-aria-label="timeline.auto_part_search_range" id="autoPartSearchRangeInput" inputmode="numeric" max="100" min="0" step="1" type="number" value="50"/><strong>%</strong></span></label>
+  </div>
+  <div class="auto-part-summary auto-part-inline-summary" id="autoPartSummary" aria-live="polite">분할될 파트 0개</div>
+  <div class="auto-part-inline-actions"><button id="autoPartCancelButton" type="button" data-i18n="cancel">취소</button><button id="autoPartApplyButton" type="button" data-i18n="ui.ok">확인</button></div>
+</section>
+<section class="measure-edit-inline-panel" id="measureEditPanel" hidden aria-label="마디 편집" data-i18n-aria-label="timeline.edit_measure">
+  <div class="measure-edit-inline-header"><strong data-i18n="timeline.edit_measure">마디 편집</strong><span id="measureEditPosition">0:00.000</span></div>
+  <div class="measure-edit-mode-tabs" id="measureEditModeTabs" role="group" aria-label="마디 편집 종류">
+    <button type="button" data-measure-edit-mode="add" class="active" data-i18n="action.add">추가</button>
+    <button type="button" data-measure-edit-mode="duplicate" data-i18n="action.duplicate">복제</button>
+    <button type="button" data-measure-edit-mode="delete" data-i18n="action.delete">삭제</button>
+  </div>
+  <div class="measure-edit-options" id="measureEditAddOptions"></div>
+  <div class="measure-edit-options" id="measureEditDuplicateOptions" hidden>
+    <label class="measure-edit-field"><span data-i18n="timeline.duplicate_count">복제 횟수</span><span class="measure-edit-number-with-unit"><input id="measureEditDuplicateCountInput" type="number" inputmode="numeric" min="1" step="1" value="1"/><small data-i18n="ui.times">회</small></span></label>
+  </div>
+  <div class="measure-edit-options" id="measureEditDeleteOptions" hidden></div>
+  <div class="measure-edit-range-summary" id="measureEditRangeSummary"></div>
+  <div class="measure-edit-scope-list" id="measureEditScopeList"></div>
+  <div class="measure-edit-inline-actions"><button id="measureEditCancelButton" type="button" data-i18n="cancel">취소</button><button id="measureEditApplyButton" type="button" data-i18n="ui.ok">확인</button></div>
+</section>
 <div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명" data-i18n-aria-label="ui.loaded_file_name"></span><button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="항목 추가" data-i18n-aria-label="item.add" class="channel-tree-add-button" id="addChannelButton" title="항목 추가" data-i18n-title="item.add" type="button">＋</button><button aria-label="삭제할 항목 선택" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 항목 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button><button aria-label="삭제 선택 취소" data-i18n-aria-label="cancel" class="channel-delete-mode-cancel" id="channelDeleteModeCancelButton" hidden type="button">×</button><button aria-label="선택 삭제 적용" data-i18n-aria-label="action.delete" class="channel-delete-mode-apply" id="channelDeleteModeApplyButton" hidden type="button">✓</button></div>
 <section class="note-edit-mode-panel" id="noteEditModePanel" hidden>
   <div class="note-edit-mode-header">
@@ -430,21 +456,25 @@
 </div>
 <div class="popup-backdrop" hidden="" id="mmlExportBackdrop">
 <section aria-label="MML 내보내기" data-i18n-aria-label="mml.export" aria-modal="true" class="transfer-dialog mml-export-dialog" id="mmlExportDialog" role="dialog">
-<div class="transfer-dialog-header"><div><strong data-i18n="mml.export">MML 내보내기</strong><span data-i18n="mml_export.selection_hint">체크한 순서대로 채널을 복사합니다.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="mmlExportCloseButton" type="button">×</button></div>
-<div class="mml-export-selection-actions"><button id="mmlExportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="mmlExportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
-<div class="mml-export-channel-list" id="mmlExportChannelList"></div>
-<div class="mml-export-copy-panel" hidden="" id="mmlExportCopyPanel">
-<div class="mml-export-copy-row">
-<div class="mml-export-copy-meta"><strong data-i18n="mml_export.copy_all">전체 복사</strong><small id="mmlExportFullCopyDetail" data-i18n="channel.no_selected">선택된 채널이 없습니다.</small></div>
-<button data-i18n="copy" disabled="" id="mmlExportCopyAllButton" type="button">복사</button>
-</div>
-<div class="mml-export-split-block">
-<div class="mml-export-split-head">
-<div class="mml-export-copy-meta"><strong data-i18n="mml_export.copy_split">분할 복사</strong><small id="mmlExportSplitSummary" data-i18n="mml_export.split_hint">2,400자 기준으로 나눕니다.</small></div>
-<label class="mml-export-split-limit"><span data-i18n="mml_export.split_limit">분할 글자</span><input aria-label="분할할 최대 글자 수" data-i18n-aria-label="mml_export.split_limit_aria" id="mmlExportSplitLimitInput" inputmode="numeric" max="5000" min="200" step="50" type="number" value="2400"/></label>
-</div>
-<div class="mml-export-split-buttons" id="mmlExportSplitButtons"></div>
-</div>
+<div class="transfer-dialog-header"><div><strong data-i18n="mml.export">MML 내보내기</strong><span data-i18n="mml_export.selection_hint">왼쪽에서 복사할 채널을 선택하세요.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="mmlExportCloseButton" type="button">×</button></div>
+<div class="mml-export-workspace">
+  <div class="mml-export-channel-pane">
+    <div class="mml-export-selection-actions"><button id="mmlExportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="mmlExportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+    <div class="mml-export-channel-list" id="mmlExportChannelList"></div>
+  </div>
+  <div class="mml-export-copy-panel" id="mmlExportCopyPanel">
+    <div class="mml-export-copy-panel-title" data-i18n="mml_export.score_copy">악보 복사</div>
+    <div class="mml-export-copy-row">
+      <div class="mml-export-copy-meta"><strong data-i18n="mml_export.copy_all">전체 복사</strong><small id="mmlExportFullCopyDetail" data-i18n="channel.no_selected">선택된 채널이 없습니다.</small></div>
+      <button data-i18n="copy" disabled="" id="mmlExportCopyAllButton" type="button">복사</button>
+    </div>
+    <div class="mml-export-split-block" id="mmlExportPartCopyBlock" hidden>
+      <div class="mml-export-split-head">
+        <div class="mml-export-copy-meta"><strong data-i18n="mml_export.copy_by_part">파트별 악보</strong><small id="mmlExportSplitSummary"></small></div>
+      </div>
+      <div class="mml-export-split-buttons" id="mmlExportSplitButtons"></div>
+    </div>
+  </div>
 </div>
 <div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="mmlExportSummary" data-i18n="channel.no_selected">선택된 채널이 없습니다.</div><button data-i18n="close" id="mmlExportCancelButton" type="button">닫기</button></div>
 </section>
@@ -698,7 +728,7 @@
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
-<script src="app.js?v=5.3.0&amp;rev=20261003-unified-tree-v1"></script>
+<script src="app.js?v=5.3.0&amp;rev=20261003-timeline-part-wide-edit-v1"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260928-account-preference1" type="module"></script>
 </body>
 </html>

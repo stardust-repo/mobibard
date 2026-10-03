@@ -17,7 +17,7 @@
   const SITE_MAP = Object.freeze([
     { id: 'simple', href: '../simple/index.html', labels: { ko: '간편 생성기', ja: '簡単ジェネレーター', en: 'Simple Generator', 'zh-CN': '简易生成器', 'zh-TW': '簡易產生器' } },
     { id: 'player', href: '../player/index.html', labels: { ko: '상세 생성기', ja: '詳細ジェネレーター', en: 'Detailed Generator', 'zh-CN': '详细生成器', 'zh-TW': '詳細產生器' } },
-    { id: 'editor', href: '../editor/index.html', labels: { ko: '에디터 (alpha)', ja: 'エディター (alpha)', en: 'Editor (alpha)', 'zh-CN': '编辑器 (alpha)', 'zh-TW': '編輯器 (alpha)' } },
+    { id: 'editor', href: '../editor/index.html', labels: { ko: '에디터 (Beta)', ja: 'エディター (Beta)', en: 'Editor (Beta)', 'zh-CN': '编辑器 (Beta)', 'zh-TW': '編輯器 (Beta)' } },
     { id: 'rollscriptor', href: '../rollscriptor/index.html', labels: { ko: '롤 스크립터', ja: 'ロールスクリプター', en: 'RollScriptor', 'zh-CN': 'RollScriptor', 'zh-TW': 'RollScriptor' } },
     { id: 'veloscriptor', href: '../veloscriptor/index.html', labels: { ko: '벨로 스크립터', ja: 'ヴェロスクリプター', en: 'VeloScriptor', 'zh-CN': 'VeloScriptor', 'zh-TW': 'VeloScriptor' } },
     { id: 'mobibeats', href: '../mobibeats/index.html', labels: { ko: '모비비츠', ja: 'モビビーツ', en: 'MobiBeats', 'zh-CN': 'MobiBeats', 'zh-TW': 'MobiBeats' } }

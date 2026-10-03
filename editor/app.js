@@ -335,6 +335,9 @@
     app: document.querySelector("#app"),
     appContent: document.querySelector(".app-content"),
     sidePanel: document.querySelector("#sidePanel"),
+    editModeTitlebar: document.querySelector("#editModeTitlebar"),
+    editModeTitlebarTitle: document.querySelector("#editModeTitlebarTitle"),
+    editModeTitlebarMeta: document.querySelector("#editModeTitlebarMeta"),
     sidebarChannelsTab: document.querySelector("#sidebarChannelsTab"),
     sidebarShortcutsTab: document.querySelector("#sidebarShortcutsTab"),
     sidebarHistoryTab: document.querySelector("#sidebarHistoryTab"),
@@ -373,6 +376,7 @@
     editDeleteButton: document.querySelector("#editDeleteButton"),
     editRestCleanupButton: document.querySelector("#editRestCleanupButton"),
     editNoteVolumeButton: document.querySelector("#editNoteVolumeButton"),
+    editAutoPartButton: document.querySelector("#editAutoPartButton"),
     fileExportButton: document.querySelector("#fileExportButton"),
     midiExportButton: document.querySelector("#midiExportButton"),
     audioExportButton: document.querySelector("#audioExportButton"),
@@ -387,6 +391,7 @@
     jumpStartButton: document.querySelector("#jumpStartButton"),
     playButton: document.querySelector("#playButton"),
     jumpEndButton: document.querySelector("#jumpEndButton"),
+    loopPlaybackButton: document.querySelector("#loopPlaybackButton"),
     playbackTime: document.querySelector("#playbackTime"),
     volumeButton: document.querySelector("#volumeButton"),
     volumeMenu: document.querySelector("#volumeMenu"),
@@ -398,8 +403,6 @@
     playbackRateSlider: document.querySelector("#playbackRateSlider"),
     playbackRateValue: document.querySelector("#playbackRateValue"),
     playbackRateResetButton: document.querySelector("#playbackRateResetButton"),
-    measureSpaceInsertButton: document.querySelector("#measureSpaceInsertButton"),
-    measureSpaceDeleteButton: document.querySelector("#measureSpaceDeleteButton"),
     snapSelect: document.querySelector("#snapSelect"),
     noteVolumeDisplaySelect: document.querySelector("#noteVolumeDisplaySelect"),
     pitchSpacingSelect: document.querySelector("#pitchSpacingSelect"),
@@ -535,6 +538,7 @@
     mmlExportClearAllButton: document.querySelector("#mmlExportClearAllButton"),
     mmlExportChannelList: document.querySelector("#mmlExportChannelList"),
     mmlExportCopyPanel: document.querySelector("#mmlExportCopyPanel"),
+    mmlExportPartCopyBlock: document.querySelector("#mmlExportPartCopyBlock"),
     mmlExportFullCopyDetail: document.querySelector("#mmlExportFullCopyDetail"),
     mmlExportCopyAllButton: document.querySelector("#mmlExportCopyAllButton"),
     mmlExportSplitSummary: document.querySelector("#mmlExportSplitSummary"),
@@ -733,6 +737,26 @@
     tempoSimplifyCloseButton: document.querySelector("#tempoSimplifyCloseButton"),
     tempoSimplifyCancelButton: document.querySelector("#tempoSimplifyCancelButton"),
     tempoSimplifyApplyButton: document.querySelector("#tempoSimplifyApplyButton"),
+    autoPartPanel: document.querySelector("#autoPartPanel"),
+    autoPartCancelButton: document.querySelector("#autoPartCancelButton"),
+    autoPartApplyButton: document.querySelector("#autoPartApplyButton"),
+    autoPartCharsInput: document.querySelector("#autoPartCharsInput"),
+    autoPartSearchRangeInput: document.querySelector("#autoPartSearchRangeInput"),
+    autoPartSummary: document.querySelector("#autoPartSummary"),
+    measureEditPanel: document.querySelector("#measureEditPanel"),
+    measureEditModeTabs: document.querySelector("#measureEditModeTabs"),
+    measureEditAddOptions: document.querySelector("#measureEditAddOptions"),
+    measureEditDuplicateOptions: document.querySelector("#measureEditDuplicateOptions"),
+    measureEditDeleteOptions: document.querySelector("#measureEditDeleteOptions"),
+    measureEditMeasureInput: document.querySelector("#measureEditMeasureInput"),
+    measureEditBeatInput: document.querySelector("#measureEditBeatInput"),
+    measureEditDuplicateCountInput: document.querySelector("#measureEditDuplicateCountInput"),
+    measureEditRangeSummary: document.querySelector("#measureEditRangeSummary"),
+    measureEditScopeList: document.querySelector("#measureEditScopeList"),
+    measureEditSummary: document.querySelector("#measureEditSummary"),
+    measureEditPosition: document.querySelector("#measureEditPosition"),
+    measureEditCancelButton: document.querySelector("#measureEditCancelButton"),
+    measureEditApplyButton: document.querySelector("#measureEditApplyButton"),
     timeEditBackdrop: document.querySelector("#timeEditBackdrop"),
     timeEditTitle: document.querySelector("#timeEditTitle"),
     timeEditPosition: document.querySelector("#timeEditPosition"),
@@ -854,12 +878,17 @@
     nextTimeSignatureId: 2,
     timelineParts: [],
     nextTimelinePartId: 1,
+    playbackRange: { startBeat: null, endBeat: null },
+    playbackLoopEnabled: false,
+    autoPart: { targetChars: 2400, searchRangePercent: 50, plan: null, active: false, restoreSidebarTab: null, restoreSidebarCollapsed: false },
+    measureEdit: { active: false, mode: "add", beat: 0, rangeStartBeat: null, rangeEndBeat: null, measures: 1, subdivisions: 0, duplicateCount: 1, scopeType: "all", scopeId: null, selecting: false, pointerId: null, restoreSidebarTab: null, restoreSidebarCollapsed: false, restoreActivePanel: null, restoreActiveChannelId: null, restoreGroupId: null, restoreAudioId: null },
     timeSignatureEditor: { timeSignatureId: null, beat: 0 },
     interaction: null,
     tempoDrag: null,
     tempoTouchTap: null,
     timeSignatureDrag: null,
     timelinePartDrag: null,
+    playbackRangeDrag: null,
     fadeDrag: null,
     fadeTouchTap: null,
     tempoEditor: { mode: null, tempoId: null, beat: 0 },
@@ -926,6 +955,7 @@
       requestToken: 0,
       startedAt: 0,
       startBeat: 0,
+      rangeStartBeat: 0,
       endBeat: 0,
       startSeconds: 0,
       endSeconds: 0,
@@ -1816,6 +1846,927 @@
     return true;
   }
 
+  function normalizePlaybackRange(value = state.playbackRange) {
+    const startRaw = value?.startBeat;
+    const endRaw = value?.endBeat;
+    const startValue = startRaw == null || startRaw === "" ? NaN : Number(startRaw);
+    const endValue = endRaw == null || endRaw === "" ? NaN : Number(endRaw);
+    const startBeat = Number.isFinite(startValue) ? Math.max(0, Number(startValue.toFixed(6))) : null;
+    const endBeat = Number.isFinite(endValue) ? Math.max(0, Number(endValue.toFixed(6))) : null;
+    return { startBeat, endBeat };
+  }
+
+  function refreshPlaybackRangeVisuals({ defer = false } = {}) {
+    // The overview end-beat cache includes playback-range markers. Invalidate it
+    // whenever a boundary changes so the very first start/end marker is rendered
+    // at the correct position instead of using a stale overview scale.
+    invalidateOverviewTimelineActivity();
+    updatePlayheadVisual();
+    updateTimelinePartGuides();
+    drawTimeline();
+    drawOverviewTimeline();
+    updatePlaybackTimeInfo();
+    if (defer) {
+      requestAnimationFrame(() => {
+        updateTimelinePartGuides();
+        drawTimeline();
+        drawOverviewTimeline();
+      });
+    }
+  }
+
+  function getPlaybackRangeBounds({ contentEndBeat = null } = {}) {
+    const range = normalizePlaybackRange();
+    const naturalEnd = Math.max(0, Number(contentEndBeat == null ? getPlaybackEndBeat() : contentEndBeat) || 0);
+    const startBeat = range.startBeat == null ? 0 : clamp(range.startBeat, 0, getTotalBeats());
+    const requestedEnd = range.endBeat == null ? naturalEnd : clamp(range.endBeat, 0, getTotalBeats());
+    const endBeat = Math.max(startBeat, requestedEnd);
+    return {
+      startBeat,
+      endBeat,
+      hasStart: range.startBeat != null,
+      hasEnd: range.endBeat != null,
+    };
+  }
+
+  function updateLoopPlaybackButton() {
+    if (!elements.loopPlaybackButton) return;
+    const active = Boolean(state.playbackLoopEnabled);
+    elements.loopPlaybackButton.classList.toggle("active", active);
+    elements.loopPlaybackButton.setAttribute("aria-pressed", String(active));
+    elements.loopPlaybackButton.title = i18nText(active ? "playback.loop_on" : "playback.loop");
+    elements.loopPlaybackButton.setAttribute("aria-label", i18nText(active ? "playback.loop_on" : "playback.loop"));
+  }
+
+  function setPlaybackLoopEnabled(enabled, { notify = true } = {}) {
+    state.playbackLoopEnabled = Boolean(enabled);
+    updateLoopPlaybackButton();
+    state.dirty = true;
+    updateDirtyState();
+    scheduleAutosave();
+    if (notify) showToast(i18nText(state.playbackLoopEnabled ? "playback.loop_enabled" : "playback.loop_disabled"));
+  }
+
+  function setPlaybackRangeBoundary(kind, beat) {
+    const target = Number(clamp(snapBeat(Number(beat) || 0), 0, getTotalBeats()).toFixed(6));
+    const current = normalizePlaybackRange();
+    if (kind === "start") {
+      if (current.endBeat != null && target >= current.endBeat - 1e-7) {
+        showToast(i18nText("timeline.playback_range_start_before_end"));
+        return false;
+      }
+      current.startBeat = target;
+    } else {
+      if (current.startBeat != null && target <= current.startBeat + 1e-7) {
+        showToast(i18nText("timeline.playback_range_end_after_start"));
+        return false;
+      }
+      current.endBeat = target;
+    }
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    state.playbackRange = normalizePlaybackRange(current);
+    markDirty(i18nText("history.playback_range"));
+    refreshPlaybackRangeVisuals({ defer: true });
+    showToast(i18nText(kind === "start" ? "timeline.playback_range_start_set" : "timeline.playback_range_end_set"));
+    return true;
+  }
+
+  function clearPlaybackRangeBoundary(kind) {
+    const current = normalizePlaybackRange();
+    const key = kind === "start" ? "startBeat" : "endBeat";
+    if (current[key] == null) {
+      showToast(i18nText(kind === "start" ? "timeline.playback_range_no_start" : "timeline.playback_range_no_end"));
+      return false;
+    }
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    current[key] = null;
+    state.playbackRange = normalizePlaybackRange(current);
+    markDirty(i18nText("history.playback_range"));
+    refreshPlaybackRangeVisuals({ defer: true });
+    showToast(i18nText(kind === "start" ? "timeline.playback_range_start_deleted" : "timeline.playback_range_end_deleted"));
+    return true;
+  }
+
+  function clearPlaybackRange() {
+    const current = normalizePlaybackRange();
+    if (current.startBeat == null && current.endBeat == null) {
+      showToast(i18nText("timeline.playback_range_none"));
+      return false;
+    }
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    state.playbackRange = { startBeat: null, endBeat: null };
+    markDirty(i18nText("history.playback_range"));
+    refreshPlaybackRangeVisuals({ defer: true });
+    showToast(i18nText("timeline.playback_range_cleared"));
+    return true;
+  }
+
+  function getAutoPartChannels() {
+    return state.channels.filter((channel) => Array.isArray(channel?.notes) && channel.notes.length);
+  }
+
+  function getAutoPartCandidateCrossingCount(channels, beat) {
+    const target = Number(beat) || 0;
+    let count = 0;
+    for (const channel of channels) {
+      for (const note of channel.notes || []) {
+        const start = Number(note.startBeat) || 0;
+        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        if (start < target - 1e-7 && end > target + 1e-7) count += 1;
+      }
+    }
+    return count;
+  }
+
+  function buildAutoPartCandidates(channels, totalEndBeat) {
+    const candidates = new Set(buildPartBoundaryCandidates(channels, getSortedTempos(), totalEndBeat));
+    const signatures = getSortedTimeSignatures();
+    for (let index = 0; index < signatures.length; index += 1) {
+      const signature = signatures[index];
+      const segmentStart = Math.max(0, Number(signature.beat) || 0);
+      const segmentEnd = Math.min(
+        totalEndBeat,
+        index + 1 < signatures.length ? Math.max(segmentStart, Number(signatures[index + 1].beat) || segmentStart) : totalEndBeat,
+      );
+      const measureLength = Math.max(CONFIG.minimumNoteBeat, getTimeSignatureMeasureLength(signature));
+      for (let beat = segmentStart; beat <= segmentEnd + 1e-7; beat += measureLength) {
+        if (beat > 1e-7 && beat < totalEndBeat - 1e-7) candidates.add(Number(beat.toFixed(6)));
+      }
+    }
+    return [...candidates]
+      .filter((beat) => Number.isFinite(beat) && beat >= 0 && beat <= totalEndBeat + 1e-7)
+      .sort((a, b) => a - b);
+  }
+
+  function renderAutoPartRangeStats(channels, startBeat, endBeat, tempos, cache) {
+    const key = `${Number(startBeat).toFixed(6)}:${Number(endBeat).toFixed(6)}`;
+    if (cache?.has(key)) return cache.get(key);
+    const mml = channelsToMmlRange(channels, startBeat, endBeat, tempos, { includeTempo: false, optimized: true });
+    const lengths = getMmlExportPartLengths(mml);
+    const maxChars = lengths.length ? Math.max(...lengths) : 0;
+    const result = { maxChars, mml };
+    cache?.set(key, result);
+    return result;
+  }
+
+  function computeAutoPartPlan(targetChars = 2400, searchRangePercent = 50) {
+    const channels = getAutoPartChannels();
+    const parsedTarget = Number(targetChars);
+    const target = clamp(Math.round(Number.isFinite(parsedTarget) ? parsedTarget : 2400), 200, 1000000);
+    const parsedRange = Number(searchRangePercent);
+    const rangePercent = clamp(Number.isFinite(parsedRange) ? parsedRange : 50, 0, 100);
+    const totalEndBeat = getMmlExportEndBeat(channels);
+    if (!channels.length || !(totalEndBeat > CONFIG.minimumNoteBeat)) {
+      return { targetChars: target, searchRangePercent: rangePercent, partCount: 1, boundaries: [], totalEndBeat, maxChars: 0 };
+    }
+
+    const tempos = getSortedTempos();
+    const candidates = buildAutoPartCandidates(channels, totalEndBeat);
+    const cache = new Map();
+    const fullStats = renderAutoPartRangeStats(channels, 0, totalEndBeat, tempos, cache);
+    if (fullStats.maxChars <= target || candidates.length < 3) {
+      return { targetChars: target, searchRangePercent: rangePercent, partCount: 1, boundaries: [], totalEndBeat, maxChars: fullStats.maxChars };
+    }
+
+    const boundaries = [];
+    const tolerance = rangePercent / 100;
+    const lowTarget = Math.max(1, target * (1 - tolerance));
+    const highTarget = Math.max(target, target * (1 + tolerance));
+    let startBeat = 0;
+    let guard = 0;
+
+    while (startBeat < totalEndBeat - CONFIG.minimumNoteBeat && guard++ < 256) {
+      const remaining = renderAutoPartRangeStats(channels, startBeat, totalEndBeat, tempos, cache);
+      if (remaining.maxChars <= target) break;
+      const eligible = candidates.filter((beat) => beat > startBeat + CONFIG.minimumNoteBeat / 2 && beat < totalEndBeat - CONFIG.minimumNoteBeat / 2);
+      if (!eligible.length) break;
+
+      let low = 0;
+      let high = eligible.length - 1;
+      let crossing = eligible.length - 1;
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const stats = renderAutoPartRangeStats(channels, startBeat, eligible[mid], tempos, cache);
+        if (stats.maxChars >= target) {
+          crossing = mid;
+          high = mid - 1;
+        } else {
+          low = mid + 1;
+        }
+      }
+
+      const probeStart = Math.max(0, crossing - 28);
+      const probeEnd = Math.min(eligible.length - 1, crossing + 28);
+      let best = null;
+      for (let index = probeStart; index <= probeEnd; index += 1) {
+        const beat = eligible[index];
+        const stats = renderAutoPartRangeStats(channels, startBeat, beat, tempos, cache);
+        if (stats.maxChars < lowTarget - 1e-7 || stats.maxChars > highTarget + 1e-7) continue;
+        const distance = Math.abs(stats.maxChars - target) / Math.max(1, target);
+        const crossings = getAutoPartCandidateCrossingCount(channels, beat);
+        const score = distance + Math.min(8, crossings) * 0.08;
+        if (!best || score < best.score - 1e-9 || (Math.abs(score - best.score) <= 1e-9 && beat > best.beat)) {
+          best = { beat, score, maxChars: stats.maxChars };
+        }
+      }
+
+      if (!best) {
+        const fallbackIndices = [crossing - 1, crossing, crossing + 1].filter((index) => index >= 0 && index < eligible.length);
+        for (const index of fallbackIndices) {
+          const beat = eligible[index];
+          const stats = renderAutoPartRangeStats(channels, startBeat, beat, tempos, cache);
+          const distance = Math.abs(stats.maxChars - target) / Math.max(1, target);
+          const crossings = getAutoPartCandidateCrossingCount(channels, beat);
+          const score = distance + Math.min(8, crossings) * 0.08;
+          if (!best || score < best.score) best = { beat, score, maxChars: stats.maxChars };
+        }
+      }
+
+      if (!best || best.beat <= startBeat + CONFIG.minimumNoteBeat / 2) break;
+      boundaries.push(Number(best.beat.toFixed(6)));
+      startBeat = best.beat;
+    }
+
+    return {
+      targetChars: target,
+      searchRangePercent: rangePercent,
+      partCount: Math.max(1, boundaries.length + 1),
+      boundaries,
+      totalEndBeat,
+      maxChars: fullStats.maxChars,
+    };
+  }
+
+  function readAutoPartOptionsFromUi() {
+    const targetRaw = String(elements.autoPartCharsInput?.value ?? "").trim();
+    const targetParsed = targetRaw === "" ? 2400 : Number(targetRaw);
+    const rangeRaw = String(elements.autoPartSearchRangeInput?.value ?? "").trim();
+    const rangeParsed = rangeRaw === "" ? 50 : Number(rangeRaw);
+    const targetChars = clamp(Math.round(Number.isFinite(targetParsed) ? targetParsed : 2400), 200, 1000000);
+    const searchRangePercent = clamp(Math.round(Number.isFinite(rangeParsed) ? rangeParsed : 50), 0, 100);
+    return { targetChars, searchRangePercent };
+  }
+
+  function isAutoPartPreviewActive() {
+    return Boolean(state.autoPart?.active);
+  }
+
+  function isAutoPartPanelTarget(target) {
+    return Boolean(target instanceof Node && elements.autoPartPanel?.contains(target));
+  }
+
+  function isAutoPartPreviewScrollTarget(target) {
+    if (!(target instanceof Element)) return false;
+    // Preview mode is view-only, not frozen. Keep the dedicated piano-roll
+    // scrollbars usable so the user can travel through the timeline and inspect
+    // every proposed split without enabling any edit interaction.
+    return Boolean(target.closest(".custom-scrollbar, .custom-scrollbar-thumb"));
+  }
+
+  function isAutoPartPreviewOverviewNavigation(event) {
+    if (!(event?.target instanceof Element) || event.target !== elements.overviewTimelineCanvas) return false;
+    // The full-track overview is another navigation surface during auto-part
+    // preview. Permit only the normal primary-button navigation gestures; keep
+    // double-click/right-click editing and context menus locked like the rest of
+    // the editor. Pointer move/up continue through the overview's pointer-capture
+    // handlers after this initial gesture is admitted.
+    if (!["pointerdown", "mousedown", "click", "touchstart"].includes(event.type)) return false;
+    if ("button" in event && Number.isFinite(event.button) && event.button !== 0) return false;
+    return true;
+  }
+
+  function focusAutoPartPanelControl() {
+    const panel = elements.autoPartPanel;
+    if (!panel || panel.hidden) return;
+    const control = panel.querySelector('input:not(:disabled), button:not(:disabled), select:not(:disabled), textarea:not(:disabled)');
+    control?.focus?.({ preventScroll: true });
+  }
+
+  // Auto-part setup is a preview transaction. While it is active, the editor
+  // outside the setup panel is view-only: wheel scrolling may still be used to
+  // inspect the proposed boundaries, but no pointer/context editing is allowed.
+  function guardAutoPartPreviewPointerInteraction(event) {
+    if (
+      !isAutoPartPreviewActive()
+      || isAutoPartPanelTarget(event.target)
+      || isAutoPartPreviewScrollTarget(event.target)
+      || isAutoPartPreviewOverviewNavigation(event)
+    ) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  function guardAutoPartPreviewKeyboardInteraction(event) {
+    if (!isAutoPartPreviewActive()) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeAutoPartDialog();
+      return;
+    }
+    if (isAutoPartPanelTarget(event.target)) {
+      // Keep keyboard focus inside the transaction panel.
+      if (event.key === 'Tab') {
+        const controls = [...elements.autoPartPanel.querySelectorAll('input:not(:disabled), button:not(:disabled), select:not(:disabled), textarea:not(:disabled)')];
+        if (controls.length) {
+          const first = controls[0];
+          const last = controls[controls.length - 1];
+          if (event.shiftKey && event.target === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && event.target === last) { event.preventDefault(); first.focus(); }
+        }
+      }
+      return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    focusAutoPartPanelControl();
+  }
+
+  function getAutoPartPreviewBoundaries() {
+    if (!isAutoPartPreviewActive()) return [];
+    const plan = state.autoPart?.plan;
+    if (!plan || plan.partCount < 2 || !Array.isArray(plan.boundaries)) return [];
+    return plan.boundaries
+      .map((beat) => Number(beat))
+      .filter((beat) => Number.isFinite(beat) && beat > 1e-7 && beat < getTotalBeats() - 1e-7)
+      .sort((a, b) => a - b);
+  }
+
+  function refreshAutoPartPreviewVisuals() {
+    updateTimelinePartGuides();
+    drawTimeline();
+    invalidateOverviewTimelineActivity();
+    drawOverviewTimeline();
+  }
+
+  function updateAutoPartSummary() {
+    if (!isAutoPartPreviewActive() || !elements.autoPartPanel || elements.autoPartPanel.hidden) return;
+    const options = readAutoPartOptionsFromUi();
+    state.autoPart.targetChars = options.targetChars;
+    state.autoPart.searchRangePercent = options.searchRangePercent;
+    if (elements.autoPartCharsInput) elements.autoPartCharsInput.value = String(options.targetChars);
+    if (elements.autoPartSearchRangeInput) elements.autoPartSearchRangeInput.value = String(options.searchRangePercent);
+    const plan = computeAutoPartPlan(options.targetChars, options.searchRangePercent);
+    state.autoPart.plan = plan;
+    if (elements.autoPartSummary) {
+      elements.autoPartSummary.textContent = i18nText("timeline.auto_part_result", [Math.max(0, plan.partCount - 1).toLocaleString()]);
+    }
+    if (elements.autoPartApplyButton) {
+      elements.autoPartApplyButton.disabled = plan.partCount < 2;
+      elements.autoPartApplyButton.title = plan.partCount < 2 ? i18nText("timeline.auto_part_need_two") : "";
+    }
+    refreshAutoPartPreviewVisuals();
+  }
+
+  function invalidateAutoPartSummary() {
+    state.autoPart.plan = null;
+    if (elements.autoPartApplyButton) {
+      elements.autoPartApplyButton.disabled = true;
+      elements.autoPartApplyButton.title = i18nText("timeline.auto_part_need_two");
+    }
+    if (elements.autoPartSummary) {
+      elements.autoPartSummary.textContent = i18nText("timeline.auto_part_result", ["—"]);
+    }
+    refreshAutoPartPreviewVisuals();
+  }
+
+  function openAutoPartDialog() {
+    if (!elements.autoPartPanel) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    if (isMeasureEditWorkspaceActive()) closeMeasureEditWorkspace();
+    closeContextMenu();
+    closeFileMenu();
+    closeEditMenu();
+    closeSettingsMenu();
+    closeThemeMenu();
+    closeGoogleAccountMenu();
+    closeVolumeMenu();
+    closeZoomMenu();
+    closePlaybackRateMenu();
+    closeItemAddMenu();
+    if (!state.autoPart.active) {
+      state.autoPart.restoreSidebarTab = state.sidebarTab || "channels";
+      state.autoPart.restoreSidebarCollapsed = Boolean(state.history?.collapsed);
+    }
+    state.autoPart.active = true;
+    if (state.history?.collapsed) setHistoryCollapsed(false);
+    setSidebarTab("channels", { persist: false });
+    elements.channelPanel?.classList.add("auto-part-preview-active");
+    elements.autoPartPanel.hidden = false;
+    if (elements.autoPartCharsInput) elements.autoPartCharsInput.value = String(state.autoPart.targetChars || 2400);
+    if (elements.autoPartSearchRangeInput) elements.autoPartSearchRangeInput.value = String(state.autoPart.searchRangePercent ?? 50);
+    state.autoPart.plan = null;
+    updateAutoPartSummary();
+    requestAnimationFrame(() => elements.autoPartCharsInput?.focus({ preventScroll: true }));
+    return true;
+  }
+
+  function closeAutoPartDialog({ restoreSidebar = true } = {}) {
+    if (!state.autoPart.active && (!elements.autoPartPanel || elements.autoPartPanel.hidden)) return false;
+    state.autoPart.active = false;
+    state.autoPart.plan = null;
+    if (elements.autoPartPanel) elements.autoPartPanel.hidden = true;
+    elements.channelPanel?.classList.remove("auto-part-preview-active");
+    refreshAutoPartPreviewVisuals();
+    if (restoreSidebar) {
+      const restoreTab = state.autoPart.restoreSidebarTab || "channels";
+      const restoreCollapsed = Boolean(state.autoPart.restoreSidebarCollapsed);
+      state.autoPart.restoreSidebarTab = null;
+      state.autoPart.restoreSidebarCollapsed = false;
+      setSidebarTab(restoreTab, { persist: false });
+      if (restoreCollapsed) setHistoryCollapsed(true);
+    }
+    return true;
+  }
+
+  function applyAutoPartPlan() {
+    const options = readAutoPartOptionsFromUi();
+    const plan = state.autoPart.plan
+      && state.autoPart.plan.targetChars === options.targetChars
+      && state.autoPart.plan.searchRangePercent === options.searchRangePercent
+      ? state.autoPart.plan
+      : computeAutoPartPlan(options.targetChars, options.searchRangePercent);
+    if (!plan || plan.partCount < 2) {
+      showToast(i18nText("timeline.auto_part_need_two"));
+      updateAutoPartSummary();
+      return false;
+    }
+    // Automatic setup is a replacement operation: every existing part boundary
+    // is discarded and the previewed plan becomes the new canonical part map.
+    let nextId = 1;
+    state.timelineParts = normalizeTimelineParts(plan.boundaries.map((beat) => ({ id: nextId++, beat })));
+    state.nextTimelinePartId = nextId;
+    markDirty(i18nText("history.timeline_part_auto"));
+    updateChannelInfo();
+    closeAutoPartDialog();
+    resizeAndDraw();
+    showToast(i18nText("timeline.auto_part_applied", [plan.partCount.toLocaleString()]));
+    return true;
+  }
+
+
+  function isMeasureEditWorkspaceActive() {
+    return Boolean(state.measureEdit?.active);
+  }
+
+  function isMeasureEditPanelTarget(target) {
+    return Boolean(target instanceof Node && elements.measureEditPanel?.contains(target));
+  }
+
+  function normalizeMeasureEditMode(value) {
+    return ["add", "duplicate", "delete"].includes(value) ? value : "add";
+  }
+
+  function getMeasureEditRangeLengthInfo(range) {
+    if (!range) return null;
+    const lengthBeat = Math.max(0, Number(range.lengthBeat) || 0);
+    const measureLength = Math.max(CONFIG.minimumNoteBeat, getTimeSignatureMeasureLength(getTimeSignatureAtBeat(range.startBeat)));
+    let measures = Math.floor((lengthBeat + 1e-7) / measureLength);
+    let remainder = Math.max(0, lengthBeat - measures * measureLength);
+    let subdivisions = Math.round(remainder / CONFIG.minimumNoteBeat);
+    const perMeasureSubdivisions = Math.max(1, Math.round(measureLength / CONFIG.minimumNoteBeat));
+    if (subdivisions >= perMeasureSubdivisions) { measures += 1; subdivisions = 0; }
+    const startSeconds = beatToSeconds(range.startBeat);
+    const endSeconds = beatToSeconds(range.endBeat);
+    return {
+      amountText: describeTimeEditAmount(measures, subdivisions),
+      beatText: lengthBeat.toFixed(3),
+      durationText: formatSeconds(Math.max(0, endSeconds - startSeconds)),
+    };
+  }
+
+  function getMeasureEditRangeLengthLabel(range) {
+    const info = getMeasureEditRangeLengthInfo(range);
+    if (!info) return i18nText("timeline.measure_range_not_selected");
+    return `${i18nText("timeline.measure_selected_length")}: ${info.amountText} · ${info.beatText} ${i18nText("ui.beat")} · ${info.durationText}`;
+  }
+
+  function renderMeasureEditRangeSummary(range) {
+    const host = elements.measureEditRangeSummary;
+    if (!host) return;
+    host.replaceChildren();
+    const info = getMeasureEditRangeLengthInfo(range);
+    if (!info) {
+      const empty = document.createElement("div");
+      empty.className = "measure-edit-range-empty";
+      empty.textContent = i18nText("timeline.measure_range_not_selected");
+      host.append(empty);
+      return;
+    }
+    const line = document.createElement("div");
+    line.className = "measure-edit-range-line";
+    const label = document.createElement("span");
+    label.className = "measure-edit-range-label";
+    label.textContent = i18nText("timeline.measure_selected_length");
+    const value = document.createElement("strong");
+    value.className = "measure-edit-range-value";
+    value.textContent = `${info.amountText} · ${info.beatText} ${i18nText("ui.beat")} · ${info.durationText}`;
+    line.append(label, value);
+    host.append(line);
+  }
+
+  function getMeasureEditScopeLabel() {
+    const type = state.measureEdit?.scopeType || "all";
+    if (type === "group") return getChannelGroupById(state.measureEdit.scopeId)?.name || i18nText("group.label");
+    if (type === "channel") return state.channels.find((item) => String(item.id) === String(state.measureEdit.scopeId))?.name || i18nText("channel.label");
+    return i18nText("ui.all");
+  }
+
+  function getMeasureEditTargetChannels() {
+    const type = state.measureEdit?.scopeType || "all";
+    if (type === "group") return getChannelGroupMembers(state.measureEdit.scopeId);
+    if (type === "channel") {
+      const channel = state.channels.find((item) => String(item.id) === String(state.measureEdit.scopeId));
+      return channel ? [channel] : [];
+    }
+    return state.channels;
+  }
+
+  function previewMeasureEditScopeSelection(type, id) {
+    if (type === "channel") {
+      const index = state.channels.findIndex((channel) => String(channel.id) === String(id));
+      if (index >= 0) selectChannel(index);
+    } else if (type === "group") {
+      selectChannelGroup(id);
+    }
+  }
+
+  function renderMeasureEditScopeList() {
+    const host = elements.measureEditScopeList;
+    if (!host) return;
+    host.replaceChildren();
+    const addRow = (type, id, label, className = "", itemColor = "var(--accent)") => {
+      const row = document.createElement("label");
+      row.className = `measure-edit-scope-row ${className}`.trim();
+      row.style.setProperty("--measure-scope-color", itemColor || "var(--accent)");
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "measureEditScope";
+      input.checked = state.measureEdit.scopeType === type && (type === "all" || String(state.measureEdit.scopeId) === String(id));
+      input.addEventListener("change", () => {
+        state.measureEdit.scopeType = type;
+        state.measureEdit.scopeId = type === "all" ? null : id;
+        previewMeasureEditScopeSelection(type, id);
+        updateMeasureEditWorkspace();
+      });
+      const text = document.createElement("span");
+      text.textContent = label;
+      row.append(input, text);
+      host.append(row);
+    };
+    addRow("all", null, i18nText("timeline.measure_all_channels"), "all", "var(--accent)");
+    const grouped = new Set();
+    for (const group of state.channelGroups) {
+      const groupIndex = state.channelGroups.indexOf(group);
+      addRow("group", group.id, group.name || i18nText("group.label"), "group", getChannelGroupColor(group, groupIndex, "bright"));
+      for (const channel of getChannelGroupMembers(group)) {
+        grouped.add(String(channel.id));
+        const channelIndex = state.channels.indexOf(channel);
+        addRow("channel", channel.id, channel.name || i18nText("channel.label"), "channel", getChannelColor(channel, channelIndex));
+      }
+    }
+    for (const channel of state.channels) {
+      if (!grouped.has(String(channel.id))) {
+        const channelIndex = state.channels.indexOf(channel);
+        addRow("channel", channel.id, channel.name || i18nText("channel.label"), "channel", getChannelColor(channel, channelIndex));
+      }
+    }
+  }
+
+  function getMeasureEditSelectedRange() {
+    let start = Number(state.measureEdit?.rangeStartBeat);
+    let end = Number(state.measureEdit?.rangeEndBeat);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+    if (end < start) [start, end] = [end, start];
+    start = clamp(start, 0, getTotalBeats());
+    end = clamp(end, 0, getTotalBeats());
+    if (end <= start + 1e-7) return null;
+    return { startBeat: start, endBeat: end, lengthBeat: end - start };
+  }
+
+  function getMeasureEditPreviewRanges() {
+    if (!isMeasureEditWorkspaceActive()) return [];
+    const mode = normalizeMeasureEditMode(state.measureEdit.mode);
+    const range = getMeasureEditSelectedRange();
+    if (!range) return [];
+    const result = [{ kind: mode, startBeat: range.startBeat, endBeat: range.endBeat, label: getMeasureEditScopeLabel() }];
+    if (mode === "duplicate") {
+      const count = Math.max(1, Math.floor(Number(elements.measureEditDuplicateCountInput?.value) || 1));
+      result.push({ kind: "destination", startBeat: range.endBeat, endBeat: range.endBeat + range.lengthBeat * count, label: `${count}${i18nText("ui.times")}` });
+    }
+    return result;
+  }
+
+  function updateMeasureEditPreviewGuides(host, layout) {
+    if (!host) return;
+    const ranges = getMeasureEditPreviewRanges();
+    const keys = new Set(ranges.map((_, i) => String(i)));
+    for (const node of [...host.querySelectorAll(".measure-edit-preview-band")]) {
+      if (!isMeasureEditWorkspaceActive() || !keys.has(String(node.dataset.measurePreviewIndex || ""))) node.remove();
+    }
+    if (!isMeasureEditWorkspaceActive()) return;
+    ranges.forEach((range, index) => {
+      let band = host.querySelector(`.measure-edit-preview-band[data-measure-preview-index="${index}"]`);
+      if (!band) {
+        band = document.createElement("div");
+        band.dataset.measurePreviewIndex = String(index);
+        const label = document.createElement("span");
+        label.className = "measure-edit-preview-label";
+        band.append(label);
+        host.append(band);
+      }
+      band.className = `measure-edit-preview-band measure-edit-preview-band-${range.kind}`;
+      const x1 = beatToX(range.startBeat) - elements.rollViewport.scrollLeft;
+      const x2 = beatToX(range.endBeat) - elements.rollViewport.scrollLeft;
+      const left = Math.max(0, Math.min(layout.viewportWidth, x1));
+      const right = Math.max(0, Math.min(layout.viewportWidth, x2));
+      const visible = right > 0 && left < layout.viewportWidth && right - left > 0.5;
+      band.hidden = !visible;
+      if (!visible) return;
+      band.style.top = `${layout.top}px`;
+      band.style.height = `${layout.height}px`;
+      band.style.transform = `translate3d(${layout.leftOffset + left}px,0,0)`;
+      band.style.width = `${Math.max(2, right - left)}px`;
+      const label = band.querySelector(".measure-edit-preview-label");
+      if (label) label.textContent = range.label || "";
+    });
+  }
+
+  function refreshMeasureEditPreviewVisuals() {
+    updateTimelinePartGuides();
+    drawTimeline();
+    invalidateOverviewTimelineActivity();
+    drawOverviewTimeline();
+  }
+
+  function updateMeasureEditWorkspace() {
+    if (!isMeasureEditWorkspaceActive()) return;
+    const mode = normalizeMeasureEditMode(state.measureEdit.mode);
+    state.measureEdit.duplicateCount = Math.max(1, Math.floor(Number(elements.measureEditDuplicateCountInput?.value) || 1));
+    elements.measureEditModeTabs?.querySelectorAll("[data-measure-edit-mode]").forEach((button) => button.classList.toggle("active", button.dataset.measureEditMode === mode));
+    if (elements.measureEditAddOptions) elements.measureEditAddOptions.hidden = mode !== "add";
+    if (elements.measureEditDuplicateOptions) elements.measureEditDuplicateOptions.hidden = mode !== "duplicate";
+    if (elements.measureEditDeleteOptions) elements.measureEditDeleteOptions.hidden = mode !== "delete";
+    const range = getMeasureEditSelectedRange();
+    renderMeasureEditRangeSummary(range);
+    const measurePositionText = range ? formatSeconds(beatToSeconds(range.startBeat)) : formatSeconds(beatToSeconds(state.measureEdit.beat));
+    if (elements.measureEditPosition) elements.measureEditPosition.textContent = measurePositionText;
+    setSidebarEditModeTitlebar(true, i18nText("timeline.edit_measure"), measurePositionText);
+    if (elements.measureEditApplyButton) elements.measureEditApplyButton.disabled = !range;
+    refreshMeasureEditPreviewVisuals();
+  }
+
+  function setMeasureEditMode(mode) {
+    if (!isMeasureEditWorkspaceActive()) return;
+    state.measureEdit.mode = normalizeMeasureEditMode(mode);
+    updateMeasureEditWorkspace();
+  }
+
+  function openMeasureEditWorkspace({ beat = state.playhead.beat, scopeType = "all", scopeId = null } = {}) {
+    if (!elements.measureEditPanel) return false;
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    if (isAutoPartPreviewActive()) closeAutoPartDialog();
+    closeContextMenu(); closeFileMenu(); closeEditMenu(); closeSettingsMenu(); closeThemeMenu(); closeGoogleAccountMenu(); closeVolumeMenu(); closeZoomMenu(); closePlaybackRateMenu(); closeItemAddMenu();
+    if (!state.measureEdit.active) {
+      state.measureEdit.restoreSidebarTab = state.sidebarTab || "channels";
+      state.measureEdit.restoreSidebarCollapsed = Boolean(state.history?.collapsed);
+      state.measureEdit.restoreActivePanel = state.activePanel;
+      state.measureEdit.restoreActiveChannelId = getActiveChannel()?.id ?? null;
+      state.measureEdit.restoreGroupId = state.selectedChannelGroupId;
+      state.measureEdit.restoreAudioId = state.activeAudioClipId;
+    }
+    const safeBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
+    state.measureEdit.active = true;
+    document.body.classList.add("measure-edit-mode-active");
+    state.measureEdit.mode = "add";
+    state.measureEdit.beat = safeBeat;
+    state.measureEdit.rangeStartBeat = safeBeat;
+    state.measureEdit.rangeEndBeat = safeBeat + getTimeSignatureMeasureLength(getTimeSignatureAtBeat(safeBeat));
+    state.measureEdit.scopeType = ["group","channel"].includes(scopeType) ? scopeType : "all";
+    state.measureEdit.scopeId = state.measureEdit.scopeType === "all" ? null : scopeId;
+    state.measureEdit.selecting = false;
+    if (state.history?.collapsed) setHistoryCollapsed(false);
+    setSidebarTab("channels", { persist: false });
+    elements.channelPanel?.classList.add("measure-edit-preview-active");
+    elements.measureEditPanel.hidden = false;
+    if (elements.measureEditDuplicateCountInput) elements.measureEditDuplicateCountInput.value = "1";
+    renderMeasureEditScopeList();
+    previewMeasureEditScopeSelection(state.measureEdit.scopeType, state.measureEdit.scopeId);
+    updateMeasureEditWorkspace();
+    requestAnimationFrame(() => elements.measureEditModeTabs?.querySelector('[data-measure-edit-mode="add"]')?.focus({ preventScroll: true }));
+    return true;
+  }
+
+  function closeMeasureEditWorkspace({ restoreSidebar = true } = {}) {
+    if (!state.measureEdit.active && (!elements.measureEditPanel || elements.measureEditPanel.hidden)) return false;
+    state.measureEdit.active = false;
+    document.body.classList.remove("measure-edit-mode-active");
+    if (!isNoteEditModeActive()) setSidebarEditModeTitlebar(false);
+    state.measureEdit.selecting = false;
+    state.measureEdit.pointerId = null;
+    if (elements.measureEditPanel) elements.measureEditPanel.hidden = true;
+    elements.channelPanel?.classList.remove("measure-edit-preview-active");
+    refreshMeasureEditPreviewVisuals();
+    if (restoreSidebar) {
+      const tab = state.measureEdit.restoreSidebarTab || "channels";
+      const collapsed = Boolean(state.measureEdit.restoreSidebarCollapsed);
+      const restorePanel = state.measureEdit.restoreActivePanel;
+      const restoreChannelId = state.measureEdit.restoreActiveChannelId;
+      const restoreGroupId = state.measureEdit.restoreGroupId;
+      const restoreAudioId = state.measureEdit.restoreAudioId;
+      state.measureEdit.restoreSidebarTab = null;
+      state.measureEdit.restoreSidebarCollapsed = false;
+      state.measureEdit.restoreActivePanel = null;
+      state.measureEdit.restoreActiveChannelId = null;
+      state.measureEdit.restoreGroupId = null;
+      state.measureEdit.restoreAudioId = null;
+      setSidebarTab(tab, { persist: false });
+      if (restorePanel === "audio" && restoreAudioId != null) selectAudioClip(restoreAudioId);
+      else if (restoreGroupId != null) selectChannelGroup(restoreGroupId);
+      else if (restoreChannelId != null) {
+        const index = state.channels.findIndex((channel) => String(channel.id) === String(restoreChannelId));
+        if (index >= 0) selectChannel(index);
+      }
+      if (collapsed) setHistoryCollapsed(true);
+    }
+    return true;
+  }
+
+  function measureEditPointerBeat(event) {
+    if (event.target === elements.timelineCanvas) return clamp(snapBeat(timelineBeatFromPointer(event)), 0, getTotalBeats());
+    if (event.target === elements.rollCanvas) {
+      const point = pointerToRoll(event);
+      return clamp(snapBeat(xToBeat(point.x)), 0, getTotalBeats());
+    }
+    return null;
+  }
+
+  function handleMeasureEditPointerDown(event) {
+    if (!isMeasureEditWorkspaceActive() || event.button !== 0) return false;
+    const beat = measureEditPointerBeat(event);
+    if (beat == null) return false;
+    state.measureEdit.selecting = true;
+    state.measureEdit.pointerId = event.pointerId;
+    state.measureEdit.rangeStartBeat = beat;
+    state.measureEdit.rangeEndBeat = beat;
+    try { event.target.setPointerCapture?.(event.pointerId); } catch {}
+    updateMeasureEditWorkspace();
+    event.preventDefault(); event.stopImmediatePropagation();
+    return true;
+  }
+
+  function handleMeasureEditPointerMove(event) {
+    if (!isMeasureEditWorkspaceActive() || !state.measureEdit.selecting || state.measureEdit.pointerId !== event.pointerId) return false;
+    const beat = measureEditPointerBeat(event);
+    if (beat == null) return false;
+    state.measureEdit.rangeEndBeat = beat;
+    updateMeasureEditWorkspace();
+    event.preventDefault(); event.stopImmediatePropagation();
+    return true;
+  }
+
+  function handleMeasureEditPointerUp(event) {
+    if (!isMeasureEditWorkspaceActive() || !state.measureEdit.selecting || state.measureEdit.pointerId !== event.pointerId) return false;
+    let beat = measureEditPointerBeat(event);
+    if (beat != null) state.measureEdit.rangeEndBeat = beat;
+    let range = getMeasureEditSelectedRange();
+    if (!range) {
+      const start = Number(state.measureEdit.rangeStartBeat) || 0;
+      const length = getTimeSignatureMeasureLength(getTimeSignatureAtBeat(start));
+      state.measureEdit.rangeEndBeat = clamp(start + length, 0, getTotalBeats());
+    }
+    state.measureEdit.selecting = false;
+    state.measureEdit.pointerId = null;
+    updateMeasureEditWorkspace();
+    event.preventDefault(); event.stopImmediatePropagation();
+    return true;
+  }
+
+  function guardMeasureEditWorkspacePointerInteraction(event) {
+    if (!isMeasureEditWorkspaceActive() || isMeasureEditPanelTarget(event.target) || isAutoPartPreviewScrollTarget(event.target) || isAutoPartPreviewOverviewNavigation(event)) return;
+    if (event.target === elements.timelineCanvas || event.target === elements.rollCanvas) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+  }
+
+  function guardMeasureEditWorkspaceKeyboardInteraction(event) {
+    if (!isMeasureEditWorkspaceActive()) return;
+    if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); closeMeasureEditWorkspace(); return; }
+    if (isMeasureEditPanelTarget(event.target)) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+  }
+
+  function shiftNotesForInsertOnChannels(channels, cursor, amount) {
+    for (const channel of channels) {
+      const kept = [];
+      for (const note of channel.notes || []) {
+        const start = Number(note.startBeat) || 0;
+        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        if (start >= cursor - 1e-7) { note.startBeat = Number((start + amount).toFixed(6)); kept.push(note); }
+        else if (end > cursor + 1e-7) { if (trimNoteToBeat(note, cursor)) kept.push(note); else state.selectedNoteIds.delete(note.id); }
+        else kept.push(note);
+      }
+      channel.notes = kept;
+      state.channelNoteRuntime.delete(String(channel.id));
+    }
+  }
+
+  function duplicateMeasureEditRange() {
+    const range = getMeasureEditSelectedRange();
+    if (!range) return false;
+    const count = Math.max(1, Math.floor(Number(elements.measureEditDuplicateCountInput?.value) || 1));
+    const totalInsert = range.lengthBeat * count;
+    const channels = getMeasureEditTargetChannels();
+    const noteCopies = new Map();
+    for (const channel of channels) {
+      const copies = [];
+      for (const note of channel.notes || []) {
+        const ns = Number(note.startBeat) || 0;
+        const ne = ns + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        const s = Math.max(ns, range.startBeat), e = Math.min(ne, range.endBeat);
+        if (e - s >= CONFIG.minimumNoteBeat - 1e-7) copies.push({ ...note, _relativeStart: s - range.startBeat, _duration: e - s });
+      }
+      noteCopies.set(String(channel.id), copies);
+    }
+    const allScope = state.measureEdit.scopeType === "all";
+    const tempoCopies = allScope ? state.tempos.filter(t => !t.fixed && t.beat >= range.startBeat - 1e-7 && t.beat < range.endBeat - 1e-7).map(t => ({...t, _relative:t.beat-range.startBeat})) : [];
+    const signatureCopies = allScope ? getSortedTimeSignatures().filter(t => !t.fixed && t.beat >= range.startBeat - 1e-7 && t.beat < range.endBeat - 1e-7).map(t => ({...t, _relative:t.beat-range.startBeat})) : [];
+    const fadeCopies = allScope ? normalizeTimelineFades().filter(f => f.startBeat >= range.startBeat - 1e-7 && f.startBeat < range.endBeat - 1e-7).map(f => ({...f, _relative:f.startBeat-range.startBeat})) : [];
+    const partCopies = allScope ? getSortedTimelineParts().filter(p => p.beat >= range.startBeat - 1e-7 && p.beat < range.endBeat - 1e-7).map(p => ({...p, _relative:p.beat-range.startBeat})) : [];
+
+    shiftNotesForInsertOnChannels(channels, range.endBeat, totalInsert);
+    if (allScope) {
+      for (const tempo of state.tempos) if (!tempo.fixed && tempo.beat > range.endBeat + 1e-7) tempo.beat = Number((tempo.beat + totalInsert).toFixed(6));
+      shiftTimelineFadesForInsert(range.endBeat, totalInsert);
+      shiftTimeSignaturesForInsert(range.endBeat, totalInsert);
+      shiftTimelinePartsForInsert(range.endBeat, totalInsert);
+      shiftPlaybackRangeForInsert(range.endBeat, totalInsert);
+    }
+    for (let rep = 0; rep < count; rep++) {
+      const dest = range.endBeat + rep * range.lengthBeat;
+      for (const channel of channels) {
+        const added = (noteCopies.get(String(channel.id)) || []).map(src => {
+          const clone = { ...src, id: state.nextNoteId++, startBeat: Number((dest + src._relativeStart).toFixed(6)), durationBeat: Number(src._duration.toFixed(6)) };
+          delete clone._relativeStart; delete clone._duration;
+          return clone;
+        });
+        channel.notes.push(...added);
+        channel.notes.sort((x,y)=>(x.startBeat-y.startBeat)||(x.pitch-y.pitch)||(x.id-y.id));
+      }
+      if (allScope) {
+        for (const src of tempoCopies) { const c={...src,id:state.nextTempoId++,beat:Number((dest+src._relative).toFixed(6)),fixed:false}; delete c._relative; state.tempos.push(c); }
+        for (const src of signatureCopies) { const id=getNextTimeSignatureId(); const c={...src,id,beat:Number((dest+src._relative).toFixed(6)),fixed:false}; delete c._relative; state.nextTimeSignatureId=Math.max(state.nextTimeSignatureId,id+1); state.timeSignatures.push(c); }
+        for (const src of fadeCopies) { const c={...src,id:getNextTimelineFadeId(),startBeat:Number((dest+src._relative).toFixed(6))}; delete c._relative; state.timelineFades.push(c); }
+        for (const src of partCopies) { const id=getNextTimelinePartId(); const c={id,beat:Number((dest+src._relative).toFixed(6))}; state.nextTimelinePartId=Math.max(state.nextTimelinePartId,id+1); state.timelineParts.push(c); }
+      }
+    }
+    if (allScope) {
+      state.tempos.sort((x,y)=>x.beat-y.beat||x.id-y.id);
+      state.timeSignatures=normalizeTimeSignatures(state.timeSignatures);
+      state.timelineFades=normalizeTimelineFades(state.timelineFades);
+      state.timelineParts=normalizeTimelineParts(state.timelineParts);
+      state.timelineBeats=Math.max(getTotalBeats()+totalInsert,getPersistentContentEndBeat()+getSnapBeat());
+    } else {
+      state.timelineBeats=Math.max(getTotalBeats(),getPersistentContentEndBeat()+getSnapBeat());
+    }
+    ensureTimelineFitsViewport();
+    markDirty(i18nText("history.measure_duplicate"));
+    renderChannelTabs(); renderChannelEditor(); resizeAndDraw(); updateChannelInfo();
+    return true;
+  }
+
+  function applyMeasureEditWorkspace() {
+    if (!isMeasureEditWorkspaceActive()) return false;
+    const mode = normalizeMeasureEditMode(state.measureEdit.mode);
+    const scoped = state.measureEdit.scopeType !== "all";
+    state.timeEdit = {
+      beat: state.measureEdit.beat,
+      scope: state.measureEdit.scopeType === "group" ? "group" : state.measureEdit.scopeType === "channel" ? "channel" : "all",
+      channelId: state.measureEdit.scopeType === "channel" ? state.measureEdit.scopeId : null,
+      groupId: state.measureEdit.scopeType === "group" ? state.measureEdit.scopeId : null,
+      preferredAction: mode === "add" ? "insert" : mode === "delete" ? "delete" : null,
+    };
+    let applied = false;
+    if (mode === "add") {
+      const range = getMeasureEditSelectedRange();
+      if (!range) return false;
+      state.timeEdit.beat = range.startBeat;
+      state.measureEdit.beat = range.startBeat;
+      applied = scoped ? insertChannelSpaceAtPlayhead(range.lengthBeat) : insertTrackSpaceAtPlayhead(range.lengthBeat);
+    } else if (mode === "delete") {
+      const range = getMeasureEditSelectedRange();
+      if (!range) return false;
+      state.timeEdit.beat = range.startBeat;
+      applied = scoped ? deleteChannelSpaceAtPlayhead(range.lengthBeat) : deleteTrackSpaceAtPlayhead(range.lengthBeat);
+    } else {
+      applied = duplicateMeasureEditRange();
+    }
+    if (applied) {
+      closeMeasureEditWorkspace();
+      showToast(i18nText("timeline.measure_edit_applied"));
+    }
+    return applied;
+  }
+
   function getTimeSignatureGridLines(startBeat = 0, endBeat = getTotalBeats()) {
     const start = Math.max(0, Number(startBeat) || 0);
     const end = Math.max(start, Number(endBeat) || 0);
@@ -2554,8 +3505,10 @@
   function getPersistentContentEndBeat() {
     const lastAudioEnd = state.audioClips.reduce((maximum, clip) => Math.max(maximum, getAudioClipEndBeat(clip)), 0);
     const lastTimelinePartBeat = getSortedTimelineParts().reduce((maximum, part) => Math.max(maximum, part.beat), 0);
+    const playbackRange = normalizePlaybackRange();
+    const lastPlaybackRangeBeat = Math.max(playbackRange.startBeat ?? 0, playbackRange.endBeat ?? 0);
     if (isMidiReferenceActive()) {
-      return Math.max(getMidiReferenceEndBeat(getActiveMidiDocument() || state.midiReference), lastAudioEnd, lastTimelinePartBeat);
+      return Math.max(getMidiReferenceEndBeat(getActiveMidiDocument() || state.midiReference), lastAudioEnd, lastTimelinePartBeat, lastPlaybackRangeBeat);
     }
     const lastNoteEnd = state.channels.reduce(
       (projectEnd, channel) => channel.notes.reduce(
@@ -2571,7 +3524,7 @@
     const fades = normalizeTimelineFades();
     const lastFadeBeat = fades.reduce((maximum, fade) => Math.max(maximum, getTimelineFadeEndBeat(fade)), 0);
     const lastTimeSignatureBeat = getSortedTimeSignatures().reduce((maximum, signature) => Math.max(maximum, signature.beat), 0);
-    return Math.max(lastNoteEnd, lastTempoBeat, lastAudioEnd, lastFadeBeat, lastTimeSignatureBeat, lastTimelinePartBeat);
+    return Math.max(lastNoteEnd, lastTempoBeat, lastAudioEnd, lastFadeBeat, lastTimeSignatureBeat, lastTimelinePartBeat, lastPlaybackRangeBeat);
   }
 
   function getProjectContentEndBeat() {
@@ -2609,6 +3562,7 @@
     resizeRollSurface();
     drawRoll();
     updatePlayheadVisual();
+    updateTimelinePartGuides();
     drawTimeline();
     drawOverviewTimeline();
     return true;
@@ -2646,6 +3600,7 @@
     );
     drawRoll();
     updatePlayheadVisual();
+    updateTimelinePartGuides();
     drawTimeline();
     drawOverviewTimeline();
     updatePlaybackTimeInfo();
@@ -3733,6 +4688,7 @@
         window.MobibardSiteNavigation?.refresh?.();
         renderShortcutKeycaps();
         updateShortcutSearchResults();
+        updateLoopPlaybackButton();
         if (notify) {
           const label = elements.languageSelect?.selectedOptions?.[0]?.textContent || state.language;
           showToast(i18nText("editor.language_saved", [label]));
@@ -3831,6 +4787,7 @@
     const hasEditorNotes = state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length > 0);
     if (elements.editRestCleanupButton) elements.editRestCleanupButton.disabled = deleteLocked || !hasEditorNotes;
     if (elements.editNoteVolumeButton) elements.editNoteVolumeButton.disabled = deleteLocked || !hasEditorNotes;
+    if (elements.editAutoPartButton) elements.editAutoPartButton.disabled = deleteLocked || !hasEditorNotes;
     // MML/MIDI 내보내기는 현재 선택/활성 패널/노트 유무와 관계없이 항상 사용할 수 있습니다.
     elements.fileExportButton.disabled = false;
     if (elements.midiExportButton) elements.midiExportButton.disabled = false;
@@ -4037,6 +4994,7 @@
     renderChannelEditor();
     renderHistoryPanel();
     updateEditToolControls();
+    updateLoopPlaybackButton();
     resizeAndDraw();
     renderAudioLane();
     updateDirtyState();
@@ -5586,11 +6544,13 @@
       (maximum, clip) => Math.max(maximum, getAudioClipEndBeat(clip)),
       0,
     );
+    const playbackRange = normalizePlaybackRange();
+    const lastPartBeat = getSortedTimelineParts().reduce((maximum, part) => Math.max(maximum, Number(part.beat) || 0), 0);
     overviewTimelineActivityCache = {
       version: overviewTimelineContentVersion,
       channelsRef: state.channels,
       audioClipsRef: state.audioClips,
-      endBeat: Math.max(CONFIG.beatsPerMeasure, lastNoteEnd, lastAudioEnd),
+      endBeat: Math.max(CONFIG.beatsPerMeasure, lastNoteEnd, lastAudioEnd, lastPartBeat, playbackRange.startBeat ?? 0, playbackRange.endBeat ?? 0),
       channelActivities,
     };
     return overviewTimelineActivityCache;
@@ -5723,16 +6683,37 @@
     );
     context.restore();
 
-    // Timeline-part boundaries are structural navigation guides, so keep them
-    // visible on the whole-track bar regardless of the track-info visibility
-    // toggle used for tempo/fade guides.
+    // Playback-range guides are transport information, not track information,
+    // so they remain visible even when track-info guides are hidden.
     if (endBeat > 0) {
-      for (const part of getSortedTimelineParts()) {
-        const x = clamp((Number(part.beat) || 0) / endBeat * width, 0, width);
+      const playbackRange = normalizePlaybackRange();
+      for (const marker of [
+        { kind: "start", beat: playbackRange.startBeat },
+        { kind: "end", beat: playbackRange.endBeat },
+      ]) {
+        if (marker.beat == null) continue;
+        const x = clamp((Number(marker.beat) || 0) / endBeat * width, 0, width);
         context.save();
-        context.strokeStyle = state.theme === "light" ? "rgba(255,157,0,.98)" : "rgba(255,196,92,.99)";
+        context.strokeStyle = getPlaybackRangeGuideColor(marker.kind);
         context.lineWidth = 2;
-        context.setLineDash([4, 3]);
+        context.setLineDash([9, 5]);
+        context.beginPath();
+        context.moveTo(Math.round(x) + .5, 0);
+        context.lineTo(Math.round(x) + .5, height);
+        context.stroke();
+        context.restore();
+      }
+    }
+
+    const autoPartPreviewActive = isAutoPartPreviewActive();
+    const autoPartPreviewBoundaries = getAutoPartPreviewBoundaries();
+    if (autoPartPreviewActive && endBeat > 0) {
+      for (const beat of autoPartPreviewBoundaries) {
+        const x = clamp((Number(beat) || 0) / endBeat * width, 0, width);
+        context.save();
+        context.strokeStyle = state.theme === "light" ? "rgba(255,145,0,.94)" : "rgba(255,194,86,.98)";
+        context.lineWidth = 2;
+        context.setLineDash([9, 5]);
         context.beginPath();
         context.moveTo(Math.round(x) + .5, 0);
         context.lineTo(Math.round(x) + .5, height);
@@ -5742,6 +6723,21 @@
     }
 
     if (showTrackInfo && endBeat > 0) {
+      // Part boundaries belong to track information on the full-track bar. During
+      // auto-part preview the proposed replacement boundaries take their place.
+      if (!autoPartPreviewActive) for (const part of getSortedTimelineParts()) {
+        const x = clamp((Number(part.beat) || 0) / endBeat * width, 0, width);
+        context.save();
+        context.strokeStyle = state.theme === "light" ? "rgba(255,157,0,.98)" : "rgba(255,196,92,.99)";
+        context.lineWidth = 2;
+        context.setLineDash([9, 5]);
+        context.beginPath();
+        context.moveTo(Math.round(x) + .5, 0);
+        context.lineTo(Math.round(x) + .5, height);
+        context.stroke();
+        context.restore();
+      }
+
       // The overview is intentionally compact: tempo and fade information is
       // represented by guide lines only. Detailed labels remain on the main timeline.
       for (const tempo of getSortedTempos()) {
@@ -6053,6 +7049,37 @@
     context.textBaseline = "alphabetic";
     context.textAlign = "start";
     context.lineWidth = 1;
+
+    const playbackRange = normalizePlaybackRange();
+    for (const marker of [
+      { kind: "start", beat: playbackRange.startBeat },
+      { kind: "end", beat: playbackRange.endBeat },
+    ]) {
+      if (marker.beat == null) continue;
+      const x = Math.round(beatToX(marker.beat) - scrollLeft) + 0.5;
+      if (x < -12 || x > width + 12) continue;
+      context.save();
+      context.fillStyle = getPlaybackRangeGuideColor(marker.kind);
+      context.strokeStyle = state.theme === "light" ? "rgba(255,255,255,.95)" : "rgba(10,18,28,.92)";
+      context.lineWidth = 1;
+      context.beginPath();
+      const markerSize = 18;
+      const markerTop = -1;
+      if (marker.kind === "start") {
+        context.moveTo(x, markerTop);
+        context.lineTo(x - markerSize, markerTop);
+        context.lineTo(x, markerTop + markerSize);
+      } else {
+        context.moveTo(x, markerTop);
+        context.lineTo(x + markerSize, markerTop);
+        context.lineTo(x, markerTop + markerSize);
+      }
+      context.closePath();
+      context.fill();
+      context.stroke();
+      context.restore();
+    }
+
     drawOverviewTimeline();
   }
 
@@ -6178,12 +7205,50 @@
     };
   }
 
+  function getPlaybackRangeGuideColor(kind) {
+    if (kind === "start") return state.theme === "light" ? "#087fb8" : "#55d4ff";
+    return state.theme === "light" ? "#7d43c7" : "#c99cff";
+  }
+
+  function updatePlaybackRangeGuides(host, layout) {
+    if (!host) return;
+    const range = normalizePlaybackRange();
+    const markers = [
+      { kind: "start", beat: range.startBeat },
+      { kind: "end", beat: range.endBeat },
+    ];
+    for (const marker of markers) {
+      let guide = host.querySelector(`.playback-range-guide[data-range-kind="${marker.kind}"]`);
+      if (marker.beat == null) {
+        guide?.remove();
+        continue;
+      }
+      if (!guide) {
+        guide = document.createElement("div");
+        guide.className = `playback-range-guide playback-range-guide-${marker.kind}`;
+        guide.dataset.rangeKind = marker.kind;
+        host.append(guide);
+      }
+      const visibleX = beatToX(marker.beat) - elements.rollViewport.scrollLeft;
+      const visible = visibleX >= -2 && visibleX <= layout.viewportWidth + 2;
+      guide.hidden = !visible;
+      if (!visible) continue;
+      guide.style.top = `${layout.top}px`;
+      guide.style.height = `${layout.height}px`;
+      guide.style.transform = `translate3d(${layout.leftOffset + visibleX}px, 0, 0)`;
+    }
+  }
+
   function updateTimelinePartGuides() {
     const host = elements.timelinePartGuides;
     if (!host || !elements.rollViewport || !elements.timelineCanvas) return;
     // Part guides intentionally stop at the bottom of the piano roll. They do
     // not continue into the velocity or audio lanes.
     const layout = getTimelinePartGuideLayout();
+    updatePlaybackRangeGuides(host, layout);
+
+    const previewActive = isAutoPartPreviewActive();
+    const previewBoundaries = getAutoPartPreviewBoundaries();
     const parts = getSortedTimelineParts();
     const activeIds = new Set(parts.map((part) => String(part.id)));
     for (const node of [...host.querySelectorAll(".timeline-part-guide")]) {
@@ -6202,7 +7267,7 @@
         host.append(guide);
       }
       const visibleX = beatToX(part.beat) - elements.rollViewport.scrollLeft;
-      const visible = visibleX >= -2 && visibleX <= layout.viewportWidth + 2;
+      const visible = !previewActive && visibleX >= -2 && visibleX <= layout.viewportWidth + 2;
       guide.hidden = !visible;
       if (!visible) continue;
       const marker = getTimelinePartMarkerScreenGeometry(part);
@@ -6219,6 +7284,50 @@
       guide.style.height = `${layout.height}px`;
       guide.style.transform = `translate3d(${layout.leftOffset + visibleX}px, 0, 0)`;
     }
+
+    updateMeasureEditPreviewGuides(host, layout);
+
+    // Auto-part setup is a transaction preview. Existing part guides remain in
+    // state but are hidden while the proposed replacement boundaries are shown.
+    const previewKeys = new Set(previewBoundaries.map((_, index) => String(index)));
+    for (const node of [...host.querySelectorAll(".auto-part-preview-guide")]) {
+      if (!previewActive || !previewKeys.has(String(node.dataset.previewIndex || ""))) node.remove();
+    }
+    if (!previewActive) return;
+
+    const lane = getTimelineLaneLayout(elements.timelineCanvas.clientHeight || 51);
+    const canvasWidth = elements.timelineCanvas.clientWidth || layout.viewportWidth;
+    previewBoundaries.forEach((beat, index) => {
+      const key = String(index);
+      let guide = host.querySelector(`.auto-part-preview-guide[data-preview-index="${key}"]`);
+      if (!guide) {
+        guide = document.createElement("div");
+        guide.className = "auto-part-preview-guide";
+        guide.dataset.previewIndex = key;
+        const label = document.createElement("span");
+        label.className = "auto-part-preview-guide-label";
+        guide.append(label);
+        host.append(guide);
+      }
+      const visibleX = beatToX(beat) - elements.rollViewport.scrollLeft;
+      const visible = visibleX >= -2 && visibleX <= layout.viewportWidth + 2;
+      guide.hidden = !visible;
+      if (!visible) return;
+      const labelText = String(index + 2);
+      const labelWidth = Math.max(18, 10 + labelText.length * 6);
+      const labelX = clamp(visibleX - labelWidth / 2, 2, Math.max(2, canvasWidth - labelWidth - 2));
+      const label = guide.querySelector(".auto-part-preview-guide-label");
+      if (label) {
+        label.textContent = labelText;
+        label.style.left = `${labelX - visibleX}px`;
+        label.style.top = `${lane.tempoY}px`;
+        label.style.width = `${labelWidth}px`;
+        label.style.height = `${lane.labelHeight}px`;
+      }
+      guide.style.top = `${layout.top}px`;
+      guide.style.height = `${layout.height}px`;
+      guide.style.transform = `translate3d(${layout.leftOffset + visibleX}px, 0, 0)`;
+    });
   }
 
   function updatePlayheadVisual() {
@@ -6321,11 +7430,55 @@
     if (preview) previewNotesAtPlayhead(state.playhead.beat);
   }
 
+  function getRunningPlaybackBoundsForSeek(beat) {
+    const naturalEndBeat = Math.max(0, Number(getPlaybackEndBeat()) || 0);
+    const targetBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
+    const range = normalizePlaybackRange();
+    const startMarker = range.startBeat == null ? null : clamp(range.startBeat, 0, getTotalBeats());
+    const endMarker = range.endBeat == null ? null : clamp(range.endBeat, 0, getTotalBeats());
+    const epsilon = 1e-7;
+
+    // A running timeline seek intentionally chooses which side of the playback
+    // range is active. This prevents a seek from unexpectedly snapping back into
+    // the configured range:
+    //   before Start -> play through End
+    //   Start..End   -> stay inside the configured range
+    //   after End    -> play through the natural end of the song
+    let rangeStartBeat = 0;
+    let endBeat = naturalEndBeat;
+
+    if (startMarker != null && endMarker != null) {
+      if (targetBeat < startMarker - epsilon) {
+        rangeStartBeat = 0;
+        endBeat = endMarker;
+      } else if (targetBeat <= endMarker + epsilon) {
+        rangeStartBeat = startMarker;
+        endBeat = endMarker;
+      } else {
+        rangeStartBeat = 0;
+        endBeat = naturalEndBeat;
+      }
+    } else if (startMarker != null) {
+      rangeStartBeat = targetBeat >= startMarker - epsilon ? startMarker : 0;
+      endBeat = naturalEndBeat;
+    } else if (endMarker != null) {
+      rangeStartBeat = 0;
+      endBeat = targetBeat <= endMarker + epsilon ? endMarker : naturalEndBeat;
+    }
+
+    return {
+      targetBeat,
+      rangeStartBeat: clamp(rangeStartBeat, 0, getTotalBeats()),
+      endBeat: clamp(endBeat, 0, getTotalBeats()),
+    };
+  }
+
   function restartRunningPlaybackAtBeat(beat) {
     if (!state.playback.running || !audioEngine.context) return false;
 
-    const endBeat = getPlaybackEndBeat();
-    const targetBeat = clamp(Number(beat) || 0, 0, endBeat);
+    const bounds = getRunningPlaybackBoundsForSeek(beat);
+    const targetBeat = bounds.targetBeat;
+    const endBeat = bounds.endBeat;
     state.playhead.beat = targetBeat;
     updatePlayheadVisual();
     drawTimeline();
@@ -6345,6 +7498,7 @@
     clearPlaybackKeyboardPitches();
 
     state.playback.startBeat = targetBeat;
+    state.playback.rangeStartBeat = bounds.rangeStartBeat;
     state.playback.endBeat = endBeat;
     const midiDocument = isMidiReferenceActive() ? getActiveMidiDocument() : null;
     state.playback.tempoMap = midiDocument
@@ -6427,6 +7581,33 @@
     }
     elements.rollViewport.scrollLeft = nextScrollLeft;
     return true;
+  }
+
+  function findPlaybackRangeMarkerFromPointer(event) {
+    const rect = elements.timelineCanvas.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
+    const size = 18;
+    if (pointerY < -4 || pointerY > size + 5) return null;
+    const range = normalizePlaybackRange();
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const marker of [
+      { kind: "start", beat: range.startBeat },
+      { kind: "end", beat: range.endBeat },
+    ]) {
+      if (marker.beat == null) continue;
+      const x = beatToX(marker.beat) - elements.rollViewport.scrollLeft;
+      const left = marker.kind === "start" ? x - size - 4 : x - 4;
+      const right = marker.kind === "start" ? x + 4 : x + size + 4;
+      if (pointerX < left || pointerX > right) continue;
+      const distance = Math.abs(pointerX - x);
+      if (distance < nearestDistance) {
+        nearest = marker;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
   }
 
   function findTimelinePartMarkerFromPointer(event) {
@@ -6534,12 +7715,17 @@
     }
     const rawBeat = timelineRawBeatFromPointer(event);
     if (rawBeat < 0) return;
-    const timeSignature = findTimeSignatureMarkerFromPointer(event);
-    const timelinePart = timeSignature ? null : findTimelinePartMarkerFromPointer(event);
+    const playbackRangeMarker = findPlaybackRangeMarkerFromPointer(event);
+    const timeSignature = playbackRangeMarker ? null : findTimeSignatureMarkerFromPointer(event);
+    const timelinePart = playbackRangeMarker || timeSignature ? null : findTimelinePartMarkerFromPointer(event);
     const fade = timeSignature || timelinePart ? null : findTimelineFadeMarkerFromPointer(event);
     const tempo = timeSignature || timelinePart || fade ? null : findTempoMarkerFromPointer(event);
     const beat = timelineBeatFromPointer(event);
-    seekPlayheadBeat(timeSignature?.beat ?? timelinePart?.beat ?? fade?.startBeat ?? tempo?.beat ?? beat);
+    seekPlayheadBeat(playbackRangeMarker?.beat ?? timeSignature?.beat ?? timelinePart?.beat ?? fade?.startBeat ?? tempo?.beat ?? beat);
+    if (playbackRangeMarker) {
+      event.preventDefault();
+      return;
+    }
     if (timeSignature) {
       openTimeSignatureDialog(timeSignature.beat, timeSignature);
       event.preventDefault();
@@ -6576,11 +7762,26 @@
       return;
     }
     const rawBeat = timelineRawBeatFromPointer(event);
-    const timeSignature = rawBeat >= 0 ? findTimeSignatureMarkerFromPointer(event) : null;
+    const playbackRangeMarker = rawBeat >= 0 ? findPlaybackRangeMarkerFromPointer(event) : null;
+    const timeSignature = rawBeat >= 0 && !playbackRangeMarker ? findTimeSignatureMarkerFromPointer(event) : null;
     const timelinePart = rawBeat >= 0 && !timeSignature ? findTimelinePartMarkerFromPointer(event) : null;
     const fade = rawBeat >= 0 && !timeSignature && !timelinePart ? findTimelineFadeMarkerFromPointer(event) : null;
     const tempo = rawBeat >= 0 && !timeSignature && !timelinePart && !fade ? findTempoMarkerFromPointer(event) : null;
     const touchLike = event.pointerType === "touch" || event.pointerType === "pen";
+
+    if (playbackRangeMarker) {
+      setPlayheadBeat(playbackRangeMarker.beat, { stop: true });
+      state.playbackRangeDrag = {
+        pointerId: event.pointerId,
+        kind: playbackRangeMarker.kind,
+        originalBeat: playbackRangeMarker.beat,
+        moved: false,
+      };
+      trySetPointerCapture(elements.timelineCanvas, event.pointerId);
+      elements.timelineCanvas.style.cursor = "ew-resize";
+      event.preventDefault();
+      return;
+    }
 
     if (timeSignature) {
       setPlayheadBeat(timeSignature.beat, { stop: true });
@@ -6687,6 +7888,28 @@
   }
 
   function handleTimelinePointerMove(event) {
+    if (state.playbackRangeDrag?.pointerId === event.pointerId) {
+      const drag = state.playbackRangeDrag;
+      scrollTimelineDuringDrag(event);
+      const range = normalizePlaybackRange();
+      const snap = Math.max(CONFIG.minimumNoteBeat, getSnapBeat());
+      let targetBeat = clamp(timelineBeatFromPointer(event), 0, getTotalBeats());
+      if (drag.kind === "start" && range.endBeat != null) {
+        targetBeat = Math.min(targetBeat, Math.max(0, range.endBeat - snap));
+      } else if (drag.kind === "end" && range.startBeat != null) {
+        targetBeat = Math.max(targetBeat, Math.min(getTotalBeats(), range.startBeat + snap));
+      }
+      const key = drag.kind === "start" ? "startBeat" : "endBeat";
+      if (Math.abs((range[key] ?? 0) - targetBeat) > 1e-7) {
+        range[key] = Number(targetBeat.toFixed(6));
+        state.playbackRange = normalizePlaybackRange(range);
+        drag.moved = true;
+        refreshPlaybackRangeVisuals();
+      }
+      event.preventDefault();
+      return;
+    }
+
     if (state.timeSignatureDrag?.pointerId === event.pointerId) {
       const drag = state.timeSignatureDrag;
       const touchLike = drag.pointerType === "touch" || drag.pointerType === "pen";
@@ -6836,13 +8059,16 @@
       return;
     }
 
-    const hoverTimeSignature = findTimeSignatureMarkerFromPointer(event);
-    const hoverTimelinePart = hoverTimeSignature ? null : findTimelinePartMarkerFromPointer(event);
+    const hoverPlaybackRange = findPlaybackRangeMarkerFromPointer(event);
+    const hoverTimeSignature = hoverPlaybackRange ? null : findTimeSignatureMarkerFromPointer(event);
+    const hoverTimelinePart = hoverPlaybackRange || hoverTimeSignature ? null : findTimelinePartMarkerFromPointer(event);
     const hoverFade = hoverTimeSignature || hoverTimelinePart ? null : findTimelineFadeMarkerFromPointer(event);
     const hoverTempo = hoverTimeSignature || hoverTimelinePart || hoverFade ? null : findTempoMarkerFromPointer(event);
-    elements.timelineCanvas.style.cursor = hoverTimeSignature
-      ? (hoverTimeSignature.fixed ? "pointer" : "ew-resize")
-      : hoverTimelinePart
+    elements.timelineCanvas.style.cursor = hoverPlaybackRange
+      ? "ew-resize"
+      : hoverTimeSignature
+        ? (hoverTimeSignature.fixed ? "pointer" : "ew-resize")
+        : hoverTimelinePart
         ? "ew-resize"
         : hoverFade
           ? "ew-resize"
@@ -6852,6 +8078,28 @@
   }
 
   function handleTimelinePointerUp(event) {
+    if (state.playbackRangeDrag?.pointerId === event.pointerId) {
+      const drag = state.playbackRangeDrag;
+      const moved = drag.moved;
+      state.playbackRangeDrag = null;
+      elements.timelineCanvas.style.cursor = "default";
+      try { elements.timelineCanvas.releasePointerCapture(event.pointerId); } catch {}
+      if (event.type === "pointercancel") {
+        if (moved) {
+          const range = normalizePlaybackRange();
+          range[drag.kind === "start" ? "startBeat" : "endBeat"] = Number(drag.originalBeat.toFixed(6));
+          state.playbackRange = normalizePlaybackRange(range);
+          refreshPlaybackRangeVisuals();
+        }
+        return;
+      }
+      if (moved) {
+        markDirty(i18nText("history.playback_range"));
+        refreshPlaybackRangeVisuals({ defer: true });
+      }
+      return;
+    }
+
     if (state.timeSignatureDrag?.pointerId === event.pointerId) {
       const drag = state.timeSignatureDrag;
       const moved = drag.moved;
@@ -14556,6 +15804,8 @@
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
       timeSignatures: getSortedTimeSignatures().map((signature) => ({ ...signature })),
       timelineParts: getSortedTimelineParts().map((part) => ({ ...part })),
+      playbackRange: normalizePlaybackRange(),
+      playbackLoopEnabled: Boolean(state.playbackLoopEnabled),
       timelineFades: normalizeTimelineFades(),
       audioClips: state.audioClips.map((clip) => ({ ...clip })),
       nextNoteId: state.nextNoteId,
@@ -14801,6 +16051,7 @@
   }
 
   function setSidebarTab(tab, { persist = true, focus = false } = {}) {
+    if (isAutoPartPreviewActive() && tab !== "channels") return false;
     if (isChannelDeleteModeActive() && tab !== "channels") return false;
     const validTabs = new Set(["channels", "shortcuts", "history", "thanks"]);
     const nextTab = validTabs.has(tab) ? tab : "channels";
@@ -14838,6 +16089,7 @@
   }
 
   function setHistoryCollapsed(collapsed) {
+    if (isAutoPartPreviewActive() && collapsed) return false;
     if (isChannelDeleteModeActive()) return false;
     state.history.collapsed = Boolean(collapsed);
     elements.appContent.classList.toggle("history-collapsed", state.history.collapsed);
@@ -14960,6 +16212,9 @@
       state.nextTimeSignatureId = Math.max(2, Number(data.nextTimeSignatureId) || 2, state.timeSignatures.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
       state.timelineParts = normalizeTimelineParts(data.timelineParts || state.timelineParts);
       state.nextTimelinePartId = Math.max(1, Number(data.nextTimelinePartId) || 1, state.timelineParts.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
+      state.playbackRange = normalizePlaybackRange(data.playbackRange || state.playbackRange);
+      state.playbackLoopEnabled = Boolean(data.playbackLoopEnabled);
+      updateLoopPlaybackButton();
       state.audioClips = (Array.isArray(data.audioClips) ? data.audioClips : []).map((clip, index) => {
         const normalized = normalizeAudioClip(clip, index);
         normalized.muted = mutedByAudioId.has(String(normalized.id)) ? mutedByAudioId.get(String(normalized.id)) : normalized.muted;
@@ -14991,6 +16246,7 @@
       clearNoteSelection();
       state.interaction = null;
       state.tempoDrag = null;
+      state.playbackRangeDrag = null;
       state.dirty = true;
       state.channelNoteRuntime.clear();
       renderAll();
@@ -15102,7 +16358,9 @@
       return;
     }
     const playbackActive = state.playback.running || state.playback.loading;
-    const endBeat = playbackActive ? state.playback.endBeat : getPlaybackEndBeat();
+    const endBeat = playbackActive
+      ? state.playback.endBeat
+      : getPlaybackRangeBounds({ contentEndBeat: getPlaybackEndBeat() }).endBeat;
     const rate = Math.max(0.01, Number(state.playbackRate) || 1);
     const currentSeconds = getPlayheadDisplaySeconds(currentBeat);
     if (elements.playheadTimeLabel) {
@@ -20905,14 +22163,7 @@
   }
 
   let mmlExportSelectionQueue = [];
-  const MML_EXPORT_SPLIT_DEFAULT_CHARS = 2400;
-  const MML_EXPORT_SPLIT_MAX_PAGES = 200;
-  let mmlExportSplitMaxChars = MML_EXPORT_SPLIT_DEFAULT_CHARS;
-  let mmlExportCopyState = { mml: "", pages: [] };
-
-  function normalizeMmlExportSplitMaxChars(value) {
-    return Math.max(200, Math.min(5000, Math.round(Number(value) || MML_EXPORT_SPLIT_DEFAULT_CHARS)));
-  }
+  let mmlExportCopyState = { mml: "", timelinePartScores: [] };
 
   function getMmlExportSelectedChannels() {
     if (!elements.mmlExportChannelList) return [];
@@ -21081,7 +22332,7 @@
     return channel ? getMmlChannelCharacterCountInRange(channel, range) : 0;
   }
 
-  function buildMmlExportSplitCandidates(channels, tempos, totalEndBeat) {
+  function buildPartBoundaryCandidates(channels, tempos, totalEndBeat) {
     const candidates = new Set([0, Number(totalEndBeat) || 0]);
     for (const channel of channels || []) {
       for (const note of channel?.notes || []) {
@@ -21100,94 +22351,8 @@
       .sort((a, b) => a - b);
   }
 
-  function splitMmlExportPages(channels, fullMml) {
-    const source = String(fullMml || "");
-    if (!source) return [];
-    const sourceParts = splitMmlPartsForExport(source);
-    const sourceLengths = sourceParts.map((part) => String(part || "").length);
-    const sourceMax = sourceLengths.length ? Math.max(...sourceLengths) : 0;
-    if (sourceMax <= mmlExportSplitMaxChars) {
-      return [{ index: 1, mml: source, parts: sourceParts, lengths: sourceLengths, maxPartLength: sourceMax }];
-    }
-
-    // 분할 기준도 최종 복사본과 동일한 공용 MML optimizer 결과를 사용한다.
-    // 각 후보 구간은 Editor 노트 타임라인에서 다시 렌더링한 뒤 최적화하고,
-    // 그 최종 글자 수가 제한 안에 들어오는 가장 긴 구간을 선택한다.
-
-    const tempos = getSortedTempos();
-    const totalEndBeat = getMmlExportEndBeat(channels);
-    if (!(totalEndBeat > 0)) {
-      return [{ index: 1, mml: source, parts: sourceParts, lengths: sourceLengths, maxPartLength: sourceMax }];
-    }
-
-    const candidates = buildMmlExportSplitCandidates(channels, tempos, totalEndBeat);
-    const pages = [];
-    let pageStart = 0;
-    let guard = 0;
-
-    while (pageStart < totalEndBeat - 1e-7 && guard++ < MML_EXPORT_SPLIT_MAX_PAGES) {
-      const firstIndex = candidates.findIndex((beat) => beat > pageStart + 1e-7);
-      if (firstIndex < 0) break;
-      let low = firstIndex;
-      let high = candidates.length - 1;
-      let bestIndex = -1;
-      let bestMml = "";
-      let bestLengths = [];
-      const cache = new Map();
-
-      const renderAt = (index) => {
-        if (cache.has(index)) return cache.get(index);
-        const endBeat = candidates[index];
-        const mml = channelsToMmlRange(channels, pageStart, endBeat, tempos);
-        const lengths = getMmlExportPartLengths(mml);
-        const maxPartLength = lengths.length ? Math.max(...lengths) : 0;
-        const result = { mml, lengths, maxPartLength };
-        cache.set(index, result);
-        return result;
-      };
-
-      while (low <= high) {
-        const mid = Math.floor((low + high) / 2);
-        const rendered = renderAt(mid);
-        if (rendered.mml && rendered.maxPartLength <= mmlExportSplitMaxChars) {
-          bestIndex = mid;
-          bestMml = rendered.mml;
-          bestLengths = rendered.lengths;
-          low = mid + 1;
-        } else {
-          high = mid - 1;
-        }
-      }
-
-      if (bestIndex < 0) {
-        bestIndex = firstIndex;
-        const rendered = renderAt(bestIndex);
-        bestMml = rendered.mml;
-        bestLengths = rendered.lengths;
-      }
-
-      const pageEnd = Math.max(pageStart + CONFIG.minimumNoteBeat, candidates[bestIndex]);
-      if (!bestMml) bestMml = channelsToMmlRange(channels, pageStart, pageEnd, tempos);
-      if (!bestLengths.length) bestLengths = getMmlExportPartLengths(bestMml);
-      const maxPartLength = bestLengths.length ? Math.max(...bestLengths) : 0;
-      pages.push({
-        index: pages.length + 1,
-        mml: bestMml,
-        parts: splitMmlPartsForExport(bestMml),
-        lengths: bestLengths,
-        maxPartLength,
-        startBeat: pageStart,
-        endBeat: pageEnd,
-      });
-      if (pageEnd <= pageStart + 1e-7) break;
-      pageStart = pageEnd;
-    }
-
-    if (!pages.length || pageStart < totalEndBeat - 1e-7) {
-      return [{ index: 1, mml: source, parts: sourceParts, lengths: sourceLengths, maxPartLength: sourceMax }];
-    }
-    return pages;
-  }
+  // MML export intentionally has no character-count paging here.
+  // "파트별 악보" is generated only from timelineParts in buildMmlExportTimelinePartCopies().
 
   async function copyMmlExportText(text, button, successMessage) {
     const copied = await writeTextToClipboard(normalizeMmlTextCase(text));
@@ -21209,12 +22374,41 @@
     return true;
   }
 
+  function buildMmlExportTimelinePartCopies(channels) {
+    // "파트별 악보"는 글자 수 자동 분할이 아니라 사용자가 타임라인에
+    // 직접 설정한 timelineParts 경계를 그대로 따른다. 자동 파트 설정은
+    // timelineParts를 만드는 편집 도구일 뿐, 내보내기에서 별도 재계산하지 않는다.
+    if (!getSortedTimelineParts().length) return [];
+    const ranges = getTimelinePartRanges(getTotalBeats());
+    const tempos = getSortedTempos();
+    return ranges.map((range, index) => {
+      const hasNotes = (channels || []).some((channel) => (channel?.notes || []).some((note) => {
+        const start = Math.max(0, Number(note.startBeat) || 0);
+        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        return end > range.startBeat + 1e-7 && start < range.endBeat - 1e-7;
+      }));
+      const mml = hasNotes
+        ? channelsToMmlRange(channels, range.startBeat, range.endBeat, tempos, { includeTempo: true, optimized: true })
+        : "";
+      return {
+        index: index + 1,
+        number: range.number || index + 1,
+        startBeat: range.startBeat,
+        endBeat: range.endBeat,
+        mml,
+        lengths: mml ? getMmlExportPartLengths(mml) : [],
+      };
+    });
+  }
+
   function renderMmlExportCopyActions(selectedChannels) {
     const channels = (selectedChannels || []).filter((channel) => channel?.notes?.length);
+    if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = false;
     if (!channels.length) {
-      mmlExportCopyState = { mml: "", pages: [] };
-      if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = true;
+      mmlExportCopyState = { mml: "", timelinePartScores: [] };
       if (elements.mmlExportCopyAllButton) elements.mmlExportCopyAllButton.disabled = true;
+      if (elements.mmlExportFullCopyDetail) elements.mmlExportFullCopyDetail.textContent = i18nText("channel.no_selected");
+      if (elements.mmlExportPartCopyBlock) elements.mmlExportPartCopyBlock.hidden = true;
       if (elements.mmlExportSplitButtons) {
         elements.mmlExportSplitButtons.replaceChildren();
         elements.mmlExportSplitButtons.hidden = true;
@@ -21223,45 +22417,43 @@
     }
 
     const mml = channelsToMml(channels, { originBeat: 0 });
-    const pages = splitMmlExportPages(channels, mml);
-    mmlExportCopyState = { mml, pages };
+    const timelinePartScores = buildMmlExportTimelinePartCopies(channels);
+    mmlExportCopyState = { mml, timelinePartScores };
 
-    if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = false;
     if (elements.mmlExportCopyAllButton) elements.mmlExportCopyAllButton.disabled = !mml;
-    if (elements.mmlExportFullCopyDetail) {
-      elements.mmlExportFullCopyDetail.textContent = formatMmlExportChannelLengths(channels);
-    }
+    if (elements.mmlExportFullCopyDetail) elements.mmlExportFullCopyDetail.textContent = formatMmlExportChannelLengths(channels);
+
+    const showParts = timelinePartScores.length > 1;
+    if (elements.mmlExportPartCopyBlock) elements.mmlExportPartCopyBlock.hidden = !showParts;
     if (elements.mmlExportSplitSummary) {
-      elements.mmlExportSplitSummary.textContent = pages.length > 1
-        ? i18nText("mml_export.split_detail", [mmlExportSplitMaxChars.toLocaleString(), pages.length])
-        : i18nText("mml_export.split_not_needed");
-    }
-    if (elements.mmlExportSplitLimitInput && document.activeElement !== elements.mmlExportSplitLimitInput) {
-      elements.mmlExportSplitLimitInput.value = String(mmlExportSplitMaxChars);
+      elements.mmlExportSplitSummary.textContent = showParts
+        ? i18nText("mml_export.timeline_part_count", [timelinePartScores.length])
+        : "";
     }
     if (elements.mmlExportSplitButtons) {
       elements.mmlExportSplitButtons.replaceChildren();
-      elements.mmlExportSplitButtons.hidden = pages.length <= 1;
-      if (pages.length > 1) pages.forEach((page, index) => {
+      elements.mmlExportSplitButtons.hidden = !showParts;
+      if (showParts) timelinePartScores.forEach((page) => {
         const row = document.createElement("div");
         row.className = "mml-export-page-copy-row";
         const meta = document.createElement("div");
         meta.className = "mml-export-page-copy-meta";
         const title = document.createElement("strong");
-        title.textContent = i18nText("mml_export.page_label", [index + 1]);
+        title.textContent = i18nText("mml_export.part_score", [page.number]);
         const detail = document.createElement("small");
-        detail.textContent = formatMmlExportPartLengths(page);
+        detail.textContent = page.mml ? formatMmlExportPartLengths(page) : i18nText("mml_export.part_empty");
         meta.append(title, detail);
 
         const button = document.createElement("button");
         button.type = "button";
         button.className = "mml-export-page-copy-button";
         button.textContent = i18nText("copy");
-        button.title = i18nText("mml_export.page_label", [index + 1]);
+        button.disabled = !page.mml;
+        button.title = i18nText("mml_export.part_score", [page.number]);
         button.addEventListener("click", () => void copyMmlExportText(
           page.mml,
           button,
-          i18nText("mml_export.split_copied", [index + 1]),
+          i18nText("mml_export.part_copied", [page.number]),
         ));
         row.append(meta, button);
         elements.mmlExportSplitButtons.append(row);
@@ -21426,9 +22618,10 @@
       elements.mmlExportSplitButtons.replaceChildren();
       elements.mmlExportSplitButtons.hidden = true;
     }
-    if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = true;
+    if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = false;
+    if (elements.mmlExportPartCopyBlock) elements.mmlExportPartCopyBlock.hidden = true;
     mmlExportSelectionQueue = [];
-    mmlExportCopyState = { mml: "", pages: [] };
+    mmlExportCopyState = { mml: "", timelinePartScores: [] };
     if (elements.mmlExportSummary) elements.mmlExportSummary.textContent = "선택된 채널이 없습니다.";
   }
 
@@ -21851,6 +23044,55 @@
     state.timelineParts = normalizeTimelineParts(remaining);
   }
 
+  function shiftPlaybackRangeForInsert(cursorBeat, amountBeats) {
+    const cursor = Math.max(0, Number(cursorBeat) || 0);
+    const amount = Math.max(0, Number(amountBeats) || 0);
+    if (!(amount > 0)) return;
+    const range = normalizePlaybackRange();
+    const shift = (beat) => beat == null ? null : (beat > cursor + 1e-7 ? Number((beat + amount).toFixed(6)) : beat);
+    state.playbackRange = normalizePlaybackRange({
+      startBeat: shift(range.startBeat),
+      endBeat: shift(range.endBeat),
+    });
+  }
+
+  function shiftPlaybackRangeForDelete(cursorBeat, amountBeats) {
+    const cursor = Math.max(0, Number(cursorBeat) || 0);
+    const amount = Math.max(0, Number(amountBeats) || 0);
+    if (!(amount > 0)) return;
+    const cutEnd = cursor + amount;
+    const range = normalizePlaybackRange();
+    const shift = (beat) => {
+      if (beat == null) return null;
+      if (beat < cursor - 1e-7) return beat;
+      if (beat >= cutEnd - 1e-7) return Number(Math.max(0, beat - amount).toFixed(6));
+      return Number(cursor.toFixed(6));
+    };
+    const next = { startBeat: shift(range.startBeat), endBeat: shift(range.endBeat) };
+    // A deletion can collapse both boundaries onto the same point. Keeping a
+    // zero-length playback range would make Play unusable, so clear the range
+    // only in that degenerate case.
+    if (next.startBeat != null && next.endBeat != null && next.endBeat <= next.startBeat + 1e-7) {
+      state.playbackRange = { startBeat: null, endBeat: null };
+    } else {
+      state.playbackRange = normalizePlaybackRange(next);
+    }
+  }
+
+  function clampPlaybackRangeAfterTimelineEnd(endBeat) {
+    const end = Math.max(0, Number(endBeat) || 0);
+    const range = normalizePlaybackRange();
+    let startBeat = range.startBeat;
+    let endBeatValue = range.endBeat;
+    if (startBeat != null && startBeat >= end - 1e-7) startBeat = null;
+    if (endBeatValue != null && endBeatValue > end + 1e-7) endBeatValue = Number(end.toFixed(6));
+    if (startBeat != null && endBeatValue != null && endBeatValue <= startBeat + 1e-7) {
+      startBeat = null;
+      endBeatValue = null;
+    }
+    state.playbackRange = normalizePlaybackRange({ startBeat, endBeat: endBeatValue });
+  }
+
   function shiftTimelineFadesForInsert(cursorBeat, amountBeats) {
     const cursor = Math.max(0, Number(cursorBeat) || 0);
     const amount = Math.max(0, Number(amountBeats) || 0);
@@ -21952,6 +23194,7 @@
     shiftTimelineFadesForInsert(cursor, amount);
     shiftTimeSignaturesForInsert(cursor, amount);
     shiftTimelinePartsForInsert(cursor, amount);
+    shiftPlaybackRangeForInsert(cursor, amount);
     state.timelineBeats = Math.max(getTotalBeats() + amount, getPersistentContentEndBeat() + getSnapBeat());
     ensureTimelineFitsViewport();
     markDirty(i18nText("timeline.add_measure_beat"));
@@ -22027,6 +23270,7 @@
     shiftTimelineFadesForDelete(cursor, amount);
     shiftTimeSignaturesForDelete(cursor, amount);
     shiftTimelinePartsForDelete(cursor, amount);
+    shiftPlaybackRangeForDelete(cursor, amount);
     state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, getTotalBeats() - amount);
     shrinkTimelineToContent();
     ensureTimelineFitsViewport();
@@ -23427,21 +24671,25 @@
     if (state.playback.running || state.playback.loading) return;
 
     const token = ++state.playback.requestToken;
-    const endBeat = getPlaybackEndBeat();
-    if (endBeat <= 0) {
-      showToast("재생할 노트가 없습니다.");
+    const naturalEndBeat = getPlaybackEndBeat();
+    const rangeBounds = getPlaybackRangeBounds({ contentEndBeat: naturalEndBeat });
+    const endBeat = rangeBounds.endBeat;
+    if (endBeat <= rangeBounds.startBeat + 1e-7) {
+      showToast(i18nText("playback.range_empty"));
       return;
     }
 
-    let startBeat = clamp(state.playhead.beat, 0, endBeat);
-    if (startBeat >= endBeat) {
-      startBeat = 0;
-      setPlayheadBeat(0);
-      elements.rollViewport.scrollLeft = 0;
+    let startBeat = clamp(state.playhead.beat, rangeBounds.startBeat, endBeat);
+    if (state.playhead.beat < rangeBounds.startBeat - 1e-7 || startBeat >= endBeat - 1e-7) {
+      startBeat = rangeBounds.startBeat;
+      setPlayheadBeat(startBeat);
+      const viewportWidth = elements.rollViewport.clientWidth || 0;
+      elements.rollViewport.scrollLeft = clamp(beatToX(startBeat) - Math.max(0, viewportWidth * 0.18), 0, getMaxScrollLeft());
     }
     state.playback.loading = true;
     preparePlaybackViewport(startBeat);
     state.playback.startBeat = startBeat;
+    state.playback.rangeStartBeat = rangeBounds.startBeat;
     state.playback.endBeat = endBeat;
     const midiDocument = isMidiReferenceActive() ? getActiveMidiDocument() : null;
     state.playback.tempoMap = midiDocument
@@ -23616,8 +24864,18 @@
     const currentBeat = secondsToBeatFromMap(currentTimelineSeconds, state.playback.tempoMap);
 
     if (currentTimelineSeconds >= state.playback.endSeconds || currentBeat >= state.playback.endBeat) {
-      setPlayheadBeat(state.playback.endBeat);
-      stopPlayback(false);
+      const shouldLoop = Boolean(state.playbackLoopEnabled)
+        && state.playback.endBeat > state.playback.rangeStartBeat + 1e-7;
+      if (shouldLoop) {
+        const restartBeat = state.playback.rangeStartBeat;
+        stopPlayback(false);
+        setPlayheadBeat(restartBeat);
+        preparePlaybackViewport(restartBeat);
+        window.setTimeout(() => { void startPlayback(); }, 0);
+      } else {
+        setPlayheadBeat(state.playback.endBeat);
+        stopPlayback(false);
+      }
       return;
     }
 
@@ -23690,17 +24948,21 @@
   }
 
   function moveToTimelineStart() {
-    seekPlayheadBeat(0);
-    elements.rollViewport.scrollLeft = 0;
+    const startBeat = normalizePlaybackRange().startBeat ?? 0;
+    seekPlayheadBeat(startBeat);
+    const viewportWidth = elements.rollViewport.clientWidth || 0;
+    elements.rollViewport.scrollLeft = clamp(beatToX(startBeat) - Math.max(0, viewportWidth * 0.18), 0, getMaxScrollLeft());
     updatePlayheadVisual();
     drawTimeline();
   }
 
   function moveToTimelineEnd() {
     stopPlayback(false);
-    const endBeat = isChannelMergeModeActive()
+    const configuredEnd = normalizePlaybackRange().endBeat;
+    const naturalEnd = isChannelMergeModeActive()
       ? getPlaybackEndBeat()
       : Math.max(getPlaybackEndBeat(), getPersistentContentEndBeat());
+    const endBeat = configuredEnd == null ? naturalEnd : clamp(configuredEnd, 0, getTotalBeats());
     setPlayheadBeat(endBeat);
     const viewportWidth = elements.rollViewport.clientWidth;
     const rightPadding = Math.min(96, Math.max(36, viewportWidth * 0.12));
@@ -23796,7 +25058,7 @@
     const data = encodeSchemaRows(project, context);
     return {
       format: "mml-piano-roll-project",
-      version: 35,
+      version: 36,
       encoding: PROJECT_STORAGE_ENCODING,
       schemas: context.schemas,
       data,
@@ -23917,7 +25179,10 @@
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
       timeSignatures: getSortedTimeSignatures().map((signature) => ({ ...signature })),
       timelineParts: getSortedTimelineParts().map((part) => ({ ...part })),
+      playbackRange: normalizePlaybackRange(),
+      playbackLoopEnabled: Boolean(state.playbackLoopEnabled),
       timelineFades: normalizeTimelineFades(),
+      // v36: 재생 구간(start/end)과 반복 재생 상태를 저장합니다.
       // v35: 파트 경계는 timelineParts 배열로 저장하며 MML 파트별 보기와 타임라인 점선에 사용합니다.
       // v26: 페이드는 타임라인 마커(type/startBeat/durationBeat) 배열로 저장하며 원본 노트 볼륨은 변경하지 않습니다.
       // v23: 채널 악기는 현재 SoundFont의 실제 Bank/Preset을 저장하고, 색상은 hue(0..359)만 저장합니다.
@@ -24487,6 +25752,8 @@
       ...(Array.isArray(data.tempos) ? data.tempos.map((tempo) => Math.max(0, Number(tempo.beat) || 0)) : []),
       ...(Array.isArray(data.timeSignatures) ? data.timeSignatures.map((signature) => Math.max(0, Number(signature.beat) || 0)) : []),
       ...(Array.isArray(data.timelineParts) ? data.timelineParts.map((part) => Math.max(0, Number(part.beat) || 0)) : []),
+      ...(data.playbackRange && Number.isFinite(Number(data.playbackRange.startBeat)) ? [Math.max(0, Number(data.playbackRange.startBeat))] : []),
+      ...(data.playbackRange && Number.isFinite(Number(data.playbackRange.endBeat)) ? [Math.max(0, Number(data.playbackRange.endBeat))] : []),
       ...state.audioClips.map((clip) => getAudioClipEndBeat(clip)),
       getRawTimelineFadeEndBeat(data.timelineFades, data.tempos),
       Math.max(0, Number(data.editor?.playheadBeat) || 0),
@@ -24501,6 +25768,9 @@
     state.nextTimeSignatureId = Math.max(2, Number(data.nextTimeSignatureId) || 2, state.timeSignatures.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
     state.timelineParts = normalizeTimelineParts(data.timelineParts || []);
     state.nextTimelinePartId = Math.max(1, Number(data.nextTimelinePartId) || 1, state.timelineParts.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
+    state.playbackRange = normalizePlaybackRange(data.playbackRange || { startBeat: null, endBeat: null });
+    state.playbackLoopEnabled = Boolean(data.playbackLoopEnabled);
+    updateLoopPlaybackButton();
     state.selectedChannelGroupId = null;
     state.channelGroups = (Array.isArray(data.channelGroups) ? data.channelGroups : []).map((group, index) => ({
       id: Number(group.id) || index + 1,
@@ -24704,6 +25974,7 @@
     stopRollDragAutoScroll();
     state.interaction = null;
     state.tempoDrag = null;
+    state.playbackRangeDrag = null;
     state.fadeDrag = null;
     state.dirty = false;
 
@@ -24813,6 +26084,9 @@
     state.timeSignatures = createDefaultTimeSignatures();
     state.timeSignatureEditor = { timeSignatureId: null, beat: 0 };
     state.timelineParts = [];
+    state.playbackRange = { startBeat: null, endBeat: null };
+    state.playbackLoopEnabled = false;
+    updateLoopPlaybackButton();
     state.timelineFades = [];
     state.midiDocuments = [];
     state.activeMidiDocumentId = null;
@@ -25156,6 +26430,15 @@
       // Right-click actions should always show exactly which timeline position they target.
       // If playback is active, seek there without leaving playback stopped.
       seekPlayheadBeat(timelineBeatFromPointer(event));
+    }
+    if ((area.name === "audio-lane" || area.name === "audio-source") && elements.audioLaneViewport) {
+      const rect = elements.audioLaneViewport.getBoundingClientRect();
+      const insideAudioTrack = event.clientX >= rect.left && event.clientX <= rect.right
+        && event.clientY >= rect.top && event.clientY <= rect.bottom;
+      if (insideAudioTrack) {
+        const absoluteX = event.clientX - rect.left + (elements.rollViewport?.scrollLeft || 0);
+        seekPlayheadBeat(clamp(snapBeat(xToBeat(absoluteX)), 0, getTotalBeats()));
+      }
     }
     if (area.name === "piano-roll") {
       const point = pointerToRoll(event);
@@ -25850,17 +27133,33 @@
     return true;
   }
 
+  function setSidebarEditModeTitlebar(active, title = "", meta = "") {
+    if (!elements.editModeTitlebar) return;
+    elements.editModeTitlebar.hidden = !active;
+    if (elements.editModeTitlebarTitle) elements.editModeTitlebarTitle.textContent = active ? String(title || "") : "";
+    if (elements.editModeTitlebarMeta) {
+      elements.editModeTitlebarMeta.textContent = active ? String(meta || "") : "";
+      elements.editModeTitlebarMeta.hidden = !active || !String(meta || "").trim();
+    }
+  }
+
   function updateNoteEditModeUi() {
     const active = isNoteEditModeActive();
     document.body.classList.toggle("note-edit-mode-active", active);
     if (elements.noteEditModePanel) elements.noteEditModePanel.hidden = !active;
-    if (!active) return;
+    if (!active) {
+      if (!isMeasureEditWorkspaceActive()) setSidebarEditModeTitlebar(false);
+      return;
+    }
     const type = state.noteEditMode.type;
+    const title = i18nText(noteEditModeTitleKey(type));
+    const selectionLabel = i18nText("note.edit_mode_source_count", [state.noteEditMode.sourceNoteIds?.size || 0]);
     if (elements.noteEditModeTrillOptions) elements.noteEditModeTrillOptions.hidden = type !== "trill";
     if (elements.noteEditModeGlissandoOptions) elements.noteEditModeGlissandoOptions.hidden = type !== "glissando";
     if (elements.noteEditModeArpeggioOptions) elements.noteEditModeArpeggioOptions.hidden = type !== "arpeggio";
-    if (elements.noteEditModeTitle) elements.noteEditModeTitle.textContent = i18nText(noteEditModeTitleKey(type));
-    if (elements.noteEditModeSelectionLabel) elements.noteEditModeSelectionLabel.textContent = i18nText("note.edit_mode_source_count", [state.noteEditMode.sourceNoteIds?.size || 0]);
+    if (elements.noteEditModeTitle) elements.noteEditModeTitle.textContent = title;
+    if (elements.noteEditModeSelectionLabel) elements.noteEditModeSelectionLabel.textContent = selectionLabel;
+    setSidebarEditModeTitlebar(true, title, selectionLabel);
     if (elements.noteEditModeHelp) elements.noteEditModeHelp.textContent = i18nText(noteEditModeHelpKey(type));
     if (elements.noteEditModeApplyButton) elements.noteEditModeApplyButton.disabled = !state.noteEditMode.previewNotes.length;
   }
@@ -26696,6 +27995,7 @@
       const durationSeconds = normalizeTimelineFadeSeconds(timelineFadeBeatToSeconds(end) - timelineFadeBeatToSeconds(fade.startBeat), 0.1);
       return [{ ...fade, durationSeconds }];
     });
+    clampPlaybackRangeAfterTimelineEnd(cursor);
     state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, Number(cursor.toFixed(6)));
     if (state.playhead.beat > cursor) state.playhead.beat = cursor;
     ensureTimelineFitsViewport();
@@ -26794,22 +28094,11 @@
     const channelScope = channel && !isMidiReferenceActive();
     return [
       {
-        label: i18nText("timeline.add_measure_beat"),
-        action: () => openTimeEditDialog({
+        label: i18nText("timeline.edit_measure"),
+        action: () => openMeasureEditWorkspace({
           beat,
-          scope: channelScope ? "channel" : "all",
-          channelId: channelScope ? channel.id : null,
-          preferredAction: "insert",
-        }),
-      },
-      {
-        label: i18nText("timeline.delete_measure_beat"),
-        danger: true,
-        action: () => openTimeEditDialog({
-          beat,
-          scope: channelScope ? "channel" : "all",
-          channelId: channelScope ? channel.id : null,
-          preferredAction: "delete",
+          scopeType: channelScope ? "channel" : "all",
+          scopeId: channelScope ? channel.id : null,
         }),
       },
       {
@@ -26865,11 +28154,13 @@
       return [
         { label: i18nText("rest_cleanup.title"), action: openRestCleanupDialog },
         { label: i18nText("volume.edit_channels"), action: openChannelVolumeDialog },
+        { label: i18nText("timeline.auto_part"), action: openAutoPartDialog },
+        { label: i18nText("timeline.edit_measure"), action: () => openMeasureEditWorkspace({ beat: snappedBeat, scopeType: "all" }) },
+        "separator",
         {
           label: i18nText(state.overviewTrackInfoVisible !== false ? "timeline.track_info_hide" : "timeline.track_info_show"),
           action: () => setOverviewTrackInfoVisible(state.overviewTrackInfoVisible === false),
         },
-        "separator",
         { label: i18nText("timeline.move_playhead_here"), action: () => seekPlayheadBeat(snappedBeat) },
         {
           label: i18nText("timeline.move_first_measure"),
@@ -26964,6 +28255,7 @@
           danger: true,
           action: () => existingPart && deleteTimelinePartById(existingPart.id),
         },
+        { label: i18nText("timeline.auto_part"), action: openAutoPartDialog },
         {
           label: i18nText("timeline.part_delete_all"),
           disabled: getSortedTimelineParts().length === 0,
@@ -26991,6 +28283,32 @@
       const allTimelineEventCount = countTimelineEventsInRange();
       const beforeTimelineEventCount = countTimelineEventsInRange(-Infinity, measureContextBeat);
       const afterTimelineEventCount = countTimelineEventsInRange(measureContextBeat, Infinity);
+      const playbackRange = normalizePlaybackRange();
+      const playbackRangeItems = [
+        { label: i18nText("timeline.playback_range_set_start"), action: () => setPlaybackRangeBoundary("start", measureContextBeat) },
+        {
+          label: i18nText("timeline.playback_range_delete_start"),
+          disabled: playbackRange.startBeat == null,
+          disabledReason: i18nText("timeline.playback_range_no_start"),
+          danger: true,
+          action: () => clearPlaybackRangeBoundary("start"),
+        },
+        { label: i18nText("timeline.playback_range_set_end"), action: () => setPlaybackRangeBoundary("end", measureContextBeat) },
+        {
+          label: i18nText("timeline.playback_range_delete_end"),
+          disabled: playbackRange.endBeat == null,
+          disabledReason: i18nText("timeline.playback_range_no_end"),
+          danger: true,
+          action: () => clearPlaybackRangeBoundary("end"),
+        },
+        {
+          label: i18nText("timeline.playback_range_delete_all"),
+          disabled: playbackRange.startBeat == null && playbackRange.endBeat == null,
+          disabledReason: i18nText("timeline.playback_range_none"),
+          danger: true,
+          action: clearPlaybackRange,
+        },
+      ];
 
       const categoryItems = [
         { label: i18nText("timeline.tempo_menu"), items: tempoItems },
@@ -26998,6 +28316,7 @@
         { label: i18nText("timeline.time_signature_menu"), items: timeSignatureItems },
         { label: i18nText("timeline.part_menu"), items: partItems },
         { label: i18nText("timeline.measure_menu"), items: selectedChannelMeasureItems },
+        { label: i18nText("timeline.playback_range_menu"), items: playbackRangeItems },
       ];
 
       return [
@@ -27089,9 +28408,10 @@
       const contextBeat = clamp(snapBeat(xToBeat(point.x)), 0, getTotalBeats());
       const measureItems = buildMeasureContextItems(contextBeat, { channel: getActiveChannel() });
       if (!clicked) {
+        const hasClipboardNotes = Boolean(state.noteClipboard?.notes?.length);
         return [
           { label: i18nText("channel.select_all_note"), disabled: !getActiveChannel()?.notes?.length, disabledReason: i18nText("context.disabled_no_notes"), action: selectAllNotes },
-          ...(state.noteClipboard?.notes?.length ? [{ label: i18nText("note.paste_playhead"), action: pasteNotesFromClipboard }] : []),
+          { label: i18nText("note.paste"), disabled: !hasClipboardNotes, disabledReason: i18nText("context.disabled_no_clipboard_notes"), action: pasteNotesFromClipboard },
           "separator",
           { label: i18nText("timeline.measure_menu"), items: measureItems },
         ];
@@ -27106,6 +28426,11 @@
       return [
         { label: i18nText("context.note.copy_short"), action: copySelectedNotes },
         { label: i18nText("context.note.cut_short"), action: cutSelectedNotes },
+        {
+          label: i18nText("context.note.delete_short"),
+          danger: true,
+          action: deleteSelectedNote,
+        },
         { label: i18nText("context.note.volume_short"), action: openNoteVolumeDialog },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         {
@@ -27115,11 +28440,6 @@
             { label: i18nText("context.note.glissando_short"), action: () => enterNoteEditMode("glissando") },
             { label: i18nText("context.note.arpeggio_short"), action: () => enterNoteEditMode("arpeggio") },
           ],
-        },
-        {
-          label: i18nText("context.note.delete_short"),
-          danger: true,
-          action: deleteSelectedNote,
         },
         "separator",
         {
@@ -28049,6 +29369,27 @@
     document.addEventListener("pointerdown", unlockEditorAudioFromGesture, { capture: true, passive: true });
     document.addEventListener("touchstart", unlockEditorAudioFromGesture, { capture: true, passive: true });
     document.addEventListener("keydown", (event) => { if (!event.repeat) unlockEditorAudioFromGesture(); }, true);
+    // Auto-part preview is a transaction: only its left-side controls may receive
+    // edit interactions. Wheel scrolling stays available for visual inspection.
+    document.addEventListener("pointerdown", handleMeasureEditPointerDown, true);
+    document.addEventListener("pointermove", handleMeasureEditPointerMove, true);
+    document.addEventListener("pointerup", handleMeasureEditPointerUp, true);
+    document.addEventListener("pointercancel", handleMeasureEditPointerUp, true);
+    document.addEventListener("pointerdown", guardMeasureEditWorkspacePointerInteraction, true);
+    document.addEventListener("mousedown", guardMeasureEditWorkspacePointerInteraction, true);
+    document.addEventListener("click", guardMeasureEditWorkspacePointerInteraction, true);
+    document.addEventListener("dblclick", guardMeasureEditWorkspacePointerInteraction, true);
+    document.addEventListener("contextmenu", guardMeasureEditWorkspacePointerInteraction, true);
+    document.addEventListener("touchstart", guardMeasureEditWorkspacePointerInteraction, { capture: true, passive: false });
+    document.addEventListener("keydown", guardMeasureEditWorkspaceKeyboardInteraction, true);
+
+    document.addEventListener("pointerdown", guardAutoPartPreviewPointerInteraction, true);
+    document.addEventListener("mousedown", guardAutoPartPreviewPointerInteraction, true);
+    document.addEventListener("click", guardAutoPartPreviewPointerInteraction, true);
+    document.addEventListener("dblclick", guardAutoPartPreviewPointerInteraction, true);
+    document.addEventListener("contextmenu", guardAutoPartPreviewPointerInteraction, true);
+    document.addEventListener("touchstart", guardAutoPartPreviewPointerInteraction, { capture: true, passive: false });
+    document.addEventListener("keydown", guardAutoPartPreviewKeyboardInteraction, true);
     // Capture Space before focused select/checkbox/button controls can consume it.
     // In note edit mode this keeps playback start/stop available regardless of panel focus.
     document.addEventListener("keydown", handleItemTreeDragKey, true);
@@ -28122,6 +29463,7 @@
     elements.editDeleteButton.addEventListener("click", () => { closeEditMenu(); deleteCurrentSelection(); });
     elements.editRestCleanupButton?.addEventListener("click", () => { closeEditMenu(); openRestCleanupDialog(); });
     elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openChannelVolumeDialog(); });
+    elements.editAutoPartButton?.addEventListener("click", () => { closeEditMenu(); openAutoPartDialog(); });
     elements.fileExportButton.addEventListener("click", () => { closeFileMenu(); exportCurrentContextAsMml(); });
     elements.midiExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsMidi(); });
     elements.audioExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsAudioOgg(); });
@@ -28211,11 +29553,6 @@
       mmlExportSelectionQueue = [];
       updateMmlExportDialogState();
     });
-    elements.mmlExportSplitLimitInput?.addEventListener("change", () => {
-      mmlExportSplitMaxChars = normalizeMmlExportSplitMaxChars(elements.mmlExportSplitLimitInput.value);
-      elements.mmlExportSplitLimitInput.value = String(mmlExportSplitMaxChars);
-      updateMmlExportDialogState();
-    });
     elements.mmlExportCopyAllButton?.addEventListener("click", applyMmlExportSelection);
     elements.mmlExportBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.mmlExportBackdrop) closeMmlExportDialog();
@@ -28301,6 +29638,7 @@
     elements.jumpStartButton.addEventListener("click", moveToTimelineStart);
     elements.playButton.addEventListener("click", togglePlayback);
     elements.jumpEndButton.addEventListener("click", moveToTimelineEnd);
+    elements.loopPlaybackButton?.addEventListener("click", () => setPlaybackLoopEnabled(!state.playbackLoopEnabled));
 
     elements.volumeButton?.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -28930,8 +30268,26 @@
     elements.tempoSimplifyBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.tempoSimplifyBackdrop) closeTempoSimplifyDialog();
     });
-    elements.measureSpaceInsertButton?.addEventListener("click", () => openTimeEditDialog({ preferredAction: "insert" }));
-    elements.measureSpaceDeleteButton?.addEventListener("click", () => openTimeEditDialog({ preferredAction: "delete" }));
+    elements.autoPartCancelButton?.addEventListener("click", () => closeAutoPartDialog());
+    elements.autoPartApplyButton?.addEventListener("click", applyAutoPartPlan);
+    elements.measureEditModeTabs?.addEventListener("click", (event) => {
+      const button = event.target.closest?.("[data-measure-edit-mode]");
+      if (button) setMeasureEditMode(button.dataset.measureEditMode);
+    });
+    elements.measureEditDuplicateCountInput?.addEventListener("input", updateMeasureEditWorkspace);
+    elements.measureEditDuplicateCountInput?.addEventListener("change", updateMeasureEditWorkspace);
+    elements.measureEditCancelButton?.addEventListener("click", () => closeMeasureEditWorkspace());
+    elements.measureEditApplyButton?.addEventListener("click", applyMeasureEditWorkspace);
+    for (const input of [elements.autoPartCharsInput, elements.autoPartSearchRangeInput]) {
+      input?.addEventListener("input", invalidateAutoPartSummary);
+      input?.addEventListener("change", updateAutoPartSummary);
+      input?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          input.blur();
+        }
+      });
+    }
     elements.timeEditCloseButton?.addEventListener("click", closeTimeEditDialog);
     elements.timeEditCancelButton?.addEventListener("click", closeTimeEditDialog);
     elements.timeEditInsertButton?.addEventListener("click", () => applyTimeEdit("insert"));
@@ -29048,6 +30404,7 @@
           closeChannelShiftDialog();
           closeTempoEditor();
           closeTempoSimplifyDialog();
+          closeAutoPartDialog();
           closeTimeEditDialog();
         }
         return;
@@ -29117,6 +30474,7 @@
         closeChannelShiftDialog();
         closeTempoEditor();
         closeTempoSimplifyDialog();
+        closeAutoPartDialog();
         closeTimeEditDialog();
         if (isChannelDeleteModeActive()) cancelChannelDeleteMode();
       }

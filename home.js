@@ -147,7 +147,7 @@
           <span class="product-icon" aria-hidden="true">${icon}</span>
           <span class="product-kind">${kind}</span>
         </div>
-        <h2 class="product-name">${name}${id === 'editor' ? '<span class="alpha-badge">alpha</span>' : ''}</h2>
+        <h2 class="product-name">${name}${id === 'editor' ? '<span class="beta-badge">Beta</span>' : ''}</h2>
         <p class="product-description">${description}</p>
         <span class="product-open">${text.open}</span>`;
       grid.append(link);

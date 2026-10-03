@@ -7881,6 +7881,7 @@ body.merge-mode-active button { opacity: .42; }
 body.merge-mode-active #playButton,
 body.merge-mode-active #jumpStartButton,
 body.merge-mode-active #jumpEndButton,
+body.merge-mode-active #loopPlaybackButton,
 body.merge-mode-active #volumeButton,
 body.merge-mode-active #playbackRateButton,
 body.merge-mode-active #volumeMenu button,
@@ -12669,3 +12670,982 @@ body [contenteditable="plaintext-only"] {
   z-index: 10000;
 }
 .item-tree-drop-indicator[hidden] { display: none !important; }
+
+/* 2026-10-03: automatic part setup + playback range transport guides. */
+.auto-part-dialog {
+  width: min(430px, 100%);
+}
+.auto-part-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 14px 16px 8px;
+}
+.auto-part-field {
+  min-width: 0;
+  margin: 0;
+}
+.auto-part-field input {
+  min-width: 0;
+  width: 100%;
+}
+.auto-part-summary {
+  margin: 2px 16px 4px;
+  padding: 9px 11px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--control-bg) 82%, transparent);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+}
+.auto-part-actions {
+  grid-template-columns: 1fr 1fr auto auto;
+}
+.playback-range-guide {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: 0;
+  pointer-events: none;
+  opacity: .98;
+  will-change: transform;
+}
+.playback-range-guide-start { background: repeating-linear-gradient(to bottom, #55d4ff 0 10px, transparent 10px 16px); }
+.playback-range-guide-end { background: repeating-linear-gradient(to bottom, #c99cff 0 10px, transparent 10px 16px); }
+:root[data-theme="light"] .playback-range-guide-start { background: repeating-linear-gradient(to bottom, #087fb8 0 10px, transparent 10px 16px); }
+:root[data-theme="light"] .playback-range-guide-end { background: repeating-linear-gradient(to bottom, #7d43c7 0 10px, transparent 10px 16px); }
+.transport-control-group .transport-loop-button {
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+.transport-loop-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-1.5px);
+}
+.transport-control-group .transport-loop-button.active,
+.transport-control-group .transport-loop-button[aria-pressed="true"] {
+  background: color-mix(in srgb, #ee9900 30%, var(--control-bg));
+  color: #ee9900;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ee9900 68%, transparent);
+}
+@media (max-width: 560px) {
+  .auto-part-fields { grid-template-columns: 1fr; gap: 7px; }
+}
+
+/* Final transport loop emphasis/alignment: keep the loop state unmistakably orange
+   even when shared topbar button rules load after the editor controls. */
+#loopPlaybackButton .transport-loop-glyph {
+  transform: translateY(-1.5px) !important;
+}
+#loopPlaybackButton.active,
+#loopPlaybackButton[aria-pressed="true"] {
+  background: color-mix(in srgb, #ee9900 30%, var(--control-bg)) !important;
+  color: #ee9900 !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ee9900 68%, transparent) !important;
+}
+
+/* 2026-10-03: inline auto-part preview workspace + playback polish. */
+#channelPanel.auto-part-preview-active {
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+#channelPanel.auto-part-preview-active > :not(#autoPartPanel) {
+  display: none !important;
+}
+.auto-part-inline-panel {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 12px 12px;
+  overflow: auto;
+  background: var(--panel);
+}
+.auto-part-inline-panel[hidden] { display: none !important; }
+.auto-part-inline-header {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.auto-part-inline-header strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+.auto-part-inline-header span,
+.auto-part-inline-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.auto-part-inline-fields {
+  display: grid;
+  gap: 9px;
+}
+.auto-part-inline-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(104px, 44%);
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+}
+.auto-part-inline-input {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+}
+.auto-part-inline-input input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 7px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text);
+  font: inherit;
+}
+.auto-part-inline-input strong {
+  color: var(--muted);
+  font-size: 10px;
+}
+.auto-part-inline-summary {
+  margin: 0 !important;
+  flex: 0 0 auto;
+}
+.auto-part-inline-actions {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.auto-part-inline-actions > button {
+  min-height: 34px;
+  font-weight: 850;
+}
+.auto-part-inline-actions #autoPartApplyButton:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 20%, var(--control-bg));
+}
+.auto-part-preview-guide {
+  --auto-part-preview-color: #ffc45c;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-left: 2px dashed var(--auto-part-preview-color);
+  opacity: .96;
+  pointer-events: none;
+  will-change: transform;
+}
+:root[data-theme="light"] .auto-part-preview-guide {
+  --auto-part-preview-color: #f08a00;
+}
+.auto-part-preview-guide-label {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1.5px dashed var(--auto-part-preview-color);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--auto-part-preview-color) 28%, var(--panel));
+  color: var(--text);
+  font: 850 10px/1 sans-serif;
+  white-space: nowrap;
+}
+
+/* Loop uses the same active treatment as the red stop button: solid state color
+   with a white glyph. Optical centering compensates for the ↻ glyph baseline. */
+#loopPlaybackButton {
+  display: inline-grid !important;
+  place-items: center !important;
+}
+#loopPlaybackButton .transport-loop-glyph {
+  display: grid !important;
+  place-items: center !important;
+  width: 18px;
+  height: 18px;
+  line-height: 18px !important;
+  color: inherit;
+  transform: translateY(-2px) !important;
+}
+#loopPlaybackButton.active,
+#loopPlaybackButton[aria-pressed="true"] {
+  border-color: #ee9900 !important;
+  background: #ee9900 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+#loopPlaybackButton.active:hover,
+#loopPlaybackButton[aria-pressed="true"]:hover {
+  border-color: #ee9900 !important;
+  background: #ee9900 !important;
+  color: #fff !important;
+}
+
+/* A playing transport button is the Stop button. Hover must not visually turn it
+   back into an ordinary control. */
+#playButton.is-playing:hover,
+#playButton.is-playing:focus-visible {
+  border-color: var(--danger) !important;
+  background: var(--danger) !important;
+  color: #fff !important;
+}
+#playButton.is-playing:hover .shared-transport-icon,
+#playButton.is-playing:focus-visible .shared-transport-icon {
+  filter: invert(1) !important;
+}
+
+
+/* 2026-10-03: use the same long-dash rhythm as playback-range guides for parts. */
+.timeline-part-guide {
+  width: 2px !important;
+  border-left: 0 !important;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--timeline-part-line-color, #ffc45c) 0 10px,
+    transparent 10px 16px
+  ) !important;
+}
+:root[data-theme="light"] .timeline-part-guide {
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--timeline-part-line-color, #ff9d00) 0 10px,
+    transparent 10px 16px
+  ) !important;
+}
+.auto-part-preview-guide {
+  width: 2px !important;
+  border-left: 0 !important;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--auto-part-preview-color) 0 10px,
+    transparent 10px 16px
+  ) !important;
+}
+
+
+/* 2026-10-03: inline measure editing workspace. */
+#channelPanel.measure-edit-preview-active {
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+#channelPanel.measure-edit-preview-active > :not(#measureEditPanel) {
+  display: none !important;
+}
+.measure-edit-inline-panel {
+  min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column;
+  gap: 10px; padding: 14px 12px 12px; overflow: hidden; background: var(--panel);
+}
+.measure-edit-inline-panel[hidden] { display: none !important; }
+.measure-edit-inline-header { display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding-bottom:9px; border-bottom:1px solid var(--line-soft); }
+.measure-edit-inline-header strong { color:var(--text); font-size:14px; font-weight:900; }
+.measure-edit-inline-header span { color:var(--muted); font-size:10px; }
+.measure-edit-mode-tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
+.measure-edit-mode-tabs button { min-height:31px; border:1px solid var(--control-border); border-radius:6px; background:var(--control-bg); color:var(--text); font-weight:850; }
+.measure-edit-mode-tabs button.active { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 22%,var(--control-bg)); }
+.measure-edit-mode-tabs button[data-measure-edit-mode="delete"].active { border-color:var(--danger); background:color-mix(in srgb,var(--danger) 18%,var(--control-bg)); color:var(--danger); }
+.measure-edit-options { display:grid; gap:7px; }
+.measure-edit-field { display:grid; grid-template-columns:minmax(0,1fr) minmax(108px,45%); align-items:center; gap:8px; color:var(--text); font-size:11px; font-weight:800; }
+.measure-edit-field input { width:100%; min-width:0; height:30px; box-sizing:border-box; border:1px solid var(--control-border); border-radius:6px; background:var(--control-bg); color:var(--text); padding:0 7px; font:inherit; }
+.measure-edit-number-with-unit { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:5px; }
+.measure-edit-number-with-unit small { color:var(--muted); font-size:10px; white-space:nowrap; }
+.measure-edit-help { margin:0; color:var(--muted); font-size:10px; line-height:1.45; }
+.measure-edit-range-summary { display:grid; gap:7px; min-height:72px; padding:9px; border:1px solid var(--line-soft); border-radius:8px; background:color-mix(in srgb,var(--control-bg) 72%,var(--panel)); }
+.measure-edit-range-title { color:var(--muted); font-size:10px; font-weight:850; letter-spacing:.01em; }
+.measure-edit-range-metrics { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,.8fr) minmax(0,1fr); gap:6px; }
+.measure-edit-range-metric { min-width:0; display:grid; gap:2px; align-content:center; padding:6px 7px; border-radius:6px; background:color-mix(in srgb,var(--panel) 72%,var(--control-bg)); text-align:center; }
+.measure-edit-range-metric strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-size:15px; line-height:1.15; font-weight:900; font-variant-numeric:tabular-nums; }
+.measure-edit-range-metric span { color:var(--muted); font-size:9px; line-height:1.1; font-weight:800; }
+.measure-edit-range-empty { min-height:50px; display:grid; place-items:center; color:var(--muted); font-size:11px; font-weight:800; text-align:center; }
+.measure-edit-summary { min-height:18px; color:var(--muted); font-size:10px; line-height:1.5; }
+.measure-edit-scope-title { color:var(--text); font-size:11px; font-weight:900; padding-top:4px; border-top:1px solid var(--line-soft); }
+.measure-edit-scope-list { flex:1 1 auto; min-height:0; max-height:none; overflow:auto; display:flex; flex-direction:column; gap:2px; padding:2px; border:1px solid var(--line-soft); border-radius:7px; background:color-mix(in srgb,var(--panel) 82%,var(--control-bg)); }
+.measure-edit-scope-row { --measure-scope-color:var(--accent); display:grid; grid-template-columns:18px minmax(0,1fr); align-items:center; gap:5px; min-height:30px; padding:2px 7px; border-radius:5px; border-left:4px solid var(--measure-scope-color); color:var(--text); font-size:11px; cursor:pointer; background:color-mix(in srgb,var(--measure-scope-color) 8%,transparent); }
+.measure-edit-scope-row:hover { background:color-mix(in srgb,var(--measure-scope-color) 16%,var(--hover-bg)); }
+.measure-edit-scope-row:has(input:checked) { background:color-mix(in srgb,var(--measure-scope-color) 23%,var(--control-bg)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--measure-scope-color) 50%,transparent); }
+.measure-edit-scope-row.group { font-weight:850; }
+.measure-edit-scope-row.channel { margin-left:14px; }
+.measure-edit-scope-row input { margin:0; accent-color:var(--measure-scope-color); }
+.measure-edit-inline-actions { margin-top:auto; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.measure-edit-inline-actions button { min-height:34px; font-weight:850; }
+#measureEditApplyButton:not(:disabled) { border-color:color-mix(in srgb,var(--accent) 70%,var(--control-border)); background:color-mix(in srgb,var(--accent) 20%,var(--control-bg)); }
+.measure-edit-preview-band { position:absolute; pointer-events:none; box-sizing:border-box; top:0; height:0; opacity:.92; border-left:2px solid currentColor; border-right:2px solid currentColor; background:color-mix(in srgb,currentColor 13%,transparent); will-change:transform,width; }
+.measure-edit-preview-band-add { color:#52d273; }
+.measure-edit-preview-band-duplicate { color:#63b7ff; }
+.measure-edit-preview-band-delete { color:#ff6b70; background:color-mix(in srgb,#ff6b70 15%,transparent); }
+.measure-edit-preview-band-destination { color:#8bd6ff; background:repeating-linear-gradient(135deg,color-mix(in srgb,#63b7ff 18%,transparent) 0 7px,transparent 7px 13px); }
+.measure-edit-preview-label { position:absolute; left:4px; top:3px; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:2px 5px; border-radius:4px; background:color-mix(in srgb,var(--panel) 86%,currentColor); color:var(--text); font:800 10px/1.3 sans-serif; }
+
+/* 2026-10-03: compact measure summary, two-column MML export, and focused inline edit workspaces. */
+.measure-edit-range-summary {
+  display: block;
+  min-height: 48px;
+  padding: 7px 2px 9px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.measure-edit-range-line {
+  display: grid;
+  gap: 3px;
+  align-content: center;
+}
+.measure-edit-range-label {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+.measure-edit-range-value {
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.measure-edit-range-empty {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mml-export-dialog {
+  width: min(880px, calc(100vw - 24px));
+  max-height: min(680px, calc(100dvh - 24px));
+}
+.mml-export-workspace {
+  min-height: 330px;
+  max-height: min(530px, 68dvh);
+  display: grid;
+  grid-template-columns: minmax(260px, .9fr) minmax(340px, 1.25fr);
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+.mml-export-channel-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel) 92%, var(--control-bg));
+}
+.mml-export-selection-actions {
+  flex: 0 0 auto;
+  padding: 9px 10px 5px;
+}
+.mml-export-channel-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  padding: 4px 10px 10px;
+}
+.mml-export-copy-panel,
+.mml-export-dialog:has(.mml-export-copy-panel:not([hidden])) .mml-export-copy-panel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 12px 12px;
+  border-top: 0;
+  background: color-mix(in srgb, var(--panel) 82%, var(--menu-bg));
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.mml-export-copy-panel-title {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: -.015em;
+}
+.mml-export-copy-row,
+.mml-export-split-block {
+  flex: 0 0 auto;
+}
+.mml-export-split-block[hidden] { display: none !important; }
+.mml-export-split-buttons {
+  max-height: none;
+  overflow: visible;
+}
+.mml-export-page-copy-row {
+  min-height: 40px;
+  padding: 7px 0;
+}
+.mml-export-page-copy-meta strong { font-size: 11px; }
+.mml-export-page-copy-meta small { font-size: 9.5px; }
+@media (max-width: 720px) {
+  .mml-export-dialog { width: min(560px, calc(100vw - 16px)); }
+  .mml-export-workspace {
+    max-height: calc(100dvh - 155px);
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(180px, .9fr) minmax(190px, 1.1fr);
+  }
+  .mml-export-channel-pane { border-right: 0; border-bottom: 1px solid var(--line-soft); }
+}
+
+/* Keep transform controls visually grouped and easy to scan without changing their behavior. */
+.note-edit-mode-panel {
+  padding: 9px 9px 11px;
+}
+.note-edit-mode-header {
+  min-height: 36px;
+  margin-bottom: 8px;
+  padding: 6px 7px 6px 11px;
+  border-radius: 7px;
+  box-shadow: none;
+}
+.note-edit-mode-header::before { inset-block: 5px; width: 2px; box-shadow: none; }
+.note-edit-mode-header strong { font-size: 13px; }
+.note-edit-mode-options {
+  gap: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--control-bg) 58%, var(--panel));
+}
+.note-edit-mode-field {
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 37px;
+  padding: 5px 0;
+  font-size: 10px;
+}
+.note-edit-mode-field + .note-edit-mode-field { border-top: 1px solid var(--line-soft); }
+.note-edit-mode-field > span:first-child { color: var(--muted); line-height: 1.25; }
+.note-edit-mode-inline { gap: 6px; }
+.note-edit-mode-field > select,
+.note-edit-mode-field > input:not([type="checkbox"]),
+.note-edit-mode-inline > select,
+.note-edit-mode-inline > input:not([type="checkbox"]) {
+  height: 29px;
+  padding-inline: 6px;
+}
+.note-edit-mode-help {
+  margin-top: 8px;
+  padding: 7px 2px 0;
+  font-size: 9.5px;
+}
+.note-edit-mode-actions {
+  position: sticky;
+  bottom: -11px;
+  z-index: 2;
+  margin-top: 8px;
+  padding: 8px 0 2px;
+  background: linear-gradient(to bottom, transparent, var(--panel) 24%);
+}
+
+/* Measure edit follows the same focused-workspace language as note transforms. */
+body.measure-edit-mode-active .editor-topbar button,
+body.measure-edit-mode-active .editor-topbar input,
+body.measure-edit-mode-active .editor-topbar select,
+body.measure-edit-mode-active .editor-menu-bar button,
+body.measure-edit-mode-active .playback-controls button,
+body.measure-edit-mode-active .playback-controls input,
+body.measure-edit-mode-active .playback-controls select,
+body.measure-edit-mode-active .edit-tool-controls button,
+body.measure-edit-mode-active .edit-tool-controls input,
+body.measure-edit-mode-active .edit-tool-controls select {
+  pointer-events: none !important;
+  opacity: .42 !important;
+}
+body.measure-edit-mode-active #measureEditPanel button,
+body.measure-edit-mode-active #measureEditPanel input,
+body.measure-edit-mode-active #measureEditPanel select,
+body.measure-edit-mode-active #measureEditPanel label,
+body.measure-edit-mode-active #timelineCanvas,
+body.measure-edit-mode-active #rollCanvas,
+body.measure-edit-mode-active #overviewTimelineCanvas,
+body.measure-edit-mode-active #horizontalScrollBar,
+body.measure-edit-mode-active #verticalScrollBar {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+body.measure-edit-mode-active #tempoLane,
+body.measure-edit-mode-active #audioLaneViewport,
+body.measure-edit-mode-active #editToolControls {
+  pointer-events: none !important;
+  opacity: .45;
+}
+
+
+/* 2026-10-03: spacious transform + measure edit workspaces (timeline-part export pass). */
+/*
+   These inline editors intentionally avoid nested cards. The top of the sidebar is
+   reserved for the editor title/status, while the lower area is used as a roomy,
+   vertical settings workspace. Multi-control rows stack vertically instead of
+   squeezing select / checkbox / select into one narrow horizontal line.
+*/
+.note-edit-mode-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 14px 12px;
+  overflow-y: auto;
+  background: var(--panel);
+}
+.note-edit-mode-header {
+  flex: 0 0 auto;
+  min-height: 78px;
+  margin: 0;
+  padding: 17px 2px 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.note-edit-mode-header::before { display: none; }
+.note-edit-mode-header strong {
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  text-shadow: none;
+}
+.note-edit-mode-selection {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
+  font-weight: 750;
+  white-space: normal;
+}
+.note-edit-mode-options {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 18px;
+  padding: 17px 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.note-edit-mode-options[hidden] { display: none !important; }
+.note-edit-mode-field {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+  padding: 0;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+}
+.note-edit-mode-field + .note-edit-mode-field { border-top: 0; }
+.note-edit-mode-field > span:first-child {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.25;
+  font-weight: 850;
+}
+.note-edit-mode-inline {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+}
+.note-edit-mode-inline > * { min-width: 0; width: 100%; }
+.note-edit-mode-field > select,
+.note-edit-mode-field > input:not([type="checkbox"]),
+.note-edit-mode-inline > select,
+.note-edit-mode-inline > input:not([type="checkbox"]) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding-inline: 9px;
+  border-radius: 6px;
+}
+.note-edit-mode-check {
+  box-sizing: border-box;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 3px;
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 750;
+}
+.note-edit-mode-check input { flex: 0 0 auto; }
+.note-edit-mode-help {
+  flex: 0 0 auto;
+  margin: 10px 0 0;
+  padding: 12px 1px 0;
+  border-top: 1px solid var(--line-soft);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.note-edit-mode-actions {
+  position: sticky;
+  bottom: -12px;
+  z-index: 2;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: auto;
+  padding: 14px 0 3px;
+  background: linear-gradient(to bottom, transparent, var(--panel) 28%);
+}
+.note-edit-mode-actions button { min-height: 36px; }
+
+/* Measure editor mirrors the same title-above / settings-below composition. */
+.measure-edit-inline-panel {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 14px 12px;
+  overflow: auto;
+  background: var(--panel);
+}
+.measure-edit-inline-header {
+  flex: 0 0 auto;
+  min-height: 78px;
+  padding: 17px 2px 13px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.measure-edit-inline-header strong {
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+}
+.measure-edit-inline-header span {
+  padding-bottom: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.measure-edit-mode-tabs {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 16px;
+}
+.measure-edit-mode-tabs button {
+  min-height: 36px;
+  border-radius: 6px;
+}
+.measure-edit-options {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+.measure-edit-options[hidden] { display: none !important; }
+.measure-edit-field {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+}
+.measure-edit-field > span:first-child {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.25;
+  font-weight: 850;
+}
+.measure-edit-field input {
+  height: 36px;
+  padding: 0 9px;
+}
+.measure-edit-number-with-unit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.measure-edit-range-summary {
+  flex: 0 0 auto;
+  display: block;
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 10px 1px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+.measure-edit-scope-list {
+  flex: 1 1 auto;
+  min-height: 90px;
+  max-height: none;
+  margin-top: 10px;
+  padding: 5px 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.measure-edit-scope-row {
+  min-height: 32px;
+  border-radius: 4px;
+  background: transparent;
+}
+.measure-edit-scope-row:hover {
+  background: color-mix(in srgb, var(--measure-scope-color) 10%, var(--hover-bg));
+}
+.measure-edit-scope-row:has(input:checked) {
+  background: color-mix(in srgb, var(--measure-scope-color) 14%, var(--control-bg));
+  box-shadow: none;
+}
+.measure-edit-inline-actions {
+  position: sticky;
+  bottom: -12px;
+  z-index: 2;
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding: 14px 0 3px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: linear-gradient(to bottom, transparent, var(--panel) 28%);
+}
+.measure-edit-inline-actions button { min-height: 36px; }
+
+@media (max-width: 760px) {
+  .note-edit-mode-panel,
+  .measure-edit-inline-panel { padding-inline: 11px; }
+  .note-edit-mode-header,
+  .measure-edit-inline-header { min-height: 70px; }
+}
+
+/* 2026-10-04: edit-mode title uses the original Channel/History/Shortcuts tab row. */
+.edit-mode-titlebar {
+  box-sizing: border-box;
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  width: 100%;
+  height: var(--sidebar-tab-height);
+  min-height: var(--sidebar-tab-height);
+  max-height: var(--sidebar-tab-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--control-border);
+  background: color-mix(in srgb, var(--panel-2) 78%, var(--panel));
+  z-index: 20;
+}
+.edit-mode-titlebar[hidden] { display: none !important; }
+.edit-mode-titlebar strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+.edit-mode-titlebar span {
+  min-width: 0;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 9.5px;
+  line-height: 1;
+  font-weight: 750;
+  text-align: right;
+}
+
+body.note-edit-mode-active .side-panel-tabs,
+body.measure-edit-mode-active .side-panel-tabs {
+  display: none !important;
+}
+
+/* The title/meta moved to the existing top tab row; do not spend settings space on a duplicate header. */
+body.note-edit-mode-active .note-edit-mode-header,
+body.measure-edit-mode-active .measure-edit-inline-header {
+  display: none !important;
+}
+body.note-edit-mode-active .note-edit-mode-options {
+  padding-top: 15px;
+}
+body.measure-edit-mode-active .measure-edit-mode-tabs {
+  margin-top: 15px;
+}
+
+/* 2026-10-04: compact grouped measure modes + horizontal transform control rows. */
+/* Measure edit: make Add / Duplicate / Delete read as one segmented control. */
+.measure-edit-mode-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: var(--control-bg);
+}
+.measure-edit-mode-tabs button {
+  min-height: 34px;
+  margin: 0;
+  border: 0;
+  border-right: 1px solid var(--control-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.measure-edit-mode-tabs button:last-child { border-right: 0; }
+.measure-edit-mode-tabs button.active {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 72%, transparent);
+}
+.measure-edit-mode-tabs button[data-measure-edit-mode="delete"].active {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 72%, transparent);
+}
+
+/* Measure edit: halve the radio-to-label spacing in the scope rows. */
+.measure-edit-scope-row {
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: 2.5px;
+}
+
+/* Transform editors: each setting keeps its title above, but related controls share one row. */
+.note-edit-mode-options {
+  gap: 13px;
+  padding-top: 14px;
+}
+.note-edit-mode-field {
+  gap: 6px;
+}
+.note-edit-mode-inline {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.note-edit-mode-inline > * {
+  min-width: 0;
+  width: auto;
+}
+.note-edit-mode-inline > select,
+.note-edit-mode-inline > input:not([type="checkbox"]) {
+  flex: 1 1 0;
+  width: 0;
+}
+.note-edit-mode-inline > .note-edit-mode-check {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: max-content;
+  min-height: 36px;
+  padding-inline: 2px;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+/* Three-control rows (start value / gradual toggle / end value) stay on one compact line. */
+#noteTrillStartDivisionSelect,
+#noteTrillEndDivisionSelect {
+  flex-basis: 64px;
+}
+
+/* Two related selects should divide the available width evenly. */
+#notePerformanceRangeModeSelect,
+#notePerformanceRangeSelect,
+#notePerformanceDynamicsSelect,
+#notePerformanceVolumeRangeSelect,
+#noteTrillDirectionSelect,
+#noteTrillIntervalSelect,
+#noteTrillDynamicsSelect,
+#noteTrillVolumeRangeSelect,
+#noteTrillStartNoteSelect,
+#noteArpeggioDynamicsSelect,
+#noteArpeggioVolumeRangeSelect {
+  min-width: 0;
+}
+
+@media (max-width: 360px) {
+  .note-edit-mode-inline { gap: 4px; }
+  .note-edit-mode-inline > .note-edit-mode-check {
+    min-width: 0;
+    white-space: normal;
+    font-size: 9.5px;
+  }
+}
+
+/* 2026-10-04: tighten empty Add/Delete measure modes and match Add with the green insert action. */
+.measure-edit-options:empty,
+#measureEditAddOptions,
+#measureEditDeleteOptions {
+  display: none !important;
+}
+.measure-edit-mode-tabs:has(button[data-measure-edit-mode="add"].active) ~ .measure-edit-range-summary,
+.measure-edit-mode-tabs:has(button[data-measure-edit-mode="delete"].active) ~ .measure-edit-range-summary {
+  margin-top: 7px;
+}
+.measure-edit-mode-tabs button[data-measure-edit-mode="add"].active {
+  border-color: color-mix(in srgb, #22c55e 72%, var(--control-border));
+  background: color-mix(in srgb, #22c55e 22%, var(--control-bg));
+  color: color-mix(in srgb, #a7f3c0 86%, var(--text));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #22c55e 72%, transparent);
+}
+.measure-edit-mode-tabs button[data-measure-edit-mode="add"].active:hover {
+  background: color-mix(in srgb, #22c55e 34%, var(--control-hover));
+}
+:root[data-theme="light"] .measure-edit-mode-tabs button[data-measure-edit-mode="add"].active {
+  color: #15783a;
+  background: color-mix(in srgb, #22c55e 15%, #ffffff);
+}

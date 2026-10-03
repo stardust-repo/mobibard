@@ -2,7 +2,7 @@
 
 마지막 갱신: 2026-09-10 KST
 
-출시 검증: v5.3 alpha. Editor 편집 기능은 유지하며 공용 포맷 계층에 VGM/VGZ, GYM, S98 입력을 추가했습니다. 정규화 기준은 현재 배포 소스와 `plugins/formats/NORMALIZATION_RULES.md`를 따릅니다.
+출시 검증: v5.3 Beta. Editor 편집 기능은 유지하며 공용 포맷 계층에 VGM/VGZ, GYM, S98 입력을 추가했습니다. 정규화 기준은 현재 배포 소스와 `plugins/formats/NORMALIZATION_RULES.md`를 따릅니다.
 
 ## 목적
 
