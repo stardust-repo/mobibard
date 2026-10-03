@@ -7297,7 +7297,7 @@ a[class*="button"]:hover {
   align-items: center;
   gap: 8px;
 }
-.channel-mml-clipboard-actions button:last-child {
+.channel-mml-clipboard-actions #channelMmlPasteButton {
   border-color: var(--control-border);
   background: var(--control-bg);
   font-weight: inherit;
@@ -10370,6 +10370,9 @@ body.channel-delete-mode-active .channel-tree-toolbar { grid-template-columns: m
 .channel-tabs.drop-ungrouped-target {
   box-shadow: inset 0 -3px 0 color-mix(in srgb, #22c55e 72%, transparent);
 }
+.channel-tabs.drop-ungrouped-before-target {
+  box-shadow: inset 0 3px 0 color-mix(in srgb, #22c55e 72%, transparent);
+}
 .channel-tree-channel-item.dragging {
   opacity: .92;
   pointer-events: none;
@@ -11667,7 +11670,7 @@ body.channel-delete-mode-active #confirmDialog button {
   right: 4px;
   height: 2px;
   border-radius: 999px;
-  background: var(--focus);
+  background: #22c55e;
   pointer-events: none;
   z-index: 8;
 }
@@ -11877,3 +11880,792 @@ body.channel-delete-mode-active #channelDeleteModeApplyButton {
   left: -6px !important;
   width: 1px !important;
 }
+
+/* 2026-10-02: timeline parts + per-part MML view. */
+.channel-mml-part-view-option {
+  flex: 0 0 auto;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--control-bg));
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.channel-mml-part-view-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.channel-mml-part-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 14px 7px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.channel-mml-part-tabs[hidden] { display: none !important; }
+.channel-mml-part-tab {
+  flex: 0 0 auto;
+  min-width: 34px;
+  min-height: 27px;
+  padding: 3px 9px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  cursor: pointer;
+}
+.channel-mml-part-tab:hover,
+.channel-mml-part-tab:focus-visible {
+  background: var(--control-hover);
+  color: var(--text);
+}
+.channel-mml-part-tab[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 20%, var(--control-bg));
+  color: var(--text);
+}
+.timeline-part-guides {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 35;
+}
+.timeline-part-guide {
+  --timeline-part-color: #c7a1ff;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-left: 1.5px dashed var(--timeline-part-color);
+  opacity: .94;
+  pointer-events: none;
+  will-change: transform;
+}
+:root[data-theme="light"] .timeline-part-guide { --timeline-part-color: #7246b6; }
+.timeline-part-guide-label {
+  position: absolute;
+  left: 6px;
+  top: 0;
+  box-sizing: border-box;
+  min-width: 25px;
+  height: 15px;
+  padding: 0 5px;
+  border: 1px solid var(--timeline-part-color);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--timeline-part-color) 18%, var(--panel));
+  color: var(--timeline-part-color);
+  font: 800 10px/13px sans-serif;
+  text-align: center;
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .channel-mml-actions { align-items: stretch; }
+  .channel-mml-clipboard-actions { flex-wrap: wrap; }
+  .channel-mml-part-view-option { min-height: 30px; }
+}
+
+/* 2026-10-02: MML popup option order/status row + compact timeline-part pagination. */
+.channel-mml-options {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.channel-mml-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.channel-mml-option-row .channel-mml-part-view-option {
+  min-height: 32px;
+  padding: 4px 8px;
+}
+.channel-mml-status {
+  width: 100%;
+  min-height: 16px;
+  flex: 0 0 auto;
+}
+.channel-mml-part-tabs {
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
+}
+.channel-mml-part-gap {
+  flex: 0 0 auto;
+  min-width: 14px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 27px;
+  text-align: center;
+  user-select: none;
+}
+@media (max-width: 560px) {
+  .channel-mml-option-row { gap: 6px; }
+  .channel-mml-option-row .channel-mml-tempo-option {
+    min-height: 30px;
+    padding-inline: 7px;
+  }
+  .channel-mml-part-tabs { gap: 2px; padding-inline: 8px; }
+  .channel-mml-part-tab { min-width: 29px; padding-inline: 6px; }
+  .channel-mml-part-gap { min-width: 10px; }
+}
+
+
+/* 2026-10-02: refine MML part pagination and timeline-part marker interaction. */
+.channel-mml-options {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.channel-mml-option-row {
+  width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.channel-mml-option-row .channel-mml-status {
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 220px;
+  margin-left: 2px;
+  white-space: normal;
+}
+.channel-mml-part-tabs {
+  min-height: 28px;
+  padding: 0 14px 3px;
+  gap: 4px;
+}
+.channel-mml-part-tab {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 2px 5px;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+.channel-mml-part-tab:hover,
+.channel-mml-part-tab:focus-visible {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text);
+  text-decoration: none;
+}
+.channel-mml-part-tab[aria-pressed="true"] {
+  border: 0 !important;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.channel-mml-actions {
+  padding-top: 5px;
+}
+.timeline-part-guide {
+  --timeline-part-color: #df3f86;
+  --timeline-part-label-bg: rgba(171, 35, 102, .78);
+  --timeline-part-label-text: #fff7fb;
+  border-left-width: 2px;
+  border-left-style: dashed;
+  border-left-color: var(--timeline-part-color);
+  opacity: 1;
+}
+:root[data-theme="light"] .timeline-part-guide {
+  --timeline-part-color: #c2185b;
+  --timeline-part-label-bg: rgba(239, 119, 170, .72);
+  --timeline-part-label-text: #5f1235;
+}
+.timeline-part-guide-label {
+  min-width: 18px;
+  height: 15px;
+  padding: 0 4px;
+  border: 1.5px solid var(--timeline-part-color);
+  border-radius: 3px;
+  background: var(--timeline-part-label-bg);
+  color: var(--timeline-part-label-text);
+  font: 850 10px/12px sans-serif;
+  box-shadow: none;
+  transform: none;
+}
+@media (max-width: 560px) {
+  .channel-mml-option-row .channel-mml-status { flex-basis: 160px; }
+  .channel-mml-part-tabs { min-height: 26px; padding-bottom: 2px; }
+  .channel-mml-part-tab { min-width: 22px; min-height: 22px; padding-inline: 4px; }
+  .channel-mml-actions { padding-top: 4px; }
+}
+
+/* 2026-10-03: restore boxed MML part paging; align/sharpen timeline-part marker. */
+.channel-mml-part-tab {
+  flex: 0 0 auto;
+  min-width: 34px;
+  min-height: 27px;
+  padding: 3px 9px;
+  border: 1px solid var(--control-border) !important;
+  border-radius: 6px;
+  background: var(--control-bg) !important;
+  box-shadow: none !important;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  text-decoration: none !important;
+}
+.channel-mml-part-tab:hover,
+.channel-mml-part-tab:focus-visible {
+  border: 1px solid var(--control-border) !important;
+  background: var(--control-hover) !important;
+  color: var(--text);
+  text-decoration: none !important;
+}
+.channel-mml-part-tab[aria-pressed="true"] {
+  border: 1px solid color-mix(in srgb, var(--accent) 72%, var(--control-border)) !important;
+  background: color-mix(in srgb, var(--accent) 20%, var(--control-bg)) !important;
+  color: var(--text);
+  font-weight: 850;
+  text-decoration: none !important;
+}
+.timeline-part-guide {
+  --timeline-part-color: #ff9d2e;
+  --timeline-part-label-bg: rgba(255,157,46,.78);
+  --timeline-part-label-text: #fffaf3;
+  border-left-width: 2px;
+  border-left-style: dashed;
+  border-left-color: var(--timeline-part-color);
+}
+:root[data-theme="light"] .timeline-part-guide {
+  --timeline-part-color: #e97900;
+  --timeline-part-label-bg: rgba(255,181,92,.82);
+  --timeline-part-label-text: #522400;
+}
+.timeline-part-guide-label {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1.5px solid var(--timeline-part-color);
+  border-radius: 3px;
+  background: var(--timeline-part-label-bg);
+  color: var(--timeline-part-label-text);
+  font: 850 10px/1 sans-serif;
+  box-shadow: none;
+}
+@media (max-width: 560px) {
+  .channel-mml-part-tab { min-width: 29px; min-height: 27px; padding-inline: 6px; }
+}
+
+
+/* 2026-10-03: two-level timeline context menu. */
+.context-menu .context-menu-item {
+  position: relative;
+}
+.context-menu .context-menu-item > button {
+  width: 100%;
+}
+.context-menu .context-submenu-arrow {
+  margin-left: 18px;
+  font-size: 17px;
+  line-height: 1;
+  opacity: .72;
+}
+.context-menu .context-submenu {
+  display: none;
+  position: absolute;
+  z-index: 2;
+  left: 100%;
+  top: -6px;
+  min-width: 210px;
+  max-width: calc(100vw - 12px);
+  padding: 6px;
+  border: 1px solid var(--menu-border);
+  border-radius: 10px;
+  background: var(--menu-bg);
+  box-shadow: 0 14px 38px var(--shadow);
+  backdrop-filter: blur(10px);
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
+}
+.context-menu .context-menu-item.submenu-open > .context-submenu {
+  display: block;
+}
+.context-menu .context-submenu.open-left {
+  left: auto;
+  right: 100%;
+}
+.context-menu .context-submenu > button,
+.context-menu .context-submenu > .context-menu-item > button {
+  min-width: 198px;
+}
+
+
+/* 2026-10-03: part-guide range/brightness, three-field selection summary, and unclipped timeline submenus. */
+.timeline-part-guide {
+  --timeline-part-line-color: #ffc45c;
+  border-left-color: var(--timeline-part-line-color) !important;
+}
+:root[data-theme="light"] .timeline-part-guide {
+  --timeline-part-line-color: #ff9d00;
+}
+.channel-inspector .compact-channel-summary {
+  gap: 6px !important;
+  font-size: 9px;
+}
+.channel-inspector .compact-channel-summary > span {
+  display: inline-flex !important;
+  align-items: baseline;
+  gap: 1px;
+}
+.channel-inspector .compact-channel-summary > span[hidden] {
+  display: none !important;
+}
+.context-menu.has-submenus {
+  overflow: visible !important;
+}
+.context-menu.has-submenus .context-submenu {
+  z-index: 1702;
+}
+
+/* 2026-10-03: horizontal 3-state controls inside second-level item menus. */
+.context-menu .context-submenu.context-submenu-segmented {
+  min-width: 210px;
+  padding: 6px;
+}
+.context-menu .context-segment-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+}
+.context-menu .context-segment-button {
+  min-width: 0 !important;
+  width: auto !important;
+  height: 31px;
+  padding: 0 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: none !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.context-menu .context-segment-button + .context-segment-button {
+  border-left: 1px solid var(--control-border) !important;
+}
+.context-menu .context-segment-button:hover:not(:disabled):not(.is-active) {
+  background: color-mix(in srgb, var(--text) 7%, var(--control-bg)) !important;
+  color: var(--text) !important;
+}
+.context-menu .context-segment-button.is-active {
+  background: color-mix(in srgb, var(--accent) 24%, var(--control-bg)) !important;
+  color: color-mix(in srgb, var(--accent) 72%, #ffffff) !important;
+}
+:root[data-theme="light"] .context-menu .context-segment-button.is-active {
+  background: color-mix(in srgb, var(--accent) 18%, #ffffff) !important;
+  color: color-mix(in srgb, var(--accent) 84%, #102033) !important;
+}
+
+
+/* 2026-10-03: item-add popover and plain context submenu choices. */
+.channel-item-add-menu {
+  position: fixed !important;
+  top: auto;
+  left: auto;
+  right: auto;
+  z-index: 1705;
+  min-width: 148px;
+  max-height: none;
+  overflow: visible;
+}
+.channel-item-add-menu button > span:first-child {
+  width: 20px;
+  min-width: 20px;
+  display: inline-flex;
+  justify-content: center;
+  font-size: 15px;
+}
+.context-menu button.context-menu-option-active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.context-menu .context-menu-option-check {
+  margin-left: 16px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+}
+/* Group-add has moved into the unified + menu, so the channel toolbar has three actions. */
+.channel-tree-toolbar {
+  grid-template-columns: minmax(0, 1fr) repeat(3, 30px) !important;
+}
+body.channel-delete-mode-active .channel-tree-toolbar {
+  grid-template-columns: minmax(0, 1fr) 30px 30px !important;
+}
+
+
+/* 2026-10-03: distinguish audio rows with a bright, thick diagonal stripe pattern instead of an inline glyph. */
+.channel-tree-item.audio-source-item:not(.active) {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 44%, #ffffff 56%) 0 7px,
+      color-mix(in srgb, var(--channel-color) 14%, var(--control-bg)) 7px 14px
+    ) !important;
+}
+.channel-tree-item.audio-source-item:not(.active):hover {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 52%, #ffffff 48%) 0 7px,
+      color-mix(in srgb, var(--channel-color) 20%, var(--control-hover)) 7px 14px
+    ) !important;
+}
+.channel-tree-item.audio-source-item.active,
+.channel-tree-item.audio-source-item.active:hover {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 50%, #ffffff 50%) 0 7px,
+      color-mix(in srgb, var(--channel-selection-accent) 16%, var(--control-bg)) 7px 14px
+    ) !important;
+}
+:root[data-theme="light"] .channel-tree-item.audio-source-item:not(.active) {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 34%, #ffffff 66%) 0 7px,
+      color-mix(in srgb, var(--channel-color) 9%, #f3f6fa) 7px 14px
+    ) !important;
+}
+:root[data-theme="light"] .channel-tree-item.audio-source-item:not(.active):hover {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 42%, #ffffff 58%) 0 7px,
+      color-mix(in srgb, var(--channel-color) 14%, #edf2f7) 7px 14px
+    ) !important;
+}
+
+/* Light theme: Special Thanks star and title use the requested orange. */
+:root[data-theme="light"] .side-panel-special-tab,
+:root[data-theme="light"] .side-panel-special-tab:not(:disabled),
+:root[data-theme="light"] .side-panel-special-tab:hover:not(:disabled),
+:root[data-theme="light"] .side-panel-special-tab.active,
+:root[data-theme="light"] .side-panel-special-tab[aria-selected="true"],
+:root[data-theme="light"] .side-panel-special-tab.active:not(:disabled),
+:root[data-theme="light"] .side-panel-special-tab[aria-selected="true"]:not(:disabled),
+:root[data-theme="light"] .special-thanks-header h2,
+:root[data-theme="light"] .special-thanks-content h2 {
+  color: #EE9900 !important;
+}
+:root[data-theme="light"] .side-panel-special-tab.active,
+:root[data-theme="light"] .side-panel-special-tab[aria-selected="true"] {
+  box-shadow: inset 0 -3px 0 #EE9900 !important;
+}
+
+/* 2026-10-03: compact MML option spacing, denser audio hatching. */
+.channel-mml-option-row {
+  gap: 4px !important;
+}
+.channel-mml-options {
+  gap: 4px !important;
+}
+.channel-mml-editor {
+  padding-top: 6px !important;
+}
+@media (max-width: 560px) {
+  .channel-mml-option-row { gap: 3px !important; }
+  .channel-mml-options { gap: 3px !important; }
+  .channel-mml-editor { padding-top: 5px !important; }
+}
+
+/* Audio rows: tighter diagonal spacing with a smaller difference between the two bands. */
+.channel-tree-item.audio-source-item:not(.active) {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 38%, #ffffff 62%) 0 4px,
+      color-mix(in srgb, var(--channel-color) 32%, #ffffff 68%) 4px 8px
+    ) !important;
+}
+.channel-tree-item.audio-source-item:not(.active):hover {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 44%, #ffffff 56%) 0 4px,
+      color-mix(in srgb, var(--channel-color) 37%, #ffffff 63%) 4px 8px
+    ) !important;
+}
+.channel-tree-item.audio-source-item.active,
+.channel-tree-item.audio-source-item.active:hover {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 42%, #ffffff 58%) 0 4px,
+      color-mix(in srgb, var(--channel-color) 35%, #ffffff 65%) 4px 8px
+    ) !important;
+}
+:root[data-theme="light"] .channel-tree-item.audio-source-item:not(.active) {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 30%, #ffffff 70%) 0 4px,
+      color-mix(in srgb, var(--channel-color) 24%, #ffffff 76%) 4px 8px
+    ) !important;
+}
+:root[data-theme="light"] .channel-tree-item.audio-source-item:not(.active):hover {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 35%, #ffffff 65%) 0 4px,
+      color-mix(in srgb, var(--channel-color) 29%, #ffffff 71%) 4px 8px
+    ) !important;
+}
+
+/* 2026-10-03: final cleanup for the unified item-add popover. No icon column; keep labels aligned and menu width stable. */
+.channel-item-add-menu {
+  min-width: 132px !important;
+  width: max-content;
+  max-width: min(220px, calc(100vw - 12px));
+  padding: 6px !important;
+}
+.channel-item-add-menu button {
+  width: 100% !important;
+  min-width: 118px;
+  min-height: 36px;
+  padding: 0 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  text-align: left !important;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.channel-item-add-menu button::before {
+  content: none !important;
+  display: none !important;
+}
+.channel-item-add-menu button > span,
+.channel-item-add-menu button > span:first-child {
+  width: auto !important;
+  min-width: 0 !important;
+  display: block !important;
+  flex: 1 1 auto;
+  justify-content: initial !important;
+  font-size: inherit !important;
+  text-align: left !important;
+}
+
+/* 2026-10-03: dark-theme contrast fixes for audio rows and timeline part badge. */
+:root:not([data-theme="light"]) .channel-tree-item.audio-source-item:not(.active) {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 20%, #1b2430 80%) 0 4px,
+      color-mix(in srgb, var(--channel-color) 16%, #232e3a 84%) 4px 8px
+    ) !important;
+  color: var(--text) !important;
+}
+:root:not([data-theme="light"]) .channel-tree-item.audio-source-item:not(.active):hover {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 24%, #222d39 76%) 0 4px,
+      color-mix(in srgb, var(--channel-color) 20%, #2a3643 80%) 4px 8px
+    ) !important;
+  color: var(--text) !important;
+}
+:root:not([data-theme="light"]) .channel-tree-item.audio-source-item.active,
+:root:not([data-theme="light"]) .channel-tree-item.audio-source-item.active:hover {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--channel-color) 25%, #2a3542 75%) 0 4px,
+      color-mix(in srgb, var(--channel-color) 20%, #344151 80%) 4px 8px
+    ) !important;
+  color: #f8fafc !important;
+}
+:root:not([data-theme="light"]) .channel-tree-item.audio-source-item .channel-tree-label,
+:root:not([data-theme="light"]) .channel-tree-item.audio-source-item .channel-tab-main {
+  color: inherit !important;
+}
+
+/* Part marker: keep the orange guide, but use the same crisp white badge outline as tempo in dark theme. */
+:root:not([data-theme="light"]) .timeline-part-guide-label {
+  border-color: #f2fff8 !important;
+}
+
+/* Dark theme: audio timeline blocks use a dark base with light labels. */
+:root:not([data-theme="light"]) .audio-clip-main {
+  background: color-mix(in srgb, var(--audio-clip-color) 32%, #111827 68%) !important;
+  color: #f8fafc !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .86) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13) !important;
+}
+:root:not([data-theme="light"]) .audio-clip-main > span {
+  color: #f8fafc !important;
+}
+:root:not([data-theme="light"]) .audio-clip-main > small {
+  color: #dbe7f5 !important;
+}
+:root:not([data-theme="light"]) .audio-clip-block.active .audio-clip-main {
+  background: color-mix(in srgb, var(--audio-clip-color) 38%, #182230 62%) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .28),
+    0 0 0 1px rgba(0, 0, 0, .26) !important;
+}
+
+/* 2026-10-03: keep editor chrome/content non-selectable. Native text selection is
+   intentionally limited to real text-entry controls. */
+body,
+body * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+body input,
+body textarea,
+body [contenteditable="true"],
+body [contenteditable="plaintext-only"] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+/* 2026-10-03: clickable disabled context items show a reason toast. */
+.context-menu button.is-disabled {
+  cursor: default;
+  opacity: .45;
+}
+.context-menu button.is-disabled:hover {
+  background: transparent;
+}
+:root[data-theme="light"] .context-menu button.is-disabled {
+  opacity: .62;
+}
+:root[data-theme="light"] .context-menu button.is-disabled:not(.danger) {
+  color: #536173;
+}
+.context-menu .context-segment-button.is-disabled {
+  cursor: default;
+  opacity: .45;
+}
+.context-menu .context-segment-button.is-disabled:hover {
+  background: transparent !important;
+  color: var(--muted) !important;
+}
+
+
+/* 2026-10-03: mixed channel/audio drag parity. Keep the compact rail's
+   insertion feedback identical to the expanded channel tree. */
+.sidebar-rail-channel.drop-before {
+  box-shadow: inset 0 3px 0 #22c55e !important;
+}
+.sidebar-rail-channel.drop-after {
+  box-shadow: inset 0 -3px 0 #22c55e !important;
+}
+.sidebar-rail-channel-list.drop-ungrouped-target {
+  box-shadow: inset 0 -3px 0 #22c55e;
+}
+.sidebar-rail-channel-list.drop-ungrouped-before-target {
+  box-shadow: inset 0 3px 0 #22c55e;
+}
+
+
+/* 2026-10-03: stable cross-group drop preview + bulk group folder toggle. */
+.channel-group-item.drop-group-insert-start::after,
+.channel-group-item.drop-group-insert-end::after,
+.channel-tree-channel-item.drop-group-insert-end::after,
+.audio-source-item.drop-group-insert-end::after,
+.sidebar-rail-channel.drop-group-insert-end::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 3px;
+  bottom: -3px;
+  z-index: 9;
+  pointer-events: none;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #22c55e 24%, transparent);
+}
+.channel-group-item.drop-group-insert-start::after {
+  /* The first insertion slot is immediately below the folder header. */
+  bottom: -3px;
+}
+.channel-tree-group-toggle .channel-tree-action-glyph {
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1;
+}
+
+
+/* Four bulk controls: group folder toggle + MML + visibility + sound. */
+.channel-bulk-actions {
+  grid-template-columns: repeat(4, 22px) !important;
+  width: 88px !important;
+  min-width: 88px !important;
+  max-width: 88px !important;
+  flex-basis: 88px !important;
+}
+
+/* 2026-10-03: bulk folder semantic/alignment refinement. Color emoji glyphs
+   have a visual baseline slightly lower than the M/eye/speaker glyphs; lift
+   only this glyph by one device-independent pixel while preserving the common
+   absolute-centering box. */
+#channelBulkGroupToggleButton .channel-tree-action-glyph {
+  top: calc(50% - 1px) !important;
+  transform: translate(-50%, -50%) !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Unified mixed-item dragging. The row itself previews the final slot, and
+   the green indicator is an overlay so it never changes hit-test geometry. */
+.item-tree-drag-active { overflow-anchor: none; }
+.item-tree-drag-active > .item-tree-drag-source {
+  opacity: .72;
+  transition: none !important;
+  outline: 1px solid rgba(62, 210, 110, .7);
+  outline-offset: -1px;
+}
+.item-tree-drag-active > .item-tree-drop-group {
+  box-shadow: inset 0 0 0 1px rgba(62, 210, 110, .7);
+}
+.item-tree-drop-indicator {
+  position: fixed;
+  height: 3px;
+  background: #42d77b;
+  border-radius: 2px;
+  box-shadow: 0 0 3px rgba(45, 180, 90, .45);
+  pointer-events: none;
+  z-index: 10000;
+}
+.item-tree-drop-indicator[hidden] { display: none !important; }

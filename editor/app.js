@@ -351,7 +351,6 @@
     historyCornerToggle: document.querySelector("#historyCornerToggle"),
     collapsedMergeChannelsButton: document.querySelector("#collapsedMergeChannelsButton"),
     collapsedAddChannelButton: document.querySelector("#collapsedAddChannelButton"),
-    collapsedAddChannelGroupButton: document.querySelector("#collapsedAddChannelGroupButton"),
     collapsedDeleteChannelsButton: document.querySelector("#collapsedDeleteChannelsButton"),
     collapsedChannelList: document.querySelector("#collapsedChannelList"),
     historyUndoButton: document.querySelector("#historyUndoButton"),
@@ -383,7 +382,6 @@
     openButton: document.querySelector("#openButton"),
     saveButton: document.querySelector("#saveButton"),
     midiOpenButton: document.querySelector("#midiOpenButton"),
-    audioOpenButton: document.querySelector("#audioOpenButton"),
     fileInput: document.querySelector("#fileInput"),
     audioFileInput: document.querySelector("#audioFileInput"),
     jumpStartButton: document.querySelector("#jumpStartButton"),
@@ -447,6 +445,7 @@
     velocityLaneTooltip: document.querySelector("#velocityLaneTooltip"),
     playhead: document.querySelector("#playhead"),
     playheadTimeLabel: document.querySelector("#playheadTimeLabel"),
+    timelinePartGuides: document.querySelector("#timelinePartGuides"),
     horizontalScrollBar: document.querySelector("#horizontalScrollBar"),
     horizontalScrollThumb: document.querySelector("#horizontalScrollThumb"),
     verticalScrollBar: document.querySelector("#verticalScrollBar"),
@@ -454,6 +453,8 @@
     channelPanel: document.querySelector("#channelPanel"),
     channelBulkBar: document.querySelector("#channelBulkBar"),
     channelBulkCounts: document.querySelector("#channelBulkCounts"),
+    channelBulkGroupToggleButton: document.querySelector("#channelBulkGroupToggleButton"),
+    channelBulkGroupToggleGlyph: document.querySelector("#channelBulkGroupToggleGlyph"),
     channelBulkMmlButton: document.querySelector("#channelBulkMmlButton"),
     channelBulkVisibilityButton: document.querySelector("#channelBulkVisibilityButton"),
     channelBulkVisibilityGlyph: document.querySelector("#channelBulkVisibilityGlyph"),
@@ -462,8 +463,11 @@
     channelTabs: document.querySelector("#channelTabs"),
     loadedFileName: document.querySelector("#loadedFileName"),
     mergeChannelsButton: document.querySelector("#mergeChannelsButton"),
-    addChannelGroupButton: document.querySelector("#addChannelGroupButton"),
     addChannelButton: document.querySelector("#addChannelButton"),
+    itemAddMenu: document.querySelector("#itemAddMenu"),
+    itemAddChannelButton: document.querySelector("#itemAddChannelButton"),
+    itemAddAudioButton: document.querySelector("#itemAddAudioButton"),
+    itemAddGroupButton: document.querySelector("#itemAddGroupButton"),
     deleteChannelsButton: document.querySelector("#deleteChannelsButton"),
     channelDeleteModeCancelButton: document.querySelector("#channelDeleteModeCancelButton"),
     channelDeleteModeApplyButton: document.querySelector("#channelDeleteModeApplyButton"),
@@ -481,6 +485,9 @@
     dirtyIndicator: document.querySelector("#dirtyIndicator"),
     infoCharLabel: document.querySelector("#infoCharLabel"),
     infoCharCount: document.querySelector("#infoCharCount"),
+    infoPartItem: document.querySelector("#infoPartItem"),
+    infoPartLabel: document.querySelector("#infoPartLabel"),
+    infoPartCount: document.querySelector("#infoPartCount"),
     infoSelectionLabel: document.querySelector("#infoSelectionLabel"),
     infoSelectionCount: document.querySelector("#infoSelectionCount"),
     noteChannelView: document.querySelector("#noteChannelView"),
@@ -599,6 +606,8 @@
     channelMmlText: document.querySelector("#channelMmlText"),
     channelMmlIncludeTempo: document.querySelector("#channelMmlIncludeTempo"),
     channelMmlOptimizedView: document.querySelector("#channelMmlOptimizedView"),
+    channelMmlPartView: document.querySelector("#channelMmlPartView"),
+    channelMmlPartTabs: document.querySelector("#channelMmlPartTabs"),
     channelMmlStatus: document.querySelector("#channelMmlStatus"),
     channelMmlCloseButton: document.querySelector("#channelMmlCloseButton"),
     channelMmlCancelButton: document.querySelector("#channelMmlCancelButton"),
@@ -826,6 +835,7 @@
     nextNoteId: 1,
     dirty: false,
     channels: createDefaultChannels(),
+    channelTreeLayout: [],
     channelGroups: [],
     nextChannelGroupId: 1,
     selectedChannelGroupId: null,
@@ -837,15 +847,19 @@
     visibilitySoloAudioClipIds: new Set(),
     channelGroupEdit: { groupId: null, mode: "create" },
     channelDeleteMode: { active: false, selectedChannelIds: new Set(), selectedAudioIds: new Set(), groupModes: new Map() },
+    pendingAudioImportGroupId: null,
     tempos: createDefaultTempos(),
     nextTempoId: 2,
     timeSignatures: createDefaultTimeSignatures(),
     nextTimeSignatureId: 2,
+    timelineParts: [],
+    nextTimelinePartId: 1,
     timeSignatureEditor: { timeSignatureId: null, beat: 0 },
     interaction: null,
     tempoDrag: null,
     tempoTouchTap: null,
     timeSignatureDrag: null,
+    timelinePartDrag: null,
     fadeDrag: null,
     fadeTouchTap: null,
     tempoEditor: { mode: null, tempoId: null, beat: 0 },
@@ -928,6 +942,7 @@
       visualPitchCounts: new Map(),
       tempoMap: null,
       lastTimelineDrawAt: 0,
+      lastInfoPartIndex: -1,
       keyboardDrawAt: 0,
       keyboardDrawTimer: 0,
       scheduleContinuation: 0,
@@ -979,57 +994,11 @@
       clientX: 0,
       clientY: 0,
     },
-    channelDrag: {
-      sourceId: null,
-      pointerId: null,
-      startX: 0,
-      startY: 0,
-      dragging: false,
-      sourceElement: null,
-      container: null,
-      previewOrder: [],
-      dropValid: false,
-      dropGroupId: null,
-      dropChannelId: null,
-      dropAfter: false,
-      dropAudioId: null,
-      dropAudioAfter: false,
-      dropSourceGroupEdgeBefore: false,
-      lastPointerY: 0,
-      direction: 0,
-      directionExtremeY: 0,
-    },
-    audioTreeDrag: {
-      sourceId: null,
-      pointerId: null,
-      startX: 0,
-      startY: 0,
-      lastPointerY: 0,
-      direction: 0,
-      directionExtremeY: 0,
-      dragging: false,
-      sourceElement: null,
-      container: null,
-      dropTarget: null,
-      previewNextAudioId: null,
-    },
-    channelGroupDrag: {
-      groupId: null,
-      pointerId: null,
-      container: null,
-      startX: 0,
-      startY: 0,
-      dragging: false,
-      headerElement: null,
-      blockElements: [],
-      targetKind: null,
-      targetId: null,
-      after: false,
-      dropValid: false,
-      lastPointerY: 0,
-      direction: 0,
-      directionExtremeY: 0,
-    },
+    // Gesture identity for existing global event guards; all geometry, preview
+    // order and commit state live in the shared itemTreeDrag transaction.
+    channelDrag: { sourceId: null, pointerId: null, dragging: false, sourceElement: null, container: null },
+    audioTreeDrag: { sourceId: null, pointerId: null, dragging: false, sourceElement: null, container: null },
+    channelGroupDrag: { groupId: null, pointerId: null, dragging: false, headerElement: null, container: null },
     channelEdit: {
       channelId: null,
       groupId: null,
@@ -1048,6 +1017,13 @@
       parsed: null,
       includeTempo: true,
       optimizedView: true,
+      partView: false,
+      partIndex: 0,
+      partDrafts: new Map(),
+      partDirtyIndexes: new Set(),
+      partBaseChannels: [],
+      partBaseTempos: [],
+      partFullSource: "",
       standardText: "",
     },
     audioEdit: {
@@ -1727,6 +1703,117 @@
 
   function getNextTimeSignatureId() {
     return Math.max(state.nextTimeSignatureId || 2, getSortedTimeSignatures().reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
+  }
+
+  function normalizeTimelinePartEvent(value, fallbackId = 1) {
+    return {
+      id: Math.max(1, Math.round(Number(value?.id) || fallbackId)),
+      beat: Number(Math.max(0, Number(value?.beat) || 0).toFixed(6)),
+    };
+  }
+
+  function normalizeTimelineParts(value = state.timelineParts) {
+    const source = Array.isArray(value) ? value : [];
+    const byBeat = new Map();
+    let fallbackId = 1;
+    for (const raw of source) {
+      const item = normalizeTimelinePartEvent(raw, fallbackId++);
+      if (item.beat <= 1e-7) continue;
+      byBeat.set(item.beat.toFixed(6), item);
+    }
+    return [...byBeat.values()].sort((a, b) => a.beat - b.beat || a.id - b.id);
+  }
+
+  function getSortedTimelineParts() {
+    return normalizeTimelineParts();
+  }
+
+  function getNextTimelinePartId() {
+    return Math.max(state.nextTimelinePartId || 1, getSortedTimelineParts().reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
+  }
+
+  function getTimelinePartMarkerAtBeat(beat, tolerance = CONFIG.minimumNoteBeat / 2 + 1e-7) {
+    const target = Math.max(0, Number(beat) || 0);
+    return getSortedTimelineParts().find((part) => Math.abs(part.beat - target) <= tolerance) || null;
+  }
+
+  function getTimelinePartStarts() {
+    return [{ id: 0, beat: 0, fixed: true }, ...getSortedTimelineParts().map((part) => ({ ...part, fixed: false }))];
+  }
+
+  function getTimelinePartRanges(endBeat = getTotalBeats()) {
+    const safeEnd = Math.max(CONFIG.minimumNoteBeat, Number(endBeat) || getTotalBeats());
+    const starts = getTimelinePartStarts().filter((part) => part.beat < safeEnd - 1e-7 || part.fixed);
+    return starts.map((part, index) => ({
+      index,
+      number: index + 1,
+      id: part.id,
+      startBeat: part.beat,
+      endBeat: index + 1 < starts.length ? starts[index + 1].beat : safeEnd,
+      fixed: Boolean(part.fixed),
+    })).filter((part) => part.endBeat > part.startBeat + 1e-7);
+  }
+
+  function getTimelinePartIndexAtBeat(beat) {
+    const target = Math.max(0, Number(beat) || 0);
+    const ranges = getTimelinePartRanges();
+    let index = 0;
+    for (let i = 0; i < ranges.length; i += 1) {
+      if (target + 1e-7 >= ranges[i].startBeat) index = i;
+      else break;
+    }
+    return clamp(index, 0, Math.max(0, ranges.length - 1));
+  }
+
+  function addTimelinePartAtBeat(beat) {
+    const target = Number(clamp(snapBeat(Number(beat) || 0), 0, getTotalBeats()).toFixed(6));
+    if (target <= 1e-7 || target >= getTotalBeats() - 1e-7) {
+      showToast(i18nText("timeline.part_add_unavailable"));
+      return false;
+    }
+    if (getTimelinePartMarkerAtBeat(target, 1e-7)) {
+      showToast(i18nText("timeline.part_exists"));
+      return false;
+    }
+    const id = getNextTimelinePartId();
+    state.timelineParts = normalizeTimelineParts([...getSortedTimelineParts(), { id, beat: target }]);
+    state.nextTimelinePartId = id + 1;
+    markDirty(i18nText("history.timeline_part"));
+    resizeAndDraw();
+    updateChannelInfo();
+    showToast(i18nText("timeline.part_added", [getTimelinePartIndexAtBeat(target) + 1]));
+    return true;
+  }
+
+  function deleteTimelinePartById(partId) {
+    const current = getSortedTimelineParts();
+    const target = current.find((part) => String(part.id) === String(partId));
+    if (!target) return false;
+    const partNumber = getTimelinePartIndexAtBeat(target.beat) + 1;
+    state.timelineParts = current.filter((part) => String(part.id) !== String(partId));
+    markDirty(i18nText("history.timeline_part"));
+    shrinkTimelineToContent();
+    ensureTimelineFitsViewport();
+    resizeAndDraw();
+    updateChannelInfo();
+    showToast(i18nText("timeline.part_deleted", [partNumber]));
+    return true;
+  }
+
+  function deleteAllTimelineParts() {
+    const count = getSortedTimelineParts().length;
+    if (!count) {
+      showToast(i18nText("timeline.part_delete_all_none"));
+      return false;
+    }
+    state.timelineParts = [];
+    markDirty(i18nText("history.timeline_part"));
+    shrinkTimelineToContent();
+    ensureTimelineFitsViewport();
+    resizeAndDraw();
+    updateChannelInfo();
+    showToast(i18nText("timeline.part_delete_all_done", [count]));
+    return true;
   }
 
   function getTimeSignatureGridLines(startBeat = 0, endBeat = getTotalBeats()) {
@@ -2466,8 +2553,9 @@
 
   function getPersistentContentEndBeat() {
     const lastAudioEnd = state.audioClips.reduce((maximum, clip) => Math.max(maximum, getAudioClipEndBeat(clip)), 0);
+    const lastTimelinePartBeat = getSortedTimelineParts().reduce((maximum, part) => Math.max(maximum, part.beat), 0);
     if (isMidiReferenceActive()) {
-      return Math.max(getMidiReferenceEndBeat(getActiveMidiDocument() || state.midiReference), lastAudioEnd);
+      return Math.max(getMidiReferenceEndBeat(getActiveMidiDocument() || state.midiReference), lastAudioEnd, lastTimelinePartBeat);
     }
     const lastNoteEnd = state.channels.reduce(
       (projectEnd, channel) => channel.notes.reduce(
@@ -2483,7 +2571,7 @@
     const fades = normalizeTimelineFades();
     const lastFadeBeat = fades.reduce((maximum, fade) => Math.max(maximum, getTimelineFadeEndBeat(fade)), 0);
     const lastTimeSignatureBeat = getSortedTimeSignatures().reduce((maximum, signature) => Math.max(maximum, signature.beat), 0);
-    return Math.max(lastNoteEnd, lastTempoBeat, lastAudioEnd, lastFadeBeat, lastTimeSignatureBeat);
+    return Math.max(lastNoteEnd, lastTempoBeat, lastAudioEnd, lastFadeBeat, lastTimeSignatureBeat, lastTimelinePartBeat);
   }
 
   function getProjectContentEndBeat() {
@@ -2540,7 +2628,7 @@
   }
 
   function shrinkTimelineToContent() {
-    if (state.playback.running || state.playback.loading || state.interaction || state.tempoDrag || state.fadeDrag) {
+    if (state.playback.running || state.playback.loading || state.interaction || state.tempoDrag || state.timelinePartDrag || state.fadeDrag) {
       return false;
     }
     const targetBeats = getMinimumTimelineBeats();
@@ -3643,6 +3731,7 @@
         state.language = normalizeLanguage(applied || nextLanguage);
         if (elements.languageSelect) elements.languageSelect.value = state.language;
         window.MobibardSiteNavigation?.refresh?.();
+        renderShortcutKeycaps();
         updateShortcutSearchResults();
         if (notify) {
           const label = elements.languageSelect?.selectedOptions?.[0]?.textContent || state.language;
@@ -3745,6 +3834,43 @@
     // MML/MIDI 내보내기는 현재 선택/활성 패널/노트 유무와 관계없이 항상 사용할 수 있습니다.
     elements.fileExportButton.disabled = false;
     if (elements.midiExportButton) elements.midiExportButton.disabled = false;
+  }
+
+  function closeItemAddMenu() {
+    if (!elements.itemAddMenu) return;
+    elements.itemAddMenu.hidden = true;
+    elements.addChannelButton?.setAttribute("aria-expanded", "false");
+    elements.collapsedAddChannelButton?.setAttribute("aria-expanded", "false");
+  }
+
+  function openItemAddMenu(anchorButton) {
+    if (!elements.itemAddMenu || !anchorButton || isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    const opening = elements.itemAddMenu.hidden;
+    closeContextMenu();
+    closeFileMenu();
+    closeEditMenu();
+    closeSettingsMenu();
+    closeThemeMenu();
+    closeGoogleAccountMenu();
+    closeVolumeMenu();
+    closeZoomMenu();
+    closePlaybackRateMenu();
+    closeItemAddMenu();
+    if (!opening) return false;
+    elements.itemAddMenu.hidden = false;
+    anchorButton.setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => {
+      const anchorRect = anchorButton.getBoundingClientRect();
+      const menuRect = elements.itemAddMenu.getBoundingClientRect();
+      let left = anchorRect.left;
+      let top = anchorRect.bottom + 4;
+      if (left + menuRect.width > window.innerWidth - 6) left = window.innerWidth - menuRect.width - 6;
+      if (top + menuRect.height > window.innerHeight - 6) top = anchorRect.top - menuRect.height - 4;
+      elements.itemAddMenu.style.left = `${Math.round(Math.max(6, left))}px`;
+      elements.itemAddMenu.style.top = `${Math.round(Math.max(6, top))}px`;
+      elements.itemAddMenu.style.right = "auto";
+    });
+    return true;
   }
 
   function closeFileMenu() {
@@ -4735,6 +4861,7 @@
       : null;
     const items = [];
     for (const channel of channels) {
+      if (!isChannelEffectivelyVisible(channel)) continue;
       const channelIndex = Math.max(0, state.channels.indexOf(channel));
       const color = getChannelColor(channel, channelIndex, "base");
       const isActive = channel === activeChannel && state.selectedChannelGroupId == null;
@@ -5342,13 +5469,29 @@
   }
 
   function getTempoMarkerScreenGeometry(tempo) {
-    const lineX = Math.round(beatToX(tempo.beat) - elements.rollViewport.scrollLeft) + 0.5;
+    const tempoBeat = Number(tempo?.beat) || 0;
+    const lineX = Math.round(beatToX(tempoBeat) - elements.rollViewport.scrollLeft) + 0.5;
     const label = `${tempo.bpm}`;
-    // Give the BPM badge enough horizontal padding for bold digits and keep the
-    // hit area identical to the visible box.
+    // Keep the BPM badge anchored beside its own guide on the third row.
     const labelWidth = Math.max(28, 10 + label.length * 6.2);
     const canvasWidth = elements.timelineCanvas.clientWidth;
-    const labelX = clamp(lineX + 5, 2, Math.max(2, canvasWidth - labelWidth - 2));
+    // Tempo always stays on the third timeline row. Keep a fixed small gap
+    // from the guide itself so a time-signature marker at the exact same beat
+    // can share the row without covering the BPM box.
+    const preferredLabelX = lineX + 9;
+    const labelX = clamp(preferredLabelX, 2, Math.max(2, canvasWidth - labelWidth - 2));
+    const lane = getTimelineLaneLayout();
+    return { lineX, label, labelX, labelY: lane.thirdY, labelWidth, labelHeight: lane.labelHeight };
+  }
+
+  function getTimelinePartMarkerScreenGeometry(part) {
+    const partBeat = Number(part?.beat) || 0;
+    const lineX = Math.round(beatToX(partBeat) - elements.rollViewport.scrollLeft) + 0.5;
+    const partNumber = getTimelinePartIndexAtBeat(partBeat) + 1;
+    const label = String(partNumber);
+    const labelWidth = Math.max(18, 10 + label.length * 6);
+    const canvasWidth = elements.timelineCanvas.clientWidth;
+    const labelX = clamp(lineX - labelWidth / 2, 2, Math.max(2, canvasWidth - labelWidth - 2));
     const lane = getTimelineLaneLayout();
     return { lineX, label, labelX, labelY: lane.tempoY, labelWidth, labelHeight: lane.labelHeight };
   }
@@ -5361,10 +5504,14 @@
     // could let the final T escape the rounded rectangle on some fonts.
     const labelWidth = label === "OUT" ? 31 : 24;
     const canvasWidth = elements.timelineCanvas.clientWidth;
-    // Leave the small time-signature pentagon at the exact beat position free.
-    const labelX = clamp(lineX + 9, 2, Math.max(2, canvasWidth - labelWidth - 2));
+    // Part and fade share row 2. Only when they are on the exact same beat,
+    // place the fade badge immediately to the right of the centered part badge.
+    const sameBeatPart = getTimelinePartMarkerAtBeat(normalized.startBeat);
+    const partHalfWidth = sameBeatPart ? getTimelinePartMarkerScreenGeometry(sameBeatPart).labelWidth / 2 : 0;
+    const preferredLabelX = lineX + Math.max(9, partHalfWidth + 3);
+    const labelX = clamp(preferredLabelX, 2, Math.max(2, canvasWidth - labelWidth - 2));
     const lane = getTimelineLaneLayout();
-    return { lineX, label, labelX, labelY: lane.thirdY, labelWidth, labelHeight: lane.labelHeight };
+    return { lineX, label, labelX, labelY: lane.tempoY, labelWidth, labelHeight: lane.labelHeight };
   }
 
   function getTimeSignatureMarkerScreenGeometry(signature) {
@@ -5575,6 +5722,24 @@
       Math.max(1, height - 1),
     );
     context.restore();
+
+    // Timeline-part boundaries are structural navigation guides, so keep them
+    // visible on the whole-track bar regardless of the track-info visibility
+    // toggle used for tempo/fade guides.
+    if (endBeat > 0) {
+      for (const part of getSortedTimelineParts()) {
+        const x = clamp((Number(part.beat) || 0) / endBeat * width, 0, width);
+        context.save();
+        context.strokeStyle = state.theme === "light" ? "rgba(255,157,0,.98)" : "rgba(255,196,92,.99)";
+        context.lineWidth = 2;
+        context.setLineDash([4, 3]);
+        context.beginPath();
+        context.moveTo(Math.round(x) + .5, 0);
+        context.lineTo(Math.round(x) + .5, height);
+        context.stroke();
+        context.restore();
+      }
+    }
 
     if (showTrackInfo && endBeat > 0) {
       // The overview is intentionally compact: tempo and fade information is
@@ -5842,47 +6007,48 @@
     context.textBaseline = "alphabetic";
 
     for (const { marker } of visibleTimeSignatureMarkers) {
-      const accent = state.theme === "light" ? "#54368f" : "#efe9ff";
+      // Match the part badge's crisp translucent-fill + strong-outline treatment.
+      const accent = state.theme === "light" ? "#3f246f" : "#fffaff";
       drawDownPentagon(context, marker.markerX, marker.markerY, marker.markerWidth, marker.markerHeight);
-      context.fillStyle = state.theme === "light" ? "rgba(202, 180, 244, .83)" : "rgba(125, 103, 188, .81)";
-      context.fill();
-      context.strokeStyle = accent;
-      context.lineWidth = 1.25;
-      context.stroke();
-    }
-
-    context.font = "700 10px sans-serif";
-    for (const { fade, marker } of visibleFadeMarkers) {
-      drawRoundedRect(context, marker.labelX, marker.labelY, marker.labelWidth, marker.labelHeight, 3);
-      const accent = fade.type === "in"
-        ? (state.theme === "light" ? "#165f86" : "#effaff")
-        : (state.theme === "light" ? "#8f422c" : "#fff1eb");
-      context.fillStyle = fade.type === "in"
-        ? (state.theme === "light" ? "rgba(151, 214, 244, .83)" : "rgba(84, 169, 224, .81)")
-        : (state.theme === "light" ? "rgba(246, 183, 160, .83)" : "rgba(224, 126, 96, .81)");
+      context.fillStyle = state.theme === "light" ? "rgba(196,170,240,.82)" : "rgba(118,92,187,.78)";
       context.fill();
       context.strokeStyle = accent;
       context.lineWidth = 1;
       context.stroke();
-      context.fillStyle = accent;
-      context.textBaseline = "middle";
-      context.textAlign = "center";
-      context.fillText(marker.label, marker.labelX + marker.labelWidth / 2, marker.labelY + marker.labelHeight / 2 + 0.25);
     }
 
-    context.font = "700 10px sans-serif";
+    context.font = "850 10px sans-serif";
+    for (const { fade, marker } of visibleFadeMarkers) {
+      drawRoundedRect(context, marker.labelX, marker.labelY, marker.labelWidth, marker.labelHeight, 3);
+      const accent = fade.type === "in"
+        ? (state.theme === "light" ? "#165f86" : "#f5fcff")
+        : (state.theme === "light" ? "#8f422c" : "#fff6f1");
+      context.fillStyle = fade.type === "in"
+        ? (state.theme === "light" ? "rgba(151,214,244,.82)" : "rgba(84,169,224,.78)")
+        : (state.theme === "light" ? "rgba(246,183,160,.82)" : "rgba(224,126,96,.78)");
+      context.fill();
+      context.strokeStyle = accent;
+      context.lineWidth = 1;
+      context.stroke();
+      context.fillStyle = state.theme === "light" ? "#17191c" : "#f8fafc";
+      context.textBaseline = "middle";
+      context.textAlign = "center";
+      context.fillText(marker.label, marker.labelX + marker.labelWidth / 2, marker.labelY + marker.labelHeight / 2);
+    }
+
+    context.font = "850 10px sans-serif";
     for (const marker of visibleTempoMarkers) {
       drawRoundedRect(context, marker.labelX, marker.labelY, marker.labelWidth, marker.labelHeight, 3);
-      const tempoAccent = state.theme === "light" ? "#176a47" : "#edfff5";
-      context.fillStyle = state.theme === "light" ? "rgba(143, 222, 181, .85)" : "rgba(69, 179, 122, .81)";
+      const tempoAccent = state.theme === "light" ? "#176a47" : "#f2fff8";
+      context.fillStyle = state.theme === "light" ? "rgba(143,222,181,.82)" : "rgba(69,179,122,.78)";
       context.fill();
       context.strokeStyle = tempoAccent;
       context.lineWidth = 1;
       context.stroke();
-      context.fillStyle = tempoAccent;
+      context.fillStyle = state.theme === "light" ? "#17191c" : "#f8fafc";
       context.textBaseline = "middle";
       context.textAlign = "center";
-      context.fillText(marker.label, marker.labelX + marker.labelWidth / 2, marker.labelY + marker.labelHeight / 2 + 0.25);
+      context.fillText(marker.label, marker.labelX + marker.labelWidth / 2, marker.labelY + marker.labelHeight / 2);
     }
     context.textBaseline = "alphabetic";
     context.textAlign = "start";
@@ -5923,6 +6089,16 @@
         event,
         signature.beat,
         `${signature.numerator}/${signature.denominator}`,
+      );
+      return;
+    }
+    const timelinePart = findTimelinePartMarkerFromPointer(event);
+    if (timelinePart) {
+      const characterCount = getSelectedTimelinePartCharacterCount(timelinePart.beat);
+      showTimelineHoverTooltip(
+        event,
+        timelinePart.beat,
+        `${characterCount.toLocaleString()}자`,
       );
       return;
     }
@@ -5990,7 +6166,63 @@
     return layout;
   }
 
+  function getTimelinePartGuideLayout() {
+    const pianoRect = elements.pianoSection.getBoundingClientRect();
+    const rollRect = elements.rollViewport.getBoundingClientRect();
+    const timelineRect = elements.timelineCanvas.getBoundingClientRect();
+    return {
+      viewportWidth: elements.rollViewport?.clientWidth || 0,
+      leftOffset: rollRect.left - pianoRect.left,
+      top: Math.round(timelineRect.top - pianoRect.top),
+      height: Math.max(0, Math.round(rollRect.bottom - timelineRect.top)),
+    };
+  }
+
+  function updateTimelinePartGuides() {
+    const host = elements.timelinePartGuides;
+    if (!host || !elements.rollViewport || !elements.timelineCanvas) return;
+    // Part guides intentionally stop at the bottom of the piano roll. They do
+    // not continue into the velocity or audio lanes.
+    const layout = getTimelinePartGuideLayout();
+    const parts = getSortedTimelineParts();
+    const activeIds = new Set(parts.map((part) => String(part.id)));
+    for (const node of [...host.querySelectorAll(".timeline-part-guide")]) {
+      if (!activeIds.has(String(node.dataset.partId || ""))) node.remove();
+    }
+    for (const part of parts) {
+      const key = String(part.id);
+      let guide = host.querySelector(`.timeline-part-guide[data-part-id="${CSS.escape(key)}"]`);
+      if (!guide) {
+        guide = document.createElement("div");
+        guide.className = "timeline-part-guide";
+        guide.dataset.partId = key;
+        const label = document.createElement("span");
+        label.className = "timeline-part-guide-label";
+        guide.append(label);
+        host.append(guide);
+      }
+      const visibleX = beatToX(part.beat) - elements.rollViewport.scrollLeft;
+      const visible = visibleX >= -2 && visibleX <= layout.viewportWidth + 2;
+      guide.hidden = !visible;
+      if (!visible) continue;
+      const marker = getTimelinePartMarkerScreenGeometry(part);
+      const label = guide.querySelector(".timeline-part-guide-label");
+      if (label) {
+        label.textContent = marker.label;
+        label.style.left = `${marker.labelX - marker.lineX}px`;
+        // Keep the DOM part badge on the exact same row/height as canvas badges.
+        label.style.top = `${marker.labelY}px`;
+        label.style.width = `${marker.labelWidth}px`;
+        label.style.height = `${marker.labelHeight}px`;
+      }
+      guide.style.top = `${layout.top}px`;
+      guide.style.height = `${layout.height}px`;
+      guide.style.transform = `translate3d(${layout.leftOffset + visibleX}px, 0, 0)`;
+    }
+  }
+
   function updatePlayheadVisual() {
+    updateTimelinePartGuides();
     if (elements.playheadTimeLabel) {
       const clockText = formatPlayheadClock(getPlayheadDisplaySeconds());
       if (clockText !== state.playhead.clockText) {
@@ -6074,14 +6306,18 @@
     if (stop && (state.playback.running || state.playback.loading)) {
       stopPlayback(false);
     }
+    const hasTimelineParts = getSortedTimelineParts().length > 0;
+    const previousPartIndex = hasTimelineParts ? getTimelinePartIndexAtBeat(state.playhead.beat) : -1;
     state.playhead.beat = clamp(
       Number(beat) || 0,
       0,
       getTotalBeats(),
     );
+    const nextPartIndex = hasTimelineParts ? getTimelinePartIndexAtBeat(state.playhead.beat) : -1;
     updatePlayheadVisual();
     drawTimeline();
-    updatePlaybackTimeInfo();
+    if (hasTimelineParts && nextPartIndex !== previousPartIndex) updateChannelInfo();
+    else updatePlaybackTimeInfo();
     if (preview) previewNotesAtPlayhead(state.playhead.beat);
   }
 
@@ -6193,6 +6429,29 @@
     return true;
   }
 
+  function findTimelinePartMarkerFromPointer(event) {
+    const rect = elements.timelineCanvas.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
+    const touchLike = event.pointerType === "touch" || event.pointerType === "pen";
+    const padding = touchLike ? 8 : 3;
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const part of getSortedTimelineParts()) {
+      const marker = getTimelinePartMarkerScreenGeometry(part);
+      const onLabel = pointerX >= marker.labelX - padding
+        && pointerX <= marker.labelX + marker.labelWidth + padding
+        && pointerY >= marker.labelY - padding
+        && pointerY <= marker.labelY + marker.labelHeight + padding;
+      const distance = Math.abs(pointerX - marker.lineX);
+      if (onLabel && distance < nearestDistance) {
+        nearest = part;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
   function findTempoMarkerFromPointer(event) {
     const rect = elements.timelineCanvas.getBoundingClientRect();
     const pointerX = event.clientX - rect.left;
@@ -6275,10 +6534,21 @@
     }
     const rawBeat = timelineRawBeatFromPointer(event);
     if (rawBeat < 0) return;
-    const fade = findTimelineFadeMarkerFromPointer(event);
-    const tempo = fade ? null : findTempoMarkerFromPointer(event);
+    const timeSignature = findTimeSignatureMarkerFromPointer(event);
+    const timelinePart = timeSignature ? null : findTimelinePartMarkerFromPointer(event);
+    const fade = timeSignature || timelinePart ? null : findTimelineFadeMarkerFromPointer(event);
+    const tempo = timeSignature || timelinePart || fade ? null : findTempoMarkerFromPointer(event);
     const beat = timelineBeatFromPointer(event);
-    seekPlayheadBeat(fade?.startBeat ?? tempo?.beat ?? beat);
+    seekPlayheadBeat(timeSignature?.beat ?? timelinePart?.beat ?? fade?.startBeat ?? tempo?.beat ?? beat);
+    if (timeSignature) {
+      openTimeSignatureDialog(timeSignature.beat, timeSignature);
+      event.preventDefault();
+      return;
+    }
+    if (timelinePart) {
+      event.preventDefault();
+      return;
+    }
     if (fade) {
       openTimelineFadeDialog(fade.startBeat, fade);
       event.preventDefault();
@@ -6307,8 +6577,9 @@
     }
     const rawBeat = timelineRawBeatFromPointer(event);
     const timeSignature = rawBeat >= 0 ? findTimeSignatureMarkerFromPointer(event) : null;
-    const fade = rawBeat >= 0 && !timeSignature ? findTimelineFadeMarkerFromPointer(event) : null;
-    const tempo = rawBeat >= 0 && !timeSignature && !fade ? findTempoMarkerFromPointer(event) : null;
+    const timelinePart = rawBeat >= 0 && !timeSignature ? findTimelinePartMarkerFromPointer(event) : null;
+    const fade = rawBeat >= 0 && !timeSignature && !timelinePart ? findTimelineFadeMarkerFromPointer(event) : null;
+    const tempo = rawBeat >= 0 && !timeSignature && !timelinePart && !fade ? findTempoMarkerFromPointer(event) : null;
     const touchLike = event.pointerType === "touch" || event.pointerType === "pen";
 
     if (timeSignature) {
@@ -6322,6 +6593,24 @@
         pointerId: event.pointerId,
         timeSignatureId: timeSignature.id,
         originalBeat: timeSignature.beat,
+        moved: false,
+        pointerType: event.pointerType || "mouse",
+        startX: event.clientX,
+        startY: event.clientY,
+        dragStarted: !touchLike,
+      };
+      trySetPointerCapture(elements.timelineCanvas, event.pointerId);
+      elements.timelineCanvas.style.cursor = touchLike ? "pointer" : "ew-resize";
+      event.preventDefault();
+      return;
+    }
+
+    if (timelinePart) {
+      setPlayheadBeat(timelinePart.beat, { stop: true });
+      state.timelinePartDrag = {
+        pointerId: event.pointerId,
+        timelinePartId: timelinePart.id,
+        originalBeat: timelinePart.beat,
         moved: false,
         pointerType: event.pointerType || "mouse",
         startX: event.clientX,
@@ -6432,6 +6721,42 @@
       return;
     }
 
+    if (state.timelinePartDrag?.pointerId === event.pointerId) {
+      const drag = state.timelinePartDrag;
+      const touchLike = drag.pointerType === "touch" || drag.pointerType === "pen";
+      if (touchLike && !drag.dragStarted) {
+        const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+        if (distance <= CONFIG.longPressMoveTolerance) { event.preventDefault(); return; }
+        drag.dragStarted = true;
+        elements.timelineCanvas.style.cursor = "ew-resize";
+      }
+      scrollTimelineDuringDrag(event);
+      const current = getSortedTimelineParts().find((item) => String(item.id) === String(drag.timelinePartId));
+      if (!current) {
+        event.preventDefault();
+        return;
+      }
+      const minimumBeat = getSnapBeat();
+      const targetBeat = clamp(timelineBeatFromPointer(event), minimumBeat, getTotalBeats());
+      const occupied = targetBeat >= getTotalBeats() - 1e-7 || getSortedTimelineParts().some((item) => (
+        String(item.id) !== String(drag.timelinePartId)
+        && Math.abs(Number(item.beat) - targetBeat) <= 1e-7
+      ));
+      if (!occupied && Math.abs(current.beat - targetBeat) > 1e-7) {
+        state.timelineParts = normalizeTimelineParts(state.timelineParts.map((part) => (
+          String(part.id) === String(drag.timelinePartId)
+            ? { ...part, beat: Number(targetBeat.toFixed(6)) }
+            : part
+        )));
+        drag.moved = true;
+        updateTimelinePartGuides();
+        drawTimeline();
+        updateChannelInfo();
+      }
+      event.preventDefault();
+      return;
+    }
+
     if (state.fadeDrag?.pointerId === event.pointerId) {
       const drag = state.fadeDrag;
       const touchLike = drag.pointerType === "touch" || drag.pointerType === "pen";
@@ -6512,15 +6837,18 @@
     }
 
     const hoverTimeSignature = findTimeSignatureMarkerFromPointer(event);
-    const hoverFade = hoverTimeSignature ? null : findTimelineFadeMarkerFromPointer(event);
-    const hoverTempo = hoverTimeSignature || hoverFade ? null : findTempoMarkerFromPointer(event);
+    const hoverTimelinePart = hoverTimeSignature ? null : findTimelinePartMarkerFromPointer(event);
+    const hoverFade = hoverTimeSignature || hoverTimelinePart ? null : findTimelineFadeMarkerFromPointer(event);
+    const hoverTempo = hoverTimeSignature || hoverTimelinePart || hoverFade ? null : findTempoMarkerFromPointer(event);
     elements.timelineCanvas.style.cursor = hoverTimeSignature
       ? (hoverTimeSignature.fixed ? "pointer" : "ew-resize")
-      : hoverFade
+      : hoverTimelinePart
         ? "ew-resize"
-        : hoverTempo
-          ? (isMidiReferenceActive() || hoverTempo.fixed ? "pointer" : "ew-resize")
-          : "default";
+        : hoverFade
+          ? "ew-resize"
+          : hoverTempo
+            ? (isMidiReferenceActive() || hoverTempo.fixed ? "pointer" : "ew-resize")
+            : "default";
   }
 
   function handleTimelinePointerUp(event) {
@@ -6553,6 +6881,38 @@
         updateChannelInfo();
       } else if (touchLike && current) {
         openTimeSignatureDialog(current.beat, current);
+      }
+      return;
+    }
+
+    if (state.timelinePartDrag?.pointerId === event.pointerId) {
+      const drag = state.timelinePartDrag;
+      const moved = drag.moved;
+      state.timelinePartDrag = null;
+      elements.timelineCanvas.style.cursor = "default";
+      try { elements.timelineCanvas.releasePointerCapture(event.pointerId); } catch {}
+
+      if (event.type === "pointercancel") {
+        if (moved) {
+          state.timelineParts = normalizeTimelineParts(state.timelineParts.map((part) => (
+            String(part.id) === String(drag.timelinePartId)
+              ? { ...part, beat: Number(drag.originalBeat.toFixed(6)) }
+              : part
+          )));
+          updateTimelinePartGuides();
+          drawTimeline();
+          updateChannelInfo();
+        }
+        return;
+      }
+
+      if (moved) {
+        markDirty(i18nText("history.timeline_part"));
+        shrinkTimelineToContent();
+        drawRoll();
+        updateTimelinePartGuides();
+        drawTimeline();
+        updateChannelInfo();
       }
       return;
     }
@@ -7115,637 +7475,317 @@
     }
   }
 
-  const CHANNEL_TREE_DRAG_REVERSAL_HYSTERESIS = 7;
+  // Channels, audio leaves and root groups share one transient ordered tree.
+  // Preview and commit use this exact same model; render geometry is never
+  // reconstructed from stale channel/audio anchors on pointer-up.
+  const ItemTree = window.MobiBardItemTree;
+  let itemTreeDrag = null;
 
-  function updateChannelTreeDragDirection(drag, clientY) {
-    const y = Number(clientY);
-    if (!Number.isFinite(y)) return Number(drag?.direction) || 0;
-    if (!Number.isFinite(drag.lastPointerY)) drag.lastPointerY = y;
-    if (!Number.isFinite(drag.directionExtremeY)) drag.directionExtremeY = y;
-
-    if (!drag.direction) {
-      const delta = y - Number(drag.lastPointerY || y);
-      if (Math.abs(delta) >= 1) {
-        drag.direction = delta > 0 ? 1 : -1;
-        drag.directionExtremeY = y;
-      }
-      drag.lastPointerY = y;
-      return drag.direction;
-    }
-
-    if (drag.direction > 0) {
-      drag.directionExtremeY = Math.max(Number(drag.directionExtremeY), y);
-      if (y <= drag.directionExtremeY - CHANNEL_TREE_DRAG_REVERSAL_HYSTERESIS) {
-        drag.direction = -1;
-        drag.directionExtremeY = y;
-      }
-    } else {
-      drag.directionExtremeY = Math.min(Number(drag.directionExtremeY), y);
-      if (y >= drag.directionExtremeY + CHANNEL_TREE_DRAG_REVERSAL_HYSTERESIS) {
-        drag.direction = 1;
-        drag.directionExtremeY = y;
-      }
-    }
-    drag.lastPointerY = y;
-    return drag.direction;
+  function getItemTreeLayout() {
+    const fallback = ItemTree.legacy(state.channels, state.channelGroups, state.audioClips);
+    state.channelTreeLayout = ItemTree.reconcile(state.channelTreeLayout, fallback);
+    return ItemTree.copy(state.channelTreeLayout);
   }
 
-  function getLiveDomMoveDirection(container, movingNodes, referenceNode) {
-    if (!container) return 0;
-    const moving = new Set((Array.isArray(movingNodes) ? movingNodes : [movingNodes]).filter(Boolean));
-    if (!moving.size) return 0;
-    const children = [...container.children];
-    const firstMovingIndex = children.findIndex((node) => moving.has(node));
-    if (firstMovingIndex < 0) return 0;
-    const currentSlot = children.slice(0, firstMovingIndex).filter((node) => !moving.has(node)).length;
-    const remaining = children.filter((node) => !moving.has(node));
-    const desiredSlot = referenceNode == null ? remaining.length : remaining.indexOf(referenceNode);
-    if (desiredSlot < 0) return 0;
-    return Math.sign(desiredSlot - currentSlot);
-  }
-
-  function dragDirectionAllowsLiveMove(drag, moveDirection) {
-    if (!moveDirection || !drag?.direction) return true;
-    return Number(moveDirection) === Number(drag.direction);
-  }
-
-  function getChannelDragContainer() {
-    return state.channelDrag.container || elements.channelTabs || null;
-  }
-
-  function clearChannelDropIndicators() {
-    const container = getChannelDragContainer();
-    container?.classList.remove("drop-ungrouped-target");
-    container?.querySelectorAll("[data-channel-id], [data-audio-clip-id], [data-channel-group-id]").forEach((item) => {
-      item.classList.remove("drop-before", "drop-after", "drop-group-target", "drop-group-before", "drop-group-after");
-      if (item.dataset.channelId != null) {
-        item.classList.toggle(
-          "dragging",
-          Boolean(state.channelDrag.dragging)
-            && item.dataset.channelId === String(state.channelDrag.sourceId),
-        );
-      }
-    });
-  }
-
-  function getChannelPreviewOrderIds(container = getChannelDragContainer()) {
-    if (!container) return [];
-    return [...container.querySelectorAll("[data-channel-id]")]
-      .map((item) => String(item.dataset.channelId || ""))
-      .filter(Boolean);
-  }
-
-  function commitChannelPreviewOrder(orderIds, sourceId) {
-    if (!Array.isArray(orderIds) || orderIds.length !== state.channels.length) {
-      renderChannelTabs();
-      return false;
-    }
-    const currentIds = state.channels.map((channel) => String(channel.id));
-    if (currentIds.every((id, index) => id === String(orderIds[index]))) {
-      renderChannelTabs();
-      return false;
-    }
-    const activeChannelId = getActiveChannel()?.id;
-    const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
-    const reordered = orderIds.map((id) => channelById.get(String(id))).filter(Boolean);
-    if (reordered.length !== state.channels.length) {
-      renderChannelTabs();
-      return false;
-    }
-    state.channels = reordered;
-    state.activeChannel = Math.max(0, state.channels.findIndex((channel) => channel.id === activeChannelId));
-    markDirty("채널 순서 변경");
-    renderChannelTabs();
-    renderChannelEditor();
-    drawRoll();
-    const moved = state.channels.find((channel) => String(channel.id) === String(sourceId));
-    if (moved) showToast(`${moved.name} 채널 순서를 변경했습니다.`);
-    return true;
-  }
-
-  function moveChannelById(sourceId, targetId, placeAfter = false) {
-    const sourceIndex = state.channels.findIndex((channel) => String(channel.id) === String(sourceId));
-    const targetIndexBeforeRemoval = state.channels.findIndex((channel) => String(channel.id) === String(targetId));
-    if (sourceIndex < 0 || targetIndexBeforeRemoval < 0 || sourceIndex === targetIndexBeforeRemoval) {
-      return false;
-    }
-    const orderIds = state.channels.map((channel) => String(channel.id));
-    const [movedId] = orderIds.splice(sourceIndex, 1);
-    const targetIndex = orderIds.findIndex((id) => id === String(targetId));
-    const insertionIndex = clamp(targetIndex + (placeAfter ? 1 : 0), 0, orderIds.length);
-    orderIds.splice(insertionIndex, 0, movedId);
-
-    const activeChannelId = getActiveChannel()?.id;
-    const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
-    state.channels = orderIds.map((id) => channelById.get(id)).filter(Boolean);
-    state.activeChannel = Math.max(0, state.channels.findIndex((channel) => channel.id === activeChannelId));
-    markDirty("채널 순서 변경");
-    renderChannelTabs();
-    renderChannelEditor();
-    drawRoll();
-    const moved = channelById.get(String(sourceId));
-    if (moved) showToast(`${moved.name} 채널 순서를 변경했습니다.`);
-    return true;
-  }
-
-  function buildUngroupedChannelEdgeTarget(groupNode, group, placeAfterGroup, { sourceGroupEdgeBefore = false } = {}) {
-    const sourceId = String(state.channelDrag.sourceId ?? "");
-    const members = getChannelGroupMembers(group).filter((channel) => String(channel.id) !== sourceId);
-    let channelId = null;
-    let after = false;
-    if (members.length) {
-      const anchor = placeAfterGroup ? members[members.length - 1] : members[0];
-      channelId = anchor?.id == null ? null : String(anchor.id);
-      after = Boolean(placeAfterGroup);
-    } else if (sourceGroupEdgeBefore) {
-      // When the dragged channel is the only member of the very first group,
-      // there is no member row above which we can anchor the ungrouped drop.
-      // Anchor to the first channel after the original group instead so the
-      // channel can be placed above the now-empty group without sending the
-      // group to an unrelated position. If there is no following channel, a
-      // null anchor naturally leaves the empty group after the extracted row.
-      const nextOutside = findChannelAfterTopLevelGroup(group?.id);
-      channelId = nextOutside?.id == null ? null : String(nextOutside.id);
-      after = false;
-    } else if (group?.beforeChannelId != null) {
-      channelId = String(group.beforeChannelId);
-      after = false;
-    }
-    const renderedBlock = getRenderedGroupBlock(group?.id, getChannelDragContainer());
-    const blockLast = renderedBlock[renderedBlock.length - 1] || groupNode;
-    const previewReference = placeAfterGroup ? (blockLast?.nextElementSibling || null) : groupNode;
-    return {
-      valid: true,
-      groupId: null,
-      channelId,
-      after,
-      element: groupNode,
-      previewReference,
-      kind: "group-edge",
-      edgeAfter: Boolean(placeAfterGroup),
-      sourceGroupEdgeBefore: Boolean(sourceGroupEdgeBefore),
-    };
-  }
-
-  function buildChannelDragTargetFromAudioNode(node, clientY) {
-    if (!node?.matches?.("[data-audio-clip-id]")) return null;
-    const clip = state.audioClips.find((item) => String(item.id) === String(node.dataset.audioClipId));
-    const source = getChannelById(state.channelDrag.sourceId);
-    if (!clip || !source) return null;
-    const rect = node.getBoundingClientRect();
-    const audioAfter = Number(clientY) >= rect.top + rect.height / 2;
-    const targetGroupId = clip.groupId == null ? null : String(clip.groupId);
-    let channelId = clip.beforeChannelId == null ? null : String(clip.beforeChannelId);
-    // An audio row can itself be anchored to the dragged channel. Use the next
-    // real channel as the stable insertion anchor so the target does not vanish
-    // while the source channel is temporarily removed from the order.
-    if (channelId === String(source.id)) {
-      channelId = getNextChannelAnchorId(source, targetGroupId);
-    }
-    return {
-      valid: true,
-      groupId: targetGroupId,
-      channelId,
-      after: false,
-      audioId: String(clip.id),
-      audioAfter,
-      element: node,
-      kind: "audio",
-    };
-  }
-
-  function buildChannelDragTargetFromNode(node, clientY) {
-    const container = getChannelDragContainer();
-    if (!node || !container || !container.contains(node)) return null;
-    if (node.matches?.("[data-channel-group-id]")) {
-      const targetGroupId = String(node.dataset.channelGroupId || "");
-      const targetGroup = getChannelGroupById(targetGroupId);
-      const sourceChannel = getChannelById(state.channelDrag.sourceId);
-      const sourceGroupId = sourceChannel?.groupId == null ? null : String(sourceChannel.groupId);
-      if (targetGroup && sourceGroupId != null) {
-        const rect = node.getBoundingClientRect();
-        const midpoint = rect.top + rect.height / 2;
-        if (sourceGroupId === targetGroupId) {
-          // Pulling upward across the upper half of the source group's own
-          // header means "take this channel out above the group". This is
-          // especially important for the first group, where there is no row
-          // above the header that could otherwise become an ungrouped target.
-          if (state.channelDrag.direction < 0 && Number(clientY) < midpoint) {
-            return buildUngroupedChannelEdgeTarget(node, targetGroup, false, { sourceGroupEdgeBefore: true });
-          }
-        } else {
-          // When pulling a channel out of a group, crossing the near edge of an
-          // adjacent group means "outside the group" first. This creates a real
-          // ungrouped slot between consecutive groups instead of instantly
-          // swallowing the channel into the next/previous group. Moving farther
-          // into the opposite half of the header still allows intentional entry.
-          if (state.channelDrag.direction > 0 && Number(clientY) < midpoint) {
-            return buildUngroupedChannelEdgeTarget(node, targetGroup, false);
-          }
-          if (state.channelDrag.direction < 0 && Number(clientY) >= midpoint) {
-            return buildUngroupedChannelEdgeTarget(node, targetGroup, true);
-          }
-        }
-      }
-      // Entering a group should preserve the pointer's approach direction so
-      // the dragged row stays near the mouse instead of jumping to the far end
-      // of the folder. Downward entry (from above) inserts at the first member;
-      // upward entry (from below) inserts after the last member.
-      const rect = node.getBoundingClientRect();
-      const midpoint = rect.top + rect.height / 2;
-      const direction = Number(state.channelDrag.direction) || 0;
-      const insertAtStart = direction > 0 || (direction === 0 && Number(clientY) < midpoint);
-      const members = targetGroup
-        ? getChannelGroupMembers(targetGroup).filter((channel) => String(channel.id) !== String(state.channelDrag.sourceId))
-        : [];
-      const anchor = members.length
-        ? (insertAtStart ? members[0] : members[members.length - 1])
-        : null;
-      return {
-        valid: true,
-        groupId: targetGroupId,
-        channelId: anchor?.id == null ? null : String(anchor.id),
-        after: !insertAtStart,
-        element: node,
-        kind: "group",
-        groupInsertAtStart: insertAtStart,
-      };
-    }
-    if (node.matches?.("[data-channel-id]")) {
-      const channelId = String(node.dataset.channelId || "");
-      if (!channelId || channelId === String(state.channelDrag.sourceId)) return null;
-      const targetChannel = getChannelById(channelId);
-      const channelRect = node.getBoundingClientRect();
-      return {
-        valid: true,
-        groupId: targetChannel?.groupId == null ? null : String(targetChannel.groupId),
-        channelId,
-        after: Number(clientY) >= channelRect.top + channelRect.height / 2,
-        element: node,
-        kind: "channel",
-      };
-    }
+  function getItemTreeNodeKey(node) {
+    if (node?.dataset?.channelGroupId != null) return `group:${node.dataset.channelGroupId}`;
+    if (node?.dataset?.channelId != null) return `channel:${node.dataset.channelId}`;
+    if (node?.dataset?.audioClipId != null) return `audio:${node.dataset.audioClipId}`;
     return null;
   }
 
-  function getChannelDragGeometryTarget(clientY) {
-    const container = getChannelDragContainer();
-    const sourceElement = state.channelDrag.sourceElement;
-    if (!container) return null;
-    const y = Number(clientY);
-    if (!Number.isFinite(y)) return null;
-    const candidates = [...container.children].filter((node) => (
-      node !== sourceElement
-      && (node.matches?.("[data-channel-group-id]") || node.matches?.("[data-channel-id]") || node.matches?.("[data-audio-clip-id]"))
-      && !node.matches?.(".dragging-group-block")
-    ));
-    if (!candidates.length) {
-      return { valid: true, groupId: null, channelId: null, after: true, element: null, kind: "ungrouped" };
+  function arrangeItemTreeNodes(container, layout = getItemTreeLayout()) {
+    if (!container) return;
+    const nodes = new Map([...container.children].map((node) => [getItemTreeNodeKey(node), node]).filter(([key]) => key));
+    // Moving existing nodes preserves handlers and focus. Collapsed children
+    // absent from this DOM still remain in the model in their exact order.
+    let previous = null;
+    for (const entry of layout) {
+      const node = nodes.get(ItemTree.key(entry));
+      if (!node) continue;
+      const reference = previous ? previous.nextElementSibling : container.firstElementChild;
+      if (node !== reference) container.insertBefore(node, reference);
+      node.classList.toggle("is-group-child", entry.parentId != null);
+      node.setAttribute("aria-level", entry.parentId == null ? "1" : "2");
+      previous = node;
     }
-
-    const measured = candidates.map((node) => ({ node, rect: node.getBoundingClientRect() }));
-    const last = measured[measured.length - 1];
-    // Only the real space below the final row means "move to the end". During a
-    // live downward move the dragged row itself has pointer-events:none, so the
-    // pointer can briefly hit the container/gap. Treating every such gap as end
-    // made a one-row downward drag jump straight to the bottom.
-    if (y > last.rect.bottom) {
-      return { valid: true, groupId: null, channelId: null, after: true, element: null, kind: "ungrouped" };
-    }
-
-    let best = measured[0];
-    let bestDistance = Infinity;
-    for (const entry of measured) {
-      const r = entry.rect;
-      const distance = y < r.top ? r.top - y : (y > r.bottom ? y - r.bottom : 0);
-      if (distance < bestDistance) {
-        best = entry;
-        bestDistance = distance;
-        if (distance === 0) break;
-      }
-    }
-    if (best.node.matches?.("[data-audio-clip-id]")) return buildChannelDragTargetFromAudioNode(best.node, y);
-    return buildChannelDragTargetFromNode(best.node, y);
   }
 
-  function getChannelDragDropTarget(event) {
-    const container = getChannelDragContainer();
-    if (!container) return null;
-    const rect = container.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return null;
-    const hit = document.elementFromPoint(event.clientX, event.clientY);
-    if (hit && container.contains(hit)) {
-      const groupItem = hit.closest?.("[data-channel-group-id]");
-      if (groupItem && container.contains(groupItem)) {
-        const target = buildChannelDragTargetFromNode(groupItem, event.clientY);
-        if (target) return target;
-      }
-      const channelItem = hit.closest?.("[data-channel-id]");
-      if (channelItem && container.contains(channelItem)) {
-        const target = buildChannelDragTargetFromNode(channelItem, event.clientY);
-        if (target) return target;
-      }
-      const audioItem = hit.closest?.("[data-audio-clip-id]");
-      if (audioItem && container.contains(audioItem)) {
-        const target = buildChannelDragTargetFromAudioNode(audioItem, event.clientY);
-        if (target) return target;
-      }
-    }
-    return getChannelDragGeometryTarget(event.clientY);
+  function restoreItemTreeFocus(identity, container = elements.channelTabs) {
+    requestAnimationFrame(() => {
+      const node = [...(container?.children || [])].find((n) => getItemTreeNodeKey(n) === `${identity.kind}:${identity.id}`)
+        || findChannelTreeItemByIdentity(identity);
+      (node?.querySelector?.(".channel-tree-main") || node)?.focus?.({ preventScroll: true });
+    });
   }
 
-  function moveChannelDragPreviewElement(target) {
-    const drag = state.channelDrag;
-    const container = getChannelDragContainer();
-    const sourceElement = drag.sourceElement;
-    if (!target?.valid || !container || !sourceElement) return false;
-
-    let reference = null;
-    if (target.kind === "channel" && target.element && target.element !== sourceElement) {
-      reference = target.after ? target.element.nextElementSibling : target.element;
-      if (reference === sourceElement) reference = sourceElement.nextElementSibling;
-    } else if (target.kind === "group" && target.element) {
-      if (target.groupInsertAtStart) {
-        // Entering from above: keep the dragged row next to the pointer by
-        // placing it immediately after the group header / before its first child.
-        reference = target.element.nextElementSibling;
-        if (reference === sourceElement) reference = reference.nextElementSibling;
-      } else {
-        // Entering from below: append after the group's currently rendered
-        // children, skipping the moving row while locating the end.
-        reference = target.element.nextElementSibling;
-        while (reference) {
-          if (reference === sourceElement) {
-            reference = reference.nextElementSibling;
-            continue;
-          }
-          if (!isRenderedGroupChildNode(reference)) break;
-          reference = reference.nextElementSibling;
-        }
-      }
-    } else if (target.kind === "group-edge" && target.element) {
-      reference = target.edgeAfter ? target.element.nextElementSibling : target.element;
-      if (target.edgeAfter) {
-        while (reference && isRenderedGroupChildNode(reference)) {
-          reference = reference.nextElementSibling;
-        }
-      }
-      if (reference === sourceElement) reference = sourceElement.nextElementSibling;
-    } else if (target.kind === "audio" && target.element && target.element !== sourceElement) {
-      reference = target.audioAfter ? target.element.nextElementSibling : target.element;
-      if (reference === sourceElement) reference = sourceElement.nextElementSibling;
-    } else if (target.kind === "ungrouped") {
-      // Root/end means the real end of the mixed channel/audio tree. The old
-      // code forced the preview in front of the first audio row, which made a
-      // downward extraction from the final group reverse direction and get
-      // rejected by the drag hysteresis.
-      reference = null;
+  function commitItemTreeLayout(layout, sourceKey) {
+    if (ItemTree.signature(getItemTreeLayout()) === ItemTree.signature(layout)) { renderChannelTabs(); return false; }
+    const activeId = getActiveChannel()?.id;
+    const maps = {
+      channel: new Map(state.channels.map((c) => [String(c.id), c])),
+      audio: new Map(state.audioClips.map((c) => [String(c.id), c])),
+      group: new Map(state.channelGroups.map((c) => [String(c.id), c])),
+    };
+    // Validate the complete transaction before touching project objects.
+    if (layout.length !== state.channels.length + state.audioClips.length + state.channelGroups.length
+      || new Set(layout.map(ItemTree.key)).size !== layout.length
+      || layout.some((r) => !maps[r.kind]?.has(String(r.id)) || (r.parentId != null && (r.kind === "group" || !maps.group.has(String(r.parentId)))))) return false;
+    for (const row of layout) {
+      if (row.kind === "group") continue;
+      maps[row.kind].get(String(row.id)).groupId = row.parentId == null ? null : maps.group.get(String(row.parentId)).id;
     }
-
-    const moveDirection = getLiveDomMoveDirection(container, sourceElement, reference);
-    const groupedPreview = target.groupId != null;
-    const groupingChanged = sourceElement.classList.contains("is-group-child") !== groupedPreview;
-
-    // After a live DOM move, row geometry changes underneath the pointer. Without
-    // this direction lock the next pointermove can immediately request the exact
-    // opposite insertion and the row visibly shudders. A 7px reversal hysteresis
-    // in updateChannelTreeDragDirection makes genuine direction changes immediate
-    // enough while rejecting geometry-induced back-and-forth moves.
-    if (moveDirection && !dragDirectionAllowsLiveMove(drag, moveDirection)) return false;
-
-    sourceElement.classList.toggle("is-group-child", groupedPreview);
-    sourceElement.setAttribute("aria-level", groupedPreview ? "2" : "1");
-
-    if (moveDirection || groupingChanged) {
-      if (reference !== sourceElement && (moveDirection || reference)) {
-        container.insertBefore(sourceElement, reference || null);
-      }
-      drag.previewOrder = getChannelPreviewOrderIds(container);
+    state.channels = layout.filter((r) => r.kind === "channel").map((r) => maps.channel.get(r.id));
+    state.audioClips = layout.filter((r) => r.kind === "audio").map((r) => maps.audio.get(r.id));
+    state.channelGroups = layout.filter((r) => r.kind === "group").map((r) => maps.group.get(r.id));
+    state.channelTreeLayout = ItemTree.copy(layout);
+    // Keep legacy anchors coherent for older files and existing add/duplicate
+    // commands. Exact mixed root order is retained independently in the layout.
+    for (let i = 0; i < layout.length; i += 1) {
+      const r = layout[i];
+      if (r.kind === "channel") continue;
+      const next = layout.slice(i + 1).find((v) => v.kind === "channel" && (r.kind === "group" || v.parentId === r.parentId));
+      maps[r.kind].get(r.id).beforeChannelId = next?.id ?? null;
     }
-    return true;
-  }
-
-  function updateChannelDragPreview(event) {
-    const drag = state.channelDrag;
-    const container = getChannelDragContainer();
-    if (!drag.dragging || !container || !drag.sourceElement) return;
-    const treeRect = container.getBoundingClientRect();
-    if (event.clientY < treeRect.top + 42) container.scrollTop -= 14;
-    else if (event.clientY > treeRect.bottom - 42) container.scrollTop += 14;
-
-    const target = getChannelDragDropTarget(event);
-    if (!target?.valid) return;
-    const accepted = moveChannelDragPreviewElement(target);
-    if (!accepted) return;
-
-    clearChannelDropIndicators();
-    drag.dropValid = true;
-    drag.dropGroupId = target.groupId ?? null;
-    drag.dropChannelId = target.channelId ?? null;
-    drag.dropAfter = Boolean(target.after);
-    drag.dropAudioId = target.audioId ?? null;
-    drag.dropAudioAfter = Boolean(target.audioAfter);
-    drag.dropSourceGroupEdgeBefore = Boolean(target.sourceGroupEdgeBefore);
-    if (target.kind === "group") target.element?.classList.add("drop-group-target");
-    else if (target.kind === "group-edge") target.element?.classList.add(target.edgeAfter ? "drop-group-after" : "drop-group-before");
-    else if (target.kind === "channel") target.element?.classList.add(target.after ? "drop-after" : "drop-before");
-    else if (target.kind === "audio") target.element?.classList.add(target.audioAfter ? "drop-after" : "drop-before");
-    else container.classList.add("drop-ungrouped-target");
-  }
-
-  function resetChannelDragState() {
-    state.channelDrag.sourceId = null;
-    state.channelDrag.pointerId = null;
-    state.channelDrag.dragging = false;
-    state.channelDrag.sourceElement = null;
-    state.channelDrag.container = null;
-    state.channelDrag.previewOrder = [];
-    state.channelDrag.dropValid = false;
-    state.channelDrag.dropGroupId = null;
-    state.channelDrag.dropChannelId = null;
-    state.channelDrag.dropAfter = false;
-    state.channelDrag.dropAudioId = null;
-    state.channelDrag.dropAudioAfter = false;
-    state.channelDrag.dropSourceGroupEdgeBefore = false;
-    state.channelDrag.lastPointerY = 0;
-    state.channelDrag.direction = 0;
-    state.channelDrag.directionExtremeY = 0;
-  }
-
-  function cancelChannelPointerDrag() {
-    const drag = state.channelDrag;
-    if (!drag.sourceId) return false;
-    try { drag.sourceElement?.releasePointerCapture(drag.pointerId); } catch {}
-    clearChannelDropIndicators();
-    resetChannelDragState();
-    renderChannelTabs();
-    return true;
-  }
-
-  function beginChannelPointerDrag(event, channelId, item, container = elements.channelTabs) {
-    if (isChannelMergeModeActive() || isChannelDeleteModeActive()) return;
-    if (
-      event.button !== 0
-      || event.target.closest(".channel-tree-action, .channel-tree-expander")
-    ) return;
-    activateChannelForPointerDrag(channelId);
-    state.channelDrag.sourceId = String(channelId);
-    state.channelDrag.pointerId = event.pointerId;
-    state.channelDrag.startX = event.clientX;
-    state.channelDrag.startY = event.clientY;
-    state.channelDrag.dragging = false;
-    state.channelDrag.sourceElement = item;
-    state.channelDrag.container = container || item.parentElement || elements.channelTabs;
-    state.channelDrag.previewOrder = getChannelPreviewOrderIds(state.channelDrag.container);
-    state.channelDrag.dropValid = false;
-    state.channelDrag.dropGroupId = null;
-    state.channelDrag.dropChannelId = null;
-    state.channelDrag.dropAfter = false;
-    state.channelDrag.dropAudioId = null;
-    state.channelDrag.dropAudioAfter = false;
-    state.channelDrag.dropSourceGroupEdgeBefore = false;
-    state.channelDrag.lastPointerY = event.clientY;
-    state.channelDrag.direction = 0;
-    state.channelDrag.directionExtremeY = event.clientY;
-  }
-
-  function moveChannelPointerDrag(event) {
-    const drag = state.channelDrag;
-    if (drag.pointerId !== event.pointerId || !drag.sourceId) return;
-    // Do not keep a stale drag alive after the primary button was released
-    // outside the channel tree/browser. The first move on re-entry cancels it.
-    if (event.pointerType === "mouse" && (event.buttons & 1) === 0) {
-      cancelChannelPointerDrag();
-      return;
-    }
-    if (!drag.dragging && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 7) {
-      drag.dragging = true;
-      drag.sourceElement?.classList.add("dragging");
-    }
-    if (!drag.dragging) return;
-    updateChannelTreeDragDirection(drag, event.clientY);
-    updateChannelDragPreview(event);
-    event.preventDefault();
-  }
-
-  function commitChannelDragDrop(sourceId, { groupId = null, channelId = null, after = false, audioId = null, audioAfter = false, sourceGroupEdgeBefore = false } = {}) {
-    const source = getChannelById(sourceId);
-    if (!source) return false;
-    const previousGroupId = source.groupId == null ? null : String(source.groupId);
-    const previousGroup = previousGroupId == null ? null : getChannelGroupById(previousGroupId);
-    const previousGroupMemberCount = previousGroup ? getChannelGroupMembers(previousGroup).length : 0;
-    const targetGroup = groupId == null ? null : getChannelGroupById(groupId);
-    const targetAudio = audioId == null ? null : state.audioClips.find((clip) => String(clip.id) === String(audioId));
-    const targetAudioPreviousAnchor = targetAudio?.beforeChannelId == null ? null : String(targetAudio.beforeChannelId);
-    const nextGroupId = targetGroup ? targetGroup.id : null;
-    const activeChannelId = getActiveChannel()?.id;
-    const beforeOrder = state.channels.map((channel) => String(channel.id));
-    const withoutSource = state.channels.filter((channel) => String(channel.id) !== String(sourceId));
-    let insertIndex = withoutSource.length;
-
-    if (channelId != null) {
-      const targetIndex = withoutSource.findIndex((channel) => String(channel.id) === String(channelId));
-      if (targetIndex >= 0) insertIndex = targetIndex + (after ? 1 : 0);
-    } else if (targetGroup) {
-      const memberIndexes = withoutSource
-        .map((channel, index) => String(channel.groupId ?? "") === String(targetGroup.id) ? index : -1)
-        .filter((index) => index >= 0);
-      if (memberIndexes.length) insertIndex = Math.max(...memberIndexes) + 1;
-    }
-
-    source.groupId = nextGroupId;
-    if (targetGroup) targetGroup.beforeChannelId = null;
-    if (sourceGroupEdgeBefore && previousGroup && previousGroupMemberCount === 1 && nextGroupId == null) {
-      // Preserve the empty source group's visual position immediately after the
-      // extracted channel. Anchoring it before the following channel keeps a
-      // topmost one-channel group from jumping to the bottom when its channel
-      // is pulled out above it.
-      previousGroup.beforeChannelId = channelId == null ? null : channelId;
-    }
-    withoutSource.splice(clamp(insertIndex, 0, withoutSource.length), 0, source);
-    const afterOrder = withoutSource.map((channel) => String(channel.id));
-    const orderChanged = beforeOrder.some((id, index) => id !== afterOrder[index]);
-    const groupChanged = previousGroupId !== (nextGroupId == null ? null : String(nextGroupId));
-    const audioAnchorWillChange = Boolean(targetAudio) && (
-      (audioAfter && targetAudioPreviousAnchor !== String(source.id))
-      || (!audioAfter && targetAudioPreviousAnchor === String(source.id))
-    );
-    if (!orderChanged && !groupChanged && !audioAnchorWillChange) {
-      renderChannelTabs();
-      return false;
-    }
-    state.channels = withoutSource;
-    // Keep an exact channel/audio visual order when the channel is dropped on an
-    // audio leaf. Audio rows are anchored before a channel; anchoring the audio
-    // to the moved channel means the channel sits immediately after that audio.
-    // For a drop before the audio, clear a self-anchor so normal render order
-    // places the channel before the audio instead.
-    if (targetAudio) {
-      if (audioAfter) {
-        targetAudio.beforeChannelId = String(source.id);
-      } else if (String(targetAudio.beforeChannelId ?? "") === String(source.id)) {
-        targetAudio.beforeChannelId = getNextChannelAnchorId(source, targetAudio.groupId ?? null);
-      }
-    }
-    if (activeChannelId != null) {
-      const activeIndex = state.channels.findIndex((channel) => String(channel.id) === String(activeChannelId));
-      if (activeIndex >= 0) state.activeChannel = activeIndex;
-    }
+    if (activeId != null) state.activeChannel = Math.max(0, state.channels.findIndex((c) => String(c.id) === String(activeId)));
     markDirty(i18nText("group.history_drag"));
     renderChannelTabs();
     renderChannelEditor();
+    renderAudioLane();
     drawRoll();
-    if (groupChanged) {
-      showToast(targetGroup
-        ? i18nText("group.drag_into", [source.name, targetGroup.name])
-        : i18nText("group.drag_out", [source.name]));
-    } else {
-      showToast(`${source.name} 채널 순서를 변경했습니다.`);
-    }
     return true;
   }
 
-  function endChannelPointerDrag(event) {
-    const drag = state.channelDrag;
-    if (drag.pointerId !== event.pointerId || !drag.sourceId) return;
-    const sourceId = drag.sourceId;
-    const dragged = drag.dragging;
-    const drop = {
-      valid: drag.dropValid,
-      groupId: drag.dropGroupId,
-      channelId: drag.dropChannelId,
-      after: drag.dropAfter,
-      audioId: drag.dropAudioId,
-      audioAfter: drag.dropAudioAfter,
-      sourceGroupEdgeBefore: drag.dropSourceGroupEdgeBefore,
+  function itemTreeDragLegacyState(kind) {
+    return kind === "group" ? state.channelGroupDrag : kind === "audio" ? state.audioTreeDrag : state.channelDrag;
+  }
+
+  function clearItemTreeDragVisuals(session) {
+    if (!session) return;
+    if (session.scrollFrame != null) cancelAnimationFrame(session.scrollFrame);
+    try { if (session.container?.hasPointerCapture?.(session.pointerId)) session.container.releasePointerCapture(session.pointerId); } catch {}
+    session.indicator?.remove();
+    session.container?.classList.remove("item-tree-drag-active");
+    session.container?.querySelectorAll(".item-tree-drag-source, .item-tree-drop-group").forEach((n) => n.classList.remove("item-tree-drag-source", "item-tree-drop-group"));
+    const legacy = itemTreeDragLegacyState(session.kind);
+    legacy.sourceId = null; legacy.groupId = null; legacy.pointerId = null;
+    legacy.dragging = false; legacy.sourceElement = null; legacy.headerElement = null;
+    legacy.container = null;
+  }
+
+  function cancelItemTreeDrag(kind = null, { rerender = true } = {}) {
+    const s = itemTreeDrag;
+    if (!s || (kind && s.kind !== kind)) return false;
+    itemTreeDrag = null;
+    clearItemTreeDragVisuals(s);
+    if (rerender) { renderChannelTabs(); restoreItemTreeFocus({ kind: s.kind, id: s.id }, s.container); }
+    return true;
+  }
+
+  function beginItemTreeDrag(event, kind, id, node, container = elements.channelTabs) {
+    if (isChannelMergeModeActive() || isChannelDeleteModeActive() || event.button !== 0
+      || event.target.closest(".channel-tree-action, .channel-tree-expander, .channel-group-folder")) return;
+    cancelItemTreeDrag();
+    const layout = getItemTreeLayout();
+    const sourceKey = `${kind}:${id}`;
+    if (!layout.some((r) => ItemTree.key(r) === sourceKey)) return;
+    if (kind === "channel") activateChannelForPointerDrag(id);
+    else if (kind === "audio") activateAudioForPointerDrag(id);
+    else activateGroupForPointerDrag(id);
+    itemTreeDrag = {
+      kind, id: String(id), key: sourceKey, node, container, pointerId: event.pointerId,
+      startX: event.clientX, startY: event.clientY, lastY: event.clientY,
+      lastClientX: event.clientX, lastClientY: event.clientY, direction: 0,
+      dragging: false, valid: false, layout, initialLayout: ItemTree.copy(layout),
+      scrollFrame: null, indicator: null,
     };
-    try { drag.sourceElement?.releasePointerCapture(event.pointerId); } catch {}
-    clearChannelDropIndicators();
-    resetChannelDragState();
+    const legacy = itemTreeDragLegacyState(kind);
+    legacy.sourceId = kind === "group" ? null : String(id);
+    legacy.groupId = kind === "group" ? String(id) : null;
+    legacy.pointerId = event.pointerId; legacy.dragging = false;
+    legacy.sourceElement = node; legacy.headerElement = kind === "group" ? node : null; legacy.container = container;
+  }
 
-    if (dragged) {
-      if (drop.valid) commitChannelDragDrop(sourceId, drop);
-      else renderChannelTabs();
-      return;
+  function measureItemTree(session) {
+    return [...session.container.children].map((node) => {
+      const key = getItemTreeNodeKey(node);
+      if (!key) return null;
+      const r = node.getBoundingClientRect();
+      const collapsed = node.dataset.channelGroupId != null && Boolean(getChannelGroupById(node.dataset.channelGroupId)?.collapsed);
+      return { key, top: r.top, bottom: r.bottom, node, collapsed };
+    }).filter((r) => r && r.bottom > r.top);
+  }
+
+  function paintItemTreeDropIndicator(s) {
+    const source = s.layout.find((r) => ItemTree.key(r) === s.key);
+    if (!source) return;
+    const containerRect = s.container.getBoundingClientRect();
+    const nodes = measureItemTree(s);
+    const movingKeys = new Set([s.key]);
+    if (s.kind === "group") for (const r of s.layout) if (r.parentId === s.id) movingKeys.add(ItemTree.key(r));
+    const movingNodes = nodes.filter((r) => movingKeys.has(r.key));
+    s.container.querySelectorAll(".item-tree-drop-group").forEach((node) => node.classList.remove("item-tree-drop-group"));
+    if (source.parentId != null) {
+      nodes.find((r) => r.key === `group:${source.parentId}`)?.node.classList.add("item-tree-drop-group");
     }
+    for (const row of nodes) row.node.classList.toggle("item-tree-drag-source", movingKeys.has(row.key));
+    if (!s.indicator) {
+      s.indicator = document.createElement("div");
+      s.indicator.className = "item-tree-drop-indicator";
+      s.indicator.setAttribute("aria-hidden", "true");
+      document.body.append(s.indicator);
+    }
+    const roots = ItemTree.siblings(s.layout, null);
+    const isRootEnd = source.parentId == null && ItemTree.key(roots[roots.length - 1]) === s.key;
+    const edge = isRootEnd ? movingNodes[movingNodes.length - 1]?.bottom : movingNodes[0]?.top;
+    s.indicator.hidden = !s.valid || !Number.isFinite(edge) || edge < containerRect.top - 2 || edge > containerRect.bottom + 2;
+    const inset = source.parentId == null ? 3 : (s.container === elements.collapsedChannelList ? 9 : 19);
+    s.indicator.style.left = `${containerRect.left + inset}px`;
+    s.indicator.style.top = `${clamp(edge ?? containerRect.top, containerRect.top + 1, containerRect.bottom - 2)}px`;
+    s.indicator.style.width = `${Math.max(8, containerRect.width - inset - 5)}px`;
+  }
 
-    const index = state.channels.findIndex((channel) => String(channel.id) === String(sourceId));
-    if (index < 0) return;
+  function updateItemTreeDragTarget(s) {
+    const rect = s.container.getBoundingClientRect();
+    const y = s.lastClientY;
+    s.valid = s.lastClientX >= rect.left - 16 && s.lastClientX <= rect.right + 16
+      && y >= rect.top - 32 && y <= rect.bottom + 32;
+    if (!s.valid) { if (s.indicator) s.indicator.hidden = true; return; }
+    const measured = measureItemTree(s);
+    let target = ItemTree.resolve(s.layout, s.key, measured, y, s.direction);
+    // At a scroll boundary, overshooting the viewport only means a root edge
+    // once the corresponding content edge is actually visible.
+    if (s.container.scrollTop <= 1 && y < rect.top + 3) target = { parentId: null, index: 0 };
+    if (s.container.scrollTop + s.container.clientHeight >= s.container.scrollHeight - 1 && y > rect.bottom - 3) {
+      target = { parentId: null, index: ItemTree.siblings(s.layout, null, s.key).length };
+    }
+    if (target) {
+      const next = ItemTree.move(s.layout, s.key, target.parentId, target.index);
+      const oldIndex = s.layout.findIndex((r) => ItemTree.key(r) === s.key);
+      const newIndex = next.findIndex((r) => ItemTree.key(r) === s.key);
+      const moveDirection = Math.sign(newIndex - oldIndex);
+      // A row moving under the cursor after reflow cannot reverse the drag.
+      // Membership-only changes have no directional restriction.
+      if ((!moveDirection || !s.direction || moveDirection === s.direction)
+        && ItemTree.signature(next) !== ItemTree.signature(s.layout)) {
+        s.layout = next;
+        const scrollTop = s.container.scrollTop;
+        arrangeItemTreeNodes(s.container, next);
+        s.container.scrollTop = scrollTop;
+      }
+    }
+    paintItemTreeDropIndicator(s);
+  }
+
+  function scheduleItemTreeDragScroll(s) {
+    if (s.scrollFrame != null) return;
+    const tick = () => {
+      s.scrollFrame = null;
+      if (itemTreeDrag !== s || !s.dragging) return;
+      const r = s.container.getBoundingClientRect();
+      const edge = Math.min(32, r.height / 4);
+      const y = s.lastClientY;
+      const speed = !s.valid ? 0 : y < r.top + edge ? -Math.ceil(2 + (r.top + edge - y) / 4)
+        : y > r.bottom - edge ? Math.ceil(2 + (y - r.bottom + edge) / 4) : 0;
+      const before = s.container.scrollTop;
+      if (speed) s.container.scrollTop += clamp(speed, -18, 18);
+      if (s.container.scrollTop !== before) updateItemTreeDragTarget(s);
+      s.scrollFrame = requestAnimationFrame(tick);
+    };
+    s.scrollFrame = requestAnimationFrame(tick);
+  }
+
+  function moveItemTreeDrag(event, kind) {
+    const s = itemTreeDrag;
+    if (!s || s.kind !== kind || event.pointerId !== s.pointerId || s.lastMoveEvent === event) return;
+    s.lastMoveEvent = event;
+    if (event.pointerType === "mouse" && !(event.buttons & 1)) { cancelItemTreeDrag(); return; }
+    s.lastClientX = event.clientX; s.lastClientY = event.clientY;
+    const delta = event.clientY - s.lastY;
+    if (Math.abs(delta) >= 1) { s.direction = Math.sign(delta); s.lastY = event.clientY; }
+    if (!s.dragging && Math.hypot(event.clientX - s.startX, event.clientY - s.startY) >= 7) {
+      s.dragging = true; itemTreeDragLegacyState(kind).dragging = true;
+      s.container.classList.add("item-tree-drag-active");
+      if (event.pointerType === "touch" || event.pointerType === "pen") {
+        try { s.container.setPointerCapture(event.pointerId); } catch {}
+      }
+    }
+    if (!s.dragging) return;
+    updateItemTreeDragTarget(s);
+    scheduleItemTreeDragScroll(s);
+    event.preventDefault();
+  }
+
+  function finishItemTreeClick(s) {
+    if (s.kind === "audio") { handleAudioEditActivation(s.id); restoreItemTreeFocus({ kind: s.kind, id: s.id }, s.container); return; }
     const now = performance.now();
-    const doubleClick = state.channelEdit.lastClickChannelId === String(sourceId)
-      && now - state.channelEdit.lastClickAt <= 360;
-    state.channelEdit.lastClickChannelId = doubleClick ? null : String(sourceId);
-    state.channelEdit.lastClickAt = doubleClick ? 0 : now;
-    if (doubleClick) {
-      openChannelEditDialog(sourceId);
+    if (s.kind === "group") {
+      const doubleClick = state.channelEdit.lastClickGroupId === s.id && now - state.channelEdit.lastClickGroupAt <= 360;
+      state.channelEdit.lastClickGroupId = doubleClick ? null : s.id;
+      state.channelEdit.lastClickGroupAt = doubleClick ? 0 : now;
+      if (doubleClick) openChannelGroupDialog(s.id);
+      else { scheduleAutosave(250); restoreItemTreeFocus({ kind: s.kind, id: s.id }, s.container); }
     } else {
-      selectChannel(index);
-      requestAnimationFrame(() => {
-        const restored = findChannelTreeItemByIdentity({ kind: "channel", id: String(sourceId) });
-        restored?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
-        restored?.scrollIntoView({ block: "nearest" });
-      });
+      const doubleClick = state.channelEdit.lastClickChannelId === s.id && now - state.channelEdit.lastClickAt <= 360;
+      state.channelEdit.lastClickChannelId = doubleClick ? null : s.id;
+      state.channelEdit.lastClickAt = doubleClick ? 0 : now;
+      if (doubleClick) openChannelEditDialog(s.id);
+      else {
+        const index = state.channels.findIndex((c) => String(c.id) === s.id);
+        if (index >= 0) selectChannel(index);
+        restoreItemTreeFocus({ kind: s.kind, id: s.id }, s.container);
+      }
     }
+  }
+
+  function endItemTreeDrag(event, kind) {
+    const s = itemTreeDrag;
+    if (!s || s.kind !== kind || event.pointerId !== s.pointerId) return;
+    itemTreeDrag = null;
+    clearItemTreeDragVisuals(s);
+    if (!s.dragging) { finishItemTreeClick(s); return; }
+    state.suppressCollapsedGroupClickUntil = performance.now() + 260;
+    state.channelEdit.lastClickChannelId = null;
+    state.channelEdit.lastClickGroupId = null;
+    const rect = s.container.getBoundingClientRect();
+    const inside = event.clientX >= rect.left - 16 && event.clientX <= rect.right + 16
+      && event.clientY >= rect.top - 32 && event.clientY <= rect.bottom + 32;
+    if (s.valid && inside) commitItemTreeLayout(s.layout, s.key);
+    else renderChannelTabs();
+    restoreItemTreeFocus({ kind: s.kind, id: s.id }, s.container);
+  }
+
+  function handleItemTreeDragKey(event) {
+    if (event.key !== "Escape" || !itemTreeDrag) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    cancelItemTreeDrag();
+    closeContextMenu();
+  }
+
+  function beginChannelPointerDrag(e, id, node, container = elements.channelTabs) { beginItemTreeDrag(e, "channel", id, node, container); }
+  function moveChannelPointerDrag(e) { moveItemTreeDrag(e, "channel"); }
+  function endChannelPointerDrag(e) { endItemTreeDrag(e, "channel"); }
+  function cancelChannelPointerDrag(options) { return cancelItemTreeDrag("channel", options); }
+  function beginChannelGroupPointerDrag(e, id, node, container = elements.channelTabs) { beginItemTreeDrag(e, "group", id, node, container); }
+  function moveChannelGroupPointerDrag(e) { moveItemTreeDrag(e, "group"); }
+  function endChannelGroupPointerDrag(e) { endItemTreeDrag(e, "group"); }
+  function cancelChannelGroupPointerDrag(options) { return cancelItemTreeDrag("group", options); }
+  function beginAudioTreeDrag(e, id, node, container = elements.channelTabs) { beginItemTreeDrag(e, "audio", id, node, container); }
+  function moveAudioTreeDrag(e) { moveItemTreeDrag(e, "audio"); }
+  function endAudioTreeDrag(e) { endItemTreeDrag(e, "audio"); }
+  function cancelAudioTreeDrag(options) { return cancelItemTreeDrag("audio", options); }
+
+  function isRenderedGroupChildNode(node) { return Boolean(node?.classList?.contains("is-group-child")); }
+
+  function moveChannelById(sourceId, targetId, placeAfter = false) {
+    const layout = getItemTreeLayout();
+    const target = layout.find((r) => r.kind === "channel" && r.id === String(targetId));
+    if (!target || String(sourceId) === String(targetId)) return false;
+    const sourceKey = `channel:${sourceId}`;
+    const siblings = ItemTree.siblings(layout, target.parentId, sourceKey);
+    const index = siblings.findIndex((r) => ItemTree.key(r) === ItemTree.key(target));
+    return commitItemTreeLayout(ItemTree.move(layout, sourceKey, target.parentId, index + (placeAfter ? 1 : 0)), sourceKey);
   }
 
   function activateGroupForPointerDrag(groupId) {
@@ -7766,348 +7806,6 @@
     drawRoll();
     updateChannelInfo();
     return true;
-  }
-
-  function getChannelGroupDragContainer() {
-    return state.channelGroupDrag.container || elements.channelTabs || null;
-  }
-
-  function isRenderedGroupChildNode(node) {
-    return Boolean(node?.matches?.(".channel-tree-channel-item.is-group-child, .audio-source-item.is-group-child, .sidebar-rail-channel.is-group-child"));
-  }
-
-  function getRenderedGroupBlock(groupId, container = getChannelGroupDragContainer()) {
-    const header = container?.querySelector(`[data-channel-group-id="${CSS.escape(String(groupId))}"]`);
-    if (!header) return [];
-    const result = [header];
-    let node = header.nextElementSibling;
-    while (isRenderedGroupChildNode(node)) {
-      if (node.dataset.audioClipId != null) {
-        const clip = state.audioClips.find((item) => String(item.id) === String(node.dataset.audioClipId));
-        if (String(clip?.groupId ?? "") !== String(groupId)) break;
-      } else {
-        const channel = getChannelById(node.dataset.channelId);
-        if (String(channel?.groupId ?? "") !== String(groupId)) break;
-      }
-      result.push(node);
-      node = node.nextElementSibling;
-    }
-    return result;
-  }
-
-  function resetChannelGroupDragState() {
-    const drag = state.channelGroupDrag;
-    drag.groupId = null;
-    drag.pointerId = null;
-    drag.container = null;
-    drag.startX = 0;
-    drag.startY = 0;
-    drag.dragging = false;
-    drag.headerElement = null;
-    drag.blockElements = [];
-    drag.targetKind = null;
-    drag.targetId = null;
-    drag.after = false;
-    drag.dropValid = false;
-    drag.lastPointerY = 0;
-    drag.direction = 0;
-    drag.directionExtremeY = 0;
-  }
-
-  function clearChannelGroupDragIndicators() {
-    getChannelGroupDragContainer()?.querySelectorAll("[data-channel-group-id], [data-channel-id]").forEach((node) => {
-      node.classList.remove("dragging-group", "dragging-group-block", "drop-group-before", "drop-group-after");
-    });
-  }
-
-  function cancelChannelGroupPointerDrag({ rerender = true } = {}) {
-    const drag = state.channelGroupDrag;
-    if (!drag.groupId) return false;
-    try { drag.headerElement?.releasePointerCapture?.(drag.pointerId); } catch {}
-    clearChannelGroupDragIndicators();
-    resetChannelGroupDragState();
-    if (rerender) renderChannelTabs();
-    return true;
-  }
-
-  function beginChannelGroupPointerDrag(event, groupId, item, container = elements.channelTabs) {
-    if (isChannelMergeModeActive() || isChannelDeleteModeActive()) return;
-    if (event.button !== 0 || event.target.closest(".channel-tree-action, .channel-group-folder")) return;
-    cancelChannelPointerDrag();
-    activateGroupForPointerDrag(groupId);
-    const drag = state.channelGroupDrag;
-    drag.groupId = String(groupId);
-    drag.pointerId = event.pointerId;
-    drag.container = container || item.parentElement || elements.channelTabs;
-    drag.startX = event.clientX;
-    drag.startY = event.clientY;
-    drag.dragging = false;
-    drag.headerElement = item;
-    drag.blockElements = getRenderedGroupBlock(groupId, drag.container);
-    drag.targetKind = null;
-    drag.targetId = null;
-    drag.after = false;
-    drag.dropValid = false;
-    drag.lastPointerY = event.clientY;
-    drag.direction = 0;
-    drag.directionExtremeY = event.clientY;
-  }
-
-  function buildChannelGroupDragTargetFromNode(node, clientY) {
-    const container = getChannelGroupDragContainer();
-    if (!node || !container || !container.contains(node)) return null;
-    if (node.matches?.("[data-channel-group-id]")) {
-      const id = String(node.dataset.channelGroupId || "");
-      if (!id || id === String(state.channelGroupDrag.groupId)) return null;
-      const block = getRenderedGroupBlock(id, container);
-      const firstRect = node.getBoundingClientRect();
-      const lastRect = block.length > 1 ? block[block.length - 1].getBoundingClientRect() : firstRect;
-      const middle = (firstRect.top + lastRect.bottom) / 2;
-      return { kind: "group", id, after: Number(clientY) >= middle, element: node };
-    }
-    if (node.matches?.("[data-channel-id]")) {
-      const channel = getChannelById(node.dataset.channelId);
-      if (channel?.groupId != null) {
-        const header = container.querySelector(`[data-channel-group-id="${CSS.escape(String(channel.groupId))}"]`);
-        return buildChannelGroupDragTargetFromNode(header, clientY);
-      }
-      const r = node.getBoundingClientRect();
-      return { kind: "channel", id: String(node.dataset.channelId || ""), after: Number(clientY) >= r.top + r.height / 2, element: node };
-    }
-    return null;
-  }
-
-  function getChannelGroupDragGeometryTarget(clientY) {
-    const container = getChannelGroupDragContainer();
-    if (!container) return null;
-    const y = Number(clientY);
-    if (!Number.isFinite(y)) return null;
-    const moving = new Set(state.channelGroupDrag.blockElements || []);
-    const candidates = [...container.children].filter((node) => {
-      if (moving.has(node)) return false;
-      if (node.matches?.("[data-channel-group-id]")) return true;
-      if (!node.matches?.("[data-channel-id]")) return false;
-      const channel = getChannelById(node.dataset.channelId);
-      return channel?.groupId == null;
-    });
-    if (!candidates.length) return { kind: "end", id: null, after: true, element: null };
-
-    const measured = candidates.map((node) => {
-      if (node.matches?.("[data-channel-group-id]")) {
-        const block = getRenderedGroupBlock(node.dataset.channelGroupId, container).filter((child) => !moving.has(child));
-        const firstRect = node.getBoundingClientRect();
-        const lastRect = block.length > 1 ? block[block.length - 1].getBoundingClientRect() : firstRect;
-        return { node, top: firstRect.top, bottom: lastRect.bottom };
-      }
-      const r = node.getBoundingClientRect();
-      return { node, top: r.top, bottom: r.bottom };
-    });
-    const last = measured[measured.length - 1];
-    if (y > last.bottom) return { kind: "end", id: null, after: true, element: null };
-
-    let best = measured[0];
-    let bestDistance = Infinity;
-    for (const entry of measured) {
-      const distance = y < entry.top ? entry.top - y : (y > entry.bottom ? y - entry.bottom : 0);
-      if (distance < bestDistance) {
-        best = entry;
-        bestDistance = distance;
-        if (distance === 0) break;
-      }
-    }
-    return buildChannelGroupDragTargetFromNode(best.node, y);
-  }
-
-  function resolveChannelGroupDragTarget(event) {
-    const container = getChannelGroupDragContainer();
-    if (!container) return null;
-    const rect = container.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return null;
-    const hit = document.elementFromPoint(event.clientX, event.clientY);
-    if (hit && container.contains(hit)) {
-      const groupItem = hit.closest?.("[data-channel-group-id]");
-      if (groupItem && container.contains(groupItem)) {
-        const target = buildChannelGroupDragTargetFromNode(groupItem, event.clientY);
-        if (target) return target;
-      }
-      const channelItem = hit.closest?.("[data-channel-id]");
-      if (channelItem && container.contains(channelItem)) {
-        const target = buildChannelGroupDragTargetFromNode(channelItem, event.clientY);
-        if (target) return target;
-      }
-    }
-    return getChannelGroupDragGeometryTarget(event.clientY);
-  }
-
-  function getGroupTargetReference(target) {
-    const container = getChannelGroupDragContainer();
-    if (!target?.element) return container?.querySelector("[data-audio-clip-id]") || null;
-    if (!target.after) return target.element;
-    if (target.kind === "group") {
-      let node = target.element.nextElementSibling;
-      while (isRenderedGroupChildNode(node)) node = node.nextElementSibling;
-      return node;
-    }
-    return target.element.nextElementSibling;
-  }
-
-  function moveChannelGroupPreview(target) {
-    const drag = state.channelGroupDrag;
-    const container = getChannelGroupDragContainer();
-    if (!drag.dragging || !container || !target) return false;
-    drag.blockElements = drag.blockElements.filter((node) => node?.isConnected);
-    const reference = getGroupTargetReference(target);
-    const moveDirection = getLiveDomMoveDirection(container, drag.blockElements, reference);
-    if (moveDirection && !dragDirectionAllowsLiveMove(drag, moveDirection)) return false;
-
-    // Avoid reinserting the same block on every pointermove. Besides saving a
-    // layout pass, this keeps hit-testing stable while crossing row boundaries.
-    if (moveDirection) {
-      for (const node of drag.blockElements) container.insertBefore(node, reference || null);
-    }
-    clearChannelGroupDragIndicators();
-    drag.headerElement?.classList.add("dragging-group");
-    drag.blockElements.forEach((node) => node?.classList.add("dragging-group-block"));
-    target.element?.classList.add(target.after ? "drop-group-after" : "drop-group-before");
-    drag.targetKind = target.kind;
-    drag.targetId = target.id;
-    drag.after = Boolean(target.after);
-    drag.dropValid = true;
-    return true;
-  }
-
-  function moveChannelGroupPointerDrag(event) {
-    const drag = state.channelGroupDrag;
-    if (drag.pointerId !== event.pointerId || !drag.groupId) return;
-    // Same stale-drag guard as channels: releasing the mouse outside the tree
-    // must never leave a group in a latched drag state.
-    if (event.pointerType === "mouse" && (event.buttons & 1) === 0) {
-      cancelChannelGroupPointerDrag();
-      return;
-    }
-    if (!drag.dragging && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 7) {
-      drag.dragging = true;
-      drag.blockElements.forEach((node) => node?.classList.add("dragging-group-block"));
-      drag.headerElement?.classList.add("dragging-group");
-    }
-    if (!drag.dragging) return;
-    updateChannelTreeDragDirection(drag, event.clientY);
-    const container = getChannelGroupDragContainer();
-    const rect = container?.getBoundingClientRect();
-    if (rect) {
-      if (event.clientY < rect.top + 42) container.scrollTop -= 14;
-      else if (event.clientY > rect.bottom - 42) container.scrollTop += 14;
-    }
-    const target = resolveChannelGroupDragTarget(event);
-    if (target) {
-      moveChannelGroupPreview(target);
-    } else {
-      clearChannelGroupDragIndicators();
-      drag.headerElement?.classList.add("dragging-group");
-      drag.blockElements.forEach((node) => node?.classList.add("dragging-group-block"));
-      drag.targetKind = null;
-      drag.targetId = null;
-      drag.after = false;
-      drag.dropValid = false;
-    }
-    event.preventDefault();
-  }
-
-  function findChannelAfterTopLevelGroup(groupId) {
-    const members = getChannelGroupMembers(groupId);
-    if (!members.length) return null;
-    const memberIds = new Set(members.map((channel) => String(channel.id)));
-    const lastIndex = state.channels.reduce((max, channel, index) => memberIds.has(String(channel.id)) ? index : max, -1);
-    for (let i = lastIndex + 1; i < state.channels.length; i += 1) {
-      const channel = state.channels[i];
-      if (!memberIds.has(String(channel.id))) return channel;
-    }
-    return null;
-  }
-
-  function commitChannelGroupDrag(groupId, { kind = "end", id = null, after = true } = {}) {
-    const group = getChannelGroupById(groupId);
-    if (!group) return false;
-    const members = getChannelGroupMembers(group);
-    const memberIds = new Set(members.map((channel) => String(channel.id)));
-    const beforeOrder = state.channels.map((channel) => String(channel.id));
-    if (!members.length) {
-      if (kind === "channel" && id) group.beforeChannelId = after ? (state.channels[state.channels.findIndex((c) => String(c.id) === String(id)) + 1]?.id ?? null) : id;
-      else if (kind === "group" && id) {
-        const targetMembers = getChannelGroupMembers(id);
-        if (targetMembers.length) group.beforeChannelId = after ? (findChannelAfterTopLevelGroup(id)?.id ?? null) : targetMembers[0].id;
-        else group.beforeChannelId = null;
-      } else group.beforeChannelId = null;
-      markDirty(i18nText("group.history_drag"));
-      renderChannelTabs();
-      return true;
-    }
-
-    const remaining = state.channels.filter((channel) => !memberIds.has(String(channel.id)));
-    let insertIndex = remaining.length;
-    if (kind === "channel" && id != null) {
-      const targetIndex = remaining.findIndex((channel) => String(channel.id) === String(id));
-      if (targetIndex >= 0) insertIndex = targetIndex + (after ? 1 : 0);
-    } else if (kind === "group" && id != null) {
-      const targetGroup = getChannelGroupById(id);
-      const targetMemberIds = new Set(getChannelGroupMembers(targetGroup).map((channel) => String(channel.id)));
-      const indexes = remaining.map((channel, index) => targetMemberIds.has(String(channel.id)) ? index : -1).filter((index) => index >= 0);
-      if (indexes.length) insertIndex = after ? Math.max(...indexes) + 1 : Math.min(...indexes);
-    }
-    remaining.splice(clamp(insertIndex, 0, remaining.length), 0, ...members);
-    const afterOrder = remaining.map((channel) => String(channel.id));
-    const changed = beforeOrder.some((value, index) => value !== afterOrder[index]);
-    group.beforeChannelId = null;
-    if (!changed) { renderChannelTabs(); return false; }
-    state.channels = remaining;
-    markDirty(i18nText("group.history_drag"));
-    renderChannelTabs();
-    renderChannelEditor();
-    drawRoll();
-    return true;
-  }
-
-  function endChannelGroupPointerDrag(event) {
-    const drag = state.channelGroupDrag;
-    if (drag.pointerId !== event.pointerId || !drag.groupId) return;
-    const groupId = drag.groupId;
-    const dragged = drag.dragging;
-    const dropValid = drag.dropValid;
-    const target = { kind: drag.targetKind || "end", id: drag.targetId, after: drag.after };
-    clearChannelGroupDragIndicators();
-    resetChannelGroupDragState();
-    if (dragged) {
-      state.suppressCollapsedGroupClickUntil = performance.now() + 260;
-      if (dropValid) commitChannelGroupDrag(groupId, target);
-      else renderChannelTabs();
-      return;
-    }
-
-    // Pointer capture on a moving group header used to swallow click/dblclick.
-    // Resolve selection/edit explicitly on pointer-up, like channel rows do.
-    const now = performance.now();
-    const doubleClick = state.channelEdit.lastClickGroupId === String(groupId)
-      && now - state.channelEdit.lastClickGroupAt <= 360;
-    state.channelEdit.lastClickGroupId = doubleClick ? null : String(groupId);
-    state.channelEdit.lastClickGroupAt = doubleClick ? 0 : now;
-    if (doubleClick) {
-      // Selection was already applied on pointer-down. Open the dialog directly
-      // on the second click so the first click never rebuilds/moves the tree.
-      // This is especially important for the last visible groups near the
-      // scroll boundary, where a render + scrollIntoView between clicks could
-      // move the row out from under the pointer and break double-click.
-      openChannelGroupDialog(groupId);
-    } else {
-      // beginChannelGroupPointerDrag() already selected the group without
-      // rebuilding the channel tree. Keep that DOM in place until a potential
-      // second click arrives; only move keyboard focus, without scrolling.
-      state.activePanel = "notes";
-      state.activeAudioClipId = null;
-      state.selectedChannelGroupId = String(groupId);
-      scheduleAutosave(250);
-      const current = elements.channelTabs?.querySelector(`[data-channel-group-id="${CSS.escape(String(groupId))}"]`);
-      current?.querySelector(".channel-group-main")?.focus({ preventScroll: true });
-    }
   }
 
   function getAudioClipHue(clip, fallbackIndex = 0) {
@@ -8176,25 +7874,6 @@
     return changed;
   }
 
-  function getNextChannelAnchorId(channel, groupId = channel?.groupId ?? null) {
-    if (!channel) return null;
-    const start = state.channels.findIndex((item) => String(item.id) === String(channel.id));
-    if (start < 0) return null;
-    for (let i = start + 1; i < state.channels.length; i += 1) {
-      const candidate = state.channels[i];
-      if (groupId == null) return String(candidate.id);
-      if (String(candidate.groupId ?? "") === String(groupId)) return String(candidate.id);
-      if (candidate.groupId == null) break;
-    }
-    return null;
-  }
-
-  function getRootAnchorBeforeGroup(group) {
-    const members = getChannelGroupMembers(group);
-    if (members.length) return String(members[0].id);
-    return group?.beforeChannelId == null ? null : String(group.beforeChannelId);
-  }
-
   function activateAudioForPointerDrag(clipId) {
     const clip = state.audioClips.find((item) => String(item.id) === String(clipId));
     if (!clip) return false;
@@ -8219,288 +7898,6 @@
     drawRoll();
     updateChannelInfo();
     return true;
-  }
-
-  function moveAudioTreePreviewElement(target) {
-    const drag = state.audioTreeDrag;
-    const container = drag.container || elements.channelTabs;
-    const sourceElement = drag.sourceElement;
-    if (!target || !container || !sourceElement) return false;
-
-    let reference = null;
-    if ((target.kind === "audio" || target.kind === "channel") && target.element && target.element !== sourceElement) {
-      reference = target.after ? target.element.nextElementSibling : target.element;
-      if (reference === sourceElement) reference = sourceElement.nextElementSibling;
-    } else if (target.kind === "group" && target.element) {
-      if (!target.after) {
-        reference = target.element.nextElementSibling;
-        if (reference === sourceElement) reference = reference.nextElementSibling;
-      } else {
-        reference = target.element.nextElementSibling;
-        while (reference) {
-          if (reference === sourceElement) {
-            reference = reference.nextElementSibling;
-            continue;
-          }
-          if (!isRenderedGroupChildNode(reference)) break;
-          reference = reference.nextElementSibling;
-        }
-      }
-    } else if (target.kind === "root" && target.element) {
-      if (target.edge === "after") {
-        reference = target.element.nextElementSibling;
-        while (reference) {
-          if (reference === sourceElement) {
-            reference = reference.nextElementSibling;
-            continue;
-          }
-          if (!isRenderedGroupChildNode(reference)) break;
-          reference = reference.nextElementSibling;
-        }
-      } else {
-        reference = target.element;
-      }
-      if (reference === sourceElement) reference = sourceElement.nextElementSibling;
-    } else if (target.kind === "root") {
-      reference = null;
-    }
-
-    const moveDirection = getLiveDomMoveDirection(container, sourceElement, reference);
-    const groupedPreview = target.groupId != null;
-    const groupingChanged = sourceElement.classList.contains("is-group-child") !== groupedPreview;
-    if (moveDirection && !dragDirectionAllowsLiveMove(drag, moveDirection)) return false;
-
-    sourceElement.classList.toggle("is-group-child", groupedPreview);
-    sourceElement.setAttribute("aria-level", groupedPreview ? "2" : "1");
-    if (moveDirection || groupingChanged) {
-      if (reference !== sourceElement && (moveDirection || reference)) {
-        container.insertBefore(sourceElement, reference || null);
-      } else if (reference == null && sourceElement !== container.lastElementChild) {
-        container.append(sourceElement);
-      }
-    }
-    return true;
-  }
-
-  function resetAudioTreeDrag() {
-    const drag = state.audioTreeDrag;
-    try { drag.sourceElement?.releasePointerCapture?.(drag.pointerId); } catch {}
-    drag.sourceElement?.classList.remove("dragging");
-    elements.channelTabs?.querySelectorAll(".drop-before, .drop-after, .drop-group-target, .drop-group-before, .drop-group-after").forEach((node) => {
-      node.classList.remove("drop-before", "drop-after", "drop-group-target", "drop-group-before", "drop-group-after");
-    });
-    drag.sourceId = null;
-    drag.pointerId = null;
-    drag.startX = 0;
-    drag.startY = 0;
-    drag.lastPointerY = 0;
-    drag.direction = 0;
-    drag.directionExtremeY = 0;
-    drag.dragging = false;
-    drag.sourceElement = null;
-    drag.container = null;
-    drag.dropTarget = null;
-    drag.previewNextAudioId = null;
-  }
-
-  function cancelAudioTreeDrag({ rerender = true } = {}) {
-    if (!state.audioTreeDrag.sourceId) return false;
-    resetAudioTreeDrag();
-    if (rerender) renderChannelTabs();
-    return true;
-  }
-
-  function buildAudioTreeTargetFromNode(node, clientY) {
-    if (!node) return null;
-    const source = state.audioClips.find((clip) => String(clip.id) === String(state.audioTreeDrag.sourceId));
-    if (!source) return null;
-    if (node.matches?.("[data-audio-clip-id]")) {
-      const target = state.audioClips.find((clip) => String(clip.id) === String(node.dataset.audioClipId));
-      if (!target || String(target.id) === String(source.id)) return null;
-      const rect = node.getBoundingClientRect();
-      return { kind: "audio", targetAudioId: String(target.id), groupId: target.groupId ?? null, beforeChannelId: target.beforeChannelId ?? null, after: Number(clientY) >= rect.top + rect.height / 2, element: node };
-    }
-    if (node.matches?.("[data-channel-id]")) {
-      const channel = getChannelById(node.dataset.channelId);
-      if (!channel) return null;
-      const rect = node.getBoundingClientRect();
-      const after = Number(clientY) >= rect.top + rect.height / 2;
-      return {
-        kind: "channel",
-        groupId: channel.groupId ?? null,
-        beforeChannelId: after ? getNextChannelAnchorId(channel, channel.groupId ?? null) : String(channel.id),
-        after,
-        element: node,
-      };
-    }
-    if (node.matches?.("[data-channel-group-id]")) {
-      const group = getChannelGroupById(node.dataset.channelGroupId);
-      if (!group) return null;
-      const rect = node.getBoundingClientRect();
-      const midpoint = rect.top + rect.height / 2;
-      const direction = Number(state.audioTreeDrag.direction) || 0;
-      const sourceGroupId = source.groupId == null ? null : String(source.groupId);
-      const targetGroupId = String(group.id);
-      if (sourceGroupId != null) {
-        if (sourceGroupId === targetGroupId && direction < 0 && Number(clientY) < midpoint) {
-          return { kind: "root", groupId: null, beforeChannelId: getRootAnchorBeforeGroup(group), after: false, element: node, edge: "before" };
-        }
-        if (sourceGroupId !== targetGroupId && direction > 0 && Number(clientY) < midpoint) {
-          return { kind: "root", groupId: null, beforeChannelId: getRootAnchorBeforeGroup(group), after: false, element: node, edge: "before" };
-        }
-        if (sourceGroupId !== targetGroupId && direction < 0 && Number(clientY) >= midpoint) {
-          return { kind: "root", groupId: null, beforeChannelId: findChannelAfterTopLevelGroup(group.id)?.id ?? null, after: true, element: node, edge: "after" };
-        }
-      }
-      const enterAtStart = direction > 0 || (direction === 0 && Number(clientY) < midpoint);
-      const firstMember = getChannelGroupMembers(group)[0] || null;
-      return { kind: "group", groupId: group.id, beforeChannelId: enterAtStart && firstMember ? String(firstMember.id) : null, after: !enterAtStart, element: node };
-    }
-    return null;
-  }
-
-  function resolveAudioTreeDragTarget(event) {
-    const container = state.audioTreeDrag.container || elements.channelTabs;
-    if (!container) return null;
-    const rect = container.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return null;
-    const hit = document.elementFromPoint(event.clientX, event.clientY);
-    const item = hit?.closest?.("[data-audio-clip-id], [data-channel-id], [data-channel-group-id]");
-    if (item && container.contains(item)) {
-      const target = buildAudioTreeTargetFromNode(item, event.clientY);
-      if (target) return target;
-    }
-    const candidates = [...container.children].filter((node) => (
-      node !== state.audioTreeDrag.sourceElement
-      && (node.matches?.("[data-audio-clip-id]") || node.matches?.("[data-channel-id]") || node.matches?.("[data-channel-group-id]"))
-    ));
-    if (!candidates.length) return { kind: "root", groupId: null, beforeChannelId: null, after: true, element: null };
-    const y = Number(event.clientY);
-    const measured = candidates.map((node) => ({ node, rect: node.getBoundingClientRect() }));
-    if (y > measured[measured.length - 1].rect.bottom) return { kind: "root", groupId: null, beforeChannelId: null, after: true, element: null };
-    let best = measured[0];
-    let distance = Infinity;
-    for (const entry of measured) {
-      const d = y < entry.rect.top ? entry.rect.top - y : (y > entry.rect.bottom ? y - entry.rect.bottom : 0);
-      if (d < distance) { best = entry; distance = d; if (d === 0) break; }
-    }
-    return buildAudioTreeTargetFromNode(best.node, y);
-  }
-
-  function beginAudioTreeDrag(event, clipId, item, container = elements.channelTabs) {
-    if (isChannelMergeModeActive() || isChannelDeleteModeActive()) return;
-    if (event.button !== 0 || event.target.closest(".channel-tree-action")) return;
-    activateAudioForPointerDrag(clipId);
-    const drag = state.audioTreeDrag;
-    drag.sourceId = String(clipId);
-    drag.pointerId = event.pointerId;
-    drag.startX = event.clientX;
-    drag.startY = event.clientY;
-    drag.lastPointerY = event.clientY;
-    drag.direction = 0;
-    drag.directionExtremeY = event.clientY;
-    drag.dragging = false;
-    drag.sourceElement = item;
-    drag.container = container || item.parentElement || elements.channelTabs;
-    drag.dropTarget = null;
-    drag.previewNextAudioId = null;
-    // Match channel/group dragging: do not capture the pointer on the moving DOM row.
-    // Re-inserting a captured audio row during live preview can release capture and
-    // cancel the gesture. Movement/up are tracked on window instead.
-  }
-
-  function moveAudioTreeDrag(event) {
-    const drag = state.audioTreeDrag;
-    if (!drag.sourceId || drag.pointerId !== event.pointerId) return;
-    if (event.pointerType === "mouse" && (event.buttons & 1) === 0) { cancelAudioTreeDrag(); return; }
-    if (!drag.dragging && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 7) {
-      drag.dragging = true;
-      drag.sourceElement?.classList.add("dragging");
-    }
-    if (!drag.dragging) return;
-    updateChannelTreeDragDirection(drag, event.clientY);
-    const container = drag.container || elements.channelTabs;
-    const rect = container?.getBoundingClientRect();
-    if (rect) {
-      if (event.clientY < rect.top + 42) container.scrollTop -= 14;
-      else if (event.clientY > rect.bottom - 42) container.scrollTop += 14;
-    }
-    container?.querySelectorAll(".drop-before, .drop-after, .drop-group-target, .drop-group-before, .drop-group-after").forEach((node) => {
-      node.classList.remove("drop-before", "drop-after", "drop-group-target", "drop-group-before", "drop-group-after");
-    });
-    const target = resolveAudioTreeDragTarget(event);
-    if (target) {
-      moveAudioTreePreviewElement(target);
-      let nextNode = drag.sourceElement?.nextElementSibling || null;
-      while (nextNode && nextNode.dataset?.audioClipId == null) nextNode = nextNode.nextElementSibling;
-      drag.previewNextAudioId = nextNode?.dataset?.audioClipId == null ? null : String(nextNode.dataset.audioClipId);
-    }
-    drag.dropTarget = target;
-    if (target?.element) {
-      if (target.kind === "group") target.element.classList.add("drop-group-target");
-      else if (target.kind === "root" && target.edge) target.element.classList.add(target.edge === "after" ? "drop-group-after" : "drop-group-before");
-      else target.element.classList.add(target.after ? "drop-after" : "drop-before");
-    }
-    event.preventDefault();
-  }
-
-  function commitAudioTreeDrag(sourceId, target, { previewNextAudioId = null } = {}) {
-    const sourceIndex = state.audioClips.findIndex((clip) => String(clip.id) === String(sourceId));
-    if (sourceIndex < 0 || !target) return false;
-    const source = state.audioClips[sourceIndex];
-    const previousGroupId = source.groupId == null ? null : String(source.groupId);
-    const previousBefore = source.beforeChannelId == null ? null : String(source.beforeChannelId);
-    const remaining = state.audioClips.filter((clip) => String(clip.id) !== String(sourceId));
-    let insertIndex = remaining.length;
-    if (previewNextAudioId != null) {
-      const nextIndex = remaining.findIndex((clip) => String(clip.id) === String(previewNextAudioId));
-      if (nextIndex >= 0) insertIndex = nextIndex;
-    } else if (target.kind === "audio" && target.targetAudioId) {
-      const targetIndex = remaining.findIndex((clip) => String(clip.id) === String(target.targetAudioId));
-      if (targetIndex >= 0) insertIndex = targetIndex + (target.after ? 1 : 0);
-    } else if (target.kind === "group" && target.groupId != null) {
-      const groupIndexes = remaining
-        .map((clip, index) => String(clip.groupId ?? "") === String(target.groupId) ? index : -1)
-        .filter((index) => index >= 0);
-      if (groupIndexes.length) insertIndex = target.after ? Math.max(...groupIndexes) + 1 : Math.min(...groupIndexes);
-    }
-    source.groupId = target.groupId == null ? null : String(target.groupId);
-    source.beforeChannelId = target.beforeChannelId == null ? null : String(target.beforeChannelId);
-    if (source.groupId != null) {
-      const anchor = source.beforeChannelId == null ? null : getChannelById(source.beforeChannelId);
-      if (anchor && String(anchor.groupId ?? "") !== String(source.groupId)) source.beforeChannelId = null;
-    }
-    remaining.splice(clamp(insertIndex, 0, remaining.length), 0, source);
-    const orderChanged = state.audioClips.some((clip, index) => String(clip.id) !== String(remaining[index]?.id));
-    const groupChanged = previousGroupId !== (source.groupId == null ? null : String(source.groupId));
-    const anchorChanged = previousBefore !== (source.beforeChannelId == null ? null : String(source.beforeChannelId));
-    if (!orderChanged && !groupChanged && !anchorChanged) { renderChannelTabs(); return false; }
-    state.audioClips = remaining;
-    markDirty("오디오 목록 순서 변경");
-    renderChannelTabs();
-    renderChannelEditor();
-    renderAudioLane();
-    if (groupChanged) {
-      const group = source.groupId == null ? null : getChannelGroupById(source.groupId);
-      showToast(group ? `${source.title} 오디오를 ${group.name} 그룹으로 이동했습니다.` : `${source.title} 오디오를 그룹 밖으로 이동했습니다.`);
-    }
-    return true;
-  }
-
-  function endAudioTreeDrag(event) {
-    const drag = state.audioTreeDrag;
-    if (!drag.sourceId || drag.pointerId !== event.pointerId) return;
-    const sourceId = drag.sourceId;
-    const dragged = drag.dragging;
-    const target = drag.dropTarget;
-    const previewNextAudioId = drag.previewNextAudioId;
-    resetAudioTreeDrag();
-    if (dragged) {
-      if (target) commitAudioTreeDrag(sourceId, target, { previewNextAudioId });
-      else renderChannelTabs();
-      return;
-    }
-    handleAudioEditActivation(sourceId);
   }
 
   function getActiveAudioClip() {
@@ -8713,8 +8110,9 @@
     return Math.max(CONFIG.minimumNoteBeat, snappedEnd - startBeat);
   }
 
-  async function importAudioFile(file) {
+  async function importAudioFile(file, { groupId = null } = {}) {
     if (!file) return false;
+    const importGroup = groupId == null ? null : getChannelGroupById(groupId);
     try {
       const arrayBuffer = await file.arrayBuffer();
       const decoded = await decodeAudioArrayBuffer(arrayBuffer);
@@ -8748,6 +8146,8 @@
         visible: true,
         muted: false,
         assetAvailable: true,
+        groupId: importGroup ? String(importGroup.id) : null,
+        beforeChannelId: null,
       }, state.audioClips.length);
       state.audioRuntime.set(String(id), { arrayBuffer, audioBuffer: decoded, mimeType: clip.mimeType });
       state.audioClips.push(clip);
@@ -8756,7 +8156,9 @@
       extendTimelineToBeat(getAudioClipEndBeat(clip) + CONFIG.minimumNoteBeat);
       markDirty("오디오 추가");
       renderAll();
-      showToast(`${file.name} 오디오를 추가했습니다.`);
+      showToast(importGroup
+        ? `${importGroup.name} 그룹에 ${file.name} 오디오를 추가했습니다.`
+        : `${file.name} 오디오를 추가했습니다.`);
       return true;
     } catch (error) {
       console.error(error);
@@ -9107,6 +8509,7 @@
   }
 
   function renderCollapsedChannelRail() {
+    if (itemTreeDrag?.dragging) return;
     const list = elements.collapsedChannelList;
     if (!list) return;
     list.replaceChildren();
@@ -9249,6 +8652,8 @@
       }
       if (reference && reference !== button) list.insertBefore(button, reference);
     });
+
+    arrangeItemTreeNodes(list);
 
     if (elements.collapsedMergeChannelsButton) elements.collapsedMergeChannelsButton.disabled = state.channels.length < 2 || state.selectedChannelGroupId != null;
     if (elements.collapsedDeleteChannelsButton) elements.collapsedDeleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length && !state.audioClips.length;
@@ -9673,6 +9078,120 @@
     return true;
   }
 
+
+  function setAllChannelTreeVisibilitySolo(solo = true) {
+    const nextSolo = Boolean(solo);
+    const channelIds = state.channels.map((channel) => String(channel.id));
+    const groupIds = state.channelGroups.map((group) => String(group.id));
+    const audioIds = state.audioClips.map((clip) => String(clip.id));
+    if (!channelIds.length && !groupIds.length && !audioIds.length) return false;
+    const alreadySolo = nextSolo
+      && channelIds.every((id) => state.visibilitySoloChannelIds.has(id))
+      && groupIds.every((id) => state.visibilitySoloGroupIds.has(id))
+      && audioIds.every((id) => state.visibilitySoloAudioClipIds.has(id))
+      && state.visibilitySoloChannelIds.size === channelIds.length
+      && state.visibilitySoloGroupIds.size === groupIds.length
+      && state.visibilitySoloAudioClipIds.size === audioIds.length;
+    if (alreadySolo) return false;
+    state.visibilitySoloChannelIds.clear();
+    state.visibilitySoloGroupIds.clear();
+    state.visibilitySoloAudioClipIds.clear();
+    for (const channel of state.channels) channel.visible = true;
+    for (const group of state.channelGroups) group.visible = true;
+    for (const clip of state.audioClips) clip.visible = true;
+    if (nextSolo) {
+      channelIds.forEach((id) => state.visibilitySoloChannelIds.add(id));
+      groupIds.forEach((id) => state.visibilitySoloGroupIds.add(id));
+      audioIds.forEach((id) => state.visibilitySoloAudioClipIds.add(id));
+    }
+    setDirtyWithoutHistory();
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    renderAudioLane();
+    updateChannelInfo();
+    showToast(`${i18nText("volume.scope_all")} · ${i18nText("context.single")}`);
+    return true;
+  }
+
+  function setAllChannelTreeSoundSolo(solo = true) {
+    const nextSolo = Boolean(solo);
+    const channelIds = state.channels.map((channel) => String(channel.id));
+    const groupIds = state.channelGroups.map((group) => String(group.id));
+    const audioIds = state.audioClips.map((clip) => String(clip.id));
+    if (!channelIds.length && !groupIds.length && !audioIds.length) return false;
+    const alreadySolo = nextSolo
+      && channelIds.every((id) => state.soloChannelIds.has(id))
+      && groupIds.every((id) => state.soloGroupIds.has(id))
+      && audioIds.every((id) => state.soloAudioClipIds.has(id))
+      && state.soloChannelIds.size === channelIds.length
+      && state.soloGroupIds.size === groupIds.length
+      && state.soloAudioClipIds.size === audioIds.length;
+    if (alreadySolo) return false;
+    const beforeAudible = captureChannelAudibleStates();
+    const beforeAudioAudible = captureAudioAudibleStates();
+    state.soloChannelIds.clear();
+    state.soloGroupIds.clear();
+    state.soloAudioClipIds.clear();
+    for (const channel of state.channels) channel.muted = false;
+    for (const group of state.channelGroups) group.muted = false;
+    for (const clip of state.audioClips) clip.muted = false;
+    if (nextSolo) {
+      channelIds.forEach((id) => state.soloChannelIds.add(id));
+      groupIds.forEach((id) => state.soloGroupIds.add(id));
+      audioIds.forEach((id) => state.soloAudioClipIds.add(id));
+    }
+    setDirtyWithoutHistory();
+    refreshChannelPlaybackForAudibleStateChange(beforeAudible);
+    refreshAudioPlaybackForAudibleStateChange(beforeAudioAudible);
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    renderAudioLane();
+    updateChannelInfo();
+    showToast(`${i18nText("volume.scope_all")} · ${i18nText("context.single")}`);
+    return true;
+  }
+
+  function getChannelTreeBulkState() {
+    const items = [...state.channels, ...state.channelGroups, ...state.audioClips];
+    const total = items.length;
+    const hasItems = total > 0;
+    const hiddenCount = items.reduce((count, item) => count + (item?.visible === false ? 1 : 0), 0);
+    const mutedCount = items.reduce((count, item) => count + (Boolean(item?.muted) ? 1 : 0), 0);
+    const hasVisibilitySolo = state.visibilitySoloChannelIds.size > 0
+      || state.visibilitySoloGroupIds.size > 0
+      || state.visibilitySoloAudioClipIds.size > 0;
+    const hasSoundSolo = state.soloChannelIds.size > 0
+      || state.soloGroupIds.size > 0
+      || state.soloAudioClipIds.size > 0;
+    const allVisibilitySolo = hasItems
+      && state.channels.every((channel) => state.visibilitySoloChannelIds.has(String(channel.id)))
+      && state.channelGroups.every((group) => state.visibilitySoloGroupIds.has(String(group.id)))
+      && state.audioClips.every((clip) => state.visibilitySoloAudioClipIds.has(String(clip.id)))
+      && state.visibilitySoloChannelIds.size === state.channels.length
+      && state.visibilitySoloGroupIds.size === state.channelGroups.length
+      && state.visibilitySoloAudioClipIds.size === state.audioClips.length;
+    const allSoundSolo = hasItems
+      && state.channels.every((channel) => state.soloChannelIds.has(String(channel.id)))
+      && state.channelGroups.every((group) => state.soloGroupIds.has(String(group.id)))
+      && state.audioClips.every((clip) => state.soloAudioClipIds.has(String(clip.id)))
+      && state.soloChannelIds.size === state.channels.length
+      && state.soloGroupIds.size === state.channelGroups.length
+      && state.soloAudioClipIds.size === state.audioClips.length;
+    return {
+      total,
+      hasItems,
+      allVisible: hasItems && hiddenCount === 0 && !hasVisibilitySolo,
+      // Hidden glyph is allowed only when every single channel/group/audio item
+      // is explicitly hidden. One hidden item among visible items keeps the eye.
+      allHidden: hasItems && hiddenCount === total && !hasVisibilitySolo,
+      allMuted: hasItems && mutedCount === total && !hasSoundSolo,
+      allVisibilitySolo,
+      allSoundSolo,
+    };
+  }
+
   function updateChannelBulkBar() {
     if (!elements.channelBulkBar) return;
     // Match the fixed bulk actions to the three right-side action columns used by
@@ -9693,42 +9212,54 @@
       elements.channelBulkCounts.textContent = countParts.join(" · ");
     }
     const locked = isChannelDeleteModeActive() || isChannelMergeModeActive();
-    const allVisible = state.channels.every((channel) => channel.visible !== false)
-      && state.channelGroups.every((group) => group.visible !== false)
-      && state.audioClips.every((clip) => clip.visible !== false)
-      && state.visibilitySoloChannelIds.size === 0
-      && state.visibilitySoloGroupIds.size === 0
-      && state.visibilitySoloAudioClipIds.size === 0;
-    const allMuted = state.channels.every((channel) => Boolean(channel.muted))
-      && state.channelGroups.every((group) => Boolean(group.muted))
-      && state.audioClips.every((clip) => Boolean(clip.muted))
-      && state.soloChannelIds.size === 0
-      && state.soloGroupIds.size === 0
-      && state.soloAudioClipIds.size === 0;
+    const { hasItems, allVisible, allHidden, allMuted, allVisibilitySolo, allSoundSolo } = getChannelTreeBulkState();
+    if (elements.channelBulkGroupToggleButton) {
+      const hasGroups = groupCount > 0;
+      const allExpanded = hasGroups && state.channelGroups.every((group) => !Boolean(group.collapsed));
+      const anyCollapsed = hasGroups && state.channelGroups.some((group) => Boolean(group.collapsed));
+      elements.channelBulkGroupToggleButton.disabled = locked || !hasGroups;
+      // Requested rule: if even one group is closed, show the closed folder and
+      // clicking expands everything. Only the fully-expanded state shows the
+      // open folder, whose click collapses everything.
+      elements.channelBulkGroupToggleButton.dataset.action = allExpanded ? "collapse" : "expand";
+      elements.channelBulkGroupToggleButton.title = i18nText(allExpanded ? "group.collapse_all" : "group.expand_all");
+      elements.channelBulkGroupToggleButton.setAttribute("aria-label", elements.channelBulkGroupToggleButton.title);
+      elements.channelBulkGroupToggleButton.setAttribute("aria-pressed", String(allExpanded));
+      elements.channelBulkGroupToggleButton.dataset.mixed = String(Boolean(anyCollapsed && allExpanded));
+      if (elements.channelBulkGroupToggleGlyph) {
+        elements.channelBulkGroupToggleGlyph.textContent = allExpanded ? "📂" : "📁";
+      }
+    }
     if (elements.channelBulkMmlButton) {
       elements.channelBulkMmlButton.disabled = locked || channelCount === 0;
       elements.channelBulkMmlButton.title = i18nText("channel.mml_all_view");
       elements.channelBulkMmlButton.setAttribute("aria-label", elements.channelBulkMmlButton.title);
     }
     if (elements.channelBulkVisibilityButton) {
-      elements.channelBulkVisibilityButton.disabled = locked || (channelCount === 0 && groupCount === 0 && state.audioClips.length === 0);
+      elements.channelBulkVisibilityButton.disabled = locked || !hasItems;
       elements.channelBulkVisibilityButton.classList.toggle("is-active", allVisible);
-      elements.channelBulkVisibilityButton.setAttribute("aria-pressed", String(allVisible));
-      elements.channelBulkVisibilityButton.title = `${i18nText("volume.scope_all")} · ${i18nText(allVisible ? "ui.hide_2" : "ui.show")}`;
+      elements.channelBulkVisibilityButton.classList.toggle("is-solo", allVisibilitySolo);
+      // This bulk button must visually enter the hidden state only when every
+      // channel, group and audio item is hidden. A mixed/partial state keeps
+      // the normal eye with no red slash.
+      elements.channelBulkVisibilityButton.setAttribute("aria-pressed", allVisibilitySolo || allVisible ? "true" : (allHidden ? "false" : "mixed"));
+      elements.channelBulkVisibilityButton.title = i18nText(allVisibilitySolo ? "item.all_single" : (allHidden ? "item.all_show" : "item.all_hide"));
       elements.channelBulkVisibilityButton.setAttribute("aria-label", elements.channelBulkVisibilityButton.title);
+      if (elements.channelBulkVisibilityGlyph) elements.channelBulkVisibilityGlyph.textContent = allVisibilitySolo ? "S" : (allHidden ? "🙈" : "👁");
     }
     if (elements.channelBulkMuteButton) {
-      elements.channelBulkMuteButton.disabled = locked || (channelCount === 0 && groupCount === 0 && state.audioClips.length === 0);
+      elements.channelBulkMuteButton.disabled = locked || !hasItems;
       elements.channelBulkMuteButton.classList.toggle("is-active", allMuted);
-      elements.channelBulkMuteButton.setAttribute("aria-pressed", String(allMuted));
-      elements.channelBulkMuteButton.title = `${i18nText("volume.scope_all")} · ${i18nText(allMuted ? "ui.unmute" : "ui.mute")}`;
+      elements.channelBulkMuteButton.classList.toggle("is-solo", allSoundSolo);
+      elements.channelBulkMuteButton.setAttribute("aria-pressed", String(allMuted || allSoundSolo));
+      elements.channelBulkMuteButton.title = i18nText(allSoundSolo ? "item.all_single" : (allMuted ? "item.all_output" : "item.all_mute"));
       elements.channelBulkMuteButton.setAttribute("aria-label", elements.channelBulkMuteButton.title);
-      if (elements.channelBulkMuteGlyph) elements.channelBulkMuteGlyph.textContent = allMuted ? "🔇" : "🔊";
+      if (elements.channelBulkMuteGlyph) elements.channelBulkMuteGlyph.textContent = allSoundSolo ? "S" : (allMuted ? "🔇" : "🔊");
     }
   }
 
   function renderChannelTabs() {
-    if (!elements.channelTabs) return;
+    if (!elements.channelTabs || itemTreeDrag?.dragging) return;
     const preservedScrollTop = Number(elements.channelTabs.scrollTop) || 0;
     const preservedScrollLeft = Number(elements.channelTabs.scrollLeft) || 0;
     elements.channelTabs.replaceChildren();
@@ -9870,9 +9401,6 @@
         item.addEventListener("pointerdown", (event) => beginChannelPointerDrag(event, channel.id, item));
         item.addEventListener("pointerup", endChannelPointerDrag);
         item.addEventListener("pointercancel", () => { cancelChannelPointerDrag(); });
-        item.addEventListener("lostpointercapture", () => {
-          if (state.channelDrag.sourceId && state.channelDrag.sourceElement === item) cancelChannelPointerDrag();
-        });
       }
       elements.channelTabs.append(item);
     };
@@ -9956,9 +9484,6 @@
         item.addEventListener("pointerdown", (event) => beginChannelGroupPointerDrag(event, group.id, item));
         item.addEventListener("pointerup", endChannelGroupPointerDrag);
         item.addEventListener("pointercancel", () => cancelChannelGroupPointerDrag());
-        item.addEventListener("lostpointercapture", () => {
-          if (state.channelGroupDrag.groupId && state.channelGroupDrag.headerElement === item) cancelChannelGroupPointerDrag();
-        });
       }
       elements.channelTabs.append(item);
     };
@@ -10100,8 +9625,9 @@
       if (reference && reference !== item) elements.channelTabs.insertBefore(item, reference);
     });
 
-    elements.addChannelButton.disabled = deleteMode;
-    if (elements.addChannelGroupButton) { elements.addChannelGroupButton.disabled = deleteMode || isChannelMergeModeActive(); elements.addChannelGroupButton.hidden = deleteMode; }
+    arrangeItemTreeNodes(elements.channelTabs);
+
+    elements.addChannelButton.disabled = deleteMode || isChannelMergeModeActive();
     if (elements.mergeChannelsButton) { elements.mergeChannelsButton.disabled = state.channels.length < 2 || deleteMode || state.selectedChannelGroupId != null; elements.mergeChannelsButton.hidden = deleteMode; }
     if (elements.addChannelButton) elements.addChannelButton.hidden = deleteMode;
     if (elements.deleteChannelsButton) { elements.deleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length && !state.audioClips.length; elements.deleteChannelsButton.hidden = deleteMode; }
@@ -10584,6 +10110,259 @@
     return true;
   }
 
+  function getChannelMmlPartRanges() {
+    return getTimelinePartRanges(getTotalBeats());
+  }
+
+  function cloneMmlPartChannels(channels) {
+    return (channels || []).map((channel, index) => ({
+      id: channel?.id ?? `mml-part-${index}`,
+      notes: (channel?.notes || []).map((note) => ({ ...note })),
+    }));
+  }
+
+  function replaceMmlPartChannelRange(channel, replacementNotes, startBeat, endBeat) {
+    const start = Math.max(0, Number(startBeat) || 0);
+    const end = Math.max(start + CONFIG.minimumNoteBeat, Number(endBeat) || start + CONFIG.minimumNoteBeat);
+    const kept = [];
+    for (const note of channel?.notes || []) {
+      const noteStart = Math.max(0, Number(note.startBeat) || 0);
+      const noteEnd = noteStart + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      if (noteEnd <= start + 1e-7 || noteStart >= end - 1e-7) {
+        kept.push({ ...note });
+        continue;
+      }
+      if (noteStart < start - 1e-7) {
+        const leftDuration = start - noteStart;
+        if (leftDuration >= CONFIG.minimumNoteBeat - 1e-7) {
+          kept.push({ ...note, durationBeat: Number(leftDuration.toFixed(6)) });
+        }
+      }
+      if (noteEnd > end + 1e-7) {
+        const rightDuration = noteEnd - end;
+        if (rightDuration >= CONFIG.minimumNoteBeat - 1e-7) {
+          kept.push({
+            ...note,
+            startBeat: Number(end.toFixed(6)),
+            durationBeat: Number(rightDuration.toFixed(6)),
+          });
+        }
+      }
+    }
+    const rangeLength = end - start;
+    for (const note of replacementNotes || []) {
+      const localStart = Math.max(0, Number(note.startBeat) || 0);
+      const localEnd = localStart + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      if (localStart >= rangeLength - 1e-7) continue;
+      const clippedEnd = Math.min(rangeLength, localEnd);
+      if (clippedEnd <= localStart + 1e-7) continue;
+      kept.push({
+        ...note,
+        startBeat: Number((start + localStart).toFixed(6)),
+        durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, clippedEnd - localStart).toFixed(6)),
+      });
+    }
+    channel.notes = kept.sort((a, b) => Number(a.startBeat) - Number(b.startBeat) || Number(a.pitch) - Number(b.pitch));
+    return channel;
+  }
+
+  function mergeMmlPartTempoRange(tempos, parsed, range) {
+    if (!Boolean(elements.channelMmlIncludeTempo?.checked) || !parsed?.explicitTempoCount) return tempos;
+    const start = range.startBeat;
+    const end = range.endBeat;
+    const kept = (tempos || []).filter((tempo) => Boolean(tempo.fixed) || tempo.beat < start - 1e-7 || tempo.beat >= end - 1e-7)
+      .map((tempo) => ({ ...tempo }));
+    const localTempos = (parsed.tempos || []).map((tempo) => ({
+      beat: Number((start + Math.max(0, Number(tempo.beat) || 0)).toFixed(6)),
+      bpm: clamp(Math.round(Number(tempo.bpm) || 120), CONFIG.minTempo, CONFIG.maxTempo),
+    })).filter((tempo) => tempo.beat < end - 1e-7 || Math.abs(start) < 1e-7);
+    if (start <= 1e-7) {
+      const initialBpm = localTempos[0]?.bpm ?? getTempoAtBeatFromCollection(0, tempos || getSortedTempos());
+      const initial = kept.find((tempo) => Boolean(tempo.fixed)) || { id: 1, beat: 0, bpm: initialBpm, fixed: true };
+      initial.beat = 0;
+      initial.bpm = initialBpm;
+      initial.fixed = true;
+      const rest = kept.filter((tempo) => tempo !== initial && !tempo.fixed);
+      const later = localTempos.filter((tempo) => tempo.beat > 1e-7).map((tempo, index) => ({ ...tempo, id: 1000000 + index, fixed: false }));
+      return [initial, ...rest, ...later].sort((a, b) => a.beat - b.beat || Number(a.id) - Number(b.id));
+    }
+    const additions = localTempos.map((tempo, index) => ({ ...tempo, id: 1000000 + index, fixed: false }));
+    const byBeat = new Map();
+    for (const tempo of [...kept, ...additions]) byBeat.set(Number(tempo.beat).toFixed(6), tempo);
+    return [...byBeat.values()].sort((a, b) => a.beat - b.beat || Number(a.id) - Number(b.id));
+  }
+
+  function getChannelMmlPartPagination(totalParts, selectedIndex) {
+    const total = Math.max(0, Math.round(Number(totalParts) || 0));
+    if (!total) return [];
+    const currentPage = clamp(Math.round(Number(selectedIndex) || 0) + 1, 1, total);
+    if (total <= 9) return Array.from({ length: total }, (_, index) => index + 1);
+
+    // Keep the first/last page fixed and show seven consecutive pages around
+    // the current part. Ellipses are separators, not page buttons, so there
+    // are never more than nine numbered buttons.
+    const middleStart = clamp(currentPage - 3, 2, total - 7);
+    const middleEnd = middleStart + 6;
+    const items = [1];
+    if (middleStart > 2) items.push("gap");
+    for (let page = middleStart; page <= middleEnd; page += 1) items.push(page);
+    if (middleEnd < total - 1) items.push("gap");
+    items.push(total);
+    return items;
+  }
+
+  function renderChannelMmlPartTabs() {
+    const host = elements.channelMmlPartTabs;
+    if (!host) return;
+    const visible = Boolean(state.channelMmlEdit.partView);
+    host.hidden = !visible;
+    host.replaceChildren();
+    if (!visible) return;
+    const ranges = getChannelMmlPartRanges();
+    const items = getChannelMmlPartPagination(ranges.length, state.channelMmlEdit.partIndex);
+    for (const item of items) {
+      if (item === "gap") {
+        const gap = document.createElement("span");
+        gap.className = "channel-mml-part-gap";
+        gap.textContent = "…";
+        gap.setAttribute("aria-hidden", "true");
+        host.append(gap);
+        continue;
+      }
+      const page = Number(item);
+      const index = page - 1;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "channel-mml-part-tab";
+      button.textContent = String(page);
+      button.setAttribute("aria-pressed", String(index === state.channelMmlEdit.partIndex));
+      if (index === state.channelMmlEdit.partIndex) button.setAttribute("aria-current", "page");
+      button.title = i18nText("channel.mml_part_button", [page]);
+      button.addEventListener("click", () => selectChannelMmlPart(index));
+      host.append(button);
+    }
+  }
+
+  function saveCurrentChannelMmlPartDraft({ dirty = false } = {}) {
+    if (!state.channelMmlEdit.partView || !elements.channelMmlText) return false;
+    const index = clamp(Number(state.channelMmlEdit.partIndex) || 0, 0, Math.max(0, getChannelMmlPartRanges().length - 1));
+    const value = normalizeMmlTextCase(String(elements.channelMmlText.value || ""));
+    state.channelMmlEdit.partDrafts.set(index, value);
+    if (dirty) state.channelMmlEdit.partDirtyIndexes.add(index);
+    return true;
+  }
+
+  function initializeChannelMmlPartView(sourceText) {
+    const source = String(sourceText || "");
+    let parsed;
+    try {
+      parsed = parseMmlEditorSource(source);
+    } catch {
+      return false;
+    }
+    const channels = getMmlEditorTempChannels(parsed);
+    const tempos = parsed?.explicitTempoCount ? (parsed.tempos || []).map((tempo) => ({ ...tempo })) : getSortedTempos().map((tempo) => ({ ...tempo }));
+    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
+    const optimized = Boolean(elements.channelMmlOptimizedView?.checked);
+    state.channelMmlEdit.partFullSource = source;
+    state.channelMmlEdit.partBaseChannels = cloneMmlPartChannels(channels);
+    state.channelMmlEdit.partBaseTempos = tempos;
+    state.channelMmlEdit.partDrafts = new Map();
+    state.channelMmlEdit.partDirtyIndexes = new Set();
+    const ranges = getChannelMmlPartRanges();
+    ranges.forEach((range, index) => {
+      let rendered = channelsToMmlRange(channels, range.startBeat, range.endBeat, tempos, { includeTempo, optimized });
+      if (!rendered && includeTempo) {
+        rendered = `MML@T${getTempoAtBeatFromCollection(range.startBeat, tempos)};`;
+        if (optimized) rendered = optimizeEditorExportMml(rendered);
+      }
+      state.channelMmlEdit.partDrafts.set(index, normalizeMmlTextCase(rendered || ""));
+    });
+    state.channelMmlEdit.partIndex = getTimelinePartIndexAtBeat(state.playhead.beat);
+    state.channelMmlEdit.partView = true;
+    renderChannelMmlPartTabs();
+    return selectChannelMmlPart(state.channelMmlEdit.partIndex, { saveCurrent: false, focus: false });
+  }
+
+  function selectChannelMmlPart(index, { saveCurrent = true, focus = true } = {}) {
+    if (!state.channelMmlEdit.partView || !elements.channelMmlText) return false;
+    if (saveCurrent) saveCurrentChannelMmlPartDraft();
+    const ranges = getChannelMmlPartRanges();
+    if (!ranges.length) return false;
+    const nextIndex = clamp(Math.round(Number(index) || 0), 0, ranges.length - 1);
+    state.channelMmlEdit.partIndex = nextIndex;
+    setChannelMmlTextareaValue(state.channelMmlEdit.partDrafts.get(nextIndex) || "");
+    renderChannelMmlPartTabs();
+    updateChannelMmlPreview();
+    if (focus) requestAnimationFrame(() => elements.channelMmlText?.focus());
+    return true;
+  }
+
+  function buildMergedChannelMmlFromPartDrafts() {
+    saveCurrentChannelMmlPartDraft();
+    if (!state.channelMmlEdit.partDirtyIndexes.size) return String(state.channelMmlEdit.partFullSource || "");
+    const ranges = getChannelMmlPartRanges();
+    const channels = cloneMmlPartChannels(state.channelMmlEdit.partBaseChannels);
+    let tempos = (state.channelMmlEdit.partBaseTempos || []).map((tempo) => ({ ...tempo }));
+    for (const index of [...state.channelMmlEdit.partDirtyIndexes].sort((a, b) => a - b)) {
+      const range = ranges[index];
+      if (!range) continue;
+      const draft = String(state.channelMmlEdit.partDrafts.get(index) || "");
+      const parsed = draft.trim() ? parseMmlEditorSource(draft) : { editParts: [], editPartCount: 0, tempos: [], explicitTempoCount: 0 };
+      const targetCount = Math.max(channels.length, parsed.editParts?.length || 0);
+      while (channels.length < targetCount) channels.push({ id: `mml-part-added-${channels.length}`, notes: [] });
+      for (let channelIndex = 0; channelIndex < channels.length; channelIndex += 1) {
+        replaceMmlPartChannelRange(channels[channelIndex], parsed.editParts?.[channelIndex]?.notes || [], range.startBeat, range.endBeat);
+      }
+      tempos = mergeMmlPartTempoRange(tempos, parsed, range);
+    }
+    const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
+    const optimized = Boolean(elements.channelMmlOptimizedView?.checked);
+    let rendered = channelsToMml(channels, { tempos, originBeat: 0, includeTempo, optimized: false });
+    if (!rendered && includeTempo) rendered = `MML@T${getTempoAtBeatFromCollection(0, tempos)};`;
+    return optimized && rendered ? optimizeEditorExportMml(rendered) : rendered;
+  }
+
+  function setChannelMmlPartView(enabled) {
+    if (!elements.channelMmlText) return false;
+    const next = Boolean(enabled);
+    if (next === Boolean(state.channelMmlEdit.partView)) return true;
+    if (next) {
+      const source = String(elements.channelMmlText.value || state.channelMmlEdit.standardText || "");
+      if (!initializeChannelMmlPartView(source)) {
+        if (elements.channelMmlPartView) elements.channelMmlPartView.checked = false;
+        return false;
+      }
+      return true;
+    }
+    const merged = buildMergedChannelMmlFromPartDrafts();
+    state.channelMmlEdit.partView = false;
+    setChannelMmlTextareaValue(merged);
+    renderChannelMmlPartTabs();
+    updateChannelMmlPreview();
+    return true;
+  }
+
+  function getChannelMmlSummaryText(source, parsed = null) {
+    const text = String(source || "");
+    let channelCount = 0;
+    let noteCount = 0;
+    if (parsed) {
+      channelCount = Math.max(0, Number(parsed.editPartCount) || 0);
+      noteCount = Math.max(0, Number(parsed.noteCount) || 0);
+    } else if (text.trim()) {
+      try {
+        const body = String(extractMmlBody(text) || "");
+        channelCount = body.trim() ? body.split(",").length : 0;
+      } catch {}
+    }
+    return [
+      i18nText("channel.mml_status_channels", [channelCount]),
+      i18nText("channel.mml_status_notes", [noteCount]),
+      i18nText("channel.mml_status_chars", [text.length]),
+    ].join(" · ");
+  }
+
   function updateChannelMmlPreview() {
     if (!elements.channelMmlText) return null;
     normalizeMmlTextareaValue(elements.channelMmlText, normalizeMmlTextCase);
@@ -10591,7 +10370,7 @@
     state.channelMmlEdit.standardText = source;
     if (!source.trim()) {
       state.channelMmlEdit.parsed = null;
-      setChannelMmlStatus(i18nText("channel.mml_empty_hint"));
+      setChannelMmlStatus(getChannelMmlSummaryText(source));
       if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
       return null;
     }
@@ -10600,28 +10379,13 @@
       state.channelMmlEdit.parsed = parsed;
       const isGroup = state.channelMmlEdit.groupId != null;
       const isAllChannels = Boolean(state.channelMmlEdit.allChannels);
-      if (!isGroup && !isAllChannels && parsed.editPartCount > 1) {
-        setChannelMmlStatus(i18nText("channel.mml_status_multi"), { error: true });
-        if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
-        return parsed;
-      }
-      const details = [];
-      if (isGroup || isAllChannels) details.push(i18nText("group.mml_summary", [parsed.editPartCount]));
-      details.push(i18nText("channel.mml_status_notes", [parsed.noteCount]));
-      details.push(i18nText("channel.mml_status_chars", [source.length]));
-      if (parsed.explicitTempoCount) {
-        details.push(Boolean(elements.channelMmlIncludeTempo?.checked)
-          ? i18nText("channel.mml_status_tempo_included", [parsed.explicitTempoCount])
-          : i18nText("channel.mml_status_tempo_ignored"));
-      }
-      if (parsed.skippedPitchCount) details.push(i18nText("channel.mml_status_pitch_skipped", [parsed.skippedPitchCount]));
-      if (parsed.unsupportedTokenCount) details.push(i18nText("channel.mml_status_unsupported", [parsed.unsupportedTokenCount]));
-      setChannelMmlStatus(details.join(" · "));
-      if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = false;
+      const singleChannelOverflow = !isGroup && !isAllChannels && parsed.editPartCount > 1;
+      setChannelMmlStatus(getChannelMmlSummaryText(source, parsed), { error: singleChannelOverflow });
+      if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = Boolean(singleChannelOverflow);
       return parsed;
     } catch (error) {
       state.channelMmlEdit.parsed = null;
-      setChannelMmlStatus(error instanceof Error ? error.message : i18nText("channel.mml_status_invalid"), { error: true });
+      setChannelMmlStatus(getChannelMmlSummaryText(source), { error: true });
       if (elements.channelMmlApplyButton) elements.channelMmlApplyButton.disabled = true;
       return null;
     }
@@ -10632,11 +10396,37 @@
     state.channelMmlEdit.parseTimer = window.setTimeout(updateChannelMmlPreview, 80);
   }
 
+  function getLocalizedChannelMmlPartTempos(range, tempos = state.channelMmlEdit.partBaseTempos) {
+    const start = Math.max(0, Number(range?.startBeat) || 0);
+    const end = Math.max(start + CONFIG.minimumNoteBeat, Number(range?.endBeat) || start + CONFIG.minimumNoteBeat);
+    const source = Array.isArray(tempos) && tempos.length ? tempos : getSortedTempos();
+    const initialBpm = getTempoAtBeatFromCollection(start, source);
+    const localized = [{ id: 1, beat: 0, bpm: initialBpm, fixed: true }];
+    let nextId = 2;
+    for (const tempo of source) {
+      const beat = Math.max(0, Number(tempo?.beat) || 0);
+      if (beat <= start + 1e-7 || beat >= end - 1e-7) continue;
+      localized.push({
+        id: nextId++,
+        beat: Number((beat - start).toFixed(6)),
+        bpm: clamp(Math.round(Number(tempo?.bpm) || initialBpm), CONFIG.minTempo, CONFIG.maxTempo),
+        fixed: false,
+      });
+    }
+    return localized;
+  }
+
   function renderMmlEditorParsedSource(parsed, { includeTempo, optimized } = {}) {
     const tempChannels = getMmlEditorTempChannels(parsed);
+    const partRange = state.channelMmlEdit.partView
+      ? getChannelMmlPartRanges()[state.channelMmlEdit.partIndex] || null
+      : null;
+    const fallbackTempos = partRange
+      ? getLocalizedChannelMmlPartTempos(partRange)
+      : getSortedTempos();
     let rendered = "";
     if (tempChannels.some((channel) => channel.notes?.length)) {
-      const tempoSource = parsed?.explicitTempoCount ? parsed.tempos : getSortedTempos();
+      const tempoSource = parsed?.explicitTempoCount ? parsed.tempos : fallbackTempos;
       rendered = channelsToMml(tempChannels, {
         tempos: tempoSource,
         originBeat: 0,
@@ -10646,7 +10436,7 @@
     } else if (includeTempo) {
       const sourceTempo = parsed?.explicitTempoCount && parsed.tempos?.length
         ? parsed.tempos[0].bpm
-        : getTempoAtBeatFromCollection(0, getSortedTempos());
+        : getTempoAtBeatFromCollection(0, fallbackTempos);
       rendered = `MML@T${sourceTempo};`;
     }
     return optimized && rendered ? optimizeEditorExportMml(rendered) : rendered;
@@ -10664,6 +10454,7 @@
     state.channelMmlEdit.includeTempo = includeTempo;
     state.channelMmlEdit.optimizedView = optimized;
     setChannelMmlTextareaValue(rendered);
+    if (state.channelMmlEdit.partView) saveCurrentChannelMmlPartDraft({ dirty: true });
     updateChannelMmlPreview();
     return true;
   }
@@ -10680,6 +10471,7 @@
     state.channelMmlEdit.optimizedView = optimized;
     state.channelMmlEdit.includeTempo = includeTempo;
     setChannelMmlTextareaValue(rendered);
+    if (state.channelMmlEdit.partView) saveCurrentChannelMmlPartDraft();
     updateChannelMmlPreview();
     return true;
   }
@@ -10695,6 +10487,13 @@
     state.channelMmlEdit.allChannels = Boolean(allChannels);
     state.channelMmlEdit.viewOnly = Boolean(viewOnly);
     state.channelMmlEdit.parsed = null;
+    state.channelMmlEdit.partView = false;
+    state.channelMmlEdit.partIndex = 0;
+    state.channelMmlEdit.partDrafts = new Map();
+    state.channelMmlEdit.partDirtyIndexes = new Set();
+    state.channelMmlEdit.partBaseChannels = [];
+    state.channelMmlEdit.partBaseTempos = [];
+    state.channelMmlEdit.partFullSource = "";
     const title = allChannels && viewOnly
       ? i18nText("channel.mml_all_view")
       : (allChannels
@@ -10716,6 +10515,8 @@
       elements.channelMmlOptimizedView.checked = state.channelMmlEdit.optimizedView !== false;
       elements.channelMmlOptimizedView.closest("label")?.removeAttribute("hidden");
     }
+    if (elements.channelMmlPartView) elements.channelMmlPartView.checked = false;
+    renderChannelMmlPartTabs();
     if (elements.channelMmlPasteButton) elements.channelMmlPasteButton.hidden = Boolean(viewOnly);
     if (elements.channelMmlCancelButton) elements.channelMmlCancelButton.hidden = Boolean(viewOnly);
     if (elements.channelMmlApplyButton) {
@@ -10769,7 +10570,16 @@
     state.channelMmlEdit.allChannels = false;
     state.channelMmlEdit.viewOnly = false;
     state.channelMmlEdit.parsed = null;
+    state.channelMmlEdit.partView = false;
+    state.channelMmlEdit.partIndex = 0;
+    state.channelMmlEdit.partDrafts = new Map();
+    state.channelMmlEdit.partDirtyIndexes = new Set();
+    state.channelMmlEdit.partBaseChannels = [];
+    state.channelMmlEdit.partBaseTempos = [];
+    state.channelMmlEdit.partFullSource = "";
     state.channelMmlEdit.standardText = "";
+    if (elements.channelMmlPartView) elements.channelMmlPartView.checked = false;
+    renderChannelMmlPartTabs();
     if (elements.channelMmlText) {
       elements.channelMmlText.readOnly = false;
       elements.channelMmlText.value = "";
@@ -10806,6 +10616,7 @@
       textarea.setRangeText(String(text), start, end, "end");
       normalizeMmlTextareaValue(textarea, normalizeMmlTextCase);
       state.channelMmlEdit.standardText = String(textarea.value || "");
+      if (state.channelMmlEdit.partView) saveCurrentChannelMmlPartDraft({ dirty: true });
       updateChannelMmlPreview();
       textarea.focus();
       showToast(i18nText("channel.mml_pasted"));
@@ -10861,6 +10672,19 @@
 
   function applyChannelMmlDialog() {
     if (state.channelMmlEdit.viewOnly) return false;
+    if (state.channelMmlEdit.partView) {
+      try {
+        saveCurrentChannelMmlPartDraft();
+        const merged = buildMergedChannelMmlFromPartDrafts();
+        state.channelMmlEdit.partView = false;
+        if (elements.channelMmlPartView) elements.channelMmlPartView.checked = false;
+        renderChannelMmlPartTabs();
+        setChannelMmlTextareaValue(merged);
+      } catch (error) {
+        setChannelMmlStatus(error instanceof Error ? error.message : i18nText("channel.mml_status_invalid"), { error: true });
+        return false;
+      }
+    }
     const parsed = updateChannelMmlPreview();
     if (!parsed) return false;
     const includeTempo = Boolean(elements.channelMmlIncludeTempo?.checked);
@@ -13861,20 +13685,49 @@
   function updateChannelInfo() {
     const selectedGroup = state.activePanel === "notes" ? getChannelGroupById(state.selectedChannelGroupId) : null;
     const channel = state.activePanel === "notes" && !selectedGroup ? state.channels[state.activeChannel] : null;
+    const partRanges = getTimelinePartRanges();
+    const hasMultipleTimelineParts = partRanges.length >= 2;
+    const currentPartRange = getTimelinePartRangeAtBeat(state.playhead.beat);
+    const currentPartNumber = getTimelinePartIndexAtBeat(state.playhead.beat) + 1;
+
+    const setSummary = ({ totalChars = 0, partChars = 0, groupMode = false, channelCount = 0, selectedCount = 0, totalTitle = "", partTitle = "" } = {}) => {
+      if (elements.infoCharLabel) elements.infoCharLabel.textContent = "전체";
+      if (elements.infoCharCount) {
+        elements.infoCharCount.textContent = Math.max(0, Number(totalChars) || 0).toLocaleString();
+        elements.infoCharCount.title = totalTitle;
+      }
+      if (elements.infoPartItem) elements.infoPartItem.hidden = !hasMultipleTimelineParts;
+      if (elements.infoPartLabel) {
+        elements.infoPartLabel.textContent = groupMode
+          ? `${currentPartNumber}파트 최대`
+          : `${currentPartNumber}파트`;
+      }
+      if (elements.infoPartCount) {
+        elements.infoPartCount.textContent = Math.max(0, Number(partChars) || 0).toLocaleString();
+        elements.infoPartCount.title = partTitle;
+      }
+      if (elements.infoSelectionLabel) elements.infoSelectionLabel.textContent = groupMode ? "채널" : "선택";
+      if (elements.infoSelectionCount) {
+        const count = groupMode ? channelCount : selectedCount;
+        elements.infoSelectionCount.textContent = Math.max(0, Number(count) || 0).toLocaleString();
+        elements.infoSelectionCount.title = groupMode ? "그룹에 포함된 채널 개수" : "현재 선택한 노트 개수";
+      }
+    };
 
     if (selectedGroup) {
       const members = getChannelGroupMembers(selectedGroup);
-      const charCount = members.reduce((total, member) => total + getMmlChannelCharacterCount(member), 0);
-      if (elements.infoCharLabel) elements.infoCharLabel.textContent = "글자수";
-      if (elements.infoSelectionLabel) elements.infoSelectionLabel.textContent = "채널개수";
-      if (elements.infoCharCount) {
-        elements.infoCharCount.textContent = charCount.toLocaleString();
-        elements.infoCharCount.title = "그룹에 포함된 채널들의 MML 글자 수 합계(템포 명령 제외)";
-      }
-      if (elements.infoSelectionCount) {
-        elements.infoSelectionCount.textContent = members.length.toLocaleString();
-        elements.infoSelectionCount.title = "그룹에 포함된 채널 개수";
-      }
+      const totalChars = members.reduce((total, member) => total + getMmlChannelCharacterCount(member), 0);
+      const partChars = currentPartRange && members.length
+        ? Math.max(...members.map((member) => getMmlChannelCharacterCountInRange(member, currentPartRange)))
+        : 0;
+      setSummary({
+        totalChars,
+        partChars,
+        groupMode: true,
+        channelCount: members.length,
+        totalTitle: "그룹에 포함된 모든 채널의 전체 MML 글자 수 합계(템포 명령 제외)",
+        partTitle: "현재 파트에서 그룹 내 가장 글자 수가 많은 채널의 MML 글자 수(템포 명령 제외)",
+      });
       if (elements.noteVolumeButton) {
         elements.noteVolumeButton.disabled = true;
         elements.noteVolumeButton.textContent = "V";
@@ -13891,23 +13744,23 @@
         elements.noteVolumeButton.textContent = "V";
         elements.noteVolumeButton.title = "채널을 선택한 뒤 노트 볼륨을 수정할 수 있습니다.";
       }
-      if (elements.infoCharLabel) elements.infoCharLabel.textContent = "글자수";
-      if (elements.infoSelectionLabel) elements.infoSelectionLabel.textContent = "선택개수";
-      if (elements.infoCharCount) elements.infoCharCount.textContent = "0";
-      if (elements.infoSelectionCount) elements.infoSelectionCount.textContent = "0";
+      setSummary({ totalChars: 0, partChars: 0, channelCount: 0 });
       updatePlaybackTimeInfo();
       updateEditMenuState();
       return;
     }
 
     const selected = getSelectedNotes();
-    if (elements.infoCharLabel) elements.infoCharLabel.textContent = "글자수";
-    if (elements.infoSelectionLabel) elements.infoSelectionLabel.textContent = "선택개수";
-    if (elements.infoCharCount) {
-      elements.infoCharCount.textContent = getMmlChannelCharacterCount(channel).toLocaleString();
-      elements.infoCharCount.title = "현재 채널 단독 MML 기준 글자 수(템포 명령 제외)";
-    }
-    if (elements.infoSelectionCount) elements.infoSelectionCount.textContent = selected.length.toLocaleString();
+    const totalChars = getMmlChannelCharacterCount(channel);
+    const partChars = currentPartRange ? getMmlChannelCharacterCountInRange(channel, currentPartRange) : totalChars;
+    setSummary({
+      totalChars,
+      partChars,
+      groupMode: false,
+      selectedCount: selected.length,
+      totalTitle: "현재 채널의 전체 MML 글자 수(템포 명령 제외)",
+      partTitle: "현재 파트의 채널 MML 글자 수(템포 명령 제외)",
+    });
     if (elements.noteVolumeButton) {
       elements.noteVolumeButton.disabled = selected.length === 0;
       if (selected.length === 1) {
@@ -14675,6 +14528,7 @@
 
   function captureHistorySnapshot() {
     return JSON.stringify({
+      channelTreeLayout: getItemTreeLayout(),
       channels: state.channels.map((channel) => ({
         id: channel.id,
         name: channel.name,
@@ -14701,11 +14555,13 @@
       nextChannelGroupId: state.nextChannelGroupId,
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
       timeSignatures: getSortedTimeSignatures().map((signature) => ({ ...signature })),
+      timelineParts: getSortedTimelineParts().map((part) => ({ ...part })),
       timelineFades: normalizeTimelineFades(),
       audioClips: state.audioClips.map((clip) => ({ ...clip })),
       nextNoteId: state.nextNoteId,
       nextTempoId: state.nextTempoId,
       nextTimeSignatureId: state.nextTimeSignatureId,
+      nextTimelinePartId: state.nextTimelinePartId,
       nextAudioClipId: state.nextAudioClipId,
     });
   }
@@ -14822,6 +14678,9 @@
     if (item.dataset.audioClipId != null) {
       return selectAudioClip(item.dataset.audioClipId);
     }
+    if (item.dataset.channelGroupId != null) {
+      return selectChannelGroup(item.dataset.channelGroupId);
+    }
     if (item.dataset.groupId != null && item.dataset.midiDocumentId != null) {
       return selectMidiGroupFromTree(item.dataset.midiDocumentId, item.dataset.groupId);
     }
@@ -14835,6 +14694,7 @@
     if (!item) return null;
     if (item.dataset.channelId != null) return { kind: "channel", id: String(item.dataset.channelId) };
     if (item.dataset.audioClipId != null) return { kind: "audio", id: String(item.dataset.audioClipId) };
+    if (item.dataset.channelGroupId != null) return { kind: "channel-group", id: String(item.dataset.channelGroupId) };
     if (item.dataset.groupId != null && item.dataset.midiDocumentId != null) {
       return { kind: "group", id: String(item.dataset.groupId), documentId: String(item.dataset.midiDocumentId) };
     }
@@ -14853,13 +14713,59 @@
   }
 
   function handleChannelTreeArrowNavigation(event) {
-    if (!elements.channelTabs || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return false;
+    if (!elements.channelTabs || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return false;
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
     const items = getChannelTreeKeyboardItems();
     if (!items.length) return false;
     const currentItem = event.target.closest?.(".channel-tree-item");
     let index = currentItem ? items.indexOf(currentItem) : items.findIndex((item) => item.classList.contains("active"));
     if (index < 0) index = 0;
+
+    const current = items[index] || null;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      const currentGroupId = current?.dataset?.channelGroupId;
+      if (currentGroupId != null) {
+        const group = getChannelGroupById(currentGroupId);
+        if (group) {
+          const shouldCollapse = event.key === "ArrowLeft";
+          if (Boolean(group.collapsed) !== shouldCollapse) {
+            const identity = { kind: "channel-group", id: String(group.id) };
+            toggleChannelGroupCollapsed(group.id);
+            // toggleChannelGroupCollapsed() rebuilds the tree. Restore keyboard
+            // focus to the newly rendered group header so subsequent arrows keep
+            // working without an extra mouse click.
+            requestAnimationFrame(() => {
+              const restored = findChannelTreeItemByIdentity(identity);
+              restored?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
+              restored?.scrollIntoView({ block: "nearest" });
+            });
+          }
+          event.preventDefault();
+          return true;
+        }
+      }
+      if (event.key === "ArrowLeft" && current?.classList.contains("is-group-child")) {
+        const itemGroupId = current.dataset.channelId != null
+          ? getChannelById(current.dataset.channelId)?.groupId
+          : current.dataset.audioClipId != null
+            ? state.audioClips.find((clip) => String(clip.id) === String(current.dataset.audioClipId))?.groupId
+            : null;
+        const group = itemGroupId == null ? null : getChannelGroupById(itemGroupId);
+        if (group && !group.collapsed) {
+          toggleChannelGroupCollapsed(group.id);
+          selectChannelGroup(group.id);
+          requestAnimationFrame(() => {
+            const header = findChannelTreeItemByIdentity({ kind: "channel-group", id: String(group.id) });
+            header?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
+            header?.scrollIntoView({ block: "nearest" });
+          });
+          event.preventDefault();
+          return true;
+        }
+      }
+      return false;
+    }
+
     if (event.key === "Home") index = 0;
     else if (event.key === "End") index = items.length - 1;
     else if (event.key === "ArrowUp") index = Math.max(0, index - 1);
@@ -14960,7 +14866,9 @@
   }
 
   function restoreHistorySnapshot(snapshot, restorePlayheadBeat = null) {
+    cancelItemTreeDrag(null, { rerender: false });
     const data = JSON.parse(snapshot);
+    state.channelTreeLayout = Array.isArray(data.channelTreeLayout) ? data.channelTreeLayout : [];
     invalidateOverviewTimelineActivity();
     const scrollLeft = elements.rollViewport.scrollLeft;
     const scrollTop = elements.rollViewport.scrollTop;
@@ -15050,6 +14958,8 @@
       state.timelineFades = normalizeTimelineFades(data.timelineFades || state.timelineFades);
       state.timeSignatures = normalizeTimeSignatures(data.timeSignatures || state.timeSignatures);
       state.nextTimeSignatureId = Math.max(2, Number(data.nextTimeSignatureId) || 2, state.timeSignatures.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
+      state.timelineParts = normalizeTimelineParts(data.timelineParts || state.timelineParts);
+      state.nextTimelinePartId = Math.max(1, Number(data.nextTimelinePartId) || 1, state.timelineParts.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
       state.audioClips = (Array.isArray(data.audioClips) ? data.audioClips : []).map((clip, index) => {
         const normalized = normalizeAudioClip(clip, index);
         normalized.muted = mutedByAudioId.has(String(normalized.id)) ? mutedByAudioId.get(String(normalized.id)) : normalized.muted;
@@ -16270,7 +16180,7 @@
       state.channelMerge.runtimeCache = null;
       refreshChannelMergePreviewFromSelection({ markModified: state.channelMerge.previewModified });
     }
-    renderChannelTabs(); renderChannelEditor(); drawRoll(); updateChannelInfo();
+    renderChannelTabs(); renderChannelEditor(); drawRoll(); renderAudioLane(); updateChannelInfo();
     if (notify) showToast(`${group.name} ${nextVisible ? i18nText("ui.showed") : i18nText("ui.hid")}`);
     return true;
   }
@@ -16280,10 +16190,12 @@
     const nextMuted = Boolean(muted);
     if (!group || Boolean(group.muted) === nextMuted) return false;
     const beforeAudible = captureChannelAudibleStates();
+    const beforeAudioAudible = captureAudioAudibleStates();
     group.muted = nextMuted;
     setDirtyWithoutHistory();
     refreshChannelPlaybackForAudibleStateChange(beforeAudible);
-    renderChannelTabs(); renderChannelEditor(); drawRoll(); updateChannelInfo();
+    refreshAudioPlaybackForAudibleStateChange(beforeAudioAudible);
+    renderChannelTabs(); renderChannelEditor(); drawRoll(); renderAudioLane(); updateChannelInfo();
     if (notify) showToast(`${group.name} ${nextMuted ? i18nText("ui.mute") : i18nText("ui.unmute")}`);
     return true;
   }
@@ -16292,9 +16204,18 @@
     if (isChannelDeleteModeActive()) return false;
     const group = getChannelGroupById(groupId);
     if (!group) return false;
+    const restoreTreeFocus = Boolean(elements.channelTabs?.contains(document.activeElement));
+    const focusIdentity = restoreTreeFocus ? { kind: "channel-group", id: String(group.id) } : null;
     group.collapsed = !Boolean(group.collapsed);
     setDirtyWithoutHistory();
     renderChannelTabs();
+    if (focusIdentity) {
+      requestAnimationFrame(() => {
+        const restored = findChannelTreeItemByIdentity(focusIdentity);
+        restored?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
+        restored?.scrollIntoView({ block: "nearest" });
+      });
+    }
     return true;
   }
 
@@ -16433,6 +16354,85 @@
     renderChannelEditor();
     drawRoll();
     showToast(`${channel.name}을 추가했습니다.`);
+    return true;
+  }
+
+  function addChannelToGroup(groupId) {
+    const group = getChannelGroupById(groupId);
+    if (!group || isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    const id = nextChannelId();
+    const channel = createDefaultChannel(id, state.channels.length);
+    channel.name = makeUniqueChannelName(defaultChannelName(channel), channel.id);
+    channel.groupId = String(group.id);
+    const members = getChannelGroupMembers(group);
+    let insertIndex = state.channels.length;
+    if (members.length) {
+      const lastMemberIndex = Math.max(...members.map((member) => state.channels.indexOf(member)).filter((index) => index >= 0));
+      if (Number.isFinite(lastMemberIndex)) insertIndex = lastMemberIndex + 1;
+    } else if (group.beforeChannelId != null) {
+      const anchorIndex = state.channels.findIndex((item) => String(item.id) === String(group.beforeChannelId));
+      if (anchorIndex >= 0) insertIndex = anchorIndex;
+    }
+    group.beforeChannelId = null;
+    state.channels.splice(insertIndex, 0, channel);
+    state.selectedChannelGroupId = null;
+    state.activePanel = "notes";
+    state.activeChannel = state.channels.findIndex((item) => String(item.id) === String(channel.id));
+    clearNoteSelection();
+    markDirty("그룹 채널 추가");
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    showToast(`${group.name} 그룹에 ${channel.name}을 추가했습니다.`);
+    return true;
+  }
+
+  function duplicateChannelById(channelId) {
+    if (isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    const sourceIndex = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
+    if (sourceIndex < 0) return false;
+    const source = state.channels[sourceIndex];
+    const id = nextChannelId();
+    const clone = {
+      ...source,
+      id,
+      name: makeUniqueChannelName(source.name, null),
+      notes: (source.notes || []).map((note) => ({ ...note, id: state.nextNoteId++ })),
+    };
+    state.channels.splice(sourceIndex + 1, 0, clone);
+    state.selectedChannelGroupId = null;
+    state.activePanel = "notes";
+    state.activeChannel = sourceIndex + 1;
+    clearNoteSelection();
+    markDirty("채널 복사");
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    showToast(`${source.name}을 ${clone.name}(으)로 복사했습니다.`);
+    return true;
+  }
+
+  function setAllChannelGroupsCollapsed(collapsed) {
+    if (isChannelDeleteModeActive() || !state.channelGroups.length) return false;
+    const next = Boolean(collapsed);
+    let changed = false;
+    for (const group of state.channelGroups) {
+      if (Boolean(group.collapsed) === next) continue;
+      group.collapsed = next;
+      changed = true;
+    }
+    if (!changed) return false;
+    setDirtyWithoutHistory();
+    renderChannelTabs();
+    showToast(next ? i18nText("group.collapse_all") : i18nText("group.expand_all"));
+    return true;
+  }
+
+  function openAudioImportPicker(groupId = null) {
+    state.pendingAudioImportGroupId = groupId != null && getChannelGroupById(groupId) ? String(groupId) : null;
+    openFilePickerInput(elements.audioFileInput);
     return true;
   }
 
@@ -17927,6 +17927,106 @@
     return true;
   }
 
+  function finalizeChannelTreeBulkMutation(historyLabel, toastMessage = "") {
+    normalizeChannelGroupMemberships();
+    normalizeAudioGroupMemberships();
+    if (!state.channels.length) {
+      state.channels = createDefaultChannels(1);
+      normalizeDefaultChannelNames();
+    }
+    state.activePanel = "notes";
+    state.selectedChannelGroupId = null;
+    state.activeAudioClipId = null;
+    state.activeChannel = clamp(state.activeChannel, 0, state.channels.length - 1);
+    clearNoteSelection();
+    clearMidiSelection();
+    shrinkTimelineToContent();
+    markDirty(historyLabel);
+    renderAll();
+    if (toastMessage) showToast(toastMessage);
+    return true;
+  }
+
+  function deleteAllChannelsImmediate() {
+    for (const channel of state.channels) {
+      state.soloChannelIds.delete(String(channel.id));
+      state.visibilitySoloChannelIds.delete(String(channel.id));
+    }
+    state.channels = createDefaultChannels(1);
+    normalizeDefaultChannelNames();
+    for (const group of state.channelGroups) group.beforeChannelId = null;
+    for (const clip of state.audioClips) clip.beforeChannelId = null;
+    state.activeChannel = 0;
+    return finalizeChannelTreeBulkMutation("모든 채널 삭제", i18nText("channel.deleted_all"));
+  }
+
+  function deleteAllAudioImmediate() {
+    for (const clip of state.audioClips) state.audioRuntime.delete(String(clip.id));
+    state.audioClips = [];
+    state.soloAudioClipIds.clear();
+    state.visibilitySoloAudioClipIds.clear();
+    state.activeAudioClipId = null;
+    return finalizeChannelTreeBulkMutation("모든 오디오 삭제", i18nText("audio.deleted_all"));
+  }
+
+  function deleteAllGroupsImmediate() {
+    for (const channel of state.channels) channel.groupId = null;
+    for (const clip of state.audioClips) {
+      clip.groupId = null;
+      clip.beforeChannelId = null;
+    }
+    state.channelGroups = [];
+    state.soloGroupIds.clear();
+    state.visibilitySoloGroupIds.clear();
+    state.selectedChannelGroupId = null;
+    return finalizeChannelTreeBulkMutation("모든 그룹 삭제", i18nText("group.deleted_all"));
+  }
+
+  function deleteAllChannelTreeItemsImmediate() {
+    for (const clip of state.audioClips) state.audioRuntime.delete(String(clip.id));
+    state.audioClips = [];
+    state.channelGroups = [];
+    state.channels = createDefaultChannels(1);
+    normalizeDefaultChannelNames();
+    state.soloChannelIds.clear();
+    state.soloGroupIds.clear();
+    state.soloAudioClipIds.clear();
+    state.visibilitySoloChannelIds.clear();
+    state.visibilitySoloGroupIds.clear();
+    state.visibilitySoloAudioClipIds.clear();
+    state.activeChannel = 0;
+    return finalizeChannelTreeBulkMutation("모든 항목 삭제", i18nText("item.deleted_all"));
+  }
+
+  function deleteChannelGroupItemsImmediate(groupId, { deleteGroup = false } = {}) {
+    const group = getChannelGroupById(groupId);
+    if (!group) return false;
+    const memberIds = new Set(getChannelGroupMembers(group).map((channel) => String(channel.id)));
+    const audioIds = new Set(getChannelGroupAudioMembers(group).map((clip) => String(clip.id)));
+    for (const id of memberIds) {
+      state.soloChannelIds.delete(id);
+      state.visibilitySoloChannelIds.delete(id);
+    }
+    for (const id of audioIds) {
+      state.soloAudioClipIds.delete(id);
+      state.visibilitySoloAudioClipIds.delete(id);
+      state.audioRuntime.delete(id);
+    }
+    state.channels = state.channels.filter((channel) => !memberIds.has(String(channel.id)));
+    state.audioClips = state.audioClips.filter((clip) => !audioIds.has(String(clip.id)));
+    group.beforeChannelId = null;
+    if (deleteGroup) {
+      state.soloGroupIds.delete(String(group.id));
+      state.visibilitySoloGroupIds.delete(String(group.id));
+      state.channelGroups = state.channelGroups.filter((item) => String(item.id) !== String(group.id));
+      if (String(state.selectedChannelGroupId ?? "") === String(group.id)) state.selectedChannelGroupId = null;
+    }
+    return finalizeChannelTreeBulkMutation(
+      deleteGroup ? "그룹/항목 모두 삭제" : "그룹 항목 삭제",
+      deleteGroup ? i18nText("group.deleted_all_items", [group.name]) : i18nText("group.deleted_items", [group.name]),
+    );
+  }
+
   async function requestDeleteChannel(index = state.activeChannel) {
     const targetIndex = clamp(index, 0, state.channels.length - 1);
     const channel = state.channels[targetIndex];
@@ -18584,6 +18684,16 @@
     // Shift+오른쪽 드래그는 기존 선택을 유지한 채 범위 안의 노트를 추가합니다.
     // 단순 우클릭(드래그 없음)은 기존 선택을 보존해 컨텍스트 메뉴 동작을 유지합니다.
     if (event.button === 2) {
+      // Ctrl/Cmd + right-click on a note is always additive, regardless of the
+      // current edit tool. Do this before the Note-tool right-drag marquee path.
+      if (existing && additive) {
+        state.activePanel = "notes";
+        state.activeAudioClipId = null;
+        state.selectedNoteIds.add(existing.id);
+        drawRoll();
+        updateChannelInfo();
+        return;
+      }
       if (pointBeat >= 0 && effectiveEditTool !== "select") {
         beginMarqueeSelection(event, point, {
           initialSelectionMode: event.shiftKey ? "add" : "replace",
@@ -20897,7 +21007,7 @@
     }).join(", ");
   }
 
-  function channelsToMmlRange(channels, startBeat, endBeat, tempos = getSortedTempos()) {
+  function channelsToMmlRange(channels, startBeat, endBeat, tempos = getSortedTempos(), { includeTempo = true, optimized = true } = {}) {
     const start = Math.max(0, Number(startBeat) || 0);
     const end = Math.max(start + CONFIG.minimumNoteBeat, Number(endBeat) || start + CONFIG.minimumNoteBeat);
     const fullVoices = [];
@@ -20926,10 +21036,49 @@
           durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, clippedEnd - clippedStart).toFixed(6)),
         }];
       });
-      if (voiceIndex === 0) return buildTempoIntegratedNoteVoiceMml(clipped, tempos, start, end);
+      if (voiceIndex === 0 && includeTempo) return buildTempoIntegratedNoteVoiceMml(clipped, tempos, start, end);
       return clipped.length ? buildNoteVoiceMml(clipped, start) : "";
     });
-    return optimizeEditorExportMml(`MML@${rendered.join(",")};`);
+    const mml = normalizeMmlTextCase(`MML@${rendered.join(",")};`);
+    return optimized ? optimizeEditorExportMml(mml) : mml;
+  }
+
+  function getMmlChannelCharacterCountInRange(channel, range) {
+    if (!channel || !range) return 0;
+    const start = Math.max(0, Number(range.startBeat) || 0);
+    const end = Math.max(start + CONFIG.minimumNoteBeat, Number(range.endBeat) || start + CONFIG.minimumNoteBeat);
+    const hasNotesInRange = (channel.notes || []).some((note) => {
+      const noteStart = Math.max(0, Number(note.startBeat) || 0);
+      const noteEnd = noteStart + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+      return noteEnd > start + 1e-7 && noteStart < end - 1e-7;
+    });
+    if (!hasNotesInRange) return 0;
+    const mml = channelsToMmlRange(
+      [channel],
+      range.startBeat,
+      range.endBeat,
+      getSortedTempos(),
+      { includeTempo: false, optimized: true },
+    );
+    return String(mml || "").length;
+  }
+
+  function getTimelinePartRangeAtBeat(beat = state.playhead.beat) {
+    const ranges = getTimelinePartRanges();
+    if (!ranges.length) return null;
+    return ranges[getTimelinePartIndexAtBeat(beat)] || ranges[0] || null;
+  }
+
+  function getSelectedTimelinePartCharacterCount(beat = state.playhead.beat) {
+    const range = getTimelinePartRangeAtBeat(beat);
+    if (!range || state.activePanel !== "notes") return 0;
+    const selectedGroup = getChannelGroupById(state.selectedChannelGroupId);
+    if (selectedGroup) {
+      const counts = getChannelGroupMembers(selectedGroup).map((member) => getMmlChannelCharacterCountInRange(member, range));
+      return counts.length ? Math.max(...counts) : 0;
+    }
+    const channel = state.channels[state.activeChannel];
+    return channel ? getMmlChannelCharacterCountInRange(channel, range) : 0;
   }
 
   function buildMmlExportSplitCandidates(channels, tempos, totalEndBeat) {
@@ -21523,7 +21672,7 @@
       if (!scopedAvailable) elements.timeEditSelectedChannelOnly.checked = false;
     }
     if (elements.timeEditScopeLabel) {
-      const key = selectedType === "group" ? "group.selected" : "channel.selected";
+      const key = selectedType === "group" ? "time_edit.selected_group_only" : "time_edit.selected_channel_only";
       elements.timeEditScopeLabel.dataset.i18n = key;
       elements.timeEditScopeLabel.textContent = i18nText(key);
     }
@@ -21582,6 +21731,23 @@
       elements.timeEditMeasureInput?.select();
     });
     return true;
+  }
+
+  function applySingleMeasureTimelineEdit(beat, action) {
+    const cursor = clamp(Number(beat) || 0, 0, getTotalBeats());
+    const measureLength = getTimeSignatureMeasureLength(getTimeSignatureAtBeat(cursor));
+    if (!(measureLength > 0)) return false;
+    const resumePlayback = state.playback.running || state.playback.loading;
+    if (resumePlayback) stopPlayback(false);
+    state.timeEdit = { beat: cursor, scope: "all", channelId: null, groupId: null, preferredAction: action };
+    const applied = action === "delete"
+      ? deleteTrackSpaceAtPlayhead(measureLength)
+      : insertTrackSpaceAtPlayhead(measureLength);
+    if (applied) {
+      showToast(i18nText(action === "delete" ? "timeline.delete_one_measure_done" : "timeline.add_one_measure_done"));
+      if (resumePlayback) window.setTimeout(() => startPlayback(), 0);
+    }
+    return applied;
   }
 
   function getTimeEditAmount() {
@@ -21648,11 +21814,50 @@
     return true;
   }
 
+  function shiftTimelinePartsForInsert(cursorBeat, amountBeats) {
+    const cursor = Math.max(0, Number(cursorBeat) || 0);
+    const amount = Math.max(0, Number(amountBeats) || 0);
+    if (!(amount > 0)) return;
+    state.timelineParts = normalizeTimelineParts(getSortedTimelineParts().map((part) => (
+      part.beat > cursor + 1e-7
+        ? { ...part, beat: Number((part.beat + amount).toFixed(6)) }
+        : part
+    )));
+  }
+
+  function shiftTimelinePartsForDelete(cursorBeat, amountBeats) {
+    const cursor = Math.max(0, Number(cursorBeat) || 0);
+    const amount = Math.max(0, Number(amountBeats) || 0);
+    if (!(amount > 0)) return;
+    const cutEnd = cursor + amount;
+    const sourceParts = getSortedTimelineParts();
+    // If the removed range crosses a part boundary, the content that follows the
+    // cut must still start a part at the collapsed edit point. This mirrors the
+    // tempo/time-signature boundary preservation below instead of silently
+    // losing the part change when its marker lived inside the deleted measures.
+    const crossedPartBoundary = cursor > 1e-7 && sourceParts.some((part) => (
+      part.beat >= cursor - 1e-7 && part.beat <= cutEnd + 1e-7
+    ));
+    const remaining = sourceParts.flatMap((part) => {
+      if (part.beat >= cursor - 1e-7 && part.beat < cutEnd - 1e-7) return [];
+      if (part.beat >= cutEnd - 1e-7) return [{ ...part, beat: Number(Math.max(0, part.beat - amount).toFixed(6)) }];
+      return [part];
+    });
+    if (crossedPartBoundary && !remaining.some((part) => Math.abs(Number(part.beat) - cursor) <= 1e-7)) {
+      const id = getNextTimelinePartId();
+      remaining.push({ id, beat: Number(cursor.toFixed(6)) });
+      state.nextTimelinePartId = Math.max(Number(state.nextTimelinePartId) || 1, id + 1);
+    }
+    state.timelineParts = normalizeTimelineParts(remaining);
+  }
+
   function shiftTimelineFadesForInsert(cursorBeat, amountBeats) {
     const cursor = Math.max(0, Number(cursorBeat) || 0);
     const amount = Math.max(0, Number(amountBeats) || 0);
     if (!(amount > 0)) return;
-    state.timelineFades = normalizeTimelineFades().map((fade) => ({ ...fade, startBeat: fade.startBeat >= cursor - 1e-7 ? fade.startBeat + amount : fade.startBeat }));
+    // A fade marker exactly on the insertion point defines the newly inserted
+    // space, so keep it anchored there. Only fades strictly after the point move.
+    state.timelineFades = normalizeTimelineFades().map((fade) => ({ ...fade, startBeat: fade.startBeat > cursor + 1e-7 ? fade.startBeat + amount : fade.startBeat }));
   }
 
   function shiftTimeSignaturesForInsert(cursorBeat, amountBeats) {
@@ -21660,7 +21865,7 @@
     const amount = Math.max(0, Number(amountBeats) || 0);
     if (!(amount > 0)) return;
     state.timeSignatures = normalizeTimeSignatures(getSortedTimeSignatures().map((signature) => (
-      !signature.fixed && signature.beat >= cursor - 1e-7
+      !signature.fixed && signature.beat > cursor + 1e-7
         ? { ...signature, beat: Number((signature.beat + amount).toFixed(6)) }
         : signature
     )));
@@ -21671,9 +21876,12 @@
     const amount = Math.max(0, Number(amountBeats) || 0);
     if (!(amount > 0)) return;
     const cutEnd = cursor + amount;
-    const beforeCut = getTimeSignatureAtBeat(cursor);
+    // Compare against the state immediately before the removed range. A marker
+    // exactly at cursor belongs to the deleted range and must not become the
+    // "before" state, otherwise its replacement can disappear after the cut.
+    const beforeCut = getTimeSignatureAtBeat(cursor > 1e-7 ? Math.max(0, cursor - 1e-8) : 0);
     const afterCut = getTimeSignatureAtBeat(cutEnd + 1e-8);
-    const remaining = getSortedTimeSignatures().flatMap((signature) => {
+    let remaining = getSortedTimeSignatures().flatMap((signature) => {
       if (signature.fixed) return [{ ...signature, beat: 0, fixed: true }];
       if (signature.beat >= cursor - 1e-7 && signature.beat < cutEnd - 1e-7) return [];
       if (signature.beat >= cutEnd - 1e-7) return [{ ...signature, beat: Number(Math.max(0, signature.beat - amount).toFixed(6)) }];
@@ -21681,11 +21889,16 @@
     });
     if (cursor <= 1e-7) {
       const later = remaining.filter((signature) => !signature.fixed && signature.beat > 1e-7);
-      remaining.length = 0;
-      remaining.push({ id: 1, beat: 0, numerator: afterCut.numerator, denominator: afterCut.denominator, fixed: true }, ...later);
-    } else if (beforeCut.numerator !== afterCut.numerator || beforeCut.denominator !== afterCut.denominator) {
-      remaining.push({ id: getNextTimeSignatureId(), beat: Number(cursor.toFixed(6)), numerator: afterCut.numerator, denominator: afterCut.denominator, fixed: false });
-      state.nextTimeSignatureId += 1;
+      remaining = [{ id: 1, beat: 0, numerator: afterCut.numerator, denominator: afterCut.denominator, fixed: true }, ...later];
+    } else {
+      // Remove any shifted/redundant marker at the collapse point, then restore
+      // only the signature that is actually needed for the content after the cut.
+      remaining = remaining.filter((signature) => signature.fixed || Math.abs(Number(signature.beat) - cursor) > 1e-7);
+      if (beforeCut.numerator !== afterCut.numerator || beforeCut.denominator !== afterCut.denominator) {
+        const id = getNextTimeSignatureId();
+        remaining.push({ id, beat: Number(cursor.toFixed(6)), numerator: afterCut.numerator, denominator: afterCut.denominator, fixed: false });
+        state.nextTimeSignatureId = Math.max(Number(state.nextTimeSignatureId) || 2, id + 1);
+      }
     }
     state.timeSignatures = normalizeTimeSignatures(remaining);
   }
@@ -21697,8 +21910,14 @@
     const cutEnd = cursor + amount;
     const mapBeat = (beat) => beat <= cursor + 1e-7 ? beat : (beat >= cutEnd - 1e-7 ? Math.max(0, beat - amount) : cursor);
     state.timelineFades = normalizeTimelineFades().flatMap((fade) => {
-      const start = mapBeat(fade.startBeat);
-      const end = mapBeat(getTimelineFadeEndBeat(fade));
+      const originalStart = Number(fade.startBeat) || 0;
+      const originalEnd = getTimelineFadeEndBeat(fade);
+      const overlapsDeletedRange = originalStart < cutEnd - 1e-7 && originalEnd > cursor + 1e-7;
+      // Fade-in represents a continuous entrance curve. Once any portion of it
+      // is cut out, shortening it changes the intended effect, so delete it.
+      if (fade.type === "in" && overlapsDeletedRange) return [];
+      const start = mapBeat(originalStart);
+      const end = mapBeat(originalEnd);
       if (end <= start + 1e-7) return [];
       const durationSeconds = normalizeTimelineFadeSeconds(timelineFadeBeatToSeconds(end) - timelineFadeBeatToSeconds(start), 0.1);
       return [{ ...fade, startBeat: start, durationSeconds }];
@@ -21725,11 +21944,14 @@
       state.channelNoteRuntime.delete(String(channel.id));
     }
     for (const tempo of state.tempos) {
-      if (!tempo.fixed && tempo.beat >= cursor - 1e-7) tempo.beat = Number((tempo.beat + amount).toFixed(6));
+      // Keep a tempo marker exactly at the insertion point in place so the
+      // inserted blank measure inherits that tempo. Only later markers move.
+      if (!tempo.fixed && tempo.beat > cursor + 1e-7) tempo.beat = Number((tempo.beat + amount).toFixed(6));
     }
     state.tempos.sort((a, b) => a.beat - b.beat || a.id - b.id);
     shiftTimelineFadesForInsert(cursor, amount);
     shiftTimeSignaturesForInsert(cursor, amount);
+    shiftTimelinePartsForInsert(cursor, amount);
     state.timelineBeats = Math.max(getTotalBeats() + amount, getPersistentContentEndBeat() + getSnapBeat());
     ensureTimelineFitsViewport();
     markDirty(i18nText("timeline.add_measure_beat"));
@@ -21750,6 +21972,7 @@
       return false;
     }
     const cutEnd = cursor + amount;
+    const bpmBeforeCut = getTempoAtBeatFromCollection(cursor > 1e-7 ? Math.max(0, cursor - 1e-8) : 0, state.tempos);
     const bpmAfterCut = getTempoAtBeatFromCollection(cutEnd + 1e-8, state.tempos);
     for (const channel of state.channels) {
       const nextNotes = [];
@@ -21792,14 +22015,18 @@
       tempoByBeat.delete("0.000000");
     } else {
       const cursorKey = Number(cursor).toFixed(6);
-      const existingAtCursor = tempoByBeat.get(cursorKey);
-      tempoByBeat.set(cursorKey, existingAtCursor
-        ? { ...existingAtCursor, bpm: bpmAfterCut }
-        : { id: state.nextTempoId++, beat: Number(cursor.toFixed(6)), bpm: bpmAfterCut, fixed: false });
+      // A tempo marker shifted from cutEnd may land at cursor. Keep a marker
+      // there only when the post-cut tempo differs from the tempo immediately
+      // before the removed measures; otherwise it is redundant.
+      tempoByBeat.delete(cursorKey);
+      if (Math.abs(Number(bpmBeforeCut) - Number(bpmAfterCut)) > 1e-7) {
+        tempoByBeat.set(cursorKey, { id: state.nextTempoId++, beat: Number(cursor.toFixed(6)), bpm: bpmAfterCut, fixed: false });
+      }
     }
     state.tempos = [...fixedTempos, ...tempoByBeat.values()].sort((a, b) => a.beat - b.beat || a.id - b.id);
     shiftTimelineFadesForDelete(cursor, amount);
     shiftTimeSignaturesForDelete(cursor, amount);
+    shiftTimelinePartsForDelete(cursor, amount);
     state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, getTotalBeats() - amount);
     shrinkTimelineToContent();
     ensureTimelineFitsViewport();
@@ -23400,6 +23627,13 @@
       state.playhead.beat = visualBeat;
       updatePagedPlaybackScroll(now, visualBeat);
       updatePlayheadVisual();
+      if (getSortedTimelineParts().length > 0) {
+        const currentPartIndex = getTimelinePartIndexAtBeat(visualBeat);
+        if (currentPartIndex !== state.playback.lastInfoPartIndex) {
+          state.playback.lastInfoPartIndex = currentPartIndex;
+          updateChannelInfo();
+        }
+      }
     }
     if (now - state.playback.lastTimelineDrawAt >= 32) {
       state.playback.lastTimelineDrawAt = now;
@@ -23424,6 +23658,7 @@
     state.playback.scheduledNoteKeys = new Set();
     state.playback.voiceRecords = new Map();
     state.playback.autoGainScale = 1;
+    state.playback.lastInfoPartIndex = -1;
     stopScheduledAudioClips();
     audioEngine.stopAll();
     clearPlaybackKeyboardPitches();
@@ -23561,7 +23796,7 @@
     const data = encodeSchemaRows(project, context);
     return {
       format: "mml-piano-roll-project",
-      version: 34,
+      version: 35,
       encoding: PROJECT_STORAGE_ENCODING,
       schemas: context.schemas,
       data,
@@ -23646,6 +23881,8 @@
 
   function serializeProject() {
     const project = {
+      // Explicit mixed-item order; old projects without this field use legacy anchors.
+      channelTreeLayout: getItemTreeLayout(),
       projectName: state.projectName,
       snapValue: state.snapValue,
       rowHeight: state.rowHeight,
@@ -23653,6 +23890,7 @@
       nextNoteId: state.nextNoteId,
       nextTempoId: state.nextTempoId,
       nextTimeSignatureId: state.nextTimeSignatureId,
+      nextTimelinePartId: state.nextTimelinePartId,
       nextMidiDocumentId: state.nextMidiDocumentId,
       nextAudioClipId: state.nextAudioClipId,
       nextChannelGroupId: state.nextChannelGroupId,
@@ -23678,7 +23916,9 @@
       },
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
       timeSignatures: getSortedTimeSignatures().map((signature) => ({ ...signature })),
+      timelineParts: getSortedTimelineParts().map((part) => ({ ...part })),
       timelineFades: normalizeTimelineFades(),
+      // v35: 파트 경계는 timelineParts 배열로 저장하며 MML 파트별 보기와 타임라인 점선에 사용합니다.
       // v26: 페이드는 타임라인 마커(type/startBeat/durationBeat) 배열로 저장하며 원본 노트 볼륨은 변경하지 않습니다.
       // v23: 채널 악기는 현재 SoundFont의 실제 Bank/Preset을 저장하고, 색상은 hue(0..359)만 저장합니다.
       // 지원 음악 파일은 공통 플러그인을 거쳐 불러오는 즉시 일반 편집 채널로 변환됩니다.
@@ -24180,6 +24420,7 @@
     const storage = JSON.parse(text);
     const data = decodeProjectStorage(storage);
     validateProject(data);
+    state.channelTreeLayout = Array.isArray(data.channelTreeLayout) ? data.channelTreeLayout : [];
     stopPlayback(false);
     releaseKeyboardVoice(true);
     clearEditorPitchPreview(true);
@@ -24245,6 +24486,7 @@
       )),
       ...(Array.isArray(data.tempos) ? data.tempos.map((tempo) => Math.max(0, Number(tempo.beat) || 0)) : []),
       ...(Array.isArray(data.timeSignatures) ? data.timeSignatures.map((signature) => Math.max(0, Number(signature.beat) || 0)) : []),
+      ...(Array.isArray(data.timelineParts) ? data.timelineParts.map((part) => Math.max(0, Number(part.beat) || 0)) : []),
       ...state.audioClips.map((clip) => getAudioClipEndBeat(clip)),
       getRawTimelineFadeEndBeat(data.timelineFades, data.tempos),
       Math.max(0, Number(data.editor?.playheadBeat) || 0),
@@ -24257,6 +24499,8 @@
     state.timelineFades = normalizeTimelineFades(data.timelineFades || [], data.tempos);
     state.timeSignatures = normalizeTimeSignatures(data.timeSignatures || createDefaultTimeSignatures());
     state.nextTimeSignatureId = Math.max(2, Number(data.nextTimeSignatureId) || 2, state.timeSignatures.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
+    state.timelineParts = normalizeTimelineParts(data.timelineParts || []);
+    state.nextTimelinePartId = Math.max(1, Number(data.nextTimelinePartId) || 1, state.timelineParts.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1);
     state.selectedChannelGroupId = null;
     state.channelGroups = (Array.isArray(data.channelGroups) ? data.channelGroups : []).map((group, index) => ({
       id: Number(group.id) || index + 1,
@@ -24525,6 +24769,8 @@
   }
 
   function resetProject({ notify = true } = {}) {
+    cancelItemTreeDrag(null, { rerender: false });
+    state.channelTreeLayout = [];
     state.soloChannelIds.clear();
     state.soloGroupIds.clear();
     state.soloAudioClipIds.clear();
@@ -24561,10 +24807,12 @@
     state.nextNoteId = 1;
     state.nextTempoId = 2;
     state.nextTimeSignatureId = 2;
+    state.nextTimelinePartId = 1;
     state.channels = createDefaultChannels();
     state.tempos = createDefaultTempos();
     state.timeSignatures = createDefaultTimeSignatures();
     state.timeSignatureEditor = { timeSignatureId: null, beat: 0 };
+    state.timelineParts = [];
     state.timelineFades = [];
     state.midiDocuments = [];
     state.activeMidiDocumentId = null;
@@ -24783,6 +25031,23 @@
 
   function openContextMenu(event) {
     event.preventDefault();
+    closeItemAddMenu();
+    const bulkVisibilityButton = event.target?.closest?.("#channelBulkVisibilityButton");
+    if (bulkVisibilityButton) {
+      event.stopImmediatePropagation();
+      closeContextMenu();
+      const { hasItems, allVisibilitySolo } = getChannelTreeBulkState();
+      if (hasItems) setAllChannelTreeVisibilitySolo(!allVisibilitySolo);
+      return;
+    }
+    const bulkMuteButton = event.target?.closest?.("#channelBulkMuteButton");
+    if (bulkMuteButton) {
+      event.stopImmediatePropagation();
+      closeContextMenu();
+      const { hasItems, allSoundSolo } = getChannelTreeBulkState();
+      if (hasItems) setAllChannelTreeSoundSolo(!allSoundSolo);
+      return;
+    }
     if (event.target?.closest?.(".popup-backdrop, dialog[open]")) {
       event.stopPropagation();
       closeContextMenu();
@@ -24947,34 +25212,167 @@
     return i18nText(keyByArea[areaName] || "context.editor");
   }
 
+  function getContextMenuDisabledReason(item) {
+    const reason = typeof item?.disabledReason === "function" ? item.disabledReason() : item?.disabledReason;
+    return String(reason || i18nText("context.disabled_unavailable"));
+  }
+
+  function renderContextMenuEntries(container, items, { nested = false } = {}) {
+    for (const item of items) {
+      if (item === "separator") {
+        const separator = document.createElement("div");
+        separator.className = "menu-separator";
+        container.append(separator);
+        continue;
+      }
+
+      const hasSegmentedSubmenu = Array.isArray(item?.segments) && item.segments.length > 0;
+      const hasSubmenu = (Array.isArray(item?.items) && item.items.length > 0) || hasSegmentedSubmenu;
+      const wrapper = hasSubmenu ? document.createElement("div") : null;
+      if (wrapper) wrapper.className = "context-menu-item has-submenu";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      const itemDisabled = Boolean(item.disabled);
+      button.classList.toggle("is-disabled", itemDisabled);
+      button.setAttribute("aria-disabled", String(itemDisabled));
+      if (item.danger) button.classList.add("danger");
+
+      if (hasSubmenu) {
+        const label = document.createElement("span");
+        label.textContent = item.label;
+        const arrow = document.createElement("span");
+        arrow.className = "context-submenu-arrow";
+        arrow.textContent = "›";
+        button.append(label, arrow);
+        button.setAttribute("aria-haspopup", "menu");
+        button.setAttribute("aria-expanded", "false");
+
+        const submenu = document.createElement("div");
+        submenu.className = `context-submenu${hasSegmentedSubmenu ? " context-submenu-segmented" : ""}`;
+        submenu.setAttribute("role", "menu");
+        if (hasSegmentedSubmenu) {
+          const segmentRow = document.createElement("div");
+          segmentRow.className = "context-segment-row";
+          segmentRow.setAttribute("role", "group");
+          segmentRow.setAttribute("aria-label", item.label);
+          for (const segment of item.segments) {
+            const segmentButton = document.createElement("button");
+            segmentButton.type = "button";
+            segmentButton.className = `context-segment-button${segment.active ? " is-active" : ""}`;
+            segmentButton.textContent = segment.label;
+            const segmentDisabled = Boolean(segment.disabled);
+            segmentButton.classList.toggle("is-disabled", segmentDisabled);
+            segmentButton.setAttribute("aria-disabled", String(segmentDisabled));
+            segmentButton.setAttribute("aria-pressed", String(Boolean(segment.active)));
+            segmentButton.addEventListener("click", (segmentEvent) => {
+              segmentEvent.preventDefault();
+              segmentEvent.stopPropagation();
+              if (segmentDisabled) {
+                showToast(getContextMenuDisabledReason(segment));
+                return;
+              }
+              closeContextMenu();
+              segment.action?.();
+            });
+            segmentRow.append(segmentButton);
+          }
+          submenu.append(segmentRow);
+        } else {
+          renderContextMenuEntries(submenu, item.items, { nested: true });
+        }
+        wrapper.append(button, submenu);
+
+        const closeSiblingSubmenus = () => {
+          for (const sibling of wrapper.parentElement?.querySelectorAll(":scope > .context-menu-item.submenu-open") || []) {
+            if (sibling === wrapper) continue;
+            sibling.classList.remove("submenu-open");
+            sibling.querySelector(":scope > button")?.setAttribute("aria-expanded", "false");
+          }
+        };
+        const positionSubmenu = () => {
+          submenu.classList.remove("open-left");
+          submenu.style.top = "-6px";
+          let rect = submenu.getBoundingClientRect();
+          if (rect.right > window.innerWidth - 4) {
+            submenu.classList.add("open-left");
+            rect = submenu.getBoundingClientRect();
+          }
+          if (rect.bottom > window.innerHeight - 4) {
+            submenu.style.top = `${-6 - (rect.bottom - (window.innerHeight - 4))}px`;
+            rect = submenu.getBoundingClientRect();
+          }
+          if (rect.top < 4) {
+            submenu.style.top = `${parseFloat(submenu.style.top || "-6") + (4 - rect.top)}px`;
+          }
+        };
+        const openSubmenu = () => {
+          if (itemDisabled) return;
+          closeSiblingSubmenus();
+          wrapper.classList.add("submenu-open");
+          button.setAttribute("aria-expanded", "true");
+          requestAnimationFrame(positionSubmenu);
+        };
+        wrapper.addEventListener("mouseenter", openSubmenu);
+        wrapper.addEventListener("mouseleave", () => {
+          wrapper.classList.remove("submenu-open");
+          button.setAttribute("aria-expanded", "false");
+        });
+        button.addEventListener("click", (clickEvent) => {
+          clickEvent.preventDefault();
+          clickEvent.stopPropagation();
+          if (itemDisabled) {
+            showToast(getContextMenuDisabledReason(item));
+            return;
+          }
+          if (wrapper.classList.contains("submenu-open")) {
+            wrapper.classList.remove("submenu-open");
+            button.setAttribute("aria-expanded", "false");
+          } else {
+            openSubmenu();
+          }
+        });
+        container.append(wrapper);
+        continue;
+      }
+
+      button.textContent = item.label;
+      if (item.active) {
+        button.classList.add("context-menu-option-active");
+        button.setAttribute("aria-current", "true");
+        const check = document.createElement("span");
+        check.className = "context-menu-option-check";
+        check.textContent = "✓";
+        check.setAttribute("aria-hidden", "true");
+        button.append(check);
+      }
+      button.addEventListener("click", (clickEvent) => {
+        clickEvent.preventDefault();
+        clickEvent.stopPropagation();
+        if (itemDisabled) {
+          showToast(getContextMenuDisabledReason(item));
+          return;
+        }
+        closeContextMenu();
+        item.action?.();
+      });
+      container.append(button);
+    }
+  }
+
   function renderContextMenu(items, x, y, areaName, event = null) {
     elements.contextMenu.replaceChildren();
+    elements.contextMenu.classList.toggle(
+      "has-submenus",
+      items.some((item) => item && item !== "separator" && ((Array.isArray(item.items) && item.items.length > 0) || (Array.isArray(item.segments) && item.segments.length > 0))),
+    );
 
     const label = document.createElement("div");
     label.className = "menu-label";
     label.textContent = getContextMenuTitle(areaName, event);
     elements.contextMenu.append(label);
 
-    for (const item of items) {
-      if (item === "separator") {
-        const separator = document.createElement("div");
-        separator.className = "menu-separator";
-        elements.contextMenu.append(separator);
-        continue;
-      }
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = item.label;
-      if (item.danger) {
-        button.classList.add("danger");
-      }
-      button.disabled = Boolean(item.disabled);
-      button.addEventListener("click", () => {
-        closeContextMenu();
-        item.action?.();
-      });
-      elements.contextMenu.append(button);
-    }
+    renderContextMenuEntries(elements.contextMenu, items);
 
     elements.contextMenu.hidden = false;
     const rect = elements.contextMenu.getBoundingClientRect();
@@ -24987,10 +25385,10 @@
   }
 
   function handleRightMouseCancelDuringChannelDrag(event) {
-    if (event.button !== 2 || !state.channelDrag.dragging) return;
+    if (event.button !== 2 || !itemTreeDrag?.dragging) return;
     event.preventDefault();
     event.stopPropagation();
-    cancelChannelPointerDrag();
+    cancelItemTreeDrag();
     state.suppressNextContextMenu = true;
     closeContextMenu();
   }
@@ -26290,6 +26688,7 @@
 
     state.tempos = state.tempos.filter((tempo) => tempo.fixed || Number(tempo.beat) < cursor - 1e-7);
     state.timeSignatures = normalizeTimeSignatures(getSortedTimeSignatures().filter((signature) => signature.fixed || Number(signature.beat) < cursor - 1e-7));
+    state.timelineParts = normalizeTimelineParts(getSortedTimelineParts().filter((part) => Number(part.beat) < cursor - 1e-7));
     state.timelineFades = normalizeTimelineFades().flatMap((fade) => {
       if (fade.startBeat >= cursor - 1e-7) return [];
       const end = Math.min(getTimelineFadeEndBeat(fade), cursor);
@@ -26307,6 +26706,52 @@
     resizeAndDraw();
     updateChannelInfo();
     showToast(i18nText("timeline.trim_after_done"));
+    if (resumePlayback) window.setTimeout(() => startPlayback(), 0);
+    return true;
+  }
+
+  function isTimelineEventBeatInRange(beat, startBeat = -Infinity, endBeat = Infinity) {
+    const value = Number(beat) || 0;
+    return value >= startBeat - 1e-7 && value <= endBeat + 1e-7;
+  }
+
+  function countTimelineEventsInRange(startBeat = -Infinity, endBeat = Infinity) {
+    const tempoCount = state.tempos.filter((tempo) => !tempo.fixed && Math.abs(Number(tempo.beat) || 0) > 1e-7
+      && isTimelineEventBeatInRange(tempo.beat, startBeat, endBeat)).length;
+    const signatureCount = getSortedTimeSignatures().filter((signature) => !signature.fixed && Math.abs(Number(signature.beat) || 0) > 1e-7
+      && isTimelineEventBeatInRange(signature.beat, startBeat, endBeat)).length;
+    const fadeCount = normalizeTimelineFades().filter((fade) => isTimelineEventBeatInRange(fade.startBeat, startBeat, endBeat)).length;
+    const partCount = getSortedTimelineParts().filter((part) => isTimelineEventBeatInRange(part.beat, startBeat, endBeat)).length;
+    return tempoCount + signatureCount + fadeCount + partCount;
+  }
+
+  function deleteTimelineEventsInRange(startBeat = -Infinity, endBeat = Infinity) {
+    const count = countTimelineEventsInRange(startBeat, endBeat);
+    if (!count) {
+      showToast(i18nText("timeline.event_delete_none"));
+      return false;
+    }
+    const resumePlayback = state.playback.running || state.playback.loading;
+    if (resumePlayback) stopPlayback(false);
+
+    state.tempos = state.tempos.filter((tempo) => tempo.fixed
+      || Math.abs(Number(tempo.beat) || 0) <= 1e-7
+      || !isTimelineEventBeatInRange(tempo.beat, startBeat, endBeat));
+    state.timeSignatures = normalizeTimeSignatures(getSortedTimeSignatures().filter((signature) => signature.fixed
+      || Math.abs(Number(signature.beat) || 0) <= 1e-7
+      || !isTimelineEventBeatInRange(signature.beat, startBeat, endBeat)));
+    state.timelineFades = normalizeTimelineFades().filter((fade) => !isTimelineEventBeatInRange(fade.startBeat, startBeat, endBeat));
+    state.timelineParts = normalizeTimelineParts(getSortedTimelineParts().filter((part) => !isTimelineEventBeatInRange(part.beat, startBeat, endBeat)));
+
+    closeTempoEditor();
+    closeTimelineFadeDialog();
+    closeTimeSignatureDialog();
+    markDirty(i18nText("history.timeline_event_delete"));
+    ensureTimelineFitsViewport();
+    resizeAndDraw();
+    updateChannelInfo();
+    if (elements.mmlExportBackdrop && !elements.mmlExportBackdrop.hidden) updateMmlExportDialogState();
+    showToast(i18nText("timeline.event_delete_done", [count.toLocaleString()]));
     if (resumePlayback) window.setTimeout(() => startPlayback(), 0);
     return true;
   }
@@ -26342,6 +26787,56 @@
       const targetLeft = Math.max(0, beatToX(lastMeasureBeat) - Math.max(0, elements.rollViewport.clientWidth * 0.25));
       elements.rollViewport.scrollLeft = targetLeft;
     }
+  }
+
+  function buildMeasureContextItems(contextBeat, { channel = getActiveChannel() } = {}) {
+    const beat = clamp(Number(contextBeat) || 0, 0, getTotalBeats());
+    const channelScope = channel && !isMidiReferenceActive();
+    return [
+      {
+        label: i18nText("timeline.add_measure_beat"),
+        action: () => openTimeEditDialog({
+          beat,
+          scope: channelScope ? "channel" : "all",
+          channelId: channelScope ? channel.id : null,
+          preferredAction: "insert",
+        }),
+      },
+      {
+        label: i18nText("timeline.delete_measure_beat"),
+        danger: true,
+        action: () => openTimeEditDialog({
+          beat,
+          scope: channelScope ? "channel" : "all",
+          channelId: channelScope ? channel.id : null,
+          preferredAction: "delete",
+        }),
+      },
+      {
+        label: i18nText("timeline.add_one_measure"),
+        action: () => applySingleMeasureTimelineEdit(beat, "insert"),
+      },
+      {
+        label: i18nText("timeline.delete_one_measure"),
+        danger: true,
+        action: () => applySingleMeasureTimelineEdit(beat, "delete"),
+      },
+      "separator",
+      {
+        label: i18nText("timeline.measure_trim_before"),
+        disabled: beat <= 0,
+        disabledReason: i18nText("context.disabled_no_trim_before"),
+        danger: true,
+        action: () => deleteTimelineBeforeBeat(beat),
+      },
+      {
+        label: i18nText("timeline.measure_trim_after"),
+        disabled: beat >= getTotalBeats() - CONFIG.minimumNoteBeat,
+        disabledReason: i18nText("context.disabled_no_trim_after"),
+        danger: true,
+        action: () => deleteTimelineAfterBeat(beat),
+      },
+    ];
   }
 
   function registerDefaultContextMenus() {
@@ -26395,6 +26890,7 @@
       const tempoAtBeat = getSortedTempos().find((item) => Math.abs((Number(item.beat) || 0) - beat) < 1e-7) || null;
       const tempo = markerTempo || tempoAtBeat;
       const selectedChannel = getActiveChannel();
+
       const tempoSimplifyItem = {
         label: i18nText("tempo.simplify"),
         action: openTempoSimplifyDialog,
@@ -26402,142 +26898,132 @@
       const deleteAllTemposItem = {
         label: i18nText("tempo.delete_all_except_initial"),
         disabled: getNonInitialTempos().length === 0,
+        disabledReason: i18nText("context.disabled_no_tempo"),
         danger: true,
         action: deleteAllNonInitialTempos,
       };
+      const tempoItems = isMidiReferenceActive()
+        ? [tempo
+            ? { label: `MIDI 템포 ${tempo.bpm} · 읽기 전용`, disabled: true, disabledReason: i18nText("context.disabled_readonly") }
+            : { label: "MIDI 템포 맵 · 읽기 전용", disabled: true, disabledReason: i18nText("context.disabled_readonly") }]
+        : tempo?.fixed
+          ? [
+              { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
+              tempoSimplifyItem,
+              deleteAllTemposItem,
+            ]
+          : tempo
+            ? [
+                { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
+                { label: i18nText("tempo.delete"), danger: true, action: () => deleteTempo(tempo) },
+                tempoSimplifyItem,
+                deleteAllTemposItem,
+              ]
+            : [
+                { label: i18nText("timeline.add_tempo_measure"), disabled: beat <= 0, disabledReason: i18nText("context.disabled_tempo_at_start"), action: () => addTempoAtBeat(beat) },
+                tempoSimplifyItem,
+                deleteAllTemposItem,
+              ];
+
       const existingFade = findTimelineFadeMarkerFromPointer(event) || getTimelineFadeAtBeat(beat);
       const fadeItems = existingFade
         ? [
             { label: i18nText("timeline.fade_change"), action: () => openTimelineFadeDialog(beat, existingFade) },
             { label: i18nText("timeline.fade_delete"), danger: true, action: () => deleteTimelineFadeById(existingFade.id) },
-            { label: i18nText("timeline.fade_delete_all"), disabled: normalizeTimelineFades().length === 0, danger: true, action: deleteAllTimelineFades },
+            { label: i18nText("timeline.fade_delete_all"), disabled: normalizeTimelineFades().length === 0, disabledReason: i18nText("context.disabled_no_fade"), danger: true, action: deleteAllTimelineFades },
           ]
         : [
             { label: i18nText("timeline.fade_add"), action: () => openTimelineFadeDialog(beat, null) },
-            { label: i18nText("timeline.fade_delete_all"), disabled: normalizeTimelineFades().length === 0, danger: true, action: deleteAllTimelineFades },
+            { label: i18nText("timeline.fade_delete_all"), disabled: normalizeTimelineFades().length === 0, disabledReason: i18nText("context.disabled_no_fade"), danger: true, action: deleteAllTimelineFades },
           ];
+
       const existingTimeSignature = findTimeSignatureMarkerFromPointer(event) || getTimeSignatureAtExactBeat(beat);
       const timeSignatureItems = existingTimeSignature
         ? [
-            { label: i18nText(existingTimeSignature.fixed ? "timeline.time_signature_change" : "timeline.time_signature_change"), action: () => openTimeSignatureDialog(beat, existingTimeSignature) },
-            { label: i18nText("timeline.time_signature_delete"), disabled: Boolean(existingTimeSignature.fixed), danger: true, action: () => deleteTimeSignatureById(existingTimeSignature.id) },
-            { label: i18nText("timeline.time_signature_delete_all"), disabled: getSortedTimeSignatures().filter((item) => !item.fixed && item.beat > 1e-7).length === 0, danger: true, action: deleteAllNonInitialTimeSignatures },
+            { label: i18nText("timeline.time_signature_change"), action: () => openTimeSignatureDialog(beat, existingTimeSignature) },
+            { label: i18nText("timeline.time_signature_delete"), disabled: Boolean(existingTimeSignature.fixed), disabledReason: i18nText("context.disabled_initial_timesig"), danger: true, action: () => deleteTimeSignatureById(existingTimeSignature.id) },
+            { label: i18nText("timeline.time_signature_delete_all"), disabled: getSortedTimeSignatures().filter((item) => !item.fixed && item.beat > 1e-7).length === 0, disabledReason: i18nText("context.disabled_no_timesig"), danger: true, action: deleteAllNonInitialTimeSignatures },
           ]
         : [
             { label: i18nText("timeline.time_signature_add"), action: () => openTimeSignatureDialog(beat, null) },
-            { label: i18nText("timeline.time_signature_delete_all"), disabled: getSortedTimeSignatures().filter((item) => !item.fixed && item.beat > 1e-7).length === 0, danger: true, action: deleteAllNonInitialTimeSignatures },
+            { label: i18nText("timeline.time_signature_delete_all"), disabled: getSortedTimeSignatures().filter((item) => !item.fixed && item.beat > 1e-7).length === 0, disabledReason: i18nText("context.disabled_no_timesig"), danger: true, action: deleteAllNonInitialTimeSignatures },
           ];
-      const selectedChannelMeasureItems = [
+
+      const existingPart = findTimelinePartMarkerFromPointer(event) || getTimelinePartMarkerAtBeat(beat);
+      const partItems = [
         {
-          label: i18nText("timeline.add_measure_beat"),
-          action: () => openTimeEditDialog({
-            beat,
-            scope: selectedChannel && !isMidiReferenceActive() ? "channel" : "all",
-            channelId: selectedChannel?.id,
-            preferredAction: "insert",
-          }),
+          label: i18nText("timeline.part_add"),
+          disabled: Boolean(existingPart) || beat <= 1e-7 || beat >= getTotalBeats() - 1e-7,
+          disabledReason: existingPart ? i18nText("context.disabled_part_exists") : i18nText("context.disabled_part_edge"),
+          action: () => addTimelinePartAtBeat(beat),
         },
         {
-          label: i18nText("timeline.delete_measure_beat"),
+          label: i18nText("timeline.part_delete"),
+          disabled: !existingPart,
+          disabledReason: i18nText("context.disabled_no_part_here"),
           danger: true,
-          action: () => openTimeEditDialog({
-            beat,
-            scope: selectedChannel && !isMidiReferenceActive() ? "channel" : "all",
-            channelId: selectedChannel?.id,
-            preferredAction: "delete",
-          }),
+          action: () => existingPart && deleteTimelinePartById(existingPart.id),
+        },
+        {
+          label: i18nText("timeline.part_delete_all"),
+          disabled: getSortedTimelineParts().length === 0,
+          disabledReason: i18nText("context.disabled_no_parts"),
+          danger: true,
+          action: deleteAllTimelineParts,
         },
       ];
-      const trimBeforeItem = {
-        label: i18nText("timeline.trim_before"),
-        disabled: beat <= 0,
-        danger: true,
-        action: () => deleteTimelineBeforeBeat(beat),
-      };
-      const trimAfterItem = {
-        label: i18nText("timeline.trim_after"),
-        disabled: beat >= getTotalBeats() - CONFIG.minimumNoteBeat,
-        danger: true,
-        action: () => deleteTimelineAfterBeat(beat),
-      };
-      if (isMidiReferenceActive()) {
-        return [
-          tempo
-            ? { label: `MIDI 템포 ${tempo.bpm} · 읽기 전용`, disabled: true }
-            : { label: "MIDI 템포 맵 · 읽기 전용", disabled: true },
-          ...selectedChannelMeasureItems,
-          "separator",
-          trimBeforeItem,
-          trimAfterItem,
-          "separator",
-          {
-            label: i18nText("timeline.move_first_measure"),
-            action: () => {
-              seekPlayheadBeat(0);
-              elements.rollViewport.scrollLeft = 0;
-            },
-          },
-          { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
-        ];
-      }
-      if (tempo?.fixed) {
-        return [
-          { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
-          tempoSimplifyItem,
-          deleteAllTemposItem,
-          "separator",
-          ...timeSignatureItems,
-          "separator",
-          ...fadeItems,
-          "separator",
-          ...selectedChannelMeasureItems,
-          "separator",
-          trimBeforeItem,
-          trimAfterItem,
-          "separator",
-          {
-            label: i18nText("timeline.move_first_measure"),
-            action: () => { seekPlayheadBeat(0); elements.rollViewport.scrollLeft = 0; },
-          },
-          { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
-        ];
-      }
-      if (tempo) {
-        return [
-          { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
-          { label: i18nText("tempo.delete"), danger: true, action: () => deleteTempo(tempo) },
-          tempoSimplifyItem,
-          deleteAllTemposItem,
-          "separator",
-          ...timeSignatureItems,
-          "separator",
-          ...fadeItems,
-          "separator",
-          ...selectedChannelMeasureItems,
-          "separator",
-          trimBeforeItem,
-          trimAfterItem,
-          "separator",
-          {
-            label: i18nText("timeline.move_first_measure"),
-            action: () => { seekPlayheadBeat(0); elements.rollViewport.scrollLeft = 0; },
-          },
-          { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
-        ];
-      }
+
+      // Measure edits begin at the exact selected marker position whenever the
+      // context menu was opened on a marker. This makes the selection point
+      // inclusive and avoids a few pixels of pointer offset changing which
+      // content is inserted/deleted. Time signatures therefore also determine
+      // the correct local measure size (for example 3/4 = 3 quarter beats).
+      const measureContextBeat = existingTimeSignature
+        ? Number(existingTimeSignature.beat)
+        : existingPart
+          ? Number(existingPart.beat)
+          : existingFade
+            ? Number(existingFade.startBeat)
+            : tempo
+              ? Number(tempo.beat)
+              : beat;
+      const selectedChannelMeasureItems = buildMeasureContextItems(measureContextBeat, { channel: selectedChannel });
+      const allTimelineEventCount = countTimelineEventsInRange();
+      const beforeTimelineEventCount = countTimelineEventsInRange(-Infinity, measureContextBeat);
+      const afterTimelineEventCount = countTimelineEventsInRange(measureContextBeat, Infinity);
+
+      const categoryItems = [
+        { label: i18nText("timeline.tempo_menu"), items: tempoItems },
+        { label: i18nText("timeline.fade_menu"), items: fadeItems },
+        { label: i18nText("timeline.time_signature_menu"), items: timeSignatureItems },
+        { label: i18nText("timeline.part_menu"), items: partItems },
+        { label: i18nText("timeline.measure_menu"), items: selectedChannelMeasureItems },
+      ];
+
       return [
-        { label: i18nText("timeline.add_tempo_measure"), disabled: beat <= 0, action: () => addTempoAtBeat(beat) },
-        tempoSimplifyItem,
-        deleteAllTemposItem,
+        ...categoryItems,
         "separator",
-        ...timeSignatureItems,
-        "separator",
-        ...fadeItems,
-        "separator",
-        ...selectedChannelMeasureItems,
-        "separator",
-        trimBeforeItem,
-        trimAfterItem,
+        {
+          label: i18nText("timeline.event_delete_all"),
+          disabled: allTimelineEventCount === 0,
+          disabledReason: i18nText("context.disabled_no_events"),
+          danger: true,
+          action: () => deleteTimelineEventsInRange(),
+        },
+        {
+          label: i18nText("timeline.event_delete_before"),
+          disabled: beforeTimelineEventCount === 0,
+          disabledReason: i18nText("context.disabled_no_events"),
+          danger: true,
+          action: () => deleteTimelineEventsInRange(-Infinity, measureContextBeat),
+        },
+        {
+          label: i18nText("timeline.event_delete_after"),
+          disabled: afterTimelineEventCount === 0,
+          disabledReason: i18nText("context.disabled_no_events"),
+          danger: true,
+          action: () => deleteTimelineEventsInRange(measureContextBeat, Infinity),
+        },
         "separator",
         {
           label: i18nText("timeline.move_first_measure"),
@@ -26549,6 +27035,7 @@
         { label: i18nText("timeline.move_last_measure"), action: movePlayheadToLastMeasure },
       ];
     });
+
     registerContextMenu("keyboard", ({ event }) => {
       const rect = elements.keyboardCanvas.getBoundingClientRect();
       const pitch = keyboardPitchAt(
@@ -26556,6 +27043,14 @@
         event.clientY - rect.top + elements.rollViewport.scrollTop,
         rect.width,
       );
+      const selectedChannel = getActiveChannel();
+      const hasSelectedChannel = !isMidiReferenceActive()
+        && state.activePanel === "notes"
+        && state.selectedChannelGroupId == null
+        && Boolean(selectedChannel);
+      const safePitch = clamp(Math.round(Number(pitch) || CONFIG.minPitch), CONFIG.minPitch, CONFIG.maxPitch);
+      const hasMatchingPitchNotes = hasSelectedChannel
+        && (selectedChannel?.notes || []).some((note) => Math.round(Number(note.pitch) || CONFIG.minPitch) === safePitch);
       return [
         {
           label: `${noteLabel(pitch)} 미리 듣기`,
@@ -26570,7 +27065,14 @@
         { label: i18nText("piano.go_row", [noteLabel(pitch)]), action: () => { elements.rollViewport.scrollTop = pitchToY(pitch); } },
         { label: "중앙 C로 이동", action: () => { elements.rollViewport.scrollTop = Math.max(0, pitchToY(60) - 120); } },
         "separator",
-        { label: i18nText("piano.add_pitch_selection", [noteLabel(pitch)]), disabled: isMidiReferenceActive() || state.activePanel !== "notes", action: () => selectNotesByKeyboardPitch(pitch) },
+        {
+          label: i18nText("piano.add_pitch_selection", [noteLabel(pitch)]),
+          disabled: !hasSelectedChannel || !hasMatchingPitchNotes,
+          disabledReason: !hasSelectedChannel
+            ? i18nText("context.disabled_requires_channel")
+            : i18nText("context.disabled_no_matching_pitch"),
+          action: () => selectNotesByKeyboardPitch(pitch),
+        },
         "separator",
         { label: i18nText("soundbank.change"), action: openEditorSoundFontDialog },
       ];
@@ -26578,39 +27080,20 @@
     registerContextMenu("piano-roll", ({ event }) => {
       if (isMidiReferenceActive()) {
         return [
-          { label: "MIDI 노트 · 읽기 전용", disabled: true },
-          { label: "채널 복사", disabled: !(getMidiGroupById()?.notes.length || getActiveMidiDocument()?.groups?.some((group) => group.notes?.length)), action: openMidiTransferDialog },
+          { label: "MIDI 노트 · 읽기 전용", disabled: true, disabledReason: i18nText("context.disabled_readonly") },
+          { label: "채널 복사", disabled: !(getMidiGroupById()?.notes.length || getActiveMidiDocument()?.groups?.some((group) => group.notes?.length)), disabledReason: i18nText("context.disabled_no_source_notes"), action: openMidiTransferDialog },
         ];
       }
       const point = pointerToRoll(event);
       const clicked = findNoteAt(point.x, point.y);
       const contextBeat = clamp(snapBeat(xToBeat(point.x)), 0, getTotalBeats());
-      const channelTools = [
-        { label: i18nText("timeline.add_measure_beat"), action: () => openTimeEditDialog({ beat: state.playhead.beat, scope: "channel", channelId: getActiveChannel()?.id, preferredAction: "insert" }) },
-        { label: i18nText("timeline.delete_measure_beat"), danger: true, action: () => openTimeEditDialog({ beat: state.playhead.beat, scope: "channel", channelId: getActiveChannel()?.id, preferredAction: "delete" }) },
-      ];
-      const trimTools = [
-        {
-          label: i18nText("timeline.trim_before"),
-          disabled: contextBeat <= 0,
-          danger: true,
-          action: () => deleteTimelineBeforeBeat(contextBeat),
-        },
-        {
-          label: i18nText("timeline.trim_after"),
-          disabled: contextBeat >= getTotalBeats() - CONFIG.minimumNoteBeat,
-          danger: true,
-          action: () => deleteTimelineAfterBeat(contextBeat),
-        },
-      ];
+      const measureItems = buildMeasureContextItems(contextBeat, { channel: getActiveChannel() });
       if (!clicked) {
         return [
-          { label: i18nText("channel.select_all_note"), disabled: !getActiveChannel()?.notes?.length, action: selectAllNotes },
+          { label: i18nText("channel.select_all_note"), disabled: !getActiveChannel()?.notes?.length, disabledReason: i18nText("context.disabled_no_notes"), action: selectAllNotes },
           ...(state.noteClipboard?.notes?.length ? [{ label: i18nText("note.paste_playhead"), action: pasteNotesFromClipboard }] : []),
           "separator",
-          ...channelTools,
-          "separator",
-          ...trimTools,
+          { label: i18nText("timeline.measure_menu"), items: measureItems },
         ];
       }
       if (!state.selectedNoteIds.has(clicked.id)) {
@@ -26619,92 +27102,289 @@
         updateChannelInfo();
       }
       const mergePlan = getSelectedSamePitchMergePlan();
+      const clickedPitch = clamp(Math.round(Number(clicked.pitch) || CONFIG.minPitch), CONFIG.minPitch, CONFIG.maxPitch);
       return [
-        { label: i18nText("context.action.note_copy"), action: copySelectedNotes },
-        { label: i18nText("context.action.note_cut"), action: cutSelectedNotes },
-        { label: i18nText("context.action.note_volume_edit"), action: openNoteVolumeDialog },
-        { label: i18nText("context.action.note_trill"), action: () => enterNoteEditMode("trill") },
-        { label: i18nText("context.action.note_performance"), action: () => enterNoteEditMode("glissando") },
-        { label: i18nText("context.action.note_arpeggio"), action: () => enterNoteEditMode("arpeggio") },
+        { label: i18nText("context.note.copy_short"), action: copySelectedNotes },
+        { label: i18nText("context.note.cut_short"), action: cutSelectedNotes },
+        { label: i18nText("context.note.volume_short"), action: openNoteVolumeDialog },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
-        "separator",
-        { label: i18nText("context.action.note_extend_left"), action: () => extendSelectedNotesToSide(-1) },
-        { label: i18nText("context.action.note_extend_right"), action: () => extendSelectedNotesToSide(1) },
-        "separator",
         {
-          label: i18nText("context.action.note_delete"),
+          label: i18nText("context.note.convert"),
+          items: [
+            { label: i18nText("context.note.trill_short"), action: () => enterNoteEditMode("trill") },
+            { label: i18nText("context.note.glissando_short"), action: () => enterNoteEditMode("glissando") },
+            { label: i18nText("context.note.arpeggio_short"), action: () => enterNoteEditMode("arpeggio") },
+          ],
+        },
+        {
+          label: i18nText("context.note.delete_short"),
           danger: true,
           action: deleteSelectedNote,
         },
+        "separator",
+        {
+          label: i18nText("context.note.select_pitch_add_all", [noteLabel(clickedPitch)]),
+          action: () => selectNotesByKeyboardPitch(clickedPitch),
+        },
+        { label: i18nText("context.note.extend_left_add"), action: () => extendSelectedNotesToSide(-1) },
+        { label: i18nText("context.note.extend_right_add"), action: () => extendSelectedNotesToSide(1) },
       ];
     });
+
+    const contextVisibilitySegments = ({ kind, item }) => {
+      const isSolo = kind === "channel"
+        ? isChannelVisibilitySolo(item)
+        : kind === "group"
+          ? isChannelGroupVisibilitySolo(item)
+          : isAudioClipVisibilitySolo(item);
+      const visible = item?.visible !== false;
+      const apply = (mode) => {
+        if (kind === "channel") {
+          if (mode === "solo") {
+            if (!visible) setChannelVisibleById(item.id, true, { notify: false });
+            setChannelVisibilitySoloById(item.id, true, { notify: false });
+          } else {
+            if (isSolo) setChannelVisibilitySoloById(item.id, false, { notify: false });
+            setChannelVisibleById(item.id, mode === "show", { notify: false });
+          }
+        } else if (kind === "group") {
+          if (mode === "solo") {
+            if (!visible) setChannelGroupVisibleById(item.id, true, { notify: false });
+            setChannelGroupVisibilitySoloById(item.id, true, { notify: false });
+          } else {
+            if (isSolo) setChannelGroupVisibilitySoloById(item.id, false, { notify: false });
+            setChannelGroupVisibleById(item.id, mode === "show", { notify: false });
+          }
+        } else {
+          if (mode === "solo") {
+            if (!visible) setAudioClipVisible(item.id, true, { notify: false });
+            setAudioClipVisibilitySoloById(item.id, true, { notify: false });
+          } else {
+            if (isSolo) setAudioClipVisibilitySoloById(item.id, false, { notify: false });
+            setAudioClipVisible(item.id, mode === "show", { notify: false });
+          }
+        }
+        showToast(`${item.name || item.title || "항목"} · ${mode === "show" ? i18nText("ui.show") : mode === "hide" ? i18nText("ui.hide_2") : i18nText("context.single")}`);
+      };
+      return [
+        { label: i18nText("ui.show"), active: !isSolo && visible, action: () => apply("show") },
+        { label: i18nText("ui.hide_2"), active: !isSolo && !visible, action: () => apply("hide") },
+        { label: i18nText("context.single"), active: isSolo, action: () => apply("solo") },
+      ];
+    };
+
+    const contextSoundSegments = ({ kind, item }) => {
+      const isSolo = kind === "channel"
+        ? isChannelSolo(item)
+        : kind === "group"
+          ? isChannelGroupSolo(item)
+          : isAudioClipSolo(item);
+      const muted = Boolean(item?.muted);
+      const apply = (mode) => {
+        if (kind === "channel") {
+          if (mode === "solo") {
+            if (muted) setChannelMutedById(item.id, false, { notify: false });
+            setChannelSoloById(item.id, true, { notify: false });
+          } else {
+            if (isSolo) setChannelSoloById(item.id, false, { notify: false });
+            setChannelMutedById(item.id, mode === "mute", { notify: false });
+          }
+        } else if (kind === "group") {
+          if (mode === "solo") {
+            if (muted) setChannelGroupMutedById(item.id, false, { notify: false });
+            setChannelGroupSoloById(item.id, true, { notify: false });
+          } else {
+            if (isSolo) setChannelGroupSoloById(item.id, false, { notify: false });
+            setChannelGroupMutedById(item.id, mode === "mute", { notify: false });
+          }
+        } else {
+          if (mode === "solo") {
+            if (muted) setAudioClipMuted(item.id, false, { notify: false });
+            setAudioClipSoloById(item.id, true, { notify: false });
+          } else {
+            if (isSolo) setAudioClipSoloById(item.id, false, { notify: false });
+            setAudioClipMuted(item.id, mode === "mute", { notify: false });
+          }
+        }
+        showToast(`${item.name || item.title || "항목"} · ${mode === "output" ? i18nText("context.output") : mode === "mute" ? i18nText("ui.mute") : i18nText("context.single")}`);
+      };
+      return [
+        { label: i18nText("context.output"), active: !isSolo && !muted, action: () => apply("output") },
+        { label: i18nText("ui.mute"), active: !isSolo && muted, action: () => apply("mute") },
+        { label: i18nText("context.single"), active: isSolo, action: () => apply("solo") },
+      ];
+    };
 
     const buildAudioContextItems = ({ event = null, area = null } = {}) => {
       const audioTarget = event?.target?.closest?.("[data-audio-clip-id]");
       if (!audioTarget && area?.name === "audio-lane") {
-        return [{ label: i18nText("audio.add"), action: () => openFilePickerInput(elements.audioFileInput) }];
+        return [
+          { label: i18nText("audio.track_add"), action: () => openAudioImportPicker(null) },
+          { label: i18nText("audio.track_delete_all"), disabled: !state.audioClips.length, disabledReason: i18nText("context.disabled_no_audio"), danger: true, action: deleteAllAudioImmediate },
+        ];
       }
       if (audioTarget?.dataset?.audioClipId) selectAudioClip(audioTarget.dataset.audioClipId);
       const clip = getActiveAudioClip();
       if (!clip) {
-        return [{ label: i18nText("audio.add"), action: () => openFilePickerInput(elements.audioFileInput) }];
+        return [
+          { label: i18nText("audio.track_add"), action: () => openAudioImportPicker(null) },
+          { label: i18nText("audio.track_delete_all"), disabled: !state.audioClips.length, disabledReason: i18nText("context.disabled_no_audio"), danger: true, action: deleteAllAudioImmediate },
+        ];
       }
       return [
-        { label: i18nText("audio.info_edit"), action: () => openAudioEditDialog(clip.id) },
-        { label: clip.visible === false ? i18nText("ui.show") : i18nText("ui.hide_2"), action: () => setAudioClipVisible(clip.id, clip.visible === false) },
-        { label: clip.muted ? i18nText("ui.unmute") : i18nText("ui.mute"), action: () => setAudioClipMuted(clip.id, !clip.muted) },
+        { label: i18nText("context.info_edit"), action: () => openAudioEditDialog(clip.id) },
+        { label: i18nText("action.delete"), danger: true, action: () => requestDeleteAudioClip(clip.id) },
         "separator",
-        { label: i18nText("audio.delete"), danger: true, action: () => requestDeleteAudioClip(clip.id) },
+        { label: i18nText("context.interface"), items: contextVisibilitySegments({ kind: "audio", item: clip }) },
+        { label: i18nText("context.sound"), items: contextSoundSegments({ kind: "audio", item: clip }) },
       ];
     };
     registerContextMenu("audio-lane", buildAudioContextItems);
     registerContextMenu("audio-source", buildAudioContextItems);
 
+    const itemAddContextItems = (groupId = null) => [
+      { label: i18nText("channel.label"), action: () => groupId == null ? addChannel() : addChannelToGroup(groupId) },
+      { label: i18nText("audio.label"), action: () => openAudioImportPicker(groupId) },
+      ...(groupId == null ? [{ label: i18nText("group.label"), action: addChannelGroup }] : []),
+    ];
+
+    const globalDeleteContextItems = () => [
+      { label: i18nText("item.select_delete"), danger: true, action: () => enterChannelDeleteMode() },
+      { label: i18nText("channel.delete_all"), disabled: !state.channels.length, disabledReason: i18nText("context.disabled_no_channels"), danger: true, action: deleteAllChannelsImmediate },
+      { label: i18nText("audio.delete_all"), disabled: !state.audioClips.length, disabledReason: i18nText("context.disabled_no_audio"), danger: true, action: deleteAllAudioImmediate },
+      { label: i18nText("group.delete_all"), disabled: !state.channelGroups.length, disabledReason: i18nText("context.disabled_no_groups"), danger: true, action: deleteAllGroupsImmediate },
+      { label: i18nText("item.delete_all"), disabled: state.channels.length <= 1 && !state.audioClips.length && !state.channelGroups.length, disabledReason: i18nText("context.disabled_no_items"), danger: true, action: deleteAllChannelTreeItemsImmediate },
+    ];
+
+    const allTreeVisibilityContextItems = () => {
+      const hasItems = state.channels.length > 0 || state.channelGroups.length > 0 || state.audioClips.length > 0;
+      const allVisible = hasItems
+        && state.channels.every((channel) => channel.visible !== false)
+        && state.channelGroups.every((group) => group.visible !== false)
+        && state.audioClips.every((clip) => clip.visible !== false)
+        && !hasAnyVisibilitySoloState();
+      const allHidden = hasItems
+        && state.channels.every((channel) => channel.visible === false)
+        && state.channelGroups.every((group) => group.visible === false)
+        && state.audioClips.every((clip) => clip.visible === false)
+        && !hasAnyVisibilitySoloState();
+      const allSolo = hasItems
+        && state.channels.every((channel) => state.visibilitySoloChannelIds.has(String(channel.id)))
+        && state.channelGroups.every((group) => state.visibilitySoloGroupIds.has(String(group.id)))
+        && state.audioClips.every((clip) => state.visibilitySoloAudioClipIds.has(String(clip.id)))
+        && state.visibilitySoloChannelIds.size === state.channels.length
+        && state.visibilitySoloGroupIds.size === state.channelGroups.length
+        && state.visibilitySoloAudioClipIds.size === state.audioClips.length;
+      return [
+        { label: i18nText("ui.show"), disabled: !hasItems, disabledReason: i18nText("context.disabled_no_items"), active: allVisible, action: () => setAllChannelTreeVisible(true) },
+        { label: i18nText("ui.hide_2"), disabled: !hasItems, disabledReason: i18nText("context.disabled_no_items"), active: allHidden, action: () => setAllChannelTreeVisible(false) },
+        { label: i18nText("context.single"), disabled: !hasItems, disabledReason: i18nText("context.disabled_no_items"), active: allSolo, action: () => setAllChannelTreeVisibilitySolo(true) },
+      ];
+    };
+
+    const allTreeSoundContextItems = () => {
+      const hasItems = state.channels.length > 0 || state.channelGroups.length > 0 || state.audioClips.length > 0;
+      const allOutput = hasItems
+        && state.channels.every((channel) => !channel.muted)
+        && state.channelGroups.every((group) => !group.muted)
+        && state.audioClips.every((clip) => !clip.muted)
+        && !hasAnyMuteSoloState();
+      const allMuted = hasItems
+        && state.channels.every((channel) => Boolean(channel.muted))
+        && state.channelGroups.every((group) => Boolean(group.muted))
+        && state.audioClips.every((clip) => Boolean(clip.muted))
+        && !hasAnyMuteSoloState();
+      const allSolo = hasItems
+        && state.channels.every((channel) => state.soloChannelIds.has(String(channel.id)))
+        && state.channelGroups.every((group) => state.soloGroupIds.has(String(group.id)))
+        && state.audioClips.every((clip) => state.soloAudioClipIds.has(String(clip.id)))
+        && state.soloChannelIds.size === state.channels.length
+        && state.soloGroupIds.size === state.channelGroups.length
+        && state.soloAudioClipIds.size === state.audioClips.length;
+      return [
+        { label: i18nText("context.output"), disabled: !hasItems, disabledReason: i18nText("context.disabled_no_items"), active: allOutput, action: () => setAllChannelTreeMuted(false) },
+        { label: i18nText("ui.mute"), disabled: !hasItems, disabledReason: i18nText("context.disabled_no_items"), active: allMuted, action: () => setAllChannelTreeMuted(true) },
+        { label: i18nText("context.single"), disabled: !hasItems, disabledReason: i18nText("context.disabled_no_items"), active: allSolo, action: () => setAllChannelTreeSoundSolo(true) },
+      ];
+    };
+
     const channelListContextItems = () => [
-      { label: i18nText("channel.merge"), disabled: state.channels.length < 2, action: openChannelMergeDialog },
-      { label: i18nText("channel.add"), action: addChannel },
-      { label: i18nText("group.create"), action: addChannelGroup },
-      { label: i18nText("group.delete_channels_groups"), danger: true, action: () => enterChannelDeleteMode() },
+      { label: i18nText("action.add"), items: itemAddContextItems() },
+      { label: i18nText("action.delete"), danger: true, items: globalDeleteContextItems() },
+      { label: i18nText("context.mml_view"), disabled: !state.channels.length, disabledReason: i18nText("context.disabled_no_mml_channels"), action: openAllChannelsMmlDialog },
+      "separator",
+      { label: i18nText("group.collapse_all"), disabled: !state.channelGroups.length || state.channelGroups.every((group) => group.collapsed), disabledReason: !state.channelGroups.length ? i18nText("context.disabled_no_groups") : i18nText("context.disabled_all_groups_collapsed"), action: () => setAllChannelGroupsCollapsed(true) },
+      { label: i18nText("group.expand_all"), disabled: !state.channelGroups.length || state.channelGroups.every((group) => !group.collapsed), disabledReason: !state.channelGroups.length ? i18nText("context.disabled_no_groups") : i18nText("context.disabled_all_groups_expanded"), action: () => setAllChannelGroupsCollapsed(false) },
+      { label: i18nText("context.interface"), items: allTreeVisibilityContextItems() },
+      { label: i18nText("context.sound"), items: allTreeSoundContextItems() },
     ];
     registerContextMenu("channel-panel", channelListContextItems);
     registerContextMenu("channel-tabs", channelListContextItems);
     registerContextMenu("channel-tab", ({ area }) => {
       const index = Number(area.element.dataset.channelIndex);
       const channel = state.channels[index];
+      if (!channel) return [];
+      const channelDeleteItems = [
+        { label: i18nText("channel.delete_all_notes"), disabled: !channel.notes.length, disabledReason: i18nText("context.disabled_no_notes"), danger: true, action: () => { selectChannel(index); clearActiveChannel(); } },
+        { label: i18nText("channel.delete"), danger: true, action: () => deleteChannelByIdImmediate(channel.id) },
+      ];
       return [
-        { label: i18nText("channel.merge"), disabled: state.channels.length < 2, action: () => channel && enterChannelMergeMode(channel.id) },
-        { label: i18nText("channel.edit_2"), action: () => channel && openChannelEditDialog(channel.id) },
-        { label: i18nText("channel.mml_view"), action: () => channel && openChannelMmlDialog(channel.id) },
-        { label: i18nText("channel.copy_all_note"), disabled: !channel?.notes.length, action: () => { selectChannel(index); copyActiveChannelNotes(); } },
-        { label: i18nText("channel.cut_all_note"), disabled: !channel?.notes.length, action: () => { selectChannel(index); cutActiveChannelNotes(); } },
-        { label: channel?.visible === false ? i18nText("context.action.note_show") : i18nText("context.action.note_hide"), action: () => channel && setChannelVisibleById(channel.id, channel.visible === false) },
-        { label: channel?.muted ? i18nText("ui.unmute") : i18nText("ui.mute"), action: () => channel && setChannelMutedById(channel.id, !channel.muted) },
+        {
+          label: i18nText("menu.edit"),
+          items: [
+            { label: i18nText("channel.merge"), disabled: state.channels.length < 2, disabledReason: i18nText("context.disabled_no_other_channel"), action: () => enterChannelMergeMode(channel.id) },
+            { label: i18nText("context.info_edit"), action: () => openChannelEditDialog(channel.id) },
+            { label: i18nText("channel.copy"), action: () => duplicateChannelById(channel.id) },
+            { label: i18nText("context.action.note_copy"), disabled: !channel.notes.length, disabledReason: i18nText("context.disabled_no_notes"), action: () => { selectChannel(index); copyActiveChannelNotes(); } },
+            { label: i18nText("context.action.note_cut"), disabled: !channel.notes.length, disabledReason: i18nText("context.disabled_no_notes"), action: () => { selectChannel(index); cutActiveChannelNotes(); } },
+          ],
+        },
+        { label: i18nText("action.delete"), danger: true, items: channelDeleteItems },
+        { label: i18nText("context.mml_edit"), action: () => openChannelMmlDialog(channel.id) },
         "separator",
-        { label: i18nText("channel.delete_all_notes"), danger: true, action: () => { selectChannel(index); clearActiveChannel(); } },
-        { label: i18nText("channel.delete"), danger: true, action: () => channel && deleteChannelByIdImmediate(channel.id) },
+        { label: i18nText("context.interface"), items: contextVisibilitySegments({ kind: "channel", item: channel }) },
+        { label: i18nText("context.sound"), items: contextSoundSegments({ kind: "channel", item: channel }) },
       ];
     });
     registerContextMenu("channel-group", ({ area }) => {
       const group = getChannelGroupById(area.element.dataset.channelGroupId);
-      const members = group ? getChannelGroupMembers(group) : [];
       if (!group) return [];
-      const items = [
-        { label: group.collapsed ? i18nText("group.expand") : i18nText("group.collapse"), action: () => toggleChannelGroupCollapsed(group.id) },
-        { label: i18nText("group.edit"), action: () => openChannelGroupDialog(group.id) },
-        { label: i18nText("group.mml_view"), action: () => openChannelGroupMmlDialog(group.id) },
-        { label: group.visible === false ? i18nText("group.show") : i18nText("group.hide"), action: () => setChannelGroupVisibleById(group.id, group.visible === false) },
-        { label: group.muted ? i18nText("ui.unmute") : i18nText("ui.mute"), action: () => setChannelGroupMutedById(group.id, !group.muted) },
+      const hasItems = getChannelGroupMembers(group).length > 0 || getChannelGroupAudioMembers(group).length > 0;
+      return [
+        {
+          label: i18nText("menu.edit"),
+          items: [
+            { label: i18nText("channel.add"), action: () => addChannelToGroup(group.id) },
+            { label: i18nText("audio.add"), action: () => openAudioImportPicker(group.id) },
+            { label: i18nText("context.info_edit"), action: () => openChannelGroupDialog(group.id) },
+          ],
+        },
+        {
+          label: i18nText("action.delete"),
+          danger: true,
+          items: [
+            { label: i18nText("item.label"), disabled: !hasItems, disabledReason: i18nText("context.disabled_no_group_items"), danger: true, action: () => deleteChannelGroupItemsImmediate(group.id, { deleteGroup: false }) },
+            { label: i18nText("group.label"), danger: true, action: () => deleteChannelGroupImmediate(group.id, { deleteChannels: false }) },
+            { label: i18nText("ui.all"), danger: true, action: () => deleteChannelGroupItemsImmediate(group.id, { deleteGroup: true }) },
+          ],
+        },
+        { label: i18nText("context.mml_edit"), action: () => openChannelGroupMmlDialog(group.id) },
         "separator",
+        {
+          label: i18nText("group.collapse"),
+          disabled: Boolean(group.collapsed),
+          disabledReason: i18nText("group.already_collapsed"),
+          action: () => toggleChannelGroupCollapsed(group.id),
+        },
+        {
+          label: i18nText("group.expand"),
+          disabled: !group.collapsed,
+          disabledReason: i18nText("group.already_expanded"),
+          action: () => toggleChannelGroupCollapsed(group.id),
+        },
+        { label: i18nText("context.interface"), items: contextVisibilitySegments({ kind: "group", item: group }) },
+        { label: i18nText("context.sound"), items: contextSoundSegments({ kind: "group", item: group }) },
       ];
-      if (!members.length) {
-        items.push({ label: i18nText("group.delete"), danger: true, action: () => deleteChannelGroupImmediate(group.id, { deleteChannels: false }) });
-      } else {
-        items.push(
-          { label: i18nText("group.delete_group_only"), danger: true, action: () => deleteChannelGroupImmediate(group.id, { deleteChannels: false }) },
-          { label: i18nText("group.delete_group_channels"), danger: true, action: () => deleteChannelGroupImmediate(group.id, { deleteChannels: true }) },
-        );
-      }
-      return items;
     });
     registerContextMenu("midi-reference-tab", ({ area }) => {
       const documentId = area.element.dataset.midiDocumentId;
@@ -26714,12 +27394,12 @@
         { label: "원본 자료 선택", action: () => midiDocument && selectMidiDocument(midiDocument.id) },
         { label: visible ? "MIDI 노트 숨기기" : "MIDI 노트 표시", action: () => midiDocument && setMidiDocumentVisible(midiDocument.id, !visible) },
         { label: midiDocument?.muted ? "MIDI 음소거 해제" : "MIDI 음소거", action: () => midiDocument && setMidiDocumentMuted(midiDocument.id, !midiDocument.muted) },
-        { label: "채널 복사", disabled: !midiDocument?.groups?.length, action: () => { if (midiDocument) { selectMidiDocument(midiDocument.id); openMidiTransferDialog(); } } },
-        { label: "원본 자료 삭제", disabled: !midiDocument, danger: true, action: () => { if (midiDocument) { selectMidiDocument(midiDocument.id); requestClearMidiReference(); } } },
+        { label: "채널 복사", disabled: !midiDocument?.groups?.length, disabledReason: i18nText("context.disabled_no_source_notes"), action: () => { if (midiDocument) { selectMidiDocument(midiDocument.id); openMidiTransferDialog(); } } },
+        { label: "원본 자료 삭제", disabled: !midiDocument, disabledReason: i18nText("context.disabled_no_source_data"), danger: true, action: () => { if (midiDocument) { selectMidiDocument(midiDocument.id); requestClearMidiReference(); } } },
       ];
     });
     registerContextMenu("midi-reference", () => [
-      { label: "채널 복사", disabled: !(getMidiGroupById()?.notes.length || getActiveMidiDocument()?.groups?.some((group) => group.notes?.length)), action: openMidiTransferDialog },
+      { label: "채널 복사", disabled: !(getMidiGroupById()?.notes.length || getActiveMidiDocument()?.groups?.some((group) => group.notes?.length)), disabledReason: i18nText("context.disabled_no_source_notes"), action: openMidiTransferDialog },
       { label: state.midiReference.activeGroupId ? "원본 채널 삭제" : "원본 자료 삭제", danger: true, action: requestClearMidiReference },
     ]);
     registerContextMenu("midi-instrument", ({ area }) => {
@@ -26730,9 +27410,9 @@
         { label: "이 악기 선택", action: () => group && selectMidiGroupFromTree(midiDocument.id, group.id) },
         { label: group?.visible === false ? "악기 노트 표시" : "악기 노트 숨기기", action: () => group && setMidiGroupVisibleByDocument(midiDocument.id, group.id, group.visible === false) },
         { label: group?.muted ? "악기 음소거 해제" : "악기 음소거", action: () => group && setMidiGroupMuted(midiDocument.id, group.id, !group.muted) },
-        { label: "채널 복사", disabled: !group?.notes.length, action: () => { if (group) { selectMidiGroupFromTree(midiDocument.id, group.id); copyActiveMidiInstrumentToNewChannels(); } } },
+        { label: "채널 복사", disabled: !group?.notes.length, disabledReason: i18nText("context.disabled_no_source_notes"), action: () => { if (group) { selectMidiGroupFromTree(midiDocument.id, group.id); copyActiveMidiInstrumentToNewChannels(); } } },
         "separator",
-        { label: "원본 채널 삭제", disabled: !group, danger: true, action: () => group && requestDeleteMidiGroup(midiDocument.id, group.id) },
+        { label: "원본 채널 삭제", disabled: !group, disabledReason: i18nText("context.disabled_no_source_data"), danger: true, action: () => group && requestDeleteMidiGroup(midiDocument.id, group.id) },
       ];
     });
 
@@ -26742,14 +27422,14 @@
       return [
         group
           ? { label: i18nText("group.edit"), action: () => openChannelGroupDialog(group.id) }
-          : { label: i18nText("channel.edit_2"), disabled: !channel, action: () => channel && openChannelEditDialog(channel.id) },
+          : { label: i18nText("channel.edit_2"), disabled: !channel, disabledReason: i18nText("context.disabled_no_selected_channel"), action: () => channel && openChannelEditDialog(channel.id) },
         "separator",
         { label: i18nText("soundbank.change"), action: openEditorSoundFontDialog },
       ];
     });
     registerContextMenu("history", () => [
-      { label: i18nText("history.undo"), disabled: state.history.undoStack.length === 0, action: () => undoHistory() },
-      { label: i18nText("history.redo"), disabled: state.history.redoStack.length === 0, action: () => redoHistory() },
+      { label: i18nText("history.undo"), disabled: state.history.undoStack.length === 0, disabledReason: i18nText("context.disabled_no_undo"), action: () => undoHistory() },
+      { label: i18nText("history.redo"), disabled: state.history.redoStack.length === 0, disabledReason: i18nText("context.disabled_no_redo"), action: () => redoHistory() },
     ]);
     registerContextMenu("history-item", ({ area }) => {
       const index = Number(area.element.dataset.historyIndex);
@@ -26760,6 +27440,7 @@
         {
           label: i18nText("context.action.go_history"),
           disabled: !entry || index === currentIndex,
+          disabledReason: !entry ? i18nText("context.disabled_unavailable") : i18nText("context.disabled_current_history"),
           action: () => entry && jumpToHistoryIndex(index),
         },
       ];
@@ -26861,6 +27542,20 @@
     return target instanceof Element && Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
   }
 
+  function isNativeTextSelectionTarget(target) {
+    if (!(target instanceof Element)) return false;
+    if (target.closest("textarea, [contenteditable='true'], [contenteditable='plaintext-only']")) return true;
+    const input = target.closest("input");
+    if (!(input instanceof HTMLInputElement)) return false;
+    const type = String(input.type || "text").toLowerCase();
+    return !new Set(["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"]).has(type);
+  }
+
+  function handleNativeTextSelectionGuard(event) {
+    if (isNativeTextSelectionTarget(event.target)) return;
+    event.preventDefault();
+  }
+
   function isActuallyVisiblePopupElement(element) {
     if (!(element instanceof Element)) return false;
     if (typeof HTMLDialogElement !== "undefined" && element instanceof HTMLDialogElement && element.open) return true;
@@ -26917,27 +27612,30 @@
       return true;
     }
 
-    if (
-      event.defaultPrevented
-      || !selectAllCommand
-      || isTextEntryTarget(event.target)
-      || isPopupLikeUiOpen()
-    ) {
+    if (event.defaultPrevented || !selectAllCommand) {
+      return false;
+    }
+
+    // Native Ctrl/Cmd+A is allowed only inside actual text-entry controls.
+    // Everywhere else the editor owns the shortcut, even when no channel is selected,
+    // so browser-wide page text selection can never leak through menus or popups.
+    if (isNativeTextSelectionTarget(event.target)) {
       return false;
     }
 
     let handled = false;
-    if (isMidiReferenceActive()) {
-      selectAllMidiNotes();
-      handled = true;
-    } else if (state.activePanel === "notes" && getActiveChannel()) {
-      selectAllNotes();
-      handled = true;
+    if (!isPopupLikeUiOpen()) {
+      if (isMidiReferenceActive()) {
+        selectAllMidiNotes();
+        handled = true;
+      } else if (state.activePanel === "notes" && state.selectedChannelGroupId == null && getActiveChannel()) {
+        selectAllNotes();
+        handled = true;
+      }
     }
 
-    if (!handled) return false;
     event.preventDefault();
-    event.stopPropagation();
+    event.stopImmediatePropagation();
     return true;
   }
 
@@ -26988,7 +27686,6 @@
   function handleGlobalSelectedNoteShortcut(event) {
     if (
       event.defaultPrevented
-      || event.altKey
       || isPopupLikeUiOpen()
       || isTextEntryTarget(event.target)
       || state.activePanel !== "notes"
@@ -27001,6 +27698,25 @@
     const selectedCount = getSelectedNotes().length;
     const key = String(event.key || "");
     const commandKey = event.ctrlKey || event.metaKey;
+
+    if (
+      selectedCount >= 1
+      && event.altKey
+      && !commandKey
+      && !event.shiftKey
+      && (key === "ArrowUp" || key === "ArrowDown")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      state.zoomWheel.mode = "volume";
+      adjustSelectedNoteVolumesByStep(key === "ArrowUp" ? 1 : -1, performance.now());
+      elements.rollViewport?.focus({ preventScroll: true });
+      return true;
+    }
+
+    // Other selected-note shortcuts do not use Alt. Keep Alt combinations free
+    // for browser/OS behaviour once the dedicated volume shortcut above is ruled out.
+    if (event.altKey) return false;
 
     if (
       selectedCount >= 2
@@ -27186,6 +27902,9 @@
   }
 
   function updateShortcutSearchResults() {
+    // Locale replacement can turn localized <dt> keycaps back into plain text.
+    // Rebuild them before cloning search results so every result keeps keycap styling.
+    renderShortcutKeycaps();
     const input = elements.shortcutSearchInput;
     const results = elements.shortcutSearchResults;
     const list = elements.shortcutSearchResultList;
@@ -27205,11 +27924,51 @@
     let matchCount = 0;
     for (const entry of groups.querySelectorAll(".shortcut-entry")) {
       const description = entry.querySelector("dd");
-      if (!description || !description.textContent.toLocaleLowerCase().includes(query)) continue;
       const key = entry.querySelector("dt");
+      const descriptionText = String(description?.textContent || "").toLocaleLowerCase();
+      const keyText = [
+        key?.getAttribute("aria-label"),
+        key?.dataset?.shortcutLabel,
+        key?.dataset?.shortcutLines,
+        key?.textContent,
+      ].filter(Boolean).join(" ").toLocaleLowerCase();
+      if (!description || (!descriptionText.includes(query) && !keyText.includes(query))) continue;
       const row = document.createElement("div");
       row.className = "shortcut-search-result";
-      if (key) row.append(key.cloneNode(true));
+      if (key) {
+        // Build a fresh keycap-only <dt> instead of cloning the translated node.
+        // Some shortcut labels themselves carry data-i18n; cloning those nodes lets
+        // a locale refresh flatten the generated spans back into plain text.
+        const keyClone = document.createElement("dt");
+        const configuredLines = String(key.dataset.shortcutLines || "")
+          .split("|")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const currentLabel = String(key.getAttribute("aria-label") || key.dataset.shortcutLabel || key.textContent || "").trim();
+        const labels = configuredLines.length ? configuredLines : (currentLabel ? [currentLabel] : []);
+        keyClone.setAttribute("aria-label", labels.join(" / "));
+        labels.forEach((label, lineIndex) => {
+          const line = document.createElement("span");
+          line.className = "shortcut-key-line";
+          line.dataset.shortcutLine = String(lineIndex + 1);
+          for (const part of shortcutKeycapParts(label)) {
+            const span = document.createElement("span");
+            if (part.type === "separator") {
+              span.className = "shortcut-key-separator";
+              span.setAttribute("aria-hidden", "true");
+            } else {
+              span.className = "shortcut-keycap";
+              if (/^(?:ctrl(?:\s*\/\s*cmd)?|control|cmd(?:\s*\/\s*ctrl)?|command|⌘|alt|option|shift|meta)$/i.test(part.text)) {
+                span.classList.add("is-modifier");
+              }
+            }
+            span.textContent = part.text;
+            line.append(span);
+          }
+          keyClone.append(line);
+        });
+        row.append(keyClone);
+      }
       row.append(description.cloneNode(true));
       list.append(row);
       matchCount += 1;
@@ -27292,6 +28051,7 @@
     document.addEventListener("keydown", (event) => { if (!event.repeat) unlockEditorAudioFromGesture(); }, true);
     // Capture Space before focused select/checkbox/button controls can consume it.
     // In note edit mode this keeps playback start/stop available regardless of panel focus.
+    document.addEventListener("keydown", handleItemTreeDragKey, true);
     document.addEventListener("keydown", handlePlaybackShortcut, true);
     document.addEventListener("keydown", handleMergeModeKeyGuard, true);
     document.addEventListener("contextmenu", handleMergeModeContextGuard, true);
@@ -27301,6 +28061,7 @@
     document.addEventListener("keydown", handleHistoryShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectAllShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectedNoteShortcut, true);
+    document.addEventListener("selectstart", handleNativeTextSelectionGuard, true);
     document.addEventListener("wheel", handleGlobalTrackZoomWheel, { capture: true, passive: false });
     elements.fileButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -27382,14 +28143,12 @@
       closeFileMenu();
       openFilePickerInput(elements.fileInput);
     });
-    elements.audioOpenButton?.addEventListener("click", () => {
-      closeFileMenu();
-      openFilePickerInput(elements.audioFileInput);
-    });
     elements.audioFileInput?.addEventListener("change", async () => {
       const [file] = elements.audioFileInput.files || [];
+      const groupId = state.pendingAudioImportGroupId;
+      state.pendingAudioImportGroupId = null;
       elements.audioFileInput.value = "";
-      if (file) await importAudioFile(file);
+      if (file) await importAudioFile(file, { groupId });
     });
     // The import dialog uses the exact same picker/input as File > Import so the
     // supported-format list never depends on which format opened the dialog first.
@@ -27496,12 +28255,10 @@
         endChannelActionSweep(event);
       }
       if (state.channelDrag.sourceId && state.channelDrag.pointerId === event.pointerId) {
-        if (state.channelDrag.dragging) endChannelPointerDrag(event);
-        else cancelChannelPointerDrag();
+        endChannelPointerDrag(event);
       }
       if (state.channelGroupDrag.groupId && state.channelGroupDrag.pointerId === event.pointerId) {
-        if (state.channelGroupDrag.dragging) endChannelGroupPointerDrag(event);
-        else cancelChannelGroupPointerDrag();
+        endChannelGroupPointerDrag(event);
       }
       if (state.audioTreeDrag.sourceId && state.audioTreeDrag.pointerId === event.pointerId) {
         endAudioTreeDrag(event);
@@ -27755,30 +28512,40 @@
     });
 
     elements.mergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
+    elements.channelBulkGroupToggleButton?.addEventListener("click", () => {
+      if (!state.channelGroups.length) return;
+      const allExpanded = state.channelGroups.every((group) => !Boolean(group.collapsed));
+      setAllChannelGroupsCollapsed(allExpanded);
+    });
     elements.channelBulkMmlButton?.addEventListener("click", openAllChannelsMmlDialog);
     elements.channelBulkVisibilityButton?.addEventListener("click", () => {
-      const allVisible = state.channels.every((channel) => channel.visible !== false)
-        && state.channelGroups.every((group) => group.visible !== false)
-        && state.audioClips.every((clip) => clip.visible !== false)
-        && state.visibilitySoloChannelIds.size === 0
-        && state.visibilitySoloGroupIds.size === 0
-        && state.visibilitySoloAudioClipIds.size === 0;
-      setAllChannelTreeVisible(!allVisible);
+      const { allHidden } = getChannelTreeBulkState();
+      // Partial hidden state still means "hide all". Only when every item is
+      // hidden does the same button switch to "show all".
+      setAllChannelTreeVisible(allHidden);
+    });
+    elements.channelBulkVisibilityButton?.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const { hasItems, allVisibilitySolo } = getChannelTreeBulkState();
+      if (hasItems) setAllChannelTreeVisibilitySolo(!allVisibilitySolo);
     });
     elements.channelBulkMuteButton?.addEventListener("click", () => {
-      const allMuted = state.channels.every((channel) => Boolean(channel.muted))
-        && state.channelGroups.every((group) => Boolean(group.muted))
-        && state.audioClips.every((clip) => Boolean(clip.muted))
-        && state.soloChannelIds.size === 0
-        && state.soloGroupIds.size === 0
-        && state.soloAudioClipIds.size === 0;
+      const { allMuted } = getChannelTreeBulkState();
       setAllChannelTreeMuted(!allMuted);
     });
-    elements.addChannelGroupButton?.addEventListener("click", addChannelGroup);
-    elements.addChannelButton.addEventListener("click", addChannel);
+    elements.channelBulkMuteButton?.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const { hasItems, allSoundSolo } = getChannelTreeBulkState();
+      if (hasItems) setAllChannelTreeSoundSolo(!allSoundSolo);
+    });
+    elements.addChannelButton?.addEventListener("click", (event) => { event.stopPropagation(); openItemAddMenu(elements.addChannelButton); });
     elements.collapsedMergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
-    elements.collapsedAddChannelButton?.addEventListener("click", addChannel);
-    elements.collapsedAddChannelGroupButton?.addEventListener("click", addChannelGroup);
+    elements.collapsedAddChannelButton?.addEventListener("click", (event) => { event.stopPropagation(); openItemAddMenu(elements.collapsedAddChannelButton); });
+    elements.itemAddChannelButton?.addEventListener("click", () => { closeItemAddMenu(); addChannel(); });
+    elements.itemAddAudioButton?.addEventListener("click", () => { closeItemAddMenu(); openAudioImportPicker(null); });
+    elements.itemAddGroupButton?.addEventListener("click", () => { closeItemAddMenu(); addChannelGroup(); });
     elements.deleteChannelsButton?.addEventListener("click", enterChannelDeleteMode);
     elements.collapsedDeleteChannelsButton?.addEventListener("click", () => {
       setHistoryCollapsed(false);
@@ -27836,6 +28603,7 @@
     elements.channelMmlText?.addEventListener("input", () => {
       if (state.channelMmlEdit.viewOnly) return;
       state.channelMmlEdit.standardText = String(elements.channelMmlText?.value || "");
+      if (state.channelMmlEdit.partView) saveCurrentChannelMmlPartDraft({ dirty: true });
       scheduleChannelMmlPreview();
     });
     elements.channelMmlText?.addEventListener("keydown", (event) => {
@@ -27846,6 +28614,7 @@
     });
     elements.channelMmlIncludeTempo?.addEventListener("change", refreshChannelMmlTempoOption);
     elements.channelMmlOptimizedView?.addEventListener("change", refreshChannelMmlOptimizedView);
+    elements.channelMmlPartView?.addEventListener("change", () => setChannelMmlPartView(elements.channelMmlPartView.checked));
     elements.copyChannelButton.addEventListener("click", copyActiveChannelNotes);
     elements.pasteChannelButton.addEventListener("click", pasteNotesFromClipboard);
     elements.noteVolumeButton?.addEventListener("click", openNoteVolumeDialog);
@@ -28215,6 +28984,9 @@
     document.addEventListener("mousedown", handleRightMouseCancelDuringNoteEdit, true);
     document.addEventListener("contextmenu", openContextMenu, true);
     document.addEventListener("pointerdown", (event) => {
+      if (elements.itemAddMenu && !elements.itemAddMenu.hidden && !elements.itemAddMenu.contains(event.target) && !event.target.closest("#addChannelButton, #collapsedAddChannelButton")) {
+        closeItemAddMenu();
+      }
       if (!elements.contextMenu.hidden && !elements.contextMenu.contains(event.target)) {
         closeContextMenu();
       }
@@ -28264,7 +29036,6 @@
           closeChannelEditDialog();
           closeChannelMmlDialog();
           closeEditorSoundFontDialog();
-          closeShortcutHelpDialog();
           closeVolumeMenu();
           closeZoomMenu();
           closePlaybackRateMenu();
@@ -28334,7 +29105,6 @@
         closeChannelEditDialog();
         closeChannelMmlDialog();
         closeEditorSoundFontDialog();
-        closeShortcutHelpDialog();
         closeVolumeMenu();
         closeZoomMenu();
         closePlaybackRateMenu();
