@@ -13649,3 +13649,231 @@ body.measure-edit-mode-active .measure-edit-mode-tabs {
   color: #15783a;
   background: color-mix(in srgb, #22c55e 15%, #ffffff);
 }
+
+/* 2026-10-04: one unified volume editor for note/channel/group scopes. */
+.unified-volume-dialog {
+  width: min(900px, calc(100vw - 28px)) !important;
+  height: min(610px, calc(100dvh - 28px));
+  max-height: calc(100dvh - 28px) !important;
+  min-height: 0;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.unified-volume-dialog-body {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(320px, .95fr) minmax(340px, 1.05fr);
+  overflow: hidden;
+}
+.unified-volume-editor-pane {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-right: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel) 72%, var(--menu-bg));
+}
+.unified-volume-editor-pane .channel-volume-options {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 14px 16px 12px;
+}
+.unified-volume-editor-pane .channel-volume-slider-row {
+  padding-top: 18px;
+  padding-bottom: 12px;
+}
+.unified-volume-editor-pane .channel-volume-count-box {
+  margin: 2px 0 8px;
+}
+.unified-volume-editor-pane .channel-volume-help.transfer-dialog-help {
+  margin: 0;
+  padding: 7px 0 0;
+}
+.channel-volume-scope-pane {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-top: 0 !important;
+  overflow: hidden;
+  background: var(--menu-bg);
+}
+.channel-volume-scope-pane[hidden] { display: none !important; }
+.channel-volume-scope-pane .channel-scope-list-toolbar.midi-transfer-selection-actions {
+  min-height: 42px;
+  padding: 7px 10px 5px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.channel-volume-scope-pane .channel-volume-list.channel-scope-scroll-list {
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+  overflow-y: auto;
+  padding: 5px 9px 9px;
+  scrollbar-gutter: stable;
+}
+.unified-volume-dialog.note-selection-mode {
+  width: min(540px, calc(100vw - 24px)) !important;
+  height: auto;
+  max-height: min(650px, calc(100dvh - 24px)) !important;
+}
+.unified-volume-dialog.note-selection-mode .unified-volume-dialog-body {
+  display: block;
+  overflow: auto;
+}
+.unified-volume-dialog.note-selection-mode .unified-volume-editor-pane {
+  border-right: 0;
+  overflow: visible;
+}
+
+.channel-volume-group-row {
+  --group-color: var(--accent);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: 26px 22px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--group-color) 46%, var(--control-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--group-color) 9%, var(--control-bg));
+  color: var(--text);
+  cursor: pointer;
+}
+.channel-volume-group-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--group-color);
+}
+.channel-volume-group-folder { font-size: 14px; line-height: 1; }
+.channel-volume-group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 900;
+}
+.channel-volume-group-count {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+.channel-volume-list .channel-volume-row {
+  grid-template-columns: 28px minmax(0, 1fr) max-content !important;
+  gap: 6px !important;
+}
+.channel-volume-list .channel-volume-row.is-group-child {
+  width: calc(100% - 22px);
+  margin-left: 22px;
+}
+.channel-volume-row-detail {
+  min-width: max-content;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+/* MML export channel selector mirrors the editor's group/channel tree.
+   A group checkbox selects its exportable child channels in visual top-to-bottom order. */
+.mml-export-group-row {
+  --group-color: var(--accent);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--group-color) 46%, var(--control-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--group-color) 9%, var(--control-bg));
+  cursor: pointer;
+}
+.mml-export-group-row.selected {
+  background: color-mix(in srgb, var(--group-color) 18%, var(--control-bg));
+}
+.mml-export-group-row.partial {
+  background: color-mix(in srgb, var(--group-color) 13%, var(--control-bg));
+}
+.mml-export-group-row:has(input:disabled) {
+  opacity: .48;
+  cursor: default;
+}
+.mml-export-group-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--group-color);
+}
+.mml-export-group-info {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.mml-export-group-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.mml-export-group-folder {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
+}
+.mml-export-group-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 900;
+}
+.mml-export-group-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.mml-export-channel-row.is-group-child {
+  width: calc(100% - 22px);
+  margin-left: 22px;
+}
+
+@media (max-width: 760px) {
+  .unified-volume-dialog {
+    width: min(620px, calc(100vw - 14px)) !important;
+    height: calc(100dvh - 14px);
+    max-height: calc(100dvh - 14px) !important;
+  }
+  .unified-volume-dialog-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(190px, 1fr);
+    overflow: auto;
+  }
+  .unified-volume-editor-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    overflow: visible;
+  }
+  .unified-volume-dialog.note-selection-mode {
+    width: min(540px, calc(100vw - 14px)) !important;
+    height: auto;
+    max-height: calc(100dvh - 14px) !important;
+  }
+}

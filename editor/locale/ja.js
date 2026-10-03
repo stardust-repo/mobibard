@@ -848,6 +848,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "history.redo": "やり直し",
     "action.cut": "切り取り",
     "channel.copy": "チャンネルをコピー",
+    "group.copy": "グループをコピー",
     "common.none": "なし",
     "selection.all_select": "すべて選択",
     "ui.export": "書き出し",

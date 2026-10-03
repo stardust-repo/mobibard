@@ -848,6 +848,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "history.redo": "Redo",
     "action.cut": "Cut",
     "channel.copy": "Copy channel",
+    "group.copy": "Copy group",
     "common.none": "None",
     "selection.all_select": "Select all",
     "ui.export": "Export",

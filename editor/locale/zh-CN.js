@@ -848,6 +848,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "history.redo": "重做",
     "action.cut": "剪切",
     "channel.copy": "复制声道",
+    "group.copy": "复制组",
     "common.none": "无",
     "selection.all_select": "全选",
     "ui.export": "导出",

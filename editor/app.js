@@ -374,6 +374,7 @@
     editPasteButton: document.querySelector("#editPasteButton"),
     editSelectAllButton: document.querySelector("#editSelectAllButton"),
     editDeleteButton: document.querySelector("#editDeleteButton"),
+    editMeasureButton: document.querySelector("#editMeasureButton"),
     editRestCleanupButton: document.querySelector("#editRestCleanupButton"),
     editNoteVolumeButton: document.querySelector("#editNoteVolumeButton"),
     editAutoPartButton: document.querySelector("#editAutoPartButton"),
@@ -637,19 +638,11 @@
     midiTransferSummary: document.querySelector("#midiTransferSummary"),
     midiTransferSelectAllButton: document.querySelector("#midiTransferSelectAllButton"),
     midiTransferClearAllButton: document.querySelector("#midiTransferClearAllButton"),
-    noteVolumeBackdrop: document.querySelector("#noteVolumeBackdrop"),
-    noteVolumeCloseButton: document.querySelector("#noteVolumeCloseButton"),
-    noteVolumeCancelButton: document.querySelector("#noteVolumeCancelButton"),
-    noteVolumeApplyButton: document.querySelector("#noteVolumeApplyButton"),
-    noteVolumeFixedMode: document.querySelector("#noteVolumeFixedMode"),
-    noteVolumeControlLabel: document.querySelector("#noteVolumeControlLabel"),
-    noteVolumeSlider: document.querySelector("#noteVolumeSlider"),
-    noteVolumeValue: document.querySelector("#noteVolumeValue"),
-    noteVolumeDialogTitle: document.querySelector("#noteVolumeDialogTitle"),
-    noteVolumeSelectionLabel: document.querySelector("#noteVolumeSelectionLabel"),
-    noteVolumeCurrentCounts: document.querySelector("#noteVolumeCurrentCounts"),
-    noteVolumeTargetCounts: document.querySelector("#noteVolumeTargetCounts"),
     channelVolumeBackdrop: document.querySelector("#channelVolumeBackdrop"),
+    channelVolumeDialog: document.querySelector("#channelVolumeDialog"),
+    channelVolumeDialogTitle: document.querySelector("#channelVolumeDialogTitle"),
+    channelVolumeScopeLabel: document.querySelector("#channelVolumeScopeLabel"),
+    channelVolumeScopePane: document.querySelector("#channelVolumeScopePane"),
     channelVolumeCloseButton: document.querySelector("#channelVolumeCloseButton"),
     channelVolumeCancelButton: document.querySelector("#channelVolumeCancelButton"),
     channelVolumeApplyButton: document.querySelector("#channelVolumeApplyButton"),
@@ -4661,9 +4654,10 @@
     if (elements.channelMergeBackdrop && !elements.channelMergeBackdrop.hidden) renderChannelMergeDialog();
     if (elements.channelDeleteBackdrop && !elements.channelDeleteBackdrop.hidden) renderChannelDeleteDialog();
     if (elements.mmlExportBackdrop && !elements.mmlExportBackdrop.hidden) updateMmlExportDialogState();
-    if (elements.noteVolumeBackdrop && !elements.noteVolumeBackdrop.hidden) {
-      updateNoteVolumeDialogControl();
-      updateNoteVolumeDialogCounts();
+    if (elements.channelVolumeBackdrop && !elements.channelVolumeBackdrop.hidden) {
+      updateChannelVolumeControl();
+      updateChannelVolumeCounts();
+      updateVolumeDialogHeader();
     }
     if (isNoteEditModeActive()) updateNoteEditModeUi();
     if (elements.tempoSimplifyBackdrop && !elements.tempoSimplifyBackdrop.hidden) updateTempoSimplifySummary();
@@ -4784,6 +4778,7 @@
       ? !activeMidiGroup?.notes?.length
       : !notesActive || !getActiveChannel()?.notes?.length);
     elements.editDeleteButton.disabled = deleteLocked || midiActive || (audioActive ? !getActiveAudioClip() : !notesActive || !state.selectedNoteIds.size);
+    if (elements.editMeasureButton) elements.editMeasureButton.disabled = deleteLocked;
     const hasEditorNotes = state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length > 0);
     if (elements.editRestCleanupButton) elements.editRestCleanupButton.disabled = deleteLocked || !hasEditorNotes;
     if (elements.editNoteVolumeButton) elements.editNoteVolumeButton.disabled = deleteLocked || !hasEditorNotes;
@@ -15093,13 +15088,12 @@
     }
   }
 
-  function getNoteVolumeDialogNotes() {
-    return getSelectedNotes();
-  }
-
-  function isNoteVolumeFixedMode() {
-    return Boolean(elements.noteVolumeFixedMode?.checked);
-  }
+  let volumeEditContext = {
+    mode: "channels",
+    noteRefs: [],
+    source: "all",
+    sourceId: null,
+  };
 
   function formatNoteVolumeDelta(value) {
     const delta = clamp(Math.round(Number(value) || 0), -15, 15);
@@ -15108,171 +15102,9 @@
     return "±0";
   }
 
-  function getNoteVolumeDialogTargetVolume(note) {
-    const sliderValue = Math.round(Number(elements.noteVolumeSlider?.value) || 0);
-    if (isNoteVolumeFixedMode()) return clamp(sliderValue, 0, 15);
-    return clamp(getNoteVolume(note) + clamp(sliderValue, -15, 15), 0, 15);
-  }
-
-  function updateNoteVolumeDialogControl() {
-    const fixed = isNoteVolumeFixedMode();
-    if (elements.noteVolumeControlLabel) {
-      const labelKey = fixed ? "volume.fixed_value" : "volume.relative_adjust";
-      elements.noteVolumeControlLabel.dataset.i18n = labelKey;
-      elements.noteVolumeControlLabel.textContent = i18nText(labelKey);
-    }
-    const value = Math.round(Number(elements.noteVolumeSlider?.value) || 0);
-    if (elements.noteVolumeValue) {
-      elements.noteVolumeValue.textContent = fixed
-        ? `V${clamp(value, 0, 15)}`
-        : formatNoteVolumeDelta(value);
-    }
-  }
-
-  function configureNoteVolumeSliderForMode(resetValue = true) {
-    if (!elements.noteVolumeSlider) return;
-    const notes = getNoteVolumeDialogNotes();
-    const fixed = isNoteVolumeFixedMode();
-    if (fixed) {
-      elements.noteVolumeSlider.min = "0";
-      elements.noteVolumeSlider.max = "15";
-      elements.noteVolumeSlider.step = "1";
-      if (resetValue) {
-        const volumes = notes.map((note) => getNoteVolume(note));
-        const unique = new Set(volumes);
-        const initial = unique.size === 1
-          ? (volumes[0] ?? CONFIG.defaultNewChannelNoteVolume)
-          : Math.round(volumes.reduce((sum, value) => sum + value, 0) / Math.max(1, volumes.length));
-        elements.noteVolumeSlider.value = String(clamp(initial, 0, 15));
-      }
-    } else {
-      elements.noteVolumeSlider.min = "-15";
-      elements.noteVolumeSlider.max = "15";
-      elements.noteVolumeSlider.step = "1";
-      if (resetValue) elements.noteVolumeSlider.value = "0";
-    }
-    updateNoteVolumeDialogControl();
-    updateNoteVolumeDialogCounts();
-  }
-
-  function updateNoteVolumeDialogCounts() {
-    const notes = getNoteVolumeDialogNotes();
-    renderNoteVolumeCountChips(elements.noteVolumeCurrentCounts, getNoteVolumeCounts(notes));
-    const targets = notes.map((note) => ({ volume: getNoteVolumeDialogTargetVolume(note) }));
-    renderNoteVolumeCountChips(elements.noteVolumeTargetCounts, getNoteVolumeCounts(targets));
-  }
-
-  function updateChannelDefaultNoteVolumeFromNotes(channel, notes) {
-    if (!channel || !Array.isArray(notes) || !notes.length) return false;
-    const volumes = [...new Set(notes.map((note) => clamp(getNoteVolume(note), 0, 15)))];
-    if (volumes.length !== 1) return false;
-    const nextVolume = volumes[0];
-    if (channel.defaultNoteVolume === nextVolume) return false;
-    channel.defaultNoteVolume = nextVolume;
-    return true;
-  }
-
-  function openNoteVolumeDialog() {
-    if (state.activePanel === "audio") {
-      showToast("오디오에는 노트 볼륨 기능을 사용할 수 없습니다.");
-      return false;
-    }
-    if (isMidiReferenceActive()) {
-      showToast("MIDI 노트는 읽기 전용입니다.");
-      return false;
-    }
-    const notes = getSelectedNotes();
-    if (!notes.length) {
-      showToast("볼륨을 수정할 노트를 선택하세요.");
-      return false;
-    }
-    if (elements.noteVolumeFixedMode) elements.noteVolumeFixedMode.checked = false;
-    configureNoteVolumeSliderForMode(true);
-    if (elements.noteVolumeDialogTitle) {
-      elements.noteVolumeDialogTitle.dataset.i18n = "note.volume";
-      elements.noteVolumeDialogTitle.textContent = i18nText("note.volume");
-    }
-    if (elements.noteVolumeSelectionLabel) {
-      elements.noteVolumeSelectionLabel.textContent = `${notes.length}개 선택 노트`;
-    }
-    elements.noteVolumeBackdrop?.querySelector("#noteVolumeDialog")?.setAttribute("aria-label", i18nText("note.edit_volume"));
-    updateNoteVolumeDialogCounts();
-    elements.noteVolumeBackdrop.hidden = false;
-    requestAnimationFrame(() => elements.noteVolumeSlider.focus());
-    return true;
-  }
-
-  function closeNoteVolumeDialog() {
-    if (elements.noteVolumeBackdrop) elements.noteVolumeBackdrop.hidden = true;
-  }
-
-  function applySelectedNoteVolume() {
-    const notes = getSelectedNotes();
-    if (!notes.length) {
-      closeNoteVolumeDialog();
-      return false;
-    }
-    const fixed = isNoteVolumeFixedMode();
-    const sliderValue = Math.round(Number(elements.noteVolumeSlider?.value) || 0);
-    const fixedVolume = clamp(sliderValue, 0, 15);
-    const delta = clamp(sliderValue, -15, 15);
-    let changedCount = 0;
-    for (const note of notes) {
-      const before = getNoteVolume(note);
-      const nextVolume = fixed ? fixedVolume : clamp(before + delta, 0, 15);
-      if (nextVolume === before) continue;
-      note.volume = nextVolume;
-      note.velocity = mmlVolumeToVelocity(nextVolume);
-      changedCount += 1;
-    }
-    const defaultVolumeChanged = updateChannelDefaultNoteVolumeFromNotes(getActiveChannel(), notes);
-    closeNoteVolumeDialog();
-    if (!changedCount && !defaultVolumeChanged) return false;
-    markDirty(!changedCount && defaultVolumeChanged ? "새 노트 볼륨 설정" : "노트 볼륨 변경");
-    drawRoll();
-    drawTimeline();
-    updateChannelInfo();
-    if (fixed) {
-      showToast(i18nText("volume.selected_fixed", [changedCount.toLocaleString(), fixedVolume]));
-    } else {
-      showToast(i18nText("volume.selected_adjusted", [changedCount.toLocaleString(), formatNoteVolumeDelta(delta)]));
-    }
-    return true;
-  }
-
-  let channelVolumeCountCache = new Map();
-
-  function rebuildChannelVolumeCountCache() {
-    channelVolumeCountCache = new Map();
-    for (const channel of state.channels) {
-      const counts = Array(16).fill(0);
-      for (const note of channel.notes || []) counts[getNoteVolume(note)] += 1;
-      channelVolumeCountCache.set(String(channel.id), counts);
-    }
-  }
-
-  function getSelectedChannelVolumeCounts() {
-    if (!channelVolumeCountCache.size) rebuildChannelVolumeCountCache();
-    const selectedIds = new Set(getCheckedChannelVolumeIds());
-    const counts = Array(16).fill(0);
-    for (const id of selectedIds) {
-      const source = channelVolumeCountCache.get(String(id));
-      if (!source) continue;
-      for (let volume = 0; volume <= 15; volume += 1) counts[volume] += Number(source[volume]) || 0;
-    }
-    return counts;
-  }
-
-  function volumeCountArrayToItems(counts) {
-    return (counts || [])
-      .map((count, volume) => ({ volume, count: Number(count) || 0 }))
-      .filter((item) => item.count > 0)
-      .sort((left, right) => right.volume - left.volume);
-  }
-
   function getCheckedChannelVolumeIds() {
     if (!elements.channelVolumeList) return [];
-    return [...elements.channelVolumeList.querySelectorAll('input[type="checkbox"]:checked')]
+    return [...elements.channelVolumeList.querySelectorAll('input.channel-volume-channel-checkbox[type="checkbox"]:checked')]
       .map((input) => String(input.value));
   }
 
@@ -15281,8 +15113,17 @@
     return state.channels.filter((channel) => ids.has(String(channel.id)) && Array.isArray(channel.notes) && channel.notes.length);
   }
 
-  function getChannelVolumeNotes() {
+  function getVolumeEditNotes() {
+    if (volumeEditContext.mode === "notes") {
+      return (volumeEditContext.noteRefs || []).filter((note) => note && typeof note === "object");
+    }
     return getChannelVolumeChannels().flatMap((channel) => channel.notes || []);
+  }
+
+  function getVolumeEditTargetChannels() {
+    if (volumeEditContext.mode !== "notes") return getChannelVolumeChannels();
+    const refs = new Set(volumeEditContext.noteRefs || []);
+    return state.channels.filter((channel) => (channel.notes || []).some((note) => refs.has(note)));
   }
 
   function isChannelVolumeFixedMode() {
@@ -15290,7 +15131,7 @@
   }
 
   function isChannelVolumeProtectV0Mode() {
-    return elements.channelVolumeProtectV0 ? Boolean(elements.channelVolumeProtectV0.checked) : true;
+    return Boolean(elements.channelVolumeProtectV0?.checked);
   }
 
   function resolveChannelVolumeTarget(beforeVolume, rawTarget) {
@@ -15310,10 +15151,6 @@
     return resolveChannelVolumeTarget(before, rawTarget);
   }
 
-  function getChannelVolumeTargetVolume(note) {
-    return getChannelVolumeTargetFromVolume(getNoteVolume(note));
-  }
-
   function updateChannelVolumeControl() {
     const fixed = isChannelVolumeFixedMode();
     if (elements.channelVolumeControlLabel) {
@@ -15327,34 +15164,56 @@
     }
   }
 
-  function updateChannelVolumeSummary() {
-    const channels = getChannelVolumeChannels();
-    const noteCount = channels.reduce((sum, channel) => sum + (channel.notes?.length || 0), 0);
-    if (elements.channelVolumeSummary) {
-      elements.channelVolumeSummary.textContent = i18nText("volume.channel_summary", [channels.length.toLocaleString(), noteCount.toLocaleString()]);
+  function updateVolumeDialogHeader() {
+    if (elements.channelVolumeDialogTitle) {
+      elements.channelVolumeDialogTitle.dataset.i18n = "volume.edit_channels";
+      elements.channelVolumeDialogTitle.textContent = i18nText("volume.edit_channels");
     }
-    if (elements.channelVolumeApplyButton) elements.channelVolumeApplyButton.disabled = channels.length === 0 || noteCount === 0;
+    if (!elements.channelVolumeScopeLabel) return;
+    if (volumeEditContext.mode === "notes") {
+      elements.channelVolumeScopeLabel.removeAttribute("data-i18n");
+      elements.channelVolumeScopeLabel.textContent = `${getVolumeEditNotes().length.toLocaleString()}개 선택 노트`;
+      return;
+    }
+    const source = volumeEditContext.source;
+    if (source === "group") {
+      const group = getChannelGroupById(volumeEditContext.sourceId);
+      elements.channelVolumeScopeLabel.removeAttribute("data-i18n");
+      elements.channelVolumeScopeLabel.textContent = group ? `${group.name} · 그룹` : i18nText("volume.select_channels");
+    } else if (source === "channel") {
+      const channel = getChannelById(volumeEditContext.sourceId);
+      elements.channelVolumeScopeLabel.removeAttribute("data-i18n");
+      elements.channelVolumeScopeLabel.textContent = channel ? `${channel.name} · 채널` : i18nText("volume.select_channels");
+    } else {
+      elements.channelVolumeScopeLabel.removeAttribute("data-i18n");
+      elements.channelVolumeScopeLabel.textContent = "모든 채널 / 그룹";
+    }
+  }
+
+  function updateChannelVolumeSummary() {
+    const notes = getVolumeEditNotes();
+    if (elements.channelVolumeSummary) {
+      if (volumeEditContext.mode === "notes") {
+        elements.channelVolumeSummary.textContent = `${notes.length.toLocaleString()}개 선택 노트`;
+      } else {
+        const channels = getChannelVolumeChannels();
+        elements.channelVolumeSummary.textContent = i18nText("volume.channel_summary", [channels.length.toLocaleString(), notes.length.toLocaleString()]);
+      }
+    }
+    if (elements.channelVolumeApplyButton) elements.channelVolumeApplyButton.disabled = notes.length === 0;
   }
 
   function updateChannelVolumeCounts() {
-    const currentArray = getSelectedChannelVolumeCounts();
-    const targetArray = Array(16).fill(0);
-    for (let volume = 0; volume <= 15; volume += 1) {
-      const count = Number(currentArray[volume]) || 0;
-      if (!count) continue;
-      targetArray[getChannelVolumeTargetFromVolume(volume)] += count;
-    }
-    renderChannelVolumeComparison(
-      elements.channelVolumeComparison,
-      volumeCountArrayToItems(currentArray),
-      volumeCountArrayToItems(targetArray),
-    );
+    const notes = getVolumeEditNotes();
+    const currentItems = getNoteVolumeCounts(notes);
+    const targetItems = getNoteVolumeCounts(notes.map((note) => ({ volume: getChannelVolumeTargetFromVolume(getNoteVolume(note)) })));
+    renderChannelVolumeComparison(elements.channelVolumeComparison, currentItems, targetItems);
     updateChannelVolumeSummary();
   }
 
   function configureChannelVolumeSliderForMode(resetValue = true) {
     if (!elements.channelVolumeSlider) return;
-    const notes = getChannelVolumeNotes();
+    const notes = getVolumeEditNotes();
     const fixed = isChannelVolumeFixedMode();
     if (fixed) {
       const minimum = isChannelVolumeProtectV0Mode() ? 1 : 0;
@@ -15381,85 +15240,231 @@
     updateChannelVolumeCounts();
   }
 
-  function renderChannelVolumeDialog() {
+  function getChannelVolumeMemberCheckboxes(groupId) {
+    if (!elements.channelVolumeList) return [];
+    const gid = String(groupId ?? "");
+    return [...elements.channelVolumeList.querySelectorAll('input.channel-volume-channel-checkbox[type="checkbox"]')]
+      .filter((input) => String(input.dataset.volumeGroupId ?? "") === gid);
+  }
+
+  function syncChannelVolumeGroupCheckboxes() {
+    if (!elements.channelVolumeList) return;
+    elements.channelVolumeList.querySelectorAll('input.channel-volume-group-checkbox[type="checkbox"]').forEach((groupCheckbox) => {
+      const members = getChannelVolumeMemberCheckboxes(groupCheckbox.value).filter((input) => !input.disabled);
+      const checkedCount = members.filter((input) => input.checked).length;
+      groupCheckbox.disabled = members.length === 0;
+      groupCheckbox.checked = members.length > 0 && checkedCount === members.length;
+      groupCheckbox.indeterminate = checkedCount > 0 && checkedCount < members.length;
+      const row = groupCheckbox.closest(".channel-volume-group-row");
+      const count = row?.querySelector(".channel-volume-group-count");
+      if (count) count.textContent = `${checkedCount}/${members.length}`;
+    });
+  }
+
+  function createChannelVolumeChannelRow(channel, index, selectedIds, parentId = null) {
+    const row = document.createElement("label");
+    row.className = `midi-transfer-channel-row channel-delete-row channel-volume-row${parentId != null ? " is-group-child" : ""}`;
+    row.style.setProperty("--channel-color", getChannelColor(channel, index));
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "channel-volume-channel-checkbox";
+    checkbox.value = String(channel.id);
+    checkbox.dataset.volumeGroupId = parentId == null ? "" : String(parentId);
+    const noteCount = channel.notes?.length || 0;
+    checkbox.checked = noteCount > 0 && selectedIds.has(String(channel.id));
+    checkbox.disabled = noteCount === 0;
+    const text = document.createElement("span");
+    text.className = "midi-transfer-channel-name";
+    text.textContent = channel.name;
+    const detail = document.createElement("small");
+    detail.className = "channel-volume-row-detail";
+    detail.textContent = noteCount ? `${noteCount.toLocaleString()}개 노트` : "빈 채널";
+    row.append(checkbox, text, detail);
+    checkbox.addEventListener("change", () => {
+      syncChannelVolumeGroupCheckboxes();
+      updateChannelVolumeCounts();
+    });
+    return row;
+  }
+
+  function createChannelVolumeGroupRow(group) {
+    const row = document.createElement("label");
+    row.className = "channel-volume-group-row";
+    const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
+    row.style.setProperty("--group-color", getChannelGroupColor(group, groupIndex, "bright"));
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "channel-volume-group-checkbox";
+    checkbox.value = String(group.id);
+    const folder = document.createElement("span");
+    folder.className = "channel-volume-group-folder";
+    folder.setAttribute("aria-hidden", "true");
+    folder.textContent = "📂";
+    const name = document.createElement("strong");
+    name.className = "channel-volume-group-name";
+    name.textContent = group.name;
+    const count = document.createElement("small");
+    count.className = "channel-volume-group-count";
+    row.append(checkbox, folder, name, count);
+    checkbox.addEventListener("change", () => {
+      const checked = checkbox.checked;
+      for (const input of getChannelVolumeMemberCheckboxes(group.id)) {
+        if (!input.disabled) input.checked = checked;
+      }
+      syncChannelVolumeGroupCheckboxes();
+      updateChannelVolumeCounts();
+    });
+    return row;
+  }
+
+  function renderChannelVolumeDialog(selectedChannelIds = new Set()) {
     if (!elements.channelVolumeList) return false;
-    rebuildChannelVolumeCountCache();
+    const selectedIds = new Set([...selectedChannelIds].map(String));
     elements.channelVolumeList.replaceChildren();
-    state.channels.forEach((channel, index) => {
-      const row = document.createElement("label");
-      row.className = "midi-transfer-channel-row channel-delete-row channel-volume-row";
-      row.style.setProperty("--channel-color", getChannelColor(channel, index));
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.value = String(channel.id);
-      const noteCount = channel.notes?.length || 0;
-      checkbox.checked = noteCount > 0;
-      checkbox.disabled = noteCount === 0;
-      const text = document.createElement("span");
-      text.className = "midi-transfer-channel-name";
-      text.textContent = channel.name;
-      row.append(checkbox, text);
-      checkbox.addEventListener("change", () => updateChannelVolumeCounts());
-      elements.channelVolumeList.append(row);
-    });
-    installLeftDragCheckboxSelection(elements.channelVolumeList, {
-      deferChange: true,
-      onCommit: updateChannelVolumeCounts,
-    });
+    const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
+    const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
+    const rendered = new Set();
+    for (const entry of getItemTreeLayout()) {
+      if (entry.kind === "group") {
+        const group = groupById.get(String(entry.id));
+        if (group) elements.channelVolumeList.append(createChannelVolumeGroupRow(group));
+        continue;
+      }
+      if (entry.kind !== "channel") continue;
+      const found = channelById.get(String(entry.id));
+      if (!found) continue;
+      rendered.add(String(entry.id));
+      elements.channelVolumeList.append(createChannelVolumeChannelRow(found.channel, found.index, selectedIds, entry.parentId));
+    }
+    for (const [id, found] of channelById) {
+      if (rendered.has(id)) continue;
+      elements.channelVolumeList.append(createChannelVolumeChannelRow(found.channel, found.index, selectedIds, found.channel.groupId));
+    }
+    syncChannelVolumeGroupCheckboxes();
     updateChannelVolumeSummary();
     return true;
   }
 
   function setAllChannelVolumeChecked(checked) {
-    if (!elements.channelVolumeList) return;
-    elements.channelVolumeList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    if (!elements.channelVolumeList || volumeEditContext.mode === "notes") return;
+    elements.channelVolumeList.querySelectorAll('input.channel-volume-channel-checkbox[type="checkbox"]').forEach((input) => {
       if (!input.disabled) input.checked = Boolean(checked);
     });
+    syncChannelVolumeGroupCheckboxes();
     updateChannelVolumeCounts();
   }
 
-  function openChannelVolumeDialog() {
-    const hasNotes = state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length);
-    if (!hasNotes) {
+  function resolveInitialVolumeChannelIds({ channelIds = null, groupId = null, channelId = null } = {}) {
+    if (Array.isArray(channelIds) || channelIds instanceof Set) return new Set([...channelIds].map(String));
+    if (groupId != null) return new Set(getChannelGroupMembers(groupId).filter((channel) => channel.notes?.length).map((channel) => String(channel.id)));
+    if (channelId != null) {
+      const channel = getChannelById(channelId);
+      return new Set(channel?.notes?.length ? [String(channel.id)] : []);
+    }
+    return new Set(state.channels.filter((channel) => channel.notes?.length).map((channel) => String(channel.id)));
+  }
+
+  function openChannelVolumeDialog(options = {}) {
+    const selectedIds = resolveInitialVolumeChannelIds(options);
+    if (!selectedIds.size) {
       showToast(i18nText("volume.no_editor_notes"));
       return false;
     }
+    volumeEditContext = {
+      mode: "channels",
+      noteRefs: [],
+      source: options.source || (options.groupId != null ? "group" : options.channelId != null ? "channel" : "all"),
+      sourceId: options.groupId ?? options.channelId ?? null,
+    };
     closeEditMenu();
     closeFileMenu();
     closeContextMenu();
-    if (!renderChannelVolumeDialog()) return false;
+    if (elements.channelVolumeScopePane) elements.channelVolumeScopePane.hidden = false;
+    elements.channelVolumeDialog?.classList.remove("note-selection-mode");
+    if (!renderChannelVolumeDialog(selectedIds)) return false;
     if (elements.channelVolumeFixedMode) elements.channelVolumeFixedMode.checked = false;
     if (elements.channelVolumeProtectV0) elements.channelVolumeProtectV0.checked = true;
+    updateVolumeDialogHeader();
     configureChannelVolumeSliderForMode(true);
     elements.channelVolumeBackdrop.hidden = false;
-    requestAnimationFrame(() => elements.channelVolumeList?.querySelector('input[type="checkbox"]:not(:disabled)')?.focus());
+    requestAnimationFrame(() => elements.channelVolumeSlider?.focus());
+    return true;
+  }
+
+  function openNoteVolumeDialog() {
+    if (state.activePanel === "audio") {
+      showToast(i18nText("audio.note_volume_controls"));
+      return false;
+    }
+    if (isMidiReferenceActive()) {
+      showToast(i18nText("context.disabled_readonly"));
+      return false;
+    }
+    const notes = getSelectedNotes();
+    if (!notes.length) {
+      showToast(i18nText("note.select_whose_volume"));
+      return false;
+    }
+    volumeEditContext = {
+      mode: "notes",
+      noteRefs: [...notes],
+      source: "notes",
+      sourceId: null,
+    };
+    closeEditMenu();
+    closeFileMenu();
+    closeContextMenu();
+    if (elements.channelVolumeList) elements.channelVolumeList.replaceChildren();
+    if (elements.channelVolumeScopePane) elements.channelVolumeScopePane.hidden = true;
+    elements.channelVolumeDialog?.classList.add("note-selection-mode");
+    if (elements.channelVolumeFixedMode) elements.channelVolumeFixedMode.checked = false;
+    // Preserve the old direct-note behavior by allowing V0 unless the user opts into protection.
+    if (elements.channelVolumeProtectV0) elements.channelVolumeProtectV0.checked = false;
+    updateVolumeDialogHeader();
+    configureChannelVolumeSliderForMode(true);
+    elements.channelVolumeBackdrop.hidden = false;
+    requestAnimationFrame(() => elements.channelVolumeSlider?.focus());
     return true;
   }
 
   function closeChannelVolumeDialog() {
     if (elements.channelVolumeBackdrop) elements.channelVolumeBackdrop.hidden = true;
+    elements.channelVolumeDialog?.classList.remove("note-selection-mode");
+  }
+
+  function closeNoteVolumeDialog() {
+    closeChannelVolumeDialog();
   }
 
   function applyChannelVolume() {
-    const channels = getChannelVolumeChannels();
-    if (!channels.length) return false;
+    const notes = getVolumeEditNotes();
+    if (!notes.length) {
+      closeChannelVolumeDialog();
+      return false;
+    }
+    const mode = volumeEditContext.mode;
+    const targetChannels = getVolumeEditTargetChannels();
+    const selectedRefs = mode === "notes" ? new Set(notes) : null;
     const fixed = isChannelVolumeFixedMode();
     const sliderValue = Math.round(Number(elements.channelVolumeSlider?.value) || 0);
     const fixedVolume = clamp(sliderValue, 0, 15);
     const delta = clamp(sliderValue, -15, 15);
     let changedCount = 0;
+    for (const note of notes) {
+      const before = getNoteVolume(note);
+      const rawTarget = fixed ? fixedVolume : clamp(before + delta, 0, 15);
+      const nextVolume = resolveChannelVolumeTarget(before, rawTarget);
+      if (nextVolume === before) continue;
+      note.volume = nextVolume;
+      note.velocity = mmlVolumeToVelocity(nextVolume);
+      changedCount += 1;
+    }
     let defaultVolumeChanged = false;
-    for (const channel of channels) {
-      for (const note of channel.notes || []) {
-        const before = getNoteVolume(note);
-        const rawTarget = fixed ? fixedVolume : clamp(before + delta, 0, 15);
-        const nextVolume = resolveChannelVolumeTarget(before, rawTarget);
-        if (nextVolume === before) continue;
-        note.volume = nextVolume;
-        note.velocity = mmlVolumeToVelocity(nextVolume);
-        changedCount += 1;
-      }
-      defaultVolumeChanged = updateChannelDefaultNoteVolumeFromNotes(channel, channel.notes || []) || defaultVolumeChanged;
+    for (const channel of targetChannels) {
+      const channelNotes = mode === "notes"
+        ? (channel.notes || []).filter((note) => selectedRefs.has(note))
+        : (channel.notes || []);
+      defaultVolumeChanged = updateChannelDefaultNoteVolumeFromNotes(channel, channelNotes) || defaultVolumeChanged;
     }
     closeChannelVolumeDialog();
     if (!changedCount && !defaultVolumeChanged) return false;
@@ -15467,12 +15472,18 @@
     drawRoll();
     drawTimeline();
     updateChannelInfo();
-    if (fixed) {
-      showToast(i18nText("volume.channels_fixed", [channels.length.toLocaleString(), changedCount.toLocaleString(), fixedVolume]));
+    if (mode === "notes") {
+      if (fixed) showToast(i18nText("volume.selected_fixed", [changedCount.toLocaleString(), fixedVolume]));
+      else showToast(i18nText("volume.selected_adjusted", [changedCount.toLocaleString(), formatNoteVolumeDelta(delta)]));
     } else {
-      showToast(i18nText("volume.channels_adjusted", [channels.length.toLocaleString(), changedCount.toLocaleString(), formatNoteVolumeDelta(delta)]));
+      if (fixed) showToast(i18nText("volume.channels_fixed", [targetChannels.length.toLocaleString(), changedCount.toLocaleString(), fixedVolume]));
+      else showToast(i18nText("volume.channels_adjusted", [targetChannels.length.toLocaleString(), changedCount.toLocaleString(), formatNoteVolumeDelta(delta)]));
     }
     return true;
+  }
+
+  function applySelectedNoteVolume() {
+    return applyChannelVolume();
   }
 
   let restCleanupAnalysisCache = { mode: null, perChannel: new Map() };
@@ -17669,6 +17680,116 @@
     drawRoll();
     updateChannelInfo();
     showToast(`${source.name}을 ${clone.name}(으)로 복사했습니다.`);
+    return true;
+  }
+
+  function duplicateChannelGroupById(groupId) {
+    if (isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    const source = getChannelGroupById(groupId);
+    if (!source) return false;
+
+    const layout = getItemTreeLayout();
+    const sourceGroupId = String(source.id);
+    const sourceIndex = layout.findIndex((row) => row.kind === "group" && String(row.id) === sourceGroupId);
+    if (sourceIndex < 0) return false;
+    const sourceChildren = layout.filter((row) => String(row.parentId ?? "") === sourceGroupId);
+
+    const cloneGroup = {
+      ...source,
+      id: state.nextChannelGroupId++,
+      name: makeUniqueChannelGroupName(source.name),
+      beforeChannelId: null,
+    };
+    state.channelGroups.push(cloneGroup);
+
+    const channelCloneIds = new Map();
+    const audioCloneIds = new Map();
+    for (const row of sourceChildren) {
+      if (row.kind === "channel") {
+        const sourceChannel = getChannelById(row.id);
+        if (!sourceChannel) continue;
+        const clone = {
+          ...sourceChannel,
+          id: nextChannelId(),
+          name: makeUniqueChannelName(sourceChannel.name, null),
+          groupId: String(cloneGroup.id),
+          notes: (sourceChannel.notes || []).map((note) => ({ ...note, id: state.nextNoteId++ })),
+        };
+        state.channels.push(clone);
+        channelCloneIds.set(String(row.id), String(clone.id));
+      } else if (row.kind === "audio") {
+        const sourceClip = state.audioClips.find((clip) => String(clip.id) === String(row.id));
+        if (!sourceClip) continue;
+        const cloneId = `audio-${state.nextAudioClipId++}`;
+        const clone = {
+          ...sourceClip,
+          id: cloneId,
+          groupId: String(cloneGroup.id),
+          beforeChannelId: null,
+        };
+        state.audioClips.push(clone);
+        const runtime = getAudioRuntime(sourceClip.id);
+        if (runtime) state.audioRuntime.set(String(cloneId), { ...runtime });
+        audioCloneIds.set(String(row.id), String(cloneId));
+      }
+    }
+
+    const cloneRows = [{ kind: "group", id: String(cloneGroup.id), parentId: null }];
+    for (const row of sourceChildren) {
+      if (row.kind === "channel") {
+        const id = channelCloneIds.get(String(row.id));
+        if (id != null) cloneRows.push({ kind: "channel", id, parentId: String(cloneGroup.id) });
+      } else if (row.kind === "audio") {
+        const id = audioCloneIds.get(String(row.id));
+        if (id != null) cloneRows.push({ kind: "audio", id, parentId: String(cloneGroup.id) });
+      }
+    }
+
+    const insertAt = sourceIndex + 1 + sourceChildren.length;
+    const nextLayout = ItemTree.copy([
+      ...layout.slice(0, insertAt),
+      ...cloneRows,
+      ...layout.slice(insertAt),
+    ]);
+    const maps = {
+      channel: new Map(state.channels.map((channel) => [String(channel.id), channel])),
+      audio: new Map(state.audioClips.map((clip) => [String(clip.id), clip])),
+      group: new Map(state.channelGroups.map((group) => [String(group.id), group])),
+    };
+    for (const row of nextLayout) {
+      if (row.kind === "group") continue;
+      const item = maps[row.kind]?.get(String(row.id));
+      if (item) item.groupId = row.parentId == null ? null : String(row.parentId);
+    }
+    state.channels = nextLayout.filter((row) => row.kind === "channel").map((row) => maps.channel.get(String(row.id))).filter(Boolean);
+    state.audioClips = nextLayout.filter((row) => row.kind === "audio").map((row) => maps.audio.get(String(row.id))).filter(Boolean);
+    state.channelGroups = nextLayout.filter((row) => row.kind === "group").map((row) => maps.group.get(String(row.id))).filter(Boolean);
+    state.channelTreeLayout = ItemTree.copy(nextLayout);
+    for (let index = 0; index < nextLayout.length; index += 1) {
+      const row = nextLayout[index];
+      if (row.kind === "channel") continue;
+      const nextChannel = nextLayout.slice(index + 1).find((candidate) => candidate.kind === "channel" && (row.kind === "group" || candidate.parentId === row.parentId));
+      const item = maps[row.kind]?.get(String(row.id));
+      if (item) item.beforeChannelId = nextChannel?.id ?? null;
+    }
+
+    state.selectedChannelGroupId = String(cloneGroup.id);
+    state.activePanel = "notes";
+    state.activeAudioClipId = null;
+    clearNoteSelection();
+    clearMidiSelection();
+    markDirty(i18nText("group.copy"));
+    renderChannelTabs();
+    renderChannelEditor();
+    renderAudioLane();
+    drawRoll();
+    updateChannelInfo();
+    requestAnimationFrame(() => {
+      const item = elements.channelTabs?.querySelector(`[data-channel-group-id="${CSS.escape(String(cloneGroup.id))}"]`);
+      item?.scrollIntoView({ block: "nearest" });
+      item?.querySelector(".channel-group-main")?.focus({ preventScroll: true });
+    });
+    showToast(`${source.name} → ${cloneGroup.name}`);
     return true;
   }
 
@@ -22165,15 +22286,25 @@
   let mmlExportSelectionQueue = [];
   let mmlExportCopyState = { mml: "", timelinePartScores: [] };
 
+  function getMmlExportChannelCheckboxes() {
+    if (!elements.mmlExportChannelList) return [];
+    return [...elements.mmlExportChannelList.querySelectorAll('input[data-mml-export-channel-id]')];
+  }
+
+  function getMmlExportGroupChannelCheckboxes(groupId) {
+    if (!elements.mmlExportChannelList || groupId == null) return [];
+    return [...elements.mmlExportChannelList.querySelectorAll(
+      `.mml-export-channel-row[data-channel-group-id="${CSS.escape(String(groupId))}"] input[data-mml-export-channel-id]`,
+    )];
+  }
+
   function getMmlExportSelectedChannels() {
     if (!elements.mmlExportChannelList) return [];
-    const checkedIds = new Set(
-      [...elements.mmlExportChannelList.querySelectorAll('input[type="checkbox"]:checked')]
-        .map((input) => String(input.value || "")),
-    );
+    const checkedInputs = getMmlExportChannelCheckboxes().filter((input) => input.checked);
+    const checkedIds = new Set(checkedInputs.map((input) => String(input.dataset.mmlExportChannelId || input.value || "")));
     mmlExportSelectionQueue = mmlExportSelectionQueue.filter((id) => checkedIds.has(String(id)));
-    for (const input of elements.mmlExportChannelList.querySelectorAll('input[type="checkbox"]:checked')) {
-      const id = String(input.value || "");
+    for (const input of checkedInputs) {
+      const id = String(input.dataset.mmlExportChannelId || input.value || "");
       if (!mmlExportSelectionQueue.includes(id)) mmlExportSelectionQueue.push(id);
     }
     const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
@@ -22461,6 +22592,22 @@
     }
   }
 
+  function syncMmlExportGroupSelectionIndicators() {
+    if (!elements.mmlExportChannelList) return;
+    elements.mmlExportChannelList.querySelectorAll('.mml-export-group-row').forEach((row) => {
+      const checkbox = row.querySelector('input[data-mml-export-group-id]');
+      if (!checkbox) return;
+      const groupId = checkbox.dataset.mmlExportGroupId;
+      const childCheckboxes = getMmlExportGroupChannelCheckboxes(groupId).filter((input) => !input.disabled);
+      const selectedCount = childCheckboxes.filter((input) => input.checked).length;
+      checkbox.disabled = childCheckboxes.length === 0;
+      checkbox.checked = childCheckboxes.length > 0 && selectedCount === childCheckboxes.length;
+      checkbox.indeterminate = selectedCount > 0 && selectedCount < childCheckboxes.length;
+      row.classList.toggle("selected", checkbox.checked);
+      row.classList.toggle("partial", checkbox.indeterminate);
+    });
+  }
+
   function syncMmlExportSelectionIndicators() {
     if (!elements.mmlExportChannelList) return;
     const selectedChannels = getMmlExportSelectedChannels();
@@ -22469,10 +22616,10 @@
     const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
     const orderById = new Map(mmlExportSelectionQueue.map((id, index) => [String(id), index + 1]));
     elements.mmlExportChannelList.querySelectorAll('.mml-export-channel-row').forEach((row) => {
-      const checkbox = row.querySelector('input[type="checkbox"]');
+      const checkbox = row.querySelector('input[data-mml-export-channel-id]');
       const order = row.querySelector('.mml-export-order');
       const detail = row.querySelector('.mml-export-channel-info small');
-      const id = String(checkbox?.value || "");
+      const id = String(checkbox?.dataset.mmlExportChannelId || checkbox?.value || "");
       const channel = channelById.get(id);
       const selectedOrder = checkbox?.checked ? orderById.get(id) : null;
       row.classList.toggle("selected", Boolean(selectedOrder));
@@ -22493,11 +22640,26 @@
           : "채널 단독 MML 기준 글자 수(템포 명령 제외)";
       }
     });
+    syncMmlExportGroupSelectionIndicators();
+  }
+
+  function setMmlExportGroupCheckboxChecked(checkbox, checked) {
+    if (!checkbox || checkbox.disabled) return;
+    const groupId = checkbox.dataset.mmlExportGroupId;
+    checkbox.checked = Boolean(checked);
+    checkbox.indeterminate = false;
+    for (const childCheckbox of getMmlExportGroupChannelCheckboxes(groupId)) {
+      if (!childCheckbox.disabled) setMmlExportCheckboxChecked(childCheckbox, checked);
+    }
   }
 
   function setMmlExportCheckboxChecked(checkbox, checked) {
     if (!checkbox || checkbox.disabled) return;
-    const id = String(checkbox.value || "");
+    if (checkbox.dataset.mmlExportGroupId != null) {
+      setMmlExportGroupCheckboxChecked(checkbox, checked);
+      return;
+    }
+    const id = String(checkbox.dataset.mmlExportChannelId || checkbox.value || "");
     checkbox.checked = Boolean(checked);
     mmlExportSelectionQueue = mmlExportSelectionQueue.filter((item) => String(item) !== id);
     if (checkbox.checked) mmlExportSelectionQueue.push(id);
@@ -22505,18 +22667,18 @@
 
   function syncMmlExportSelectionVisualOnly() {
     if (!elements.mmlExportChannelList) return;
-    const checkedInputs = [...elements.mmlExportChannelList.querySelectorAll('input[type="checkbox"]:checked')];
-    const checkedIds = new Set(checkedInputs.map((input) => String(input.value || "")));
+    const checkedInputs = getMmlExportChannelCheckboxes().filter((input) => input.checked);
+    const checkedIds = new Set(checkedInputs.map((input) => String(input.dataset.mmlExportChannelId || input.value || "")));
     mmlExportSelectionQueue = mmlExportSelectionQueue.filter((id) => checkedIds.has(String(id)));
     for (const input of checkedInputs) {
-      const id = String(input.value || "");
+      const id = String(input.dataset.mmlExportChannelId || input.value || "");
       if (!mmlExportSelectionQueue.includes(id)) mmlExportSelectionQueue.push(id);
     }
     const orderById = new Map(mmlExportSelectionQueue.map((id, index) => [String(id), index + 1]));
     elements.mmlExportChannelList.querySelectorAll('.mml-export-channel-row').forEach((row) => {
-      const checkbox = row.querySelector('input[type="checkbox"]');
+      const checkbox = row.querySelector('input[data-mml-export-channel-id]');
       const order = row.querySelector('.mml-export-order');
-      const id = String(checkbox?.value || "");
+      const id = String(checkbox?.dataset.mmlExportChannelId || checkbox?.value || "");
       const selectedOrder = checkbox?.checked ? orderById.get(id) : null;
       row.classList.toggle("selected", Boolean(selectedOrder));
       if (order) {
@@ -22525,6 +22687,7 @@
         order.setAttribute("aria-label", selectedOrder ? `내보내기 ${selectedOrder}번째` : "선택 순서");
       }
     });
+    syncMmlExportGroupSelectionIndicators();
     if (elements.mmlExportSummary) {
       const exportableCount = state.channels.filter((channel) => channel.notes?.length).length;
       elements.mmlExportSummary.textContent = checkedInputs.length
@@ -22551,10 +22714,56 @@
     if (!elements.mmlExportChannelList) return;
     elements.mmlExportChannelList.replaceChildren();
     mmlExportSelectionQueue = [];
-    state.channels.forEach((channel, index) => {
+
+    const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
+    const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
+    const renderedChannels = new Set();
+
+    const appendGroupRow = (group) => {
       const row = document.createElement("label");
-      row.className = "mml-export-channel-row";
+      row.className = "mml-export-group-row";
+      row.dataset.mmlExportGroupRow = String(group.id);
+      const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
+      row.style.setProperty("--group-color", getChannelGroupColor(group, groupIndex, "bright"));
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.dataset.mmlExportGroupId = String(group.id);
+      checkbox.checked = false;
+
+      const info = document.createElement("span");
+      info.className = "mml-export-group-info";
+      const titleLine = document.createElement("span");
+      titleLine.className = "mml-export-group-title";
+      const folder = document.createElement("span");
+      folder.className = "mml-export-group-folder";
+      folder.setAttribute("aria-hidden", "true");
+      folder.textContent = "📂";
+      const name = document.createElement("strong");
+      name.textContent = group.name;
+      titleLine.append(folder, name);
+      const members = getChannelGroupMembers(group);
+      const exportable = members.filter((channel) => channel.notes?.length).length;
+      const detail = document.createElement("small");
+      detail.textContent = exportable === members.length
+        ? `${members.length.toLocaleString()}개 채널 · 그룹 전체 선택`
+        : `${exportable.toLocaleString()}/${members.length.toLocaleString()}개 채널 · 그룹 전체 선택`;
+      info.append(titleLine, detail);
+
+      row.append(checkbox, info);
+      checkbox.disabled = exportable === 0;
+      checkbox.addEventListener("change", () => {
+        setMmlExportGroupCheckboxChecked(checkbox, checkbox.checked);
+        updateMmlExportDialogState();
+      });
+      elements.mmlExportChannelList.append(row);
+    };
+
+    const appendChannelRow = (channel, index, parentId = null) => {
+      const row = document.createElement("label");
+      row.className = `mml-export-channel-row${parentId != null ? " is-group-child" : ""}`;
       row.style.setProperty("--channel-color", getChannelColor(channel, index));
+      if (parentId != null) row.dataset.channelGroupId = String(parentId);
 
       const order = document.createElement("span");
       order.className = "mml-export-order";
@@ -22563,6 +22772,7 @@
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.value = String(channel.id);
+      checkbox.dataset.mmlExportChannelId = String(channel.id);
       checkbox.checked = false;
       checkbox.disabled = !channel.notes?.length;
 
@@ -22586,7 +22796,25 @@
         updateMmlExportDialogState();
       });
       elements.mmlExportChannelList.append(row);
-    });
+    };
+
+    for (const entry of getItemTreeLayout()) {
+      if (entry.kind === "group") {
+        const group = groupById.get(String(entry.id));
+        if (group) appendGroupRow(group);
+        continue;
+      }
+      if (entry.kind !== "channel") continue;
+      const found = channelById.get(String(entry.id));
+      if (!found) continue;
+      renderedChannels.add(String(entry.id));
+      appendChannelRow(found.channel, found.index, entry.parentId);
+    }
+    for (const [id, found] of channelById) {
+      if (renderedChannels.has(id)) continue;
+      appendChannelRow(found.channel, found.index, found.channel.groupId);
+    }
+
     installLeftDragCheckboxSelection(elements.mmlExportChannelList, {
       deferChange: true,
       onVisualChange: (checkbox) => {
@@ -28137,8 +28365,6 @@
 
     registerContextMenu("app", commonItems);
     registerContextMenu("piano-section", () => [
-      { label: i18nText("volume.edit_channels"), action: openChannelVolumeDialog },
-      "separator",
       {
         label: `${state.velocityLaneVisible !== false ? "✓ " : ""}${i18nText("volume.editor")}`,
         action: () => setVelocityLaneVisible(!state.velocityLaneVisible),
@@ -28431,7 +28657,7 @@
           danger: true,
           action: deleteSelectedNote,
         },
-        { label: i18nText("context.note.volume_short"), action: openNoteVolumeDialog },
+        { label: i18nText("volume.edit_channels"), action: openNoteVolumeDialog },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         {
           label: i18nText("context.note.convert"),
@@ -28655,6 +28881,7 @@
             { label: i18nText("channel.merge"), disabled: state.channels.length < 2, disabledReason: i18nText("context.disabled_no_other_channel"), action: () => enterChannelMergeMode(channel.id) },
             { label: i18nText("context.info_edit"), action: () => openChannelEditDialog(channel.id) },
             { label: i18nText("channel.copy"), action: () => duplicateChannelById(channel.id) },
+            { label: i18nText("volume.edit_channels"), disabled: !channel.notes.length, disabledReason: i18nText("context.disabled_no_notes"), action: () => openChannelVolumeDialog({ channelId: channel.id, source: "channel" }) },
             { label: i18nText("context.action.note_copy"), disabled: !channel.notes.length, disabledReason: i18nText("context.disabled_no_notes"), action: () => { selectChannel(index); copyActiveChannelNotes(); } },
             { label: i18nText("context.action.note_cut"), disabled: !channel.notes.length, disabledReason: i18nText("context.disabled_no_notes"), action: () => { selectChannel(index); cutActiveChannelNotes(); } },
           ],
@@ -28674,6 +28901,8 @@
         {
           label: i18nText("menu.edit"),
           items: [
+            { label: i18nText("group.copy"), action: () => duplicateChannelGroupById(group.id) },
+            { label: i18nText("volume.edit_channels"), disabled: !getChannelGroupMembers(group).some((channel) => channel.notes?.length), disabledReason: i18nText("context.disabled_no_notes"), action: () => openChannelVolumeDialog({ groupId: group.id, source: "group" }) },
             { label: i18nText("channel.add"), action: () => addChannelToGroup(group.id) },
             { label: i18nText("audio.add"), action: () => openAudioImportPicker(group.id) },
             { label: i18nText("context.info_edit"), action: () => openChannelGroupDialog(group.id) },
@@ -29461,6 +29690,7 @@
     elements.editPasteButton.addEventListener("click", () => { closeEditMenu(); pasteNotesFromClipboard(); });
     elements.editSelectAllButton.addEventListener("click", () => { closeEditMenu(); selectAllCurrentContext(); });
     elements.editDeleteButton.addEventListener("click", () => { closeEditMenu(); deleteCurrentSelection(); });
+    elements.editMeasureButton?.addEventListener("click", () => { closeEditMenu(); openMeasureEditWorkspace({ beat: state.playhead.beat, scopeType: "all" }); });
     elements.editRestCleanupButton?.addEventListener("click", () => { closeEditMenu(); openRestCleanupDialog(); });
     elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openChannelVolumeDialog(); });
     elements.editAutoPartButton?.addEventListener("click", () => { closeEditMenu(); openAutoPartDialog(); });
@@ -29549,6 +29779,7 @@
     elements.mmlExportClearAllButton?.addEventListener("click", () => {
       elements.mmlExportChannelList?.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
         checkbox.checked = false;
+        checkbox.indeterminate = false;
       });
       mmlExportSelectionQueue = [];
       updateMmlExportDialogState();
@@ -30143,17 +30374,6 @@
     elements.midiTransferClearAllButton?.addEventListener("click", () => setAllMidiTransferGroupsChecked(false));
     elements.midiTransferBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.midiTransferBackdrop) closeMidiTransferDialog();
-    });
-    elements.noteVolumeCloseButton?.addEventListener("click", closeNoteVolumeDialog);
-    elements.noteVolumeCancelButton?.addEventListener("click", closeNoteVolumeDialog);
-    elements.noteVolumeApplyButton?.addEventListener("click", applySelectedNoteVolume);
-    elements.noteVolumeFixedMode?.addEventListener("change", () => configureNoteVolumeSliderForMode(true));
-    elements.noteVolumeSlider?.addEventListener("input", () => {
-      updateNoteVolumeDialogControl();
-      updateNoteVolumeDialogCounts();
-    });
-    elements.noteVolumeBackdrop?.addEventListener("pointerdown", (event) => {
-      if (event.target === elements.noteVolumeBackdrop) closeNoteVolumeDialog();
     });
     elements.channelVolumeCloseButton?.addEventListener("click", closeChannelVolumeDialog);
     elements.channelVolumeCancelButton?.addEventListener("click", closeChannelVolumeDialog);

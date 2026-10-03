@@ -848,6 +848,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "history.redo": "다시적용",
     "action.cut": "잘라내기",
     "channel.copy": "채널 복사",
+    "group.copy": "그룹 복사",
     "common.none": "없음",
     "selection.all_select": "모두 선택",
     "ui.export": "내보내기",
