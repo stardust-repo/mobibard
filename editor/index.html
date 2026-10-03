@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20261003-timeline-part-wide-edit-v1" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20261004-tutorial-rich-v11" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -156,6 +156,8 @@
 </div>
 </div>
 </div>
+<button class="topbar-help-button" id="tutorialButton" type="button" title="MML 제작 최소 튜토리얼">튜토리얼</button>
+<a class="topbar-help-button topbar-survey-button" id="betaSurveyButton" href="https://forms.gle/z6tte6gSDeKno2WJ6" target="_blank" rel="noopener noreferrer" title="Beta 이용자 설문을 새 탭에서 엽니다">Beta 설문</a>
 </div>
 <div class="toolbar-spacer"></div>
 <div class="toolbar-group view-actions">
@@ -666,6 +668,36 @@
 </section>
 </div>
 
+<div class="popup-backdrop" hidden id="tutorialBackdrop">
+<section class="tutorial-dialog" id="tutorialDialog" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle">
+  <div class="tutorial-header">
+    <div>
+      <strong id="tutorialTitle">MML 에디터 빠른 시작</strong>
+      <span id="tutorialStepLabel">1 / 7</span>
+    </div>
+    <button aria-label="닫기" class="channel-mute-close" id="tutorialCloseButton" type="button">×</button>
+  </div>
+  <div class="tutorial-progress" aria-hidden="true"><span id="tutorialProgressBar"></span></div>
+  <div class="tutorial-body">
+    <figure class="tutorial-capture" id="tutorialCapture">
+      <img id="tutorialStepImage" alt="" decoding="async"/>
+      <figcaption id="tutorialStepCaption"></figcaption>
+    </figure>
+    <div class="tutorial-copy">
+      <h3 id="tutorialStepTitle"></h3>
+      <p id="tutorialStepText"></p>
+      <ul class="tutorial-points" id="tutorialStepPoints"></ul>
+      <div class="tutorial-tip" id="tutorialStepTip"></div>
+    </div>
+  </div>
+  <div class="tutorial-actions">
+    <button id="tutorialPrevButton" type="button">이전</button>
+    <div class="tutorial-dots" id="tutorialDots" aria-label="튜토리얼 단계"></div>
+    <button id="tutorialNextButton" type="button">다음</button>
+  </div>
+</section>
+</div>
+
 <dialog class="confirm-dialog" id="confirmDialog">
 <form method="dialog">
 <h2 id="confirmDialogTitle" data-i18n="ui.ok">확인</h2>
@@ -732,7 +764,7 @@
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
-<script src="app.js?v=5.3.0&amp;rev=20261003-timeline-part-wide-edit-v1"></script>
+<script src="app.js?v=5.3.0&amp;rev=20261004-tutorial-captures-v13"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260928-account-preference1" type="module"></script>
 </body>
 </html>

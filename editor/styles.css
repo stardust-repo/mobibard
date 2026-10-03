@@ -13877,3 +13877,106 @@ body.measure-edit-mode-active .measure-edit-mode-tabs {
     max-height: calc(100dvh - 14px) !important;
   }
 }
+
+
+/* 2026-10 temporary MML tutorial + Beta survey entry points */
+.topbar-help-button {
+  --help-accent: #2563eb;
+  --help-bg: #dbeafe;
+  --help-fg: #123d72;
+  flex: 0 0 auto;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--help-accent);
+  border-radius: 7px;
+  background: var(--help-bg);
+  color: var(--help-fg);
+  box-shadow: inset 0 1px rgba(255,255,255,.48), 0 1px 2px rgba(15,23,42,.12);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease, background .16s ease;
+}
+.topbar-help-button:hover { filter: brightness(1.06) saturate(1.08); transform: translateY(-1px); }
+.topbar-help-button:focus-visible { outline: 2px solid var(--help-accent); outline-offset: 2px; }
+.topbar-survey-button { --help-accent: #d97706; --help-bg: #ffedd5; --help-fg: #713b00; }
+html[data-theme="dark"] .topbar-help-button { --help-accent: #60a5fa; --help-bg: #17365d; --help-fg: #eff6ff; box-shadow: inset 0 1px rgba(255,255,255,.08), 0 1px 4px rgba(0,0,0,.32); }
+html[data-theme="dark"] .topbar-survey-button { --help-accent: #fbbf24; --help-bg: #51300b; --help-fg: #fff7df; }
+.topbar-help-button.attention-pulse { animation: topbar-help-attention 1.05s ease-out 1; }
+@keyframes topbar-help-attention {
+  0%, 100% { transform: translateY(0) scale(1); box-shadow: 0 1px 2px rgba(15,23,42,.12); }
+  28% { transform: translateY(-2px) scale(1.035); box-shadow: 0 0 0 3px color-mix(in srgb, var(--help-accent) 24%, transparent), 0 5px 14px color-mix(in srgb, var(--help-accent) 30%, transparent); }
+  52% { transform: translateY(0) scale(1); }
+  72% { transform: translateY(-1px) scale(1.018); box-shadow: 0 0 0 2px color-mix(in srgb, var(--help-accent) 18%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .topbar-help-button { transition: none; }
+  .topbar-help-button.attention-pulse { animation: none; }
+}
+
+.tutorial-dialog {
+  width: min(820px, 100%);
+  min-height: 560px;
+  max-height: min(760px, 92vh);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 14px;
+  background: var(--panel-2);
+  box-shadow: 0 22px 60px rgba(0,0,0,.42);
+}
+.tutorial-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 10px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.tutorial-header > div { min-width: 0; display: flex; align-items: baseline; gap: 9px; }
+.tutorial-header strong { font-size: 17px; }
+.tutorial-header span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tutorial-progress { height: 3px; background: color-mix(in srgb, var(--line) 82%, transparent); overflow: hidden; }
+.tutorial-progress > span { display: block; width: 14.285%; height: 100%; background: var(--accent); transition: width .18s ease; }
+.tutorial-body { min-height: 0; overflow: auto; padding: 20px 24px 22px; }
+.tutorial-capture { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); box-shadow: 0 5px 18px rgba(0,0,0,.12); }
+.tutorial-capture img { display: block; width: 100%; aspect-ratio: 16 / 7; object-fit: cover; object-position: center; background: var(--panel); }
+.tutorial-capture figcaption { padding: 8px 11px; border-top: 1px solid var(--line); color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent); font-size: 11px; line-height: 1.45; }
+.tutorial-copy { padding: 0 6px; }
+.tutorial-body h3 { margin: 0 0 10px; font-size: 21px; line-height: 1.3; }
+.tutorial-body p { margin: 0; color: var(--text); font-size: 13px; line-height: 1.68; white-space: pre-line; }
+.tutorial-points { margin: 12px 0 0; padding: 0 0 0 19px; display: grid; gap: 6px; color: var(--text); font-size: 12px; line-height: 1.55; }
+.tutorial-points li::marker { color: var(--accent); }
+.tutorial-tip { margin-top: 14px; padding: 10px 12px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+.tutorial-actions { display: grid; grid-template-columns: 84px minmax(0,1fr) 84px; align-items: center; gap: 12px; padding: 12px 16px 16px; border-top: 1px solid var(--line); }
+.tutorial-actions > button { min-height: 36px; }
+#tutorialNextButton { border-color: color-mix(in srgb, var(--accent) 78%, var(--control-border)); background: color-mix(in srgb, var(--accent) 72%, var(--control-bg)); color: #fff; font-weight: 800; }
+#tutorialNextButton:hover { background: color-mix(in srgb, var(--accent) 88%, var(--control-bg)); }
+.tutorial-dots { min-width: 0; display: flex; justify-content: center; gap: 6px; }
+.tutorial-dot { width: 7px; height: 7px; padding: 0; min-height: 0; border: 0; border-radius: 999px; background: var(--line); cursor: pointer; }
+.tutorial-dot.active { width: 20px; background: var(--accent); }
+
+@media (max-width: 900px) {
+  .topbar-help-button { min-height: 30px; height: 30px; padding-inline: 7px; font-size: 10px; }
+  .tutorial-dialog { width: min(720px, 100%); min-height: min(560px, 90vh); }
+}
+@media (max-width: 620px) {
+  .tutorial-dialog { min-height: min(590px, 94vh); max-height: 94vh; }
+  .tutorial-body { padding: 15px 14px 16px; }
+  .tutorial-capture { margin-bottom: 14px; }
+  .tutorial-capture img { aspect-ratio: 16 / 8.5; }
+  .tutorial-copy { padding-inline: 2px; }
+  .tutorial-body h3 { font-size: 18px; }
+  .tutorial-actions { grid-template-columns: 72px minmax(0,1fr) 72px; padding-inline: 12px; }
+}
+
