@@ -7851,9 +7851,6 @@ body.merge-mode-active .channel-tree-channel-item .channel-tree-actions,
 body.merge-mode-active .channel-tree-toolbar,
 body.merge-mode-active .side-panel-tabs,
 body.merge-mode-active #channelInstrumentSelect,
-body.merge-mode-active .top-menu button:not(#playButton),
-body.merge-mode-active .app-toolbar button:not(#playButton),
-body.merge-mode-active #editToolControls,
 body.merge-mode-active #tempoLane,
 body.merge-mode-active #audioLaneViewport {
   pointer-events: none !important;
@@ -13980,3 +13977,354 @@ html[data-theme="dark"] .topbar-survey-button { --help-accent: #fbbf24; --help-b
   .tutorial-actions { grid-template-columns: 72px minmax(0,1fr) 72px; padding-inline: 12px; }
 }
 
+
+/* 2026-10-06: shared multi-channel selection for measure edit, auto-part and rest cleanup. */
+.inline-channel-select-toolbar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 2px 0;
+}
+.inline-channel-select-toolbar > strong {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+}
+.inline-channel-select-toolbar > button {
+  min-height: 27px;
+  padding: 3px 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 850;
+}
+.inline-channel-select-toolbar > button:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--control-bg));
+}
+.inline-channel-select-list {
+  flex: 1 1 auto;
+  min-height: 88px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 1px 5px;
+  scrollbar-width: thin;
+}
+.inline-channel-group-row {
+  --group-color: var(--accent);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 22px 19px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--group-color) 52%, var(--control-border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--group-color) 13%, var(--control-bg));
+  color: var(--text);
+  cursor: pointer;
+}
+.inline-channel-group-row:hover {
+  background: color-mix(in srgb, var(--group-color) 19%, var(--control-bg));
+}
+.inline-channel-group-row input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--group-color);
+}
+.inline-channel-group-folder { font-size: 13px; line-height: 1; }
+.inline-channel-group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 900;
+}
+.inline-channel-group-count {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+.inline-channel-select-row {
+  --channel-color: var(--accent);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: 23px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--channel-color) 62%, var(--control-border));
+  border-left-width: 4px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--channel-color) 14%, var(--control-bg));
+  color: var(--text);
+  cursor: pointer;
+}
+.inline-channel-select-row.is-group-child {
+  width: calc(100% - 18px);
+  margin-left: 18px;
+}
+.inline-channel-select-row:hover {
+  background: color-mix(in srgb, var(--channel-color) 22%, var(--control-bg));
+}
+.inline-channel-select-row:has(input:checked) {
+  background: color-mix(in srgb, var(--channel-color) 28%, var(--control-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--channel-color) 42%, transparent);
+}
+.inline-channel-select-row:has(input:disabled) {
+  opacity: .48;
+  cursor: default;
+}
+.inline-channel-select-row input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--channel-color);
+}
+.inline-channel-info {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.inline-channel-info strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 900;
+}
+.inline-channel-info small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 750;
+}
+
+/* Auto-part: keep the options compact and spend the remaining height on channel selection. */
+#autoPartChannelList { min-height: 120px; }
+.auto-part-inline-panel .inline-channel-select-toolbar { margin-top: 1px; }
+
+/* Measure edit: the old single All/Group/Channel radio list is now a checkbox list. */
+.measure-edit-channel-toolbar { margin-top: 4px; }
+.measure-edit-scope-list.inline-channel-select-list {
+  min-height: 100px;
+  margin-top: 0;
+  padding: 2px 1px 4px;
+}
+
+/* Rest cleanup now uses the same inline workspace pattern as part/measure editing. */
+#channelPanel.rest-cleanup-preview-active {
+  grid-template-rows: minmax(0, 1fr) !important;
+}
+#channelPanel.rest-cleanup-preview-active > :not(#restCleanupPanel) {
+  display: none !important;
+}
+.rest-cleanup-inline-panel {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 12px 12px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.rest-cleanup-inline-panel[hidden] { display: none !important; }
+.rest-cleanup-inline-header {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 3px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.rest-cleanup-inline-header strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+.rest-cleanup-inline-header span,
+.rest-cleanup-inline-help {
+  color: var(--muted);
+  font-size: 9.5px;
+  line-height: 1.4;
+}
+.rest-cleanup-inline-section {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 6px;
+}
+.rest-cleanup-inline-section > strong {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+}
+.rest-cleanup-inline-panel .rest-cleanup-thresholds {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.rest-cleanup-inline-panel .rest-cleanup-segments button {
+  min-height: 30px;
+  padding: 3px 4px;
+  font-size: 9.5px;
+}
+.rest-cleanup-inline-preview {
+  flex: 0 0 auto;
+  min-height: 18px;
+  margin: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--control-bg));
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.rest-cleanup-inline-panel .rest-cleanup-channel-list {
+  flex: 1 1 auto;
+  min-height: 90px;
+  max-height: none;
+  padding: 2px 1px 4px;
+}
+.rest-cleanup-inline-help { flex: 0 0 auto; }
+.rest-cleanup-inline-actions {
+  flex: 0 0 auto;
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 3px;
+}
+.rest-cleanup-inline-actions button {
+  min-height: 35px;
+  font-weight: 850;
+}
+#restCleanupApplyButton:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 20%, var(--control-bg));
+}
+
+@media (max-width: 760px) {
+  .inline-channel-select-toolbar {
+    grid-template-columns: minmax(0, 1fr) max-content max-content;
+  }
+  .inline-channel-select-toolbar > span { display: none; }
+  .inline-channel-select-toolbar > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* 2026-10-06 v20: merge workspace topbar locking is governed only by
+   syncWorkspaceTopbarLocks(). Keep every other topbar control interactive. */
+body.merge-mode-active .editor-topbar,
+body.merge-mode-active .editor-topbar .app-toolbar,
+body.merge-mode-active .editor-topbar #editToolControls {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+body.merge-mode-active .editor-topbar button,
+body.merge-mode-active .editor-topbar input,
+body.merge-mode-active .editor-topbar select,
+body.merge-mode-active .editor-topbar textarea {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+body.merge-mode-active .editor-topbar button:disabled,
+body.merge-mode-active .editor-topbar input:disabled,
+body.merge-mode-active .editor-topbar select:disabled,
+body.merge-mode-active .editor-topbar textarea:disabled {
+  pointer-events: none !important;
+  opacity: .45 !important;
+}
+
+/* Account menu controls use the same compact width as the theme button. */
+.theme-menu .options-language-field select,
+.theme-menu .options-recommended-field select {
+  box-sizing: border-box;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+  height: 36px;
+  justify-self: end;
+}
+
+
+/* 2026-10-06 v21: one shared topbar-lock visual/interaction contract for
+   merge, measure edit, rest cleanup and auto-part. Native disabled state is
+   the single source of truth: File/Edit/Settings/Note/Select are dimmed;
+   every other topbar control remains interactive. */
+body.workspace-topbar-locked .editor-topbar,
+body.workspace-topbar-locked .editor-topbar .toolbar-group,
+body.workspace-topbar-locked .editor-topbar .playback-compact-box,
+body.workspace-topbar-locked .editor-topbar .edit-tool-control {
+  pointer-events: auto !important;
+}
+body.workspace-topbar-locked .editor-topbar button,
+body.workspace-topbar-locked .editor-topbar input,
+body.workspace-topbar-locked .editor-topbar select,
+body.workspace-topbar-locked .editor-topbar textarea,
+body.workspace-topbar-locked .editor-topbar a {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+body.workspace-topbar-locked .editor-topbar button:disabled,
+body.workspace-topbar-locked .editor-topbar input:disabled,
+body.workspace-topbar-locked .editor-topbar select:disabled,
+body.workspace-topbar-locked .editor-topbar textarea:disabled {
+  pointer-events: none !important;
+  opacity: .45 !important;
+}
+
+/* Measure edit is the only shared workspace that locks playback. Treat the
+   transport/time/volume/rate container as one disabled box so the time label
+   cannot look active while its neighboring controls are disabled. */
+body.workspace-playback-locked .playback-compact-box {
+  pointer-events: none !important;
+  opacity: .42 !important;
+  filter: grayscale(.18);
+}
+body.workspace-playback-locked .playback-compact-box * {
+  pointer-events: none !important;
+}
+
+
+/* 2026-10-06 v22: tutorial modal is always interactive, even while a workspace
+   transaction (including legacy merge mode styling) is active. */
+body.merge-mode-active #tutorialBackdrop,
+body.merge-mode-active #tutorialBackdrop .tutorial-dialog,
+body.merge-mode-active #tutorialBackdrop button,
+body.merge-mode-active #tutorialBackdrop input,
+body.merge-mode-active #tutorialBackdrop select,
+body.merge-mode-active #tutorialBackdrop textarea,
+body.merge-mode-active #tutorialBackdrop a,
+body.workspace-topbar-locked #tutorialBackdrop,
+body.workspace-topbar-locked #tutorialBackdrop .tutorial-dialog,
+body.workspace-topbar-locked #tutorialBackdrop button,
+body.workspace-topbar-locked #tutorialBackdrop input,
+body.workspace-topbar-locked #tutorialBackdrop select,
+body.workspace-topbar-locked #tutorialBackdrop textarea,
+body.workspace-topbar-locked #tutorialBackdrop a {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  filter: none !important;
+}

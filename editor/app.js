@@ -672,8 +672,7 @@
     channelVolumeSlider: document.querySelector("#channelVolumeSlider"),
     channelVolumeValue: document.querySelector("#channelVolumeValue"),
     channelVolumeComparison: document.querySelector("#channelVolumeComparison"),
-    restCleanupBackdrop: document.querySelector("#restCleanupBackdrop"),
-    restCleanupCloseButton: document.querySelector("#restCleanupCloseButton"),
+    restCleanupPanel: document.querySelector("#restCleanupPanel"),
     restCleanupCancelButton: document.querySelector("#restCleanupCancelButton"),
     restCleanupApplyButton: document.querySelector("#restCleanupApplyButton"),
     restCleanupSelectAllButton: document.querySelector("#restCleanupSelectAllButton"),
@@ -752,6 +751,9 @@
     autoPartCharsInput: document.querySelector("#autoPartCharsInput"),
     autoPartSearchRangeInput: document.querySelector("#autoPartSearchRangeInput"),
     autoPartSummary: document.querySelector("#autoPartSummary"),
+    autoPartSelectAllButton: document.querySelector("#autoPartSelectAllButton"),
+    autoPartClearAllButton: document.querySelector("#autoPartClearAllButton"),
+    autoPartChannelList: document.querySelector("#autoPartChannelList"),
     measureEditPanel: document.querySelector("#measureEditPanel"),
     measureEditModeTabs: document.querySelector("#measureEditModeTabs"),
     measureEditAddOptions: document.querySelector("#measureEditAddOptions"),
@@ -762,6 +764,8 @@
     measureEditDuplicateCountInput: document.querySelector("#measureEditDuplicateCountInput"),
     measureEditRangeSummary: document.querySelector("#measureEditRangeSummary"),
     measureEditScopeList: document.querySelector("#measureEditScopeList"),
+    measureEditSelectAllButton: document.querySelector("#measureEditSelectAllButton"),
+    measureEditClearAllButton: document.querySelector("#measureEditClearAllButton"),
     measureEditSummary: document.querySelector("#measureEditSummary"),
     measureEditPosition: document.querySelector("#measureEditPosition"),
     measureEditCancelButton: document.querySelector("#measureEditCancelButton"),
@@ -889,8 +893,8 @@
     nextTimelinePartId: 1,
     playbackRange: { startBeat: null, endBeat: null },
     playbackLoopEnabled: false,
-    autoPart: { targetChars: 2400, searchRangePercent: 50, plan: null, active: false, restoreSidebarTab: null, restoreSidebarCollapsed: false },
-    measureEdit: { active: false, mode: "add", beat: 0, rangeStartBeat: null, rangeEndBeat: null, measures: 1, subdivisions: 0, duplicateCount: 1, scopeType: "all", scopeId: null, selecting: false, pointerId: null, restoreSidebarTab: null, restoreSidebarCollapsed: false, restoreActivePanel: null, restoreActiveChannelId: null, restoreGroupId: null, restoreAudioId: null },
+    autoPart: { targetChars: 2400, searchRangePercent: 50, plan: null, active: false, selectedChannelIds: new Set(), restoreSidebarTab: null, restoreSidebarCollapsed: false },
+    measureEdit: { active: false, mode: "add", beat: 0, rangeStartBeat: null, rangeEndBeat: null, measures: 1, subdivisions: 0, duplicateCount: 1, selectedChannelIds: new Set(), scopeType: "all", scopeId: null, selecting: false, pointerId: null, restoreSidebarTab: null, restoreSidebarCollapsed: false, restoreActivePanel: null, restoreActiveChannelId: null, restoreGroupId: null, restoreAudioId: null },
     timeSignatureEditor: { timeSignatureId: null, beat: 0 },
     interaction: null,
     tempoDrag: null,
@@ -1088,7 +1092,7 @@
     velocityLaneRenderItems: [],
     velocityLaneDrawRaf: 0,
     velocityLaneWheelInteraction: null,
-    restCleanup: { mode: "32" },
+    restCleanup: { mode: "32", active: false, selectedChannelIds: new Set(), previewChanges: [], restoreSidebarTab: null, restoreSidebarCollapsed: false },
     playbackRate: 1,
     rollSurface: {
       originX: 0,
@@ -1970,8 +1974,134 @@
     return true;
   }
 
+  function getInlineSelectableChannels({ notesOnly = true } = {}) {
+    return state.channels.filter((channel) => !notesOnly || (Array.isArray(channel?.notes) && channel.notes.length));
+  }
+
+  function setInlineChannelSelectionAll(selectedIds, checked, { notesOnly = true } = {}) {
+    if (!(selectedIds instanceof Set)) return;
+    selectedIds.clear();
+    if (checked) {
+      for (const channel of getInlineSelectableChannels({ notesOnly })) selectedIds.add(String(channel.id));
+    }
+  }
+
+  function syncInlineChannelSelectionGroups(host) {
+    if (!host) return;
+    host.querySelectorAll('input.inline-channel-group-checkbox[type="checkbox"]').forEach((groupCheckbox) => {
+      const gid = String(groupCheckbox.dataset.inlineGroupId ?? "");
+      const members = [...host.querySelectorAll('input.inline-channel-checkbox[type="checkbox"]')]
+        .filter((input) => String(input.dataset.inlineGroupId ?? "") === gid && !input.disabled);
+      const checkedCount = members.filter((input) => input.checked).length;
+      groupCheckbox.disabled = members.length === 0;
+      groupCheckbox.checked = members.length > 0 && checkedCount === members.length;
+      groupCheckbox.indeterminate = checkedCount > 0 && checkedCount < members.length;
+      const count = groupCheckbox.closest('.inline-channel-group-row')?.querySelector('.inline-channel-group-count');
+      if (count) count.textContent = `${checkedCount}/${members.length}`;
+    });
+  }
+
+  function renderInlineChannelSelectionList(host, selectedIds, {
+    notesOnly = true,
+    onChange = null,
+    detailForChannel = null,
+  } = {}) {
+    if (!host || !(selectedIds instanceof Set)) return false;
+    host.replaceChildren();
+    const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
+    const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
+    const rendered = new Set();
+
+    const appendGroupRow = (group) => {
+      const row = document.createElement('label');
+      row.className = 'inline-channel-group-row';
+      const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
+      row.style.setProperty('--group-color', getChannelGroupColor(group, groupIndex, 'bright'));
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'inline-channel-group-checkbox';
+      checkbox.dataset.inlineGroupId = String(group.id);
+      const folder = document.createElement('span');
+      folder.className = 'inline-channel-group-folder';
+      folder.setAttribute('aria-hidden', 'true');
+      folder.textContent = '📂';
+      const name = document.createElement('strong');
+      name.className = 'inline-channel-group-name';
+      name.textContent = group.name || i18nText('group.label');
+      const count = document.createElement('small');
+      count.className = 'inline-channel-group-count';
+      row.append(checkbox, folder, name, count);
+      checkbox.addEventListener('change', () => {
+        const members = getChannelGroupMembers(group).filter((channel) => !notesOnly || channel.notes?.length);
+        for (const channel of members) {
+          if (checkbox.checked) selectedIds.add(String(channel.id));
+          else selectedIds.delete(String(channel.id));
+        }
+        host.querySelectorAll('input.inline-channel-checkbox[type="checkbox"]').forEach((input) => {
+          if (String(input.dataset.inlineGroupId ?? '') === String(group.id) && !input.disabled) {
+            input.checked = checkbox.checked;
+          }
+        });
+        syncInlineChannelSelectionGroups(host);
+        onChange?.();
+      });
+      host.append(row);
+    };
+
+    const appendChannelRow = (channel, index, parentId = null) => {
+      const row = document.createElement('label');
+      row.className = `inline-channel-select-row${parentId != null ? ' is-group-child' : ''}`;
+      row.style.setProperty('--channel-color', getChannelColor(channel, index));
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'inline-channel-checkbox';
+      checkbox.value = String(channel.id);
+      checkbox.dataset.inlineGroupId = parentId == null ? '' : String(parentId);
+      const eligible = !notesOnly || Boolean(channel.notes?.length);
+      checkbox.disabled = !eligible;
+      checkbox.checked = eligible && selectedIds.has(String(channel.id));
+      const info = document.createElement('span');
+      info.className = 'inline-channel-info';
+      const name = document.createElement('strong');
+      name.textContent = channel.name || `Ch${index + 1}`;
+      const detail = document.createElement('small');
+      detail.dataset.inlineChannelDetailFor = String(channel.id);
+      if (typeof detailForChannel === 'function') detail.textContent = String(detailForChannel(channel) ?? '');
+      else detail.textContent = channel.notes?.length ? `${channel.notes.length.toLocaleString()}개 노트` : '빈 채널';
+      info.append(name, detail);
+      row.append(checkbox, info);
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) selectedIds.add(String(channel.id));
+        else selectedIds.delete(String(channel.id));
+        syncInlineChannelSelectionGroups(host);
+        onChange?.();
+      });
+      host.append(row);
+    };
+
+    for (const entry of getItemTreeLayout()) {
+      if (entry.kind === 'group') {
+        const group = groupById.get(String(entry.id));
+        if (group) appendGroupRow(group);
+        continue;
+      }
+      if (entry.kind !== 'channel') continue;
+      const found = channelById.get(String(entry.id));
+      if (!found) continue;
+      rendered.add(String(entry.id));
+      appendChannelRow(found.channel, found.index, entry.parentId);
+    }
+    for (const [id, found] of channelById) {
+      if (rendered.has(id)) continue;
+      appendChannelRow(found.channel, found.index, found.channel.groupId);
+    }
+    syncInlineChannelSelectionGroups(host);
+    return true;
+  }
+
   function getAutoPartChannels() {
-    return state.channels.filter((channel) => Array.isArray(channel?.notes) && channel.notes.length);
+    const selectedIds = state.autoPart?.selectedChannelIds instanceof Set ? state.autoPart.selectedChannelIds : new Set();
+    return state.channels.filter((channel) => selectedIds.has(String(channel.id)) && Array.isArray(channel?.notes) && channel.notes.length);
   }
 
   function getAutoPartCandidateCrossingCount(channels, beat) {
@@ -2018,15 +2148,20 @@
     return result;
   }
 
+  function getAutoPartSelectionKey(channels = getAutoPartChannels()) {
+    return channels.map((channel) => String(channel.id)).sort().join(",");
+  }
+
   function computeAutoPartPlan(targetChars = 2400, searchRangePercent = 50) {
     const channels = getAutoPartChannels();
+    const channelKey = getAutoPartSelectionKey(channels);
     const parsedTarget = Number(targetChars);
     const target = clamp(Math.round(Number.isFinite(parsedTarget) ? parsedTarget : 2400), 200, 1000000);
     const parsedRange = Number(searchRangePercent);
     const rangePercent = clamp(Number.isFinite(parsedRange) ? parsedRange : 50, 0, 100);
     const totalEndBeat = getMmlExportEndBeat(channels);
     if (!channels.length || !(totalEndBeat > CONFIG.minimumNoteBeat)) {
-      return { targetChars: target, searchRangePercent: rangePercent, partCount: 1, boundaries: [], totalEndBeat, maxChars: 0 };
+      return { targetChars: target, searchRangePercent: rangePercent, channelKey, partCount: 1, boundaries: [], totalEndBeat, maxChars: 0 };
     }
 
     const tempos = getSortedTempos();
@@ -2034,7 +2169,7 @@
     const cache = new Map();
     const fullStats = renderAutoPartRangeStats(channels, 0, totalEndBeat, tempos, cache);
     if (fullStats.maxChars <= target || candidates.length < 3) {
-      return { targetChars: target, searchRangePercent: rangePercent, partCount: 1, boundaries: [], totalEndBeat, maxChars: fullStats.maxChars };
+      return { targetChars: target, searchRangePercent: rangePercent, channelKey, partCount: 1, boundaries: [], totalEndBeat, maxChars: fullStats.maxChars };
     }
 
     const boundaries = [];
@@ -2099,6 +2234,7 @@
     return {
       targetChars: target,
       searchRangePercent: rangePercent,
+      channelKey,
       partCount: Math.max(1, boundaries.length + 1),
       boundaries,
       totalEndBeat,
@@ -2144,6 +2280,45 @@
     return true;
   }
 
+  function isWorkspaceTopbarInteractionTarget(target) {
+    return Boolean(target instanceof Element && target.closest(".editor-topbar"));
+  }
+
+  function isTutorialInteractionTarget(target) {
+    return Boolean(target instanceof Node && elements.tutorialBackdrop?.contains(target));
+  }
+
+  function isRestCleanupPanelTarget(target) {
+    return Boolean(target instanceof Node && elements.restCleanupPanel?.contains(target));
+  }
+
+  function guardRestCleanupPreviewPointerInteraction(event) {
+    if (
+      !isRestCleanupWorkspaceActive()
+      || isRestCleanupPanelTarget(event.target)
+      || isWorkspaceTopbarInteractionTarget(event.target)
+      || isTutorialInteractionTarget(event.target)
+      || isAutoPartPreviewScrollTarget(event.target)
+      || isAutoPartPreviewOverviewNavigation(event)
+    ) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  function guardRestCleanupPreviewKeyboardInteraction(event) {
+    if (!isRestCleanupWorkspaceActive()) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeRestCleanupDialog();
+      return;
+    }
+    if (isRestCleanupPanelTarget(event.target) || isWorkspaceTopbarInteractionTarget(event.target) || isTutorialInteractionTarget(event.target)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    elements.restCleanupPanel?.querySelector('button:not(:disabled), input:not(:disabled)')?.focus?.({ preventScroll: true });
+  }
+
   function focusAutoPartPanelControl() {
     const panel = elements.autoPartPanel;
     if (!panel || panel.hidden) return;
@@ -2158,6 +2333,8 @@
     if (
       !isAutoPartPreviewActive()
       || isAutoPartPanelTarget(event.target)
+      || isWorkspaceTopbarInteractionTarget(event.target)
+      || isTutorialInteractionTarget(event.target)
       || isAutoPartPreviewScrollTarget(event.target)
       || isAutoPartPreviewOverviewNavigation(event)
     ) return;
@@ -2173,6 +2350,7 @@
       closeAutoPartDialog();
       return;
     }
+    if (isWorkspaceTopbarInteractionTarget(event.target) || isTutorialInteractionTarget(event.target)) return;
     if (isAutoPartPanelTarget(event.target)) {
       // Keep keyboard focus inside the transaction panel.
       if (event.key === 'Tab') {
@@ -2206,6 +2384,21 @@
     drawTimeline();
     invalidateOverviewTimelineActivity();
     drawOverviewTimeline();
+  }
+
+  function renderAutoPartChannelSelection() {
+    if (!(state.autoPart.selectedChannelIds instanceof Set)) state.autoPart.selectedChannelIds = new Set();
+    return renderInlineChannelSelectionList(elements.autoPartChannelList, state.autoPart.selectedChannelIds, {
+      notesOnly: true,
+      onChange: () => updateAutoPartSummary(),
+    });
+  }
+
+  function setAllAutoPartChannelsChecked(checked) {
+    if (!(state.autoPart.selectedChannelIds instanceof Set)) state.autoPart.selectedChannelIds = new Set();
+    setInlineChannelSelectionAll(state.autoPart.selectedChannelIds, checked, { notesOnly: true });
+    renderAutoPartChannelSelection();
+    updateAutoPartSummary();
   }
 
   function updateAutoPartSummary() {
@@ -2243,6 +2436,8 @@
     if (!elements.autoPartPanel) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     if (isMeasureEditWorkspaceActive()) closeMeasureEditWorkspace();
+    if (isRestCleanupWorkspaceActive()) closeRestCleanupDialog();
+    if (isChannelMergeModeActive()) cancelChannelMergeMode({ silent: true });
     closeContextMenu();
     closeFileMenu();
     closeEditMenu();
@@ -2258,6 +2453,7 @@
       state.autoPart.restoreSidebarCollapsed = Boolean(state.history?.collapsed);
     }
     state.autoPart.active = true;
+    syncWorkspaceTopbarLocks();
     if (state.history?.collapsed) setHistoryCollapsed(false);
     setSidebarTab("channels", { persist: false });
     elements.channelPanel?.classList.add("auto-part-preview-active");
@@ -2265,6 +2461,8 @@
     if (elements.autoPartCharsInput) elements.autoPartCharsInput.value = String(state.autoPart.targetChars || 2400);
     if (elements.autoPartSearchRangeInput) elements.autoPartSearchRangeInput.value = String(state.autoPart.searchRangePercent ?? 50);
     state.autoPart.plan = null;
+    state.autoPart.selectedChannelIds = new Set(getInlineSelectableChannels({ notesOnly: true }).map((channel) => String(channel.id)));
+    renderAutoPartChannelSelection();
     updateAutoPartSummary();
     requestAnimationFrame(() => elements.autoPartCharsInput?.focus({ preventScroll: true }));
     return true;
@@ -2274,6 +2472,7 @@
     if (!state.autoPart.active && (!elements.autoPartPanel || elements.autoPartPanel.hidden)) return false;
     state.autoPart.active = false;
     state.autoPart.plan = null;
+    syncWorkspaceTopbarLocks();
     if (elements.autoPartPanel) elements.autoPartPanel.hidden = true;
     elements.channelPanel?.classList.remove("auto-part-preview-active");
     refreshAutoPartPreviewVisuals();
@@ -2293,6 +2492,7 @@
     const plan = state.autoPart.plan
       && state.autoPart.plan.targetChars === options.targetChars
       && state.autoPart.plan.searchRangePercent === options.searchRangePercent
+      && state.autoPart.plan.channelKey === getAutoPartSelectionKey()
       ? state.autoPart.plan
       : computeAutoPartPlan(options.targetChars, options.searchRangePercent);
     if (!plan || plan.partCount < 2) {
@@ -2316,6 +2516,68 @@
 
   function isMeasureEditWorkspaceActive() {
     return Boolean(state.measureEdit?.active);
+  }
+
+  function getWorkspaceTopbarLockState() {
+    const merge = isChannelMergeModeActive();
+    const measure = isMeasureEditWorkspaceActive();
+    const restCleanup = Boolean(state.restCleanup?.active);
+    const autoPart = isAutoPartPreviewActive();
+    return {
+      active: merge || measure || restCleanup || autoPart,
+      disablePlayback: measure,
+      mode: measure ? "measure" : merge ? "merge" : restCleanup ? "rest-cleanup" : autoPart ? "auto-part" : null,
+    };
+  }
+
+  function syncWorkspaceTopbarLocks() {
+    const lock = getWorkspaceTopbarLockState();
+    const commonControls = [
+      elements.fileButton,
+      elements.editButton,
+      elements.settingsButton,
+      elements.noteToolButton,
+      elements.selectToolButton,
+    ];
+    for (const control of commonControls) {
+      if (!control) continue;
+      control.disabled = lock.active;
+      control.setAttribute("aria-disabled", String(lock.active));
+    }
+
+    const playbackControls = [
+      elements.jumpStartButton,
+      elements.playButton,
+      elements.jumpEndButton,
+      elements.loopPlaybackButton,
+      elements.volumeButton,
+      elements.playbackRateButton,
+    ];
+    for (const control of playbackControls) {
+      if (!control) continue;
+      control.disabled = lock.disablePlayback;
+      control.setAttribute("aria-disabled", String(lock.disablePlayback));
+    }
+
+    document.body.classList.toggle("workspace-topbar-locked", lock.active);
+    document.body.classList.toggle("workspace-playback-locked", lock.disablePlayback);
+    document.body.dataset.workspaceTopbarLock = lock.mode || "";
+    const playbackBox = document.querySelector(".playback-compact-box");
+    if (playbackBox) {
+      playbackBox.setAttribute("aria-disabled", String(lock.disablePlayback));
+      playbackBox.toggleAttribute("inert", lock.disablePlayback);
+    }
+
+    if (lock.active) {
+      closeFileMenu();
+      closeEditMenu();
+      closeSettingsMenu();
+    }
+    if (lock.disablePlayback) {
+      closeVolumeMenu();
+      closePlaybackRateMenu();
+    }
+    return lock;
   }
 
   function isMeasureEditPanelTarget(target) {
@@ -2374,72 +2636,46 @@
     host.append(line);
   }
 
+  function getMeasureEditSelectedChannelIds() {
+    return state.measureEdit?.selectedChannelIds instanceof Set ? state.measureEdit.selectedChannelIds : new Set();
+  }
+
+  function getMeasureEditSelectableChannels() {
+    return getInlineSelectableChannels({ notesOnly: true });
+  }
+
+  function isMeasureEditAllChannelsSelected() {
+    const selectable = getMeasureEditSelectableChannels();
+    const selected = getMeasureEditSelectedChannelIds();
+    return selectable.length > 0 && selectable.every((channel) => selected.has(String(channel.id)));
+  }
+
   function getMeasureEditScopeLabel() {
-    const type = state.measureEdit?.scopeType || "all";
-    if (type === "group") return getChannelGroupById(state.measureEdit.scopeId)?.name || i18nText("group.label");
-    if (type === "channel") return state.channels.find((item) => String(item.id) === String(state.measureEdit.scopeId))?.name || i18nText("channel.label");
-    return i18nText("ui.all");
+    const selected = getMeasureEditTargetChannels();
+    if (!selected.length) return i18nText('mml.channel_select');
+    if (isMeasureEditAllChannelsSelected()) return `${selected.length.toLocaleString()}개 채널 · 모두 선택`;
+    if (selected.length === 1) return selected[0].name || i18nText('channel.label');
+    return `${selected.length.toLocaleString()}개 채널 선택`;
   }
 
   function getMeasureEditTargetChannels() {
-    const type = state.measureEdit?.scopeType || "all";
-    if (type === "group") return getChannelGroupMembers(state.measureEdit.scopeId);
-    if (type === "channel") {
-      const channel = state.channels.find((item) => String(item.id) === String(state.measureEdit.scopeId));
-      return channel ? [channel] : [];
-    }
-    return state.channels;
-  }
-
-  function previewMeasureEditScopeSelection(type, id) {
-    if (type === "channel") {
-      const index = state.channels.findIndex((channel) => String(channel.id) === String(id));
-      if (index >= 0) selectChannel(index);
-    } else if (type === "group") {
-      selectChannelGroup(id);
-    }
+    const selectedIds = getMeasureEditSelectedChannelIds();
+    return state.channels.filter((channel) => selectedIds.has(String(channel.id)) && Array.isArray(channel.notes) && channel.notes.length);
   }
 
   function renderMeasureEditScopeList() {
-    const host = elements.measureEditScopeList;
-    if (!host) return;
-    host.replaceChildren();
-    const addRow = (type, id, label, className = "", itemColor = "var(--accent)") => {
-      const row = document.createElement("label");
-      row.className = `measure-edit-scope-row ${className}`.trim();
-      row.style.setProperty("--measure-scope-color", itemColor || "var(--accent)");
-      const input = document.createElement("input");
-      input.type = "radio";
-      input.name = "measureEditScope";
-      input.checked = state.measureEdit.scopeType === type && (type === "all" || String(state.measureEdit.scopeId) === String(id));
-      input.addEventListener("change", () => {
-        state.measureEdit.scopeType = type;
-        state.measureEdit.scopeId = type === "all" ? null : id;
-        previewMeasureEditScopeSelection(type, id);
-        updateMeasureEditWorkspace();
-      });
-      const text = document.createElement("span");
-      text.textContent = label;
-      row.append(input, text);
-      host.append(row);
-    };
-    addRow("all", null, i18nText("timeline.measure_all_channels"), "all", "var(--accent)");
-    const grouped = new Set();
-    for (const group of state.channelGroups) {
-      const groupIndex = state.channelGroups.indexOf(group);
-      addRow("group", group.id, group.name || i18nText("group.label"), "group", getChannelGroupColor(group, groupIndex, "bright"));
-      for (const channel of getChannelGroupMembers(group)) {
-        grouped.add(String(channel.id));
-        const channelIndex = state.channels.indexOf(channel);
-        addRow("channel", channel.id, channel.name || i18nText("channel.label"), "channel", getChannelColor(channel, channelIndex));
-      }
-    }
-    for (const channel of state.channels) {
-      if (!grouped.has(String(channel.id))) {
-        const channelIndex = state.channels.indexOf(channel);
-        addRow("channel", channel.id, channel.name || i18nText("channel.label"), "channel", getChannelColor(channel, channelIndex));
-      }
-    }
+    if (!(state.measureEdit.selectedChannelIds instanceof Set)) state.measureEdit.selectedChannelIds = new Set();
+    renderInlineChannelSelectionList(elements.measureEditScopeList, state.measureEdit.selectedChannelIds, {
+      notesOnly: true,
+      onChange: () => updateMeasureEditWorkspace(),
+    });
+  }
+
+  function setAllMeasureEditChannelsChecked(checked) {
+    if (!(state.measureEdit.selectedChannelIds instanceof Set)) state.measureEdit.selectedChannelIds = new Set();
+    setInlineChannelSelectionAll(state.measureEdit.selectedChannelIds, checked, { notesOnly: true });
+    renderMeasureEditScopeList();
+    updateMeasureEditWorkspace();
   }
 
   function getMeasureEditSelectedRange() {
@@ -2521,7 +2757,7 @@
     const measurePositionText = range ? formatSeconds(beatToSeconds(range.startBeat)) : formatSeconds(beatToSeconds(state.measureEdit.beat));
     if (elements.measureEditPosition) elements.measureEditPosition.textContent = measurePositionText;
     setSidebarEditModeTitlebar(true, i18nText("timeline.edit_measure"), measurePositionText);
-    if (elements.measureEditApplyButton) elements.measureEditApplyButton.disabled = !range;
+    if (elements.measureEditApplyButton) elements.measureEditApplyButton.disabled = !range || getMeasureEditTargetChannels().length === 0;
     refreshMeasureEditPreviewVisuals();
   }
 
@@ -2535,6 +2771,8 @@
     if (!elements.measureEditPanel) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     if (isAutoPartPreviewActive()) closeAutoPartDialog();
+    if (isRestCleanupWorkspaceActive()) closeRestCleanupDialog();
+    if (isChannelMergeModeActive()) cancelChannelMergeMode({ silent: true });
     closeContextMenu(); closeFileMenu(); closeEditMenu(); closeSettingsMenu(); closeThemeMenu(); closeGoogleAccountMenu(); closeVolumeMenu(); closeZoomMenu(); closePlaybackRateMenu(); closeItemAddMenu();
     if (!state.measureEdit.active) {
       state.measureEdit.restoreSidebarTab = state.sidebarTab || "channels";
@@ -2547,12 +2785,19 @@
     const safeBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
     state.measureEdit.active = true;
     document.body.classList.add("measure-edit-mode-active");
+    syncWorkspaceTopbarLocks();
     state.measureEdit.mode = "add";
     state.measureEdit.beat = safeBeat;
     state.measureEdit.rangeStartBeat = safeBeat;
     state.measureEdit.rangeEndBeat = safeBeat + getTimeSignatureMeasureLength(getTimeSignatureAtBeat(safeBeat));
     state.measureEdit.scopeType = ["group","channel"].includes(scopeType) ? scopeType : "all";
     state.measureEdit.scopeId = state.measureEdit.scopeType === "all" ? null : scopeId;
+    const initialMeasureChannels = state.measureEdit.scopeType === "group"
+      ? getChannelGroupMembers(scopeId).filter((channel) => channel.notes?.length)
+      : state.measureEdit.scopeType === "channel"
+        ? state.channels.filter((channel) => String(channel.id) === String(scopeId) && channel.notes?.length)
+        : getMeasureEditSelectableChannels();
+    state.measureEdit.selectedChannelIds = new Set(initialMeasureChannels.map((channel) => String(channel.id)));
     state.measureEdit.selecting = false;
     if (state.history?.collapsed) setHistoryCollapsed(false);
     setSidebarTab("channels", { persist: false });
@@ -2560,7 +2805,6 @@
     elements.measureEditPanel.hidden = false;
     if (elements.measureEditDuplicateCountInput) elements.measureEditDuplicateCountInput.value = "1";
     renderMeasureEditScopeList();
-    previewMeasureEditScopeSelection(state.measureEdit.scopeType, state.measureEdit.scopeId);
     updateMeasureEditWorkspace();
     requestAnimationFrame(() => elements.measureEditModeTabs?.querySelector('[data-measure-edit-mode="add"]')?.focus({ preventScroll: true }));
     return true;
@@ -2570,6 +2814,7 @@
     if (!state.measureEdit.active && (!elements.measureEditPanel || elements.measureEditPanel.hidden)) return false;
     state.measureEdit.active = false;
     document.body.classList.remove("measure-edit-mode-active");
+    syncWorkspaceTopbarLocks();
     if (!isNoteEditModeActive()) setSidebarEditModeTitlebar(false);
     state.measureEdit.selecting = false;
     state.measureEdit.pointerId = null;
@@ -2652,15 +2897,25 @@
   }
 
   function guardMeasureEditWorkspacePointerInteraction(event) {
-    if (!isMeasureEditWorkspaceActive() || isMeasureEditPanelTarget(event.target) || isAutoPartPreviewScrollTarget(event.target) || isAutoPartPreviewOverviewNavigation(event)) return;
-    if (event.target === elements.timelineCanvas || event.target === elements.rollCanvas) return;
-    event.preventDefault(); event.stopImmediatePropagation();
+    if (
+      !isMeasureEditWorkspaceActive()
+      || isMeasureEditPanelTarget(event.target)
+      || isWorkspaceTopbarInteractionTarget(event.target)
+      || isTutorialInteractionTarget(event.target)
+      || isAutoPartPreviewScrollTarget(event.target)
+      || isAutoPartPreviewOverviewNavigation(event)
+    ) return;
+    // Range selection still owns primary-button gestures on the timeline/roll,
+    // but context menus are never allowed while the measure transaction is open.
+    if (event.type !== "contextmenu" && (event.target === elements.timelineCanvas || event.target === elements.rollCanvas)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
   }
 
   function guardMeasureEditWorkspaceKeyboardInteraction(event) {
     if (!isMeasureEditWorkspaceActive()) return;
     if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); closeMeasureEditWorkspace(); return; }
-    if (isMeasureEditPanelTarget(event.target)) return;
+    if (isMeasureEditPanelTarget(event.target) || isWorkspaceTopbarInteractionTarget(event.target) || isTutorialInteractionTarget(event.target)) return;
     event.preventDefault(); event.stopImmediatePropagation();
   }
 
@@ -2696,7 +2951,7 @@
       }
       noteCopies.set(String(channel.id), copies);
     }
-    const allScope = state.measureEdit.scopeType === "all";
+    const allScope = isMeasureEditAllChannelsSelected();
     const tempoCopies = allScope ? state.tempos.filter(t => !t.fixed && t.beat >= range.startBeat - 1e-7 && t.beat < range.endBeat - 1e-7).map(t => ({...t, _relative:t.beat-range.startBeat})) : [];
     const signatureCopies = allScope ? getSortedTimeSignatures().filter(t => !t.fixed && t.beat >= range.startBeat - 1e-7 && t.beat < range.endBeat - 1e-7).map(t => ({...t, _relative:t.beat-range.startBeat})) : [];
     const fadeCopies = allScope ? normalizeTimelineFades().filter(f => f.startBeat >= range.startBeat - 1e-7 && f.startBeat < range.endBeat - 1e-7).map(f => ({...f, _relative:f.startBeat-range.startBeat})) : [];
@@ -2746,32 +3001,38 @@
   function applyMeasureEditWorkspace() {
     if (!isMeasureEditWorkspaceActive()) return false;
     const mode = normalizeMeasureEditMode(state.measureEdit.mode);
-    const scoped = state.measureEdit.scopeType !== "all";
+    const selectedChannels = getMeasureEditTargetChannels();
+    if (!selectedChannels.length) return false;
+    const allScope = isMeasureEditAllChannelsSelected();
     state.timeEdit = {
       beat: state.measureEdit.beat,
-      scope: state.measureEdit.scopeType === "group" ? "group" : state.measureEdit.scopeType === "channel" ? "channel" : "all",
-      channelId: state.measureEdit.scopeType === "channel" ? state.measureEdit.scopeId : null,
-      groupId: state.measureEdit.scopeType === "group" ? state.measureEdit.scopeId : null,
-      preferredAction: mode === "add" ? "insert" : mode === "delete" ? "delete" : null,
+      scope: allScope ? 'all' : 'multi',
+      channelId: null,
+      groupId: null,
+      preferredAction: mode === 'add' ? 'insert' : mode === 'delete' ? 'delete' : null,
     };
     let applied = false;
-    if (mode === "add") {
+    if (mode === 'add') {
       const range = getMeasureEditSelectedRange();
       if (!range) return false;
       state.timeEdit.beat = range.startBeat;
       state.measureEdit.beat = range.startBeat;
-      applied = scoped ? insertChannelSpaceAtPlayhead(range.lengthBeat) : insertTrackSpaceAtPlayhead(range.lengthBeat);
-    } else if (mode === "delete") {
+      applied = allScope
+        ? insertTrackSpaceAtPlayhead(range.lengthBeat)
+        : insertChannelSpaceAtPlayhead(range.lengthBeat, selectedChannels);
+    } else if (mode === 'delete') {
       const range = getMeasureEditSelectedRange();
       if (!range) return false;
       state.timeEdit.beat = range.startBeat;
-      applied = scoped ? deleteChannelSpaceAtPlayhead(range.lengthBeat) : deleteTrackSpaceAtPlayhead(range.lengthBeat);
+      applied = allScope
+        ? deleteTrackSpaceAtPlayhead(range.lengthBeat)
+        : deleteChannelSpaceAtPlayhead(range.lengthBeat, selectedChannels);
     } else {
       applied = duplicateMeasureEditRange();
     }
     if (applied) {
       closeMeasureEditWorkspace();
-      showToast(i18nText("timeline.measure_edit_applied"));
+      showToast(i18nText('timeline.measure_edit_applied'));
     }
     return applied;
   }
@@ -5415,6 +5676,44 @@
     }
   }
 
+  function drawRestCleanupPreviewOverlay(context, visibleLeft, visibleTop, visibleRight, visibleBottom) {
+    if (!isRestCleanupWorkspaceActive()) return;
+    const changes = Array.isArray(state.restCleanup?.previewChanges) ? state.restCleanup.previewChanges : [];
+    if (!changes.length) return;
+    context.save();
+    for (const change of changes) {
+      const channelIndex = state.channels.findIndex((channel) => String(channel.id) === String(change.channelId));
+      if (channelIndex < 0) continue;
+      const channel = state.channels[channelIndex];
+      if (!isChannelEffectivelyVisible(channel)) continue;
+      const noteStartX = beatToX(change.startBeat);
+      const beforeEndX = beatToX(change.startBeat + change.beforeDurationBeat);
+      const afterEndX = beatToX(change.startBeat + change.afterDurationBeat);
+      if (afterEndX < visibleLeft || noteStartX > visibleRight) continue;
+      const y = pitchToY(change.pitch) + 1;
+      const heightValue = Math.max(4, getRowHeight() - 2);
+      if (y + heightValue < visibleTop || y > visibleBottom) continue;
+      const color = getChannelColor(channel, channelIndex);
+      const extensionX = Math.max(noteStartX + 1, beforeEndX);
+      const extensionWidth = Math.max(2, afterEndX - extensionX - 1);
+      context.globalAlpha = 0.34;
+      context.fillStyle = color;
+      context.fillRect(extensionX, y, extensionWidth, heightValue);
+      context.globalAlpha = 0.95;
+      context.strokeStyle = color;
+      context.lineWidth = 2;
+      context.setLineDash([5, 3]);
+      const outlineWidth = Math.max(4, afterEndX - noteStartX - 1);
+      context.strokeRect(noteStartX + 1.5, y + 0.5, outlineWidth - 1, heightValue - 1);
+      context.setLineDash([]);
+      context.globalAlpha = 0.9;
+      context.fillStyle = state.theme === 'light' ? 'rgba(0,0,0,.72)' : 'rgba(255,255,255,.82)';
+      const markerX = Math.max(extensionX + 1, afterEndX - 3);
+      context.fillRect(markerX, y + 2, 2, Math.max(1, heightValue - 4));
+    }
+    context.restore();
+  }
+
   function drawRoll() {
     const context = elements.rollCanvas.getContext("2d");
     const viewportWidth = Math.max(1, state.rollSurface.width || elements.rollCanvas.clientWidth);
@@ -5645,6 +5944,7 @@
       }
     }
     context.globalAlpha = 1;
+    drawRestCleanupPreviewOverlay(context, visibleLeft, visibleTop, visibleRight, visibleBottom);
 
     // In merge mode, make X-channel reference notes and the same-pitch candidates
     // they block visible before drawing the merge preview overlay.
@@ -15579,10 +15879,13 @@
     return normalized === "all" ? Infinity : 4 / Number(normalized);
   }
 
+  function isRestCleanupWorkspaceActive() {
+    return Boolean(state.restCleanup?.active && elements.restCleanupPanel && !elements.restCleanupPanel.hidden);
+  }
+
   function getCheckedRestCleanupChannelIds() {
-    if (!elements.restCleanupChannelList) return [];
-    return [...elements.restCleanupChannelList.querySelectorAll('input[type="checkbox"]:checked')]
-      .map((input) => String(input.value));
+    const selected = state.restCleanup?.selectedChannelIds;
+    return selected instanceof Set ? [...selected].map(String) : [];
   }
 
   function getRestCleanupChannels() {
@@ -15592,48 +15895,22 @@
 
   function renderRestCleanupChannelList() {
     if (!elements.restCleanupChannelList) return false;
-    elements.restCleanupChannelList.replaceChildren();
-    const activeId = getActiveChannel()?.id;
-    let checkedOne = false;
-    state.channels.forEach((channel, index) => {
-      const row = document.createElement("label");
-      row.className = "midi-transfer-channel-row channel-delete-row rest-cleanup-channel-row";
-      row.style.setProperty("--channel-color", getChannelColor(channel, index));
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.value = String(channel.id);
-      const noteCount = channel.notes?.length || 0;
-      checkbox.disabled = noteCount === 0;
-      checkbox.checked = noteCount > 0 && String(channel.id) === String(activeId);
-      checkedOne = checkedOne || checkbox.checked;
-      const text = document.createElement("span");
-      text.className = "midi-transfer-channel-name";
-      text.textContent = channel.name;
-      const affected = document.createElement("span");
-      affected.className = "rest-cleanup-affected-count";
-      affected.dataset.restCleanupCountFor = String(channel.id);
-      affected.textContent = "0";
-      row.dataset.channelId = String(channel.id);
-      row.append(checkbox, text, affected);
-      checkbox.addEventListener("change", syncRestCleanupDialog);
-      elements.restCleanupChannelList.append(row);
+    if (!(state.restCleanup.selectedChannelIds instanceof Set)) state.restCleanup.selectedChannelIds = new Set();
+    const perChannel = getRestCleanupAnalysisByChannel(state.restCleanup.mode);
+    return renderInlineChannelSelectionList(elements.restCleanupChannelList, state.restCleanup.selectedChannelIds, {
+      notesOnly: true,
+      detailForChannel: (channel) => {
+        const result = perChannel.get(String(channel.id)) || { count: 0 };
+        return i18nText('rest_cleanup.row_affected', [Number(result.count || 0).toLocaleString()]);
+      },
+      onChange: () => syncRestCleanupDialog(),
     });
-    installLeftDragCheckboxSelection(elements.restCleanupChannelList, {
-      deferChange: true,
-      onCommit: syncRestCleanupDialog,
-    });
-    if (!checkedOne) {
-      const first = elements.restCleanupChannelList.querySelector('input[type="checkbox"]:not(:disabled)');
-      if (first) first.checked = true;
-    }
-    return true;
   }
 
   function setAllRestCleanupChecked(checked) {
-    if (!elements.restCleanupChannelList) return;
-    elements.restCleanupChannelList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
-      if (!input.disabled) input.checked = Boolean(checked);
-    });
+    if (!(state.restCleanup.selectedChannelIds instanceof Set)) state.restCleanup.selectedChannelIds = new Set();
+    setInlineChannelSelectionAll(state.restCleanup.selectedChannelIds, checked, { notesOnly: true });
+    renderRestCleanupChannelList();
     syncRestCleanupDialog();
   }
 
@@ -15712,13 +15989,39 @@
     return Number(numeric.toFixed(4)).toLocaleString(document.documentElement.lang || undefined, { maximumFractionDigits: 4 });
   }
 
+  function buildRestCleanupPreviewChanges(mode = state.restCleanup.mode) {
+    const changes = [];
+    for (const channel of getRestCleanupChannels()) {
+      const clone = { ...channel, notes: (channel.notes || []).map((note) => ({ ...note })) };
+      applyRestCleanupToChannel(clone, mode);
+      const originalById = new Map((channel.notes || []).map((note) => [String(note.id), note]));
+      for (const note of clone.notes || []) {
+        const original = originalById.get(String(note.id));
+        if (!original) continue;
+        const before = Math.max(CONFIG.minimumNoteBeat, Number(original.durationBeat) || CONFIG.minimumNoteBeat);
+        const after = Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        if (after > before + 1e-7) {
+          changes.push({
+            channelId: channel.id,
+            noteId: note.id,
+            pitch: Number(note.pitch) || 0,
+            startBeat: Number(note.startBeat) || 0,
+            beforeDurationBeat: before,
+            afterDurationBeat: after,
+          });
+        }
+      }
+    }
+    return changes;
+  }
+
   function syncRestCleanupDialog() {
     const mode = normalizeRestCleanupMode(state.restCleanup.mode);
     state.restCleanup.mode = mode;
-    elements.restCleanupModeOptions?.querySelectorAll("[data-rest-cleanup-mode]").forEach((button) => {
+    elements.restCleanupModeOptions?.querySelectorAll('[data-rest-cleanup-mode]').forEach((button) => {
       const active = button.dataset.restCleanupMode === mode;
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-pressed", active ? "true" : "false");
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
     const channels = getRestCleanupChannels();
     const selectedIds = new Set(channels.map((channel) => String(channel.id)));
@@ -15731,41 +16034,72 @@
       analysis.beats += result.beats;
       if (result.count) analysis.channelCount += 1;
     }
-    elements.restCleanupChannelList?.querySelectorAll("[data-rest-cleanup-count-for]").forEach((node) => {
-      const result = perChannel.get(String(node.dataset.restCleanupCountFor)) || { count: 0 };
-      node.textContent = i18nText("rest_cleanup.row_affected", [Number(result.count || 0).toLocaleString()]);
+    elements.restCleanupChannelList?.querySelectorAll('[data-inline-channel-detail-for]').forEach((node) => {
+      const result = perChannel.get(String(node.dataset.inlineChannelDetailFor)) || { count: 0 };
+      node.textContent = i18nText('rest_cleanup.row_affected', [Number(result.count || 0).toLocaleString()]);
     });
     if (elements.restCleanupPreview) {
       elements.restCleanupPreview.textContent = !channels.length
-        ? i18nText("rest_cleanup.preview_select_channel")
+        ? i18nText('rest_cleanup.preview_select_channel')
         : analysis.count
-          ? i18nText("rest_cleanup.preview_channels", [channels.length.toLocaleString(), analysis.count.toLocaleString()])
-          : i18nText("rest_cleanup.preview_none");
+          ? i18nText('rest_cleanup.preview_channels', [channels.length.toLocaleString(), analysis.count.toLocaleString()])
+          : i18nText('rest_cleanup.preview_none');
     }
     if (elements.restCleanupApplyButton) elements.restCleanupApplyButton.disabled = channels.length === 0 || analysis.count === 0;
+    state.restCleanup.previewChanges = channels.length ? buildRestCleanupPreviewChanges(mode) : [];
+    if (isRestCleanupWorkspaceActive()) drawRoll();
     return analysis;
   }
 
   function openRestCleanupDialog() {
     const hasNotes = state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length);
     if (!hasNotes) {
-      showToast(i18nText("rest_cleanup.no_notes"));
+      showToast(i18nText('rest_cleanup.no_notes'));
       return false;
     }
+    if (isAutoPartPreviewActive()) closeAutoPartDialog();
+    if (isMeasureEditWorkspaceActive()) closeMeasureEditWorkspace();
+    if (isChannelMergeModeActive()) cancelChannelMergeMode({ silent: true });
+    if (!state.restCleanup.active) {
+      state.restCleanup.restoreSidebarTab = state.sidebarTab || 'channels';
+      state.restCleanup.restoreSidebarCollapsed = Boolean(state.history?.collapsed);
+    }
     state.restCleanup.mode = normalizeRestCleanupMode(state.restCleanup.mode);
+    state.restCleanup.active = true;
+    state.restCleanup.selectedChannelIds = new Set(getInlineSelectableChannels({ notesOnly: true }).map((channel) => String(channel.id)));
     closeEditMenu();
     closeFileMenu();
+    closeSettingsMenu();
     closeContextMenu();
-    renderRestCleanupChannelList();
+    syncWorkspaceTopbarLocks();
+    if (state.history?.collapsed) setHistoryCollapsed(false);
+    setSidebarTab('channels', { persist: false });
+    elements.channelPanel?.classList.add('rest-cleanup-preview-active');
+    if (elements.restCleanupPanel) elements.restCleanupPanel.hidden = false;
     invalidateRestCleanupAnalysisCache();
+    renderRestCleanupChannelList();
     syncRestCleanupDialog();
-    if (elements.restCleanupBackdrop) elements.restCleanupBackdrop.hidden = false;
-    requestAnimationFrame(() => elements.restCleanupChannelList?.querySelector('input[type="checkbox"]:checked')?.focus());
+    requestAnimationFrame(() => elements.restCleanupModeOptions?.querySelector('[data-rest-cleanup-mode].active')?.focus({ preventScroll: true }));
     return true;
   }
 
-  function closeRestCleanupDialog() {
-    if (elements.restCleanupBackdrop) elements.restCleanupBackdrop.hidden = true;
+  function closeRestCleanupDialog({ restoreSidebar = true } = {}) {
+    if (!state.restCleanup.active && (!elements.restCleanupPanel || elements.restCleanupPanel.hidden)) return false;
+    state.restCleanup.active = false;
+    state.restCleanup.previewChanges = [];
+    syncWorkspaceTopbarLocks();
+    if (elements.restCleanupPanel) elements.restCleanupPanel.hidden = true;
+    elements.channelPanel?.classList.remove('rest-cleanup-preview-active');
+    drawRoll();
+    if (restoreSidebar) {
+      const restoreTab = state.restCleanup.restoreSidebarTab || 'channels';
+      const restoreCollapsed = Boolean(state.restCleanup.restoreSidebarCollapsed);
+      state.restCleanup.restoreSidebarTab = null;
+      state.restCleanup.restoreSidebarCollapsed = false;
+      setSidebarTab(restoreTab, { persist: false });
+      if (restoreCollapsed) setHistoryCollapsed(true);
+    }
+    return true;
   }
 
   function applyRestCleanupToChannel(channel, mode = state.restCleanup.mode) {
@@ -18214,6 +18548,7 @@
   function updateChannelMergeModeUi() {
     const active = isChannelMergeModeActive();
     document.body.classList.toggle("merge-mode-active", active);
+    syncWorkspaceTopbarLocks();
     if (elements.channelMergeModeControls) elements.channelMergeModeControls.hidden = !active;
     const normalInstrument = elements.channelInstrumentSelect?.closest?.(".channel-instrument-control");
     const normalSummary = elements.infoCharCount?.closest?.(".channel-summary");
@@ -18238,6 +18573,9 @@
 
   function enterChannelMergeMode(channelId = null) {
     if (isNoteEditModeActive()) return false;
+    if (isAutoPartPreviewActive()) closeAutoPartDialog();
+    if (isMeasureEditWorkspaceActive()) closeMeasureEditWorkspace();
+    if (isRestCleanupWorkspaceActive()) closeRestCleanupDialog();
     if (state.channels.length < 2) {
       showToast(i18nText("channel.select_least_two_merge"));
       return false;
@@ -18290,6 +18628,7 @@
     closeContextMenu();
     closeFileMenu();
     closeEditMenu();
+    closeSettingsMenu();
     renderChannelTabs();
     renderChannelEditor();
     updateChannelMergeModeUi();
@@ -23584,8 +23923,8 @@
     return [];
   }
 
-  function insertChannelSpaceAtPlayhead(amountBeats) {
-    const channels = getTimeEditChannels();
+  function insertChannelSpaceAtPlayhead(amountBeats, overrideChannels = null) {
+    const channels = Array.isArray(overrideChannels) ? overrideChannels : getTimeEditChannels();
     if (!channels.length) return false;
     const amount = Math.max(CONFIG.minimumNoteBeat, Number(amountBeats) || 0);
     const cursor = clamp(Number(state.timeEdit?.beat ?? state.playhead.beat) || 0, 0, getTotalBeats());
@@ -23612,8 +23951,8 @@
     return true;
   }
 
-  function deleteChannelSpaceAtPlayhead(amountBeats) {
-    const channels = getTimeEditChannels();
+  function deleteChannelSpaceAtPlayhead(amountBeats, overrideChannels = null) {
+    const channels = Array.isArray(overrideChannels) ? overrideChannels : getTimeEditChannels();
     if (!channels.length) return false;
     const amount = Math.max(CONFIG.minimumNoteBeat, Number(amountBeats) || 0);
     const cursor = clamp(Number(state.timeEdit?.beat ?? state.playhead.beat) || 0, 0, getTotalBeats());
@@ -26598,6 +26937,14 @@
   function openContextMenu(event) {
     event.preventDefault();
     closeItemAddMenu();
+    // Merge / measure / rest-cleanup / auto-part are transaction workspaces.
+    // Never allow a normal editor context menu (especially the timeline menu)
+    // to mutate state behind an active transaction.
+    if (getWorkspaceTopbarLockState().active) {
+      event.stopImmediatePropagation();
+      closeContextMenu();
+      return;
+    }
     const bulkVisibilityButton = event.target?.closest?.("#channelBulkVisibilityButton");
     if (bulkVisibilityButton) {
       event.stopImmediatePropagation();
@@ -29855,7 +30202,14 @@
     document.addEventListener("dblclick", guardAutoPartPreviewPointerInteraction, true);
     document.addEventListener("contextmenu", guardAutoPartPreviewPointerInteraction, true);
     document.addEventListener("touchstart", guardAutoPartPreviewPointerInteraction, { capture: true, passive: false });
+    document.addEventListener("pointerdown", guardRestCleanupPreviewPointerInteraction, true);
+    document.addEventListener("mousedown", guardRestCleanupPreviewPointerInteraction, true);
+    document.addEventListener("click", guardRestCleanupPreviewPointerInteraction, true);
+    document.addEventListener("dblclick", guardRestCleanupPreviewPointerInteraction, true);
+    document.addEventListener("contextmenu", guardRestCleanupPreviewPointerInteraction, true);
+    document.addEventListener("touchstart", guardRestCleanupPreviewPointerInteraction, { capture: true, passive: false });
     document.addEventListener("keydown", guardAutoPartPreviewKeyboardInteraction, true);
+    document.addEventListener("keydown", guardRestCleanupPreviewKeyboardInteraction, true);
     // Capture Space before focused select/checkbox/button controls can consume it.
     // In note edit mode this keeps playback start/stop available regardless of panel focus.
     document.addEventListener("keydown", handleItemTreeDragKey, true);
@@ -30646,7 +31000,6 @@
     elements.channelVolumeBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.channelVolumeBackdrop) closeChannelVolumeDialog();
     });
-    elements.restCleanupCloseButton?.addEventListener("click", closeRestCleanupDialog);
     elements.restCleanupCancelButton?.addEventListener("click", closeRestCleanupDialog);
     elements.restCleanupApplyButton?.addEventListener("click", applyRestCleanup);
     elements.restCleanupSelectAllButton?.addEventListener("click", () => setAllRestCleanupChecked(true));
@@ -30656,9 +31009,6 @@
       if (!button) return;
       state.restCleanup.mode = normalizeRestCleanupMode(button.dataset.restCleanupMode);
       syncRestCleanupDialog();
-    });
-    elements.restCleanupBackdrop?.addEventListener("pointerdown", (event) => {
-      if (event.target === elements.restCleanupBackdrop) closeRestCleanupDialog();
     });
     elements.noteEditModeCancelButton?.addEventListener("click", () => cancelNoteEditMode());
     elements.noteEditModeApplyButton?.addEventListener("click", applyNoteEditMode);
@@ -30747,12 +31097,16 @@
     });
     elements.autoPartCancelButton?.addEventListener("click", () => closeAutoPartDialog());
     elements.autoPartApplyButton?.addEventListener("click", applyAutoPartPlan);
+    elements.autoPartSelectAllButton?.addEventListener("click", () => setAllAutoPartChannelsChecked(true));
+    elements.autoPartClearAllButton?.addEventListener("click", () => setAllAutoPartChannelsChecked(false));
     elements.measureEditModeTabs?.addEventListener("click", (event) => {
       const button = event.target.closest?.("[data-measure-edit-mode]");
       if (button) setMeasureEditMode(button.dataset.measureEditMode);
     });
     elements.measureEditDuplicateCountInput?.addEventListener("input", updateMeasureEditWorkspace);
     elements.measureEditDuplicateCountInput?.addEventListener("change", updateMeasureEditWorkspace);
+    elements.measureEditSelectAllButton?.addEventListener("click", () => setAllMeasureEditChannelsChecked(true));
+    elements.measureEditClearAllButton?.addEventListener("click", () => setAllMeasureEditChannelsChecked(false));
     elements.measureEditCancelButton?.addEventListener("click", () => closeMeasureEditWorkspace());
     elements.measureEditApplyButton?.addEventListener("click", applyMeasureEditWorkspace);
     for (const input of [elements.autoPartCharsInput, elements.autoPartSearchRangeInput]) {
