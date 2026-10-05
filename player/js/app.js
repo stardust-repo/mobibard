@@ -255,8 +255,18 @@
     state.options.channels = cloneChannelOptions(draft.channels);
     state.options.accompaniment = cloneAccompanimentOption(draft.accompaniment);
     setChannelOptionsDirty(false);
+
+    // Draft controls are intentionally separate from the applied options.  When the
+    // user presses Apply, invalidate every transformation cache before rebuilding
+    // from the immutable source MML so volume/rest/octave changes can never reuse a
+    // stale stage result.
     state.lastApplySignature = "";
+    resetPipelineCache();
     applyFromSource({ force: true });
+
+    // Keep the controls anchored to the values that were actually applied.
+    syncChannelDraftFromApplied({ force: true });
+    syncChannelDraftControls();
     clearPendingPlaybackPreview();
     scheduleOptionMetricsUpdate();
     scheduleSessionPersist();
@@ -903,9 +913,17 @@
     }, Math.max(60, Number(delay) || 160));
   }
 
+  function isDefaultSampleSourceActive() {
+    return String(state.sourceMeta?.name || "") === "Sample MML"
+      && String(state.sourceMeta?.sourceType || "") === "mml";
+  }
+
   async function loadSessionRestorePrompt() {
     const snapshot = await readPlayerSession();
-    if (!snapshot?.sourceMml || !snapshot?.name || snapshot.version < 3 || snapshot.userEdited !== true || state.sourceMml) return;
+    // The built-in Sample MML is a live demo source, not a user-loaded document.
+    // Keep it fully editable while still offering restoration of a saved real session.
+    if (!snapshot?.sourceMml || !snapshot?.name || snapshot.version < 3 || snapshot.userEdited !== true
+      || (state.sourceMml && !isDefaultSampleSourceActive())) return;
     state.sessionLoadedSnapshot = snapshot;
     if (state.ui.restoreButton && state.ui.fileName) {
       state.ui.fileName.hidden = true;
@@ -1406,9 +1424,25 @@
 
   function applyFromSource({ force = false } = {}) {
     if (!state.sourceMml) {
-      scheduleCopyRowsRender();
-      scheduleOptionMetricsUpdate();
-      return;
+      // Safety net for the built-in/default text: if something delayed source
+      // initialization, never leave a visible MML string disconnected from the
+      // transformation pipeline. This makes every channel/global option usable
+      // even before the user loads a file.
+      const visibleMml = String($("mainMml")?.value || "").trim();
+      if (visibleMml) {
+        state.sourceMml = visibleMml;
+        if (!state.sourceMeta?.name) {
+          state.sourceMeta = { name: "Sample MML", sourceType: "mml", sourceLabel: "MML" };
+        }
+        state.sourceVersion += 1;
+        state.lastApplySignature = "";
+        state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], noteStatsSource: "", noteStats: [], tempoInput: "", tempoResult: null };
+        resetPipelineCache();
+      } else {
+        scheduleCopyRowsRender();
+        scheduleOptionMetricsUpdate();
+        return;
+      }
     }
     const optimizer = window.MabiOptimizer;
     if (!optimizer) return;
@@ -3958,13 +3992,18 @@
   updateLocalText();
   window.setTimeout(() => syncChannelCodeEditor(), 0);
 
+  // Make the markup's built-in MML a real source immediately. Previously the text
+  // was visible before sourceMml was initialized (and could remain uninitialized
+  // whenever a restorable session existed), so channel/volume/rest/octave/etc.
+  // controls could appear to do nothing on the first-visit sample.
+  const initialSampleMml = $("mainMml")?.value || "";
+  if (initialSampleMml.trim()) {
+    receiveSourceBaseline({ mml: initialSampleMml, name: "Sample MML", sourceType: "mml", sourceLabel: "MML" });
+  }
+
   Promise.resolve(window.MobibardI18n?.ready).then(async () => {
     updateLocalText();
     await loadSessionRestorePrompt();
-    if (!state.sourceMml && !state.sessionLoadedSnapshot) {
-      const initial = $("mainMml")?.value || "";
-      if (initial.trim()) receiveSourceBaseline({ mml: initial, name: "Sample MML", sourceType: "mml", sourceLabel: "MML" });
-    }
   });
 
   window.MobibardPlayerLayout = Object.freeze({
@@ -4561,6 +4600,24 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
   window.addEventListener("mobibard:preview-source", handlePlayerUiPreviewSource);
+
+  // Channel-option Apply can replace the MML while playback is already running.
+  // The editor/schedule cache is refreshed by the textarea input event, but the
+  // already prepared SoundFont notes keep their old gain/volume until playback is
+  // restarted.  Rebuild immediately and resume from the same position so an
+  // applied volume change is audible as soon as Apply is pressed.
+  window.addEventListener("mobibard:options-applied", event => {
+    if (!event?.detail?.changed) return;
+    const wasPlaying = Boolean(isPlaying);
+    const resumeOffset = wasPlaying ? getCurrentPlaybackOffset() : Math.max(0, Number(currentOffset) || 0);
+    if (wasPlaying) stopPlayback(false);
+    currentOffset = resumeOffset;
+    cancelScheduledEditorDerivedRefresh();
+    rebuildSchedulePreviewSilently();
+    if (wasPlaying) {
+      window.setTimeout(() => { void playFromCurrent(); }, 0);
+    }
+  });
 
 
   function dispatchPlayerUiOriginalAvailability() {

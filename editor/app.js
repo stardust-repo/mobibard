@@ -3467,6 +3467,31 @@
     return clamp(Math.round(baseVolume * factor), 0, 15);
   }
 
+  function updateChannelDefaultNoteVolumeFromNotes(channel, notes = []) {
+    if (!channel || !Array.isArray(notes) || !notes.length) return false;
+    const volumes = notes
+      .filter((note) => note && typeof note === "object")
+      .map((note) => getNoteVolume(note))
+      .filter((value) => Number.isFinite(value));
+    if (!volumes.length) return false;
+    // Keep newly-created notes consistent with the volume level the user most
+    // recently edited in this channel. For mixed selections, use their rounded
+    // average so a relative edit does not arbitrarily pick one note's value.
+    const next = clamp(
+      Math.round(volumes.reduce((sum, value) => sum + value, 0) / volumes.length),
+      0,
+      15,
+    );
+    const before = clamp(
+      Math.round(Number(channel.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || CONFIG.defaultNewChannelNoteVolume),
+      0,
+      15,
+    );
+    if (before === next) return false;
+    channel.defaultNoteVolume = next;
+    return true;
+  }
+
   function getNotePlaybackVelocityForVolume(note, volume) {
     const safeVolume = clamp(Math.round(Number(volume) || 0), 0, 15);
     if (safeVolume <= 0) return 0;
@@ -6009,50 +6034,67 @@
     return low;
   }
 
+  function getVelocityLaneVisualColumns(renderItems = state.velocityLaneRenderItems || []) {
+    const byX = new Map();
+    for (const item of renderItems || []) {
+      const entry = item?.entry;
+      const x = Number(item?.x);
+      if (!entry || !Number.isFinite(x)) continue;
+      // drawVelocityLane() snaps onset bars to half-pixel X positions. Treat every
+      // bar painted on that same visual column as one edit target, even if tiny beat
+      // differences exist underneath after import/quantization.
+      const key = String(x);
+      let column = byX.get(key);
+      if (!column) {
+        column = { x, entries: [] };
+        byX.set(key, column);
+      }
+      column.entries.push(entry);
+    }
+    const columns = [...byX.values()].sort((left, right) => left.x - right.x);
+    for (const column of columns) {
+      column.entries.sort((left, right) => left.channelIndex - right.channelIndex || Number(left.note.id) - Number(right.note.id));
+    }
+    return columns;
+  }
+
   function applyVelocityLaneSegment(interaction, fromBeat, fromVolume, toBeat, toVolume) {
-    const entries = interaction?.entries || [];
-    if (!entries.length) return false;
-    const quarterWidth = Math.max(1, getQuarterWidth());
-    const hitTolerance = Math.max(CONFIG.minimumNoteBeat / 8, 6 / quarterWidth);
-    const span = Math.abs(toBeat - fromBeat);
+    const columns = getVelocityLaneVisualColumns(interaction?.renderItems || []);
+    if (!columns.length) return false;
+    const scrollLeft = Number(interaction?.scrollLeft) || 0;
+    const fromX = beatToX(fromBeat) - scrollLeft;
+    const toX = beatToX(toBeat) - scrollLeft;
+    const spanX = Math.abs(toX - fromX);
+    const hitTolerancePx = 6;
     let changed = false;
 
-    // A click/vertical drag edits the nearest onset only. Use the sorted onset list
-    // directly instead of scanning every visible note on each pointermove.
-    if (span < hitTolerance * 0.35) {
-      const index = lowerBoundVelocityEntries(entries, toBeat);
-      let nearestBeat = null;
+    // Vertical/near-vertical editing changes the whole nearest visible onset column.
+    // The editable area is the full lane height; only X proximity to a bar matters.
+    if (spanX < 2) {
+      let nearest = null;
       let nearestDistance = Infinity;
-      for (const candidateIndex of [index - 1, index]) {
-        const entry = entries[candidateIndex];
-        if (!entry) continue;
-        const distance = Math.abs(entry.startBeat - toBeat);
+      for (const column of columns) {
+        const distance = Math.abs(column.x - toX);
         if (distance < nearestDistance) {
           nearestDistance = distance;
-          nearestBeat = entry.startBeat;
+          nearest = column;
         }
       }
-      if (nearestBeat == null || nearestDistance > hitTolerance) return false;
-      let cursor = lowerBoundVelocityEntries(entries, nearestBeat - 1e-7);
-      while (cursor < entries.length && entries[cursor].startBeat <= nearestBeat + 1e-7) {
-        changed = setVelocityLaneNoteVolume(entries[cursor], toVolume, interaction) || changed;
-        cursor += 1;
-      }
-      return changed;
+      if (!nearest || nearestDistance > hitTolerancePx) return false;
+      return setVelocityLaneEntriesVolume(nearest.entries, toVolume, interaction);
     }
 
-    // Horizontal/diagonal painting follows the pointer segment. Only the onset slice
-    // crossed by this pointer segment is visited, keeping dense arrangements responsive.
-    const lowBeat = Math.min(fromBeat, toBeat);
-    const highBeat = Math.max(fromBeat, toBeat);
-    let cursor = lowerBoundVelocityEntries(entries, lowBeat - 1e-7);
-    while (cursor < entries.length) {
-      const entry = entries[cursor];
-      if (entry.startBeat > highBeat + 1e-7) break;
-      const ratio = clamp((entry.startBeat - fromBeat) / (toBeat - fromBeat), 0, 1);
+    // Horizontal/diagonal painting follows visual onset columns, not raw beat
+    // equality. All bars that share one displayed X column always receive the same
+    // value, which keeps Group/All editing deterministic.
+    const lowX = Math.min(fromX, toX) - 0.75;
+    const highX = Math.max(fromX, toX) + 0.75;
+    for (const column of columns) {
+      if (column.x < lowX) continue;
+      if (column.x > highX) break;
+      const ratio = clamp((column.x - fromX) / (toX - fromX), 0, 1);
       const volume = Math.round(fromVolume + (toVolume - fromVolume) * ratio);
-      changed = setVelocityLaneNoteVolume(entry, volume, interaction) || changed;
-      cursor += 1;
+      changed = setVelocityLaneEntriesVolume(column.entries, volume, interaction) || changed;
     }
     return changed;
   }
@@ -6123,13 +6165,17 @@
       nearestDistance = distance;
       nearestRegion = region;
     }
-    const targetBeat = Number(nearestRegion?.item?.entry?.startBeat);
-    if (!Number.isFinite(targetBeat)) return [];
+    const targetX = Number(nearestRegion?.x);
+    if (!Number.isFinite(targetX)) return [];
     const entries = [];
     const seen = new Set();
     for (const region of state.velocityLaneHitRegions || []) {
+      // The user's edit target is the visible vertical bar column. Imported notes
+      // can carry microscopic beat differences while still rendering to the same X;
+      // those bars must be edited together for click and wheel operations.
+      if (Math.abs(Number(region?.x) - targetX) > 1e-7) continue;
       const entry = region?.item?.entry;
-      if (!entry || Math.abs(Number(entry.startBeat) - targetBeat) > 1e-7) continue;
+      if (!entry) continue;
       const key = `${entry.channel?.id ?? ""}:${entry.note?.id ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -15434,8 +15480,9 @@
     if (elements.channelVolumeScopePane) elements.channelVolumeScopePane.hidden = true;
     elements.channelVolumeDialog?.classList.add("note-selection-mode");
     if (elements.channelVolumeFixedMode) elements.channelVolumeFixedMode.checked = false;
-    // Preserve the old direct-note behavior by allowing V0 unless the user opts into protection.
-    if (elements.channelVolumeProtectV0) elements.channelVolumeProtectV0.checked = false;
+    // This is one unified volume editor: note-selection and channel/group entry
+    // points start with the same V0/minimum-volume protection rule.
+    if (elements.channelVolumeProtectV0) elements.channelVolumeProtectV0.checked = true;
     updateVolumeDialogHeader();
     configureChannelVolumeSliderForMode(true);
     elements.channelVolumeBackdrop.hidden = false;
@@ -15486,6 +15533,7 @@
     if (!changedCount && !defaultVolumeChanged) return false;
     markDirty(i18nText("volume.edit_channels"));
     drawRoll();
+    drawVelocityLane();
     drawTimeline();
     updateChannelInfo();
     if (mode === "notes") {
