@@ -71,25 +71,33 @@ async function fetchJson(url) {
 async function download(url, expectedBytes, onProgress, cacheMode) {
   const response = await fetch(url, { cache: cacheMode });
   if (!response.ok) throw new ModelError("model-unavailable", `${url}: HTTP ${response.status}`);
-  const total = Number(response.headers.get("content-length")) || expectedBytes || 0;
+  // The stream yields *decoded* bytes. When the server compresses the response (GitHub Pages
+  // serves .onnx with Content-Encoding: gzip), Content-Length is the compressed size and must
+  // not be used to size the buffer. Prefer the manifest size, which is the real decoded size.
+  const encoded = !!response.headers.get("content-encoding") && response.headers.get("content-encoding") !== "identity";
+  const headerLength = encoded ? 0 : Number(response.headers.get("content-length")) || 0;
+  const total = expectedBytes || headerLength || 0;
   if (!response.body || typeof response.body.getReader !== "function") {
     const buffer = await response.arrayBuffer();
     onProgress?.(buffer.byteLength, total || buffer.byteLength);
     return new Uint8Array(buffer);
   }
   const reader = response.body.getReader();
-  const out = total > 0 ? new Uint8Array(total) : null;
-  const parts = out ? null : [];
+  let out = total > 0 ? new Uint8Array(total) : null;
+  let parts = out ? null : [];
   let loaded = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    if (out && loaded + value.byteLength <= out.byteLength) out.set(value, loaded);
-    else if (out) { // server sent more than announced: fall back to chunk list
-      throw new ModelError("model-corrupt", "Model download size mismatch");
-    } else parts.push(value);
+    if (out && loaded + value.byteLength > out.byteLength) {
+      // More data than expected (wrong size hint): keep everything and let the hash check decide.
+      parts = [out.subarray(0, loaded)];
+      out = null;
+    }
+    if (out) out.set(value, loaded);
+    else parts.push(value);
     loaded += value.byteLength;
-    onProgress?.(loaded, total);
+    onProgress?.(loaded, Math.max(total, loaded));
   }
   if (out) return loaded === out.byteLength ? out : out.slice(0, loaded);
   const joined = new Uint8Array(loaded);
