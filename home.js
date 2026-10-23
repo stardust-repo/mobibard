@@ -17,7 +17,7 @@
       brand: '모비바드',
       subtitle: '연주 파일 변환, MML 제작, 편집, 분석과 리듬 플레이를 브라우저 한 곳에서 이용할 수 있는 음악 도구 모음입니다.',
       language: '언어', open: '열기 →', footer: '모든 도구는 브라우저에서 실행됩니다.',
-      soundfont: { kicker: '공개 음색 파일', title: 'MobiBard Instruments SF3 / DLS', description: '모비바드의 기본 음색을 원본 SF3와 호환용 DLS 파일로 제공합니다. 두 파일의 URL을 그대로 공유하거나 다른 프로젝트에서 직접 사용할 수 있습니다.', license: '개인·상업적 이용, 복사, 수정, 변환, 재배포, 미러링 및 직접 링크를 모두 자유롭게 허용합니다. 출처 표기나 별도 허가는 필요하지 않습니다.', downloadSf3: 'SF3 다운로드', downloadDls: 'DLS 다운로드', licenseLink: '자유 이용 안내' },
+      soundfont: { kicker: '공개 음색 파일', title: 'MobiBard Instruments SF3 / DLS', description: '모비바드의 기본 음색을 원본 SF3와 호환용 DLS 파일로 제공합니다. 두 파일의 URL을 그대로 공유하거나 다른 프로젝트에서 직접 사용할 수 있습니다.', license: 'startdust-io가 제작했으며 MIT License로 배포합니다. 개인·상업적 이용, 복사, 수정, 변환, 재배포, 미러링 및 직접 링크를 허용하며, 파일을 재배포할 때는 저작권 고지와 라이선스 문구를 함께 포함해야 합니다.', downloadSf3: 'SF3 다운로드', downloadDls: 'DLS 다운로드', licenseLink: 'MIT 라이선스' },
       products: [
         ['simple', 'MML 간편 생성기', 'MML 생성', '♪', '연주 파일을 복잡한 설정 없이 빠르게 최대 3채널 MML로 변환합니다.'],
         ['player', 'MML 상세 생성기', 'MML 생성', '≋', '6채널 배정, 세부 옵션, 피아노롤과 미리듣기를 갖춘 상세 MML 생성기입니다.'],
@@ -31,7 +31,7 @@
       brand: 'モビバード',
       subtitle: '演奏ファイルの変換、MML作成、編集、解析、リズムプレイをブラウザーで利用できる音楽ツール集です。',
       language: '言語', open: '開く →', footer: 'すべてのツールはブラウザー上で動作します。',
-      soundfont: { kicker: '公開音色ファイル', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBardの標準音色をオリジナルSF3と互換用DLSファイルで提供します。どちらのファイルURLもそのまま共有したり、他のプロジェクトから直接利用できます。', license: '個人・商用利用、複製、改変、変換、再配布、ミラーリング、直接リンクをすべて自由に許可します。クレジット表記や個別の許可は不要です。', downloadSf3: 'SF3をダウンロード', downloadDls: 'DLSをダウンロード', licenseLink: '自由利用について' },
+      soundfont: { kicker: '公開音色ファイル', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBardの標準音色をオリジナルSF3と互換用DLSファイルで提供します。どちらのファイルURLもそのまま共有したり、他のプロジェクトから直接利用できます。', license: 'startdust-io が制作し、MIT License で配布しています。個人・商用利用、複製、改変、変換、再配布、ミラーリング、直接リンクを許可します。ファイルを再配布する際は著作権表示とライセンス文を同梱してください。', downloadSf3: 'SF3をダウンロード', downloadDls: 'DLSをダウンロード', licenseLink: 'MITライセンス' },
       products: [
         ['simple', 'MML簡単ジェネレーター', 'MML作成', '♪', '複雑な設定なしで演奏ファイルを最大3チャンネルのMMLへ素早く変換します。'],
         ['player', 'MML詳細ジェネレーター', 'MML作成', '≋', '6チャンネル割り当て、詳細設定、ピアノロールとプレビューを備えたMML作成ツールです。'],
@@ -45,7 +45,7 @@
       brand: 'Mobibard',
       subtitle: 'A browser-based music toolkit for converting performance files, creating and editing MML, analysis, and rhythm play.',
       language: 'Language', open: 'Open →', footer: 'All tools run in your browser.',
-      soundfont: { kicker: 'Public sound files', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBard’s default sound set is provided as the original SF3 and a compatible DLS version. You may share either file URL as-is or use it directly in other projects.', license: 'Personal and commercial use, copying, modification, conversion, redistribution, mirroring, and direct linking are all freely permitted. No attribution or separate permission is required.', downloadSf3: 'Download SF3', downloadDls: 'Download DLS', licenseLink: 'Free-use notice' },
+      soundfont: { kicker: 'Public sound files', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBard’s default sound set is provided as the original SF3 and a compatible DLS version. You may share either file URL as-is or use it directly in other projects.', license: 'Made by startdust-io and released under the MIT License. Personal and commercial use, copying, modification, conversion, redistribution, mirroring, and direct linking are permitted; include the copyright notice and license text when you redistribute the files.', downloadSf3: 'Download SF3', downloadDls: 'Download DLS', licenseLink: 'MIT License' },
       products: [
         ['simple', 'MML Simple Generator', 'MML creator', '♪', 'Quickly convert performance files into up to three MML channels with minimal setup.'],
         ['player', 'MML Detailed Generator', 'MML creator', '≋', 'A detailed six-channel MML creator with assignment controls, options, piano roll, and preview.'],
@@ -59,7 +59,7 @@
       brand: 'Mobibard',
       subtitle: '在浏览器中完成演奏文件转换、MML制作与编辑、分析以及节奏游戏的一组音乐工具。',
       language: '语言', open: '打开 →', footer: '所有工具均在浏览器中运行。',
-      soundfont: { kicker: '公开音色文件', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBard默认音色提供原始SF3与兼容DLS两个版本。可以直接分享任一文件链接，也可以在其他项目中直接使用。', license: '允许自由用于个人或商业用途，也允许复制、修改、转换、再发布、镜像及直接链接。无需署名或另行取得许可。', downloadSf3: '下载SF3', downloadDls: '下载DLS', licenseLink: '自由使用说明' },
+      soundfont: { kicker: '公开音色文件', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBard默认音色提供原始SF3与兼容DLS两个版本。可以直接分享任一文件链接，也可以在其他项目中直接使用。', license: '由 startdust-io 制作，以 MIT License 发布。允许个人或商业用途，以及复制、修改、转换、再发布、镜像及直接链接；再发布文件时须附上版权声明与许可文本。', downloadSf3: '下载SF3', downloadDls: '下载DLS', licenseLink: 'MIT 许可证' },
       products: [
         ['simple', 'MML 简易生成器', 'MML制作', '♪', '无需复杂设置，即可快速将演奏文件转换为最多3个MML声道。'],
         ['player', 'MML 详细生成器', 'MML制作', '≋', '提供6声道分配、详细选项、钢琴卷帘和预览的MML制作工具。'],
@@ -73,7 +73,7 @@
       brand: 'Mobibard',
       subtitle: '可在瀏覽器中完成演奏檔轉換、MML製作與編輯、分析及節奏遊戲的一組音樂工具。',
       language: '語言', open: '開啟 →', footer: '所有工具皆在瀏覽器中執行。',
-      soundfont: { kicker: '公開音色檔案', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBard預設音色提供原始SF3與相容DLS兩個版本。可以直接分享任一檔案連結，也可以在其他專案中直接使用。', license: '允許自由用於個人或商業用途，也允許複製、修改、轉換、再散布、鏡像及直接連結。無需標示出處或另行取得許可。', downloadSf3: '下載SF3', downloadDls: '下載DLS', licenseLink: '自由使用說明' },
+      soundfont: { kicker: '公開音色檔案', title: 'MobiBard Instruments SF3 / DLS', description: 'MobiBard預設音色提供原始SF3與相容DLS兩個版本。可以直接分享任一檔案連結，也可以在其他專案中直接使用。', license: '由 startdust-io 製作，以 MIT License 發布。允許個人或商業用途，以及複製、修改、轉換、再散布、鏡像及直接連結；再散布檔案時須附上著作權聲明與授權條款。', downloadSf3: '下載SF3', downloadDls: '下載DLS', licenseLink: 'MIT 授權' },
       products: [
         ['simple', 'MML 簡易產生器', 'MML製作', '♪', '不需複雜設定，即可快速將演奏檔轉換為最多3個MML頻道。'],
         ['player', 'MML 詳細產生器', 'MML製作', '≋', '提供6頻道配置、詳細選項、鋼琴捲軸與預覽的MML製作工具。'],

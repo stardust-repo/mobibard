@@ -4,6 +4,8 @@
   // Source: MobiBard_Instruments(6).sf3 (4,076,732 bytes)
   // Internal name: MobiBard Instruments
   // Generator: MobiBard Instrument Builder
+  // Author: startdust-io
+  // License: MIT (Copyright (c) 2026 startdust-io) - see assets/MobiBard_Instruments_LICENSE.txt
   // SHA-256: 10519b3519bc8f67639cefb49cfe135102f58b731c281e59e154ba11883bb32e
   window.MOBIBARD_DEFAULT_SF3_NAME = "MobiBard_Instruments.sf3";
   window.MOBIBARD_DEFAULT_SF3_BASE64 = `

@@ -1,0 +1,12 @@
+{
+  "id": "mobibard_m2m",
+  "name": "Wave2MIDI",
+  "version": "0.1",
+  "author": "startdust-io",
+  "license": "MIT",
+  "licenseFile": "LICENSE",
+  "file": "mobibard_m2m.onnx",
+  "meta": "meta.json",
+  "bytes": 39044291,
+  "sha256": "ad15b573d289a7c97f2256489c2e39c425cd6da70a9afbb80bbff3bb4360c289"
+}

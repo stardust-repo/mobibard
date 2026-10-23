@@ -381,7 +381,6 @@
     fileExportButton: document.querySelector("#fileExportButton"),
     midiExportButton: document.querySelector("#midiExportButton"),
     audioExportButton: document.querySelector("#audioExportButton"),
-    midiExtractButton: document.querySelector("#midiExtractButton"),
     supportedFilesMenuButton: document.querySelector("#supportedFilesMenuButton"),
     newButton: document.querySelector("#newButton"),
     openButton: document.querySelector("#openButton"),
@@ -13686,6 +13685,10 @@
   }
 
   function closeMidiImportDialog({ reset = true } = {}) {
+    if (cancelAudioToMidiImport()) {
+      state.midiImport.busy = false;
+      showToast(i18nText("audio_midi.cancelled"));
+    }
     stopMidiImportPreview({ update: false });
     if (elements.midiImportBackdrop) elements.midiImportBackdrop.hidden = true;
     if (reset && !state.midiImport.busy) {
@@ -13715,6 +13718,157 @@
     }
     updateMidiImportDialog();
     return parsed;
+  }
+
+  // ---- 오디오 → MIDI (AI, Beta): shared Wave2MIDI module (plugins/ai/wave2midi) ----
+  // 불러오기에서 음원 파일을 고르면 AI로 MIDI를 만든 뒤 일반 MIDI와 같은 통합 불러오기 흐름을 사용합니다.
+  const AUDIO_TO_MIDI_EXTENSIONS = new Set(["wav", "wave", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"]);
+  const AUDIO_TO_MIDI_MAX_MINUTES = 10;
+  let audioToMidiController = null;
+
+  function isAudioToMidiImportFile(file) {
+    const extension = (String(file?.name || "").toLowerCase().match(/\.([^.]+)$/)?.[1] || "");
+    if (AUDIO_TO_MIDI_EXTENSIONS.has(extension)) return true;
+    const type = String(file?.type || "").toLowerCase();
+    return type.startsWith("audio/") && !/midi|kar/.test(type);
+  }
+
+  function formatMegabytes(bytes) {
+    return (Math.max(0, Number(bytes) || 0) / 1e6).toFixed(1);
+  }
+
+  function describeAudioToMidiProgress({ stage, done = 0, total = 0 } = {}) {
+    switch (stage) {
+      case "decode": return i18nText("audio_midi.stage_decode");
+      case "runtime": return i18nText("audio_midi.stage_runtime");
+      case "model-check": return i18nText("audio_midi.stage_model_check");
+      case "model-download": return i18nText("audio_midi.stage_model_download", [formatMegabytes(done), formatMegabytes(total)]);
+      case "model-store": return i18nText("audio_midi.stage_model_store");
+      case "model-init": return i18nText("audio_midi.stage_model_init");
+      case "analyze": return i18nText("audio_midi.stage_analyze", [done, Math.max(total, 1)]);
+      case "velocity": return i18nText("audio_midi.stage_velocity");
+      case "midi": return i18nText("audio_midi.stage_midi");
+      default: return "";
+    }
+  }
+
+  function audioToMidiErrorMessage(error) {
+    const code = error?.code || "failed";
+    const keys = {
+      unsupported: "audio_midi.error_unsupported",
+      "decode-failed": "audio_midi.error_decode",
+      "too-long": "audio_midi.error_too_long",
+      "runtime-unavailable": "audio_midi.error_runtime",
+      "model-init-failed": "audio_midi.error_runtime",
+      "model-unavailable": "audio_midi.error_model",
+      "model-corrupt": "audio_midi.error_model",
+      "out-of-memory": "audio_midi.error_memory",
+      "no-notes": "audio_midi.no_notes",
+    };
+    return i18nText(keys[code] || "audio_midi.error_generic", code === "too-long" ? [AUDIO_TO_MIDI_MAX_MINUTES] : []);
+  }
+
+  function audioToMidiProgressFraction({ stage, done = 0, total = 0 } = {}) {
+    if ((stage === "model-download" || stage === "analyze") && total > 0) return Math.max(0, Math.min(1, done / total));
+    return null;
+  }
+
+  // Large progress panel shown in the (still empty) channel list while the AI conversion runs.
+  function renderAudioToMidiProgressPanel(text, fraction = null) {
+    const list = elements.midiImportSelectionList;
+    if (!list) return;
+    let panel = list.querySelector(".audio-ai-import-progress");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.className = "audio-ai-import-progress";
+      panel.innerHTML = '<strong></strong><progress max="1"></progress><span></span><small class="audio-ai-import-credit" hidden><a target="_blank" rel="noopener noreferrer"></a></small>';
+      list.replaceChildren(panel);
+      void window.MobibardWave2Midi?.getModelInfo?.().then((info) => {
+        const credit = panel.querySelector(".audio-ai-import-credit");
+        const link = credit?.querySelector("a");
+        if (!credit || !link || !panel.isConnected) return;
+        // Model attribution (manifest.json): e.g. "Wave2MIDI v0.1 · startdust-io · MIT License"
+        link.textContent = [info.version ? `${info.name} v${info.version}` : info.name, info.author, info.license ? `${info.license} License` : ""].filter(Boolean).join(" · ");
+        if (info.licenseUrl) link.href = info.licenseUrl;
+        else link.removeAttribute("href");
+        credit.hidden = false;
+      }).catch(() => {});
+    }
+    panel.querySelector("strong").textContent = i18nText("audio_midi.source_label");
+    const bar = panel.querySelector("progress");
+    if (fraction == null) bar.removeAttribute("value");
+    else bar.value = fraction;
+    panel.querySelector("span").textContent = String(text || "");
+  }
+
+  function cancelAudioToMidiImport() {
+    if (!audioToMidiController) return false;
+    audioToMidiController.abort(); // terminates the inference worker
+    audioToMidiController = null;
+    return true;
+  }
+
+  async function prepareAudioToMidiImportFile(file) {
+    if (!file || state.midiImport.busy) return false;
+    const api = window.MobibardWave2Midi;
+    if (!api?.isSupported?.()) {
+      showToast(i18nText("audio_midi.error_unsupported"));
+      return false;
+    }
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    resetMidiImportState();
+    const sourceLabel = i18nText("audio_midi.source_label");
+    const controller = new AbortController();
+    audioToMidiController = controller;
+    state.midiImport.busy = true;
+    state.midiImport.kind = "midi";
+    state.midiImport.sourceFile = file;
+    state.midiImport.fileName = String(file.name || "Audio");
+    state.midiImport.sourceType = "audio-ai";
+    state.midiImport.sourceLabel = sourceLabel;
+    if (elements.midiImportQuantize) elements.midiImportQuantize.value = "64";
+    openMidiImportDialog();
+    setMidiImportStatus(describeAudioToMidiProgress({ stage: "decode" }));
+    renderAudioToMidiProgressPanel(describeAudioToMidiProgress({ stage: "decode" }));
+    try {
+      const result = await api.transcribe(file, {
+        maxSeconds: AUDIO_TO_MIDI_MAX_MINUTES * 60,
+        signal: controller.signal,
+        onProgress: (event) => {
+          if (controller.signal.aborted) return;
+          const text = describeAudioToMidiProgress(event);
+          if (!text) return;
+          setMidiImportStatus(text);
+          renderAudioToMidiProgressPanel(text, audioToMidiProgressFraction(event));
+        },
+      });
+      if (controller.signal.aborted) return false;
+      if (!result.notes.length) throw Object.assign(new Error("No notes"), { code: "no-notes" });
+      const midiBuffer = toStandaloneArrayBuffer(result.midi);
+      const preview = parseMidiArrayBuffer(midiBuffer, state.midiImport.fileName, {
+        quantizeDivision: 64,
+        sourceType: "audio-ai",
+        sourceLabel,
+      });
+      state.midiImport.midiBuffer = midiBuffer;
+      state.midiImport.preview = preview;
+      state.midiImport.selectedGroupIds = new Set(preview.groups.map((group) => String(group.id)));
+      state.midiImport.busy = false;
+      updateMidiImportDialog();
+      showToast(i18nText("audio_midi.done", [result.model?.version || "-", result.notes.length, Number(result.elapsed || 0).toFixed(1)]));
+      return true;
+    } catch (error) {
+      if (controller.signal.aborted || error?.code === "aborted") return false;
+      console.error("Audio to MIDI conversion failed", error);
+      state.midiImport.busy = false;
+      state.midiImport.midiBuffer = null;
+      state.midiImport.preview = null;
+      updateMidiImportDialog();
+      setMidiImportStatus(audioToMidiErrorMessage(error), { error: true });
+      return false;
+    } finally {
+      if (audioToMidiController === controller) audioToMidiController = null;
+    }
   }
 
   async function prepareMidiImportFile(file) {
@@ -14832,6 +14986,9 @@
     }
     if (window.MabiMusicFormats?.isSupported(name, file.type || "")) {
       return prepareMidiImportFile(file);
+    }
+    if (isAudioToMidiImportFile(file)) {
+      return prepareAudioToMidiImportFile(file);
     }
     if (["mml", "3mle", "mmi", "txt"].includes(extension) || String(file.type || "").startsWith("text/")) {
       return prepareCompatibleTextImportFile(file);
@@ -26292,11 +26449,6 @@
     }
   }
 
-  function openMidiExtractionSupport() {
-    window.open("https://muscriptor.kyutai.org/", "_blank", "noopener,noreferrer");
-    return true;
-  }
-
   async function loadProjectFromFile(file, { notify = true, loadedFileName = null } = {}) {
     state.soloChannelIds.clear();
     state.soloGroupIds.clear();
@@ -30288,7 +30440,6 @@
     elements.fileExportButton.addEventListener("click", () => { closeFileMenu(); exportCurrentContextAsMml(); });
     elements.midiExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsMidi(); });
     elements.audioExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsAudioOgg(); });
-    elements.midiExtractButton?.addEventListener("click", () => { closeFileMenu(); openMidiExtractionSupport(); });
     elements.supportedFilesMenuButton?.addEventListener("click", closeFileMenu);
     elements.newButton.addEventListener("click", () => {
       closeFileMenu();

@@ -200,7 +200,7 @@
     editor: [
       { category: "project", label: "모비바드 프로젝트", extensions: ["mmlproj", "mmlproj.json", "json"], description: "피아노롤 편집 프로젝트" },
       { category: "project", label: "3MLE / MabiIcco / MML", extensions: ["mml", "3mle", "mmi", "txt"], description: "3MLE(.mml/.3mle) · MabiIcco/마비꼬(.mmi) · MML 텍스트(.txt)" },
-      { category: "audio", label: "오디오", extensions: ["wav", "mp3", "ogg", "m4a", "aac", "flac", "webm"], description: "편집용 참고 오디오" },
+      { category: "audio", label: "오디오", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], description: "편집용 참고 오디오 · 불러오기에서 선택하면 AI로 악기별 MIDI 변환 (Beta)" },
     ],
   };
 
@@ -229,7 +229,7 @@
     { id: "mml", labelKey: "pickerMml", extensions: ["mml", "mmi", "3mle", "txt"], mimeType: "text/plain" },
     { id: "soundfont", labelKey: "pickerSoundFont", extensions: ["sf2", "sf3"], includeMacBinary: true, mimeType: "application/octet-stream" },
     { id: "dls", labelKey: "pickerDls", extensions: ["dls"], includeMacBinary: true, mimeType: "application/octet-stream" },
-    { id: "audio", labelKey: "pickerAudio", extensions: ["wav", "mp3", "ogg", "m4a", "aac", "flac", "webm"], mimeType: "audio/*" },
+    { id: "audio", labelKey: "pickerAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], mimeType: "audio/*" },
   ]);
 
   const POPUP_FAMILIES = Object.freeze([

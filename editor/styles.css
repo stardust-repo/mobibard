@@ -14328,3 +14328,19 @@ body.workspace-topbar-locked #tutorialBackdrop a {
   opacity: 1 !important;
   filter: none !important;
 }
+
+/* 오디오 → MIDI (AI, Beta) progress inside the unified import dialog */
+.audio-ai-import-progress {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  align-content: center;
+  min-height: 180px;
+  padding: 28px 16px;
+  text-align: center;
+}
+.audio-ai-import-progress strong { font-size: 13px; }
+.audio-ai-import-progress progress { width: min(360px, 100%); height: 8px; accent-color: var(--accent); }
+.audio-ai-import-progress span { color: var(--muted); font-size: 11.5px; font-weight: 700; overflow-wrap: anywhere; }
+.audio-ai-import-credit { color: var(--muted); font-size: 10px; }
+.audio-ai-import-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }

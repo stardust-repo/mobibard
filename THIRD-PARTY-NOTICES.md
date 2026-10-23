@@ -1,6 +1,6 @@
 # Third-party notices
 
-- 마지막 업데이트: **2026-09-23 KST**
+- 마지막 업데이트: **2026-10-23 KST**
 
 이 문서는 현재 저장소에 포함된 제3자 코드와 라이선스 고지를 정리합니다. 파일을 이동하거나 공용 플러그인 구조를 변경하더라도 아래 고지와 각 원본 라이선스 파일을 함께 유지해야 합니다.
 
@@ -189,3 +189,30 @@ Relevant upstream projects:
 - libogg: https://github.com/xiph/ogg
 - libvorbis: https://github.com/xiph/vorbis
 
+
+## ONNX Runtime Web 1.20.1 (Wave2MIDI)
+
+`plugins/ai/wave2midi/worker.js` loads ONNX Runtime Web from `plugins/ai/wave2midi/vendor/onnxruntime-web/` when present, otherwise from `https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/`.
+Project: https://github.com/microsoft/onnxruntime
+
+MIT License
+
+Copyright (c) Microsoft Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

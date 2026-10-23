@@ -1,0 +1,201 @@
+{
+ "architecture": "w2m_hybrid_axial_v5",
+ "version": "0.1",
+ "author": "startdust-io",
+ "license": {
+  "spdx": "MIT",
+  "copyright": "Copyright (c) 2026 startdust-io",
+  "file": "LICENSE"
+ },
+ "step": 40000,
+ "parameters": 19355020,
+ "classes": [
+  0,
+  2,
+  8,
+  16,
+  24,
+  26,
+  29,
+  33,
+  40,
+  41,
+  42,
+  48,
+  52,
+  56,
+  60,
+  64,
+  66,
+  67,
+  70,
+  72,
+  80,
+  88,
+  106
+ ],
+ "thresholds": {
+  "onset": 0.16,
+  "frame": 0.3,
+  "offset": 0.5,
+  "drum": 0.16,
+  "inst_multi": 0.65,
+  "min_frames": 2,
+  "inst_frames": 15,
+  "drum_seconds": 0.05
+ },
+ "window_seconds": 8.0,
+ "overlap_seconds": 2.0,
+ "frames": 800,
+ "sample_rate": 24000,
+ "hop": 240,
+ "pitch_min": 21,
+ "n_pitch": 88,
+ "drum": 128,
+ "frontend": {
+  "n_ffts": [
+   4096,
+   1024
+  ],
+  "harmonics": [
+   0.5,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "shifts": [
+   -36,
+   0,
+   36,
+   57,
+   72,
+   84,
+   93,
+   101
+  ],
+  "out_start": 36,
+  "out_bins": 264,
+  "n_logf": 357,
+  "base_midi": 8.666666666666666,
+  "pad_lo": 9,
+  "pad_hi": 53
+ },
+ "input": {
+  "name": "features",
+  "shape": [
+   1,
+   16,
+   800,
+   264
+  ]
+ },
+ "outputs": {
+  "onset": [
+   1,
+   800,
+   88
+  ],
+  "frame": [
+   1,
+   800,
+   88
+  ],
+  "offset": [
+   1,
+   800,
+   88
+  ],
+  "drum": [
+   1,
+   800,
+   88
+  ],
+  "inst": [
+   1,
+   800,
+   88,
+   23
+  ]
+ },
+ "models": {
+  "fp32": {
+   "file": "model.onnx",
+   "mb": 77.7,
+   "compute": "fp32",
+   "note": "reference"
+  },
+  "w16": {
+   "file": "model_w16.onnx",
+   "mb": 39.0,
+   "compute": "fp32",
+   "max_diff": {
+    "onset": 0.00123,
+    "frame": 0.00129,
+    "offset": 0.000699,
+    "drum": 0.00114,
+    "inst": 0.00101
+   },
+   "onset_flips_per_positive": 0.00125,
+   "demo_note_agreement": 0.9974,
+   "cpu_seconds_per_window": 2.15
+  }
+ },
+ "precision_check": {
+  "fp32": {
+   "mel": 0.6083,
+   "mel_at_ckpt_threshold": 0.6083,
+   "drum": 0.6412,
+   "mel_inst": 0.3403,
+   "mel_offset": 0.397,
+   "onset_threshold": 0.16
+  },
+  "w16": {
+   "mel": 0.6082,
+   "mel_at_ckpt_threshold": 0.6082,
+   "drum": 0.6413,
+   "mel_inst": 0.3403,
+   "mel_offset": 0.3967,
+   "onset_threshold": 0.16
+  },
+  "fp16": {
+   "mel": 0.6082,
+   "mel_at_ckpt_threshold": 0.6082,
+   "drum": 0.6412,
+   "mel_inst": 0.3402,
+   "mel_offset": 0.3969,
+   "onset_threshold": 0.16
+  },
+  "max_activation": 912.5
+ },
+ "velocity": {
+  "enabled": true,
+  "min": 35,
+  "max": 120,
+  "harmonics": 6,
+  "window_frames": 6,
+  "pre_frames": [
+   2,
+   5
+  ],
+  "min_range_db": 12.0,
+  "pitch_comp": 0.5,
+  "track_balance": 0.3,
+  "min_group": 6,
+  "n_fft": 4096,
+  "drum_n_fft": 1024,
+  "cluster_frames": 2
+ },
+ "metrics": {
+  "mel": 0.6085090879650245,
+  "mel_inst": 0.34041191044757,
+  "mel_offset": 0.3969153544103955,
+  "drum": 0.6410600045515463,
+  "all": 0.6153649508694378,
+  "frame": 0.7129695103763175
+ },
+ "exported": "2026-10-23 11:52:37"
+}
