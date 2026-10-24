@@ -14,7 +14,7 @@
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
   const LOCALE_VERSION = "5.2.0";
-  const LOCALE_REVISION = "20261024f-sf3-notice";
+  const LOCALE_REVISION = "20261025b-save-menu";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 

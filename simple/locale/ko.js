@@ -70,7 +70,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ko"] = {
     "load": "불러오기",
     "audioSave": "오디오 저장",
     "audioExporting": "OGG 오디오 생성 중...",
-    "audioSaved": "44.1 kHz OGG 오디오를 저장했습니다.",
+    "audioSaved": "48 kHz OGG 오디오를 저장했습니다.",
     "audioExportFailed": "오디오 저장에 실패했습니다.",
     "localSave": "로컬 저장",
     "googleSave": "구글 저장",
@@ -212,6 +212,13 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ko"] = {
     "soundDownloadStart": "기본 음원(약 5 MB)을 내려받는 중입니다. 처음 한 번만 받습니다.",
     "soundDownloadReady": "기본 음원 준비가 끝났습니다.",
     "soundDownloadFailed": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요.",
-    "sound.err_default_download": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요."
+    "sound.err_default_download": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요.",
+    "saveMenu": "저장",
+    "midiSave": "MIDI 저장",
+    "savedMidi": "MIDI 파일을 저장했습니다.",
+    "midiSaveFailed": "MIDI 저장에 실패했습니다.",
+    "partMelody": "멜로디",
+    "partHarmony1": "화음1",
+    "partHarmony2": "화음2"
   }
 };

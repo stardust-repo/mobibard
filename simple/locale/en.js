@@ -70,7 +70,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["en"] = {
     "load": "Load",
     "audioSave": "Save audio",
     "audioExporting": "Creating OGG audio...",
-    "audioSaved": "Saved 44.1 kHz OGG audio.",
+    "audioSaved": "Saved 48 kHz OGG audio.",
     "audioExportFailed": "Could not save audio.",
     "localSave": "Local save",
     "googleSave": "Google save",
@@ -212,6 +212,13 @@ window.__MOBIBARD_SIMPLE_LOCALES__["en"] = {
     "soundDownloadStart": "Downloading the default instrument sounds (about 5 MB). This happens only once.",
     "soundDownloadReady": "Default instrument sounds are ready.",
     "soundDownloadFailed": "Could not download the default instrument sounds. Check your network connection.",
-    "sound.err_default_download": "Could not download the default instrument sounds. Check your network connection."
+    "sound.err_default_download": "Could not download the default instrument sounds. Check your network connection.",
+    "saveMenu": "Save",
+    "midiSave": "Save MIDI",
+    "savedMidi": "Saved the MIDI file.",
+    "midiSaveFailed": "Could not save MIDI.",
+    "partMelody": "Melody",
+    "partHarmony1": "Harmony 1",
+    "partHarmony2": "Harmony 2"
   }
 };

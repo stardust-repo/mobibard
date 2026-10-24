@@ -25,9 +25,9 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "aria.select_item": "选择{0}",
     "aria.sound": "{0}的音色",
     "audio.export_ogg": "保存音频",
-    "audio.export_ogg_hint": "保存为 44.1 kHz OGG 音频",
+    "audio.export_ogg_hint": "保存为 48 kHz OGG 音频",
     "audio.exporting_ogg": "正在生成 OGG 音频...",
-    "audio.export_done": "已保存 44.1 kHz OGG 音频。",
+    "audio.export_done": "已保存 48 kHz OGG 音频。",
     "audio.export_failed": "无法保存音频。",
     "audio.unsupported_web": "此浏览器不支持Web Audio。",
     "auth.login": "登录",
@@ -697,6 +697,9 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "soundbank.download_start": "正在下载默认音源（约 5 MB），仅首次需要。",
     "soundbank.download_ready": "默认音源已就绪。",
     "soundbank.download_failed": "无法下载默认音源，请检查网络连接。",
-    "sound.err_default_download": "无法下载默认音源，请检查网络连接。"
+    "sound.err_default_download": "无法下载默认音源，请检查网络连接。",
+    "file.save_midi": "保存 MIDI",
+    "file.saved_midi": "已保存 MIDI 文件。",
+    "file.save_midi_failed": "MIDI 保存失败"
   }
 };

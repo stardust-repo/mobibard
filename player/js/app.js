@@ -329,6 +329,7 @@
   const retained = {
     copy: $("copyBtn"),
     audio: $("audioSaveBtn"),
+    midi: $("midiSaveBtn"),
     save: $("saveBtn"),
     driveSave: $("googleDriveSaveBtn")
   };
@@ -3832,30 +3833,37 @@
     meta.append(el("strong", "copy-title", { text: t("copyAll") }), el("span", "copy-detail", { text: partDetail(fullParts) }));
     const actions = el("div", "wb8-full-copy-actions");
     const audio = retained.audio;
+    const midi = retained.midi;
     const save = retained.save;
     const drive = retained.driveSave;
     const copyButton = retained.copy;
+    // 저장: one button + menu (오디오 저장 · MIDI 저장 · 로컬 저장 · Google 저장). The original buttons are
+    // moved into the menu once and reused on every re-render so their handlers keep working.
+    const menuItems = [audio, midi, save, drive].filter(Boolean);
+    for (const item of menuItems) {
+      item.removeAttribute("data-i18n");
+      item.removeAttribute("data-i18n-title");
+      item.className = "";
+    }
+    // This first layout IIFE is built before the Player application scope exists.
+    // Use the layout-local i18n helper here instead of the later app-only i18nText().
     if (audio) {
-      audio.removeAttribute("data-i18n");
-      // This first layout IIFE is built before the Player application scope exists.
-      // Use the layout-local i18n helper here instead of the later app-only i18nText().
       audio.textContent = appText("audio.export_ogg", "오디오 저장");
-      audio.className = "copy-button wb4-copy-button wb9-save-copy-button";
-      audio.title = appText("audio.export_ogg_hint", "44.1 kHz OGG 오디오로 저장");
-      actions.append(audio);
+      audio.title = appText("audio.export_ogg_hint", "48 kHz OGG 오디오로 저장");
     }
-    if (save) {
-      save.removeAttribute("data-i18n");
-      save.textContent = t("saveFile");
-      save.className = "copy-button wb4-copy-button wb9-save-copy-button";
-      actions.append(save);
+    if (midi) midi.textContent = appText("file.save_midi", "MIDI 저장");
+    if (save) save.textContent = t("saveFile");
+    if (drive) drive.textContent = t("saveDrive");
+    if (!retained.saveMenu && window.MabiSaveMenu && menuItems.length) {
+      retained.saveMenu = window.MabiSaveMenu.create({ label: appText("ui.save", "저장"), buttonClassName: "copy-button wb4-copy-button wb9-save-copy-button" });
+      retained.saveMenu.button.id = "saveMenuButton";
     }
-    if (drive) {
-      drive.removeAttribute("data-i18n");
-      drive.removeAttribute("data-i18n-title");
-      drive.textContent = t("saveDrive");
-      drive.className = "copy-button wb4-copy-button wb9-save-copy-button";
-      actions.append(drive);
+    if (retained.saveMenu) {
+      retained.saveMenu.addItems(menuItems);
+      if (!retained.saveMenu.button.dataset.busy) retained.saveMenu.setLabel(appText("ui.save", "저장"));
+      actions.append(retained.saveMenu.wrap);
+    } else {
+      for (const item of menuItems) { item.className = "copy-button wb4-copy-button wb9-save-copy-button"; actions.append(item); }
     }
     if (copyButton) {
       copyButton.removeAttribute("data-i18n");
@@ -4398,6 +4406,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const playInfo = $("playInfo");
   const copyBtn = $("copyBtn");
   const audioSaveBtn = $("audioSaveBtn");
+  const midiSaveBtn = $("midiSaveBtn");
   const pasteBtn = $("pasteBtn");
   const pasteMmlDialog = $("pasteMmlDialog");
   const pasteMmlForm = $("pasteMmlForm");
@@ -4895,6 +4904,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     });
     saveBtn.addEventListener("click", async () => {
       if (await runPlayerUiBeforeAction("save")) void saveVisibleMml();
+    });
+    midiSaveBtn?.addEventListener("click", async () => {
+      if (await runPlayerUiBeforeAction("save")) void saveMidiFile();
     });
     rhythmGameBtn?.addEventListener("click", () => {
       openRhythmGameLayer();
@@ -10966,6 +10978,12 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
     audioOggExportBusy = true;
     const oldText = audioSaveBtn?.textContent || "";
+    // The audio button now lives inside the 저장 menu; show progress on the menu button too.
+    const saveMenuButton = $("saveMenuButton");
+    if (saveMenuButton) {
+      saveMenuButton.dataset.busy = "1";
+      saveMenuButton.textContent = i18nText("audio.exporting_ogg");
+    }
     if (audioSaveBtn) {
       audioSaveBtn.disabled = true;
       audioSaveBtn.textContent = i18nText("audio.exporting_ogg");
@@ -11033,6 +11051,54 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         audioSaveBtn.disabled = false;
         audioSaveBtn.textContent = oldText || i18nText("audio.export_ogg");
       }
+      if (saveMenuButton) {
+        delete saveMenuButton.dataset.busy;
+        saveMenuButton.textContent = i18nText("ui.save");
+      }
+    }
+  }
+
+  // 저장 > MIDI 저장: the visible (optimized) MML as a standard MIDI file. Each part gets the
+  // instrument chosen for playback; MobiBard default presets are mapped to GM programs.
+  async function saveMidiFile() {
+    const midiApi = window.MabiMmlMidi;
+    if (!midiApi) {
+      showToast(i18nText("file.save_midi_failed"), "error");
+      return false;
+    }
+    let text = "";
+    try {
+      text = getFullMmlForExport().text;
+    } catch (err) {
+      showToast([i18nText("file.save_midi_failed"), i18nText("mml.optimize_error_detail", [shortError(err)])].filter(Boolean).join(": "), "error");
+      return false;
+    }
+    if (!String(text || "").trim()) {
+      showToast([i18nText("file.save_midi_failed"), i18nText("mml.empty")].filter(Boolean).join(": "), "error");
+      return false;
+    }
+    try {
+      const instruments = Array.from({ length: 6 }, (_, index) => {
+        const [bank, program] = sanitizePresetKey(partPresetKeys[index] || DEFAULT_PART_PRESET_KEY).split(":").map(Number);
+        return { bank, program };
+      });
+      const partNames = [i18nText("part.melody"), ...[1, 2, 3, 4, 5].map((index) => i18nText(`part.harmony${index}`))];
+      const fileName = midiApi.midiFileName(defaultLocalSaveFileName());
+      const { bytes } = midiApi.buildMidiFromMml(text, {
+        title: fileName.replace(/\.mid$/i, ""),
+        instruments,
+        embeddedDefault: !soundFont || Boolean(soundFont.isEmbeddedDefault),
+        partNames,
+        maxParts: 6,
+      });
+      const saved = await midiApi.saveMidiBytes(bytes, fileName, { description: "MIDI" });
+      if (saved) showToast(i18nText("file.saved_midi"), "success");
+      return saved;
+    } catch (err) {
+      showToast(err?.code === "no-notes"
+        ? [i18nText("file.save_midi_failed"), i18nText("mml.empty")].filter(Boolean).join(": ")
+        : [i18nText("file.save_midi_failed"), shortError(err)].filter(Boolean).join(": "), "error");
+      return false;
     }
   }
 

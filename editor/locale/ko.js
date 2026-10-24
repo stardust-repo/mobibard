@@ -493,7 +493,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "midi.v0_silent_v1": "V0은 무음이며 V1은 MIDI velocity 1에 대응합니다. V2~V15는 나머지 velocity 범위를 균등하게 나눕니다.",
     "audio.export_ogg": "오디오 내보내기",
     "audio.exporting_ogg": "OGG 오디오 생성 중...",
-    "audio.export_done": "44.1 kHz OGG 오디오를 저장했습니다.",
+    "audio.export_done": "48 kHz OGG 오디오를 저장했습니다.",
     "audio.export_failed": "오디오 내보내기에 실패했습니다.",
     "audio.export_no_notes": "내보낼 노트가 없습니다.",
     "audio.export_ready_to_save": "오디오 생성이 완료되었습니다. 저장할 위치와 파일 이름을 선택하세요.",

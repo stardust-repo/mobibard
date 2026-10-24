@@ -2,7 +2,7 @@
   "use strict";
 
   const VERSION = "1.0.4";
-  const SAMPLE_RATE = 44100;
+  const SAMPLE_RATE = 48000;
   const CHANNELS = 2;
   const ENCODER_VERSION = "0.7.0";
   const CURRENT_SCRIPT_URL = document.currentScript?.src ? new URL(document.currentScript.src) : null;

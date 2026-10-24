@@ -25,9 +25,9 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "aria.select_item": "Select {0}",
     "aria.sound": "Sound for {0}",
     "audio.export_ogg": "Save audio",
-    "audio.export_ogg_hint": "Save as 44.1 kHz OGG audio",
+    "audio.export_ogg_hint": "Save as 48 kHz OGG audio",
     "audio.exporting_ogg": "Creating OGG audio...",
-    "audio.export_done": "Saved 44.1 kHz OGG audio.",
+    "audio.export_done": "Saved 48 kHz OGG audio.",
     "audio.export_failed": "Could not save audio.",
     "audio.unsupported_web": "This browser does not support Web Audio.",
     "auth.login": "Log in",
@@ -697,6 +697,9 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "soundbank.download_start": "Downloading the default instrument sounds (about 5 MB). This happens only once.",
     "soundbank.download_ready": "Default instrument sounds are ready.",
     "soundbank.download_failed": "Could not download the default instrument sounds. Check your network connection.",
-    "sound.err_default_download": "Could not download the default instrument sounds. Check your network connection."
+    "sound.err_default_download": "Could not download the default instrument sounds. Check your network connection.",
+    "file.save_midi": "Save MIDI",
+    "file.saved_midi": "Saved the MIDI file.",
+    "file.save_midi_failed": "Could not save MIDI"
   }
 };

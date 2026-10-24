@@ -493,7 +493,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "midi.v0_silent_v1": "V0 为静音，V1 对应 MIDI velocity 1。V2–V15 均分其余 velocity 范围。",
     "audio.export_ogg": "导出音频",
     "audio.exporting_ogg": "正在生成 OGG 音频...",
-    "audio.export_done": "已保存 44.1 kHz OGG 音频。",
+    "audio.export_done": "已保存 48 kHz OGG 音频。",
     "audio.export_failed": "无法导出音频。",
     "audio.export_no_notes": "没有可导出的音符。",
     "audio.export_ready_to_save": "音频生成已完成。请选择保存位置和文件名。",

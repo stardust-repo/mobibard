@@ -161,7 +161,7 @@ server.
 ## wasm-media-encoders 0.7.0 (OGG audio export)
 
 `plugins/common/audio-export.js` uses `wasm-media-encoders` 0.7.0 to encode
-browser-rendered 44.1 kHz PCM audio as Ogg Vorbis. MobiBard is configured to
+browser-rendered 48 kHz PCM audio as Ogg Vorbis. MobiBard is configured to
 load only the pinned bundled vendor files from:
 
 - `plugins/vendor/wasm-media-encoders/0.7.0/WasmMediaEncoder.min.js`

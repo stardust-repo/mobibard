@@ -493,7 +493,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "midi.v0_silent_v1": "V0 is silent and V1 maps to MIDI velocity 1. V2–V15 evenly divide the remaining velocity range.",
     "audio.export_ogg": "Export audio",
     "audio.exporting_ogg": "Creating OGG audio...",
-    "audio.export_done": "Saved 44.1 kHz OGG audio.",
+    "audio.export_done": "Saved 48 kHz OGG audio.",
     "audio.export_failed": "Could not export audio.",
     "audio.export_no_notes": "There are no notes to export.",
     "audio.export_ready_to_save": "Audio rendering is complete. Choose the folder and file name to save.",

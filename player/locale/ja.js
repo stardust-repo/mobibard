@@ -25,9 +25,9 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "aria.select_item": "{0}を選択",
     "aria.sound": "{0}の音色",
     "audio.export_ogg": "オーディオ保存",
-    "audio.export_ogg_hint": "44.1 kHz OGGオーディオとして保存",
+    "audio.export_ogg_hint": "48 kHz OGGオーディオとして保存",
     "audio.exporting_ogg": "OGGオーディオを生成中...",
-    "audio.export_done": "44.1 kHz OGGオーディオを保存しました。",
+    "audio.export_done": "48 kHz OGGオーディオを保存しました。",
     "audio.export_failed": "オーディオを保存できませんでした。",
     "audio.unsupported_web": "このブラウザーはWeb Audioに対応していません。",
     "auth.login": "ログイン",
@@ -697,6 +697,9 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "soundbank.download_start": "既定の音源（約5 MB）をダウンロード中です。初回のみ行われます。",
     "soundbank.download_ready": "既定の音源の準備ができました。",
     "soundbank.download_failed": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。",
-    "sound.err_default_download": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。"
+    "sound.err_default_download": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。",
+    "file.save_midi": "MIDI保存",
+    "file.saved_midi": "MIDIファイルを保存しました。",
+    "file.save_midi_failed": "MIDIを保存できませんでした"
   }
 };

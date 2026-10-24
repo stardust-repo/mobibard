@@ -70,7 +70,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ja"] = {
     "load": "読み込む",
     "audioSave": "オーディオ保存",
     "audioExporting": "OGGオーディオを生成中...",
-    "audioSaved": "44.1 kHz OGGオーディオを保存しました。",
+    "audioSaved": "48 kHz OGGオーディオを保存しました。",
     "audioExportFailed": "オーディオを保存できませんでした。",
     "localSave": "ローカルに保存",
     "googleSave": "Google Driveに保存",
@@ -212,6 +212,13 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ja"] = {
     "soundDownloadStart": "既定の音源（約5 MB）をダウンロード中です。初回のみ行われます。",
     "soundDownloadReady": "既定の音源の準備ができました。",
     "soundDownloadFailed": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。",
-    "sound.err_default_download": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。"
+    "sound.err_default_download": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。",
+    "saveMenu": "保存",
+    "midiSave": "MIDI保存",
+    "savedMidi": "MIDIファイルを保存しました。",
+    "midiSaveFailed": "MIDIを保存できませんでした。",
+    "partMelody": "メロディー",
+    "partHarmony1": "和音1",
+    "partHarmony2": "和音2"
   }
 };

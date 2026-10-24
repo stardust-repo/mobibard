@@ -493,7 +493,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "midi.v0_silent_v1": "V0は無音、V1はMIDI velocity 1に対応します。V2～V15は残りのvelocity範囲を均等に分割します。",
     "audio.export_ogg": "オーディオを書き出す",
     "audio.exporting_ogg": "OGGオーディオを生成中...",
-    "audio.export_done": "44.1 kHz OGGオーディオを保存しました。",
+    "audio.export_done": "48 kHz OGGオーディオを保存しました。",
     "audio.export_failed": "オーディオを書き出せませんでした。",
     "audio.export_no_notes": "書き出すノートがありません。",
     "audio.export_ready_to_save": "オーディオの生成が完了しました。保存先とファイル名を選択してください。",

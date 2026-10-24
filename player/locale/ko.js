@@ -25,9 +25,9 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "aria.select_item": "{0} 선택",
     "aria.sound": "{0} 음색",
     "audio.export_ogg": "오디오 저장",
-    "audio.export_ogg_hint": "44.1 kHz OGG 오디오로 저장",
+    "audio.export_ogg_hint": "48 kHz OGG 오디오로 저장",
     "audio.exporting_ogg": "OGG 오디오 생성 중...",
-    "audio.export_done": "44.1 kHz OGG 오디오를 저장했습니다.",
+    "audio.export_done": "48 kHz OGG 오디오를 저장했습니다.",
     "audio.export_failed": "오디오 저장에 실패했습니다.",
     "audio.unsupported_web": "이 브라우저는 WebAudio를 지원하지 않습니다.",
     "auth.login": "로그인",
@@ -697,6 +697,9 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "soundbank.download_start": "기본 음원(약 5 MB)을 내려받는 중입니다. 처음 한 번만 받습니다.",
     "soundbank.download_ready": "기본 음원 준비가 끝났습니다.",
     "soundbank.download_failed": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요.",
-    "sound.err_default_download": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요."
+    "sound.err_default_download": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요.",
+    "file.save_midi": "MIDI 저장",
+    "file.saved_midi": "MIDI 파일을 저장했습니다.",
+    "file.save_midi_failed": "MIDI 저장 실패"
   }
 };

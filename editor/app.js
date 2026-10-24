@@ -26230,7 +26230,7 @@
         tailSec: 3.65,
         vbrQuality: 5,
         // Larger encoder chunks reduce JS↔WASM call overhead while preserving
-        // the same 44.1 kHz stereo/VBR output.
+        // the same 48 kHz stereo/VBR output.
         chunkFrames: 131072,
         onProgress: (stage, fraction) => {
           // renderOgg reports encode progress; render progress comes from the suspend windows below.

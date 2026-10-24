@@ -70,7 +70,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-TW"] = {
     "load": "載入",
     "audioSave": "儲存音訊",
     "audioExporting": "正在產生 OGG 音訊...",
-    "audioSaved": "已儲存 44.1 kHz OGG 音訊。",
+    "audioSaved": "已儲存 48 kHz OGG 音訊。",
     "audioExportFailed": "無法儲存音訊。",
     "localSave": "本機儲存",
     "googleSave": "Google 儲存",
@@ -212,6 +212,13 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-TW"] = {
     "soundDownloadStart": "正在下載預設音源（約 5 MB），僅首次需要。",
     "soundDownloadReady": "預設音源已就緒。",
     "soundDownloadFailed": "無法下載預設音源，請檢查網路連線。",
-    "sound.err_default_download": "無法下載預設音源，請檢查網路連線。"
+    "sound.err_default_download": "無法下載預設音源，請檢查網路連線。",
+    "saveMenu": "儲存",
+    "midiSave": "儲存 MIDI",
+    "savedMidi": "已儲存 MIDI 檔案。",
+    "midiSaveFailed": "MIDI 儲存失敗。",
+    "partMelody": "旋律",
+    "partHarmony1": "和聲1",
+    "partHarmony2": "和聲2"
   }
 };

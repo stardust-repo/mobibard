@@ -51,13 +51,34 @@
     results: $("results")
   };
 
+  // 저장: one button + menu (오디오 저장 · MIDI 저장 · 로컬 저장 · 구글 저장). The existing buttons
+  // become menu items so their handlers and disabled states keep working.
+  els.midiSaveButton = document.createElement("button");
+  els.midiSaveButton.type = "button";
+  els.midiSaveButton.id = "midiSaveAllButton";
+  els.midiSaveButton.className = "copy-button";
+  const saveMenu = (() => {
+    const anchor = els.audioSaveButton;
+    if (!window.MabiSaveMenu || !anchor?.parentElement) return null;
+    const menu = window.MabiSaveMenu.create({
+      label: "저장",
+      buttonClassName: "copy-button",
+      items: [els.audioSaveButton, els.midiSaveButton, els.localSaveButton, els.googleSaveButton],
+    });
+    menu.button.id = "saveMenuButton";
+    const copyButton = document.getElementById("copyAllButton");
+    if (copyButton?.parentElement) copyButton.parentElement.insertBefore(menu.wrap, copyButton);
+    else anchor.parentElement?.append(menu.wrap);
+    return menu;
+  })();
+
   const fallback = {
     ko: {
       recommended: "추천 사이트", mobibeats: "모비비트", account: "계정", guest: "게스트",
       login: "로그인", logout: "로그아웃", googleFile: "구글 파일", paste: "붙여넣기",
       pasteTitle: "MML 붙여넣기", pasteHint: "MML 코드를 붙여넣으면 바로 불러옵니다.",
-      cancel: "취소", load: "불러오기", audioSave: "오디오 저장", localSave: "로컬 저장", googleSave: "구글 저장",
-      audioExporting: "OGG 오디오 생성 중...", audioSaved: "44.1 kHz OGG 오디오를 저장했습니다.", audioExportFailed: "오디오 저장에 실패했습니다.",
+      cancel: "취소", load: "불러오기", audioSave: "오디오 저장", localSave: "로컬 저장", googleSave: "구글 저장", saveMenu: "저장", midiSave: "MIDI 저장", savedMidi: "MIDI 파일을 저장했습니다.", midiSaveFailed: "MIDI 저장에 실패했습니다.", partMelody: "멜로디", partHarmony1: "화음1", partHarmony2: "화음2",
+      audioExporting: "OGG 오디오 생성 중...", audioSaved: "48 kHz OGG 오디오를 저장했습니다.", audioExportFailed: "오디오 저장에 실패했습니다.",
       rewind: "처음으로", close: "닫기", loginRequired: "Google 로그인이 필요합니다.",
       googleConnecting: "Google 로그인 중...", googleConnected: "Google에 연결되었습니다.", googleDisconnected: "Google 연결을 해제했습니다.",
       googleLoginFailed: "Google 로그인에 실패했습니다.", googleLoadFailed: "Google 파일을 불러오지 못했습니다.",
@@ -73,8 +94,8 @@
       recommended: "Recommended", mobibeats: "MobiBeats", account: "Account", guest: "Guest",
       login: "Sign in", logout: "Sign out", googleFile: "Google file", paste: "Paste",
       pasteTitle: "Paste MML", pasteHint: "Paste MML code to load it immediately.",
-      cancel: "Cancel", load: "Load", audioSave: "Save audio", localSave: "Local save", googleSave: "Google save",
-      audioExporting: "Creating OGG audio...", audioSaved: "Saved 44.1 kHz OGG audio.", audioExportFailed: "Could not save audio.",
+      cancel: "Cancel", load: "Load", audioSave: "Save audio", localSave: "Local save", googleSave: "Google save", saveMenu: "Save", midiSave: "Save MIDI", savedMidi: "Saved the MIDI file.", midiSaveFailed: "Could not save MIDI.", partMelody: "Melody", partHarmony1: "Harmony 1", partHarmony2: "Harmony 2",
+      audioExporting: "Creating OGG audio...", audioSaved: "Saved 48 kHz OGG audio.", audioExportFailed: "Could not save audio.",
       rewind: "Back to start", close: "Close", loginRequired: "Google sign-in is required.",
       googleConnecting: "Signing in to Google...", googleConnected: "Connected to Google.", googleDisconnected: "Disconnected from Google.",
       googleLoginFailed: "Google sign-in failed.", googleLoadFailed: "Could not load the Google file.",
@@ -157,6 +178,8 @@
     if (els.audioSaveButton) els.audioSaveButton.textContent = tx("audioSave");
     if (els.localSaveButton) els.localSaveButton.textContent = tx("localSave");
     if (els.googleSaveButton) els.googleSaveButton.textContent = tx("googleSave");
+    if (els.midiSaveButton) els.midiSaveButton.textContent = tx("midiSave");
+    saveMenu?.setLabel(tx("saveMenu"));
     if (els.rewindButton) {
       els.rewindButton.setAttribute("aria-label", tx("rewind"));
       els.rewindButton.title = tx("rewind");
@@ -177,6 +200,8 @@
     if (els.audioSaveButton) els.audioSaveButton.disabled = !hasMml;
     if (els.localSaveButton) els.localSaveButton.disabled = !hasMml;
     if (els.googleSaveButton) els.googleSaveButton.disabled = !hasMml;
+    if (els.midiSaveButton) els.midiSaveButton.disabled = !hasMml;
+    saveMenu?.sync();
   }
 
   function isGoogleConnected() {
@@ -468,6 +493,24 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  async function saveMidi() {
+    const mml = String(bridge()?.getCurrentMml?.() || "");
+    if (!mml) { showToast(tx("noMml"), "error"); return; }
+    const midiApi = window.MabiMmlMidi;
+    if (!midiApi) { showToast(tx("midiSaveFailed"), "error"); return; }
+    try {
+      const name = normalizedSaveName();
+      const { bytes } = midiApi.buildMidiFromMml(mml, {
+        title: name.replace(/\.[^.]+$/, ""),
+        partNames: [tx("partMelody"), tx("partHarmony1"), tx("partHarmony2")],
+        embeddedDefault: true,
+      });
+      if (await midiApi.saveMidiBytes(bytes, midiApi.midiFileName(name))) showToast(tx("savedMidi"), "success");
+    } catch (error) {
+      showToast(error?.code === "no-notes" ? tx("noMml") : `${tx("midiSaveFailed")} ${shortError(error)}`.trim(), "error");
+    }
+  }
+
   function saveLocal() {
     const mml = String(bridge()?.getCurrentMml?.() || "");
     if (!mml) { showToast(tx("noMml"), "error"); return; }
@@ -687,6 +730,7 @@
     const originalText = els.audioSaveButton.textContent;
     els.audioSaveButton.disabled = true;
     els.audioSaveButton.textContent = tx("audioExporting");
+    saveMenu?.setLabel(tx("audioExporting"));
     try {
       await api.exportCurrentAudio();
       showToast(tx("audioSaved"));
@@ -694,6 +738,7 @@
       showToast(`${tx("audioExportFailed")} ${shortError(error)}`.trim(), "error");
     } finally {
       els.audioSaveButton.textContent = originalText || tx("audioSave");
+      saveMenu?.setLabel(tx("saveMenu"));
       updateSaveButtons();
     }
   }
@@ -711,6 +756,7 @@
   els.pasteForm?.addEventListener("submit", applyPaste);
   els.audioSaveButton?.addEventListener("click", () => void saveAudioOgg());
   els.localSaveButton?.addEventListener("click", saveLocal);
+  els.midiSaveButton?.addEventListener("click", () => void saveMidi());
   els.googleSaveButton?.addEventListener("click", () => void saveGoogle());
   els.mobibeatsLink?.addEventListener("click", openRhythmGameLayer);
   els.rhythmGameClose?.addEventListener("click", closeRhythmGameLayer);
@@ -735,6 +781,9 @@
   }
 
   currentLanguage = languageKey(bridge()?.getLanguage?.() || document.documentElement.lang);
+  // The first "mobibard:simple-localechange" fires before this script loads, so read the
+  // already-loaded locale directly (otherwise ja/zh start with the English fallback text).
+  currentStrings = window.__MOBIBARD_SIMPLE_LOCALES__?.[currentLanguage]?.strings || currentStrings;
   readTokenCache();
   updateStaticText();
   updateSaveButtons();
