@@ -57,6 +57,13 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 - 실행: WebGPU가 있으면 WebGPU, 없거나 실패하면 WebAssembly(CPU)로 실행합니다. 강제로 CPU를 쓰려면 `executionProvider: "wasm"`을 넘기세요.
 - Worker는 마지막 사용 뒤 3분이 지나면 종료되어 메모리를 돌려줍니다. 다음 호출 때 모델은 IndexedDB에서 다시 불러옵니다.
 
+### UI 보조 함수 (1.0.4)
+
+- `isAudioFile(fileOrName, mimeType)`: AI 변환 대상 오디오인지 판별(MIDI/KAR 제외).
+- `progressText(event, tr)` / `progressFraction(event)`: 진행 이벤트를 문구·비율로 변환. `tr`은 `preparing`, `downloading`, `analyzing` 이름을 받는 번역 함수입니다.
+- `errorText(error, tr, { maxMinutes })`: 오류 코드를 `err_*`/`no_notes`/`failed` 문구로 변환.
+- `showProgressNotice(text, fraction)` / `hideProgressNotice()`: 화면 하단 가운데 진행 표시줄(Simple·Player에서 사용).
+
 ## 모델 영구 저장
 
 - 첫 사용 때 모델을 내려받아 IndexedDB `mobibard-ai-models`에 저장하고, `navigator.storage.persist()`로 영구 저장소를 요청합니다. 허용되면 브라우저가 저장 공간 부족 등을 이유로 자동 삭제하지 않습니다. 사용자가 사이트 데이터를 직접 지우면 삭제됩니다.

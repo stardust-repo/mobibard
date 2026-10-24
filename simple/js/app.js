@@ -14,7 +14,7 @@
 
   const LOCALE_FILES = Object.freeze({ ko: "ko.js", ja: "ja.js", en: "en.js", "zh-CN": "zh-CN.js", "zh-TW": "zh-TW.js" });
   const LOCALE_VERSION = "5.2.0";
-  const LOCALE_REVISION = "20260906-locale-prune1";
+  const LOCALE_REVISION = "20261024f-sf3-notice";
   const localeCache = new Map();
   const localeLoadPromises = new Map();
 
@@ -58,7 +58,6 @@
     resultStepTitle: $("resultStepTitle"),
     resultStepDescription: $("resultStepDescription"),
     brandName: $("brandName"),
-    midiExtractLink: $("midiExtractLink"),
     fullEditorLink: $("fullEditorLink"),
     siteMapButton: $("siteMapButton"),
     siteMapLabel: $("siteMapLabel"),
@@ -274,6 +273,7 @@
     };
     const uiKey = map[key];
     if (uiKey) return t(uiKey, values);
+    if (activeLocale?.strings?.[key] != null) return t(key, values);
     if (key === "ui.no_notes") return t("engineNoNotes");
     if (key === "midi.program_number") return ({ ko: `프로그램 ${values[0] ?? ""}`, ja: `プログラム ${values[0] ?? ""}`, "zh-CN": `音色 ${values[0] ?? ""}`, "zh-TW": `音色 ${values[0] ?? ""}` }[language] || `Program ${values[0] ?? ""}`);
     if (key === "midi.part_default") return ({ ko: `파트 ${values[0] ?? ""}`, ja: `パート ${values[0] ?? ""}`, "zh-CN": `声部 ${values[0] ?? ""}`, "zh-TW": `聲部 ${values[0] ?? ""}` }[language] || `Part ${values[0] ?? ""}`);
@@ -312,7 +312,6 @@
     if (els.convertStepDescription) els.convertStepDescription.textContent = t("stepConvertDescription");
     if (els.resultStepTitle) els.resultStepTitle.textContent = t("stepResultTitle");
     if (els.resultStepDescription) els.resultStepDescription.textContent = t("stepResultDescription");
-    els.midiExtractLink.textContent = t("extract");
     els.fullEditorLink.textContent = t("full");
     els.fullEditorLink.href = `../player/index.html?lang=${encodeURIComponent(language)}`;
     if (els.siteMapButton) { els.siteMapButton.setAttribute("aria-label", t("siteMap")); els.siteMapButton.title = t("siteMap"); }
@@ -382,6 +381,41 @@
     return Boolean(file && window.MabiMusicFormats?.isSupported(file.name || "", file.type || ""));
   }
 
+  // 오디오 파일은 공용 Wave2MIDI 모듈(plugins/ai/wave2midi)로 MIDI를 만든 뒤 일반 MIDI처럼 변환합니다.
+  const AUDIO_AI_MAX_MINUTES = 10;
+  function isAudioAiSourceFile(file) {
+    return Boolean(file && window.MobibardWave2Midi?.isAudioFile?.(file));
+  }
+
+  function audioAiText(name, values = []) {
+    const keys = {
+      preparing: "audioAiPreparing", downloading: "audioAiDownloading", analyzing: "audioAiAnalyzing",
+      err_unsupported: "audioAiErrUnsupported", err_decode: "audioAiErrDecode", err_too_long: "audioAiErrTooLong",
+      err_runtime: "audioAiErrRuntime", err_model: "audioAiErrModel", err_memory: "audioAiErrMemory",
+      no_notes: "audioAiNoNotes", failed: "audioAiFailed",
+    };
+    return t(keys[name] || name, values);
+  }
+
+  async function transcribeAudioToMidiBytes(file, isCurrent) {
+    const api = window.MobibardWave2Midi;
+    if (!api?.isSupported?.()) throw Object.assign(new Error("unsupported"), { code: "unsupported" });
+    api.showProgressNotice(`${file.name} · ${audioAiText("preparing")}`, null);
+    try {
+      const result = await api.transcribe(file, {
+        maxSeconds: AUDIO_AI_MAX_MINUTES * 60,
+        onProgress: (event) => {
+          if (!isCurrent()) return;
+          api.showProgressNotice(`${file.name} · ${api.progressText(event, audioAiText)}`, api.progressFraction(event));
+        },
+      });
+      if (!result.notes.length) throw Object.assign(new Error("no notes"), { code: "no-notes" });
+      return { midiBytes: result.midi, result };
+    } finally {
+      api.hideProgressNotice();
+    }
+  }
+
   async function normalizeSourceToMidiBytes(file, sourceBytes, options = {}) {
     if (!window.MabiMusicFormats?.convertBytes) throw new Error(t("failed", ["Music format plugins are unavailable"]));
     const converted = await window.MabiMusicFormats.convertBytes(sourceBytes, file.name || "music", file.type || "", options);
@@ -404,8 +438,30 @@
     els.fileName.hidden = true;
     clearResults();
 
-    if (!isSupportedSourceFile(file)) {
+    const audioSource = !isSupportedSourceFile(file) && isAudioAiSourceFile(file);
+    if (!isSupportedSourceFile(file) && !audioSource) {
       showToast(t("invalidFile"), "error");
+      return;
+    }
+    if (audioSource) {
+      try {
+        const { midiBytes, result } = await transcribeAudioToMidiBytes(file, () => selectToken === fileSelectionSerial);
+        if (selectToken !== fileSelectionSerial) return;
+        selectedFile = file;
+        selectedBytes = midiBytes instanceof Uint8Array ? midiBytes : new Uint8Array(midiBytes || []);
+        els.fileName.textContent = `${file.name} · ${t("audioAiLabel")}`;
+        els.fileName.hidden = false;
+        showToast(t("audioAiDone", [result.model?.version || "-", result.notes.length.toLocaleString()]), "success");
+        requestConversion();
+      } catch (error) {
+        if (selectToken !== fileSelectionSerial) return;
+        console.error("Audio to MIDI conversion failed", error);
+        selectedFile = null;
+        selectedBytes = null;
+        els.fileName.hidden = true;
+        clearResults();
+        showToast(window.MobibardWave2Midi?.errorText?.(error, audioAiText, { maxMinutes: AUDIO_AI_MAX_MINUTES }) || t("failed", [shortError(error)]), "error");
+      }
       return;
     }
     try {
@@ -723,7 +779,7 @@
 
   let toastTimer = 0;
 
-  function showToast(message, tone = "info") {
+  function showToast(message, tone = "info", duration = 1800) {
     const toast = els.toast || $("simpleToast");
     if (!toast || !message) return;
     clearTimeout(toastTimer);
@@ -735,8 +791,16 @@
     toastTimer = window.setTimeout(() => {
       toast.classList.remove("is-visible");
       window.setTimeout(() => { toast.hidden = true; }, 180);
-    }, 1800);
+    }, duration);
   }
+
+  // Default SoundFont is fetched on first playback (plugins/formats/soundbank/soundbank.js); tell the user.
+  window.addEventListener("mobibard:default-soundbank", (event) => {
+    const stateName = event.detail?.state;
+    if (stateName === "downloading") showToast(t("soundDownloadStart"), "info", 20000);
+    else if (stateName === "ready") showToast(t("soundDownloadReady"), "success", 2200);
+    else if (stateName === "error") showToast(t("soundDownloadFailed"), "error", 4000);
+  });
 
   function rebuildPlayback(mml) {
     stopPlayback(false);

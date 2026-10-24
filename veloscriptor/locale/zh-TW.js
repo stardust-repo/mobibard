@@ -106,6 +106,10 @@ export default {
     "error.audio_decode": "此瀏覽器無法解碼所選音訊編碼。",
     "error.analysis": "音量分析時發生錯誤。",
     "error.files_required": "請選擇MIDI和相同音訊。",
-    "error.no_melodic_notes": "沒有可分析的有音高音符，不支援只有鼓音的MIDI。"
+    "error.no_melodic_notes": "沒有可分析的有音高音符，不支援只有鼓音的MIDI。",
+    "preview.controls_aria": "試聽原始與轉換後的 MIDI",
+    "sound.download_start": "正在下載預設音源（約 5 MB），僅首次需要。",
+    "sound.download_ready": "預設音源已就緒。",
+    "sound.download_failed": "無法下載預設音源，請檢查網路連線。"
   }
 };

@@ -106,6 +106,10 @@ export default {
     "error.audio_decode": "此浏览器无法解码所选音频编码。",
     "error.analysis": "音量分析时发生错误。",
     "error.files_required": "请选择MIDI和匹配音频。",
-    "error.no_melodic_notes": "没有可分析的有音高音符，不支持仅含鼓音的MIDI。"
+    "error.no_melodic_notes": "没有可分析的有音高音符，不支持仅含鼓音的MIDI。",
+    "preview.controls_aria": "试听原始与转换后的 MIDI",
+    "sound.download_start": "正在下载默认音源（约 5 MB），仅首次需要。",
+    "sound.download_ready": "默认音源已就绪。",
+    "sound.download_failed": "无法下载默认音源，请检查网络连接。"
   }
 };

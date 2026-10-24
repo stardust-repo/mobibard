@@ -231,6 +231,12 @@ export default {
     "error.white_boundaries": "흰 건반 경계를 충분히 찾지 못했습니다. 다른 기준 프레임이나 수동 영역을 사용하세요.",
     "overlay.single": "전체 건반",
     "overlay.white": "흰 건반",
-    "overlay.black": "검은 건반"
+    "overlay.black": "검은 건반",
+    "toast.frame_failed": "프레임 표시 실패: {message}",
+    "guide.legend_dual": "건반 인식선",
+    "guide.legend_single": "단일 건반 인식선",
+    "toast.sound_download_start": "기본 음원(약 5 MB)을 내려받는 중입니다. 처음 한 번만 받습니다.",
+    "toast.sound_download_ready": "기본 음원 준비가 끝났습니다.",
+    "toast.sound_download_failed": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요."
   }
 };

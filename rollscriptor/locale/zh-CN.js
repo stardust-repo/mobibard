@@ -231,6 +231,12 @@ export default {
     "error.white_boundaries": "无法找到足够的白键边界。请尝试其他参考帧或调整检测线。",
     "overlay.single": "全部琴键",
     "overlay.white": "白键",
-    "overlay.black": "黑键"
+    "overlay.black": "黑键",
+    "toast.frame_failed": "无法显示帧：{message}",
+    "guide.legend_dual": "琴键识别线",
+    "guide.legend_single": "单条琴键识别线",
+    "toast.sound_download_start": "正在下载默认音源（约 5 MB），仅首次需要。",
+    "toast.sound_download_ready": "默认音源已就绪。",
+    "toast.sound_download_failed": "无法下载默认音源，请检查网络连接。"
   }
 };

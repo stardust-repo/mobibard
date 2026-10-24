@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.3";
+  const VERSION = "1.0.4";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x 23 instrument probabilities in memory (~49 MB per minute of audio).
@@ -197,6 +197,100 @@
     return new File([result.midi], `${base}.mid`, { type: "audio/midi" });
   }
 
+  // ---- Helpers shared by products that import audio through their normal file loaders ----
+  const AUDIO_EXTENSIONS = new Set(["wav", "wave", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"]);
+
+  /** True for audio files this module can transcribe (not MIDI/karaoke, which are "audio/*" too). */
+  function isAudioFile(fileOrName, mimeType = "") {
+    const name = typeof fileOrName === "string" ? fileOrName : String(fileOrName?.name || "");
+    const type = String((typeof fileOrName === "string" ? mimeType : fileOrName?.type) || mimeType || "").toLowerCase();
+    const extension = (name.toLowerCase().match(/\.([^.]+)$/)?.[1] || "");
+    if (AUDIO_EXTENSIONS.has(extension)) return true;
+    return type.startsWith("audio/") && !/midi|kar/.test(type);
+  }
+
+  /**
+   * Localized progress line. tr(name, values) is the product's translator for these logical names:
+   * preparing, downloading ({0}/{1} MB), analyzing ({0} %).
+   */
+  function progressText(event, tr) {
+    const stage = String(event?.stage || "");
+    const done = Number(event?.done) || 0;
+    const total = Number(event?.total) || 0;
+    if (stage === "model-download") return tr("downloading", [(done / 1e6).toFixed(1), ((total || done) / 1e6).toFixed(1)]);
+    if (stage === "analyze") return tr("analyzing", [total > 0 ? Math.round((done / total) * 100) : 0]);
+    return tr("preparing", []);
+  }
+
+  /** 0..1 for stages with real progress, otherwise null (indeterminate). */
+  function progressFraction(event) {
+    const done = Number(event?.done) || 0;
+    const total = Number(event?.total) || 0;
+    if ((event?.stage === "model-download" || event?.stage === "analyze") && total > 0) return Math.max(0, Math.min(1, done / total));
+    return null;
+  }
+
+  /** Localized error line. tr names: err_unsupported, err_decode, err_too_long ({0} minutes), err_runtime,
+   *  err_model, err_memory, no_notes, failed ({0} = raw message). */
+  function errorText(error, tr, { maxMinutes = 10 } = {}) {
+    const code = String(error?.code || "");
+    const map = {
+      unsupported: ["err_unsupported", []],
+      "decode-failed": ["err_decode", []],
+      "too-long": ["err_too_long", [maxMinutes]],
+      "runtime-unavailable": ["err_runtime", []],
+      "model-init-failed": ["err_runtime", []],
+      "model-unavailable": ["err_model", []],
+      "model-corrupt": ["err_model", []],
+      "out-of-memory": ["err_memory", []],
+      "no-notes": ["no_notes", []],
+    };
+    const [name, values] = map[code] || ["failed", [String(error?.message || error || "")]];
+    return tr(name, values);
+  }
+
+  // Small persistent progress notice (toasts in Simple/Player auto-hide after ~2 s, while a
+  // transcription can take a minute). One notice per page; styles are injected once.
+  let noticeElement = null;
+  function ensureNotice() {
+    if (noticeElement?.isConnected) return noticeElement;
+    if (!document.getElementById("w2m-progress-notice-style")) {
+      const style = document.createElement("style");
+      style.id = "w2m-progress-notice-style";
+      style.textContent = `
+.w2m-progress-notice{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));z-index:2147483000;transform:translateX(-50%);
+  width:min(360px,calc(100vw - 32px));box-sizing:border-box;display:grid;gap:7px;padding:10px 14px 12px;border-radius:12px;
+  background:rgba(22,27,34,.94);color:#f5f7fa;font:600 12.5px/1.35 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+  box-shadow:0 12px 32px rgba(0,0,0,.28);pointer-events:none}
+.w2m-progress-notice[hidden]{display:none}
+.w2m-progress-notice span{overflow-wrap:anywhere}
+.w2m-progress-notice progress{width:100%;height:6px;accent-color:#5b8def}
+@media (prefers-color-scheme: light){.w2m-progress-notice{background:rgba(255,255,255,.97);color:#1c2430;border:1px solid rgba(20,30,45,.14)}}`;
+      document.head.append(style);
+    }
+    noticeElement = document.createElement("div");
+    noticeElement.className = "w2m-progress-notice";
+    noticeElement.setAttribute("role", "status");
+    noticeElement.setAttribute("aria-live", "polite");
+    noticeElement.hidden = true;
+    noticeElement.innerHTML = "<span></span><progress max=\"1\"></progress>";
+    document.body.append(noticeElement);
+    return noticeElement;
+  }
+
+  function showProgressNotice(text, fraction = null) {
+    const notice = ensureNotice();
+    notice.querySelector("span").textContent = String(text || "");
+    const bar = notice.querySelector("progress");
+    if (fraction == null) bar.removeAttribute("value");
+    else bar.value = Math.max(0, Math.min(1, Number(fraction) || 0));
+    notice.hidden = false;
+  }
+
+  function hideProgressNotice() {
+    if (noticeElement) noticeElement.hidden = true;
+  }
+
   root.MobibardWave2Midi = Object.freeze({
     version: VERSION,
     SAMPLE_RATE,
@@ -210,6 +304,12 @@
     clearCache,
     requestPersistentStorage,
     toMidiFile,
+    isAudioFile,
+    progressText,
+    progressFraction,
+    errorText,
+    showProgressNotice,
+    hideProgressNotice,
     dispose: () => disposeWorker(),
   });
 })();

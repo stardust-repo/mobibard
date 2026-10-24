@@ -106,6 +106,10 @@ export default {
     "error.audio_decode": "This browser could not decode the selected audio codec.",
     "error.analysis": "An error occurred during volume analysis.",
     "error.files_required": "Choose both the MIDI and matching audio.",
-    "error.no_melodic_notes": "There are no pitched notes to analyze. Drum-only MIDI files are not supported."
+    "error.no_melodic_notes": "There are no pitched notes to analyze. Drum-only MIDI files are not supported.",
+    "preview.controls_aria": "Preview original and converted MIDI",
+    "sound.download_start": "Downloading the default instrument sounds (about 5 MB). This happens only once.",
+    "sound.download_ready": "Default instrument sounds are ready.",
+    "sound.download_failed": "Could not download the default instrument sounds. Check your network connection."
   }
 };

@@ -6,6 +6,8 @@
 
   const I18N = {
     ko: {
+      labelAudio: "오디오",
+      labelMobibardProject: "모비바드 프로젝트",
       button: "지원 파일",
       title: "지원 파일",
       close: "닫기",
@@ -43,6 +45,8 @@
       pickerAudio: "오디오",
     },
     ja: {
+      labelAudio: "オーディオ",
+      labelMobibardProject: "モビバード プロジェクト",
       button: "対応ファイル",
       title: "対応ファイル",
       close: "閉じる",
@@ -80,6 +84,8 @@
       pickerAudio: "オーディオ",
     },
     en: {
+      labelAudio: "Audio",
+      labelMobibardProject: "MobiBard project",
       button: "Supported files",
       title: "Supported files",
       close: "Close",
@@ -117,6 +123,8 @@
       pickerAudio: "Audio",
     },
     "zh-CN": {
+      labelAudio: "音频",
+      labelMobibardProject: "MobiBard 项目",
       button: "支持文件",
       title: "支持文件",
       close: "关闭",
@@ -154,6 +162,8 @@
       pickerAudio: "音频",
     },
     "zh-TW": {
+      labelAudio: "音訊",
+      labelMobibardProject: "MobiBard 專案",
       button: "支援檔案",
       title: "支援檔案",
       close: "關閉",
@@ -192,15 +202,17 @@
     },
   };
 
+  const AUDIO_AI_EXTRA = { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], description: "AI로 악기별 MIDI 변환 후 불러오기 (Beta)" };
   const EXTRA = {
-    simple: [],
+    simple: [AUDIO_AI_EXTRA],
     player: [
       { category: "project", label: "3MLE / MabiIcco / MML", extensions: ["mml", "mmi", "txt"], description: "3MLE(.mml) · MabiIcco/마비꼬(.mmi) · MML 텍스트(.txt)" },
+      AUDIO_AI_EXTRA,
     ],
     editor: [
-      { category: "project", label: "모비바드 프로젝트", extensions: ["mmlproj", "mmlproj.json", "json"], description: "피아노롤 편집 프로젝트" },
+      { category: "project", label: "모비바드 프로젝트", labelKey: "labelMobibardProject", extensions: ["mmlproj", "mmlproj.json", "json"], description: "피아노롤 편집 프로젝트" },
       { category: "project", label: "3MLE / MabiIcco / MML", extensions: ["mml", "3mle", "mmi", "txt"], description: "3MLE(.mml/.3mle) · MabiIcco/마비꼬(.mmi) · MML 텍스트(.txt)" },
-      { category: "audio", label: "오디오", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], description: "편집용 참고 오디오 · 불러오기에서 선택하면 AI로 악기별 MIDI 변환 (Beta)" },
+      { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], description: "편집용 참고 오디오 · 불러오기에서 선택하면 AI로 악기별 MIDI 변환 (Beta)" },
     ],
   };
 
@@ -382,7 +394,7 @@
     const extensions = (item.extensions || []).map(ext => `<span class="mabi-supported-file-ext">.${String(ext).replace(/^\./, "")}</span>`).join("");
     const showKoreanDetails = language() === "ko";
     return `<div class="mabi-supported-file-item">
-      <div class="mabi-supported-file-name"><span>${item.label}</span><span class="mabi-supported-file-exts">${extensions}</span></div>
+      <div class="mabi-supported-file-name"><span>${(item.labelKey && t[item.labelKey]) || item.label}</span><span class="mabi-supported-file-exts">${extensions}</span></div>
       ${showKoreanDetails && item.description ? `<span class="mabi-supported-file-desc">${item.description}</span>` : ""}
       ${showKoreanDetails && item.limitation ? `<span class="mabi-supported-file-limit">${item.limitation}</span>` : ""}
       ${item.requiresNetwork ? `<span class="mabi-supported-file-network">${t.network}</span>` : ""}

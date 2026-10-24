@@ -106,6 +106,10 @@ export default {
     "error.audio_decode": "이 브라우저에서 해당 음원 코덱을 디코딩하지 못했습니다.",
     "error.analysis": "볼륨 분석 중 오류가 발생했습니다.",
     "error.files_required": "MIDI와 동일 음원을 모두 선택해 주세요.",
-    "error.no_melodic_notes": "분석할 음계 노트가 없습니다. 드럼 채널만 있는 MIDI는 지원하지 않습니다."
+    "error.no_melodic_notes": "분석할 음계 노트가 없습니다. 드럼 채널만 있는 MIDI는 지원하지 않습니다.",
+    "preview.controls_aria": "원본과 변환 MIDI 미리듣기",
+    "sound.download_start": "기본 음원(약 5 MB)을 내려받는 중입니다. 처음 한 번만 받습니다.",
+    "sound.download_ready": "기본 음원 준비가 끝났습니다.",
+    "sound.download_failed": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요."
   }
 };

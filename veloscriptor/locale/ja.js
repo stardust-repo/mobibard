@@ -106,6 +106,10 @@ export default {
     "error.audio_decode": "このブラウザーでは選択した音源コーデックをデコードできません。",
     "error.analysis": "音量解析中にエラーが発生しました。",
     "error.files_required": "MIDIと同一音源を両方選択してください。",
-    "error.no_melodic_notes": "解析できる音程ノートがありません。ドラムだけのMIDIには対応していません。"
+    "error.no_melodic_notes": "解析できる音程ノートがありません。ドラムだけのMIDIには対応していません。",
+    "preview.controls_aria": "元MIDIと変換MIDIの試聴",
+    "sound.download_start": "既定の音源（約5 MB）をダウンロード中です。初回のみ行われます。",
+    "sound.download_ready": "既定の音源の準備ができました。",
+    "sound.download_failed": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。"
   }
 };

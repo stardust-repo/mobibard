@@ -11127,14 +11127,9 @@ body.channel-delete-mode-active #confirmDialog button {
 }
 .settings-menu #noteVolumeDisplaySelect,
 .settings-menu #pitchSpacingSelect { width: 100%; max-width: none; }
-.settings-control > #settingsButton { min-height: 30px; padding-inline: 7px; font-size: 12px; }
+/* 설정 button follows the same generic button sizing as 파일 / 편집 (30px, 36px on touch). */
 
 /* 2026-09-27 velocity editor refinement ---------------------------------- */
-.settings-control > #settingsButton {
-  min-height: 30px;
-  padding-inline: 8px;
-  font-size: inherit;
-}
 @media (max-width: 900px) and (min-width: 721px) {
   .settings-control > #settingsButton { min-height: 32px; padding-inline: 6px; font-size: 12px; }
 }
@@ -14590,4 +14585,168 @@ body.merge-mode-active #channelMergeModeControls .channel-merge-overlap-control 
   min-height: 30px !important;
   height: 30px;
   font-size: 12px !important;
+}
+
+/* ===== 2026-10-24c ===== */
+/* 마디 편집 · 쉼표 정리 · 파트 자동 설정: the action area matches the channel tab's bottom strip
+   (top divider + tinted background, same height as the piano-roll bottom bar). */
+#measureEditPanel,
+#restCleanupPanel,
+#autoPartPanel {
+  padding-bottom: 0 !important;
+}
+#measureEditPanel .measure-edit-inline-actions,
+#restCleanupPanel .rest-cleanup-inline-actions,
+#autoPartPanel .auto-part-inline-actions {
+  box-sizing: border-box;
+  margin: auto -10px 0 !important;
+  min-height: calc(var(--audio-lane-height) + var(--scrollbar-size));
+  padding: 8px 10px !important;
+  align-content: center;
+  border-top: 1px solid var(--control-border);
+  background: color-mix(in srgb, var(--panel-2) 45%, var(--panel));
+}
+/* 파트 자동 설정: the result line sits inside the same strip, above the buttons. */
+#autoPartPanel .auto-part-inline-summary {
+  margin: auto -10px 0 !important;
+  padding: 7px 10px 0 !important;
+  border: 0 !important;
+  border-top: 1px solid var(--control-border) !important;
+  border-radius: 0 !important;
+  background: color-mix(in srgb, var(--panel-2) 45%, var(--panel)) !important;
+  color: var(--text);
+  font-weight: 800;
+}
+#autoPartPanel .auto-part-inline-summary + .auto-part-inline-actions {
+  margin-top: 0 !important;
+  min-height: 0;
+  border-top: 0;
+  padding-top: 6px !important;
+}
+
+/* "채널 선택 3/16" */
+.inline-channel-select-toolbar > .inline-channel-select-count {
+  display: inline !important;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  .inline-channel-select-toolbar { grid-template-columns: max-content minmax(0, 1fr) max-content max-content; }
+}
+
+/* ===== 2026-10-24d ===== */
+/* 파트 자동 설정: 나눌 글자수 · 검색 범위 side by side; small label above each input. */
+#autoPartPanel .auto-part-inline-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+#autoPartPanel .auto-part-inline-field {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: start;
+  gap: 3px !important;
+}
+#autoPartPanel .auto-part-inline-field > span:first-child {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+#autoPartPanel .auto-part-inline-input {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+}
+
+/* 2026-10-24e: measure edit / rest cleanup / auto part channel pickers use the channel-delete tree
+   template (channel-tree rows + 📂 group rows + ○/✓ toggle on the right).
+   2026-10-24f: the ○/✓ toggle looks exactly like channel delete (no fill, rows keep full colour). */
+.inline-channel-select-list.inline-channel-tree {
+  display: block !important;
+  gap: 0 !important;
+  padding: 2px 1px 4px !important;
+  touch-action: pan-y;
+}
+.inline-channel-tree .channel-tree-item,
+.inline-channel-tree .channel-tree-main { cursor: pointer; user-select: none; -webkit-user-select: none; }
+.inline-channel-tree .channel-tree-main:disabled { cursor: default; }
+.inline-channel-tree .inline-channel-tree-group.select-state-partial { border-style: dashed !important; }
+.inline-channel-tree .channel-tree-item.is-disabled { opacity: .42; }
+.inline-channel-tree .channel-tree-item.is-disabled .channel-tree-main { cursor: default; }
+.inline-channel-tree .channel-tree-select-toggle:disabled { opacity: .45; cursor: default; }
+.inline-channel-tree .channel-group-folder { cursor: pointer; pointer-events: auto; }
+.inline-channel-tree .channel-tree-main .inline-channel-tree-detail {
+  margin-left: auto;
+  padding-left: 6px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ===== 2026-10-24f ===== */
+/* 마디 편집 · 쉼표 정리 · 파트 자동 설정: slimmer bottom strip (two buttons only) and tighter
+   vertical spacing between the controls above the channel list. */
+#measureEditPanel,
+#restCleanupPanel,
+#autoPartPanel {
+  gap: 5px !important;
+  padding-top: 7px !important;
+}
+#measureEditPanel .measure-edit-inline-actions,
+#restCleanupPanel .rest-cleanup-inline-actions,
+#autoPartPanel .auto-part-inline-actions {
+  min-height: 0 !important;
+  padding: 6px 10px !important;
+  flex: 0 0 auto !important;
+}
+#measureEditPanel .inline-channel-select-list,
+#restCleanupPanel .inline-channel-select-list,
+#autoPartPanel .inline-channel-select-list { min-height: 0 !important; flex: 1 1 0 !important; }
+#measureEditPanel .measure-edit-mode-tabs { margin-top: 0 !important; }
+#measureEditPanel .measure-edit-range-summary { margin-top: 0 !important; }
+#measureEditPanel .measure-edit-channel-toolbar,
+#restCleanupPanel .inline-channel-select-toolbar,
+#autoPartPanel .inline-channel-select-toolbar { margin-top: 0 !important; }
+#restCleanupPanel .rest-cleanup-inline-section { gap: 4px !important; }
+#autoPartPanel .auto-part-inline-field { gap: 2px !important; }
+
+/* 채널 삭제 · 채널 병합: "채널 선택 N/M" toolbar replaces the "채널 16 · 그룹 16" bulk bar (same grid row). */
+body.channel-delete-mode-active #channelBulkBar,
+body.merge-mode-active #channelBulkBar { display: none !important; }
+.channel-mode-select-toolbar {
+  box-sizing: border-box;
+  height: 27px;
+  min-height: 27px !important;
+  padding: 0 9px 0 9px !important;
+  gap: 5px !important;
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel-2) 78%, var(--panel));
+  z-index: 4;
+}
+.channel-mode-select-toolbar.is-merge { grid-template-columns: max-content minmax(0, 1fr) max-content !important; }
+.channel-mode-select-toolbar > button { height: 22px; min-height: 22px !important; padding: 0 8px !important; font-size: 11px !important; pointer-events: auto !important; opacity: 1; }
+.channel-mode-select-toolbar > button:disabled { opacity: .45; }
+/* 채널 삭제: folders collapse/expand like 채널 병합. */
+body.channel-delete-mode-active #channelTabs .channel-group-folder {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  cursor: pointer !important;
+}
+body.channel-delete-mode-active #channelModeSelectToolbar button:not(:disabled),
+body.merge-mode-active #channelModeSelectToolbar button:not(:disabled) {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+/* 채널 병합: bulk show/hide uses the channel eye button look. */
+.channel-mode-select-toolbar > .channel-mode-visibility-button {
+  width: 24px !important;
+  min-width: 24px !important;
+  height: 22px !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  justify-self: end;
 }

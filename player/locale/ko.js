@@ -676,6 +676,27 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "tutorial.step5.note": "채널 버튼으로 개별 음소거가 가능하고, 배속·볼륨·음색은 재생 확인용 설정입니다.",
     "tutorial.step6.title": "6. 악보 복사",
     "tutorial.step6.body": "악보 복사 탭에서 전체 MML을 한 번에 복사하거나 글자 수 제한에 맞춘 분할 악보를 페이지별로 복사합니다.",
-    "tutorial.step6.note": "기본 제한은 채널당 2,400자입니다. 분할 탐색지점은 마지막 허용 위치에서 뒤로 탐색할 때, 앞에서부터 몇 % 지점까지 공통 쉼표를 찾을지 정합니다."
+    "tutorial.step6.note": "기본 제한은 채널당 2,400자입니다. 분할 탐색지점은 마지막 허용 위치에서 뒤로 탐색할 때, 앞에서부터 몇 % 지점까지 공통 쉼표를 찾을지 정합니다.",
+    "audio_ai.label": "오디오 · AI 변환 (Beta)",
+    "audio_ai.preparing": "AI 변환 준비 중…",
+    "audio_ai.downloading": "AI 모델 내려받는 중… {0} / {1} MB",
+    "audio_ai.analyzing": "AI 변환 중… {0}%",
+    "audio_ai.done": "AI 변환 완료 (모델 v{0}): 노트 {1}개",
+    "audio_ai.busy": "다른 음원을 변환하는 중입니다.",
+    "audio_ai.err_unsupported": "이 브라우저에서는 오디오 AI 변환을 사용할 수 없습니다.",
+    "audio_ai.err_decode": "음원 파일을 읽지 못했습니다. 다른 형식(WAV, MP3, OGG 등)으로 시도해 주세요.",
+    "audio_ai.err_too_long": "{0}분보다 긴 음원은 변환할 수 없습니다. 음원을 나눠서 시도해 주세요.",
+    "audio_ai.err_runtime": "AI 실행 환경을 불러오지 못했습니다. 네트워크 연결을 확인해 주세요.",
+    "audio_ai.err_model": "AI 모델을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요.",
+    "audio_ai.err_memory": "메모리가 부족합니다. 더 짧은 음원으로 시도해 주세요.",
+    "audio_ai.no_notes": "음원에서 노트를 찾지 못했습니다.",
+    "audio_ai.failed": "오디오 AI 변환에 실패했습니다: {0}",
+    "format.module_load_failed": "음악 포맷 변환 모듈을 불러오지 못했습니다: {0}",
+    "google.api_load_failed": "Google API 로드 실패: {0}",
+    "format.plugin_unavailable": "음악 포맷 플러그인을 불러오지 못했습니다.",
+    "soundbank.download_start": "기본 음원(약 5 MB)을 내려받는 중입니다. 처음 한 번만 받습니다.",
+    "soundbank.download_ready": "기본 음원 준비가 끝났습니다.",
+    "soundbank.download_failed": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요.",
+    "sound.err_default_download": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요."
   }
 };

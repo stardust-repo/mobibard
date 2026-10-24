@@ -53,7 +53,6 @@
     defaultNewChannelNoteVolume: 10,
   };
 
-  const { getIgnorableSequentialOverlapTrim } = window.MabiUtils;
 
   function openFilePickerInput(input) {
     if (!input || input.disabled) return;
@@ -117,148 +116,6 @@
     }
     downloadBlobWithName(blob, fallbackFileName);
     return true;
-  }
-
-  function canUseNativeDirectoryPicker() {
-    return typeof window.showDirectoryPicker === "function" && window.isSecureContext !== false;
-  }
-
-  function normalizeAudioExportFileName(value, fallbackName) {
-    let name = String(value || "").trim();
-    if (!name) name = String(fallbackName || "mobibard-project.ogg").trim() || "mobibard-project.ogg";
-    name = name.replace(/[\\/:*?"<>|]/g, "_");
-    if (!/\.ogg$/i.test(name)) name += ".ogg";
-    return name;
-  }
-
-  // For audio export we intentionally choose only the destination directory first.
-  // showSaveFilePicker() creates/truncates the selected file as soon as the picker
-  // resolves, which leaves a 0-byte placeholder while a long render is running.
-  // A directory handle lets us ask the user first, render/encode second, and create
-  // or overwrite the actual .ogg file only after the final Blob is ready.
-  async function chooseAudioExportDestinationBeforeWork(defaultFileName) {
-    if (!canUseNativeDirectoryPicker()) {
-      return { directoryHandle: null, fileName: normalizeAudioExportFileName(defaultFileName, defaultFileName), cancelled: false };
-    }
-    let directoryHandle;
-    try {
-      directoryHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-    } catch (error) {
-      if (error?.name === "AbortError") return { directoryHandle: null, fileName: defaultFileName, cancelled: true };
-      console.warn("Native directory picker unavailable; falling back to download.", error);
-      return { directoryHandle: null, fileName: normalizeAudioExportFileName(defaultFileName, defaultFileName), cancelled: false };
-    }
-
-    const proposed = window.prompt(
-      i18nText("drive.save_name_prompt", [String(directoryHandle.name || "")]),
-      normalizeAudioExportFileName(defaultFileName, defaultFileName),
-    );
-    if (proposed === null) return { directoryHandle: null, fileName: defaultFileName, cancelled: true };
-    const fileName = normalizeAudioExportFileName(proposed, defaultFileName);
-
-    try {
-      await directoryHandle.getFileHandle(fileName);
-      if (!window.confirm(i18nText("editor.drive.overwrite", [fileName]))) {
-        return { directoryHandle: null, fileName, cancelled: true };
-      }
-    } catch (error) {
-      if (error?.name !== "NotFoundError") throw error;
-    }
-
-    return { directoryHandle, fileName, cancelled: false };
-  }
-
-  async function writeAudioBlobToChosenDestination(blob, destination) {
-    if (destination?.cancelled) return false;
-    if (destination?.directoryHandle) {
-      // Do not request/create the file handle until the final encoded Blob exists.
-      const handle = await destination.directoryHandle.getFileHandle(destination.fileName, { create: true });
-      const writable = await handle.createWritable();
-      try {
-        await writable.write(blob);
-      } finally {
-        await writable.close();
-      }
-      return true;
-    }
-    downloadBlobWithName(blob, destination?.fileName || "mobibard-project.ogg");
-    return true;
-  }
-
-  // A long render cannot safely keep the browser's transient user activation alive.
-  // Ask for the destination only after the final Blob exists, and open the native
-  // picker directly from the user's Save click so no empty placeholder sits on disk
-  // during rendering/encoding.
-  function chooseNativeSaveTargetAfterWork({ suggestedName, mimeType, extensions, title, message, confirmLabel }) {
-    if (!canUseNativeSavePicker()) return Promise.resolve({ handle: null, cancelled: false });
-    const dialog = elements.confirmDialog;
-    const confirmButton = elements.confirmDialogConfirm;
-    const cancelButton = elements.confirmDialogCancel;
-    if (!dialog || typeof dialog.showModal !== "function" || !confirmButton || !cancelButton) {
-      return chooseNativeSaveTarget({ suggestedName, mimeType, extensions });
-    }
-    if (dialog.open) dialog.close("cancel");
-    elements.confirmDialogTitle.textContent = String(title || i18nText("audio.export_ogg"));
-    elements.confirmDialogMessage.textContent = String(message || i18nText("audio.export_ready_to_save"));
-    confirmButton.textContent = String(confirmLabel || i18nText("audio.save_file"));
-    dialog.returnValue = "cancel";
-    const hadDangerClass = confirmButton.classList.contains("danger-button");
-    confirmButton.classList.remove("danger-button");
-
-    return new Promise((resolve) => {
-      let settled = false;
-      const cleanup = () => {
-        confirmButton.removeEventListener("click", onConfirm, true);
-        cancelButton.removeEventListener("click", onCancel, true);
-        dialog.removeEventListener("cancel", onDialogCancel);
-        dialog.removeEventListener("close", onDialogClose);
-        confirmButton.disabled = false;
-        if (hadDangerClass) confirmButton.classList.add("danger-button");
-      };
-      const finish = (target) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve(target);
-      };
-      const onConfirm = async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        confirmButton.disabled = true;
-        const target = await chooseNativeSaveTarget({ suggestedName, mimeType, extensions });
-        confirmButton.disabled = false;
-        if (target.cancelled) {
-          // Cancelling the OS picker returns to the ready-to-save dialog so the
-          // rendered Blob remains available without forcing another render.
-          return;
-        }
-        dialog.returnValue = "confirm";
-        finish(target);
-        dialog.close("confirm");
-      };
-      const onCancel = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        dialog.returnValue = "cancel";
-        finish({ handle: null, cancelled: true });
-        dialog.close("cancel");
-      };
-      const onDialogCancel = (event) => {
-        event.preventDefault();
-        dialog.returnValue = "cancel";
-        finish({ handle: null, cancelled: true });
-        dialog.close("cancel");
-      };
-      const onDialogClose = () => {
-        if (!settled) finish({ handle: null, cancelled: true });
-      };
-      confirmButton.addEventListener("click", onConfirm, true);
-      cancelButton.addEventListener("click", onCancel, true);
-      dialog.addEventListener("cancel", onDialogCancel);
-      dialog.addEventListener("close", onDialogClose);
-      dialog.showModal();
-      requestAnimationFrame(() => confirmButton.focus());
-    });
   }
 
   const NOTE_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
@@ -483,6 +340,11 @@
     verticalScrollThumb: document.querySelector("#verticalScrollThumb"),
     channelPanel: document.querySelector("#channelPanel"),
     channelBulkBar: document.querySelector("#channelBulkBar"),
+    channelModeSelectToolbar: document.querySelector("#channelModeSelectToolbar"),
+    channelModeSelectCount: document.querySelector("#channelModeSelectCount"),
+    channelModeSelectAllButton: document.querySelector("#channelModeSelectAllButton"),
+    channelModeClearAllButton: document.querySelector("#channelModeClearAllButton"),
+    channelModeVisibilityButton: document.querySelector("#channelModeVisibilityButton"),
     channelBulkCounts: document.querySelector("#channelBulkCounts"),
     channelBulkGroupToggleButton: document.querySelector("#channelBulkGroupToggleButton"),
     channelBulkGroupToggleGlyph: document.querySelector("#channelBulkGroupToggleGlyph"),
@@ -1998,20 +1860,55 @@
     }
   }
 
+  // Inline channel pickers (measure edit / rest cleanup / auto part) reuse the channel-delete tree
+  // template: coloured channel-tree rows, 📂 group rows with a count pill and a ○/✓ toggle on the right.
+  function setInlineChannelToggleState(button, active) {
+    if (!button) return;
+    button.classList.toggle('is-active', Boolean(active));
+    button.setAttribute('aria-pressed', String(Boolean(active)));
+    const glyph = button.querySelector('.channel-tree-action-glyph');
+    if (glyph) glyph.textContent = active ? '✓' : '○';
+  }
+
+  // Counts come from the selection Set (not the DOM) so collapsed groups still count their members.
   function syncInlineChannelSelectionGroups(host) {
     if (!host) return;
-    host.querySelectorAll('input.inline-channel-group-checkbox[type="checkbox"]').forEach((groupCheckbox) => {
-      const gid = String(groupCheckbox.dataset.inlineGroupId ?? "");
-      const members = [...host.querySelectorAll('input.inline-channel-checkbox[type="checkbox"]')]
-        .filter((input) => String(input.dataset.inlineGroupId ?? "") === gid && !input.disabled);
-      const checkedCount = members.filter((input) => input.checked).length;
-      groupCheckbox.disabled = members.length === 0;
-      groupCheckbox.checked = members.length > 0 && checkedCount === members.length;
-      groupCheckbox.indeterminate = checkedCount > 0 && checkedCount < members.length;
-      const count = groupCheckbox.closest('.inline-channel-group-row')?.querySelector('.inline-channel-group-count');
+    const config = host._inlineSelection;
+    if (!config) return;
+    const { selectedIds, notesOnly } = config;
+    const eligible = (channel) => !notesOnly || Boolean(channel?.notes?.length);
+    host.querySelectorAll('.inline-channel-tree-group[data-inline-group-id]').forEach((groupRow) => {
+      const gid = String(groupRow.dataset.inlineGroupId ?? '');
+      const members = state.channels.filter((channel) => String(channel.groupId ?? '') === gid && eligible(channel));
+      const checkedCount = members.filter((channel) => selectedIds.has(String(channel.id))).length;
+      const all = members.length > 0 && checkedCount === members.length;
+      const partial = checkedCount > 0 && !all;
+      groupRow.classList.toggle('select-state-all', all);
+      groupRow.classList.toggle('select-state-partial', partial);
+      groupRow.classList.toggle('is-disabled', members.length === 0);
+      const toggle = groupRow.querySelector('.channel-tree-select-toggle');
+      if (toggle) {
+        toggle.disabled = members.length === 0;
+        setInlineChannelToggleState(toggle, all);
+        if (partial) toggle.querySelector('.channel-tree-action-glyph').textContent = '–';
+      }
+      const count = groupRow.querySelector('.channel-group-count');
       if (count) count.textContent = `${checkedCount}/${members.length}`;
     });
+    // "채널 선택 3/16": selected / selectable channel count next to the list's toolbar title.
+    const toolbar = host.previousElementSibling?.classList?.contains('inline-channel-select-toolbar') ? host.previousElementSibling : null;
+    const counter = toolbar?.querySelector(':scope > span');
+    if (counter) {
+      const enabled = state.channels.filter(eligible);
+      const selected = enabled.filter((channel) => selectedIds.has(String(channel.id))).length;
+      counter.textContent = `${selected}/${enabled.length}`;
+      counter.classList.add('inline-channel-select-count');
+    }
   }
+
+  // Folder (📂) collapse state for the inline pickers. Session-only and shared by the three panels,
+  // so it never marks the project dirty or changes the sidebar tree.
+  const inlineChannelCollapsedGroupIds = new Set();
 
   function renderInlineChannelSelectionList(host, selectedIds, {
     notesOnly = true,
@@ -2019,76 +1916,234 @@
     detailForChannel = null,
   } = {}) {
     if (!host || !(selectedIds instanceof Set)) return false;
+    const scrollTop = host.scrollTop;
     host.replaceChildren();
+    host.classList.add('inline-channel-tree');
+    host.setAttribute('role', 'tree');
+    host._inlineSelection = { selectedIds, notesOnly };
     const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
     const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
     const rendered = new Set();
+    const fragment = document.createDocumentFragment();
+    const rerender = () => renderInlineChannelSelectionList(host, selectedIds, { notesOnly, onChange, detailForChannel });
 
-    const appendGroupRow = (group) => {
-      const row = document.createElement('label');
-      row.className = 'inline-channel-group-row';
-      const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
-      row.style.setProperty('--group-color', getChannelGroupColor(group, groupIndex, 'bright'));
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'inline-channel-group-checkbox';
-      checkbox.dataset.inlineGroupId = String(group.id);
-      const folder = document.createElement('span');
-      folder.className = 'inline-channel-group-folder';
-      folder.setAttribute('aria-hidden', 'true');
-      folder.textContent = '📂';
-      const name = document.createElement('strong');
-      name.className = 'inline-channel-group-name';
-      name.textContent = group.name || i18nText('group.label');
-      const count = document.createElement('small');
-      count.className = 'inline-channel-group-count';
-      row.append(checkbox, folder, name, count);
-      checkbox.addEventListener('change', () => {
-        const members = getChannelGroupMembers(group).filter((channel) => !notesOnly || channel.notes?.length);
-        for (const channel of members) {
-          if (checkbox.checked) selectedIds.add(String(channel.id));
-          else selectedIds.delete(String(channel.id));
+    const createToggle = (label) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'channel-tree-action channel-tree-select-toggle';
+      button.setAttribute('aria-label', label);
+      button.title = label;
+      const glyph = document.createElement('span');
+      glyph.className = 'channel-tree-action-glyph';
+      glyph.setAttribute('aria-hidden', 'true');
+      glyph.textContent = '○';
+      button.append(glyph);
+      return button;
+    };
+
+    const isEligibleChannel = (channel) => !notesOnly || Boolean(channel?.notes?.length);
+    const getGroupChannelIds = (groupId) => state.channels
+      .filter((channel) => String(channel.groupId ?? '') === String(groupId) && isEligibleChannel(channel))
+      .map((channel) => String(channel.id));
+    const isGroupAllSelected = (groupId) => {
+      const ids = getGroupChannelIds(groupId);
+      return ids.length > 0 && ids.every((id) => selectedIds.has(id));
+    };
+
+    const setChannelSelected = (row, selected) => {
+      const id = String(row.dataset.inlineChannelId);
+      if (selected) selectedIds.add(id); else selectedIds.delete(id);
+      row.dataset.inlineSelected = String(Boolean(selected));
+      row.classList.toggle('is-select-selected', Boolean(selected));
+      setInlineChannelToggleState(row.querySelector('.channel-tree-select-toggle'), selected);
+    };
+    // Group toggles also cover members hidden inside a collapsed group.
+    const setGroupSelected = (groupId, selected) => {
+      for (const id of getGroupChannelIds(groupId)) {
+        if (selected) selectedIds.add(id); else selectedIds.delete(id);
+      }
+      host.querySelectorAll('.inline-channel-tree-channel[data-inline-channel-id]').forEach((row) => {
+        if (String(row.dataset.inlineParentId ?? '') === String(groupId) && row.dataset.inlineDisabled !== 'true') {
+          setChannelSelected(row, selected);
         }
-        host.querySelectorAll('input.inline-channel-checkbox[type="checkbox"]').forEach((input) => {
-          if (String(input.dataset.inlineGroupId ?? '') === String(group.id) && !input.disabled) {
-            input.checked = checkbox.checked;
-          }
-        });
+      });
+    };
+
+    // Click-drag sweep, like the channel-delete ○/✓ buttons: the first row decides the target value
+    // (opposite of its current state) and every row of the same kind the pointer passes gets it.
+    let sweep = null;
+    const sweepRowAt = (clientX, clientY) => {
+      const hit = document.elementFromPoint(clientX, clientY);
+      const row = hit?.closest?.('.inline-channel-tree-channel, .inline-channel-tree-group');
+      return row && host.contains(row) ? row : null;
+    };
+    const applySweepTo = (row) => {
+      if (!sweep || !row || sweep.touched.has(row)) return;
+      const isGroup = row.classList.contains('inline-channel-tree-group');
+      if (isGroup !== (sweep.kind === 'group')) return;
+      sweep.touched.add(row);
+      if (isGroup) setGroupSelected(row.dataset.inlineGroupId, sweep.value);
+      else if (row.dataset.inlineDisabled !== 'true') setChannelSelected(row, sweep.value);
+      sweep.changed = true;
+      syncInlineChannelSelectionGroups(host);
+    };
+    const endSweep = (event) => {
+      if (!sweep || (event && event.pointerId !== sweep.pointerId)) return;
+      const changed = sweep.changed;
+      try { host.releasePointerCapture?.(sweep.pointerId); } catch (_) {}
+      window.cancelAnimationFrame(sweep.scrollFrame || 0);
+      sweep = null;
+      if (changed) onChange?.();
+    };
+    const autoScroll = () => {
+      if (!sweep) return;
+      const rect = host.getBoundingClientRect();
+      const edge = 28;
+      let delta = 0;
+      if (sweep.lastY < rect.top + edge) delta = -Math.ceil((rect.top + edge - sweep.lastY) / 3);
+      else if (sweep.lastY > rect.bottom - edge) delta = Math.ceil((sweep.lastY - (rect.bottom - edge)) / 3);
+      if (delta) {
+        host.scrollTop += delta;
+        applySweepTo(sweepRowAt(sweep.lastX, Math.min(rect.bottom - 2, Math.max(rect.top + 2, sweep.lastY))));
+      }
+      sweep.scrollFrame = window.requestAnimationFrame(autoScroll);
+    };
+    const beginSweep = (event, row) => {
+      if (event.button !== 0 || !row) return false;
+      const isGroup = row.classList.contains('inline-channel-tree-group');
+      if (!isGroup && row.dataset.inlineDisabled === 'true') return false;
+      const current = isGroup ? isGroupAllSelected(row.dataset.inlineGroupId) : row.dataset.inlineSelected === 'true';
+      event.preventDefault();
+      sweep = { pointerId: event.pointerId, kind: isGroup ? 'group' : 'channel', value: !current, touched: new Set(), changed: false, lastX: event.clientX, lastY: event.clientY, scrollFrame: 0 };
+      try { host.setPointerCapture?.(event.pointerId); } catch (_) {}
+      applySweepTo(row);
+      sweep.scrollFrame = window.requestAnimationFrame(autoScroll);
+      return true;
+    };
+    host.onpointermove = (event) => {
+      if (!sweep || event.pointerId !== sweep.pointerId) return;
+      sweep.lastX = event.clientX;
+      sweep.lastY = event.clientY;
+      applySweepTo(sweepRowAt(event.clientX, event.clientY));
+    };
+    host.onpointerup = endSweep;
+    host.onpointercancel = endSweep;
+    host.onlostpointercapture = endSweep;
+
+    // Toggle buttons sweep for every pointer type; the row body sweeps for the mouse only so a touch
+    // drag on a row still scrolls the list (a tap still toggles through click).
+    const bindRowInput = (row, main, toggle) => {
+      let handledByPointer = false;
+      const start = (event, allowTouch) => {
+        if (!allowTouch && event.pointerType !== 'mouse') return;
+        if (beginSweep(event, row)) handledByPointer = true;
+      };
+      toggle.addEventListener('pointerdown', (event) => { event.stopPropagation(); start(event, true); });
+      main.addEventListener('pointerdown', (event) => {
+        if (event.target.closest?.('.channel-group-folder')) return;
+        start(event, false);
+      });
+      const onClick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (handledByPointer) { handledByPointer = false; return; }
+        if (row.classList.contains('inline-channel-tree-group')) {
+          setGroupSelected(row.dataset.inlineGroupId, !isGroupAllSelected(row.dataset.inlineGroupId));
+        } else {
+          if (row.dataset.inlineDisabled === 'true') return;
+          setChannelSelected(row, row.dataset.inlineSelected !== 'true');
+        }
         syncInlineChannelSelectionGroups(host);
         onChange?.();
-      });
-      host.append(row);
+      };
+      main.addEventListener('click', onClick);
+      toggle.addEventListener('click', onClick);
+    };
+
+    const appendGroupRow = (group) => {
+      const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
+      const collapsed = inlineChannelCollapsedGroupIds.has(String(group.id));
+      const item = document.createElement('div');
+      item.className = `channel-tree-item channel-group-item inline-channel-tree-group${collapsed ? ' is-collapsed' : ''}`;
+      item.dataset.inlineGroupId = String(group.id);
+      item.style.setProperty('--group-accent', getChannelGroupColor(group, groupIndex, 'soft'));
+      item.style.setProperty('--group-edge', getChannelGroupColor(group, groupIndex, 'bright'));
+      item.style.setProperty('--channel-color', getChannelGroupColor(group, groupIndex, 'bright'));
+      item.setAttribute('role', 'treeitem');
+      item.setAttribute('aria-level', '1');
+      item.setAttribute('aria-expanded', String(!collapsed));
+      const main = document.createElement('button');
+      main.type = 'button';
+      main.className = 'channel-tree-main channel-group-main';
+      const folder = document.createElement('span');
+      folder.className = 'channel-group-folder';
+      folder.setAttribute('role', 'button');
+      folder.tabIndex = 0;
+      folder.setAttribute('aria-label', i18nText(collapsed ? 'group.expand' : 'group.collapse'));
+      folder.title = folder.getAttribute('aria-label');
+      folder.textContent = collapsed ? '📁' : '📂';
+      const toggleCollapsed = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = String(group.id);
+        if (inlineChannelCollapsedGroupIds.has(id)) inlineChannelCollapsedGroupIds.delete(id);
+        else inlineChannelCollapsedGroupIds.add(id);
+        rerender();
+      };
+      folder.addEventListener('pointerdown', (event) => event.stopPropagation());
+      folder.addEventListener('click', toggleCollapsed);
+      folder.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') toggleCollapsed(event); });
+      const name = document.createElement('span');
+      name.className = 'channel-tree-label channel-group-label';
+      name.textContent = group.name || i18nText('group.label');
+      const count = document.createElement('span');
+      count.className = 'channel-group-count';
+      main.append(folder, name, count);
+      const actions = document.createElement('div');
+      actions.className = 'channel-tree-actions channel-group-actions';
+      const toggle = createToggle(name.textContent);
+      actions.append(toggle);
+      item.append(main, actions);
+      bindRowInput(item, main, toggle);
+      fragment.append(item);
     };
 
     const appendChannelRow = (channel, index, parentId = null) => {
-      const row = document.createElement('label');
-      row.className = `inline-channel-select-row${parentId != null ? ' is-group-child' : ''}`;
-      row.style.setProperty('--channel-color', getChannelColor(channel, index));
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'inline-channel-checkbox';
-      checkbox.value = String(channel.id);
-      checkbox.dataset.inlineGroupId = parentId == null ? '' : String(parentId);
-      const eligible = !notesOnly || Boolean(channel.notes?.length);
-      checkbox.disabled = !eligible;
-      checkbox.checked = eligible && selectedIds.has(String(channel.id));
-      const info = document.createElement('span');
-      info.className = 'inline-channel-info';
-      const name = document.createElement('strong');
-      name.textContent = channel.name || `Ch${index + 1}`;
-      const detail = document.createElement('small');
-      detail.dataset.inlineChannelDetailFor = String(channel.id);
-      if (typeof detailForChannel === 'function') detail.textContent = String(detailForChannel(channel) ?? '');
-      else detail.textContent = channel.notes?.length ? `${channel.notes.length.toLocaleString()}개 노트` : '빈 채널';
-      info.append(name, detail);
-      row.append(checkbox, info);
-      checkbox.addEventListener('change', () => {
-        if (checkbox.checked) selectedIds.add(String(channel.id));
-        else selectedIds.delete(String(channel.id));
-        syncInlineChannelSelectionGroups(host);
-        onChange?.();
-      });
-      host.append(row);
+      const eligible = isEligibleChannel(channel);
+      const selected = eligible && selectedIds.has(String(channel.id));
+      const item = document.createElement('div');
+      item.className = `channel-tab-item channel-tree-item channel-tree-leaf-item channel-tree-channel-item inline-channel-tree-channel${parentId != null ? ' is-group-child' : ''}${selected ? ' is-select-selected' : ''}${eligible ? '' : ' is-disabled'}`;
+      item.style.setProperty('--channel-color', getChannelColor(channel, index));
+      item.dataset.inlineChannelId = String(channel.id);
+      item.dataset.inlineParentId = parentId == null ? '' : String(parentId);
+      item.dataset.inlineSelected = String(selected);
+      item.dataset.inlineDisabled = String(!eligible);
+      item.setAttribute('role', 'treeitem');
+      item.setAttribute('aria-level', parentId != null ? '2' : '1');
+      const main = document.createElement('button');
+      main.type = 'button';
+      main.className = 'channel-tree-main channel-tab-main';
+      main.disabled = !eligible;
+      const label = document.createElement('span');
+      label.className = 'channel-tree-label channel-tab-label';
+      label.textContent = channel.name || `Ch${index + 1}`;
+      main.append(label);
+      if (typeof detailForChannel === 'function') {
+        const detail = document.createElement('small');
+        detail.className = 'inline-channel-tree-detail';
+        detail.dataset.inlineChannelDetailFor = String(channel.id);
+        detail.textContent = String(detailForChannel(channel) ?? '');
+        main.append(detail);
+      }
+      const actions = document.createElement('div');
+      actions.className = 'channel-tree-actions';
+      const toggle = createToggle(label.textContent);
+      toggle.disabled = !eligible;
+      setInlineChannelToggleState(toggle, selected);
+      actions.append(toggle);
+      item.append(main, actions);
+      bindRowInput(item, main, toggle);
+      fragment.append(item);
     };
 
     for (const entry of getItemTreeLayout()) {
@@ -2101,13 +2156,17 @@
       const found = channelById.get(String(entry.id));
       if (!found) continue;
       rendered.add(String(entry.id));
+      if (entry.parentId != null && inlineChannelCollapsedGroupIds.has(String(entry.parentId))) continue;
       appendChannelRow(found.channel, found.index, entry.parentId);
     }
     for (const [id, found] of channelById) {
       if (rendered.has(id)) continue;
+      if (found.channel.groupId != null && inlineChannelCollapsedGroupIds.has(String(found.channel.groupId))) continue;
       appendChannelRow(found.channel, found.index, found.channel.groupId);
     }
+    host.append(fragment);
     syncInlineChannelSelectionGroups(host);
+    host.scrollTop = scrollTop;
     return true;
   }
 
@@ -2532,6 +2591,12 @@
     updateAutoPartSummary();
   }
 
+  // The split count / progress is shown at the right of the tab-row title (파트 자동 설정 · 분할 N개).
+  function setAutoPartStatus(text) {
+    state.autoPart.statusText = String(text || "");
+    syncInlineToolTitlebar();
+  }
+
   let autoPartComputeToken = 0;
   let autoPartComputeTimer = 0;
 
@@ -2551,14 +2616,12 @@
       elements.autoPartApplyButton.disabled = true;
       elements.autoPartApplyButton.title = "";
     }
-    if (elements.autoPartSummary) elements.autoPartSummary.textContent = i18nText("timeline.auto_part_computing", [0]);
+    setAutoPartStatus(i18nText("timeline.auto_part_computing_short", [0]));
     refreshAutoPartPreviewVisuals();
     const steps = autoPartPlanSteps(options.targetChars, options.searchRangePercent);
     const finish = (plan) => {
       state.autoPart.plan = plan;
-      if (elements.autoPartSummary) {
-        elements.autoPartSummary.textContent = i18nText("timeline.auto_part_result", [Math.max(0, plan.partCount - 1).toLocaleString()]);
-      }
+      setAutoPartStatus(i18nText("timeline.auto_part_split_count", [Math.max(0, plan.partCount - 1).toLocaleString()]));
       if (elements.autoPartApplyButton) {
         elements.autoPartApplyButton.disabled = plan.partCount < 2;
         elements.autoPartApplyButton.title = plan.partCount < 2 ? i18nText("timeline.auto_part_need_two") : "";
@@ -2580,9 +2643,7 @@
         finish(step.value);
         return;
       }
-      if (elements.autoPartSummary) {
-        elements.autoPartSummary.textContent = i18nText("timeline.auto_part_computing", [Math.round(clamp(Number(step.value) || 0, 0, 1) * 100)]);
-      }
+      setAutoPartStatus(i18nText("timeline.auto_part_computing_short", [Math.round(clamp(Number(step.value) || 0, 0, 1) * 100)]));
       autoPartComputeTimer = window.setTimeout(run, 0);
     };
     autoPartComputeTimer = window.setTimeout(run, Math.max(0, Number(debounceMs) || 0));
@@ -2596,9 +2657,7 @@
       elements.autoPartApplyButton.disabled = true;
       elements.autoPartApplyButton.title = i18nText("timeline.auto_part_need_two");
     }
-    if (elements.autoPartSummary) {
-      elements.autoPartSummary.textContent = i18nText("timeline.auto_part_result", ["—"]);
-    }
+    setAutoPartStatus(i18nText("timeline.auto_part_split_count", ["—"]));
     refreshAutoPartPreviewVisuals();
   }
 
@@ -2782,12 +2841,6 @@
     };
   }
 
-  function getMeasureEditRangeLengthLabel(range) {
-    const info = getMeasureEditRangeLengthInfo(range);
-    if (!info) return i18nText("timeline.measure_range_not_selected");
-    return `${i18nText("timeline.measure_selected_length")}: ${info.amountText} · ${info.beatText} ${i18nText("ui.beat")} · ${info.durationText}`;
-  }
-
   function renderMeasureEditRangeSummary(range) {
     const host = elements.measureEditRangeSummary;
     if (!host) return;
@@ -2807,7 +2860,8 @@
     label.textContent = i18nText("timeline.measure_selected_length");
     const value = document.createElement("strong");
     value.className = "measure-edit-range-value";
-    value.textContent = `${info.amountText} · ${info.beatText} ${i18nText("ui.beat")} · ${info.durationText}`;
+    // Measures/beats (박자) + time are enough; the raw quarter-beat count is omitted.
+    value.textContent = `${info.amountText} · ${info.durationText}`;
     line.append(label, value);
     host.append(line);
   }
@@ -2829,9 +2883,9 @@
   function getMeasureEditScopeLabel() {
     const selected = getMeasureEditTargetChannels();
     if (!selected.length) return i18nText('mml.channel_select');
-    if (isMeasureEditAllChannelsSelected()) return `${selected.length.toLocaleString()}개 채널 · 모두 선택`;
+    if (isMeasureEditAllChannelsSelected()) return i18nText("measure.scope_all_selected", [selected.length.toLocaleString()]);
     if (selected.length === 1) return selected[0].name || i18nText('channel.label');
-    return `${selected.length.toLocaleString()}개 채널 선택`;
+    return i18nText("measure.scope_n_selected", [selected.length.toLocaleString()]);
   }
 
   function getMeasureEditTargetChannels() {
@@ -6269,30 +6323,6 @@
     return active ? [active] : [];
   }
 
-  function getVelocityLaneEditableEntries({ visibleOnly = true } = {}) {
-    const channels = getVelocityLaneChannels();
-    const entries = [];
-    let firstBeat = -Infinity;
-    let lastBeat = Infinity;
-    if (visibleOnly && elements.velocityLaneViewport) {
-      const width = Math.max(1, elements.velocityLaneViewport.clientWidth || 1);
-      const scrollLeft = elements.rollViewport?.scrollLeft || 0;
-      const margin = Math.max(CONFIG.minimumNoteBeat, getVisibleGridUnit());
-      firstBeat = Math.max(0, xToBeat(scrollLeft) - margin);
-      lastBeat = Math.min(getTotalBeats(), xToBeat(scrollLeft + width) + margin);
-    }
-    for (const channel of channels) {
-      const channelIndex = Math.max(0, state.channels.indexOf(channel));
-      for (const note of channel.notes || []) {
-        const startBeat = Math.max(0, Number(note.startBeat) || 0);
-        if (startBeat < firstBeat - 1e-7 || startBeat > lastBeat + 1e-7) continue;
-        entries.push({ channel, channelIndex, note, startBeat });
-      }
-    }
-    entries.sort((left, right) => left.startBeat - right.startBeat || left.channelIndex - right.channelIndex || Number(left.note.id) - Number(right.note.id));
-    return entries;
-  }
-
   function getVelocityLaneVerticalBounds(height) {
     const safeHeight = Math.max(20, Number(height) || 20);
     // Keep a small visual margin so V15/V0 do not touch the lane edges.
@@ -6498,17 +6528,6 @@
     const activeChannel = getActiveChannel();
     if (activeChannel && String(activeChannel.id) === String(entry.channel.id)) interaction.timelineDirty = true;
     return true;
-  }
-
-  function lowerBoundVelocityEntries(entries, beat) {
-    let low = 0;
-    let high = entries.length;
-    while (low < high) {
-      const mid = (low + high) >> 1;
-      if (entries[mid].startBeat < beat) low = mid + 1;
-      else high = mid;
-    }
-    return low;
   }
 
   function getVelocityLaneVisualColumns(renderItems = state.velocityLaneRenderItems || []) {
@@ -7377,7 +7396,6 @@
       context.strokeStyle = fade.type === "in" ? "rgba(98,190,255,.92)" : "rgba(255,151,118,.92)";
       context.lineWidth = 2;
       if (x1 >= -1 && x1 <= width + 1) {
-        const lane = getTimelineLaneLayout(height);
         context.beginPath();
         context.moveTo(Math.round(x1)+.5, 0);
         context.lineTo(Math.round(x1)+.5, height);
@@ -9808,7 +9826,7 @@
     drawRoll();
     renderAudioLane();
     updateChannelInfo();
-    if (notify) showToast(`${clip.title} 표시 싱글 ${nextSolo ? "켬" : "해제"}`);
+    if (notify) showToast(i18nText(nextSolo ? "ui.visibility_solo_on_named" : "ui.visibility_solo_off_named", [clip.title]));
     return true;
   }
 
@@ -9843,7 +9861,7 @@
     drawRoll();
     renderAudioLane();
     updateChannelInfo();
-    if (notify) showToast(`${clip.title} 싱글 ${nextSolo ? "켬" : "해제"}`);
+    if (notify) showToast(i18nText(nextSolo ? "ui.solo_on_named" : "channel.solo_off_named", [clip.title]));
     return true;
   }
 
@@ -10339,7 +10357,7 @@
       groupButton.title = group.name;
       groupButton.dataset.channelGroupId = key;
       groupButton.dataset.contextArea = "channel-group";
-      groupButton.setAttribute("aria-label", `${group.name} 그룹`);
+      groupButton.setAttribute("aria-label", i18nText("group.aria_named", [group.name]));
       groupButton.setAttribute("aria-selected", String(groupActive));
       groupButton.addEventListener("pointerdown", (event) => beginChannelGroupPointerDrag(event, group.id, groupButton, list));
       groupButton.addEventListener("click", (event) => {
@@ -10804,7 +10822,6 @@
     return true;
   }
 
-  const channelGroupClickTimers = new Map();
 
   function setAllChannelTreeVisible(visible) {
     const nextVisible = Boolean(visible);
@@ -10974,7 +10991,76 @@
     };
   }
 
+  // 채널 삭제 / 채널 병합: the "채널 16 · 그룹 16" bulk bar is replaced by the same
+  // "채널 선택 N/M" toolbar as the inline panels. Delete: 모두 선택 / 모두 해제.
+  // Merge: one 모두 보이기 / 모두 감추기 toggle.
+  function syncChannelModeSelectToolbar() {
+    const toolbar = elements.channelModeSelectToolbar;
+    if (!toolbar) return;
+    const deleteMode = isChannelDeleteModeActive();
+    const mergeMode = !deleteMode && isChannelMergeModeActive();
+    toolbar.hidden = !(deleteMode || mergeMode);
+    toolbar.classList.toggle("is-merge", mergeMode);
+    if (toolbar.hidden) return;
+    // Line the right edge up with the tree's action column: add the tree's native scrollbar gutter
+    // (same rule as the normal bulk bar) and size the eye like the per-row eye buttons.
+    const scrollbarWidth = Math.max(0, (elements.channelTabs?.offsetWidth || 0) - (elements.channelTabs?.clientWidth || 0));
+    toolbar.style.setProperty("padding-right", `${9 + scrollbarWidth}px`, "important");
+    const rowEye = elements.channelTabs?.querySelector(".channel-tree-visibility");
+    if (rowEye && elements.channelModeVisibilityButton) {
+      const width = Math.round(rowEye.getBoundingClientRect().width);
+      if (width > 0) {
+        elements.channelModeVisibilityButton.style.setProperty("width", `${width}px`, "important");
+        elements.channelModeVisibilityButton.style.setProperty("min-width", `${width}px`, "important");
+      }
+    }
+    if (elements.channelModeSelectAllButton) elements.channelModeSelectAllButton.hidden = !deleteMode;
+    if (elements.channelModeClearAllButton) elements.channelModeClearAllButton.hidden = !deleteMode;
+    if (elements.channelModeVisibilityButton) elements.channelModeVisibilityButton.hidden = !mergeMode;
+    if (deleteMode) {
+      const mode = state.channelDeleteMode;
+      const channelIds = new Set(state.channels.map((channel) => String(channel.id)));
+      const selectedChannels = [...mode.selectedChannelIds].filter((id) => channelIds.has(String(id))).length;
+      const everything = selectedChannels === channelIds.size
+        && mode.selectedAudioIds.size >= state.audioClips.length
+        && (mode.groupModes?.size || 0) >= state.channelGroups.length;
+      const anything = mode.selectedChannelIds.size + mode.selectedAudioIds.size + (mode.groupModes?.size || 0) > 0;
+      if (elements.channelModeSelectCount) elements.channelModeSelectCount.textContent = `${selectedChannels}/${channelIds.size}`;
+      if (elements.channelModeSelectAllButton) elements.channelModeSelectAllButton.disabled = everything;
+      if (elements.channelModeClearAllButton) elements.channelModeClearAllButton.disabled = !anything;
+    } else {
+      const sources = state.channelMerge.sourceChannelIds instanceof Set ? state.channelMerge.sourceChannelIds : new Set();
+      const target = state.channelMerge.targetChannelId;
+      const included = new Set([...sources].map(String));
+      if (target != null && getChannelById(target)) included.add(String(target));
+      if (elements.channelModeSelectCount) elements.channelModeSelectCount.textContent = `${included.size}/${state.channels.length}`;
+      const { hasItems, allVisible, allHidden } = getChannelTreeBulkState();
+      const button = elements.channelModeVisibilityButton;
+      if (button) {
+        // Same eye glyph as the per-channel visibility buttons: 👁 = shown (click hides all), 🙈 = all hidden.
+        const label = i18nText(allHidden ? "channel.bulk_show" : "channel.bulk_hide");
+        button.title = label;
+        button.setAttribute("aria-label", label);
+        button.setAttribute("aria-pressed", allVisible ? "true" : (allHidden ? "false" : "mixed"));
+        button.classList.toggle("is-active", allVisible);
+        const glyph = button.querySelector(".channel-tree-action-glyph");
+        if (glyph) glyph.textContent = allHidden ? "🙈" : "👁";
+        button.disabled = !hasItems;
+      }
+    }
+  }
+
+  function setAllChannelDeleteModeSelection(selected) {
+    if (!isChannelDeleteModeActive()) return;
+    const mode = state.channelDeleteMode;
+    mode.selectedChannelIds = new Set(selected ? state.channels.map((channel) => String(channel.id)) : []);
+    mode.selectedAudioIds = new Set(selected ? state.audioClips.map((clip) => String(clip.id)) : []);
+    mode.groupModes = new Map(selected ? state.channelGroups.map((group) => [String(group.id), "group-only"]) : []);
+    renderChannelTabs();
+  }
+
   function updateChannelBulkBar() {
+    syncChannelModeSelectToolbar();
     if (!elements.channelBulkBar) return;
     // Match the fixed bulk actions to the three right-side action columns used by
     // scrollable channel/group rows. The tree reserves a native scrollbar gutter,
@@ -11110,7 +11196,6 @@
       const mergeSource = isChannelMergeModeActive() && state.channelMerge.sourceChannelIds?.has(String(channel.id));
       const mergeMask = isChannelMergeModeActive() && getChannelMergeExcludeOverlapChannelIds().has(String(channel.id));
       const deleteSelected = deleteMode && state.channelDeleteMode.selectedChannelIds.has(String(channel.id));
-      const group = getChannelGroupForChannel(channel);
       item.className = `channel-tab-item channel-tree-item channel-tree-leaf-item channel-tree-channel-item${groupChild ? " is-group-child" : ""}${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${!isChannelEffectivelyVisible(channel) ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${mergeTarget ? " is-merge-target" : ""}${mergeSource ? " is-merge-source" : ""}${mergeMask ? " is-merge-mask" : ""}${deleteSelected ? " is-delete-selected" : ""}`;
       item.style.setProperty("--channel-color", getChannelColor(channel, index));
       item.dataset.channelIndex = String(index);
@@ -11123,7 +11208,7 @@
       const main = document.createElement("button");
       main.type = "button";
       main.className = "channel-tree-main channel-tab-main";
-      main.title = deleteMode ? `${channel.name} · 채널 선택 및 노트 확인` : `${channel.name} · 누르면 선택, 위아래로 드래그하면 순서 변경`;
+      main.title = deleteMode ? i18nText("channel.delete_mode_item_title", [channel.name]) : i18nText("selection.click_drag_up", [channel.name]);
       const label = document.createElement("span");
       label.className = "channel-tree-label channel-tab-label";
       label.textContent = channel.name;
@@ -11174,7 +11259,7 @@
         actions.append(
           ...(mergeRoleGroup ? [mergeRoleGroup] : []),
           createAction({ kind: "mml", active: false, label: i18nText("channel.mml_button_aria", [channel.name]), title: i18nText("channel.mml_button_title"), textContent: "M", onClick: () => openChannelMmlDialog(channel.id) }),
-          createAction({ kind: "visibility", active: channel.visible !== false, solo: visibilitySolo, label: visibilitySolo ? `${channel.name} 표시 싱글 해제` : i18nText(channel.visible === false ? "ui.show_2" : "ui.hide_3", [channel.name]), title: visibilitySolo ? "표시 싱글 해제" : i18nText("channel.mute_context_solo", [i18nText(channel.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelVisibilitySoloById(channel.id, false) : setChannelVisibleById(channel.id, channel.visible === false), sweep: !visibilitySolo, sweepId: channel.id, rightSweepKind: "visibility-solo" }),
+          createAction({ kind: "visibility", active: channel.visible !== false, solo: visibilitySolo, label: visibilitySolo ? i18nText("ui.visibility_solo_off_named", [channel.name]) : i18nText(channel.visible === false ? "ui.show_2" : "ui.hide_3", [channel.name]), title: visibilitySolo ? i18nText("ui.visibility_solo_off") : i18nText("channel.mute_context_solo", [i18nText(channel.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelVisibilitySoloById(channel.id, false) : setChannelVisibleById(channel.id, channel.visible === false), sweep: !visibilitySolo, sweepId: channel.id, rightSweepKind: "visibility-solo" }),
           createAction({ kind: "mute", active: channel.muted, solo: channelSolo, label: channelSolo ? i18nText("channel.solo_off_named", [channel.name]) : i18nText(channel.muted ? "ui.unmute_2" : "ui.mute_2", [channel.name]), title: channelSolo ? i18nText("group.solo_off") : i18nText("channel.mute_context_solo", [i18nText(channel.muted ? "ui.unmute" : "ui.mute")]), onClick: () => channelSolo ? setChannelSoloById(channel.id, false) : setChannelMutedById(channel.id, !channel.muted), sweep: !channelSolo, sweepId: channel.id, rightSweepKind: "mute-solo" }),
         );
       }
@@ -11197,7 +11282,7 @@
       const mergeIncludeState = mergeMode ? getChannelMergeGroupRoleState(group, "include") : { members: [], active: false };
       const mergeExcludeState = mergeMode ? getChannelMergeGroupRoleState(group, "exclude") : { members: [], active: false };
       const stateName = deleteMode ? getGroupDeleteDisplayState(group.id) : "none";
-      item.className = `channel-tree-item channel-group-item${groupActive ? " active" : ""}${group.collapsed && !deleteMode ? " is-collapsed" : ""}${!isChannelGroupEffectivelyVisible(group) ? " is-hidden" : ""}${isChannelGroupEffectivelyMuted(group) ? " is-muted" : ""}${solo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${deleteMode ? ` delete-state-${stateName}` : ""}`;
+      item.className = `channel-tree-item channel-group-item${groupActive ? " active" : ""}${group.collapsed ? " is-collapsed" : ""}${!isChannelGroupEffectivelyVisible(group) ? " is-hidden" : ""}${isChannelGroupEffectivelyMuted(group) ? " is-muted" : ""}${solo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${deleteMode ? ` delete-state-${stateName}` : ""}`;
       item.dataset.channelGroupId = String(group.id);
       item.dataset.contextArea = "channel-group";
       const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
@@ -11205,12 +11290,12 @@
       item.style.setProperty("--group-edge", getChannelGroupColor(group, groupIndex, "bright"));
       // 채널 행과 동일하게 그룹의 왼쪽 강조선/선택선도 그룹 고유 hue를 사용합니다.
       item.style.setProperty("--channel-color", getChannelGroupColor(group, groupIndex, "bright"));
-      item.setAttribute("role", "treeitem"); item.setAttribute("aria-level", "1"); item.setAttribute("aria-expanded", String(deleteMode || !group.collapsed)); item.setAttribute("aria-selected", String(groupActive));
+      item.setAttribute("role", "treeitem"); item.setAttribute("aria-level", "1"); item.setAttribute("aria-expanded", String(!group.collapsed)); item.setAttribute("aria-selected", String(groupActive));
       const main = document.createElement("button"); main.type = "button"; main.className = "channel-tree-main channel-group-main";
-      const folder = document.createElement("span"); folder.className = "channel-group-folder"; folder.setAttribute("role", "button"); folder.tabIndex = deleteMode ? -1 : 0; folder.setAttribute("aria-label", group.collapsed ? "그룹 펼치기" : "그룹 접기"); folder.setAttribute("aria-disabled", String(deleteMode)); folder.textContent = group.collapsed && !deleteMode ? "📁" : "📂";
+      const folder = document.createElement("span"); folder.className = "channel-group-folder"; folder.setAttribute("role", "button"); folder.tabIndex = 0; folder.setAttribute("aria-label", i18nText(group.collapsed ? "group.expand" : "group.collapse")); folder.textContent = group.collapsed ? "📁" : "📂";
       folder.addEventListener("pointerdown", (event) => event.stopPropagation());
-      folder.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); if (!deleteMode) toggleChannelGroupCollapsed(group.id); });
-      folder.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); if (!deleteMode) toggleChannelGroupCollapsed(group.id); } });
+      folder.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); toggleChannelGroupCollapsed(group.id); });
+      folder.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); toggleChannelGroupCollapsed(group.id); } });
       const label = document.createElement("span"); label.className = "channel-tree-label channel-group-label"; label.textContent = group.name;
       const count = document.createElement("span"); count.className = "channel-group-count"; count.textContent = String(members.length + getChannelGroupAudioMembers(group).length);
       main.append(folder, label, count);
@@ -11252,12 +11337,12 @@
         );
         actions.append(
           roleGroup,
-          createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? `${group.name} 표시 싱글 해제` : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? "표시 싱글 해제" : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), sweep: !visibilitySolo, sweepId: group.id, rightSweepKind: "visibility-solo" }),
+          createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? i18nText("ui.visibility_solo_off_named", [group.name]) : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? i18nText("ui.visibility_solo_off") : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), sweep: !visibilitySolo, sweepId: group.id, rightSweepKind: "visibility-solo" }),
         );
       } else {
         actions.append(
           createAction({ kind: "mml", active: false, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) }),
-          createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? `${group.name} 표시 싱글 해제` : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? "표시 싱글 해제" : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), sweep: !visibilitySolo, sweepId: group.id, rightSweepKind: "visibility-solo" }),
+          createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? i18nText("ui.visibility_solo_off_named", [group.name]) : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? i18nText("ui.visibility_solo_off") : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), sweep: !visibilitySolo, sweepId: group.id, rightSweepKind: "visibility-solo" }),
           createAction({ kind: "mute", active: Boolean(group.muted), solo, label: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText(group.muted ? "group.unmute_named" : "group.mute_named", [group.name]), title: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText("channel.mute_context_solo", [i18nText(group.muted ? "ui.unmute" : "ui.mute")]), onClick: () => solo ? setChannelGroupSoloById(group.id, false) : setChannelGroupMutedById(group.id, !group.muted), sweep: !solo, sweepId: group.id, rightSweepKind: "mute-solo" }),
         );
       }
@@ -11278,7 +11363,7 @@
       if (renderedGroups.has(key)) return;
       renderedGroups.add(key);
       renderGroupHeader(group);
-      if (deleteMode || !group.collapsed) {
+      if (!group.collapsed) {
         state.channels.forEach((member, memberIndex) => {
           if (String(member.groupId ?? "") === key) renderChannelItem(member, memberIndex, { groupChild: true });
         });
@@ -11308,7 +11393,7 @@
     // 해당 그룹의 자식으로, beforeChannelId가 있으면 그 채널 앞에 배치합니다.
     state.audioClips.forEach((clip, clipIndex) => {
       const group = getAudioClipGroup(clip);
-      if (group && !deleteMode && group.collapsed) return;
+      if (group && group.collapsed) return;
       const groupChild = Boolean(group);
       const active = state.activePanel === "audio" && String(state.activeAudioClipId) === String(clip.id);
       const audioSolo = isAudioClipSolo(clip);
@@ -11325,7 +11410,7 @@
       const main = document.createElement("button");
       main.type = "button";
       main.className = "channel-tree-main channel-tab-main";
-      main.title = deleteMode ? `${clip.title} · 오디오 선택 및 확인` : `${clip.title} · 누르면 선택, 위아래로 드래그하면 순서/그룹 변경`;
+      main.title = deleteMode ? i18nText("audio.delete_mode_item_title", [clip.title]) : i18nText("selection.click_drag_group", [clip.title]);
       const label = document.createElement("span");
       label.className = "channel-tree-label channel-tab-label";
       label.textContent = clip.title;
@@ -11356,8 +11441,8 @@
             kind: "visibility",
             active: clip.visible !== false,
             solo: audioVisibilitySolo,
-            label: audioVisibilitySolo ? `${clip.title} 표시 싱글 해제` : i18nText(clip.visible === false ? "ui.show_2" : "ui.hide_3", [clip.title]),
-            title: audioVisibilitySolo ? "표시 싱글 해제" : i18nText(clip.visible === false ? "audio.show_block" : "audio.hide_block"),
+            label: audioVisibilitySolo ? i18nText("ui.visibility_solo_off_named", [clip.title]) : i18nText(clip.visible === false ? "ui.show_2" : "ui.hide_3", [clip.title]),
+            title: audioVisibilitySolo ? i18nText("ui.visibility_solo_off") : i18nText(clip.visible === false ? "audio.show_block" : "audio.hide_block"),
             onClick: () => audioVisibilitySolo ? setAudioClipVisibilitySoloById(clip.id, false) : setAudioClipVisible(clip.id, clip.visible === false),
             sweep: !audioVisibilitySolo,
             sweepId: clip.id,
@@ -11367,7 +11452,7 @@
             kind: "mute",
             active: clip.muted,
             solo: audioSolo,
-            label: audioSolo ? `${clip.title} 싱글 해제` : i18nText(clip.muted ? "ui.unmute_2" : "ui.mute_2", [clip.title]),
+            label: audioSolo ? i18nText("channel.solo_off_named", [clip.title]) : i18nText(clip.muted ? "ui.unmute_2" : "ui.mute_2", [clip.title]),
             title: audioSolo ? "싱글 해제" : i18nText(clip.muted ? "audio.unmute" : "audio.mute"),
             onClick: () => audioSolo ? setAudioClipSoloById(clip.id, false) : setAudioClipMuted(clip.id, !clip.muted),
             sweep: !audioSolo,
@@ -11584,32 +11669,6 @@
     else select.value = "";
   }
 
-  function renderChannelGroupMemberList() {
-    if (!elements.channelGroupMemberList) return;
-    elements.channelGroupMemberList.replaceChildren();
-    const group = getChannelGroupById(state.channelGroupEdit.groupId);
-    const members = group ? getChannelGroupMembers(group) : [];
-    if (!members.length) {
-      const empty = document.createElement("div");
-      empty.className = "channel-group-member-empty";
-      empty.textContent = i18nText("group.no_members");
-      elements.channelGroupMemberList.append(empty);
-      return;
-    }
-    members.forEach((channel, index) => {
-      const row = document.createElement("div");
-      row.className = "midi-transfer-channel-row channel-group-member-row is-readonly";
-      row.style.setProperty("--channel-color", getChannelColor(channel, state.channels.indexOf(channel)));
-      const marker = document.createElement("span");
-      marker.className = "channel-group-member-marker";
-      marker.textContent = String(index + 1);
-      const text = document.createElement("span");
-      text.textContent = channel.name;
-      row.append(marker, text);
-      elements.channelGroupMemberList.append(row);
-    });
-  }
-
   function addChannelGroup() {
     if (isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
     const group = {
@@ -11666,11 +11725,6 @@
   function closeChannelGroupDialog() {
     if (elements.channelGroupBackdrop) elements.channelGroupBackdrop.hidden = true;
     state.channelGroupEdit = { groupId: null, mode: "create" };
-  }
-
-  function getSelectedChannelGroupDialogIds() {
-    const group = getChannelGroupById(state.channelGroupEdit.groupId);
-    return group ? getChannelGroupMembers(group).map((channel) => String(channel.id)) : [];
   }
 
   function applyChannelGroupDialog() {
@@ -11772,19 +11826,6 @@
     }
   }
 
-  function optimizeChannelEditableMmlBody(body) {
-    const source = normalizeMmlCommandCase(String(body || "").trim());
-    if (!source) return "";
-    const optimized = optimizeEditorExportMml(`MML@${source};`);
-    const parts = splitMmlPartsForExport(optimized);
-    return parts.length ? normalizeMmlCommandCase(parts.join(",")) : source;
-  }
-
-  function channelToDisplayedMml(channel, { includeTempo = false, sourceNotes = null, optimized = false } = {}) {
-    const source = channelToEditableMml(channel, { includeTempo, sourceNotes });
-    return optimized ? optimizeChannelEditableMmlBody(source) : source;
-  }
-
   function normalizeMmlTextareaValue(textarea, normalizer = normalizeMmlTextCase) {
     if (!textarea || typeof normalizer !== "function") return false;
     const before = String(textarea.value || "");
@@ -11801,10 +11842,6 @@
     return true;
   }
 
-  function normalizeChannelMmlTextareaCase() {
-    return normalizeMmlTextareaValue(elements.channelMmlText, normalizeMmlCommandCase);
-  }
-
   function normalizeUnifiedMmlImportTextareaCase() {
     const textarea = elements.midiImportTextInput;
     if (!textarea) return false;
@@ -11816,46 +11853,10 @@
     return normalizeMmlTextareaValue(textarea, normalizeMmlTextCase);
   }
 
-  function channelToEditableMml(channel, { includeTempo = false, sourceNotes = null } = {}) {
-    const inputNotes = Array.isArray(sourceNotes) ? sourceNotes : (channel?.notes || []);
-    if (!inputNotes.length) {
-      if (!includeTempo) return "";
-      const tempos = getSortedTempos();
-      return normalizeMmlCommandCase(`t${getTempoAtBeatFromCollection(0, tempos)}`);
-    }
-    const normalized = inputNotes.map((note) => ({
-      ...note,
-      startBeat: Math.max(0, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat)),
-      durationBeat: Math.max(CONFIG.minimumNoteBeat, snapBeatToUnit(note.durationBeat, CONFIG.minimumNoteBeat)),
-    }));
-    const voices = partitionNotesIntoMmlVoices(normalized);
-    const endBeat = normalized.reduce((maximum, note) => Math.max(maximum, note.startBeat + note.durationBeat), 0);
-    const tempos = getSortedTempos();
-    const rendered = voices
-      .map((voice, voiceIndex) => (includeTempo && voiceIndex === 0
-        ? buildTempoIntegratedNoteVoiceMml(voice, tempos, 0, endBeat, { applyTimelineFade: false })
-        : buildNoteVoiceMml(voice, 0, { applyTimelineFade: false })))
-      .filter(Boolean);
-    return normalizeMmlCommandCase(rendered.join(","));
-  }
-
   function setChannelMmlStatus(message, { error = false } = {}) {
     if (!elements.channelMmlStatus) return;
     elements.channelMmlStatus.textContent = String(message || "");
     elements.channelMmlStatus.classList.toggle("error", Boolean(error));
-  }
-
-  function getMmlEditDialogChannels() {
-    if (state.channelMmlEdit.allChannels) return state.channels.slice();
-    if (state.channelMmlEdit.groupId != null) {
-      const group = getChannelGroupById(state.channelMmlEdit.groupId);
-      return group ? getChannelGroupMembers(group) : [];
-    }
-    if (state.channelMmlEdit.channelId != null) {
-      const channel = getChannelById(state.channelMmlEdit.channelId);
-      return channel ? [channel] : [];
-    }
-    return [];
   }
 
   function parseMmlEditorSource(source) {
@@ -12288,7 +12289,7 @@
         : (group ? i18nText("group.mml_view") : i18nText("channel.mml_edit")));
     if (elements.channelMmlDialogTitle) elements.channelMmlDialogTitle.textContent = title;
     if (elements.channelMmlDialog) elements.channelMmlDialog.setAttribute("aria-label", title);
-    if (elements.channelMmlText) elements.channelMmlText.setAttribute("aria-label", `${title} 내용`);
+    if (elements.channelMmlText) elements.channelMmlText.setAttribute("aria-label", i18nText("ui.content_named", [title]));
     if (elements.channelMmlTargetLabel) {
       elements.channelMmlTargetLabel.textContent = allChannels
         ? `${i18nText("volume.scope_all")} · ${list.length}`
@@ -12556,7 +12557,7 @@
       if (!group) { closeChannelEditDialog(); return false; }
       const requestedName = String(elements.channelEditNameInput?.value || "").trim();
       if (!requestedName) {
-        showToast(i18nText("group.name_required") || "그룹 이름은 비워둘 수 없습니다.");
+        showToast(i18nText("group.name_required"));
         elements.channelEditNameInput?.focus();
         return false;
       }
@@ -13463,10 +13464,6 @@
     if (!preview?.groups?.length) return [];
     const selected = state.midiImport.selectedGroupIds;
     return preview.groups.filter((group) => selected.has(String(group.id)));
-  }
-
-  function getMidiImportSelectedTextCandidates() {
-    return (state.midiImport.textCandidates || []).filter((_, index) => state.midiImport.selectedTextIndexes.has(index));
   }
 
   function getUnifiedTextParsedWithGlobalTempo(indexes = null) {
@@ -15073,7 +15070,7 @@
         const limitToast = imported.limitedInstrumentCount > 0
           ? i18nText("midi.limit_channels_applied", [imported.limitedInstrumentCount, imported.maxChannelsPerInstrument])
           : "";
-        showToast(`${stripMidiFileExtension(fileName)}에서 선택한 악기 ${imported.instrumentCount}개를 ${imported.channelCount}개 편집 채널로 ${openNew ? "새로 열었습니다." : "추가했습니다."}${limitToast}`);
+        showToast(`${i18nText(openNew ? "channel.open_selected" : "channel.add_selected_instrument", [stripMidiFileExtension(fileName), imported.instrumentCount, imported.channelCount])}${limitToast}`);
         return true;
       }
 
@@ -15327,7 +15324,7 @@
     renderChannelTabs();
     updateMidiReferenceUI();
     drawRoll();
-    if (notify) showToast(`${document.title || document.fileName || "MIDI"}를 ${nextVisible ? "표시" : "숨김"} 처리했습니다.`);
+    if (notify) showToast(i18nText(nextVisible ? "midi.shown_named" : "midi.hidden_named", [document.title || document.fileName || "MIDI"]));
     return true;
   }
 
@@ -15535,7 +15532,7 @@
     renderChannelEditor();
     resizeAndDraw();
     const voiceExtra = createdChannels.length - validGroups.length;
-    showToast(`${validGroups.length}개 악기에서 ${copiedNotes}개 노트를 ${createdChannels.length}개 새 편집 채널로 복사했습니다.${voiceExtra > 0 ? " 화음은 겹치지 않도록 여러 채널로 분리했습니다." : ""}`);
+    showToast(i18nText(voiceExtra > 0 ? "channel.copy_note_instrument_new" : "channel.copy_note_instrument", [validGroups.length, copiedNotes, createdChannels.length]));
     return true;
   }
 
@@ -15636,7 +15633,7 @@
     const currentPartNumber = getTimelinePartIndexAtBeat(state.playhead.beat) + 1;
 
     const setSummary = ({ totalChars = 0, partChars = 0, groupMode = false, channelCount = 0, selectedCount = 0, totalTitle = "", partTitle = "" } = {}) => {
-      if (elements.infoCharLabel) elements.infoCharLabel.textContent = "전체";
+      if (elements.infoCharLabel) elements.infoCharLabel.textContent = i18nText("info.total_label");
       if (elements.infoCharCount) {
         elements.infoCharCount.textContent = Math.max(0, Number(totalChars) || 0).toLocaleString();
         elements.infoCharCount.title = totalTitle;
@@ -15644,8 +15641,8 @@
       if (elements.infoPartItem) elements.infoPartItem.hidden = !hasMultipleTimelineParts;
       if (elements.infoPartLabel) {
         elements.infoPartLabel.textContent = groupMode
-          ? `${currentPartNumber}파트 최대`
-          : `${currentPartNumber}파트`;
+          ? i18nText("info.part_max", [currentPartNumber])
+          : i18nText("info.part_number", [currentPartNumber]);
       }
       if (elements.infoPartCount) {
         elements.infoPartCount.textContent = Math.max(0, Number(partChars) || 0).toLocaleString();
@@ -15655,7 +15652,7 @@
       if (elements.infoSelectionCount) {
         const count = groupMode ? channelCount : selectedCount;
         elements.infoSelectionCount.textContent = Math.max(0, Number(count) || 0).toLocaleString();
-        elements.infoSelectionCount.title = groupMode ? "그룹에 포함된 채널 개수" : "현재 선택한 노트 개수";
+        elements.infoSelectionCount.title = i18nText(groupMode ? "info.group_channel_count" : "info.selected_note_count");
       }
     };
 
@@ -15670,13 +15667,13 @@
         partChars,
         groupMode: true,
         channelCount: members.length,
-        totalTitle: "그룹에 포함된 모든 채널의 전체 MML 글자 수 합계(템포 명령 제외)",
-        partTitle: "현재 파트에서 그룹 내 가장 글자 수가 많은 채널의 MML 글자 수(템포 명령 제외)",
+        totalTitle: i18nText("info.group_total_chars"),
+        partTitle: i18nText("info.group_part_chars"),
       });
       if (elements.noteVolumeButton) {
         elements.noteVolumeButton.disabled = true;
         elements.noteVolumeButton.textContent = "V";
-        elements.noteVolumeButton.title = "채널을 선택한 뒤 노트 볼륨을 수정할 수 있습니다.";
+        elements.noteVolumeButton.title = i18nText("channel.select_edit_note");
       }
       updatePlaybackTimeInfo();
       updateEditMenuState();
@@ -15687,7 +15684,7 @@
       if (elements.noteVolumeButton) {
         elements.noteVolumeButton.disabled = true;
         elements.noteVolumeButton.textContent = "V";
-        elements.noteVolumeButton.title = "채널을 선택한 뒤 노트 볼륨을 수정할 수 있습니다.";
+        elements.noteVolumeButton.title = i18nText("channel.select_edit_note");
       }
       setSummary({ totalChars: 0, partChars: 0, channelCount: 0 });
       updatePlaybackTimeInfo();
@@ -15703,8 +15700,8 @@
       partChars,
       groupMode: false,
       selectedCount: selected.length,
-      totalTitle: "현재 채널의 전체 MML 글자 수(템포 명령 제외)",
-      partTitle: "현재 파트의 채널 MML 글자 수(템포 명령 제외)",
+      totalTitle: i18nText("info.channel_total_chars"),
+      partTitle: i18nText("info.channel_part_chars"),
     });
     if (elements.noteVolumeButton) {
       elements.noteVolumeButton.disabled = selected.length === 0;
@@ -15733,29 +15730,6 @@
     return [...counts.entries()]
       .sort((left, right) => right[0] - left[0])
       .map(([volume, count]) => ({ volume, count }));
-  }
-
-  function renderNoteVolumeCountChips(node, items) {
-    if (!node) return;
-    node.replaceChildren();
-    const values = Array.isArray(items) ? items : [];
-    if (!values.length) {
-      const empty = document.createElement("span");
-      empty.className = "note-volume-count-chip is-empty";
-      empty.textContent = "V-";
-      node.append(empty);
-      return;
-    }
-    for (const { volume, count } of values) {
-      const chip = document.createElement("span");
-      chip.className = "note-volume-count-chip";
-      const label = document.createElement("em");
-      label.textContent = `V${volume}`;
-      const amount = document.createElement("strong");
-      amount.textContent = `× ${Number(count).toLocaleString()}`;
-      chip.append(label, amount);
-      node.append(chip);
-    }
   }
 
   function renderChannelVolumeComparison(node, currentItems, targetItems) {
@@ -16186,10 +16160,6 @@
     return true;
   }
 
-  function applySelectedNoteVolume() {
-    return applyChannelVolume();
-  }
-
   let restCleanupAnalysisCache = { mode: null, perChannel: new Map() };
 
   function invalidateRestCleanupAnalysisCache() {
@@ -16313,17 +16283,6 @@
     return { count, beats };
   }
 
-  function analyzeRestCleanup(mode = state.restCleanup.mode) {
-    const channels = getRestCleanupChannels();
-    return channels.reduce((summary, channel) => {
-      const result = analyzeRestCleanupChannel(channel, mode);
-      summary.count += result.count;
-      summary.beats += result.beats;
-      summary.channelCount += result.count ? 1 : 0;
-      return summary;
-    }, { count: 0, beats: 0, channelCount: 0, targetChannelCount: channels.length });
-  }
-
   function formatRestCleanupBeats(value) {
     const numeric = Math.max(0, Number(value) || 0);
     return Number(numeric.toFixed(4)).toLocaleString(document.documentElement.lang || undefined, { maximumFractionDigits: 4 });
@@ -16385,6 +16344,9 @@
           ? i18nText('rest_cleanup.preview_channels', [channels.length.toLocaleString(), analysis.count.toLocaleString()])
           : i18nText('rest_cleanup.preview_none');
     }
+    // The total rest count is shown at the right of the tab-row title (쉼표 정리 · 쉼표 N개).
+    state.restCleanup.totalCount = analysis.count;
+    syncInlineToolTitlebar();
     if (elements.restCleanupApplyButton) elements.restCleanupApplyButton.disabled = channels.length === 0 || analysis.count === 0;
     state.restCleanup.previewChanges = channels.length ? buildRestCleanupPreviewChanges(mode) : [];
     if (isRestCleanupWorkspaceActive()) drawRoll();
@@ -17126,8 +17088,17 @@
     const totalSeconds = (playbackActive
       ? state.playback.endSeconds
       : beatToSeconds(endBeat)) / rate;
-    elements.playbackTime.textContent = `${formatSeconds(currentSeconds)} / ${formatSeconds(totalSeconds)}`;
-    elements.playbackTime.title = `현재 ${formatSeconds(currentSeconds)} / 전체 ${formatSeconds(totalSeconds)}`;
+    // Called every playback frame: only touch the DOM when the shown text changes, and build the
+    // tooltip with i18nText so the source-text translator does not pattern-match it each frame.
+    const currentText = formatSeconds(currentSeconds);
+    const totalText = formatSeconds(totalSeconds);
+    const timeText = `${currentText} / ${totalText}`;
+    const timeInfoKey = `${document.documentElement.lang}|${timeText}`;
+    if (timeInfoKey !== state.playhead.timeInfoText) {
+      state.playhead.timeInfoText = timeInfoKey;
+      elements.playbackTime.textContent = timeText;
+      elements.playbackTime.title = i18nText("ui.total", [currentText, totalText]);
+    }
   }
 
   function clearNoteSelection() {
@@ -17788,6 +17759,40 @@
     return true;
   }
 
+  // These three helpers were referenced (tree keyboard selection, MIDI reference roll clicks and the
+  // MIDI context menus) but missing, which threw ReferenceError on those interactions.
+  function isMidiDocumentVisible(midiDocument) {
+    return Boolean(midiDocument) && midiDocument.visible !== false;
+  }
+
+  function selectMidiGroupFromTree(documentId, groupId) {
+    const activeDocumentId = String(state.activeMidiDocumentId ?? "");
+    if (!isMidiReferenceActive() || activeDocumentId !== String(documentId)) {
+      if (!selectMidiDocument(documentId)) return false;
+    }
+    const group = getMidiGroupById(groupId) || state.midiReference.groups.find((item) => String(item.id) === String(groupId)) || null;
+    if (!group) return false;
+    if (state.midiReference.activeGroupId !== group.id) {
+      state.midiReference.activeGroupId = group.id;
+      clearMidiSelection();
+    }
+    renderChannelTabs();
+    renderChannelEditor();
+    updateMidiReferenceUI();
+    drawRoll();
+    return true;
+  }
+
+  function activateMidiGroupFromRoll(groupId) {
+    const group = getMidiGroupById(groupId) || state.midiReference.groups.find((item) => String(item.id) === String(groupId)) || null;
+    if (!group || state.midiReference.activeGroupId === group.id) return false;
+    state.midiReference.activeGroupId = group.id;
+    clearMidiSelection();
+    renderChannelTabs();
+    updateMidiReferenceUI();
+    return true;
+  }
+
   function getActiveChannel() {
     if (state.activePanel === "notes" && state.selectedChannelGroupId != null) return null;
     return state.channels[state.activeChannel] || null;
@@ -18146,7 +18151,7 @@
     drawRoll();
     renderAudioLane();
     updateChannelInfo();
-    if (notify) showToast(`${channel.name} 표시 싱글 ${nextSolo ? "켬" : "해제"}`);
+    if (notify) showToast(i18nText(nextSolo ? "ui.visibility_solo_on_named" : "ui.visibility_solo_off_named", [channel.name]));
     return true;
   }
 
@@ -18172,7 +18177,7 @@
     drawRoll();
     renderAudioLane();
     updateChannelInfo();
-    if (notify) showToast(`${group.name} 표시 싱글 ${nextSolo ? "켬" : "해제"}`);
+    if (notify) showToast(i18nText(nextSolo ? "ui.visibility_solo_on_named" : "ui.visibility_solo_off_named", [group.name]));
     return true;
   }
 
@@ -18212,7 +18217,6 @@
   }
 
   function toggleChannelGroupCollapsed(groupId) {
-    if (isChannelDeleteModeActive()) return false;
     const group = getChannelGroupById(groupId);
     if (!group) return false;
     const restoreTreeFocus = Boolean(elements.channelTabs?.contains(document.activeElement));
@@ -18722,15 +18726,6 @@
     return selected;
   }
 
-  function channelMergeCandidatesOverlap(left, right) {
-    if (!left || !right) return false;
-    const leftStart = Number(left.startBeat) || 0;
-    const rightStart = Number(right.startBeat) || 0;
-    const leftEnd = leftStart + Math.max(CONFIG.minimumNoteBeat, Number(left.durationBeat) || CONFIG.minimumNoteBeat);
-    const rightEnd = rightStart + Math.max(CONFIG.minimumNoteBeat, Number(right.durationBeat) || CONFIG.minimumNoteBeat);
-    return leftStart < rightEnd - 1e-7 && rightStart < leftEnd - 1e-7;
-  }
-
   function getChannelMergeExcludeOverlapChannelIds() {
     const targetId = String(state.channelMerge?.targetChannelId ?? "");
     const rawIds = state.channelMerge?.excludeOverlapChannelIds instanceof Set
@@ -18741,14 +18736,6 @@
       && id !== targetId
       && state.channels.some((channel) => String(channel.id) === id && isChannelEffectivelyVisible(channel))
     )));
-  }
-
-  function channelMergeCandidateMatchesUsedNote(candidate, reference) {
-    if (!candidate || !reference) return false;
-    // Used-note exclusion is keyed by note onset. A note is considered already
-    // used only when pitch AND start beat match; interval-only overlap does not count.
-    if (Number(candidate.pitch) !== Number(reference.pitch)) return false;
-    return Math.abs((Number(candidate.startBeat) || 0) - (Number(reference.startBeat) || 0)) < 1e-7;
   }
 
   function isChannelMergeCandidateBlockedByOverlapChannel(candidate, pool = state.channelMerge?.candidatePool) {
@@ -19473,14 +19460,14 @@
   function updateChannelMergeSummary() {
     const channels = getSelectedChannelMergeChannels();
     const noteCount = channels.reduce((sum, channel) => sum + (channel.notes?.length || 0), 0);
-    const roleLabels = { auto: "자동", high: "고음", low: "저음" };
-    const overlapLabels = { all: "모두", half: "절반", none: "안함" };
+    const roleLabels = { auto: i18nText("ui.auto"), high: i18nText("ui.high"), low: i18nText("ui.low") };
+    const overlapLabels = { all: i18nText("ui.all"), half: i18nText("ui.half"), none: i18nText("ui.none") };
     const role = normalizeChannelMergeRole(state.channelMerge?.role);
     const overlapMode = normalizeChannelMergeOverlapMode(state.channelMerge?.overlapMode);
     if (elements.channelMergeSummary) {
       elements.channelMergeSummary.textContent = channels.length < 2
-        ? "2개 이상의 채널을 선택하세요."
-        : `${channels.length}개 채널 · ${noteCount}노트 · ${roleLabels[role]} / ${overlapLabels[overlapMode]}`;
+        ? i18nText("channel.select_least_two")
+        : i18nText("merge.summary_line", [channels.length, noteCount, roleLabels[role], overlapLabels[overlapMode]]);
     }
     if (elements.channelMergeApplyButton) {
       elements.channelMergeApplyButton.disabled = channels.length < 2 || noteCount < 1;
@@ -19918,13 +19905,6 @@
       elements.channelDeleteList.append(row);
     });
     updateChannelDeleteSummary();
-    return true;
-  }
-
-  function openChannelDeleteDialog() {
-    if (!renderChannelDeleteDialog()) return false;
-    elements.channelDeleteBackdrop.hidden = false;
-    requestAnimationFrame(() => elements.channelDeleteList.querySelector('input[type="checkbox"]')?.focus());
     return true;
   }
 
@@ -22436,10 +22416,6 @@
     closeMidiImportDialog();
   }
 
-  async function loadMmlImportFile(file) {
-    return prepareCompatibleTextImportFile(file);
-  }
-
   async function pasteMmlImportTextFromClipboard() {
     try {
       if (!navigator.clipboard?.readText) throw new Error("clipboard unavailable");
@@ -23111,11 +23087,6 @@
     return splitMmlPartsForExport(mml).map((part) => String(part || "").length);
   }
 
-  function getMmlExportMaxPartLength(mml) {
-    const lengths = getMmlExportPartLengths(mml);
-    return lengths.length ? Math.max(...lengths) : 0;
-  }
-
   function formatMmlExportPartLengths(page) {
     const lengths = Array.isArray(page?.lengths) && page.lengths.length
       ? page.lengths
@@ -23377,7 +23348,7 @@
       if (order) {
         order.textContent = selectedOrder ? String(selectedOrder) : "";
         order.classList.toggle("filled", Boolean(selectedOrder));
-        order.setAttribute("aria-label", selectedOrder ? `내보내기 ${selectedOrder}번째` : "선택 순서");
+        order.setAttribute("aria-label", selectedOrder ? i18nText("ui.export_order", [selectedOrder]) : i18nText("selection.order"));
       }
       if (detail && channel?.notes?.length) {
         const includesTempo = id === firstSelectedId;
@@ -23385,7 +23356,7 @@
           includeTempo: includesTempo,
           exportEndBeat,
         });
-        detail.textContent = `${characterCount.toLocaleString()}자${includesTempo ? " (템포 포함)" : ""} · ${channel.notes.length.toLocaleString()}개 노트`;
+        detail.textContent = i18nText(includesTempo ? "note.chars_including_tempo" : "note.chars", [characterCount.toLocaleString(), channel.notes.length.toLocaleString()]);
         detail.title = includesTempo
           ? "첫 번째 선택 채널의 실제 MML 기준 글자 수(템포 명령 포함)"
           : "채널 단독 MML 기준 글자 수(템포 명령 제외)";
@@ -23435,7 +23406,7 @@
       if (order) {
         order.textContent = selectedOrder ? String(selectedOrder) : "";
         order.classList.toggle("filled", Boolean(selectedOrder));
-        order.setAttribute("aria-label", selectedOrder ? `내보내기 ${selectedOrder}번째` : "선택 순서");
+        order.setAttribute("aria-label", selectedOrder ? i18nText("ui.export_order", [selectedOrder]) : i18nText("selection.order"));
       }
     });
     syncMmlExportGroupSelectionIndicators();
@@ -23497,8 +23468,8 @@
       const exportable = members.filter((channel) => channel.notes?.length).length;
       const detail = document.createElement("small");
       detail.textContent = exportable === members.length
-        ? `${members.length.toLocaleString()}개 채널 · 그룹 전체 선택`
-        : `${exportable.toLocaleString()}/${members.length.toLocaleString()}개 채널 · 그룹 전체 선택`;
+        ? i18nText("mml_export.group_all_channels", [members.length.toLocaleString()])
+        : i18nText("mml_export.group_partial_channels", [exportable.toLocaleString(), members.length.toLocaleString()]);
       info.append(titleLine, detail);
 
       row.append(checkbox, info);
@@ -23860,51 +23831,6 @@
     }
   }
 
-  function openTimeEditDialog({ beat = state.playhead.beat, scope = "all", channelId = null, preferredAction = null } = {}) {
-    const targetChannel = state.channels.find((channel) => String(channel.id) === String(channelId ?? getActiveChannel()?.id)) || null;
-    const normalizedAction = preferredAction === "insert" || preferredAction === "delete" ? preferredAction : null;
-    const channelScopeAvailable = Boolean(targetChannel) && !isMidiReferenceActive();
-    state.timeEdit = {
-      beat: clamp(Number(beat) || 0, 0, getTotalBeats()),
-      scope: "all",
-      channelId: channelScopeAvailable ? targetChannel.id : null,
-      groupId: null,
-      preferredAction: normalizedAction,
-    };
-    if (elements.timeEditTitle) {
-      elements.timeEditTitle.textContent = normalizedAction === "insert"
-        ? i18nText("timeline.add_measure_beat")
-        : normalizedAction === "delete"
-          ? i18nText("timeline.delete_measure_beat")
-          : i18nText("timeline.edit_measure");
-    }
-    if (elements.timeEditLengthLabel) {
-      const key = normalizedAction === "insert"
-        ? "timeline.length_to_add"
-        : normalizedAction === "delete"
-          ? "timeline.length_to_delete"
-          : "ui.length_edit";
-      elements.timeEditLengthLabel.dataset.i18n = key;
-      elements.timeEditLengthLabel.textContent = i18nText(key);
-    }
-    if (elements.timeEditSelectedChannelOnly) {
-      elements.timeEditSelectedChannelOnly.checked = false;
-    }
-    updateTimeEditScopeUi();
-    if (elements.timeEditMeasureInput) elements.timeEditMeasureInput.value = "1";
-    if (elements.timeEditBeatInput) elements.timeEditBeatInput.value = "0";
-    // 마디 추가/삭제 버튼은 각각 자신에게 맞는 동작만 보여 줍니다.
-    // 일반적인 "마디 편집" 진입(preferredAction 없음)에서만 두 동작을 모두 제공합니다.
-    if (elements.timeEditInsertButton) elements.timeEditInsertButton.hidden = normalizedAction === "delete";
-    if (elements.timeEditDeleteButton) elements.timeEditDeleteButton.hidden = normalizedAction === "insert";
-    if (elements.timeEditBackdrop) elements.timeEditBackdrop.hidden = false;
-    requestAnimationFrame(() => {
-      elements.timeEditMeasureInput?.focus();
-      elements.timeEditMeasureInput?.select();
-    });
-    return true;
-  }
-
   function applySingleMeasureTimelineEdit(beat, action) {
     const cursor = clamp(Number(beat) || 0, 0, getTotalBeats());
     const measureLength = getTimeSignatureMeasureLength(getTimeSignatureAtBeat(cursor));
@@ -23938,7 +23864,7 @@
 
   function describeTimeEditAmount(measures, subdivisions) {
     const parts = [];
-    if (measures) parts.push(`${measures}마디`);
+    if (measures) parts.push(i18nText("ui.measures_count", [measures]));
     if (subdivisions) parts.push(`${subdivisions}/64 박자`);
     return parts.join(" ") || "0박자";
   }
@@ -24406,6 +24332,7 @@
   }
 
   function openTimelineFadeDialog(contextBeat = state.playhead.beat, sourceFade = null) {
+    if (isTimelinePopupBlockedByWorkspace()) return false;
     if (!elements.timelineFadeBackdrop) return false;
     const beat = snapBeatToUnit(Math.max(0, Number(contextBeat) || 0), CONFIG.minimumNoteBeat);
     const source = sourceFade ? normalizeTimelineFadeEvent(sourceFade, sourceFade.id || 1) : getTimelineFadeAtBeat(beat);
@@ -24477,6 +24404,7 @@
 
   function openTimeSignatureDialog(contextBeat = state.playhead.beat, sourceSignature = null) {
     if (!elements.timeSignatureBackdrop) return false;
+    if (isTimelinePopupBlockedByWorkspace()) return false;
     const beat = snapBeatToUnit(Math.max(0, Number(contextBeat) || 0), CONFIG.minimumNoteBeat);
     const exactSource = sourceSignature
       ? normalizeTimeSignatureEvent(sourceSignature, sourceSignature.id || 1)
@@ -24552,7 +24480,22 @@
     state.tempoEditor = { mode: null, tempoId: null, beat: 0 };
   }
 
+  // Inline workspaces (마디 편집, 쉼표 정리, 파트 자동 설정, 채널 병합/삭제, note edit mode) own the
+  // timeline while they are open; tempo / time-signature / fade / time-edit popups must not open
+  // on top of them (e.g. a timeline double-click while selecting a measure range).
+  function isTimelinePopupBlockedByWorkspace() {
+    return Boolean(
+      isMeasureEditWorkspaceActive()
+      || state.restCleanup?.active
+      || state.autoPart?.active
+      || state.channelMerge?.active
+      || state.channelDeleteMode?.active
+      || isNoteEditModeActive()
+    );
+  }
+
   function openTempoEditor(tempo = null, { beat = null } = {}) {
+    if (isTimelinePopupBlockedByWorkspace()) return false;
     if (isMidiReferenceActive()) {
       showToast("MIDI 탭의 템포는 읽기 전용입니다.");
       return false;
@@ -25078,8 +25021,8 @@
     updateChannelInfo();
     const volumes = [...new Set(selected.map((note) => getNoteVolume(note)))];
     showToast(volumes.length === 1
-      ? `${selected.length}개 노트 볼륨 · V${volumes[0]}`
-      : `${selected.length}개 노트 볼륨을 ${step > 0 ? "올렸습니다" : "내렸습니다"}.`);
+      ? i18nText("note.volume_v", [selected.length, volumes[0]])
+      : i18nText(step > 0 ? "note.raised_volume" : "note.lowered_volume", [selected.length]));
     return true;
   }
 
@@ -26059,65 +26002,6 @@
       return decoded;
     }
     return storage;
-  }
-
-  function serializeHistoryEntry(entry) {
-    if (!entry || typeof entry !== "object") return null;
-    let snapshot = null;
-    try {
-      snapshot = typeof entry.snapshot === "string" ? JSON.parse(entry.snapshot) : entry.snapshot;
-    } catch {
-      return null;
-    }
-    if (!snapshot || typeof snapshot !== "object") return null;
-    return {
-      id: Number(entry.id) || 0,
-      label: String(entry.label || "편집"),
-      channelId: entry.channelId ?? null,
-      restorePlayheadBeat: Number.isFinite(Number(entry.restorePlayheadBeat)) ? Number(entry.restorePlayheadBeat) : null,
-      createdAt: Number(entry.createdAt) || 0,
-      snapshot,
-    };
-  }
-
-  function serializeHistoryState() {
-    return {
-      version: 1,
-      nextId: Math.max(1, Number(state.history.nextId) || 1),
-      undo: state.history.undoStack.map(serializeHistoryEntry).filter(Boolean),
-      current: serializeHistoryEntry(state.history.currentEntry),
-      redo: state.history.redoStack.map(serializeHistoryEntry).filter(Boolean),
-    };
-  }
-
-  function deserializeHistoryEntry(entry) {
-    if (!entry || typeof entry !== "object" || !entry.snapshot || typeof entry.snapshot !== "object") return null;
-    return {
-      id: Math.max(1, Number(entry.id) || 1),
-      snapshot: JSON.stringify(entry.snapshot),
-      label: String(entry.label || "편집"),
-      channelId: entry.channelId ?? null,
-      restorePlayheadBeat: Number.isFinite(Number(entry.restorePlayheadBeat)) ? Math.max(0, Number(entry.restorePlayheadBeat)) : null,
-      createdAt: Number(entry.createdAt) || Date.now(),
-    };
-  }
-
-  function restoreSavedHistory(savedHistory) {
-    if (!savedHistory || typeof savedHistory !== "object") return false;
-    const undo = (Array.isArray(savedHistory.undo) ? savedHistory.undo : []).map(deserializeHistoryEntry).filter(Boolean);
-    const redo = (Array.isArray(savedHistory.redo) ? savedHistory.redo : []).map(deserializeHistoryEntry).filter(Boolean);
-    const current = deserializeHistoryEntry(savedHistory.current);
-    if (!current) return false;
-    const limitedUndo = undo.slice(-CONFIG.historyLimit);
-    const limitedRedo = redo.slice(-CONFIG.historyLimit);
-    state.history.undoStack = limitedUndo;
-    state.history.redoStack = limitedRedo;
-    state.history.currentEntry = current;
-    const maximumId = [current, ...limitedUndo, ...limitedRedo].reduce((maximum, entry) => Math.max(maximum, Number(entry.id) || 0), 0);
-    state.history.nextId = Math.max(maximumId + 1, Number(savedHistory.nextId) || 1);
-    state.history.restoring = false;
-    renderHistoryPanel();
-    return true;
   }
 
   function serializeProject() {
@@ -27410,14 +27294,22 @@
     return confirmed ? clearMidiReference() : false;
   }
 
-  function showToast(message) {
+  function showToast(message, { duration = 1700 } = {}) {
     elements.toast.textContent = message;
     elements.toast.classList.add("visible");
     window.clearTimeout(showToast.timer);
     showToast.timer = window.setTimeout(() => {
       elements.toast.classList.remove("visible");
-    }, 1700);
+    }, duration);
   }
+
+  // Default SoundFont is fetched on first playback (plugins/formats/soundbank/soundbank.js); tell the user.
+  window.addEventListener("mobibard:default-soundbank", (event) => {
+    const stateName = event.detail?.state;
+    if (stateName === "downloading") showToast(i18nText("soundbank.download_start"), { duration: 20000 });
+    else if (stateName === "ready") showToast(i18nText("soundbank.download_ready"), { duration: 2200 });
+    else if (stateName === "error") showToast(i18nText("soundbank.download_failed"), { duration: 4000 });
+  });
 
   function cancelLongPress() {
     const pending = state.longPress;
@@ -28035,10 +27927,6 @@
     return channel.notes.filter((note) => ids.has(note.id)).sort(compareNotesByTimeline);
   }
 
-  function isNoteEditModeSourceNote(note) {
-    return Boolean(isNoteEditModeActive() && note && state.noteEditMode.sourceNoteIds?.has(note.id));
-  }
-
   function resetNoteEditControlState() {
     state.noteEditMode.controlPitches = new Map();
     state.noteEditMode.arpeggioDirectPitches = [];
@@ -28373,10 +28261,6 @@
     return NOTE_EDIT_MODE_HANDLERS?.[String(type || "")] || null;
   }
 
-  function readCurrentNoteEditModeOptions() {
-    return getNoteEditModeHandler()?.readOptions?.() || {};
-  }
-
   function rebuildNoteEditPreview({ draw = true } = {}) {
     if (!isNoteEditModeActive()) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
@@ -28394,12 +28278,11 @@
 
   // 쉼표 정리 / 파트 자동 설정 use the same tab-row title bar as 마디 편집.
   function getInlineToolTitlebar() {
-    if (state.restCleanup?.active) return { title: i18nText("rest_cleanup.title"), meta: "" };
-    if (state.autoPart?.active) return { title: i18nText("timeline.auto_part"), meta: "" };
-    if (state.channelMerge?.active) {
-      const target = getChannelById(state.channelMerge.targetChannelId);
-      return { title: i18nText("channel.merge"), meta: target ? String(target.name || "") : "" };
+    if (state.restCleanup?.active) {
+      return { title: i18nText("rest_cleanup.title"), meta: i18nText("rest_cleanup.total_count", [Number(state.restCleanup.totalCount || 0).toLocaleString()]) };
     }
+    if (state.autoPart?.active) return { title: i18nText("timeline.auto_part"), meta: String(state.autoPart.statusText || "") };
+    if (state.channelMerge?.active) return { title: i18nText("channel.merge"), meta: "" };
     if (state.channelDeleteMode?.active) {
       const count = (state.channelDeleteMode.selectedChannelIds?.size || 0) + (state.channelDeleteMode.selectedAudioIds?.size || 0);
       return { title: i18nText("channel.delete_mode_title"), meta: i18nText("channel.delete_summary_count", [count]) };
@@ -28827,11 +28710,6 @@
   }
 
 
-  function normalizePerformanceMode(value) {
-    const mode = String(value || "glissando");
-    return ["glissando", "strum"].includes(mode) ? mode : "glissando";
-  }
-
   function readNotePerformanceOptionsFromUi() {
     const mode = "glissando";
     const directionValue = String(elements.notePerformanceDirectionSelect?.value || "up");
@@ -28849,11 +28727,6 @@
       : "preserve";
     const volumeRange = clamp(Math.round(Number(elements.notePerformanceVolumeRangeSelect?.value) || 3), 1, 5);
     return { mode, direction, speed, stepSemitones, rangeMode, rangeSemitones, targetPitch, dynamics, volumeRange };
-  }
-
-  function performanceModeHelpKey(mode) {
-    if (mode === "strum") return "note.performance_help_strum";
-    return "note.performance_help_glissando";
   }
 
   function ensureNotePerformanceTargetPitchOptions() {
@@ -29008,12 +28881,6 @@
       });
     }
     return segments;
-  }
-
-  function buildPitchOrder(notes, direction = "up") {
-    const ascending = [...notes].sort((a, b) => Number(a.pitch) - Number(b.pitch));
-    if (!ascending.length) return [];
-    return direction === "down" ? ascending.slice().reverse() : ascending;
   }
 
 
@@ -29344,29 +29211,9 @@
     return true;
   }
 
-  function historyEntryChannelIndex(entry) {
-    if (entry?.channelId == null) return -1;
-    return state.channels.findIndex((channel) => String(channel.id) === String(entry.channelId));
-  }
-
-  function viewHistoryEntryChannel(entry) {
-    const channelIndex = historyEntryChannelIndex(entry);
-    if (channelIndex < 0) return false;
-    selectChannel(channelIndex);
-    setSidebarTab("channels");
-    requestAnimationFrame(() => {
-      const target = [...(elements.channelTabs?.querySelectorAll("[data-channel-id]") || [])]
-        .find((item) => String(item.dataset.channelId) === String(entry.channelId));
-      target?.scrollIntoView({ block: "nearest" });
-      target?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
-    });
-    return true;
-  }
-
   function movePlayheadToLastMeasure() {
     const total = Math.max(CONFIG.beatsPerMeasure, getTotalBeats());
     const signature = getTimeSignatureAtBeat(Math.max(0, total - 1e-7));
-    const sorted = getSortedTimeSignatures();
     const segmentStart = signature?.beat || 0;
     const measureLength = getTimeSignatureMeasureLength(signature);
     const lastMeasureBeat = Math.max(segmentStart, segmentStart + Math.floor(Math.max(0, total - segmentStart - 1e-7) / measureLength) * measureLength);
@@ -30080,17 +29927,6 @@
     return true;
   }
 
-  function promptRenameChannel(index) {
-    const current = state.channels[index]?.name;
-    if (!current) {
-      return;
-    }
-    const result = window.prompt(i18nText("channel.name"), current);
-    if (result != null) {
-      renameChannel(index, result);
-    }
-  }
-
   function setChannelHue(index, hue, { commit = true } = {}) {
     const channel = state.channels[index];
     if (!channel) return false;
@@ -30109,11 +29945,6 @@
     drawRoll();
     drawOverviewTimeline();
     return true;
-  }
-
-  function openChannelColorPicker(index) {
-    selectChannel(index);
-    openHueColorPalette(elements.channelColorInput);
   }
 
 
@@ -30586,12 +30417,6 @@
     if (empty) empty.hidden = matchCount > 0;
   }
 
-  function clearShortcutSearch() {
-    if (!elements.shortcutSearchInput) return;
-    elements.shortcutSearchInput.value = "";
-    updateShortcutSearchResults();
-  }
-
   function openSelectedRecommendedLink() {
     const select = elements.editorRecommendedLinks;
     if (!select) return false;
@@ -30770,13 +30595,13 @@
     }
     if (elements.tutorialStepTip) elements.tutorialStepTip.textContent = step.tip;
     if (elements.tutorialPrevButton) elements.tutorialPrevButton.disabled = tutorialStepIndex <= 0;
-    if (elements.tutorialNextButton) elements.tutorialNextButton.textContent = tutorialStepIndex >= count - 1 ? "완료" : "다음";
+    if (elements.tutorialNextButton) elements.tutorialNextButton.textContent = i18nText(tutorialStepIndex >= count - 1 ? "tutorial.done" : "nav.next");
     if (elements.tutorialDots) {
       elements.tutorialDots.replaceChildren(...MML_TUTORIAL_STEPS.map((_, index) => {
         const dot = document.createElement("button");
         dot.type = "button";
         dot.className = `tutorial-dot${index === tutorialStepIndex ? " active" : ""}`;
-        dot.setAttribute("aria-label", `${index + 1}단계로 이동`);
+        dot.setAttribute("aria-label", i18nText("tutorial.go_step", [index + 1]));
         dot.addEventListener("click", () => { tutorialStepIndex = index; renderTutorialStep(); });
         return dot;
       }));
@@ -31360,6 +31185,12 @@
       setAllChannelGroupsCollapsed(allExpanded);
     });
     elements.channelBulkMmlButton?.addEventListener("click", openAllChannelsMmlDialog);
+    elements.channelModeSelectAllButton?.addEventListener("click", () => setAllChannelDeleteModeSelection(true));
+    elements.channelModeClearAllButton?.addEventListener("click", () => setAllChannelDeleteModeSelection(false));
+    elements.channelModeVisibilityButton?.addEventListener("click", () => {
+      const { allHidden } = getChannelTreeBulkState();
+      setAllChannelTreeVisible(allHidden);
+    });
     elements.channelBulkVisibilityButton?.addEventListener("click", () => {
       const { allHidden } = getChannelTreeBulkState();
       // Partial hidden state still means "hide all". Only when every item is
@@ -31898,7 +31729,6 @@
           closeNoteVolumeDialog();
           closeRestCleanupDialog();
           if (isNoteEditModeActive()) cancelNoteEditMode();
-          closeChannelShiftDialog();
           closeTempoEditor();
           closeTempoSimplifyDialog();
           closeAutoPartDialog();
@@ -31969,7 +31799,6 @@
         closeNoteVolumeDialog();
         closeRestCleanupDialog();
         if (isNoteEditModeActive()) cancelNoteEditMode();
-        closeChannelShiftDialog();
         closeTempoEditor();
         closeTempoSimplifyDialog();
         closeAutoPartDialog();

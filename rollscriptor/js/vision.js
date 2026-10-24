@@ -1,4 +1,4 @@
-import { t } from './language-manager.js?v=20260919-locale-sync1';
+import { t } from './language-manager.js?v=20261024f-sf3-notice';
 const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
 const WHITE_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const WHITE_PCS = [0, 2, 4, 5, 7, 9, 11];
@@ -692,10 +692,6 @@ function detectBlackCandidates(imageData, boundaries) {
   };
 }
 
-function nextWhitePitchClassIndex(index) {
-  return (index + 1) % 7;
-}
-
 function expectedBlackAfterWhitePitchClass(whiteIndex) {
   // C-D, D-E, F-G, G-A, A-B have black keys.
   return ![2, 6].includes(whiteIndex);
@@ -766,21 +762,6 @@ export function detectKeyGeometry(imageData, options = {}) {
       candidateBoundaryCount: white.peaks.length,
     },
   };
-}
-
-function nextWhiteMidi(midi) {
-  const pitchClass = ((midi % 12) + 12) % 12;
-  return midi + (pitchClass === 4 || pitchClass === 11 ? 1 : 2);
-}
-
-function nearestWhiteMidiWithPitchClass(pitchClass, around = 48) {
-  let best = null;
-  for (let midi = 0; midi <= 127; midi += 1) {
-    if (!isWhiteMidi(midi) || midi % 12 !== pitchClass) continue;
-    const distance = Math.abs(midi - around);
-    if (!best || distance < best.distance) best = { midi, distance };
-  }
-  return best?.midi ?? 60;
 }
 
 /**
@@ -886,12 +867,6 @@ export function createSingleLineKeyMap(geometry, startMidi = 21) {
     pitchMismatch: false,
     inferredLeftmostName: midiNoteName(safeStart),
   };
-}
-
-export function suggestLeftmostMidi(geometry) {
-  if (geometry.whiteCount === 52) return 21; // Full 88-key piano: A0 to C8.
-  const pitchClass = WHITE_PCS[geometry.inferredLeftmostWhiteIndex] ?? 0;
-  return nearestWhiteMidiWithPitchClass(pitchClass, 48);
 }
 
 export function createKeyMapForRange(geometry, requestedStartMidi = 21, requestedEndMidi = 108) {
@@ -1008,66 +983,6 @@ export function createKeyMapForRange(geometry, requestedStartMidi = 21, requeste
 }
 
 /** Converts the visual key geometry into MIDI-numbered white and black keys. */
-export function createKeyMap(geometry, requestedStartMidi) {
-  let startMidi = clamp(Math.round(Number(requestedStartMidi) || 60), 0, 127);
-  while (startMidi > 0 && !isWhiteMidi(startMidi)) startMidi -= 1;
-  const whiteKeys = [];
-  let midi = startMidi;
-
-  for (let index = 0; index < geometry.whiteCount; index += 1) {
-    if (midi > 127) break;
-    whiteKeys.push({
-      id: `w-${index}`,
-      type: 'white',
-      visualIndex: index,
-      midi,
-      name: midiNoteName(midi),
-      x0: geometry.whiteBoundaries[index],
-      x1: geometry.whiteBoundaries[index + 1],
-      y0: 0,
-      y1: geometry.height,
-    });
-    midi = nextWhiteMidi(midi);
-  }
-
-  const blackKeys = [];
-  for (let gap = 0; gap < whiteKeys.length - 1; gap += 1) {
-    const left = whiteKeys[gap];
-    const right = whiteKeys[gap + 1];
-    if (right.midi - left.midi !== 2) continue;
-    const boundary = geometry.whiteBoundaries[gap + 1];
-    const localWhiteWidth = Math.min(left.x1 - left.x0, right.x1 - right.x0);
-    const detected = geometry.blackGaps[gap];
-    const fallbackWidth = Math.max(3, localWhiteWidth * 0.56);
-    const x0 = detected ? detected.x0 : boundary - fallbackWidth / 2;
-    const x1 = detected ? detected.x1 : boundary + fallbackWidth / 2;
-    blackKeys.push({
-      id: `b-${gap}`,
-      type: 'black',
-      visualIndex: gap,
-      midi: left.midi + 1,
-      name: midiNoteName(left.midi + 1),
-      x0: clamp(x0, 0, geometry.width),
-      x1: clamp(x1, 0, geometry.width),
-      y0: detected?.y0 ?? Math.round(geometry.height * 0.04),
-      y1: detected?.y1 ?? geometry.blackHeight,
-      detected: Boolean(detected),
-    });
-  }
-
-  const keys = [...whiteKeys, ...blackKeys].sort((a, b) => a.midi - b.midi);
-  const visualPitchClass = WHITE_PCS[geometry.inferredLeftmostWhiteIndex];
-  const pitchMismatch = startMidi % 12 !== visualPitchClass && geometry.inferredPitchConfidence >= 0.58;
-  return {
-    startMidi,
-    whiteKeys,
-    blackKeys,
-    keys,
-    pitchMismatch,
-    inferredLeftmostName: geometry.inferredLeftmostWhiteName,
-  };
-}
-
 function safeProbeRect(x0, y0, x1, y1, width, height) {
   const left = clamp(Math.floor(Math.min(x0, x1)), 0, Math.max(0, width - 1));
   const top = clamp(Math.floor(Math.min(y0, y1)), 0, Math.max(0, height - 1));
@@ -1192,57 +1107,6 @@ export function createSingleLineAnalysisProbes(
 }
 
 /** Builds two small color probes per key in a resized analysis canvas. */
-export function createAnalysisProbes(keyMap, sourceWidth, sourceHeight, targetWidth, targetHeight) {
-  const scaleX = targetWidth / sourceWidth;
-  const scaleY = targetHeight / sourceHeight;
-  return keyMap.keys.map(key => {
-    const x0 = key.x0 * scaleX;
-    const x1 = key.x1 * scaleX;
-    const keyWidth = Math.max(1, x1 - x0);
-    let primary;
-    let secondary;
-    if (key.type === 'white') {
-      primary = safeProbeRect(
-        x0 + keyWidth * 0.20,
-        targetHeight * 0.62,
-        x1 - keyWidth * 0.20,
-        targetHeight * 0.90,
-        targetWidth,
-        targetHeight,
-      );
-      secondary = safeProbeRect(
-        x0 + keyWidth * 0.31,
-        targetHeight * 0.32,
-        x1 - keyWidth * 0.31,
-        targetHeight * 0.53,
-        targetWidth,
-        targetHeight,
-      );
-    } else {
-      const y0 = key.y0 * scaleY;
-      const y1 = key.y1 * scaleY;
-      const keyHeight = Math.max(1, y1 - y0);
-      primary = safeProbeRect(
-        x0 + keyWidth * 0.18,
-        y0 + keyHeight * 0.18,
-        x1 - keyWidth * 0.18,
-        y0 + keyHeight * 0.68,
-        targetWidth,
-        targetHeight,
-      );
-      secondary = safeProbeRect(
-        x0 + keyWidth * 0.24,
-        y0 + keyHeight * 0.55,
-        x1 - keyWidth * 0.24,
-        y0 + keyHeight * 0.88,
-        targetWidth,
-        targetHeight,
-      );
-    }
-    return { key, patches: [primary, secondary] };
-  });
-}
-
 function averagePatch(data, width, height, rect) {
   const patchWidth = Math.max(1, rect.x1 - rect.x0);
   const patchHeight = Math.max(1, rect.y1 - rect.y0);
@@ -1414,10 +1278,3 @@ export function sampleKeyColorsFromContext(context, sampler) {
   return output;
 }
 
-export function cropImageData(context, rect) {
-  const x = clamp(Math.round(rect.x), 0, context.canvas.width - 1);
-  const y = clamp(Math.round(rect.y), 0, context.canvas.height - 1);
-  const width = clamp(Math.round(rect.width), 1, context.canvas.width - x);
-  const height = clamp(Math.round(rect.height), 1, context.canvas.height - y);
-  return context.getImageData(x, y, width, height);
-}

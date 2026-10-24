@@ -60,7 +60,7 @@
     const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
     if (localeUrl.protocol !== "file:") {
       localeUrl.searchParams.set("v", "5.2.0");
-      localeUrl.searchParams.set("rev", "20260919-mbt-import1");
+      localeUrl.searchParams.set("rev", "20261024f-sf3-notice");
     }
     document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   })();
@@ -142,14 +142,13 @@
 <p class="subtitle" id="subtitle">파일을 넣으면 3채널 MML로 바로 변환합니다.</p>
 </div>
 <div aria-label="모드 이동" class="simple-mode-actions">
-<a class="mode-action-button" href="https://muscriptor.kyutai.org/" id="midiExtractLink" rel="noopener noreferrer" target="_blank">MIDI 추출</a>
 <a class="mode-action-button" href="../player/index.html" id="fullEditorLink">상세 모드</a>
 </div>
 </div>
 <section aria-labelledby="sourceStepTitle" class="simple-workflow-section">
 <div class="simple-section-head"><div><span class="step-number">1</span><h2 id="sourceStepTitle">파일 불러오기</h2></div><p id="sourceStepDescription">MIDI·악보 파일을 선택하거나 MML을 붙여넣어 변환할 원본을 불러옵니다.</p></div>
 <div aria-controls="midiFileInput" class="drop-zone" id="dropZone" role="button" tabindex="0">
-<input accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,application/musicxml+xml,application/xml,text/xml,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98" data-music-format-input="" hidden="" id="midiFileInput" type="file"/>
+<input accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,application/musicxml+xml,application/xml,text/xml,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98,audio/*,.wav,.mp3,.ogg,.oga,.opus,.m4a,.aac,.flac,.webm,.aif,.aiff" data-music-format-input="" hidden="" id="midiFileInput" type="file"/>
 <div class="simple-help-actions">
 <button class="mabi-supported-files-button" data-supported-files-button="" data-supported-files-context="simple" type="button">지원 파일</button>
 <button class="simple-tutorial-button" id="simpleTutorialBtn" type="button">튜토리얼</button>
@@ -330,19 +329,19 @@
 <script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
 <script src="../plugins/common/midi-to-mml.js?v=5.1.0&amp;rev=20260823-final6"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261024-export-fixes"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261024f-sf3-notice"></script>
 <script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260831-split-search-point1"></script>
 <script src="../plugins/common/mml-parser.js?v=5.1.1"></script>
-<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
-<script src="../assets/default_sf3.js?v=20260907-mobibard16-cleaned"></script>
+<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0&amp;rev=20261024f-sf3-notice"></script>
 <script src="../plugins/common/audio-export.js?v=1.0.4&amp;rev=20261024b-panels"></script>
+<script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.4"></script>
 <script src="./js/playback.js?v=5.1.0"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script><script src="./js/app.js?v=5.3.0&amp;rev=20261024b-panels"></script>
-<script src="./enhancements.js?v=5.3.0&amp;rev=20260919-mbt-import1"></script>
+<script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script><script src="./js/app.js?v=5.3.0&amp;rev=20261024f-sf3-notice"></script>
+<script src="./enhancements.js?v=5.3.0&amp;rev=20261024f-sf3-notice"></script>
 </body>
 </html>

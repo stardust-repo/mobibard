@@ -5,12 +5,25 @@
   if (!utils) throw new Error("utils.js must be loaded before soundbank.js");
 
   const VERSION = "5.1.0";
+  // The embedded default SF3 (assets/default_sf3.js, ~5.4 MB of base64) is fetched on first use
+  // instead of as a blocking <script> on every page. Resolved relative to this file so it works
+  // from editor/, player/, simple/, rollscriptor/ and veloscriptor/ alike.
+  const DEFAULT_SOUND_BANK_ASSET_VERSION = "20260907-mobibard16-cleaned";
+  const DEFAULT_SOUND_BANK_ASSET_URL = (() => {
+    try {
+      const own = document.currentScript?.src;
+      if (own) return new URL(`../../../assets/default_sf3.js?v=${DEFAULT_SOUND_BANK_ASSET_VERSION}`, own).href;
+    } catch (_) {}
+    return "";
+  })();
+  let defaultSoundBankAssetPromise = null;
   const SUPPORTED_EXTENSIONS = Object.freeze(["sf2", "sf3", "dls"]);
   const FALLBACK_MESSAGES = Object.freeze({
     "sound.err_header": "지원하지 않는 SoundBank 파일입니다. SF2, SF3 또는 DLS 파일을 사용하세요.",
     "sound.err_decode_unavailable": "이 브라우저에서는 SF3 압축 샘플을 해제할 수 없습니다.",
     "sound.err_sf3_codec": "SF3 샘플을 해석하지 못했습니다: {0}",
     "sound.err_sf3_mono": "SF3 샘플의 채널 구성을 지원하지 않습니다: {0}",
+    "sound.err_default_download": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요.",
     "sf2.err_header": "올바른 SF2/SF3 파일이 아닙니다.",
     "sf2.err_sections": "SF2/SF3 내부 섹션이 없습니다.",
     "sf2.err_samples": "SF2/SF3 샘플 데이터가 없습니다.",
@@ -80,15 +93,68 @@
     return bytes;
   }
 
+  function hasDefaultSoundBankAsset() {
+    return Boolean(String(window.MOBIBARD_DEFAULT_SF3_BASE64 || "").trim());
+  }
+
+  // Products show a toast for this so a first playback that waits on the ~5 MB download is not
+  // mistaken for a bug. "downloading" fires only if the load takes longer than 250 ms (a cached
+  // load stays silent); "ready" follows only after an announced download; "error" always fires.
+  const DEFAULT_SOUND_BANK_EVENT = "mobibard:default-soundbank";
+  const DEFAULT_SOUND_BANK_NOTICE_DELAY_MS = 250;
+
+  function emitDefaultSoundBankState(state) {
+    try {
+      window.dispatchEvent(new CustomEvent(DEFAULT_SOUND_BANK_EVENT, { detail: { state, sizeMb: 5 } }));
+    } catch (_) {}
+  }
+
+  function ensureDefaultSoundBankAsset() {
+    if (hasDefaultSoundBankAsset() || !DEFAULT_SOUND_BANK_ASSET_URL) return Promise.resolve();
+    if (!defaultSoundBankAssetPromise) {
+      defaultSoundBankAssetPromise = new Promise((resolve, reject) => {
+        let announced = false;
+        const noticeTimer = window.setTimeout(() => {
+          announced = true;
+          emitDefaultSoundBankState("downloading");
+        }, DEFAULT_SOUND_BANK_NOTICE_DELAY_MS);
+        const script = document.createElement("script");
+        script.src = DEFAULT_SOUND_BANK_ASSET_URL;
+        script.async = true;
+        script.onload = () => {
+          window.clearTimeout(noticeTimer);
+          script.remove();
+          if (announced) emitDefaultSoundBankState("ready");
+          resolve();
+        };
+        script.onerror = () => {
+          window.clearTimeout(noticeTimer);
+          script.remove();
+          defaultSoundBankAssetPromise = null;
+          emitDefaultSoundBankState("error");
+          const error = new Error(tr("sound.err_default_download"));
+          error.code = "default-soundbank-download-failed";
+          reject(error);
+        };
+        document.head.appendChild(script);
+      });
+    }
+    return defaultSoundBankAssetPromise;
+  }
+
   async function loadEmbeddedSoundBank(options = {}) {
     if (embeddedSoundBank && options.reload !== true) return embeddedSoundBank;
     if (embeddedSoundBankPromise && options.reload !== true) return embeddedSoundBankPromise;
-    const encoded = options.base64 != null
-      ? String(options.base64 || "")
-      : String(window.MOBIBARD_DEFAULT_SF3_BASE64 || "");
-    if (!encoded.trim()) throw new Error("기본 SoundBank 데이터를 찾지 못했습니다.");
-    const name = String(options.name || window.MOBIBARD_DEFAULT_SF3_NAME || "default.sf3");
     embeddedSoundBankPromise = (async () => {
+      if (options.base64 == null && !hasDefaultSoundBankAsset()) {
+        defaultSoundBankAssetPromise = options.reload === true ? null : defaultSoundBankAssetPromise;
+        await ensureDefaultSoundBankAsset();
+      }
+      const encoded = options.base64 != null
+        ? String(options.base64 || "")
+        : String(window.MOBIBARD_DEFAULT_SF3_BASE64 || "");
+      if (!encoded.trim()) throw new Error("기본 SoundBank 데이터를 찾지 못했습니다.");
+      const name = String(options.name || window.MOBIBARD_DEFAULT_SF3_NAME || "default.sf3");
       const bytes = await decodeBase64(encoded, {
         onProgress: options.onProgress,
         yield: options.yield,
@@ -1126,6 +1192,7 @@
     parseSoundBankFile,
     decodeBase64,
     loadEmbeddedSoundBank,
+    DEFAULT_SOUND_BANK_EVENT,
     resetEmbeddedSoundBankCache,
     findPreset,
     parseSoundFont,

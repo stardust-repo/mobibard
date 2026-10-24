@@ -349,13 +349,7 @@
     title.append(state.ui.titleName);
 
     const actions = el("div", "wb4-title-actions");
-    const midiExtract = $("midiExtractBtn");
     const simple = $("simpleVersionBtn");
-    if (midiExtract) {
-      midiExtract.className = "player-mode-action-button";
-      midiExtract.querySelector(".midi-extract-toolbar-icon")?.remove();
-      actions.append(midiExtract);
-    }
     if (simple) {
       simple.className = "player-mode-action-button";
       actions.append(simple);
@@ -591,18 +585,67 @@
       }, 120);
     }, { passive: false });
 
+    // Change-driven sync. The old loop rewrote the progress style, five tick labels and the split
+    // markers (which re-read and compare the whole MML text) on every animation frame, even while
+    // idle. Now DOM writes happen only when the slider state changes; when nothing changes for
+    // ~0.5s the loop drops from rAF to a 250ms poll and returns to rAF on the first change.
+    let lastValueSignature = "";
+    let lastTickSignature = "";
+    let lastTickNode = null;
+    let lastMarkerCheck = 0;
+    let lastMarkerRevision = -1;
+    let stableFrames = 0;
+    let frameId = 0;
+    let timerId = 0;
     const sync = () => {
       const max = Math.max(0, Number(progressSlider.max) || 0);
       const value = Math.max(0, Math.min(max || 0, Number(progressSlider.value) || 0));
-      const percent = max > 0 ? value / max * 100 : 0;
-      progressWrap.style.setProperty("--wb4-playback-progress", `${percent}%`);
-      progressWrap.classList.toggle("disabled", progressSlider.disabled || max <= 0);
-      if (state.ui.playheadLabel) state.ui.playheadLabel.textContent = formatClock(value);
-      state.ui.timelineTicks?.forEach((node, index) => { node.textContent = formatClock(max * (index / 4)); });
-      renderTimelineScoreSplitMarkers(max);
-      window.requestAnimationFrame(sync);
+      const disabled = progressSlider.disabled || max <= 0;
+      const valueSignature = `${max}|${value}|${disabled ? 1 : 0}`;
+      const changed = valueSignature !== lastValueSignature;
+      if (changed) {
+        lastValueSignature = valueSignature;
+        const percent = max > 0 ? value / max * 100 : 0;
+        progressWrap.style.setProperty("--wb4-playback-progress", `${percent}%`);
+        progressWrap.classList.toggle("disabled", disabled);
+        if (state.ui.playheadLabel) state.ui.playheadLabel.textContent = formatClock(value);
+      }
+      const tickSignature = `${max}|${state.ui.timelineTicks?.length || 0}`;
+      const firstTick = state.ui.timelineTicks?.[0] || null;
+      if (tickSignature !== lastTickSignature || firstTick !== lastTickNode) {
+        lastTickSignature = tickSignature;
+        lastTickNode = firstTick;
+        state.ui.timelineTicks?.forEach((node, index) => { node.textContent = formatClock(max * (index / 4)); });
+      }
+      const now = performance.now();
+      const revision = Number(state.scoreSplitMarkerRevision) || 0;
+      if (changed || revision !== lastMarkerRevision || now - lastMarkerCheck > 1000) {
+        lastMarkerRevision = revision;
+        lastMarkerCheck = now;
+        renderTimelineScoreSplitMarkers(max);
+      }
+      return changed;
     };
-    window.requestAnimationFrame(sync);
+    const scheduleSync = (fast) => {
+      if (frameId || timerId) return;
+      if (fast) frameId = window.requestAnimationFrame(runSync);
+      else timerId = window.setTimeout(runSync, 250);
+    };
+    const runSync = () => {
+      frameId = 0;
+      timerId = 0;
+      stableFrames = sync() ? 0 : stableFrames + 1;
+      scheduleSync(stableFrames < 30);
+    };
+    const wakeSync = () => {
+      stableFrames = 0;
+      if (timerId) { window.clearTimeout(timerId); timerId = 0; }
+      scheduleSync(true);
+    };
+    progressSlider.addEventListener("input", wakeSync);
+    progressSlider.addEventListener("change", wakeSync);
+    progressWrap.addEventListener("pointerdown", wakeSync);
+    scheduleSync(true);
   }
 
   function segmented(defs, current, onChange, className = "") {
@@ -1636,7 +1679,7 @@
     return parts.map((part, index) => ({ part, index })).filter(item => item.part).map(item => `${channelLabel(item.index)} ${item.part.length.toLocaleString()}`).join(" · ") || "0";
   }
 
-  function showToast(message, tone = "success") {
+  function showToast(message, tone = "success", duration = 1500) {
     let toast = state.ui.toast;
     if (!toast) {
       toast = el("div", "wb9-toast", { role: "status", "aria-live": "polite", hidden: true });
@@ -1652,8 +1695,16 @@
     state.toastTimer = window.setTimeout(() => {
       toast.classList.remove("is-visible");
       window.setTimeout(() => { toast.hidden = true; }, 180);
-    }, 1500);
+    }, duration);
   }
+
+  // Default SoundFont is fetched on first playback (plugins/formats/soundbank/soundbank.js); tell the user.
+  window.addEventListener("mobibard:default-soundbank", (event) => {
+    const stateName = event.detail?.state;
+    if (stateName === "downloading") showToast(localeText("soundbank.download_start"), "info", 20000);
+    else if (stateName === "ready") showToast(localeText("soundbank.download_ready"), "success", 2200);
+    else if (stateName === "error") showToast(localeText("soundbank.download_failed"), "error", 4000);
+  });
 
   function setUnavailableReason(node, unavailable, reasonKey = "") {
     if (!node) return;
@@ -4088,7 +4139,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
-  const SOURCE_FILE_EXTENSIONS = new Set(["txt", "mmi", "mml", ...(window.MabiMusicFormats?.inputExtensions?.() || window.MabiMusicFormats?.supportedExtensions?.() || [])]);
+  const AUDIO_AI_EXTENSIONS = ["wav", "wave", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"];
+  const SOURCE_FILE_EXTENSIONS = new Set(["txt", "mmi", "mml", ...AUDIO_AI_EXTENSIONS, ...(window.MabiMusicFormats?.inputExtensions?.() || window.MabiMusicFormats?.supportedExtensions?.() || [])]);
   // MIDI/KAR + MML are core Player workflows and remain eagerly loaded.
   // Other source-format converters are loaded only when a matching file is actually opened.
   const FORMAT_RUNTIME_REVISION = "20260824-final46";
@@ -4159,7 +4211,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       script.src = key;
       script.async = true;
       script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`음악 포맷 변환 모듈을 불러오지 못했습니다: ${raw}`));
+      script.onerror = () => reject(new Error(i18nText("format.module_load_failed", [raw])));
       document.head.appendChild(script);
     }).catch(error => {
       formatRuntimeScriptPromises.delete(key);
@@ -4354,7 +4406,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const pasteMmlApply = $("pasteMmlApply");
   const pasteMmlCancel = $("pasteMmlCancel");
   const saveBtn = $("saveBtn");
-  const midiExtractBtn = $("midiExtractBtn");
   const rhythmGameBtn = $("rhythmGameBtn");
   const simpleVersionBtn = $("simpleVersionBtn");
   const rhythmGameLayer = $("rhythmGameLayer");
@@ -4844,10 +4895,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     });
     saveBtn.addEventListener("click", async () => {
       if (await runPlayerUiBeforeAction("save")) void saveVisibleMml();
-    });
-    midiExtractBtn?.addEventListener("click", () => {
-      const midiExtractWindow = window.open("https://muscriptor.kyutai.org/", "_blank");
-      if (midiExtractWindow) midiExtractWindow.opener = null;
     });
     rhythmGameBtn?.addEventListener("click", () => {
       openRhythmGameLayer();
@@ -5805,8 +5852,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     googleDriveMmlFolderId = "";
   }
 
-  let lastGoogleToastMessage = "";
-  let lastGoogleToastAt = 0;
 
   function clearGoogleUserProfile(refresh = true) {
     googleUserProfile = null;
@@ -5952,7 +5997,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       script.async = true;
       script.defer = true;
       script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Google API 로드 실패: ${url}`));
+      script.onerror = () => reject(new Error(i18nText("google.api_load_failed", [url])));
       document.head.appendChild(script);
     }).catch(error => {
       googleExternalScriptPromises.delete(url);
@@ -7293,9 +7338,55 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return mode ? { mbtPackingMode: mode } : null;
   }
 
+  // 오디오 파일: 공용 Wave2MIDI 모듈(plugins/ai/wave2midi)로 MIDI를 만든 뒤 일반 MIDI처럼 변환 팝업을 엽니다.
+  const AUDIO_AI_MAX_MINUTES = 10;
+  let audioAiImportBusy = false;
+
+  function isAudioAiSource(name, mimeType = "") {
+    return Boolean(window.MobibardWave2Midi?.isAudioFile?.(String(name || ""), mimeType)) && !window.MabiMusicFormats?.isSupported(name, mimeType);
+  }
+
+  function audioAiText(name, values = []) {
+    return i18nText(`audio_ai.${name}`, values);
+  }
+
+  async function buildAudioAiMidiImport(source, name = "Audio", mimeType = "") {
+    const api = window.MobibardWave2Midi;
+    if (!api?.isSupported?.()) throw Object.assign(new Error("unsupported"), { code: "unsupported" });
+    if (audioAiImportBusy) throw Object.assign(new Error(audioAiText("busy")), { code: "busy" });
+    audioAiImportBusy = true;
+    const blob = source instanceof Blob ? source : new Blob([source], { type: mimeType || "application/octet-stream" });
+    api.showProgressNotice(`${name} · ${audioAiText("preparing")}`, null);
+    try {
+      const result = await api.transcribe(blob, {
+        maxSeconds: AUDIO_AI_MAX_MINUTES * 60,
+        onProgress: (event) => api.showProgressNotice(`${name} · ${api.progressText(event, audioAiText)}`, api.progressFraction(event)),
+      });
+      if (!result.notes.length) throw Object.assign(new Error("no notes"), { code: "no-notes" });
+      const midiBytes = result.midi instanceof Uint8Array ? result.midi : new Uint8Array(result.midi || []);
+      showToast(audioAiText("done", [result.model?.version || "-", result.notes.length.toLocaleString()]), "success");
+      return {
+        bytes: midiBytes,
+        name,
+        overview: analyzeMidi(midiBytes, name),
+        sourceType: "audio-ai",
+        sourceLabel: audioAiText("label"),
+        cacheFingerprint: buildSourceFileFingerprint("audio-ai", midiBytes),
+      };
+    } finally {
+      audioAiImportBusy = false;
+      api.hideProgressNotice();
+    }
+  }
+
+  function audioAiErrorText(error) {
+    if (error?.code === "busy") return audioAiText("busy");
+    return window.MobibardWave2Midi?.errorText?.(error, audioAiText, { maxMinutes: AUDIO_AI_MAX_MINUTES }) || shortError(error);
+  }
+
   async function buildPluginMidiImport(bytes, name = "Music", mimeType = "", options = {}) {
     if (!window.MabiMusicFormats?.convertBytes) {
-      throw new Error("음악 포맷 플러그인을 불러오지 못했습니다.");
+      throw new Error(i18nText("format.plugin_unavailable"));
     }
     await ensureMusicFormatRuntime(name, mimeType, bytes);
     const converted = await window.MabiMusicFormats.convertBytes(bytes, name, mimeType, options);
@@ -7354,6 +7445,19 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const response = await googleDriveFetch(mediaUrl);
     if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
     const bytes = new Uint8Array(await response.arrayBuffer());
+    if (isAudioAiSource(name, mimeType)) {
+      let importData;
+      try {
+        importData = await buildAudioAiMidiImport(bytes, name, mimeType);
+      } catch (audioError) {
+        console.error("Audio to MIDI conversion failed", audioError);
+        showToast(audioAiErrorText(audioError), "error");
+        return;
+      }
+      googleDriveMmlFileName = "";
+      openMidiConvertDialog(importData);
+      return;
+    }
     if (window.MabiMusicFormats?.isSupported(name, mimeType)) {
       const importOptions = await chooseMbtImportOptions(name);
       if (importOptions == null) return;
@@ -8034,6 +8138,16 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         if (importOptions == null) return;
         const bytes = new Uint8Array(await file.arrayBuffer());
         const importData = await buildPluginMidiImport(bytes, name, file.type || "", importOptions);
+        openMidiConvertDialog(importData);
+      } else if (isAudioAiSource(name, file.type || "")) {
+        let importData;
+        try {
+          importData = await buildAudioAiMidiImport(file, name, file.type || "");
+        } catch (audioError) {
+          console.error("Audio to MIDI conversion failed", audioError);
+          showToast(audioAiErrorText(audioError), "error");
+          return;
+        }
         openMidiConvertDialog(importData);
       } else if (ext === "mmi") {
         const bytes = new Uint8Array(await file.arrayBuffer());
@@ -9461,11 +9575,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     }
     updateMidiRoleControls();
     scheduleMidiConvertRequest();
-  }
-
-  function getAllowedMidiGroupsForSetting(setting) {
-    if (!pendingMidiSettings || !setting) return [];
-    return pendingMidiSettings.groups;
   }
 
 

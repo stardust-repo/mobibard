@@ -231,6 +231,12 @@ export default {
     "error.white_boundaries": "找不到足夠的白鍵邊界。請嘗試其他參考畫面或調整偵測線。",
     "overlay.single": "全部琴鍵",
     "overlay.white": "白鍵",
-    "overlay.black": "黑鍵"
+    "overlay.black": "黑鍵",
+    "toast.frame_failed": "無法顯示影格：{message}",
+    "guide.legend_dual": "琴鍵辨識線",
+    "guide.legend_single": "單條琴鍵辨識線",
+    "toast.sound_download_start": "正在下載預設音源（約 5 MB），僅首次需要。",
+    "toast.sound_download_ready": "預設音源已就緒。",
+    "toast.sound_download_failed": "無法下載預設音源，請檢查網路連線。"
   }
 };

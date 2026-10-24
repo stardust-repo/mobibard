@@ -106,3 +106,14 @@ The RollScriptor settings panel is initialized independently from the video/WebC
 - 건반 범위를 변경하면 기존 건반 검출과 분석 결과를 무효화하고 다시 `건반 검출`하도록 합니다. 새 범위에서 첫 검출이 성공하면 분석 시간 자동 탐색도 다시 한 번 실행됩니다.
 - `자동 탐색`은 고정 88건반을 찾는 것이 아니라 현재 지정된 건반 범위가 안정적으로 보이는 구간을 찾습니다.
 - 1선 모드의 균등 영역 수도 지정한 시작~끝 건반 수에 맞춰집니다.
+
+## 2026-10-24 점검
+
+- 기본 SoundFont는 MIDI 미리듣기를 처음 재생할 때 공용 `soundbank.js`가 불러옵니다(첫 화면 다운로드 약 6.8 MB → 1.3 MB).
+- 프레임 표시 실패 토스트와 건반 인식선 범례 aria-label을 로케일 키로 바꿨습니다.
+- 모듈 import 버전을 통일했습니다(`vision.js`가 두 버전 URL로 두 번 로드되던 문제 포함).
+
+### 기본 음원 다운로드 안내
+
+- 처음 재생할 때 기본 음원(약 5 MB)을 내려받는 동안 "내려받는 중" 토스트를, 끝나면 "준비 완료" 토스트를 보여 줍니다. 실패하면 네트워크 확인 안내가 나옵니다.
+- 미사용 함수·export 8개(`cropImageData`, `createKeyMap`, `createAnalysisProbes`, `suggestLeftmostMidi`, `nextWhiteMidi`, `nearestWhiteMidiWithPitchClass`, `nextWhitePitchClassIndex`, `updatePostProcessingProgress`)를 제거했습니다.

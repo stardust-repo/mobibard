@@ -2848,21 +2848,6 @@
     return busy;
   }
 
-  function getCommonSilenceIntervals(parsedParts, from, to) {
-    const intervals = collectAllNotes(parsedParts)
-      .map(n => ({ start: Math.max(from, n.start), end: Math.min(to, n.end) }))
-      .filter(n => n.end > from + EPS && n.start < to - EPS && n.end > n.start + EPS)
-      .sort((a, b) => a.start - b.start || a.end - b.end);
-    const gaps = [];
-    let cursor = from;
-    for (const iv of intervals) {
-      if (iv.start > cursor + EPS) gaps.push({ start: cursor, end: iv.start });
-      cursor = Math.max(cursor, iv.end);
-    }
-    if (cursor < to - EPS) gaps.push({ start: cursor, end: to });
-    return gaps;
-  }
-
   function collectBoundaryPoints(parsedParts, from, to) {
     const set = new Set([Math.round(to)]);
     for (const n of collectAllNotes(parsedParts)) {

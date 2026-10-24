@@ -1,7 +1,6 @@
 import {
   autoDetectKeyboardRegion,
   clamp,
-  cropImageData,
   createKeyMapForRange,
   createLineAnalysisProbes,
   createSingleLineAnalysisProbes,
@@ -14,11 +13,11 @@ import {
   sampleKeyColors,
   sampleKeyColorsFromContext,
   PROBE_PATCH_COUNT,
-} from './vision.js?v=20260914-keyrange-auto2';
-import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20260905-joint-velocity1';
+} from './vision.js?v=20261024f-sf3-notice';
+import { StreamingNoteDetector, createKeyChangeEvaluator, expandNotesByStoredFrameContext, applyAudioVelocityLevels, estimateAudioVelocities } from './analysis.js?v=20261024f-sf3-notice';
 import { createMidiFile } from './midi.js?v=20260830-site-nav1';
-import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260919-locale-sync1';
-import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20260831-account-menu1';
+import { getLanguage, initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20261024f-sf3-notice';
+import { initializeHeaderUi, initializeThemeUi } from './ui.js?v=20261024f-sf3-notice';
 
 const MEDIABUNNY_VERSION = '1.55.3';
 const MEDIABUNNY_LOCAL_URL = new URL(
@@ -142,12 +141,20 @@ let midiPreviewOriginalMediaReady = null;
 let midiPreviewOriginalUnavailableNotified = false;
 const MIDI_PREVIEW_OUTPUT_LEVEL = 0.44;
 
-function showToast(message, type = '') {
+function showToast(message, type = '', duration = 2800) {
   elements.toast.textContent = message;
   elements.toast.className = `toast show ${type}`.trim();
   clearTimeout(showToast.timeout);
-  showToast.timeout = setTimeout(() => { elements.toast.className = 'toast'; }, 2800);
+  showToast.timeout = setTimeout(() => { elements.toast.className = 'toast'; }, duration);
 }
+
+// Default SoundFont is fetched on first playback (plugins/formats/soundbank/soundbank.js); tell the user.
+window.addEventListener('mobibard:default-soundbank', event => {
+  const stateName = event.detail?.state;
+  if (stateName === 'downloading') showToast(t('toast.sound_download_start'), '', 20000);
+  else if (stateName === 'ready') showToast(t('toast.sound_download_ready'), '', 2200);
+  else if (stateName === 'error') showToast(t('toast.sound_download_failed'), 'error', 4000);
+});
 
 function formatNumber(value) {
   try { return Number(value).toLocaleString(getLanguage()); }
@@ -2112,7 +2119,7 @@ async function renderPreview(timeSeconds, force = false) {
     if (!state.playing && !state.analyzing) scheduleFrameCacheWarm(state.previewFrameTime);
   } catch (error) {
     console.error(error);
-    if (token === state.previewToken) showToast(`프레임 표시 실패: ${error.message || error}`, 'error');
+    if (token === state.previewToken) showToast(t('toast.frame_failed', { message: error?.message || error }), 'error');
   } finally {
     state.previewRenderPending = false;
   }
@@ -3432,12 +3439,6 @@ function setAnalysisBusy(busy) {
   elements.cancelAnalysis.textContent = t('actions.cancel');
   updateControlAvailability();
   updateKeyboardStatus();
-}
-
-function updatePostProcessingProgress(info) {
-  if (!info) return;
-  if (info.phase === 'notes') setProgress(0.76 + info.progress * 0.23, t('progress.color_compare'), info.detail);
-  else if (info.phase === 'done') setProgress(1, t('progress.done'), info.detail);
 }
 
 async function analyzeAllFrames() {

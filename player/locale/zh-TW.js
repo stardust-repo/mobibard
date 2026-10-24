@@ -676,6 +676,27 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "tutorial.step5.note": "聲道按鈕可個別靜音；播放速度、輸出音量與音色用於試聽確認。",
     "tutorial.step6.title": "6. 複製樂譜",
     "tutorial.step6.body": "在「樂譜複製」中，可以一次複製完整 MML，也可以依字數限制逐頁複製分割後的樂譜。",
-    "tutorial.step6.note": "預設限制為每個聲道 2,400 個字元。「分割搜尋位置」表示從限制位置反向搜尋時，最遠搜尋到從開頭計算的百分比位置。"
+    "tutorial.step6.note": "預設限制為每個聲道 2,400 個字元。「分割搜尋位置」表示從限制位置反向搜尋時，最遠搜尋到從開頭計算的百分比位置。",
+    "audio_ai.label": "音訊 · AI 轉換 (Beta)",
+    "audio_ai.preparing": "正在準備 AI 轉換…",
+    "audio_ai.downloading": "正在下載 AI 模型… {0} / {1} MB",
+    "audio_ai.analyzing": "AI 轉換中… {0}%",
+    "audio_ai.done": "AI 轉換完成 (模型 v{0})：{1} 個音符",
+    "audio_ai.busy": "正在轉換其他音訊。",
+    "audio_ai.err_unsupported": "此瀏覽器無法使用音訊 AI 轉換。",
+    "audio_ai.err_decode": "無法讀取音訊檔案。請嘗試其他格式（WAV、MP3、OGG 等）。",
+    "audio_ai.err_too_long": "無法轉換超過 {0} 分鐘的音訊。請分割後再試。",
+    "audio_ai.err_runtime": "無法載入 AI 執行環境。請檢查網路連線。",
+    "audio_ai.err_model": "無法下載 AI 模型。請檢查網路連線。",
+    "audio_ai.err_memory": "記憶體不足。請嘗試較短的音訊。",
+    "audio_ai.no_notes": "未在音訊中找到音符。",
+    "audio_ai.failed": "音訊 AI 轉換失敗：{0}",
+    "format.module_load_failed": "無法載入音樂格式轉換模組：{0}",
+    "google.api_load_failed": "Google API 載入失敗：{0}",
+    "format.plugin_unavailable": "無法載入音樂格式外掛。",
+    "soundbank.download_start": "正在下載預設音源（約 5 MB），僅首次需要。",
+    "soundbank.download_ready": "預設音源已就緒。",
+    "soundbank.download_failed": "無法下載預設音源，請檢查網路連線。",
+    "sound.err_default_download": "無法下載預設音源，請檢查網路連線。"
   }
 };

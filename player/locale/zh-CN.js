@@ -676,6 +676,27 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "tutorial.step5.note": "声道按钮可单独静音；播放速度、输出音量和音色用于试听确认。",
     "tutorial.step6.title": "6. 复制乐谱",
     "tutorial.step6.body": "在“乐谱复制”中，可以一次复制完整 MML，也可以按字符限制逐页复制分割后的乐谱。",
-    "tutorial.step6.note": "默认限制为每个声道 2,400 个字符。“分割搜索位置”表示从限制位置反向搜索时，最远搜索到从开头计算的百分比位置。"
+    "tutorial.step6.note": "默认限制为每个声道 2,400 个字符。“分割搜索位置”表示从限制位置反向搜索时，最远搜索到从开头计算的百分比位置。",
+    "audio_ai.label": "音频 · AI 转换 (Beta)",
+    "audio_ai.preparing": "正在准备 AI 转换…",
+    "audio_ai.downloading": "正在下载 AI 模型… {0} / {1} MB",
+    "audio_ai.analyzing": "AI 转换中… {0}%",
+    "audio_ai.done": "AI 转换完成 (模型 v{0})：{1} 个音符",
+    "audio_ai.busy": "正在转换其他音频。",
+    "audio_ai.err_unsupported": "此浏览器无法使用音频 AI 转换。",
+    "audio_ai.err_decode": "无法读取音频文件。请尝试其他格式（WAV、MP3、OGG 等）。",
+    "audio_ai.err_too_long": "无法转换超过 {0} 分钟的音频。请拆分后重试。",
+    "audio_ai.err_runtime": "无法加载 AI 运行环境。请检查网络连接。",
+    "audio_ai.err_model": "无法下载 AI 模型。请检查网络连接。",
+    "audio_ai.err_memory": "内存不足。请尝试更短的音频。",
+    "audio_ai.no_notes": "未在音频中找到音符。",
+    "audio_ai.failed": "音频 AI 转换失败：{0}",
+    "format.module_load_failed": "无法加载音乐格式转换模块：{0}",
+    "google.api_load_failed": "Google API 加载失败：{0}",
+    "format.plugin_unavailable": "无法加载音乐格式插件。",
+    "soundbank.download_start": "正在下载默认音源（约 5 MB），仅首次需要。",
+    "soundbank.download_ready": "默认音源已就绪。",
+    "soundbank.download_failed": "无法下载默认音源，请检查网络连接。",
+    "sound.err_default_download": "无法下载默认音源，请检查网络连接。"
   }
 };

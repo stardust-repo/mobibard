@@ -231,6 +231,12 @@ export default {
     "error.white_boundaries": "白鍵の境界を十分に検出できませんでした。別の基準フレームまたはライン位置を試してください。",
     "overlay.single": "全鍵盤",
     "overlay.white": "白鍵",
-    "overlay.black": "黒鍵"
+    "overlay.black": "黒鍵",
+    "toast.frame_failed": "フレームを表示できませんでした: {message}",
+    "guide.legend_dual": "鍵盤認識ライン",
+    "guide.legend_single": "単一鍵盤認識ライン",
+    "toast.sound_download_start": "既定の音源（約5 MB）をダウンロード中です。初回のみ行われます。",
+    "toast.sound_download_ready": "既定の音源の準備ができました。",
+    "toast.sound_download_failed": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。"
   }
 };

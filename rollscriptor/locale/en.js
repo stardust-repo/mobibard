@@ -231,6 +231,12 @@ export default {
     "error.white_boundaries": "Not enough white-key boundaries were found. Try another reference frame or adjust the guides.",
     "overlay.single": "All keys",
     "overlay.white": "White keys",
-    "overlay.black": "Black keys"
+    "overlay.black": "Black keys",
+    "toast.frame_failed": "Could not display the frame: {message}",
+    "guide.legend_dual": "Keyboard detection lines",
+    "guide.legend_single": "Single keyboard detection line",
+    "toast.sound_download_start": "Downloading the default instrument sounds (about 5 MB). This happens only once.",
+    "toast.sound_download_ready": "Default instrument sounds are ready.",
+    "toast.sound_download_failed": "Could not download the default instrument sounds. Check your network connection."
   }
 };

@@ -676,6 +676,27 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "tutorial.step5.note": "チャンネルボタンで個別ミュートできます。速度・音量・音色は試聴用の設定です。",
     "tutorial.step6.title": "6. 楽譜をコピー",
     "tutorial.step6.body": "「楽譜コピー」でMML全体を一括コピーするか、文字数制限に合わせた分割楽譜をページごとにコピーします。",
-    "tutorial.step6.note": "初期上限は各チャンネル2,400文字です。分割探索地点は上限位置から逆方向に探索するとき、先頭から何%の地点まで共通休符を探すかを指定します。"
+    "tutorial.step6.note": "初期上限は各チャンネル2,400文字です。分割探索地点は上限位置から逆方向に探索するとき、先頭から何%の地点まで共通休符を探すかを指定します。",
+    "audio_ai.label": "オーディオ · AI変換 (Beta)",
+    "audio_ai.preparing": "AI変換を準備中…",
+    "audio_ai.downloading": "AIモデルをダウンロード中… {0} / {1} MB",
+    "audio_ai.analyzing": "AI変換中… {0}%",
+    "audio_ai.done": "AI変換完了 (モデル v{0}): ノート {1} 個",
+    "audio_ai.busy": "別の音源を変換中です。",
+    "audio_ai.err_unsupported": "このブラウザではオーディオのAI変換を利用できません。",
+    "audio_ai.err_decode": "音源ファイルを読み込めませんでした。別の形式 (WAV、MP3、OGG など) でお試しください。",
+    "audio_ai.err_too_long": "{0}分を超える音源は変換できません。分割してお試しください。",
+    "audio_ai.err_runtime": "AI実行環境を読み込めませんでした。ネットワーク接続を確認してください。",
+    "audio_ai.err_model": "AIモデルをダウンロードできませんでした。ネットワーク接続を確認してください。",
+    "audio_ai.err_memory": "メモリが不足しています。より短い音源でお試しください。",
+    "audio_ai.no_notes": "音源からノートが見つかりませんでした。",
+    "audio_ai.failed": "オーディオのAI変換に失敗しました: {0}",
+    "format.module_load_failed": "音楽フォーマット変換モジュールを読み込めませんでした: {0}",
+    "google.api_load_failed": "Google APIの読み込みに失敗しました: {0}",
+    "format.plugin_unavailable": "音楽フォーマットプラグインを読み込めませんでした。",
+    "soundbank.download_start": "既定の音源（約5 MB）をダウンロード中です。初回のみ行われます。",
+    "soundbank.download_ready": "既定の音源の準備ができました。",
+    "soundbank.download_failed": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。",
+    "sound.err_default_download": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。"
   }
 };

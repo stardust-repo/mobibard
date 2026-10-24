@@ -5,7 +5,7 @@
   const LEGACY_PREF_KEY = "mobibard-language";
   const DEFAULT_LANGUAGE = "ko";
   const LOCALE_VERSION = "5.3.0";
-  const LOCALE_REVISION = "20261003-context-menu-v1";
+  const LOCALE_REVISION = "20261024g-panels2";
   const KEY_PATTERN = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*$/;
   const SUPPORTED = Object.freeze({
     ko: { file: "ko.js", htmlLang: "ko" },
@@ -29,7 +29,10 @@
     ...Object.keys(EXPLICIT_ATTRIBUTE_MARKERS),
     ...Object.keys(EXPLICIT_ATTRIBUTE_MARKERS).map((marker) => `${marker}-args`)
   ];
-  const SKIP_SELECTOR = "script,style,textarea,pre,code,kbd,samp,[data-i18n-skip],[data-i18n]";
+  // Elements with data-i18n markers are still source-translated: app code often rewrites their
+  // text/title/aria-label at runtime with Korean source text (e.g. "전체 재생 볼륨 75%").
+  // Already-translated text never matches a Korean source entry, so this is a no-op for it.
+  const SKIP_SELECTOR = "script,style,textarea,pre,code,kbd,samp,[data-i18n-skip]";
 
   const localeCache = new Map();
   const localeLoadPromises = new Map();
@@ -260,14 +263,20 @@
     return applyTemplate(template, normalizedValues);
   }
 
-  function translateSourceCore(source) {
+  const HANGUL_PATTERN = /[가-힣]/;
+
+  function translateSourceCore(source, depth = 0) {
     const exactKey = sourceStringKeys.get(source);
     if (exactKey) return translateKey(exactKey);
     for (const item of sourcePatternMatchers) {
       const match = String(source).match(item.regex);
       if (!match) continue;
       const values = [];
-      item.names.forEach((name, index) => { values[name] = match[index + 1] ?? ""; });
+      // Captured values may themselves be Korean UI text (e.g. "분자" in "{0} 증가").
+      item.names.forEach((name, index) => {
+        const value = match[index + 1] ?? "";
+        values[name] = depth < 2 && HANGUL_PATTERN.test(value) ? translateSourceCore(value, depth + 1) : value;
+      });
       return translateKey(item.key, values);
     }
     return source;
@@ -345,8 +354,6 @@
       attributeSourceCache.set(element, map);
     }
     for (const attribute of TRANSLATABLE_ATTRIBUTES) {
-      const marker = Object.keys(EXPLICIT_ATTRIBUTE_MARKERS).find((name) => EXPLICIT_ATTRIBUTE_MARKERS[name] === attribute);
-      if (marker && element.hasAttribute(marker)) continue;
       if (!element.hasAttribute(attribute)) continue;
       const current = element.getAttribute(attribute) || "";
       if (!current.trim()) continue;

@@ -676,6 +676,27 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "tutorial.step5.note": "Channel buttons mute individual parts. Speed, output volume, and sound settings are for playback preview.",
     "tutorial.step6.title": "6. Copy the score",
     "tutorial.step6.body": "In Score Copy, copy the full MML at once or copy split pages that fit the character limit.",
-    "tutorial.step6.note": "The default limit is 2,400 characters per channel. Split Search Point sets how far back the reverse search may go, measured as a percentage from the start (for example, 80% means search from the limit back to the 80% point)."
+    "tutorial.step6.note": "The default limit is 2,400 characters per channel. Split Search Point sets how far back the reverse search may go, measured as a percentage from the start (for example, 80% means search from the limit back to the 80% point).",
+    "audio_ai.label": "Audio · AI transcription (Beta)",
+    "audio_ai.preparing": "Preparing AI transcription…",
+    "audio_ai.downloading": "Downloading AI model… {0} / {1} MB",
+    "audio_ai.analyzing": "Transcribing with AI… {0}%",
+    "audio_ai.done": "AI transcription done (model v{0}): {1} notes",
+    "audio_ai.busy": "Another audio file is being transcribed.",
+    "audio_ai.err_unsupported": "Audio AI transcription is not available in this browser.",
+    "audio_ai.err_decode": "Could not read the audio file. Try another format (WAV, MP3, OGG, …).",
+    "audio_ai.err_too_long": "Audio longer than {0} minutes cannot be transcribed. Please split it and try again.",
+    "audio_ai.err_runtime": "Could not load the AI runtime. Check your connection.",
+    "audio_ai.err_model": "Could not download the AI model. Check your connection.",
+    "audio_ai.err_memory": "Not enough memory. Try a shorter audio file.",
+    "audio_ai.no_notes": "No notes were found in this audio.",
+    "audio_ai.failed": "Audio AI transcription failed: {0}",
+    "format.module_load_failed": "Could not load the music format module: {0}",
+    "google.api_load_failed": "Failed to load Google API: {0}",
+    "format.plugin_unavailable": "Could not load the music format plugin.",
+    "soundbank.download_start": "Downloading the default instrument sounds (about 5 MB). This happens only once.",
+    "soundbank.download_ready": "Default instrument sounds are ready.",
+    "soundbank.download_failed": "Could not download the default instrument sounds. Check your network connection.",
+    "sound.err_default_download": "Could not download the default instrument sounds. Check your network connection."
   }
 };

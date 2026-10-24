@@ -1,5 +1,5 @@
 import { buildMidiPlaybackNotes, makeOutputFileName, parseMidiForVelocity, patchMidiVelocities } from './midi.js?v=20260831-preview-crossfade1';
-import { initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20260906-locale-prune1';
+import { initializeLanguage, onLanguageChange, t } from './language-manager.js?v=20261024f-sf3-notice';
 
 const TARGET_SAMPLE_RATE = 16000;
 const AUTO_BASE_VELOCITY = 96;
@@ -82,14 +82,22 @@ function setProgress(value) {
 }
 
 let toastTimer = 0;
-function showToast(message, error = false) {
+function showToast(message, error = false, duration = 2600) {
   if (!elements.toast) return;
   clearTimeout(toastTimer);
   elements.toast.textContent = message;
   elements.toast.classList.toggle('error', error);
   elements.toast.classList.add('show');
-  toastTimer = window.setTimeout(() => elements.toast.classList.remove('show'), 2600);
+  toastTimer = window.setTimeout(() => elements.toast.classList.remove('show'), duration);
 }
+
+// Default SoundFont is fetched on first playback (plugins/formats/soundbank/soundbank.js); tell the user.
+window.addEventListener('mobibard:default-soundbank', event => {
+  const stateName = event.detail?.state;
+  if (stateName === 'downloading') showToast(t('sound.download_start'), false, 20000);
+  else if (stateName === 'ready') showToast(t('sound.download_ready'), false, 2200);
+  else if (stateName === 'error') showToast(t('sound.download_failed'), true, 4000);
+});
 
 const previewScriptPromises = new Map();
 
@@ -114,8 +122,7 @@ function loadPreviewScript(relativeUrl) {
 
 async function ensurePreviewEngine() {
   if (globalThis.MobibardEditorSoundBank?.Player) return globalThis.MobibardEditorSoundBank;
-  await loadPreviewScript('../../plugins/formats/soundbank/soundbank.js?v=5.1.0');
-  await loadPreviewScript('../../assets/default_sf3.js?v=20260907-mobibard16-cleaned');
+  await loadPreviewScript('../../plugins/formats/soundbank/soundbank.js?v=5.1.0&rev=20261024f-sf3-notice');
   await loadPreviewScript('../../plugins/common/default-instrument-map.js?v=1.0.0&rev=20260906-mobibard14');
   await loadPreviewScript('../../editor/js/soundbank-player.js?v=5.3.0&rev=20260906-mobibard14');
   if (!globalThis.MobibardEditorSoundBank?.Player) throw new Error(t('error.preview_engine'));
