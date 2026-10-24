@@ -1143,7 +1143,22 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "audio_midi.error_runtime": "无法加载 AI 运行环境。请检查网络连接后重试。",
     "audio_midi.error_model": "无法下载 AI 模型。请检查网络连接后重试。",
     "audio_midi.error_memory": "内存不足。请尝试更短的音频。",
-    "audio_midi.error_generic": "音频 AI 转换时发生错误。"
+    "audio_midi.error_generic": "音频 AI 转换时发生错误。",
+    "export.select_channels_hint": "请选择要导出的声道。",
+    "export.action": "导出",
+    "export.summary": "已选择 {0} 个声道 · {1} 个音符",
+    "export.group_detail": "{0}/{1} 个声道 · 选择整个分组",
+    "export.channel_detail": "{0} · {1} 个音符",
+    "export.empty_channel": "空声道",
+    "export.audio_preparing": "正在准备音频…",
+    "export.audio_rendering": "正在渲染音频… {0}%",
+    "export.audio_encoding": "正在编码 OGG… {0}%",
+    "merge.cancel": "取消合并",
+    "merge.apply": "应用合并",
+    "merge.overlap_ratio": "重叠比例",
+    "merge.overlap_hint": "与前一音符重叠时仍可作为合并候选的最大比例。100% 允许任意重叠，0% 只选不重叠的音符。",
+    "channel.delete_mode_title": "删除声道",
+    "timeline.auto_part_computing": "正在计算分段边界… {0}%"
   },
   "patterns": {
     "channel.solo_on_named": "{0} 独奏",

@@ -1143,7 +1143,22 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "audio_midi.error_runtime": "AI実行環境を読み込めませんでした。ネットワーク接続を確認して再度お試しください。",
     "audio_midi.error_model": "AIモデルをダウンロードできませんでした。ネットワーク接続を確認して再度お試しください。",
     "audio_midi.error_memory": "メモリが不足しています。より短い音源でお試しください。",
-    "audio_midi.error_generic": "オーディオのAI変換中にエラーが発生しました。"
+    "audio_midi.error_generic": "オーディオのAI変換中にエラーが発生しました。",
+    "export.select_channels_hint": "書き出すチャンネルを選択してください。",
+    "export.action": "書き出し",
+    "export.summary": "{0} チャンネル · ノート {1} 個を選択",
+    "export.group_detail": "{0}/{1} チャンネル · グループ全体を選択",
+    "export.channel_detail": "{0} · ノート {1} 個",
+    "export.empty_channel": "空のチャンネル",
+    "export.audio_preparing": "オーディオを準備中…",
+    "export.audio_rendering": "オーディオをレンダリング中… {0}%",
+    "export.audio_encoding": "OGG をエンコード中… {0}%",
+    "merge.cancel": "結合をキャンセル",
+    "merge.apply": "結合を適用",
+    "merge.overlap_ratio": "重なり率",
+    "merge.overlap_hint": "前のノートと重なっても結合候補に含める最大の割合です。100%はすべて許可、0%は重ならないように選びます。",
+    "channel.delete_mode_title": "チャンネル削除",
+    "timeline.auto_part_computing": "パート境界を計算中… {0}%"
   },
   "patterns": {
     "channel.solo_on_named": "{0} ソロ",

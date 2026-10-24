@@ -1143,7 +1143,22 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "audio_midi.error_runtime": "無法載入 AI 執行環境。請檢查網路連線後再試。",
     "audio_midi.error_model": "無法下載 AI 模型。請檢查網路連線後再試。",
     "audio_midi.error_memory": "記憶體不足。請嘗試較短的音訊。",
-    "audio_midi.error_generic": "音訊 AI 轉換時發生錯誤。"
+    "audio_midi.error_generic": "音訊 AI 轉換時發生錯誤。",
+    "export.select_channels_hint": "請選擇要匯出的聲道。",
+    "export.action": "匯出",
+    "export.summary": "已選擇 {0} 個聲道 · {1} 個音符",
+    "export.group_detail": "{0}/{1} 個聲道 · 選擇整個群組",
+    "export.channel_detail": "{0} · {1} 個音符",
+    "export.empty_channel": "空聲道",
+    "export.audio_preparing": "正在準備音訊…",
+    "export.audio_rendering": "正在算繪音訊… {0}%",
+    "export.audio_encoding": "正在編碼 OGG… {0}%",
+    "merge.cancel": "取消合併",
+    "merge.apply": "套用合併",
+    "merge.overlap_ratio": "重疊比例",
+    "merge.overlap_hint": "與前一音符重疊時仍可作為合併候選的最大比例。100% 允許任意重疊，0% 只選不重疊的音符。",
+    "channel.delete_mode_title": "刪除聲道",
+    "timeline.auto_part_computing": "正在計算分段邊界… {0}%"
   },
   "patterns": {
     "channel.solo_on_named": "{0} 獨奏",

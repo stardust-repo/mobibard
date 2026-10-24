@@ -473,14 +473,23 @@
     return uniqueExtensions(extensions);
   }
 
-  function filePickerType(description, extensions, mimeType = "application/octet-stream") {
+  // Chrome expands each MIME key of showOpenFilePicker() with the extensions the OS/browser maps
+  // to it; "application/octet-stream" pulls in .exe/.com/.bin. Use a private, unmapped MIME key
+  // for generic binary groups so only the listed extensions are offered.
+  const PICKER_BINARY_MIME = "application/x-mobibard-file";
+  // Extensions that must never be offered by a picker even if a MIME mapping would add them.
+  const PICKER_BLOCKED_EXTENSIONS = new Set(["exe", "com", "dll", "msi", "bat", "cmd", "scr"]);
+
+  function filePickerType(description, extensions, mimeType = PICKER_BINARY_MIME) {
     const suffixes = uniqueExtensions(extensions)
+      .filter(extension => !PICKER_BLOCKED_EXTENSIONS.has(String(extension).toLowerCase()))
       .map(extension => `.${extension}`)
       .filter(extension => extension.length <= 17 && !/[\\/]/.test(extension) && !extension.endsWith("."));
     if (!suffixes.length) return null;
+    const safeMimeType = /^application\/octet-stream$/i.test(String(mimeType || "")) ? PICKER_BINARY_MIME : String(mimeType || PICKER_BINARY_MIME);
     return {
       description: String(description || "Files"),
-      accept: { [mimeType]: suffixes },
+      accept: { [safeMimeType]: suffixes },
     };
   }
 

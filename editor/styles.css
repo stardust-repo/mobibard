@@ -14344,3 +14344,250 @@ body.workspace-topbar-locked #tutorialBackdrop a {
 .audio-ai-import-progress span { color: var(--muted); font-size: 11.5px; font-weight: 700; overflow-wrap: anywhere; }
 .audio-ai-import-credit { color: var(--muted); font-size: 10px; }
 .audio-ai-import-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* 2026-10-24 iOS Safari: toolbar dropdowns (파일·편집·설정·볼륨·배속·확대 메뉴) are position:fixed
+   children of the horizontally scrolling .topbar-main. WebKit paints them inside the toolbar's
+   layer, so later positioned regions (channel tabs, overview track bar) covered them. Lift the
+   whole toolbar into its own stacking layer above the workspace but below popups (1500). */
+.topbar {
+  position: relative;
+  z-index: 1400;
+  isolation: isolate;
+}
+.topbar-main {
+  /* Legacy iOS momentum flag creates a clipping compositing layer for fixed descendants. */
+  -webkit-overflow-scrolling: auto;
+}
+
+/* 2026-10-24 MML export, side-by-side layout: the older stacked-layout cap
+   (.mml-export-dialog:has(.mml-export-copy-panel:not([hidden])) .mml-export-channel-list → 280px)
+   out-ranked the side-by-side rule, leaving empty space under the channel list. Let the list
+   fill the channel pane; it scrolls inside the pane instead. */
+@media (min-width: 721px) {
+  .mml-export-dialog .mml-export-workspace .mml-export-channel-list,
+  .mml-export-dialog:has(.mml-export-copy-panel:not([hidden])) .mml-export-workspace .mml-export-channel-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+  /* An auto row grows to the content height and is then clipped by the workspace's max-height,
+     hiding the end of the list. A shrinkable 1fr row keeps both panes inside the workspace. */
+  .mml-export-dialog .mml-export-workspace { grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+}
+
+/* 2026-10-24 쉼표 정리 · 파트 자동 설정: title uses the Channel/History/Shortcuts tab row like 마디 편집.
+   The big in-panel title is dropped; its one-line description stays at the top of the panel. */
+body.rest-cleanup-mode-active .side-panel-tabs,
+body.auto-part-mode-active .side-panel-tabs {
+  display: none !important;
+}
+/* The title lives in the tab row; the in-panel header has nothing left to show. */
+body.rest-cleanup-mode-active .rest-cleanup-inline-header,
+body.auto-part-mode-active .auto-part-inline-header {
+  display: none !important;
+}
+
+/* 2026-10-24 File > MIDI / 오디오 내보내기: channel selection dialog (reuses MML export rows). */
+.channel-export-dialog {
+  width: min(460px, calc(100vw - 24px));
+  max-height: min(680px, calc(100dvh - 24px));
+  display: flex;
+  flex-direction: column;
+}
+.channel-export-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel) 92%, var(--control-bg));
+}
+.channel-export-body .mml-export-selection-actions { flex: 0 0 auto; padding: 9px 10px 5px; }
+.channel-export-dialog .channel-export-list {
+  flex: 1 1 auto;
+  min-height: 140px;
+  max-height: min(460px, 60dvh);
+  padding: 4px 10px 10px;
+}
+.channel-export-progress {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.channel-export-progress[hidden] { display: none !important; }
+.channel-export-progress progress { width: 100%; height: 8px; accent-color: var(--accent); }
+.channel-export-progress span { color: var(--muted); font-size: 11px; font-weight: 800; }
+#channelExportApplyButton:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Channel export rows have no "selection order" badge: two columns (checkbox, info). */
+.channel-export-list .mml-export-channel-row,
+.channel-export-list .mml-export-channel-row.is-group-child {
+  grid-template-columns: 24px minmax(0, 1fr) !important;
+}
+
+/* ===== 2026-10-24b ===== */
+/* 채널 병합 · 채널 삭제: title in the Channel/History/Shortcuts tab row (like 쉼표 정리). */
+body.merge-mode-active .side-panel-tabs,
+body.channel-delete-mode-active .side-panel-tabs {
+  display: none !important;
+}
+
+/* 채널 병합: cancel/merge are the same × / ✓ toolbar actions as 채널 삭제. */
+body.merge-mode-active .channel-tree-toolbar {
+  grid-template-columns: minmax(0, 1fr) 30px 30px !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+body.merge-mode-active .channel-tree-toolbar > .channel-tree-loaded-file { opacity: .55; }
+body.merge-mode-active #channelMergeModeCancelButton,
+body.merge-mode-active #channelMergeModeApplyButton {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+}
+body.merge-mode-active #channelMergeModeCancelButton {
+  border-color: var(--control-border) !important;
+  background: var(--control-bg) !important;
+  color: var(--text) !important;
+}
+body.merge-mode-active #channelMergeModeApplyButton:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--control-border)) !important;
+  background: color-mix(in srgb, var(--accent) 18%, var(--control-bg)) !important;
+  color: color-mix(in srgb, var(--accent) 85%, var(--text)) !important;
+  box-shadow: none !important;
+}
+body.merge-mode-active #channelMergeModeApplyButton:disabled {
+  opacity: .4 !important;
+  pointer-events: none !important;
+}
+
+/* 겹침 비율 row (where the old 취소 / 병합 buttons were). */
+.channel-merge-overlap-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 2px 2px 0;
+}
+.channel-merge-overlap-control strong {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.channel-merge-overlap-control input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.channel-merge-overlap-control output {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+body.merge-mode-active #channelMergeModeControls .channel-merge-overlap-control input {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+
+/* 마디 편집 · 쉼표 정리 · 파트 자동 설정: same density as the 채널 병합 / 삭제 channel tree
+   (27px rows, 28px choice buttons, 30px actions). */
+#measureEditPanel,
+#restCleanupPanel,
+#autoPartPanel {
+  gap: 8px !important;
+  padding: 10px 10px 10px !important;
+}
+#measureEditPanel .measure-edit-mode-tabs { margin-top: 2px !important; }
+#measureEditPanel .measure-edit-mode-tabs button,
+#restCleanupPanel .rest-cleanup-segments button {
+  min-height: 28px !important;
+  height: 28px;
+  padding: 0 4px !important;
+  font-size: 11px !important;
+}
+#measureEditPanel .measure-edit-options { margin-top: 0 !important; gap: 6px !important; }
+#measureEditPanel .measure-edit-range-summary {
+  min-height: 0 !important;
+  padding: 2px 2px 6px !important;
+}
+#measureEditPanel .measure-edit-range-label { font-size: 9.5px !important; }
+#measureEditPanel .measure-edit-range-value { font-size: 13px !important; line-height: 1.25 !important; }
+#measureEditPanel .measure-edit-range-empty { min-height: 24px !important; font-size: 10px !important; }
+#measureEditPanel .measure-edit-field input,
+#autoPartPanel .auto-part-inline-input input {
+  height: 26px !important;
+  min-height: 26px !important;
+  font-size: 11px !important;
+}
+#restCleanupPanel .rest-cleanup-inline-section { gap: 5px; }
+#restCleanupPanel .rest-cleanup-inline-preview { padding: 5px 7px; font-size: 10px; }
+#autoPartPanel .auto-part-inline-fields { gap: 6px; }
+#autoPartPanel .auto-part-inline-summary {
+  min-height: 0 !important;
+  padding: 5px 8px !important;
+  font-size: 10.5px !important;
+}
+
+/* Channel checklists: one 27px line per item (name left, detail right). */
+#measureEditPanel .inline-channel-select-toolbar,
+#restCleanupPanel .inline-channel-select-toolbar,
+#autoPartPanel .inline-channel-select-toolbar { min-height: 26px; padding: 0; }
+#measureEditPanel .inline-channel-select-toolbar > button,
+#restCleanupPanel .inline-channel-select-toolbar > button,
+#autoPartPanel .inline-channel-select-toolbar > button { min-height: 24px; padding: 2px 7px; }
+#measureEditPanel .inline-channel-select-list,
+#restCleanupPanel .inline-channel-select-list,
+#autoPartPanel .inline-channel-select-list { gap: 3px; }
+#measureEditPanel .inline-channel-group-row,
+#restCleanupPanel .inline-channel-group-row,
+#autoPartPanel .inline-channel-group-row,
+#measureEditPanel .inline-channel-select-row,
+#restCleanupPanel .inline-channel-select-row,
+#autoPartPanel .inline-channel-select-row {
+  min-height: 27px !important;
+  padding: 1px 6px !important;
+  gap: 5px !important;
+  border-radius: 6px !important;
+}
+#measureEditPanel .inline-channel-select-row,
+#restCleanupPanel .inline-channel-select-row,
+#autoPartPanel .inline-channel-select-row { grid-template-columns: 18px minmax(0, 1fr) !important; }
+#measureEditPanel .inline-channel-group-row,
+#restCleanupPanel .inline-channel-group-row,
+#autoPartPanel .inline-channel-group-row { grid-template-columns: 18px 16px minmax(0, 1fr) max-content !important; }
+#measureEditPanel input[type="checkbox"],
+#restCleanupPanel input[type="checkbox"],
+#autoPartPanel input[type="checkbox"] { width: 15px !important; height: 15px !important; }
+#measureEditPanel .inline-channel-info,
+#restCleanupPanel .inline-channel-info,
+#autoPartPanel .inline-channel-info {
+  display: flex !important;
+  align-items: baseline;
+  gap: 6px;
+}
+#measureEditPanel .inline-channel-info strong,
+#restCleanupPanel .inline-channel-info strong,
+#autoPartPanel .inline-channel-info strong { flex: 1 1 auto; font-size: 11px; }
+#measureEditPanel .inline-channel-info small,
+#restCleanupPanel .inline-channel-info small,
+#autoPartPanel .inline-channel-info small { flex: 0 0 auto; font-size: 9px; }
+
+/* Bottom actions. */
+#measureEditPanel .measure-edit-inline-actions,
+#restCleanupPanel .rest-cleanup-inline-actions,
+#autoPartPanel .auto-part-inline-actions { gap: 6px !important; padding-top: 4px !important; }
+#measureEditPanel .measure-edit-inline-actions button,
+#restCleanupPanel .rest-cleanup-inline-actions button,
+#autoPartPanel .auto-part-inline-actions > button {
+  min-height: 30px !important;
+  height: 30px;
+  font-size: 12px !important;
+}

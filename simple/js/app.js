@@ -1116,15 +1116,30 @@
         const master = context.createGain();
         master.gain.value = 0.44;
         master.connect(context.destination);
-        playbackApi.schedulePreparedNotes(context, prepared, {
-          baseTime: 0.01,
-          fromSec: 0,
-          windowStart: 0,
-          windowEnd: duration + 0.001,
-          destination: master,
-          minLeadTime: 0.005,
-          playbackSpeed: 1,
-        });
+        const baseTime = 0.01;
+        const scheduledIds = new Set();
+        const activeSources = [];
+        let startIndex = 0;
+        const scheduleSongWindow = (fromSec, toSec) => {
+          const result = playbackApi.schedulePreparedNotes(context, prepared, {
+            baseTime,
+            fromSec: 0,
+            windowStart: Math.max(0, fromSec - baseTime),
+            windowEnd: Number.isFinite(toSec) ? Math.min(duration + 0.001, toSec - baseTime) : duration + 0.001,
+            destination: master,
+            minLeadTime: 0.005,
+            playbackSpeed: 1,
+            scheduledIds,
+            activeSources,
+            startIndex,
+          });
+          if (Number.isFinite(result?.nextIndex)) startIndex = result.nextIndex;
+        };
+        if (typeof exporter.scheduleInWindows === "function") {
+          exporter.scheduleInWindows(context, { durationSec: duration + baseTime, schedule: scheduleSongWindow });
+        } else {
+          scheduleSongWindow(0, Infinity);
+        }
       },
     });
   }

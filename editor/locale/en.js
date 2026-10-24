@@ -1143,7 +1143,22 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "audio_midi.error_runtime": "Could not load the AI runtime. Check your connection and try again.",
     "audio_midi.error_model": "Could not download the AI model. Check your connection and try again.",
     "audio_midi.error_memory": "Not enough memory. Try a shorter audio file.",
-    "audio_midi.error_generic": "An error occurred during audio AI transcription."
+    "audio_midi.error_generic": "An error occurred during audio AI transcription.",
+    "export.select_channels_hint": "Choose the channels to export.",
+    "export.action": "Export",
+    "export.summary": "{0} channels · {1} notes selected",
+    "export.group_detail": "{0}/{1} channels · select whole group",
+    "export.channel_detail": "{0} · {1} notes",
+    "export.empty_channel": "Empty channel",
+    "export.audio_preparing": "Preparing audio…",
+    "export.audio_rendering": "Rendering audio… {0}%",
+    "export.audio_encoding": "Encoding OGG… {0}%",
+    "merge.cancel": "Cancel merge",
+    "merge.apply": "Apply merge",
+    "merge.overlap_ratio": "Overlap",
+    "merge.overlap_hint": "How much a candidate may overlap the previous note and still be merged. 100% allows any overlap, 0% picks non-overlapping notes.",
+    "channel.delete_mode_title": "Delete Channels",
+    "timeline.auto_part_computing": "Finding part boundaries… {0}%"
   },
   "patterns": {
     "channel.solo_on_named": "{0} solo",

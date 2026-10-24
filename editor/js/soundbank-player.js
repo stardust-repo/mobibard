@@ -585,6 +585,11 @@
         gain.gain.exponentialRampToValueAtTime(0.0001, releaseAt + releaseSeconds);
         try { source.stop(releaseAt + releaseSeconds + 0.03); } catch {}
       }
+      // Detach finished voices so the offline graph stays small during long renders.
+      source.onended = () => {
+        try { source.disconnect(); } catch {}
+        try { gain.disconnect(); } catch {}
+      };
 
       // Offline export never needs release/cancel bookkeeping after scheduling, so
       // avoid allocating one voice object and two closures per note.

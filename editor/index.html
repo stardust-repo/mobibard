@@ -66,7 +66,7 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20261023-audio-ai";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20261024b-panels";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20261006-tutorial-unlock-v22" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20261024b-panels" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -238,7 +238,6 @@
 <section class="auto-part-inline-panel" id="autoPartPanel" hidden aria-label="파트 자동 설정" data-i18n-aria-label="timeline.auto_part">
   <div class="auto-part-inline-header">
     <strong data-i18n="timeline.auto_part">파트 자동 설정</strong>
-    <span data-i18n="timeline.auto_part_subtitle">MML 글자수를 기준으로 파트 경계를 자동 계산합니다.</span>
   </div>
   <div class="auto-part-inline-fields">
     <label class="auto-part-inline-field"><span data-i18n="timeline.auto_part_chars">나눌 글자수</span><span class="auto-part-inline-input"><input aria-label="나눌 글자수" data-i18n-aria-label="timeline.auto_part_chars" id="autoPartCharsInput" inputmode="numeric" min="200" step="1" type="number" value="2400"/><strong data-i18n="ui.characters">자</strong></span></label>
@@ -250,7 +249,7 @@
   <div class="auto-part-inline-actions"><button id="autoPartCancelButton" type="button" data-i18n="cancel">취소</button><button id="autoPartApplyButton" type="button" data-i18n="ui.ok">확인</button></div>
 </section>
 <section class="rest-cleanup-inline-panel" id="restCleanupPanel" hidden aria-label="쉼표 정리" data-i18n-aria-label="rest_cleanup.title">
-  <div class="rest-cleanup-inline-header"><strong data-i18n="rest_cleanup.title">쉼표 정리</strong><span data-i18n="rest_cleanup.subtitle">짧은 쉼표를 앞 노트 길이에 흡수합니다.</span></div>
+  <div class="rest-cleanup-inline-header"><strong data-i18n="rest_cleanup.title">쉼표 정리</strong></div>
   <div class="rest-cleanup-inline-section"><strong data-i18n="rest_cleanup.threshold">제거할 쉼표</strong><div class="rest-cleanup-segments rest-cleanup-thresholds" id="restCleanupModeOptions" role="group" aria-label="제거할 쉼표" data-i18n-aria-label="rest_cleanup.threshold"><button type="button" data-rest-cleanup-mode="64" data-i18n="rest_cleanup.64">1/64 이하</button><button class="active" type="button" data-rest-cleanup-mode="32" data-i18n="rest_cleanup.32">1/32 이하</button><button type="button" data-rest-cleanup-mode="16" data-i18n="rest_cleanup.16">1/16 이하</button><button type="button" data-rest-cleanup-mode="8" data-i18n="rest_cleanup.8">1/8 이하</button><button type="button" data-rest-cleanup-mode="4" data-i18n="rest_cleanup.4">1/4 이하</button><button type="button" data-rest-cleanup-mode="all" data-i18n="rest_cleanup.all">모두</button></div></div>
   <p class="rest-cleanup-preview rest-cleanup-inline-preview" id="restCleanupPreview"></p>
   <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button id="restCleanupSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="restCleanupClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
@@ -274,7 +273,7 @@
   <div class="measure-edit-scope-list inline-channel-select-list" id="measureEditScopeList"></div>
   <div class="measure-edit-inline-actions"><button id="measureEditCancelButton" type="button" data-i18n="cancel">취소</button><button id="measureEditApplyButton" type="button" data-i18n="ui.ok">확인</button></div>
 </section>
-<div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명" data-i18n-aria-label="ui.loaded_file_name"></span><button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="항목 추가" data-i18n-aria-label="item.add" class="channel-tree-add-button" id="addChannelButton" title="항목 추가" data-i18n-title="item.add" type="button">＋</button><button aria-label="삭제할 항목 선택" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 항목 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button><button aria-label="삭제 선택 취소" data-i18n-aria-label="cancel" class="channel-delete-mode-cancel" id="channelDeleteModeCancelButton" hidden type="button">×</button><button aria-label="선택 삭제 적용" data-i18n-aria-label="action.delete" class="channel-delete-mode-apply" id="channelDeleteModeApplyButton" hidden type="button">✓</button></div>
+<div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명" data-i18n-aria-label="ui.loaded_file_name"></span><button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="항목 추가" data-i18n-aria-label="item.add" class="channel-tree-add-button" id="addChannelButton" title="항목 추가" data-i18n-title="item.add" type="button">＋</button><button aria-label="삭제할 항목 선택" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 항목 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button><button aria-label="삭제 선택 취소" data-i18n-aria-label="cancel" class="channel-delete-mode-cancel" id="channelDeleteModeCancelButton" hidden type="button">×</button><button aria-label="선택 삭제 적용" data-i18n-aria-label="action.delete" class="channel-delete-mode-apply" id="channelDeleteModeApplyButton" hidden type="button">✓</button><button aria-label="병합 취소" data-i18n-aria-label="merge.cancel" title="병합 취소" data-i18n-title="merge.cancel" class="channel-delete-mode-cancel channel-merge-toolbar-cancel" id="channelMergeModeCancelButton" hidden type="button">×</button><button aria-label="병합 적용" data-i18n-aria-label="merge.apply" title="병합 적용" data-i18n-title="merge.apply" class="channel-delete-mode-apply channel-merge-toolbar-apply" id="channelMergeModeApplyButton" hidden type="button">✓</button></div>
 <section class="note-edit-mode-panel" id="noteEditModePanel" hidden>
   <div class="note-edit-mode-header">
     <strong id="noteEditModeTitle" data-i18n="note.edit_mode_title">노트 편집 모드</strong>
@@ -339,12 +338,11 @@
       <button type="button" data-merge-mode-role="low" data-i18n="ui.low">저음</button>
     </div>
   </div>
-  <div class="channel-merge-action-row">
-    <div class="channel-merge-mode-actions">
-      <button class="merge-cancel-button" type="button" id="channelMergeModeCancelButton" data-i18n="cancel">취소</button>
-      <button class="merge-apply-button" type="button" id="channelMergeModeApplyButton" data-i18n="ui.merge">병합</button>
-    </div>
-  </div>
+  <label class="channel-merge-overlap-control" title="앞 노트와 겹쳐도 병합 후보로 넣을 최대 비율입니다. 100%는 모두 허용, 0%는 겹치지 않게 고릅니다." data-i18n-title="merge.overlap_hint">
+    <strong data-i18n="merge.overlap_ratio">겹침 비율</strong>
+    <input type="range" id="channelMergeOverlapSlider" min="0" max="100" step="5" value="100" aria-label="겹침 비율" data-i18n-aria-label="merge.overlap_ratio"/>
+    <output id="channelMergeOverlapValue" for="channelMergeOverlapSlider">100%</output>
+  </label>
   <div class="channel-merge-exclude-row">
     <strong data-i18n="merge.exclude_overlap">사용된 노트 제외</strong>
     <span class="channel-merge-role-legend"><b class="merge-legend-include">✓</b><span data-i18n="merge.include_legend">병합 포함</span><b class="merge-legend-exclude">×</b><span data-i18n="merge.exclude_legend">제외 기준</span></span>
@@ -493,6 +491,17 @@
   </div>
 </div>
 <div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="mmlExportSummary" data-i18n="channel.no_selected">선택된 채널이 없습니다.</div><button data-i18n="close" id="mmlExportCancelButton" type="button">닫기</button></div>
+</section>
+</div>
+<div class="popup-backdrop" hidden="" id="channelExportBackdrop">
+<section aria-labelledby="channelExportTitle" aria-modal="true" class="transfer-dialog channel-export-dialog" id="channelExportDialog" role="dialog">
+<div class="transfer-dialog-header"><div><strong id="channelExportTitle">내보내기</strong><span data-i18n="export.select_channels_hint">내보낼 채널을 선택하세요.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelExportCloseButton" type="button">×</button></div>
+<div class="channel-export-body">
+<div class="mml-export-selection-actions"><button id="channelExportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelExportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+<div class="mml-export-channel-list channel-export-list" id="channelExportList"></div>
+<div class="channel-export-progress" hidden="" id="channelExportProgress"><progress id="channelExportProgressBar" max="1"></progress><span aria-live="polite" id="channelExportProgressText"></span></div>
+</div>
+<div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="channelExportSummary" data-i18n="channel.no_selected">선택된 채널이 없습니다.</div><button data-i18n="cancel" id="channelExportCancelButton" type="button">취소</button><button disabled="" id="channelExportApplyButton" type="button" data-i18n="export.action">내보내기</button></div>
 </section>
 </div>
 <div class="popup-backdrop" hidden="" id="channelDeleteBackdrop">
@@ -755,17 +764,17 @@
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0"></script>
 <script src="../assets/default_sf3.js?v=20260907-mobibard16-cleaned"></script>
-<script src="../plugins/common/audio-export.js?v=1.0.3&amp;rev=20260923-local-vendor2"></script>
+<script src="../plugins/common/audio-export.js?v=1.0.4&amp;rev=20261024b-panels"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
-<script src="js/soundbank-player.js?v=5.3.0&amp;rev=20261003-timeline-note-menu-v2"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261023-audio-ai"></script>
+<script src="js/soundbank-player.js?v=5.3.0&amp;rev=20261024-export-fixes"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261024-export-fixes"></script>
 <script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.3"></script>
-<script src="app.js?v=5.3.0&amp;rev=20261023-wave2midi-license"></script>
+<script src="app.js?v=5.3.0&amp;rev=20261024b-panels"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260928-account-preference1" type="module"></script>
 </body>
 </html>

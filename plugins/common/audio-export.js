@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "1.0.3";
+  const VERSION = "1.0.4";
   const SAMPLE_RATE = 44100;
   const CHANNELS = 2;
   const ENCODER_VERSION = "0.7.0";
@@ -124,6 +124,43 @@
     return new Blob(parts, { type: "audio/ogg" });
   }
 
+  /**
+   * Attach notes to an OfflineAudioContext a few seconds at a time while it renders.
+   *
+   * Connecting a whole song before startRendering() makes Chrome process every connected node on
+   * every render quantum (even nodes whose source starts minutes later), so render time grows with
+   * note count × song length: a 3-minute, 15k-note song took over 10 minutes. Scheduling each
+   * window from a suspend() callback keeps only the currently sounding notes in the graph; the
+   * rendered PCM is the same.
+   *
+   * schedule(fromSec, toSec) must attach every note whose *context* start time is in [fromSec, toSec)
+   * (toSec is Infinity for the last call). Call this inside the renderOgg() render callback.
+   */
+  function scheduleInWindows(context, { durationSec, windowSec = 2, schedule, onProgress } = {}) {
+    if (typeof schedule !== "function") throw new Error("scheduleInWindows needs a schedule(fromSec, toSec) callback.");
+    const step = Math.max(0.25, Number(windowSec) || 2);
+    const end = Math.max(step, Number(durationSec) || step);
+    const canSuspend = typeof context?.suspend === "function" && typeof context?.resume === "function";
+    if (!canSuspend || end <= step) {
+      schedule(0, Infinity);
+      return;
+    }
+    schedule(0, step);
+    for (let at = step; at < end; at += step) {
+      const from = at;
+      const to = at + step >= end ? Infinity : at + step;
+      context.suspend(from).then(() => {
+        schedule(from, to);
+        onProgress?.("render", Math.min(1, from / end));
+        return context.resume();
+      }).catch(error => {
+        console.error("[MobibardAudioExport] scheduling window failed", error);
+        try { schedule(from, Infinity); } catch {}
+        context.resume().catch(() => {});
+      });
+    }
+  }
+
   function normalizeOggFileName(fileName) {
     const cleaned = String(fileName || "mobibard-audio")
       .replace(/[\\/:*?"<>|]+/g, "_")
@@ -186,6 +223,7 @@
     channels: CHANNELS,
     encodeOgg,
     renderOgg,
+    scheduleInWindows,
     renderAndDownloadOgg,
     normalizeOggFileName,
     downloadBlob,

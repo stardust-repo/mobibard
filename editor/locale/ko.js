@@ -1143,7 +1143,22 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "audio_midi.error_runtime": "AI 실행 환경을 불러오지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.",
     "audio_midi.error_model": "AI 모델을 내려받지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.",
     "audio_midi.error_memory": "메모리가 부족합니다. 더 짧은 음원으로 시도해 주세요.",
-    "audio_midi.error_generic": "오디오 AI 변환 중 오류가 발생했습니다."
+    "audio_midi.error_generic": "오디오 AI 변환 중 오류가 발생했습니다.",
+    "export.select_channels_hint": "내보낼 채널을 선택하세요.",
+    "export.action": "내보내기",
+    "export.summary": "{0}개 채널 · 노트 {1}개 선택",
+    "export.group_detail": "{0}/{1}개 채널 · 그룹 전체 선택",
+    "export.channel_detail": "{0} · 노트 {1}개",
+    "export.empty_channel": "빈 채널",
+    "export.audio_preparing": "오디오를 준비하는 중…",
+    "export.audio_rendering": "오디오 렌더링 중… {0}%",
+    "export.audio_encoding": "OGG 인코딩 중… {0}%",
+    "merge.cancel": "병합 취소",
+    "merge.apply": "병합 적용",
+    "merge.overlap_ratio": "겹침 비율",
+    "merge.overlap_hint": "앞 노트와 겹쳐도 병합 후보로 넣을 최대 비율입니다. 100%는 모두 허용, 0%는 겹치지 않게 고릅니다.",
+    "channel.delete_mode_title": "채널 삭제",
+    "timeline.auto_part_computing": "파트 경계 계산 중… {0}%"
   },
   "patterns": {
     "channel.solo_on_named": "{0} 싱글",

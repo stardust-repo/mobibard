@@ -381,6 +381,18 @@
     fileExportButton: document.querySelector("#fileExportButton"),
     midiExportButton: document.querySelector("#midiExportButton"),
     audioExportButton: document.querySelector("#audioExportButton"),
+    channelExportBackdrop: document.querySelector("#channelExportBackdrop"),
+    channelExportTitle: document.querySelector("#channelExportTitle"),
+    channelExportList: document.querySelector("#channelExportList"),
+    channelExportSummary: document.querySelector("#channelExportSummary"),
+    channelExportSelectAllButton: document.querySelector("#channelExportSelectAllButton"),
+    channelExportClearAllButton: document.querySelector("#channelExportClearAllButton"),
+    channelExportCloseButton: document.querySelector("#channelExportCloseButton"),
+    channelExportCancelButton: document.querySelector("#channelExportCancelButton"),
+    channelExportApplyButton: document.querySelector("#channelExportApplyButton"),
+    channelExportProgress: document.querySelector("#channelExportProgress"),
+    channelExportProgressBar: document.querySelector("#channelExportProgressBar"),
+    channelExportProgressText: document.querySelector("#channelExportProgressText"),
     supportedFilesMenuButton: document.querySelector("#supportedFilesMenuButton"),
     newButton: document.querySelector("#newButton"),
     openButton: document.querySelector("#openButton"),
@@ -575,6 +587,7 @@
     channelMergeModeControls: document.querySelector("#channelMergeModeControls"),
     channelMergeModeRoleOptions: document.querySelector("#channelMergeModeRoleOptions"),
     channelMergeOverlapSlider: document.querySelector("#channelMergeOverlapSlider"),
+    channelMergeOverlapValue: document.querySelector("#channelMergeOverlapValue"),
     channelMergeExcludeChannelSelect: document.querySelector("#channelMergeExcludeChannelSelect"),
     channelMergeModeCancelButton: document.querySelector("#channelMergeModeCancelButton"),
     channelMergeModeApplyButton: document.querySelector("#channelMergeModeApplyButton"),
@@ -2136,13 +2149,62 @@
       .sort((a, b) => a - b);
   }
 
+  // Optimized length of one exported part, computed the same way optimizeEditorExportMml() treats
+  // that part: parts are optimized independently; part 0 (and every part past the sixth, which is
+  // optimized on its own) is the "melody" part whose synthetic T120 header is stripped when the
+  // source has no tempo. Auto-part stats never include tempo commands.
+  const autoPartOptimizedPartCache = new Map();
+  function getAutoPartOptimizedPartLength(part, index) {
+    const optimize = window.MabiOptimizer?.optimizeMml;
+    const source = String(part || "");
+    if (!source || typeof optimize !== "function") return source.length;
+    const slot = index < 6 ? index : 0;
+    const key = `${slot}:${source}`;
+    const cached = autoPartOptimizedPartCache.get(key);
+    if (cached != null) return cached;
+    const wrapped = `MML@${",".repeat(slot)}${source};`;
+    let optimizedPart = source;
+    try {
+      const result = optimize(normalizeMmlTextCase(wrapped), { partCount: slot + 1 });
+      optimizedPart = splitMmlPartsForExport(normalizeMmlTextCase(String(result?.mml || wrapped)))[slot] ?? source;
+      if (slot === 0 && !/(?:^|[^a-z])t\s*\d+/i.test(source)) optimizedPart = optimizedPart.replace(/^T120/i, "");
+    } catch {
+      optimizedPart = source;
+    }
+    if (autoPartOptimizedPartCache.size > 20000) autoPartOptimizedPartCache.clear();
+    autoPartOptimizedPartCache.set(key, optimizedPart.length);
+    return optimizedPart.length;
+  }
+
+  // The shared optimizer only ever shortens a part, so a part whose *raw* length is not above the
+  // current maximum cannot raise it. Optimizing parts longest-raw-first and stopping there returns
+  // the exact same maxChars while usually optimizing only one or two of the parts.
+  const AUTO_PART_RAW_BOUND_MARGIN = 0;
   function renderAutoPartRangeStats(channels, startBeat, endBeat, tempos, cache) {
     const key = `${Number(startBeat).toFixed(6)}:${Number(endBeat).toFixed(6)}`;
     if (cache?.has(key)) return cache.get(key);
-    const mml = channelsToMmlRange(channels, startBeat, endBeat, tempos, { includeTempo: false, optimized: true });
-    const lengths = getMmlExportPartLengths(mml);
-    const maxChars = lengths.length ? Math.max(...lengths) : 0;
-    const result = { maxChars, mml };
+    const rawMml = channelsToMmlRange(channels, startBeat, endBeat, tempos, { includeTempo: false, optimized: false });
+    const parts = splitMmlPartsForExport(normalizeMmlTextCase(String(rawMml || "").trim()));
+    const order = parts.map((part, index) => ({ index, part, raw: part.length }))
+      .filter((entry) => entry.raw > 0)
+      .sort((left, right) => right.raw - left.raw || left.index - right.index);
+    let maxChars = 0;
+    for (const entry of order) {
+      if (entry.raw + AUTO_PART_RAW_BOUND_MARGIN <= maxChars) break;
+      maxChars = Math.max(maxChars, getAutoPartOptimizedPartLength(entry.part, entry.index));
+    }
+    if (window.__autoPartVerify) {
+      const full = getMmlExportPartLengths(channelsToMmlRange(channels, startBeat, endBeat, tempos, { includeTempo: false, optimized: true }));
+      const fullMax = full.length ? Math.max(...full) : 0;
+      const log = window.__autoPartVerify;
+      log.checks = (log.checks || 0) + 1;
+      if (fullMax !== maxChars) (log.mismatch ||= []).push({ key, fullMax, maxChars });
+      parts.forEach((part, index) => {
+        const excess = (full[index] ?? 0) - part.length;
+        if (excess > (log.maxExcess ?? -Infinity)) log.maxExcess = excess;
+      });
+    }
+    const result = { maxChars };
     cache?.set(key, result);
     return result;
   }
@@ -2151,7 +2213,43 @@
     return channels.map((channel) => String(channel.id)).sort().join(",");
   }
 
-  function computeAutoPartPlan(targetChars = 2400, searchRangePercent = 50) {
+  // Rendered-range stats survive between runs (reopening the panel, changing the target, toggling
+  // channels) until the selected channels' content, tempos or fades change.
+  const autoPartStatsCache = { signature: "", map: new Map() };
+
+  function getAutoPartContentSignature(channels, tempos) {
+    let hash = 2166136261;
+    const mix = (value) => {
+      const text = String(value);
+      for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+      }
+    };
+    for (const channel of channels) {
+      mix(`#${channel.id}:${channel.notes?.length || 0}`);
+      for (const note of channel.notes || []) {
+        mix(`${note.startBeat},${note.durationBeat},${note.pitch},${note.volume ?? ""},${note.velocity ?? ""};`);
+      }
+    }
+    mix(JSON.stringify(tempos || []));
+    mix(JSON.stringify(state.timelineFades || []));
+    return `${channels.map((channel) => channel.id).join(",")}|${(hash >>> 0).toString(36)}`;
+  }
+
+  function getAutoPartStatsCache(channels, tempos) {
+    const signature = getAutoPartContentSignature(channels, tempos);
+    if (autoPartStatsCache.signature !== signature) {
+      autoPartStatsCache.signature = signature;
+      autoPartStatsCache.map = new Map();
+    }
+    return autoPartStatsCache.map;
+  }
+
+  // The search pauses (yield) before every MML render that is not cached yet, so it can run
+  // synchronously (computeAutoPartPlan) or in small background steps (updateAutoPartSummary)
+  // with the same result. Yield values report progress (0..1).
+  function* autoPartPlanSteps(targetChars = 2400, searchRangePercent = 50) {
     const channels = getAutoPartChannels();
     const channelKey = getAutoPartSelectionKey(channels);
     const parsedTarget = Number(targetChars);
@@ -2165,7 +2263,9 @@
 
     const tempos = getSortedTempos();
     const candidates = buildAutoPartCandidates(channels, totalEndBeat);
-    const cache = new Map();
+    const cache = getAutoPartStatsCache(channels, tempos);
+    const isCached = (from, to) => cache.has(`${Number(from).toFixed(6)}:${Number(to).toFixed(6)}`);
+    if (!isCached(0, totalEndBeat)) yield 0;
     const fullStats = renderAutoPartRangeStats(channels, 0, totalEndBeat, tempos, cache);
     if (fullStats.maxChars <= target || candidates.length < 3) {
       return { targetChars: target, searchRangePercent: rangePercent, channelKey, partCount: 1, boundaries: [], totalEndBeat, maxChars: fullStats.maxChars };
@@ -2179,6 +2279,7 @@
     let guard = 0;
 
     while (startBeat < totalEndBeat - CONFIG.minimumNoteBeat && guard++ < 256) {
+      if (!isCached(startBeat, totalEndBeat)) yield startBeat / totalEndBeat;
       const remaining = renderAutoPartRangeStats(channels, startBeat, totalEndBeat, tempos, cache);
       if (remaining.maxChars <= target) break;
       const eligible = candidates.filter((beat) => beat > startBeat + CONFIG.minimumNoteBeat / 2 && beat < totalEndBeat - CONFIG.minimumNoteBeat / 2);
@@ -2189,6 +2290,7 @@
       let crossing = eligible.length - 1;
       while (low <= high) {
         const mid = Math.floor((low + high) / 2);
+        if (!isCached(startBeat, eligible[mid])) yield startBeat / totalEndBeat;
         const stats = renderAutoPartRangeStats(channels, startBeat, eligible[mid], tempos, cache);
         if (stats.maxChars >= target) {
           crossing = mid;
@@ -2201,15 +2303,37 @@
       const probeStart = Math.max(0, crossing - 28);
       const probeEnd = Math.min(eligible.length - 1, crossing + 28);
       let best = null;
-      for (let index = probeStart; index <= probeEnd; index += 1) {
-        const beat = eligible[index];
-        const stats = renderAutoPartRangeStats(channels, startBeat, beat, tempos, cache);
-        if (stats.maxChars < lowTarget - 1e-7 || stats.maxChars > highTarget + 1e-7) continue;
-        const distance = Math.abs(stats.maxChars - target) / Math.max(1, target);
-        const crossings = getAutoPartCandidateCrossingCount(channels, beat);
-        const score = distance + Math.min(8, crossings) * 0.08;
-        if (!best || score < best.score - 1e-9 || (Math.abs(score - best.score) <= 1e-9 && beat > best.beat)) {
-          best = { beat, score, maxChars: stats.maxChars };
+      // Probe outward from the crossing point. Part length grows with the end beat, so once a
+      // candidate is on the far side of the target and its distance alone (a lower bound of its
+      // score) is worse than the best score, the candidates beyond it cannot win either. Stop a
+      // direction after three such candidates in a row instead of scoring all 57 probes.
+      const probeDirections = [
+        { index: crossing, step: 1, misses: 0, done: false },
+        { index: crossing - 1, step: -1, misses: 0, done: false },
+      ];
+      while (probeDirections.some((direction) => !direction.done)) {
+        for (const direction of probeDirections) {
+          if (direction.done) continue;
+          if (direction.index < probeStart || direction.index > probeEnd) {
+            direction.done = true;
+            continue;
+          }
+          const beat = eligible[direction.index];
+          direction.index += direction.step;
+          if (!isCached(startBeat, beat)) yield startBeat / totalEndBeat;
+          const stats = renderAutoPartRangeStats(channels, startBeat, beat, tempos, cache);
+          const distance = Math.abs(stats.maxChars - target) / Math.max(1, target);
+          if (stats.maxChars >= lowTarget - 1e-7 && stats.maxChars <= highTarget + 1e-7) {
+            const crossings = getAutoPartCandidateCrossingCount(channels, beat);
+            const score = distance + Math.min(8, crossings) * 0.08;
+            if (!best || score < best.score - 1e-9 || (Math.abs(score - best.score) <= 1e-9 && beat > best.beat)) {
+              best = { beat, score, maxChars: stats.maxChars };
+            }
+          }
+          const movingAway = direction.step > 0 ? stats.maxChars >= target : stats.maxChars <= target;
+          if (best && movingAway && distance > best.score + 1e-9) direction.misses += 1;
+          else direction.misses = 0;
+          if (direction.misses >= 3) direction.done = true;
         }
       }
 
@@ -2217,6 +2341,7 @@
         const fallbackIndices = [crossing - 1, crossing, crossing + 1].filter((index) => index >= 0 && index < eligible.length);
         for (const index of fallbackIndices) {
           const beat = eligible[index];
+          if (!isCached(startBeat, beat)) yield startBeat / totalEndBeat;
           const stats = renderAutoPartRangeStats(channels, startBeat, beat, tempos, cache);
           const distance = Math.abs(stats.maxChars - target) / Math.max(1, target);
           const crossings = getAutoPartCandidateCrossingCount(channels, beat);
@@ -2239,6 +2364,13 @@
       totalEndBeat,
       maxChars: fullStats.maxChars,
     };
+  }
+
+  function computeAutoPartPlan(targetChars = 2400, searchRangePercent = 50) {
+    const steps = autoPartPlanSteps(targetChars, searchRangePercent);
+    let step = steps.next();
+    while (!step.done) step = steps.next();
+    return step.value;
   }
 
   function readAutoPartOptionsFromUi() {
@@ -2389,7 +2521,7 @@
     if (!(state.autoPart.selectedChannelIds instanceof Set)) state.autoPart.selectedChannelIds = new Set();
     return renderInlineChannelSelectionList(elements.autoPartChannelList, state.autoPart.selectedChannelIds, {
       notesOnly: true,
-      onChange: () => updateAutoPartSummary(),
+      onChange: () => updateAutoPartSummary({ debounceMs: 200 }),
     });
   }
 
@@ -2400,26 +2532,65 @@
     updateAutoPartSummary();
   }
 
-  function updateAutoPartSummary() {
+  let autoPartComputeToken = 0;
+  let autoPartComputeTimer = 0;
+
+  function updateAutoPartSummary({ debounceMs = 0 } = {}) {
     if (!isAutoPartPreviewActive() || !elements.autoPartPanel || elements.autoPartPanel.hidden) return;
     const options = readAutoPartOptionsFromUi();
     state.autoPart.targetChars = options.targetChars;
     state.autoPart.searchRangePercent = options.searchRangePercent;
     if (elements.autoPartCharsInput) elements.autoPartCharsInput.value = String(options.targetChars);
     if (elements.autoPartSearchRangeInput) elements.autoPartSearchRangeInput.value = String(options.searchRangePercent);
-    const plan = computeAutoPartPlan(options.targetChars, options.searchRangePercent);
-    state.autoPart.plan = plan;
-    if (elements.autoPartSummary) {
-      elements.autoPartSummary.textContent = i18nText("timeline.auto_part_result", [Math.max(0, plan.partCount - 1).toLocaleString()]);
-    }
+    // Large songs need hundreds of optimized MML renders; run them in background steps so the
+    // panel opens immediately and typing / toggling channels never freezes the editor.
+    const token = ++autoPartComputeToken;
+    window.clearTimeout(autoPartComputeTimer);
+    state.autoPart.plan = null;
     if (elements.autoPartApplyButton) {
-      elements.autoPartApplyButton.disabled = plan.partCount < 2;
-      elements.autoPartApplyButton.title = plan.partCount < 2 ? i18nText("timeline.auto_part_need_two") : "";
+      elements.autoPartApplyButton.disabled = true;
+      elements.autoPartApplyButton.title = "";
     }
+    if (elements.autoPartSummary) elements.autoPartSummary.textContent = i18nText("timeline.auto_part_computing", [0]);
     refreshAutoPartPreviewVisuals();
+    const steps = autoPartPlanSteps(options.targetChars, options.searchRangePercent);
+    const finish = (plan) => {
+      state.autoPart.plan = plan;
+      if (elements.autoPartSummary) {
+        elements.autoPartSummary.textContent = i18nText("timeline.auto_part_result", [Math.max(0, plan.partCount - 1).toLocaleString()]);
+      }
+      if (elements.autoPartApplyButton) {
+        elements.autoPartApplyButton.disabled = plan.partCount < 2;
+        elements.autoPartApplyButton.title = plan.partCount < 2 ? i18nText("timeline.auto_part_need_two") : "";
+      }
+      refreshAutoPartPreviewVisuals();
+    };
+    const run = () => {
+      if (token !== autoPartComputeToken || !isAutoPartPreviewActive()) return;
+      const deadline = performance.now() + 12;
+      let step;
+      try {
+        do { step = steps.next(); } while (!step.done && performance.now() < deadline);
+      } catch (error) {
+        console.error("Auto part plan failed", error);
+        invalidateAutoPartSummary();
+        return;
+      }
+      if (step.done) {
+        finish(step.value);
+        return;
+      }
+      if (elements.autoPartSummary) {
+        elements.autoPartSummary.textContent = i18nText("timeline.auto_part_computing", [Math.round(clamp(Number(step.value) || 0, 0, 1) * 100)]);
+      }
+      autoPartComputeTimer = window.setTimeout(run, 0);
+    };
+    autoPartComputeTimer = window.setTimeout(run, Math.max(0, Number(debounceMs) || 0));
   }
 
   function invalidateAutoPartSummary() {
+    autoPartComputeToken += 1;
+    window.clearTimeout(autoPartComputeTimer);
     state.autoPart.plan = null;
     if (elements.autoPartApplyButton) {
       elements.autoPartApplyButton.disabled = true;
@@ -2455,6 +2626,8 @@
     syncWorkspaceTopbarLocks();
     if (state.history?.collapsed) setHistoryCollapsed(false);
     setSidebarTab("channels", { persist: false });
+    document.body.classList.add("auto-part-mode-active");
+    if (!isNoteEditModeActive()) setSidebarEditModeTitlebar(false);
     elements.channelPanel?.classList.add("auto-part-preview-active");
     elements.autoPartPanel.hidden = false;
     if (elements.autoPartCharsInput) elements.autoPartCharsInput.value = String(state.autoPart.targetChars || 2400);
@@ -2471,6 +2644,10 @@
     if (!state.autoPart.active && (!elements.autoPartPanel || elements.autoPartPanel.hidden)) return false;
     state.autoPart.active = false;
     state.autoPart.plan = null;
+    autoPartComputeToken += 1;
+    window.clearTimeout(autoPartComputeTimer);
+    document.body.classList.remove("auto-part-mode-active");
+    if (!isNoteEditModeActive() && !isMeasureEditWorkspaceActive()) setSidebarEditModeTitlebar(false);
     syncWorkspaceTopbarLocks();
     if (elements.autoPartPanel) elements.autoPartPanel.hidden = true;
     elements.channelPanel?.classList.remove("auto-part-preview-active");
@@ -4946,6 +5123,7 @@
     updatePlaybackRateControl();
     updateThemeControls();
     updateEditorSoundFontUi();
+    if ((state.restCleanup?.active || state.autoPart?.active) && !isNoteEditModeActive() && !isMeasureEditWorkspaceActive()) setSidebarEditModeTitlebar(false);
     populateChannelGroupInstrumentSelect();
     renderAll();
     updateMidiReferenceUI();
@@ -11231,10 +11409,15 @@
 
     arrangeItemTreeNodes(elements.channelTabs);
 
-    elements.addChannelButton.disabled = deleteMode || isChannelMergeModeActive();
-    if (elements.mergeChannelsButton) { elements.mergeChannelsButton.disabled = state.channels.length < 2 || deleteMode || state.selectedChannelGroupId != null; elements.mergeChannelsButton.hidden = deleteMode; }
-    if (elements.addChannelButton) elements.addChannelButton.hidden = deleteMode;
-    if (elements.deleteChannelsButton) { elements.deleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length && !state.audioClips.length; elements.deleteChannelsButton.hidden = deleteMode; }
+    const mergeMode = isChannelMergeModeActive();
+    elements.addChannelButton.disabled = deleteMode || mergeMode;
+    if (elements.mergeChannelsButton) { elements.mergeChannelsButton.disabled = state.channels.length < 2 || deleteMode || state.selectedChannelGroupId != null; elements.mergeChannelsButton.hidden = deleteMode || mergeMode; }
+    if (elements.addChannelButton) elements.addChannelButton.hidden = deleteMode || mergeMode;
+    if (elements.deleteChannelsButton) { elements.deleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length && !state.audioClips.length; elements.deleteChannelsButton.hidden = deleteMode || mergeMode; }
+    // 채널 병합 uses the same × / ✓ toolbar actions as 채널 삭제.
+    if (elements.channelMergeModeCancelButton) elements.channelMergeModeCancelButton.hidden = !mergeMode;
+    if (elements.channelMergeModeApplyButton) elements.channelMergeModeApplyButton.hidden = !mergeMode;
+    syncInlineToolTitlebar();
     if (elements.channelDeleteModeCancelButton) elements.channelDeleteModeCancelButton.hidden = !deleteMode;
     if (elements.channelDeleteModeApplyButton) {
       elements.channelDeleteModeApplyButton.hidden = !deleteMode;
@@ -16231,6 +16414,8 @@
     syncWorkspaceTopbarLocks();
     if (state.history?.collapsed) setHistoryCollapsed(false);
     setSidebarTab('channels', { persist: false });
+    document.body.classList.add('rest-cleanup-mode-active');
+    if (!isNoteEditModeActive()) setSidebarEditModeTitlebar(false);
     elements.channelPanel?.classList.add('rest-cleanup-preview-active');
     if (elements.restCleanupPanel) elements.restCleanupPanel.hidden = false;
     invalidateRestCleanupAnalysisCache();
@@ -16244,6 +16429,8 @@
     if (!state.restCleanup.active && (!elements.restCleanupPanel || elements.restCleanupPanel.hidden)) return false;
     state.restCleanup.active = false;
     state.restCleanup.previewChanges = [];
+    document.body.classList.remove('rest-cleanup-mode-active');
+    if (!isNoteEditModeActive() && !isMeasureEditWorkspaceActive()) setSidebarEditModeTitlebar(false);
     syncWorkspaceTopbarLocks();
     if (elements.restCleanupPanel) elements.restCleanupPanel.hidden = true;
     elements.channelPanel?.classList.remove('rest-cleanup-preview-active');
@@ -18706,6 +18893,7 @@
     const active = isChannelMergeModeActive();
     document.body.classList.toggle("merge-mode-active", active);
     syncWorkspaceTopbarLocks();
+    syncInlineToolTitlebar();
     if (elements.channelMergeModeControls) elements.channelMergeModeControls.hidden = !active;
     const normalInstrument = elements.channelInstrumentSelect?.closest?.(".channel-instrument-control");
     const normalSummary = elements.infoCharCount?.closest?.(".channel-summary");
@@ -18718,6 +18906,9 @@
     });
     if (elements.channelMergeOverlapSlider) {
       elements.channelMergeOverlapSlider.value = String(Math.round(normalizeChannelMergeOverlapAmount(state.channelMerge.overlapAmount) * 100));
+    }
+    if (elements.channelMergeOverlapValue) {
+      elements.channelMergeOverlapValue.textContent = `${Math.round(normalizeChannelMergeOverlapAmount(state.channelMerge.overlapAmount) * 100)}%`;
     }
     if (elements.channelMergeModeApplyButton) {
       const targetId = String(state.channelMerge.targetChannelId);
@@ -26034,10 +26225,12 @@
 
   let audioOggExportBusy = false;
 
-  function collectProjectAudioExportNotes() {
+  function collectProjectAudioExportNotes(channelIds = null) {
     const tempoMap = createTempoTimeMap();
     const notes = [];
+    const allowed = channelIds ? new Set([...channelIds].map(String)) : null;
     for (const channel of state.channels || []) {
+      if (allowed && !allowed.has(String(channel.id))) continue;
       for (const note of channel.notes || []) {
         const fadedVolume = getTimelineFadedNoteVolume(note);
         const velocity = mmlVolumeToPlayerPlaybackVelocity(fadedVolume);
@@ -26101,7 +26294,13 @@
     return `${safeName}.ogg`;
   }
 
-  async function exportProjectAsAudioOgg() {
+  // Notes are attached to the OfflineAudioContext graph in short windows (suspend/resume) instead of
+  // all at once. Chrome processes every connected GainNode on each render quantum even before its
+  // source starts, so connecting a whole song up front made rendering cost grow with
+  // (note count × song length): a 3-minute, 15k-note song took over 10 minutes.
+  const AUDIO_EXPORT_SCHEDULE_WINDOW_SEC = 2;
+
+  async function exportProjectAsAudioOgg({ channelIds = null, onProgress = null } = {}) {
     if (audioOggExportBusy) return false;
     const exporter = window.MobibardAudioExport;
     if (!exporter?.renderOgg || !exporter?.renderAndDownloadOgg) {
@@ -26109,7 +26308,7 @@
       return false;
     }
 
-    const notes = collectProjectAudioExportNotes();
+    const notes = collectProjectAudioExportNotes(channelIds);
     if (!notes.length) {
       showToast(i18nText("audio.export_no_notes"));
       return false;
@@ -26134,7 +26333,10 @@
 
     audioOggExportBusy = true;
     if (elements.audioExportButton) elements.audioExportButton.disabled = true;
-    showToast(i18nText("audio.exporting_ogg"));
+    if (!onProgress) showToast(i18nText("audio.exporting_ogg"));
+    const report = (stage, fraction) => {
+      try { onProgress?.(stage, Math.max(0, Math.min(1, Number(fraction) || 0))); } catch {}
+    };
     try {
       await audioEngine.prepare();
       const autoGainScale = computePlaybackAutoGainScale(notes, { windowStart: 0, windowEnd: duration });
@@ -26146,30 +26348,52 @@
         // Larger encoder chunks reduce JS↔WASM call overhead while preserving
         // the same 44.1 kHz stereo/VBR output.
         chunkFrames: 131072,
+        onProgress: (stage, fraction) => {
+          // renderOgg reports encode progress; render progress comes from the suspend windows below.
+          if (stage === "encode") report("encode", fraction);
+        },
         render: async (context) => {
           const offlineEngine = configureOfflineEditorEngine(context, notes);
-          for (let index = 0; index < notes.length; index += 1) {
-            const note = notes[index];
-            offlineEngine.playNote(
-              note.pitch,
-              note.velocity,
-              0.01 + note.startSeconds,
-              Math.max(0.003, note.endSeconds - note.startSeconds),
-              {
-                program: clamp(Number(note.instrumentProgram) || 0, 0, 127),
-                bank: clamp(Number(note.instrumentBank) || 0, 0, 16383),
-                exactPreset: Boolean(note.instrumentExactPreset),
-                gainScale: autoGainScale,
-                mmlVolume: Number.isFinite(Number(note.volume)) ? Number(note.volume) : null,
-              },
-            );
-            if (index > 0 && index % 2048 === 0) await new Promise(resolve => window.setTimeout(resolve, 0));
+          let index = 0;
+          const playNotesStartingBefore = (limitSeconds) => {
+            while (index < notes.length && 0.01 + notes[index].startSeconds < limitSeconds) {
+              const note = notes[index];
+              offlineEngine.playNote(
+                note.pitch,
+                note.velocity,
+                0.01 + note.startSeconds,
+                Math.max(0.003, note.endSeconds - note.startSeconds),
+                {
+                  program: clamp(Number(note.instrumentProgram) || 0, 0, 127),
+                  bank: clamp(Number(note.instrumentBank) || 0, 0, 16383),
+                  exactPreset: Boolean(note.instrumentExactPreset),
+                  gainScale: autoGainScale,
+                  mmlVolume: Number.isFinite(Number(note.volume)) ? Number(note.volume) : null,
+                },
+              );
+              index += 1;
+            }
+          };
+          const lastStart = 0.01 + notes[notes.length - 1].startSeconds;
+          const renderEnd = Math.max(lastStart, duration);
+          const scheduleWindow = (fromSec, toSec) => playNotesStartingBefore(toSec);
+          if (typeof exporter.scheduleInWindows === "function") {
+            exporter.scheduleInWindows(context, {
+              durationSec: lastStart + 0.001,
+              windowSec: AUDIO_EXPORT_SCHEDULE_WINDOW_SEC,
+              schedule: scheduleWindow,
+              onProgress: (stage, fraction) => report("render", (fraction * lastStart) / renderEnd),
+            });
+          } else {
+            playNotesStartingBefore(Infinity);
           }
         },
       };
       // Render + encode completely in memory first. Only after the final OGG Blob
       // exists do we open the writable stream for the file chosen above.
+      report("render", 0);
       const result = await exporter.renderOgg(renderOptions);
+      report("encode", 1);
       const saved = await writeBlobToSaveTarget(result.blob, destination, fileName);
       if (!saved) return false;
       showToast(i18nText("audio.export_done"));
@@ -26185,6 +26409,34 @@
   }
 
   const MIDI_EXPORT_MELODIC_CHANNELS = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15]);
+  // The embedded MobiBard SoundFont numbers its 14 presets 0..13 (not GM). Exported MIDI must use GM
+  // programs so other players/DAWs pick the right instrument. Same table as the MBT format
+  // (plugins/formats/mbt) and inverse of plugins/common/default-instrument-map.js, so re-importing an
+  // exported file maps back to the same MobiBard presets. Presets 12/13 (BigDrum/Cymbals) export as
+  // GM drums on channel 10.
+  const MOBIBARD_PRESET_TO_GM_PROGRAM = Object.freeze([0, 71, 73, 46, 24, 15, 40, 13, 10, 25, 22, 53]);
+
+  function getMidiExportProgram(channel) {
+    const program = getChannelInstrumentProgram(channel);
+    const bank = getChannelInstrumentBank(channel);
+    if (isEditorUsingEmbeddedDefaultSoundBank() && bank === 0 && program >= 0 && program < MOBIBARD_PRESET_TO_GM_PROGRAM.length) {
+      return { program: MOBIBARD_PRESET_TO_GM_PROGRAM[program], bank: 0 };
+    }
+    return { program, bank };
+  }
+
+  function wholeMidiExportLaneBlock(lane) {
+    return {
+      signature: lane.signature,
+      isDrums: lane.isDrums,
+      program: lane.program,
+      bank: lane.bank,
+      names: lane.names.slice(),
+      notes: lane.notes.slice(),
+      startTick: lane.startTick,
+      endTick: lane.endTick,
+    };
+  }
 
   function midiExportSamePitchOverlap(leftNotes, rightNotes) {
     const byPitch = (notes) => {
@@ -26259,13 +26511,16 @@
     return lanes;
   }
 
-  function buildEditorMidiPacking(ppq = 480) {
+  function buildEditorMidiPacking(ppq = 480, channelIds = null) {
+    const allowed = channelIds ? new Set([...channelIds].map(String)) : null;
     const parts = state.channels.map((channel, channelIndex) => {
+      if (allowed && !allowed.has(String(channel.id))) return null;
       const isDrums = isChannelPercussionInstrument(channel);
-      const program = getChannelInstrumentProgram(channel);
-      const bank = getChannelInstrumentBank(channel);
-      const useFixedDefaultPercussionPitch = isEditorUsingEmbeddedDefaultSoundBank() && bank === 0 && (program === 12 || program === 13);
-      const fixedPercussionPitch = useFixedDefaultPercussionPitch ? (program === 12 ? 36 : 49) : null;
+      const editorProgram = getChannelInstrumentProgram(channel);
+      const editorBank = getChannelInstrumentBank(channel);
+      const { program, bank } = getMidiExportProgram(channel);
+      const useFixedDefaultPercussionPitch = isEditorUsingEmbeddedDefaultSoundBank() && editorBank === 0 && (editorProgram === 12 || editorProgram === 13);
+      const fixedPercussionPitch = useFixedDefaultPercussionPitch ? (editorProgram === 12 ? 36 : 49) : null;
       const notes = (Array.isArray(channel?.notes) ? channel.notes : []).map((note) => {
         const fadedVolume = getTimelineFadedNoteVolume(note);
         const fadedVelocity = getNotePlaybackVelocityForVolume(note, fadedVolume);
@@ -26329,7 +26584,13 @@
     // instrument reuse the same MIDI channel during the gap, then restores the
     // original program when that instrument returns. This is tighter than using
     // only each lane's first/last note range.
-    const activityBlocks = instrumentLanes.flatMap(splitMidiExportActivityBlocks);
+    // When every instrument lane fits in the 15 melodic channels, keep one MIDI channel per lane with
+    // a single program change (what DAWs and players expect). Only split at silent gaps and reuse
+    // channels with program changes when there are more lanes than channels.
+    const melodicInstrumentLanes = instrumentLanes.filter(lane => !lane.isDrums);
+    const activityBlocks = melodicInstrumentLanes.length <= MIDI_EXPORT_MELODIC_CHANNELS.length
+      ? [...melodicInstrumentLanes.map(wholeMidiExportLaneBlock), ...instrumentLanes.filter(lane => lane.isDrums).flatMap(splitMidiExportActivityBlocks)]
+      : instrumentLanes.flatMap(splitMidiExportActivityBlocks);
     const melodicLanes = packMidiExportActivityBlocks(activityBlocks.filter(block => !block.isDrums));
     const drumLanes = packMidiExportActivityBlocks(activityBlocks.filter(block => block.isDrums));
     const packedLanes = [...melodicLanes, ...drumLanes];
@@ -26391,7 +26652,214 @@
     };
   }
 
-  async function exportProjectAsMidi() {
+  // ---- File > MIDI 내보내기 / 오디오 내보내기: channel selection dialog (MML 내보내기 style) ----
+  const channelExportState = { mode: null, selectedIds: new Set(), busy: false };
+
+  function getChannelExportableChannels() {
+    return state.channels.filter((channel) => Array.isArray(channel.notes) && channel.notes.length > 0);
+  }
+
+  function renderChannelExportList() {
+    const list = elements.channelExportList;
+    if (!list) return;
+    list.replaceChildren();
+    const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
+    const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
+    const rendered = new Set();
+
+    const appendGroupRow = (group) => {
+      const members = getChannelGroupMembers(group);
+      const exportable = members.filter((channel) => channel.notes?.length);
+      const row = document.createElement("label");
+      row.className = "mml-export-group-row";
+      row.style.setProperty("--group-color", getChannelGroupColor(group, Math.max(0, state.channelGroups.indexOf(group)), "bright"));
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.dataset.channelExportGroupId = String(group.id);
+      checkbox.disabled = exportable.length === 0;
+      const info = document.createElement("span");
+      info.className = "mml-export-group-info";
+      const title = document.createElement("span");
+      title.className = "mml-export-group-title";
+      const folder = document.createElement("span");
+      folder.className = "mml-export-group-folder";
+      folder.setAttribute("aria-hidden", "true");
+      folder.textContent = "📂";
+      const name = document.createElement("strong");
+      name.textContent = group.name;
+      title.append(folder, name);
+      const detail = document.createElement("small");
+      detail.textContent = i18nText("export.group_detail", [exportable.length.toLocaleString(), members.length.toLocaleString()]);
+      info.append(title, detail);
+      row.append(checkbox, info);
+      checkbox.addEventListener("change", () => {
+        for (const member of exportable) {
+          if (checkbox.checked) channelExportState.selectedIds.add(String(member.id));
+          else channelExportState.selectedIds.delete(String(member.id));
+        }
+        updateChannelExportDialogState();
+      });
+      list.append(row);
+    };
+
+    const appendChannelRow = (channel, index, parentId = null) => {
+      const row = document.createElement("label");
+      row.className = `mml-export-channel-row${parentId != null ? " is-group-child" : ""}`;
+      row.style.setProperty("--channel-color", getChannelColor(channel, index));
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.dataset.channelExportChannelId = String(channel.id);
+      checkbox.disabled = !channel.notes?.length;
+      const info = document.createElement("span");
+      info.className = "mml-export-channel-info";
+      const name = document.createElement("strong");
+      name.textContent = channel.name || `Ch${index + 1}`;
+      const detail = document.createElement("small");
+      detail.textContent = channel.notes?.length
+        ? i18nText("export.channel_detail", [String(channel.instrument || ""), channel.notes.length.toLocaleString()])
+        : i18nText("export.empty_channel");
+      info.append(name, detail);
+      row.append(checkbox, info);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) channelExportState.selectedIds.add(String(channel.id));
+        else channelExportState.selectedIds.delete(String(channel.id));
+        updateChannelExportDialogState();
+      });
+      list.append(row);
+    };
+
+    for (const entry of getItemTreeLayout()) {
+      if (entry.kind === "group") {
+        const group = groupById.get(String(entry.id));
+        if (group) appendGroupRow(group);
+        continue;
+      }
+      if (entry.kind !== "channel") continue;
+      const found = channelById.get(String(entry.id));
+      if (!found) continue;
+      rendered.add(String(entry.id));
+      appendChannelRow(found.channel, found.index, entry.parentId);
+    }
+    for (const [id, found] of channelById) {
+      if (!rendered.has(id)) appendChannelRow(found.channel, found.index, found.channel.groupId);
+    }
+
+    installLeftDragCheckboxSelection(list, {
+      deferChange: true,
+      onVisualChange: (checkbox) => {
+        const id = checkbox.dataset.channelExportChannelId;
+        if (!id) return;
+        if (checkbox.checked) channelExportState.selectedIds.add(id);
+        else channelExportState.selectedIds.delete(id);
+        checkbox.closest(".mml-export-channel-row")?.classList.toggle("selected", checkbox.checked);
+      },
+      onCommit: updateChannelExportDialogState,
+    });
+  }
+
+  function updateChannelExportDialogState() {
+    const list = elements.channelExportList;
+    const selectable = new Set(getChannelExportableChannels().map((channel) => String(channel.id)));
+    for (const id of [...channelExportState.selectedIds]) if (!selectable.has(id)) channelExportState.selectedIds.delete(id);
+    list?.querySelectorAll("input[data-channel-export-channel-id]").forEach((checkbox) => {
+      checkbox.checked = channelExportState.selectedIds.has(checkbox.dataset.channelExportChannelId);
+      checkbox.closest(".mml-export-channel-row")?.classList.toggle("selected", checkbox.checked);
+    });
+    list?.querySelectorAll("input[data-channel-export-group-id]").forEach((checkbox) => {
+      const members = getChannelGroupMembers(checkbox.dataset.channelExportGroupId).filter((channel) => channel.notes?.length);
+      const count = members.filter((channel) => channelExportState.selectedIds.has(String(channel.id))).length;
+      checkbox.checked = members.length > 0 && count === members.length;
+      checkbox.indeterminate = count > 0 && count < members.length;
+    });
+    const selectedChannels = state.channels.filter((channel) => channelExportState.selectedIds.has(String(channel.id)));
+    const noteCount = selectedChannels.reduce((sum, channel) => sum + (channel.notes?.length || 0), 0);
+    if (elements.channelExportSummary) {
+      elements.channelExportSummary.textContent = selectedChannels.length
+        ? i18nText("export.summary", [selectedChannels.length.toLocaleString(), noteCount.toLocaleString()])
+        : i18nText("channel.no_selected");
+    }
+    const busy = channelExportState.busy;
+    if (elements.channelExportApplyButton) elements.channelExportApplyButton.disabled = busy || selectedChannels.length === 0;
+    for (const button of [elements.channelExportSelectAllButton, elements.channelExportClearAllButton]) {
+      if (button) button.disabled = busy;
+    }
+    if (elements.channelExportCancelButton) elements.channelExportCancelButton.disabled = busy;
+    if (elements.channelExportCloseButton) elements.channelExportCloseButton.disabled = busy;
+    // While audio renders the selection is frozen; the list is re-rendered afterwards.
+    if (busy) list?.querySelectorAll("input[type=checkbox]").forEach((checkbox) => { checkbox.disabled = true; });
+  }
+
+  function setChannelExportProgress(text = "", fraction = null) {
+    if (!elements.channelExportProgress) return;
+    elements.channelExportProgress.hidden = !text;
+    if (elements.channelExportProgressText) elements.channelExportProgressText.textContent = String(text || "");
+    if (elements.channelExportProgressBar) {
+      if (fraction == null) elements.channelExportProgressBar.removeAttribute("value");
+      else elements.channelExportProgressBar.value = Math.max(0, Math.min(1, fraction));
+    }
+  }
+
+  function openChannelExportDialog(mode) {
+    closeFileMenu();
+    closeEditMenu();
+    closeContextMenu();
+    if (channelExportState.busy) return false;
+    const exportable = getChannelExportableChannels();
+    if (!exportable.length) {
+      showToast(i18nText(mode === "audio" ? "audio.export_no_notes" : "midi.export_no_notes"));
+      return false;
+    }
+    channelExportState.mode = mode === "audio" ? "audio" : "midi";
+    // Full-song exports usually want everything: start with all non-empty channels selected.
+    channelExportState.selectedIds = new Set(exportable.map((channel) => String(channel.id)));
+    if (elements.channelExportTitle) elements.channelExportTitle.textContent = i18nText(channelExportState.mode === "audio" ? "audio.export_ogg" : "midi.export");
+    setChannelExportProgress("");
+    renderChannelExportList();
+    updateChannelExportDialogState();
+    if (elements.channelExportBackdrop) elements.channelExportBackdrop.hidden = false;
+    return true;
+  }
+
+  function closeChannelExportDialog() {
+    if (channelExportState.busy) return false;
+    if (elements.channelExportBackdrop) elements.channelExportBackdrop.hidden = true;
+    elements.channelExportList?.replaceChildren();
+    setChannelExportProgress("");
+    return true;
+  }
+
+  async function applyChannelExport() {
+    if (channelExportState.busy) return false;
+    const channelIds = new Set(channelExportState.selectedIds);
+    if (!channelIds.size) return false;
+    if (channelExportState.mode === "midi") {
+      const ok = await exportProjectAsMidi({ channelIds });
+      if (ok) closeChannelExportDialog();
+      return ok;
+    }
+    channelExportState.busy = true;
+    updateChannelExportDialogState();
+    setChannelExportProgress(i18nText("export.audio_preparing"), null);
+    let ok = false;
+    try {
+      ok = await exportProjectAsAudioOgg({
+        channelIds,
+        onProgress: (stage, fraction) => {
+          const percent = Math.round(fraction * 100);
+          setChannelExportProgress(i18nText(stage === "encode" ? "export.audio_encoding" : "export.audio_rendering", [percent]), stage === "encode" ? 0.85 + fraction * 0.15 : fraction * 0.85);
+        },
+      });
+    } finally {
+      channelExportState.busy = false;
+      setChannelExportProgress("");
+      renderChannelExportList();
+      updateChannelExportDialogState();
+    }
+    if (ok) closeChannelExportDialog();
+    return ok;
+  }
+
+  async function exportProjectAsMidi({ channelIds = null } = {}) {
     const buildMidi = window.MabiMusicFormats?.buildMidi;
     if (typeof buildMidi !== "function") {
       showToast(i18nText("midi.export_module_unavailable"));
@@ -26409,7 +26877,7 @@
 
     let packing;
     try {
-      packing = buildEditorMidiPacking(ppq);
+      packing = buildEditorMidiPacking(ppq, channelIds);
       if (!packing.noteCount) {
         showToast(i18nText("midi.export_no_notes"));
         return false;
@@ -27924,8 +28392,37 @@
     return true;
   }
 
+  // 쉼표 정리 / 파트 자동 설정 use the same tab-row title bar as 마디 편집.
+  function getInlineToolTitlebar() {
+    if (state.restCleanup?.active) return { title: i18nText("rest_cleanup.title"), meta: "" };
+    if (state.autoPart?.active) return { title: i18nText("timeline.auto_part"), meta: "" };
+    if (state.channelMerge?.active) {
+      const target = getChannelById(state.channelMerge.targetChannelId);
+      return { title: i18nText("channel.merge"), meta: target ? String(target.name || "") : "" };
+    }
+    if (state.channelDeleteMode?.active) {
+      const count = (state.channelDeleteMode.selectedChannelIds?.size || 0) + (state.channelDeleteMode.selectedAudioIds?.size || 0);
+      return { title: i18nText("channel.delete_mode_title"), meta: i18nText("channel.delete_summary_count", [count]) };
+    }
+    return null;
+  }
+
+  // Keeps the tab-row title in sync for the inline tools that do not own it explicitly.
+  function syncInlineToolTitlebar() {
+    if (isNoteEditModeActive() || isMeasureEditWorkspaceActive()) return;
+    setSidebarEditModeTitlebar(false);
+  }
+
   function setSidebarEditModeTitlebar(active, title = "", meta = "") {
     if (!elements.editModeTitlebar) return;
+    if (!active) {
+      const fallback = getInlineToolTitlebar();
+      if (fallback) {
+        active = true;
+        title = fallback.title;
+        meta = fallback.meta;
+      }
+    }
     elements.editModeTitlebar.hidden = !active;
     if (elements.editModeTitlebarTitle) elements.editModeTitlebarTitle.textContent = active ? String(title || "") : "";
     if (elements.editModeTitlebarMeta) {
@@ -30438,8 +30935,22 @@
     elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openChannelVolumeDialog(); });
     elements.editAutoPartButton?.addEventListener("click", () => { closeEditMenu(); openAutoPartDialog(); });
     elements.fileExportButton.addEventListener("click", () => { closeFileMenu(); exportCurrentContextAsMml(); });
-    elements.midiExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsMidi(); });
-    elements.audioExportButton?.addEventListener("click", () => { closeFileMenu(); void exportProjectAsAudioOgg(); });
+    elements.midiExportButton?.addEventListener("click", () => { closeFileMenu(); openChannelExportDialog("midi"); });
+    elements.audioExportButton?.addEventListener("click", () => { closeFileMenu(); openChannelExportDialog("audio"); });
+    elements.channelExportCloseButton?.addEventListener("click", closeChannelExportDialog);
+    elements.channelExportCancelButton?.addEventListener("click", closeChannelExportDialog);
+    elements.channelExportApplyButton?.addEventListener("click", () => { void applyChannelExport(); });
+    elements.channelExportSelectAllButton?.addEventListener("click", () => {
+      channelExportState.selectedIds = new Set(getChannelExportableChannels().map((channel) => String(channel.id)));
+      updateChannelExportDialogState();
+    });
+    elements.channelExportClearAllButton?.addEventListener("click", () => {
+      channelExportState.selectedIds.clear();
+      updateChannelExportDialogState();
+    });
+    elements.channelExportBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.channelExportBackdrop) closeChannelExportDialog();
+    });
     elements.supportedFilesMenuButton?.addEventListener("click", closeFileMenu);
     elements.newButton.addEventListener("click", () => {
       closeFileMenu();
@@ -31112,7 +31623,9 @@
       button.addEventListener("click", () => setChannelMergeModeRole(button.dataset.mergeModeRole));
     });
     elements.channelMergeOverlapSlider?.addEventListener("input", () => {
-      setChannelMergeOverlapAmount(Number(elements.channelMergeOverlapSlider.value) / 100);
+      const percent = Number(elements.channelMergeOverlapSlider.value);
+      if (elements.channelMergeOverlapValue) elements.channelMergeOverlapValue.textContent = `${Math.round(percent)}%`;
+      setChannelMergeOverlapAmount(percent / 100);
     });
     elements.channelMergeModeCancelButton?.addEventListener("click", () => cancelChannelMergeMode());
     elements.channelMergeModeApplyButton?.addEventListener("click", applyChannelMergeMode);
@@ -31262,7 +31775,7 @@
     elements.measureEditApplyButton?.addEventListener("click", applyMeasureEditWorkspace);
     for (const input of [elements.autoPartCharsInput, elements.autoPartSearchRangeInput]) {
       input?.addEventListener("input", invalidateAutoPartSummary);
-      input?.addEventListener("change", updateAutoPartSummary);
+      input?.addEventListener("change", () => updateAutoPartSummary({ debounceMs: 250 }));
       input?.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
@@ -31379,6 +31892,7 @@
           closeZoomMenu();
           closePlaybackRateMenu();
           closeMmlImportDialog();
+          closeChannelExportDialog();
           closeMidiImportDialog();
           closeMidiTransferDialog();
           closeNoteVolumeDialog();
