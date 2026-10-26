@@ -136,7 +136,8 @@ async function transcribe(id, wave, options) {
   let tempoMap = null;
   if (options.tempo !== false && notes.length) {
     progress("tempo", 0, 0);
-    const fixed = Number(options.tempo);
+    // Only an explicit number fixes the BPM; true / undefined mean automatic (Number(true) would be 1 BPM).
+    const fixed = typeof options.tempo === "number" ? options.tempo : NaN;
     const cfg = { ...(meta.tempo || {}), mode: Number.isFinite(fixed) && fixed > 0 ? fixed : "auto" };
     try {
       tempoMap = tempo.tempoMap(notes, seconds, cfg);
