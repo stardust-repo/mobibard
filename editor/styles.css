@@ -2099,6 +2099,7 @@ button {
   white-space: nowrap;
 }
 .tempo-simplify-option input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.tempo-recalc-option { padding: 0 16px 8px; white-space: normal; }
 .tempo-simplify-threshold-field {
   grid-template-columns: 62px auto;
   gap: 7px;
@@ -14749,4 +14750,23 @@ body.merge-mode-active #channelModeSelectToolbar button:not(:disabled) {
   padding: 0 !important;
   font-size: 13px !important;
   justify-self: end;
+}
+
+/* ===== 2026-10-26 ===== */
+/* MML/MIDI/오디오 내보내기 · 채널 볼륨 수정: channel pickers use the measure-edit inline tree
+   template (toolbar "채널 선택 n/m" + channel-tree rows); give them the dialog's inner gutter. */
+.mml-export-channel-pane > .inline-channel-select-toolbar,
+.channel-export-body > .inline-channel-select-toolbar,
+.channel-volume-scope-pane > .inline-channel-select-toolbar {
+  padding: 6px 10px 2px;
+}
+.inline-channel-select-list.dialog-inline-channel-list {
+  min-height: 0;
+  padding: 2px 10px 8px !important;
+}
+.inline-channel-select-list.dialog-inline-channel-list.is-locked { opacity: .6; }
+/* 채널 삭제: group ○/✓ toggle had 27px width vs 22px for channels, so the marks did not line up. */
+body.channel-delete-mode-active #channelTabs .channel-tree-group-delete {
+  width: 22px !important;
+  min-width: 22px !important;
 }

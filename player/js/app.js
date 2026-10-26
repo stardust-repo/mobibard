@@ -1,6 +1,15 @@
 (() => {
   "use strict";
 
+  // Classic (space-taking) scrollbar width for popup padding compensation; 0 with overlay scrollbars.
+  try {
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:absolute;top:-9999px;left:-9999px;width:100px;height:100px;overflow:scroll;visibility:hidden";
+    (document.body || document.documentElement).append(probe);
+    document.documentElement.style.setProperty("--mb-scrollbar-width", `${Math.max(0, probe.offsetWidth - probe.clientWidth)}px`);
+    probe.remove();
+  } catch (_) {}
+
   const $ = id => document.getElementById(id);
   const el = (tag, className = "", attrs = {}) => {
     const node = document.createElement(tag);
@@ -1094,15 +1103,22 @@
   function normalizeTempoOverride(value = {}) {
     const kind = value.kind === "start" ? "start" : "explicit";
     const bpm = normalizeOverrideBpm(value.bpm);
+    // Recalculating edits (노트 재계산) also rewrite note lengths, so each one is kept as its own
+    // step (unique key) and replayed in order with the BPM it changed from.
+    const recalc = Boolean(value.recalc) && Number.isFinite(Number(value.fromBpm));
+    const recalcFields = recalc
+      ? { recalc: true, fromBpm: normalizeOverrideBpm(value.fromBpm), recalcId: String(value.recalcId || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`) }
+      : {};
     if (kind === "start") {
       return {
-        key: "start",
+        key: recalc ? `start:r${recalcFields.recalcId}` : "start",
         kind,
         bpm,
         part: -1,
         beat: 0,
         partOrdinal: -1,
-        globalOrdinal: -1
+        globalOrdinal: -1,
+        ...recalcFields
       };
     }
     const part = Number.isInteger(Number(value.part)) ? Math.max(0, Math.min(5, Number(value.part))) : 0;
@@ -1111,22 +1127,33 @@
     const globalOrdinal = Number.isInteger(Number(value.globalOrdinal)) ? Math.max(-1, Number(value.globalOrdinal)) : -1;
     const ordinalKey = partOrdinal >= 0 ? `p${partOrdinal}` : `g${globalOrdinal}`;
     return {
-      key: `part${part}:beat${beat.toFixed(6)}:${ordinalKey}`,
+      key: `part${part}:beat${beat.toFixed(6)}:${ordinalKey}${recalc ? `:r${recalcFields.recalcId}` : ""}`,
       kind,
       bpm,
       part,
       beat,
       partOrdinal,
-      globalOrdinal
+      globalOrdinal,
+      ...recalcFields
     };
   }
 
   function normalizeTempoOverrides(values = []) {
-    const unique = new Map();
-    for (const raw of Array.isArray(values) ? values : []) {
-      const normalized = normalizeTempoOverride(raw);
-      unique.set(normalized.key, normalized);
+    const list = (Array.isArray(values) ? values : []).map(raw => normalizeTempoOverride(raw));
+    // Once a recalculating edit exists the edits depend on each other (later positions moved), so
+    // keep them in the order they were made; a plain edit only replaces an identical one before it
+    // when no recalculating edit lies in between.
+    if (list.some(item => item.recalc)) {
+      const ordered = [];
+      for (const item of list) {
+        const last = ordered[ordered.length - 1];
+        if (last && !last.recalc && !item.recalc && last.key === item.key) ordered[ordered.length - 1] = item;
+        else ordered.push(item);
+      }
+      return ordered;
     }
+    const unique = new Map();
+    for (const normalized of list) unique.set(normalized.key, normalized);
     return Array.from(unique.values());
   }
 
@@ -1165,7 +1192,7 @@
     const bpm = normalizeOverrideBpm(detail.bpm);
     const beat = normalizeOverrideBeat(marker.beat);
     if (!marker.explicit && beat <= TEMPO_OVERRIDE_BEAT_EPSILON) {
-      return normalizeTempoOverride({ kind: "start", bpm });
+      return normalizeTempoOverride({ kind: "start", bpm, recalc: Boolean(detail.recalc), fromBpm: detail.beforeBpm });
     }
 
     const part = Number.isInteger(Number(marker.part)) ? Math.max(0, Math.min(5, Number(marker.part))) : 0;
@@ -1182,7 +1209,9 @@
       part,
       beat,
       partOrdinal: target?.partOrdinal ?? -1,
-      globalOrdinal: target?.globalOrdinal ?? -1
+      globalOrdinal: target?.globalOrdinal ?? -1,
+      recalc: Boolean(detail.recalc),
+      fromBpm: detail.beforeBpm
     });
   }
 
@@ -1210,10 +1239,49 @@
     return null;
   }
 
+  // Replays edits one by one when a recalculating edit is involved: every step sees the text the
+  // user saw when making that edit, and recalculating steps rewrite their span again.
+  function applyTempoOverridesSequentially(mml, overrides) {
+    let output = String(mml || "");
+    const rescale = window.MabiMml?.rescaleMmlTempoSegment;
+    for (const override of overrides) {
+      let startBeat = 0;
+      if (override.kind === "start") {
+        const { parsed, events } = parseTempoCommandData(output);
+        const effectiveStart = (parsed?.tempos || []).find(tempo =>
+          Boolean(tempo?.explicit) && Math.abs(Number(tempo?.beat) || 0) <= TEMPO_OVERRIDE_BEAT_EPSILON
+        );
+        const candidate = effectiveStart
+          ? events.find(tempo => tempo.globalSourceStart === Number(effectiveStart.globalSourceStart))
+          : null;
+        if (candidate) {
+          output = `${output.slice(0, candidate.globalSourceStart)}T${override.bpm}${output.slice(candidate.globalSourceEnd)}`;
+        } else {
+          const header = output.match(/^\s*MML\s*@/i);
+          if (header) output = `${output.slice(0, header[0].length)}T${override.bpm}${output.slice(header[0].length)}`;
+          else output = `MML@T${override.bpm}${output.replace(/^\s*MML\s*@/i, "").replace(/;\s*$/, "")};`;
+        }
+      } else {
+        const { events } = parseTempoCommandData(output);
+        const candidate = findTempoOverrideTarget(override, events, new Set());
+        if (!candidate) continue;
+        output = `${output.slice(0, candidate.globalSourceStart)}T${override.bpm}${output.slice(candidate.globalSourceEnd)}`;
+        startBeat = Number(candidate.beat) || 0;
+      }
+      if (override.recalc && typeof rescale === "function") {
+        try {
+          output = rescale(output, { startBeat, fromBpm: override.fromBpm, toBpm: override.bpm }).mml;
+        } catch (_) {}
+      }
+    }
+    return output;
+  }
+
   function applyTempoOverridesToMml(mml, values = state.tempoOverrides) {
     let output = String(mml || "");
     const overrides = normalizeTempoOverrides(values);
     if (!output || !overrides.length) return output;
+    if (overrides.some(override => override.recalc)) return applyTempoOverridesSequentially(output, overrides);
 
     const { parsed, events } = parseTempoCommandData(output);
     const replacements = new Map();
@@ -4398,6 +4466,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const tempoEditBpm = $("tempoEditBpm");
   const tempoEditApply = $("tempoEditApply");
   const tempoEditCancel = $("tempoEditCancel");
+  const tempoEditRecalc = $("tempoEditRecalc");
   const pianoRoll = $("pianoRoll");
   const pianoRollCanvas = $("pianoRollCanvas");
   const pianoRollEmpty = $("pianoRollEmpty");
@@ -4867,6 +4936,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     tempoEditCancel?.addEventListener("click", () => tempoEditDialog?.close());
     tempoEditBpm?.addEventListener("change", normalizeTempoEditBpmInput);
     tempoEditBpm?.addEventListener("blur", normalizeTempoEditBpmInput);
+    tempoEditBpm?.addEventListener("input", syncTempoEditApplyState);
     tempoEditDialog?.addEventListener("close", () => {
       selectedTempoMarker = null;
       if (!tempoEditSuppressCloseResume) resumePlaybackAfterTempoEdit();
@@ -11625,6 +11695,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const bpm = normalizeTempoBpm(marker.bpm);
     selectedTempoMarker = { ...marker, bpm };
     if (tempoEditBpm) tempoEditBpm.value = String(bpm);
+    if (tempoEditRecalc) tempoEditRecalc.checked = false;
+    syncTempoEditApplyState();
     if (tempoEditContext) {
       const part = Number.isInteger(marker.part) && marker.part >= 0 ? PART_LABELS[marker.part] : i18nText("tempo.default");
       tempoEditContext.textContent = i18nText("tempo.edit_context", [formatTime(Math.max(0, Number(marker.time) || 0)), bpm, part]);
@@ -11664,6 +11736,15 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   function normalizeTempoEditBpmInput() {
     if (!tempoEditBpm) return;
     tempoEditBpm.value = String(normalizeTempoBpm(tempoEditBpm.value));
+    syncTempoEditApplyState();
+  }
+
+  // The update button stays disabled while the value equals the marker's current tempo.
+  function syncTempoEditApplyState() {
+    if (!tempoEditApply) return;
+    const raw = String(tempoEditBpm?.value ?? "").trim();
+    const current = Number(selectedTempoMarker?.bpm);
+    tempoEditApply.disabled = Boolean(selectedTempoMarker) && raw !== "" && Number(raw) === current;
   }
 
   function normalizeTempoBpm(value) {
@@ -11678,19 +11759,21 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       return;
     }
     normalizeTempoEditBpmInput();
+    if (tempoEditApply?.disabled) return;
     const bpm = normalizeTempoBpm(tempoEditBpm?.value);
     const marker = selectedTempoMarker;
+    const recalc = Boolean(tempoEditRecalc?.checked);
     tempoEditSuppressCloseResume = true;
     tempoEditDialog?.close();
     try {
-      applyTempoEdit(bpm, marker);
+      applyTempoEdit(bpm, marker, { recalc });
     } finally {
       tempoEditSuppressCloseResume = false;
       resumePlaybackAfterTempoEdit();
     }
   }
 
-  function applyTempoEdit(value, marker) {
+  function applyTempoEdit(value, marker, { recalc = false } = {}) {
     const bpm = normalizeTempoBpm(value);
     const beforeBpm = normalizeTempoBpm(marker?.bpm);
     if (bpm === beforeBpm) {
@@ -11701,13 +11784,24 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     stopPlayback(false);
     try {
       const source = normalizeMmlForDisplay(mainMml?.value || "");
-      const updated = replaceTempoMarkerCommand(source, marker, bpm);
+      let updated = replaceTempoMarkerCommand(source, marker, bpm);
+      // "노트 재계산": rescale the note lengths of this tempo span so they keep their real length.
+      let recalcResult = null;
+      if (recalc && typeof window.MabiMml?.rescaleMmlTempoSegment === "function") {
+        recalcResult = window.MabiMml.rescaleMmlTempoSegment(updated, {
+          startBeat: Number(marker?.beat) || 0,
+          fromBpm: beforeBpm,
+          toBpm: bpm
+        });
+        updated = recalcResult.mml;
+      }
       setMainMml(updated);
       try {
         window.dispatchEvent(new CustomEvent("mobibard:tempo-edit-committed", {
           detail: {
             bpm,
             beforeBpm,
+            recalc: Boolean(recalcResult),
             sourceBefore: source,
             marker: {
               beat: Number(marker?.beat) || 0,
@@ -11720,10 +11814,30 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         }));
       } catch (_) {}
       currentOffset = 0;
-      showToast([i18nText("tempo.edit"), i18nText("tempo.changed", [formatTime(Math.max(0, Number(marker?.time) || 0)), beforeBpm, bpm])].filter(Boolean).join(": "), "info");
+      if (recalcResult) {
+        showToast(formatTempoRecalcToast(beforeBpm, bpm, recalcResult), "info");
+      } else {
+        showToast([i18nText("tempo.edit"), i18nText("tempo.changed", [formatTime(Math.max(0, Number(marker?.time) || 0)), beforeBpm, bpm])].filter(Boolean).join(": "), "info");
+      }
     } catch (err) {
       showToast([i18nText("tempo.edit_2"), shortError(err)].filter(Boolean).join(": "), "error");
     }
+  }
+
+  function formatTempoRecalcToast(beforeBpm, bpm, result) {
+    const parts = [
+      i18nText("tempo.recalc_change", [beforeBpm, bpm]),
+      i18nText("tempo.recalc_count", [Number(result?.changedNotes) || 0])
+    ];
+    const delta = Number(result?.delta) || 0;
+    if (Number.isFinite(result?.endBeat) && Math.abs(delta) > 1e-7) {
+      const beats = Number(delta.toFixed(4));
+      parts.push(i18nText("tempo.recalc_shift", [`${beats > 0 ? "+" : ""}${beats}`]));
+    }
+    if (Number.isFinite(result?.maxErrorMs)) {
+      parts.push(i18nText("tempo.recalc_error", [result.maxErrorMs < 1 ? "<1" : String(Math.round(result.maxErrorMs))]));
+    }
+    return parts.join(" · ");
   }
 
   function replaceTempoMarkerCommand(source, marker, bpm) {

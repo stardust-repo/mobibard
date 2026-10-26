@@ -633,7 +633,136 @@ function renderApproxNumericToken(core, targetUnits, isRest) {
 }
 
 
+// "노트 재계산" for a tempo change done directly in MML text (Player).
+// `text` already carries the new tempo. The span [startBeat, next tempo) is rescaled by
+// toBpm / fromBpm so the notes keep (about) the same real length; everything after the span
+// moves with it because each part is sequential. Only the length tokens inside the span are
+// rewritten (in place, the rest of the text is untouched). Positions are rounded to 1/16 beat
+// relative to the span start; leftover rendering error is carried to the next token of the part.
+function rescaleMmlTempoSegment(text, options = {}) {
+  const source = String(text || "");
+  const fromBpm = Number(options.fromBpm);
+  const toBpm = Number(options.toBpm);
+  const start = Math.max(0, Number(options.startBeat) || 0);
+  const result = { mml: source, changed: false, changedNotes: 0, delta: 0, endBeat: Infinity, maxErrorMs: null };
+  if (!(fromBpm > 0) || !(toBpm > 0) || Math.abs(fromBpm - toBpm) < EPS || !source.trim()) return result;
+
+  const unit = 1 / 16;
+  const ratio = toBpm / fromBpm;
+  const before = parseMabinogiMml(source);
+  const next = before.tempos.find(tempo => tempo.beat > start + 1e-7);
+  const end = next ? next.beat : Infinity;
+  const scale = length => Math.round((length * ratio) / unit) * unit;
+  const delta = Number.isFinite(end) ? scale(end - start) - (end - start) : 0;
+  const map = beat => {
+    if (beat <= start + 1e-9) return beat;
+    if (beat < end - 1e-9) return start + scale(beat - start);
+    return beat + delta;
+  };
+  const UNITS_PER_BEAT = APPROX_WHOLE_UNITS / 4;
+
+  const parts = splitMmlPartsDetailed(source);
+  const edits = [];
+  let changedNotes = 0;
+  for (const part of parts) {
+    const s = part.text;
+    let i = 0;
+    let beat = 0;
+    let defaultBeats = 1;
+    let defaultText = "L4";
+    let carry = 0;
+    const readNumber = () => { const from = i; while (i < s.length && /\d/.test(s[i])) i++; return i > from ? Number(s.slice(from, i)) : null; };
+    const readDots = base => { let dur = base, add = base / 2; while (s[i] === ".") { dur += add; add /= 2; i++; } return dur; };
+    while (i < s.length) {
+      const tokenStart = i;
+      const ch = s[i].toLowerCase();
+      let token = null;
+      if (ch in NOTE_BASE || ch === "r") {
+        i++;
+        if (ch !== "r" && (s[i] === "+" || s[i] === "#" || s[i] === "-")) i++;
+        const core = s.slice(tokenStart, i);
+        const n = readNumber();
+        const dur = n == null ? readDots(defaultBeats) : (n > 0 ? readDots(4 / n) : 0);
+        token = { kind: "ordinary", core, rest: ch === "r", dur };
+      } else if (ch === "n") {
+        i++;
+        const num = readNumber();
+        const core = s.slice(tokenStart, i);
+        const dur = readDots(defaultBeats);
+        token = { kind: "numeric", core, rest: num === 0, dur };
+      } else if (ch === "l") {
+        i++;
+        const n = readNumber();
+        if (n != null && n > 0) {
+          defaultBeats = readDots(4 / n);
+          defaultText = s.slice(tokenStart, i);
+        }
+        continue;
+      } else if (ch === "t" || ch === "o" || ch === "v") {
+        i++;
+        readNumber();
+        continue;
+      } else {
+        i++;
+        continue;
+      }
+      const tokenEnd = i;
+      const oldStart = beat;
+      const oldEnd = beat + token.dur;
+      beat = oldEnd;
+      if (oldEnd <= start + 1e-9 || oldStart >= end - 1e-9) {
+        if (oldStart >= end - 1e-9) carry = 0;
+        continue;
+      }
+      const ideal = (map(oldEnd) - map(oldStart)) * UNITS_PER_BEAT;
+      const oldUnits = token.dur * UNITS_PER_BEAT;
+      if (Math.abs(ideal + carry - oldUnits) < 1e-6) { carry += ideal - oldUnits; continue; }
+      const rendered = token.kind === "ordinary"
+        ? renderApproxOrdinaryToken(token.core, Math.max(1, ideal + carry), token.rest)
+        : renderApproxNumericToken(token.core, Math.max(1, ideal + carry), token.rest);
+      carry += ideal - rendered.units;
+      // Numeric notes change the default length to get theirs; put the part's default back.
+      const textOut = token.kind === "numeric" && !token.rest ? `${rendered.text}${defaultText}` : rendered.text;
+      edits.push({ start: part.sourceStart + tokenStart, end: part.sourceStart + tokenEnd, text: textOut });
+      if (!token.rest) changedNotes += 1;
+    }
+  }
+  if (!edits.length) return { ...result, delta, endBeat: end };
+
+  let out = source;
+  for (const edit of edits.sort((a, b) => b.start - a.start)) {
+    out = `${out.slice(0, edit.start)}${edit.text}${out.slice(edit.end)}`;
+  }
+
+  // Largest timing difference of any note start/end against the old timing (old tempo map =
+  // the input map with the edited tempo set back to fromBpm).
+  let maxErrorMs = null;
+  try {
+    const after = parseMabinogiMml(out);
+    const oldMap = before.tempos.map(tempo => ({ ...tempo }));
+    let editedIndex = -1;
+    oldMap.forEach((tempo, index) => { if (tempo.beat <= start + 1e-7) editedIndex = index; });
+    if (editedIndex >= 0) oldMap[editedIndex].bpm = fromBpm;
+    maxErrorMs = 0;
+    before.parts.forEach((part, partIndex) => {
+      const nextNotes = after.parts[partIndex]?.notes || [];
+      if (nextNotes.length !== part.notes.length) { maxErrorMs = null; return; }
+      part.notes.forEach((note, noteIndex) => {
+        if (maxErrorMs == null) return;
+        const moved = nextNotes[noteIndex];
+        const startError = Math.abs(beatToSeconds(note.beat, oldMap) - beatToSeconds(moved.beat, after.tempos));
+        const endError = Math.abs(beatToSeconds(note.beat + note.duration, oldMap) - beatToSeconds(moved.beat + moved.duration, after.tempos));
+        maxErrorMs = Math.max(maxErrorMs, startError * 1000, endError * 1000);
+      });
+    });
+  } catch (_) {
+    maxErrorMs = null;
+  }
+  return { mml: out, changed: out !== source, changedNotes, delta, endBeat: end, maxErrorMs };
+}
 
 
-  window.MabiMml = Object.freeze({ version: "5.1.1", parseMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, beatToSeconds, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths });
+
+
+  window.MabiMml = Object.freeze({ version: "5.1.2", parseMabinogiMml, rescaleMmlTempoSegment, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, beatToSeconds, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths });
 })();

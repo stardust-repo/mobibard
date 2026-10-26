@@ -331,16 +331,16 @@
       .mabi-supported-files-button::before{content:"";width:15px;height:15px;background:currentColor;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm0 0v6h6M8 13h8m-8 4h8'/%3E%3C/svg%3E") center/contain no-repeat}
       .mabi-supported-files-backdrop{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;padding:18px;background:rgba(9,13,20,.56);backdrop-filter:blur(5px)}
       .mabi-supported-files-backdrop[hidden]{display:none!important}
-      .mabi-supported-files-dialog{width:min(720px,100%);max-height:min(760px,calc(100dvh - 36px));overflow:auto;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:20px;background:var(--surface,#fff);color:var(--text,#1d2430);box-shadow:0 24px 80px rgba(0,0,0,.28);padding:0}
+      .mabi-supported-files-dialog{display:flex;flex-direction:column;width:min(720px,100%);max-height:min(760px,calc(100dvh - 36px));overflow:hidden;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:20px;background:var(--surface,#fff);color:var(--text,#1d2430);box-shadow:0 24px 80px rgba(0,0,0,.28);padding:0}
       [data-theme="dark"] .mabi-supported-files-dialog{background:var(--surface,#20242c);color:var(--text,#edf0f4)}
-      .mabi-supported-files-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid color-mix(in srgb,currentColor 14%,transparent);background:inherit}
+      .mabi-supported-files-head{flex:0 0 auto;position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid color-mix(in srgb,currentColor 14%,transparent);background:inherit}
       .mabi-supported-files-title{margin:0;font-size:20px;line-height:1.2}
       .mabi-supported-files-close{box-sizing:border-box;display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;margin:0;padding:0;border:1px solid color-mix(in srgb,currentColor 12%,transparent);border-radius:50%;appearance:none;background:color-mix(in srgb,currentColor 8%,transparent);color:inherit;line-height:0;cursor:pointer}
       .mabi-supported-files-close:hover{background:color-mix(in srgb,currentColor 14%,transparent);border-color:color-mix(in srgb,currentColor 24%,transparent)}
       .mabi-supported-files-close:focus-visible{outline:2px solid color-mix(in srgb,#4b7bec 78%,transparent);outline-offset:2px}
       .mabi-supported-files-close svg{display:block;width:17px;height:17px;overflow:visible;pointer-events:none}
       .mabi-supported-files-close path{fill:none;stroke:currentColor;stroke-width:2.25;stroke-linecap:round;vector-effect:non-scaling-stroke}
-      .mabi-supported-files-body{display:grid;gap:20px;padding:20px}
+      .mabi-supported-files-body{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable both-edges;display:grid;gap:20px;padding:20px}
       .mabi-supported-files-note{margin:0;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,#4b7bec 10%,transparent);font-size:13px;line-height:1.55}
       .mabi-supported-files-group{display:grid;gap:9px}
       .mabi-supported-files-group h3{margin:0;font-size:14px}

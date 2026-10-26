@@ -700,6 +700,11 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "sound.err_default_download": "기본 음원을 내려받지 못했습니다. 네트워크 연결을 확인해 주세요.",
     "file.save_midi": "MIDI 저장",
     "file.saved_midi": "MIDI 파일을 저장했습니다.",
-    "file.save_midi_failed": "MIDI 저장 실패"
+    "file.save_midi_failed": "MIDI 저장 실패",
+    "tempo.recalc_notes": "노트 재계산 (실제 길이 유지)",
+    "tempo.recalc_change": "템포 {0} → {1}",
+    "tempo.recalc_count": "노트 {0}개 길이 재계산",
+    "tempo.recalc_shift": "이후 내용 {0} beat 이동",
+    "tempo.recalc_error": "최대 오차 {0}ms"
   }
 };

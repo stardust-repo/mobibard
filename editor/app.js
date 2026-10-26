@@ -608,6 +608,7 @@
     tempoEditorTitle: document.querySelector("#tempoEditorTitle"),
     tempoEditorPosition: document.querySelector("#tempoEditorPosition"),
     tempoBpmInput: document.querySelector("#tempoBpmInput"),
+    tempoRecalcNotesCheckbox: document.querySelector("#tempoRecalcNotesCheckbox"),
     tempoEditorCloseButton: document.querySelector("#tempoEditorCloseButton"),
     tempoEditorCancelButton: document.querySelector("#tempoEditorCancelButton"),
     tempoEditorApplyButton: document.querySelector("#tempoEditorApplyButton"),
@@ -615,6 +616,7 @@
     tempoSimplifyBackdrop: document.querySelector("#tempoSimplifyBackdrop"),
     tempoSimplifyThresholdInput: document.querySelector("#tempoSimplifyThresholdInput"),
     tempoSimplifyPreserveExtrema: document.querySelector("#tempoSimplifyPreserveExtrema"),
+    tempoSimplifyRecalcNotes: document.querySelector("#tempoSimplifyRecalcNotes"),
     tempoSimplifySummary: document.querySelector("#tempoSimplifySummary"),
     tempoSimplifyCloseButton: document.querySelector("#tempoSimplifyCloseButton"),
     tempoSimplifyCancelButton: document.querySelector("#tempoSimplifyCancelButton"),
@@ -691,6 +693,7 @@
     confirmDialogMessage: document.querySelector("#confirmDialogMessage"),
     confirmDialogCancel: document.querySelector("#confirmDialogCancel"),
     confirmDialogConfirm: document.querySelector("#confirmDialogConfirm"),
+    confirmDialogAlternate: document.querySelector("#confirmDialogAlternate"),
     contextMenu: document.querySelector("#contextMenu"),
     toast: document.querySelector("#toast"),
   };
@@ -1875,8 +1878,18 @@
     if (!host) return;
     const config = host._inlineSelection;
     if (!config) return;
-    const { selectedIds, notesOnly } = config;
+    const { selectedIds, notesOnly, badgeForChannel } = config;
     const eligible = (channel) => !notesOnly || Boolean(channel?.notes?.length);
+    // Optional badge (e.g. MML export order "1, 2, 3") replaces the ✓ of selected channel rows.
+    if (typeof badgeForChannel === 'function') {
+      const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
+      host.querySelectorAll('.inline-channel-tree-channel[data-inline-channel-id]').forEach((row) => {
+        if (row.dataset.inlineSelected !== 'true') return;
+        const badge = badgeForChannel(channelById.get(String(row.dataset.inlineChannelId)));
+        const glyph = row.querySelector('.channel-tree-select-toggle .channel-tree-action-glyph');
+        if (glyph && badge != null && badge !== '') glyph.textContent = String(badge);
+      });
+    }
     host.querySelectorAll('.inline-channel-tree-group[data-inline-group-id]').forEach((groupRow) => {
       const gid = String(groupRow.dataset.inlineGroupId ?? '');
       const members = state.channels.filter((channel) => String(channel.groupId ?? '') === gid && eligible(channel));
@@ -1910,22 +1923,35 @@
   // so it never marks the project dirty or changes the sidebar tree.
   const inlineChannelCollapsedGroupIds = new Set();
 
+  // Re-reads detailForChannel for every visible channel row (e.g. MML character counts that depend
+  // on which channel is selected first) without rebuilding the list.
+  function refreshInlineChannelDetails(host) {
+    const detailForChannel = host?._inlineSelection?.detailForChannel;
+    if (typeof detailForChannel !== 'function') return;
+    const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
+    host.querySelectorAll('[data-inline-channel-detail-for]').forEach((node) => {
+      const channel = channelById.get(String(node.dataset.inlineChannelDetailFor));
+      if (channel) node.textContent = String(detailForChannel(channel) ?? '');
+    });
+  }
+
   function renderInlineChannelSelectionList(host, selectedIds, {
     notesOnly = true,
     onChange = null,
     detailForChannel = null,
+    badgeForChannel = null,
   } = {}) {
     if (!host || !(selectedIds instanceof Set)) return false;
     const scrollTop = host.scrollTop;
     host.replaceChildren();
     host.classList.add('inline-channel-tree');
     host.setAttribute('role', 'tree');
-    host._inlineSelection = { selectedIds, notesOnly };
+    host._inlineSelection = { selectedIds, notesOnly, detailForChannel, badgeForChannel };
     const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
     const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
     const rendered = new Set();
     const fragment = document.createDocumentFragment();
-    const rerender = () => renderInlineChannelSelectionList(host, selectedIds, { notesOnly, onChange, detailForChannel });
+    const rerender = () => renderInlineChannelSelectionList(host, selectedIds, { notesOnly, onChange, detailForChannel, badgeForChannel });
 
     const createToggle = (label) => {
       const button = document.createElement('button');
@@ -15778,10 +15804,10 @@
     return "±0";
   }
 
+  let channelVolumeSelectedIds = new Set();
+
   function getCheckedChannelVolumeIds() {
-    if (!elements.channelVolumeList) return [];
-    return [...elements.channelVolumeList.querySelectorAll('input.channel-volume-channel-checkbox[type="checkbox"]:checked')]
-      .map((input) => String(input.value));
+    return [...channelVolumeSelectedIds];
   }
 
   function getChannelVolumeChannels() {
@@ -15842,8 +15868,9 @@
 
   function updateVolumeDialogHeader() {
     if (elements.channelVolumeDialogTitle) {
-      elements.channelVolumeDialogTitle.dataset.i18n = "volume.edit_channels";
-      elements.channelVolumeDialogTitle.textContent = i18nText("volume.edit_channels");
+      const titleKey = volumeEditContext.mode === "notes" ? "note.selected_volume_edit" : "volume.edit_channels";
+      elements.channelVolumeDialogTitle.dataset.i18n = titleKey;
+      elements.channelVolumeDialogTitle.textContent = i18nText(titleKey);
     }
     if (!elements.channelVolumeScopeLabel) return;
     if (volumeEditContext.mode === "notes") {
@@ -15916,117 +15943,24 @@
     updateChannelVolumeCounts();
   }
 
-  function getChannelVolumeMemberCheckboxes(groupId) {
-    if (!elements.channelVolumeList) return [];
-    const gid = String(groupId ?? "");
-    return [...elements.channelVolumeList.querySelectorAll('input.channel-volume-channel-checkbox[type="checkbox"]')]
-      .filter((input) => String(input.dataset.volumeGroupId ?? "") === gid);
-  }
-
-  function syncChannelVolumeGroupCheckboxes() {
-    if (!elements.channelVolumeList) return;
-    elements.channelVolumeList.querySelectorAll('input.channel-volume-group-checkbox[type="checkbox"]').forEach((groupCheckbox) => {
-      const members = getChannelVolumeMemberCheckboxes(groupCheckbox.value).filter((input) => !input.disabled);
-      const checkedCount = members.filter((input) => input.checked).length;
-      groupCheckbox.disabled = members.length === 0;
-      groupCheckbox.checked = members.length > 0 && checkedCount === members.length;
-      groupCheckbox.indeterminate = checkedCount > 0 && checkedCount < members.length;
-      const row = groupCheckbox.closest(".channel-volume-group-row");
-      const count = row?.querySelector(".channel-volume-group-count");
-      if (count) count.textContent = `${checkedCount}/${members.length}`;
-    });
-  }
-
-  function createChannelVolumeChannelRow(channel, index, selectedIds, parentId = null) {
-    const row = document.createElement("label");
-    row.className = `midi-transfer-channel-row channel-delete-row channel-volume-row${parentId != null ? " is-group-child" : ""}`;
-    row.style.setProperty("--channel-color", getChannelColor(channel, index));
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.className = "channel-volume-channel-checkbox";
-    checkbox.value = String(channel.id);
-    checkbox.dataset.volumeGroupId = parentId == null ? "" : String(parentId);
-    const noteCount = channel.notes?.length || 0;
-    checkbox.checked = noteCount > 0 && selectedIds.has(String(channel.id));
-    checkbox.disabled = noteCount === 0;
-    const text = document.createElement("span");
-    text.className = "midi-transfer-channel-name";
-    text.textContent = channel.name;
-    const detail = document.createElement("small");
-    detail.className = "channel-volume-row-detail";
-    detail.textContent = noteCount ? `${noteCount.toLocaleString()}개 노트` : "빈 채널";
-    row.append(checkbox, text, detail);
-    checkbox.addEventListener("change", () => {
-      syncChannelVolumeGroupCheckboxes();
-      updateChannelVolumeCounts();
-    });
-    return row;
-  }
-
-  function createChannelVolumeGroupRow(group) {
-    const row = document.createElement("label");
-    row.className = "channel-volume-group-row";
-    const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
-    row.style.setProperty("--group-color", getChannelGroupColor(group, groupIndex, "bright"));
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.className = "channel-volume-group-checkbox";
-    checkbox.value = String(group.id);
-    const folder = document.createElement("span");
-    folder.className = "channel-volume-group-folder";
-    folder.setAttribute("aria-hidden", "true");
-    folder.textContent = "📂";
-    const name = document.createElement("strong");
-    name.className = "channel-volume-group-name";
-    name.textContent = group.name;
-    const count = document.createElement("small");
-    count.className = "channel-volume-group-count";
-    row.append(checkbox, folder, name, count);
-    checkbox.addEventListener("change", () => {
-      const checked = checkbox.checked;
-      for (const input of getChannelVolumeMemberCheckboxes(group.id)) {
-        if (!input.disabled) input.checked = checked;
-      }
-      syncChannelVolumeGroupCheckboxes();
-      updateChannelVolumeCounts();
-    });
-    return row;
-  }
-
   function renderChannelVolumeDialog(selectedChannelIds = new Set()) {
     if (!elements.channelVolumeList) return false;
-    const selectedIds = new Set([...selectedChannelIds].map(String));
-    elements.channelVolumeList.replaceChildren();
-    const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
-    const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
-    const rendered = new Set();
-    for (const entry of getItemTreeLayout()) {
-      if (entry.kind === "group") {
-        const group = groupById.get(String(entry.id));
-        if (group) elements.channelVolumeList.append(createChannelVolumeGroupRow(group));
-        continue;
-      }
-      if (entry.kind !== "channel") continue;
-      const found = channelById.get(String(entry.id));
-      if (!found) continue;
-      rendered.add(String(entry.id));
-      elements.channelVolumeList.append(createChannelVolumeChannelRow(found.channel, found.index, selectedIds, entry.parentId));
-    }
-    for (const [id, found] of channelById) {
-      if (rendered.has(id)) continue;
-      elements.channelVolumeList.append(createChannelVolumeChannelRow(found.channel, found.index, selectedIds, found.channel.groupId));
-    }
-    syncChannelVolumeGroupCheckboxes();
+    channelVolumeSelectedIds = new Set([...selectedChannelIds].map(String));
+    renderInlineChannelSelectionList(elements.channelVolumeList, channelVolumeSelectedIds, {
+      notesOnly: true,
+      onChange: updateChannelVolumeCounts,
+      detailForChannel: (channel) => (channel.notes?.length
+        ? i18nText("volume.channel_note_count", [channel.notes.length.toLocaleString()])
+        : i18nText("export.empty_channel")),
+    });
     updateChannelVolumeSummary();
     return true;
   }
 
   function setAllChannelVolumeChecked(checked) {
     if (!elements.channelVolumeList || volumeEditContext.mode === "notes") return;
-    elements.channelVolumeList.querySelectorAll('input.channel-volume-channel-checkbox[type="checkbox"]').forEach((input) => {
-      if (!input.disabled) input.checked = Boolean(checked);
-    });
-    syncChannelVolumeGroupCheckboxes();
+    setInlineChannelSelectionAll(channelVolumeSelectedIds, checked, { notesOnly: true });
+    renderChannelVolumeDialog(channelVolumeSelectedIds);
     updateChannelVolumeCounts();
   }
 
@@ -16145,7 +16079,7 @@
     }
     closeChannelVolumeDialog();
     if (!changedCount && !defaultVolumeChanged) return false;
-    markDirty(i18nText("volume.edit_channels"));
+    markDirty(i18nText(volumeEditContext.mode === "notes" ? "note.selected_volume_edit" : "volume.edit_channels"));
     drawRoll();
     drawVelocityLane();
     drawTimeline();
@@ -23010,32 +22944,15 @@
       : false;
   }
 
-  let mmlExportSelectionQueue = [];
   let mmlExportCopyState = { mml: "", timelinePartScores: [] };
 
-  function getMmlExportChannelCheckboxes() {
-    if (!elements.mmlExportChannelList) return [];
-    return [...elements.mmlExportChannelList.querySelectorAll('input[data-mml-export-channel-id]')];
-  }
-
-  function getMmlExportGroupChannelCheckboxes(groupId) {
-    if (!elements.mmlExportChannelList || groupId == null) return [];
-    return [...elements.mmlExportChannelList.querySelectorAll(
-      `.mml-export-channel-row[data-channel-group-id="${CSS.escape(String(groupId))}"] input[data-mml-export-channel-id]`,
-    )];
-  }
+  // Selection order matters (part order of the exported MML): a Set keeps insertion order, and
+  // deselecting then reselecting a channel moves it to the end.
+  let mmlExportSelectedIds = new Set();
 
   function getMmlExportSelectedChannels() {
-    if (!elements.mmlExportChannelList) return [];
-    const checkedInputs = getMmlExportChannelCheckboxes().filter((input) => input.checked);
-    const checkedIds = new Set(checkedInputs.map((input) => String(input.dataset.mmlExportChannelId || input.value || "")));
-    mmlExportSelectionQueue = mmlExportSelectionQueue.filter((id) => checkedIds.has(String(id)));
-    for (const input of checkedInputs) {
-      const id = String(input.dataset.mmlExportChannelId || input.value || "");
-      if (!mmlExportSelectionQueue.includes(id)) mmlExportSelectionQueue.push(id);
-    }
     const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
-    return mmlExportSelectionQueue
+    return [...mmlExportSelectedIds]
       .map((id) => channelById.get(String(id)))
       .filter((channel) => channel?.notes?.length);
   }
@@ -23314,116 +23231,27 @@
     }
   }
 
-  function syncMmlExportGroupSelectionIndicators() {
-    if (!elements.mmlExportChannelList) return;
-    elements.mmlExportChannelList.querySelectorAll('.mml-export-group-row').forEach((row) => {
-      const checkbox = row.querySelector('input[data-mml-export-group-id]');
-      if (!checkbox) return;
-      const groupId = checkbox.dataset.mmlExportGroupId;
-      const childCheckboxes = getMmlExportGroupChannelCheckboxes(groupId).filter((input) => !input.disabled);
-      const selectedCount = childCheckboxes.filter((input) => input.checked).length;
-      checkbox.disabled = childCheckboxes.length === 0;
-      checkbox.checked = childCheckboxes.length > 0 && selectedCount === childCheckboxes.length;
-      checkbox.indeterminate = selectedCount > 0 && selectedCount < childCheckboxes.length;
-      row.classList.toggle("selected", checkbox.checked);
-      row.classList.toggle("partial", checkbox.indeterminate);
-    });
+  // MML character counts depend on which channel is first (it carries the tempo commands).
+  function getMmlExportChannelDetail(channel, context) {
+    if (!channel?.notes?.length) return i18nText("export.empty_channel");
+    const includesTempo = String(channel.id) === context.firstSelectedId;
+    const characterCount = getMmlChannelCharacterCount(channel, { includeTempo: includesTempo, exportEndBeat: context.exportEndBeat });
+    return i18nText(includesTempo ? "note.chars_including_tempo" : "note.chars", [characterCount.toLocaleString(), channel.notes.length.toLocaleString()]);
   }
 
-  function syncMmlExportSelectionIndicators() {
-    if (!elements.mmlExportChannelList) return;
-    const selectedChannels = getMmlExportSelectedChannels();
-    const firstSelectedId = selectedChannels.length ? String(selectedChannels[0].id) : null;
-    const exportEndBeat = getMmlExportEndBeat(selectedChannels);
-    const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
-    const orderById = new Map(mmlExportSelectionQueue.map((id, index) => [String(id), index + 1]));
-    elements.mmlExportChannelList.querySelectorAll('.mml-export-channel-row').forEach((row) => {
-      const checkbox = row.querySelector('input[data-mml-export-channel-id]');
-      const order = row.querySelector('.mml-export-order');
-      const detail = row.querySelector('.mml-export-channel-info small');
-      const id = String(checkbox?.dataset.mmlExportChannelId || checkbox?.value || "");
-      const channel = channelById.get(id);
-      const selectedOrder = checkbox?.checked ? orderById.get(id) : null;
-      row.classList.toggle("selected", Boolean(selectedOrder));
-      if (order) {
-        order.textContent = selectedOrder ? String(selectedOrder) : "";
-        order.classList.toggle("filled", Boolean(selectedOrder));
-        order.setAttribute("aria-label", selectedOrder ? i18nText("ui.export_order", [selectedOrder]) : i18nText("selection.order"));
-      }
-      if (detail && channel?.notes?.length) {
-        const includesTempo = id === firstSelectedId;
-        const characterCount = getMmlChannelCharacterCount(channel, {
-          includeTempo: includesTempo,
-          exportEndBeat,
-        });
-        detail.textContent = i18nText(includesTempo ? "note.chars_including_tempo" : "note.chars", [characterCount.toLocaleString(), channel.notes.length.toLocaleString()]);
-        detail.title = includesTempo
-          ? "첫 번째 선택 채널의 실제 MML 기준 글자 수(템포 명령 포함)"
-          : "채널 단독 MML 기준 글자 수(템포 명령 제외)";
-      }
-    });
-    syncMmlExportGroupSelectionIndicators();
-  }
-
-  function setMmlExportGroupCheckboxChecked(checkbox, checked) {
-    if (!checkbox || checkbox.disabled) return;
-    const groupId = checkbox.dataset.mmlExportGroupId;
-    checkbox.checked = Boolean(checked);
-    checkbox.indeterminate = false;
-    for (const childCheckbox of getMmlExportGroupChannelCheckboxes(groupId)) {
-      if (!childCheckbox.disabled) setMmlExportCheckboxChecked(childCheckbox, checked);
-    }
-  }
-
-  function setMmlExportCheckboxChecked(checkbox, checked) {
-    if (!checkbox || checkbox.disabled) return;
-    if (checkbox.dataset.mmlExportGroupId != null) {
-      setMmlExportGroupCheckboxChecked(checkbox, checked);
-      return;
-    }
-    const id = String(checkbox.dataset.mmlExportChannelId || checkbox.value || "");
-    checkbox.checked = Boolean(checked);
-    mmlExportSelectionQueue = mmlExportSelectionQueue.filter((item) => String(item) !== id);
-    if (checkbox.checked) mmlExportSelectionQueue.push(id);
-  }
-
-  function syncMmlExportSelectionVisualOnly() {
-    if (!elements.mmlExportChannelList) return;
-    const checkedInputs = getMmlExportChannelCheckboxes().filter((input) => input.checked);
-    const checkedIds = new Set(checkedInputs.map((input) => String(input.dataset.mmlExportChannelId || input.value || "")));
-    mmlExportSelectionQueue = mmlExportSelectionQueue.filter((id) => checkedIds.has(String(id)));
-    for (const input of checkedInputs) {
-      const id = String(input.dataset.mmlExportChannelId || input.value || "");
-      if (!mmlExportSelectionQueue.includes(id)) mmlExportSelectionQueue.push(id);
-    }
-    const orderById = new Map(mmlExportSelectionQueue.map((id, index) => [String(id), index + 1]));
-    elements.mmlExportChannelList.querySelectorAll('.mml-export-channel-row').forEach((row) => {
-      const checkbox = row.querySelector('input[data-mml-export-channel-id]');
-      const order = row.querySelector('.mml-export-order');
-      const id = String(checkbox?.dataset.mmlExportChannelId || checkbox?.value || "");
-      const selectedOrder = checkbox?.checked ? orderById.get(id) : null;
-      row.classList.toggle("selected", Boolean(selectedOrder));
-      if (order) {
-        order.textContent = selectedOrder ? String(selectedOrder) : "";
-        order.classList.toggle("filled", Boolean(selectedOrder));
-        order.setAttribute("aria-label", selectedOrder ? i18nText("ui.export_order", [selectedOrder]) : i18nText("selection.order"));
-      }
-    });
-    syncMmlExportGroupSelectionIndicators();
-    if (elements.mmlExportSummary) {
-      const exportableCount = state.channels.filter((channel) => channel.notes?.length).length;
-      elements.mmlExportSummary.textContent = checkedInputs.length
-        ? i18nText("mml_export.selection_summary", [checkedInputs.length])
-        : (exportableCount ? "선택된 채널이 없습니다." : "내보낼 노트가 있는 채널이 없습니다.");
-    }
-    if (elements.mmlExportCopyAllButton) elements.mmlExportCopyAllButton.disabled = true;
-    elements.mmlExportSplitButtons?.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+  function getMmlExportDetailContext() {
+    const selected = getMmlExportSelectedChannels();
+    return { firstSelectedId: selected.length ? String(selected[0].id) : null, exportEndBeat: getMmlExportEndBeat(selected) };
   }
 
   function updateMmlExportDialogState() {
     const selected = getMmlExportSelectedChannels();
     const exportableCount = state.channels.filter((channel) => channel.notes?.length).length;
-    syncMmlExportSelectionIndicators();
+    if (elements.mmlExportChannelList) {
+      elements.mmlExportChannelList._mmlDetailContext = getMmlExportDetailContext();
+      refreshInlineChannelDetails(elements.mmlExportChannelList);
+      syncInlineChannelSelectionGroups(elements.mmlExportChannelList);
+    }
     if (elements.mmlExportSummary) {
       elements.mmlExportSummary.textContent = selected.length
         ? i18nText("mml_export.selection_summary", [selected.length])
@@ -23433,117 +23261,17 @@
   }
 
   function renderMmlExportChannelList() {
-    if (!elements.mmlExportChannelList) return;
-    elements.mmlExportChannelList.replaceChildren();
-    mmlExportSelectionQueue = [];
-
-    const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
-    const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
-    const renderedChannels = new Set();
-
-    const appendGroupRow = (group) => {
-      const row = document.createElement("label");
-      row.className = "mml-export-group-row";
-      row.dataset.mmlExportGroupRow = String(group.id);
-      const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
-      row.style.setProperty("--group-color", getChannelGroupColor(group, groupIndex, "bright"));
-
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.dataset.mmlExportGroupId = String(group.id);
-      checkbox.checked = false;
-
-      const info = document.createElement("span");
-      info.className = "mml-export-group-info";
-      const titleLine = document.createElement("span");
-      titleLine.className = "mml-export-group-title";
-      const folder = document.createElement("span");
-      folder.className = "mml-export-group-folder";
-      folder.setAttribute("aria-hidden", "true");
-      folder.textContent = "📂";
-      const name = document.createElement("strong");
-      name.textContent = group.name;
-      titleLine.append(folder, name);
-      const members = getChannelGroupMembers(group);
-      const exportable = members.filter((channel) => channel.notes?.length).length;
-      const detail = document.createElement("small");
-      detail.textContent = exportable === members.length
-        ? i18nText("mml_export.group_all_channels", [members.length.toLocaleString()])
-        : i18nText("mml_export.group_partial_channels", [exportable.toLocaleString(), members.length.toLocaleString()]);
-      info.append(titleLine, detail);
-
-      row.append(checkbox, info);
-      checkbox.disabled = exportable === 0;
-      checkbox.addEventListener("change", () => {
-        setMmlExportGroupCheckboxChecked(checkbox, checkbox.checked);
-        updateMmlExportDialogState();
-      });
-      elements.mmlExportChannelList.append(row);
-    };
-
-    const appendChannelRow = (channel, index, parentId = null) => {
-      const row = document.createElement("label");
-      row.className = `mml-export-channel-row${parentId != null ? " is-group-child" : ""}`;
-      row.style.setProperty("--channel-color", getChannelColor(channel, index));
-      if (parentId != null) row.dataset.channelGroupId = String(parentId);
-
-      const order = document.createElement("span");
-      order.className = "mml-export-order";
-      order.setAttribute("aria-label", "선택 순서");
-
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.value = String(channel.id);
-      checkbox.dataset.mmlExportChannelId = String(channel.id);
-      checkbox.checked = false;
-      checkbox.disabled = !channel.notes?.length;
-
-      const info = document.createElement("span");
-      info.className = "mml-export-channel-info";
-      const name = document.createElement("strong");
-      name.textContent = channel.name || `Ch${index + 1}`;
-      const detail = document.createElement("small");
-      if (channel.notes?.length) {
-        const characterCount = getMmlChannelCharacterCount(channel);
-        detail.textContent = `${characterCount.toLocaleString()}자 · ${channel.notes.length.toLocaleString()}개 노트`;
-        detail.title = "채널 단독 MML 기준 글자 수(템포 명령 제외)";
-      } else {
-        detail.textContent = "빈 채널";
-      }
-      info.append(name, detail);
-
-      row.append(order, checkbox, info);
-      checkbox.addEventListener("change", () => {
-        setMmlExportCheckboxChecked(checkbox, checkbox.checked);
-        updateMmlExportDialogState();
-      });
-      elements.mmlExportChannelList.append(row);
-    };
-
-    for (const entry of getItemTreeLayout()) {
-      if (entry.kind === "group") {
-        const group = groupById.get(String(entry.id));
-        if (group) appendGroupRow(group);
-        continue;
-      }
-      if (entry.kind !== "channel") continue;
-      const found = channelById.get(String(entry.id));
-      if (!found) continue;
-      renderedChannels.add(String(entry.id));
-      appendChannelRow(found.channel, found.index, entry.parentId);
-    }
-    for (const [id, found] of channelById) {
-      if (renderedChannels.has(id)) continue;
-      appendChannelRow(found.channel, found.index, found.channel.groupId);
-    }
-
-    installLeftDragCheckboxSelection(elements.mmlExportChannelList, {
-      deferChange: true,
-      onVisualChange: (checkbox) => {
-        setMmlExportCheckboxChecked(checkbox, checkbox.checked);
-        syncMmlExportSelectionVisualOnly();
+    const host = elements.mmlExportChannelList;
+    if (!host) return;
+    host._mmlDetailContext = getMmlExportDetailContext();
+    renderInlineChannelSelectionList(host, mmlExportSelectedIds, {
+      notesOnly: true,
+      onChange: updateMmlExportDialogState,
+      detailForChannel: (channel) => getMmlExportChannelDetail(channel, host._mmlDetailContext || getMmlExportDetailContext()),
+      badgeForChannel: (channel) => {
+        const order = [...mmlExportSelectedIds].indexOf(String(channel?.id));
+        return order >= 0 ? order + 1 : "";
       },
-      onCommit: updateMmlExportDialogState,
     });
     updateMmlExportDialogState();
   }
@@ -23556,6 +23284,7 @@
     closeVolumeMenu();
     closeZoomMenu();
     closePlaybackRateMenu();
+    mmlExportSelectedIds = new Set();
     renderMmlExportChannelList();
     if (elements.mmlExportBackdrop) elements.mmlExportBackdrop.hidden = false;
     return true;
@@ -23570,7 +23299,7 @@
     }
     if (elements.mmlExportCopyPanel) elements.mmlExportCopyPanel.hidden = false;
     if (elements.mmlExportPartCopyBlock) elements.mmlExportPartCopyBlock.hidden = true;
-    mmlExportSelectionQueue = [];
+    mmlExportSelectedIds = new Set();
     mmlExportCopyState = { mml: "", timelinePartScores: [] };
     if (elements.mmlExportSummary) elements.mmlExportSummary.textContent = "선택된 채널이 없습니다.";
   }
@@ -24477,7 +24206,144 @@
   function closeTempoEditor() {
     if (!elements.tempoEditorBackdrop) return;
     elements.tempoEditorBackdrop.hidden = true;
-    state.tempoEditor = { mode: null, tempoId: null, beat: 0 };
+    state.tempoEditor = { mode: null, tempoId: null, beat: 0, originalBpm: null };
+  }
+
+  // Edit mode: the apply button stays disabled while the value equals the current tempo.
+  function syncTempoEditorApplyState() {
+    const button = elements.tempoEditorApplyButton;
+    if (!button) return;
+    const bpm = Number(elements.tempoBpmInput?.value);
+    const original = state.tempoEditor?.originalBpm == null ? NaN : Number(state.tempoEditor.originalBpm);
+    button.disabled = Number.isFinite(original) && String(elements.tempoBpmInput?.value ?? "").trim() !== "" && bpm === original;
+  }
+
+  // "노트 재계산": replace the tempo list with nextTempos (positions still in the current beat
+  // coordinates, new BPM values) while keeping the real length of the music. The timeline is cut at
+  // every old and new tempo position; each piece is rescaled by newBpm / oldBpm and everything after
+  // it shifts by the resulting length change. Positions inside a rescaled piece are rounded to the
+  // smallest note unit relative to the piece start (no measure snapping); unchanged pieces are only
+  // shifted, so their own spacing stays exact.
+  function createTempoRecalcMapping(nextTempos) {
+    const unit = CONFIG.minimumNoteBeat;
+    const oldTempos = [...state.tempos];
+    const points = [...new Set([0, ...oldTempos.map((tempo) => Number(tempo.beat) || 0), ...nextTempos.map((tempo) => Number(tempo.beat) || 0)]
+      .map((beat) => Number(Math.max(0, beat).toFixed(6))))].sort((left, right) => left - right);
+    const segments = [];
+    let mapped = 0;
+    for (let index = 0; index < points.length; index++) {
+      const from = points[index];
+      const to = index + 1 < points.length ? points[index + 1] : Infinity;
+      const ratio = getTempoAtBeatFromCollection(from + 1e-7, nextTempos) / getTempoAtBeatFromCollection(from + 1e-7, oldTempos);
+      const changed = Math.abs(ratio - 1) > 1e-9;
+      segments.push({ from, to, mapped, ratio, changed });
+      if (Number.isFinite(to)) mapped += changed ? Math.round(((to - from) * ratio) / unit) * unit : to - from;
+    }
+    const firstChanged = segments.find((segment) => segment.changed);
+    const start = firstChanged ? firstChanged.from : Infinity;
+    const last = segments[segments.length - 1];
+    const delta = last.changed ? null : last.mapped - last.from;
+    const map = (beat) => {
+      const value = Math.max(0, Number(beat) || 0);
+      if (value <= start + 1e-9) return value;
+      let segment = segments[0];
+      for (const candidate of segments) {
+        if (candidate.from > value + 1e-9) break;
+        segment = candidate;
+      }
+      const offset = value - segment.from;
+      const next = segment.changed ? segment.mapped + Math.round((offset * segment.ratio) / unit) * unit : segment.mapped + offset;
+      return Number(next.toFixed(6));
+    };
+    return { start, delta, map };
+  }
+
+  // Remaps notes and every beat-positioned timeline item, swaps in the remapped nextTempos and
+  // measures the largest timing difference against the old tempo map.
+  function applyTempoRecalc(nextTempos) {
+    const unit = CONFIG.minimumNoteBeat;
+    const mapping = createTempoRecalcMapping(nextTempos);
+    const { start, map } = mapping;
+    const oldMap = createTempoTimeMap(state.tempos);
+    const samples = [];
+    let resizedNotes = 0;
+    for (const channel of state.channels) {
+      for (const note of channel.notes || []) {
+        const noteStart = Math.max(0, Number(note.startBeat) || 0);
+        const duration = Math.max(unit, Number(note.durationBeat) || unit);
+        const noteEnd = noteStart + duration;
+        if (noteEnd <= start + 1e-7) continue;
+        const nextStart = map(noteStart);
+        const nextEnd = Math.max(nextStart + unit, map(noteEnd));
+        const nextDuration = Number((nextEnd - nextStart).toFixed(6));
+        if (Math.abs(nextDuration - duration) > 1e-6) resizedNotes += 1;
+        samples.push([beatToSecondsInTempoMap(noteStart, oldMap), nextStart]);
+        samples.push([beatToSecondsInTempoMap(noteEnd, oldMap), nextEnd]);
+        note.startBeat = nextStart;
+        note.durationBeat = nextDuration;
+      }
+      state.channelNoteRuntime.delete(String(channel.id));
+    }
+    state.timeSignatures = normalizeTimeSignatures(getSortedTimeSignatures().map((signature) => (
+      !signature.fixed && signature.beat > start + 1e-7 ? { ...signature, beat: map(signature.beat) } : signature
+    )));
+    state.timelineParts = normalizeTimelineParts(getSortedTimelineParts().map((part) => (
+      part.beat > start + 1e-7 ? { ...part, beat: map(part.beat) } : part
+    )));
+    // Fade lengths are stored in seconds, so only their start moves.
+    state.timelineFades = normalizeTimelineFades().map((fade) => (
+      fade.startBeat > start + 1e-7 ? { ...fade, startBeat: map(fade.startBeat) } : fade
+    ));
+    const range = normalizePlaybackRange();
+    state.playbackRange = normalizePlaybackRange({
+      startBeat: range.startBeat == null ? null : map(range.startBeat),
+      endBeat: range.endBeat == null ? null : map(range.endBeat),
+    });
+    for (const clip of state.audioClips) {
+      const clipStart = Math.max(0, Number(clip.startBeat) || 0);
+      const clipEnd = getAudioClipEndBeat(clip);
+      if (clipEnd <= start + 1e-7) continue;
+      const nextStart = map(clipStart);
+      clip.startBeat = nextStart;
+      clip.durationBeat = Number(Math.max(unit, map(clipEnd) - nextStart).toFixed(6));
+    }
+    if (state.playhead) state.playhead.beat = map(state.playhead.beat);
+    const totalBeats = map(getTotalBeats());
+    state.tempos = nextTempos
+      .map((tempo) => ({ ...tempo, beat: tempo.fixed ? tempo.beat : map(tempo.beat) }))
+      .sort((a, b) => a.beat - b.beat || a.id - b.id);
+    const newMap = createTempoTimeMap(state.tempos);
+    let maxErrorMs = 0;
+    for (const [oldSeconds, nextBeat] of samples) {
+      maxErrorMs = Math.max(maxErrorMs, Math.abs(beatToSecondsInTempoMap(nextBeat, newMap) - oldSeconds) * 1000);
+    }
+    state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, totalBeats, getPersistentContentEndBeat() + getSnapBeat());
+    ensureTimelineFitsViewport();
+    return { mapping, resizedNotes, maxErrorMs };
+  }
+
+  // Toast tail shared by every recalculating tempo action: "노트 N개 길이 재계산 · 이후 내용 ±x beat
+  // 이동 · 최대 오차 y ms".
+  function formatTempoRecalcDetails(result) {
+    const parts = [i18nText("tempo.recalc_count", [result.resizedNotes])];
+    const delta = result.mapping.delta;
+    if (delta != null && Math.abs(delta) > 1e-7) {
+      const beats = Number(delta.toFixed(4));
+      parts.push(i18nText("tempo.recalc_shift", [`${beats > 0 ? "+" : ""}${beats}`]));
+    }
+    parts.push(i18nText("tempo.recalc_error", [result.maxErrorMs < 1 ? "<1" : String(Math.round(result.maxErrorMs))]));
+    return parts.join(" · ");
+  }
+
+  function formatTempoRecalcToast(oldBpm, newBpm, result) {
+    return `${i18nText("tempo.recalc_change", [oldBpm, newBpm])} · ${formatTempoRecalcDetails(result)}`;
+  }
+
+  function renderAfterTempoRecalc() {
+    renderChannelTabs();
+    renderChannelEditor();
+    resizeAndDraw();
+    updateChannelInfo();
   }
 
   // Inline workspaces (마디 편집, 쉼표 정리, 파트 자동 설정, 채널 병합/삭제, note edit mode) own the
@@ -24518,10 +24384,15 @@
       mode: adding ? "add" : "edit",
       tempoId: tempo?.id ?? null,
       beat: Number(targetBeat.toFixed(6)),
+      // Adding a marker with the same BPM as the tempo in effect is allowed, so only edit mode
+      // blocks an unchanged value.
+      originalBpm: adding ? null : tempo.bpm,
     };
     elements.tempoEditorTitle.textContent = adding ? "템포 추가" : "템포 수정";
     elements.tempoEditorPosition.textContent = formatSeconds(beatToSeconds(targetBeat));
     elements.tempoBpmInput.value = String(adding ? getTempoAtBeat(targetBeat) : tempo.bpm);
+    if (elements.tempoRecalcNotesCheckbox) elements.tempoRecalcNotesCheckbox.checked = false;
+    syncTempoEditorApplyState();
     elements.tempoEditorDeleteButton.hidden = adding || Boolean(tempo?.fixed) || targetBeat === 0;
     elements.tempoEditorBackdrop.hidden = false;
     requestAnimationFrame(() => {
@@ -24539,6 +24410,8 @@
       return false;
     }
     const editor = state.tempoEditor;
+    if (elements.tempoEditorApplyButton?.disabled) return false;
+    const recalc = Boolean(elements.tempoRecalcNotesCheckbox?.checked);
     if (editor.mode === "add") {
       if (getTempoAtExactBeat(editor.beat)) {
         showToast("해당 위치에 이미 템포가 있습니다.");
@@ -24546,6 +24419,18 @@
         return false;
       }
       if (state.playback.running || state.playback.loading) stopPlayback(false);
+      const oldBpm = getTempoAtBeat(editor.beat);
+      if (recalc && oldBpm !== bpm) {
+        const result = applyTempoRecalc([
+          ...state.tempos.map((item) => ({ ...item })),
+          { id: state.nextTempoId++, beat: Number(editor.beat.toFixed(6)), bpm, fixed: false },
+        ]);
+        closeTempoEditor();
+        markDirty("템포 추가");
+        renderAfterTempoRecalc();
+        showToast(formatTempoRecalcToast(oldBpm, bpm, result), { duration: 4200 });
+        return true;
+      }
       state.tempos.push({
         id: state.nextTempoId++,
         beat: Number(editor.beat.toFixed(6)),
@@ -24571,6 +24456,15 @@
       return false;
     }
     if (state.playback.running || state.playback.loading) stopPlayback(false);
+    if (recalc) {
+      const oldBpm = tempo.bpm;
+      const result = applyTempoRecalc(state.tempos.map((item) => (item === tempo ? { ...item, bpm } : { ...item })));
+      closeTempoEditor();
+      markDirty("템포 변경");
+      renderAfterTempoRecalc();
+      showToast(formatTempoRecalcToast(oldBpm, bpm, result), { duration: 4200 });
+      return true;
+    }
     tempo.bpm = bpm;
     closeTempoEditor();
     markDirty("템포 변경");
@@ -24589,7 +24483,7 @@
     return tempo ? openTempoEditor(tempo) : false;
   }
 
-  function deleteTempo(tempo) {
+  function deleteTempo(tempo, { recalc = false } = {}) {
     if (isMidiReferenceActive()) {
       showToast("MIDI 탭의 템포는 읽기 전용입니다.");
       return false;
@@ -24601,11 +24495,19 @@
       showToast("0번 템포는 삭제할 수 없습니다.");
       return false;
     }
-    const before = state.tempos.length;
-    state.tempos = state.tempos.filter((item) => item.id !== tempo.id);
-    if (state.tempos.length === before) {
-      return false;
+    if (!state.tempos.some((item) => item.id === tempo.id)) return false;
+    // Removing a marker hands its span to the previous tempo, so with "노트 재계산" this is a
+    // tempo change of that span from tempo.bpm to the previous BPM.
+    const previousBpm = getTempoAtBeatFromCollection(Math.max(0, tempo.beat - 1e-6), state.tempos.filter((item) => item.id !== tempo.id));
+    if (recalc && previousBpm !== tempo.bpm) {
+      const result = applyTempoRecalc(state.tempos.filter((item) => item.id !== tempo.id).map((item) => ({ ...item })));
+      closeTempoEditor();
+      markDirty("템포 삭제");
+      renderAfterTempoRecalc();
+      showToast(formatTempoRecalcToast(tempo.bpm, previousBpm, result), { duration: 4200 });
+      return true;
     }
+    state.tempos = state.tempos.filter((item) => item.id !== tempo.id);
     closeTempoEditor();
     markDirty("템포 삭제");
     shrinkTimelineToContent();
@@ -24618,14 +24520,45 @@
 
   function deleteTempoFromEditor() {
     const tempo = state.tempos.find((item) => String(item.id) === String(state.tempoEditor.tempoId));
-    return tempo ? deleteTempo(tempo) : false;
+    return tempo ? deleteTempo(tempo, { recalc: Boolean(elements.tempoRecalcNotesCheckbox?.checked) }) : false;
+  }
+
+  // Menu "템포 삭제": when the span would get a different BPM, ask whether to keep the notes' real
+  // length (노트 재계산) or delete only the marker. Same BPM as the previous tempo → nothing to adjust.
+  async function requestDeleteTempo(tempo) {
+    if (!tempo || tempo.fixed || Math.abs(Number(tempo.beat) || 0) <= 1e-7) return deleteTempo(tempo);
+    const previousBpm = getTempoAtBeatFromCollection(Math.max(0, tempo.beat - 1e-6), state.tempos.filter((item) => item.id !== tempo.id));
+    if (previousBpm === tempo.bpm) return deleteTempo(tempo);
+    const choice = await showChoiceDialog({
+      title: i18nText("tempo.delete"),
+      message: i18nText("tempo.delete_recalc_ask", [tempo.bpm, previousBpm]),
+      confirmLabel: i18nText("tempo.delete_with_recalc"),
+      alternateLabel: i18nText("tempo.delete_only"),
+    });
+    if (choice === "cancel") return false;
+    return deleteTempo(tempo, { recalc: choice === "confirm" });
+  }
+
+  async function requestDeleteAllNonInitialTempos() {
+    const removable = getNonInitialTempos();
+    if (!removable.length || isMidiReferenceActive()) return deleteAllNonInitialTempos();
+    const remaining = state.tempos.filter((item) => Math.abs(Number(item?.beat) || 0) <= 1e-7);
+    if (!Number.isFinite(createTempoRecalcMapping(remaining).start)) return deleteAllNonInitialTempos();
+    const choice = await showChoiceDialog({
+      title: i18nText("tempo.delete_all_except_initial"),
+      message: i18nText("tempo.delete_all_recalc_ask", [removable.length.toLocaleString(), getTempoAtBeatFromCollection(0, remaining)]),
+      confirmLabel: i18nText("tempo.delete_with_recalc"),
+      alternateLabel: i18nText("tempo.delete_only"),
+    });
+    if (choice === "cancel") return false;
+    return deleteAllNonInitialTempos({ recalc: choice === "confirm" });
   }
 
   function getNonInitialTempos() {
     return state.tempos.filter((item) => Math.abs(Number(item?.beat) || 0) > 1e-7);
   }
 
-  function deleteAllNonInitialTempos() {
+  function deleteAllNonInitialTempos({ recalc = false } = {}) {
     if (isMidiReferenceActive()) {
       showToast("MIDI 탭의 템포는 읽기 전용입니다.");
       return false;
@@ -24636,6 +24569,14 @@
       return false;
     }
     if (state.playback.running || state.playback.loading) stopPlayback(false);
+    if (recalc) {
+      const result = applyTempoRecalc(state.tempos.filter((item) => Math.abs(Number(item?.beat) || 0) <= 1e-7).map((item) => ({ ...item })));
+      closeTempoEditor();
+      markDirty("모든 템포 삭제");
+      renderAfterTempoRecalc();
+      showToast(`${i18nText("tempo.delete_all_done", [removable.length.toLocaleString()])} · ${formatTempoRecalcDetails(result)}`, { duration: 4200 });
+      return true;
+    }
     state.tempos = state.tempos.filter((item) => Math.abs(Number(item?.beat) || 0) <= 1e-7);
     closeTempoEditor();
     markDirty("모든 템포 삭제");
@@ -24780,6 +24721,7 @@
     const options = state.tempoSimplify || { maxBpmDeltaExclusive: 5, preserveExtrema: true };
     elements.tempoSimplifyThresholdInput.value = String(Math.max(1, Math.round(Number(options.maxBpmDeltaExclusive) || 5)));
     elements.tempoSimplifyPreserveExtrema.checked = options.preserveExtrema !== false;
+    if (elements.tempoSimplifyRecalcNotes) elements.tempoSimplifyRecalcNotes.checked = false;
     updateTempoSimplifySummary();
     elements.tempoSimplifyBackdrop.hidden = false;
     requestAnimationFrame(() => {
@@ -24800,6 +24742,15 @@
       return false;
     }
     if (state.playback.running || state.playback.loading) stopPlayback(false);
+    if (elements.tempoSimplifyRecalcNotes?.checked) {
+      const result = applyTempoRecalc(state.tempos.filter((tempo) => !analysis.removedIds.has(String(tempo.id))).map((tempo) => ({ ...tempo })));
+      closeTempoSimplifyDialog();
+      markDirty(i18nText("history.tempo_simplify"));
+      renderAfterTempoRecalc();
+      updatePlaybackTimeInfo();
+      showToast(`${i18nText("tempo.simplify_done", [analysis.removedCount.toLocaleString(document.documentElement.lang || undefined)])} · ${formatTempoRecalcDetails(result)}`, { duration: 4200 });
+      return true;
+    }
     state.tempos = state.tempos.filter((tempo) => !analysis.removedIds.has(String(tempo.id)));
     closeTempoSimplifyDialog();
     shrinkTimelineToContent();
@@ -26546,98 +26497,12 @@
   function renderChannelExportList() {
     const list = elements.channelExportList;
     if (!list) return;
-    list.replaceChildren();
-    const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
-    const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
-    const rendered = new Set();
-
-    const appendGroupRow = (group) => {
-      const members = getChannelGroupMembers(group);
-      const exportable = members.filter((channel) => channel.notes?.length);
-      const row = document.createElement("label");
-      row.className = "mml-export-group-row";
-      row.style.setProperty("--group-color", getChannelGroupColor(group, Math.max(0, state.channelGroups.indexOf(group)), "bright"));
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.dataset.channelExportGroupId = String(group.id);
-      checkbox.disabled = exportable.length === 0;
-      const info = document.createElement("span");
-      info.className = "mml-export-group-info";
-      const title = document.createElement("span");
-      title.className = "mml-export-group-title";
-      const folder = document.createElement("span");
-      folder.className = "mml-export-group-folder";
-      folder.setAttribute("aria-hidden", "true");
-      folder.textContent = "📂";
-      const name = document.createElement("strong");
-      name.textContent = group.name;
-      title.append(folder, name);
-      const detail = document.createElement("small");
-      detail.textContent = i18nText("export.group_detail", [exportable.length.toLocaleString(), members.length.toLocaleString()]);
-      info.append(title, detail);
-      row.append(checkbox, info);
-      checkbox.addEventListener("change", () => {
-        for (const member of exportable) {
-          if (checkbox.checked) channelExportState.selectedIds.add(String(member.id));
-          else channelExportState.selectedIds.delete(String(member.id));
-        }
-        updateChannelExportDialogState();
-      });
-      list.append(row);
-    };
-
-    const appendChannelRow = (channel, index, parentId = null) => {
-      const row = document.createElement("label");
-      row.className = `mml-export-channel-row${parentId != null ? " is-group-child" : ""}`;
-      row.style.setProperty("--channel-color", getChannelColor(channel, index));
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.dataset.channelExportChannelId = String(channel.id);
-      checkbox.disabled = !channel.notes?.length;
-      const info = document.createElement("span");
-      info.className = "mml-export-channel-info";
-      const name = document.createElement("strong");
-      name.textContent = channel.name || `Ch${index + 1}`;
-      const detail = document.createElement("small");
-      detail.textContent = channel.notes?.length
+    renderInlineChannelSelectionList(list, channelExportState.selectedIds, {
+      notesOnly: true,
+      onChange: updateChannelExportDialogState,
+      detailForChannel: (channel) => (channel.notes?.length
         ? i18nText("export.channel_detail", [String(channel.instrument || ""), channel.notes.length.toLocaleString()])
-        : i18nText("export.empty_channel");
-      info.append(name, detail);
-      row.append(checkbox, info);
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) channelExportState.selectedIds.add(String(channel.id));
-        else channelExportState.selectedIds.delete(String(channel.id));
-        updateChannelExportDialogState();
-      });
-      list.append(row);
-    };
-
-    for (const entry of getItemTreeLayout()) {
-      if (entry.kind === "group") {
-        const group = groupById.get(String(entry.id));
-        if (group) appendGroupRow(group);
-        continue;
-      }
-      if (entry.kind !== "channel") continue;
-      const found = channelById.get(String(entry.id));
-      if (!found) continue;
-      rendered.add(String(entry.id));
-      appendChannelRow(found.channel, found.index, entry.parentId);
-    }
-    for (const [id, found] of channelById) {
-      if (!rendered.has(id)) appendChannelRow(found.channel, found.index, found.channel.groupId);
-    }
-
-    installLeftDragCheckboxSelection(list, {
-      deferChange: true,
-      onVisualChange: (checkbox) => {
-        const id = checkbox.dataset.channelExportChannelId;
-        if (!id) return;
-        if (checkbox.checked) channelExportState.selectedIds.add(id);
-        else channelExportState.selectedIds.delete(id);
-        checkbox.closest(".mml-export-channel-row")?.classList.toggle("selected", checkbox.checked);
-      },
-      onCommit: updateChannelExportDialogState,
+        : i18nText("export.empty_channel")),
     });
   }
 
@@ -26645,16 +26510,6 @@
     const list = elements.channelExportList;
     const selectable = new Set(getChannelExportableChannels().map((channel) => String(channel.id)));
     for (const id of [...channelExportState.selectedIds]) if (!selectable.has(id)) channelExportState.selectedIds.delete(id);
-    list?.querySelectorAll("input[data-channel-export-channel-id]").forEach((checkbox) => {
-      checkbox.checked = channelExportState.selectedIds.has(checkbox.dataset.channelExportChannelId);
-      checkbox.closest(".mml-export-channel-row")?.classList.toggle("selected", checkbox.checked);
-    });
-    list?.querySelectorAll("input[data-channel-export-group-id]").forEach((checkbox) => {
-      const members = getChannelGroupMembers(checkbox.dataset.channelExportGroupId).filter((channel) => channel.notes?.length);
-      const count = members.filter((channel) => channelExportState.selectedIds.has(String(channel.id))).length;
-      checkbox.checked = members.length > 0 && count === members.length;
-      checkbox.indeterminate = count > 0 && count < members.length;
-    });
     const selectedChannels = state.channels.filter((channel) => channelExportState.selectedIds.has(String(channel.id)));
     const noteCount = selectedChannels.reduce((sum, channel) => sum + (channel.notes?.length || 0), 0);
     if (elements.channelExportSummary) {
@@ -26669,8 +26524,11 @@
     }
     if (elements.channelExportCancelButton) elements.channelExportCancelButton.disabled = busy;
     if (elements.channelExportCloseButton) elements.channelExportCloseButton.disabled = busy;
-    // While audio renders the selection is frozen; the list is re-rendered afterwards.
-    if (busy) list?.querySelectorAll("input[type=checkbox]").forEach((checkbox) => { checkbox.disabled = true; });
+    // While audio renders the selection is frozen.
+    if (list) {
+      list.inert = busy;
+      list.classList.toggle("is-locked", busy);
+    }
   }
 
   function setChannelExportProgress(text = "", fraction = null) {
@@ -27261,6 +27119,7 @@
   }
 
   function showConfirmDialog({ title = "확인", message = "계속할까요?", confirmLabel = "확인" } = {}) {
+    if (elements.confirmDialogAlternate) elements.confirmDialogAlternate.hidden = true;
     if (!elements.confirmDialog || typeof elements.confirmDialog.showModal !== "function") {
       return Promise.resolve(window.confirm(message));
     }
@@ -27277,6 +27136,27 @@
       elements.confirmDialog.showModal();
       requestAnimationFrame(() => elements.confirmDialogCancel.focus());
     });
+  }
+
+  // Three-way variant of the confirm dialog: resolves "confirm", "alternate" or "cancel".
+  async function showChoiceDialog({ title, message, confirmLabel, alternateLabel } = {}) {
+    if (!elements.confirmDialog || !elements.confirmDialogAlternate || typeof elements.confirmDialog.showModal !== "function") {
+      return window.confirm(message) ? "confirm" : "cancel";
+    }
+    if (elements.confirmDialog.open) elements.confirmDialog.close("cancel");
+    elements.confirmDialogTitle.textContent = title;
+    elements.confirmDialogMessage.textContent = message;
+    elements.confirmDialogConfirm.textContent = confirmLabel;
+    elements.confirmDialogAlternate.textContent = alternateLabel;
+    elements.confirmDialogAlternate.hidden = false;
+    elements.confirmDialog.returnValue = "cancel";
+    const result = await new Promise((resolve) => {
+      elements.confirmDialog.addEventListener("close", () => resolve(elements.confirmDialog.returnValue || "cancel"), { once: true });
+      elements.confirmDialog.showModal();
+      requestAnimationFrame(() => elements.confirmDialogConfirm.focus());
+    });
+    elements.confirmDialogAlternate.hidden = true;
+    return result === "confirm" || result === "alternate" ? result : "cancel";
   }
 
   async function requestClearMidiReference() {
@@ -29324,30 +29204,30 @@
         disabled: getNonInitialTempos().length === 0,
         disabledReason: i18nText("context.disabled_no_tempo"),
         danger: true,
-        action: deleteAllNonInitialTempos,
+        action: () => { void requestDeleteAllNonInitialTempos(); },
       };
       const tempoItems = isMidiReferenceActive()
         ? [tempo
             ? { label: `MIDI 템포 ${tempo.bpm} · 읽기 전용`, disabled: true, disabledReason: i18nText("context.disabled_readonly") }
             : { label: "MIDI 템포 맵 · 읽기 전용", disabled: true, disabledReason: i18nText("context.disabled_readonly") }]
-        : tempo?.fixed
-          ? [
-              { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
+        : (() => {
+            // Always list add / change / delete so unavailable actions show as disabled, like the
+            // part and time-signature items.
+            const canDelete = Boolean(tempo) && !tempo.fixed && Number(tempo.beat) > 1e-7;
+            const deleteReason = tempo ? i18nText("context.disabled_initial_tempo") : i18nText("context.disabled_no_tempo_here");
+            return [
+              {
+                label: i18nText("timeline.add_tempo_measure"),
+                disabled: Boolean(tempo) || beat <= 0,
+                disabledReason: tempo ? i18nText("context.disabled_tempo_exists") : i18nText("context.disabled_tempo_at_start"),
+                action: () => addTempoAtBeat(beat),
+              },
+              { label: i18nText("tempo.change"), disabled: !tempo, disabledReason: i18nText("context.disabled_no_tempo_here"), action: () => editTempo(tempo) },
+              { label: i18nText("tempo.delete"), disabled: !canDelete, disabledReason: deleteReason, danger: true, action: () => { void requestDeleteTempo(tempo); } },
               tempoSimplifyItem,
               deleteAllTemposItem,
-            ]
-          : tempo
-            ? [
-                { label: i18nText("tempo.change"), action: () => editTempo(tempo) },
-                { label: i18nText("tempo.delete"), danger: true, action: () => deleteTempo(tempo) },
-                tempoSimplifyItem,
-                deleteAllTemposItem,
-              ]
-            : [
-                { label: i18nText("timeline.add_tempo_measure"), disabled: beat <= 0, disabledReason: i18nText("context.disabled_tempo_at_start"), action: () => addTempoAtBeat(beat) },
-                tempoSimplifyItem,
-                deleteAllTemposItem,
-              ];
+            ];
+          })();
 
       const existingFade = findTimelineFadeMarkerFromPointer(event) || getTimelineFadeAtBeat(beat);
       const fadeItems = existingFade
@@ -29454,7 +29334,7 @@
 
       return [
         ...categoryItems,
-        "separator",
+        { label: i18nText("timeline.event_delete"), danger: true, items: [
         {
           label: i18nText("timeline.event_delete_all"),
           disabled: allTimelineEventCount === 0,
@@ -29476,6 +29356,7 @@
           danger: true,
           action: () => deleteTimelineEventsInRange(measureContextBeat, Infinity),
         },
+        ] },
         "separator",
         {
           label: i18nText("timeline.move_first_measure"),
@@ -29564,7 +29445,7 @@
           danger: true,
           action: deleteSelectedNote,
         },
-        { label: i18nText("volume.edit_channels"), action: openNoteVolumeDialog },
+        { label: i18nText("note.selected_volume_edit"), action: openNoteVolumeDialog },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         {
           label: i18nText("context.note.convert"),
@@ -29819,9 +29700,9 @@
           label: i18nText("action.delete"),
           danger: true,
           items: [
-            { label: i18nText("item.label"), disabled: !hasItems, disabledReason: i18nText("context.disabled_no_group_items"), danger: true, action: () => deleteChannelGroupItemsImmediate(group.id, { deleteGroup: false }) },
-            { label: i18nText("group.label"), danger: true, action: () => deleteChannelGroupImmediate(group.id, { deleteChannels: false }) },
-            { label: i18nText("ui.all"), danger: true, action: () => deleteChannelGroupItemsImmediate(group.id, { deleteGroup: true }) },
+            { label: i18nText("group.menu_delete_items"), disabled: !hasItems, disabledReason: i18nText("context.disabled_no_group_items"), danger: true, action: () => deleteChannelGroupItemsImmediate(group.id, { deleteGroup: false }) },
+            { label: i18nText("group.menu_delete_group"), danger: true, action: () => deleteChannelGroupImmediate(group.id, { deleteChannels: false }) },
+            { label: i18nText("group.menu_delete_all"), danger: true, action: () => deleteChannelGroupItemsImmediate(group.id, { deleteGroup: true }) },
           ],
         },
         { label: i18nText("context.mml_edit"), action: () => openChannelGroupMmlDialog(group.id) },
@@ -30766,11 +30647,13 @@
     elements.channelExportCancelButton?.addEventListener("click", closeChannelExportDialog);
     elements.channelExportApplyButton?.addEventListener("click", () => { void applyChannelExport(); });
     elements.channelExportSelectAllButton?.addEventListener("click", () => {
-      channelExportState.selectedIds = new Set(getChannelExportableChannels().map((channel) => String(channel.id)));
+      setInlineChannelSelectionAll(channelExportState.selectedIds, true, { notesOnly: true });
+      renderChannelExportList();
       updateChannelExportDialogState();
     });
     elements.channelExportClearAllButton?.addEventListener("click", () => {
       channelExportState.selectedIds.clear();
+      renderChannelExportList();
       updateChannelExportDialogState();
     });
     elements.channelExportBackdrop?.addEventListener("pointerdown", (event) => {
@@ -30849,18 +30732,13 @@
     elements.mmlExportCloseButton?.addEventListener("click", closeMmlExportDialog);
     elements.mmlExportCancelButton?.addEventListener("click", closeMmlExportDialog);
     elements.mmlExportSelectAllButton?.addEventListener("click", () => {
-      elements.mmlExportChannelList?.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach((checkbox) => {
-        if (!checkbox.checked) setMmlExportCheckboxChecked(checkbox, true);
-      });
-      updateMmlExportDialogState();
+      // Keep the current order and append the remaining channels in list order.
+      for (const channel of getInlineSelectableChannels({ notesOnly: true })) mmlExportSelectedIds.add(String(channel.id));
+      renderMmlExportChannelList();
     });
     elements.mmlExportClearAllButton?.addEventListener("click", () => {
-      elements.mmlExportChannelList?.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-        checkbox.checked = false;
-        checkbox.indeterminate = false;
-      });
-      mmlExportSelectionQueue = [];
-      updateMmlExportDialogState();
+      mmlExportSelectedIds.clear();
+      renderMmlExportChannelList();
     });
     elements.mmlExportCopyAllButton?.addEventListener("click", applyMmlExportSelection);
     elements.mmlExportBackdrop?.addEventListener("pointerdown", (event) => {
@@ -31644,6 +31522,7 @@
     elements.timeEditBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.timeEditBackdrop) closeTimeEditDialog();
     });
+    elements.tempoBpmInput?.addEventListener("input", syncTempoEditorApplyState);
     elements.tempoBpmInput?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -32040,6 +31919,8 @@
       addTempoAtBeat,
       editTempo,
       deleteTempo,
+      requestDeleteTempo,
+      requestDeleteAllNonInitialTempos,
       applyTheme,
       shrinkTimelineToContent,
       undoHistory,

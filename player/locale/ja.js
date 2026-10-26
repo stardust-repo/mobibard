@@ -700,6 +700,11 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "sound.err_default_download": "既定の音源をダウンロードできませんでした。ネットワーク接続を確認してください。",
     "file.save_midi": "MIDI保存",
     "file.saved_midi": "MIDIファイルを保存しました。",
-    "file.save_midi_failed": "MIDIを保存できませんでした"
+    "file.save_midi_failed": "MIDIを保存できませんでした",
+    "tempo.recalc_notes": "ノートを再計算（実際の長さを維持）",
+    "tempo.recalc_change": "テンポ {0} → {1}",
+    "tempo.recalc_count": "ノート {0} 個の長さを再計算",
+    "tempo.recalc_shift": "以降の内容を {0} beat 移動",
+    "tempo.recalc_error": "最大誤差 {0}ms"
   }
 };

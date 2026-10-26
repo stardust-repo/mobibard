@@ -700,6 +700,11 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "sound.err_default_download": "無法下載預設音源，請檢查網路連線。",
     "file.save_midi": "儲存 MIDI",
     "file.saved_midi": "已儲存 MIDI 檔案。",
-    "file.save_midi_failed": "MIDI 儲存失敗"
+    "file.save_midi_failed": "MIDI 儲存失敗",
+    "tempo.recalc_notes": "重新計算音符（保持實際時長）",
+    "tempo.recalc_change": "速度 {0} → {1}",
+    "tempo.recalc_count": "已重新計算 {0} 個音符的時值",
+    "tempo.recalc_shift": "後續內容移動 {0} beat",
+    "tempo.recalc_error": "最大誤差 {0}ms"
   }
 };

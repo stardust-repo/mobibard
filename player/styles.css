@@ -10112,3 +10112,22 @@ a[class*="button"]:hover {
   .soundfont-download-row { grid-template-columns: 1fr; gap: 6px; }
   .soundfont-download-control { grid-template-columns: 1fr 1fr; }
 }
+
+/* 2026-10-26: 템포 수정 "노트 재계산" option. */
+.tempo-recalc-check { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--text, inherit); font-size: 13px; font-weight: 700; cursor: pointer; user-select: none; }
+.tempo-recalc-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent, #2563eb); }
+#tempoEditApply:disabled { opacity: .45; cursor: default; }
+
+/* 2026-10-26: popups were wider on the right. A "stable" scrollbar gutter reserves the scrollbar
+   width on the right side only, even when nothing scrolls. Cards only show a scrollbar when they
+   really overflow; the code help body (usually scrolling) reserves the gutter on both sides. */
+.mml-dialog > .dialog-card { scrollbar-gutter: auto !important; }
+#codeHelpDialog .code-help-popup-body { scrollbar-gutter: stable both-edges; }
+/* Tall cards (채널 음색 설정 etc.) can overflow on short screens; then the scrollbar took space on
+   the right only. Reserve it on both edges and take the scrollbar width out of the side padding
+   (--mb-scrollbar-width is measured in app.js; 0 for overlay scrollbars) so the total stays 20px. */
+.mml-dialog > :is(.part-sound-card, .tempo-edit-card, .midi-bulk-assign-card, .wb4-paste-card, .wb4-question-card) {
+  scrollbar-gutter: stable both-edges !important;
+  padding-left: max(4px, calc(20px - var(--mb-scrollbar-width, 0px))) !important;
+  padding-right: max(4px, calc(20px - var(--mb-scrollbar-width, 0px))) !important;
+}

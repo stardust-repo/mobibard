@@ -700,6 +700,11 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "sound.err_default_download": "无法下载默认音源，请检查网络连接。",
     "file.save_midi": "保存 MIDI",
     "file.saved_midi": "已保存 MIDI 文件。",
-    "file.save_midi_failed": "MIDI 保存失败"
+    "file.save_midi_failed": "MIDI 保存失败",
+    "tempo.recalc_notes": "重新计算音符（保持实际时长）",
+    "tempo.recalc_change": "速度 {0} → {1}",
+    "tempo.recalc_count": "已重新计算 {0} 个音符的时值",
+    "tempo.recalc_shift": "后续内容移动 {0} beat",
+    "tempo.recalc_error": "最大误差 {0}ms"
   }
 };

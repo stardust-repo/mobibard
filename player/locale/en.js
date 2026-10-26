@@ -700,6 +700,11 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "sound.err_default_download": "Could not download the default instrument sounds. Check your network connection.",
     "file.save_midi": "Save MIDI",
     "file.saved_midi": "Saved the MIDI file.",
-    "file.save_midi_failed": "Could not save MIDI"
+    "file.save_midi_failed": "Could not save MIDI",
+    "tempo.recalc_notes": "Recalculate notes (keep real length)",
+    "tempo.recalc_change": "Tempo {0} → {1}",
+    "tempo.recalc_count": "{0} notes resized",
+    "tempo.recalc_shift": "later content moved {0} beat",
+    "tempo.recalc_error": "max error {0}ms"
   }
 };
