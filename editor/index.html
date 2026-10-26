@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20261026h-group-delete-labels";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20261026i-guide";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.3.0&amp;rev=20261026h-group-delete-labels"></script>
+<script src="js/language-manager.js?v=5.3.0&amp;rev=20261026i-guide"></script>
 <title data-i18n="app.title">모비바드 v5.3</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20261026h-group-delete-labels" rel="stylesheet"/>
+<link href="styles.css?v=5.3.0&amp;rev=20261026i-guide" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -155,7 +155,7 @@
 </div>
 </div>
 </div>
-<button class="topbar-help-button" id="tutorialButton" type="button" title="MML 제작 최소 튜토리얼">튜토리얼</button>
+<button class="topbar-help-button" id="tutorialButton" type="button" title="모비바드 에디터 가이드" data-i18n-title="guide.button_title" data-i18n="guide.button">가이드</button>
 <a class="topbar-help-button topbar-survey-button" id="betaSurveyButton" href="https://forms.gle/z6tte6gSDeKno2WJ6" target="_blank" rel="noopener noreferrer" title="Beta 이용자 설문을 새 탭에서 엽니다">Beta 설문</a>
 </div>
 <div class="toolbar-spacer"></div>
@@ -678,31 +678,14 @@
 </div>
 
 <div class="popup-backdrop" hidden id="tutorialBackdrop">
-<section class="tutorial-dialog" id="tutorialDialog" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle">
-  <div class="tutorial-header">
-    <div>
-      <strong id="tutorialTitle">MML 에디터 빠른 시작</strong>
-      <span id="tutorialStepLabel">1 / 7</span>
-    </div>
-    <button aria-label="닫기" class="channel-mute-close" id="tutorialCloseButton" type="button">×</button>
+<section class="guide-dialog" id="guideDialog" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+  <div class="guide-header">
+    <strong id="guideTitle" data-i18n="guide.title">에디터 가이드</strong>
+    <button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="guideCloseButton" type="button">×</button>
   </div>
-  <div class="tutorial-progress" aria-hidden="true"><span id="tutorialProgressBar"></span></div>
-  <div class="tutorial-body">
-    <figure class="tutorial-capture" id="tutorialCapture">
-      <img id="tutorialStepImage" alt="" decoding="async"/>
-      <figcaption id="tutorialStepCaption"></figcaption>
-    </figure>
-    <div class="tutorial-copy">
-      <h3 id="tutorialStepTitle"></h3>
-      <p id="tutorialStepText"></p>
-      <ul class="tutorial-points" id="tutorialStepPoints"></ul>
-      <div class="tutorial-tip" id="tutorialStepTip"></div>
-    </div>
-  </div>
-  <div class="tutorial-actions">
-    <button id="tutorialPrevButton" type="button">이전</button>
-    <div class="tutorial-dots" id="tutorialDots" aria-label="튜토리얼 단계"></div>
-    <button id="tutorialNextButton" type="button">다음</button>
+  <div class="guide-layout">
+    <nav class="guide-nav" id="guideNav" aria-label="가이드 목차" data-i18n-aria-label="guide.nav_label"></nav>
+    <article class="guide-content" id="guideContent" tabindex="-1"></article>
   </div>
 </section>
 </div>
@@ -763,18 +746,18 @@
 <script src="../plugins/formats/musescore/format-musescore.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
-<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0&amp;rev=20261026h-group-delete-labels"></script>
+<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0&amp;rev=20261026i-guide"></script>
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
 <script src="js/soundbank-player.js?v=5.3.0&amp;rev=20261024-export-fixes"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261026h-group-delete-labels"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261026i-guide"></script>
 <script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.4"></script>
-<script src="app.js?v=5.3.0&amp;rev=20261026h-group-delete-labels"></script>
+<script src="app.js?v=5.3.0&amp;rev=20261026i-guide"></script>
 <script src="js/account-drive.js?v=5.3.0&amp;rev=20260928-account-preference1" type="module"></script>
 </body>
 </html>

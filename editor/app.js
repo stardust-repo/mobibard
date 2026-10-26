@@ -275,19 +275,9 @@
     tutorialButton: document.querySelector("#tutorialButton"),
     betaSurveyButton: document.querySelector("#betaSurveyButton"),
     tutorialBackdrop: document.querySelector("#tutorialBackdrop"),
-    tutorialCloseButton: document.querySelector("#tutorialCloseButton"),
-    tutorialStepLabel: document.querySelector("#tutorialStepLabel"),
-    tutorialProgressBar: document.querySelector("#tutorialProgressBar"),
-    tutorialStepTitle: document.querySelector("#tutorialStepTitle"),
-    tutorialStepText: document.querySelector("#tutorialStepText"),
-    tutorialStepImage: document.querySelector("#tutorialStepImage"),
-    tutorialStepCaption: document.querySelector("#tutorialStepCaption"),
-    tutorialCapture: document.querySelector("#tutorialCapture"),
-    tutorialStepPoints: document.querySelector("#tutorialStepPoints"),
-    tutorialStepTip: document.querySelector("#tutorialStepTip"),
-    tutorialPrevButton: document.querySelector("#tutorialPrevButton"),
-    tutorialNextButton: document.querySelector("#tutorialNextButton"),
-    tutorialDots: document.querySelector("#tutorialDots"),
+    guideCloseButton: document.querySelector("#guideCloseButton"),
+    guideNav: document.querySelector("#guideNav"),
+    guideContent: document.querySelector("#guideContent"),
     snapSelect: document.querySelector("#snapSelect"),
     noteVolumeDisplaySelect: document.querySelector("#noteVolumeDisplaySelect"),
     pitchSpacingSelect: document.querySelector("#pitchSpacingSelect"),
@@ -5222,6 +5212,7 @@
     if (elements.tempoSimplifyBackdrop && !elements.tempoSimplifyBackdrop.hidden) updateTempoSimplifySummary();
     renderShortcutKeycaps();
     updateShortcutSearchResults();
+    if (elements.tutorialBackdrop && !elements.tutorialBackdrop.hidden) renderGuide();
     window.MobibardSiteNavigation?.refresh?.();
   }
 
@@ -30357,136 +30348,226 @@
     }
   }
 
-  const MML_TUTORIAL_STEPS = [
-    {
-      title: "1. 채널과 그룹 만들기",
-      text: "먼저 왼쪽 목록에서 곡에 사용할 채널과 그룹을 만듭니다. 채널은 실제 노트를 넣는 작업 단위이고, 그룹은 여러 채널을 한 묶음으로 정리하는 폴더라고 생각하면 됩니다.",
-      points: [
-        "＋ 버튼에서 채널 또는 그룹을 추가합니다. 악기나 역할이 다르면 채널을 나누는 것이 편합니다.",
-        "채널과 그룹은 목록에서 순서를 정리할 수 있고, 각 항목의 편집 메뉴에서 복사·볼륨 수정 같은 작업을 할 수 있습니다.",
-        "그룹은 멜로디·반주처럼 여러 채널을 함께 관리하거나 MML 내보내기에서 한 번에 선택할 때 유용합니다.",
-      ],
-      tip: "처음에는 ‘그룹 = 큰 묶음, 채널 = 실제 악기/파트’ 정도만 기억하면 충분합니다.",
-      image: "assets/tutorial/01-overview.png?v=13",
-      imageAlt: "모비바드 에디터의 채널과 그룹 목록",
-      caption: "왼쪽에서 채널과 그룹을 만들고 정리한 뒤, 오른쪽 피아노롤에서 해당 채널의 노트를 편집합니다.",
-    },
-    {
-      title: "2. 노트의 기본 조작 익히기",
-      text: "피아노롤에 노트를 넣고 위치와 길이를 조절하는 것이 편집의 기본입니다. 처음에는 음높이, 시작 위치, 길이 세 가지만 익혀도 대부분의 입력을 할 수 있습니다.",
-      points: [
-        "노트 도구로 빈 공간을 클릭하면 현재 편집 단위에 맞춰 노트가 생성됩니다.",
-        "노트를 드래그해 위치와 음높이를 옮기고, 노트의 양 끝을 잡아 길이를 조절할 수 있습니다.",
-        "상단의 1/4, 1/8 같은 편집 단위는 노트를 움직이거나 배치할 때 붙는 시간 간격을 정합니다.",
-      ],
-      tip: "처음에는 세밀한 옵션보다 ‘찍기 → 옮기기 → 길이 조절’ 세 동작부터 익히는 것이 가장 빠릅니다.",
-      image: "assets/tutorial/02-note-basic.png?v=13",
-      imageAlt: "노트 도구와 편집 단위가 표시된 기본 피아노롤 화면",
-      caption: "피아노롤의 사각형 하나가 노트 하나입니다. 세로는 음높이, 가로 위치는 시작 시점, 가로 길이는 노트 길이를 뜻합니다.",
-    },
-    {
-      title: "3. 여러 노트를 한 번에 선택하고 편집하기",
-      text: "노트가 많아지면 하나씩 수정하기보다 필요한 노트를 여러 개 선택해서 함께 다루는 것이 훨씬 빠릅니다. 선택된 노트에는 기본 편집 명령을 한 번에 적용할 수 있습니다.",
-      points: [
-        "선택 도구에서 빈 공간을 드래그하면 사각형 안의 여러 노트를 한 번에 선택할 수 있습니다.",
-        "선택한 노트는 복사·잘라내기·삭제하거나, 볼륨을 한꺼번에 조절할 수 있습니다.",
-        "여러 노트를 선택한 상태는 다음 단계의 트릴·글리산도·아르페지오 같은 변환 작업에도 그대로 사용됩니다.",
-      ],
-      tip: "여러 노트에 같은 작업을 해야 한다면 먼저 선택 범위를 만드는 습관을 들이면 편집 시간이 크게 줄어듭니다.",
-      image: "assets/tutorial/02-note-edit.png?v=13",
-      imageAlt: "선택 영역으로 여러 노트를 선택하는 피아노롤 화면",
-      caption: "선택 도구로 필요한 노트를 묶은 뒤, 우클릭 편집 메뉴나 기본 편집 명령을 사용합니다.",
-    },
-    {
-      title: "4. 노트 변환 옵션 사용하기",
-      text: "직접 노트를 여러 개 찍어야 하는 연주 패턴은 ‘변환’ 기능으로 빠르게 만들 수 있습니다. 변환은 선택한 노트를 재료로 사용하므로 먼저 변환할 노트를 선택하세요.",
-      points: [
-        "트릴: 두 음을 빠르게 반복하는 형태를 만들고 노트 간격과 강약 변화를 설정합니다.",
-        "글리산도: 낮은 음에서 높은 음 또는 반대 방향으로 이어지는 계단식 음 진행을 만듭니다.",
-        "아르페지오: 코드의 음을 한꺼번에 치지 않고 순서대로 펼쳐 연주하는 형태를 만듭니다.",
-      ],
-      tip: "처음에는 기본값으로 한 번 적용해 결과를 본 뒤, 간격·방향·범위만 조금씩 바꿔 보는 것이 이해하기 쉽습니다.",
-      image: "assets/tutorial/04-transform-edit.png?v=13",
-      imageAlt: "글리산도 변환 편집 화면",
-      caption: "노트를 선택한 뒤 노트 편집 메뉴의 ‘변환’에서 트릴, 글리산도, 아르페지오를 선택할 수 있습니다.",
-    },
-    {
-      title: "5. 마디 편집으로 곡의 구간 다루기",
-      text: "마디 편집은 곡 중간에 공간을 만들거나 반복 구간을 복제하고, 필요 없는 구간을 통째로 없앨 때 사용합니다. 많은 노트를 일일이 옮길 필요가 없습니다.",
-      points: [
-        "추가: 선택한 위치에 빈 마디 또는 시간을 넣고 뒤쪽 내용을 뒤로 이동합니다.",
-        "복제: 지정한 구간을 복사해 반복 구간을 빠르게 만듭니다.",
-        "삭제: 지정한 구간을 제거하고 뒤쪽 내용을 앞으로 당깁니다.",
-      ],
-      tip: "인트로를 늘리거나 후렴을 반복하는 등 곡의 큰 구조를 바꿀 때 사용하는 기능입니다.",
-      image: "assets/tutorial/05-measure-edit.png?v=13",
-      imageAlt: "마디 편집 화면",
-      caption: "상단 편집 → 마디 편집에서 추가·복제·삭제 중 원하는 작업을 선택하고 적용 범위를 정합니다.",
-    },
-    {
-      title: "6. 템포와 박자 이해하기",
-      text: "템포와 박자는 특정 채널의 노트가 아니라 곡 전체의 시간 구조를 정하는 설정입니다. 재생 속도나 마디 구성이 달라지는 위치가 있다면 타임라인에서 해당 지점에 설정합니다.",
-      points: [
-        "템포(BPM)는 곡이 얼마나 빠르게 연주되는지를 정합니다. 값이 높을수록 빠릅니다.",
-        "박자표는 한 마디가 어떤 박으로 구성되는지 정합니다. 예를 들어 4/4, 3/4처럼 사용할 수 있습니다.",
-        "곡 중간에 템포나 박자가 바뀌면 해당 위치부터 새 설정이 적용되며, MML 내보내기에도 반영됩니다.",
-      ],
-      tip: "처음 만드는 곡이 한 가지 속도와 4/4 박자라면 기본값을 그대로 두고 넘어가도 됩니다.",
-      image: "assets/tutorial/06-tempo-meter.png?v=13",
-      imageAlt: "타임라인의 템포와 박자 개념을 표시한 편집 화면",
-      caption: "템포와 박자는 타임라인의 전역 설정입니다. 노트 채널과 달리 곡 전체의 시간 기준에 영향을 줍니다.",
-    },
-    {
-      title: "7. 완성한 곡을 MML로 내보내기",
-      text: "편집이 끝났다면 파일 → MML 내보내기를 엽니다. 어떤 채널을 악보로 만들지 선택한 뒤 복사 버튼으로 MML을 가져가면 됩니다.",
-      points: [
-        "왼쪽에서 채널을 개별 선택하거나 그룹을 선택해 그룹 안의 채널을 한 번에 선택할 수 있습니다.",
-        "그룹으로 선택된 채널은 화면 위에서부터 순서대로 번호가 매겨지며, 이 번호가 실제 내보내기 순서를 보여줍니다.",
-        "전체 복사는 선택한 채널의 전체 MML을 만들고, 파트별 악보는 타임라인에서 설정한 파트 경계를 기준으로 나눠 제공합니다.",
-      ],
-      tip: "처음에는 필요한 그룹이나 채널만 선택한 뒤 ‘전체 복사’ 결과부터 확인하면 가장 간단합니다.",
-      image: "assets/tutorial/07-mml-export.png?v=13",
-      imageAlt: "MML 내보내기의 그룹과 채널 선택 화면",
-      caption: "그룹 또는 채널을 선택하고 오른쪽의 복사 버튼을 사용하면 바로 MML을 가져갈 수 있습니다.",
-    },
-  ];
-  let tutorialStepIndex = 0;
+  // ---- 가이드 (Help → Guide): left menu of 11 topics, right content. ----
+  // Text lives in the locale files (guide.<id>.*); `blocks` gives the item count of each block.
+  const GUIDE_SECTIONS = Object.freeze([
+    { id: "basics", steps: 5, figure: "overview" },
+    { id: "channels", blocks: [3, 3, 1, 2, 2], figure: "channels" },
+    { id: "notes", blocks: [3, 4, 4], figure: "notes" },
+    { id: "volume", blocks: [2, 2, 2], figure: "volume" },
+    { id: "transform", blocks: [3, 3], figure: "transform" },
+    { id: "tempo", blocks: [2, 3, 1], figure: "tempo" },
+    { id: "events", blocks: [2, 1, 1, 1], figure: "events" },
+    { id: "measure", blocks: [4, 2], figure: "measure" },
+    { id: "parts", blocks: [2, 2], figure: "parts" },
+    { id: "import", blocks: [3, 2, 1], figure: "import" },
+    { id: "export", blocks: [3, 1, 2], figure: "export" },
+  ]);
+  // Callout positions (percent of the 1280×720 capture) for the basics steps 1–5:
+  // ＋ button, Note tool, piano roll, play button, File menu.
+  const GUIDE_OVERVIEW_CALLOUTS = Object.freeze({
+    ko: [[16.8, 16.88], [74.45, 3.4], [58.96, 59.03], [27.95, 3.4], [12.87, 3.4]],
+    en: [[16.8, 16.88], [72.79, 3.4], [58.96, 59.03], [30.4, 3.4], [13.43, 3.4]],
+    ja: [[16.8, 16.88], [73.14, 3.4], [58.96, 59.03], [31.66, 3.4], [13.96, 3.4]],
+    "zh-CN": [[16.8, 16.88], [74.45, 3.4], [58.96, 59.03], [28.51, 3.4], [13.43, 3.4]],
+    "zh-TW": [[16.8, 16.88], [74.45, 3.4], [58.96, 59.03], [28.51, 3.4], [13.43, 3.4]],
+  });
+  const GUIDE_ASSET_VERSION = "20261026a";
+  let guideSectionId = "basics";
 
-  function renderTutorialStep() {
-    const count = MML_TUTORIAL_STEPS.length;
-    tutorialStepIndex = clamp(Math.round(Number(tutorialStepIndex) || 0), 0, Math.max(0, count - 1));
-    const step = MML_TUTORIAL_STEPS[tutorialStepIndex];
-    if (!step) return;
-    if (elements.tutorialStepLabel) elements.tutorialStepLabel.textContent = `${tutorialStepIndex + 1} / ${count}`;
-    if (elements.tutorialProgressBar) elements.tutorialProgressBar.style.width = `${((tutorialStepIndex + 1) / count) * 100}%`;
-    if (elements.tutorialStepTitle) elements.tutorialStepTitle.textContent = step.title;
-    if (elements.tutorialStepText) elements.tutorialStepText.textContent = step.text;
-    if (elements.tutorialStepImage) {
-      elements.tutorialStepImage.src = step.image || "";
-      elements.tutorialStepImage.alt = step.imageAlt || "";
+  function guideText(key, args) {
+    return i18nText(key, args);
+  }
+
+  function guideHasText(key) {
+    const value = i18nText(key);
+    return Boolean(value) && value !== key;
+  }
+
+  function guideEscape(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  }
+
+  function guideLanguage() {
+    const language = normalizeLanguage(window.MobibardI18n?.language || state.language || "ko");
+    return GUIDE_OVERVIEW_CALLOUTS[language] ? language : "en";
+  }
+
+  // Drawn (not captured) mini UI pictures. Labels reuse the app's own strings so every
+  // language shows the words the user sees in the editor.
+  function buildGuideFigure(kind) {
+    const t = (key, args) => guideEscape(guideText(key, args));
+    const menu = (items) => `<div class="gf-menu">${items.map((item) => {
+      if (item === "-") return '<div class="gf-menu-sep"></div>';
+      const classes = ["gf-menu-item", item.danger ? "is-danger" : "", item.active ? "is-active" : "", item.disabled ? "is-disabled" : ""].filter(Boolean).join(" ");
+      return `<div class="${classes}"><span>${item.label}</span>${item.sub ? '<b aria-hidden="true">›</b>' : ""}</div>`;
+    }).join("")}</div>`;
+    const ruler = (markers, extra = "") => `<div class="gf-timeline">${[0, 1, 2, 3].map((index) => `<span class="gf-bar" style="left:${index * 25}%">${index + 1}</span>`).join("")}${markers.map((m) => `<span class="gf-marker gf-marker-${m.kind}" style="left:${m.at}%">${guideEscape(m.label)}</span>`).join("")}${extra}</div>`;
+    const notes = (items) => items.map(([x, y, w, extra = ""]) => `<span class="gf-note${extra ? ` ${extra}` : ""}" style="left:${x}%;top:${y}%;width:${w}%"></span>`).join("");
+    switch (kind) {
+      case "channels":
+        return `<div class="gf-panel gf-channels">
+          <div class="gf-list-head"><span class="gf-icon-btn" title="${t("channel.merge")}">⇉</span><span class="gf-icon-btn is-accent">＋</span><span class="gf-icon-btn is-danger">🗑</span></div>
+          <div class="gf-row gf-row-channel is-active" style="--c:#2f7de1"><span class="gf-name">${t("guide.fig.melody")}</span><span class="gf-row-icons">👁 🔊</span></div>
+          <div class="gf-row gf-row-group" style="--c:#c8b23a"><span class="gf-name">📂 ${t("guide.fig.group")}</span><span class="gf-pill">2</span><span class="gf-row-icons">👁 🔊</span></div>
+          <div class="gf-row gf-row-channel is-child" style="--c:#d0475b"><span class="gf-name">${t("guide.fig.chord")}</span><span class="gf-row-icons">👁 🔊</span></div>
+          <div class="gf-row gf-row-channel is-child" style="--c:#2fa36b"><span class="gf-name">${t("guide.fig.bass")}</span><span class="gf-row-icons">👁 🔊</span></div>
+        </div>`;
+      case "notes":
+        return `<div class="gf-panel gf-notes">
+          <div class="gf-toolbar"><span class="gf-seg"><b class="is-on">${t("tool.note")}</b><b>${t("tool.select")}</b></span><span class="gf-select">1/8 ▾</span></div>
+          <div class="gf-roll">${notes([[4, 62, 12], [18, 50, 8], [28, 42, 8, "is-selected"], [38, 34, 16, "is-selected"], [56, 42, 8, "is-selected"], [68, 50, 20]])}
+            <span class="gf-selection" style="left:26%;top:26%;width:40%;height:34%"></span>
+            <span class="gf-tag" style="left:42%;top:8%">${t("guide.fig.selected")}</span>
+          </div>
+        </div>`;
+      case "volume":
+        return `<div class="gf-panel gf-volume">
+          <div class="gf-roll gf-roll-short">${notes([[6, 40, 14], [24, 30, 10], [38, 50, 18], [60, 36, 10], [76, 44, 14]])}</div>
+          <div class="gf-lane">${[[6, 62, "V12"], [24, 42, "V8"], [38, 78, "V15"], [60, 21, "V4"], [76, 52, "V10"]].map(([x, h, v]) => `<span class="gf-vbar" style="left:${x}%;height:${h}%"><i>${v}</i></span>`).join("")}</div>
+          <div class="gf-caption-row">${t("volume.editor")}</div>
+        </div>`;
+      case "transform":
+        return `<div class="gf-menu-wrap">${menu([
+          { label: t("context.note.copy_short") },
+          { label: t("context.note.cut_short") },
+          { label: t("note.selected_volume_edit") },
+          { label: t("context.note.convert"), sub: true, active: true },
+          "-",
+          { label: t("context.note.delete_short"), danger: true },
+        ])}${menu([
+          { label: t("context.note.trill_short") },
+          { label: t("context.note.glissando_short") },
+          { label: t("context.note.arpeggio_short") },
+        ])}</div>`;
+      case "tempo":
+        return `<div class="gf-stack">
+          <div class="gf-panel">${ruler([{ kind: "tempo", at: 1, label: "120" }, { kind: "tempo", at: 51, label: "90" }, { kind: "sig", at: 1, label: "4/4" }, { kind: "sig", at: 76, label: "3/4" }])}</div>
+          <div class="gf-dialog">
+            <div class="gf-dialog-title">${t("tempo.edit")}</div>
+            <div class="gf-field"><span>${t("tempo.label")}</span><b class="gf-input">90</b><span>BPM</span></div>
+            <div class="gf-check is-on"><i>✓</i><span>${t("tempo.recalc_notes")}</span></div>
+          </div>
+        </div>`;
+      case "events":
+        return `<div class="gf-menu-wrap">${menu([
+          { label: t("timeline.tempo_menu"), sub: true },
+          { label: t("timeline.fade_menu"), sub: true },
+          { label: t("timeline.time_signature_menu"), sub: true },
+          { label: t("timeline.part_menu"), sub: true },
+          { label: t("timeline.measure_menu"), sub: true },
+          { label: t("timeline.playback_range_menu"), sub: true },
+          { label: t("timeline.event_delete"), sub: true, danger: true, active: true },
+        ])}${menu([
+          { label: t("timeline.event_delete_all"), danger: true },
+          { label: t("timeline.event_delete_before"), danger: true },
+          { label: t("timeline.event_delete_after"), danger: true },
+        ])}</div>`;
+      case "measure":
+        return `<div class="gf-stack">
+          <div class="gf-seg gf-seg-wide"><b>${t("action.add")}</b><b class="is-on">${t("action.duplicate")}</b><b>${t("action.delete")}</b></div>
+          <div class="gf-panel">${ruler([], `<span class="gf-range" style="left:25%;width:25%">${t("guide.fig.range")}</span>`)}
+            <div class="gf-roll gf-roll-short">${notes([[3, 40, 10], [15, 55, 8], [27, 35, 9], [38, 50, 9], [52, 40, 10], [66, 55, 8], [78, 35, 12]])}<span class="gf-range-band" style="left:25%;width:25%"></span></div>
+          </div>
+          <div class="gf-field gf-field-inline"><span>${t("timeline.duplicate_count")}</span><b class="gf-input">2</b></div>
+        </div>`;
+      case "parts":
+        return `<div class="gf-panel">${ruler([{ kind: "part", at: 1, label: "P1" }, { kind: "part", at: 38, label: "P2" }, { kind: "part", at: 72, label: "P3" }])}
+          <div class="gf-spans"><span style="left:0;width:37%">${t("guide.fig.chars", ["1,180"])}</span><span style="left:37%;width:34%">${t("guide.fig.chars", ["1,120"])}</span><span style="left:71%;width:29%">${t("guide.fig.chars", ["960"])}</span></div>
+        </div>`;
+      case "import":
+        return `<div class="gf-menu-wrap">${menu([
+          { label: t("file.new") },
+          { label: t("load"), active: true },
+          { label: t("drive.open") },
+          "-",
+          { label: t("file.save") },
+          { label: t("drive.save_google") },
+          "-",
+          { label: t("mml.export") },
+          { label: t("midi.export") },
+          { label: t("audio.export_ogg") },
+          "-",
+          { label: t("file.supported"), active: true },
+        ])}</div>`;
+      case "export":
+        return `<div class="gf-export">
+          <div class="gf-panel gf-channels">
+            ${[["2", "guide.fig.melody", "#2f7de1", "412"], ["3", "guide.fig.chord", "#d0475b", "388"], ["1", "guide.fig.bass", "#2fa36b", "205"]].map(([order, key, color, chars]) => `<div class="gf-row gf-row-channel" style="--c:${color}"><span class="gf-name">${t(key)}</span><small>${t("guide.fig.chars", [chars])}</small><span class="gf-order">${order}</span></div>`).join("")}
+          </div>
+          <div class="gf-panel gf-copy"><div class="gf-copy-row"><b>${t("mml_export.copy_all")}</b><span class="gf-btn">${t("copy")}</span></div><div class="gf-copy-row is-muted"><b>${t("mml_export.copy_by_part")}</b><span class="gf-btn">P1</span><span class="gf-btn">P2</span></div></div>
+        </div>`;
+      default:
+        return "";
     }
-    if (elements.tutorialCapture) elements.tutorialCapture.hidden = !step.image;
-    if (elements.tutorialStepCaption) elements.tutorialStepCaption.textContent = step.caption || "";
-    if (elements.tutorialStepPoints) {
-      elements.tutorialStepPoints.replaceChildren(...(step.points || []).map((point) => {
-        const item = document.createElement("li");
-        item.textContent = point;
-        return item;
-      }));
+  }
+
+  function renderGuideNav() {
+    const nav = elements.guideNav;
+    if (!nav) return;
+    nav.replaceChildren(...GUIDE_SECTIONS.map((section, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `guide-nav-item${section.id === "basics" ? " is-basics" : ""}${section.id === guideSectionId ? " is-active" : ""}`;
+      button.dataset.guideSection = section.id;
+      button.setAttribute("aria-current", section.id === guideSectionId ? "page" : "false");
+      const number = document.createElement("span");
+      number.className = "guide-nav-number";
+      number.textContent = section.id === "basics" ? "★" : String(index);
+      const label = document.createElement("span");
+      label.className = "guide-nav-label";
+      label.textContent = guideText(`guide.${section.id}.nav`);
+      button.append(number, label);
+      button.addEventListener("click", () => selectGuideSection(section.id, { focusContent: false }));
+      return button;
+    }));
+  }
+
+  function renderGuideContent() {
+    const host = elements.guideContent;
+    if (!host) return;
+    const section = GUIDE_SECTIONS.find((item) => item.id === guideSectionId) || GUIDE_SECTIONS[0];
+    const t = (key, args) => guideEscape(guideText(key, args));
+    const base = `guide.${section.id}`;
+    const parts = [`<h2 class="guide-heading">${t(`${base}.title`)}</h2>`, `<p class="guide-lead">${t(`${base}.lead`)}</p>`];
+    if (guideHasText(`${base}.where`)) {
+      parts.push(`<div class="guide-where"><span>${t("guide.where")}</span>${t(`${base}.where`)}</div>`);
     }
-    if (elements.tutorialStepTip) elements.tutorialStepTip.textContent = step.tip;
-    if (elements.tutorialPrevButton) elements.tutorialPrevButton.disabled = tutorialStepIndex <= 0;
-    if (elements.tutorialNextButton) elements.tutorialNextButton.textContent = i18nText(tutorialStepIndex >= count - 1 ? "tutorial.done" : "nav.next");
-    if (elements.tutorialDots) {
-      elements.tutorialDots.replaceChildren(...MML_TUTORIAL_STEPS.map((_, index) => {
-        const dot = document.createElement("button");
-        dot.type = "button";
-        dot.className = `tutorial-dot${index === tutorialStepIndex ? " active" : ""}`;
-        dot.setAttribute("aria-label", i18nText("tutorial.go_step", [index + 1]));
-        dot.addEventListener("click", () => { tutorialStepIndex = index; renderTutorialStep(); });
-        return dot;
-      }));
+    if (section.figure === "overview") {
+      const language = guideLanguage();
+      const callouts = GUIDE_OVERVIEW_CALLOUTS[language];
+      parts.push(`<figure class="guide-shot"><div class="guide-shot-frame"><img src="assets/guide/overview-${language}.webp?v=${GUIDE_ASSET_VERSION}" alt="${t("guide.basics.title")}" decoding="async" width="1280" height="720"/>${callouts.map(([x, y], index) => `<span class="guide-callout" style="left:${x}%;top:${y}%">${index + 1}</span>`).join("")}</div></figure>`);
+      parts.push(`<ol class="guide-steps">${Array.from({ length: section.steps }, (_, index) => `<li><span class="guide-step-number">${index + 1}</span><div><strong>${t(`${base}.s${index + 1}.title`)}</strong><p>${t(`${base}.s${index + 1}.text`)}</p></div></li>`).join("")}</ol>`);
+    } else {
+      const figure = buildGuideFigure(section.figure);
+      if (figure) parts.push(`<figure class="guide-figure" aria-hidden="true">${figure}<figcaption>${t("guide.figure_note")}</figcaption></figure>`);
+      (section.blocks || []).forEach((count, blockIndex) => {
+        const blockKey = `${base}.b${blockIndex + 1}`;
+        parts.push(`<section class="guide-block"><h3>${t(`${blockKey}.title`)}</h3><ul>${Array.from({ length: count }, (_, itemIndex) => `<li>${t(`${blockKey}.i${itemIndex + 1}`)}</li>`).join("")}</ul></section>`);
+      });
     }
+    if (guideHasText(`${base}.tip`)) {
+      parts.push(`<div class="guide-tip"><b>${t("guide.tip")}</b><span>${t(`${base}.tip`)}</span></div>`);
+    }
+    host.innerHTML = parts.join("");
+    host.scrollTop = 0;
+  }
+
+  function selectGuideSection(id, { focusContent = false } = {}) {
+    if (!GUIDE_SECTIONS.some((section) => section.id === id)) return;
+    guideSectionId = id;
+    elements.guideNav?.querySelectorAll(".guide-nav-item").forEach((item) => {
+      const active = item.dataset.guideSection === id;
+      item.classList.toggle("is-active", active);
+      item.setAttribute("aria-current", active ? "page" : "false");
+    });
+    renderGuideContent();
+    if (focusContent) elements.guideContent?.focus({ preventScroll: true });
+  }
+
+  function renderGuide() {
+    renderGuideNav();
+    renderGuideContent();
   }
 
   function openTutorialDialog() {
@@ -30500,14 +30581,27 @@
     closeVolumeMenu();
     closeZoomMenu();
     closePlaybackRateMenu();
-    tutorialStepIndex = 0;
-    renderTutorialStep();
+    renderGuide();
     elements.tutorialBackdrop.hidden = false;
-    requestAnimationFrame(() => elements.tutorialNextButton?.focus());
+    requestAnimationFrame(() => elements.guideNav?.querySelector(".guide-nav-item.is-active")?.focus({ preventScroll: true }));
   }
 
   function closeTutorialDialog() {
     if (elements.tutorialBackdrop) elements.tutorialBackdrop.hidden = true;
+  }
+
+  // ↑/↓ (and Home/End) move between topics while the menu has focus.
+  function handleGuideNavKeydown(event) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const index = GUIDE_SECTIONS.findIndex((section) => section.id === guideSectionId);
+    let next = index;
+    if (event.key === "ArrowDown") next = Math.min(GUIDE_SECTIONS.length - 1, index + 1);
+    else if (event.key === "ArrowUp") next = Math.max(0, index - 1);
+    else if (event.key === "Home") next = 0;
+    else next = GUIDE_SECTIONS.length - 1;
+    event.preventDefault();
+    selectGuideSection(GUIDE_SECTIONS[next].id);
+    elements.guideNav?.querySelector(`[data-guide-section="${GUIDE_SECTIONS[next].id}"]`)?.focus({ preventScroll: false });
   }
 
   function pulseHelpEntryButtons() {
@@ -30868,19 +30962,8 @@
     elements.tutorialButton?.addEventListener("click", () => elements.tutorialButton?.classList.remove("attention-pulse"));
     elements.betaSurveyButton?.addEventListener("click", () => elements.betaSurveyButton?.classList.remove("attention-pulse"));
     startHelpEntryAttention();
-    elements.tutorialCloseButton?.addEventListener("click", closeTutorialDialog);
-    elements.tutorialPrevButton?.addEventListener("click", () => {
-      tutorialStepIndex = Math.max(0, tutorialStepIndex - 1);
-      renderTutorialStep();
-    });
-    elements.tutorialNextButton?.addEventListener("click", () => {
-      if (tutorialStepIndex >= MML_TUTORIAL_STEPS.length - 1) {
-        closeTutorialDialog();
-        return;
-      }
-      tutorialStepIndex += 1;
-      renderTutorialStep();
-    });
+    elements.guideCloseButton?.addEventListener("click", closeTutorialDialog);
+    elements.guideNav?.addEventListener("keydown", handleGuideNavKeydown);
     elements.tutorialBackdrop?.addEventListener("pointerdown", (event) => {
       if (event.target === elements.tutorialBackdrop) closeTutorialDialog();
     });
