@@ -5,7 +5,7 @@
   "author": "startdust-io",
   "license": "MIT",
   "licenseFile": "LICENSE",
-  "file": "mobibard_w2m.onnx",
+  "file": "mobibard_a2m.onnx",
   "meta": "meta.json",
   "bytes": 39042933,
   "sha256": "240a3a8e054d36e1579aa723f7cf9f0ff69fcd097c3c1d1797cfc3aa563241c0"

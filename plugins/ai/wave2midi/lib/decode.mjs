@@ -71,7 +71,11 @@ export function decodeNotes(probs, T, classes, th) {
 }
 
 /** Overlapping windows + linear cross-fade, as in predict_song. runWindow(Float32Array samples) -> probs of W frames. */
-export async function predictSong(wave, meta, runWindow, onProgress) {
+/** runWindow(x) -> probabilities of one window. x is the 8 s audio segment, or, when opts.prepare is given,
+ *  what prepare(segment) resolved to (e.g. frontend features computed in Web Workers). prepare() is started
+ *  opts.lookahead windows ahead, so feature extraction for the next windows overlaps the network run. */
+export async function predictSong(wave, meta, runWindow, onProgress, opts = {}) {
+  const prepare = opts.prepare, ahead = Math.max(0, opts.lookahead ?? 0);
   let W = Math.round(meta.window_seconds * FPS); W += W % 2;
   const O = Math.min(Math.round(meta.overlap_seconds * FPS), W / 2), H = W - O;
   const T = Math.ceil(wave.length / HOP), K = meta.classes.length;
@@ -80,10 +84,19 @@ export async function predictSong(wave, meta, runWindow, onProgress) {
   const acc = { onset: new Float32Array(T * P), frame: new Float32Array(T * P), offset: new Float32Array(T * P),
                 drum: new Float32Array(T * P), inst: new Float32Array(T * P * K) };
   const wsum = new Float32Array(T);
-  for (let wi = 0; wi < starts.length; wi++) {
+  const segment = wi => {
     const st = starts[wi], seg = new Float32Array(W * HOP);
     seg.set(wave.subarray(st * HOP, Math.min(wave.length, (st + W) * HOP)));
-    const pr = await runWindow(seg);
+    return seg;
+  };
+  const pending = new Map();
+  const start = wi => { if (prepare && wi < starts.length && !pending.has(wi)) pending.set(wi, prepare(segment(wi))); };
+  for (let wi = 0; wi < starts.length; wi++) {
+    const st = starts[wi];
+    for (let j = wi; j <= wi + ahead; j++) start(j);
+    let pr;
+    if (prepare) { const x = await pending.get(wi); pending.delete(wi); pr = await runWindow(x); }
+    else pr = await runWindow(segment(wi));
     const n = Math.min(W, T - st);
     for (let i = 0; i < n; i++) {
       let w = 1;

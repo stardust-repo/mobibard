@@ -13,19 +13,20 @@ plugins/ai/wave2midi/
   lib/decode.mjs          확률 맵 -> 노트, 8초 창 / 2초 겹침 cross-fade (w2m/labels.py, infer.py)
   lib/velocity.mjs        onset spectral flux 기반 velocity (w2m/velocity.py)
   lib/midi.mjs            표준 MIDI 작성기 (w2m/midi.py)
+  lib/tempo.mjs           노트로부터 템포 맵 추정 (w2m/tempo.py, 기본 사용)
   lib/model-cache.mjs     모델 영구 저장(IndexedDB) + SHA-256 무결성 검사
-  model/mobibard_w2m.onnx mobibard_w2m v1.0, 16비트 가중치 / 32비트 연산 (39 MB)
+  model/mobibard_a2m.onnx mobibard_a2m v1.0, 16비트 가중치 / 32비트 연산 (39 MB)
   model/meta.json         학습 export 메타데이터 (모델 버전 v1.0, 전처리, 임계값, 16개 GM 클래스, velocity 설정)
   model/manifest.json     모델 이름·버전·제작자·라이선스, 캐시 키(파일명, 크기, sha256)
   model/LICENSE           모델 라이선스 (MIT, startdust-io)
   vendor/onnxruntime-web/ (선택) 로컬 ONNX Runtime. 없으면 jsDelivr 1.20.1 사용
 ```
 
-`lib/*.mjs` 중 dsp·decode·velocity·midi는 학습 저장소의 web export와 동일한 파일입니다. 학습 쪽에서 갱신되면 그대로 덮어쓰면 됩니다.
+`lib/*.mjs` 중 dsp·decode·velocity·midi·tempo는 학습 저장소의 web export와 동일한 파일입니다. 학습 쪽에서 갱신되면 그대로 덮어쓰면 됩니다.
 
 ## 라이선스
 
-Wave2MIDI 모델(`model/mobibard_w2m.onnx`, `model/meta.json`)은 **startdust-io**가 제작했으며 **MIT License**로 배포합니다. 전문은 `model/LICENSE`에 있습니다.
+Wave2MIDI 모델(`model/mobibard_a2m.onnx`, `model/meta.json`)은 **startdust-io**가 제작했으며 **MIT License**로 배포합니다. 전문은 `model/LICENSE`에 있습니다.
 모델을 다른 곳에 복사하거나 재배포할 때는 `model/LICENSE`의 저작권 고지와 허가 문구를 함께 포함해야 합니다.
 
 - `meta.json`: `author`, `license.spdx`, `license.copyright`, `license.file`
@@ -42,6 +43,7 @@ Wave2MIDI 모델(`model/mobibard_w2m.onnx`, `model/meta.json`)은 **startdust-io
 ```js
 const result = await MobibardWave2Midi.transcribe(file, {
   velocity: true,              // false면 velocity 100 고정
+  tempo: true,                 // 기본: 노트로 템포 맵 추정. false면 120 BPM 고정, 숫자면 그 BPM으로 고정
   onsetThreshold: undefined,   // 기본값은 meta.thresholds.onset (0.16)
   onProgress: ({ stage, done, total }) => {},
   signal: abortController.signal,
@@ -50,7 +52,7 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 ```
 
 - `result.notes`: `[pitch, program, onset초, offset초, confidence]` 배열. program 128은 드럼(MIDI 채널 10)입니다.
-- `result.midi`: 120 BPM, 480 PPQ 표준 MIDI(Uint8Array). program별 트랙, 드럼은 채널 10입니다.
+- `result.midi`: 480 PPQ 표준 MIDI(Uint8Array). 추정한 템포 변화와 박자표가 들어가며(`result.tempo`), program별 트랙, 드럼은 채널 10입니다.
 - 진행 단계 `stage`: `decode` → `runtime` → `model-check` → (`model-download` → `model-store`) → `model-init` → `analyze`(done/total 창) → `velocity` → `midi`
 - 오류 `error.code`: `unsupported`, `decode-failed`, `too-long`, `runtime-unavailable`, `model-unavailable`, `model-corrupt`, `model-init-failed`, `out-of-memory`, `aborted`
 - 기본 최대 길이는 10분입니다(`maxSeconds`). 악기 확률 맵이 오디오 1분당 약 34 MB를 쓰기 때문입니다.
@@ -79,8 +81,8 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 2. `manifest.json`의 `file`, `bytes`, `sha256`을 갱신합니다.
 
 ```bash
-stat -c %s model/mobibard_w2m.onnx
-sha256sum model/mobibard_w2m.onnx
+stat -c %s model/mobibard_a2m.onnx
+sha256sum model/mobibard_a2m.onnx
 ```
 
 sha256이 바뀌면 사용자 브라우저에 있던 이전 모델은 다음 사용 때 새 모델로 교체됩니다. `meta.json`만 고친 경우에는 manifest를 바꿀 필요가 없습니다.

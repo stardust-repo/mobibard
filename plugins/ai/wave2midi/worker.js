@@ -37,7 +37,8 @@ function loadLibs() {
     import(libUrl("velocity.mjs")),
     import(libUrl("midi.mjs")),
     import(libUrl("model-cache.mjs")),
-  ]).then(([dsp, decode, velocity, midi, cache]) => ({ dsp, decode, velocity, midi, cache }));
+    import(libUrl("tempo.mjs")),
+  ]).then(([dsp, decode, velocity, midi, cache, tempo]) => ({ dsp, decode, velocity, midi, cache, tempo }));
   return libsPromise;
 }
 
@@ -97,7 +98,7 @@ async function ensureSession(options, progress) {
 async function transcribe(id, wave, options) {
   const progress = (stage, done = 0, total = 0) => self.postMessage({ type: "progress", id, stage, done, total });
   const info = await ensureSession(options, progress);
-  const { dsp, decode, velocity, midi } = await loadLibs();
+  const { dsp, decode, velocity, midi, tempo } = await loadLibs();
   const meta = info.meta;
   const seconds = wave.length / dsp.SR;
   const maxSeconds = Number(options.maxSeconds) || 0;
@@ -129,8 +130,23 @@ async function transcribe(id, wave, options) {
     progress("velocity", 0, 0);
     velocities = velocity.estimateVelocity(wave, notes, meta.velocity);
   }
+  // Tempo map from the notes (on by default): the MIDI then carries the detected tempo changes and
+  // bar positions instead of a constant 120 BPM grid. options.tempo === false keeps the audio timing at
+  // 120 BPM; a number fixes that BPM.
+  let tempoMap = null;
+  if (options.tempo !== false && notes.length) {
+    progress("tempo", 0, 0);
+    const fixed = Number(options.tempo);
+    const cfg = { ...(meta.tempo || {}), mode: Number.isFinite(fixed) && fixed > 0 ? fixed : "auto" };
+    try {
+      tempoMap = tempo.tempoMap(notes, seconds, cfg);
+    } catch (error) {
+      console.warn("[Wave2MIDI] tempo estimation failed; using 120 BPM", error);
+      tempoMap = null;
+    }
+  }
   progress("midi", 0, 0);
-  const midiBytes = midi.midiBytes(notes, velocities ?? 100);
+  const midiBytes = midi.midiBytes(notes, velocities ?? 100, 480, 120, tempoMap);
   return {
     notes,
     velocities,
@@ -139,6 +155,7 @@ async function transcribe(id, wave, options) {
     elapsed: (performance.now() - started) / 1000,
     provider: info.provider,
     thresholds,
+    tempo: tempoMap,
     classes: meta.classes.slice(),
     model: {
       id: info.manifest?.id, sha256: info.manifest?.sha256, version: meta.version, step: meta.step,

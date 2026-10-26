@@ -1,5 +1,6 @@
 // Standard MIDI file writer, ported 1:1 from w2m/midi.py::write_midi (byte-identical output).
 import { DRUM, roundHalfEven } from './dsp.mjs';
+import { beatPosition } from './tempo.mjs';
 
 export const GM_FAMILY = ['Piano', 'Chromatic Perc', 'Organ', 'Guitar', 'Bass', 'Strings', 'Ensemble', 'Brass',
   'Reed', 'Pipe', 'Synth Lead', 'Synth Pad', 'Synth FX', 'Ethnic', 'Percussive', 'SFX'];
@@ -18,12 +19,24 @@ function track(events) {
   return chunk('MTrk', data);
 }
 
-/** notes [[pitch, program, onset, offset, ...]], velocities: number or array. Returns Uint8Array. */
-export function midiBytes(notes, velocities = 100, ppq = 480, bpm = 120) {
-  const tempo = Math.round(60000000 / bpm), tps = ppq * 1000000 / tempo;
+/** notes [[pitch, program, onset, offset, ...]], velocities: number or array. Returns Uint8Array.
+ *  tempo: map from tempo.mjs tempoMap (null -> constant bpm, audio timing kept). Same bytes as midi.py. */
+export function midiBytes(notes, velocities = 100, ppq = 480, bpm = 120, tempo = null) {
   const vel = i => Math.min(127, Math.max(1, Array.isArray(velocities) || ArrayBuffer.isView(velocities) ? velocities[i] : velocities));
-  const tracks = [track([[0, 0, [0xff, 0x51, 0x03, (tempo >> 16) & 255, (tempo >> 8) & 255, tempo & 255]],
-                         [0, 0, [0xff, 0x58, 0x04, 0x04, 0x02, 0x18, 0x08]]])];
+  const tempoEv = (tick, b) => { const us = roundHalfEven(60000000 / b); return [tick, 0, [0xff, 0x51, 0x03, (us >> 16) & 255, (us >> 8) & 255, us & 255]]; };
+  let toTick, nb = 4;
+  const meta = [];
+  if (!tempo || tempo.mode === 'fixed') {
+    const b = tempo ? tempo.bpm : bpm, us = roundHalfEven(60000000 / b), tps = ppq * 1000000 / us;
+    toTick = t => roundHalfEven(t * tps);
+    meta.push(tempoEv(0, b));
+  } else {
+    toTick = t => Math.max(roundHalfEven(beatPosition(t, tempo) * ppq), 0);
+    nb = tempo.time_signature?.[0] ?? 4;
+    for (const sg of tempo.segments) meta.push(tempoEv(Math.max(roundHalfEven(sg.beat * ppq), 0), sg.bpm_written));
+  }
+  meta.push([0, 0, [0xff, 0x58, 0x04, nb, 0x02, 0x18, 0x08]]);
+  const tracks = [track(meta)];
   const programs = [...new Set(notes.map(n => n[1]))].sort((a, b) => a - b);
   const melodic = [...Array(16).keys()].filter(c => c !== 9);
   let mi = 0;
@@ -39,7 +52,7 @@ export function midiBytes(notes, velocities = 100, ppq = 480, bpm = 120) {
     }
     notes.forEach((n, i) => {
       if (n[1] !== prog) return;
-      const a = roundHalfEven(n[2] * tps), b = Math.max(roundHalfEven(n[3] * tps), a + 1), p = n[0] & 0x7f;
+      const a = toTick(n[2]), b = Math.max(toTick(n[3]), a + 1), p = n[0] & 0x7f;
       ev.push([a, 3, [0x90 | ch, p, vel(i)]]);
       ev.push([b, 2, [0x80 | ch, p, 0]]);
     });

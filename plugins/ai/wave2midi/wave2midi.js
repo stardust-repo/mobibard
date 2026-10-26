@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.5";
+  const VERSION = "1.0.6";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -123,7 +123,8 @@
 
   /**
    * input: File | Blob | ArrayBuffer | Float32Array (already mono 24 kHz).
-   * options: { velocity=true, onsetThreshold, maxSeconds=600, executionProvider: "auto"|"wasm",
+   * options: { velocity=true, tempo=true (false: constant 120 BPM, number: fixed BPM), onsetThreshold,
+   *            maxSeconds=600, executionProvider: "auto"|"wasm",
    *            ortSources: string[], onProgress({stage, done, total}), signal }
    * Progress stages: decode, runtime, model-check, model-download, model-store, model-init,
    *                  analyze (done/total windows), velocity, midi.
@@ -147,6 +148,7 @@
       wave,
       options: {
         velocity: options.velocity !== false,
+        tempo: options.tempo ?? true,
         onsetThreshold: options.onsetThreshold,
         maxSeconds,
         executionProvider: options.executionProvider || "auto",

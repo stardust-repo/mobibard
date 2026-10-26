@@ -1,7 +1,7 @@
 {
- "name": "mobibard_w2m",
- "full_name": "mobibard_w2m v1.0",
- "architecture": "mobibard_w2m",
+ "name": "mobibard_a2m",
+ "full_name": "mobibard_a2m v1.0",
+ "architecture": "mobibard_a2m",
  "version": "1.0",
  "author": "startdust-io",
  "license": {
@@ -118,7 +118,7 @@
  },
  "models": {
   "w16": {
-   "file": "mobibard_w2m.onnx",
+   "file": "mobibard_a2m.onnx",
    "mb": 39.0,
    "compute": "fp32",
    "max_diff": {
