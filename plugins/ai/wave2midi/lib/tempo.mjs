@@ -244,6 +244,17 @@ function metre(beatF, low, env, notes) {
   return [nb, best[nb][1]];
 }
 
+const DENSITY_TARGET = 2.0, DENSITY_SIGMA = 0.6, PRIOR_SIGMA = 0.9;
+const octaveScore = (bpm, perBeat, prefer) =>
+  -0.5 * (Math.log2(bpm / prefer) / PRIOR_SIGMA) ** 2 - 0.5 * (Math.log2(Math.max(perBeat, 1e-3) / DENSITY_TARGET) / DENSITY_SIGMA) ** 2;
+function startsPerBeat(starts, beatT) {
+  if (beatT.length < 2) return 0.0;
+  const a = beatT[0], b = beatT[beatT.length - 1];
+  return (searchsorted(starts, b, true) - searchsorted(starts, a)) / (beatT.length - 1);
+}
+const preferDouble = (bpm, perBeat, prefer, margin = 0.3) =>
+  octaveScore(2 * bpm, perBeat / 2, prefer) > octaveScore(bpm, perBeat, prefer) + margin;
+
 function needsDouble(beatF, snare, nSnare) {
   if (nSnare < 24 || beatF.length < 16) return false;
   const on = peakAt(snare, beatF);
@@ -347,7 +358,9 @@ function fromPath(winBpm, ctx, allowDouble) {
   let beatF = trackBeats(env, period);
   if (beatF.length < 8) return null;
   let mult = 1.0;
-  if (allowDouble && needsDouble(beatF, snenv, ctx.nSnare) && amax(winBpm) * 2 <= hi) {
+  const bpmNow = median(beatF.map(f => winBpm[nearest[f]]));
+  if (allowDouble && amax(winBpm) * 2 <= hi && (needsDouble(beatF, snenv, ctx.nSnare) ||
+      preferDouble(bpmNow, startsPerBeat(ctx.starts, beatF.map(f => f / TFPS)), Number(c.prefer)))) {
     mult = 2.0;
     beatF = trackBeats(env, period.map(p => p / 2));
   }
@@ -460,7 +473,9 @@ export function estimateTempo(notes, seconds, cfg = {}) {
     if (Math.abs(centres[p] - t) < Math.abs(centres[j] - t)) j = p;
     nearest[t] = j;
   }
-  const ctx = { notes, n, env, low, snenv, nSnare, nearest, c, lo, hi };
+  const starts = Float64Array.from(new Set(notes.filter(nt => !(nt[1] === DRUM && HATS.includes(roundHalfEven(nt[0]))))
+    .map(nt => roundHalfEven(nt[2] * 100)))).sort().map(v => v / 100);
+  const ctx = { notes, n, env, low, snenv, nSnare, nearest, starts, c, lo, hi };
   const winBpm = Float64Array.from(path, k => bpms[k]);
   let best = fromPath(winBpm, ctx, true);
   if (!best) return fixedTempo(clampPrefer(), 'no beat found');
@@ -478,7 +493,7 @@ export function estimateTempo(notes, seconds, cfg = {}) {
     }
     for (const wb of cands) {
       if (amin(wb) < lo || amax(wb) > hi) continue;
-      const tm = fromPath(wb, ctx, false);
+      const tm = fromPath(wb, ctx, true);
       if (tm && tm.grid_fit > best.grid_fit + 0.1) best = tm;
     }
   }
