@@ -1,44 +1,39 @@
 {
- "architecture": "w2m_hybrid_axial_v5",
- "version": "0.1",
+ "name": "mobibard_w2m",
+ "full_name": "mobibard_w2m v1.0",
+ "architecture": "mobibard_w2m",
+ "version": "1.0",
  "author": "startdust-io",
  "license": {
   "spdx": "MIT",
   "copyright": "Copyright (c) 2026 startdust-io",
   "file": "LICENSE"
  },
- "step": 40000,
- "parameters": 19355020,
+ "step": 98000,
+ "parameters": 19354341,
  "classes": [
   0,
-  2,
   8,
   16,
   24,
-  26,
-  29,
   33,
   40,
-  41,
-  42,
   48,
-  52,
-  56,
   60,
-  64,
-  66,
-  67,
-  70,
+  68,
   72,
   80,
   88,
-  106
+  99,
+  105,
+  116,
+  127
  ],
  "thresholds": {
   "onset": 0.16,
-  "frame": 0.3,
+  "frame": 0.4,
   "offset": 0.5,
-  "drum": 0.16,
+  "drum": 0.2,
   "inst_multi": 0.65,
   "min_frames": 2,
   "inst_frames": 15,
@@ -118,59 +113,54 @@
    1,
    800,
    88,
-   23
+   16
   ]
  },
  "models": {
-  "fp32": {
-   "file": "model.onnx",
-   "mb": 77.7,
-   "compute": "fp32",
-   "note": "reference"
-  },
   "w16": {
-   "file": "model_w16.onnx",
+   "file": "mobibard_w2m.onnx",
    "mb": 39.0,
    "compute": "fp32",
    "max_diff": {
-    "onset": 0.00123,
-    "frame": 0.00129,
-    "offset": 0.000699,
-    "drum": 0.00114,
-    "inst": 0.00101
+    "onset": 0.000541,
+    "frame": 0.000778,
+    "offset": 0.000529,
+    "drum": 0.000692,
+    "inst": 0.000774
    },
-   "onset_flips_per_positive": 0.00125,
-   "demo_note_agreement": 0.9974,
-   "cpu_seconds_per_window": 2.15
+   "onset_flips_per_positive": 0.00028,
+   "demo_note_agreement": 1.0,
+   "cpu_seconds_per_window": 2.1
   }
  },
  "precision_check": {
   "fp32": {
-   "mel": 0.6083,
-   "mel_at_ckpt_threshold": 0.6083,
-   "drum": 0.6412,
-   "mel_inst": 0.3403,
-   "mel_offset": 0.397,
+   "mel": 0.7157,
+   "mel_at_ckpt_threshold": 0.7157,
+   "drum": 0.5641,
+   "mel_inst": 0.4948,
+   "mel_offset": 0.4916,
    "onset_threshold": 0.16
   },
   "w16": {
-   "mel": 0.6082,
-   "mel_at_ckpt_threshold": 0.6082,
-   "drum": 0.6413,
-   "mel_inst": 0.3403,
-   "mel_offset": 0.3967,
+   "mel": 0.7157,
+   "mel_at_ckpt_threshold": 0.7157,
+   "drum": 0.5641,
+   "mel_inst": 0.4948,
+   "mel_offset": 0.4916,
    "onset_threshold": 0.16
   },
   "fp16": {
-   "mel": 0.6082,
-   "mel_at_ckpt_threshold": 0.6082,
-   "drum": 0.6412,
-   "mel_inst": 0.3402,
-   "mel_offset": 0.3969,
+   "mel": 0.7157,
+   "mel_at_ckpt_threshold": 0.7157,
+   "drum": 0.5641,
+   "mel_inst": 0.4948,
+   "mel_offset": 0.4916,
    "onset_threshold": 0.16
   },
-  "max_activation": 912.5
+  "max_activation": 4934.9
  },
+ "max_activation": 4932.2,
  "velocity": {
   "enabled": true,
   "min": 35,
@@ -189,13 +179,25 @@
   "drum_n_fft": 1024,
   "cluster_frames": 2
  },
- "metrics": {
-  "mel": 0.6085090879650245,
-  "mel_inst": 0.34041191044757,
-  "mel_offset": 0.3969153544103955,
-  "drum": 0.6410600045515463,
-  "all": 0.6153649508694378,
-  "frame": 0.7129695103763175
+ "tempo": {
+  "mode": "auto",
+  "min": 32,
+  "max": 255,
+  "prefer": 120.0,
+  "changes": true,
+  "change_penalty": 8.0,
+  "min_segment_beats": 16,
+  "align_bars": true,
+  "integer_bpm": true,
+  "follow_beats": true
  },
- "exported": "2026-10-23 11:52:37"
+ "metrics": {
+  "mel": 0.715563483138806,
+  "mel_inst": 0.4945627839458816,
+  "mel_offset": 0.49157263432729714,
+  "drum": 0.5639409087517719,
+  "all": 0.6905966773516442,
+  "frame": 0.8004757824460936
+ },
+ "exported": "2026-10-27 03:59:56"
 }

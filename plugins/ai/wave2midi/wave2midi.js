@@ -14,10 +14,11 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.4";
+  const VERSION = "1.0.5";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
-  // predictSong keeps T x 88 x 23 instrument probabilities in memory (~49 MB per minute of audio).
+  // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
+  // 16 classes ≈ 34 MB per minute of audio).
   const DEFAULT_MAX_SECONDS = 10 * 60;
 
   let worker = null;
