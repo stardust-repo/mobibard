@@ -723,6 +723,9 @@
       active: false,
       type: null,
       channelId: null,
+      channelIds: [],
+      sourceChannelIdByNoteId: new Map(),
+      originalNotesByChannelId: new Map(),
       sourceNoteIds: new Set(),
       originalChannelNotes: [],
       originalSelectedNoteIds: new Set(),
@@ -5352,11 +5355,11 @@
     const deleteLocked = isChannelDeleteModeActive();
     const midiActive = isMidiReferenceActive();
     const audioActive = state.activePanel === "audio";
-    const notesActive = state.activePanel === "notes" && Boolean(getActiveChannel());
+    const notesActive = state.activePanel === "notes" && (Boolean(getActiveChannel()) || isGroupNoteEditActive());
     const activeMidiGroup = midiActive ? getMidiGroupById() : null;
     const hasCopySource = audioActive ? false : (midiActive
       ? Boolean(state.midiSelectedNoteKeys.size || activeMidiGroup?.notes?.length)
-      : notesActive && Boolean(state.selectedNoteIds.size || getActiveChannel()?.notes?.length));
+      : notesActive && Boolean(state.selectedNoteIds.size || getNoteEditVirtualChannel()?.notes?.length));
     elements.editUndoButton.disabled = deleteLocked || state.history.undoStack.length === 0;
     elements.editRedoButton.disabled = deleteLocked || state.history.redoStack.length === 0;
     elements.editCopyButton.disabled = !hasCopySource;
@@ -5364,7 +5367,7 @@
     elements.editPasteButton.disabled = deleteLocked || midiActive || audioActive || !notesActive;
     elements.editSelectAllButton.disabled = deleteLocked || audioActive || (midiActive
       ? !activeMidiGroup?.notes?.length
-      : !notesActive || !getActiveChannel()?.notes?.length);
+      : !notesActive || !getNoteEditVirtualChannel()?.notes?.length);
     elements.editDeleteButton.disabled = deleteLocked || midiActive || (audioActive ? !getActiveAudioClip() : !notesActive || !state.selectedNoteIds.size);
     if (elements.editMeasureButton) elements.editMeasureButton.disabled = deleteLocked;
     const hasEditorNotes = state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length > 0);
@@ -5869,13 +5872,16 @@
     // 위치가 바뀐 노트만 추가 검사해 긴 채널에서도 전체 배열 순회를 피합니다.
     if (
       state.interaction
-      && state.activePanel === "notes"
-      && channelIndex === state.activeChannel
+      && isNoteEditChannelIndex(channelIndex)
     ) {
-      const interactionNotes = state.interaction.type === "move-selection"
-        ? state.interaction.originals?.map((entry) => entry.note) || []
-        : state.interaction.type === "resize-note"
-          ? [state.interaction.note]
+      const interaction = state.interaction;
+      const channelKey = String(channel.id);
+      const interactionNotes = interaction.type === "move-selection"
+        ? (interaction.originalsByChannelId
+          ? interaction.originalsByChannelId.get(channelKey) || []
+          : interaction.originals?.map((entry) => entry.note) || [])
+        : interaction.type === "resize-note"
+          ? (interaction.channelId == null || String(interaction.channelId) === channelKey ? [interaction.note] : [])
           : [];
       for (const note of interactionNotes) {
         if (note && note.startBeat + note.durationBeat >= startBeat && note.startBeat <= endBeat) {
@@ -5910,7 +5916,7 @@
         ? candidate.sourceIndex
         : state.channels.findIndex((channel) => String(channel.id) === sourceChannelId);
       if (channelIndex < 0 || !isChannelEffectivelyVisible(state.channels[channelIndex])) continue;
-      const isActive = state.activePanel === "notes" && state.selectedChannelGroupId == null && channelIndex === state.activeChannel;
+      const isActive = isNoteEditChannelIndex(channelIndex);
       const x = beatToX(candidate.startBeat);
       const endX = beatToX(candidate.startBeat + candidate.durationBeat);
       if (endX < visibleLeft || x > visibleRight) continue;
@@ -6111,14 +6117,14 @@
       : [...state.channels.keys()]
         .filter((channelIndex) => isChannelEffectivelyVisible(state.channels[channelIndex]))
         // Background channels first; the active channel is always painted last so it stays on top.
-        .sort((a, b) => Number(state.activePanel === "notes" && state.selectedChannelGroupId == null && a === state.activeChannel) - Number(state.activePanel === "notes" && state.selectedChannelGroupId == null && b === state.activeChannel));
+        .sort((a, b) => Number(isNoteEditChannelIndex(a)) - Number(isNoteEditChannelIndex(b)));
     for (const channelIndex of visibleChannels) {
       const channel = state.channels[channelIndex];
       const color = getChannelColor(channel, channelIndex);
       // Dark mode needs the note edge to move away from the dark canvas, not toward it.
       // Light mode keeps the existing darker edge so channel colors preserve their embossed look.
       const noteBorderColor = getChannelColor(channel, channelIndex, "edge");
-      const isActive = state.activePanel === "notes" && state.selectedChannelGroupId == null && channelIndex === state.activeChannel;
+      const isActive = isNoteEditChannelIndex(channelIndex);
       const hasActiveSelection = isActive && state.selectedNoteIds.size > 0;
       // Keep overlaps visible, while giving the active channel a dense foreground presence.
       const baseAlpha = isActive ? 0.99 : 0.70;
@@ -6420,7 +6426,7 @@
       if (!isChannelEffectivelyVisible(channel)) continue;
       const channelIndex = Math.max(0, state.channels.indexOf(channel));
       const color = getChannelColor(channel, channelIndex, "base");
-      const isActive = channel === activeChannel && state.selectedChannelGroupId == null;
+      const isActive = isNoteEditChannelIndex(channelIndex);
       const inSelectedGroup = selectedGroupId != null && String(channel.groupId ?? "") === selectedGroupId;
       const drawPriority = isActive ? 2 : (inSelectedGroup ? 1 : 0);
       const muted = isChannelEffectivelyMuted(channel);
@@ -9653,6 +9659,15 @@
     return commitItemTreeLayout(ItemTree.move(layout, sourceKey, target.parentId, index + (placeAfter ? 1 : 0)), sourceKey);
   }
 
+  // 오디오·그룹·채널 선택 표시는 항상 하나만 남깁니다.
+  function clearAudioSelectionMarks() {
+    elements.channelTabs?.querySelectorAll(".audio-source-item").forEach((node) => {
+      node.classList.remove("active");
+      node.setAttribute("aria-selected", "false");
+    });
+    elements.audioLaneContent?.querySelectorAll(".audio-clip-block.active").forEach((node) => node.classList.remove("active"));
+  }
+
   function activateGroupForPointerDrag(groupId) {
     const group = getChannelGroupById(groupId);
     if (!group) return false;
@@ -9661,6 +9676,7 @@
     state.selectedChannelGroupId = String(group.id);
     clearNoteSelection();
     clearMidiSelection();
+    clearAudioSelectionMarks();
     elements.channelTabs?.querySelectorAll(".channel-tree-channel-item").forEach((node) => node.classList.remove("active"));
     elements.channelTabs?.querySelectorAll(".channel-group-item").forEach((node) => {
       const active = String(node.dataset.channelGroupId || "") === String(group.id);
@@ -11843,7 +11859,28 @@
     return normalizeMmlCommandCase(source);
   }
 
+  // 최적화는 비용이 크고(노트 수천 개 기준 수백 ms) 같은 입력이 반복해서 들어옵니다.
+  // (정보 표시줄 글자 수, 범위 선택/드래그 중 갱신 등) 입력 문자열 기준으로 결과를 기억합니다.
+  const optimizedMmlCache = new Map();
+  const OPTIMIZED_MML_CACHE_LIMIT = 96;
+
   function optimizeEditorExportMml(mml) {
+    const key = String(mml || "");
+    if (optimizedMmlCache.has(key)) {
+      const cached = optimizedMmlCache.get(key);
+      optimizedMmlCache.delete(key);
+      optimizedMmlCache.set(key, cached);
+      return cached;
+    }
+    const result = optimizeEditorExportMmlUncached(key);
+    optimizedMmlCache.set(key, result);
+    if (optimizedMmlCache.size > OPTIMIZED_MML_CACHE_LIMIT) {
+      optimizedMmlCache.delete(optimizedMmlCache.keys().next().value);
+    }
+    return result;
+  }
+
+  function optimizeEditorExportMmlUncached(mml) {
     const source = normalizeMmlTextCase(String(mml || "").trim());
     if (!source) return "";
     const optimize = window.MabiOptimizer?.optimizeMml;
@@ -17317,6 +17354,15 @@
   function snapMoveDeltaDirectionally(rawDeltaBeat, interaction) {
     if (!interaction) return null;
     const rawDelta = Number(rawDeltaBeat) || 0;
+    if (!interaction._magnetTargets) interaction._magnetTargets = buildMoveMagnetTargets(interaction);
+    return resolveMagneticBoundaryBeat(rawDelta, interaction._magnetTargets, interaction, {
+      unit: getSnapBeat(),
+      latchKey: "magnetLatchedDirectionalDelta",
+      lastRawKey: "magnetLastRawDirectionalDelta",
+    });
+  }
+
+  function buildMoveMagnetTargets(interaction) {
     const targets = [0];
 
     // For every blocking note there are only two legitimate placements:
@@ -17336,13 +17382,7 @@
       );
     }
     targets.sort((a, b) => a - b);
-    const uniqueTargets = targets.filter((value, index) => index === 0 || Math.abs(value - targets[index - 1]) > 1e-7);
-
-    return resolveMagneticBoundaryBeat(rawDelta, uniqueTargets, interaction, {
-      unit: getSnapBeat(),
-      latchKey: "magnetLatchedDirectionalDelta",
-      lastRawKey: "magnetLastRawDirectionalDelta",
-    });
+    return targets.filter((value, index) => index === 0 || Math.abs(value - targets[index - 1]) > 1e-7);
   }
 
   // Direct piano-roll editing uses overwrite semantics instead of rejecting overlaps.
@@ -17479,7 +17519,13 @@
     return output;
   }
 
-  function getSelectedNotes(channel = getActiveChannel()) {
+  function getSelectedNotes(channel) {
+    if (channel === undefined) {
+      if (isGroupNoteEditActive()) {
+        return getNoteEditChannels().flatMap((member) => member.notes.filter((note) => state.selectedNoteIds.has(note.id)));
+      }
+      channel = getActiveChannel();
+    }
     if (!channel?.notes) return [];
     return channel.notes.filter((note) => state.selectedNoteIds.has(note.id));
   }
@@ -17498,11 +17544,11 @@
   }
 
   function selectAllNotes() {
-    const channel = state.activePanel === "notes" ? getActiveChannel() : null;
-    if (!channel || !isChannelEffectivelyVisible(channel)) return false;
+    const channels = getNoteEditChannels();
+    if (!channels.length || !channels.some((channel) => channel.notes.length)) return false;
     clearNoteSelection();
-    for (const note of channel.notes) {
-      state.selectedNoteIds.add(note.id);
+    for (const channel of channels) {
+      for (const note of channel.notes) state.selectedNoteIds.add(note.id);
     }
     drawRoll();
     updateChannelInfo();
@@ -17510,25 +17556,26 @@
   }
 
   function removeRestsBetweenSelectedNotes() {
-    const channel = state.activePanel === "notes" && !isMidiReferenceActive() ? getActiveChannel() : null;
-    if (!channel?.notes?.length) return false;
+    const editChannels = getNoteEditChannels().filter((member) => member.notes.length);
+    if (!editChannels.length) return false;
 
     const selectedIds = state.selectedNoteIds;
     if (selectedIds.size < 2) return false;
 
-    const ordered = sortNoteIntervals(channel.notes);
     const runs = [];
-    let currentRun = [];
-
-    for (const note of ordered) {
-      if (selectedIds.has(note.id)) {
-        currentRun.push(note);
-        continue;
+    for (const member of editChannels) {
+      const ordered = sortNoteIntervals(member.notes);
+      let currentRun = [];
+      for (const note of ordered) {
+        if (selectedIds.has(note.id)) {
+          currentRun.push(note);
+          continue;
+        }
+        if (currentRun.length >= 2) runs.push(currentRun);
+        currentRun = [];
       }
       if (currentRun.length >= 2) runs.push(currentRun);
-      currentRun = [];
     }
-    if (currentRun.length >= 2) runs.push(currentRun);
 
     if (!runs.length) {
       showToast("서로 연속해서 선택된 노트가 없습니다.");
@@ -17565,7 +17612,7 @@
       return true;
     }
 
-    state.channelNoteRuntime.delete(String(channel.id));
+    for (const member of editChannels) state.channelNoteRuntime.delete(String(member.id));
     markDirty("연속 선택 구간 쉼표 메우기");
     shrinkTimelineToContent();
     drawRoll();
@@ -17575,10 +17622,10 @@
   }
 
   function extendSelectedNotesToSide(direction) {
-    const channel = state.activePanel === "notes" && !isMidiReferenceActive() ? getActiveChannel() : null;
+    const channel = state.activePanel === "notes" && !isMidiReferenceActive() ? getNoteEditVirtualChannel() : null;
     if (!channel?.notes?.length || !state.selectedNoteIds.size) return false;
 
-    const selected = getSelectedNotes(channel);
+    const selected = getSelectedNotes();
     if (!selected.length) return false;
     const minStart = Math.min(...selected.map((note) => Number(note.startBeat) || 0));
     const maxStart = Math.max(...selected.map((note) => Number(note.startBeat) || 0));
@@ -17600,10 +17647,10 @@
   }
 
   function shiftSelectedNotesByOctave(direction) {
-    const channel = state.activePanel === "notes" && !isMidiReferenceActive() ? getActiveChannel() : null;
+    const channel = state.activePanel === "notes" && !isMidiReferenceActive() ? getNoteEditVirtualChannel() : null;
     if (!channel?.notes?.length || !state.selectedNoteIds.size) return false;
 
-    const selected = getSelectedNotes(channel);
+    const selected = getSelectedNotes();
     if (!selected.length) return false;
     const lowest = Math.min(...selected.map((note) => Number(note.pitch) || CONFIG.minPitch));
     const highest = Math.max(...selected.map((note) => Number(note.pitch) || CONFIG.minPitch));
@@ -17620,7 +17667,7 @@
     }
 
     for (const note of selected) note.pitch += semitones;
-    state.channelNoteRuntime.delete(String(channel.id));
+    for (const member of getNoteEditChannels()) state.channelNoteRuntime.delete(String(member.id));
     markDirty(direction > 0 ? "선택 노트 옥타브 올리기" : "선택 노트 옥타브 내리기");
     drawRoll();
     updateChannelInfo();
@@ -17639,6 +17686,7 @@
     clearNoteSelection();
     clearMidiSelection();
     renderChannelTabs();
+    clearAudioSelectionMarks();
     renderChannelEditor();
     drawRoll();
     updateChannelInfo();
@@ -17655,6 +17703,7 @@
     state.activeChannel = index;
     clearNoteSelection();
     clearMidiSelection();
+    clearAudioSelectionMarks();
     elements.channelTabs?.querySelectorAll(".channel-tree-channel-item").forEach((node) => {
       const active = String(node.dataset.channelId || "") === String(channelId);
       node.classList.toggle("active", active);
@@ -17692,6 +17741,7 @@
     clearMidiSelection();
     state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, getMinimumTimelineBeats());
     renderChannelTabs();
+    clearAudioSelectionMarks();
     renderChannelEditor();
     resizeAndDraw();
     // 피아노롤에서 노트로 채널을 고른 경우에도 왼쪽 목록에서 현재 채널이
@@ -17777,6 +17827,52 @@
 
   function getChannelById(channelId) {
     return state.channels.find((channel) => String(channel.id) === String(channelId)) || null;
+  }
+
+  // 그룹이 선택된 상태에서는 그룹에 속한 (표시 중인) 하위 채널들의 노트를 한꺼번에 편집합니다.
+  function isGroupNoteEditActive() {
+    return state.activePanel === "notes"
+      && state.selectedChannelGroupId != null
+      && !isMidiReferenceActive()
+      && Boolean(getChannelGroupById(state.selectedChannelGroupId));
+  }
+
+  function getNoteEditChannels() {
+    if (isGroupNoteEditActive()) {
+      const gid = String(state.selectedChannelGroupId);
+      return state.channels.filter((channel) => String(channel.groupId ?? "") === gid && isChannelEffectivelyVisible(channel));
+    }
+    const active = state.activePanel === "notes" ? getActiveChannel() : null;
+    return active ? [active] : [];
+  }
+
+  function isNoteEditChannelIndex(channelIndex) {
+    if (state.activePanel !== "notes" || isMidiReferenceActive()) return false;
+    if (state.selectedChannelGroupId != null) {
+      const channel = state.channels[channelIndex];
+      return Boolean(channel) && isGroupNoteEditActive()
+        && String(channel.groupId ?? "") === String(state.selectedChannelGroupId);
+    }
+    return channelIndex === state.activeChannel;
+  }
+
+  // 여러 채널의 노트를 하나의 목록처럼 다루기 위한 가상 채널 (notes 배열만 읽는 계산용).
+  function getNoteEditVirtualChannel() {
+    if (!isGroupNoteEditActive()) return getActiveChannel();
+    const channels = getNoteEditChannels();
+    return { id: `group:${state.selectedChannelGroupId}`, name: "group", notes: channels.flatMap((channel) => channel.notes), virtual: true };
+  }
+
+  function getNoteEditChannelOfNote(noteOrId) {
+    const id = typeof noteOrId === "object" && noteOrId ? noteOrId.id : noteOrId;
+    return getNoteEditChannels().find((channel) => channel.notes.some((note) => note.id === id)) || null;
+  }
+
+  function resolveDirectEditOverlapsForEdit(editedIds) {
+    for (const channel of getNoteEditChannels()) {
+      const ids = new Set(channel.notes.filter((note) => editedIds.has(note.id)).map((note) => note.id));
+      if (ids.size) resolveDirectEditOverlaps(channel, ids);
+    }
   }
 
   function getChannelGroupById(groupId) {
@@ -20136,14 +20232,25 @@
     };
   }
 
-  function findNoteHitAt(x, y, channelIndex = state.activeChannel) {
+  function findNoteHitAt(x, y, channelIndex = null) {
+    if (channelIndex == null && isGroupNoteEditActive()) {
+      // 그룹 편집: 나중에 그려진(위에 보이는) 하위 채널부터 확인합니다.
+      const members = getNoteEditChannels();
+      for (let index = members.length - 1; index >= 0; index -= 1) {
+        const memberIndex = state.channels.indexOf(members[index]);
+        const hit = findNoteHitAt(x, y, memberIndex);
+        if (hit) return { ...hit, channel: members[index], channelIndex: memberIndex };
+      }
+      return null;
+    }
+    if (channelIndex == null) channelIndex = state.activeChannel;
     const channel = state.channels[channelIndex];
     if (!channel || !isChannelEffectivelyVisible(channel)) {
       return null;
     }
     const beat = Math.max(0, xToBeat(x));
     const rawCandidates = getVisibleChannelNotes(channel, beat, beat, channelIndex);
-    const candidates = channelIndex === state.activeChannel
+    const candidates = isNoteEditChannelIndex(channelIndex)
       ? [...rawCandidates].sort((left, right) => {
         const leftSelected = state.selectedNoteIds.has(left.id) ? 1 : 0;
         const rightSelected = state.selectedNoteIds.has(right.id) ? 1 : 0;
@@ -20153,7 +20260,7 @@
     for (let index = candidates.length - 1; index >= 0; index -= 1) {
       const note = candidates[index];
       const bounds = getNoteBounds(note);
-      const isSelected = channelIndex === state.activeChannel && state.selectedNoteIds.has(note.id);
+      const isSelected = isNoteEditChannelIndex(channelIndex) && state.selectedNoteIds.has(note.id);
       const outerHandlePadding = isSelected ? 4 : 0;
       if (
         x >= bounds.left - outerHandlePadding &&
@@ -20185,18 +20292,18 @@
     return null;
   }
 
-  function findNoteAt(x, y, channelIndex = state.activeChannel) {
+  function findNoteAt(x, y, channelIndex = null) {
     return findNoteHitAt(x, y, channelIndex)?.note || null;
   }
 
   function findOtherVisibleChannelNoteHitAt(
     x,
     y,
-    excludedChannelIndex = state.selectedChannelGroupId == null ? state.activeChannel : -1,
+    excludedChannelIndex = state.selectedChannelGroupId == null ? state.activeChannel : -2,
   ) {
     // 채널은 낮은 인덱스부터 그려지므로 마지막에 그려진 채널부터 역순으로 찾습니다.
     for (let channelIndex = state.channels.length - 1; channelIndex >= 0; channelIndex -= 1) {
-      if (channelIndex === excludedChannelIndex || !isChannelEffectivelyVisible(state.channels[channelIndex])) {
+      if (channelIndex === excludedChannelIndex || (excludedChannelIndex === -2 && isNoteEditChannelIndex(channelIndex)) || !isChannelEffectivelyVisible(state.channels[channelIndex])) {
         continue;
       }
       const hit = findNoteHitAt(x, y, channelIndex);
@@ -20367,7 +20474,7 @@
     const top = Math.min(interaction.startY, interaction.currentY);
     const bottom = Math.max(interaction.startY, interaction.currentY);
     const matchingIds = [];
-    for (const note of getActiveChannel().notes) {
+    for (const note of getNoteEditVirtualChannel()?.notes || []) {
       if (noteIntersectsBox(note, left, top, right, bottom)) matchingIds.push(note.id);
     }
     state.selectedNoteIds = applyMarqueeSelectionMode(
@@ -20550,6 +20657,56 @@
     event.preventDefault();
   }
 
+  // 드래그 시작 시 한 번만 채널별 원본/차단 노트를 나눠 둡니다.
+  // 매 프레임 전체 노트를 다시 훑지 않고, 그룹 편집에서도 노트가 자기 채널에만 그려지게 합니다.
+  function buildMoveInteractionChannelMaps(selectedNotes) {
+    const selectedIds = new Set((selectedNotes || []).map((note) => note.id));
+    const originalsByChannelId = new Map();
+    const blockersByChannelId = new Map();
+    for (const channel of getNoteEditChannels()) {
+      const key = String(channel.id);
+      const own = [];
+      const blockers = [];
+      for (const note of channel.notes) (selectedIds.has(note.id) ? own : blockers).push(note);
+      if (!own.length) continue;
+      originalsByChannelId.set(key, own);
+      blockersByChannelId.set(key, sortNoteIntervals(blockers));
+    }
+    return { originalsByChannelId, blockersByChannelId };
+  }
+
+  function getCachedNoteEditModeMoveDeltaBounds(interaction) {
+    if (interaction._noteEditMoveBounds) return interaction._noteEditMoveBounds;
+    let minimum = -Infinity;
+    let maximum = Infinity;
+    const originalsById = new Map((interaction.originals || []).map((original) => [original.note.id, original]));
+    const groups = interaction.originalsByChannelId && interaction.blockersByChannelId
+      ? [...interaction.originalsByChannelId].map(([key, notes]) => [notes, interaction.blockersByChannelId.get(key) || []])
+      : [[(interaction.originals || []).map((original) => original.note), interaction.blockingNotes || []]];
+    for (const [notes, blockers] of groups) {
+      if (!blockers.length) continue;
+      const starts = blockers.map((blocker) => Number(blocker.startBeat) || 0).sort((a, b) => a - b);
+      const ends = blockers
+        .map((blocker) => (Number(blocker.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(blocker.durationBeat) || CONFIG.minimumNoteBeat))
+        .sort((a, b) => a - b);
+      for (const note of notes) {
+        const original = originalsById.get(note.id);
+        const start = Number(original?.startBeat ?? note.startBeat) || 0;
+        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(original?.durationBeat ?? note.durationBeat) || CONFIG.minimumNoteBeat);
+        // 시작 이전에 끝나는 차단 노트 중 가장 늦게 끝나는 것
+        let lo = 0; let hi = ends.length;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (ends[mid] <= start + 1e-7) lo = mid + 1; else hi = mid; }
+        if (lo > 0) minimum = Math.max(minimum, ends[lo - 1] - start);
+        // 끝 이후에 시작하는 차단 노트 중 가장 이른 것
+        lo = 0; hi = starts.length;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (starts[mid] < end - 1e-7) lo = mid + 1; else hi = mid; }
+        if (lo < starts.length) maximum = Math.min(maximum, starts[lo] - end);
+      }
+    }
+    interaction._noteEditMoveBounds = { minimum, maximum };
+    return interaction._noteEditMoveBounds;
+  }
+
   function getNoteEditModeMoveDeltaBounds(originals, blockingNotes) {
     let minimum = -Infinity;
     let maximum = Infinity;
@@ -20698,7 +20855,7 @@
     // 그룹이 선택된 상태에서 선택 도구(Ctrl 전환 포함)로 노트를 누르면,
     // stale activeChannel을 기준으로 처리하지 않고 실제 클릭한 노트의 채널로
     // 선택을 이동합니다. 이때 selectChannel()이 접힌 부모 그룹도 자동으로 펼칩니다.
-    if (touchSelectionMode && state.selectedChannelGroupId != null) {
+    if (false && touchSelectionMode && state.selectedChannelGroupId != null) {
       const groupChannelHit = findOtherVisibleChannelNoteHitAt(point.x, point.y, -1);
       if (groupChannelHit) {
         selectChannel(groupChannelHit.channelIndex);
@@ -20761,7 +20918,7 @@
         : new Set([existing.id]);
     }
 
-    if (!isChannelEffectivelyVisible(getActiveChannel()) && event.button === 0 && pointBeat >= 0 && !existing) {
+    if (!isGroupNoteEditActive() && !isChannelEffectivelyVisible(getActiveChannel()) && event.button === 0 && pointBeat >= 0 && !existing) {
       showToast("숨긴 채널은 표시 버튼을 켠 뒤 편집할 수 있습니다.");
       event.preventDefault();
       return;
@@ -20843,7 +21000,8 @@
 
         if (noteHit.part === "left-resize" || noteHit.part === "right-resize") {
         const snapUnit = getSnapBeat();
-        const selectedForResize = getSelectedNotes();
+        const resizeChannel = noteHit.channel || getActiveChannel();
+        const selectedForResize = getSelectedNotes(resizeChannel);
         const multiResize = Boolean(
           event.shiftKey
           && selectedForResize.length > 1
@@ -20863,16 +21021,17 @@
           snapUnit,
           multiResize,
           resizeOriginals: multiResize
-            ? buildIndependentResizeOriginals(getActiveChannel(), selectedForResize)
+            ? buildIndependentResizeOriginals(resizeChannel, selectedForResize)
             : null,
           originalStartBeat: existing.startBeat,
           originalDurationBeat: existing.durationBeat,
           originalEndBeat: existing.startBeat + existing.durationBeat,
           minimumDurationBeat: CONFIG.minimumNoteBeat,
-          blockingNotes: sortNoteIntervals(getActiveChannel().notes.filter((note) => note.id !== existing.id)),
+          blockingNotes: sortNoteIntervals(resizeChannel.notes.filter((note) => note.id !== existing.id)),
+          channelId: resizeChannel.id,
           ...(() => {
             const directional = buildDirectionalNoteBoundarySnapPoints(
-              getActiveChannel(),
+              resizeChannel,
               existing.startBeat,
               existing.startBeat + existing.durationBeat,
               resizeIgnoredIds,
@@ -20924,12 +21083,13 @@
           toggleSelectionOnTap: touchSelectionMode && wasSelected,
           clickedNoteId: existing.id,
           selectedIds: new Set(selected.map((note) => note.id)),
-          blockingNotes: sortNoteIntervals(getActiveChannel().notes.filter((note) => !state.selectedNoteIds.has(note.id))),
+          ...buildMoveInteractionChannelMaps(selected),
+          blockingNotes: sortNoteIntervals(getNoteEditVirtualChannel().notes.filter((note) => !state.selectedNoteIds.has(note.id))),
           ...(() => {
             const minStartBeat = Math.min(...selected.map((note) => note.startBeat));
             const maxEndBeat = Math.max(...selected.map((note) => note.startBeat + note.durationBeat));
             const directional = buildDirectionalNoteBoundarySnapPoints(
-              getActiveChannel(),
+              getNoteEditVirtualChannel(),
               minStartBeat,
               maxEndBeat,
               new Set(selected.map((note) => note.id)),
@@ -20955,6 +21115,11 @@
         return;
       }
       if (effectiveEditTool === "select") {
+        beginMarqueeSelection(event, point, {
+          initialSelectionMode: event.shiftKey ? "add" : "toggle",
+        });
+      } else if (isGroupNoteEditActive()) {
+        // 그룹에서는 노트를 새로 만들지 않고 범위 선택만 합니다.
         beginMarqueeSelection(event, point, {
           initialSelectionMode: event.shiftKey ? "add" : "toggle",
         });
@@ -21233,7 +21398,7 @@
           getTotalBeats() - interaction.maxEndBeat,
         );
         if (isNoteEditModeActive()) {
-          const bounds = getNoteEditModeMoveDeltaBounds(interaction.originals, interaction.blockingNotes);
+          const bounds = getCachedNoteEditModeMoveDeltaBounds(interaction);
           deltaBeat = clamp(deltaBeat, bounds.minimum, bounds.maximum);
         }
       }
@@ -21343,7 +21508,7 @@
       (interaction.type === "move-selection" || interaction.type === "resize-note") &&
       interaction.moved
     ) {
-      const channel = getActiveChannel();
+      const channel = getActiveChannel() || getNoteEditChannelOfNote(interaction.type === "resize-note" ? interaction.note : interaction.originals?.[0]?.note);
       const editedIds = interaction.type === "resize-note"
         ? interaction.multiResize
           ? new Set((interaction.resizeOriginals || []).map((original) => original.note.id))
@@ -21353,13 +21518,15 @@
         // Direct note-edit modes are a temporary editing session. Source-note edits
         // only rebuild the striped preview; the project history is committed once
         // when the user presses Apply.
-        state.channelNoteRuntime.delete(String(channel.id));
+        for (const member of getNoteEditChannels()) state.channelNoteRuntime.delete(String(member.id));
         rebuildNoteEditPreview({ draw: false });
       } else {
         if (interaction.type === "resize-note" && interaction.multiResize) {
           // Group Shift-resize already clamps every note against its own neighbours,
           // so do not apply the normal overwrite cleanup to surrounding notes.
-          state.channelNoteRuntime.delete(String(channel.id));
+          if (channel) state.channelNoteRuntime.delete(String(channel.id));
+        } else if (isGroupNoteEditActive()) {
+          resolveDirectEditOverlapsForEdit(editedIds);
         } else {
           resolveDirectEditOverlaps(channel, editedIds);
         }
@@ -22631,17 +22798,60 @@
     return false;
   }
 
-  function createNodeClipboardPayload(notes, { originBeat = null, label = "노트", source = "editor" } = {}) {
+  // 노트가 속한 채널별로 묶어 클립보드 트랙을 만듭니다. (채널 목록 순서 유지)
+  function buildClipboardTracksForNotes(notes) {
+    const ids = new Set((notes || []).map((note) => note.id));
+    const tracks = [];
+    for (const channel of state.channels) {
+      const own = channel.notes.filter((note) => ids.has(note.id));
+      if (own.length) {
+        tracks.push({
+          channelId: String(channel.id),
+          name: String(channel.name || ""),
+          instrument: channel.instrument,
+          instrumentProgram: channel.instrumentProgram,
+          instrumentBank: channel.instrumentBank,
+          instrumentExactPreset: channel.instrumentExactPreset,
+          notes: own,
+        });
+      }
+    }
+    return tracks;
+  }
+
+  function createNodeClipboardPayload(notes, { originBeat = null, label = "노트", source = "editor", tracks = undefined } = {}) {
     if (!notes.length) return null;
     const safeOrigin = originBeat == null
       ? Math.min(...notes.map((note) => Math.max(0, Number(note.startBeat) || 0)))
       : Math.max(0, Number(originBeat) || 0);
+    const serialize = (list) => list
+      .map((note) => ({
+        pitch: clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch),
+        startBeat: Number((Math.max(0, Number(note.startBeat) || 0) - safeOrigin).toFixed(6)),
+        durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat).toFixed(6)),
+        velocity: normalizeNoteDynamics(note).velocity,
+        volume: normalizeNoteDynamics(note).volume,
+      }))
+      .sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch);
+    const sourceTracks = tracks === undefined ? buildClipboardTracksForNotes(notes) : (tracks || []);
     return {
       format: NOTE_CLIPBOARD_FORMAT,
       version: 1,
       label: String(label || "노트"),
       source: String(source || "editor"),
       copiedAt: Date.now(),
+      // 채널별 트랙 정보(선택). 그룹 붙여넣기에서 채널 대응에 사용하고, 예전 버전은 notes만 읽습니다.
+      tracks: sourceTracks.length
+        ? sourceTracks.map((track) => ({
+          channelId: track.channelId,
+          name: track.name,
+          instrument: track.instrument,
+          instrumentProgram: track.instrumentProgram,
+          instrumentBank: track.instrumentBank,
+          instrumentExactPreset: track.instrumentExactPreset,
+          notes: serialize(track.notes),
+        }))
+        : undefined,
       notes: notes
         .map((note) => ({
           pitch: clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch),
@@ -22761,6 +22971,152 @@
     return isValidNodeClipboardPayload(state.noteClipboard) ? state.noteClipboard : null;
   }
 
+  function materializeClipboardNotes(notes, targetOrigin) {
+    const created = (notes || []).map((note, index) => ({
+      id: state.nextNoteId + index,
+      pitch: clamp(Math.round(Number(note.pitch) || 60), CONFIG.minPitch, CONFIG.maxPitch),
+      startBeat: Number((targetOrigin + Math.max(0, Number(note.startBeat) || 0)).toFixed(6)),
+      durationBeat: Number(Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat).toFixed(6)),
+      velocity: normalizeNoteDynamics(note).velocity,
+      volume: normalizeNoteDynamics(note).volume,
+    }));
+    state.nextNoteId += created.length;
+    return created;
+  }
+
+  // 그룹 붙여넣기 대상 결정:
+  // 1) 복사한 채널이 모두 이 그룹 안에 있으면 원래 채널로 되돌려 붙입니다.
+  // 2) 아니면 여러 채널(트랙)을 그룹 하위 채널에 위에서부터 순서대로 대응시킵니다.
+  // 한 채널에서 복사한 노트를 그룹 밖에서 가져온 경우처럼 대상이 모호하면 막습니다.
+  function resolveGroupPasteTargets(payload) {
+    const members = getNoteEditChannels();
+    const tracks = Array.isArray(payload?.tracks) ? payload.tracks.filter((track) => Array.isArray(track?.notes) && track.notes.length) : [];
+    if (!tracks.length) return { error: "채널 정보가 없는 노트입니다. 붙여넣을 채널을 선택하세요." };
+    const memberById = new Map(members.map((member) => [String(member.id), member]));
+    const sameIds = tracks.every((track) => memberById.has(String(track.channelId)))
+      && new Set(tracks.map((track) => String(track.channelId))).size === tracks.length;
+    if (sameIds) return { pairs: tracks.map((track) => ({ channel: memberById.get(String(track.channelId)), notes: track.notes })), mode: "same" };
+    if (tracks.length === 1 && members.length) return { error: "한 채널에서 복사한 노트는 붙여넣을 채널을 선택한 뒤 붙여넣으세요." };
+    // 그룹 채널이 부족하면 부족한 만큼 새 채널을 만들어 담습니다(채널은 검사 통과 후 생성).
+    return {
+      pairs: tracks.map((track, index) => ({ channel: members[index] || null, track, notes: track.notes })),
+      mode: "order",
+      createCount: Math.max(0, tracks.length - members.length),
+    };
+  }
+
+  // 선택 상태를 바꾸지 않고 그룹 끝에 채널을 하나 만듭니다. (붙여넣기 전용)
+  function createChannelInGroupForPaste(group, track = null) {
+    const id = nextChannelId();
+    const channel = createDefaultChannel(id, state.channels.length);
+    const sourceChannel = track?.channelId != null ? getChannelById(track.channelId) : null;
+    const instrumentSource = sourceChannel || track || null;
+    if (instrumentSource?.instrument) {
+      channel.instrument = instrumentSource.instrument;
+      if (instrumentSource.instrumentProgram != null) channel.instrumentProgram = instrumentSource.instrumentProgram;
+      if (instrumentSource.instrumentBank != null) channel.instrumentBank = instrumentSource.instrumentBank;
+      if (instrumentSource.instrumentExactPreset != null) channel.instrumentExactPreset = instrumentSource.instrumentExactPreset;
+    }
+    channel.name = makeUniqueChannelName(String(track?.name || "").trim() || defaultChannelName(channel), channel.id);
+    channel.groupId = String(group.id);
+    const members = getChannelGroupMembers(group);
+    let insertIndex = state.channels.length;
+    if (members.length) {
+      const lastMemberIndex = Math.max(...members.map((member) => state.channels.indexOf(member)).filter((index) => index >= 0));
+      if (Number.isFinite(lastMemberIndex)) insertIndex = lastMemberIndex + 1;
+    } else if (group.beforeChannelId != null) {
+      const anchorIndex = state.channels.findIndex((item) => String(item.id) === String(group.beforeChannelId));
+      if (anchorIndex >= 0) insertIndex = anchorIndex;
+    }
+    group.beforeChannelId = null;
+    state.channels.splice(insertIndex, 0, channel);
+    if (insertIndex <= state.activeChannel) state.activeChannel += 1;
+    return channel;
+  }
+
+  function pasteClipboardIntoGroup(payload, { insert = false } = {}) {
+    const resolved = resolveGroupPasteTargets(payload);
+    if (resolved.error) {
+      showToast(resolved.error);
+      return false;
+    }
+    const targetOrigin = clamp(snapBeat(state.playhead.beat), 0, getTotalBeats());
+    const allNotes = resolved.pairs.flatMap((pair) => pair.notes);
+    const spanBeats = Math.max(
+      CONFIG.minimumNoteBeat,
+      ...allNotes.map((note) => Math.max(0, Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat)),
+    );
+    for (const pair of resolved.pairs) {
+      const probe = pair.notes.map((note, index) => ({
+        id: -1 - index,
+        startBeat: Math.max(0, Number(note.startBeat) || 0),
+        durationBeat: Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat),
+        pitch: note.pitch,
+      }));
+      if (!canPlaceMonophonicNotes(probe, [])) {
+        showToast(`${pair.channel?.name || pair.track?.name || "새 채널"}에 붙일 노트끼리 서로 겹쳐 있어 붙여넣을 수 없습니다.`);
+        return false;
+      }
+    }
+    if (targetOrigin + spanBeats > getTotalBeats() - 1e-7) {
+      state.timelineBeats = Math.ceil((targetOrigin + spanBeats) / CONFIG.timelineExtensionBeats) * CONFIG.timelineExtensionBeats;
+      resizeRollSurface();
+    }
+
+    const group = getChannelGroupById(state.selectedChannelGroupId);
+    const createdChannels = [];
+    if (insert) {
+      // 삽입 붙여넣기: 그룹 전체(숨긴 채널 포함)에 같은 길이의 시간을 만들어 박자가 어긋나지 않게 합니다.
+      for (const member of getChannelGroupMembers(group)) {
+        const kept = [];
+        for (const note of member.notes || []) {
+          const start = Number(note.startBeat) || 0;
+          const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+          if (start >= targetOrigin - 1e-7) {
+            note.startBeat = Number((start + spanBeats).toFixed(6));
+            kept.push(note);
+          } else if (end > targetOrigin + 1e-7) {
+            if (trimNoteToBeat(note, targetOrigin)) kept.push(note);
+          } else {
+            kept.push(note);
+          }
+        }
+        member.notes = kept;
+        state.channelNoteRuntime.delete(String(member.id));
+      }
+    }
+
+    // 시간 삽입 뒤에 새 채널을 만들어야 새 채널 노트가 밀리지 않습니다.
+    for (const pair of resolved.pairs) {
+      if (pair.channel) continue;
+      pair.channel = createChannelInGroupForPaste(group, pair.track);
+      createdChannels.push(pair.channel);
+    }
+    clearNoteSelection();
+    let count = 0;
+    for (const pair of resolved.pairs) {
+      const created = materializeClipboardNotes(pair.notes, targetOrigin);
+      created.forEach((note) => state.selectedNoteIds.add(note.id));
+      pair.channel.notes.push(...created);
+      if (!insert) resolveDirectEditOverlaps(pair.channel, new Set(created.map((note) => note.id)));
+      pair.channel.notes.sort(compareNotesByTimeline);
+      state.channelNoteRuntime.delete(String(pair.channel.id));
+      count += created.length;
+    }
+    if (insert) {
+      state.timelineBeats = Math.max(getTotalBeats(), getPersistentContentEndBeat() + getSnapBeat(), targetOrigin + spanBeats + getSnapBeat());
+    }
+    markDirty(insert ? "노트 삽입 붙여넣기" : "노트 붙여넣기");
+    ensureTimelineFitsViewport();
+    resizeAndDraw();
+    renderChannelTabs();
+    updateChannelInfo();
+    showToast(createdChannels.length
+      ? `${count}개 노트를 그룹 채널 ${resolved.pairs.length}개에 ${insert ? "삽입했습니다" : "붙여넣었습니다"}. (채널 ${createdChannels.length}개 새로 만듦)`
+      : `${count}개 노트를 그룹 채널 ${resolved.pairs.length}개에 ${insert ? "삽입했습니다" : "붙여넣었습니다"}.`);
+    return true;
+  }
+
   async function pasteNotesFromClipboard(payloadOverride = null) {
     if (isMidiReferenceActive()) {
       showToast("MIDI 탭은 읽기 전용입니다. 일반 채널을 선택한 뒤 붙여넣으세요.");
@@ -22772,6 +23128,10 @@
     if (!payload) {
       showToast("붙여넣을 노트 정보가 없습니다.");
       return false;
+    }
+    if (isGroupNoteEditActive()) {
+      if (payloadOverride) rememberNodeClipboardPayload(payload, { persist: true });
+      return pasteClipboardIntoGroup(payload);
     }
     if (payloadOverride) rememberNodeClipboardPayload(payload, { persist: true });
     const channel = getActiveChannel();
@@ -22794,7 +23154,9 @@
       volume: normalizeNoteDynamics(note).volume,
     }));
     if (!canPlaceMonophonicNotes(pasted, [])) {
-      showToast("복사한 노트끼리 서로 겹쳐 있어 단선율 채널에 붙여넣을 수 없습니다.");
+      showToast((payload.tracks?.length || 0) > 1
+        ? "여러 채널에서 복사한 노트가 서로 겹칩니다. 그룹을 선택한 뒤 붙여넣으세요."
+        : "복사한 노트끼리 서로 겹쳐 있어 단선율 채널에 붙여넣을 수 없습니다.");
       return false;
     }
     clearNoteSelection();
@@ -22826,7 +23188,12 @@
       showToast("삽입할 노트 정보가 없습니다.");
       return false;
     }
+    if (isGroupNoteEditActive()) return pasteClipboardIntoGroup(payload, { insert: true });
     const channel = getActiveChannel();
+    if (!channel) {
+      showToast("삽입할 채널을 선택하세요.");
+      return false;
+    }
     const targetOrigin = clamp(snapBeat(state.playhead.beat), 0, getTotalBeats());
     const insertBeats = Math.max(
       CONFIG.minimumNoteBeat,
@@ -22841,7 +23208,9 @@
       volume: normalizeNoteDynamics(note).volume,
     }));
     if (!canPlaceMonophonicNotes(pasted, [])) {
-      showToast("복사한 노트끼리 서로 겹쳐 있어 단선율 채널에 삽입할 수 없습니다.");
+      showToast((payload.tracks?.length || 0) > 1
+        ? "여러 채널에서 복사한 노트가 서로 겹칩니다. 그룹을 선택한 뒤 삽입하세요."
+        : "복사한 노트끼리 서로 겹쳐 있어 단선율 채널에 삽입할 수 없습니다.");
       return false;
     }
 
@@ -22894,7 +23263,7 @@
       && !isTextEntryTarget(event.target)
       && state.activePanel === "notes"
       && !isMidiReferenceActive()
-      && getActiveChannel()
+      && (getActiveChannel() || isGroupNoteEditActive())
     );
   }
 
@@ -23513,6 +23882,16 @@
   }
 
   function copyActiveChannelNotes() {
+    if (isGroupNoteEditActive()) {
+      // 선택이 없을 때 그룹 복사 = 그룹 하위 채널 전체를 채널별 트랙으로 복사합니다.
+      const group = getChannelGroupById(state.selectedChannelGroupId);
+      const members = getNoteEditChannels().filter((member) => member.notes.length);
+      if (!members.length) {
+        showToast("복사할 그룹 노트가 없습니다.");
+        return false;
+      }
+      return copyNotesToNodeClipboard(members.flatMap((member) => member.notes), { label: `${group?.name || "그룹"} 전체 노트`, originBeat: 0, source: "group" });
+    }
     const channel = getActiveChannel();
     if (!channel?.notes.length) {
       showToast("복사할 채널 노트가 없습니다.");
@@ -23522,6 +23901,26 @@
   }
 
   async function cutActiveChannelNotes() {
+    if (isGroupNoteEditActive()) {
+      const members = getNoteEditChannels().filter((member) => member.notes.length);
+      if (!members.length) {
+        showToast("잘라낼 그룹 노트가 없습니다.");
+        return false;
+      }
+      const copied = await copyActiveChannelNotes();
+      if (!copied) return false;
+      for (const member of members) {
+        member.notes = [];
+        state.channelNoteRuntime.delete(String(member.id));
+      }
+      clearNoteSelection();
+      markDirty("그룹 노트 잘라내기");
+      shrinkTimelineToContent();
+      drawRoll();
+      updateChannelInfo();
+      showToast(`그룹 채널 ${members.length}개의 노트를 잘라냈습니다.`);
+      return true;
+    }
     const channel = getActiveChannel();
     if (!channel?.notes.length) {
       showToast("잘라낼 채널 노트가 없습니다.");
@@ -23544,10 +23943,16 @@
     if (!state.selectedNoteIds.size) {
       return false;
     }
-    const channel = getActiveChannel();
-    const before = channel.notes.length;
-    channel.notes = channel.notes.filter((note) => !state.selectedNoteIds.has(note.id));
-    const removed = before - channel.notes.length;
+    const targets = getNoteEditChannels();
+    let removed = 0;
+    for (const channel of targets) {
+      const before = channel.notes.length;
+      channel.notes = channel.notes.filter((note) => !state.selectedNoteIds.has(note.id));
+      if (channel.notes.length !== before) {
+        removed += before - channel.notes.length;
+        state.channelNoteRuntime.delete(String(channel.id));
+      }
+    }
     if (!removed) {
       return false;
     }
@@ -24955,11 +25360,7 @@
     if (isMidiReferenceActive() || state.activePanel !== "notes" || !state.selectedNoteIds.size) {
       return [];
     }
-    const channel = getActiveChannel();
-    if (!channel?.notes?.length) {
-      return [];
-    }
-    return channel.notes.filter((note) => state.selectedNoteIds.has(note.id));
+    return getSelectedNotes();
   }
 
   function updateCurrentWheelVolumeHistory(label = "노트 볼륨 변경") {
@@ -24981,7 +25382,7 @@
       return false;
     }
 
-    const channel = getActiveChannel();
+    const editChannels = getNoteEditChannels();
     let changed = false;
     for (const note of selected) {
       const nextVolume = clamp(getNoteVolume(note) + Math.sign(step), 0, 15);
@@ -24996,9 +25397,13 @@
       return false;
     }
 
-    updateChannelDefaultNoteVolumeFromNotes(channel, selected);
-    state.channelNoteRuntime.delete(String(channel.id));
-    const selectionSignature = `${channel.id}:${selected.map((note) => note.id).sort((a, b) => a - b).join(",")}`;
+    for (const channel of editChannels) {
+      const own = selected.filter((note) => channel.notes.includes(note));
+      if (!own.length) continue;
+      updateChannelDefaultNoteVolumeFromNotes(channel, own);
+      state.channelNoteRuntime.delete(String(channel.id));
+    }
+    const selectionSignature = `${editChannels.map((channel) => channel.id).join("+")}:${selected.map((note) => note.id).sort((a, b) => a - b).join(",")}`;
     const canMergeWithCurrentHistory = (
       state.zoomWheel.mode === "volume"
       && state.zoomWheel.selectionSignature === selectionSignature
@@ -25158,11 +25563,10 @@
       const sourceIdSet = state.noteEditMode.sourceNoteIds instanceof Set
         ? state.noteEditMode.sourceNoteIds
         : new Set();
-      const editChannelId = String(state.noteEditMode.channelId || "");
       let lastNoteEnd = 0;
       for (const channel of state.channels) {
         for (const note of channel.notes || []) {
-          if (String(channel.id) === editChannelId && sourceIdSet.has(note.id)) continue;
+          if (sourceIdSet.has(note.id)) continue;
           lastNoteEnd = Math.max(lastNoteEnd, Number(note.startBeat || 0) + Number(note.durationBeat || 0));
         }
       }
@@ -25303,7 +25707,7 @@
       if (!includeMuted && isChannelEffectivelyMuted(channel)) continue;
       const playbackChannelNotes = channel.notes;
       for (const note of playbackChannelNotes) {
-        if (noteEditActive && String(channel.id) === noteEditChannelId && sourceIdSet.has(note.id)) continue;
+        if (noteEditActive && sourceIdSet.has(note.id)) continue;
         if (note.startBeat + note.durationBeat <= startBeat + 1e-7) continue;
         const fadedVolume = getTimelineFadedNoteVolume(note);
         notes.push({
@@ -25322,9 +25726,12 @@
         });
       }
     }
-    if (noteEditActive && noteEditChannel && (includeMuted || !isChannelEffectivelyMuted(noteEditChannel))) {
+    if (noteEditActive && noteEditChannel) {
       let previewIndex = 0;
+      const previewChannelById = new Map(getNoteEditModeChannels().map((item) => [String(item.id), item]));
       for (const note of state.noteEditMode.previewNotes || []) {
+        const previewChannel = previewChannelById.get(getNoteEditModeSourceChannelId(note._noteEditSourceId)) || noteEditChannel;
+        if (!includeMuted && isChannelEffectivelyMuted(previewChannel)) continue;
         if (note.startBeat + note.durationBeat <= startBeat + 1e-7) continue;
         const fadedVolume = getTimelineFadedNoteVolume(note);
         notes.push({
@@ -25336,10 +25743,10 @@
           durationBeat: note.durationBeat,
           endBeat: note.startBeat + note.durationBeat,
           source: "note-edit-preview",
-          sourceId: noteEditChannel.id,
-          instrumentProgram: getChannelInstrumentProgram(noteEditChannel),
-          instrumentBank: getChannelInstrumentBank(noteEditChannel),
-          instrumentExactPreset: getChannelInstrumentExactPreset(noteEditChannel),
+          sourceId: previewChannel.id,
+          instrumentProgram: getChannelInstrumentProgram(previewChannel),
+          instrumentBank: getChannelInstrumentBank(previewChannel),
+          instrumentExactPreset: getChannelInstrumentExactPreset(previewChannel),
         });
       }
     }
@@ -27774,11 +28181,10 @@
 
   function getSelectedSamePitchMergePlan() {
     if (isMidiReferenceActive() || state.activePanel !== "notes") return null;
-    const channel = getActiveChannel();
-    if (!channel || state.selectedNoteIds.size < 2) return null;
+    const channels = getNoteEditChannels();
+    if (!channels.length || state.selectedNoteIds.size < 2) return null;
 
     const selectedIds = new Set(state.selectedNoteIds);
-    const ordered = sortNoteIntervals(channel.notes);
     const groups = [];
     let current = [];
 
@@ -27790,23 +28196,25 @@
     // Only neighboring selected notes in the channel's actual timeline order may
     // be joined. An unselected note or a different pitch splits the run, so a
     // non-mergeable section never prevents other mergeable runs from succeeding.
-    for (const note of ordered) {
-      if (!selectedIds.has(note.id)) {
-        flush();
-        continue;
+    for (const channel of channels) {
+      for (const note of sortNoteIntervals(channel.notes)) {
+        if (!selectedIds.has(note.id)) {
+          flush();
+          continue;
+        }
+        if (!current.length || Number(current[0].pitch) === Number(note.pitch)) {
+          current.push(note);
+        } else {
+          flush();
+          current = [note];
+        }
       }
-      if (!current.length || Number(current[0].pitch) === Number(note.pitch)) {
-        current.push(note);
-      } else {
-        flush();
-        current = [note];
-      }
+      flush();
     }
-    flush();
 
     if (!groups.length) return null;
     return {
-      channel,
+      channels,
       groups,
       selectedIds,
       mergeNoteCount: groups.reduce((sum, group) => sum + group.length, 0),
@@ -27833,9 +28241,11 @@
       }
     }
 
-    plan.channel.notes = plan.channel.notes.filter((note) => !removeIds.has(note.id));
+    for (const channel of plan.channels) {
+      channel.notes = channel.notes.filter((note) => !removeIds.has(note.id));
+      state.channelNoteRuntime.delete(String(channel.id));
+    }
     state.selectedNoteIds = nextSelection;
-    state.channelNoteRuntime.delete(String(plan.channel.id));
     markDirty("선택 노트 합침");
     shrinkTimelineToContent();
     drawRoll();
@@ -27854,11 +28264,26 @@
     return isNoteEditModeActive() ? getChannelById(state.noteEditMode.channelId) : null;
   }
 
+  // 변환 편집은 그룹에서 여러 채널을 동시에 대상으로 할 수 있습니다.
+  // channelId는 대표(첫) 채널, channelIds는 실제 대상 채널 전체입니다.
+  function getNoteEditModeChannels() {
+    if (!isNoteEditModeActive()) return [];
+    const ids = Array.isArray(state.noteEditMode.channelIds) && state.noteEditMode.channelIds.length
+      ? state.noteEditMode.channelIds
+      : [state.noteEditMode.channelId];
+    return ids.map((id) => getChannelById(id)).filter(Boolean);
+  }
+
+  function getNoteEditModeSourceChannelId(noteId) {
+    const map = state.noteEditMode.sourceChannelIdByNoteId;
+    return map instanceof Map && map.has(noteId) ? map.get(noteId) : String(state.noteEditMode.channelId ?? "");
+  }
+
   function getNoteEditModeSourceNotes() {
-    const channel = getNoteEditModeChannel();
-    if (!channel) return [];
     const ids = state.noteEditMode.sourceNoteIds instanceof Set ? state.noteEditMode.sourceNoteIds : new Set();
-    return channel.notes.filter((note) => ids.has(note.id)).sort(compareNotesByTimeline);
+    return getNoteEditModeChannels()
+      .flatMap((channel) => channel.notes.filter((note) => ids.has(note.id)))
+      .sort(compareNotesByTimeline);
   }
 
   function resetNoteEditControlState() {
@@ -28340,8 +28765,10 @@
     const normalizedType = String(type || "");
     const handler = getNoteEditModeHandler(normalizedType);
     if (!handler || isMidiReferenceActive() || state.activePanel !== "notes" || isChannelMergeModeActive() || isNoteEditModeActive()) return false;
-    const channel = getActiveChannel();
-    const selected = getSelectedNotes(channel);
+    // 그룹 선택이면 선택 노트를 가진 하위 채널 전체를 함께 변환합니다.
+    const owners = getNoteEditChannels().filter((member) => member.notes.some((note) => state.selectedNoteIds.has(note.id)));
+    const channel = owners[0] || null;
+    const selected = getSelectedNotes();
     if (!channel || !selected.length) {
       showToast(i18nText(normalizedType === "trill" ? "note.trill_need_selection" : normalizedType === "glissando" ? "note.performance_need_selection" : "note.arpeggio_need_selection"));
       return false;
@@ -28352,7 +28779,16 @@
     state.noteEditMode.active = true;
     state.noteEditMode.type = normalizedType;
     state.noteEditMode.channelId = String(channel.id);
+    state.noteEditMode.channelIds = owners.map((owner) => String(owner.id));
     state.noteEditMode.sourceNoteIds = new Set(selected.map((note) => note.id));
+    state.noteEditMode.sourceChannelIdByNoteId = new Map();
+    state.noteEditMode.originalNotesByChannelId = new Map();
+    for (const owner of owners) {
+      state.noteEditMode.originalNotesByChannelId.set(String(owner.id), owner.notes.map((note) => ({ ...note })));
+      for (const note of owner.notes) {
+        if (state.noteEditMode.sourceNoteIds.has(note.id)) state.noteEditMode.sourceChannelIdByNoteId.set(note.id, String(owner.id));
+      }
+    }
     state.noteEditMode.originalChannelNotes = channel.notes.map((note) => ({ ...note }));
     state.noteEditMode.originalSelectedNoteIds = new Set(state.selectedNoteIds);
     state.noteEditMode.originalNextNoteId = state.nextNoteId;
@@ -28374,9 +28810,12 @@
   function cancelNoteEditMode({ silent = false } = {}) {
     if (!isNoteEditModeActive()) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
-    const channel = getNoteEditModeChannel();
-    if (channel) {
-      channel.notes = state.noteEditMode.originalChannelNotes.map((note) => ({ ...note }));
+    const originals = state.noteEditMode.originalNotesByChannelId instanceof Map ? state.noteEditMode.originalNotesByChannelId : new Map();
+    for (const channel of getNoteEditModeChannels()) {
+      const saved = originals.get(String(channel.id))
+        || (String(channel.id) === String(state.noteEditMode.channelId) ? state.noteEditMode.originalChannelNotes : null);
+      if (!saved) continue;
+      channel.notes = saved.map((note) => ({ ...note }));
       state.channelNoteRuntime.delete(String(channel.id));
     }
     state.nextNoteId = state.noteEditMode.originalNextNoteId;
@@ -28385,6 +28824,9 @@
     state.noteEditMode.active = false;
     state.noteEditMode.type = null;
     state.noteEditMode.channelId = null;
+    state.noteEditMode.channelIds = [];
+    state.noteEditMode.sourceChannelIdByNoteId = new Map();
+    state.noteEditMode.originalNotesByChannelId = new Map();
     state.noteEditMode.sourceNoteIds = new Set();
     state.noteEditMode.originalChannelNotes = [];
     state.noteEditMode.originalSelectedNoteIds = new Set();
@@ -28406,17 +28848,23 @@
 
   function applyNoteEditMode() {
     if (!isNoteEditModeActive()) return false;
-    const channel = getNoteEditModeChannel();
+    const channels = getNoteEditModeChannels();
     const sourceNotes = getNoteEditModeSourceNotes();
-    const preview = (state.noteEditMode.previewNotes || []).map((note) => ({ ...note }));
-    if (!channel || !sourceNotes.length || !preview.length) return false;
+    const allPreview = (state.noteEditMode.previewNotes || []).map((note) => ({ ...note }));
+    if (!channels.length || !sourceNotes.length || !allPreview.length) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     const sourceIds = new Set(state.noteEditMode.sourceNoteIds);
-    const firstSource = sourceNotes[0];
     const sourceById = new Map(sourceNotes.map((note) => [note.id, note]));
     const reusedSourceIds = new Set();
-    const untouched = channel.notes.filter((note) => !sourceIds.has(note.id));
     const nextSelection = new Set();
+    const survivingIds = new Set();
+    for (const channel of channels) {
+    const channelKey = String(channel.id);
+    const channelSources = sourceNotes.filter((note) => getNoteEditModeSourceChannelId(note.id) === channelKey);
+    if (!channelSources.length) continue;
+    const firstSource = channelSources[0];
+    const preview = allPreview.filter((raw) => getNoteEditModeSourceChannelId(raw._noteEditSourceId) === channelKey);
+    const untouched = channel.notes.filter((note) => !sourceIds.has(note.id));
     const transformed = preview.map((raw) => {
       const source = sourceById.get(raw._noteEditSourceId) || firstSource;
       const reuseOriginalId = sourceIds.has(source.id) && !reusedSourceIds.has(source.id);
@@ -28435,15 +28883,19 @@
       };
     });
     channel.notes = normalizeMonophonicNotes([...untouched, ...transformed]);
-    const survivingIds = new Set(channel.notes.map((note) => note.id));
-    state.selectedNoteIds = new Set([...nextSelection].filter((id) => survivingIds.has(id)));
+    for (const note of channel.notes) survivingIds.add(note.id);
     state.channelNoteRuntime.delete(String(channel.id));
+    }
+    state.selectedNoteIds = new Set([...nextSelection].filter((id) => survivingIds.has(id)));
     const appliedType = state.noteEditMode.type;
     const handler = getNoteEditModeHandler(appliedType);
     handler?.saveOptions?.(handler.readOptions?.() || {});
     state.noteEditMode.active = false;
     state.noteEditMode.type = null;
     state.noteEditMode.channelId = null;
+    state.noteEditMode.channelIds = [];
+    state.noteEditMode.sourceChannelIdByNoteId = new Map();
+    state.noteEditMode.originalNotesByChannelId = new Map();
     state.noteEditMode.sourceNoteIds = new Set();
     state.noteEditMode.originalChannelNotes = [];
     state.noteEditMode.originalSelectedNoteIds = new Set();
@@ -29509,7 +29961,7 @@
       if (!clicked) {
         const hasClipboardNotes = Boolean(state.noteClipboard?.notes?.length);
         return [
-          { label: i18nText("channel.select_all_note"), disabled: !getActiveChannel()?.notes?.length, disabledReason: i18nText("context.disabled_no_notes"), action: selectAllNotes },
+          { label: i18nText("channel.select_all_note"), disabled: !getNoteEditVirtualChannel()?.notes?.length, disabledReason: i18nText("context.disabled_no_notes"), action: selectAllNotes },
           { label: i18nText("note.paste"), disabled: !hasClipboardNotes, disabledReason: i18nText("context.disabled_no_clipboard_notes"), action: pasteNotesFromClipboard },
           "separator",
           { label: i18nText("timeline.measure_menu"), items: measureItems },
@@ -30012,7 +30464,7 @@
       if (isMidiReferenceActive()) {
         selectAllMidiNotes();
         handled = true;
-      } else if (state.activePanel === "notes" && state.selectedChannelGroupId == null && getActiveChannel()) {
+      } else if (state.activePanel === "notes" && (getActiveChannel() || isGroupNoteEditActive())) {
         selectAllNotes();
         handled = true;
       }
@@ -30074,7 +30526,7 @@
       || isTextEntryTarget(event.target)
       || state.activePanel !== "notes"
       || isMidiReferenceActive()
-      || !getActiveChannel()
+      || !(getActiveChannel() || isGroupNoteEditActive())
     ) {
       return false;
     }
@@ -32067,6 +32519,7 @@
       changeZoom,
       handlePianoRollAltWheelZoom,
       adjustSelectedNoteVolumesByStep,
+      beatToX, pitchToY, selectChannelGroup, findNoteHitAt, getSelectedNotes, selectAllNotes, deleteSelectedNote, mergeSelectedSamePitchNotes, shiftSelectedNotesByOctave, getNoteEditChannels,
       findOtherVisibleChannelNoteHitAt,
       parseMmlText,
       extractThreeMleMmlPartCandidates,
