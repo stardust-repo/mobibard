@@ -6,7 +6,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ja"] = {
   "strings": {
     "title": "MML簡単ジェネレーター",
     "brand": "モビバード",
-    "browserTitle": "モビバード v5.3",
+    "browserTitle": "モビバード v5.5",
     "subtitle": "ファイルを入れるだけで、3チャンネルMMLにすぐ変換します。",
     "stepSourceTitle": "ファイルを読み込む",
     "stepSourceDescription": "MIDI・楽譜ファイルを選ぶかMMLを貼り付けて、変換元を読み込みます。",

@@ -2,7 +2,7 @@ export default {
   "code": "ja",
   "htmlLang": "ja",
   "strings": {
-    "site.title": "モビバード v5.3",
+    "site.title": "モビバード v5.5",
     "ui.brand": "モビバード",
     "ui.recommended": "おすすめサイト",
     "ui.select_recommended": "おすすめサイトを選択",

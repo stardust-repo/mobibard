@@ -14976,3 +14976,92 @@ body.channel-delete-mode-active #channelTabs .channel-tree-group-delete {
 .gf-range { bottom: 3px; }
 .gf-lane { height: 62px; }
 .gf-vbar > i { bottom: calc(100% + 1px); }
+
+/* 2026-10-30: groups and audio rows show the same selection dot as channel rows. */
+.channel-tree-item.audio-source-item.active .channel-tab-main::before,
+.channel-tree-item.audio-source-item.active:hover .channel-tab-main::before {
+  content: "" !important;
+  display: block !important;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-right: 0;
+  border-radius: 999px;
+  background: var(--channel-color);
+  box-shadow: none;
+  font-size: 0;
+}
+.channel-group-item.active .channel-group-main::before,
+.channel-group-item.active:hover .channel-group-main::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--channel-color);
+  box-shadow: none;
+}
+
+/* 2026-10-30: current part indicator above the BPM readout (shown only when the song has 2+ parts). */
+.timeline-tempo-readout { cursor: pointer; }
+.timeline-tempo-readout em {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--accent, #6aa7ff);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+.timeline-tempo-readout em[hidden] { display: none; }
+
+/* 2026-10-30: selection circles / checks (channel, group, audio rows in pickers and delete mode)
+   use clearly visible colors instead of the pale grey. */
+:root {
+  --select-mark-off: #d9dfeb;
+  --select-mark-on: #4ade80;
+  --select-mark-danger: #ff6b78;
+}
+:root[data-theme="light"] {
+  --select-mark-off: #3d4859;
+  --select-mark-on: #15803d;
+  --select-mark-danger: #dc2626;
+}
+.channel-tree-select-toggle,
+.channel-tree-delete-select,
+.channel-tree-group-delete {
+  color: var(--select-mark-off) !important;
+}
+.channel-tree-select-toggle .channel-tree-action-glyph,
+.channel-tree-delete-select .channel-tree-action-glyph,
+.channel-tree-group-delete .channel-tree-action-glyph {
+  color: inherit !important;
+  font-size: 15px;
+  font-weight: 900;
+}
+.channel-tree-select-toggle.is-active,
+.channel-tree-select-toggle.is-active .channel-tree-action-glyph {
+  color: var(--select-mark-on) !important;
+}
+.channel-tree-delete-select.is-active,
+.channel-tree-group-delete.is-active {
+  color: var(--select-mark-danger) !important;
+}
+
+/* Group collapse/expand button inside the export dialogs' toolbar. */
+.inline-channel-select-toolbar:has(.inline-group-toggle) {
+  grid-template-columns: max-content minmax(0, 1fr) max-content max-content max-content;
+}
+.inline-channel-select-toolbar > .inline-group-toggle {
+  position: relative;
+  width: 27px;
+  min-width: 27px;
+  height: 27px;
+  padding: 0;
+}
+.inline-channel-select-toolbar > .inline-group-toggle:disabled { opacity: .45; }
+
+/* Current part indicator takes the part guide line colour. */
+.timeline-tempo-readout em { color: #ffc45c; font-size: 10px; }
+:root[data-theme="light"] .timeline-tempo-readout em { color: #ff9d00; }

@@ -66,14 +66,14 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.3.0&rev=20261026i-guide";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261030d-menus3";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.3.0&amp;rev=20261026i-guide"></script>
-<title data-i18n="app.title">모비바드 v5.3</title>
+<script src="js/language-manager.js?v=5.5.0&amp;rev=20261030d-menus3"></script>
+<title data-i18n="app.title">모비바드 v5.5</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
 (() => {
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.3.0&amp;rev=20261026i-guide" rel="stylesheet"/>
+<link href="styles.css?v=5.5.0&amp;rev=20261030d-menus3" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -102,7 +102,7 @@
 <div data-context-area="app" id="app">
 <header class="topbar editor-topbar" data-context-area="topbar">
 <div class="topbar-main">
-<details class="brand-site-map" data-current-site="editor"><summary class="brand-site-map-trigger brand" aria-label="사이트 맵" data-i18n-aria-label="ui.site_map" title="사이트 맵" data-i18n-title="ui.site_map"><span aria-hidden="true" class="brand-mark"></span><span class="brand-site-map-name" data-i18n="brand">모비바드</span><span class="brand-version">v5.3</span><svg aria-hidden="true" class="brand-site-map-chevron" viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6"></path></svg></summary><nav aria-label="사이트 맵" data-i18n-aria-label="ui.site_map" class="brand-site-map-popover" data-common-site-map=""></nav></details>
+<details class="brand-site-map" data-current-site="editor"><summary class="brand-site-map-trigger brand" aria-label="사이트 맵" data-i18n-aria-label="ui.site_map" title="사이트 맵" data-i18n-title="ui.site_map"><span aria-hidden="true" class="brand-mark"></span><span class="brand-site-map-name" data-i18n="brand">모비바드</span><svg aria-hidden="true" class="brand-site-map-chevron" viewBox="0 0 16 16"><path d="M3.5 6 8 10.5 12.5 6"></path></svg></summary><nav aria-label="사이트 맵" data-i18n-aria-label="ui.site_map" class="brand-site-map-popover" data-common-site-map=""></nav></details>
 <div class="toolbar-group file-actions">
 <div class="file-control">
 <button aria-expanded="false" aria-haspopup="menu" id="fileButton" type="button" data-i18n="menu.file">파일</button>
@@ -418,7 +418,7 @@
 <div aria-hidden="true" class="overview-timeline-corner"></div>
 <canvas aria-label="전체 타임라인" data-i18n-aria-label="timeline.overview" class="overview-timeline" data-context-area="overview-timeline" id="overviewTimelineCanvas"></canvas>
 <div aria-hidden="true" class="scrollbar-gutter overview-scrollbar-gutter"></div>
-<div aria-label="현재 재생선 위치의 템포" data-i18n-aria-label="tempo.playhead" class="timeline-corner timeline-tempo-readout" id="timelineTempoReadout"><span>BPM</span><strong id="timelineTempoValue">120</strong></div>
+<div aria-label="현재 재생선 위치의 템포" data-i18n-aria-label="tempo.playhead" class="timeline-corner timeline-tempo-readout" data-context-area="tempo-readout" id="timelineTempoReadout"><em hidden="" id="timelinePartValue"></em><span>BPM</span><strong id="timelineTempoValue">120</strong></div>
 <canvas class="timeline" data-context-area="timeline" id="timelineCanvas"></canvas>
 <div class="timeline-hover-tooltip" hidden="" id="timelineHoverTooltip">00:00.0</div>
 <div aria-hidden="true" class="scrollbar-gutter top-scrollbar-gutter"></div>
@@ -471,7 +471,7 @@
 <div class="transfer-dialog-header"><div><strong data-i18n="mml.export">MML 내보내기</strong><span data-i18n="mml_export.selection_hint">왼쪽에서 복사할 채널을 선택하세요.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="mmlExportCloseButton" type="button">×</button></div>
 <div class="mml-export-workspace">
   <div class="mml-export-channel-pane">
-    <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button id="mmlExportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="mmlExportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+    <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="mmlExportGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="mmlExportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="mmlExportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
     <div class="mml-export-channel-list inline-channel-select-list dialog-inline-channel-list" id="mmlExportChannelList"></div>
   </div>
   <div class="mml-export-copy-panel" id="mmlExportCopyPanel">
@@ -495,7 +495,7 @@
 <section aria-labelledby="channelExportTitle" aria-modal="true" class="transfer-dialog channel-export-dialog" id="channelExportDialog" role="dialog">
 <div class="transfer-dialog-header"><div><strong id="channelExportTitle">내보내기</strong><span data-i18n="export.select_channels_hint">내보낼 채널을 선택하세요.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelExportCloseButton" type="button">×</button></div>
 <div class="channel-export-body">
-<div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button id="channelExportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelExportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+<div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="channelExportGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="channelExportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelExportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
 <div class="mml-export-channel-list channel-export-list inline-channel-select-list dialog-inline-channel-list" id="channelExportList"></div>
 <div class="channel-export-progress" hidden="" id="channelExportProgress"><progress id="channelExportProgressBar" max="1"></progress><span aria-live="polite" id="channelExportProgressText"></span></div>
 </div>
@@ -746,18 +746,18 @@
 <script src="../plugins/formats/musescore/format-musescore.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
-<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0&amp;rev=20261026i-guide"></script>
+<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0&amp;rev=20261030d-menus3"></script>
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
-<script src="js/soundbank-player.js?v=5.3.0&amp;rev=20261024-export-fixes"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261026i-guide"></script>
+<script src="js/soundbank-player.js?v=5.5.0&amp;rev=20261024-export-fixes"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261030d-menus3"></script>
 <script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.8"></script>
-<script src="app.js?v=5.3.0&amp;rev=20261026i-guide"></script>
-<script src="js/account-drive.js?v=5.3.0&amp;rev=20260928-account-preference1" type="module"></script>
+<script src="app.js?v=5.5.0&amp;rev=20261030d-menus3"></script>
+<script src="js/account-drive.js?v=5.5.0&amp;rev=20260928-account-preference1" type="module"></script>
 </body>
 </html>

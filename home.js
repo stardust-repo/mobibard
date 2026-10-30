@@ -122,7 +122,7 @@
     const safe = supported.has(lang) ? lang : 'ko';
     const text = copy[safe];
     document.documentElement.lang = safe;
-    document.title = `${text.brand} v5.3`;
+    document.title = `${text.brand} v5.5`;
     select.value = safe;
     homeTitle.textContent = text.brand;
     subtitle.textContent = text.subtitle;

@@ -2,7 +2,7 @@ export default {
   "code": "zh-TW",
   "htmlLang": "zh-Hant",
   "strings": {
-    "site.title": "Mobibard v5.3",
+    "site.title": "Mobibard v5.5",
     "ui.brand": "Mobibard",
     "ui.recommended": "推薦網站",
     "ui.select_recommended": "選擇推薦網站",

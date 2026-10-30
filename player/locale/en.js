@@ -452,7 +452,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "ui.mel": "Mel",
     "ui.middle_c": "is middle C (C4).",
     "ui.mobibard": "Mobibard",
-    "ui.mobibard_version": "Mobibard v5.3",
+    "ui.mobibard_version": "Mobibard v5.5",
     "ui.name_count": "{0}: {1}",
     "ui.no_chars": "0 chars",
     "ui.no_notes": "No notes",

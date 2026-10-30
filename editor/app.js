@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION_LABEL = "v5.3";
+  const APP_VERSION_LABEL = "v5.5";
 
   const CONFIG = {
     defaultChannelCount: 1,
@@ -311,6 +311,7 @@
     timelineCanvas: document.querySelector("#timelineCanvas"),
     timelineTempoReadout: document.querySelector("#timelineTempoReadout"),
     timelineTempoValue: document.querySelector("#timelineTempoValue"),
+    timelinePartValue: document.querySelector("#timelinePartValue"),
     keyboardCanvas: document.querySelector("#keyboardCanvas"),
     rollViewport: document.querySelector("#rollViewport"),
     rollSpacer: document.querySelector("#rollSpacer"),
@@ -1937,6 +1938,7 @@
     host.classList.add('inline-channel-tree');
     host.setAttribute('role', 'tree');
     host._inlineSelection = { selectedIds, notesOnly, detailForChannel, badgeForChannel };
+    host._inlineRerender = () => renderInlineChannelSelectionList(host, selectedIds, { notesOnly, onChange, detailForChannel, badgeForChannel });
     const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
     const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
     const rendered = new Set();
@@ -2183,7 +2185,33 @@
     host.append(fragment);
     syncInlineChannelSelectionGroups(host);
     host.scrollTop = scrollTop;
+    syncInlineGroupToggleButton(host.closest('.transfer-dialog')?.querySelector('.inline-group-toggle'));
     return true;
+  }
+
+  // "Collapse / expand all groups" button inside the export dialogs. It uses the same rule as the
+  // channel panel button: the open folder shows while at least one group is open.
+  function syncInlineGroupToggleButton(button) {
+    if (!button) return;
+    const groups = state.channelGroups;
+    const anyOpen = groups.some((group) => !inlineChannelCollapsedGroupIds.has(String(group.id)));
+    button.disabled = groups.length === 0;
+    button.dataset.action = anyOpen ? 'collapse' : 'expand';
+    button.title = i18nText(anyOpen ? 'group.collapse_all' : 'group.expand_all');
+    button.setAttribute('aria-label', button.title);
+    const glyph = button.querySelector('.channel-tree-action-glyph');
+    if (glyph) glyph.textContent = anyOpen ? '📂' : '📁';
+  }
+
+  function toggleInlineGroupsFromButton(button) {
+    const groups = state.channelGroups;
+    if (!groups.length) return;
+    const anyOpen = groups.some((group) => !inlineChannelCollapsedGroupIds.has(String(group.id)));
+    if (anyOpen) groups.forEach((group) => inlineChannelCollapsedGroupIds.add(String(group.id)));
+    else inlineChannelCollapsedGroupIds.clear();
+    const host = button.closest('.transfer-dialog')?.querySelector('.inline-channel-tree');
+    if (typeof host?._inlineRerender === 'function') host._inlineRerender();
+    else syncInlineGroupToggleButton(button);
   }
 
   function getAutoPartChannels() {
@@ -4320,6 +4348,16 @@
 
   function getSortedTempos() {
     return [...getActiveTempoCollection()].sort((left, right) => left.beat - right.beat || (left.id || 0) - (right.id || 0));
+  }
+
+  function getCurrentTempoEntry(beat) {
+    const targetBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
+    let current = null;
+    for (const tempo of getSortedTempos()) {
+      if (tempo.beat > targetBeat + 1e-9) break;
+      current = tempo;
+    }
+    return current;
   }
 
   function getTempoAtBeat(beat) {
@@ -7481,6 +7519,16 @@
     const currentTempo = getTempoAtBeat(clamp(Number(state.playhead.beat) || 0, 0, getTotalBeats()));
     if (elements.timelineTempoValue) elements.timelineTempoValue.textContent = String(currentTempo);
     if (elements.timelineTempoReadout) elements.timelineTempoReadout.title = `현재 템포 ${currentTempo} BPM`;
+    if (elements.timelinePartValue) {
+      // The part indicator only exists once the song has been split into two or more parts.
+      const partRanges = getTimelinePartRanges();
+      const split = partRanges.length > 1;
+      elements.timelinePartValue.hidden = !split;
+      if (split) {
+        const partText = i18nText("timeline.part_readout", [getTimelinePartIndexAtBeat(state.playhead.beat) + 1]);
+        if (elements.timelinePartValue.textContent !== partText) elements.timelinePartValue.textContent = partText;
+      }
+    }
     const drawingUnit = getVisibleGridUnit();
     const firstVisibleBeat = Math.max(0, xToBeat(scrollLeft) - drawingUnit);
     const lastVisibleBeat = Math.min(getTotalBeats(), xToBeat(scrollLeft + width) + drawingUnit);
@@ -11100,7 +11148,9 @@
     const { hasItems, allVisible, allHidden, allMuted, allVisibilitySolo, allSoundSolo } = getChannelTreeBulkState();
     if (elements.channelBulkGroupToggleButton) {
       const hasGroups = groupCount > 0;
-      const allExpanded = hasGroups && state.channelGroups.every((group) => !Boolean(group.collapsed));
+      // Updated rule: the folder glyph is open as soon as at least one group is open;
+      // it is closed only when every group is collapsed. The action follows the glyph.
+      const allExpanded = hasGroups && state.channelGroups.some((group) => !Boolean(group.collapsed));
       const anyCollapsed = hasGroups && state.channelGroups.some((group) => Boolean(group.collapsed));
       elements.channelBulkGroupToggleButton.disabled = locked || !hasGroups;
       // Requested rule: if even one group is closed, show the closed folder and
@@ -11316,6 +11366,7 @@
       const label = document.createElement("span"); label.className = "channel-tree-label channel-group-label"; label.textContent = group.name;
       const count = document.createElement("span"); count.className = "channel-group-count"; count.textContent = String(members.length + getChannelGroupAudioMembers(group).length);
       main.append(folder, label, count);
+      main.title = deleteMode ? i18nText("group.delete_mode_item_title", [group.name]) : i18nText("selection.click_drag_up", [group.name]);
       main.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -15967,7 +16018,8 @@
 
   function openChannelVolumeDialog(options = {}) {
     const selectedIds = resolveInitialVolumeChannelIds(options);
-    if (!selectedIds.size) {
+    const hasAnyNotes = state.channels.some((channel) => channel.notes?.length);
+    if (!selectedIds.size && !(options.allowEmpty && hasAnyNotes)) {
       showToast(i18nText("volume.no_editor_notes"));
       return false;
     }
@@ -23267,7 +23319,7 @@
     updateMmlExportDialogState();
   }
 
-  function openMmlExportDialog() {
+  function openMmlExportDialog(preselectChannelIds = null) {
     closeFileMenu();
     closeEditMenu();
     closeContextMenu();
@@ -23276,6 +23328,10 @@
     closeZoomMenu();
     closePlaybackRateMenu();
     mmlExportSelectedIds = new Set();
+    if (Array.isArray(preselectChannelIds)) {
+      const withNotes = new Set(state.channels.filter((channel) => channel.notes?.length).map((channel) => String(channel.id)));
+      for (const id of preselectChannelIds) if (withNotes.has(String(id))) mmlExportSelectedIds.add(String(id));
+    }
     renderMmlExportChannelList();
     if (elements.mmlExportBackdrop) elements.mmlExportBackdrop.hidden = false;
     return true;
@@ -26532,7 +26588,7 @@
     }
   }
 
-  function openChannelExportDialog(mode) {
+  function openChannelExportDialog(mode, preselectChannelIds = null) {
     closeFileMenu();
     closeEditMenu();
     closeContextMenu();
@@ -26545,6 +26601,11 @@
     channelExportState.mode = mode === "audio" ? "audio" : "midi";
     // Full-song exports usually want everything: start with all non-empty channels selected.
     channelExportState.selectedIds = new Set(exportable.map((channel) => String(channel.id)));
+    // Context-menu exports (group / channel) start with only that item's channels selected.
+    if (Array.isArray(preselectChannelIds)) {
+      const allowed = new Set(preselectChannelIds.map(String));
+      channelExportState.selectedIds = new Set([...channelExportState.selectedIds].filter((id) => allowed.has(id)));
+    }
     if (elements.channelExportTitle) elements.channelExportTitle.textContent = i18nText(channelExportState.mode === "audio" ? "audio.export_ogg" : "midi.export");
     setChannelExportProgress("");
     renderChannelExportList();
@@ -27231,7 +27292,7 @@
 
   function shouldUseLongPress(target) {
     return Boolean(target?.closest?.(
-      "#timelineCanvas, #rollCanvas, #keyboardCanvas, .channel-tab-item, .channel-group-item, .history-item, [data-context-area='midi-instrument'], .channel-detail-toolbar, #channelPanel",
+      "#timelineCanvas, #timelineTempoReadout, #rollCanvas, #keyboardCanvas, .channel-tab-item, .channel-group-item, .history-item, [data-context-area='midi-instrument'], .channel-detail-toolbar, #channelPanel",
     ));
   }
 
@@ -27483,6 +27544,7 @@
     }
     const factory = contextMenuRegistry.get(area.name) || contextMenuRegistry.get("app");
     const items = factory?.({ event, area, state }) || [];
+    if (!items.length) { closeContextMenu(); return; }
     renderContextMenu(items, event.clientX, event.clientY, area.name, event);
   }
 
@@ -27499,7 +27561,8 @@
       timeline: "context.timeline",
       keyboard: "context.keyboard",
       "overview-timeline": "context.overview",
-      "velocity-lane": "volume.editor",
+      "velocity-lane": "context.velocity_lane",
+      "tempo-readout": "context.tempo_readout",
       "audio-lane": "context.audio_track",
       "audio-source": "context.audio_source",
       "channel-panel": "context.channel_list",
@@ -29134,15 +29197,22 @@
     ];
   }
 
-  function registerDefaultContextMenus() {
-    const commonItems = () => [
-      { label: "새 파일", action: () => requestNewProject() },
-      { label: "불러오기", action: () => openFilePickerInput(elements.fileInput) },
-      { label: "저장", action: () => { void saveProject(); } },
+  function channelExportContextItems(channels) {
+    const ids = channels.map((channel) => String(channel.id));
+    const hasNotes = channels.some((channel) => channel.notes?.length);
+    const disabled = !hasNotes;
+    const disabledReason = i18nText("context.disabled_no_notes");
+    return [
+      { label: i18nText("mml.export"), disabled, disabledReason, action: () => openMmlExportDialog(ids) },
+      { label: i18nText("midi.export"), disabled, disabledReason, action: () => openChannelExportDialog("midi", ids) },
+      { label: i18nText("audio.export_ogg"), disabled, disabledReason, action: () => openChannelExportDialog("audio", ids) },
     ];
+  }
 
-    registerContextMenu("app", commonItems);
-    registerContextMenu("piano-section", () => [
+  function registerDefaultContextMenus() {
+    // 2026-10-30: the generic "editor menu" (app), selected-item info (channel-info)
+    // and history list menus were removed. Areas without a registered menu show nothing.
+    const laneToggleItems = () => [
       {
         label: `${state.velocityLaneVisible !== false ? "✓ " : ""}${i18nText("volume.editor")}`,
         action: () => setVelocityLaneVisible(!state.velocityLaneVisible),
@@ -29151,15 +29221,23 @@
         label: `${state.audioLaneVisible !== false ? "✓ " : ""}${i18nText("settings.audio_track")}`,
         action: () => setAudioLaneVisible(!state.audioLaneVisible),
       },
-    ]);
+    ];
+    // The scrollbar / empty-strip area (piano-section) intentionally has no context menu.
+    // Volume dialog entry from the volume editor: open with exactly the channels the editor is
+    // showing for its current scope (current channel / the group of the selected item / all).
+    const volumeEditorDialogOptions = () => {
+      // Nothing to show in the editor (no selected channel/group) -> open with nothing checked.
+      const channelIds = getVelocityLaneChannels().filter((channel) => channel.notes?.length).map((channel) => String(channel.id));
+      return { channelIds, allowEmpty: true };
+    };
     registerContextMenu("overview-timeline", ({ event }) => {
       const beat = overviewTimelineBeatFromPointer(event);
       const snappedBeat = clamp(snapBeat(beat), 0, getTotalBeats());
       return [
-        { label: i18nText("rest_cleanup.title"), action: openRestCleanupDialog },
-        { label: i18nText("volume.edit_channels"), action: openChannelVolumeDialog },
-        { label: i18nText("timeline.auto_part"), action: openAutoPartDialog },
         { label: i18nText("timeline.edit_measure"), action: () => openMeasureEditWorkspace({ beat: snappedBeat, scopeType: "all" }) },
+        { label: i18nText("rest_cleanup.title"), action: openRestCleanupDialog },
+        { label: i18nText("volume.edit_channels"), action: () => openChannelVolumeDialog() },
+        { label: i18nText("timeline.auto_part"), action: openAutoPartDialog },
         "separator",
         {
           label: i18nText(state.overviewTrackInfoVisible !== false ? "timeline.track_info_hide" : "timeline.track_info_show"),
@@ -29177,8 +29255,24 @@
       ];
     });
     registerContextMenu("velocity-lane", () => [
-      { label: i18nText("volume.edit_channels"), action: openChannelVolumeDialog },
+      { label: i18nText("volume.edit_channels"), action: () => openChannelVolumeDialog(volumeEditorDialogOptions()) },
+      "separator",
+      ...laneToggleItems(),
     ]);
+    registerContextMenu("tempo-readout", () => {
+      const playheadBeat = clamp(Number(state.playhead.beat) || 0, 0, getTotalBeats());
+      const tempo = getCurrentTempoEntry(playheadBeat);
+      const partRanges = getTimelinePartRanges();
+      const partRange = partRanges.length > 1 ? partRanges[getTimelinePartIndexAtBeat(playheadBeat)] : null;
+      const goTo = (beat) => {
+        seekPlayheadBeat(beat);
+        if (elements.rollViewport) elements.rollViewport.scrollLeft = Math.max(0, beatToX(beat) - Math.max(0, elements.rollViewport.clientWidth * 0.25));
+      };
+      return [
+        { label: i18nText("tempo.go_current"), disabled: !tempo, disabledReason: i18nText("context.disabled_unavailable"), action: () => tempo && goTo(tempo.beat) },
+        { label: i18nText("timeline.go_current_part"), disabled: !partRange, disabledReason: i18nText("timeline.no_parts"), action: () => partRange && goTo(partRange.startBeat) },
+      ];
+    });
     registerContextMenu("timeline", ({ event }) => {
       const beat = timelineBeatFromPointer(event);
       const markerTempo = findTempoMarkerFromPointer(event);
@@ -29419,6 +29513,8 @@
           { label: i18nText("note.paste"), disabled: !hasClipboardNotes, disabledReason: i18nText("context.disabled_no_clipboard_notes"), action: pasteNotesFromClipboard },
           "separator",
           { label: i18nText("timeline.measure_menu"), items: measureItems },
+          "separator",
+          ...laneToggleItems(),
         ];
       }
       if (!state.selectedNoteIds.has(clicked.id)) {
@@ -29453,6 +29549,8 @@
         },
         { label: i18nText("context.note.extend_left_add"), action: () => extendSelectedNotesToSide(-1) },
         { label: i18nText("context.note.extend_right_add"), action: () => extendSelectedNotesToSide(1) },
+        "separator",
+        ...laneToggleItems(),
       ];
     });
 
@@ -29564,8 +29662,9 @@
         { label: i18nText("context.sound"), items: contextSoundSegments({ kind: "audio", item: clip }) },
       ];
     };
-    registerContextMenu("audio-lane", buildAudioContextItems);
-    registerContextMenu("audio-source", buildAudioContextItems);
+    const buildAudioContextItemsWithToggles = (context) => [...buildAudioContextItems(context), "separator", ...laneToggleItems()];
+    registerContextMenu("audio-lane", buildAudioContextItemsWithToggles);
+    registerContextMenu("audio-source", buildAudioContextItemsWithToggles);
 
     const itemAddContextItems = (groupId = null) => [
       { label: i18nText("channel.label"), action: () => groupId == null ? addChannel() : addChannelToGroup(groupId) },
@@ -29667,6 +29766,7 @@
         },
         { label: i18nText("action.delete"), danger: true, items: channelDeleteItems },
         { label: i18nText("context.mml_edit"), action: () => openChannelMmlDialog(channel.id) },
+        { label: i18nText("ui.export"), items: channelExportContextItems([channel]) },
         "separator",
         { label: i18nText("context.interface"), items: contextVisibilitySegments({ kind: "channel", item: channel }) },
         { label: i18nText("context.sound"), items: contextSoundSegments({ kind: "channel", item: channel }) },
@@ -29697,6 +29797,7 @@
           ],
         },
         { label: i18nText("context.mml_edit"), action: () => openChannelGroupMmlDialog(group.id) },
+        { label: i18nText("ui.export"), items: channelExportContextItems(getChannelGroupMembers(group)) },
         "separator",
         {
           label: i18nText("group.collapse"),
@@ -29744,35 +29845,6 @@
       ];
     });
 
-    registerContextMenu("channel-info", () => {
-      const group = getChannelGroupById(state.selectedChannelGroupId);
-      const channel = group ? null : getActiveChannel();
-      return [
-        group
-          ? { label: i18nText("group.edit"), action: () => openChannelGroupDialog(group.id) }
-          : { label: i18nText("channel.edit_2"), disabled: !channel, disabledReason: i18nText("context.disabled_no_selected_channel"), action: () => channel && openChannelEditDialog(channel.id) },
-        "separator",
-        { label: i18nText("soundbank.change"), action: openEditorSoundFontDialog },
-      ];
-    });
-    registerContextMenu("history", () => [
-      { label: i18nText("history.undo"), disabled: state.history.undoStack.length === 0, disabledReason: i18nText("context.disabled_no_undo"), action: () => undoHistory() },
-      { label: i18nText("history.redo"), disabled: state.history.redoStack.length === 0, disabledReason: i18nText("context.disabled_no_redo"), action: () => redoHistory() },
-    ]);
-    registerContextMenu("history-item", ({ area }) => {
-      const index = Number(area.element.dataset.historyIndex);
-      const entries = getOrderedHistoryEntries();
-      const entry = entries[index];
-      const currentIndex = state.history.undoStack.length;
-      return [
-        {
-          label: i18nText("context.action.go_history"),
-          disabled: !entry || index === currentIndex,
-          disabledReason: !entry ? i18nText("context.disabled_unavailable") : i18nText("context.disabled_current_history"),
-          action: () => entry && jumpToHistoryIndex(index),
-        },
-      ];
-    });
     registerContextMenu("splitter", () => []);
   }
 
@@ -31142,8 +31214,17 @@
     elements.mergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
     elements.channelBulkGroupToggleButton?.addEventListener("click", () => {
       if (!state.channelGroups.length) return;
-      const allExpanded = state.channelGroups.every((group) => !Boolean(group.collapsed));
+      const allExpanded = state.channelGroups.some((group) => !Boolean(group.collapsed));
       setAllChannelGroupsCollapsed(allExpanded);
+    });
+    document.addEventListener("click", (event) => {
+      const button = event.target?.closest?.(".inline-group-toggle");
+      if (button && !button.disabled) toggleInlineGroupsFromButton(button);
+    });
+    elements.timelineTempoReadout?.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      const tempo = getCurrentTempoEntry(state.playhead.beat);
+      if (tempo) openTempoEditor(tempo);
     });
     elements.channelBulkMmlButton?.addEventListener("click", openAllChannelsMmlDialog);
     elements.channelModeSelectAllButton?.addEventListener("click", () => setAllChannelDeleteModeSelection(true));

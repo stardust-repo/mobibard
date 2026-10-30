@@ -452,7 +452,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "ui.mel": "멜",
     "ui.middle_c": "은 4옥타브 도입니다.",
     "ui.mobibard": "모비바드",
-    "ui.mobibard_version": "모비바드 v5.3",
+    "ui.mobibard_version": "모비바드 v5.5",
     "ui.name_count": "{0} {1}개",
     "ui.no_chars": "0글자",
     "ui.no_notes": "노트 없음",

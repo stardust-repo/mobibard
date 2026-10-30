@@ -452,7 +452,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "ui.mel": "旋",
     "ui.middle_c": "表示C4。",
     "ui.mobibard": "Mobibard",
-    "ui.mobibard_version": "Mobibard v5.3",
+    "ui.mobibard_version": "Mobibard v5.5",
     "ui.name_count": "{0}：{1}",
     "ui.no_chars": "0個字元",
     "ui.no_notes": "無音符",

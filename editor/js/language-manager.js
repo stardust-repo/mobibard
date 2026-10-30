@@ -4,7 +4,7 @@
   const PREF_KEY = "mobibard.player.language";
   const LEGACY_PREF_KEY = "mobibard-language";
   const DEFAULT_LANGUAGE = "ko";
-  const LOCALE_VERSION = "5.3.0";
+  const LOCALE_VERSION = "5.5.0";
   const LOCALE_REVISION = "20261024g-panels2";
   const KEY_PATTERN = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*$/;
   const SUPPORTED = Object.freeze({

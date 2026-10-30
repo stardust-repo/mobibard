@@ -2,7 +2,7 @@ export default {
   "code": "ko",
   "htmlLang": "ko",
   "strings": {
-    "site.title": "모비바드 v5.3",
+    "site.title": "모비바드 v5.5",
     "ui.brand": "모비바드",
     "ui.recommended": "추천 사이트",
     "ui.select_recommended": "추천 사이트 선택",

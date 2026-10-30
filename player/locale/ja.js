@@ -452,7 +452,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "ui.mel": "メロ",
     "ui.middle_c": "はC4です。",
     "ui.mobibard": "モビバード",
-    "ui.mobibard_version": "モビバード v5.3",
+    "ui.mobibard_version": "モビバード v5.5",
     "ui.name_count": "{0}: {1}件",
     "ui.no_chars": "0文字",
     "ui.no_notes": "ノートなし",

@@ -1,7 +1,7 @@
 {
   "name": "MobiBeats",
   "display_name": "모비비트",
-  "version": "5.3.0",
+  "version": "5.5.0",
   "type": "repository-integrated-static-webpage",
   "deployment_root": "repository-root",
   "updated_utc": "2026-09-06T14:31:39Z",
