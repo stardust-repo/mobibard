@@ -44,7 +44,7 @@ Wave2MIDI 모델(`model/mobibard_w2m.onnx`, `model/meta.json`)은 **startdust-io
 ```js
 const result = await MobibardWave2Midi.transcribe(file, {
   velocity: true,              // true: 자동 추정, false: 100 고정, 숫자(1~127): 그 값으로 고정
-  velocityRange: [35, 120],    // 자동 추정 때 세기 범위(기본값은 meta.velocity.min/max)
+  velocityRange: [35, 120],    // 자동 추정 때 세기 범위(기본값은 meta.velocity.min/max, 에디터는 V3~V15에 해당하는 [11, 127] 사용)
   tempo: true,                 // 기본: 노트로 템포 맵 추정. false면 120 BPM 고정, 숫자면 그 BPM으로 고정
   tempoChanges: true,          // 자동 추정 때 곡 중간 템포 변화 반영 여부
   onsetThreshold: undefined,   // 기본값은 meta.thresholds.onset (0.16)

@@ -402,10 +402,7 @@
     midiImportSummary: document.querySelector("#midiImportSummary"),
     midiImportLimitChannelsPerInstrument: document.querySelector("#midiImportLimitChannelsPerInstrument"),
     midiImportAudioControls: document.querySelector("#midiImportAudioControls"),
-    w2mVolumeMin: document.querySelector("#w2mVolumeMin"),
-    w2mVolumeMax: document.querySelector("#w2mVolumeMax"),
     w2mVolumeFixed: document.querySelector("#w2mVolumeFixed"),
-    w2mTempoChanges: document.querySelector("#w2mTempoChanges"),
     w2mTempoBpm: document.querySelector("#w2mTempoBpm"),
     midiImportChannelLimitInput: document.querySelector("#midiImportChannelLimitInput"),
     importChannelColorMode: document.querySelector("#importChannelColorMode"),
@@ -14576,9 +14573,6 @@
   let audioPostprocessDefaults = { onsetThreshold: 0.16, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
   void window.MobibardWave2Midi?.getPostprocessDefaults?.().then((defaults) => {
     audioPostprocessDefaults = defaults;
-    // 모델 기본 세기 범위(예: 35~120)를 편집기 볼륨 단계(V)로 보여 줍니다.
-    if (elements.w2mVolumeMin && !elements.w2mVolumeMin.dataset.touched) elements.w2mVolumeMin.value = String(velocityToMmlVolume(defaults.velocityMin));
-    if (elements.w2mVolumeMax && !elements.w2mVolumeMax.dataset.touched) elements.w2mVolumeMax.value = String(velocityToMmlVolume(defaults.velocityMax));
   }).catch(() => {});
 
   // 볼륨 V(1~15) → 이 V로 표시되는 velocity 구간의 시작/끝 (velocityToMmlVolume의 역)
@@ -14610,28 +14604,23 @@
     if (fixedVolume) {
       velocity = mmlVolumeToVelocity(readW2mVolumeInput(elements.w2mVolumeFixed, 12));
     } else {
-      let low = readW2mVolumeInput(elements.w2mVolumeMin, 5);
-      let high = readW2mVolumeInput(elements.w2mVolumeMax, 15);
-      if (low > high) [low, high] = [high, low];
-      velocityRange = [mmlVolumeVelocityBounds(low)[0], mmlVolumeVelocityBounds(high)[1]];
+      // 실제 소리의 강약을 V3~V15 전체에 펼칩니다(V1~V2는 거의 들리지 않아 약간 보수적으로 제외).
+      velocityRange = [mmlVolumeVelocityBounds(3)[0], mmlVolumeVelocityBounds(15)[1]];
     }
     return {
       onsetThreshold: Number(onsetThreshold.toFixed(4)),
       velocity,
       velocityRange,
       tempo: fixed ? bpm : true,
-      tempoChanges: elements.w2mTempoChanges?.checked !== false,
+      tempoChanges: true,
     };
   }
 
   function syncAudioToMidiOptionControls() {
     const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
     if (elements.w2mTempoBpm) elements.w2mTempoBpm.disabled = !fixed;
-    if (elements.w2mTempoChanges) elements.w2mTempoChanges.disabled = fixed;
     const fixedVolume = getCheckedRadioValue("w2mVolume") === "fixed";
     if (elements.w2mVolumeFixed) elements.w2mVolumeFixed.disabled = !fixedVolume;
-    if (elements.w2mVolumeMin) elements.w2mVolumeMin.disabled = fixedVolume;
-    if (elements.w2mVolumeMax) elements.w2mVolumeMax.disabled = fixedVolume;
     if (elements.midiImportAudioControls) elements.midiImportAudioControls.hidden = state.midiImport.sourceType !== "audio-ai";
   }
 
@@ -31983,12 +31972,10 @@
     document.querySelectorAll('input[type="radio"][name="midiImportOverlap"]').forEach((input) => input.addEventListener("change", updateMidiImportDialog));
     document.querySelectorAll('input[type="radio"][name="w2mSensitivity"], input[type="radio"][name="w2mTempo"], input[type="radio"][name="w2mVolume"]')
       .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
-    [elements.w2mVolumeMin, elements.w2mVolumeMax, elements.w2mVolumeFixed].forEach((input) => input?.addEventListener("change", () => {
-      input.dataset.touched = "1";
-      readW2mVolumeInput(input, input === elements.w2mVolumeMin ? 5 : input === elements.w2mVolumeMax ? 15 : 12);
+    elements.w2mVolumeFixed?.addEventListener("change", () => {
+      readW2mVolumeInput(elements.w2mVolumeFixed, 12);
       scheduleAudioToMidiPostprocess();
-    }));
-    elements.w2mTempoChanges?.addEventListener("change", scheduleAudioToMidiPostprocess);
+    });
     elements.w2mTempoBpm?.addEventListener("change", () => {
       const value = clamp(Math.round(Number(elements.w2mTempoBpm.value) || 120), audioPostprocessDefaults.tempoMin || 32, audioPostprocessDefaults.tempoMax || 255);
       elements.w2mTempoBpm.value = String(value);
