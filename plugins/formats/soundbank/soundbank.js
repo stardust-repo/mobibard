@@ -721,6 +721,14 @@
     return out;
   }
 
+  function isAppleWebKit() {
+    const nav = window.navigator || {};
+    const ua = String(nav.userAgent || "");
+    const iOS = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && Number(nav.maxTouchPoints) > 1);
+    const desktopSafari = /AppleWebKit\//.test(ua) && /Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\/|Firefox\//.test(ua);
+    return iOS || desktopSafari;
+  }
+
   function createAudioDecoder(options = {}) {
     if (typeof options.decodeAudio === "function") {
       return {
@@ -734,7 +742,11 @@
     try {
       // Prefer the regular AudioContext. Some browser builds have stricter or
       // less reliable compressed-audio decoding on OfflineAudioContext.
-      if (Audio) ctx = new Audio();
+      // Apple WebKit is the exception: every real AudioContext there opens (and on close()
+      // can deactivate) the tab's shared audio session, which may leave the playback context
+      // silent. An OfflineAudioContext never touches the audio hardware.
+      if (Offline && isAppleWebKit()) ctx = new Offline(1, 1, 44100);
+      else if (Audio) ctx = new Audio();
       else if (Offline) ctx = new Offline(1, 1, 44100);
     } catch (_) {
       ctx = null;

@@ -160,7 +160,24 @@
       this.onStatus?.({ label, mode });
     }
 
+    // Safari/iOS: an "interrupted" context (another app/tab or the system took the audio
+    // session) often never resumes. Drop it so ensureContext() builds a fresh one.
+    discardContext() {
+      const old = this.context;
+      if (!old) return false;
+      try { old.close?.(); } catch {}
+      this.context = null;
+      this.masterGain = null;
+      this.compressor = null;
+      this.bufferCache.clear();
+      this.zoneOutputCache.clear();
+      this.offlineRenderTemplateCache.clear();
+      this.voices.clear();
+      return true;
+    }
+
     resetClosedContext() {
+      if (this.context?.state === "interrupted") return this.discardContext();
       if (!this.context || this.context.state !== "closed") return false;
       this.context = null;
       this.masterGain = null;
@@ -181,6 +198,11 @@
       if (!AudioContextClass) {
         throw new Error(i18nText("soundbank.web_audio_unsupported"));
       }
+      // Safari 16.4+: declare this as media playback so the tab's audio session is (re)activated
+      // as a playback session instead of an ambient one that other audio can silently take over.
+      try {
+        if (navigator.audioSession && navigator.audioSession.type !== "playback") navigator.audioSession.type = "playback";
+      } catch {}
       this.context = new AudioContextClass({ latencyHint: "interactive" });
       this.masterGain = this.context.createGain();
       this.masterGain.gain.value = this.volume;
@@ -222,7 +244,19 @@
     async resume() {
       let context = this.ensureContext();
       if (context.state !== "running") {
-        await context.resume();
+        // resume() on a stuck Safari context can stay pending forever; give it a moment, then rebuild.
+        // Only rebuild when the context is "interrupted" or resume() failed inside a user gesture —
+        // outside a gesture a suspended context is just waiting for autoplay permission.
+        const inGesture = Boolean(navigator.userActivation?.isActive);
+        await Promise.race([
+          Promise.resolve(context.resume()).catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, 600)),
+        ]);
+        if (context.state === "interrupted" || (inGesture && context.state === "suspended")) {
+          this.discardContext();
+          context = this.ensureContext();
+          await context.resume();
+        }
       }
       if (context.state !== "running") {
         await new Promise((resolve) => setTimeout(resolve, 0));

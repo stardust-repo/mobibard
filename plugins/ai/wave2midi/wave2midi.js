@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.9";
+  const VERSION = "1.0.11";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -31,6 +31,16 @@
     error.code = code;
     return error;
   }
+
+  // Safari / every iOS & iPadOS browser (all WebKit).
+  function isAppleWebKit() {
+    const nav = root.navigator || {};
+    const ua = String(nav.userAgent || "");
+    const iOS = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && Number(nav.maxTouchPoints) > 1);
+    const desktopSafari = /AppleWebKit\//.test(ua) && /Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\/|Firefox\//.test(ua);
+    return iOS || desktopSafari;
+  }
+  const APPLE_WEBKIT = isAppleWebKit();
 
   function isSupported() {
     return typeof Worker === "function"
@@ -101,11 +111,60 @@
     }
   }
 
+  // 2:1 decimation 48 kHz -> 24 kHz with a windowed-sinc low-pass (cutoff 11 kHz, 63 taps).
+  let halfBandTaps = null;
+  function decimate48kTo24k(input) {
+    if (!halfBandTaps) {
+      const N = 63, M = (N - 1) / 2, fc = 11000 / 48000;
+      halfBandTaps = new Float32Array(N);
+      let sum = 0;
+      for (let n = 0; n < N; n += 1) {
+        const k = n - M;
+        const sinc = k === 0 ? 2 * fc : Math.sin(2 * Math.PI * fc * k) / (Math.PI * k);
+        const window = 0.42 - 0.5 * Math.cos((2 * Math.PI * n) / (N - 1)) + 0.08 * Math.cos((4 * Math.PI * n) / (N - 1));
+        halfBandTaps[n] = sinc * window;
+        sum += halfBandTaps[n];
+      }
+      for (let n = 0; n < N; n += 1) halfBandTaps[n] /= sum;
+    }
+    const taps = halfBandTaps, N = taps.length, M = (N - 1) >> 1;
+    const out = new Float32Array(Math.ceil(input.length / 2));
+    for (let i = 0; i < out.length; i += 1) {
+      const center = i * 2;
+      let acc = 0;
+      for (let n = 0; n < N; n += 1) {
+        const j = center + n - M;
+        if (j >= 0 && j < input.length) acc += input[j] * taps[n];
+      }
+      out[i] = acc;
+    }
+    return out;
+  }
+
   /** File | Blob | ArrayBuffer -> Float32Array (mono, 24 kHz). */
   async function decodeAudio(input) {
     const Offline = root.OfflineAudioContext || root.webkitOfflineAudioContext;
     if (!Offline) throw makeError("unsupported", "OfflineAudioContext is not available");
     const buffer = input instanceof ArrayBuffer ? input.slice(0) : await input.arrayBuffer();
+    // Apple WebKit: no audio object at a non-standard rate (24 kHz) is created, because a tab whose
+    // Web Audio state was touched at an unusual rate is suspected of staying silent until it is
+    // closed. Decode/down-mix at 48 kHz instead and resample to 24 kHz here.
+    if (APPLE_WEBKIT) {
+      const RATE = 48000;
+      let decoded;
+      try {
+        decoded = await new Offline(1, 1, RATE).decodeAudioData(buffer);
+      } catch (error) {
+        throw makeError("decode-failed", error?.message || "Audio decoding failed");
+      }
+      const frames = Math.max(1, Math.ceil(decoded.duration * RATE));
+      const mixer = new Offline(1, frames, RATE);
+      const mixSource = mixer.createBufferSource();
+      mixSource.buffer = decoded; // down-mixed to mono at 48 kHz by the browser
+      mixSource.connect(mixer.destination);
+      mixSource.start();
+      return decimate48kTo24k((await mixer.startRendering()).getChannelData(0));
+    }
     let audio;
     try {
       audio = await new Offline(1, 1, SAMPLE_RATE).decodeAudioData(buffer);
@@ -306,6 +365,7 @@
 
   root.MobibardWave2Midi = Object.freeze({
     version: VERSION,
+    isAppleWebKit: APPLE_WEBKIT,
     SAMPLE_RATE,
     DRUM_PROGRAM: 128,
     isSupported,

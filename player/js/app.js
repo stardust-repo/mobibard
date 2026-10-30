@@ -11760,10 +11760,36 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     });
   }
 
+  // Safari/iOS: an "interrupted" context or a resume() that never settles means the context is stuck.
+  function discardStuckAudioContext() {
+    try { audioCtx?.close?.(); } catch (_) {}
+    audioCtx = null;
+    masterGain = null;
+    partPlaybackGains = [];
+  }
+
+  async function resumeAudioContextOrRebuild() {
+    if (audioCtx.state === "running") return;
+    // Outside a user gesture a suspended context is only waiting for autoplay permission: keep it.
+    const inGesture = Boolean(navigator.userActivation?.isActive);
+    await Promise.race([
+      Promise.resolve(audioCtx.resume()).catch(() => {}),
+      new Promise(resolve => setTimeout(resolve, 600))
+    ]);
+    if (audioCtx.state === "running") return;
+    if (audioCtx.state !== "interrupted" && !inGesture) { await audioCtx.resume(); return; }
+    discardStuckAudioContext();
+    await ensureAudioContext();
+  }
+
   async function ensureAudioContext() {
+    if (audioCtx?.state === "interrupted") discardStuckAudioContext();
     if (!audioCtx || audioCtx.state === "closed") {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) throw new Error(i18nText("audio.unsupported_web"));
+      try {
+        if (navigator.audioSession && navigator.audioSession.type !== "playback") navigator.audioSession.type = "playback";
+      } catch (_) {}
       audioCtx = new AC();
       masterGain = audioCtx.createGain();
       masterGain.connect(audioCtx.destination);
@@ -11776,7 +11802,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     }
     ensurePartPlaybackGains();
     applyPartMuteAudioGains({ instant: true });
-    if (audioCtx.state !== "running") await audioCtx.resume();
+    if (audioCtx.state !== "running") await resumeAudioContextOrRebuild();
     applyOutputVolume();
     return audioCtx;
   }

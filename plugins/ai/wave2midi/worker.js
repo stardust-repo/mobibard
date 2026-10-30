@@ -101,9 +101,14 @@ function probeCapabilities() {
 }
 
 // Builds to try, best first. options.modelVariant: "auto" (default) | "fp16" | "w16".
+function cpuOnly(options) {
+  return options.executionProvider === "wasm";
+}
+
 async function chooseVariants(options) {
+  if (cpuOnly(options)) return { caps: { webgpu: false, shaderF16: false, adapter: "", skipped: "cpu-only" }, order: ["w16"] };
   const caps = await probeCapabilities();
-  if (options.executionProvider === "wasm" || options.modelVariant === "w16") return { caps, order: ["w16"] };
+  if (options.modelVariant === "w16") return { caps, order: ["w16"] };
   const fp16Ready = caps.webgpu && caps.shaderF16;
   return { caps, order: fp16Ready ? ["fp16", "w16"] : ["w16"] };
 }
@@ -111,7 +116,7 @@ async function chooseVariants(options) {
 function executionPlans(variant, options, caps) {
   // fp16 is only worth running on the GPU; on WebAssembly it would be emulated and slower than w16.
   if (variant === "fp16") return [["webgpu"]];
-  return options.executionProvider === "wasm" || !caps.webgpu ? [["wasm"]] : [["webgpu", "wasm"], ["wasm"]];
+  return cpuOnly(options) || !caps.webgpu ? [["wasm"]] : [["webgpu", "wasm"], ["wasm"]];
 }
 
 async function releaseSession() {

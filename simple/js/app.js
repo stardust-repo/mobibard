@@ -848,16 +848,38 @@
     updatePlayButton();
   }
 
-  async function ensureAudioContext() {
+  // Safari/iOS: an "interrupted" context, or a resume() that never settles, is stuck; rebuild it.
+  function discardStuckAudioContext() {
+    try { audioCtx?.close?.(); } catch (_) {}
+    audioCtx = null;
+    masterGain = null;
+  }
+
+  async function ensureAudioContext(retry = true) {
+    if (audioCtx?.state === "interrupted") discardStuckAudioContext();
     if (!audioCtx || audioCtx.state === "closed") {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) throw new Error("Web Audio API is unavailable");
+      try {
+        if (navigator.audioSession && navigator.audioSession.type !== "playback") navigator.audioSession.type = "playback";
+      } catch (_) {}
       audioCtx = new AC();
       masterGain = audioCtx.createGain();
       masterGain.gain.value = 0.44;
       masterGain.connect(audioCtx.destination);
     }
-    if (audioCtx.state === "suspended") await audioCtx.resume();
+    if (audioCtx.state !== "running") {
+      // Outside a user gesture a suspended context is only waiting for autoplay permission: keep it.
+      const inGesture = Boolean(navigator.userActivation?.isActive);
+      await Promise.race([
+        Promise.resolve(audioCtx.resume()).catch(() => {}),
+        new Promise(resolve => setTimeout(resolve, 600)),
+      ]);
+      if (audioCtx.state !== "running" && retry && (audioCtx.state === "interrupted" || inGesture)) {
+        discardStuckAudioContext();
+        return ensureAudioContext(false);
+      }
+    }
     return audioCtx;
   }
 
