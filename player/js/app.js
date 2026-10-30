@@ -9063,290 +9063,42 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   function hasThreeMlePlayableTokens(value) {
     return /[cdefgabn]/i.test(String(value || ""));
   }
+  // MabiIcco(.mmi) 읽기/정리는 공용 플러그인(plugins/formats/mmi/format-mmi.js)이 맡습니다.
+  // 여기에는 플레이어 고유의 MML 파트 검사만 둡니다.
+  const MABI_MMI = () => window.MabiMmi;
+  const MMI_NAME_OPTIONS = { isMmlPart: (value) => looksLikeMmlPart(value) };
+
   function extractMabiIccoMmlPartCandidates(text) {
-    const source = String(text || "");
-    const nameMarkers = extractMmiNameMarkers(source);
-    const fullRecords = [];
-    const fullRe = /MML\s*@([\s\S]*?)\s*;/gi;
-    let m;
-    let fullIndex = 0;
-    while ((m = fullRe.exec(source))) {
-      const parsed = splitMmlParts(`MML@${m[1]};`);
-      for (const part of parsed) {
-        fullIndex++;
-        const cleaned = cleanupMmiMmlValue(part);
-        if (cleaned) {
-          const name = nameMarkers[fullIndex - 1]?.name || findMmiNameForCandidate(m.index, nameMarkers, fullIndex - 1);
-          fullRecords.push({ label: formatMmiChannelLabel(fullIndex, name), value: cleaned, name });
-        }
-        if (fullRecords.length >= MMI_IMPORT_MAX_DETECTED_PARTS) return fullRecords;
-      }
-    }
-    if (fullRecords.length) return fullRecords;
-
-    const found = [];
-    const add = (value, index = 0) => {
-      const cleaned = cleanupMmiMmlValue(value);
-      if (!cleaned) return;
-      const parts = cleaned.includes(",") ? cleaned.split(",") : [cleaned];
-      for (const part of parts) {
-        const candidate = cleanupMmiMmlValue(part);
-        if (looksLikeMmlPart(candidate)) {
-          const name = findMmiNameForCandidate(index, nameMarkers, found.length);
-          found.push({ index, value: candidate, name });
-        }
-      }
-    };
-
-    const keyed = /(?:^|[\s<{,;])(?:[A-Za-z0-9_:-]*(?:mml|melody|chord|song|part|track)[A-Za-z0-9_:-]*)\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^\r\n<>]+))/gim;
-    while ((m = keyed.exec(source))) add(m[1] ?? m[2] ?? m[3] ?? "", m.index);
-
-    const tagged = /<([A-Za-z0-9_:-]*(?:mml|melody|chord|song|part|track)[A-Za-z0-9_:-]*)\b[^>]*>([\s\S]*?)<\/\1>/gim;
-    while ((m = tagged.exec(source))) add(m[2] || "", m.index);
-
-    const stringTagged = /<string\b[^>]*>([\s\S]*?)<\/string>/gim;
-    while ((m = stringTagged.exec(source))) add(m[1] || "", m.index);
-
-    if (found.length < MMI_IMPORT_MAX_CHANNELS) {
-      const lineRe = /^\s*([^\r\n=:#<>]{1,20000})\s*$/gm;
-      while ((m = lineRe.exec(source))) add(m[1] || "", m.index);
-    }
-
-    found.sort((a, b) => a.index - b.index);
-    const parts = [];
-    for (const item of found) {
-      pushMmiPart(parts, item.value, item.index, item.name);
-      if (parts.length >= MMI_IMPORT_MAX_DETECTED_PARTS) break;
-    }
-    return parts.map((part, index) => ({
-      label: formatMmiChannelLabel(index + 1, part.name),
-      value: part.value,
-      name: part.name
-    }));
+    return MABI_MMI().extractCandidates(text, {
+      isMmlPart: looksLikeMmlPart,
+      minTempo: 1,
+      maxTempo: 1000,
+      nameOptions: MMI_NAME_OPTIONS,
+    });
   }
 
   function extractMmiNameMarkers(source) {
-    const text = String(source || "");
-    const markers = [];
-    const seen = new Set();
-    const addName = (raw, index = 0) => {
-      const name = cleanupMmiNameValue(raw);
-      if (!name) return;
-      const key = `${index}:${name}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      markers.push({ index: Math.max(0, Number(index) || 0), name });
-    };
-
-    let m;
-    const nameTag = /<([A-Za-z0-9_:-]*(?:name|trackname|partname)[A-Za-z0-9_:-]*)\b[^>]*>([\s\S]{0,500}?)<\/\1>/gim;
-    while ((m = nameTag.exec(text))) addName(m[2] || "", m.index);
-
-    const nameAttr = /\b(?:name|trackName|track_name|partName|part_name)\s*=\s*(?:"([^"]{0,220})"|'([^']{0,220})')/gim;
-    while ((m = nameAttr.exec(text))) addName(m[1] ?? m[2] ?? "", m.index);
-
-    const keyedName = /(?:^|[\r\n,{;\s])(?:[A-Za-z0-9_.:-]*(?:name|trackname|track_name|partname|part_name)[A-Za-z0-9_.:-]*)\s*[:=]\s*(?:"([^"]{0,220})"|'([^']{0,220})'|([^\r\n,}<>]{0,220}))/gim;
-    while ((m = keyedName.exec(text))) addName(m[1] ?? m[2] ?? m[3] ?? "", m.index);
-
-    return markers.sort((a, b) => a.index - b.index);
+    return MABI_MMI().extractNameMarkers(source, MMI_NAME_OPTIONS);
   }
 
   function cleanupMmiNameValue(value) {
-    let s = String(value == null ? "" : value);
-    s = s.replace(/^\s*<!\[CDATA\[/i, "").replace(/\]\]>\s*$/i, "");
-    s = s.replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-    s = s.replace(/\\r\\n|\\n|\\r|\\t/g, " ");
-    s = s.replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'");
-    s = s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-    s = s.replace(/^name\s*[:=]\s*/i, "").trim();
-    if (!s || s.length > 120) return "";
-    if (/^MML\s*@/i.test(s)) return "";
-    const cleanedAsMml = cleanupMmiMmlValue(s);
-    if (cleanedAsMml && looksLikeMmlPart(cleanedAsMml)) return "";
-    return s;
+    return MABI_MMI().cleanupNameValue(value, MMI_NAME_OPTIONS);
   }
 
   function findMmiNameForCandidate(position, markers, orderIndex = 0) {
-    if (!markers?.length) return "";
-    const pos = Math.max(0, Number(position) || 0);
-    let best = null;
-    for (const marker of markers) {
-      const beforeDistance = pos - marker.index;
-      if (beforeDistance >= 0 && beforeDistance <= 2400) {
-        if (!best || beforeDistance < best.distance) best = { name: marker.name, distance: beforeDistance };
-      }
-    }
-    if (best?.name) return best.name;
-    for (const marker of markers) {
-      const afterDistance = marker.index - pos;
-      if (afterDistance >= 0 && afterDistance <= 900) {
-        if (!best || afterDistance < best.distance) best = { name: marker.name, distance: afterDistance };
-      }
-    }
-    if (best?.name) return best.name;
-    const ordered = markers[Math.max(0, Math.min(markers.length - 1, Number(orderIndex) || 0))];
-    return ordered?.name || "";
+    return MABI_MMI().findNameForCandidate(position, markers, orderIndex);
   }
 
   function formatMmiChannelLabel(number, name = "") {
-    const label = `Ch ${number}`;
-    const cleaned = cleanupMmiNameValue(name);
-    return cleaned ? `${label} · ${cleaned}` : label;
+    return MABI_MMI().formatChannelLabel(number, name, MMI_NAME_OPTIONS);
   }
 
   function cleanupMmiMmlValue(value) {
-    let s = String(value == null ? "" : value);
-    s = s.replace(/^\s*<!\[CDATA\[/i, "").replace(/\]\]>\s*$/i, "");
-    s = s.replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-    s = s.replace(/\\r\\n|\\n|\\r|\\t/g, " ");
-    s = s.replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'");
-    return s.replace(/^\s*MML\s*@/i, "").replace(/;\s*$/g, "").trim();
+    return MABI_MMI().cleanupMmlValue(value);
   }
 
-
   function normalizeMmiLegacyLengthsInPart(value) {
-    const s = String(value || "");
-    let i = 0;
-    let out = "";
-    let legacyDefault = null;
-
-    const isDigit = ch => /\d/.test(ch || "");
-    const readDigits = () => {
-      const start = i;
-      while (i < s.length && isDigit(s[i])) i++;
-      return i > start ? s.slice(start, i) : "";
-    };
-    const readDots = () => {
-      const start = i;
-      while (s[i] === ".") i++;
-      return i - start;
-    };
-    const legacyFactor = dots => {
-      let factor = 1;
-      let add = 0.5;
-      for (let n = 0; n < dots; n++) {
-        factor += add;
-        add /= 2;
-      }
-      return factor;
-    };
-    const isValidMmlLength = n => [1, 2, 4, 8, 16, 32, 64].includes(n);
-    const quantaFromSpec = spec => {
-      if (!spec || !spec.length || spec.length <= 0) return 16;
-      const factor = legacyFactor(spec.dots || 0) * (spec.extraFactor || 1);
-      return Math.max(1, Math.round((64 / spec.length) * factor));
-    };
-    const decomposeQuanta = quanta => {
-      let remain = Math.max(1, Math.floor(quanta));
-      const result = [];
-      for (const entry of [
-        { len: 1, q: 64 },
-        { len: 2, q: 32 },
-        { len: 4, q: 16 },
-        { len: 8, q: 8 },
-        { len: 16, q: 4 },
-        { len: 32, q: 2 },
-        { len: 64, q: 1 }
-      ]) {
-        while (remain >= entry.q) {
-          result.push(entry.len);
-          remain -= entry.q;
-        }
-      }
-      return result.length ? result : [64];
-    };
-    const expandTimedToken = (head, spec, options = {}) => {
-      const lengths = decomposeQuanta(quantaFromSpec(spec));
-      const isRest = options.rest || /^r$/i.test(head) || /^n0$/i.test(head);
-      if (options.needsLengthCommand) {
-        return lengths
-          .map(len => `l${len}${head}`)
-          .join(isRest ? "" : "&");
-      }
-      return lengths
-        .map(len => `${head}${len}`)
-        .join(isRest ? "" : "&");
-    };
-    const combineDefaultSpec = (dots = 0) => {
-      if (!legacyDefault) return null;
-      return {
-        length: legacyDefault.length,
-        dots: legacyDefault.dots,
-        extraFactor: legacyFactor(dots)
-      };
-    };
-
-    while (i < s.length) {
-      const ch = s[i];
-      const lower = ch.toLowerCase();
-
-      if (lower === "l") {
-        const start = i;
-        i++;
-        const digits = readDigits();
-        const dots = readDots();
-        const n = digits ? Number(digits) : null;
-        if (n && !isValidMmlLength(n)) {
-          legacyDefault = { length: n, dots };
-        } else {
-          legacyDefault = null;
-          out += s.slice(start, i);
-        }
-        continue;
-      }
-
-      if (/[cdefgab]/i.test(ch)) {
-        i++;
-        let head = ch;
-        if (s[i] === "+" || s[i] === "#" || s[i] === "-") {
-          head += s[i];
-          i++;
-        }
-        const digits = readDigits();
-        const dots = readDots();
-        const n = digits ? Number(digits) : null;
-        if (n && !isValidMmlLength(n)) {
-          out += expandTimedToken(head, { length: n, dots });
-        } else if (!digits && legacyDefault) {
-          out += expandTimedToken(head, combineDefaultSpec(dots));
-        } else {
-          out += `${head}${digits}${".".repeat(dots)}`;
-        }
-        continue;
-      }
-
-      if (lower === "r") {
-        i++;
-        const digits = readDigits();
-        const dots = readDots();
-        const n = digits ? Number(digits) : null;
-        if (n && !isValidMmlLength(n)) {
-          out += expandTimedToken(ch, { length: n, dots }, { rest: true });
-        } else if (!digits && legacyDefault) {
-          out += expandTimedToken(ch, combineDefaultSpec(dots), { rest: true });
-        } else {
-          out += `${ch}${digits}${".".repeat(dots)}`;
-        }
-        continue;
-      }
-
-      if (lower === "n") {
-        i++;
-        const noteNumber = readDigits();
-        const dots = readDots();
-        const head = `n${noteNumber}`;
-        if (legacyDefault && noteNumber) {
-          out += expandTimedToken(head, combineDefaultSpec(dots), { needsLengthCommand: true, rest: Number(noteNumber) === 0 });
-        } else {
-          out += `${head}${".".repeat(dots)}`;
-        }
-        continue;
-      }
-
-      out += ch;
-      i++;
-    }
-    return out;
+    return MABI_MMI().normalizeLegacyLengths(value);
   }
 
   function looksLikeMmlPart(value) {
@@ -9363,13 +9115,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       return false;
     }
   }
-
-  function pushMmiPart(list, value, index = 0, name = "") {
-    const cleaned = cleanupMmiMmlValue(value);
-    if (!cleaned) return;
-    list.push({ value: cleaned, index, name: cleanupMmiNameValue(name) });
-  }
-
 
   function openMidiConvertDialog(importData) {
     pendingMidiImport = importData;

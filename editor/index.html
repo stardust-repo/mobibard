@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261030g-pastechan";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261030t-mmi4";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.5.0&amp;rev=20261030g-pastechan"></script>
+<script src="js/language-manager.js?v=5.5.0&amp;rev=20261030t-mmi4"></script>
 <title data-i18n="app.title">모비바드 v5.5</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.5.0&amp;rev=20261030g-pastechan" rel="stylesheet"/>
+<link href="styles.css?v=5.5.0&amp;rev=20261030t-mmi4" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -220,7 +220,7 @@
 </header>
 <div class="app-content"><main class="workspace"><div class="editor-body">
 <aside aria-label="왼쪽 패널" data-i18n-aria-label="ui.left_panel" class="side-panel" id="sidePanel">
-<div class="edit-mode-titlebar" id="editModeTitlebar" hidden aria-live="polite"><strong id="editModeTitlebarTitle"></strong><span id="editModeTitlebarMeta"></span></div>
+<div class="edit-mode-titlebar" id="editModeTitlebar" hidden aria-live="polite"><strong id="editModeTitlebarTitle"></strong><span id="editModeTitlebarMeta"></span><button type="button" class="edit-mode-titlebar-action" id="editModeTitlebarAction" hidden></button></div>
 <div aria-label="왼쪽 패널" data-i18n-aria-label="ui.left_panel" class="side-panel-tabs" role="tablist">
 <button aria-controls="channelPanel" aria-selected="true" class="side-panel-tab active" id="sidebarChannelsTab" role="tab" type="button" data-i18n="channel.label">채널</button>
 <button aria-controls="historyPanel" aria-selected="false" class="side-panel-tab" id="sidebarHistoryTab" role="tab" type="button" data-i18n="history.text">히스토리</button>
@@ -243,16 +243,59 @@
     <label class="auto-part-inline-field"><span data-i18n="timeline.auto_part_chars">나눌 글자수</span><span class="auto-part-inline-input"><input aria-label="나눌 글자수" data-i18n-aria-label="timeline.auto_part_chars" id="autoPartCharsInput" inputmode="numeric" min="200" step="1" type="number" value="2400"/><strong data-i18n="ui.characters">자</strong></span></label>
     <label class="auto-part-inline-field"><span data-i18n="timeline.auto_part_search_range">검색 범위</span><span class="auto-part-inline-input"><input aria-label="검색 범위" data-i18n-aria-label="timeline.auto_part_search_range" id="autoPartSearchRangeInput" inputmode="numeric" max="100" min="0" step="1" type="number" value="50"/><strong>%</strong></span></label>
   </div>
-  <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button id="autoPartSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="autoPartClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+  <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">선택</strong><span></span><div class="inline-select-tools"><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="autoPartGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="autoPartSelectToggleButton" type="button" class="inline-select-mark inline-select-toggle" data-state="none" data-i18n-title="selection.all_select" data-i18n-aria-label="selection.all_select" title="모두 선택" aria-label="모두 선택">○</button><button id="autoPartSelectAllButton" type="button" hidden aria-hidden="true" tabindex="-1">✓</button><button id="autoPartClearAllButton" type="button" hidden aria-hidden="true" tabindex="-1">○</button></div></div>
   <div class="inline-channel-select-list" id="autoPartChannelList"></div>
   <div class="auto-part-inline-actions"><button id="autoPartCancelButton" type="button" data-i18n="cancel">취소</button><button id="autoPartApplyButton" type="button" data-i18n="ui.ok">확인</button></div>
 </section>
 <section class="rest-cleanup-inline-panel" id="restCleanupPanel" hidden aria-label="쉼표 정리" data-i18n-aria-label="rest_cleanup.title">
   <div class="rest-cleanup-inline-header"><strong data-i18n="rest_cleanup.title">쉼표 정리</strong></div>
   <div class="rest-cleanup-inline-section"><strong data-i18n="rest_cleanup.threshold">제거할 쉼표</strong><div class="rest-cleanup-segments rest-cleanup-thresholds" id="restCleanupModeOptions" role="group" aria-label="제거할 쉼표" data-i18n-aria-label="rest_cleanup.threshold"><button type="button" data-rest-cleanup-mode="64" data-i18n="rest_cleanup.64">1/64 이하</button><button class="active" type="button" data-rest-cleanup-mode="32" data-i18n="rest_cleanup.32">1/32 이하</button><button type="button" data-rest-cleanup-mode="16" data-i18n="rest_cleanup.16">1/16 이하</button><button type="button" data-rest-cleanup-mode="8" data-i18n="rest_cleanup.8">1/8 이하</button><button type="button" data-rest-cleanup-mode="4" data-i18n="rest_cleanup.4">1/4 이하</button><button type="button" data-rest-cleanup-mode="all" data-i18n="rest_cleanup.all">모두</button></div></div>
-  <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button id="restCleanupSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="restCleanupClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+  <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">선택</strong><span></span><div class="inline-select-tools"><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="restCleanupGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="restCleanupSelectToggleButton" type="button" class="inline-select-mark inline-select-toggle" data-state="none" data-i18n-title="selection.all_select" data-i18n-aria-label="selection.all_select" title="모두 선택" aria-label="모두 선택">○</button><button id="restCleanupSelectAllButton" type="button" hidden aria-hidden="true" tabindex="-1">✓</button><button id="restCleanupClearAllButton" type="button" hidden aria-hidden="true" tabindex="-1">○</button></div></div>
   <div class="inline-channel-select-list rest-cleanup-channel-list" id="restCleanupChannelList"></div>
   <div class="rest-cleanup-inline-actions"><button id="restCleanupCancelButton" type="button" data-i18n="cancel">취소</button><button id="restCleanupApplyButton" type="button" data-i18n="action.apply">적용</button></div>
+</section>
+<section class="rest-cleanup-inline-panel channel-export-inline-panel" id="channelExportPanel" hidden aria-label="내보내기" data-i18n-aria-label="ui.export">
+  <div class="rest-cleanup-inline-header"><strong id="channelExportTitle">내보내기</strong></div>
+  <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">선택</strong><span></span><div class="inline-select-tools"><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="channelExportGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="channelExportSelectToggleButton" type="button" class="inline-select-mark inline-select-toggle" data-state="none" data-i18n-title="selection.all_select" data-i18n-aria-label="selection.all_select" title="모두 선택" aria-label="모두 선택">○</button><button id="channelExportSelectAllButton" type="button" hidden aria-hidden="true" tabindex="-1">✓</button><button id="channelExportClearAllButton" type="button" hidden aria-hidden="true" tabindex="-1">○</button></div></div>
+  <div class="inline-channel-select-list rest-cleanup-channel-list channel-export-list" id="channelExportList"></div>
+  <div class="channel-export-progress" hidden id="channelExportProgress"><progress id="channelExportProgressBar" max="1"></progress><span aria-live="polite" id="channelExportProgressText"></span></div>
+  <div class="rest-cleanup-inline-preview" id="channelExportSummary" hidden></div>
+  <div class="rest-cleanup-inline-actions"><button id="channelExportCancelButton" type="button" data-i18n="cancel">취소</button><button disabled id="channelExportApplyButton" type="button" data-i18n="export.action">내보내기</button></div>
+</section>
+<section class="rest-cleanup-inline-panel channel-export-inline-panel channel-volume-inline-panel" id="channelVolumePanel" hidden aria-label="채널 볼륨 수정" data-i18n-aria-label="volume.edit_channels">
+  <div class="rest-cleanup-inline-header"><strong id="channelVolumeDialogTitle" data-i18n="volume.edit_channels">채널 볼륨 수정</strong><span id="channelVolumeScopeLabel"></span></div>
+  <div class="channel-volume-options">
+    <div class="channel-volume-mode-options-row">
+      <label class="note-volume-mode-row channel-volume-mode-row"><input id="channelVolumeFixedMode" type="checkbox"/><span data-i18n="volume.fixed_mode">동일 볼륨으로 변경</span></label>
+      <label class="note-volume-mode-row channel-volume-protect-row"><input id="channelVolumeProtectV0" type="checkbox" checked/><span data-i18n="volume.protect_v0_min_v1">기존 V0 유지 · 최소 V1</span></label>
+    </div>
+    <label class="note-volume-slider-row channel-volume-slider-row"><span id="channelVolumeControlLabel" data-i18n="volume.relative_adjust">볼륨 증감</span><input aria-label="노트 볼륨 조절" data-i18n-aria-label="volume.adjust_aria" id="channelVolumeSlider" max="15" min="-15" step="1" type="range" value="0"/><strong id="channelVolumeValue">±0</strong></label>
+  </div>
+  <div class="channel-volume-scope-pane" id="channelVolumeScopePane">
+    <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">선택</strong><span></span><div class="inline-select-tools"><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="channelVolumeGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="channelVolumeSelectToggleButton" type="button" class="inline-select-mark inline-select-toggle" data-state="none" data-i18n-title="selection.all_select" data-i18n-aria-label="selection.all_select" title="모두 선택" aria-label="모두 선택">○</button><button id="channelVolumeSelectAllButton" type="button" hidden aria-hidden="true" tabindex="-1">✓</button><button id="channelVolumeClearAllButton" type="button" hidden aria-hidden="true" tabindex="-1">○</button></div></div>
+    <div class="channel-volume-list inline-channel-select-list rest-cleanup-channel-list" id="channelVolumeList"></div>
+  </div>
+  <div class="rest-cleanup-inline-actions"><button id="channelVolumeCancelButton" type="button" data-i18n="cancel">취소</button><button id="channelVolumeApplyButton" type="button" data-i18n="action.apply">적용</button></div>
+</section>
+<section class="rest-cleanup-inline-panel channel-export-inline-panel mml-export-inline-panel" id="mmlExportPanel" hidden aria-label="MML 내보내기" data-i18n-aria-label="mml.export">
+  <div class="rest-cleanup-inline-header"><strong data-i18n="mml.export">MML 내보내기</strong></div>
+  <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">선택</strong><span></span><div class="inline-select-tools"><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="mmlExportGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="mmlExportSelectToggleButton" type="button" class="inline-select-mark inline-select-toggle" data-state="none" data-i18n-title="selection.all_select" data-i18n-aria-label="selection.all_select" title="모두 선택" aria-label="모두 선택">○</button><button id="mmlExportSelectAllButton" type="button" hidden aria-hidden="true" tabindex="-1">✓</button><button id="mmlExportClearAllButton" type="button" hidden aria-hidden="true" tabindex="-1">○</button></div></div>
+  <div class="mml-export-channel-list inline-channel-select-list rest-cleanup-channel-list" id="mmlExportChannelList"></div>
+  <div class="rest-cleanup-inline-preview" id="mmlExportSummary" hidden></div>
+  <div class="rest-cleanup-inline-actions"><button data-i18n="close" id="mmlExportCancelButton" type="button">닫기</button><button data-i18n="mml_export.mmi_export" id="mmlExportMmiButton" type="button" disabled>MMI 내보내기</button></div>
+</section>
+<section class="rest-cleanup-inline-panel channel-export-inline-panel midi-import-inline-panel" id="midiImportPanel" hidden aria-label="파일 불러오기" data-i18n-aria-label="ui.load_source_2">
+  <div class="rest-cleanup-inline-header"><strong id="midiImportTitle" data-i18n="load">불러오기</strong></div>
+  <div class="midi-import-info">
+    <div class="midi-import-file-name" id="midiImportSourceLabel" data-i18n="file.select">파일 선택</div>
+    <div class="midi-import-summary" id="midiImportSummary" hidden></div>
+    <div class="import-color-mode-row"><span data-i18n="import.channel_color">색상</span><div class="import-color-mode-buttons" id="importChannelColorMode" role="group" aria-label="불러오기 채널 색상 기준" data-i18n-aria-label="import.channel_color_aria"><button type="button" data-color-mode="channel" data-i18n="import.color_by_channel">채널별</button><button type="button" data-color-mode="instrument" data-i18n="import.color_by_instrument">악기별</button></div></div>
+    <div aria-live="polite" class="midi-import-status" id="midiImportStatus"></div>
+  </div>
+  <div class="inline-channel-select-toolbar" id="midiImportChannelToolbar"><strong data-i18n="mml.channel_select">선택</strong><span></span><div class="inline-select-tools" id="midiImportSelectionActions"><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="midiImportGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="midiImportSelectToggleButton" type="button" class="inline-select-mark inline-select-toggle" data-state="none" data-i18n-title="selection.all_select" data-i18n-aria-label="selection.all_select" title="모두 선택" aria-label="모두 선택">○</button><button id="midiImportSelectAllButton" type="button" hidden aria-hidden="true" tabindex="-1">✓</button><button id="midiImportClearAllButton" type="button" hidden aria-hidden="true" tabindex="-1">○</button></div></div>
+  <div class="inline-channel-select-list midi-import-channel-tree" id="midiImportChannelTree"></div>
+  <div class="midi-import-selection-list" id="midiImportSelectionList" hidden></div>
+  <div class="rest-cleanup-inline-actions midi-import-inline-actions"><button id="midiImportCancelButton" type="button" data-i18n="cancel">취소</button><button id="midiImportApplyButton" type="button" data-i18n="action.add">추가</button><button id="midiImportNewButton" type="button" data-i18n="ui.open_new">새로 열기</button></div>
 </section>
 <section class="measure-edit-inline-panel" id="measureEditPanel" hidden aria-label="마디 편집" data-i18n-aria-label="timeline.edit_measure">
   <div class="measure-edit-inline-header"><strong data-i18n="timeline.edit_measure">마디 편집</strong><span id="measureEditPosition">0:00.000</span></div>
@@ -261,13 +304,15 @@
     <button type="button" data-measure-edit-mode="duplicate" data-i18n="action.duplicate">복제</button>
     <button type="button" data-measure-edit-mode="delete" data-i18n="action.delete">삭제</button>
   </div>
+  <div class="measure-edit-range-row" id="measureEditRangeRow">
   <div class="measure-edit-options" id="measureEditAddOptions"></div>
   <div class="measure-edit-options" id="measureEditDuplicateOptions" hidden>
     <label class="measure-edit-field"><span data-i18n="timeline.duplicate_count">복제 횟수</span><span class="measure-edit-number-with-unit"><input id="measureEditDuplicateCountInput" type="number" inputmode="numeric" min="1" step="1" value="1"/><small data-i18n="ui.times">회</small></span></label>
   </div>
   <div class="measure-edit-options" id="measureEditDeleteOptions" hidden></div>
   <div class="measure-edit-range-summary" id="measureEditRangeSummary"></div>
-  <div class="inline-channel-select-toolbar measure-edit-channel-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button id="measureEditSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="measureEditClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
+  </div>
+  <div class="inline-channel-select-toolbar measure-edit-channel-toolbar"><strong data-i18n="mml.channel_select">선택</strong><span></span><div class="inline-select-tools"><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="measureEditGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="measureEditSelectToggleButton" type="button" class="inline-select-mark inline-select-toggle" data-state="none" data-i18n-title="selection.all_select" data-i18n-aria-label="selection.all_select" title="모두 선택" aria-label="모두 선택">○</button><button id="measureEditSelectAllButton" type="button" hidden aria-hidden="true" tabindex="-1">✓</button><button id="measureEditClearAllButton" type="button" hidden aria-hidden="true" tabindex="-1">○</button></div></div>
   <div class="measure-edit-scope-list inline-channel-select-list" id="measureEditScopeList"></div>
   <div class="measure-edit-inline-actions"><button id="measureEditCancelButton" type="button" data-i18n="cancel">취소</button><button id="measureEditApplyButton" type="button" data-i18n="ui.ok">확인</button></div>
 </section>
@@ -316,7 +361,7 @@
     <button type="button" class="channel-tree-action channel-tree-mute channel-bulk-action" id="channelBulkMuteButton" aria-pressed="false" aria-label="모든 항목 음소거" title="모든 항목 음소거"><span class="channel-tree-action-glyph" id="channelBulkMuteGlyph" aria-hidden="true">🔊</span></button>
   </div>
 </div>
-<div class="inline-channel-select-toolbar channel-mode-select-toolbar" id="channelModeSelectToolbar" hidden><strong data-i18n="mml.channel_select">채널 선택</strong><span id="channelModeSelectCount" class="inline-channel-select-count"></span><button id="channelModeSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelModeClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button><button id="channelModeVisibilityButton" class="channel-tree-action channel-tree-visibility channel-bulk-action channel-mode-visibility-button" type="button" aria-pressed="true" hidden><span class="channel-tree-action-glyph" aria-hidden="true">👁</span></button></div>
+<div class="inline-channel-select-toolbar channel-mode-select-toolbar" id="channelModeSelectToolbar" hidden><strong data-i18n="mml.channel_select">선택</strong><span id="channelModeSelectCount" class="inline-channel-select-count"></span><button id="channelModeGroupToggleButton" class="channel-tree-action channel-tree-group-toggle channel-bulk-action channel-mode-group-toggle-button" type="button" aria-label="모든 그룹 접기" title="모든 그룹 접기" hidden><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="channelModeVisibilityButton" class="channel-tree-action channel-tree-visibility channel-bulk-action channel-mode-visibility-button" type="button" aria-pressed="true" hidden><span class="channel-tree-action-glyph" aria-hidden="true">👁</span></button><button id="channelModeSelectToggleButton" type="button" class="inline-select-mark inline-select-toggle" data-state="none" data-i18n-title="selection.all_select" data-i18n-aria-label="selection.all_select" title="모두 선택" aria-label="모두 선택" hidden>○</button><button id="channelModeSelectAllButton" type="button" hidden aria-hidden="true" tabindex="-1">✓</button><button id="channelModeClearAllButton" type="button" hidden aria-hidden="true" tabindex="-1">○</button></div>
 <div aria-label="채널 목록" data-i18n-aria-label="channel.list" class="channel-tabs channel-tree" data-context-area="channel-tabs" id="channelTabs" role="tree"></div>
 <div class="channel-detail-row channel-inspector">
 <div class="channel-body note-channel-body" id="noteChannelView">
@@ -414,6 +459,49 @@
 </div>
 </section>
 </aside>
+<aside class="inline-detail-pane" id="inlineDetailPane" hidden aria-label="상세 내용" data-i18n-aria-label="ui.detail_pane">
+  <section class="inline-detail-section" id="channelVolumeDetail" hidden>
+    <div class="channel-volume-compare-grid" id="channelVolumeComparison" aria-label="볼륨 변경 비교"></div>
+    <span id="channelVolumeSummary" hidden></span>
+  </section>
+  <section class="inline-detail-section" id="midiImportDetail" hidden>
+    <div class="midi-import-settings" id="midiImportMidiControls">
+      <div class="midi-import-radio-group" role="radiogroup" aria-labelledby="midiImportQuantizeLegend">
+        <span class="midi-import-setting-title" id="midiImportQuantizeLegend" data-i18n="import.note_min_length">노트 최소길이</span>
+        <label class="midi-import-radio"><input type="radio" name="midiImportQuantize" value="64" checked/><span data-i18n="ui.1_64_quantize">64박 양자화</span></label>
+        <label class="midi-import-radio"><input type="radio" name="midiImportQuantize" value="32"/><span data-i18n="ui.1_32_quantize">32박 양자화</span></label>
+      </div>
+      <div class="midi-import-radio-group" role="radiogroup" aria-labelledby="midiImportOverlapLegend">
+        <span class="midi-import-setting-title" id="midiImportOverlapLegend" data-i18n="import.overlap_title">겹침 처리</span>
+        <label class="midi-import-radio"><input type="radio" name="midiImportOverlap" value="0"/><span data-i18n="import.overlap_none">겹침 무시 안 함</span></label>
+        <label class="midi-import-radio"><input type="radio" name="midiImportOverlap" value="64" checked/><span data-i18n="ui.ignore_1_64">64박 겹침 무시</span></label>
+        <label class="midi-import-radio"><input type="radio" name="midiImportOverlap" value="32"/><span data-i18n="import.overlap_32">32박 겹침 무시</span></label>
+      </div>
+      <div class="midi-import-limit-group">
+        <label class="midi-import-check"><input id="midiImportLimitChannelsPerInstrument" type="checkbox"/><span data-i18n="import.channel_limit_title">악기당 최대 채널 수 제한</span></label>
+        <input id="midiImportChannelLimitInput" type="number" min="1" max="16" step="1" value="3" inputmode="numeric" disabled aria-label="악기당 최대 채널 수" data-i18n-aria-label="import.channel_limit_title"/>
+      </div>
+      <label class="midi-import-setting midi-import-mbt-row"><span data-i18n="mbt.packing_aria">MBT 채널 구성</span><select aria-label="MBT 채널 구성" data-i18n-aria-label="mbt.packing_aria" hidden="" id="midiImportMbtPacking"><option value="byInstrument" data-i18n="mbt.packing_by_instrument">악기별 채널</option><option value="compact" data-i18n="mbt.packing_compact">최소 채널</option></select></label>
+    </div>
+    <div class="unified-import-text-source midi-import-settings" hidden="" id="midiImportTextSourcePanel">
+      <button id="midiImportPasteButton" type="button" data-i18n="clipboard.paste">클립보드 붙여넣기</button>
+      <textarea aria-label="불러올 3MLE, MabiIcco 또는 MML 텍스트" data-i18n-aria-label="mml.text_import" id="midiImportTextInput" placeholder="MML@t120o4v15c4d4e4,...; · 3MLE(.mml) [Channel1] · MabiIcco(.mmi) 파일 내용" data-i18n-placeholder="mml.import_example"></textarea>
+    </div>
+  </section>
+  <section class="inline-detail-section" id="mmlExportDetail" hidden>
+    <label class="mml-export-summary-row"><input id="mmlExportSummaryMode" type="checkbox"/><span data-i18n="mml_export.summary_mode">글자수 요약</span></label>
+    <div class="mml-export-copy-panel" id="mmlExportCopyPanel">
+      <div class="mml-export-copy-row">
+        <button data-i18n="mml_export.copy_all" disabled="" id="mmlExportCopyAllButton" type="button">전체 복사</button>
+        <small id="mmlExportFullCopyDetail" data-i18n="channel.no_selected">선택된 채널이 없습니다.</small>
+      </div>
+      <div class="mml-export-split-block" id="mmlExportPartCopyBlock" hidden>
+        <span id="mmlExportSplitSummary" hidden></span>
+        <div class="mml-export-split-buttons" id="mmlExportSplitButtons"></div>
+      </div>
+    </div>
+  </section>
+</aside>
 <section class="piano-section" data-context-area="piano-section">
 <div aria-hidden="true" class="overview-timeline-corner"></div>
 <canvas aria-label="전체 타임라인" data-i18n-aria-label="timeline.overview" class="overview-timeline" data-context-area="overview-timeline" id="overviewTimelineCanvas"></canvas>
@@ -439,69 +527,8 @@
 </section>
 </div></main></div>
 </div>
-<div class="popup-backdrop" hidden="" id="midiImportBackdrop">
-<section aria-label="파일 불러오기" data-i18n-aria-label="ui.load_source_2" aria-modal="true" class="midi-import-dialog unified-import-dialog" id="midiImportDialog" role="dialog">
-<div class="transfer-dialog-header">
-<div><strong id="midiImportTitle" data-i18n="load">불러오기</strong><span id="midiImportSourceLabel" data-i18n="file.select">파일 선택</span></div>
-<button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="midiImportCloseButton" type="button">×</button>
-</div>
-<div class="midi-import-midi-controls unified-import-options-row" id="midiImportMidiControls">
-<button id="midiImportChooseFileButton" type="button" data-i18n="file.text">파일 선택</button>
-<select aria-label="MIDI 양자화" data-i18n-aria-label="midi.quantize" id="midiImportQuantize"><option value="" disabled data-i18n="import.note_min_length">노트 최소길이</option><option selected="" value="64" data-i18n="ui.1_64_quantize">64박 양자화</option><option value="32" data-i18n="ui.1_32_quantize">32박 양자화</option></select>
-<label class="midi-import-overlap-option"><input checked="" id="midiImportIgnoreSingle64thOverlap" type="checkbox"/><span data-i18n="ui.ignore_1_64">64박 겹침 무시</span></label>
-<label class="midi-import-overlap-option midi-import-channel-limit-option"><input id="midiImportLimitChannelsPerInstrument" type="checkbox"/><span id="midiImportChannelLimitLabel" data-i18n="midi.limit_channels" data-i18n-args="[3]">악기당 최대 3채널</span></label>
-<label class="import-channel-color-mode"><select aria-label="불러오기 채널 색상 기준" data-i18n-aria-label="import.channel_color_aria" id="importChannelColorMode"><option value="" disabled data-i18n="import.channel_color">채널 색상</option><option value="channel" data-i18n="import.color_by_channel">채널마다 다른 색</option><option value="instrument" data-i18n="import.color_by_instrument">악기마다 다른 색</option></select></label>
-<select aria-label="MBT 채널 구성" data-i18n-aria-label="mbt.packing_aria" hidden="" id="midiImportMbtPacking"><option value="byInstrument" data-i18n="mbt.packing_by_instrument">악기별 채널</option><option value="compact" data-i18n="mbt.packing_compact">최소 채널</option></select>
-</div>
-<div class="unified-import-text-source" hidden="" id="midiImportTextSourcePanel">
-<div class="unified-import-text-source-actions"><button id="midiImportTextChooseFileButton" type="button" data-i18n="file.text">파일 선택</button><button id="midiImportPasteButton" type="button" data-i18n="clipboard.paste">클립보드 붙여넣기</button></div>
-<textarea aria-label="불러올 3MLE, MabiIcco 또는 MML 텍스트" data-i18n-aria-label="mml.text_import" id="midiImportTextInput" placeholder="MML@t120o4v15c4d4e4,...; · 3MLE(.mml) [Channel1] · MabiIcco(.mmi) 파일 내용" data-i18n-placeholder="mml.import_example"></textarea>
-</div>
-<div class="unified-import-channel-toolbar" id="midiImportChannelToolbar">
-<div class="midi-import-selection-actions midi-import-inline-selection-actions" id="midiImportSelectionActions"><button id="midiImportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiImportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
-<div class="midi-import-summary" id="midiImportSummary"></div>
-<div class="midi-import-preview-actions"><button class="midi-import-source-preview" id="midiImportPreviewAllButton" type="button"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span><span class="transport-button-label" data-i18n="ui.preview_source">원본 듣기</span></button></div>
-</div>
-<div class="midi-import-selection-list" id="midiImportSelectionList"></div>
-<div class="transfer-dialog-actions unified-import-actions"><div aria-live="polite" class="midi-import-status" id="midiImportStatus" data-i18n="selection.items_import">불러올 항목을 선택하세요.</div><button id="midiImportCancelButton" type="button" data-i18n="cancel">취소</button><button id="midiImportApplyButton" type="button" data-i18n="action.add">추가</button><button id="midiImportNewButton" type="button" data-i18n="ui.open_new">새로 열기</button></div>
-</section>
-</div>
-<div class="popup-backdrop" hidden="" id="mmlExportBackdrop">
-<section aria-label="MML 내보내기" data-i18n-aria-label="mml.export" aria-modal="true" class="transfer-dialog mml-export-dialog" id="mmlExportDialog" role="dialog">
-<div class="transfer-dialog-header"><div><strong data-i18n="mml.export">MML 내보내기</strong><span data-i18n="mml_export.selection_hint">왼쪽에서 복사할 채널을 선택하세요.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="mmlExportCloseButton" type="button">×</button></div>
-<div class="mml-export-workspace">
-  <div class="mml-export-channel-pane">
-    <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="mmlExportGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="mmlExportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="mmlExportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
-    <div class="mml-export-channel-list inline-channel-select-list dialog-inline-channel-list" id="mmlExportChannelList"></div>
-  </div>
-  <div class="mml-export-copy-panel" id="mmlExportCopyPanel">
-    <div class="mml-export-copy-panel-title" data-i18n="mml_export.score_copy">악보 복사</div>
-    <div class="mml-export-copy-row">
-      <div class="mml-export-copy-meta"><strong data-i18n="mml_export.copy_all">전체 복사</strong><small id="mmlExportFullCopyDetail" data-i18n="channel.no_selected">선택된 채널이 없습니다.</small></div>
-      <button data-i18n="copy" disabled="" id="mmlExportCopyAllButton" type="button">복사</button>
-    </div>
-    <div class="mml-export-split-block" id="mmlExportPartCopyBlock" hidden>
-      <div class="mml-export-split-head">
-        <div class="mml-export-copy-meta"><strong data-i18n="mml_export.copy_by_part">파트별 악보</strong><small id="mmlExportSplitSummary"></small></div>
-      </div>
-      <div class="mml-export-split-buttons" id="mmlExportSplitButtons"></div>
-    </div>
-  </div>
-</div>
-<div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="mmlExportSummary" data-i18n="channel.no_selected">선택된 채널이 없습니다.</div><button data-i18n="close" id="mmlExportCancelButton" type="button">닫기</button></div>
-</section>
-</div>
-<div class="popup-backdrop" hidden="" id="channelExportBackdrop">
-<section aria-labelledby="channelExportTitle" aria-modal="true" class="transfer-dialog channel-export-dialog" id="channelExportDialog" role="dialog">
-<div class="transfer-dialog-header"><div><strong id="channelExportTitle">내보내기</strong><span data-i18n="export.select_channels_hint">내보낼 채널을 선택하세요.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelExportCloseButton" type="button">×</button></div>
-<div class="channel-export-body">
-<div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="channelExportGroupToggleButton" aria-label="모든 그룹 접기" title="모든 그룹 접기"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="channelExportSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelExportClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
-<div class="mml-export-channel-list channel-export-list inline-channel-select-list dialog-inline-channel-list" id="channelExportList"></div>
-<div class="channel-export-progress" hidden="" id="channelExportProgress"><progress id="channelExportProgressBar" max="1"></progress><span aria-live="polite" id="channelExportProgressText"></span></div>
-</div>
-<div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="channelExportSummary" data-i18n="channel.no_selected">선택된 채널이 없습니다.</div><button data-i18n="cancel" id="channelExportCancelButton" type="button">취소</button><button disabled="" id="channelExportApplyButton" type="button" data-i18n="export.action">내보내기</button></div>
-</section>
-</div>
+
+
 <div class="popup-backdrop" hidden="" id="channelDeleteBackdrop">
 <section aria-label="편집 채널 삭제" data-i18n-aria-label="channel.delete_edit" aria-modal="true" class="transfer-dialog channel-delete-dialog" id="channelDeleteDialog" role="dialog">
 <div class="transfer-dialog-header"><div><strong data-i18n="channel.delete">채널 삭제</strong><span data-i18n="channel.select_edit_delete">삭제할 편집 채널을 선택하세요.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelDeleteCloseButton" type="button">×</button></div>
@@ -573,32 +600,7 @@
 <p class="transfer-dialog-help" data-i18n="audio.double_click_item">오디오 목록 또는 오디오 블록을 더블 클릭하면 이 창을 다시 열 수 있습니다.</p>
 <div class="transfer-dialog-actions"><button id="audioEditCancelButton" type="button" data-i18n="cancel">취소</button><button id="audioEditApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
-</div><div class="popup-backdrop" hidden="" id="midiTransferBackdrop"><section aria-label="원본 채널 복사" data-i18n-aria-label="channel.copy_source" aria-modal="true" class="transfer-dialog" id="midiTransferDialog" role="dialog"><div class="transfer-dialog-header"><div><strong data-i18n="channel.copy">채널 복사</strong><span id="midiTransferSourceLabel" data-i18n="ui.source">원본 자료</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="midiTransferCloseButton" type="button">×</button></div><p class="transfer-dialog-help" data-i18n="channel.instrument_copy_new">편집 영역에 새 채널로 복사할 악기를 선택하세요. 화음처럼 노트가 겹치는 악기는 편집 채널의 단선율 규칙에 맞게 필요한 만큼 여러 채널로 자동 분리됩니다.</p><div class="midi-transfer-selection-actions"><button id="midiTransferSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiTransferClearAllButton" type="button" data-i18n="selection.clear">모두 선택 해제</button></div><div class="midi-transfer-channel-list" id="midiTransferChannelList"></div><div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="midiTransferSummary"></div><button id="midiTransferCancelButton" type="button" data-i18n="cancel">취소</button><button id="midiTransferApplyButton" type="button" data-i18n="copy">복사</button></div></section></div><div class="popup-backdrop" hidden="" id="channelVolumeBackdrop">
-<section aria-label="채널 볼륨 수정" data-i18n-aria-label="volume.edit_channels" aria-modal="true" class="transfer-dialog channel-volume-dialog unified-volume-dialog" id="channelVolumeDialog" role="dialog">
-  <div class="transfer-dialog-header"><div><strong id="channelVolumeDialogTitle" data-i18n="volume.edit_channels">채널 볼륨 수정</strong><span id="channelVolumeScopeLabel" data-i18n="volume.select_channels">수정할 채널을 선택하세요.</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="channelVolumeCloseButton" type="button">×</button></div>
-  <div class="unified-volume-dialog-body">
-    <div class="unified-volume-editor-pane">
-      <div class="channel-volume-options">
-        <div class="channel-volume-mode-options-row">
-          <label class="note-volume-mode-row channel-volume-mode-row"><input id="channelVolumeFixedMode" type="checkbox"/><span data-i18n="volume.fixed_mode">동일 볼륨으로 변경</span></label>
-          <label class="note-volume-mode-row channel-volume-protect-row"><input id="channelVolumeProtectV0" type="checkbox" checked/><span data-i18n="volume.protect_v0_min_v1">기존 V0 유지 · 최소 V1</span></label>
-        </div>
-        <label class="note-volume-slider-row channel-volume-slider-row"><span id="channelVolumeControlLabel" data-i18n="volume.relative_adjust">볼륨 증감</span><input aria-label="노트 볼륨 조절" data-i18n-aria-label="volume.adjust_aria" id="channelVolumeSlider" max="15" min="-15" step="1" type="range" value="0"/><strong id="channelVolumeValue">±0</strong></label>
-        <div class="note-volume-count-box channel-volume-count-box" aria-label="볼륨 변경 비교">
-          <div class="channel-volume-count-heading"><span class="channel-volume-heading-before" data-i18n="ui.text">현재</span><b class="channel-volume-heading-arrow" aria-hidden="true">&gt;</b><span class="channel-volume-heading-after" data-i18n="ui.change_short">변경</span></div>
-          <div class="channel-volume-compare-grid" id="channelVolumeComparison"></div>
-        </div>
-        <p class="transfer-dialog-help channel-volume-help" data-i18n="midi.v0_silent_v1">V0은 무음이며 V1은 MIDI velocity 1에 대응합니다. V2~V15는 나머지 velocity 범위를 균등하게 나눕니다.</p>
-      </div>
-    </div>
-    <div class="channel-scope-list-section channel-volume-list-section channel-volume-scope-pane" id="channelVolumeScopePane">
-      <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">채널 선택</strong><span></span><button id="channelVolumeSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="channelVolumeClearAllButton" type="button" data-i18n="ui.clear_all">모두 해제</button></div>
-      <div class="channel-volume-list channel-scope-scroll-list inline-channel-select-list dialog-inline-channel-list" id="channelVolumeList"></div>
-    </div>
-  </div>
-  <div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="channelVolumeSummary"></div><button id="channelVolumeCancelButton" type="button" data-i18n="cancel">취소</button><button id="channelVolumeApplyButton" type="button" data-i18n="action.apply">적용</button></div>
-</section>
-</div>
+</div><div class="popup-backdrop" hidden="" id="midiTransferBackdrop"><section aria-label="원본 채널 복사" data-i18n-aria-label="channel.copy_source" aria-modal="true" class="transfer-dialog" id="midiTransferDialog" role="dialog"><div class="transfer-dialog-header"><div><strong data-i18n="channel.copy">채널 복사</strong><span id="midiTransferSourceLabel" data-i18n="ui.source">원본 자료</span></div><button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="midiTransferCloseButton" type="button">×</button></div><p class="transfer-dialog-help" data-i18n="channel.instrument_copy_new">편집 영역에 새 채널로 복사할 악기를 선택하세요. 화음처럼 노트가 겹치는 악기는 편집 채널의 단선율 규칙에 맞게 필요한 만큼 여러 채널로 자동 분리됩니다.</p><div class="midi-transfer-selection-actions"><button id="midiTransferSelectAllButton" type="button" data-i18n="selection.all_select">모두 선택</button><button id="midiTransferClearAllButton" type="button" data-i18n="selection.clear">모두 선택 해제</button></div><div class="midi-transfer-channel-list" id="midiTransferChannelList"></div><div class="transfer-dialog-actions transfer-dialog-actions-with-summary"><div class="transfer-dialog-summary" id="midiTransferSummary"></div><button id="midiTransferCancelButton" type="button" data-i18n="cancel">취소</button><button id="midiTransferApplyButton" type="button" data-i18n="copy">복사</button></div></section></div>
 <div class="popup-backdrop" hidden="" id="timeEditBackdrop">
 <section aria-label="마디 편집" data-i18n-aria-label="ui.edit_track_space" aria-modal="true" class="time-edit-dialog" id="timeEditDialog" role="dialog">
 <div class="tempo-editor-header">
@@ -735,6 +737,7 @@
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/mbt/format-mbt.js?v=1.0.2&amp;rev=20260920-mbt-extension-only"></script>
+<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261030t-mmi4"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
@@ -746,18 +749,18 @@
 <script src="../plugins/formats/musescore/format-musescore.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
-<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0&amp;rev=20261030g-pastechan"></script>
+<script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0&amp;rev=20261030t-mmi4"></script>
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
 <script src="js/soundbank-player.js?v=5.5.0&amp;rev=20261024-export-fixes"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261030g-pastechan"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261030t-mmi4"></script>
 <script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.8"></script>
-<script src="app.js?v=5.5.0&amp;rev=20261030g-pastechan"></script>
+<script src="app.js?v=5.5.0&amp;rev=20261030t-mmi4"></script>
 <script src="js/account-drive.js?v=5.5.0&amp;rev=20260928-account-preference1" type="module"></script>
 </body>
 </html>

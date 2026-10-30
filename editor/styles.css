@@ -12719,7 +12719,7 @@ body [contenteditable="plaintext-only"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transform: translateY(-1.5px);
+  transform: translate(-50%, calc(-50% - 3px));
 }
 .transport-control-group .transport-loop-button.active,
 .transport-control-group .transport-loop-button[aria-pressed="true"] {
@@ -14080,7 +14080,7 @@ html[data-theme="dark"] .topbar-survey-button { --help-accent: #fbbf24; --help-b
 #channelPanel.rest-cleanup-preview-active {
   grid-template-rows: minmax(0, 1fr) !important;
 }
-#channelPanel.rest-cleanup-preview-active > :not(#restCleanupPanel) {
+#channelPanel.rest-cleanup-preview-active > :not(#restCleanupPanel):not(#channelExportPanel):not(#channelVolumePanel):not(#mmlExportPanel):not(#midiImportPanel) {
   display: none !important;
 }
 .rest-cleanup-inline-panel {
@@ -14674,7 +14674,7 @@ body.merge-mode-active #channelBulkBar { display: none !important; }
   background: color-mix(in srgb, var(--panel-2) 78%, var(--panel));
   z-index: 4;
 }
-.channel-mode-select-toolbar.is-merge { grid-template-columns: max-content minmax(0, 1fr) max-content !important; }
+.channel-mode-select-toolbar.is-merge { grid-template-columns: max-content minmax(0, 1fr) max-content max-content !important; }
 .channel-mode-select-toolbar > button { height: 22px; min-height: 22px !important; padding: 0 8px !important; font-size: 11px !important; pointer-events: auto !important; opacity: 1; }
 .channel-mode-select-toolbar > button:disabled { opacity: .45; }
 /* 채널 삭제: folders collapse/expand like 채널 병합. */
@@ -15065,3 +15065,697 @@ body.channel-delete-mode-active #channelTabs .channel-tree-group-delete {
 /* Current part indicator takes the part guide line colour. */
 .timeline-tempo-readout em { color: #ffc45c; font-size: 10px; }
 :root[data-theme="light"] .timeline-tempo-readout em { color: #ff9d00; }
+
+/* 2026-10-30: 마디 편집 복제 모드 - 왼쪽 선택한 길이, 오른쪽 복제 횟수를 나란히 배치. */
+#measureEditPanel .measure-edit-range-row { display: block; }
+#measureEditPanel .measure-edit-range-row:has(#measureEditDuplicateOptions:not([hidden])) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  column-gap: 12px;
+}
+#measureEditPanel .measure-edit-range-row:has(#measureEditDuplicateOptions:not([hidden])) .measure-edit-range-summary {
+  grid-column: 1; grid-row: 1; min-width: 0; margin-top: 0 !important; align-self: start;
+}
+#measureEditPanel .measure-edit-range-row:has(#measureEditDuplicateOptions:not([hidden])) #measureEditDuplicateOptions {
+  grid-column: 2; grid-row: 1; min-width: 0; margin-top: 0 !important;
+}
+#measureEditPanel .measure-edit-range-row:has(#measureEditDuplicateOptions:not([hidden])) .measure-edit-field {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+}
+#measureEditPanel .measure-edit-range-row:has(#measureEditDuplicateOptions:not([hidden])) .measure-edit-field > span:first-child {
+  font-size: 9.5px !important;
+}
+
+/* 2026-10-30: 마디 편집 - 채널 선택 위 구분선 제거, 모든 모드에서 탭과 내용 간격 동일. */
+#measureEditPanel .measure-edit-range-summary { border-bottom: 0 !important; }
+#measureEditPanel .measure-edit-range-row { margin-top: 0 !important; }
+
+/* 2026-10-30: 모드를 바꿔도 탭 아래 영역 높이가 변하지 않도록 고정. */
+#measureEditPanel .measure-edit-range-row { min-height: 42px; box-sizing: border-box; }
+
+/* 채널 병합: 눈 버튼 옆 그룹 모두 접기/펼치기 버튼. */
+.channel-mode-select-toolbar > .channel-mode-group-toggle-button {
+  width: 24px !important;
+  min-width: 24px !important;
+  height: 22px !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  justify-self: end;
+}
+.channel-mode-select-toolbar > .channel-mode-group-toggle-button:disabled { opacity: .45; }
+
+/* 인라인 채널 선택 툴바: [채널 선택 N/M ........ 📂 모두 선택 해제] */
+.inline-channel-select-toolbar:has(> .inline-select-tools) {
+  grid-template-columns: max-content minmax(0, 1fr) max-content !important;
+}
+.inline-select-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.inline-select-tools > .inline-select-all-label {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 850;
+  white-space: nowrap;
+  padding: 0 1px 0 3px;
+}
+.inline-select-tools > button:not(.inline-group-toggle) {
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.inline-select-tools > button:not(.inline-group-toggle):hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--control-border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--control-bg));
+}
+.inline-select-tools > .inline-group-toggle {
+  position: relative;
+  width: 26px;
+  min-width: 26px;
+  height: 24px;
+  padding: 0;
+  margin-right: 2px;
+}
+.inline-select-tools > .inline-group-toggle:disabled { opacity: .45; }
+
+
+/* 내보내기(MIDI/오디오) 채널 영역 패널: 쉼표 정리 패널과 같은 밀도/하단 바 규칙을 따릅니다. */
+#channelExportPanel {
+  gap: 8px !important;
+  padding: 10px 10px 10px !important;
+}
+#channelExportPanel .rest-cleanup-segments button {
+  min-height: 28px !important;
+  height: 28px;
+  padding: 0 4px !important;
+  font-size: 11px !important;
+}
+#channelExportPanel .rest-cleanup-inline-section { gap: 5px; }
+#channelExportPanel .rest-cleanup-inline-preview { padding: 5px 7px; font-size: 10px; }
+#channelExportPanel .inline-channel-select-toolbar { min-height: 26px; padding: 0; }
+#channelExportPanel .inline-channel-select-toolbar > button { min-height: 24px; padding: 2px 7px; }
+#channelExportPanel .inline-channel-select-list { gap: 3px; }
+#channelExportPanel .inline-channel-group-row,
+#channelExportPanel .inline-channel-select-row {
+  min-height: 27px !important;
+  padding: 1px 6px !important;
+  gap: 5px !important;
+  border-radius: 6px !important;
+}
+#channelExportPanel .inline-channel-select-row { grid-template-columns: 18px minmax(0, 1fr) !important; }
+#channelExportPanel .inline-channel-group-row { grid-template-columns: 18px 16px minmax(0, 1fr) max-content !important; }
+#channelExportPanel input[type="checkbox"] { width: 15px !important; height: 15px !important; }
+#channelExportPanel .inline-channel-info {
+  display: flex !important;
+  align-items: baseline;
+  gap: 6px;
+}
+#channelExportPanel .inline-channel-info strong { flex: 1 1 auto; font-size: 11px; }
+#channelExportPanel .inline-channel-info small { flex: 0 0 auto; font-size: 9px; }
+#channelExportPanel .rest-cleanup-inline-actions { gap: 6px !important; padding-top: 4px !important; }
+#channelExportPanel .rest-cleanup-inline-actions button {
+  min-height: 30px !important;
+  height: 30px;
+  font-size: 12px !important;
+}
+#channelExportPanel {
+  padding-bottom: 0 !important;
+}
+#channelExportPanel .rest-cleanup-inline-actions {
+  box-sizing: border-box;
+  margin: auto -10px 0 !important;
+  min-height: calc(var(--audio-lane-height) + var(--scrollbar-size));
+  padding: 8px 10px !important;
+  align-content: center;
+  border-top: 1px solid var(--control-border);
+  background: color-mix(in srgb, var(--panel-2) 45%, var(--panel));
+}
+#channelExportPanel {
+  gap: 5px !important;
+  padding-top: 7px !important;
+}
+#channelExportPanel .rest-cleanup-inline-actions {
+  min-height: 0 !important;
+  padding: 6px 10px !important;
+  flex: 0 0 auto !important;
+}
+#channelExportPanel .inline-channel-select-list { min-height: 0 !important; flex: 1 1 0 !important; }
+#channelExportPanel .inline-channel-select-toolbar { margin-top: 0 !important; }
+#channelExportPanel .rest-cleanup-inline-section { gap: 4px !important; }
+#channelExportApplyButton:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #fff; }
+#channelExportPanel .channel-export-progress { padding: 4px 2px; gap: 4px; border-top: 0; }
+#channelExportPanel .rest-cleanup-inline-preview { margin-top: 0; }
+#channelExportPanel .channel-export-list { padding: 2px 1px 4px; max-height: none; }
+
+/* inline select marks (✓ / ○) */
+.inline-select-tools .inline-select-mark {
+  width: 26px; height: 24px; padding: 0; display: inline-grid; place-items: center;
+  font-size: 15px; line-height: 1; font-weight: 700; border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--line, rgba(128,140,160,.35));
+}
+.inline-select-tools .inline-select-mark-all { color: #22c55e; }
+.inline-select-tools .inline-select-mark-none { color: #8b96a8; }
+.inline-select-tools .inline-select-mark:hover { background: rgba(128,140,160,.16); }
+.inline-select-tools .inline-select-all-label { display: none; }
+#channelExportSummary[hidden] { display: none !important; }
+.channel-mode-select-toolbar > .channel-mode-group-toggle-button .channel-tree-action-glyph,
+.channel-mode-select-toolbar > #channelModeVisibilityButton .channel-tree-action-glyph {
+  font-size: 14px; line-height: 16px;
+}
+
+/* select marks: no border, checkmark uses the same green as checked rows */
+.inline-select-tools .inline-select-mark { border: 0 !important; background: transparent !important; }
+.inline-select-tools .inline-select-mark:hover { background: rgba(128,140,160,.16) !important; }
+.inline-select-tools .inline-select-mark-all { color: var(--select-mark-on) !important; }
+.inline-select-tools .inline-select-mark-none { color: var(--select-mark-off) !important; }
+
+
+/* 2026-10-30b: 채널 삭제 toolbar uses 📂 ✓ ○ marks; tighter gaps; no separator lines around count bars. */
+.channel-mode-select-toolbar { border-bottom: 0 !important; border-top: 0 !important; }
+.channel-bulk-bar { border-bottom: 0 !important; border-top: 0 !important; }
+.channel-mode-select-toolbar:not(.is-merge) { grid-template-columns: max-content minmax(0, 1fr) max-content max-content max-content !important; gap: 0 !important; }
+.channel-mode-select-toolbar.is-merge { gap: 0 !important; }
+.channel-mode-select-toolbar > .inline-select-mark {
+  width: 24px; min-width: 24px; height: 22px; min-height: 22px !important; padding: 0 !important;
+  display: inline-grid; place-items: center; font-size: 15px !important; line-height: 1; font-weight: 700;
+  border: 0 !important; background: transparent !important; border-radius: 6px; cursor: pointer;
+}
+.channel-mode-select-toolbar > .inline-select-mark[hidden] { display: none !important; }
+.channel-mode-select-toolbar > .inline-select-mark-all { color: var(--select-mark-on) !important; }
+.channel-mode-select-toolbar > .inline-select-mark-none { color: var(--select-mark-off) !important; }
+.channel-mode-select-toolbar > .inline-select-mark:hover { background: rgba(128,140,160,.16) !important; }
+.channel-mode-select-toolbar > .channel-mode-group-toggle-button { justify-self: end; margin-right: 0 !important; }
+.inline-select-tools { gap: 0 !important; }
+.inline-select-tools > .inline-group-toggle { margin-right: 0 !important; width: 24px; min-width: 24px; }
+.inline-select-tools .inline-select-mark { width: 24px; }
+.channel-mode-select-toolbar > .inline-channel-select-count { margin-left: 5px; }
+#channelPanel > .channel-tree-toolbar { border-bottom: 0 !important; }
+
+/* 2026-10-30b: 마디 편집 - "선택" 툴바 위 여백을 다른 기능과 동일하게 축소 (모드가 바뀌어도 높이 고정 유지). */
+#measureEditPanel .measure-edit-range-row { min-height: 37px !important; }
+#measureEditPanel .measure-edit-range-summary { padding: 2px 2px 0 !important; }
+#measureEditPanel #measureEditDuplicateOptions input { height: 22px !important; min-height: 22px !important; }
+.inline-select-tools .inline-select-mark { font-size: 17px; }
+.inline-select-tools > .inline-select-mark { font-size: 18px !important; line-height: 1 !important; padding: 0 !important; min-height: 24px; }
+.channel-mode-select-toolbar > .inline-select-mark { font-size: 18px !important; }
+
+/* 2026-10-30c: marks match the group button box (24x24); 삭제 모드의 전체 선택 ✓는 행 체크와 같은 빨강. */
+.channel-mode-select-toolbar > .inline-select-mark { height: 24px !important; min-height: 24px !important; }
+.channel-mode-select-toolbar > .channel-mode-group-toggle-button { height: 24px !important; }
+.inline-select-tools > .inline-select-mark,
+.channel-mode-select-toolbar > .inline-select-mark { font-size: 17px !important; }
+body.channel-delete-mode-active .channel-mode-select-toolbar > .inline-select-mark-all { color: var(--select-mark-danger) !important; }
+
+/* 2026-10-30d: 채널 볼륨 수정 / MML 내보내기 패널은 내보내기 패널과 같은 밀도 규칙을 씁니다. */
+#channelVolumePanel,
+#mmlExportPanel {
+  gap: 8px !important;
+  padding: 10px 10px 10px !important;
+}
+#channelVolumePanel .rest-cleanup-segments button,
+#mmlExportPanel .rest-cleanup-segments button {
+  min-height: 28px !important;
+  height: 28px;
+  padding: 0 4px !important;
+  font-size: 11px !important;
+}
+#channelVolumePanel .rest-cleanup-inline-section,
+#mmlExportPanel .rest-cleanup-inline-section { gap: 5px; }
+#channelVolumePanel .rest-cleanup-inline-preview,
+#mmlExportPanel .rest-cleanup-inline-preview { padding: 5px 7px; font-size: 10px; }
+#channelVolumePanel .inline-channel-select-toolbar,
+#mmlExportPanel .inline-channel-select-toolbar { min-height: 26px; padding: 0; }
+#channelVolumePanel .inline-channel-select-toolbar > button,
+#mmlExportPanel .inline-channel-select-toolbar > button { min-height: 24px; padding: 2px 7px; }
+#channelVolumePanel .inline-channel-select-list,
+#mmlExportPanel .inline-channel-select-list { gap: 3px; }
+#channelVolumePanel .inline-channel-group-row,
+#mmlExportPanel .inline-channel-group-row,
+#channelVolumePanel .inline-channel-select-row,
+#mmlExportPanel .inline-channel-select-row {
+  min-height: 27px !important;
+  padding: 1px 6px !important;
+  gap: 5px !important;
+  border-radius: 6px !important;
+}
+#channelVolumePanel .inline-channel-select-row,
+#mmlExportPanel .inline-channel-select-row { grid-template-columns: 18px minmax(0, 1fr) !important; }
+#channelVolumePanel .inline-channel-group-row,
+#mmlExportPanel .inline-channel-group-row { grid-template-columns: 18px 16px minmax(0, 1fr) max-content !important; }
+#channelVolumePanel input[type="checkbox"],
+#mmlExportPanel input[type="checkbox"] { width: 15px !important; height: 15px !important; }
+#channelVolumePanel .inline-channel-info,
+#mmlExportPanel .inline-channel-info {
+  display: flex !important;
+  align-items: baseline;
+  gap: 6px;
+}
+#channelVolumePanel .inline-channel-info strong,
+#mmlExportPanel .inline-channel-info strong { flex: 1 1 auto; font-size: 11px; }
+#channelVolumePanel .inline-channel-info small,
+#mmlExportPanel .inline-channel-info small { flex: 0 0 auto; font-size: 9px; }
+#channelVolumePanel .rest-cleanup-inline-actions,
+#mmlExportPanel .rest-cleanup-inline-actions { gap: 6px !important; padding-top: 4px !important; }
+#channelVolumePanel .rest-cleanup-inline-actions button,
+#mmlExportPanel .rest-cleanup-inline-actions button {
+  min-height: 30px !important;
+  height: 30px;
+  font-size: 12px !important;
+}
+#channelVolumePanel,
+#mmlExportPanel {
+  padding-bottom: 0 !important;
+}
+#channelVolumePanel .rest-cleanup-inline-actions,
+#mmlExportPanel .rest-cleanup-inline-actions {
+  box-sizing: border-box;
+  margin: auto -10px 0 !important;
+  min-height: calc(var(--audio-lane-height) + var(--scrollbar-size));
+  padding: 8px 10px !important;
+  align-content: center;
+  border-top: 1px solid var(--control-border);
+  background: color-mix(in srgb, var(--panel-2) 45%, var(--panel));
+}
+#channelVolumePanel,
+#mmlExportPanel {
+  gap: 5px !important;
+  padding-top: 7px !important;
+}
+#channelVolumePanel .rest-cleanup-inline-actions,
+#mmlExportPanel .rest-cleanup-inline-actions {
+  min-height: 0 !important;
+  padding: 6px 10px !important;
+  flex: 0 0 auto !important;
+}
+#channelVolumePanel .inline-channel-select-list,
+#mmlExportPanel .inline-channel-select-list { min-height: 0 !important; flex: 1 1 0 !important; }
+#channelVolumePanel .inline-channel-select-toolbar,
+#mmlExportPanel .inline-channel-select-toolbar { margin-top: 0 !important; }
+#channelVolumePanel .rest-cleanup-inline-section,
+#mmlExportPanel .rest-cleanup-inline-section { gap: 4px !important; }
+#channelVolumePanel .channel-export-progress,
+#mmlExportPanel .channel-export-progress { padding: 4px 2px; gap: 4px; border-top: 0; }
+#channelVolumePanel .rest-cleanup-inline-preview,
+#mmlExportPanel .rest-cleanup-inline-preview { margin-top: 0; }
+#channelVolumePanel .channel-export-list,
+#mmlExportPanel .channel-export-list { padding: 2px 1px 4px; max-height: none; }
+
+/* 채널 영역 옆 상세 패널 (볼륨 변경 내용 / MML 복사 목록) */
+.inline-detail-pane { display: none; }
+body.inline-detail-active .editor-body {
+  grid-template-columns: var(--sidebar-width) var(--inline-detail-width, 290px) minmax(0, 1fr) !important;
+}
+body.inline-detail-active .inline-detail-pane:not([hidden]) {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-right: 1px solid var(--control-border);
+  background: color-mix(in srgb, var(--panel) 88%, var(--menu-bg));
+}
+body.inline-detail-active .piano-section { grid-column: 3 !important; }
+.inline-detail-section { min-width: 0; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 10px 12px; overflow: auto; scrollbar-width: thin; }
+.inline-detail-section[hidden] { display: none !important; }
+.inline-detail-header { flex: 0 0 auto; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-height: 22px; }
+.inline-detail-header strong { color: var(--text); font-size: 13px; font-weight: 900; letter-spacing: -.015em; }
+.inline-detail-header span { color: var(--muted); font-size: 10px; font-weight: 800; text-align: right; }
+#channelVolumeDetail .channel-volume-count-box { flex: 0 0 auto; display: grid; gap: 6px; padding: 8px 9px; }
+#channelVolumeDetail .channel-volume-count-heading { grid-template-columns: 38px minmax(0, 1fr) auto minmax(0, 1fr); column-gap: 6px; }
+#channelVolumeDetail .channel-volume-count-heading::before { content: ""; }
+#channelVolumeDetail .channel-volume-count-heading span:last-child { text-align: right; }
+#channelVolumeDetail .channel-volume-compare-grid { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 3px; }
+#channelVolumeDetail .channel-volume-compare-item {
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto minmax(0, 1fr); column-gap: 6px; align-items: baseline;
+  padding: 4px 6px; font-size: 11px;
+}
+#channelVolumeDetail .channel-volume-compare-after { text-align: right; font-size: 11px; }
+#channelVolumeDetail .channel-volume-help { margin: 0; font-size: 10px; line-height: 1.45; color: var(--muted); }
+#mmlExportDetail .mml-export-copy-panel { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 0; border: 0; background: transparent; overflow: visible; }
+#mmlExportDetail .mml-export-split-buttons { max-height: none; overflow: visible; }
+#channelVolumePanel .channel-volume-scope-pane { min-height: 0; flex: 1 1 0; display: flex; flex-direction: column; gap: 4px; }
+#channelVolumePanel .channel-volume-scope-pane[hidden] { display: none !important; }
+#channelVolumePanel .channel-volume-options { flex: 0 0 auto; display: grid; gap: 6px; padding: 0; }
+#channelVolumePanel .channel-volume-mode-options-row { display: grid; gap: 4px; padding: 0 !important; margin: 0 !important; grid-template-columns: minmax(0, 1fr) !important; }
+#channelVolumePanel .channel-volume-mode-options-row .note-volume-mode-row { padding: 0 2px !important; margin: 0 !important; min-height: 22px; }
+#channelVolumePanel .channel-volume-slider-row { display: grid !important; grid-template-columns: max-content minmax(0, 1fr) 34px !important; align-items: center; column-gap: 8px; padding: 2px !important; margin: 0 !important; }
+#channelVolumePanel .channel-volume-slider-row > span { white-space: nowrap; font-size: 11px; }
+#channelVolumePanel .channel-volume-slider-row > strong { text-align: right; font-size: 12px; }
+#channelVolumeDetail .channel-volume-compare-before { text-align: right; }
+@media (max-width: 900px) { body.inline-detail-active { --inline-detail-width: 220px; } }
+
+/* 3상태 전체 선택 토글 (○ 없음 / – 일부 / ✓ 전체) */
+.inline-select-tools > button[hidden],
+.channel-mode-select-toolbar > button[hidden] { display: none !important; }
+.inline-select-toggle[data-state="none"] { color: var(--select-mark-off) !important; }
+.inline-select-toggle[data-state="some"],
+.inline-select-toggle[data-state="all"] { color: var(--select-mark-on) !important; }
+.inline-select-toggle[data-state="some"] { font-weight: 900; }
+.inline-select-toggle:disabled { opacity: .45; }
+body.channel-delete-mode-active .channel-mode-select-toolbar > .inline-select-toggle[data-state="some"],
+body.channel-delete-mode-active .channel-mode-select-toolbar > .inline-select-toggle[data-state="all"] { color: var(--select-mark-danger) !important; }
+.channel-mode-select-toolbar:not(.is-merge) { grid-template-columns: max-content minmax(0, 1fr) max-content max-content !important; }
+.channel-mode-select-toolbar > .inline-select-toggle { justify-self: end; }
+
+/* 눈/폴더 이모지: 같은 이모지 글꼴·크기·줄높이를 써서 채널의 눈 이모지와 같은 높이에 놓습니다. */
+.inline-select-tools .inline-group-toggle .channel-tree-action-glyph,
+.channel-mode-select-toolbar > .channel-mode-group-toggle-button .channel-tree-action-glyph,
+.channel-mode-select-toolbar > #channelModeVisibilityButton .channel-tree-action-glyph {
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif !important;
+  font-size: 13px !important;
+  line-height: 16px !important;
+}
+
+/* 채널 영역 작업 공간: 일반 채널 목록과 같은 좌우 여백(7px)을 써서 붕 떠 보이지 않게 합니다. */
+#measureEditPanel,
+#restCleanupPanel,
+#autoPartPanel,
+#channelExportPanel,
+#channelVolumePanel,
+#mmlExportPanel {
+  padding-left: 7px !important;
+  padding-right: 7px !important;
+}
+#measureEditPanel [class*="inline-actions"],
+#restCleanupPanel [class*="inline-actions"],
+#autoPartPanel [class*="inline-actions"],
+#channelExportPanel [class*="inline-actions"],
+#channelVolumePanel [class*="inline-actions"],
+#mmlExportPanel [class*="inline-actions"] {
+  margin-left: -7px !important;
+  margin-right: -7px !important;
+  padding-left: 7px !important;
+  padding-right: 7px !important;
+}
+
+/* 상세 패널: 폭 1/3, 볼륨은 변경 내용만 / MML은 버튼 + 정보 */
+body.side-tool-volume-active, body.side-tool-mml-active { --inline-detail-width: 104px; }
+.inline-detail-section { padding: 8px 6px 10px; gap: 6px; }
+#channelVolumeDetail { padding: 6px 6px 10px; }
+#channelVolumeDetail .channel-volume-compare-grid { flex: 1 1 auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 3px; }
+#channelVolumeDetail .channel-volume-compare-item {
+  display: grid; grid-template-columns: 26px minmax(0, 1fr) auto minmax(0, 1fr); column-gap: 4px; align-items: baseline;
+  padding: 4px 5px; font-size: 11px;
+}
+#channelVolumeDetail .channel-volume-compare-before { text-align: right; }
+#channelVolumeDetail .channel-volume-compare-after { text-align: right; font-size: 11px; }
+.mml-export-summary-row { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 2px; color: var(--text); font-size: 11px; font-weight: 800; cursor: pointer; }
+.mml-export-summary-row input { margin: 0; width: 14px; height: 14px; }
+#mmlExportDetail .mml-export-copy-panel { gap: 10px; }
+#mmlExportDetail .mml-export-copy-row,
+#mmlExportDetail .mml-export-split-block,
+#mmlExportDetail .mml-export-page-copy-row {
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 0; border: 0; border-radius: 0; background: transparent;
+}
+#mmlExportDetail .mml-export-split-block { gap: 8px; }
+#mmlExportDetail .mml-export-split-buttons { display: flex; flex-direction: column; gap: 8px; padding: 0; }
+#mmlExportDetail .mml-export-page-copy-row + .mml-export-page-copy-row { border-top: 0; }
+#mmlExportDetail #mmlExportCopyAllButton,
+#mmlExportDetail .mml-export-page-copy-button { width: 100%; min-width: 0; min-height: 28px; padding: 3px 4px; font-size: 11px; }
+#mmlExportDetail small { color: var(--muted); font-size: 9.5px; line-height: 1.35; overflow-wrap: anywhere; }
+#mmlExportDetail small { word-break: keep-all; overflow-wrap: normal; }
+
+/* 2026-10-30e: 상세 패널 폭 / 채널 목록 여백 제거 / 툴바 버튼 모양 */
+body.side-tool-volume-active, body.side-tool-mml-active { --inline-detail-width: 145px; }
+#measureEditPanel .inline-channel-select-list,
+#restCleanupPanel .inline-channel-select-list,
+#autoPartPanel .inline-channel-select-list,
+#channelExportPanel .inline-channel-select-list,
+#channelVolumePanel .inline-channel-select-list,
+#mmlExportPanel .inline-channel-select-list,
+#measureEditPanel .measure-edit-scope-list {
+  padding: 0 9px 0 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+#measureEditPanel .inline-channel-select-toolbar,
+#restCleanupPanel .inline-channel-select-toolbar,
+#autoPartPanel .inline-channel-select-toolbar,
+#channelExportPanel .inline-channel-select-toolbar,
+#channelVolumePanel .inline-channel-select-toolbar,
+#mmlExportPanel .inline-channel-select-toolbar { padding-right: 11px !important; }
+.inline-select-tools > .inline-group-toggle,
+.inline-select-tools > .inline-select-toggle,
+.channel-mode-select-toolbar > .inline-select-toggle,
+.channel-mode-select-toolbar > .channel-mode-group-toggle-button,
+.channel-mode-select-toolbar > .channel-mode-visibility-button {
+  width: 22px !important; min-width: 22px !important; height: 22px !important; min-height: 22px !important;
+  border-radius: 4px !important;
+}
+.inline-select-tools > .inline-group-toggle:hover:not(:disabled),
+.inline-select-tools > .inline-select-toggle:hover:not(:disabled),
+.channel-mode-select-toolbar > .inline-select-toggle:hover:not(:disabled),
+.channel-mode-select-toolbar > .channel-mode-group-toggle-button:hover:not(:disabled),
+.channel-mode-select-toolbar > .channel-mode-visibility-button:hover:not(:disabled) {
+  background: var(--control-hover) !important;
+}
+
+
+/* 2026-10-30f: 채널 영역 작업 공간을 채널 목록(#channelTabs)과 같은 구조로:
+   패널 자체는 여백 없이 꽉 채우고, 내용은 띠(band) 안쪽 여백만, "선택" 줄은 일괄 제어 줄과 같은 띠,
+   목록은 채널 트리와 같은 스크롤 상자(5px 7px, 스크롤바 자리 고정)로 바닥까지 붙입니다. */
+#measureEditPanel,
+#restCleanupPanel,
+#autoPartPanel,
+#channelExportPanel,
+#channelVolumePanel,
+#mmlExportPanel {
+  padding: 0 !important;
+  gap: 6px !important;
+}
+#measureEditPanel > :not(.inline-channel-select-toolbar):not(.inline-channel-select-list):not([class*="inline-actions"]):not(.channel-volume-scope-pane),
+#restCleanupPanel > :not(.inline-channel-select-toolbar):not(.inline-channel-select-list):not([class*="inline-actions"]):not(.channel-volume-scope-pane),
+#autoPartPanel > :not(.inline-channel-select-toolbar):not(.inline-channel-select-list):not([class*="inline-actions"]):not(.channel-volume-scope-pane),
+#channelExportPanel > :not(.inline-channel-select-toolbar):not(.inline-channel-select-list):not([class*="inline-actions"]):not(.channel-volume-scope-pane),
+#channelVolumePanel > :not(.inline-channel-select-toolbar):not(.inline-channel-select-list):not([class*="inline-actions"]):not(.channel-volume-scope-pane),
+#mmlExportPanel > :not(.inline-channel-select-toolbar):not(.inline-channel-select-list):not([class*="inline-actions"]):not(.channel-volume-scope-pane) {
+  padding-left: 7px !important;
+  padding-right: 7px !important;
+}
+#measureEditPanel > :not([hidden]):not(.rest-cleanup-inline-header):not(.measure-edit-inline-header):not(.auto-part-inline-header):first-of-type,
+#restCleanupPanel > :not([hidden]):not(.rest-cleanup-inline-header):not(.measure-edit-inline-header):not(.auto-part-inline-header):first-of-type,
+#autoPartPanel > :not([hidden]):not(.rest-cleanup-inline-header):not(.measure-edit-inline-header):not(.auto-part-inline-header):first-of-type,
+#channelExportPanel > :not([hidden]):not(.rest-cleanup-inline-header):not(.measure-edit-inline-header):not(.auto-part-inline-header):first-of-type,
+#channelVolumePanel > :not([hidden]):not(.rest-cleanup-inline-header):not(.measure-edit-inline-header):not(.auto-part-inline-header):first-of-type,
+#mmlExportPanel > :not([hidden]):not(.rest-cleanup-inline-header):not(.measure-edit-inline-header):not(.auto-part-inline-header):first-of-type {
+  margin-top: 7px !important;
+}
+#measureEditPanel .inline-channel-select-toolbar,
+#restCleanupPanel .inline-channel-select-toolbar,
+#autoPartPanel .inline-channel-select-toolbar,
+#channelExportPanel .inline-channel-select-toolbar,
+#channelVolumePanel .inline-channel-select-toolbar,
+#mmlExportPanel .inline-channel-select-toolbar {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  height: 27px !important;
+  min-height: 27px !important;
+  margin: 0 !important;
+  padding: 1px 19px 1px 7px !important;
+  background: color-mix(in srgb, var(--panel-2) 78%, var(--panel)) !important;
+  border: 0 !important;
+}
+:root[data-theme="light"] #measureEditPanel .inline-channel-select-toolbar,
+:root[data-theme="light"] #restCleanupPanel .inline-channel-select-toolbar,
+:root[data-theme="light"] #autoPartPanel .inline-channel-select-toolbar,
+:root[data-theme="light"] #channelExportPanel .inline-channel-select-toolbar,
+:root[data-theme="light"] #channelVolumePanel .inline-channel-select-toolbar,
+:root[data-theme="light"] #mmlExportPanel .inline-channel-select-toolbar {
+  background: color-mix(in srgb, var(--panel-2) 90%, #fff) !important;
+}
+#measureEditPanel .inline-channel-select-list,
+#restCleanupPanel .inline-channel-select-list,
+#autoPartPanel .inline-channel-select-list,
+#channelExportPanel .inline-channel-select-list,
+#channelVolumePanel .inline-channel-select-list,
+#mmlExportPanel .inline-channel-select-list {
+  box-sizing: border-box !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: -6px 0 0 !important;
+  padding: 5px 7px !important;
+  overflow-y: auto !important;
+  scrollbar-gutter: stable !important;
+  scrollbar-width: thin !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+#measureEditPanel [class*="inline-actions"],
+#restCleanupPanel [class*="inline-actions"],
+#autoPartPanel [class*="inline-actions"],
+#channelExportPanel [class*="inline-actions"],
+#channelVolumePanel [class*="inline-actions"],
+#mmlExportPanel [class*="inline-actions"] {
+  margin: -6px 0 0 !important;
+  padding-left: 7px !important;
+  padding-right: 7px !important;
+}
+#channelVolumePanel .channel-volume-scope-pane {
+  margin: 0 !important;
+  padding: 0 !important;
+  gap: 0 !important;
+}
+#channelVolumePanel .channel-volume-scope-pane .inline-channel-select-list { margin-top: 0 !important; }
+#measureEditPanel > .measure-edit-mode-tabs,
+#restCleanupPanel > .rest-cleanup-inline-section:first-of-type,
+#restCleanupPanel > .rest-cleanup-inline-header + .rest-cleanup-inline-section,
+#autoPartPanel > .auto-part-inline-fields,
+#channelVolumePanel > .channel-volume-options { margin-top: 7px !important; }
+#measureEditPanel > .measure-edit-mode-tabs {
+  padding: 0 !important;
+  margin-left: 7px !important;
+  margin-right: 7px !important;
+}
+
+
+/* 2026-10-30g: 불러오기 작업 공간(채널 영역) + 설정 패널(상세 패널) */
+body.side-tool-import-active { --inline-detail-width: 170px; }
+#midiImportPanel { padding: 0 !important; gap: 6px !important; }
+#midiImportPanel > :not(.inline-channel-select-toolbar):not(.inline-channel-select-list):not([class*="inline-actions"]) { padding-left: 7px !important; padding-right: 7px !important; }
+#midiImportPanel > .midi-import-info { margin-top: 7px !important; display: grid; gap: 4px; min-width: 0; }
+#midiImportPanel .midi-import-file-name { color: var(--text); font-size: 12px; font-weight: 900; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#midiImportPanel .midi-import-summary { display: flex; flex-wrap: wrap; gap: 2px 6px; color: var(--muted); font-size: 10px; font-weight: 800; line-height: 1.35; }
+#midiImportPanel .midi-import-summary span[data-separator="true"]::after { content: "·"; margin-left: 6px; color: var(--muted); }
+#midiImportPanel .import-channel-color-mode { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px; margin: 2px 0 0; color: var(--text); font-size: 11px; font-weight: 800; }
+#midiImportPanel .import-channel-color-mode select { min-width: 0; width: 100%; min-height: 26px; font-size: 11px; }
+#midiImportPanel .midi-import-status { min-height: 14px; color: var(--muted); font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
+#midiImportPanel .midi-import-status.is-error, #midiImportPanel .midi-import-status[data-error="true"] { color: var(--danger); }
+#midiImportPanel .inline-channel-select-toolbar {
+  box-sizing: border-box !important; width: 100% !important; height: 27px !important; min-height: 27px !important;
+  margin: 0 !important; padding: 1px 19px 1px 7px !important;
+  display: grid !important; grid-template-columns: max-content minmax(0, 1fr) max-content !important; align-items: center; gap: 6px;
+  background: color-mix(in srgb, var(--panel-2) 78%, var(--panel)) !important; border: 0 !important;
+}
+:root[data-theme="light"] #midiImportPanel .inline-channel-select-toolbar { background: color-mix(in srgb, var(--panel-2) 90%, #fff) !important; }
+#midiImportPanel .inline-channel-select-toolbar > strong { font-size: 11px; font-weight: 900; color: var(--text); }
+#midiImportPanel .inline-channel-select-toolbar > .inline-select-tools { display: inline-flex; gap: 0; }
+#midiImportPanel .inline-channel-select-toolbar > .inline-select-tools[hidden] { display: none !important; }
+#midiImportPanel .midi-import-selection-list {
+  box-sizing: border-box !important; flex: 1 1 0 !important; min-height: 0 !important; max-height: none !important;
+  margin: -6px 0 0 !important; padding: 5px 7px !important; display: flex; flex-direction: column; gap: 0;
+  overflow-y: auto !important; scrollbar-gutter: stable !important; scrollbar-width: thin !important;
+  border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+}
+#midiImportPanel .midi-import-selection-list[hidden] { display: flex !important; visibility: hidden; }
+#midiImportPanel .midi-import-selection-row {
+  display: grid !important; grid-template-columns: 18px minmax(0, 1fr) 22px !important; align-items: center; gap: 6px;
+  min-height: 27px; margin: 1px 0; padding: 2px 4px 2px 6px !important; box-sizing: border-box;
+  border: 0 !important; border-radius: 6px; background: color-mix(in srgb, var(--control-bg) 86%, var(--panel)) !important;
+}
+#midiImportPanel .midi-import-selection-row input[type="checkbox"] { width: 15px; height: 15px; margin: 0; }
+#midiImportPanel .midi-import-selection-info { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+#midiImportPanel .midi-import-selection-info strong { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 11px; font-weight: 900; }
+#midiImportPanel .midi-import-selection-info small { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 9.5px; }
+#midiImportPanel .midi-import-row-preview { width: 22px !important; min-width: 22px !important; height: 22px !important; min-height: 22px !important; padding: 0 !important; border: 0 !important; border-radius: 4px !important; background: transparent !important; display: inline-grid; place-items: center; }
+#midiImportPanel .midi-import-row-preview:hover { background: var(--control-hover) !important; }
+#midiImportPanel [class*="inline-actions"] {
+  margin: -6px 0 0 !important; padding: 6px 7px !important; display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 6px !important;
+  border-top: 1px solid var(--control-border); background: color-mix(in srgb, var(--panel-2) 45%, var(--panel)); flex: 0 0 auto;
+}
+#midiImportPanel [class*="inline-actions"] button { min-height: 30px; height: 30px; font-size: 12px; padding: 0 4px; }
+#midiImportApplyButton:not(:disabled), #midiImportNewButton:not(:disabled) { border-color: var(--accent); }
+#midiImportApplyButton:not(:disabled) { background: var(--accent); color: #fff; }
+
+#midiImportDetail { gap: 8px; }
+#midiImportDetail button { width: 100%; min-height: 28px; padding: 3px 6px; font-size: 11px; }
+#midiImportDetail .midi-import-source-preview { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+#midiImportDetail .midi-import-settings { display: flex; flex-direction: column; gap: 8px; }
+#midiImportDetail .midi-import-settings[hidden] { display: none !important; }
+#midiImportDetail .midi-import-setting { display: grid; gap: 3px; color: var(--muted); font-size: 10px; font-weight: 800; }
+#midiImportDetail .midi-import-setting select,
+#midiImportDetail .midi-import-setting input { width: 100%; min-width: 0; min-height: 26px; box-sizing: border-box; font-size: 11px; color: var(--text); }
+#midiImportDetail .midi-import-setting input:disabled { opacity: .5; }
+#midiImportDetail .midi-import-mbt-row:has(> select[hidden]) { display: none; }
+#midiImportDetail .midi-import-check { display: grid; grid-template-columns: 15px minmax(0, 1fr); align-items: center; gap: 6px; color: var(--text); font-size: 11px; font-weight: 800; line-height: 1.3; cursor: pointer; }
+#midiImportDetail .midi-import-check input { width: 15px; height: 15px; margin: 0; }
+#midiImportDetail textarea { width: 100%; min-height: 180px; box-sizing: border-box; resize: vertical; font-size: 11px; font-family: ui-monospace, monospace; }
+#midiImportPanel .midi-import-status.error { color: var(--danger); }
+#midiImportPanel .midi-import-summary { padding: 0 !important; margin: 0 !important; border: 0 !important; background: transparent !important; min-height: 0 !important; }
+#midiImportPanel .midi-import-summary span {
+  display: inline !important; padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important;
+  background: transparent !important; box-shadow: none !important; min-height: 0 !important; min-width: 0 !important;
+  color: var(--muted) !important; font-size: 10px !important; font-weight: 800 !important; line-height: 1.4 !important; white-space: nowrap;
+}
+#midiImportPanel .midi-import-summary span[data-separator="true"]::after { content: "·" !important; display: inline !important; position: static !important; margin: 0 0 0 6px !important; }
+#midiImportPanel .midi-import-status { padding: 0 !important; border: 0 !important; background: transparent !important; text-align: left !important; }
+
+/* 2026-10-30h: 불러오기 — 그룹/채널 트리, 색상 버튼, 제목줄 "다시 선택", 설정 패널 여백 정리 */
+#midiImportPanel .midi-import-channel-tree {
+  box-sizing: border-box !important; flex: 1 1 0 !important; min-height: 0 !important; max-height: none !important;
+  margin: -6px 0 0 !important; padding: 5px 7px !important;
+  overflow-y: auto !important; scrollbar-gutter: stable !important; scrollbar-width: thin !important;
+  border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+}
+#midiImportPanel .midi-import-selection-list { flex: 0 0 auto !important; margin: 0 !important; padding: 6px 7px !important; overflow: visible !important; }
+#midiImportPanel .midi-import-selection-list[hidden] { display: none !important; }
+#midiImportPanel .midi-import-status:not(.error) { display: none !important; }
+#midiImportPanel .midi-import-summary[hidden] { display: none !important; }
+#midiImportPanel .import-color-mode-row { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px; color: var(--text); font-size: 11px; font-weight: 800; }
+#midiImportPanel .import-color-mode-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 0; min-width: 0; border: 1px solid var(--control-border); border-radius: 7px; overflow: hidden; }
+#midiImportPanel .import-color-mode-buttons button { min-width: 0; min-height: 26px; padding: 2px 4px; border: 0 !important; border-radius: 0 !important; background: var(--control-bg); color: var(--text); font-size: 10.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#midiImportPanel .import-color-mode-buttons button + button { border-left: 1px solid var(--control-border) !important; }
+#midiImportPanel .import-color-mode-buttons button.active { background: color-mix(in srgb, var(--accent) 18%, var(--control-bg)); color: var(--accent); }
+.edit-mode-titlebar-action {
+  flex: 0 0 auto; margin-left: auto; min-height: 24px; height: 24px; padding: 0 9px;
+  border-radius: 6px; font-size: 11px; font-weight: 800; white-space: nowrap;
+}
+.edit-mode-titlebar-action[hidden] { display: none !important; }
+.edit-mode-titlebar:has(> .edit-mode-titlebar-action:not([hidden])) > span[hidden] { display: none !important; }
+/* 설정 패널: 내용 묶음에 추가 안쪽 여백/테두리 없이 같은 열로 */
+#midiImportDetail .unified-import-text-source,
+#midiImportDetail .midi-import-settings {
+  padding: 0 !important; margin: 0 !important; border: 0 !important; background: transparent !important;
+  display: flex !important; flex-direction: column; gap: 8px; grid-template-rows: none !important;
+}
+#midiImportDetail .unified-import-text-source[hidden],
+#midiImportDetail .midi-import-settings[hidden] { display: none !important; }
+#midiImportDetail #midiImportTextInput { margin: 0 !important; min-height: 220px; flex: 1 1 auto; }
+
+/* 2026-10-30i: 불러오기 설정 — 라디오 그룹, 버튼 색 체계(취소=무채색 / 추가=파랑 / 새로 열기=주황) */
+#midiImportDetail .midi-import-radio-group { display: grid; gap: 5px; }
+#midiImportDetail .midi-import-setting-title { color: var(--muted); font-size: 10px; font-weight: 800; }
+#midiImportDetail .midi-import-radio { display: grid; grid-template-columns: 15px minmax(0, 1fr); align-items: center; gap: 6px; color: var(--text); font-size: 11px; font-weight: 800; line-height: 1.3; cursor: pointer; }
+#midiImportDetail .midi-import-radio input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
+#midiImportPanel .midi-import-inline-actions button { font-weight: 850; }
+#midiImportCancelButton { border-color: var(--control-border); background: var(--control-bg); color: var(--muted); }
+#midiImportApplyButton:not(:disabled) { border-color: var(--accent); background: var(--accent); color: #fff; }
+#midiImportNewButton:not(:disabled) { border-color: #b8660d; background: #b8660d; color: #fff; }
+#midiImportApplyButton:disabled, #midiImportNewButton:disabled { border-color: var(--control-border); background: var(--control-bg); color: var(--muted); opacity: .55; }
+
+#midiImportDetail .midi-import-limit-group { display: grid; gap: 5px; }
+#midiImportDetail .midi-import-limit-group > input { width: 100%; min-width: 0; min-height: 26px; box-sizing: border-box; font-size: 11px; color: var(--text); }
+#midiImportDetail .midi-import-limit-group > input:disabled { opacity: .5; }
+
+/* 마디 편집 추가/복제/삭제: 불러오기 색상 버튼처럼 선택된 칸이 통째로 채워지는 분할 버튼 */
+#measureEditPanel .measure-edit-mode-tabs { gap: 0 !important; border: 1px solid var(--control-border); border-radius: 7px; overflow: hidden; background: var(--control-bg); }
+#measureEditPanel .measure-edit-mode-tabs button { border: 0 !important; border-radius: 0 !important; background: var(--control-bg); color: var(--text); box-shadow: none !important; }
+#measureEditPanel .measure-edit-mode-tabs button + button { border-left: 1px solid var(--control-border) !important; }
+#measureEditPanel .measure-edit-mode-tabs button[data-measure-edit-mode="add"].active { background: color-mix(in srgb, #22c55e 22%, var(--control-bg)); color: #1f9d4d; }
+#measureEditPanel .measure-edit-mode-tabs button[data-measure-edit-mode="duplicate"].active { background: color-mix(in srgb, var(--accent) 22%, var(--control-bg)); color: var(--accent); }
+#measureEditPanel .measure-edit-mode-tabs button[data-measure-edit-mode="delete"].active { background: color-mix(in srgb, var(--danger) 22%, var(--control-bg)); color: var(--danger); }
+:root[data-theme="dark"] #measureEditPanel .measure-edit-mode-tabs button[data-measure-edit-mode="add"].active { color: #7ee2a0; }
+/* 마디 편집 탭: 공통 7px 좌우 안쪽 여백이 테두리 안에 들어가 양옆이 귀처럼 튀어나오던 문제 → 여백 제거, 포커스 테두리 제거 */
+#measureEditPanel > .measure-edit-mode-tabs:not(.inline-channel-select-toolbar):not(.inline-channel-select-list):not([class*="inline-actions"]):not(.channel-volume-scope-pane) {
+  padding: 0 !important;
+}
+#measureEditPanel .measure-edit-mode-tabs button:focus,
+#measureEditPanel .measure-edit-mode-tabs button:focus-visible { outline: none !important; }
