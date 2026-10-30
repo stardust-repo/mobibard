@@ -4,6 +4,12 @@
  *   24 kHz mono samples -> frontend features -> ONNX (8 s windows, 2 s overlap)
  *   -> note decoding -> velocity -> Standard MIDI bytes.
  * The model bytes come from lib/model-cache.mjs (IndexedDB, verified by SHA-256).
+ *
+ * Two builds of the same model are published (model/manifest.json "models"):
+ *   fp16 — half-precision compute, WebGPU only, needs the adapter feature "shader-f16"
+ *   w16  — 16-bit weights / 32-bit compute, runs everywhere (WebGPU or WebAssembly); the fallback
+ * The environment is probed first and only the build that will actually run is downloaded.
+ * If the fp16 build cannot be downloaded, initialised or run, the worker falls back to w16.
  */
 "use strict";
 
@@ -62,34 +68,98 @@ function loadOrt(sources) {
   throw fail("runtime-unavailable", "ONNX Runtime could not be loaded. " + errors.join(" | "));
 }
 
-async function hasWebGpu() {
-  if (!self.navigator?.gpu) return false;
-  try { return !!(await navigator.gpu.requestAdapter()); } catch { return false; }
+// ---- Environment probe -----------------------------------------------------------------
+// fp16 needs a WebGPU adapter that exposes "shader-f16" (half floats in WGSL); ONNX Runtime's
+// WebGPU backend requests that feature itself when the adapter has it. The result is cached
+// for the worker's lifetime.
+let capsPromise = null;
+function probeCapabilities() {
+  capsPromise ??= (async () => {
+    const caps = { webgpu: false, shaderF16: false, adapter: "" };
+    if (!self.navigator?.gpu) return caps;
+    try {
+      const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+      if (!adapter) return caps;
+      caps.webgpu = true;
+      caps.shaderF16 = !!adapter.features?.has?.("shader-f16");
+      const info = adapter.info || (await adapter.requestAdapterInfo?.().catch(() => null)) || null;
+      caps.adapter = [info?.vendor, info?.architecture, info?.description].filter(Boolean).join(" ");
+      // Confirms a device with half-float shaders can really be created on this adapter
+      // (some drivers advertise the feature but refuse the device).
+      if (caps.shaderF16) {
+        try {
+          const device = await adapter.requestDevice({ requiredFeatures: ["shader-f16"] });
+          device.destroy?.();
+        } catch {
+          caps.shaderF16 = false;
+        }
+      }
+    } catch { /* WebGPU blocked or crashed: WebAssembly only */ }
+    return caps;
+  })();
+  return capsPromise;
+}
+
+// Builds to try, best first. options.modelVariant: "auto" (default) | "fp16" | "w16".
+async function chooseVariants(options) {
+  const caps = await probeCapabilities();
+  if (options.executionProvider === "wasm" || options.modelVariant === "w16") return { caps, order: ["w16"] };
+  const fp16Ready = caps.webgpu && caps.shaderF16;
+  return { caps, order: fp16Ready ? ["fp16", "w16"] : ["w16"] };
+}
+
+function executionPlans(variant, options, caps) {
+  // fp16 is only worth running on the GPU; on WebAssembly it would be emulated and slower than w16.
+  if (variant === "fp16") return [["webgpu"]];
+  return options.executionProvider === "wasm" || !caps.webgpu ? [["wasm"]] : [["webgpu", "wasm"], ["wasm"]];
+}
+
+async function releaseSession() {
+  const old = session;
+  session = null;
+  sessionInfo = null;
+  try { await old?.release?.(); } catch { /* already gone */ }
 }
 
 async function ensureSession(options, progress) {
-  if (session) return sessionInfo;
+  if (session && (!options.modelVariant || options.modelVariant === "auto" || options.modelVariant === sessionInfo?.variant)) return sessionInfo;
+  if (session) await releaseSession();
   const libs = await loadLibs();
   progress("runtime", 0, 0);
   loadOrt(options.ortSources?.length ? options.ortSources : DEFAULT_ORT_SOURCES);
-  const model = await libs.cache.loadModel(new URL("model/", BASE).href, (stage, loaded, total) => progress(stage, loaded, total));
-  progress("model-init", 0, 0);
-  const plans = options.executionProvider === "wasm" || !(await hasWebGpu()) ? [["wasm"]] : [["webgpu", "wasm"], ["wasm"]];
+  const { caps, order } = await chooseVariants(options);
   const errors = [];
-  for (const eps of plans) {
+  for (const variant of order) {
+    let model;
     try {
-      session = await self.ort.InferenceSession.create(model.bytes, { executionProviders: eps, graphOptimizationLevel: "all" });
-      sessionInfo = {
-        provider: eps[0],
-        runtimeBase: ortBase,
-        meta: model.meta,
-        manifest: model.manifest,
-        modelFromCache: model.fromCache,
-        modelStored: model.stored,
-      };
-      return sessionInfo;
+      model = await libs.cache.loadModel(new URL("model/", BASE).href, (stage, loaded, total) => progress(stage, loaded, total), { variant });
     } catch (error) {
-      errors.push(`[${eps.join("+")}] ${error?.message || error}`);
+      // The fallback build is mandatory; a missing/corrupt fp16 build just means "use w16".
+      if (variant === order[order.length - 1]) throw error;
+      errors.push(`[${variant} download] ${error?.message || error}`);
+      continue;
+    }
+    progress("model-init", 0, 0);
+    for (const eps of executionPlans(model.variant, options, caps)) {
+      try {
+        session = await self.ort.InferenceSession.create(model.bytes, { executionProviders: eps, graphOptimizationLevel: "all" });
+        sessionInfo = {
+          provider: eps[0],
+          variant: model.variant,
+          compute: model.compute,
+          capabilities: caps,
+          runtimeBase: ortBase,
+          meta: model.meta,
+          manifest: model.manifest,
+          modelFromCache: model.fromCache,
+          modelStored: model.stored,
+          fallbackReasons: errors.slice(),
+        };
+        if (errors.length) console.warn("[Wave2MIDI] fp16 build unavailable, using", model.variant, errors);
+        return sessionInfo;
+      } catch (error) {
+        errors.push(`[${model.variant} ${eps.join("+")}] ${error?.message || error}`);
+      }
     }
   }
   throw fail("model-init-failed", "The model could not be initialised. " + errors.join(" | "));
@@ -97,7 +167,7 @@ async function ensureSession(options, progress) {
 
 async function transcribe(id, wave, options) {
   const progress = (stage, done = 0, total = 0) => self.postMessage({ type: "progress", id, stage, done, total });
-  const info = await ensureSession(options, progress);
+  let info = await ensureSession(options, progress);
   const { dsp, decode, velocity, midi, tempo } = await loadLibs();
   const meta = info.meta;
   const seconds = wave.length / dsp.SR;
@@ -121,7 +191,20 @@ async function transcribe(id, wave, options) {
   const totalFrames = Math.ceil(wave.length / dsp.HOP);
   const windowCount = totalFrames > W ? 1 + Math.ceil((totalFrames - W) / hopFrames) : 1;
   progress("analyze", 0, windowCount);
-  const { probs, T } = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total));
+  let predicted;
+  try {
+    predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total));
+  } catch (error) {
+    // Some GPUs pass the probe but fail (or lose the device) while running half precision.
+    if (info.variant !== "fp16" || error instanceof RangeError) throw error;
+    console.warn("[Wave2MIDI] fp16 inference failed, retrying with the w16 build", error);
+    await releaseSession();
+    info = await ensureSession({ ...options, modelVariant: "w16" }, progress);
+    info.fallbackReasons = [...(info.fallbackReasons || []), `[fp16 run] ${error?.message || error}`];
+    progress("analyze", 0, windowCount);
+    predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total));
+  }
+  const { probs, T } = predicted;
   const onset = Number(options.onsetThreshold);
   const thresholds = { ...meta.thresholds, ...(onset > 0 && onset < 1 ? { onset } : {}) };
   const notes = decode.decodeNotes(probs, T, meta.classes, thresholds);
@@ -155,6 +238,7 @@ async function transcribe(id, wave, options) {
     seconds,
     elapsed: (performance.now() - started) / 1000,
     provider: info.provider,
+    variant: info.variant,
     thresholds,
     tempo: tempoMap,
     classes: meta.classes.slice(),
@@ -162,6 +246,7 @@ async function transcribe(id, wave, options) {
       id: info.manifest?.id, sha256: info.manifest?.sha256, version: meta.version, step: meta.step,
       author: meta.author || info.manifest?.author || "", license: meta.license?.spdx || info.manifest?.license || "",
       fromCache: info.modelFromCache, stored: info.modelStored,
+      variant: info.variant, compute: info.compute,
     },
   };
 }
@@ -176,10 +261,20 @@ self.onmessage = async event => {
       self.postMessage({ type: "result", id, result }, transfer);
     } else if (type === "preload") {
       const info = await ensureSession(event.data.options || {}, (stage, done, total) => self.postMessage({ type: "progress", id, stage, done, total }));
-      self.postMessage({ type: "result", id, result: { provider: info.provider, model: { id: info.manifest?.id, fromCache: info.modelFromCache, stored: info.modelStored } } });
+      self.postMessage({ type: "result", id, result: {
+        provider: info.provider,
+        variant: info.variant,
+        capabilities: info.capabilities,
+        model: { id: info.manifest?.id, variant: info.variant, compute: info.compute, fromCache: info.modelFromCache, stored: info.modelStored },
+      } });
     } else if (type === "status") {
       const { cache } = await loadLibs();
-      self.postMessage({ type: "result", id, result: await cache.getCacheStatus(new URL("model/", BASE).href) });
+      const { caps, order } = await chooseVariants(event.data.options || {});
+      const status = await cache.getCacheStatus(new URL("model/", BASE).href, order[0]);
+      self.postMessage({ type: "result", id, result: { ...status, capabilities: caps } });
+    } else if (type === "capabilities") {
+      const { caps, order } = await chooseVariants(event.data.options || {});
+      self.postMessage({ type: "result", id, result: { ...caps, variant: order[0] } });
     } else if (type === "clear") {
       const { cache } = await loadLibs();
       self.postMessage({ type: "result", id, result: { removed: await cache.clearCache() } });

@@ -5,8 +5,24 @@
   "author": "startdust-io",
   "license": "MIT",
   "licenseFile": "LICENSE",
-  "file": "mobibard_w2m.onnx",
   "meta": "meta.json",
+  "models": {
+    "fp16": {
+      "file": "wave2mid_fp16.onnx",
+      "bytes": 39099614,
+      "sha256": "b44c7f9357f2a2af5ada86bf342095de58343133a4186caceb839118253c5220",
+      "compute": "fp16",
+      "requires": "webgpu-shader-f16"
+    },
+    "w16": {
+      "file": "wave2mid_w16.onnx",
+      "bytes": 39042933,
+      "sha256": "240a3a8e054d36e1579aa723f7cf9f0ff69fcd097c3c1d1797cfc3aa563241c0",
+      "compute": "fp32"
+    }
+  },
+  "fallback": "w16",
+  "file": "wave2mid_w16.onnx",
   "bytes": 39042933,
   "sha256": "240a3a8e054d36e1579aa723f7cf9f0ff69fcd097c3c1d1797cfc3aa563241c0"
 }

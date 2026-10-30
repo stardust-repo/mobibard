@@ -5,6 +5,11 @@
 // publishing a new model (new sha256 in manifest.json) replaces the old bytes in place.
 // Records are verified by size + SHA-256 on every load; a damaged record is dropped and
 // downloaded again. Usable from both window and worker scopes.
+//
+// manifest.json can list several builds of the same model under "models" (e.g. "fp16" for
+// GPUs with shader-f16, "w16" as the universal fallback). Each build is stored as its own
+// record, so switching between environments never evicts the other build. The fallback build
+// keeps the bare model id, which is the key older versions used, so an existing download is reused.
 
 export const DB_NAME = "mobibard-ai-models";
 export const DB_VERSION = 1;
@@ -106,24 +111,59 @@ async function download(url, expectedBytes, onProgress, cacheMode) {
   return joined;
 }
 
-async function verifiedRecord(record, manifest) {
+/**
+ * Resolves which file to load. Returns { variant, id, file, bytes, sha256, compute }.
+ * A manifest without "models" is the old single-model layout (file/bytes/sha256 at the top level).
+ */
+export function resolveModelEntry(manifest, variant) {
+  const baseId = manifest?.id || "mobibard_m2m";
+  const models = manifest?.models && typeof manifest.models === "object" ? manifest.models : null;
+  if (!models) {
+    if (variant && variant !== "w16" && variant !== "default") {
+      throw new ModelError("model-unavailable", `Model build "${variant}" is not published`);
+    }
+    return { variant: "w16", id: baseId, file: manifest?.file, bytes: manifest?.bytes, sha256: manifest?.sha256, compute: "fp32" };
+  }
+  const fallback = manifest.fallback && models[manifest.fallback] ? manifest.fallback : Object.keys(models)[0];
+  const key = variant && variant !== "default" ? variant : fallback;
+  const entry = models[key];
+  if (!entry?.file) throw new ModelError("model-unavailable", `Model build "${key}" is not published`);
+  return {
+    variant: key,
+    id: key === fallback ? baseId : `${baseId}:${key}`,
+    file: entry.file,
+    bytes: Number(entry.bytes) || 0,
+    sha256: String(entry.sha256 || ""),
+    compute: String(entry.compute || ""),
+  };
+}
+
+function fallbackRecordId(manifest, variant) {
+  const baseId = manifest?.id || "mobibard_m2m";
+  return variant && variant !== "w16" && variant !== "default" ? `${baseId}:${variant}` : baseId;
+}
+
+async function verifiedRecord(record, entry) {
   if (!record?.data) return null;
-  if (manifest && record.sha256 !== manifest.sha256) return null;           // outdated model
+  if (entry && record.sha256 !== entry.sha256) return null;                 // outdated model
   if (record.data.byteLength !== record.bytes) return null;
   const hash = await sha256Hex(record.data);
   return hash === record.sha256 ? record : null;
 }
 
-/** Status without downloading anything. */
-export async function getCacheStatus(baseUrl) {
+/** Status without downloading anything (variant: the build this environment would use). */
+export async function getCacheStatus(baseUrl, variant = "default") {
   let manifest = null;
   try { manifest = await fetchJson(new URL("manifest.json", baseUrl).href); } catch { /* offline */ }
+  let entry = null;
+  try { entry = manifest ? resolveModelEntry(manifest, variant) : null; } catch { entry = null; }
   let record = null;
-  try { record = await readRecord(manifest?.id || "mobibard_m2m"); } catch { /* no storage */ }
+  try { record = await readRecord(entry?.id || fallbackRecordId(manifest, variant)); } catch { /* no storage */ }
   return {
+    variant: entry?.variant || record?.variant || variant,
     cached: !!record?.data,
-    current: !!record?.data && (!manifest || record.sha256 === manifest.sha256),
-    bytes: record?.bytes || manifest?.bytes || 0,
+    current: !!record?.data && (!entry || record.sha256 === entry.sha256),
+    bytes: record?.bytes || entry?.bytes || 0,
     savedAt: record?.savedAt || 0,
     sha256: record?.sha256 || "",
   };
@@ -136,18 +176,21 @@ export async function clearCache() {
 }
 
 /**
- * Returns { bytes: Uint8Array, meta, manifest, fromCache, stored }.
+ * Returns { bytes: Uint8Array, meta, manifest, variant, compute, fromCache, stored }.
+ * variant: a key of manifest.models ("fp16", "w16", …) or "default" for the fallback build.
  * onProgress(stage, loaded, total) with stage "model-check" | "model-download" | "model-store".
  */
-export async function loadModel(baseUrl, onProgress) {
+export async function loadModel(baseUrl, onProgress, { variant = "default" } = {}) {
   onProgress?.("model-check", 0, 0);
   let manifest = null;
   try { manifest = await fetchJson(new URL("manifest.json", baseUrl).href); } catch (error) { /* offline: try cache */ }
-  const id = manifest?.id || "mobibard_m2m";
+  // Offline: no manifest, so the record id is derived from the requested build.
+  const entry = manifest ? resolveModelEntry(manifest, variant) : null;
+  const id = entry?.id || fallbackRecordId(null, variant);
   let record = null;
   try { record = await readRecord(id); } catch { /* storage blocked: download only */ }
   try {
-    const valid = await verifiedRecord(record, manifest);
+    const valid = await verifiedRecord(record, entry);
     if (valid) {
       // meta.json can change without a new model file (version label, thresholds), so refresh it
       // whenever the network is available and keep the stored copy for offline use.
@@ -161,18 +204,22 @@ export async function loadModel(baseUrl, onProgress) {
           }
         } catch { /* offline: stored meta */ }
       }
-      return { bytes: new Uint8Array(valid.data), meta, manifest: manifest || valid.manifest, fromCache: true, stored: true };
+      return {
+        bytes: new Uint8Array(valid.data), meta, manifest: manifest || valid.manifest,
+        variant: entry?.variant || valid.variant || "w16", compute: entry?.compute || valid.compute || "",
+        fromCache: true, stored: true,
+      };
     }
   } catch { /* hash failure -> re-download */ }
   if (!manifest) throw new ModelError("model-unavailable", "Model manifest could not be loaded (offline?)");
 
-  const modelUrl = new URL(manifest.file, baseUrl).href;
-  const progress = (loaded, total) => onProgress?.("model-download", loaded, total || manifest.bytes);
-  let bytes = await download(modelUrl, manifest.bytes, progress, "default");
-  if (bytes.byteLength !== manifest.bytes || await sha256Hex(bytes) !== manifest.sha256) {
+  const modelUrl = new URL(entry.file, baseUrl).href;
+  const progress = (loaded, total) => onProgress?.("model-download", loaded, total || entry.bytes);
+  let bytes = await download(modelUrl, entry.bytes, progress, "default");
+  if (bytes.byteLength !== entry.bytes || await sha256Hex(bytes) !== entry.sha256) {
     // A stale HTTP cache entry can serve the previous model under the same URL.
-    bytes = await download(modelUrl, manifest.bytes, progress, "reload");
-    if (bytes.byteLength !== manifest.bytes || await sha256Hex(bytes) !== manifest.sha256) {
+    bytes = await download(modelUrl, entry.bytes, progress, "reload");
+    if (bytes.byteLength !== entry.bytes || await sha256Hex(bytes) !== entry.sha256) {
       throw new ModelError("model-corrupt", "Downloaded model failed the integrity check");
     }
   }
@@ -182,10 +229,13 @@ export async function loadModel(baseUrl, onProgress) {
   try {
     // Store a standalone ArrayBuffer (structured clone) and drop any previous version of this id.
     const data = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes.buffer : bytes.slice().buffer;
-    await writeRecord({ id, sha256: manifest.sha256, bytes: manifest.bytes, data, meta, manifest, savedAt: Date.now() });
+    await writeRecord({
+      id, variant: entry.variant, compute: entry.compute, sha256: entry.sha256, bytes: entry.bytes,
+      data, meta, manifest, savedAt: Date.now(),
+    });
     stored = true;
   } catch (error) {
     console.warn("[Wave2MIDI] Model could not be stored persistently; it will be downloaded again next time.", error);
   }
-  return { bytes, meta, manifest, fromCache: false, stored };
+  return { bytes, meta, manifest, variant: entry.variant, compute: entry.compute, fromCache: false, stored };
 }

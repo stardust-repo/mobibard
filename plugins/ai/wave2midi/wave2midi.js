@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.8";
+  const VERSION = "1.0.9";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -124,12 +124,12 @@
   /**
    * input: File | Blob | ArrayBuffer | Float32Array (already mono 24 kHz).
    * options: { velocity=true, tempo=true (false: constant 120 BPM, number: fixed BPM), onsetThreshold,
-   *            maxSeconds=600, executionProvider: "auto"|"wasm",
+   *            maxSeconds=600, executionProvider: "auto"|"wasm", modelVariant: "auto"|"fp16"|"w16",
    *            ortSources: string[], onProgress({stage, done, total}), signal }
    * Progress stages: decode, runtime, model-check, model-download, model-store, model-init,
    *                  analyze (done/total windows), velocity, midi.
    * Result: { notes: [[pitch, program(128=drum), onsetSec, offsetSec, confidence]], velocities,
-   *           midi: Uint8Array, seconds, elapsed, provider, thresholds, classes, model, storage }
+   *           midi: Uint8Array, seconds, elapsed, provider, variant ("fp16"|"w16"), thresholds, classes, model, storage }
    */
   async function transcribe(input, options = {}) {
     if (!isSupported()) throw makeError("unsupported", "This browser cannot run Wave2MIDI");
@@ -152,6 +152,7 @@
         onsetThreshold: options.onsetThreshold,
         maxSeconds,
         executionProvider: options.executionProvider || "auto",
+        modelVariant: options.modelVariant || "auto",
         ortSources: options.ortSources,
       },
     }, { onProgress, signal, transfer: [wave.buffer] });
@@ -162,9 +163,18 @@
   /** Download/verify the model and create the session ahead of time. */
   async function preload(options = {}) {
     const storagePromise = requestPersistentStorage();
-    const result = await call("preload", { options: { executionProvider: options.executionProvider || "auto", ortSources: options.ortSources } }, options);
+    const result = await call("preload", { options: {
+      executionProvider: options.executionProvider || "auto",
+      modelVariant: options.modelVariant || "auto",
+      ortSources: options.ortSources,
+    } }, options);
     result.storage = await storagePromise;
     return result;
+  }
+
+  /** Which build this browser would use: { webgpu, shaderF16, adapter, variant: "fp16"|"w16" } (no download). */
+  function getCapabilities(options = {}) {
+    return call("capabilities", { options: { executionProvider: options.executionProvider || "auto", modelVariant: options.modelVariant || "auto" } });
   }
 
   async function getCacheStatus() {
@@ -303,6 +313,7 @@
     transcribe,
     preload,
     getCacheStatus,
+    getCapabilities,
     getModelInfo,
     clearCache,
     requestPersistentStorage,
