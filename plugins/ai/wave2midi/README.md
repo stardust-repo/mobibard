@@ -17,7 +17,7 @@ plugins/ai/wave2midi/
   lib/model-cache.mjs     모델 영구 저장(IndexedDB) + SHA-256 무결성 검사
   model/wave2mid_fp16.onnx  가속용: 16비트 연산 (39 MB). WebGPU + shader-f16 지원 환경에서만 사용
   model/wave2mid_w16.onnx   기본(fallback): 16비트 가중치 / 32비트 연산 (39 MB). 모든 환경
-  model/meta.json         학습 export 메타데이터 (모델 버전 v1.0, 전처리, 임계값, 16개 GM 클래스, velocity 설정)
+  model/meta.json         학습 export 메타데이터 (모델 버전 v1.1, 전처리, 임계값, 16개 GM 클래스, velocity 설정)
   model/manifest.json     모델 이름·버전·제작자·라이선스, 빌드별(models.fp16 / models.w16) 파일명·크기·sha256
   model/LICENSE           모델 라이선스 (MIT, startdust-io)
   vendor/onnxruntime-web/ (선택) 로컬 ONNX Runtime. 없으면 jsDelivr 1.20.1 사용
@@ -33,7 +33,7 @@ Wave2MIDI 모델(`model/mobibard_w2m.onnx`, `model/meta.json`)은 **startdust-io
 - `meta.json`: `author`, `license.spdx`, `license.copyright`, `license.file`
 - `manifest.json`: `name`, `version`, `author`, `license`, `licenseFile`
 - API: `MobibardWave2Midi.getModelInfo()`는 `{ name, version, author, license, licenseUrl }`를 돌려줍니다(모델은 내려받지 않음). `transcribe()` 결과의 `result.model`에도 `author`, `license`가 들어 있습니다.
-- Editor는 오디오 AI 변환 중 진행 패널에 `Wave2MIDI v1.0 · startdust-io · MIT License`를 표시하고 `model/LICENSE`로 연결합니다.
+- Editor는 오디오 AI 변환 중 진행 패널에 `Wave2MIDI v1.1 · startdust-io · MIT License`를 표시하고 `model/LICENSE`로 연결합니다.
 
 ## 사용법
 

@@ -1,15 +1,9 @@
 {
- "name": "mobibard_w2m",
- "full_name": "mobibard_w2m v1.0",
- "architecture": "mobibard_w2m",
- "version": "1.0",
- "author": "startdust-io",
- "license": {
-  "spdx": "MIT",
-  "copyright": "Copyright (c) 2026 startdust-io",
-  "file": "LICENSE"
- },
- "step": 98000,
+ "name": "mobibard_a2m",
+ "full_name": "mobibard_a2m v1.0",
+ "architecture": "mobibard_a2m_v1",
+ "version": "1.0.1",
+ "step": 4000,
  "parameters": 19354341,
  "classes": [
   0,
@@ -30,10 +24,10 @@
   127
  ],
  "thresholds": {
-  "onset": 0.16,
-  "frame": 0.4,
+  "onset": 0.13,
+  "frame": 0.5,
   "offset": 0.5,
-  "drum": 0.2,
+  "drum": 0.1,
   "inst_multi": 0.65,
   "min_frames": 2,
   "inst_frames": 15,
@@ -118,54 +112,66 @@
  },
  "models": {
   "w16": {
-   "file": "wave2mid_w16.onnx",
+   "file": "mobibard_a2m_v1_w16.onnx",
    "mb": 39.0,
    "compute": "fp32",
    "max_diff": {
-    "onset": 0.000541,
-    "frame": 0.000778,
-    "offset": 0.000529,
-    "drum": 0.000692,
-    "inst": 0.000774
+    "onset": 0.00059,
+    "frame": 0.000852,
+    "offset": 0.000376,
+    "drum": 0.000636,
+    "inst": 0.00119
    },
-   "onset_flips_per_positive": 0.00028,
+   "onset_flips_per_positive": 0.00061,
    "demo_note_agreement": 1.0,
-   "cpu_seconds_per_window": 2.1
+   "cpu_seconds_per_window": 2.09
   },
   "fp16": {
-   "file": "wave2mid_fp16.onnx",
+   "file": "mobibard_a2m_v1_fp16.onnx",
    "mb": 39.1,
-   "compute": "fp16"
+   "compute": "fp16",
+   "max_diff": {
+    "onset": 0.00246,
+    "frame": 0.00388,
+    "offset": 0.00138,
+    "drum": 0.00171,
+    "inst": 0.00367
+   },
+   "onset_flips_per_positive": 0.00061,
+   "demo_note_agreement": 1.0,
+   "cpu_seconds_per_window": 2.76
   }
  },
- "precision_check": {
-  "fp32": {
-   "mel": 0.7157,
-   "mel_at_ckpt_threshold": 0.7157,
-   "drum": 0.5641,
-   "mel_inst": 0.4948,
-   "mel_offset": 0.4916,
-   "onset_threshold": 0.16
-  },
-  "w16": {
-   "mel": 0.7157,
-   "mel_at_ckpt_threshold": 0.7157,
-   "drum": 0.5641,
-   "mel_inst": 0.4948,
-   "mel_offset": 0.4916,
-   "onset_threshold": 0.16
-  },
-  "fp16": {
-   "mel": 0.7157,
-   "mel_at_ckpt_threshold": 0.7157,
-   "drum": 0.5641,
-   "mel_inst": 0.4948,
-   "mel_offset": 0.4916,
-   "onset_threshold": 0.16
-  },
-  "max_activation": 4934.9
+ "precision_check": null,
+ "max_activation": 4869.7,
+ "provenance": {
+  "datasets": [
+   {
+    "name": "midi_rwc",
+    "producer": {
+     "tool": "mobibard_a2m",
+     "version": "1.0.1",
+     "method": "audio + MIDI pairs (MIDI = exact answer)"
+    },
+    "license": {
+     "id": "CC-BY-NC-4.0",
+     "noncommercial": true,
+     "attribution": "",
+     "notice": "",
+     "url": ""
+    },
+    "songs": 309
+   }
+  ],
+  "noncommercial": true,
+  "attribution": [],
+  "notices": [],
+  "licenses": [
+   "CC-BY-NC-4.0"
+  ],
+  "unknown": true
  },
- "max_activation": 4932.2,
+ "license_notice": "NON-COMMERCIAL use only | licenses: CC-BY-NC-4.0 | (some labels of unknown provenance)",
  "velocity": {
   "enabled": true,
   "min": 35,
@@ -197,12 +203,12 @@
   "follow_beats": true
  },
  "metrics": {
-  "mel": 0.715563483138806,
-  "mel_inst": 0.4945627839458816,
-  "mel_offset": 0.49157263432729714,
-  "drum": 0.5639409087517719,
-  "all": 0.6905966773516442,
-  "frame": 0.8004757824460936
+  "mel": 0.5545707264010313,
+  "mel_inst": 0.4148757796705982,
+  "mel_offset": 0.2491438701099875,
+  "drum": 0.36439062022386864,
+  "all": 0.5100235414573985,
+  "frame": 0.6430383328180954
  },
- "exported": "2026-10-27 03:59:56"
+ "exported": "2026-10-31 02:05:55"
 }
