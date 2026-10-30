@@ -28,6 +28,7 @@ let libsPromise = null;
 let ortBase = "";
 let session = null;
 let sessionInfo = null;
+let lastJob = null;
 
 function fail(code, message, cause) {
   const error = new Error(message || code);
@@ -209,7 +210,21 @@ async function transcribe(id, wave, options) {
     progress("analyze", 0, windowCount);
     predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total));
   }
-  const { probs, T } = predicted;
+  // The model output is kept so post-processing options (note sensitivity, velocity, tempo) can be
+  // re-applied without running the model again ("postprocess" message). Freed with the worker.
+  lastJob = { probs: predicted.probs, T: predicted.T, wave, seconds, info };
+  return finishTranscription(lastJob, options, progress, started);
+}
+
+// Post-processing: probability maps -> notes -> velocity -> tempo map -> MIDI.
+//   options.onsetThreshold  note sensitivity (lower = more notes); default meta.thresholds.onset
+//   options.velocity        false: constant velocity 100
+//   options.tempo           true/undefined: auto, false: 120 BPM grid, number: that fixed BPM
+//   options.tempoChanges    false: one tempo for the whole song (auto mode only)
+async function finishTranscription(job, options, progress, started = performance.now()) {
+  const { decode, velocity, midi, tempo } = await loadLibs();
+  const { probs, T, wave, seconds, info } = job;
+  const meta = info.meta;
   const onset = Number(options.onsetThreshold);
   const thresholds = { ...meta.thresholds, ...(onset > 0 && onset < 1 ? { onset } : {}) };
   const notes = decode.decodeNotes(probs, T, meta.classes, thresholds);
@@ -227,6 +242,7 @@ async function transcribe(id, wave, options) {
     // Only an explicit number fixes the BPM; true / undefined mean automatic (Number(true) would be 1 BPM).
     const fixed = typeof options.tempo === "number" ? options.tempo : NaN;
     const cfg = { ...(meta.tempo || {}), mode: Number.isFinite(fixed) && fixed > 0 ? fixed : "auto" };
+    if (typeof options.tempoChanges === "boolean") cfg.changes = options.tempoChanges;
     try {
       tempoMap = tempo.tempoMap(notes, seconds, cfg);
     } catch (error) {
@@ -261,6 +277,13 @@ self.onmessage = async event => {
   try {
     if (type === "transcribe") {
       const result = await transcribe(id, event.data.wave, event.data.options || {});
+      const transfer = [result.midi.buffer];
+      if (result.velocities) transfer.push(result.velocities.buffer);
+      self.postMessage({ type: "result", id, result }, transfer);
+    } else if (type === "postprocess") {
+      if (!lastJob) throw fail("no-job", "No transcription to post-process (the worker was released)");
+      const progress = (stage, done = 0, total = 0) => self.postMessage({ type: "progress", id, stage, done, total });
+      const result = await finishTranscription(lastJob, event.data.options || {}, progress);
       const transfer = [result.midi.buffer];
       if (result.velocities) transfer.push(result.velocities.buffer);
       self.postMessage({ type: "result", id, result }, transfer);

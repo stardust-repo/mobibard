@@ -15759,3 +15759,13 @@ body.side-tool-import-active { --inline-detail-width: 170px; }
 }
 #measureEditPanel .measure-edit-mode-tabs button:focus,
 #measureEditPanel .measure-edit-mode-tabs button:focus-visible { outline: none !important; }
+/* 오디오 → MIDI 변환 중: 빈 채널 목록이 공간을 차지하지 않게 해 진행 상자가 목록 위쪽에 보이도록 */
+#midiImportPanel .midi-import-channel-tree:empty { flex: 0 0 0 !important; padding: 0 !important; }
+#midiImportPanel .midi-import-selection-list:not([hidden]) { padding-top: 14px !important; }
+#midiImportPanel .midi-import-channel-tree:empty + .midi-import-selection-list:not([hidden]) { flex: 1 1 0 !important; min-height: 0 !important; }
+/* AI 변환 후처리 옵션 */
+#midiImportDetail .midi-import-sub-check { padding-left: 21px; font-weight: 700; color: var(--muted); }
+#midiImportDetail .midi-import-radio-group > input[type="number"] { width: 100%; min-width: 0; min-height: 26px; box-sizing: border-box; font-size: 11px; color: var(--text); }
+#midiImportDetail .midi-import-radio-group > input[type="number"]:disabled,
+#midiImportDetail .midi-import-check input:disabled + span { opacity: .5; }
+#midiImportDetail .midi-import-audio-settings:not([hidden]) { padding-bottom: 10px !important; border-bottom: 1px solid var(--control-border) !important; margin-bottom: 2px !important; }

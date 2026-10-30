@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.11";
+  const VERSION = "1.0.12";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -182,7 +182,7 @@
 
   /**
    * input: File | Blob | ArrayBuffer | Float32Array (already mono 24 kHz).
-   * options: { velocity=true, tempo=true (false: constant 120 BPM, number: fixed BPM), onsetThreshold,
+   * options: { velocity=true, tempo=true (false: constant 120 BPM, number: fixed BPM), tempoChanges, onsetThreshold,
    *            maxSeconds=600, executionProvider: "auto"|"wasm", modelVariant: "auto"|"fp16"|"w16",
    *            ortSources: string[], onProgress({stage, done, total}), signal }
    * Progress stages: decode, runtime, model-check, model-download, model-store, model-init,
@@ -208,6 +208,7 @@
       options: {
         velocity: options.velocity !== false,
         tempo: options.tempo ?? true,
+        tempoChanges: options.tempoChanges,
         onsetThreshold: options.onsetThreshold,
         maxSeconds,
         executionProvider: options.executionProvider || "auto",
@@ -217,6 +218,37 @@
     }, { onProgress, signal, transfer: [wave.buffer] });
     result.storage = await storagePromise;
     return result;
+  }
+
+  /**
+   * Re-applies post-processing options (onsetThreshold, velocity, tempo, tempoChanges) to the last
+   * transcription without running the model again. Rejects with code "no-job" when the worker was
+   * released in the meantime (idle timeout, abort) — call transcribe() again in that case.
+   */
+  async function postprocess(options = {}) {
+    if (!worker) throw makeError("no-job", "No transcription to post-process");
+    return call("postprocess", { options: {
+      velocity: options.velocity !== false,
+      tempo: options.tempo ?? true,
+      tempoChanges: options.tempoChanges,
+      onsetThreshold: options.onsetThreshold,
+    } }, options);
+  }
+
+  /** Default post-processing values from model/meta.json (no model download). */
+  let defaultsPromise = null;
+  function getPostprocessDefaults() {
+    defaultsPromise ??= fetch(new URL("model/meta.json", BASE).href, { cache: "no-cache" })
+      .then(response => (response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))))
+      .then(meta => Object.freeze({
+        onsetThreshold: Number(meta?.thresholds?.onset) || 0.16,
+        velocity: meta?.velocity?.enabled !== false,
+        tempoChanges: meta?.tempo?.changes !== false,
+        tempoMin: Number(meta?.tempo?.min) || 32,
+        tempoMax: Number(meta?.tempo?.max) || 255,
+      }))
+      .catch(error => { defaultsPromise = null; throw error; });
+    return defaultsPromise;
   }
 
   /** Download/verify the model and create the session ahead of time. */
@@ -371,6 +403,8 @@
     isSupported,
     decodeAudio,
     transcribe,
+    postprocess,
+    getPostprocessDefaults,
     preload,
     getCacheStatus,
     getCapabilities,

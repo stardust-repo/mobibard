@@ -401,6 +401,10 @@
     midiImportSourceLabel: document.querySelector("#midiImportSourceLabel"),
     midiImportSummary: document.querySelector("#midiImportSummary"),
     midiImportLimitChannelsPerInstrument: document.querySelector("#midiImportLimitChannelsPerInstrument"),
+    midiImportAudioControls: document.querySelector("#midiImportAudioControls"),
+    w2mVelocity: document.querySelector("#w2mVelocity"),
+    w2mTempoChanges: document.querySelector("#w2mTempoChanges"),
+    w2mTempoBpm: document.querySelector("#w2mTempoBpm"),
     midiImportChannelLimitInput: document.querySelector("#midiImportChannelLimitInput"),
     importChannelColorMode: document.querySelector("#importChannelColorMode"),
     midiImportMbtPacking: document.querySelector("#midiImportMbtPacking"),
@@ -14380,6 +14384,7 @@
       elements.midiImportSourceLabel.title = state.midiImport.fileName || "";
     }
     if (elements.midiImportMidiControls) elements.midiImportMidiControls.hidden = !isMidi;
+    syncAudioToMidiOptionControls();
     if (elements.midiImportMbtPacking) {
       const showMbtPacking = isMidi && isMbtImportFileName();
       elements.midiImportMbtPacking.hidden = !showMbtPacking;
@@ -14500,6 +14505,7 @@
       case "model-init": return i18nText("audio_midi.stage_model_init");
       case "analyze": return i18nText("audio_midi.stage_analyze", [done, Math.max(total, 1)]);
       case "velocity": return i18nText("audio_midi.stage_velocity");
+      case "tempo": return i18nText("audio_midi.stage_tempo");
       case "midi": return i18nText("audio_midi.stage_midi");
       default: return "";
     }
@@ -14552,16 +14558,108 @@
     if (fraction == null) bar.removeAttribute("value");
     else bar.value = fraction;
     panel.querySelector("span").textContent = String(text || "");
+    // 채널 영역 불러오기에서는 이 상자가 기본으로 숨겨져 있으므로 변환 중에는 보이게 합니다.
+    list.hidden = false;
+    // 화면 하단 진행 알림(토스트형, 진행 막대 포함)으로도 지금 하는 일을 알려 줍니다.
+    window.MobibardWave2Midi?.showProgressNotice?.(`${i18nText("audio_midi.source_label")} · ${String(text || "")}`, fraction);
+  }
+
+  function hideAudioToMidiProgressNotice() {
+    window.MobibardWave2Midi?.hideProgressNotice?.();
+  }
+
+  // ---- AI 변환 후처리 옵션(불러오기 오른쪽 설정): 모델을 다시 돌리지 않고 노트/세기/템포만 다시 계산 ----
+  let audioPostprocessDefaults = { onsetThreshold: 0.16, tempoMin: 32, tempoMax: 255 };
+  void window.MobibardWave2Midi?.getPostprocessDefaults?.().then((defaults) => { audioPostprocessDefaults = defaults; }).catch(() => {});
+  let audioPostprocessTimer = 0;
+  let audioPostprocessToken = 0;
+
+  function getAudioToMidiOptions() {
+    const base = Number(audioPostprocessDefaults.onsetThreshold) || 0.16;
+    const sensitivity = getCheckedRadioValue("w2mSensitivity") || "normal";
+    // 감도가 높을수록 onset 임계값을 낮춰 더 작은 노트까지 잡습니다.
+    const onsetThreshold = sensitivity === "low" ? Math.min(0.9, base * 1.5) : sensitivity === "high" ? base * 0.65 : base;
+    const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
+    const bpm = clamp(Math.round(Number(elements.w2mTempoBpm?.value) || 120), audioPostprocessDefaults.tempoMin || 32, audioPostprocessDefaults.tempoMax || 255);
+    return {
+      onsetThreshold: Number(onsetThreshold.toFixed(4)),
+      velocity: elements.w2mVelocity?.checked !== false,
+      tempo: fixed ? bpm : true,
+      tempoChanges: elements.w2mTempoChanges?.checked !== false,
+    };
+  }
+
+  function syncAudioToMidiOptionControls() {
+    const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
+    if (elements.w2mTempoBpm) elements.w2mTempoBpm.disabled = !fixed;
+    if (elements.w2mTempoChanges) elements.w2mTempoChanges.disabled = fixed;
+    if (elements.midiImportAudioControls) elements.midiImportAudioControls.hidden = state.midiImport.sourceType !== "audio-ai";
+  }
+
+  function scheduleAudioToMidiPostprocess() {
+    syncAudioToMidiOptionControls();
+    if (state.midiImport.sourceType !== "audio-ai") return;
+    window.clearTimeout(audioPostprocessTimer);
+    audioPostprocessTimer = window.setTimeout(() => { void applyAudioToMidiPostprocess(); }, 250);
+  }
+
+  async function applyAudioToMidiPostprocess() {
+    if (state.midiImport.sourceType !== "audio-ai" || !state.midiImport.midiBuffer) return false;
+    if (state.midiImport.busy) { scheduleAudioToMidiPostprocess(); return false; }
+    const api = window.MobibardWave2Midi;
+    const token = ++audioPostprocessToken;
+    const label = i18nText("audio_midi.postprocessing");
+    setMidiImportStatus(label);
+    api?.showProgressNotice?.(`${i18nText("audio_midi.source_label")} · ${label}`, null);
+    try {
+      let result;
+      try {
+        result = await api.postprocess(getAudioToMidiOptions());
+      } catch (error) {
+        if (error?.code !== "no-job") throw error;
+        // 변환 작업자(모델 결과)가 이미 해제됨(일정 시간 미사용) → 같은 음원을 처음부터 다시 변환합니다.
+        if (token === audioPostprocessToken) await rerunAudioToMidiKeepingSettings();
+        return false;
+      }
+      if (token !== audioPostprocessToken) return false;
+      if (!result.notes.length) throw Object.assign(new Error("No notes"), { code: "no-notes" });
+      state.midiImport.midiBuffer = toStandaloneArrayBuffer(result.midi);
+      reparseMidiImportPreview();
+      showToast(i18nText("audio_midi.postprocess_done", [result.notes.length]));
+      return true;
+    } catch (error) {
+      if (token !== audioPostprocessToken) return false;
+      console.error("Audio to MIDI post-processing failed", error);
+      showToast(audioToMidiErrorMessage(error));
+      return false;
+    } finally {
+      if (token === audioPostprocessToken) window.MobibardWave2Midi?.hideProgressNotice?.();
+    }
+  }
+
+  async function rerunAudioToMidiKeepingSettings() {
+    const file = state.midiImport.sourceFile;
+    if (!file) return false;
+    const saved = {
+      quantize: getMidiImportQuantizeDivision(),
+      overlap: getMidiImportOverlapMode(),
+      limit: getMidiImportChannelLimit(),
+      excluded: new Set(state.midiImport.excludedKeys),
+      colorMode: state.midiImport.colorMode,
+    };
+    const ok = await prepareAudioToMidiImportFile(file, { keepSettings: saved });
+    return ok;
   }
 
   function cancelAudioToMidiImport() {
     if (!audioToMidiController) return false;
     audioToMidiController.abort(); // terminates the inference worker
     audioToMidiController = null;
+    hideAudioToMidiProgressNotice();
     return true;
   }
 
-  async function prepareAudioToMidiImportFile(file) {
+  async function prepareAudioToMidiImportFile(file, { keepSettings = null } = {}) {
     if (!file || state.midiImport.busy) return false;
     const api = window.MobibardWave2Midi;
     if (!api?.isSupported?.()) {
@@ -14570,6 +14668,14 @@
     }
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     resetMidiImportState();
+    if (keepSettings) {
+      // 후처리 옵션 변경으로 다시 변환할 때는 사용자가 고른 불러오기 설정을 그대로 둡니다.
+      setMidiImportQuantizeDivision(keepSettings.quantize);
+      setMidiImportOverlapMode(keepSettings.overlap);
+      setMidiImportChannelLimit(keepSettings.limit);
+      state.midiImport.excludedKeys = new Set(keepSettings.excluded);
+      state.midiImport.colorMode = keepSettings.colorMode;
+    }
     const sourceLabel = i18nText("audio_midi.source_label");
     const controller = new AbortController();
     audioToMidiController = controller;
@@ -14579,12 +14685,14 @@
     state.midiImport.fileName = String(file.name || "Audio");
     state.midiImport.sourceType = "audio-ai";
     state.midiImport.sourceLabel = sourceLabel;
-    setMidiImportQuantizeDivision(64);
+    if (!keepSettings) setMidiImportQuantizeDivision(64);
     openMidiImportDialog();
+    syncAudioToMidiOptionControls();
     setMidiImportStatus(describeAudioToMidiProgress({ stage: "decode" }));
     renderAudioToMidiProgressPanel(describeAudioToMidiProgress({ stage: "decode" }));
     try {
       const result = await api.transcribe(file, {
+        ...getAudioToMidiOptions(),
         maxSeconds: AUDIO_TO_MIDI_MAX_MINUTES * 60,
         signal: controller.signal,
         onProgress: (event) => {
@@ -14599,7 +14707,7 @@
       if (!result.notes.length) throw Object.assign(new Error("No notes"), { code: "no-notes" });
       const midiBuffer = toStandaloneArrayBuffer(result.midi);
       const preview = parseMidiArrayBuffer(midiBuffer, state.midiImport.fileName, {
-        quantizeDivision: 64,
+        quantizeDivision: getMidiImportQuantizeDivision(),
         sourceType: "audio-ai",
         sourceLabel,
       });
@@ -14618,9 +14726,11 @@
       state.midiImport.preview = null;
       updateMidiImportDialog();
       setMidiImportStatus(audioToMidiErrorMessage(error), { error: true });
+      showToast(audioToMidiErrorMessage(error));
       return false;
     } finally {
       if (audioToMidiController === controller) audioToMidiController = null;
+      hideAudioToMidiProgressNotice();
     }
   }
 
@@ -31832,6 +31942,15 @@
       scheduleUnifiedTextImportParse();
     });
     document.querySelectorAll('input[type="radio"][name="midiImportOverlap"]').forEach((input) => input.addEventListener("change", updateMidiImportDialog));
+    document.querySelectorAll('input[type="radio"][name="w2mSensitivity"], input[type="radio"][name="w2mTempo"]')
+      .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
+    elements.w2mVelocity?.addEventListener("change", scheduleAudioToMidiPostprocess);
+    elements.w2mTempoChanges?.addEventListener("change", scheduleAudioToMidiPostprocess);
+    elements.w2mTempoBpm?.addEventListener("change", () => {
+      const value = clamp(Math.round(Number(elements.w2mTempoBpm.value) || 120), audioPostprocessDefaults.tempoMin || 32, audioPostprocessDefaults.tempoMax || 255);
+      elements.w2mTempoBpm.value = String(value);
+      scheduleAudioToMidiPostprocess();
+    });
     elements.midiImportLimitChannelsPerInstrument?.addEventListener("change", () => {
       if (elements.midiImportChannelLimitInput) elements.midiImportChannelLimitInput.disabled = !elements.midiImportLimitChannelsPerInstrument.checked;
       updateMidiImportDialog();
