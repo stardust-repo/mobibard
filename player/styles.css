@@ -10131,3 +10131,49 @@ a[class*="button"]:hover {
   padding-left: max(4px, calc(20px - var(--mb-scrollbar-width, 0px))) !important;
   padding-right: max(4px, calc(20px - var(--mb-scrollbar-width, 0px))) !important;
 }
+
+/* 2026-10-30: code tab — original (editable) / applied result (read-only) views. */
+.player-ui .wb-code-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  user-select: none;
+}
+.player-ui .wb-code-view-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent, #416fca); cursor: pointer; }
+.player-ui .wb-code-mode-hint {
+  margin: 6px 2px 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted, #8a93a6);
+}
+.player-ui .wb-code-mode-hint[data-mode="applied"] { color: var(--accent, #416fca); }
+.player-ui .wb-source-editor[hidden] { display: none !important; }
+.player-ui .wb-source-editor .wb-source-textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 260px;
+  height: 430px;
+  border-radius: 0;
+  border-top: 2px solid var(--wb4-channel-color, var(--wb4-accent, #416fca));
+}
+.player-ui .wb6-code-panel[data-code-view="applied"] .wb4-channel-code-editor textarea.highlight-source { cursor: default; }
+.player-ui .wb-code-view-radios { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin-right: 8px; }
+
+/* Narrow screens: radios on their own row, then the counts and the code-help button. */
+@media (max-width: 720px) {
+  .player-ui .wb6-code-panel .wb10-code-tools {
+    flex-wrap: wrap !important;
+    row-gap: 6px !important;
+  }
+  .player-ui .wb6-code-panel .wb10-code-tools .wb-code-view-radios {
+    flex: 0 0 100%;
+    margin-right: 0;
+  }
+}

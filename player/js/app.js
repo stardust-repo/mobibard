@@ -66,6 +66,7 @@
     sourceMeta: {},
     applying: false,
     manualEdited: false,
+    codeViewApplied: false,
     midiAutoTimer: 0,
     applyFrame: 0,
     applyTimer: 0,
@@ -2182,6 +2183,8 @@
       button.textContent = index < 0 ? wb6t("allChannels") : channelLabel(index);
     }));
     if (state.ui.codeHelpButton) state.ui.codeHelpButton.textContent = t("codeHelp");
+    updateCodeModeHint();
+    state.ui.sourceTextarea?.setAttribute("aria-label", t("codeViewSourceLabel"));
     if (state.ui.tutorialButton) state.ui.tutorialButton.textContent = appText("tutorial.open", "튜토리얼");
     updateTutorialLocale();
     if ($("pasteBtn")) $("pasteBtn").textContent = t("pasteMml");
@@ -2384,8 +2387,14 @@
     }
 
     const allChannels = Number(index) < 0;
-    const metricText = allChannels ? mainText : String(mainParts[index] || $(`part${index}`)?.value || "");
-    const charValue = allChannels ? mainText.length : Number(counts[index] || 0);
+    const sourceView = state.activeWorkspaceTab === "code" && !state.codeViewApplied;
+    const sourceParts = sourceView ? normalizeMainToParts(state.sourceMml) : null;
+    const metricText = sourceView
+      ? (allChannels ? String(state.sourceMml || "") : String(sourceParts[index] || ""))
+      : (allChannels ? mainText : String(mainParts[index] || $(`part${index}`)?.value || ""));
+    const charValue = sourceView
+      ? metricText.length
+      : (allChannels ? mainText.length : Number(counts[index] || 0));
     const restValue = (metricText.match(/r(?=\s*(?:\d|\.|&|[a-g<>ovtln#+,;@-]|$))/gi) || []).length;
     const volumeValue = (metricText.match(/v\s*\d+/gi) || []).length;
     const formatMetric = value => Number(value || 0).toLocaleString(document.documentElement.lang || undefined);
@@ -2497,8 +2506,134 @@
       tools.append(state.ui.codeHelpButton);
     }
     state.ui.codeEditorHost = el("div", "wb4-channel-code-editor wb6-channel-code-editor", { id: "wb4ChannelCodeEditor" });
-    panel.append(tools, state.ui.codeEditorHost);
+    // Two views of the code tab: the editable ORIGINAL source, or the read-only RESULT with every
+    // setting applied. Edits only ever go to the original; settings are re-applied on top of it.
+    const viewGroup = el("div", "wb-code-view-radios", { role: "radiogroup", "aria-label": t("codeEdit") });
+    state.ui.codeViewRadios = {};
+    [["source", "codeViewSource", "codeViewSourceRadio"], ["applied", "codeViewApplied", "codeViewAppliedRadio"]].forEach(([mode, key, id]) => {
+      const label = el("label", "wb-code-view-toggle");
+      const input = el("input", "", { type: "radio", name: "codeViewMode", id, value: mode });
+      input.addEventListener("change", () => { if (input.checked) setCodeViewApplied(mode === "applied"); });
+      state.ui.codeViewRadios[mode] = input;
+      label.append(input, keyedText(key, "wb-code-view-toggle-label"));
+      viewGroup.append(label);
+    });
+    tools.prepend(viewGroup);
+    state.ui.sourceEditorHost = el("div", "wb4-channel-code-editor wb6-channel-code-editor wb-source-editor", { id: "wbSourceCodeEditor" });
+    state.ui.sourceTextarea = el("textarea", "wb-source-textarea", { id: "sourceMmlEditor", spellcheck: "false", "aria-label": t("codeViewSourceLabel") });
+    state.ui.sourceTextarea.addEventListener("input", () => { normalizeSourceEditorCase(); scheduleSourceEdit(); });
+    state.ui.sourceTextarea.addEventListener("blur", () => flushSourceEdit());
+    state.ui.sourceEditorHost.append(state.ui.sourceTextarea);
+    panel.append(tools, state.ui.sourceEditorHost, state.ui.codeEditorHost);
     return panel;
+  }
+
+  // ---- code tab: original (editable) / applied (read-only) -------------------------------------
+  function composeSourceMml(parts) {
+    const list = parts.slice(0, 6).map(part => String(part || "").replace(/[\r\n]+/g, "").trim());
+    while (list.length > 1 && !list[list.length - 1]) list.pop();
+    return `MML@${list.join(",")};`;
+  }
+
+  // Same casing rule as the applied result: t / o / l / v commands upper-case, notes lower-case.
+  function normalizeSourceCommandCase(text) {
+    return String(text || "").replace(/[A-Za-z]/g, ch => {
+      const lower = ch.toLowerCase();
+      if ("tolv".includes(lower)) return lower.toUpperCase();
+      if ("rnabcdefg".includes(lower)) return lower;
+      return ch;
+    });
+  }
+
+  function currentSourceEditorText() {
+    const view = state.activeChannelView;
+    const text = view < 0 ? String(state.sourceMml || "") : String(normalizeMainToParts(state.sourceMml)[view] || "");
+    return normalizeSourceCommandCase(text);
+  }
+
+  function normalizeSourceEditorCase() {
+    const area = state.ui.sourceTextarea;
+    if (!area) return;
+    const before = area.value;
+    const after = normalizeSourceCommandCase(before);
+    if (before === after) return;
+    const start = area.selectionStart;
+    const end = area.selectionEnd;
+    area.value = after;
+    try { area.setSelectionRange(start, end); } catch (_) {}
+  }
+
+  function refreshSourceEditor({ force = false } = {}) {
+    const area = state.ui.sourceTextarea;
+    if (!area) return;
+    if (!force && document.activeElement === area) return;
+    const text = currentSourceEditorText();
+    if (area.value !== text) area.value = text;
+  }
+
+  function updateCodeModeHint() {
+    if (!state.ui.codeModeHint) return;
+    state.ui.codeModeHint.textContent = t(state.codeViewApplied ? "codeAppliedHint" : "codeSourceHint");
+    state.ui.codeModeHint.dataset.mode = state.codeViewApplied ? "applied" : "source";
+  }
+
+  function applyCodeViewVisibility() {
+    const applied = Boolean(state.codeViewApplied);
+    if (state.ui.codeEditorHost) state.ui.codeEditorHost.hidden = !applied;
+    if (state.ui.sourceEditorHost) state.ui.sourceEditorHost.hidden = applied;
+    state.ui.workspacePanels?.code?.setAttribute("data-code-view", applied ? "applied" : "source");
+    if (state.ui.codeViewRadios) {
+      state.ui.codeViewRadios.source.checked = !applied;
+      state.ui.codeViewRadios.applied.checked = applied;
+    }
+    updateCodeModeHint();
+    if (!applied) refreshSourceEditor({ force: true });
+  }
+
+  function setCodeViewApplied(applied) {
+    flushSourceEdit();
+    state.codeViewApplied = Boolean(applied);
+    applyCodeViewVisibility();
+    updateChannelCodeCount();
+  }
+
+  let sourceEditTimer = 0;
+  function scheduleSourceEdit() {
+    clearTimeout(sourceEditTimer);
+    sourceEditTimer = setTimeout(flushSourceEdit, 350);
+  }
+
+  function flushSourceEdit() {
+    if (!sourceEditTimer) return;
+    clearTimeout(sourceEditTimer);
+    sourceEditTimer = 0;
+    const area = state.ui.sourceTextarea;
+    if (!area || state.codeViewApplied) return;
+    const view = state.activeChannelView;
+    const parts = normalizeMainToParts(state.sourceMml);
+    let nextParts;
+    if (view < 0) nextParts = normalizeMainToParts(area.value);
+    else {
+      nextParts = parts.slice();
+      nextParts[view] = area.value;
+    }
+    const next = composeSourceMml(nextParts);
+    if (next === state.sourceMml) {
+      updateChannelCodeCount();
+      return;
+    }
+    state.sourceMml = next;
+    state.sourceVersion += 1;
+    state.lastApplySignature = "";
+    state.tempoCleanCount = 0;
+    state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], noteStatsSource: "", noteStats: [], tempoInput: "", tempoResult: null };
+    resetPipelineCache();
+    markPlayerEdited();
+    applyFromSource({ force: true });
+    scheduleChannelCountsUpdate();
+    scheduleCopyRowsRender();
+    scheduleOptionMetricsUpdate();
+    scheduleSessionPersist();
   }
 
   function buildCopyWorkspacePanel() {
@@ -2574,6 +2709,8 @@
     }
     const hiddenTab = document.querySelector(`.tab-btn[data-tab="${panelName}"]`);
     if (hiddenTab) hiddenTab.click();
+    flushSourceEdit();
+    applyCodeViewVisibility();
     updateChannelCodeCount(view);
   }
 
@@ -2610,6 +2747,11 @@
     main.replaceChildren(shell);
     fileToolbar.remove();
     menuCard.remove();
+    // The result text is view/copy only; edits go through the original-source editor.
+    ["mainMml", "part0", "part1", "part2", "part3", "part4", "part5"].forEach(id => {
+      const area = $(id);
+      if (area) { area.readOnly = true; area.setAttribute("aria-readonly", "true"); }
+    });
     activateChannelView(state.activeChannelView);
   }
 
@@ -4080,6 +4222,7 @@
     scheduleChannelCountsUpdate();
     scheduleOptionMetricsUpdate();
     if (preserveEditedSession) scheduleSessionPersist();
+    refreshSourceEditor({ force: true });
   }
 
   function writeResultMml(mml) {
