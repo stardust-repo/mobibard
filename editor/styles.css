@@ -15769,3 +15769,9 @@ body.side-tool-import-active { --inline-detail-width: 170px; }
 #midiImportDetail .midi-import-radio-group > input[type="number"]:disabled,
 #midiImportDetail .midi-import-check input:disabled + span { opacity: .5; }
 #midiImportDetail .midi-import-audio-settings:not([hidden]) { padding-bottom: 10px !important; border-bottom: 1px solid var(--control-border) !important; margin-bottom: 2px !important; }
+#midiImportDetail .midi-import-range-row { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 6px; padding-left: 21px; color: var(--muted); font-size: 10.5px; font-weight: 800; }
+#midiImportDetail .midi-import-range-inputs { display: flex; align-items: center; gap: 3px; min-width: 0; }
+#midiImportDetail .midi-import-range-inputs input { width: 40px; min-width: 0; min-height: 24px; box-sizing: border-box; font-size: 11px; color: var(--text); text-align: center; }
+#midiImportDetail .midi-import-range-inputs input:disabled { opacity: .5; }
+#midiImportDetail .midi-import-range-inputs { flex-wrap: nowrap; white-space: nowrap; }
+#midiImportDetail .midi-import-range-inputs input { width: 32px; padding: 0 2px; flex: 0 0 auto; }

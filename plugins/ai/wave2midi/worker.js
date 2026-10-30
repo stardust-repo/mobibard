@@ -218,7 +218,8 @@ async function transcribe(id, wave, options) {
 
 // Post-processing: probability maps -> notes -> velocity -> tempo map -> MIDI.
 //   options.onsetThreshold  note sensitivity (lower = more notes); default meta.thresholds.onset
-//   options.velocity        false: constant velocity 100
+//   options.velocity        true/undefined: estimated, false: constant 100, number: that fixed velocity (1-127)
+//   options.velocityRange   [min, max] (1-127) range of estimated velocities; default meta.velocity min/max
 //   options.tempo           true/undefined: auto, false: 120 BPM grid, number: that fixed BPM
 //   options.tempoChanges    false: one tempo for the whole song (auto mode only)
 async function finishTranscription(job, options, progress, started = performance.now()) {
@@ -229,9 +230,20 @@ async function finishTranscription(job, options, progress, started = performance
   const thresholds = { ...meta.thresholds, ...(onset > 0 && onset < 1 ? { onset } : {}) };
   const notes = decode.decodeNotes(probs, T, meta.classes, thresholds);
   let velocities = null;
-  if (options.velocity !== false && meta.velocity?.enabled !== false && notes.length) {
+  const fixedVelocity = typeof options.velocity === "number" && options.velocity > 0
+    ? Math.min(127, Math.max(1, Math.round(options.velocity)))
+    : (options.velocity === false ? 100 : 0);
+  if (!fixedVelocity && meta.velocity?.enabled !== false && notes.length) {
     progress("velocity", 0, 0);
-    velocities = velocity.estimateVelocity(wave, notes, meta.velocity);
+    const cfg = { ...meta.velocity };
+    const range = Array.isArray(options.velocityRange) ? options.velocityRange.map(Number) : null;
+    if (range && range.every((value) => Number.isFinite(value))) {
+      const lo = Math.min(127, Math.max(1, Math.round(Math.min(range[0], range[1]))));
+      const hi = Math.min(127, Math.max(1, Math.round(Math.max(range[0], range[1]))));
+      cfg.min = lo;
+      cfg.max = hi;
+    }
+    velocities = velocity.estimateVelocity(wave, notes, cfg);
   }
   // Tempo map from the notes (on by default): the MIDI then carries the detected tempo changes and
   // bar positions instead of a constant 120 BPM grid. options.tempo === false keeps the audio timing at
@@ -251,7 +263,7 @@ async function finishTranscription(job, options, progress, started = performance
     }
   }
   progress("midi", 0, 0);
-  const midiBytes = midi.midiBytes(notes, velocities ?? 100, 480, 120, tempoMap);
+  const midiBytes = midi.midiBytes(notes, velocities ?? (fixedVelocity || 100), 480, 120, tempoMap);
   return {
     notes,
     velocities,

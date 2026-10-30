@@ -402,7 +402,9 @@
     midiImportSummary: document.querySelector("#midiImportSummary"),
     midiImportLimitChannelsPerInstrument: document.querySelector("#midiImportLimitChannelsPerInstrument"),
     midiImportAudioControls: document.querySelector("#midiImportAudioControls"),
-    w2mVelocity: document.querySelector("#w2mVelocity"),
+    w2mVolumeMin: document.querySelector("#w2mVolumeMin"),
+    w2mVolumeMax: document.querySelector("#w2mVolumeMax"),
+    w2mVolumeFixed: document.querySelector("#w2mVolumeFixed"),
     w2mTempoChanges: document.querySelector("#w2mTempoChanges"),
     w2mTempoBpm: document.querySelector("#w2mTempoBpm"),
     midiImportChannelLimitInput: document.querySelector("#midiImportChannelLimitInput"),
@@ -13186,7 +13188,9 @@
     return start + duration;
   }
 
-  function mergeMidiInstrumentNotes(rawNotes) {
+  // reevaluateVelocity: 일반 MIDI는 악기별로 세기 분포를 넓혀 볼륨 차이를 살립니다. AI 변환 결과는
+  // 사용자가 고른 볼륨 범위/고정 볼륨을 그대로 지켜야 하므로 다시 계산하지 않습니다.
+  function mergeMidiInstrumentNotes(rawNotes, { reevaluateVelocity = true } = {}) {
     const duplicateMap = new Map();
     for (const note of rawNotes) {
       const rawStartBeat = getMidiNoteRawStartBeat(note);
@@ -13253,7 +13257,7 @@
         || left.pitch - right.pitch
         || getMidiNoteRawEndBeat(left) - getMidiNoteRawEndBeat(right))
       .map((note, index) => ({ ...note, id: index + 1 }));
-    return reevaluateMidiInstrumentVelocities(merged).map((note) => ({
+    return (reevaluateVelocity ? reevaluateMidiInstrumentVelocities(merged) : merged).map((note) => ({
       ...note,
       volume: velocityToMmlVolume(note.velocity),
     }));
@@ -13495,7 +13499,7 @@
     let mergedDuplicateCount = 0;
     const groups = Array.from(instruments.values())
       .map((instrument, index) => {
-        const notes = mergeMidiInstrumentNotes(instrument.rawNotes);
+        const notes = mergeMidiInstrumentNotes(instrument.rawNotes, { reevaluateVelocity: sourceType !== "audio-ai" });
         mergedDuplicateCount += instrument.rawNotes.length - notes.length;
         const sourceTracks = Array.from(instrument.sourceTracks);
         const sourceTrackIndices = Array.from(instrument.sourceTrackIndices).sort((left, right) => left - right);
@@ -14569,8 +14573,27 @@
   }
 
   // ---- AI 변환 후처리 옵션(불러오기 오른쪽 설정): 모델을 다시 돌리지 않고 노트/세기/템포만 다시 계산 ----
-  let audioPostprocessDefaults = { onsetThreshold: 0.16, tempoMin: 32, tempoMax: 255 };
-  void window.MobibardWave2Midi?.getPostprocessDefaults?.().then((defaults) => { audioPostprocessDefaults = defaults; }).catch(() => {});
+  let audioPostprocessDefaults = { onsetThreshold: 0.16, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
+  void window.MobibardWave2Midi?.getPostprocessDefaults?.().then((defaults) => {
+    audioPostprocessDefaults = defaults;
+    // 모델 기본 세기 범위(예: 35~120)를 편집기 볼륨 단계(V)로 보여 줍니다.
+    if (elements.w2mVolumeMin && !elements.w2mVolumeMin.dataset.touched) elements.w2mVolumeMin.value = String(velocityToMmlVolume(defaults.velocityMin));
+    if (elements.w2mVolumeMax && !elements.w2mVolumeMax.dataset.touched) elements.w2mVolumeMax.value = String(velocityToMmlVolume(defaults.velocityMax));
+  }).catch(() => {});
+
+  // 볼륨 V(1~15) → 이 V로 표시되는 velocity 구간의 시작/끝 (velocityToMmlVolume의 역)
+  function mmlVolumeVelocityBounds(volume) {
+    const v = clamp(Math.round(Number(volume) || 1), 1, 15);
+    if (v === 1) return [1, 1];
+    const start = 2 + (v - 2) * 9;
+    return [start, Math.min(127, start + 8)];
+  }
+
+  function readW2mVolumeInput(input, fallback) {
+    const value = clamp(Math.round(Number(input?.value) || fallback), 1, 15);
+    if (input) input.value = String(value);
+    return value;
+  }
   let audioPostprocessTimer = 0;
   let audioPostprocessToken = 0;
 
@@ -14581,9 +14604,21 @@
     const onsetThreshold = sensitivity === "low" ? Math.min(0.9, base * 1.5) : sensitivity === "high" ? base * 0.65 : base;
     const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
     const bpm = clamp(Math.round(Number(elements.w2mTempoBpm?.value) || 120), audioPostprocessDefaults.tempoMin || 32, audioPostprocessDefaults.tempoMax || 255);
+    const fixedVolume = getCheckedRadioValue("w2mVolume") === "fixed";
+    let velocity = true;
+    let velocityRange;
+    if (fixedVolume) {
+      velocity = mmlVolumeToVelocity(readW2mVolumeInput(elements.w2mVolumeFixed, 12));
+    } else {
+      let low = readW2mVolumeInput(elements.w2mVolumeMin, 5);
+      let high = readW2mVolumeInput(elements.w2mVolumeMax, 15);
+      if (low > high) [low, high] = [high, low];
+      velocityRange = [mmlVolumeVelocityBounds(low)[0], mmlVolumeVelocityBounds(high)[1]];
+    }
     return {
       onsetThreshold: Number(onsetThreshold.toFixed(4)),
-      velocity: elements.w2mVelocity?.checked !== false,
+      velocity,
+      velocityRange,
       tempo: fixed ? bpm : true,
       tempoChanges: elements.w2mTempoChanges?.checked !== false,
     };
@@ -14593,6 +14628,10 @@
     const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
     if (elements.w2mTempoBpm) elements.w2mTempoBpm.disabled = !fixed;
     if (elements.w2mTempoChanges) elements.w2mTempoChanges.disabled = fixed;
+    const fixedVolume = getCheckedRadioValue("w2mVolume") === "fixed";
+    if (elements.w2mVolumeFixed) elements.w2mVolumeFixed.disabled = !fixedVolume;
+    if (elements.w2mVolumeMin) elements.w2mVolumeMin.disabled = fixedVolume;
+    if (elements.w2mVolumeMax) elements.w2mVolumeMax.disabled = fixedVolume;
     if (elements.midiImportAudioControls) elements.midiImportAudioControls.hidden = state.midiImport.sourceType !== "audio-ai";
   }
 
@@ -31501,14 +31540,14 @@
     { id: "basics", steps: 5, figure: "overview" },
     { id: "channels", blocks: [3, 3, 1, 2, 2], figure: "channels" },
     { id: "notes", blocks: [3, 4, 4], figure: "notes" },
-    { id: "volume", blocks: [2, 2, 2], figure: "volume" },
+    { id: "volume", blocks: [2, 2, 3], figure: "volume" },
     { id: "transform", blocks: [3, 3], figure: "transform" },
     { id: "tempo", blocks: [2, 3, 1], figure: "tempo" },
     { id: "events", blocks: [2, 1, 1, 1], figure: "events" },
     { id: "measure", blocks: [4, 2], figure: "measure" },
     { id: "parts", blocks: [2, 2], figure: "parts" },
-    { id: "import", blocks: [3, 2, 1], figure: "import" },
-    { id: "export", blocks: [3, 1, 2], figure: "export" },
+    { id: "import", blocks: [5, 2, 1, 3], figure: "import" },
+    { id: "export", blocks: [4, 2, 2], figure: "export" },
   ]);
   // Callout positions (percent of the 1280×720 capture) for the basics steps 1–5:
   // ＋ button, Note tool, piano roll, play button, File menu.
@@ -31642,7 +31681,7 @@
           <div class="gf-panel gf-channels">
             ${[["2", "guide.fig.melody", "#2f7de1", "412"], ["3", "guide.fig.chord", "#d0475b", "388"], ["1", "guide.fig.bass", "#2fa36b", "205"]].map(([order, key, color, chars]) => `<div class="gf-row gf-row-channel" style="--c:${color}"><span class="gf-name">${t(key)}</span><small>${t("guide.fig.chars", [chars])}</small><span class="gf-order">${order}</span></div>`).join("")}
           </div>
-          <div class="gf-panel gf-copy"><div class="gf-copy-row"><b>${t("mml_export.copy_all")}</b><span class="gf-btn">${t("copy")}</span></div><div class="gf-copy-row is-muted"><b>${t("mml_export.copy_by_part")}</b><span class="gf-btn">P1</span><span class="gf-btn">P2</span></div></div>
+          <div class="gf-panel gf-copy"><div class="gf-copy-row"><b>${t("mml_export.copy_all")}</b><span class="gf-btn">${t("copy")}</span></div><div class="gf-copy-row is-muted"><b>${t("mml_export.copy_by_part")}</b><span class="gf-btn">P1</span><span class="gf-btn">P2</span></div><div class="gf-copy-row"><b>MMI</b><span class="gf-btn">${t("mml_export.mmi_export")}</span></div></div>
         </div>`;
       default:
         return "";
@@ -31942,9 +31981,13 @@
       scheduleUnifiedTextImportParse();
     });
     document.querySelectorAll('input[type="radio"][name="midiImportOverlap"]').forEach((input) => input.addEventListener("change", updateMidiImportDialog));
-    document.querySelectorAll('input[type="radio"][name="w2mSensitivity"], input[type="radio"][name="w2mTempo"]')
+    document.querySelectorAll('input[type="radio"][name="w2mSensitivity"], input[type="radio"][name="w2mTempo"], input[type="radio"][name="w2mVolume"]')
       .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
-    elements.w2mVelocity?.addEventListener("change", scheduleAudioToMidiPostprocess);
+    [elements.w2mVolumeMin, elements.w2mVolumeMax, elements.w2mVolumeFixed].forEach((input) => input?.addEventListener("change", () => {
+      input.dataset.touched = "1";
+      readW2mVolumeInput(input, input === elements.w2mVolumeMin ? 5 : input === elements.w2mVolumeMax ? 15 : 12);
+      scheduleAudioToMidiPostprocess();
+    }));
     elements.w2mTempoChanges?.addEventListener("change", scheduleAudioToMidiPostprocess);
     elements.w2mTempoBpm?.addEventListener("change", () => {
       const value = clamp(Math.round(Number(elements.w2mTempoBpm.value) || 120), audioPostprocessDefaults.tempoMin || 32, audioPostprocessDefaults.tempoMax || 255);

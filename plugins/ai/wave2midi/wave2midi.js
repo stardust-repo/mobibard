@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.12";
+  const VERSION = "1.0.13";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -182,7 +182,8 @@
 
   /**
    * input: File | Blob | ArrayBuffer | Float32Array (already mono 24 kHz).
-   * options: { velocity=true, tempo=true (false: constant 120 BPM, number: fixed BPM), tempoChanges, onsetThreshold,
+   * options: { velocity=true (false: constant 100, number: fixed velocity), velocityRange=[min,max],
+   *            tempo=true (false: constant 120 BPM, number: fixed BPM), tempoChanges, onsetThreshold,
    *            maxSeconds=600, executionProvider: "auto"|"wasm", modelVariant: "auto"|"fp16"|"w16",
    *            ortSources: string[], onProgress({stage, done, total}), signal }
    * Progress stages: decode, runtime, model-check, model-download, model-store, model-init,
@@ -206,7 +207,8 @@
     const result = await call("transcribe", {
       wave,
       options: {
-        velocity: options.velocity !== false,
+        velocity: options.velocity ?? true,
+        velocityRange: options.velocityRange,
         tempo: options.tempo ?? true,
         tempoChanges: options.tempoChanges,
         onsetThreshold: options.onsetThreshold,
@@ -221,14 +223,15 @@
   }
 
   /**
-   * Re-applies post-processing options (onsetThreshold, velocity, tempo, tempoChanges) to the last
+   * Re-applies post-processing options (onsetThreshold, velocity, velocityRange, tempo, tempoChanges) to the last
    * transcription without running the model again. Rejects with code "no-job" when the worker was
    * released in the meantime (idle timeout, abort) — call transcribe() again in that case.
    */
   async function postprocess(options = {}) {
     if (!worker) throw makeError("no-job", "No transcription to post-process");
     return call("postprocess", { options: {
-      velocity: options.velocity !== false,
+      velocity: options.velocity ?? true,
+      velocityRange: options.velocityRange,
       tempo: options.tempo ?? true,
       tempoChanges: options.tempoChanges,
       onsetThreshold: options.onsetThreshold,
@@ -243,6 +246,8 @@
       .then(meta => Object.freeze({
         onsetThreshold: Number(meta?.thresholds?.onset) || 0.16,
         velocity: meta?.velocity?.enabled !== false,
+        velocityMin: Number(meta?.velocity?.min) || 35,
+        velocityMax: Number(meta?.velocity?.max) || 120,
         tempoChanges: meta?.tempo?.changes !== false,
         tempoMin: Number(meta?.tempo?.min) || 32,
         tempoMax: Number(meta?.tempo?.max) || 255,

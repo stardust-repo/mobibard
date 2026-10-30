@@ -43,8 +43,10 @@ Wave2MIDI 모델(`model/mobibard_w2m.onnx`, `model/meta.json`)은 **startdust-io
 
 ```js
 const result = await MobibardWave2Midi.transcribe(file, {
-  velocity: true,              // false면 velocity 100 고정
+  velocity: true,              // true: 자동 추정, false: 100 고정, 숫자(1~127): 그 값으로 고정
+  velocityRange: [35, 120],    // 자동 추정 때 세기 범위(기본값은 meta.velocity.min/max)
   tempo: true,                 // 기본: 노트로 템포 맵 추정. false면 120 BPM 고정, 숫자면 그 BPM으로 고정
+  tempoChanges: true,          // 자동 추정 때 곡 중간 템포 변화 반영 여부
   onsetThreshold: undefined,   // 기본값은 meta.thresholds.onset (0.16)
   onProgress: ({ stage, done, total }) => {},
   signal: abortController.signal,
@@ -64,6 +66,11 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
   - 강제로 CPU를 쓰려면 `executionProvider: "wasm"`(항상 w16), 빌드를 고정하려면 `modelVariant: "fp16" | "w16"`을 넘기세요.
   - `MobibardWave2Midi.getCapabilities()`는 모델을 받지 않고 `{ webgpu, shaderF16, adapter, variant }`를 돌려줍니다. `transcribe()` 결과의 `result.variant`와 `result.model.variant`에 실제 사용한 빌드가 들어 있습니다.
 - Worker는 마지막 사용 뒤 3분이 지나면 종료되어 메모리를 돌려줍니다. 다음 호출 때 모델은 IndexedDB에서 다시 불러옵니다.
+
+### 후처리 다시 적용 (1.0.12~)
+
+- `postprocess({ onsetThreshold, velocity, velocityRange, tempo, tempoChanges })`: 마지막 변환의 모델 출력으로 노트·세기·템포·MIDI만 다시 계산합니다(모델을 다시 돌리지 않음). Worker가 해제된 뒤에는 `error.code === "no-job"`으로 실패하므로 `transcribe()`를 다시 호출하세요.
+- `getPostprocessDefaults()`: `model/meta.json`의 기본값 `{ onsetThreshold, velocity, velocityMin, velocityMax, tempoChanges, tempoMin, tempoMax }` (모델은 내려받지 않음).
 
 ### UI 보조 함수 (1.0.4)
 
