@@ -15881,3 +15881,54 @@ body.midi-input-recording #playheadTimeLabel { background: #e5484d; }
 .midi-input-monitor-signals li.is-recorded em { color: #22a06b; font-weight: 700; }
 .midi-input-monitor-signals li.is-warn { border-left-color: #d97706; }
 .midi-input-monitor-signals li.is-warn em { color: #d97706; font-weight: 700; }
+
+/* MIDI 입력: 메트로놈 · 카운트인 · 기록 보정 */
+.midi-input-metro, .midi-input-offset { display: grid; gap: 4px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--control-border) 60%, transparent); }
+.midi-input-inline-field { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-weight: 700; min-width: 0; }
+.midi-input-inline-field select { min-height: 22px; font-size: 11px; }
+.midi-input-inline-field input[type="range"] { width: 72px; margin: 0; }
+.midi-input-offset-title { color: var(--muted); font-weight: 800; }
+.midi-input-offset-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px max-content; align-items: center; gap: 5px; color: var(--muted); font-weight: 700; }
+.midi-input-offset-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.midi-input-offset-row input { min-width: 0; min-height: 22px; font-size: 11px; text-align: right; }
+.midi-metronome-hud {
+  position: fixed; top: 74px; left: 50%; z-index: 90; transform: translateX(-50%);
+  display: none; flex-direction: column; align-items: center; gap: 4px; padding: 8px 16px;
+  border: 1px solid var(--control-border); border-radius: 12px; pointer-events: none;
+  background: color-mix(in srgb, var(--panel) 92%, transparent); color: var(--text);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .28);
+}
+.midi-metronome-hud.is-visible { display: flex; }
+.midi-metronome-label { font-size: 11px; font-weight: 800; color: var(--muted); }
+.midi-metronome-label:empty, .midi-metronome-number:empty { display: none; }
+.midi-metronome-number { font-size: 42px; line-height: 1; font-weight: 900; color: #e5484d; }
+.midi-metronome-lamps { display: flex; gap: 7px; }
+.midi-metronome-lamp { width: 14px; height: 14px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 35%, transparent); transition: background .06s, transform .06s; }
+.midi-metronome-lamp.is-accent { box-shadow: 0 0 0 2px color-mix(in srgb, #e5484d 55%, transparent); }
+.midi-metronome-lamp.is-on { background: var(--accent); transform: scale(1.25); }
+.midi-metronome-lamp.is-accent.is-on { background: #e5484d; }
+.midi-metronome-hud.is-pulse { animation: midi-metronome-pulse .16s ease-out; }
+@keyframes midi-metronome-pulse { from { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 45%, transparent), 0 6px 22px rgba(0,0,0,.28); } to { box-shadow: 0 6px 22px rgba(0,0,0,.28); } }
+
+/* MIDI 입력 설정 팝업 */
+.midi-input-settings-dialog { width: min(440px, calc(100vw - 24px)); max-height: min(720px, calc(100dvh - 24px)); display: flex; flex-direction: column; }
+.midi-input-settings-host { min-height: 0; overflow: auto; }
+.midi-input-settings-body { display: grid; gap: 12px; padding: 6px 14px 12px; font-size: 12px; }
+.midi-input-settings-section { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid color-mix(in srgb, var(--control-border) 55%, transparent); }
+.midi-input-settings-section:last-child { border-bottom: 0; padding-bottom: 0; }
+.midi-input-settings-section-title { color: var(--text); font-size: 12px; font-weight: 800; }
+.midi-input-settings-body .midi-input-metro, .midi-input-settings-body .midi-input-offset { border-top: 0; padding-top: 0; }
+.midi-input-settings-body .midi-input-hint { font-size: 11px; }
+.midi-input-settings-body .midi-input-instrument select { min-height: 28px; font-size: 12px; }
+.midi-input-metro-toggle.is-on { border-color: color-mix(in srgb, var(--accent) 60%, var(--control-border)); color: var(--text); background: color-mix(in srgb, var(--accent) 16%, var(--control-bg)); }
+.midi-input-metro-toggle:not(.is-on) { color: var(--muted); }
+.midi-input-settings-button { margin-left: auto; padding: 0 7px; }
+.midi-input-bottom-offset { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.midi-input-bottom-offset[hidden] { display: none; }
+.midi-input-bottom-offset input { width: 64px; min-height: 22px; font-size: 11px; text-align: right; }
+.channel-summary.is-midi-offset > :not(.midi-input-bottom-offset) { display: none !important; }
+.channel-summary.is-midi-offset { width: 100%; }
+.midi-input-bottom-offset { width: 100%; flex-wrap: nowrap; gap: 5px; }
+.midi-input-bottom-offset input { flex: 1 1 56px; width: auto; min-width: 40px; }
+.midi-input-bottom-offset > span { flex: 0 0 auto; white-space: nowrap; }
+.midi-input-bottom-offset .midi-input-connect-button { white-space: nowrap; }

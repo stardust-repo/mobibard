@@ -9693,7 +9693,7 @@
       const doubleClick = state.channelEdit.lastClickGroupId === s.id && now - state.channelEdit.lastClickGroupAt <= 360;
       state.channelEdit.lastClickGroupId = doubleClick ? null : s.id;
       state.channelEdit.lastClickGroupAt = doubleClick ? 0 : now;
-      if (doubleClick) openChannelGroupDialog(s.id);
+      if (doubleClick) { if (isMidiInputGroup(getChannelGroupById(s.id))) openMidiInputSettingsDialog(); else openChannelGroupDialog(s.id); }
       else { scheduleAutosave(250); restoreItemTreeFocus({ kind: s.kind, id: s.id }, s.container); }
     } else {
       const doubleClick = state.channelEdit.lastClickChannelId === s.id && now - state.channelEdit.lastClickAt <= 360;
@@ -11380,7 +11380,7 @@
 
     // 삭제 모드에서는 채널/그룹을 선택해 노트를 확인할 수만 있고,
     // 악기 프리셋 자체는 변경할 수 없도록 콤보박스를 잠급니다.
-    if (elements.channelInstrumentSelect) elements.channelInstrumentSelect.disabled = deleteMode || isMidiInputEditTarget();
+    if (elements.channelInstrumentSelect) elements.channelInstrumentSelect.disabled = deleteMode || (isMidiInputEditTarget() && state.selectedChannelGroupId == null);
     if (elements.channelEditInstrumentSelect) elements.channelEditInstrumentSelect.disabled = deleteMode;
     const renderChannelItem = (channel, index, { groupChild = false } = {}) => {
       const active = state.activePanel === "notes" && state.selectedChannelGroupId == null && index === state.activeChannel;
@@ -11539,9 +11539,7 @@
         );
       } else {
         actions.append(
-          midiInputGroup
-            ? createAction({ kind: "midi-record", active: midiInputRuntime.recording, label: i18nText(midiInputRuntime.recording ? "midi_input.stop_title" : "midi_input.record_title"), title: i18nText(midiInputRuntime.recording ? "midi_input.stop_title" : "midi_input.record_title"), textContent: "●", onClick: () => toggleMidiInputRecording() })
-            : createAction({ kind: "mml", active: false, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) }),
+          ...(midiInputGroup ? [] : [createAction({ kind: "mml", active: false, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) })]),
           createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? i18nText("ui.visibility_solo_off_named", [group.name]) : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? i18nText("ui.visibility_solo_off") : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), sweep: !visibilitySolo, sweepId: group.id, rightSweepKind: "visibility-solo" }),
           createAction({ kind: "mute", active: Boolean(group.muted), solo, label: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText(group.muted ? "group.unmute_named" : "group.mute_named", [group.name]), title: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText("channel.mute_context_solo", [i18nText(group.muted ? "ui.unmute" : "ui.mute")]), onClick: () => solo ? setChannelGroupSoloById(group.id, false) : setChannelGroupMutedById(group.id, !group.muted), sweep: !solo, sweepId: group.id, rightSweepKind: "mute-solo" }),
         );
@@ -12904,7 +12902,12 @@
       elements.channelTitle.textContent = selectedGroup.name;
       if (elements.channelNameInput.value !== selectedGroup.name) elements.channelNameInput.value = selectedGroup.name;
       updateChannelColorControl(getChannelGroupHue(selectedGroup, state.channelGroups.indexOf(selectedGroup)));
-      configureInstrumentSelectForGroup(elements.channelInstrumentSelect, selectedGroup);
+      if (elements.channelInstrumentSelect) elements.channelInstrumentSelect.disabled = isChannelDeleteModeActive();
+      if (isMidiInputGroup(selectedGroup)) configureMidiInputDefaultInstrumentSelect(elements.channelInstrumentSelect);
+      else {
+        setChannelInstrumentControlLabel(i18nText("instrument.text"));
+        configureInstrumentSelectForGroup(elements.channelInstrumentSelect, selectedGroup);
+      }
       updateChannelInfo();
       updateChannelMergeModeUi();
       return;
@@ -12921,9 +12924,31 @@
     }
     const activeHue = getChannelHue(channel, state.activeChannel);
     updateChannelColorControl(activeHue);
+    setChannelInstrumentControlLabel(i18nText("instrument.text"));
+    if (elements.channelInstrumentSelect) elements.channelInstrumentSelect.disabled = isChannelDeleteModeActive() || isMidiInputChannel(channel);
     configureInstrumentSelectForChannel(elements.channelInstrumentSelect, channel);
     updateChannelInfo();
     updateChannelMergeModeUi();
+  }
+
+  function setChannelInstrumentControlLabel(text) {
+    const label = elements.channelInstrumentSelect?.closest("label")?.querySelector("span");
+    if (label && label.textContent !== text) label.textContent = text;
+    if (elements.channelInstrumentSelect && text === i18nText("instrument.text")) elements.channelInstrumentSelect.title = "";
+  }
+
+  // 맨 아래 설정 줄: MIDI 입력 항목에서는 새 악기가 처음 생길 때 쓸 "기본 악기"를 고릅니다.
+  function configureMidiInputDefaultInstrumentSelect(select) {
+    if (!select) return;
+    setChannelInstrumentControlLabel(i18nText("midi_input.default_instrument"));
+    select.title = i18nText("midi_input.default_instrument_hint");
+    populateChannelInstrumentSelect();
+    for (let index = select.options.length - 1; index >= 0; index -= 1) {
+      if (String(select.options[index].value || "") === "") select.remove(index);
+    }
+    const current = getMidiInputDefaultPreset();
+    const key = editorPresetKey(current.bank, current.preset);
+    if ([...select.options].some((option) => option.value === key)) select.value = key;
   }
 
   function setMidiReferenceStatus(label, mode = "") {
@@ -16372,18 +16397,24 @@
   function updateChannelInfo() {
     const selectedGroup = state.activePanel === "notes" ? getChannelGroupById(state.selectedChannelGroupId) : null;
     const channel = state.activePanel === "notes" && !selectedGroup ? state.channels[state.activeChannel] : null;
+    syncMidiInputBottomOffset(Boolean((selectedGroup && isMidiInputGroup(selectedGroup)) || (channel && isMidiInputChannel(channel))));
     const partRanges = getTimelinePartRanges();
     const hasMultipleTimelineParts = partRanges.length >= 2;
     const currentPartRange = getTimelinePartRangeAtBeat(state.playhead.beat);
     const currentPartNumber = getTimelinePartIndexAtBeat(state.playhead.beat) + 1;
 
-    const setSummary = ({ totalChars = 0, partChars = 0, groupMode = false, channelCount = 0, selectedCount = 0, totalTitle = "", partTitle = "" } = {}) => {
-      if (elements.infoCharLabel) elements.infoCharLabel.textContent = i18nText("info.total_label");
+    const setSummary = ({ totalChars = 0, partChars = 0, groupMode = false, channelCount = 0, selectedCount = 0, totalTitle = "", partTitle = "", totalLabel = "", unit = "", selectionLabel = "", hidePart = false } = {}) => {
+      const unitNode = elements.infoCharCount?.nextElementSibling;
+      if (unitNode) {
+        if (unitNode.dataset.defaultText == null) unitNode.dataset.defaultText = unitNode.textContent;
+        unitNode.textContent = unit || unitNode.dataset.defaultText;
+      }
+      if (elements.infoCharLabel) elements.infoCharLabel.textContent = totalLabel || i18nText("info.total_label");
       if (elements.infoCharCount) {
         elements.infoCharCount.textContent = Math.max(0, Number(totalChars) || 0).toLocaleString();
         elements.infoCharCount.title = totalTitle;
       }
-      if (elements.infoPartItem) elements.infoPartItem.hidden = !hasMultipleTimelineParts;
+      if (elements.infoPartItem) elements.infoPartItem.hidden = !hasMultipleTimelineParts || hidePart;
       if (elements.infoPartLabel) {
         elements.infoPartLabel.textContent = groupMode
           ? i18nText("info.part_max", [currentPartNumber])
@@ -16393,13 +16424,24 @@
         elements.infoPartCount.textContent = Math.max(0, Number(partChars) || 0).toLocaleString();
         elements.infoPartCount.title = partTitle;
       }
-      if (elements.infoSelectionLabel) elements.infoSelectionLabel.textContent = groupMode ? "채널" : "선택";
+      if (elements.infoSelectionLabel) elements.infoSelectionLabel.textContent = selectionLabel || (groupMode ? "채널" : "선택");
       if (elements.infoSelectionCount) {
         const count = groupMode ? channelCount : selectedCount;
         elements.infoSelectionCount.textContent = Math.max(0, Number(count) || 0).toLocaleString();
         elements.infoSelectionCount.title = i18nText(groupMode ? "info.group_channel_count" : "info.selected_note_count");
       }
     };
+
+    if (selectedGroup && isMidiInputGroup(selectedGroup)) {
+      if (elements.noteVolumeButton) {
+        elements.noteVolumeButton.disabled = true;
+        elements.noteVolumeButton.textContent = "V";
+        elements.noteVolumeButton.title = i18nText("channel.select_edit_note");
+      }
+      updatePlaybackTimeInfo();
+      updateEditMenuState();
+      return;
+    }
 
     if (selectedGroup) {
       const members = getChannelGroupMembers(selectedGroup);
@@ -16438,6 +16480,16 @@
     }
 
     const selected = getSelectedNotes();
+    if (isMidiInputChannel(channel)) {
+      if (elements.noteVolumeButton) {
+        elements.noteVolumeButton.disabled = true;
+        elements.noteVolumeButton.textContent = "V";
+        elements.noteVolumeButton.title = i18nText("midi_input.readonly");
+      }
+      updatePlaybackTimeInfo();
+      updateEditMenuState();
+      return;
+    }
     const totalChars = getMmlChannelCharacterCount(channel);
     const partChars = currentPartRange ? getMmlChannelCharacterCountInRange(channel, currentPartRange) : totalChars;
     setSummary({
@@ -18705,6 +18757,7 @@
   // 구조: "MIDI 입력" 그룹(group.midiInput = true) 아래에 악기별 하위 채널(channel.midiInput = { key })이 생깁니다.
   // 하위 채널은 화음·겹침을 그대로 담는 읽기 전용 원본이며, 삭제와 복사·병합(다른 채널로 가져가기)만 할 수 있습니다.
   const MIDI_INPUT_STORAGE_KEY = "mobibard.editor.midiInput.v1";
+  const MIDI_INPUT_OFFSET_LIMIT = 500;
   const midiInputRuntime = {
     status: "idle", // idle | requesting | unsupported | denied | ready
     access: null,
@@ -18737,6 +18790,18 @@
     monitorPaintPending: false,
     heldPitches: new Map(), // pitch -> 누르고 있는 수 (왼쪽 건반 표시)
     keyboardPaintPending: false,
+    // 메트로놈·카운트인·기록 보정
+    metronome: { enabled: true, sound: true, visual: true, countIn: 1, volume: 0.6 },
+    offsets: new Map(), // deviceKey -> 기록 보정(ms, +면 노트를 앞당김)
+    countInUntilPerf: 0,
+    countInActive: false,
+    clockCtx0: 0, // 자체 시계 기준: 기록 시작 오디오 시각 ↔ clockSeconds0
+    clockSeconds0: 0,
+    metroTimer: 0,
+    metroNextBeat: 0,
+    metroNodes: [],
+    metroVisualTimers: new Set(),
+    calibration: null,
   };
 
   // ---- 임시 진단 로그: MIDI 입력 문제 확인용(메모리에만 보관, "로그 저장"으로 내려받기) ----
@@ -18806,6 +18871,19 @@
         if (Array.isArray(raw.disabledDeviceKeys)) raw.disabledDeviceKeys.forEach((key) => midiInputRuntime.disabledDeviceKeys.add(String(key)));
         if (typeof raw.defaultPresetKey === "string") midiInputRuntime.defaultPresetKey = raw.defaultPresetKey;
         if (typeof raw.playAlong === "boolean") midiInputRuntime.playAlong = raw.playAlong;
+        if (raw.metronome && typeof raw.metronome === "object") {
+          const metro = midiInputRuntime.metronome;
+          if (typeof raw.metronome.enabled === "boolean") metro.enabled = raw.metronome.enabled;
+          if (typeof raw.metronome.sound === "boolean") metro.sound = raw.metronome.sound;
+          if (typeof raw.metronome.visual === "boolean") metro.visual = raw.metronome.visual;
+          if ([0, 1, 2].includes(Number(raw.metronome.countIn))) metro.countIn = Number(raw.metronome.countIn);
+          if (Number.isFinite(Number(raw.metronome.volume))) metro.volume = Math.min(1, Math.max(0, Number(raw.metronome.volume)));
+        }
+        if (raw.offsets && typeof raw.offsets === "object") {
+          for (const [key, value] of Object.entries(raw.offsets)) {
+            if (Number.isFinite(Number(value))) midiInputRuntime.offsets.set(String(key), clamp(Math.round(Number(value)), -MIDI_INPUT_OFFSET_LIMIT, MIDI_INPUT_OFFSET_LIMIT));
+          }
+        }
       }
     } catch { /* storage blocked */ }
   })();
@@ -18816,6 +18894,8 @@
         disabledDeviceKeys: [...midiInputRuntime.disabledDeviceKeys],
         defaultPresetKey: midiInputRuntime.defaultPresetKey,
         playAlong: midiInputRuntime.playAlong,
+        metronome: { ...midiInputRuntime.metronome },
+        offsets: Object.fromEntries(midiInputRuntime.offsets),
       }));
     } catch { /* storage blocked */ }
   }
@@ -19152,12 +19232,375 @@
     return midiInputRuntime.anchorSeconds + Math.max(0, now - midiInputRuntime.anchorPerf) / 1000 * rate;
   }
 
-  function getMidiInputBeatAt(timeStamp) {
+  // timeStamp가 있으면 장치 신호가 도착한 시각을 기준으로 하고, deviceKey가 있으면 그 장치의 기록 보정(ms)을 반영합니다.
+  function getMidiInputBeatAt(timeStamp, deviceKey = null) {
     const rate = Math.max(0.01, Number(state.playbackRate) || 1);
     const now = performance.now();
-    const lag = Number.isFinite(Number(timeStamp)) && Number(timeStamp) > 0 ? Math.max(0, now - Number(timeStamp)) : 0;
-    const seconds = getMidiInputNowSeconds() - Math.min(lag, 250) / 1000 * rate;
-    return Math.max(0, secondsToBeatInTempoMap(seconds, midiInputRuntime.tempoMap));
+    const hasStamp = Number.isFinite(Number(timeStamp)) && Number(timeStamp) > 0;
+    const lag = hasStamp ? Math.max(0, now - Number(timeStamp)) : 0;
+    const offsetMs = hasStamp && deviceKey != null ? getMidiInputOffsetMs(deviceKey) : 0;
+    const seconds = getMidiInputNowSeconds() - Math.min(lag, 250) / 1000 * rate - offsetMs / 1000 * rate;
+    return Math.max(midiInputRuntime.startBeat || 0, secondsToBeatInTempoMap(seconds, midiInputRuntime.tempoMap));
+  }
+
+  // ---- 기록 보정(ms) ----
+  function getMidiInputOffsetMs(deviceKey) {
+    return midiInputRuntime.offsets.get(String(deviceKey)) || 0;
+  }
+
+  function setMidiInputOffsetMs(deviceKey, value) {
+    const ms = clamp(Math.round(Number(value) || 0), -MIDI_INPUT_OFFSET_LIMIT, MIDI_INPUT_OFFSET_LIMIT);
+    if (ms) midiInputRuntime.offsets.set(String(deviceKey), ms);
+    else midiInputRuntime.offsets.delete(String(deviceKey));
+    saveMidiInputSettings();
+    midiLog("offset-set", { deviceKey, ms });
+    if (isMidiInputEditTarget()) syncMidiInputBottomOffset(true);
+    return ms;
+  }
+
+  // 맨 아래 정보 줄: MIDI 입력 항목을 선택하면 글자 수 대신 기록 보정(오프셋) 입력칸을 보여 줍니다.
+  // 장치별 값은 팝업에서, 여기서는 연결된 장치 전체에 한 번에 적용합니다.
+  function getMidiInputConnectedDeviceKeys() {
+    return [...midiInputRuntime.devices.values()].filter((device) => device.connected).map((device) => device.key);
+  }
+
+  // 기록 보정 입력칸 + 측정 + 자동 보정(맨 아래 줄과 설정 팝업에서 같은 모양으로 씁니다). 입력값은 연결된 장치 전체에 적용합니다.
+  function buildMidiInputOffsetControls() {
+    const box = document.createElement("div");
+    box.className = "midi-input-bottom-offset";
+    box.title = i18nText("midi_input.offset_hint");
+    box.addEventListener("pointerdown", (event) => event.stopPropagation());
+    const label = document.createElement("span");
+    label.className = "midi-input-bottom-offset-label";
+    label.textContent = i18nText("midi_input.offset_title");
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = "5";
+    input.inputMode = "numeric";
+    input.min = String(-MIDI_INPUT_OFFSET_LIMIT);
+    input.max = String(MIDI_INPUT_OFFSET_LIMIT);
+    input.setAttribute("aria-label", i18nText("midi_input.offset_title"));
+    const keys = getMidiInputConnectedDeviceKeys();
+    const values = new Set(keys.map((key) => getMidiInputOffsetMs(key)));
+    input.value = values.size <= 1 ? String(values.size ? [...values][0] : 0) : "";
+    input.placeholder = values.size > 1 ? i18nText("midi_input.offset_mixed") : "0";
+    input.disabled = !keys.length;
+    input.addEventListener("change", () => {
+      const value = clamp(Math.round(Number(input.value) || 0), -MIDI_INPUT_OFFSET_LIMIT, MIDI_INPUT_OFFSET_LIMIT);
+      getMidiInputConnectedDeviceKeys().forEach((key) => setMidiInputOffsetMs(key, value));
+      input.value = String(value);
+      renderMidiInputSettingsDialog();
+    });
+    const unit = document.createElement("span");
+    unit.textContent = "ms";
+    const measure = document.createElement("button");
+    measure.type = "button";
+    measure.className = "midi-input-connect-button";
+    measure.disabled = midiInputRuntime.recording || midiInputRuntime.startingRecording;
+    measure.textContent = i18nText(midiInputRuntime.calibration?.active ? "midi_input.measure_cancel_button" : "midi_input.measure_button");
+    measure.title = i18nText("midi_input.measure_title");
+    measure.addEventListener("click", () => { void startMidiInputCalibration(); });
+    const auto = document.createElement("button");
+    auto.type = "button";
+    auto.className = "midi-input-connect-button";
+    auto.textContent = i18nText("midi_input.offset_auto");
+    auto.title = i18nText("midi_input.offset_auto_title");
+    auto.addEventListener("click", () => estimateMidiInputOffsetFromAudio());
+    box.append(label, input, unit, measure, auto);
+    return box;
+  }
+
+  function syncMidiInputBottomOffset(show) {
+    const summary = elements.infoCharCount?.closest?.(".channel-summary");
+    if (!summary) return;
+    const current = summary.querySelector(".midi-input-bottom-offset");
+    if (!show) {
+      current?.remove();
+      summary.classList.remove("is-midi-offset");
+      return;
+    }
+    summary.classList.add("is-midi-offset");
+    // 입력 중인 값은 건드리지 않고, 그 외에는 최신 장치·값·버튼 상태로 다시 만듭니다.
+    if (current && current.contains(document.activeElement) && document.activeElement?.tagName === "INPUT") return;
+    const next = buildMidiInputOffsetControls();
+    if (current) current.replaceWith(next);
+    else summary.append(next);
+  }
+
+  function getMidiInputKeyDeviceKey(openKey) {
+    return String(openKey).split(":").slice(0, -2).join(":");
+  }
+
+  // ---- 메트로놈 ----
+  // 마디·박 격자는 박자표(분자/분모)를 따르고, 시각은 템포 맵으로 계산합니다(곡 중간에 템포가 바뀌어도 따라감).
+  function getMetronomeClickAtOrAfter(beat) {
+    const sorted = getSortedTimeSignatures();
+    const target = Math.max(0, Number(beat) || 0);
+    let index = 0;
+    for (let i = 0; i < sorted.length; i += 1) {
+      if (sorted[i].beat <= target + 1e-7) index = i;
+      else break;
+    }
+    const describe = (signature) => ({
+      unit: getTimeSignatureBeatUnit(signature),
+      count: clamp(Math.round(Number(signature?.numerator) || 4), 1, 64),
+    });
+    let signature = sorted[index];
+    let { unit, count } = describe(signature);
+    let k = Math.max(0, Math.ceil((target - signature.beat) / unit - 1e-6));
+    let clickBeat = signature.beat + k * unit;
+    const next = sorted[index + 1];
+    if (next && clickBeat >= next.beat - 1e-7) {
+      signature = next;
+      ({ unit, count } = describe(signature));
+      k = 0;
+      clickBeat = signature.beat;
+    }
+    return { beat: clickBeat, index: k % count, count, unit };
+  }
+
+  function playMetronomeClick(when, accent) {
+    const context = audioEngine.context;
+    if (!context) return;
+    const volume = clamp(Number(midiInputRuntime.metronome.volume) || 0, 0, 1);
+    if (volume <= 0) return;
+    const osc = context.createOscillator();
+    const gain = context.createGain();
+    osc.type = "sine";
+    osc.frequency.value = accent ? 1760 : 1175;
+    const peak = Math.max(0.0002, volume * volume * (accent ? 0.9 : 0.65));
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.linearRampToValueAtTime(peak, when + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.07);
+    osc.connect(gain);
+    gain.connect(audioEngine.masterGain || context.destination);
+    osc.start(when);
+    osc.stop(when + 0.09);
+    midiInputRuntime.metroNodes.push(osc);
+    osc.onended = () => {
+      const at = midiInputRuntime.metroNodes.indexOf(osc);
+      if (at >= 0) midiInputRuntime.metroNodes.splice(at, 1);
+      try { osc.disconnect(); gain.disconnect(); } catch { /* already disconnected */ }
+    };
+  }
+
+  function getMetronomeHud() {
+    let hud = document.getElementById("midiInputMetroHud");
+    if (!hud) {
+      hud = document.createElement("div");
+      hud.id = "midiInputMetroHud";
+      hud.className = "midi-metronome-hud";
+      hud.setAttribute("aria-hidden", "true");
+      hud.innerHTML = '<div class="midi-metronome-label"></div><div class="midi-metronome-number"></div><div class="midi-metronome-lamps"></div>';
+      document.body.append(hud);
+    }
+    return hud;
+  }
+
+  function showMetronomeHud(count, label = "") {
+    const hud = getMetronomeHud();
+    hud.querySelector(".midi-metronome-label").textContent = label;
+    hud.querySelector(".midi-metronome-number").textContent = "";
+    const lamps = hud.querySelector(".midi-metronome-lamps");
+    lamps.textContent = "";
+    for (let i = 0; i < count; i += 1) {
+      const lamp = document.createElement("span");
+      lamp.className = `midi-metronome-lamp${i === 0 ? " is-accent" : ""}`;
+      lamps.append(lamp);
+    }
+    hud.dataset.count = String(count);
+    hud.classList.add("is-visible");
+  }
+
+  function hideMetronomeHud() {
+    document.getElementById("midiInputMetroHud")?.classList.remove("is-visible");
+  }
+
+  function flashMetronomeHud(click, { countIn = false } = {}) {
+    const hud = document.getElementById("midiInputMetroHud");
+    if (!hud || !hud.classList.contains("is-visible")) return;
+    if (Number(hud.dataset.count) !== click.count) showMetronomeHud(click.count, hud.querySelector(".midi-metronome-label").textContent);
+    hud.querySelectorAll(".midi-metronome-lamp").forEach((lamp, i) => {
+      lamp.classList.toggle("is-on", i === click.index);
+      lamp.classList.toggle("is-accent", i === 0);
+    });
+    const number = hud.querySelector(".midi-metronome-number");
+    number.textContent = countIn ? String(click.index + 1) : "";
+    hud.classList.toggle("is-count-in", countIn);
+    hud.classList.remove("is-pulse");
+    void hud.offsetWidth; // 애니메이션 재시작
+    hud.classList.add("is-pulse");
+  }
+
+  // 소리는 오디오 시각에 정확히 예약하고, 화면 표시는 귀에 들리는 시점(출력 지연 반영)에 맞춥니다.
+  function scheduleMetronomeClick(when, click, { countIn = false, forceSound = false } = {}) {
+    const metro = midiInputRuntime.metronome;
+    const context = audioEngine.context;
+    if (!context) return;
+    if (metro.sound || forceSound) playMetronomeClick(when, click.index === 0);
+    if (metro.visual || forceSound) {
+      const latency = clamp(Number(context.outputLatency) || 0, 0, 0.3);
+      const delay = Math.max(0, (when + latency - context.currentTime) * 1000);
+      const timer = window.setTimeout(() => {
+        midiInputRuntime.metroVisualTimers.delete(timer);
+        flashMetronomeHud(click, { countIn });
+      }, delay);
+      midiInputRuntime.metroVisualTimers.add(timer);
+    }
+  }
+
+  function getMetronomeContextTime(seconds) {
+    const rate = Math.max(0.01, Number(state.playbackRate) || 1);
+    if (midiInputRuntime.followPlayback && state.playback.running) {
+      return state.playback.audioStartTime + (seconds - state.playback.startSeconds) / rate;
+    }
+    return midiInputRuntime.clockCtx0 + (seconds - midiInputRuntime.clockSeconds0) / rate;
+  }
+
+  function runMidiInputMetronomeTick() {
+    const context = audioEngine.context;
+    if (!context || !midiInputRuntime.recording || !midiInputRuntime.tempoMap) return;
+    const metro = midiInputRuntime.metronome;
+    const active = metro.enabled && (metro.sound || metro.visual);
+    const horizon = context.currentTime + 0.18;
+    for (let guard = 0; guard < 24; guard += 1) {
+      const click = getMetronomeClickAtOrAfter(midiInputRuntime.metroNextBeat);
+      const when = getMetronomeContextTime(beatToSecondsInTempoMap(click.beat, midiInputRuntime.tempoMap));
+      if (when > horizon) break;
+      midiInputRuntime.metroNextBeat = click.beat + click.unit * 0.5;
+      if (active && when >= context.currentTime - 0.02) scheduleMetronomeClick(Math.max(when, context.currentTime), click);
+    }
+  }
+
+  function startMidiInputMetronome(firstBeat) {
+    if (midiInputRuntime.metroTimer) window.clearInterval(midiInputRuntime.metroTimer);
+    midiInputRuntime.metroNextBeat = Math.max(0, Number(firstBeat) || 0);
+    midiInputRuntime.metroTimer = window.setInterval(runMidiInputMetronomeTick, 25);
+    runMidiInputMetronomeTick();
+  }
+
+  function stopMidiInputMetronome({ keepHud = false } = {}) {
+    if (midiInputRuntime.metroTimer) window.clearInterval(midiInputRuntime.metroTimer);
+    midiInputRuntime.metroTimer = 0;
+    for (const timer of midiInputRuntime.metroVisualTimers) window.clearTimeout(timer);
+    midiInputRuntime.metroVisualTimers.clear();
+    for (const node of midiInputRuntime.metroNodes.splice(0)) {
+      try { node.stop(); } catch { /* not started or already stopped */ }
+    }
+    if (!keepHud) hideMetronomeHud();
+  }
+
+  // ---- 보정 측정: 일정한 박으로 클릭을 울리고, 연주자가 박에 맞춰 친 건반과의 평균 차이를 구합니다 ----
+  const MIDI_INPUT_CALIBRATION_CLICKS = 8;
+  const MIDI_INPUT_CALIBRATION_INTERVAL = 0.6;
+
+  async function startMidiInputCalibration() {
+    if (midiInputRuntime.calibration?.active) { cancelMidiInputCalibration(); return; }
+    if (midiInputRuntime.recording || midiInputRuntime.startingRecording) return;
+    unlockEditorAudioFromGesture();
+    await ensureMidiInputAccess();
+    if (!getEnabledMidiInputDevices().length) {
+      showToast(i18nText("midi_input.no_device_record"));
+      return;
+    }
+    try {
+      audioEngine.ensureContext();
+      await audioEngine.resume();
+    } catch (error) {
+      midiLog("calibration-audio-error", { message: error?.message || String(error) });
+    }
+    const context = audioEngine.context;
+    if (!context) return;
+    const t0 = context.currentTime + 0.6;
+    const perfNow = performance.now();
+    const ctxNow = context.currentTime;
+    const clicks = [];
+    showMetronomeHud(4, i18nText("midi_input.measure_hud"));
+    for (let i = 0; i < MIDI_INPUT_CALIBRATION_CLICKS; i += 1) {
+      const when = t0 + i * MIDI_INPUT_CALIBRATION_INTERVAL;
+      clicks.push(perfNow + (when - ctxNow) * 1000);
+      scheduleMetronomeClick(when, { index: i % 4, count: 4, unit: 1, beat: i }, { forceSound: true, countIn: true });
+    }
+    const endMs = (t0 + MIDI_INPUT_CALIBRATION_CLICKS * MIDI_INPUT_CALIBRATION_INTERVAL - ctxNow) * 1000 + 350;
+    midiInputRuntime.calibration = {
+      active: true,
+      clicks,
+      hits: [],
+      timer: window.setTimeout(finishMidiInputCalibration, endMs),
+    };
+    midiLog("calibration-start", { clicks: clicks.length });
+    showToast(i18nText("midi_input.measure_start", [String(MIDI_INPUT_CALIBRATION_CLICKS)]));
+    renderMidiInputControls();
+  }
+
+  function cancelMidiInputCalibration({ silent = false } = {}) {
+    const calibration = midiInputRuntime.calibration;
+    if (!calibration) return;
+    window.clearTimeout(calibration.timer);
+    midiInputRuntime.calibration = null;
+    stopMidiInputMetronome();
+    midiLog("calibration-cancel");
+    if (!silent) showToast(i18nText("midi_input.measure_cancel"));
+    renderMidiInputControls();
+  }
+
+  function collectMidiInputCalibrationHit(deviceKey, timeStamp) {
+    const calibration = midiInputRuntime.calibration;
+    if (!calibration?.active) return false;
+    const stamp = Number.isFinite(Number(timeStamp)) && Number(timeStamp) > 0 ? Number(timeStamp) : performance.now();
+    calibration.hits.push({ deviceKey, t: stamp });
+    return true;
+  }
+
+  function finishMidiInputCalibration() {
+    const calibration = midiInputRuntime.calibration;
+    if (!calibration) return;
+    midiInputRuntime.calibration = null;
+    stopMidiInputMetronome();
+    const byDevice = new Map();
+    for (const hit of calibration.hits) {
+      let bestIndex = -1;
+      let bestDiff = Infinity;
+      calibration.clicks.forEach((time, index) => {
+        const diff = hit.t - time;
+        if (Math.abs(diff) < Math.abs(bestDiff)) { bestDiff = diff; bestIndex = index; }
+      });
+      // 처음 두 박은 적응 구간으로 보고, 박 간격의 절반 안쪽에 들어온 입력만 씁니다.
+      if (bestIndex < 2 || Math.abs(bestDiff) > MIDI_INPUT_CALIBRATION_INTERVAL * 500) continue;
+      if (!byDevice.has(hit.deviceKey)) byDevice.set(hit.deviceKey, []);
+      byDevice.get(hit.deviceKey).push(bestDiff);
+    }
+    let bestKey = null;
+    for (const [key, values] of byDevice) if (!bestKey || values.length > byDevice.get(bestKey).length) bestKey = key;
+    const values = bestKey ? byDevice.get(bestKey) : [];
+    midiLog("calibration-finish", { hits: calibration.hits.length, used: values.length, device: bestKey, diffs: values.map((v) => Number(v.toFixed(1))) });
+    if (values.length < 4) {
+      showToast(i18nText("midi_input.measure_fail"));
+      renderMidiInputControls();
+      return;
+    }
+    // 중앙값에서 멀리 벗어난 입력(실수로 친 건반)은 빼고 평균을 구합니다.
+    const sorted = [...values].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const trimmed = values.filter((v) => Math.abs(v - median) <= 80);
+    const mean = trimmed.reduce((sum, v) => sum + v, 0) / Math.max(1, trimmed.length);
+    const ms = setMidiInputOffsetMs(bestKey, mean);
+    const device = midiInputRuntime.devices.get(bestKey);
+    showToast(i18nText("midi_input.measure_done", [String(ms), device?.name || bestKey]));
+    renderMidiInputControls();
+  }
+
+  function estimateMidiInputOffsetFromAudio() {
+    const context = audioEngine.context || audioEngine.ensureContext?.();
+    const seconds = (Number(context?.outputLatency) || 0) + (Number(context?.baseLatency) || 0);
+    const ms = Math.round(seconds * 1000);
+    if (!(ms > 0)) {
+      showToast(i18nText("midi_input.offset_auto_unavailable"));
+      return;
+    }
+    for (const device of midiInputRuntime.devices.values()) if (device.connected) setMidiInputOffsetMs(device.key, ms);
+    showToast(i18nText("midi_input.offset_auto_done", [String(ms)]));
+    renderMidiInputControls();
   }
 
   function snapMidiInputBeat(beat) {
@@ -19202,6 +19645,7 @@
       const velocity = data.length > 2 ? data[2] & 0x7f : 0;
       if (status === 0x90 && velocity > 0) {
         entry.kind = "note-on";
+        collectMidiInputCalibrationHit(deviceKey, event.timeStamp);
         entry.result = handleMidiInputNoteOn(deviceKey, midiChannel, pitch, velocity, event.timeStamp) || "";
       } else {
         entry.kind = "note-off";
@@ -19316,11 +19760,17 @@
     } else {
       midiLog("monitor-muted", { pitch });
     }
+    if (midiInputRuntime.calibration?.active) return "calibrating";
     if (!midiInputRuntime.recording) { midiLog("note-on-not-recording", { pitch, midiChannel: midiChannel + 1 }); return "not-recording"; }
+    if (midiInputRuntime.countInUntilPerf) {
+      // 카운트인 동안 누른 건반은 소리만 내고 기록하지 않습니다(시작 직전 60ms 안쪽은 첫 박 입력으로 봅니다).
+      const stamp = Number.isFinite(Number(timeStamp)) && Number(timeStamp) > 0 ? Number(timeStamp) : performance.now();
+      if (stamp - getMidiInputOffsetMs(deviceKey) < midiInputRuntime.countInUntilPerf - 60) { midiLog("note-count-in", { pitch }); return "count-in"; }
+    }
     if (pitch < CONFIG.minPitch || pitch > CONFIG.maxPitch) { midiLog("note-out-of-range", { pitch, range: [CONFIG.minPitch, CONFIG.maxPitch] }); return "out-of-range"; }
     const channel = getOrCreateMidiInputChannel(preset, midiChannel);
     if (!channel) { midiLog("note-no-target", { pitch, hasGroup: Boolean(getMidiInputGroup()) }); return "no-target"; }
-    const startBeat = snapMidiInputBeat(getMidiInputBeatAt(timeStamp));
+    const startBeat = snapMidiInputBeat(getMidiInputBeatAt(timeStamp, deviceKey));
     const note = {
       id: state.nextNoteId++,
       pitch,
@@ -19365,7 +19815,7 @@
     const open = midiInputRuntime.openNotes.get(openKey);
     if (!open) return;
     midiInputRuntime.openNotes.delete(openKey);
-    const endBeat = snapMidiInputBeat(getMidiInputBeatAt(timeStamp));
+    const endBeat = snapMidiInputBeat(getMidiInputBeatAt(timeStamp, getMidiInputKeyDeviceKey(openKey)));
     open.note.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, endBeat - open.note.startBeat).toFixed(6));
     const channel = getChannelById(open.channelId);
     if (channel) touchMidiInputChannel(channel);
@@ -19421,28 +19871,76 @@
       midiInputRuntime.tempoMap = createTempoTimeMap();
       midiInputRuntime.followPlayback = false;
       midiInputRuntime.startedPlayback = false;
-      if (midiInputRuntime.playAlong && hasMidiInputPlayAlongContent(startBeat)) {
+      const rate = Math.max(0.01, Number(state.playbackRate) || 1);
+      const metro = midiInputRuntime.metronome;
+      const wantsClick = metro.sound || metro.visual;
+      const countInMeasures = wantsClick ? metro.countIn : 0;
+      const usesMetronome = wantsClick && (metro.enabled || countInMeasures > 0);
+      let context = audioEngine.context;
+      if (usesMetronome) {
         try {
-          await startPlayback();
+          audioEngine.ensureContext();
+          await audioEngine.resume();
         } catch (error) {
-          midiLog("record-playback-error", { message: error?.message || String(error) });
+          midiLog("metronome-audio-error", { message: error?.message || String(error) });
         }
-        if (state.playback.running) {
-          midiInputRuntime.followPlayback = true;
-          midiInputRuntime.startedPlayback = true;
-        }
+        context = audioEngine.context;
       }
-      const beatAfterStart = state.playback.running ? state.playhead.beat : startBeat;
-      midiInputRuntime.anchorSeconds = beatToSecondsInTempoMap(midiInputRuntime.followPlayback ? state.playback.startBeat : beatAfterStart, midiInputRuntime.tempoMap);
-      midiInputRuntime.anchorPerf = performance.now();
-      if (midiInputRuntime.followPlayback) getMidiInputNowSeconds();
+      // 기록 시작 시각(오디오 시계)과 같은 순간의 performance 시각을 짝지어 둡니다.
+      const startSeconds = beatToSecondsInTempoMap(startBeat, midiInputRuntime.tempoMap);
+      const signature = getTimeSignatureAtBeat(startBeat);
+      const unit = getTimeSignatureBeatUnit(signature);
+      const numerator = clamp(Math.round(Number(signature?.numerator) || 4), 1, 64);
+      const ctxNow = context ? context.currentTime : 0;
+      const perfNow = performance.now();
+      let startCtx = ctxNow;
+      midiInputRuntime.countInUntilPerf = 0;
+      midiInputRuntime.countInActive = false;
+      if (context && countInMeasures > 0) {
+        const beatCount = numerator * countInMeasures;
+        const beatSeconds = Math.max(0.05, (beatToSecondsInTempoMap(startBeat + unit, midiInputRuntime.tempoMap) - startSeconds) / rate);
+        const firstClick = ctxNow + 0.15;
+        startCtx = firstClick + beatCount * beatSeconds;
+        showMetronomeHud(numerator, i18nText("midi_input.count_in_label"));
+        for (let i = 0; i < beatCount; i += 1) {
+          scheduleMetronomeClick(firstClick + i * beatSeconds, { index: i % numerator, count: numerator, unit, beat: startBeat - (beatCount - i) * unit }, { countIn: true });
+        }
+        midiInputRuntime.countInUntilPerf = perfNow + (startCtx - ctxNow) * 1000;
+        midiInputRuntime.countInActive = true;
+      } else if (context && usesMetronome) {
+        startCtx = ctxNow + 0.06;
+        showMetronomeHud(numerator, "");
+      }
+      midiInputRuntime.clockCtx0 = startCtx;
+      midiInputRuntime.clockSeconds0 = startSeconds;
+      midiInputRuntime.anchorSeconds = startSeconds;
+      midiInputRuntime.anchorPerf = perfNow + (startCtx - ctxNow) * 1000;
       midiInputRuntime.recordedNoteCount = 0;
       midiInputRuntime.recording = true;
-      midiLog("record-start", { startBeat, followPlayback: midiInputRuntime.followPlayback, anchorSeconds: midiInputRuntime.anchorSeconds, devices: getEnabledMidiInputDevices().map((device) => device.key) });
+      midiLog("record-start", { startBeat, countInMeasures, metronome: usesMetronome, devices: getEnabledMidiInputDevices().map((device) => device.key) });
       document.body.classList.add("midi-input-recording");
       cancelAnimationFrame(midiInputRuntime.animationFrame);
       midiInputRuntime.animationFrame = requestAnimationFrame(midiInputRecordingFrame);
       showToast(i18nText("midi_input.record_started"));
+      if (usesMetronome && context) startMidiInputMetronome(startBeat);
+      if (midiInputRuntime.playAlong && hasMidiInputPlayAlongContent(startBeat)) {
+        try {
+          await startPlayback({ audioStartTime: startCtx });
+        } catch (error) {
+          midiLog("record-playback-error", { message: error?.message || String(error) });
+        }
+        if (!midiInputRuntime.recording) {
+          // 기다리는 사이 기록이 멈췄다면 방금 시작한 재생도 멈춥니다.
+          if (state.playback.running || state.playback.loading) stopPlayback(false);
+          return false;
+        }
+        if (state.playback.running) {
+          midiInputRuntime.followPlayback = true;
+          midiInputRuntime.startedPlayback = true;
+          midiInputRuntime.anchorSeconds = beatToSecondsInTempoMap(state.playback.startBeat, midiInputRuntime.tempoMap);
+          getMidiInputNowSeconds();
+        }
+      }
     } catch (error) {
       console.error("[MIDI 입력] 기록 시작 오류", error);
       midiLog("record-start-error", { name: error?.name, message: error?.message || String(error), stack: String(error?.stack || "").split("\n").slice(0, 4).join(" | ") });
@@ -19456,6 +19954,11 @@
 
   function midiInputRecordingFrame(now) {
     if (!midiInputRuntime.recording) return;
+    if (midiInputRuntime.countInUntilPerf && now >= midiInputRuntime.countInUntilPerf + 150) {
+      midiInputRuntime.countInUntilPerf = 0;
+      midiInputRuntime.countInActive = false;
+      document.getElementById("midiInputMetroHud")?.classList.remove("is-count-in");
+    }
     const beat = getMidiInputBeatAt(null);
     // 누르고 있는 노트는 현재 위치까지 실시간으로 늘어납니다.
     const snapped = snapMidiInputBeat(beat);
@@ -19487,6 +19990,9 @@
     const endBeat = getMidiInputBeatAt(null);
     closeAllMidiInputNotes(null);
     midiInputRuntime.recording = false;
+    midiInputRuntime.countInUntilPerf = 0;
+    midiInputRuntime.countInActive = false;
+    stopMidiInputMetronome();
     cancelAnimationFrame(midiInputRuntime.animationFrame);
     midiInputRuntime.animationFrame = 0;
     document.body.classList.remove("midi-input-recording");
@@ -19610,11 +20116,23 @@
     }
   }
 
+  // 항목 패널에는 꼭 필요한 것(기록 · 메트로놈 켜기 · 장치 상태)만 두고, 나머지 설정은 더블클릭 팝업에서 바꿉니다.
   function buildMidiInputControls(group) {
     const box = document.createElement("div");
     box.className = "midi-input-controls";
     box.addEventListener("pointerdown", (event) => event.stopPropagation());
-    box.addEventListener("click", (event) => event.stopPropagation());
+    // 버튼·입력칸이 아닌 빈 곳은 항목 헤더처럼 동작합니다: 한 번 누르면 선택, 더블클릭하면 설정 팝업.
+    const isEmptyArea = (event) => !event.target.closest("button, input, select, label, a");
+    box.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (isEmptyArea(event) && String(state.selectedChannelGroupId ?? "") !== String(group.id)) selectChannelGroup(group.id);
+    });
+    box.addEventListener("dblclick", (event) => {
+      if (!isEmptyArea(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openMidiInputSettingsDialog();
+    });
     box.addEventListener("contextmenu", (event) => event.stopPropagation());
 
     const top = document.createElement("div");
@@ -19627,33 +20145,55 @@
     record.lastElementChild.textContent = i18nText(midiInputRuntime.recording ? "midi_input.stop" : "midi_input.record");
     record.title = i18nText(midiInputRuntime.recording ? "midi_input.stop_title" : "midi_input.record_title");
     record.addEventListener("click", () => toggleMidiInputRecording());
-    const playAlong = document.createElement("label");
-    playAlong.className = "midi-input-check";
-    playAlong.innerHTML = '<input type="checkbox"/><span></span>';
-    playAlong.querySelector("input").checked = midiInputRuntime.playAlong;
-    playAlong.querySelector("input").disabled = midiInputRuntime.recording;
-    playAlong.querySelector("span").textContent = i18nText("midi_input.play_along");
-    playAlong.querySelector("input").addEventListener("change", (event) => {
-      midiInputRuntime.playAlong = event.target.checked;
+    const metronome = document.createElement("button");
+    metronome.type = "button";
+    metronome.className = `midi-input-connect-button midi-input-metro-toggle${midiInputRuntime.metronome.enabled ? " is-on" : ""}`;
+    metronome.setAttribute("aria-pressed", String(midiInputRuntime.metronome.enabled));
+    metronome.textContent = `🔔 ${i18nText("midi_input.metro_enable")}`;
+    metronome.title = i18nText("midi_input.metro_enable_title");
+    metronome.addEventListener("click", () => {
+      midiInputRuntime.metronome.enabled = !midiInputRuntime.metronome.enabled;
       saveMidiInputSettings();
+      renderMidiInputControls();
     });
-    top.append(record, playAlong);
+    top.append(record, metronome);
+    const connectButton = buildMidiInputConnectButton();
+    if (connectButton) top.append(connectButton);
 
+    box.append(top);
+    const deviceRow = buildMidiInputDevicesRow();
+    if (deviceRow.childElementCount) box.append(deviceRow);
+    if (!getMidiInputChannels(group).length) {
+      const hint = document.createElement("p");
+      hint.className = "midi-input-hint";
+      hint.textContent = i18nText("midi_input.empty_hint");
+      box.append(hint);
+    }
+    return box;
+  }
+
+  function buildMidiInputConnectButton() {
+    if (midiInputRuntime.status !== "idle") return null;
+    const connect = document.createElement("button");
+    connect.type = "button";
+    connect.className = "midi-input-connect-button";
+    connect.textContent = i18nText("midi_input.connect");
+    connect.addEventListener("click", () => { void ensureMidiInputAccess(); });
+    return connect;
+  }
+
+  // 항목 패널(showStatus=false)에서는 오류 상태가 아니면 안내 문구를 숨기고, 팝업에서는 상태 문구를 모두 보여 줍니다.
+  function buildMidiInputDevicesRow({ showStatus = false } = {}) {
     const devices = document.createElement("div");
     devices.className = "midi-input-controls-row midi-input-devices";
     const list = [...midiInputRuntime.devices.values()].filter((device) => device.connected);
     if (midiInputRuntime.status !== "ready" || !list.length) {
-      const status = document.createElement("span");
-      status.className = `midi-input-status is-${midiInputRuntime.status}`;
-      status.textContent = getMidiInputStatusText();
-      devices.append(status);
-      if (midiInputRuntime.status === "idle") {
-        const connect = document.createElement("button");
-        connect.type = "button";
-        connect.className = "midi-input-connect-button";
-        connect.textContent = i18nText("midi_input.connect");
-        connect.addEventListener("click", () => { void ensureMidiInputAccess(); });
-        devices.append(connect);
+      const isError = midiInputRuntime.status === "unsupported" || midiInputRuntime.status === "denied";
+      if (showStatus || isError) {
+        const status = document.createElement("span");
+        status.className = `midi-input-status is-${midiInputRuntime.status}`;
+        status.textContent = getMidiInputStatusText();
+        devices.append(status);
       }
     } else {
       for (const device of list) {
@@ -19670,29 +20210,162 @@
         devices.append(chip);
       }
     }
+    return devices;
+  }
 
-    const instrument = document.createElement("label");
-    instrument.className = "midi-input-controls-row midi-input-instrument";
-    instrument.title = i18nText("midi_input.default_instrument_hint");
-    const instrumentLabel = document.createElement("span");
-    instrumentLabel.textContent = i18nText("midi_input.default_instrument");
-    const select = document.createElement("select");
-    select.setAttribute("aria-label", i18nText("midi_input.default_instrument"));
-    const presets = getEditorSoundBankPresets();
-    if (!presets.length) {
-      select.add(new Option(i18nText("ui.ready_default_sounds"), ""));
-      select.disabled = true;
-    } else {
-      for (const preset of presets) select.add(new Option(formatEditorPresetLabel(preset), editorPresetKey(preset.bank, preset.preset)));
-      const current = getMidiInputDefaultPreset();
-      select.value = editorPresetKey(current.bank, current.preset);
-    }
-    select.addEventListener("change", () => {
-      midiInputRuntime.defaultPresetKey = select.value;
+  // ---- 설정 팝업(다른 항목의 설정 팝업처럼 더블클릭으로 엽니다) ----
+  function buildMidiInputSettingsSection(titleKey) {
+    const section = document.createElement("section");
+    section.className = "midi-input-settings-section";
+    const title = document.createElement("div");
+    title.className = "midi-input-settings-section-title";
+    title.textContent = i18nText(titleKey);
+    section.append(title);
+    return section;
+  }
+
+  function buildMidiInputSettingsBody() {
+    const body = document.createElement("div");
+    body.className = "midi-input-settings-body";
+
+    const deviceSection = buildMidiInputSettingsSection("midi_input.settings_devices");
+    const popupDeviceRow = buildMidiInputDevicesRow({ showStatus: true });
+    const popupConnect = buildMidiInputConnectButton();
+    if (popupConnect) popupDeviceRow.append(popupConnect);
+    deviceSection.append(popupDeviceRow);
+
+    const recordSection = buildMidiInputSettingsSection("midi_input.settings_recording");
+    const playAlong = document.createElement("label");
+    playAlong.className = "midi-input-check";
+    playAlong.innerHTML = '<input type="checkbox"/><span></span>';
+    playAlong.querySelector("input").checked = midiInputRuntime.playAlong;
+    playAlong.querySelector("input").disabled = midiInputRuntime.recording;
+    playAlong.querySelector("span").textContent = i18nText("midi_input.play_along");
+    playAlong.querySelector("input").addEventListener("change", (event) => {
+      midiInputRuntime.playAlong = event.target.checked;
       saveMidiInputSettings();
     });
-    instrument.append(instrumentLabel, select);
+    recordSection.append(playAlong);
 
+    const metroSection = buildMidiInputSettingsSection("midi_input.settings_metronome");
+    const metro = midiInputRuntime.metronome;
+    const metroBox = document.createElement("div");
+    metroBox.className = "midi-input-metro";
+    const metroRow = document.createElement("div");
+    metroRow.className = "midi-input-controls-row";
+    const makeCheck = (labelKey, key, title = "") => {
+      const label = document.createElement("label");
+      label.className = "midi-input-check";
+      label.innerHTML = '<input type="checkbox"/><span></span>';
+      const input = label.querySelector("input");
+      input.checked = Boolean(metro[key]);
+      label.querySelector("span").textContent = i18nText(labelKey);
+      if (title) label.title = title;
+      input.addEventListener("change", () => {
+        metro[key] = input.checked;
+        saveMidiInputSettings();
+        if (key === "enabled") renderMidiInputControls();
+      });
+      return label;
+    };
+    metroRow.append(
+      makeCheck("midi_input.metro_enable", "enabled", i18nText("midi_input.metro_enable_title")),
+      makeCheck("midi_input.metro_sound", "sound"),
+      makeCheck("midi_input.metro_visual", "visual"),
+    );
+    const metroRow2 = document.createElement("div");
+    metroRow2.className = "midi-input-controls-row midi-input-metro-row2";
+    const countInLabel = document.createElement("label");
+    countInLabel.className = "midi-input-inline-field";
+    countInLabel.title = i18nText("midi_input.count_in_title");
+    const countInText = document.createElement("span");
+    countInText.textContent = i18nText("midi_input.count_in");
+    const countInSelect = document.createElement("select");
+    for (const value of [0, 1, 2]) countInSelect.add(new Option(i18nText(`midi_input.count_in_${value}`), String(value)));
+    countInSelect.value = String(metro.countIn);
+    countInSelect.addEventListener("change", () => {
+      metro.countIn = Number(countInSelect.value) || 0;
+      saveMidiInputSettings();
+    });
+    countInLabel.append(countInText, countInSelect);
+    const volumeLabel = document.createElement("label");
+    volumeLabel.className = "midi-input-inline-field";
+    const volumeText = document.createElement("span");
+    volumeText.textContent = i18nText("midi_input.metro_volume");
+    const volumeInput = document.createElement("input");
+    volumeInput.type = "range";
+    volumeInput.min = "0";
+    volumeInput.max = "100";
+    volumeInput.value = String(Math.round(clamp(Number(metro.volume) || 0, 0, 1) * 100));
+    volumeInput.addEventListener("input", () => {
+      metro.volume = Number(volumeInput.value) / 100;
+      saveMidiInputSettings();
+    });
+    volumeLabel.append(volumeText, volumeInput);
+    metroRow2.append(countInLabel, volumeLabel);
+    metroBox.append(metroRow, metroRow2);
+
+    metroSection.append(metroBox);
+
+    const offsetSection = buildMidiInputSettingsSection("midi_input.offset_title");
+    const offsetBox = document.createElement("div");
+    offsetBox.className = "midi-input-offset";
+    const connectedDevices = [...midiInputRuntime.devices.values()].filter((device) => device.connected);
+    if (!connectedDevices.length) {
+      const empty = document.createElement("span");
+      empty.className = "midi-input-status";
+      empty.textContent = i18nText("midi_input.offset_no_device");
+      offsetBox.append(empty);
+    }
+    for (const device of connectedDevices) {
+      const row = document.createElement("label");
+      row.className = "midi-input-offset-row";
+      const name = document.createElement("span");
+      name.className = "midi-input-offset-name";
+      name.textContent = device.name;
+      name.title = device.name;
+      const input = document.createElement("input");
+      input.type = "number";
+      input.step = "5";
+      input.min = String(-MIDI_INPUT_OFFSET_LIMIT);
+      input.max = String(MIDI_INPUT_OFFSET_LIMIT);
+      input.value = String(getMidiInputOffsetMs(device.key));
+      input.setAttribute("aria-label", i18nText("midi_input.offset_title"));
+      input.addEventListener("change", () => {
+        input.value = String(setMidiInputOffsetMs(device.key, input.value));
+      });
+      const unit = document.createElement("span");
+      unit.textContent = "ms";
+      row.append(name, input, unit);
+      offsetBox.append(row);
+    }
+    const offsetButtons = document.createElement("div");
+    offsetButtons.className = "midi-input-controls-row";
+    const measureButton = document.createElement("button");
+    measureButton.type = "button";
+    measureButton.className = "midi-input-connect-button";
+    measureButton.disabled = midiInputRuntime.recording || midiInputRuntime.startingRecording;
+    measureButton.textContent = i18nText(midiInputRuntime.calibration?.active ? "midi_input.measure_cancel_button" : "midi_input.measure_button");
+    measureButton.title = i18nText("midi_input.measure_title");
+    measureButton.addEventListener("click", () => { void startMidiInputCalibration(); });
+    const autoButton = document.createElement("button");
+    autoButton.type = "button";
+    autoButton.className = "midi-input-connect-button";
+    autoButton.textContent = i18nText("midi_input.offset_auto");
+    autoButton.title = i18nText("midi_input.offset_auto_title");
+    autoButton.addEventListener("click", () => estimateMidiInputOffsetFromAudio());
+    offsetButtons.append(measureButton, autoButton);
+    offsetBox.append(offsetButtons);
+
+    const offsetHint = document.createElement("p");
+    offsetHint.className = "midi-input-hint";
+    offsetHint.textContent = i18nText("midi_input.offset_hint");
+    offsetButtons.remove();
+    if (connectedDevices.length < 2) offsetBox.querySelectorAll(".midi-input-offset-row, .midi-input-status").forEach((node) => node.remove());
+    offsetSection.append(offsetHint, buildMidiInputOffsetControls());
+    if (offsetBox.childElementCount) offsetSection.append(offsetBox);
+
+    const diagSection = buildMidiInputSettingsSection("midi_input.settings_diagnostics");
     const logRow = document.createElement("div");
     logRow.className = "midi-input-controls-row midi-input-log-row";
     const monitorButton = document.createElement("button");
@@ -19717,15 +20390,61 @@
     logCount.textContent = i18nText("midi_input.log_count", [String(midiInputLog.length)]);
     logRow.append(logButton, logCount);
 
-    box.append(top, devices, instrument, logRow);
-    if (midiInputRuntime.monitorOpen) box.append(buildMidiInputMonitor());
-    if (!getMidiInputChannels(group).length) {
-      const hint = document.createElement("p");
-      hint.className = "midi-input-hint";
-      hint.textContent = i18nText("midi_input.empty_hint");
-      box.append(hint);
-    }
-    return box;
+    diagSection.append(logRow);
+    if (midiInputRuntime.monitorOpen) diagSection.append(buildMidiInputMonitor());
+
+    body.append(deviceSection, recordSection, metroSection, offsetSection, diagSection);
+    return body;
+  }
+
+  function ensureMidiInputSettingsDialog() {
+    let backdrop = document.getElementById("midiInputSettingsBackdrop");
+    if (backdrop) return backdrop;
+    backdrop = document.createElement("div");
+    backdrop.className = "popup-backdrop";
+    backdrop.id = "midiInputSettingsBackdrop";
+    backdrop.hidden = true;
+    backdrop.innerHTML = `<section class="transfer-dialog midi-input-settings-dialog" role="dialog" aria-modal="true">
+      <div class="transfer-dialog-header"><div><strong></strong><span></span></div><button class="channel-mute-close" type="button">×</button></div>
+      <div class="midi-input-settings-host"></div>
+      <div class="transfer-dialog-actions"><button type="button" class="midi-input-settings-done"></button></div>
+    </section>`;
+    document.body.append(backdrop);
+    backdrop.querySelector(".channel-mute-close").addEventListener("click", closeMidiInputSettingsDialog);
+    backdrop.querySelector(".midi-input-settings-done").addEventListener("click", closeMidiInputSettingsDialog);
+    backdrop.addEventListener("pointerdown", (event) => { if (event.target === backdrop) closeMidiInputSettingsDialog(); });
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || backdrop.hidden) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeMidiInputSettingsDialog();
+    }, true);
+    return backdrop;
+  }
+
+  function renderMidiInputSettingsDialog() {
+    const backdrop = document.getElementById("midiInputSettingsBackdrop");
+    if (!backdrop || backdrop.hidden) return;
+    backdrop.querySelector(".transfer-dialog-header strong").textContent = i18nText("midi_input.settings_title");
+    backdrop.querySelector(".transfer-dialog-header span").textContent = i18nText("midi_input.settings_subtitle");
+    backdrop.querySelector(".channel-mute-close").setAttribute("aria-label", i18nText("close"));
+    backdrop.querySelector(".midi-input-settings-done").textContent = i18nText("close");
+    backdrop.querySelector(".midi-input-settings-dialog").setAttribute("aria-label", i18nText("midi_input.settings_title"));
+    backdrop.querySelector(".midi-input-settings-host").replaceChildren(buildMidiInputSettingsBody());
+  }
+
+  function openMidiInputSettingsDialog() {
+    const backdrop = ensureMidiInputSettingsDialog();
+    backdrop.hidden = false;
+    renderMidiInputSettingsDialog();
+    void ensureMidiInputAccess();
+    return true;
+  }
+
+  function closeMidiInputSettingsDialog() {
+    if (midiInputRuntime.calibration?.active) cancelMidiInputCalibration({ silent: true });
+    const backdrop = document.getElementById("midiInputSettingsBackdrop");
+    if (backdrop) backdrop.hidden = true;
   }
 
   // 피아노롤: MIDI 입력은 노트 선택(복사용)과 재생 위치 이동만 허용합니다.
@@ -19777,10 +20496,11 @@
     return true;
   }
 
-  function midiInputContextItems(channels, { group = null } = {}) {
+  function midiInputContextItems(channels, { group = null, visibilitySegments, soundSegments } = {}) {
     const hasNotes = channels.some((channel) => channel.notes.length);
     const items = [
       { label: i18nText(midiInputRuntime.recording ? "midi_input.stop" : "midi_input.record"), action: () => toggleMidiInputRecording() },
+      ...(group ? [{ label: i18nText("midi_input.settings_title"), action: () => openMidiInputSettingsDialog() }] : []),
       { label: i18nText("midi_input.copy_to_channels"), disabled: !hasNotes, disabledReason: i18nText("context.disabled_no_notes"), action: () => copyMidiInputChannelsToEditable(channels) },
       { label: i18nText("ui.export"), items: channelExportContextItems(channels) },
       "separator",
@@ -19794,19 +20514,21 @@
           { label: i18nText("midi_input.delete_all"), danger: true, action: () => { stopMidiInputRecording({ silent: true }); deleteChannelGroupItemsImmediate(group.id, { deleteGroup: true }); } },
         ],
       });
-      items.push({ label: i18nText("context.interface"), items: contextVisibilitySegments({ kind: "group", item: group }) });
-      items.push({ label: i18nText("context.sound"), items: contextSoundSegments({ kind: "group", item: group }) });
+      items.push({ label: i18nText("context.interface"), items: visibilitySegments({ kind: "group", item: group }) });
+      items.push({ label: i18nText("context.sound"), items: soundSegments({ kind: "group", item: group }) });
     } else {
       const channel = channels[0];
       items.push({ label: i18nText("channel.delete"), danger: true, action: () => deleteChannelByIdImmediate(channel.id) });
-      items.push({ label: i18nText("context.interface"), items: contextVisibilitySegments({ kind: "channel", item: channel }) });
-      items.push({ label: i18nText("context.sound"), items: contextSoundSegments({ kind: "channel", item: channel }) });
+      items.push({ label: i18nText("context.interface"), items: visibilitySegments({ kind: "channel", item: channel }) });
+      items.push({ label: i18nText("context.sound"), items: soundSegments({ kind: "channel", item: channel }) });
     }
     return items;
   }
 
   const MIDI_INPUT_RESULT_LABELS = {
     "not-recording": "midi_input.res_not_recording",
+    "count-in": "midi_input.res_count_in",
+    calibrating: "midi_input.res_calibrating",
     "out-of-range": "midi_input.res_out_of_range",
     "no-target": "midi_input.res_no_target",
     "device-off": "midi_input.res_device_off",
@@ -19825,6 +20547,7 @@
     if (!noteEntries.length) return i18nText("midi_input.hint_no_note");
     const last = noteEntries[0];
     if (last.result === "not-recording") return i18nText("midi_input.hint_press_record");
+    if (last.result === "count-in") return i18nText("midi_input.hint_count_in");
     if (last.result === "out-of-range") return i18nText("midi_input.hint_out_of_range", [noteLabel(CONFIG.minPitch), noteLabel(CONFIG.maxPitch)]);
     if (last.result === "device-off") return i18nText("midi_input.hint_device_off");
     if (String(last.result).startsWith("recorded:")) return i18nText("midi_input.hint_ok");
@@ -19893,6 +20616,8 @@
   }
 
   function renderMidiInputControls() {
+    renderMidiInputSettingsDialog();
+    if (isMidiInputEditTarget()) syncMidiInputBottomOffset(true);
     const group = getMidiInputGroup();
     if (!group) return;
     const header = elements.channelTabs?.querySelector(`[data-channel-group-id="${CSS.escape(String(group.id))}"]`);
@@ -27811,8 +28536,9 @@
     drawTimeline();
   }
 
-  async function startPlayback() {
+  async function startPlayback(options = null) {
     if (state.playback.running || state.playback.loading) return;
+    const requestedAudioStartTime = options && typeof options === "object" ? Number(options.audioStartTime) : NaN;
 
     const token = ++state.playback.requestToken;
     const naturalEndBeat = getPlaybackEndBeat();
@@ -27869,7 +28595,11 @@
       if (token !== state.playback.requestToken) return;
 
       const context = audioEngine.context;
-      const scheduleDelay = 0.14;
+      let scheduleDelay = 0.14;
+      // 카운트인 뒤에 정확히 시작해야 할 때는 지정한 오디오 시각을 씁니다(이미 지났으면 기본 지연).
+      if (Number.isFinite(requestedAudioStartTime) && requestedAudioStartTime > context.currentTime + 0.03) {
+        scheduleDelay = requestedAudioStartTime - context.currentTime;
+      }
       state.playback.audioStartTime = context.currentTime + scheduleDelay;
       state.playback.startedAt = performance.now() + scheduleDelay * 1000;
       state.playback.loading = false;
@@ -32127,7 +32857,7 @@
       const index = Number(area.element.dataset.channelIndex);
       const channel = state.channels[index];
       if (!channel) return [];
-      if (isMidiInputChannel(channel)) return midiInputContextItems([channel]);
+      if (isMidiInputChannel(channel)) return midiInputContextItems([channel], { visibilitySegments: contextVisibilitySegments, soundSegments: contextSoundSegments });
       const channelDeleteItems = [
         { label: i18nText("channel.delete_all_notes"), disabled: !channel.notes.length, disabledReason: i18nText("context.disabled_no_notes"), danger: true, action: () => { selectChannel(index); clearActiveChannel(); } },
         { label: i18nText("channel.delete"), danger: true, action: () => deleteChannelByIdImmediate(channel.id) },
@@ -32155,7 +32885,7 @@
     registerContextMenu("channel-group", ({ area }) => {
       const group = getChannelGroupById(area.element.dataset.channelGroupId);
       if (!group) return [];
-      if (isMidiInputGroup(group)) return midiInputContextItems(getChannelGroupMembers(group), { group });
+      if (isMidiInputGroup(group)) return midiInputContextItems(getChannelGroupMembers(group), { group, visibilitySegments: contextVisibilitySegments, soundSegments: contextSoundSegments });
       const hasItems = getChannelGroupMembers(group).length > 0 || getChannelGroupAudioMembers(group).length > 0;
       return [
         {
@@ -33812,6 +34542,18 @@
         return;
       }
       const group = getChannelGroupById(state.selectedChannelGroupId);
+      if (group && state.activePanel === "notes" && isMidiInputGroup(group)) {
+        const selectedValue = String(elements.channelInstrumentSelect.value || "");
+        if (!selectedValue) return;
+        midiInputRuntime.defaultPresetKey = selectedValue;
+        saveMidiInputSettings();
+        const preset = getMidiInputDefaultPreset();
+        if (typeof audioEngine.prepareProgram === "function") {
+          void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: true }).catch((error) => console.warn("악기 음원 준비 실패", error));
+        }
+        showToast(i18nText("midi_input.default_instrument_set", [formatEditorPresetLabel(preset)]));
+        return;
+      }
       if (group && state.activePanel === "notes") {
         const selectedValue = String(elements.channelInstrumentSelect.value || "");
         if (!selectedValue) return;
