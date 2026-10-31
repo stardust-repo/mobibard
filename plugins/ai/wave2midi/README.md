@@ -1,7 +1,7 @@
 # Wave2MIDI 공용 모듈
 
 음원(오디오 파일)을 브라우저 안에서 악기별 MIDI로 변환하는 공용 모듈입니다. 파일은 서버로 업로드되지 않습니다.
-Editor `파일 > 불러오기`에서 오디오 파일을 고르면 사용되며(오디오 · AI 변환 Beta), 다른 제품도 같은 API로 불러 쓸 수 있습니다.
+Editor `파일 > 불러오기`에서 오디오 파일을 고르면 사용되며(오디오 · AI 변환), 다른 제품도 같은 API로 불러 쓸 수 있습니다.
 
 ## 구성
 
@@ -19,7 +19,7 @@ plugins/ai/wave2midi/
   model/wave2mid_w16.onnx   기본(fallback): 16비트 가중치 / 32비트 연산 (39 MB). 모든 환경
   model/meta.json         학습 export 메타데이터 (모델 버전 v1.1, 전처리, 임계값, 16개 GM 클래스, velocity 설정)
   model/manifest.json     모델 이름·버전·제작자·라이선스, 빌드별(models.fp16 / models.w16) 파일명·크기·sha256
-  model/LICENSE           모델 라이선스 (MIT, startdust-io)
+  model/LICENSE           모델 라이선스 (CC BY-NC 4.0, startdust-io)
   vendor/onnxruntime-web/ (선택) 로컬 ONNX Runtime. 없으면 jsDelivr 1.20.1 사용
 ```
 
@@ -27,13 +27,13 @@ plugins/ai/wave2midi/
 
 ## 라이선스
 
-Wave2MIDI 모델(`model/mobibard_w2m.onnx`, `model/meta.json`)은 **startdust-io**가 제작했으며 **MIT License**로 배포합니다. 전문은 `model/LICENSE`에 있습니다.
-모델을 다른 곳에 복사하거나 재배포할 때는 `model/LICENSE`의 저작권 고지와 허가 문구를 함께 포함해야 합니다.
+Wave2MIDI 모델(`model/mobibard_w2m.onnx`, `model/meta.json`)은 **startdust-io**가 제작했으며 **CC BY-NC 4.0 (CC-BY-NC-4.0)**으로 배포합니다. 학습 데이터에 비상업 라이선스(CC-BY-NC-4.0) 자료가 포함되어 있어 **비상업적 이용만** 허용되며, 안내문은 `model/LICENSE`에 있습니다.
+모델을 다른 곳에 복사하거나 재배포할 때는 `model/LICENSE`를 함께 포함하고, 저작자 표시와 비상업 조건을 지켜야 합니다.
 
 - `meta.json`: `author`, `license.spdx`, `license.copyright`, `license.file`
 - `manifest.json`: `name`, `version`, `author`, `license`, `licenseFile`
 - API: `MobibardWave2Midi.getModelInfo()`는 `{ name, version, author, license, licenseUrl }`를 돌려줍니다(모델은 내려받지 않음). `transcribe()` 결과의 `result.model`에도 `author`, `license`가 들어 있습니다.
-- Editor는 오디오 AI 변환 중 진행 패널에 `Wave2MIDI v1.1 · startdust-io · MIT License`를 표시하고 `model/LICENSE`로 연결합니다.
+- Editor는 오디오 AI 변환 중 진행 패널에 `Wave2MIDI v1.1 · startdust-io · CC BY-NC 4.0`를 표시하고 `model/LICENSE`로 연결합니다.
 
 ## 사용법
 

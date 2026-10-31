@@ -1,9 +1,20 @@
 {
  "name": "mobibard_a2m",
- "full_name": "mobibard_a2m v1.0",
+ "full_name": "mobibard_a2m v1.1",
  "architecture": "mobibard_a2m_v1",
- "version": "1.0.1",
- "step": 4000,
+ "version": "1.1",
+ "step": 102000,
+ "license": {
+  "spdx": "CC-BY-NC-4.0",
+  "copyright": "Copyright (c) 2026 startdust-io",
+  "file": "LICENSE",
+  "noncommercial": true
+ },
+ "train_steps": {
+  "pretrain": 98000,
+  "finetune": 4000,
+  "total": 102000
+ },
  "parameters": 19354341,
  "classes": [
   0,

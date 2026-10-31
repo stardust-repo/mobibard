@@ -1,24 +1,28 @@
-MIT License
+Wave2MIDI model - License
 
 Copyright (c) 2026 startdust-io
 
+License: Creative Commons Attribution-NonCommercial 4.0 International
+         (CC BY-NC 4.0, SPDX: CC-BY-NC-4.0)
+Full text: https://creativecommons.org/licenses/by-nc/4.0/legalcode
+
 This license applies to the Wave2MIDI model files in this folder
-(mobibard_w2m.onnx, meta.json).
+(wave2mid_fp16.onnx, wave2mid_w16.onnx, meta.json, manifest.json).
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+You are free to:
+  - Share: copy and redistribute the material in any medium or format.
+  - Adapt: remix, transform, and build upon the material.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Under the following terms:
+  - Attribution: give appropriate credit (startdust-io, Wave2MIDI), provide
+    a link to the license, and indicate if changes were made.
+  - NonCommercial: you may not use the material for commercial purposes.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Why NonCommercial: the model was trained on data that includes material
+licensed under CC-BY-NC-4.0 (see "provenance" in meta.json), so the trained
+model is distributed under the same non-commercial condition. Some training
+labels are of unknown provenance.
+
+This notice is a human-readable summary and is not a substitute for the
+license. If this summary and the legal code differ, the legal code applies.
+The model is provided "AS IS", without warranty of any kind.

@@ -14595,8 +14595,8 @@
         const credit = panel.querySelector(".audio-ai-import-credit");
         const link = credit?.querySelector("a");
         if (!credit || !link || !panel.isConnected) return;
-        // Model attribution (manifest.json): e.g. "Wave2MIDI v0.1 · startdust-io · MIT License"
-        link.textContent = [info.version ? `${info.name} v${info.version}` : info.name, info.author, info.license ? `${info.license} License` : ""].filter(Boolean).join(" · ");
+        // Model attribution (manifest.json): e.g. "Wave2MIDI v1.1 · startdust-io · CC BY-NC 4.0"
+        link.textContent = [info.version ? `${info.name} v${info.version}` : info.name, info.author, info.license ? (/^CC[- ]/i.test(info.license) ? info.license.replace(/^CC-/i, "CC ").replace(/-(\d)/, " $1") : `${info.license} License`) : ""].filter(Boolean).join(" · ");
         if (info.licenseUrl) link.href = info.licenseUrl;
         else link.removeAttribute("href");
         credit.hidden = false;

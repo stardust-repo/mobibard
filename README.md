@@ -28,7 +28,7 @@
 - `assets/default_sf3.js`는 페이지에 직접 넣지 않습니다. `plugins/formats/soundbank/soundbank.js`의 `loadEmbeddedSoundBank()`가 처음 필요할 때 자기 위치 기준 `../../../assets/default_sf3.js`를 불러옵니다(MobiBeats는 시작 즉시 재생하므로 계속 미리 불러옵니다).
 - 내려받는 데 0.25초 넘게 걸리면 `soundbank.js`가 `window`에 `mobibard:default-soundbank` 이벤트(`detail.state`: `downloading` → `ready`, 실패 시 `error`)를 보냅니다. Editor·Player·Simple·RollScriptor·VeloScriptor는 이를 받아 "기본 음원(약 5 MB)을 내려받는 중" → "준비 완료" 토스트를 보여 줍니다(캐시에서 바로 불러오면 조용히 지나감). 실패 오류 문구는 `sound.err_default_download` 키입니다.
 - 공개 다운로드는 `assets/MobiBard_Instruments_sf3.zip`과 `assets/MobiBard_Instruments_dls.zip` 두 압축 파일로 제공합니다. SF3 ZIP 안의 `MobiBard_Instruments.sf3`는 `assets/default_sf3.js`에 내장된 기본 음색과 동일한 파일이며, DLS ZIP에는 정리된 호환용 `MobiBard_Instruments.dls`가 들어 있습니다. 프로젝트에는 다운로드용 원본 SF3/DLS를 중복 보관하지 않습니다. MobiBard Instruments는 **startdust-io**가 제작했으며 **MIT License**로 배포합니다. 개인·상업적 이용, 복사, 수정, 변환, 재배포, 미러링 및 웹에서의 직접 링크를 허용하며, 재배포할 때는 저작권 고지와 라이선스 문구를 함께 포함해야 합니다. 두 ZIP 안에도 `LICENSE.txt`가 들어 있습니다. Player와 Editor의 사운드폰트 설정 팝업에서도 SF3/DLS ZIP과 라이선스를 바로 확인할 수 있습니다. 전문은 `assets/MobiBard_Instruments_LICENSE.txt`를 참고합니다.
-- Editor 오디오 AI 변환에 쓰는 Wave2MIDI 모델(`plugins/ai/wave2midi/model/`)도 **startdust-io** 제작 **MIT License**이며 전문은 `plugins/ai/wave2midi/model/LICENSE`에 있습니다.
+- Editor 오디오 AI 변환에 쓰는 Wave2MIDI 모델(`plugins/ai/wave2midi/model/`)도 **startdust-io** 제작 **CC BY-NC 4.0 (비상업 이용 전용)**이며 안내문은 `plugins/ai/wave2midi/model/LICENSE`에 있습니다.
 - MUSX, MNX, MSCZ, MSCX 입력을 추가했습니다. 각 형식은 표준 MIDI로 정규화된 뒤 동일한 공용 MIDI 파서를 사용합니다.
 - 배포에 사용되지 않는 Guitar Pro 개발 소스와 테스트 전용 코드·샘플은 최종 패키지에서 제외했습니다.
 - 지원 파일 팝업의 제목을 버튼과 같은 `지원 파일`로 통일하고, 글꼴의 × 문자를 사용하던 닫기 버튼을 중앙 정렬된 SVG 아이콘으로 교체했습니다.

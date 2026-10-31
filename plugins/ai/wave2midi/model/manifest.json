@@ -3,7 +3,7 @@
   "name": "Wave2MIDI",
   "version": "1.1",
   "author": "startdust-io",
-  "license": "MIT",
+  "license": "CC-BY-NC-4.0",
   "licenseFile": "LICENSE",
   "meta": "meta.json",
   "models": {

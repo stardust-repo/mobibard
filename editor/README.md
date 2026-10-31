@@ -86,15 +86,15 @@ assets/icons/
 - 일반 저장, Google Drive 저장, IndexedDB 자동 저장에 Undo/Redo 히스토리(현재 위치 포함)를 함께 저장하고 복원합니다.
 - v29에서는 1단계 채널 그룹 구조(`groupId` 및 그룹 메타데이터)를 프로젝트/히스토리에 함께 저장합니다.
 
-## 2026-10-23 불러오기: 오디오 AI 변환 (Beta)
+## 2026-10-23 불러오기: 오디오 AI 변환
 
 - `파일 > 불러오기`(통합 불러오기 팝업의 `파일 선택` 포함)에서 오디오(`wav`·`mp3`·`ogg`·`oga`·`opus`·`m4a`·`aac`·`flac`·`webm`·`aif`·`aiff`)를 선택하면 공용 모듈 `plugins/ai/wave2midi/`(Wave2MIDI, 모델 v0.1)로 악기별 MIDI를 만든 뒤 기존 통합 불러오기 팝업에서 미리듣기·채널 선택·양자화·새로 열기/추가를 그대로 사용합니다. 별도 `MIDI 추출` 메뉴(외부 MuScriptor 링크)는 제거했습니다.
-- 팝업 제목은 `오디오 · AI 변환 (Beta) 불러오기`이며, 변환 중에는 채널 목록 자리에 진행 막대와 단계(모델 다운로드 MB, 분석 구간 n/m)를 표시합니다. 완료되면 모델 버전·노트 수·소요 시간을 알림으로 보여 줍니다.
+- 팝업 제목은 `오디오 · AI 변환 불러오기`이며, 변환 중에는 채널 목록 자리에 진행 막대와 단계(모델 다운로드 MB, 분석 구간 n/m)를 표시합니다. 완료되면 모델 버전·노트 수·소요 시간을 알림으로 보여 줍니다.
 - 변환은 브라우저 Worker에서 진행하며 파일은 업로드되지 않습니다. 양자화 등 옵션을 바꾸면 AI를 다시 실행하지 않고 변환된 MIDI만 다시 해석합니다.
 - 팝업의 취소·닫기·Esc는 실행 중인 변환 Worker를 종료합니다. 최대 길이는 10분입니다.
 - AI 모델(39 MB)은 처음 한 번 내려받아 IndexedDB에 저장하고 영구 저장소(`navigator.storage.persist()`)를 요청합니다. 이후에는 네트워크 없이 SHA-256 검증 후 사용하며, `meta.json`만 바뀐 경우에도 다음 사용 때 갱신됩니다.
 - 오디오 참고 트랙으로 넣는 기존 `오디오 가져오기` 기능은 그대로입니다.
-- 모델은 startdust-io가 제작한 MIT License 모델이며, 변환 진행 패널에 `Wave2MIDI v0.1 · startdust-io · MIT License`를 표시하고 `plugins/ai/wave2midi/model/LICENSE`로 연결합니다.
+- 모델은 startdust-io가 제작한 CC BY-NC 4.0(비상업 이용 전용) 모델이며, 변환 진행 패널에 `Wave2MIDI v1.1 · startdust-io · CC BY-NC 4.0`를 표시하고 `plugins/ai/wave2midi/model/LICENSE`로 연결합니다.
 
 ## 2026-10-24 내보내기·레이아웃 수정
 
