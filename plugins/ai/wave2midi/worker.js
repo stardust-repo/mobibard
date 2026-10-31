@@ -17,10 +17,10 @@ const BASE = new URL("./", self.location.href);
 // Cache-busting token passed by wave2midi.js (worker.js?v=...), reused for the ES module imports.
 const ASSET_VERSION = new URL(self.location.href).searchParams.get("v") || "1";
 const libUrl = name => new URL(`lib/${name}?v=${encodeURIComponent(ASSET_VERSION)}`, BASE).href;
-const ORT_VERSION = "1.20.1";
+const ORT_VERSION = "1.31.1";
 const ORT_FILE = "ort.webgpu.min.js";
 const DEFAULT_ORT_SOURCES = [
-  new URL("vendor/onnxruntime-web/", BASE).href,
+  new URL("../../vendor/onnxruntime-web/1.31.1/", BASE).href,
   `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`,
 ];
 
