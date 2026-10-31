@@ -15807,6 +15807,14 @@
     return { ...parsed, noteParts, endBeat: Number(endBeat.toFixed(6)) };
   }
 
+  // After an import (new or added) the playhead goes back to the start and the timeline scrolls there,
+  // so pressing play starts from the beginning of what was just loaded.
+  function resetTimelineToStartAfterImport() {
+    setPlayheadBeat(0);
+    if (elements.rollViewport) elements.rollViewport.scrollLeft = 0;
+    drawTimeline();
+  }
+
   async function applyMidiImport(action = "add") {
     if (state.midiImport.busy) return false;
     // 미리보기를 걷어내 원래 프로젝트로 되돌린 뒤 실제 불러오기를 적용합니다(히스토리/저장 정상 기록).
@@ -15836,11 +15844,11 @@
         markDirty(`${state.midiImport.sourceLabel || "MIDI"} ${i18nText(openNew ? "ui.open_new" : "action.add")}`);
         shrinkTimelineToContent();
         ensureTimelineFitsViewport();
-        state.playhead.beat = clamp(state.playhead.beat, 0, getTotalBeats());
         state.midiImport.busy = false;
         closeMidiImportDialog();
         renderAll();
         resizeAndDraw();
+        resetTimelineToStartAfterImport();
         const limitToast = imported.limitedInstrumentCount > 0
           ? i18nText("midi.limit_channels_applied", [imported.limitedInstrumentCount, imported.maxChannelsPerInstrument])
           : "";
@@ -15911,6 +15919,7 @@
       closeMidiImportDialog();
       renderAll();
       resizeAndDraw();
+      resetTimelineToStartAfterImport();
       showToast(i18nText(openNew ? "mml.opened_new_channels" : "channel.add_edit", [importLabel, parsed.noteParts.length]));
       return true;
     } catch (error) {
