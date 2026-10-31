@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.20";
+  const VERSION = "1.0.21";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -50,7 +50,7 @@
   })();
 
   // Diagnostics: the page address can force a path, e.g. editor/index.html?w2m=wasm
-  //   w2m=wasm (CPU only) | w16 | fp16 (build) | low / full (low-memory mode on / off); join with commas: ?w2m=w16,full
+  //   w2m=wasm (CPU only) | w16 | fp16 (build) | low / full (low-memory mode on / off) | ort120 (old runtime); join with commas: ?w2m=w16,full
   const DEBUG_FLAGS = (() => {
     try {
       return new Set(String(new URLSearchParams(root.location?.search || "").get("w2m") || "").toLowerCase().split(",").filter(Boolean));
@@ -63,6 +63,11 @@
     if (DEBUG_FLAGS.has("w16")) return "w16";
     if (DEBUG_FLAGS.has("fp16")) return "fp16";
     return options.modelVariant || "auto";
+  }
+  // ?w2m=ort120 loads ONNX Runtime 1.20.1 from the CDN instead of the bundled 1.31.1 (to compare runtimes).
+  function pickOrtSources(options) {
+    if (DEBUG_FLAGS.has("ort120")) return ["https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/"];
+    return options.ortSources;
   }
   function pickLowMemory(options) {
     if (DEBUG_FLAGS.has("low")) return true;
@@ -243,7 +248,7 @@
         maxSeconds,
         executionProvider: pickProvider(options),
         modelVariant: pickVariant(options),
-        ortSources: options.ortSources,
+        ortSources: pickOrtSources(options),
         lowMemory: pickLowMemory(options),
       },
     }, { onProgress, signal, transfer: [wave.buffer] });
@@ -291,7 +296,7 @@
     const result = await call("preload", { options: {
       executionProvider: pickProvider(options),
       modelVariant: pickVariant(options),
-      ortSources: options.ortSources,
+      ortSources: pickOrtSources(options),
     } }, options);
     result.storage = await storagePromise;
     return result;
