@@ -5484,6 +5484,11 @@
     closePlaybackRateMenu();
     closeItemAddMenu();
     if (!opening) return false;
+    if (elements.itemAddMidiInputButton) {
+      const exists = Boolean(getMidiInputGroup());
+      elements.itemAddMidiInputButton.disabled = exists;
+      elements.itemAddMidiInputButton.title = exists ? i18nText("midi_input.menu_exists") : "";
+    }
     elements.itemAddMenu.hidden = false;
     anchorButton.setAttribute("aria-expanded", "true");
     requestAnimationFrame(() => {
@@ -32779,6 +32784,8 @@
       { label: i18nText("channel.label"), action: () => groupId == null ? addChannel() : addChannelToGroup(groupId) },
       { label: i18nText("audio.label"), action: () => openAudioImportPicker(groupId) },
       ...(groupId == null ? [{ label: i18nText("group.label"), action: addChannelGroup }] : []),
+      // MIDI 입력 항목은 프로젝트에 하나만 만들 수 있어, 이미 있으면 비활성화합니다.
+      ...(groupId == null ? [{ label: i18nText("midi_input.menu_label"), disabled: Boolean(getMidiInputGroup()), disabledReason: i18nText("midi_input.menu_exists"), action: () => createOrSelectMidiInputGroup() }] : []),
     ];
 
     const globalDeleteContextItems = () => [
@@ -33535,7 +33542,7 @@
   // Text lives in the locale files (guide.<id>.*); `blocks` gives the item count of each block.
   const GUIDE_SECTIONS = Object.freeze([
     { id: "basics", steps: 5, figure: "overview" },
-    { id: "channels", blocks: [3, 3, 1, 2, 2, 3], figure: "channels" },
+    { id: "channels", blocks: [3, 3, 1, 2, 2, 5], figure: "channels" },
     { id: "notes", blocks: [3, 4, 4], figure: "notes" },
     { id: "volume", blocks: [2, 2, 3], figure: "volume" },
     { id: "transform", blocks: [3, 3], figure: "transform" },
