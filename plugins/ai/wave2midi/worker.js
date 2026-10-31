@@ -265,6 +265,10 @@ async function transcribe(id, wave, options) {
     predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total), predictOptions);
   } finally {
     pool.terminate();
+    // iPad / iPhone: the WebGPU weights and buffers of the session stay allocated while the worker idles, and the
+    // tab was killed shortly after a conversion finished. Free them right away (the next conversion reloads the
+    // model from the IndexedDB copy). The probability maps stay, so "postprocess" still works without the model.
+    if (options.lowMemory) await releaseSession();
   }
   // The model output is kept so post-processing options (note sensitivity, velocity, tempo) can be
   // re-applied without running the model again ("postprocess" message). Freed with the worker.
