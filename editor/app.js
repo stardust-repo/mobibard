@@ -33542,7 +33542,8 @@
   // Text lives in the locale files (guide.<id>.*); `blocks` gives the item count of each block.
   const GUIDE_SECTIONS = Object.freeze([
     { id: "basics", steps: 5, figure: "overview" },
-    { id: "channels", blocks: [3, 3, 1, 2, 2, 5], figure: "channels" },
+    { id: "channels", blocks: [3, 3, 1, 2, 2], figure: "channels" },
+    { id: "midi", blocks: [4, 3, 3, 2, 5], figure: "" },
     { id: "notes", blocks: [3, 4, 4], figure: "notes" },
     { id: "volume", blocks: [2, 2, 3], figure: "volume" },
     { id: "transform", blocks: [3, 3], figure: "transform" },
@@ -33551,6 +33552,7 @@
     { id: "measure", blocks: [4, 2], figure: "measure" },
     { id: "parts", blocks: [2, 2], figure: "parts" },
     { id: "import", blocks: [5, 2, 1, 3], figure: "import" },
+    { id: "listen", blocks: [4, 3, 1, 2], figure: "range" },
     { id: "export", blocks: [4, 2, 2], figure: "export" },
   ]);
   // Callout positions (percent of the 1280×720 capture) for the basics steps 1–5:
@@ -33652,6 +33654,21 @@
           { label: t("timeline.event_delete_all"), danger: true },
           { label: t("timeline.event_delete_before"), danger: true },
           { label: t("timeline.event_delete_after"), danger: true },
+        ])}</div>`;
+      case "range":
+        return `<div class="gf-menu-wrap">${menu([
+          { label: t("timeline.tempo_menu"), sub: true },
+          { label: t("timeline.fade_menu"), sub: true },
+          { label: t("timeline.time_signature_menu"), sub: true },
+          { label: t("timeline.part_menu"), sub: true },
+          { label: t("timeline.measure_menu"), sub: true },
+          { label: t("timeline.playback_range_menu"), sub: true, active: true },
+          { label: t("timeline.event_delete"), sub: true, danger: true },
+        ])}${menu([
+          { label: t("timeline.playback_range_set_start") },
+          { label: t("timeline.playback_range_set_end") },
+          "-",
+          { label: t("timeline.playback_range_clear"), danger: true },
         ])}</div>`;
       case "measure":
         return `<div class="gf-stack">
