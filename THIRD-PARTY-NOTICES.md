@@ -190,9 +190,9 @@ Relevant upstream projects:
 - libvorbis: https://github.com/xiph/vorbis
 
 
-## ONNX Runtime Web 1.31.1 (Wave2MIDI)
+## ONNX Runtime Web 1.20.1 (Wave2MIDI)
 
-`plugins/ai/wave2midi/worker.js` loads ONNX Runtime Web from `plugins/vendor/onnxruntime-web/1.31.1/` when present, otherwise from `https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/`.
+`plugins/ai/wave2midi/worker.js` loads ONNX Runtime Web from `plugins/vendor/onnxruntime-web/1.20.1/` when present, otherwise from `https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/`.
 Project: https://github.com/microsoft/onnxruntime
 
 MIT License

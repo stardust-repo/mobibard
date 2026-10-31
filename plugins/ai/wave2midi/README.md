@@ -16,12 +16,11 @@ plugins/ai/wave2midi/
   lib/midi.mjs            표준 MIDI 작성기 (w2m/midi.py)
   lib/tempo.mjs           노트로부터 템포 맵 추정 (w2m/tempo.py, 기본 사용)
   lib/model-cache.mjs     모델 영구 저장(IndexedDB) + SHA-256 무결성 검사
-  model/wave2mid_fp16.onnx  가속용: 16비트 연산 (39 MB). WebGPU + shader-f16 지원 환경에서만 사용
-  model/wave2mid_w16.onnx   기본(fallback): 16비트 가중치 / 32비트 연산 (39 MB). 모든 환경
+  model/wave2mid_w16.onnx   모델 (39 MB): 16비트 가중치 / 32비트 연산. GPU(WebGPU)와 CPU(WebAssembly) 모두 이 파일 하나로 실행
   model/meta.json         학습 export 메타데이터 (모델 버전 v1.1, 전처리, 임계값, 16개 GM 클래스, velocity 설정)
-  model/manifest.json     모델 이름·버전·제작자·라이선스, 빌드별(models.fp16 / models.w16) 파일명·크기·sha256
+  model/manifest.json     모델 이름·버전·제작자·라이선스, 파일명·크기·sha256(models.w16)
   model/LICENSE           모델 라이선스 (CC BY-NC 4.0, startdust-io)
-  (ONNX Runtime 1.31.1 사본은 공용 모듈로 `plugins/vendor/onnxruntime-web/1.31.1/`에 있습니다. 없으면 jsDelivr 1.31.1 사용)
+  (ONNX Runtime 1.20.1 사본은 공용 모듈로 `plugins/vendor/onnxruntime-web/1.20.1/`에 있습니다. 없으면 jsDelivr 1.20.1 사용)
 ```
 
 `lib/*.mjs` 중 dsp·decode·velocity·midi·tempo는 학습 저장소의 web export와 동일한 파일입니다. 학습 쪽에서 갱신되면 그대로 덮어쓰면 됩니다.
@@ -61,14 +60,13 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 - 오류 `error.code`: `unsupported`, `decode-failed`, `too-long`, `runtime-unavailable`, `model-unavailable`, `model-corrupt`, `model-init-failed`, `out-of-memory`, `aborted`
 - 기본 최대 길이는 10분입니다(`maxSeconds`). 악기 확률 맵이 오디오 1분당 약 34 MB를 쓰기 때문입니다.
 - 실행 환경 판별(모든 제품 공통, Worker 안에서 자동):
-  1. WebGPU 어댑터가 있고 `shader-f16` 기능을 지원하며, 그 기능으로 장치를 실제로 만들 수 있으면 **fp16 빌드**(`wave2mid_fp16.onnx`)만 내려받아 WebGPU로 실행합니다.
-  2. 그렇지 않으면 **w16 빌드**(`wave2mid_w16.onnx`)만 내려받아 WebGPU(가능하면) 또는 WebAssembly(CPU)로 실행합니다.
-  3. fp16 빌드의 다운로드·초기화·추론 중 하나라도 실패하면 자동으로 w16 빌드로 다시 시도합니다.
-  - 강제로 CPU를 쓰려면 `executionProvider: "wasm"`(항상 w16), 빌드를 고정하려면 `modelVariant: "fp16" | "w16"`을 넘기세요.
+  1. 브라우저가 WebGPU를 제공하면(휴대폰·태블릿 포함) GPU로 먼저 실행합니다. GPU 세션을 만들지 못하면 같은 모델을 CPU(WebAssembly)로 실행합니다.
+  2. GPU 세션은 만들어졌지만 변환 도중 실패(장치 유실 등)하면 처음부터 CPU로 다시 실행합니다.
+  - 강제로 CPU를 쓰려면 `executionProvider: "wasm"`을 넘기세요.
   - 주파수 특징(frontend) 계산은 중첩 Web Worker(`lib/feature_worker.mjs`) 여러 개(최대 `코어 수 - 2`, 8개 이하)가 앞선 창들을 미리 병렬로 계산합니다. 중첩 Worker를 쓸 수 없으면 Worker 안에서 직접 계산합니다.
   - 다음 창의 신경망 실행을 이전 창의 결과 합산 전에 먼저 시작해 GPU/CPU가 쉬지 않게 합니다(`lib/decode.mjs`).
   - 교차 출처 격리 페이지의 WebAssembly 스레드 수는 `min(8, 코어 수 - 2)`입니다.
-  - `MobibardWave2Midi.getCapabilities()`는 모델을 받지 않고 `{ webgpu, shaderF16, adapter, variant }`를 돌려줍니다. `transcribe()` 결과의 `result.variant`와 `result.model.variant`에 실제 사용한 빌드가 들어 있습니다.
+  - `MobibardWave2Midi.getCapabilities()`는 모델을 받지 않고 `{ webgpu, adapter, variant }`를 돌려줍니다. `transcribe()` 결과의 `result.provider`("webgpu" 또는 "wasm")에 실제 실행 위치가 들어 있습니다.
 - Worker는 마지막 사용 뒤 3분이 지나면 종료되어 메모리를 돌려줍니다. 다음 호출 때 모델은 IndexedDB에서 다시 불러옵니다.
 
 ### 후처리 다시 적용 (1.0.12~)
@@ -87,7 +85,7 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 
 - 첫 사용 때 그 환경에 맞는 빌드 하나만 내려받아 IndexedDB `mobibard-ai-models`에 저장하고, `navigator.storage.persist()`로 영구 저장소를 요청합니다. 허용되면 브라우저가 저장 공간 부족 등을 이유로 자동 삭제하지 않습니다. 사용자가 사이트 데이터를 직접 지우면 삭제됩니다.
 - 불러올 때마다 크기와 SHA-256을 확인합니다. 손상되었거나 `manifest.json`의 sha256과 다르면 다시 내려받습니다.
-- 같은 사이트의 모든 제품이 저장된 모델을 같이 씁니다. 빌드마다 따로 저장되며(w16은 `mobibard_m2m`, fp16은 `mobibard_m2m:fp16`), w16은 이전 버전과 같은 키·같은 파일이라 이미 받아 둔 모델을 그대로 씁니다.
+- 같은 사이트의 모든 제품이 저장된 모델을 같이 씁니다. 저장 키는 `mobibard_m2m`이며, 이전 버전과 같은 키·같은 파일이라 이미 받아 둔 모델을 그대로 씁니다(예전에 저장된 `mobibard_m2m:fp16` 항목은 쓰이지 않습니다).
 - `meta.json`(버전 표기, 임계값 등)은 모델 파일과 별개로 매번 새로 받아 저장본을 갱신합니다. 모델 파일이 같으면 다시 내려받지 않습니다.
 - 오프라인이어서 `manifest.json`을 못 받아도 저장된 모델과 메타가 있으면 그대로 사용합니다.
 - `MobibardWave2Midi.getCacheStatus()`로 상태를 확인하고, `clearCache()`로 삭제할 수 있습니다.
@@ -95,11 +93,11 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 ## 모델 교체
 
 1. `model/`에 새 onnx와 `meta.json`을 넣습니다.
-2. `manifest.json`의 `models.fp16`, `models.w16` 각각의 `file`, `bytes`, `sha256`을 갱신합니다. 맨 위의 `file`/`bytes`/`sha256`은 이전 버전 호환용이므로 w16과 같은 값으로 맞춥니다.
+2. `manifest.json`의 `models.w16`의 `file`, `bytes`, `sha256`을 갱신합니다. 맨 위의 `file`/`bytes`/`sha256`은 이전 버전 호환용이므로 w16과 같은 값으로 맞춥니다.
 
 ```bash
-stat -c %s model/wave2mid_fp16.onnx model/wave2mid_w16.onnx
-sha256sum model/wave2mid_fp16.onnx model/wave2mid_w16.onnx
+stat -c %s model/wave2mid_w16.onnx
+sha256sum model/wave2mid_w16.onnx
 ```
 
 sha256이 바뀌면 사용자 브라우저에 있던 이전 모델은 다음 사용 때 새 모델로 교체됩니다. `meta.json`만 고친 경우에는 manifest를 바꿀 필요가 없습니다.

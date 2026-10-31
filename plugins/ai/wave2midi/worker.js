@@ -5,11 +5,9 @@
  *   -> note decoding -> velocity -> Standard MIDI bytes.
  * The model bytes come from lib/model-cache.mjs (IndexedDB, verified by SHA-256).
  *
- * Two builds of the same model are published (model/manifest.json "models"):
- *   fp16 — half-precision compute, WebGPU only, needs the adapter feature "shader-f16"
- *   w16  — 16-bit weights / 32-bit compute, runs everywhere (WebGPU or WebAssembly); the fallback
- * The environment is probed first and only the build that will actually run is downloaded.
- * If the fp16 build cannot be downloaded, initialised or run, the worker falls back to w16.
+ * One model build is published (model/manifest.json "models.w16": 16-bit weights, 32-bit maths). It runs on
+ * the GPU (WebGPU) whenever the browser offers it and on the CPU (WebAssembly) otherwise; if the GPU session
+ * cannot be created or a GPU run fails, the work is repeated on the CPU.
  */
 "use strict";
 
@@ -17,10 +15,10 @@ const BASE = new URL("./", self.location.href);
 // Cache-busting token passed by wave2midi.js (worker.js?v=...), reused for the ES module imports.
 const ASSET_VERSION = new URL(self.location.href).searchParams.get("v") || "1";
 const libUrl = name => new URL(`lib/${name}?v=${encodeURIComponent(ASSET_VERSION)}`, BASE).href;
-const ORT_VERSION = "1.31.1";
+const ORT_VERSION = "1.20.1";
 const ORT_FILE = "ort.webgpu.min.js";
 const DEFAULT_ORT_SOURCES = [
-  new URL("../../vendor/onnxruntime-web/1.31.1/", BASE).href,
+  new URL("../../vendor/onnxruntime-web/1.20.1/", BASE).href,
   `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`,
 ];
 
@@ -70,53 +68,38 @@ function loadOrt(sources) {
 }
 
 // ---- Environment probe -----------------------------------------------------------------
-// fp16 needs a WebGPU adapter that exposes "shader-f16" (half floats in WGSL); ONNX Runtime's
-// WebGPU backend requests that feature itself when the adapter has it. The result is cached
-// for the worker's lifetime.
+// The model is a single build (w16: 16-bit weights, 32-bit maths), so the only question is whether the GPU can be
+// used. WebGPU is used whenever the browser gives an adapter (phones and tablets included); ONNX Runtime falls back
+// to WebAssembly by itself when the GPU session cannot be created, and a run that fails on the GPU is repeated on
+// the CPU (see transcribe). The result is cached for the worker's lifetime.
 let capsPromise = null;
 function probeCapabilities() {
   capsPromise ??= (async () => {
-    const caps = { webgpu: false, shaderF16: false, adapter: "" };
+    const caps = { webgpu: false, adapter: "" };
     if (!self.navigator?.gpu) return caps;
     try {
       const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+      // Without an adapter ONNX Runtime silently drops "webgpu" and runs on the CPU, so it must not be reported as GPU.
       if (!adapter) return caps;
       caps.webgpu = true;
-      caps.shaderF16 = !!adapter.features?.has?.("shader-f16");
       const info = adapter.info || (await adapter.requestAdapterInfo?.().catch(() => null)) || null;
       caps.adapter = [info?.vendor, info?.architecture, info?.description].filter(Boolean).join(" ");
-      // Confirms a device with half-float shaders can really be created on this adapter
-      // (some drivers advertise the feature but refuse the device).
-      if (caps.shaderF16) {
-        try {
-          const device = await adapter.requestDevice({ requiredFeatures: ["shader-f16"] });
-          device.destroy?.();
-        } catch {
-          caps.shaderF16 = false;
-        }
-      }
     } catch { /* WebGPU blocked or crashed: WebAssembly only */ }
     return caps;
   })();
   return capsPromise;
 }
 
-// Builds to try, best first. options.modelVariant: "auto" (default) | "fp16" | "w16".
 function cpuOnly(options) {
   return options.executionProvider === "wasm";
 }
 
 async function chooseVariants(options) {
-  if (cpuOnly(options)) return { caps: { webgpu: false, shaderF16: false, adapter: "", skipped: "cpu-only" }, order: ["w16"] };
-  const caps = await probeCapabilities();
-  if (options.modelVariant === "w16") return { caps, order: ["w16"] };
-  const fp16Ready = caps.webgpu && caps.shaderF16;
-  return { caps, order: fp16Ready ? ["fp16", "w16"] : ["w16"] };
+  if (cpuOnly(options)) return { caps: { webgpu: false, adapter: "", skipped: "cpu-only" }, order: ["w16"] };
+  return { caps: await probeCapabilities(), order: ["w16"] };
 }
 
 function executionPlans(variant, options, caps) {
-  // fp16 is only worth running on the GPU; on WebAssembly it would be emulated and slower than w16.
-  if (variant === "fp16") return [["webgpu"]];
   return cpuOnly(options) || !caps.webgpu ? [["wasm"]] : [["webgpu", "wasm"], ["wasm"]];
 }
 
@@ -128,7 +111,7 @@ async function releaseSession() {
 }
 
 async function ensureSession(options, progress) {
-  if (session && (!options.modelVariant || options.modelVariant === "auto" || options.modelVariant === sessionInfo?.variant)) return sessionInfo;
+  if (session && (options.executionProvider !== "wasm" || sessionInfo?.provider === "wasm")) return sessionInfo;
   if (session) await releaseSession();
   const libs = await loadLibs();
   progress("runtime", 0, 0);
@@ -140,10 +123,7 @@ async function ensureSession(options, progress) {
     try {
       model = await libs.cache.loadModel(new URL("model/", BASE).href, (stage, loaded, total) => progress(stage, loaded, total), { variant });
     } catch (error) {
-      // The fallback build is mandatory; a missing/corrupt fp16 build just means "use w16".
-      if (variant === order[order.length - 1]) throw error;
-      errors.push(`[${variant} download] ${error?.message || error}`);
-      continue;
+      throw error;
     }
     progress("model-init", 0, 0);
     for (const eps of executionPlans(model.variant, options, caps)) {
@@ -161,7 +141,6 @@ async function ensureSession(options, progress) {
           modelStored: model.stored,
           fallbackReasons: errors.slice(),
         };
-        if (errors.length) console.warn("[Wave2MIDI] fp16 build unavailable, using", model.variant, errors);
         return sessionInfo;
       } catch (error) {
         errors.push(`[${model.variant} ${eps.join("+")}] ${error?.message || error}`);
@@ -229,10 +208,8 @@ async function transcribe(id, wave, options) {
   const started = performance.now();
 
   // Features for several windows are prepared in parallel workers while the network runs.
-  // lowMemory (iPhone / iPad): no helper workers and only one window prepared ahead. Every helper worker and every
-  // prepared window (13.5 MB each) adds to the memory of the tab, and iOS reloads the page when it runs out.
   const cores = navigator.hardwareConcurrency || 4;
-  const poolSize = options.lowMemory ? 0 : Math.max(1, Math.min(8, cores - 2));
+  const poolSize = Math.max(1, Math.min(8, cores - 2));
   const pool = new FeaturePool(meta, poolSize);
   const predictOptions = { prepare: seg => pool.features(seg, dsp), lookahead: Math.max(1, pool.size) };
   const runWindow = async feats => {
@@ -255,20 +232,16 @@ async function transcribe(id, wave, options) {
   try {
     predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total), predictOptions);
   } catch (error) {
-    // Some GPUs pass the probe but fail (or lose the device) while running half precision.
-    if (info.variant !== "fp16" || error instanceof RangeError) throw error;
-    console.warn("[Wave2MIDI] fp16 inference failed, retrying with the w16 build", error);
+    // Some GPUs create the session but fail (or lose the device) while running: repeat the whole run on the CPU.
+    if (info.provider !== "webgpu" || error instanceof RangeError) throw error;
+    console.warn("[Wave2MIDI] GPU inference failed, retrying on the CPU (WebAssembly)", error);
     await releaseSession();
-    info = await ensureSession({ ...options, modelVariant: "w16" }, progress);
-    info.fallbackReasons = [...(info.fallbackReasons || []), `[fp16 run] ${error?.message || error}`];
+    info = await ensureSession({ ...options, executionProvider: "wasm" }, progress);
+    info.fallbackReasons = [...(info.fallbackReasons || []), `[gpu run] ${error?.message || error}`];
     progress("analyze", 0, windowCount);
     predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total), predictOptions);
   } finally {
     pool.terminate();
-    // iPad / iPhone: the WebGPU weights and buffers of the session stay allocated while the worker idles, and the
-    // tab was killed shortly after a conversion finished. Free them right away (the next conversion reloads the
-    // model from the IndexedDB copy). The probability maps stay, so "postprocess" still works without the model.
-    if (options.lowMemory) await releaseSession();
   }
   // The model output is kept so post-processing options (note sensitivity, velocity, tempo) can be
   // re-applied without running the model again ("postprocess" message). Freed with the worker.

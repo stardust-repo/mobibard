@@ -7,13 +7,6 @@
   "licenseFile": "LICENSE",
   "meta": "meta.json",
   "models": {
-    "fp16": {
-      "file": "wave2mid_fp16.onnx",
-      "bytes": 39099614,
-      "sha256": "bcefccfc8d266db80b4c7cf73318fb9f940e41582ac14583f1258b96cded789e",
-      "compute": "fp16",
-      "requires": "webgpu-shader-f16"
-    },
     "w16": {
       "file": "wave2mid_w16.onnx",
       "bytes": 39042933,
