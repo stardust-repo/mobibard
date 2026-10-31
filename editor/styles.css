@@ -15848,3 +15848,36 @@ body.side-tool-import-active { --inline-detail-width: 170px; }
 .midi-input-hint { margin: 0; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
 body.midi-input-recording #playheadTimeLabel { background: #e5484d; }
 @keyframes midi-input-blink { 50% { opacity: .25; } }
+.midi-input-monitor-button.is-open { border-color: color-mix(in srgb, var(--accent) 60%, var(--control-border)); color: var(--accent); }
+.midi-input-monitor {
+  display: grid;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+}
+.midi-input-monitor-hint { margin: 0; font-size: 11px; font-weight: 700; line-height: 1.4; color: var(--text); }
+.midi-input-monitor-devices, .midi-input-monitor-signals { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.midi-input-monitor-devices li { display: grid; gap: 1px; font-size: 10.5px; }
+.midi-input-monitor-devices strong { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.midi-input-monitor-devices span { color: var(--muted); }
+.midi-input-monitor-signals { max-height: 168px; overflow-y: auto; }
+.midi-input-monitor-signals li {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 6px;
+  padding: 2px 4px;
+  border-left: 3px solid var(--control-border);
+  border-radius: 3px;
+  font-size: 10.5px;
+  background: color-mix(in srgb, var(--control-bg) 70%, transparent);
+}
+.midi-input-monitor-signals li.is-empty { display: block; color: var(--muted); border-left-color: transparent; }
+.midi-input-monitor-signals time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.midi-input-monitor-signals span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.midi-input-monitor-signals em { grid-column: 2; font-style: normal; color: var(--muted); }
+.midi-input-monitor-signals li.is-recorded { border-left-color: #22a06b; }
+.midi-input-monitor-signals li.is-recorded em { color: #22a06b; font-weight: 700; }
+.midi-input-monitor-signals li.is-warn { border-left-color: #d97706; }
+.midi-input-monitor-signals li.is-warn em { color: #d97706; font-weight: 700; }

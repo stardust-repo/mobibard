@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261031c-midiin1";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261031e-midimon1";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.5.0&amp;rev=20261031c-midiin1"></script>
+<script src="js/language-manager.js?v=5.5.0&amp;rev=20261031e-midimon1"></script>
 <title data-i18n="app.title">모비바드 v5.5</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.5.0&amp;rev=20261031c-midiin1" rel="stylesheet"/>
+<link href="styles.css?v=5.5.0&amp;rev=20261031e-midimon1" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -758,7 +758,7 @@
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/mbt/format-mbt.js?v=1.0.2&amp;rev=20260920-mbt-extension-only"></script>
-<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261031c-midiin1"></script>
+<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261031e-midimon1"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
@@ -774,14 +774,14 @@
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
 <script src="js/soundbank-player.js?v=5.5.0&amp;rev=20261030-safari-audio1"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261031c-midiin1"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261031e-midimon1"></script>
 <script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.13"></script>
-<script src="app.js?v=5.5.0&amp;rev=20261031c-midiin1"></script>
+<script src="app.js?v=5.5.0&amp;rev=20261031e-midimon1"></script>
 <script src="js/account-drive.js?v=5.5.0&amp;rev=20260928-account-preference1" type="module"></script>
 </body>
 </html>
