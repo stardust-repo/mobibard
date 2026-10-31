@@ -59,7 +59,7 @@ function loadOrt(sources) {
         ortBase = base;
         self.ort.env.wasm.wasmPaths = base;
         // Multi-threaded WASM needs SharedArrayBuffer (cross-origin isolation); GitHub Pages is not isolated.
-        self.ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)) : 1;
+        self.ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 2)) : 1;
         return base;
       }
     } catch (error) {
@@ -171,6 +171,53 @@ async function ensureSession(options, progress) {
   throw fail("model-init-failed", "The model could not be initialised. " + errors.join(" | "));
 }
 
+// ---- Frontend features in nested Web Workers ---------------------------------------------
+// One window's features take about as long as 5 network runs on a GPU, so several windows are prepared in
+// parallel (lib/feature_worker.mjs) while the network runs. Falls back to the calling thread.
+class FeaturePool {
+  constructor(meta, count) {
+    this.meta = meta;
+    this.workers = [];
+    this.jobs = new Map();
+    this.next = 0;
+    try {
+      if (typeof Worker === "undefined") throw new Error("nested workers unavailable");
+      const url = libUrl("feature_worker.mjs");
+      for (let i = 0; i < count; i++) {
+        const w = new Worker(url, { type: "module" });
+        w.onmessage = e => {
+          const job = this.jobs.get(e.data.id);
+          this.jobs.delete(e.data.id);
+          job?.resolve(e.data.f);
+        };
+        w.onerror = e => {
+          // A worker that cannot start (module workers unsupported, blocked, ...): switch to the main path.
+          for (const job of this.jobs.values()) job.reject(new Error(e.message || "feature worker failed"));
+          this.jobs.clear();
+          this.terminate();
+        };
+        w.postMessage({ meta });
+        this.workers.push(w);
+      }
+    } catch {
+      this.terminate();
+    }
+  }
+  get size() { return this.workers.length; }
+  features(seg, dsp) {
+    if (!this.workers.length) return Promise.resolve(dsp.frontendFeatures(seg, this.meta));
+    const id = this.next++;
+    const promise = new Promise((resolve, reject) => this.jobs.set(id, { resolve, reject }));
+    this.workers[id % this.workers.length].postMessage({ id, seg });   // copied (0.8 MB), so seg stays usable
+    // If the pool dies mid-run, recompute on this thread instead of failing the whole conversion.
+    return promise.catch(() => dsp.frontendFeatures(seg, this.meta));
+  }
+  terminate() {
+    for (const w of this.workers) { try { w.terminate(); } catch { /* gone */ } }
+    this.workers = [];
+  }
+}
+
 async function transcribe(id, wave, options) {
   const progress = (stage, done = 0, total = 0) => self.postMessage({ type: "progress", id, stage, done, total });
   let info = await ensureSession(options, progress);
@@ -181,8 +228,13 @@ async function transcribe(id, wave, options) {
   if (maxSeconds > 0 && seconds > maxSeconds) throw fail("too-long", `Audio is longer than ${maxSeconds} seconds`);
   const started = performance.now();
 
-  const runWindow = async segment => {
-    const input = new self.ort.Tensor("float32", dsp.frontendFeatures(segment, meta), meta.input.shape);
+  // Features for several windows are prepared in parallel workers while the network runs.
+  const cores = navigator.hardwareConcurrency || 4;
+  const poolSize = Math.max(1, Math.min(8, cores - 2));
+  const pool = new FeaturePool(meta, poolSize);
+  const predictOptions = { prepare: seg => pool.features(seg, dsp), lookahead: Math.max(1, pool.size) };
+  const runWindow = async feats => {
+    const input = new self.ort.Tensor("float32", feats, meta.input.shape);
     const result = await session.run({ [meta.input.name || "features"]: input });
     const out = {
       onset: result.onset.data, frame: result.frame.data, offset: result.offset.data,
@@ -199,7 +251,7 @@ async function transcribe(id, wave, options) {
   progress("analyze", 0, windowCount);
   let predicted;
   try {
-    predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total));
+    predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total), predictOptions);
   } catch (error) {
     // Some GPUs pass the probe but fail (or lose the device) while running half precision.
     if (info.variant !== "fp16" || error instanceof RangeError) throw error;
@@ -208,7 +260,9 @@ async function transcribe(id, wave, options) {
     info = await ensureSession({ ...options, modelVariant: "w16" }, progress);
     info.fallbackReasons = [...(info.fallbackReasons || []), `[fp16 run] ${error?.message || error}`];
     progress("analyze", 0, windowCount);
-    predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total));
+    predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total), predictOptions);
+  } finally {
+    pool.terminate();
   }
   // The model output is kept so post-processing options (note sensitivity, velocity, tempo) can be
   // re-applied without running the model again ("postprocess" message). Freed with the worker.

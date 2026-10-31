@@ -91,12 +91,25 @@ export async function predictSong(wave, meta, runWindow, onProgress, opts = {}) 
   };
   const pending = new Map();
   const start = wi => { if (prepare && wi < starts.length && !pending.has(wi)) pending.set(wi, prepare(segment(wi))); };
+  const t0 = performance.now();
+  const stats = { accumulate: 0, wait: 0 };
+  /** Starts the network run of window wi (its input may still be in preparation). */
+  const launch = async wi => {
+    for (let j = wi; j <= wi + ahead; j++) start(j);
+    if (!prepare) return runWindow(segment(wi));
+    const x = await pending.get(wi); pending.delete(wi);
+    return runWindow(x);
+  };
+  // The run of window wi+1 is started BEFORE the results of window wi are added up, so the GPU/CPU keeps working
+  // on the next window while the main thread does the bookkeeping (and no timer tick is waited for per window).
+  let running = launch(0);
   for (let wi = 0; wi < starts.length; wi++) {
     const st = starts[wi];
-    for (let j = wi; j <= wi + ahead; j++) start(j);
-    let pr;
-    if (prepare) { const x = await pending.get(wi); pending.delete(wi); pr = await runWindow(x); }
-    else pr = await runWindow(segment(wi));
+    const tw = performance.now();
+    const pr = await running;
+    stats.wait += performance.now() - tw;
+    if (wi + 1 < starts.length) running = launch(wi + 1);
+    const ta = performance.now();
     const n = Math.min(W, T - st);
     for (let i = 0; i < n; i++) {
       let w = 1;
@@ -111,12 +124,14 @@ export async function predictSong(wave, meta, runWindow, onProgress, opts = {}) 
       for (let j = 0; j < P * K; j++) a[base + j] += w * src[sb + j];
       wsum[t] += w;
     }
+    stats.accumulate += performance.now() - ta;
     if (onProgress) onProgress(wi + 1, starts.length);
   }
+  stats.total = performance.now() - t0;
   for (let t = 0; t < T; t++) {
     const s = Math.max(wsum[t], 1e-6);
     for (const key of ['onset', 'frame', 'offset', 'drum']) for (let p = 0; p < P; p++) acc[key][t * P + p] /= s;
     for (let j = 0; j < P * K; j++) acc.inst[t * P * K + j] /= s;
   }
-  return { probs: acc, T };
+  return { probs: acc, T, stats };
 }

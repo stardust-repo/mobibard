@@ -10,7 +10,8 @@ plugins/ai/wave2midi/
   wave2midi.js            메인 스레드 API (classic script, window.MobibardWave2Midi)
   worker.js               추론 Worker: ONNX Runtime 로드, 창 분할 추론, 디코딩, velocity, MIDI 생성
   lib/dsp.mjs             frontend 특징 추출 (w2m/dsp.py 1:1 포팅)
-  lib/decode.mjs          확률 맵 -> 노트, 8초 창 / 2초 겹침 cross-fade (w2m/labels.py, infer.py)
+  lib/decode.mjs          확률 맵 -> 노트, 8초 창 / 2초 겹침 cross-fade, 창 파이프라이닝 (w2m/labels.py, infer.py)
+  lib/feature_worker.mjs  창별 frontend 특징 계산 (중첩 Web Worker, worker.js가 여러 개 띄움)
   lib/velocity.mjs        onset spectral flux 기반 velocity (w2m/velocity.py)
   lib/midi.mjs            표준 MIDI 작성기 (w2m/midi.py)
   lib/tempo.mjs           노트로부터 템포 맵 추정 (w2m/tempo.py, 기본 사용)
@@ -64,6 +65,9 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
   2. 그렇지 않으면 **w16 빌드**(`wave2mid_w16.onnx`)만 내려받아 WebGPU(가능하면) 또는 WebAssembly(CPU)로 실행합니다.
   3. fp16 빌드의 다운로드·초기화·추론 중 하나라도 실패하면 자동으로 w16 빌드로 다시 시도합니다.
   - 강제로 CPU를 쓰려면 `executionProvider: "wasm"`(항상 w16), 빌드를 고정하려면 `modelVariant: "fp16" | "w16"`을 넘기세요.
+  - 주파수 특징(frontend) 계산은 중첩 Web Worker(`lib/feature_worker.mjs`) 여러 개(최대 `코어 수 - 2`, 8개 이하)가 앞선 창들을 미리 병렬로 계산합니다. 중첩 Worker를 쓸 수 없으면 Worker 안에서 직접 계산합니다.
+  - 다음 창의 신경망 실행을 이전 창의 결과 합산 전에 먼저 시작해 GPU/CPU가 쉬지 않게 합니다(`lib/decode.mjs`).
+  - 교차 출처 격리 페이지의 WebAssembly 스레드 수는 `min(8, 코어 수 - 2)`입니다.
   - `MobibardWave2Midi.getCapabilities()`는 모델을 받지 않고 `{ webgpu, shaderF16, adapter, variant }`를 돌려줍니다. `transcribe()` 결과의 `result.variant`와 `result.model.variant`에 실제 사용한 빌드가 들어 있습니다.
 - Worker는 마지막 사용 뒤 3분이 지나면 종료되어 메모리를 돌려줍니다. 다음 호출 때 모델은 IndexedDB에서 다시 불러옵니다.
 
