@@ -15775,3 +15775,76 @@ body.side-tool-import-active { --inline-detail-width: 170px; }
 #midiImportDetail .midi-import-range-inputs input:disabled { opacity: .5; }
 #midiImportDetail .midi-import-range-inputs { flex-wrap: nowrap; white-space: nowrap; }
 #midiImportDetail .midi-import-range-inputs input { width: 32px; padding: 0 2px; flex: 0 0 auto; }
+
+/* ---- MIDI 입력: 연주를 원본 그대로 기록하는 전용 그룹 ---- */
+.channel-group-item.is-midi-input {
+  height: auto !important;
+  min-height: 34px;
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+.channel-group-item.is-midi-input > .channel-tree-main,
+.channel-group-item.is-midi-input > .channel-tree-actions { flex-shrink: 0; }
+.channel-group-item.is-midi-input > .channel-tree-main { flex: 1 1 0; }
+.channel-group-item.is-midi-input .channel-group-folder { filter: none; }
+.channel-tree-item .channel-tree-midi-record .channel-tree-action-glyph { color: #d63b3b; font-size: 12px; }
+.channel-tree-item .channel-tree-midi-record.is-recording { background: color-mix(in srgb, #e5484d 22%, transparent) !important; }
+.channel-tree-item .channel-tree-midi-record.is-recording .channel-tree-action-glyph { animation: midi-input-blink 1s steps(2, start) infinite; }
+.channel-tree-channel-item.is-midi-input .channel-tree-label::after {
+  content: "🔒";
+  margin-left: 4px;
+  font-size: 9px;
+  opacity: .55;
+}
+.midi-input-controls {
+  flex: 0 0 100%;
+  display: grid;
+  gap: 5px;
+  padding: 4px 4px 5px 6px;
+  font-size: 11px;
+  cursor: default;
+  touch-action: auto;
+}
+.midi-input-controls-row { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.midi-input-record-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 0 10px 0 8px;
+  border: 1px solid color-mix(in srgb, #e5484d 55%, var(--control-border));
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 11px;
+  cursor: pointer;
+}
+.midi-input-record-button:hover { background: color-mix(in srgb, #e5484d 12%, var(--control-hover)); }
+.midi-input-record-dot { width: 9px; height: 9px; border-radius: 50%; background: #e5484d; }
+.midi-input-record-button.is-recording { background: #e5484d; border-color: #e5484d; color: #fff; }
+.midi-input-record-button.is-recording .midi-input-record-dot { background: #fff; border-radius: 2px; animation: midi-input-blink 1s steps(2, start) infinite; }
+.midi-input-record-button:disabled { opacity: .6; cursor: progress; }
+.midi-input-check { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 700; cursor: pointer; }
+.midi-input-check input { margin: 0; }
+.midi-input-status { color: var(--muted); font-weight: 700; line-height: 1.35; }
+.midi-input-status.is-denied, .midi-input-status.is-unsupported { color: #d97706; }
+.midi-input-connect-button {
+  min-height: 22px; padding: 0 8px; border: 1px solid var(--control-border); border-radius: 6px;
+  background: var(--control-bg); color: var(--text); font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.midi-input-device-chip {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+  min-height: 22px; padding: 0 8px; border: 1px solid var(--control-border); border-radius: 999px;
+  background: var(--control-bg); color: var(--muted); font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.midi-input-device-chip.is-enabled { color: var(--text); border-color: color-mix(in srgb, var(--accent) 55%, var(--control-border)); }
+.midi-input-device-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.midi-input-device-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 45%, transparent); }
+.midi-input-device-chip.is-enabled .midi-input-device-dot { background: #22a06b; }
+.midi-input-device-chip.is-active .midi-input-device-dot { background: #4ade80; box-shadow: 0 0 0 3px color-mix(in srgb, #4ade80 35%, transparent); }
+.midi-input-instrument { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px; color: var(--muted); font-weight: 700; }
+.midi-input-instrument select { min-width: 0; min-height: 24px; font-size: 11px; }
+.midi-input-hint { margin: 0; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
+body.midi-input-recording #playheadTimeLabel { background: #e5484d; }
+@keyframes midi-input-blink { 50% { opacity: .25; } }

@@ -355,6 +355,7 @@
     itemAddChannelButton: document.querySelector("#itemAddChannelButton"),
     itemAddAudioButton: document.querySelector("#itemAddAudioButton"),
     itemAddGroupButton: document.querySelector("#itemAddGroupButton"),
+    itemAddMidiInputButton: document.querySelector("#itemAddMidiInputButton"),
     deleteChannelsButton: document.querySelector("#deleteChannelsButton"),
     channelDeleteModeCancelButton: document.querySelector("#channelDeleteModeCancelButton"),
     channelDeleteModeApplyButton: document.querySelector("#channelDeleteModeApplyButton"),
@@ -1880,7 +1881,7 @@
   }
 
   function getInlineSelectableChannels({ notesOnly = true } = {}) {
-    return state.channels.filter((channel) => !notesOnly || (Array.isArray(channel?.notes) && channel.notes.length));
+    return state.channels.filter((channel) => !isMidiInputChannel(channel) && (!notesOnly || (Array.isArray(channel?.notes) && channel.notes.length)));
   }
 
   function setInlineChannelSelectionAll(selectedIds, checked, { notesOnly = true } = {}) {
@@ -1991,6 +1992,7 @@
     onChange = null,
     detailForChannel = null,
     badgeForChannel = null,
+    includeMidiInput = false,
   } = {}) {
     if (!host || !(selectedIds instanceof Set)) return false;
     const scrollTop = host.scrollTop;
@@ -1998,12 +2000,12 @@
     host.classList.add('inline-channel-tree');
     host.setAttribute('role', 'tree');
     host._inlineSelection = { selectedIds, notesOnly, detailForChannel, badgeForChannel };
-    host._inlineRerender = () => renderInlineChannelSelectionList(host, selectedIds, { notesOnly, onChange, detailForChannel, badgeForChannel });
+    host._inlineRerender = () => renderInlineChannelSelectionList(host, selectedIds, { notesOnly, onChange, detailForChannel, badgeForChannel, includeMidiInput });
     const channelById = new Map(state.channels.map((channel, index) => [String(channel.id), { channel, index }]));
     const groupById = new Map(state.channelGroups.map((group) => [String(group.id), group]));
     const rendered = new Set();
     const fragment = document.createDocumentFragment();
-    const rerender = () => renderInlineChannelSelectionList(host, selectedIds, { notesOnly, onChange, detailForChannel, badgeForChannel });
+    const rerender = () => renderInlineChannelSelectionList(host, selectedIds, { notesOnly, onChange, detailForChannel, badgeForChannel, includeMidiInput });
 
     const createToggle = (label) => {
       const button = document.createElement('button');
@@ -2224,10 +2226,14 @@
       fragment.append(item);
     };
 
+    // MIDI 입력(읽기 전용 원본)은 편집 도구 목록에 넣지 않습니다(내보내기처럼 명시한 경우만 포함).
+    if (!includeMidiInput) {
+      for (const [id, found] of [...channelById]) if (isMidiInputChannel(found.channel)) channelById.delete(id);
+    }
     for (const entry of getItemTreeLayout()) {
       if (entry.kind === 'group') {
         const group = groupById.get(String(entry.id));
-        if (group) appendGroupRow(group);
+        if (group && (includeMidiInput || !isMidiInputGroup(group))) appendGroupRow(group);
         continue;
       }
       if (entry.kind !== 'channel') continue;
@@ -9489,6 +9495,11 @@
     if (layout.length !== state.channels.length + state.audioClips.length + state.channelGroups.length
       || new Set(layout.map(ItemTree.key)).size !== layout.length
       || layout.some((r) => !maps[r.kind]?.has(String(r.id)) || (r.parentId != null && (r.kind === "group" || !maps.group.has(String(r.parentId)))))) return false;
+    if (!isItemTreeLayoutAllowedForMidiInput(layout)) {
+      notifyMidiInputReadOnly();
+      renderChannelTabs();
+      return false;
+    }
     for (const row of layout) {
       if (row.kind === "group") continue;
       maps[row.kind].get(String(row.id)).groupId = row.parentId == null ? null : maps.group.get(String(row.parentId)).id;
@@ -11368,7 +11379,7 @@
 
     // 삭제 모드에서는 채널/그룹을 선택해 노트를 확인할 수만 있고,
     // 악기 프리셋 자체는 변경할 수 없도록 콤보박스를 잠급니다.
-    if (elements.channelInstrumentSelect) elements.channelInstrumentSelect.disabled = deleteMode;
+    if (elements.channelInstrumentSelect) elements.channelInstrumentSelect.disabled = deleteMode || isMidiInputEditTarget();
     if (elements.channelEditInstrumentSelect) elements.channelEditInstrumentSelect.disabled = deleteMode;
     const renderChannelItem = (channel, index, { groupChild = false } = {}) => {
       const active = state.activePanel === "notes" && state.selectedChannelGroupId == null && index === state.activeChannel;
@@ -11379,7 +11390,8 @@
       const mergeSource = isChannelMergeModeActive() && state.channelMerge.sourceChannelIds?.has(String(channel.id));
       const mergeMask = isChannelMergeModeActive() && getChannelMergeExcludeOverlapChannelIds().has(String(channel.id));
       const deleteSelected = deleteMode && state.channelDeleteMode.selectedChannelIds.has(String(channel.id));
-      item.className = `channel-tab-item channel-tree-item channel-tree-leaf-item channel-tree-channel-item${groupChild ? " is-group-child" : ""}${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${!isChannelEffectivelyVisible(channel) ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${mergeTarget ? " is-merge-target" : ""}${mergeSource ? " is-merge-source" : ""}${mergeMask ? " is-merge-mask" : ""}${deleteSelected ? " is-delete-selected" : ""}`;
+      const midiInputChannel = isMidiInputChannel(channel);
+      item.className = `channel-tab-item channel-tree-item channel-tree-leaf-item channel-tree-channel-item${midiInputChannel ? " is-midi-input" : ""}${groupChild ? " is-group-child" : ""}${active ? " active" : ""}${isChannelEffectivelyMuted(channel) ? " is-muted" : ""}${!isChannelEffectivelyVisible(channel) ? " is-hidden" : ""}${channelSolo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${mergeTarget ? " is-merge-target" : ""}${mergeSource ? " is-merge-source" : ""}${mergeMask ? " is-merge-mask" : ""}${deleteSelected ? " is-delete-selected" : ""}`;
       item.style.setProperty("--channel-color", getChannelColor(channel, index));
       item.dataset.channelIndex = String(index);
       item.dataset.channelId = String(channel.id);
@@ -11441,7 +11453,7 @@
         }
         actions.append(
           ...(mergeRoleGroup ? [mergeRoleGroup] : []),
-          createAction({ kind: "mml", active: false, label: i18nText("channel.mml_button_aria", [channel.name]), title: i18nText("channel.mml_button_title"), textContent: "M", onClick: () => openChannelMmlDialog(channel.id) }),
+          ...(midiInputChannel ? [] : [createAction({ kind: "mml", active: false, label: i18nText("channel.mml_button_aria", [channel.name]), title: i18nText("channel.mml_button_title"), textContent: "M", onClick: () => openChannelMmlDialog(channel.id) })]),
           createAction({ kind: "visibility", active: channel.visible !== false, solo: visibilitySolo, label: visibilitySolo ? i18nText("ui.visibility_solo_off_named", [channel.name]) : i18nText(channel.visible === false ? "ui.show_2" : "ui.hide_3", [channel.name]), title: visibilitySolo ? i18nText("ui.visibility_solo_off") : i18nText("channel.mute_context_solo", [i18nText(channel.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelVisibilitySoloById(channel.id, false) : setChannelVisibleById(channel.id, channel.visible === false), sweep: !visibilitySolo, sweepId: channel.id, rightSweepKind: "visibility-solo" }),
           createAction({ kind: "mute", active: channel.muted, solo: channelSolo, label: channelSolo ? i18nText("channel.solo_off_named", [channel.name]) : i18nText(channel.muted ? "ui.unmute_2" : "ui.mute_2", [channel.name]), title: channelSolo ? i18nText("group.solo_off") : i18nText("channel.mute_context_solo", [i18nText(channel.muted ? "ui.unmute" : "ui.mute")]), onClick: () => channelSolo ? setChannelSoloById(channel.id, false) : setChannelMutedById(channel.id, !channel.muted), sweep: !channelSolo, sweepId: channel.id, rightSweepKind: "mute-solo" }),
         );
@@ -11465,7 +11477,8 @@
       const mergeIncludeState = mergeMode ? getChannelMergeGroupRoleState(group, "include") : { members: [], active: false };
       const mergeExcludeState = mergeMode ? getChannelMergeGroupRoleState(group, "exclude") : { members: [], active: false };
       const stateName = deleteMode ? getGroupDeleteDisplayState(group.id) : "none";
-      item.className = `channel-tree-item channel-group-item${groupActive ? " active" : ""}${group.collapsed ? " is-collapsed" : ""}${!isChannelGroupEffectivelyVisible(group) ? " is-hidden" : ""}${isChannelGroupEffectivelyMuted(group) ? " is-muted" : ""}${solo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${deleteMode ? ` delete-state-${stateName}` : ""}`;
+      const midiInputGroup = isMidiInputGroup(group);
+      item.className = `channel-tree-item channel-group-item${midiInputGroup ? " is-midi-input" : ""}${groupActive ? " active" : ""}${group.collapsed ? " is-collapsed" : ""}${!isChannelGroupEffectivelyVisible(group) ? " is-hidden" : ""}${isChannelGroupEffectivelyMuted(group) ? " is-muted" : ""}${solo ? " is-solo" : ""}${visibilitySolo ? " is-visibility-solo" : ""}${deleteMode ? ` delete-state-${stateName}` : ""}`;
       item.dataset.channelGroupId = String(group.id);
       item.dataset.contextArea = "channel-group";
       const groupIndex = Math.max(0, state.channelGroups.indexOf(group));
@@ -11475,7 +11488,7 @@
       item.style.setProperty("--channel-color", getChannelGroupColor(group, groupIndex, "bright"));
       item.setAttribute("role", "treeitem"); item.setAttribute("aria-level", "1"); item.setAttribute("aria-expanded", String(!group.collapsed)); item.setAttribute("aria-selected", String(groupActive));
       const main = document.createElement("button"); main.type = "button"; main.className = "channel-tree-main channel-group-main";
-      const folder = document.createElement("span"); folder.className = "channel-group-folder"; folder.setAttribute("role", "button"); folder.tabIndex = 0; folder.setAttribute("aria-label", i18nText(group.collapsed ? "group.expand" : "group.collapse")); folder.textContent = group.collapsed ? "📁" : "📂";
+      const folder = document.createElement("span"); folder.className = "channel-group-folder"; folder.setAttribute("role", "button"); folder.tabIndex = 0; folder.setAttribute("aria-label", i18nText(group.collapsed ? "group.expand" : "group.collapse")); folder.textContent = midiInputGroup ? "🎹" : (group.collapsed ? "📁" : "📂");
       folder.addEventListener("pointerdown", (event) => event.stopPropagation());
       folder.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); toggleChannelGroupCollapsed(group.id); });
       folder.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); toggleChannelGroupCollapsed(group.id); } });
@@ -11525,12 +11538,15 @@
         );
       } else {
         actions.append(
-          createAction({ kind: "mml", active: false, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) }),
+          midiInputGroup
+            ? createAction({ kind: "midi-record", active: midiInputRuntime.recording, label: i18nText(midiInputRuntime.recording ? "midi_input.stop_title" : "midi_input.record_title"), title: i18nText(midiInputRuntime.recording ? "midi_input.stop_title" : "midi_input.record_title"), textContent: "●", onClick: () => toggleMidiInputRecording() })
+            : createAction({ kind: "mml", active: false, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) }),
           createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? i18nText("ui.visibility_solo_off_named", [group.name]) : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? i18nText("ui.visibility_solo_off") : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), sweep: !visibilitySolo, sweepId: group.id, rightSweepKind: "visibility-solo" }),
           createAction({ kind: "mute", active: Boolean(group.muted), solo, label: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText(group.muted ? "group.unmute_named" : "group.mute_named", [group.name]), title: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText("channel.mute_context_solo", [i18nText(group.muted ? "ui.unmute" : "ui.mute")]), onClick: () => solo ? setChannelGroupSoloById(group.id, false) : setChannelGroupMutedById(group.id, !group.muted), sweep: !solo, sweepId: group.id, rightSweepKind: "mute-solo" }),
         );
       }
       item.append(main, actions);
+      if (midiInputGroup && !group.collapsed && !deleteMode && !mergeMode) item.append(buildMidiInputControls(group));
       if (!deleteMode && !mergeMode) {
         item.addEventListener("pointerdown", (event) => beginChannelGroupPointerDrag(event, group.id, item));
         item.addEventListener("pointerup", endChannelGroupPointerDrag);
@@ -11696,7 +11712,8 @@
     elements.deleteChannelButton.disabled = !hasSelectedChannel || state.channels.length <= 1;
     elements.clearChannelButton.disabled = !hasSelectedChannel;
     elements.copyChannelButton.disabled = !hasSelectedChannel;
-    elements.pasteChannelButton.disabled = !hasSelectedChannel;
+    elements.pasteChannelButton.disabled = !hasSelectedChannel || isMidiInputEditTarget();
+    if (isMidiInputEditTarget()) elements.clearChannelButton.disabled = true;
     // Rebuilding the tree must never jump the user's working position. Visibility,
     // mute and Solo sweeps all re-render this list, so restore the scroll offset
     // synchronously before the next pointer move is hit-tested.
@@ -16854,7 +16871,7 @@
       const channel = getChannelById(channelId);
       return new Set(channel?.notes?.length ? [String(channel.id)] : []);
     }
-    return new Set(state.channels.filter((channel) => channel.notes?.length).map((channel) => String(channel.id)));
+    return new Set(state.channels.filter((channel) => channel.notes?.length && !isMidiInputChannel(channel)).map((channel) => String(channel.id)));
   }
 
   function openChannelVolumeDialog(options = {}) {
@@ -17328,6 +17345,7 @@
           15,
         ),
         groupId: channel.groupId ?? null,
+        ...(channel.midiInput ? { midiInput: { ...channel.midiInput } } : {}),
         notes: channel.notes.map((note) => ({ ...note })),
       })),
       channelGroups: state.channelGroups.map((group, index) => ({
@@ -17336,6 +17354,7 @@
         collapsed: Boolean(group.collapsed),
         hue: getChannelGroupHue(group, index),
         beforeChannelId: group.beforeChannelId ?? null,
+        ...(group.midiInput ? { midiInput: true } : {}),
       })),
       nextChannelGroupId: state.nextChannelGroupId,
       tempos: state.tempos.map((tempo) => ({ ...tempo })),
@@ -17675,6 +17694,7 @@
     const mutedByAudioId = new Map(state.audioClips.map((clip) => [String(clip.id), Boolean(clip.muted)]));
     const visibleByAudioId = new Map(state.audioClips.map((clip) => [String(clip.id), clip.visible !== false]));
 
+    stopMidiInputRecording({ silent: true });
     stopPlayback(false);
     releaseKeyboardVoice(true);
     clearEditorPitchPreview(true);
@@ -17693,6 +17713,7 @@
           beforeChannelId: group.beforeChannelId ?? null,
           visible: visibleByGroupId.has(String(id)) ? visibleByGroupId.get(String(id)) : true,
           muted: mutedByGroupId.get(String(id)) || false,
+          ...(group.midiInput ? { midiInput: true } : {}),
         };
       });
       state.nextChannelGroupId = Math.max(1, Number(data.nextChannelGroupId) || 1, ...state.channelGroups.map((group) => Number(group.id) + 1));
@@ -17719,7 +17740,8 @@
           15,
         ),
         groupId: channel.groupId == null ? null : Number(channel.groupId),
-        notes: normalizeMonophonicNotes(channel.notes.map((note) => ({
+        ...(channel.midiInput ? { midiInput: { key: String(channel.midiInput.key || "") } } : {}),
+        notes: (channel.midiInput ? normalizeMidiInputNotes : normalizeMonophonicNotes)(channel.notes.map((note) => ({
           id: Number(note.id),
           pitch: clamp(Number(note.pitch), CONFIG.minPitch, CONFIG.maxPitch),
           startBeat: Math.max(0, Number(note.startBeat) || 0),
@@ -17735,6 +17757,7 @@
       normalizeChannelGroupMemberships();
       pruneEmptyChannelGroups();
       normalizeDefaultChannelNames();
+      refreshMidiInputLocks();
       state.tempos = data.tempos.map((tempo) => ({
         id: Number(tempo.id),
         beat: Math.max(0, Number(tempo.beat) || 0),
@@ -17878,6 +17901,7 @@
   function markDirty(label = "편집", { preserveNoteRuntime = false } = {}) {
     if (!preserveNoteRuntime) state.channelNoteRuntime.clear();
     invalidateOverviewTimelineActivity();
+    enforceMidiInputIntegrity();
     commitHistorySnapshot(label);
     state.dirty = true;
     updateDirtyState();
@@ -18676,6 +18700,910 @@
     return getNoteEditChannels().find((channel) => channel.notes.some((note) => note.id === id)) || null;
   }
 
+  // ---- MIDI 입력: 연결된 MIDI 장치의 연주를 원본 그대로 기록하는 전용 항목 ----
+  // 구조: "MIDI 입력" 그룹(group.midiInput = true) 아래에 악기별 하위 채널(channel.midiInput = { key })이 생깁니다.
+  // 하위 채널은 화음·겹침을 그대로 담는 읽기 전용 원본이며, 삭제와 복사·병합(다른 채널로 가져가기)만 할 수 있습니다.
+  const MIDI_INPUT_STORAGE_KEY = "mobibard.editor.midiInput.v1";
+  const midiInputRuntime = {
+    status: "idle", // idle | requesting | unsupported | denied | ready
+    access: null,
+    requestPromise: null,
+    devices: new Map(), // deviceKey -> { key, id, name, manufacturer, input, connected, activityUntil }
+    disabledDeviceKeys: new Set(),
+    defaultPresetKey: "",
+    playAlong: true,
+    recording: false,
+    startingRecording: false,
+    followPlayback: false,
+    startedPlayback: false,
+    tempoMap: null,
+    anchorSeconds: 0,
+    anchorPerf: 0,
+    startBeat: 0,
+    recordedNoteCount: 0,
+    openNotes: new Map(), // `${deviceKey}:${midiChannel}:${pitch}` -> { channelId, note }
+    sustainedKeys: new Map(), // `${deviceKey}:${midiChannel}` -> Set(openKey) released while the pedal is down
+    sustainDown: new Set(),
+    programByChannel: new Map(), // `${deviceKey}:${midiChannel}` -> program
+    monitorVoices: new Map(), // openKey -> voice
+    animationFrame: 0,
+    lastTimelineDrawAt: 0,
+    lastActivityPaintAt: 0,
+    locks: new Map(), // channelId -> signature of the protected content
+    lastReadOnlyToastAt: 0,
+  };
+
+  (function loadMidiInputSettings() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(MIDI_INPUT_STORAGE_KEY) || "null");
+      if (raw && typeof raw === "object") {
+        if (Array.isArray(raw.disabledDeviceKeys)) raw.disabledDeviceKeys.forEach((key) => midiInputRuntime.disabledDeviceKeys.add(String(key)));
+        if (typeof raw.defaultPresetKey === "string") midiInputRuntime.defaultPresetKey = raw.defaultPresetKey;
+        if (typeof raw.playAlong === "boolean") midiInputRuntime.playAlong = raw.playAlong;
+      }
+    } catch { /* storage blocked */ }
+  })();
+
+  function saveMidiInputSettings() {
+    try {
+      localStorage.setItem(MIDI_INPUT_STORAGE_KEY, JSON.stringify({
+        disabledDeviceKeys: [...midiInputRuntime.disabledDeviceKeys],
+        defaultPresetKey: midiInputRuntime.defaultPresetKey,
+        playAlong: midiInputRuntime.playAlong,
+      }));
+    } catch { /* storage blocked */ }
+  }
+
+  function isMidiInputGroup(group) {
+    return Boolean(group && group.midiInput);
+  }
+
+  function isMidiInputChannel(channel) {
+    return Boolean(channel && channel.midiInput);
+  }
+
+  function getMidiInputGroup() {
+    return state.channelGroups.find(isMidiInputGroup) || null;
+  }
+
+  function getMidiInputChannels(group = getMidiInputGroup()) {
+    if (!group) return [];
+    return state.channels.filter((channel) => isMidiInputChannel(channel) && String(channel.groupId ?? "") === String(group.id));
+  }
+
+  // 지금 노트 편집 대상이 MIDI 입력(그룹 또는 하위 항목)인지.
+  function isMidiInputEditTarget() {
+    if (state.activePanel !== "notes") return false;
+    if (state.selectedChannelGroupId != null) return isMidiInputGroup(getChannelGroupById(state.selectedChannelGroupId));
+    return isMidiInputChannel(getActiveChannel());
+  }
+
+  function notifyMidiInputReadOnly() {
+    const now = performance.now();
+    if (now - midiInputRuntime.lastReadOnlyToastAt < 1200) return;
+    midiInputRuntime.lastReadOnlyToastAt = now;
+    showToast(i18nText("midi_input.readonly"));
+  }
+
+  // 화음과 겹침을 유지한 채 시간순으로만 정리합니다(편집 채널의 단선율 정규화를 쓰지 않음).
+  function normalizeMidiInputNotes(notes) {
+    return (notes || []).map((raw) => {
+      const dynamics = normalizeNoteDynamics(raw);
+      return {
+        ...raw,
+        startBeat: Math.max(0, Number(raw.startBeat) || 0),
+        durationBeat: Math.max(CONFIG.minimumNoteBeat, Number(raw.durationBeat) || CONFIG.minimumNoteBeat),
+        velocity: dynamics.velocity,
+        volume: dynamics.volume,
+      };
+    }).sort((left, right) => left.startBeat - right.startBeat || left.pitch - right.pitch);
+  }
+
+  function getMidiInputChannelSignature(channel) {
+    return JSON.stringify([
+      channel.name,
+      channel.instrument,
+      getChannelInstrumentProgram(channel),
+      getChannelInstrumentBank(channel),
+      channel.groupId ?? null,
+      channel.midiInput?.key || "",
+      channel.notes.map((note) => [note.id, note.pitch, note.startBeat, note.durationBeat, note.velocity, note.volume]),
+    ]);
+  }
+
+  function lockMidiInputChannel(channel) {
+    if (!isMidiInputChannel(channel)) return;
+    midiInputRuntime.locks.set(String(channel.id), {
+      signature: getMidiInputChannelSignature(channel),
+      data: {
+        name: channel.name,
+        instrument: channel.instrument,
+        instrumentProgram: channel.instrumentProgram,
+        instrumentBank: channel.instrumentBank,
+        instrumentExactPreset: channel.instrumentExactPreset,
+        groupId: channel.groupId ?? null,
+        midiInput: { ...channel.midiInput },
+        notes: channel.notes.map((note) => ({ ...note })),
+      },
+    });
+  }
+
+  function refreshMidiInputLocks() {
+    midiInputRuntime.locks.clear();
+    for (const channel of state.channels) lockMidiInputChannel(channel);
+  }
+
+  // 모든 편집 경로의 최종 안전장치: MIDI 입력 하위 항목이 기록 외의 방법으로 바뀌었으면 되돌립니다.
+  // (markDirty → 히스토리 기록 직전에 호출되어, 되돌린 변경은 히스토리에도 남지 않습니다.)
+  function enforceMidiInputIntegrity() {
+    let reverted = false;
+    const midiGroupIds = new Set(state.channelGroups.filter(isMidiInputGroup).map((group) => String(group.id)));
+    for (const channel of state.channels) {
+      const inMidiGroup = channel.groupId != null && midiGroupIds.has(String(channel.groupId));
+      if (!isMidiInputChannel(channel)) {
+        // 일반 채널은 MIDI 입력 그룹 안에 들어갈 수 없습니다.
+        if (inMidiGroup) { channel.groupId = null; reverted = true; }
+        continue;
+      }
+      if (!inMidiGroup) {
+        // 그룹 밖으로 나온 사본(채널 복사 등)은 일반 편집 채널이 됩니다.
+        const lock = midiInputRuntime.locks.get(String(channel.id));
+        if (lock && lock.data.groupId != null && midiGroupIds.has(String(lock.data.groupId))) {
+          channel.groupId = lock.data.groupId;
+          reverted = true;
+        } else {
+          delete channel.midiInput;
+          channel.notes = normalizeMonophonicNotes(channel.notes);
+          midiInputRuntime.locks.delete(String(channel.id));
+          continue;
+        }
+      }
+      const lock = midiInputRuntime.locks.get(String(channel.id));
+      if (!lock) { lockMidiInputChannel(channel); continue; }
+      if (lock.signature === getMidiInputChannelSignature(channel)) continue;
+      Object.assign(channel, {
+        name: lock.data.name,
+        instrument: lock.data.instrument,
+        instrumentProgram: lock.data.instrumentProgram,
+        instrumentBank: lock.data.instrumentBank,
+        instrumentExactPreset: lock.data.instrumentExactPreset,
+        groupId: lock.data.groupId,
+        midiInput: { ...lock.data.midiInput },
+        notes: lock.data.notes.map((note) => ({ ...note })),
+      });
+      state.channelNoteRuntime.delete(String(channel.id));
+      reverted = true;
+    }
+    if (reverted) {
+      const valid = new Set(state.channels.flatMap((channel) => channel.notes.map((note) => note.id)));
+      for (const id of [...state.selectedNoteIds]) if (!valid.has(id)) state.selectedNoteIds.delete(id);
+      notifyMidiInputReadOnly();
+      requestAnimationFrame(() => { renderChannelTabs(); renderChannelEditor(); drawRoll(); updateChannelInfo(); });
+    }
+    return reverted;
+  }
+
+  // 트리 드래그: MIDI 입력 하위 항목은 그룹 밖으로, 다른 항목은 MIDI 입력 그룹 안으로 옮길 수 없습니다.
+  function isItemTreeLayoutAllowedForMidiInput(layout) {
+    const midiGroupIds = new Set(state.channelGroups.filter(isMidiInputGroup).map((group) => String(group.id)));
+    if (!midiGroupIds.size) return true;
+    const channelById = new Map(state.channels.map((channel) => [String(channel.id), channel]));
+    return layout.every((row) => {
+      if (row.kind === "group") return true;
+      const inMidiGroup = row.parentId != null && midiGroupIds.has(String(row.parentId));
+      if (row.kind === "audio") return !inMidiGroup;
+      const channel = channelById.get(String(row.id));
+      if (!isMidiInputChannel(channel)) return !inMidiGroup;
+      return inMidiGroup && String(row.parentId) === String(channel.groupId);
+    });
+  }
+
+  function createOrSelectMidiInputGroup() {
+    if (isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    let group = getMidiInputGroup();
+    if (!group) {
+      group = {
+        id: state.nextChannelGroupId++,
+        name: makeUniqueChannelGroupName(i18nText("midi_input.group_name")),
+        collapsed: false,
+        visible: true,
+        muted: false,
+        hue: 200,
+        beforeChannelId: null,
+        midiInput: true,
+      };
+      state.channelGroups.push(group);
+      markDirty(i18nText("midi_input.history_create"));
+    }
+    group.collapsed = false;
+    selectChannelGroup(group.id);
+    renderChannelTabs();
+    renderChannelEditor();
+    requestAnimationFrame(() => {
+      const item = elements.channelTabs?.querySelector(`[data-channel-group-id="${CSS.escape(String(group.id))}"]`);
+      item?.scrollIntoView({ block: "nearest" });
+    });
+    void ensureMidiInputAccess();
+    return true;
+  }
+
+  // ---- 장치 ----
+  function getMidiInputDeviceKey(port) {
+    return `${String(port?.manufacturer || "").trim()}|${String(port?.name || "").trim()}` || String(port?.id || "");
+  }
+
+  function isMidiInputDeviceEnabled(device) {
+    return Boolean(device?.connected) && !midiInputRuntime.disabledDeviceKeys.has(device.key);
+  }
+
+  function getEnabledMidiInputDevices() {
+    return [...midiInputRuntime.devices.values()].filter(isMidiInputDeviceEnabled);
+  }
+
+  function ensureMidiInputAccess() {
+    if (midiInputRuntime.access) return Promise.resolve(midiInputRuntime.access);
+    if (midiInputRuntime.requestPromise) return midiInputRuntime.requestPromise;
+    if (typeof navigator.requestMIDIAccess !== "function") {
+      midiInputRuntime.status = "unsupported";
+      renderMidiInputControls();
+      return Promise.resolve(null);
+    }
+    midiInputRuntime.status = "requesting";
+    renderMidiInputControls();
+    midiInputRuntime.requestPromise = navigator.requestMIDIAccess({ sysex: false }).then((access) => {
+      midiInputRuntime.access = access;
+      midiInputRuntime.status = "ready";
+      access.onstatechange = (event) => {
+        const port = event?.port;
+        if (port && port.type !== "input") return;
+        const before = new Map([...midiInputRuntime.devices].map(([key, device]) => [key, device.connected]));
+        syncMidiInputDevices();
+        if (port) {
+          const key = getMidiInputDeviceKey(port);
+          const connected = Boolean(midiInputRuntime.devices.get(key)?.connected);
+          if (before.get(key) !== connected) {
+            if (!connected) closeMidiInputNotesForDevice(key);
+            showToast(i18nText(connected ? "midi_input.device_connected" : "midi_input.device_disconnected", [port.name || "MIDI"]));
+          }
+        }
+      };
+      syncMidiInputDevices();
+      return access;
+    }).catch((error) => {
+      console.warn("[MIDI 입력] 장치 접근 실패", error);
+      midiInputRuntime.status = "denied";
+      renderMidiInputControls();
+      return null;
+    }).finally(() => {
+      midiInputRuntime.requestPromise = null;
+    });
+    return midiInputRuntime.requestPromise;
+  }
+
+  function syncMidiInputDevices() {
+    const access = midiInputRuntime.access;
+    if (!access) return;
+    const seen = new Set();
+    for (const input of access.inputs.values()) {
+      const key = getMidiInputDeviceKey(input);
+      seen.add(key);
+      const device = midiInputRuntime.devices.get(key) || { key, activityUntil: 0 };
+      device.id = input.id;
+      device.name = String(input.name || "MIDI");
+      device.manufacturer = String(input.manufacturer || "");
+      device.connected = input.state !== "disconnected";
+      if (device.input !== input) {
+        if (device.input) device.input.onmidimessage = null;
+        device.input = input;
+      }
+      input.onmidimessage = (event) => handleMidiInputMessage(key, event);
+      midiInputRuntime.devices.set(key, device);
+    }
+    for (const [key, device] of midiInputRuntime.devices) {
+      if (!seen.has(key)) {
+        device.connected = false;
+        if (device.input) device.input.onmidimessage = null;
+        device.input = null;
+      }
+    }
+    renderMidiInputControls();
+  }
+
+  function setMidiInputDeviceEnabled(deviceKey, enabled) {
+    if (enabled) midiInputRuntime.disabledDeviceKeys.delete(deviceKey);
+    else {
+      midiInputRuntime.disabledDeviceKeys.add(deviceKey);
+      closeMidiInputNotesForDevice(deviceKey);
+    }
+    saveMidiInputSettings();
+    renderMidiInputControls();
+  }
+
+  // ---- 악기 ----
+  function getMidiInputDefaultPreset() {
+    const presets = getEditorSoundBankPresets();
+    const [bank, program] = String(midiInputRuntime.defaultPresetKey || "").split(":").map(Number);
+    const stored = midiInputRuntime.defaultPresetKey ? findEditorSoundBankPreset(bank, program) : null;
+    return stored || presets[0] || { bank: 0, preset: 0, name: "Piano", regions: [] };
+  }
+
+  function resolveMidiInputPreset(deviceKey, midiChannel, pitch) {
+    if (midiChannel === 9) {
+      return resolveMidiGroupEditorPreset({ channel: 9, channels: [9], bank: 128, program: 0, programName: "Drums" }, [{ pitch }]);
+    }
+    const program = midiInputRuntime.programByChannel.get(`${deviceKey}:${midiChannel}`);
+    if (program == null) return getMidiInputDefaultPreset();
+    return resolveMidiGroupEditorPreset({ channel: midiChannel, channels: [midiChannel], bank: 0, program, programName: GM_PROGRAM_NAMES[program] || "" }, [{ pitch }]);
+  }
+
+  function getMidiInputPresetKey(preset, midiChannel) {
+    return `${midiChannel === 9 ? "drum:" : ""}${editorPresetKey(preset?.bank, preset?.preset)}`;
+  }
+
+  // 악기별 하위 항목을 찾거나, 없으면 MIDI 입력 그룹 맨 아래에 새로 만듭니다.
+  function getOrCreateMidiInputChannel(preset, midiChannel) {
+    const group = getMidiInputGroup();
+    if (!group) return null;
+    const key = getMidiInputPresetKey(preset, midiChannel);
+    const existing = getMidiInputChannels(group).find((channel) => channel.midiInput.key === key);
+    if (existing) return existing;
+    const id = nextChannelId();
+    const channel = createDefaultChannel(id, state.channels.length);
+    setChannelInstrumentPreset(channel, preset);
+    channel.name = makeUniqueChannelName(String(preset?.name || channel.instrument || "MIDI").trim(), channel.id);
+    channel.hue = normalizeHue((Number(group.hue) || 200) + getMidiInputChannels(group).length * 47);
+    channel.groupId = group.id;
+    channel.midiInput = { key };
+    const members = getMidiInputChannels(group);
+    const lastMember = members[members.length - 1];
+    const insertAt = lastMember ? state.channels.indexOf(lastMember) + 1 : state.channels.length;
+    const activeId = getActiveChannel()?.id;
+    state.channels.splice(insertAt, 0, channel);
+    if (activeId != null) state.activeChannel = Math.max(0, state.channels.findIndex((item) => String(item.id) === String(activeId)));
+    lockMidiInputChannel(channel);
+    renderChannelTabs();
+    return channel;
+  }
+
+  // ---- 시계: 재생 중이면 재생 시계, 아니면 자체 시계(타임라인 초) ----
+  function getMidiInputNowSeconds() {
+    const rate = Math.max(0.01, Number(state.playbackRate) || 1);
+    const now = performance.now();
+    if (midiInputRuntime.followPlayback && state.playback.running && audioEngine.context) {
+      const seconds = state.playback.startSeconds
+        + Math.max(0, audioEngine.context.currentTime - state.playback.audioStartTime) * rate;
+      midiInputRuntime.anchorSeconds = seconds;
+      midiInputRuntime.anchorPerf = now;
+      return seconds;
+    }
+    return midiInputRuntime.anchorSeconds + Math.max(0, now - midiInputRuntime.anchorPerf) / 1000 * rate;
+  }
+
+  function getMidiInputBeatAt(timeStamp) {
+    const rate = Math.max(0.01, Number(state.playbackRate) || 1);
+    const now = performance.now();
+    const lag = Number.isFinite(Number(timeStamp)) && Number(timeStamp) > 0 ? Math.max(0, now - Number(timeStamp)) : 0;
+    const seconds = getMidiInputNowSeconds() - Math.min(lag, 250) / 1000 * rate;
+    return Math.max(0, secondsToBeatInTempoMap(seconds, midiInputRuntime.tempoMap));
+  }
+
+  function snapMidiInputBeat(beat) {
+    return Number(Math.max(0, snapBeatToUnit(beat, CONFIG.minimumNoteBeat)).toFixed(6));
+  }
+
+  // ---- 메시지 ----
+  function handleMidiInputMessage(deviceKey, event) {
+    const device = midiInputRuntime.devices.get(deviceKey);
+    if (!isMidiInputDeviceEnabled(device)) return;
+    const data = event?.data;
+    if (!data || data.length < 1) return;
+    const status = data[0] & 0xf0;
+    const midiChannel = data[0] & 0x0f;
+    if (status === 0x90 || status === 0x80) {
+      const pitch = data[1] & 0x7f;
+      const velocity = data.length > 2 ? data[2] & 0x7f : 0;
+      if (status === 0x90 && velocity > 0) handleMidiInputNoteOn(deviceKey, midiChannel, pitch, velocity, event.timeStamp);
+      else handleMidiInputNoteOff(deviceKey, midiChannel, pitch, event.timeStamp);
+      device.activityUntil = performance.now() + 140;
+      paintMidiInputActivity();
+    } else if (status === 0xc0) {
+      midiInputRuntime.programByChannel.set(`${deviceKey}:${midiChannel}`, data[1] & 0x7f);
+    } else if (status === 0xb0) {
+      const controller = data[1] & 0x7f;
+      const value = data.length > 2 ? data[2] & 0x7f : 0;
+      const channelKey = `${deviceKey}:${midiChannel}`;
+      if (controller === 64) {
+        if (value >= 64) midiInputRuntime.sustainDown.add(channelKey);
+        else {
+          midiInputRuntime.sustainDown.delete(channelKey);
+          const held = midiInputRuntime.sustainedKeys.get(channelKey);
+          midiInputRuntime.sustainedKeys.delete(channelKey);
+          for (const openKey of held || []) finishMidiInputNote(openKey, event.timeStamp);
+        }
+      } else if (controller === 123 || controller === 120) {
+        closeMidiInputNotesForDevice(deviceKey, event.timeStamp);
+      }
+    }
+  }
+
+  function handleMidiInputNoteOn(deviceKey, midiChannel, pitch, velocity, timeStamp) {
+    const openKey = `${deviceKey}:${midiChannel}:${pitch}`;
+    // 같은 건반이 다시 눌리면(페달 등) 이전 노트를 먼저 닫습니다.
+    if (midiInputRuntime.openNotes.has(openKey) || midiInputRuntime.monitorVoices.has(openKey)) finishMidiInputNote(openKey, timeStamp);
+    const preset = resolveMidiInputPreset(deviceKey, midiChannel, pitch);
+    const group = getMidiInputGroup();
+    const monitorMuted = Boolean(group && isChannelGroupEffectivelyMuted(group));
+    if (!monitorMuted) {
+      try {
+        const voice = playEditorAuditionPitch(pitch, {
+          velocity,
+          instrumentOptions: { program: preset.preset, bank: preset.bank, exactPreset: true },
+          mmlVolume: velocityToMmlVolume(velocity),
+        });
+        if (voice) midiInputRuntime.monitorVoices.set(openKey, voice);
+      } catch (error) {
+        console.warn("[MIDI 입력] 모니터 재생 실패", error);
+      }
+    }
+    if (!midiInputRuntime.recording) return;
+    if (pitch < CONFIG.minPitch || pitch > CONFIG.maxPitch) return;
+    const channel = getOrCreateMidiInputChannel(preset, midiChannel);
+    if (!channel) return;
+    const startBeat = snapMidiInputBeat(getMidiInputBeatAt(timeStamp));
+    const note = {
+      id: state.nextNoteId++,
+      pitch,
+      startBeat,
+      durationBeat: CONFIG.minimumNoteBeat,
+      velocity,
+      volume: velocityToMmlVolume(velocity),
+    };
+    // 시간순 위치에 넣습니다(이어 기록하면 뒤쪽에 기존 노트가 있을 수 있음).
+    let index = channel.notes.length;
+    while (index > 0 && channel.notes[index - 1].startBeat > startBeat) index -= 1;
+    channel.notes.splice(index, 0, note);
+    midiInputRuntime.openNotes.set(openKey, { channelId: channel.id, note });
+    midiInputRuntime.recordedNoteCount += 1;
+    extendTimelineToBeat(startBeat + CONFIG.beatsPerMeasure * 2);
+    touchMidiInputChannel(channel);
+  }
+
+  function handleMidiInputNoteOff(deviceKey, midiChannel, pitch, timeStamp) {
+    const openKey = `${deviceKey}:${midiChannel}:${pitch}`;
+    const channelKey = `${deviceKey}:${midiChannel}`;
+    if (midiInputRuntime.sustainDown.has(channelKey)) {
+      if (!midiInputRuntime.sustainedKeys.has(channelKey)) midiInputRuntime.sustainedKeys.set(channelKey, new Set());
+      midiInputRuntime.sustainedKeys.get(channelKey).add(openKey);
+      return;
+    }
+    finishMidiInputNote(openKey, timeStamp);
+  }
+
+  function finishMidiInputNote(openKey, timeStamp = null) {
+    const voice = midiInputRuntime.monitorVoices.get(openKey);
+    if (voice) {
+      releaseAuditionVoice(voice, 0.08);
+      midiInputRuntime.monitorVoices.delete(openKey);
+    }
+    const open = midiInputRuntime.openNotes.get(openKey);
+    if (!open) return;
+    midiInputRuntime.openNotes.delete(openKey);
+    const endBeat = snapMidiInputBeat(getMidiInputBeatAt(timeStamp));
+    open.note.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, endBeat - open.note.startBeat).toFixed(6));
+    const channel = getChannelById(open.channelId);
+    if (channel) touchMidiInputChannel(channel);
+  }
+
+  function closeMidiInputNotesForDevice(deviceKey, timeStamp = null) {
+    const prefix = `${deviceKey}:`;
+    for (const openKey of [...midiInputRuntime.openNotes.keys(), ...midiInputRuntime.monitorVoices.keys()]) {
+      if (openKey.startsWith(prefix)) finishMidiInputNote(openKey, timeStamp);
+    }
+    for (const channelKey of [...midiInputRuntime.sustainDown]) if (channelKey.startsWith(prefix)) midiInputRuntime.sustainDown.delete(channelKey);
+    for (const channelKey of [...midiInputRuntime.sustainedKeys.keys()]) if (channelKey.startsWith(prefix)) midiInputRuntime.sustainedKeys.delete(channelKey);
+  }
+
+  function closeAllMidiInputNotes(timeStamp = null) {
+    for (const openKey of [...midiInputRuntime.openNotes.keys(), ...midiInputRuntime.monitorVoices.keys()]) finishMidiInputNote(openKey, timeStamp);
+    midiInputRuntime.sustainDown.clear();
+    midiInputRuntime.sustainedKeys.clear();
+  }
+
+  function touchMidiInputChannel(channel) {
+    state.channelNoteRuntime.delete(String(channel.id));
+    lockMidiInputChannel(channel);
+  }
+
+  // ---- 기록 ----
+  function hasMidiInputPlayAlongContent(startBeat) {
+    return state.channels.some((channel) => channel.notes.some((note) => note.startBeat + note.durationBeat > startBeat + 1e-7))
+      || state.audioClips.some((clip) => getAudioClipEndBeat(clip) > startBeat + 1e-7);
+  }
+
+  async function startMidiInputRecording() {
+    if (midiInputRuntime.recording || midiInputRuntime.startingRecording) return false;
+    if (isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    unlockEditorAudioFromGesture();
+    if (!getMidiInputGroup()) createOrSelectMidiInputGroup();
+    await ensureMidiInputAccess();
+    if (!getEnabledMidiInputDevices().length) {
+      showToast(i18nText(midiInputRuntime.status === "unsupported"
+        ? "midi_input.status_unsupported"
+        : midiInputRuntime.status === "denied" ? "midi_input.status_denied" : "midi_input.no_device_record"));
+      renderMidiInputControls();
+      return false;
+    }
+    midiInputRuntime.startingRecording = true;
+    renderMidiInputControls();
+    try {
+      if (state.playback.running || state.playback.loading) stopPlayback(false);
+      const startBeat = Math.max(0, Number(state.playhead.beat) || 0);
+      midiInputRuntime.startBeat = startBeat;
+      midiInputRuntime.tempoMap = createTempoTimeMap();
+      midiInputRuntime.followPlayback = false;
+      midiInputRuntime.startedPlayback = false;
+      if (midiInputRuntime.playAlong && hasMidiInputPlayAlongContent(startBeat)) {
+        await startPlayback();
+        if (state.playback.running) {
+          midiInputRuntime.followPlayback = true;
+          midiInputRuntime.startedPlayback = true;
+        }
+      }
+      const beatAfterStart = state.playback.running ? state.playhead.beat : startBeat;
+      midiInputRuntime.anchorSeconds = beatToSecondsInTempoMap(midiInputRuntime.followPlayback ? state.playback.startBeat : beatAfterStart, midiInputRuntime.tempoMap);
+      midiInputRuntime.anchorPerf = performance.now();
+      if (midiInputRuntime.followPlayback) getMidiInputNowSeconds();
+      midiInputRuntime.recordedNoteCount = 0;
+      midiInputRuntime.recording = true;
+      document.body.classList.add("midi-input-recording");
+      cancelAnimationFrame(midiInputRuntime.animationFrame);
+      midiInputRuntime.animationFrame = requestAnimationFrame(midiInputRecordingFrame);
+      showToast(i18nText("midi_input.record_started"));
+    } finally {
+      midiInputRuntime.startingRecording = false;
+      renderMidiInputControls();
+    }
+    return true;
+  }
+
+  function midiInputRecordingFrame(now) {
+    if (!midiInputRuntime.recording) return;
+    const beat = getMidiInputBeatAt(null);
+    // 누르고 있는 노트는 현재 위치까지 실시간으로 늘어납니다.
+    const snapped = snapMidiInputBeat(beat);
+    const touched = new Set();
+    for (const open of midiInputRuntime.openNotes.values()) {
+      open.note.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, snapped - open.note.startBeat).toFixed(6));
+      touched.add(String(open.channelId));
+    }
+    for (const id of touched) state.channelNoteRuntime.delete(id);
+    if (!state.playback.running) {
+      extendTimelineToBeat(beat + CONFIG.beatsPerMeasure);
+      if (state.playhead.pointerId === null) {
+        state.playhead.beat = beat;
+        updatePagedPlaybackScroll(now, beat);
+        updatePlayheadVisual();
+      }
+      if (now - midiInputRuntime.lastTimelineDrawAt >= 32) {
+        midiInputRuntime.lastTimelineDrawAt = now;
+        drawTimeline();
+        updatePlaybackTimeInfo(beat);
+      }
+    }
+    drawRoll();
+    midiInputRuntime.animationFrame = requestAnimationFrame(midiInputRecordingFrame);
+  }
+
+  function stopMidiInputRecording({ silent = false } = {}) {
+    if (!midiInputRuntime.recording) return false;
+    const endBeat = getMidiInputBeatAt(null);
+    closeAllMidiInputNotes(null);
+    midiInputRuntime.recording = false;
+    cancelAnimationFrame(midiInputRuntime.animationFrame);
+    midiInputRuntime.animationFrame = 0;
+    document.body.classList.remove("midi-input-recording");
+    if (midiInputRuntime.startedPlayback && (state.playback.running || state.playback.loading)) stopPlayback(false);
+    midiInputRuntime.followPlayback = false;
+    midiInputRuntime.startedPlayback = false;
+    state.playhead.beat = getPlaybackVisualBeat(endBeat);
+    updatePlayheadVisual();
+    drawTimeline();
+    updatePlaybackTimeInfo();
+    refreshMidiInputLocks();
+    const count = midiInputRuntime.recordedNoteCount;
+    if (count > 0) markDirty(i18nText("midi_input.history_record"));
+    renderChannelTabs();
+    renderChannelEditor();
+    drawRoll();
+    updateChannelInfo();
+    if (!silent) showToast(i18nText("midi_input.record_stopped", [count.toLocaleString()]));
+    return true;
+  }
+
+  function toggleMidiInputRecording() {
+    if (midiInputRuntime.recording) return stopMidiInputRecording();
+    void startMidiInputRecording();
+    return true;
+  }
+
+  // ---- 편집 채널로 복사: 화음은 불러오기와 같은 규칙으로 단선율 채널 여러 개로 나눕니다 ----
+  function copyMidiInputChannelsToEditable(channels) {
+    const sources = (channels || []).filter((channel) => isMidiInputChannel(channel) && channel.notes.length);
+    if (!sources.length) {
+      showToast(i18nText("context.disabled_no_notes"));
+      return false;
+    }
+    const groups = sources.map((channel, index) => {
+      const drums = String(channel.midiInput?.key || "").startsWith("drum:");
+      return {
+        id: `midi-input-${channel.id}`,
+        name: channel.name,
+        programName: channel.name,
+        trackName: channel.name,
+        program: getChannelInstrumentProgram(channel),
+        bank: getChannelInstrumentBank(channel),
+        channel: drums ? 9 : 0,
+        channels: [drums ? 9 : 0],
+        hue: getChannelHue(channel, index),
+        notes: channel.notes.map((note) => ({
+          pitch: note.pitch,
+          startBeat: note.startBeat,
+          durationBeat: note.durationBeat,
+          rawStartBeat: note.startBeat,
+          rawEndBeat: note.startBeat + note.durationBeat,
+          velocity: note.velocity,
+          volume: note.volume,
+        })),
+      };
+    });
+    // 원본마다 따로 변환해, 새로 생긴 채널에 기록한 채널의 실제 악기를 그대로 적용합니다.
+    let createdCount = 0;
+    groups.forEach((group, index) => {
+      const source = sources[index];
+      const before = new Set(state.channels.map((channel) => String(channel.id)));
+      importMidiSelectionAsEditableChannels({ groups: [group], quantizeDivision: 64, fileName: "MIDI" }, {
+        openNew: false,
+        overlapToleranceBeat: 0,
+        colorMode: "channel",
+      });
+      const created = state.channels.filter((channel) => !before.has(String(channel.id)));
+      created.forEach((channel, voiceIndex) => {
+        createdCount += 1;
+        channel.instrument = source.instrument;
+        channel.instrumentProgram = source.instrumentProgram;
+        channel.instrumentBank = source.instrumentBank;
+        channel.instrumentExactPreset = source.instrumentExactPreset;
+        channel.name = makeUniqueChannelName(created.length > 1 ? `${source.name} (${voiceIndex + 1})` : source.name, channel.id);
+      });
+      for (const groupId of new Set(created.map((channel) => String(channel.groupId ?? "")).filter(Boolean))) {
+        const createdGroup = getChannelGroupById(groupId);
+        if (createdGroup) createdGroup.name = makeUniqueChannelGroupName(source.name, createdGroup.id);
+      }
+    });
+    normalizeDefaultChannelNames();
+    markDirty(i18nText("midi_input.copy_to_channels"));
+    renderAll();
+    showToast(i18nText("midi_input.copied", [String(createdCount)]));
+    return true;
+  }
+
+  // ---- UI ----
+  function paintMidiInputActivity() {
+    const now = performance.now();
+    if (now - midiInputRuntime.lastActivityPaintAt < 40) return;
+    midiInputRuntime.lastActivityPaintAt = now;
+    requestAnimationFrame(() => {
+      const time = performance.now();
+      document.querySelectorAll(".midi-input-device-chip[data-device-key]").forEach((chip) => {
+        const device = midiInputRuntime.devices.get(chip.dataset.deviceKey);
+        chip.classList.toggle("is-active", Boolean(device && device.activityUntil > time));
+      });
+      window.setTimeout(() => {
+        const later = performance.now();
+        document.querySelectorAll(".midi-input-device-chip.is-active").forEach((chip) => {
+          const device = midiInputRuntime.devices.get(chip.dataset.deviceKey);
+          if (!device || device.activityUntil <= later) chip.classList.remove("is-active");
+        });
+      }, 160);
+    });
+  }
+
+  function getMidiInputStatusText() {
+    switch (midiInputRuntime.status) {
+      case "unsupported": return i18nText("midi_input.status_unsupported");
+      case "denied": return i18nText("midi_input.status_denied");
+      case "requesting": return i18nText("midi_input.status_request");
+      case "ready": {
+        const connected = [...midiInputRuntime.devices.values()].filter((device) => device.connected).length;
+        return connected ? i18nText("midi_input.status_ready", [String(connected)]) : i18nText("midi_input.status_none");
+      }
+      default: return i18nText("midi_input.status_idle");
+    }
+  }
+
+  function buildMidiInputControls(group) {
+    const box = document.createElement("div");
+    box.className = "midi-input-controls";
+    box.addEventListener("pointerdown", (event) => event.stopPropagation());
+    box.addEventListener("click", (event) => event.stopPropagation());
+    box.addEventListener("contextmenu", (event) => event.stopPropagation());
+
+    const top = document.createElement("div");
+    top.className = "midi-input-controls-row";
+    const record = document.createElement("button");
+    record.type = "button";
+    record.className = `midi-input-record-button${midiInputRuntime.recording ? " is-recording" : ""}`;
+    record.disabled = midiInputRuntime.startingRecording;
+    record.innerHTML = `<span class="midi-input-record-dot" aria-hidden="true"></span><span></span>`;
+    record.lastElementChild.textContent = i18nText(midiInputRuntime.recording ? "midi_input.stop" : "midi_input.record");
+    record.title = i18nText(midiInputRuntime.recording ? "midi_input.stop_title" : "midi_input.record_title");
+    record.addEventListener("click", () => toggleMidiInputRecording());
+    const playAlong = document.createElement("label");
+    playAlong.className = "midi-input-check";
+    playAlong.innerHTML = '<input type="checkbox"/><span></span>';
+    playAlong.querySelector("input").checked = midiInputRuntime.playAlong;
+    playAlong.querySelector("input").disabled = midiInputRuntime.recording;
+    playAlong.querySelector("span").textContent = i18nText("midi_input.play_along");
+    playAlong.querySelector("input").addEventListener("change", (event) => {
+      midiInputRuntime.playAlong = event.target.checked;
+      saveMidiInputSettings();
+    });
+    top.append(record, playAlong);
+
+    const devices = document.createElement("div");
+    devices.className = "midi-input-controls-row midi-input-devices";
+    const list = [...midiInputRuntime.devices.values()].filter((device) => device.connected);
+    if (midiInputRuntime.status !== "ready" || !list.length) {
+      const status = document.createElement("span");
+      status.className = `midi-input-status is-${midiInputRuntime.status}`;
+      status.textContent = getMidiInputStatusText();
+      devices.append(status);
+      if (midiInputRuntime.status === "idle") {
+        const connect = document.createElement("button");
+        connect.type = "button";
+        connect.className = "midi-input-connect-button";
+        connect.textContent = i18nText("midi_input.connect");
+        connect.addEventListener("click", () => { void ensureMidiInputAccess(); });
+        devices.append(connect);
+      }
+    } else {
+      for (const device of list) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        const enabled = isMidiInputDeviceEnabled(device);
+        chip.className = `midi-input-device-chip${enabled ? " is-enabled" : ""}`;
+        chip.dataset.deviceKey = device.key;
+        chip.setAttribute("aria-pressed", String(enabled));
+        chip.title = i18nText(enabled ? "midi_input.device_disable" : "midi_input.device_enable", [device.name]);
+        chip.innerHTML = '<span class="midi-input-device-dot" aria-hidden="true"></span><span class="midi-input-device-name"></span>';
+        chip.lastElementChild.textContent = device.name;
+        chip.addEventListener("click", () => setMidiInputDeviceEnabled(device.key, !enabled));
+        devices.append(chip);
+      }
+    }
+
+    const instrument = document.createElement("label");
+    instrument.className = "midi-input-controls-row midi-input-instrument";
+    instrument.title = i18nText("midi_input.default_instrument_hint");
+    const instrumentLabel = document.createElement("span");
+    instrumentLabel.textContent = i18nText("midi_input.default_instrument");
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", i18nText("midi_input.default_instrument"));
+    const presets = getEditorSoundBankPresets();
+    if (!presets.length) {
+      select.add(new Option(i18nText("ui.ready_default_sounds"), ""));
+      select.disabled = true;
+    } else {
+      for (const preset of presets) select.add(new Option(formatEditorPresetLabel(preset), editorPresetKey(preset.bank, preset.preset)));
+      const current = getMidiInputDefaultPreset();
+      select.value = editorPresetKey(current.bank, current.preset);
+    }
+    select.addEventListener("change", () => {
+      midiInputRuntime.defaultPresetKey = select.value;
+      saveMidiInputSettings();
+    });
+    instrument.append(instrumentLabel, select);
+
+    box.append(top, devices, instrument);
+    if (!getMidiInputChannels(group).length) {
+      const hint = document.createElement("p");
+      hint.className = "midi-input-hint";
+      hint.textContent = i18nText("midi_input.empty_hint");
+      box.append(hint);
+    }
+    return box;
+  }
+
+  // 피아노롤: MIDI 입력은 노트 선택(복사용)과 재생 위치 이동만 허용합니다.
+  function handleMidiInputRollPointerDown(event, point, pointBeat, additive) {
+    const noteHit = findNoteHitAt(point.x, point.y);
+    const existing = noteHit?.note || null;
+    event.preventDefault();
+    if (event.button === 2) {
+      if (existing) {
+        if (!state.selectedNoteIds.has(existing.id)) selectOnlyNote(existing.id);
+      } else if (pointBeat >= 0) {
+        beginMarqueeSelection(event, point, { initialSelectionMode: event.shiftKey ? "add" : "replace", preserveSelectionOnTap: true });
+        startRollDragAutoScroll(event.clientX, event.clientY);
+      }
+      drawRoll();
+      updateChannelInfo();
+      return;
+    }
+    if (existing) {
+      if (additive) {
+        if (state.selectedNoteIds.has(existing.id)) state.selectedNoteIds.delete(existing.id);
+        else state.selectedNoteIds.add(existing.id);
+      } else {
+        selectOnlyNote(existing.id);
+      }
+      previewEditorPitch(existing.pitch, { holdVisual: false });
+    } else if (pointBeat >= 0) {
+      if (!midiInputRuntime.recording) setPlayheadBeat(clamp(snapBeat(pointBeat), 0, getTotalBeats()), { stop: true, preview: false });
+      beginMarqueeSelection(event, point, { initialSelectionMode: additive ? "add" : "replace" });
+      startRollDragAutoScroll(event.clientX, event.clientY);
+    }
+    drawRoll();
+    updateChannelInfo();
+  }
+
+  // 키보드: 삭제·잘라내기·붙여넣기·이동·볼륨 변경 단축키를 막고, 복사·전체 선택·재생은 그대로 둡니다.
+  function handleMidiInputKeyGuard(event) {
+    if (event.defaultPrevented || !isMidiInputEditTarget() || isTextEntryTarget(event.target) || isPopupLikeUiOpen()) return false;
+    const key = String(event.key || "");
+    const commandKey = event.ctrlKey || event.metaKey;
+    const lower = key.toLowerCase();
+    const blocked = key === "Delete" || key === "Backspace"
+      || (commandKey && ["x", "v", "d", "b", "j"].includes(lower))
+      || (key.startsWith("Arrow") && (state.selectedNoteIds.size > 0 || event.altKey));
+    if (!blocked) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    notifyMidiInputReadOnly();
+    return true;
+  }
+
+  function midiInputContextItems(channels, { group = null } = {}) {
+    const hasNotes = channels.some((channel) => channel.notes.length);
+    const items = [
+      { label: i18nText(midiInputRuntime.recording ? "midi_input.stop" : "midi_input.record"), action: () => toggleMidiInputRecording() },
+      { label: i18nText("midi_input.copy_to_channels"), disabled: !hasNotes, disabledReason: i18nText("context.disabled_no_notes"), action: () => copyMidiInputChannelsToEditable(channels) },
+      { label: i18nText("ui.export"), items: channelExportContextItems(channels) },
+      "separator",
+    ];
+    if (group) {
+      items.push({
+        label: i18nText("action.delete"),
+        danger: true,
+        items: [
+          { label: i18nText("group.menu_delete_items"), disabled: !channels.length, disabledReason: i18nText("context.disabled_no_group_items"), danger: true, action: () => deleteChannelGroupItemsImmediate(group.id, { deleteGroup: false }) },
+          { label: i18nText("midi_input.delete_all"), danger: true, action: () => { stopMidiInputRecording({ silent: true }); deleteChannelGroupItemsImmediate(group.id, { deleteGroup: true }); } },
+        ],
+      });
+      items.push({ label: i18nText("context.interface"), items: contextVisibilitySegments({ kind: "group", item: group }) });
+      items.push({ label: i18nText("context.sound"), items: contextSoundSegments({ kind: "group", item: group }) });
+    } else {
+      const channel = channels[0];
+      items.push({ label: i18nText("channel.delete"), danger: true, action: () => deleteChannelByIdImmediate(channel.id) });
+      items.push({ label: i18nText("context.interface"), items: contextVisibilitySegments({ kind: "channel", item: channel }) });
+      items.push({ label: i18nText("context.sound"), items: contextSoundSegments({ kind: "channel", item: channel }) });
+    }
+    return items;
+  }
+
+  function renderMidiInputControls() {
+    const group = getMidiInputGroup();
+    if (!group) return;
+    const header = elements.channelTabs?.querySelector(`[data-channel-group-id="${CSS.escape(String(group.id))}"]`);
+    const current = header?.querySelector(".midi-input-controls");
+    if (current) current.replaceWith(buildMidiInputControls(group));
+    const recordAction = header?.querySelector(".channel-tree-midi-record");
+    if (recordAction) {
+      recordAction.classList.toggle("is-recording", midiInputRuntime.recording);
+      recordAction.setAttribute("aria-pressed", String(midiInputRuntime.recording));
+    }
+  }
+
   function resolveDirectEditOverlapsForEdit(editedIds) {
     for (const channel of getNoteEditChannels()) {
       const ids = new Set(channel.notes.filter((note) => editedIds.has(note.id)).map((note) => note.id));
@@ -19297,6 +20225,7 @@
 
   function duplicateChannelById(channelId) {
     if (isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    if (isMidiInputChannel(getChannelById(channelId))) return copyMidiInputChannelsToEditable([getChannelById(channelId)]);
     const sourceIndex = state.channels.findIndex((channel) => String(channel.id) === String(channelId));
     if (sourceIndex < 0) return false;
     const source = state.channels[sourceIndex];
@@ -19325,6 +20254,7 @@
     if (isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
     const source = getChannelGroupById(groupId);
     if (!source) return false;
+    if (isMidiInputGroup(source)) return copyMidiInputChannelsToEditable(getChannelGroupMembers(source));
 
     const layout = getItemTreeLayout();
     const sourceGroupId = String(source.id);
@@ -19811,6 +20741,11 @@
     }
     const target = getChannelById(channelId ?? getActiveChannel()?.id);
     if (!target) return false;
+    if (isMidiInputChannel(target)) {
+      showToast(i18nText("midi_input.merge_target_blocked"));
+      return false;
+    }
+    stopMidiInputRecording({ silent: true });
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     setSidebarTab("channels");
     setHistoryCollapsed(false);
@@ -21646,6 +22581,11 @@
     const additive = event.ctrlKey || event.metaKey;
     const touchSelectionMode = effectiveEditTool === "select" && event.button === 0;
 
+    if (isMidiInputEditTarget() && !isNoteEditModeActive()) {
+      handleMidiInputRollPointerDown(event, point, pointBeat, additive);
+      return;
+    }
+
     if (isNoteEditModeActive() && event.button === 0) {
       const controlHit = findNoteEditControlHitAt(point.x, point.y);
       if (controlHit) {
@@ -23287,6 +24227,21 @@
     const tracks = [];
     for (const channel of state.channels) {
       const own = channel.notes.filter((note) => ids.has(note.id));
+      if (own.length && isMidiInputChannel(channel)) {
+        // MIDI 입력의 화음은 단선율 트랙 여러 개로 나눠 담아, 그룹에 붙여넣으면 채널별로 들어가게 합니다.
+        const voices = splitNotesIntoMonophonicVoices(own, { overlapToleranceBeat: 0, quantizeUnit: CONFIG.minimumNoteBeat })
+          .filter((voice) => voice.length);
+        voices.forEach((voice, voiceIndex) => tracks.push({
+          channelId: `${channel.id}:${voiceIndex}`,
+          name: voices.length > 1 ? `${channel.name} (${voiceIndex + 1})` : String(channel.name || ""),
+          instrument: channel.instrument,
+          instrumentProgram: channel.instrumentProgram,
+          instrumentBank: channel.instrumentBank,
+          instrumentExactPreset: channel.instrumentExactPreset,
+          notes: voice,
+        }));
+        continue;
+      }
       if (own.length) {
         tracks.push({
           channelId: String(channel.id),
@@ -24188,7 +25143,7 @@
     closePlaybackRateMenu();
     mmlExportSelectedIds = new Set();
     if (Array.isArray(preselectChannelIds)) {
-      const withNotes = new Set(state.channels.filter((channel) => channel.notes?.length).map((channel) => String(channel.id)));
+      const withNotes = new Set(state.channels.filter((channel) => channel.notes?.length && !isMidiInputChannel(channel)).map((channel) => String(channel.id)));
       for (const id of preselectChannelIds) if (withNotes.has(String(id))) mmlExportSelectedIds.add(String(id));
     }
     if (!openSideToolWorkspace("mml")) return false;
@@ -26828,6 +27783,10 @@
   }
 
   function togglePlayback() {
+    if (midiInputRuntime.recording) {
+      stopMidiInputRecording();
+      return;
+    }
     if (state.playback.running || state.playback.loading) {
       stopPlayback(false);
     } else {
@@ -27514,6 +28473,7 @@
     if (!list) return;
     renderInlineChannelSelectionList(list, channelExportState.selectedIds, {
       notesOnly: true,
+      includeMidiInput: true,
       onChange: updateChannelExportDialogState,
       detailForChannel: (channel) => (channel.notes?.length
         ? i18nText("export.channel_detail", [String(channel.instrument || ""), channel.notes.length.toLocaleString()])
@@ -27756,6 +28716,7 @@
   }
 
   async function loadProjectFromFile(file, { notify = true, loadedFileName = null } = {}) {
+    stopMidiInputRecording({ silent: true });
     state.soloChannelIds.clear();
     state.soloGroupIds.clear();
     state.soloAudioClipIds.clear();
@@ -27869,6 +28830,7 @@
       beforeChannelId: group.beforeChannelId ?? null,
       visible: group.visible !== false,
       muted: Boolean(group.muted),
+      ...(group.midiInput ? { midiInput: true } : {}),
     }));
     state.nextChannelGroupId = Math.max(1, Number(data.nextChannelGroupId) || 1, ...state.channelGroups.map((group) => Number(group.id) + 1));
     state.soloGroupIds.clear();
@@ -27892,7 +28854,8 @@
         15,
       ),
       groupId: channel.groupId == null ? null : Number(channel.groupId),
-      notes: normalizeMonophonicNotes(channel.notes.map((note) => {
+      ...(channel.midiInput ? { midiInput: { key: String(channel.midiInput.key || "") } } : {}),
+      notes: (channel.midiInput ? normalizeMidiInputNotes : normalizeMonophonicNotes)(channel.notes.map((note) => {
         const startBeat = clamp(
           Number(note.startBeat),
           0,
@@ -27920,6 +28883,7 @@
     normalizeChannelGroupMemberships();
     normalizeDefaultChannelNames();
     pruneEmptyChannelGroups();
+    refreshMidiInputLocks();
 
     const savedChannelState = data.channelState && typeof data.channelState === "object" ? data.channelState : {};
     const validChannelIds = new Set(state.channels.map((channel) => String(channel.id)));
@@ -28129,6 +29093,7 @@
   }
 
   function resetProject({ notify = true } = {}) {
+    stopMidiInputRecording({ silent: true });
     cancelItemTreeDrag(null, { rerender: false });
     state.channelTreeLayout = [];
     state.soloChannelIds.clear();
@@ -30605,6 +31570,16 @@
           { label: "채널 복사", disabled: !(getMidiGroupById()?.notes.length || getActiveMidiDocument()?.groups?.some((group) => group.notes?.length)), disabledReason: i18nText("context.disabled_no_source_notes"), action: openMidiTransferDialog },
         ];
       }
+      if (isMidiInputEditTarget()) {
+        const channels = getNoteEditChannels();
+        return [
+          { label: i18nText("channel.select_all_note"), disabled: !getNoteEditVirtualChannel()?.notes?.length, disabledReason: i18nText("context.disabled_no_notes"), action: selectAllNotes },
+          { label: i18nText("context.action.note_copy"), disabled: !state.selectedNoteIds.size, disabledReason: i18nText("context.disabled_no_notes"), action: copySelectedNotes },
+          { label: i18nText("midi_input.copy_to_channels"), disabled: !channels.some((channel) => channel.notes.length), disabledReason: i18nText("context.disabled_no_notes"), action: () => copyMidiInputChannelsToEditable(channels) },
+          "separator",
+          ...laneToggleItems(),
+        ];
+      }
       const point = pointerToRoll(event);
       const clicked = findNoteAt(point.x, point.y);
       const contextBeat = clamp(snapBeat(xToBeat(point.x)), 0, getTotalBeats());
@@ -30851,6 +31826,7 @@
       const index = Number(area.element.dataset.channelIndex);
       const channel = state.channels[index];
       if (!channel) return [];
+      if (isMidiInputChannel(channel)) return midiInputContextItems([channel]);
       const channelDeleteItems = [
         { label: i18nText("channel.delete_all_notes"), disabled: !channel.notes.length, disabledReason: i18nText("context.disabled_no_notes"), danger: true, action: () => { selectChannel(index); clearActiveChannel(); } },
         { label: i18nText("channel.delete"), danger: true, action: () => deleteChannelByIdImmediate(channel.id) },
@@ -30878,6 +31854,7 @@
     registerContextMenu("channel-group", ({ area }) => {
       const group = getChannelGroupById(area.element.dataset.channelGroupId);
       if (!group) return [];
+      if (isMidiInputGroup(group)) return midiInputContextItems(getChannelGroupMembers(group), { group });
       const hasItems = getChannelGroupMembers(group).length > 0 || getChannelGroupAudioMembers(group).length > 0;
       return [
         {
@@ -31310,7 +32287,7 @@
       event.target.blur();
       elements.rollViewport?.focus?.({ preventScroll: true });
     }
-    state.playback.running || state.playback.loading ? stopPlayback(false) : startPlayback();
+    if (midiInputRuntime.recording) stopMidiInputRecording(); else if (state.playback.running || state.playback.loading) stopPlayback(false); else startPlayback();
     return true;
   }
 
@@ -31527,7 +32504,7 @@
   // Text lives in the locale files (guide.<id>.*); `blocks` gives the item count of each block.
   const GUIDE_SECTIONS = Object.freeze([
     { id: "basics", steps: 5, figure: "overview" },
-    { id: "channels", blocks: [3, 3, 1, 2, 2], figure: "channels" },
+    { id: "channels", blocks: [3, 3, 1, 2, 2, 3], figure: "channels" },
     { id: "notes", blocks: [3, 4, 4], figure: "notes" },
     { id: "volume", blocks: [2, 2, 3], figure: "volume" },
     { id: "transform", blocks: [3, 3], figure: "transform" },
@@ -31848,6 +32825,7 @@
     // Capture Space before focused select/checkbox/button controls can consume it.
     // In note edit mode this keeps playback start/stop available regardless of panel focus.
     document.addEventListener("keydown", handleItemTreeDragKey, true);
+    document.addEventListener("keydown", handleMidiInputKeyGuard, true);
     document.addEventListener("keydown", handlePlaybackShortcut, true);
     document.addEventListener("keydown", handleMergeModeKeyGuard, true);
     document.addEventListener("contextmenu", handleMergeModeContextGuard, true);
@@ -32407,6 +33385,7 @@
     elements.itemAddChannelButton?.addEventListener("click", () => { closeItemAddMenu(); addChannel(); });
     elements.itemAddAudioButton?.addEventListener("click", () => { closeItemAddMenu(); openAudioImportPicker(null); });
     elements.itemAddGroupButton?.addEventListener("click", () => { closeItemAddMenu(); addChannelGroup(); });
+    elements.itemAddMidiInputButton?.addEventListener("click", () => { closeItemAddMenu(); createOrSelectMidiInputGroup(); });
     elements.deleteChannelsButton?.addEventListener("click", enterChannelDeleteMode);
     elements.collapsedDeleteChannelsButton?.addEventListener("click", () => {
       setHistoryCollapsed(false);
@@ -33166,6 +34145,10 @@
     window.MMLEditor = {
       state,
       registerContextMenu,
+      midiInput: { runtime: midiInputRuntime, createOrSelectMidiInputGroup, startMidiInputRecording, stopMidiInputRecording, copyMidiInputChannelsToEditable, ensureMidiInputAccess },
+      setPlayheadBeat,
+      selectChannelGroup,
+      duplicateChannelById,
       serializeProject,
       loadProjectFromFile,
       markProjectSaved,
