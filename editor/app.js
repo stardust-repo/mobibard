@@ -14792,7 +14792,7 @@
       state.midiImport.selectedGroupIds = new Set(preview.groups.map((group) => String(group.id)));
       state.midiImport.busy = false;
       updateMidiImportDialog();
-      showToast(i18nText("audio_midi.done", [result.model?.version || "-", result.notes.length, Number(result.elapsed || 0).toFixed(1)]));
+      showToast(`${i18nText("audio_midi.done", [result.model?.version || "-", result.notes.length, Number(result.elapsed || 0).toFixed(1)])} · ${result.provider === "webgpu" ? "GPU" : "CPU"} ${result.variant || ""}`.trim());
       return true;
     } catch (error) {
       if (controller.signal.aborted || error?.code === "aborted") return false;

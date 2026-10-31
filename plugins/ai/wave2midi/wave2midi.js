@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.18";
+  const VERSION = "1.0.19";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -48,6 +48,27 @@
     const ua = String(nav.userAgent || "");
     return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && Number(nav.maxTouchPoints) > 1);
   })();
+
+  // Diagnostics: the page address can force a path, e.g. editor/index.html?w2m=wasm
+  //   w2m=wasm (CPU only) | w16 | fp16 (build) | low / full (low-memory mode on / off); join with commas: ?w2m=w16,full
+  const DEBUG_FLAGS = (() => {
+    try {
+      return new Set(String(new URLSearchParams(root.location?.search || "").get("w2m") || "").toLowerCase().split(",").filter(Boolean));
+    } catch { return new Set(); }
+  })();
+  function pickProvider(options) {
+    return DEBUG_FLAGS.has("wasm") ? "wasm" : (options.executionProvider || "auto");
+  }
+  function pickVariant(options) {
+    if (DEBUG_FLAGS.has("w16")) return "w16";
+    if (DEBUG_FLAGS.has("fp16")) return "fp16";
+    return options.modelVariant || "auto";
+  }
+  function pickLowMemory(options) {
+    if (DEBUG_FLAGS.has("low")) return true;
+    if (DEBUG_FLAGS.has("full")) return false;
+    return options.lowMemory ?? IOS_LIKE;
+  }
 
   function isSupported() {
     return typeof Worker === "function"
@@ -220,10 +241,10 @@
         tempoChanges: options.tempoChanges,
         onsetThreshold: options.onsetThreshold,
         maxSeconds,
-        executionProvider: options.executionProvider || "auto",
-        modelVariant: options.modelVariant || "auto",
+        executionProvider: pickProvider(options),
+        modelVariant: pickVariant(options),
         ortSources: options.ortSources,
-        lowMemory: options.lowMemory ?? IOS_LIKE,
+        lowMemory: pickLowMemory(options),
       },
     }, { onProgress, signal, transfer: [wave.buffer] });
     result.storage = await storagePromise;
@@ -268,8 +289,8 @@
   async function preload(options = {}) {
     const storagePromise = requestPersistentStorage();
     const result = await call("preload", { options: {
-      executionProvider: options.executionProvider || "auto",
-      modelVariant: options.modelVariant || "auto",
+      executionProvider: pickProvider(options),
+      modelVariant: pickVariant(options),
       ortSources: options.ortSources,
     } }, options);
     result.storage = await storagePromise;
@@ -278,7 +299,7 @@
 
   /** Which build this browser would use: { webgpu, shaderF16, adapter, variant: "fp16"|"w16" } (no download). */
   function getCapabilities(options = {}) {
-    return call("capabilities", { options: { executionProvider: options.executionProvider || "auto", modelVariant: options.modelVariant || "auto" } });
+    return call("capabilities", { options: { executionProvider: pickProvider(options), modelVariant: pickVariant(options) } });
   }
 
   async function getCacheStatus() {
