@@ -229,8 +229,10 @@ async function transcribe(id, wave, options) {
   const started = performance.now();
 
   // Features for several windows are prepared in parallel workers while the network runs.
+  // lowMemory (iPhone / iPad): no helper workers and only one window prepared ahead. Every helper worker and every
+  // prepared window (13.5 MB each) adds to the memory of the tab, and iOS reloads the page when it runs out.
   const cores = navigator.hardwareConcurrency || 4;
-  const poolSize = Math.max(1, Math.min(8, cores - 2));
+  const poolSize = options.lowMemory ? 0 : Math.max(1, Math.min(8, cores - 2));
   const pool = new FeaturePool(meta, poolSize);
   const predictOptions = { prepare: seg => pool.features(seg, dsp), lookahead: Math.max(1, pool.size) };
   const runWindow = async feats => {

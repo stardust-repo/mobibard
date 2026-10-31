@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.17";
+  const VERSION = "1.0.18";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -41,6 +41,13 @@
     return iOS || desktopSafari;
   }
   const APPLE_WEBKIT = isAppleWebKit();
+  // iPhone / iPad (iPadOS reports "Macintosh" but has a touch screen): the tab is killed and reloaded when it
+  // uses too much memory, so the worker keeps its footprint small there.
+  const IOS_LIKE = (() => {
+    const nav = root.navigator || {};
+    const ua = String(nav.userAgent || "");
+    return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && Number(nav.maxTouchPoints) > 1);
+  })();
 
   function isSupported() {
     return typeof Worker === "function"
@@ -216,6 +223,7 @@
         executionProvider: options.executionProvider || "auto",
         modelVariant: options.modelVariant || "auto",
         ortSources: options.ortSources,
+        lowMemory: options.lowMemory ?? IOS_LIKE,
       },
     }, { onProgress, signal, transfer: [wave.buffer] });
     result.storage = await storagePromise;
