@@ -422,12 +422,6 @@
     return converted.midiBytes;
   }
 
-  async function chooseMbtImportOptions(file) {
-    if (!window.MobibardMbt?.isMbtFile?.(file?.name || "")) return {};
-    const mode = await window.MobibardMbt.choosePackingMode({ language });
-    return mode ? { mbtPackingMode: mode } : null;
-  }
-
   async function selectFile(file) {
     const selectToken = ++fileSelectionSerial;
     conversionSerial++;
@@ -465,11 +459,10 @@
       return;
     }
     try {
-      const importOptions = await chooseMbtImportOptions(file);
-      if (importOptions == null || selectToken !== fileSelectionSerial) return;
+      if (selectToken !== fileSelectionSerial) return;
       const buffer = await file.arrayBuffer();
       const sourceBytes = new Uint8Array(buffer);
-      const midiBytes = await normalizeSourceToMidiBytes(file, sourceBytes, importOptions);
+      const midiBytes = await normalizeSourceToMidiBytes(file, sourceBytes);
       if (selectToken !== fileSelectionSerial) return;
       selectedFile = file;
       selectedBytes = midiBytes instanceof Uint8Array ? midiBytes : new Uint8Array(midiBytes || []);

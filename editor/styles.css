@@ -7770,27 +7770,6 @@ a[class*="button"]:hover {
   .unified-import-channel-toolbar .midi-import-summary { flex: 0 0 auto; }
 }
 
-/* Unified music import: format-specific controls live in the same MIDI/KAR option row. */
-.unified-import-dialog .midi-import-midi-controls #midiImportMbtPacking {
-  flex: 0 0 122px;
-  width: 122px;
-  min-width: 122px;
-  max-width: 122px;
-  min-height: 30px;
-  padding-left: 7px;
-  padding-right: 22px;
-}
-.unified-import-dialog .midi-import-midi-controls #midiImportMbtPacking[hidden] { display: none; }
-@media (max-width: 480px) {
-  .unified-import-dialog .midi-import-midi-controls #midiImportMbtPacking {
-    flex: 0 0 116px;
-    width: 116px;
-    min-width: 116px;
-    max-width: 116px;
-  }
-}
-
-
 /* 2026-09-20 interactive channel merge mode */
 .channel-merge-mode-controls {
   min-width: 0;
@@ -15700,7 +15679,6 @@ body.side-tool-import-active { --inline-detail-width: 170px; }
 #midiImportDetail .midi-import-setting select,
 #midiImportDetail .midi-import-setting input { width: 100%; min-width: 0; min-height: 26px; box-sizing: border-box; font-size: 11px; color: var(--text); }
 #midiImportDetail .midi-import-setting input:disabled { opacity: .5; }
-#midiImportDetail .midi-import-mbt-row:has(> select[hidden]) { display: none; }
 #midiImportDetail .midi-import-check { display: grid; grid-template-columns: 15px minmax(0, 1fr); align-items: center; gap: 6px; color: var(--text); font-size: 11px; font-weight: 800; line-height: 1.3; cursor: pointer; }
 #midiImportDetail .midi-import-check input { width: 15px; height: 15px; margin: 0; }
 #midiImportDetail textarea { width: 100%; min-height: 180px; box-sizing: border-box; resize: vertical; font-size: 11px; font-family: ui-monospace, monospace; }

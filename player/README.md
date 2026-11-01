@@ -17,7 +17,6 @@
 
 ## 새 파일/붙여넣기
 
-- MOBIBARD AI/학습 결과 `.mbt`(MBT1)를 직접 불러옵니다. 채널 정보가 없는 MBT를 노트로 복원하고 `악기별`/`Compact` 채널 배치(Compact에서도 음정 악기와 북·심벌즈 무음정 악기는 서로 다른 풀)를 선택한 뒤 기존 MIDI 불러오기·미리듣기 경로로 연결합니다.
 - 로컬, Google Drive, 붙여넣기로 새 소스를 넣으면 하부 작업 상태를 새 작업 기준으로 초기화합니다.
 - 공용 포맷 계층에서 Sega VGM/VGZ·GYM과 S98 사운드칩 로그를 표준 MIDI로 복원해 기존 MML 변환 경로에 전달합니다.
 - 오디오 파일(WAV/MP3/OGG/OPUS/M4A/AAC/FLAC/WEBM/AIFF)을 로컬 파일·Google Drive·드롭으로 넣으면 공용 Wave2MIDI(Beta)로 악기별 MIDI로 변환해 기존 MIDI 불러오기 경로로 연결합니다(최대 10분). 상단의 `MIDI 추출` 버튼은 제거했습니다.

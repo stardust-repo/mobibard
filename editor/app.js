@@ -407,7 +407,6 @@
     w2mTempoBpm: document.querySelector("#w2mTempoBpm"),
     midiImportChannelLimitInput: document.querySelector("#midiImportChannelLimitInput"),
     importChannelColorMode: document.querySelector("#importChannelColorMode"),
-    midiImportMbtPacking: document.querySelector("#midiImportMbtPacking"),
     midiImportMidiControls: document.querySelector("#midiImportMidiControls"),
     midiImportChooseFileButton: document.querySelector("#midiImportChooseFileButton"),
     midiImportTextSourcePanel: document.querySelector("#midiImportTextSourcePanel"),
@@ -905,7 +904,6 @@
       sourceLabel: "MIDI",
       kind: "midi",
       sourceFile: null,
-      mbtPackingMode: "byInstrument",
       colorMode: "channel",
       midiBuffer: null,
       preview: null,
@@ -13638,21 +13636,6 @@
     return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
   }
 
-  function isMbtImportFileName(fileName = state.midiImport.fileName) {
-    return Boolean(window.MobibardMbt?.isMbtFile?.(String(fileName || "")));
-  }
-
-  function normalizeMbtImportPackingMode(value) {
-    return window.MobibardMbt?.normalizePackingMode?.(value) || (value === "compact" ? "compact" : "byInstrument");
-  }
-
-  function getMbtImportOptions(fileName = state.midiImport.fileName) {
-    if (!isMbtImportFileName(fileName)) return {};
-    const mode = normalizeMbtImportPackingMode(elements.midiImportMbtPacking?.value || state.midiImport.mbtPackingMode || "byInstrument");
-    state.midiImport.mbtPackingMode = mode;
-    return { mbtPackingMode: mode };
-  }
-
   async function convertImportFileToMidiBuffer(file, options = {}) {
     if (!window.MabiMusicFormats?.convertFile) throw new Error("음악 포맷 플러그인을 불러오지 못했습니다.");
     const converted = await window.MabiMusicFormats.convertFile(file, options);
@@ -13703,7 +13686,6 @@
     state.midiImport.sourceLabel = "MIDI";
     state.midiImport.kind = "midi";
     state.midiImport.sourceFile = null;
-    state.midiImport.mbtPackingMode = normalizeMbtImportPackingMode(window.MobibardMbt?.readStoredPackingMode?.() || "byInstrument");
     state.midiImport.midiBuffer = null;
     state.midiImport.preview = null;
     state.midiImport.text = "";
@@ -14440,11 +14422,6 @@
     }
     if (elements.midiImportMidiControls) elements.midiImportMidiControls.hidden = !isMidi;
     syncAudioToMidiOptionControls();
-    if (elements.midiImportMbtPacking) {
-      const showMbtPacking = isMidi && isMbtImportFileName();
-      elements.midiImportMbtPacking.hidden = !showMbtPacking;
-      if (showMbtPacking) elements.midiImportMbtPacking.value = normalizeMbtImportPackingMode(state.midiImport.mbtPackingMode);
-    }
     if (elements.midiImportTextSourcePanel) elements.midiImportTextSourcePanel.hidden = !isText;
     if (elements.midiImportTextInput && isText && elements.midiImportTextInput.value !== state.midiImport.text) {
       elements.midiImportTextInput.value = state.midiImport.text || "";
@@ -14827,14 +14804,10 @@
     state.midiImport.sourceType = source.sourceType;
     state.midiImport.sourceLabel = source.sourceLabel;
     setMidiImportQuantizeDivision(64);
-    if (isMbtImportFileName(source.fileName)) {
-      state.midiImport.mbtPackingMode = normalizeMbtImportPackingMode(window.MobibardMbt?.readStoredPackingMode?.() || "byInstrument");
-      if (elements.midiImportMbtPacking) elements.midiImportMbtPacking.value = state.midiImport.mbtPackingMode;
-    }
     openMidiImportDialog();
     setMidiImportStatus(i18nText("file.analyzing_named", [source.sourceLabel]));
     try {
-      const converted = await convertImportFileToMidiBuffer(file, getMbtImportOptions(source.fileName));
+      const converted = await convertImportFileToMidiBuffer(file);
       state.midiImport.fileName = converted.fileName;
       state.midiImport.sourceType = converted.sourceType;
       state.midiImport.sourceLabel = converted.sourceLabel;
@@ -14856,41 +14829,6 @@
       const message = error instanceof Error ? error.message : `${source.sourceLabel} 파일을 읽지 못했습니다.`;
       setMidiImportStatus(message, { error: true });
       updateMidiImportDialog();
-      console.error(error);
-      return false;
-    }
-  }
-
-  async function reprepareMbtImportFromSharedOptions() {
-    const file = state.midiImport.sourceFile;
-    if (!file || !isMbtImportFileName(state.midiImport.fileName) || state.midiImport.busy) return false;
-    stopMidiImportPreview({ update: false });
-    state.midiImport.busy = true;
-    state.midiImport.mbtPackingMode = normalizeMbtImportPackingMode(elements.midiImportMbtPacking?.value || state.midiImport.mbtPackingMode);
-    updateMidiImportDialog();
-    setMidiImportStatus(i18nText("file.analyzing_named", [state.midiImport.sourceLabel || "MBT"]));
-    try {
-      const converted = await convertImportFileToMidiBuffer(file, getMbtImportOptions(file.name || state.midiImport.fileName));
-      state.midiImport.midiBuffer = converted.midiBuffer;
-      state.midiImport.sourceType = converted.sourceType;
-      state.midiImport.sourceLabel = converted.sourceLabel;
-      const quantizeDivision = getMidiImportQuantizeDivision();
-      const preview = parseMidiArrayBuffer(converted.midiBuffer, converted.fileName, {
-        quantizeDivision,
-        sourceType: converted.sourceType,
-        sourceLabel: converted.sourceLabel,
-      });
-      state.midiImport.preview = preview;
-      state.midiImport.selectedGroupIds = new Set(preview.groups.map((group) => String(group.id)));
-      state.midiImport.busy = false;
-      updateMidiImportDialog();
-      return true;
-    } catch (error) {
-      state.midiImport.busy = false;
-      state.midiImport.midiBuffer = null;
-      state.midiImport.preview = null;
-      updateMidiImportDialog();
-      setMidiImportStatus(error instanceof Error ? error.message : i18nText("mml.fail_read_file"), { error: true });
       console.error(error);
       return false;
     }
@@ -15973,8 +15911,7 @@
       return prepareMidiImportFile(file);
     }
     try {
-      const importOptions = isMbtImportFileName(file.name || "") ? { mbtPackingMode: normalizeMbtImportPackingMode(window.MobibardMbt?.readStoredPackingMode?.() || "byInstrument") } : {};
-      const converted = await convertImportFileToMidiBuffer(file, importOptions || {});
+      const converted = await convertImportFileToMidiBuffer(file);
       const parsed = parseMidiArrayBuffer(converted.midiBuffer, converted.fileName, {
         quantizeDivision: options.quantizeDivision,
         sourceType: converted.sourceType,
@@ -29273,8 +29210,7 @@
 
   const MIDI_EXPORT_MELODIC_CHANNELS = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15]);
   // The embedded MobiBard SoundFont numbers its 14 presets 0..13 (not GM). Exported MIDI must use GM
-  // programs so other players/DAWs pick the right instrument. Same table as the MBT format
-  // (plugins/formats/mbt) and inverse of plugins/common/default-instrument-map.js, so re-importing an
+  // programs so other players/DAWs pick the right instrument. Inverse of plugins/common/default-instrument-map.js, so re-importing an
   // exported file maps back to the same MobiBard presets. Presets 12/13 (BigDrum/Cymbals) export as
   // GM drums on channel 10.
   const MOBIBARD_PRESET_TO_GM_PROGRAM = Object.freeze([0, 71, 73, 46, 24, 15, 40, 13, 10, 25, 22, 53]);
@@ -30059,7 +29995,9 @@
       setActiveMidiReference(null);
     }
     ensureTimelineFitsViewport();
-    state.playhead.beat = clamp(
+    // 사용자가 파일을 불러온 경우에는 재생 위치를 처음(0)으로 두고, 자동 저장 복구만 저장된 위치를 되살립니다.
+    const startAtBeginning = !state.autosave.restoring;
+    state.playhead.beat = startAtBeginning ? 0 : clamp(
       Number(data.editor?.playheadBeat) || 0,
       0,
       getTotalBeats(),
@@ -30113,7 +30051,7 @@
       } else {
         migratedScrollLeft = savedScrollLeft + getPreRollWidth();
       }
-      elements.rollViewport.scrollLeft = migratedScrollLeft;
+      elements.rollViewport.scrollLeft = startAtBeginning ? 0 : migratedScrollLeft;
       const savedScrollTop = Math.max(0, Number(data.editor?.scrollTop) || 0);
       const migratedScrollTop = Number(data.version) >= 3
         ? savedScrollTop
@@ -34048,7 +33986,6 @@
       elements.midiImportChannelLimitInput.value = String(value);
       updateMidiImportDialog({ renderSelection: false });
     });
-    elements.midiImportMbtPacking?.addEventListener("change", () => { void reprepareMbtImportFromSharedOptions(); });
     const onQuantizeChange = () => {
       if (state.midiImport.kind === "midi" && state.midiImport.midiBuffer && !state.midiImport.busy) {
         try { reparseMidiImportPreview(); }

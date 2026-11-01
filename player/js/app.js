@@ -7557,12 +7557,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return type === "application/x-3mle" || type === "application/vnd.3mle";
   }
 
-  async function chooseMbtImportOptions(name = "") {
-    if (!window.MobibardMbt?.isMbtFile?.(name)) return {};
-    const mode = await window.MobibardMbt.choosePackingMode({ language: document.documentElement.lang });
-    return mode ? { mbtPackingMode: mode } : null;
-  }
-
   // 오디오 파일: 공용 Wave2MIDI 모듈(plugins/ai/wave2midi)로 MIDI를 만든 뒤 일반 MIDI처럼 변환 팝업을 엽니다.
   const AUDIO_AI_MAX_MINUTES = 10;
   let audioAiImportBusy = false;
@@ -7684,9 +7678,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       return;
     }
     if (window.MabiMusicFormats?.isSupported(name, mimeType)) {
-      const importOptions = await chooseMbtImportOptions(name);
-      if (importOptions == null) return;
-      const importData = await buildPluginMidiImport(bytes, name, mimeType, importOptions);
+      const importData = await buildPluginMidiImport(bytes, name, mimeType);
       googleDriveMmlFileName = "";
       openMidiConvertDialog(importData);
       showToast(i18nText("drive.midi_loaded"), "info");
@@ -8359,10 +8351,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       stopMidiPreview();
       stopPlayback(false);
       if (window.MabiMusicFormats?.isSupported(name, file.type || "")) {
-        const importOptions = await chooseMbtImportOptions(name);
-        if (importOptions == null) return;
         const bytes = new Uint8Array(await file.arrayBuffer());
-        const importData = await buildPluginMidiImport(bytes, name, file.type || "", importOptions);
+        const importData = await buildPluginMidiImport(bytes, name, file.type || "");
         openMidiConvertDialog(importData);
       } else if (isAudioAiSource(name, file.type || "")) {
         let importData;
