@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.22";
+  const VERSION = "1.0.23";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -22,6 +22,7 @@
   const DEFAULT_MAX_SECONDS = 10 * 60;
 
   let worker = null;
+  let workerUsed = false;
   let idleTimer = 0;
   let nextId = 1;
   const pending = new Map();
@@ -41,6 +42,22 @@
     return iOS || desktopSafari;
   }
   const APPLE_WEBKIT = isAppleWebKit();
+  // How many CPU (WebAssembly) sessions may run side by side when there is no GPU. Each one holds the model and a
+  // WebAssembly heap (see measurements in README), so phones and small-memory devices get fewer.
+  function defaultCpuSessions() {
+    const nav = root.navigator || {};
+    const ua = String(nav.userAgent || "");
+    const iOS = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && Number(nav.maxTouchPoints) > 1);
+    if (iOS) return 1;
+    const cores = Number(nav.hardwareConcurrency) || 4;
+    const memory = Number(nav.deviceMemory) || 0;   // GB, Chromium only
+    const mobile = /Android|Mobile/.test(ua);
+    // Measured: one session peaks around 2.4 GB, two around 4.2 GB, four exhausted an 8 GB machine.
+    let count = Math.min(Math.floor(cores / 2), 2);
+    if (mobile || (memory && memory <= 4)) count = 1;
+    return Math.max(1, count);
+  }
+
   function isSupported() {
     return typeof Worker === "function"
       && typeof WebAssembly === "object"
@@ -52,6 +69,7 @@
   function disposeWorker(reason = "disposed") {
     window.clearTimeout(idleTimer);
     if (worker) { worker.terminate(); worker = null; }
+    workerUsed = false;
     for (const entry of pending.values()) entry.reject(makeError(reason === "aborted" ? "aborted" : "disposed", reason));
     pending.clear();
   }
@@ -203,6 +221,10 @@
     if (signal?.aborted) throw makeError("aborted", "aborted");
     const maxSeconds = options.maxSeconds ?? DEFAULT_MAX_SECONDS;
     if (maxSeconds > 0 && wave.length / SAMPLE_RATE > maxSeconds) throw makeError("too-long", `Audio is longer than ${maxSeconds} seconds`);
+    // A worker that already transcribed holds a grown WASM heap, the previous probability maps and a session;
+    // memory-tight browsers (iPad) crash on back-to-back runs, so every run starts in a fresh worker.
+    if (worker && workerUsed && !pending.size) disposeWorker("recycled");
+    workerUsed = true;
     const result = await call("transcribe", {
       wave,
       options: {
@@ -214,6 +236,7 @@
         maxSeconds,
         executionProvider: options.executionProvider || "auto",
         ortSources: options.ortSources,
+        cpuSessions: options.cpuSessions ?? defaultCpuSessions(),
       },
     }, { onProgress, signal, transfer: [wave.buffer] });
     result.storage = await storagePromise;

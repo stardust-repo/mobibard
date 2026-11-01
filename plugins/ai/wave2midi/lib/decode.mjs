@@ -75,7 +75,8 @@ export function decodeNotes(probs, T, classes, th) {
  *  what prepare(segment) resolved to (e.g. frontend features computed in Web Workers). prepare() is started
  *  opts.lookahead windows ahead, so feature extraction for the next windows overlaps the network run. */
 export async function predictSong(wave, meta, runWindow, onProgress, opts = {}) {
-  const prepare = opts.prepare, ahead = Math.max(0, opts.lookahead ?? 0);
+  const prepare = opts.prepare, conc = Math.max(1, Math.floor(opts.concurrency ?? 1));
+  const ahead = Math.max(conc, Math.max(0, opts.lookahead ?? 0));
   let W = Math.round(meta.window_seconds * FPS); W += W % 2;
   const O = Math.min(Math.round(meta.overlap_seconds * FPS), W / 2), H = W - O;
   const T = Math.ceil(wave.length / HOP), K = meta.classes.length;
@@ -100,15 +101,24 @@ export async function predictSong(wave, meta, runWindow, onProgress, opts = {}) 
     const x = await pending.get(wi); pending.delete(wi);
     return runWindow(x);
   };
-  // The run of window wi+1 is started BEFORE the results of window wi are added up, so the GPU/CPU keeps working
-  // on the next window while the main thread does the bookkeeping (and no timer tick is waited for per window).
-  let running = launch(0);
+  // Up to `concurrency` network runs are in flight (CPU: one per session lane; GPU: 1). The run of window wi+1 is
+  // started BEFORE the results of window wi are added up, so the GPU/CPU keeps working on the next window while
+  // the main thread does the bookkeeping (and no timer tick is waited for per window).
+  const runs = new Map();
+  let nextLaunch = 0;
+  const fill = upto => {
+    while (nextLaunch < upto && nextLaunch < starts.length) {
+      const r = launch(nextLaunch); r.catch(() => {}); runs.set(nextLaunch, r); nextLaunch++;
+    }
+  };
+  fill(conc);
   for (let wi = 0; wi < starts.length; wi++) {
     const st = starts[wi];
     const tw = performance.now();
-    const pr = await running;
+    const pr = await runs.get(wi);
+    runs.delete(wi);
     stats.wait += performance.now() - tw;
-    if (wi + 1 < starts.length) running = launch(wi + 1);
+    fill(wi + 1 + conc);
     const ta = performance.now();
     const n = Math.min(W, T - st);
     for (let i = 0; i < n; i++) {

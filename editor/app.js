@@ -6201,6 +6201,8 @@
 
     drawMidiReferenceNotes(context, visibleLeft, visibleTop, visibleRight, visibleBottom);
 
+    // 볼륨 수정 중에는 슬라이더로 조정한 볼륨을 롤의 V 표기와 투명도에도 미리 반영합니다.
+    const rollVolumePreview = getSideToolVolumePreview();
     const visibleChannels = isMidiReferenceActive()
       ? []
       : [...state.channels.keys()]
@@ -6247,7 +6249,7 @@
         }
         const widthValue = Math.max(5, endX - x - 1);
         const selected = state.selectedNoteIds.has(note.id);
-        const noteVolume = getNoteVolume(note);
+        const noteVolume = getNoteVolume(rollVolumePreview ? rollVolumePreview(note, channel) : note);
         const selectionDim = isActive && hasActiveSelection && !selected ? 0.75 : 1;
         context.globalAlpha = channelAlpha * (0.62 + noteVolume / 15 * 0.36) * selectionDim;
 
@@ -6600,10 +6602,11 @@
     if (!Array.isArray(renderItems)) state.velocityLaneRenderItems = items;
 
     state.velocityLaneHitRegions = [];
+    const laneVolumePreview = getSideToolVolumePreview();
     const bottom = getVelocityLaneY(0, height);
     for (const item of items) {
       const { channel, note, color, isActive, muted, multiChannel, selected, x, endX } = item;
-      const volume = getNoteVolume(note);
+      const volume = getNoteVolume(laneVolumePreview ? laneVolumePreview(note, channel) : note);
       const y = getVelocityLaneY(volume, height);
       const visibleStartX = Math.max(-2, x);
       const visibleEndX = Math.min(width + 2, endX);
@@ -23575,7 +23578,7 @@
       return;
     }
 
-    elements.rollViewport.focus();
+    elements.rollViewport.focus({ preventScroll: true });
     if (Boolean(event.ctrlKey) !== Boolean(state.ctrlToolHeld)) {
       state.ctrlToolHeld = Boolean(event.ctrlKey);
       updateEditToolControls();
@@ -24281,6 +24284,9 @@
     }
 
     const interaction = state.interaction;
+    // macOS/iPadOS Safari는 contextmenu를 pointerup 전에(마우스 버튼을 누르는 순간) 보냅니다.
+    // 오른쪽 버튼을 뗄 때 방금 열린 메뉴를 닫지 않도록 왼쪽 버튼일 때만 닫습니다.
+    const closeMenuAfterPointerUp = () => { if (interaction.pointerButton !== 2) closeContextMenu(); };
     stopRollDragAutoScroll();
     if (interaction.pointerButton === 0 && interaction.type !== "marquee" && interaction.type !== "midi-marquee") {
       endEditorPitchPreview();
@@ -24337,15 +24343,15 @@
       state.selectedNoteIds.delete(interaction.clickedNoteId);
     } else if (interaction.type === "midi-marquee" && interaction.moved) {
       state.suppressContextMenuUntil = performance.now() + 600;
-      closeContextMenu();
+      closeMenuAfterPointerUp();
       updateMidiReferenceUI();
     } else if (interaction.type === "midi-marquee") {
       clearMidiSelection();
       updateMidiReferenceUI();
-      closeContextMenu();
+      closeMenuAfterPointerUp();
     } else if (interaction.type === "marquee" && interaction.moved) {
       state.suppressContextMenuUntil = performance.now() + 600;
-      closeContextMenu();
+      closeMenuAfterPointerUp();
     } else if (interaction.type === "marquee") {
       if (interaction.preserveSelectionOnTap) {
         state.selectedNoteIds = new Set(interaction.baseSelection);
@@ -24363,7 +24369,7 @@
       } else {
         clearNoteSelection();
       }
-      closeContextMenu();
+      closeMenuAfterPointerUp();
     }
 
     state.interaction = null;
@@ -33279,7 +33285,7 @@
     }
     event.preventDefault();
     setEditMode(noteValue);
-    elements.rollViewport.focus();
+    elements.rollViewport.focus({ preventScroll: true });
     return true;
   }
 
@@ -33300,7 +33306,7 @@
 
     event.preventDefault();
     changeZoom(zoomDirection);
-    elements.rollViewport.focus();
+    elements.rollViewport.focus({ preventScroll: true });
     return true;
   }
 
@@ -33312,6 +33318,12 @@
     return Boolean(isNoteEditModeActive() && target instanceof Element && target.closest("#noteEditModePanel"));
   }
 
+  // 슬라이더·체크박스·라디오는 Space를 쓰지 않으므로 포커스를 물고 있어도 재생 단축키가 우선합니다.
+  function isPlaybackShortcutPassiveControl(target) {
+    if (!(target instanceof HTMLInputElement)) return false;
+    return ["range", "checkbox", "radio"].includes(String(target.type || "").toLowerCase());
+  }
+
   function handlePlaybackShortcut(event) {
     if (isModalPopupOpen()) return false;
     if (event.code !== "Space") {
@@ -33319,18 +33331,19 @@
     }
     const instrumentSelectFocused = isPlaybackShortcutInstrumentSelect(event.target);
     const noteEditControlFocused = isPlaybackShortcutNoteEditControl(event.target);
+    const passiveControlFocused = isPlaybackShortcutPassiveControl(event.target);
     if (
       event.defaultPrevented
       || event.ctrlKey
       || event.metaKey
       || event.altKey
-      || (isTextEntryTarget(event.target) && !instrumentSelectFocused && !noteEditControlFocused)
+      || (isTextEntryTarget(event.target) && !instrumentSelectFocused && !noteEditControlFocused && !passiveControlFocused)
     ) {
       return false;
     }
     event.preventDefault();
     if (event.repeat) return true;
-    if (instrumentSelectFocused && event.target instanceof HTMLElement) {
+    if ((instrumentSelectFocused || passiveControlFocused) && event.target instanceof HTMLElement) {
       event.target.blur();
       elements.rollViewport?.focus?.({ preventScroll: true });
     }
@@ -34183,6 +34196,12 @@
       event.stopPropagation();
       toggleVolumeMenu();
     });
+    // 슬라이더를 놓으면 포커스를 돌려줘서 Space 재생이 슬라이더에 막히지 않게 합니다(키보드 조작은 그대로).
+    document.addEventListener("pointerup", (event) => {
+      const input = event.target instanceof Element ? event.target.closest("input[type='range']") : null;
+      if (!input) return;
+      window.setTimeout(() => { if (document.activeElement === input) input.blur(); }, 0);
+    }, true);
     elements.volumeSlider?.addEventListener("input", () => {
       setMasterVolume(Number(elements.volumeSlider.value) / 100);
     });

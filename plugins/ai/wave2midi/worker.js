@@ -22,6 +22,9 @@ const DEFAULT_ORT_SOURCES = [
   `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`,
 ];
 
+// CPU sessions: do not keep a memory arena / planned buffers between runs (measured: far less memory per session).
+const CPU_MEMORY_OPTIONS = { enableCpuMemArena: false, enableMemPattern: false };
+
 let libsPromise = null;
 let ortBase = "";
 let session = null;
@@ -128,7 +131,7 @@ async function ensureSession(options, progress) {
     progress("model-init", 0, 0);
     for (const eps of executionPlans(model.variant, options, caps)) {
       try {
-        session = await self.ort.InferenceSession.create(model.bytes, { executionProviders: eps, graphOptimizationLevel: "all" });
+        session = await self.ort.InferenceSession.create(model.bytes, { executionProviders: eps, graphOptimizationLevel: "all", ...(eps[0] === "wasm" ? CPU_MEMORY_OPTIONS : {}) });
         sessionInfo = {
           provider: eps[0],
           variant: model.variant,
@@ -197,8 +200,90 @@ class FeaturePool {
   }
 }
 
+// ---- Several CPU sessions (no GPU) ---------------------------------------------------------
+// WebAssembly threads need cross-origin isolation, which the host (GitHub Pages) cannot provide, so a CPU run uses
+// one thread per session. Windows are independent, so "lanes" (this worker's own session plus helper workers with
+// their own single-thread sessions, infer-worker.js) each process a different window. Every lane costs memory
+// (model weights + WebAssembly heap), hence the small lane count chosen by the caller.
+class LanePool {
+  constructor(runOnMain, inputName, shape) {
+    this.inputName = inputName;
+    this.shape = shape;
+    this.helpers = [];
+    this.free = [];
+    this.waiters = [];
+    this.mainLane = { helper: null, run: async feats => { await new Promise(r => setTimeout(r, 0)); return runOnMain(feats); } };
+  }
+  /** Starts count-1 helper sessions; the ones that fail to start are simply left out. */
+  async start(count) {
+    const starting = [];
+    for (let i = 1; i < count; i++) {
+      starting.push(new Promise(resolve => {
+        let worker = null;
+        try {
+          worker = new Worker(new URL(`infer-worker.js?v=${encodeURIComponent(ASSET_VERSION)}`, BASE).href);
+        } catch { resolve(null); return; }
+        const lane = { helper: worker, pending: new Map(), next: 1 };
+        lane.run = feats => new Promise((res, rej) => {
+          const id = lane.next++;
+          lane.pending.set(id, { res, rej });
+          // Copied (13.5 MB), not transferred, so the window can be computed again if this helper fails.
+          worker.postMessage({ type: "run", id, feats, shape: this.shape, inputName: this.inputName });
+        });
+        const failAll = message => { for (const j of lane.pending.values()) j.rej(new Error(message)); lane.pending.clear(); };
+        worker.onmessage = e => {
+          const m = e.data || {};
+          if (m.type === "ready") { resolve(lane); return; }
+          if (m.type === "done") { const j = lane.pending.get(m.id); lane.pending.delete(m.id); j?.res(m.out); return; }
+          if (m.type === "error") {
+            if (m.id == null) { worker.terminate(); resolve(null); return; }
+            const j = lane.pending.get(m.id); lane.pending.delete(m.id); j?.rej(new Error(m.message));
+          }
+        };
+        worker.onerror = e => { failAll(e.message || "helper failed"); lane.dead = true; resolve(null); };
+        worker.postMessage({ type: "init", ortBase, ortFile: ORT_FILE });
+      }));
+    }
+    this.helpers = (await Promise.all(starting)).filter(Boolean);
+    // Helpers first: the main lane computes synchronously and would delay handing out the other windows.
+    this.free = [...this.helpers, this.mainLane];
+  }
+  get size() { return this.helpers.length + 1; }
+  async acquire() {
+    if (this.free.length) return this.free.shift();
+    return new Promise(resolve => this.waiters.push(resolve));
+  }
+  release(lane) {
+    if (lane.dead) return;
+    const waiter = this.waiters.shift();
+    if (waiter) waiter(lane); else this.free.push(lane);
+  }
+  async run(feats) {
+    const lane = await this.acquire();
+    try {
+      return await lane.run(feats);
+    } catch (error) {
+      // A helper that fails is dropped and its window is computed again on the remaining lanes.
+      if (!lane.helper || error instanceof RangeError) throw error;
+      lane.dead = true;
+      try { lane.helper.terminate(); } catch { /* gone */ }
+      this.helpers = this.helpers.filter(h => h !== lane);
+      console.warn("[Wave2MIDI] a CPU helper session failed; continuing with fewer lanes", error);
+      return this.run(feats);
+    } finally {
+      this.release(lane);
+    }
+  }
+  terminate() {
+    for (const h of this.helpers) { try { h.helper.terminate(); } catch { /* gone */ } }
+    this.helpers = [];
+    this.free = [];
+  }
+}
+
 async function transcribe(id, wave, options) {
   const progress = (stage, done = 0, total = 0) => self.postMessage({ type: "progress", id, stage, done, total });
+  lastJob = null; // drop the previous song's probability maps before allocating new ones
   let info = await ensureSession(options, progress);
   const { dsp, decode, velocity, midi, tempo } = await loadLibs();
   const meta = info.meta;
@@ -209,10 +294,14 @@ async function transcribe(id, wave, options) {
 
   // Features for several windows are prepared in parallel workers while the network runs.
   const cores = navigator.hardwareConcurrency || 4;
-  const poolSize = Math.max(1, Math.min(8, cores - 2));
+  // CPU lanes (see LanePool): how many sessions the caller allows (1 = just this worker's session).
+  const cpuSessions = Math.max(1, Math.floor(Number(options.cpuSessions) || 1));
+  const poolSize = info.provider === "wasm" && cpuSessions > 1
+    ? Math.max(1, Math.min(cpuSessions, cores - 2))
+    : Math.max(1, Math.min(8, cores - 2));
   const pool = new FeaturePool(meta, poolSize);
   const predictOptions = { prepare: seg => pool.features(seg, dsp), lookahead: Math.max(1, pool.size) };
-  const runWindow = async feats => {
+  const runOnMain = async feats => {
     const input = new self.ort.Tensor("float32", feats, meta.input.shape);
     const result = await session.run({ [meta.input.name || "features"]: input });
     const out = {
@@ -228,9 +317,25 @@ async function transcribe(id, wave, options) {
   const totalFrames = Math.ceil(wave.length / dsp.HOP);
   const windowCount = totalFrames > W ? 1 + Math.ceil((totalFrames - W) / hopFrames) : 1;
   progress("analyze", 0, windowCount);
+  const inputName = meta.input.name || "features";
+  const predictOnce = async () => {
+    let lanes = null;
+    try {
+      if (info.provider === "wasm" && cpuSessions > 1) {
+        lanes = new LanePool(runOnMain, inputName, meta.input.shape);
+        await lanes.start(cpuSessions);
+        if (lanes.size < 2) { lanes.terminate(); lanes = null; }
+      }
+      return await decode.predictSong(wave, meta, lanes ? feats => lanes.run(feats) : runOnMain,
+        (done, total) => progress("analyze", done, total),
+        { ...predictOptions, concurrency: lanes ? lanes.size : 1, lookahead: Math.max(predictOptions.lookahead, lanes ? lanes.size : 1) });
+    } finally {
+      lanes?.terminate();
+    }
+  };
   let predicted;
   try {
-    predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total), predictOptions);
+    predicted = await predictOnce();
   } catch (error) {
     // Some GPUs create the session but fail (or lose the device) while running: repeat the whole run on the CPU.
     if (info.provider !== "webgpu" || error instanceof RangeError) throw error;
@@ -239,12 +344,14 @@ async function transcribe(id, wave, options) {
     info = await ensureSession({ ...options, executionProvider: "wasm" }, progress);
     info.fallbackReasons = [...(info.fallbackReasons || []), `[gpu run] ${error?.message || error}`];
     progress("analyze", 0, windowCount);
-    predicted = await decode.predictSong(wave, meta, runWindow, (done, total) => progress("analyze", done, total), predictOptions);
+    predicted = await predictOnce();
   } finally {
     pool.terminate();
   }
   // The model output is kept so post-processing options (note sensitivity, velocity, tempo) can be
   // re-applied without running the model again ("postprocess" message). Freed with the worker.
+  // Only the probability maps are needed for post-processing: free the model and its buffers now.
+  await releaseSession();
   lastJob = { probs: predicted.probs, T: predicted.T, wave, seconds, info };
   return finishTranscription(lastJob, options, progress, started);
 }

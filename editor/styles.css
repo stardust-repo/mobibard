@@ -8771,6 +8771,22 @@ body.merge-mode-active #rollCanvas { cursor: crosshair !important; }
 .special-thanks-list li:not(.special-thanks-all) .special-thanks-name {
   font-size: 14px;
 }
+.special-thanks-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.special-thanks-desc {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--muted, inherit);
+  opacity: .78;
+  overflow-wrap: anywhere;
+}
+.special-thanks-list li:not(.special-thanks-all) { align-items: flex-start; }
+.special-thanks-list li:not(.special-thanks-all) .special-thanks-server { margin-top: 2px; }
 .channel-mml-optimize-option {
   background: color-mix(in srgb, var(--accent) 8%, var(--control-bg));
 }
