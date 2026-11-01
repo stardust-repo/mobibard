@@ -14086,6 +14086,8 @@
     const sourceObject = mi.kind === "midi" ? mi.preview : mi.textParsed;
     const signature = getImportPreviewSignature();
     if (!force && signature === importPreviewState.signature && sourceObject === importPreviewState.sourceObject) return false;
+    // 새 파일을 불러오거나 다시 불러오면(원본 데이터가 바뀌면) 재생 위치를 처음으로 되돌립니다.
+    const sourceChanged = force || sourceObject !== importPreviewState.sourceObject;
     importPreviewState.signature = signature;
     importPreviewState.sourceObject = sourceObject;
     const wasPlaying = state.playback.running || state.playback.loading;
@@ -14169,6 +14171,7 @@
     resizeAndDraw();
     renderImportChannelTree();
     refreshSideToolTitlebar();
+    if (built && sourceChanged) resetTimelineToStartAfterImport();
     if (wasPlaying && built) startPlayback();
     return built;
   }
