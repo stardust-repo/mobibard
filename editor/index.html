@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261101c";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261101g";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.5.0&amp;rev=20261101c"></script>
+<script src="js/language-manager.js?v=5.5.0&amp;rev=20261101g"></script>
 <title data-i18n="app.title">모비바드 v5.5</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.5.0&amp;rev=20261101c" rel="stylesheet"/>
+<link href="styles.css?v=5.5.0&amp;rev=20261101g" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -450,11 +450,12 @@
 <div class="special-thanks-content">
 <p class="special-thanks-intro" data-i18n="special_thanks.major_help">큰 도움을 주신 분들</p>
 <ul class="special-thanks-list">
-<li><span class="special-thanks-server">던컨</span><span class="special-thanks-who"><span class="special-thanks-name">탕속의고기</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_tang">알파 버전의 기초 기능과 단축키 접근성에 의견을 주셨어요</span></span></li>
-<li><span class="special-thanks-server">던컨</span><span class="special-thanks-who"><span class="special-thanks-name">쏘닉</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_sonic">베타 버전 전반의 버그를 제보해 주셨어요</span></span></li>
-<li><span class="special-thanks-server">던컨</span><span class="special-thanks-who"><span class="special-thanks-name">메굼잉</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_megum">베타 버전의 Mac 환경 버그를 제보하고 재생 구간에 의견을 주셨어요</span></span></li>
+<li><span class="special-thanks-server">던컨</span><span class="special-thanks-who"><span class="special-thanks-name">탕속의고기</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_tang">알파 버전의 기초 기능과 필요한 단축키에 의견을 주셨어요</span></span></li>
+<li><span class="special-thanks-server">던컨</span><span class="special-thanks-who"><span class="special-thanks-name">쏘닉</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_sonic">베타 버전 전반의 버그를 제보하고 단축키 안내 접근성에 의견을 주셨어요</span></span></li>
+<li><span class="special-thanks-server">던컨</span><span class="special-thanks-who"><span class="special-thanks-name">메굼잉</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_megum">베타 버전의 Mac 환경 버그를 제보하고 재생 구간과 반복 재생에 의견을 주셨어요</span></span></li>
 <li><span class="special-thanks-server">던컨</span><span class="special-thanks-who"><span class="special-thanks-name">루나비앙카</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_luna">페이드 인/아웃에 의견을 주셨어요</span></span></li>
 <li><span class="special-thanks-server">던컨</span><span class="special-thanks-who"><span class="special-thanks-name">ProRes</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_prores">MIDI 입력 기능을 테스트하고 메트로놈과 입력 오프셋에 의견을 주셨어요</span></span></li>
+<li><span class="special-thanks-server">메이븐</span><span class="special-thanks-who"><span class="special-thanks-name">마녀히즈</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_witchhz">가이드에 의견을 주셨어요</span></span></li>
 <li class="special-thanks-all"><span class="special-thanks-name" data-i18n="special_thanks.everyone_interested">관심 가져주신 모든 분!</span></li>
 </ul>
 </div>
@@ -759,7 +760,7 @@
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/mbt/format-mbt.js?v=1.0.2&amp;rev=20260920-mbt-extension-only"></script>
-<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261101c"></script>
+<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261101g"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
@@ -775,14 +776,14 @@
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
 <script src="js/soundbank-player.js?v=5.5.0&amp;rev=20261030-safari-audio1"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261101c"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.1&amp;rev=20261101g"></script>
 <script src="../plugins/common/site-navigation.js?v=20260913-sitemap-short1"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.23"></script>
-<script src="app.js?v=5.5.0&amp;rev=20261101c"></script>
+<script src="app.js?v=5.5.0&amp;rev=20261101g"></script>
 <script src="js/account-drive.js?v=5.5.0&amp;rev=20260928-account-preference1" type="module"></script>
 </body>
 </html>
