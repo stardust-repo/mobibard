@@ -16197,11 +16197,39 @@
     return (document.groups || []).filter((group) => selectedIds.has(String(group.id)));
   }
 
+  // 드럼 채널 이름: GM 드럼 번호를 킥/스네어/하이햇… 역할로 묶고, 노트가 많은 역할 순서(최대 3개)로 적습니다.
+  function getDrumRoleKey(pitch) {
+    const n = Math.round(Number(pitch) || 0);
+    if (n === 35 || n === 36) return "kick";
+    if (n >= 37 && n <= 40) return "snare";
+    if (n === 42 || n === 44 || n === 46) return "hihat";
+    if (n === 41 || n === 43 || n === 45 || n === 47 || n === 48 || n === 50) return "tom";
+    if (n === 49 || n === 52 || n === 55 || n === 57) return "crash";
+    if (n === 51 || n === 53 || n === 59) return "ride";
+    return "perc";
+  }
+
+  function getDrumVoiceRoleName(notes) {
+    const counts = new Map();
+    for (const note of notes || []) {
+      const key = getDrumRoleKey(note.pitch);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    const total = [...counts.values()].reduce((sum, value) => sum + value, 0);
+    if (!total) return "";
+    const ranked = [...counts.entries()].sort((left, right) => right[1] - left[1]);
+    const picked = ranked.filter(([, count], index) => index === 0 || count / total >= 0.2).slice(0, 3);
+    return picked.map(([key]) => i18nText(`drum.role_${key}`)).join("/");
+  }
+
   function makeEditorChannelFromMidiVoice(group, notes, { voiceIndex = 0, voiceCount = 1, copyHue = null } = {}) {
     const id = nextChannelId();
     const channel = createDefaultChannel(id, state.channels.length);
     const voiceSuffix = voiceCount > 1 ? ` (${voiceIndex + 1})` : "";
-    const requestedName = `${getMidiGroupDisplayName(group, i18nText("channel.instrument_3"))}${voiceSuffix}`;
+    const drumRoleName = isMidiGroupDrums(group) ? getDrumVoiceRoleName(notes) : "";
+    const requestedName = drumRoleName
+      ? `Ch10 · ${drumRoleName}`
+      : `${getMidiGroupDisplayName(group, i18nText("channel.instrument_3"))}${voiceSuffix}`;
     channel.name = makeUniqueChannelName(requestedName, channel.id);
     channel.hue = Number.isFinite(Number(copyHue)) ? normalizeHue(copyHue) : getMidiGroupHue(group, state.channels.length);
     const sourcePreset = resolveMidiGroupEditorPreset(group, notes);
