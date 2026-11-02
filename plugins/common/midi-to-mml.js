@@ -124,8 +124,9 @@
     for (const note of midi.notes) {
       if (!isMmlPitchSupported(note.midi)) continue;
       const groupInfo = getInstrumentGroupInfo(note);
-      const startGrid = quantizeGridValue(note.startTick / ticksPerGrid, gridStep, 0);
-      const durGrid = quantizeGridValue((note.endTick - note.startTick) / ticksPerGrid, gridStep, gridStep);
+      const span = window.MabiNoteTiming.quantizeSpan(note.startTick / ticksPerGrid, note.endTick / ticksPerGrid, gridStep);
+      const startGrid = span.start;
+      const durGrid = span.duration;
       const key = `${groupInfo.id}|${note.midi}|${startGrid}|${startGrid + durGrid}`;
       dupStats.set(key, (dupStats.get(key) || 0) + 1);
     }
@@ -670,8 +671,9 @@
         const choiceId = sourceToChoice.get(sourceInfo.id) || sourceInfo.choiceId;
         const choice = choiceMap.get(choiceId);
         if (!selectedSet.has(choiceId)) return null;
-        const startGrid = quantizeGridValue(n.startTick / ticksPerGrid, gridStep, 0);
-        const durGrid = quantizeGridValue((n.endTick - n.startTick) / ticksPerGrid, gridStep, gridStep);
+        const span = window.MabiNoteTiming.quantizeSpan(n.startTick / ticksPerGrid, n.endTick / ticksPerGrid, gridStep);
+        const startGrid = span.start;
+        const durGrid = span.duration;
         return {
           id: `note-${nextNoteId++}`,
           midi: n.midi,
@@ -702,7 +704,10 @@
     const maxEndGrid = Math.max(0, ...notes.map(n => n.endGrid));
     const assignableNotes = notes.filter(note => exportChannels.some(ch => canChannelUseNote(note, ch)));
     const assignment = assignNotesToVoices(assignableNotes, exportChannels, null, {
-      ignoreSingle64thOverlap: options.ignoreSingle64thOverlap === true
+      ignoreSingle64thOverlap: options.ignoreSingle64thOverlap === true,
+      // One quantize cell: with 32nd-note quantization (2 grid cells) overlaps are multiples of 2, so a fixed
+      // tolerance of 1 cell would never apply.
+      ignorableOverlapGrid: Math.max(IGNORABLE_OVERLAP_GRID, gridStep)
     });
     const { voices, skipped, placed, overlapMerged } = assignment;
     const finalEndGrid = Math.max(maxEndGrid, ...voices.flatMap(v => v.map(n => n.endGrid || 0)), 0);
@@ -905,7 +910,7 @@
           });
         } else {
           const ignorableOverlap = assignmentOptions.ignoreSingle64thOverlap
-            ? getIgnorableOverlapCandidateInfo(voices[channelIndex], startGrid)
+            ? getIgnorableOverlapCandidateInfo(voices[channelIndex], startGrid, assignmentOptions.ignorableOverlapGrid)
             : null;
           if (ignorableOverlap) {
             normalCandidates.push({
@@ -1018,15 +1023,15 @@
   }
 
 
-  function getIgnorableOverlapCandidateInfo(voice, startGrid) {
+  function getIgnorableOverlapCandidateInfo(voice, startGrid, toleranceGrid = IGNORABLE_OVERLAP_GRID) {
     const active = findActiveNoteAt(voice, startGrid);
     if (!active) return null;
     const plan = getIgnorableSequentialOverlapTrim(
       active.startGrid,
       active.endGrid,
       startGrid,
-      IGNORABLE_OVERLAP_GRID,
-      IGNORABLE_OVERLAP_GRID,
+      toleranceGrid,
+      Math.min(toleranceGrid, IGNORABLE_OVERLAP_GRID),
     );
     if (!plan) return null;
     return { active, playedLength: plan.trimmedDuration };

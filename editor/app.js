@@ -15176,13 +15176,19 @@
     return Number.isFinite(value) ? clamp(Math.round(value), 0, 15) : null;
   }
 
-  function canAssignRawMidiNoteToVoice(voice, note, overlapToleranceBeat) {
+  function canAssignRawMidiNoteToVoice(voice, note, overlapToleranceBeat, quantizeUnit = 0) {
+    // Shared rule (plugins/common/note-timing.js): a note follows the voice's last note when it does not overlap it,
+    // or overlaps by at most the chosen tolerance (1/64 or 1/32 note). True simultaneity and notes that would land
+    // on the same grid onset never share a voice, so quantization cannot drop them.
     const start = getMidiNoteRawStartBeat(note);
-    if (voice.endBeat <= start + 1e-9) return true;
-    if (!(overlapToleranceBeat > 0) || start <= voice.lastStartBeat + 1e-9) return false;
-    // Small overlaps in source MIDI are usually pedal/release or tick-boundary artifacts.
-    // Treat overlaps up to the chosen tolerance (1/64 or 1/32 note) as sequential, but never collapse true simultaneity.
-    return voice.endBeat - start <= overlapToleranceBeat + 1e-7;
+    if (voice.lastStartBeat === -Infinity) return true;
+    return window.MabiNoteTiming.canChain({
+      prevStart: voice.lastStartBeat,
+      prevEnd: voice.endBeat,
+      nextStart: start,
+      tolerance: overlapToleranceBeat,
+      unit: quantizeUnit,
+    });
   }
 
   function scoreRawMidiVoiceAssignment(voice, note) {
@@ -15209,8 +15215,9 @@
     return score;
   }
 
-  function appendRawMidiNoteToVoice(voice, note) {
+  function appendRawMidiNoteToVoice(voice, note, quantizeUnit = 0) {
     const start = getMidiNoteRawStartBeat(note);
+    voice.lastSnappedStart = quantizeUnit > 0 ? snapBeatToUnit(start, quantizeUnit) : null;
     const end = getMidiNoteRawEndBeat(note);
     const pitch = clamp(Math.round(Number(note?.pitch) || 60), 0, 127);
     voice.notes.push({ ...note });
@@ -15239,8 +15246,9 @@
     for (const note of notes || []) {
       const rawStart = getMidiNoteRawStartBeat(note);
       const rawEnd = getMidiNoteRawEndBeat(note);
-      const startBeat = Math.max(0, snapBeatToUnit(rawStart, unit));
-      const endBeat = Math.max(startBeat + unit, snapBeatToUnit(rawEnd, unit));
+      const span = window.MabiNoteTiming.quantizeSpan(rawStart, rawEnd, unit);
+      const startBeat = span.start;
+      const endBeat = span.end;
       const key = startBeat.toFixed(9);
       if (!buckets.has(key)) buckets.set(key, { startBeat, candidates: [] });
       buckets.get(key).candidates.push({ ...note, startBeat, durationBeat: endBeat - startBeat });
@@ -15276,6 +15284,7 @@
     overlapToleranceBeat = CONFIG.minimumNoteBeat,
     quantizeUnit = CONFIG.minimumNoteBeat,
   } = {}) {
+    const unit = Math.max(CONFIG.minimumNoteBeat, Number(quantizeUnit) || CONFIG.minimumNoteBeat);
     const sorted = (notes || []).map((note) => ({ ...note })).sort((left, right) => (
       getMidiNoteRawStartBeat(left) - getMidiNoteRawStartBeat(right)
       || getMidiNoteRawEndBeat(left) - getMidiNoteRawEndBeat(right)
@@ -15296,7 +15305,7 @@
 
       const availableVoiceIndexes = new Set();
       voices.forEach((voice, voiceIndex) => {
-        if (batch.some((note) => canAssignRawMidiNoteToVoice(voice, note, overlapToleranceBeat))) {
+        if (batch.some((note) => canAssignRawMidiNoteToVoice(voice, note, overlapToleranceBeat, unit))) {
           availableVoiceIndexes.add(voiceIndex);
         }
       });
@@ -15308,7 +15317,7 @@
           const note = batch[noteIndex];
           for (const voiceIndex of availableVoiceIndexes) {
             const voice = voices[voiceIndex];
-            if (!canAssignRawMidiNoteToVoice(voice, note, overlapToleranceBeat)) continue;
+            if (!canAssignRawMidiNoteToVoice(voice, note, overlapToleranceBeat, unit)) continue;
             const score = scoreRawMidiVoiceAssignment(voice, note);
             const pitchDistance = voice.lastPitch == null ? 0 : Math.abs(voice.lastPitch - Number(note.pitch));
             const candidate = { score, pitchDistance, voiceIndex, noteIndex };
@@ -15322,7 +15331,7 @@
           }
         }
         if (!best) break;
-        appendRawMidiNoteToVoice(voices[best.voiceIndex], batch[best.noteIndex]);
+        appendRawMidiNoteToVoice(voices[best.voiceIndex], batch[best.noteIndex], unit);
         availableVoiceIndexes.delete(best.voiceIndex);
         remainingNoteIndexes.delete(best.noteIndex);
       }
@@ -15341,7 +15350,7 @@
             lastSourcePort: null,
             lastSourceChannel: null,
           };
-          appendRawMidiNoteToVoice(voice, batch[noteIndex]);
+          appendRawMidiNoteToVoice(voice, batch[noteIndex], unit);
           voices.push(voice);
         });
     }
