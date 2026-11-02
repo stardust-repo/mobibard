@@ -15,12 +15,32 @@ const BASE = new URL("./", self.location.href);
 // Cache-busting token passed by wave2midi.js (worker.js?v=...), reused for the ES module imports.
 const ASSET_VERSION = new URL(self.location.href).searchParams.get("v") || "1";
 const libUrl = name => new URL(`lib/${name}?v=${encodeURIComponent(ASSET_VERSION)}`, BASE).href;
-const ORT_VERSION = "1.20.1";
-const ORT_FILE = "ort.webgpu.min.js";
-const DEFAULT_ORT_SOURCES = [
-  new URL("../../vendor/onnxruntime-web/1.20.1/", BASE).href,
-  `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`,
-];
+// ONNX Runtime Web builds. Apple WebKit (iPhone/iPad/Safari) stays on 1.20.1: from 1.21 on, Safari/WebKit 26 is
+// reported to run away with CPU and memory after an inference (microsoft/onnxruntime#26827). Everything else uses 1.31.1
+// (CPU-only build when the model runs on the CPU anyway, the WebGPU build otherwise).
+const ORT_RUNTIMES = {
+  legacy: { version: "1.20.1", file: "ort.webgpu.min.js" },
+  modernGpu: { version: "1.31.1", file: "ort.webgpu.min.js" },
+  modernCpu: { version: "1.31.1", file: "ort.wasm.min.js" },
+};
+function isAppleWebKit() {
+  const nav = self.navigator || {};
+  const ua = String(nav.userAgent || "");
+  const iOS = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && Number(nav.maxTouchPoints) > 1);
+  const desktopSafari = /AppleWebKit\//.test(ua) && /Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\/|Firefox\//.test(ua);
+  return iOS || desktopSafari;
+}
+function pickRuntime(options) {
+  return options?.executionProvider === "wasm" ? ORT_RUNTIMES.modernCpu : ORT_RUNTIMES.modernGpu;
+}
+function ortSourcesFor(runtime) {
+  return [
+    new URL(`../../vendor/onnxruntime-web/${runtime.version}/`, BASE).href,
+    `https://cdn.jsdelivr.net/npm/onnxruntime-web@${runtime.version}/dist/`,
+  ];
+}
+let ortFile = ORT_RUNTIMES.legacy.file;
+let ortVersion = "";
 
 // CPU sessions: do not keep a memory arena / planned buffers between runs (measured: far less memory per session).
 const CPU_MEMORY_OPTIONS = { enableCpuMemArena: false, enableMemPattern: false };
@@ -50,14 +70,16 @@ function loadLibs() {
   return libsPromise;
 }
 
-function loadOrt(sources) {
+function loadOrt(sources, runtime) {
   if (self.ort) return ortBase;
   const errors = [];
   for (const base of sources) {
     try {
-      importScripts(base + ORT_FILE);
+      importScripts(base + runtime.file);
       if (self.ort?.InferenceSession) {
         ortBase = base;
+        ortFile = runtime.file;
+        ortVersion = runtime.version;
         self.ort.env.wasm.wasmPaths = base;
         // Multi-threaded WASM needs SharedArrayBuffer (cross-origin isolation); GitHub Pages is not isolated.
         self.ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 2)) : 1;
@@ -118,7 +140,8 @@ async function ensureSession(options, progress) {
   if (session) await releaseSession();
   const libs = await loadLibs();
   progress("runtime", 0, 0);
-  loadOrt(options.ortSources?.length ? options.ortSources : DEFAULT_ORT_SOURCES);
+  const runtime = pickRuntime(options);
+  loadOrt(options.ortSources?.length ? options.ortSources : ortSourcesFor(runtime), runtime);
   const { caps, order } = await chooseVariants(options);
   const errors = [];
   for (const variant of order) {
@@ -138,6 +161,7 @@ async function ensureSession(options, progress) {
           compute: model.compute,
           capabilities: caps,
           runtimeBase: ortBase,
+          runtimeVersion: ortVersion,
           meta: model.meta,
           manifest: model.manifest,
           modelFromCache: model.fromCache,
@@ -241,7 +265,7 @@ class LanePool {
           }
         };
         worker.onerror = e => { failAll(e.message || "helper failed"); lane.dead = true; resolve(null); };
-        worker.postMessage({ type: "init", ortBase, ortFile: ORT_FILE });
+        worker.postMessage({ type: "init", ortBase, ortFile });
       }));
     }
     this.helpers = (await Promise.all(starting)).filter(Boolean);

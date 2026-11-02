@@ -20,7 +20,7 @@ plugins/ai/wave2midi/
   model/meta.json         학습 export 메타데이터 (모델 버전 v1.1, 전처리, 임계값, 16개 GM 클래스, velocity 설정)
   model/manifest.json     모델 이름·버전·제작자·라이선스, 파일명·크기·sha256(models.w16)
   model/LICENSE           모델 라이선스 (CC BY-NC 4.0, startdust-io)
-  (ONNX Runtime 1.20.1 사본은 공용 모듈로 `plugins/vendor/onnxruntime-web/1.20.1/`에 있습니다. 없으면 jsDelivr 1.20.1 사용)
+  (ONNX Runtime 사본은 공용 모듈 `plugins/vendor/onnxruntime-web/`에 있습니다. 모든 환경이 `1.31.1`을 씁니다. 폰(CPU 전용)은 1.31.1의 CPU 전용 빌드입니다. 없으면 jsDelivr의 같은 버전을 사용합니다)
 ```
 
 `lib/*.mjs` 중 dsp·decode·velocity·midi·tempo는 학습 저장소의 web export와 동일한 파일입니다. 학습 쪽에서 갱신되면 그대로 덮어쓰면 됩니다.
