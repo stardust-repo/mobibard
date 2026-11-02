@@ -9,13 +9,13 @@
   "models": {
     "w16": {
       "file": "wave2mid_w16.onnx",
-      "bytes": 39029639,
-      "sha256": "289cd32122c32ec2a2cbacf73321351d906a29b8bfa26b6c3522487e68fe6603",
+      "bytes": 38971439,
+      "sha256": "21acca279a6f43566e11af481256c754c494c0d9f7f32aed49c3629694e6df9b",
       "compute": "fp32"
     }
   },
   "fallback": "w16",
   "file": "wave2mid_w16.onnx",
-  "bytes": 39029639,
-  "sha256": "289cd32122c32ec2a2cbacf73321351d906a29b8bfa26b6c3522487e68fe6603"
+  "bytes": 38971439,
+  "sha256": "21acca279a6f43566e11af481256c754c494c0d9f7f32aed49c3629694e6df9b"
 }

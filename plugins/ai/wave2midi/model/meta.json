@@ -44,9 +44,9 @@
   "inst_frames": 15,
   "drum_seconds": 0.05
  },
- "window_seconds": 8.0,
- "overlap_seconds": 2.0,
- "frames": 800,
+ "window_seconds": 5.0,
+ "overlap_seconds": 1.0,
+ "frames": 500,
  "sample_rate": 24000,
  "hop": 240,
  "pitch_min": 21,
@@ -89,7 +89,7 @@
   "shape": [
    1,
    16,
-   800,
+   500,
    264
   ]
  },
