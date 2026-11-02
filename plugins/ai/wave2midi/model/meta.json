@@ -39,9 +39,9 @@
   "inst_frames": 15,
   "drum_seconds": 0.05
  },
- "window_seconds": 5.0,
+ "window_seconds": 6.0,
  "overlap_seconds": 1.0,
- "frames": 500,
+ "frames": 600,
  "sample_rate": 24000,
  "hop": 240,
  "pitch_min": 21,
@@ -84,34 +84,34 @@
   "shape": [
    1,
    16,
-   500,
+   600,
    264
   ]
  },
  "outputs": {
   "onset": [
    1,
-   500,
+   600,
    88
   ],
   "frame": [
    1,
-   500,
+   600,
    88
   ],
   "offset": [
    1,
-   500,
+   600,
    88
   ],
   "drum": [
    1,
-   500,
+   600,
    88
   ],
   "inst": [
    1,
-   500,
+   600,
    88,
    16
   ]

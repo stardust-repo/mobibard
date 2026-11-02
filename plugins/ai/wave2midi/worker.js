@@ -15,21 +15,11 @@ const BASE = new URL("./", self.location.href);
 // Cache-busting token passed by wave2midi.js (worker.js?v=...), reused for the ES module imports.
 const ASSET_VERSION = new URL(self.location.href).searchParams.get("v") || "1";
 const libUrl = name => new URL(`lib/${name}?v=${encodeURIComponent(ASSET_VERSION)}`, BASE).href;
-// ONNX Runtime Web builds. Apple WebKit (iPhone/iPad/Safari) stays on 1.20.1: from 1.21 on, Safari/WebKit 26 is
-// reported to run away with CPU and memory after an inference (microsoft/onnxruntime#26827). Everything else uses 1.31.1
-// (CPU-only build when the model runs on the CPU anyway, the WebGPU build otherwise).
+// ONNX Runtime Web 1.31.1 builds: the CPU-only build when the model runs on the CPU anyway (phones), the WebGPU build otherwise.
 const ORT_RUNTIMES = {
-  legacy: { version: "1.20.1", file: "ort.webgpu.min.js" },
   modernGpu: { version: "1.31.1", file: "ort.webgpu.min.js" },
   modernCpu: { version: "1.31.1", file: "ort.wasm.min.js" },
 };
-function isAppleWebKit() {
-  const nav = self.navigator || {};
-  const ua = String(nav.userAgent || "");
-  const iOS = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && Number(nav.maxTouchPoints) > 1);
-  const desktopSafari = /AppleWebKit\//.test(ua) && /Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\/|Firefox\//.test(ua);
-  return iOS || desktopSafari;
-}
 function pickRuntime(options) {
   return options?.executionProvider === "wasm" ? ORT_RUNTIMES.modernCpu : ORT_RUNTIMES.modernGpu;
 }
@@ -39,7 +29,7 @@ function ortSourcesFor(runtime) {
     `https://cdn.jsdelivr.net/npm/onnxruntime-web@${runtime.version}/dist/`,
   ];
 }
-let ortFile = ORT_RUNTIMES.legacy.file;
+let ortFile = ORT_RUNTIMES.modernGpu.file;
 let ortVersion = "";
 
 // CPU sessions: do not keep a memory arena / planned buffers between runs (measured: far less memory per session).

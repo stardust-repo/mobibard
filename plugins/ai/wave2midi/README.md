@@ -10,7 +10,7 @@ plugins/ai/wave2midi/
   wave2midi.js            메인 스레드 API (classic script, window.MobibardWave2Midi)
   worker.js               추론 Worker: ONNX Runtime 로드, 창 분할 추론, 디코딩, velocity, MIDI 생성
   lib/dsp.mjs             frontend 특징 추출 (w2m/dsp.py 1:1 포팅)
-  lib/decode.mjs          확률 맵 -> 노트, 5초 창 / 1초 겹침 cross-fade, 창 파이프라이닝 (w2m/labels.py, infer.py)
+  lib/decode.mjs          확률 맵 -> 노트, 6초 창 / 1초 겹침 cross-fade, 창 파이프라이닝 (w2m/labels.py, infer.py)
   lib/feature_worker.mjs  창별 frontend 특징 계산 (중첩 Web Worker, worker.js가 여러 개 띄움)
   lib/velocity.mjs        onset spectral flux 기반 velocity (w2m/velocity.py)
   lib/midi.mjs            표준 MIDI 작성기 (w2m/midi.py)
