@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.23";
+  const VERSION = "1.0.24";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -233,6 +233,9 @@
         tempo: options.tempo ?? true,
         tempoChanges: options.tempoChanges,
         onsetThreshold: options.onsetThreshold,
+        frameThreshold: options.frameThreshold,
+        offsetThreshold: options.offsetThreshold,
+        minNoteSeconds: options.minNoteSeconds,
         maxSeconds,
         executionProvider: options.executionProvider || "auto",
         ortSources: options.ortSources,
@@ -256,6 +259,9 @@
       tempo: options.tempo ?? true,
       tempoChanges: options.tempoChanges,
       onsetThreshold: options.onsetThreshold,
+      frameThreshold: options.frameThreshold,
+      offsetThreshold: options.offsetThreshold,
+      minNoteSeconds: options.minNoteSeconds,
     } }, options);
   }
 
@@ -266,6 +272,8 @@
       .then(response => (response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))))
       .then(meta => Object.freeze({
         onsetThreshold: Number(meta?.thresholds?.onset) || 0.16,
+        frameThreshold: Number(meta?.thresholds?.frame) || 0.5,
+        offsetThreshold: Number(meta?.thresholds?.offset) || 0.5,
         velocity: meta?.velocity?.enabled !== false,
         velocityMin: Number(meta?.velocity?.min) || 35,
         velocityMax: Number(meta?.velocity?.max) || 120,

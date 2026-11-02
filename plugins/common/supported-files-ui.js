@@ -447,7 +447,7 @@
     closeButton.addEventListener("click", close);
     backdrop.addEventListener("pointerdown", event => { if (event.target === backdrop) close(); });
     dialog.addEventListener("pointerdown", event => event.stopPropagation());
-    document.addEventListener("keydown", event => { if (!backdrop.hidden && event.key === "Escape") close(); });
+    document.addEventListener("keydown", event => { if (!backdrop.hidden && event.key === "Escape") { event.stopPropagation(); event.preventDefault(); close(); } }, true);
     return { open, close, render };
   }
 
@@ -583,7 +583,7 @@
       if (!dialogs.has(context)) dialogs.set(context, createDialog(context));
       const update = () => {
         const t = strings();
-        button.textContent = t.button;
+        if (!button.dataset.supportedFilesIcon) button.textContent = t.button;
         button.setAttribute("aria-label", t.title);
         button.setAttribute("title", t.title);
       };

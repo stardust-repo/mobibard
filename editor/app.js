@@ -394,6 +394,7 @@
     midiImportPanel: document.querySelector("#midiImportPanel"),
     midiImportChannelTree: document.querySelector("#midiImportChannelTree"),
     editModeTitlebarAction: document.querySelector("#editModeTitlebarAction"),
+    editModeTitlebarInfo: document.querySelector("#editModeTitlebarInfo"),
     midiImportDetail: document.querySelector("#midiImportDetail"),
     midiImportPreviewMode: document.querySelector("#midiImportPreviewMode"),
     midiImportSelectCount: document.querySelector("#midiImportSelectCount"),
@@ -14601,7 +14602,7 @@
   }
 
   // ---- AI 변환 후처리 옵션(불러오기 오른쪽 설정): 모델을 다시 돌리지 않고 노트/세기/템포만 다시 계산 ----
-  let audioPostprocessDefaults = { onsetThreshold: 0.16, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
+  let audioPostprocessDefaults = { onsetThreshold: 0.16, frameThreshold: 0.5, offsetThreshold: 0.5, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
   void window.MobibardWave2Midi?.getPostprocessDefaults?.().then((defaults) => {
     audioPostprocessDefaults = defaults;
   }).catch(() => {});
@@ -14627,6 +14628,14 @@
     const sensitivity = getCheckedRadioValue("w2mSensitivity") || "normal";
     // 감도가 높을수록 onset 임계값을 낮춰 더 작은 노트까지 잡습니다.
     const onsetThreshold = sensitivity === "low" ? Math.min(0.9, base * 1.5) : sensitivity === "high" ? base * 0.65 : base;
+    // 노트 끝 판정: 짧게 = 소리가 조금만 약해져도 끊음, 길게 = 여운까지 이어서 하나의 노트로 봄.
+    const noteEnd = getCheckedRadioValue("w2mNoteEnd") || "normal";
+    const baseFrame = Number(audioPostprocessDefaults.frameThreshold) || 0.5;
+    const baseOffset = Number(audioPostprocessDefaults.offsetThreshold) || 0.5;
+    const frameThreshold = noteEnd === "short" ? Math.min(0.9, baseFrame * 1.25) : noteEnd === "long" ? baseFrame * 0.75 : baseFrame;
+    const offsetThreshold = noteEnd === "short" ? baseOffset * 0.7 : noteEnd === "long" ? Math.min(0.9, baseOffset * 1.3) : baseOffset;
+    const minLen = getCheckedRadioValue("w2mMinLength") || "none";
+    const minNoteSeconds = minLen === "strong" ? 0.16 : minLen === "weak" ? 0.08 : 0;
     const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
     const bpm = clamp(Math.round(Number(elements.w2mTempoBpm?.value) || 120), audioPostprocessDefaults.tempoMin || 32, audioPostprocessDefaults.tempoMax || 255);
     const fixedVolume = getCheckedRadioValue("w2mVolume") === "fixed";
@@ -14640,6 +14649,9 @@
     }
     return {
       onsetThreshold: Number(onsetThreshold.toFixed(4)),
+      frameThreshold: Number(frameThreshold.toFixed(4)),
+      offsetThreshold: Number(offsetThreshold.toFixed(4)),
+      minNoteSeconds,
       velocity,
       velocityRange,
       tempo: fixed ? bpm : true,
@@ -16659,6 +16671,7 @@
       target instanceof Node
       && (elements.channelVolumePanel?.contains(target) || elements.mmlExportPanel?.contains(target) || elements.midiImportPanel?.contains(target)
         || elements.inlineDetailPane?.contains(target) || elements.editModeTitlebarAction?.contains(target)
+        || elements.editModeTitlebarInfo?.contains(target) || Boolean(target instanceof Element && target.closest(".mabi-supported-files-backdrop"))
         || (target instanceof HTMLInputElement && target.type === "file")),
     );
   }
@@ -16686,6 +16699,8 @@
   function guardSideToolKeyboardInteraction(event) {
     if (!sideToolState.kind) return;
     if (event.code === "Space" && !isTextEntryTarget(event.target)) return;
+    // 지원 파일 팝업이 열려 있으면 Esc는 팝업만 닫습니다.
+    if (event.key === "Escape" && document.querySelector(".mabi-supported-files-backdrop:not([hidden])")) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -31268,6 +31283,8 @@
     if (elements.editModeTitlebarAction) {
       // 불러오기: 제목 오른쪽 끝의 "다시 선택"으로 다른 파일을 고릅니다.
       const showAction = active && sideToolState.kind === "import";
+      // 지원 파일 안내(ℹ️)는 "다시 선택" 왼쪽에 함께 보입니다.
+      if (elements.editModeTitlebarInfo) elements.editModeTitlebarInfo.hidden = !showAction;
       elements.editModeTitlebarAction.hidden = !showAction;
       if (showAction) {
         elements.editModeTitlebarAction.textContent = i18nText("import.reselect");
@@ -33966,7 +33983,7 @@
       scheduleUnifiedTextImportParse();
     });
     document.querySelectorAll('input[type="radio"][name="midiImportOverlap"]').forEach((input) => input.addEventListener("change", updateMidiImportDialog));
-    document.querySelectorAll('input[type="radio"][name="w2mSensitivity"], input[type="radio"][name="w2mTempo"], input[type="radio"][name="w2mVolume"]')
+    document.querySelectorAll('input[type="radio"][name="w2mSensitivity"], input[type="radio"][name="w2mNoteEnd"], input[type="radio"][name="w2mMinLength"], input[type="radio"][name="w2mTempo"], input[type="radio"][name="w2mVolume"]')
       .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
     elements.w2mVolumeFixed?.addEventListener("change", () => {
       readW2mVolumeInput(elements.w2mVolumeFixed, 12);

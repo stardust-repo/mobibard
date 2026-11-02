@@ -358,6 +358,8 @@ async function transcribe(id, wave, options) {
 
 // Post-processing: probability maps -> notes -> velocity -> tempo map -> MIDI.
 //   options.onsetThreshold  note sensitivity (lower = more notes); default meta.thresholds.onset
+//   options.frameThreshold / offsetThreshold  note end: lower frame / higher offset = longer notes; default meta.thresholds
+//   options.minNoteSeconds  drop pitched notes shorter than this (0 = keep all)
 //   options.velocity        true/undefined: estimated, false: constant 100, number: that fixed velocity (1-127)
 //   options.velocityRange   [min, max] (1-127) range of estimated velocities; default meta.velocity min/max
 //   options.tempo           true/undefined: auto, false: 120 BPM grid, number: that fixed BPM
@@ -367,8 +369,17 @@ async function finishTranscription(job, options, progress, started = performance
   const { probs, T, wave, seconds, info } = job;
   const meta = info.meta;
   const onset = Number(options.onsetThreshold);
-  const thresholds = { ...meta.thresholds, ...(onset > 0 && onset < 1 ? { onset } : {}) };
-  const notes = decode.decodeNotes(probs, T, meta.classes, thresholds);
+  const frame = Number(options.frameThreshold), offsetTh = Number(options.offsetThreshold);
+  const thresholds = {
+    ...meta.thresholds,
+    ...(onset > 0 && onset < 1 ? { onset } : {}),
+    ...(frame > 0 && frame < 1 ? { frame } : {}),
+    ...(offsetTh > 0 && offsetTh < 1 ? { offset: offsetTh } : {}),
+  };
+  let notes = decode.decodeNotes(probs, T, meta.classes, thresholds);
+  // Optional clean-up: drop pitched notes shorter than options.minNoteSeconds (drum hits are always that short).
+  const minNoteSeconds = Number(options.minNoteSeconds);
+  if (minNoteSeconds > 0) notes = notes.filter(note => note[1] === 128 || note[3] - note[2] >= minNoteSeconds);
   let velocities = null;
   const fixedVelocity = typeof options.velocity === "number" && options.velocity > 0
     ? Math.min(127, Math.max(1, Math.round(options.velocity)))
