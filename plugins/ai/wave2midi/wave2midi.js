@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.24";
+  const VERSION = "1.0.25";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
@@ -42,6 +42,22 @@
     return iOS || desktopSafari;
   }
   const APPLE_WEBKIT = isAppleWebKit();
+  // Phones (not tablets, not desktops) always run the model on the CPU (WebAssembly): WebGPU on phones has
+  // crashed the page (out of memory) after OS updates. iPad/iPadOS (also with a desktop UA), Android tablets and
+  // desktops keep the normal path (WebGPU first, CPU as fallback).
+  function isPhone() {
+    const nav = root.navigator || {};
+    const ua = String(nav.userAgent || "");
+    if (/iPhone|iPod/.test(ua)) return true;
+    if (/iPad/.test(ua) || (/Macintosh/.test(ua) && Number(nav.maxTouchPoints) > 1)) return false;
+    // Android phones report "Mobile" in the UA (and userAgentData.mobile); Android tablets do not.
+    return /Android/.test(ua) && (/Mobile/.test(ua) || nav.userAgentData?.mobile === true);
+  }
+  const IS_PHONE = isPhone();
+  function resolveProvider(requested) {
+    return IS_PHONE ? "wasm" : (requested || "auto");
+  }
+
   // How many CPU (WebAssembly) sessions may run side by side when there is no GPU. Each one holds the model and a
   // WebAssembly heap (see measurements in README), so phones and small-memory devices get fewer.
   function defaultCpuSessions() {
@@ -237,7 +253,7 @@
         offsetThreshold: options.offsetThreshold,
         minNoteSeconds: options.minNoteSeconds,
         maxSeconds,
-        executionProvider: options.executionProvider || "auto",
+        executionProvider: resolveProvider(options.executionProvider),
         ortSources: options.ortSources,
         cpuSessions: options.cpuSessions ?? defaultCpuSessions(),
       },
@@ -289,7 +305,7 @@
   async function preload(options = {}) {
     const storagePromise = requestPersistentStorage();
     const result = await call("preload", { options: {
-      executionProvider: options.executionProvider || "auto",
+      executionProvider: resolveProvider(options.executionProvider),
       ortSources: options.ortSources,
     } }, options);
     result.storage = await storagePromise;
@@ -298,7 +314,7 @@
 
   /** Which build this browser would use: { webgpu, adapter, variant: "w16" } (no download). */
   function getCapabilities(options = {}) {
-    return call("capabilities", { options: { executionProvider: options.executionProvider || "auto" } });
+    return call("capabilities", { options: { executionProvider: resolveProvider(options.executionProvider) } });
   }
 
   async function getCacheStatus() {
@@ -431,6 +447,7 @@
   root.MobibardWave2Midi = Object.freeze({
     version: VERSION,
     isAppleWebKit: APPLE_WEBKIT,
+    isPhone: IS_PHONE,
     SAMPLE_RATE,
     DRUM_PROGRAM: 128,
     isSupported,
