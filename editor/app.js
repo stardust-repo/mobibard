@@ -14511,7 +14511,7 @@
     return parsed;
   }
 
-  // ---- 오디오 → MIDI (AI, Beta): shared Wave2MIDI module (plugins/ai/wave2midi) ----
+  // ---- 오디오 → MIDI (AI): shared Wave2MIDI module (plugins/ai/wave2midi) ----
   // 불러오기에서 음원 파일을 고르면 AI로 MIDI를 만든 뒤 일반 MIDI와 같은 통합 불러오기 흐름을 사용합니다.
   const AUDIO_TO_MIDI_EXTENSIONS = new Set(["wav", "wave", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"]);
   const AUDIO_TO_MIDI_MAX_MINUTES = 10;

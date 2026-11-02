@@ -133,7 +133,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ko"] = {
     "tutorialStep4Body": "전체 악보를 한 번에 복사하거나, 2,400자 제한을 넘는 경우 자동 분할된 악보를 페이지별로 복사합니다.",
     "tutorialStep4Note": "전체 악보의 각 채널 글자 수도 함께 표시되어 복사 전에 길이를 확인할 수 있습니다.",
     "noAudiblePlayback": "재생 가능한 음표를 생성하지 못했습니다.",
-    "audioAiLabel": "오디오 · AI 변환 (Beta)",
+    "audioAiLabel": "오디오 · AI 변환",
     "audioAiPreparing": "AI 변환 준비 중…",
     "audioAiDownloading": "AI 모델 내려받는 중… {0} / {1} MB",
     "audioAiAnalyzing": "AI 변환 중… {0}%",

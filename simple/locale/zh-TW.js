@@ -133,7 +133,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-TW"] = {
     "tutorialStep4Body": "可一次複製完整樂譜；若某聲道超過 2,400 字元，也可逐頁複製自動分割的樂譜。",
     "tutorialStep4Note": "畫面會同時顯示各聲道字元數，方便複製前確認長度。",
     "noAudiblePlayback": "無法產生可聽見的播放音符。",
-    "audioAiLabel": "音訊 · AI 轉換 (Beta)",
+    "audioAiLabel": "音訊 · AI 轉換",
     "audioAiPreparing": "正在準備 AI 轉換…",
     "audioAiDownloading": "正在下載 AI 模型… {0} / {1} MB",
     "audioAiAnalyzing": "AI 轉換中… {0}%",

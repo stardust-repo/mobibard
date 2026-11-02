@@ -197,7 +197,7 @@
     },
   };
 
-  const AUDIO_AI_EXTRA = { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], description: "AI로 악기별 MIDI 변환 후 불러오기 (Beta)" };
+  const AUDIO_AI_EXTRA = { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], description: "AI로 악기별 MIDI 변환 후 불러오기" };
   const EXTRA = {
     simple: [AUDIO_AI_EXTRA],
     player: [
@@ -207,7 +207,7 @@
     editor: [
       { category: "project", label: "모비바드 프로젝트", labelKey: "labelMobibardProject", extensions: ["mmlproj", "mmlproj.json", "json"], description: "피아노롤 편집 프로젝트" },
       { category: "project", label: "3MLE / MabiIcco / MML", extensions: ["mml", "3mle", "mmi", "txt"], description: "3MLE(.mml/.3mle) · MabiIcco/마비꼬(.mmi) · MML 텍스트(.txt)" },
-      { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], description: "편집용 참고 오디오 · 불러오기에서 선택하면 AI로 악기별 MIDI 변환 (Beta)" },
+      { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], description: "편집용 참고 오디오 · 불러오기에서 선택하면 AI로 악기별 MIDI 변환" },
     ],
   };
 

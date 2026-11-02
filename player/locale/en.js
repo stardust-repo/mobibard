@@ -682,7 +682,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "tutorial.step6.title": "6. Copy the score",
     "tutorial.step6.body": "In Score Copy, copy the full MML at once or copy split pages that fit the character limit.",
     "tutorial.step6.note": "The default limit is 2,400 characters per channel. Split Search Point sets how far back the reverse search may go, measured as a percentage from the start (for example, 80% means search from the limit back to the 80% point).",
-    "audio_ai.label": "Audio · AI transcription (Beta)",
+    "audio_ai.label": "Audio · AI transcription",
     "audio_ai.preparing": "Preparing AI transcription…",
     "audio_ai.downloading": "Downloading AI model… {0} / {1} MB",
     "audio_ai.analyzing": "Transcribing with AI… {0}%",

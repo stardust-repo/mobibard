@@ -682,7 +682,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "tutorial.step6.title": "6. 楽譜をコピー",
     "tutorial.step6.body": "「楽譜コピー」でMML全体を一括コピーするか、文字数制限に合わせた分割楽譜をページごとにコピーします。",
     "tutorial.step6.note": "初期上限は各チャンネル2,400文字です。分割探索地点は上限位置から逆方向に探索するとき、先頭から何%の地点まで共通休符を探すかを指定します。",
-    "audio_ai.label": "オーディオ · AI変換 (Beta)",
+    "audio_ai.label": "オーディオ · AI変換",
     "audio_ai.preparing": "AI変換を準備中…",
     "audio_ai.downloading": "AIモデルをダウンロード中… {0} / {1} MB",
     "audio_ai.analyzing": "AI変換中… {0}%",

@@ -60,7 +60,7 @@
     const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
     if (localeUrl.protocol !== "file:") {
       localeUrl.searchParams.set("v", "5.2.0");
-      localeUrl.searchParams.set("rev", "20261025b-save-menu");
+      localeUrl.searchParams.set("rev", "20261102-nobeta");
     }
     document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   })();
@@ -328,7 +328,7 @@
 <script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
 <script src="../plugins/common/midi-to-mml.js?v=5.1.0&amp;rev=20260823-final6"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.2&amp;rev=20261102a-nombt"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261102b"></script>
 <script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260831-split-search-point1"></script>
 <script src="../plugins/common/mml-parser.js?v=5.1.1"></script>
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0&amp;rev=20261030-safari-audio1"></script>
@@ -343,6 +343,6 @@
 <script src="../plugins/common/site-navigation.js?v=20261102-gamma"></script><script src="./js/app.js?v=5.5.0&amp;rev=20261102a-nombt"></script>
 <script src="../plugins/common/mml-midi.js?v=1.0.0"></script>
 <script src="../plugins/common/save-menu.js?v=1.0.1"></script>
-<script src="./enhancements.js?v=5.5.0&amp;rev=20261025b-save-menu"></script>
+<script src="./enhancements.js?v=5.5.0&amp;rev=20261102-nobeta"></script>
 </body>
 </html>

@@ -682,7 +682,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "tutorial.step6.title": "6. 악보 복사",
     "tutorial.step6.body": "악보 복사 탭에서 전체 MML을 한 번에 복사하거나 글자 수 제한에 맞춘 분할 악보를 페이지별로 복사합니다.",
     "tutorial.step6.note": "기본 제한은 채널당 2,400자입니다. 분할 탐색지점은 마지막 허용 위치에서 뒤로 탐색할 때, 앞에서부터 몇 % 지점까지 공통 쉼표를 찾을지 정합니다.",
-    "audio_ai.label": "오디오 · AI 변환 (Beta)",
+    "audio_ai.label": "오디오 · AI 변환",
     "audio_ai.preparing": "AI 변환 준비 중…",
     "audio_ai.downloading": "AI 모델 내려받는 중… {0} / {1} MB",
     "audio_ai.analyzing": "AI 변환 중… {0}%",

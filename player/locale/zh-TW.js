@@ -682,7 +682,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "tutorial.step6.title": "6. 複製樂譜",
     "tutorial.step6.body": "在「樂譜複製」中，可以一次複製完整 MML，也可以依字數限制逐頁複製分割後的樂譜。",
     "tutorial.step6.note": "預設限制為每個聲道 2,400 個字元。「分割搜尋位置」表示從限制位置反向搜尋時，最遠搜尋到從開頭計算的百分比位置。",
-    "audio_ai.label": "音訊 · AI 轉換 (Beta)",
+    "audio_ai.label": "音訊 · AI 轉換",
     "audio_ai.preparing": "正在準備 AI 轉換…",
     "audio_ai.downloading": "正在下載 AI 模型… {0} / {1} MB",
     "audio_ai.analyzing": "AI 轉換中… {0}%",

@@ -133,7 +133,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["en"] = {
     "tutorialStep4Body": "Copy the full score at once, or copy automatically split pages when a channel exceeds the 2,400-character limit.",
     "tutorialStep4Note": "Channel character counts are shown so you can check the size before copying.",
     "noAudiblePlayback": "No audible playback notes could be generated.",
-    "audioAiLabel": "Audio · AI transcription (Beta)",
+    "audioAiLabel": "Audio · AI transcription",
     "audioAiPreparing": "Preparing AI transcription…",
     "audioAiDownloading": "Downloading AI model… {0} / {1} MB",
     "audioAiAnalyzing": "Transcribing with AI… {0}%",

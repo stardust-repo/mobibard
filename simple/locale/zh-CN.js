@@ -133,7 +133,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-CN"] = {
     "tutorialStep4Body": "可一次复制完整乐谱；如果某通道超过 2,400 字符，也可逐页复制自动分割的乐谱。",
     "tutorialStep4Note": "界面会同时显示各通道字符数，方便复制前确认长度。",
     "noAudiblePlayback": "无法生成可听见的播放音符。",
-    "audioAiLabel": "音频 · AI 转换 (Beta)",
+    "audioAiLabel": "音频 · AI 转换",
     "audioAiPreparing": "正在准备 AI 转换…",
     "audioAiDownloading": "正在下载 AI 模型… {0} / {1} MB",
     "audioAiAnalyzing": "AI 转换中… {0}%",

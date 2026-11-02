@@ -133,7 +133,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ja"] = {
     "tutorialStep4Body": "楽譜全体を一括コピーするか、1 チャンネル 2,400 文字を超える場合は自動分割された楽譜をページごとにコピーします。",
     "tutorialStep4Note": "各チャンネルの文字数も表示されるため、コピー前に長さを確認できます。",
     "noAudiblePlayback": "再生可能な音符を生成できませんでした。",
-    "audioAiLabel": "オーディオ · AI変換 (Beta)",
+    "audioAiLabel": "オーディオ · AI変換",
     "audioAiPreparing": "AI変換を準備中…",
     "audioAiDownloading": "AIモデルをダウンロード中… {0} / {1} MB",
     "audioAiAnalyzing": "AI変換中… {0}%",

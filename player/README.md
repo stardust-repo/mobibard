@@ -19,7 +19,7 @@
 
 - 로컬, Google Drive, 붙여넣기로 새 소스를 넣으면 하부 작업 상태를 새 작업 기준으로 초기화합니다.
 - 공용 포맷 계층에서 Sega VGM/VGZ·GYM과 S98 사운드칩 로그를 표준 MIDI로 복원해 기존 MML 변환 경로에 전달합니다.
-- 오디오 파일(WAV/MP3/OGG/OPUS/M4A/AAC/FLAC/WEBM/AIFF)을 로컬 파일·Google Drive·드롭으로 넣으면 공용 Wave2MIDI(Beta)로 악기별 MIDI로 변환해 기존 MIDI 불러오기 경로로 연결합니다(최대 10분). 상단의 `MIDI 추출` 버튼은 제거했습니다.
+- 오디오 파일(WAV/MP3/OGG/OPUS/M4A/AAC/FLAC/WEBM/AIFF)을 로컬 파일·Google Drive·드롭으로 넣으면 공용 Wave2MIDI로 악기별 MIDI로 변환해 기존 MIDI 불러오기 경로로 연결합니다(최대 10분). 상단의 `MIDI 추출` 버튼은 제거했습니다.
 - 이전 악기 draft, 채널 옵션 draft, 분할 설정, 코드 편집 상태, 선택 서브탭을 그대로 이어받지 않습니다.
 - MIDI 계열은 최초 채널 정보를 자동 적용해 별도 `적용` 없이 바로 재생/결과를 확인할 수 있습니다.
 - 동일 작업에서 악기 설정의 `적용`만 누르는 경우에는 새 입력 초기화를 하지 않습니다.
