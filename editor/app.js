@@ -15533,10 +15533,10 @@
   function overwriteEditorChannelsFromMidiDocument(parsed) {
     const descriptors = [];
     for (const group of parsed.groups || []) {
-      const voices = splitNotesIntoMonophonicVoices(group.notes || [], { quantizeUnit: 4 / (Number(parsed?.quantizeDivision) === 32 ? 32 : 64) });
+      const voices = splitMidiGroupIntoVoices(group, { quantizeUnit: 4 / (Number(parsed?.quantizeDivision) === 32 ? 32 : 64) });
       voices.forEach((notes, voiceIndex) => {
         descriptors.push({
-          name: voices.length > 1 ? `${group.name} ${voiceIndex + 1}` : group.name,
+          name: isMidiGroupDrums(group) ? (`Ch10 · ${getDrumVoiceRoleName(notes)}`) : (voices.length > 1 ? `${group.name} ${voiceIndex + 1}` : group.name),
           group,
           notes,
         });
@@ -15660,7 +15660,7 @@
       }
       return editorGroup;
       };
-      let voices = splitNotesIntoMonophonicVoices(group.notes || [], {
+      let voices = splitMidiGroupIntoVoices(group, {
         overlapToleranceBeat,
         quantizeUnit: 4 / (Number(parsed?.quantizeDivision) === 32 ? 32 : 64),
       });
@@ -16198,15 +16198,40 @@
   }
 
   // 드럼 채널 이름: GM 드럼 번호를 킥/스네어/하이햇… 역할로 묶고, 노트가 많은 역할 순서(최대 3개)로 적습니다.
+  // 다른 악기 이름(GM 영어 이름)과 맞추기 위해 번역하지 않고 영어로 둡니다.
+  const DRUM_ROLE_NAMES = { kick: "Kick", snare: "Snare", hihat: "Hi-hat", tom: "Toms", crash: "Crash", ride: "Ride", "perc-drum": "Perc", "perc-metal": "Perc (Metal)", "perc-other": "Perc (Other)" };
+
+  // simple/player(plugins/common/midi-to-mml.js)와 같은 규칙입니다. 퍼커션은 마비노기 악기 매핑이 달라지는 경계로 나눕니다.
   function getDrumRoleKey(pitch) {
     const n = Math.round(Number(pitch) || 0);
     if (n === 35 || n === 36) return "kick";
-    if (n >= 37 && n <= 40) return "snare";
+    if (n === 37 || n === 38 || n === 40) return "snare";
     if (n === 42 || n === 44 || n === 46) return "hihat";
     if (n === 41 || n === 43 || n === 45 || n === 47 || n === 48 || n === 50) return "tom";
     if (n === 49 || n === 52 || n === 55 || n === 57) return "crash";
     if (n === 51 || n === 53 || n === 59) return "ride";
-    return "perc";
+    if ((n >= 60 && n <= 66) || n === 78 || n === 79) return "perc-drum";
+    if (n === 54 || n === 56 || (n >= 67 && n <= 69) || n === 80 || n === 81) return "perc-metal";
+    return "perc-other";
+  }
+
+  // 채널 나누기: 드럼은 먼저 킥/스네어/하이햇… 종류별로 나눈 뒤, 같은 종류 안에서 겹치는 노트만 다시 나눕니다.
+  // 드럼이 아니면 기존처럼 겹치지 않게만 나눕니다.
+  function splitMidiGroupIntoVoices(group, options = {}) {
+    const notes = group?.notes || [];
+    if (!isMidiGroupDrums(group)) return splitNotesIntoMonophonicVoices(notes, options);
+    const byRole = new Map(Object.keys(DRUM_ROLE_NAMES).map((key) => [key, []]));
+    for (const note of notes) byRole.get(getDrumRoleKey(note.pitch)).push(note);
+    const result = [];
+    let quantizationCollisionCount = 0;
+    for (const roleNotes of byRole.values()) {
+      if (!roleNotes.length) continue;
+      const voices = splitNotesIntoMonophonicVoices(roleNotes, options);
+      quantizationCollisionCount += Number(voices.quantizationCollisionCount) || 0;
+      result.push(...voices);
+    }
+    Object.defineProperty(result, "quantizationCollisionCount", { value: quantizationCollisionCount, enumerable: false, configurable: true });
+    return result;
   }
 
   function getDrumVoiceRoleName(notes) {
@@ -16217,9 +16242,11 @@
     }
     const total = [...counts.values()].reduce((sum, value) => sum + value, 0);
     if (!total) return "";
-    const ranked = [...counts.entries()].sort((left, right) => right[1] - left[1]);
-    const picked = ranked.filter(([, count], index) => index === 0 || count / total >= 0.2).slice(0, 3);
-    return picked.map(([key]) => i18nText(`drum.role_${key}`)).join("/");
+    // 노트가 거의 없는 역할(20% 미만)은 빼되, 가장 많은 역할은 항상 넣고 이름 순서는 고정(Kick → … → Perc)입니다.
+    const top = [...counts.entries()].sort((left, right) => right[1] - left[1])[0][0];
+    return Object.keys(DRUM_ROLE_NAMES)
+      .filter((key) => key === top || (counts.get(key) || 0) / total >= 0.2)
+      .map((key) => DRUM_ROLE_NAMES[key]).join("/");
   }
 
   function makeEditorChannelFromMidiVoice(group, notes, { voiceIndex = 0, voiceCount = 1, copyHue = null } = {}) {
@@ -16268,7 +16295,7 @@
         hueByInstrument.set(instrumentKey, getMidiGroupHue(group, sourceIndex));
       }
       const copyHue = hueByInstrument.get(instrumentKey);
-      const voices = splitNotesIntoMonophonicVoices(group.notes || [], { quantizeUnit: 4 / (Number(document?.quantizeDivision) === 32 ? 32 : 64) });
+      const voices = splitMidiGroupIntoVoices(group, { quantizeUnit: 4 / (Number(document?.quantizeDivision) === 32 ? 32 : 64) });
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {

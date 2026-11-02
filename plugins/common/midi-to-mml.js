@@ -304,6 +304,26 @@
     return `inst:bank:${msb}:${lsb}:program:${programKey}`;
   }
 
+  // GM 드럼 번호 -> 종류. midi는 미리듣기/악기 매핑에 쓰는 대표 번호.
+  // 퍼커션은 마비노기 악기 매핑(북/금속/기본)이 달라지는 경계로 한 번 더 나눈다.
+  const DRUM_ROLE_RULES = [
+    { key: "kick", name: "Kick", midi: 36, notes: [35, 36] },
+    { key: "snare", name: "Snare", midi: 38, notes: [37, 38, 40] },
+    { key: "hihat", name: "Hi-hat", midi: 42, notes: [42, 44, 46] },
+    { key: "tom", name: "Toms", midi: 45, notes: [41, 43, 45, 47, 48, 50] },
+    { key: "crash", name: "Crash", midi: 49, notes: [49, 52, 55, 57] },
+    { key: "ride", name: "Ride", midi: 51, notes: [51, 53, 59] },
+    { key: "perc-drum", name: "Perc", midi: 60, notes: [60, 61, 62, 63, 64, 65, 66, 78, 79] },
+    { key: "perc-metal", name: "Perc (Metal)", midi: 56, notes: [54, 56, 67, 68, 69, 80, 81] }
+  ];
+  const DRUM_ROLE_OTHER = { key: "perc-other", name: "Perc (Other)", midi: 70 };
+  const DRUM_ROLE_BY_NOTE = new Map();
+  for (const rule of DRUM_ROLE_RULES) for (const n of rule.notes) DRUM_ROLE_BY_NOTE.set(n, rule);
+
+  function getDrumRole(midiNote) {
+    return DRUM_ROLE_BY_NOTE.get(Math.trunc(Number(midiNote))) || DRUM_ROLE_OTHER;
+  }
+
   function getInstrumentGroupInfo(note) {
     const program = normalizeProgram(note.program);
     const bankMsb = normalizeBank(note.bankMsb);
@@ -313,16 +333,19 @@
     const names = [programName(program), explicitInstrumentName].filter(Boolean).join(" / ");
     const isBeat = note.channel === 9 || BEAT_PROGRAMS.has(program) || PERCUSSION_NAME_RE.test(names);
     if (note.channel === 9) {
-      const drumName = GM_DRUM_NAMES[note.midi] || `Percussion ${note.midi}`;
-      const choiceId = instrumentChoiceId(bankMsb, bankLsb, program, true, note.midi);
+      // 드럼은 Drum Note마다 나누지 않고 킥/스네어/하이햇… 같은 종류별로 묶는다(에디터와 같은 규칙).
+      // drumMidi는 종류의 대표 번호이며, 마비노기 악기 매핑(default-instrument-map)이 종류 안에서 항상 같은 악기로 풀리도록 나눴다.
+      const role = getDrumRole(note.midi);
+      const drumName = role.name;
+      const choiceId = instrumentChoiceId(bankMsb, bankLsb, program, true, role.midi);
       return {
-        id: `part:${identityText(partName)}:ch${note.channel}:bank:${bankMsb}:${bankLsb}:program:${program}:drum:${note.midi}`,
+        id: `part:${identityText(partName)}:ch${note.channel}:bank:${bankMsb}:${bankLsb}:program:${program}:drum:${role.key}`,
         choiceId,
         partName,
         bankMsb,
         bankLsb,
         program,
-        drumMidi: note.midi,
+        drumMidi: role.midi,
         isBeat: true,
         isDrumNoteGroup: true,
         instrumentName: drumName,
