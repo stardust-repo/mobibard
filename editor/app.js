@@ -3399,6 +3399,33 @@
     return applied;
   }
 
+  // 보조 격자(점선)는 마디를 먼저 나눈 뒤 각 마디 시작점부터 단위로 쪼갭니다(마디 길이가 단위의 배수가 아니어도 마디 시작에 선이 놓이도록).
+  function getMinorGridBeats(start, end, unit) {
+    const signatures = getSortedTimeSignatures();
+    const result = [];
+    for (let index = 0; index < signatures.length; index += 1) {
+      const segmentStart = signatures[index].beat;
+      const segmentEnd = index + 1 < signatures.length ? signatures[index + 1].beat : Infinity;
+      if (segmentEnd < start - 1e-7 || segmentStart > end + 1e-7) continue;
+      const measureLength = getTimeSignatureMeasureLength(signatures[index]);
+      const firstMeasure = Math.max(0, Math.floor((start - unit - segmentStart) / measureLength));
+      const lastMeasure = Math.ceil((Math.min(end + unit, segmentEnd) - segmentStart) / measureLength);
+      for (let m = firstMeasure; m <= lastMeasure; m += 1) {
+        const measureStart = segmentStart + m * measureLength;
+        const measureEnd = Math.min(measureStart + measureLength, segmentEnd);
+        if (measureStart >= segmentEnd - 1e-7) break;
+        for (let k = 0; ; k += 1) {
+          const beat = measureStart + k * unit;
+          if (beat >= measureEnd - 1e-7) break;
+          if (beat < start - unit - 1e-7) continue;
+          if (beat > end + unit + 1e-7) break;
+          result.push({ beat, rel: k * unit });
+        }
+      }
+    }
+    return result;
+  }
+
   function getTimeSignatureGridLines(startBeat = 0, endBeat = getTotalBeats()) {
     const start = Math.max(0, Number(startBeat) || 0);
     const end = Math.max(start, Number(endBeat) || 0);
@@ -6165,16 +6192,13 @@
     const drawingUnit = getVisibleGridUnit();
     const visibleStartBeat = Math.max(0, xToBeat(visibleLeft) - drawingUnit);
     const visibleEndBeat = Math.min(getTotalBeats(), Math.max(0, xToBeat(visibleRight) + drawingUnit));
-    const firstGridIndex = Math.max(0, Math.floor(visibleStartBeat / drawingUnit));
-    const lastGridIndex = Math.ceil(visibleEndBeat / drawingUnit);
 
     // Minor guides remain zoom-dependent; time-signature beat/measure lines are
     // painted in a separate pass so odd meters such as 3/8 or 5/16 do not need
     // to align to the global quarter-note grid.
-    for (let index = firstGridIndex; index <= lastGridIndex; index += 1) {
-      const beat = index * drawingUnit;
+    for (const { beat, rel } of getMinorGridBeats(visibleStartBeat, visibleEndBeat, drawingUnit)) {
       const x = Math.round(beatToX(beat)) + 0.5;
-      const isThirtySecondBoundary = Math.abs(beat / 0.125 - Math.round(beat / 0.125)) < 1e-7;
+      const isThirtySecondBoundary = Math.abs(rel / 0.125 - Math.round(rel / 0.125)) < 1e-7;
       const isSixtyFourthSubdivision = Math.abs(drawingUnit - CONFIG.minimumNoteBeat) < 1e-7 && !isThirtySecondBoundary;
       context.strokeStyle = theme.minorGrid;
       context.lineWidth = 1;
@@ -7647,12 +7671,9 @@
       context.fillRect(0, 0, Math.min(width, preRollRight), height);
     }
 
-    const firstGridIndex = Math.max(0, Math.floor(firstVisibleBeat / drawingUnit));
-    const lastGridIndex = Math.ceil(lastVisibleBeat / drawingUnit);
-    for (let index = firstGridIndex; index <= lastGridIndex; index += 1) {
-      const beat = index * drawingUnit;
+    for (const { beat, rel } of getMinorGridBeats(firstVisibleBeat, lastVisibleBeat, drawingUnit)) {
       const x = Math.round(beatToX(beat) - scrollLeft) + 0.5;
-      const isThirtySecondBoundary = Math.abs(beat / 0.125 - Math.round(beat / 0.125)) < 1e-7;
+      const isThirtySecondBoundary = Math.abs(rel / 0.125 - Math.round(rel / 0.125)) < 1e-7;
       const isSixtyFourthSubdivision = Math.abs(drawingUnit - CONFIG.minimumNoteBeat) < 1e-7 && !isThirtySecondBoundary;
       context.strokeStyle = theme.minorGrid;
       context.lineWidth = 1;
