@@ -15515,172 +15515,72 @@
     return result;
   }
 
-  function getMidiPackedVoicePitchCenter(notes) {
-    const pitches = (notes || [])
-      .map((note) => Number(note?.pitch))
-      .filter(Number.isFinite)
-      .sort((left, right) => left - right);
-    if (!pitches.length) return 60;
-    const middle = Math.floor(pitches.length / 2);
-    return pitches.length % 2
-      ? pitches[middle]
-      : (pitches[middle - 1] + pitches[middle]) / 2;
-  }
-
-  function getMidiPackedVoicePreferredTargets(voices, targetCount) {
-    const count = Math.max(1, Math.round(Number(targetCount) || 1));
-    const ranked = (voices || []).map((voice, sourceVoiceIndex) => ({
-      sourceVoiceIndex,
-      pitchCenter: getMidiPackedVoicePitchCenter(voice),
-    })).sort((left, right) => (
-      right.pitchCenter - left.pitchCenter
-      || left.sourceVoiceIndex - right.sourceVoiceIndex
-    ));
-    const preferred = new Map();
-    ranked.forEach((item, rank) => {
-      const targetIndex = ranked.length <= 1 || count <= 1
-        ? 0
-        : Math.round((rank / (ranked.length - 1)) * (count - 1));
-      preferred.set(item.sourceVoiceIndex, targetIndex);
-    });
-    return preferred;
-  }
-
-  function findMidiPackedVoiceReferenceNote(target, pitch) {
-    const references = target?.referenceNotes || [];
-    let best = null;
-    let bestDistance = Infinity;
-    for (const note of references) {
-      const distance = Math.abs((Number(note?.pitch) || 60) - pitch);
-      if (distance < bestDistance) {
-        best = note;
-        bestDistance = distance;
-      }
-    }
-    return best;
-  }
-
-  function scoreMidiPackedVoiceTarget(target, targetIndex, targetCount, item, onsetInfo, preferredTargets) {
-    const note = item.note;
-    const pitch = clamp(Math.round(Number(note?.pitch) || 60), 0, 127);
-    const reference = findMidiPackedVoiceReferenceNote(target, pitch);
-    const pitchDistance = reference ? Math.abs((Number(reference.pitch) || 60) - pitch) : 0;
-    const overlapCount = target?.activeNotes?.length || 0;
-    const sameOnsetCount = onsetInfo.assignedCounts[targetIndex] || 0;
-    const sourcePreferred = preferredTargets.get(item.sourceVoiceIndex) ?? 0;
-    const targetPosition = targetCount <= 1 ? 0.5 : targetIndex / (targetCount - 1);
-    const pitchPosition = onsetInfo.maxPitch > onsetInfo.minPitch
-      ? (onsetInfo.maxPitch - pitch) / (onsetInfo.maxPitch - onsetInfo.minPitch)
-      : targetPosition;
-    const pitchLaneDistance = Math.abs(targetPosition - pitchPosition);
-    const preferredDistance = Math.abs(targetIndex - sourcePreferred);
-
-    let sourceAffinity = 0;
-    const sourceTrack = getMidiVoiceSourceTrack(note);
-    const sourcePort = getMidiVoiceSourcePort(note);
-    const sourceChannel = getMidiVoiceSourceChannel(note);
-    if (reference) {
-      const referenceTrack = getMidiVoiceSourceTrack(reference);
-      if (sourceTrack != null && referenceTrack != null) sourceAffinity += sourceTrack === referenceTrack ? -22 : 5;
-      const referencePort = getMidiVoiceSourcePort(reference);
-      const referenceChannel = getMidiVoiceSourceChannel(reference);
-      if (sourcePort != null && sourceChannel != null && referencePort != null && referenceChannel != null) {
-        sourceAffinity += sourcePort === referencePort && sourceChannel === referenceChannel ? -10 : 3;
-      }
-    }
-
-    // This follows the Player's two-stage idea: free/unused channels win first, then an
-    // already-busy channel is accepted instead of dropping a note. The strong same-onset
-    // and overlap costs spread a chord across N channels before stacking additional notes.
-    return sameOnsetCount * 10000
-      + overlapCount * 1200
-      + pitchLaneDistance * 90
-      + preferredDistance * 18
-      + pitchDistance * 2.4
-      + sourceAffinity
-      + target.notes.length * 0.002;
-  }
-
-  function packMidiVoicesToMaxChannels(voices, maxVoiceCount) {
+  // 악기당 최대 채널 수 제한 압축.
+  // simple/player와 같은 공용 배정 규칙(plugins/common/midi-to-mml.js의 assignNotesToVoices)을 그대로 씁니다.
+  //  - 채널 역할: 1개 = 고음 / 2개 = 고음·저음 / 3개 이상 = 고음·저음·나머지 자동
+  //  - 비어 있는 채널을 먼저 쓰고, 불가능할 때만 앞 노트의 끝을 자르는 겹침 병합, 그래도 안 되면 생략
+  function packMidiVoicesToMaxChannels(voices, maxVoiceCount, { isDrums = false } = {}) {
     const sourceVoices = (voices || []).filter((voice) => Array.isArray(voice) && voice.length);
     const requestedCount = Math.max(1, Math.round(Number(maxVoiceCount) || 1));
     if (sourceVoices.length <= requestedCount) return sourceVoices;
+    const assign = window.MabiMidi?.assignNotesToVoices;
+    if (typeof assign !== "function") throw new Error("공용 채널 배정 모듈(midi-to-mml.js)을 불러오지 못했습니다.");
 
-    const targetCount = Math.min(requestedCount, sourceVoices.length);
-    const targets = Array.from({ length: targetCount }, () => ({
-      notes: [],
-      activeNotes: [],
-      referenceNotes: [],
-      currentOnsetNotes: [],
+    const GRID_BEAT = 4 / 64; // 공용 코드의 격자 1칸 = 64분음표
+    const minGrid = Math.max(1, Math.round(CONFIG.minimumNoteBeat / GRID_BEAT));
+    const lookup = new Map();
+    const gridNotes = [];
+    let nextId = 1;
+    sourceVoices.forEach((voice) => voice.forEach((note) => {
+      const startGrid = Math.max(0, Math.round((Number(note.startBeat) || 0) / GRID_BEAT));
+      const durGrid = Math.max(minGrid, Math.round((Number(note.durationBeat) || CONFIG.minimumNoteBeat) / GRID_BEAT));
+      const velocity = Math.max(1, Math.min(127, Math.round(Number(note.velocity) || 100)));
+      const id = nextId++;
+      lookup.set(id, note);
+      gridNotes.push({
+        id,
+        midi: clamp(Math.round(Number(note.pitch) || 60), 0, 127),
+        startGrid,
+        endGrid: startGrid + durGrid,
+        durGrid,
+        velocity,
+        midiVelocity: velocity,
+        instrumentGroupId: "pack",
+        instrumentChoiceId: "pack",
+        isBeat: Boolean(isDrums),
+        isPercussion: Boolean(isDrums),
+      });
     }));
-    const preferredTargets = getMidiPackedVoicePreferredTargets(sourceVoices, targetCount);
-    const items = sourceVoices.flatMap((voice, sourceVoiceIndex) => voice.map((note, sourceNoteIndex) => ({
-      note: { ...note },
-      sourceVoiceIndex,
-      sourceNoteIndex,
-    }))).sort((left, right) => (
-      Number(left.note.startBeat) - Number(right.note.startBeat)
-      || Number(right.note.pitch) - Number(left.note.pitch)
-      || left.sourceVoiceIndex - right.sourceVoiceIndex
-      || left.sourceNoteIndex - right.sourceNoteIndex
+    gridNotes.sort((a, b) => a.startGrid - b.startGrid || b.midi - a.midi || b.velocity - a.velocity);
+
+    const roles = Array.from({ length: requestedCount }, (_, index) => (
+      index === 0 ? "high" : index === 1 ? "low" : "auto"
     ));
+    const exportChannels = roles.map((role) => ({
+      role,
+      overlapMergeMode: "all",
+      overlapMerge: true,
+      selectedInstrumentGroups: ["pack"],
+    }));
+    const result = assign(gridNotes, exportChannels, null, {});
 
-    for (let cursor = 0; cursor < items.length;) {
-      const startBeat = Number(items[cursor].note.startBeat) || 0;
-      const batch = [];
-      while (cursor < items.length && Math.abs((Number(items[cursor].note.startBeat) || 0) - startBeat) <= 1e-9) {
-        batch.push(items[cursor]);
-        cursor += 1;
-      }
-      const pitches = batch.map((item) => clamp(Math.round(Number(item.note.pitch) || 60), 0, 127));
-      const onsetInfo = {
-        minPitch: Math.min(...pitches),
-        maxPitch: Math.max(...pitches),
-        assignedCounts: Array(targetCount).fill(0),
-      };
-      targets.forEach((target) => {
-        target.activeNotes = target.activeNotes.filter((note) => (
-          (Number(note.startBeat) || 0) + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat) > startBeat + 1e-9
-        ));
-        target.currentOnsetNotes = [];
-      });
-
-      const remaining = batch.slice();
-      while (remaining.length) {
-        let best = null;
-        for (let noteIndex = 0; noteIndex < remaining.length; noteIndex += 1) {
-          const item = remaining[noteIndex];
-          for (let targetIndex = 0; targetIndex < targetCount; targetIndex += 1) {
-            const score = scoreMidiPackedVoiceTarget(targets[targetIndex], targetIndex, targetCount, item, onsetInfo, preferredTargets);
-            const candidate = { score, noteIndex, targetIndex };
-            if (!best
-              || candidate.score < best.score - 1e-9
-              || (Math.abs(candidate.score - best.score) <= 1e-9 && candidate.targetIndex < best.targetIndex)
-              || (Math.abs(candidate.score - best.score) <= 1e-9 && candidate.targetIndex === best.targetIndex && candidate.noteIndex < best.noteIndex)) {
-              best = candidate;
-            }
-          }
-        }
-        const [chosen] = remaining.splice(best.noteIndex, 1);
-        targets[best.targetIndex].notes.push(chosen.note);
-        targets[best.targetIndex].currentOnsetNotes.push(chosen.note);
-        onsetInfo.assignedCounts[best.targetIndex] += 1;
-      }
-      targets.forEach((target) => {
-        if (target.currentOnsetNotes.length) target.referenceNotes = target.currentOnsetNotes.slice();
-        target.activeNotes.push(...target.currentOnsetNotes);
-      });
-    }
-
-    const packed = targets.map((target) => target.notes.sort((left, right) => (
-      Number(left.startBeat) - Number(right.startBeat)
-      || Number(left.durationBeat) - Number(right.durationBeat)
-      || Number(left.pitch) - Number(right.pitch)
-    ))).filter((voice) => voice.length);
+    const packed = result.voices.map((voice) => voice
+      .slice()
+      .sort((a, b) => a.startGrid - b.startGrid || a.endGrid - b.endGrid || a.midi - b.midi)
+      .map((gridNote) => {
+        const source = lookup.get(gridNote.id);
+        return {
+          ...source,
+          startBeat: Number((gridNote.startGrid * GRID_BEAT).toFixed(6)),
+          durationBeat: Number(((gridNote.endGrid - gridNote.startGrid) * GRID_BEAT).toFixed(6)),
+        };
+      })).filter((voice) => voice.length);
     Object.defineProperties(packed, {
       sourceVoiceCount: { value: sourceVoices.length, enumerable: false, configurable: true },
       packedVoiceCount: { value: packed.length, enumerable: false, configurable: true },
       quantizationCollisionCount: { value: Number(voices?.quantizationCollisionCount) || 0, enumerable: false, configurable: true },
+      packDroppedCount: { value: Number(result.skipped) || 0, enumerable: false, configurable: true },
+      packTrimmedCount: { value: Number(result.overlapMerged) || 0, enumerable: false, configurable: true },
     });
     return packed;
   }
@@ -15823,7 +15723,7 @@
       const channelLimit = Math.max(0, Math.round(Number(maxChannelsPerInstrument) || 0));
       if (channelLimit > 0 && voices.length > channelLimit) {
         channelsBeforeLimit += uncappedVoiceCount;
-        voices = packMidiVoicesToMaxChannels(voices, channelLimit);
+        voices = packMidiVoicesToMaxChannels(voices, channelLimit, { isDrums: isMidiGroupDrums(group) });
         limitedInstrumentCount += 1;
       }
       voices.forEach((voiceNotes, voiceIndex) => {

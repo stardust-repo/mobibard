@@ -1449,5 +1449,5 @@
     }));
   }
 
-  window.MabiMidi = Object.freeze({ version: "5.1.0", midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview, parseMidiFile });
+  window.MabiMidi = Object.freeze({ version: "5.1.0", midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview, parseMidiFile, assignNotesToVoices });
 })();
