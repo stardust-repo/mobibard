@@ -15934,25 +15934,3 @@ body.midi-input-recording #playheadTimeLabel { background: #e5484d; }
 .midi-input-bottom-offset input { flex: 1 1 56px; width: auto; min-width: 40px; }
 .midi-input-bottom-offset > span { flex: 0 0 auto; white-space: nowrap; }
 .midi-input-bottom-offset .midi-input-connect-button { white-space: nowrap; }
-
-/* 오디오→MIDI 불러오기: 전사에 쓴 원본 오디오를 함께 추가할지 고르는 맨 위 항목 */
-.midi-import-audio-row {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
-  align-items: center;
-  gap: 9px;
-  margin: 2px 0 6px;
-  padding: 6px 8px;
-  border: 1px solid var(--control-border);
-  border-radius: 8px;
-  background: var(--control-bg);
-  cursor: pointer;
-}
-.midi-import-audio-row[hidden] { display: none; }
-.midi-import-audio-row input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  accent-color: var(--accent);
-}

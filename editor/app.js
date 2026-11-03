@@ -393,9 +393,6 @@
     midiImportBackdrop: document.querySelector("#midiImportPanel"),
     midiImportPanel: document.querySelector("#midiImportPanel"),
     midiImportChannelTree: document.querySelector("#midiImportChannelTree"),
-    midiImportAudioRow: document.querySelector("#midiImportAudioRow"),
-    midiImportAudioCheck: document.querySelector("#midiImportAudioCheck"),
-    midiImportAudioName: document.querySelector("#midiImportAudioName"),
     editModeTitlebarAction: document.querySelector("#editModeTitlebarAction"),
     editModeTitlebarInfo: document.querySelector("#editModeTitlebarInfo"),
     midiImportDetail: document.querySelector("#midiImportDetail"),
@@ -10106,7 +10103,7 @@
     return Math.max(CONFIG.minimumNoteBeat, snappedEnd - startBeat);
   }
 
-  async function importAudioFile(file, { groupId = null, startBeat: forcedStartBeat = null, openEditor = false } = {}) {
+  async function importAudioFile(file, { groupId = null, startBeat: forcedStartBeat = null } = {}) {
     if (!file) return false;
     const importGroup = groupId == null ? null : getChannelGroupById(groupId);
     try {
@@ -10157,7 +10154,6 @@
       showToast(importGroup
         ? `${importGroup.name} 그룹에 ${file.name} 오디오를 추가했습니다.`
         : `${file.name} 오디오를 추가했습니다.`);
-      if (openEditor) openAudioEditDialog(clip.id);
       return true;
     } catch (error) {
       console.error(error);
@@ -13710,7 +13706,6 @@
     state.midiImport.excludedKeys = new Set();
     state.midiImport.busy = false;
     state.midiImport.includeSourceAudio = true;
-    if (elements.midiImportAudioCheck) elements.midiImportAudioCheck.checked = true;
     if (elements.midiImportTextInput) elements.midiImportTextInput.value = "";
     applyImportOptionsToControls(importOptionsCurrent);
   }
@@ -14406,16 +14401,55 @@
     handleImportTreeChange();
   }
 
-  // 오디오 → MIDI 불러오기에서만, 전사에 쓴 원본 오디오를 함께 추가할지 고르는 맨 위 항목을 보입니다.
+  // 오디오 → MIDI 불러오기에서만, 전사에 쓴 원본 오디오를 채널 목록의 맨 위 항목처럼 보여 줍니다.
+  // 체크하면 불러올 때 오디오 클립으로 함께 추가됩니다.
   function syncImportSourceAudioRow() {
-    const row = elements.midiImportAudioRow;
-    if (!row) return;
+    const host = elements.midiImportChannelTree;
+    if (!host) return;
+    host.querySelectorAll(":scope > .import-source-audio-item").forEach((node) => node.remove());
     const mi = state.midiImport;
-    const visible = mi.sourceType === "audio-ai" && Boolean(mi.sourceFile) && !mi.busy;
-    row.hidden = !visible;
-    if (!visible) return;
-    if (elements.midiImportAudioCheck) elements.midiImportAudioCheck.checked = mi.includeSourceAudio !== false;
-    if (elements.midiImportAudioName) elements.midiImportAudioName.textContent = String(mi.sourceFile?.name || mi.fileName || "");
+    if (!(mi.sourceType === "audio-ai" && mi.sourceFile && !mi.busy)) return;
+    const included = mi.includeSourceAudio !== false;
+    const item = document.createElement("div");
+    item.className = `channel-tab-item channel-tree-item channel-tree-leaf-item channel-tree-channel-item import-source-audio-item${included ? " is-select-selected" : ""}`;
+    item.style.setProperty("--channel-color", getThemeHueColor(getDefaultHue(state.audioClips.length), "bright"));
+    item.setAttribute("role", "treeitem");
+    item.setAttribute("aria-level", "1");
+    const main = document.createElement("button");
+    main.type = "button";
+    main.className = "channel-tree-main channel-tab-main";
+    const label = document.createElement("span");
+    label.className = "channel-tree-label channel-tab-label";
+    label.textContent = String(mi.sourceFile?.name || mi.fileName || "Audio");
+    const detail = document.createElement("small");
+    detail.className = "inline-channel-tree-detail";
+    detail.textContent = i18nText("audio_midi.include_audio");
+    main.append(label, detail);
+    const actions = document.createElement("div");
+    actions.className = "channel-tree-actions";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "channel-tree-action channel-tree-select-toggle";
+    toggle.setAttribute("aria-label", detail.textContent);
+    toggle.title = detail.textContent;
+    const glyph = document.createElement("span");
+    glyph.className = "channel-tree-action-glyph";
+    glyph.setAttribute("aria-hidden", "true");
+    toggle.append(glyph);
+    setInlineChannelToggleState(toggle, included);
+    actions.append(toggle);
+    item.append(main, actions);
+    const flip = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      mi.includeSourceAudio = !(mi.includeSourceAudio !== false);
+      const on = mi.includeSourceAudio;
+      item.classList.toggle("is-select-selected", on);
+      setInlineChannelToggleState(toggle, on);
+    };
+    main.addEventListener("click", flip);
+    toggle.addEventListener("click", flip);
+    host.prepend(item);
   }
 
   function updateMidiImportApplyState() {
@@ -15884,9 +15918,9 @@
         renderAll();
         resizeAndDraw();
         resetTimelineToStartAfterImport();
-        // 전사에 쓴 원본 오디오도 함께 추가하고, 시작 위치를 맞출 수 있도록 오디오 편집 창을 엽니다.
+        // 전사에 쓴 원본 오디오도 함께 추가합니다(0박 시작, 오디오 목록에 선택된 상태).
         if (includeSourceAudio && sourceAudioFile) {
-          await importAudioFile(sourceAudioFile, { startBeat: 0, openEditor: true });
+          await importAudioFile(sourceAudioFile, { startBeat: 0 });
         }
         const limitToast = imported.limitedInstrumentCount > 0
           ? i18nText("midi.limit_channels_applied", [imported.limitedInstrumentCount, imported.maxChannelsPerInstrument])
@@ -34178,9 +34212,6 @@
     });
     elements.editModeTitlebarAction?.addEventListener("click", () => {
       if (sideToolState.kind === "import" && !state.midiImport.busy) openFilePickerInput(elements.fileInput);
-    });
-    elements.midiImportAudioCheck?.addEventListener("change", () => {
-      state.midiImport.includeSourceAudio = Boolean(elements.midiImportAudioCheck.checked);
     });
     elements.midiImportApplyButton?.addEventListener("click", () => applyMidiImport("add"));
     elements.midiImportNewButton?.addEventListener("click", () => applyMidiImport("new"));
