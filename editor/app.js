@@ -14248,6 +14248,7 @@
     if (wasPlaying) stopPlayback(false);
     restoreImportPreviewStash();
     const openNew = importPreviewState.mode === "new";
+    const adoptFileTempo = !openNew && isProjectEmptyForImportTempo();
     // 원본 배열은 건드리지 않도록 작업용 사본 위에 결과를 만듭니다.
     state.channels = openNew ? [] : state.channels.slice();
     state.channelGroups = openNew ? [] : state.channelGroups.slice();
@@ -14277,8 +14278,10 @@
             colorMode: mi.colorMode,
             tagImportKeys: true,
           });
-
-          if (openNew) state.timeSignatures = buildImportTimeSignatureList(parsed.timeSignatures);
+          if (openNew || adoptFileTempo) {
+            state.tempos = buildImportTempoList(parsed.tempoEvents || []);
+            state.timeSignatures = buildImportTimeSignatureList(parsed.timeSignatures);
+          }
           built = true;
         }
       } else if (!mi.busy && mi.kind === "text" && mi.textCandidates.length) {
@@ -14488,6 +14491,16 @@
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
     });
+  }
+
+  // 비어 있는 기본 프로젝트(노트·오디오 없음, 템포 120 하나, 4/4)에 추가로 불러올 때는 파일의 템포/박자표를 그대로 씁니다.
+  function isProjectEmptyForImportTempo() {
+    if ((state.channels || []).some((channel) => (channel.notes || []).length)) return false;
+    if ((state.audioClips || []).length) return false;
+    const tempos = state.tempos || [];
+    if (tempos.length > 1 || (tempos[0] && Math.round(Number(tempos[0].bpm) || 120) !== 120)) return false;
+    const signatures = state.timeSignatures || [];
+    return !signatures.length || (signatures.length === 1 && signatures[0].numerator === 4 && signatures[0].denominator === 4);
   }
 
   function buildImportTimeSignatureList(events) {
@@ -15936,6 +15949,7 @@
         state.midiImport.selectedGroupIds = new Set((state.midiImport.preview?.groups || []).map((group) => String(group.id)));
         const parsed = cloneMidiImportSelection();
         if (!parsed?.groups?.length) throw new Error(i18nText("instrument.select_least_one"));
+        const adoptFileTempo = !openNew && isProjectEmptyForImportTempo();
         const imported = importMidiSelectionAsEditableChannels(parsed, {
           openNew,
           fileName,
@@ -15945,6 +15959,12 @@
           excludeChannelKeys: state.midiImport.excludedKeys,
         });
         if (!imported.channelCount) throw new Error(i18nText("note.select_least_one"));
+        if (adoptFileTempo) {
+          state.tempos = buildImportTempoList(parsed.tempoEvents || []);
+          state.nextTempoId = state.tempos.length + 1;
+          state.timeSignatures = buildImportTimeSignatureList(parsed.timeSignatures);
+          state.nextTimeSignatureId = state.timeSignatures.length + 1;
+        }
         markDirty(`${state.midiImport.sourceLabel || "MIDI"} ${i18nText(openNew ? "ui.open_new" : "action.add")}`);
         shrinkTimelineToContent();
         ensureTimelineFitsViewport();
