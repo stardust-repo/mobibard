@@ -21852,7 +21852,7 @@
       state.channelMerge.selectedCandidateKeys = chooseAutomaticChannelMergeCandidateKeys(
         automaticPool,
         state.channelMerge.role,
-        1,
+        state.channelMerge.overlapAmount,
       );
     } else {
       const validKeys = new Set(pool.map((note) => note._mergeCandidateKey));
@@ -22023,7 +22023,6 @@
     const normalized = normalizeChannelMergeRole(role);
     if (normalized === state.channelMerge.role) return false;
     state.channelMerge.role = normalized;
-    state.channelMerge.overlapAmount = 1;
     state.channelMerge.previewModified = false;
     rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
     renderChannelTabs();
