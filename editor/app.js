@@ -2253,6 +2253,8 @@
     syncInlineChannelSelectionGroups(host);
     host.scrollTop = scrollTop;
     syncInlineGroupToggleButton(getInlineToolRoot(host)?.querySelector('.inline-group-toggle'));
+    // 불러오기 목록은 다시 그려질 때마다(전체 접기 등) 원본 오디오 항목을 맨 위에 다시 붙입니다.
+    if (host === elements.midiImportChannelTree) syncImportSourceAudioRow();
     return true;
   }
 
