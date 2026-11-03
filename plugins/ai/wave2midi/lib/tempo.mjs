@@ -447,7 +447,9 @@ function fromPath(winBpm, ctx, allowDouble) {
   tm.pickup_beats = 0.0;
   if (c.align_bars) {
     const r = pmod(ref, nb);
-    if (r > 0.02 && nb - r > 0.02) tm.pickup_beats = pyRound(nb - r, 4);
+    // 에디터 최소 단위(64분음표 = 1/16박)에 맞춰 못갖춘마디 길이를 정수 단위로 맞춘다.
+    const u = Math.round((nb - r) * 16);
+    if (u > 0 && u < nb * 16) tm.pickup_beats = u / 16;
   }
   outSegs.forEach((sg, i) => {
     sg.time = i === 0 ? T0 : beatTime(sg.beat, tm);

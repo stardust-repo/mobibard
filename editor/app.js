@@ -14504,7 +14504,13 @@
   }
 
   function buildImportTimeSignatureList(events) {
-    const list = (events || []).map((item, index) => normalizeTimeSignatureEvent({ ...item, id: index + 1 }, index + 1));
+    // 박자표는 최소 단위(64분음표) 격자에만 둘 수 있으므로 위치를 격자에 맞춥니다.
+    const unit = CONFIG.minimumNoteBeat || 0.0625;
+    const list = (events || []).map((item, index) => normalizeTimeSignatureEvent({
+      ...item,
+      id: index + 1,
+      beat: Math.round((Number(item.beat) || 0) / unit) * unit,
+    }, index + 1));
     return normalizeTimeSignatures(list);
   }
 
