@@ -1,14 +1,18 @@
 {
  "name": "Wave2MIDI",
  "full_name": "Wave2MIDI v1.1",
- "architecture": "mobibard_a2m_v1",
- "version": "1.1.0-rwc-v3",
- "step": 4000,
+ "architecture": "w2m_v1",
+ "version": "1.1.0",
+ "step": 2000,
  "license": {
   "spdx": "CC-BY-NC-4.0",
   "copyright": "Copyright (c) 2026 startdust-io",
   "file": "LICENSE",
   "noncommercial": true
+ },
+ "training": {
+  "pretrain_steps": 98000,
+  "finetune_steps": 2000
  },
  "parameters": 19354341,
  "classes": [
@@ -33,7 +37,7 @@
   "onset": 0.13,
   "frame": 0.5,
   "offset": 0.5,
-  "drum": 0.1,
+  "drum": 0.16,
   "inst_multi": 0.65,
   "min_frames": 2,
   "inst_frames": 15,
@@ -122,41 +126,41 @@
    "mb": 39.0,
    "compute": "fp32",
    "max_diff": {
-    "onset": 0.000549,
-    "frame": 0.0011,
-    "offset": 0.000356,
-    "drum": 0.000693,
-    "inst": 0.00141
+    "onset": 0.000916,
+    "frame": 0.00121,
+    "offset": 0.000647,
+    "drum": 0.000995,
+    "inst": 0.00113
    },
-   "onset_flips_per_positive": 0.00125,
-   "demo_note_agreement": 0.9946,
-   "cpu_seconds_per_window": 1.25
+   "onset_flips_per_positive": 0.0,
+   "demo_note_agreement": 1.0,
+   "cpu_seconds_per_window": 1.36
   },
   "fp16": {
    "file": "wave2mid_fp16.onnx",
    "mb": 39.1,
    "compute": "fp16",
    "max_diff": {
-    "onset": 0.00203,
+    "onset": 0.00137,
     "frame": 0.00334,
-    "offset": 0.000928,
-    "drum": 0.000953,
-    "inst": 0.0049
+    "offset": 0.00116,
+    "drum": 0.00159,
+    "inst": 0.00256
    },
-   "onset_flips_per_positive": 0.00125,
-   "demo_note_agreement": 0.9946,
-   "cpu_seconds_per_window": 1.71
+   "onset_flips_per_positive": 0.00103,
+   "demo_note_agreement": 1.0,
+   "cpu_seconds_per_window": 1.88
   }
  },
  "precision_check": null,
- "max_activation": 4818.4,
+ "max_activation": 4754.4,
  "provenance": {
   "datasets": [
    {
     "name": "midi_rwc",
     "producer": {
-     "tool": "mobibard_a2m",
-     "version": "1.0.1",
+     "tool": "Wave2MIDI",
+     "version": "1.1.0",
      "method": "audio + MIDI pairs (MIDI = exact answer)"
     },
     "license": {
@@ -189,6 +193,8 @@
    5
   ],
   "min_range_db": 12.0,
+  "spread": 0.4,
+  "center_shift": 0.12,
   "pitch_comp": 0.5,
   "track_balance": 0.3,
   "min_group": 6,
@@ -209,51 +215,12 @@
   "follow_beats": true
  },
  "metrics": {
-  "mel": 0.5545707264010313,
-  "mel_inst": 0.4148757796705982,
-  "mel_offset": 0.2491438701099875,
-  "drum": 0.36439062022386864,
-  "all": 0.5100235414573985,
-  "frame": 0.6430383328180954
+  "mel": 0.553028770282847,
+  "mel_inst": 0.41186908137090394,
+  "mel_offset": 0.24657063084206693,
+  "drum": 0.46311497397929074,
+  "all": 0.5309196985406768,
+  "frame": 0.6438233878940048
  },
- "exported": "2026-11-02 22:57:20",
- "model_surgery": {
-  "name": "RWC note-priority calibration v3",
-  "base_version": "1.1.0",
-  "training": "no backbone retraining; no original learned tensor changed",
-  "goal": "maximize pitch/onset/offset note agreement; instrument class accuracy excluded from tuning",
-  "onset_temporal_fusion": {
-   "edge": 1.24721222,
-   "future_rise": 0.88724735,
-   "post_frame": 0.47687704,
-   "past_frame_suppression": 0.52189441,
-   "logit_bias": 0.02766513,
-   "context_frames": 3
-  },
-  "calibration": {
-   "frame_effective_original_threshold_at_output_0.5": 0.45,
-   "offset_effective_original_threshold_at_output_0.5": 0.075,
-   "drum_effective_original_threshold_at_output_0.1": 0.15
-  },
-  "instrument_head_changed": false,
-  "reference_files": [
-   "RWC_R003",
-   "RWC_R006",
-   "RWC_R009"
-  ],
-  "reference_eval_note": "Calibration/reference evaluation only; not an independent held-out test. Training split membership of these songs was not established."
- },
- "reference_eval_3songs_90s": {
-  "instrument_labels_ignored": true,
-  "onset_f1_original": 0.6392377652663491,
-  "onset_f1_v3": 0.6434855467113532,
-  "full_note_f1_original": 0.2910350801212646,
-  "full_note_f1_v3": 0.3359865940511102,
-  "drum_onset_f1_original": 0.4761904761904762,
-  "drum_onset_f1_v3": 0.4983050847457627,
-  "matched_note_offset_mae_original_s": 0.20461089175417793,
-  "matched_note_offset_mae_v3_s": 0.19838999259440135,
-  "onset_tolerance_s": 0.05,
-  "offset_tolerance": "max(0.05 s, 20% of reference note duration)"
- }
+ "exported": "2026-11-03 17:02:27"
 }

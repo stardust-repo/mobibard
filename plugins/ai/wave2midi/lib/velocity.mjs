@@ -115,7 +115,7 @@ export function estimateVelocity(wave, notes, cfg, spectra = null) {
       offset = cfg.track_balance * (med - poolMed) / poolSpan;
     }
     idx.forEach((i, q) => {
-      const x = Math.min(1, Math.max(0, 0.5 + (v[q] - med) / span + offset));
+      const x = Math.min(1, Math.max(0, 0.5 + (cfg.spread ?? 1) * ((v[q] - med) / span + offset) + (cfg.center_shift ?? 0)));
       out[i] = Math.min(127, Math.max(1, roundHalfEven(cfg.min + (cfg.max - cfg.min) * x)));
     });
   }
