@@ -2,7 +2,7 @@
  "name": "Wave2MIDI",
  "full_name": "Wave2MIDI v1.1",
  "architecture": "mobibard_a2m_v1",
- "version": "1.1.0",
+ "version": "1.1.0-rwc-v3",
  "step": 4000,
  "license": {
   "spdx": "CC-BY-NC-4.0",
@@ -216,5 +216,44 @@
   "all": 0.5100235414573985,
   "frame": 0.6430383328180954
  },
- "exported": "2026-11-02 22:57:20"
+ "exported": "2026-11-02 22:57:20",
+ "model_surgery": {
+  "name": "RWC note-priority calibration v3",
+  "base_version": "1.1.0",
+  "training": "no backbone retraining; no original learned tensor changed",
+  "goal": "maximize pitch/onset/offset note agreement; instrument class accuracy excluded from tuning",
+  "onset_temporal_fusion": {
+   "edge": 1.24721222,
+   "future_rise": 0.88724735,
+   "post_frame": 0.47687704,
+   "past_frame_suppression": 0.52189441,
+   "logit_bias": 0.02766513,
+   "context_frames": 3
+  },
+  "calibration": {
+   "frame_effective_original_threshold_at_output_0.5": 0.45,
+   "offset_effective_original_threshold_at_output_0.5": 0.075,
+   "drum_effective_original_threshold_at_output_0.1": 0.15
+  },
+  "instrument_head_changed": false,
+  "reference_files": [
+   "RWC_R003",
+   "RWC_R006",
+   "RWC_R009"
+  ],
+  "reference_eval_note": "Calibration/reference evaluation only; not an independent held-out test. Training split membership of these songs was not established."
+ },
+ "reference_eval_3songs_90s": {
+  "instrument_labels_ignored": true,
+  "onset_f1_original": 0.6392377652663491,
+  "onset_f1_v3": 0.6434855467113532,
+  "full_note_f1_original": 0.2910350801212646,
+  "full_note_f1_v3": 0.3359865940511102,
+  "drum_onset_f1_original": 0.4761904761904762,
+  "drum_onset_f1_v3": 0.4983050847457627,
+  "matched_note_offset_mae_original_s": 0.20461089175417793,
+  "matched_note_offset_mae_v3_s": 0.19838999259440135,
+  "onset_tolerance_s": 0.05,
+  "offset_tolerance": "max(0.05 s, 20% of reference note duration)"
+ }
 }

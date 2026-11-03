@@ -1,7 +1,7 @@
 {
   "id": "mobibard_m2m",
   "name": "Wave2MIDI",
-  "version": "1.1",
+  "version": "1.1-rwc-v3",
   "author": "startdust-io",
   "license": "CC-BY-NC-4.0",
   "licenseFile": "LICENSE",
@@ -9,13 +9,13 @@
   "models": {
     "w16": {
       "file": "wave2mid_w16.onnx",
-      "bytes": 39004133,
-      "sha256": "a40ede1dfa1fc01c4783a6f1f4f36c9b2152faf828a360e2d4188320d60b8e4d",
+      "bytes": 39008039,
+      "sha256": "58f73bffbbc488f8c9e3d428a987b9c6d07e7ee7b7263201f38d8475394d2d4e",
       "compute": "fp32"
     }
   },
   "fallback": "w16",
   "file": "wave2mid_w16.onnx",
-  "bytes": 39004133,
-  "sha256": "a40ede1dfa1fc01c4783a6f1f4f36c9b2152faf828a360e2d4188320d60b8e4d"
+  "bytes": 39008039,
+  "sha256": "58f73bffbbc488f8c9e3d428a987b9c6d07e7ee7b7263201f38d8475394d2d4e"
 }

@@ -1,4 +1,4 @@
-pytorch2.11.0:ÉÏÌ
+pytorch2.11.0:‹îÌ
 C
 m.pitch_emb__f16m.pitch_embm.pitch_emb__cast"Cast*	
 to 
@@ -4790,20 +4790,177 @@ K/Constant_30_output_0/Constant_30"Constant*
 /Constant_29_output_0
 /Constant_27_output_0
 /Constant_30_output_0/Slice_4_output_0/Slice_4"Slice
-,
-/Gather_output_0onset/Sigmoid"Sigmoid
-0
-/Gather_1_output_0frame
+5
+/Gather_output_0/s3/onset_base/Sigmoid"Sigmoid
+9
+/Gather_1_output_0/s3/frame_base
 /Sigmoid_1"Sigmoid
-1
-/Gather_2_output_0offset
+:
+/Gather_2_output_0/s3/offset_base
 /Sigmoid_2"Sigmoid
-/
-/Gather_3_output_0drum
+8
+/Gather_3_output_0/s3/drum_base
 /Sigmoid_3"Sigmoid
 .
 /Slice_4_output_0inst
-/Sigmoid_4"Sigmoid
+/Sigmoid_4"Sigmoid
+S
+/s3/frame_base
+/s3/pad_prev1/s3/prev1_pad/s3/pad_prev1"Pad*
+mode"edge 
+k
+/s3/prev1_pad
+/s3/start_prev1
+/s3/end_prev1
+/s3/axis_time
+/s3/step	/s3/prev1/s3/slice_prev1"Slice
+S
+/s3/frame_base
+/s3/pad_next1/s3/next1_pad/s3/pad_next1"Pad*
+mode"edge 
+k
+/s3/next1_pad
+/s3/start_next1
+/s3/end_next1
+/s3/axis_time
+/s3/step	/s3/next1/s3/slice_next1"Slice
+S
+/s3/frame_base
+/s3/pad_prev2/s3/prev2_pad/s3/pad_prev2"Pad*
+mode"edge 
+k
+/s3/prev2_pad
+/s3/start_prev2
+/s3/end_prev2
+/s3/axis_time
+/s3/step	/s3/prev2/s3/slice_prev2"Slice
+S
+/s3/frame_base
+/s3/pad_next2/s3/next2_pad/s3/pad_next2"Pad*
+mode"edge 
+k
+/s3/next2_pad
+/s3/start_next2
+/s3/end_next2
+/s3/axis_time
+/s3/step	/s3/next2/s3/slice_next2"Slice
+S
+/s3/frame_base
+/s3/pad_prev3/s3/prev3_pad/s3/pad_prev3"Pad*
+mode"edge 
+k
+/s3/prev3_pad
+/s3/start_prev3
+/s3/end_prev3
+/s3/axis_time
+/s3/step	/s3/prev3/s3/slice_prev3"Slice
+S
+/s3/frame_base
+/s3/pad_next3/s3/next3_pad/s3/pad_next3"Pad*
+mode"edge 
+k
+/s3/next3_pad
+/s3/start_next3
+/s3/end_next3
+/s3/axis_time
+/s3/step	/s3/next3/s3/slice_next3"Slice
+:
+	/s3/prev1
+	/s3/prev2
+	/s3/prev3/s3/past/s3/past"Max
+N
+/s3/frame_base
+	/s3/next1
+	/s3/next2
+	/s3/next3
+/s3/future
+/s3/future"Max
+7
+
+/s3/future
+/s3/past/s3/edge_pre/s3/edge_sub"Sub
+(
+/s3/edge_pre/s3/edge/s3/edge"Relu
+>
+/s3/frame_base
+	/s3/prev1/s3/rise0_pre/s3/rise0_sub"Sub
++
+/s3/rise0_pre	/s3/rise0	/s3/rise0"Relu
+>
+	/s3/next1
+/s3/frame_base/s3/rise1_pre/s3/rise1_sub"Sub
++
+/s3/rise1_pre	/s3/rise1	/s3/rise1"Relu
+9
+	/s3/next2
+	/s3/next1/s3/rise2_pre/s3/rise2_sub"Sub
++
+/s3/rise2_pre	/s3/rise2	/s3/rise2"Relu
+9
+	/s3/next3
+	/s3/next2/s3/rise3_pre/s3/rise3_sub"Sub
++
+/s3/rise3_pre	/s3/rise3	/s3/rise3"Relu
+G
+	/s3/rise0
+	/s3/rise1
+	/s3/rise2
+	/s3/rise3	/s3/frise	/s3/frise"Max
+:
+	/s3/next1
+	/s3/next2
+	/s3/next3/s3/post/s3/post"Max
+0
+/s3/edge
+/s3/a
+/s3/edge_s/s3/edge_mul"Mul
+3
+	/s3/frise
+/s3/b/s3/frise_s/s3/frise_mul"Mul
+0
+/s3/post
+/s3/c
+/s3/post_s/s3/post_mul"Mul
+0
+/s3/past
+/s3/d
+/s3/past_s/s3/past_mul"Mul
+6
+/Gather_output_0
+
+/s3/edge_s/s3/on1/s3/on_a"Add
+.
+/s3/on1
+/s3/frise_s/s3/on2/s3/on_b"Add
+-
+/s3/on2
+
+/s3/post_s/s3/on3/s3/on_c"Add
+-
+/s3/on3
+
+/s3/past_s/s3/on4/s3/on_d"Sub
+5
+/s3/on4
+/s3/on_bias/s3/on5/s3/on_bias_add"Add
+$
+/s3/on5onset	/s3/onset"Sigmoid
+N
+/Gather_1_output_0
+/s3/frame_bias/s3/frame_logit/s3/frame_bias_add"Add
+,
+/s3/frame_logitframe	/s3/frame"Sigmoid
+Q
+/Gather_2_output_0
+/s3/offset_bias/s3/offset_logit/s3/offset_bias_add"Add
+/
+/s3/offset_logitoffset
+/s3/offset"Sigmoid
+K
+/Gather_3_output_0
+/s3/drum_bias/s3/drum_logit/s3/drum_bias_add"Add
+)
+/s3/drum_logitdrum/s3/drum"Sigmoid
 main_graph*ˆXÀ
 Bm.pitch_emb__f16J€ˆÎ´W$733.²}44,±Ï²æ'±5*È1E´~3™)ù5€­™®©µr3Ü°¹­8[¸`°·ÉµÅ6l, u4Ø)z¶“ª¤Û¬“2ª2P,0F1Õ)i¶/°æ&¹±Œ´¤±rµÌ5P¤ƒ´/K5-\¶d³q´Ñ4['¨3³.7µd5š´Ş¡İ
 .µ»1¤5`,H*Ó+™/a-€±a7Ó1.)±†¯™#µ0Î3ó®F1Ê­u´%±¥±e3¶	.-± 0'$¤)£5t¬Á4¸o5®Ö²§¶P²%±¯ô1»´£­•´š³Y±97|±&s4Ç1¶R©­€¬@§°Î2
@@ -102085,7 +102242,7 @@ Bonnx::MatMul_2798__f16J€
 ¦å¬>°$*á­û­ß®µìª¦*€­¿·F(±´K®¢>°¥~*­­k³‡µ$³Á¸¹ø¸ô»_¨v¯
 ,ó˜ì¦É4*2À®1*
 6)
-4À4ù4.,ø4ë76è7·£” D¡¤,œ1°®B!å)ç o™^©š.4¤=$D¦ô¡¡)L)[&œA)Í Ë©æ0©+V%;û –#b«÷.¡4ô1Ç-ô3T4À0á5‡3¢ªP1¦xÚ),£¤s-·,ş¢Ã.1(H2„.62¯3á3ß0Â«§«0Z'ß¤(M0Ãª[,\,¥ç-º.±/—2z¡¡*Y3¬©34›á.i°$(g)ò©G))–¥Ù¡ö.ı)‡0–'›1}¬\/Z$
+4À4ù4.,ø4ë76è7·£” D¡¤,œ1°®B!å)ç o™^©š.4¤=$D¦ô¡¡)L)[&œA)Í Ë©æ0©+V%;û –#b«÷.¡4ô1Ç-ô3T4À0á5‡3¢ªP1¦xÚ),£¤s-·,ş¢Ã.1(H2„.62¯3á3ß0Â«§«0Z'ß¤(M0Ãª[,\,¥ç-º.±/—2z¡¡*Y3¬©34›á.i°$(g)ò©G))–¥Ù¡ö.ı)‡0–'›1}¬\/*B/s3/aJ¦¤Ÿ?*B/s3/bJ¤"c?*B/s3/cJ:)ô>*B/s3/dJßš?*B/s3/on_biasJü¡â<*B/s3/frame_biasJ|M>*B/s3/offset_biasJÉ @*B/s3/drum_biasJşÜì¾*B/s3/axis_timeJ       *B/s3/stepJ       *EB/s3/pad_prev1J0                                               *EB/s3/pad_next1J0                                               *B/s3/start_prev1J        *B/s3/end_prev1JX      *B/s3/start_next1J       *B/s3/end_next1JY      *EB/s3/pad_prev2J0                                               *EB/s3/pad_next2J0                                               *B/s3/start_prev2J        *B/s3/end_prev2JX      *B/s3/start_next2J       *B/s3/end_next2JZ      *EB/s3/pad_prev3J0                                               *EB/s3/pad_next3J0                                               *B/s3/start_prev3J        *B/s3/end_prev3JX      *B/s3/start_next3J       *B/s3/end_next3J[      Z$
 features
 
 

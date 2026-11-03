@@ -47,7 +47,7 @@ const result = await MobibardWave2Midi.transcribe(file, {
   velocityRange: [35, 120],    // 자동 추정 때 세기 범위(기본값은 meta.velocity.min/max, 에디터는 V3~V15에 해당하는 [11, 127] 사용)
   tempo: true,                 // 기본: 노트로 템포 맵 추정. false면 120 BPM 고정, 숫자면 그 BPM으로 고정
   tempoChanges: true,          // 자동 추정 때 곡 중간 템포 변화 반영 여부
-  onsetThreshold: undefined,   // 기본값은 meta.thresholds.onset (0.16)
+  onsetThreshold: undefined,   // 기본값은 meta.thresholds.onset (0.13)
   onProgress: ({ stage, done, total }) => {},
   signal: abortController.signal,
 });
@@ -103,3 +103,8 @@ sha256sum model/wave2mid_w16.onnx
 sha256이 바뀌면 사용자 브라우저에 있던 이전 모델은 다음 사용 때 새 모델로 교체됩니다. `meta.json`만 고친 경우에는 manifest를 바꿀 필요가 없습니다.
 
 `lib/*.mjs`나 `worker.js`를 고치면 `wave2midi.js`의 `VERSION`을 올려 브라우저 캐시를 무효화하세요.
+
+
+## RWC note-priority model surgery v3
+
+이 패키지의 `model/wave2mid_w16.onnx`는 원본 v1.1 모델의 학습 가중치를 그대로 두고 ONNX 그래프를 수정한 실험 버전입니다. 악기 16-class 출력은 튜닝 대상에서 제외했으며, 같은 pitch의 onset/offset 노트 일치도를 우선했습니다. 자세한 변경식과 참고 데이터 결과는 `MODEL_TUNING_V3.md`를 보세요.
