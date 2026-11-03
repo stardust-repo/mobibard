@@ -8,7 +8,7 @@
   // The embedded default SF3 (assets/default_sf3.js, ~5.4 MB of base64) is fetched on first use
   // instead of as a blocking <script> on every page. Resolved relative to this file so it works
   // from editor/, player/, simple/, rollscriptor/ and veloscriptor/ alike.
-  const DEFAULT_SOUND_BANK_ASSET_VERSION = "20260907-mobibard16-cleaned";
+  const DEFAULT_SOUND_BANK_ASSET_VERSION = "20261103-marker1";
   const DEFAULT_SOUND_BANK_ASSET_URL = (() => {
     try {
       const own = document.currentScript?.src;
@@ -61,6 +61,7 @@
         else if (type === "DLS ") bank = await parseDls(data, options);
         else continue;
         bank.container = { ...candidate.metadata };
+        applyMobibardMarker(bank, data);
         return bank;
       } catch (error) {
         if (!firstError) firstError = error;
@@ -68,6 +69,48 @@
     }
     if (firstError) throw firstError;
     throw new Error(tr("sound.err_header"));
+  }
+
+  // MobiBard-compatible banks declare themselves in the INFO comment (ICMT) of the SF2/SF3/DLS file with two lines:
+  //   MobiBard-Compatible: 1        (compatibility level; present = compatible)
+  //   MobiBard-Version: v1.0        (bank version, independent of the compatibility flag)
+  // The file name, the generator program and the bank name are deliberately NOT used: they are easy to change.
+  function readRiffInfoText(data, id) {
+    const view = utils.toUint8Array(data);
+    let pos = 12;
+    while (pos + 8 <= view.length) {
+      const chunkId = ascii(view, pos, 4);
+      const size = u32le(view, pos + 4);
+      const body = pos + 8;
+      if (chunkId === "LIST" && ascii(view, body, 4) === "INFO") {
+        const end = Math.min(view.length, body + size);
+        let p = body + 4;
+        while (p + 8 <= end) {
+          const sub = ascii(view, p, 4);
+          const subSize = u32le(view, p + 4);
+          if (sub === id) return readText(view, p + 8, Math.min(subSize, end - p - 8));
+          p += 8 + subSize + (subSize & 1);
+        }
+        return "";
+      }
+      pos = body + size + (size & 1);
+    }
+    return "";
+  }
+
+  function parseMobibardMarker(text) {
+    const source = String(text || "");
+    const compat = /^\s*MobiBard-Compatible\s*:\s*(\d+)/im.exec(source);
+    if (!compat || !Number(compat[1])) return null;
+    const version = /^\s*MobiBard-Version\s*:\s*v?(\d+(?:\.\d+){0,2})/im.exec(source);
+    return { compatible: Number(compat[1]), version: version ? `v${version[1]}` : "" };
+  }
+
+  function applyMobibardMarker(bank, data) {
+    let marker = null;
+    try { marker = parseMobibardMarker(readRiffInfoText(data, "ICMT")); } catch (_) {}
+    bank.mobibard = marker;
+    bank.isMobibardCompatible = Boolean(marker);
   }
 
   async function parseSoundBankFile(file, options = {}) {
@@ -1209,6 +1252,7 @@
     findPreset,
     parseSoundFont,
     parseDls,
+    parseMobibardMarker,
     prepareNotes,
     prepareDrumNotes,
     schedulePreparedNotes,

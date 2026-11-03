@@ -3695,7 +3695,7 @@
   }
 
   function isEditorUsingEmbeddedDefaultSoundBank() {
-    if (audioEngine?.soundBank) return Boolean(audioEngine.soundBank.isEmbeddedDefault);
+    if (audioEngine?.soundBank) return Boolean(audioEngine.soundBank.isEmbeddedDefault || audioEngine.soundBank.isMobibardCompatible);
     return !editorSoundFontName;
   }
 
@@ -5528,7 +5528,11 @@
   }
 
   function updateEditorSoundFontUi(message = "") {
-    const label = message || editorSoundFontName || i18nText("soundbank.default");
+    let label = message || editorSoundFontName || i18nText("soundbank.default");
+    if (!message) {
+      const marker = audioEngine?.soundBank?.mobibard;
+      if (marker?.compatible) label += ` \u00b7 MobiBard${marker.version ? " v" + String(marker.version).replace(/^v/i, "") : ""}`;
+    }
     if (elements.editorSoundFontCurrentName) elements.editorSoundFontCurrentName.textContent = label;
     if (elements.editorSoundFontMenuLabel) elements.editorSoundFontMenuLabel.textContent = label;
     if (elements.editorSoundFontSettingsButton) {

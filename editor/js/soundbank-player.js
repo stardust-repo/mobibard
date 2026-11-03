@@ -32,7 +32,7 @@
   function resolvePresetRequest(soundBank, program = 0, bank = 0, midi = null, exactPreset = false) {
     const safeProgram = clamp(Math.round(Number(program) || 0), 0, 127);
     const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
-    if (exactPreset || !soundBank?.isEmbeddedDefault) return { program: safeProgram, bank: safeBank };
+    if (exactPreset || !(soundBank?.isEmbeddedDefault || soundBank?.isMobibardCompatible)) return { program: safeProgram, bank: safeBank };
     const mapper = window.MobibardDefaultInstrumentMap;
     if (!mapper?.resolveRequest) return { program: safeProgram, bank: safeBank };
     const target = mapper.resolveRequest({
@@ -390,7 +390,7 @@
         return parsed;
       } catch {
         // User SoundFonts keep the old rule: a missing percussion bank stays silent.
-        if (!this.soundBank?.isEmbeddedDefault && safeBank === 128) return null;
+        if (!(this.soundBank?.isEmbeddedDefault || this.soundBank?.isMobibardCompatible) && safeBank === 128) return null;
         return this.soundFont;
       }
     }

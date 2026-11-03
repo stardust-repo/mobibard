@@ -8263,15 +8263,27 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return meta;
   }
 
+  // The bundled default and any SoundBank that declares itself MobiBard-compatible (INFO/ICMT marker, see
+  // soundbank.js) share the 14-preset layout, so both use the direct MobiBard instrument mapping.
+  function soundFontUsesMobibardMapping() {
+    return Boolean(soundFontIsDefault || soundFont?.isMobibardCompatible || soundFont?.isEmbeddedDefault);
+  }
+
+  function describeMobibardMarker(bank) {
+    const marker = bank?.mobibard;
+    return marker ? `MobiBard${marker.version ? ` ${marker.version}` : ""}` : "";
+  }
+
   function updateSoundFontUi(message = "") {
     if (!soundName) return;
     if (message) {
       soundName.textContent = message;
       return;
     }
+    const markerText = describeMobibardMarker(soundFont);
     soundName.textContent = soundFontIsDefault
       ? i18nText("snd.restore_default")
-      : (sf2Name || "SoundBank");
+      : `${sf2Name || "SoundBank"}${markerText ? ` · ${markerText}` : ""}`;
   }
 
   function openSf2Picker() {
@@ -9913,7 +9925,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       isBeat: Boolean(preview?.isBeat),
       instrumentName: preview?.instrumentName || preview?.programText || preview?.name || "",
     });
-    const bank = soundFont?.isEmbeddedDefault ? soundFont : defaultSoundFont;
+    const bank = (soundFont?.isEmbeddedDefault || soundFont?.isMobibardCompatible) ? soundFont : defaultSoundFont;
     const presets = Array.isArray(bank?.presets) ? bank.presets : [];
     const preset = presets.find(item => Number(item?.bank) === 0 && Number(item?.preset) === Number(target?.preset))
       || presets.find(item => Number(item?.bank) === 0 && Number(item?.preset) === 0)
@@ -9925,7 +9937,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
   function resolvePreviewPreset(preview) {
-    if (soundFontIsDefault) {
+    if (soundFontUsesMobibardMapping()) {
       const mapped = resolveDefaultMappedPreviewPreset(preview);
       if (mapped) return mapped;
     }
@@ -10044,7 +10056,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
       // 기본 SoundFont는 MobiBard 전용 14개 프리셋(0~13)에 직접 매핑한다.
       // 사용자 SoundFont에서는 기존 GM 기반 악기 배정 규칙을 그대로 유지한다.
-      const mappedTarget = soundFontIsDefault
+      const mappedTarget = soundFontUsesMobibardMapping()
         ? defaultInstrumentMap?.chooseTarget?.(selected)
         : instrumentMap?.chooseTarget?.(selected);
       if (mappedTarget?.presetKey) {
