@@ -1257,6 +1257,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "tempo.including": " (including tempo)",
     "audio_midi.cancelled": "AI transcription cancelled.",
     "audio_midi.source_label": "Audio · AI transcription",
+    "audio_midi.include_audio": "Add source audio",
     "audio_midi.stage_decode": "Reading audio…",
     "audio_midi.stage_runtime": "Preparing the AI runtime…",
     "audio_midi.stage_model_check": "Checking the stored AI model…",

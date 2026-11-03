@@ -1257,6 +1257,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "tempo.including": " (템포 포함)",
     "audio_midi.cancelled": "AI 변환을 취소했습니다.",
     "audio_midi.source_label": "오디오 · AI 변환",
+    "audio_midi.include_audio": "원본 오디오 추가",
     "audio_midi.stage_decode": "음원을 읽는 중…",
     "audio_midi.stage_runtime": "AI 실행 환경을 준비하는 중…",
     "audio_midi.stage_model_check": "저장된 AI 모델을 확인하는 중…",

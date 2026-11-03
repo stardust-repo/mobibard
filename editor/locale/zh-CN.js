@@ -1257,6 +1257,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "tempo.including": "（含速度）",
     "audio_midi.cancelled": "已取消 AI 转换。",
     "audio_midi.source_label": "音频 · AI 转换",
+    "audio_midi.include_audio": "添加原始音频",
     "audio_midi.stage_decode": "正在读取音频…",
     "audio_midi.stage_runtime": "正在准备 AI 运行环境…",
     "audio_midi.stage_model_check": "正在检查已保存的 AI 模型…",

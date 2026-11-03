@@ -393,6 +393,9 @@
     midiImportBackdrop: document.querySelector("#midiImportPanel"),
     midiImportPanel: document.querySelector("#midiImportPanel"),
     midiImportChannelTree: document.querySelector("#midiImportChannelTree"),
+    midiImportAudioRow: document.querySelector("#midiImportAudioRow"),
+    midiImportAudioCheck: document.querySelector("#midiImportAudioCheck"),
+    midiImportAudioName: document.querySelector("#midiImportAudioName"),
     editModeTitlebarAction: document.querySelector("#editModeTitlebarAction"),
     editModeTitlebarInfo: document.querySelector("#editModeTitlebarInfo"),
     midiImportDetail: document.querySelector("#midiImportDetail"),
@@ -905,6 +908,7 @@
       sourceLabel: "MIDI",
       kind: "midi",
       sourceFile: null,
+      includeSourceAudio: true,
       colorMode: "channel",
       midiBuffer: null,
       preview: null,
@@ -10102,7 +10106,7 @@
     return Math.max(CONFIG.minimumNoteBeat, snappedEnd - startBeat);
   }
 
-  async function importAudioFile(file, { groupId = null } = {}) {
+  async function importAudioFile(file, { groupId = null, startBeat: forcedStartBeat = null, openEditor = false } = {}) {
     if (!file) return false;
     const importGroup = groupId == null ? null : getChannelGroupById(groupId);
     try {
@@ -10122,7 +10126,9 @@
         return true;
       }
       const id = `audio-${state.nextAudioClipId++}`;
-      const startBeat = clamp(snapBeatToUnit(state.playhead.beat, getSnapBeat()), 0, getTotalBeats());
+      const startBeat = forcedStartBeat != null
+        ? Math.max(0, Number(forcedStartBeat) || 0)
+        : clamp(snapBeatToUnit(state.playhead.beat, getSnapBeat()), 0, getTotalBeats());
       const clip = normalizeAudioClip({
         id,
         title: file.name.replace(/\.[^.]+$/, "") || file.name,
@@ -10151,6 +10157,7 @@
       showToast(importGroup
         ? `${importGroup.name} 그룹에 ${file.name} 오디오를 추가했습니다.`
         : `${file.name} 오디오를 추가했습니다.`);
+      if (openEditor) openAudioEditDialog(clip.id);
       return true;
     } catch (error) {
       console.error(error);
@@ -13702,6 +13709,8 @@
     state.midiImport.selectedTextIndexes = new Set();
     state.midiImport.excludedKeys = new Set();
     state.midiImport.busy = false;
+    state.midiImport.includeSourceAudio = true;
+    if (elements.midiImportAudioCheck) elements.midiImportAudioCheck.checked = true;
     if (elements.midiImportTextInput) elements.midiImportTextInput.value = "";
     applyImportOptionsToControls(importOptionsCurrent);
   }
@@ -14397,7 +14406,20 @@
     handleImportTreeChange();
   }
 
+  // 오디오 → MIDI 불러오기에서만, 전사에 쓴 원본 오디오를 함께 추가할지 고르는 맨 위 항목을 보입니다.
+  function syncImportSourceAudioRow() {
+    const row = elements.midiImportAudioRow;
+    if (!row) return;
+    const mi = state.midiImport;
+    const visible = mi.sourceType === "audio-ai" && Boolean(mi.sourceFile) && !mi.busy;
+    row.hidden = !visible;
+    if (!visible) return;
+    if (elements.midiImportAudioCheck) elements.midiImportAudioCheck.checked = mi.includeSourceAudio !== false;
+    if (elements.midiImportAudioName) elements.midiImportAudioName.textContent = String(mi.sourceFile?.name || mi.fileName || "");
+  }
+
   function updateMidiImportApplyState() {
+    syncImportSourceAudioRow();
     const ready = !state.midiImport.busy && importTreeSelectedIds.size > 0;
     if (elements.midiImportApplyButton) elements.midiImportApplyButton.disabled = !ready;
     if (elements.midiImportNewButton) elements.midiImportNewButton.disabled = !ready;
@@ -15833,6 +15855,8 @@
     const openNew = action === "new";
     const kind = state.midiImport.kind;
     const fileName = state.midiImport.fileName;
+    const sourceAudioFile = state.midiImport.sourceType === "audio-ai" ? state.midiImport.sourceFile : null;
+    const includeSourceAudio = state.midiImport.includeSourceAudio !== false;
     stopMidiImportPreview({ update: false });
     state.midiImport.busy = true;
     updateMidiImportDialog();
@@ -15860,6 +15884,10 @@
         renderAll();
         resizeAndDraw();
         resetTimelineToStartAfterImport();
+        // 전사에 쓴 원본 오디오도 함께 추가하고, 시작 위치를 맞출 수 있도록 오디오 편집 창을 엽니다.
+        if (includeSourceAudio && sourceAudioFile) {
+          await importAudioFile(sourceAudioFile, { startBeat: 0, openEditor: true });
+        }
         const limitToast = imported.limitedInstrumentCount > 0
           ? i18nText("midi.limit_channels_applied", [imported.limitedInstrumentCount, imported.maxChannelsPerInstrument])
           : "";
@@ -34150,6 +34178,9 @@
     });
     elements.editModeTitlebarAction?.addEventListener("click", () => {
       if (sideToolState.kind === "import" && !state.midiImport.busy) openFilePickerInput(elements.fileInput);
+    });
+    elements.midiImportAudioCheck?.addEventListener("change", () => {
+      state.midiImport.includeSourceAudio = Boolean(elements.midiImportAudioCheck.checked);
     });
     elements.midiImportApplyButton?.addEventListener("click", () => applyMidiImport("add"));
     elements.midiImportNewButton?.addEventListener("click", () => applyMidiImport("new"));
