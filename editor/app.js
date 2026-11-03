@@ -4973,6 +4973,7 @@
     if (elements.importChannelColorMode) elements.importChannelColorMode.value = mode;
     if (persist) {
       try { window.localStorage.setItem(IMPORT_CHANNEL_COLOR_MODE_KEY, mode); } catch {}
+      if (typeof rememberImportOptions === "function" && importOptionMemoryReady) rememberImportOptions();
     }
     return mode;
   }
@@ -13698,8 +13699,7 @@
     state.midiImport.excludedKeys = new Set();
     state.midiImport.busy = false;
     if (elements.midiImportTextInput) elements.midiImportTextInput.value = "";
-    setMidiImportOverlapMode(64);
-    setMidiImportChannelLimit(0);
+    applyImportOptionsToControls(importOptionsCurrent);
   }
 
   function getMidiImportSelectedGroups(preview = state.midiImport.preview) {
@@ -13983,6 +13983,148 @@
       elements.midiImportChannelLimitInput.value = String(limit || CONFIG.midiImportMaxChannelsPerInstrument);
       elements.midiImportChannelLimitInput.disabled = limit === 0;
     }
+  }
+
+  // ---- 불러오기 옵션 기억 ------------------------------------------------------------------
+  // 불러오기 창의 옵션(양자화·겹침·채널 제한·AI 변환 옵션·채널 색상)을 마지막으로 고른 값으로 기억합니다.
+  // 항목 선택(체크)·접기/펼치기는 옵션이 아니므로 저장하지 않습니다. Google 계정으로 로그인하면
+  // 계정별로 따로 저장하고(editor/js/account-drive.js), 계정 저장공간(Drive 앱 데이터)과도 맞춥니다.
+  const IMPORT_OPTIONS_KEY = "mobibard-import-options";
+  const IMPORT_OPTION_DEFAULTS = Object.freeze({
+    quantize: 64, overlap: 64, limitOn: false, limitCount: 3,
+    sensitivity: "normal", noteEnd: "normal", minLength: "none",
+    volume: "auto", volumeFixed: 12, tempo: "auto", tempoBpm: 120,
+    colorMode: "channel",
+  });
+  let importOptionsScope = "guest";
+  let importOptionsCurrent = { ...IMPORT_OPTION_DEFAULTS };
+  let importOptionsStored = false;
+  let importOptionMemoryReady = false;
+
+  function normalizeImportOptionsScope(value) {
+    const scope = String(value || "").trim();
+    return scope.startsWith("account:") && scope.length > 8 ? scope : "guest";
+  }
+
+  function normalizeImportOptions(raw) {
+    const d = IMPORT_OPTION_DEFAULTS;
+    const src = raw && typeof raw === "object" ? raw : {};
+    const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
+    return {
+      quantize: Number(src.quantize) === 32 ? 32 : 64,
+      overlap: [0, 32, 64].includes(Number(src.overlap)) ? Number(src.overlap) : d.overlap,
+      limitOn: src.limitOn === true,
+      limitCount: clamp(Math.round(Number(src.limitCount) || d.limitCount), 1, 16),
+      sensitivity: pick(src.sensitivity, ["low", "normal", "high"], d.sensitivity),
+      noteEnd: pick(src.noteEnd, ["short", "normal", "long"], d.noteEnd),
+      minLength: pick(src.minLength, ["none", "weak", "strong"], d.minLength),
+      volume: pick(src.volume, ["auto", "fixed"], d.volume),
+      volumeFixed: clamp(Math.round(Number(src.volumeFixed) || d.volumeFixed), 1, 15),
+      tempo: pick(src.tempo, ["auto", "fixed"], d.tempo),
+      tempoBpm: clamp(Math.round(Number(src.tempoBpm) || d.tempoBpm), 32, 255),
+      colorMode: normalizeImportChannelColorMode(src.colorMode),
+    };
+  }
+
+  function readImportOptionsFromControls() {
+    return normalizeImportOptions({
+      quantize: getMidiImportQuantizeDivision(),
+      overlap: getMidiImportOverlapMode(),
+      limitOn: Boolean(elements.midiImportLimitChannelsPerInstrument?.checked),
+      limitCount: elements.midiImportChannelLimitInput?.value,
+      sensitivity: getCheckedRadioValue("w2mSensitivity"),
+      noteEnd: getCheckedRadioValue("w2mNoteEnd"),
+      minLength: getCheckedRadioValue("w2mMinLength"),
+      volume: getCheckedRadioValue("w2mVolume"),
+      volumeFixed: elements.w2mVolumeFixed?.value,
+      tempo: getCheckedRadioValue("w2mTempo"),
+      tempoBpm: elements.w2mTempoBpm?.value,
+      colorMode: state.midiImport.colorMode,
+    });
+  }
+
+  function applyImportOptionsToControls(options = importOptionsCurrent) {
+    const o = normalizeImportOptions(options);
+    setMidiImportQuantizeDivision(o.quantize);
+    setMidiImportOverlapMode(o.overlap);
+    if (elements.midiImportLimitChannelsPerInstrument) elements.midiImportLimitChannelsPerInstrument.checked = o.limitOn;
+    if (elements.midiImportChannelLimitInput) {
+      elements.midiImportChannelLimitInput.value = String(o.limitCount);
+      elements.midiImportChannelLimitInput.disabled = !o.limitOn;
+    }
+    setCheckedRadioValue("w2mSensitivity", o.sensitivity);
+    setCheckedRadioValue("w2mNoteEnd", o.noteEnd);
+    setCheckedRadioValue("w2mMinLength", o.minLength);
+    setCheckedRadioValue("w2mVolume", o.volume);
+    setCheckedRadioValue("w2mTempo", o.tempo);
+    if (elements.w2mVolumeFixed) { elements.w2mVolumeFixed.value = String(o.volumeFixed); elements.w2mVolumeFixed.disabled = o.volume !== "fixed"; }
+    if (elements.w2mTempoBpm) { elements.w2mTempoBpm.value = String(o.tempoBpm); elements.w2mTempoBpm.disabled = o.tempo !== "fixed"; }
+    setImportChannelColorMode(o.colorMode, { persist: false });
+  }
+
+  function importOptionsStorageKey(scope = importOptionsScope) {
+    return `${IMPORT_OPTIONS_KEY}:${normalizeImportOptionsScope(scope)}`;
+  }
+
+  function loadStoredImportOptions(scope = importOptionsScope) {
+    try {
+      const raw = window.localStorage.getItem(importOptionsStorageKey(scope));
+      if (raw) return normalizeImportOptions(JSON.parse(raw));
+    } catch {}
+    return null;
+  }
+
+  function storeImportOptions(options, scope = importOptionsScope) {
+    try { window.localStorage.setItem(importOptionsStorageKey(scope), JSON.stringify(options)); } catch {}
+  }
+
+  // 사용자가 옵션을 바꿨을 때: 메모리·로컬에 저장하고, 계정 동기화 모듈에 알립니다.
+  function rememberImportOptions() {
+    importOptionsCurrent = readImportOptionsFromControls();
+    importOptionsStored = true;
+    storeImportOptions(importOptionsCurrent);
+    window.dispatchEvent(new CustomEvent("mobibard:importoptionschange", { detail: { options: importOptionsCurrent, scopeKey: importOptionsScope } }));
+  }
+
+  function initImportOptionMemory() {
+    importOptionsScope = normalizeImportOptionsScope(window.MobibardEditorAccountScope);
+    const stored = loadStoredImportOptions(importOptionsScope);
+    if (stored) {
+      importOptionsCurrent = stored;
+      importOptionsStored = true;
+      applyImportOptionsToControls(stored);
+    } else {
+      importOptionsCurrent = { ...readImportOptionsFromControls(), colorMode: state.midiImport.colorMode };
+    }
+    const selector = [
+      'input[name="midiImportQuantize"]', 'input[name="midiImportOverlap"]',
+      "#midiImportLimitChannelsPerInstrument", "#midiImportChannelLimitInput",
+      'input[name="w2mSensitivity"]', 'input[name="w2mNoteEnd"]', 'input[name="w2mMinLength"]',
+      'input[name="w2mVolume"]', "#w2mVolumeFixed", 'input[name="w2mTempo"]', "#w2mTempoBpm",
+    ].join(",");
+    // 각 입력의 자체 change 처리(값 보정 등)가 끝난 뒤(버블링) 읽습니다.
+    document.addEventListener("change", (event) => {
+      if (event.target instanceof Element && event.target.matches(selector)) rememberImportOptions();
+    });
+    window.addEventListener("mobibard:editoraccountchange", (event) => {
+      const nextScope = normalizeImportOptionsScope(event?.detail?.scopeKey);
+      if (nextScope === importOptionsScope) return;
+      importOptionsScope = nextScope;
+      const next = loadStoredImportOptions(nextScope);
+      if (next) { importOptionsCurrent = next; importOptionsStored = true; applyImportOptionsToControls(next); }
+      else importOptionsCurrent = readImportOptionsFromControls();
+    });
+    // 계정 저장공간에서 받은 값(account-drive.js)
+    window.addEventListener("mobibard:importoptionsremote", (event) => {
+      if (normalizeImportOptionsScope(event?.detail?.scopeKey) !== importOptionsScope) return;
+      importOptionsCurrent = normalizeImportOptions(event?.detail?.options);
+      importOptionsStored = true;
+      storeImportOptions(importOptionsCurrent);
+      applyImportOptionsToControls(importOptionsCurrent);
+    });
+    window.addEventListener("mobibard:importoptionsrequest", () => {
+      window.dispatchEvent(new CustomEvent("mobibard:importoptionsresponse", { detail: { options: importOptionsCurrent, scopeKey: importOptionsScope, stored: importOptionsStored } }));
+    });
   }
 
   function getMidiImportSelectionCounts() {
@@ -14756,7 +14898,7 @@
     state.midiImport.fileName = String(file.name || "Audio");
     state.midiImport.sourceType = "audio-ai";
     state.midiImport.sourceLabel = sourceLabel;
-    if (!keepSettings) setMidiImportQuantizeDivision(64);
+    if (!keepSettings) setMidiImportQuantizeDivision(importOptionsCurrent.quantize);
     openMidiImportDialog();
     syncAudioToMidiOptionControls();
     setMidiImportStatus(describeAudioToMidiProgress({ stage: "decode" }));
@@ -14815,7 +14957,7 @@
     state.midiImport.fileName = source.fileName;
     state.midiImport.sourceType = source.sourceType;
     state.midiImport.sourceLabel = source.sourceLabel;
-    setMidiImportQuantizeDivision(64);
+    setMidiImportQuantizeDivision(importOptionsCurrent.quantize);
     openMidiImportDialog();
     setMidiImportStatus(i18nText("file.analyzing_named", [source.sourceLabel]));
     try {
@@ -35206,6 +35348,8 @@
     state.noteClipboard = readNodeClipboardFromSharedStorage();
     registerDefaultContextMenus();
     bindEvents();
+    initImportOptionMemory();
+    importOptionMemoryReady = true;
     initializeSplitter();
     setSidebarTab(loadStoredSidebarTab(), { persist: false });
     renderShortcutKeycaps();

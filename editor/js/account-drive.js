@@ -371,6 +371,117 @@ function bindDriveButtons() {
   }
 }
 
+// ---- 불러오기 옵션 계정 동기화 ---------------------------------------------------------------------
+// 불러오기 창의 옵션(app.js의 "불러오기 옵션 기억")을 Google Drive 앱 데이터 폴더의 작은 JSON 파일에 맞춥니다.
+// 로그인하면 계정에 저장된 값을 받아 적용하고(없으면 지금 값을 올립니다), 이후 바꿀 때마다 올립니다.
+const SETTINGS_FILE_NAME = 'mobibard-editor-settings.json';
+let settingsFileId = '';
+let settingsSaveTimer = 0;
+let settingsSaving = false;
+let settingsPending = null;
+
+async function findSettingsFile() {
+  const q = encodeURIComponent(`name = '${escapeDriveQuery(SETTINGS_FILE_NAME)}' and trashed = false`);
+  const data = await driveJson(`${DRIVE_API}/files?spaces=appDataFolder&pageSize=1&q=${q}&fields=files(id,name,modifiedTime)`);
+  return Array.isArray(data.files) && data.files.length ? data.files[0] : null;
+}
+
+async function writeSettingsFile(options) {
+  const content = JSON.stringify({ app: 'mobibard-editor', version: 1, savedAt: new Date().toISOString(), importOptions: options }, null, 2);
+  const boundary = `mobibard_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const send = async (fileId) => {
+    const metadata = fileId
+      ? { name: SETTINGS_FILE_NAME, mimeType: PROJECT_MIME }
+      : { name: SETTINGS_FILE_NAME, mimeType: PROJECT_MIME, parents: ['appDataFolder'] };
+    const body = [
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
+      `--${boundary}\r\nContent-Type: ${PROJECT_MIME}; charset=UTF-8\r\n\r\n${content}\r\n`,
+      `--${boundary}--`,
+    ].join('');
+    const endpoint = fileId
+      ? `${DRIVE_UPLOAD_API}/files/${encodeURIComponent(fileId)}?uploadType=multipart&fields=id`
+      : `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id`;
+    return driveJson(endpoint, {
+      method: fileId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body,
+    });
+  };
+  if (!settingsFileId) settingsFileId = (await findSettingsFile())?.id || '';
+  try {
+    const saved = await send(settingsFileId);
+    settingsFileId = saved?.id || settingsFileId;
+  } catch (error) {
+    if (!settingsFileId) throw error;
+    settingsFileId = '';              // the file was removed on the Drive side: create it again
+    const saved = await send('');
+    settingsFileId = saved?.id || '';
+  }
+}
+
+async function flushSettingsSave() {
+  if (settingsSaving || !settingsPending || !isGoogleAccountConnected()) return;
+  settingsSaving = true;
+  try {
+    while (settingsPending) {
+      const options = settingsPending;
+      settingsPending = null;
+      await writeSettingsFile(options);
+    }
+  } catch (_) {
+    // Settings sync is best-effort; the local copy is already saved.
+  } finally {
+    settingsSaving = false;
+  }
+}
+
+function scheduleSettingsSave(options) {
+  if (!isGoogleAccountConnected()) return;
+  settingsPending = options;
+  window.clearTimeout(settingsSaveTimer);
+  settingsSaveTimer = window.setTimeout(() => void flushSettingsSave(), 1500);
+}
+
+async function pullSettings(scopeKey) {
+  if (!isGoogleAccountConnected()) return;
+  try {
+    const file = await findSettingsFile();
+    if (file?.id) {
+      settingsFileId = file.id;
+      const response = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(file.id)}?alt=media`);
+      const data = JSON.parse(await response.text());
+      if (data?.importOptions && window.MobibardEditorAccountScope === scopeKey) {
+        window.dispatchEvent(new CustomEvent('mobibard:importoptionsremote', { detail: { options: data.importOptions, scopeKey } }));
+        return;
+      }
+    }
+    // Nothing saved in the account yet: upload what this browser currently uses.
+    settingsFileId = file?.id || '';
+    const onResponse = (event) => {
+      window.removeEventListener('mobibard:importoptionsresponse', onResponse);
+      if (event?.detail?.options) scheduleSettingsSave(event.detail.options);
+    };
+    window.addEventListener('mobibard:importoptionsresponse', onResponse);
+    window.dispatchEvent(new CustomEvent('mobibard:importoptionsrequest'));
+  } catch (_) {
+    // Offline / permission problems: keep using the local copy.
+  }
+}
+
+function bindSettingsSync() {
+  window.addEventListener('mobibard:importoptionschange', (event) => {
+    if (event?.detail?.scopeKey && event.detail.scopeKey !== 'guest') scheduleSettingsSave(event.detail.options);
+  });
+  window.addEventListener('mobibard:editoraccountchange', (event) => {
+    settingsFileId = '';
+    settingsPending = null;
+    const scopeKey = event?.detail?.scopeKey;
+    if (scopeKey && scopeKey !== 'guest') void pullSettings(scopeKey);
+  });
+  const scope = window.MobibardEditorAccountScope;
+  if (scope && scope !== 'guest') void pullSettings(scope);
+}
+
 function initializeAccount() {
   if (accountController) return;
   accountController = initializeGoogleAccountMenu({
@@ -391,6 +502,7 @@ async function initialize() {
   try { await window.MobibardI18n?.ready; } catch (_) {}
   initializeAccount();
   bindDriveButtons();
+  bindSettingsSync();
   window.addEventListener('mobibard:localechange', () => accountController?.refreshText?.());
 }
 
