@@ -439,9 +439,16 @@ function fromPath(winBpm, ctx, allowDouble) {
   const outSegs = segs.map(([ka], i) => ({ beat: ka - k0, bpm: 60.0 / fits[i][1] }));
   const tm = { mode: 'auto', segments: outSegs, time_signature: [nb, 4], bar_aligned: !!c.align_bars, beats: N,
     beat_first: -k0, beat_times: Array.from(bt, x => pyRound(x, 4)) };
-  if (c.align_bars) T0 = beatTime(0.0, tm);
+  // 마디선 정렬: tick 0은 항상 오디오 0초. 노트 시간은 건드리지 않고,
+  // 오디오 시작이 마디 중간이면 첫 마디를 못갖춘마디(pickup)로 표시한다.
+  T0 = 0.0;
   tm.offset_seconds = T0;
   const ref = absPos(T0, tm);
+  tm.pickup_beats = 0.0;
+  if (c.align_bars) {
+    const r = pmod(ref, nb);
+    if (r > 0.02 && nb - r > 0.02) tm.pickup_beats = pyRound(nb - r, 4);
+  }
   outSegs.forEach((sg, i) => {
     sg.time = i === 0 ? T0 : beatTime(sg.beat, tm);
     sg.beat = i === 0 ? 0.0 : pyRound(sg.beat - ref, 4);

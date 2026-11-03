@@ -906,6 +906,7 @@
       kind: "midi",
       sourceFile: null,
       includeSourceAudio: true,
+      sourceAudioOffsetSeconds: 0,
       colorMode: "channel",
       midiBuffer: null,
       preview: null,
@@ -10103,7 +10104,7 @@
     return Math.max(CONFIG.minimumNoteBeat, snappedEnd - startBeat);
   }
 
-  async function importAudioFile(file, { groupId = null, startBeat: forcedStartBeat = null } = {}) {
+  async function importAudioFile(file, { groupId = null, startBeat: forcedStartBeat = null, alignSeconds = null } = {}) {
     if (!file) return false;
     const importGroup = groupId == null ? null : getChannelGroupById(groupId);
     try {
@@ -10123,9 +10124,23 @@
         return true;
       }
       const id = `audio-${state.nextAudioClipId++}`;
-      const startBeat = forcedStartBeat != null
-        ? Math.max(0, Number(forcedStartBeat) || 0)
-        : clamp(snapBeatToUnit(state.playhead.beat, getSnapBeat()), 0, getTotalBeats());
+      // alignSeconds: MIDI 0박에 해당하는 음원 시각(초). 전사한 MIDI는 첫 마디 시작을 0박으로 잡으므로
+      // 0보다 크면 그만큼 음원을 앞에서 잘라 시작하고, 0보다 작으면 음원을 그만큼 뒤에서 시작합니다.
+      let sourceOffsetSeconds = 0;
+      let startBeat;
+      if (alignSeconds != null && Number.isFinite(Number(alignSeconds))) {
+        const align = Number(alignSeconds);
+        if (align >= 0) {
+          startBeat = 0;
+          sourceOffsetSeconds = Math.min(align, Math.max(0, decoded.duration - 0.01));
+        } else {
+          startBeat = Math.max(0, Number(secondsToBeatFromMap(-align, createTempoTimeMap()).toFixed(6)));
+        }
+      } else {
+        startBeat = forcedStartBeat != null
+          ? Math.max(0, Number(forcedStartBeat) || 0)
+          : clamp(snapBeatToUnit(state.playhead.beat, getSnapBeat()), 0, getTotalBeats());
+      }
       const clip = normalizeAudioClip({
         id,
         title: file.name.replace(/\.[^.]+$/, "") || file.name,
@@ -10133,9 +10148,9 @@
         mimeType: file.type || "audio/*",
         hue: getDefaultHue(state.audioClips.length),
         startBeat,
-        durationBeat: audioDurationToBeatLength(startBeat, decoded.duration),
+        durationBeat: audioDurationToBeatLength(startBeat, decoded.duration - sourceOffsetSeconds),
         sourceDurationSeconds: decoded.duration,
-        sourceOffsetSeconds: 0,
+        sourceOffsetSeconds,
         volume: 0.3,
         playbackRate: 1,
         visible: true,
@@ -13619,6 +13634,11 @@
       trackCount: midi.trackCount,
       durationBeats: Number(snapBeatToUnit(durationBeats, quantizeUnit, "ceil").toFixed(6)),
       tempoEvents: normalizedTempoEvents,
+      timeSignatures: (midi.timeSignatures || []).map((signature) => ({
+        beat: Number(Math.max(0, (Number(signature.tick) || 0) / division).toFixed(6)),
+        numerator: signature.numerator,
+        denominator: signature.denominator,
+      })),
       visible: true,
       muted: false,
       groups,
@@ -13706,6 +13726,7 @@
     state.midiImport.excludedKeys = new Set();
     state.midiImport.busy = false;
     state.midiImport.includeSourceAudio = true;
+    state.midiImport.sourceAudioOffsetSeconds = 0;
     if (elements.midiImportTextInput) elements.midiImportTextInput.value = "";
     applyImportOptionsToControls(importOptionsCurrent);
   }
@@ -14256,7 +14277,8 @@
             colorMode: mi.colorMode,
             tagImportKeys: true,
           });
-          if (openNew) state.tempos = buildImportTempoList(parsed.tempoEvents || []);
+
+          if (openNew) state.timeSignatures = buildImportTimeSignatureList(parsed.timeSignatures);
           built = true;
         }
       } else if (!mi.busy && mi.kind === "text" && mi.textCandidates.length) {
@@ -14466,6 +14488,11 @@
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
     });
+  }
+
+  function buildImportTimeSignatureList(events) {
+    const list = (events || []).map((item, index) => normalizeTimeSignatureEvent({ ...item, id: index + 1 }, index + 1));
+    return normalizeTimeSignatures(list);
   }
 
   function buildImportTempoList(events) {
@@ -14897,6 +14924,7 @@
       if (token !== audioPostprocessToken) return false;
       if (!result.notes.length) throw Object.assign(new Error("No notes"), { code: "no-notes" });
       state.midiImport.midiBuffer = toStandaloneArrayBuffer(result.midi);
+      state.midiImport.sourceAudioOffsetSeconds = Number(result.tempo?.offset_seconds) || 0;
       reparseMidiImportPreview();
       showToast(i18nText("audio_midi.postprocess_done", [result.notes.length]));
       return true;
@@ -14985,6 +15013,7 @@
         sourceLabel,
       });
       state.midiImport.midiBuffer = midiBuffer;
+      state.midiImport.sourceAudioOffsetSeconds = Number(result.tempo?.offset_seconds) || 0;
       state.midiImport.preview = preview;
       state.midiImport.selectedGroupIds = new Set(preview.groups.map((group) => String(group.id)));
       state.midiImport.busy = false;
@@ -15359,6 +15388,7 @@
       activeGroupId: groups[0]?.id || null,
       durationBeats: Number(durationBeats.toFixed(6)),
       tempoEvents: (preview.tempoEvents || []).map((tempo) => ({ ...tempo })),
+      timeSignatures: (preview.timeSignatures || []).map((signature) => ({ ...signature })),
       playbackCache: null,
     };
   }
@@ -15708,6 +15738,8 @@
       if (index === 0) tempo.beat = 0;
     });
     state.nextTempoId = state.tempos.length + 1;
+    state.timeSignatures = buildImportTimeSignatureList(parsed.timeSignatures);
+    state.nextTimeSignatureId = state.timeSignatures.length + 1;
     state.activeChannel = Math.max(0, state.channels.findIndex((channel) => channel.id === importedIds[0]));
     state.activePanel = "notes";
     clearNoteSelection();
@@ -15826,6 +15858,8 @@
         if (index === 0) tempo.beat = 0;
       });
       state.nextTempoId = state.tempos.length + 1;
+      state.timeSignatures = buildImportTimeSignatureList(parsed.timeSignatures);
+      state.nextTimeSignatureId = state.timeSignatures.length + 1;
     }
 
     state.activePanel = "notes";
@@ -15891,6 +15925,7 @@
     const fileName = state.midiImport.fileName;
     const sourceAudioFile = state.midiImport.sourceType === "audio-ai" ? state.midiImport.sourceFile : null;
     const includeSourceAudio = state.midiImport.includeSourceAudio !== false;
+    const sourceAudioOffsetSeconds = Number(state.midiImport.sourceAudioOffsetSeconds) || 0;
     stopMidiImportPreview({ update: false });
     state.midiImport.busy = true;
     updateMidiImportDialog();
@@ -15920,7 +15955,7 @@
         resetTimelineToStartAfterImport();
         // 전사에 쓴 원본 오디오도 함께 추가합니다(0박 시작, 오디오 목록에 선택된 상태).
         if (includeSourceAudio && sourceAudioFile) {
-          await importAudioFile(sourceAudioFile, { startBeat: 0 });
+          await importAudioFile(sourceAudioFile, { alignSeconds: sourceAudioOffsetSeconds });
         }
         const limitToast = imported.limitedInstrumentCount > 0
           ? i18nText("midi.limit_channels_applied", [imported.limitedInstrumentCount, imported.maxChannelsPerInstrument])

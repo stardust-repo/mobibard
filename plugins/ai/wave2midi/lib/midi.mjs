@@ -35,7 +35,16 @@ export function midiBytes(notes, velocities = 100, ppq = 480, bpm = 120, tempo =
     nb = tempo.time_signature?.[0] ?? 4;
     for (const sg of tempo.segments) meta.push(tempoEv(Math.max(roundHalfEven(sg.beat * ppq), 0), sg.bpm_written));
   }
-  meta.push([0, 0, [0xff, 0x58, 0x04, nb, 0x02, 0x18, 0x08]]);
+  const pickup = tempo && tempo.mode !== 'fixed' ? Number(tempo.pickup_beats) || 0 : 0;
+  if (pickup > 0) {
+    // 못갖춘마디: 첫 마디를 pickup 길이(1/64 단위)의 박자표로 두고, 끝나는 지점부터 일반 박자표.
+    let num = Math.max(1, Math.round(pickup * 16)), den = 64, e = 6;
+    while (num % 2 === 0 && e > 2) { num /= 2; e--; den /= 2; }
+    meta.push([0, 0, [0xff, 0x58, 0x04, num, e, 0x18, 0x08]]);
+    meta.push([Math.round(pickup * ppq), 0, [0xff, 0x58, 0x04, nb, 0x02, 0x18, 0x08]]);
+  } else {
+    meta.push([0, 0, [0xff, 0x58, 0x04, nb, 0x02, 0x18, 0x08]]);
+  }
   const tracks = [track(meta)];
   const programs = [...new Set(notes.map(n => n[1]))].sort((a, b) => a - b);
   const melodic = [...Array(16).keys()].filter(c => c !== 9);
