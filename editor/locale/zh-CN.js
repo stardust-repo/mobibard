@@ -1302,7 +1302,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "audio_midi.done": "AI 转换完成 (模型 v{0})：{1} 个音符 · 用时 {2} 秒",
     "audio_midi.no_notes": "未在音频中找到音符。",
     "audio_midi.error_unsupported": "此浏览器无法使用音频 AI 转换。",
-    "audio_midi.error_decode": "无法读取音频文件。请尝试其他格式（WAV、MP3、OGG 等）。",
+    "audio_midi.error_decode": "无法读取音频或视频中的音频。请尝试其他格式（WAV、MP3、MP4 等）。",
     "audio_midi.error_too_long": "无法转换超过 {0} 分钟的音频。请拆分后重试。",
     "audio_midi.error_runtime": "无法加载 AI 运行环境。请检查网络连接后重试。",
     "audio_midi.error_model": "无法下载 AI 模型。请检查网络连接后重试。",

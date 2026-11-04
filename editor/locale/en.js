@@ -1302,7 +1302,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "audio_midi.done": "AI transcription done (model v{0}): {1} notes · took {2}s",
     "audio_midi.no_notes": "No notes were found in this audio.",
     "audio_midi.error_unsupported": "Audio AI transcription is not available in this browser.",
-    "audio_midi.error_decode": "Could not read the audio file. Try another format (WAV, MP3, OGG, …).",
+    "audio_midi.error_decode": "Could not read the audio of this file. Try another format (WAV, MP3, MP4, …).",
     "audio_midi.error_too_long": "Audio longer than {0} minutes cannot be transcribed. Please split it and try again.",
     "audio_midi.error_runtime": "Could not load the AI runtime. Check your connection and try again.",
     "audio_midi.error_model": "Could not download the AI model. Check your connection and try again.",

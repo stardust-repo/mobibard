@@ -4358,7 +4358,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const AUTO_IMPORT_LEADING_SILENCE_SECONDS = 2;
   const MMI_IMPORT_MAX_CHANNELS = 6;
   const MMI_IMPORT_MAX_DETECTED_PARTS = 96;
-  const AUDIO_AI_EXTENSIONS = ["wav", "wave", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"];
+  const AUDIO_AI_EXTENSIONS = ["wav", "wave", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff", "mp4", "m4v", "mov", "ogv", "3gp", "mkv"];
   const SOURCE_FILE_EXTENSIONS = new Set(["txt", "mmi", "mml", ...AUDIO_AI_EXTENSIONS, ...(window.MabiMusicFormats?.inputExtensions?.() || window.MabiMusicFormats?.supportedExtensions?.() || [])]);
   // MIDI/KAR + MML are core Player workflows and remain eagerly loaded.
   // Other source-format converters are loaded only when a matching file is actually opened.

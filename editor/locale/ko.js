@@ -1302,7 +1302,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "audio_midi.done": "AI 변환 완료 (모델 v{0}): 노트 {1}개 · {2}초 걸림",
     "audio_midi.no_notes": "음원에서 노트를 찾지 못했습니다.",
     "audio_midi.error_unsupported": "이 브라우저에서는 오디오 AI 변환을 사용할 수 없습니다.",
-    "audio_midi.error_decode": "음원 파일을 읽지 못했습니다. 다른 형식(WAV, MP3, OGG 등)으로 시도해 주세요.",
+    "audio_midi.error_decode": "음원 또는 영상의 오디오를 읽지 못했습니다. 다른 형식(WAV, MP3, MP4 등)으로 시도해 주세요.",
     "audio_midi.error_too_long": "{0}분보다 긴 음원은 변환할 수 없습니다. 음원을 나눠서 시도해 주세요.",
     "audio_midi.error_runtime": "AI 실행 환경을 불러오지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.",
     "audio_midi.error_model": "AI 모델을 내려받지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.",

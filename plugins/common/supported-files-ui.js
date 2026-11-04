@@ -197,7 +197,7 @@
     },
   };
 
-  const AUDIO_AI_EXTRA = { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], description: "AI로 악기별 MIDI 변환 후 불러오기" };
+  const AUDIO_AI_EXTRA = { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff", "mp4", "m4v", "mov", "ogv", "3gp", "mkv"], description: "AI로 악기별 MIDI 변환 후 불러오기 · 영상(mp4 등)은 오디오만 사용" };
   const EXTRA = {
     simple: [AUDIO_AI_EXTRA],
     player: [
@@ -207,7 +207,7 @@
     editor: [
       { category: "project", label: "모비바드 프로젝트", labelKey: "labelMobibardProject", extensions: ["mmlproj", "mmlproj.json", "json"], description: "피아노롤 편집 프로젝트" },
       { category: "project", label: "3MLE / MabiIcco / MML", extensions: ["mml", "3mle", "mmi", "txt"], description: "3MLE(.mml/.3mle) · MabiIcco/마비꼬(.mmi) · MML 텍스트(.txt)" },
-      { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], description: "편집용 참고 오디오 · 불러오기에서 선택하면 AI로 악기별 MIDI 변환" },
+      { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff", "mp4", "m4v", "mov", "ogv", "3gp", "mkv"], description: "편집용 참고 오디오 · 불러오기에서 선택하면 AI로 악기별 MIDI 변환 · 영상(mp4 등)은 오디오만 사용" },
     ],
   };
 
@@ -235,7 +235,7 @@
     { id: "mml", labelKey: "pickerMml", extensions: ["mml", "mmi", "3mle", "txt"], mimeType: "text/plain" },
     { id: "soundfont", labelKey: "pickerSoundFont", extensions: ["sf2", "sf3"], includeMacBinary: true, mimeType: "application/octet-stream" },
     { id: "dls", labelKey: "pickerDls", extensions: ["dls"], includeMacBinary: true, mimeType: "application/octet-stream" },
-    { id: "audio", labelKey: "pickerAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], mimeType: "audio/*" },
+    { id: "audio", labelKey: "pickerAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff", "mp4", "m4v", "mov", "ogv", "3gp", "mkv"], mimeType: "audio/*" },
   ]);
 
   const POPUP_FAMILIES = Object.freeze([

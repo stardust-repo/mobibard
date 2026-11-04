@@ -351,7 +351,7 @@
   }
 
   // ---- Helpers shared by products that import audio through their normal file loaders ----
-  const AUDIO_EXTENSIONS = new Set(["wav", "wave", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"]);
+  const AUDIO_EXTENSIONS = new Set(["wav", "wave", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff", "mp4", "m4v", "mov", "ogv", "3gp", "mkv"]);
 
   /** True for audio files this module can transcribe (not MIDI/karaoke, which are "audio/*" too). */
   function isAudioFile(fileOrName, mimeType = "") {
@@ -359,7 +359,7 @@
     const type = String((typeof fileOrName === "string" ? mimeType : fileOrName?.type) || mimeType || "").toLowerCase();
     const extension = (name.toLowerCase().match(/\.([^.]+)$/)?.[1] || "");
     if (AUDIO_EXTENSIONS.has(extension)) return true;
-    return type.startsWith("audio/") && !/midi|kar/.test(type);
+    return (type.startsWith("audio/") && !/midi|kar/.test(type)) || type.startsWith("video/");
   }
 
   /**

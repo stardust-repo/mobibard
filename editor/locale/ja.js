@@ -1302,7 +1302,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "audio_midi.done": "AI変換完了 (モデル v{0}): ノート {1} 個 · {2} 秒",
     "audio_midi.no_notes": "音源からノートが見つかりませんでした。",
     "audio_midi.error_unsupported": "このブラウザではオーディオのAI変換を利用できません。",
-    "audio_midi.error_decode": "音源ファイルを読み込めませんでした。別の形式 (WAV、MP3、OGG など) でお試しください。",
+    "audio_midi.error_decode": "音源または動画の音声を読み込めませんでした。別の形式 (WAV、MP3、MP4 など) でお試しください。",
     "audio_midi.error_too_long": "{0}分を超える音源は変換できません。分割してお試しください。",
     "audio_midi.error_runtime": "AI実行環境を読み込めませんでした。ネットワーク接続を確認して再度お試しください。",
     "audio_midi.error_model": "AIモデルをダウンロードできませんでした。ネットワーク接続を確認して再度お試しください。",
