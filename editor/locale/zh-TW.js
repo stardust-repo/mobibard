@@ -641,7 +641,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "channel.select_edit_delete": "請選擇要刪除的編輯頻道。",
     "nav.player": "詳細產生器",
     "file.new": "新增檔案",
-    "ui.open_new": "作為新專案開啟",
+    "ui.open_new": "新建專案",
     "ui.color": "顏色",
     "tool.select": "選擇",
     "selection.edit": "選擇 · 剪貼簿",

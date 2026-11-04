@@ -15934,3 +15934,9 @@ body.midi-input-recording #playheadTimeLabel { background: #e5484d; }
 .midi-input-bottom-offset input { flex: 1 1 56px; width: auto; min-width: 40px; }
 .midi-input-bottom-offset > span { flex: 0 0 auto; white-space: nowrap; }
 .midi-input-bottom-offset .midi-input-connect-button { white-space: nowrap; }
+/* 불러오기 하단 버튼: 번역이 길어도 버튼 밖으로 넘치지 않도록 한 줄 유지 + 말줄임 */
+#midiImportPanel [class*="inline-actions"] button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+:lang(en) #midiImportPanel [class*="inline-actions"] button,
+:lang(ja) #midiImportPanel [class*="inline-actions"] button,
+:lang(zh-CN) #midiImportPanel [class*="inline-actions"] button,
+:lang(zh-TW) #midiImportPanel [class*="inline-actions"] button { font-size: 11px; padding: 0 2px; }

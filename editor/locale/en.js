@@ -641,7 +641,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "channel.select_edit_delete": "Select edit channels to delete.",
     "nav.player": "Detailed Generator",
     "file.new": "New file",
-    "ui.open_new": "Open as new",
+    "ui.open_new": "Open new",
     "ui.color": "Color",
     "tool.select": "Select",
     "selection.edit": "Selection · Clipboard",
