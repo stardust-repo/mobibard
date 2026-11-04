@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261104o";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261105a";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.5.0&amp;rev=20261104o"></script>
+<script src="js/language-manager.js?v=5.5.0&amp;rev=20261105a"></script>
 <title data-i18n="app.title">모비바드 v5.5</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.5.0&amp;rev=20261104o" rel="stylesheet"/>
+<link href="styles.css?v=5.5.0&amp;rev=20261105a" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -464,23 +464,34 @@
   </section>
   <section class="inline-detail-section" id="midiImportDetail" hidden>
     <div class="midi-import-settings midi-import-audio-settings" id="midiImportAudioControls" hidden>
-      <div class="midi-import-radio-group" role="radiogroup" aria-labelledby="w2mSensitivityLegend">
-        <span class="midi-import-setting-title" id="w2mSensitivityLegend" data-i18n="audio_midi.opt_sensitivity">노트 검출 감도</span>
-        <label class="midi-import-radio"><input type="radio" name="w2mSensitivity" value="low"/><span data-i18n="audio_midi.opt_sens_low">낮음 (확실한 노트만)</span></label>
-        <label class="midi-import-radio"><input type="radio" name="w2mSensitivity" value="normal" checked/><span data-i18n="audio_midi.opt_sens_normal">보통</span></label>
-        <label class="midi-import-radio"><input type="radio" name="w2mSensitivity" value="high"/><span data-i18n="audio_midi.opt_sens_high">높음 (작은 노트까지)</span></label>
+      <div class="midi-import-slider-group">
+        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mSensitivityLegend" data-i18n="audio_midi.opt_sensitivity">노트 검출 감도</span><output id="w2mSensitivityValue" for="w2mSensitivity">0.13</output></div>
+        <input type="range" id="w2mSensitivity" min="0" max="100" step="5" value="50" aria-labelledby="w2mSensitivityLegend"/>
+        <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_sens_left">작은 노트까지</span><span data-i18n="audio_midi.opt_sens_right">확실한 노트만</span></div>
       </div>
-      <div class="midi-import-radio-group" role="radiogroup" aria-labelledby="w2mNoteEndLegend">
-        <span class="midi-import-setting-title" id="w2mNoteEndLegend" data-i18n="audio_midi.opt_note_end">노트 끝 판정</span>
-        <label class="midi-import-radio"><input type="radio" name="w2mNoteEnd" value="short"/><span data-i18n="audio_midi.opt_end_short">짧게 끊기</span></label>
-        <label class="midi-import-radio"><input type="radio" name="w2mNoteEnd" value="normal" checked/><span data-i18n="audio_midi.opt_end_normal">보통</span></label>
-        <label class="midi-import-radio"><input type="radio" name="w2mNoteEnd" value="long"/><span data-i18n="audio_midi.opt_end_long">길게 이어짐</span></label>
+      <div class="midi-import-slider-group">
+        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mNoteEndLegend" data-i18n="audio_midi.opt_note_end">노트 끝 판정</span><output id="w2mNoteEndValue" for="w2mNoteEnd">0.50</output></div>
+        <input type="range" id="w2mNoteEnd" min="0" max="100" step="5" value="50" aria-labelledby="w2mNoteEndLegend"/>
+        <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_end_left">길게 이어짐</span><span data-i18n="audio_midi.opt_end_right">짧게 끊기</span></div>
       </div>
-      <div class="midi-import-radio-group" role="radiogroup" aria-labelledby="w2mMinLengthLegend">
-        <span class="midi-import-setting-title" id="w2mMinLengthLegend" data-i18n="audio_midi.opt_min_length">짧은 노트 제거</span>
-        <label class="midi-import-radio"><input type="radio" name="w2mMinLength" value="none" checked/><span data-i18n="audio_midi.opt_min_none">안 함</span></label>
-        <label class="midi-import-radio"><input type="radio" name="w2mMinLength" value="weak"/><span data-i18n="audio_midi.opt_min_weak">80ms 미만</span></label>
-        <label class="midi-import-radio"><input type="radio" name="w2mMinLength" value="strong"/><span data-i18n="audio_midi.opt_min_strong">160ms 미만</span></label>
+      <div class="midi-import-slider-group">
+        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mMinLengthLegend" data-i18n="audio_midi.opt_min_length">짧은 노트 제거</span><output id="w2mMinLengthValue" for="w2mMinLength">안 함</output></div>
+        <input type="range" id="w2mMinLength" min="0" max="200" step="10" value="0" aria-labelledby="w2mMinLengthLegend"/>
+        
+      </div>
+      <div class="midi-import-radio-group">
+        <span class="midi-import-setting-title" data-i18n="audio_midi.opt_poly">동시 발음 제한</span>
+        <label class="midi-import-radio"><input type="checkbox" id="w2mPolyUnlimited"/><span data-i18n="audio_midi.opt_poly_unlimited">제한 없음</span></label>
+        <input id="w2mPolyMax" type="number" min="1" max="88" step="1" value="3" inputmode="numeric" aria-label="동시 발음 최대 음 개수" data-i18n-aria-label="audio_midi.opt_poly_max" title="같은 시각에 시작한 음이 여럿 잡히면 확률이 높은 음부터 이 개수까지만 사용합니다" data-i18n-title="audio_midi.opt_poly_hint"/>
+      </div>
+      <div class="midi-import-slider-group">
+        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mInstRangeLegend" data-i18n="audio_midi.opt_inst_range">악기 검출 범위</span><output id="w2mInstRangeValue" for="w2mInstRange">10%</output></div>
+        <input type="range" id="w2mInstRange" min="0" max="100" step="5" value="10" aria-labelledby="w2mInstRangeLegend"/>
+        
+      </div>
+      <div class="midi-import-radio-group">
+        <span class="midi-import-setting-title" data-i18n="audio_midi.opt_inst_max">동시 악기 최대 수</span>
+        <input id="w2mInstMax" type="number" min="1" max="16" step="1" value="2" inputmode="numeric" aria-label="동시 악기 최대 수" data-i18n-aria-label="audio_midi.opt_inst_max" title="가장 확률이 높은 악기와 확률 차이가 검출 범위 이내인 악기도 함께 쓰며, 한 음에 쓰는 악기는 이 개수까지입니다" data-i18n-title="audio_midi.opt_inst_hint"/>
       </div>
       <div class="midi-import-radio-group" role="radiogroup" aria-labelledby="w2mVolumeLegend">
         <span class="midi-import-setting-title" id="w2mVolumeLegend" data-i18n="audio_midi.opt_volume">볼륨(셈여림)</span>
@@ -768,7 +779,7 @@
 <script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261104o"></script>
+<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261105a"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
@@ -784,14 +795,14 @@
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
 <script src="js/soundbank-player.js?v=5.5.0&amp;rev=20261103-marker1"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261104o"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261105a"></script>
 <script src="../plugins/common/site-navigation.js?v=20261102-gamma"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
-<script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.27"></script>
-<script src="app.js?v=5.5.0&amp;rev=20261104o"></script>
+<script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.28"></script>
+<script src="app.js?v=5.5.0&amp;rev=20261105a"></script>
 <script src="js/account-drive.js?v=5.5.0&amp;rev=20261103-settings1" type="module"></script>
 </body>
 </html>

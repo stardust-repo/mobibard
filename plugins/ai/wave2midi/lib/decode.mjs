@@ -2,6 +2,7 @@
 import { HOP, FPS, N_PITCH, PITCH_MIN, DRUM } from './dsp.mjs';
 
 const P = N_PITCH;
+const INST_FLOOR = 0.05;       // 악기 후보로 인정하는 최소 확률 (inst_range 사용 시)
 
 function peaks(x, T, th, radius = 2) {
   const out = [];
@@ -55,7 +56,16 @@ export function decodeNotes(probs, T, classes, th) {
         let best = 0;
         for (let k = 0; k < K; k++) { score[k] /= (h - t); if (score[k] > score[best]) best = k; }
         ks = [best];
-        for (let k = 0; k < K; k++) if (k !== best && score[k] >= th.inst_multi) ks.push(k);
+        if (th.inst_range != null) {
+          // 가장 확률이 높은 악기의 확률에서 inst_range 이내인 악기를 확률 순서로 inst_max개까지(최고 악기 포함) 씁니다.
+          // 확률이 너무 낮은 악기(< INST_FLOOR)는 범위 안이어도 쓰지 않습니다.
+          const extra = [];
+          for (let k = 0; k < K; k++) if (k !== best && score[k] >= INST_FLOOR && score[best] - score[k] <= th.inst_range + 1e-9) extra.push(k);
+          extra.sort((a, b) => score[b] - score[a] || a - b);
+          for (const k of extra.slice(0, Math.max(0, Math.floor(th.inst_max ?? K) - 1))) ks.push(k);
+        } else {
+          for (let k = 0; k < K; k++) if (k !== best && score[k] >= th.inst_multi) ks.push(k);
+        }
       }
       for (const k of ks) out.push([p + PITCH_MIN, classes[k], onsetS, offsetS, conf]);
     }
@@ -68,6 +78,27 @@ export function decodeNotes(probs, T, classes, th) {
   }
   out.sort((a, b) => a[2] - b[2] || a[1] - b[1] || a[0] - b[0]);
   return out;
+}
+
+/** 같은 시각(onset이 SAME_ONSET초 이내)에 시작한 음높이 노트가 max개보다 많으면, onset 확률(confidence)이 높은 음높이부터
+ *  max개 음높이만 남깁니다. 한 음높이의 여러 악기 노트는 함께 남거나 함께 빠집니다. 드럼은 건드리지 않습니다. */
+const SAME_ONSET = 0.03;
+export function limitPolyphony(notes, max) {
+  const limit = Math.floor(Number(max));
+  if (!(limit >= 1)) return notes;
+  const pitched = notes.filter(n => n[1] !== DRUM).sort((a, b) => a[2] - b[2]);
+  const drop = new Set();
+  for (let i = 0; i < pitched.length;) {
+    let j = i; while (j < pitched.length && pitched[j][2] - pitched[i][2] <= SAME_ONSET) j++;
+    const best = new Map();                                   // pitch -> highest confidence in this cluster
+    for (let k = i; k < j; k++) best.set(pitched[k][0], Math.max(best.get(pitched[k][0]) ?? -1, pitched[k][4]));
+    if (best.size > limit) {
+      const keep = new Set([...best.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, limit).map(e => e[0]));
+      for (let k = i; k < j; k++) if (!keep.has(pitched[k][0])) drop.add(pitched[k]);
+    }
+    i = j;
+  }
+  return drop.size ? notes.filter(n => !drop.has(n)) : notes;
 }
 
 /** Overlapping windows + linear cross-fade, as in predict_song. runWindow(Float32Array samples) -> probs of W frames. */

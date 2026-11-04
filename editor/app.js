@@ -404,6 +404,13 @@
     midiImportSummary: document.querySelector("#midiImportSummary"),
     midiImportLimitChannelsPerInstrument: document.querySelector("#midiImportLimitChannelsPerInstrument"),
     midiImportAudioControls: document.querySelector("#midiImportAudioControls"),
+    w2mSensitivity: document.querySelector("#w2mSensitivity"),
+    w2mNoteEnd: document.querySelector("#w2mNoteEnd"),
+    w2mMinLength: document.querySelector("#w2mMinLength"),
+    w2mPolyUnlimited: document.querySelector("#w2mPolyUnlimited"),
+    w2mPolyMax: document.querySelector("#w2mPolyMax"),
+    w2mInstRange: document.querySelector("#w2mInstRange"),
+    w2mInstMax: document.querySelector("#w2mInstMax"),
     w2mVolumeFixed: document.querySelector("#w2mVolumeFixed"),
     w2mTempoBpm: document.querySelector("#w2mTempoBpm"),
     midiImportChannelLimitInput: document.querySelector("#midiImportChannelLimitInput"),
@@ -14200,7 +14207,8 @@
   const IMPORT_OPTIONS_KEY = "mobibard-import-options";
   const IMPORT_OPTION_DEFAULTS = Object.freeze({
     quantize: 64, overlap: 64, limitOn: false, limitCount: 3,
-    sensitivity: "normal", noteEnd: "normal", minLength: "none",
+    onsetPos: 50, endPos: 50, minLengthMs: 0,
+    polyUnlimited: false, polyMax: 3, instRange: 10, instMax: 2,
     volume: "auto", volumeFixed: 12, tempo: "auto", tempoBpm: 120,
     colorMode: "channel",
   });
@@ -14218,14 +14226,23 @@
     const d = IMPORT_OPTION_DEFAULTS;
     const src = raw && typeof raw === "object" ? raw : {};
     const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
+    const slotValue = (value, lo, hi, step, fallback) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? clamp(Math.round(n / step) * step, lo, hi) : fallback;
+    };
     return {
       quantize: Number(src.quantize) === 32 ? 32 : 64,
       overlap: [0, 32, 64].includes(Number(src.overlap)) ? Number(src.overlap) : d.overlap,
       limitOn: src.limitOn === true,
       limitCount: clamp(Math.round(Number(src.limitCount) || d.limitCount), 1, 16),
-      sensitivity: pick(src.sensitivity, ["low", "normal", "high"], d.sensitivity),
-      noteEnd: pick(src.noteEnd, ["short", "normal", "long"], d.noteEnd),
-      minLength: pick(src.minLength, ["none", "weak", "strong"], d.minLength),
+      // 예전 버전(낮음/보통/높음 등 3단계)에 저장된 값은 가장 가까운 슬라이더 위치로 옮깁니다.
+      onsetPos: slotValue(src.onsetPos ?? ({ low: 60, normal: 50, high: 25 })[src.sensitivity], 0, 100, 5, d.onsetPos),
+      endPos: slotValue(src.endPos ?? ({ short: 70, normal: 50, long: 30 })[src.noteEnd], 0, 100, 5, d.endPos),
+      minLengthMs: slotValue(src.minLengthMs ?? ({ none: 0, weak: 80, strong: 160 })[src.minLength], 0, 200, 10, d.minLengthMs),
+      polyUnlimited: src.polyUnlimited === true,
+      polyMax: clamp(Math.round(Number(src.polyMax) || d.polyMax), 1, 88),
+      instRange: slotValue(src.instRange, 0, 100, 5, d.instRange),
+      instMax: clamp(Math.round(Number(src.instMax) || d.instMax), 1, 16),
       volume: pick(src.volume, ["auto", "fixed"], d.volume),
       volumeFixed: clamp(Math.round(Number(src.volumeFixed) || d.volumeFixed), 1, 15),
       tempo: pick(src.tempo, ["auto", "fixed"], d.tempo),
@@ -14240,9 +14257,13 @@
       overlap: getMidiImportOverlapMode(),
       limitOn: Boolean(elements.midiImportLimitChannelsPerInstrument?.checked),
       limitCount: elements.midiImportChannelLimitInput?.value,
-      sensitivity: getCheckedRadioValue("w2mSensitivity"),
-      noteEnd: getCheckedRadioValue("w2mNoteEnd"),
-      minLength: getCheckedRadioValue("w2mMinLength"),
+      onsetPos: elements.w2mSensitivity?.value,
+      endPos: elements.w2mNoteEnd?.value,
+      minLengthMs: elements.w2mMinLength?.value,
+      polyUnlimited: Boolean(elements.w2mPolyUnlimited?.checked),
+      polyMax: elements.w2mPolyMax?.value,
+      instRange: elements.w2mInstRange?.value,
+      instMax: elements.w2mInstMax?.value,
       volume: getCheckedRadioValue("w2mVolume"),
       volumeFixed: elements.w2mVolumeFixed?.value,
       tempo: getCheckedRadioValue("w2mTempo"),
@@ -14260,9 +14281,14 @@
       elements.midiImportChannelLimitInput.value = String(o.limitCount);
       elements.midiImportChannelLimitInput.disabled = !o.limitOn;
     }
-    setCheckedRadioValue("w2mSensitivity", o.sensitivity);
-    setCheckedRadioValue("w2mNoteEnd", o.noteEnd);
-    setCheckedRadioValue("w2mMinLength", o.minLength);
+    if (elements.w2mSensitivity) elements.w2mSensitivity.value = String(o.onsetPos);
+    if (elements.w2mNoteEnd) elements.w2mNoteEnd.value = String(o.endPos);
+    if (elements.w2mMinLength) elements.w2mMinLength.value = String(o.minLengthMs);
+    if (elements.w2mPolyUnlimited) elements.w2mPolyUnlimited.checked = o.polyUnlimited;
+    if (elements.w2mPolyMax) { elements.w2mPolyMax.value = String(o.polyMax); elements.w2mPolyMax.disabled = o.polyUnlimited; }
+    if (elements.w2mInstRange) elements.w2mInstRange.value = String(o.instRange);
+    if (elements.w2mInstMax) elements.w2mInstMax.value = String(o.instMax);
+    updateW2mSliderReadouts();
     setCheckedRadioValue("w2mVolume", o.volume);
     setCheckedRadioValue("w2mTempo", o.tempo);
     if (elements.w2mVolumeFixed) { elements.w2mVolumeFixed.value = String(o.volumeFixed); elements.w2mVolumeFixed.disabled = o.volume !== "fixed"; }
@@ -14307,7 +14333,7 @@
     const selector = [
       'input[name="midiImportQuantize"]', 'input[name="midiImportOverlap"]',
       "#midiImportLimitChannelsPerInstrument", "#midiImportChannelLimitInput",
-      'input[name="w2mSensitivity"]', 'input[name="w2mNoteEnd"]', 'input[name="w2mMinLength"]',
+      "#w2mSensitivity", "#w2mNoteEnd", "#w2mMinLength", "#w2mPolyUnlimited", "#w2mPolyMax", "#w2mInstRange", "#w2mInstMax",
       'input[name="w2mVolume"]', "#w2mVolumeFixed", 'input[name="w2mTempo"]', "#w2mTempoBpm",
     ].join(",");
     // 각 입력의 자체 change 처리(값 보정 등)가 끝난 뒤(버블링) 읽습니다.
@@ -15029,7 +15055,7 @@
   }
 
   // ---- AI 변환 후처리 옵션(불러오기 오른쪽 설정): 모델을 다시 돌리지 않고 노트/세기/템포만 다시 계산 ----
-  let audioPostprocessDefaults = { onsetThreshold: 0.16, frameThreshold: 0.5, offsetThreshold: 0.5, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
+  let audioPostprocessDefaults = { onsetThreshold: 0.13, frameThreshold: 0.5, offsetThreshold: 0.5, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
   void window.MobibardWave2Midi?.getPostprocessDefaults?.().then((defaults) => {
     audioPostprocessDefaults = defaults;
   }).catch(() => {});
@@ -15050,19 +15076,39 @@
   let audioPostprocessTimer = 0;
   let audioPostprocessToken = 0;
 
+  // 슬라이더 위치(0~100, 5 간격) → 실제 값. 가운데(50)가 모델 기본값이고, 좌우 간격은 비대칭이어도 됩니다.
+  const W2M_ONSET_MIN = 0.04, W2M_ONSET_MAX = 0.5;
+  function w2mOnsetFromPos(pos) {
+    const base = Number(audioPostprocessDefaults.onsetThreshold) || 0.13;
+    const p = clamp(Number(pos), 0, 100);
+    return p <= 50 ? W2M_ONSET_MIN + (base - W2M_ONSET_MIN) * (p / 50) : base + (W2M_ONSET_MAX - base) * ((p - 50) / 50);
+  }
+  // 끝 판정: frame 임계값 = 슬라이더 값(0.15~0.85, 가운데 0.5), offset 임계값 = 1 - frame. 오른쪽일수록 일찍 끊깁니다.
+  function w2mEndFromPos(pos) { return 0.15 + 0.7 * (clamp(Number(pos), 0, 100) / 100); }
+
+  function updateW2mSliderReadouts() {
+    const set = (id, text) => { const out = document.querySelector(id); if (out) out.textContent = text; };
+    if (elements.w2mSensitivity) set("#w2mSensitivityValue", w2mOnsetFromPos(elements.w2mSensitivity.value).toFixed(3));
+    if (elements.w2mNoteEnd) {
+      const frame = w2mEndFromPos(elements.w2mNoteEnd.value);
+      set("#w2mNoteEndValue", frame.toFixed(2));
+      elements.w2mNoteEnd.title = `frame ${frame.toFixed(2)} · offset ${(1 - frame).toFixed(2)}`;
+    }
+    if (elements.w2mMinLength) {
+      const ms = Number(elements.w2mMinLength.value) || 0;
+      set("#w2mMinLengthValue", ms > 0 ? `${ms}ms` : i18nText("audio_midi.opt_min_none"));
+    }
+    if (elements.w2mInstRange) set("#w2mInstRangeValue", `${Number(elements.w2mInstRange.value) || 0}%`);
+  }
+
   function getAudioToMidiOptions() {
-    const base = Number(audioPostprocessDefaults.onsetThreshold) || 0.16;
-    const sensitivity = getCheckedRadioValue("w2mSensitivity") || "normal";
-    // 감도가 높을수록 onset 임계값을 낮춰 더 작은 노트까지 잡습니다.
-    const onsetThreshold = sensitivity === "low" ? Math.min(0.9, base * 1.5) : sensitivity === "high" ? base * 0.65 : base;
-    // 노트 끝 판정: 짧게 = 소리가 조금만 약해져도 끊음, 길게 = 여운까지 이어서 하나의 노트로 봄.
-    const noteEnd = getCheckedRadioValue("w2mNoteEnd") || "normal";
-    const baseFrame = Number(audioPostprocessDefaults.frameThreshold) || 0.5;
-    const baseOffset = Number(audioPostprocessDefaults.offsetThreshold) || 0.5;
-    const frameThreshold = noteEnd === "short" ? Math.min(0.9, baseFrame * 1.25) : noteEnd === "long" ? baseFrame * 0.75 : baseFrame;
-    const offsetThreshold = noteEnd === "short" ? baseOffset * 0.7 : noteEnd === "long" ? Math.min(0.9, baseOffset * 1.3) : baseOffset;
-    const minLen = getCheckedRadioValue("w2mMinLength") || "none";
-    const minNoteSeconds = minLen === "strong" ? 0.16 : minLen === "weak" ? 0.08 : 0;
+    const onsetThreshold = w2mOnsetFromPos(elements.w2mSensitivity?.value ?? 50);
+    const frameThreshold = w2mEndFromPos(elements.w2mNoteEnd?.value ?? 50);
+    const offsetThreshold = 1 - frameThreshold;
+    const minNoteSeconds = (Number(elements.w2mMinLength?.value) || 0) / 1000;
+    const maxPolyphony = elements.w2mPolyUnlimited?.checked ? 0 : clamp(Math.round(Number(elements.w2mPolyMax?.value) || 3), 1, 88);
+    const instRange = clamp(Number(elements.w2mInstRange?.value) || 0, 0, 100) / 100;
+    const instMax = clamp(Math.round(Number(elements.w2mInstMax?.value) || 2), 1, 16);
     const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
     const bpm = clamp(Math.round(Number(elements.w2mTempoBpm?.value) || 120), audioPostprocessDefaults.tempoMin || 32, audioPostprocessDefaults.tempoMax || 255);
     const fixedVolume = getCheckedRadioValue("w2mVolume") === "fixed";
@@ -15079,6 +15125,9 @@
       frameThreshold: Number(frameThreshold.toFixed(4)),
       offsetThreshold: Number(offsetThreshold.toFixed(4)),
       minNoteSeconds,
+      maxPolyphony,
+      instRange,
+      instMax,
       velocity,
       velocityRange,
       tempo: fixed ? bpm : true,
@@ -15091,6 +15140,8 @@
     if (elements.w2mTempoBpm) elements.w2mTempoBpm.disabled = !fixed;
     const fixedVolume = getCheckedRadioValue("w2mVolume") === "fixed";
     if (elements.w2mVolumeFixed) elements.w2mVolumeFixed.disabled = !fixedVolume;
+    if (elements.w2mPolyMax) elements.w2mPolyMax.disabled = Boolean(elements.w2mPolyUnlimited?.checked);
+    updateW2mSliderReadouts();
     if (elements.midiImportAudioControls) elements.midiImportAudioControls.hidden = state.midiImport.sourceType !== "audio-ai";
   }
 
@@ -34921,8 +34972,21 @@
       scheduleUnifiedTextImportParse();
     });
     document.querySelectorAll('input[type="radio"][name="midiImportOverlap"]').forEach((input) => input.addEventListener("change", updateMidiImportDialog));
-    document.querySelectorAll('input[type="radio"][name="w2mSensitivity"], input[type="radio"][name="w2mNoteEnd"], input[type="radio"][name="w2mMinLength"], input[type="radio"][name="w2mTempo"], input[type="radio"][name="w2mVolume"]')
+    document.querySelectorAll('input[type="radio"][name="w2mTempo"], input[type="radio"][name="w2mVolume"]')
       .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
+    for (const slider of [elements.w2mSensitivity, elements.w2mNoteEnd, elements.w2mMinLength, elements.w2mInstRange]) {
+      slider?.addEventListener("input", updateW2mSliderReadouts);
+      slider?.addEventListener("change", scheduleAudioToMidiPostprocess);
+    }
+    elements.w2mPolyUnlimited?.addEventListener("change", scheduleAudioToMidiPostprocess);
+    elements.w2mPolyMax?.addEventListener("change", () => {
+      elements.w2mPolyMax.value = String(clamp(Math.round(Number(elements.w2mPolyMax.value) || 3), 1, 88));
+      scheduleAudioToMidiPostprocess();
+    });
+    elements.w2mInstMax?.addEventListener("change", () => {
+      elements.w2mInstMax.value = String(clamp(Math.round(Number(elements.w2mInstMax.value) || 2), 1, 16));
+      scheduleAudioToMidiPostprocess();
+    });
     elements.w2mVolumeFixed?.addEventListener("change", () => {
       readW2mVolumeInput(elements.w2mVolumeFixed, 12);
       scheduleAudioToMidiPostprocess();
@@ -36170,6 +36234,9 @@
     // 추후 메뉴를 교체할 때 사용할 수 있도록 공개합니다.
     window.MMLEditor = {
       state,
+      getAudioToMidiOptions,
+      readImportOptionsFromControls,
+      normalizeImportOptions,
       registerContextMenu,
       midiInput: { runtime: midiInputRuntime, createOrSelectMidiInputGroup, startMidiInputRecording, stopMidiInputRecording, copyMidiInputChannelsToEditable, ensureMidiInputAccess },
       setPlayheadBeat,

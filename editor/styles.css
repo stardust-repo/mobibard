@@ -16028,3 +16028,11 @@ body.merge-mode-active .channel-tree-merge-target.is-active { opacity:1; }
 body.merge-mode-active .channel-merge-role-select,
 body.merge-mode-active .channel-instrument-control select { pointer-events: auto !important; opacity: 1 !important; }
 .channel-tree-channel-item > .channel-merge-role-select { margin: 0 4px; align-self: center; }
+
+/* 2026-11-05: AI 변환 옵션 슬라이더(검출 감도/끝 판정/짧은 노트 제거/악기 검출 범위) */
+#midiImportDetail .midi-import-slider-group { display: grid; gap: 3px; }
+#midiImportDetail .midi-import-slider-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+#midiImportDetail .midi-import-slider-head output { color: var(--text); font-size: 11px; font-weight: 850; font-variant-numeric: tabular-nums; }
+#midiImportDetail .midi-import-slider-group input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); }
+#midiImportDetail .midi-import-slider-ends { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; font-weight: 700; }
+#midiImportDetail .midi-import-radio-group > .midi-import-radio:has(input[type="checkbox"]) { grid-template-columns: 15px minmax(0, 1fr); }
