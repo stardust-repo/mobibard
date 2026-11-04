@@ -10816,7 +10816,7 @@
 
     arrangeItemTreeNodes(list);
 
-    if (elements.collapsedMergeChannelsButton) elements.collapsedMergeChannelsButton.disabled = state.channels.length < 2 || (state.selectedChannelGroupId != null && !isMultiSelectActive()) || (isMultiSelectActive() && state.channelMultiIds.size >= state.channels.length);
+    if (elements.collapsedMergeChannelsButton) elements.collapsedMergeChannelsButton.disabled = state.channels.length < 2 || (state.selectedChannelGroupId != null && !isMultiSelectActive() && (() => { const ids = getSelectedMergeGroupMemberIds(); return !ids || ids.length >= state.channels.length; })()) || (isMultiSelectActive() && state.channelMultiIds.size >= state.channels.length);
     if (elements.collapsedDeleteChannelsButton) elements.collapsedDeleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length && !state.audioClips.length;
   }
 
@@ -11903,7 +11903,7 @@
 
     const mergeMode = isChannelMergeModeActive();
     elements.addChannelButton.disabled = deleteMode || mergeMode;
-    if (elements.mergeChannelsButton) { elements.mergeChannelsButton.disabled = state.channels.length < 2 || deleteMode || (state.selectedChannelGroupId != null && !isMultiSelectActive()) || (isMultiSelectActive() && state.channelMultiIds.size >= state.channels.length); elements.mergeChannelsButton.hidden = deleteMode || mergeMode; }
+    if (elements.mergeChannelsButton) { elements.mergeChannelsButton.disabled = state.channels.length < 2 || deleteMode || (state.selectedChannelGroupId != null && !isMultiSelectActive() && (() => { const ids = getSelectedMergeGroupMemberIds(); return !ids || ids.length >= state.channels.length; })()) || (isMultiSelectActive() && state.channelMultiIds.size >= state.channels.length); elements.mergeChannelsButton.hidden = deleteMode || mergeMode; }
     if (elements.addChannelButton) elements.addChannelButton.hidden = deleteMode || mergeMode;
     if (elements.deleteChannelsButton) { elements.deleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length && !state.audioClips.length; elements.deleteChannelsButton.hidden = deleteMode || mergeMode; }
     // 채널 병합 uses the same × / ✓ toolbar actions as 채널 삭제.
@@ -21322,7 +21322,7 @@
   function isAudioClipEffectivelyVisible(clip) {
     if (!clip) return false;
     const group = getAudioClipGroup(clip);
-    if (hasAnyVisibilitySoloState()) return isAudioClipVisibilitySolo(clip) || Boolean(group && isChannelGroupVisibilitySolo(group));
+    if (hasAnyVisibilitySoloState()) return isAudioClipVisibilitySolo(clip) || Boolean(group && isChannelGroupVisibilitySolo(group) && clip.visible !== false);
     if (clip.visible === false) return false;
     return group ? group.visible !== false : true;
   }
@@ -21330,7 +21330,7 @@
   function isAudioClipEffectivelyMuted(clip) {
     if (!clip) return true;
     const group = getAudioClipGroup(clip);
-    if (hasAnyMuteSoloState()) return !(isAudioClipSolo(clip) || Boolean(group && isChannelGroupSolo(group)));
+    if (hasAnyMuteSoloState()) return !(isAudioClipSolo(clip) || Boolean(group && isChannelGroupSolo(group) && !clip.muted));
     return Boolean(clip.muted) || Boolean(group?.muted);
   }
 
@@ -21372,7 +21372,8 @@
     pruneEmptyChannelGroups();
     const group = getChannelGroupForChannel(channel);
     const hasSolo = hasAnyVisibilitySoloState();
-    if (hasSolo) return isChannelVisibilitySolo(channel) || (group && isChannelGroupVisibilitySolo(group));
+    // 그룹 표시 싱글도 개별로 숨긴 하위 채널은 보여주지 않습니다.
+    if (hasSolo) return isChannelVisibilitySolo(channel) || Boolean(group && isChannelGroupVisibilitySolo(group) && channel.visible !== false);
     if (channel.visible === false) return false;
     return group ? group.visible !== false : true;
   }
@@ -21426,7 +21427,8 @@
     pruneEmptyChannelGroups();
     const group = getChannelGroupForChannel(channel);
     const hasSolo = hasAnyMuteSoloState();
-    if (hasSolo) return !(isChannelSolo(channel) || (group && isChannelGroupSolo(group)));
+    // 그룹 싱글은 그 그룹 안에서 개별로 음소거한 하위 채널까지 켜지는 않습니다.
+    if (hasSolo) return !(isChannelSolo(channel) || (group && isChannelGroupSolo(group) && !channel.muted));
     return Boolean(channel.muted || group?.muted);
   }
 
@@ -21465,6 +21467,8 @@
       if (isAudible) schedulePlaybackCatchupForSource(channel.id, { source: "channel" });
       else releasePlaybackVoicesForSource(channel.id, { source: "channel" });
     }
+    if (hasAnyMuteSoloState()) releasePlaybackVoicesForSource(null, { source: "midi" });
+    else schedulePlaybackCatchupForSource(null, { source: "midi" });
     refreshPlaybackVisualsAfterMuteChange();
   }
 
@@ -22432,6 +22436,16 @@
     }
   }
 
+  // 그룹이 선택되어 있으면 그 그룹의 하위 채널이 모두 받는 채널이 됩니다.
+  function getSelectedMergeGroupMemberIds() {
+    const groupId = state.selectedChannelGroupId;
+    if (groupId == null || String(groupId) === MULTI_GROUP_ID) return null;
+    const group = getChannelGroupById(groupId);
+    if (!group) return null;
+    const ids = getChannelGroupMembers(group).map((channel) => String(channel.id));
+    return ids.length ? ids : null;
+  }
+
   function enterChannelMergeMode(channelIdOrIds = null) {
     if (isNoteEditModeActive()) return false;
     if (isAutoPartPreviewActive()) closeAutoPartDialog();
@@ -22445,7 +22459,9 @@
     }
     let requestedIds = Array.isArray(channelIdOrIds) || channelIdOrIds instanceof Set
       ? [...channelIdOrIds]
-      : [channelIdOrIds ?? (isMultiSelectActive() ? [...state.channelMultiIds] : getActiveChannel()?.id)].flat();
+      : [channelIdOrIds ?? (isMultiSelectActive()
+        ? [...state.channelMultiIds]
+        : (getSelectedMergeGroupMemberIds() || getActiveChannel()?.id))].flat();
     requestedIds = requestedIds.filter((id) => id != null).map(String);
     // 화면 순서대로 정렬하고, MIDI 입력 항목은 받는 채널이 될 수 없습니다.
     const targetChannels = state.channels.filter((channel) => requestedIds.includes(String(channel.id)));
@@ -22464,6 +22480,11 @@
     if (state.playback.running || state.playback.loading) stopPlayback(false);
     setSidebarTab("channels");
     setHistoryCollapsed(false);
+    // 접혀 있는 그룹의 받는 채널도 모음 후보를 고를 수 있도록 펼칩니다.
+    for (const channel of targetChannels) {
+      const owner = channel.groupId != null ? state.channelGroups.find((group) => String(group.id) === String(channel.groupId)) : null;
+      if (owner?.collapsed) owner.collapsed = false;
+    }
     clearChannelMultiSelect();
     state.selectedChannelGroupId = null;
     state.channelMerge.active = true;
@@ -29120,6 +29141,8 @@
     if (note.source === "midi") {
       const document = getActiveMidiDocument();
       if (!document || document.muted) return false;
+      // 채널/그룹/오디오에 싱글(S)이 걸려 있으면 MIDI 참조 소리도 함께 꺼집니다.
+      if (hasAnyMuteSoloState()) return false;
       const group = (document.groups || []).find((item) => String(item.id) === String(note.sourceId));
       return Boolean(group && !group.muted);
     }
@@ -33781,6 +33804,11 @@
         {
           label: i18nText("menu.edit"),
           items: [
+            (() => {
+              const memberIds = getChannelGroupMembers(group).map((channel) => channel.id);
+              const allTargets = memberIds.length >= state.channels.length;
+              return { label: i18nText("channel.merge"), disabled: !memberIds.length || allTargets, disabledReason: i18nText(allTargets ? "merge.all_targets_blocked" : "context.disabled_no_group_items"), action: () => enterChannelMergeMode(memberIds) };
+            })(),
             { label: i18nText("group.copy"), action: () => duplicateChannelGroupById(group.id) },
             { label: i18nText("volume.edit_channels"), disabled: !getChannelGroupMembers(group).some((channel) => channel.notes?.length), disabledReason: i18nText("context.disabled_no_notes"), action: () => openChannelVolumeDialog({ groupId: group.id, source: "group" }) },
             { label: i18nText("channel.add"), action: () => addChannelToGroup(group.id) },
