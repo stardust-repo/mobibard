@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261103v";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261104j";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.5.0&amp;rev=20261103v"></script>
+<script src="js/language-manager.js?v=5.5.0&amp;rev=20261104j"></script>
 <title data-i18n="app.title">모비바드 v5.5</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.5.0&amp;rev=20261103v" rel="stylesheet"/>
+<link href="styles.css?v=5.5.0&amp;rev=20261104j" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -229,7 +229,7 @@
 <button aria-label="왼쪽 패널 닫기" data-i18n-aria-label="ui.close_left_panel" aria-pressed="false" class="side-panel-toggle" data-state="open" id="historyCornerToggle" title="왼쪽 패널 닫기" data-i18n-title="ui.close_left_panel" type="button">‹</button>
 </div>
 <div aria-label="접힌 채널 빠른 선택" data-i18n-aria-label="channel.collapsed_quick_select" class="sidebar-collapsed-rail" id="sidebarCollapsedRail">
-<button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="sidebar-rail-action sidebar-rail-merge" id="collapsedMergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button>
+<button aria-label="노트 모으기" data-i18n-aria-label="channel.merge" class="sidebar-rail-action sidebar-rail-merge" id="collapsedMergeChannelsButton" title="다른 채널에서 노트를 모아옵니다" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button>
 <button aria-label="항목 추가" data-i18n-aria-label="item.add" class="sidebar-rail-action sidebar-rail-add" id="collapsedAddChannelButton" title="항목 추가" data-i18n-title="item.add" type="button">＋</button>
 <button aria-label="삭제할 항목 선택" data-i18n-aria-label="channel.select_delete_2" class="sidebar-rail-action sidebar-rail-delete" id="collapsedDeleteChannelsButton" title="삭제할 항목 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button>
 <div aria-label="채널 빠른 선택 목록" data-i18n-aria-label="channel.quick_select" class="sidebar-rail-channel-list" id="collapsedChannelList" role="listbox"></div>
@@ -316,7 +316,7 @@
   <div class="measure-edit-scope-list inline-channel-select-list" id="measureEditScopeList"></div>
   <div class="measure-edit-inline-actions"><button id="measureEditCancelButton" type="button" data-i18n="cancel">취소</button><button id="measureEditApplyButton" type="button" data-i18n="ui.ok">확인</button></div>
 </section>
-<div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명" data-i18n-aria-label="ui.loaded_file_name"></span><button aria-label="채널 병합" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="여러 채널을 새 채널 하나로 병합" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="항목 추가" data-i18n-aria-label="item.add" class="channel-tree-add-button" id="addChannelButton" title="항목 추가" data-i18n-title="item.add" type="button">＋</button><button aria-label="삭제할 항목 선택" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 항목 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button><button aria-label="삭제 선택 취소" data-i18n-aria-label="cancel" class="channel-delete-mode-cancel" id="channelDeleteModeCancelButton" hidden type="button">×</button><button aria-label="선택 삭제 적용" data-i18n-aria-label="action.delete" class="channel-delete-mode-apply" id="channelDeleteModeApplyButton" hidden type="button">✓</button><button aria-label="병합 취소" data-i18n-aria-label="merge.cancel" title="병합 취소" data-i18n-title="merge.cancel" class="channel-delete-mode-cancel channel-merge-toolbar-cancel" id="channelMergeModeCancelButton" hidden type="button">×</button><button aria-label="병합 적용" data-i18n-aria-label="merge.apply" title="병합 적용" data-i18n-title="merge.apply" class="channel-delete-mode-apply channel-merge-toolbar-apply" id="channelMergeModeApplyButton" hidden type="button">✓</button></div>
+<div class="channel-tree-toolbar"><span class="channel-tree-loaded-file" id="loadedFileName" aria-label="불러온 파일명" data-i18n-aria-label="ui.loaded_file_name"></span><button aria-label="노트 모으기" data-i18n-aria-label="channel.merge" class="channel-tree-merge-button" id="mergeChannelsButton" title="다른 채널에서 노트를 모아옵니다" data-i18n-title="channel.merge_multiple_one" type="button"><img aria-hidden="true" alt="" class="channel-merge-icon" draggable="false" src="../assets/icons/channel-merge.svg"/></button><button aria-label="항목 추가" data-i18n-aria-label="item.add" class="channel-tree-add-button" id="addChannelButton" title="항목 추가" data-i18n-title="item.add" type="button">＋</button><button aria-label="삭제할 항목 선택" data-i18n-aria-label="channel.select_delete_2" class="channel-tree-delete-button" id="deleteChannelsButton" title="삭제할 항목 선택" data-i18n-title="channel.select_delete_3" type="button">🗑</button><button aria-label="삭제 선택 취소" data-i18n-aria-label="cancel" class="channel-delete-mode-cancel" id="channelDeleteModeCancelButton" hidden type="button">×</button><button aria-label="선택 삭제 적용" data-i18n-aria-label="action.delete" class="channel-delete-mode-apply" id="channelDeleteModeApplyButton" hidden type="button">✓</button><button aria-label="병합 취소" data-i18n-aria-label="merge.cancel" title="모으기 취소" data-i18n-title="merge.cancel" class="channel-delete-mode-cancel channel-merge-toolbar-cancel" id="channelMergeModeCancelButton" hidden type="button">×</button><button aria-label="병합 적용" data-i18n-aria-label="merge.apply" title="모으기 적용" data-i18n-title="merge.apply" class="channel-delete-mode-apply channel-merge-toolbar-apply" id="channelMergeModeApplyButton" hidden type="button">✓</button></div>
 <section class="note-edit-mode-panel" id="noteEditModePanel" hidden>
   <div class="note-edit-mode-header">
     <strong id="noteEditModeTitle" data-i18n="note.edit_mode_title">노트 편집 모드</strong>
@@ -374,23 +374,19 @@
 <label class="channel-instrument-control compact-channel-instrument"><span data-i18n="instrument.text">악기</span><select aria-label="현재 채널 악기" data-i18n-aria-label="channel.instrument_2" id="channelInstrumentSelect"></select></label>
 <div aria-label="선택 항목 정보" data-i18n-aria-label="channel.summary" class="channel-summary compact-channel-summary"><span><span id="infoCharLabel">전체</span> <strong id="infoCharCount">0</strong><span aria-hidden="true">자</span></span><span hidden id="infoPartItem"><span id="infoPartLabel">1파트</span> <strong id="infoPartCount">0</strong><span aria-hidden="true">자</span></span><span><span id="infoSelectionLabel">채널</span> <strong id="infoSelectionCount">0</strong><span aria-hidden="true">개</span></span></div>
 <div class="channel-merge-mode-controls" id="channelMergeModeControls" hidden>
-  <div class="channel-merge-mode-main-row">
-    <strong class="channel-merge-mode-title" data-i18n="merge.candidates">병합 후보</strong>
-    <div class="channel-merge-mode-role-options" id="channelMergeModeRoleOptions" role="group" aria-label="병합 후보" data-i18n-aria-label="merge.candidates">
+  <div class="channel-merge-mode-main-row" hidden>
+    <strong class="channel-merge-mode-title" data-i18n="merge.candidates">모을 후보</strong>
+    <div class="channel-merge-mode-role-options" id="channelMergeModeRoleOptions" role="group" aria-label="모을 후보" data-i18n-aria-label="merge.candidates">
       <button type="button" data-merge-mode-role="auto" data-i18n="ui.auto">자동</button>
       <button type="button" data-merge-mode-role="high" data-i18n="ui.high">고음</button>
       <button type="button" data-merge-mode-role="low" data-i18n="ui.low">저음</button>
     </div>
   </div>
-  <label class="channel-merge-overlap-control" title="앞 노트와 겹쳐도 병합 후보로 넣을 최대 비율입니다. 100%는 모두 허용, 0%는 겹치지 않게 고릅니다." data-i18n-title="merge.overlap_hint">
+  <label class="channel-merge-overlap-control" title="앞 노트와 겹쳐도 모을 후보로 넣을 최대 비율입니다. 100%는 모두 허용, 0%는 겹치지 않게 고릅니다." data-i18n-title="merge.overlap_hint">
     <strong data-i18n="merge.overlap_ratio">겹침 비율</strong>
     <input type="range" id="channelMergeOverlapSlider" min="0" max="100" step="5" value="100" aria-label="겹침 비율" data-i18n-aria-label="merge.overlap_ratio"/>
     <output id="channelMergeOverlapValue" for="channelMergeOverlapSlider">100%</output>
   </label>
-  <div class="channel-merge-exclude-row">
-    <strong data-i18n="merge.exclude_overlap">사용된 노트 제외</strong>
-    <span class="channel-merge-role-legend"><b class="merge-legend-include">✓</b><span data-i18n="merge.include_legend">병합 포함</span><b class="merge-legend-exclude">×</b><span data-i18n="merge.exclude_legend">제외 기준</span></span>
-  </div>
 </div>
 </div>
 </div>
@@ -772,7 +768,7 @@
 <script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261103v"></script>
+<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261104j"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
@@ -788,14 +784,14 @@
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
 <script src="js/soundbank-player.js?v=5.5.0&amp;rev=20261103-marker1"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261103v"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261104j"></script>
 <script src="../plugins/common/site-navigation.js?v=20261102-gamma"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.27"></script>
-<script src="app.js?v=5.5.0&amp;rev=20261103v"></script>
+<script src="app.js?v=5.5.0&amp;rev=20261104j"></script>
 <script src="js/account-drive.js?v=5.5.0&amp;rev=20261103-settings1" type="module"></script>
 </body>
 </html>

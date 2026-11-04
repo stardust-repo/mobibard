@@ -7830,13 +7830,11 @@ a[class*="button"]:hover {
 body.merge-mode-active .channel-tree-channel-item .channel-tree-actions,
 body.merge-mode-active .channel-tree-toolbar,
 body.merge-mode-active .side-panel-tabs,
-body.merge-mode-active #channelInstrumentSelect,
 body.merge-mode-active #tempoLane,
 body.merge-mode-active #audioLaneViewport {
   pointer-events: none !important;
   opacity: .45;
 }
-body.merge-mode-active .compact-channel-instrument,
 body.merge-mode-active .compact-channel-summary {
   display: none !important;
 }
@@ -7866,6 +7864,8 @@ body.merge-mode-active #volumeMenu input,
 body.merge-mode-active #playbackRateMenu button,
 body.merge-mode-active #playbackRateMenu input,
 body.merge-mode-active #channelMergeModeControls button,
+body.merge-mode-active .channel-merge-role-select,
+body.merge-mode-active .channel-instrument-control select,
 body.merge-mode-active .channel-tree-channel-item .channel-tree-main,
 body.merge-mode-active .channel-group-item .channel-tree-visibility {
   pointer-events: auto !important;
@@ -15940,3 +15940,91 @@ body.midi-input-recording #playheadTimeLabel { background: #e5484d; }
 :lang(ja) #midiImportPanel [class*="inline-actions"] button,
 :lang(zh-CN) #midiImportPanel [class*="inline-actions"] button,
 :lang(zh-TW) #midiImportPanel [class*="inline-actions"] button { font-size: 11px; padding: 0 2px; }
+
+/* 선택된 채널 행(1개든 여러 개든 동일): 호박색 강조 */
+:root { --channel-multi-accent: #ffb61e; }
+:root[data-theme="light"] { --channel-multi-accent: #d98200; }
+#channelTabs .channel-tab-item.channel-tree-channel-item.active,
+#channelTabs .channel-tab-item.channel-tree-channel-item.active:hover,
+:root[data-theme] #channelTabs .channel-tab-item.channel-tree-channel-item.active {
+  background: color-mix(in srgb, var(--channel-multi-accent) 42%, var(--control-bg)) !important;
+  border-color: var(--channel-multi-accent) !important;
+  box-shadow:
+    inset 6px 0 0 var(--channel-multi-accent),
+    inset 0 0 0 2px color-mix(in srgb, var(--channel-multi-accent) 70%, transparent) !important;
+}
+#channelTabs.row-sweeping,
+#channelTabs.row-sweeping * { user-select: none; }
+.item-tree-multi-follow { opacity: 0.55; }
+
+/* 우클릭 드래그 선택 영역 */
+.channel-sweep-box {
+  position: fixed;
+  z-index: 9000;
+  pointer-events: none;
+  border: 1px solid var(--channel-multi-accent);
+  background: color-mix(in srgb, var(--channel-multi-accent) 18%, transparent);
+  border-radius: 2px;
+}
+.channel-sweep-badge {
+  position: fixed;
+  z-index: 9001;
+  pointer-events: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #111;
+  background: var(--channel-multi-accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  white-space: nowrap;
+}
+
+/* 노트 모으기: 받는 채널의 모음 후보 목록 / 받는 채널 지정 버튼 */
+.channel-merge-role-select {
+  flex: 0 0 auto;
+  margin-left: auto;
+  max-width: 64px;
+  height: 20px;
+  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--border, rgba(128,128,128,.5));
+  border-radius: 4px;
+  background: var(--control-bg);
+  color: var(--text);
+}
+.channel-tree-action.channel-tree-merge-target { font-size: 13px; opacity: .55; }
+.channel-tree-action.channel-tree-merge-target.is-active { opacity: 1; font-weight: 900; }
+.merge-legend-target { margin-right: 2px; }
+#channelTabs .channel-tab-item.channel-tree-channel-item.is-merge-target:not(.active) {
+  background: color-mix(in srgb, var(--channel-multi-accent) 12%, var(--control-bg)) !important;
+  border-color: color-mix(in srgb, var(--channel-multi-accent) 45%, transparent) !important;
+  box-shadow: inset 4px 0 0 color-mix(in srgb, var(--channel-multi-accent) 60%, transparent) !important;
+}
+.channel-merge-exclude-row { flex-wrap: wrap; row-gap: 2px; }
+.channel-merge-role-legend { flex-wrap: wrap; }
+
+/* 노트 모으기: 악기 목록(대상 전체 적용)과 겹침 비율/제외 영역이 겹치지 않도록 위아래로 배치 */
+body.merge-mode-active .channel-inspector .compact-channel-inspector {
+  grid-template-rows: auto auto !important;
+  align-content: start !important;
+  gap: 4px !important;
+}
+body.merge-mode-active .channel-inspector .compact-channel-instrument { display: grid !important; }
+body.merge-mode-active .channel-inspector .compact-channel-instrument select { height: 24px; min-height: 24px; }
+body.merge-mode-active .channel-detail-row.channel-inspector {
+  height: auto !important;
+  max-height: none !important;
+}
+body.merge-mode-active .channel-tree-merge-target { pointer-events:auto !important; opacity:.6; }
+body.merge-mode-active .channel-tree-merge-target.is-active { opacity:1; }
+.channel-tree-merge-target {
+  width:21px !important; min-width:21px !important; max-width:21px !important;
+  height:18px !important; min-height:18px !important;
+  font-size:13px !important; border-radius:5px !important;
+}
+
+body.merge-mode-active .channel-merge-role-select,
+body.merge-mode-active .channel-instrument-control select { pointer-events: auto !important; opacity: 1 !important; }
+.channel-tree-channel-item > .channel-merge-role-select { margin: 0 4px; align-self: center; }
