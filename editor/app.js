@@ -21134,8 +21134,16 @@
     const targetId = String(channelId);
     const rows = [...(elements.channelTabs?.querySelectorAll(".channel-tree-channel-item[data-channel-id]") || [])]
       .map((row) => String(row.dataset.channelId));
-    const anchorChannel = state.activePanel === "notes" ? state.channels[state.activeChannel] : null;
-    const anchorId = anchorChannel ? String(anchorChannel.id) : targetId;
+    // 마지막 선택이 채널(단일/다중)일 때만 기준이 됩니다. 그룹 등 다른 항목을 골랐다면 클릭한 채널이 첫 선택이 됩니다.
+    const groupSel = state.selectedChannelGroupId;
+    const lastWasChannel = state.activePanel === "notes" && (groupSel == null || String(groupSel) === MULTI_GROUP_ID);
+    const anchorChannel = lastWasChannel ? state.channels[state.activeChannel] : null;
+    if (!anchorChannel) {
+      const index = state.channels.findIndex((channel) => String(channel.id) === targetId);
+      if (index >= 0) selectChannel(index);
+      return true;
+    }
+    const anchorId = String(anchorChannel.id);
     const from = rows.indexOf(anchorId);
     const to = rows.indexOf(targetId);
     if (from < 0 || to < 0) return setChannelMultiSelection(new Set([targetId]));
