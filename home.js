@@ -142,6 +142,7 @@
       const link = document.createElement('a');
       link.className = 'product-card';
       link.href = `${pathById[id]}?lang=${encodeURIComponent(safe)}`;
+      link.title = `${name} – ${description}`;
       link.innerHTML = `
         <div class="product-top">
           <span class="product-icon" aria-hidden="true">${icon}</span>

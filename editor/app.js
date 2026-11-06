@@ -15840,72 +15840,106 @@
     return result;
   }
 
-  // 악기당 최대 채널 수 제한 압축.
-  // simple/player와 같은 공용 배정 규칙(plugins/common/midi-to-mml.js의 assignNotesToVoices)을 그대로 씁니다.
-  //  - 채널 역할: 1개 = 고음 / 2개 = 고음·저음 / 3개 이상 = 고음·저음·나머지 자동
-  //  - 비어 있는 채널을 먼저 쓰고, 불가능할 때만 앞 노트의 끝을 자르는 겹침 병합, 그래도 안 되면 생략
-  function packMidiVoicesToMaxChannels(voices, maxVoiceCount, { isDrums = false } = {}) {
-    const sourceVoices = (voices || []).filter((voice) => Array.isArray(voice) && voice.length);
-    const requestedCount = Math.max(1, Math.round(Number(maxVoiceCount) || 1));
-    if (sourceVoices.length <= requestedCount) return sourceVoices;
+  // player/simple과 같은 공용 배정 규칙(plugins/common/midi-to-mml.js의 assignNotesToVoices)으로
+  // 노트를 여러 채널에 나눠 담습니다. 빠른 채널부터 채우되, 채널 순서와 상관없이
+  // 고음/저음 역할을 가진 채널이 먼저 우선권을 갖도록 공용 코드가 평가합니다.
+  //  items: [{ pitch, startBeat, durationBeat, velocity(1~127 또는 볼륨), allowed: [허용 채널 번호...], isBeat }]
+  //  channelSpecs: [{ role: "auto"|"high"|"low", overlapMergeMode: "all"|"half"|"none" }]
+  //  반환: { voices: [[{ item, startBeat, durationBeat }]], skipped, overlapMerged }
+  const SHARED_ASSIGN_GRID_BEAT = 4 / 64; // 공용 코드의 격자 1칸 = 64분음표
+  function assignEditorNotesByPlayerRules(items, channelSpecs, { gridStep = 1, ignoreSingle64thOverlap = true } = {}) {
     const assign = window.MabiMidi?.assignNotesToVoices;
     if (typeof assign !== "function") throw new Error("공용 채널 배정 모듈(midi-to-mml.js)을 불러오지 못했습니다.");
-
-    const GRID_BEAT = 4 / 64; // 공용 코드의 격자 1칸 = 64분음표
+    const GRID_BEAT = SHARED_ASSIGN_GRID_BEAT;
     const minGrid = Math.max(1, Math.round(CONFIG.minimumNoteBeat / GRID_BEAT));
     const lookup = new Map();
-    const gridNotes = [];
+    const best = new Map();
     let nextId = 1;
-    sourceVoices.forEach((voice) => voice.forEach((note) => {
-      const startGrid = Math.max(0, Math.round((Number(note.startBeat) || 0) / GRID_BEAT));
-      const durGrid = Math.max(minGrid, Math.round((Number(note.durationBeat) || CONFIG.minimumNoteBeat) / GRID_BEAT));
-      const velocity = Math.max(1, Math.min(127, Math.round(Number(note.velocity) || 100)));
-      const id = nextId++;
-      lookup.set(id, note);
-      gridNotes.push({
-        id,
-        midi: clamp(Math.round(Number(note.pitch) || 60), 0, 127),
-        startGrid,
-        endGrid: startGrid + durGrid,
-        durGrid,
-        velocity,
-        midiVelocity: velocity,
-        instrumentGroupId: "pack",
-        instrumentChoiceId: "pack",
-        isBeat: Boolean(isDrums),
-        isPercussion: Boolean(isDrums),
-      });
-    }));
-    gridNotes.sort((a, b) => a.startGrid - b.startGrid || b.midi - a.midi || b.velocity - a.velocity);
-
-    const roles = Array.from({ length: requestedCount }, (_, index) => (
-      index === 0 ? "high" : index === 1 ? "low" : "auto"
-    ));
-    const exportChannels = roles.map((role) => ({
-      role,
-      overlapMergeMode: "all",
-      overlapMerge: true,
-      selectedInstrumentGroups: ["pack"],
-    }));
-    const result = assign(gridNotes, exportChannels, null, {});
-
-    const packed = result.voices.map((voice) => voice
+    for (const item of items || []) {
+      const startGrid = Math.max(0, Math.round((Number(item.startBeat) || 0) / GRID_BEAT));
+      const durGrid = Math.max(minGrid, Math.round((Number(item.durationBeat) || CONFIG.minimumNoteBeat) / GRID_BEAT));
+      const velocity = Math.max(1, Math.min(127, Math.round(Number(item.velocity) || 100)));
+      const midi = clamp(Math.round(Number(item.pitch) || 60), 0, 127);
+      const choiceId = `allow:${(item.allowed || []).join(",")}`;
+      // 공용 코드처럼 같은 음높이·같은 구간의 완전 중복 노트는 하나만 남깁니다.
+      const dedupeKey = `${choiceId}|${midi}|${startGrid}|${startGrid + durGrid}`;
+      const current = best.get(dedupeKey);
+      if (current && current.velocity >= velocity) continue;
+      const id = current ? current.id : nextId++;
+      const gridNote = {
+        id, midi, startGrid, endGrid: startGrid + durGrid, durGrid,
+        velocity, midiVelocity: velocity,
+        instrumentGroupId: choiceId, instrumentChoiceId: choiceId,
+        isBeat: Boolean(item.isBeat), isPercussion: Boolean(item.isBeat),
+      };
+      best.set(dedupeKey, gridNote);
+      lookup.set(id, { item, gridNote, originalEndGrid: gridNote.endGrid });
+    }
+    const gridNotes = [...best.values()].sort((a, b) => a.startGrid - b.startGrid || b.midi - a.midi || b.velocity - a.velocity);
+    const choiceByChannel = channelSpecs.map(() => []);
+    const knownChoices = new Set(gridNotes.map((note) => note.instrumentChoiceId));
+    for (const choiceId of knownChoices) {
+      const allowed = choiceId.slice("allow:".length).split(",").filter(Boolean).map(Number);
+      for (const index of allowed) if (choiceByChannel[index]) choiceByChannel[index].push(choiceId);
+    }
+    const exportChannels = channelSpecs.map((spec, index) => {
+      const mode = ["all", "half", "none"].includes(spec?.overlapMergeMode) ? spec.overlapMergeMode : "all";
+      return {
+        role: ["auto", "high", "low"].includes(spec?.role) ? spec.role : "auto",
+        overlapMergeMode: mode,
+        overlapMerge: mode !== "none",
+        selectedInstrumentGroups: choiceByChannel[index],
+      };
+    });
+    const result = assign(gridNotes, exportChannels, null, {
+      ignoreSingle64thOverlap,
+      ignorableOverlapGrid: Math.max(1, gridStep),
+    });
+    const voices = result.voices.map((voice) => voice
       .slice()
       .sort((a, b) => a.startGrid - b.startGrid || a.endGrid - b.endGrid || a.midi - b.midi)
       .map((gridNote) => {
-        const source = lookup.get(gridNote.id);
-        return {
-          ...source,
-          startBeat: Number((gridNote.startGrid * GRID_BEAT).toFixed(6)),
-          durationBeat: Number(((gridNote.endGrid - gridNote.startGrid) * GRID_BEAT).toFixed(6)),
-        };
-      })).filter((voice) => voice.length);
+        const entry = lookup.get(gridNote.id);
+        const item = entry.item;
+        const trimmed = gridNote.endGrid < entry.originalEndGrid;
+        const startBeat = Number((Number(item.startBeat) || 0).toFixed(6));
+        const durationBeat = trimmed
+          ? Number(Math.max(CONFIG.minimumNoteBeat, gridNote.endGrid * GRID_BEAT - startBeat).toFixed(6))
+          : Number(Math.max(CONFIG.minimumNoteBeat, Number(item.durationBeat) || CONFIG.minimumNoteBeat).toFixed(6));
+        return { item, startBeat, durationBeat };
+      }));
+    return { voices, skipped: Number(result.skipped) || 0, overlapMerged: Number(result.overlapMerged) || 0 };
+  }
+
+  // 악기당 최대 채널 수 제한 압축.
+  // 불러오기에서는 사용자가 채널 순서를 정할 수 없으므로 역할을 고정합니다:
+  // 1번 = 고음, 2번 = 저음, 3번 이후 = 자동 (모두 겹침 병합 허용).
+  function packMidiVoicesToMaxChannels(voices, maxVoiceCount, { isDrums = false, gridStep = 1 } = {}) {
+    const sourceVoices = (voices || []).filter((voice) => Array.isArray(voice) && voice.length);
+    const requestedCount = Math.max(1, Math.round(Number(maxVoiceCount) || 1));
+    if (sourceVoices.length <= requestedCount) return sourceVoices;
+    const allowed = Array.from({ length: requestedCount }, (_, index) => index);
+    const items = [];
+    sourceVoices.forEach((voice) => voice.forEach((note) => {
+      items.push({
+        pitch: note.pitch, startBeat: note.startBeat, durationBeat: note.durationBeat,
+        velocity: note.velocity, allowed, isBeat: Boolean(isDrums), source: note,
+      });
+    }));
+    const specs = allowed.map((index) => ({
+      role: index === 0 ? "high" : index === 1 ? "low" : "auto",
+      overlapMergeMode: "all",
+    }));
+    const result = assignEditorNotesByPlayerRules(items, specs, { gridStep, ignoreSingle64thOverlap: false });
+    const packed = result.voices
+      .map((voice) => voice.map(({ item, startBeat, durationBeat }) => ({ ...item.source, startBeat, durationBeat })))
+      .filter((voice) => voice.length);
     Object.defineProperties(packed, {
       sourceVoiceCount: { value: sourceVoices.length, enumerable: false, configurable: true },
       packedVoiceCount: { value: packed.length, enumerable: false, configurable: true },
       quantizationCollisionCount: { value: Number(voices?.quantizationCollisionCount) || 0, enumerable: false, configurable: true },
-      packDroppedCount: { value: Number(result.skipped) || 0, enumerable: false, configurable: true },
-      packTrimmedCount: { value: Number(result.overlapMerged) || 0, enumerable: false, configurable: true },
+      packDroppedCount: { value: result.skipped, enumerable: false, configurable: true },
+      packTrimmedCount: { value: result.overlapMerged, enumerable: false, configurable: true },
     });
     return packed;
   }
@@ -16050,7 +16084,7 @@
       const channelLimit = Math.max(0, Math.round(Number(maxChannelsPerInstrument) || 0));
       if (channelLimit > 0 && voices.length > channelLimit) {
         channelsBeforeLimit += uncappedVoiceCount;
-        voices = packMidiVoicesToMaxChannels(voices, channelLimit, { isDrums: isMidiGroupDrums(group) });
+        voices = packMidiVoicesToMaxChannels(voices, channelLimit, { isDrums: isMidiGroupDrums(group), gridStep: Number(parsed?.quantizeDivision) === 32 ? 2 : 1 });
         limitedInstrumentCount += 1;
       }
       voices.forEach((voiceNotes, voiceIndex) => {
@@ -22546,40 +22580,36 @@
     const targetSet = new Set(targets);
     const sourceSet = new Set(getChannelMergeSources().map((channel) => String(channel.id)));
     const amount = normalizeChannelMergeOverlapAmount(merge.overlapAmount);
-    const claimed = new Set();
-    const runs = new Map(targets.map((id) => [id, { keys: new Set(), previous: null, previousPitch: null, role: normalizeChannelMergeRole(getMergePlan(id).role) }]));
-    const groups = [];
+    const roles = new Map(targets.map((id) => [id, normalizeChannelMergeRole(getMergePlan(id).role)]));
+    // player와 같은 공용 배정 규칙으로 모든 대상 채널에 한 번에 나눕니다.
+    // 빠른 대상부터 채우되, 순서와 상관없이 고음/저음 대상이 먼저 우선권을 가집니다.
+    const allTargetIndexes = targets.map((_, index) => index);
+    const items = [];
     for (const note of pool) {
       const src = String(note.sourceChannelId);
       if (!(targetSet.has(src) || sourceSet.has(src)) || blocked.has(note._mergeCandidateKey)) continue;
-      const key = note.startBeat.toFixed(6);
-      const last = groups[groups.length - 1];
-      if (!last || last.key !== key) groups.push({ key, notes: [note] });
-      else last.notes.push(note);
+      items.push({
+        pitch: note.pitch,
+        startBeat: note.startBeat,
+        durationBeat: note.durationBeat,
+        velocity: note.velocity,
+        allowed: sourceSet.has(src) ? allTargetIndexes : [targets.indexOf(src)],
+        note,
+      });
     }
-    for (const group of groups) {
-      for (const id of targets) {
-        const run = runs.get(id);
-        const candidates = group.notes.filter((note) => (
-          !claimed.has(note._mergeCandidateKey)
-          && (String(note.sourceChannelId) === id || sourceSet.has(String(note.sourceChannelId)))
-        ));
-        if (!candidates.length) continue;
-        const choice = chooseChannelMergeNoteCandidate(candidates, run.role, run.previousPitch);
-        if (!choice) continue;
-        if (run.previous) {
-          const previousEnd = run.previous.startBeat + run.previous.durationBeat;
-          if (choice.startBeat < previousEnd - 1e-7) {
-            const earliest = run.previous.startBeat + run.previous.durationBeat * (1 - amount);
-            if (choice.startBeat < earliest - 1e-7) continue;
-          }
-        }
-        claimed.add(choice._mergeCandidateKey);
-        run.keys.add(choice._mergeCandidateKey);
-        run.previous = choice;
-        run.previousPitch = choice.pitch;
-      }
+    const overlapMode = amount >= 0.99 ? "all" : amount > 0.01 ? "half" : "none";
+    const keysByTarget = new Map(targets.map((id) => [id, new Set()]));
+    if (targets.length && items.length) {
+      const assigned = assignEditorNotesByPlayerRules(
+        items,
+        targets.map((id) => ({ role: roles.get(id), overlapMergeMode: overlapMode })),
+      );
+      assigned.voices.forEach((voice, index) => {
+        const keys = keysByTarget.get(targets[index]);
+        for (const placed of voice) keys.add(placed.item.note._mergeCandidateKey);
+      });
     }
+    const runs = new Map(targets.map((id) => [id, { keys: keysByTarget.get(id), role: roles.get(id) }]));
     for (const id of targets) {
       const plan = getMergePlan(id);
       plan.role = runs.get(id).role;
@@ -23468,47 +23498,18 @@
     ));
     if (!notes.length) return [];
 
-    const startGroups = [];
-    for (const note of notes) {
-      const key = note.startBeat.toFixed(6);
-      const last = startGroups[startGroups.length - 1];
-      if (!last || last.key !== key) startGroups.push({ key, startBeat: note.startBeat, notes: [note] });
-      else last.notes.push(note);
-    }
-
-    const output = [];
-    let previousPitch = null;
-    for (const group of startGroups) {
-      const candidate = chooseChannelMergeNoteCandidate(group.notes, normalizedRole, previousPitch);
-      if (!candidate) continue;
-      const startBeat = candidate.startBeat;
-      const active = output[output.length - 1];
-      if (active) {
-        const activeEnd = active.startBeat + active.durationBeat;
-        if (startBeat < activeEnd - 1e-7) {
-          if (normalizedOverlapMode === "none") continue;
-          if (normalizedOverlapMode === "half") {
-            const halfPoint = active.startBeat + active.durationBeat * 0.5;
-            if (startBeat < halfPoint - 1e-7) continue;
-          }
-          const trimmedDuration = startBeat - active.startBeat;
-          if (trimmedDuration >= CONFIG.minimumNoteBeat - 1e-7) {
-            active.durationBeat = Number(Math.max(CONFIG.minimumNoteBeat, trimmedDuration).toFixed(6));
-          } else {
-            output.pop();
-          }
-        }
-      }
-      output.push({
-        pitch: candidate.pitch,
-        startBeat: candidate.startBeat,
-        durationBeat: candidate.durationBeat,
-        velocity: candidate.velocity,
-        volume: candidate.volume,
-      });
-      previousPitch = candidate.pitch;
-    }
-    return output;
+    // player와 같은 공용 배정 규칙으로 한 채널에 모읍니다(역할 = 고음/저음/자동, 겹침 = 전체/절반/안 함).
+    const result = assignEditorNotesByPlayerRules(
+      notes.map((note) => ({ ...note, allowed: [0], item: note })),
+      [{ role: normalizedRole, overlapMergeMode: normalizedOverlapMode }],
+    );
+    return (result.voices[0] || []).map(({ item, startBeat, durationBeat }) => ({
+      pitch: item.pitch,
+      startBeat,
+      durationBeat,
+      velocity: item.velocity,
+      volume: item.volume,
+    }));
   }
 
   function applyChannelMergeSelection() {
@@ -36515,6 +36516,8 @@
       midiInput: { runtime: midiInputRuntime, createOrSelectMidiInputGroup, startMidiInputRecording, stopMidiInputRecording, copyMidiInputChannelsToEditable, ensureMidiInputAccess },
       setPlayheadBeat,
       selectChannelGroup,
+      enterChannelMergeMode,
+      packMidiVoicesToMaxChannels,
       duplicateChannelById,
       serializeProject,
       loadProjectFromFile,
