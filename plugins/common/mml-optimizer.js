@@ -1819,6 +1819,86 @@
   }
 
 
+  /**
+   * 볼륨 간소화(템포 간소화와 같은 방식): 파트별로 음의 볼륨을 앞에서부터 보면서, 직전에 유지한 볼륨과의 차이가
+   * maxDelta 이하이면 직전 볼륨을 그대로 씁니다. 파트의 최저/최고 볼륨인 음은 건드리지 않고,
+   * 원래 V0인 음은 V0으로 두며 V0이 아닌 음이 V0이 되지는 않습니다(최소 V1).
+   * options: { partCount, maxDelta = 1 }
+   */
+  function simplifyVolumesMml(text, options = {}) {
+    const partCount = Math.max(1, Math.min(6, options.partCount || 6));
+    const maxDelta = clamp(Math.round(Number(options.maxDelta ?? 1) || 1), 1, 14);
+    const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
+    while (sourceParts.length < partCount) sourceParts.push("");
+
+    const parsedParts = sourceParts.map((part, index) => parsePart(part, index, { mergeRests: false }));
+    const tempoMap = normalizeTempoEvents(parsedParts.flatMap(p => p.tempos));
+    const hasAnyContent = parsedParts.some(p => p.events.length || p.tempos.length || String(p.raw || "").trim());
+
+    let changedNotes = 0;
+    let changesBefore = 0;
+    let changesAfter = 0;
+    const outputParts = [];
+
+    for (let i = 0; i < partCount; i++) {
+      const notes = parsedParts[i].events.filter(ev => ev.type === "note");
+      if (!notes.length) {
+        outputParts.push(sourceParts[i] || "");
+        continue;
+      }
+      let partMin = 15;
+      let partMax = 0;
+      for (const ev of notes) {
+        const v = clamp(ev.volume, 0, 15);
+        if (v < partMin) partMin = v;
+        if (v > partMax) partMax = v;
+      }
+      let prevBefore = null;
+      let prevAfter = null;
+      let events = parsedParts[i].events.map(ev => {
+        if (ev.type !== "note") return { ...ev };
+        const before = clamp(ev.volume, 0, 15);
+        let after = before;
+        const isExtreme = before === partMin || before === partMax;
+        if (!isExtreme && prevAfter !== null && Math.abs(before - prevAfter) <= maxDelta) {
+          after = before === 0 ? 0 : Math.max(1, prevAfter);
+        }
+        if (prevBefore !== null && before !== prevBefore) changesBefore++;
+        if (prevAfter !== null && after !== prevAfter) changesAfter++;
+        if (after !== before) changedNotes++;
+        prevBefore = before;
+        prevAfter = after;
+        return { ...ev, volume: after };
+      });
+
+      events = mergeAdjacentRests(events);
+      if (i === 0) events = injectTempoEvents(events, tempoMap);
+
+      outputParts.push(renderPart(events, {
+        isMelody: i === 0,
+        startTempo: tempoMap[0]?.bpm || DEFAULT_TEMPO,
+        forceHeader: i === 0 && hasAnyContent,
+        partIndex: i
+      }));
+    }
+
+    const mml = composeMml(outputParts, { preserveEmpty: true, partCount });
+    const before = countPartChars(sourceParts);
+    const after = countPartChars(outputParts);
+    return {
+      mml,
+      parts: outputParts,
+      before,
+      after,
+      saved: before - after,
+      maxDelta,
+      changedNotes,
+      changesBefore,
+      changesAfter,
+      removedChanges: changesBefore - changesAfter
+    };
+  }
+
 
   function buildTempoSecondIndex(tempoMap) {
     const beatUnits = durationUnits(4, 0);
@@ -3966,5 +4046,5 @@
     return Array.from(parts || []).reduce((sum, part) => sum + String(part || "").trim().length, 0);
   }
 
-  window.MabiOptimizer = Object.freeze({ version: "5.1.1", optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, setVolumesMml, applyFadeMml, transposeOctavesMml, splitMmlPages });
+  window.MabiOptimizer = Object.freeze({ version: "5.1.1", optimizeMml, generateAccompanimentMml, generateDynamicsMml, simplifyTemposMml, countShortRestsMml, trimShortRestsMml, addLeadingSilenceMml, adjustVolumesMml, setVolumesMml, simplifyVolumesMml, applyFadeMml, transposeOctavesMml, splitMmlPages });
 })();

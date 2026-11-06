@@ -108,6 +108,8 @@ window.__MOBIBARD_SIMPLE_LOCALES__["en"] = {
     "presetMissing": "Could not find a playback instrument preset. (Bank {0} / Program {1})",
     "volumeFixed": "Volume setting",
     "volumeOriginal": "Original",
+    "volumeSimplify": "Simplify",
+    "volumeSimplifyTitle": "Merges volume changes of 1 or less into the previous volume to shorten the MML. (Min/max volumes are kept)",
     "fadeInSeconds": "Fade In (sec)",
     "fadeOutSeconds": "Fade Out (sec)",
     "tutorialOpen": "Tutorial",

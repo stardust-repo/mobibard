@@ -96,6 +96,7 @@
   let selectedFadeIn = 0;
   let selectedFadeOut = 0;
   let selectedFixedVolume = null;
+  let selectedVolumeSimplify = false;
   let currentMml = "";
   let resultPages = [];
   let conversionSerial = 0;
@@ -343,6 +344,11 @@
     if (els.volumeFixedLabel) els.volumeFixedLabel.textContent = t("volumeFixed");
     const keepVolumeButton = els.volumeFixedOptions?.querySelector('[data-volume-fixed="keep"]');
     if (keepVolumeButton) keepVolumeButton.textContent = t("volumeOriginal");
+    const simplifyVolumeButton = els.volumeFixedOptions?.querySelector('[data-volume-fixed="simplify"]');
+    if (simplifyVolumeButton) {
+      simplifyVolumeButton.textContent = t("volumeSimplify");
+      simplifyVolumeButton.title = t("volumeSimplifyTitle");
+    }
     els.fadeInLabel.textContent = t("fadeInSeconds");
     els.fadeOutLabel.textContent = t("fadeOutSeconds");
     if (els.tutorialButton) els.tutorialButton.textContent = t("tutorialOpen");
@@ -491,10 +497,12 @@
 
   function selectFixedVolumeOption(value, refresh = true) {
     const raw = String(value ?? "keep");
-    selectedFixedVolume = raw === "keep" ? null : Math.max(0, Math.min(15, Math.round(Number(raw) || 0)));
+    // "간소화"는 볼륨 값을 바꾸지 않고(원본 유지) 변화가 1 이하인 곳만 합치는 항목이라 고정 볼륨과 함께 쓰지 않습니다.
+    selectedVolumeSimplify = raw === "simplify";
+    selectedFixedVolume = raw === "keep" || selectedVolumeSimplify ? null : Math.max(0, Math.min(15, Math.round(Number(raw) || 0)));
     els.volumeFixedOptions?.querySelectorAll("[data-volume-fixed]").forEach(button => {
-      const buttonValue = button.dataset.volumeFixed === "keep" ? null : Number(button.dataset.volumeFixed);
-      const active = buttonValue === selectedFixedVolume;
+      const key = button.dataset.volumeFixed;
+      const active = key === "simplify" ? selectedVolumeSimplify : (!selectedVolumeSimplify && (key === "keep" ? null : Number(key)) === selectedFixedVolume);
       button.classList.toggle("active", active);
       button.setAttribute("aria-checked", active ? "true" : "false");
     });
@@ -586,6 +594,12 @@
     }).mml;
   }
 
+  function applyVolumeSimplification(mml) {
+    const simplify = window.MabiOptimizer?.simplifyVolumesMml;
+    if (!selectedVolumeSimplify || typeof simplify !== "function") return mml;
+    return simplify(mml, { partCount: 3, maxDelta: 1 }).mml;
+  }
+
   function applySimpleFade(mml) {
     const fade = window.MabiOptimizer?.applyFadeMml;
     if (typeof fade !== "function" || (selectedFadeIn <= 0 && selectedFadeOut <= 0)) return mml;
@@ -663,7 +677,7 @@
       const cleanedMml = applyRestRemoval(simplifiedMml);
       const alignedMml = alignGeneratedMmlStart(cleanedMml);
       const fixedVolumeMml = applyFixedVolume(alignedMml);
-      const fadedMml = applySimpleFade(fixedVolumeMml);
+      const fadedMml = applySimpleFade(applyVolumeSimplification(fixedVolumeMml));
       if (token !== conversionSerial) return;
 
       currentMml = fadedMml;

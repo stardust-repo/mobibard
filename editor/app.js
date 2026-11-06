@@ -232,6 +232,13 @@
     editSelectAllButton: document.querySelector("#editSelectAllButton"),
     editDeleteButton: document.querySelector("#editDeleteButton"),
     editMeasureButton: document.querySelector("#editMeasureButton"),
+    editLeadingSilenceButton: document.querySelector("#editLeadingSilenceButton"),
+    leadingSilenceBackdrop: document.querySelector("#leadingSilenceBackdrop"),
+    leadingSilenceInput: document.querySelector("#leadingSilenceInput"),
+    leadingSilenceTempoInput: document.querySelector("#leadingSilenceTempoInput"),
+    leadingSilenceCloseButton: document.querySelector("#leadingSilenceCloseButton"),
+    leadingSilenceCancelButton: document.querySelector("#leadingSilenceCancelButton"),
+    leadingSilenceApplyButton: document.querySelector("#leadingSilenceApplyButton"),
     editRestCleanupButton: document.querySelector("#editRestCleanupButton"),
     editNoteVolumeButton: document.querySelector("#editNoteVolumeButton"),
     editAutoPartButton: document.querySelector("#editAutoPartButton"),
@@ -407,10 +414,6 @@
     w2mSensitivity: document.querySelector("#w2mSensitivity"),
     w2mNoteEnd: document.querySelector("#w2mNoteEnd"),
     w2mMinLength: document.querySelector("#w2mMinLength"),
-    w2mPolyUnlimited: document.querySelector("#w2mPolyUnlimited"),
-    w2mPolyMax: document.querySelector("#w2mPolyMax"),
-    w2mInstRange: document.querySelector("#w2mInstRange"),
-    w2mInstMax: document.querySelector("#w2mInstMax"),
     w2mVolumeFixed: document.querySelector("#w2mVolumeFixed"),
     w2mTempoBpm: document.querySelector("#w2mTempoBpm"),
     midiImportChannelLimitInput: document.querySelector("#midiImportChannelLimitInput"),
@@ -563,6 +566,9 @@
     channelVolumeSlider: document.querySelector("#channelVolumeSlider"),
     channelVolumeValue: document.querySelector("#channelVolumeValue"),
     channelVolumeComparison: document.querySelector("#channelVolumeComparison"),
+    channelVolumeChangeCount: document.querySelector("#channelVolumeChangeCount"),
+    channelVolumeSimplify: document.querySelector("#channelVolumeSimplify"),
+    channelVolumeSimplifyThreshold: document.querySelector("#channelVolumeSimplifyThreshold"),
     restCleanupPanel: document.querySelector("#restCleanupPanel"),
     restCleanupCancelButton: document.querySelector("#restCleanupCancelButton"),
     restCleanupApplyButton: document.querySelector("#restCleanupApplyButton"),
@@ -807,7 +813,7 @@
     fadeDrag: null,
     fadeTouchTap: null,
     tempoEditor: { mode: null, tempoId: null, beat: 0 },
-    tempoSimplify: { maxBpmDeltaExclusive: 5, preserveExtrema: true },
+    tempoSimplify: { maxBpmDelta: 4, preserveExtrema: true },
     timelineFades: [],
     trillOptions: {
       direction: "up",
@@ -2918,10 +2924,13 @@
       elements.noteToolButton,
       elements.selectToolButton,
     ];
+    // 불러오기 작업 중에도 설정 메뉴는 쓸 수 있습니다(나머지 작업 공간에서는 잠깁니다).
+    const settingsLocked = lock.active && lock.mode !== "side-tool-import";
     for (const control of commonControls) {
       if (!control) continue;
-      control.disabled = lock.active;
-      control.setAttribute("aria-disabled", String(lock.active));
+      const locked = control === elements.settingsButton ? settingsLocked : lock.active;
+      control.disabled = locked;
+      control.setAttribute("aria-disabled", String(locked));
     }
 
     const playbackControls = [
@@ -2950,7 +2959,7 @@
     if (lock.active) {
       closeFileMenu();
       closeEditMenu();
-      closeSettingsMenu();
+      if (settingsLocked) closeSettingsMenu();
     }
     if (lock.disablePlayback) {
       closeVolumeMenu();
@@ -5497,6 +5506,7 @@
       : !notesActive || !getNoteEditVirtualChannel()?.notes?.length);
     elements.editDeleteButton.disabled = deleteLocked || midiActive || (audioActive ? !getActiveAudioClip() : !notesActive || !state.selectedNoteIds.size);
     if (elements.editMeasureButton) elements.editMeasureButton.disabled = deleteLocked;
+    if (elements.editLeadingSilenceButton) elements.editLeadingSilenceButton.disabled = deleteLocked || midiActive || audioActive;
     const hasEditorNotes = state.channels.some((channel) => Array.isArray(channel.notes) && channel.notes.length > 0);
     if (elements.editRestCleanupButton) elements.editRestCleanupButton.disabled = deleteLocked || !hasEditorNotes;
     if (elements.editNoteVolumeButton) elements.editNoteVolumeButton.disabled = deleteLocked || !hasEditorNotes;
@@ -11510,6 +11520,7 @@
   function renderChannelTabs() {
     if (!elements.channelTabs || itemTreeDrag?.dragging) return;
     healChannelMultiSelect();
+    try { syncIdleMetronomeHud(); } catch { /* 초기화 전 */ }
     const preservedScrollTop = Number(elements.channelTabs.scrollTop) || 0;
     const preservedScrollLeft = Number(elements.channelTabs.scrollLeft) || 0;
     elements.channelTabs.replaceChildren();
@@ -14208,7 +14219,6 @@
   const IMPORT_OPTION_DEFAULTS = Object.freeze({
     quantize: 64, overlap: 64, limitOn: false, limitCount: 3,
     onsetPos: 50, endPos: 50, minLengthMs: 0,
-    polyUnlimited: false, polyMax: 3, instRange: 10, instMax: 2,
     volume: "auto", volumeFixed: 12, tempo: "auto", tempoBpm: 120,
     colorMode: "channel",
   });
@@ -14238,11 +14248,7 @@
       // 예전 버전(낮음/보통/높음 등 3단계)에 저장된 값은 가장 가까운 슬라이더 위치로 옮깁니다.
       onsetPos: slotValue(src.onsetPos ?? ({ low: 60, normal: 50, high: 25 })[src.sensitivity], 0, 100, 5, d.onsetPos),
       endPos: slotValue(src.endPos ?? ({ short: 70, normal: 50, long: 30 })[src.noteEnd], 0, 100, 5, d.endPos),
-      minLengthMs: slotValue(src.minLengthMs ?? ({ none: 0, weak: 80, strong: 160 })[src.minLength], 0, 200, 10, d.minLengthMs),
-      polyUnlimited: src.polyUnlimited === true,
-      polyMax: clamp(Math.round(Number(src.polyMax) || d.polyMax), 1, 88),
-      instRange: slotValue(src.instRange, 0, 100, 5, d.instRange),
-      instMax: clamp(Math.round(Number(src.instMax) || d.instMax), 1, 16),
+      minLengthMs: slotValue(src.minLengthMs ?? ({ none: 0, weak: 50, strong: 100 })[src.minLength], 0, 100, 5, d.minLengthMs),
       volume: pick(src.volume, ["auto", "fixed"], d.volume),
       volumeFixed: clamp(Math.round(Number(src.volumeFixed) || d.volumeFixed), 1, 15),
       tempo: pick(src.tempo, ["auto", "fixed"], d.tempo),
@@ -14260,10 +14266,6 @@
       onsetPos: elements.w2mSensitivity?.value,
       endPos: elements.w2mNoteEnd?.value,
       minLengthMs: elements.w2mMinLength?.value,
-      polyUnlimited: Boolean(elements.w2mPolyUnlimited?.checked),
-      polyMax: elements.w2mPolyMax?.value,
-      instRange: elements.w2mInstRange?.value,
-      instMax: elements.w2mInstMax?.value,
       volume: getCheckedRadioValue("w2mVolume"),
       volumeFixed: elements.w2mVolumeFixed?.value,
       tempo: getCheckedRadioValue("w2mTempo"),
@@ -14284,10 +14286,6 @@
     if (elements.w2mSensitivity) elements.w2mSensitivity.value = String(o.onsetPos);
     if (elements.w2mNoteEnd) elements.w2mNoteEnd.value = String(o.endPos);
     if (elements.w2mMinLength) elements.w2mMinLength.value = String(o.minLengthMs);
-    if (elements.w2mPolyUnlimited) elements.w2mPolyUnlimited.checked = o.polyUnlimited;
-    if (elements.w2mPolyMax) { elements.w2mPolyMax.value = String(o.polyMax); elements.w2mPolyMax.disabled = o.polyUnlimited; }
-    if (elements.w2mInstRange) elements.w2mInstRange.value = String(o.instRange);
-    if (elements.w2mInstMax) elements.w2mInstMax.value = String(o.instMax);
     updateW2mSliderReadouts();
     setCheckedRadioValue("w2mVolume", o.volume);
     setCheckedRadioValue("w2mTempo", o.tempo);
@@ -14333,7 +14331,7 @@
     const selector = [
       'input[name="midiImportQuantize"]', 'input[name="midiImportOverlap"]',
       "#midiImportLimitChannelsPerInstrument", "#midiImportChannelLimitInput",
-      "#w2mSensitivity", "#w2mNoteEnd", "#w2mMinLength", "#w2mPolyUnlimited", "#w2mPolyMax", "#w2mInstRange", "#w2mInstMax",
+      "#w2mSensitivity", "#w2mNoteEnd", "#w2mMinLength",
       'input[name="w2mVolume"]', "#w2mVolumeFixed", 'input[name="w2mTempo"]', "#w2mTempoBpm",
     ].join(",");
     // 각 입력의 자체 change 처리(값 보정 등)가 끝난 뒤(버블링) 읽습니다.
@@ -15077,9 +15075,9 @@
   let audioPostprocessToken = 0;
 
   // 슬라이더 위치(0~100, 5 간격) → 실제 값. 가운데(50)가 모델 기본값이고, 좌우 간격은 비대칭이어도 됩니다.
-  const W2M_ONSET_MIN = 0.04, W2M_ONSET_MAX = 0.5;
+  const W2M_ONSET_MIN = 0.06, W2M_ONSET_BASE = 0.12, W2M_ONSET_MAX = 0.3;
   function w2mOnsetFromPos(pos) {
-    const base = Number(audioPostprocessDefaults.onsetThreshold) || 0.13;
+    const base = W2M_ONSET_BASE;
     const p = clamp(Number(pos), 0, 100);
     return p <= 50 ? W2M_ONSET_MIN + (base - W2M_ONSET_MIN) * (p / 50) : base + (W2M_ONSET_MAX - base) * ((p - 50) / 50);
   }
@@ -15098,7 +15096,6 @@
       const ms = Number(elements.w2mMinLength.value) || 0;
       set("#w2mMinLengthValue", ms > 0 ? `${ms}ms` : i18nText("audio_midi.opt_min_none"));
     }
-    if (elements.w2mInstRange) set("#w2mInstRangeValue", `${Number(elements.w2mInstRange.value) || 0}%`);
   }
 
   function getAudioToMidiOptions() {
@@ -15106,9 +15103,6 @@
     const frameThreshold = w2mEndFromPos(elements.w2mNoteEnd?.value ?? 50);
     const offsetThreshold = 1 - frameThreshold;
     const minNoteSeconds = (Number(elements.w2mMinLength?.value) || 0) / 1000;
-    const maxPolyphony = elements.w2mPolyUnlimited?.checked ? 0 : clamp(Math.round(Number(elements.w2mPolyMax?.value) || 3), 1, 88);
-    const instRange = clamp(Number(elements.w2mInstRange?.value) || 0, 0, 100) / 100;
-    const instMax = clamp(Math.round(Number(elements.w2mInstMax?.value) || 2), 1, 16);
     const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
     const bpm = clamp(Math.round(Number(elements.w2mTempoBpm?.value) || 120), audioPostprocessDefaults.tempoMin || 32, audioPostprocessDefaults.tempoMax || 255);
     const fixedVolume = getCheckedRadioValue("w2mVolume") === "fixed";
@@ -15125,9 +15119,6 @@
       frameThreshold: Number(frameThreshold.toFixed(4)),
       offsetThreshold: Number(offsetThreshold.toFixed(4)),
       minNoteSeconds,
-      maxPolyphony,
-      instRange,
-      instMax,
       velocity,
       velocityRange,
       tempo: fixed ? bpm : true,
@@ -15140,7 +15131,6 @@
     if (elements.w2mTempoBpm) elements.w2mTempoBpm.disabled = !fixed;
     const fixedVolume = getCheckedRadioValue("w2mVolume") === "fixed";
     if (elements.w2mVolumeFixed) elements.w2mVolumeFixed.disabled = !fixedVolume;
-    if (elements.w2mPolyMax) elements.w2mPolyMax.disabled = Boolean(elements.w2mPolyUnlimited?.checked);
     updateW2mSliderReadouts();
     if (elements.midiImportAudioControls) elements.midiImportAudioControls.hidden = state.midiImport.sourceType !== "audio-ai";
   }
@@ -17145,12 +17135,18 @@
     else if (isSideToolWorkspaceActive("import")) { if (!state.midiImport.busy) closeMidiImportDialog(); }
   }
 
+  // 불러오기 같은 작업 중에도 설정 메뉴에서 연 사운드폰트 팝업은 조작할 수 있습니다.
+  function isSideToolAllowedPopupTarget(target) {
+    return Boolean(target instanceof Element && target.closest("#editorSoundFontBackdrop"));
+  }
+
   function guardSideToolPointerInteraction(event) {
     if (
       !sideToolState.kind
       || isSideToolPanelTarget(event.target)
       || isWorkspaceTopbarInteractionTarget(event.target)
       || isTutorialInteractionTarget(event.target)
+      || isSideToolAllowedPopupTarget(event.target)
       || isAutoPartPreviewScrollTarget(event.target)
       || isAutoPartPreviewOverviewNavigation(event)
       || isWorkspaceTimelineSeekGesture(event)
@@ -17164,6 +17160,8 @@
     if (event.code === "Space" && !isTextEntryTarget(event.target)) return;
     // 지원 파일 팝업이 열려 있으면 Esc는 팝업만 닫습니다.
     if (event.key === "Escape" && document.querySelector(".mabi-supported-files-backdrop:not([hidden])")) return;
+    if (event.key === "Escape" && elements.editorSoundFontBackdrop && !elements.editorSoundFontBackdrop.hidden) return;
+    if (isSideToolAllowedPopupTarget(event.target)) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -17241,6 +17239,12 @@
 
   function updateChannelVolumeControl() {
     const fixed = isChannelVolumeFixedMode();
+    // 동일 볼륨이면 볼륨이 하나뿐이라 간소화할 것이 없습니다.
+    if (elements.channelVolumeSimplify) {
+      if (fixed) elements.channelVolumeSimplify.checked = false;
+      elements.channelVolumeSimplify.disabled = fixed;
+    }
+    if (elements.channelVolumeSimplifyThreshold) elements.channelVolumeSimplifyThreshold.disabled = fixed || !isChannelVolumeSimplifyOn();
     if (elements.channelVolumeControlLabel) {
       const labelKey = fixed ? "volume.fixed_value" : "volume.relative_adjust";
       elements.channelVolumeControlLabel.dataset.i18n = labelKey;
@@ -17292,11 +17296,127 @@
     if (elements.channelVolumeApplyButton) elements.channelVolumeApplyButton.disabled = notes.length === 0;
   }
 
-  function updateChannelVolumeCounts() {
+  function isChannelVolumeSimplifyOn() {
+    return Boolean(elements.channelVolumeSimplify?.checked);
+  }
+
+  function getChannelVolumeSimplifyThreshold() {
+    return clamp(Math.round(Number(elements.channelVolumeSimplifyThreshold?.value) || 1), 1, 14);
+  }
+
+  // MML 내보내기와 같은 방식(채널 안에서 음이 겹치지 않는 성부로 나눔)으로 볼륨 명령(v)이 몇 번 들어가는지 세면서,
+  // 지금 설정(증감/고정 + 간소화)을 적용했을 때의 노트별 볼륨을 계산합니다.
+  let volumeVoiceCache = new WeakMap(); // 패널을 열 때마다 비웁니다(패널이 열린 동안 노트는 바뀌지 않음)
+  function getChannelVolumeVoices(channel) {
+    let voices = volumeVoiceCache.get(channel);
+    if (!voices) {
+      voices = partitionNotesIntoMmlVoices(channel.notes || []);
+      volumeVoiceCache.set(channel, voices);
+    }
+    return voices;
+  }
+
+  function planChannelVolumeEdit() {
     const notes = getVolumeEditNotes();
+    const edited = new Set(notes);
+    const target = new Map();
+    for (const note of notes) target.set(note, getChannelVolumeTargetFromVolume(getNoteVolume(note)));
+    const simplify = isChannelVolumeSimplifyOn() && !isChannelVolumeFixedMode();
+    const threshold = getChannelVolumeSimplifyThreshold();
+    const stat = { beforeChanges: 0, afterChanges: 0, beforeChars: 0, afterChars: 0 };
+    for (const channel of getVolumeEditTargetChannels()) {
+      // 최저/최고 볼륨은 간소화하지 않고 보존합니다(채널 전체 기준, 선택 노트일 때도 해당 채널의 최저/최고).
+      let channelMin = 15;
+      let channelMax = 0;
+      for (const note of channel.notes || []) {
+        const value = edited.has(note) ? target.get(note) : getNoteVolume(note);
+        if (value < channelMin) channelMin = value;
+        if (value > channelMax) channelMax = value;
+      }
+      const baseVolume = new Map();
+      for (const note of channel.notes || []) if (edited.has(note)) baseVolume.set(note, target.get(note));
+      for (const voice of getChannelVolumeVoices(channel)) {
+        let prevBefore = null;
+        let prevAfter = null;
+        let prevEdited = false;
+        for (const note of voice) {
+          const before = getNoteVolume(note);
+          const isEdited = edited.has(note);
+          let after = isEdited ? target.get(note) : before;
+          // 선택한 노트가 이어지는 구간(성부 안에서 연속한 선택 노트) 안에서만 비교합니다. 선택이 끊기면 다시 시작합니다.
+          const isExtreme = isEdited && (baseVolume.get(note) === channelMin || baseVolume.get(note) === channelMax);
+          if (simplify && isEdited && !isExtreme && prevEdited && prevAfter !== null && Math.abs(after - prevAfter) <= threshold) {
+            after = resolveChannelVolumeTarget(before, prevAfter);
+            target.set(note, after);
+          }
+          if (prevBefore === null || before !== prevBefore) {
+            stat.beforeChars += `v${before}`.length;
+            if (prevBefore !== null) stat.beforeChanges += 1;
+          }
+          if (prevAfter === null || after !== prevAfter) {
+            stat.afterChars += `v${after}`.length;
+            if (prevAfter !== null) stat.afterChanges += 1;
+          }
+          prevBefore = before;
+          prevAfter = after;
+          prevEdited = isEdited;
+        }
+      }
+    }
+    return { notes, target, ...stat };
+  }
+
+  function updateChannelVolumeChangeCount(plan) {
+    const node = elements.channelVolumeChangeCount;
+    if (!node) return;
+    const fmt = (value) => Number(value).toLocaleString(document.documentElement.lang || undefined);
+    node.replaceChildren();
+    if (!plan.notes.length) return;
+    const heading = document.createElement("div");
+    heading.className = "channel-volume-detail-heading";
+    heading.textContent = i18nText("volume.change_heading");
+    node.append(heading);
+    // 아래 볼륨별 변경 목록과 같은 모양의 행으로 보여 줍니다.
+    const row = (labelText, title, ...cells) => {
+      const item = document.createElement("span");
+      item.className = "channel-volume-compare-item is-change";
+      const label = document.createElement("em");
+      label.textContent = labelText;
+      if (title) item.title = title;
+      item.append(label, ...cells);
+      node.append(item);
+    };
+    const before = document.createElement("span");
+    before.className = "channel-volume-compare-before";
+    before.textContent = fmt(plan.beforeChanges);
+    const changeLabel = i18nText("volume.change_title");
+    if (plan.afterChanges === plan.beforeChanges) {
+      row("↗↙", changeLabel, before);
+      return;
+    }
+    const arrow = document.createElement("b");
+    arrow.className = "channel-volume-compare-arrow";
+    arrow.textContent = ">";
+    const after = document.createElement("strong");
+    after.className = "channel-volume-compare-after";
+    after.textContent = fmt(plan.afterChanges);
+    row("↗↙", changeLabel, before, arrow, after);
+    const skipped = plan.beforeChanges - plan.afterChanges;
+    if (skipped > 0) {
+      const count = document.createElement("strong");
+      count.className = "channel-volume-compare-after";
+      count.textContent = fmt(skipped);
+      row(i18nText("volume.change_skipped"), "", count);
+    }
+  }
+
+  function updateChannelVolumeCounts() {
+    const plan = planChannelVolumeEdit();
+    const notes = plan.notes;
     const currentItems = getNoteVolumeCounts(notes);
-    const targetItems = getNoteVolumeCounts(notes.map((note) => ({ volume: getChannelVolumeTargetFromVolume(getNoteVolume(note)) })));
+    const targetItems = getNoteVolumeCounts(notes.map((note) => ({ volume: plan.target.get(note) })));
     renderChannelVolumeComparison(elements.channelVolumeComparison, currentItems, targetItems);
+    updateChannelVolumeChangeCount(plan);
     updateChannelVolumeSummary();
     refreshSideToolTitlebar();
     if (sideToolState.kind === "volume") refreshSideToolFocus();
@@ -17383,6 +17503,8 @@
     if (!renderChannelVolumeDialog(selectedIds)) return false;
     if (elements.channelVolumeFixedMode) elements.channelVolumeFixedMode.checked = false;
     if (elements.channelVolumeProtectV0) elements.channelVolumeProtectV0.checked = true;
+    if (elements.channelVolumeSimplify) elements.channelVolumeSimplify.checked = false;
+    volumeVoiceCache = new WeakMap();
     updateVolumeDialogHeader();
     configureChannelVolumeSliderForMode(true);
     if (!openSideToolWorkspace("volume")) return false;
@@ -17417,6 +17539,8 @@
     if (elements.channelVolumeScopePane) elements.channelVolumeScopePane.hidden = true;
     elements.channelVolumeDialog?.classList.add("note-selection-mode");
     if (elements.channelVolumeFixedMode) elements.channelVolumeFixedMode.checked = false;
+    if (elements.channelVolumeSimplify) elements.channelVolumeSimplify.checked = false;
+    volumeVoiceCache = new WeakMap();
     // This is one unified volume editor: note-selection and channel/group entry
     // points start with the same V0/minimum-volume protection rule.
     if (elements.channelVolumeProtectV0) elements.channelVolumeProtectV0.checked = true;
@@ -17452,10 +17576,10 @@
     const fixedVolume = clamp(sliderValue, 0, 15);
     const delta = clamp(sliderValue, -15, 15);
     let changedCount = 0;
+    const plan = planChannelVolumeEdit();
     for (const note of notes) {
       const before = getNoteVolume(note);
-      const rawTarget = fixed ? fixedVolume : clamp(before + delta, 0, 15);
-      const nextVolume = resolveChannelVolumeTarget(before, rawTarget);
+      const nextVolume = plan.target.get(note) ?? before;
       if (nextVolume === before) continue;
       note.volume = nextVolume;
       note.velocity = mmlVolumeToVelocity(nextVolume);
@@ -19861,8 +19985,12 @@
       hud.id = "midiInputMetroHud";
       hud.className = "midi-metronome-hud";
       hud.setAttribute("aria-hidden", "true");
-      hud.innerHTML = '<div class="midi-metronome-label"></div><div class="midi-metronome-number"></div><div class="midi-metronome-lamps"></div>';
+      hud.innerHTML = '<div class="midi-metronome-label"></div><div class="midi-metronome-number"></div><div class="midi-metronome-lamps"></div>'
+        + '<label class="midi-metronome-volume"><span aria-hidden="true">🔔</span><input type="range" min="0" max="100" step="5" data-metro-volume/><output data-metro-volume-text></output></label>';
+      hud.querySelector("input[data-metro-volume]").setAttribute("aria-label", i18nText("midi_input.metro_volume"));
+      bindMetronomeVolumeInput(hud.querySelector("input[data-metro-volume]"));
       document.body.append(hud);
+      syncMetronomeVolumeInputs();
     }
     return hud;
   }
@@ -19879,11 +20007,56 @@
       lamps.append(lamp);
     }
     hud.dataset.count = String(count);
+    hud.classList.remove("is-idle");
     hud.classList.add("is-visible");
   }
 
   function hideMetronomeHud() {
-    document.getElementById("midiInputMetroHud")?.classList.remove("is-visible");
+    document.getElementById("midiInputMetroHud")?.classList.remove("is-visible", "is-idle");
+    syncIdleMetronomeHud();
+  }
+
+  // 메트로놈 볼륨: 설정 창과 화면의 메트로놈 표시가 같은 값을 공유합니다.
+  function syncMetronomeVolumeInputs(except = null) {
+    const percent = Math.round(clamp(Number(midiInputRuntime.metronome.volume) || 0, 0, 1) * 20) * 5;
+    document.querySelectorAll("input[data-metro-volume]").forEach((input) => {
+      if (input !== except) input.value = String(percent);
+    });
+    document.querySelectorAll("[data-metro-volume-text]").forEach((out) => { out.textContent = `${percent}%`; });
+  }
+
+  function bindMetronomeVolumeInput(input) {
+    input.addEventListener("pointerdown", (event) => event.stopPropagation());
+    input.addEventListener("input", () => {
+      midiInputRuntime.metronome.volume = clamp(Number(input.value) / 100, 0, 1);
+      syncMetronomeVolumeInputs(input);
+      saveMidiInputSettings();
+    });
+    // 놓았을 때 한 번 울려서 크기를 바로 확인할 수 있게 합니다(기록·측정 중에는 울리지 않음).
+    input.addEventListener("change", () => {
+      const context = audioEngine.context;
+      if (!context || midiInputRuntime.recording || midiInputRuntime.calibration) return;
+      playMetronomeClick(context.currentTime + 0.02, false);
+    });
+  }
+
+  // 기록 중이 아니어도 메트로놈 옵션이 켜져 있으면(MIDI 입력 그룹이 있을 때) 메트로놈 표시를 계속 띄워 둡니다.
+  function syncIdleMetronomeHud() {
+    const runtime = midiInputRuntime;
+    const busy = runtime.recording || runtime.startingRecording || runtime.calibration || runtime.countInActive;
+    const want = !busy && runtime.metronome.enabled && Boolean(getMidiInputGroup());
+    const hud = document.getElementById("midiInputMetroHud");
+    if (want) {
+      const signature = getTimeSignatureAtBeat(0);
+      const numerator = clamp(Math.round(Number(signature?.numerator) || 4), 1, 64);
+      const h = getMetronomeHud();
+      if (h.classList.contains("is-idle") && Number(h.dataset.count) === numerator) { syncMetronomeVolumeInputs(); return; }
+      showMetronomeHud(numerator, "");
+      h.classList.add("is-idle");
+      syncMetronomeVolumeInputs();
+    } else if (hud?.classList.contains("is-idle")) {
+      hud.classList.remove("is-visible", "is-idle");
+    }
   }
 
   function flashMetronomeHud(click, { countIn = false } = {}) {
@@ -20765,13 +20938,15 @@
     const volumeInput = document.createElement("input");
     volumeInput.type = "range";
     volumeInput.min = "0";
+    volumeInput.step = "5";
     volumeInput.max = "100";
-    volumeInput.value = String(Math.round(clamp(Number(metro.volume) || 0, 0, 1) * 100));
-    volumeInput.addEventListener("input", () => {
-      metro.volume = Number(volumeInput.value) / 100;
-      saveMidiInputSettings();
-    });
-    volumeLabel.append(volumeText, volumeInput);
+    volumeInput.setAttribute("data-metro-volume", "");
+    volumeInput.value = String(Math.round(clamp(Number(metro.volume) || 0, 0, 1) * 20) * 5);
+    bindMetronomeVolumeInput(volumeInput);
+    const volumeOut = document.createElement("output");
+    volumeOut.setAttribute("data-metro-volume-text", "");
+    volumeOut.textContent = `${Number(volumeInput.value)}%`;
+    volumeLabel.append(volumeText, volumeInput, volumeOut);
     metroRow2.append(countInLabel, volumeLabel);
     metroBox.append(metroRow, metroRow2);
 
@@ -21087,6 +21262,7 @@
 
   function renderMidiInputControls() {
     renderMidiInputSettingsDialog();
+    syncIdleMetronomeHud();
     if (isMidiInputEditTarget()) syncMidiInputBottomOffset(true);
     const group = getMidiInputGroup();
     if (!group) return;
@@ -27665,7 +27841,7 @@
     });
   }
 
-  function insertTrackSpaceAtPlayhead(amountBeats) {
+  function insertTrackSpaceAtPlayhead(amountBeats, onBeforeCommit = null) {
     const amount = Math.max(CONFIG.minimumNoteBeat, Number(amountBeats) || 0);
     const cursor = clamp(Number(state.timeEdit?.beat ?? state.playhead.beat) || 0, 0, getTotalBeats());
     for (const channel of state.channels) {
@@ -27696,6 +27872,7 @@
     shiftPlaybackRangeForInsert(cursor, amount);
     state.timelineBeats = Math.max(getTotalBeats() + amount, getPersistentContentEndBeat() + getSnapBeat());
     ensureTimelineFitsViewport();
+    if (typeof onBeforeCommit === "function") onBeforeCommit();
     markDirty(i18nText("timeline.add_measure_beat"));
     renderChannelTabs();
     renderChannelEditor();
@@ -27705,7 +27882,7 @@
     return true;
   }
 
-  function deleteTrackSpaceAtPlayhead(amountBeats) {
+  function deleteTrackSpaceAtPlayhead(amountBeats, onBeforeCommit = null) {
     const requested = Math.max(CONFIG.minimumNoteBeat, Number(amountBeats) || 0);
     const cursor = clamp(Number(state.timeEdit?.beat ?? state.playhead.beat) || 0, 0, getTotalBeats());
     const amount = Math.min(requested, Math.max(0, getTotalBeats() - cursor));
@@ -27773,6 +27950,7 @@
     state.timelineBeats = Math.max(CONFIG.beatsPerMeasure, getTotalBeats() - amount);
     shrinkTimelineToContent();
     ensureTimelineFitsViewport();
+    if (typeof onBeforeCommit === "function") onBeforeCommit();
     markDirty(i18nText("timeline.delete_measure_beat"));
     renderChannelTabs();
     renderChannelEditor();
@@ -28456,6 +28634,84 @@
   }
 
 
+  function closeLeadingSilenceDialog() {
+    if (elements.leadingSilenceBackdrop) elements.leadingSilenceBackdrop.hidden = true;
+  }
+
+  function openLeadingSilenceDialog() {
+    if (!elements.leadingSilenceBackdrop) return false;
+    if (isMidiReferenceActive()) {
+      showToast(i18nText("midi.tempo_tab_readonly"));
+      return false;
+    }
+    if (!state.channels.some((channel) => (channel.notes || []).length)) {
+      showToast(i18nText("leading.no_notes"));
+      return false;
+    }
+    if (state.playback.running || state.playback.loading) stopPlayback(false);
+    closeContextMenu(); closeFileMenu(); closeEditMenu(); closeSettingsMenu();
+    elements.leadingSilenceInput.value = "2";
+    if (elements.leadingSilenceTempoInput) elements.leadingSilenceTempoInput.value = String(Math.round(getTempoAtBeat(0)) || 120);
+    elements.leadingSilenceBackdrop.hidden = false;
+    requestAnimationFrame(() => {
+      elements.leadingSilenceInput?.focus();
+      elements.leadingSilenceInput?.select();
+    });
+    return true;
+  }
+
+  function applyLeadingSilence() {
+    const seconds = clamp(Number(elements.leadingSilenceInput?.value) || 0, 0, 300);
+    if (elements.leadingSilenceInput) elements.leadingSilenceInput.value = String(seconds);
+    const bpm = Math.round(Number(elements.leadingSilenceTempoInput?.value));
+    if (!Number.isInteger(bpm) || bpm < CONFIG.minTempo || bpm > CONFIG.maxTempo) {
+      showToast(`템포는 ${CONFIG.minTempo}~${CONFIG.maxTempo} 사이의 정수만 입력할 수 있습니다.`);
+      elements.leadingSilenceTempoInput?.focus();
+      return false;
+    }
+    closeLeadingSilenceDialog();
+    // 시작 템포는 공백 구간에만 적용한다. 첫 노트부터는 원래 템포를 유지한다.
+    const firstBeatBefore = getFirstEditorNoteBeat();
+    const originalTempoAtFirst = Math.round(getTempoAtBeat(firstBeatBefore)) || 120;
+    const startTempoChanged = Math.round(getTempoAtBeat(0)) !== bpm;
+    const applyLeadingTempos = (firstBeat) => {
+      const atStart = state.tempos.find((item) => item.fixed) || state.tempos.find((item) => Math.abs(Number(item.beat) || 0) < 1e-7);
+      if (atStart) atStart.bpm = bpm;
+      else state.tempos.push({ id: state.nextTempoId++, beat: 0, bpm, fixed: false });
+      if (firstBeat > 1e-7 && originalTempoAtFirst !== bpm) {
+        const atFirst = state.tempos.find((item) => Math.abs((Number(item.beat) || 0) - firstBeat) < 1e-7);
+        if (atFirst) atFirst.bpm = originalTempoAtFirst;
+        else state.tempos.push({ id: state.nextTempoId++, beat: Number(firstBeat.toFixed(6)), bpm: originalTempoAtFirst, fixed: false });
+      }
+      state.tempos.sort((a, b) => a.beat - b.beat || a.id - b.id);
+    };
+    // 공백 길이 계산용으로 먼저 시작 템포를 반영한다.
+    if (startTempoChanged) {
+      const atStart = state.tempos.find((item) => item.fixed) || state.tempos.find((item) => Math.abs(Number(item.beat) || 0) < 1e-7);
+      if (atStart) atStart.bpm = bpm;
+      else state.tempos.push({ id: state.nextTempoId++, beat: 0, bpm, fixed: false });
+      state.tempos.sort((a, b) => a.beat - b.beat || a.id - b.id);
+    }
+    const targetBeat = Math.round(secondsToBeatUnclamped(seconds) * 4) / 4;
+    const delta = Number((targetBeat - firstBeatBefore).toFixed(6));
+    if (Math.abs(delta) < 1e-6) {
+      if (startTempoChanged) {
+        applyLeadingTempos(firstBeatBefore);
+        markDirty("템포 변경");
+        drawRoll();
+        drawTimeline();
+        updateChannelInfo();
+      }
+      return startTempoChanged;
+    }
+    const previousTimeEdit = state.timeEdit;
+    state.timeEdit = { beat: 0, scope: "all", channelId: null, groupId: null, preferredAction: null };
+    const finish = () => applyLeadingTempos(targetBeat);
+    const ok = delta > 0 ? insertTrackSpaceAtPlayhead(delta, finish) : deleteTrackSpaceAtPlayhead(-delta, finish);
+    if (!ok) state.timeEdit = previousTimeEdit;
+    return ok;
+  }
+
   function closeTempoSimplifyDialog() {
     if (elements.tempoSimplifyBackdrop) elements.tempoSimplifyBackdrop.hidden = true;
   }
@@ -28471,8 +28727,8 @@
     return Number.isFinite(firstBeat) ? firstBeat : 0;
   }
 
-  function analyzeTempoSimplification({ maxBpmDeltaExclusive = 5, preserveExtrema = true } = {}) {
-    const threshold = Math.max(1, Number(maxBpmDeltaExclusive) || 5);
+  function analyzeTempoSimplification({ maxBpmDelta = 4, preserveExtrema = true } = {}) {
+    const threshold = clamp(Number(maxBpmDelta) || 4, 1, 254);
     const source = [...(state.tempos || [])]
       .map((tempo) => ({ ...tempo, beat: Math.max(0, Number(tempo.beat) || 0), bpm: Number(tempo.bpm) || 120 }))
       .sort((left, right) => left.beat - right.beat || (Number(left.id) || 0) - (Number(right.id) || 0));
@@ -28532,7 +28788,7 @@
         continue;
       }
       const isExtrema = Boolean(preserveExtrema) && (tempo.bpm === minBpm || tempo.bpm === maxBpm);
-      const isSmallChange = Math.abs(tempo.bpm - previousRetained.bpm) < threshold;
+      const isSmallChange = Math.abs(tempo.bpm - previousRetained.bpm) <= threshold;
       if (!tempo.fixed && !isExtrema && isSmallChange) {
         removedGroups.push(tempo);
         continue;
@@ -28553,7 +28809,7 @@
       afterCount: Math.max(0, source.length - removedIds.size),
       minBpm,
       maxBpm,
-      maxBpmDeltaExclusive: threshold,
+      maxBpmDelta: threshold,
       preserveExtrema: Boolean(preserveExtrema),
       ignoredLeadingDefaultTempoForComparison: hasLeadingDefaultTempoPadding,
     };
@@ -28561,9 +28817,9 @@
 
   function readTempoSimplifyOptionsFromUi() {
     const rawThreshold = Number(elements.tempoSimplifyThresholdInput?.value);
-    const threshold = Number.isFinite(rawThreshold) ? Math.round(rawThreshold) : 5;
+    const threshold = Number.isFinite(rawThreshold) ? Math.round(rawThreshold) : 4;
     return {
-      maxBpmDeltaExclusive: clamp(threshold, 1, 255),
+      maxBpmDelta: clamp(threshold, 1, 254),
       preserveExtrema: elements.tempoSimplifyPreserveExtrema?.checked !== false,
     };
   }
@@ -28585,8 +28841,12 @@
       return false;
     }
     if (!elements.tempoSimplifyBackdrop) return false;
-    const options = state.tempoSimplify || { maxBpmDeltaExclusive: 5, preserveExtrema: true };
-    elements.tempoSimplifyThresholdInput.value = String(Math.max(1, Math.round(Number(options.maxBpmDeltaExclusive) || 5)));
+    if (getSortedTempos().length <= 1) {
+      showToast(i18nText("tempo.simplify_disabled"));
+      return false;
+    }
+    const options = state.tempoSimplify || { maxBpmDelta: 4, preserveExtrema: true };
+    elements.tempoSimplifyThresholdInput.value = String(clamp(Math.round(Number(options.maxBpmDelta) || 4), 1, 254));
     elements.tempoSimplifyPreserveExtrema.checked = options.preserveExtrema !== false;
     if (elements.tempoSimplifyRecalcNotes) elements.tempoSimplifyRecalcNotes.checked = false;
     updateTempoSimplifySummary();
@@ -28600,7 +28860,7 @@
 
   function applyTempoSimplification() {
     const options = readTempoSimplifyOptionsFromUi();
-    if (elements.tempoSimplifyThresholdInput) elements.tempoSimplifyThresholdInput.value = String(options.maxBpmDeltaExclusive);
+    if (elements.tempoSimplifyThresholdInput) elements.tempoSimplifyThresholdInput.value = String(options.maxBpmDelta);
     state.tempoSimplify = { ...options };
     const analysis = analyzeTempoSimplification(options);
     if (!analysis.removedCount) {
@@ -33221,6 +33481,7 @@
       const beat = overviewTimelineBeatFromPointer(event);
       const snappedBeat = clamp(snapBeat(beat), 0, getTotalBeats());
       return [
+        { label: i18nText("leading.menu"), action: openLeadingSilenceDialog },
         { label: i18nText("timeline.edit_measure"), action: () => openMeasureEditWorkspace({ beat: snappedBeat, scopeType: "all" }) },
         { label: i18nText("rest_cleanup.title"), action: openRestCleanupDialog },
         { label: i18nText("volume.edit_channels"), action: () => openChannelVolumeDialog() },
@@ -33269,6 +33530,8 @@
 
       const tempoSimplifyItem = {
         label: i18nText("tempo.simplify"),
+        disabled: getSortedTempos().length <= 1,
+        disabledReason: i18nText("tempo.simplify_disabled"),
         action: openTempoSimplifyDialog,
       };
       const deleteAllTemposItem = {
@@ -33398,9 +33661,9 @@
       const categoryItems = [
         { label: i18nText("timeline.tempo_menu"), items: tempoItems },
         { label: i18nText("timeline.fade_menu"), items: fadeItems },
-        { label: i18nText("timeline.time_signature_menu"), items: timeSignatureItems },
-        { label: i18nText("timeline.part_menu"), items: partItems },
         { label: i18nText("timeline.measure_menu"), items: selectedChannelMeasureItems },
+        { label: i18nText("timeline.part_menu"), items: partItems },
+        { label: i18nText("timeline.time_signature_menu"), items: timeSignatureItems },
         { label: i18nText("timeline.playback_range_menu"), items: playbackRangeItems },
       ];
 
@@ -33529,7 +33792,7 @@
           danger: true,
           action: deleteSelectedNote,
         },
-        { label: i18nText("note.selected_volume_edit"), action: openNoteVolumeDialog },
+        { label: i18nText("note.volume_edit_menu"), action: openNoteVolumeDialog },
         ...(mergePlan ? [{ label: i18nText("note.merge_consecutive_same", [mergePlan.mergeNoteCount]), action: mergeSelectedSamePitchNotes }] : []),
         {
           label: i18nText("context.note.convert"),
@@ -34592,7 +34855,7 @@
         return `<div class="gf-menu-wrap">${menu([
           { label: t("context.note.copy_short") },
           { label: t("context.note.cut_short") },
-          { label: t("note.selected_volume_edit") },
+          { label: t("note.volume_edit_menu") },
           { label: t("context.note.convert"), sub: true, active: true },
           "-",
           { label: t("context.note.delete_short"), danger: true },
@@ -34614,9 +34877,9 @@
         return `<div class="gf-menu-wrap">${menu([
           { label: t("timeline.tempo_menu"), sub: true },
           { label: t("timeline.fade_menu"), sub: true },
-          { label: t("timeline.time_signature_menu"), sub: true },
-          { label: t("timeline.part_menu"), sub: true },
           { label: t("timeline.measure_menu"), sub: true },
+          { label: t("timeline.part_menu"), sub: true },
+          { label: t("timeline.time_signature_menu"), sub: true },
           { label: t("timeline.playback_range_menu"), sub: true },
           { label: t("timeline.event_delete"), sub: true, danger: true, active: true },
         ])}${menu([
@@ -34628,9 +34891,9 @@
         return `<div class="gf-menu-wrap">${menu([
           { label: t("timeline.tempo_menu"), sub: true },
           { label: t("timeline.fade_menu"), sub: true },
-          { label: t("timeline.time_signature_menu"), sub: true },
-          { label: t("timeline.part_menu"), sub: true },
           { label: t("timeline.measure_menu"), sub: true },
+          { label: t("timeline.part_menu"), sub: true },
+          { label: t("timeline.time_signature_menu"), sub: true },
           { label: t("timeline.playback_range_menu"), sub: true, active: true },
           { label: t("timeline.event_delete"), sub: true, danger: true },
         ])}${menu([
@@ -34974,19 +35237,10 @@
     document.querySelectorAll('input[type="radio"][name="midiImportOverlap"]').forEach((input) => input.addEventListener("change", updateMidiImportDialog));
     document.querySelectorAll('input[type="radio"][name="w2mTempo"], input[type="radio"][name="w2mVolume"]')
       .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
-    for (const slider of [elements.w2mSensitivity, elements.w2mNoteEnd, elements.w2mMinLength, elements.w2mInstRange]) {
+    for (const slider of [elements.w2mSensitivity, elements.w2mNoteEnd, elements.w2mMinLength]) {
       slider?.addEventListener("input", updateW2mSliderReadouts);
       slider?.addEventListener("change", scheduleAudioToMidiPostprocess);
     }
-    elements.w2mPolyUnlimited?.addEventListener("change", scheduleAudioToMidiPostprocess);
-    elements.w2mPolyMax?.addEventListener("change", () => {
-      elements.w2mPolyMax.value = String(clamp(Math.round(Number(elements.w2mPolyMax.value) || 3), 1, 88));
-      scheduleAudioToMidiPostprocess();
-    });
-    elements.w2mInstMax?.addEventListener("change", () => {
-      elements.w2mInstMax.value = String(clamp(Math.round(Number(elements.w2mInstMax.value) || 2), 1, 16));
-      scheduleAudioToMidiPostprocess();
-    });
     elements.w2mVolumeFixed?.addEventListener("change", () => {
       readW2mVolumeInput(elements.w2mVolumeFixed, 12);
       scheduleAudioToMidiPostprocess();
@@ -35742,6 +35996,12 @@
     elements.channelVolumeClearAllButton?.addEventListener("click", () => setAllChannelVolumeChecked(false));
     elements.channelVolumeFixedMode?.addEventListener("change", () => configureChannelVolumeSliderForMode(true));
     elements.channelVolumeProtectV0?.addEventListener("change", () => configureChannelVolumeSliderForMode(false));
+    elements.channelVolumeSimplify?.addEventListener("change", () => { updateChannelVolumeControl(); updateChannelVolumeCounts(); });
+    elements.channelVolumeSimplifyThreshold?.addEventListener("input", updateChannelVolumeCounts);
+    elements.channelVolumeSimplifyThreshold?.addEventListener("change", () => {
+      elements.channelVolumeSimplifyThreshold.value = String(getChannelVolumeSimplifyThreshold());
+      updateChannelVolumeCounts();
+    });
     elements.channelVolumeSlider?.addEventListener("input", () => {
       updateChannelVolumeControl();
       updateChannelVolumeCounts();
@@ -35825,6 +36085,18 @@
     elements.tempoEditorCancelButton?.addEventListener("click", closeTempoEditor);
     elements.tempoEditorApplyButton?.addEventListener("click", applyTempoEditor);
     elements.tempoEditorDeleteButton?.addEventListener("click", deleteTempoFromEditor);
+    elements.editLeadingSilenceButton?.addEventListener("click", () => { closeEditMenu(); openLeadingSilenceDialog(); });
+    elements.leadingSilenceCloseButton?.addEventListener("click", closeLeadingSilenceDialog);
+    elements.leadingSilenceCancelButton?.addEventListener("click", closeLeadingSilenceDialog);
+    elements.leadingSilenceApplyButton?.addEventListener("click", applyLeadingSilence);
+    for (const input of [elements.leadingSilenceInput, elements.leadingSilenceTempoInput]) {
+      input?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") { event.preventDefault(); applyLeadingSilence(); }
+      });
+    }
+    elements.leadingSilenceBackdrop?.addEventListener("pointerdown", (event) => {
+      if (event.target === elements.leadingSilenceBackdrop) closeLeadingSilenceDialog();
+    });
     elements.tempoSimplifyCloseButton?.addEventListener("click", closeTempoSimplifyDialog);
     elements.tempoSimplifyCancelButton?.addEventListener("click", closeTempoSimplifyDialog);
     elements.tempoSimplifyApplyButton?.addEventListener("click", applyTempoSimplification);
@@ -35832,7 +36104,7 @@
     elements.tempoSimplifyPreserveExtrema?.addEventListener("change", updateTempoSimplifySummary);
     elements.tempoSimplifyThresholdInput?.addEventListener("blur", () => {
       const options = readTempoSimplifyOptionsFromUi();
-      if (elements.tempoSimplifyThresholdInput) elements.tempoSimplifyThresholdInput.value = String(options.maxBpmDeltaExclusive);
+      if (elements.tempoSimplifyThresholdInput) elements.tempoSimplifyThresholdInput.value = String(options.maxBpmDelta);
       updateTempoSimplifySummary();
     });
     elements.tempoSimplifyThresholdInput?.addEventListener("keydown", (event) => {
@@ -35984,6 +36256,7 @@
           if (isNoteEditModeActive()) cancelNoteEditMode();
           closeTempoEditor();
           closeTempoSimplifyDialog();
+          closeLeadingSilenceDialog();
           closeAutoPartDialog();
           closeTimeEditDialog();
         }
@@ -36054,6 +36327,7 @@
         if (isNoteEditModeActive()) cancelNoteEditMode();
         closeTempoEditor();
         closeTempoSimplifyDialog();
+        closeLeadingSilenceDialog();
         closeAutoPartDialog();
         closeTimeEditDialog();
         if (isChannelDeleteModeActive()) cancelChannelDeleteMode();

@@ -108,6 +108,8 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ko"] = {
     "presetMissing": "재생용 악기 프리셋을 찾지 못했습니다. (Bank {0} / Program {1})",
     "volumeFixed": "볼륨 설정",
     "volumeOriginal": "원본",
+    "volumeSimplify": "간소화",
+    "volumeSimplifyTitle": "볼륨 변화가 1 이하인 곳은 이전 볼륨으로 합쳐 글자 수를 줄입니다. (최저/최고 볼륨 유지)",
     "fadeInSeconds": "페이드 인 (초)",
     "fadeOutSeconds": "페이드 아웃 (초)",
     "tutorialOpen": "튜토리얼",

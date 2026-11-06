@@ -374,8 +374,6 @@ async function transcribe(id, wave, options) {
 //   options.onsetThreshold  note sensitivity (lower = more notes); default meta.thresholds.onset
 //   options.frameThreshold / offsetThreshold  note end: lower frame / higher offset = longer notes; default meta.thresholds
 //   options.minNoteSeconds  drop pitched notes shorter than this (0 = keep all)
-//   options.maxPolyphony    at most this many pitches per onset time (omitted/0 = no limit)
-//   options.instRange / instMax  instruments within instRange probability of the best one, at most instMax per note (omitted = meta inst_multi rule)
 //   options.velocity        true/undefined: estimated, false: constant 100, number: that fixed velocity (1-127)
 //   options.velocityRange   [min, max] (1-127) range of estimated velocities; default meta.velocity min/max
 //   options.tempo           true/undefined: auto, false: 120 BPM grid, number: that fixed BPM
@@ -391,14 +389,11 @@ async function finishTranscription(job, options, progress, started = performance
     ...(onset > 0 && onset < 1 ? { onset } : {}),
     ...(frame > 0 && frame < 1 ? { frame } : {}),
     ...(offsetTh > 0 && offsetTh < 1 ? { offset: offsetTh } : {}),
-    ...(Number(options.instRange) >= 0 && options.instRange != null ? { inst_range: Number(options.instRange), inst_max: Math.max(1, Math.floor(Number(options.instMax)) || 1) } : {}),
   };
   let notes = decode.decodeNotes(probs, T, meta.classes, thresholds);
   // Optional clean-up: drop pitched notes shorter than options.minNoteSeconds (drum hits are always that short).
   const minNoteSeconds = Number(options.minNoteSeconds);
   if (minNoteSeconds > 0) notes = notes.filter(note => note[1] === 128 || note[3] - note[2] >= minNoteSeconds);
-  // Optional polyphony limit (pitched notes starting at the same time: keep the most confident pitches).
-  if (Number(options.maxPolyphony) >= 1) notes = decode.limitPolyphony(notes, options.maxPolyphony);
   let velocities = null;
   const fixedVelocity = typeof options.velocity === "number" && options.velocity > 0
     ? Math.min(127, Math.max(1, Math.round(options.velocity)))

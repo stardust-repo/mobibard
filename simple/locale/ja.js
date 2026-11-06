@@ -108,6 +108,8 @@ window.__MOBIBARD_SIMPLE_LOCALES__["ja"] = {
     "presetMissing": "再生用の楽器プリセットが見つかりませんでした。（Bank {0} / Program {1}）",
     "volumeFixed": "音量設定",
     "volumeOriginal": "元の音量",
+    "volumeSimplify": "簡略化",
+    "volumeSimplifyTitle": "音量の変化が1以下の箇所は直前の音量にまとめ、文字数を減らします。（最低/最高音量は維持）",
     "fadeInSeconds": "フェードイン (秒)",
     "fadeOutSeconds": "フェードアウト (秒)",
     "tutorialOpen": "チュートリアル",

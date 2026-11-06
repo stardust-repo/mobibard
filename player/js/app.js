@@ -78,6 +78,7 @@
     metricsCache: { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], noteStatsSource: "", noteStats: [], tempoInput: "", tempoResult: null },
     pipelineCache: { sourceVersion: -1, stages: [] },
     tempoCleanCount: 0,
+    volumeSimplifyCount: 0,
     tempoOverrides: [],
     copySplitCache: { mml: "", maxChars: 0, searchPercent: 0, pages: null },
     copySplitPlan: { sourceVersion: -1, maxChars: 0, searchPercent: 0, geometrySignature: "", pages: null },
@@ -106,6 +107,7 @@
       leading: { beats: 4 },
       fade: { inSeconds: 0, outSeconds: 0 },
       tempo: { scale: 100, simplify: true },
+      volumeSimplify: false,
       dynamics: { genre: "", strength: "normal", targetChannels: [true, true, true, true, true, true] },
       accompaniment: { genre: "", strength: "normal" },
       split: { maxChars: 2400, searchPercent: 50 }
@@ -780,6 +782,7 @@
       leading: state.options.leading,
       fade: state.options.fade,
       tempo: state.options.tempo,
+      volumeSimplify: state.options.volumeSimplify,
       tempoOverrides: state.tempoOverrides,
       dynamics: state.options.dynamics,
       accompaniment: state.options.accompaniment
@@ -895,6 +898,7 @@
         scale: Math.max(50, Math.min(200, Math.round(Number(saved.tempo?.scale) || 100))),
         simplify: saved.tempo?.simplify !== false
       },
+      volumeSimplify: saved.volumeSimplify === true,
       dynamics: {
         genre: String(saved.dynamics?.genre || ""),
         strength: String(saved.dynamics?.strength || "normal"),
@@ -1073,6 +1077,8 @@
       } else {
         const restoredAnalysis = getTempoCleanupAnalysis(String(mainMml?.value || state.sourceMml));
         state.tempoCleanCount = Math.max(0, Number(restoredAnalysis?.removedCount) || 0);
+        const restoredVol = getVolumeSimplifyAnalysis(String(mainMml?.value || state.sourceMml));
+        state.volumeSimplifyCount = Math.max(0, Number(restoredVol?.removedChanges) || 0);
         updateTempoCleanButton();
       }
 
@@ -1370,6 +1376,18 @@
     return { output, key };
   }
 
+  function getVolumeSimplifyAnalysis(input) {
+    const source = String(input || "");
+    if (state.metricsCache.volSimpInput === source && state.metricsCache.volSimpResult) return state.metricsCache.volSimpResult;
+    let result = { mml: source, removedChanges: 0 };
+    try {
+      result = window.MabiOptimizer?.simplifyVolumesMml?.(source, { partCount: 6, maxDelta: 1 }) || result;
+    } catch (_) {}
+    state.metricsCache.volSimpInput = source;
+    state.metricsCache.volSimpResult = result;
+    return result;
+  }
+
   function getTempoCleanupAnalysis(input) {
     const source = String(input || "");
     if (state.metricsCache.tempoInput === source && state.metricsCache.tempoResult) return state.metricsCache.tempoResult;
@@ -1463,6 +1481,9 @@
         maxBpmDeltaExclusive: 5,
         preserveExtrema: true
       }), out);
+    }
+    if (state.options.volumeSimplify && optimizer.simplifyVolumesMml) {
+      out = resultMml(optimizer.simplifyVolumesMml(out, { partCount: 6, maxDelta: 1 }), out);
     }
     if (Number(state.options.tempo.scale) !== 100) out = scaleTempoCommands(out, state.options.tempo.scale);
     const fadeInSeconds = normalizeFadeSeconds(state.options.fade?.inSeconds);
@@ -1563,7 +1584,7 @@
     if (!force && signature === state.lastApplySignature) return;
 
     const startedAt = performance.now();
-    const transformCalls = { dynamics: 0, rest: 0, volumeFixed: 0, volume: 0, octave: 0, accompaniment: 0, leading: 0, tempoClean: 0, tempoScale: 0, fade: 0, tempoOverride: 0 };
+    const transformCalls = { dynamics: 0, rest: 0, volumeFixed: 0, volume: 0, octave: 0, accompaniment: 0, leading: 0, tempoClean: 0, volumeSimplify: 0, tempoScale: 0, fade: 0, tempoOverride: 0 };
     const diagnostics = { cacheHits: 0, stageDurations: {} };
     let out = String(state.sourceMml);
     let previousKey = `source:${state.sourceVersion}`;
@@ -1688,6 +1709,17 @@
         if (!state.options.tempo.simplify) return input;
         transformCalls.tempoClean += 1;
         return resultMml(cleanupAnalysis, input);
+      }, diagnostics);
+      out = stage.output;
+      previousKey = stage.key;
+
+      const volSimpAnalysis = getVolumeSimplifyAnalysis(out);
+      state.volumeSimplifyCount = Math.max(0, Number(volSimpAnalysis?.removedChanges) || 0);
+      updateTempoCleanButton();
+      stage = pipelineStage(stageIndex++, previousKey, "volumeSimplify", state.options.volumeSimplify, out, input => {
+        if (!state.options.volumeSimplify) return input;
+        transformCalls.volumeSimplify += 1;
+        return resultMml(volSimpAnalysis, input);
       }, diagnostics);
       out = stage.output;
       previousKey = stage.key;
@@ -2626,6 +2658,7 @@
     state.sourceVersion += 1;
     state.lastApplySignature = "";
     state.tempoCleanCount = 0;
+    state.volumeSimplifyCount = 0;
     state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], noteStatsSource: "", noteStats: [], tempoInput: "", tempoResult: null };
     resetPipelineCache();
     markPlayerEdited();
@@ -3888,14 +3921,20 @@
     canvas.append(block);
   }
 
-  function updateTempoCleanButton() {
-    const button = state.ui.tempoCleanButton;
+  function updateSimplifyButton(button, enabled, count, titleKey, countKey) {
     if (!button) return;
-    button.textContent = state.options.tempo.simplify
-      ? t("tempoCleanEnabledCount", [Math.max(0, Number(state.tempoCleanCount) || 0).toLocaleString(document.documentElement.lang || undefined)])
+    const locale = document.documentElement.lang || undefined;
+    const status = enabled
+      ? t(countKey, [Math.max(0, Number(count) || 0).toLocaleString(locale)])
       : t("tempoCleanDisabled");
-    button.classList.toggle("active", Boolean(state.options.tempo.simplify));
-    button.setAttribute("aria-pressed", state.options.tempo.simplify ? "true" : "false");
+    button.replaceChildren(el("span", "wb9-simplify-title", { text: t(titleKey) }), el("span", "wb9-simplify-status", { text: status }));
+    button.classList.toggle("active", Boolean(enabled));
+    button.setAttribute("aria-pressed", enabled ? "true" : "false");
+  }
+
+  function updateTempoCleanButton() {
+    updateSimplifyButton(state.ui.tempoCleanButton, state.options.tempo.simplify, state.tempoCleanCount, "tempoCleanShort", "tempoCleanEnabledCount");
+    updateSimplifyButton(state.ui.volumeSimplifyButton, state.options.volumeSimplify, state.volumeSimplifyCount, "volumeSimplifyShort", "volumeSimplifyEnabledCount");
   }
 
   function createTargetChannelButtons(values, onChange, className = "") {
@@ -3969,6 +4008,22 @@
     }, "wb7-quantize-segments");
     common.append(optionRow("quantize", state.ui.quantizeControl, "", "wb7-common-quantize wb8-common-quantize wb9-common-quantize"));
 
+    const leadingStepper = wb9NumberControl({ min: 0, max: 300, step: 0.25, value: state.options.leading.beats * 0.5, suffix: t("seconds"), label: t("leading"), onChange: value => {
+      state.options.leading.beats = Math.round(value * 4) / 2;
+      queueApply();
+    }});
+    state.ui.leadingControl = leadingStepper;
+    common.append(optionRow("leading", leadingStepper, "", "wb6-common-leading wb8-common-leading wb9-common-leading"));
+
+    state.ui.volumeSimplifyButton = el("button", "wb9-tempo-clean-button wb9-volume-simplify-button", {
+      type: "button",
+      "aria-pressed": state.options.volumeSimplify ? "true" : "false"
+    });
+    state.ui.volumeSimplifyButton.addEventListener("click", () => {
+      state.options.volumeSimplify = !state.options.volumeSimplify;
+      updateTempoCleanButton();
+      queueApply();
+    });
     state.ui.tempoCleanButton = el("button", "wb9-tempo-clean-button", {
       type: "button",
       "aria-pressed": state.options.tempo.simplify ? "true" : "false"
@@ -3978,8 +4033,10 @@
       updateTempoCleanButton();
       queueApply();
     });
+    const simplifyPair = el("div", "wb9-simplify-pair");
+    simplifyPair.append(state.ui.volumeSimplifyButton, state.ui.tempoCleanButton);
     updateTempoCleanButton();
-    common.append(optionRow("tempoClean", state.ui.tempoCleanButton, "", "wb8-common-tempo-clean wb9-common-tempo-clean"));
+    common.append(optionRow("simplify", simplifyPair, "", "wb8-common-tempo-clean wb9-common-tempo-clean wb9-common-simplify"));
 
     const tempoScale = wb9NumberControl({ min: 50, max: 200, step: 1, value: state.options.tempo.scale, suffix: "%", label: t("tempoScale"), onChange: value => {
       state.options.tempo.scale = value;
@@ -3987,13 +4044,6 @@
     }});
     state.ui.tempoScaleControl = tempoScale;
     common.append(optionRow("tempoScale", tempoScale, "", "wb6-common-tempo wb8-common-tempo-scale wb9-common-tempo-scale"));
-
-    const leadingStepper = wb9NumberControl({ min: 0, max: 300, step: 0.25, value: state.options.leading.beats * 0.5, suffix: t("seconds"), label: t("leading"), onChange: value => {
-      state.options.leading.beats = Math.round(value * 4) / 2;
-      queueApply();
-    }});
-    state.ui.leadingControl = leadingStepper;
-    common.append(optionRow("leading", leadingStepper, "", "wb6-common-leading wb8-common-leading wb9-common-leading"));
 
     const fadeSecondsDefs = FADE_SECOND_OPTIONS.map(value => [String(value), String(value)]);
     const fadeInSegments = segmented(fadeSecondsDefs, String(normalizeFadeSeconds(state.options.fade?.inSeconds)), value => {
@@ -4209,6 +4259,7 @@
     state.sourceVersion += 1;
     state.lastApplySignature = "";
     state.tempoCleanCount = 0;
+    state.volumeSimplifyCount = 0;
     syncChannelDraftFromApplied();
     state.metricsCache = { sourceVersion: -1, restInput: "", rest: new Map(), volumeSource: "", volume: [], noteStatsSource: "", noteStats: [], tempoInput: "", tempoResult: null };
     resetPipelineCache();

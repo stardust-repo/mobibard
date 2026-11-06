@@ -10177,3 +10177,36 @@ a[class*="button"]:hover {
     margin-right: 0;
   }
 }
+
+/* simplify (volume | tempo) pair */
+.player-ui .wb9-simplify-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+.player-ui .wb9-simplify-pair .wb9-tempo-clean-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 4px 4px;
+  white-space: normal;
+  line-height: 1.2;
+}
+.player-ui .wb9-simplify-title {
+  font-size: 10.5px;
+  font-weight: 800;
+}
+.player-ui .wb9-simplify-status {
+  font-size: 9px;
+  font-weight: 650;
+  opacity: .85;
+}
+
+.player-ui .wb9-common-options .wb4-option-row:nth-child(-n+4) {
+  padding-left: 8px;
+  padding-right: 8px;
+}

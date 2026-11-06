@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261105a";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261106k";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.5.0&amp;rev=20261105a"></script>
+<script src="js/language-manager.js?v=5.5.0&amp;rev=20261106k"></script>
 <title data-i18n="app.title">모비바드 v5.5</title>
 <link href="../assets/favicon.ico" rel="icon"/>
 <script>
@@ -93,7 +93,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.5.0&amp;rev=20261105a" rel="stylesheet"/>
+<link href="styles.css?v=5.5.0&amp;rev=20261106k" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -118,7 +118,7 @@
 <button id="audioExportButton" role="menuitem" type="button" data-i18n="audio.export_ogg">오디오 내보내기</button>
 <div class="file-menu-separator" role="separator"></div>
 <button data-supported-files-button data-supported-files-context="editor" id="supportedFilesMenuButton" role="menuitem" type="button" data-i18n="file.supported">지원 파일</button></div>
-</div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button" data-i18n="menu.edit">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button" data-i18n="history.undo">되돌리기</button><button id="editRedoButton" role="menuitem" type="button" data-i18n="history.redo">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button" data-i18n="copy">복사</button><button id="editCutButton" role="menuitem" type="button" data-i18n="action.cut">잘라내기</button><button id="editPasteButton" role="menuitem" type="button" data-i18n="paste">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button" data-i18n="selection.all">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button" data-i18n="action.delete">삭제</button><div class="file-menu-separator" role="separator"></div><button id="editMeasureButton" role="menuitem" type="button" data-i18n="timeline.edit_measure">마디 편집</button><button id="editRestCleanupButton" role="menuitem" type="button" data-i18n="rest_cleanup.title">쉼표 정리</button><button id="editNoteVolumeButton" role="menuitem" type="button" data-i18n="volume.edit_channels">채널 볼륨 수정</button><button id="editAutoPartButton" role="menuitem" type="button" data-i18n="timeline.auto_part">파트 자동 설정</button></div></div><div class="settings-control"><button aria-expanded="false" aria-haspopup="dialog" id="settingsButton" type="button" data-i18n="menu.settings">설정</button><div class="file-menu settings-menu" hidden id="settingsMenu" role="dialog" aria-label="Editor 설정" data-i18n-aria-label="settings.editor"><button aria-checked="true" class="settings-toggle-row" id="velocityLaneVisibleToggle" role="menuitemcheckbox" type="button"><span aria-hidden="true" class="settings-check-mark">✓</span><span data-i18n="volume.editor">볼륨 편집기</span></button><button aria-checked="true" class="settings-toggle-row" id="audioLaneVisibleToggle" role="menuitemcheckbox" type="button"><span aria-hidden="true" class="settings-check-mark">✓</span><span data-i18n="settings.audio_track">오디오 트랙</span></button><div class="file-menu-separator" role="separator"></div><label class="settings-field"><span data-i18n="volume.labels">볼륨 표시</span><select id="noteVolumeDisplaySelect" title="피아노롤 노트의 볼륨(V0~V15) 표시 범위를 변경합니다." data-i18n-title="note.change_which_piano"><option value="all" data-i18n="ui.show_all">모두 표시</option><option selected value="selected" data-i18n="channel.selected_only">선택 채널만</option><option value="none" data-i18n="ui.hide">표시 안 함</option></select></label><label class="settings-field"><span data-i18n="ui.pitch_spacing">음계 두께</span><select id="pitchSpacingSelect" title="피아노롤 음계 두께를 변경합니다." data-i18n-title="ui.change_spacing_between"><option value="8">8px</option><option value="10">10px</option><option selected value="12">12px</option><option value="14">14px</option><option value="16">16px</option></select></label><div class="settings-field settings-soundfont-field"><span data-i18n="soundbank.text">사운드폰트</span><button aria-controls="editorSoundFontBackdrop" aria-haspopup="dialog" id="editorSoundFontSettingsButton" title="Editor 재생 사운드폰트 설정" data-i18n-title="soundbank.configure_playback" type="button"><span id="editorSoundFontMenuLabel" data-i18n="soundbank.default">기본 음색</span></button></div></div></div>
+</div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button" data-i18n="menu.edit">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button" data-i18n="history.undo">되돌리기</button><button id="editRedoButton" role="menuitem" type="button" data-i18n="history.redo">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button" data-i18n="copy">복사</button><button id="editCutButton" role="menuitem" type="button" data-i18n="action.cut">잘라내기</button><button id="editPasteButton" role="menuitem" type="button" data-i18n="paste">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button" data-i18n="selection.all">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button" data-i18n="action.delete">삭제</button><div class="file-menu-separator" role="separator"></div><button id="editLeadingSilenceButton" role="menuitem" type="button" data-i18n="leading.menu">시작 공백 설정</button><button id="editMeasureButton" role="menuitem" type="button" data-i18n="timeline.edit_measure">마디 편집</button><button id="editRestCleanupButton" role="menuitem" type="button" data-i18n="rest_cleanup.title">쉼표 정리</button><button id="editNoteVolumeButton" role="menuitem" type="button" data-i18n="volume.edit_channels">채널 볼륨 수정</button><button id="editAutoPartButton" role="menuitem" type="button" data-i18n="timeline.auto_part">파트 자동 설정</button></div></div><div class="settings-control"><button aria-expanded="false" aria-haspopup="dialog" id="settingsButton" type="button" data-i18n="menu.settings">설정</button><div class="file-menu settings-menu" hidden id="settingsMenu" role="dialog" aria-label="Editor 설정" data-i18n-aria-label="settings.editor"><button aria-checked="true" class="settings-toggle-row" id="velocityLaneVisibleToggle" role="menuitemcheckbox" type="button"><span aria-hidden="true" class="settings-check-mark">✓</span><span data-i18n="volume.editor">볼륨 편집기</span></button><button aria-checked="true" class="settings-toggle-row" id="audioLaneVisibleToggle" role="menuitemcheckbox" type="button"><span aria-hidden="true" class="settings-check-mark">✓</span><span data-i18n="settings.audio_track">오디오 트랙</span></button><div class="file-menu-separator" role="separator"></div><label class="settings-field"><span data-i18n="volume.labels">볼륨 표시</span><select id="noteVolumeDisplaySelect" title="피아노롤 노트의 볼륨(V0~V15) 표시 범위를 변경합니다." data-i18n-title="note.change_which_piano"><option value="all" data-i18n="ui.show_all">모두 표시</option><option selected value="selected" data-i18n="channel.selected_only">선택 채널만</option><option value="none" data-i18n="ui.hide">표시 안 함</option></select></label><label class="settings-field"><span data-i18n="ui.pitch_spacing">음계 두께</span><select id="pitchSpacingSelect" title="피아노롤 음계 두께를 변경합니다." data-i18n-title="ui.change_spacing_between"><option value="8">8px</option><option value="10">10px</option><option selected value="12">12px</option><option value="14">14px</option><option value="16">16px</option></select></label><div class="settings-field settings-soundfont-field"><span data-i18n="soundbank.text">사운드폰트</span><button aria-controls="editorSoundFontBackdrop" aria-haspopup="dialog" id="editorSoundFontSettingsButton" title="Editor 재생 사운드폰트 설정" data-i18n-title="soundbank.configure_playback" type="button"><span id="editorSoundFontMenuLabel" data-i18n="soundbank.default">기본 음색</span></button></div></div></div>
 <input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98,audio/*,.wav,.mp3,.ogg,.oga,.opus,.m4a,.aac,.flac,.webm,.aif,.aiff,.mp4,.m4v,.mov,.ogv,.3gp,.mkv" hidden="" id="fileInput" data-music-format-input type="file"/>
 <input accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm" hidden="" id="audioFileInput" type="file"/>
 </div>
@@ -137,7 +137,7 @@
 <div aria-label="전체 재생 볼륨" data-i18n-aria-label="playback.master_volume" class="vertical-range-menu volume-menu" hidden="" id="volumeMenu" role="dialog">
 <label class="vertical-range-control">
 <span class="vertical-range-limit">150%</span>
-<input aria-label="전체 볼륨" data-i18n-aria-label="volume.master" class="vertical-range-input" id="volumeSlider" max="150" min="0" orient="vertical" step="1" type="range" value="100"/>
+<input aria-label="전체 볼륨" data-i18n-aria-label="volume.master" class="vertical-range-input" id="volumeSlider" max="150" min="0" orient="vertical" step="5" type="range" value="100"/>
 <span class="vertical-range-limit">0%</span>
 </label>
 <button class="vertical-range-reset" id="volumeResetButton" type="button" data-i18n="action.reset">초기화</button>
@@ -267,6 +267,10 @@
   <div class="channel-volume-options">
     <div class="channel-volume-mode-options-row">
       <label class="note-volume-mode-row channel-volume-mode-row"><input id="channelVolumeFixedMode" type="checkbox"/><span data-i18n="volume.fixed_mode">동일 볼륨으로 변경</span></label>
+    <div class="channel-volume-simplify-row">
+      <label class="note-volume-mode-row channel-volume-simplify-toggle" data-i18n-title="volume.simplify_title" title="볼륨은 바꾸지 않고 잔떨림·점진 변화만 줄여 MML 글자 수를 줄입니다."><input id="channelVolumeSimplify" type="checkbox"/><span data-i18n="volume.simplify">볼륨 변화 간소화</span></label>
+      <label class="channel-volume-simplify-threshold"><input aria-label="볼륨 차이 병합 기준" data-i18n-aria-label="volume.simplify_threshold_aria" id="channelVolumeSimplifyThreshold" inputmode="numeric" max="14" min="1" step="1" type="number" value="1"/><span data-i18n="volume.simplify_threshold_suffix">단계 미만 차이는 이전 볼륨 유지</span></label>
+    </div>
       <label class="note-volume-mode-row channel-volume-protect-row"><input id="channelVolumeProtectV0" type="checkbox" checked/><span data-i18n="volume.protect_v0_min_v1">기존 V0 유지 · 최소 V1</span></label>
     </div>
     <label class="note-volume-slider-row channel-volume-slider-row"><span id="channelVolumeControlLabel" data-i18n="volume.relative_adjust">볼륨 증감</span><input aria-label="노트 볼륨 조절" data-i18n-aria-label="volume.adjust_aria" id="channelVolumeSlider" max="15" min="-15" step="1" type="range" value="0"/><strong id="channelVolumeValue">±0</strong></label>
@@ -410,7 +414,7 @@
 <label><span data-i18n="ui.offset">오프셋</span><span class="audio-setting-input"><input aria-label="오디오 시작 오프셋 초" data-i18n-aria-label="audio.start_offset_seconds" id="audioSourceOffsetInput" inputmode="decimal" min="0" step="0.01" type="number" value="0"/><small data-i18n="ui.sec">초</small></span></label>
 <label><span data-i18n="ui.speed">배속</span><span class="audio-setting-input"><input aria-label="오디오 개별 배속" data-i18n-aria-label="audio.playback_rate" id="audioSourceRateInput" inputmode="decimal" max="4" min="0.25" step="0.05" type="number" value="1"/><small>×</small></span></label>
 </div>
-<label class="audio-volume-slider-control compact-audio-volume" title="오디오 볼륨" data-i18n-title="audio.volume"><span data-i18n="volume.level">음량</span><input aria-label="오디오 볼륨" data-i18n-aria-label="audio.volume" id="audioSourceVolumeInput" max="100" min="0" step="1" type="range" value="30"/><output id="audioSourceVolumeValue">30%</output></label>
+<label class="audio-volume-slider-control compact-audio-volume" title="오디오 볼륨" data-i18n-title="audio.volume"><span data-i18n="volume.level">음량</span><input aria-label="오디오 볼륨" data-i18n-aria-label="audio.volume" id="audioSourceVolumeInput" max="100" min="0" step="5" type="range" value="30"/><output id="audioSourceVolumeValue">30%</output></label>
 </div>
 </div>
 </div>
@@ -459,6 +463,8 @@
 </aside>
 <aside class="inline-detail-pane" id="inlineDetailPane" hidden aria-label="상세 내용" data-i18n-aria-label="ui.detail_pane">
   <section class="inline-detail-section" id="channelVolumeDetail" hidden>
+    <div class="channel-volume-change-count" id="channelVolumeChangeCount" aria-live="polite"></div>
+    <div class="channel-volume-detail-heading" data-i18n="volume.count_heading">볼륨 개수</div>
     <div class="channel-volume-compare-grid" id="channelVolumeComparison" aria-label="볼륨 변경 비교"></div>
     <span id="channelVolumeSummary" hidden></span>
   </section>
@@ -476,22 +482,8 @@
       </div>
       <div class="midi-import-slider-group">
         <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mMinLengthLegend" data-i18n="audio_midi.opt_min_length">짧은 노트 제거</span><output id="w2mMinLengthValue" for="w2mMinLength">안 함</output></div>
-        <input type="range" id="w2mMinLength" min="0" max="200" step="10" value="0" aria-labelledby="w2mMinLengthLegend"/>
+        <input type="range" id="w2mMinLength" min="0" max="100" step="5" value="0" aria-labelledby="w2mMinLengthLegend"/>
         
-      </div>
-      <div class="midi-import-radio-group">
-        <span class="midi-import-setting-title" data-i18n="audio_midi.opt_poly">동시 발음 제한</span>
-        <label class="midi-import-radio"><input type="checkbox" id="w2mPolyUnlimited"/><span data-i18n="audio_midi.opt_poly_unlimited">제한 없음</span></label>
-        <input id="w2mPolyMax" type="number" min="1" max="88" step="1" value="3" inputmode="numeric" aria-label="동시 발음 최대 음 개수" data-i18n-aria-label="audio_midi.opt_poly_max" title="같은 시각에 시작한 음이 여럿 잡히면 확률이 높은 음부터 이 개수까지만 사용합니다" data-i18n-title="audio_midi.opt_poly_hint"/>
-      </div>
-      <div class="midi-import-slider-group">
-        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mInstRangeLegend" data-i18n="audio_midi.opt_inst_range">악기 검출 범위</span><output id="w2mInstRangeValue" for="w2mInstRange">10%</output></div>
-        <input type="range" id="w2mInstRange" min="0" max="100" step="5" value="10" aria-labelledby="w2mInstRangeLegend"/>
-        
-      </div>
-      <div class="midi-import-radio-group">
-        <span class="midi-import-setting-title" data-i18n="audio_midi.opt_inst_max">동시 악기 최대 수</span>
-        <input id="w2mInstMax" type="number" min="1" max="16" step="1" value="2" inputmode="numeric" aria-label="동시 악기 최대 수" data-i18n-aria-label="audio_midi.opt_inst_max" title="가장 확률이 높은 악기와 확률 차이가 검출 범위 이내인 악기도 함께 쓰며, 한 음에 쓰는 악기는 이 개수까지입니다" data-i18n-title="audio_midi.opt_inst_hint"/>
       </div>
       <div class="midi-import-radio-group" role="radiogroup" aria-labelledby="w2mVolumeLegend">
         <span class="midi-import-setting-title" id="w2mVolumeLegend" data-i18n="audio_midi.opt_volume">볼륨(셈여림)</span>
@@ -689,6 +681,24 @@
 <div class="tempo-editor-actions"><button class="danger-button" hidden="" id="tempoEditorDeleteButton" type="button" data-i18n="action.delete">삭제</button><span></span><button id="tempoEditorCancelButton" type="button" data-i18n="cancel">취소</button><button id="tempoEditorApplyButton" type="button" data-i18n="action.apply">적용</button></div>
 </section>
 </div>
+<div class="popup-backdrop" hidden="" id="leadingSilenceBackdrop">
+<section aria-label="시작 공백 설정" data-i18n-aria-label="leading.menu" aria-modal="true" class="tempo-editor-dialog leading-silence-dialog" id="leadingSilenceDialog" role="dialog">
+<div class="tempo-editor-header">
+<div><strong data-i18n="leading.menu">시작 공백 설정</strong></div>
+<button aria-label="닫기" data-i18n-aria-label="close" class="channel-mute-close" id="leadingSilenceCloseButton" type="button">×</button>
+</div>
+<div class="tempo-simplify-control-row">
+<span class="tempo-simplify-option" data-i18n="leading.label">시작 공백</span>
+<label class="tempo-editor-field tempo-simplify-threshold-field"><input aria-label="시작 공백(초)" data-i18n-aria-label="leading.aria" id="leadingSilenceInput" inputmode="decimal" max="300" min="0" step="0.25" type="number" value="2"/><strong data-i18n="leading.suffix">초</strong></label>
+</div>
+<div class="tempo-simplify-control-row leading-tempo-row">
+<span class="tempo-simplify-option" data-i18n="leading.tempo_label">시작 템포</span>
+<label class="tempo-editor-field tempo-simplify-threshold-field"><input aria-label="시작 템포(BPM)" data-i18n-aria-label="leading.tempo_aria" id="leadingSilenceTempoInput" inputmode="numeric" max="255" min="1" step="1" type="number" value="120"/><strong>BPM</strong></label>
+</div>
+<p class="tempo-editor-help" data-i18n="leading.help">첫 노트 앞의 공백을 입력한 시간으로 맞춥니다. 기존 공백은 늘리거나 줄여서 맞춰집니다.</p>
+<div class="tempo-editor-actions tempo-simplify-actions"><span></span><span></span><button id="leadingSilenceCancelButton" type="button" data-i18n="cancel">취소</button><button id="leadingSilenceApplyButton" type="button" data-i18n="action.apply">적용</button></div>
+</section>
+</div>
 <div class="popup-backdrop" hidden="" id="tempoSimplifyBackdrop">
 <section aria-label="템포 간소화" data-i18n-aria-label="tempo.simplify" aria-modal="true" class="tempo-editor-dialog tempo-simplify-dialog" id="tempoSimplifyDialog" role="dialog">
 <div class="tempo-editor-header">
@@ -697,7 +707,7 @@
 </div>
 <div class="tempo-simplify-control-row">
 <label class="tempo-simplify-option"><input checked="" id="tempoSimplifyPreserveExtrema" type="checkbox"/><span data-i18n="tempo.simplify_preserve_extrema">최저/최고 템포 유지</span></label>
-<label class="tempo-editor-field tempo-simplify-threshold-field"><input aria-label="템포 BPM 차이 제거 기준" data-i18n-aria-label="tempo.simplify_threshold_aria" id="tempoSimplifyThresholdInput" inputmode="numeric" max="255" min="1" step="1" type="number" value="5"/><strong data-i18n="tempo.simplify_threshold_suffix">BPM 미만</strong></label>
+<label class="tempo-editor-field tempo-simplify-threshold-field"><input aria-label="템포 BPM 차이 제거 기준" data-i18n-aria-label="tempo.simplify_threshold_aria" id="tempoSimplifyThresholdInput" inputmode="numeric" max="254" min="1" step="1" type="number" value="4"/><strong data-i18n="tempo.simplify_threshold_suffix">BPM 미만</strong></label>
 </div>
 <label class="tempo-simplify-option tempo-recalc-option"><input id="tempoSimplifyRecalcNotes" type="checkbox"/><span data-i18n="tempo.recalc_notes">노트 재계산 (실제 길이 유지)</span></label>
 <div class="tempo-simplify-summary" data-i18n="tempo.simplify_preview" data-i18n-args="[0,0,0]" id="tempoSimplifySummary">0개 → 0개 (0개 삭제)</div>
@@ -753,7 +763,7 @@
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
 <script src="../plugins/common/utils.js?v=5.1.0&amp;rev=20260819-163106"></script>
 <script src="../plugins/common/note-timing.js?v=1.0.0"></script>
-<script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20260907-editor-export-copy1"></script>
+<script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20261106-volsimp1"></script>
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.1&amp;rev=20260907-fixed92"></script>
 <script src="../plugins/common/midi-to-mml.js?v=5.1.1&amp;rev=20261103-assign"></script>
@@ -779,7 +789,7 @@
 <script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261105a"></script>
+<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261106k"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
@@ -795,14 +805,14 @@
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
 <script src="js/soundbank-player.js?v=5.5.0&amp;rev=20261103-marker1"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261105a"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261106k"></script>
 <script src="../plugins/common/site-navigation.js?v=20261102-gamma"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
-<script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.28"></script>
-<script src="app.js?v=5.5.0&amp;rev=20261105a"></script>
+<script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.29"></script>
+<script src="app.js?v=5.5.0&amp;rev=20261106k"></script>
 <script src="js/account-drive.js?v=5.5.0&amp;rev=20261103-settings1" type="module"></script>
 </body>
 </html>

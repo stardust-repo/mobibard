@@ -108,6 +108,8 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-CN"] = {
     "presetMissing": "找不到用于播放的乐器预设。（Bank {0} / Program {1}）",
     "volumeFixed": "音量设置",
     "volumeOriginal": "原始音量",
+    "volumeSimplify": "简化",
+    "volumeSimplifyTitle": "音量变化不超过 1 的位置沿用前一个音量，以减少字数。（保留最低/最高音量）",
     "fadeInSeconds": "淡入 (秒)",
     "fadeOutSeconds": "淡出 (秒)",
     "tutorialOpen": "教程",
