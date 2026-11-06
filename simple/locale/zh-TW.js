@@ -126,7 +126,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["zh-TW"] = {
     "tutorialStep1Body": "可透過本機檔案、Google 檔案或貼上載入音樂。按支援檔案可查看可轉換的格式。",
     "tutorialStep1Note": "簡易生成器會將載入的音樂自動轉換為 3 聲道 MML。",
     "tutorialStep2Title": "2. 設定轉換選項",
-    "tutorialStep2Body": "選擇量化與休止符移除，並可將淡入、淡出設定為 0、1、2 或 4 秒。0 表示不套用。",
+    "tutorialStep2Body": "選擇量化與休止符移除，並可使用音量的「簡化」按鈕，以及將淡入、淡出設定為 0、1、2 或 4 秒。0 表示不套用。",
     "tutorialStep2Note": "淡入從第一個實際音符開始；淡出會自動調整，使最後一個實際音符從 V1 開始。",
     "tutorialStep3Title": "3. 播放確認",
     "tutorialStep3Body": "轉換完成後，可使用播放按鈕與時間軸試聽結果。回到開頭按鈕會返回 0 秒。",

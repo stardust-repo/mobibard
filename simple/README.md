@@ -1,6 +1,6 @@
 # Simple 구현 스펙 스냅샷
 
-마지막 갱신: 2026-08-24 KST  
+마지막 갱신: 2026-11-06 KST  
 출시 기준: 이 README와 현재 배포 소스
 
 ## 목적
@@ -12,7 +12,8 @@
 - MIDI/KAR, XMI/HMP/HMI, Tracker(MOD/S3M/XM/IT), PlayStation/Nintendo/Sega 시퀀스와 VGM/VGZ·GYM·S98 사운드칩 로그, MusicXML/MNX/Finale/MuseScore/Guitar Pro, VOCALOID/UTAU/OpenUtau/Synthesizer V/CeVIO 계열을 공용 포맷 계층으로 처리합니다.
 - `.bin`·`.macbin` Classic Mac 컨테이너는 내부 형식을 공용 계층이 자동 판별합니다.
 - 공용 MIDI→MML 변환기로 최대 3채널을 생성합니다.
-- 공용 1/64 겹침 허용 규칙과 템포 정리를 사용합니다.
+- 공용 1/64 겹침 허용 규칙과 템포 간소화를 사용합니다.
+- 볼륨의 `간소화` 버튼은 변화량 1 이하의 볼륨 변화를 이전 볼륨으로 합쳐 글자 수를 줄입니다(최저/최고 볼륨 유지, 공용 `simplifyVolumesMml`).
 - 양자화, 쉼표 제거, MML 분할/복사, 기본 SoundFont 미리듣기를 제공합니다.
 - 오디오 파일(WAV/MP3/OGG/OPUS/M4A/AAC/FLAC/WEBM/AIFF)을 로컬 파일·구글 파일·드롭으로 넣으면 공용 Wave2MIDI로 악기별 MIDI로 변환한 뒤 같은 변환 경로를 탑니다. 진행 상황은 하단 진행 표시줄로 보여 줍니다(최대 10분). 기존 `MIDI 추출` 외부 링크는 제거했습니다.
 

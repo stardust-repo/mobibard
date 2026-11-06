@@ -126,7 +126,7 @@ window.__MOBIBARD_SIMPLE_LOCALES__["en"] = {
     "tutorialStep1Body": "Load music from a local file, Google file, or pasted MML. Use Supported Files to check convertible formats.",
     "tutorialStep1Note": "Simple automatically converts the loaded music into 3-channel MML.",
     "tutorialStep2Title": "2. Set conversion options",
-    "tutorialStep2Body": "Choose quantization and rest removal, then optionally set Fade In and Fade Out to 0, 1, 2, or 4 seconds. 0 disables the fade.",
+    "tutorialStep2Body": "Choose quantization and rest removal, then optionally use the volume Simplify button and set Fade In and Fade Out to 0, 1, 2, or 4 seconds. 0 disables the fade.",
     "tutorialStep2Note": "Fade In starts at the first actual note. Fade Out is adjusted so the last actual note starts at V1.",
     "tutorialStep3Title": "3. Preview playback",
     "tutorialStep3Body": "After conversion, use Play and the timeline to listen to the result. Rewind returns playback to 0 seconds.",

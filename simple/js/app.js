@@ -1154,7 +1154,7 @@
     ui.prev.textContent=t("tutorialPrev"); ui.prev.disabled=simpleTutorialStep===0;
     ui.next.textContent=t(simpleTutorialStep===SIMPLE_TUTORIAL_STEPS.length-1?"tutorialFinish":"tutorialNext");
     ui.image.hidden=false; ui.fallback.hidden=true;
-    ui.image.src=`assets/tutorial/${tutorialLanguageFolder()}/${step.image}?rev=20260824-final43`;
+    ui.image.src=`assets/tutorial/${tutorialLanguageFolder()}/${step.image}?rev=20261106-tutorial-recapture`;
     ui.image.alt=t("tutorialImageAlt",[t(step.title)]);
     ui.dots.forEach((button,index)=>{ const active=index===simpleTutorialStep; button.classList.toggle("active",active); button.setAttribute("aria-current",active?"step":"false"); button.setAttribute("aria-label",t("tutorialJump",[index+1])); });
   }
