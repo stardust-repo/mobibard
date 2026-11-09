@@ -96,7 +96,7 @@ assets/icons/
 - 팝업의 취소·닫기·Esc는 실행 중인 변환 Worker를 종료합니다. 최대 길이는 10분입니다.
 - AI 모델(39 MB)은 처음 한 번 내려받아 IndexedDB에 저장하고 영구 저장소(`navigator.storage.persist()`)를 요청합니다. 이후에는 네트워크 없이 SHA-256 검증 후 사용하며, `meta.json`만 바뀐 경우에도 다음 사용 때 갱신됩니다.
 - 오디오 참고 트랙으로 넣는 기존 `오디오 가져오기` 기능은 그대로입니다.
-- 모델은 startdust-io가 제작한 CC BY-NC 4.0(비상업 이용 전용) 모델이며, 변환 진행 패널에 `Wave2MIDI v1.1 · startdust-io · CC BY-NC 4.0`를 표시하고 `plugins/ai/wave2midi/model/LICENSE`로 연결합니다.
+- 모델은 startdust-io가 제작한 CC BY-NC 4.0(비상업 이용 전용) 모델이며, 변환 진행 패널에 `Wave2MIDI v1.2 · startdust-io · CC BY-NC 4.0`를 표시하고 `plugins/ai/wave2midi/model/LICENSE`로 연결합니다.
 
 ## 2026-10-24 내보내기·레이아웃 수정
 

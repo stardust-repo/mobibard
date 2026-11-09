@@ -321,6 +321,7 @@ async function transcribe(id, wave, options) {
     const out = {
       onset: result.onset.data, frame: result.frame.data, offset: result.offset.data,
       drum: result.drum.data, inst: result.inst.data,
+      fp: result.fp ? result.fp.data : null,
     };
     input.dispose?.();
     return out;
@@ -366,7 +367,7 @@ async function transcribe(id, wave, options) {
   // re-applied without running the model again ("postprocess" message). Freed with the worker.
   // Only the probability maps are needed for post-processing: free the model and its buffers now.
   await releaseSession();
-  lastJob = { probs: predicted.probs, T: predicted.T, wave, seconds, info };
+  lastJob = { probs: predicted.probs, T: predicted.T, fp: predicted.fp || null, level: null, wave, seconds, info };
   return finishTranscription(lastJob, options, progress, started);
 }
 
@@ -390,7 +391,15 @@ async function finishTranscription(job, options, progress, started = performance
     ...(frame > 0 && frame < 1 ? { frame } : {}),
     ...(offsetTh > 0 && offsetTh < 1 ? { offset: offsetTh } : {}),
   };
-  let notes = decode.decodeNotes(probs, T, meta.classes, thresholds);
+  let notes;
+  if (meta.decode_plus?.enabled && decode.decodePlus) {
+    // Extended decoder (model v1.2+): recovers softly started notes and decides instruments with the
+    // fingerprint output. The level map depends only on the audio, so it is computed once per song.
+    job.level ??= decode.levelMap(wave, T);
+    notes = decode.decodePlus(probs, T, meta.classes, thresholds, meta.decode_plus, job.fp || null, job.level);
+  } else {
+    notes = decode.decodeNotes(probs, T, meta.classes, thresholds);
+  }
   // Optional clean-up: drop pitched notes shorter than options.minNoteSeconds (drum hits are always that short).
   const minNoteSeconds = Number(options.minNoteSeconds);
   if (minNoteSeconds > 0) notes = notes.filter(note => note[1] === 128 || note[3] - note[2] >= minNoteSeconds);

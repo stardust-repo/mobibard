@@ -32,6 +32,7 @@ self.onmessage = async event => {
           onset: r.onset.data.slice(), frame: r.frame.data.slice(), offset: r.offset.data.slice(),
           drum: r.drum.data.slice(), inst: r.inst.data.slice(),
         };
+        if (r.fp) out.fp = r.fp.data.slice();
         input.dispose?.();
         self.postMessage({ type: "done", id: m.id, out }, Object.values(out).map(a => a.buffer));
       } catch (error) {

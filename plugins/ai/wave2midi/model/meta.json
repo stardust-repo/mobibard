@@ -1,20 +1,14 @@
 {
  "name": "Wave2MIDI",
- "full_name": "Wave2MIDI v1.1",
+ "full_name": "Wave2MIDI v1.2",
  "architecture": "w2m_v1",
- "version": "1.1.0",
- "step": 2000,
- "license": {
-  "spdx": "CC-BY-NC-4.0",
-  "copyright": "Copyright (c) 2026 startdust-io",
-  "file": "LICENSE",
-  "noncommercial": true
- },
+ "version": "1.2.0",
+ "step": 4000,
  "training": {
   "pretrain_steps": 98000,
-  "finetune_steps": 2000
+  "finetune_steps": 4000
  },
- "parameters": 19354341,
+ "parameters": 19434461,
  "classes": [
   0,
   8,
@@ -35,7 +29,7 @@
  ],
  "thresholds": {
   "onset": 0.13,
-  "frame": 0.5,
+  "frame": 0.4,
   "offset": 0.5,
   "drum": 0.16,
   "inst_multi": 0.65,
@@ -118,49 +112,91 @@
    600,
    88,
    16
+  ],
+  "fp": [
+   1,
+   600,
+   88,
+   32
   ]
+ },
+ "fp_dim": 32,
+ "decode_plus": {
+  "enabled": true,
+  "inst_multi": 0.4,
+  "recover": true,
+  "extend": false,
+  "rec_core": 0.5,
+  "rec_core_frames": 8,
+  "rec_lo": 0.2,
+  "rec_share": 0.7,
+  "rec_fp": 0.8,
+  "rec_min_frames": 8,
+  "rec_back": 15,
+  "rec_back_onset": 0.02,
+  "rec_join": 3,
+  "rec_join_rise": 1.0,
+  "rec_ghost": 0.8,
+  "rise": 0.5,
+  "rise_onset": 0.03,
+  "fp_inst": true,
+  "fp_cand": 0.3,
+  "fp_ref": 0.5,
+  "fp_win": 3.0,
+  "fp_semi": 7,
+  "fp_topk": 3,
+  "fp_margin": 0.05,
+  "unison": false,
+  "uni_resp": 0.3,
+  "uni_win": 1.5,
+  "uni_semi": 12,
+  "uni_min_refs": 2,
+  "fp_store_frame": 0.15,
+  "fp_store_onset": 0.02
  },
  "models": {
   "w16": {
    "file": "wave2mid_w16.onnx",
-   "mb": 39.0,
+   "mb": 39.2,
    "compute": "fp32",
    "max_diff": {
-    "onset": 0.000916,
-    "frame": 0.00121,
-    "offset": 0.000647,
-    "drum": 0.000995,
-    "inst": 0.00113
+    "onset": 0.0012,
+    "frame": 0.000777,
+    "offset": 0.000844,
+    "drum": 0.000887,
+    "inst": 0.00164,
+    "fp": 0.000694
    },
-   "onset_flips_per_positive": 0.0,
-   "demo_note_agreement": 1.0,
-   "cpu_seconds_per_window": 1.36
+   "onset_flips_per_positive": 0.00178,
+   "demo_note_agreement": 0.9967,
+   "cpu_seconds_per_window": 1.35
   },
   "fp16": {
    "file": "wave2mid_fp16.onnx",
-   "mb": 39.1,
+   "mb": 39.2,
    "compute": "fp16",
    "max_diff": {
-    "onset": 0.00137,
-    "frame": 0.00334,
-    "offset": 0.00116,
-    "drum": 0.00159,
-    "inst": 0.00256
+    "onset": 0.00211,
+    "frame": 0.00282,
+    "offset": 0.00144,
+    "drum": 0.00163,
+    "inst": 0.00421,
+    "fp": 0.0017
    },
-   "onset_flips_per_positive": 0.00103,
-   "demo_note_agreement": 1.0,
-   "cpu_seconds_per_window": 1.88
+   "onset_flips_per_positive": 0.00254,
+   "demo_note_agreement": 0.9967,
+   "cpu_seconds_per_window": 1.85
   }
  },
  "precision_check": null,
- "max_activation": 4754.4,
+ "max_activation": 4714.7,
  "provenance": {
   "datasets": [
    {
     "name": "midi_rwc",
     "producer": {
      "tool": "Wave2MIDI",
-     "version": "1.1.0",
+     "version": "1.2.0",
      "method": "audio + MIDI pairs (MIDI = exact answer)"
     },
     "license": {
@@ -215,12 +251,18 @@
   "follow_beats": true
  },
  "metrics": {
-  "mel": 0.553028770282847,
-  "mel_inst": 0.41186908137090394,
-  "mel_offset": 0.24657063084206693,
-  "drum": 0.46311497397929074,
-  "all": 0.5309196985406768,
-  "frame": 0.6438233878940048
+  "mel": 0.5512882739734426,
+  "mel_inst": 0.4147973660260185,
+  "mel_offset": 0.24218426686149586,
+  "drum": 0.4582654983811074,
+  "all": 0.5291629990415273,
+  "frame": 0.6381148710299803
  },
- "exported": "2026-11-03 17:02:27"
+ "exported": "2026-11-10 02:19:43",
+ "license": {
+  "spdx": "CC-BY-NC-4.0",
+  "copyright": "Copyright (c) 2026 startdust-io",
+  "file": "LICENSE",
+  "noncommercial": true
+ }
 }

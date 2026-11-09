@@ -11,19 +11,20 @@ plugins/ai/wave2midi/
   worker.js               추론 Worker: ONNX Runtime 로드, 창 분할 추론, 디코딩, velocity, MIDI 생성
   lib/dsp.mjs             frontend 특징 추출 (w2m/dsp.py 1:1 포팅)
   lib/decode.mjs          확률 맵 -> 노트, 6초 창 / 1초 겹침 cross-fade, 창 파이프라이닝 (w2m/labels.py, infer.py)
+                          v1.2부터 확장 해석(decodePlus: 약하게 시작한 음 복원, 지문 출력 fp로 악기 판단, w2m/decode_plus.py)
   lib/feature_worker.mjs  창별 frontend 특징 계산 (중첩 Web Worker, worker.js가 여러 개 띄움)
   lib/velocity.mjs        onset spectral flux 기반 velocity (w2m/velocity.py)
   lib/midi.mjs            표준 MIDI 작성기 (w2m/midi.py)
   lib/tempo.mjs           노트로부터 템포 맵 추정 (w2m/tempo.py, 기본 사용)
   lib/model-cache.mjs     모델 영구 저장(IndexedDB) + SHA-256 무결성 검사
   model/wave2mid_w16.onnx   모델 (39 MB): 16비트 가중치 / 32비트 연산. GPU(WebGPU)와 CPU(WebAssembly) 모두 이 파일 하나로 실행
-  model/meta.json         학습 export 메타데이터 (모델 버전 v1.1, 전처리, 임계값, 16개 GM 클래스, velocity 설정)
+  model/meta.json         학습 export 메타데이터 (모델 버전 v1.2, 전처리, 임계값, 16개 GM 클래스, velocity 설정)
   model/manifest.json     모델 이름·버전·제작자·라이선스, 파일명·크기·sha256(models.w16)
   model/LICENSE           모델 라이선스 (CC BY-NC 4.0, startdust-io)
   (ONNX Runtime 사본은 공용 모듈 `plugins/vendor/onnxruntime-web/`에 있습니다. 모든 환경이 `1.31.1`을 씁니다. 폰(CPU 전용)은 1.31.1의 CPU 전용 빌드입니다. 없으면 jsDelivr의 같은 버전을 사용합니다)
 ```
 
-`lib/*.mjs` 중 dsp·decode·velocity·midi·tempo는 학습 저장소의 web export와 동일한 파일입니다. 학습 쪽에서 갱신되면 그대로 덮어쓰면 됩니다.
+`lib/*.mjs` 중 dsp·decode·velocity·midi·tempo는 학습 저장소의 web export와 동일한 파일입니다. 학습 쪽에서 갱신되면 그대로 덮어쓰면 됩니다. 단, MobiBard 쪽 변경(노트당 악기 1개, 못갖춘마디 처리, 창 동시 실행)은 유지해야 합니다. decodePlus도 `allow_multi`가 켜져 있지 않으면 노트당 악기 1개만 냅니다.
 
 ## 라이선스
 
@@ -33,7 +34,7 @@ Wave2MIDI 모델(`model/mobibard_w2m.onnx`, `model/meta.json`)은 **startdust-io
 - `meta.json`: `author`, `license.spdx`, `license.copyright`, `license.file`
 - `manifest.json`: `name`, `version`, `author`, `license`, `licenseFile`
 - API: `MobibardWave2Midi.getModelInfo()`는 `{ name, version, author, license, licenseUrl }`를 돌려줍니다(모델은 내려받지 않음). `transcribe()` 결과의 `result.model`에도 `author`, `license`가 들어 있습니다.
-- Editor는 오디오 AI 변환 중 진행 패널에 `Wave2MIDI v1.1 · startdust-io · CC BY-NC 4.0`를 표시하고 `model/LICENSE`로 연결합니다.
+- Editor는 오디오 AI 변환 중 진행 패널에 `Wave2MIDI v1.2 · startdust-io · CC BY-NC 4.0`를 표시하고 `model/LICENSE`로 연결합니다.
 
 ## 사용법
 
