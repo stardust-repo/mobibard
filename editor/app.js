@@ -15053,9 +15053,10 @@
   }
 
   // ---- AI 변환 후처리 옵션(불러오기 오른쪽 설정): 모델을 다시 돌리지 않고 노트/세기/템포만 다시 계산 ----
-  let audioPostprocessDefaults = { onsetThreshold: 0.13, frameThreshold: 0.5, offsetThreshold: 0.5, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
+  let audioPostprocessDefaults = { onsetThreshold: 0.13, frameThreshold: 0.4, offsetThreshold: 0.5, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
   void window.MobibardWave2Midi?.getPostprocessDefaults?.().then((defaults) => {
     audioPostprocessDefaults = defaults;
+    try { updateW2mSliderReadouts(); } catch {}
   }).catch(() => {});
 
   // 볼륨 V(1~15) → 이 V로 표시되는 velocity 구간의 시작/끝 (velocityToMmlVolume의 역)
@@ -15074,23 +15075,29 @@
   let audioPostprocessTimer = 0;
   let audioPostprocessToken = 0;
 
-  // 슬라이더 위치(0~100, 5 간격) → 실제 값. 가운데(50)가 모델 기본값이고, 좌우 간격은 비대칭이어도 됩니다.
-  const W2M_ONSET_MIN = 0.06, W2M_ONSET_BASE = 0.12, W2M_ONSET_MAX = 0.3;
+  // 슬라이더 위치(0~100, 5 간격) → 실제 값. 가운데(50)가 모델 기본값(model/meta.json thresholds)이고, 좌우 간격은 비대칭이어도 됩니다.
+  const W2M_ONSET_MIN = 0.06, W2M_ONSET_MAX = 0.3;
   function w2mOnsetFromPos(pos) {
-    const base = W2M_ONSET_BASE;
+    const base = clamp(Number(audioPostprocessDefaults.onsetThreshold) || 0.13, W2M_ONSET_MIN + 0.01, W2M_ONSET_MAX - 0.01);
     const p = clamp(Number(pos), 0, 100);
     return p <= 50 ? W2M_ONSET_MIN + (base - W2M_ONSET_MIN) * (p / 50) : base + (W2M_ONSET_MAX - base) * ((p - 50) / 50);
   }
-  // 끝 판정: frame 임계값 = 슬라이더 값(0.15~0.85, 가운데 0.5), offset 임계값 = 1 - frame. 오른쪽일수록 일찍 끊깁니다.
-  function w2mEndFromPos(pos) { return 0.15 + 0.7 * (clamp(Number(pos), 0, 100) / 100); }
+  // 끝 판정: 가운데 = 모델 기본 frame/offset 임계값. 오른쪽일수록 frame은 올리고 offset은 내려 일찍 끊깁니다(±0.35).
+  function w2mEndThresholdsFromPos(pos) {
+    const delta = 0.35 * ((clamp(Number(pos), 0, 100) - 50) / 50);
+    const frame0 = Number(audioPostprocessDefaults.frameThreshold) || 0.5;
+    const offset0 = Number(audioPostprocessDefaults.offsetThreshold) || 0.5;
+    return { frame: clamp(frame0 + delta, 0.05, 0.95), offset: clamp(offset0 - delta, 0.05, 0.95) };
+  }
+  function w2mEndFromPos(pos) { return w2mEndThresholdsFromPos(pos).frame; }
 
   function updateW2mSliderReadouts() {
     const set = (id, text) => { const out = document.querySelector(id); if (out) out.textContent = text; };
     if (elements.w2mSensitivity) set("#w2mSensitivityValue", w2mOnsetFromPos(elements.w2mSensitivity.value).toFixed(3));
     if (elements.w2mNoteEnd) {
-      const frame = w2mEndFromPos(elements.w2mNoteEnd.value);
-      set("#w2mNoteEndValue", frame.toFixed(2));
-      elements.w2mNoteEnd.title = `frame ${frame.toFixed(2)} · offset ${(1 - frame).toFixed(2)}`;
+      const end = w2mEndThresholdsFromPos(elements.w2mNoteEnd.value);
+      set("#w2mNoteEndValue", end.frame.toFixed(2));
+      elements.w2mNoteEnd.title = `frame ${end.frame.toFixed(2)} · offset ${end.offset.toFixed(2)}`;
     }
     if (elements.w2mMinLength) {
       const ms = Number(elements.w2mMinLength.value) || 0;
@@ -15100,8 +15107,9 @@
 
   function getAudioToMidiOptions() {
     const onsetThreshold = w2mOnsetFromPos(elements.w2mSensitivity?.value ?? 50);
-    const frameThreshold = w2mEndFromPos(elements.w2mNoteEnd?.value ?? 50);
-    const offsetThreshold = 1 - frameThreshold;
+    const endThresholds = w2mEndThresholdsFromPos(elements.w2mNoteEnd?.value ?? 50);
+    const frameThreshold = endThresholds.frame;
+    const offsetThreshold = endThresholds.offset;
     const minNoteSeconds = (Number(elements.w2mMinLength?.value) || 0) / 1000;
     const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
     const bpm = clamp(Math.round(Number(elements.w2mTempoBpm?.value) || 120), audioPostprocessDefaults.tempoMin || 32, audioPostprocessDefaults.tempoMax || 255);

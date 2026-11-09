@@ -391,12 +391,14 @@ async function finishTranscription(job, options, progress, started = performance
     ...(frame > 0 && frame < 1 ? { frame } : {}),
     ...(offsetTh > 0 && offsetTh < 1 ? { offset: offsetTh } : {}),
   };
-  let notes;
+  let notes, decoder = { mode: "basic" };
   if (meta.decode_plus?.enabled && decode.decodePlus) {
     // Extended decoder (model v1.2+): recovers softly started notes and decides instruments with the
     // fingerprint output. The level map depends only on the audio, so it is computed once per song.
     job.level ??= decode.levelMap(wave, T);
-    notes = decode.decodePlus(probs, T, meta.classes, thresholds, meta.decode_plus, job.fp || null, job.level);
+    const st = {};
+    notes = decode.decodePlus(probs, T, meta.classes, thresholds, meta.decode_plus, job.fp || null, job.level, st);
+    decoder = { mode: "plus", recovered: st.recovered || 0, fingerprintCells: job.fp?.map?.size || 0 };
   } else {
     notes = decode.decodeNotes(probs, T, meta.classes, thresholds);
   }
@@ -448,6 +450,7 @@ async function finishTranscription(job, options, progress, started = performance
     variant: info.variant,
     thresholds,
     tempo: tempoMap,
+    decoder,
     classes: meta.classes.slice(),
     model: {
       id: info.manifest?.id, sha256: info.manifest?.sha256, version: meta.version, step: meta.step,
