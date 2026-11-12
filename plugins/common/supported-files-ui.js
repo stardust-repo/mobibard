@@ -7,6 +7,7 @@
   const I18N = {
     ko: {
       labelAudio: "오디오",
+      labelVideo: "비디오",
       labelMobibardProject: "모비바드 프로젝트",
       button: "지원 파일",
       title: "지원 파일",
@@ -16,7 +17,7 @@
       console: "콘솔",
       vocal: "보컬 편집기",
       project: "프로젝트 · MML",
-      audio: "오디오 참고 파일",
+      audio: "오디오·비디오 참고 파일",
       network: "처음 불러올 때 인터넷 연결 필요",
       commonNote: "음표·템포·박자는 MIDI로 변환해 가져옵니다. 각 프로그램 고유의 레이아웃, 가사 발음, 보컬 표현과 기타 주법 일부는 단순화될 수 있습니다.",
       pickerAll: "지원 파일",
@@ -42,9 +43,11 @@
       pickerSoundFont: "SoundFont",
       pickerDls: "DLS 음원",
       pickerAudio: "오디오",
+      pickerVideo: "비디오",
     },
     ja: {
       labelAudio: "オーディオ",
+      labelVideo: "ビデオ",
       labelMobibardProject: "モビバード プロジェクト",
       button: "対応ファイル",
       title: "対応ファイル",
@@ -54,7 +57,7 @@
       console: "ゲーム機",
       vocal: "ボーカルエディター",
       project: "プロジェクト・MML",
-      audio: "参照オーディオ",
+      audio: "参照オーディオ・ビデオ",
       network: "初回読込時にインターネット接続が必要",
       commonNote: "音符・テンポ・拍子をMIDIへ変換して読み込みます。固有のレイアウト、発音、ボーカル表現や奏法の一部は簡略化される場合があります。",
       pickerAll: "対応ファイル",
@@ -80,9 +83,11 @@
       pickerSoundFont: "SoundFont",
       pickerDls: "DLSサウンド",
       pickerAudio: "オーディオ",
+      pickerVideo: "ビデオ",
     },
     en: {
       labelAudio: "Audio",
+      labelVideo: "Video",
       labelMobibardProject: "MobiBard project",
       button: "Supported files",
       title: "Supported files",
@@ -92,7 +97,7 @@
       console: "Console sequences",
       vocal: "Vocal editors",
       project: "Projects · MML",
-      audio: "Reference audio",
+      audio: "Reference audio & video",
       network: "Internet connection required on first import",
       commonNote: "Notes, tempo and time signatures are converted through MIDI. App-specific layout, phonemes, vocal expression and some playing techniques may be simplified.",
       pickerAll: "Supported files",
@@ -118,9 +123,11 @@
       pickerSoundFont: "SoundFont",
       pickerDls: "DLS sound banks",
       pickerAudio: "Audio",
+      pickerVideo: "Video",
     },
     "zh-CN": {
       labelAudio: "音频",
+      labelVideo: "视频",
       labelMobibardProject: "MobiBard 项目",
       button: "支持文件",
       title: "支持文件",
@@ -130,7 +137,7 @@
       console: "游戏机",
       vocal: "歌声编辑器",
       project: "工程 · MML",
-      audio: "参考音频",
+      audio: "参考音频与视频",
       network: "首次导入时需要联网",
       commonNote: "音符、速度和拍号会先转换为 MIDI。各软件特有的排版、音素、歌声表现及部分演奏技法可能会被简化。",
       pickerAll: "支持文件",
@@ -156,9 +163,11 @@
       pickerSoundFont: "SoundFont",
       pickerDls: "DLS 音源",
       pickerAudio: "音频",
+      pickerVideo: "视频",
     },
     "zh-TW": {
       labelAudio: "音訊",
+      labelVideo: "影片",
       labelMobibardProject: "MobiBard 專案",
       button: "支援檔案",
       title: "支援檔案",
@@ -168,7 +177,7 @@
       console: "遊戲主機",
       vocal: "歌聲編輯器",
       project: "專案 · MML",
-      audio: "參考音訊",
+      audio: "參考音訊與影片",
       network: "首次匯入時需要連線",
       commonNote: "音符、速度與拍號會先轉換為 MIDI。各軟體特有的版面、音素、歌聲表現及部分演奏技法可能會被簡化。",
       pickerAll: "支援檔案",
@@ -194,20 +203,25 @@
       pickerSoundFont: "SoundFont",
       pickerDls: "DLS 音源",
       pickerAudio: "音訊",
+      pickerVideo: "影片",
     },
   };
 
-  const AUDIO_AI_EXTRA = { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff", "mp4", "m4v", "mov", "ogv", "3gp", "mkv"], description: "AI로 악기별 MIDI 변환 후 불러오기 · 영상(mp4 등)은 오디오만 사용" };
+  const AUDIO_AI_EXTRA = [
+    { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "aif", "aiff", "webm"], description: "AI로 악기별 MIDI 변환 후 불러오기" },
+    { category: "audio", label: "비디오", labelKey: "labelVideo", extensions: ["mp4", "m4v", "mov", "ogv", "3gp", "mkv", "webm"], description: "AI로 악기별 MIDI 변환 후 불러오기 · 영상은 오디오만 사용" },
+  ];
   const EXTRA = {
-    simple: [AUDIO_AI_EXTRA],
+    simple: [...AUDIO_AI_EXTRA],
     player: [
       { category: "project", label: "3MLE / MabiIcco / MML", extensions: ["mml", "mmi", "txt"], description: "3MLE(.mml) · MabiIcco/마비꼬(.mmi) · MML 텍스트(.txt)" },
-      AUDIO_AI_EXTRA,
+      ...AUDIO_AI_EXTRA,
     ],
     editor: [
       { category: "project", label: "모비바드 프로젝트", labelKey: "labelMobibardProject", extensions: ["mmlproj", "mmlproj.json", "json"], description: "피아노롤 편집 프로젝트" },
       { category: "project", label: "3MLE / MabiIcco / MML", extensions: ["mml", "3mle", "mmi", "txt"], description: "3MLE(.mml/.3mle) · MabiIcco/마비꼬(.mmi) · MML 텍스트(.txt)" },
-      { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff", "mp4", "m4v", "mov", "ogv", "3gp", "mkv"], description: "편집용 참고 오디오 · 불러오기에서 선택하면 AI로 악기별 MIDI 변환 · 영상(mp4 등)은 오디오만 사용" },
+      { category: "audio", label: "오디오", labelKey: "labelAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "aif", "aiff", "webm"], description: "편집용 참고 오디오 · 불러오기에서 선택하면 AI로 악기별 MIDI 변환" },
+      { category: "audio", label: "비디오", labelKey: "labelVideo", extensions: ["mp4", "m4v", "mov", "ogv", "3gp", "mkv", "webm"], description: "편집용 참고 영상(오디오만 사용) · 불러오기에서 선택하면 AI로 악기별 MIDI 변환" },
     ],
   };
 
@@ -235,7 +249,8 @@
     { id: "mml", labelKey: "pickerMml", extensions: ["mml", "mmi", "3mle", "txt"], mimeType: "text/plain" },
     { id: "soundfont", labelKey: "pickerSoundFont", extensions: ["sf2", "sf3"], includeMacBinary: true, mimeType: "application/octet-stream" },
     { id: "dls", labelKey: "pickerDls", extensions: ["dls"], includeMacBinary: true, mimeType: "application/octet-stream" },
-    { id: "audio", labelKey: "pickerAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff", "mp4", "m4v", "mov", "ogv", "3gp", "mkv"], mimeType: "audio/*" },
+    { id: "audio", labelKey: "pickerAudio", extensions: ["wav", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff"], mimeType: "audio/*" },
+    { id: "video", labelKey: "pickerVideo", extensions: ["mp4", "m4v", "mov", "ogv", "3gp", "mkv"], mimeType: "video/*" },
   ]);
 
   const POPUP_FAMILIES = Object.freeze([
