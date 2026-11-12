@@ -19489,7 +19489,8 @@
   };
 
   // 마이크 설정: 감도(0~100, 높을수록 작은 소리도 받음), 음역(MIDI 번호), 최소 음 길이(ms), 악기("" = 기본 악기).
-  const MIC_SETTING_DEFAULTS = { sensitivity: 50, low: 40, high: 84, minMs: 70, presetKey: "" };
+  const MIC_SETTING_DEFAULTS = { sensitivity: 50, low: 40, high: 84, minMs: 70, presetKey: "", transpose: 0 };
+  const MIC_TRANSPOSE_LIMIT = 24;
   const MIC_MIN_MS_RANGE = [30, 200];
   function normalizeMicSettings(raw = {}) {
     const next = { ...MIC_SETTING_DEFAULTS };
@@ -19498,6 +19499,7 @@
     if (Number.isFinite(Number(raw.high))) next.high = clamp(Math.round(Number(raw.high)), 36, 108);
     if (next.high < next.low + 12) next.high = Math.min(108, next.low + 12);
     if (Number.isFinite(Number(raw.minMs))) next.minMs = clamp(Math.round(Number(raw.minMs)), MIC_MIN_MS_RANGE[0], MIC_MIN_MS_RANGE[1]);
+    if (Number.isFinite(Number(raw.transpose))) next.transpose = clamp(Math.round(Number(raw.transpose)), -MIC_TRANSPOSE_LIMIT, MIC_TRANSPOSE_LIMIT);
     if (typeof raw.presetKey === "string" && /^(\d+:\d+)?$/.test(raw.presetKey)) next.presetKey = raw.presetKey;
     return next;
   }
@@ -19839,7 +19841,7 @@
   // ---- 마이크: 소리의 음높이를 찾아 노트로 기록합니다(한 번에 한 음) ----
   // 흐름: getUserMedia → AnalyserNode(최근 2048샘플) → 약 10ms마다 YIN으로 음높이 추정 → 음 시작/끝 판정 → 일반 노트 기록 경로.
   const MIC_RELEASE_MS = 60;
-  const micRuntime = { status: "idle", timer: 0, deviceChangeBound: false, dec: null, diff: null, cmnd: null, statusFrame: 0, refreshPromise: null };
+  const micRuntime = { status: "idle", timer: 0, deviceChangeBound: false, dec: null, diff: null, cmnd: null, statusFrame: 0, refreshPromise: null, advancedOpen: new Set() };
 
   function getMicSettings(deviceKey) {
     return normalizeMicSettings(midiInputRuntime.micSettings.get(String(deviceKey)) || {});
@@ -20147,12 +20149,15 @@
     }
   }
 
+  // 키(반음 이동): 부른 음높이에 이동량을 더한 음으로 기록합니다. 한 번 시작한 음은 끝날 때까지 같은 값을 씁니다.
   function startMicNote(device, tracker, pitch, time, velocity) {
-    tracker.note = { pitch, since: time };
+    const out = pitch + getMicSettings(device.key).transpose;
+    tracker.note = { pitch, out, since: time };
     if (!device.held) device.held = new Map();
-    device.held.set(pitch, velocity);
+    device.held.set(out, velocity);
     if (!isMidiInputDeviceEnabled(device)) return;
-    handleMidiInputNoteOn(device.key, 0, pitch, velocity, time, { monitor: false });
+    if (out < 0 || out > 127) return;
+    handleMidiInputNoteOn(device.key, 0, out, velocity, time, { monitor: false });
     paintMidiInputActivity();
   }
 
@@ -20161,8 +20166,8 @@
     tracker.note = null;
     tracker.silentSince = null;
     if (!note) return;
-    device.held?.delete(note.pitch);
-    handleMidiInputNoteOff(device.key, 0, note.pitch, time);
+    device.held?.delete(note.out);
+    handleMidiInputNoteOff(device.key, 0, note.out, time);
   }
 
   // ---- 악기 ----
@@ -21305,14 +21310,25 @@
     return clamp((Number(db) + 80) / 80, 0, 1) * 100;
   }
 
-  function buildDeviceInputField(labelKey, control, extra = null) {
-    const label = document.createElement("label");
-    label.className = "device-input-field";
-    const text = document.createElement("span");
-    text.textContent = i18nText(labelKey);
-    label.append(text, control);
-    if (extra) label.append(extra);
-    return label;
+  // 설정 한 줄: 왼쪽에 이름과 한 줄 설명, 오른쪽에 조절 칸.
+  function buildDeviceInputRow(labelKey, hintKey, ...controls) {
+    const row = document.createElement("div");
+    row.className = "device-input-row";
+    const text = document.createElement("div");
+    text.className = "device-input-row-text";
+    const label = document.createElement("strong");
+    label.textContent = i18nText(labelKey);
+    text.append(label);
+    if (hintKey) {
+      const hint = document.createElement("small");
+      hint.textContent = i18nText(hintKey);
+      text.append(hint);
+    }
+    const control = document.createElement("div");
+    control.className = "device-input-row-control";
+    control.append(...controls);
+    row.append(text, control);
+    return row;
   }
 
   function buildMicPitchSelect(value, min, max, onChange) {
@@ -21323,6 +21339,14 @@
     return select;
   }
 
+  function makeDeviceInputUnit(text) {
+    const unit = document.createElement("span");
+    unit.className = "device-input-unit";
+    unit.textContent = text;
+    return unit;
+  }
+
+  // 장치 카드: ① 이름·켜기 ② 지금 들어오는 신호(문구·소리 크기·건반) ③ 기본 설정 ④ 고급 설정(접힘)
   function buildDeviceInputCard(device) {
     const mic = isMicDevice(device);
     const enabled = isMidiInputDeviceEnabled(device);
@@ -21349,29 +21373,49 @@
     head.append(toggle, name, lamp);
     card.append(head);
 
+    const live = document.createElement("div");
+    live.className = "device-input-live";
     const signal = document.createElement("div");
     signal.className = "device-input-signal";
-    card.append(signal);
-
+    live.append(signal);
     const settings = mic ? getMicSettings(device.key) : null;
     if (mic) {
+      const meterRow = document.createElement("div");
+      meterRow.className = "device-input-meter-row";
+      const meterLabel = document.createElement("span");
+      meterLabel.className = "device-input-meter-label";
+      meterLabel.textContent = i18nText("device_input.meter_label");
       const meter = document.createElement("div");
       meter.className = "device-input-meter";
       meter.innerHTML = '<div class="device-input-meter-fill"></div><div class="device-input-meter-gate"></div>';
       meter.querySelector(".device-input-meter-gate").style.left = `${micLevelToPercent(getMicGateDb(settings))}%`;
       meter.title = i18nText("device_input.meter_title");
-      card.append(meter);
+      meterRow.append(meterLabel, meter);
+      live.append(meterRow);
     }
-
     const octaveRow = document.createElement("div");
     octaveRow.className = "device-input-octave-row";
     const notes = document.createElement("span");
     notes.className = "device-input-notes";
     octaveRow.append(buildDeviceInputOctave(), notes);
-    card.append(octaveRow);
+    live.append(octaveRow);
+    card.append(live);
 
-    const fields = document.createElement("div");
-    fields.className = "device-input-fields";
+    const offset = document.createElement("input");
+    offset.type = "number";
+    offset.step = "5";
+    offset.min = String(-MIDI_INPUT_OFFSET_LIMIT);
+    offset.max = String(MIDI_INPUT_OFFSET_LIMIT);
+    offset.value = String(getMidiInputOffsetMs(device.key));
+    offset.addEventListener("change", () => {
+      offset.value = String(setMidiInputOffsetMs(device.key, offset.value));
+      if (isMidiInputEditTarget()) syncMidiInputBottomOffset(true);
+    });
+    const offsetRow = buildDeviceInputRow("midi_input.offset_title", "device_input.hint_offset", offset, makeDeviceInputUnit("ms"));
+
+    const basic = document.createElement("div");
+    basic.className = "device-input-basic";
+    const advancedRows = [];
     if (mic) {
       const sensitivity = document.createElement("input");
       sensitivity.type = "range";
@@ -21386,30 +21430,28 @@
         sensitivityOut.textContent = String(next.sensitivity);
         card.querySelector(".device-input-meter-gate").style.left = `${micLevelToPercent(getMicGateDb(next))}%`;
       });
-      const sensitivityField = buildDeviceInputField("device_input.mic_sensitivity", sensitivity, sensitivityOut);
-      sensitivityField.title = i18nText("device_input.mic_sensitivity_title");
 
-      const range = document.createElement("span");
-      range.className = "device-input-range";
-      const dash = document.createElement("span");
-      dash.textContent = "–";
-      const low = buildMicPitchSelect(settings.low, 24, 96, (value) => { setMicSetting(device.key, "low", value); renderMidiInputSettingsDialog(); });
-      const high = buildMicPitchSelect(settings.high, 36, 108, (value) => { setMicSetting(device.key, "high", value); renderMidiInputSettingsDialog(); });
-      range.append(low, dash, high);
-      const rangeField = buildDeviceInputField("device_input.mic_range", range);
-      rangeField.title = i18nText("device_input.mic_range_title");
-
-      const minMs = document.createElement("input");
-      minMs.type = "number";
-      minMs.min = String(MIC_MIN_MS_RANGE[0]);
-      minMs.max = String(MIC_MIN_MS_RANGE[1]);
-      minMs.step = "10";
-      minMs.value = String(settings.minMs);
-      minMs.addEventListener("change", () => { minMs.value = String(setMicSetting(device.key, "minMs", minMs.value).minMs); });
-      const msUnit = document.createElement("span");
-      msUnit.textContent = "ms";
-      const minField = buildDeviceInputField("device_input.mic_min_length", minMs, msUnit);
-      minField.title = i18nText("device_input.mic_min_length_title");
+      // 키: 부른 음에 더해 기록할 반음 수. 옥타브 단위 버튼으로 큰 차이를 한 번에 맞춥니다.
+      const keyBox = document.createElement("span");
+      keyBox.className = "device-input-key-shift";
+      const keyInput = document.createElement("input");
+      keyInput.type = "number";
+      keyInput.min = String(-MIC_TRANSPOSE_LIMIT);
+      keyInput.max = String(MIC_TRANSPOSE_LIMIT);
+      keyInput.step = "1";
+      keyInput.value = String(settings.transpose);
+      const applyKey = (value) => { keyInput.value = String(setMicSetting(device.key, "transpose", value).transpose); };
+      keyInput.addEventListener("change", () => applyKey(keyInput.value));
+      const makeKeyButton = (text, delta, titleKey) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "midi-input-connect-button";
+        button.textContent = text;
+        button.title = i18nText(titleKey);
+        button.addEventListener("click", () => applyKey((Number(keyInput.value) || 0) + delta));
+        return button;
+      };
+      keyBox.append(makeKeyButton("−12", -12, "device_input.mic_key_octave_down"), keyInput, makeKeyButton("+12", 12, "device_input.mic_key_octave_up"));
 
       const instrument = document.createElement("select");
       instrument.add(new Option(i18nText("device_input.mic_instrument_default"), ""));
@@ -21417,24 +21459,47 @@
       instrument.value = settings.presetKey;
       if (instrument.value !== settings.presetKey) instrument.value = "";
       instrument.addEventListener("change", () => setMicSetting(device.key, "presetKey", instrument.value));
-      fields.append(sensitivityField, rangeField, minField, buildDeviceInputField("instrument.text", instrument));
+
+      basic.append(
+        buildDeviceInputRow("device_input.mic_sensitivity", "device_input.hint_sensitivity", sensitivity, sensitivityOut),
+        buildDeviceInputRow("device_input.mic_key", "device_input.hint_key", keyBox, makeDeviceInputUnit(i18nText("device_input.mic_key_unit"))),
+        buildDeviceInputRow("instrument.text", "device_input.hint_instrument", instrument),
+      );
+
+      const range = document.createElement("span");
+      range.className = "device-input-range";
+      const low = buildMicPitchSelect(settings.low, 24, 96, (value) => { setMicSetting(device.key, "low", value); renderMidiInputSettingsDialog(); });
+      const high = buildMicPitchSelect(settings.high, 36, 108, (value) => { setMicSetting(device.key, "high", value); renderMidiInputSettingsDialog(); });
+      range.append(low, makeDeviceInputUnit("–"), high);
+      const minMs = document.createElement("input");
+      minMs.type = "number";
+      minMs.min = String(MIC_MIN_MS_RANGE[0]);
+      minMs.max = String(MIC_MIN_MS_RANGE[1]);
+      minMs.step = "10";
+      minMs.value = String(settings.minMs);
+      minMs.addEventListener("change", () => { minMs.value = String(setMicSetting(device.key, "minMs", minMs.value).minMs); });
+      advancedRows.push(
+        buildDeviceInputRow("device_input.mic_range", "device_input.hint_range", range),
+        buildDeviceInputRow("device_input.mic_min_length", "device_input.hint_min_length", minMs, makeDeviceInputUnit("ms")),
+      );
     }
-    const offset = document.createElement("input");
-    offset.type = "number";
-    offset.step = "5";
-    offset.min = String(-MIDI_INPUT_OFFSET_LIMIT);
-    offset.max = String(MIDI_INPUT_OFFSET_LIMIT);
-    offset.value = String(getMidiInputOffsetMs(device.key));
-    offset.addEventListener("change", () => {
-      offset.value = String(setMidiInputOffsetMs(device.key, offset.value));
-      if (isMidiInputEditTarget()) syncMidiInputBottomOffset(true);
+    advancedRows.push(offsetRow);
+    if (basic.childElementCount) card.append(basic);
+
+    const advanced = document.createElement("details");
+    advanced.className = "device-input-advanced";
+    advanced.open = micRuntime.advancedOpen.has(device.key);
+    advanced.addEventListener("toggle", () => {
+      if (advanced.open) micRuntime.advancedOpen.add(device.key);
+      else micRuntime.advancedOpen.delete(device.key);
     });
-    const offsetUnit = document.createElement("span");
-    offsetUnit.textContent = "ms";
-    const offsetField = buildDeviceInputField("midi_input.offset_title", offset, offsetUnit);
-    offsetField.title = i18nText("midi_input.offset_hint");
-    fields.append(offsetField);
-    card.append(fields);
+    const summary = document.createElement("summary");
+    summary.textContent = i18nText("device_input.advanced");
+    const advancedBody = document.createElement("div");
+    advancedBody.className = "device-input-advanced-body";
+    advancedBody.append(...advancedRows);
+    advanced.append(summary, advancedBody);
+    card.append(advanced);
     return card;
   }
 
@@ -21448,7 +21513,10 @@
       if (device.mic.voiced && device.mic.pitch != null) {
         const nearest = Math.round(device.mic.pitch);
         const cents = Math.round((device.mic.pitch - nearest) * 100);
-        return i18nText("device_input.mic_pitch", [`${noteLabel(nearest)} ${cents >= 0 ? "+" : ""}${cents}`, level]);
+        const shift = getMicSettings(device.key).transpose;
+        const sung = `${noteLabel(nearest)} ${cents >= 0 ? "+" : ""}${cents}`;
+        if (shift) return i18nText("device_input.mic_pitch_shifted", [sung, noteLabel(nearest + shift), level]);
+        return i18nText("device_input.mic_pitch", [sung, level]);
       }
       if (device.mic.level >= gate) return i18nText("device_input.mic_sound", [level]);
       return i18nText("device_input.mic_quiet", [level]);
@@ -21475,7 +21543,7 @@
         const fill = card.querySelector(".device-input-meter-fill");
         if (fill) fill.style.width = `${mic ? micLevelToPercent(mic.level) : 0}%`;
         if (mic?.voiced && mic.pitch != null) {
-          const pitch = Math.round(mic.pitch);
+          const pitch = Math.round(mic.pitch) + getMicSettings(device.key).transpose;
           const gate = getMicGateDb(getMicSettings(device.key));
           levels[((pitch % 12) + 12) % 12] = clamp((mic.level - gate) / 30, 0.2, 1);
           names.push(noteLabel(pitch));
@@ -21549,6 +21617,7 @@
     }
 
     const recordSection = buildMidiInputSettingsSection("midi_input.settings_recording");
+    recordSection.classList.add("is-record-options");
     const playAlong = document.createElement("label");
     playAlong.className = "midi-input-check";
     playAlong.innerHTML = '<input type="checkbox"/><span></span>';
@@ -21561,7 +21630,12 @@
     });
     recordSection.append(playAlong);
 
-    const metroSection = buildMidiInputSettingsSection("midi_input.settings_metronome");
+    const metroTitle = document.createElement("div");
+    metroTitle.className = "midi-input-settings-subtitle";
+    metroTitle.textContent = i18nText("midi_input.settings_metronome");
+    const metroSection = document.createElement("div");
+    metroSection.className = "midi-input-metro-section";
+    metroSection.append(metroTitle);
     const metro = midiInputRuntime.metronome;
     const metroBox = document.createElement("div");
     metroBox.className = "midi-input-metro";
@@ -21623,13 +21697,27 @@
     metroSection.append(metroBox);
 
     // 기록 보정: 장치별 값은 위 장치 카드에서, 여기서는 연결된 장치 전체에 한 번에 적용하거나 측정합니다.
-    const offsetSection = buildMidiInputSettingsSection("midi_input.offset_title");
+    recordSection.append(metroSection);
+
+    // 기록 보정은 한 번 맞추면 거의 건드리지 않으므로 접어 둡니다.
+    const offsetSection = document.createElement("details");
+    offsetSection.className = "midi-input-settings-section device-input-advanced is-global";
+    offsetSection.open = micRuntime.advancedOpen.has("__offset");
+    offsetSection.addEventListener("toggle", () => {
+      if (offsetSection.open) micRuntime.advancedOpen.add("__offset");
+      else micRuntime.advancedOpen.delete("__offset");
+    });
+    const offsetSummary = document.createElement("summary");
+    offsetSummary.textContent = i18nText("device_input.offset_all");
     const offsetHint = document.createElement("p");
     offsetHint.className = "midi-input-hint";
     offsetHint.textContent = i18nText("midi_input.offset_hint");
-    offsetSection.append(offsetHint, buildMidiInputOffsetControls());
+    const offsetBody = document.createElement("div");
+    offsetBody.className = "device-input-advanced-body";
+    offsetBody.append(offsetHint, buildMidiInputOffsetControls());
+    offsetSection.append(offsetSummary, offsetBody);
 
-    body.append(deviceSection, recordSection, metroSection, offsetSection);
+    body.append(deviceSection, recordSection, offsetSection);
     return body;
   }
 
