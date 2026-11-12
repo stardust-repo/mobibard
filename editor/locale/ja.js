@@ -568,6 +568,8 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "action.close": "閉じる",
     "history.undo_hint": "元に戻す (Ctrl+Z)",
     "history.undo_redo": "元に戻す / やり直す",
+    "history.usage": "履歴の容量",
+    "history.usage_title": "履歴 {0} / 上限 {1} · {2}件。上限を超えると古い履歴から削除されます。",
     "ui.drums": "ドラム",
     "ui.listen": "聴く",
     "account.logout": "ログアウト",

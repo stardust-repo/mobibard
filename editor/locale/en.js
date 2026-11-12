@@ -568,6 +568,8 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "action.close": "Close",
     "history.undo_hint": "Undo (Ctrl+Z)",
     "history.undo_redo": "Undo and redo",
+    "history.usage": "History size",
+    "history.usage_title": "History {0} of {1} limit · {2} entries. When the limit is exceeded the oldest entries are removed first.",
     "ui.drums": "Drums",
     "ui.listen": "Listen",
     "account.logout": "Log out",

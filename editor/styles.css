@@ -16093,3 +16093,11 @@ body.merge-mode-active .channel-instrument-control select { pointer-events: auto
 
 #channelVolumeDetail .channel-volume-compare-item.is-change > em { font-size: 12px; line-height: 1; letter-spacing: 0; white-space: nowrap; overflow: visible; }
 .leading-silence-dialog .leading-tempo-row { padding-top: 0; }
+
+/* 2026-11 history usage meter (capacity-based history) */
+.history-panel.side-panel-view, .side-panel > .history-panel, .side-panel .history-panel { grid-template-rows: auto auto minmax(0, 1fr) !important; }
+.history-usage { display: grid; align-content: start; grid-auto-rows: min-content; gap: 3px; padding: 5px 8px 6px; border-bottom: 1px solid var(--line-soft, var(--line)); font-size: 11px; color: var(--muted, #8a97a8); }
+.history-usage-bar { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--text, #888) 16%, transparent); overflow: hidden; }
+.history-usage-fill { display: block; height: 100%; width: 0; background: var(--accent, #4a8cf0); border-radius: 3px; transition: width .2s; }
+.history-usage.is-high .history-usage-fill { background: #e0883a; }
+.history-usage-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }

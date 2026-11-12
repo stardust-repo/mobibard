@@ -33,7 +33,7 @@
     dragAutoScrollMaxSpeed: 18,
     noteBoundarySnapPixels: 10,
     timelineExtensionBeats: 4,
-    historyLimit: 100,
+    historyBudgetBytes: 1024 * 1024 * 1024,
     playbackLookaheadSeconds: 0.65,
     playbackSchedulerIntervalMs: 45,
     playbackScheduleBatchLimit: 96,
@@ -10834,7 +10834,7 @@
     arrangeItemTreeNodes(list);
 
     if (elements.collapsedMergeChannelsButton) elements.collapsedMergeChannelsButton.disabled = state.channels.length < 2 || (state.selectedChannelGroupId != null && !isMultiSelectActive() && (() => { const ids = getSelectedMergeGroupMemberIds(); return !ids || ids.length >= state.channels.length; })()) || (isMultiSelectActive() && state.channelMultiIds.size >= state.channels.length);
-    if (elements.collapsedDeleteChannelsButton) elements.collapsedDeleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length && !state.audioClips.length;
+    if (elements.collapsedDeleteChannelsButton) elements.collapsedDeleteChannelsButton.disabled = false;
   }
 
   const channelActionSweep = {
@@ -11923,7 +11923,7 @@
     elements.addChannelButton.disabled = deleteMode || mergeMode;
     if (elements.mergeChannelsButton) { elements.mergeChannelsButton.disabled = state.channels.length < 2 || deleteMode || (state.selectedChannelGroupId != null && !isMultiSelectActive() && (() => { const ids = getSelectedMergeGroupMemberIds(); return !ids || ids.length >= state.channels.length; })()) || (isMultiSelectActive() && state.channelMultiIds.size >= state.channels.length); elements.mergeChannelsButton.hidden = deleteMode || mergeMode; }
     if (elements.addChannelButton) elements.addChannelButton.hidden = deleteMode || mergeMode;
-    if (elements.deleteChannelsButton) { elements.deleteChannelsButton.disabled = state.channels.length <= 1 && !state.channelGroups.length && !state.audioClips.length; elements.deleteChannelsButton.hidden = deleteMode || mergeMode; }
+    if (elements.deleteChannelsButton) { elements.deleteChannelsButton.disabled = false; elements.deleteChannelsButton.hidden = deleteMode || mergeMode; }
     // 채널 병합 uses the same × / ✓ toolbar actions as 채널 삭제.
     if (elements.channelMergeModeCancelButton) elements.channelMergeModeCancelButton.hidden = !mergeMode;
     if (elements.channelMergeModeApplyButton) elements.channelMergeModeApplyButton.hidden = !mergeMode;
@@ -11934,7 +11934,7 @@
       elements.channelDeleteModeApplyButton.disabled = false;
     }
     const hasSelectedChannel = state.activePanel === "notes" && state.selectedChannelGroupId == null && Boolean(getActiveChannel());
-    elements.deleteChannelButton.disabled = !hasSelectedChannel || state.channels.length <= 1;
+    elements.deleteChannelButton.disabled = !hasSelectedChannel;
     elements.clearChannelButton.disabled = !hasSelectedChannel;
     elements.copyChannelButton.disabled = !hasSelectedChannel;
     elements.pasteChannelButton.disabled = !hasSelectedChannel || isMidiInputEditTarget();
@@ -13403,6 +13403,7 @@
       const snapshot = captureHistorySnapshot();
       if (state.history.currentEntry) {
         state.history.currentEntry.snapshot = snapshot;
+        state.history.currentEntry.bytes = estimateHistorySnapshotBytes(snapshot);
       } else {
         state.history.currentEntry = createHistoryEntry(snapshot, "현재 상태");
       }
@@ -18026,11 +18027,65 @@
     });
   }
 
+  // 스냅샷은 JSON 문자열입니다. 영문·숫자만 있으면 문자당 1바이트, 한글 등이 하나라도 있으면 JS가 2바이트로 저장합니다.
+  function estimateHistorySnapshotBytes(snapshot) {
+    const text = String(snapshot || "");
+    return (/[^\u0000-\u00ff]/.test(text) ? text.length * 2 : text.length) + 256;
+  }
+
+  function getHistoryUsageBytes() {
+    const history = state.history;
+    let total = history.currentEntry ? history.currentEntry.bytes || 0 : 0;
+    for (const entry of history.undoStack) total += entry.bytes || 0;
+    for (const entry of history.redoStack) total += entry.bytes || 0;
+    return total;
+  }
+
+  // 용량 한도 안에 들도록 오래된 기록부터 지웁니다. 현재 상태는 지우지 않으므로,
+  // 기록 1건이 한도보다 커도 그 1건은 항상 남습니다(유일한 예외).
+  function trimHistoryToBudget() {
+    const history = state.history;
+    const limit = CONFIG.historyBudgetBytes;
+    let total = getHistoryUsageBytes();
+    if (total <= limit) return;
+    let dropUndo = 0;
+    while (total > limit && dropUndo < history.undoStack.length) total -= history.undoStack[dropUndo++].bytes || 0;
+    if (dropUndo) history.undoStack.splice(0, dropUndo);
+    let dropRedo = 0;
+    while (total > limit && dropRedo < history.redoStack.length) total -= history.redoStack[dropRedo++].bytes || 0;
+    if (dropRedo) history.redoStack.splice(0, dropRedo);
+  }
+
+  function formatHistoryBytes(bytes) {
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
+    if (mb >= 100) return `${Math.round(mb)} MB`;
+    if (mb >= 1) return `${mb.toFixed(1)} MB`;
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  function updateHistoryUsage() {
+    const box = document.getElementById("historyUsage");
+    if (!box) return;
+    const used = getHistoryUsageBytes();
+    const limit = CONFIG.historyBudgetBytes;
+    const ratio = Math.min(1, used / limit);
+    const percent = used >= limit ? 100 : Math.max(used > 0 ? 1 : 0, Math.floor(ratio * 100));
+    const bar = box.querySelector(".history-usage-fill");
+    if (bar) bar.style.width = `${(ratio * 100).toFixed(1)}%`;
+    box.classList.toggle("is-high", ratio >= 0.8);
+    box.setAttribute("aria-valuenow", String(percent));
+    const text = box.querySelector(".history-usage-text");
+    if (text) text.textContent = `${percent}% · ${formatHistoryBytes(used)} / ${formatHistoryBytes(limit)}`;
+    box.title = i18nText("history.usage_title", [formatHistoryBytes(used), formatHistoryBytes(limit), String(getOrderedHistoryEntries().length)]);
+  }
+
   function createHistoryEntry(snapshot, label = "편집") {
     const activeChannel = getActiveChannel();
     return {
       id: state.history.nextId++,
       snapshot,
+      bytes: estimateHistorySnapshotBytes(snapshot),
       label: String(label || "편집"),
       channelId: activeChannel?.id ?? null,
       restorePlayheadBeat: null,
@@ -18069,11 +18124,9 @@
       return false;
     }
     state.history.undoStack.push(state.history.currentEntry);
-    if (state.history.undoStack.length > CONFIG.historyLimit) {
-      state.history.undoStack.splice(0, state.history.undoStack.length - CONFIG.historyLimit);
-    }
     state.history.currentEntry = createHistoryEntry(nextSnapshot, label);
     state.history.redoStack.length = 0;
+    trimHistoryToBudget();
     renderHistoryPanel();
     return true;
   }
@@ -18087,6 +18140,7 @@
   }
 
   function renderHistoryPanel() {
+    updateHistoryUsage();
     if (!elements.historyList) {
       return;
     }
@@ -18531,9 +18585,6 @@
     const nextEntry = state.history.redoStack.pop();
     if (state.history.currentEntry) {
       state.history.undoStack.push(state.history.currentEntry);
-    }
-    if (state.history.undoStack.length > CONFIG.historyLimit) {
-      state.history.undoStack.splice(0, state.history.undoStack.length - CONFIG.historyLimit);
     }
     state.history.currentEntry = nextEntry;
     restoreHistorySnapshot(nextEntry.snapshot, nextEntry.restorePlayheadBeat);
@@ -23687,11 +23738,6 @@
       showToast(i18nText("group.delete_nothing"));
       return false;
     }
-    if (deleteIds.size >= state.channels.length) {
-      showToast(i18nText("group.delete_keep_one"));
-      return false;
-    }
-
     const confirmed = await showConfirmDialog({
       title: i18nText("group.delete_confirm_title"),
       message: i18nText("group.delete_confirm_items", [deleteIds.size, removeGroupIds.size, deleteAudioIds.size]),
@@ -23732,6 +23778,12 @@
       state.activePanel = "notes";
     }
     pruneEmptyChannelGroups();
+    if (!state.channels.length) {
+      state.channels = createDefaultChannels(1);
+      normalizeDefaultChannelNames();
+      for (const group of state.channelGroups) group.beforeChannelId = null;
+      for (const clip of state.audioClips) clip.beforeChannelId = null;
+    }
     let nextIndex = state.channels.findIndex((channel) => String(channel.id) === String(activeId));
     if (nextIndex < 0) nextIndex = clamp(oldIndex, 0, state.channels.length - 1);
     if (state.activePanel !== "audio") {

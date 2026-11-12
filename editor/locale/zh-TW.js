@@ -568,6 +568,8 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "action.close": "關閉",
     "history.undo_hint": "復原 (Ctrl+Z)",
     "history.undo_redo": "復原與重做",
+    "history.usage": "歷史記錄容量",
+    "history.usage_title": "歷史記錄 {0} / 上限 {1} · {2} 筆。超出上限時會先刪除最舊的記錄。",
     "ui.drums": "鼓類",
     "ui.listen": "試聽",
     "account.logout": "退出登入",

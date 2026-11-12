@@ -568,6 +568,8 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "action.close": "닫기",
     "history.undo_hint": "되돌리기 (Ctrl+Z)",
     "history.undo_redo": "되돌리기 및 다시 실행",
+    "history.usage": "히스토리 용량",
+    "history.usage_title": "히스토리 사용량 {0} / 한도 {1} · 기록 {2}건. 한도를 넘으면 오래된 기록부터 지워집니다.",
     "ui.drums": "드럼",
     "ui.listen": "듣기",
     "account.logout": "로그아웃",

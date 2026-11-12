@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261110a";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261112b";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.5.0&amp;rev=20261110a"></script>
+<script src="js/language-manager.js?v=5.5.0&amp;rev=20261112b"></script>
 <title data-i18n="app.title">모비바드 v5.5 - MML 편집기</title>
 <script src="../plugins/common/seo-title.js" data-suffix=" - MML 편집기"></script>
 <meta name="description" content="MML·MIDI를 피아노롤에서 편집하고 채널, 템포, 참조 오디오를 프로젝트로 관리하는 MML 편집기입니다.">
@@ -105,7 +105,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.5.0&amp;rev=20261110a" rel="stylesheet"/>
+<link href="styles.css?v=5.5.0&amp;rev=20261112b" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -456,6 +456,7 @@
 </section>
 <section aria-label="편집 히스토리" data-i18n-aria-label="history.edit" class="side-panel-view history-panel" data-context-area="history" hidden="" id="historyPanel" role="tabpanel">
 <div aria-label="되돌리기 및 다시 실행" data-i18n-aria-label="history.undo_redo" class="history-actions" role="group"><button id="historyUndoButton" title="되돌리기 (Ctrl+Z)" data-i18n-title="history.undo_hint" type="button" data-i18n="history.undo_icon">↶ 되돌리기</button><button id="historyRedoButton" title="다시 적용 (Ctrl+Y)" data-i18n-title="history.redo_hint" type="button" data-i18n="history.redo_icon">↷ 다시적용</button></div>
+<div aria-label="히스토리 용량" data-i18n-aria-label="history.usage" class="history-usage" id="historyUsage" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="history-usage-bar"><span class="history-usage-fill"></span></div><span class="history-usage-text">0% · 0 KB / 1.00 GB</span></div>
 <ol aria-label="최신순 편집 기록" data-i18n-aria-label="history.edit_newest_first" class="history-list" id="historyList"></ol>
 </section>
 <section aria-label="Special Thanks" class="side-panel-view special-thanks-panel" hidden id="specialThanksPanel" role="tabpanel">
@@ -802,7 +803,7 @@
 <script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261110a"></script>
+<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261112b"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
@@ -818,14 +819,14 @@
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
 <script src="js/soundbank-player.js?v=5.5.0&amp;rev=20261103-marker1"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261110a"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261112b"></script>
 <script src="../plugins/common/site-navigation.js?v=20261106-tip"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.31"></script>
-<script src="app.js?v=5.5.0&amp;rev=20261110a"></script>
+<script src="app.js?v=5.5.0&amp;rev=20261112b"></script>
 <script src="js/account-drive.js?v=5.5.0&amp;rev=20261103-settings1" type="module"></script>
 </body>
 </html>
