@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261112g";
+  const suffix = location.protocol === "file:" ? "" : "?v=5.5.0&rev=20261112i";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=5.5.0&amp;rev=20261112g"></script>
+<script src="js/language-manager.js?v=5.5.0&amp;rev=20261112i"></script>
 <title data-i18n="app.title">모비바드 v5.5 - MML 편집기</title>
 <script src="../plugins/common/seo-title.js" data-suffix=" - MML 편집기"></script>
 <meta name="description" content="MML·MIDI를 피아노롤에서 편집하고 채널, 템포, 참조 오디오를 프로젝트로 관리하는 MML 편집기입니다.">
@@ -105,7 +105,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=5.5.0&amp;rev=20261112g" rel="stylesheet"/>
+<link href="styles.css?v=5.5.0&amp;rev=20261112i" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -133,7 +133,7 @@
 <button data-supported-files-button data-supported-files-context="editor" id="supportedFilesMenuButton" role="menuitem" type="button" data-i18n="file.supported">지원 파일</button></div>
 </div><div class="edit-control"><button aria-expanded="false" aria-haspopup="menu" id="editButton" type="button" data-i18n="menu.edit">편집</button><div class="file-menu edit-menu" hidden="" id="editMenu" role="menu"><button id="editUndoButton" role="menuitem" type="button" data-i18n="history.undo">되돌리기</button><button id="editRedoButton" role="menuitem" type="button" data-i18n="history.redo">다시적용</button><div class="file-menu-separator" role="separator"></div><button id="editCopyButton" role="menuitem" type="button" data-i18n="copy">복사</button><button id="editCutButton" role="menuitem" type="button" data-i18n="action.cut">잘라내기</button><button id="editPasteButton" role="menuitem" type="button" data-i18n="paste">붙여넣기</button><button id="editSelectAllButton" role="menuitem" type="button" data-i18n="selection.all">전체 선택</button><button id="editDeleteButton" role="menuitem" type="button" data-i18n="action.delete">삭제</button><div class="file-menu-separator" role="separator"></div><button id="editLeadingSilenceButton" role="menuitem" type="button" data-i18n="leading.menu">시작 공백 설정</button><button id="editMeasureButton" role="menuitem" type="button" data-i18n="timeline.edit_measure">마디 편집</button><button id="editRestCleanupButton" role="menuitem" type="button" data-i18n="rest_cleanup.title">쉼표 정리</button><button id="editNoteVolumeButton" role="menuitem" type="button" data-i18n="volume.edit_channels">채널 볼륨 수정</button><button id="editAutoPartButton" role="menuitem" type="button" data-i18n="timeline.auto_part">파트 자동 설정</button></div></div><div class="settings-control"><button aria-expanded="false" aria-haspopup="dialog" id="settingsButton" type="button" data-i18n="menu.settings">설정</button><div class="file-menu settings-menu" hidden id="settingsMenu" role="dialog" aria-label="Editor 설정" data-i18n-aria-label="settings.editor"><button aria-checked="true" class="settings-toggle-row" id="velocityLaneVisibleToggle" role="menuitemcheckbox" type="button"><span aria-hidden="true" class="settings-check-mark">✓</span><span data-i18n="volume.editor">볼륨 편집기</span></button><button aria-checked="true" class="settings-toggle-row" id="audioLaneVisibleToggle" role="menuitemcheckbox" type="button"><span aria-hidden="true" class="settings-check-mark">✓</span><span data-i18n="settings.audio_track">오디오 트랙</span></button><div class="file-menu-separator" role="separator"></div><label class="settings-field"><span data-i18n="volume.labels">볼륨 표시</span><select id="noteVolumeDisplaySelect" title="피아노롤 노트의 볼륨(V0~V15) 표시 범위를 변경합니다." data-i18n-title="note.change_which_piano"><option value="all" data-i18n="ui.show_all">모두 표시</option><option selected value="selected" data-i18n="channel.selected_only">선택 채널만</option><option value="none" data-i18n="ui.hide">표시 안 함</option></select></label><label class="settings-field"><span data-i18n="ui.pitch_spacing">음계 두께</span><select id="pitchSpacingSelect" title="피아노롤 음계 두께를 변경합니다." data-i18n-title="ui.change_spacing_between"><option value="8">8px</option><option value="10">10px</option><option selected value="12">12px</option><option value="14">14px</option><option value="16">16px</option></select></label><div class="settings-field settings-soundfont-field"><span data-i18n="soundbank.text">사운드폰트</span><button aria-controls="editorSoundFontBackdrop" aria-haspopup="dialog" id="editorSoundFontSettingsButton" title="Editor 재생 사운드폰트 설정" data-i18n-title="soundbank.configure_playback" type="button"><span id="editorSoundFontMenuLabel" data-i18n="soundbank.default">기본 음색</span></button></div><div class="settings-field settings-soundfont-field settings-device-input-field"><span data-i18n="device_input.settings_menu">장치 입력</span><button aria-haspopup="dialog" id="deviceInputSettingsButton" type="button" data-i18n-title="midi_input.settings_title" title="장치 입력 설정"><span>확인 전</span></button></div></div></div>
 <input accept="application/json,.json,.mmlproj,.mmlproj.json,text/plain,.mml,.3mle,.mmi,.txt,application/x-3mle,application/vnd.3mle,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,.bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,application/xml,text/xml,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98,audio/*,.wav,.mp3,.ogg,.oga,.opus,.m4a,.aac,.flac,.webm,.aif,.aiff,.mp4,.m4v,.mov,.ogv,.3gp,.mkv" hidden="" id="fileInput" data-music-format-input type="file"/>
-<input accept="audio/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm" hidden="" id="audioFileInput" type="file"/>
+<input accept="audio/*,video/*,.wav,.mp3,.ogg,.m4a,.aac,.flac,.webm,.mp4,.m4v,.mov,.mkv,.ogv,.3gp" hidden="" id="audioFileInput" type="file"/>
 </div>
 <div class="toolbar-separator"></div>
 <div class="toolbar-group transport-actions">
@@ -803,7 +803,7 @@
 <script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261112g"></script>
+<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261112i"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>
@@ -819,14 +819,14 @@
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
 <script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
 <script src="js/soundbank-player.js?v=5.5.0&amp;rev=20261103-marker1"></script>
-<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261112g"></script>
+<script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261112i"></script>
 <script src="../plugins/common/site-navigation.js?v=20261106-tip"></script>
 <script src="../plugins/google/google-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=1.0.31"></script>
-<script src="app.js?v=5.5.0&amp;rev=20261112g"></script>
+<script src="app.js?v=5.5.0&amp;rev=20261112i"></script>
 <script src="js/account-drive.js?v=5.5.0&amp;rev=20261103-settings1" type="module"></script>
 </body>
 </html>

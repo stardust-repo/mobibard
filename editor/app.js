@@ -10267,7 +10267,7 @@
     return Math.max(CONFIG.minimumNoteBeat, snappedEnd - startBeat);
   }
 
-  async function importAudioFile(file, { groupId = null, startBeat: forcedStartBeat = null, alignSeconds = null } = {}) {
+  async function importAudioFile(file, { groupId = null, startBeat: forcedStartBeat = null, alignSeconds = null, muted = false, beforeChannelId = null } = {}) {
     if (!file) return false;
     const importGroup = groupId == null ? null : getChannelGroupById(groupId);
     try {
@@ -10317,10 +10317,10 @@
         volume: 0.3,
         playbackRate: 1,
         visible: true,
-        muted: false,
+        muted: Boolean(muted),
         assetAvailable: true,
         groupId: importGroup ? String(importGroup.id) : null,
-        beforeChannelId: null,
+        beforeChannelId: beforeChannelId == null ? null : String(beforeChannelId),
       }, state.audioClips.length);
       state.audioRuntime.set(String(id), { arrayBuffer, audioBuffer: decoded, mimeType: clip.mimeType });
       state.audioClips.push(clip);
@@ -10335,7 +10335,7 @@
       return true;
     } catch (error) {
       console.error(error);
-      showToast(error instanceof Error ? error.message : "오디오를 불러오지 못했습니다.");
+      showToast(error instanceof DOMException || !(error instanceof Error) ? i18nText("audio.decode_fail") : error.message);
       return false;
     }
   }
@@ -16214,6 +16214,7 @@
         const parsed = cloneMidiImportSelection();
         if (!parsed?.groups?.length) throw new Error(i18nText("instrument.select_least_one"));
         const adoptFileTempo = !openNew && isProjectEmptyForImportTempo();
+        const channelIdsBeforeImport = new Set(state.channels.map((channel) => String(channel.id)));
         const imported = importMidiSelectionAsEditableChannels(parsed, {
           openNew,
           fileName,
@@ -16237,9 +16238,17 @@
         renderAll();
         resizeAndDraw();
         resetTimelineToStartAfterImport();
-        // 전사에 쓴 원본 오디오도 함께 추가합니다(0박 시작, 오디오 목록에 선택된 상태).
+        // 전사에 쓴 원본 오디오도 함께 추가합니다. 불러오기 화면에서 보여 준 대로 불러온 항목들의 맨 위에 두고,
+        // 변환된 노트와 겹쳐 들리지 않도록 음소거 상태로 둡니다(필요하면 음소거를 풀어 맞춰 들을 수 있음).
         if (includeSourceAudio && sourceAudioFile) {
-          await importAudioFile(sourceAudioFile, { alignSeconds: sourceAudioOffsetSeconds });
+          const firstImported = openNew
+            ? state.channels[0]
+            : state.channels.find((channel) => !channelIdsBeforeImport.has(String(channel.id)));
+          await importAudioFile(sourceAudioFile, {
+            alignSeconds: sourceAudioOffsetSeconds,
+            muted: true,
+            beforeChannelId: firstImported?.id ?? null,
+          });
         }
         const limitToast = imported.limitedInstrumentCount > 0
           ? i18nText("midi.limit_channels_applied", [imported.limitedInstrumentCount, imported.maxChannelsPerInstrument])
@@ -16323,6 +16332,151 @@
       console.error(error);
       return false;
     }
+  }
+
+  // ---- 파일 드래그 오버레이 -------------------------------------------------
+  // 드래그 중에는 브라우저가 파일 이름을 알려주지 않고 MIME 형식만 보여줍니다. 그래서 오버레이는
+  // 형식으로 "지원 가능성"을 판단하고, 실제 처리 대상은 놓은 뒤 이름으로 다시 확인합니다.
+  function classifyDraggedItemType(type) {
+    const t = String(type || "").toLowerCase();
+    if (t.startsWith("video/")) return "media";
+    if (t.startsWith("audio/")) return /mid|kar/.test(t) ? "file" : "media";
+    if (!t || t === "application/octet-stream" || t === "application/json" || t === "application/xml"
+      || t === "text/xml" || t.startsWith("text/") || /macbinary|3mle|karaoke|musicxml|mxl|zip-compressed/.test(t)) return "file";
+    return null;
+  }
+
+  function isMediaFileForItemAdd(file) {
+    if (window.MabiMusicFormats?.isSupported(String(file?.name || ""), file?.type || "")) return false;
+    return isAudioToMidiImportFile(file);
+  }
+
+  function isSupportedDroppedFile(file) {
+    const name = String(file?.name || "");
+    const extension = (name.match(/\.([^.]+)$/)?.[1] || "").toLowerCase();
+    if (["json", "mmlproj", "mml", "3mle", "mmi", "txt"].includes(extension)) return true;
+    if (window.MabiMusicFormats?.isSupported(name, file?.type || "")) return true;
+    return isAudioToMidiImportFile(file) || String(file?.type || "").startsWith("text/");
+  }
+
+  // 팝업·대화상자가 하나라도 떠 있으면 true. 드래그 앤 드롭은 팝업이 없을 때만 동작합니다.
+  function isAnyPopupOpen() {
+    const nodes = document.querySelectorAll('.popup-backdrop, [id$="Backdrop"], [aria-modal="true"], #midiImportPanel, #mmlExportPanel, #channelVolumePanel');
+    for (const node of nodes) {
+      if (!node.hidden && node.getClientRects().length) return true;
+    }
+    return false;
+  }
+
+  function setupFileDropOverlay() {
+    let overlay = null;
+    let importZone = null;
+    let addZone = null;
+    let depth = 0;
+    let mode = null; // "media" | "file" | null
+
+    function ensureOverlay() {
+      if (overlay) return;
+      overlay = document.createElement("div");
+      overlay.className = "file-drop-overlay";
+      overlay.hidden = true;
+      const makeZone = (kind, titleKey, hintKey) => {
+        const zone = document.createElement("div");
+        zone.className = `file-drop-zone file-drop-${kind}`;
+        const title = document.createElement("strong");
+        title.textContent = i18nText(titleKey);
+        const hint = document.createElement("span");
+        hint.textContent = i18nText(hintKey);
+        zone.append(title, hint);
+        overlay.append(zone);
+        return zone;
+      };
+      importZone = makeZone("import", "drop.import_title", "drop.import_hint_audio");
+      addZone = makeZone("add", "drop.add_title", "drop.add_hint");
+      document.body.append(overlay);
+    }
+
+    function detectMode(dataTransfer) {
+      const items = Array.from(dataTransfer?.items || []).filter((item) => item.kind === "file");
+      for (const item of items) {
+        const kind = classifyDraggedItemType(item.type);
+        if (kind) return kind;
+      }
+      return null;
+    }
+
+    function hasFiles(event) {
+      return Array.from(event.dataTransfer?.types || []).includes("Files");
+    }
+
+    function show() {
+      ensureOverlay();
+      overlay.classList.toggle("is-split", mode === "media");
+      overlay.querySelector(".file-drop-import span").textContent = i18nText(mode === "media" ? "drop.import_hint_audio" : "drop.import_hint_file");
+      overlay.querySelector(".file-drop-import strong").textContent = i18nText("drop.import_title");
+      overlay.querySelector(".file-drop-add strong").textContent = i18nText("drop.add_title");
+      overlay.querySelector(".file-drop-add span").textContent = i18nText("drop.add_hint");
+      overlay.hidden = false;
+    }
+
+    function hide() {
+      depth = 0;
+      mode = null;
+      if (overlay) {
+        overlay.hidden = true;
+        importZone.classList.remove("is-hot");
+        addZone.classList.remove("is-hot");
+      }
+    }
+
+    function markHot(event) {
+      if (!overlay || overlay.hidden) return;
+      const right = mode === "media" && event.clientX >= window.innerWidth / 2;
+      importZone.classList.toggle("is-hot", !right);
+      addZone.classList.toggle("is-hot", right);
+    }
+
+    window.addEventListener("dragenter", (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      depth += 1;
+      if (depth === 1) {
+        mode = isAnyPopupOpen() ? null : detectMode(event.dataTransfer);
+        if (mode) show();
+      }
+      markHot(event);
+    });
+    window.addEventListener("dragover", (event) => {
+      if (!hasFiles(event)) return;
+      // 파일을 놓아도 브라우저가 그 파일로 이동해 작업을 잃지 않도록 항상 기본 동작을 막습니다.
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = mode ? "copy" : "none";
+      markHot(event);
+    });
+    window.addEventListener("dragleave", (event) => {
+      if (!hasFiles(event)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0 || event.relatedTarget == null && event.clientX <= 0 && event.clientY <= 0) hide();
+    });
+    window.addEventListener("dragend", hide);
+    window.addEventListener("drop", (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      const wasMode = mode;
+      const popupOpen = isAnyPopupOpen();
+      const toAdd = wasMode === "media" && event.clientX >= window.innerWidth / 2;
+      hide();
+      if (popupOpen) return;
+      const files = Array.from(event.dataTransfer?.files || []);
+      const file = files.find((candidate) => isSupportedDroppedFile(candidate));
+      if (!file) {
+        if (files.length) showToast(i18nText("drop.unsupported"));
+        return;
+      }
+      if (state.midiImport.busy) return;
+      if (toAdd && isMediaFileForItemAdd(file)) void importAudioFile(file);
+      else void prepareUnifiedImportFile(file);
+    });
   }
 
   async function prepareUnifiedImportFile(file) {
@@ -19489,7 +19643,7 @@
   };
 
   // 마이크 설정: 감도(0~100, 높을수록 작은 소리도 받음), 음역(MIDI 번호), 최소 음 길이(ms), 악기("" = 기본 악기).
-  const MIC_SETTING_DEFAULTS = { sensitivity: 50, low: 40, high: 84, minMs: 70, presetKey: "", transpose: 0 };
+  const MIC_SETTING_DEFAULTS = { sensitivity: 100, low: 40, high: 84, minMs: 30, presetKey: "", transpose: 0 };
   const MIC_TRANSPOSE_LIMIT = 24;
   const MIC_MIN_MS_RANGE = [30, 200];
   function normalizeMicSettings(raw = {}) {
@@ -35826,6 +35980,7 @@
       elements.audioFileInput.value = "";
       if (file) await importAudioFile(file, { groupId });
     });
+    setupFileDropOverlay();
     // The import dialog uses the exact same picker/input as File > Import so the
     // supported-format list never depends on which format opened the dialog first.
     elements.midiImportChooseFileButton?.addEventListener("click", () => openFilePickerInput(elements.fileInput));

@@ -16162,3 +16162,11 @@ body.merge-mode-active .channel-instrument-control select { pointer-events: auto
 .midi-input-settings-subtitle { color: var(--text); font-size: 11.5px; font-weight: 800; padding-top: 4px; }
 .midi-input-metro-section { display: grid; gap: 4px; margin-top: 4px; padding-top: 6px; border-top: 1px dashed color-mix(in srgb, var(--control-border) 70%, transparent); }
 .midi-input-settings-section.device-input-advanced.is-global { border-bottom: 0; padding-bottom: 0; }
+
+.file-drop-overlay { position: fixed; inset: 0; z-index: 20000; display: flex; gap: 16px; padding: 18px; background: rgba(214, 218, 226, 0.62); backdrop-filter: blur(2px); pointer-events: none; }
+.file-drop-overlay[hidden] { display: none; }
+.file-drop-zone { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 2px dashed rgba(70, 78, 92, 0.55); border-radius: 18px; background: rgba(236, 239, 244, 0.55); color: #2a303a; text-align: center; transition: background 120ms ease, border-color 120ms ease, transform 120ms ease; }
+.file-drop-zone strong { font-size: 26px; }
+.file-drop-zone span { font-size: 14px; opacity: 0.8; }
+.file-drop-zone.is-hot { background: rgba(250, 251, 253, 0.9); border-style: solid; border-color: rgba(60, 100, 200, 0.85); transform: scale(1.01); }
+.file-drop-overlay:not(.is-split) .file-drop-add { display: none; }
