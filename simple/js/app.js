@@ -1277,6 +1277,10 @@
     els.dropZone.addEventListener(eventName, event => {
       event.preventDefault();
       event.stopPropagation();
+      if (window.MabiUtils?.isFolderOnlyDrag?.(event.dataTransfer)) {
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+        return;
+      }
       els.dropZone.classList.add("dragover");
     });
   }
@@ -1287,7 +1291,11 @@
       els.dropZone.classList.remove("dragover");
     });
   }
-  els.dropZone.addEventListener("drop", event => void selectFile(event.dataTransfer?.files?.[0] || null));
+  els.dropZone.addEventListener("drop", event => {
+    // 폴더는 지원하지 않으므로 무시하고, 선택된 파일이 없으면 기존 상태를 건드리지 않습니다.
+    const file = (window.MabiUtils?.getDroppedFiles ? window.MabiUtils.getDroppedFiles(event.dataTransfer) : Array.from(event.dataTransfer?.files || []))[0];
+    if (file) void selectFile(file);
+  });
 
   els.quantizeOptions.addEventListener("click", event => {
     const button = event.target.closest("[data-quantize]");

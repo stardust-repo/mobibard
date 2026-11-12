@@ -483,7 +483,7 @@
       drop.classList.remove("dragover");
     }));
     drop.addEventListener("drop", event => {
-      const file = event.dataTransfer?.files?.[0];
+      const file = (window.MabiUtils?.getDroppedFiles ? window.MabiUtils.getDroppedFiles(event.dataTransfer) : Array.from(event.dataTransfer?.files || []))[0];
       if (!file || !input) return;
       try {
         const dt = new DataTransfer();
@@ -8479,13 +8479,13 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     document.addEventListener("dragover", (event) => {
       if (!isSourceFileDrag(event)) return;
       event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = hasOpenAppDialog() ? "none" : "copy";
+      if (event.dataTransfer) event.dataTransfer.dropEffect = hasOpenAppDialog() || window.MabiUtils?.isFolderOnlyDrag?.(event.dataTransfer) ? "none" : "copy";
     });
     document.addEventListener("drop", (event) => {
       if (!isSourceFileDrag(event)) return;
       event.preventDefault();
-      if (hasOpenAppDialog()) return;
-      const file = findFirstSupportedSourceFile(event.dataTransfer?.files);
+      if (hasOpenAppDialog() || window.MabiUtils?.isFolderOnlyDrag?.(event.dataTransfer)) return;
+      const file = findFirstSupportedSourceFile(window.MabiUtils?.getDroppedFiles ? window.MabiUtils.getDroppedFiles(event.dataTransfer) : event.dataTransfer?.files);
       if (!file) {
         showToast([i18nText("file.load_fail"), i18nText("xml.drag_drop")].filter(Boolean).join(": "), "error");
         return;

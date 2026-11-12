@@ -3620,6 +3620,10 @@ function initializeEvents() {
   for (const type of ['dragenter', 'dragover']) {
     elements.fileDrop.addEventListener(type, event => {
       event.preventDefault();
+      if (window.MabiUtils?.isFolderOnlyDrag?.(event.dataTransfer)) {
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+        return;
+      }
       elements.fileDrop.classList.add('dragover');
     });
   }
@@ -3630,7 +3634,10 @@ function initializeEvents() {
     });
   }
   elements.fileDrop.addEventListener('drop', event => {
-    const file = Array.from(event.dataTransfer?.files || []).find(item => item.type.startsWith('video/') || /\.(mp4|mov|webm|mkv)$/i.test(item.name));
+    // 폴더는 지원하지 않으므로 걸러내고, 폴더만 놓았다면 아무 동작도 하지 않습니다.
+    if (window.MabiUtils?.isFolderOnlyDrag?.(event.dataTransfer)) return;
+    const dropped = window.MabiUtils?.getDroppedFiles ? window.MabiUtils.getDroppedFiles(event.dataTransfer) : Array.from(event.dataTransfer?.files || []);
+    const file = dropped.find(item => item.type.startsWith('video/') || /\.(mp4|mov|webm|mkv)$/i.test(item.name));
     if (file) loadVideoFile(file);
     else showToast(t('toast.no_video_file'), 'error');
   });

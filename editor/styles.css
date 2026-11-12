@@ -10982,8 +10982,13 @@ body.channel-delete-mode-active #confirmDialog button {
 .settings-control { position: relative; display: inline-flex; }
 .settings-menu {
   min-width: 246px;
+  /* 파일(168px)·편집(186px) 메뉴보다 약 50% 큰 정도(280px)를 가로 상한으로 둡니다. 긴 문구는 줄바꿈하지 않고 ...으로 줄입니다. */
+  max-width: 280px;
   padding: 8px;
 }
+.settings-menu .settings-check-row > span,
+.settings-menu .settings-field > span,
+.settings-menu button { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .settings-check-row,
 .settings-field {
   min-height: 34px;
@@ -16170,3 +16175,6 @@ body.merge-mode-active .channel-instrument-control select { pointer-events: auto
 .file-drop-zone span { font-size: 14px; opacity: 0.8; }
 .file-drop-zone.is-hot { background: rgba(250, 251, 253, 0.9); border-style: solid; border-color: rgba(60, 100, 200, 0.85); transform: scale(1.01); }
 .file-drop-overlay:not(.is-split) .file-drop-add { display: none; }
+
+.overview-seek-ghost { position: absolute; left: 0; top: 0; width: 0; border-left: 2px dashed rgba(70, 140, 255, 0.95); pointer-events: none; will-change: transform; z-index: 4; filter: drop-shadow(0 0 4px rgba(70, 140, 255, 0.55)); }
+.overview-seek-ghost[hidden] { display: none; }

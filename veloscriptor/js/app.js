@@ -439,6 +439,10 @@ function setupDropZone(zone, input, callback) {
   for (const type of ['dragenter', 'dragover']) {
     zone.addEventListener(type, event => {
       event.preventDefault();
+      if (window.MabiUtils?.isFolderOnlyDrag?.(event.dataTransfer)) {
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+        return;
+      }
       if (!state.analyzing) zone.classList.add('is-dragging');
     });
   }
@@ -450,7 +454,8 @@ function setupDropZone(zone, input, callback) {
   }
   zone.addEventListener('drop', event => {
     if (state.analyzing) return;
-    const [file] = event.dataTransfer?.files || [];
+    // 폴더는 지원하지 않으므로 걸러내고, 폴더만 놓았다면 아무 동작도 하지 않습니다.
+    const [file] = window.MabiUtils?.getDroppedFiles ? window.MabiUtils.getDroppedFiles(event.dataTransfer) : Array.from(event.dataTransfer?.files || []);
     if (file) callback(file);
   });
 }

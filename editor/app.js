@@ -7530,6 +7530,20 @@
     context.moveTo(Math.round(playheadX) + 0.5, 0);
     context.lineTo(Math.round(playheadX) + 0.5, height);
     context.stroke();
+
+    // 재생 중 전체 트랙바를 드래그하면 놓는 위치로 점프합니다. 놓기 전까지는 점프할 위치만 표시합니다.
+    if (overviewTimelineDrag?.seekMode && Number.isFinite(overviewTimelineDrag.seekBeat)) {
+      const ghostX = clamp(overviewTimelineDrag.seekBeat / endBeat * width, 0, width);
+      context.save();
+      context.strokeStyle = state.theme === "light" ? "rgba(30,90,200,.95)" : "rgba(120,180,255,.95)";
+      context.lineWidth = 2;
+      context.setLineDash([4, 3]);
+      context.beginPath();
+      context.moveTo(Math.round(ghostX) + 0.5, 0);
+      context.lineTo(Math.round(ghostX) + 0.5, height);
+      context.stroke();
+      context.restore();
+    }
   }
 
   function overviewTimelineBeatFromPointer(event) {
@@ -7556,29 +7570,81 @@
     return targetBeat;
   }
 
+  // 재생 중이 아니면 둘러보기(화면만 이동), 재생 중이면 드래그해서 놓은 위치로 재생 위치를 점프합니다.
+  let overviewSeekGhostElement = null;
+
+  // 피아노 롤에도 전체 트랙바와 같은 점프 위치 점선을 보여줍니다.
+  function updateOverviewSeekGhost(beat) {
+    if (beat == null) {
+      if (overviewSeekGhostElement) overviewSeekGhostElement.hidden = true;
+      return;
+    }
+    if (!overviewSeekGhostElement) {
+      overviewSeekGhostElement = document.createElement("div");
+      overviewSeekGhostElement.className = "overview-seek-ghost";
+      overviewSeekGhostElement.setAttribute("aria-hidden", "true");
+      elements.playhead.parentElement?.append(overviewSeekGhostElement);
+    }
+    const layout = getPlayheadLayout();
+    const visibleX = beatToX(beat) - elements.rollViewport.scrollLeft;
+    const isVisible = visibleX >= -1 && visibleX <= layout.viewportWidth + 1;
+    overviewSeekGhostElement.hidden = !isVisible;
+    if (!isVisible) return;
+    overviewSeekGhostElement.style.top = `${layout.top}px`;
+    overviewSeekGhostElement.style.height = `${layout.height}px`;
+    overviewSeekGhostElement.style.transform = `translate3d(${layout.leftOffset + visibleX - 1}px, 0, 0)`;
+  }
+
+  function updateOverviewTimelineSeekPreview(event) {
+    const beat = clamp(snapBeat(overviewTimelineBeatFromPointer(event)), 0, getTotalBeats());
+    overviewTimelineDrag.seekBeat = beat;
+    // 놓을 위치를 눈으로 확인할 수 있도록 피아노 롤 화면도 그 위치로 함께 움직입니다.
+    navigateOverviewTimelineFromPointer(event);
+    drawOverviewTimeline();
+    updateOverviewSeekGhost(beat);
+    return beat;
+  }
+
   function handleOverviewTimelinePointerDown(event) {
     if (event.button !== 0 || !elements.overviewTimelineCanvas) return;
-    overviewTimelineDrag = { pointerId: event.pointerId };
+    const seekMode = Boolean(state.playback.running && audioEngine.context);
+    overviewTimelineDrag = { pointerId: event.pointerId, seekMode, seekBeat: null };
     trySetPointerCapture(elements.overviewTimelineCanvas, event.pointerId);
-    navigateOverviewTimelineFromPointer(event);
+    if (seekMode) updateOverviewTimelineSeekPreview(event);
+    else navigateOverviewTimelineFromPointer(event);
     event.preventDefault();
   }
 
   function handleOverviewTimelinePointerMove(event) {
     if (overviewTimelineDrag?.pointerId !== event.pointerId) return;
-    navigateOverviewTimelineFromPointer(event);
+    if (overviewTimelineDrag.seekMode) updateOverviewTimelineSeekPreview(event);
+    else navigateOverviewTimelineFromPointer(event);
     event.preventDefault();
   }
 
   function handleOverviewTimelinePointerUp(event) {
     if (overviewTimelineDrag?.pointerId !== event.pointerId) return;
+    const drag = overviewTimelineDrag;
     overviewTimelineDrag = null;
+    updateOverviewSeekGhost(null);
     try {
       elements.overviewTimelineCanvas?.releasePointerCapture(event.pointerId);
     } catch {
       // Pointer capture may already have been released.
     }
-    if (event.type !== "pointercancel") navigateOverviewTimelineFromPointer(event);
+    if (drag.seekMode) {
+      if (event.type !== "pointercancel") {
+        const beat = clamp(snapBeat(overviewTimelineBeatFromPointer(event)), 0, getTotalBeats());
+        seekPlayheadBeat(beat);
+        if (elements.rollViewport) {
+          elements.rollViewport.scrollLeft = clamp(beatToX(beat) - elements.rollViewport.clientWidth * 0.25, 0, getMaxScrollLeft());
+          updateCustomScrollbars();
+        }
+      }
+      drawOverviewTimeline();
+    } else if (event.type !== "pointercancel") {
+      navigateOverviewTimelineFromPointer(event);
+    }
     event.preventDefault();
   }
 
@@ -16397,7 +16463,7 @@
     }
 
     function detectMode(dataTransfer) {
-      const items = Array.from(dataTransfer?.items || []).filter((item) => item.kind === "file");
+      const items = Array.from(dataTransfer?.items || []).filter((item) => item.kind === "file" && !window.MabiUtils?.isDirectoryDataTransferItem?.(item));
       for (const item of items) {
         const kind = classifyDraggedItemType(item.type);
         if (kind) return kind;
@@ -16467,7 +16533,8 @@
       const toAdd = wasMode === "media" && event.clientX >= window.innerWidth / 2;
       hide();
       if (popupOpen) return;
-      const files = Array.from(event.dataTransfer?.files || []);
+      // 폴더는 지원하지 않으므로 걸러내고, 폴더만 놓았다면 아무 동작도 하지 않습니다.
+      const files = window.MabiUtils?.getDroppedFiles ? window.MabiUtils.getDroppedFiles(event.dataTransfer) : Array.from(event.dataTransfer?.files || []);
       const file = files.find((candidate) => isSupportedDroppedFile(candidate));
       if (!file) {
         if (files.length) showToast(i18nText("drop.unsupported"));
@@ -30562,6 +30629,11 @@
       return;
     }
     if (state.customScrollDrag?.axis === "x") {
+      return;
+    }
+    // 전체 트랙바에서 점프할 위치를 고르는 동안에는 마디가 넘어가도 화면이 자동으로 넘어가지 않습니다.
+    if (overviewTimelineDrag?.seekMode) {
+      state.playback.scrollAnimation = null;
       return;
     }
 

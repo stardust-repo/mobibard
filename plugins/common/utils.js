@@ -527,7 +527,32 @@
     return null;
   }
 
+  // 드래그 앤 드롭: 폴더는 지원하지 않으므로 항목 단위로 폴더를 걸러냅니다.
+  // 드래그 중에는 파일 이름을 알 수 없어 webkitGetAsEntry로 폴더 여부만 확인합니다.
+  function isDirectoryDataTransferItem(item) {
+    try {
+      const entry = item?.webkitGetAsEntry?.();
+      return Boolean(entry && entry.isDirectory);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function getDroppedFiles(dataTransfer) {
+    const items = Array.from(dataTransfer?.items || []).filter(item => item.kind === "file");
+    if (!items.length) return Array.from(dataTransfer?.files || []);
+    return items.filter(item => !isDirectoryDataTransferItem(item)).map(item => item.getAsFile()).filter(Boolean);
+  }
+
+  function isFolderOnlyDrag(dataTransfer) {
+    const items = Array.from(dataTransfer?.items || []).filter(item => item.kind === "file");
+    return items.length > 0 && items.every(isDirectoryDataTransferItem);
+  }
+
   root.MabiUtils = Object.freeze({
+    isDirectoryDataTransferItem,
+    getDroppedFiles,
+    isFolderOnlyDrag,
     version: "5.1.0",
     clamp,
     clampInt,
