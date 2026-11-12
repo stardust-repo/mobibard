@@ -15778,7 +15778,7 @@ body.side-tool-import-active { --inline-detail-width: 170px; }
 #midiImportDetail .midi-import-range-inputs { flex-wrap: nowrap; white-space: nowrap; }
 #midiImportDetail .midi-import-range-inputs input { width: 32px; padding: 0 2px; flex: 0 0 auto; }
 
-/* ---- MIDI 입력: 연주를 원본 그대로 기록하는 전용 그룹 ---- */
+/* ---- 장치 입력: 연주를 원본 그대로 기록하는 전용 그룹(여러 개, 녹음 대상은 하나) ---- */
 .channel-group-item.is-midi-input {
   height: auto !important;
   min-height: 34px;
@@ -15850,40 +15850,6 @@ body.side-tool-import-active { --inline-detail-width: 170px; }
 .midi-input-hint { margin: 0; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
 body.midi-input-recording #playheadTimeLabel { background: #e5484d; }
 @keyframes midi-input-blink { 50% { opacity: .25; } }
-.midi-input-monitor-button.is-open { border-color: color-mix(in srgb, var(--accent) 60%, var(--control-border)); color: var(--accent); }
-.midi-input-monitor {
-  display: grid;
-  gap: 5px;
-  padding: 6px;
-  border: 1px solid var(--control-border);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--panel) 85%, transparent);
-}
-.midi-input-monitor-hint { margin: 0; font-size: 11px; font-weight: 700; line-height: 1.4; color: var(--text); }
-.midi-input-monitor-devices, .midi-input-monitor-signals { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
-.midi-input-monitor-devices li { display: grid; gap: 1px; font-size: 10.5px; }
-.midi-input-monitor-devices strong { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.midi-input-monitor-devices span { color: var(--muted); }
-.midi-input-monitor-signals { max-height: 168px; overflow-y: auto; }
-.midi-input-monitor-signals li {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  column-gap: 6px;
-  padding: 2px 4px;
-  border-left: 3px solid var(--control-border);
-  border-radius: 3px;
-  font-size: 10.5px;
-  background: color-mix(in srgb, var(--control-bg) 70%, transparent);
-}
-.midi-input-monitor-signals li.is-empty { display: block; color: var(--muted); border-left-color: transparent; }
-.midi-input-monitor-signals time { color: var(--muted); font-variant-numeric: tabular-nums; }
-.midi-input-monitor-signals span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.midi-input-monitor-signals em { grid-column: 2; font-style: normal; color: var(--muted); }
-.midi-input-monitor-signals li.is-recorded { border-left-color: #22a06b; }
-.midi-input-monitor-signals li.is-recorded em { color: #22a06b; font-weight: 700; }
-.midi-input-monitor-signals li.is-warn { border-left-color: #d97706; }
-.midi-input-monitor-signals li.is-warn em { color: #d97706; font-weight: 700; }
-
 /* MIDI 입력: 메트로놈 · 카운트인 · 기록 보정 */
 .midi-input-metro, .midi-input-offset { display: grid; gap: 4px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--control-border) 60%, transparent); }
 .midi-input-inline-field { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-weight: 700; min-width: 0; }
@@ -16101,3 +16067,83 @@ body.merge-mode-active .channel-instrument-control select { pointer-events: auto
 .history-usage-fill { display: block; height: 100%; width: 0; background: var(--accent, #4a8cf0); border-radius: 3px; transition: width .2s; }
 .history-usage.is-high .history-usage-fill { background: #e0883a; }
 .history-usage-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
+/* ---- 장치 입력: 녹음 대상 표시 · 공용 설정의 장치 상태 ---- */
+.channel-group-item.is-midi-input.is-recording-target .channel-group-label::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #e5484d;
+  vertical-align: 1px;
+  animation: midi-input-blink 1s steps(2, start) infinite;
+}
+.midi-input-record-button.is-busy { opacity: .45; cursor: not-allowed; }
+.midi-input-device-chip.is-mic .midi-input-device-name { letter-spacing: 0; }
+.device-input-status-rows { display: grid; gap: 4px; }
+.device-input-cards { display: grid; gap: 8px; }
+.device-input-card {
+  display: grid;
+  gap: 6px;
+  padding: 8px 9px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--control-bg) 72%, transparent);
+  min-width: 0;
+}
+.device-input-card.is-off { opacity: .72; }
+.device-input-card-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.device-input-toggle { flex: 0 0 auto; }
+.device-input-kind {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.device-input-card.is-mic .device-input-kind { background: color-mix(in srgb, #22a06b 22%, transparent); }
+.device-input-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--text); }
+.device-input-lamp { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 40%, transparent); transition: background-color 80ms linear, box-shadow 80ms linear; }
+.device-input-lamp.is-on { background: #4ade80; box-shadow: 0 0 0 3px color-mix(in srgb, #4ade80 30%, transparent); }
+.device-input-signal { color: var(--muted); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; min-height: 15px; }
+.device-input-meter {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+}
+.device-input-meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: #22a06b;
+}
+.device-input-meter-gate { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--text); opacity: .7; }
+.device-input-octave-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.device-input-octave { position: relative; flex: 0 0 auto; width: 126px; height: 36px; }
+.device-input-key { position: absolute; top: 0; box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--control-border) 85%, #000); overflow: hidden; }
+.device-input-key.is-white { height: 100%; background: #f7f7f5; border-radius: 0 0 4px 4px; }
+.device-input-key.is-black { height: 60%; background: #2a2a2e; border-color: #111; border-radius: 0 0 3px 3px; z-index: 1; }
+.device-input-key::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  opacity: var(--key-level, 0);
+  transition: opacity 60ms linear;
+}
+.device-input-notes { min-width: 0; flex: 1 1 auto; color: var(--text); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-input-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 5px 10px; }
+.device-input-field { display: inline-flex; align-items: center; gap: 5px; min-width: 0; color: var(--muted); font-weight: 700; }
+.device-input-field > span:first-child { flex: 0 0 auto; }
+.device-input-field input[type="number"] { width: 60px; min-height: 22px; font-size: 11px; text-align: right; }
+.device-input-field input[type="range"] { flex: 1 1 60px; min-width: 50px; margin: 0; }
+.device-input-field select { min-width: 0; max-width: 100%; min-height: 22px; font-size: 11px; }
+.device-input-field output { min-width: 22px; text-align: right; font-variant-numeric: tabular-nums; }
+.device-input-range { display: inline-flex; align-items: center; gap: 3px; min-width: 0; }
+.device-input-target-select { min-width: 0; max-width: 100%; min-height: 24px; font-size: 12px; }
