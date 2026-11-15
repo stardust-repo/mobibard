@@ -9,8 +9,8 @@
   "models": {
     "w16": {
       "file": "wave2mid_v2_w16.onnx",
-      "bytes": 37940715,
-      "sha256": "44325eb96da62238297dbe339abb4f53422a834843dabbbacdff3bf08eb31e7c",
+      "bytes": 37940797,
+      "sha256": "2d3b7079534987a388bfd6db972352e27d9451eff2606821cbfba96a590c57c4",
       "compute": "fp32 (weights stored as fp16)",
       "devices": "WebGPU and CPU (WebAssembly)"
     }

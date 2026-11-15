@@ -410,6 +410,7 @@
     try {
       const result = await api.transcribe(file, {
         maxSeconds: AUDIO_AI_MAX_MINUTES * 60,
+        fingerprint: true, // same-sounding notes get one instrument (see plugins/ai/wave2midi/README.md)
         onProgress: (event) => {
           if (!isCurrent()) return;
           api.showProgressNotice(`${file.name} · ${api.progressText(event, audioAiText)}`, api.progressFraction(event));

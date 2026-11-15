@@ -412,6 +412,7 @@
     midiImportLimitChannelsPerInstrument: document.querySelector("#midiImportLimitChannelsPerInstrument"),
     midiImportAudioControls: document.querySelector("#midiImportAudioControls"),
     w2mStateBias: document.querySelector("#w2mStateBias"),
+    w2mFingerprint: document.querySelector("#w2mFingerprint"),
     w2mDrum: document.querySelector("#w2mDrum"),
     w2mVolumeFixed: document.querySelector("#w2mVolumeFixed"),
     w2mTempoBpm: document.querySelector("#w2mTempoBpm"),
@@ -14345,7 +14346,7 @@
   const IMPORT_OPTIONS_KEY = "mobibard-import-options";
   const IMPORT_OPTION_DEFAULTS = Object.freeze({
     quantize: 64, overlap: 64, limitOn: false, limitCount: 3,
-    stateBias: 0, drumThreshold: 0.13,
+    stateBias: 0, drumThreshold: 0.13, fingerprint: true,
     volume: "auto", volumeFixed: 12, tempo: "auto", tempoBpm: 120,
     colorMode: "channel",
   });
@@ -14375,6 +14376,7 @@
       // Wave2MIDI v2: 예전 감도/노트 끝/짧은 노트 제거 값은 더 이상 쓰지 않고, 새 슬라이더는 기본값에서 시작합니다.
       stateBias: slotValue(src.stateBias, -1, 1, 0.05, d.stateBias),
       drumThreshold: slotValue(src.drumThreshold, 0.05, 0.4, 0.01, d.drumThreshold),
+      fingerprint: src.fingerprint !== false,
       volume: pick(src.volume, ["auto", "fixed"], d.volume),
       volumeFixed: clamp(Math.round(Number(src.volumeFixed) || d.volumeFixed), 1, 15),
       tempo: pick(src.tempo, ["auto", "fixed"], d.tempo),
@@ -14391,6 +14393,7 @@
       limitCount: elements.midiImportChannelLimitInput?.value,
       stateBias: elements.w2mStateBias?.value,
       drumThreshold: elements.w2mDrum?.value,
+      fingerprint: elements.w2mFingerprint ? elements.w2mFingerprint.checked : true,
       volume: getCheckedRadioValue("w2mVolume"),
       volumeFixed: elements.w2mVolumeFixed?.value,
       tempo: getCheckedRadioValue("w2mTempo"),
@@ -14410,6 +14413,7 @@
     }
     if (elements.w2mStateBias) elements.w2mStateBias.value = String(o.stateBias);
     if (elements.w2mDrum) elements.w2mDrum.value = String(o.drumThreshold);
+    if (elements.w2mFingerprint) elements.w2mFingerprint.checked = o.fingerprint;
     updateW2mSliderReadouts();
     setCheckedRadioValue("w2mVolume", o.volume);
     setCheckedRadioValue("w2mTempo", o.tempo);
@@ -14455,7 +14459,7 @@
     const selector = [
       'input[name="midiImportQuantize"]', 'input[name="midiImportOverlap"]',
       "#midiImportLimitChannelsPerInstrument", "#midiImportChannelLimitInput",
-      "#w2mStateBias", "#w2mDrum",
+      "#w2mStateBias", "#w2mDrum", "#w2mFingerprint",
       'input[name="w2mVolume"]', "#w2mVolumeFixed", 'input[name="w2mTempo"]', "#w2mTempoBpm",
     ].join(",");
     // 각 입력의 자체 change 처리(값 보정 등)가 끝난 뒤(버블링) 읽습니다.
@@ -15235,6 +15239,8 @@
     return {
       stateBias: readW2mStateBias(),
       drumThreshold: readW2mDrumThreshold(),
+      fingerprint: elements.w2mFingerprint ? elements.w2mFingerprint.checked : true,
+      collectFingerprint: true,
       velocity,
       velocityRange,
       tempo: fixed ? bpm : true,
@@ -36124,6 +36130,7 @@
       slider?.addEventListener("input", updateW2mSliderReadouts);
       slider?.addEventListener("change", scheduleAudioToMidiPostprocess);
     }
+    elements.w2mFingerprint?.addEventListener("change", scheduleAudioToMidiPostprocess);
     elements.w2mVolumeFixed?.addEventListener("change", () => {
       readW2mVolumeInput(elements.w2mVolumeFixed, 12);
       scheduleAudioToMidiPostprocess();

@@ -1302,6 +1302,8 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "audio_midi.opt_state_bias": "노트 시작 편향",
     "audio_midi.opt_bias_left": "확실한 노트만",
     "audio_midi.opt_bias_right": "작은 노트까지",
+    "audio_midi.opt_fingerprint": "악기 지문 유사도 보정",
+    "audio_midi.opt_fingerprint_hint": "곡 전체에서 음색이 비슷한 음끼리 묶어 같은 악기로 통일합니다",
     "audio_midi.opt_drum": "드럼 검출 기준",
     "audio_midi.opt_drum_left": "약한 타격까지",
     "audio_midi.opt_drum_right": "확실한 타격만",

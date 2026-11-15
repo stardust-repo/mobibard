@@ -325,11 +325,16 @@ async function transcribe(id, wave, options) {
     : Math.max(1, Math.min(8, cores - 2));
   const pool = new FeaturePool(meta, poolSize, w2m);
   const predictOptions = { prepare: seg => pool.features(seg), lookahead: Math.max(1, pool.size), keys: NEEDED_OUTPUTS };
+  // The 128-d per-note feature (model output "feat") is only fetched when the fingerprint check can use it.
+  const wantFeat = (options.fingerprint === true || options.collectFingerprint === true) && Boolean(meta.outputs?.feat);
+  const fetchNames = wantFeat ? [...NEEDED_OUTPUTS, "feat"] : NEEDED_OUTPUTS;
+  predictOptions.sparseFeat = wantFeat ? Number(meta.outputs.feat[3]) || 128 : 0;
   const runOnMain = async feats => {
     const input = new self.ort.Tensor("float32", feats, meta.input.shape);
-    const result = await session.run({ [meta.input.name || "features"]: input }, NEEDED_OUTPUTS);
+    const result = await session.run({ [meta.input.name || "features"]: input }, fetchNames);
     const out = {};
     for (const name of NEEDED_OUTPUTS) out[name] = result[name].data;
+    if (wantFeat && result.feat) Object.assign(out, w2m.sparsifyFeat(result.state.data, result.feat.data, meta.input.shape[2], result.feat.dims[3]));
     input.dispose?.();
     return out;
   };
@@ -345,7 +350,7 @@ async function transcribe(id, wave, options) {
     let lanes = null;
     try {
       if (info.provider === "wasm" && cpuSessions > 1) {
-        lanes = new LanePool(runOnMain, inputName, meta.input.shape, NEEDED_OUTPUTS);
+        lanes = new LanePool(runOnMain, inputName, meta.input.shape, fetchNames);
         await lanes.start(cpuSessions);
         if (lanes.size < 2) { lanes.terminate(); lanes = null; }
       }
@@ -382,6 +387,8 @@ async function transcribe(id, wave, options) {
 // Post-processing: probability maps -> notes (state decoder) -> velocity -> tempo map -> MIDI.
 //   options.stateBias       -1..1 added to the "note start" state (higher = more and weaker notes); default 0
 //   options.drumThreshold   0.05..0.4 drum hit threshold (lower = more drum hits); default meta.thresholds.drum
+//   options.collectFingerprint  true: keep the model's 128-d note features during the run, so fingerprint can be switched on later
+//   options.fingerprint     true: uncertain instruments are decided by similar nearby notes (see lib/w2m_web.mjs); default false
 //   options.velocity        true/undefined: estimated, false: constant 100, number: that fixed velocity (1-127)
 //   options.velocityRange   [min, max] (1-127) range of estimated velocities; default meta.velocity min/max
 //   options.tempo           true/undefined: auto, false: 120 BPM grid, number: that fixed BPM
@@ -403,8 +410,10 @@ async function finishTranscription(job, options, progress, started = performance
   const thresholds = { ...meta.thresholds, drum, multi: 1.01 };
   // The state decoder reads the "multi" map only to compare it with the (unreachable) threshold above.
   const maps = { ...probs, T, multi: probs.multi || (job.zeroMulti ??= new Float32Array(T * w2m.NP)) };
-  let notes = w2m.decodeStates(maps, { ...meta, thresholds }, bias);
-  const decoder = { mode: "state", bias };
+  const fingerprint = options.fingerprint === true;
+  const fpStats = {};
+  let notes = w2m.decodeStates(maps, { ...meta, thresholds }, bias, { fingerprint, stats: fpStats, debug: options.debugFingerprint ? (job.fpDebug = []) : null });
+  const decoder = { mode: "state", bias, fingerprint, ...fpStats };
   let velocities = null;
   const fixedVelocity = typeof options.velocity === "number" && options.velocity > 0
     ? Math.min(127, Math.max(1, Math.round(options.velocity)))
@@ -451,6 +460,7 @@ async function finishTranscription(job, options, progress, started = performance
     thresholds,
     tempo: tempoMap,
     decoder,
+    ...(job.fpDebug ? { fingerprintDebug: job.fpDebug } : {}),
     classes: meta.classes.slice(),
     model: {
       id: info.manifest?.id, sha256: info.manifest?.sha256, version: meta.version, step: meta.step,

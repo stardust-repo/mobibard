@@ -1302,6 +1302,8 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "audio_midi.opt_state_bias": "ノート開始のバイアス",
     "audio_midi.opt_bias_left": "確実な音のみ",
     "audio_midi.opt_bias_right": "小さな音まで",
+    "audio_midi.opt_fingerprint": "楽器フィンガープリント補正",
+    "audio_midi.opt_fingerprint_hint": "曲全体で音色の近い音をまとめ、グループごとに同じ楽器に統一します",
     "audio_midi.opt_drum": "ドラム検出の基準",
     "audio_midi.opt_drum_left": "弱い打撃まで",
     "audio_midi.opt_drum_right": "確実な打撃のみ",

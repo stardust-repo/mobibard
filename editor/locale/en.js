@@ -1302,6 +1302,8 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "audio_midi.opt_state_bias": "Note start bias",
     "audio_midi.opt_bias_left": "Sure notes only",
     "audio_midi.opt_bias_right": "Include small notes",
+    "audio_midi.opt_fingerprint": "Instrument fingerprint check",
+    "audio_midi.opt_fingerprint_hint": "Groups similar-sounding notes across the whole song and gives each group one instrument",
     "audio_midi.opt_drum": "Drum detection threshold",
     "audio_midi.opt_drum_left": "Include soft hits",
     "audio_midi.opt_drum_right": "Clear hits only",

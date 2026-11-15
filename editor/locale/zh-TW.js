@@ -1302,6 +1302,8 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "audio_midi.opt_state_bias": "音符起始偏置",
     "audio_midi.opt_bias_left": "僅可靠音符",
     "audio_midi.opt_bias_right": "包含較小音符",
+    "audio_midi.opt_fingerprint": "樂器指紋相似度校正",
+    "audio_midi.opt_fingerprint_hint": "將整首曲子中音色相近的音符歸為一組,每組統一為同一種樂器",
     "audio_midi.opt_drum": "鼓偵測閾值",
     "audio_midi.opt_drum_left": "包含較輕敲擊",
     "audio_midi.opt_drum_right": "僅明確敲擊",

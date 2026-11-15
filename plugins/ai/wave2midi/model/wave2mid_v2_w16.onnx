@@ -1,4 +1,4 @@
-pytorch2.11.0:ÏÛ‹
+pytorch2.11.0:¡Ü‹
 C
 m.pitch_emb__f16m.pitch_embm.pitch_emb__cast"Cast*	
 to 
@@ -94432,4 +94432,8 @@ u‘i’,ùˆ–¬Ò¸¢?—ïB˜´!o¥#¯ó Ëœ´Ÿ•$(•í ,Ò£”™H!K•©Ÿã¦‘—^´Œ
 
 Ø
 X
-B
+b
+feat
+
+B
+&/head_norm/LayerNormalization_output_0featfeat_out"IdentityB

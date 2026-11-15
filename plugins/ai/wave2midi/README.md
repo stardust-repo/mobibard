@@ -51,6 +51,8 @@ const result = await MobibardWave2Midi.transcribe(file, {
   tempoChanges: true,          // 자동 추정 때 곡 중간 템포 변화 반영 여부
   stateBias: 0,                // 노트 시작 편향 -1~1 (기본 0). 클수록 작은 노트까지, 작을수록 확실한 노트만
   drumThreshold: 0.13,         // 드럼 검출 기준 0.05~0.4 (기본 0.13). 낮을수록 약한 타격까지
+  collectFingerprint: false,   // true: 변환 중 모델의 128차원 노트 특징(출력 feat)을 모아 둠 → 나중에 postprocess로 fingerprint를 켤 수 있음
+  fingerprint: false,          // true: 악기가 애매한 음(후보 2개 이상)을 근처(±3초, ±7반음) 확정 음과의 유사도로 보정 (기본 false, 에디터는 켬)
   onProgress: ({ stage, done, total }) => {},
   signal: abortController.signal,
 });
@@ -74,7 +76,7 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 
 ### 후처리 다시 적용
 
-- `postprocess({ stateBias, drumThreshold, velocity, velocityRange, tempo, tempoChanges })`: 마지막 변환의 모델 출력으로 노트·세기·템포·MIDI만 다시 계산합니다(모델을 다시 돌리지 않음). Worker가 해제된 뒤에는 `error.code === "no-job"`으로 실패하므로 `transcribe()`를 다시 호출하세요.
+- `postprocess({ stateBias, drumThreshold, fingerprint, velocity, velocityRange, tempo, tempoChanges })`: 마지막 변환의 모델 출력으로 노트·세기·템포·MIDI만 다시 계산합니다(모델을 다시 돌리지 않음). Worker가 해제된 뒤에는 `error.code === "no-job"`으로 실패하므로 `transcribe()`를 다시 호출하세요.
 - `getPostprocessDefaults()`: `model/meta.json`의 기본값 `{ stateBias, stateBiasMin, stateBiasMax, drumThreshold, drumMin, drumMax, velocity, velocityMin, velocityMax, tempoChanges, tempoMin, tempoMax }` (모델은 내려받지 않음).
 
 ### UI 보조 함수 (1.0.4)
@@ -106,3 +108,10 @@ sha256sum model/wave2mid_v2_w16.onnx
 sha256이 바뀌면 사용자 브라우저에 있던 이전 모델은 다음 사용 때 새 모델로 교체됩니다. `meta.json`만 고친 경우에는 manifest를 바꿀 필요가 없습니다.
 
 `lib/*.mjs`나 `worker.js`를 고치면 `wave2midi.js`의 `VERSION`을 올려 브라우저 캐시를 무효화하세요.
+
+## 악기 지문(fingerprint) 보정과 `feat` 출력
+
+`wave2mid_v2_w16.onnx`에는 원래 7개 출력 외에 `feat`([1,600,88,128])이 추가되어 있습니다. 모델의 모든 헤드(시작·프레임·악기 …)가 계산되는 `/head` 행렬곱의 입력, 즉 `head_norm`의 128차원 값을 `Identity`로 그대로 내보낸 것이며 기존 출력은 비트 단위로 같습니다.
+곡 전체의 128차원을 모으면 수백 MB라서, 각 윈도우에서 “노트 시작 상태 확률 ≥ 0.02인 프레임부터 5프레임”의 칸만 남기고(`sparsifyFeat`) 겹치는 구간은 크로스페이드 가중치로 합칩니다.
+`fingerprint`가 켜지면(일관성 우선) 노트별 지문 = 시작 후 5프레임 평균의 128차원 원본 벡터입니다(음높이 평균을 빼면 군집이 나빠져서 쓰지 않습니다). 곡 전체의 노트를 가장 비슷한 그룹끼리 한 단계씩 병합합니다(평균 연결, 코사인 유사도 ≥ 0.6이 남지 않을 때까지). 그룹마다 노트들의 악기 점수 합이 가장 큰 악기 하나로 통일하므로, 같은 소리끼리는 같은 악기가 됩니다(그룹이 통째로 틀릴 수는 있음). `feat`이 없거나 모으지 않았으면 16개 악기 점수와 근처(±3초, ±7반음) 확정 음을 비교하는 예전 국소 규칙을 씁니다. 동시에 여러 악기를 내는 음은 건드리지 않습니다.
+다른 모델로 교체할 때는 같은 위치에서 `feat` 출력을 다시 추가해야 합니다(없어도 동작은 하며 16차원 지문으로 내려갑니다).
