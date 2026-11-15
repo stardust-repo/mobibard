@@ -451,7 +451,7 @@
         selectedBytes = midiBytes instanceof Uint8Array ? midiBytes : new Uint8Array(midiBytes || []);
         els.fileName.textContent = `${file.name} · ${t("audioAiLabel")}`;
         els.fileName.hidden = false;
-        showToast(t("audioAiDone", [result.model?.version || "-", result.notes.length.toLocaleString()]), "success");
+        showToast(t("audioAiDone", [`${result.model?.version || "-"} · ${result.provider === "webgpu" ? "GPU" : "CPU"}`, result.notes.length.toLocaleString()]), "success");
         requestConversion();
       } catch (error) {
         if (selectToken !== fileSelectionSerial) return;

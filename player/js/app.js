@@ -7634,7 +7634,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       });
       if (!result.notes.length) throw Object.assign(new Error("no notes"), { code: "no-notes" });
       const midiBytes = result.midi instanceof Uint8Array ? result.midi : new Uint8Array(result.midi || []);
-      showToast(audioAiText("done", [result.model?.version || "-", result.notes.length.toLocaleString()]), "success");
+      showToast(audioAiText("done", [`${result.model?.version || "-"} · ${result.provider === "webgpu" ? "GPU" : "CPU"}`, result.notes.length.toLocaleString()]), "success");
       return {
         bytes: midiBytes,
         name,
