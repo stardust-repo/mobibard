@@ -2347,7 +2347,8 @@
   // Optimized length of one exported part, computed the same way optimizeEditorExportMml() treats
   // that part: parts are optimized independently; part 0 (and every part past the sixth, which is
   // optimized on its own) is the "melody" part whose synthetic T120 header is stripped when the
-  // source has no tempo. Auto-part stats never include tempo commands.
+  // source has no tempo. Auto-part stats include the tempo commands exactly as the part export does
+  // (the first voice of every part starts with its tempo and carries the tempo changes inside it).
   const autoPartOptimizedPartCache = new Map();
   function getAutoPartOptimizedPartLength(part, index) {
     const optimize = window.MabiOptimizer?.optimizeMml;
@@ -2378,7 +2379,7 @@
   function renderAutoPartRangeStats(channels, startBeat, endBeat, tempos, cache) {
     const key = `${Number(startBeat).toFixed(6)}:${Number(endBeat).toFixed(6)}`;
     if (cache?.has(key)) return cache.get(key);
-    const rawMml = channelsToMmlRange(channels, startBeat, endBeat, tempos, { includeTempo: false, optimized: false });
+    const rawMml = channelsToMmlRange(channels, startBeat, endBeat, tempos, { includeTempo: true, optimized: false });
     const parts = splitMmlPartsForExport(normalizeMmlTextCase(String(rawMml || "").trim()));
     const order = parts.map((part, index) => ({ index, part, raw: part.length }))
       .filter((entry) => entry.raw > 0)
@@ -2389,7 +2390,7 @@
       maxChars = Math.max(maxChars, getAutoPartOptimizedPartLength(entry.part, entry.index));
     }
     if (window.__autoPartVerify) {
-      const full = getMmlExportPartLengths(channelsToMmlRange(channels, startBeat, endBeat, tempos, { includeTempo: false, optimized: true }));
+      const full = getMmlExportPartLengths(channelsToMmlRange(channels, startBeat, endBeat, tempos, { includeTempo: true, optimized: true }));
       const fullMax = full.length ? Math.max(...full) : 0;
       const log = window.__autoPartVerify;
       log.checks = (log.checks || 0) + 1;
@@ -2441,6 +2442,43 @@
     return autoPartStatsCache.map;
   }
 
+  // A shared rest counts for at most 2 beats (two quarter notes), as in the page splitter of simple/player.
+  const AUTO_PART_SILENCE_CAP_BEATS = 2;
+
+  function getAutoPartCrossingChannelCount(channels, beat) {
+    const target = Number(beat) || 0;
+    let count = 0;
+    for (const channel of channels) {
+      const crosses = (channel.notes || []).some((note) => {
+        const start = Number(note.startBeat) || 0;
+        const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        return start < target - 1e-7 && end > target + 1e-7;
+      });
+      if (crosses) count += 1;
+    }
+    return count;
+  }
+
+  // Beat ranges where at least one of the selected channels has a note (sorted, non-overlapping).
+  function buildAutoPartBusyIntervals(channels) {
+    const busy = [];
+    for (const channel of channels) {
+      for (const note of channel.notes || []) {
+        const start = Math.max(0, snapBeatToUnit(note.startBeat, CONFIG.minimumNoteBeat));
+        const end = start + Math.max(CONFIG.minimumNoteBeat, snapBeatToUnit(note.durationBeat, CONFIG.minimumNoteBeat));
+        busy.push({ start, end });
+      }
+    }
+    busy.sort((a, b) => a.start - b.start || a.end - b.end);
+    const merged = [];
+    for (const item of busy) {
+      const last = merged[merged.length - 1];
+      if (last && item.start <= last.end + 1e-7) last.end = Math.max(last.end, item.end);
+      else merged.push({ ...item });
+    }
+    return merged;
+  }
+
   // The search pauses (yield) before every MML render that is not cached yet, so it can run
   // synchronously (computeAutoPartPlan) or in small background steps (updateAutoPartSummary)
   // with the same result. Yield values report progress (0..1).
@@ -2459,6 +2497,7 @@
     const tempos = getSortedTempos();
     const candidates = buildAutoPartCandidates(channels, totalEndBeat);
     const cache = getAutoPartStatsCache(channels, tempos);
+    const commonBusy = buildAutoPartBusyIntervals(channels);
     const isCached = (from, to) => cache.has(`${Number(from).toFixed(6)}:${Number(to).toFixed(6)}`);
     if (!isCached(0, totalEndBeat)) yield 0;
     const fullStats = renderAutoPartRangeStats(channels, 0, totalEndBeat, tempos, cache);
@@ -2467,9 +2506,6 @@
     }
 
     const boundaries = [];
-    const tolerance = rangePercent / 100;
-    const lowTarget = Math.max(1, target * (1 - tolerance));
-    const highTarget = Math.max(target, target * (1 + tolerance));
     let startBeat = 0;
     let guard = 0;
 
@@ -2480,76 +2516,45 @@
       const eligible = candidates.filter((beat) => beat > startBeat + CONFIG.minimumNoteBeat / 2 && beat < totalEndBeat - CONFIG.minimumNoteBeat / 2);
       if (!eligible.length) break;
 
-      let low = 0;
-      let high = eligible.length - 1;
-      let crossing = eligible.length - 1;
-      while (low <= high) {
-        const mid = Math.floor((low + high) / 2);
-        if (!isCached(startBeat, eligible[mid])) yield startBeat / totalEndBeat;
-        const stats = renderAutoPartRangeStats(channels, startBeat, eligible[mid], tempos, cache);
-        if (stats.maxChars >= target) {
-          crossing = mid;
-          high = mid - 1;
-        } else {
-          low = mid + 1;
-        }
+      // The search is the shared one (plugins/common/split-search.js, also used by simple/player to cut
+      // pages); the editor only describes its notes and then turns the cut into a part boundary.
+      const statsAt = (beat) => renderAutoPartRangeStats(channels, startBeat, beat, tempos, cache);
+      const search = window.MabiSplitSearch.searchBoundaryGen({
+        start: startBeat,
+        candidates: eligible,
+        measure: (beat) => ({ maxLen: statsAt(beat).maxChars }),
+        isMeasured: (beat) => isCached(startBeat, beat),
+        maxChars: target,
+        searchMinChars: Math.round(target * rangePercent / 100),
+        strict: true,
+        busy: commonBusy,
+        maxSilence: AUTO_PART_SILENCE_CAP_BEATS,
+        countClean: (beat) => channels.length - getAutoPartCrossingChannelCount(channels, beat),
+        channelCount: channels.length,
+        minAdvance: CONFIG.minimumNoteBeat / 2,
+        eps: 1e-7,
+      });
+      let found;
+      for (;;) {
+        const step = search.next();
+        if (step.done) { found = step.value; break; }
+        yield startBeat / totalEndBeat;
       }
-
-      const probeStart = Math.max(0, crossing - 28);
-      const probeEnd = Math.min(eligible.length - 1, crossing + 28);
-      let best = null;
-      // Probe outward from the crossing point. Part length grows with the end beat, so once a
-      // candidate is on the far side of the target and its distance alone (a lower bound of its
-      // score) is worse than the best score, the candidates beyond it cannot win either. Stop a
-      // direction after three such candidates in a row instead of scoring all 57 probes.
-      const probeDirections = [
-        { index: crossing, step: 1, misses: 0, done: false },
-        { index: crossing - 1, step: -1, misses: 0, done: false },
-      ];
-      while (probeDirections.some((direction) => !direction.done)) {
-        for (const direction of probeDirections) {
-          if (direction.done) continue;
-          if (direction.index < probeStart || direction.index > probeEnd) {
-            direction.done = true;
-            continue;
-          }
-          const beat = eligible[direction.index];
-          direction.index += direction.step;
-          if (!isCached(startBeat, beat)) yield startBeat / totalEndBeat;
-          const stats = renderAutoPartRangeStats(channels, startBeat, beat, tempos, cache);
-          const distance = Math.abs(stats.maxChars - target) / Math.max(1, target);
-          if (stats.maxChars >= lowTarget - 1e-7 && stats.maxChars <= highTarget + 1e-7) {
-            const crossings = getAutoPartCandidateCrossingCount(channels, beat);
-            const score = distance + Math.min(8, crossings) * 0.08;
-            if (!best || score < best.score - 1e-9 || (Math.abs(score - best.score) <= 1e-9 && beat > best.beat)) {
-              best = { beat, score, maxChars: stats.maxChars };
-            }
-          }
-          const movingAway = direction.step > 0 ? stats.maxChars >= target : stats.maxChars <= target;
-          if (best && movingAway && distance > best.score + 1e-9) direction.misses += 1;
-          else direction.misses = 0;
-          if (direction.misses >= 3) direction.done = true;
-        }
+      // The next part starts where the shared rest ends (right at the next note); keep that only while the
+      // part before still fits, otherwise cut where the rest starts.
+      let cutBeat = found.end;
+      if (found.nextStart > found.end + 1e-7) {
+        if (!isCached(startBeat, found.nextStart)) yield startBeat / totalEndBeat;
+        if (statsAt(found.nextStart).maxChars <= target) cutBeat = found.nextStart;
       }
-
-      if (!best) {
-        const fallbackIndices = [crossing - 1, crossing, crossing + 1].filter((index) => index >= 0 && index < eligible.length);
-        for (const index of fallbackIndices) {
-          const beat = eligible[index];
-          if (!isCached(startBeat, beat)) yield startBeat / totalEndBeat;
-          const stats = renderAutoPartRangeStats(channels, startBeat, beat, tempos, cache);
-          const distance = Math.abs(stats.maxChars - target) / Math.max(1, target);
-          const crossings = getAutoPartCandidateCrossingCount(channels, beat);
-          const score = distance + Math.min(8, crossings) * 0.08;
-          if (!best || score < best.score) best = { beat, score, maxChars: stats.maxChars };
-        }
-      }
+      const best = { beat: cutBeat };
 
       if (!best || best.beat <= startBeat + CONFIG.minimumNoteBeat / 2) break;
       boundaries.push(Number(best.beat.toFixed(6)));
       startBeat = best.beat;
     }
 
+    if (window.__autoPartVerify) window.__autoPartVerify.boundaries = boundaries.slice();
     return {
       targetChars: target,
       searchRangePercent: rangePercent,
