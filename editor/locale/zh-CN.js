@@ -116,6 +116,8 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "merge.legend_target": "接收频道",
     "merge.instrument_hint": "应用于所有接收频道的乐器。选择“不更改”则保留各频道原有乐器。",
     "multi.sweep_count": "已选 {0} 个",
+    "merge.chip_editing": "正在编辑的接收通道(紫色音符)",
+    "merge.chip_other": "此接收通道已选音符的颜色",
     "merge.candidates": "汇集候选",
     "merge.note_overlap": "音符重叠",
     "merge.exclude_overlap": "排除已使用音符",

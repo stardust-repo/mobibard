@@ -116,6 +116,8 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "merge.legend_target": "受け取り先",
     "merge.instrument_hint": "受け取り先すべてに適用する楽器です。「変更しない」なら各チャンネルの楽器を保ちます。",
     "multi.sweep_count": "{0}個選択",
+    "merge.chip_editing": "編集中の受け取りチャンネル(紫のノート)",
+    "merge.chip_other": "このチャンネルが取ったノートの色",
     "merge.candidates": "集める候補",
     "merge.note_overlap": "ノート重なり",
     "merge.exclude_overlap": "使用済みノート除外",

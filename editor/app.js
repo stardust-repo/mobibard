@@ -6049,8 +6049,11 @@
     const visualCandidates = runtime.exclusionVisualCandidates || [];
     if (!visualCandidates.length) return;
     const rowHeight = getRowHeight();
-    const brightRed = "#ff374c"; // Same bright red family as the current playhead.
-    const brightRedHatch = "rgba(255,55,76,.94)";
+    const light = state.theme === "light";
+    // Unavailable notes use a neutral "disabled" grey so they never mix with red channel colours.
+    const brightRed = light ? "#6b7280" : "#a3a9b5";
+    const brightRedHatch = light ? "rgba(107,114,128,.9)" : "rgba(163,169,181,.9)";
+    const greyFill = light ? "107,114,128" : "163,169,181";
 
     for (const candidate of visualCandidates) {
       const key = candidate._mergeCandidateKey;
@@ -6070,11 +6073,11 @@
       if (y + heightValue < visibleTop || y > visibleBottom) continue;
       const widthValue = Math.max(5, endX - x - 1);
 
-      // X-reference notes and candidates blocked by them use the same bright-red
-      // hatch as the playhead, so unavailable notes are obvious at a glance.
+      // X-reference notes and candidates blocked by them use a grey
+      // hatch (disabled look), so they are not confused with red channels.
       context.save();
       context.globalAlpha = 1;
-      context.fillStyle = isExcludeReference ? "rgba(255,55,76,.16)" : "rgba(255,55,76,.10)";
+      context.fillStyle = isExcludeReference ? `rgba(${greyFill},.22)` : `rgba(${greyFill},.14)`;
       context.fillRect(x + 1, y, widthValue, heightValue);
       context.beginPath();
       context.rect(x + 1, y, widthValue, heightValue);
@@ -6102,7 +6105,7 @@
         context.textAlign = "center";
         context.textBaseline = "middle";
         context.lineWidth = 2.6;
-        context.strokeStyle = state.theme === "light" ? "rgba(255,255,255,.96)" : "rgba(35,6,10,.94)";
+        context.strokeStyle = state.theme === "light" ? "rgba(255,255,255,.96)" : "rgba(20,22,28,.94)";
         context.fillStyle = brightRed;
         const cx = x + 1 + widthValue / 2;
         const cy = y + heightValue / 2;
@@ -6391,6 +6394,55 @@
       // from other channels. Original target notes use violet; added merge candidates
       // use cyan. Both remain hatched so they are clearly preview-only notes.
       const targetId = String(state.channelMerge.targetChannelId ?? "");
+
+      // Notes already taken for the OTHER receiving channels (not the one being edited): drawn in a colour
+      // fixed per receiving channel (channel colours are often all alike) as a dashed outline with a light hatch, so it is clear which notes
+      // are spoken for and by which channel. The receiving channel's own original notes are the normal
+      // channel notes, so only the notes that come from other channels are drawn here.
+      for (const otherId of getMergeTargetIds()) {
+        if (otherId === targetId) continue;
+        const otherIndex = state.channels.findIndex((channel) => String(channel.id) === otherId);
+        if (otherIndex < 0) continue;
+        const otherChannel = state.channels[otherIndex];
+        if (!isChannelEffectivelyVisible(otherChannel)) continue;
+        const otherColor = getMergeOtherTargetColor(otherId);
+        for (const note of getMergePlan(otherId).notes || []) {
+          if (String(note._mergeSourceChannelId ?? "") === otherId) continue;
+          const x = beatToX(note.startBeat);
+          const endX = beatToX(note.startBeat + note.durationBeat);
+          if (endX < visibleLeft || x > visibleRight) continue;
+          const y = pitchToY(note.pitch) + 1;
+          const heightValue = Math.max(4, getRowHeight() - 2);
+          if (y + heightValue < visibleTop || y > visibleBottom) continue;
+          const widthValue = Math.max(5, endX - x - 1);
+          context.save();
+          context.globalAlpha = 0.34;
+          context.fillStyle = otherColor;
+          context.fillRect(x + 1, y, widthValue, heightValue);
+          context.beginPath();
+          context.rect(x + 1, y, widthValue, heightValue);
+          context.clip();
+          context.globalAlpha = 0.9;
+          context.strokeStyle = otherColor;
+          context.lineWidth = 1.2;
+          for (let offset = -heightValue; offset < widthValue + heightValue; offset += 8) {
+            context.beginPath();
+            context.moveTo(x + 1 + offset, y + heightValue);
+            context.lineTo(x + 1 + offset + heightValue, y);
+            context.stroke();
+          }
+          context.restore();
+          context.save();
+          context.globalAlpha = 1;
+          context.strokeStyle = otherColor;
+          context.lineWidth = 2;
+          context.setLineDash([4, 3]);
+          context.strokeRect(x + 1.5, y + 0.5, Math.max(1, widthValue - 1), Math.max(1, heightValue - 1));
+          context.setLineDash([]);
+          context.restore();
+        }
+      }
+
       for (const note of state.channelMerge.previewNotes || []) {
         const isTargetOriginal = String(note._mergeSourceChannelId ?? "") === targetId;
         const previewColor = isTargetOriginal
@@ -11672,6 +11724,15 @@
       const label = document.createElement("span");
       label.className = "channel-tree-label channel-tab-label";
       label.textContent = channel.name;
+      if (mergeTarget && getMergeTargetIds().length > 1) {
+        // Colour chip = the colour of the notes this receiving channel has taken (violet when it is the one being edited).
+        const chip = document.createElement("span");
+        chip.className = "channel-merge-target-chip";
+        const focused = String(state.channelMerge.targetChannelId ?? "") === String(channel.id);
+        chip.style.background = focused ? "#7c3aed" : getMergeOtherTargetColor(channel.id);
+        chip.title = focused ? i18nText("merge.chip_editing") : i18nText("merge.chip_other");
+        main.append(chip);
+      }
       main.append(label);
       let roleSelectEl = null;
       if (mergeTarget) {
@@ -23002,6 +23063,15 @@
     state.pendingAudioImportGroupId = groupId != null && getChannelGroupById(groupId) ? String(groupId) : null;
     openFilePickerInput(elements.audioFileInput);
     return true;
+  }
+
+  // One fixed colour per receiving channel, in on-screen order, so the notes taken for the other
+  // receiving channels can be told apart from the base notes and from the focused channel's violet/cyan.
+  const MERGE_OTHER_TARGET_COLORS = ["#d97706", "#db2777", "#16a34a", "#4f46e5", "#0d9488", "#a16207"];
+  function getMergeOtherTargetColor(channelId) {
+    const ids = getMergeTargetIds();
+    const index = Math.max(0, ids.indexOf(String(channelId)));
+    return MERGE_OTHER_TARGET_COLORS[index % MERGE_OTHER_TARGET_COLORS.length];
   }
 
   function isChannelMergeModeActive() {

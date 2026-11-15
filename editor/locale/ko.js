@@ -116,6 +116,8 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "merge.legend_target": "받는 채널",
     "merge.instrument_hint": "모으기 대상 채널 전체에 적용할 악기입니다. \"변경 안 함\"이면 각 채널의 악기를 유지합니다.",
     "multi.sweep_count": "{0}개 선택",
+    "merge.chip_editing": "편집 중인 받는 채널 (보라색 노트)",
+    "merge.chip_other": "다른 받는 채널이 가져간 노트 색",
     "merge.candidates": "모을 후보",
     "merge.note_overlap": "노트 겹침",
     "merge.exclude_overlap": "사용된 노트 제외",

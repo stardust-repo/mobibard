@@ -116,6 +116,8 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "merge.legend_target": "Receiver",
     "merge.instrument_hint": "Instrument applied to all receiving channels. \"Keep\" leaves each channel's own instrument.",
     "multi.sweep_count": "{0} selected",
+    "merge.chip_editing": "Receiving channel being edited (violet notes)",
+    "merge.chip_other": "Colour of notes taken by this receiving channel",
     "merge.candidates": "Gather candidates",
     "merge.note_overlap": "Note overlap",
     "merge.exclude_overlap": "Used-note exclusion",
