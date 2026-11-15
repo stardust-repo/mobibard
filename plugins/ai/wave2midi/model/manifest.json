@@ -1,21 +1,26 @@
 {
   "id": "mobibard_m2m",
   "name": "Wave2MIDI",
-  "version": "1.2",
+  "version": "2.0",
   "author": "startdust-io",
   "license": "CC-BY-NC-4.0",
   "licenseFile": "LICENSE",
   "meta": "meta.json",
   "models": {
-    "w16": {
-      "file": "wave2mid_w16.onnx",
-      "bytes": 39168959,
-      "sha256": "a3b9de7711396aebdd98de5c55441a1849f1d07ec58b0d3f780c3d8c87d537ea",
-      "compute": "fp32"
+    "fp16": {
+      "file": "wave2mid_v2_fp16.onnx",
+      "bytes": 38012886,
+      "sha256": "b431a23ed4681cb9d63ce6ef259863c5fb0a93558abac670058ca05dc52c13f4",
+      "compute": "fp16",
+      "devices": "WebGPU with shader-f16"
+    },
+    "int8": {
+      "file": "wave2mid_v2_int8_cpu.onnx",
+      "bytes": 22981388,
+      "sha256": "0179387c6ba2c0a5d970163eebb075a2a396f546270837d7aed7865c310a6ee5",
+      "compute": "int8",
+      "devices": "CPU (WebAssembly), fallback for every environment"
     }
   },
-  "fallback": "w16",
-  "file": "wave2mid_w16.onnx",
-  "bytes": 39168959,
-  "sha256": "a3b9de7711396aebdd98de5c55441a1849f1d07ec58b0d3f780c3d8c87d537ea"
-}
+  "fallback": "int8"
+}

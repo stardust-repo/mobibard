@@ -14,11 +14,11 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "1.0.31";
+  const VERSION = "2.0.0";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
-  // predictSong keeps T x 88 x K instrument probabilities in memory (K = meta.classes.length;
-  // 16 classes ≈ 34 MB per minute of audio).
+  // predictSong keeps T x 88 maps in memory: state (3), drum (1) and instruments (K = meta.classes.length = 16),
+  // about 42 MB per minute of audio.
   const DEFAULT_MAX_SECONDS = 10 * 60;
 
   let worker = null;
@@ -216,13 +216,14 @@
   /**
    * input: File | Blob | ArrayBuffer | Float32Array (already mono 24 kHz).
    * options: { velocity=true (false: constant 100, number: fixed velocity), velocityRange=[min,max],
-   *            tempo=true (false: constant 120 BPM, number: fixed BPM), tempoChanges, onsetThreshold,
+   *            tempo=true (false: constant 120 BPM, number: fixed BPM), tempoChanges,
+   *            stateBias (-1..1, default 0), drumThreshold (0.05..0.4, default 0.13),
    *            maxSeconds=600, executionProvider: "auto"|"wasm",
    *            ortSources: string[], onProgress({stage, done, total}), signal }
    * Progress stages: decode, runtime, model-check, model-download, model-store, model-init,
    *                  analyze (done/total windows), velocity, midi.
    * Result: { notes: [[pitch, program(128=drum), onsetSec, offsetSec, confidence]], velocities,
-   *           midi: Uint8Array, seconds, elapsed, provider ("webgpu"|"wasm"), variant ("w16"), thresholds, classes, model, storage }
+   *           midi: Uint8Array, seconds, elapsed, provider ("webgpu"|"wasm"), variant ("fp16"|"int8"), thresholds, decoder, classes, model, storage }
    */
   async function transcribe(input, options = {}) {
     if (!isSupported()) throw makeError("unsupported", "This browser cannot run Wave2MIDI");
@@ -248,10 +249,8 @@
         velocityRange: options.velocityRange,
         tempo: options.tempo ?? true,
         tempoChanges: options.tempoChanges,
-        onsetThreshold: options.onsetThreshold,
-        frameThreshold: options.frameThreshold,
-        offsetThreshold: options.offsetThreshold,
-        minNoteSeconds: options.minNoteSeconds,
+        stateBias: options.stateBias,
+        drumThreshold: options.drumThreshold,
         maxSeconds,
         executionProvider: resolveProvider(options.executionProvider),
         ortSources: options.ortSources,
@@ -263,7 +262,7 @@
   }
 
   /**
-   * Re-applies post-processing options (onsetThreshold, velocity, velocityRange, tempo, tempoChanges) to the last
+   * Re-applies post-processing options (stateBias, drumThreshold, velocity, velocityRange, tempo, tempoChanges) to the last
    * transcription without running the model again. Rejects with code "no-job" when the worker was
    * released in the meantime (idle timeout, abort) — call transcribe() again in that case.
    */
@@ -274,10 +273,8 @@
       velocityRange: options.velocityRange,
       tempo: options.tempo ?? true,
       tempoChanges: options.tempoChanges,
-      onsetThreshold: options.onsetThreshold,
-      frameThreshold: options.frameThreshold,
-      offsetThreshold: options.offsetThreshold,
-      minNoteSeconds: options.minNoteSeconds,
+      stateBias: options.stateBias,
+      drumThreshold: options.drumThreshold,
     } }, options);
   }
 
@@ -287,9 +284,12 @@
     defaultsPromise ??= fetch(new URL("model/meta.json", BASE).href, { cache: "no-cache" })
       .then(response => (response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))))
       .then(meta => Object.freeze({
-        onsetThreshold: Number(meta?.thresholds?.onset) || 0.16,
-        frameThreshold: Number(meta?.thresholds?.frame) || 0.5,
-        offsetThreshold: Number(meta?.thresholds?.offset) || 0.5,
+        stateBias: Number(meta?.decode?.state_bias) || 0,
+        stateBiasMin: Number(meta?.decode?.state_bias_range?.[0] ?? -1),
+        stateBiasMax: Number(meta?.decode?.state_bias_range?.[1] ?? 1),
+        drumThreshold: Number(meta?.thresholds?.drum) || 0.13,
+        drumMin: Number(meta?.decode?.drum_range?.[0]) || 0.05,
+        drumMax: Number(meta?.decode?.drum_range?.[1]) || 0.4,
         velocity: meta?.velocity?.enabled !== false,
         velocityMin: Number(meta?.velocity?.min) || 35,
         velocityMax: Number(meta?.velocity?.max) || 120,
@@ -312,7 +312,7 @@
     return result;
   }
 
-  /** Which build this browser would use: { webgpu, adapter, variant: "w16" } (no download). */
+  /** Which build this browser would use: { webgpu, f16, adapter, variant: "fp16"|"int8" } (no download). */
   function getCapabilities(options = {}) {
     return call("capabilities", { options: { executionProvider: resolveProvider(options.executionProvider) } });
   }

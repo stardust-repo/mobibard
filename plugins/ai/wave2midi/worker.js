@@ -1,13 +1,15 @@
 /* MOBIBARD Wave2MIDI inference worker (classic worker).
  *
  * Runs the whole pipeline off the main thread:
- *   24 kHz mono samples -> frontend features -> ONNX (8 s windows, 2 s overlap)
- *   -> note decoding -> velocity -> Standard MIDI bytes.
+ *   24 kHz mono samples -> frontend features -> ONNX (6 s windows, 1 s overlap)
+ *   -> state decoder -> velocity -> tempo map -> Standard MIDI bytes.
  * The model bytes come from lib/model-cache.mjs (IndexedDB, verified by SHA-256).
  *
- * One model build is published (model/manifest.json "models.w16": 16-bit weights, 32-bit maths). It runs on
- * the GPU (WebGPU) whenever the browser offers it and on the CPU (WebAssembly) otherwise; if the GPU session
- * cannot be created or a GPU run fails, the work is repeated on the CPU.
+ * Wave2MIDI v2 is published in two builds (model/manifest.json "models"):
+ *   fp16  16-bit weights and maths. Used wherever the browser gives WebGPU with the shader-f16 feature.
+ *   int8  8-bit weights (dynamic activation quantisation). CPU (WebAssembly) only; the fallback for everything
+ *         else, including a GPU session that cannot be created or a GPU run that fails.
+ * The note decoder is fixed to the state decoder (lib/w2m_web.mjs decodeStates).
  */
 "use strict";
 
@@ -15,14 +17,16 @@ const BASE = new URL("./", self.location.href);
 // Cache-busting token passed by wave2midi.js (worker.js?v=...), reused for the ES module imports.
 const ASSET_VERSION = new URL(self.location.href).searchParams.get("v") || "1";
 const libUrl = name => new URL(`lib/${name}?v=${encodeURIComponent(ASSET_VERSION)}`, BASE).href;
-// ONNX Runtime Web 1.31.1 builds: the CPU-only build when the model runs on the CPU anyway (phones), the WebGPU build otherwise.
+// ONNX Runtime Web 1.31.1 builds: the CPU-only build when the model runs on the CPU anyway, the WebGPU build otherwise.
 const ORT_RUNTIMES = {
   modernGpu: { version: "1.31.1", file: "ort.webgpu.min.js" },
   modernCpu: { version: "1.31.1", file: "ort.wasm.min.js" },
 };
-function pickRuntime(options) {
-  return options?.executionProvider === "wasm" ? ORT_RUNTIMES.modernCpu : ORT_RUNTIMES.modernGpu;
+function pickRuntime(options, caps) {
+  return options?.executionProvider === "wasm" || !caps?.f16 ? ORT_RUNTIMES.modernCpu : ORT_RUNTIMES.modernGpu;
 }
+// Model outputs the state decoder uses (fetching only these keeps the read-back from the GPU small).
+const NEEDED_OUTPUTS = ["state", "drum", "inst"];
 function ortSourcesFor(runtime) {
   return [
     new URL(`../../vendor/onnxruntime-web/${runtime.version}/`, BASE).href,
@@ -50,13 +54,12 @@ function fail(code, message, cause) {
 
 function loadLibs() {
   libsPromise ??= Promise.all([
-    import(libUrl("dsp.mjs")),
-    import(libUrl("decode.mjs")),
+    import(libUrl("w2m_web.mjs")),
     import(libUrl("velocity.mjs")),
     import(libUrl("midi.mjs")),
     import(libUrl("model-cache.mjs")),
     import(libUrl("tempo.mjs")),
-  ]).then(([dsp, decode, velocity, midi, cache, tempo]) => ({ dsp, decode, velocity, midi, cache, tempo }));
+  ]).then(([w2m, velocity, midi, cache, tempo]) => ({ w2m, velocity, midi, cache, tempo }));
   return libsPromise;
 }
 
@@ -83,20 +86,21 @@ function loadOrt(sources, runtime) {
 }
 
 // ---- Environment probe -----------------------------------------------------------------
-// The model is a single build (w16: 16-bit weights, 32-bit maths), so the only question is whether the GPU can be
-// used. WebGPU is used whenever the browser gives an adapter (phones and tablets included); ONNX Runtime falls back
-// to WebAssembly by itself when the GPU session cannot be created, and a run that fails on the GPU is repeated on
-// the CPU (see transcribe). The result is cached for the worker's lifetime.
+// The fp16 build needs WebGPU with shader-f16; every other environment runs the int8 build on the CPU
+// (WebAssembly). Browsers that offer WebGPU without shader-f16 therefore also use the CPU build. A GPU session that
+// cannot be created falls through to the int8 build, and a run that fails on the GPU is repeated on the CPU (see
+// transcribe). The result is cached for the worker's lifetime.
 let capsPromise = null;
 function probeCapabilities() {
   capsPromise ??= (async () => {
-    const caps = { webgpu: false, adapter: "" };
+    const caps = { webgpu: false, f16: false, adapter: "" };
     if (!self.navigator?.gpu) return caps;
     try {
       const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
       // Without an adapter ONNX Runtime silently drops "webgpu" and runs on the CPU, so it must not be reported as GPU.
       if (!adapter) return caps;
       caps.webgpu = true;
+      caps.f16 = !!adapter.features?.has("shader-f16");
       const info = adapter.info || (await adapter.requestAdapterInfo?.().catch(() => null)) || null;
       caps.adapter = [info?.vendor, info?.architecture, info?.description].filter(Boolean).join(" ");
     } catch { /* WebGPU blocked or crashed: WebAssembly only */ }
@@ -110,12 +114,13 @@ function cpuOnly(options) {
 }
 
 async function chooseVariants(options) {
-  if (cpuOnly(options)) return { caps: { webgpu: false, adapter: "", skipped: "cpu-only" }, order: ["w16"] };
-  return { caps: await probeCapabilities(), order: ["w16"] };
+  if (cpuOnly(options)) return { caps: { webgpu: false, f16: false, adapter: "", skipped: "cpu-only" }, order: ["int8"] };
+  const caps = await probeCapabilities();
+  return { caps, order: caps.webgpu && caps.f16 ? ["fp16", "int8"] : ["int8"] };
 }
 
-function executionPlans(variant, options, caps) {
-  return cpuOnly(options) || !caps.webgpu ? [["wasm"]] : [["webgpu", "wasm"], ["wasm"]];
+function executionPlans(variant) {
+  return variant === "fp16" ? [["webgpu"]] : [["wasm"]];
 }
 
 async function releaseSession() {
@@ -130,9 +135,9 @@ async function ensureSession(options, progress) {
   if (session) await releaseSession();
   const libs = await loadLibs();
   progress("runtime", 0, 0);
-  const runtime = pickRuntime(options);
-  loadOrt(options.ortSources?.length ? options.ortSources : ortSourcesFor(runtime), runtime);
   const { caps, order } = await chooseVariants(options);
+  const runtime = pickRuntime(options, caps);
+  loadOrt(options.ortSources?.length ? options.ortSources : ortSourcesFor(runtime), runtime);
   const errors = [];
   for (const variant of order) {
     let model;
@@ -142,7 +147,7 @@ async function ensureSession(options, progress) {
       throw error;
     }
     progress("model-init", 0, 0);
-    for (const eps of executionPlans(model.variant, options, caps)) {
+    for (const eps of executionPlans(model.variant)) {
       try {
         session = await self.ort.InferenceSession.create(model.bytes, { executionProviders: eps, graphOptimizationLevel: "all", ...(eps[0] === "wasm" ? CPU_MEMORY_OPTIONS : {}) });
         sessionInfo = {
@@ -171,8 +176,10 @@ async function ensureSession(options, progress) {
 // One window's features take about as long as 5 network runs on a GPU, so several windows are prepared in
 // parallel (lib/feature_worker.mjs) while the network runs. Falls back to the calling thread.
 class FeaturePool {
-  constructor(meta, count) {
+  constructor(meta, count, w2m) {
     this.meta = meta;
+    this.w2m = w2m;
+    this.frontend = null;
     this.workers = [];
     this.jobs = new Map();
     this.next = 0;
@@ -200,13 +207,18 @@ class FeaturePool {
     }
   }
   get size() { return this.workers.length; }
-  features(seg, dsp) {
-    if (!this.workers.length) return Promise.resolve(dsp.frontendFeatures(seg, this.meta));
+  // Same computation on the calling thread, used when no nested worker is available.
+  localFeatures(seg) {
+    this.frontend ??= new this.w2m.Frontend(this.meta.frontend);
+    return this.frontend.features(seg, seg.length / this.w2m.HOP);
+  }
+  features(seg) {
+    if (!this.workers.length) return Promise.resolve(this.localFeatures(seg));
     const id = this.next++;
     const promise = new Promise((resolve, reject) => this.jobs.set(id, { resolve, reject }));
     this.workers[id % this.workers.length].postMessage({ id, seg });   // copied (0.8 MB), so seg stays usable
     // If the pool dies mid-run, recompute on this thread instead of failing the whole conversion.
-    return promise.catch(() => dsp.frontendFeatures(seg, this.meta));
+    return promise.catch(() => this.localFeatures(seg));
   }
   terminate() {
     for (const w of this.workers) { try { w.terminate(); } catch { /* gone */ } }
@@ -220,9 +232,10 @@ class FeaturePool {
 // their own single-thread sessions, infer-worker.js) each process a different window. Every lane costs memory
 // (model weights + WebAssembly heap), hence the small lane count chosen by the caller.
 class LanePool {
-  constructor(runOnMain, inputName, shape) {
+  constructor(runOnMain, inputName, shape, outputNames) {
     this.inputName = inputName;
     this.shape = shape;
+    this.outputNames = outputNames;
     this.helpers = [];
     this.free = [];
     this.waiters = [];
@@ -242,7 +255,7 @@ class LanePool {
           const id = lane.next++;
           lane.pending.set(id, { res, rej });
           // Copied (13.5 MB), not transferred, so the window can be computed again if this helper fails.
-          worker.postMessage({ type: "run", id, feats, shape: this.shape, inputName: this.inputName });
+          worker.postMessage({ type: "run", id, feats, shape: this.shape, inputName: this.inputName, outputNames: this.outputNames });
         });
         const failAll = message => { for (const j of lane.pending.values()) j.rej(new Error(message)); lane.pending.clear(); };
         worker.onmessage = e => {
@@ -299,9 +312,9 @@ async function transcribe(id, wave, options) {
   const progress = (stage, done = 0, total = 0) => self.postMessage({ type: "progress", id, stage, done, total });
   lastJob = null; // drop the previous song's probability maps before allocating new ones
   let info = await ensureSession(options, progress);
-  const { dsp, decode, velocity, midi, tempo } = await loadLibs();
+  const { w2m } = await loadLibs();
   const meta = info.meta;
-  const seconds = wave.length / dsp.SR;
+  const seconds = wave.length / w2m.SR;
   const maxSeconds = Number(options.maxSeconds) || 0;
   if (maxSeconds > 0 && seconds > maxSeconds) throw fail("too-long", `Audio is longer than ${maxSeconds} seconds`);
   const started = performance.now();
@@ -313,36 +326,34 @@ async function transcribe(id, wave, options) {
   const poolSize = info.provider === "wasm" && cpuSessions > 1
     ? Math.max(1, Math.min(cpuSessions, cores - 2))
     : Math.max(1, Math.min(8, cores - 2));
-  const pool = new FeaturePool(meta, poolSize);
-  const predictOptions = { prepare: seg => pool.features(seg, dsp), lookahead: Math.max(1, pool.size) };
+  const pool = new FeaturePool(meta, poolSize, w2m);
+  const predictOptions = { prepare: seg => pool.features(seg), lookahead: Math.max(1, pool.size), keys: NEEDED_OUTPUTS };
   const runOnMain = async feats => {
     const input = new self.ort.Tensor("float32", feats, meta.input.shape);
-    const result = await session.run({ [meta.input.name || "features"]: input });
-    const out = {
-      onset: result.onset.data, frame: result.frame.data, offset: result.offset.data,
-      drum: result.drum.data, inst: result.inst.data,
-      fp: result.fp ? result.fp.data : null,
-    };
+    const result = await session.run({ [meta.input.name || "features"]: input }, NEEDED_OUTPUTS);
+    const out = {};
+    for (const name of NEEDED_OUTPUTS) out[name] = result[name].data;
     input.dispose?.();
     return out;
   };
-  // Same window layout as decode.predictSong, so the first progress tick already shows the real count.
-  let W = Math.round(meta.window_seconds * dsp.FPS); W += W % 2;
-  const hopFrames = W - Math.min(Math.round(meta.overlap_seconds * dsp.FPS), W / 2);
-  const totalFrames = Math.ceil(wave.length / dsp.HOP);
+  // Same window layout as w2m.predictSong, so the first progress tick already shows the real count.
+  let W = Math.round(meta.window_seconds * w2m.FPS); W += W % 2;
+  const hopFrames = W - Math.min(Math.round(meta.overlap_seconds * w2m.FPS), W / 2);
+  const totalFrames = Math.ceil(wave.length / w2m.HOP);
   const windowCount = totalFrames > W ? 1 + Math.ceil((totalFrames - W) / hopFrames) : 1;
   progress("analyze", 0, windowCount);
   const inputName = meta.input.name || "features";
+  const frontend = new w2m.Frontend(meta.frontend);
   const predictOnce = async () => {
     let lanes = null;
     try {
       if (info.provider === "wasm" && cpuSessions > 1) {
-        lanes = new LanePool(runOnMain, inputName, meta.input.shape);
+        lanes = new LanePool(runOnMain, inputName, meta.input.shape, NEEDED_OUTPUTS);
         await lanes.start(cpuSessions);
         if (lanes.size < 2) { lanes.terminate(); lanes = null; }
       }
-      return await decode.predictSong(wave, meta, lanes ? feats => lanes.run(feats) : runOnMain,
-        (done, total) => progress("analyze", done, total),
+      return await w2m.predictSong(wave, meta, frontend, lanes ? feats => lanes.run(feats) : runOnMain,
+        (fraction, done, total) => progress("analyze", done, total),
         { ...predictOptions, concurrency: lanes ? lanes.size : 1, lookahead: Math.max(predictOptions.lookahead, lanes ? lanes.size : 1) });
     } finally {
       lanes?.terminate();
@@ -363,48 +374,40 @@ async function transcribe(id, wave, options) {
   } finally {
     pool.terminate();
   }
-  // The model output is kept so post-processing options (note sensitivity, velocity, tempo) can be
+  // The model output is kept so post-processing options (note sensitivity, drums, velocity, tempo) can be
   // re-applied without running the model again ("postprocess" message). Freed with the worker.
   // Only the probability maps are needed for post-processing: free the model and its buffers now.
   await releaseSession();
-  lastJob = { probs: predicted.probs, T: predicted.T, fp: predicted.fp || null, level: null, wave, seconds, info };
+  lastJob = { probs: predicted.probs ?? predicted, T: predicted.T, wave, seconds, info };
   return finishTranscription(lastJob, options, progress, started);
 }
 
-// Post-processing: probability maps -> notes -> velocity -> tempo map -> MIDI.
-//   options.onsetThreshold  note sensitivity (lower = more notes); default meta.thresholds.onset
-//   options.frameThreshold / offsetThreshold  note end: lower frame / higher offset = longer notes; default meta.thresholds
-//   options.minNoteSeconds  drop pitched notes shorter than this (0 = keep all)
+// Post-processing: probability maps -> notes (state decoder) -> velocity -> tempo map -> MIDI.
+//   options.stateBias       -1..1 added to the "note start" state (higher = more and weaker notes); default 0
+//   options.drumThreshold   0.05..0.4 drum hit threshold (lower = more drum hits); default meta.thresholds.drum
 //   options.velocity        true/undefined: estimated, false: constant 100, number: that fixed velocity (1-127)
 //   options.velocityRange   [min, max] (1-127) range of estimated velocities; default meta.velocity min/max
 //   options.tempo           true/undefined: auto, false: 120 BPM grid, number: that fixed BPM
 //   options.tempoChanges    false: one tempo for the whole song (auto mode only)
 async function finishTranscription(job, options, progress, started = performance.now()) {
-  const { decode, velocity, midi, tempo } = await loadLibs();
+  const { w2m, velocity, midi, tempo } = await loadLibs();
   const { probs, T, wave, seconds, info } = job;
   const meta = info.meta;
-  const onset = Number(options.onsetThreshold);
-  const frame = Number(options.frameThreshold), offsetTh = Number(options.offsetThreshold);
-  const thresholds = {
-    ...meta.thresholds,
-    ...(onset > 0 && onset < 1 ? { onset } : {}),
-    ...(frame > 0 && frame < 1 ? { frame } : {}),
-    ...(offsetTh > 0 && offsetTh < 1 ? { offset: offsetTh } : {}),
-  };
-  let notes, decoder = { mode: "basic" };
-  if (meta.decode_plus?.enabled && decode.decodePlus) {
-    // Extended decoder (model v1.2+): recovers softly started notes and decides instruments with the
-    // fingerprint output. The level map depends only on the audio, so it is computed once per song.
-    job.level ??= decode.levelMap(wave, T);
-    const st = {};
-    notes = decode.decodePlus(probs, T, meta.classes, thresholds, meta.decode_plus, job.fp || null, job.level, st);
-    decoder = { mode: "plus", recovered: st.recovered || 0, fingerprintCells: job.fp?.map?.size || 0 };
-  } else {
-    notes = decode.decodeNotes(probs, T, meta.classes, thresholds);
-  }
-  // Optional clean-up: drop pitched notes shorter than options.minNoteSeconds (drum hits are always that short).
-  const minNoteSeconds = Number(options.minNoteSeconds);
-  if (minNoteSeconds > 0) notes = notes.filter(note => note[1] === 128 || note[3] - note[2] >= minNoteSeconds);
+  const range = meta.decode || {};
+  const [biasLo, biasHi] = range.state_bias_range || [-1, 1];
+  const [drumLo, drumHi] = range.drum_range || [0.05, 0.4];
+  const bias = Number.isFinite(Number(options.stateBias)) && options.stateBias !== null && options.stateBias !== ""
+    ? Math.min(biasHi, Math.max(biasLo, Number(options.stateBias)))
+    : Number(range.state_bias) || 0;
+  const drum = Number.isFinite(Number(options.drumThreshold)) && options.drumThreshold !== null && options.drumThreshold !== ""
+    ? Math.min(drumHi, Math.max(drumLo, Number(options.drumThreshold)))
+    : Number(meta.thresholds.drum);
+  // multi > 1: a second instrument per note is never added (one instrument per note).
+  const thresholds = { ...meta.thresholds, drum, multi: 1.01 };
+  // The state decoder reads the "multi" map only to compare it with the (unreachable) threshold above.
+  const maps = { ...probs, T, multi: probs.multi || (job.zeroMulti ??= new Float32Array(T * w2m.NP)) };
+  let notes = w2m.decodeStates(maps, { ...meta, thresholds }, bias);
+  const decoder = { mode: "state", bias };
   let velocities = null;
   const fixedVelocity = typeof options.velocity === "number" && options.velocity > 0
     ? Math.min(127, Math.max(1, Math.round(options.velocity)))
@@ -412,10 +415,10 @@ async function finishTranscription(job, options, progress, started = performance
   if (!fixedVelocity && meta.velocity?.enabled !== false && notes.length) {
     progress("velocity", 0, 0);
     const cfg = { ...meta.velocity };
-    const range = Array.isArray(options.velocityRange) ? options.velocityRange.map(Number) : null;
-    if (range && range.every((value) => Number.isFinite(value))) {
-      const lo = Math.min(127, Math.max(1, Math.round(Math.min(range[0], range[1]))));
-      const hi = Math.min(127, Math.max(1, Math.round(Math.max(range[0], range[1]))));
+    const vrange = Array.isArray(options.velocityRange) ? options.velocityRange.map(Number) : null;
+    if (vrange && vrange.every((value) => Number.isFinite(value))) {
+      const lo = Math.min(127, Math.max(1, Math.round(Math.min(vrange[0], vrange[1]))));
+      const hi = Math.min(127, Math.max(1, Math.round(Math.max(vrange[0], vrange[1]))));
       cfg.min = lo;
       cfg.max = hi;
     }

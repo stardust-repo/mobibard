@@ -411,9 +411,8 @@
     midiImportSummary: document.querySelector("#midiImportSummary"),
     midiImportLimitChannelsPerInstrument: document.querySelector("#midiImportLimitChannelsPerInstrument"),
     midiImportAudioControls: document.querySelector("#midiImportAudioControls"),
-    w2mSensitivity: document.querySelector("#w2mSensitivity"),
-    w2mNoteEnd: document.querySelector("#w2mNoteEnd"),
-    w2mMinLength: document.querySelector("#w2mMinLength"),
+    w2mStateBias: document.querySelector("#w2mStateBias"),
+    w2mDrum: document.querySelector("#w2mDrum"),
     w2mVolumeFixed: document.querySelector("#w2mVolumeFixed"),
     w2mTempoBpm: document.querySelector("#w2mTempoBpm"),
     midiImportChannelLimitInput: document.querySelector("#midiImportChannelLimitInput"),
@@ -14280,7 +14279,7 @@
   const IMPORT_OPTIONS_KEY = "mobibard-import-options";
   const IMPORT_OPTION_DEFAULTS = Object.freeze({
     quantize: 64, overlap: 64, limitOn: false, limitCount: 3,
-    onsetPos: 50, endPos: 50, minLengthMs: 0,
+    stateBias: 0, drumThreshold: 0.13,
     volume: "auto", volumeFixed: 12, tempo: "auto", tempoBpm: 120,
     colorMode: "channel",
   });
@@ -14307,10 +14306,9 @@
       overlap: [0, 32, 64].includes(Number(src.overlap)) ? Number(src.overlap) : d.overlap,
       limitOn: src.limitOn === true,
       limitCount: clamp(Math.round(Number(src.limitCount) || d.limitCount), 1, 16),
-      // 예전 버전(낮음/보통/높음 등 3단계)에 저장된 값은 가장 가까운 슬라이더 위치로 옮깁니다.
-      onsetPos: slotValue(src.onsetPos ?? ({ low: 60, normal: 50, high: 25 })[src.sensitivity], 0, 100, 5, d.onsetPos),
-      endPos: slotValue(src.endPos ?? ({ short: 70, normal: 50, long: 30 })[src.noteEnd], 0, 100, 5, d.endPos),
-      minLengthMs: slotValue(src.minLengthMs ?? ({ none: 0, weak: 50, strong: 100 })[src.minLength], 0, 100, 5, d.minLengthMs),
+      // Wave2MIDI v2: 예전 감도/노트 끝/짧은 노트 제거 값은 더 이상 쓰지 않고, 새 슬라이더는 기본값에서 시작합니다.
+      stateBias: slotValue(src.stateBias, -1, 1, 0.05, d.stateBias),
+      drumThreshold: slotValue(src.drumThreshold, 0.05, 0.4, 0.01, d.drumThreshold),
       volume: pick(src.volume, ["auto", "fixed"], d.volume),
       volumeFixed: clamp(Math.round(Number(src.volumeFixed) || d.volumeFixed), 1, 15),
       tempo: pick(src.tempo, ["auto", "fixed"], d.tempo),
@@ -14325,9 +14323,8 @@
       overlap: getMidiImportOverlapMode(),
       limitOn: Boolean(elements.midiImportLimitChannelsPerInstrument?.checked),
       limitCount: elements.midiImportChannelLimitInput?.value,
-      onsetPos: elements.w2mSensitivity?.value,
-      endPos: elements.w2mNoteEnd?.value,
-      minLengthMs: elements.w2mMinLength?.value,
+      stateBias: elements.w2mStateBias?.value,
+      drumThreshold: elements.w2mDrum?.value,
       volume: getCheckedRadioValue("w2mVolume"),
       volumeFixed: elements.w2mVolumeFixed?.value,
       tempo: getCheckedRadioValue("w2mTempo"),
@@ -14345,9 +14342,8 @@
       elements.midiImportChannelLimitInput.value = String(o.limitCount);
       elements.midiImportChannelLimitInput.disabled = !o.limitOn;
     }
-    if (elements.w2mSensitivity) elements.w2mSensitivity.value = String(o.onsetPos);
-    if (elements.w2mNoteEnd) elements.w2mNoteEnd.value = String(o.endPos);
-    if (elements.w2mMinLength) elements.w2mMinLength.value = String(o.minLengthMs);
+    if (elements.w2mStateBias) elements.w2mStateBias.value = String(o.stateBias);
+    if (elements.w2mDrum) elements.w2mDrum.value = String(o.drumThreshold);
     updateW2mSliderReadouts();
     setCheckedRadioValue("w2mVolume", o.volume);
     setCheckedRadioValue("w2mTempo", o.tempo);
@@ -14393,7 +14389,7 @@
     const selector = [
       'input[name="midiImportQuantize"]', 'input[name="midiImportOverlap"]',
       "#midiImportLimitChannelsPerInstrument", "#midiImportChannelLimitInput",
-      "#w2mSensitivity", "#w2mNoteEnd", "#w2mMinLength",
+      "#w2mStateBias", "#w2mDrum",
       'input[name="w2mVolume"]', "#w2mVolumeFixed", 'input[name="w2mTempo"]', "#w2mTempoBpm",
     ].join(",");
     // 각 입력의 자체 change 처리(값 보정 등)가 끝난 뒤(버블링) 읽습니다.
@@ -15115,7 +15111,7 @@
   }
 
   // ---- AI 변환 후처리 옵션(불러오기 오른쪽 설정): 모델을 다시 돌리지 않고 노트/세기/템포만 다시 계산 ----
-  let audioPostprocessDefaults = { onsetThreshold: 0.13, frameThreshold: 0.4, offsetThreshold: 0.5, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
+  let audioPostprocessDefaults = { stateBias: 0, drumThreshold: 0.13, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
   void window.MobibardWave2Midi?.getPostprocessDefaults?.().then((defaults) => {
     audioPostprocessDefaults = defaults;
     try { updateW2mSliderReadouts(); } catch {}
@@ -15137,42 +15133,28 @@
   let audioPostprocessTimer = 0;
   let audioPostprocessToken = 0;
 
-  // 슬라이더 위치(0~100, 5 간격) → 실제 값. 가운데(50)가 모델 기본값(model/meta.json thresholds)이고, 좌우 간격은 비대칭이어도 됩니다.
-  const W2M_ONSET_MIN = 0.06, W2M_ONSET_MAX = 0.3;
-  function w2mOnsetFromPos(pos) {
-    const base = clamp(Number(audioPostprocessDefaults.onsetThreshold) || 0.13, W2M_ONSET_MIN + 0.01, W2M_ONSET_MAX - 0.01);
-    const p = clamp(Number(pos), 0, 100);
-    return p <= 50 ? W2M_ONSET_MIN + (base - W2M_ONSET_MIN) * (p / 50) : base + (W2M_ONSET_MAX - base) * ((p - 50) / 50);
+  // Wave2MIDI v2의 디코더는 state 방식으로 고정입니다. 슬라이더 값이 곧 실제 값입니다.
+  //   노트 시작 편향: -1 ~ 1 (기본 0). 클수록 작고 약한 노트까지 잡고, 작을수록 확실한 노트만 남깁니다.
+  //   드럼 검출 기준: 0.05 ~ 0.4 (기본 0.13). 낮을수록 약한 타격까지 잡습니다.
+  function readW2mStateBias() {
+    const value = clamp(Math.round((Number(elements.w2mStateBias?.value) || 0) / 0.05) * 0.05, -1, 1);
+    return Number(value.toFixed(2));
   }
-  // 끝 판정: 가운데 = 모델 기본 frame/offset 임계값. 오른쪽일수록 frame은 올리고 offset은 내려 일찍 끊깁니다(±0.35).
-  function w2mEndThresholdsFromPos(pos) {
-    const delta = 0.35 * ((clamp(Number(pos), 0, 100) - 50) / 50);
-    const frame0 = Number(audioPostprocessDefaults.frameThreshold) || 0.5;
-    const offset0 = Number(audioPostprocessDefaults.offsetThreshold) || 0.5;
-    return { frame: clamp(frame0 + delta, 0.05, 0.95), offset: clamp(offset0 - delta, 0.05, 0.95) };
+  function readW2mDrumThreshold() {
+    const value = clamp(Number(elements.w2mDrum?.value) || 0.13, 0.05, 0.4);
+    return Number(value.toFixed(2));
   }
-  function w2mEndFromPos(pos) { return w2mEndThresholdsFromPos(pos).frame; }
 
   function updateW2mSliderReadouts() {
     const set = (id, text) => { const out = document.querySelector(id); if (out) out.textContent = text; };
-    if (elements.w2mSensitivity) set("#w2mSensitivityValue", w2mOnsetFromPos(elements.w2mSensitivity.value).toFixed(3));
-    if (elements.w2mNoteEnd) {
-      const end = w2mEndThresholdsFromPos(elements.w2mNoteEnd.value);
-      set("#w2mNoteEndValue", end.frame.toFixed(2));
-      elements.w2mNoteEnd.title = `frame ${end.frame.toFixed(2)} · offset ${end.offset.toFixed(2)}`;
+    if (elements.w2mStateBias) {
+      const bias = readW2mStateBias();
+      set("#w2mStateBiasValue", `${bias > 0 ? "+" : ""}${bias.toFixed(2)}`);
     }
-    if (elements.w2mMinLength) {
-      const ms = Number(elements.w2mMinLength.value) || 0;
-      set("#w2mMinLengthValue", ms > 0 ? `${ms}ms` : i18nText("audio_midi.opt_min_none"));
-    }
+    if (elements.w2mDrum) set("#w2mDrumValue", readW2mDrumThreshold().toFixed(2));
   }
 
   function getAudioToMidiOptions() {
-    const onsetThreshold = w2mOnsetFromPos(elements.w2mSensitivity?.value ?? 50);
-    const endThresholds = w2mEndThresholdsFromPos(elements.w2mNoteEnd?.value ?? 50);
-    const frameThreshold = endThresholds.frame;
-    const offsetThreshold = endThresholds.offset;
-    const minNoteSeconds = (Number(elements.w2mMinLength?.value) || 0) / 1000;
     const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
     const bpm = clamp(Math.round(Number(elements.w2mTempoBpm?.value) || 120), audioPostprocessDefaults.tempoMin || 32, audioPostprocessDefaults.tempoMax || 255);
     const fixedVolume = getCheckedRadioValue("w2mVolume") === "fixed";
@@ -15185,10 +15167,8 @@
       velocityRange = [mmlVolumeVelocityBounds(3)[0], mmlVolumeVelocityBounds(15)[1]];
     }
     return {
-      onsetThreshold: Number(onsetThreshold.toFixed(4)),
-      frameThreshold: Number(frameThreshold.toFixed(4)),
-      offsetThreshold: Number(offsetThreshold.toFixed(4)),
-      minNoteSeconds,
+      stateBias: readW2mStateBias(),
+      drumThreshold: readW2mDrumThreshold(),
       velocity,
       velocityRange,
       tempo: fixed ? bpm : true,
@@ -36065,7 +36045,7 @@
     document.querySelectorAll('input[type="radio"][name="midiImportOverlap"]').forEach((input) => input.addEventListener("change", updateMidiImportDialog));
     document.querySelectorAll('input[type="radio"][name="w2mTempo"], input[type="radio"][name="w2mVolume"]')
       .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
-    for (const slider of [elements.w2mSensitivity, elements.w2mNoteEnd, elements.w2mMinLength]) {
+    for (const slider of [elements.w2mStateBias, elements.w2mDrum]) {
       slider?.addEventListener("input", updateW2mSliderReadouts);
       slider?.addEventListener("change", scheduleAudioToMidiPostprocess);
     }
