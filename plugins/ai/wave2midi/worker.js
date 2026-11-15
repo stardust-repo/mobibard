@@ -5,10 +5,8 @@
  *   -> state decoder -> velocity -> tempo map -> Standard MIDI bytes.
  * The model bytes come from lib/model-cache.mjs (IndexedDB, verified by SHA-256).
  *
- * Wave2MIDI v2 is published in two builds (model/manifest.json "models"):
- *   fp16  16-bit weights and maths. Used wherever the browser gives WebGPU with the shader-f16 feature.
- *   int8  8-bit weights (dynamic activation quantisation). CPU (WebAssembly) only; the fallback for everything
- *         else, including a GPU session that cannot be created or a GPU run that fails.
+ * Wave2MIDI v2 ships as one build (model/manifest.json "models.w16"): weights stored as 16-bit, maths in 32-bit.
+ * The same file runs on WebGPU and on the CPU (WebAssembly); the GPU is used when the browser offers it.
  * The note decoder is fixed to the state decoder (lib/w2m_web.mjs decodeStates).
  */
 "use strict";
@@ -23,7 +21,7 @@ const ORT_RUNTIMES = {
   modernCpu: { version: "1.31.1", file: "ort.wasm.min.js" },
 };
 function pickRuntime(options, caps) {
-  return options?.executionProvider === "wasm" || !caps?.f16 ? ORT_RUNTIMES.modernCpu : ORT_RUNTIMES.modernGpu;
+  return options?.executionProvider === "wasm" || !caps?.webgpu ? ORT_RUNTIMES.modernCpu : ORT_RUNTIMES.modernGpu;
 }
 // Model outputs the state decoder uses (fetching only these keeps the read-back from the GPU small).
 const NEEDED_OUTPUTS = ["state", "drum", "inst"];
@@ -86,10 +84,9 @@ function loadOrt(sources, runtime) {
 }
 
 // ---- Environment probe -----------------------------------------------------------------
-// The fp16 build needs WebGPU with shader-f16; every other environment runs the int8 build on the CPU
-// (WebAssembly). Browsers that offer WebGPU without shader-f16 therefore also use the CPU build. A GPU session that
-// cannot be created falls through to the int8 build, and a run that fails on the GPU is repeated on the CPU (see
-// transcribe). The result is cached for the worker's lifetime.
+// Browsers that give a WebGPU adapter run the model on the GPU; everything else runs it on the CPU (WebAssembly).
+// A GPU session that cannot be created falls through to the CPU, and a run that fails on the GPU is repeated on the
+// CPU (see transcribe). The result is cached for the worker's lifetime.
 let capsPromise = null;
 function probeCapabilities() {
   capsPromise ??= (async () => {
@@ -114,13 +111,13 @@ function cpuOnly(options) {
 }
 
 async function chooseVariants(options) {
-  if (cpuOnly(options)) return { caps: { webgpu: false, f16: false, adapter: "", skipped: "cpu-only" }, order: ["int8"] };
+  if (cpuOnly(options)) return { caps: { webgpu: false, f16: false, adapter: "", skipped: "cpu-only" }, order: ["w16"] };
   const caps = await probeCapabilities();
-  return { caps, order: caps.webgpu && caps.f16 ? ["fp16", "int8"] : ["int8"] };
+  return { caps, order: ["w16"] };
 }
 
-function executionPlans(variant) {
-  return variant === "fp16" ? [["webgpu"]] : [["wasm"]];
+function executionPlans(caps) {
+  return caps?.webgpu ? [["webgpu"], ["wasm"]] : [["wasm"]];
 }
 
 async function releaseSession() {
@@ -147,7 +144,7 @@ async function ensureSession(options, progress) {
       throw error;
     }
     progress("model-init", 0, 0);
-    for (const eps of executionPlans(model.variant)) {
+    for (const eps of executionPlans(caps)) {
       try {
         session = await self.ort.InferenceSession.create(model.bytes, { executionProviders: eps, graphOptimizationLevel: "all", ...(eps[0] === "wasm" ? CPU_MEMORY_OPTIONS : {}) });
         sessionInfo = {

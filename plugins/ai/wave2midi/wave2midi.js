@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "2.0.0";
+  const VERSION = "2.0.4";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 maps in memory: state (3), drum (1) and instruments (K = meta.classes.length = 16),
@@ -42,9 +42,9 @@
     return iOS || desktopSafari;
   }
   const APPLE_WEBKIT = isAppleWebKit();
-  // Phones (not tablets, not desktops) always run the model on the CPU (WebAssembly): WebGPU on phones has
-  // crashed the page (out of memory) after OS updates. iPad/iPadOS (also with a desktop UA), Android tablets and
-  // desktops keep the normal path (WebGPU first, CPU as fallback).
+  // Phones (not tablets, not desktops) always run the model on the CPU (WebAssembly): WebGPU on phones is offered
+  // (recent iPhones included) but does not run this model reliably. iPad/iPadOS (also with a desktop UA), Android
+  // tablets and desktops keep the normal path (WebGPU first, CPU as fallback).
   function isPhone() {
     const nav = root.navigator || {};
     const ua = String(nav.userAgent || "");
@@ -223,7 +223,7 @@
    * Progress stages: decode, runtime, model-check, model-download, model-store, model-init,
    *                  analyze (done/total windows), velocity, midi.
    * Result: { notes: [[pitch, program(128=drum), onsetSec, offsetSec, confidence]], velocities,
-   *           midi: Uint8Array, seconds, elapsed, provider ("webgpu"|"wasm"), variant ("fp16"|"int8"), thresholds, decoder, classes, model, storage }
+   *           midi: Uint8Array, seconds, elapsed, provider ("webgpu"|"wasm"), variant ("w16"), thresholds, decoder, classes, model, storage }
    */
   async function transcribe(input, options = {}) {
     if (!isSupported()) throw makeError("unsupported", "This browser cannot run Wave2MIDI");
@@ -312,7 +312,7 @@
     return result;
   }
 
-  /** Which build this browser would use: { webgpu, f16, adapter, variant: "fp16"|"int8" } (no download). */
+  /** Which build this browser would use: { webgpu, f16, adapter, variant: "w16" } (no download). */
   function getCapabilities(options = {}) {
     return call("capabilities", { options: { executionProvider: resolveProvider(options.executionProvider) } });
   }

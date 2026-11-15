@@ -6,8 +6,7 @@
 // Records are verified by size + SHA-256 on every load; a damaged record is dropped and
 // downloaded again. Usable from both window and worker scopes.
 //
-// manifest.json can list several builds of the same model under "models" (e.g. "fp16" for
-// GPUs with shader-f16, "int8" as the universal fallback). Each build is stored as its own
+// manifest.json can list several builds of the same model under "models" (e.g. a GPU-only build, "w16" as the universal fallback). Each build is stored as its own
 // record, so switching between environments never evicts the other build. The fallback build
 // keeps the bare model id, which is the key older versions used, so an existing download is reused.
 
@@ -119,10 +118,10 @@ export function resolveModelEntry(manifest, variant) {
   const baseId = manifest?.id || "mobibard_m2m";
   const models = manifest?.models && typeof manifest.models === "object" ? manifest.models : null;
   if (!models) {
-    if (variant && variant !== "int8" && variant !== "default") {
+    if (variant && variant !== "w16" && variant !== "default") {
       throw new ModelError("model-unavailable", `Model build "${variant}" is not published`);
     }
-    return { variant: "int8", id: baseId, file: manifest?.file, bytes: manifest?.bytes, sha256: manifest?.sha256, compute: "int8" };
+    return { variant: "w16", id: baseId, file: manifest?.file, bytes: manifest?.bytes, sha256: manifest?.sha256, compute: "fp32" };
   }
   const fallback = manifest.fallback && models[manifest.fallback] ? manifest.fallback : Object.keys(models)[0];
   const key = variant && variant !== "default" ? variant : fallback;
@@ -140,7 +139,7 @@ export function resolveModelEntry(manifest, variant) {
 
 function fallbackRecordId(manifest, variant) {
   const baseId = manifest?.id || "mobibard_m2m";
-  return variant && variant !== "int8" && variant !== "default" ? `${baseId}:${variant}` : baseId;
+  return variant && variant !== "w16" && variant !== "default" ? `${baseId}:${variant}` : baseId;
 }
 
 async function verifiedRecord(record, entry) {
@@ -177,7 +176,7 @@ export async function clearCache() {
 
 /**
  * Returns { bytes: Uint8Array, meta, manifest, variant, compute, fromCache, stored }.
- * variant: a key of manifest.models ("fp16", "int8", …) or "default" for the fallback build.
+ * variant: a key of manifest.models ("fp16", "w16", …) or "default" for the fallback build.
  * onProgress(stage, loaded, total) with stage "model-check" | "model-download" | "model-store".
  */
 export async function loadModel(baseUrl, onProgress, { variant = "default" } = {}) {
@@ -206,7 +205,7 @@ export async function loadModel(baseUrl, onProgress, { variant = "default" } = {
       }
       return {
         bytes: new Uint8Array(valid.data), meta, manifest: manifest || valid.manifest,
-        variant: entry?.variant || valid.variant || "int8", compute: entry?.compute || valid.compute || "",
+        variant: entry?.variant || valid.variant || "w16", compute: entry?.compute || valid.compute || "",
         fromCache: true, stored: true,
       };
     }

@@ -21,7 +21,7 @@ self.onmessage = async event => {
       self.ort.env.wasm.numThreads = 1;
       // The model comes from the same IndexedDB copy worker.js uses (already downloaded and verified).
       const cache = await import(new URL(`lib/model-cache.mjs?v=${encodeURIComponent(ASSET_VERSION)}`, BASE).href);
-      const model = await cache.loadModel(new URL("model/", BASE).href, () => {}, { variant: "int8" });
+      const model = await cache.loadModel(new URL("model/", BASE).href, () => {}, { variant: "w16" });
       session = await self.ort.InferenceSession.create(model.bytes, { executionProviders: ["wasm"], graphOptimizationLevel: "all", enableCpuMemArena: false, enableMemPattern: false });
       self.postMessage({ type: "ready" });
     } else if (m.type === "run") {
