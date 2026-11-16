@@ -11,7 +11,7 @@
 const BASE = new URL("./", self.location.href);
 const ASSET_VERSION = new URL(self.location.href).searchParams.get("v") || "1";
 let session = null;
-let sparsifyFeat = null;
+let selectFeat = null;
 
 self.onmessage = async event => {
   const m = event.data || {};
@@ -23,7 +23,7 @@ self.onmessage = async event => {
       // The model comes from the same IndexedDB copy worker.js uses (already downloaded and verified).
       const cache = await import(new URL(`lib/model-cache.mjs?v=${encodeURIComponent(ASSET_VERSION)}`, BASE).href);
       const model = await cache.loadModel(new URL("model/", BASE).href, () => {}, { variant: "w16" });
-      sparsifyFeat = (await import(new URL(`lib/w2m_web.mjs?v=${encodeURIComponent(ASSET_VERSION)}`, BASE).href)).sparsifyFeat;
+      { const lib = await import(new URL(`lib/w2m_web.mjs?v=${encodeURIComponent(ASSET_VERSION)}`, BASE).href); selectFeat = lib.selectFeat; }
       session = await self.ort.InferenceSession.create(model.bytes, { executionProviders: ["wasm"], graphOptimizationLevel: "all", enableCpuMemArena: false, enableMemPattern: false });
       self.postMessage({ type: "ready" });
     } else if (m.type === "run") {
@@ -32,9 +32,9 @@ self.onmessage = async event => {
         const names = Array.isArray(m.outputNames) && m.outputNames.length ? m.outputNames : session.outputNames;
         const r = await session.run({ [m.inputName || "features"]: input }, names);
         const out = {};
-        for (const name of names) if (name !== "feat") out[name] = r[name].data.slice();
-        // "feat" (128 per frame and pitch) is reduced to the cells around note starts here, before it is sent back.
-        if (names.includes("feat") && r.feat && r.state) Object.assign(out, sparsifyFeat(r.state.data, r.feat.data, m.shape[2], r.feat.dims[3]));
+        for (const name of names) if (name !== "fpi" && name !== "fpv" && name !== "fpc") out[name] = r[name].data.slice();
+        // fpi/fpv/fpc (note-start candidates with their 128-d vectors) are reduced to the usable prefix before they are sent back.
+        if (names.includes("fpc") && r.fpi && r.fpv && r.fpc) Object.assign(out, selectFeat(r.fpi.data, r.fpv.data, r.fpc.data, r.fpc.dims[2]));
         input.dispose?.();
         self.postMessage({ type: "done", id: m.id, out }, Object.values(out).map(a => a.buffer));
       } catch (error) {

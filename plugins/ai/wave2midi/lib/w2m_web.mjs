@@ -82,33 +82,24 @@ export class Frontend {
 }
 
 // ---------------------------------------------------------------- per-note feature (the 128-d vector that feeds the model's heads)
-// The model's "feat" output is the 128-d vector every head (onset, instrument, ...) is computed from, one per
-// (frame, pitch). Keeping all of it for a song would take hundreds of MB, so only the cells that can belong to a
-// note start are kept: a cell is kept when the "note start" state probability was >= thr within the last `span`
-// frames. state/feat are one window: [T*P*3] and [T*P*D].
-export function sparsifyFeat(state, feat, T, D = 128, thr = 0.02, span = 5) {
-  const P = NP, cells = [];
-  for (let p = 0; p < P; p++) {
-    let last = -1e9;
-    for (let t = 0; t < T; t++) {
-      if (state[(t * P + p) * 3 + 1] >= thr) last = t;
-      if (t - last < span) cells.push(t * P + p);
-    }
-  }
-  const featCells = Uint32Array.from(cells), featVals = new Float32Array(featCells.length * D);
-  for (let c = 0; c < featCells.length; c++) featVals.set(feat.subarray(featCells[c] * D, featCells[c] * D + D), c * D);
-  return { featCells, featVals };
+// The model picks the K most note-start-like cells of every window itself (score = max(onset, note-start probability))
+// and returns, per cell, the unit-length mean of the 128-d head feature over that frame and the next 4:
+//   fpi [K] cell index (frame*88 + pitch index), fpv [K] score, fpc [K, D] vector.
+// Cells whose score is below thr are junk filler and are dropped here (the list is sorted, so it is a prefix).
+export function selectFeat(fpi, fpv, fpc, D = 128, thr = 0.02) {
+  let n = 0; while (n < fpi.length && fpv[n] >= thr) n++;
+  return { fpCells: Uint32Array.from(fpi.subarray(0, n)), fpScore: Float32Array.from(fpv.subarray(0, n)), fpVals: Float32Array.from(fpc.subarray(0, n * D)) };
 }
-function noteFeat(featMap, t, p, T, D, span = 5) {
-  let acc = null, n = 0;
-  for (let f = t; f < Math.min(t + span, T); f++) {
-    const v = featMap.get(f * NP + p); if (!v) continue;
-    if (!acc) acc = new Float32Array(D);
-    for (let j = 0; j < D; j++) acc[j] += v[j];
-    n++;
+// The vector of a note: the highest-scoring cell within +-1 frame of the note's start frame (null when there is none).
+function noteFeat(featMap, t, p, T, D) {
+  let best = null, bs = -1;
+  for (let f = Math.max(t - 1, 0); f <= Math.min(t + 1, T - 1); f++) {
+    const e = featMap.get(f * NP + p); if (e && e.s > bs) { best = e; bs = e.s; }
   }
-  if (!acc) return null;
-  for (let j = 0; j < D; j++) acc[j] /= n;
+  if (!best) return null;
+  let q = 0; for (let j = 0; j < D; j++) q += best.v[j] * best.v[j];
+  const acc = new Float32Array(D), r = 1 / Math.sqrt(Math.max(q, 1e-12));
+  for (let j = 0; j < D; j++) acc[j] = best.v[j] * r;
   return acc;
 }
 
@@ -120,7 +111,7 @@ function noteFeat(featMap, t, p, T, D, span = 5) {
 //
 // MobiBard changes against the upstream web export (keep them when this file is replaced):
 //   opts.concurrency  up to this many network runs in flight (CPU: one per session lane; GPU: 1)
-//   opts.sparseFeat   128: also merge the sparse per-note features of each window (out.featCells/featVals, see sparsifyFeat)
+//   opts.sparseFeat   128: also merge the per-note features of each window (out.fpCells/fpScore/fpVals, see selectFeat)
 //   opts.keys         which model outputs are accumulated (default: all). The state decoder needs only
 //                     ["state", "drum", "inst"], which saves memory on long songs.
 export async function predictSong(wave, meta, frontend, runWindow, onProgress, opts = {}) {
@@ -160,14 +151,14 @@ export async function predictSong(wave, meta, frontend, runWindow, onProgress, o
       for (let i = 0; i < n; i++) { const wi_ = w[i], s0 = (st + i) * c, d0 = i * c; for (let j = 0; j < c; j++) a[s0 + j] += wi_ * d[d0 + j]; }
     }
     for (let i = 0; i < n; i++) wsum[st + i] += w[i];
-    if (opts.sparseFeat && out.featCells) {
-      const D = opts.sparseFeat, cells = out.featCells, vals = out.featVals;
+    if (opts.sparseFeat && out.fpCells) {
+      const D = opts.sparseFeat, cells = out.fpCells, vals = out.fpVals, sc = out.fpScore;
       for (let c = 0; c < cells.length; c++) {
         const i = (cells[c] / NP) | 0; if (i >= n) continue;
         const key = st * NP + cells[c], wi_ = w[i];
-        let e = featSum.get(key); if (!e) { e = { v: new Float32Array(D), w: 0 }; featSum.set(key, e); }
+        let e = featSum.get(key); if (!e) { e = { v: new Float32Array(D), w: 0, s: 0 }; featSum.set(key, e); }
         const v = e.v, o = c * D; for (let j = 0; j < D; j++) v[j] += wi_ * vals[o + j];
-        e.w += wi_;
+        e.w += wi_; e.s += wi_ * sc[c];
       }
     }
     stats.accumulate += performance.now() - ta;
@@ -179,7 +170,7 @@ export async function predictSong(wave, meta, frontend, runWindow, onProgress, o
   }
   if (opts.sparseFeat) {
     const D = opts.sparseFeat, featMap = new Map();
-    for (const [key, e] of featSum) { const d = Math.max(e.w, 1e-6), v = e.v; for (let j = 0; j < D; j++) v[j] /= d; featMap.set(key, v); }
+    for (const [key, e] of featSum) { const d = Math.max(e.w, 1e-6), v = e.v; for (let j = 0; j < D; j++) v[j] /= d; featMap.set(key, { v, s: e.s / d }); }
     acc.featMap = featMap; acc.featDim = D;
   }
   acc.T = T; acc.stats = stats; return acc;

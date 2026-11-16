@@ -127,10 +127,14 @@
       88,
       3
     ],
-    "feat": [
-      1,
-      600,
-      88,
+    "fpi": [
+      4096
+    ],
+    "fpv": [
+      4096
+    ],
+    "fpc": [
+      4096,
       128
     ]
   },
@@ -304,5 +308,11 @@
       0.05,
       0.4
     ]
+  },
+  "fingerprint": {
+    "top_k": 4096,
+    "frames": 5,
+    "min_score": 0.02,
+    "note": "fpi = cell index (frame*88+pitch) of the 4096 highest scores, score = max(onset, note-start probability); fpv = those scores (descending); fpc = unit-length mean of the 128-d head feature over that frame and the next 4 (same pitch, clamped at the window end)"
   }
-}
+}

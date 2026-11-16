@@ -923,8 +923,6 @@
       sourceLabel: "MIDI",
       kind: "midi",
       sourceFile: null,
-      includeSourceAudio: true,
-      sourceAudioOffsetSeconds: 0,
       colorMode: "channel",
       midiBuffer: null,
       preview: null,
@@ -2272,7 +2270,6 @@
     host.scrollTop = scrollTop;
     syncInlineGroupToggleButton(getInlineToolRoot(host)?.querySelector('.inline-group-toggle'));
     // 불러오기 목록은 다시 그려질 때마다(전체 접기 등) 원본 오디오 항목을 맨 위에 다시 붙입니다.
-    if (host === elements.midiImportChannelTree) syncImportSourceAudioRow();
     return true;
   }
 
@@ -14050,8 +14047,6 @@
     state.midiImport.selectedTextIndexes = new Set();
     state.midiImport.excludedKeys = new Set();
     state.midiImport.busy = false;
-    state.midiImport.includeSourceAudio = true;
-    state.midiImport.sourceAudioOffsetSeconds = 0;
     if (elements.midiImportTextInput) elements.midiImportTextInput.value = "";
     applyImportOptionsToControls(importOptionsCurrent);
   }
@@ -14757,59 +14752,7 @@
     handleImportTreeChange();
   }
 
-  // 오디오 → MIDI 불러오기에서만, 전사에 쓴 원본 오디오를 채널 목록의 맨 위 항목처럼 보여 줍니다.
-  // 체크하면 불러올 때 오디오 클립으로 함께 추가됩니다.
-  function syncImportSourceAudioRow() {
-    const host = elements.midiImportChannelTree;
-    if (!host) return;
-    host.querySelectorAll(":scope > .import-source-audio-item").forEach((node) => node.remove());
-    const mi = state.midiImport;
-    if (!(mi.sourceType === "audio-ai" && mi.sourceFile && !mi.busy)) return;
-    const included = mi.includeSourceAudio !== false;
-    const item = document.createElement("div");
-    item.className = `channel-tab-item channel-tree-item channel-tree-leaf-item channel-tree-channel-item import-source-audio-item${included ? " is-select-selected" : ""}`;
-    item.style.setProperty("--channel-color", getThemeHueColor(getDefaultHue(state.audioClips.length), "bright"));
-    item.setAttribute("role", "treeitem");
-    item.setAttribute("aria-level", "1");
-    const main = document.createElement("button");
-    main.type = "button";
-    main.className = "channel-tree-main channel-tab-main";
-    const label = document.createElement("span");
-    label.className = "channel-tree-label channel-tab-label";
-    label.textContent = String(mi.sourceFile?.name || mi.fileName || "Audio");
-    const detail = document.createElement("small");
-    detail.className = "inline-channel-tree-detail";
-    detail.textContent = i18nText("audio_midi.include_audio");
-    main.append(label, detail);
-    const actions = document.createElement("div");
-    actions.className = "channel-tree-actions";
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "channel-tree-action channel-tree-select-toggle";
-    toggle.setAttribute("aria-label", detail.textContent);
-    toggle.title = detail.textContent;
-    const glyph = document.createElement("span");
-    glyph.className = "channel-tree-action-glyph";
-    glyph.setAttribute("aria-hidden", "true");
-    toggle.append(glyph);
-    setInlineChannelToggleState(toggle, included);
-    actions.append(toggle);
-    item.append(main, actions);
-    const flip = (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      mi.includeSourceAudio = !(mi.includeSourceAudio !== false);
-      const on = mi.includeSourceAudio;
-      item.classList.toggle("is-select-selected", on);
-      setInlineChannelToggleState(toggle, on);
-    };
-    main.addEventListener("click", flip);
-    toggle.addEventListener("click", flip);
-    host.prepend(item);
-  }
-
   function updateMidiImportApplyState() {
-    syncImportSourceAudioRow();
     const ready = !state.midiImport.busy && importTreeSelectedIds.size > 0;
     if (elements.midiImportApplyButton) elements.midiImportApplyButton.disabled = !ready;
     if (elements.midiImportNewButton) elements.midiImportNewButton.disabled = !ready;
@@ -15093,7 +15036,7 @@
   // ---- 오디오 → MIDI (AI): shared Wave2MIDI module (plugins/ai/wave2midi) ----
   // 불러오기에서 음원 파일을 고르면 AI로 MIDI를 만든 뒤 일반 MIDI와 같은 통합 불러오기 흐름을 사용합니다.
   const AUDIO_TO_MIDI_EXTENSIONS = new Set(["wav", "wave", "mp3", "ogg", "oga", "opus", "m4a", "aac", "flac", "webm", "aif", "aiff", "mp4", "m4v", "mov", "ogv", "3gp", "mkv"]);
-  const AUDIO_TO_MIDI_MAX_MINUTES = 10;
+  const AUDIO_TO_MIDI_MAX_MINUTES = 30;
   let audioToMidiController = null;
 
   function isAudioToMidiImportFile(file) {
@@ -15285,7 +15228,6 @@
       if (token !== audioPostprocessToken) return false;
       if (!result.notes.length) throw Object.assign(new Error("No notes"), { code: "no-notes" });
       state.midiImport.midiBuffer = toStandaloneArrayBuffer(result.midi);
-      state.midiImport.sourceAudioOffsetSeconds = Number(result.tempo?.offset_seconds) || 0;
       reparseMidiImportPreview();
       showToast(i18nText("audio_midi.postprocess_done", [result.notes.length]));
       return true;
@@ -15374,7 +15316,6 @@
         sourceLabel,
       });
       state.midiImport.midiBuffer = midiBuffer;
-      state.midiImport.sourceAudioOffsetSeconds = Number(result.tempo?.offset_seconds) || 0;
       state.midiImport.preview = preview;
       state.midiImport.selectedGroupIds = new Set(preview.groups.map((group) => String(group.id)));
       state.midiImport.busy = false;
@@ -16318,9 +16259,6 @@
     const openNew = action === "new";
     const kind = state.midiImport.kind;
     const fileName = state.midiImport.fileName;
-    const sourceAudioFile = state.midiImport.sourceType === "audio-ai" ? state.midiImport.sourceFile : null;
-    const includeSourceAudio = state.midiImport.includeSourceAudio !== false;
-    const sourceAudioOffsetSeconds = Number(state.midiImport.sourceAudioOffsetSeconds) || 0;
     stopMidiImportPreview({ update: false });
     state.midiImport.busy = true;
     updateMidiImportDialog();
@@ -16332,7 +16270,6 @@
         const parsed = cloneMidiImportSelection();
         if (!parsed?.groups?.length) throw new Error(i18nText("instrument.select_least_one"));
         const adoptFileTempo = !openNew && isProjectEmptyForImportTempo();
-        const channelIdsBeforeImport = new Set(state.channels.map((channel) => String(channel.id)));
         const imported = importMidiSelectionAsEditableChannels(parsed, {
           openNew,
           fileName,
@@ -16356,18 +16293,6 @@
         renderAll();
         resizeAndDraw();
         resetTimelineToStartAfterImport();
-        // 전사에 쓴 원본 오디오도 함께 추가합니다. 불러오기 화면에서 보여 준 대로 불러온 항목들의 맨 위에 두고,
-        // 변환된 노트와 겹쳐 들리지 않도록 음소거 상태로 둡니다(필요하면 음소거를 풀어 맞춰 들을 수 있음).
-        if (includeSourceAudio && sourceAudioFile) {
-          const firstImported = openNew
-            ? state.channels[0]
-            : state.channels.find((channel) => !channelIdsBeforeImport.has(String(channel.id)));
-          await importAudioFile(sourceAudioFile, {
-            alignSeconds: sourceAudioOffsetSeconds,
-            muted: true,
-            beforeChannelId: firstImported?.id ?? null,
-          });
-        }
         const limitToast = imported.limitedInstrumentCount > 0
           ? i18nText("midi.limit_channels_applied", [imported.limitedInstrumentCount, imported.maxChannelsPerInstrument])
           : "";
@@ -16486,6 +16411,18 @@
     return false;
   }
 
+  // The import panel itself must not block dropping another file: it is where a file is (re)picked, also while
+  // the previous one is still being loaded. Every other open panel/dialog still blocks drops.
+  function isDropBlockingPopupOpen() {
+    const importOpen = isSideToolWorkspaceActive("import");
+    const nodes = document.querySelectorAll('.popup-backdrop, [id$="Backdrop"], [aria-modal="true"], #midiImportPanel, #mmlExportPanel, #channelVolumePanel');
+    for (const node of nodes) {
+      if (importOpen && (node.id === "midiImportPanel" || node.id === "midiImportBackdrop")) continue;
+      if (!node.hidden && node.getClientRects().length) return true;
+    }
+    return false;
+  }
+
   function setupFileDropOverlay() {
     let overlay = null;
     let importZone = null;
@@ -16559,7 +16496,7 @@
       event.preventDefault();
       depth += 1;
       if (depth === 1) {
-        mode = isAnyPopupOpen() ? null : detectMode(event.dataTransfer);
+        mode = isDropBlockingPopupOpen() ? null : detectMode(event.dataTransfer);
         if (mode) show();
       }
       markHot(event);
@@ -16581,7 +16518,7 @@
       if (!hasFiles(event)) return;
       event.preventDefault();
       const wasMode = mode;
-      const popupOpen = isAnyPopupOpen();
+      const popupOpen = isDropBlockingPopupOpen();
       const toAdd = wasMode === "media" && event.clientX >= window.innerWidth / 2;
       hide();
       if (popupOpen) return;
@@ -16592,7 +16529,11 @@
         if (files.length) showToast(i18nText("drop.unsupported"));
         return;
       }
-      if (state.midiImport.busy) return;
+      if (state.midiImport.busy) {
+        // A file dropped while another one is still loading replaces it: the running audio conversion is stopped first.
+        if (!cancelAudioToMidiImport()) return;
+        state.midiImport.busy = false;
+      }
       if (toAdd && isMediaFileForItemAdd(file)) void importAudioFile(file);
       else void prepareUnifiedImportFile(file);
     });

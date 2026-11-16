@@ -1,4 +1,4 @@
-pytorch2.11.0:¡Ü‹
+pytorch2.11.0:Øé‹
 C
 m.pitch_emb__f16m.pitch_embm.pitch_emb__cast"Cast*	
 to 
@@ -94432,8 +94432,105 @@ u‘i’,ùˆ–¬Ò¸¢?—ïB˜´!o¥#¯ó Ëœ´Ÿ•$(•í ,Ò£”™H!K•©Ÿã¦‘—^´Œ
 
 Ø
 X
-b
-feat
+b
+fpi
+	
 
-B
-&/head_norm/LayerNormalization_output_0featfeat_out"IdentityB
+€ b
+fpv
+	
+
+€ b
+fpc
+
+
+€ 
+€*B	fp_startsJ       *Bfp_endsJ       *Bfp_axesJ       *Bfp_flatJÿÿÿÿÿÿÿÿ*Bfp_kJ       *Bfp_88JX       *Bfp_colJ              *;B	fp_arangeJ(                                    *Bfp_599JW      *Bfp_allJ P      *!B	fp_feat2dJÿÿÿÿÿÿÿÿ€       *%Bfp_3dJ              €       *Bfp_ax1J       *Bfp_epsJÌ¼Œ+*'Bfp_out3J              €       *Bfp_out2J              
+<
+state
+	fp_starts
+fp_ends
+fp_axesfp_stfp_slice"Slice
+(
+fp_st
+fp_flatfp_stffp_r1"Reshape
+(
+onset
+fp_flatfp_onffp_r2"Reshape
+'
+fp_stf
+fp_onffp_scorefp_max"Max
+0
+fp_score
+fp_kfp_valsfp_idxfp_topk"TopK
+"
+fp_idx
+fp_88fp_tfp_div"Div
+#
+fp_t
+fp_88fp_t88fp_mul0"Mul
+#
+fp_idx
+fp_t88fp_pfp_sub"Sub
+%
+fp_t
+fp_colfp_tcfp_r3"Reshape
+%
+fp_p
+fp_colfp_pcfp_r4"Reshape
+'
+fp_tc
+	fp_arangefp_ttfp_add0"Add
+$
+fp_tt
+fp_599fp_ttcfp_min"Min
+&
+fp_ttc
+fp_88fp_cellfp_mul1"Mul
+(
+fp_cell
+fp_pcfp_cellpfp_add1"Add
+,
+fp_cellp
+fp_allfp_cellsfp_r5"Reshape
+L
+&/head_norm/LayerNormalization_output_0
+	fp_feat2dfp_featfp_r6"Reshape
+,
+fp_feat
+fp_cellsfp_g	fp_gather"Gather
+$
+fp_g
+fp_3dfp_g3fp_r7"Reshape
+A
+fp_g3fp_meanfp_rm"
+ReduceMean*
+axes@ *
+keepdims  
+'
+fp_mean
+fp_meanfp_sqfp_mul2"Mul
+9
+fp_sq
+fp_ax1fp_ssfp_rs"	ReduceSum*
+keepdims 
+%
+fp_ss
+fp_epsfp_ssmfp_max2"Max
+
+fp_ssmfp_nrmfp_sqrt"Sqrt
+(
+fp_mean
+fp_nrmfp_unitfp_div2"Div
+'
+fp_unit
+fp_out3fpcfp_r8"Reshape
+'
+fp_vals
+fp_out2fpvfp_r9"Reshape
+,
+fp_idxfp_idx32fp_cast"Cast*	
+to 
+)
+fp_idx32
+fp_out2fpifp_r10"ReshapeB

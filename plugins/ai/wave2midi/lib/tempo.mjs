@@ -6,6 +6,7 @@ const TFPS = 100;
 export const DEFAULT_TEMPO = {
   mode: 'auto', min: 32, max: 255, prefer: 120.0, changes: true, change_penalty: 8.0,
   min_segment_beats: 16, align_bars: true, integer_bpm: true, follow_beats: true,
+  integer_block_beats: 8, integer_tolerance: 0.015,
 };
 const KICK = [35, 36], SNARE = [37, 38, 39, 40], HATS = [42, 44, 46];
 
@@ -351,6 +352,32 @@ export function fixedTempo(bpm = 120.0, reason = null) {
   return tm;
 }
 
+// 박 시각(bt, 곡에서 잡은 실제 박)을 정수 BPM 구간들로 근사한다. 정수 템포 하나로는 121.3처럼 소수점이 있는 템포를
+// 표현하지 못해 곡이 진행될수록 재생 시각이 밀리므로, L박 단위로 바로 아래/위 정수 템포를 골라 누적 오차를 tol(초) 안으로 묶는다.
+// 현재 템포로 오차가 tol 안이면 그대로 둔다(템포 변경이 늘어나지 않게). 반환: { bt: 정수 템포로 만든 박 시각, segs: [{ka, bpm}] }
+function integerTempoPath(bt, lo, hi, L, tol) {
+  const N = bt.length;
+  if (N < 2) return null;
+  L = Math.max(2, L | 0);
+  const M = new Float64Array(N); M[0] = bt[0];
+  const segs = []; let cur = null;
+  for (let s = 0; s < N - 1; s += L) {
+    const e = Math.min(s + L, N - 1), n = e - s, span = bt[e] - bt[s];
+    if (!(span > 0)) return null;
+    const bhat = 60.0 * n / span;
+    const cl = v => Math.min(Math.max(v, Math.ceil(lo)), Math.floor(hi));
+    const cands = [...new Set([cl(Math.floor(bhat)), cl(Math.ceil(bhat))])];
+    const err = bpm => Math.abs(M[s] + n * 60.0 / bpm - bt[e]);
+    let pick = null;
+    if (cur != null && err(cur) <= tol) pick = cur;
+    else { pick = cands[0]; for (const b of cands) if (err(b) < err(pick)) pick = b; }
+    for (let j = 1; j <= n; j++) M[s + j] = M[s] + j * 60.0 / pick;
+    if (!segs.length || segs[segs.length - 1].bpm !== pick) segs.push({ ka: s, bpm: pick });
+    cur = pick;
+  }
+  return { bt: M, segs };
+}
+
 // ---------- main ----------
 function fromPath(winBpm, ctx, allowDouble) {
   const { notes, n, env, low, snenv, nearest, c, hi } = ctx;
@@ -436,7 +463,13 @@ function fromPath(winBpm, ctx, allowDouble) {
     }
     if (ok) bt = cand;
   }
-  const outSegs = segs.map(([ka], i) => ({ beat: ka - k0, bpm: 60.0 / fits[i][1] }));
+  let segStarts = segs.map(([ka], i) => ({ ka, bpm: 60.0 / fits[i][1] }));
+  // 정수 BPM만 쓸 수 있으므로(MML/에디터), 박 위치를 정수 템포로 다시 만든다(integerTempoPath).
+  if (c.integer_bpm) {
+    const r = integerTempoPath(bt, ctx.lo, hi, Math.trunc(c.integer_block_beats), Number(c.integer_tolerance));
+    if (r) { bt = r.bt; segStarts = r.segs; }
+  }
+  const outSegs = segStarts.map(({ ka, bpm }) => ({ beat: ka - k0, bpm }));
   const tm = { mode: 'auto', segments: outSegs, time_signature: [nb, 4], bar_aligned: !!c.align_bars, beats: N,
     beat_first: -k0, beat_times: Array.from(bt, x => pyRound(x, 4)) };
   // 마디선 정렬: tick 0은 항상 오디오 0초. 노트 시간은 건드리지 않고,

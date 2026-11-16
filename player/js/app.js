@@ -7609,7 +7609,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
   // 오디오 파일: 공용 Wave2MIDI 모듈(plugins/ai/wave2midi)로 MIDI를 만든 뒤 일반 MIDI처럼 변환 팝업을 엽니다.
-  const AUDIO_AI_MAX_MINUTES = 10;
+  const AUDIO_AI_MAX_MINUTES = 30;
   let audioAiImportBusy = false;
 
   function isAudioAiSource(name, mimeType = "") {

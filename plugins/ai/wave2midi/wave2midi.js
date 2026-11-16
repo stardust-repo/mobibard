@@ -14,12 +14,12 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "2.0.7";
+  const VERSION = "2.0.11";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 maps in memory: state (3), drum (1) and instruments (K = meta.classes.length = 16),
   // about 42 MB per minute of audio.
-  const DEFAULT_MAX_SECONDS = 10 * 60;
+  const DEFAULT_MAX_SECONDS = 30 * 60;
 
   let worker = null;
   let workerUsed = false;
@@ -219,7 +219,7 @@
    *            tempo=true (false: constant 120 BPM, number: fixed BPM), tempoChanges,
    *            stateBias (-1..1, default 0), drumThreshold (0.05..0.4, default 0.13), fingerprint (default false),
    *            collectFingerprint (true: keep the 128-d note features so fingerprint can be switched later),
-   *            maxSeconds=600, executionProvider: "auto"|"wasm",
+   *            maxSeconds=1800, executionProvider: "auto"|"wasm",
    *            ortSources: string[], onProgress({stage, done, total}), signal }
    * Progress stages: decode, runtime, model-check, model-download, model-store, model-init,
    *                  analyze (done/total windows), velocity, midi.

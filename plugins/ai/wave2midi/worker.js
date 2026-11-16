@@ -325,16 +325,17 @@ async function transcribe(id, wave, options) {
     : Math.max(1, Math.min(8, cores - 2));
   const pool = new FeaturePool(meta, poolSize, w2m);
   const predictOptions = { prepare: seg => pool.features(seg), lookahead: Math.max(1, pool.size), keys: NEEDED_OUTPUTS };
-  // The 128-d per-note feature (model output "feat") is only fetched when the fingerprint check can use it.
-  const wantFeat = (options.fingerprint === true || options.collectFingerprint === true) && Boolean(meta.outputs?.feat);
-  const fetchNames = wantFeat ? [...NEEDED_OUTPUTS, "feat"] : NEEDED_OUTPUTS;
-  predictOptions.sparseFeat = wantFeat ? Number(meta.outputs.feat[3]) || 128 : 0;
+  // The 128-d per-note feature (model outputs fpi/fpv/fpc) is only fetched when the instrument-consistency step can use it.
+  const wantFeat = (options.fingerprint === true || options.collectFingerprint === true) && Boolean(meta.outputs?.fpc);
+  const fpThr = 0.02; // same as the default of selectFeat in the helper lanes (infer-worker.js)
+  const fetchNames = wantFeat ? [...NEEDED_OUTPUTS, "fpi", "fpv", "fpc"] : NEEDED_OUTPUTS;
+  predictOptions.sparseFeat = wantFeat ? Number(meta.outputs.fpc[1]) || 128 : 0;
   const runOnMain = async feats => {
     const input = new self.ort.Tensor("float32", feats, meta.input.shape);
     const result = await session.run({ [meta.input.name || "features"]: input }, fetchNames);
     const out = {};
     for (const name of NEEDED_OUTPUTS) out[name] = result[name].data;
-    if (wantFeat && result.feat) Object.assign(out, w2m.sparsifyFeat(result.state.data, result.feat.data, meta.input.shape[2], result.feat.dims[3]));
+    if (wantFeat && result.fpc) Object.assign(out, w2m.selectFeat(result.fpi.data, result.fpv.data, result.fpc.data, result.fpc.dims[2], fpThr));
     input.dispose?.();
     return out;
   };

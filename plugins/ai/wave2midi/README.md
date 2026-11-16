@@ -51,7 +51,7 @@ const result = await MobibardWave2Midi.transcribe(file, {
   tempoChanges: true,          // 자동 추정 때 곡 중간 템포 변화 반영 여부
   stateBias: 0,                // 노트 시작 편향 -1~1 (기본 0). 클수록 작은 노트까지, 작을수록 확실한 노트만
   drumThreshold: 0.13,         // 드럼 검출 기준 0.05~0.4 (기본 0.13). 낮을수록 약한 타격까지
-  collectFingerprint: false,   // true: 변환 중 모델의 128차원 노트 특징(출력 feat)을 모아 둠 → 나중에 postprocess로 fingerprint를 켤 수 있음
+  collectFingerprint: false,   // true: 변환 중 모델의 128차원 노트 특징(출력 fpi/fpv/fpc)을 모아 둠 → 나중에 postprocess로 fingerprint를 켤 수 있음
   fingerprint: false,          // true: 악기가 애매한 음(후보 2개 이상)을 근처(±3초, ±7반음) 확정 음과의 유사도로 보정 (기본 false, 에디터는 켬)
   onProgress: ({ stage, done, total }) => {},
   signal: abortController.signal,
@@ -61,9 +61,10 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 
 - `result.notes`: `[pitch, program, onset초, offset초, confidence]` 배열. program 128은 드럼(MIDI 채널 10)입니다.
 - `result.midi`: 480 PPQ 표준 MIDI(Uint8Array). 추정한 템포 변화와 박자표가 들어가며(`result.tempo`), program별 트랙, 드럼은 채널 10입니다.
+  - 템포는 정수 BPM만 씁니다(에디터·MML이 정수 BPM만 지원). 곡에서 잡은 박 간격이 121.3BPM처럼 소수점이면 정수 하나로는 표현할 수 없어 곡이 진행될수록 재생 시각이 밀리므로(180초에 약 450ms), 8박마다 바로 아래/위 정수 템포(121, 122)를 골라 누적 오차를 15ms 안으로 묶습니다(`lib/tempo.mjs`의 `integerTempoPath`, 설정 `integer_block_beats`·`integer_tolerance`). 템포가 정수에 가까운 곡은 템포 변경 없이 하나로 남고, 소수점이 있는 곡은 템포 변경이 곡 전체에 여러 개 생깁니다. 노트의 시간은 건드리지 않으므로 MIDI를 재생한 시각은 오디오와 1ms 안으로 맞습니다. 가상 곡으로만 시험했고 실제 곡에서는 확인하지 못했습니다.
 - 진행 단계 `stage`: `decode` → `runtime` → `model-check` → (`model-download` → `model-store`) → `model-init` → `analyze`(done/total 창) → `velocity` → `midi`
 - 오류 `error.code`: `unsupported`, `decode-failed`, `too-long`, `runtime-unavailable`, `model-unavailable`, `model-corrupt`, `model-init-failed`, `out-of-memory`, `aborted`
-- 기본 최대 길이는 10분입니다(`maxSeconds`). 악기 확률 맵이 오디오 1분당 약 34 MB를 쓰기 때문입니다.
+- 기본 최대 길이는 30분입니다(`maxSeconds`). 곡 전체 확률 맵(state 3 + drum 1 + inst 16채널 × 88음높이 × 100프레임/초, float32)이 오디오 1분당 약 42 MB라서 30분이면 이 맵만 약 1.27 GB입니다(메모리가 모자라면 `out-of-memory` 오류).
 - 실행 환경 판별(모든 제품 공통, Worker 안에서 자동):
   1. 휴대폰(iPhone, Android 폰)은 WebGPU가 있어도 항상 CPU로 실행합니다. 아이패드·안드로이드 태블릿·데스크톱은 WebGPU 어댑터가 있으면 GPU로 먼저 실행합니다. GPU 세션을 만들지 못하면 같은 모델을 CPU(WebAssembly)로 실행합니다.
   2. GPU 세션은 만들어졌지만 변환 도중 실패(장치 유실 등)하면 처음부터 CPU로 다시 실행합니다.
@@ -109,9 +110,10 @@ sha256이 바뀌면 사용자 브라우저에 있던 이전 모델은 다음 사
 
 `lib/*.mjs`나 `worker.js`를 고치면 `wave2midi.js`의 `VERSION`을 올려 브라우저 캐시를 무효화하세요.
 
-## 악기 지문(fingerprint) 보정과 `feat` 출력
+## 악기 지문(fingerprint) 보정과 128차원 특징 출력
 
-`wave2mid_v2_w16.onnx`에는 원래 7개 출력 외에 `feat`([1,600,88,128])이 추가되어 있습니다. 모델의 모든 헤드(시작·프레임·악기 …)가 계산되는 `/head` 행렬곱의 입력, 즉 `head_norm`의 128차원 값을 `Identity`로 그대로 내보낸 것이며 기존 출력은 비트 단위로 같습니다.
-곡 전체의 128차원을 모으면 수백 MB라서, 각 윈도우에서 “노트 시작 상태 확률 ≥ 0.02인 프레임부터 5프레임”의 칸만 남기고(`sparsifyFeat`) 겹치는 구간은 크로스페이드 가중치로 합칩니다.
-`fingerprint`가 켜지면(일관성 우선) 노트별 지문 = 시작 후 5프레임 평균의 128차원 원본 벡터입니다(음높이 평균을 빼면 군집이 나빠져서 쓰지 않습니다). 곡 전체의 노트를 가장 비슷한 그룹끼리 한 단계씩 병합합니다(평균 연결, 코사인 유사도 ≥ 0.6이 남지 않을 때까지). 그룹마다 노트들의 악기 점수 합이 가장 큰 악기 하나로 통일하므로, 같은 소리끼리는 같은 악기가 됩니다(그룹이 통째로 틀릴 수는 있음). `feat`이 없거나 모으지 않았으면 16개 악기 점수와 근처(±3초, ±7반음) 확정 음을 비교하는 예전 국소 규칙을 씁니다. 동시에 여러 악기를 내는 음은 건드리지 않습니다.
-다른 모델로 교체할 때는 같은 위치에서 `feat` 출력을 다시 추가해야 합니다(없어도 동작은 하며 16차원 지문으로 내려갑니다).
+자세한 변경 내용·시험 결과·한계는 [FINGERPRINT.md](FINGERPRINT.md)입니다.
+
+`wave2mid_v2_w16.onnx`에는 원래 7개 출력 외에 `fpi`[1,4096]/`fpv`[1,4096]/`fpc`[1,4096,128]이 추가되어 있습니다. 점수 `max(onset, 시작 확률)`이 높은 후보 칸 4096개를 모델 안에서 골라, 칸 번호(`fpi`)·점수(`fpv`)·그 칸부터 5프레임의 128차원 평균을 길이 1로 정규화한 벡터(`fpc`)를 내보냅니다. 기존 출력은 비트 단위로 같습니다. 칸 전체(27MB/창) 대신 약 2MB만 읽습니다. 웹은 점수 0.02 미만인 칸을 버리고, 겹치는 윈도우 구간은 크로스페이드 가중치로 합칩니다.
+`fingerprint`가 켜지면(일관성 우선) 노트별 지문 = 시작 프레임 ±1프레임 안에서 점수가 가장 높은 후보 칸의 128차원 벡터입니다(음높이 평균을 빼면 군집이 나빠져서 쓰지 않습니다). 곡 전체의 노트를 가장 비슷한 그룹끼리 한 단계씩 병합합니다(평균 연결, 코사인 유사도 ≥ 0.6이 남지 않을 때까지). 그룹마다 노트들의 악기 점수 합이 가장 큰 악기 하나로 통일하므로, 같은 소리끼리는 같은 악기가 됩니다(그룹이 통째로 틀릴 수는 있음). 특징 출력이 없거나 모으지 않았으면 16개 악기 점수와 근처(±3초, ±7반음) 확정 음을 비교하는 예전 국소 규칙을 씁니다. 동시에 여러 악기를 내는 음은 건드리지 않습니다.
+다른 모델로 교체할 때는 같은 출력을 다시 포함해야 합니다(없어도 동작은 하며 16차원 점수 기반의 예전 규칙으로 내려갑니다). 자세한 내용은 FINGERPRINT.md를 보세요.
