@@ -2982,7 +2982,7 @@
   }
 
   function convertDialogs() {
-    const nativePopupIds = new Set(["tempoEditDialog", "partSoundDialog", "codeHelpDialog", "pasteMmlDialog", "midiBulkAssignDialog"]);
+    const nativePopupIds = new Set(["tempoEditDialog", "codeHelpDialog", "pasteMmlDialog", "midiBulkAssignDialog"]);
     Array.from(document.querySelectorAll("dialog")).forEach(dialog => {
       if (nativePopupIds.has(dialog.id)) return;
       const panel = el("section", `${dialog.className} wb4-converted-dialog`);
@@ -3823,7 +3823,6 @@
     const loopLabel = loopInput?.closest("label");
     const quickControls = transport?.querySelector(".quick-controls");
     const transportActions = transport?.querySelector(".transport-actions");
-    const soundButton = $("partSoundBtn");
     const speedWrap = $("speedControlButton")?.closest(".compact-control-wrap");
     const volumeWrap = $("volumeControlButton")?.closest(".compact-control-wrap");
 
@@ -3868,12 +3867,6 @@
       if (volumeWrap?.parentElement === quickControls) quickControls.insertBefore(channels, volumeWrap);
       else if (speedWrap?.parentElement === quickControls) quickControls.insertBefore(channels, speedWrap);
       else quickControls.prepend(channels);
-    }
-    if (quickControls && soundButton) {
-      soundButton.classList.add("wb9-sound-button");
-      if (speedWrap?.parentElement === quickControls) speedWrap.after(soundButton);
-      else if (volumeWrap?.parentElement === quickControls) volumeWrap.after(soundButton);
-      else quickControls.append(soundButton);
     }
     if (loopLabel) {
       state.ui.originalCheckbox = el("input", "", { id: "originalPlayback", type: "checkbox", disabled: true });
@@ -4346,9 +4339,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const GOOGLE_TOKEN_CACHE_PREF = "googleTokenCache";
   const MIDI_CONVERT_CACHE_PREF = "midiConvertLastSettings";
   const MIDI_CONVERT_CACHE_VERSION = 2;
+  // 예전 버전이 저장한 SoundBank 선택 메타는 더 이상 쓰지 않지만 구글 설정 동기화에서는 계속 제외한다.
   const SOUND_BANK_SELECTION_PREF = "soundBankSelectionMeta";
-  const GOOGLE_SOUND_BANK_FILE_NAME = "mobibard-player-soundbank-cache.bin";
-  const GOOGLE_SOUND_BANK_MIME = "application/octet-stream";
   const GOOGLE_LOCAL_ONLY_PREFS = new Set([
     GOOGLE_AUTO_RECONNECT_PREF,
     GOOGLE_TOKEN_CACHE_PREF,
@@ -4552,10 +4544,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const midiFile = $("midiFile");
   const midiLoadBtn = $("midiLoadBtn");
   const midiSiteLinks = $("midiSiteLinks");
-  const sf2File = $("sf2File");
-  const soundName = $("soundName");
-  const soundFontLoadBtn = $("soundFontLoadBtn");
-  const soundFontResetBtn = $("soundFontResetBtn");
   const languageSelect = $("languageSelect");
   const googleLoginBtn = $("googleLoginBtn");
   const googleDriveLoadBtn = $("googleDriveLoadBtn");
@@ -4658,14 +4646,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const themeToggleBtn = $("themeToggleBtn");
   const themeModeText = $("themeModeText");
   const charCount = $("charCount");
-  const partSoundBtn = $("partSoundBtn");
-  const partSoundDialog = $("partSoundDialog");
-  const partSoundRows = $("partSoundRows");
-  const partSoundCancel = $("partSoundCancel");
-  const partSoundApply = $("partSoundApply");
-  const partSoundPresetSelect = $("partSoundPresetSelect");
-  const partSoundPresetSave = $("partSoundPresetSave");
-  const partSoundPresetDelete = $("partSoundPresetDelete");
   const playbackChannelButtons = Array.from(document.querySelectorAll("[data-playback-channel-index]"));
   const mainMml = $("mainMml");
   const mainMmlHighlight = $("mainMmlHighlight");
@@ -4750,11 +4730,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   let splitPreviewButton = null;
   let splitPreviewButtonText = "";
   let partPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
-  let draftPartPresetKeys = null;
-  let draftSoundPresetBaseId = "";
   let midiPartPresetKeys = null;
   let midiPartPresetName = defaultMidiSoundPresetLabel();
-  let userSoundPresets = [];
   let partMuteStates = Array.from({ length: 6 }, () => false);
   let googleTokenClient = null;
   let googleAccessToken = "";
@@ -4762,8 +4739,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   let googleTokenExpiryTimer = 0;
   let googlePickerLoaded = false;
   let googleSettingsFileId = "";
-  let googleSoundBankFileId = "";
-  let googleSoundBankSyncQueue = Promise.resolve();
   let googleSettingsApplying = false;
   let googleSettingsSaveTimer = 0;
   let googleSettingsSaving = false;
@@ -4997,9 +4972,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     loadThemePref();
     loadPlaybackPrefs();
     loadPianoRollPrefs();
-    loadPartSoundPrefs();
     loadMidiPartSoundPresetPrefs();
-    loadUserSoundPresetPrefs();
+    partPresetKeys = currentPartPresetKeys();
     loadPartMutePrefs();
     loadGoogleDriveFolderPrefs();
     restoreGoogleTokenCache();
@@ -5048,9 +5022,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       }
       if (pendingMmiImport) resolveMmiImportDialog(null);
     });
-    sf2File?.addEventListener("change", () => { if (sf2File.files?.[0]) void loadUserSf2(); });
-    soundFontLoadBtn?.addEventListener("click", openSf2Picker);
-    soundFontResetBtn?.addEventListener("click", () => void restoreDefaultSoundFont());
     playToggleBtn.addEventListener("click", async () => {
       if (isPlaying) { stopPlayback(false); return; }
       if (await runPlayerUiBeforePlay()) void playFromCurrent();
@@ -5128,12 +5099,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     rhythmGameClose?.addEventListener("click", closeRhythmGameLayer);
     rhythmGameFrame?.addEventListener("load", handleRhythmGameFrameLoad);
     window.addEventListener("message", handleRhythmGameMessage);
-    partSoundBtn?.addEventListener("click", () => void openPartSoundDialog());
-    partSoundCancel?.addEventListener("click", () => partSoundDialog?.close());
-    partSoundApply?.addEventListener("click", () => applyPartSoundDialog());
-    partSoundPresetSelect?.addEventListener("change", () => applyPartSoundPresetToDraft(partSoundPresetSelect.value));
-    partSoundPresetSave?.addEventListener("click", () => void saveDraftSoundPreset());
-    partSoundPresetDelete?.addEventListener("click", () => void deleteSelectedSoundPreset());
     for (const button of playbackChannelButtons) {
       button.addEventListener("click", () => {
         const index = clampInt(Number(button.dataset.playbackChannelIndex), 0, 5);
@@ -5215,7 +5180,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       updateVisibleHighlight();
       requestPianoRollRefresh(true);
     });
-    partSoundDialog?.addEventListener("close", () => stopMidiPreview());
     themeToggleBtn?.addEventListener("click", toggleTheme);
     mainMml.addEventListener("paste", handleEditorMmlPaste);
     mainMml.addEventListener("input", () => {
@@ -5242,13 +5206,10 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     // 이전 MML 편집 초안 캐시는 더 이상 사용하지 않는다.
     // MIDI/파일 불러오기 설정 캐시(midiConvertLastSettings)는 별도 키이므로 유지한다.
     try { localStorage.removeItem(PREF_PREFIX + "mmlDraft"); } catch (_) {}
-    await restoreCachedSoundBankFromLocal();
     normalizeTextareaCommands(mainMml);
     syncPartsFromMain();
     applyPlaybackSpeed(false);
     applyOutputVolume();
-    updateSoundFontUi();
-    updateSoundPresetControls();
     updatePartMuteControl();
     updateGoogleDriveControls();
     scheduleGoogleAutoReconnect();
@@ -5396,8 +5357,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     applyPlaybackSpeed(false);
     applyOutputVolume();
     updatePartMuteControl();
-    updateSoundFontUi();
-    updateSoundPresetControls();
     if (mmiImportDialog?.open) updateMmiImportSelectionState();
     if (pianoRollEmpty && !pianoRollEmpty.hidden && pianoRollRangeLabel) {
       pianoRollRangeLabel.textContent = i18nText("roll.title");
@@ -5450,6 +5409,13 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
 
+  // 플레이어는 음색 설정 UI가 없으므로 항상 자동(MIDI 변환 결과 또는 기본값) 음색을 쓴다.
+  function currentPartPresetKeys() {
+    return Array.isArray(midiPartPresetKeys) && midiPartPresetKeys.length >= 6
+      ? normalizePresetKeyArray(midiPartPresetKeys)
+      : defaultPartPresetKeys();
+  }
+
   function defaultPartPresetKeys() {
     return Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
   }
@@ -5459,28 +5425,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return Array.from({ length: 6 }, (_, i) => sanitizePresetKey(source[i] || fallback));
   }
 
-  function samePresetKeys(a, b) {
-    const aa = normalizePresetKeyArray(a);
-    const bb = normalizePresetKeyArray(b);
-    return aa.every((key, i) => key === bb[i]);
-  }
 
-  function loadPartSoundPrefs() {
-    const saved = readPref("partPresetKeys");
-    if (!saved) return;
-    try {
-      const arr = JSON.parse(saved);
-      if (!Array.isArray(arr)) return;
-      partPresetKeys = normalizePresetKeyArray(arr);
-    } catch (_) {
-      partPresetKeys = defaultPartPresetKeys();
-    }
-  }
 
-  function savePartSoundPrefs() {
-    partPresetKeys = normalizePresetKeyArray(partPresetKeys);
-    writePref("partPresetKeys", JSON.stringify(partPresetKeys));
-  }
 
   function loadMidiPartSoundPresetPrefs() {
     const saved = readPref("midiPartPresetKeys");
@@ -5796,12 +5742,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     catch (_) {}
   }
 
-  function readLocalJsonPref(name) {
-    const raw = readPref(name);
-    if (!raw) return null;
-    try { return JSON.parse(raw); }
-    catch (_) { return null; }
-  }
 
   function writeLocalJsonPref(name, value) {
     try { writeLocalPrefOnly(name, JSON.stringify(value)); return true; }
@@ -6479,62 +6419,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     });
   }
 
-  async function uploadGoogleDriveBinaryFile({ fileId = "", name, bytes, parents = null, mimeType = GOOGLE_SOUND_BANK_MIME }) {
-    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
-    const metadata = { name, mimeType };
-    if (parents && !fileId) metadata.parents = parents;
-    const encodedId = encodeURIComponent(fileId);
-    const baseUrl = fileId
-      ? `${GOOGLE_DRIVE_UPLOAD_BASE}/files/${encodedId}`
-      : `${GOOGLE_DRIVE_UPLOAD_BASE}/files`;
-    const initUrl = appendGoogleDriveParams(baseUrl, googleDriveSupportsAllDrivesParams({
-      uploadType: "resumable",
-      fields: "id,name,modifiedTime,size,mimeType,parents"
-    }));
-    const method = fileId ? "PATCH" : "POST";
-    const initResponse = await googleDriveFetch(initUrl, {
-      method,
-      headers: {
-        "Content-Type": "application/json; charset=UTF-8",
-        "X-Upload-Content-Type": mimeType,
-        "X-Upload-Content-Length": String(view.byteLength)
-      },
-      body: JSON.stringify(metadata)
-    });
-    if (!initResponse.ok) throw new Error(await googleDriveErrorMessage(initResponse));
-    const sessionUrl = initResponse.headers.get("Location");
-    if (!sessionUrl) throw new Error("Google Drive did not return an upload session URL.");
-    const uploadResponse = await googleDriveFetch(sessionUrl, {
-      method: "PUT",
-      headers: { "Content-Type": mimeType },
-      body: new Blob([view], { type: mimeType })
-    });
-    if (!uploadResponse.ok) throw new Error(await googleDriveErrorMessage(uploadResponse));
-    return uploadResponse.json();
-  }
 
-  async function findGoogleSoundBankCacheFile() {
-    const q = encodeURIComponent(`name = '${driveQueryString(GOOGLE_SOUND_BANK_FILE_NAME)}' and trashed = false`);
-    const url = `${GOOGLE_DRIVE_API_BASE}/files?spaces=appDataFolder&pageSize=1&q=${q}&fields=files(id,name,modifiedTime,size,mimeType)`;
-    const data = await googleDriveJson(url);
-    return Array.isArray(data.files) && data.files.length ? data.files[0] : null;
-  }
 
-  async function downloadGoogleDriveBinary(fileId) {
-    const url = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}`, googleDriveSupportsAllDrivesParams({ alt: "media" }));
-    const response = await googleDriveFetch(url);
-    if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
-    return new Uint8Array(await response.arrayBuffer());
-  }
 
-  async function deleteGoogleDriveFile(fileId) {
-    if (!fileId) return false;
-    const url = appendGoogleDriveParams(`${GOOGLE_DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}`, googleDriveSupportsAllDrivesParams());
-    const response = await googleDriveFetch(url, { method: "DELETE" });
-    if (response.status === 404) return false;
-    if (!response.ok) throw new Error(await googleDriveErrorMessage(response));
-    return true;
-  }
 
   async function findGoogleMmlFolder() {
     const q = `name = '${driveQueryString(GOOGLE_MML_FOLDER_NAME)}' and mimeType = '${GOOGLE_DRIVE_FOLDER_MIME}' and trashed = false`;
@@ -6947,210 +6834,15 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     });
   }
 
-  function soundBankSelectionTime(meta) {
-    const time = Date.parse(String(meta?.updatedAt || ""));
-    return Number.isFinite(time) ? time : 0;
-  }
 
-  function normalizeGoogleSoundBankMeta(value) {
-    const normalized = normalizeSoundBankSelectionMeta(value);
-    if (!normalized) return null;
-    return {
-      ...normalized,
-      fileId: normalized.mode === "custom" ? String(value?.fileId || "").trim().slice(0, 200) : ""
-    };
-  }
 
-  function buildGoogleSoundBankSettingsMeta() {
-    const local = readSoundBankSelectionMeta() || newDefaultSoundBankSelectionMeta("");
-    return {
-      ...local,
-      fileId: local.mode === "custom" ? String(googleSoundBankFileId || "") : ""
-    };
-  }
 
-  async function uploadSoundBankBytesToGoogle(bytes) {
-    if (!googleSoundBankFileId) {
-      const existing = await findGoogleSoundBankCacheFile();
-      googleSoundBankFileId = existing?.id || "";
-    }
-    let saved;
-    try {
-      saved = await uploadGoogleDriveBinaryFile({
-        fileId: googleSoundBankFileId,
-        name: GOOGLE_SOUND_BANK_FILE_NAME,
-        bytes,
-        parents: googleSoundBankFileId ? null : ["appDataFolder"],
-        mimeType: GOOGLE_SOUND_BANK_MIME
-      });
-    } catch (err) {
-      if (!googleSoundBankFileId || !isGoogleDriveNotFoundError(err)) throw err;
-      googleSoundBankFileId = "";
-      saved = await uploadGoogleDriveBinaryFile({
-        fileId: "",
-        name: GOOGLE_SOUND_BANK_FILE_NAME,
-        bytes,
-        parents: ["appDataFolder"],
-        mimeType: GOOGLE_SOUND_BANK_MIME
-      });
-    }
-    googleSoundBankFileId = saved?.id || googleSoundBankFileId;
-    return saved;
-  }
 
-  async function removeGoogleSoundBankCacheFile(fileId = "") {
-    let targetId = String(fileId || googleSoundBankFileId || "").trim();
-    if (!targetId) {
-      try { targetId = String((await findGoogleSoundBankCacheFile())?.id || ""); } catch (_) {}
-    }
-    if (targetId) {
-      try { await deleteGoogleDriveFile(targetId); }
-      catch (err) { if (!isGoogleDriveNotFoundError(err)) throw err; }
-    }
-    googleSoundBankFileId = "";
-  }
 
-  function queueGoogleSoundBankSync(task) {
-    const run = googleSoundBankSyncQueue
-      .catch(() => false)
-      .then(() => task());
-    googleSoundBankSyncQueue = run;
-    return run;
-  }
 
-  async function syncManualSoundBankSelectionToGoogle(bytes) {
-    if (!isGoogleConnected()) return false;
-    return queueGoogleSoundBankSync(async () => {
-      try {
-        await uploadSoundBankBytesToGoogle(bytes);
-        await saveGoogleSettingsNow(true);
-        return true;
-      } catch (err) {
-        console.warn("[Mobibard] Failed to cache sound bank in Google Drive.", err);
-        return false;
-      }
-    });
-  }
 
-  async function syncDefaultSoundBankSelectionToGoogle(meta) {
-    if (!isGoogleConnected()) return false;
-    return queueGoogleSoundBankSync(async () => {
-      try {
-        await removeGoogleSoundBankCacheFile();
-        if (meta) writeSoundBankSelectionMeta(meta);
-        await saveGoogleSettingsNow(true);
-        return true;
-      } catch (err) {
-        console.warn("[Mobibard] Failed to clear Google sound-bank cache.", err);
-        return false;
-      }
-    });
-  }
 
-  async function applyGoogleCustomSoundBank(bytes, cloudMeta) {
-    const meta = normalizeGoogleSoundBankMeta(cloudMeta);
-    if (!meta || meta.mode !== "custom") throw new Error("Invalid Google sound-bank metadata.");
-    if (meta.size > 0 && bytes.byteLength !== meta.size) {
-      throw new Error(`Cached sound-bank size mismatch (${bytes.byteLength}/${meta.size}).`);
-    }
-    if (meta.sha256) {
-      const actual = await sha256Hex(bytes);
-      if (actual && actual !== meta.sha256) throw new Error("Cached sound-bank SHA-256 mismatch.");
-    }
-    const parsed = await parseSoundBank(bytes);
-    stopPlayback(false);
-    stopMidiPreview();
-    soundFont = parsed;
-    soundFontIsDefault = false;
-    sf2Name = meta.name || "SoundBank";
-    const api = soundBankCacheApi();
-    if (api?.putActive) {
-      try {
-        await api.putActive({
-          bytes,
-          name: sf2Name,
-          mimeType: meta.mimeType || GOOGLE_SOUND_BANK_MIME,
-          extension: meta.extension || soundBankExtension(sf2Name),
-          sha256: meta.sha256,
-          updatedAt: meta.updatedAt
-        });
-      } catch (err) {
-        console.warn("[Mobibard] Local sound-bank cache write failed after Google restore.", err);
-      }
-    }
-    writeSoundBankSelectionMeta(meta);
-    updateSoundFontUi();
-    if (partSoundDialog?.open) {
-      draftPartPresetKeys = normalizePresetKeyArray(draftPartPresetKeys || partPresetKeys);
-      renderPartSoundRows();
-      updateSoundPresetControls();
-    }
-  }
 
-  async function syncSoundBankSelectionWithGoogle(cloudValue) {
-    if (!isGoogleConnected()) return false;
-    return queueGoogleSoundBankSync(async () => {
-      try {
-      const cloud = normalizeGoogleSoundBankMeta(cloudValue);
-      if (cloud?.fileId) googleSoundBankFileId = cloud.fileId;
-      const local = readSoundBankSelectionMeta();
-      let cached = null;
-      if (local?.mode === "custom") {
-        try { cached = await soundBankCacheApi()?.getActive?.(); } catch (_) {}
-      }
-      const localTime = soundBankSelectionTime(local);
-      const cloudTime = soundBankSelectionTime(cloud);
-
-      if (!cloud) {
-        if (local?.mode === "custom" && cached?.bytes?.byteLength) {
-          await uploadSoundBankBytesToGoogle(cached.bytes);
-        } else {
-          googleSoundBankFileId = "";
-          if (!local) writeSoundBankSelectionMeta(newDefaultSoundBankSelectionMeta(new Date().toISOString()));
-        }
-        return true;
-      }
-
-      if (cloud.mode === "default" && (cloudTime > localTime || !local)) {
-        await removeGoogleSoundBankCacheFile();
-        await restoreDefaultSoundFont({
-          silent: true,
-          syncGoogle: false,
-          persistSelection: true,
-          updatedAt: cloud.updatedAt || new Date().toISOString()
-        });
-        return false;
-      }
-
-      if (local?.mode === "default" && cloud.mode === "custom" && localTime >= cloudTime) {
-        await removeGoogleSoundBankCacheFile(cloud.fileId);
-        return true;
-      }
-
-      if (cloud.mode === "custom" && (
-        cloudTime > localTime
-        || !local
-        || (local.mode === "custom" && !cached?.bytes?.byteLength)
-        || (local.mode !== "custom" && cloudTime >= localTime)
-      )) {
-        if (!cloud.fileId) throw new Error("Google sound-bank cache metadata has no file ID.");
-        const bytes = await downloadGoogleDriveBinary(cloud.fileId);
-        await applyGoogleCustomSoundBank(bytes, cloud);
-        return false;
-      }
-
-      if (local?.mode === "custom" && cached?.bytes?.byteLength && (localTime > cloudTime || cloud.mode !== "custom" || !cloud.fileId)) {
-        await uploadSoundBankBytesToGoogle(cached.bytes);
-        return true;
-      }
-
-      return false;
-      } catch (err) {
-        console.warn("[Mobibard] Failed to synchronize sound-bank cache with Google Drive.", err);
-        return false;
-      }
-    });
-  }
 
   function captureLocalPrefSnapshot() {
     const prefs = {};
@@ -7181,8 +6873,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (["string", "number", "boolean"].includes(typeof value)) normalized[name] = String(value);
     }
     return {
-      prefs: normalized,
-      soundBank: normalizeGoogleSoundBankMeta(data?.soundBank)
+      prefs: normalized
     };
   }
 
@@ -7191,8 +6882,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       app: GOOGLE_SETTINGS_APP_NAME,
       version: 2,
       savedAt: new Date().toISOString(),
-      prefs: captureLocalPrefSnapshot(),
-      soundBank: buildGoogleSoundBankSettingsMeta()
+      prefs: captureLocalPrefSnapshot()
     }, null, 2);
   }
 
@@ -7233,23 +6923,19 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
   function reloadPreferencesFromStorage() {
-    partPresetKeys = defaultPartPresetKeys();
     midiPartPresetKeys = null;
     midiPartPresetName = defaultMidiSoundPresetLabel();
-    userSoundPresets = [];
     partMuteStates = Array.from({ length: 6 }, () => false);
     loadThemePref();
     loadPlaybackPrefs();
     loadPianoRollPrefs();
-    loadPartSoundPrefs();
     loadMidiPartSoundPresetPrefs();
-    loadUserSoundPresetPrefs();
+    partPresetKeys = currentPartPresetKeys();
     loadPartMutePrefs();
     loadGoogleDriveFolderPrefs();
     void window.MobibardI18n?.syncFromPreference({ source: "settings" });
     applyPlaybackSpeed(false);
     applyOutputVolume();
-    updateSoundPresetControls();
     updatePartMuteControl();
     applyPartMuteAudioGains();
     updateCharCount();
@@ -7264,7 +6950,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (!file?.id) {
         googleSettingsFileId = "";
         showToast(i18nText("google.settings_create"), "info");
-        await syncSoundBankSelectionWithGoogle(null);
         await saveGoogleSettingsNow(true);
         showToast(i18nText("google.local_settings"), "info");
         return false;
@@ -7273,8 +6958,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const text = await downloadGoogleDriveText(file.id);
       const settings = parseGoogleSettings(text);
       applyPrefSnapshot(settings.prefs);
-      const soundBankChangedCloud = await syncSoundBankSelectionWithGoogle(settings.soundBank);
-      if (soundBankChangedCloud) await saveGoogleSettingsNow(true);
       showToast(i18nText("google.settings_applied"), "info");
       return true;
     } catch (err) {
@@ -7824,235 +7507,25 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     }
   }
 
-  function hasMidiPartSoundPreset() {
-    return Array.isArray(midiPartPresetKeys) && midiPartPresetKeys.length >= 6;
-  }
 
-  function getAutoPartPresetKeys() {
-    return hasMidiPartSoundPreset() ? normalizePresetKeyArray(midiPartPresetKeys) : defaultPartPresetKeys();
-  }
 
-  function sanitizeUserSoundPresetName(name, fallback = i18nText("snd.preset")) {
-    const text = String(name == null ? "" : name).replace(/\s+/g, " ").trim();
-    return (text || fallback).slice(0, 40);
-  }
 
-  function createUserSoundPresetId() {
-    const random = Math.random().toString(36).slice(2, 7);
-    return `p${Date.now().toString(36)}${random}`;
-  }
 
-  function normalizeUserSoundPreset(raw, index = 0, usedIds = new Set()) {
-    if (!raw || typeof raw !== "object") return null;
-    let id = String(raw.id || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
-    if (!id || usedIds.has(id)) id = createUserSoundPresetId();
-    usedIds.add(id);
-    const name = sanitizeUserSoundPresetName(raw.name, i18nText("snd.preset_default_name", [index + 1]));
-    const keys = normalizePresetKeyArray(raw.keys);
-    return { id, name, keys };
-  }
 
-  function loadUserSoundPresetPrefs() {
-    const saved = readPref("userSoundPresets");
-    if (!saved) return;
-    try {
-      const arr = JSON.parse(saved);
-      if (!Array.isArray(arr)) return;
-      const usedIds = new Set();
-      userSoundPresets = arr
-        .map((item, index) => normalizeUserSoundPreset(item, index, usedIds))
-        .filter(Boolean)
-        .slice(0, 80);
-    } catch (_) {
-      userSoundPresets = [];
-    }
-  }
 
-  function saveUserSoundPresetPrefs() {
-    const usedIds = new Set();
-    userSoundPresets = (Array.isArray(userSoundPresets) ? userSoundPresets : [])
-      .map((item, index) => normalizeUserSoundPreset(item, index, usedIds))
-      .filter(Boolean)
-      .slice(0, 80);
-    writePref("userSoundPresets", JSON.stringify(userSoundPresets));
-  }
 
-  function userSoundPresetValue(id) {
-    return `${USER_SOUND_PRESET_VALUE_PREFIX}${id}`;
-  }
 
-  function userSoundPresetIdFromValue(value) {
-    const text = String(value || "");
-    return text.startsWith(USER_SOUND_PRESET_VALUE_PREFIX) ? text.slice(USER_SOUND_PRESET_VALUE_PREFIX.length) : "";
-  }
 
-  function findUserSoundPreset(id) {
-    return userSoundPresets.find(p => p.id === id) || null;
-  }
 
-  function findUserSoundPresetIdByKeys(keys) {
-    const normalized = normalizePresetKeyArray(keys);
-    const matched = userSoundPresets.find(p => samePresetKeys(normalized, p.keys));
-    return matched?.id || "";
-  }
 
-  function soundPresetMatch(keys) {
-    const normalized = normalizePresetKeyArray(keys);
-    if (samePresetKeys(normalized, getAutoPartPresetKeys())) return "auto";
-    const matched = userSoundPresets.find(p => samePresetKeys(normalized, p.keys));
-    return matched ? userSoundPresetValue(matched.id) : "current";
-  }
 
-  function renderSoundPresetSelect(select, keys, preferredValue = null) {
-    if (!select) return;
-    const match = soundPresetMatch(keys);
-    const currentValue = preferredValue || match;
-    select.innerHTML = "";
 
-    select.appendChild(new Option(i18nText("snd.auto"), "auto"));
 
-    if (userSoundPresets.length) {
-      const group = document.createElement("optgroup");
-      group.label = i18nText("snd.saved");
-      for (const preset of userSoundPresets) {
-        group.appendChild(new Option(preset.name, userSoundPresetValue(preset.id)));
-      }
-      select.appendChild(group);
-    }
 
-    const hasPreferred = Array.from(select.options).some(option => option.value === currentValue);
-    if (hasPreferred) {
-      select.value = currentValue;
-    } else if (match === "current") {
-      const current = new Option(i18nText("cfg.current"), "current");
-      current.disabled = true;
-      current.selected = true;
-      select.insertBefore(current, select.children[1] || null);
-    } else {
-      select.value = match;
-    }
-  }
 
-  function updateSoundPresetControls(preferredDialogValue = null) {
-    renderSoundPresetSelect(partSoundPresetSelect, draftPartPresetKeys || partPresetKeys, preferredDialogValue);
-    updatePartSoundPresetDeleteState();
-  }
 
-  function updatePartSoundPresetDeleteState() {
-    const id = userSoundPresetIdFromValue(partSoundPresetSelect?.value);
-    const preset = id ? findUserSoundPreset(id) : null;
-    const canManage = Boolean(preset);
-    if (partSoundPresetDelete) {
-      partSoundPresetDelete.disabled = !canManage;
-      partSoundPresetDelete.title = canManage ? i18nText("snd.delete_saved") : i18nText("snd.delete_select");
-    }
-  }
 
-  function getPartPresetKeysForMode(mode) {
-    if (mode === "auto") return getAutoPartPresetKeys();
-    const id = userSoundPresetIdFromValue(mode);
-    const preset = id ? findUserSoundPreset(id) : null;
-    return preset ? normalizePresetKeyArray(preset.keys) : null;
-  }
 
-  function applyPartSoundPresetToDraft(mode) {
-    const keys = getPartPresetKeysForMode(mode);
-    if (!keys) {
-      updateSoundPresetControls();
-      return;
-    }
-    draftSoundPresetBaseId = userSoundPresetIdFromValue(mode);
-    draftPartPresetKeys = normalizePresetKeyArray(keys);
-    renderPartSoundRows();
-    updateSoundPresetControls(mode);
-  }
-
-  async function saveDraftSoundPreset() {
-    if (!Array.isArray(draftPartPresetKeys)) draftPartPresetKeys = normalizePresetKeyArray(partPresetKeys);
-    const keys = normalizePresetKeyArray(draftPartPresetKeys);
-    const selectedId = userSoundPresetIdFromValue(partSoundPresetSelect?.value);
-    const baseId = selectedId || draftSoundPresetBaseId;
-    const basePreset = baseId ? findUserSoundPreset(baseId) : null;
-    let target = null;
-    let message = "";
-
-    if (basePreset) {
-      if (samePresetKeys(keys, basePreset.keys)) {
-        showToast([i18nText("snd.preset_save"), i18nText("snd.no_settings")].filter(Boolean).join(": "), "info");
-        updatePartSoundPresetDeleteState();
-        return;
-      }
-      const overwrite = await inlineConfirm(
-        i18nText("snd.preset_overwrite_confirm", [basePreset.name]),
-        { title: i18nText("snd.preset_save") }
-      );
-      if (overwrite) {
-        basePreset.keys = keys;
-        target = basePreset;
-        message = i18nText("snd.preset_overwritten", [target.name]);
-      } else {
-        target = await createSoundPresetFromPrompt(keys, i18nText("snd.preset_copy_name", [basePreset.name]));
-        if (!target) return;
-        message = i18nText("snd.preset_saved_new", [target.name]);
-      }
-    } else {
-      target = await createSoundPresetFromPrompt(keys, i18nText("snd.preset_default_name", [userSoundPresets.length + 1]));
-      if (!target) return;
-      message = i18nText("snd.preset_saved_named", [target.name]);
-    }
-
-    saveUserSoundPresetPrefs();
-    draftPartPresetKeys = keys;
-    draftSoundPresetBaseId = target.id;
-    updateSoundPresetControls(userSoundPresetValue(target.id));
-    showToast([i18nText("snd.preset_saved"), message].filter(Boolean).join(": "), "info");
-  }
-
-  async function createSoundPresetFromPrompt(keys, defaultName, excludeId = "") {
-    const input = await inlinePrompt(
-      i18nText("snd.name_required"),
-      defaultName,
-      { title: i18nText("snd.preset_save") }
-    );
-    if (input == null) return null;
-    const name = sanitizeUserSoundPresetName(input, "");
-    if (!name) {
-      showToast([i18nText("snd.save_preset"), i18nText("snd.enter_preset")].filter(Boolean).join(": "), "info");
-      return null;
-    }
-
-    let target = userSoundPresets.find(p => p.name === name && p.id !== excludeId) || null;
-    if (target) {
-      if (!(await inlineConfirm(
-        i18nText("snd.preset_exists_confirm", [name]),
-        { title: i18nText("snd.preset_save") }
-      ))) return null;
-      target.keys = keys;
-      return target;
-    }
-
-    target = { id: createUserSoundPresetId(), name, keys };
-    userSoundPresets.push(target);
-    return target;
-  }
-
-  async function deleteSelectedSoundPreset() {
-    const id = userSoundPresetIdFromValue(partSoundPresetSelect?.value);
-    const preset = id ? findUserSoundPreset(id) : null;
-    if (!preset) {
-      showToast([i18nText("snd.delete_preset"), i18nText("snd.select_saved")].filter(Boolean).join(": "), "info");
-      updatePartSoundPresetDeleteState();
-      return;
-    }
-    if (!(await inlineConfirm(
-      i18nText("snd.preset_delete_confirm", [preset.name]),
-      { title: i18nText("snd.delete_preset") }
-    ))) return;
-    userSoundPresets = userSoundPresets.filter(p => p.id !== id);
-    saveUserSoundPresetPrefs();
-    updateSoundPresetControls();
-    showToast([i18nText("snd.preset_deleted"), i18nText("snd.preset_deleted_named", [preset.name])].filter(Boolean).join(": "), "info");
-  }
 
   function updatePartMuteControl() {
     for (const button of playbackChannelButtons) {
@@ -8121,149 +7594,17 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
 
-  function restartPlaybackAfterSoundChange() {
-    if (!isPlaying) return;
-    currentOffset = getCurrentPlaybackOffset();
-    stopPlayback(false);
-    void playFromCurrent();
-  }
 
-  function setSoundFontControlsBusy(busy) {
-    if (soundFontLoadBtn) soundFontLoadBtn.disabled = Boolean(busy);
-    if (soundFontResetBtn) soundFontResetBtn.disabled = Boolean(busy);
-  }
 
-  function soundBankCacheApi() {
-    return window.MobibardSoundBankCache || null;
-  }
 
-  function soundBankExtension(name = "") {
-    const match = String(name || "").trim().toLowerCase().match(/\.([a-z0-9]+)$/);
-    return match ? match[1] : "";
-  }
 
-  function normalizeSoundBankSelectionMeta(value) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-    const mode = value.mode === "custom" ? "custom" : (value.mode === "default" ? "default" : "");
-    if (!mode) return null;
-    const updatedAt = String(value.updatedAt || "");
-    if (updatedAt && !Number.isFinite(Date.parse(updatedAt))) return null;
-    const normalized = {
-      version: 1,
-      mode,
-      updatedAt,
-      name: String(value.name || "").slice(0, 255),
-      extension: String(value.extension || "").replace(/^\./, "").toLowerCase().slice(0, 12),
-      mimeType: String(value.mimeType || GOOGLE_SOUND_BANK_MIME).slice(0, 120),
-      size: Math.max(0, Number(value.size) || 0),
-      sha256: String(value.sha256 || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 64)
-    };
-    return normalized;
-  }
 
-  function readSoundBankSelectionMeta() {
-    return normalizeSoundBankSelectionMeta(readLocalJsonPref(SOUND_BANK_SELECTION_PREF));
-  }
 
-  function writeSoundBankSelectionMeta(meta) {
-    const normalized = normalizeSoundBankSelectionMeta(meta);
-    if (!normalized) return false;
-    return writeLocalJsonPref(SOUND_BANK_SELECTION_PREF, normalized);
-  }
 
-  function newDefaultSoundBankSelectionMeta(updatedAt) {
-    const resolvedUpdatedAt = updatedAt === undefined ? new Date().toISOString() : String(updatedAt || "");
-    return {
-      version: 1,
-      mode: "default",
-      updatedAt: resolvedUpdatedAt,
-      name: "",
-      extension: "",
-      mimeType: GOOGLE_SOUND_BANK_MIME,
-      size: 0,
-      sha256: ""
-    };
-  }
 
-  async function sha256Hex(bytes) {
-    try {
-      if (!window.crypto?.subtle) return "";
-      const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
-      const digest = await window.crypto.subtle.digest("SHA-256", view);
-      return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join("");
-    } catch (_) {
-      return "";
-    }
-  }
 
-  async function persistManualSoundBankCache(bytes, file) {
-    const api = soundBankCacheApi();
-    const updatedAt = new Date().toISOString();
-    const name = String(file?.name || sf2Name || "SoundBank");
-    const extension = soundBankExtension(name);
-    const mimeType = String(file?.type || GOOGLE_SOUND_BANK_MIME);
-    const sha256 = await sha256Hex(bytes);
-    const meta = normalizeSoundBankSelectionMeta({
-      version: 1,
-      mode: "custom",
-      updatedAt,
-      name,
-      extension,
-      mimeType,
-      size: bytes.byteLength,
-      sha256
-    });
-    if (api?.putActive) {
-      try {
-        await api.putActive({
-          bytes,
-          name: meta.name,
-          mimeType: meta.mimeType,
-          extension: meta.extension,
-          sha256: meta.sha256,
-          updatedAt: meta.updatedAt
-        });
-      } catch (err) {
-        console.warn("[Mobibard] Local sound-bank cache write failed.", err);
-      }
-    }
-    writeSoundBankSelectionMeta(meta);
-    return meta;
-  }
 
-  async function restoreCachedSoundBankFromLocal() {
-    const meta = readSoundBankSelectionMeta();
-    if (!meta || meta.mode !== "custom") {
-      soundFontIsDefault = true;
-      sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
-      return false;
-    }
-    const api = soundBankCacheApi();
-    if (!api?.getActive) return false;
-    try {
-      const cached = await api.getActive();
-      if (!cached?.bytes?.byteLength) return false;
-      if (meta.size > 0 && cached.bytes.byteLength !== meta.size) return false;
-      if (meta.sha256 && cached.sha256 && meta.sha256 !== String(cached.sha256).toLowerCase()) return false;
-      const parsed = await parseSoundBank(cached.bytes);
-      soundFont = parsed;
-      soundFontIsDefault = false;
-      sf2Name = meta.name || cached.name || "SoundBank";
-      return true;
-    } catch (err) {
-      console.warn("[Mobibard] Failed to restore cached sound bank.", err);
-      return false;
-    }
-  }
 
-  async function clearLocalSoundBankCache(updatedAt = new Date().toISOString()) {
-    try { await soundBankCacheApi()?.clearActive?.(); } catch (err) {
-      console.warn("[Mobibard] Failed to clear cached sound bank.", err);
-    }
-    const meta = newDefaultSoundBankSelectionMeta(updatedAt);
-    writeSoundBankSelectionMeta(meta);
-    return meta;
-  }
 
   // The bundled default and any SoundBank that declares itself MobiBard-compatible (INFO/ICMT marker, see
   // soundbank.js) share the 14-preset layout, so both use the direct MobiBard instrument mapping.
@@ -8271,62 +7612,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return Boolean(soundFontIsDefault || soundFont?.isMobibardCompatible || soundFont?.isEmbeddedDefault);
   }
 
-  function describeMobibardMarker(bank) {
-    const marker = bank?.mobibard;
-    return marker ? `MobiBard${marker.version ? ` ${marker.version}` : ""}` : "";
-  }
 
-  function updateSoundFontUi(message = "") {
-    if (!soundName) return;
-    if (message) {
-      soundName.textContent = message;
-      return;
-    }
-    const markerText = describeMobibardMarker(soundFont);
-    soundName.textContent = soundFontIsDefault
-      ? i18nText("snd.restore_default")
-      : `${sf2Name || "SoundBank"}${markerText ? ` · ${markerText}` : ""}`;
-  }
 
-  function openSf2Picker() {
-    if (!sf2File) return;
-    sf2File.value = "";
-    openFilePickerInput(sf2File);
-  }
 
-  async function restoreDefaultSoundFont(options = {}) {
-    const silent = Boolean(options?.silent);
-    const syncGoogle = options?.syncGoogle !== false;
-    const persistSelection = options?.persistSelection !== false;
-    const selectionUpdatedAt = String(options?.updatedAt || new Date().toISOString());
-    stopPlayback(false);
-    stopMidiPreview();
-    setSoundFontControlsBusy(true);
-    soundFont = null;
-    soundFontIsDefault = true;
-    sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
-    if (sf2File) sf2File.value = "";
-    updateSoundFontUi(i18nText("snd.reading_soundbank"));
-    let selectionMeta = null;
-    try {
-      if (persistSelection) selectionMeta = await clearLocalSoundBankCache(selectionUpdatedAt);
-      await loadDefaultSf2IfNeeded();
-      updateSoundFontUi();
-      if (partSoundDialog?.open) {
-        draftPartPresetKeys = normalizePresetKeyArray(draftPartPresetKeys || partPresetKeys);
-        renderPartSoundRows();
-        updateSoundPresetControls();
-      }
-      if (syncGoogle && isGoogleConnected()) {
-        void syncDefaultSoundBankSelectionToGoogle(selectionMeta || newDefaultSoundBankSelectionMeta(selectionUpdatedAt));
-      }
-    } catch (err) {
-      updateSoundFontUi();
-      if (!silent) showToast([i18nText("snd.load_soundbank"), shortError(err)].filter(Boolean).join(": "), "error");
-    } finally {
-      setSoundFontControlsBusy(false);
-    }
-  }
 
   function openSourceFilePicker() {
     if (!midiFile) return;
@@ -10073,21 +9361,11 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
   function rememberMidiPartSoundPreset(keys) {
-    const selectedQuickMode = soundPresetMatch(partPresetKeys);
-    const shouldApplyToCurrentSound = selectedQuickMode === "auto";
     midiPartPresetKeys = normalizePresetKeyArray(keys);
     midiPartPresetName = defaultMidiSoundPresetLabel();
     saveMidiPartSoundPresetPrefs();
-
-    if (shouldApplyToCurrentSound) {
-      partPresetKeys = normalizePresetKeyArray(midiPartPresetKeys);
-      savePartSoundPrefs();
-      updateSoundPresetControls();
-      return true;
-    }
-
-    updateSoundPresetControls();
-    return false;
+    partPresetKeys = currentPartPresetKeys();
+    return true;
   }
 
   function getMidiExportChannelConfigs(settings = pendingMidiSettings) {
@@ -10304,50 +9582,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     });
   }
 
-  async function loadUserSf2() {
-    const file = sf2File?.files?.[0];
-    if (!file) return;
-    const previousSoundFont = soundFont;
-    const previousSoundFontIsDefault = soundFontIsDefault;
-    const previousSf2Name = sf2Name;
-    stopPlayback(false);
-    stopMidiPreview();
-    setSoundFontControlsBusy(true);
-    updateSoundFontUi(i18nText("snd.reading_soundbank"));
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const parsed = await parseSoundBank(bytes);
-      soundFont = parsed;
-      soundFontIsDefault = false;
-      sf2Name = file.name || "SoundBank";
-      updateSoundFontUi();
-      if (partSoundDialog?.open) {
-        draftPartPresetKeys = normalizePresetKeyArray(draftPartPresetKeys || partPresetKeys);
-        renderPartSoundRows();
-        updateSoundPresetControls();
-      }
-      try {
-        const meta = await persistManualSoundBankCache(bytes, file);
-        if (meta && isGoogleConnected()) void syncManualSoundBankSelectionToGoogle(bytes);
-      } catch (cacheErr) {
-        console.warn("[Mobibard] Failed to cache selected sound bank.", cacheErr);
-      }
-    } catch (err) {
-      soundFont = previousSoundFont;
-      soundFontIsDefault = previousSoundFontIsDefault;
-      sf2Name = previousSf2Name;
-      if (sf2File) sf2File.value = "";
-      if (!soundFont) {
-        soundFontIsDefault = true;
-        sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
-        try { await loadDefaultSf2IfNeeded(); } catch (_) {}
-      }
-      updateSoundFontUi();
-      showToast([i18nText("snd.load_soundbank"), shortError(err)].filter(Boolean).join(": "), "error");
-    } finally {
-      setSoundFontControlsBusy(false);
-    }
-  }
 
   async function ensureDefaultSoundFont() {
     if (defaultSoundFont) return defaultSoundFont;
@@ -10362,214 +9596,14 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       soundFontIsDefault = true;
       sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
     }
-    updateSoundFontUi();
   }
 
-  async function openPartSoundDialog() {
-    stopPlayback(false);
-    stopMidiPreview();
 
-    // 음색 파일을 읽지 못하더라도 설정 창 자체는 항상 연다.
-    // 사용자는 이 창의 "불러오기" 버튼으로 SF2/SF3/DLS 파일을 교체할 수 있어야 한다.
-    if (!soundFont) {
-      updateSoundFontUi(i18nText("snd.reading_soundbank"));
-      try {
-        await loadDefaultSf2IfNeeded();
-      } catch (_) {
-        soundFont = null;
-        soundFontIsDefault = true;
-        sf2Name = DEFAULT_SOUND_BANK_FILE_NAME;
-        updateSoundFontUi();
-      }
-    } else {
-      updateSoundFontUi();
-    }
 
-    draftPartPresetKeys = normalizePresetKeyArray(partPresetKeys);
-    draftSoundPresetBaseId = findUserSoundPresetIdByKeys(draftPartPresetKeys);
-    renderPartSoundRows();
-    updateSoundPresetControls();
-    if (partSoundDialog?.showModal) partSoundDialog.showModal();
-    else showToast([i18nText("snd.ch_settings"), i18nText("cfg.browser_fail")].filter(Boolean).join(": "), "error");
-  }
 
-  async function previewPartPreset(key, partIndex = 0, triggerButton = null) {
-    const button = triggerButton instanceof HTMLElement ? triggerButton : null;
-    const originalText = button?.textContent || i18nText("ui.listen");
-    try {
-      stopPlayback(false);
-      stopMidiPreview();
-      if (button) {
-        button.disabled = true;
-        button.textContent = i18nText("ui.play");
-      }
-      await loadDefaultSf2IfNeeded();
-      const preset = findPresetByKey(key);
-      if (!preset) throw new Error(i18nText("snd.find_sf2_preset_2"));
-      const ctx = await ensureAudioContext();
-      const notes = buildPartPresetPreviewNotes(preset, partIndex);
-      const prepared = prepareNotes(ctx, soundFont, preset, notes);
-      if (!prepared.length) throw new Error(i18nText("snd.find_preview_sf2"));
-      const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
-      const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
-      const result = schedulePreparedNotes(ctx, prepared, {
-        baseTime: ctx.currentTime + 0.08,
-        fromSec: 0,
-        windowStart: 0,
-        windowEnd: Math.max(0.5, duration + 0.1),
-        destination: masterGain || ctx.destination,
-        activeSources: midiPreviewSources,
-        scheduledIds: new Set(),
-        minLeadTime: 0.01,
-        gainScale
-      });
-      const stopMs = Math.max(650, Math.min(6000, (result.maxEnd - ctx.currentTime + 0.25) * 1000));
-      midiPreviewTimer = window.setTimeout(() => stopMidiPreview(), stopMs);
-    } catch (err) {
-      showToast([i18nText("snd.preview_fail"), shortError(err)].filter(Boolean).join(": "), "error");
-    } finally {
-      if (button) {
-        window.setTimeout(() => {
-          button.disabled = false;
-          button.textContent = originalText;
-        }, 350);
-      }
-    }
-  }
 
-  function buildPartPresetPreviewNotes(preset, partIndex = 0) {
-    const part = clampInt(Number(partIndex) || 0, 0, 5);
-    if (Number(preset?.bank) === 128) {
-      return PART_PREVIEW_DRUM_NOTES.map((midi, i) => ({
-        id: i,
-        part,
-        start: i * 0.18,
-        durationSec: midi === 46 ? 0.2 : 0.13,
-        midi,
-        volume: midi === 42 ? 10 : 13
-      }));
-    }
 
-    const range = getPresetPlayableRange(preset);
-    const base = choosePreviewMelodyBaseMidi(range, PART_PREVIEW_MELODY_INTERVALS);
-    let start = 0;
-    return PART_PREVIEW_MELODY_INTERVALS.map((interval, i) => {
-      const last = i === PART_PREVIEW_MELODY_INTERVALS.length - 1;
-      const durationSec = last ? 0.34 : 0.18;
-      const note = {
-        id: i,
-        part,
-        start,
-        durationSec,
-        midi: clampInt(base + interval, range.min, range.max),
-        volume: 13
-      };
-      start += last ? 0.34 : 0.2;
-      return note;
-    });
-  }
 
-  function getPresetPlayableRange(preset) {
-    const regions = Array.isArray(preset?.regions) ? preset.regions : [];
-    let min = 127;
-    let max = 0;
-    let found = false;
-    for (const region of regions) {
-      const keyRange = Array.isArray(region?.keyRange) ? region.keyRange : [0, 127];
-      const lo = clampInt(Number(keyRange[0]), 0, 127);
-      const hi = clampInt(Number(keyRange[1]), 0, 127);
-      if (hi < lo) continue;
-      min = Math.min(min, lo);
-      max = Math.max(max, hi);
-      found = true;
-    }
-    return found ? { min, max } : { min: 0, max: 127 };
-  }
-
-  function choosePreviewMelodyBaseMidi(range, intervals) {
-    const min = clampInt(Number(range?.min), 0, 127);
-    const max = clampInt(Number(range?.max), min, 127);
-    const minInterval = Math.min(...intervals);
-    const maxInterval = Math.max(...intervals);
-    for (const base of [60, 48, 72, 36, 84, 24, 96]) {
-      if (base + minInterval >= min && base + maxInterval <= max) return base;
-    }
-    const centered = Math.round((min + max - minInterval - maxInterval) / 2);
-    return clampInt(centered, Math.max(0, min - minInterval), Math.min(127, max - maxInterval));
-  }
-
-  function applyPartSoundDialog() {
-    if (!Array.isArray(draftPartPresetKeys)) draftPartPresetKeys = defaultPartPresetKeys();
-    partPresetKeys = normalizePresetKeyArray(draftPartPresetKeys);
-    savePartSoundPrefs();
-    updateSoundPresetControls();
-    rebuildSchedulePreviewSilently();
-    partSoundDialog?.close();
-    restartPlaybackAfterSoundChange();
-  }
-
-  function renderPartSoundRows() {
-    if (!partSoundRows) return;
-    const presets = getPresetOptions();
-    partSoundRows.innerHTML = "";
-    if (!presets.length) {
-      const empty = document.createElement("div");
-      empty.className = "part-sound-empty";
-      empty.textContent = soundFont ? i18nText("snd.find_any") : i18nText("snd.load_or_replace");
-      partSoundRows.appendChild(empty);
-      return;
-    }
-
-    for (let i = 0; i < 6; i++) {
-      const row = document.createElement("div");
-      row.className = `part-sound-row part-${i}`;
-      const label = document.createElement("label");
-      label.className = "part-sound-label";
-      label.htmlFor = `partSoundSelect${i}`;
-      label.textContent = PART_LABELS[i] || i18nText("ui.numbered", [i + 1]);
-
-      const select = document.createElement("select");
-      select.id = `partSoundSelect${i}`;
-      select.dataset.partPresetIndex = String(i);
-      select.setAttribute("aria-label", i18nText("aria.sound", [PART_LABELS[i]]));
-      const current = sanitizePresetKey(draftPartPresetKeys?.[i] || DEFAULT_PART_PRESET_KEY);
-      const availableKeys = new Set(presets.map(p => p.key));
-      const selectedKey = availableKeys.has(current) ? current : (availableKeys.has(DEFAULT_PART_PRESET_KEY) ? DEFAULT_PART_PRESET_KEY : presets[0].key);
-      if (draftPartPresetKeys) draftPartPresetKeys[i] = selectedKey;
-      for (const preset of presets) {
-        const option = document.createElement("option");
-        option.value = preset.key;
-        option.textContent = preset.label;
-        option.selected = preset.key === selectedKey;
-        select.appendChild(option);
-      }
-      const previewButton = document.createElement("button");
-      previewButton.className = "part-sound-preview-btn soft-tool-button";
-      previewButton.type = "button";
-      previewButton.textContent = i18nText("ui.listen");
-      previewButton.setAttribute("aria-label", i18nText("aria.preview_selected_sound", [PART_LABELS[i]]));
-      previewButton.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        void previewPartPreset(select.value, i, previewButton);
-      });
-
-      select.addEventListener("change", () => {
-        if (!draftPartPresetKeys) draftPartPresetKeys = normalizePresetKeyArray(partPresetKeys);
-        draftPartPresetKeys[i] = sanitizePresetKey(select.value);
-        updateSoundPresetControls();
-        void previewPartPreset(select.value, i, previewButton);
-      });
-
-      const control = document.createElement("div");
-      control.className = "part-sound-control";
-      control.appendChild(select);
-      control.appendChild(previewButton);
-
-      row.appendChild(label);
-      row.appendChild(control);
-      partSoundRows.appendChild(row);
-    }
-  }
 
   function sanitizePresetKey(value) {
     const text = String(value == null ? DEFAULT_PART_PRESET_KEY : value).trim();
@@ -10580,33 +9614,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return `${bank}:${preset}`;
   }
 
-  function presetKey(preset) {
-    return `${clampInt(Number(preset?.bank ?? 0), 0, 16383)}:${clampInt(Number(preset?.preset ?? 0), 0, 127)}`;
-  }
 
-  function getPresetOptions() {
-    if (!soundFont || !Array.isArray(soundFont.presets)) return [];
-    const seen = new Set();
-    return soundFont.presets
-      .filter(p => p && Array.isArray(p.regions) && p.regions.length && (typeof soundFont.hasAudiblePreset !== "function" || soundFont.hasAudiblePreset(p)))
-      .slice()
-      .sort((a, b) => (a.bank - b.bank) || (a.preset - b.preset) || String(a.name || "").localeCompare(String(b.name || "")))
-      .filter(p => {
-        const key = presetKey(p);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .map(p => ({ key: presetKey(p), label: formatPresetLabel(p) }));
-  }
 
-  function formatPresetLabel(preset) {
-    const bank = clampInt(Number(preset?.bank ?? 0), 0, 16383);
-    const program = clampInt(Number(preset?.preset ?? 0), 0, 127);
-    const name = String(preset?.name || i18nText("snd.unnamed_preset")).trim();
-    const num = String(program + 1).padStart(3, "0");
-    return bank === 0 ? `${num} ${name}` : `Bank ${bank} · ${num} ${name}`;
-  }
 
   function findPresetByKey(key) {
     if (!soundFont) return null;

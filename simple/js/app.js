@@ -112,6 +112,8 @@
   let masterGain = null;
   let playbackSoundFont = null;
   let fixedPlaybackPreset = null;
+  let currentPartInstIds = [];
+  let partPlaybackPresets = null;
   let playbackSoundFontPromise = null;
   let preparedPlaybackNotes = null;
   let playbackSchedule = null;
@@ -712,6 +714,8 @@
       if (token !== conversionSerial) return;
 
       currentMml = fadedMml;
+      currentPartInstIds = Array.isArray(converted.instIds) ? converted.instIds.slice() : [];
+      partPlaybackPresets = null;
       resultPages = splitForCopy(fadedMml);
       rebuildPlayback(fadedMml);
       renderResults(resultPages);
@@ -1005,10 +1009,34 @@
     updatePlayButton();
   }
 
+  // 채널마다 편곡 엔진이 고른 모비바드 악기(id)를 기본 SoundFont의 프리셋으로 바꿔 재생한다.
+  // 기본 SoundFont는 GM 번호가 아니라 MobiBard 전용 프리셋 0~13이므로 default-instrument-map.js 의 표를 쓴다.
+  // 편곡 엔진 id 와 이름이 다른 두 악기만 바꿔 준다.
+  const ARRANGER_TO_SOUNDFONT_ID = { folkGuitar: "guitar", catHarmonica: "vocal" };
+
+  function presetForInstrument(instId) {
+    const playbackApi = window.MobibardSimplePlayback;
+    const targets = window.MobibardDefaultInstrumentMap?.targets || [];
+    const id = ARRANGER_TO_SOUNDFONT_ID[instId] || instId;
+    const target = targets.find(item => item.id === id) || targets.find(item => item.id === "piano");
+    const preset = target && playbackApi?.findPreset
+      ? playbackApi.findPreset(playbackSoundFont, target.preset, target.bank)
+      : null;
+    return preset || fixedPlaybackPreset;
+  }
+
   function prepareFixedPlaybackNotes() {
     const playbackApi = window.MobibardSimplePlayback;
     if (!playbackSchedule || !playbackSoundFont || !fixedPlaybackPreset || !playbackApi?.prepareNotes) return [];
-    const prepared = playbackApi.prepareNotes(audioCtx, playbackSoundFont, fixedPlaybackPreset, playbackSchedule.notes || []);
+    const notes = playbackSchedule.notes || [];
+    const prepared = [];
+    for (let part = 0; part < 6; part += 1) {
+      const partNotes = notes.filter(note => Number(note.part) === part);
+      if (!partNotes.length) continue;
+      const preset = presetForInstrument(currentPartInstIds[part] || "piano");
+      prepared.push(...playbackApi.prepareNotes(audioCtx, playbackSoundFont, preset, partNotes));
+    }
+    prepared.sort((x, y) => x.start - y.start || x.part - y.part || x.midi - y.midi);
     for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
     preparedPlaybackNotes = prepared;
     return prepared;

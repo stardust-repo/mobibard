@@ -16207,3 +16207,89 @@ body.merge-mode-active .channel-instrument-control select { pointer-events: auto
 .channel-group-item {
   border-width: 0 !important;
 }
+
+/* ---- Sidebar toolbars: one shared background (channel / history / shortcuts) ---- */
+:root { --side-toolbar-bg: rgb(37, 40, 48); }
+:root[data-theme="light"] { --side-toolbar-bg: rgb(231, 237, 244); }
+.channel-tree-toolbar,
+#channelBulkBar,
+.side-panel .history-actions,
+.shortcut-toolbar {
+  background: var(--side-toolbar-bg) !important;
+}
+
+/* History undo/redo: no divider below, and the same two-column look at every window width. */
+.side-panel .history-actions,
+.history-actions {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  grid-template-rows: none !important;
+  gap: 6px !important;
+  border-bottom: 0 !important;
+}
+.side-panel .history-actions button,
+.history-actions button {
+  font-size: 12px !important;
+  padding: 0 5px !important;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* Shortcut toolbar: search box + expand/collapse-all button. */
+.shortcut-toolbar { gap: 6px; }
+.shortcut-search-field { flex: 1 1 auto; width: auto; }
+.shortcut-toggle-all {
+  box-sizing: border-box;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  background: var(--control-bg, var(--input-bg));
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.shortcut-toggle-all:hover:not(:disabled) { background: var(--control-hover, var(--input-bg)); }
+.shortcut-toggle-all:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 1px; }
+.shortcut-toggle-all:disabled { opacity: .45; cursor: default; }
+
+/* Shortcut expand/collapse-all uses the same chevron as each category header (rotated when everything is collapsed). */
+.shortcut-toggle-all .shortcut-toggle-all-glyph.is-collapsed { transform: rotate(-90deg); }
+.shortcut-toggle-all .shortcut-toggle-all-glyph { font-size: 15px; transition: transform .14s ease; }
+
+/* History usage strip shares the channel bulk-bar background. */
+#historyUsage { background: var(--side-toolbar-bg) !important; }
+
+/* Toggle-all arrow: drawn chevron rotating around its own centre so it barely moves when it turns. */
+.shortcut-toggle-all .shortcut-toggle-all-glyph {
+  position: relative;
+  display: block;
+  width: 10px;
+  height: 10px;
+  font-size: 0 !important;
+  line-height: 0;
+  transform: none !important;
+}
+.shortcut-toggle-all .shortcut-toggle-all-glyph::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -4px 0 0 -3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transform-origin: 50% 50%;
+  transition: transform .14s ease;
+}
+.shortcut-toggle-all .shortcut-toggle-all-glyph.is-collapsed::before {
+  margin: -3px 0 0 -4px;
+  transform: rotate(-45deg);
+}

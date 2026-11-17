@@ -42,6 +42,7 @@
     parseSoundBank,
     loadEmbeddedSoundBank: (...args) => soundBankApi().loadEmbeddedSoundBank(...args),
     loadDefaultPreset,
+    findPreset: (...args) => soundBankApi().findPreset(...args),
     prepareNotes,
     schedulePreparedNotes,
   });

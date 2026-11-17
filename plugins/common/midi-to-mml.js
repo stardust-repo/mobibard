@@ -1495,7 +1495,10 @@
     // 엔진 틱 → 64분음표 격자. 엔진이 시간 단위를 늘렸으면(result.div) 그 기준으로 나눈다.
     const ticksPerGrid = result.div / 16;
     const fold = p => { let v = p; while (v < MML_MIN_MIDI) v += 12; while (v > MML_MAX_MIDI) v -= 12; return v; };
-    const voices = result.channels.filter(c => !c.drum).map(c => c.notes.map(n => {
+    const voiceChannels = result.channels.filter(c => !c.drum);
+    const voiceInstIds = voiceChannels.map(c => c.instId || 'piano');
+    while (voiceInstIds.length < channelCount) voiceInstIds.push('piano');
+    const voices = voiceChannels.map(c => c.notes.map(n => {
       const startGrid = quantizeGridValue(n.s / ticksPerGrid, gridStep, 0);
       const endGrid = Math.max(startGrid + gridStep, quantizeGridValue(n.e / ticksPerGrid, gridStep, 0));
       return { midi: fold(n.p), startGrid, endGrid, durGrid: endGrid - startGrid, velocity: midiVelocityToMmlVolume(n.v) };
@@ -1517,6 +1520,7 @@
     return {
       mml, parts, partCount: channelCount, warnings: warnings.concat(result.warnings || []), notices: result.notices || [],
       quantizeDivision, preserved: result.preserved,
+      instIds: voiceInstIds, // MML 채널 순서대로 모비바드 악기 id (재생용)
       channels: result.channels.map(c => ({ mml: c.mml, player: c.player, main: c.main, role: c.role, roleKey: c.roleKey, inst: c.inst, noteCount: c.notes.length, shift: c.shift })),
     };
   }

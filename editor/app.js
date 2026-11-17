@@ -202,6 +202,8 @@
     pianoSection: document.querySelector(".piano-section"),
     shortcutPanel: document.querySelector("#shortcutPanel"),
     shortcutSearchInput: document.querySelector("#shortcutSearchInput"),
+    shortcutToggleAllButton: document.querySelector("#shortcutToggleAllButton"),
+    shortcutToggleAllGlyph: document.querySelector("#shortcutToggleAllGlyph"),
     shortcutSearchResults: document.querySelector("#shortcutSearchResults"),
     shortcutSearchResultList: document.querySelector("#shortcutSearchResultList"),
     shortcutSearchEmpty: document.querySelector("#shortcutSearchEmpty"),
@@ -35961,7 +35963,31 @@
     }
   }
 
+  // 단축키 분류 일괄 접기/펼치기: 하나라도 펼쳐져 있으면 "모두 접기", 전부 접혀 있으면 "모두 펼치기".
+  function updateShortcutToggleAllButton() {
+    const button = elements.shortcutToggleAllButton;
+    const groups = Array.from(elements.shortcutGroups?.querySelectorAll("details.shortcut-group") || []);
+    if (!button) return;
+    // 그룹 일괄 접기/펼치기와 같은 규칙: 하나라도 펼쳐져 있으면 펼침 상태(⌄), 모두 접혀 있을 때만 접힘 상태로 보여 줍니다.
+    const allOpen = groups.some((group) => group.open);
+    const label = i18nText(allOpen ? "shortcut.collapse_all" : "shortcut.expand_all");
+    button.dataset.action = allOpen ? "collapse" : "expand";
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.disabled = groups.length === 0;
+    elements.shortcutToggleAllGlyph?.classList.toggle("is-collapsed", !allOpen);
+  }
+
+  function toggleAllShortcutGroups() {
+    const groups = Array.from(elements.shortcutGroups?.querySelectorAll("details.shortcut-group") || []);
+    if (!groups.length) return;
+    const open = !groups.some((group) => group.open);
+    for (const group of groups) group.open = open;
+    updateShortcutToggleAllButton();
+  }
+
   function updateShortcutSearchResults() {
+    updateShortcutToggleAllButton();
     // Locale replacement can turn localized <dt> keycaps back into plain text.
     // Rebuild them before cloning search results so every result keeps keycap styling.
     renderShortcutKeycaps();
@@ -36670,6 +36696,9 @@
     elements.sidebarShortcutsTab?.addEventListener("click", () => setSidebarTab("shortcuts"));
     elements.sidebarHistoryTab?.addEventListener("click", () => setSidebarTab("history"));
     elements.sidebarThanksTab?.addEventListener("click", () => setSidebarTab("thanks"));
+    elements.shortcutToggleAllButton?.addEventListener("click", toggleAllShortcutGroups);
+    elements.shortcutGroups?.addEventListener("toggle", updateShortcutToggleAllButton, true);
+    updateShortcutToggleAllButton();
     elements.shortcutSearchInput?.addEventListener("input", updateShortcutSearchResults);
     elements.shortcutSearchInput?.addEventListener("search", updateShortcutSearchResults);
     elements.channelTabs?.addEventListener("keydown", handleChannelTreeArrowNavigation);
