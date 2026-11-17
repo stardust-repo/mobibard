@@ -442,7 +442,7 @@
     state.ui.tutorialButton = el("button", "wb15-tutorial-source-button", {
       id: "tutorialBtn",
       type: "button",
-      text: appText("tutorial.open", "튜토리얼")
+      text: appText("tutorial.open", "가이드")
     });
     sourceTools.append(state.ui.tutorialButton);
 
@@ -2217,7 +2217,7 @@
     if (state.ui.codeHelpButton) state.ui.codeHelpButton.textContent = t("codeHelp");
     updateCodeModeHint();
     state.ui.sourceTextarea?.setAttribute("aria-label", t("codeViewSourceLabel"));
-    if (state.ui.tutorialButton) state.ui.tutorialButton.textContent = appText("tutorial.open", "튜토리얼");
+    if (state.ui.tutorialButton) state.ui.tutorialButton.textContent = appText("tutorial.open", "가이드");
     updateTutorialLocale();
     if ($("pasteBtn")) $("pasteBtn").textContent = t("pasteMml");
     const play = $("playToggleBtn");

@@ -659,7 +659,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "layout6.noInstrumentSource": "ファイルを読み込むと、6チャンネルの設定と楽器一覧が表示されます。",
     "layout6.allChannels": "全チャンネル",
     "layout6.originalUnavailable": "元のMIDI音源を含むファイルを読み込むと使用できます。",
-    "tutorial.open": "チュートリアル",
+    "tutorial.open": "ガイド",
     "tutorial.title": "クイックガイド",
     "tutorial.progress": "{0} / {1}",
     "tutorial.close": "閉じる",

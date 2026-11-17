@@ -8,16 +8,16 @@
 <meta content="light dark" name="color-scheme"/>
 <title>모비바드 v6.0 - MML 생성기</title>
 <script src="../plugins/common/seo-title.js" data-suffix=" - MML 생성기"></script>
-<meta name="description" content="연주 파일을 복잡한 설정 없이 빠르게 최대 3채널 MML로 변환하는 MML 생성기입니다.">
+<meta name="description" content="연주 파일을 복잡한 설정 없이 빠르게 최대 6채널 MML로 변환하는 MML 생성기입니다.">
 <link rel="canonical" href="https://stardust-repo.github.io/mobibard/simple/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="MobiBard">
 <meta property="og:title" content="모비바드 MML 생성기">
-<meta property="og:description" content="연주 파일을 복잡한 설정 없이 빠르게 최대 3채널 MML로 변환하는 MML 생성기입니다.">
+<meta property="og:description" content="연주 파일을 복잡한 설정 없이 빠르게 최대 6채널 MML로 변환하는 MML 생성기입니다.">
 <meta property="og:url" content="https://stardust-repo.github.io/mobibard/simple/">
 <meta property="og:image" content="https://stardust-repo.github.io/mobibard/assets/icons/mobibard-mark-64.png">
 <meta name="twitter:card" content="summary">
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "모비바드 MML 생성기", "url": "https://stardust-repo.github.io/mobibard/simple/", "description": "연주 파일을 복잡한 설정 없이 빠르게 최대 3채널 MML로 변환하는 MML 생성기입니다.", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any", "browserRequirements": "Requires JavaScript", "inLanguage": ["ko", "ja", "en", "zh-CN", "zh-TW"], "offers": {"@type": "Offer", "price": "0", "priceCurrency": "KRW"}}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "모비바드 MML 생성기", "url": "https://stardust-repo.github.io/mobibard/simple/", "description": "연주 파일을 복잡한 설정 없이 빠르게 최대 6채널 MML로 변환하는 MML 생성기입니다.", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any", "browserRequirements": "Requires JavaScript", "inLanguage": ["ko", "ja", "en", "zh-CN", "zh-TW"], "offers": {"@type": "Offer", "price": "0", "priceCurrency": "KRW"}}</script>
 
 <link href="../assets/favicon.ico" rel="icon"/>
 <link href="https://stardust-repo.github.io/mobibard/simple/?lang=ko" hreflang="ko" rel="alternate"/>
@@ -72,17 +72,17 @@
     const localeUrl = new URL(`locale/${files[language]}`, document.baseURI);
     if (localeUrl.protocol !== "file:") {
       localeUrl.searchParams.set("v", "5.2.0");
-      localeUrl.searchParams.set("rev", "20261106a");
+      localeUrl.searchParams.set("rev", "20261117b");
     }
     document.write(`<script src="${localeUrl.href.replace(/&/g, "&amp;")}"><\/script>`);
   })();
   </script>
-<link href="./styles.css?v=20260831-simple-result-section1" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
+<link href="./styles.css?v=20261117-channel-count5" rel="stylesheet"/><link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
 <body>
   <img src="../assets/icons/mobibard-mark-64.png" alt="MobiBard" aria-hidden="true" class="mobibard-thumbnail-probe" width="64" height="64" fetchpriority="high" decoding="async" style="position:fixed;width:64px;height:64px;left:-10000px;top:0;pointer-events:none;" />
-<div class="mobibard-seo-text" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0;"><p>모비바드 MML 생성기: 연주 파일을 복잡한 설정 없이 빠르게 최대 3채널 MML로 변환하는 MML 생성기입니다.</p></div>
+<div class="mobibard-seo-text" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0;"><p>모비바드 MML 생성기: 연주 파일을 복잡한 설정 없이 빠르게 최대 6채널 MML로 변환하는 MML 생성기입니다.</p></div>
 <header class="topbar simple-topbar">
 <div class="topbar-inner">
 <details class="brand-site-map" data-current-site="simple"><summary class="brand-site-map-trigger brand" id="siteMapButton">
@@ -152,7 +152,7 @@
 <div class="simple-title-row">
 <div class="title-block">
 <h1 id="pageTitle"><span id="pageTitleText">MML 간편 생성기</span></h1>
-<p class="subtitle" id="subtitle">파일을 넣으면 3채널 MML로 바로 변환합니다.</p>
+<p class="subtitle" id="subtitle">파일을 넣으면 1~6채널 MML로 바로 변환합니다.</p>
 </div>
 <div aria-label="모드 이동" class="simple-mode-actions">
 <a class="mode-action-button" href="../player/index.html" id="fullEditorLink">상세 모드</a>
@@ -164,7 +164,7 @@
 <input accept=".bin,.macbin,application/macbinary,application/x-macbinary,.mid,.midi,.kar,.seq,.sep,.sq,.bq,.sseq,.ssar,.sdat,.brseq,.rseq,.brsar,.bcseq,.cseq,.bcsar,.bfseq,.fseq,.bfsar,.psf,.psf1,.minipsf,.minipsf1,.psf2,.minipsf2,.ncsf,.minincsf,.2sf,.mini2sf,.mus,.musx,.mnx,.mnx.json,.mscz,.mscx,.musicxml,.xml,.mxl,.gp3,.gp5,.vsq,.vsqx,.vpr,.ust,.ustx,.svp,.s5p,.ccs,audio/midi,audio/x-midi,audio/kar,audio/x-karaoke,application/x-karaoke,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml-mxl,application/musicxml+xml,application/xml,text/xml,.xmi,.hmp,.hmi,.mod,.s3m,.xm,.it,.xgm,.vgm,.vgz,.gym,.s98,audio/*,video/*,.wav,.mp3,.ogg,.oga,.opus,.m4a,.aac,.flac,.webm,.aif,.aiff,.mp4,.m4v,.mov,.ogv,.3gp,.mkv" data-music-format-input="" hidden="" id="midiFileInput" type="file"/>
 <div class="simple-help-actions">
 <button class="mabi-supported-files-button" data-supported-files-button="" data-supported-files-context="simple" type="button">지원 파일</button>
-<button class="simple-tutorial-button" id="simpleTutorialBtn" type="button">튜토리얼</button>
+<button class="simple-tutorial-button" id="simpleTutorialBtn" type="button">가이드</button>
 </div>
 <div class="simple-source-actions">
 <button class="file-button simple-source-primary" id="fileButton" type="button">로컬 파일</button>
@@ -178,11 +178,24 @@
 <section aria-labelledby="convertStepTitle" class="simple-workflow-section">
 <div class="simple-section-head"><div><span class="step-number">2</span><h2 id="convertStepTitle">변환 설정</h2></div><p id="convertStepDescription">양자화·쉼표·볼륨·페이드를 설정합니다.</p></div>
 <div class="options-stack">
+<div class="option-row-quantize-channel">
 <div class="option-block option-block-quantize">
 <span class="option-label" id="quantizeLabel">양자화</span>
 <div aria-labelledby="quantizeLabel" class="segmented quantize-options" id="quantizeOptions" role="radiogroup">
 <button aria-checked="true" class="segment active" data-quantize="64" role="radio" type="button">64박</button>
 <button aria-checked="false" class="segment" data-quantize="32" role="radio" type="button">32박</button>
+</div>
+</div>
+<div class="option-block option-block-channel-count">
+<span class="option-label" id="channelCountLabel">채널 수</span>
+<div aria-labelledby="channelCountLabel" class="segmented channel-count-options" id="channelCountOptions" role="radiogroup">
+<button aria-checked="false" class="segment" data-channel-count="1" role="radio" type="button">1</button>
+<button aria-checked="false" class="segment" data-channel-count="2" role="radio" type="button">2</button>
+<button aria-checked="true" class="segment active" data-channel-count="3" role="radio" type="button">3</button>
+<button aria-checked="false" class="segment" data-channel-count="4" role="radio" type="button">4</button>
+<button aria-checked="false" class="segment" data-channel-count="5" role="radio" type="button">5</button>
+<button aria-checked="false" class="segment" data-channel-count="6" role="radio" type="button">6</button>
+</div>
 </div>
 </div>
 <div class="option-block option-block-rest">
@@ -341,7 +354,8 @@
 <script src="../plugins/formats/musescore/format-musescore.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
-<script src="../plugins/common/midi-to-mml.js?v=5.1.1&amp;rev=20261103-assign"></script>
+<script src="../plugins/common/mml-arranger.js?v=2.0.0&amp;rev=20261117a"></script>
+<script src="../plugins/common/midi-to-mml.js?v=5.1.1&amp;rev=20261117-arrange"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261112b"></script>
 <script src="../plugins/common/split-search.js?v=1.0.0"></script><script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20261115-split"></script>
 <script src="../plugins/common/mml-parser.js?v=5.1.1"></script>
@@ -354,7 +368,7 @@
 <script async="" defer="" src="https://apis.google.com/js/api.js"></script>
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
-<script src="../plugins/common/site-navigation.js?v=20261106-tip"></script><script src="./js/app.js?v=6.0.0&amp;rev=20261116b"></script>
+<script src="../plugins/common/site-navigation.js?v=20261106-tip"></script><script src="./js/app.js?v=6.0.0&amp;rev=20261117c"></script>
 <script src="../plugins/common/mml-midi.js?v=1.0.0"></script>
 <script src="../plugins/common/save-menu.js?v=1.0.1"></script>
 <script src="./enhancements.js?v=6.0.0&amp;rev=20261102-nobeta"></script>

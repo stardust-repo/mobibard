@@ -1449,5 +1449,77 @@
     }));
   }
 
-  window.MabiMidi = Object.freeze({ version: "5.1.0", midiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview, parseMidiFile, assignNotesToVoices });
+  // MML 채널 정리 엔진(plugins/common/mml-arranger.js, window.MabiArranger)으로 채널을 나눈 뒤 MML로 만든다.
+  // 기존 고음/자동/저음 배치(midiToMml)를 대신하는 경로. 타악기(드럼 채널·타악기 음색)는 넣지 않는다.
+  // options: { channelCount(1~6), mainCount(1~3), quantizeDivision(64|32), trust(0~1) }
+  function arrangeMidiToMml(bytes, _fileName = "MIDI", options = {}) {
+    const arranger = window.MabiArranger;
+    if (!arranger?.arrangeSource) throw new Error("MML arranger is unavailable");
+    const midi = parseMidiFile(bytes);
+    if (midi.smpteDivision) throw new Error(tr("midi.err_smpte"));
+    const ppq = midi.ppq;
+    const quantizeDivision = normalizeQuantizeDivision(options.quantizeDivision);
+    const gridStep = quantizeGridStep(quantizeDivision);
+    const warnings = [...midi.warnings];
+
+    const notes = [];
+    const progs = {};
+    const ordered = [...midi.notes].sort((a, b) => a.startTick - b.startTick);
+    for (const n of ordered) {
+      if (!(n.endTick > n.startTick)) continue;
+      if (getInstrumentGroupInfo(n).isBeat) continue;
+      const ch = clampInt(n.channel, 0, 15);
+      if (!(ch in progs)) progs[ch] = normalizeProgram(n.program);
+      notes.push({ s: n.startTick, e: n.endTick, p: clampInt(n.midi, 0, 127), v: Math.max(1, playbackVelocity(n)), ch });
+    }
+    if (!notes.length) throw new Error(tr("midi.err_selected_no_notes"));
+    notes.sort((a, b) => a.s - b.s || a.p - b.p);
+    const tempos = normalizeMidiTempos(midi.tempoEvents)
+      .map(t => [Math.max(0, Math.round(t.tick || 0)), Math.max(1, Math.round(Number(t.mpqn) || 60000000 / (Number(t.bpm) || 120)))]);
+    if (!tempos.length) tempos.push([0, 500000]);
+    const tsigs = (midi.timeSignatures || []).map(ts => [Math.max(0, ts.tick || 0), ts.numerator || 4, ts.denominator || 4]);
+
+    const channelCount = clampInt(options.channelCount ?? 3, 1, 6);
+    const mainCount = clampInt(options.mainCount ?? Math.min(3, channelCount), 1, Math.min(3, channelCount));
+    const result = arranger.arrangeSource({ div: ppq, notes, tempos, tsigs, progs }, {
+      total: channelCount,
+      mainCount,
+      mainInst: "auto",
+      trust: Number.isFinite(Number(options.trust)) ? Number(options.trust) : 0.5,
+      rows: Array.from({ length: Math.max(0, channelCount - mainCount) }, () => "auto"),
+      cymbal: { on: false },
+      drum: { on: false },
+      gridPerBeat: quantizeDivision === 32 ? 8 : 16,
+    });
+
+    // 엔진 틱 → 64분음표 격자. 엔진이 시간 단위를 늘렸으면(result.div) 그 기준으로 나눈다.
+    const ticksPerGrid = result.div / 16;
+    const fold = p => { let v = p; while (v < MML_MIN_MIDI) v += 12; while (v > MML_MAX_MIDI) v -= 12; return v; };
+    const voices = result.channels.filter(c => !c.drum).map(c => c.notes.map(n => {
+      const startGrid = quantizeGridValue(n.s / ticksPerGrid, gridStep, 0);
+      const endGrid = Math.max(startGrid + gridStep, quantizeGridValue(n.e / ticksPerGrid, gridStep, 0));
+      return { midi: fold(n.p), startGrid, endGrid, durGrid: endGrid - startGrid, velocity: midiVelocityToMmlVolume(n.v) };
+    }).sort((a, b) => a.startGrid - b.startGrid));
+    for (const voice of voices) for (let i = 1; i < voice.length; i++) {
+      if (voice[i - 1].endGrid > voice[i].startGrid) { voice[i - 1].endGrid = voice[i].startGrid; voice[i - 1].durGrid = voice[i - 1].endGrid - voice[i - 1].startGrid; }
+    }
+    const cleanVoices = voices.map(v => v.filter(n => n.endGrid > n.startGrid));
+    while (cleanVoices.length < channelCount) cleanVoices.push([]);
+
+    const srcTicksPerGrid = ppq / 16;
+    const tempoGridEvents = normalizeGridTempos(normalizeMidiTempos(midi.tempoEvents).map(t => ({
+      grid: quantizeGridValue(t.tick / srcTicksPerGrid, gridStep, 0),
+      bpm: t.bpm
+    })));
+    const finalEndGrid = Math.max(0, ...cleanVoices.flatMap(v => v.map(n => n.endGrid)));
+    const parts = cleanVoices.map((v, i) => voiceToMml64(v, i === 0 ? tempoGridEvents : [], i === 0 ? finalEndGrid : 0));
+    const mml = `MML@${parts.join(",")};`;
+    return {
+      mml, parts, partCount: channelCount, warnings: warnings.concat(result.warnings || []), notices: result.notices || [],
+      quantizeDivision, preserved: result.preserved,
+      channels: result.channels.map(c => ({ mml: c.mml, player: c.player, main: c.main, role: c.role, roleKey: c.roleKey, inst: c.inst, noteCount: c.notes.length, shift: c.shift })),
+    };
+  }
+
+  window.MabiMidi = Object.freeze({ version: "5.1.0", midiToMml, arrangeMidiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview, parseMidiFile, assignNotesToVoices });
 })();

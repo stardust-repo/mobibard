@@ -659,7 +659,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "layout6.noInstrumentSource": "파일을 불러오면 6개 채널 설정과 전체 악기 목록이 표시됩니다.",
     "layout6.allChannels": "전체 채널",
     "layout6.originalUnavailable": "원본 음원을 지원하는 파일을 불러오면 사용할 수 있습니다.",
-    "tutorial.open": "튜토리얼",
+    "tutorial.open": "가이드",
     "tutorial.title": "빠른 사용법",
     "tutorial.progress": "{0} / {1}",
     "tutorial.close": "닫기",

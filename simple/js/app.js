@@ -27,6 +27,8 @@
     fileName: $("fileName"),
     quantizeLabel: $("quantizeLabel"),
     quantizeOptions: $("quantizeOptions"),
+    channelCountLabel: $("channelCountLabel"),
+    channelCountOptions: $("channelCountOptions"),
     restLabel: $("restLabel"),
     restOptions: $("restOptions"),
     allRestButton: $("allRestButton"),
@@ -93,6 +95,9 @@
   let selectedBytes = null;
   let selectedRest = "32";
   let selectedQuantize = 64;
+  // 채널 수(1~6). 메인 주자 채널은 1·2채널이면 그대로, 3채널 이상이면 3입니다.
+  let selectedChannelCount = 3;
+  let currentPartCount = 3;
   let selectedFadeIn = 0;
   let selectedFadeOut = 0;
   let selectedFixedVolume = null;
@@ -335,6 +340,7 @@
     els.quantizeLabel.textContent = t("quantize");
     els.quantizeOptions.querySelector('[data-quantize="64"]').textContent = t("quantize64");
     els.quantizeOptions.querySelector('[data-quantize="32"]').textContent = t("quantize32");
+    if (els.channelCountLabel) els.channelCountLabel.textContent = t("channelCount");
     els.restLabel.textContent = t("rest");
     els.restOptions.querySelector('[data-rest="keep"]').textContent = t("keep");
     for (const denom of [64, 32, 16, 8, 4]) {
@@ -534,6 +540,26 @@
     if (refresh) requestConversion();
   }
 
+  function selectChannelCountOption(value, refresh = true) {
+    selectedChannelCount = Math.max(1, Math.min(6, Math.round(Number(value) || 3)));
+    els.channelCountOptions?.querySelectorAll("[data-channel-count]").forEach(button => {
+      const active = Number(button.dataset.channelCount) === selectedChannelCount;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    if (refresh) requestConversion();
+  }
+
+  // MML 채널 정리 엔진 옵션: 판단 기준은 균형(0.5), 악기는 모두 자동으로 고정합니다.
+  function buildSimpleArrangeOptions() {
+    return {
+      channelCount: selectedChannelCount,
+      mainCount: selectedChannelCount <= 2 ? selectedChannelCount : 3,
+      quantizeDivision: selectedQuantize,
+      trust: 0.5,
+    };
+  }
+
   function buildSimpleConvertOptions(groupIds) {
     const ids = [...groupIds];
     return {
@@ -558,7 +584,7 @@
     const simplify = window.MabiOptimizer?.simplifyTemposMml;
     if (typeof simplify !== "function") return mml;
     return simplify(mml, {
-      partCount: 3,
+      partCount: currentPartCount,
       maxBpmDeltaExclusive: 5,
       preserveExtrema: true
     }).mml;
@@ -568,8 +594,8 @@
     if (selectedRest === "keep") return mml;
     if (!window.MabiOptimizer?.trimShortRestsMml) return mml;
     const options = selectedRest === "all"
-      ? { partCount: 3, all: true }
-      : { partCount: 3, denom: Number(selectedRest) };
+      ? { partCount: currentPartCount, all: true }
+      : { partCount: currentPartCount, denom: Number(selectedRest) };
     return window.MabiOptimizer.trimShortRestsMml(mml, options).mml;
   }
 
@@ -580,7 +606,7 @@
     // Player와 동일하게 기존 공통 앞 공백을 제거한 뒤 T120 기준 2초(R1)로 다시 정렬한다.
     // 쉼표 제거를 먼저 실행해야 사용자가 선택한 제거 옵션이 최종 2초 공백을 지우지 않는다.
     return window.MabiOptimizer.addLeadingSilenceMml(mml, {
-      partCount: 3,
+      partCount: currentPartCount,
       beats: GENERATED_MML_LEADING_SILENCE_SECONDS * 2
     }).mml;
   }
@@ -589,8 +615,8 @@
     const setVolumes = window.MabiOptimizer?.setVolumesMml;
     if (selectedFixedVolume == null || typeof setVolumes !== "function") return mml;
     return setVolumes(mml, {
-      partCount: 3,
-      partVolumes: [selectedFixedVolume, selectedFixedVolume, selectedFixedVolume],
+      partCount: currentPartCount,
+      partVolumes: Array.from({ length: currentPartCount }, () => selectedFixedVolume),
       preserveZeroMinOne: true
     }).mml;
   }
@@ -598,14 +624,14 @@
   function applyVolumeSimplification(mml) {
     const simplify = window.MabiOptimizer?.simplifyVolumesMml;
     if (!selectedVolumeSimplify || typeof simplify !== "function") return mml;
-    return simplify(mml, { partCount: 3, maxDelta: 1 }).mml;
+    return simplify(mml, { partCount: currentPartCount, maxDelta: 1 }).mml;
   }
 
   function applySimpleFade(mml) {
     const fade = window.MabiOptimizer?.applyFadeMml;
     if (typeof fade !== "function" || (selectedFadeIn <= 0 && selectedFadeOut <= 0)) return mml;
     return fade(mml, {
-      partCount: 3,
+      partCount: currentPartCount,
       fadeInSeconds: selectedFadeIn,
       fadeOutSeconds: selectedFadeOut
     }).mml;
@@ -616,7 +642,7 @@
       return [{ index: 1, mml, parts: splitMmlPartsFallback(mml) }];
     }
     const split = window.MabiOptimizer.splitMmlPages(mml, {
-      partCount: 3,
+      partCount: currentPartCount,
       maxChars: MAX_SPLIT_CHARS,
       // Player와 동일한 의미: 마지막 허용 위치에서 뒤로 탐색하되
       // 앞에서부터 50% 지점까지만 탐색한다.
@@ -629,8 +655,8 @@
 
   function splitMmlPartsFallback(mml) {
     const match = /^\s*MML@([\s\S]*?);?\s*$/i.exec(String(mml || ""));
-    if (!match) return [String(mml || ""), "", ""];
-    return match[1].split(",").slice(0, 3);
+    if (!match) return [String(mml || ""), ...Array.from({ length: Math.max(0, currentPartCount - 1) }, () => "")];
+    return match[1].split(",").slice(0, currentPartCount);
   }
 
   function trackScoreCopy(scope) {
@@ -671,8 +697,12 @@
       const nonDrumGroups = (analysis.instrumentGroups || []).filter(group => !isDrumGroup(group) && Number(group.noteCount || 0) > 0);
       if (!nonDrumGroups.length) throw new Error(t("noMelody"));
 
-      const options = buildSimpleConvertOptions(nonDrumGroups.map(group => group.id));
-      const converted = window.MabiMidi.midiToMml(selectedBytes, selectedFile.name, options);
+      // 기존 고음/자동/저음 배치(buildSimpleConvertOptions + midiToMml) 대신 MML 채널 정리 엔진을 씁니다.
+      // 공용 코드(midiToMml)는 Player·Editor가 아직 쓰므로 그대로 둡니다.
+      if (typeof window.MabiMidi.arrangeMidiToMml !== "function") throw new Error("MML arranger is unavailable");
+      const arrangeOptions = buildSimpleArrangeOptions();
+      currentPartCount = arrangeOptions.channelCount;
+      const converted = window.MabiMidi.arrangeMidiToMml(selectedBytes, selectedFile.name, arrangeOptions);
       // 템포 정리는 원본 템포 흐름을 기준으로 먼저 적용한 뒤 나머지 후처리를 수행한다.
       const simplifiedMml = applyTempoSimplification(converted.mml);
       const cleanedMml = applyRestRemoval(simplifiedMml);
@@ -702,6 +732,10 @@
     resetPlayback();
   }
 
+  function formatPartDetail(parts) {
+    return parts.slice(0, currentPartCount).map((part, index) => t("detailPart", [index + 1, String(part || "").length])).join(" · ");
+  }
+
   function renderResults(pages) {
     els.copyButtons.innerHTML = "";
     els.results.hidden = false;
@@ -711,16 +745,16 @@
     els.copyAllButton.textContent = t("copy");
     els.copyAllButton.classList.remove("copied");
     const fullParts = splitMmlPartsFallback(currentMml);
-    while (fullParts.length < 3) fullParts.push("");
-    els.fullScoreDetail.textContent = t("detail", [fullParts[0].length, fullParts[1].length, fullParts[2].length]);
+    while (fullParts.length < currentPartCount) fullParts.push("");
+    els.fullScoreDetail.textContent = formatPartDetail(fullParts);
     els.resultsSummary.textContent = showSplitResults ? t("pages", [pages.length]) : "";
     if (!showSplitResults) return;
 
     for (const page of pages) {
       const parts = Array.isArray(page.parts) && page.parts.length
-        ? page.parts.slice(0, 3)
+        ? page.parts.slice(0, currentPartCount)
         : splitMmlPartsFallback(page.mml);
-      while (parts.length < 3) parts.push("");
+      while (parts.length < currentPartCount) parts.push("");
 
       const row = document.createElement("div");
       row.className = "copy-item";
@@ -731,7 +765,7 @@
       title.textContent = t("score", [page.index || 1]);
       const detail = document.createElement("span");
       detail.className = "copy-detail";
-      detail.textContent = t("detail", [parts[0].length, parts[1].length, parts[2].length]);
+      detail.textContent = formatPartDetail(parts);
       meta.append(title, detail);
 
       const button = document.createElement("button");
@@ -1155,7 +1189,7 @@
     ui.prev.textContent=t("tutorialPrev"); ui.prev.disabled=simpleTutorialStep===0;
     ui.next.textContent=t(simpleTutorialStep===SIMPLE_TUTORIAL_STEPS.length-1?"tutorialFinish":"tutorialNext");
     ui.image.hidden=false; ui.fallback.hidden=true;
-    ui.image.src=`assets/tutorial/${tutorialLanguageFolder()}/${step.image}?rev=20261106-tutorial-recapture`;
+    ui.image.src=`assets/tutorial/${tutorialLanguageFolder()}/${step.image}?rev=20261117-channel-count2`;
     ui.image.alt=t("tutorialImageAlt",[t(step.title)]);
     ui.dots.forEach((button,index)=>{ const active=index===simpleTutorialStep; button.classList.toggle("active",active); button.setAttribute("aria-current",active?"step":"false"); button.setAttribute("aria-label",t("tutorialJump",[index+1])); });
   }
@@ -1303,6 +1337,11 @@
     if (!button) return;
     selectQuantizeOption(button.dataset.quantize, true);
   });
+  els.channelCountOptions?.addEventListener("click", event => {
+    const button = event.target.closest("[data-channel-count]");
+    if (!button) return;
+    selectChannelCountOption(button.dataset.channelCount, true);
+  });
   els.restOptions.addEventListener("click", event => {
     const button = event.target.closest("[data-rest]");
     if (!button) return;
@@ -1353,6 +1392,7 @@
   });
 
   selectQuantizeOption(64, false);
+  selectChannelCountOption(3, false);
   selectRestOption("32", false);
   selectFadeOption("in", 0, false);
   selectFadeOption("out", 0, false);

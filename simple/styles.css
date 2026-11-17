@@ -265,7 +265,24 @@ h1 {
 }
 .option-block { min-width: 0; }
 .option-block-quantize { flex: 0 0 auto; }
-.option-block-rest { flex: 1 1 480px; }
+.option-block-channel-count { flex: 1 1 240px; }
+/* 양자화 + 채널 수: 아래 쉼표 제거(7칸)와 같은 7칸 격자. 양자화는 첫 칸(그대로), 채널 수는 64박~모두 폭에 맞춥니다. */
+.option-row-quantize-channel {
+  flex: 1 1 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: end;
+}
+.option-row-quantize-channel .option-block-quantize { grid-column: 1; padding-right: 12px; min-width: 0; }
+.option-row-quantize-channel .segmented.quantize-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+.option-row-quantize-channel .quantize-options .segment { min-width: 0; padding-left: 4px; padding-right: 4px; }
+.option-row-quantize-channel .option-block-channel-count { grid-column: 2 / -1; min-width: 0; }
+html:lang(ja) .option-row-quantize-channel .quantize-options .segment, html:lang(zh) .option-row-quantize-channel .quantize-options .segment { font-size: 11px; padding-left: 2px; padding-right: 2px; }
+.segmented.channel-count-options { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); width: 100%; }
+.channel-count-options .segment { min-width: 0; }
+/* 쉼표 제거는 양자화·채널 수 다음 줄에 둡니다. */
+.option-block-rest { flex: 1 1 100%; }
 .option-label {
   display: block;
   margin: 0 0 8px;
@@ -408,6 +425,23 @@ h1 {
   }
   .playback-controls { grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
   .play-button { min-width: 88px; padding: 0 10px; }
+}
+
+@media (max-width: 620px) {
+  /* 좁은 화면에서는 7칸 정렬 대신 양자화(내용 폭) + 채널 수(남은 폭)로 둡니다. */
+  .option-row-quantize-channel { grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; }
+  .option-row-quantize-channel .option-block-quantize { padding-right: 0; }
+  .option-row-quantize-channel .segmented.quantize-options { display: inline-flex; width: auto; }
+  .option-row-quantize-channel .quantize-options .segment { min-width: 48px; padding-left: 10px; padding-right: 10px; }
+  .option-row-quantize-channel .option-block-channel-count { grid-column: 2; }
+}
+@media (max-width: 960px) {
+  /* 일본어·중국어는 양자화 이름이 길어 첫 칸에 들어가지 않으므로 더 넓은 폭부터 정렬을 풉니다. */
+  html:lang(ja) .option-row-quantize-channel, html:lang(zh) .option-row-quantize-channel { grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; }
+  html:lang(ja) .option-row-quantize-channel .option-block-quantize, html:lang(zh) .option-row-quantize-channel .option-block-quantize { padding-right: 0; }
+  html:lang(ja) .option-row-quantize-channel .segmented.quantize-options, html:lang(zh) .option-row-quantize-channel .segmented.quantize-options { display: inline-flex; width: auto; }
+  html:lang(ja) .option-row-quantize-channel .quantize-options .segment, html:lang(zh) .option-row-quantize-channel .quantize-options .segment { min-width: 48px; padding-left: 10px; padding-right: 10px; }
+  html:lang(ja) .option-row-quantize-channel .option-block-channel-count, html:lang(zh) .option-row-quantize-channel .option-block-channel-count { grid-column: 2; }
 }
 
 @media (max-width: 480px) {
