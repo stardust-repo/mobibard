@@ -78,20 +78,22 @@ function writeMidi(div, tracks) {
 
 // ------------------------------------------------------------ 악기 표
 // aff: 역할별 어울림(0~1)  melody / counter / harmony / bass
+// 모비바드 악기(player/js/mabinogi-instrument-map.js 의 TARGETS 중 음정 악기)만 쓴다. id 도 그 파일과 같다.
+// 음역(lo/hi)·어울림(aff)은 기존 표의 값을 그대로 쓰고, 표에 없던 악기(만돌린·포크 기타·샬루모·고양이의 하모니카·오르골)는
+// 가장 가까운 악기의 값을 따라 정했다.
 const INSTRUMENTS = [
   { id: 'piano',   name: '피아노',        prog: 0,  lo: 21, hi: 108, sus: false, aff: { melody: .8, counter: .7, harmony: 1, bass: .8 } },
   { id: 'harp',    name: '하프',          prog: 46, lo: 24, hi: 103, sus: false, aff: { melody: .6, counter: .7, harmony: 1, bass: .6 } },
-  { id: 'lute',    name: '류트(기타)',    prog: 24, lo: 40, hi: 88,  sus: false, aff: { melody: .6, counter: .6, harmony: 1, bass: .5 } },
+  { id: 'lute',    name: '류트',          prog: 24, lo: 40, hi: 88,  sus: false, aff: { melody: .6, counter: .6, harmony: 1, bass: .5 } },
+  { id: 'folkGuitar', name: '포크 기타',  prog: 25, lo: 40, hi: 88,  sus: false, aff: { melody: .6, counter: .6, harmony: 1, bass: .5 } },
+  { id: 'mandolin', name: '만돌린',       prog: 105, lo: 55, hi: 96, sus: false, aff: { melody: .8, counter: .7, harmony: .8, bass: .1 } },
   { id: 'violin',  name: '바이올린',      prog: 40, lo: 55, hi: 100, sus: true,  aff: { melody: 1, counter: .9, harmony: .5, bass: .1 } },
   { id: 'flute',   name: '플루트',        prog: 73, lo: 60, hi: 96,  sus: true,  aff: { melody: 1, counter: .9, harmony: .4, bass: 0 } },
-  { id: 'clarinet',name: '클라리넷',      prog: 71, lo: 50, hi: 91,  sus: true,  aff: { melody: .9, counter: .9, harmony: .6, bass: .2 } },
-  { id: 'oboe',    name: '오보에',        prog: 68, lo: 58, hi: 91,  sus: true,  aff: { melody: .9, counter: .8, harmony: .4, bass: .1 } },
-  { id: 'trumpet', name: '트럼펫',        prog: 56, lo: 54, hi: 82,  sus: true,  aff: { melody: .9, counter: .7, harmony: .4, bass: .1 } },
+  { id: 'chalumeau', name: '샬루모',      prog: 71, lo: 50, hi: 91,  sus: true,  aff: { melody: .9, counter: .9, harmony: .6, bass: .2 } },
   { id: 'harmonica',name:'하모니카',      prog: 22, lo: 60, hi: 96,  sus: true,  aff: { melody: .8, counter: .7, harmony: .6, bass: 0 } },
+  { id: 'catHarmonica', name: '고양이의 하모니카', prog: 53, lo: 60, hi: 96, sus: true, aff: { melody: .8, counter: .7, harmony: .6, bass: 0 } },
   { id: 'xylophone',name:'실로폰',        prog: 13, lo: 65, hi: 108, sus: false, aff: { melody: .8, counter: .7, harmony: .5, bass: 0 } },
-  { id: 'cello',   name: '첼로',          prog: 42, lo: 36, hi: 76,  sus: true,  aff: { melody: .6, counter: .7, harmony: .7, bass: .8 } },
-  { id: 'contrabass',name:'콘트라베이스', prog: 43, lo: 28, hi: 60,  sus: true,  aff: { melody: .1, counter: .2, harmony: .4, bass: 1 } },
-  { id: 'tuba',    name: '튜바',          prog: 58, lo: 28, hi: 58,  sus: true,  aff: { melody: .1, counter: .2, harmony: .3, bass: 1 } },
+  { id: 'musicBox', name: '오르골',       prog: 10, lo: 60, hi: 108, sus: false, aff: { melody: .7, counter: .6, harmony: .5, bass: 0 } },
 ];
 const DRUM_INST = [
   { id: 'cymbal', name: '드럼 심벌', drum: 'cymbal' },
@@ -99,26 +101,13 @@ const DRUM_INST = [
 ];
 const INST_BY_ID = Object.fromEntries([...INSTRUMENTS, ...DRUM_INST].map(x => [x.id, x]));
 
-// GM 프로그램 → 가장 가까운 프리셋 (자동 선택용)
+// GM 프로그램 → 모비바드 악기. MIDI→모비바드 악기 변환 규칙(window.MobibardInstrumentMap)을 그대로 따른다.
+// 북·심벌즈로 연결되는 프로그램은 음정 악기가 아니므로 피아노로 둔다.
 function presetFromProgram(p) {
   if (p == null) return 'piano';
-  if (p === 22 || p === 23) return 'harmonica';
-  if (p === 42) return 'cello';
-  if (p === 43) return 'contrabass';
-  if (p === 46) return 'harp';
-  if (p === 58) return 'tuba';
-  if (p === 68 || p === 69) return 'oboe';
-  if (p < 8) return 'piano';
-  if (p < 16) return 'xylophone';
-  if (p < 24) return 'piano';
-  if (p < 32) return 'lute';
-  if (p < 40) return 'contrabass';
-  if (p < 56) return 'violin';
-  if (p < 64) return 'trumpet';
-  if (p < 72) return 'clarinet';
-  if (p < 80) return 'flute';
-  if (p < 88) return 'violin';
-  return 'piano';
+  const map = (typeof window !== 'undefined' && window.MobibardInstrumentMap) || null;
+  const id = map?.resolveProgram ? map.resolveProgram(p)?.id : null;
+  return id && INST_BY_ID[id] && !INST_BY_ID[id].drum ? id : 'piano';
 }
 const GM_LABEL = p => {
   if (p == null) return '악기 미지정';

@@ -1640,18 +1640,6 @@ iframe[src*="apis.google.com/picker"] {
 .genre-arrange-note strong { color: var(--text); font-size: 13px; }
 .genre-arrange-note span { color: var(--muted); font-size: 12px; line-height: 1.5; }
 
-.accompaniment-generate-dialog { max-width: min(580px, calc(100vw - 32px)); }
-.accompaniment-confirm-dialog { max-width: min(500px, calc(100vw - 32px)); }
-.accompaniment-channel-section {
-  display: grid;
-  gap: 8px;
-  padding: 11px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--input-bg) 84%, transparent);
-}
-.accompaniment-channel-section .dialog-field-row { margin: 0; }
-.accompaniment-channel-section .dialog-small { margin-top: -1px; }
 .player-file-actions-special {
   display: inline-flex;
   align-items: center;
@@ -5734,26 +5722,8 @@ textarea.wb4-question-input { min-height: 110px; resize: vertical; }
   flex-wrap: wrap;
   gap: 8px 12px;
 }
-.player-ui .wb8-accompaniment-channel-control {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-}
-.player-ui .wb8-accompaniment-global {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-}
 .player-ui .wb8-dynamics-control > select {
   min-width: 105px;
-}
-.player-ui .wb8-accompaniment-global {
-  min-height: 58px;
-  padding: 9px 10px;
-  border-bottom: 1px solid var(--wb4-line);
-  background: color-mix(in srgb, var(--wb4-accent) 4%, transparent);
 }
 .player-ui #midiConvertDialog #midiRoleList {
   width: 100% !important;
@@ -6206,28 +6176,6 @@ textarea.wb4-question-input { min-height: 110px; resize: vertical; }
 .player-ui .wb9-volume-chip.is-empty {
   color: var(--wb4-muted);
 }
-.player-ui .wb9-accompaniment-global {
-  display: grid;
-  grid-template-columns: minmax(130px, 220px) minmax(100px, 150px);
-  gap: 10px;
-  padding: 11px 10px;
-  border-bottom: 1px solid var(--wb4-line);
-}
-.player-ui .wb9-accompaniment-channel-control {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 18px;
-}
-.player-ui .wb9-accompaniment-feature.is-genre-unselected .wb9-option-list-row {
-  opacity: .58;
-}
-.player-ui .wb9-accompaniment-feature.is-genre-unselected .wb9-accompaniment-global {
-  opacity: 1;
-}
-.player-ui .wb9-accompaniment-feature .wb4-toggle-row.is-disabled {
-  cursor: not-allowed;
-}
 .player-ui #midiConvertDialog .wb8-midi-instrument-channels .midi-part-chip {
   width: 24px;
   min-width: 24px;
@@ -6359,10 +6307,6 @@ textarea.wb4-question-input { min-height: 110px; resize: vertical; }
     min-height: 21px;
     padding: 2px 5px;
     font-size: 7.5px;
-  }
-  .player-ui .wb9-accompaniment-global {
-    grid-template-columns: minmax(0, 1fr) minmax(86px, .7fr);
-    padding-inline: 5px;
   }
   .player-ui #midiConvertDialog #midiRoleList {
     gap: 3px !important;
@@ -8914,7 +8858,7 @@ body.player-ui > main {
   border-top: 0 !important;
   border-bottom: 1px solid var(--wb4-line) !important;
 }
-.player-ui .wb6-overview-block > .wb9-common-options.wb4-common-options {
+.player-ui .wb6-overview-block .wb9-common-options.wb4-common-options {
   border-top: 0 !important;
   border-bottom: 0 !important;
 }
@@ -10154,15 +10098,7 @@ a[class*="button"]:hover {
 }
 .player-ui .wb-code-mode-hint[data-mode="applied"] { color: var(--accent, #416fca); }
 .player-ui .wb-source-editor[hidden] { display: none !important; }
-.player-ui .wb-source-editor .wb-source-textarea {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 260px;
-  height: 430px;
-  border-radius: 0;
-  border-top: 2px solid var(--wb4-channel-color, var(--wb4-accent, #416fca));
-}
+.player-ui .wb-source-editor .wb-source-panel { display: block; }
 .player-ui .wb6-code-panel[data-code-view="applied"] .wb4-channel-code-editor textarea.highlight-source { cursor: default; }
 .player-ui .wb-code-view-radios { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin-right: 8px; }
 
@@ -10210,3 +10146,62 @@ a[class*="button"]:hover {
   padding-left: 8px;
   padding-right: 8px;
 }
+
+.player-ui .wb6-overview-block > .wb6-workspace-tabs {
+  background: color-mix(in srgb, var(--wb4-surface-2) 66%, var(--wb4-surface));
+}
+.player-ui .wb6-overview-block > .wb6-workspace-panel {
+  background: var(--wb4-surface) !important;
+}
+
+.player-ui .wb9-dynamics-segments { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; max-width: 420px; }
+.player-ui .wb9-dynamics-segments .wb4-segment { min-width: 0; white-space: nowrap; }
+
+/* ---- 전체 탭: 2열 2줄(양자화·시작 공백 / 간소화·템포 배율) + 페이드 줄 ---- */
+.player-ui .wb6-global-panel .wb9-common-options.wb4-common-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+.player-ui .wb6-global-panel .wb9-common-options .wb4-option-row {
+  border: 0 !important;
+  grid-column: auto !important;
+}
+.player-ui .wb6-global-panel .wb9-common-options .wb4-option-row:nth-child(n+5) {
+  border-top: 1px solid var(--wb4-line) !important;
+}
+
+/* ---- 볼륨 생성 탭 ---- */
+.player-ui .wb9-dynamics-feature .wb9-dynamics-buttons { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.player-ui .wb9-dynamics-feature .wb9-dynamics-buttons .wb4-segment { min-height: 34px; font-size: 11px; white-space: nowrap; }
+.player-ui .wb9-dynamics-genre-body { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.player-ui .wb9-dynamics-genre-body > select.wb9-genre-select { flex: 0 0 min(200px, 46%); width: min(200px, 46%); }
+.player-ui .wb9-dynamics-genre-desc { min-width: 0; color: var(--wb4-muted); font-size: 11px; line-height: 1.45; }
+.player-ui .wb9-dynamics-feature.is-genre-unselected .wb9-option-list-row:not(.wb9-dynamics-genre-row) { opacity: .45; }
+.player-ui .wb9-dynamics-feature.is-genre-unselected .wb9-dynamics-buttons { pointer-events: none; }
+.player-ui .wb9-dynamics-feature .wb4-segment:disabled { cursor: not-allowed; }
+
+/* ---- 전체 탭: 버튼 박스와 숫자 박스 높이 통일(38px), 단위는 박스 밖 오른쪽 ---- */
+.player-ui .wb6-global-panel .wb9-common-options .wb7-quantize-segments,
+.player-ui .wb6-global-panel .wb9-common-options .wb9-simplify-pair { height: 38px; }
+.player-ui .wb6-global-panel .wb9-common-options .wb7-quantize-segments .wb4-segment { min-height: 36px; height: 36px; }
+.player-ui .wb6-global-panel .wb9-common-leading .wb4-option-control,
+.player-ui .wb6-global-panel .wb9-common-tempo-scale .wb4-option-control {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.player-ui .wb6-global-panel .wb9-unit-outside { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
+.player-ui .wb6-global-panel .wb9-unit-outside .wb9-number-control {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  grid-template-columns: minmax(44px, 1fr) 22px;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 16%, var(--wb4-line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--wb4-accent) 3%, var(--wb4-surface));
+}
+.player-ui .wb6-global-panel .wb9-unit-outside .wb9-number-step-buttons { align-self: center; }
+.player-ui .wb6-global-panel .wb9-unit-outside .wb9-number-suffix { flex: 0 0 auto; color: var(--wb4-muted); font-size: 12px; font-weight: 700; }

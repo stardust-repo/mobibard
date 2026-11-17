@@ -58,8 +58,14 @@
     volumeDelta: 0,
     volumeFixed: null,
     octaveDelta: 0,
-    accompaniment: { analysis: index === 0, generation: index > 0 }
+    dynamicsStrength: "normal"
   });
+
+  const DYNAMICS_STRENGTHS = Object.freeze(["off", "light", "normal", "strong"]);
+  function normalizeDynamicsStrength(value) {
+    const text = String(value || "normal");
+    return DYNAMICS_STRENGTHS.includes(text) ? text : "normal";
+  }
 
   const state = {
     sourceMml: "",
@@ -108,8 +114,7 @@
       fade: { inSeconds: 0, outSeconds: 0 },
       tempo: { scale: 100, simplify: true },
       volumeSimplify: false,
-      dynamics: { genre: "", strength: "normal", targetChannels: [true, true, true, true, true, true] },
-      accompaniment: { genre: "", strength: "normal" },
+      dynamics: { genre: "" },
       split: { maxChars: 2400, searchPercent: 50 }
     }
   };
@@ -142,26 +147,20 @@
           ? null
           : Math.max(1, Math.min(15, Math.round(Number(source.volumeFixed) || 1))),
         octaveDelta: Math.max(-7, Math.min(7, Math.round(Number(source.octaveDelta) || 0))),
-        accompaniment: {
-          analysis: Boolean(source.accompaniment?.analysis),
-          generation: Boolean(source.accompaniment?.generation)
-        }
+        dynamicsStrength: normalizeDynamicsStrength(source.dynamicsStrength)
       };
     });
   }
 
-  function cloneAccompanimentOption(value = state.options.accompaniment) {
-    return {
-      genre: String(value?.genre || ""),
-      strength: String(value?.strength || "normal")
-    };
+  function cloneDynamicsOption(value = state.options.dynamics) {
+    return { genre: String(value?.genre || "") };
   }
 
   function ensureChannelDraft() {
     if (!state.channelDraft) {
       state.channelDraft = {
         channels: cloneChannelOptions(),
-        accompaniment: cloneAccompanimentOption()
+        dynamics: cloneDynamicsOption()
       };
     }
     return state.channelDraft;
@@ -203,26 +202,23 @@
     setWorkspacePending("channel", state.channelOptionsDirty);
   }
 
-  function normalizedChannelOptionSnapshot(channels, accompaniment) {
+  function normalizedChannelOptionSnapshot(channels, dynamics) {
     return {
       channels: cloneChannelOptions(channels).map(channel => ({
         restMode: String(channel.restMode || "keep"),
         volumeDelta: Number(channel.volumeDelta) || 0,
         volumeFixed: channel.volumeFixed == null ? null : Math.max(1, Math.min(15, Math.round(Number(channel.volumeFixed) || 1))),
         octaveDelta: Number(channel.octaveDelta) || 0,
-        accompaniment: {
-          analysis: Boolean(channel.accompaniment?.analysis),
-          generation: Boolean(channel.accompaniment?.generation)
-        }
+        dynamicsStrength: normalizeDynamicsStrength(channel.dynamicsStrength)
       })),
-      accompaniment: cloneAccompanimentOption(accompaniment)
+      dynamics: cloneDynamicsOption(dynamics)
     };
   }
 
   function channelDraftMatchesApplied() {
     const draft = ensureChannelDraft();
-    const pending = normalizedChannelOptionSnapshot(draft.channels, draft.accompaniment);
-    const applied = normalizedChannelOptionSnapshot(state.options.channels, state.options.accompaniment);
+    const pending = normalizedChannelOptionSnapshot(draft.channels, draft.dynamics);
+    const applied = normalizedChannelOptionSnapshot(state.options.channels, state.options.dynamics);
     return JSON.stringify(pending) === JSON.stringify(applied);
   }
 
@@ -245,7 +241,7 @@
       syncFeatureBatchState(feature);
     });
     syncVolumeModeControls();
-    syncAccompanimentFeatureControls();
+    syncDynamicsFeatureControls();
     scheduleOptionMetricsUpdate();
   }
 
@@ -265,7 +261,7 @@
       return;
     }
     state.options.channels = cloneChannelOptions(draft.channels);
-    state.options.accompaniment = cloneAccompanimentOption(draft.accompaniment);
+    state.options.dynamics = cloneDynamicsOption(draft.dynamics);
     setChannelOptionsDirty(false);
 
     // Draft controls are intentionally separate from the applied options.  When the
@@ -288,9 +284,9 @@
   function syncChannelDraftFromApplied({ force = false } = {}) {
     if (state.channelOptionsDirty && !force) return;
     const channels = cloneChannelOptions(state.options.channels);
-    const accompaniment = cloneAccompanimentOption(state.options.accompaniment);
+    const dynamics = cloneDynamicsOption(state.options.dynamics);
     if (!state.channelDraft) {
-      state.channelDraft = { channels, accompaniment };
+      state.channelDraft = { channels, dynamics };
       return;
     }
     for (let index = 0; index < 6; index += 1) {
@@ -300,24 +296,21 @@
       target.volumeDelta = source.volumeDelta;
       target.volumeFixed = source.volumeFixed;
       target.octaveDelta = source.octaveDelta;
-      target.accompaniment ||= {};
-      target.accompaniment.analysis = source.accompaniment.analysis;
-      target.accompaniment.generation = source.accompaniment.generation;
+      target.dynamicsStrength = source.dynamicsStrength;
       state.channelDraft.channels[index] = target;
     }
-    state.channelDraft.accompaniment.genre = accompaniment.genre;
-    state.channelDraft.accompaniment.strength = accompaniment.strength;
+    state.channelDraft.dynamics.genre = dynamics.genre;
   }
 
   function resetSubmenuStateForNewSource() {
     // A file/paste/Drive load is a new editing job. Keep the global "전체 설정"
     // controls, but reset every lower workspace to its clean defaults.
     state.options.channels = Array.from({ length: 6 }, (_, index) => makeChannelOptions(index));
-    state.options.accompaniment = { genre: "", strength: "normal" };
+    state.options.dynamics = { genre: "" };
     state.options.split = { maxChars: 2400, searchPercent: 50 };
     state.tempoOverrides = [];
     state.manualEdited = false;
-    state.activeWorkspaceTab = "copy";
+    state.activeWorkspaceTab = "global";
     state.activeOptionFeature = "rest";
     state.activeChannel = 0;
     state.activeChannelView = 0;
@@ -784,8 +777,7 @@
       tempo: state.options.tempo,
       volumeSimplify: state.options.volumeSimplify,
       tempoOverrides: state.tempoOverrides,
-      dynamics: state.options.dynamics,
-      accompaniment: state.options.accompaniment
+      dynamics: state.options.dynamics
     };
     return `${state.sourceVersion}|${JSON.stringify(transformOptions)}`;
   }
@@ -886,7 +878,6 @@
 
   function normalizeSessionOptions(saved = {}) {
     const channels = cloneChannelOptions(saved.channels || state.options.channels);
-    const targetChannels = Array.from({ length: 6 }, (_, index) => saved.dynamics?.targetChannels?.[index] !== false);
     return {
       channels,
       leading: { beats: Math.max(0, Math.min(600, Math.round((Number(saved.leading?.beats) || 0) * 2) / 2)) },
@@ -899,12 +890,7 @@
         simplify: saved.tempo?.simplify !== false
       },
       volumeSimplify: saved.volumeSimplify === true,
-      dynamics: {
-        genre: String(saved.dynamics?.genre || ""),
-        strength: String(saved.dynamics?.strength || "normal"),
-        targetChannels
-      },
-      accompaniment: cloneAccompanimentOption(saved.accompaniment),
+      dynamics: cloneDynamicsOption(saved.dynamics),
       split: {
         maxChars: Math.max(200, Math.min(5000, Math.round(Number(saved.split?.maxChars) || 2400))),
         searchPercent: [50, 60, 70, 80, 90].includes(Number(saved.split?.searchPercent)) ? Number(saved.split.searchPercent) : 50
@@ -919,7 +905,6 @@
     state.ui.fadeOutControl?.setValue?.(String(normalizeFadeSeconds(state.options.fade?.outSeconds)));
     updateTempoCleanButton();
     state.ui.leadingControl?.setSuffix?.(t("seconds"));
-    syncVolumeGenerationControls();
     state.ui.quantizeControl?.setValue?.(String(Number(state.midiQuantizeDivision) === 32 ? 32 : 64));
   }
 
@@ -948,12 +933,12 @@
       sourceMeta: { ...state.sourceMeta, name },
       resultMml: String($("mainMml")?.value || ""),
       options: JSON.parse(JSON.stringify(state.options)),
-      channelDraft: state.channelDraft ? normalizedChannelOptionSnapshot(state.channelDraft.channels, state.channelDraft.accompaniment) : null,
+      channelDraft: state.channelDraft ? normalizedChannelOptionSnapshot(state.channelDraft.channels, state.channelDraft.dynamics) : null,
       channelOptionsDirty: Boolean(state.channelOptionsDirty),
       instrumentDirty: Boolean(state.instrumentDirty),
       manualEdited: Boolean(state.manualEdited),
       tempoOverrides: normalizeTempoOverrides(state.tempoOverrides),
-      activeWorkspaceTab: state.activeWorkspaceTab || "copy",
+      activeWorkspaceTab: state.activeWorkspaceTab || "global",
       activeOptionFeature: state.activeOptionFeature || "rest",
       activeChannelView: Number(state.activeChannelView),
       midiQuantizeDivision: Number(state.midiQuantizeDivision) === 32 ? 32 : 64,
@@ -994,7 +979,7 @@
   function restoreChannelDraftInPlace(savedDraft = null) {
     const target = ensureChannelDraft();
     const sourceChannels = cloneChannelOptions(savedDraft?.channels || state.options.channels);
-    const sourceAccompaniment = cloneAccompanimentOption(savedDraft?.accompaniment || state.options.accompaniment);
+    const sourceDynamics = cloneDynamicsOption(savedDraft?.dynamics || state.options.dynamics);
     for (let index = 0; index < 6; index += 1) {
       const source = sourceChannels[index];
       const channel = target.channels[index] || makeChannelOptions(index);
@@ -1002,13 +987,10 @@
       channel.volumeDelta = source.volumeDelta;
       channel.volumeFixed = source.volumeFixed;
       channel.octaveDelta = source.octaveDelta;
-      channel.accompaniment ||= {};
-      channel.accompaniment.analysis = Boolean(source.accompaniment?.analysis);
-      channel.accompaniment.generation = Boolean(source.accompaniment?.generation);
+      channel.dynamicsStrength = source.dynamicsStrength;
       target.channels[index] = channel;
     }
-    target.accompaniment.genre = sourceAccompaniment.genre;
-    target.accompaniment.strength = sourceAccompaniment.strength;
+    target.dynamics.genre = sourceDynamics.genre;
     return target;
   }
 
@@ -1059,9 +1041,9 @@
       syncChannelDraftControls();
       setChannelOptionsDirty(Boolean(snapshot.channelOptionsDirty));
       setInstrumentDirty(Boolean(snapshot.instrumentDirty));
-      state.activeOptionFeature = ["rest", "volume", "octave", "accompaniment"].includes(snapshot.activeOptionFeature) ? snapshot.activeOptionFeature : "rest";
+      state.activeOptionFeature = ["rest", "volume", "dynamics", "octave"].includes(snapshot.activeOptionFeature) ? snapshot.activeOptionFeature : "rest";
       activateChannelView(Number.isFinite(Number(snapshot.activeChannelView)) ? Number(snapshot.activeChannelView) : 0);
-      activateWorkspaceTab(["copy", "instrument", "channel", "code"].includes(snapshot.activeWorkspaceTab) ? snapshot.activeWorkspaceTab : "copy");
+      activateWorkspaceTab(["global", "instrument", "channel", "code"].includes(snapshot.activeWorkspaceTab) ? snapshot.activeWorkspaceTab : "global");
       if (state.activeWorkspaceTab === "channel") activateOptionFeature(state.activeOptionFeature);
       if (state.ui.manualBadge) state.ui.manualBadge.hidden = !state.manualEdited;
 
@@ -1405,39 +1387,34 @@
   }
 
 
-  function transformPreviewSource(sourceMml, channelOptions, accompanimentOption) {
+  function dynamicsStrengthGroups(channels) {
+    const groups = [];
+    for (const strength of ["light", "normal", "strong"]) {
+      const targets = [];
+      channels.forEach((channel, index) => { if (normalizeDynamicsStrength(channel.dynamicsStrength) === strength) targets.push(index); });
+      if (targets.length) groups.push([strength, targets]);
+    }
+    return groups;
+  }
+
+  function transformPreviewSource(sourceMml, channelOptions, dynamicsOption) {
     const optimizer = window.MabiOptimizer;
     let out = String(sourceMml || "");
     if (!optimizer || !out) return out;
     const channels = cloneChannelOptions(channelOptions);
-    const accompaniment = cloneAccompanimentOption(accompanimentOption);
+    const dynamics = cloneDynamicsOption(dynamicsOption);
 
-    const analysisPartIndexes = [];
-    const generationPartIndexes = [];
-    channels.forEach((channel, index) => {
-      if (channel.accompaniment.analysis) analysisPartIndexes.push(index);
-      if (channel.accompaniment.generation) generationPartIndexes.push(index);
-    });
-    if (accompaniment.genre && optimizer.generateAccompanimentMml && analysisPartIndexes.length && generationPartIndexes.length) {
-      out = resultMml(optimizer.generateAccompanimentMml(out, {
-        genre: accompaniment.genre,
-        strength: accompaniment.strength,
-        analysisPartIndexes,
-        generationPartIndexes
-      }), out);
-    }
-
-    const dynamicsTargets = state.options.dynamics.targetChannels
-      .map((enabled, index) => enabled ? index : -1)
-      .filter(index => index >= 0);
-    if (state.options.dynamics.genre && optimizer.generateDynamicsMml && dynamicsTargets.length) {
-      out = resultMml(optimizer.generateDynamicsMml(out, {
-        partCount: 6,
-        genre: state.options.dynamics.genre,
-        strength: state.options.dynamics.strength,
-        targetPartIndexes: dynamicsTargets,
-        overwriteExisting: true
-      }), out);
+    // 볼륨 생성: 장르는 공통, 강약은 채널별. 강약이 같은 채널끼리 묶어 한 번씩 적용한다(채널은 서로 독립).
+    if (dynamics.genre && optimizer.generateDynamicsMml) {
+      for (const [strength, targets] of dynamicsStrengthGroups(channels)) {
+        out = resultMml(optimizer.generateDynamicsMml(out, {
+          partCount: 6,
+          genre: dynamics.genre,
+          strength,
+          targetPartIndexes: targets,
+          overwriteExisting: true
+        }), out);
+      }
     }
 
     const previewRestModes = channels.map(channel => String(channel.restMode || "keep"));
@@ -1515,8 +1492,8 @@
       if (!source) return false;
       const channelState = state.channelOptionsDirty
         ? ensureChannelDraft()
-        : { channels: state.options.channels, accompaniment: state.options.accompaniment };
-      const previewMml = transformPreviewSource(source, channelState.channels, channelState.accompaniment);
+        : { channels: state.options.channels, dynamics: state.options.dynamics };
+      const previewMml = transformPreviewSource(source, channelState.channels, channelState.dynamics);
       try {
         window.dispatchEvent(new CustomEvent("mobibard:preview-source", {
           detail: { active: true, mml: previewMml, label: t("previewPending") }
@@ -1584,56 +1561,32 @@
     if (!force && signature === state.lastApplySignature) return;
 
     const startedAt = performance.now();
-    const transformCalls = { dynamics: 0, rest: 0, volumeFixed: 0, volume: 0, octave: 0, accompaniment: 0, leading: 0, tempoClean: 0, volumeSimplify: 0, tempoScale: 0, fade: 0, tempoOverride: 0 };
+    const transformCalls = { dynamics: 0, rest: 0, volumeFixed: 0, volume: 0, octave: 0, leading: 0, tempoClean: 0, volumeSimplify: 0, tempoScale: 0, fade: 0, tempoOverride: 0 };
     const diagnostics = { cacheHits: 0, stageDurations: {} };
     let out = String(state.sourceMml);
     let previousKey = `source:${state.sourceVersion}`;
     let stageIndex = 0;
     try {
 
-      const accompaniment = state.options.accompaniment;
-      const analysisPartIndexes = [];
-      const generationPartIndexes = [];
-      state.options.channels.forEach((channel, index) => {
-        if (channel.accompaniment.analysis) analysisPartIndexes.push(index);
-        if (channel.accompaniment.generation) generationPartIndexes.push(index);
-      });
-      let stage = pipelineStage(stageIndex++, previousKey, "accompaniment", {
-        genre: accompaniment.genre,
-        strength: accompaniment.strength,
-        analysisPartIndexes,
-        generationPartIndexes
-      }, out, input => {
-        if (!accompaniment.genre || !optimizer.generateAccompanimentMml || !analysisPartIndexes.length || !generationPartIndexes.length) return input;
-        transformCalls.accompaniment += 1;
-        return resultMml(optimizer.generateAccompanimentMml(input, {
-          genre: accompaniment.genre,
-          strength: accompaniment.strength,
-          analysisPartIndexes,
-          generationPartIndexes
-        }), input);
-      }, diagnostics);
-      out = stage.output;
-      previousKey = stage.key;
-
       const dynamics = state.options.dynamics;
-      const dynamicsTargets = dynamics.targetChannels
-        .map((enabled, index) => enabled ? index : -1)
-        .filter(index => index >= 0);
-      stage = pipelineStage(stageIndex++, previousKey, "dynamics", {
+      const dynamicsStrengths = state.options.channels.map(channel => normalizeDynamicsStrength(channel.dynamicsStrength));
+      let stage = pipelineStage(stageIndex++, previousKey, "dynamics", {
         genre: dynamics.genre,
-        strength: dynamics.strength,
-        targetPartIndexes: dynamicsTargets
+        strengths: dynamicsStrengths
       }, out, input => {
-        if (!dynamics.genre || !optimizer.generateDynamicsMml || !dynamicsTargets.length) return input;
-        transformCalls.dynamics += 1;
-        return resultMml(optimizer.generateDynamicsMml(input, {
-          partCount: 6,
-          genre: dynamics.genre,
-          strength: dynamics.strength,
-          targetPartIndexes: dynamicsTargets,
-          overwriteExisting: true
-        }), input);
+        if (!dynamics.genre || !optimizer.generateDynamicsMml) return input;
+        let next = input;
+        for (const [strength, targets] of dynamicsStrengthGroups(state.options.channels)) {
+          transformCalls.dynamics += 1;
+          next = resultMml(optimizer.generateDynamicsMml(next, {
+            partCount: 6,
+            genre: dynamics.genre,
+            strength,
+            targetPartIndexes: targets,
+            overwriteExisting: true
+          }), next);
+        }
+        return next;
       }, diagnostics);
       out = stage.output;
       previousKey = stage.key;
@@ -1922,20 +1875,11 @@
   function copySplitGeometrySignature() {
     // Cached timing boundaries are only reusable while the musical geometry is
     // unchanged. Rest trimming can extend notes across former silences, leading
-    // silence shifts every event, and accompaniment can add/remove sounding
-    // regions. Volume/octave/dynamics/fade changes keep the same timing geometry and
+    // silence shifts every event. Volume/octave/dynamics/fade changes keep the same timing geometry and
     // may safely reuse the expensive boundary search.
     return JSON.stringify({
       restModes: state.options.channels.map(channel => String(channel.restMode || "keep")),
-      leadingBeats: Math.max(0, Math.round((Number(state.options.leading?.beats) || 0) * 2) / 2),
-      accompaniment: {
-        genre: String(state.options.accompaniment?.genre || ""),
-        strength: String(state.options.accompaniment?.strength || "normal"),
-        channels: state.options.channels.map(channel => ({
-          analysis: Boolean(channel.accompaniment?.analysis),
-          generation: Boolean(channel.accompaniment?.generation)
-        }))
-      }
+      leadingBeats: Math.max(0, Math.round((Number(state.options.leading?.beats) || 0) * 2) / 2)
     });
   }
 
@@ -2245,9 +2189,8 @@
     syncMidiQuantizeControl();
     updateTempoCleanButton();
     state.ui.leadingControl?.setSuffix?.(t("seconds"));
-    syncVolumeGenerationControls();
     syncVolumeModeControls();
-    syncAccompanimentFeatureControls();
+    syncDynamicsFeatureControls();
     scheduleChannelCountsUpdate();
     scheduleCopyRowsRender();
   }
@@ -2300,12 +2243,6 @@
       button.title = button.getAttribute("aria-disabled") === "true" ? t("unavailableDynamics") : channelLabel(normalized);
     });
     refreshUnavailableReasonTitles();
-
-    document.querySelectorAll(".wb9-accompaniment-channel-control").forEach(control => {
-      const labels = control.querySelectorAll(".wb4-toggle-row span");
-      if (labels[0]) labels[0].textContent = t("useForAnalysis");
-      if (labels[1]) labels[1].textContent = t("useForGeneration");
-    });
 
     const mobibeat = $("rhythmGameBtn");
     const mobibeatLabel = mobibeat?.querySelector("span:last-child");
@@ -2462,7 +2399,52 @@
       state.ui.channelCharCounts.push(value);
     }
     const common = buildCommonOptions();
-    block.append(countStrip, common);
+    const globalPanel = el("section", "wb6-workspace-panel wb6-global-panel", {
+      role: "tabpanel",
+      "data-workspace-panel": "global"
+    });
+    globalPanel.append(common);
+    const tabs = el("div", "wb6-workspace-tabs", { role: "tablist" });
+    const definitions = [
+      ["global", "globalTab"],
+      ["instrument", "instrumentTab"],
+      ["channel", "channelOptionTab"],
+      ["code", "codeTab"]
+    ];
+    state.ui.workspaceTabs = [];
+    definitions.forEach(([name, key], index) => {
+      const button = el("button", "wb6-workspace-tab", {
+        type: "button",
+        role: "tab",
+        "data-workspace-tab": name,
+        "data-wb6-text": key,
+        text: wb6t(key),
+        "aria-selected": index === 0 ? "true" : "false",
+        tabindex: index === 0 ? "0" : "-1"
+      });
+      button.addEventListener("click", () => activateWorkspaceTab(name));
+      button.addEventListener("keydown", event => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const current = definitions.findIndex(item => item[0] === state.activeWorkspaceTab);
+        let target = current;
+        if (event.key === "ArrowLeft") target = (current + definitions.length - 1) % definitions.length;
+        if (event.key === "ArrowRight") target = (current + 1) % definitions.length;
+        if (event.key === "Home") target = 0;
+        if (event.key === "End") target = definitions.length - 1;
+        activateWorkspaceTab(definitions[target][0]);
+        state.ui.workspaceTabs[target]?.focus();
+      });
+      tabs.append(button);
+      state.ui.workspaceTabs.push(button);
+    });
+    state.ui.workspacePanels = {
+      global: globalPanel,
+      instrument: buildInstrumentWorkspacePanel(),
+      channel: buildChannelOptionsWorkspacePanel(),
+      code: buildCodeWorkspacePanel()
+    };
+    block.append(countStrip, tabs, ...Object.values(state.ui.workspacePanels));
     canvas.append(block);
   }
 
@@ -2552,10 +2534,17 @@
     });
     tools.prepend(viewGroup);
     state.ui.sourceEditorHost = el("div", "wb4-channel-code-editor wb6-channel-code-editor wb-source-editor", { id: "wbSourceCodeEditor" });
-    state.ui.sourceTextarea = el("textarea", "wb-source-textarea", { id: "sourceMmlEditor", spellcheck: "false", "aria-label": t("codeViewSourceLabel") });
-    state.ui.sourceTextarea.addEventListener("input", () => { normalizeSourceEditorCase(); scheduleSourceEdit(); });
+    // Same overlay structure as the applied view: a coloured <pre> under a transparent textarea.
+    state.ui.sourceTextarea = el("textarea", "highlight-source wb-source-textarea", { id: "sourceMmlEditor", spellcheck: "false", "aria-label": t("codeViewSourceLabel") });
+    state.ui.sourceHighlight = el("pre", "mml-highlight", { "aria-hidden": "true" });
+    const sourceColored = el("div", "colored-textarea");
+    sourceColored.append(state.ui.sourceHighlight, state.ui.sourceTextarea);
+    state.ui.sourcePanel = el("div", "wb-source-panel part-panel part-0");
+    state.ui.sourcePanel.append(sourceColored);
+    state.ui.sourceTextarea.addEventListener("input", () => { normalizeSourceEditorCase(); updateSourceHighlight(); scheduleSourceEdit(); });
+    state.ui.sourceTextarea.addEventListener("scroll", syncSourceHighlightScroll);
     state.ui.sourceTextarea.addEventListener("blur", () => flushSourceEdit());
-    state.ui.sourceEditorHost.append(state.ui.sourceTextarea);
+    state.ui.sourceEditorHost.append(state.ui.sourcePanel);
     panel.append(tools, state.ui.sourceEditorHost, state.ui.codeEditorHost);
     return panel;
   }
@@ -2595,12 +2584,34 @@
     try { area.setSelectionRange(start, end); } catch (_) {}
   }
 
+  function syncSourceHighlightScroll() {
+    const area = state.ui.sourceTextarea;
+    const pre = state.ui.sourceHighlight;
+    if (!area || !pre) return;
+    pre.scrollTop = area.scrollTop;
+    pre.scrollLeft = area.scrollLeft;
+  }
+
+  function updateSourceHighlight() {
+    const area = state.ui.sourceTextarea;
+    const pre = state.ui.sourceHighlight;
+    if (!area || !pre) return;
+    const view = state.activeChannelView;
+    const index = view < 0 ? -1 : Math.max(0, Math.min(5, view));
+    if (state.ui.sourcePanel) state.ui.sourcePanel.className = `wb-source-panel part-panel ${index < 0 ? "main-panel" : `part-${index}`}`;
+    pre.className = `mml-highlight${index < 0 ? "" : ` ch${index}`}`;
+    const render = window.__mobibardRenderSourceHighlight;
+    pre.innerHTML = (typeof render === "function" ? render(area.value, index) : "") + "\n";
+    syncSourceHighlightScroll();
+  }
+
   function refreshSourceEditor({ force = false } = {}) {
     const area = state.ui.sourceTextarea;
     if (!area) return;
-    if (!force && document.activeElement === area) return;
+    if (!force && document.activeElement === area) { updateSourceHighlight(); return; }
     const text = currentSourceEditorText();
     if (area.value !== text) area.value = text;
+    updateSourceHighlight();
   }
 
   function updateCodeModeHint() {
@@ -2685,50 +2696,11 @@
       "data-active-channel": state.activeChannel
     });
     state.ui.workspaceBlock = block;
-    const tabs = el("div", "wb6-workspace-tabs", { role: "tablist" });
-    const definitions = [
-      ["copy", "copyTab"],
-      ["instrument", "instrumentTab"],
-      ["channel", "channelOptionTab"],
-      ["code", "codeTab"]
-    ];
-    state.ui.workspaceTabs = [];
-    definitions.forEach(([name, key], index) => {
-      const button = el("button", "wb6-workspace-tab", {
-        type: "button",
-        role: "tab",
-        "data-workspace-tab": name,
-        "data-wb6-text": key,
-        text: wb6t(key),
-        "aria-selected": index === 0 ? "true" : "false",
-        tabindex: index === 0 ? "0" : "-1"
-      });
-      button.addEventListener("click", () => activateWorkspaceTab(name));
-      button.addEventListener("keydown", event => {
-        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-        event.preventDefault();
-        const current = definitions.findIndex(item => item[0] === state.activeWorkspaceTab);
-        let target = current;
-        if (event.key === "ArrowLeft") target = (current + definitions.length - 1) % definitions.length;
-        if (event.key === "ArrowRight") target = (current + 1) % definitions.length;
-        if (event.key === "Home") target = 0;
-        if (event.key === "End") target = definitions.length - 1;
-        activateWorkspaceTab(definitions[target][0]);
-        state.ui.workspaceTabs[target]?.focus();
-      });
-      tabs.append(button);
-      state.ui.workspaceTabs.push(button);
-    });
-
-    state.ui.workspacePanels = {
-      copy: buildCopyWorkspacePanel(),
-      instrument: buildInstrumentWorkspacePanel(),
-      channel: buildChannelOptionsWorkspacePanel(),
-      code: buildCodeWorkspacePanel()
-    };
-    block.append(tabs, ...Object.values(state.ui.workspacePanels));
+    const copyPanel = buildCopyWorkspacePanel();
+    state.ui.workspacePanels = { ...(state.ui.workspacePanels || {}), copy: copyPanel };
+    block.append(copyPanel);
     canvas.append(block);
-    activateWorkspaceTab(state.activeWorkspaceTab || "copy");
+    activateWorkspaceTab(state.activeWorkspaceTab || "global");
   }
 
   function syncChannelCodeEditor() {
@@ -2754,7 +2726,7 @@
   function buildShell() {
     document.body.classList.add("player-ui");
     installUnavailableReasonGuard();
-    state.activeWorkspaceTab = "copy";
+    state.activeWorkspaceTab = "global";
     state.activeChannelView = 0;
     state.originalPreview = false;
     state.ui.channelTabGroups = [];
@@ -3166,6 +3138,7 @@
       if (suffixNode) suffixNode.textContent = String(text ?? "");
     };
     wrap._input = input;
+    wrap._suffix = suffixNode;
     buttonWrap.append(up, down);
     wrap.append(input, buttonWrap);
     if (suffixNode) wrap.append(suffixNode);
@@ -3175,7 +3148,6 @@
 
   function scheduleCopyRowsRender() {
     state.copyDirty = true;
-    if (state.activeWorkspaceTab !== "copy") return;
     if (state.copyRenderFrame) cancelAnimationFrame(state.copyRenderFrame);
     state.copyRenderFrame = requestAnimationFrame(() => {
       state.copyRenderFrame = 0;
@@ -3670,85 +3642,87 @@
     setUnavailableReason(toggle, locked, reasonKey);
   }
 
-  function syncAccompanimentFeatureControls() {
-    const refs = state.ui.featureControls?.accompaniment;
+  function dynamicsStrengthOptions() {
+    return [["off", t("dynamicsOff")], ["light", t("light")], ["normal", t("normal")], ["strong", t("strong")]];
+  }
+
+  function syncDynamicsFeatureControls() {
+    const refs = state.ui.featureControls?.dynamics;
     if (!refs) return;
     const draft = ensureChannelDraft();
     const channels = draft.channels;
-    const accompanimentOption = draft.accompaniment;
-    const disabled = !accompanimentOption.genre;
-    if (refs.genre) refs.genre.value = accompanimentOption.genre;
-    if (refs.strength) {
-      refs.strength.value = accompanimentOption.strength;
-      refs.strength.disabled = false;
-      setUnavailableReason(refs.strength, disabled, "unavailableAccompaniment");
+    const disabled = !draft.dynamics.genre;
+    if (refs.genre) refs.genre.value = draft.dynamics.genre;
+    if (refs.genreLabel) refs.genreLabel.textContent = t("dynamicsGenreLabel");
+    if (refs.genreDesc) {
+      const key = draft.dynamics.genre ? `genreDesc_${draft.dynamics.genre}` : "genreDesc_none";
+      refs.genreDesc.textContent = t(key);
     }
-    wb9SetMixedToggle(refs.batch?.analysis, channels.map(item => item.accompaniment.analysis));
-    wb9SetMixedToggle(refs.batch?.generation, channels.map(item => item.accompaniment.generation));
-    setToggleDisabled(refs.batch?.analysis, disabled, "unavailableAccompaniment");
-    setToggleDisabled(refs.batch?.generation, disabled, "unavailableAccompaniment");
-    refs.channels?.forEach((control, index) => {
-      const accompaniment = channels[index]?.accompaniment;
-      if (!accompaniment) return;
-      control.analysis._input.checked = Boolean(accompaniment.analysis);
-      control.analysis._input.indeterminate = false;
-      control.generation._input.checked = Boolean(accompaniment.generation);
-      control.generation._input.indeterminate = false;
-      setToggleDisabled(control.analysis, disabled, "unavailableAccompaniment");
-      setToggleDisabled(control.generation, disabled, "unavailableAccompaniment");
+    const labels = Object.fromEntries(dynamicsStrengthOptions());
+    const values = channels.map(channel => normalizeDynamicsStrength(channel.dynamicsStrength));
+    const mixed = values.some(value => value !== values[0]);
+    const relabel = seg => seg.querySelectorAll(".wb4-segment").forEach(button => { button.textContent = labels[button.dataset.value] || button.textContent; });
+    if (refs.batch) {
+      relabel(refs.batch);
+      refs.batch.setValue(values[0], { mixed });
+    }
+    // 장르를 고르기 전에는 강약 버튼을 쓸 수 없다.
+    const lockButtons = seg => seg.querySelectorAll(".wb4-segment").forEach(button => {
+      button.disabled = disabled;
+      button.setAttribute("aria-disabled", disabled ? "true" : "false");
+    });
+    if (refs.batch) lockButtons(refs.batch);
+    refs.channels?.forEach((seg, index) => {
+      relabel(seg);
+      seg.setValue(values[index]);
+      lockButtons(seg);
     });
     refs.panel?.classList.toggle("is-genre-unselected", disabled);
   }
 
-  function wb9AccompanimentChannelControl(channel, { batch = false } = {}) {
-    const wrap = el("div", "wb8-accompaniment-channel-control wb9-accompaniment-channel-control");
-    const channels = ensureChannelDraft().channels;
-    const analysis = toggleControl(t("useForAnalysis"), batch ? channels.every(item => item.accompaniment.analysis) : channel.accompaniment.analysis, value => {
-      if (batch) channels.forEach(item => { item.accompaniment.analysis = value; });
-      else channel.accompaniment.analysis = value;
-      syncAccompanimentFeatureControls();
-      markChannelOptionsDirty();
-    });
-    const generation = toggleControl(t("useForGeneration"), batch ? channels.every(item => item.accompaniment.generation) : channel.accompaniment.generation, value => {
-      if (batch) channels.forEach(item => { item.accompaniment.generation = value; });
-      else channel.accompaniment.generation = value;
-      syncAccompanimentFeatureControls();
-      markChannelOptionsDirty();
-    });
-    wrap._controls = { analysis, generation };
-    wrap.append(analysis, generation);
-    return wrap;
-  }
-
-  function buildAccompanimentFeaturePanel() {
-    const panel = el("section", "wb8-feature-panel wb9-feature-panel wb8-accompaniment-feature wb9-accompaniment-feature", { role: "tabpanel", hidden: true, "data-option-feature-panel": "accompaniment" });
+  function buildDynamicsFeaturePanel() {
+    const panel = el("section", "wb8-feature-panel wb9-feature-panel wb9-rest-feature wb9-dynamics-feature", { role: "tabpanel", hidden: true, "data-option-feature-panel": "dynamics" });
     const draft = ensureChannelDraft();
-    const global = el("div", "wb8-accompaniment-global wb9-accompaniment-global");
-    const genre = selectControl(genreValuesWithPlaceholder(), draft.accompaniment.genre, value => {
-      draft.accompaniment.genre = value;
-      syncAccompanimentFeatureControls();
+    const genre = selectControl(genreValuesWithPlaceholder(), draft.dynamics.genre, value => {
+      draft.dynamics.genre = value;
+      syncDynamicsFeatureControls();
       markChannelOptionsDirty();
     }, "wb9-genre-select");
-    const strength = selectControl([["light", t("light")], ["normal", t("normal")], ["strong", t("strong")]], draft.accompaniment.strength, value => {
-      draft.accompaniment.strength = value;
+    // 장르 줄: 다른 채널 줄과 같은 모양(구분 영역 없음). 콤보박스 오른쪽에 장르 설명.
+    const genreRow = el("div", "wb8-option-list-row wb9-option-list-row wb8-option-list-all wb9-option-list-all wb8-option-list-wide wb9-option-list-wide wb9-dynamics-genre-row", { style: "--wb8-channel-color:var(--wb4-accent)" });
+    const genreLabelWrap = el("div", "wb8-option-list-label wb9-option-list-label");
+    const genreLabel = el("strong", "wb9-option-channel-name", { text: t("dynamicsGenreLabel") });
+    genreLabelWrap.append(genreLabel);
+    const genreBody = el("div", "wb8-option-list-control wb9-option-list-control wb9-dynamics-genre-body");
+    const genreDesc = el("span", "wb9-dynamics-genre-desc", { text: t("genreDesc_none") });
+    genreBody.append(genre, genreDesc);
+    genreRow.append(genreLabelWrap, genreBody);
+    panel.append(genreRow);
+
+    // 강약은 버튼으로 고른다: [적용 안 함] [약하게] [보통] [강하게]
+    const makeSegments = onChange => segmented(dynamicsStrengthOptions(), "normal", value => onChange(value), "wb9-rest-buttons wb9-dynamics-buttons");
+    const batch = makeSegments(value => {
+      draft.channels.forEach(channel => { channel.dynamicsStrength = normalizeDynamicsStrength(value); });
+      syncDynamicsFeatureControls();
       markChannelOptionsDirty();
-    }, "wb9-strength-select");
-    global.append(genre, strength);
-    panel.append(global);
-    const batchWrap = wb9AccompanimentChannelControl(draft.channels[0], { batch: true });
-    state.ui.featureControls.accompaniment = { panel, genre, strength, batch: batchWrap._controls, channels: [] };
-    panel.append(wb9OptionListRow({ index: -1, control: batchWrap, extraClass: "wb8-option-list-wide wb9-option-list-wide" }));
-    draft.channels.forEach((channel, index) => {
-      const control = wb9AccompanimentChannelControl(channel);
-      state.ui.featureControls.accompaniment.channels.push(control._controls);
-      panel.append(wb9OptionListRow({ index, control, extraClass: "wb8-option-list-wide wb9-option-list-wide" }));
     });
-    requestAnimationFrame(syncAccompanimentFeatureControls);
+    state.ui.featureControls.dynamics = { panel, genre, genreLabel, genreDesc, batch, channels: [] };
+    panel.append(wb9OptionListRow({ index: -1, control: batch, extraClass: "wb8-option-list-wide wb9-option-list-wide" }));
+    draft.channels.forEach((channel, index) => {
+      const seg = makeSegments(value => {
+        channel.dynamicsStrength = normalizeDynamicsStrength(value);
+        syncDynamicsFeatureControls();
+        markChannelOptionsDirty();
+      });
+      state.ui.featureControls.dynamics.channels.push(seg);
+      panel.append(wb9OptionListRow({ index, control: seg, extraClass: "wb8-option-list-wide wb9-option-list-wide" }));
+    });
+    syncDynamicsFeatureControls();
     return panel;
   }
 
   function activateOptionFeature(name) {
-    const next = ["rest", "volume", "octave", "accompaniment"].includes(name) ? name : "rest";
+    const next = ["rest", "volume", "dynamics", "octave"].includes(name) ? name : "rest";
     state.activeOptionFeature = next;
     state.ui.featureTabs?.forEach(button => {
       const active = button.dataset.optionFeature === next;
@@ -3766,7 +3740,7 @@
       "data-workspace-panel": "channel",
       hidden: true
     });
-    const definitions = [["rest", "rest"], ["volume", "volume"], ["octave", "octave"], ["accompaniment", "accompaniment"]];
+    const definitions = [["rest", "rest"], ["volume", "volumeAdjust"], ["dynamics", "dynamics"], ["octave", "octave"]];
     const tabs = el("div", "wb8-feature-tabs wb9-feature-tabs", { role: "tablist" });
     state.ui.featureTabs = [];
     definitions.forEach(([name, key], index) => {
@@ -3788,8 +3762,8 @@
     state.ui.featurePanels = [
       buildRestFeaturePanel(),
       buildVolumeFeaturePanel(),
-      buildOctaveFeaturePanel(),
-      buildAccompanimentFeaturePanel()
+      buildDynamicsFeaturePanel(),
+      buildOctaveFeaturePanel()
     ];
     state.ui.channelApplyBar = el("div", "wb11-pending-apply wb11-channel-apply", {
       role: "status",
@@ -3984,17 +3958,12 @@
     return wrap;
   }
 
-  function syncVolumeGenerationControls() {
-    const refs = state.ui.volumeGeneration;
-    if (!refs) return;
-    const disabled = !state.options.dynamics.genre;
-    refs.genre.value = state.options.dynamics.genre;
-    refs.strength.value = state.options.dynamics.strength;
-    refs.strength.disabled = false;
-    setUnavailableReason(refs.strength, disabled, "unavailableDynamics");
-    refs.channels.sync();
-    refs.channels.setDisabled(disabled, "unavailableDynamics");
-    refs.wrap.classList.toggle("is-genre-unselected", disabled);
+  // 숫자 입력 박스 밖(오른쪽)에 단위(초, %)를 둔다.
+  function withOutsideUnit(numberControl) {
+    const holder = el("div", "wb9-unit-outside");
+    holder.append(numberControl);
+    if (numberControl._suffix) holder.append(numberControl._suffix);
+    return holder;
   }
 
   function buildCommonOptions() {
@@ -4013,7 +3982,7 @@
       queueApply();
     }});
     state.ui.leadingControl = leadingStepper;
-    common.append(optionRow("leading", leadingStepper, "", "wb6-common-leading wb8-common-leading wb9-common-leading"));
+    common.append(optionRow("leading", withOutsideUnit(leadingStepper), "", "wb6-common-leading wb8-common-leading wb9-common-leading"));
 
     state.ui.volumeSimplifyButton = el("button", "wb9-tempo-clean-button wb9-volume-simplify-button", {
       type: "button",
@@ -4043,7 +4012,7 @@
       queueApply();
     }});
     state.ui.tempoScaleControl = tempoScale;
-    common.append(optionRow("tempoScale", tempoScale, "", "wb6-common-tempo wb8-common-tempo-scale wb9-common-tempo-scale"));
+    common.append(optionRow("tempoScale", withOutsideUnit(tempoScale), "", "wb6-common-tempo wb8-common-tempo-scale wb9-common-tempo-scale"));
 
     const fadeSecondsDefs = FADE_SECOND_OPTIONS.map(value => [String(value), String(value)]);
     const fadeInSegments = segmented(fadeSecondsDefs, String(normalizeFadeSeconds(state.options.fade?.inSeconds)), value => {
@@ -4060,23 +4029,6 @@
     state.ui.fadeOutControl = fadeOutSegments;
     common.append(optionRow("fadeOutSeconds", fadeOutSegments, "", "wb9-common-fade-out"));
 
-    const dynamicsWrap = el("div", "wb9-volume-generation-controls");
-    const genre = selectControl(genreValuesWithPlaceholder(), state.options.dynamics.genre, value => {
-      state.options.dynamics.genre = value;
-      syncVolumeGenerationControls();
-      queueApply();
-    }, "wb9-genre-select");
-    const strength = selectControl([["light", t("light")], ["normal", t("normal")], ["strong", t("strong")]], state.options.dynamics.strength, value => {
-      state.options.dynamics.strength = value;
-      if (state.options.dynamics.genre) queueApply();
-    }, "wb9-strength-select");
-    const channels = createTargetChannelButtons(state.options.dynamics.targetChannels, () => {
-      if (state.options.dynamics.genre) queueApply();
-    }, "wb9-volume-generation-channels");
-    dynamicsWrap.append(genre, strength, channels);
-    state.ui.volumeGeneration = { wrap: dynamicsWrap, genre, strength, channels };
-    common.append(optionRow("dynamics", dynamicsWrap, "", "wb9-common-dynamics"));
-    syncVolumeGenerationControls();
     syncMidiQuantizeControl();
     return common;
   }
@@ -4192,7 +4144,7 @@
   }
 
   function activateWorkspaceTab(name) {
-    const next = ["copy", "instrument", "channel", "code"].includes(name) ? name : "copy";
+    const next = ["global", "instrument", "channel", "code"].includes(name) ? name : "global";
     state.activeWorkspaceTab = next;
     state.ui.workspaceTabs?.forEach(button => {
       const active = button.dataset.workspaceTab === next;
@@ -4200,17 +4152,15 @@
       button.setAttribute("aria-selected", active ? "true" : "false");
       button.tabIndex = active ? 0 : -1;
     });
-    Object.entries(state.ui.workspacePanels || {}).forEach(([key, panel]) => { panel.hidden = key !== next; });
+    Object.entries(state.ui.workspacePanels || {}).forEach(([key, panel]) => { if (key !== "copy") panel.hidden = key !== next; });
     if (next === "code") syncChannelCodeEditor();
     if (next === "instrument") updateMidiChannelFilter();
     if (next === "channel") {
       activateOptionFeature(state.activeOptionFeature);
       scheduleOptionMetricsUpdate();
     }
-    if (next === "copy") {
-      state.copyDirty = true;
-      scheduleCopyRowsRender();
-    }
+    state.copyDirty = true;
+    scheduleCopyRowsRender();
     requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     scheduleSessionPersist();
   }
@@ -13337,6 +13287,10 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     for (const range of activeRanges || []) addRangeClass(classes, range.start, range.end, "mml-active-code");
     return renderClassedText(text, classes, splitMarkers);
   }
+
+  window.__mobibardRenderSourceHighlight = (text, index) => (
+    index < 0 ? renderColoredMml(text, [], []) : renderPartWithErrors(text, [], [])
+  );
 
   function createClassBuckets(length) {
     return Array.from({ length: Math.max(0, Number(length) || 0) }, () => []);
