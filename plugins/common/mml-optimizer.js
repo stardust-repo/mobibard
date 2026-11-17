@@ -76,11 +76,33 @@
 
 
 
+  // ---------------------------------------------------------------- 볼륨 생성 (v2)
+  // 1) 모든 채널의 노트로 박자(3/4·4/4)와 마디 시작 위치를 추정한다. 앞쪽 공백이 마디 단위가 아니어도 강박이 맞는다.
+  // 2) 마디별 에너지(노트 밀도·연주 채널 수·음높이)를 모든 채널 공통으로 계산해 구간 단위 셈여림을 만든다.
+  // 3) 채널별로 프레이즈 곡선·박자 강세·당김음·음 길이·선율 윤곽을 더해 연속값 목표를 만든다.
+  // 4) 기준 볼륨(중앙값)을 유지하도록 맞추고, 히스테리시스로 V 명령 수를 줄여 정수 볼륨으로 바꾼다.
+  const DYNAMICS_GENRES = ["pop", "jazz", "ballad", "bossa", "rock", "funk", "classical"];
+  const DYNAMICS_PROFILES = {
+    //            박자 강세(4/4)                3/4      8분 엇박 16분 엇박 당김음 구간  프레이즈 길이  음높이 밀도
+    pop:       { beat: [1.00, -0.25, 0.50, -0.20], beat3: [1.00, -0.25, -0.15], off8: 0.10, off16: -0.15, sync: 0.35, macro: 0.70, phrase: 0.70, length: 0.35, pitch: 0.25, density: 0.30 },
+    jazz:      { beat: [0.20, 0.35, 0.10, 0.40],   beat3: [0.30, 0.20, 0.30],    off8: 0.55, off16: -0.05, sync: 0.60, macro: 0.60, phrase: 0.55, length: 0.30, pitch: 0.25, density: 0.25 },
+    ballad:    { beat: [0.55, -0.15, 0.25, -0.15], beat3: [0.60, -0.15, -0.10], off8: 0.00, off16: -0.20, sync: 0.20, macro: 1.00, phrase: 1.05, length: 0.60, pitch: 0.40, density: 0.35 },
+    bossa:     { beat: [0.50, 0.05, 0.25, 0.10],   beat3: [0.50, 0.05, 0.10],    off8: 0.40, off16: -0.05, sync: 0.45, macro: 0.50, phrase: 0.50, length: 0.25, pitch: 0.15, density: 0.25 },
+    rock:      { beat: [1.00, 0.10, 0.85, 0.10],   beat3: [1.00, 0.10, 0.10],    off8: 0.05, off16: -0.15, sync: 0.30, macro: 0.55, phrase: 0.40, length: 0.20, pitch: 0.15, density: 0.20 },
+    funk:      { beat: [0.55, -0.10, 0.25, -0.10], beat3: [0.55, -0.10, -0.10], off8: 0.30, off16: 0.55,  sync: 0.55, macro: 0.40, phrase: 0.35, length: 0.10, pitch: 0.10, density: 0.15 },
+    classical: { beat: [0.80, -0.25, 0.35, -0.20], beat3: [0.85, -0.25, -0.15], off8: 0.00, off16: -0.15, sync: 0.25, macro: 1.10, phrase: 1.10, length: 0.65, pitch: 0.50, density: 0.35 }
+  };
+  // 강약: 점수 배율, 기준 볼륨 위/아래로 허용하는 폭, 같은 볼륨을 유지할 최소 노트 수, 바꿀 때 필요한 차이(히스테리시스).
+  const DYNAMICS_STRENGTHS = {
+    light:  { gain: 1.0, spanUp: 2, spanDown: 2, minHold: 3, hysteresis: 0.85 },
+    normal: { gain: 1.7, spanUp: 3, spanDown: 3, minHold: 2, hysteresis: 0.75 },
+    strong: { gain: 2.6, spanUp: 4, spanDown: 5, minHold: 1, hysteresis: 0.65 }
+  };
+
   function generateDynamicsMml(text, options = {}) {
     const partCount = Math.max(1, Math.min(6, options.partCount || 6));
     const genre = String(options.genre || "pop").trim().toLowerCase();
-    const supportedGenres = new Set(["pop", "jazz", "ballad", "bossa", "rock", "funk", "classical"]);
-    if (!supportedGenres.has(genre)) throw new Error(tr("vol.err_genre"));
+    if (!DYNAMICS_GENRES.includes(genre)) throw new Error(tr("vol.err_genre"));
     const strength = normalizeGenerationStrength(options.strength);
     const sourceParts = splitMmlPartsStrict(text).slice(0, partCount);
     while (sourceParts.length < partCount) sourceParts.push("");
@@ -93,6 +115,14 @@
     let skippedExpressivePartCount = 0;
     let existingExpressivePartCount = 0;
 
+    // 대상 채널은 파싱 오류를 그대로 알리고, 대상이 아닌 채널은 박자·구간 분석에만 쓰므로 실패해도 건너뛴다.
+    const scannedParts = sourceParts.map((part, partIndex) => {
+      const selected = targetPartIndexes == null || targetPartIndexes.has(partIndex);
+      if (selected) return scanPartForDynamics(part, partIndex);
+      try { return scanPartForDynamics(part, partIndex); } catch (_) { return null; }
+    });
+    const context = analyzeDynamicsContext(scannedParts);
+
     for (let partIndex = 0; partIndex < partCount; partIndex++) {
       const selected = targetPartIndexes == null || targetPartIndexes.has(partIndex);
       if (!selected) {
@@ -100,7 +130,7 @@
         continue;
       }
 
-      const scanned = scanPartForDynamics(sourceParts[partIndex], partIndex);
+      const scanned = scannedParts[partIndex];
       const soundingNotes = scanned.notes.filter(note => note.volume > 0);
       if (soundingNotes.length < 2) {
         partResults.push({ partIndex, status: "no_notes", generatedCommands: 0, changedNotes: 0 });
@@ -136,6 +166,7 @@
         genre,
         strength,
         partIndex,
+        context,
         baseVolume: clamp(Math.round(medianNumber(soundingNotes.map(note => note.volume), DEFAULT_VOLUME)), 2, 15)
       });
       const rewritten = rewritePartWithDynamics(sourceParts[partIndex], scanned, generated.targets);
@@ -165,6 +196,7 @@
       saved: before - after,
       genre,
       strength,
+      meter: { beatsPerBar: context.beatsPerBar, phaseUnits: context.phase, confident: context.confident },
       generatedCommands,
       changedNotes,
       processedPartCount,
@@ -172,6 +204,119 @@
       existingExpressivePartCount,
       partResults
     };
+  }
+
+  // 모든 채널의 노트로 박자·마디 위치·마디별 에너지를 구한다.
+  function analyzeDynamicsContext(scannedParts) {
+    const q = durationUnits(4, 0);
+    const s16 = durationUnits(16, 0);
+    const onsets = [];
+    let firstStart = Infinity;
+    for (const part of scannedParts) {
+      for (const note of part?.notes || []) {
+        if (!(note.volume > 0)) continue;
+        onsets.push(note);
+        if (note.start < firstStart) firstStart = note.start;
+      }
+    }
+    const fallback = { beatsPerBar: 4, bar: 4 * q, phase: 0, confident: false, barEnergy: [] };
+    if (onsets.length < 8) return withBarEnergy(fallback, scannedParts);
+
+    // 길게 울리는 음, 여러 채널이 같이 시작하는 자리, 가장 낮은 채널(베이스)이 들어오는 자리가 강박일 가능성이 높다.
+    // 곡의 첫 음도 강박으로 본다. (왈츠처럼 매 박 음이 있어도 베이스가 1박에만 들어오면 3박자로 잡힌다.)
+    let bassPart = null;
+    let bassMedian = Infinity;
+    for (const part of scannedParts) {
+      const pitches = (part?.notes || []).filter(note => note.volume > 0).map(note => note.midi);
+      if (pitches.length < 8) continue;
+      const median = medianNumber(pitches, 60);
+      if (median < bassMedian) { bassMedian = median; bassPart = part; }
+    }
+    const weightAt = new Map();
+    for (const part of scannedParts) {
+      const bassBonus = part && part === bassPart && scannedParts.filter(Boolean).length > 1 ? 2 : 0;
+      for (const note of part?.notes || []) {
+        if (!(note.volume > 0)) continue;
+        const grid = Math.round(note.start / s16);
+        const weight = 0.5 + Math.min(note.duration / q, 2) * 0.5 + bassBonus + (note.start === firstStart ? 2 : 0);
+        weightAt.set(grid, (weightAt.get(grid) || 0) + weight);
+      }
+    }
+    // 4분음표 안의 위치(16분 단위 0~3) 중 무게가 가장 큰 곳을 박 위치로 본다(대부분 0).
+    const subWeights = [0, 0, 0, 0];
+    for (const [grid, weight] of weightAt) subWeights[((grid % 4) + 4) % 4] += weight;
+    const subPhase = subWeights.indexOf(Math.max(...subWeights));
+
+    let best = null;
+    for (const beatsPerBar of [4, 3]) {
+      const sums = new Array(beatsPerBar).fill(0);
+      for (const [grid, weight] of weightAt) {
+        const rel = grid - subPhase;
+        if (((rel % 4) + 4) % 4 !== 0) continue;
+        sums[(((rel / 4) % beatsPerBar) + beatsPerBar) % beatsPerBar] += weight;
+      }
+      const mean = sums.reduce((a, b) => a + b, 0) / beatsPerBar || 1;
+      const firstBeat = ((Math.round(firstStart / s16) - subPhase) / 4);
+      const firstIndex = ((Math.round(firstBeat) % beatsPerBar) + beatsPerBar) % beatsPerBar;
+      let top = 0;
+      for (let k = 1; k < beatsPerBar; k++) if (sums[k] > sums[top]) top = k;
+      // 첫 음 위치가 거의 같은 무게면 첫 음 쪽을 마디 시작으로 둔다.
+      const downbeat = sums[firstIndex] >= sums[top] * 0.9 ? firstIndex : top;
+      const salience = sums[downbeat] / mean;
+      const candidate = { beatsPerBar, downbeat, salience };
+      if (!best) best = candidate;
+      else if (beatsPerBar === 3 && candidate.salience > best.salience * 1.15 && candidate.salience >= 1.35) best = candidate;
+    }
+    const bar = best.beatsPerBar * q;
+    const phase = (((subPhase * s16 + best.downbeat * q) % bar) + bar) % bar;
+    return withBarEnergy({ beatsPerBar: best.beatsPerBar, bar, phase, confident: best.salience >= 1.25, barEnergy: [] }, scannedParts);
+  }
+
+  // 마디별 에너지: 노트 시작 수, 연주 중인 채널 수, 평균 음높이를 순위로 정규화해 -1~1, 앞뒤 2마디로 부드럽게.
+  function withBarEnergy(context, scannedParts) {
+    const { bar, phase } = context;
+    const stats = [];
+    const statAt = index => {
+      while (stats.length <= index) stats.push({ onsets: 0, parts: new Set(), pitchSum: 0, sounding: 0 });
+      return stats[index];
+    };
+    scannedParts.forEach((part, partIndex) => {
+      for (const note of part?.notes || []) {
+        if (!(note.volume > 0)) continue;
+        const index = Math.max(0, Math.floor((note.start - phase) / bar) + (phase > 0 ? 1 : 0));
+        const stat = statAt(index);
+        stat.onsets++;
+        stat.parts.add(partIndex);
+        stat.pitchSum += note.midi;
+        stat.sounding += note.duration;
+      }
+    });
+    if (stats.length < 4) return { ...context, barEnergy: stats.map(() => 0) };
+    const active = stats.map((stat, index) => ({ index, stat })).filter(item => item.stat.onsets > 0);
+    const rankOf = values => {
+      const order = values.map((value, i) => [value, i]).sort((a, b) => a[0] - b[0]);
+      const ranks = new Array(values.length);
+      order.forEach(([, i], r) => { ranks[i] = values.length > 1 ? r / (values.length - 1) : 0.5; });
+      return ranks;
+    };
+    const density = rankOf(active.map(item => item.stat.onsets));
+    const parts = rankOf(active.map(item => item.stat.parts.size));
+    const pitch = rankOf(active.map(item => item.stat.pitchSum / item.stat.onsets));
+    const raw = new Array(stats.length).fill(-1);
+    active.forEach((item, i) => { raw[item.index] = (0.5 * density[i] + 0.3 * parts[i] + 0.2 * pitch[i]) * 2 - 1; });
+    const barEnergy = raw.map((_, index) => {
+      let sum = 0;
+      let weight = 0;
+      for (let k = -2; k <= 2; k++) {
+        const value = raw[index + k];
+        if (value == null) continue;
+        const w = 3 - Math.abs(k);
+        sum += value * w;
+        weight += w;
+      }
+      return weight ? sum / weight : 0;
+    });
+    return { ...context, barEnergy };
   }
 
   function scanPartForDynamics(input, partIndex) {
@@ -293,78 +438,110 @@
   function buildDynamicsTargets(allNotes, options) {
     const sounding = allNotes.filter(note => note.volume > 0);
     const baseVolume = clamp(options.baseVolume, 2, 15);
-    const strengthAmount = { light: 1, normal: 2, strong: 3 }[options.strength] || 2;
+    const strengthConfig = DYNAMICS_STRENGTHS[options.strength] || DYNAMICS_STRENGTHS.normal;
+    const profile = DYNAMICS_PROFILES[options.genre] || DYNAMICS_PROFILES.pop;
+    const context = options.context || { beatsPerBar: 4, bar: WHOLE_UNITS, phase: 0, barEnergy: [] };
     const q = durationUnits(4, 0);
     const e = durationUnits(8, 0);
     const s16 = durationUnits(16, 0);
-    const bar = WHOLE_UNITS;
-    const medianPitch = medianNumber(sounding.map(note => note.midi), 60);
-    const profile = {
-      pop: { beat: [1.0, -0.2, 0.55, -0.15], offbeat: 0.15, phrase: 0.75, length: 0.35, pitch: 0.22, density: 0.40 },
-      jazz: { beat: [0.15, 0.15, 0.05, 0.20], offbeat: 0.70, phrase: 0.55, length: 0.35, pitch: 0.18, density: 0.30 },
-      ballad: { beat: [0.50, -0.15, 0.25, -0.15], offbeat: 0.05, phrase: 1.05, length: 0.65, pitch: 0.38, density: 0.45 },
-      bossa: { beat: [0.55, 0.05, 0.30, 0.10], offbeat: 0.55, phrase: 0.48, length: 0.25, pitch: 0.12, density: 0.30 },
-      rock: { beat: [1.00, 0.05, 0.80, 0.05], offbeat: 0.10, phrase: 0.45, length: 0.20, pitch: 0.12, density: 0.25 },
-      funk: { beat: [0.50, -0.05, 0.25, -0.05], offbeat: 0.95, phrase: 0.38, length: 0.10, pitch: 0.08, density: 0.20 },
-      classical: { beat: [0.85, -0.20, 0.35, -0.15], offbeat: 0.05, phrase: 1.10, length: 0.70, pitch: 0.48, density: 0.42 }
-    }[options.genre];
-    const roleFactor = options.partIndex === 0 ? 1 : 0.72;
+    const bar = context.bar;
+    const isMelody = options.partIndex === 0;
+    const roleFactor = isMelody ? 1 : 0.7;
+    const beatProfile = context.beatsPerBar === 3 ? profile.beat3 : profile.beat;
+    const positionInBar = start => ((((start - context.phase) % bar) + bar) % bar);
+    const barIndexOf = start => Math.max(0, Math.floor((start - context.phase) / bar) + (context.phase > 0 ? 1 : 0));
 
-    const phraseIds = [];
-    let phraseId = 0;
-    let phraseStartTime = sounding[0]?.start || 0;
-    for (let index = 0; index < sounding.length; index++) {
-      if (index > 0) {
-        const previous = sounding[index - 1];
-        const gap = sounding[index].start - (previous.start + previous.duration);
-        const longContinuous = sounding[index].start - phraseStartTime >= bar * 4 && (sounding[index].start % bar) < s16;
-        if (gap >= e || longContinuous) {
-          phraseId++;
-          phraseStartTime = sounding[index].start;
+    // 프레이즈: 8분 쉼표 이상 끊기거나, 4마디 이상 이어진 뒤 마디 첫 박에서 새로 시작.
+    const phrases = [];
+    let current = [];
+    let phraseStart = sounding[0]?.start || 0;
+    for (let i = 0; i < sounding.length; i++) {
+      const note = sounding[i];
+      if (current.length) {
+        const previous = sounding[i - 1];
+        const gap = note.start - (previous.start + previous.duration);
+        const longRun = note.start - phraseStart >= bar * 4 && positionInBar(note.start) < s16;
+        if (gap >= e || longRun) {
+          phrases.push(current);
+          current = [];
+          phraseStart = note.start;
         }
       }
-      phraseIds[index] = phraseId;
+      current.push(i);
     }
-    const phraseGroups = new Map();
+    if (current.length) phrases.push(current);
+
+    // 구간 안의 노트 밀도(앞뒤 반 박)를 두 포인터로 센다.
+    const localDensity = new Array(sounding.length).fill(0);
+    let lo = 0;
+    let hi = 0;
     for (let i = 0; i < sounding.length; i++) {
-      if (!phraseGroups.has(phraseIds[i])) phraseGroups.set(phraseIds[i], []);
-      phraseGroups.get(phraseIds[i]).push(i);
+      const start = sounding[i].start;
+      while (lo < sounding.length && sounding[lo].start < start - q / 2) lo++;
+      while (hi < sounding.length && sounding[hi].start < start + q / 2) hi++;
+      localDensity[i] = hi - lo;
     }
 
-    const rawTargets = new Map();
+    const continuous = new Array(sounding.length).fill(0);
     const forceChange = new Set();
-    for (const indexes of phraseGroups.values()) {
-      for (let localIndex = 0; localIndex < indexes.length; localIndex++) {
-        const noteIndex = indexes[localIndex];
+    for (const indexes of phrases) {
+      const pitches = indexes.map(i => sounding[i].midi);
+      const phraseMean = pitches.reduce((a, b) => a + b, 0) / pitches.length;
+      indexes.forEach((noteIndex, localIndex) => {
         const note = sounding[noteIndex];
-        const progress = indexes.length <= 1 ? 0.5 : localIndex / (indexes.length - 1);
-        const phraseCurve = (Math.sin(Math.PI * progress) - 0.38) * profile.phrase * roleFactor;
-        const withinBar = ((note.start % bar) + bar) % bar;
-        const quarterIndex = Math.floor(withinBar / q) % 4;
-        const withinQuarter = withinBar % q;
-        const isOffbeat = Math.abs(withinQuarter - e) <= s16 / 2 || (options.genre === "funk" && withinQuarter >= s16 && withinQuarter <= q - s16);
-        let beatScore = profile.beat[quarterIndex] || 0;
-        if (isOffbeat) beatScore += profile.offbeat;
-        const lengthRatio = note.duration / q;
-        const lengthScore = lengthRatio >= 2 ? profile.length : (lengthRatio <= 0.25 ? -profile.length * 0.55 : 0);
-        const pitchScore = clamp((note.midi - medianPitch) / 12, -1, 1) * profile.pitch * roleFactor;
-        const windowStart = note.start - q / 2;
-        const windowEnd = note.start + q / 2;
-        const localDensity = sounding.reduce((count, other) => count + (other.start >= windowStart && other.start < windowEnd ? 1 : 0), 0);
-        const densityScore = localDensity >= 5 ? -profile.density : (localDensity <= 1 ? profile.density * 0.18 : 0);
-        const previous = noteIndex > 0 ? sounding[noteIndex - 1] : null;
-        const repeatScore = previous && previous.midi === note.midi ? (noteIndex % 2 ? -0.25 : 0.20) : 0;
-        const boundaryScore = localIndex === 0 ? 0.45 : (localIndex === indexes.length - 1 ? (lengthRatio >= 1 ? 0.20 : -0.30) : 0);
-        const score = (beatScore + phraseCurve + lengthScore + pitchScore + densityScore + repeatScore + boundaryScore) * strengthAmount;
-        rawTargets.set(note, clamp(baseVolume + Math.round(score), 2, 15));
-        if (localIndex === 0 || beatScore >= 0.8) forceChange.add(note);
-      }
+        // 프레이즈 곡선: 60% 지점에서 정점, 시작은 약간 여리게, 끝은 풀어 준다.
+        const progress = indexes.length <= 1 ? 0.6 : localIndex / (indexes.length - 1);
+        const arch = progress <= 0.6 ? Math.sin((Math.PI / 2) * (progress / 0.6)) : Math.cos((Math.PI / 2) * ((progress - 0.6) / 0.4));
+        let phraseScore = (arch - 0.45) * profile.phrase * roleFactor;
+        if (localIndex === indexes.length - 1 && indexes.length > 1 && note.duration < q) phraseScore -= 0.25 * profile.phrase;
+
+        // 박자 강세와 엇박.
+        const withinBar = positionInBar(note.start);
+        const beatIndex = Math.min(beatProfile.length - 1, Math.floor(withinBar / q));
+        const withinBeat = withinBar - beatIndex * q;
+        let metric = withinBeat < s16 / 2 ? beatProfile[beatIndex] : 0;
+        if (Math.abs(withinBeat - e) < s16 / 2) metric += profile.off8;
+        else if (withinBeat >= s16 / 2 && Math.abs(withinBeat - e) >= s16 / 2) metric += profile.off16;
+        // 당김음: 박 사이에서 시작해 다음 박을 넘겨 이어지는 음.
+        const nextBeat = note.start - withinBeat + q;
+        const syncopated = withinBeat >= s16 / 2 && note.start + note.duration > nextBeat + s16 / 2;
+        if (syncopated) metric += profile.sync;
+
+        // 음 길이: 길수록 조금 세게, 아주 짧으면 조금 여리게.
+        const lengthScore = Math.max(-1, Math.min(1, Math.log2(Math.max(note.duration, 1) / e) / 2)) * profile.length;
+        // 선율 윤곽: 프레이즈 평균보다 높으면 세게, 앞뒤보다 2반음 이상 높은 정점은 추가 강세.
+        let pitchScore = Math.max(-1, Math.min(1, (note.midi - phraseMean) / 7)) * profile.pitch * roleFactor;
+        const prev = localIndex > 0 ? sounding[indexes[localIndex - 1]] : null;
+        const next = localIndex < indexes.length - 1 ? sounding[indexes[localIndex + 1]] : null;
+        if (prev && next && note.midi - prev.midi >= 2 && note.midi - next.midi >= 2) pitchScore += 0.3 * profile.pitch * roleFactor;
+        // 빠른 음이 몰린 곳의 개별 음은 강세를 덜 준다.
+        const density = localDensity[noteIndex];
+        const densityScore = density >= 5 ? -profile.density : (density <= 1 ? profile.density * 0.2 : 0);
+        // 구간 셈여림(모든 채널 공통).
+        const macro = (context.barEnergy[barIndexOf(note.start)] || 0) * profile.macro;
+
+        continuous[noteIndex] = (macro + phraseScore + metric + lengthScore + pitchScore + densityScore) * strengthConfig.gain;
+        if (localIndex === 0 || (withinBar < s16 / 2 && beatProfile[0] >= 0.5)) forceChange.add(note);
+      });
     }
+
+    // 기준 볼륨(원래 중앙값)이 유지되도록 가운데를 맞춘 뒤, 허용 폭 안으로 위/아래를 따로 눌러 담는다.
+    const center = medianNumber(continuous, 0);
+    const upRoom = Math.max(0, Math.min(strengthConfig.spanUp, 15 - baseVolume));
+    const downRoom = Math.max(0, Math.min(strengthConfig.spanDown, baseVolume - 2));
+    const centered = continuous.map(value => value - center);
+    const maxUp = Math.max(0, ...centered);
+    const maxDown = Math.max(0, ...centered.map(value => -value));
+    const values = new Map();
+    sounding.forEach((note, i) => {
+      const value = centered[i];
+      const scaled = value >= 0 ? (maxUp > upRoom ? value * (upRoom / maxUp) : value) : (maxDown > downRoom ? value * (downRoom / maxDown) : value);
+      values.set(note, baseVolume + scaled);
+    });
 
     const targets = new Map();
     let currentVolume = null;
-    let notesSinceChange = 999;
-    const minHold = options.strength === "light" ? 4 : (options.strength === "normal" ? 2 : 1);
+    let notesSinceChange = 0;
     let changedNotes = 0;
     let minVolume = 15;
     let maxVolume = 2;
@@ -375,17 +552,16 @@
         notesSinceChange = 0;
         continue;
       }
-      let target = rawTargets.get(note) ?? baseVolume;
+      const value = values.get(note) ?? baseVolume;
+      const rounded = clamp(Math.round(value), 2, 15);
       if (currentVolume == null || currentVolume === 0) {
-        currentVolume = target;
+        currentVolume = rounded;
         notesSinceChange = 0;
-      } else if (target !== currentVolume) {
-        const allow = forceChange.has(note) || Math.abs(target - currentVolume) >= 2 || notesSinceChange >= minHold;
+      } else if (rounded !== currentVolume && Math.abs(value - currentVolume) >= strengthConfig.hysteresis) {
+        const allow = forceChange.has(note) || Math.abs(rounded - currentVolume) >= 2 || notesSinceChange >= strengthConfig.minHold;
         if (allow) {
-          currentVolume = target;
+          currentVolume = rounded;
           notesSinceChange = 0;
-        } else {
-          target = currentVolume;
         }
       }
       targets.set(note, currentVolume);
