@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION_LABEL = "v5.5";
+  const APP_VERSION_LABEL = "v6.0";
 
   const CONFIG = {
     defaultChannelCount: 1,
@@ -225,6 +225,7 @@
     velocityLaneVisibleToggle: document.querySelector("#velocityLaneVisibleToggle"),
     audioLaneVisibleToggle: document.querySelector("#audioLaneVisibleToggle"),
     addItemInstantlyToggle: document.querySelector("#addItemInstantlyToggle"),
+    playheadSoundSelect: document.querySelector("#playheadSoundSelect"),
     editUndoButton: document.querySelector("#editUndoButton"),
     editRedoButton: document.querySelector("#editRedoButton"),
     editCopyButton: document.querySelector("#editCopyButton"),
@@ -995,6 +996,7 @@
     noteVolumeDisplay: "selected",
     audioLaneVisible: false,
     addItemInstantly: false,
+    playheadSoundMode: "release",
     velocityLaneVisible: false,
     overviewTrackInfoVisible: true,
     velocityLaneScope: "channel",
@@ -5107,6 +5109,24 @@
     return state.addItemInstantly;
   }
 
+  // 시간선 이동 소리: off(없음) / release(마우스를 뗄 때 1회, 기본) / always(시간선이 바뀔 때마다)
+  function normalizePlayheadSoundMode(value) {
+    return value === "off" || value === "always" ? value : "release";
+  }
+
+  function loadStoredPlayheadSoundMode() {
+    try { return normalizePlayheadSoundMode(window.localStorage.getItem("mobibard-playhead-sound")); } catch { return "release"; }
+  }
+
+  function setPlayheadSoundMode(value, { persist = true } = {}) {
+    state.playheadSoundMode = normalizePlayheadSoundMode(value);
+    if (elements.playheadSoundSelect) elements.playheadSoundSelect.value = state.playheadSoundMode;
+    if (persist) {
+      try { window.localStorage.setItem("mobibard-playhead-sound", state.playheadSoundMode); } catch {}
+    }
+    return state.playheadSoundMode;
+  }
+
   function loadStoredVelocityLaneScope() {
     try {
       return normalizeVelocityLaneScope(window.localStorage.getItem("mobibard-velocity-lane-scope"));
@@ -8254,11 +8274,11 @@
     elements.playhead.style.transform = `translate3d(${layout.leftOffset + visibleX - 1}px, 0, 0)`;
   }
 
-  function previewNotesAtPlayhead(beat) {
+  function previewNotesAtPlayhead(beat, { duration = 0.14, force = false } = {}) {
     if (state.playback.running || state.playback.loading) return 0;
     const safeBeat = clamp(Number(beat) || 0, 0, getTotalBeats());
     const now = performance.now();
-    if (Math.abs(safeBeat - state.playhead.previewBeat) < 1e-7 && now - state.playhead.previewAt < 80) return 0;
+    if (!force && Math.abs(safeBeat - state.playhead.previewBeat) < 1e-7 && now - state.playhead.previewAt < 80) return 0;
     state.playhead.previewBeat = safeBeat;
     state.playhead.previewAt = now;
 
@@ -8289,6 +8309,7 @@
             if (velocity > 0) notes.push({
               pitch: note.pitch,
               velocity,
+              mmlVolume: getNoteVolume(note),
               program: getChannelInstrumentProgram(channel),
               bank: getChannelInstrumentBank(channel),
               exactPreset: getChannelInstrumentExactPreset(channel),
@@ -8304,11 +8325,12 @@
       .slice(0, maximum);
     const gainScale = getPlaybackNormalizationGainForVoiceCount(audible.length);
     for (const note of audible) {
-      audioEngine.playNote(note.pitch, note.velocity, null, 0.14, {
+      audioEngine.playNote(note.pitch, note.velocity, null, duration, {
         program: note.program,
         bank: note.bank || 0,
         gainScale,
         exactPreset: Boolean(note.exactPreset),
+        mmlVolume: Number.isFinite(Number(note.mmlVolume)) ? Number(note.mmlVolume) : null,
       });
     }
     return audible.length;
@@ -8330,7 +8352,7 @@
     drawTimeline();
     if (hasTimelineParts && nextPartIndex !== previousPartIndex) updateChannelInfo();
     else updatePlaybackTimeInfo();
-    if (preview) previewNotesAtPlayhead(state.playhead.beat);
+    if (preview && state.playheadSoundMode !== "off") previewNotesAtPlayhead(state.playhead.beat);
   }
 
   function getRunningPlaybackBoundsForSeek(beat) {
@@ -8795,7 +8817,7 @@
 
     state.playhead.pointerId = event.pointerId;
     trySetPointerCapture(elements.timelineCanvas, event.pointerId);
-    setPlayheadBeat(timelineBeatFromPointer(event), { preview: false });
+    setPlayheadBeat(timelineBeatFromPointer(event), { preview: state.playheadSoundMode === "always" });
     event.preventDefault();
   }
 
@@ -8967,7 +8989,7 @@
 
     if (state.playhead.pointerId === event.pointerId) {
       scrollTimelineDuringDrag(event);
-      setPlayheadBeat(timelineBeatFromPointer(event), { preview: true });
+      setPlayheadBeat(timelineBeatFromPointer(event), { preview: state.playheadSoundMode === "always" });
       return;
     }
 
@@ -9152,6 +9174,7 @@
       return;
     }
     if (state.playback.running || state.playback.loading) seekPlayheadBeat(targetBeat);
+    else if (state.playheadSoundMode === "release") previewNotesAtPlayhead(state.playhead.beat, { duration: PLAYHEAD_SOUND_HOLD_SECONDS, force: true });
   }
 
 
@@ -9405,6 +9428,7 @@
   }
 
 
+  const PLAYHEAD_SOUND_HOLD_SECONDS = 0.45;
   const EDITOR_AUDITION_LEAD_SECONDS = 0.045;
   const EDITOR_AUDITION_MIN_HOLD_SECONDS = 0.18;
   const EDITOR_NOTE_AUDITION_SECONDS = 0.24;
@@ -9518,7 +9542,13 @@
     }
   }
 
-  function previewEditorPitch(pitch, { holdVisual = true } = {}) {
+  function getActiveNewNoteVolume() {
+    const channel = getActiveChannel();
+    return clamp(Math.round(Number(channel?.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || 0), 0, 15);
+  }
+
+  // note: 소리를 낼 노트(볼륨 V0~V15 반영) / channel: 그 노트의 채널(음색) / volume: 노트 없이 볼륨만 지정
+  function previewEditorPitch(pitch, { holdVisual = true, note = null, channel = null, volume = null, instrumentOptions = null } = {}) {
     const safePitch = clamp(Math.round(Number(pitch) || CONFIG.minPitch), CONFIG.minPitch, CONFIG.maxPitch);
     window.clearTimeout(state.keyboard.previewTimer);
     state.keyboard.previewTimer = 0;
@@ -9533,10 +9563,24 @@
     }
 
     try {
-      state.keyboard.previewVoice = playEditorAuditionPitch(safePitch, {
-        velocity: 108,
-        duration: EDITOR_NOTE_AUDITION_SECONDS,
-      });
+      let auditionVelocity = 108;
+      let auditionVolume = 15;
+      if (note) {
+        auditionVolume = getNoteVolume(note);
+        auditionVelocity = getNotePlaybackVelocity(note);
+      } else if (Number.isFinite(Number(volume))) {
+        auditionVolume = clamp(Math.round(Number(volume)), 0, 15);
+        auditionVelocity = auditionVolume > 0 ? mmlVolumeToVelocity(auditionVolume) : 0;
+      }
+      if (auditionVelocity > 0 && auditionVolume > 0) {
+        const baseOptions = instrumentOptions || (channel ? getEditorAuditionOptions(channel) : null);
+        state.keyboard.previewVoice = playEditorAuditionPitch(safePitch, {
+          velocity: auditionVelocity,
+          duration: EDITOR_NOTE_AUDITION_SECONDS,
+          mmlVolume: auditionVolume,
+          ...(baseOptions ? { instrumentOptions: { program: baseOptions.program, bank: baseOptions.bank, exactPreset: baseOptions.exactPreset } } : {}),
+        });
+      }
     } catch (error) {
       console.error(error);
     }
@@ -14744,12 +14788,14 @@
           const colorMode = normalizeImportChannelColorMode(mi.colorMode);
           const hueByInstrument = new Map();
           const taggedParts = [];
+          const previewTextGroup = createTextImportGroup({ fileName: mi.fileName, format: mi.textFormat, text: mi.text });
           allIndexes.forEach((candidateIndex) => {
             const one = getUnifiedTextParsedWithGlobalTempo([candidateIndex]);
             (one?.noteParts || []).forEach((part) => taggedParts.push({ part, key: `t:${candidateIndex}` }));
           });
           taggedParts.forEach(({ part, key }, partIndex) => {
             const channel = createImportedChannel(part, partIndex + 1);
+            channel.groupId = previewTextGroup.id;
             channel._importKey = key;
             if (colorMode === "instrument") {
               const instrumentKey = `${getChannelInstrumentBank(channel)}:${getChannelInstrumentProgram(channel)}`;
@@ -16465,8 +16511,12 @@
       const importedChannelIds = [];
       const importColorMode = normalizeImportChannelColorMode(state.midiImport.colorMode);
       const hueByImportedInstrument = new Map();
+      const textImportGroup = parsed.noteParts.length
+        ? createTextImportGroup({ fileName, format, text: state.midiImport.text })
+        : null;
       parsed.noteParts.forEach((part, partIndex) => {
         const channel = createImportedChannel(part, partIndex + 1);
+        if (textImportGroup) channel.groupId = textImportGroup.id;
         if (importColorMode === "instrument") {
           const instrumentKey = `${getChannelInstrumentBank(channel)}:${getChannelInstrumentProgram(channel)}`;
           if (!hueByImportedInstrument.has(instrumentKey)) {
@@ -22355,7 +22405,7 @@
       } else {
         selectOnlyNote(existing.id);
       }
-      previewEditorPitch(existing.pitch, { holdVisual: false });
+      previewEditorPitch(existing.pitch, { holdVisual: false, note: existing });
     } else if (pointBeat >= 0) {
       if (!midiInputRuntime.recording) setPlayheadBeat(clamp(snapBeat(pointBeat), 0, getTotalBeats()), { stop: true, preview: false });
       beginMarqueeSelection(event, point, { initialSelectionMode: additive ? "add" : "replace" });
@@ -24448,7 +24498,7 @@
       const candidate = findChannelMergeCandidateHitAt(point.x, point.y);
       if (candidate?._mergeCandidateKey) {
         toggleChannelMergeCandidate(candidate._mergeCandidateKey, { silentBlocked: false });
-        previewEditorPitch(candidate.pitch, { holdVisual: false });
+        previewEditorPitch(candidate.pitch, { holdVisual: false, note: candidate });
       }
     }
     endEditorPitchPreview();
@@ -25523,7 +25573,7 @@
       magnetLastRawBeat: startBeat,
       magnetLatchedBeat: null,
     };
-    previewEditorPitch(state.interaction.lastPreviewPitch, { holdVisual: true });
+    previewEditorPitch(state.interaction.lastPreviewPitch, { holdVisual: true, volume: getActiveNewNoteVolume() });
     trySetPointerCapture(elements.rollCanvas, event.pointerId);
   }
 
@@ -25604,7 +25654,11 @@
       } else {
         selectOnlyMidiNote(hit.group.id, hit.note.id);
       }
-      previewEditorPitch(hit.note.pitch, { holdVisual: false });
+      previewEditorPitch(hit.note.pitch, {
+        holdVisual: false,
+        volume: velocityToMmlVolume(hit.note.velocity),
+        instrumentOptions: { program: clamp(Number(hit.group?.program) || 0, 0, 127), bank: getMidiGroupBank(hit.group), exactPreset: false },
+      });
       updateMidiReferenceUI();
       renderChannelTabs();
       drawRoll();
@@ -25787,7 +25841,7 @@
         if (otherChannelHit) {
           selectChannel(otherChannelHit.channelIndex);
           selectOnlyNote(otherChannelHit.hit.note.id);
-          previewEditorPitch(otherChannelHit.hit.note.pitch, { holdVisual: false });
+          previewEditorPitch(otherChannelHit.hit.note.pitch, { holdVisual: false, note: otherChannelHit.hit.note, channel: state.channels[otherChannelHit.channelIndex] || null });
           drawRoll();
           updateChannelInfo();
           event.preventDefault();
@@ -25951,7 +26005,7 @@
     }
     if (existing) {
       if (additive) {
-        previewEditorPitch(existing.pitch, { holdVisual: false });
+        previewEditorPitch(existing.pitch, { holdVisual: false, note: existing });
         if (state.selectedNoteIds.has(existing.id)) {
           state.selectedNoteIds.delete(existing.id);
         } else {
@@ -25989,7 +26043,7 @@
             selectOnlyNote(existing.id);
           }
         }
-        previewEditorPitch(existing.pitch, { holdVisual: true });
+        previewEditorPitch(existing.pitch, { holdVisual: true, note: existing });
 
         if (noteHit.part === "left-resize" || noteHit.part === "right-resize") {
         const snapUnit = getSnapBeat();
@@ -26070,6 +26124,7 @@
           anchorOriginalStartBeat: existing.startBeat,
           pointerBeatOffset: xToBeat(point.x) - existing.startBeat,
           previewOriginalPitch: existing.pitch,
+          previewNote: existing,
           lastPreviewPitch: existing.pitch,
           dragStarted: false,
           verticalOnly: Boolean(event.shiftKey),
@@ -26226,7 +26281,7 @@
       state.interaction.draft.pitch = nextPitch;
       if (nextPitch !== state.interaction.lastPreviewPitch) {
         state.interaction.lastPreviewPitch = nextPitch;
-        previewEditorPitch(nextPitch, { holdVisual: true });
+        previewEditorPitch(nextPitch, { holdVisual: true, volume: getActiveNewNoteVolume() });
       }
     } else if (state.interaction.type === "midi-marquee") {
       state.interaction.currentX = Math.max(point.x, beatToX(0));
@@ -26419,7 +26474,7 @@
       const previewPitch = interaction.previewOriginalPitch + appliedPitchDelta;
       if (previewPitch !== interaction.lastPreviewPitch) {
         interaction.lastPreviewPitch = previewPitch;
-        previewEditorPitch(previewPitch, { holdVisual: true });
+        previewEditorPitch(previewPitch, { holdVisual: true, note: interaction.previewNote || null });
       }
       interaction.moved = interaction.moved || Math.abs(appliedDeltaBeat) > 1e-7 || appliedPitchDelta !== 0;
       if (interaction.moved && Math.abs(appliedDeltaBeat) > 1e-7) {
@@ -27270,6 +27325,39 @@
       showToast(i18nText("mml.fail_read_clipboard"));
       return false;
     }
+  }
+
+  // 악기 분류/폴더가 없는 형식(MMI·3MLE·MML)은 MIDI 불러오기처럼 최상단 그룹 하나에 담습니다.
+  // 이름: 파일 안의 제목이 있으면 그것, 없으면 "확장자 - 파일명".
+  function extractTextImportTitle(text) {
+    const source = String(text || "");
+    const found = /^[ \t]*(?:(?:\/\/|;|#)[ \t]*)?title[ \t]*[=:][ \t]*(.+?)[ \t]*$/im.exec(source);
+    return found ? found[1].replace(/\s+/g, " ").trim() : "";
+  }
+
+  function buildTextImportGroupName({ fileName = "", format = "", text = "" } = {}) {
+    const title = extractTextImportTitle(text);
+    if (title) return title;
+    const name = String(fileName || "").split(/[\\/]/).pop().trim();
+    const extMatch = /\.([^.\s]+)$/.exec(name);
+    const extension = (extMatch ? extMatch[1] : String(format || "")).toUpperCase();
+    const base = extMatch ? name.slice(0, extMatch.index).trim() : name;
+    if (extension && base) return `${extension} - ${base}`;
+    return extension || base || i18nText("group.default_name");
+  }
+
+  function createTextImportGroup(info) {
+    const group = {
+      id: state.nextChannelGroupId++,
+      name: makeUniqueChannelGroupName(buildTextImportGroupName(info)),
+      collapsed: false,
+      visible: true,
+      muted: false,
+      hue: getDefaultHue(state.channelGroups.length),
+      beforeChannelId: null,
+    };
+    state.channelGroups.push(group);
+    return group;
   }
 
   function createImportedChannel(part, partNumber) {
@@ -32406,6 +32494,7 @@
     elements.pitchSpacingSelect.value = String(state.rowHeight);
     setAudioLaneVisible(state.audioLaneVisible, { persist: false, redraw: false });
     setAddItemInstantly(loadStoredAddItemInstantly(), { persist: false });
+    setPlayheadSoundMode(loadStoredPlayheadSoundMode(), { persist: false });
     setVelocityLaneVisible(state.velocityLaneVisible, { persist: false, redraw: false });
     setVelocityLaneScope(state.velocityLaneScope, { persist: false, redraw: false });
     renderAll();
@@ -35760,6 +35849,16 @@
     return ["range", "checkbox", "radio"].includes(String(target.type || "").toLowerCase());
   }
 
+  // Z: 현재 시간선 위치에서 소리 나는 모든 노트를 각 노트 볼륨대로 한 번 들어봅니다.
+  function handlePlayheadSoundShortcut(event) {
+    if (event.code !== "KeyZ" || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
+    if (event.defaultPrevented || isPopupLikeUiOpen() || isModalPopupOpen() || isTextEntryTarget(event.target)) return false;
+    event.preventDefault();
+    if (event.repeat) return true;
+    previewNotesAtPlayhead(state.playhead.beat, { duration: PLAYHEAD_SOUND_HOLD_SECONDS, force: true });
+    return true;
+  }
+
   function handlePlaybackShortcut(event) {
     if (isModalPopupOpen()) return false;
     if (event.code !== "Space") {
@@ -36348,6 +36447,7 @@
     document.addEventListener("keydown", handleHistoryShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectAllShortcut, true);
     document.addEventListener("keydown", handleGlobalSelectedNoteShortcut, true);
+    document.addEventListener("keydown", handlePlayheadSoundShortcut, true);
     document.addEventListener("selectstart", handleNativeTextSelectionGuard, true);
     document.addEventListener("wheel", handleGlobalTrackZoomWheel, { capture: true, passive: false });
     elements.fileButton.addEventListener("click", (event) => {
@@ -36709,6 +36809,11 @@
     }
     elements.noteVolumeDisplaySelect?.addEventListener("change", () => {
       setNoteVolumeDisplay(elements.noteVolumeDisplaySelect.value);
+    });
+    elements.playheadSoundSelect?.addEventListener("change", () => {
+      setPlayheadSoundMode(elements.playheadSoundSelect.value);
+      elements.playheadSoundSelect.blur();
+      elements.rollViewport?.focus?.({ preventScroll: true });
     });
     elements.pitchSpacingSelect.addEventListener("change", () => {
       setRowHeight(Number(elements.pitchSpacingSelect.value));

@@ -2,7 +2,7 @@ export default {
   "code": "en",
   "htmlLang": "en",
   "strings": {
-    "site.title": "Mobibard v5.5",
+    "site.title": "Mobibard v6.0",
     "ui.brand": "Mobibard",
     "ui.recommended": "Recommended sites",
     "ui.select_recommended": "Select a recommended site",

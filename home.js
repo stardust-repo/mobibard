@@ -144,7 +144,7 @@
     const text = copy[safe];
     currentLang = safe;
     document.documentElement.lang = safe;
-    document.title = `${text.brand} v5.5`;
+    document.title = `${text.brand} v6.0`;
     select.value = safe;
     homeTitle.textContent = text.brand;
     subtitle.textContent = text.subtitle;
