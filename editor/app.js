@@ -25537,7 +25537,8 @@
 
   function beginNoteCreation(event, point, pointBeat) {
     const unit = getSnapBeat();
-    const startBeat = clamp(snapBeat(pointBeat), 0, getTotalBeats() - CONFIG.minimumNoteBeat);
+    // 클릭한 칸(격자 한 칸)에서 시작합니다. 반올림하면 칸의 오른쪽 절반을 눌렀을 때 다음 칸에 만들어집니다.
+    const startBeat = clamp(snapBeatToUnit(pointBeat, unit, "floor"), 0, getTotalBeats() - CONFIG.minimumNoteBeat);
     const directionalBoundaries = buildDirectionalNoteBoundarySnapPoints(
       getActiveChannel(),
       startBeat,
@@ -26266,7 +26267,7 @@
         start = clamp(magneticBeat, 0, state.interaction.initialEndBeat - CONFIG.minimumNoteBeat);
         end = state.interaction.initialEndBeat;
       } else {
-        const currentBeat = clamp(snapBeat(rawCurrentBeat), 0, getTotalBeats() - unit);
+        const currentBeat = clamp(snapBeatToUnit(rawCurrentBeat, unit, "floor"), 0, getTotalBeats() - unit);
         start = Math.min(anchorBeat, currentBeat);
         end = Math.min(
           getTotalBeats(),
