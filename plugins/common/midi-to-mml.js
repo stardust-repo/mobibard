@@ -1462,14 +1462,34 @@
     const gridStep = quantizeGridStep(quantizeDivision);
     const warnings = [...midi.warnings];
 
+    // 정리에 넣을 악기 그룹(악기 선택 목록의 id). 없으면 전부 넣는다.
+    let allowChoice = null;
+    if (Array.isArray(options.selectedInstrumentGroups)) {
+      const ticksPerGrid64 = ppq / 16;
+      const sourceGroups = buildInstrumentSourceGroups(midi, ticksPerGrid64, gridStep);
+      const choices = buildInstrumentChoices(sourceGroups);
+      const sourceToChoice = new Map();
+      for (const choice of choices) for (const sourceId of choice.sourceGroupIds || []) sourceToChoice.set(sourceId, choice.id);
+      const selected = new Set(options.selectedInstrumentGroups.map(String));
+      allowChoice = info => selected.has(String(sourceToChoice.get(info.id) || info.choiceId));
+    }
+    const rowLimit = Math.max(0, clampInt(options.channelCount ?? 3, 1, 6) - clampInt(options.mainCount ?? 3, 1, Math.min(3, clampInt(options.channelCount ?? 3, 1, 6))));
+    const rows = Array.isArray(options.rows) ? options.rows.slice(0, rowLimit).map(id => String(id || "auto")) : null;
+    const cymbalOn = Boolean(rows && rows.includes("cymbal"));
+    const drumOn = Boolean(rows && rows.includes("bigdrum"));
+    const useDrums = cymbalOn || drumOn;
+
     const notes = [];
     const progs = {};
     const ordered = [...midi.notes].sort((a, b) => a.startTick - b.startTick);
     for (const n of ordered) {
       if (!(n.endTick > n.startTick)) continue;
-      if (getInstrumentGroupInfo(n).isBeat) continue;
+      const info = getInstrumentGroupInfo(n);
+      if (allowChoice && !allowChoice(info)) continue;
       const ch = clampInt(n.channel, 0, 15);
-      if (!(ch in progs)) progs[ch] = normalizeProgram(n.program);
+      // 드럼(10번 채널)은 나머지 주자 악기로 드럼 심벌/드럼 북을 고른 경우에만 엔진에 넘긴다.
+      if (info.isBeat && !(useDrums && ch === 9)) continue;
+      if (!(ch in progs) && ch !== 9) progs[ch] = normalizeProgram(n.program);
       notes.push({ s: n.startTick, e: n.endTick, p: clampInt(n.midi, 0, 127), v: Math.max(1, playbackVelocity(n)), ch });
     }
     if (!notes.length) throw new Error(tr("midi.err_selected_no_notes"));
@@ -1484,19 +1504,20 @@
     const result = arranger.arrangeSource({ div: ppq, notes, tempos, tsigs, progs }, {
       total: channelCount,
       mainCount,
-      mainInst: "auto",
+      mainInst: String(options.mainInst || "auto"),
       trust: Number.isFinite(Number(options.trust)) ? Number(options.trust) : 0.5,
-      rows: Array.from({ length: Math.max(0, channelCount - mainCount) }, () => "auto"),
-      cymbal: { on: false },
-      drum: { on: false },
+      rows: rows ? rows.slice(0, Math.max(0, channelCount - mainCount)) : Array.from({ length: Math.max(0, channelCount - mainCount) }, () => "auto"),
+      cymbal: { on: cymbalOn, density: String(options.cymbalDensity || "max") },
+      drum: { on: drumOn, density: String(options.drumDensity || "max") },
       gridPerBeat: quantizeDivision === 32 ? 8 : 16,
     });
 
     // 엔진 틱 → 64분음표 격자. 엔진이 시간 단위를 늘렸으면(result.div) 그 기준으로 나눈다.
     const ticksPerGrid = result.div / 16;
     const fold = p => { let v = p; while (v < MML_MIN_MIDI) v += 12; while (v > MML_MAX_MIDI) v -= 12; return v; };
-    const voiceChannels = result.channels.filter(c => !c.drum);
-    const voiceInstIds = voiceChannels.map(c => c.instId || 'piano');
+    // 드럼 채널도 MML 채널 하나로 그대로 둔다(엔진이 정한 순서 = MML 채널 순서).
+    const voiceChannels = result.channels;
+    const voiceInstIds = voiceChannels.map(c => c.instId || (c.drum === 'cymbal' ? 'cymbal' : c.drum ? 'bigdrum' : 'piano'));
     while (voiceInstIds.length < channelCount) voiceInstIds.push('piano');
     const voices = voiceChannels.map(c => c.notes.map(n => {
       const startGrid = quantizeGridValue(n.s / ticksPerGrid, gridStep, 0);

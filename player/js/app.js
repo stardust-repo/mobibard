@@ -2800,7 +2800,7 @@
     );
     if (state.ui.tutorialImage) {
       state.ui.tutorialImage.hidden = false;
-      state.ui.tutorialImage.src = `assets/tutorial/${folder}/${step.image}?rev=20261106-tutorial-recapture`;
+      state.ui.tutorialImage.src = `assets/tutorial/${folder}/${step.image}?rev=20261118-tutorial-recapture`;
       state.ui.tutorialImage.alt = tutorialFormat("tutorial.image_alt", [title], `${title} screen example`);
     }
     if (state.ui.tutorialImageFallback) state.ui.tutorialImageFallback.hidden = true;
@@ -2821,7 +2821,7 @@
     const next = TUTORIAL_STEPS[tutorialStepIndex + 1];
     if (next) {
       const preload = new Image();
-      preload.src = `assets/tutorial/${folder}/${next.image}?rev=20261106-tutorial-recapture`;
+      preload.src = `assets/tutorial/${folder}/${next.image}?rev=20261118-tutorial-recapture`;
     }
   }
 
@@ -2917,7 +2917,7 @@
   }
 
   function targetForPanel(id) {
-    if (id === "midiConvertDialog" || id === "midiBulkAssignDialog") return state.ui.assignmentHost;
+    if (id === "midiConvertDialog") return state.ui.assignmentHost;
     if (id === "mmiImportDialog") return state.ui.sourceInlineHost;
     if (id === "googleDriveSaveDialog") return state.ui.copyInlineHost;
     return state.ui.legacyHost;
@@ -2955,11 +2955,6 @@
           leftHead.removeAttribute("data-i18n");
           leftHead.textContent = wb6t("channelSettings");
         }
-        const rightHead = panel.querySelector("#midiInstrumentPanelTitle");
-        if (rightHead) {
-          rightHead.removeAttribute("data-i18n");
-          rightHead.textContent = wb6t("instrumentSettings");
-        }
         updateMidiChannelFilter();
         requestAnimationFrame(updateMidiChannelFilter);
       }
@@ -2982,7 +2977,7 @@
   }
 
   function convertDialogs() {
-    const nativePopupIds = new Set(["tempoEditDialog", "codeHelpDialog", "pasteMmlDialog", "midiBulkAssignDialog"]);
+    const nativePopupIds = new Set(["tempoEditDialog", "codeHelpDialog", "pasteMmlDialog"]);
     Array.from(document.querySelectorAll("dialog")).forEach(dialog => {
       if (nativePopupIds.has(dialog.id)) return;
       const panel = el("section", `${dialog.className} wb4-converted-dialog`);
@@ -3000,8 +2995,7 @@
     state.ui.assignmentHost?.addEventListener("click", event => {
       const button = event.target.closest("button");
       if (!button || !button.closest("#midiConvertDialog")) return;
-      if (["midiBulkAssignBtn", "midiConvertReloadFile", "midiConvertGoogleDriveLoad", "midiConvertApply", "midiConvertCancel"].includes(button.id)) return;
-      if (button.closest("#midiBulkAssignDialog")) return;
+      if (["midiConvertReloadFile", "midiConvertGoogleDriveLoad", "midiConvertApply", "midiConvertCancel"].includes(button.id)) return;
       scheduleMidiAutoApply();
     });
   }
@@ -4502,11 +4496,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
 
   const { shortError, clampInt, formatTime } = window.MabiUtils;
-  const { midiToMml: sharedMidiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
-  const midiToMml = (bytes, fileName, options = {}) => sharedMidiToMml(bytes, fileName, {
-    ...options,
-    ignoreSingle64thOverlap: true,
-  });
+  const { analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview } = window.MabiMidi;
   const { parseMabinogiMml: parseSharedMabinogiMml, splitMmlParts, splitMmlPartsDetailed, parseMmlPart, buildSchedule, composeMml, analyzeIrregularMmlLengths, normalizeIrregularMmlLengths } = window.MabiMml;
   const parseMabinogiMml = (text) => parseSharedMabinogiMml(text, { maxParts: 6, padToParts: 6 });
   const { optimizeMml, addLeadingSilenceMml } = window.MabiOptimizer;
@@ -4627,15 +4617,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const midiConvertDialog = $("midiConvertDialog");
   const midiConvertTitle = $("midiConvertTitle");
   const midiConvertSummary = $("midiConvertSummary");
-  const midiBulkAssignBtn = $("midiBulkAssignBtn");
-  const midiBulkAssignDialog = $("midiBulkAssignDialog");
-  const midiBulkChannelButtons = Array.from(document.querySelectorAll(".midi-bulk-channel"));
-  const midiBulkAllBtn = $("midiBulkAllBtn");
-  const midiBulkInstrumentButtons = Array.from(document.querySelectorAll(".midi-bulk-instrument"));
-  const midiBulkAllInstrumentBtn = $("midiBulkAllInstrumentBtn");
-  const midiBulkSelectBtn = $("midiBulkSelectBtn");
-  const midiBulkClearBtn = $("midiBulkClearBtn");
-  const midiBulkCancelBtn = $("midiBulkCancelBtn");
   const midiChannelList = $("midiChannelList");
   const midiRoleList = $("midiRoleList");
   const midiInstrumentPanelTitle = $("midiInstrumentPanelTitle");
@@ -4730,6 +4711,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   let splitPreviewButton = null;
   let splitPreviewButtonText = "";
   let partPresetKeys = Array.from({ length: 6 }, () => DEFAULT_PART_PRESET_KEY);
+  // 악기 탭 draft를 미리 재생할 때만 쓰는 채널 음색(적용하거나 취소하면 비운다).
+  let previewPartPresetKeys = null;
   let midiPartPresetKeys = null;
   let midiPartPresetName = defaultMidiSoundPresetLabel();
   let partMuteStates = Array.from({ length: 6 }, () => false);
@@ -4829,6 +4812,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const active = Boolean(detail.active);
     const nextSource = active ? normalizeMmlForDisplay(String(detail.mml || "")) : "";
     const nextLabel = active ? String(detail.label || "") : "";
+    if (!active) previewPartPresetKeys = null;
     if (nextSource === playbackSourceOverride && nextLabel === playbackSourceOverrideLabel) return;
 
     const wasPlaying = Boolean(isPlaying);
@@ -5107,37 +5091,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         applyPartMuteStates(next);
       });
     }
-    midiBulkAssignBtn?.addEventListener("click", openMidiBulkAssignDialog);
-    for (const button of midiBulkChannelButtons) {
-      button.addEventListener("click", () => {
-        const selected = button.getAttribute("aria-pressed") !== "true";
-        setMidiBulkChannelButtonState(button, selected);
-        updateMidiBulkAllButtonState();
-      });
-    }
-    midiBulkAllBtn?.addEventListener("click", () => {
-      const shouldSelectAll = !midiBulkChannelButtons.every(button => button.getAttribute("aria-pressed") === "true");
-      for (const button of midiBulkChannelButtons) setMidiBulkChannelButtonState(button, shouldSelectAll);
-      updateMidiBulkAllButtonState();
-    });
-    for (const button of midiBulkInstrumentButtons) {
-      button.addEventListener("click", () => {
-        if (button.disabled) return;
-        const selected = button.getAttribute("aria-pressed") !== "true";
-        setMidiBulkChannelButtonState(button, selected);
-        updateMidiBulkAllInstrumentButtonState();
-      });
-    }
-    midiBulkAllInstrumentBtn?.addEventListener("click", () => {
-      const availableButtons = midiBulkInstrumentButtons.filter(button => !button.disabled);
-      if (!availableButtons.length) return;
-      const shouldSelectAll = !availableButtons.every(button => button.getAttribute("aria-pressed") === "true");
-      for (const button of availableButtons) setMidiBulkChannelButtonState(button, shouldSelectAll);
-      updateMidiBulkAllInstrumentButtonState();
-    });
-    midiBulkClearBtn?.addEventListener("click", () => applyMidiBulkAssignment(false));
-    midiBulkSelectBtn?.addEventListener("click", () => applyMidiBulkAssignment(true));
-    midiBulkCancelBtn?.addEventListener("click", () => midiBulkAssignDialog?.close());
     midiConvertReloadFile?.addEventListener("click", () => { if (!midiConvertBusy) openSourceFilePicker(); });
     midiConvertGoogleDriveLoad?.addEventListener("click", () => { if (!midiConvertBusy) void openGoogleDrivePicker(); });
     midiConvertApply?.addEventListener("click", () => requestMidiConvert({ force: true }));
@@ -8513,6 +8466,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       sourceName: String(importData?.name || ""),
       savedAt: Date.now(),
       groupSignatures: groups.map(midiGroupCacheSignature),
+      arrange: normalizeArrangeSettings(settings?.arrange),
+      includedGroupIndexes: Array.from(settings?.includedGroups || []).map(id => indexById.get(String(id))).filter(index => Number.isInteger(index)),
       quantizeDivision: Number(settings?.quantizeDivision) === 32 ? 32 : 64,
       channels: Array.from({ length: 6 }, (_, index) => {
         const channel = settings?.channels?.[index] || {};
@@ -8554,17 +8509,25 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       groups: allGroups,
       quantizeDivision: 64,
       partCount: 0,
-      channels: channelSettings
+      channels: channelSettings,
+      includedGroups: new Set(),
+      arrange: defaultArrangeSettings()
     };
   }
 
   function cloneMidiPendingSettings(settings) {
     if (!settings) return null;
     const groups = Array.isArray(settings.groups) ? settings.groups : [];
+    // 정리에 넣을 악기는 기본으로 전부 선택한다(예전 세션처럼 값이 없을 때도 전부).
+    const includedGroups = settings.includedGroups
+      ? new Set(Array.from(settings.includedGroups).map(String))
+      : new Set(groups.map(group => String(group.id)));
     return {
       groups,
       quantizeDivision: Number(settings.quantizeDivision) === 32 ? 32 : 64,
       partCount: Math.max(0, Number(settings.partCount) || 0),
+      includedGroups,
+      arrange: normalizeArrangeSettings(settings.arrange),
       channels: Array.from({ length: 6 }, (_, index) => {
         const source = settings.channels?.[index] || {};
         const overlapMergeMode = normalizeOverlapMergeMode(source.overlapMergeMode ?? source.overlapMerge);
@@ -8623,23 +8586,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
   function applyInitialMidiGroupAssignment(settings) {
-    if (!settings?.groups?.length || !Array.isArray(settings.channels)) return;
-    const sortedGroups = sortMidiInstrumentGroups(settings.groups);
-    // 드럼이 정렬상 첫 그룹이어도 뒤의 멜로디 그룹을 찾아 최초 배정한다.
-    // 드럼만 있는 파일은 드럼 그룹 자체를 배정해 최초 자동 변환이 비지 않게 한다.
-    const firstGroup = sortedGroups.find(group => getMidiInstrumentCategory(group) !== "drums") || sortedGroups[0];
-    if (!firstGroup) return;
-    const firstCategory = getMidiInstrumentCategory(firstGroup);
-
-    const firstCategoryGroupIds = sortedGroups
-      .filter(group => getMidiInstrumentCategory(group) === firstCategory)
-      .map(group => group.id);
-
-    for (const channelIndex of [0, 1, 2]) {
-      const selected = settings.channels[channelIndex]?.selectedInstrumentGroups;
-      if (!selected) continue;
-      for (const groupId of firstCategoryGroupIds) selected.add(groupId);
-    }
+    // 처음에는 모든 악기 파트를 정리에 넣는다. 드럼 파트는 나머지 주자 악기로 드럼을 골랐을 때만 쓰인다.
+    if (!settings?.groups?.length) return;
+    settings.includedGroups = new Set(settings.groups.map(group => String(group.id)));
   }
 
   function updateMidiQuantizeToggle() {
@@ -8664,62 +8613,353 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
 
+  // ---- 악기 탭: MML 채널 정리 엔진 설정 -------------------------------------------------------
+  // 판단 기준(1 = 악기, 0.5 = 균형, 0 = 문맥), 사용할 채널 수, 메인 주자 채널 수,
+  // 메인 주자 악기, 나머지 주자 악기(1채널씩, 드럼 심벌/드럼 북 포함) + 정리에 넣을 악기 그룹.
+  const ARRANGE_TRUST_OPTIONS = [[1, "record"], [0.5, "balance"], [0, "context"]];
+  const ARRANGE_MELODIC_IDS = ["piano", "harp", "lute", "folkGuitar", "mandolin", "violin", "flute", "chalumeau", "harmonica", "catHarmonica", "xylophone", "musicBox"];
+  const ARRANGE_DRUM_IDS = ["cymbal", "bigdrum"];
+  const ARRANGE_DENSITY_OPTIONS = ["max", "mid", "low"];
+  // 편곡 엔진 악기 id → 기본 SoundFont(MobiBard 14 프리셋) 악기 id
+  const ARRANGE_TO_SOUNDFONT_ID = { folkGuitar: "guitar", catHarmonica: "vocal", cymbal: "metal", bigdrum: "drum" };
+
+  function defaultArrangeSettings() {
+    return { trust: 0.5, total: 6, mainCount: 3, mainInst: "auto", rows: ["auto", "auto", "auto", "auto", "auto"], cymbalDensity: "max", drumDensity: "max" };
+  }
+
+  function normalizeArrangeSettings(raw) {
+    const base = defaultArrangeSettings();
+    const source = raw && typeof raw === "object" ? raw : {};
+    const trustValue = Number(source.trust);
+    const trust = ARRANGE_TRUST_OPTIONS.some(([value]) => value === trustValue) ? trustValue : base.trust;
+    const total = clampInt(Number(source.total) || base.total, 1, 6);
+    const mainCount = clampInt(Number(source.mainCount) || base.mainCount, 1, Math.min(3, total));
+    const mainInst = ARRANGE_MELODIC_IDS.includes(source.mainInst) ? source.mainInst : "auto";
+    const rows = Array.from({ length: 5 }, (_, index) => {
+      const id = String(source.rows?.[index] || "auto");
+      return ARRANGE_MELODIC_IDS.includes(id) || ARRANGE_DRUM_IDS.includes(id) ? id : "auto";
+    });
+    // 드럼 심벌·드럼 북은 각각 한 채널만 쓸 수 있다. 실제로 쓰는 나머지 주자 칸 안에서 두 번째부터는 자동으로 돌린다.
+    const rowCount = total - mainCount;
+    const seenDrums = new Set();
+    for (let index = 0; index < rows.length; index++) {
+      if (!ARRANGE_DRUM_IDS.includes(rows[index])) continue;
+      if (index < rowCount && !seenDrums.has(rows[index])) seenDrums.add(rows[index]);
+      else if (index < rowCount) rows[index] = "auto";
+    }
+    const density = value => ARRANGE_DENSITY_OPTIONS.includes(value) ? value : "max";
+    return { trust, total, mainCount, mainInst, rows, cymbalDensity: density(source.cymbalDensity), drumDensity: density(source.drumDensity) };
+  }
+
+  function arrangeActiveRows(arrange) {
+    return arrange.rows.slice(0, Math.max(0, arrange.total - arrange.mainCount));
+  }
+
+  function arrangeInstLabel(id) {
+    return id === "auto" ? i18nText("arrange.auto") : i18nText(`arrange.inst_${id}`);
+  }
+
+  function getMidiIncludedGroupIds(settings = pendingMidiSettings) {
+    if (!settings) return [];
+    const allowed = new Set((settings.groups || []).map(group => String(group.id)));
+    return Array.from(settings.includedGroups || []).map(String).filter(id => allowed.has(id));
+  }
+
+  function renderArrangeSegmented(values, current, labelOf, onPick, options = {}) {
+    const group = document.createElement("div");
+    group.className = "wb4-segmented wb15-arr-segmented";
+    group.setAttribute("role", "group");
+    if (options.ariaLabel) group.setAttribute("aria-label", options.ariaLabel);
+    for (const value of values) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `wb4-segment wb15-arr-option${value === current ? " active" : ""}`;
+      button.textContent = labelOf(value);
+      button.setAttribute("aria-pressed", value === current ? "true" : "false");
+      if (options.isDisabled?.(value)) button.disabled = true;
+      button.addEventListener("click", () => onPick(value));
+      group.appendChild(button);
+    }
+    return group;
+  }
+
+  function renderArrangeSelect(values, current, onPick, ariaLabel, isDisabled = null) {
+    const select = document.createElement("select");
+    select.className = "wb15-arr-select";
+    select.setAttribute("aria-label", ariaLabel);
+    for (const value of values) {
+      const option = new Option(arrangeInstLabel(value), value, false, value === current);
+      if (isDisabled?.(value)) option.disabled = true;
+      select.appendChild(option);
+    }
+    select.value = current;
+    select.addEventListener("change", () => onPick(select.value));
+    return select;
+  }
+
+  function arrangeField(labelKey, control, descText = "") {
+    const field = document.createElement("div");
+    field.className = "wb15-arr-field";
+    const label = document.createElement("strong");
+    label.className = "wb15-arr-label";
+    label.textContent = i18nText(labelKey);
+    const body = document.createElement("div");
+    body.className = "wb15-arr-body";
+    body.appendChild(control);
+    if (descText) {
+      const desc = document.createElement("p");
+      desc.className = "wb15-arr-desc";
+      desc.textContent = descText;
+      body.appendChild(desc);
+    }
+    field.append(label, body);
+    return field;
+  }
+
+  function updateArrangeSetting(mutator) {
+    if (!pendingMidiSettings) return;
+    const next = normalizeArrangeSettings(pendingMidiSettings.arrange);
+    mutator(next);
+    pendingMidiSettings.arrange = normalizeArrangeSettings(next);
+    renderMidiRoleList();
+    updateMidiRoleControls();
+    scheduleMidiConvertRequest();
+  }
+
   function renderMidiRoleList() {
     if (!midiRoleList || !pendingMidiSettings) return;
-    midiRoleList.innerHTML = "";
-    const header = document.createElement("div");
-    header.className = "midi-role-list-header wb13-midi-role-header";
-    header.innerHTML = `
-      <strong>${escapeHtml(i18nText("ui.channel"))}</strong>
-      <strong>${escapeHtml(i18nText("midi.instrument_note_placement"))}</strong>
-      <strong>${escapeHtml(i18nText("midi.instrument_note_overlap"))}</strong>
-    `;
-    midiRoleList.appendChild(header);
+    const arrange = pendingMidiSettings.arrange = normalizeArrangeSettings(pendingMidiSettings.arrange);
+    midiRoleList.replaceChildren();
+    midiRoleList.classList.add("wb15-arr-options");
 
-    const roleOptions = [
-      ["auto", i18nText("ui.auto")],
-      ["high", i18nText("ui.high")],
-      ["low", i18nText("ui.low")]
-    ];
-    for (let i = 0; i < 6; i++) {
-      const setting = pendingMidiSettings.channels[i];
+    const trustKey = (ARRANGE_TRUST_OPTIONS.find(([value]) => value === arrange.trust) || ARRANGE_TRUST_OPTIONS[1])[1];
+    midiRoleList.appendChild(arrangeField("arrange.trust", renderArrangeSegmented(
+      ARRANGE_TRUST_OPTIONS.map(([value]) => value),
+      arrange.trust,
+      value => i18nText(`arrange.trust_${(ARRANGE_TRUST_OPTIONS.find(([v]) => v === value) || [])[1]}`),
+      value => updateArrangeSetting(next => { next.trust = value; }),
+      { ariaLabel: i18nText("arrange.trust") }
+    ), i18nText(`arrange.trust_desc_${trustKey}`)));
+
+    midiRoleList.appendChild(arrangeField("arrange.total", renderArrangeSegmented(
+      [1, 2, 3, 4, 5, 6], arrange.total, String,
+      value => updateArrangeSetting(next => { next.total = value; next.mainCount = Math.min(next.mainCount, value, 3); }),
+      { ariaLabel: i18nText("arrange.total") }
+    )));
+
+    midiRoleList.appendChild(arrangeField("arrange.main_count", renderArrangeSegmented(
+      [1, 2, 3], arrange.mainCount, String,
+      value => updateArrangeSetting(next => { next.mainCount = value; }),
+      { ariaLabel: i18nText("arrange.main_count"), isDisabled: value => value > arrange.total }
+    ), i18nText("arrange.main_count_desc")));
+
+    midiRoleList.appendChild(arrangeField("arrange.main_inst", renderArrangeSelect(
+      ["auto", ...ARRANGE_MELODIC_IDS], arrange.mainInst,
+      value => updateArrangeSetting(next => { next.mainInst = value; }),
+      i18nText("arrange.main_inst")
+    )));
+
+    const rows = arrangeActiveRows(arrange);
+    const rowsHost = document.createElement("div");
+    rowsHost.className = "wb15-arr-rows";
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.className = "wb15-arr-desc";
+      empty.textContent = i18nText("arrange.rest_none");
+      rowsHost.appendChild(empty);
+    }
+    rows.forEach((id, index) => {
+      const channelIndex = arrange.mainCount + index;
       const row = document.createElement("div");
-      row.className = `midi-role-row midi-export-channel part-${i} wb8-midi-role-card wb13-midi-role-row`;
-      row.dataset.channelIndex = String(i);
-      const mergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
-      setting.overlapMergeMode = mergeMode;
-      setting.overlapMerge = mergeMode !== "none";
+      row.className = `wb15-arr-row part-${channelIndex}`;
+      row.style.setProperty("--wb15-channel-color", `var(--part${channelIndex})`);
+      const name = document.createElement("span");
+      name.className = "wb15-arr-row-name";
+      name.textContent = PART_LABELS[channelIndex] || i18nText("ui.numbered", [channelIndex + 1]);
+      const usedElsewhere = value => ARRANGE_DRUM_IDS.includes(value) && rows.some((other, otherIndex) => otherIndex !== index && other === value);
+      const select = renderArrangeSelect(
+        ["auto", ...ARRANGE_MELODIC_IDS, ...ARRANGE_DRUM_IDS], id,
+        value => updateArrangeSetting(next => { next.rows[index] = value; }),
+        `${i18nText("arrange.rest_inst")} · ${name.textContent}`,
+        usedElsewhere
+      );
+      row.append(name, select);
+      if (ARRANGE_DRUM_IDS.includes(id)) {
+        const densityKey = id === "cymbal" ? "cymbalDensity" : "drumDensity";
+        row.appendChild(renderArrangeSegmented(
+          ARRANGE_DENSITY_OPTIONS, arrange[densityKey], value => i18nText(`arrange.density_${value}`),
+          value => updateArrangeSetting(next => { next[densityKey] = value; }),
+          { ariaLabel: i18nText("arrange.density") }
+        ));
+      }
+      rowsHost.appendChild(row);
+    });
+    const restField = arrangeField("arrange.rest_inst", rowsHost);
+    restField.querySelector(".wb15-arr-label").append(Object.assign(document.createElement("span"), { className: "wb15-arr-label-hint", textContent: ` ${i18nText("arrange.rest_inst_hint")}` }));
+    midiRoleList.appendChild(restField);
+    scheduleMidiInstrumentListHeightSync();
+  }
 
-      const roleButtons = roleOptions.map(([value, label]) => `
-        <button type="button" class="wb13-midi-role-option${setting.role === value ? " active" : ""}"
-          data-role-index="${i}" data-role-value="${value}" aria-pressed="${setting.role === value ? "true" : "false"}">${escapeHtml(label)}</button>
-      `).join("");
-      const mergeButtons = OVERLAP_MERGE_OPTIONS.map(opt => `
-        <button type="button" class="wb13-midi-role-option${mergeMode === opt.value ? " active" : ""}"
-          data-merge-index="${i}" data-merge-value="${opt.value}" aria-pressed="${mergeMode === opt.value ? "true" : "false"}">${escapeHtml(i18nText(opt.labelKey))}</button>
-      `).join("");
+  function setMidiGroupIncluded(groupIds, included) {
+    if (!pendingMidiSettings) return;
+    if (!(pendingMidiSettings.includedGroups instanceof Set)) pendingMidiSettings.includedGroups = new Set();
+    for (const id of groupIds) {
+      if (included) pendingMidiSettings.includedGroups.add(String(id));
+      else pendingMidiSettings.includedGroups.delete(String(id));
+    }
+    renderActiveMidiInstrumentList();
+    updateMidiRoleControls();
+    scheduleMidiConvertRequest();
+  }
 
-      row.innerHTML = `
-        <strong class="wb8-midi-role-name wb13-midi-role-name">${escapeHtml(PART_LABELS[i])}</strong>
-        <div class="wb13-midi-role-options" role="group" aria-label="${escapeHtml(i18nText("aria.role", [PART_LABELS[i]]))}">${roleButtons}</div>
-        <div class="wb13-midi-role-options" role="group" aria-label="${escapeHtml(i18nText("aria.merge_mode", [PART_LABELS[i]]))}">${mergeButtons}</div>
-      `;
-      row.querySelectorAll("[data-role-value]").forEach(button => button.addEventListener("click", () => {
-        const value = String(button.dataset.roleValue || "auto");
-        updateMidiChannelRole(i, value);
-        renderMidiRoleList();
-      }));
-      row.querySelectorAll("[data-merge-value]").forEach(button => button.addEventListener("click", () => {
-        const mode = normalizeOverlapMergeMode(button.dataset.mergeValue);
-        pendingMidiSettings.channels[i].overlapMergeMode = mode;
-        pendingMidiSettings.channels[i].overlapMerge = mode !== "none";
-        updateMidiRoleControls();
-        scheduleMidiConvertRequest();
-        renderMidiRoleList();
-      }));
-      midiRoleList.appendChild(row);
+  function renderActiveMidiInstrumentList() {
+    if (!midiChannelList || !pendingMidiSettings) return;
+    const groups = sortMidiInstrumentGroups(pendingMidiSettings.groups || []);
+    const included = new Set(getMidiIncludedGroupIds());
+    if (midiInstrumentPanelTitle) {
+      const count = document.createElement("span");
+      count.className = "wb15-arr-include-total";
+      count.textContent = `${formatCount(included.size)} / ${formatCount(groups.length)}`;
+      midiInstrumentPanelTitle.replaceChildren(document.createTextNode(i18nText("arrange.include")), count);
+    }
+    midiChannelList.replaceChildren();
+    if (!groups.length) {
+      const empty = document.createElement("div");
+      empty.className = "midi-instrument-empty";
+      empty.textContent = i18nText("snd.no_inst");
+      midiChannelList.appendChild(empty);
+      return;
+    }
+    const intro = document.createElement("p");
+    intro.className = `wb15-arr-desc wb15-arr-include-desc${included.size ? "" : " is-warning"}`;
+    intro.textContent = i18nText(included.size ? "arrange.include_desc" : "arrange.include_none");
+    midiChannelList.appendChild(intro);
+
+    const makeRow = group => {
+      const id = String(group.id);
+      const checked = included.has(id);
+      const row = document.createElement("label");
+      row.className = `midi-channel-row midi-instrument-row wb8-midi-instrument-row wb15-arr-include-row${getMidiInstrumentCategory(group) === "drums" ? " percussion" : ""}${checked ? " is-included" : ""}`;
+      row.dataset.midiGroupId = id;
+      const name = group.displayName || [group.instrumentName || group.programText || i18nText("snd.no_inst"), group.partName].filter(Boolean).join(" · ");
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.className = "wb15-arr-include-check";
+      box.checked = checked;
+      box.setAttribute("aria-label", i18nText("aria.select_item", [name]));
+      box.addEventListener("change", () => setMidiGroupIncluded([id], box.checked));
+      const title = document.createElement("strong");
+      title.className = "wb8-midi-instrument-name";
+      title.textContent = name;
+      const count = document.createElement("span");
+      count.className = "wb8-midi-instrument-count wb15-arr-note-chip";
+      count.textContent = i18nText("midi.note_count", [formatCount(group.noteCount)]);
+      const listen = document.createElement("button");
+      listen.type = "button";
+      listen.className = "midi-preview-btn wb8-midi-listen wb15-arr-listen";
+      listen.dataset.midiPreview = id;
+      listen.setAttribute("aria-label", i18nText("ui.listen"));
+      listen.title = i18nText("ui.listen");
+      listen.innerHTML = midiListenIconSvg(false);
+      listen.addEventListener("click", ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        void previewMidiInstrument(group.id, ev.currentTarget, name);
+      });
+      row.append(box, title, count, listen);
+      return row;
+    };
+
+    const grouped = new Map(MIDI_INSTRUMENT_CATEGORY_ORDER.map(key => [key, []]));
+    for (const group of groups) {
+      const key = getMidiInstrumentCategory(group);
+      grouped.get(grouped.has(key) ? key : "other").push(group);
+    }
+    for (const key of MIDI_INSTRUMENT_CATEGORY_ORDER) {
+      const items = grouped.get(key) || [];
+      if (!items.length) continue;
+      const label = i18nText(MIDI_INSTRUMENT_CATEGORY_LABEL_KEYS[key] || "midi.other_instruments");
+      const section = document.createElement("details");
+      section.dataset.midiCategory = key;
+      section.open = midiInstrumentSectionOpenState.has(key) ? midiInstrumentSectionOpenState.get(key) !== false : true;
+      section.className = `midi-instrument-section midi-instrument-category-section category-${key}`;
+      const summary = document.createElement("summary");
+      summary.className = "midi-instrument-section-head wb15-arr-section-head";
+      const ids = items.map(group => String(group.id));
+      const selectedCount = ids.filter(id => included.has(id)).length;
+      const all = document.createElement("input");
+      all.type = "checkbox";
+      all.className = "wb15-arr-include-check wb15-arr-include-all";
+      all.checked = selectedCount === ids.length;
+      all.indeterminate = selectedCount > 0 && selectedCount < ids.length;
+      all.setAttribute("aria-label", i18nText("aria.select_item", [label]));
+      all.addEventListener("click", ev => ev.stopPropagation());
+      all.addEventListener("change", () => setMidiGroupIncluded(ids, all.checked));
+      const heading = document.createElement("strong");
+      heading.className = "wb15-arr-section-name";
+      heading.textContent = label;
+      const headingCount = document.createElement("span");
+      headingCount.className = "wb15-arr-section-count";
+      headingCount.textContent = `${formatCount(selectedCount)} / ${formatCount(items.length)}`;
+      const chevron = document.createElement("span");
+      chevron.className = "wb15-arr-chevron";
+      chevron.setAttribute("aria-hidden", "true");
+      summary.append(chevron, all, heading, headingCount);
+      section.appendChild(summary);
+      section.addEventListener("toggle", () => midiInstrumentSectionOpenState.set(key, section.open));
+      for (const group of items) section.appendChild(makeRow(group));
+      midiChannelList.appendChild(section);
     }
     scheduleMidiInstrumentListHeightSync();
+  }
+
+  function countActiveMidiExportChannels(settings = pendingMidiSettings) {
+    if (!settings || !getMidiIncludedGroupIds(settings).length) return 0;
+    return normalizeArrangeSettings(settings.arrange).total;
+  }
+
+  function collectMidiConvertOptions(settings = pendingMidiSettings) {
+    const sourceLabel = getMidiImportSourceLabel();
+    if (!settings) throw new Error(i18nText("midi.settings_missing", [sourceLabel]));
+    const selectedInstrumentGroups = getMidiIncludedGroupIds(settings);
+    if (!selectedInstrumentGroups.length) throw new Error(i18nText("arrange.include_none"));
+    const arrange = normalizeArrangeSettings(settings.arrange);
+    return {
+      partCount: arrange.total,
+      channelCount: arrange.total,
+      mainCount: arrange.mainCount,
+      trust: arrange.trust,
+      mainInst: arrange.mainInst,
+      rows: arrangeActiveRows(arrange),
+      cymbalDensity: arrange.cymbalDensity,
+      drumDensity: arrange.drumDensity,
+      selectedInstrumentGroups,
+      quantizeDivision: Number(settings.quantizeDivision) === 32 ? 32 : 64,
+      sourceLabel
+    };
+  }
+
+  // 편곡 엔진으로 변환하고, 채널마다 엔진이 고른 모비바드 악기를 기본 SoundFont 프리셋 키로 바꾼다.
+  function runMidiArrangeConvert(options) {
+    const arrange = window.MabiMidi?.arrangeMidiToMml;
+    if (typeof arrange !== "function") throw new Error("MML arranger is unavailable");
+    const result = arrange(pendingMidiImport.bytes, pendingMidiImport.name, options);
+    const targets = window.MobibardDefaultInstrumentMap?.targets || [];
+    const keys = defaultPartPresetKeys();
+    (result.instIds || []).slice(0, 6).forEach((instId, index) => {
+      const id = ARRANGE_TO_SOUNDFONT_ID[instId] || instId;
+      const target = targets.find(item => item.id === id);
+      keys[index] = target?.presetKey ? sanitizePresetKey(target.presetKey) : DEFAULT_PART_PRESET_KEY;
+    });
+    return { result, presetKeys: normalizePresetKeyArray(keys) };
+  }
+
+  function getMidiChannelSettingsSignature(settings = pendingMidiSettings) {
+    if (!settings) return "";
+    return JSON.stringify({
+      arrange: normalizeArrangeSettings(settings.arrange),
+      groups: getMidiIncludedGroupIds(settings).sort()
+    });
   }
 
   function syncMidiInstrumentListHeight() {
@@ -8779,14 +9019,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     requestAnimationFrame(() => syncMidiInstrumentListHeight());
   }
 
-  function updateMidiChannelRole(index, role) {
-    if (!pendingMidiSettings) return;
-    const setting = pendingMidiSettings.channels[index];
-    const requestedRole = String(role || "auto").toLowerCase();
-    setting.role = ["auto", "high", "low"].includes(requestedRole) ? requestedRole : "auto";
-    updateMidiRoleControls();
-    scheduleMidiConvertRequest();
-  }
 
   function normalizeOverlapMergeMode(value) {
     if (value === true || value === "true") return "all";
@@ -8796,48 +9028,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
 
-  function getMidiGroupSelectableChannels(group) {
-    if (!pendingMidiSettings || !group) return [];
-    return Array.from({ length: 6 }, (_, i) => ({
-      index: i,
-      label: PART_LABELS[i] || i18nText("ui.numbered", [i + 1]),
-      selected: Boolean(pendingMidiSettings.channels[i]?.selectedInstrumentGroups?.has(group.id))
-    }));
-  }
 
-  function renderMidiGroupChannelButtons(group) {
-    const items = getMidiGroupSelectableChannels(group);
-    if (!items.length) return "";
-    const shortLabel = (item) => item.index === 0 ? i18nText("ui.mel") : String(item.index);
-    return items.map(item => `
-      <button
-        class="midi-part-chip midi-part-toggle wb13-instrument-channel-button part-${item.index}${item.selected ? " selected" : ""}"
-        type="button"
-        data-midi-group-channel="${item.index}"
-        aria-pressed="${item.selected ? "true" : "false"}"
-        aria-label="${escapeHtml(i18nText("aria.select_item", [item.label]))}"
-        title="${escapeHtml(item.label)}"
-        style="--wb13-channel-color:var(--part${item.index})"
-      >${escapeHtml(shortLabel(item))}</button>
-    `).join("");
-  }
 
-  function toggleMidiGroupChannel(groupId, channelIndex, sourceButton = null) {
-    if (!pendingMidiSettings) return;
-    const index = clampInt(Number(channelIndex), 0, 5);
-    const group = pendingMidiSettings.groups.find(item => String(item.id) === String(groupId));
-    const setting = pendingMidiSettings.channels[index];
-    if (!group || !setting) return;
-    if (setting.selectedInstrumentGroups.has(group.id)) setting.selectedInstrumentGroups.delete(group.id);
-    else setting.selectedInstrumentGroups.add(group.id);
-    const selected = setting.selectedInstrumentGroups.has(group.id);
-    if (sourceButton) {
-      sourceButton.classList.toggle("selected", selected);
-      sourceButton.setAttribute("aria-pressed", selected ? "true" : "false");
-    }
-    updateMidiRoleControls();
-    scheduleMidiConvertRequest();
-  }
 
 
   function getMidiInstrumentCategory(group) {
@@ -8878,163 +9070,13 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     });
   }
 
-  function setMidiBulkChannelButtonState(button, selected) {
-    if (!button) return;
-    button.setAttribute("aria-pressed", selected ? "true" : "false");
-    button.classList.toggle("selected", selected);
-  }
 
-  function updateMidiBulkAllButtonState() {
-    if (!midiBulkAllBtn) return;
-    const allSelected = midiBulkChannelButtons.length > 0
-      && midiBulkChannelButtons.every(button => button.getAttribute("aria-pressed") === "true");
-    setMidiBulkChannelButtonState(midiBulkAllBtn, allSelected);
-  }
 
-  function updateMidiBulkAllInstrumentButtonState() {
-    if (!midiBulkAllInstrumentBtn) return;
-    const availableButtons = midiBulkInstrumentButtons.filter(button => !button.disabled);
-    const allSelected = availableButtons.length > 0
-      && availableButtons.every(button => button.getAttribute("aria-pressed") === "true");
-    setMidiBulkChannelButtonState(midiBulkAllInstrumentBtn, allSelected);
-  }
 
-  function updateMidiBulkInstrumentAvailability() {
-    const categoryCounts = new Map();
-    for (const group of pendingMidiSettings?.groups || []) {
-      const category = getMidiInstrumentCategory(group);
-      categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
-    }
 
-    let availableCount = 0;
-    for (const button of midiBulkInstrumentButtons) {
-      const category = String(button.dataset.midiBulkCategory || "");
-      const count = categoryCounts.get(category) || 0;
-      const disabled = count === 0;
-      button.disabled = disabled;
-      button.setAttribute("aria-disabled", disabled ? "true" : "false");
-      button.dataset.instrumentCount = String(count);
-      if (disabled) setMidiBulkChannelButtonState(button, false);
-      else availableCount += 1;
-    }
 
-    if (midiBulkAllInstrumentBtn) {
-      midiBulkAllInstrumentBtn.disabled = availableCount === 0;
-      midiBulkAllInstrumentBtn.setAttribute("aria-disabled", availableCount === 0 ? "true" : "false");
-      if (availableCount === 0) setMidiBulkChannelButtonState(midiBulkAllInstrumentBtn, false);
-    }
-    updateMidiBulkAllInstrumentButtonState();
-  }
 
-  function openMidiBulkAssignDialog() {
-    if (!pendingMidiSettings || midiConvertBusy || !midiBulkAssignDialog) return;
-    for (const button of midiBulkChannelButtons) setMidiBulkChannelButtonState(button, false);
-    updateMidiBulkAllButtonState();
-    for (const button of midiBulkInstrumentButtons) setMidiBulkChannelButtonState(button, false);
-    updateMidiBulkInstrumentAvailability();
-    if (midiBulkAssignDialog.showModal) midiBulkAssignDialog.showModal();
-  }
 
-  function getMidiBulkTargetGroups(categories) {
-    if (!pendingMidiSettings) return [];
-    const targets = categories instanceof Set ? categories : new Set(categories || []);
-    return pendingMidiSettings.groups.filter(group => targets.has(getMidiInstrumentCategory(group)));
-  }
-
-  function applyMidiBulkAssignment(checked) {
-    if (!pendingMidiSettings) return;
-    const channelIndexes = midiBulkChannelButtons
-      .filter(button => button.getAttribute("aria-pressed") === "true")
-      .map(button => clampInt(Number(button.dataset.midiBulkChannel), 0, 5));
-    if (!channelIndexes.length) {
-      showToast([i18nText("midi.bulk_assign"), i18nText("midi.choose_target_channel")].filter(Boolean).join(": "), "info");
-      return;
-    }
-    const targetCategories = new Set(
-      midiBulkInstrumentButtons
-        .filter(button => !button.disabled && button.getAttribute("aria-pressed") === "true")
-        .map(button => String(button.dataset.midiBulkCategory || ""))
-        .filter(Boolean)
-    );
-    if (!targetCategories.size) {
-      showToast([i18nText("midi.bulk_assign"), i18nText("midi.choose_target_instrument")].filter(Boolean).join(": "), "info");
-      return;
-    }
-    const groups = getMidiBulkTargetGroups(targetCategories);
-    for (const index of channelIndexes) {
-      const selected = pendingMidiSettings.channels[index]?.selectedInstrumentGroups;
-      if (!selected) continue;
-      for (const group of groups) {
-        if (checked) selected.add(group.id);
-        else selected.delete(group.id);
-      }
-    }
-    midiBulkAssignDialog?.close();
-    renderMidiRoleList();
-    renderActiveMidiInstrumentList();
-    updateMidiRoleControls();
-    scheduleMidiConvertRequest();
-  }
-
-  function renderActiveMidiInstrumentList() {
-    if (!midiChannelList || !pendingMidiSettings) return;
-    const groups = sortMidiInstrumentGroups(pendingMidiSettings.groups || []);
-    if (midiInstrumentPanelTitle) midiInstrumentPanelTitle.textContent = i18nText("midi.instrument_channel_select");
-    midiChannelList.innerHTML = "";
-    if (!groups.length) {
-      const empty = document.createElement("div");
-      empty.className = "midi-instrument-empty";
-      empty.textContent = i18nText("snd.no_inst");
-      midiChannelList.appendChild(empty);
-      return;
-    }
-
-    const makeRow = group => {
-      const row = document.createElement("div");
-      row.className = `midi-channel-row midi-instrument-row wb8-midi-instrument-row${getMidiInstrumentCategory(group) === "drums" ? " percussion" : ""}`;
-      row.dataset.midiGroupId = String(group.id);
-      const name = group.displayName || [group.instrumentName || group.programText || i18nText("snd.no_inst"), group.partName].filter(Boolean).join(" · ");
-      row.innerHTML = `
-        <div class="midi-instrument-selected-parts wb8-midi-instrument-channels" aria-label="${escapeHtml(i18nText("mml.chs"))}">${renderMidiGroupChannelButtons(group)}</div>
-        <strong class="wb8-midi-instrument-name">${escapeHtml(name)}</strong>
-        <span class="wb8-midi-instrument-count">${escapeHtml(i18nText("midi.note_count", [formatCount(group.noteCount)]))}</span>
-        <button class="midi-preview-btn wb8-midi-listen" type="button" data-midi-preview="${escapeHtml(group.id)}" aria-label="${escapeHtml(i18nText("ui.listen"))}" title="${escapeHtml(i18nText("ui.listen"))}"><span class="shared-transport-icon shared-icon-play" aria-hidden="true"></span></button>
-      `;
-      row.querySelector("[data-midi-preview]")?.addEventListener("click", ev => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        void previewMidiInstrument(group.id, ev.currentTarget, name);
-      });
-      row.querySelectorAll("[data-midi-group-channel]").forEach(button => {
-        button.addEventListener("click", ev => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          toggleMidiGroupChannel(group.id, Number(button.dataset.midiGroupChannel), button);
-        });
-      });
-      return row;
-    };
-
-    const grouped = new Map(MIDI_INSTRUMENT_CATEGORY_ORDER.map(key => [key, []]));
-    for (const group of groups) {
-      const key = getMidiInstrumentCategory(group);
-      grouped.get(grouped.has(key) ? key : "other").push(group);
-    }
-    for (const key of MIDI_INSTRUMENT_CATEGORY_ORDER) {
-      const items = grouped.get(key) || [];
-      if (!items.length) continue;
-      const label = i18nText(MIDI_INSTRUMENT_CATEGORY_LABEL_KEYS[key] || "midi.other_instruments");
-      const section = document.createElement("details");
-      section.dataset.midiCategory = key;
-      section.open = midiInstrumentSectionOpenState.has(key) ? midiInstrumentSectionOpenState.get(key) !== false : true;
-      section.className = `midi-instrument-section midi-instrument-category-section category-${key}`;
-      section.innerHTML = `<summary class="midi-instrument-section-head"><strong>${escapeHtml(i18nText("ui.name_count", [label, formatCount(items.length)]))}</strong></summary>`;
-      section.addEventListener("toggle", () => midiInstrumentSectionOpenState.set(key, section.open));
-      for (const group of items) section.appendChild(makeRow(group));
-      midiChannelList.appendChild(section);
-    }
-    scheduleMidiInstrumentListHeightSync();
-  }
 
 
   async function previewMidiInstrument(groupId, triggerButton = null, previewLabel = "") {
@@ -9102,13 +9144,17 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     }
   }
 
+  // 파일(file://)로 열어도 보이도록 마스크 대신 인라인 SVG로 그린다.
+  function midiListenIconSvg(isPlaying) {
+    return isPlaying
+      ? '<svg class="wb15-listen-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>'
+      : '<svg class="wb15-listen-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.8c0-1.05 1.15-1.7 2.06-1.17l10.02 6.2a2.55 2.55 0 0 1 0 4.34L9.06 20.37A1.36 1.36 0 0 1 7 19.2V4.8Z" fill="currentColor"/></svg>';
+  }
+
   function setMidiInstrumentPreviewButtonIcon(button, isPlaying) {
     if (!(button instanceof HTMLElement)) return;
     const label = isPlaying ? i18nText("midi.preview_stop") : i18nText("ui.listen");
-    const icon = document.createElement("span");
-    icon.className = `shared-transport-icon shared-icon-${isPlaying ? "stop" : "play"}`;
-    icon.setAttribute("aria-hidden", "true");
-    button.replaceChildren(icon);
+    button.innerHTML = midiListenIconSvg(isPlaying);
     button.setAttribute("aria-label", label);
     button.title = label;
   }
@@ -9317,7 +9363,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const disabled = midiConvertBusy || !hasSelectedChannel;
     midiConvertApply.disabled = disabled;
     midiConvertApply.setAttribute("aria-disabled", disabled ? "true" : "false");
-    midiConvertApply.title = hasSelectedChannel ? "" : i18nText("midi.choose_target_channel");
+    midiConvertApply.title = hasSelectedChannel ? "" : i18nText("arrange.include_none");
   }
 
   function updateMidiRoleControls() {
@@ -9330,35 +9376,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     updateMidiConvertApplyState();
   }
 
-  function buildMidiPartSoundPreset(exportChannels, groups, partCount = 6) {
-    const keys = defaultPartPresetKeys();
-    const groupMap = new Map((groups || []).map(g => [String(g.id), g]));
-    const count = clampInt(Number(partCount) || 6, 1, 6);
-    const instrumentMap = window.MobibardInstrumentMap;
-    const defaultInstrumentMap = window.MobibardDefaultInstrumentMap;
-
-    for (let i = 0; i < count; i++) {
-      const channel = exportChannels?.[i];
-      const selected = Array.isArray(channel?.selectedInstrumentGroups)
-        ? channel.selectedInstrumentGroups.map(id => groupMap.get(String(id))).filter(Boolean)
-        : [];
-      if (!selected.length) continue;
-
-      // 기본 SoundFont는 MobiBard 전용 14개 프리셋(0~13)에 직접 매핑한다.
-      // 사용자 SoundFont에서는 기존 GM 기반 악기 배정 규칙을 그대로 유지한다.
-      const mappedTarget = soundFontUsesMobibardMapping()
-        ? defaultInstrumentMap?.chooseTarget?.(selected)
-        : instrumentMap?.chooseTarget?.(selected);
-      if (mappedTarget?.presetKey) {
-        keys[i] = sanitizePresetKey(mappedTarget.presetKey);
-        continue;
-      }
-
-      // 설정 파일이 없거나 잘못된 경우에도 범주 외 코드는 1번 피아노를 사용한다.
-      keys[i] = DEFAULT_PART_PRESET_KEY;
-    }
-    return normalizePresetKeyArray(keys);
-  }
 
   function rememberMidiPartSoundPreset(keys) {
     midiPartPresetKeys = normalizePresetKeyArray(keys);
@@ -9368,55 +9385,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return true;
   }
 
-  function getMidiExportChannelConfigs(settings = pendingMidiSettings) {
-    if (!settings) return [];
-    const exportChannels = [];
-    const groups = Array.isArray(settings.groups) ? settings.groups : [];
-    const allowedIds = new Set(groups.map(group => group.id));
-    for (let i = 0; i < 6; i++) {
-      const setting = settings.channels?.[i];
-      if (!setting) continue;
-      const selected = Array.from(setting.selectedInstrumentGroups || []).filter(id => allowedIds.has(id));
-      if (!selected.length) continue;
-      const overlapMergeMode = normalizeOverlapMergeMode(setting.overlapMergeMode ?? setting.overlapMerge);
-      exportChannels.push({
-        sourcePartIndex: i,
-        role: setting.role || "auto",
-        overlapMergeMode,
-        overlapMerge: overlapMergeMode !== "none",
-        selectedInstrumentGroups: selected
-      });
-    }
-    return exportChannels;
-  }
 
-  function countActiveMidiExportChannels(settings = pendingMidiSettings) {
-    return getMidiExportChannelConfigs(settings).length;
-  }
 
-  function collectMidiConvertOptions(settings = pendingMidiSettings) {
-    const sourceLabel = getMidiImportSourceLabel();
-    if (!settings) throw new Error(i18nText("midi.settings_missing", [sourceLabel]));
-    const exportChannels = getMidiExportChannelConfigs(settings);
-    if (!exportChannels.length) throw new Error(i18nText("mml.select_one"));
-    const partCount = exportChannels.length;
-    return {
-      partCount,
-      roles: exportChannels.map(ch => ch.role),
-      exportChannels,
-      quantizeDivision: Number(settings.quantizeDivision) === 32 ? 32 : 64,
-      sourceLabel
-    };
-  }
 
-  function getMidiChannelSettingsSignature(settings = pendingMidiSettings) {
-    if (!settings) return "";
-    return JSON.stringify((settings.channels || []).map(channel => ({
-      role: channel?.role || "auto",
-      overlap: normalizeOverlapMergeMode(channel?.overlapMergeMode ?? channel?.overlapMerge),
-      groups: [...(channel?.selectedInstrumentGroups || [])].map(String).sort()
-    })));
-  }
 
   function getMidiConvertSettingsSignature(settings = pendingMidiSettings) {
     if (!settings || !pendingMidiImport) return "";
@@ -9498,8 +9469,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
     try {
       stopPlayback(false);
-      const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
-      const midiSoundPresetKeys = buildMidiPartSoundPreset(options.exportChannels, settingsForConvert?.groups || [], options.partCount);
+      const { result, presetKeys: midiSoundPresetKeys } = runMidiArrangeConvert(options);
+      previewPartPresetKeys = null;
       const normalized = normalizeImportedFullMml(result.mml);
       notifyPlayerUiSourceBaseline(normalized.mml, {
         name: pendingMidiImport.name,
@@ -9628,7 +9599,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
   function getPartPreset(partIndex) {
-    const key = partPresetKeys[clampInt(Number(partIndex), 0, 5)] || DEFAULT_PART_PRESET_KEY;
+    const key = (previewPartPresetKeys || partPresetKeys)[clampInt(Number(partIndex), 0, 5)] || DEFAULT_PART_PRESET_KEY;
     return findPresetByKey(key) || soundFont?.findPreset(0) || soundFont?.presets?.[0] || null;
   }
 
@@ -12544,12 +12515,14 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (!pendingMidiImport || !pendingMidiSettings) return "";
       const options = collectMidiConvertOptions();
       await waitForBrowserPaint();
-      const result = midiToMml(pendingMidiImport.bytes, pendingMidiImport.name, options);
+      const { result, presetKeys } = runMidiArrangeConvert(options);
+      previewPartPresetKeys = presetKeys;
       return normalizeImportedFullMml(result.mml).mml;
     },
     cancelPending() {
       if (!pendingMidiSettings || !midiAppliedSettingsSnapshot) return false;
       pendingMidiSettings = cloneMidiPendingSettings(midiAppliedSettingsSnapshot);
+      previewPartPresetKeys = null;
       updateMidiConvertSummary();
       updateMidiQuantizeToggle();
       renderMidiRoleList();

@@ -10005,3 +10005,249 @@ a[class*="button"]:hover {
 }
 .player-ui .wb6-global-panel .wb9-unit-outside .wb9-number-step-buttons { align-self: center; }
 .player-ui .wb6-global-panel .wb9-unit-outside .wb9-number-suffix { flex: 0 0 auto; color: var(--wb4-muted); font-size: 12px; font-weight: 700; }
+
+/* ---- 악기 탭: MML 채널 정리 설정 + 정리에 넣을 악기 (노트 탭과 같은 행 구성) ---- */
+.player-ui #midiConvertDialog .midi-dialog-layout { display: grid !important; grid-template-columns: minmax(0, 1fr) !important; gap: 0 !important; }
+.player-ui #midiConvertDialog .midi-left-panel,
+.player-ui #midiConvertDialog .midi-right-panel { padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+
+/* 설정 행 */
+.player-ui #midiConvertDialog .wb15-arr-options {
+  display: grid !important;
+  gap: 0 !important;
+  padding: 6px 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.player-ui #midiConvertDialog .wb15-arr-field {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 12px;
+  padding: 6px 10px;
+}
+.player-ui #midiConvertDialog .wb15-arr-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  margin: 0;
+  color: var(--wb4-accent);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.player-ui #midiConvertDialog .wb15-arr-label-hint { color: var(--wb4-muted); font-size: 10px; font-weight: 600; }
+.player-ui #midiConvertDialog .wb15-arr-body { display: grid; gap: 6px; min-width: 0; }
+.player-ui #midiConvertDialog .wb15-arr-segmented { min-height: 34px; }
+.player-ui #midiConvertDialog .wb15-arr-segmented .wb4-segment { min-height: 32px; font-size: 10.5px; }
+.player-ui #midiConvertDialog .wb15-arr-segmented .wb4-segment:disabled { opacity: .35; cursor: default; background: transparent; }
+.player-ui #midiConvertDialog .wb15-arr-desc { margin: 0; color: var(--wb4-muted); font-size: 10.5px; font-weight: 600; line-height: 1.5; }
+.player-ui #midiConvertDialog .wb15-arr-select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 7px;
+  background-color: var(--wb4-surface);
+  color: var(--wb4-text);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.player-ui #midiConvertDialog .wb15-arr-select:focus-visible { outline: 2px solid color-mix(in srgb, var(--wb4-accent) 35%, transparent); outline-offset: 1px; }
+.player-ui #midiConvertDialog .wb15-arr-rows { display: grid; gap: 6px; }
+.player-ui #midiConvertDialog .wb15-arr-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 10px;
+}
+.player-ui #midiConvertDialog .wb15-arr-row > .wb15-arr-segmented { grid-column: 2; }
+.player-ui #midiConvertDialog .wb15-arr-row-name { color: var(--wb15-channel-color); font-size: 11px; font-weight: 800; }
+.player-ui #midiConvertDialog .wb15-arr-row .wb15-arr-select { border-color: color-mix(in srgb, var(--wb15-channel-color) 45%, var(--wb4-line)); }
+
+/* 정리에 넣을 악기: 제목 줄 */
+.player-ui #midiConvertDialog .midi-right-panel { border-top: 1px solid var(--wb4-line) !important; }
+.player-ui #midiConvertDialog .midi-instrument-panel-head {
+  display: flex !important;
+  align-items: center !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 12px 10px 2px !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+.player-ui #midiConvertDialog #midiInstrumentPanelTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--wb4-accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+.player-ui #midiConvertDialog .wb15-arr-include-total {
+  padding: 1px 7px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 999px;
+  color: var(--wb4-muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+.player-ui #midiConvertDialog .midi-channel-list {
+  display: grid !important;
+  gap: 6px !important;
+  height: auto !important;
+  max-height: none !important;
+  padding: 4px 10px 10px !important;
+  overflow: visible !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+.player-ui #midiConvertDialog .wb15-arr-include-desc { padding: 0 0 4px; }
+.player-ui #midiConvertDialog .wb15-arr-include-desc.is-warning { color: var(--danger, #e5484d); }
+
+/* 분류 묶음 */
+.player-ui #midiConvertDialog .midi-instrument-section {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 8px !important;
+  background: var(--wb4-surface) !important;
+}
+.player-ui #midiConvertDialog .wb15-arr-section-head {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 36px !important;
+  margin: 0 !important;
+  padding: 0 10px !important;
+  list-style: none !important;
+  background: var(--wb4-surface-2, transparent) !important;
+  cursor: pointer;
+  user-select: none;
+}
+.player-ui #midiConvertDialog .wb15-arr-section-head::-webkit-details-marker { display: none; }
+.player-ui #midiConvertDialog .wb15-arr-section-head::marker { content: ""; }
+.player-ui #midiConvertDialog .midi-instrument-section[open] > .wb15-arr-section-head { border-bottom: 1px solid var(--wb4-line); }
+.player-ui #midiConvertDialog .wb15-arr-chevron {
+  width: 7px;
+  height: 7px;
+  margin: 0 3px 0 1px;
+  border-right: 2px solid var(--wb4-muted);
+  border-bottom: 2px solid var(--wb4-muted);
+  transform: rotate(-45deg);
+  transition: transform .14s ease;
+  flex: 0 0 auto;
+}
+.player-ui #midiConvertDialog .midi-instrument-section[open] .wb15-arr-chevron { transform: translateY(-2px) rotate(45deg); }
+.player-ui #midiConvertDialog .wb15-arr-section-name { color: var(--wb4-text); font-size: 11.5px; font-weight: 800; }
+.player-ui #midiConvertDialog .wb15-arr-section-count { margin-left: auto; color: var(--wb4-muted); font-size: 10px; font-weight: 750; }
+.player-ui #midiConvertDialog .wb15-arr-include-check {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--wb4-accent);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+/* 악기 행 */
+.player-ui #midiConvertDialog .wb8-midi-instrument-row.wb15-arr-include-row > * { grid-area: auto !important; }
+.player-ui #midiConvertDialog .wb8-midi-instrument-row.wb15-arr-include-row,
+.player-ui #midiConvertDialog .wb8-midi-instrument-row.wb15-arr-include-row.percussion {
+  display: grid !important;
+  grid-template-columns: 15px minmax(0, 1fr) auto 30px !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-height: 40px !important;
+  margin: 0 !important;
+  padding: 4px 10px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+.player-ui #midiConvertDialog .wb15-arr-include-row + .wb15-arr-include-row { border-top: 1px solid color-mix(in srgb, var(--wb4-line) 70%, transparent) !important; }
+.player-ui #midiConvertDialog .wb15-arr-include-row:hover { background: color-mix(in srgb, var(--wb4-accent) 6%, transparent) !important; }
+.player-ui #midiConvertDialog .wb15-arr-include-row .wb8-midi-instrument-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--wb4-text);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-ui #midiConvertDialog .wb15-arr-note-chip {
+  padding: 2px 7px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 6px;
+  color: var(--wb4-muted);
+  font-size: 9.5px;
+  font-weight: 730;
+  white-space: nowrap;
+}
+.player-ui #midiConvertDialog .wb15-arr-include-row:not(.is-included) .wb8-midi-instrument-name,
+.player-ui #midiConvertDialog .wb15-arr-include-row:not(.is-included) .wb15-arr-note-chip { opacity: .45; }
+.player-ui #midiConvertDialog .wb15-arr-listen {
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  border: 1px solid color-mix(in srgb, var(--wb4-accent) 55%, var(--wb4-line)) !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--wb4-accent) 10%, var(--wb4-surface)) !important;
+  color: var(--wb4-accent) !important;
+  box-shadow: none !important;
+}
+.player-ui #midiConvertDialog .wb15-arr-listen:hover { background: color-mix(in srgb, var(--wb4-accent) 18%, var(--wb4-surface)) !important; }
+.player-ui #midiConvertDialog .wb15-arr-listen.danger { border-color: var(--danger, #e5484d) !important; color: var(--danger, #e5484d) !important; background: color-mix(in srgb, var(--danger, #e5484d) 10%, var(--wb4-surface)) !important; }
+.player-ui #midiConvertDialog .wb15-arr-listen .shared-transport-icon { transform: scale(.8); }
+
+@media (max-width: 640px) {
+  .player-ui #midiConvertDialog .wb15-arr-field { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .player-ui #midiConvertDialog .wb15-arr-label { min-height: 0; }
+}
+.player-ui #midiConvertDialog #midiChannelList.midi-channel-list {
+  display: grid !important;
+  gap: 8px !important;
+  height: auto !important;
+  max-height: none !important;
+  padding: 4px 10px 12px !important;
+  overflow: visible !important;
+}
+.player-ui #midiConvertDialog .wb15-arr-section-head::before,
+.player-ui #midiConvertDialog .wb15-arr-section-head::after { content: none !important; display: none !important; }
+.player-ui #midiConvertDialog .wb8-midi-instrument-row.wb15-arr-include-row { height: auto !important; min-height: 40px !important; }
+/* 듣기 버튼 아이콘: 인라인 SVG (버튼 글자색을 따른다). */
+.player-ui #midiConvertDialog .wb15-arr-listen .wb15-listen-svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  pointer-events: none;
+}
+/* 판단 기준 영역 아래선과 악기 목록 위 테두리가 겹쳐 두껍게 보이던 것을 한 줄로. */
+.player-ui .wb6-instrument-panel #midiConvertDialog #midiRoleList.wb15-arr-options { border-bottom: 0 !important; }
+.player-ui #midiConvertDialog .midi-right-panel { border-top: 1px solid var(--wb4-line) !important; }
+/* 악기 행 사이 구분선 제거 (드럼 분류와 동일하게 모든 분류에서 없음) */
+.player-ui #midiConvertDialog .wb15-arr-include-row + .wb15-arr-include-row,
+.player-ui #midiConvertDialog .wb8-midi-instrument-row.wb15-arr-include-row + .wb15-arr-include-row { border-top: 0 !important; }
+/* 악기 행: 한 줄 그리드로 고정해 내용을 수직 중앙에 맞춘다 (남는 행·행 간격 제거). */
+.player-ui #midiConvertDialog .wb8-midi-instrument-row.wb15-arr-include-row,
+.player-ui #midiConvertDialog .wb8-midi-instrument-row.wb15-arr-include-row.percussion {
+  grid-template-rows: auto !important;
+  grid-auto-flow: column !important;
+  grid-auto-rows: 0 !important;
+  row-gap: 0 !important;
+  align-content: center !important;
+  align-items: center !important;
+}
