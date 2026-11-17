@@ -14615,6 +14615,10 @@
         const parsedAll = getUnifiedTextParsedWithGlobalTempo(allIndexes);
         if (parsedAll?.noteCount) {
           state.tempos = buildImportTempoList(parsedAll.tempos || []);
+          if ((openNew || isProjectEmptyForImportTempo()) && parsedAll.timeSignatures?.length) {
+            state.timeSignatures = buildImportTimeSignatureList(parsedAll.timeSignatures);
+            state.nextTimeSignatureId = state.timeSignatures.length + 1;
+          }
           const colorMode = normalizeImportChannelColorMode(mi.colorMode);
           const hueByInstrument = new Map();
           const taggedParts = [];
@@ -16328,6 +16332,10 @@
           if (index === 0) tempo.beat = 0;
         });
         state.nextTempoId = state.tempos.length + 1;
+        if (parsed.timeSignatures?.length) {
+          state.timeSignatures = buildImportTimeSignatureList(parsed.timeSignatures);
+          state.nextTimeSignatureId = state.timeSignatures.length + 1;
+        }
       } else {
         parsed = remapMmlParsedToProjectTempo(parsed);
       }
@@ -18435,9 +18443,202 @@
     }) || null;
   }
 
+  // 현재 선택된 항목(다중 선택이면 전부)이 목록에서 차지하는 위치들입니다.
+  function getSelectedChannelTreeIndexes(items) {
+    if (isMultiSelectActive()) {
+      const result = [];
+      items.forEach((item, index) => {
+        if (item.dataset.channelId != null && state.channelMultiIds.has(String(item.dataset.channelId))) result.push(index);
+      });
+      if (result.length) return result;
+    }
+    const active = items.findIndex((item) => item.classList.contains("active"));
+    return active >= 0 ? [active] : [];
+  }
+
+  // Shift+방향키: 드래그 선택처럼 기준 항목에서 커서 항목까지 채널을 연속 선택합니다.
+  let channelShiftRange = null; // { anchorKey, cursorKey, signature }
+
+  function channelTreeItemKey(item) {
+    const identity = channelTreeItemIdentity(item);
+    return identity ? `${identity.kind}:${identity.id}` : "";
+  }
+
+  // 목록이 다시 그려지면 포커스가 사라지므로(키를 빠르게 누르면 그 사이 입력이 피아노롤로 새어 나감) 즉시 되돌립니다.
+  function focusChannelTreeItemNow(identity) {
+    const row = findChannelTreeItemByIdentity(identity);
+    row?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
+    return row;
+  }
+
+  function isCollapsedGroupWithMembers(item) {
+    if (item?.dataset?.channelGroupId == null) return false;
+    const group = getChannelGroupById(item.dataset.channelGroupId);
+    return Boolean(group && group.collapsed && getChannelGroupMembers(group).length);
+  }
+
+  function expandChannelGroupForKeyboard(group) {
+    group.collapsed = false;
+    setDirtyWithoutHistory();
+    renderChannelTabs();
+  }
+
+  // base(items 안의 위치)에서 direction 쪽으로 다음 항목을 찾습니다.
+  // 접힌 그룹(채널이 있는 경우)은 열고 그 안의 항목으로 이어서 이동합니다.
+  // channelsOnly면 채널이 아닌 항목(그룹 머리글, 오디오 등)은 건너뜁니다.
+  // 반환: { items, index } (그룹을 열면 items가 새로 만들어집니다) 또는 null.
+  function findAdjacentTreeItem(items, base, direction, { channelsOnly = false, noExpand = false } = {}) {
+    let list = items;
+    let i = base + direction;
+    let guard = 0;
+    while (i >= 0 && i < list.length && guard++ < 500) {
+      const item = list[i];
+      if (!noExpand && isCollapsedGroupWithMembers(item)) {
+        const group = getChannelGroupById(item.dataset.channelGroupId);
+        const headerKey = channelTreeItemKey(item);
+        expandChannelGroupForKeyboard(group);
+        list = getChannelTreeKeyboardItems();
+        const headerIndex = list.findIndex((candidate) => channelTreeItemKey(candidate) === headerKey);
+        if (headerIndex < 0) return null;
+        let last = headerIndex;
+        while (list[last + 1]?.classList.contains("is-group-child")) last += 1;
+        if (direction > 0) {
+          // 아래로: 머리글을 건너뛰고 첫 번째 자식으로 들어갑니다(일반 이동은 머리글 다음 첫 항목).
+          i = headerIndex + 1;
+          if (!channelsOnly && i <= last) return { items: list, index: i };
+        } else {
+          i = last;
+          if (!channelsOnly && i > headerIndex) return { items: list, index: i };
+        }
+        continue;
+      }
+      if (!channelsOnly || item.dataset.channelId != null) return { items: list, index: i };
+      i += direction;
+    }
+    return null;
+  }
+
+  function extendChannelSelectionByKey(direction, { restoreTreeFocus = false } = {}) {
+    let items = getChannelTreeKeyboardItems();
+    if (!items.length) return false;
+    const selected = getSelectedChannelTreeIndexes(items);
+    if (!selected.length) return false;
+    const keyAt = (index) => channelTreeItemKey(items[index]);
+    const signature = selected.map(keyAt).join("|");
+    let anchorKey = null;
+    let cursorKey = null;
+    if (channelShiftRange && channelShiftRange.signature === signature) {
+      anchorKey = channelShiftRange.anchorKey;
+      cursorKey = channelShiftRange.cursorKey;
+    }
+    let nextCursorItem = null;
+    if (anchorKey == null) {
+      const lo = Math.min(...selected);
+      const hi = Math.max(...selected);
+      const startIndex = direction < 0 ? lo : hi;
+      if (items[startIndex].dataset.channelId != null) {
+        anchorKey = keyAt(direction < 0 ? hi : lo);
+        cursorKey = keyAt(startIndex);
+      } else {
+        // 채널이 아닌 항목에서 시작하면, 그 방향에서 가장 가까운 채널 하나를 먼저 선택하고 거기서부터 늘립니다.
+        let from = startIndex;
+        if (direction > 0 && isCollapsedGroupWithMembers(items[startIndex])) {
+          // 접힌 그룹 머리글에서 아래로: 그룹 안의 첫 채널이 가장 가깝습니다.
+          const headerKey = channelTreeItemKey(items[startIndex]);
+          expandChannelGroupForKeyboard(getChannelGroupById(items[startIndex].dataset.channelGroupId));
+          items = getChannelTreeKeyboardItems();
+          from = items.findIndex((item) => channelTreeItemKey(item) === headerKey);
+          if (from < 0) return true;
+        }
+        const found = findAdjacentTreeItem(items, from, direction, { channelsOnly: true });
+        if (!found) return true;
+        items = found.items;
+        nextCursorItem = items[found.index];
+        anchorKey = cursorKey = channelTreeItemKey(nextCursorItem);
+      }
+    }
+    if (!nextCursorItem) {
+      const cursorIndex = items.findIndex((item) => channelTreeItemKey(item) === cursorKey);
+      if (cursorIndex < 0) { channelShiftRange = null; return true; }
+      const found = findAdjacentTreeItem(items, cursorIndex, direction, { channelsOnly: true });
+      if (!found) return true;
+      items = found.items;
+      nextCursorItem = items[found.index];
+    }
+    const anchorIndex = items.findIndex((item) => channelTreeItemKey(item) === anchorKey);
+    const nextIndex = items.indexOf(nextCursorItem);
+    if (anchorIndex < 0 || nextIndex < 0) { channelShiftRange = null; return true; }
+    const from = Math.min(anchorIndex, nextIndex);
+    const to = Math.max(anchorIndex, nextIndex);
+    const ids = [];
+    for (let index = from; index <= to; index += 1) {
+      if (items[index].dataset.channelId != null) ids.push(String(items[index].dataset.channelId));
+    }
+    if (!ids.length) return true;
+    const cursorIdentity = channelTreeItemIdentity(nextCursorItem);
+    const nextCursorKey = channelTreeItemKey(nextCursorItem);
+    setChannelMultiSelection(ids, { primaryId: String(nextCursorItem.dataset.channelId) });
+    const newItems = getChannelTreeKeyboardItems();
+    channelShiftRange = {
+      anchorKey,
+      cursorKey: nextCursorKey,
+      signature: getSelectedChannelTreeIndexes(newItems).map((index) => channelTreeItemKey(newItems[index])).join("|"),
+    };
+    if (restoreTreeFocus) focusChannelTreeItemNow(cursorIdentity);
+    else elements.rollViewport?.focus?.({ preventScroll: true });
+    requestAnimationFrame(() => {
+      const row = findChannelTreeItemByIdentity(cursorIdentity);
+      row?.scrollIntoView({ block: "nearest" });
+      if (restoreTreeFocus) row?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
+      else elements.rollViewport?.focus?.({ preventScroll: true });
+    });
+    return true;
+  }
+
+  // 피아노 롤에서 방향키로 항목 선택 이동: ←/↑ 선택 항목의 위, →/↓ 선택 항목의 아래.
+  // 여러 개 선택 중이면 ↑는 가장 위 항목의 바로 위, ↓는 가장 아래 항목의 바로 아래로 옮깁니다.
+  function handleRollItemArrowNavigation(event) {
+    const key = event.key;
+    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return false;
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return false;
+    if (isTextEntryTarget(event.target) || isPopupLikeUiOpen()) return false;
+    const items = getChannelTreeKeyboardItems();
+    if (!items.length) return false;
+    const selected = getSelectedChannelTreeIndexes(items);
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selected.length) return true;
+    const up = key === "ArrowUp" || key === "ArrowLeft";
+    if (event.shiftKey) {
+      extendChannelSelectionByKey(up ? -1 : 1);
+      return true;
+    }
+    const base = up ? Math.min(...selected) : Math.max(...selected);
+    const found = findAdjacentTreeItem(items, base, up ? -1 : 1, { noExpand: true });
+    if (!found) return true;
+    const target = found.items[found.index];
+    activateChannelTreeKeyboardItem(target);
+    elements.rollViewport?.focus?.({ preventScroll: true });
+    requestAnimationFrame(() => {
+      const identity = channelTreeItemIdentity(target);
+      findChannelTreeItemByIdentity(identity)?.scrollIntoView({ block: "nearest" });
+      elements.rollViewport?.focus?.({ preventScroll: true });
+    });
+    return true;
+  }
+
   function handleChannelTreeArrowNavigation(event) {
     if (!elements.channelTabs || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return false;
-    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
+    if (event.altKey || event.ctrlKey || event.metaKey) return false;
+    if (event.shiftKey) {
+      if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return false;
+      const upKey = event.key === "ArrowUp" || event.key === "ArrowLeft";
+      if (extendChannelSelectionByKey(upKey ? -1 : 1, { restoreTreeFocus: true })) {
+        event.preventDefault();
+        return true;
+      }
+      return false;
+    }
     const items = getChannelTreeKeyboardItems();
     if (!items.length) return false;
     const currentItem = event.target.closest?.(".channel-tree-item");
@@ -18454,6 +18655,7 @@
           if (Boolean(group.collapsed) !== shouldCollapse) {
             const identity = { kind: "channel-group", id: String(group.id) };
             toggleChannelGroupCollapsed(group.id);
+            focusChannelTreeItemNow(identity);
             // toggleChannelGroupCollapsed() rebuilds the tree. Restore keyboard
             // focus to the newly rendered group header so subsequent arrows keep
             // working without an extra mouse click.
@@ -18477,6 +18679,7 @@
         if (group && !group.collapsed) {
           toggleChannelGroupCollapsed(group.id);
           selectChannelGroup(group.id);
+          focusChannelTreeItemNow({ kind: "channel-group", id: String(group.id) });
           requestAnimationFrame(() => {
             const header = findChannelTreeItemByIdentity({ kind: "channel-group", id: String(group.id) });
             header?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
@@ -18489,13 +18692,24 @@
       return false;
     }
 
-    if (event.key === "Home") index = 0;
+    let navItems = items;
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      const selected = isMultiSelectActive() ? getSelectedChannelTreeIndexes(items) : [];
+      // 여러 개 선택: ↑는 가장 위 항목의 바로 위, ↓는 가장 아래 항목의 바로 아래.
+      const base = selected.length
+        ? (event.key === "ArrowUp" ? Math.min(...selected) : Math.max(...selected))
+        : index;
+      const found = findAdjacentTreeItem(items, base, event.key === "ArrowUp" ? -1 : 1, { noExpand: true });
+      event.preventDefault();
+      if (!found) return true;
+      navItems = found.items;
+      index = found.index;
+    } else if (event.key === "Home") index = 0;
     else if (event.key === "End") index = items.length - 1;
-    else if (event.key === "ArrowUp") index = Math.max(0, index - 1);
-    else index = Math.min(items.length - 1, index + 1);
-    const target = items[index];
+    const target = navItems[index];
     const identity = channelTreeItemIdentity(target);
     activateChannelTreeKeyboardItem(target);
+    focusChannelTreeItemNow(identity);
     requestAnimationFrame(() => {
       const restored = findChannelTreeItemByIdentity(identity);
       restored?.querySelector(".channel-tree-main")?.focus({ preventScroll: true });
@@ -25633,7 +25847,7 @@
         const resizeChannel = noteHit.channel || getActiveChannel();
         const selectedForResize = getSelectedNotes(resizeChannel);
         const multiResize = Boolean(
-          event.shiftKey
+          !event.altKey
           && selectedForResize.length > 1
           && state.selectedNoteIds.has(existing.id)
         );
@@ -26802,6 +27016,8 @@
       ...part,
       notes: quantizeMmlPartNotes(part.notes, quantize),
     })).filter((part) => part.notes.length);
+    const mmiTimeSignature = sourceCandidates.find((candidate) => candidate.mmiTimeSignature)?.mmiTimeSignature || null;
+    const timeSignatures = mmiTimeSignature ? [{ beat: 0, numerator: mmiTimeSignature.numerator, denominator: mmiTimeSignature.denominator, fixed: true }] : [];
     const mmiGlobalTempoEvents = sourceCandidates.find((candidate) => Array.isArray(candidate.mmiGlobalTempoEvents) && candidate.mmiGlobalTempoEvents.length)?.mmiGlobalTempoEvents || [];
     const explicitTempoCount = mmiGlobalTempoEvents.length
       ? mmiGlobalTempoEvents.length
@@ -26816,6 +27032,7 @@
       ...tempos.map((tempo) => tempo.beat),
     );
     return {
+      timeSignatures,
       quantize: Number(quantize) === 32 ? 32 : 64,
       rawPartCount: sourceCandidates.length,
       noteParts,
@@ -35309,9 +35526,34 @@
     return false;
   }
 
+  let rollKeydownRouter = null;
+
+  // 포커스가 있는 컨트롤이 해당 키를 스스로 쓰지 않는 경우에만 피아노롤 키 처리로 넘깁니다.
+  function shouldRouteKeyToRoll(event) {
+    const target = event.target;
+    if (event.defaultPrevented || !(target instanceof Element) || !elements.rollViewport) return false;
+    if (elements.rollViewport.contains(target) || isModalPopupOpen() || isPopupLikeUiOpen()) return false;
+    if (target.closest("#channelTabs, #historyList, #guideNav, [role='menu'], [role='dialog'], .popup-backdrop")) return false;
+    const tag = target.tagName;
+    const inputType = target instanceof HTMLInputElement ? String(target.type || "").toLowerCase() : "";
+    const passive = tag === "BUTTON" || tag === "SELECT" || tag === "SUMMARY" || tag === "A" || tag === "BODY"
+      || (tag === "INPUT" && ["checkbox", "radio", "range", "button", "submit", "reset"].includes(inputType));
+    if (!passive) return false;
+    const key = String(event.key || "");
+    const commandKey = event.ctrlKey || event.metaKey;
+    if (key === "Delete" || key === "Backspace" || key === "Escape") return !commandKey && !event.altKey;
+    if (commandKey && !event.altKey && (key.toLowerCase() === "b" || event.code === "KeyB")) return true;
+    if (key.startsWith("Arrow")) {
+      // 드롭박스·슬라이더·라디오는 방향키를 스스로 씁니다.
+      if (tag === "SELECT" || (tag === "INPUT" && ["range", "radio"].includes(inputType))) return false;
+      return !commandKey && !event.altKey;
+    }
+    return false;
+  }
+
   function handleEditModeShortcut(event) {
     if (isModalPopupOpen()) return false;
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isTextEntryTarget(event.target)) {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || (isTextEntryTarget(event.target) && !isSelectTarget(event.target))) {
       return false;
     }
     const noteValue = EDIT_MODE_SHORTCUTS.get(event.key);
@@ -35326,7 +35568,7 @@
 
   function handleZoomShortcut(event) {
     if (isModalPopupOpen()) return false;
-    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || isTextEntryTarget(event.target)) {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || (isTextEntryTarget(event.target) && !isSelectTarget(event.target))) {
       return false;
     }
 
@@ -35345,8 +35587,13 @@
     return true;
   }
 
+  // 드롭박스(편집 간격, 악기 등)가 포커스를 쥐고 있어도 Space/숫자/확대 단축키는 동작해야 합니다.
+  function isSelectTarget(target) {
+    return target instanceof HTMLSelectElement;
+  }
+
   function isPlaybackShortcutInstrumentSelect(target) {
-    return target === elements.channelInstrumentSelect;
+    return isSelectTarget(target);
   }
 
   function isPlaybackShortcutNoteEditControl(target) {
@@ -36291,7 +36538,18 @@
 
     elements.snapSelect.addEventListener("change", () => {
       setEditMode(Number(elements.snapSelect.value), { notify: false });
+      // 값을 고른 뒤에는 포커스를 피아노롤로 돌려 Space(재생) 등 단축키가 바로 동작하게 합니다.
+      elements.snapSelect.blur();
+      elements.rollViewport?.focus?.({ preventScroll: true });
     });
+    // Space는 keydown에서 재생으로 처리되므로, 드롭박스가 keyup/keypress로 열리지 않게 막습니다.
+    for (const type of ["keyup", "keypress"]) {
+      document.addEventListener(type, (event) => {
+        if ((event.code === "Space" || event.key === " ") && isSelectTarget(event.target) && !event.ctrlKey && !event.metaKey && !event.altKey && !isModalPopupOpen()) {
+          event.preventDefault();
+        }
+      }, true);
+    }
     elements.noteVolumeDisplaySelect?.addEventListener("change", () => {
       setNoteVolumeDisplay(elements.noteVolumeDisplaySelect.value);
     });
@@ -36396,8 +36654,9 @@
     elements.keyboardCanvas.addEventListener("pointercancel", handleKeyboardPointerUp);
     elements.keyboardCanvas.addEventListener("pointerleave", handleKeyboardPointerLeave);
 
-    elements.rollViewport.addEventListener("keydown", (event) => {
-      if (handleEditModeShortcut(event) || handleZoomShortcut(event) || handlePlaybackShortcut(event)) {
+    elements.rollViewport.addEventListener("keydown", handleRollKeydown);
+    function handleRollKeydown(event) {
+      if (handleEditModeShortcut(event) || handleZoomShortcut(event) || handlePlaybackShortcut(event) || handleRollItemArrowNavigation(event)) {
         return;
       }
       const commandKey = event.ctrlKey || event.metaKey;
@@ -36463,7 +36722,8 @@
         event.preventDefault();
         return;
       }
-    });
+    }
+    rollKeydownRouter = handleRollKeydown;
 
     elements.mergeChannelsButton?.addEventListener("click", openChannelMergeDialog);
     const toggleAllChannelGroups = () => {
@@ -37103,6 +37363,11 @@
       }
       if (handleEditModeShortcut(event) || handleZoomShortcut(event) || handlePlaybackShortcut(event)) {
         return;
+      }
+      // 툴바 버튼·드롭박스·체크박스 등에 포커스가 남아 있어도 피아노롤 키(Delete/Esc/방향키 등)가 동작하도록 넘깁니다.
+      if (shouldRouteKeyToRoll(event) && rollKeydownRouter) {
+        rollKeydownRouter(event);
+        if (event.defaultPrevented) return;
       }
 
       // 채널 트리/버튼에 포커스가 있어도 채널 간 노트 복사·붙여넣기 단축키는 계속 동작합니다.

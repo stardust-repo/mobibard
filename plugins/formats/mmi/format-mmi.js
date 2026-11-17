@@ -312,6 +312,8 @@
     if (!matches.length) return [];
 
     const globalTempoEvents = extractGlobalTempoEvents(scoreSection, options);
+    const timeMatch = /^\s*time\s*=\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*$/im.exec(scoreSection);
+    const timeSignature = timeMatch ? { numerator: Number(timeMatch[1]), denominator: Number(timeMatch[2]) } : null;
     const candidates = [];
     let commonStartOffset = 0;
     let previousTrackEnd = 0;
@@ -365,6 +367,7 @@
           mmiVisible: visible,
           mmiStartTick: startTick,
           mmiGlobalTempoEvents: globalTempoEvents,
+          mmiTimeSignature: timeSignature,
         });
       }
       previousTrackEnd = trackMatch.end;
