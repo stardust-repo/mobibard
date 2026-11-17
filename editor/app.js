@@ -224,6 +224,7 @@
     settingsMenu: document.querySelector("#settingsMenu"),
     velocityLaneVisibleToggle: document.querySelector("#velocityLaneVisibleToggle"),
     audioLaneVisibleToggle: document.querySelector("#audioLaneVisibleToggle"),
+    addItemInstantlyToggle: document.querySelector("#addItemInstantlyToggle"),
     editUndoButton: document.querySelector("#editUndoButton"),
     editRedoButton: document.querySelector("#editRedoButton"),
     editCopyButton: document.querySelector("#editCopyButton"),
@@ -951,6 +952,7 @@
     audioTreeDrag: { sourceId: null, pointerId: null, dragging: false, sourceElement: null, container: null },
     channelGroupDrag: { groupId: null, pointerId: null, dragging: false, headerElement: null, container: null },
     channelEdit: {
+      pending: null,
       channelId: null,
       groupId: null,
       mode: "channel",
@@ -992,6 +994,7 @@
     masterVolume: 1,
     noteVolumeDisplay: "selected",
     audioLaneVisible: false,
+    addItemInstantly: false,
     velocityLaneVisible: false,
     overviewTrackInfoVisible: true,
     velocityLaneScope: "channel",
@@ -5083,6 +5086,25 @@
     } catch {
       return false;
     }
+  }
+
+  // "항목 바로 추가": 꺼져 있으면(기본) 항목을 추가하기 전에 편집 창을 먼저 띄웁니다.
+  function loadStoredAddItemInstantly() {
+    try {
+      const raw = window.localStorage.getItem("mobibard-add-item-instantly");
+      return raw != null && raw !== "0" && raw !== "false";
+    } catch {
+      return false;
+    }
+  }
+
+  function setAddItemInstantly(value, { persist = true } = {}) {
+    state.addItemInstantly = Boolean(value);
+    syncSettingsToggle(elements.addItemInstantlyToggle, state.addItemInstantly);
+    if (persist) {
+      try { window.localStorage.setItem("mobibard-add-item-instantly", state.addItemInstantly ? "1" : "0"); } catch {}
+    }
+    return state.addItemInstantly;
   }
 
   function loadStoredVelocityLaneScope() {
@@ -9873,7 +9895,7 @@
       const doubleClick = state.channelEdit.lastClickGroupId === s.id && now - state.channelEdit.lastClickGroupAt <= 360;
       state.channelEdit.lastClickGroupId = doubleClick ? null : s.id;
       state.channelEdit.lastClickGroupAt = doubleClick ? 0 : now;
-      if (doubleClick) { if (isMidiInputGroup(getChannelGroupById(s.id))) openMidiInputSettingsDialog(); else openChannelGroupDialog(s.id); }
+      if (doubleClick) openChannelGroupDialog(s.id);
       else { scheduleAutosave(250); restoreItemTreeFocus({ kind: s.kind, id: s.id }, s.container); }
     } else {
       const doubleClick = state.channelEdit.lastClickChannelId === s.id && now - state.channelEdit.lastClickAt <= 360;
@@ -10387,7 +10409,7 @@
     return Math.max(CONFIG.minimumNoteBeat, snappedEnd - startBeat);
   }
 
-  async function importAudioFile(file, { groupId = null, startBeat: forcedStartBeat = null, alignSeconds = null, muted = false, beforeChannelId = null } = {}) {
+  async function importAudioFile(file, { groupId = null, startBeat: forcedStartBeat = null, alignSeconds = null, muted = false, beforeChannelId = null, confirmEdit = false } = {}) {
     if (!file) return false;
     const importGroup = groupId == null ? null : getChannelGroupById(groupId);
     try {
@@ -10447,6 +10469,12 @@
       state.activeAudioClipId = clip.id;
       state.activePanel = "audio";
       extendTimelineToBeat(getAudioClipEndBeat(clip) + CONFIG.minimumNoteBeat);
+      if (confirmEdit && elements.audioEditBackdrop) {
+        // 추가 전 편집 창: 확인하면 그때 기록을 남기고, 취소하면 방금 넣은 오디오를 걷어냅니다.
+        renderAll();
+        openAudioEditDialog(clip.id, { pendingAdd: true });
+        return true;
+      }
       markDirty("오디오 추가");
       renderAll();
       showToast(importGroup
@@ -11656,6 +11684,7 @@
       glyph.textContent = textContent != null
         ? String(textContent)
         : (solo ? "S" : (kind === "visibility" ? "👁" : (active ? "🔇" : "🔊")));
+      if (kind === "mml") glyph.innerHTML = '<svg viewBox="0 0 7 8" width="7" height="8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="miter" stroke-linecap="butt" aria-hidden="true"><path d="M1 8V0.4L3.5 4.6L6 0.4V8"/></svg>';
       button.append(glyph);
       if (sweep) button.dataset.channelSweepKind = kind;
       if (rightSweepKind) button.dataset.channelRightSweepKind = String(rightSweepKind);
@@ -11889,7 +11918,12 @@
         );
       } else {
         actions.append(
-          ...(midiInputGroup ? [] : [createAction({ kind: "mml", active: false, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) })]),
+          ...(midiInputGroup ? [(() => {
+            // 글꼴마다 기호의 좌우 여백이 달라 한쪽으로 치우치므로, 정확히 가운데에 오는 SVG 기어를 씁니다.
+            const settingsButton = createAction({ kind: "settings", active: false, label: i18nText("midi_input.settings_title"), title: i18nText("midi_input.settings_title"), textContent: "", onClick: () => openMidiInputSettingsDialog() });
+            settingsButton.firstElementChild.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+            return settingsButton;
+          })()] : [createAction({ kind: "mml", active: false, label: i18nText("group.mml_view_named", [group.name]), title: i18nText("group.mml_view"), textContent: "M", onClick: () => openChannelGroupMmlDialog(group.id) })]),
           createAction({ kind: "visibility", active: group.visible !== false, solo: visibilitySolo, label: visibilitySolo ? i18nText("ui.visibility_solo_off_named", [group.name]) : i18nText(group.visible === false ? "group.show_named" : "group.hide_named", [group.name]), title: visibilitySolo ? i18nText("ui.visibility_solo_off") : i18nText("channel.mute_context_solo", [i18nText(group.visible === false ? "ui.show" : "ui.hide_2")]), onClick: () => visibilitySolo ? setChannelGroupVisibilitySoloById(group.id, false) : setChannelGroupVisibleById(group.id, group.visible === false), sweep: !visibilitySolo, sweepId: group.id, rightSweepKind: "visibility-solo" }),
           createAction({ kind: "mute", active: Boolean(group.muted), solo, label: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText(group.muted ? "group.unmute_named" : "group.mute_named", [group.name]), title: solo ? i18nText("group.solo_off_named", [group.name]) : i18nText("channel.mute_context_solo", [i18nText(group.muted ? "ui.unmute" : "ui.mute")]), onClick: () => solo ? setChannelGroupSoloById(group.id, false) : setChannelGroupMutedById(group.id, !group.muted), sweep: !solo, sweepId: group.id, rightSweepKind: "mute-solo" }),
         );
@@ -12189,8 +12223,72 @@
     return true;
   }
 
+  // 항목 추가 전 편집 창: 확인을 눌러야 실제로 만들어지고, 취소하면 아무것도 만들지 않습니다.
+  function openNewItemDialog({ kind, groupId }) {
+    if (!elements.channelEditBackdrop) return false;
+    state.channelEdit.channelId = null;
+    state.channelEdit.groupId = null;
+    const groupLike = kind === "group" || kind === "midiInput";
+    state.channelEdit.mode = groupLike ? "group" : "channel";
+    state.channelEdit.pending = { kind, groupId };
+    const title = elements.channelEditBackdrop.querySelector(".transfer-dialog-header strong");
+    const instrumentLabel = elements.channelEditInstrumentSelect?.closest("label");
+    if (groupLike) {
+      const midiKind = kind === "midiInput";
+      const defaultName = i18nText(midiKind ? "midi_input.group_name" : "group.default_name");
+      if (elements.channelEditNameInput) elements.channelEditNameInput.value = makeUniqueChannelGroupName(defaultName);
+      setHueControlValue(elements.channelEditColorInput, midiKind ? normalizeHue(200 + getMidiInputGroups().length * 67) : getDefaultHue(state.channelGroups.length + 2));
+      if (elements.channelEditTargetLabel) elements.channelEditTargetLabel.textContent = defaultName;
+      if (title) title.textContent = midiKind ? defaultName : (i18nText("group.create") || "그룹 추가");
+      if (instrumentLabel) instrumentLabel.hidden = true;
+    } else {
+      const draft = createDefaultChannel(nextChannelId(), state.channels.length);
+      configureInstrumentSelectForChannel(elements.channelEditInstrumentSelect, draft);
+      const sharedInstrumentLabel = instrumentLabel?.querySelector("span");
+      if (sharedInstrumentLabel) sharedInstrumentLabel.textContent = i18nText("instrument.text");
+      if (elements.channelEditInstrumentSelect) {
+        elements.channelEditInstrumentSelect.setAttribute("aria-label", i18nText("channel.instrument"));
+        elements.channelEditInstrumentSelect.value = editorPresetKey(getChannelInstrumentBank(draft), getChannelInstrumentProgram(draft));
+      }
+      if (instrumentLabel) instrumentLabel.hidden = false;
+      if (elements.channelEditNameInput) elements.channelEditNameInput.value = makeUniqueChannelName(defaultChannelName(draft), draft.id);
+      setHueControlValue(elements.channelEditColorInput, getDefaultHue(state.channels.length));
+      if (elements.channelEditTargetLabel) elements.channelEditTargetLabel.textContent = i18nText("channel.label");
+      if (title) title.textContent = i18nText("channel.add") || "채널 추가";
+    }
+    refreshChannelEditStateActions();
+    elements.channelEditBackdrop.hidden = false;
+    requestAnimationFrame(() => {
+      elements.channelEditNameInput?.focus();
+      elements.channelEditNameInput?.select();
+    });
+    return true;
+  }
+
+  function applyPendingNewItem() {
+    const pending = state.channelEdit.pending;
+    if (!pending) return false;
+    const name = String(elements.channelEditNameInput?.value || "").trim();
+    if (!name) {
+      showToast(pending.kind === "channel" ? "채널 이름은 비워둘 수 없습니다." : i18nText("group.name_required"));
+      elements.channelEditNameInput?.focus();
+      return false;
+    }
+    const hue = getHueControlValue(elements.channelEditColorInput, getDefaultHue(state.channels.length));
+    const draft = { name, hue, instrumentValue: String(elements.channelEditInstrumentSelect?.value || "") };
+    closeChannelEditDialog();
+    if (pending.kind === "midiInput") return createOrSelectMidiInputGroup({ skipConfirm: true, draft });
+    if (pending.kind === "group") return addChannelGroup({ skipConfirm: true, draft });
+    return pending.groupId != null
+      ? addChannelToGroup(pending.groupId, { skipConfirm: true, draft })
+      : addChannel({ skipConfirm: true, draft });
+  }
+
   function closeChannelEditDialog() {
     if (elements.channelEditBackdrop) elements.channelEditBackdrop.hidden = true;
+    state.channelEdit.pending = null;
+    const instrumentLabel = elements.channelEditInstrumentSelect?.closest("label");
+    if (instrumentLabel) instrumentLabel.hidden = false;
     state.channelEdit.channelId = null;
     state.channelEdit.groupId = null;
     state.channelEdit.mode = "channel";
@@ -12219,15 +12317,18 @@
     else select.value = "";
   }
 
-  function addChannelGroup() {
+  function addChannelGroup(options = {}) {
     if (isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    if (!options.skipConfirm && !state.addItemInstantly && elements.channelEditBackdrop) {
+      return openNewItemDialog({ kind: "group", groupId: null });
+    }
     const group = {
       id: state.nextChannelGroupId++,
-      name: makeUniqueChannelGroupName(i18nText("group.default_name")),
+      name: makeUniqueChannelGroupName(options.draft?.name || i18nText("group.default_name")),
       collapsed: false,
       visible: true,
       muted: false,
-      hue: getDefaultHue(state.channelGroups.length + 2),
+      hue: options.draft?.hue != null ? options.draft.hue : getDefaultHue(state.channelGroups.length + 2),
       beforeChannelId: null,
     };
     state.channelGroups.push(group);
@@ -13123,6 +13224,7 @@
   }
 
   function applyChannelEditDialog() {
+    if (state.channelEdit.pending) return applyPendingNewItem();
     if (state.channelEdit.mode === "group" && state.channelEdit.groupId != null) {
       const group = getChannelGroupById(state.channelEdit.groupId);
       if (!group) { closeChannelEditDialog(); return false; }
@@ -13444,11 +13546,14 @@
     return false;
   }
 
-  function openAudioEditDialog(clipId = state.activeAudioClipId) {
+  function openAudioEditDialog(clipId = state.activeAudioClipId, { pendingAdd = false } = {}) {
     const clip = state.audioClips.find((item) => String(item.id) === String(clipId));
     if (!clip || !elements.audioEditBackdrop) return false;
     selectAudioClip(clip.id);
     state.audioEdit.clipId = String(clip.id);
+    state.audioEdit.pendingAdd = Boolean(pendingAdd);
+    const audioTitle = elements.audioEditBackdrop.querySelector(".transfer-dialog-header strong");
+    if (audioTitle) audioTitle.textContent = pendingAdd ? (i18nText("audio.add") || "오디오 추가") : (i18nText("audio.edit") || "오디오 수정");
     const index = state.audioClips.indexOf(clip);
     if (elements.audioEditNameInput) elements.audioEditNameInput.value = clip.title;
     setHueControlValue(elements.audioEditColorInput, getAudioClipHue(clip, index));
@@ -13469,6 +13574,21 @@
 
   function closeAudioEditDialog() {
     if (elements.audioEditBackdrop) elements.audioEditBackdrop.hidden = true;
+    // 추가 전 편집 창을 확인 없이 닫으면 아직 확정되지 않은 오디오를 되돌립니다.
+    if (state.audioEdit.pendingAdd && state.audioEdit.clipId != null) {
+      const clipId = String(state.audioEdit.clipId);
+      const at = state.audioClips.findIndex((item) => String(item.id) === clipId);
+      if (at >= 0) {
+        state.audioClips.splice(at, 1);
+        state.audioRuntime.delete(clipId);
+        if (String(state.activeAudioClipId) === clipId) {
+          state.activeAudioClipId = null;
+          state.activePanel = "notes";
+        }
+        renderAll();
+      }
+    }
+    state.audioEdit.pendingAdd = false;
     state.audioEdit.clipId = null;
   }
 
@@ -13496,12 +13616,13 @@
       || Math.abs((Number(clip.sourceOffsetSeconds) || 0) - nextOffset) > 1e-7
       || Math.abs((Number(clip.playbackRate) || 1) - nextRate) > 1e-7
       || Math.abs((Number(clip.volume) || 0) - nextVolume) > 1e-7;
-    if (!changed) {
+    if (!changed && !state.audioEdit.pendingAdd) {
       closeAudioEditDialog();
       return true;
     }
     const wasPlaying = state.playback.running || state.playback.loading;
     const resumeBeat = state.playhead.beat;
+    const pendingAdd = Boolean(state.audioEdit.pendingAdd);
     clip.title = nextName;
     clip.hue = nextHue;
     clip.sourceOffsetSeconds = nextOffset;
@@ -13512,13 +13633,14 @@
       state.playhead.beat = resumeBeat;
       window.setTimeout(() => startPlayback(), 0);
     }
-    markDirty("오디오 정보 변경");
+    state.audioEdit.pendingAdd = false;
+    markDirty(pendingAdd ? "오디오 추가" : "오디오 정보 변경");
     renderChannelTabs();
     renderChannelEditor();
     renderAudioLane();
     updateAudioSourceInspector();
     closeAudioEditDialog();
-    showToast(`${clip.title} 오디오 정보를 변경했습니다.`);
+    showToast(pendingAdd ? `${clip.title} 오디오를 추가했습니다.` : `${clip.title} 오디오 정보를 변경했습니다.`);
     return true;
   }
 
@@ -20136,17 +20258,20 @@
   }
 
   // 장치 입력 그룹을 새로 만듭니다(여러 개 가능).
-  function createOrSelectMidiInputGroup() {
+  function createOrSelectMidiInputGroup(options = {}) {
     if (isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    if (!options.skipConfirm && !state.addItemInstantly && elements.channelEditBackdrop) {
+      return openNewItemDialog({ kind: "midiInput", groupId: null });
+    }
     let group = null;
     {
       group = {
         id: state.nextChannelGroupId++,
-        name: makeUniqueChannelGroupName(i18nText("midi_input.group_name")),
+        name: makeUniqueChannelGroupName(options.draft?.name || i18nText("midi_input.group_name")),
         collapsed: false,
         visible: true,
         muted: false,
-        hue: normalizeHue(200 + getMidiInputGroups().length * 67),
+        hue: options.draft?.hue != null ? options.draft.hue : normalizeHue(200 + getMidiInputGroups().length * 67),
         beforeChannelId: null,
         midiInput: true,
       };
@@ -21589,7 +21714,7 @@
     const box = document.createElement("div");
     box.className = "midi-input-controls";
     box.addEventListener("pointerdown", (event) => event.stopPropagation());
-    // 버튼·입력칸이 아닌 빈 곳은 항목 헤더처럼 동작합니다: 한 번 누르면 선택, 더블클릭하면 설정 팝업.
+    // 버튼·입력칸이 아닌 빈 곳은 항목 헤더처럼 동작합니다: 한 번 누르면 선택, 더블클릭하면 편집 팝업.
     const isEmptyArea = (event) => !event.target.closest("button, input, select, label, a");
     box.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -21599,7 +21724,7 @@
       if (!isEmptyArea(event)) return;
       event.preventDefault();
       event.stopPropagation();
-      openMidiInputSettingsDialog();
+      openChannelGroupDialog(group.id);
     });
     box.addEventListener("contextmenu", (event) => event.stopPropagation());
 
@@ -22269,6 +22394,7 @@
       "separator",
     ];
     if (group) {
+      items.splice(2, 0, { label: i18nText("context.info_edit"), action: () => openChannelGroupDialog(group.id) });
       items.push({
         label: i18nText("action.delete"),
         danger: true,
@@ -23019,10 +23145,29 @@
     });
   }
 
-  function addChannel() {
+  // 편집 창에서 정한 이름/색/악기를 새 채널에 적용합니다.
+  function applyNewItemDraftToChannel(channel, draft) {
+    if (!draft) return;
+    if (draft.name) channel.name = makeUniqueChannelName(draft.name, channel.id);
+    if (draft.hue != null) channel.hue = draft.hue;
+    const key = parseEditorPresetKey(String(draft.instrumentValue || "0:0"));
+    const preset = draft.instrumentValue ? findEditorSoundBankPreset(key.bank, key.program) : null;
+    if (preset) {
+      setChannelInstrumentPreset(channel, preset);
+      if (typeof audioEngine.prepareProgram === "function") {
+        void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: true }).catch((error) => console.warn("악기 음원 준비 실패", error));
+      }
+    }
+  }
+
+  function addChannel(options = {}) {
+    if (!options.skipConfirm && !state.addItemInstantly && elements.channelEditBackdrop && !isChannelDeleteModeActive() && !isChannelMergeModeActive()) {
+      return openNewItemDialog({ kind: "channel", groupId: null });
+    }
     const id = nextChannelId();
     const channel = createDefaultChannel(id, state.channels.length);
     channel.name = makeUniqueChannelName(defaultChannelName(channel), channel.id);
+    applyNewItemDraftToChannel(channel, options.draft);
     state.channels.push(channel);
     state.activePanel = "notes";
     state.activeChannel = state.channels.length - 1;
@@ -23035,12 +23180,16 @@
     return true;
   }
 
-  function addChannelToGroup(groupId) {
+  function addChannelToGroup(groupId, options = {}) {
     const group = getChannelGroupById(groupId);
     if (!group || isChannelDeleteModeActive() || isChannelMergeModeActive()) return false;
+    if (!options.skipConfirm && !state.addItemInstantly && elements.channelEditBackdrop) {
+      return openNewItemDialog({ kind: "channel", groupId: String(group.id) });
+    }
     const id = nextChannelId();
     const channel = createDefaultChannel(id, state.channels.length);
     channel.name = makeUniqueChannelName(defaultChannelName(channel), channel.id);
+    applyNewItemDraftToChannel(channel, options.draft);
     channel.groupId = String(group.id);
     const members = getChannelGroupMembers(group);
     let insertIndex = state.channels.length;
@@ -32256,6 +32405,7 @@
     elements.snapSelect.value = String(state.snapValue);
     elements.pitchSpacingSelect.value = String(state.rowHeight);
     setAudioLaneVisible(state.audioLaneVisible, { persist: false, redraw: false });
+    setAddItemInstantly(loadStoredAddItemInstantly(), { persist: false });
     setVelocityLaneVisible(state.velocityLaneVisible, { persist: false, redraw: false });
     setVelocityLaneScope(state.velocityLaneScope, { persist: false, redraw: false });
     renderAll();
@@ -34510,6 +34660,10 @@
         label: `${state.audioLaneVisible !== false ? "✓ " : ""}${i18nText("settings.audio_track")}`,
         action: () => setAudioLaneVisible(!state.audioLaneVisible),
       },
+      {
+        label: `${state.addItemInstantly ? "✓ " : ""}${i18nText("settings.add_item_instantly")}`,
+        action: () => setAddItemInstantly(!state.addItemInstantly),
+      },
     ];
     // The scrollbar / empty-strip area (piano-section) intentionally has no context menu.
     // Volume dialog entry from the volume editor: open with exactly the channels the editor is
@@ -36250,6 +36404,9 @@
     elements.audioLaneVisibleToggle?.addEventListener("click", () => {
       setAudioLaneVisible(!state.audioLaneVisible);
     });
+    elements.addItemInstantlyToggle?.addEventListener("click", () => {
+      setAddItemInstantly(!state.addItemInstantly);
+    });
     elements.editUndoButton.addEventListener("click", () => { closeEditMenu(); undoHistory(); });
     elements.editRedoButton.addEventListener("click", () => { closeEditMenu(); redoHistory(); });
     elements.editCopyButton.addEventListener("click", () => { closeEditMenu(); copyCurrentContext(); });
@@ -36299,7 +36456,7 @@
       const groupId = state.pendingAudioImportGroupId;
       state.pendingAudioImportGroupId = null;
       elements.audioFileInput.value = "";
-      if (file) await importAudioFile(file, { groupId });
+      if (file) await importAudioFile(file, { groupId, confirmEdit: !state.addItemInstantly });
     });
     setupFileDropOverlay();
     // The import dialog uses the exact same picker/input as File > Import so the
@@ -37337,6 +37494,7 @@
           closeChannelMergeDialog();
           closeChannelGroupDialog();
           closeChannelEditDialog();
+          closeAudioEditDialog();
           closeChannelMmlDialog();
           closeEditorSoundFontDialog();
           closeTutorialDialog();

@@ -7,6 +7,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "menu.settings": "Settings",
     "settings.editor": "Editor settings",
     "settings.audio_track": "Audio track",
+    "settings.add_item_instantly": "Add items instantly",
     "volume.editor": "Velocity editor",
     "volume.editor_scope": "Velocity editor scope",
     "volume.note_editor": "Note velocity editor",

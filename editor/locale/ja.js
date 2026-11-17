@@ -7,6 +7,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "menu.settings": "設定",
     "settings.editor": "Editor 設定",
     "settings.audio_track": "オーディオトラック",
+    "settings.add_item_instantly": "項目をすぐ追加",
     "volume.editor": "ベロシティ編集",
     "volume.editor_scope": "ベロシティ表示範囲",
     "volume.note_editor": "ノートベロシティ編集",

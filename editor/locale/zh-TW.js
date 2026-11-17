@@ -7,6 +7,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "menu.settings": "設定",
     "settings.editor": "Editor 設定",
     "settings.audio_track": "音訊軌道",
+    "settings.add_item_instantly": "直接新增項目",
     "volume.editor": "力度編輯器",
     "volume.editor_scope": "力度編輯範圍",
     "volume.note_editor": "音符力度編輯器",

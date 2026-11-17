@@ -7401,14 +7401,25 @@ a[class*="button"]:hover {
   font-weight: 900;
   line-height: 1;
   letter-spacing: 0;
-  padding-top: 1px;
+  padding-top: 0;
 }
+.channel-tree-mml .channel-tree-action-glyph svg { display: block; }
 .channel-tree-visibility .channel-tree-action-glyph,
 .channel-tree-mute .channel-tree-action-glyph {
   font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
   font-size: 13px;
   font-weight: 400;
 }
+.channel-tree-settings .channel-tree-action-glyph {
+  /* SVG 기어: 글꼴 여백과 무관하게 버튼 한가운데에 놓이고, 테마 글자색을 따릅니다. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--text);
+}
+.channel-tree-settings .channel-tree-action-glyph svg { display: block; }
 .channel-tree-mute.is-solo .channel-tree-action-glyph {
   font-family: inherit;
   font-size: 12px;
@@ -10520,7 +10531,8 @@ body.merge-mode-active .channel-group-item .channel-tree-visibility {
 }
 body.merge-mode-active .channel-group-item .channel-group-main { cursor: pointer; }
 body.merge-mode-active .channel-group-item .channel-tree-mute,
-body.merge-mode-active .channel-group-item .channel-tree-mml { display: none !important; }
+body.merge-mode-active .channel-group-item .channel-tree-mml,
+body.merge-mode-active .channel-group-item .channel-tree-settings { display: none !important; }
 body.merge-mode-active .channel-group-item.is-hidden .channel-tree-merge-include,
 body.merge-mode-active .channel-group-item.is-hidden .channel-tree-merge-exclude {
   opacity: .34 !important;
@@ -16188,4 +16200,10 @@ body.merge-mode-active .channel-instrument-control select { pointer-events: auto
   border-radius: 3px;
   border: 1px solid rgba(255, 255, 255, 0.7);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+/* Theme parity: group/device-input rows use no border in either theme (light's single-tone stripe is the reference);
+   the dark theme's extra 3px left border made the stripe two-tone and shifted the action buttons by 1px. */
+.channel-group-item {
+  border-width: 0 !important;
 }

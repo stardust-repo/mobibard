@@ -7,6 +7,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "menu.settings": "설정",
     "settings.editor": "Editor 설정",
     "settings.audio_track": "오디오 트랙",
+    "settings.add_item_instantly": "항목 바로 추가",
     "volume.editor": "볼륨 편집기",
     "volume.editor_scope": "볼륨 편집 범위",
     "volume.note_editor": "노트 볼륨 편집기",
