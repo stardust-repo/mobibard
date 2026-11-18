@@ -15,10 +15,61 @@
     } catch (_) {
       throw new Error("모비바드 Editor 프로젝트 JSON을 읽지 못했습니다.");
     }
+    // v31 이상 Editor는 schema-rows-v2로 압축 저장한다(editor/app.js의 decodeProjectStorage와 같은 규칙).
+    data = decodeStorage(data);
     if (!data || data.format !== FORMAT_NAME || !Array.isArray(data.channels)) {
       throw new Error("모비바드 Editor 프로젝트 파일이 아닙니다.");
     }
     return data;
+  }
+
+  const STORAGE_ENCODING = "schema-rows-v2";
+
+  function isPlainObject(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  function decodeRows(value, schemas) {
+    if (Array.isArray(value)) return value.map(item => decodeRows(item, schemas));
+    if (!isPlainObject(value)) return value;
+    const schemaIndex = Number(value.$s);
+    const rows = value.$r;
+    const fields = Number.isInteger(schemaIndex) ? schemas?.[schemaIndex] : null;
+    if (
+      Array.isArray(fields)
+      && Array.isArray(rows)
+      && Object.keys(value).length === 2
+      && fields.every(field => typeof field === "string")
+      && rows.every(Array.isArray)
+    ) {
+      return rows.map(row => {
+        const record = {};
+        for (let index = 0; index < fields.length; index += 1) {
+          record[fields[index]] = decodeRows(index < row.length ? row[index] : null, schemas);
+        }
+        return record;
+      });
+    }
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, decodeRows(item, schemas)]));
+  }
+
+  function decodeStorage(storage) {
+    if (
+      storage?.format === FORMAT_NAME
+      && storage?.encoding === STORAGE_ENCODING
+      && Array.isArray(storage?.schemas)
+      && storage?.data
+    ) {
+      const decoded = decodeRows(storage.data, storage.schemas);
+      if (decoded && typeof decoded === "object") {
+        decoded.format = storage.format;
+        decoded.version = Number(storage.version) || 31;
+      }
+      return decoded;
+    }
+    return storage;
   }
 
   function clamp(value, min, max, fallback = min) {
