@@ -26793,7 +26793,8 @@
           continue;
         }
         index = numeric.nextIndex;
-        addNote(Math.round(numeric.value), defaultLengthBeat);
+        // N 코드 기준(o4 c = 48)은 MabiUtils가 정한다. n0은 쉼표라서 환산하지 않는다.
+        addNote(numeric.value === 0 ? 0 : window.MabiUtils.nCodeToMidi(Math.round(numeric.value)), defaultLengthBeat);
         continue;
       }
       if (character === "o") {

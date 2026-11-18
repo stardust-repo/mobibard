@@ -31,7 +31,7 @@
     values.forEach((value, index) => { message = message.replaceAll(`{${index}}`, String(value)); });
     return message;
   };
-  const { clampInt, formatTime, composeMml } = window.MabiUtils;
+  const { clampInt, formatTime, composeMml, nCodeToMidi } = window.MabiUtils;
   const NOTE_BASE = { c:0, d:2, e:4, f:5, g:7, a:9, b:11 };
   const VALID_LENGTHS = [1, 2, 4, 8, 16, 32, 64];
   const VALID_LENGTH_SET = new Set(VALID_LENGTHS);
@@ -151,7 +151,8 @@ function parseMmlPart(s, partIndex, options = {}) {
       if (num == null) throw new Error(tr("mml.err_part_n_required", [partIndex + 1]));
       const dur = readDots(defaultDuration);
       if (num === 0) return { rest: true, midi: null, dur, sourceRange: makeSourceRange(tokenStart, i) };
-      return { rest: false, midi: clampInt(num, 0, 127), dur, sourceRange: makeSourceRange(tokenStart, i) };
+      // N 코드 기준(o4 c = 48)은 MabiUtils가 정한다. 내부 음높이는 MIDI 번호로 환산한다.
+      return { rest: false, midi: clampInt(nCodeToMidi(num), 0, 127), dur, sourceRange: makeSourceRange(tokenStart, i) };
     }
     i++;
     let semitone = NOTE_BASE[ch];

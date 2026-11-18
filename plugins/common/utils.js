@@ -549,7 +549,28 @@
     return items.length > 0 && items.every(isDirectoryDataTransferItem);
   }
 
+  // ---- 마비노기 N(음 번호) 코드 기준 -------------------------------------------------
+  // 모든 제품의 MML 읽기/쓰기는 이 기준 하나를 쓴다. 내부 음높이는 MIDI 번호(o4 c = 60)이고,
+  // N 코드는 "o4 c가 몇 번인가"만 정하면 나머지가 따라 바뀐다. 지금은 마비노기 규칙인 48로 고정한다.
+  // 나중에 옵션으로 바꿀 때는 setNCodeC4Base(값)만 부르면 읽기·쓰기·분석이 모두 따라간다.
+  const MIDI_C4 = 60;
+  let nCodeC4Base = 48;
+  function getNCodeC4Base() { return nCodeC4Base; }
+  function setNCodeC4Base(value) {
+    const next = Math.round(Number(value));
+    if (Number.isFinite(next) && next >= 0 && next <= MIDI_C4 + 12) nCodeC4Base = next;
+    return nCodeC4Base;
+  }
+  // N 코드 숫자 → 내부 MIDI 번호 (읽을 때)
+  function nCodeToMidi(code) { return Number(code) + (MIDI_C4 - nCodeC4Base); }
+  // 내부 MIDI 번호 → N 코드 숫자 (쓸 때)
+  function midiToNCode(midi) { return Number(midi) - (MIDI_C4 - nCodeC4Base); }
+
   root.MabiUtils = Object.freeze({
+    getNCodeC4Base,
+    setNCodeC4Base,
+    nCodeToMidi,
+    midiToNCode,
     isDirectoryDataTransferItem,
     getDroppedFiles,
     isFolderOnlyDrag,

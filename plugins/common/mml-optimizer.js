@@ -386,7 +386,8 @@
           if (!n) fail(tr("mml.err_n_required"));
           const duration = durationUnitsFromBase(defaultUnits, readDotsCount());
           if (n.value === 0) appendToken({ kind: "rest", duration, sourceIndex });
-          else appendToken({ kind: "note", midi: n.value, duration, sourceIndex });
+          // N 코드 기준(o4 c = 48)은 MabiUtils가 정한다.
+          else appendToken({ kind: "note", midi: Math.min(127, window.MabiUtils.nCodeToMidi(n.value)), duration, sourceIndex });
           continue;
         }
         i++;
@@ -1856,7 +1857,8 @@
         if (num.value < 0 || num.value > 127) fail(tr("mml.err_n_range", [num.value]));
         const duration = durationUnitsFromBase(defaultUnits, readDotsCount());
         if (num.value === 0) return { kind: "rest", duration, sourceStart, sourceEnd: i };
-        return { kind: "note", midi: num.value, duration, volume, sourceStart, sourceEnd: i };
+        // N 코드 기준(o4 c = 48)은 MabiUtils가 정한다.
+        return { kind: "note", midi: Math.min(127, window.MabiUtils.nCodeToMidi(num.value)), duration, volume, sourceStart, sourceEnd: i };
       }
       i++;
       let semitone = NOTE_BASE[ch];
