@@ -1,0 +1,18 @@
+[
+ "plugins/common/utils.js",
+ "plugins/common/note-timing.js",
+ "plugins/formats/midi/midi-parser.js",
+ "plugins/formats/notation/notation-utils.js",
+ "plugins/formats/music-format-core.js",
+ "plugins/formats/midi/format-midi.js",
+ "plugins/formats/editor-project/format-editor-project.js",
+ "plugins/common/mml-arranger.js",
+ "plugins/common/midi-to-mml.js",
+ "plugins/common/mml-optimizer.js",
+ "plugins/common/mml-parser.js",
+ "plugins/common/default-instrument-map.js",
+ "plugins/common/mml-midi.js",
+ "player/js/mabinogi-instrument-map.js",
+ "plugins/common/split-search.js",
+ "plugins/formats/mmi/format-mmi.js"
+]

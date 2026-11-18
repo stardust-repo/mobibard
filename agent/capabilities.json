@@ -1,0 +1,424 @@
+{
+  "schema": "mobibard-ai-capabilities/1",
+  "version": "0.1.0",
+  "site": "https://stardust-repo.github.io/mobibard/",
+  "description": "MobiBard의 MML 제작 기능 중 JS(Node)만으로 끝나는 것을 CLI로 묶은 꾸러미. 서버·브라우저·설치 없이 Node 18+ 만 있으면 된다.",
+  "description_en": "The subset of MobiBard that runs on plain JavaScript (Node 18+), packaged as a CLI. No server, browser or install needed.",
+  "game": "Mabinogi (마비노기) MML: up to 6 channels, tempo T32~T255 recommended, volume V0~V15, octave O1~O8.",
+  "conventions": {
+    "note_numbers": "MML의 N 코드는 마비노기 규칙으로 읽는다: o4 c = N48. 내부 음높이는 MIDI 번호(o4 c = 60).",
+    "channels": "MML은 최대 6채널. 문자열은 MML@채널1,채널2,...; 형태. 채널 0번이 멜로디(템포 포함).",
+    "units": "길이는 박(beat) 또는 음표 분모(l4, l8 ...). 볼륨은 V0~V15.",
+    "files": "파일은 {name, text} 또는 {name, base64} 또는 {name, bytes(Uint8Array)} 로 넘긴다.",
+    "request": {
+      "cli": "node run.mjs <capability> <파일> [--옵션] — 결과 파일은 --out 폴더(기본 ./out), stdout은 JSON({ok,report,files,error}). --print 로 MML을 stdout에도 출력.",
+      "json": "node run.mjs --json 요청.json — 요청 JSON {capability|steps, options, files:[{path}], outputs} 그대로 실행"
+    },
+    "edit_args_note": "split-pages args: maxChars(기본 2400). transpose: delta 또는 partOctaves. set-volume: volume 또는 partVolumes. adjust-volume: delta/partDeltas. fade: fadeInSeconds/fadeOutSeconds. trim-short-rests: denom. add-leading-silence: beats. simplify-tempo: bpmThreshold. simplify-volume: maxDelta. split-pages의 maxChars는 채널당 글자 수 한도(기본 2400)."
+  },
+  "file_kinds": {
+    "midi": ".mid .midi .kar",
+    "mml": ".mml .txt (MML@...;)",
+    "mmi": ".mmi (MabiIcco)",
+    "project": ".mmlproj.json (MobiBard 에디터 프로젝트, 읽으면 MIDI로 변환되어 midi-to-mml로 이어짐)"
+  },
+  "capabilities": [
+    {
+      "id": "inspect",
+      "status": "available",
+      "title": "파일 살펴보기",
+      "summary": "파일에 무엇이 들어 있는지 알려 준다(채널, 악기, 노트 수, 템포, 길이, MML 글자 수).",
+      "use_when": "무엇부터 해야 할지 모를 때, 또는 변환 옵션(어떤 악기를 넣을지)을 정하기 전에.",
+      "accepts": [
+        "midi",
+        "mmi",
+        "mml",
+        "project"
+      ],
+      "options": {},
+      "outputs": [
+        "report(JSON)"
+      ],
+      "notes": [
+        "MIDI는 악기 그룹 목록(instrumentGroups)을 돌려준다. 이 id를 midi-to-mml의 selectedInstrumentGroups에 쓴다."
+      ]
+    },
+    {
+      "id": "midi-to-mml",
+      "status": "available",
+      "title": "MIDI를 마비노기 MML로 정리",
+      "summary": "여러 악기가 든 MIDI를 최대 6채널 MML로 정리한다. 악기 판단 기준, 채널 수, 메인 주자와 나머지 주자의 악기를 고를 수 있다. 선택으로 볼륨 생성과 압축을 이어서 실행한다.",
+      "use_when": "'이 곡을 마비노기에서 연주할 악보로 만들어줘'.",
+      "accepts": [
+        "midi",
+        "project"
+      ],
+      "options": {
+        "channelCount": {
+          "type": "integer",
+          "min": 1,
+          "max": 6,
+          "default": 3,
+          "desc": "사용할 MML 채널 수."
+        },
+        "mainCount": {
+          "type": "integer",
+          "min": 1,
+          "max": 3,
+          "default": 3,
+          "desc": "메인 주자(주 선율) 채널 수. channelCount보다 클 수 없다."
+        },
+        "trust": {
+          "type": "enum",
+          "values": [
+            "instrument",
+            "balance",
+            "context"
+          ],
+          "default": "balance",
+          "desc": "악기 판단 기준. instrument=MIDI에 기록된 악기를 믿음, balance=절충, context=음 흐름으로 판단."
+        },
+        "mainInst": {
+          "type": "string",
+          "default": "auto",
+          "desc": "메인 주자 악기. auto 또는 악기 id(아래 instrument_ids)."
+        },
+        "rows": {
+          "type": "array<string>",
+          "default": [],
+          "desc": "나머지 주자(channelCount - mainCount개)의 악기. 각 값은 auto, 악기 id, cymbal, bigdrum."
+        },
+        "cymbalDensity": {
+          "type": "enum",
+          "values": [
+            "max",
+            "mid",
+            "low"
+          ],
+          "default": "max",
+          "desc": "rows에 cymbal이 있을 때 타악 밀도."
+        },
+        "drumDensity": {
+          "type": "enum",
+          "values": [
+            "max",
+            "mid",
+            "low"
+          ],
+          "default": "max",
+          "desc": "rows에 bigdrum이 있을 때 타악 밀도."
+        },
+        "selectedInstrumentGroups": {
+          "type": "array<string>",
+          "default": "전부",
+          "desc": "정리에 넣을 악기 그룹 id. inspect 결과의 instrumentGroups[].id. 생략하면 전부 넣는다."
+        },
+        "quantizeDivision": {
+          "type": "enum",
+          "values": [
+            64,
+            32
+          ],
+          "default": 64,
+          "desc": "음 길이 최소 단위(64분음표/32분음표). 32는 글자 수가 줄지만 거칠다."
+        },
+        "volume": {
+          "type": "object|null",
+          "default": null,
+          "desc": "지정하면 변환 뒤 generate-volume을 이어서 실행한다. 예: {\"genre\":\"pop\",\"strength\":\"normal\"}."
+        },
+        "optimize": {
+          "type": "boolean",
+          "default": false,
+          "desc": "true이면 마지막에 optimize-mml로 글자 수를 줄인다."
+        }
+      },
+      "outputs": [
+        "mml(.mml)",
+        "mmi(.mmi, --mmi)",
+        "report(JSON)"
+      ],
+      "instrument_ids": [
+        "piano",
+        "harp",
+        "lute",
+        "folkGuitar",
+        "mandolin",
+        "violin",
+        "flute",
+        "chalumeau",
+        "harmonica",
+        "catHarmonica",
+        "xylophone",
+        "musicBox",
+        "cymbal",
+        "bigdrum"
+      ],
+      "notes": [
+        "채널당 글자 수 제한 때문에 긴 곡은 split-pages가 필요할 수 있다.",
+        "결과가 들리는 느낌은 AI가 확인할 수 없다. 사용자가 들어보고 옵션을 조정하게 한다."
+      ]
+    },
+    {
+      "id": "optimize-mml",
+      "status": "available",
+      "title": "MML 압축(글자 수 줄이기)",
+      "summary": "같은 소리를 더 짧은 MML로 다시 쓴다. 길이 표기, 쉼표, 템포를 정리한다.",
+      "use_when": "'글자 수 제한에 걸린다', 'MML이 너무 길다'.",
+      "accepts": [
+        "mml",
+        "mmi"
+      ],
+      "options": {
+        "partCount": {
+          "type": "integer",
+          "min": 1,
+          "max": 6,
+          "default": 6,
+          "desc": "처리할 채널 수."
+        }
+      },
+      "outputs": [
+        "mml",
+        "report(JSON: 줄이기 전·후 채널별 글자 수)"
+      ]
+    },
+    {
+      "id": "generate-volume",
+      "status": "available",
+      "title": "볼륨(강약) 자동 생성",
+      "summary": "박자와 마디 흐름, 선율 모양으로 채널별 V(볼륨) 명령을 새로 만든다. 장르와 강약 세기를 고른다.",
+      "use_when": "'소리가 밋밋하다', '강약을 자연스럽게'.",
+      "accepts": [
+        "mml",
+        "mmi"
+      ],
+      "options": {
+        "genre": {
+          "type": "enum",
+          "values": [
+            "pop",
+            "jazz",
+            "ballad",
+            "bossa",
+            "rock",
+            "funk",
+            "classical"
+          ],
+          "default": "pop",
+          "desc": "곡 느낌."
+        },
+        "strength": {
+          "type": "enum",
+          "values": [
+            "light",
+            "normal",
+            "strong"
+          ],
+          "default": "normal",
+          "desc": "강약 폭."
+        },
+        "targetPartIndexes": {
+          "type": "array<integer>",
+          "default": "전부",
+          "desc": "볼륨을 만들 채널 번호(0부터). 생략하면 전부."
+        },
+        "overwriteExisting": {
+          "type": "boolean",
+          "default": false,
+          "desc": "이미 강약이 들어 있는 채널도 덮어쓸지."
+        }
+      },
+      "outputs": [
+        "mml",
+        "report(JSON: 생성한 V 명령 수, 바뀐 음 수, 채널별 처리 상태)"
+      ],
+      "notes": [
+        "이미 강약이 있는 채널은 overwriteExisting이 false이면 건너뛴다."
+      ]
+    },
+    {
+      "id": "edit-mml",
+      "status": "available",
+      "title": "MML 다듬기",
+      "summary": "옥타브 이동, 볼륨 일괄 조절, 페이드, 템포 정리, 짧은 쉼표 정리, 앞 무음 추가, 곡 나누기 중 하나를 실행한다.",
+      "use_when": "'한 옥타브 올려줘', '볼륨 한 단계 줄여줘', '페이드 아웃', '곡을 여러 페이지로 나눠줘'.",
+      "accepts": [
+        "mml",
+        "mmi"
+      ],
+      "options": {
+        "op": {
+          "type": "enum",
+          "values": [
+            "transpose",
+            "set-volume",
+            "adjust-volume",
+            "simplify-volume",
+            "fade",
+            "simplify-tempo",
+            "trim-short-rests",
+            "add-leading-silence",
+            "split-pages"
+          ],
+          "required": true,
+          "desc": "실행할 작업."
+        },
+        "args": {
+          "type": "object",
+          "default": {},
+          "desc": "작업별 인자. 아래 ops 참고."
+        }
+      },
+      "ops": {
+        "transpose": {
+          "args": {
+            "delta": "옥타브 이동량(정수, 예: 1 또는 -1)",
+            "partOctaves": "채널별 이동량 배열(선택)"
+          }
+        },
+        "set-volume": {
+          "args": {
+            "volume": "모든 채널 볼륨 0~15",
+            "partVolumes": "채널별 볼륨 배열(선택)"
+          }
+        },
+        "adjust-volume": {
+          "args": {
+            "delta": "더하거나 뺄 볼륨(정수)",
+            "partDeltas": "채널별 배열(선택)"
+          }
+        },
+        "simplify-volume": {
+          "args": {
+            "maxDelta": "이 값 이하의 볼륨 변화는 합친다"
+          }
+        },
+        "fade": {
+          "args": {
+            "fadeInSeconds": "페이드 인 길이(초)",
+            "fadeOutSeconds": "페이드 아웃 길이(초)"
+          }
+        },
+        "simplify-tempo": {
+          "args": {
+            "bpmThreshold": "이 값 이하의 템포 변화는 합친다"
+          }
+        },
+        "trim-short-rests": {
+          "args": {
+            "denom": "이 음표 분모보다 짧은 쉼표를 앞 음에 흡수(예: 32)"
+          }
+        },
+        "add-leading-silence": {
+          "args": {
+            "beats": "맨 앞에 넣을 쉼 박 수"
+          }
+        },
+        "split-pages": {
+          "args": {
+            "maxChars": "한 페이지 최대 글자 수",
+            "maxPages": "최대 페이지 수(선택)"
+          }
+        }
+      },
+      "outputs": [
+        "mml",
+        "pages(split-pages일 때 MML 배열)",
+        "report(JSON)"
+      ]
+    },
+    {
+      "id": "analyze-mml",
+      "status": "available",
+      "title": "MML 검사",
+      "summary": "MML을 해석해 채널별 노트 수, 길이(초), 템포, 글자 수와 문제점(오류, 한도 초과)을 알려 준다.",
+      "use_when": "'이 MML이 문제없는지 봐줘', 결과를 고치기 전에 상태를 확인할 때.",
+      "accepts": [
+        "mml",
+        "mmi"
+      ],
+      "options": {},
+      "outputs": [
+        "report(JSON)"
+      ]
+    },
+    {
+      "id": "mml-to-midi",
+      "status": "available",
+      "title": "MML을 MIDI로",
+      "summary": "MML을 표준 MIDI(.mid)로 바꾼다. 다른 프로그램에서 열거나 소리를 확인할 때 쓴다.",
+      "use_when": "'이 악보를 MIDI로 받고 싶다'.",
+      "accepts": [
+        "mml",
+        "mmi"
+      ],
+      "options": {
+        "partNames": {
+          "type": "array<string>",
+          "default": [],
+          "desc": "트랙 이름(선택)."
+        }
+      },
+      "outputs": [
+        "midi(.mid)",
+        "report(JSON)"
+      ]
+    }
+  ],
+  "goals": [
+    {
+      "goal": "MIDI 파일을 마비노기 악보(MML)로 만들고 싶다",
+      "steps": [
+        "inspect",
+        "midi-to-mml (volume, optimize 옵션 포함)",
+        "analyze-mml",
+        "필요하면 edit-mml(split-pages)"
+      ],
+      "result": "mml, mmi"
+    },
+    {
+      "goal": "내가 가진 MML의 글자 수를 줄이고 싶다",
+      "steps": [
+        "analyze-mml",
+        "optimize-mml"
+      ],
+      "result": "mml"
+    },
+    {
+      "goal": "MML의 강약을 자연스럽게 만들고 싶다",
+      "steps": [
+        "analyze-mml",
+        "generate-volume",
+        "optimize-mml"
+      ],
+      "result": "mml"
+    },
+    {
+      "goal": "MML을 MIDI로 받고 싶다",
+      "steps": [
+        "mml-to-midi"
+      ],
+      "result": "midi"
+    },
+    {
+      "goal": "긴 곡을 글자 수 제한에 맞게 여러 페이지로 나누고 싶다",
+      "steps": [
+        "edit-mml (op: split-pages)"
+      ],
+      "result": "mml(여러 개)"
+    }
+  ],
+  "limits": [
+    "AI는 결과를 직접 들을 수 없다. report의 숫자와 경고로 설명하고, 소리는 사용자가 확인하게 한다.",
+    "모든 처리는 로컬(Node)에서 실행되고 네트워크를 쓰지 않는다."
+  ],
+  "bundle": {
+    "git": "https://github.com/stardust-repo/mobibard (폴더 agent/)",
+    "run": "node agent/run.mjs help"
+  },
+  "not_supported": [
+    "오디오(mp3/wav) → MIDI: 모델 실행이 필요. 사이트(simple/player)에서 MIDI로 전사한 뒤 MIDI를 넘긴다.",
+    "MusicXML, MuseScore, Guitar Pro, 게임 시퀀스, 보컬 합성 파일: XML/압축 처리가 브라우저 기능에 의존해 이 꾸러미에서는 제외"
+  ]
+}

@@ -1,0 +1,16 @@
+# MobiBard
+
+마비노기 MML(악보) 제작 웹 도구 모음. https://stardust-repo.github.io/mobibard/
+MobiBard: browser tools for making Mabinogi MML scores.
+
+## AI 에이전트 (코드를 실행할 수 있다면)
+사용자가 MIDI/MML/MMI 파일을 주고 "MML이나 MIDI로 바꿔줘"라고 하면 agent 꾸러미로 직접 변환해서 결과를 돌려줄 수 있다. Node 18+ 만 필요, 설치·네트워크 불필요.
+If you can run code, convert the user's MIDI/MML/MMI files yourself with the agent package (Node 18+, no install).
+- 먼저 확인 / Check first: 코드 실행 가능 + Node 18+ + 저장소 clone 가능 + `node agent/run.mjs selftest` 통과. 하나라도 안 되면 변환하지 말고 사용자에게 사정을 알리고 사람용 도구(아래)나 zip 첨부를 안내한다. If any check fails, tell the user and point to the web tools below; do not fabricate results.
+- [사용 가이드 / Guide](https://stardust-repo.github.io/mobibard/agent/AGENT_GUIDE.md): 흐름, 명령, 옵션, 오류
+- [기능 목록 / Capabilities (JSON)](https://stardust-repo.github.io/mobibard/agent/capabilities.json)
+- 받기 / Get: `git clone https://github.com/stardust-repo/mobibard` → `node agent/run.mjs help`
+
+## 사람용 도구
+- [Simple](https://stardust-repo.github.io/mobibard/simple/) 쉬운 변환 · [Player](https://stardust-repo.github.io/mobibard/player/) 변환·재생·정리 · [Editor](https://stardust-repo.github.io/mobibard/editor/) 피아노롤
+- 오디오(mp3/wav)는 Simple/Player에서 MIDI로 전사한 뒤 MIDI를 agent에 넘긴다.
