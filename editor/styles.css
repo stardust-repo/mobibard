@@ -16293,3 +16293,13 @@ body.merge-mode-active .channel-instrument-control select { pointer-events: auto
   margin: -3px 0 0 -4px;
   transform: rotate(-45deg);
 }
+
+/* 2026-11-18: AI 변환 노트 판단 방식 가로 2버튼(자동 / 메뉴얼) */
+#midiImportDetail .w2m-mode-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border: 1px solid var(--line, var(--border, rgba(127,127,127,.35))); border-radius: 8px; background: var(--panel-soft, transparent); }
+#midiImportDetail .w2m-mode-toggle label { position: relative; display: block; cursor: pointer; }
+#midiImportDetail .w2m-mode-toggle input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+#midiImportDetail .w2m-mode-toggle span { display: block; text-align: center; padding: 5px 6px; border-radius: 6px; font-size: 11px; font-weight: 800; color: var(--muted); }
+#midiImportDetail .w2m-mode-toggle input:checked + span { background: var(--accent); color: var(--accent-contrast, #fff); }
+#midiImportDetail .w2m-mode-toggle input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+#midiImportDetail #w2mStateGroup, #midiImportDetail #w2mPeakGroup { display: grid; gap: 8px; }
+#midiImportDetail #w2mStateGroup[hidden], #midiImportDetail #w2mPeakGroup[hidden] { display: none; }

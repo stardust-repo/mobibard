@@ -416,6 +416,14 @@
     midiImportLimitChannelsPerInstrument: document.querySelector("#midiImportLimitChannelsPerInstrument"),
     midiImportAudioControls: document.querySelector("#midiImportAudioControls"),
     w2mStateBias: document.querySelector("#w2mStateBias"),
+    w2mStateGroup: document.querySelector("#w2mStateGroup"),
+    w2mPeakGroup: document.querySelector("#w2mPeakGroup"),
+    w2mPeakOnset: document.querySelector("#w2mPeakOnset"),
+    w2mPeakFrame: document.querySelector("#w2mPeakFrame"),
+    w2mPeakOffset: document.querySelector("#w2mPeakOffset"),
+    w2mPeakMin: document.querySelector("#w2mPeakMin"),
+    w2mTempoError: document.querySelector("#w2mTempoError"),
+    w2mFingerprintLabel: document.querySelector("#w2mFingerprintLabel"),
     w2mFingerprint: document.querySelector("#w2mFingerprint"),
     w2mDrum: document.querySelector("#w2mDrum"),
     w2mVolumeFixed: document.querySelector("#w2mVolumeFixed"),
@@ -14510,6 +14518,7 @@
   const IMPORT_OPTION_DEFAULTS = Object.freeze({
     quantize: 64, overlap: 64, limitOn: false, limitCount: 3,
     stateBias: 0, drumThreshold: 0.13, fingerprint: true,
+    decoderMode: "state", peakOnset: 0.13, peakFrame: 0.5, peakOffset: 0.5, peakMinFrames: 2, tempoError: 0,
     volume: "auto", volumeFixed: 12, tempo: "auto", tempoBpm: 120,
     colorMode: "channel",
   });
@@ -14540,6 +14549,12 @@
       stateBias: slotValue(src.stateBias, -1, 1, 0.05, d.stateBias),
       drumThreshold: slotValue(src.drumThreshold, 0.05, 0.4, 0.01, d.drumThreshold),
       fingerprint: src.fingerprint !== false,
+      decoderMode: pick(src.decoderMode, ["state", "peak"], d.decoderMode),
+      peakOnset: slotValue(src.peakOnset, 0.02, 0.6, 0.01, d.peakOnset),
+      peakFrame: slotValue(src.peakFrame, 0.1, 0.9, 0.05, d.peakFrame),
+      peakOffset: slotValue(src.peakOffset, 0.1, 0.9, 0.05, d.peakOffset),
+      peakMinFrames: slotValue(src.peakMinFrames, 1, 10, 1, d.peakMinFrames),
+      tempoError: slotValue(src.tempoError, 0, 10, 1, d.tempoError),
       volume: pick(src.volume, ["auto", "fixed"], d.volume),
       volumeFixed: clamp(Math.round(Number(src.volumeFixed) || d.volumeFixed), 1, 15),
       tempo: pick(src.tempo, ["auto", "fixed"], d.tempo),
@@ -14557,6 +14572,12 @@
       stateBias: elements.w2mStateBias?.value,
       drumThreshold: elements.w2mDrum?.value,
       fingerprint: elements.w2mFingerprint ? elements.w2mFingerprint.checked : true,
+      decoderMode: getCheckedRadioValue("w2mMode"),
+      peakOnset: elements.w2mPeakOnset?.value,
+      peakFrame: elements.w2mPeakFrame?.value,
+      peakOffset: elements.w2mPeakOffset?.value,
+      peakMinFrames: elements.w2mPeakMin?.value,
+      tempoError: elements.w2mTempoError?.value,
       volume: getCheckedRadioValue("w2mVolume"),
       volumeFixed: elements.w2mVolumeFixed?.value,
       tempo: getCheckedRadioValue("w2mTempo"),
@@ -14577,6 +14598,13 @@
     if (elements.w2mStateBias) elements.w2mStateBias.value = String(o.stateBias);
     if (elements.w2mDrum) elements.w2mDrum.value = String(o.drumThreshold);
     if (elements.w2mFingerprint) elements.w2mFingerprint.checked = o.fingerprint;
+    setCheckedRadioValue("w2mMode", o.decoderMode);
+    if (elements.w2mPeakOnset) elements.w2mPeakOnset.value = String(o.peakOnset);
+    if (elements.w2mPeakFrame) elements.w2mPeakFrame.value = String(o.peakFrame);
+    if (elements.w2mPeakOffset) elements.w2mPeakOffset.value = String(o.peakOffset);
+    if (elements.w2mPeakMin) elements.w2mPeakMin.value = String(o.peakMinFrames);
+    if (elements.w2mTempoError) elements.w2mTempoError.value = String(o.tempoError);
+    syncW2mModeGroups();
     updateW2mSliderReadouts();
     setCheckedRadioValue("w2mVolume", o.volume);
     setCheckedRadioValue("w2mTempo", o.tempo);
@@ -14623,6 +14651,7 @@
       'input[name="midiImportQuantize"]', 'input[name="midiImportOverlap"]',
       "#midiImportLimitChannelsPerInstrument", "#midiImportChannelLimitInput",
       "#w2mStateBias", "#w2mDrum", "#w2mFingerprint",
+      'input[name="w2mMode"]', "#w2mPeakOnset", "#w2mPeakFrame", "#w2mPeakOffset", "#w2mPeakMin", "#w2mTempoError",
       'input[name="w2mVolume"]', "#w2mVolumeFixed", 'input[name="w2mTempo"]', "#w2mTempoBpm",
     ].join(",");
     // 각 입력의 자체 change 처리(값 보정 등)가 끝난 뒤(버블링) 읽습니다.
@@ -15298,7 +15327,7 @@
   }
 
   // ---- AI 변환 후처리 옵션(불러오기 오른쪽 설정): 모델을 다시 돌리지 않고 노트/세기/템포만 다시 계산 ----
-  let audioPostprocessDefaults = { stateBias: 0, drumThreshold: 0.13, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
+  let audioPostprocessDefaults = { stateBias: 0, drumThreshold: 0.13, peakOnset: 0.13, peakFrame: 0.5, peakOffset: 0.5, peakMinFrames: 2, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
   void window.MobibardWave2Midi?.getPostprocessDefaults?.().then((defaults) => {
     audioPostprocessDefaults = defaults;
     try { updateW2mSliderReadouts(); } catch {}
@@ -15332,6 +15361,31 @@
     return Number(value.toFixed(2));
   }
 
+  // 임계점(peak) 방식: 예전처럼 노트 시작(onset) → 소리 유지(frame) → 끝(offset) 기준을 직접 정합니다.
+  function readW2mPeak() {
+    const num = (el, lo, hi, step, fallback) => {
+      const n = Number(el?.value);
+      return Number((Number.isFinite(n) ? clamp(Math.round(n / step) * step, lo, hi) : fallback).toFixed(2));
+    };
+    return {
+      peakOnset: num(elements.w2mPeakOnset, 0.02, 0.6, 0.01, 0.13),
+      peakFrame: num(elements.w2mPeakFrame, 0.1, 0.9, 0.05, 0.5),
+      peakOffset: num(elements.w2mPeakOffset, 0.1, 0.9, 0.05, 0.5),
+      peakMinFrames: num(elements.w2mPeakMin, 1, 10, 1, 2),
+    };
+  }
+  function readW2mTempoError() {
+    return clamp(Math.round(Number(elements.w2mTempoError?.value) || 0), 0, 10);
+  }
+  function readW2mMode() {
+    return getCheckedRadioValue("w2mMode") === "peak" ? "peak" : "state";
+  }
+  function syncW2mModeGroups() {
+    const peak = readW2mMode() === "peak";
+    if (elements.w2mStateGroup) elements.w2mStateGroup.hidden = peak;
+    if (elements.w2mPeakGroup) elements.w2mPeakGroup.hidden = !peak;
+  }
+
   function updateW2mSliderReadouts() {
     const set = (id, text) => { const out = document.querySelector(id); if (out) out.textContent = text; };
     if (elements.w2mStateBias) {
@@ -15339,6 +15393,11 @@
       set("#w2mStateBiasValue", `${bias > 0 ? "+" : ""}${bias.toFixed(2)}`);
     }
     if (elements.w2mDrum) set("#w2mDrumValue", readW2mDrumThreshold().toFixed(2));
+    const peak = readW2mPeak();
+    set("#w2mPeakOnsetValue", peak.peakOnset.toFixed(2));
+    set("#w2mPeakFrameValue", peak.peakFrame.toFixed(2));
+    set("#w2mPeakOffsetValue", peak.peakOffset.toFixed(2));
+    set("#w2mPeakMinValue", `${peak.peakMinFrames * 10}ms`);
   }
 
   function getAudioToMidiOptions() {
@@ -15358,6 +15417,9 @@
       drumThreshold: readW2mDrumThreshold(),
       fingerprint: elements.w2mFingerprint ? elements.w2mFingerprint.checked : true,
       collectFingerprint: true,
+      decoderMode: readW2mMode(),
+      ...readW2mPeak(),
+      tempoError: fixed ? 0 : readW2mTempoError(),
       velocity,
       velocityRange,
       tempo: fixed ? bpm : true,
@@ -15368,6 +15430,8 @@
   function syncAudioToMidiOptionControls() {
     const fixed = getCheckedRadioValue("w2mTempo") === "fixed";
     if (elements.w2mTempoBpm) elements.w2mTempoBpm.disabled = !fixed;
+    if (elements.w2mTempoError) elements.w2mTempoError.disabled = fixed;
+    syncW2mModeGroups();
     const fixedVolume = getCheckedRadioValue("w2mVolume") === "fixed";
     if (elements.w2mVolumeFixed) elements.w2mVolumeFixed.disabled = !fixedVolume;
     updateW2mSliderReadouts();
@@ -36599,7 +36663,9 @@
     document.querySelectorAll('input[type="radio"][name="midiImportOverlap"]').forEach((input) => input.addEventListener("change", updateMidiImportDialog));
     document.querySelectorAll('input[type="radio"][name="w2mTempo"], input[type="radio"][name="w2mVolume"]')
       .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
-    for (const slider of [elements.w2mStateBias, elements.w2mDrum]) {
+    document.querySelectorAll('input[type="radio"][name="w2mMode"]')
+      .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
+    for (const slider of [elements.w2mStateBias, elements.w2mDrum, elements.w2mPeakOnset, elements.w2mPeakFrame, elements.w2mPeakOffset, elements.w2mPeakMin, elements.w2mTempoError]) {
       slider?.addEventListener("input", updateW2mSliderReadouts);
       slider?.addEventListener("change", scheduleAudioToMidiPostprocess);
     }

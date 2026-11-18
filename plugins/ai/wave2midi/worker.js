@@ -24,7 +24,11 @@ function pickRuntime(options, caps) {
   return options?.executionProvider === "wasm" || !caps?.webgpu ? ORT_RUNTIMES.modernCpu : ORT_RUNTIMES.modernGpu;
 }
 // Model outputs the state decoder uses (fetching only these keeps the read-back from the GPU small).
-const NEEDED_OUTPUTS = ["state", "drum", "inst"];
+// peak decoder (decoderMode "peak"): onset/frame/offset maps instead of the state map.
+const DEFAULT_TEMPO_FALLBACK = { integer_tolerance: 0.015, integer_block_beats: 8 };
+const STATE_OUTPUTS = ["state", "drum", "inst"];
+const PEAK_OUTPUTS = ["onset", "frame", "offset", "drum", "inst"];
+const neededOutputsFor = mode => (mode === "peak" ? PEAK_OUTPUTS : STATE_OUTPUTS);
 function ortSourcesFor(runtime) {
   return [
     new URL(`../../vendor/onnxruntime-web/${runtime.version}/`, BASE).href,
@@ -324,6 +328,8 @@ async function transcribe(id, wave, options) {
     ? Math.max(1, Math.min(cpuSessions, cores - 2))
     : Math.max(1, Math.min(8, cores - 2));
   const pool = new FeaturePool(meta, poolSize, w2m);
+  const decoderMode = options.decoderMode === "peak" ? "peak" : "state";
+  const NEEDED_OUTPUTS = neededOutputsFor(decoderMode);
   const predictOptions = { prepare: seg => pool.features(seg), lookahead: Math.max(1, pool.size), keys: NEEDED_OUTPUTS };
   // The 128-d per-note feature (model outputs fpi/fpv/fpc) is only fetched when the instrument-consistency step can use it.
   const wantFeat = (options.fingerprint === true || options.collectFingerprint === true) && Boolean(meta.outputs?.fpc);
@@ -381,7 +387,7 @@ async function transcribe(id, wave, options) {
   // re-applied without running the model again ("postprocess" message). Freed with the worker.
   // Only the probability maps are needed for post-processing: free the model and its buffers now.
   await releaseSession();
-  lastJob = { probs: predicted.probs ?? predicted, T: predicted.T, wave, seconds, info };
+  lastJob = { probs: predicted.probs ?? predicted, T: predicted.T, wave, seconds, info, mode: decoderMode };
   return finishTranscription(lastJob, options, progress, started);
 }
 
@@ -398,6 +404,9 @@ async function finishTranscription(job, options, progress, started = performance
   const { w2m, velocity, midi, tempo } = await loadLibs();
   const { probs, T, wave, seconds, info } = job;
   const meta = info.meta;
+  const mode = options.decoderMode === "peak" ? "peak" : "state";
+  // The model outputs the chosen decoder needs were not kept for this job (other mode) -> the caller re-runs the model.
+  if (mode !== (job.mode || "state")) throw fail("no-job", `The stored model output is for the "${job.mode || "state"}" decoder`);
   const range = meta.decode || {};
   const [biasLo, biasHi] = range.state_bias_range || [-1, 1];
   const [drumLo, drumHi] = range.drum_range || [0.05, 0.4];
@@ -413,8 +422,20 @@ async function finishTranscription(job, options, progress, started = performance
   const maps = { ...probs, T, multi: probs.multi || (job.zeroMulti ??= new Float32Array(T * w2m.NP)) };
   const fingerprint = options.fingerprint === true;
   const fpStats = {};
-  let notes = w2m.decodeStates(maps, { ...meta, thresholds }, bias, { fingerprint, stats: fpStats, debug: options.debugFingerprint ? (job.fpDebug = []) : null });
-  const decoder = { mode: "state", bias, fingerprint, ...fpStats };
+  let notes, decoder;
+  if (mode === "peak") {
+    const num = (value, lo, hi, fallback) => (Number.isFinite(Number(value)) && value !== null && value !== "" ? Math.min(hi, Math.max(lo, Number(value))) : fallback);
+    const peakThresholds = { ...thresholds,
+      onset: num(options.peakOnset, 0.02, 0.9, Number(meta.thresholds.onset)),
+      frame: num(options.peakFrame, 0.05, 0.95, Number(meta.thresholds.frame)),
+      offset: num(options.peakOffset, 0.05, 0.95, Number(meta.thresholds.offset)),
+      min_frames: Math.round(num(options.peakMinFrames, 1, 30, Number(meta.thresholds.min_frames))) };
+    notes = w2m.decodeNotes(maps, { ...meta, thresholds: peakThresholds }, { fingerprint, stats: fpStats, debug: options.debugFingerprint ? (job.fpDebug = []) : null });
+    decoder = { mode: "peak", onset: peakThresholds.onset, frame: peakThresholds.frame, offset: peakThresholds.offset, minFrames: peakThresholds.min_frames, fingerprint, ...fpStats };
+  } else {
+    notes = w2m.decodeStates(maps, { ...meta, thresholds }, bias, { fingerprint, stats: fpStats, debug: options.debugFingerprint ? (job.fpDebug = []) : null });
+    decoder = { mode: "state", bias, fingerprint, ...fpStats };
+  }
   let velocities = null;
   const fixedVelocity = typeof options.velocity === "number" && options.velocity > 0
     ? Math.min(127, Math.max(1, Math.round(options.velocity)))
@@ -441,6 +462,15 @@ async function finishTranscription(job, options, progress, started = performance
     const fixed = typeof options.tempo === "number" ? options.tempo : NaN;
     const cfg = { ...(meta.tempo || {}), mode: Number.isFinite(fixed) && fixed > 0 ? fixed : "auto" };
     if (typeof options.tempoChanges === "boolean") cfg.changes = options.tempoChanges;
+    // Tempo error allowance (0 = default: timing kept as exact as before). Higher levels allow a larger accumulated timing
+    // error (seconds) and re-fit the integer tempo over longer stretches (beats), so the tempo is corrected less often.
+    const level = Number(options.tempoError);
+    if (Number.isFinite(level) && level > 0) {
+      const lv = Math.min(10, Math.max(0, level));
+      const base = { ...DEFAULT_TEMPO_FALLBACK, ...(meta.tempo || {}) };
+      cfg.integer_tolerance = Number(base.integer_tolerance) + lv * 0.0135;
+      cfg.integer_block_beats = Math.round(Number(base.integer_block_beats) + lv * 6);
+    }
     try {
       tempoMap = tempo.tempoMap(notes, seconds, cfg);
     } catch (error) {

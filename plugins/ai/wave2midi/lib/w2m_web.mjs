@@ -217,8 +217,8 @@ function makeInstruments(pr, meta) {
   };
 }
 
-export function decodeNotes(pr, meta) {
-  const th = meta.thresholds, T = pr.T, P = NP, K = meta.classes.length, minf = th.min_frames | 0, out = [];
+export function decodeNotes(pr, meta, opts = {}) {
+  const th = meta.thresholds, T = pr.T, P = NP, K = meta.classes.length, minf = th.min_frames | 0, out = [], fp = [];
   const instruments = makeInstruments(pr, meta);
   const on = peaks(pr.onset, T, P, th.onset);
   if (on.length) {
@@ -232,9 +232,16 @@ export function decodeNotes(pr, meta) {
         let e = j < stops.length ? stops[j] : T; e = Math.min(e, nxt); e = Math.max(e, Math.min(t + 1, T));
         const s = subframe(pr.onset, T, P, t, p), onset = Math.max(s, 0) / FPS; let offset = e / FPS;
         if (offset <= onset) offset = onset + 1 / FPS;
-        for (const k of instruments(t, e, p)) out.push([p + PITCH_MIN, meta.classes[k], Math.fround(onset), Math.fround(offset), pr.onset[t * P + p]]);
+        const sink = {}, ks = instruments(t, e, p, sink);
+        // MobiBard: instrument-consistency step also for the peak decoder (same as decodeStates)
+        if (opts.fingerprint && ks.length === 1 && sink.sc) fp.push({ idx: out.length, pitch: p, onset, sc: sink.sc, k: ks[0], vec: pr.featMap ? noteFeat(pr.featMap, t, p, T, pr.featDim || 128) : null });
+        for (const k of ks) out.push([p + PITCH_MIN, meta.classes[k], Math.fround(onset), Math.fround(offset), pr.onset[t * P + p]]);
       });
     }
+  }
+  if (opts.fingerprint && fp.length) {
+    const stats = refineByFingerprint(fp, out, meta, { ...(opts.fingerprint === true ? {} : opts.fingerprint), debug: opts.debug });
+    if (opts.stats) Object.assign(opts.stats, stats);
   }
   for (const { t, p } of peaks(pr.drum, T, P, th.drum)) {
     const o = Math.max(subframe(pr.drum, T, P, t, p), 0) / FPS;

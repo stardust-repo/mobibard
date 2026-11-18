@@ -14,7 +14,7 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "2.0.11";
+  const VERSION = "2.0.13";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
   // predictSong keeps T x 88 maps in memory: state (3), drum (1) and instruments (K = meta.classes.length = 16),
@@ -216,7 +216,8 @@
   /**
    * input: File | Blob | ArrayBuffer | Float32Array (already mono 24 kHz).
    * options: { velocity=true (false: constant 100, number: fixed velocity), velocityRange=[min,max],
-   *            tempo=true (false: constant 120 BPM, number: fixed BPM), tempoChanges,
+   *            tempo=true (false: constant 120 BPM, number: fixed BPM), tempoChanges, tempoError (0..10, default 0 = exact timing),
+   *            decoderMode ("state" default | "peak" with peakOnset/peakFrame/peakOffset/peakMinFrames),
    *            stateBias (-1..1, default 0), drumThreshold (0.05..0.4, default 0.13), fingerprint (default false),
    *            collectFingerprint (true: keep the 128-d note features so fingerprint can be switched later),
    *            maxSeconds=1800, executionProvider: "auto"|"wasm",
@@ -250,6 +251,12 @@
         velocityRange: options.velocityRange,
         tempo: options.tempo ?? true,
         tempoChanges: options.tempoChanges,
+        tempoError: options.tempoError,
+        decoderMode: options.decoderMode === "peak" ? "peak" : "state",
+        peakOnset: options.peakOnset,
+        peakFrame: options.peakFrame,
+        peakOffset: options.peakOffset,
+        peakMinFrames: options.peakMinFrames,
         stateBias: options.stateBias,
         drumThreshold: options.drumThreshold,
         fingerprint: options.fingerprint === true,
@@ -277,6 +284,12 @@
       velocityRange: options.velocityRange,
       tempo: options.tempo ?? true,
       tempoChanges: options.tempoChanges,
+      tempoError: options.tempoError,
+      decoderMode: options.decoderMode === "peak" ? "peak" : "state",
+      peakOnset: options.peakOnset,
+      peakFrame: options.peakFrame,
+      peakOffset: options.peakOffset,
+      peakMinFrames: options.peakMinFrames,
       stateBias: options.stateBias,
       drumThreshold: options.drumThreshold,
       fingerprint: options.fingerprint === true,
@@ -294,6 +307,10 @@
         stateBiasMin: Number(meta?.decode?.state_bias_range?.[0] ?? -1),
         stateBiasMax: Number(meta?.decode?.state_bias_range?.[1] ?? 1),
         drumThreshold: Number(meta?.thresholds?.drum) || 0.13,
+        peakOnset: Number(meta?.thresholds?.onset) || 0.13,
+        peakFrame: Number(meta?.thresholds?.frame) || 0.5,
+        peakOffset: Number(meta?.thresholds?.offset) || 0.5,
+        peakMinFrames: Number(meta?.thresholds?.min_frames) || 2,
         drumMin: Number(meta?.decode?.drum_range?.[0]) || 0.05,
         drumMax: Number(meta?.decode?.drum_range?.[1]) || 0.4,
         velocity: meta?.velocity?.enabled !== false,
