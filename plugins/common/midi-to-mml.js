@@ -682,6 +682,8 @@
           durGrid,
           midiVelocity: playbackVelocity(n),
           velocity: midiVelocityToMmlVolume(playbackVelocity(n)),
+          startTick: n.startTick,
+          endTick: n.endTick,
           channel: n.channel,
           trackIndex: n.trackIndex,
           program: normalizeProgram(n.program),
@@ -697,6 +699,14 @@
       .filter(Boolean);
 
     if (!rawNotes.length) throw new Error(tr("midi.err_selected_no_notes"));
+
+    // Player 메뉴얼 모드(options.smartAuto): 신형 노트 분류기로 음마다 주선율/대선율/베이스/화음을 표시하고,
+    // "자동" 노트 배치 채널이 맡을 역할과 "자동" 겹침 병합 판단에 쓴다. 다른 호출(에디터 등)은 예전 그대로다.
+    let smartAuto = false;
+    if (options.smartAuto === true && exportChannels.some(ch => ch.role === "auto" || ch.overlapMergeMode === "auto")) {
+      smartAuto = labelNotesWithArranger(rawNotes, midi, ppq);
+      if (smartAuto) resolveAutoTargets(rawNotes, exportChannels);
+    }
 
     const { notes, mergedCount } = mergeDuplicateGridNotes(rawNotes);
     notes.sort((a, b) => a.startGrid - b.startGrid || b.midi - a.midi || b.velocity - a.velocity);
@@ -720,7 +730,93 @@
       fmt(totalUsed),
       fmt(skipped)
     ]);
-    return { mml, parts, message, warnings, selectedInstrumentGroups: Array.from(selectedSet), partCount: exportChannels.length, roles, exportChannels, skipped, unsupportedPitchCount, mergedCount, placed, overlapMerged, quantizeDivision };
+    return { mml, parts, message, warnings, selectedInstrumentGroups: Array.from(selectedSet), partCount: exportChannels.length, roles, exportChannels, skipped, unsupportedPitchCount, mergedCount, placed, overlapMerged, quantizeDivision,
+      autoTargets: smartAuto ? exportChannels.map(ch => ch.autoTarget || null) : null };
+  }
+
+  // ---- 메뉴얼 "자동": 신형 노트 분류기(MabiArranger classifyOnly) 연결 ---------------------------------
+  const AUTO_LINE_ROLES = ["melody", "bass", "counter"];
+  const AUTO_BEAT_GRID = 16;   // 64분음표 격자에서 1박
+
+  function labelNotesWithArranger(rawNotes, midi, ppq) {
+    const arranger = window.MabiArranger;
+    if (!arranger?.arrangeSource) return false;
+    const pitched = rawNotes.filter(n => !n.isBeat && Number.isFinite(n.startTick) && Number.isFinite(n.endTick) && n.endTick > n.startTick);
+    if (!pitched.length) return false;
+    const chOf = n => (n.channel === 9 ? 15 : clampInt(n.channel, 0, 15));
+    const notes = pitched.map(n => ({ s: n.startTick, e: n.endTick, p: n.midi, v: Math.max(1, n.midiVelocity || 64), ch: chOf(n) }))
+      .sort((a, b) => a.s - b.s || a.p - b.p);
+    const progs = {};
+    for (const n of pitched) if (!(chOf(n) in progs)) progs[chOf(n)] = normalizeProgram(n.program);
+    const tempos = normalizeMidiTempos(midi.tempoEvents)
+      .map(t => [Math.max(0, Math.round(t.tick || 0)), Math.max(1, Math.round(Number(t.mpqn) || 60000000 / (Number(t.bpm) || 120)))]);
+    if (!tempos.length) tempos.push([0, 500000]);
+    const tsigs = (midi.timeSignatures || []).map(ts => [Math.max(0, ts.tick || 0), ts.numerator || 4, ts.denominator || 4]);
+    let result;
+    try {
+      result = arranger.arrangeSource({ div: ppq, notes, tempos, tsigs, progs }, { total: 6, mainCount: 3, trust: 0.5, gridPerBeat: 16, classifyOnly: true });
+    } catch (_) {
+      return false;
+    }
+    if (!result?.labelOf) return false;
+    for (const n of pitched) n.aiLabel = result.labelOf(n.startTick, n.midi) || "harmony";
+    return true;
+  }
+
+  // 각 채널이 맡을 역할: 고음 = 주선율, 저음 = 베이스, 자동 = 자기 채널에 배정된 악기로 가장 잘 맡을 수 있는 역할.
+  // 주선율·베이스·대선율은 한 채널씩, 남은 자동 채널은 화음을 맡는다.
+  function resolveAutoTargets(rawNotes, exportChannels) {
+    const total = { melody: 0, bass: 0, counter: 0, harmony: 0 };
+    for (const n of rawNotes) if (n.aiLabel) total[n.aiLabel]++;
+    const coverage = exportChannels.map(cfg => {
+      const c = { melody: 0, bass: 0, counter: 0, harmony: 0 };
+      for (const n of rawNotes) if (n.aiLabel && canChannelUseNote(n, cfg)) c[n.aiLabel]++;
+      return c;
+    });
+    const frac = (i, r) => (total[r] ? coverage[i][r] / total[r] : 0);
+    const claimed = new Set();
+    exportChannels.forEach((cfg, i) => {
+      if (cfg.role === "high") { cfg.autoTarget = "melody"; if (frac(i, "melody") >= 0.3) claimed.add("melody"); }
+      else if (cfg.role === "low") { cfg.autoTarget = "bass"; if (frac(i, "bass") >= 0.3) claimed.add("bass"); }
+    });
+    const autoIdx = exportChannels.map((cfg, i) => (cfg.role === "auto" ? i : -1)).filter(i => i >= 0);
+    const weight = { melody: 4, bass: 3, counter: 2, harmony: 1 };
+    const minNotes = Math.max(8, Math.round(0.02 * rawNotes.length));
+    const allowed = r => r === "harmony" || (!claimed.has(r) && total[r] >= minNotes);
+    // 같은 악기 범위의 자동 채널끼리는 주선율이 앞 채널, 베이스가 뒤 채널로 가도록 아주 작은 순서 가산을 둔다.
+    const value = (i, r) => {
+      const f = frac(i, r);
+      if (r !== "harmony" && f < 0.3) return -Infinity;
+      const order = r === "melody" ? -0.001 * i : r === "bass" ? 0.001 * i : r === "counter" ? -0.0005 * i : 0;
+      return weight[r] * f + order;
+    };
+    let best = null, bestScore = -Infinity;
+    const pick = (k, used, acc, score) => {
+      if (k === autoIdx.length) { if (score > bestScore) { bestScore = score; best = acc.slice(); } return; }
+      const i = autoIdx[k];
+      for (const r of ["melody", "bass", "counter", "harmony"]) {
+        if (!allowed(r) || (r !== "harmony" && used.has(r))) continue;
+        const v = value(i, r);
+        if (!Number.isFinite(v)) continue;
+        if (r !== "harmony") used.add(r);
+        acc.push(r);
+        pick(k + 1, used, acc, score + v);
+        acc.pop();
+        if (r !== "harmony") used.delete(r);
+      }
+    };
+    pick(0, new Set(), [], 0);
+    (best || []).forEach((r, k) => { exportChannels[autoIdx[k]].autoTarget = r; });
+  }
+
+  // 자동 채널이 이 음을 얼마나 원하는지(역할 방향 점수 자리, 0~1000; 예전 자동은 500 고정).
+  function autoTargetDirectionScore(note, cfg) {
+    const target = cfg?.autoTarget;
+    const label = note?.aiLabel;
+    if (!target || !label) return 500;
+    if (label === target) return 900;
+    if (target === "harmony") return AUTO_LINE_ROLES.includes(label) ? 200 : 500;
+    return 100;
   }
 
   function normalizeExportChannels(options, partCount, instrumentGroups) {
@@ -814,7 +910,7 @@
     if (value === true || value === "true") return "all";
     if (value === false || value === "false") return "none";
     const mode = String(value || "all").toLowerCase();
-    return ["all", "half", "none"].includes(mode) ? mode : "all";
+    return ["auto", "all", "half", "none"].includes(mode) ? mode : "all";
   }
 
   function assignNotesToVoices(notes, exportChannelsOrCount, oldRoles = null, assignmentOptions = {}) {
@@ -924,7 +1020,7 @@
               trimIgnorableOverlap: true
             });
           } else {
-            const mergeInfo = getOverlapMergeCandidateInfo(cfg, voices[channelIndex], startGrid);
+            const mergeInfo = getOverlapMergeCandidateInfo(cfg, voices[channelIndex], startGrid, note);
             if (mergeInfo) {
               mergeCandidates.push({
                 type: "merge",
@@ -983,7 +1079,7 @@
         if (assignedChannels.has(channelIndex)) continue;
         const cfg = exportChannels[channelIndex];
         if (!canChannelUseNote(note, cfg)) continue;
-        const mergeInfo = getOverlapMergeCandidateInfo(cfg, voices[channelIndex], startGrid);
+        const mergeInfo = getOverlapMergeCandidateInfo(cfg, voices[channelIndex], startGrid, note);
         if (!mergeInfo) continue;
         candidates.push({
           noteIndex,
@@ -1037,15 +1133,26 @@
     return { active, playedLength: plan.trimmedDuration };
   }
 
-  function getOverlapMergeCandidateInfo(cfg, voice, startGrid) {
+  function getOverlapMergeCandidateInfo(cfg, voice, startGrid, note = null) {
     const mergeMode = normalizeOverlapMergeMode(cfg?.overlapMergeMode ?? cfg?.overlapMerge);
     if (mergeMode === "none") return null;
     const active = findActiveNoteAt(voice, startGrid);
     if (!active) return null;
     if (mergeMode === "half" && !isPastOverlapMergeHalfPoint(active, startGrid)) return null;
+    if (mergeMode === "auto" && !isAutoOverlapMergeAllowed(cfg, active, startGrid, note)) return null;
     const activeStart = Number(active.startGrid);
     const playedLength = Math.max(0, startGrid - (Number.isFinite(activeStart) ? activeStart : startGrid));
     return { active, playedLength };
+  }
+
+  // 겹침 병합 "자동": 채널이 맡은 선율(주선율·베이스·대선율)의 다음 음이면 울리던 음을 끊고 잇는다(단선율 흐름).
+  // 그 밖의 음(화음 등)은 울리던 음이 1박 이상 울렸을 때만 끊는다(정리 엔진의 화음 성부 규칙). 분류가 없으면 "절반"과 같다.
+  function isAutoOverlapMergeAllowed(cfg, active, startGrid, note) {
+    const target = cfg?.autoTarget;
+    const label = note?.aiLabel;
+    if (!target || !label) return isPastOverlapMergeHalfPoint(active, startGrid);
+    if (AUTO_LINE_ROLES.includes(target) && label === target) return true;
+    return startGrid - (Number(active.startGrid) || 0) >= AUTO_BEAT_GRID;
   }
 
   function canChannelUseNote(note, cfg) {
@@ -1254,7 +1361,9 @@
       ? optionPitchDistance
       : notePitchDistance(note, referenceNote);
     const proximity = pitchDistance === null ? 0 : Math.max(0, 128 - Math.min(128, pitchDistance));
-    const roleDirection = melodicRoleDirectionScore(note, role, options.pitchSpread);
+    const roleDirection = role === "auto" && cfg?.autoTarget
+      ? autoTargetDirectionScore(note, cfg)
+      : melodicRoleDirectionScore(note, role, options.pitchSpread);
     const startupRoleFit = startupRoleSeedScore(note, role, referenceNote, options.startupRoleContext);
     const relaxRolePriority = shouldRelaxRolePriority(note, role, referenceNote, pitchDistance, options.nearestPitchDistance, options.pitchSpread);
     // 고음/저음 역할은 자동보다 기본 우선권을 가진다.

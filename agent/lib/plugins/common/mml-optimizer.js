@@ -626,7 +626,7 @@
       ? Array.from({ length: partCount }, (_, index) => {
           const mode = String(perPartModes[index] ?? "keep").toLowerCase();
           if (!mode || mode === "keep") return null;
-          return normalizeRestTrimThreshold(mode === "all" ? { all: true } : { denom: Number(mode) });
+          return normalizeRestTrimThreshold(mode === "all" ? { all: true } : { denom: /^d\d+$/i.test(mode) ? mode : Number(mode) });
         })
       : null;
 
@@ -1994,11 +1994,14 @@
     if (options.all || String(options.denom || options.threshold || "").toLowerCase() === "all") {
       return { all: true, units: Infinity, denom: null };
     }
-    const denom = Number(options.denom ?? options.thresholdDenom ?? options.threshold ?? 32);
+    const rawDenom = options.denom ?? options.thresholdDenom ?? options.threshold ?? 32;
+    const dotted = /^d(\d+)$/i.exec(String(rawDenom));
+    const denom = dotted ? Number(dotted[1]) : Number(rawDenom);
+    const dots = dotted ? 1 : 0;
     if (!VALID_LENGTHS.includes(denom) || denom < 4) {
       throw new Error(tr("rest.err_limit"));
     }
-    return { all: false, units: durationUnits(denom, 0), denom };
+    return { all: false, units: durationUnits(denom, dots), denom, dots };
   }
 
   function countAbsorbableShortRests(events, threshold) {

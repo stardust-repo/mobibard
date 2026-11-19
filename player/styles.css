@@ -10080,7 +10080,7 @@ a[class*="button"]:hover {
   border: 0 !important;
   background: transparent !important;
 }
-.player-ui #midiConvertDialog #midiInstrumentPanelTitle {
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) #midiInstrumentPanelTitle {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -10096,7 +10096,7 @@ a[class*="button"]:hover {
   font-size: 10px;
   font-weight: 750;
 }
-.player-ui #midiConvertDialog .midi-channel-list {
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) .midi-channel-list {
   display: grid !important;
   gap: 6px !important;
   height: auto !important;
@@ -10110,7 +10110,7 @@ a[class*="button"]:hover {
 .player-ui #midiConvertDialog .wb15-arr-include-desc.is-warning { color: var(--danger, #e5484d); }
 
 /* 분류 묶음 */
-.player-ui #midiConvertDialog .midi-instrument-section {
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) .midi-instrument-section {
   margin: 0 !important;
   padding: 0 !important;
   overflow: hidden;
@@ -10251,3 +10251,135 @@ a[class*="button"]:hover {
   align-content: center !important;
   align-items: center !important;
 }
+
+/* 2026-11-19: 판단 기준 "메뉴얼"(이전 악기 선택) — 듣기 아이콘은 인라인 SVG, 크기는 예전 아이콘과 같게 */
+.player-ui #midiConvertDialog.wb15-manual-mode .wb8-midi-listen .wb15-listen-svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  pointer-events: none;
+}
+.player-ui #midiConvertDialog.wb15-manual-mode .wb15-manual-roles { display: contents; }
+.player-ui #midiConvertDialog .wb13-midi-role-options.wb15-merge-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* ---- rev 20261119c: fixed apply bar, rest notch slider, 2-row volume chips ---- */
+.player-ui .wb11-pending-apply.wb11-channel-apply,
+.player-ui .wb11-pending-apply.wb11-instrument-apply {
+  box-sizing: border-box;
+  height: 46px;
+  min-height: 46px;
+  padding-block: 5px;
+  transition: background-color .15s, border-color .15s;
+}
+.player-ui .wb11-channel-apply.is-idle {
+  border-color: var(--wb4-line);
+  border-left-color: var(--wb4-line);
+  background: var(--wb4-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.player-ui .wb11-channel-apply.is-idle .wb11-pending-apply-text {
+  color: var(--wb4-muted);
+  font-weight: 600;
+  font-size: 10.5px;
+}
+.player-ui .wb11-channel-apply.is-idle .wb11-pending-actions {
+  visibility: hidden;
+}
+.player-ui .wb11-channel-apply.is-dirty {
+  border-color: color-mix(in srgb, var(--wb4-accent) 60%, var(--wb4-line));
+  border-left-color: var(--wb4-accent);
+  background: color-mix(in srgb, var(--wb4-accent) 16%, var(--wb4-surface));
+}
+.player-ui .wb11-channel-apply .wb11-pending-actions { flex: 0 0 auto; }
+.player-ui .wb11-channel-apply .wb11-apply-button,
+.player-ui .wb11-channel-apply .wb11-cancel-button { min-height: 32px; }
+
+.player-ui .wb11-instrument-apply.is-idle {
+  border-color: var(--wb4-line);
+  border-left-color: var(--wb4-line);
+  background: var(--wb4-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.player-ui .wb11-instrument-apply.is-idle .wb11-pending-apply-text {
+  color: var(--wb4-muted);
+  font-weight: 600;
+  font-size: 10.5px;
+}
+.player-ui .wb11-instrument-apply.is-idle .wb11-pending-actions {
+  visibility: hidden;
+}
+.player-ui .wb11-instrument-apply.is-dirty {
+  border-color: color-mix(in srgb, var(--wb4-accent) 60%, var(--wb4-line));
+  border-left-color: var(--wb4-accent);
+  background: color-mix(in srgb, var(--wb4-accent) 16%, var(--wb4-surface));
+}
+.player-ui .wb11-instrument-apply .wb11-pending-actions { flex: 0 0 auto; }
+.player-ui .wb11-instrument-apply .wb11-apply-button,
+.player-ui .wb11-instrument-apply .wb11-cancel-button { min-height: 32px; }
+
+/* volume channel chips: reserve two rows, no horizontal scroll */
+.player-ui .wb13-volume-metric-row .wb13-volume-channel-distribution {
+  flex-wrap: wrap !important;
+  overflow: hidden !important;
+  align-content: flex-start;
+  box-sizing: border-box;
+  height: 56px !important;
+  min-height: 56px !important;
+  max-height: 56px !important;
+  padding: 4px 0 !important;
+  gap: 4px !important;
+}
+.player-ui .wb13-volume-metric-row .wb13-volume-channel-distribution .wb9-volume-chip {
+  flex: 0 1 auto;
+  min-height: 22px;
+  max-height: 22px;
+  white-space: nowrap;
+}
+
+/* rest removal: thin bar slider with round dimples */
+.player-ui .wb17-notch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.player-ui .wb17-notch-track { position: relative; height: 28px; min-width: 0; }
+.player-ui .wb17-notch-ticks { position: absolute; inset: 0 9px; pointer-events: none; }
+.player-ui .wb17-notch-ticks::before {
+  content: ""; position: absolute; left: -9px; right: -9px; top: 50%; height: 4px; transform: translateY(-50%);
+  border-radius: 999px; background: color-mix(in srgb, var(--wb4-muted) 24%, var(--wb4-surface));
+}
+.player-ui .wb17-notch-tick {
+  position: absolute; top: 50%; left: calc(var(--p) * 100%); width: 8px; height: 8px;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: var(--wb4-surface);
+  border: 1.5px solid color-mix(in srgb, var(--wb4-muted) 45%, transparent);
+  box-sizing: border-box;
+}
+.player-ui .wb17-notch-input {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; background: transparent;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+}
+.player-ui .wb17-notch-input::-webkit-slider-runnable-track { background: transparent; height: 28px; }
+.player-ui .wb17-notch-input::-moz-range-track { background: transparent; height: 28px; }
+.player-ui .wb17-notch-input::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: 5px; border-radius: 50%;
+  border: 0; background: var(--wb8-channel-color, var(--wb4-accent));
+  box-shadow: 0 1px 4px color-mix(in srgb, #000 30%, transparent);
+}
+.player-ui .wb17-notch-input::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%; border: 0;
+  background: var(--wb8-channel-color, var(--wb4-accent));
+  box-shadow: 0 1px 4px color-mix(in srgb, #000 30%, transparent);
+}
+.player-ui .wb17-notch[data-mixed="true"] .wb17-notch-input { opacity: .55; }
+.player-ui .wb17-notch-readout {
+  min-width: 44px; max-width: 76px; text-align: right; font-size: 11px; font-weight: 800; overflow: hidden; text-overflow: ellipsis;
+  color: var(--wb8-channel-color, var(--wb4-accent)); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.player-ui .wb9-rest-feature .wb9-option-list-row { grid-template-columns: minmax(104px, 140px) minmax(0, 1fr); }

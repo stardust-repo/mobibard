@@ -589,6 +589,24 @@ function arrangeSource(src0, opt) {
   for (const n of bass) used.add(n.id);
   const ctrIds = new Set(counter.map(n => n.id));
 
+  // MobiBard: opt.classifyOnly — 채널 정리는 하지 않고, 각 음이 주선율/대선율/베이스/화음 중 무엇인지만 돌려준다.
+  // (Player 메뉴얼 모드의 "자동" 노트 배치·겹침 병합이 이 분류를 참고한다.) labelOf(원본 틱, 음높이) → 역할 또는 undefined
+  if (opt.classifyOnly) {
+    const label = new Map();
+    for (const n of all) label.set(n.id, 'harmony');
+    for (const n of counter) label.set(n.id, 'counter');
+    for (const n of bass) label.set(n.id, 'bass');
+    for (const n of melody) label.set(n.id, 'melody');
+    const byKey = new Map();
+    for (const n of all) byKey.set(n.s * 128 + n.p, label.get(n.id));
+    const scale = src.div / src0.div;
+    return {
+      classifyOnly: true,
+      counts: { melody: melody.length, counter: counter.length, bass: bass.length, all: all.length },
+      labelOf: (tick, pitch) => byKey.get(q(Number(tick) * scale) * 128 + Number(pitch)),
+    };
+  }
+
   // ---- 7. 역할 목록
   const restExists = all.some(n => !used.has(n.id) && !ctrIds.has(n.id) && n.p >= 40);
   const harmAvail = restExists || counter.length > 0;
