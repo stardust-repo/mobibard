@@ -113,6 +113,54 @@
     bank.isMobibardCompatible = Boolean(marker);
   }
 
+  // File-name based "try MobiBard-compatible mode" (user-confirmed, remembered per file).
+  const FORCE_COMPAT_KEY = "mobibard.soundbank.forceCompat";
+  function compatNameKey(name, size) { return `${String(name || "").trim()}|${Number(size) || 0}`; }
+  function nameSuggestsMobibard(name) { return /mobibard/i.test(String(name || "")); }
+  // Case-insensitive scan for "mobibard" anywhere in the raw file (ASCII or UTF-16LE).
+  function bytesContainMobibard(bytes) {
+    if (!bytes || !bytes.length) return false;
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes.buffer || bytes, bytes.byteOffset || 0, bytes.byteLength);
+    const word = "mobibard", n = word.length, last = u8.length - n;
+    for (let i = 0; i <= last; i++) {
+      if ((u8[i] | 32) !== 109) continue; // 'm'
+      let ok = true, wide = true;
+      for (let k = 1; k < n && (ok || wide); k++) {
+        const c = word.charCodeAt(k);
+        if (ok && (u8[i + k] | 32) !== c) ok = false;
+        if (wide && (i + 2 * k >= u8.length || (u8[i + 2 * k] | 32) !== c || u8[i + 2 * k + 1] !== 0)) wide = false;
+      }
+      if (ok || wide) return true;
+    }
+    return false;
+  }
+  function needsCompatPrompt(bank, name, bytes) {
+    if (!bank || bank.isMobibardCompatible || bank.isEmbeddedDefault) return false;
+    return nameSuggestsMobibard(name) || bytesContainMobibard(bytes);
+  }
+  function readForcedCompat() {
+    try { return JSON.parse(localStorage.getItem(FORCE_COMPAT_KEY) || "null"); } catch (_) { return null; }
+  }
+  function rememberForcedCompat(name, size) {
+    try { localStorage.setItem(FORCE_COMPAT_KEY, JSON.stringify({ key: compatNameKey(name, size) })); } catch (_) {}
+  }
+  function forgetForcedCompat() { try { localStorage.removeItem(FORCE_COMPAT_KEY); } catch (_) {} }
+  function applyForcedCompat(bank, name, size, remember = true) {
+    if (!bank) return bank;
+    bank.isMobibardCompatible = true;
+    bank.mobibardForced = true;
+    if (remember) rememberForcedCompat(name, size);
+    return bank;
+  }
+  // Re-apply a previously confirmed choice (cache restore). Returns true if applied.
+  function restoreForcedCompat(bank, name, size) {
+    if (!bank || bank.isMobibardCompatible) return false;
+    const saved = readForcedCompat();
+    if (!saved || saved.key !== compatNameKey(name, size)) return false;
+    applyForcedCompat(bank, name, size, false);
+    return true;
+  }
+
   async function parseSoundBankFile(file, options = {}) {
     if (!file || typeof file.arrayBuffer !== "function") throw new TypeError("SoundBank File 객체가 필요합니다.");
     const bank = await parseSoundBank(await file.arrayBuffer(), options);
@@ -1322,6 +1370,11 @@
     parseSoundFont,
     parseDls,
     parseMobibardMarker,
+    nameSuggestsMobibard,
+    needsCompatPrompt,
+    applyForcedCompat,
+    restoreForcedCompat,
+    forgetForcedCompat,
     prepareNotes,
     prepareDrumNotes,
     schedulePreparedNotes,

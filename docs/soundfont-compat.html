@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MobiBard SoundFont / DLS</title>
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#1d2330;--mut:#667085;--line:#d9dee8;--code:#f2f4f8;--acc:#3b6fd8}
+@media(prefers-color-scheme:dark){:root{--bg:#14171d;--fg:#e6e9f0;--mut:#98a2b3;--line:#2b3140;--code:#1d222c;--acc:#7da6ff}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.7 system-ui,"Segoe UI","Malgun Gothic",sans-serif}
+main{max-width:780px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:22px;margin:.2em 0 .4em}h2{font-size:17px;margin:1.8em 0 .5em;border-bottom:1px solid var(--line);padding-bottom:4px}
+code,pre{background:var(--code);border-radius:6px;font:13px/1.5 ui-monospace,Consolas,monospace}code{padding:1px 5px}pre{padding:10px 12px;overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
+a{color:var(--acc)}.langs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}.langs button{border:1px solid var(--line);background:none;color:var(--fg);border-radius:6px;padding:3px 10px;cursor:pointer}.langs button[aria-pressed=true]{background:var(--acc);color:#fff;border-color:var(--acc)}
+.mut{color:var(--mut)}[data-l]{display:none}
+</style>
+</head>
+<body><main>
+<div class="langs" id="langs"></div>
+
+<div data-l="ko">
+<h1>SF3 / DLS를 모비바드 호환으로 만들기</h1>
+<p class="mut">모비바드는 "호환 표시"가 있는 음색 파일만 자체 악기 배치(프리셋 0~14)로 재생합니다. 표시가 없는 파일은 일반 GM 방식(프로그램 번호 = 프리셋 번호)으로 읽어서, 악기가 엉뚱하게 나옵니다.</p>
+<h2>1. 호환 표시 넣기</h2>
+<p>파일의 RIFF <code>INFO</code> 목록 안 <code>ICMT</code>(Comment)에 아래 두 줄을 넣습니다.</p>
+<pre>MobiBard-Compatible: 1
+MobiBard-Version: v1.0</pre>
+<p>SF2/SF3는 Polyphone·Swami 등의 "Comments" 항목, DLS는 Gigasampler/DLS 편집기의 Comments에 입력하면 됩니다. 편집기가 마땅치 않으면 <a href="tools/add_mobibard_marker.py">add_mobibard_marker.py</a>로 샘플·프리셋은 그대로 두고 표시만 추가할 수 있습니다.</p>
+<pre>python add_mobibard_marker.py 원본.dls 결과.dls</pre>
+<h2>2. 프리셋 배치 (Bank 0)</h2>
+<table><tr><th>번호</th><th>악기</th><th>번호</th><th>악기</th></tr>
+<tr><td>0</td><td>Piano (기본/대체)</td><td>8</td><td>Music Box</td></tr><tr><td>1</td><td>Chalumeau</td><td>9</td><td>Guitar</td></tr><tr><td>2</td><td>Flute</td><td>10</td><td>Harmonica</td></tr><tr><td>3</td><td>Harp</td><td>11</td><td>Cat (보컬)</td></tr><tr><td>4</td><td>Lute</td><td>12</td><td>Big Drum</td></tr><tr><td>5</td><td>Mandolin</td><td>13</td><td>Cymbals</td></tr><tr><td>6</td><td>Violin</td><td>14</td><td>Gramophone</td></tr><tr><td>7</td><td>Xylophone</td><td></td><td></td></tr></table>
+<p>MIDI의 프로그램/드럼 노트는 모비바드가 위 프리셋으로 변환합니다. 파일에는 프리셋 번호만 맞춰 두면 됩니다. 없는 번호는 0번(Piano)으로 대체됩니다.</p>
+<h2>3. 소리 설정 팁</h2>
+<ul>
+<li>엔벌로프(A/D/S/R)는 파일 값을 그대로 따릅니다. SF2/SF3는 Generator 34·36·37·38, DLS는 Articulation(EG1) 값입니다.</li>
+<li>길게 울리는 악기는 샘플에 루프를 넣고 Release를 충분히 주세요. 루프가 없으면 샘플 길이만큼만 납니다.</li>
+<li>타악기(Cat, Big Drum, Cymbals)는 Sustain 0 + 긴 Release로 한 번 치면 끝까지 울리게 하는 편이 자연스럽습니다.</li>
+</ul>
+<h2>4. 확인</h2>
+<p>파일을 불러온 뒤 사운드폰트 이름이 바뀌고, 곡의 각 채널이 기본 음색과 같은 악기로 나오면 정상입니다.</p>
+<h2>5. 표시 없이 시도하기</h2>
+<p>호환 표시가 없어도 <b>파일 이름에 <code>mobibard</code>가 들어 있으면</b>, 불러올 때 "모비바드 호환으로 시도할까요?"라고 물어봅니다. 승인하면 위 배치로 읽어 봅니다. 번호가 맞게 만들어진 파일이면 이것만으로도 동작하지만, 확실하게 쓰려면 1번처럼 표시를 넣는 쪽이 좋습니다. 이미 표시가 있는 파일은 묻지 않습니다.</p>
+</div>
+
+<div data-l="en">
+<h1>Making an SF3 / DLS MobiBard-compatible</h1>
+<p class="mut">MobiBard only uses its own instrument layout (presets 0–14) for banks that carry a compatibility marker. Without it the file is read as plain GM (program number = preset number), so instruments come out wrong.</p>
+<h2>1. Add the marker</h2>
+<p>Put these two lines in the <code>ICMT</code> (Comment) entry of the file's RIFF <code>INFO</code> list:</p>
+<pre>MobiBard-Compatible: 1
+MobiBard-Version: v1.0</pre>
+<p>Use the "Comments" field in Polyphone/Swami (SF2/SF3) or a DLS editor. Or run <a href="tools/add_mobibard_marker.py">add_mobibard_marker.py</a>, which only adds the marker and leaves samples and presets untouched.</p>
+<pre>python add_mobibard_marker.py input.dls output.dls</pre>
+<h2>2. Preset layout (Bank 0)</h2>
+<table><tr><th>#</th><th>Instrument</th><th>#</th><th>Instrument</th></tr>
+<tr><td>0</td><td>Piano (default/fallback)</td><td>8</td><td>Music Box</td></tr><tr><td>1</td><td>Chalumeau</td><td>9</td><td>Guitar</td></tr><tr><td>2</td><td>Flute</td><td>10</td><td>Harmonica</td></tr><tr><td>3</td><td>Harp</td><td>11</td><td>Cat (vocal)</td></tr><tr><td>4</td><td>Lute</td><td>12</td><td>Big Drum</td></tr><tr><td>5</td><td>Mandolin</td><td>13</td><td>Cymbals</td></tr><tr><td>6</td><td>Violin</td><td>14</td><td>Gramophone</td></tr><tr><td>7</td><td>Xylophone</td><td></td><td></td></tr></table>
+<p>MobiBard converts MIDI programs and drum notes to these presets itself; just keep the preset numbers. Missing numbers fall back to preset 0 (Piano).</p>
+<h2>3. Sound tips</h2>
+<ul>
+<li>Envelopes (A/D/S/R) are taken from the file: SF2/SF3 generators 34/36/37/38, DLS articulation (EG1).</li>
+<li>Sustained instruments need a sample loop and a decent Release; without a loop the sound ends with the sample.</li>
+<li>For percussion (Cat, Big Drum, Cymbals) use Sustain 0 with a long Release so one hit rings out.</li>
+</ul>
+<h2>4. Check</h2>
+<p>After loading, the soundfont name changes and every channel should use the same instruments as with the default sound.</p>
+<h2>5. Trying without the marker</h2>
+<p>Even without the marker, if the <b>file name contains <code>mobibard</code></b>, loading it asks whether to try MobiBard-compatible mode. If you accept, the file is read with the layout above. This works when the preset numbers already match, but adding the marker (step 1) is the reliable way. Files that already carry the marker are not asked.</p>
+</div>
+
+<div data-l="ja">
+<h1>SF3 / DLS をモビバード互換にする方法</h1>
+<p class="mut">モビバードは「互換マーカー」のある音色ファイルだけ独自の楽器配置(プリセット0〜14)で再生します。マーカーがないと通常のGM方式(プログラム番号=プリセット番号)で読むため、楽器が違って聞こえます。</p>
+<h2>1. マーカーを入れる</h2>
+<p>RIFF <code>INFO</code> リストの <code>ICMT</code>(コメント)に次の2行を入れます。</p>
+<pre>MobiBard-Compatible: 1
+MobiBard-Version: v1.0</pre>
+<p>Polyphone/Swami(SF2/SF3)やDLSエディタの「Comments」欄に入力します。<a href="tools/add_mobibard_marker.py">add_mobibard_marker.py</a> を使うと、サンプルやプリセットはそのままマーカーだけ追加できます。</p>
+<pre>python add_mobibard_marker.py input.dls output.dls</pre>
+<h2>2. プリセット配置(Bank 0)</h2>
+<table><tr><th>No.</th><th>楽器</th><th>No.</th><th>楽器</th></tr>
+<tr><td>0</td><td>Piano(既定/代替)</td><td>8</td><td>Music Box</td></tr><tr><td>1</td><td>Chalumeau</td><td>9</td><td>Guitar</td></tr><tr><td>2</td><td>Flute</td><td>10</td><td>Harmonica</td></tr><tr><td>3</td><td>Harp</td><td>11</td><td>Cat(ボーカル)</td></tr><tr><td>4</td><td>Lute</td><td>12</td><td>Big Drum</td></tr><tr><td>5</td><td>Mandolin</td><td>13</td><td>Cymbals</td></tr><tr><td>6</td><td>Violin</td><td>14</td><td>Gramophone</td></tr><tr><td>7</td><td>Xylophone</td><td></td><td></td></tr></table>
+<p>MIDIのプログラム/ドラムノートはモビバードが上記プリセットへ変換します。番号さえ合わせればOKです。無い番号は0(Piano)になります。</p>
+<h2>3. 音作りのヒント</h2>
+<ul>
+<li>エンベロープ(A/D/S/R)はファイルの値に従います。SF2/SF3はGenerator 34/36/37/38、DLSはArticulation(EG1)です。</li>
+<li>伸びる楽器はサンプルにループと十分なReleaseを設定してください。ループがないとサンプル長で終わります。</li>
+<li>打楽器(Cat, Big Drum, Cymbals)はSustain 0と長いReleaseで鳴り切らせると自然です。</li>
+</ul>
+<h2>4. 確認</h2>
+<p>読み込み後、サウンドフォント名が変わり、各チャンネルが既定音色と同じ楽器で鳴れば正常です。</p>
+<h2>5. マーカーなしで試す</h2>
+<p>マーカーがなくても、<b>ファイル名に <code>mobibard</code> が含まれていれば</b>、読み込み時に「モビバード互換で試しますか?」と確認します。承認すると上の配置で読み込みます。番号が合っていればこれだけで動きますが、確実に使うには手順1のマーカーを入れてください。マーカー付きのファイルでは確認しません。</p>
+</div>
+
+<div data-l="zh-CN">
+<h1>让 SF3 / DLS 兼容 MobiBard</h1>
+<p class="mut">只有带"兼容标记"的音色文件，MobiBard 才会使用自己的乐器布局(预设 0–14)。没有标记时按普通 GM 方式(程序号=预设号)读取，乐器会不对。</p>
+<h2>1. 添加标记</h2>
+<p>在文件 RIFF <code>INFO</code> 列表的 <code>ICMT</code>(注释)中写入以下两行：</p>
+<pre>MobiBard-Compatible: 1
+MobiBard-Version: v1.0</pre>
+<p>可在 Polyphone/Swami(SF2/SF3)或 DLS 编辑器的"Comments"中填写；也可用 <a href="tools/add_mobibard_marker.py">add_mobibard_marker.py</a>，只添加标记，不改动采样和预设。</p>
+<pre>python add_mobibard_marker.py input.dls output.dls</pre>
+<h2>2. 预设布局 (Bank 0)</h2>
+<table><tr><th>编号</th><th>乐器</th><th>编号</th><th>乐器</th></tr>
+<tr><td>0</td><td>Piano(默认/回退)</td><td>8</td><td>Music Box</td></tr><tr><td>1</td><td>Chalumeau</td><td>9</td><td>Guitar</td></tr><tr><td>2</td><td>Flute</td><td>10</td><td>Harmonica</td></tr><tr><td>3</td><td>Harp</td><td>11</td><td>Cat(人声)</td></tr><tr><td>4</td><td>Lute</td><td>12</td><td>Big Drum</td></tr><tr><td>5</td><td>Mandolin</td><td>13</td><td>Cymbals</td></tr><tr><td>6</td><td>Violin</td><td>14</td><td>Gramophone</td></tr><tr><td>7</td><td>Xylophone</td><td></td><td></td></tr></table>
+<p>MIDI 的程序号/鼓音符由 MobiBard 自行转换为上述预设，只需保证预设编号一致。缺失的编号回退到 0(Piano)。</p>
+<h2>3. 音色提示</h2>
+<ul>
+<li>包络(A/D/S/R)遵循文件中的值：SF2/SF3 为 Generator 34/36/37/38，DLS 为 Articulation(EG1)。</li>
+<li>延音乐器需要采样循环和足够的 Release；没有循环则随采样结束。</li>
+<li>打击乐(Cat, Big Drum, Cymbals)建议 Sustain 0 加较长 Release，使单次敲击能完整响完。</li>
+</ul>
+<h2>4. 检查</h2>
+<p>加载后音色文件名会改变，各声道应与默认音色使用相同的乐器。</p>
+<h2>5. 无标记时的尝试</h2>
+<p>即使没有标记，只要<b>文件名包含 <code>mobibard</code></b>，加载时会询问是否尝试 MobiBard 兼容模式。确认后按上述布局读取。预设编号本来就对应时可直接使用，但想稳妥建议按第 1 步添加标记。已带标记的文件不会询问。</p>
+</div>
+
+<div data-l="zh-TW">
+<h1>讓 SF3 / DLS 相容 MobiBard</h1>
+<p class="mut">只有帶「相容標記」的音色檔，MobiBard 才會使用自己的樂器配置(預設 0–14)。沒有標記時依一般 GM 方式(程式號=預設號)讀取，樂器會不對。</p>
+<h2>1. 加入標記</h2>
+<p>在檔案 RIFF <code>INFO</code> 清單的 <code>ICMT</code>(註解)中寫入以下兩行：</p>
+<pre>MobiBard-Compatible: 1
+MobiBard-Version: v1.0</pre>
+<p>可在 Polyphone/Swami(SF2/SF3)或 DLS 編輯器的「Comments」填寫；也可使用 <a href="tools/add_mobibard_marker.py">add_mobibard_marker.py</a>，只加入標記，不更動取樣與預設。</p>
+<pre>python add_mobibard_marker.py input.dls output.dls</pre>
+<h2>2. 預設配置 (Bank 0)</h2>
+<table><tr><th>編號</th><th>樂器</th><th>編號</th><th>樂器</th></tr>
+<tr><td>0</td><td>Piano(預設/備援)</td><td>8</td><td>Music Box</td></tr><tr><td>1</td><td>Chalumeau</td><td>9</td><td>Guitar</td></tr><tr><td>2</td><td>Flute</td><td>10</td><td>Harmonica</td></tr><tr><td>3</td><td>Harp</td><td>11</td><td>Cat(人聲)</td></tr><tr><td>4</td><td>Lute</td><td>12</td><td>Big Drum</td></tr><tr><td>5</td><td>Mandolin</td><td>13</td><td>Cymbals</td></tr><tr><td>6</td><td>Violin</td><td>14</td><td>Gramophone</td></tr><tr><td>7</td><td>Xylophone</td><td></td><td></td></tr></table>
+<p>MIDI 的程式號/鼓音符由 MobiBard 自行轉換為上述預設，只需讓預設編號一致。缺少的編號會退回 0(Piano)。</p>
+<h2>3. 音色提示</h2>
+<ul>
+<li>包絡(A/D/S/R)依檔案中的值：SF2/SF3 為 Generator 34/36/37/38，DLS 為 Articulation(EG1)。</li>
+<li>延音樂器需要取樣迴圈與足夠的 Release；沒有迴圈則隨取樣結束。</li>
+<li>打擊樂(Cat, Big Drum, Cymbals)建議 Sustain 0 搭配較長 Release，讓單次敲擊完整響完。</li>
+</ul>
+<h2>4. 檢查</h2>
+<p>載入後音色檔名稱會改變，各聲道應與預設音色使用相同的樂器。</p>
+<h2>5. 沒有標記時的嘗試</h2>
+<p>即使沒有標記，只要<b>檔名包含 <code>mobibard</code></b>，載入時會詢問是否嘗試 MobiBard 相容模式。確認後依上述配置讀取。預設編號本來就對應時可直接使用，但想穩妥建議依第 1 步加入標記。已帶標記的檔案不會詢問。</p>
+</div>
+
+<script>
+(function(){
+  var L=[["ko","한국어"],["ja","日本語"],["en","English"],["zh-CN","简体中文"],["zh-TW","繁體中文"]],ids=L.map(function(x){return x[0]});
+  function norm(v){v=String(v||"").trim();if(ids.indexOf(v)>=0)return v;var l=v.toLowerCase();
+    if(l.indexOf("zh-tw")==0||l.indexOf("zh-hant")==0||l=="zh-hk")return"zh-TW";if(l.indexOf("zh")==0)return"zh-CN";
+    var b=l.split("-")[0];return ids.indexOf(b)>=0?b:""}
+  var q=new URLSearchParams(location.search).get("lang"),s="";try{s=localStorage.getItem("mobibard.player.language")||""}catch(e){}
+  var cur=norm(q)||norm(s)||norm(navigator.language)||"en";
+  var box=document.getElementById("langs");
+  function show(c){cur=c;document.documentElement.lang=c;
+    document.querySelectorAll("[data-l]").forEach(function(e){e.style.display=e.dataset.l==c?"block":"none"});
+    box.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-pressed",b.dataset.c==c)})}
+  L.forEach(function(x){var b=document.createElement("button");b.textContent=x[1];b.dataset.c=x[0];b.onclick=function(){show(x[0])};box.appendChild(b)});
+  show(cur);
+})();
+</script>
+</main></body></html>

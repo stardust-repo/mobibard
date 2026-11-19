@@ -5670,6 +5670,21 @@
     updateEditorSoundFontUi(i18nText("ui.load"));
     try {
       await audioEngine.useSoundBank(file, { label: file.name || "SoundBank" });
+      {
+        const sbApi = window.MabiSoundBank;
+        const bank = audioEngine.soundBank;
+        let rawBytes = null;
+        try { if (bank && !bank.isMobibardCompatible) rawBytes = new Uint8Array(await file.arrayBuffer()); } catch (_) {}
+        if (sbApi?.needsCompatPrompt?.(bank, file.name, rawBytes)) {
+          const tryCompat = await showConfirmDialog({
+            title: i18nText("soundbank.compat_try_title"),
+            message: i18nText("soundbank.compat_try_message"),
+            confirmLabel: i18nText("soundbank.compat_try_yes"),
+          });
+          if (tryCompat) { sbApi.applyForcedCompat(bank, file.name, file.size); audioEngine.clearSoundBankCaches?.(); }
+          else sbApi.forgetForcedCompat?.();
+        } else if (!bank?.isMobibardCompatible) sbApi?.forgetForcedCompat?.();
+      }
       editorSoundFontName = String(file.name || "SoundBank");
       await cacheEditorSoundFontFile(file);
       reconcileEditorChannelsWithSoundBank();
@@ -38073,6 +38088,7 @@
       if (cachedSoundFont?.source) {
         try {
           await audioEngine.useSoundBank(cachedSoundFont.source, { label: cachedSoundFont.name });
+          if (window.MabiSoundBank?.restoreForcedCompat?.(audioEngine.soundBank, cachedSoundFont.name, cachedSoundFont.source?.size)) audioEngine.clearSoundBankCaches?.();
           editorSoundFontName = cachedSoundFont.name;
           updateEditorSoundFontUi();
           ready = true;

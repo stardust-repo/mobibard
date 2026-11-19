@@ -7188,6 +7188,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (actual && actual !== meta.sha256) throw new Error("Cached sound-bank SHA-256 mismatch.");
     }
     const parsed = await parseSoundBank(bytes);
+    window.MabiSoundBank?.restoreForcedCompat?.(parsed, meta.name, bytes.byteLength);
     stopPlayback(false);
     stopMidiPreview();
     soundFont = parsed;
@@ -8376,6 +8377,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (meta.size > 0 && cached.bytes.byteLength !== meta.size) return false;
       if (meta.sha256 && cached.sha256 && meta.sha256 !== String(cached.sha256).toLowerCase()) return false;
       const parsed = await parseSoundBank(cached.bytes);
+      window.MabiSoundBank?.restoreForcedCompat?.(parsed, meta.name || cached.name, cached.bytes.byteLength);
       soundFont = parsed;
       soundFontIsDefault = false;
       sf2Name = meta.name || cached.name || "SoundBank";
@@ -10939,6 +10941,17 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const parsed = await parseSoundBank(bytes);
+      const sbApi = window.MabiSoundBank;
+      if (sbApi?.needsCompatPrompt?.(parsed, file.name, bytes)) {
+        const tryCompat = await inlineConfirm(i18nText("snd.compat_try_message"), {
+          title: i18nText("snd.compat_try_title"),
+          confirmText: i18nText("snd.compat_try_yes")
+        });
+        if (tryCompat) sbApi.applyForcedCompat(parsed, file.name, bytes.byteLength);
+        else sbApi.forgetForcedCompat?.();
+      } else if (!parsed.isMobibardCompatible) {
+        sbApi?.forgetForcedCompat?.();
+      }
       soundFont = parsed;
       soundFontIsDefault = false;
       sf2Name = file.name || "SoundBank";

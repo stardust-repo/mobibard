@@ -122,9 +122,9 @@ function loadPreviewScript(relativeUrl) {
 
 async function ensurePreviewEngine() {
   if (globalThis.MobibardEditorSoundBank?.Player) return globalThis.MobibardEditorSoundBank;
-  await loadPreviewScript('../../plugins/formats/soundbank/soundbank.js?v=5.1.0&rev=20261120-env3');
+  await loadPreviewScript('../../plugins/formats/soundbank/soundbank.js?v=5.1.0&rev=20261120-env5');
   await loadPreviewScript('../../plugins/common/default-instrument-map.js?v=1.0.0&rev=20260906-mobibard14');
-  await loadPreviewScript('../../editor/js/soundbank-player.js?v=6.0.0&rev=20261120-env3');
+  await loadPreviewScript('../../editor/js/soundbank-player.js?v=6.0.0&rev=20261120-env5');
   if (!globalThis.MobibardEditorSoundBank?.Player) throw new Error(t('error.preview_engine'));
   return globalThis.MobibardEditorSoundBank;
 }
