@@ -9068,7 +9068,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
   function renderMidiGroupChannelButtons(group) {
     if (!pendingMidiSettings || !group) return "";
-    const shortLabel = index => PART_LABELS[index] || String(index);
+    const shortLabel = index => index === 0 ? i18nText("ui.mel") : String(index);
     return Array.from({ length: 6 }, (_, index) => {
       const label = PART_LABELS[index] || i18nText("ui.numbered", [index + 1]);
       const selected = Boolean(pendingMidiSettings.channels[index]?.selectedInstrumentGroups?.has(group.id));
