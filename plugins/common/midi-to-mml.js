@@ -734,6 +734,161 @@
       autoTargets: smartAuto ? exportChannels.map(ch => ch.autoTarget || null) : null };
   }
 
+  // ---- 메뉴얼 "추천 선택": 신형 노트 분류기로 악기 파트를 채널에 배분 ------------------------------------
+  const RECOMMEND_CYMBAL_DRUMS = new Set([42, 49, 51, 56]);   // 하이햇·크래시·라이드·금속 퍼커션 -> 심벌
+
+  function recommendPolyphony(list) {
+    if (!list.length) return 1;
+    const events = [];
+    let sum = 0;
+    for (const n of list) {
+      const d = Math.max(1, n.endTick - n.startTick);
+      sum += d;
+      events.push([n.startTick, 1], [n.startTick + d, -1]);
+    }
+    events.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    let depth = 0, last = 0, union = 0;
+    for (const [t, d] of events) {
+      if (depth > 0) union += t - last;
+      depth += d;
+      last = t;
+    }
+    return union > 0 ? Math.max(1, sum / union) : 1;
+  }
+
+  function recommendInstrumentAssignment(bytes, options = {}) {
+    const midi = parseMidiFile(bytes);
+    if (midi.smpteDivision) throw new Error(tr("midi.err_smpte"));
+    const ppq = midi.ppq;
+    const ticksPerGrid = ppq / 16;
+    const gridStep = quantizeGridStep(normalizeQuantizeDivision(options.quantizeDivision));
+    const sourceGroups = buildInstrumentSourceGroups(midi, ticksPerGrid, gridStep);
+    const choices = buildInstrumentChoices(sourceGroups);
+    const choiceMap = new Map(choices.map(g => [g.id, g]));
+    const sourceToChoice = new Map();
+    for (const choice of choices) for (const sourceId of choice.sourceGroupIds || []) sourceToChoice.set(sourceId, choice.id);
+
+    const rawNotes = [];
+    for (const n of midi.notes) {
+      if (!isMmlPitchSupported(n.midi) || !(n.endTick > n.startTick)) continue;
+      const info = getInstrumentGroupInfo(n);
+      const choiceId = sourceToChoice.get(info.id) || info.choiceId;
+      const choice = choiceMap.get(choiceId);
+      if (!choice) continue;
+      rawNotes.push({
+        midi: n.midi, startTick: n.startTick, endTick: n.endTick, channel: n.channel,
+        midiVelocity: playbackVelocity(n), program: normalizeProgram(n.program),
+        choiceId, isBeat: Boolean(choice.isBeat || info.isBeat)
+      });
+    }
+    const labelled = labelNotesWithArranger(rawNotes, midi, ppq);
+    const pitchedAll = rawNotes.filter(n => !n.isBeat);
+    if (!labelled && pitchedAll.length) {
+      const sorted = pitchedAll.map(n => n.midi).sort((a, b) => a - b);
+      const lo = sorted[Math.floor(sorted.length * 0.3)], hi = sorted[Math.floor(sorted.length * 0.7)];
+      for (const n of pitchedAll) n.aiLabel = n.midi <= lo ? "bass" : n.midi >= hi ? "melody" : "harmony";
+    }
+
+    const stats = new Map();
+    for (const choice of choices) {
+      stats.set(choice.id, { id: choice.id, choice, notes: [], label: { melody: 0, counter: 0, bass: 0, harmony: 0 } });
+    }
+    for (const n of rawNotes) {
+      const st = stats.get(n.choiceId);
+      if (!st) continue;
+      st.notes.push(n);
+      if (!n.isBeat && n.aiLabel) st.label[n.aiLabel]++;
+    }
+    const all = Array.from(stats.values()).filter(st => st.notes.length > 0);
+    const isDrumGroup = st => Boolean(st.choice.isBeat || st.choice.isDrumNoteGroup || Number.isInteger(st.choice.drumMidi));
+    const pitched = all.filter(st => !isDrumGroup(st));
+    const drums = all.filter(isDrumGroup);
+    const cymbalGroups = drums.filter(st => Number.isInteger(st.choice.drumMidi) && RECOMMEND_CYMBAL_DRUMS.has(st.choice.drumMidi));
+    const drumGroups = drums.filter(st => !cymbalGroups.includes(st));
+
+    const total = clampInt(options.total ?? 6, 1, 6);
+    const channels = Array.from({ length: total }, () => []);
+    const cfgs = Array.from({ length: total }, (_, i) => options.channels?.[i] || {});
+    const useCymbal = options.cymbal === true && cymbalGroups.length > 0;
+    const useDrum = options.drum === true && drumGroups.length > 0;
+    let poolEnd = total;
+    let drumChannel = -1, cymbalChannel = -1;
+    if (useDrum && poolEnd > 1) { drumChannel = --poolEnd; for (const st of drumGroups) channels[drumChannel].push(st.id); }
+    if (useCymbal && poolEnd > 1) { cymbalChannel = --poolEnd; for (const st of cymbalGroups) channels[cymbalChannel].push(st.id); }
+
+    let mainId = null;
+    let mainCount = 0;
+    if (pitched.length) {
+      const main = [...pitched].sort((a, b) =>
+        (b.label.melody * 3 + b.label.counter) - (a.label.melody * 3 + a.label.counter) || b.notes.length - a.notes.length)[0];
+      mainId = main.id;
+      mainCount = clampInt(options.mainCount ?? 3, 1, Math.max(1, poolEnd));
+      for (let i = 0; i < mainCount; i++) channels[i].push(main.id);
+    }
+
+    // 나머지 주자: 채널의 노트 배치 역할과 겹침 병합 설정을 보고 악기 파트를 나눠 넣는다.
+    const pool = [];
+    for (let i = mainCount; i < poolEnd; i++) pool.push(i);
+    const pitchedTotal = pitched.reduce((sum, st) => sum + st.notes.length, 0);
+    const minNotes = Math.max(6, Math.round(pitchedTotal * 0.01));
+    const others = pitched.filter(st => st.id !== mainId).sort((a, b) => b.notes.length - a.notes.length);
+    const kept = others.filter(st => st.notes.length >= minNotes);
+    let skipped = others.length - kept.length;
+    const AFFINITY = {
+      high: { melody: 1, counter: 0.8, bass: 0, harmony: 0.2 },
+      low: { melody: 0, counter: 0.1, bass: 1, harmony: 0.2 },
+      auto: { melody: 0.2, counter: 0.6, bass: 0.3, harmony: 0.8 }
+    };
+    const mergeFactor = (mode, poly) => {
+      const extra = Math.max(0, poly - 1);
+      if (mode === "none") return 1 / (1 + extra);
+      if (mode === "half") return 1 / (1 + 0.5 * extra);
+      return 1;
+    };
+    const score = (st, ch) => {
+      const aff = AFFINITY[cfgs[ch].role] || AFFINITY.auto;
+      const n = Math.max(1, st.label.melody + st.label.counter + st.label.bass + st.label.harmony);
+      let v = 0;
+      for (const r of ["melody", "counter", "bass", "harmony"]) v += (st.label[r] / n) * aff[r];
+      const mode = cfgs[ch].overlapMergeMode ?? (cfgs[ch].overlapMerge === false ? "none" : "all");
+      return v * mergeFactor(mode, recommendPolyphony(st.notes)) + 0.0001 * (total - ch);
+    };
+    if (pool.length && kept.length) {
+      const topN = Math.min(pool.length, kept.length, 6);
+      const top = kept.slice(0, topN);
+      let best = null, bestScore = -Infinity;
+      const used = new Set();
+      const walk = (k, acc, sc) => {
+        if (k === top.length) { if (sc > bestScore) { bestScore = sc; best = acc.slice(); } return; }
+        for (const ch of pool) {
+          if (used.has(ch)) continue;
+          used.add(ch); acc.push(ch);
+          walk(k + 1, acc, sc + score(top[k], ch));
+          acc.pop(); used.delete(ch);
+        }
+      };
+      walk(0, [], 0);
+      const load = new Map(pool.map(ch => [ch, 0]));
+      top.forEach((st, k) => { channels[best[k]].push(st.id); load.set(best[k], 1); });
+      for (const st of kept.slice(topN)) {
+        let pick = pool[0], pickScore = -Infinity;
+        for (const ch of pool) {
+          const v = score(st, ch) / (1 + 0.5 * load.get(ch));
+          if (v > pickScore) { pickScore = v; pick = ch; }
+        }
+        channels[pick].push(st.id);
+        load.set(pick, load.get(pick) + 1);
+      }
+    } else if (kept.length) {
+      skipped += kept.length;
+    }
+    return {
+      channels, mainId, mainCount, drumChannel, cymbalChannel, skipped,
+      hasCymbal: cymbalGroups.length > 0, hasDrum: drumGroups.length > 0,
+      classified: labelled
+    };
+  }
+
   // ---- 메뉴얼 "자동": 신형 노트 분류기(MabiArranger classifyOnly) 연결 ---------------------------------
   const AUTO_LINE_ROLES = ["melody", "bass", "counter"];
   const AUTO_BEAT_GRID = 16;   // 64분음표 격자에서 1박
@@ -1655,5 +1810,5 @@
     };
   }
 
-  window.MabiMidi = Object.freeze({ version: "5.1.0", midiToMml, arrangeMidiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview, parseMidiFile, assignNotesToVoices });
+  window.MabiMidi = Object.freeze({ version: "5.1.0", midiToMml, arrangeMidiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview, parseMidiFile, assignNotesToVoices, recommendInstrumentAssignment });
 })();
