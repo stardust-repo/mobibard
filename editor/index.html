@@ -66,7 +66,7 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=6.0.0&rev=20261118g";
+  const suffix = location.protocol === "file:" ? "" : "?v=6.0.0&rev=20261119-protect";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
@@ -262,7 +262,7 @@
 </section>
 <section class="rest-cleanup-inline-panel" id="restCleanupPanel" hidden aria-label="쉼표 정리" data-i18n-aria-label="rest_cleanup.title">
   <div class="rest-cleanup-inline-header"><strong data-i18n="rest_cleanup.title">쉼표 정리</strong></div>
-  <div class="rest-cleanup-inline-section"><strong data-i18n="rest_cleanup.threshold">제거할 쉼표</strong><div class="rest-cleanup-segments rest-cleanup-thresholds" id="restCleanupModeOptions" role="group" aria-label="제거할 쉼표" data-i18n-aria-label="rest_cleanup.threshold"><button type="button" data-rest-cleanup-mode="64" data-i18n="rest_cleanup.64">1/64 이하</button><button class="active" type="button" data-rest-cleanup-mode="32" data-i18n="rest_cleanup.32">1/32 이하</button><button type="button" data-rest-cleanup-mode="16" data-i18n="rest_cleanup.16">1/16 이하</button><button type="button" data-rest-cleanup-mode="8" data-i18n="rest_cleanup.8">1/8 이하</button><button type="button" data-rest-cleanup-mode="4" data-i18n="rest_cleanup.4">1/4 이하</button><button type="button" data-rest-cleanup-mode="all" data-i18n="rest_cleanup.all">모두</button></div></div>
+  <div class="rest-cleanup-inline-section"><strong data-i18n="rest_cleanup.threshold">제거할 쉼표</strong><div class="rest-cleanup-notch" id="restCleanupModeOptions" role="group" aria-label="제거할 쉼표" data-i18n-aria-label="rest_cleanup.threshold"></div></div>
   <div class="inline-channel-select-toolbar"><strong data-i18n="mml.channel_select">선택</strong><span></span><div class="inline-select-tools"><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="restCleanupGroupToggleButton" aria-label="Collapse all groups" title="Collapse all groups" data-i18n-aria-label="group.collapse_all" data-i18n-title="group.collapse_all"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="restCleanupSelectToggleButton" type="button" class="inline-select-mark inline-select-toggle" data-state="none" data-i18n-title="selection.all_select" data-i18n-aria-label="selection.all_select" title="모두 선택" aria-label="모두 선택">○</button><button id="restCleanupSelectAllButton" type="button" hidden aria-hidden="true" tabindex="-1">✓</button><button id="restCleanupClearAllButton" type="button" hidden aria-hidden="true" tabindex="-1">○</button></div></div>
   <div class="inline-channel-select-list rest-cleanup-channel-list" id="restCleanupChannelList"></div>
   <div class="rest-cleanup-inline-actions"><button id="restCleanupCancelButton" type="button" data-i18n="cancel">취소</button><button id="restCleanupApplyButton" type="button" data-i18n="action.apply">적용</button></div>
@@ -399,10 +399,10 @@
       <button type="button" data-merge-mode-role="low" data-i18n="ui.low">저음</button>
     </div>
   </div>
-  <label class="channel-merge-overlap-control" title="앞 노트와 겹쳐도 모을 후보로 넣을 최대 비율입니다. 100%는 모두 허용, 0%는 겹치지 않게 고릅니다." data-i18n-title="merge.overlap_hint">
-    <strong data-i18n="merge.overlap_ratio">겹침 비율</strong>
-    <input type="range" id="channelMergeOverlapSlider" min="0" max="100" step="5" value="100" aria-label="겹침 비율" data-i18n-aria-label="merge.overlap_ratio"/>
-    <output id="channelMergeOverlapValue" for="channelMergeOverlapSlider">100%</output>
+  <label class="channel-merge-overlap-control" title="앞 노트를 얼마나 지킬지 정합니다. 자동은 Player 메뉴얼과 같이 상황에 맞게 정하고, 0%는 겹침을 가장 많이 허용, 100%는 앞 노트를 끝까지 보호합니다." data-i18n-title="merge.overlap_hint">
+    <strong data-i18n="merge.overlap_ratio">길이 보호</strong>
+    <input type="range" id="channelMergeOverlapSlider" min="-5" max="100" step="5" value="-5" aria-label="길이 보호" data-i18n-aria-label="merge.overlap_ratio"/>
+    <output id="channelMergeOverlapValue" for="channelMergeOverlapSlider">자동</output>
   </label>
 </div>
 </div>
@@ -811,7 +811,8 @@
 <script src="../plugins/common/split-search.js?v=1.0.0"></script><script src="../plugins/common/mml-optimizer.js?v=5.1.0&amp;rev=20261119-dotrest"></script>
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.1&amp;rev=20260907-fixed92"></script>
-<script src="../plugins/common/midi-to-mml.js?v=5.1.1&amp;rev=20261119-recommend"></script>
+<script src="../plugins/common/midi-to-mml.js?v=5.1.1&amp;rev=20261119-smartmerge"></script>
+<script src="../plugins/common/mml-arranger.js?v=2.0.0&amp;rev=20261119-classify"></script>
 <script src="../plugins/formats/notation/notation-utils.js?v=5.1.0"></script>
 <script src="../plugins/formats/music-format-core.js?v=5.1.1&amp;rev=20260907-fixed92"></script>
 <script src="../plugins/formats/console-gm-normalizer.js?v=5.1.0&amp;rev=20260820-003400"></script>
@@ -857,7 +858,7 @@
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=2.0.13"></script>
-<script src="app.js?v=6.0.0&amp;rev=20261118g"></script>
+<script src="app.js?v=6.0.0&amp;rev=20261119-protect"></script>
 <script src="js/account-drive.js?v=6.0.0&amp;rev=20261103-settings1" type="module"></script>
 </body>
 </html>

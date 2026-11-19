@@ -756,7 +756,7 @@
       sourceChannelIds: new Set(),
       role: "auto",
       overlapMode: "all",
-      overlapAmount: 1,
+      overlapProtect: "auto",
       excludeOverlapChannelIds: new Set(),
       candidatePool: [],
       runtimeCache: null,
@@ -5432,6 +5432,8 @@
     if (elements.midiImportBackdrop && !elements.midiImportBackdrop.hidden) updateMidiImportDialog();
     if (elements.midiTransferBackdrop && !elements.midiTransferBackdrop.hidden) renderMidiTransferDialog();
     if (elements.channelMergeBackdrop && !elements.channelMergeBackdrop.hidden) renderChannelMergeDialog();
+    if (isChannelMergeModeActive()) updateChannelMergeModeUi();
+    if (state.restCleanup?.active) syncRestCleanupDialog();
     if (elements.channelDeleteBackdrop && !elements.channelDeleteBackdrop.hidden) renderChannelDeleteDialog();
     if (elements.mmlExportBackdrop && !elements.mmlExportBackdrop.hidden) updateMmlExportDialogState();
     if (elements.channelVolumeBackdrop && !elements.channelVolumeBackdrop.hidden) {
@@ -11862,7 +11864,7 @@
           mergeRoleGroup = document.createElement("div");
           mergeRoleGroup.className = "channel-merge-role-toggle-group";
           mergeRoleGroup.setAttribute("role", "group");
-          mergeRoleGroup.setAttribute("aria-label", `${channel.name} 모으기 역할`);
+          mergeRoleGroup.setAttribute("aria-label", i18nText("merge.role_aria", [channel.name]));
           mergeRoleGroup.append(
             createAction({ kind: "merge-include", active: mergeSource, label: i18nText(mergeSource ? "merge.include_clear_named" : "merge.include_set_named", [channel.name]), title: i18nText(mergeSource ? "merge.include_clear_named" : "merge.include_set_named", [channel.name]), textContent: "✓", onClick: () => toggleChannelMergeSource(channel.id), sweep: true, sweepId: channel.id }),
             createAction({ kind: "merge-exclude", active: mergeMask, label: i18nText(mergeMask ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [channel.name]), title: i18nText(mergeMask ? "merge.exclude_overlap_clear_named" : "merge.exclude_overlap_set_named", [channel.name]), textContent: "×", onClick: () => toggleChannelMergeExcludeOverlapChannel(channel.id), sweep: true, sweepId: channel.id }),
@@ -11960,7 +11962,7 @@
         const roleGroup = document.createElement("div");
         roleGroup.className = "channel-merge-role-toggle-group channel-group-merge-role-toggle-group";
         roleGroup.setAttribute("role", "group");
-        roleGroup.setAttribute("aria-label", `${group.name} 모으기 역할`);
+        roleGroup.setAttribute("aria-label", i18nText("merge.role_aria", [group.name]));
         const roleDisabled = group.visible === false || mergeIncludeState.members.length === 0;
         roleGroup.append(
           createAction({ kind: "merge-include", active: mergeIncludeState.active, disabled: roleDisabled, label: i18nText(mergeIncludeState.active ? "merge.include_clear_named" : "merge.include_set_named", [group.name]), title: i18nText(mergeIncludeState.active ? "merge.include_clear_named" : "merge.include_set_named", [group.name]), textContent: "✓", onClick: () => toggleChannelMergeGroupRole(group.id, "include") }),
@@ -14798,6 +14800,7 @@
             fileName: mi.fileName,
             overlapToleranceBeat: getMidiImportOverlapToleranceBeat(),
             maxChannelsPerInstrument: getMidiImportChannelLimit(),
+            arrange: true,
             colorMode: mi.colorMode,
             tagImportKeys: true,
           });
@@ -16147,6 +16150,11 @@
   //  items: [{ pitch, startBeat, durationBeat, velocity(1~127 또는 볼륨), allowed: [허용 채널 번호...], isBeat }]
   //  channelSpecs: [{ role: "auto"|"high"|"low", overlapMergeMode: "all"|"half"|"none" }]
   //  반환: { voices: [[{ item, startBeat, durationBeat }]], skipped, overlapMerged }
+  // 분류기는 MIDI 채널(0~15, 9번은 드럼)별 성격을 보므로, 모으는 원본 채널 순번을 드럼 번호를 피해 채널 번호로 바꿉니다.
+  function toArrangerSourceChannel(index) {
+    const channel = Math.max(0, Math.round(Number(index) || 0)) % 15;
+    return channel >= 9 ? channel + 1 : channel;
+  }
   const SHARED_ASSIGN_GRID_BEAT = 4 / 64; // 공용 코드의 격자 1칸 = 64분음표
   function assignEditorNotesByPlayerRules(items, channelSpecs, { gridStep = 1, ignoreSingle64thOverlap = true } = {}) {
     const assign = window.MabiMidi?.assignNotesToVoices;
@@ -16172,6 +16180,8 @@
         velocity, midiVelocity: velocity,
         instrumentGroupId: choiceId, instrumentChoiceId: choiceId,
         isBeat: Boolean(item.isBeat), isPercussion: Boolean(item.isBeat),
+        sourceChannel: Number.isFinite(item.sourceChannel) ? item.sourceChannel : 0,
+        program: Number.isFinite(item.program) ? item.program : undefined,
       };
       best.set(dedupeKey, gridNote);
       lookup.set(id, { item, gridNote, originalEndGrid: gridNote.endGrid });
@@ -16184,7 +16194,7 @@
       for (const index of allowed) if (choiceByChannel[index]) choiceByChannel[index].push(choiceId);
     }
     const exportChannels = channelSpecs.map((spec, index) => {
-      const mode = ["all", "half", "none"].includes(spec?.overlapMergeMode) ? spec.overlapMergeMode : "all";
+      const mode = ["auto", "all", "half", "none"].includes(spec?.overlapMergeMode) ? spec.overlapMergeMode : "all";
       return {
         role: ["auto", "high", "low"].includes(spec?.role) ? spec.role : "auto",
         overlapMergeMode: mode,
@@ -16192,6 +16202,8 @@
         selectedInstrumentGroups: choiceByChannel[index],
       };
     });
+    // 역할이 '자동'인 채널이 있으면 Player 메뉴얼과 같은 신형 노트 분류기로 음마다 주선율/대선율/베이스/화음을 판단해 역할을 정합니다.
+    window.MabiMidi.applySmartAutoToGridNotes?.(gridNotes, exportChannels, { timeSignatures: state.timeSignatures });
     const result = assign(gridNotes, exportChannels, null, {
       ignoreSingle64thOverlap,
       ignorableOverlapGrid: Math.max(1, gridStep),
@@ -16212,43 +16224,10 @@
     return { voices, skipped: Number(result.skipped) || 0, overlapMerged: Number(result.overlapMerged) || 0 };
   }
 
-  // 악기당 최대 채널 수 제한 압축.
-  // 불러오기에서는 사용자가 채널 순서를 정할 수 없으므로 역할을 고정합니다:
-  // 1번 = 고음, 2번 = 저음, 3번 이후 = 자동 (모두 겹침 병합 허용).
-  function packMidiVoicesToMaxChannels(voices, maxVoiceCount, { isDrums = false, gridStep = 1 } = {}) {
-    const sourceVoices = (voices || []).filter((voice) => Array.isArray(voice) && voice.length);
-    const requestedCount = Math.max(1, Math.round(Number(maxVoiceCount) || 1));
-    if (sourceVoices.length <= requestedCount) return sourceVoices;
-    const allowed = Array.from({ length: requestedCount }, (_, index) => index);
-    const items = [];
-    sourceVoices.forEach((voice) => voice.forEach((note) => {
-      items.push({
-        pitch: note.pitch, startBeat: note.startBeat, durationBeat: note.durationBeat,
-        velocity: note.velocity, allowed, isBeat: Boolean(isDrums), source: note,
-      });
-    }));
-    const specs = allowed.map((index) => ({
-      role: index === 0 ? "high" : index === 1 ? "low" : "auto",
-      overlapMergeMode: "all",
-    }));
-    const result = assignEditorNotesByPlayerRules(items, specs, { gridStep, ignoreSingle64thOverlap: false });
-    const packed = result.voices
-      .map((voice) => voice.map(({ item, startBeat, durationBeat }) => ({ ...item.source, startBeat, durationBeat })))
-      .filter((voice) => voice.length);
-    Object.defineProperties(packed, {
-      sourceVoiceCount: { value: sourceVoices.length, enumerable: false, configurable: true },
-      packedVoiceCount: { value: packed.length, enumerable: false, configurable: true },
-      quantizationCollisionCount: { value: Number(voices?.quantizationCollisionCount) || 0, enumerable: false, configurable: true },
-      packDroppedCount: { value: result.skipped, enumerable: false, configurable: true },
-      packTrimmedCount: { value: result.overlapMerged, enumerable: false, configurable: true },
-    });
-    return packed;
-  }
-
   function overwriteEditorChannelsFromMidiDocument(parsed) {
     const descriptors = [];
     for (const group of parsed.groups || []) {
-      const voices = splitMidiGroupIntoVoices(group, { quantizeUnit: 4 / (Number(parsed?.quantizeDivision) === 32 ? 32 : 64) });
+      const voices = splitMidiGroupIntoVoices(group, { arrange: true, quantizeDivision: parsed?.quantizeDivision, timeSignatures: parsed?.timeSignatures });
       voices.forEach((notes, voiceIndex) => {
         descriptors.push({
           name: isMidiGroupDrums(group) ? (`Ch10 · ${getDrumVoiceRoleName(notes)}`) : (voices.length > 1 ? `${group.name} ${voiceIndex + 1}` : group.name),
@@ -16327,6 +16306,7 @@
     fileName = parsed?.fileName || "",
     overlapToleranceBeat = CONFIG.minimumNoteBeat,
     maxChannelsPerInstrument = 0,
+    arrange = false,
     colorMode = state.midiImport.colorMode,
     excludeChannelKeys = null,
     tagImportKeys = false,
@@ -16377,15 +16357,15 @@
       }
       return editorGroup;
       };
-      let voices = splitMidiGroupIntoVoices(group, {
+      const voices = splitMidiGroupIntoVoices(group, {
+        arrange,
         overlapToleranceBeat,
-        quantizeUnit: 4 / (Number(parsed?.quantizeDivision) === 32 ? 32 : 64),
+        quantizeDivision: parsed?.quantizeDivision,
+        timeSignatures: parsed?.timeSignatures,
+        maxChannels: maxChannelsPerInstrument,
       });
-      const uncappedVoiceCount = voices.length;
-      const channelLimit = Math.max(0, Math.round(Number(maxChannelsPerInstrument) || 0));
-      if (channelLimit > 0 && voices.length > channelLimit) {
-        channelsBeforeLimit += uncappedVoiceCount;
-        voices = packMidiVoicesToMaxChannels(voices, channelLimit, { isDrums: isMidiGroupDrums(group), gridStep: Number(parsed?.quantizeDivision) === 32 ? 2 : 1 });
+      if (voices.limited) {
+        channelsBeforeLimit += voices.naturalCount;
         limitedInstrumentCount += 1;
       }
       voices.forEach((voiceNotes, voiceIndex) => {
@@ -16513,6 +16493,7 @@
           fileName,
           overlapToleranceBeat: getMidiImportOverlapToleranceBeat(),
           maxChannelsPerInstrument: getMidiImportChannelLimit(),
+          arrange: true,
           colorMode: state.midiImport.colorMode,
           excludeChannelKeys: state.midiImport.excludedKeys,
         });
@@ -16827,6 +16808,7 @@
       });
       const imported = importMidiSelectionAsEditableChannels(parsed, {
         openNew: false,
+        arrange: true,
         fileName: converted.fileName,
       });
       if (!imported.channelCount) throw new Error("가져올 노트가 없습니다.");
@@ -17111,18 +17093,91 @@
     return "perc-other";
   }
 
-  // 채널 나누기: 드럼은 먼저 킥/스네어/하이햇… 종류별로 나눈 뒤, 같은 종류 안에서 겹치는 노트만 다시 나눕니다.
-  // 드럼이 아니면 기존처럼 겹치지 않게만 나눕니다.
+  // 한 악기가 동시에 내는 음의 최대 개수(= 겹치지 않게 담는 데 필요한 최소 채널 수). 허용 오차보다 짧게 겹치는 부분은 무시합니다.
+  function getMaxSimultaneousNotes(notes, toleranceBeat = 0) {
+    const events = [];
+    for (const note of notes || []) {
+      const start = Number(note.startBeat) || 0;
+      const end = start + Math.max(0, Number(note.durationBeat) || 0);
+      events.push([start, 1], [Math.max(start + 1e-6, end - toleranceBeat), -1]);
+    }
+    events.sort((left, right) => left[0] - right[0] || left[1] - right[1]);
+    let depth = 0;
+    let max = 0;
+    for (const [, delta] of events) {
+      depth += delta;
+      if (depth > max) max = depth;
+    }
+    return Math.max(1, max);
+  }
+
+  // 악기 하나를 신형 노트 분류기(MabiArranger)에 맡겨 채널로 나눕니다.
+  // 채널 수 = min(그 악기의 최대 동시 음 수, 상한). 상한 0은 제한 없음. 반환 배열에 naturalCount·limited를 붙입니다.
+  function arrangeMidiGroupIntoVoices(group, { quantizeDivision, timeSignatures, overlapToleranceBeat = CONFIG.minimumNoteBeat, maxChannels = 0 } = {}) {
+    const arranger = window.MabiArranger;
+    const notes = (group?.notes || []).filter((note) => Number(note.durationBeat) > 0);
+    if (!arranger?.arrangeSource || !notes.length) return null;
+    const division = 960;
+    const naturalCount = getMaxSimultaneousNotes(notes, overlapToleranceBeat);
+    const limit = Math.max(0, Math.round(Number(maxChannels) || 0));
+    const channels = limit > 0 ? Math.min(naturalCount, limit) : naturalCount;
+    const program = clamp(Math.round(Number(group?.program) || 0), 0, 127);
+    try {
+      const result = arranger.arrangeSource({
+        div: division,
+        notes: notes.map((note) => ({
+          s: Math.round(note.startBeat * division),
+          e: Math.max(Math.round(note.startBeat * division) + 1, Math.round((note.startBeat + note.durationBeat) * division)),
+          p: clamp(Math.round(Number(note.pitch) || 60), 0, 127),
+          v: clamp(Math.round(Number(note.velocity) || 80), 1, 127),
+          ch: 0,
+        })).sort((left, right) => left.s - right.s || left.p - right.p),
+        tempos: [[0, 500000]],
+        tsigs: (timeSignatures || []).map((signature) => [Math.max(0, Math.round((Number(signature.beat) || 0) * division)), signature.numerator || 4, signature.denominator || 4]),
+        progs: { 0: program },
+      }, {
+        players: [{ channels, inst: "auto" }],
+        trust: 0.5,
+        gridPerBeat: Number(quantizeDivision) === 32 ? 8 : 16,
+      });
+      const voices = result.channels
+        .filter((channel) => !channel.drum && channel.notes.length)
+        .map((channel) => channel.notes.map((note) => ({
+          pitch: note.p,
+          startBeat: Number((note.s / result.div).toFixed(6)),
+          durationBeat: Number(((note.e - note.s) / result.div).toFixed(6)),
+          velocity: note.v,
+        })));
+      if (!voices.length) return null;
+      Object.defineProperties(voices, {
+        naturalCount: { value: naturalCount, enumerable: false, configurable: true },
+        limited: { value: limit > 0 && naturalCount > limit, enumerable: false, configurable: true },
+      });
+      return voices;
+    } catch (error) {
+      console.warn("MML arranger failed for an instrument; using plain split", error);
+      return null;
+    }
+  }
+
+  // 채널 나누기. 드럼은 킥/스네어/하이햇… 종류별로 나눈 뒤 같은 종류 안에서 겹치는 노트만 다시 나누고(상한 없음),
+  // 그 밖의 악기는 options.arrange가 켜져 있으면 신형 분류기가 악기별 채널 수에 맞춰 자동으로 정리합니다.
+  // 꺼져 있거나(MIDI 입력 기록·옛 프로젝트 복원처럼 원본 그대로 둬야 할 때) 분류기를 못 쓸 때는 겹치지 않게 나누는 기본 방식을 씁니다.
   function splitMidiGroupIntoVoices(group, options = {}) {
     const notes = group?.notes || [];
-    if (!isMidiGroupDrums(group)) return splitNotesIntoMonophonicVoices(notes, options);
+    const quantizeUnit = 4 / (Number(options.quantizeDivision) === 32 ? 32 : 64);
+    if (!isMidiGroupDrums(group)) {
+      const arranged = options.arrange ? arrangeMidiGroupIntoVoices(group, options) : null;
+      if (arranged) return arranged;
+      return splitNotesIntoMonophonicVoices(notes, { overlapToleranceBeat: options.overlapToleranceBeat, quantizeUnit });
+    }
     const byRole = new Map(Object.keys(DRUM_ROLE_NAMES).map((key) => [key, []]));
     for (const note of notes) byRole.get(getDrumRoleKey(note.pitch)).push(note);
     const result = [];
     let quantizationCollisionCount = 0;
     for (const roleNotes of byRole.values()) {
       if (!roleNotes.length) continue;
-      const voices = splitNotesIntoMonophonicVoices(roleNotes, options);
+      const voices = splitNotesIntoMonophonicVoices(roleNotes, { overlapToleranceBeat: options.overlapToleranceBeat, quantizeUnit });
       quantizationCollisionCount += Number(voices.quantizationCollisionCount) || 0;
       result.push(...voices);
     }
@@ -17191,7 +17246,7 @@
         hueByInstrument.set(instrumentKey, getMidiGroupHue(group, sourceIndex));
       }
       const copyHue = hueByInstrument.get(instrumentKey);
-      const voices = splitMidiGroupIntoVoices(group, { quantizeUnit: 4 / (Number(document?.quantizeDivision) === 32 ? 32 : 64) });
+      const voices = splitMidiGroupIntoVoices(group, { arrange: true, quantizeDivision: document?.quantizeDivision, timeSignatures: document?.timeSignatures });
       voices.forEach((voiceNotes, voiceIndex) => {
         if (!voiceNotes.length) return;
         const channel = makeEditorChannelFromMidiVoice(group, voiceNotes, {
@@ -18126,14 +18181,23 @@
     return perChannel;
   }
 
+  // 쉼표 정리 단계(작은 쉼표 → 큰 쉼표). "d"는 점음표 길이(예: d32 = 점 1/32 = 1/32의 1.5배).
+  const REST_CLEANUP_STEPS = ["64", "32", "d32", "16", "d16", "8", "d8", "4", "all"];
+  const REST_CLEANUP_STEP_LABEL_KEYS = {
+    "64": "rest_cleanup.64", "32": "rest_cleanup.32", d32: "rest_cleanup.d32", "16": "rest_cleanup.16",
+    d16: "rest_cleanup.d16", "8": "rest_cleanup.8", d8: "rest_cleanup.d8", "4": "rest_cleanup.4", all: "rest_cleanup.all",
+  };
+  let restCleanupSlider = null;
+
   function normalizeRestCleanupMode(value) {
     const mode = String(value || "32").toLowerCase();
-    return ["64", "32", "16", "8", "4", "all"].includes(mode) ? mode : "32";
+    return REST_CLEANUP_STEPS.includes(mode) ? mode : "32";
   }
 
   function getRestCleanupThresholdBeat(mode = state.restCleanup.mode) {
     const normalized = normalizeRestCleanupMode(mode);
-    return normalized === "all" ? Infinity : 4 / Number(normalized);
+    if (normalized === "all") return Infinity;
+    return normalized.startsWith("d") ? 4 / Number(normalized.slice(1)) * 1.5 : 4 / Number(normalized);
   }
 
   function isRestCleanupWorkspaceActive() {
@@ -18175,7 +18239,7 @@
     const normalized = normalizeRestCleanupMode(mode);
     return normalized === "all"
       ? { partCount: 1, all: true }
-      : { partCount: 1, denom: Number(normalized) };
+      : { partCount: 1, denom: normalized.startsWith("d") ? normalized : Number(normalized) };
   }
 
   function restCleanupUnitsToBeats(units) {
@@ -18261,14 +18325,57 @@
     return changes;
   }
 
+  // Player의 쉼표 제거와 같은 단계 슬라이더. 단계 이름은 현재 언어로 매번 다시 붙입니다.
+  function ensureRestCleanupSlider() {
+    const host = elements.restCleanupModeOptions;
+    if (!host) return null;
+    const labels = () => REST_CLEANUP_STEPS.map((step) => i18nText(REST_CLEANUP_STEP_LABEL_KEYS[step]));
+    if (!restCleanupSlider) {
+      const last = REST_CLEANUP_STEPS.length - 1;
+      host.replaceChildren();
+      const track = document.createElement("div");
+      track.className = "rest-cleanup-notch-track";
+      const ticks = document.createElement("div");
+      ticks.className = "rest-cleanup-notch-ticks";
+      ticks.setAttribute("aria-hidden", "true");
+      REST_CLEANUP_STEPS.forEach((_, index) => {
+        const tick = document.createElement("span");
+        tick.className = "rest-cleanup-notch-tick";
+        tick.style.setProperty("--p", String(index / last));
+        ticks.appendChild(tick);
+      });
+      const input = document.createElement("input");
+      input.type = "range";
+      input.className = "rest-cleanup-notch-input";
+      input.min = "0";
+      input.max = String(last);
+      input.step = "1";
+      input.setAttribute("aria-label", i18nText("rest_cleanup.threshold"));
+      const readout = document.createElement("span");
+      readout.className = "rest-cleanup-notch-readout";
+      track.append(ticks, input);
+      host.append(track, readout);
+      input.addEventListener("input", () => {
+        state.restCleanup.mode = REST_CLEANUP_STEPS[Number(input.value)] || "32";
+        syncRestCleanupDialog();
+      });
+      restCleanupSlider = {
+        setValue(mode) {
+          const index = Math.max(0, REST_CLEANUP_STEPS.indexOf(mode));
+          input.value = String(index);
+          readout.textContent = labels()[index];
+          input.setAttribute("aria-valuetext", readout.textContent);
+        },
+        focus() { input.focus({ preventScroll: true }); },
+      };
+    }
+    return restCleanupSlider;
+  }
+
   function syncRestCleanupDialog() {
     const mode = normalizeRestCleanupMode(state.restCleanup.mode);
     state.restCleanup.mode = mode;
-    elements.restCleanupModeOptions?.querySelectorAll('[data-rest-cleanup-mode]').forEach((button) => {
-      const active = button.dataset.restCleanupMode === mode;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
+    ensureRestCleanupSlider()?.setValue(mode);
     const channels = getRestCleanupChannels();
     const selectedIds = new Set(channels.map((channel) => String(channel.id)));
     const perChannel = getRestCleanupAnalysisByChannel(mode);
@@ -18332,7 +18439,7 @@
     invalidateRestCleanupAnalysisCache();
     renderRestCleanupChannelList();
     syncRestCleanupDialog();
-    requestAnimationFrame(() => elements.restCleanupModeOptions?.querySelector('[data-rest-cleanup-mode].active')?.focus({ preventScroll: true }));
+    requestAnimationFrame(() => ensureRestCleanupSlider()?.focus());
     return true;
   }
 
@@ -23567,9 +23674,22 @@
     });
   }
 
-  function normalizeChannelMergeOverlapAmount(value) {
+  // 길이 보호: "auto"(Player 메뉴얼 자동) 또는 0~1(앞 노트를 지키는 비율, 0=최소 보호, 1=최대 보호).
+  function normalizeChannelMergeOverlapProtect(value) {
+    if (value === "auto" || value == null) return "auto";
     const numeric = Number(value);
-    return clamp(Number.isFinite(numeric) ? numeric : 1, 0, 1);
+    return Number.isFinite(numeric) ? clamp(numeric, 0, 1) : "auto";
+  }
+
+  function channelMergeProtectToOverlapMode(value) {
+    const protect = normalizeChannelMergeOverlapProtect(value);
+    if (protect === "auto") return "auto";
+    return protect <= 0.01 ? "all" : protect >= 0.99 ? "none" : "half";
+  }
+
+  function formatChannelMergeProtect(value) {
+    const protect = normalizeChannelMergeOverlapProtect(value);
+    return protect === "auto" ? i18nText("ui.auto") : `${Math.round(protect * 100)}%`;
   }
 
   function makeChannelMergeCandidateKey(channel, note, noteIndex = 0) {
@@ -23691,7 +23811,8 @@
       if (!last || last.key !== key) groups.push({ key, startBeat: note.startBeat, notes: [note] });
       else last.notes.push(note);
     }
-    const amount = normalizeChannelMergeOverlapAmount(overlapAmount);
+    const amountRaw = normalizeChannelMergeOverlapProtect(overlapAmount);
+    const amount = amountRaw === "auto" ? 1 : 1 - amountRaw;
     let previous = null;
     let previousPitch = null;
     for (const group of groups) {
@@ -23876,25 +23997,34 @@
     const blocked = getChannelMergeRuntimeCache(pool).blockedCandidateKeys;
     const targetSet = new Set(targets);
     const sourceSet = new Set(getChannelMergeSources().map((channel) => String(channel.id)));
-    const amount = normalizeChannelMergeOverlapAmount(merge.overlapAmount);
     const roles = new Map(targets.map((id) => [id, normalizeChannelMergeRole(getMergePlan(id).role)]));
     // player와 같은 공용 배정 규칙으로 모든 대상 채널에 한 번에 나눕니다.
     // 빠른 대상부터 채우되, 순서와 상관없이 고음/저음 대상이 먼저 우선권을 가집니다.
     const allTargetIndexes = targets.map((_, index) => index);
     const items = [];
+    const arrangerChannelBySource = new Map();
     for (const note of pool) {
       const src = String(note.sourceChannelId);
       if (!(targetSet.has(src) || sourceSet.has(src)) || blocked.has(note._mergeCandidateKey)) continue;
+      if (!arrangerChannelBySource.has(src)) {
+        const sourceChannel = state.channels.find((channel) => String(channel.id) === src);
+        arrangerChannelBySource.set(src, {
+          channel: toArrangerSourceChannel(arrangerChannelBySource.size),
+          program: sourceChannel ? Number(getChannelInstrumentProgram(sourceChannel)) : undefined,
+        });
+      }
       items.push({
         pitch: note.pitch,
         startBeat: note.startBeat,
         durationBeat: note.durationBeat,
         velocity: note.velocity,
+        sourceChannel: arrangerChannelBySource.get(src).channel,
+        program: arrangerChannelBySource.get(src).program,
         allowed: sourceSet.has(src) ? allTargetIndexes : [targets.indexOf(src)],
         note,
       });
     }
-    const overlapMode = amount >= 0.99 ? "all" : amount > 0.01 ? "half" : "none";
+    const overlapMode = channelMergeProtectToOverlapMode(merge.overlapProtect);
     const keysByTarget = new Map(targets.map((id) => [id, new Set()]));
     if (targets.length && items.length) {
       const assigned = assignEditorNotesByPlayerRules(
@@ -23976,10 +24106,11 @@
       button.setAttribute("aria-pressed", String(button.dataset.mergeModeRole === state.channelMerge.role));
     });
     if (elements.channelMergeOverlapSlider) {
-      elements.channelMergeOverlapSlider.value = String(Math.round(normalizeChannelMergeOverlapAmount(state.channelMerge.overlapAmount) * 100));
+      const protect = normalizeChannelMergeOverlapProtect(state.channelMerge.overlapProtect);
+      elements.channelMergeOverlapSlider.value = String(protect === "auto" ? -5 : Math.round(protect * 100));
     }
     if (elements.channelMergeOverlapValue) {
-      elements.channelMergeOverlapValue.textContent = `${Math.round(normalizeChannelMergeOverlapAmount(state.channelMerge.overlapAmount) * 100)}%`;
+      elements.channelMergeOverlapValue.textContent = formatChannelMergeProtect(state.channelMerge.overlapProtect);
     }
     if (elements.channelMergeModeApplyButton) {
       const targetSet = getMergeTargetIdSet();
@@ -24048,8 +24179,8 @@
     state.channelMerge.instrumentKey = "";
     state.channelMerge.sourceChannelIds = new Set();
     state.channelMerge.role = "auto";
-    state.channelMerge.overlapMode = "all";
-    state.channelMerge.overlapAmount = 1;
+    state.channelMerge.overlapMode = "auto";
+    state.channelMerge.overlapProtect = "auto";
     state.channelMerge.excludeOverlapChannelIds = new Set();
     state.channelMerge.candidatePool = [];
     state.channelMerge.runtimeCache = null;
@@ -24207,12 +24338,12 @@
     return setChannelMergeTargetRole(state.channelMerge.targetChannelId, role);
   }
 
-  function setChannelMergeOverlapAmount(value) {
+  function setChannelMergeOverlapProtect(value) {
     if (!isChannelMergeModeActive()) return false;
     if (state.playback.running || state.playback.loading) stopPlayback(false);
-    const normalized = normalizeChannelMergeOverlapAmount(value);
-    if (Math.abs(normalized - state.channelMerge.overlapAmount) < 1e-7) return false;
-    state.channelMerge.overlapAmount = normalized;
+    const normalized = normalizeChannelMergeOverlapProtect(value);
+    if (normalized === state.channelMerge.overlapProtect) return false;
+    state.channelMerge.overlapProtect = normalized;
     state.channelMerge.previewModified = false;
     rebuildChannelMergePreview({ resetCandidates: true, reusePool: true });
     return true;
@@ -24627,7 +24758,7 @@
 
   function normalizeChannelMergeOverlapMode(value) {
     const mode = String(value || "all").toLowerCase();
-    return ["all", "half", "none"].includes(mode) ? mode : "all";
+    return ["auto", "all", "half", "none"].includes(mode) ? mode : "all";
   }
 
   function getCheckedChannelMergeIds() {
@@ -24658,7 +24789,7 @@
     const channels = getSelectedChannelMergeChannels();
     const noteCount = channels.reduce((sum, channel) => sum + (channel.notes?.length || 0), 0);
     const roleLabels = { auto: i18nText("ui.auto"), high: i18nText("ui.high"), low: i18nText("ui.low") };
-    const overlapLabels = { all: i18nText("ui.all"), half: i18nText("ui.half"), none: i18nText("ui.none") };
+    const overlapLabels = { auto: i18nText("ui.auto"), all: i18nText("ui.all"), half: i18nText("ui.half"), none: i18nText("ui.none") };
     const role = normalizeChannelMergeRole(state.channelMerge?.role);
     const overlapMode = normalizeChannelMergeOverlapMode(state.channelMerge?.overlapMode);
     if (elements.channelMergeSummary) {
@@ -24682,7 +24813,7 @@
       checkbox.type = "checkbox";
       checkbox.value = String(channel.id);
       checkbox.checked = false;
-      checkbox.setAttribute("aria-label", `${channel.name} 모으기 선택`);
+      checkbox.setAttribute("aria-label", i18nText("merge.select_aria", [channel.name]));
       const text = document.createElement("span");
       text.className = "midi-transfer-channel-name";
       text.textContent = `${channel.name} · ${channel.notes?.length || 0}노트`;
@@ -24797,7 +24928,13 @@
 
     // player와 같은 공용 배정 규칙으로 한 채널에 모읍니다(역할 = 고음/저음/자동, 겹침 = 전체/절반/안 함).
     const result = assignEditorNotesByPlayerRules(
-      notes.map((note) => ({ ...note, allowed: [0], item: note })),
+      notes.map((note) => ({
+        ...note,
+        allowed: [0],
+        item: note,
+        sourceChannel: toArrangerSourceChannel(note.sourceIndex),
+        program: Number(getChannelInstrumentProgram(channels[note.sourceIndex])),
+      })),
       [{ role: normalizedRole, overlapMergeMode: normalizedOverlapMode }],
     );
     return (result.voices[0] || []).map(({ item, startBeat, durationBeat }) => ({
@@ -37418,8 +37555,9 @@
     });
     elements.channelMergeOverlapSlider?.addEventListener("input", () => {
       const percent = Number(elements.channelMergeOverlapSlider.value);
-      if (elements.channelMergeOverlapValue) elements.channelMergeOverlapValue.textContent = `${Math.round(percent)}%`;
-      setChannelMergeOverlapAmount(percent / 100);
+      const protect = percent < 0 ? "auto" : percent / 100;
+      if (elements.channelMergeOverlapValue) elements.channelMergeOverlapValue.textContent = formatChannelMergeProtect(protect);
+      setChannelMergeOverlapProtect(protect);
     });
     elements.channelMergeModeCancelButton?.addEventListener("click", () => cancelChannelMergeMode());
     elements.channelMergeModeApplyButton?.addEventListener("click", applyChannelMergeMode);
@@ -37465,12 +37603,6 @@
     elements.restCleanupApplyButton?.addEventListener("click", applyRestCleanup);
     elements.restCleanupSelectAllButton?.addEventListener("click", () => setAllRestCleanupChecked(true));
     elements.restCleanupClearAllButton?.addEventListener("click", () => setAllRestCleanupChecked(false));
-    elements.restCleanupModeOptions?.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-rest-cleanup-mode]");
-      if (!button) return;
-      state.restCleanup.mode = normalizeRestCleanupMode(button.dataset.restCleanupMode);
-      syncRestCleanupDialog();
-    });
     elements.noteEditModeCancelButton?.addEventListener("click", () => cancelNoteEditMode());
     elements.noteEditModeApplyButton?.addEventListener("click", applyNoteEditMode);
     [
@@ -37977,7 +38109,6 @@
       setPlayheadBeat,
       selectChannelGroup,
       enterChannelMergeMode,
-      packMidiVoicesToMaxChannels,
       duplicateChannelById,
       serializeProject,
       loadProjectFromFile,

@@ -4430,10 +4430,11 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   const PART_PREVIEW_MELODY_INTERVALS = [0, 2, 4, 7, 9, 7, 4, 0];
   const PART_PREVIEW_DRUM_NOTES = [36, 42, 38, 42, 36, 46, 38, 42];
   const OVERLAP_MERGE_OPTIONS = [
-    { value: "auto", labelKey: "ui.auto" },
-    { value: "all", labelKey: "ui.all" },
-    { value: "half", labelKey: "ui.half" },
-    { value: "none", labelKey: "ui.none" }
+    // 노트 길이 보호: 최소(all) = 앞 노트를 마음껏 자름, 절반(half), 최대(none) = 자르지 않음. 저장 값 이름은 그대로.
+    { value: "auto", labelKey: "ui.auto", tipKey: "midi.protect_auto_tip" },
+    { value: "all", labelKey: "midi.protect_min", tipKey: "midi.protect_min_tip" },
+    { value: "half", labelKey: "ui.half", tipKey: "midi.protect_half_tip" },
+    { value: "none", labelKey: "midi.protect_max", tipKey: "midi.protect_max_tip" }
   ];
   const MIDI_INSTRUMENT_CATEGORY_ORDER = ["keyboard", "strings", "winds", "vocal", "other", "drums"];
   const MIDI_INSTRUMENT_CATEGORY_LABEL_KEYS = {
@@ -9384,7 +9385,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   function createDefaultMidiSettings(groups) {
     const allGroups = Array.isArray(groups) ? groups : [];
     const channelSettings = Array.from({ length: 6 }, (_, i) => {
-      const role = i === 0 ? "high" : (i === 2 ? "low" : "auto");
+      const role = "auto";
       const overlapMergeMode = "auto";
       return {
         role,
@@ -9539,7 +9540,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return { manual: source.manual === true, trust, total, mainCount, mainInst, rows, cymbalDensity: density(source.cymbalDensity), drumDensity: density(source.drumDensity) };
   }
 
-  // 판단 기준의 "메뉴얼": 정리 엔진 대신 예전처럼 채널마다 노트 배치·겹침 병합을 정하고 악기 파트를 채널에 직접 배정한다.
+  // 판단 기준의 "메뉴얼": 정리 엔진 대신 예전처럼 채널마다 노트 배치·노트 길이 보호를 정하고 악기 파트를 채널에 직접 배정한다.
   function isMidiManualMode(settings = pendingMidiSettings) {
     return Boolean(settings && normalizeArrangeSettings(settings.arrange).manual);
   }
@@ -9725,7 +9726,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
 
-  // ---- 메뉴얼 모드(이전 악기 선택): 채널별 노트 배치·겹침 병합 + 악기 파트의 채널 배정 -------------------
+  // ---- 메뉴얼 모드(이전 악기 선택): 채널별 노트 배치·노트 길이 보호 + 악기 파트의 채널 배정 -------------------
   function renderManualMidiRoleRows() {
     const host = document.createElement("div");
     host.className = "wb15-manual-roles";
@@ -9756,7 +9757,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       `).join("");
       const mergeButtons = OVERLAP_MERGE_OPTIONS.map(opt => `
         <button type="button" class="wb13-midi-role-option${mergeMode === opt.value ? " active" : ""}"
-          data-merge-index="${i}" data-merge-value="${opt.value}" aria-pressed="${mergeMode === opt.value ? "true" : "false"}">${escapeHtml(i18nText(opt.labelKey))}</button>
+          data-merge-index="${i}" data-merge-value="${opt.value}" title="${escapeHtml(i18nText(opt.tipKey))}" aria-pressed="${mergeMode === opt.value ? "true" : "false"}">${escapeHtml(i18nText(opt.labelKey))}</button>
       `).join("");
       row.innerHTML = `
         <strong class="wb8-midi-role-name wb13-midi-role-name" title="${escapeHtml(PART_LABELS[i])}">${escapeHtml(PART_LABELS[i])}</strong>
@@ -10259,7 +10260,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (!exportChannels.length) throw new Error(i18nText("mml.select_one"));
       return {
         manual: true,
-        // "자동" 노트 배치·겹침 병합은 신형 노트 분류기를 참고한다(공용 midiToMml의 smartAuto).
+        // "자동" 노트 배치·노트 길이 보호는 신형 노트 분류기를 참고한다(공용 midiToMml의 smartAuto).
         smartAuto: true,
         partCount: exportChannels.length,
         roles: exportChannels.map(ch => ch.role),
@@ -10385,8 +10386,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   function normalizeOverlapMergeMode(value) {
     if (value === true || value === "true") return "all";
     if (value === false || value === "false") return "none";
-    const mode = String(value || "all").toLowerCase();
-    return OVERLAP_MERGE_OPTIONS.some(opt => opt.value === mode) ? mode : "all";
+    const mode = String(value || "auto").toLowerCase();
+    return OVERLAP_MERGE_OPTIONS.some(opt => opt.value === mode) ? mode : "auto";
   }
 
 

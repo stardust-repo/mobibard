@@ -964,6 +964,27 @@
     (best || []).forEach((r, k) => { exportChannels[autoIdx[k]].autoTarget = r; });
   }
 
+  // 에디터 '노트 모으기'용: 64분음표 격자 노트에 신형 노트 분류기 라벨(aiLabel)을 붙이고, 채널별 역할 대상(autoTarget)을 정한다.
+  // Player 메뉴얼의 "자동/고음/저음" 판단과 같은 규칙이다. 역할이 "자동"인 채널이 하나도 없으면 아무것도 하지 않는다(예전 규칙 그대로).
+  // gridNotes: assignNotesToVoices에 넘길 노트(+ 선택 항목 sourceChannel, program). options.timeSignatures: [{ beat, numerator, denominator }]
+  function applySmartAutoToGridNotes(gridNotes, exportChannels, options = {}) {
+    if (!Array.isArray(gridNotes) || !gridNotes.length || !(exportChannels || []).some(ch => ch.role === "auto" || ch.overlapMergeMode === "auto")) return false;
+    const ppq = 960;
+    const ticksPerGrid = ppq / 16;
+    for (const note of gridNotes) {
+      note.startTick = note.startGrid * ticksPerGrid;
+      note.endTick = note.endGrid * ticksPerGrid;
+      note.channel = Number.isFinite(note.sourceChannel) ? note.sourceChannel : 0;
+    }
+    const midi = {
+      tempoEvents: [],
+      timeSignatures: (options.timeSignatures || []).map(ts => ({ tick: Math.round((Number(ts.beat) || 0) * ppq), numerator: ts.numerator || 4, denominator: ts.denominator || 4 })),
+    };
+    if (!labelNotesWithArranger(gridNotes, midi, ppq)) return false;
+    resolveAutoTargets(gridNotes, exportChannels);
+    return true;
+  }
+
   // 자동 채널이 이 음을 얼마나 원하는지(역할 방향 점수 자리, 0~1000; 예전 자동은 500 고정).
   function autoTargetDirectionScore(note, cfg) {
     const target = cfg?.autoTarget;
@@ -1810,5 +1831,5 @@
     };
   }
 
-  window.MabiMidi = Object.freeze({ version: "5.1.0", midiToMml, arrangeMidiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview, parseMidiFile, assignNotesToVoices, recommendInstrumentAssignment });
+  window.MabiMidi = Object.freeze({ version: "5.1.0", midiToMml, arrangeMidiToMml, analyzeMidi, buildMidiInstrumentPreview, buildMidiFilePreview, parseMidiFile, assignNotesToVoices, recommendInstrumentAssignment, applySmartAutoToGridNotes });
 })();
