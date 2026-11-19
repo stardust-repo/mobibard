@@ -10062,7 +10062,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       section.dataset.midiCategory = key;
       section.open = midiInstrumentSectionOpenState.has(key) ? midiInstrumentSectionOpenState.get(key) !== false : true;
       section.className = `midi-instrument-section midi-instrument-category-section wb15-manual-section category-${key}`;
-      section.innerHTML = `<summary class="midi-instrument-section-head"><strong>${escapeHtml(i18nText("ui.name_count", [label, formatCount(items.length)]))}</strong></summary>`;
+      section.innerHTML = `<summary class="midi-instrument-section-head"><strong>${escapeHtml(label)}</strong><span class="wb15-manual-section-count">${escapeHtml(formatCount(items.length))}</span></summary>`;
       section.addEventListener("toggle", () => midiInstrumentSectionOpenState.set(key, section.open));
       for (const group of items) section.appendChild(makeRow(group));
       midiChannelList.appendChild(section);
@@ -10140,7 +10140,19 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const count = document.createElement("span");
       count.className = "wb15-arr-include-total";
       count.textContent = `${formatCount(included.size)} / ${formatCount(groups.length)}`;
-      midiInstrumentPanelTitle.replaceChildren(document.createTextNode(i18nText("arrange.include")), count);
+      const bulk = document.createElement("span");
+      bulk.className = "wb15-arr-bulk";
+      const allIds = groups.map(group => String(group.id));
+      for (const [key, value] of [["midi.select_all_inst", true], ["midi.clear_all_inst", false]]) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "wb15-arr-bulk-btn";
+        btn.textContent = i18nText(key);
+        btn.disabled = value ? included.size >= allIds.length : included.size === 0;
+        btn.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); setMidiGroupIncluded(allIds, value); });
+        bulk.appendChild(btn);
+      }
+      midiInstrumentPanelTitle.replaceChildren(document.createTextNode(i18nText("layout6.instrumentSettings")), count, bulk);
     }
     midiChannelList.replaceChildren();
     if (!groups.length) {

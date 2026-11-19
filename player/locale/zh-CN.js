@@ -7,6 +7,8 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "account.guest": "访客",
     "account.menu": "帐号菜单",
     "account.user": "Google 用户",
+    "midi.select_all_inst": "全选",
+    "midi.clear_all_inst": "全部取消",
     "aria.listen_item": "试听{0}",
     "aria.merge_mode": "{0}的重叠合并方式",
     "aria.preview_selected_sound": "预览{0}所选音色",

@@ -10280,7 +10280,7 @@ a[class*="button"]:hover {
   border: 0 !important;
   background: transparent !important;
 }
-.player-ui #midiConvertDialog:not(.wb15-manual-mode) #midiInstrumentPanelTitle {
+.player-ui #midiConvertDialog #midiInstrumentPanelTitle {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -10596,3 +10596,148 @@ a[class*="button"]:hover {
   border-color: var(--wb4-accent, #4f46e5); background: var(--wb4-accent, #4f46e5); color: #fff;
 }
 .midi-recommend-opt:disabled { opacity: .4; cursor: not-allowed; }
+
+/* rev 20261119t: 악기 설정(비수동) — 선 없는 분류 묶음, 개수는 분류명 바로 옆, 노트 개수 박스 테두리 제거 */
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) .midi-instrument-section {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: visible;
+}
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) .wb15-arr-section-head {
+  background: transparent !important;
+  border-bottom: 0 !important;
+  padding: 0 4px !important;
+}
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) .midi-instrument-section[open] > .wb15-arr-section-head { border-bottom: 0 !important; }
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) .wb15-arr-section-count { margin-left: 0 !important; }
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) .wb15-arr-note-chip {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 2px 0 !important;
+}
+
+/* rev 20261119u: 분류별 선택 개수 — 악기 설정 총 개수처럼 테두리 칩, 그룹명 바로 오른쪽 */
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) .wb15-arr-section-head { justify-content: flex-start !important; }
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) .wb15-arr-section-name { flex: 0 1 auto !important; min-width: 0; }
+.player-ui #midiConvertDialog:not(.wb15-manual-mode) .wb15-arr-section-count {
+  flex: 0 0 auto;
+  margin: 0 0 0 -2px !important;
+  padding: 1px 7px !important;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 999px;
+  color: var(--wb4-muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+/* rev 20261119v: 분류명 파란색, 수동 분류 개수는 박스 칩(숫자만) */
+.player-ui #midiConvertDialog .wb15-arr-section-name,
+.player-ui #midiConvertDialog .wb15-manual-section > .midi-instrument-section-head strong { color: var(--wb4-accent) !important; }
+.player-ui #midiConvertDialog .wb15-manual-section > .midi-instrument-section-head { justify-content: flex-start !important; align-items: center !important; }
+.player-ui #midiConvertDialog .wb15-manual-section > .midi-instrument-section-head strong { flex: 0 1 auto !important; }
+.player-ui #midiConvertDialog .wb15-manual-section-count {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border: 1px solid var(--wb4-line);
+  border-radius: 999px;
+  color: var(--wb4-muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+/* rev 20261119w: 수동 분류 머리 높이를 악기 설정(자동 정리)과 동일하게 */
+.player-ui #midiConvertDialog .wb15-manual-section > .midi-instrument-section-head {
+  min-height: 36px !important;
+  padding: 0 4px !important;
+  gap: 8px !important;
+}
+.player-ui #midiConvertDialog .wb15-manual-section-count { margin-left: -2px; }
+
+/* rev 20261119x: 악기 설정 오른쪽 모두 선택/해제 */
+.player-ui #midiConvertDialog #midiInstrumentPanelTitle { width: 100%; }
+.player-ui #midiConvertDialog .wb15-arr-bulk { margin-left: auto; display: inline-flex; gap: 6px; }
+.player-ui #midiConvertDialog .wb15-arr-bulk-btn {
+  min-height: 0 !important;
+  height: 24px;
+  padding: 0 9px !important;
+  border: 1px solid var(--wb4-line) !important;
+  border-radius: 999px !important;
+  background: var(--wb4-surface) !important;
+  color: var(--wb4-text) !important;
+  font-size: 10.5px !important;
+  font-weight: 750 !important;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.player-ui #midiConvertDialog .wb15-arr-bulk-btn:hover:not(:disabled) { border-color: var(--wb4-accent) !important; color: var(--wb4-accent) !important; }
+.player-ui #midiConvertDialog .wb15-arr-bulk-btn:disabled { opacity: .4; cursor: default; }
+
+/* rev 20261119z2: 4개 버튼은 음색 버튼 색, 팝업은 이전 양식 + 음색 팝업의 블러/색 */
+.player-ui #midiConvertDialog .wb15-arr-bulk-btn,
+.player-ui #midiConvertDialog .midi-panel-title-actions > button {
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 6px 13px !important;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--line) 60%) !important;
+  border-radius: 8px !important;
+  background: var(--accent-weak) !important;
+  color: var(--accent) !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  white-space: nowrap;
+}
+.player-ui #midiConvertDialog .wb15-arr-bulk-btn:hover:not(:disabled),
+.player-ui #midiConvertDialog .midi-panel-title-actions > button:hover:not(:disabled) {
+  background: var(--control-hover) !important;
+  color: var(--accent) !important;
+}
+.player-ui #midiConvertDialog .wb15-arr-bulk-btn:disabled { opacity: .45; }
+#midiRecommendDialog.mml-dialog {
+  position: fixed !important; inset: 0 !important; height: fit-content !important;
+  max-height: min(88dvh, 760px) !important; margin: auto !important; padding: 0 !important;
+  border: 0 !important; border-radius: 14px !important; background: transparent !important;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, .32) !important; overflow: visible !important; z-index: 320 !important;
+}
+#midiRecommendDialog.mml-dialog::backdrop { background: rgba(15, 23, 42, .5); backdrop-filter: blur(3px); }
+#midiRecommendDialog .dialog-card {
+  width: 100% !important; max-width: none !important; max-height: min(88dvh, 760px) !important;
+  margin: 0 !important; border-radius: 14px !important; overflow: auto !important;
+}
+/* 음색 설정 팝업: 일괄 선택 팝업 양식(라벨 위, 선택지 아래, 박스 없음, 폭 640) */
+#partSoundDialog.mml-dialog { width: min(92vw, 640px) !important; max-width: 640px !important; }
+#partSoundDialog .part-sound-card { gap: 14px; }
+#partSoundDialog .soundfont-file-row,
+#partSoundDialog .soundfont-download-row,
+#partSoundDialog .part-sound-preset-row {
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  gap: 7px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+#partSoundDialog .soundfont-file-row > .dialog-field,
+#partSoundDialog .soundfont-download-row > .dialog-field,
+#partSoundDialog .part-sound-preset-row > .dialog-field { color: var(--text); font-size: 14px; font-weight: 900; text-align: left; }
+
+/* rev 20261119y: 팝업 하단 버튼을 '채널 음색 설정'의 취소/적용 양식으로 */
+#midiBulkAssignDialog .midi-bulk-assign-actions > button,
+#midiRecommendDialog .midi-bulk-assign-actions > button {
+  min-width: 0; padding: 6px 10px; border: 0 !important; border-radius: 9px; box-shadow: none !important;
+  font-size: 13.5px; font-weight: 700;
+}
+#midiBulkAssignDialog #midiBulkCancelBtn, #midiBulkAssignDialog #midiBulkClearBtn,
+#midiRecommendDialog #midiRecommendCancelBtn {
+  background: #f3f4f6 !important; color: #1f2937 !important;
+}
+#midiBulkAssignDialog #midiBulkSelectBtn, #midiRecommendDialog #midiRecommendOkBtn {
+  background: #4f46e5 !important; color: #fff !important;
+}
+:root[data-theme="dark"] #midiBulkAssignDialog #midiBulkCancelBtn,
+:root[data-theme="dark"] #midiBulkAssignDialog #midiBulkClearBtn,
+:root[data-theme="dark"] #midiRecommendDialog #midiRecommendCancelBtn { background: #1f2937 !important; color: #e5e7eb !important; }
+:root[data-theme="dark"] #midiBulkAssignDialog #midiBulkSelectBtn,
+:root[data-theme="dark"] #midiRecommendDialog #midiRecommendOkBtn { background: #818cf8 !important; color: #fff !important; }

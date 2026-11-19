@@ -7,6 +7,8 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "account.guest": "게스트",
     "account.menu": "계정 메뉴",
     "account.user": "Google 사용자",
+    "midi.select_all_inst": "모두 선택",
+    "midi.clear_all_inst": "모두 해제",
     "aria.listen_item": "{0} 듣기",
     "aria.merge_mode": "{0} 겹침 병합 방식",
     "aria.preview_selected_sound": "{0} 선택 음색 미리듣기",

@@ -7,6 +7,8 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "account.guest": "Guest",
     "account.menu": "Account menu",
     "account.user": "Google user",
+    "midi.select_all_inst": "Select all",
+    "midi.clear_all_inst": "Clear all",
     "aria.listen_item": "Listen to {0}",
     "aria.merge_mode": "Overlap merge mode for {0}",
     "aria.preview_selected_sound": "Preview selected sound for {0}",

@@ -7,6 +7,8 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "account.guest": "ゲスト",
     "account.menu": "アカウントメニュー",
     "account.user": "Google ユーザー",
+    "midi.select_all_inst": "すべて選択",
+    "midi.clear_all_inst": "すべて解除",
     "aria.listen_item": "{0}を試聴",
     "aria.merge_mode": "{0}の重なり結合方式",
     "aria.preview_selected_sound": "{0}の選択音色を試聴",
