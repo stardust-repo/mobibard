@@ -8,7 +8,7 @@
   // The embedded default SF3 (assets/default_sf3.js, ~5.4 MB of base64) is fetched on first use
   // instead of as a blocking <script> on every page. Resolved relative to this file so it works
   // from editor/, player/, simple/, rollscriptor/ and veloscriptor/ alike.
-  const DEFAULT_SOUND_BANK_ASSET_VERSION = "20261103-marker1";
+  const DEFAULT_SOUND_BANK_ASSET_VERSION = "20261120-env3";
   const DEFAULT_SOUND_BANK_ASSET_URL = (() => {
     try {
       const own = document.currentScript?.src;
@@ -622,9 +622,13 @@
     const name = readInfoName(bytes, chunk.children) || `DLS ${index + 1}`;
     const regions = [];
     const regionChunks = lrgn.children.filter(c => c.id === "LIST" && (c.type === "rgn " || c.type === "rgn2"));
+    const instrumentEnvelope = parseDlsEnvelope(bytes, findList(chunk.children, "lart") || findList(chunk.children, "lar2"));
     for (const regionChunk of regionChunks) {
       const region = parseDlsRegion(bytes, regionChunk, waveByPoolIndex);
-      if (region) regions.push(region);
+      if (!region) continue;
+      // 영역 값이 악기 값보다 우선합니다.
+      Object.assign(region, instrumentEnvelope, parseDlsEnvelope(bytes, findList(regionChunk.children, "lart") || findList(regionChunk.children, "lar2")));
+      regions.push(region);
     }
     return { name, bank: bankNumber, preset: program, regions, dlsBankMsb: bankMsb, dlsBankLsb: bankLsb, isDrum };
   }
@@ -663,6 +667,35 @@
       sample: regionSample,
       dlsTableIndex: tableIndex
     };
+  }
+
+  // DLS 볼륨 엔벨로프(EG1)를 SF2와 같은 단위로 바꿉니다: 시간은 타임센트, 서스테인은 감쇠 센티벨.
+  function parseDlsEnvelope(bytes, lart) {
+    const out = {};
+    if (!lart) return out;
+    for (const art of (lart.children || []).filter(c => c.id === "art1" || c.id === "art2")) {
+      if (art.size < 8) continue;
+      const headSize = Math.max(8, u32le(bytes, art.offset));
+      const count = u32le(bytes, art.offset + 4);
+      for (let i = 0; i < count; i++) {
+        const p = art.offset + headSize + i * 12;
+        if (p + 12 > art.offset + art.size) break;
+        const source = u16le(bytes, p);
+        const control = u16le(bytes, p + 2);
+        const dest = u16le(bytes, p + 4);
+        if (source !== 0 || control !== 0) continue;
+        const scale = i32le(bytes, p + 8);
+        const timecents = scale / 65536;
+        if (dest === 0x0206) out.attackVolEnv = Math.max(-12000, timecents);
+        else if (dest === 0x0207) out.decayVolEnv = Math.max(-12000, timecents);
+        else if (dest === 0x0209) out.releaseVolEnv = Math.max(-12000, timecents);
+        else if (dest === 0x020A) {
+          const level = Math.max(0.0001, Math.min(1, scale / 65536 / 1000));
+          out.sustainVolEnv = Math.round(Math.max(0, Math.min(1440, -200 * Math.log10(level))));
+        }
+      }
+    }
+    return out;
   }
 
   function parseDlsWsmp(bytes, chunk) {
@@ -1080,14 +1113,29 @@
 
       const gain = ctx.createGain();
       const v = Math.max(0.0001, Math.min(1.25, n.gainValue * gainScale));
-      const attack = Math.min(0.008, playDur * 0.25);
-      const release = Math.min(0.04, Math.max(0.004, playDur * 0.55));
-      const holdEnd = Math.max(start + attack, end - release);
+      const env = resolveRegionEnvelope(region, playDur);
+      const release = env.release;
+      const attackEnd = start + env.attack;
+      const decayEnd = attackEnd + env.decay;
+      const sustainLevel = Math.max(0.0001, v * env.sustainRatio);
+      const levelAt = (time) => {
+        if (time <= start) return 0.0001;
+        if (time < attackEnd) return Math.max(0.0001, v * (time - start) / env.attack);
+        if (env.sustainRatio < 0.999 && time < decayEnd) {
+          return Math.max(0.0001, v * Math.pow(env.sustainRatio, (time - attackEnd) / env.decay));
+        }
+        return env.sustainRatio < 0.999 ? sustainLevel : v;
+      };
 
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.linearRampToValueAtTime(v, start + attack);
-      gain.gain.setValueAtTime(v, holdEnd);
-      gain.gain.linearRampToValueAtTime(0.0001, end + release);
+      gain.gain.linearRampToValueAtTime(v, attackEnd);
+      if (env.sustainRatio < 0.999) gain.gain.exponentialRampToValueAtTime(sustainLevel, decayEnd);
+      // 음을 뗀 시점부터 소리 끝(릴리즈)까지는 사운드폰트의 릴리즈 시간을 따릅니다.
+      // cancelAndHoldAtTime 만으로는 진행 중인 램프가 없을 때 값이 고정되지 않아(이전 이벤트부터 곧바로 줄어듦),
+      // 그 시점의 값을 직접 계산해 고정한 뒤 릴리즈를 겁니다.
+      gain.gain.cancelScheduledValues(end);
+      gain.gain.setValueAtTime(levelAt(end), end);
+      gain.gain.exponentialRampToValueAtTime(0.0001, end + release);
 
       const partIndex = Number.isFinite(Number(n.part)) ? Math.max(0, Math.min(5, Math.trunc(Number(n.part)))) : -1;
       const noteOutput = partIndex >= 0 && destinationsByPart?.[partIndex] ? destinationsByPart[partIndex] : output;
@@ -1112,6 +1160,22 @@
     }
 
     return { maxEnd, count, nextIndex };
+  }
+
+  // 사운드폰트가 가진 볼륨 엔벨로프를 초 단위로 풀어 줍니다. 값이 없는 항목은 예전 기본 동작을 따릅니다.
+  function resolveRegionEnvelope(region, playDur) {
+    const has = (value) => value != null && Number.isFinite(Number(value));
+    const seconds = (value) => Math.pow(2, Math.max(-12000, Math.min(8000, Number(value))) / 1200);
+    const attack = has(region?.attackVolEnv)
+      ? Math.max(0.001, Math.min(seconds(region.attackVolEnv), 20))
+      : Math.min(0.008, playDur * 0.25);
+    const release = has(region?.releaseVolEnv)
+      ? Math.max(0.004, Math.min(seconds(region.releaseVolEnv), 20))
+      : Math.min(0.04, Math.max(0.004, playDur * 0.55));
+    const sustainCb = has(region?.sustainVolEnv) ? Math.max(0, Math.min(1440, Number(region.sustainVolEnv))) : 0;
+    const sustainRatio = Math.pow(10, -sustainCb / 200);
+    const decay = has(region?.decayVolEnv) ? Math.max(0.01, Math.min(seconds(region.decayVolEnv), 20)) : 0.5;
+    return { attack, decay, sustainRatio, release };
   }
 
   function selectRegion(regions, midi, velocity) {
@@ -1192,6 +1256,11 @@
       switch (g.op) {
         case 2: z.startLoopOffset = g.sAmount; break;
         case 3: z.endLoopOffset = g.sAmount; break;
+        // 볼륨 엔벨로프(타임센트/센티벨). 값이 없으면 재생기가 기본값을 씁니다.
+        case 34: z.attackVolEnv = g.sAmount; break;
+        case 36: z.decayVolEnv = g.sAmount; break;
+        case 37: z.sustainVolEnv = g.amount; break;
+        case 38: z.releaseVolEnv = g.sAmount; break;
         case 41: z.instrument = g.amount; break;
         case 43: z.keyRange = [g.lo, g.hi]; break;
         case 44: z.velRange = [g.lo, g.hi]; break;

@@ -63,6 +63,30 @@
     return null;
   }
 
+  // 지수 램프로 만든 어택/디케이 곡선에서 time 시점의 게인을 계산합니다.
+  // cancelAndHoldAtTime 은 진행 중인 램프가 없으면 값을 고정하지 못해(이전 이벤트부터 곧바로 줄어듦)
+  // 길게 누른 음이 릴리즈 전에 조용해지므로, 값을 직접 계산해 고정합니다.
+  function envelopeLevelAt(time, when, attack, decay, peak, sustain) {
+    const floor = 0.0001;
+    const top = Math.max(floor, peak);
+    const low = Math.max(floor, Math.min(top, sustain));
+    if (time <= when) return floor;
+    if (time < when + attack) return floor * Math.pow(top / floor, (time - when) / Math.max(1e-6, attack));
+    if (time < when + attack + decay) return top * Math.pow(low / top, (time - when - attack) / Math.max(1e-6, decay));
+    return low;
+  }
+
+  function holdGainAndRelease(gainParam, releaseAt, releaseSeconds, level) {
+    gainParam.cancelScheduledValues(releaseAt);
+    gainParam.setValueAtTime(Math.max(0.0001, level), releaseAt);
+    gainParam.exponentialRampToValueAtTime(0.0001, releaseAt + releaseSeconds);
+  }
+
+  function envSeconds(timecents, fallback) {
+    const value = Number(timecents);
+    return Number.isFinite(value) && timecents != null ? 2 ** (clamp(value, -12000, 8000) / 1200) : fallback;
+  }
+
   function adaptSharedPreset(soundBank, preset) {
     if (!soundBank || !preset) {
       throw new Error(i18nText("soundbank.no_playable_preset"));
@@ -104,10 +128,11 @@
         velocityRange: normalizeSharedRange(region.velRange),
         pan: 0,
         gain: 10 ** (-attenuation / 200),
-        attack: 0.006,
-        decay: 1.2,
-        sustainAttenuation: 0,
-        release: 0.4,
+        // 사운드폰트의 볼륨 엔벨로프(타임센트)를 쓰고, 없으면 예전 고정값을 씁니다.
+        attack: envSeconds(region.attackVolEnv, 0.006),
+        decay: envSeconds(region.decayVolEnv, 1.2),
+        sustainAttenuation: Number.isFinite(Number(region.sustainVolEnv)) ? clamp(Number(region.sustainVolEnv), 0, 1440) : 0,
+        release: envSeconds(region.releaseVolEnv, 0.4),
         loop: ((Number(region.sampleModes) || 0) & 1) !== 0 && loopEnd - loopStart > 8,
         loopRegion: region,
       };
@@ -563,9 +588,9 @@
         loopEnd,
         zoneGain: zone.gain,
         sustainRatio: 10 ** (-zone.sustainAttenuation / 200),
-        attack: clamp(zone.attack, 0.003, 0.25),
-        decay: clamp(zone.decay, 0.03, 8),
-        release: clamp(zone.release, 0.06, 3.5),
+        attack: clamp(zone.attack, 0.001, 20),
+        decay: clamp(zone.decay, 0.001, 20),
+        release: clamp(zone.release, 0.004, 20),
       });
       this.offlineRenderTemplateCache.set(cacheKey, template);
       return template;
@@ -610,13 +635,7 @@
       if (Number.isFinite(duration) && duration > 0) {
         const releaseAt = Math.max(context.currentTime, when + duration);
         const releaseSeconds = template.release;
-        if (typeof gain.gain.cancelAndHoldAtTime === "function") {
-          gain.gain.cancelAndHoldAtTime(releaseAt);
-        } else {
-          gain.gain.cancelScheduledValues(releaseAt);
-          gain.gain.setValueAtTime(Math.max(0.0001, peak), releaseAt);
-        }
-        gain.gain.exponentialRampToValueAtTime(0.0001, releaseAt + releaseSeconds);
+        holdGainAndRelease(gain.gain, releaseAt, releaseSeconds, envelopeLevelAt(releaseAt, when, template.attack, template.decay, peak, sustain));
         try { source.stop(releaseAt + releaseSeconds + 0.03); } catch {}
       }
       // Detach finished voices so the offline graph stays small during long renders.
@@ -669,13 +688,7 @@
 
       if (Number.isFinite(duration) && duration > 0) {
         const releaseAt = Math.max(context.currentTime, when + duration);
-        if (typeof gain.gain.cancelAndHoldAtTime === "function") {
-          gain.gain.cancelAndHoldAtTime(releaseAt);
-        } else {
-          gain.gain.cancelScheduledValues(releaseAt);
-          gain.gain.setValueAtTime(Math.max(0.0001, peak), releaseAt);
-        }
-        gain.gain.exponentialRampToValueAtTime(0.0001, releaseAt + releaseSeconds);
+        holdGainAndRelease(gain.gain, releaseAt, releaseSeconds, envelopeLevelAt(releaseAt, when, 0.008, 0.692, peak, peak * 0.32));
         try { oscillatorA.stop(releaseAt + releaseSeconds + 0.03); } catch {}
         try { oscillatorB.stop(releaseAt + releaseSeconds + 0.03); } catch {}
       }
@@ -710,9 +723,9 @@
         : Math.pow(velocity / 127, 1.5) * zone.gain * 0.9 * safeGainScale;
       const peak = clamp(peakBase, 0.0001, 1.2);
       const sustain = peak * 10 ** (-zone.sustainAttenuation / 200);
-      const attack = clamp(zone.attack, 0.003, 0.25);
-      const decay = clamp(zone.decay, 0.03, 8);
-      const release = clamp(zone.release, 0.06, 3.5);
+      const attack = clamp(zone.attack, 0.001, 20);
+      const decay = clamp(zone.decay, 0.001, 20);
+      const release = clamp(zone.release, 0.004, 20);
 
       source.buffer = buffer;
       source.playbackRate.value = 2 ** (centsFromRoot / 1200);
@@ -748,15 +761,9 @@
             return;
           }
           voice.releaseAt = releaseAt;
-          const releaseSeconds = clamp(releaseOverride, 0.025, 3.5);
+          const releaseSeconds = clamp(releaseOverride, 0.004, 20);
           voice.releaseEndAt = releaseAt + releaseSeconds + 0.03;
-          if (typeof gain.gain.cancelAndHoldAtTime === "function") {
-            gain.gain.cancelAndHoldAtTime(releaseAt);
-          } else {
-            gain.gain.cancelScheduledValues(releaseAt);
-            gain.gain.setValueAtTime(Math.max(0.0001, peak), releaseAt);
-          }
-          gain.gain.exponentialRampToValueAtTime(0.0001, releaseAt + releaseSeconds);
+          holdGainAndRelease(gain.gain, releaseAt, releaseSeconds, envelopeLevelAt(releaseAt, when, attack, decay, peak, sustain));
           try {
             source.stop(releaseAt + releaseSeconds + 0.03);
           } catch {
@@ -770,12 +777,10 @@
           voice.releaseAt = Math.min(voice.releaseAt, stopAt);
           voice.releaseEndAt = Math.min(voice.releaseEndAt, fadeEnd + 0.004);
           try {
-            if (typeof gain.gain.cancelAndHoldAtTime === "function") {
-              gain.gain.cancelAndHoldAtTime(stopAt);
-            } else {
-              gain.gain.cancelScheduledValues(stopAt);
-              gain.gain.setValueAtTime(Math.max(0.0001, gain.gain.value || peak), stopAt);
-            }
+            // 곧바로 멈추는 용도라 지금 게인 값을 읽어 고정한 뒤 짧게 줄입니다.
+            const currentLevel = Math.max(0.0001, gain.gain.value || peak);
+            gain.gain.cancelScheduledValues(stopAt);
+            gain.gain.setValueAtTime(currentLevel, stopAt);
             gain.gain.linearRampToValueAtTime(0.0001, fadeEnd);
           } catch {}
           try { source.stop(fadeEnd + 0.004); } catch {}
@@ -856,13 +861,7 @@
           voice.releaseAt = releaseAt;
           const releaseSeconds = clamp(releaseOverride, 0.025, 1.5);
           voice.releaseEndAt = releaseAt + releaseSeconds + 0.03;
-          if (typeof gain.gain.cancelAndHoldAtTime === "function") {
-            gain.gain.cancelAndHoldAtTime(releaseAt);
-          } else {
-            gain.gain.cancelScheduledValues(releaseAt);
-            gain.gain.setValueAtTime(Math.max(0.0001, peak), releaseAt);
-          }
-          gain.gain.exponentialRampToValueAtTime(0.0001, releaseAt + releaseSeconds);
+          holdGainAndRelease(gain.gain, releaseAt, releaseSeconds, envelopeLevelAt(releaseAt, when, 0.008, 0.692, peak, peak * 0.32));
           try { oscillatorA.stop(releaseAt + releaseSeconds + 0.03); } catch {}
           try { oscillatorB.stop(releaseAt + releaseSeconds + 0.03); } catch {}
         },

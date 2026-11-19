@@ -4807,7 +4807,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   let playbackScheduleCursor = 0;
   let scheduledNoteIds = new Set();
   let schedulerTimer = 0;
-  const PLAY_START_DELAY = 0.18;
+  const PLAY_START_DELAY = 0.03;
   const SCHEDULE_AHEAD_SEC = 1.6;
   const SCHEDULE_INTERVAL_MS = 80;
   let isPlaying = false;
@@ -8885,7 +8885,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const duration = notes.reduce((m, n) => Math.max(m, (Number(n.start) || 0) + (Number(n.durationSec) || 0)), 0);
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
       const result = schedulePreparedNotes(ctx, prepared, {
-        baseTime: ctx.currentTime + 0.08,
+        baseTime: ctx.currentTime + 0.03,
         fromSec: 0,
         playbackSpeed,
         windowStart: 0,
@@ -8999,7 +8999,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const gainScale = computeAutoGainScale(prepared, { windowStart: fromSec, windowEnd });
 
       const result = schedulePreparedNotes(ctx, prepared, {
-        baseTime: ctx.currentTime + 0.08,
+        baseTime: ctx.currentTime + 0.03,
         fromSec,
         playbackSpeed,
         windowStart: fromSec,
@@ -10481,7 +10481,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (previewToken !== midiInstrumentPreviewToken) return;
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: preview.duration });
       const result = schedulePreparedNotes(ctx, prepared, {
-        baseTime: ctx.currentTime + 0.08,
+        baseTime: ctx.currentTime + 0.03,
         fromSec: 0,
         windowStart: 0,
         windowEnd: Math.max(0.5, preview.duration + 0.1),
@@ -11035,7 +11035,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
       const result = schedulePreparedNotes(ctx, prepared, {
-        baseTime: ctx.currentTime + 0.08,
+        baseTime: ctx.currentTime + 0.03,
         fromSec: 0,
         windowStart: 0,
         windowEnd: Math.max(0.5, duration + 0.1),
