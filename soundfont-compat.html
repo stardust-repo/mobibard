@@ -14,7 +14,14 @@ code,pre{background:var(--code);border-radius:6px;font:13px/1.5 ui-monospace,Con
 table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid var(--line);padding:4px 8px;text-align:left}
 a{color:var(--acc)}.langs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}.langs button{border:1px solid var(--line);background:none;color:var(--fg);border-radius:6px;padding:3px 10px;cursor:pointer}.langs button[aria-pressed=true]{background:var(--acc);color:#fff;border-color:var(--acc)}
 .mut{color:var(--mut)}[data-l]{display:none}
-</style>
+.tool{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center}
+.t-lab{font-weight:600;font-size:14px}
+.tool input[type=file]{min-width:0;font-size:13px;color:var(--mut)}
+.tool input[type=file]::file-selector-button{margin-right:10px;border:1px solid var(--line);background:var(--code);color:var(--fg);border-radius:6px;padding:5px 12px;cursor:pointer}
+.tool input[type=text]{justify-self:start;background:var(--code);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:13px ui-monospace,Consolas,monospace}
+.tool button.t-go{grid-column:2;justify-self:start;border:0;background:var(--acc);color:#fff;border-radius:6px;padding:7px 16px;font-weight:600;cursor:pointer}
+.t-msg{grid-column:1/-1;margin:0;font-size:13px;color:var(--mut);min-height:1.2em}
+h3{font-size:15px;margin:1.2em 0 .4em}</style>
 </head>
 <body><main>
 <div class="langs" id="langs"></div>
@@ -25,9 +32,17 @@ a{color:var(--acc)}.langs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 <h2>1. 호환 표시 넣기</h2>
 <p>파일의 RIFF <code>INFO</code> 목록 안 <code>ICMT</code>(Comment)에 아래 두 줄을 넣습니다.</p>
 <pre>MobiBard-Compatible: 1
-MobiBard-Version: v1.0</pre>
-<p>SF2/SF3는 Polyphone·Swami 등의 "Comments" 항목, DLS는 Gigasampler/DLS 편집기의 Comments에 입력하면 됩니다. 편집기가 마땅치 않으면 <a href="tools/add_mobibard_marker.py">add_mobibard_marker.py</a>로 샘플·프리셋은 그대로 두고 표시만 추가할 수 있습니다.</p>
-<pre>python add_mobibard_marker.py 원본.dls 결과.dls</pre>
+MobiBard-Version: v2.0</pre>
+<p>SF2/SF3는 Polyphone·Swami 등의 "Comments" 항목, DLS는 DLS 편집기의 Comments에 입력하면 됩니다. 편집기가 마땅치 않으면 아래 도구로 이 페이지에서 바로 추가할 수 있습니다.</p>
+<h3>표시 바로 추가하기</h3>
+<div class="tool" data-ok="완료: 다운로드했습니다." data-upd="이미 호환 표시가 있어 값을 갱신했습니다." data-bad="SF2/SF3/DLS 파일이 아닙니다." data-badv="버전 형식이 올바르지 않습니다. 예: v2.0" data-nof="파일을 먼저 선택하세요.">
+<label class="t-lab" for="tf-ko">파일</label>
+<input type="file" class="t-file" id="tf-ko" accept=".sf2,.sf3,.dls">
+<label class="t-lab" for="tv-ko">버전</label>
+<input type="text" class="t-ver" id="tv-ko" value="v2.0" size="8">
+<button type="button" class="t-go">표시 추가하고 다운로드</button>
+<p class="t-msg" aria-live="polite"></p>
+</div>
 <h2>2. 프리셋 배치 (Bank 0)</h2>
 <table><tr><th>번호</th><th>악기</th><th>번호</th><th>악기</th></tr>
 <tr><td>0</td><td>Piano (기본/대체)</td><td>8</td><td>Music Box</td></tr><tr><td>1</td><td>Chalumeau</td><td>9</td><td>Guitar</td></tr><tr><td>2</td><td>Flute</td><td>10</td><td>Harmonica</td></tr><tr><td>3</td><td>Harp</td><td>11</td><td>Cat (보컬)</td></tr><tr><td>4</td><td>Lute</td><td>12</td><td>Big Drum</td></tr><tr><td>5</td><td>Mandolin</td><td>13</td><td>Cymbals</td></tr><tr><td>6</td><td>Violin</td><td>14</td><td>Gramophone</td></tr><tr><td>7</td><td>Xylophone</td><td></td><td></td></tr></table>
@@ -50,9 +65,17 @@ MobiBard-Version: v1.0</pre>
 <h2>1. Add the marker</h2>
 <p>Put these two lines in the <code>ICMT</code> (Comment) entry of the file's RIFF <code>INFO</code> list:</p>
 <pre>MobiBard-Compatible: 1
-MobiBard-Version: v1.0</pre>
-<p>Use the "Comments" field in Polyphone/Swami (SF2/SF3) or a DLS editor. Or run <a href="tools/add_mobibard_marker.py">add_mobibard_marker.py</a>, which only adds the marker and leaves samples and presets untouched.</p>
-<pre>python add_mobibard_marker.py input.dls output.dls</pre>
+MobiBard-Version: v2.0</pre>
+<p>Use the "Comments" field in Polyphone/Swami (SF2/SF3) or a DLS editor. If you have no editor, add it right here with the tool below.</p>
+<h3>Add the marker here</h3>
+<div class="tool" data-ok="Done: file downloaded." data-upd="The file already had a marker; it was updated." data-bad="Not an SF2/SF3/DLS file." data-badv="Invalid version. Example: v2.0" data-nof="Choose a file first.">
+<label class="t-lab" for="tf-en">File</label>
+<input type="file" class="t-file" id="tf-en" accept=".sf2,.sf3,.dls">
+<label class="t-lab" for="tv-en">Version</label>
+<input type="text" class="t-ver" id="tv-en" value="v2.0" size="8">
+<button type="button" class="t-go">Add marker and download</button>
+<p class="t-msg" aria-live="polite"></p>
+</div>
 <h2>2. Preset layout (Bank 0)</h2>
 <table><tr><th>#</th><th>Instrument</th><th>#</th><th>Instrument</th></tr>
 <tr><td>0</td><td>Piano (default/fallback)</td><td>8</td><td>Music Box</td></tr><tr><td>1</td><td>Chalumeau</td><td>9</td><td>Guitar</td></tr><tr><td>2</td><td>Flute</td><td>10</td><td>Harmonica</td></tr><tr><td>3</td><td>Harp</td><td>11</td><td>Cat (vocal)</td></tr><tr><td>4</td><td>Lute</td><td>12</td><td>Big Drum</td></tr><tr><td>5</td><td>Mandolin</td><td>13</td><td>Cymbals</td></tr><tr><td>6</td><td>Violin</td><td>14</td><td>Gramophone</td></tr><tr><td>7</td><td>Xylophone</td><td></td><td></td></tr></table>
@@ -75,9 +98,17 @@ MobiBard-Version: v1.0</pre>
 <h2>1. マーカーを入れる</h2>
 <p>RIFF <code>INFO</code> リストの <code>ICMT</code>(コメント)に次の2行を入れます。</p>
 <pre>MobiBard-Compatible: 1
-MobiBard-Version: v1.0</pre>
-<p>Polyphone/Swami(SF2/SF3)やDLSエディタの「Comments」欄に入力します。<a href="tools/add_mobibard_marker.py">add_mobibard_marker.py</a> を使うと、サンプルやプリセットはそのままマーカーだけ追加できます。</p>
-<pre>python add_mobibard_marker.py input.dls output.dls</pre>
+MobiBard-Version: v2.0</pre>
+<p>Polyphone/Swami(SF2/SF3)やDLSエディタの「Comments」欄に入力します。エディタがない場合は、下のツールでこのページ上から追加できます。</p>
+<h3>ここでマーカーを追加</h3>
+<div class="tool" data-ok="完了:ダウンロードしました。" data-upd="すでにマーカーがあったため、値を更新しました。" data-bad="SF2/SF3/DLSファイルではありません。" data-badv="バージョン形式が正しくありません。例: v2.0" data-nof="先にファイルを選択してください。">
+<label class="t-lab" for="tf-ja">ファイル</label>
+<input type="file" class="t-file" id="tf-ja" accept=".sf2,.sf3,.dls">
+<label class="t-lab" for="tv-ja">バージョン</label>
+<input type="text" class="t-ver" id="tv-ja" value="v2.0" size="8">
+<button type="button" class="t-go">マーカーを追加してダウンロード</button>
+<p class="t-msg" aria-live="polite"></p>
+</div>
 <h2>2. プリセット配置(Bank 0)</h2>
 <table><tr><th>No.</th><th>楽器</th><th>No.</th><th>楽器</th></tr>
 <tr><td>0</td><td>Piano(既定/代替)</td><td>8</td><td>Music Box</td></tr><tr><td>1</td><td>Chalumeau</td><td>9</td><td>Guitar</td></tr><tr><td>2</td><td>Flute</td><td>10</td><td>Harmonica</td></tr><tr><td>3</td><td>Harp</td><td>11</td><td>Cat(ボーカル)</td></tr><tr><td>4</td><td>Lute</td><td>12</td><td>Big Drum</td></tr><tr><td>5</td><td>Mandolin</td><td>13</td><td>Cymbals</td></tr><tr><td>6</td><td>Violin</td><td>14</td><td>Gramophone</td></tr><tr><td>7</td><td>Xylophone</td><td></td><td></td></tr></table>
@@ -100,9 +131,17 @@ MobiBard-Version: v1.0</pre>
 <h2>1. 添加标记</h2>
 <p>在文件 RIFF <code>INFO</code> 列表的 <code>ICMT</code>(注释)中写入以下两行：</p>
 <pre>MobiBard-Compatible: 1
-MobiBard-Version: v1.0</pre>
-<p>可在 Polyphone/Swami(SF2/SF3)或 DLS 编辑器的"Comments"中填写；也可用 <a href="tools/add_mobibard_marker.py">add_mobibard_marker.py</a>，只添加标记，不改动采样和预设。</p>
-<pre>python add_mobibard_marker.py input.dls output.dls</pre>
+MobiBard-Version: v2.0</pre>
+<p>可在 Polyphone/Swami(SF2/SF3)或 DLS 编辑器的「Comments」中填写。没有编辑器的话，可用下面的工具直接在本页添加。</p>
+<h3>在此直接添加标记</h3>
+<div class="tool" data-ok="完成：已下载。" data-upd="文件已有标记，已更新其值。" data-bad="不是 SF2/SF3/DLS 文件。" data-badv="版本格式不正确。例：v2.0" data-nof="请先选择文件。">
+<label class="t-lab" for="tf-zh-CN">文件</label>
+<input type="file" class="t-file" id="tf-zh-CN" accept=".sf2,.sf3,.dls">
+<label class="t-lab" for="tv-zh-CN">版本</label>
+<input type="text" class="t-ver" id="tv-zh-CN" value="v2.0" size="8">
+<button type="button" class="t-go">添加标记并下载</button>
+<p class="t-msg" aria-live="polite"></p>
+</div>
 <h2>2. 预设布局 (Bank 0)</h2>
 <table><tr><th>编号</th><th>乐器</th><th>编号</th><th>乐器</th></tr>
 <tr><td>0</td><td>Piano(默认/回退)</td><td>8</td><td>Music Box</td></tr><tr><td>1</td><td>Chalumeau</td><td>9</td><td>Guitar</td></tr><tr><td>2</td><td>Flute</td><td>10</td><td>Harmonica</td></tr><tr><td>3</td><td>Harp</td><td>11</td><td>Cat(人声)</td></tr><tr><td>4</td><td>Lute</td><td>12</td><td>Big Drum</td></tr><tr><td>5</td><td>Mandolin</td><td>13</td><td>Cymbals</td></tr><tr><td>6</td><td>Violin</td><td>14</td><td>Gramophone</td></tr><tr><td>7</td><td>Xylophone</td><td></td><td></td></tr></table>
@@ -125,9 +164,17 @@ MobiBard-Version: v1.0</pre>
 <h2>1. 加入標記</h2>
 <p>在檔案 RIFF <code>INFO</code> 清單的 <code>ICMT</code>(註解)中寫入以下兩行：</p>
 <pre>MobiBard-Compatible: 1
-MobiBard-Version: v1.0</pre>
-<p>可在 Polyphone/Swami(SF2/SF3)或 DLS 編輯器的「Comments」填寫；也可使用 <a href="tools/add_mobibard_marker.py">add_mobibard_marker.py</a>，只加入標記，不更動取樣與預設。</p>
-<pre>python add_mobibard_marker.py input.dls output.dls</pre>
+MobiBard-Version: v2.0</pre>
+<p>可在 Polyphone/Swami(SF2/SF3)或 DLS 編輯器的「Comments」填寫。沒有編輯器的話，可用下方工具直接在本頁加入。</p>
+<h3>在此直接加入標記</h3>
+<div class="tool" data-ok="完成：已下載。" data-upd="檔案已有標記，已更新其值。" data-bad="不是 SF2/SF3/DLS 檔案。" data-badv="版本格式不正確。例：v2.0" data-nof="請先選擇檔案。">
+<label class="t-lab" for="tf-zh-TW">檔案</label>
+<input type="file" class="t-file" id="tf-zh-TW" accept=".sf2,.sf3,.dls">
+<label class="t-lab" for="tv-zh-TW">版本</label>
+<input type="text" class="t-ver" id="tv-zh-TW" value="v2.0" size="8">
+<button type="button" class="t-go">加入標記並下載</button>
+<p class="t-msg" aria-live="polite"></p>
+</div>
 <h2>2. 預設配置 (Bank 0)</h2>
 <table><tr><th>編號</th><th>樂器</th><th>編號</th><th>樂器</th></tr>
 <tr><td>0</td><td>Piano(預設/備援)</td><td>8</td><td>Music Box</td></tr><tr><td>1</td><td>Chalumeau</td><td>9</td><td>Guitar</td></tr><tr><td>2</td><td>Flute</td><td>10</td><td>Harmonica</td></tr><tr><td>3</td><td>Harp</td><td>11</td><td>Cat(人聲)</td></tr><tr><td>4</td><td>Lute</td><td>12</td><td>Big Drum</td></tr><tr><td>5</td><td>Mandolin</td><td>13</td><td>Cymbals</td></tr><tr><td>6</td><td>Violin</td><td>14</td><td>Gramophone</td></tr><tr><td>7</td><td>Xylophone</td><td></td><td></td></tr></table>
@@ -158,6 +205,53 @@ MobiBard-Version: v1.0</pre>
     box.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-pressed",b.dataset.c==c)})}
   L.forEach(function(x){var b=document.createElement("button");b.textContent=x[1];b.dataset.c=x[0];b.onclick=function(){show(x[0])};box.appendChild(b)});
   show(cur);
+})();
+
+(function(){
+  function chunks(d,s,e){var o=[],p=s;while(p+8<=e){var sz=d[p+4]|d[p+5]<<8|d[p+6]<<16|d[p+7]*16777216;o.push([String.fromCharCode(d[p],d[p+1],d[p+2],d[p+3]),p,sz]);p+=8+sz+(sz&1)}return o}
+  function mk(id,payload){var n=payload.length,out=new Uint8Array(8+n+(n&1));for(var i=0;i<4;i++)out[i]=id.charCodeAt(i);out[4]=n&255;out[5]=n>>8&255;out[6]=n>>16&255;out[7]=n>>>24;out.set(payload,8);return out}
+  function cat(a){var n=0;a.forEach(function(x){n+=x.length});var o=new Uint8Array(n),p=0;a.forEach(function(x){o.set(x,p);p+=x.length});return o}
+  function addMarker(d,version){
+    var form=String.fromCharCode(d[8],d[9],d[10],d[11]);
+    if(String.fromCharCode(d[0],d[1],d[2],d[3])!=="RIFF"||(form!=="DLS "&&form!=="sfbk"))return null;
+    var txt="MobiBard-Compatible: 1\r\nMobiBard-Version: "+version+"\r\nMobiBard instrument bank.";
+    var enc=new TextEncoder().encode(txt),cm=new Uint8Array(enc.length+1);cm.set(enc);
+    var parts=[],done=false,updated=false,list=chunks(d,12,d.length);
+    list.forEach(function(c){
+      var raw=d.subarray(c[1],c[1]+8+c[2]+(c[2]&1));
+      if(c[0]==="LIST"&&String.fromCharCode(d[c[1]+8],d[c[1]+9],d[c[1]+10],d[c[1]+11])==="INFO"){
+        var items=[],has=false;
+        chunks(d,c[1]+12,c[1]+8+c[2]).forEach(function(s){
+          if(s[0]==="ICMT"){items.push(mk("ICMT",cm));has=true;updated=true}
+          else items.push(d.subarray(s[1],s[1]+8+s[2]+(s[2]&1)));
+        });
+        if(!has)items.push(mk("ICMT",cm));
+        raw=mk("LIST",cat([new TextEncoder().encode("INFO")].concat(items)));done=true;
+      }
+      parts.push(raw);
+    });
+    if(!done)parts.unshift(mk("LIST",cat([new TextEncoder().encode("INFO"),mk("ICMT",cm)])));
+    var body=cat([d.subarray(8,12)].concat(parts)),out=new Uint8Array(8+body.length);
+    out.set(d.subarray(0,4));out[4]=body.length&255;out[5]=body.length>>8&255;out[6]=body.length>>16&255;out[7]=body.length>>>24;out.set(body,8);
+    return {bytes:out,updated:updated};
+  }
+  document.querySelectorAll(".tool").forEach(function(box){
+    var msg=box.querySelector(".t-msg");
+    box.querySelector(".t-go").onclick=function(){
+      var f=box.querySelector(".t-file").files[0],v=box.querySelector(".t-ver").value.trim();
+      if(!f){msg.textContent=box.dataset.nof;return}
+      if(!/^v?\d+(\.\d+){0,2}$/.test(v)){msg.textContent=box.dataset.badv;return}
+      if(v[0]!=="v")v="v"+v;
+      f.arrayBuffer().then(function(buf){
+        var r=addMarker(new Uint8Array(buf),v);
+        if(!r){msg.textContent=box.dataset.bad;return}
+        var m=/^(.*?)(\.[^.]+)?$/.exec(f.name),name=m[1]+"_MobiBard"+(m[2]||"");
+        var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([r.bytes],{type:"application/octet-stream"}));a.download=name;
+        document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);
+        msg.textContent=(r.updated?box.dataset.upd+" ":"")+box.dataset.ok+" ("+name+")";
+      });
+    };
+  });
 })();
 </script>
 </main></body></html>

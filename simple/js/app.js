@@ -930,6 +930,7 @@
   }
 
   async function ensureFixedPlaybackPreset() {
+    try { await window.MobibardSoundStack?.ready?.(); } catch (_) {}
     if (playbackSoundFont && fixedPlaybackPreset) return fixedPlaybackPreset;
     if (!playbackSoundFontPromise) {
       playbackSoundFontPromise = (async () => {
@@ -1025,6 +1026,28 @@
     return preset || fixedPlaybackPreset;
   }
 
+  // Shared SoundFont list: user fonts (top = highest priority) are asked first for this instrument.
+  function stackBankPresetForInstrument(instId) {
+    const stack = window.MobibardSoundStack;
+    if (!stack?.banks?.length) return null;
+    const targets = window.MobibardDefaultInstrumentMap?.targets || [];
+    const id = ARRANGER_TO_SOUNDFONT_ID[instId] || instId;
+    const target = targets.find(item => item.id === id) || targets.find(item => item.id === "piano");
+    const picked = target ? stack.pick({ targetPreset: target.preset }) : null;
+    return picked?.preset && picked?.soundBank ? { soundBank: picked.soundBank, preset: picked.preset } : null;
+  }
+
+  let soundStackChanges = 0;
+  window.MobibardSoundStack?.onChange?.(() => {
+    soundStackChanges += 1;
+    if (soundStackChanges <= 1) return;
+    // Fonts changed while playing: continue from the same spot with the new sound.
+    const wasPlaying = playbackPlaying;
+    try { stopPlayback(true); } catch (_) {}
+    preparedPlaybackNotes = null;
+    if (wasPlaying) void startPlayback();
+  });
+
   function prepareFixedPlaybackNotes() {
     const playbackApi = window.MobibardSimplePlayback;
     if (!playbackSchedule || !playbackSoundFont || !fixedPlaybackPreset || !playbackApi?.prepareNotes) return [];
@@ -1033,8 +1056,10 @@
     for (let part = 0; part < 6; part += 1) {
       const partNotes = notes.filter(note => Number(note.part) === part);
       if (!partNotes.length) continue;
-      const preset = presetForInstrument(currentPartInstIds[part] || "piano");
-      prepared.push(...playbackApi.prepareNotes(audioCtx, playbackSoundFont, preset, partNotes));
+      const instId = currentPartInstIds[part] || "piano";
+      const stacked = stackBankPresetForInstrument(instId);
+      const preset = stacked ? stacked.preset : presetForInstrument(instId);
+      prepared.push(...playbackApi.prepareNotes(audioCtx, stacked ? stacked.soundBank : playbackSoundFont, preset, partNotes));
     }
     prepared.sort((x, y) => x.start - y.start || x.part - y.part || x.midi - y.midi);
     for (let i = 0; i < prepared.length; i++) prepared[i].id = i;

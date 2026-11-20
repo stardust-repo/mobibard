@@ -1661,6 +1661,7 @@ async function ensureMidiPreviewAudioContext() {
 }
 
 async function ensureMidiPreviewPreset() {
+  try { await window.MobibardSoundStack?.ready?.(); } catch (_) {}
   if (midiPreviewSoundBank && midiPreviewPreset) return midiPreviewPreset;
   if (!midiPreviewPresetPromise) {
     midiPreviewPresetPromise = (async () => {
@@ -1683,10 +1684,12 @@ async function ensureMidiPreviewPreset() {
 function prepareMidiPreviewNotes() {
   const api = window.MabiSoundBank;
   if (!midiPreviewSchedule || !midiPreviewSoundBank || !midiPreviewPreset || !api?.prepareNotes) return [];
+  // Shared SoundFont list: user fonts (top = highest priority) get the first chance for Piano.
+  const stacked = window.MobibardSoundStack?.pick?.({ targetPreset: 0 });
   const prepared = api.prepareNotes(
     midiPreviewAudioContext,
-    midiPreviewSoundBank,
-    midiPreviewPreset,
+    stacked?.soundBank || midiPreviewSoundBank,
+    stacked?.preset || midiPreviewPreset,
     midiPreviewSchedule.notes || [],
   );
   for (let index = 0; index < prepared.length; index += 1) prepared[index].id = index;
@@ -1801,6 +1804,17 @@ function finishMidiPreview() {
   midiPreviewOffset = duration;
   setMidiPreviewSlider(duration);
 }
+
+// Fonts changed while the preview plays: continue from the same spot with the new sound.
+let rollscriptorStackChanges = 0;
+window.MobibardSoundStack?.onChange?.(() => {
+  rollscriptorStackChanges += 1;
+  if (rollscriptorStackChanges <= 1) return;
+  midiPreviewPreparedNotes = null;
+  if (!midiPreviewPlaying) return;
+  stopMidiPreview(true);
+  void startMidiPreview();
+});
 
 function toggleMidiPreview() {
   if (midiPreviewPlaying) stopMidiPreview(true);

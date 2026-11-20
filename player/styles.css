@@ -10741,3 +10741,23 @@ a[class*="button"]:hover {
 :root[data-theme="dark"] #midiRecommendDialog #midiRecommendCancelBtn { background: #1f2937 !important; color: #e5e7eb !important; }
 :root[data-theme="dark"] #midiBulkAssignDialog #midiBulkSelectBtn,
 :root[data-theme="dark"] #midiRecommendDialog #midiRecommendOkBtn { background: #818cf8 !important; color: #fff !important; }
+
+/* rev 20261120p4: 소리 설정 팝업 간결 정리 */
+#partSoundDialog.mml-dialog { width: min(92vw, 560px) !important; max-width: 560px !important; }
+#partSoundDialog .part-sound-card { gap: 10px; }
+#partSoundDialog .part-sound-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+#partSoundDialog .part-sound-preset-row {
+  grid-template-columns: auto minmax(0, 1fr) !important; align-items: center !important; gap: 10px !important;
+  padding: 0 0 10px !important; border-bottom: 1px solid var(--line) !important; border-radius: 0 !important;
+}
+#partSoundDialog .part-sound-preset-row > .dialog-field { font-size: 13px; font-weight: 800; white-space: nowrap; }
+#partSoundDialog .part-sound-preset-control { grid-template-columns: minmax(0, 1fr) auto auto; }
+#partSoundDialog .part-sound-preset-control button { min-height: 30px; padding: 4px 10px; font-size: 12.5px; }
+#partSoundDialog .part-sound-rows { gap: 2px; }
+#partSoundDialog .part-sound-row {
+  grid-template-columns: 56px minmax(0, 1fr); gap: 8px; padding: 3px 0; border: 0; border-radius: 0; background: transparent;
+}
+#partSoundDialog .part-sound-label { font-size: 13px; }
+#partSoundDialog .part-sound-row select, #partSoundDialog .part-sound-preset-row select { min-height: 30px; padding: 4px 8px; }
+#partSoundDialog .part-sound-preview-btn { min-width: 0; min-height: 30px; padding: 4px 10px; font-size: 12.5px; }
+@media (max-width: 560px) { #partSoundDialog .part-sound-row { grid-template-columns: 56px minmax(0, 1fr); } }

@@ -1086,6 +1086,7 @@
   async function prepareAudioNotes() {
     if (!state.schedule) return [];
     const audioCtx = await ensureAudioContext();
+    try { await window.MobibardSoundStack?.ready?.(); } catch (_) {}
     if (!state.soundFont) {
       state.preparedAudioNotes = null;
       state.audioGainScale = 0.72;
@@ -1096,9 +1097,12 @@
     for (let part = 0; part < 6; part++) {
       const partNotes = state.schedule.notes.filter((note) => note.part === part && note.volume > 0);
       if (!partNotes.length) continue;
-      const preset = findSoundBankPreset(state.soundFont, ...parseInstrumentKey(state.instruments[part]));
+      const [program, bankNo] = parseInstrumentKey(state.instruments[part]);
+      const preset = findSoundBankPreset(state.soundFont, program, bankNo);
       if (!preset) continue;
-      prepared.push(...prepareNotes(audioCtx, state.soundFont, preset, partNotes));
+      // Shared SoundFont list: user fonts (top = highest priority) get the first chance for this instrument.
+      const stacked = bankNo === 0 && program <= 13 ? window.MobibardSoundStack?.pick?.({ targetPreset: program }) : null;
+      prepared.push(...prepareNotes(audioCtx, stacked?.soundBank || state.soundFont, stacked?.preset || preset, partNotes));
     }
     prepared.sort((a, b) => a.start - b.start || a.part - b.part || a.midi - b.midi);
     prepared.forEach((note, index) => { note.id = index; });

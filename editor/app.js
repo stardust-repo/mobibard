@@ -3697,8 +3697,19 @@
     return isDrumInstrumentName(channel?.instrument) ? 128 : 0;
   }
 
+  // instrumentExactPreset: true / false, or a SoundFont key string (exact preset from that font).
   function getChannelInstrumentExactPreset(channel) {
-    return channel?.instrumentExactPreset === true;
+    const value = channel?.instrumentExactPreset;
+    return typeof value === "string" && value ? value : value === true;
+  }
+
+  function getChannelInstrumentFont(channel) {
+    const value = channel?.instrumentExactPreset;
+    return typeof value === "string" ? value : "";
+  }
+
+  function editorExactValue(value) {
+    return typeof value === "string" && value ? value : Boolean(value);
   }
 
   function isChannelPercussionInstrument(channel) {
@@ -3708,21 +3719,54 @@
     return isEditorUsingEmbeddedDefaultSoundBank() && bank === 0 && (program === 12 || program === 13);
   }
 
-  function editorPresetKey(bank = 0, program = 0) {
-    return `${clamp(Math.round(Number(bank) || 0), 0, 16383)}:${clamp(Math.round(Number(program) || 0), 0, 127)}`;
+  function editorPresetKey(bank = 0, program = 0, font = "") {
+    const base = `${clamp(Math.round(Number(bank) || 0), 0, 16383)}:${clamp(Math.round(Number(program) || 0), 0, 127)}`;
+    return font ? `${font}@${base}` : base;
   }
 
   function parseEditorPresetKey(value) {
-    const match = String(value || "").match(/^(\d+):(\d+)$/);
-    if (!match) return { bank: 0, program: 0 };
+    const match = String(value || "").match(/^(?:([^@]+)@)?(\d+):(\d+)$/);
+    if (!match) return { bank: 0, program: 0, font: "" };
     return {
-      bank: clamp(Math.round(Number(match[1]) || 0), 0, 16383),
-      program: clamp(Math.round(Number(match[2]) || 0), 0, 127),
+      font: match[1] || "",
+      bank: clamp(Math.round(Number(match[2]) || 0), 0, 16383),
+      program: clamp(Math.round(Number(match[3]) || 0), 0, 127),
     };
   }
 
-  function getEditorSoundBankPresets() {
-    const soundBank = audioEngine?.soundBank;
+  function getChannelPresetKey(channel) {
+    return editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel), getChannelInstrumentFont(channel));
+  }
+
+  // Menu value that matches the channel's instrument; channels without a font use the first font that has the preset.
+  function getChannelPresetOptionKey(channel) {
+    const key = getChannelPresetKey(channel);
+    const list = getEditorSoundBankPresets();
+    const exact = list.find((preset) => editorPresetKey(preset.bank, preset.preset, preset.fontKey) === key);
+    if (exact) return key;
+    const plain = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
+    const hit = list.find((preset) => editorPresetKey(preset.bank, preset.preset) === plain);
+    return hit ? editorPresetKey(hit.bank, hit.preset, hit.fontKey) : key;
+  }
+
+  const editorBankIds = new WeakMap();
+  let editorBankIdCounter = 0;
+  let editorPresetListCache = { sig: "", list: [] };
+  function editorBankId(bank) {
+    if (!bank || typeof bank !== "object") return 0;
+    let id = editorBankIds.get(bank);
+    if (!id) { id = ++editorBankIdCounter; editorBankIds.set(bank, id); }
+    return id;
+  }
+
+  // Active fonts of the shared SoundFont list, top first (the first one is the "main" font).
+  function getEditorStackFonts() {
+    const stack = window.MobibardSoundStack;
+    if (!stack?.loaded || typeof stack.fontList !== "function") return [];
+    return stack.fontList().filter((font) => !font.disabled && (font.isDefault || font.bank));
+  }
+
+  function collectEditorBankPresets(soundBank, fontKey, fontName) {
     if (!soundBank || !Array.isArray(soundBank.presets)) return [];
     const seen = new Set();
     return soundBank.presets
@@ -3738,12 +3782,70 @@
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
-      });
+      })
+      .map((preset) => (fontName ? Object.create(preset, { fontKey: { value: fontKey }, fontName: { value: fontName } }) : preset));
   }
 
-  function findEditorSoundBankPreset(bank = 0, program = 0) {
+  function editorDefaultInstrumentsLabel() {
+    const lang = String(window.MobibardI18n?.language || state.language || "ko");
+    if (/^ja/i.test(lang)) return "\u57fa\u672c\u306e\u697d\u5668";
+    if (/^zh.*(tw|hant)/i.test(lang)) return "\u9810\u8a2d\u6a02\u5668";
+    if (/^zh/i.test(lang)) return "\u9ed8\u8ba4\u4e50\u5668";
+    if (/^en/i.test(lang)) return "Default instruments";
+    return "\uae30\ubcf8 \uc545\uae30";
+  }
+
+  // All instruments of every active font, in SoundFont-list order.
+  function getEditorSoundBankPresets() {
+    const fonts = getEditorStackFonts();
+    const defaultBank = audioEngine?.soundBank || null;
+    const sig = `${editorDefaultInstrumentsLabel()}|${editorBankId(defaultBank)}:${defaultBank?.presets?.length || 0}|` + fonts.map((font) => `${font.key}#${editorBankId(font.isDefault ? defaultBank : font.bank)}`).join("|");
+    if (sig === editorPresetListCache.sig) return editorPresetListCache.list;
+    let list = [];
+    if (!fonts.length) list = collectEditorBankPresets(defaultBank, "", "");
+    else {
+      // Top group: the fixed MobiBard list (0~14), shown whatever the fonts are. It always follows
+      // the first font (MobiBard layout or plain MIDI mapping), so no font is stored on the channel.
+      const label = editorDefaultInstrumentsLabel();
+      list.push(...collectEditorBankPresets(defaultBank, "", label).filter((preset) => Number(preset.bank) === 0 && Number(preset.preset) <= 14));
+      // Below it: every font's own instruments in list order, except the bundled default when it is
+      // first (its list is the fixed list above). Picking one binds the channel to that font.
+      fonts.filter((font, index) => !(index === 0 && font.isDefault)).forEach((font) => {
+        list.push(...collectEditorBankPresets(font.isDefault ? defaultBank : font.bank, font.key, font.name));
+      });
+    }
+    editorPresetListCache = { sig, list };
+    return list;
+  }
+
+  function findEditorSoundBankPreset(bank = 0, program = 0, font = "") {
     const targetKey = editorPresetKey(bank, program);
-    return getEditorSoundBankPresets().find((preset) => editorPresetKey(preset.bank, preset.preset) === targetKey) || null;
+    const list = getEditorSoundBankPresets();
+    if (font) {
+      const hit = list.find((preset) => preset.fontKey === font && editorPresetKey(preset.bank, preset.preset) === targetKey);
+      if (hit) return hit;
+    }
+    return list.find((preset) => editorPresetKey(preset.bank, preset.preset) === targetKey) || null;
+  }
+
+  // Adds the instrument options to a <select>: one group per font when several fonts are active.
+  function appendEditorPresetOptions(select, presets = getEditorSoundBankPresets()) {
+    const groups = new Map();
+    for (const preset of presets) {
+      const key = preset.fontKey || "";
+      if (!groups.has(key)) groups.set(key, { name: preset.fontName || "", items: [] });
+      groups.get(key).items.push(preset);
+    }
+    const grouped = groups.size > 1;
+    for (const [, group] of groups) {
+      const parent = grouped ? document.createElement("optgroup") : select;
+      if (grouped) parent.label = group.name;
+      for (const preset of group.items) {
+        const bank = clamp(Math.round(Number(preset.bank) || 0), 0, 16383);
+        parent.appendChild(new Option(formatEditorPresetLabel(preset), editorPresetKey(bank, preset.preset, preset.fontKey)));
+      }
+      if (grouped) select.appendChild(parent);
+    }
   }
 
   function formatEditorPresetLabel(preset) {
@@ -3758,12 +3860,64 @@
     if (!channel || !preset) return false;
     channel.instrumentProgram = clamp(Math.round(Number(preset.preset) || 0), 0, 127);
     channel.instrumentBank = clamp(Math.round(Number(preset.bank) || 0), 0, 16383);
-    channel.instrumentExactPreset = true;
+    channel.instrumentExactPreset = preset.fontKey || true;
     channel.instrument = String(preset.name || `Preset ${channel.instrumentProgram + 1}`).trim();
+    applyChannelInstrumentToPlayback(channel);
     return true;
   }
 
+  // While playing, an instrument change is heard at once: the channel's queued and sounding
+  // voices are released and re-scheduled from the current position with the new instrument.
+  const pendingPlaybackInstrumentChannels = new Set();
+  let pendingPlaybackInstrumentTimer = 0;
+  function applyChannelInstrumentToPlayback(channel) {
+    if (!state?.playback?.running || !channel) return;
+    const id = String(channel.id);
+    const program = getChannelInstrumentProgram(channel);
+    const bank = getChannelInstrumentBank(channel);
+    const exact = getChannelInstrumentExactPreset(channel);
+    for (const note of state.playback.notes || []) {
+      if (String(note.source || "channel") !== "channel" || String(note.sourceId ?? "") !== id) continue;
+      note.instrumentProgram = program;
+      note.instrumentBank = bank;
+      note.instrumentExactPreset = exact;
+    }
+    pendingPlaybackInstrumentChannels.add(id);
+    if (pendingPlaybackInstrumentTimer) return;
+    pendingPlaybackInstrumentTimer = window.setTimeout(async () => {
+      pendingPlaybackInstrumentTimer = 0;
+      const ids = [...pendingPlaybackInstrumentChannels];
+      pendingPlaybackInstrumentChannels.clear();
+      for (const channelId of ids) {
+        const target = getChannelById(channelId);
+        if (!target || typeof audioEngine.prepareProgram !== "function") continue;
+        try {
+          await audioEngine.prepareProgram(getChannelInstrumentProgram(target), getChannelInstrumentBank(target), { exactPreset: getChannelInstrumentExactPreset(target) });
+        } catch (error) { console.warn("악기 음원 준비 실패", error); }
+      }
+      refreshRunningPlaybackVoices(ids);
+    }, 0);
+  }
+
+  function refreshRunningPlaybackVoices(channelIds = null) {
+    if (!state.playback.running || !audioEngine.context) return;
+    if (!channelIds) {
+      releasePlaybackVoicesForSource(null, { source: "channel" });
+      releasePlaybackVoicesForSource(null, { source: "midi" });
+      schedulePlaybackCatchupForSource(null, { source: "channel" });
+      schedulePlaybackCatchupForSource(null, { source: "midi" });
+      return;
+    }
+    for (const id of channelIds) {
+      releasePlaybackVoicesForSource(id, { source: "channel" });
+      schedulePlaybackCatchupForSource(id, { source: "channel" });
+    }
+  }
+
   function isEditorUsingEmbeddedDefaultSoundBank() {
+    // The first font of the shared list decides: MobiBard layout (default / compatible) or plain MIDI.
+    // With the shared list the fixed MobiBard instrument list always applies; the first font only decides how it sounds.
+    if (window.MobibardSoundStack?.loaded && window.MobibardSoundStack.mainFont?.()) return true;
     if (audioEngine?.soundBank) return Boolean(audioEngine.soundBank.isEmbeddedDefault || audioEngine.soundBank.isMobibardCompatible);
     return !editorSoundFontName;
   }
@@ -3825,12 +3979,16 @@
   }
 
   function reconcileEditorChannelsWithSoundBank() {
+    // Wait for the shared SoundFont list; otherwise font-bound channels would look "missing".
+    if (window.MobibardSoundStack && !window.MobibardSoundStack.loaded) return false;
     const presets = getEditorSoundBankPresets();
     if (!presets.length) return false;
     const first = presets[0];
     let changed = false;
     for (const channel of state.channels) {
-      let preset = findEditorSoundBankPreset(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
+      const channelFont = getChannelInstrumentFont(channel);
+      let preset = findEditorSoundBankPreset(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel), channelFont);
+      if (preset && channelFont && preset.fontKey !== channelFont) preset = null;
       if (!preset && isEditorUsingEmbeddedDefaultSoundBank()) {
         const legacyProgram = getChannelInstrumentProgram(channel);
         const legacyIsDrums = isDrumInstrumentName(channel?.instrument) || getChannelInstrumentBank(channel) === 128;
@@ -3844,10 +4002,12 @@
         if (mapped) preset = findEditorSoundBankPreset(mapped.bank, mapped.program);
       }
       preset ||= first;
-      const before = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
+      const before = getChannelPresetKey(channel);
       const beforeName = String(channel.instrument || "");
-      setChannelInstrumentPreset(channel, preset);
-      if (before !== editorPresetKey(channel.instrumentBank, channel.instrumentProgram) || beforeName !== channel.instrument) changed = true;
+      const keepFont = !channelFont && channel.instrumentExactPreset === true && preset.fontKey && channel.instrumentBank === preset.bank && channel.instrumentProgram === preset.preset;
+      if (keepFont) channel.instrument = String(preset.name || channel.instrument || "").trim();
+      else setChannelInstrumentPreset(channel, preset);
+      if (before !== getChannelPresetKey(channel) || beforeName !== channel.instrument) changed = true;
     }
     return changed;
   }
@@ -5634,8 +5794,17 @@
   function updateEditorSoundFontUi(message = "") {
     let label = message || editorSoundFontName || i18nText("soundbank.default");
     if (!message) {
-      const marker = audioEngine?.soundBank?.mobibard;
-      if (marker?.compatible) label += ` \u00b7 MobiBard${marker.version ? " v" + String(marker.version).replace(/^v/i, "") : ""}`;
+      // The first font of the shared SoundFont list is what the editor is "using".
+      const stack = window.MobibardSoundStack;
+      const main = stack?.loaded ? stack.mainFont?.() : null;
+      if (main && !main.isDefault) {
+        label = main.name;
+        const marker = main.bank?.mobibard;
+        if (main.compat) label += ` \u00b7 MobiBard${marker?.version ? " v" + String(marker.version).replace(/^v/i, "") : ""}`;
+      } else {
+        const marker = audioEngine?.soundBank?.mobibard;
+        if (marker?.compatible) label += ` \u00b7 MobiBard${marker.version ? " v" + String(marker.version).replace(/^v/i, "") : ""}`;
+      }
     }
     if (elements.editorSoundFontCurrentName) elements.editorSoundFontCurrentName.textContent = label;
     if (elements.editorSoundFontMenuLabel) elements.editorSoundFontMenuLabel.textContent = label;
@@ -5651,6 +5820,11 @@
   }
 
   function openEditorSoundFontDialog() {
+    if (window.MobibardSoundStack?.openDialog) {
+      closeThemeMenu();
+      void window.MobibardSoundStack.openDialog();
+      return;
+    }
     if (!elements.editorSoundFontBackdrop) return;
     closeThemeMenu();
     updateEditorSoundFontUi();
@@ -8356,7 +8530,7 @@
         program: note.program,
         bank: note.bank || 0,
         gainScale,
-        exactPreset: Boolean(note.exactPreset),
+        exactPreset: editorExactValue(note.exactPreset),
         mmlVolume: Number.isFinite(Number(note.mmlVolume)) ? Number(note.mmlVolume) : null,
       });
     }
@@ -9499,7 +9673,7 @@
       ? {
           program: clamp(Math.round(Number(instrumentOptions.program) || 0), 0, 127),
           bank: clamp(Math.round(Number(instrumentOptions.bank) || 0), 0, 16383),
-          exactPreset: Boolean(instrumentOptions.exactPreset),
+          exactPreset: editorExactValue(instrumentOptions.exactPreset),
         }
       : getEditorAuditionOptions();
     const options = {
@@ -12281,7 +12455,7 @@
     setHueControlValue(elements.channelEditColorInput, getChannelHue(channel, index));
     if (elements.channelEditTargetLabel) elements.channelEditTargetLabel.textContent = `${index + 1}번 채널`;
     if (elements.channelEditInstrumentSelect) {
-      elements.channelEditInstrumentSelect.value = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
+      elements.channelEditInstrumentSelect.value = getChannelPresetOptionKey(channel);
     }
     const title = elements.channelEditBackdrop.querySelector(".transfer-dialog-header strong");
     if (title) title.textContent = i18nText("channel.edit") || "채널 정보 수정";
@@ -12319,7 +12493,7 @@
       if (sharedInstrumentLabel) sharedInstrumentLabel.textContent = i18nText("instrument.text");
       if (elements.channelEditInstrumentSelect) {
         elements.channelEditInstrumentSelect.setAttribute("aria-label", i18nText("channel.instrument"));
-        elements.channelEditInstrumentSelect.value = editorPresetKey(getChannelInstrumentBank(draft), getChannelInstrumentProgram(draft));
+        elements.channelEditInstrumentSelect.value = getChannelPresetOptionKey(draft);
       }
       if (instrumentLabel) instrumentLabel.hidden = false;
       if (elements.channelEditNameInput) elements.channelEditNameInput.value = makeUniqueChannelName(defaultChannelName(draft), draft.id);
@@ -12380,10 +12554,7 @@
     const previous = String(select.value || "");
     select.replaceChildren();
     select.add(new Option(i18nText("group.instrument_keep"), ""));
-    for (const preset of getEditorSoundBankPresets()) {
-      const bank = clamp(Math.round(Number(preset.bank) || 0), 0, 16383);
-      select.add(new Option(formatEditorPresetLabel(preset), editorPresetKey(bank, preset.preset)));
-    }
+    appendEditorPresetOptions(select);
     if ([...select.options].some((option) => option.value === previous)) select.value = previous;
     else select.value = "";
   }
@@ -12458,10 +12629,10 @@
     const selectedKey = String(elements.channelGroupInstrumentSelect?.value || "");
     if (selectedKey) {
       const parsed = parseEditorPresetKey(selectedKey);
-      const preset = findEditorSoundBankPreset(parsed.bank, parsed.program);
+      const preset = findEditorSoundBankPreset(parsed.bank, parsed.program, parsed.font);
       if (preset) {
         for (const channel of getChannelGroupMembers(group)) setChannelInstrumentPreset(channel, preset);
-        if (typeof audioEngine.prepareProgram === "function") void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: true }).catch(() => {});
+        if (typeof audioEngine.prepareProgram === "function") void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: preset.fontKey || true }).catch(() => {});
       }
     }
     markDirty(i18nText("group.history_edit"));
@@ -13312,15 +13483,15 @@
       if (selectedValue) {
         const members = getChannelGroupMembers(group);
         const alreadyUniform = members.length > 0 && members.every((channel) => (
-          editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel)) === selectedValue
+          getChannelPresetOptionKey(channel) === selectedValue
         ));
         if (!alreadyUniform) {
           const selectedKey = parseEditorPresetKey(selectedValue);
-          const selectedPreset = findEditorSoundBankPreset(selectedKey.bank, selectedKey.program);
+          const selectedPreset = findEditorSoundBankPreset(selectedKey.bank, selectedKey.program, selectedKey.font);
           if (selectedPreset) {
             for (const channel of members) setChannelInstrumentPreset(channel, selectedPreset);
             if (typeof audioEngine.prepareProgram === "function") {
-              void audioEngine.prepareProgram(selectedPreset.preset, selectedPreset.bank, { exactPreset: true }).catch((error) => console.warn("악기 음원 준비 실패", error));
+              void audioEngine.prepareProgram(selectedPreset.preset, selectedPreset.bank, { exactPreset: selectedPreset.fontKey || true }).catch((error) => console.warn("악기 음원 준비 실패", error));
             }
             instrumentChanged = true;
           }
@@ -13360,7 +13531,7 @@
     const nextHue = getHueControlValue(elements.channelEditColorInput, getChannelHue(channel, index));
     const selectedValue = String(elements.channelEditInstrumentSelect?.value || "0:0");
     const selectedKey = parseEditorPresetKey(selectedValue);
-    const selectedPreset = findEditorSoundBankPreset(selectedKey.bank, selectedKey.program) || getEditorSoundBankPresets()[0] || null;
+    const selectedPreset = findEditorSoundBankPreset(selectedKey.bank, selectedKey.program, selectedKey.font) || getEditorSoundBankPresets()[0] || null;
     const nextInstrument = String(selectedPreset?.name || channel.instrument || "Piano");
     const nextProgram = selectedPreset ? clamp(Math.round(Number(selectedPreset.preset) || 0), 0, 127) : getChannelInstrumentProgram(channel);
     const nextBank = selectedPreset ? clamp(Math.round(Number(selectedPreset.bank) || 0), 0, 16383) : getChannelInstrumentBank(channel);
@@ -13380,7 +13551,7 @@
       channel.instrumentExactPreset = true;
     }
     if (typeof audioEngine.prepareProgram === "function") {
-      void audioEngine.prepareProgram(nextProgram, nextBank, { exactPreset: true }).catch((error) => console.warn("악기 음원 준비 실패", error));
+      void audioEngine.prepareProgram(nextProgram, nextBank, { exactPreset: getChannelInstrumentExactPreset(channel) }).catch((error) => console.warn("악기 음원 준비 실패", error));
     }
     markDirty("채널 정보 변경");
     renderChannelTabs();
@@ -13471,7 +13642,7 @@
       if (String(select.options[index].value || "") === "") select.remove(index);
     }
     const current = getMidiInputDefaultPreset();
-    const key = editorPresetKey(current.bank, current.preset);
+    const key = editorPresetKey(current.bank, current.preset, current.fontKey);
     if ([...select.options].some((option) => option.value === key)) select.value = key;
   }
 
@@ -15778,7 +15949,7 @@
               endSeconds: beatToSecondsInTempoMap(endBeat, tempoMap),
               program,
               bank,
-              exactPreset: Boolean(resolvedPreset),
+              exactPreset: editorExactValue(resolvedPreset?.fontKey || resolvedPreset),
             });
           });
         });
@@ -15816,7 +15987,7 @@
               endSeconds: beatToSecondsInTempoMap(endBeat, tempoMap),
               program,
               bank,
-              exactPreset: Boolean(resolvedPreset),
+              exactPreset: editorExactValue(resolvedPreset?.fontKey || resolvedPreset),
             });
           });
         });
@@ -15846,10 +16017,10 @@
       // on the known-good audition code path.
       const programKeys = new Map();
       for (const note of previewNotes) {
-        programKeys.set(`${note.bank}:${note.program}:${note.exactPreset ? 1 : 0}`, {
+        programKeys.set(`${note.bank}:${note.program}:${note.exactPreset || 0}`, {
           program: note.program,
           bank: note.bank,
-          exactPreset: Boolean(note.exactPreset),
+          exactPreset: editorExactValue(note.exactPreset),
         });
       }
       if (typeof audioEngine.prepareProgram === "function") {
@@ -15863,7 +16034,7 @@
           velocity: note.velocity,
           instrumentProgram: note.program,
           instrumentBank: note.bank,
-          instrumentExactPreset: Boolean(note.exactPreset),
+          instrumentExactPreset: editorExactValue(note.exactPreset),
         })));
       }
 
@@ -15885,7 +16056,7 @@
             instrumentOptions: {
               program: note.program,
               bank: note.bank,
-              exactPreset: Boolean(note.exactPreset),
+              exactPreset: editorExactValue(note.exactPreset),
             },
             gainScale,
             mmlVolume: 15,
@@ -19226,7 +19397,7 @@
         instrument: String(channel.instrument || "Piano"),
         instrumentProgram: clamp(Math.round(Number(channel.instrumentProgram ?? getInstrumentProgramFromName(channel.instrument)) || 0), 0, 127),
         instrumentBank: clamp(Math.round(Number(channel.instrumentBank ?? (isDrumInstrumentName(channel.instrument) ? 128 : 0)) || 0), 0, 16383),
-        instrumentExactPreset: channel.instrumentExactPreset === true,
+        instrumentExactPreset: getChannelInstrumentExactPreset(channel),
         defaultNoteVolume: clamp(
           Math.round(Number(channel.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || CONFIG.defaultNewChannelNoteVolume),
           0,
@@ -20964,8 +21135,8 @@
   // ---- 악기 ----
   function getMidiInputDefaultPreset() {
     const presets = getEditorSoundBankPresets();
-    const [bank, program] = String(midiInputRuntime.defaultPresetKey || "").split(":").map(Number);
-    const stored = midiInputRuntime.defaultPresetKey ? findEditorSoundBankPreset(bank, program) : null;
+    const storedKey = midiInputRuntime.defaultPresetKey ? parseEditorPresetKey(midiInputRuntime.defaultPresetKey) : null;
+    const stored = storedKey ? findEditorSoundBankPreset(storedKey.bank, storedKey.program, storedKey.font) : null;
     return stored || presets[0] || { bank: 0, preset: 0, name: "Piano", regions: [] };
   }
 
@@ -20974,7 +21145,7 @@
     if (isMicDevice(device)) {
       const { presetKey } = getMicSettings(deviceKey);
       const parsed = presetKey ? parseEditorPresetKey(presetKey) : null;
-      return (parsed && findEditorSoundBankPreset(parsed.bank, parsed.program)) || getMidiInputDefaultPreset();
+      return (parsed && findEditorSoundBankPreset(parsed.bank, parsed.program, parsed.font)) || getMidiInputDefaultPreset();
     }
     if (midiChannel === 9) {
       return resolveMidiGroupEditorPreset({ channel: 9, channels: [9], bank: 128, program: 0, programName: "Drums" }, [{ pitch }]);
@@ -20985,7 +21156,7 @@
   }
 
   function getMidiInputPresetKey(preset, midiChannel) {
-    return `${midiChannel === 9 ? "drum:" : ""}${editorPresetKey(preset?.bank, preset?.preset)}`;
+    return `${midiChannel === 9 ? "drum:" : ""}${editorPresetKey(preset?.bank, preset?.preset, preset?.fontKey)}`;
   }
 
   // 악기별 하위 항목을 찾거나, 없으면 MIDI 입력 그룹 맨 아래에 새로 만듭니다.
@@ -20995,7 +21166,7 @@
     const device = midiInputRuntime.devices.get(deviceKey);
     const mic = isMicDevice(device);
     // 마이크는 장치마다 따로 담습니다(같은 악기여도 건반 연주와 섞이지 않게).
-    const key = mic ? `mic:${deviceKey}:${editorPresetKey(preset?.bank, preset?.preset)}` : getMidiInputPresetKey(preset, midiChannel);
+    const key = mic ? `mic:${deviceKey}:${editorPresetKey(preset?.bank, preset?.preset, preset?.fontKey)}` : getMidiInputPresetKey(preset, midiChannel);
     const existing = getMidiInputChannels(group).find((channel) => channel.midiInput.key === key);
     if (existing) return existing;
     const id = nextChannelId();
@@ -21547,7 +21718,7 @@
       try {
         const voice = playEditorAuditionPitch(pitch, {
           velocity,
-          instrumentOptions: { program: preset.preset, bank: preset.bank, exactPreset: true },
+          instrumentOptions: { program: preset.preset, bank: preset.bank, exactPreset: preset.fontKey || true },
           mmlVolume: velocityToMmlVolume(velocity),
         });
         if (voice) midiInputRuntime.monitorVoices.set(openKey, voice);
@@ -22246,7 +22417,7 @@
 
       const instrument = document.createElement("select");
       instrument.add(new Option(i18nText("device_input.mic_instrument_default"), ""));
-      for (const preset of getEditorSoundBankPresets()) instrument.add(new Option(formatEditorPresetLabel(preset), editorPresetKey(preset.bank, preset.preset)));
+      appendEditorPresetOptions(instrument);
       instrument.value = settings.presetKey;
       if (instrument.value !== settings.presetKey) instrument.value = "";
       instrument.addEventListener("change", () => setMicSetting(device.key, "presetKey", instrument.value));
@@ -22834,8 +23005,8 @@
   function getChannelGroupUniformInstrumentKey(groupOrId) {
     const members = getChannelGroupMembers(groupOrId);
     if (!members.length) return "";
-    const firstKey = editorPresetKey(getChannelInstrumentBank(members[0]), getChannelInstrumentProgram(members[0]));
-    return members.every((channel) => editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel)) === firstKey)
+    const firstKey = getChannelPresetOptionKey(members[0]);
+    return members.every((channel) => getChannelPresetOptionKey(channel) === firstKey)
       ? firstKey
       : "";
   }
@@ -22858,7 +23029,7 @@
     for (let index = select.options.length - 1; index >= 0; index -= 1) {
       if (String(select.options[index].value || "") === "") select.remove(index);
     }
-    select.value = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
+    select.value = getChannelPresetOptionKey(channel);
     return true;
   }
 
@@ -23389,11 +23560,11 @@
     if (draft.name) channel.name = makeUniqueChannelName(draft.name, channel.id);
     if (draft.hue != null) channel.hue = draft.hue;
     const key = parseEditorPresetKey(String(draft.instrumentValue || "0:0"));
-    const preset = draft.instrumentValue ? findEditorSoundBankPreset(key.bank, key.program) : null;
+    const preset = draft.instrumentValue ? findEditorSoundBankPreset(key.bank, key.program, key.font) : null;
     if (preset) {
       setChannelInstrumentPreset(channel, preset);
       if (typeof audioEngine.prepareProgram === "function") {
-        void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: true }).catch((error) => console.warn("악기 음원 준비 실패", error));
+        void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: preset.fontKey || true }).catch((error) => console.warn("악기 음원 준비 실패", error));
       }
     }
   }
@@ -24402,7 +24573,7 @@
     if (!mergedSourceIds.size) return false;
     const instrumentKey = String(state.channelMerge.instrumentKey || "");
     const instrumentPreset = instrumentKey
-      ? (() => { const parsed = parseEditorPresetKey(instrumentKey); return findEditorSoundBankPreset(parsed.bank, parsed.program); })()
+      ? (() => { const parsed = parseEditorPresetKey(instrumentKey); return findEditorSoundBankPreset(parsed.bank, parsed.program, parsed.font); })()
       : null;
     let totalNotes = 0;
     const names = [];
@@ -24423,7 +24594,7 @@
       if (instrumentPreset) {
         setChannelInstrumentPreset(target, instrumentPreset);
         if (typeof audioEngine.prepareProgram === "function") {
-          void audioEngine.prepareProgram(target.instrumentProgram, target.instrumentBank, { exactPreset: true }).catch(() => {});
+          void audioEngine.prepareProgram(target.instrumentProgram, target.instrumentBank, { exactPreset: getChannelInstrumentExactPreset(target) }).catch(() => {});
         }
       }
       totalNotes += target.notes.length;
@@ -30845,7 +31016,7 @@
     const mergeActive = isChannelMergeModeActive();
     if (mergeActive) {
       const mergeInstrument = state.channelMerge.instrumentKey
-        ? (() => { const parsed = parseEditorPresetKey(state.channelMerge.instrumentKey); return findEditorSoundBankPreset(parsed.bank, parsed.program); })()
+        ? (() => { const parsed = parseEditorPresetKey(state.channelMerge.instrumentKey); return findEditorSoundBankPreset(parsed.bank, parsed.program, parsed.font); })()
         : null;
       for (const { note, targetId } of getAllMergePreviewNotes()) {
         const target = getChannelById(targetId);
@@ -30866,7 +31037,7 @@
           sourceId: target.id,
           instrumentProgram: mergeInstrument ? mergeInstrument.preset : getChannelInstrumentProgram(target),
           instrumentBank: mergeInstrument ? mergeInstrument.bank : getChannelInstrumentBank(target),
-          instrumentExactPreset: mergeInstrument ? true : getChannelInstrumentExactPreset(target),
+          instrumentExactPreset: mergeInstrument ? (mergeInstrument.fontKey || true) : getChannelInstrumentExactPreset(target),
         });
       }
     }
@@ -30990,7 +31161,7 @@
     const voice = audioEngine.playNote(note.pitch, playbackVelocity, startAt, duration, {
       program: clamp(Number(note.instrumentProgram) || 0, 0, 127),
       bank: clamp(Number(note.instrumentBank) || 0, 0, 16383),
-      exactPreset: Boolean(note.instrumentExactPreset),
+      exactPreset: editorExactValue(note.instrumentExactPreset),
       gainScale: state.playback.autoGainScale,
       mmlVolume: Number.isFinite(Number(note.volume)) ? Number(note.volume) : null,
     });
@@ -31849,7 +32020,7 @@
                 {
                   program: clamp(Number(note.instrumentProgram) || 0, 0, 127),
                   bank: clamp(Number(note.instrumentBank) || 0, 0, 16383),
-                  exactPreset: Boolean(note.instrumentExactPreset),
+                  exactPreset: editorExactValue(note.instrumentExactPreset),
                   gainScale: autoGainScale,
                   mmlVolume: Number.isFinite(Number(note.volume)) ? Number(note.volume) : null,
                 },
@@ -32520,7 +32691,7 @@
       instrument: String(channel.instrument || "Piano"),
       instrumentProgram: clamp(Math.round(Number(channel.instrumentProgram ?? getInstrumentProgramFromName(channel.instrument)) || 0), 0, 127),
       instrumentBank: clamp(Math.round(Number(channel.instrumentBank ?? (isDrumInstrumentName(channel.instrument) ? 128 : 0)) || 0), 0, 16383),
-      instrumentExactPreset: channel.instrumentExactPreset === true,
+      instrumentExactPreset: getChannelInstrumentExactPreset(channel),
       defaultNoteVolume: clamp(
         Math.round(Number(channel.defaultNoteVolume ?? CONFIG.defaultNewChannelNoteVolume) || CONFIG.defaultNewChannelNoteVolume),
         0,
@@ -37430,10 +37601,10 @@
         state.channelMerge.instrumentKey = key;
         if (key) {
           const parsed = parseEditorPresetKey(key);
-          const preset = findEditorSoundBankPreset(parsed.bank, parsed.program);
+          const preset = findEditorSoundBankPreset(parsed.bank, parsed.program, parsed.font);
           if (preset) {
             if (typeof audioEngine.prepareProgram === "function") {
-              void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: true }).catch((error) => console.warn("악기 음원 준비 실패", error));
+              void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: preset.fontKey || true }).catch((error) => console.warn("악기 음원 준비 실패", error));
             }
             showToast(i18nText("merge.instrument_set", [formatEditorPresetLabel(preset)]));
           }
@@ -37454,7 +37625,7 @@
         saveMidiInputSettings();
         const preset = getMidiInputDefaultPreset();
         if (typeof audioEngine.prepareProgram === "function") {
-          void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: true }).catch((error) => console.warn("악기 음원 준비 실패", error));
+          void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: preset.fontKey || true }).catch((error) => console.warn("악기 음원 준비 실패", error));
         }
         showToast(i18nText("midi_input.default_instrument_set", [formatEditorPresetLabel(preset)]));
         return;
@@ -37463,14 +37634,14 @@
         const selectedValue = String(elements.channelInstrumentSelect.value || "");
         if (!selectedValue) return;
         const selected = parseEditorPresetKey(selectedValue);
-        const preset = findEditorSoundBankPreset(selected.bank, selected.program);
+        const preset = findEditorSoundBankPreset(selected.bank, selected.program, selected.font);
         if (!preset) { renderChannelEditor(); return; }
         const members = getChannelGroupMembers(group);
-        const changedMembers = members.filter((channel) => editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel)) !== selectedValue);
+        const changedMembers = members.filter((channel) => getChannelPresetOptionKey(channel) !== selectedValue);
         if (!changedMembers.length) return;
         for (const channel of changedMembers) setChannelInstrumentPreset(channel, preset);
         if (typeof audioEngine.prepareProgram === "function") {
-          void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: true })
+          void audioEngine.prepareProgram(preset.preset, preset.bank, { exactPreset: preset.fontKey || true })
             .catch((error) => console.warn("악기 음원 준비 실패", error));
         }
         markDirty(i18nText("group.history_edit"));
@@ -37483,18 +37654,18 @@
       const channel = getActiveChannel();
       if (!channel) return;
       const selected = parseEditorPresetKey(elements.channelInstrumentSelect.value);
-      const preset = findEditorSoundBankPreset(selected.bank, selected.program);
+      const preset = findEditorSoundBankPreset(selected.bank, selected.program, selected.font);
       if (!preset) {
         configureInstrumentSelectForChannel(elements.channelInstrumentSelect, channel);
         renderChannelEditor();
         return;
       }
-      const before = editorPresetKey(getChannelInstrumentBank(channel), getChannelInstrumentProgram(channel));
-      const nextKey = editorPresetKey(preset.bank, preset.preset);
+      const before = getChannelPresetOptionKey(channel);
+      const nextKey = editorPresetKey(preset.bank, preset.preset, preset.fontKey);
       if (before === nextKey && String(channel.instrument || "") === String(preset.name || "")) return;
       setChannelInstrumentPreset(channel, preset);
       if (typeof audioEngine.prepareProgram === "function") {
-        void audioEngine.prepareProgram(channel.instrumentProgram, channel.instrumentBank, { exactPreset: true })
+        void audioEngine.prepareProgram(channel.instrumentProgram, channel.instrumentBank, { exactPreset: getChannelInstrumentExactPreset(channel) })
           .catch((error) => console.warn("악기 음원 준비 실패", error));
       }
       markDirty("채널 악기 변경");
@@ -38006,7 +38177,7 @@
     if (!selects.length) return;
     const presets = getEditorSoundBankPresets();
     const signature = presets.length
-      ? presets.map((preset) => `${editorPresetKey(preset.bank, preset.preset)}:${String(preset.name || "")}`).join("|")
+      ? presets.map((preset) => `${editorPresetKey(preset.bank, preset.preset, preset.fontKey)}:${String(preset.name || "")}:${String(preset.fontName || "")}`).join("|")
       : "loading";
     if (signature === editorInstrumentOptionsSignature && selects.every((select) => select.options.length)) return;
     editorInstrumentOptionsSignature = signature;
@@ -38021,10 +38192,7 @@
         continue;
       }
       select.disabled = false;
-      for (const preset of presets) {
-        const bank = clamp(Math.round(Number(preset.bank) || 0), 0, 16383);
-        select.add(new Option(formatEditorPresetLabel(preset), editorPresetKey(bank, preset.preset)));
-      }
+      appendEditorPresetOptions(select, presets);
       if ([...select.options].some((option) => option.value === previousValue)) select.value = previousValue;
     }
   }
@@ -38085,7 +38253,16 @@
     const prepareAudio = async () => {
       let ready = false;
       const cachedSoundFont = await loadCachedEditorSoundFontFile();
-      if (cachedSoundFont?.source) {
+      if (cachedSoundFont?.source && window.MobibardSoundStack) {
+        // The single custom SoundFont of older versions now lives in the shared SoundFont list.
+        try {
+          await window.MobibardSoundStack.ready();
+          if (!window.MobibardSoundStack.banks.some((bank) => bank.stackName === cachedSoundFont.name)) {
+            await window.MobibardSoundStack.addFile(new File([cachedSoundFont.source], cachedSoundFont.name));
+          }
+          await clearCachedEditorSoundFontFile();
+        } catch (error) { console.warn("Editor SoundFont migration failed", error); }
+      } else if (cachedSoundFont?.source) {
         try {
           await audioEngine.useSoundBank(cachedSoundFont.source, { label: cachedSoundFont.name });
           if (window.MabiSoundBank?.restoreForcedCompat?.(audioEngine.soundBank, cachedSoundFont.name, cachedSoundFont.source?.size)) audioEngine.clearSoundBankCaches?.();
@@ -38113,6 +38290,19 @@
     // Parsing yields between chunks, so start it now instead of waiting for an idle
     // callback that may not run before the user's first audition click.
     void prepareAudio();
+    // Adding, removing or reordering fonts refreshes the instrument menus and the settings label.
+    window.MobibardSoundStack?.onChange?.(() => {
+      try {
+        reconcileEditorChannelsWithSoundBank();
+        populateChannelInstrumentSelect();
+        populateChannelGroupInstrumentSelect();
+        renderChannelEditor();
+        renderChannelTabs();
+        updateEditorSoundFontUi();
+        // Fonts changed (added / removed / reordered): what is playing switches to the new sound right away.
+        refreshRunningPlaybackVoices(null);
+      } catch (error) { console.warn("Editor SoundFont list refresh failed", error); }
+    });
 
     // 추후 메뉴를 교체할 때 사용할 수 있도록 공개합니다.
     window.MMLEditor = {

@@ -1,19 +1,23 @@
-MobiBard Instruments SF3 / DLS - License
-========================================
+MobiBard Instruments v2.0 - License
+====================================
 
 제작: startdust-io
 라이선스: MIT License
 
 적용 대상:
-- MobiBard_Instruments_sf3.zip (MobiBard_Instruments.sf3 포함)
-- MobiBard_Instruments_dls.zip (MobiBard_Instruments.dls 포함)
-- assets/default_sf3.js 에 내장된 MobiBard_Instruments.sf3
+- MobiBard_Instruments_v2.0.dls
+- WAV/ 폴더의 샘플 67개
+- source/ 폴더의 합성·빌드 스크립트
+- MobiBard_v2.0_preview.mp3
 
 개인·상업적 이용, 복사, 수정, 변환, 병합, 게시, 배포, 재라이선스, 판매를
 모두 허용합니다. 파일이나 그 상당 부분을 복사·재배포할 때는 아래 저작권 고지와
-허가 문구를 함께 포함해야 합니다. DLS 파일은 SF3 음색 데이터를 호환용 DLS 형식으로
-정리한 버전이며 같은 조건을 적용합니다. 파일은 어떠한 보증 없이 "있는 그대로"
+허가 문구를 함께 포함해야 합니다. 파일은 어떠한 보증 없이 "있는 그대로"
 제공됩니다. 법적 효력은 아래 영문 MIT License 원문을 따릅니다.
+
+출처: 모든 오디오는 source/ 의 수학적 모델(가산·모달 합성, 필터링한 노이즈)로
+새로 생성했습니다. 게임 오디오, 녹음, 타사 샘플, 임펄스 응답, 학습된 오디오 모델은
+사용하지 않았습니다.
 
 ---
 

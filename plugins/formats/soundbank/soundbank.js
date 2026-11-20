@@ -8,7 +8,7 @@
   // The embedded default SF3 (assets/default_sf3.js, ~5.4 MB of base64) is fetched on first use
   // instead of as a blocking <script> on every page. Resolved relative to this file so it works
   // from editor/, player/, simple/, rollscriptor/ and veloscriptor/ alike.
-  const DEFAULT_SOUND_BANK_ASSET_VERSION = "20261120-env3";
+  const DEFAULT_SOUND_BANK_ASSET_VERSION = "20261120-env9";
   const DEFAULT_SOUND_BANK_ASSET_URL = (() => {
     try {
       const own = document.currentScript?.src;

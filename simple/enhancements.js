@@ -163,11 +163,13 @@
     if (els.rhythmGameLayer?.hidden && els.rhythmGameStatus) els.rhythmGameStatus.textContent = tx("mobibeatsPreparing");
     if (els.rhythmGameLayer?.hidden && els.rhythmGameLoadingText) els.rhythmGameLoadingText.textContent = tx("mobibeatsLoading");
     if (els.rhythmGameFrame) els.rhythmGameFrame.title = tx("mobibeatsFrameTitle");
-    document.querySelector(".header-links")?.setAttribute("aria-label", tx("recommended"));
+    
     document.querySelector(".simple-mode-actions")?.setAttribute("aria-label", tx("modeNav"));
     if (els.fullEditorLink) els.fullEditorLink.href = `../player/index.html?lang=${language}`;
     if (els.midiSiteLinks?.options?.[0]) els.midiSiteLinks.options[0].textContent = tx("recommended");
     if (els.midiSiteLinks) els.midiSiteLinks.setAttribute("aria-label", tx("recommended"));
+    const recLabel = document.getElementById("recommendedLabel");
+    if (recLabel) recLabel.textContent = tx("recommended");
     if (els.settingsButton) {
       els.settingsButton.setAttribute("aria-label", tx("account"));
       els.settingsButton.title = tx("account");

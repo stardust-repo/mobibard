@@ -333,3 +333,13 @@ a[href*="discord.gg"] {
 @media (prefers-reduced-motion: reduce) {
   a[href*="discord.gg"] { animation: none; filter: none; }
 }
+
+/* Recommended-sites select that lives inside the account/settings menu (below the theme row). */
+.account-menu-popover .account-menu-recommended-field .midi-site-links {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  min-height: 38px;
+  box-sizing: border-box;
+}

@@ -1,0 +1,40 @@
+/* Shared SoundFont list dialog (plugins/common/soundbank-stack.js) */
+.sbs-backdrop{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;padding:12px;background:rgba(10,14,22,.5)}
+.sbs-dialog{--sbs-bg:#fff;--sbs-fg:#1d2330;--sbs-mut:#667085;--sbs-line:#d9dee8;--sbs-soft:#f3f5f9;--sbs-acc:#3b6fd8;
+  box-sizing:border-box;width:min(520px,100%);max-height:calc(100dvh - 24px);display:flex;flex-direction:column;background:var(--sbs-bg);color:var(--sbs-fg);border:1px solid var(--sbs-line);border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.3);font:13px/1.5 system-ui,"Segoe UI","Malgun Gothic",sans-serif;overflow:hidden}
+@media(prefers-color-scheme:dark){.sbs-dialog{--sbs-bg:#171b23;--sbs-fg:#e6e9f0;--sbs-mut:#98a2b3;--sbs-line:#2c3342;--sbs-soft:#202632;--sbs-acc:#7da6ff}}
+:root[data-theme="dark"] .sbs-dialog,body.dark .sbs-dialog{--sbs-bg:#171b23;--sbs-fg:#e6e9f0;--sbs-mut:#98a2b3;--sbs-line:#2c3342;--sbs-soft:#202632;--sbs-acc:#7da6ff}
+:root[data-theme="light"] .sbs-dialog{--sbs-bg:#fff;--sbs-fg:#1d2330;--sbs-mut:#667085;--sbs-line:#d9dee8;--sbs-soft:#f3f5f9;--sbs-acc:#3b6fd8}
+.sbs-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--sbs-line);font-size:15px}
+.sbs-x{border:0;background:none;color:var(--sbs-fg);font-size:22px;line-height:1;cursor:pointer;padding:0 4px}
+.sbs-body{display:grid;gap:10px;padding:14px;overflow:auto}
+.sbs-btn{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:5px 12px;border:1px solid var(--sbs-line);border-radius:8px;background:var(--sbs-soft);color:var(--sbs-fg);font:inherit;font-weight:700;font-size:12px;text-decoration:none;cursor:pointer;white-space:nowrap;list-style:none}
+.sbs-btn:hover{border-color:var(--sbs-acc)}.sbs-btn:disabled{opacity:.5;cursor:default}
+.sbs-primary{background:var(--sbs-acc);border-color:var(--sbs-acc);color:#fff}
+.sbs-top{display:flex;gap:8px}.sbs-add{flex:1 1 auto;min-height:36px}.sbs-reset{min-height:36px;min-width:64px}
+.sbs-msg{margin:0;color:var(--sbs-mut);min-height:0}.sbs-msg:empty{display:none}
+.sbs-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.sbs-item{display:flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid var(--sbs-line);border-radius:9px}
+.sbs-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.sbs-meta{flex:0 0 auto;color:var(--sbs-mut);font-size:11px}
+.sbs-mini{flex:0 0 auto;border:1px solid var(--sbs-line);background:var(--sbs-soft);color:var(--sbs-fg);border-radius:6px;min-width:26px;height:26px;padding:0 7px;font-size:11px;cursor:pointer}
+.sbs-mini:disabled{opacity:.35;cursor:default}.sbs-mini.sbs-del{min-width:26px;padding:0;font-size:16px;line-height:1;background:#d93025;border-color:#d93025;color:#fff;font-weight:700}.sbs-mini.sbs-del:hover{background:#b3261e;border-color:#b3261e}
+.sbs-star{color:#f5b301;margin-right:6px}.sbs-tag{flex:0 0 auto;font-size:11px;font-weight:700;line-height:1;padding:4px 8px;border-radius:999px;border:1px solid var(--sbs-line);color:var(--sbs-mut);background:var(--sbs-soft)}
+.sbs-tag-def{color:#3b6fd8;border-color:currentColor;background:rgba(59,111,216,.1)}.sbs-tag-compat{color:#1e8e4e;border-color:currentColor;background:rgba(30,142,78,.1)}
+.sbs-empty,.sbs-hint{margin:0;color:var(--sbs-mut);font-size:12px}
+.sbs-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--sbs-line)}
+.sbs-dl{position:relative}.sbs-dl>summary{list-style:none}.sbs-dl>summary::-webkit-details-marker{display:none}
+.sbs-dl>summary::after{content:"▾";margin-left:6px;font-size:10px}
+.sbs-dl-menu{position:absolute;right:0;bottom:calc(100% + 4px);z-index:2;min-width:100%;display:grid;gap:2px;padding:4px;background:var(--sbs-bg);border:1px solid var(--sbs-line);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.2)}
+.sbs-dl-menu a{padding:6px 10px;border-radius:6px;color:var(--sbs-fg);text-decoration:none;font-weight:700;font-size:12px;white-space:nowrap}
+.sbs-dl-menu a:hover{background:var(--sbs-soft)}
+.sbs-ask{margin:0 14px 14px;padding:10px 12px;border:1px solid var(--sbs-acc);border-radius:10px;background:var(--sbs-soft)}
+.sbs-ask p{margin:4px 0 8px}.sbs-ask-row{display:flex;justify-content:flex-end;gap:6px}
+
+/* Header button that opens the shared SoundFont dialog (Simple / Player) */
+.soundfont-menu-button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 12px;border:1px solid var(--line,var(--border,#d9dee8));border-radius:9px;background:var(--surface,var(--panel,var(--bg,#fff)));color:var(--text,inherit);font:inherit;font-size:13px;font-weight:800;line-height:1;cursor:pointer;white-space:nowrap}
+.soundfont-menu-button:hover{border-color:var(--line-strong,var(--accent,#3b6fd8))}
+
+.sbs-foot-left,.sbs-foot-right{display:flex;align-items:center;gap:6px}.sbs-foot-right{margin-left:auto}.sbs-foot-label{color:var(--sbs-mut);font-size:12px;font-weight:700;margin-right:2px}
+.sbs-spacer{display:inline-block;width:26px;min-width:26px;padding:0;border:0;background:none;visibility:hidden}
+.sbs-off .sbs-name,.sbs-off .sbs-tag{opacity:.45}.sbs-item.sbs-off{border-style:dashed}.sbs-mini.sbs-addback{min-width:26px;padding:0;font-size:16px;line-height:1;background:var(--sbs-acc);border-color:var(--sbs-acc);color:#fff}

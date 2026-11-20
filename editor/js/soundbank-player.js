@@ -17,6 +17,7 @@
     return { low, high };
   }
 
+  function exactValue(value) { return typeof value === "string" && value ? value : Boolean(value); }
   function selectSharedPreset(soundBank, program = 0, bank = 0) {
     const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
     const shared = window.MabiSoundBank?.findPreset?.(soundBank, program, safeBank);
@@ -104,7 +105,7 @@
       const sampleRate = Math.max(8000, Number(sample.decodedSampleRate || sample.sampleRate) || 44100);
       const loopStart = clamp(Math.round(Number(sample.loopStartFrame) || 0), 0, frameLength);
       const loopEnd = clamp(Math.round(Number(sample.loopEndFrame) || 0), loopStart, frameLength);
-      const sampleId = String(sample.cacheKey || `shared:${preset.bank}:${preset.preset}:${sample.name || index}:${index}`);
+      const sampleId = (soundBank?.stackId ? `${soundBank.stackId}|` : "") + String(sample.cacheKey || `shared:${preset.bank}:${preset.preset}:${sample.name || index}:${index}`);
       const attenuation = Math.max(0, Number(region.initialAttenuation) || 0);
       return {
         instrumentName: preset.name || `Preset ${preset.preset}`,
@@ -153,6 +154,7 @@
 
   class MabinogiSf2Player {
     constructor(options = {}) {
+      window.MobibardSoundStack?.onChange?.(() => { try { this.clearSoundBankCaches(); } catch (_) {} });
       this.presetNumber = options.presetNumber ?? 0;
       this.bankNumber = options.bankNumber ?? 0;
       this.onStatus = typeof options.onStatus === "function" ? options.onStatus : null;
@@ -395,15 +397,58 @@
     }
 
     async ensureReady() {
+      try { await window.MobibardSoundStack?.ready?.(); } catch (_) {}
       await this.resume();
       await this.prepare();
       return this;
+    }
+
+    // Shared SoundFont list: user fonts (top = highest priority) get the first chance for each instrument.
+    getStackSoundFont(program, bank, midi, exactPreset) {
+      const stack = window.MobibardSoundStack;
+      if (!stack?.banks?.length) return null;
+      const isDrum = bank === 128;
+      // A font key string means "this exact preset of that font" (chosen from the instrument menu).
+      // A font key string means "this exact preset of that font" (chosen from the instrument menu).
+      // Plain exact presets (the fixed MobiBard list) go through stack.pick and follow the first font.
+      if (typeof exactPreset === "string" && exactPreset) {
+        if (exactPreset === "default") return null;
+        const chosen = stack.bankForKey?.(exactPreset);
+        const found = chosen && Array.isArray(chosen.presets)
+          ? chosen.presets.find((p) => Number(p.bank) === bank && Number(p.preset) === program) : null;
+        if (!found) return null;
+        const chosenKey = `stack:${chosen.stackId}:${found.bank}:${found.preset}`;
+        if (this.soundFonts.has(chosenKey)) return this.soundFonts.get(chosenKey);
+        try {
+          const parsed = adaptSharedPreset(chosen, found);
+          parsed.stackId = chosen.stackId;
+          this.soundFonts.set(chosenKey, parsed);
+          return parsed;
+        } catch { return null; }
+      }
+      const mobibardLayout = Boolean(this.soundBank?.isEmbeddedDefault || this.soundBank?.isMobibardCompatible);
+      const req = exactPreset && mobibardLayout && !isDrum && bank === 0 && program <= 14
+        ? { targetPreset: program }
+        : { program, bankMsb: bank >> 7, bankLsb: bank & 127, isDrum, midi };
+      if (exactPreset && !(req.targetPreset != null)) return null;
+      const picked = stack.pick(req);
+      if (!picked?.preset || !picked?.soundBank) return null;
+      const key = `stack:${picked.soundBank.stackId}:${picked.preset.bank}:${picked.preset.preset}`;
+      if (this.soundFonts.has(key)) return this.soundFonts.get(key);
+      try {
+        const parsed = adaptSharedPreset(picked.soundBank, picked.preset);
+        parsed.stackId = picked.soundBank.stackId;
+        this.soundFonts.set(key, parsed);
+        return parsed;
+      } catch { return null; }
     }
 
     getSoundFont(program = this.presetNumber, bank = this.bankNumber, midi = null, exactPreset = false) {
       if (!this.soundBank || !this.soundFont) return null;
       const safeProgram = clamp(Math.round(Number(program) || 0), 0, 127);
       const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
+      const stacked = this.getStackSoundFont(safeProgram, safeBank, midi, exactPreset);
+      if (stacked) return stacked;
       const resolved = resolvePresetRequest(this.soundBank, safeProgram, safeBank, midi, exactPreset);
       const key = `${resolved.bank}:${resolved.program}`;
       if (this.soundFonts.has(key)) return this.soundFonts.get(key);
@@ -422,7 +467,7 @@
 
     async prepareProgram(program = 0, bank = 0, options = null) {
       await this.ensureReady();
-      const parsed = this.getSoundFont(program, bank, null, Boolean(options?.exactPreset));
+      const parsed = this.getSoundFont(program, bank, null, exactValue(options?.exactPreset));
       await new Promise((resolve) => setTimeout(resolve, 0));
       return parsed;
     }
@@ -431,7 +476,7 @@
       const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
       const soundFont = this.getSoundFont(program, safeBank, midi, exactPreset);
       if (!soundFont) return null;
-      const cacheKey = `${safeBank}:${soundFont.bank}:${soundFont.preset}:${Math.round(midi)}:${Math.floor(clamp(velocity, 0, 127) / 16)}`;
+      const cacheKey = `${safeBank}:${soundFont.stackId || ""}:${soundFont.bank}:${soundFont.preset}:${Math.round(midi)}:${Math.floor(clamp(velocity, 0, 127) / 16)}`;
       if (this.zoneCache.has(cacheKey)) {
         return this.zoneCache.get(cacheKey);
       }
@@ -476,7 +521,7 @@
         const velocity = typeof item === "number" ? 100 : clamp(Number(item?.velocity) || 100, 1, 127);
         const program = typeof item === "number" ? this.presetNumber : clamp(Number(item?.instrumentProgram) || 0, 0, 127);
         const bank = typeof item === "number" ? this.bankNumber : clamp(Number(item?.instrumentBank) || 0, 0, 16383);
-        const exactPreset = typeof item === "number" ? false : Boolean(item?.instrumentExactPreset);
+        const exactPreset = typeof item === "number" ? false : exactValue(item?.instrumentExactPreset);
         if (!Number.isFinite(pitch)) continue;
         const soundFont = this.getSoundFont(program, bank, pitch, exactPreset);
         const zone = this.findZone(pitch, velocity, program, bank, exactPreset);
@@ -553,7 +598,7 @@
       const safeProgram = clamp(Math.round(Number(program) || 0), 0, 127);
       const safeBank = clamp(Math.round(Number(bank) || 0), 0, 16383);
       const velocityBucket = Math.floor(safeVelocity / 16);
-      const cacheKey = `${safeBank}:${safeProgram}:${exactPreset ? 1 : 0}:${safeMidi}:${velocityBucket}`;
+      const cacheKey = `${safeBank}:${safeProgram}:${typeof exactPreset === "string" ? exactPreset : (exactPreset ? 1 : 0)}:${safeMidi}:${velocityBucket}`;
       if (this.offlineRenderTemplateCache.has(cacheKey)) {
         return this.offlineRenderTemplateCache.get(cacheKey);
       }
@@ -907,7 +952,7 @@
       const gainScale = Number.isFinite(Number(options?.gainScale))
         ? clamp(Number(options.gainScale), 0, 1.5)
         : 1;
-      const exactPreset = Boolean(options?.exactPreset);
+      const exactPreset = exactValue(options?.exactPreset);
       const rawMmlVolume = Number(options?.mmlVolume);
       const mmlVolume = Number.isFinite(rawMmlVolume) ? clamp(rawMmlVolume, 0, 15) : null;
       if (mmlVolume != null && mmlVolume <= 0) return null;

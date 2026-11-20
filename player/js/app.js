@@ -5372,7 +5372,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     // 이전 MML 편집 초안 캐시는 더 이상 사용하지 않는다.
     // MIDI/파일 불러오기 설정 캐시(midiConvertLastSettings)는 별도 키이므로 유지한다.
     try { localStorage.removeItem(PREF_PREFIX + "mmlDraft"); } catch (_) {}
-    await restoreCachedSoundBankFromLocal();
+    await migrateLegacySoundBankToStack();
     normalizeTextareaCommands(mainMml);
     syncPartsFromMain();
     applyPlaybackSpeed(false);
@@ -8362,6 +8362,23 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return meta;
   }
 
+  // The single custom SoundFont of older versions now lives in the shared SoundFont list.
+  async function migrateLegacySoundBankToStack() {
+    try {
+      const meta = readSoundBankSelectionMeta();
+      if (!meta || meta.mode !== "custom") return;
+      const stack = window.MobibardSoundStack;
+      const cached = await soundBankCacheApi()?.getActive?.();
+      if (!stack || !cached?.bytes?.byteLength) return;
+      await stack.ready();
+      const name = meta.name || cached.name || "SoundBank";
+      if (!stack.banks.some(bank => bank.stackName === name)) await stack.addFile(new File([cached.bytes], name));
+      await clearLocalSoundBankCache();
+    } catch (err) {
+      console.warn("[Mobibard] Legacy sound bank migration failed.", err);
+    }
+  }
+
   async function restoreCachedSoundBankFromLocal() {
     const meta = readSoundBankSelectionMeta();
     if (!meta || meta.mode !== "custom") {
@@ -8947,9 +8964,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     for (let partIndex = 0; partIndex < count; partIndex++) {
       const partNotes = notes.filter(note => note.part === partIndex);
       if (!partNotes.length) continue;
-      const preset = getPartPreset(partIndex % MMI_IMPORT_MAX_CHANNELS);
-      if (!preset) continue;
-      prepared.push(...prepareNotes(ctx, soundFont, preset, partNotes));
+      const bankPreset = getPartBankPreset(partIndex % MMI_IMPORT_MAX_CHANNELS);
+      if (!bankPreset) continue;
+      prepared.push(...prepareNotes(ctx, bankPreset.soundBank, bankPreset.preset, partNotes));
     }
     prepared.sort((a, b) => a.start - b.start || a.part - b.part || a.midi - b.midi || a.id - b.id);
     for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
@@ -8993,9 +9010,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const lastEnd = notes.reduce((m, n) => Math.max(m, (Number(n.start) || 0) + (Number(n.durationSec) || 0)), 0);
       const fromSec = Number.isFinite(firstStart) ? Math.max(0, firstStart) : 0;
       const windowEnd = Math.min(lastEnd, fromSec + 10);
-      const preset = getPartPreset(0);
-      if (!preset) throw new Error(i18nText("snd.find_preview"));
-      const prepared = prepareNotes(ctx, soundFont, preset, notes).sort((a, b) => a.start - b.start || a.midi - b.midi);
+      const bankPreset = getPartBankPreset(0);
+      if (!bankPreset) throw new Error(i18nText("snd.find_preview"));
+      const prepared = prepareNotes(ctx, bankPreset.soundBank, bankPreset.preset, notes).sort((a, b) => a.start - b.start || a.midi - b.midi);
       for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
       if (!prepared.length) throw new Error(i18nText("msg.no_audible"));
       const gainScale = computeAutoGainScale(prepared, { windowStart: fromSec, windowEnd });
@@ -10637,7 +10654,30 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       : null;
   }
 
+  function resolveStackPreviewPreset(preview) {
+    const stack = window.MobibardSoundStack;
+    if (!stack?.banks?.length) return null;
+    const midi = Number.isFinite(Number(preview?.midi))
+      ? Math.trunc(Number(preview.midi))
+      : (Number.isFinite(Number(preview?.drumMidi)) ? Math.trunc(Number(preview.drumMidi)) : (Number.isFinite(Number(preview?.notes?.[0]?.midi)) ? Math.trunc(Number(preview.notes[0].midi)) : null));
+    const picked = stack.pick({
+      program: preview?.program,
+      bankMsb: preview?.bankMsb,
+      bankLsb: preview?.bankLsb,
+      isDrum: Boolean(preview?.isBeat),
+      midi,
+      instrumentName: preview?.instrumentName || preview?.programText || preview?.name || "",
+    });
+    if (!picked?.preset || !picked?.soundBank) return null;
+    if (!picked.isDrum) return { soundBank: picked.soundBank, preset: picked.preset, isDrum: false, fallbackSoundBank: null, fallbackPreset: null };
+    const originals = Array.isArray(defaultSoundFont?.presets) ? defaultSoundFont.presets : [];
+    const standardKit = originals.find(p => Number(p.bank) === 128 && Number(p.preset) === 0) || null;
+    return { soundBank: picked.soundBank, preset: picked.preset, isDrum: true, fallbackSoundBank: defaultSoundFont || null, fallbackPreset: standardKit };
+  }
+
   function resolvePreviewPreset(preview) {
+    const stacked = resolveStackPreviewPreset(preview);
+    if (stacked) return stacked;
     if (soundFontUsesMobibardMapping()) {
       const mapped = resolveDefaultMappedPreviewPreset(preview);
       if (mapped) return mapped;
@@ -10990,7 +11030,15 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return defaultSoundFont;
   }
 
+  let soundStackChangeCount = 0;
+  window.MobibardSoundStack?.onChange?.(() => {
+    soundStackChangeCount += 1;
+    // Fonts changed while playing: continue from the same spot with the new sound.
+    if (soundStackChangeCount > 1) { try { stopMidiPreview(); restartPlaybackAfterSoundChange(); } catch (_) {} }
+  });
+
   async function loadDefaultSf2IfNeeded() {
+    try { await window.MobibardSoundStack?.ready?.(); } catch (_) {}
     const original = await ensureDefaultSoundFont();
     if (!soundFont) {
       soundFont = original;
@@ -11039,11 +11087,12 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         button.textContent = i18nText("ui.play");
       }
       await loadDefaultSf2IfNeeded();
-      const preset = findPresetByKey(key);
+      const stackPick = findStackPresetByKey(key);
+      const preset = stackPick ? stackPick.preset : findPresetByKey(key);
       if (!preset) throw new Error(i18nText("snd.find_sf2_preset_2"));
       const ctx = await ensureAudioContext();
       const notes = buildPartPresetPreviewNotes(preset, partIndex);
-      const prepared = prepareNotes(ctx, soundFont, preset, notes);
+      const prepared = prepareNotes(ctx, stackPick ? stackPick.soundBank : soundFont, preset, notes);
       if (!prepared.length) throw new Error(i18nText("snd.find_preview_sf2"));
       const duration = notes.reduce((m, n) => Math.max(m, n.start + n.durationSec), 0);
       const gainScale = computeAutoGainScale(prepared, { windowStart: 0, windowEnd: duration });
@@ -11171,12 +11220,23 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const availableKeys = new Set(presets.map(p => p.key));
       const selectedKey = availableKeys.has(current) ? current : (availableKeys.has(DEFAULT_PART_PRESET_KEY) ? DEFAULT_PART_PRESET_KEY : presets[0].key);
       if (draftPartPresetKeys) draftPartPresetKeys[i] = selectedKey;
+      const optionGroups = new Map();
       for (const preset of presets) {
         const option = document.createElement("option");
         option.value = preset.key;
         option.textContent = preset.label;
         option.selected = preset.key === selectedKey;
-        select.appendChild(option);
+        let parent = select;
+        if (preset.group) {
+          if (!optionGroups.has(preset.group)) {
+            const optgroup = document.createElement("optgroup");
+            optgroup.label = preset.group;
+            select.appendChild(optgroup);
+            optionGroups.set(preset.group, optgroup);
+          }
+          parent = optionGroups.get(preset.group);
+        }
+        parent.appendChild(option);
       }
       const previewButton = document.createElement("button");
       previewButton.className = "part-sound-preview-btn soft-tool-button";
@@ -11206,7 +11266,23 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     }
   }
 
+  // Presets of SoundFonts added in the shared list use "bank:preset@fontId".
+  function parseStackPresetKey(value) {
+    const m = String(value == null ? "" : value).trim().match(/^(\d{1,5}):(\d{1,3})@([A-Za-z0-9_-]+)$/);
+    return m ? { bank: clampInt(Number(m[1]), 0, 16383), preset: clampInt(Number(m[2]), 0, 127), id: m[3] } : null;
+  }
+
+  function findStackPresetByKey(value) {
+    const parsed = parseStackPresetKey(value);
+    if (!parsed) return null;
+    const bank = window.MobibardSoundStack?.banks?.find(item => item.stackId === parsed.id);
+    const preset = bank?.presets?.find(p => Number(p.bank) === parsed.bank && Number(p.preset) === parsed.preset);
+    return bank && preset ? { soundBank: bank, preset } : null;
+  }
+
   function sanitizePresetKey(value) {
+    const stackKey = parseStackPresetKey(value);
+    if (stackKey) return `${stackKey.bank}:${stackKey.preset}@${stackKey.id}`;
     const text = String(value == null ? DEFAULT_PART_PRESET_KEY : value).trim();
     const m = text.match(/^(\d{1,5}):(\d{1,5})$/);
     if (!m) return DEFAULT_PART_PRESET_KEY;
@@ -11232,7 +11308,27 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         seen.add(key);
         return true;
       })
-      .map(p => ({ key: presetKey(p), label: formatPresetLabel(p) }));
+      .map(p => ({ key: presetKey(p), label: formatPresetLabel(p) }))
+      .concat(getStackPresetOptions());
+  }
+
+  // Instruments of the SoundFonts added in the SoundFont dialog, grouped by font name.
+  function getStackPresetOptions() {
+    const options = [];
+    for (const bank of window.MobibardSoundStack?.banks || []) {
+      const seen = new Set();
+      (bank.presets || [])
+        .filter(p => p && Array.isArray(p.regions) && p.regions.length && (typeof bank.hasAudiblePreset !== "function" || bank.hasAudiblePreset(p)))
+        .slice()
+        .sort((a, b) => (a.bank - b.bank) || (a.preset - b.preset))
+        .forEach(p => {
+          const key = `${presetKey(p)}@${bank.stackId}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          options.push({ key, label: formatPresetLabel(p), group: bank.stackName || "SoundFont" });
+        });
+    }
+    return options;
   }
 
   function formatPresetLabel(preset) {
@@ -11251,6 +11347,26 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     return soundFont.presets.find(p => p.bank === bank && p.preset === program)
       || (bank === 0 ? soundFont.findPreset(program) : null)
       || null;
+  }
+
+  // Shared SoundFont list: ask the user's fonts (top = highest priority) for the MobiBard instrument this part
+  // uses; when none of them has it, the bundled bank / current default handling stays in charge.
+  function getPartBankPreset(partIndex) {
+    const ownKey = (previewPartPresetKeys || partPresetKeys)[clampInt(Number(partIndex), 0, 5)];
+    const chosen = findStackPresetByKey(ownKey);
+    if (chosen) return chosen;
+    const base = getPartPreset(partIndex);
+    if (!base) return null;
+    const stack = window.MobibardSoundStack;
+    if (stack?.banks?.length && soundFontUsesMobibardMapping()) {
+      const key = (previewPartPresetKeys || partPresetKeys)[clampInt(Number(partIndex), 0, 5)] || DEFAULT_PART_PRESET_KEY;
+      const m = /^(\d+):(\d+)$/.exec(String(key));
+      if (m && Number(m[1]) === 0 && Number(m[2]) <= 13) {
+        const picked = stack.pick({ targetPreset: Number(m[2]) });
+        if (picked?.preset && picked?.soundBank) return { soundBank: picked.soundBank, preset: picked.preset };
+      }
+    }
+    return { soundBank: soundFont, preset: base };
   }
 
   function getPartPreset(partIndex) {
@@ -11294,9 +11410,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       // 음소거 채널도 미리 준비한다. 재생 중 음소거 해제 시 재스케줄 없이 즉시 소리가 나야 한다.
       const partNotes = list.filter(n => Number(n.part) === part);
       if (!partNotes.length) continue;
-      const preset = getPartPreset(part);
-      if (!preset) continue;
-      prepared.push(...prepareNotes(ctx, soundFont, preset, partNotes));
+      const bankPreset = getPartBankPreset(part);
+      if (!bankPreset) continue;
+      prepared.push(...prepareNotes(ctx, bankPreset.soundBank, bankPreset.preset, partNotes));
     }
     prepared.sort((a, b) => a.start - b.start || a.part - b.part || a.midi - b.midi);
     for (let i = 0; i < prepared.length; i++) prepared[i].id = i;
@@ -11312,7 +11428,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       if (partMuteStates[part]) continue;
       const resolved = resolvePreviewPreset(note);
       if (!resolved?.preset || !resolved?.soundBank) continue;
-      const sourceTag = resolved.soundBank === soundFont ? "selected" : "default";
+      const sourceTag = resolved.soundBank === soundFont ? "selected" : (resolved.soundBank === defaultSoundFont ? "default" : `stack${resolved.soundBank?.stackId || ""}`);
       const key = `${sourceTag}:${resolved.preset.bank}:${resolved.preset.preset}:${note.isBeat ? 1 : 0}`;
       if (!byPreset.has(key)) byPreset.set(key, { ...resolved, notes: [] });
       byPreset.get(key).notes.push({ ...note, part });
