@@ -329,9 +329,30 @@
       const a = el("a", "", label);
       a.href = new URL(path, base).href;
       a.download = path.split("/").pop();
+      a.addEventListener("click", () => { d.open = false; });
       menu.appendChild(a);
     }
     d.appendChild(menu);
+    // Only one download menu open at a time.
+    d.addEventListener("toggle", () => {
+      if (!d.open) return;
+      document.querySelectorAll("details.sbs-dl[open]").forEach((other) => { if (other !== d) other.open = false; });
+    });
+    if (!downloadMenu.outsideHooked) {
+      downloadMenu.outsideHooked = true;
+      // Clicking or tapping anywhere else (other buttons, other dropdowns, the list) closes it.
+      document.addEventListener("pointerdown", (event) => {
+        document.querySelectorAll("details.sbs-dl[open]").forEach((open) => { if (!open.contains(event.target)) open.open = false; });
+      }, true);
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        const open = document.querySelectorAll("details.sbs-dl[open]");
+        if (!open.length) return;
+        open.forEach((item) => { item.open = false; });
+        event.preventDefault();
+        event.stopPropagation();
+      }, true);
+    }
     return d;
   }
 
