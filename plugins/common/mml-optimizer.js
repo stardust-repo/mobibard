@@ -2344,10 +2344,13 @@
       while (ti < tempos.length && tempos[ti].pos > localStart && tempos[ti].pos < localStart + left) {
         const tempo = tempos[ti++];
         const firstDur = tempo.pos - localStart;
-        if (firstDur > 0) result.push(copyEventSegment(ev, localStart, firstDur, false));
+        // Keep the tie of a note that was already split at an earlier tempo change, and do not
+        // carry the tempo commands written before the first piece over to the next pieces.
+        if (firstDur > 0) result.push(copyEventSegment(ev, localStart, firstDur, Boolean(ev.tieFromPrev)));
         const secondDur = localStart + left - tempo.pos;
-        ev = copyEventSegment(ev, tempo.pos, secondDur, ev.type === "note");
-        ev.preTempos = [...(ev.preTempos || []), tempo.bpm];
+        const next = copyEventSegment(ev, tempo.pos, secondDur, ev.type === "note");
+        next.preTempos = firstDur > 0 ? [tempo.bpm] : [...(ev.preTempos || []), tempo.bpm];
+        ev = next;
         localStart = tempo.pos;
         left = secondDur;
       }
