@@ -2633,7 +2633,12 @@
   }
 
   function isWorkspaceTopbarInteractionTarget(target) {
-    return Boolean(target instanceof Element && target.closest(".editor-topbar"));
+    // The shared SoundFont popup can be opened from the topbar while a preview workspace is active.
+    return Boolean(target instanceof Element && (target.closest(".editor-topbar") || target.closest(".sbs-backdrop")));
+  }
+
+  function isSharedOverlayTarget(target) {
+    return Boolean(target instanceof Element && target.closest(".sbs-backdrop"));
   }
 
   function isTutorialInteractionTarget(target) {
@@ -2658,6 +2663,7 @@
   }
 
   function guardRestCleanupPreviewKeyboardInteraction(event) {
+    if (isSharedOverlayTarget(event.target)) return;
     if (!isRestCleanupWorkspaceActive()) return;
     if (event.key === 'Escape') {
       event.preventDefault();
@@ -2696,6 +2702,7 @@
   }
 
   function guardAutoPartPreviewKeyboardInteraction(event) {
+    if (isSharedOverlayTarget(event.target)) return;
     if (!isAutoPartPreviewActive()) return;
     if (event.key === 'Escape') {
       event.preventDefault();
@@ -3315,6 +3322,7 @@
   }
 
   function guardMeasureEditWorkspaceKeyboardInteraction(event) {
+    if (isSharedOverlayTarget(event.target)) return;
     if (!isMeasureEditWorkspaceActive()) return;
     if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); closeMeasureEditWorkspace(); return; }
     if (isMeasureEditPanelTarget(event.target) || isWorkspaceTopbarInteractionTarget(event.target) || isTutorialInteractionTarget(event.target)) return;
@@ -17876,7 +17884,7 @@
 
   // 불러오기 같은 작업 중에도 설정 메뉴에서 연 사운드폰트 팝업은 조작할 수 있습니다.
   function isSideToolAllowedPopupTarget(target) {
-    return Boolean(target instanceof Element && target.closest("#editorSoundFontBackdrop"));
+    return Boolean(target instanceof Element && target.closest("#editorSoundFontBackdrop, .sbs-backdrop"));
   }
 
   function guardSideToolPointerInteraction(event) {
@@ -17895,6 +17903,7 @@
   }
 
   function guardSideToolKeyboardInteraction(event) {
+    if (isSharedOverlayTarget(event.target)) return;
     if (!sideToolState.kind) return;
     if (event.code === "Space" && !isTextEntryTarget(event.target)) return;
     // 지원 파일 팝업이 열려 있으면 Esc는 팝업만 닫습니다.
@@ -32456,6 +32465,7 @@
   }
 
   function guardChannelExportKeyboardInteraction(event) {
+    if (isSharedOverlayTarget(event.target)) return;
     if (!isChannelExportWorkspaceActive()) return;
     if (event.code === "Space" && !isTextEntryTarget(event.target)) return;
     if (event.key === "Escape") {

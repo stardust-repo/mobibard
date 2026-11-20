@@ -39,3 +39,4 @@ dialog.sbs-backdrop{margin:0;border:0;width:100%;height:100%;max-width:none;max-
 .sbs-foot-left,.sbs-foot-right{display:flex;align-items:center;gap:6px}.sbs-foot-right{margin-left:auto}.sbs-foot-label{color:var(--sbs-mut);font-size:12px;font-weight:700;margin-right:2px}
 .sbs-spacer{display:inline-block;width:26px;min-width:26px;padding:0;border:0;background:none;visibility:hidden}
 .sbs-off .sbs-name,.sbs-off .sbs-tag{opacity:.45}.sbs-item.sbs-off{border-style:dashed}.sbs-mini.sbs-addback{min-width:26px;padding:0;font-size:16px;line-height:1;background:var(--sbs-acc);border-color:var(--sbs-acc);color:#fff}
+.sbs-dialog:focus{outline:none}
