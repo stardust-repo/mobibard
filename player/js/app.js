@@ -5345,7 +5345,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       updateVisibleHighlight();
       requestPianoRollRefresh(true);
     });
-    partSoundDialog?.addEventListener("close", () => stopMidiPreview());
+    partSoundDialog?.addEventListener("close", () => { stopMidiPreview(); revertLivePartSounds(); });
     themeToggleBtn?.addEventListener("click", toggleTheme);
     mainMml.addEventListener("paste", handleEditorMmlPaste);
     mainMml.addEventListener("input", () => {
@@ -8096,6 +8096,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     draftPartPresetKeys = normalizePresetKeyArray(keys);
     renderPartSoundRows();
     updateSoundPresetControls(mode);
+    livePreviewDraftPartSounds();
   }
 
   async function saveDraftSoundPreset() {
@@ -11048,9 +11049,35 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     updateSoundFontUi();
   }
 
+  // While the sound dialog is open, playback keeps going and picks are heard right away.
+  // Cancel / closing without "적용" puts the previous sounds back.
+  let partSoundOriginalKeys = null;
+  let partSoundCommitted = false;
+
+  function livePreviewDraftPartSounds() {
+    if (!isPlaying || !Array.isArray(draftPartPresetKeys)) return false;
+    const next = normalizePresetKeyArray(draftPartPresetKeys);
+    if (next.join("|") === normalizePresetKeyArray(partPresetKeys).join("|")) return true;
+    partPresetKeys = next;
+    rebuildSchedulePreviewSilently();
+    restartPlaybackAfterSoundChange();
+    return true;
+  }
+
+  function revertLivePartSounds() {
+    if (partSoundCommitted || !Array.isArray(partSoundOriginalKeys)) return;
+    const original = normalizePresetKeyArray(partSoundOriginalKeys);
+    partSoundOriginalKeys = null;
+    if (original.join("|") === normalizePresetKeyArray(partPresetKeys).join("|")) return;
+    partPresetKeys = original;
+    rebuildSchedulePreviewSilently();
+    restartPlaybackAfterSoundChange();
+  }
+
   async function openPartSoundDialog() {
-    stopPlayback(false);
     stopMidiPreview();
+    partSoundOriginalKeys = normalizePresetKeyArray(partPresetKeys);
+    partSoundCommitted = false;
 
     // 음색 파일을 읽지 못하더라도 설정 창 자체는 항상 연다.
     // 사용자는 이 창의 "불러오기" 버튼으로 SF2/SF3/DLS 파일을 교체할 수 있어야 한다.
@@ -11080,7 +11107,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const button = triggerButton instanceof HTMLElement ? triggerButton : null;
     const originalText = button?.textContent || i18nText("ui.listen");
     try {
-      stopPlayback(false);
+      if (!isPlaying || !partSoundDialog?.open) stopPlayback(false);
       stopMidiPreview();
       if (button) {
         button.disabled = true;
@@ -11184,12 +11211,16 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
   function applyPartSoundDialog() {
     if (!Array.isArray(draftPartPresetKeys)) draftPartPresetKeys = defaultPartPresetKeys();
-    partPresetKeys = normalizePresetKeyArray(draftPartPresetKeys);
+    const next = normalizePresetKeyArray(draftPartPresetKeys);
+    const alreadyLive = next.join("|") === normalizePresetKeyArray(partPresetKeys).join("|");
+    partPresetKeys = next;
+    partSoundCommitted = true;
+    partSoundOriginalKeys = null;
     savePartSoundPrefs();
     updateSoundPresetControls();
     rebuildSchedulePreviewSilently();
     partSoundDialog?.close();
-    restartPlaybackAfterSoundChange();
+    if (!alreadyLive) restartPlaybackAfterSoundChange();
   }
 
   function renderPartSoundRows() {
@@ -11252,7 +11283,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         if (!draftPartPresetKeys) draftPartPresetKeys = normalizePresetKeyArray(partPresetKeys);
         draftPartPresetKeys[i] = sanitizePresetKey(select.value);
         updateSoundPresetControls();
-        void previewPartPreset(select.value, i, previewButton);
+        // Playing: switch the song's sound right away. Stopped: play the short sample phrase.
+        if (!livePreviewDraftPartSounds()) void previewPartPreset(select.value, i, previewButton);
       });
 
       const control = document.createElement("div");
