@@ -87,6 +87,34 @@
     return rev;
   }
 
+  // ---------------------------------------------------- audio pause while busy
+  // Parsing a newly added font blocks the page for a moment. Instead of letting the song stutter,
+  // every running AudioContext of the page is paused while the list is rebuilt and resumed once the
+  // products have switched to the new sound.
+  const trackedContexts = new Set();
+  function registerAudioContext(ctx) { if (ctx && typeof ctx.suspend === "function") trackedContexts.add(ctx); return ctx; }
+  try {
+    const Native = window.AudioContext;
+    if (typeof Native === "function" && !Native.__sbsTracked) {
+      const Tracked = class extends Native { constructor(...args) { super(...args); registerAudioContext(this); } };
+      Object.defineProperty(Tracked, "name", { value: "AudioContext" });
+      Tracked.__sbsTracked = true;
+      window.AudioContext = Tracked;
+    }
+  } catch (_) {}
+  async function pauseAudio() {
+    const paused = [];
+    for (const ctx of trackedContexts) {
+      if (ctx.state === "closed") { trackedContexts.delete(ctx); continue; }
+      if (ctx.state !== "running") continue;
+      try { await ctx.suspend(); paused.push(ctx); } catch (_) {}
+    }
+    return paused;
+  }
+  function resumeAudio(paused) {
+    for (const ctx of paused || []) { if (ctx.state === "suspended") ctx.resume().catch(() => {}); }
+  }
+
   let channel = null;
   try { channel = typeof BroadcastChannel === "function" ? new BroadcastChannel(CHANNEL) : null; } catch (_) {}
 
@@ -106,6 +134,8 @@
   }
   // Portable font identity stored in projects: derived from file name + size, never the random id.
   function fontKeyOf(e) { return "u~" + encodeURIComponent(String(e.name || "")) + "~" + Number(e.size || 0); }
+  // Parsed fonts are kept between changes: reordering / toggling never re-parses, adding parses only the new file.
+  const parseCache = new Map(); // id -> { sig, bank, mention }
   async function reload() {
     await waitForParser();
     let entries = [];
@@ -114,7 +144,17 @@
     const banks = [];
     const parsedById = new Map();
     const mentionById = new Map();
+    const sigOf = (entry) => `${entry.size}|${entry.forceCompat ? 1 : 0}|${entry.addedAt || 0}`;
+    const needParse = entries.some((entry) => parseCache.get(entry.id)?.sig !== sigOf(entry));
+    const paused = needParse && state.loaded ? await pauseAudio() : [];
+    for (const id of Array.from(parseCache.keys())) if (!entries.some((entry) => entry.id === id)) parseCache.delete(id);
     for (const entry of entries) {
+      const cached = parseCache.get(entry.id);
+      if (cached && cached.sig === sigOf(entry)) {
+        parsedById.set(entry.id, cached.bank);
+        mentionById.set(entry.id, cached.mention);
+        continue;
+      }
       try {
         if (!api?.parseSoundBank) throw new Error("parser unavailable");
         const raw = new Uint8Array(entry.bytes);
@@ -126,6 +166,7 @@
         bank.stackId = entry.id;
         bank.stackName = entry.name;
         parsedById.set(entry.id, bank);
+        parseCache.set(entry.id, { sig: sigOf(entry), bank, mention });
       } catch (error) { console.warn("[MobiBard] SoundFont list entry failed", entry?.name, error); }
     }
     const byId = new Map(entries.map((e) => [e.id, e]));
@@ -148,7 +189,14 @@
     state.banks = banks;
     state.bankById = parsedById;
     state.loaded = true;
-    for (const cb of Array.from(state.listeners)) { try { cb(banks.slice()); } catch (_) {} }
+    const results = [];
+    for (const cb of Array.from(state.listeners)) { try { results.push(cb(banks.slice())); } catch (_) {} }
+    if (paused.length) {
+      // Let the products restart on the new sound (bounded wait), then continue the music.
+      await Promise.race([Promise.allSettled(results), new Promise((r) => setTimeout(r, 4000))]);
+      await new Promise((r) => setTimeout(r, 60));
+      resumeAudio(paused);
+    }
     return banks;
   }
   function load() {
@@ -359,7 +407,11 @@
   let dialog = null;
   function closeDialog() {
     const wasOpen = Boolean(dialog);
-    if (dialog) { dialog.remove(); dialog = null; }
+    if (dialog) {
+      try { if (dialog.open) dialog.close(); } catch (_) {}
+      dialog.remove();
+      dialog = null;
+    }
     // Nothing left in the list: bring the bundled MobiBard sound back as number one.
     if (wasOpen && state.loaded && !state.items.length) {
       writeOrder([DEFAULT_ID, ...state.entries.map((e) => e.id).filter((x) => x !== DEFAULT_ID)]);
@@ -466,20 +518,35 @@
     });
   }
 
-  async function openDialog() {
-    closeDialog();
-    await load().catch(() => {});
-    const back = el("div", "sbs-backdrop");
-    const root = el("section", "sbs-dialog"); root.setAttribute("role", "dialog"); root.setAttribute("aria-modal", "true");
-    back.appendChild(root);
-    back.addEventListener("pointerdown", (e) => { if (e.target === back) closeDialog(); });
-    back.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDialog(); });
-    document.body.appendChild(back);
-    dialog = back;
-    try { const dflt = await window.MabiSoundBank?.loadEmbeddedSoundBank?.({ clearBase64: true }); if (dflt?.mobibard?.version) window.__mobibardDefaultBankInfo = { version: dflt.mobibard.version }; } catch (_) {}
-    await render(root);
-    await maybeAskMain(root); render(root);
-    root.querySelector(".sbs-add")?.focus();
+  // Opens once (repeated clicks while it is still loading are ignored) and always on the top layer,
+  // so it works even while another popup (file loading, conversion settings…) is open.
+  let opening = null;
+  function openDialog() {
+    if (dialog && dialog.isConnected) return Promise.resolve();
+    if (opening) return opening;
+    opening = (async () => {
+      const back = document.createElement("dialog");
+      back.className = "sbs-backdrop";
+      const root = el("section", "sbs-dialog"); root.setAttribute("role", "dialog"); root.setAttribute("aria-modal", "true");
+      root.appendChild(el("div", "sbs-loading", "…"));
+      back.appendChild(root);
+      back.addEventListener("pointerdown", (e) => { if (e.target === back) closeDialog(); });
+      back.addEventListener("cancel", (e) => { e.preventDefault(); closeDialog(); });
+      document.body.appendChild(back);
+      dialog = back;
+      try { back.showModal(); } catch (_) { back.setAttribute("open", ""); }
+      await load().catch(() => {});
+      if (dialog !== back) return;
+      await render(root);
+      try { const dflt = await window.MabiSoundBank?.loadEmbeddedSoundBank?.({ clearBase64: true }); if (dflt?.mobibard?.version) window.__mobibardDefaultBankInfo = { version: dflt.mobibard.version }; } catch (_) {}
+      if (dialog !== back) return;
+      await render(root);
+      await maybeAskMain(root);
+      if (dialog !== back) return;
+      render(root);
+      root.querySelector(".sbs-add")?.focus();
+    })().finally(() => { opening = null; });
+    return opening;
   }
 
   // Wire a product's "SoundFont" button; keeps its label localized.
@@ -496,7 +563,7 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", autoBind); else autoBind();
 
   window.MobibardSoundStack = Object.freeze({
-    load, ready, onChange, pick, fontList, mainFont, bankForKey, setForceCompat, resetAll, openDialog, bindButton, addFile, remove, move,
+    load, ready, onChange, pick, fontList, mainFont, bankForKey, setForceCompat, registerAudioContext, resetAll, openDialog, bindButton, addFile, remove, move,
     get banks() { return state.banks; },
     get loaded() { return state.loaded; },
     downloadMenu,

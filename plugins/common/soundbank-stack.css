@@ -1,5 +1,6 @@
 /* Shared SoundFont list dialog (plugins/common/soundbank-stack.js) */
 .sbs-backdrop{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;padding:12px;background:rgba(10,14,22,.5)}
+dialog.sbs-backdrop{margin:0;border:0;width:100%;height:100%;max-width:none;max-height:none;box-sizing:border-box;color:inherit}dialog.sbs-backdrop:not([open]){display:none}dialog.sbs-backdrop::backdrop{background:transparent}.sbs-loading{padding:24px;text-align:center;color:var(--sbs-mut)}
 .sbs-dialog{--sbs-bg:#fff;--sbs-fg:#1d2330;--sbs-mut:#667085;--sbs-line:#d9dee8;--sbs-soft:#f3f5f9;--sbs-acc:#3b6fd8;
   box-sizing:border-box;width:min(520px,100%);max-height:calc(100dvh - 24px);display:flex;flex-direction:column;background:var(--sbs-bg);color:var(--sbs-fg);border:1px solid var(--sbs-line);border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.3);font:13px/1.5 system-ui,"Segoe UI","Malgun Gothic",sans-serif;overflow:hidden}
 @media(prefers-color-scheme:dark){.sbs-dialog{--sbs-bg:#171b23;--sbs-fg:#e6e9f0;--sbs-mut:#98a2b3;--sbs-line:#2c3342;--sbs-soft:#202632;--sbs-acc:#7da6ff}}
