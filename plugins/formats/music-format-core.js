@@ -330,7 +330,9 @@
   function midiChunk(type, payload) {
     const output = Array.from(new TextEncoder().encode(type));
     pushUint32(output, payload.length);
-    output.push(...payload);
+    // A long track can hold hundreds of thousands of bytes; spreading them into push()
+    // overflows the call stack ("Maximum call stack size exceeded"), so append in a loop.
+    for (let index = 0; index < payload.length; index++) output.push(payload[index]);
     return output;
   }
 
