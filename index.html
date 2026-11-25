@@ -22,7 +22,7 @@
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "모비바드 종합 MML 제작소", "url": "https://stardust-repo.github.io/mobibard/", "description": "연주 파일 변환부터 MML 생성·편집, 영상·오디오 분석, 리듬게임까지 브라우저에서 바로 쓰는 종합 MML 제작소입니다.", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any", "browserRequirements": "Requires JavaScript", "inLanguage": ["ko", "ja", "en", "zh-CN", "zh-TW"], "offers": {"@type": "Offer", "price": "0", "priceCurrency": "KRW"}}</script>
 
   <link rel="icon" href="assets/favicon.ico">
-  <link rel="stylesheet" href="home.css?v=6.0.0&amp;rev=20261120h">
+  <link rel="stylesheet" href="home.css?v=6.0.0&amp;rev=20261125f">
   <script>
     (() => {
       try {
@@ -63,6 +63,16 @@
       </div>
     </header>
 
+    <section class="event-card" aria-labelledby="eventTitle">
+      <div class="event-copy">
+        <p class="event-kicker" id="eventKicker"></p>
+        <h2 id="eventTitle"></h2>
+        <p class="event-description" id="eventDescription"></p>
+        <p class="event-deadline" id="eventDeadline"></p>
+      </div>
+      <a class="event-link" id="eventLink" href="https://forms.gle/S4h4kZWwutpAsYXc6" target="_blank" rel="noopener noreferrer"></a>
+    </section>
+
     <section class="product-grid" id="productGrid" aria-label="MobiBard products"></section>
 
     <section class="soundfont-card" aria-labelledby="soundfontTitle">
@@ -85,6 +95,6 @@
       <span id="footerText"></span>
     </footer>
   </main>
-  <script src="home.js?v=6.0.0&amp;rev=20261120c"></script>
+  <script src="home.js?v=6.0.0&amp;rev=20261125f"></script>
 </body>
 </html>

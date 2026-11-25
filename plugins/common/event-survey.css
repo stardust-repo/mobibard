@@ -1,0 +1,7 @@
+/* Temporary event: usage survey button (remove with the event) */
+.event-survey-button{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-height:36px;padding:0 12px;border:1px solid #d97706;border-radius:9px;background:#ffedd5;color:#713b00;box-shadow:inset 0 1px rgba(255,255,255,.48),0 1px 2px rgba(15,23,42,.12);font:inherit;font-size:13px;font-weight:850;line-height:1;white-space:nowrap;text-decoration:none;cursor:pointer;user-select:none;transition:transform .16s ease,filter .16s ease}
+.event-survey-button:hover{filter:brightness(1.06) saturate(1.08);transform:translateY(-1px)}
+.event-survey-button:focus-visible{outline:2px solid #d97706;outline-offset:2px}
+html[data-theme="dark"] .event-survey-button{border-color:#fbbf24;background:#51300b;color:#fff7df;box-shadow:inset 0 1px rgba(255,255,255,.08),0 1px 4px rgba(0,0,0,.32)}
+@media (max-width:900px){.event-survey-button{min-height:32px;padding:0 8px;font-size:12px}}
+@media (prefers-reduced-motion:reduce){.event-survey-button{transition:none}}
