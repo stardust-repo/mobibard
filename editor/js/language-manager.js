@@ -5,7 +5,7 @@
   const LEGACY_PREF_KEY = "mobibard-language";
   const DEFAULT_LANGUAGE = "ko";
   const LOCALE_VERSION = "6.0.0";
-  const LOCALE_REVISION = "20261024g-panels2";
+  const LOCALE_REVISION = "20261125-overview4";
   const KEY_PATTERN = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*$/;
   const SUPPORTED = Object.freeze({
     ko: { file: "ko.js", htmlLang: "ko" },

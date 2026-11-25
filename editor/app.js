@@ -227,6 +227,8 @@
     velocityLaneVisibleToggle: document.querySelector("#velocityLaneVisibleToggle"),
     audioLaneVisibleToggle: document.querySelector("#audioLaneVisibleToggle"),
     addItemInstantlyToggle: document.querySelector("#addItemInstantlyToggle"),
+    overviewTrackInfoToggle: document.querySelector("#overviewTrackInfoToggle"),
+    overviewChannelOrderToggle: document.querySelector("#overviewChannelOrderToggle"),
     playheadSoundSelect: document.querySelector("#playheadSoundSelect"),
     editUndoButton: document.querySelector("#editUndoButton"),
     editRedoButton: document.querySelector("#editRedoButton"),
@@ -1009,6 +1011,8 @@
     playheadSoundMode: "release",
     velocityLaneVisible: false,
     overviewTrackInfoVisible: true,
+    // Full-track bar: false (default) = notes placed by pitch, true = one fixed lane per channel.
+    overviewChannelOrder: false,
     velocityLaneScope: "channel",
     velocityLaneInteraction: null,
     velocityLaneHitRegions: [],
@@ -5350,8 +5354,29 @@
     }
   }
 
+  // Full-track bar layout: unchecked = notes by pitch (default), checked = one lane per channel in channel order.
+  function loadStoredOverviewChannelOrder() {
+    try {
+      const raw = window.localStorage.getItem("mobibard-overview-channel-order");
+      return raw != null && raw !== "0" && raw !== "false";
+    } catch {
+      return false;
+    }
+  }
+
+  function setOverviewChannelOrder(value, { persist = true, redraw = true } = {}) {
+    state.overviewChannelOrder = Boolean(value);
+    syncSettingsToggle(elements.overviewChannelOrderToggle, state.overviewChannelOrder);
+    if (persist) {
+      try { window.localStorage.setItem("mobibard-overview-channel-order", state.overviewChannelOrder ? "1" : "0"); } catch {}
+    }
+    if (redraw) drawOverviewTimeline();
+    return state.overviewChannelOrder;
+  }
+
   function setOverviewTrackInfoVisible(visible, { persist = true, redraw = true } = {}) {
     state.overviewTrackInfoVisible = Boolean(visible);
+    syncSettingsToggle(elements.overviewTrackInfoToggle, state.overviewTrackInfoVisible);
     if (persist) {
       try {
         const value = state.overviewTrackInfoVisible ? "1" : "0";
@@ -7586,14 +7611,19 @@
       return overviewTimelineActivityCache;
     }
     let lastNoteEnd = 0;
+    let minPitch = Infinity;
+    let maxPitch = -Infinity;
     const channelActivities = [];
     state.channels.forEach((channel, index) => {
       const intervals = [];
       for (const note of channel.notes || []) {
         const start = Math.max(0, Number(note.startBeat) || 0);
         const end = start + Math.max(CONFIG.minimumNoteBeat, Number(note.durationBeat) || CONFIG.minimumNoteBeat);
+        const pitch = clamp(Math.round(Number(note.pitch) || 60), 0, 127);
         lastNoteEnd = Math.max(lastNoteEnd, end);
-        intervals.push({ start, end });
+        if (pitch < minPitch) minPitch = pitch;
+        if (pitch > maxPitch) maxPitch = pitch;
+        intervals.push({ start, end, pitch });
       }
       if (intervals.length) {
         intervals.sort((a, b) => a.start - b.start || a.end - b.end);
@@ -7612,8 +7642,80 @@
       audioClipsRef: state.audioClips,
       endBeat: Math.max(CONFIG.beatsPerMeasure, lastNoteEnd, lastAudioEnd, lastPartBeat, playbackRange.startBeat ?? 0, playbackRange.endBeat ?? 0),
       channelActivities,
+      minPitch: Number.isFinite(minPitch) ? minPitch : 60,
+      maxPitch: Number.isFinite(maxPitch) ? maxPitch : 72,
     };
     return overviewTimelineActivityCache;
+  }
+
+  // Pitch layout: every note of every channel at its pitch height (high notes on top).
+  function drawOverviewPitchNotes(context, overviewData, width, height, endBeat, activeChannelId) {
+    const entries = overviewData.channelActivities || [];
+    if (!entries.length || !(endBeat > 0)) return;
+    const lowPitch = overviewData.minPitch;
+    const highPitch = Math.max(lowPitch + 12, overviewData.maxPitch);
+    const padTop = 2;
+    const padBottom = 2;
+    const usable = Math.max(4, height - padTop - padBottom);
+    const step = usable / (highPitch - lowPitch + 1);
+    const barHeight = Math.max(1, Math.min(2.2, step * 1.2));
+    const yOf = (pitch) => padTop + (highPitch - pitch + 0.5) * step;
+    const ordered = [
+      ...entries.filter((entry) => String(entry.channel?.id) !== String(activeChannelId)),
+      ...entries.filter((entry) => String(entry.channel?.id) === String(activeChannelId)),
+    ];
+    for (const entry of ordered) {
+      const { channel, index, intervals } = entry;
+      const isActive = activeChannelId != null && String(channel?.id) === String(activeChannelId);
+      const h = isActive ? Math.max(1.6, barHeight * 1.5) : barHeight;
+      context.globalAlpha = isChannelEffectivelyMuted(channel) ? 0.24 : (!isChannelEffectivelyVisible(channel) ? 0.38 : (isActive ? 1 : 0.85));
+      context.fillStyle = getChannelColor(channel, index);
+      // Merge touching notes of the same pitch so long passages stay cheap to draw.
+      const lastXByPitch = new Map();
+      for (const interval of intervals) {
+        const x1 = clamp(interval.start / endBeat * width, 0, width);
+        const x2 = clamp(interval.end / endBeat * width, 0, width);
+        const previous = lastXByPitch.get(interval.pitch);
+        if (previous && x1 <= previous.x2 + 0.6) {
+          if (x2 > previous.x2) previous.x2 = x2;
+          continue;
+        }
+        if (previous) context.fillRect(previous.x1, yOf(interval.pitch) - h / 2, Math.max(0.8, previous.x2 - previous.x1), h);
+        lastXByPitch.set(interval.pitch, { x1, x2 });
+      }
+      for (const [pitch, run] of lastXByPitch) {
+        context.fillRect(run.x1, yOf(pitch) - h / 2, Math.max(0.8, run.x2 - run.x1), h);
+      }
+    }
+    context.globalAlpha = 1;
+  }
+
+  // Rough time marks (like the Player timeline): only a few labels, enough to see roughly where you are.
+  function drawOverviewTimeLabels(context, width, height, endBeat) {
+    if (!(endBeat > 0) || width < 120) return;
+    const totalSeconds = beatToSeconds(Math.min(endBeat, getTotalBeats()));
+    if (!(totalSeconds > 0)) return;
+    const minSpacingPx = 90;
+    const candidates = [5, 10, 15, 30, 60, 120, 180, 300, 600];
+    const interval = candidates.find((seconds) => seconds / totalSeconds * width >= minSpacingPx) || 600;
+    const isLight = state.theme === "light";
+    context.save();
+    context.font = "600 9px system-ui, sans-serif";
+    context.textBaseline = "bottom";
+    context.lineWidth = 3;
+    context.strokeStyle = isLight ? "rgba(255,255,255,.85)" : "rgba(16,20,28,.85)";
+    for (let seconds = interval; seconds < totalSeconds - interval * 0.35; seconds += interval) {
+      const beat = secondsToBeat(seconds);
+      const x = Math.round(clamp(beat / endBeat * width, 0, width)) + 0.5;
+      context.fillStyle = isLight ? "rgba(60,72,90,.35)" : "rgba(220,228,240,.28)";
+      context.fillRect(x - 0.5, height - 5, 1, 5);
+      const minutes = Math.floor(seconds / 60);
+      const label = `${minutes}:${String(Math.round(seconds % 60)).padStart(2, "0")}`;
+      context.strokeText(label, x + 2, height - 1);
+      context.fillStyle = isLight ? "rgba(52,64,82,.92)" : "rgba(226,234,246,.9)";
+      context.fillText(label, x + 2, height - 1);
+    }
+    context.restore();
   }
 
   function getOverviewTimelineEndBeat() {
@@ -7664,7 +7766,9 @@
     ];
 
     context.lineCap = "butt";
-    for (const entry of drawOrder) {
+    if (!state.overviewChannelOrder) {
+      drawOverviewPitchNotes(context, overviewData, width, height, endBeat, activeChannelId);
+    } else for (const entry of drawOrder) {
       const lane = laneIndexByEntry.get(entry) ?? 0;
       const { channel, index, intervals } = entry;
       const isActiveChannel = activeChannelId != null && String(channel?.id) === String(activeChannelId);
@@ -7713,6 +7817,8 @@
       flush();
     }
     context.globalAlpha = 1;
+
+    drawOverviewTimeLabels(context, width, height, endBeat);
 
     // Show the currently visible roll window inside the full-song overview.
     const visibleStartBeat = clamp(xToBeat(elements.rollViewport.scrollLeft), 0, endBeat);
@@ -35167,16 +35273,27 @@
       const beat = overviewTimelineBeatFromPointer(event);
       const snappedBeat = clamp(snapBeat(beat), 0, getTotalBeats());
       return [
-        { label: i18nText("leading.menu"), action: openLeadingSilenceDialog },
-        { label: i18nText("timeline.edit_measure"), action: () => openMeasureEditWorkspace({ beat: snappedBeat, scopeType: "all" }) },
-        { label: i18nText("rest_cleanup.title"), action: openRestCleanupDialog },
-        { label: i18nText("volume.edit_channels"), action: () => openChannelVolumeDialog() },
-        { label: i18nText("timeline.auto_part"), action: openAutoPartDialog },
-        "separator",
         {
-          label: i18nText(state.overviewTrackInfoVisible !== false ? "timeline.track_info_hide" : "timeline.track_info_show"),
+          label: i18nText("menu.edit"),
+          items: [
+            { label: i18nText("leading.menu"), action: openLeadingSilenceDialog },
+            { label: i18nText("timeline.edit_measure"), action: () => openMeasureEditWorkspace({ beat: snappedBeat, scopeType: "all" }) },
+            { label: i18nText("rest_cleanup.title"), action: openRestCleanupDialog },
+            { label: i18nText("volume.edit_channels"), action: () => openChannelVolumeDialog() },
+            { label: i18nText("timeline.auto_part"), action: openAutoPartDialog },
+          ],
+        },
+        {
+          label: i18nText("timeline.track_info_show"),
+          active: state.overviewTrackInfoVisible !== false,
           action: () => setOverviewTrackInfoVisible(state.overviewTrackInfoVisible === false),
         },
+        {
+          label: i18nText("timeline.channel_order"),
+          active: Boolean(state.overviewChannelOrder),
+          action: () => setOverviewChannelOrder(!state.overviewChannelOrder),
+        },
+        "separator",
         { label: i18nText("timeline.move_playhead_here"), action: () => seekPlayheadBeat(snappedBeat) },
         {
           label: i18nText("timeline.move_first_measure"),
@@ -36932,6 +37049,12 @@
     elements.addItemInstantlyToggle?.addEventListener("click", () => {
       setAddItemInstantly(!state.addItemInstantly);
     });
+    elements.overviewTrackInfoToggle?.addEventListener("click", () => {
+      setOverviewTrackInfoVisible(state.overviewTrackInfoVisible === false);
+    });
+    elements.overviewChannelOrderToggle?.addEventListener("click", () => {
+      setOverviewChannelOrder(!state.overviewChannelOrder);
+    });
     elements.editUndoButton.addEventListener("click", () => { closeEditMenu(); undoHistory(); });
     elements.editRedoButton.addEventListener("click", () => { closeEditMenu(); redoHistory(); });
     elements.editCopyButton.addEventListener("click", () => { closeEditMenu(); copyCurrentContext(); });
@@ -38230,6 +38353,7 @@
     window.addEventListener("mobibard:editoraccountchange", handleOverviewTrackInfoAccountChange);
     state.overviewTrackInfoVisible = loadStoredOverviewTrackInfoVisible(overviewTrackInfoCacheScope);
     setOverviewTrackInfoVisible(state.overviewTrackInfoVisible, { persist: false, redraw: false });
+    setOverviewChannelOrder(loadStoredOverviewChannelOrder(), { persist: false, redraw: false });
     state.velocityLaneScope = loadStoredVelocityLaneScope();
     setVelocityLaneScope(state.velocityLaneScope, { persist: false, redraw: false });
     state.playbackRate = loadStoredPlaybackRate();

@@ -12127,25 +12127,32 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const start = Math.max(0, Number(note?.start) || 0);
       const duration = Math.max(0, Number(note?.durationSec) || 0);
       if (!(duration > 0)) continue;
-      timelineActivityIntervals[part].push({ start, end: start + duration });
+      const midi = Math.max(0, Math.min(127, Math.round(Number(note?.midi) || 60)));
+      timelineActivityIntervals[part].push({ start, end: start + duration, midi });
     }
 
+    // Notes are drawn at their pitch height; touching notes of the same pitch are merged.
+    let minMidi = Infinity;
+    let maxMidi = -Infinity;
     const mergeGapSec = 0.004;
     for (let part = 0; part < 6; part++) {
       const source = timelineActivityIntervals[part];
-      if (source.length <= 1) continue;
-      source.sort((a, b) => a.start - b.start || a.end - b.end);
+      source.sort((a, b) => a.midi - b.midi || a.start - b.start || a.end - b.end);
       const merged = [];
       for (const interval of source) {
+        if (interval.midi < minMidi) minMidi = interval.midi;
+        if (interval.midi > maxMidi) maxMidi = interval.midi;
         const previous = merged[merged.length - 1];
-        if (previous && interval.start <= previous.end + mergeGapSec) {
+        if (previous && previous.midi === interval.midi && interval.start <= previous.end + mergeGapSec) {
           if (interval.end > previous.end) previous.end = interval.end;
         } else {
-          merged.push({ start: interval.start, end: interval.end });
+          merged.push({ start: interval.start, end: interval.end, midi: interval.midi });
         }
       }
       timelineActivityIntervals[part] = merged;
     }
+    timelineActivityIntervals.minMidi = Number.isFinite(minMidi) ? minMidi : 60;
+    timelineActivityIntervals.maxMidi = Number.isFinite(maxMidi) ? maxMidi : 72;
     return timelineActivityIntervals;
   }
 
@@ -12177,17 +12184,20 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     ctx.clearRect(0, 0, cssWidth, cssHeight);
     if (!(duration > 0)) return;
 
+    // Notes are placed by pitch (high notes on top) instead of one fixed lane per part.
     const intervalsByPart = getTimelineActivityIntervals();
-    const laneHeight = cssHeight / 6;
-    const lineWidth = Math.max(1.5, Math.min(2.6, laneHeight * 0.48));
+    const lowMidi = intervalsByPart.minMidi;
+    const highMidi = Math.max(lowMidi + 12, intervalsByPart.maxMidi);
+    const padY = 2;
+    const usable = Math.max(4, cssHeight - padY * 2);
+    const step = usable / (highMidi - lowMidi + 1);
+    const lineWidth = Math.max(1.2, Math.min(2.4, step * 1.2));
     const pixelMergeGap = 0.85;
 
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    ctx.lineCap = "butt";
     for (let part = 0; part < 6; part++) {
       const intervals = intervalsByPart[part] || [];
       if (!intervals.length) continue;
-      const y = laneHeight * (part + 0.5);
       ctx.strokeStyle = timelinePartColor(part);
       ctx.globalAlpha = partMuteStates[part] ? 0.24 : 0.9;
       ctx.lineWidth = lineWidth;
@@ -12195,12 +12205,13 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
       let pendingStart = -1;
       let pendingEnd = -1;
+      let pendingY = 0;
       const flush = () => {
         if (pendingStart < 0) return;
         const x1 = Math.max(0, Math.min(cssWidth, pendingStart));
         const x2 = Math.max(x1 + 0.8, Math.min(cssWidth, pendingEnd));
-        ctx.moveTo(x1, y);
-        ctx.lineTo(x2, y);
+        ctx.moveTo(x1, pendingY);
+        ctx.lineTo(x2, pendingY);
         pendingStart = -1;
         pendingEnd = -1;
       };
@@ -12210,15 +12221,14 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         const end = Math.max(start, Math.min(duration, Number(interval.end) || start));
         const x1 = start / duration * cssWidth;
         const x2 = end / duration * cssWidth;
-        if (pendingStart < 0) {
-          pendingStart = x1;
-          pendingEnd = x2;
-        } else if (x1 <= pendingEnd + pixelMergeGap) {
+        const y = padY + (highMidi - interval.midi + 0.5) * step;
+        if (pendingStart >= 0 && y === pendingY && x1 <= pendingEnd + pixelMergeGap) {
           if (x2 > pendingEnd) pendingEnd = x2;
         } else {
           flush();
           pendingStart = x1;
           pendingEnd = x2;
+          pendingY = y;
         }
       }
       flush();
