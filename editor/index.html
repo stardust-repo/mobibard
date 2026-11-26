@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=6.0.0&rev=20261125-overview4";
+  const suffix = location.protocol === "file:" ? "" : "?v=6.0.0&rev=20261126-ai21";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=6.0.0&amp;rev=20261125-overview4"></script>
+<script src="js/language-manager.js?v=6.0.0&amp;rev=20261126-ai21"></script>
 <title data-i18n="app.title">모비바드 v6.0 - MML 편집기</title>
 <script src="../plugins/common/seo-title.js" data-suffix=" - MML 편집기"></script>
 <meta name="description" content="MML·MIDI를 피아노롤에서 편집하고 채널, 템포, 참조 오디오를 프로젝트로 관리하는 MML 편집기입니다.">
@@ -499,13 +499,13 @@
       </div>
       <div id="w2mPeakGroup" hidden>
         <div class="midi-import-slider-group">
-          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mPeakOnsetLegend" data-i18n="audio_midi.opt_peak_onset">노트 시작 기준</span><output id="w2mPeakOnsetValue" for="w2mPeakOnset">0.13</output></div>
-          <input type="range" id="w2mPeakOnset" min="0.02" max="0.6" step="0.01" value="0.13" aria-labelledby="w2mPeakOnsetLegend"/>
+          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mPeakOnsetLegend" data-i18n="audio_midi.opt_peak_onset">노트 시작 기준</span><output id="w2mPeakOnsetValue" for="w2mPeakOnset">0.25</output></div>
+          <input type="range" id="w2mPeakOnset" min="0.02" max="0.6" step="0.01" value="0.25" aria-labelledby="w2mPeakOnsetLegend"/>
           <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_peak_onset_left">작은 노트까지</span><span data-i18n="audio_midi.opt_peak_onset_right">확실한 노트만</span></div>
         </div>
         <div class="midi-import-slider-group">
-          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mPeakFrameLegend" data-i18n="audio_midi.opt_peak_frame">소리 유지 기준</span><output id="w2mPeakFrameValue" for="w2mPeakFrame">0.50</output></div>
-          <input type="range" id="w2mPeakFrame" min="0.1" max="0.9" step="0.05" value="0.50" aria-labelledby="w2mPeakFrameLegend"/>
+          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mPeakFrameLegend" data-i18n="audio_midi.opt_peak_frame">소리 유지 기준</span><output id="w2mPeakFrameValue" for="w2mPeakFrame">0.40</output></div>
+          <input type="range" id="w2mPeakFrame" min="0.1" max="0.9" step="0.05" value="0.40" aria-labelledby="w2mPeakFrameLegend"/>
           <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_peak_frame_left">길게 이어 붙임</span><span data-i18n="audio_midi.opt_peak_frame_right">짧게 끊음</span></div>
         </div>
         <div class="midi-import-slider-group">
@@ -524,7 +524,11 @@
         <input type="range" id="w2mDrum" min="0.05" max="0.4" step="0.01" value="0.13" aria-labelledby="w2mDrumLegend"/>
         <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_drum_left">약한 타격까지</span><span data-i18n="audio_midi.opt_drum_right">확실한 타격만</span></div>
       </div>
-      <label class="midi-import-check" id="w2mFingerprintLabel" title="곡 전체에서 소리가 비슷한 음을 같은 악기로 모읍니다. 한 악기가 이 음은 피아노, 저 음은 기타로 갈려 나오는 것을 줄여 줍니다. 악기 이름이 실제와 다를 수는 있지만, 같은 소리는 같은 악기가 됩니다." data-i18n-title="audio_midi.opt_fingerprint_hint"><input id="w2mFingerprint" type="checkbox" checked/><span data-i18n="audio_midi.opt_fingerprint">악기 일관성 보정</span></label>
+      <div class="midi-import-slider-group">
+        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mNoteGateLegend" data-i18n="audio_midi.opt_note_gate">가짜 노트 걸러내기</span><output id="w2mNoteGateValue" for="w2mNoteGate">OFF</output></div>
+        <input type="range" id="w2mNoteGate" min="0" max="0.9" step="0.05" value="0" aria-labelledby="w2mNoteGateLegend"/>
+        <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_note_gate_left">거르지 않음</span><span data-i18n="audio_midi.opt_note_gate_right">많이 거름</span></div>
+      </div>
       <div class="midi-import-radio-group" role="radiogroup" aria-labelledby="w2mVolumeLegend">
         <span class="midi-import-setting-title" id="w2mVolumeLegend" data-i18n="audio_midi.opt_volume">볼륨(셈여림)</span>
         <label class="midi-import-radio"><input type="radio" name="w2mVolume" value="auto" checked/><span data-i18n="audio_midi.opt_volume_auto">자동 추정</span></label>
@@ -858,8 +862,8 @@
 <script src="../plugins/google/firebase-config.js?v=5.1.0"></script>
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
-<script src="../plugins/ai/wave2midi/wave2midi.js?v=2.0.13"></script>
-<script src="app.js?v=6.0.0&amp;rev=20261125-overview4"></script>
+<script src="../plugins/ai/wave2midi/wave2midi.js?v=2.1.0"></script>
+<script src="app.js?v=6.0.0&amp;rev=20261126-ai21"></script>
 <script src="js/account-drive.js?v=6.0.0&amp;rev=20261103-settings1" type="module"></script>
 </body>
 </html>

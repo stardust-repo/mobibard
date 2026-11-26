@@ -81,39 +81,18 @@ export class Frontend {
   }
 }
 
-// ---------------------------------------------------------------- per-note feature (the 128-d vector that feeds the model's heads)
-// The model picks the K most note-start-like cells of every window itself (score = max(onset, note-start probability))
-// and returns, per cell, the unit-length mean of the 128-d head feature over that frame and the next 4:
-//   fpi [K] cell index (frame*88 + pitch index), fpv [K] score, fpc [K, D] vector.
-// Cells whose score is below thr are junk filler and are dropped here (the list is sorted, so it is a prefix).
-export function selectFeat(fpi, fpv, fpc, D = 128, thr = 0.02) {
-  let n = 0; while (n < fpi.length && fpv[n] >= thr) n++;
-  return { fpCells: Uint32Array.from(fpi.subarray(0, n)), fpScore: Float32Array.from(fpv.subarray(0, n)), fpVals: Float32Array.from(fpc.subarray(0, n * D)) };
-}
-// The vector of a note: the highest-scoring cell within +-1 frame of the note's start frame (null when there is none).
-function noteFeat(featMap, t, p, T, D) {
-  let best = null, bs = -1;
-  for (let f = Math.max(t - 1, 0); f <= Math.min(t + 1, T - 1); f++) {
-    const e = featMap.get(f * NP + p); if (e && e.s > bs) { best = e; bs = e.s; }
-  }
-  if (!best) return null;
-  let q = 0; for (let j = 0; j < D; j++) q += best.v[j] * best.v[j];
-  const acc = new Float32Array(D), r = 1 / Math.sqrt(Math.max(q, 1e-12));
-  for (let j = 0; j < D; j++) acc[j] = best.v[j] * r;
-  return acc;
-}
-
 // ---------------------------------------------------------------- whole song: windows + cross-fade (predict_song)
 // runWindow(features) -> {onset, frame, offset, drum, multi: [600*88], inst: [600*88*K], state: [600*88*3]} (probabilities)
+// plus, for v2.1, the note layer of the window: nidx [512] (cell = frame*88 + pitch index), ninst [512*K], nrole [512*3],
+// nmulti [512], nis [512] (is-a-real-note score). Every note start the model decides on carries its own instrument there.
 // opts.prepare(seg) -> Promise<features> (e.g. a pool of Web Workers); opts.lookahead = windows prepared in advance.
 // The next window's network run is started BEFORE the finished one is added up, so the accelerator is not left
 // waiting for the CPU (frontend of one window takes about as long as several network runs).
 //
 // MobiBard changes against the upstream web export (keep them when this file is replaced):
 //   opts.concurrency  up to this many network runs in flight (CPU: one per session lane; GPU: 1)
-//   opts.sparseFeat   128: also merge the per-note features of each window (out.fpCells/fpScore/fpVals, see selectFeat)
-//   opts.keys         which model outputs are accumulated (default: all). The state decoder needs only
-//                     ["state", "drum", "inst"], which saves memory on long songs.
+//   opts.keys         which per-cell model outputs are accumulated (default: all). The state decoder needs only
+//                     ["state", "drum", "inst"], which saves memory on long songs. The note layer (nidx ...) is always merged.
 export async function predictSong(wave, meta, frontend, runWindow, onProgress, opts = {}) {
   let W = Math.round(meta.window_seconds * FPS); W += W % 2;
   const O = Math.min(Math.round(meta.overlap_seconds * FPS), W >> 1), H = W - O;
@@ -127,7 +106,7 @@ export async function predictSong(wave, meta, frontend, runWindow, onProgress, o
   const prepare = opts.prepare || (seg => frontend.features(seg, W)), ahead = Math.max(conc, opts.lookahead ?? 0);
   const segment = wi => { const seg = new Float32Array(W * HOP), st = starts[wi];
     seg.set(wave.subarray(st * HOP, Math.min(wave.length, (st + W) * HOP))); return seg; };
-  const featSum = new Map(), pending = new Map();
+  const nlBest = new Map(), pending = new Map();   // v2.1 note layer: cell key -> row of the heaviest window
   const start = wi => { if (wi < starts.length && !pending.has(wi)) pending.set(wi, Promise.resolve(prepare(segment(wi)))); };
   const launch = async wi => { for (let j = wi; j <= wi + ahead; j++) start(j);
     const x = await pending.get(wi); pending.delete(wi); return runWindow(x); };
@@ -151,14 +130,14 @@ export async function predictSong(wave, meta, frontend, runWindow, onProgress, o
       for (let i = 0; i < n; i++) { const wi_ = w[i], s0 = (st + i) * c, d0 = i * c; for (let j = 0; j < c; j++) a[s0 + j] += wi_ * d[d0 + j]; }
     }
     for (let i = 0; i < n; i++) wsum[st + i] += w[i];
-    if (opts.sparseFeat && out.fpCells) {
-      const D = opts.sparseFeat, cells = out.fpCells, vals = out.fpVals, sc = out.fpScore;
-      for (let c = 0; c < cells.length; c++) {
-        const i = (cells[c] / NP) | 0; if (i >= n) continue;
-        const key = st * NP + cells[c], wi_ = w[i];
-        let e = featSum.get(key); if (!e) { e = { v: new Float32Array(D), w: 0, s: 0 }; featSum.set(key, e); }
-        const v = e.v, o = c * D; for (let j = 0; j < D; j++) v[j] += wi_ * vals[o + j];
-        e.w += wi_; e.s += wi_ * sc[c];
+    if (out.nidx) {                               // v2.1 note layer: keep, per cell, the row of the window that sees it best
+      const Kc = out.nidx.length;
+      for (let k = 0; k < Kc; k++) {
+        const c = Number(out.nidx[k]), tt = Math.floor(c / NP), pp = c - tt * NP;
+        if (tt >= n) continue;
+        const key = (st + tt) * NP + pp, wt = w[tt], old = nlBest.get(key);
+        if (!old || wt > old.w) nlBest.set(key, { w: wt, inst: out.ninst.slice(k * K, (k + 1) * K), role: out.nrole ? out.nrole.slice(k * 3, k * 3 + 3) : null,
+                                                  multi: out.nmulti[k], is: out.nis[k] });
       }
     }
     stats.accumulate += performance.now() - ta;
@@ -168,10 +147,13 @@ export async function predictSong(wave, meta, frontend, runWindow, onProgress, o
     const c = per[k] * NP, a = acc[k];
     for (let t = 0; t < T; t++) { const d = Math.max(wsum[t], 1e-6); for (let j = 0; j < c; j++) a[t * c + j] /= d; }
   }
-  if (opts.sparseFeat) {
-    const D = opts.sparseFeat, featMap = new Map();
-    for (const [key, e] of featSum) { const d = Math.max(e.w, 1e-6), v = e.v; for (let j = 0; j < D; j++) v[j] /= d; featMap.set(key, { v, s: e.s / d }); }
-    acc.featMap = featMap; acc.featDim = D;
+  if (nlBest.size) {
+    const ks = [...nlBest.keys()].sort((x, y) => x - y), M = ks.length;
+    const nl = { key: Int32Array.from(ks), inst: new Float32Array(M * K), role: new Float32Array(M * 3),
+                 multi: new Float32Array(M), is: new Float32Array(M), byP: new Map() };
+    ks.forEach((k, r) => { const e = nlBest.get(k); nl.inst.set(e.inst, r * K); if (e.role) nl.role.set(e.role, r * 3); nl.multi[r] = e.multi; nl.is[r] = e.is;
+      const p = k % NP, t = (k - p) / NP; if (!nl.byP.has(p)) nl.byP.set(p, { fr: [], rows: [] }); const bp = nl.byP.get(p); bp.fr.push(t); bp.rows.push(r); });
+    acc.nl = nl;                                  // keys are sorted, so each pitch's frames are sorted too
   }
   acc.T = T; acc.stats = stats; return acc;
 }
@@ -198,14 +180,31 @@ function subframe(x, T, P, t, p) {
 }
 function lowerBound(arr, v) { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m] < v) lo = m + 1; else hi = m; } return lo; }
 
+/** Row of the note layer's candidate within +-2 frames of (t, p), or -1 (labels.nl_row). */
+export function nlRow(pr, t, p) {
+  const b = pr.nl && pr.nl.byP.get(p); if (!b) return -1;
+  let lo = 0, hi = b.fr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (b.fr[m] < t) lo = m + 1; else hi = m; }
+  let best = -1, bd = 3;
+  for (const k of [lo - 1, lo]) if (k >= 0 && k < b.fr.length && Math.abs(b.fr[k] - t) < bd) { best = b.rows[k]; bd = Math.abs(b.fr[k] - t); }
+  return best;
+}
+// note_gate: a note start the note layer rates below this as "a real note" is dropped (0 = off; cells without a row are kept)
+const gateOk = (pr, th, t, p) => { const g = th.note_gate || 0; if (g <= 0) return true; const r = nlRow(pr, t, p); return r < 0 || pr.nl.is[r] >= g; };
+
 function makeInstruments(pr, meta) {
   const th = meta.thresholds, T = pr.T, P = NP, K = meta.classes.length;
-  return (t, e, p, sink) => {
+  return (t, e, p) => {
     if (K <= 1) return [0];
-    const h = Math.max(Math.min(e, t + (th.inst_frames | 0)), t + 1), sc = new Float64Array(K);
+    const r = nlRow(pr, t, p);
+    if (r >= 0) {                                 // v2.1: the note layer decides the instrument per note
+      const sc = pr.nl.inst.subarray(r * K, (r + 1) * K), order = [...Array(K).keys()].sort((a, b) => sc[b] - sc[a] || a - b);
+      const ks = [order[0]]; for (let k = 0; k < K; k++) if (sc[k] >= th.inst_multi && k !== order[0]) ks.push(k);
+      if (ks.length === 1 && pr.nl.multi[r] >= (th.multi ?? 0.5)) { const more = order.slice(1).filter(k => sc[k] >= 0.5); ks.push(...(more.length ? more : [order[1]])); }
+      return ks;
+    }
+    const h = Math.max(Math.min(e, t + (th.inst_frames | 0)), t + 1), sc = new Float64Array(K);   // no note-layer row: frame-wise scores
     for (let f = t; f < h; f++) for (let k = 0; k < K; k++) sc[k] += pr.inst[(f * P + p) * K + k];
     for (let k = 0; k < K; k++) sc[k] /= (h - t);
-    if (sink) sink.sc = sc;
     const order = [...Array(K).keys()].sort((a, b) => sc[b] - sc[a] || a - b);
     const best = order[0], ks = [best];
     for (let k = 0; k < K; k++) if (sc[k] >= th.inst_multi && k !== best) ks.push(k);
@@ -217,8 +216,8 @@ function makeInstruments(pr, meta) {
   };
 }
 
-export function decodeNotes(pr, meta, opts = {}) {
-  const th = meta.thresholds, T = pr.T, P = NP, K = meta.classes.length, minf = th.min_frames | 0, out = [], fp = [];
+export function decodeNotes(pr, meta) {
+  const th = meta.thresholds, T = pr.T, P = NP, K = meta.classes.length, minf = th.min_frames | 0, out = [];
   const instruments = makeInstruments(pr, meta);
   const on = peaks(pr.onset, T, P, th.onset);
   if (on.length) {
@@ -228,20 +227,14 @@ export function decodeNotes(pr, meta, opts = {}) {
     for (const [p, list] of [...byP].sort((a, b) => a[0] - b[0])) {
       const stops = []; for (let t = 0; t < T; t++) if (pr.frame[t * P + p] < th.frame || offPeak[t * P + p]) stops.push(t);
       list.forEach((o, i) => {
+        if (!gateOk(pr, th, o.t, p)) return;
         const t = o.t, nxt = i + 1 < list.length ? list[i + 1].t : T, j = lowerBound(stops, t + minf);
         let e = j < stops.length ? stops[j] : T; e = Math.min(e, nxt); e = Math.max(e, Math.min(t + 1, T));
         const s = subframe(pr.onset, T, P, t, p), onset = Math.max(s, 0) / FPS; let offset = e / FPS;
         if (offset <= onset) offset = onset + 1 / FPS;
-        const sink = {}, ks = instruments(t, e, p, sink);
-        // MobiBard: instrument-consistency step also for the peak decoder (same as decodeStates)
-        if (opts.fingerprint && ks.length === 1 && sink.sc) fp.push({ idx: out.length, pitch: p, onset, sc: sink.sc, k: ks[0], vec: pr.featMap ? noteFeat(pr.featMap, t, p, T, pr.featDim || 128) : null });
-        for (const k of ks) out.push([p + PITCH_MIN, meta.classes[k], Math.fround(onset), Math.fround(offset), pr.onset[t * P + p]]);
+        for (const k of instruments(t, e, p)) out.push([p + PITCH_MIN, meta.classes[k], Math.fround(onset), Math.fround(offset), pr.onset[t * P + p]]);
       });
     }
-  }
-  if (opts.fingerprint && fp.length) {
-    const stats = refineByFingerprint(fp, out, meta, { ...(opts.fingerprint === true ? {} : opts.fingerprint), debug: opts.debug });
-    if (opts.stats) Object.assign(opts.stats, stats);
   }
   for (const { t, p } of peaks(pr.drum, T, P, th.drum)) {
     const o = Math.max(subframe(pr.drum, T, P, t, p), 0) / FPS;
@@ -273,8 +266,8 @@ function statePath(st, T, P, bias) {
   return path;
 }
 
-export function decodeStates(pr, meta, bias = 0, opts = {}) {
-  const th = meta.thresholds, T = pr.T, P = NP, K = meta.classes.length, out = [], fp = [];
+export function decodeStates(pr, meta, bias = 0) {
+  const th = meta.thresholds, T = pr.T, P = NP, K = meta.classes.length, out = [];
   const path = statePath(pr.state, T, P, bias), ps = new Float32Array(T * P);
   for (let i = 0; i < T * P; i++) ps[i] = pr.state[i * 3 + 1];
   const instruments = makeInstruments(pr, meta);
@@ -290,16 +283,11 @@ export function decodeStates(pr, meta, bias = 0, opts = {}) {
       let e = j < offs.length ? offs[j] : T; e = Math.min(e, i + 1 < ts.length ? ts[i + 1] : T); e = Math.max(e, Math.min(t + 1, T));
       let r = t; while (r + 1 < e && path[(r + 1) * P + p] === 1) r++;
       let pk = t; for (let f = t + 1; f <= r; f++) if (ps[f * P + p] > ps[pk * P + p]) pk = f;
+      if (!gateOk(pr, th, pk, p)) return;
       const onset = Math.max(subframe(ps, T, P, pk, p), 0) / FPS; let offset = e / FPS;
       if (offset <= onset) offset = onset + 1 / FPS;
-      const sink = {}, ks = instruments(pk, e, p, sink);
-      if (opts.fingerprint && ks.length === 1 && sink.sc) fp.push({ idx: out.length, pitch: p, onset, sc: sink.sc, k: ks[0], vec: pr.featMap ? noteFeat(pr.featMap, pk, p, T, pr.featDim || 128) : null });
-      for (const k of ks) out.push([p + PITCH_MIN, meta.classes[k], Math.fround(onset), Math.fround(offset), ps[pk * P + p]]);
+      for (const k of instruments(pk, e, p)) out.push([p + PITCH_MIN, meta.classes[k], Math.fround(onset), Math.fround(offset), ps[pk * P + p]]);
     });
-  }
-  if (opts.fingerprint && fp.length) {
-    const stats = refineByFingerprint(fp, out, meta, { ...(opts.fingerprint === true ? {} : opts.fingerprint), debug: opts.debug });
-    if (opts.stats) Object.assign(opts.stats, stats);
   }
   for (const { t, p } of peaks(pr.drum, T, P, th.drum)) {
     const o = Math.max(subframe(pr.drum, T, P, t, p), 0) / FPS;
@@ -307,110 +295,6 @@ export function decodeStates(pr, meta, bias = 0, opts = {}) {
   }
   out.sort((a, b) => a[2] - b[2] || a[1] - b[1] || a[0] - b[0]);
   return out;
-}
-
-// ---------------------------------------------------------------- fingerprint check (consistent instruments)
-// Goal: consistency. Notes that sound alike get the same instrument, even when the model's own pick for some of them
-// is different; a whole group that is wrong together is better than a group that flickers between instruments.
-//
-// Mode "cluster" (model "feat" output collected): the fingerprint of a note is its 128-d model feature (mean of the first
-// 5 frames). All notes of the song are merged step by step, always the two most similar groups first (average linkage,
-// cosine similarity of the groups' members), until no two groups are at least `tau` similar. Every final group then takes
-// ONE of the model's instruments: the one with the highest summed instrument score of its notes.
-// Mode "local" (no feat output; instrument-score vectors only): the older rule, see refineLocal.
-// Notes that sound several instruments at once (inst_multi) are not touched.
-function refineByFingerprint(fp, out, meta, o = {}) {
-  const withVec = fp.filter(x => x.vec);
-  if (withVec.length >= 8 && withVec.length >= fp.length * 0.5) return refineByClusters(withVec, out, meta, o);
-  return refineLocal(fp, out, meta, o);
-}
-
-// Average-linkage agglomerative clustering on cosine similarity (Lance-Williams updates, best-neighbour cache).
-function clusterAverage(unit, tau) {
-  const n = unit.length, D = unit[0].length, sim = new Float32Array(n * n), size = new Float64Array(n).fill(1);
-  for (let i = 0; i < n; i++) { sim[i * n + i] = -2; for (let j = i + 1; j < n; j++) { let d = 0; const a = unit[i], b = unit[j]; for (let k = 0; k < D; k++) d += a[k] * b[k]; sim[i * n + j] = sim[j * n + i] = d; } }
-  const alive = new Uint8Array(n).fill(1), nn = new Int32Array(n), nnSim = new Float32Array(n), parent = Int32Array.from({ length: n }, (_, i) => i);
-  const rescan = i => { let b = -1, bs = -3; for (let j = 0; j < n; j++) if (alive[j] && j !== i && sim[i * n + j] > bs) { bs = sim[i * n + j]; b = j; } nn[i] = b; nnSim[i] = bs; };
-  for (let i = 0; i < n; i++) rescan(i);
-  for (;;) {
-    let a = -1, best = -3; for (let i = 0; i < n; i++) if (alive[i] && nnSim[i] > best) { best = nnSim[i]; a = i; }
-    if (a < 0 || best < tau) break;
-    const b = nn[a], na = size[a], nb = size[b];
-    for (let k = 0; k < n; k++) if (alive[k] && k !== a && k !== b) { const v = (na * sim[a * n + k] + nb * sim[b * n + k]) / (na + nb); sim[a * n + k] = sim[k * n + a] = v; }
-    alive[b] = 0; size[a] = na + nb;
-    for (let k = 0; k < n; k++) if (parent[k] === b) parent[k] = a;
-    rescan(a);
-    for (let k = 0; k < n; k++) if (alive[k] && k !== a) { if (nn[k] === a || nn[k] === b) rescan(k); else if (sim[k * n + a] > nnSim[k]) { nn[k] = a; nnSim[k] = sim[k * n + a]; } }
-  }
-  return parent;
-}
-
-function refineByClusters(items, out, meta, o = {}) {
-  const K = meta.classes.length, tau = o.tau ?? 0.6, maxN = o.maxNotes ?? 2500;
-  const n = items.length, unitOf = v => { let s = 0; for (let j = 0; j < v.length; j++) s += v[j] * v[j]; s = Math.sqrt(s) || 1; return Float32Array.from(v, x => x / s); };
-  const units = items.map(x => unitOf(x.vec));
-  // Very long songs: cluster a regular subset, the rest join the most similar group afterwards.
-  const stride = Math.max(1, Math.ceil(n / maxN)), core = []; for (let i = 0; i < n; i += stride) core.push(i);
-  const parent = clusterAverage(core.map(i => units[i]), tau);
-  const group = new Int32Array(n).fill(-1), ids = new Map();
-  core.forEach((i, c) => { const r = parent[c]; if (!ids.has(r)) ids.set(r, ids.size); group[i] = ids.get(r); });
-  const G = ids.size, D = units[0].length, cen = Array.from({ length: G }, () => new Float64Array(D));
-  for (const i of core) for (let j = 0; j < D; j++) cen[group[i]][j] += units[i][j];
-  if (stride > 1) {
-    const cu = cen.map(unitOf);
-    for (let i = 0; i < n; i++) if (group[i] < 0) { let b = 0, bs = -2; cu.forEach((c, g) => { let d = 0; for (let j = 0; j < D; j++) d += c[j] * units[i][j]; if (d > bs) { bs = d; b = g; } }); group[i] = b; }
-  }
-  const score = Array.from({ length: G }, () => new Float64Array(K));
-  items.forEach((x, i) => { const s = score[group[i]]; for (let k = 0; k < K; k++) s[k] += x.sc[k]; });
-  const pick = score.map(s => { let b = 0; for (let k = 1; k < K; k++) if (s[k] > s[b]) b = k; return b; });
-  let changed = 0;
-  items.forEach((x, i) => {
-    const k = pick[group[i]];
-    if (o.debug) o.debug.push({ pitch: x.pitch, onset: x.onset, first: x.k, final: k, group: group[i], sc: Array.from(x.sc), vec: Array.from(x.vec), cvec: null });
-    if (k !== x.k) { out[x.idx][1] = meta.classes[k]; changed++; }
-  });
-  return { fingerprintMode: "cluster", fingerprintNotes: n, fingerprintGroups: G, fingerprintChanged: changed, fingerprintFeatNotes: n };
-}
-
-// ---- older local rule (used when the model's feat output is not available) ----
-// A note whose instrument is uncertain (two or more candidates >= cand) is compared with nearby notes whose
-// instrument is certain: the notes within +-win seconds and +-semis semitones, per candidate instrument the mean
-// cosine similarity of its topk most similar notes. A candidate that is clearly more similar than the model's
-// first choice (by margin) replaces it. Notes are handled from the fewest candidates up, and every handled
-// note then counts as a reference for the next ones.
-function refineLocal(fp, out, meta, o = {}) {
-  const K = meta.classes.length;
-  const cand = o.cand ?? 0.3, certain = o.certain ?? 0.5, win = o.win ?? 3, semis = o.semis ?? 7, topk = o.topk ?? 3, margin = o.margin ?? 0.05;
-  fp.sort((a, b) => a.onset - b.onset);
-  const n = fp.length, unit = new Array(n), label = new Int16Array(n), cands = new Array(n), isRef = new Uint8Array(n);
-  for (let i = 0; i < n; i++) {
-    const v = fp[i].sc; let norm = 0; for (let k = 0; k < v.length; k++) norm += v[k] * v[k]; norm = Math.sqrt(norm) || 1;
-    unit[i] = Float64Array.from(v, x => x / norm);
-    label[i] = fp[i].k;
-    const c = []; for (let k = 0; k < K; k++) if (k === fp[i].k || v[k] >= cand) c.push(k);
-    cands[i] = c;
-    if (c.length === 1 && v[fp[i].k] >= certain) isRef[i] = 1;
-  }
-  const todo = []; for (let i = 0; i < n; i++) if (cands[i].length > 1) todo.push(i);
-  todo.sort((a, b) => cands[a].length - cands[b].length || a - b);
-  const times = fp.map(x => x.onset), cos = (a, b) => { let s = 0; for (let k = 0; k < a.length; k++) s += a[k] * b[k]; return s; };
-  let changed = 0;
-  for (const i of todo) {
-    const lo = lowerBound(times, fp[i].onset - win);
-    const sims = new Map(); for (const k of cands[i]) sims.set(k, []);
-    for (let j = lo; j < n && times[j] <= fp[i].onset + win; j++) {
-      if (j === i || !isRef[j] || Math.abs(fp[j].pitch - fp[i].pitch) > semis || unit[j].length !== unit[i].length) continue;
-      const list = sims.get(label[j]); if (list) list.push(cos(unit[i], unit[j]));
-    }
-    const score = k => { const l = sims.get(k); if (!l.length) return null; l.sort((a, b) => b - a); const m = l.slice(0, topk); return m.reduce((a, b) => a + b, 0) / m.length; };
-    const first = label[i], s0 = score(first) ?? 0;
-    let best = first, bs = s0 + margin;
-    for (const k of cands[i]) { if (k === first) continue; const sk = score(k); if (sk != null && sk >= bs) { best = k; bs = sk; } }
-    if (best !== first) { label[i] = best; out[fp[i].idx][1] = meta.classes[best]; changed++; }
-    isRef[i] = 1;
-  }
-  if (o.debug) for (let i = 0; i < n; i++) o.debug.push({ pitch: fp[i].pitch, onset: fp[i].onset, first: fp[i].k, final: label[i], sc: Array.from(fp[i].sc), vec: null, cvec: null });
-  return { fingerprintMode: "local", fingerprintNotes: n, fingerprintAmbiguous: todo.length, fingerprintChanged: changed, fingerprintFeatNotes: 0 };
 }
 
 // ---------------------------------------------------------------- MIDI (fixed 120 BPM, PPQ 480)

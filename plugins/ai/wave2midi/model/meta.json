@@ -1,318 +1,338 @@
 {
-  "name": "Wave2MIDI",
-  "full_name": "Wave2MIDI v2.0",
-  "architecture": "w2m_v2",
-  "version": "2.0.0",
-  "step": 11000,
-  "training": {
-    "pretrain_steps": 90000,
-    "finetune_steps": 11000
-  },
-  "parameters": 18810113,
-  "classes": [
-    0,
-    8,
-    16,
-    24,
-    33,
-    40,
-    48,
-    60,
-    68,
-    72,
-    80,
-    88,
-    98,
-    104,
-    116,
-    120
+ "name": "Wave2MIDI",
+ "full_name": "Wave2MIDI v2.1",
+ "architecture": "w2m_v2",
+ "version": "2.1.0",
+ "step": 4000,
+ "training": {
+  "pretrain_steps": 100000,
+  "finetune_steps": 4000
+ },
+ "parameters": 19577592,
+ "classes": [
+  0,
+  8,
+  16,
+  24,
+  26,
+  29,
+  33,
+  40,
+  42,
+  46,
+  47,
+  48,
+  52,
+  60,
+  65,
+  68,
+  72,
+  80,
+  88
+ ],
+ "thresholds": {
+  "onset": 0.25,
+  "frame": 0.4,
+  "offset": 0.5,
+  "drum": 0.13,
+  "inst_multi": 1.01,
+  "min_frames": 2,
+  "inst_frames": 15,
+  "drum_seconds": 0.05,
+  "multi": 0.5,
+  "note_gate": 0.0
+ },
+ "window_seconds": 6.0,
+ "overlap_seconds": 1.0,
+ "frames": 600,
+ "sample_rate": 24000,
+ "hop": 240,
+ "pitch_min": 21,
+ "n_pitch": 88,
+ "drum": 128,
+ "frontend": {
+  "n_ffts": [
+   8192,
+   4096,
+   1024,
+   512
   ],
-  "thresholds": {
-    "onset": 0.13,
-    "frame": 0.5,
-    "offset": 0.5,
-    "drum": 0.13,
-    "inst_multi": 1.01,
-    "min_frames": 2,
-    "inst_frames": 15,
-    "drum_seconds": 0.05,
-    "multi": 1.01
-  },
-  "window_seconds": 6.0,
-  "overlap_seconds": 1.0,
-  "frames": 600,
-  "sample_rate": 24000,
-  "hop": 240,
-  "pitch_min": 21,
-  "n_pitch": 88,
-  "drum": 128,
-  "frontend": {
-    "n_ffts": [
-      4096,
-      1024,
-      512
-    ],
-    "harmonics": [
-      0.5,
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7
-    ],
-    "shifts": [
-      -36,
-      0,
-      36,
-      57,
-      72,
-      84,
-      93,
-      101
-    ],
-    "out_start": 36,
-    "out_bins": 264,
-    "n_logf": 357,
-    "base_midi": 8.666666666666666,
-    "pad_lo": 9,
-    "pad_hi": 53,
-    "max_shift": 3
-  },
-  "input": {
-    "name": "features",
-    "shape": [
-      1,
-      24,
-      600,
-      264
-    ]
-  },
-  "outputs": {
-    "onset": [
-      1,
-      600,
-      88
-    ],
-    "frame": [
-      1,
-      600,
-      88
-    ],
-    "offset": [
-      1,
-      600,
-      88
-    ],
-    "drum": [
-      1,
-      600,
-      88
-    ],
-    "inst": [
-      1,
-      600,
-      88,
-      16
-    ],
-    "multi": [
-      1,
-      600,
-      88
-    ],
-    "state": [
-      1,
-      600,
-      88,
-      3
-    ],
-    "fpi": [
-      4096
-    ],
-    "fpv": [
-      4096
-    ],
-    "fpc": [
-      4096,
-      128
-    ]
-  },
-  "tools": {
-    "onnx": "1.23.2",
-    "onnxruntime": "1.31.1",
-    "torch": "2.11.0+cu128"
-  },
-  "models": {
-    "w16": {
-      "file": "wave2mid_v2_w16.onnx",
-      "compute": "fp32 (weights stored as fp16)",
-      "devices": "any GPU (WebGPU, CUDA ...) and CPU / WebAssembly",
-      "mb": 37.9,
-      "max_diff": {
-        "onset": 0.000812,
-        "frame": 0.00062,
-        "offset": 0.00118,
-        "drum": 0.000611,
-        "inst": 0.00121,
-        "multi": 0.000295,
-        "state": 0.000763
-      },
-      "onset_flips_per_positive": 0.00096,
-      "cpu_seconds_per_window": 2.4,
-      "non_finite": false,
-      "scores": {
-        "mel_f1": 0.7386,
-        "mel_inst_f1": 0.5697,
-        "drum_f1": 0.55
-      }
-    }
-  },
-  "scores": {
-    "pytorch fp32": {
-      "mel_f1": 0.7387,
-      "mel_inst_f1": 0.5698,
-      "drum_f1": 0.5499
-    },
-    "w16": {
-      "mel_f1": 0.7386,
-      "mel_inst_f1": 0.5697,
-      "drum_f1": 0.55
-    }
-  },
-  "provenance": {
-    "datasets": [
-      {
-        "name": "midi_slakh",
-        "producer": {
-          "tool": "Wave2MIDI",
-          "version": "2.0.0",
-          "method": "audio + MIDI pairs (MIDI = exact answer)"
-        },
-        "license": {
-          "id": null,
-          "noncommercial": false,
-          "attribution": "",
-          "notice": "",
-          "url": ""
-        },
-        "songs": 1665
-      },
-      {
-        "name": "midi_musicnet",
-        "producer": {
-          "tool": "Wave2MIDI",
-          "version": "2.0.0",
-          "method": "audio + MIDI pairs (MIDI = exact answer)"
-        },
-        "license": {
-          "id": null,
-          "noncommercial": false,
-          "attribution": "",
-          "notice": "",
-          "url": ""
-        },
-        "songs": 323
-      },
-      {
-        "name": "muscriptor_large_cfg2",
-        "producer": {
-          "tool": "convert_old",
-          "version": "1",
-          "method": "teacher large (older folder muscriptor_large_cfg2); settings {\"max_tokens\": 1600, \"precision\": \"fp16\", \"decoding\": \"greedy\", \"tie_prompt\": true, \"cfg\": 2.0}"
-        },
-        "license": {
-          "id": null,
-          "noncommercial": false,
-          "attribution": "",
-          "notice": "converted from an older teacher folder; set the real terms with D2_SET_LICENSE.bat",
-          "url": ""
-        },
-        "songs": 4261
-      },
-      {
-        "name": "midi_rwc",
-        "producer": {
-          "tool": "Wave2MIDI",
-          "version": "1.1.0",
-          "method": "audio + MIDI pairs (MIDI = exact answer)"
-        },
-        "license": {
-          "id": "CC-BY-NC-4.0",
-          "noncommercial": true,
-          "attribution": "",
-          "notice": "",
-          "url": ""
-        },
-        "songs": 309
-      }
-    ],
-    "noncommercial": true,
-    "attribution": [],
-    "notices": [
-      "converted from an older teacher folder; set the real terms with D2_SET_LICENSE.bat"
-    ],
-    "licenses": [
-      "CC-BY-NC-4.0"
-    ]
-  },
-  "license_notice": "NON-COMMERCIAL use only | licenses: CC-BY-NC-4.0",
-  "exported": "2026-11-15 17:55:50",
-  "author": "startdust-io",
-  "license": {
-    "spdx": "CC-BY-NC-4.0",
-    "copyright": "Copyright (c) 2026 startdust-io",
-    "file": "LICENSE",
-    "noncommercial": true
-  },
-  "velocity": {
-    "enabled": true,
-    "min": 35,
-    "max": 120,
-    "harmonics": 6,
-    "window_frames": 6,
-    "pre_frames": [
-      2,
-      5
-    ],
-    "min_range_db": 12.0,
-    "spread": 0.4,
-    "center_shift": 0.12,
-    "pitch_comp": 0.5,
-    "track_balance": 0.3,
-    "min_group": 6,
-    "n_fft": 4096,
-    "drum_n_fft": 1024,
-    "cluster_frames": 2
-  },
-  "tempo": {
-    "mode": "auto",
-    "min": 32,
-    "max": 255,
-    "prefer": 120.0,
-    "changes": true,
-    "change_penalty": 8.0,
-    "min_segment_beats": 16,
-    "align_bars": true,
-    "integer_bpm": true,
-    "follow_beats": true
-  },
-  "decode": {
-    "mode": "state",
-    "state_bias": 0.0,
-    "state_bias_range": [
-      -1.0,
-      1.0
-    ],
-    "drum_range": [
-      0.05,
-      0.4
-    ]
-  },
-  "fingerprint": {
-    "top_k": 4096,
-    "frames": 5,
-    "min_score": 0.02,
-    "note": "fpi = cell index (frame*88+pitch) of the 4096 highest scores, score = max(onset, note-start probability); fpv = those scores (descending); fpc = unit-length mean of the 128-d head feature over that frame and the next 4 (same pitch, clamped at the window end)"
+  "harmonics": [
+   0.5,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "shifts": [
+   -36,
+   0,
+   36,
+   57,
+   72,
+   84,
+   93,
+   101
+  ],
+  "out_start": 36,
+  "out_bins": 264,
+  "n_logf": 357,
+  "base_midi": 8.666666666666666,
+  "pad_lo": 9,
+  "pad_hi": 53,
+  "max_shift": 3
+ },
+ "input": {
+  "name": "features",
+  "shape": [
+   1,
+   32,
+   600,
+   264
+  ]
+ },
+ "outputs": {
+  "onset": [
+   1,
+   600,
+   88
+  ],
+  "frame": [
+   1,
+   600,
+   88
+  ],
+  "offset": [
+   1,
+   600,
+   88
+  ],
+  "drum": [
+   1,
+   600,
+   88
+  ],
+  "inst": [
+   1,
+   600,
+   88,
+   19
+  ],
+  "multi": [
+   1,
+   600,
+   88
+  ],
+  "state": [
+   1,
+   600,
+   88,
+   3
+  ],
+  "role": [
+   1,
+   600,
+   88,
+   3
+  ],
+  "nidx": [
+   1,
+   512
+  ],
+  "ninst": [
+   1,
+   512,
+   19
+  ],
+  "nrole": [
+   1,
+   512,
+   3
+  ],
+  "nmulti": [
+   1,
+   512
+  ],
+  "nis": [
+   1,
+   512
+  ]
+ },
+ "tools": {
+  "onnx": "1.23.2",
+  "onnxruntime": "1.31.1",
+  "torch": "2.11.0+cu128"
+ },
+ "models": {
+  "w16": {
+   "file": "wave2mid_v2_1_w16.onnx",
+   "compute": "fp32 (weights stored as fp16)",
+   "devices": "any GPU (WebGPU, CUDA ...) and CPU / WebAssembly",
+   "mb": 39.6,
+   "max_diff": {
+    "onset": 0.000566,
+    "frame": 0.000623,
+    "offset": 0.000685,
+    "drum": 0.000398,
+    "inst": 0.00183,
+    "multi": 0.000376,
+    "state": 0.000711,
+    "role": 0.00106,
+    "fpc": 0.0,
+    "notes": 0.0423
+   },
+   "onset_flips_per_positive": 0.0,
+   "cpu_seconds_per_window": 2.45,
+   "non_finite": false,
+   "scores": {
+    "mel_f1": 0.8285,
+    "mel_inst_f1": 0.7703,
+    "drum_f1": 1.0
+   }
   }
-}
+ },
+ "scores": {
+  "pytorch fp32": {
+   "mel_f1": 0.8286,
+   "mel_inst_f1": 0.7702,
+   "drum_f1": 1.0
+  },
+  "w16": {
+   "mel_f1": 0.8285,
+   "mel_inst_f1": 0.7703,
+   "drum_f1": 1.0
+  }
+ },
+ "provenance": {
+  "datasets": [
+   {
+    "name": "midi_rwc",
+    "producer": {
+     "tool": "Wave2MIDI",
+     "version": "2.1.0",
+     "method": "audio + MIDI pairs (MIDI = exact answer)"
+    },
+    "license": {
+     "id": "CC-BY-NC-4.0",
+     "noncommercial": true,
+     "attribution": "",
+     "notice": "",
+     "url": ""
+    },
+    "songs": 308
+   },
+   {
+    "name": "midi_slakh",
+    "producer": {
+     "tool": "Wave2MIDI",
+     "version": "2.1.0",
+     "method": "audio + MIDI pairs (MIDI = exact answer)"
+    },
+    "license": {
+     "id": null,
+     "noncommercial": false,
+     "attribution": "",
+     "notice": "",
+     "url": ""
+    },
+    "songs": 1665
+   },
+   {
+    "name": "midi_musicnet",
+    "producer": {
+     "tool": "Wave2MIDI",
+     "version": "2.1.0",
+     "method": "audio + MIDI pairs (MIDI = exact answer)"
+    },
+    "license": {
+     "id": null,
+     "noncommercial": false,
+     "attribution": "",
+     "notice": "",
+     "url": ""
+    },
+    "songs": 323
+   },
+   {
+    "name": "muscriptor_large_cfg2",
+    "producer": {
+     "tool": "convert_old",
+     "version": "1",
+     "method": "teacher large (older folder muscriptor_large_cfg2); settings {\"max_tokens\": 1600, \"precision\": \"fp16\", \"decoding\": \"greedy\", \"tie_prompt\": true, \"cfg\": 2.0}"
+    },
+    "license": {
+     "id": null,
+     "noncommercial": false,
+     "attribution": "",
+     "notice": "converted from an older teacher folder; set the real terms with D2_SET_LICENSE.bat",
+     "url": ""
+    },
+    "songs": 4261
+   }
+  ],
+  "noncommercial": true,
+  "attribution": [],
+  "notices": [
+   "converted from an older teacher folder; set the real terms with D2_SET_LICENSE.bat"
+  ],
+  "licenses": [
+   "CC-BY-NC-4.0"
+  ]
+ },
+ "license_notice": "NON-COMMERCIAL use only | licenses: CC-BY-NC-4.0",
+ "exported": "2026-11-26 23:09:51",
+ "author": "startdust-io",
+ "license": {
+  "spdx": "CC-BY-NC-4.0",
+  "copyright": "Copyright (c) 2026 startdust-io",
+  "file": "LICENSE",
+  "noncommercial": true
+ },
+ "velocity": {
+  "enabled": true,
+  "min": 35,
+  "max": 120,
+  "harmonics": 6,
+  "window_frames": 6,
+  "pre_frames": [
+   2,
+   5
+  ],
+  "min_range_db": 12.0,
+  "spread": 0.4,
+  "center_shift": 0.12,
+  "pitch_comp": 0.5,
+  "track_balance": 0.3,
+  "min_group": 6,
+  "n_fft": 4096,
+  "drum_n_fft": 1024,
+  "cluster_frames": 2
+ },
+ "tempo": {
+  "mode": "auto",
+  "min": 32,
+  "max": 255,
+  "prefer": 120.0,
+  "changes": true,
+  "change_penalty": 8.0,
+  "min_segment_beats": 16,
+  "align_bars": true,
+  "integer_bpm": true,
+  "follow_beats": true
+ },
+ "decode": {
+  "mode": "state",
+  "state_bias": 0.0,
+  "state_bias_range": [
+   -1.0,
+   1.0
+  ],
+  "drum_range": [
+   0.05,
+   0.4
+  ]
+ }
+}

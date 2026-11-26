@@ -425,8 +425,7 @@
     w2mPeakOffset: document.querySelector("#w2mPeakOffset"),
     w2mPeakMin: document.querySelector("#w2mPeakMin"),
     w2mTempoError: document.querySelector("#w2mTempoError"),
-    w2mFingerprintLabel: document.querySelector("#w2mFingerprintLabel"),
-    w2mFingerprint: document.querySelector("#w2mFingerprint"),
+    w2mNoteGate: document.querySelector("#w2mNoteGate"),
     w2mDrum: document.querySelector("#w2mDrum"),
     w2mVolumeFixed: document.querySelector("#w2mVolumeFixed"),
     w2mTempoBpm: document.querySelector("#w2mTempoBpm"),
@@ -14819,8 +14818,8 @@
   const IMPORT_OPTIONS_KEY = "mobibard-import-options";
   const IMPORT_OPTION_DEFAULTS = Object.freeze({
     quantize: 64, overlap: 64, limitOn: false, limitCount: 3,
-    stateBias: 0, drumThreshold: 0.13, fingerprint: true,
-    decoderMode: "state", peakOnset: 0.13, peakFrame: 0.5, peakOffset: 0.5, peakMinFrames: 2, tempoError: 0,
+    stateBias: 0, drumThreshold: 0.13, noteGate: 0,
+    decoderMode: "state", peakOnset: 0.25, peakFrame: 0.4, peakOffset: 0.5, peakMinFrames: 2, tempoError: 0,
     volume: "auto", volumeFixed: 12, tempo: "auto", tempoBpm: 120,
     colorMode: "channel",
   });
@@ -14847,13 +14846,14 @@
       overlap: [0, 32, 64].includes(Number(src.overlap)) ? Number(src.overlap) : d.overlap,
       limitOn: src.limitOn === true,
       limitCount: clamp(Math.round(Number(src.limitCount) || d.limitCount), 1, 16),
-      // Wave2MIDI v2: 예전 감도/노트 끝/짧은 노트 제거 값은 더 이상 쓰지 않고, 새 슬라이더는 기본값에서 시작합니다.
+      // Wave2MIDI v2.1: 저장된 값이 v2.0 기본값(노트 시작 0.13, 소리 유지 0.5)이면 v2.1 기본값으로 바꿉니다.
+      // w2m 표식(2.1)이 없는 저장값만 해당하고, 표식이 있으면 사용자가 고른 값 그대로입니다.
       stateBias: slotValue(src.stateBias, -1, 1, 0.05, d.stateBias),
       drumThreshold: slotValue(src.drumThreshold, 0.05, 0.4, 0.01, d.drumThreshold),
-      fingerprint: src.fingerprint !== false,
+      noteGate: slotValue(src.noteGate, 0, 0.9, 0.05, d.noteGate),
       decoderMode: pick(src.decoderMode, ["state", "peak"], d.decoderMode),
-      peakOnset: slotValue(src.peakOnset, 0.02, 0.6, 0.01, d.peakOnset),
-      peakFrame: slotValue(src.peakFrame, 0.1, 0.9, 0.05, d.peakFrame),
+      peakOnset: Number(src.w2m) === 2.1 ? slotValue(src.peakOnset, 0.02, 0.6, 0.01, d.peakOnset) : d.peakOnset,
+      peakFrame: Number(src.w2m) === 2.1 ? slotValue(src.peakFrame, 0.1, 0.9, 0.05, d.peakFrame) : d.peakFrame,
       peakOffset: slotValue(src.peakOffset, 0.1, 0.9, 0.05, d.peakOffset),
       peakMinFrames: slotValue(src.peakMinFrames, 1, 10, 1, d.peakMinFrames),
       tempoError: slotValue(src.tempoError, 0, 10, 1, d.tempoError),
@@ -14862,6 +14862,7 @@
       tempo: pick(src.tempo, ["auto", "fixed"], d.tempo),
       tempoBpm: clamp(Math.round(Number(src.tempoBpm) || d.tempoBpm), 32, 255),
       colorMode: normalizeImportChannelColorMode(src.colorMode),
+      w2m: 2.1,
     };
   }
 
@@ -14873,7 +14874,7 @@
       limitCount: elements.midiImportChannelLimitInput?.value,
       stateBias: elements.w2mStateBias?.value,
       drumThreshold: elements.w2mDrum?.value,
-      fingerprint: elements.w2mFingerprint ? elements.w2mFingerprint.checked : true,
+      noteGate: elements.w2mNoteGate?.value,
       decoderMode: getCheckedRadioValue("w2mMode"),
       peakOnset: elements.w2mPeakOnset?.value,
       peakFrame: elements.w2mPeakFrame?.value,
@@ -14885,6 +14886,7 @@
       tempo: getCheckedRadioValue("w2mTempo"),
       tempoBpm: elements.w2mTempoBpm?.value,
       colorMode: state.midiImport.colorMode,
+      w2m: 2.1,
     });
   }
 
@@ -14899,7 +14901,7 @@
     }
     if (elements.w2mStateBias) elements.w2mStateBias.value = String(o.stateBias);
     if (elements.w2mDrum) elements.w2mDrum.value = String(o.drumThreshold);
-    if (elements.w2mFingerprint) elements.w2mFingerprint.checked = o.fingerprint;
+    if (elements.w2mNoteGate) elements.w2mNoteGate.value = String(o.noteGate);
     setCheckedRadioValue("w2mMode", o.decoderMode);
     if (elements.w2mPeakOnset) elements.w2mPeakOnset.value = String(o.peakOnset);
     if (elements.w2mPeakFrame) elements.w2mPeakFrame.value = String(o.peakFrame);
@@ -14952,7 +14954,7 @@
     const selector = [
       'input[name="midiImportQuantize"]', 'input[name="midiImportOverlap"]',
       "#midiImportLimitChannelsPerInstrument", "#midiImportChannelLimitInput",
-      "#w2mStateBias", "#w2mDrum", "#w2mFingerprint",
+      "#w2mStateBias", "#w2mDrum", "#w2mNoteGate",
       'input[name="w2mMode"]', "#w2mPeakOnset", "#w2mPeakFrame", "#w2mPeakOffset", "#w2mPeakMin", "#w2mTempoError",
       'input[name="w2mVolume"]', "#w2mVolumeFixed", 'input[name="w2mTempo"]', "#w2mTempoBpm",
     ].join(",");
@@ -15630,7 +15632,7 @@
   }
 
   // ---- AI 변환 후처리 옵션(불러오기 오른쪽 설정): 모델을 다시 돌리지 않고 노트/세기/템포만 다시 계산 ----
-  let audioPostprocessDefaults = { stateBias: 0, drumThreshold: 0.13, peakOnset: 0.13, peakFrame: 0.5, peakOffset: 0.5, peakMinFrames: 2, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
+  let audioPostprocessDefaults = { stateBias: 0, drumThreshold: 0.13, noteGate: 0, peakOnset: 0.25, peakFrame: 0.4, peakOffset: 0.5, peakMinFrames: 2, tempoMin: 32, tempoMax: 255, velocityMin: 35, velocityMax: 120 };
   void window.MobibardWave2Midi?.getPostprocessDefaults?.().then((defaults) => {
     audioPostprocessDefaults = defaults;
     try { updateW2mSliderReadouts(); } catch {}
@@ -15652,15 +15654,20 @@
   let audioPostprocessTimer = 0;
   let audioPostprocessToken = 0;
 
-  // Wave2MIDI v2의 디코더는 state 방식으로 고정입니다. 슬라이더 값이 곧 실제 값입니다.
+  // Wave2MIDI v2.1 슬라이더 값이 곧 실제 값입니다. 노트 판단은 자동(state) 또는 메뉴얼(peak) 방식입니다.
   //   노트 시작 편향: -1 ~ 1 (기본 0). 클수록 작고 약한 노트까지 잡고, 작을수록 확실한 노트만 남깁니다.
   //   드럼 검출 기준: 0.05 ~ 0.4 (기본 0.13). 낮을수록 약한 타격까지 잡습니다.
+  //   가짜 노트 걸러내기: 0 ~ 0.9 (기본 0 = 끔). 모델이 "진짜 노트가 아닐 가능성이 높다"고 본 노트 시작을 뺍니다(두 방식 공통).
   function readW2mStateBias() {
     const value = clamp(Math.round((Number(elements.w2mStateBias?.value) || 0) / 0.05) * 0.05, -1, 1);
     return Number(value.toFixed(2));
   }
   function readW2mDrumThreshold() {
     const value = clamp(Number(elements.w2mDrum?.value) || 0.13, 0.05, 0.4);
+    return Number(value.toFixed(2));
+  }
+  function readW2mNoteGate() {
+    const value = clamp(Math.round((Number(elements.w2mNoteGate?.value) || 0) / 0.05) * 0.05, 0, 0.9);
     return Number(value.toFixed(2));
   }
 
@@ -15671,8 +15678,8 @@
       return Number((Number.isFinite(n) ? clamp(Math.round(n / step) * step, lo, hi) : fallback).toFixed(2));
     };
     return {
-      peakOnset: num(elements.w2mPeakOnset, 0.02, 0.6, 0.01, 0.13),
-      peakFrame: num(elements.w2mPeakFrame, 0.1, 0.9, 0.05, 0.5),
+      peakOnset: num(elements.w2mPeakOnset, 0.02, 0.6, 0.01, 0.25),
+      peakFrame: num(elements.w2mPeakFrame, 0.1, 0.9, 0.05, 0.4),
       peakOffset: num(elements.w2mPeakOffset, 0.1, 0.9, 0.05, 0.5),
       peakMinFrames: num(elements.w2mPeakMin, 1, 10, 1, 2),
     };
@@ -15696,6 +15703,7 @@
       set("#w2mStateBiasValue", `${bias > 0 ? "+" : ""}${bias.toFixed(2)}`);
     }
     if (elements.w2mDrum) set("#w2mDrumValue", readW2mDrumThreshold().toFixed(2));
+    if (elements.w2mNoteGate) { const gate = readW2mNoteGate(); set("#w2mNoteGateValue", gate > 0 ? gate.toFixed(2) : "OFF"); }
     const peak = readW2mPeak();
     set("#w2mPeakOnsetValue", peak.peakOnset.toFixed(2));
     set("#w2mPeakFrameValue", peak.peakFrame.toFixed(2));
@@ -15718,8 +15726,7 @@
     return {
       stateBias: readW2mStateBias(),
       drumThreshold: readW2mDrumThreshold(),
-      fingerprint: elements.w2mFingerprint ? elements.w2mFingerprint.checked : true,
-      collectFingerprint: true,
+      noteGate: readW2mNoteGate(),
       decoderMode: readW2mMode(),
       ...readW2mPeak(),
       tempoError: fixed ? 0 : readW2mTempoError(),
@@ -37121,11 +37128,10 @@
       .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
     document.querySelectorAll('input[type="radio"][name="w2mMode"]')
       .forEach((input) => input.addEventListener("change", scheduleAudioToMidiPostprocess));
-    for (const slider of [elements.w2mStateBias, elements.w2mDrum, elements.w2mPeakOnset, elements.w2mPeakFrame, elements.w2mPeakOffset, elements.w2mPeakMin, elements.w2mTempoError]) {
+    for (const slider of [elements.w2mStateBias, elements.w2mDrum, elements.w2mNoteGate, elements.w2mPeakOnset, elements.w2mPeakFrame, elements.w2mPeakOffset, elements.w2mPeakMin, elements.w2mTempoError]) {
       slider?.addEventListener("input", updateW2mSliderReadouts);
       slider?.addEventListener("change", scheduleAudioToMidiPostprocess);
     }
-    elements.w2mFingerprint?.addEventListener("change", scheduleAudioToMidiPostprocess);
     elements.w2mVolumeFixed?.addEventListener("change", () => {
       readW2mVolumeInput(elements.w2mVolumeFixed, 12);
       scheduleAudioToMidiPostprocess();

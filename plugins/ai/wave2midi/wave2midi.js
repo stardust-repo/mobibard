@@ -14,11 +14,11 @@
   const root = typeof window !== "undefined" ? window : globalThis;
   const scriptUrl = document.currentScript?.src || new URL("plugins/ai/wave2midi/wave2midi.js", document.baseURI).href;
   const BASE = new URL("./", scriptUrl);
-  const VERSION = "2.0.13";
+  const VERSION = "2.1.0";
   const SAMPLE_RATE = 24000;
   const IDLE_TERMINATE_MS = 3 * 60 * 1000;
-  // predictSong keeps T x 88 maps in memory: state (3), drum (1) and instruments (K = meta.classes.length = 16),
-  // about 42 MB per minute of audio.
+  // predictSong keeps T x 88 maps in memory: state (3), drum (1) and instruments (K = meta.classes.length = 19),
+  // about 50 MB per minute of audio.
   const DEFAULT_MAX_SECONDS = 30 * 60;
 
   let worker = null;
@@ -218,8 +218,8 @@
    * options: { velocity=true (false: constant 100, number: fixed velocity), velocityRange=[min,max],
    *            tempo=true (false: constant 120 BPM, number: fixed BPM), tempoChanges, tempoError (0..10, default 0 = exact timing),
    *            decoderMode ("state" default | "peak" with peakOnset/peakFrame/peakOffset/peakMinFrames),
-   *            stateBias (-1..1, default 0), drumThreshold (0.05..0.4, default 0.13), fingerprint (default false),
-   *            collectFingerprint (true: keep the 128-d note features so fingerprint can be switched later),
+   *            stateBias (-1..1, default 0), drumThreshold (0.05..0.4, default 0.13),
+   *            noteGate (0..0.95, default 0 = off: drops note starts the model rates low as a real note),
    *            maxSeconds=1800, executionProvider: "auto"|"wasm",
    *            ortSources: string[], onProgress({stage, done, total}), signal }
    * Progress stages: decode, runtime, model-check, model-download, model-store, model-init,
@@ -259,9 +259,7 @@
         peakMinFrames: options.peakMinFrames,
         stateBias: options.stateBias,
         drumThreshold: options.drumThreshold,
-        fingerprint: options.fingerprint === true,
-        debugFingerprint: options.debugFingerprint === true,
-        collectFingerprint: options.collectFingerprint === true,
+        noteGate: options.noteGate,
         maxSeconds,
         executionProvider: resolveProvider(options.executionProvider),
         ortSources: options.ortSources,
@@ -273,7 +271,7 @@
   }
 
   /**
-   * Re-applies post-processing options (stateBias, drumThreshold, velocity, velocityRange, tempo, tempoChanges) to the last
+   * Re-applies post-processing options (stateBias, drumThreshold, noteGate, peak thresholds, velocity, velocityRange, tempo, tempoChanges) to the last
    * transcription without running the model again. Rejects with code "no-job" when the worker was
    * released in the meantime (idle timeout, abort) — call transcribe() again in that case.
    */
@@ -292,8 +290,7 @@
       peakMinFrames: options.peakMinFrames,
       stateBias: options.stateBias,
       drumThreshold: options.drumThreshold,
-      fingerprint: options.fingerprint === true,
-      debugFingerprint: options.debugFingerprint === true,
+      noteGate: options.noteGate,
     } }, options);
   }
 
@@ -307,8 +304,9 @@
         stateBiasMin: Number(meta?.decode?.state_bias_range?.[0] ?? -1),
         stateBiasMax: Number(meta?.decode?.state_bias_range?.[1] ?? 1),
         drumThreshold: Number(meta?.thresholds?.drum) || 0.13,
-        peakOnset: Number(meta?.thresholds?.onset) || 0.13,
-        peakFrame: Number(meta?.thresholds?.frame) || 0.5,
+        noteGate: Number(meta?.thresholds?.note_gate) || 0,
+        peakOnset: Number(meta?.thresholds?.onset) || 0.25,
+        peakFrame: Number(meta?.thresholds?.frame) || 0.4,
         peakOffset: Number(meta?.thresholds?.offset) || 0.5,
         peakMinFrames: Number(meta?.thresholds?.min_frames) || 2,
         drumMin: Number(meta?.decode?.drum_range?.[0]) || 0.05,

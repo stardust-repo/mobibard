@@ -7711,7 +7711,6 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     try {
       const result = await api.transcribe(blob, {
         maxSeconds: AUDIO_AI_MAX_MINUTES * 60,
-        fingerprint: true, // same-sounding notes get one instrument (see plugins/ai/wave2midi/README.md)
         onProgress: (event) => api.showProgressNotice(`${name} · ${api.progressText(event, audioAiText)}`, api.progressFraction(event)),
       });
       if (!result.notes.length) throw Object.assign(new Error("no notes"), { code: "no-notes" });

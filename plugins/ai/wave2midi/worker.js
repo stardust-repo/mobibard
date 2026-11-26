@@ -2,12 +2,14 @@
  *
  * Runs the whole pipeline off the main thread:
  *   24 kHz mono samples -> frontend features -> ONNX (6 s windows, 1 s overlap)
- *   -> state decoder -> velocity -> tempo map -> Standard MIDI bytes.
+ *   -> note decoder -> velocity -> tempo map -> Standard MIDI bytes.
  * The model bytes come from lib/model-cache.mjs (IndexedDB, verified by SHA-256).
  *
  * Wave2MIDI v2 ships as one build (model/manifest.json "models.w16"): weights stored as 16-bit, maths in 32-bit.
  * The same file runs on WebGPU and on the CPU (WebAssembly); the GPU is used when the browser offers it.
- * The note decoder is fixed to the state decoder (lib/w2m_web.mjs decodeStates).
+ * Wave2MIDI v2.1: besides the per-cell maps the model returns a "note layer" (nidx/ninst/nrole/nmulti/nis, 512 candidates per
+ * window) that decides the instrument of each note itself and rates how real a note start is (note_gate).
+ * Decoders: state (default, lib/w2m_web.mjs decodeStates) or peak (decodeNotes).
  */
 "use strict";
 
@@ -23,11 +25,13 @@ const ORT_RUNTIMES = {
 function pickRuntime(options, caps) {
   return options?.executionProvider === "wasm" || !caps?.webgpu ? ORT_RUNTIMES.modernCpu : ORT_RUNTIMES.modernGpu;
 }
-// Model outputs the state decoder uses (fetching only these keeps the read-back from the GPU small).
+// Model outputs the decoders use (fetching only these keeps the read-back from the GPU small).
 // peak decoder (decoderMode "peak"): onset/frame/offset maps instead of the state map.
+// NOTE_LAYER_OUTPUTS: v2.1 per-note candidates (instrument, "is a note" score), small, needed by both decoders.
 const DEFAULT_TEMPO_FALLBACK = { integer_tolerance: 0.015, integer_block_beats: 8 };
 const STATE_OUTPUTS = ["state", "drum", "inst"];
 const PEAK_OUTPUTS = ["onset", "frame", "offset", "drum", "inst"];
+const NOTE_LAYER_OUTPUTS = ["nidx", "ninst", "nrole", "nmulti", "nis"];
 const neededOutputsFor = mode => (mode === "peak" ? PEAK_OUTPUTS : STATE_OUTPUTS);
 function ortSourcesFor(runtime) {
   return [
@@ -331,17 +335,14 @@ async function transcribe(id, wave, options) {
   const decoderMode = options.decoderMode === "peak" ? "peak" : "state";
   const NEEDED_OUTPUTS = neededOutputsFor(decoderMode);
   const predictOptions = { prepare: seg => pool.features(seg), lookahead: Math.max(1, pool.size), keys: NEEDED_OUTPUTS };
-  // The 128-d per-note feature (model outputs fpi/fpv/fpc) is only fetched when the instrument-consistency step can use it.
-  const wantFeat = (options.fingerprint === true || options.collectFingerprint === true) && Boolean(meta.outputs?.fpc);
-  const fpThr = 0.02; // same as the default of selectFeat in the helper lanes (infer-worker.js)
-  const fetchNames = wantFeat ? [...NEEDED_OUTPUTS, "fpi", "fpv", "fpc"] : NEEDED_OUTPUTS;
-  predictOptions.sparseFeat = wantFeat ? Number(meta.outputs.fpc[1]) || 128 : 0;
+  // The note layer only exists in v2.1 models; older exports are decoded from the per-cell maps alone.
+  const noteLayer = NOTE_LAYER_OUTPUTS.filter(name => meta.outputs?.[name]);
+  const fetchNames = [...NEEDED_OUTPUTS, ...noteLayer];
   const runOnMain = async feats => {
     const input = new self.ort.Tensor("float32", feats, meta.input.shape);
     const result = await session.run({ [meta.input.name || "features"]: input }, fetchNames);
     const out = {};
-    for (const name of NEEDED_OUTPUTS) out[name] = result[name].data;
-    if (wantFeat && result.fpc) Object.assign(out, w2m.selectFeat(result.fpi.data, result.fpv.data, result.fpc.data, result.fpc.dims[2], fpThr));
+    for (const name of fetchNames) out[name] = result[name].data;
     input.dispose?.();
     return out;
   };
@@ -394,8 +395,7 @@ async function transcribe(id, wave, options) {
 // Post-processing: probability maps -> notes (state decoder) -> velocity -> tempo map -> MIDI.
 //   options.stateBias       -1..1 added to the "note start" state (higher = more and weaker notes); default 0
 //   options.drumThreshold   0.05..0.4 drum hit threshold (lower = more drum hits); default meta.thresholds.drum
-//   options.collectFingerprint  true: keep the model's 128-d note features during the run, so fingerprint can be switched on later
-//   options.fingerprint     true: uncertain instruments are decided by similar nearby notes (see lib/w2m_web.mjs); default false
+//   options.noteGate        0..0.95 drops note starts the model's note layer rates below this as a real note (0 = off); default meta.thresholds.note_gate
 //   options.velocity        true/undefined: estimated, false: constant 100, number: that fixed velocity (1-127)
 //   options.velocityRange   [min, max] (1-127) range of estimated velocities; default meta.velocity min/max
 //   options.tempo           true/undefined: auto, false: 120 BPM grid, number: that fixed BPM
@@ -417,11 +417,12 @@ async function finishTranscription(job, options, progress, started = performance
     ? Math.min(drumHi, Math.max(drumLo, Number(options.drumThreshold)))
     : Number(meta.thresholds.drum);
   // multi > 1: a second instrument per note is never added (one instrument per note).
-  const thresholds = { ...meta.thresholds, drum, multi: 1.01 };
+  const gate = Number.isFinite(Number(options.noteGate)) && options.noteGate !== null && options.noteGate !== ""
+    ? Math.min(0.95, Math.max(0, Number(options.noteGate)))
+    : Number(meta.thresholds.note_gate) || 0;
+  const thresholds = { ...meta.thresholds, drum, multi: 1.01, note_gate: gate };
   // The state decoder reads the "multi" map only to compare it with the (unreachable) threshold above.
   const maps = { ...probs, T, multi: probs.multi || (job.zeroMulti ??= new Float32Array(T * w2m.NP)) };
-  const fingerprint = options.fingerprint === true;
-  const fpStats = {};
   let notes, decoder;
   if (mode === "peak") {
     const num = (value, lo, hi, fallback) => (Number.isFinite(Number(value)) && value !== null && value !== "" ? Math.min(hi, Math.max(lo, Number(value))) : fallback);
@@ -430,11 +431,11 @@ async function finishTranscription(job, options, progress, started = performance
       frame: num(options.peakFrame, 0.05, 0.95, Number(meta.thresholds.frame)),
       offset: num(options.peakOffset, 0.05, 0.95, Number(meta.thresholds.offset)),
       min_frames: Math.round(num(options.peakMinFrames, 1, 30, Number(meta.thresholds.min_frames))) };
-    notes = w2m.decodeNotes(maps, { ...meta, thresholds: peakThresholds }, { fingerprint, stats: fpStats, debug: options.debugFingerprint ? (job.fpDebug = []) : null });
-    decoder = { mode: "peak", onset: peakThresholds.onset, frame: peakThresholds.frame, offset: peakThresholds.offset, minFrames: peakThresholds.min_frames, fingerprint, ...fpStats };
+    notes = w2m.decodeNotes(maps, { ...meta, thresholds: peakThresholds });
+    decoder = { mode: "peak", onset: peakThresholds.onset, frame: peakThresholds.frame, offset: peakThresholds.offset, minFrames: peakThresholds.min_frames, noteGate: gate };
   } else {
-    notes = w2m.decodeStates(maps, { ...meta, thresholds }, bias, { fingerprint, stats: fpStats, debug: options.debugFingerprint ? (job.fpDebug = []) : null });
-    decoder = { mode: "state", bias, fingerprint, ...fpStats };
+    notes = w2m.decodeStates(maps, { ...meta, thresholds }, bias);
+    decoder = { mode: "state", bias, noteGate: gate };
   }
   let velocities = null;
   const fixedVelocity = typeof options.velocity === "number" && options.velocity > 0
@@ -491,7 +492,6 @@ async function finishTranscription(job, options, progress, started = performance
     thresholds,
     tempo: tempoMap,
     decoder,
-    ...(job.fpDebug ? { fingerprintDebug: job.fpDebug } : {}),
     classes: meta.classes.slice(),
     model: {
       id: info.manifest?.id, sha256: info.manifest?.sha256, version: meta.version, step: meta.step,

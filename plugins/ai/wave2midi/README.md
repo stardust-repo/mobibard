@@ -11,15 +11,15 @@ plugins/ai/wave2midi/
   worker.js               추론 Worker: ONNX Runtime 로드, 창 분할 추론, 디코딩(state 고정), velocity, MIDI 생성
   infer-worker.js         CPU 보조 추론 Worker (같은 w16 모델, 여러 세션으로 창을 나눠 실행)
   lib/dsp.mjs             frontend 특징 추출 (w2m/dsp.py 1:1 포팅)
-  lib/w2m_web.mjs         v2 web export: 확률 맵 -> 노트(state Viterbi 디코더, 드럼 피크, 악기), 6초 창 / 1초 겹침,
+  lib/w2m_web.mjs         v2.1 web export: 확률 맵·노트 레이어 -> 노트(state Viterbi 디코더, 드럼 피크, 악기), 6초 창 / 1초 겹침,
                           창 파이프라이닝(predictSong). MobiBard 변경: 동시 실행(concurrency), 필요한 출력만 받기(keys), 진행 콜백
   lib/feature_worker.mjs  창별 frontend 특징 계산 (중첩 Web Worker, worker.js가 여러 개 띄움)
   lib/velocity.mjs        onset spectral flux 기반 velocity (w2m/velocity.py)
   lib/midi.mjs            표준 MIDI 작성기 (w2m/midi.py)
   lib/tempo.mjs           노트로부터 템포 맵 추정 (w2m/tempo.py, 기본 사용)
   lib/model-cache.mjs     모델 영구 저장(IndexedDB) + SHA-256 무결성 검사
-  model/wave2mid_v2_w16.onnx  모델 v2.0 (38 MB): 가중치 16비트 저장 / 32비트 연산. GPU(WebGPU)와 CPU(WebAssembly) 모두 이 파일 하나로 실행
-  model/meta.json         학습 export 메타데이터 (모델 v2.0, 전처리, 임계값, decode, 16개 GM 클래스, velocity 설정)
+  model/wave2mid_v2_1_w16.onnx  모델 v2.1 (40 MB): 가중치 16비트 저장 / 32비트 연산. GPU(WebGPU)와 CPU(WebAssembly) 모두 이 파일 하나로 실행
+  model/meta.json         학습 export 메타데이터 (모델 v2.1, 전처리, 임계값, decode, 19개 악기 클래스, velocity 설정)
   model/manifest.json     모델 이름·버전·제작자·라이선스, 파일명·크기·sha256(models.w16), fallback
   model/LICENSE           모델 라이선스 (CC BY-NC 4.0, startdust-io)
   (ONNX Runtime 사본은 공용 모듈 `plugins/vendor/onnxruntime-web/`에 있습니다. 모든 환경이 `1.31.1`을 씁니다. 폰(CPU 전용)은 1.31.1의 CPU 전용 빌드입니다. 없으면 jsDelivr의 같은 버전을 사용합니다)
@@ -29,13 +29,13 @@ plugins/ai/wave2midi/
 
 ## 라이선스
 
-Wave2MIDI 모델(`model/wave2mid_v2_w16.onnx`, `model/meta.json`)은 **startdust-io**가 제작했으며 **CC BY-NC 4.0 (CC-BY-NC-4.0)**으로 배포합니다. 학습 데이터에 비상업 라이선스(CC-BY-NC-4.0) 자료가 포함되어 있어 **비상업적 이용만** 허용되며, 안내문은 `model/LICENSE`에 있습니다.
+Wave2MIDI 모델(`model/wave2mid_v2_1_w16.onnx`, `model/meta.json`)은 **startdust-io**가 제작했으며 **CC BY-NC 4.0 (CC-BY-NC-4.0)**으로 배포합니다. 학습 데이터에 비상업 라이선스(CC-BY-NC-4.0) 자료가 포함되어 있어 **비상업적 이용만** 허용되며, 안내문은 `model/LICENSE`에 있습니다.
 모델을 다른 곳에 복사하거나 재배포할 때는 `model/LICENSE`를 함께 포함하고, 저작자 표시와 비상업 조건을 지켜야 합니다.
 
 - `meta.json`: `author`, `license.spdx`, `license.copyright`, `license.file`
 - `manifest.json`: `name`, `version`, `author`, `license`, `licenseFile`
 - API: `MobibardWave2Midi.getModelInfo()`는 `{ name, version, author, license, licenseUrl }`를 돌려줍니다(모델은 내려받지 않음). `transcribe()` 결과의 `result.model`에도 `author`, `license`가 들어 있습니다.
-- Editor는 오디오 AI 변환 중 진행 패널에 `Wave2MIDI v2.0 · startdust-io · CC BY-NC 4.0`를 표시하고 `model/LICENSE`로 연결합니다.
+- Editor는 오디오 AI 변환 중 진행 패널에 `Wave2MIDI v2.1 · startdust-io · CC BY-NC 4.0`를 표시하고 `model/LICENSE`로 연결합니다.
 
 ## 사용법
 
@@ -51,8 +51,8 @@ const result = await MobibardWave2Midi.transcribe(file, {
   tempoChanges: true,          // 자동 추정 때 곡 중간 템포 변화 반영 여부
   stateBias: 0,                // 노트 시작 편향 -1~1 (기본 0). 클수록 작은 노트까지, 작을수록 확실한 노트만
   drumThreshold: 0.13,         // 드럼 검출 기준 0.05~0.4 (기본 0.13). 낮을수록 약한 타격까지
-  collectFingerprint: false,   // true: 변환 중 모델의 128차원 노트 특징(출력 fpi/fpv/fpc)을 모아 둠 → 나중에 postprocess로 fingerprint를 켤 수 있음
-  fingerprint: false,          // true: 악기가 애매한 음(후보 2개 이상)을 근처(±3초, ±7반음) 확정 음과의 유사도로 보정 (기본 false, 에디터는 켬)
+  noteGate: 0,                 // 가짜 노트 걸러내기 0~0.95 (기본 0 = 끔). 모델의 노트 레이어가 "진짜 노트일 가능성"을 이 값보다 낮게 본 노트 시작을 뺌 (state/peak 공통)
+  decoderMode: "state",        // "state"(기본) 또는 "peak". peak는 peakOnset(0.25)/peakFrame(0.4)/peakOffset(0.5)/peakMinFrames(2)를 직접 지정
   onProgress: ({ stage, done, total }) => {},
   signal: abortController.signal,
 });
@@ -77,8 +77,8 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 
 ### 후처리 다시 적용
 
-- `postprocess({ stateBias, drumThreshold, fingerprint, velocity, velocityRange, tempo, tempoChanges })`: 마지막 변환의 모델 출력으로 노트·세기·템포·MIDI만 다시 계산합니다(모델을 다시 돌리지 않음). Worker가 해제된 뒤에는 `error.code === "no-job"`으로 실패하므로 `transcribe()`를 다시 호출하세요.
-- `getPostprocessDefaults()`: `model/meta.json`의 기본값 `{ stateBias, stateBiasMin, stateBiasMax, drumThreshold, drumMin, drumMax, velocity, velocityMin, velocityMax, tempoChanges, tempoMin, tempoMax }` (모델은 내려받지 않음).
+- `postprocess({ stateBias, drumThreshold, noteGate, decoderMode, peakOnset, peakFrame, peakOffset, peakMinFrames, velocity, velocityRange, tempo, tempoChanges })`: 마지막 변환의 모델 출력으로 노트·세기·템포·MIDI만 다시 계산합니다(모델을 다시 돌리지 않음). Worker가 해제된 뒤에는 `error.code === "no-job"`으로 실패하므로 `transcribe()`를 다시 호출하세요.
+- `getPostprocessDefaults()`: `model/meta.json`의 기본값 `{ stateBias, stateBiasMin, stateBiasMax, drumThreshold, drumMin, drumMax, noteGate, peakOnset, peakFrame, peakOffset, peakMinFrames, velocity, velocityMin, velocityMax, tempoChanges, tempoMin, tempoMax }` (모델은 내려받지 않음).
 
 ### UI 보조 함수 (1.0.4)
 
@@ -91,7 +91,7 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 
 - 첫 사용 때 그 환경에 맞는 빌드 하나만 내려받아 IndexedDB `mobibard-ai-models`에 저장하고, `navigator.storage.persist()`로 영구 저장소를 요청합니다. 허용되면 브라우저가 저장 공간 부족 등을 이유로 자동 삭제하지 않습니다. 사용자가 사이트 데이터를 직접 지우면 삭제됩니다.
 - 불러올 때마다 크기와 SHA-256을 확인합니다. 손상되었거나 `manifest.json`의 sha256과 다르면 다시 내려받습니다.
-- 같은 사이트의 모든 제품이 저장된 모델을 같이 씁니다. 저장 키는 `mobibard_m2m`입니다. 이전(v1) 모델이 저장돼 있던 사용자는 sha256이 달라 다음 사용 때 v2 모델을 새로 받습니다.
+- 같은 사이트의 모든 제품이 저장된 모델을 같이 씁니다. 저장 키는 `mobibard_m2m`입니다. 이전(v1, v2.0) 모델이 저장돼 있던 사용자는 sha256이 달라 다음 사용 때 v2.1 모델을 새로 받습니다.
 - `meta.json`(버전 표기, 임계값 등)은 모델 파일과 별개로 매번 새로 받아 저장본을 갱신합니다. 모델 파일이 같으면 다시 내려받지 않습니다.
 - 오프라인이어서 `manifest.json`을 못 받아도 저장된 모델과 메타가 있으면 그대로 사용합니다.
 - `MobibardWave2Midi.getCacheStatus()`로 상태를 확인하고, `clearCache()`로 삭제할 수 있습니다.
@@ -102,18 +102,20 @@ const midiFile = MobibardWave2Midi.toMidiFile(result, file.name); // File("곡.m
 2. `manifest.json`의 `models.w16`의 `file`, `bytes`, `sha256`을 갱신합니다. `fallback`은 `w16`을 가리킵니다.
 
 ```bash
-stat -c %s model/wave2mid_v2_w16.onnx
-sha256sum model/wave2mid_v2_w16.onnx
+stat -c %s model/wave2mid_v2_1_w16.onnx
+sha256sum model/wave2mid_v2_1_w16.onnx
 ```
 
 sha256이 바뀌면 사용자 브라우저에 있던 이전 모델은 다음 사용 때 새 모델로 교체됩니다. `meta.json`만 고친 경우에는 manifest를 바꿀 필요가 없습니다.
 
 `lib/*.mjs`나 `worker.js`를 고치면 `wave2midi.js`의 `VERSION`을 올려 브라우저 캐시를 무효화하세요.
 
-## 악기 지문(fingerprint) 보정과 128차원 특징 출력
+## v2.1 노트 레이어
 
-자세한 변경 내용·시험 결과·한계는 [FINGERPRINT.md](FINGERPRINT.md)입니다.
+v2.1 모델은 칸별 확률 맵 외에 **노트 레이어**를 함께 냅니다. 창마다 노트 시작 후보 512개의 칸 번호(`nidx`), 악기 점수(`ninst`, 19개), 역할(`nrole`: 화음/멜로디/베이스), 동시 발음(`nmulti`), "진짜 노트일 가능성"(`nis`)입니다.
 
-`wave2mid_v2_w16.onnx`에는 원래 7개 출력 외에 `fpi`[1,4096]/`fpv`[1,4096]/`fpc`[1,4096,128]이 추가되어 있습니다. 점수 `max(onset, 시작 확률)`이 높은 후보 칸 4096개를 모델 안에서 골라, 칸 번호(`fpi`)·점수(`fpv`)·그 칸부터 5프레임의 128차원 평균을 길이 1로 정규화한 벡터(`fpc`)를 내보냅니다. 기존 출력은 비트 단위로 같습니다. 칸 전체(27MB/창) 대신 약 2MB만 읽습니다. 웹은 점수 0.02 미만인 칸을 버리고, 겹치는 윈도우 구간은 크로스페이드 가중치로 합칩니다.
-`fingerprint`가 켜지면(일관성 우선) 노트별 지문 = 시작 프레임 ±1프레임 안에서 점수가 가장 높은 후보 칸의 128차원 벡터입니다(음높이 평균을 빼면 군집이 나빠져서 쓰지 않습니다). 곡 전체의 노트를 가장 비슷한 그룹끼리 한 단계씩 병합합니다(평균 연결, 코사인 유사도 ≥ 0.6이 남지 않을 때까지). 그룹마다 노트들의 악기 점수 합이 가장 큰 악기 하나로 통일하므로, 같은 소리끼리는 같은 악기가 됩니다(그룹이 통째로 틀릴 수는 있음). 특징 출력이 없거나 모으지 않았으면 16개 악기 점수와 근처(±3초, ±7반음) 확정 음을 비교하는 예전 국소 규칙을 씁니다. 동시에 여러 악기를 내는 음은 건드리지 않습니다.
-다른 모델로 교체할 때는 같은 출력을 다시 포함해야 합니다(없어도 동작은 하며 16차원 점수 기반의 예전 규칙으로 내려갑니다). 자세한 내용은 FINGERPRINT.md를 보세요.
+- 악기는 이 레이어가 노트마다 직접 정합니다. 예전에 후처리로 소리가 비슷한 음을 모으던 악기 지문(fingerprint) 보정은 모델 안으로 들어갔기 때문에 없앴습니다(옵션 `fingerprint`, `collectFingerprint`와 128차원 특징 출력 `fpi`/`fpv`/`fpc`도 없습니다).
+- `noteGate`는 `nis`가 기준보다 낮은 노트 시작을 뺍니다. 레이어에 후보가 없는 칸은 그대로 둡니다.
+- 노트 레이어가 없는 모델(v2.0 등)은 예전처럼 칸별 악기 점수로 악기를 고릅니다.
+- 노트당 악기는 1개로 고정합니다(`worker.js`가 `multi`를 1.01로 둡니다). 모델 기본값(`meta.thresholds.multi` 0.5)을 쓰면 겹쳐 울리는 노트에 악기 2개가 붙습니다.
+- 역할(`nrole`)은 노트 레이어에 합쳐 두기만 하고(`pr.nl.role`) 지금은 쓰지 않습니다. 칸별 `role` 출력은 받지 않습니다.
