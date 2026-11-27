@@ -5669,6 +5669,8 @@
       updateVolumeDialogHeader();
     }
     if (isNoteEditModeActive()) updateNoteEditModeUi();
+    // 마디 편집의 "선택한 길이"(1마디 · 4/64 박자 등)도 새 언어로 다시 쓴다.
+    if (isMeasureEditWorkspaceActive()) updateMeasureEditWorkspace();
     if (elements.tempoSimplifyBackdrop && !elements.tempoSimplifyBackdrop.hidden) updateTempoSimplifySummary();
     renderShortcutKeycaps();
     updateShortcutSearchResults();
@@ -29516,7 +29518,7 @@
 
   function describeTimeEditAmount(measures, subdivisions) {
     const parts = [];
-    if (measures) parts.push(i18nText("ui.measures_count", [measures]));
+    if (measures) parts.push(measures === 1 ? i18nText("ui.measure_one") : i18nText("ui.measures_count", [measures]));
     if (subdivisions) parts.push(i18nText("ui.beat64_count", [subdivisions]));
     return parts.join(" ") || i18nText("ui.beat_zero");
   }
