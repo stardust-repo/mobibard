@@ -2637,11 +2637,12 @@
 
   function isWorkspaceTopbarInteractionTarget(target) {
     // The shared SoundFont popup can be opened from the topbar while a preview workspace is active.
-    return Boolean(target instanceof Element && (target.closest(".editor-topbar") || target.closest(".sbs-backdrop")));
+    // 공간 사운드(3D) 창도 상단 3D 버튼에서 여는 창이므로, 불러오기 같은 작업 중에도 조작할 수 있어야 한다.
+    return Boolean(target instanceof Element && (target.closest(".editor-topbar") || target.closest(".sbs-backdrop") || target.closest(".sr-root")));
   }
 
   function isSharedOverlayTarget(target) {
-    return Boolean(target instanceof Element && target.closest(".sbs-backdrop"));
+    return Boolean(target instanceof Element && (target.closest(".sbs-backdrop") || target.closest(".sr-root")));
   }
 
   function isTutorialInteractionTarget(target) {
