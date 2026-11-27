@@ -2154,6 +2154,7 @@ button {
 
 #volumeButton,
 #zoomButton,
+#spatialRoomButton,
 #playbackRateButton {
   width: 61px;
   min-width: 61px;
@@ -2259,6 +2260,7 @@ button {
 @media (pointer: coarse) {
   #volumeButton,
   #zoomButton,
+  #spatialRoomButton,
   #playbackRateButton {
     width: 63px;
     min-width: 63px;
@@ -2288,6 +2290,7 @@ button {
 /* 2026-08 compact range-menu sizing refinement */
 #volumeButton,
 #zoomButton,
+#spatialRoomButton,
 #playbackRateButton {
   width: 61px;
   min-width: 61px !important;
@@ -2371,6 +2374,7 @@ button {
 @media (pointer: coarse) {
   #volumeButton,
   #zoomButton,
+  #spatialRoomButton,
   #playbackRateButton {
     width: 63px;
     min-width: 63px !important;
@@ -4859,6 +4863,7 @@ button {
 /* 2026-09 utility controls: icons carry meaning; popup headers are intentionally omitted. */
 #volumeButton,
 #zoomButton,
+#spatialRoomButton,
 #playbackRateButton {
   display: inline-flex;
   align-items: center;
@@ -4894,11 +4899,13 @@ button {
 /* 2026-09-03 utility control spacing: match Player emoji/value treatment. */
 #volumeButton,
 #zoomButton,
+#spatialRoomButton,
 #playbackRateButton {
   gap: 2px;
 }
 #volumeButton .transport-utility-icon,
 #zoomButton .transport-utility-icon,
+#spatialRoomButton .transport-utility-icon,
 #playbackRateButton .transport-utility-icon {
   font-size: 17px;
   line-height: 1;
@@ -4908,6 +4915,7 @@ button {
 /* 2026-09-03 utility control visual centering: keep enlarged emoji/value optically centered. */
 #volumeButton,
 #zoomButton,
+#spatialRoomButton,
 #playbackRateButton {
   display: inline-grid;
   grid-auto-flow: column;
@@ -4919,6 +4927,7 @@ button {
 }
 #volumeButton .transport-utility-icon,
 #zoomButton .transport-utility-icon,
+#spatialRoomButton .transport-utility-icon,
 #playbackRateButton .transport-utility-icon {
   display: inline-grid;
   place-items: center;
@@ -4949,6 +4958,7 @@ button {
 /* 2026-09-03 utility control optical centering refinement. */
 #volumeButton,
 #zoomButton,
+#spatialRoomButton,
 #playbackRateButton {
   display: inline-flex;
   align-items: center;
@@ -4959,6 +4969,7 @@ button {
 }
 #volumeButton .transport-utility-icon,
 #zoomButton .transport-utility-icon,
+#spatialRoomButton .transport-utility-icon,
 #playbackRateButton .transport-utility-icon {
   display: inline-flex;
   align-items: center;
@@ -6128,6 +6139,7 @@ a[class*="button"]:hover {
   font-size: 10px;
 }
 .playback-compact-box #volumeButton,
+.playback-compact-box #spatialRoomButton,
 .playback-compact-box #playbackRateButton {
   width: 49px;
   min-width: 49px;
@@ -6139,10 +6151,12 @@ a[class*="button"]:hover {
   background: transparent;
 }
 .playback-compact-box #volumeButton:hover,
+.playback-compact-box #spatialRoomButton:hover,
 .playback-compact-box #playbackRateButton:hover { background: var(--control-hover); }
 @media (max-width: 900px) {
   .playback-compact-box .playback-time { min-width: 104px; font-size: 9.5px; }
   .playback-compact-box #volumeButton,
+  .playback-compact-box #spatialRoomButton,
   .playback-compact-box #playbackRateButton { width: 46px; min-width: 46px; max-width: 46px; }
 }
 
@@ -7869,6 +7883,7 @@ body.merge-mode-active #jumpStartButton,
 body.merge-mode-active #jumpEndButton,
 body.merge-mode-active #loopPlaybackButton,
 body.merge-mode-active #volumeButton,
+body.merge-mode-active #spatialRoomButton,
 body.merge-mode-active #playbackRateButton,
 body.merge-mode-active #volumeMenu button,
 body.merge-mode-active #volumeMenu input,
@@ -8243,6 +8258,7 @@ body.note-edit-mode-active #playButton,
 body.note-edit-mode-active #jumpStartButton,
 body.note-edit-mode-active #jumpEndButton,
 body.note-edit-mode-active #volumeButton,
+body.note-edit-mode-active #spatialRoomButton,
 body.note-edit-mode-active #playbackRateButton,
 body.note-edit-mode-active #volumeMenu button,
 body.note-edit-mode-active #volumeMenu input,
@@ -10851,6 +10867,7 @@ body.channel-delete-mode-active #playButton,
 body.channel-delete-mode-active #jumpStartButton,
 body.channel-delete-mode-active #jumpEndButton,
 body.channel-delete-mode-active #volumeButton,
+body.channel-delete-mode-active #spatialRoomButton,
 body.channel-delete-mode-active #playbackRateButton,
 body.channel-delete-mode-active #volumeMenu button,
 body.channel-delete-mode-active #volumeMenu input,
@@ -16329,3 +16346,14 @@ body.merge-mode-active .channel-instrument-control select { pointer-events: auto
   min-width: 54px; max-width: 96px; text-align: right; font-size: 11px; font-weight: 800; overflow: hidden;
   text-overflow: ellipsis; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
+
+/* 공간 사운드 창이 열려 있으면 3D 버튼을 반복 재생처럼 켜진 상태로 표시 */
+#spatialRoomButton.active,
+#spatialRoomButton[aria-pressed="true"] {
+  border-color: #ee9900 !important;
+  background: #ee9900 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+#spatialRoomButton.active .transport-utility-value,
+#spatialRoomButton[aria-pressed="true"] .transport-utility-value { color: #fff !important; }

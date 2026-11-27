@@ -537,8 +537,24 @@
       return pending.length;
     }
 
-    getZoneOutput(zone) {
+    getZoneOutput(zone, customOutput = null) {
       if (!this.masterGain) this.ensureContext();
+      if (customOutput) {
+        // 공간 사운드: 채널 버스로 직접 보낸다(존 팬은 그대로 유지).
+        if (Math.abs(zone.pan) <= 0.01 || typeof this.context.createStereoPanner !== "function") return customOutput;
+        if (!this.customZoneOutputs) this.customZoneOutputs = new WeakMap();
+        let map = this.customZoneOutputs.get(customOutput);
+        if (!map) { map = new Map(); this.customZoneOutputs.set(customOutput, map); }
+        const customKey = `${zone.sampleId}:${Math.round(zone.pan * 1000)}`;
+        let panner = map.get(customKey);
+        if (!panner) {
+          panner = this.context.createStereoPanner();
+          panner.pan.value = zone.pan;
+          panner.connect(customOutput);
+          map.set(customKey, panner);
+        }
+        return panner;
+      }
       if (Math.abs(zone.pan) <= 0.01 || typeof this.context.createStereoPanner !== "function") {
         return this.masterGain;
       }
@@ -740,7 +756,7 @@
       return oscillatorA;
     }
 
-    createSf2Voice(midi, velocity, when, duration, program = this.presetNumber, bank = this.bankNumber, gainScale = 1, exactPreset = false, mmlVolume = null) {
+    createSf2Voice(midi, velocity, when, duration, program = this.presetNumber, bank = this.bankNumber, gainScale = 1, exactPreset = false, mmlVolume = null, customOutput = null) {
       const context = this.ensureContext();
       const safeGainScale = Number.isFinite(Number(gainScale))
         ? clamp(Number(gainScale), 0, 1.5)
@@ -752,13 +768,13 @@
       if (!zone) {
         // A missing drum key should stay silent rather than become a pitched synth.
         if (clamp(Math.round(Number(bank) || 0), 0, 16383) === 128) return null;
-        return this.createFallbackVoice(midi, velocity, when, duration, safeGainScale, mmlVolume);
+        return this.createFallbackVoice(midi, velocity, when, duration, safeGainScale, mmlVolume, customOutput);
       }
 
       if (!this.offlineRenderMode) this.enforceVoiceLimit(when);
       const source = context.createBufferSource();
       const gain = context.createGain();
-      const outputNode = this.getZoneOutput(zone);
+      const outputNode = this.getZoneOutput(zone, customOutput);
       const buffer = this.getSampleBuffer(zone);
       const centsFromRoot = (midi - zone.rootKey) * zone.scaleTuning - zone.pitchCorrection + zone.coarseTune * 100 + zone.fineTune;
       const hasMmlVolume = Number.isFinite(Number(mmlVolume));
@@ -848,7 +864,7 @@
       return voice;
     }
 
-    createFallbackVoice(midi, velocity, when, duration, gainScale = 1, mmlVolume = null) {
+    createFallbackVoice(midi, velocity, when, duration, gainScale = 1, mmlVolume = null, customOutput = null) {
       const context = this.ensureContext();
       const safeGainScale = Number.isFinite(Number(gainScale))
         ? clamp(Number(gainScale), 0, 1.5)
@@ -885,7 +901,7 @@
       oscillatorA.connect(filter);
       oscillatorB.connect(filter);
       filter.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(customOutput || this.masterGain);
 
       const voice = {
         gain,
@@ -953,13 +969,14 @@
         ? clamp(Number(options.gainScale), 0, 1.5)
         : 1;
       const exactPreset = exactValue(options?.exactPreset);
+      const customOutput = options?.output && !this.offlineRenderMode ? options.output : null;
       const rawMmlVolume = Number(options?.mmlVolume);
       const mmlVolume = Number.isFinite(rawMmlVolume) ? clamp(rawMmlVolume, 0, 15) : null;
       if (mmlVolume != null && mmlVolume <= 0) return null;
       if (this.soundFont) {
-        return this.createSf2Voice(midi, velocity, startAt, duration, program, bank, gainScale, exactPreset, mmlVolume);
+        return this.createSf2Voice(midi, velocity, startAt, duration, program, bank, gainScale, exactPreset, mmlVolume, customOutput);
       }
-      return this.createFallbackVoice(midi, velocity, startAt, duration, gainScale, mmlVolume);
+      return this.createFallbackVoice(midi, velocity, startAt, duration, gainScale, mmlVolume, customOutput);
     }
 
     stopAll(time = null) {

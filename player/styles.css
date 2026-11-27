@@ -10766,3 +10766,11 @@ a[class*="button"]:hover {
 .player-ui .wb-code-revert-button[hidden] { display: none !important; }
 .player-ui .wb-code-revert-button:disabled { opacity: .45; cursor: default; }
 .player-ui .wb-code-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+
+/* 공간 사운드(3D) 버튼 */
+.spatial-room-btn { gap: 5px; }
+.spatial-room-label { color: var(--text); font-size: 12.5px; font-weight: 900; }
+.spatial-room-btn.active,
+.spatial-room-btn[aria-expanded="true"] { border-color: #ee9900 !important; background: #ee9900 !important; box-shadow: none !important; }
+.spatial-room-btn.active .spatial-room-label,
+.spatial-room-btn[aria-expanded="true"] .spatial-room-label { color: #fff; }

@@ -31267,6 +31267,91 @@
     });
   }
 
+  // 공간 사운드: 켜져 있으면 채널(sourceId)별 버스로 보내고, 공간 엔진이 스피커/청자 기준으로 소리를 만든다.
+  let spatialRoom = null;
+  let spatialEngine = null;
+  let spatialEngineCtx = null;
+  function disposeSpatialEngine() {
+    if (spatialEngine) { try { spatialEngine.dispose(); } catch {} }
+    spatialEngine = null; spatialEngineCtx = null;
+  }
+  function getSpatialPlaybackOutput(note) {
+    const config = spatialRoom?.getConfig?.();
+    const SA = window.MobibardSpatialAudio;
+    if (!SA || !config?.enabled) return null;
+    const context = audioEngine.context;
+    if (!context || !audioEngine.masterGain) return null;
+    if (!spatialEngine || spatialEngineCtx !== context) {
+      disposeSpatialEngine();
+      spatialEngine = SA.createEngine({ context, destination: audioEngine.masterGain });
+      spatialEngineCtx = context;
+      spatialEngine.setConfig(config);
+    }
+    const isChannel = !note.source || note.source === "channel";
+    const id = isChannel ? String(note.sourceId ?? "") : "";
+    return spatialEngine.channelInput(id || "other");
+  }
+  function applySpatialConfig() {
+    const config = spatialRoom?.getConfig?.();
+    if (!config?.enabled) { disposeSpatialEngine(); return; }
+    if (spatialEngine) spatialEngine.setConfig(config);
+  }
+  function initSpatialRoom() {
+    const button = document.getElementById("spatialRoomButton");
+    if (!window.MobibardSpatialRoom || !button || spatialRoom) return;
+    spatialRoom = window.MobibardSpatialRoom.create({
+      storageKey: "mobibard-spatial-room-v1",
+      // 같은 곡(프로젝트)이면 스피커 채널 선택을 기억한다.
+      getSongKey: () => `editor|${state.projectName || ""}`,
+      getLang: () => document.documentElement.lang || "ko",
+      getChannels: () => {
+        const groups = new Map((state.channelGroups || []).map((group) => [String(group.id), group]));
+        return state.channels.map((channel, index) => {
+          const group = channel.groupId != null ? groups.get(String(channel.groupId)) : null;
+          return {
+            id: String(channel.id),
+            name: channel.name || `Ch${index + 1}`,
+            color: getChannelColor(channel, index),
+            group: group ? { id: String(group.id), name: group.name || String(group.id) } : null,
+          };
+        });
+      },
+      onChange: () => {
+        const wasEnabled = Boolean(spatialEngine);
+        applySpatialConfig();
+        refreshSpatialButton();
+        // 켜고 끌 때 이미 예약된 음은 이전 경로로 남아 있으므로 재생 중이면 다시 예약한다.
+        if (wasEnabled !== Boolean(spatialRoom.isEnabled())) refreshRunningPlaybackVoices();
+      },
+      onListener: (listener) => { if (spatialEngine) spatialEngine.setListener(listener); },
+      onVisibility: () => refreshSpatialButton(),
+      transport: {
+        getState: () => {
+          const playing = Boolean(state.playback.running || state.playback.loading);
+          const rate = Math.max(0.01, Number(state.playbackRate) || 1);
+          const endBeat = playing ? state.playback.endBeat : getPlaybackRangeBounds({ contentEndBeat: getPlaybackEndBeat() }).endBeat;
+          const duration = (playing ? state.playback.endSeconds : beatToSeconds(endBeat)) / rate;
+          return { playing, loop: Boolean(state.playbackLoopEnabled), position: getPlayheadDisplaySeconds(), duration, volume: Math.round((Number(state.masterVolume) || 0) * 100), speed: rate };
+        },
+        togglePlay: () => togglePlayback(),
+        toStart: () => moveToTimelineStart(),
+        toEnd: () => moveToTimelineEnd(),
+        setLoop: (value) => setPlaybackLoopEnabled(Boolean(value)),
+        seek: (seconds) => seekPlayheadBeat(secondsToBeat(Math.max(0, Number(seconds) || 0) * Math.max(0.01, Number(state.playbackRate) || 1))),
+        setVolume: (percent) => setMasterVolume((Number(percent) || 0) / 100),
+        setSpeed: (speed) => setPlaybackRate(Number(speed) || 1),
+      },
+    });
+    const refreshSpatialButton = () => {
+      const label = spatialRoom.text("open");
+      button.title = label; button.setAttribute("aria-label", label);
+      button.style.borderColor = spatialRoom.isEnabled() ? "var(--accent, #3b6cff)" : "";
+      button.setAttribute("aria-pressed", String(spatialRoom.isOpen()));
+      button.classList.toggle("active", spatialRoom.isOpen());
+    };
+    button.addEventListener("click", () => spatialRoom.toggle());
+    refreshSpatialButton();
+  }
   function schedulePlaybackNoteVoice(note, { timelineNow, contextNow, rate } = {}) {
     if (!note || !audioEngine.context || !isPlaybackNoteCurrentlyAudible(note)) return false;
     const key = getPlaybackNoteKey(note);
@@ -31292,6 +31377,7 @@
       exactPreset: editorExactValue(note.instrumentExactPreset),
       gainScale: state.playback.autoGainScale,
       mmlVolume: Number.isFinite(Number(note.volume)) ? Number(note.volume) : null,
+      output: getSpatialPlaybackOutput(note),
     });
     trackPlaybackVoice(note, voice);
     return true;
@@ -36944,6 +37030,7 @@
   }
 
   function bindEvents() {
+    initSpatialRoom();
     // Unlock Web Audio in the capture phase, before any async click/pointer handler
     // can lose the browser's transient user activation. This single path serves
     // piano keys, note audition, playback, and import previews.

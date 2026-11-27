@@ -4533,6 +4533,7 @@
 
   window.MobibardPlayerLayout = Object.freeze({
     get sourceMml() { return state.sourceMml; },
+    get originalMml() { return state.originalMml || state.sourceMml; },
     get options() { return JSON.parse(JSON.stringify(state.options)); },
     get activeChannel() { return state.activeChannel; },
     applyFromSource,
@@ -4934,6 +4935,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
 
   let audioCtx = null;
   let masterGain = null;
+  let spatialRoom = null;
+  let spatialEngine = null;
+  let spatialEngineCtx = null;
   let partPlaybackGains = [];
   let soundFont = null;
   let defaultSoundFont = null;
@@ -5391,6 +5395,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     rhythmGameFrame?.addEventListener("load", handleRhythmGameFrameLoad);
     window.addEventListener("message", handleRhythmGameMessage);
     partSoundBtn?.addEventListener("click", () => void openPartSoundDialog());
+    initSpatialRoom();
     partSoundCancel?.addEventListener("click", () => partSoundDialog?.close());
     partSoundApply?.addEventListener("click", () => applyPartSoundDialog());
     partSoundPresetSelect?.addEventListener("change", () => applyPartSoundPresetToDraft(partSoundPresetSelect.value));
@@ -12763,6 +12768,80 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       gain.connect(masterGain);
       return gain;
     });
+    applySpatialRouting();
+  }
+
+  // 공간 사운드: 켜져 있으면 6개 파트를 공간 엔진(스피커/청자)으로 보내고, 꺼져 있으면 기존처럼 마스터로 보낸다.
+  function applySpatialRouting() {
+    if (!audioCtx || !masterGain || partPlaybackGains.length !== 6) return;
+    const SA = window.MobibardSpatialAudio;
+    const config = spatialRoom?.getConfig?.();
+    if (SA && config?.enabled) {
+      if (!spatialEngine || spatialEngineCtx !== audioCtx) {
+        try { spatialEngine?.dispose(); } catch {}
+        spatialEngine = SA.createEngine({ context: audioCtx, destination: masterGain });
+        spatialEngineCtx = audioCtx;
+      }
+      spatialEngine.setConfig(config);
+      partPlaybackGains.forEach((gain, part) => {
+        try { gain.disconnect(); } catch {}
+        gain.connect(spatialEngine.channelInput(String(part + 1)));
+      });
+    } else {
+      partPlaybackGains.forEach(gain => {
+        try { gain.disconnect(); } catch {}
+        gain.connect(masterGain);
+      });
+      if (spatialEngine) { try { spatialEngine.dispose(); } catch {} spatialEngine = null; spatialEngineCtx = null; }
+    }
+  }
+  function initSpatialRoom() {
+    const button = $("spatialRoomBtn");
+    if (!window.MobibardSpatialRoom || !button || spatialRoom) return;
+    spatialRoom = window.MobibardSpatialRoom.create({
+      storageKey: `${PREF_PREFIX}spatialRoomV1`,
+      // 같은 곡(원본 MML)이면 스피커 채널 선택을 기억한다.
+      getSongKey: () => window.MobibardPlayerLayout?.originalMml || null,
+      getLang: () => document.documentElement.lang || "ko",
+      getChannels: () => Array.from({ length: 6 }, (_, index) => ({ id: String(index + 1), name: PART_LABELS[index] })),
+      onChange: () => { applySpatialRouting(); updateSpatialButton(); },
+      onListener: listener => { if (spatialEngine) spatialEngine.setListener(listener); },
+      onVisibility: () => updateSpatialButton(),
+      // 룸 안의 재생 컨트롤은 기존 재생 UI를 그대로 조작한다(같은 동작·같은 저장).
+      transport: {
+        getState: () => ({
+          playing: Boolean(isPlaying),
+          loop: Boolean(loopPlayback?.checked),
+          position: Number(progressSlider?.value) || 0,
+          duration: Number(progressSlider?.max) || 0,
+          volume: Number(volumeSlider?.value ?? 100),
+          speed: Number(speedSlider?.value ?? 1),
+        }),
+        togglePlay: () => playToggleBtn?.click(),
+        toStart: () => rewindBtn?.click(),
+        toEnd: () => setRangeValue(progressSlider, Number(progressSlider?.max) || 0, ["input", "change"]),
+        setLoop: value => { if (loopPlayback) { loopPlayback.checked = Boolean(value); loopPlayback.dispatchEvent(new Event("change", { bubbles: true })); } },
+        seek: seconds => setRangeValue(progressSlider, seconds, ["input", "change"]),
+        setVolume: percent => setRangeValue(volumeSlider, percent, ["input", "change"]),
+        setSpeed: speed => setRangeValue(speedSlider, speed, ["input", "change"]),
+      },
+    });
+    function setRangeValue(input, value, events) {
+      if (!input || input.disabled) return;
+      input.value = String(value);
+      for (const type of events) input.dispatchEvent(new Event(type, { bubbles: true }));
+    }
+    const label = () => spatialRoom.text("open");
+    const updateSpatialButton = () => {
+      button.title = label(); button.setAttribute("aria-label", label());
+      button.style.borderColor = spatialRoom.isEnabled() ? "var(--accent)" : "";
+      button.setAttribute("aria-expanded", String(spatialRoom.isOpen()));
+      button.classList.toggle("active", spatialRoom.isOpen());
+      button.style.opacity = spatialRoom.isEnabled() ? "1" : "";
+    };
+    button.addEventListener("click", () => spatialRoom.toggle());
+    window.addEventListener("mobibard:languagechange", () => { updateSpatialButton(); spatialRoom.refresh(); });
+    updateSpatialButton();
   }
 
   // Safari/iOS: an "interrupted" context or a resume() that never settles means the context is stuck.
