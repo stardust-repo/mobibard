@@ -8840,14 +8840,99 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     flashButton(button, label || i18nText("st.loaded"));
   }
 
+  // ---- MabiIcco 템포/시작 위치 반영 ----
+  // MabiIcco 파일은 템포를 트랙 MML 안이 아니라 [mml-score] 의 tempo= 줄(틱T템포, 4분음표=96틱)에 따로 두고,
+  // 트랙별 시작 위치(startOffset/startDelta)도 따로 둔다. 이것을 MML 로 옮기지 않으면 모두 T120 으로 재생된다.
+  const MMI_REST_TICKS = [[384, "r1"], [192, "r2"], [96, "r4"], [48, "r8"], [24, "r16"], [12, "r32"], [6, "r64"]];
+  function mmiTicksToRests(ticks) {
+    let remaining = Math.max(0, Math.round(Number(ticks) || 0));
+    let out = "";
+    for (const [size, token] of MMI_REST_TICKS) {
+      while (remaining >= size) { out += token; remaining -= size; }
+    }
+    return out;
+  }
+  // 파트 안의 음/쉼표 시작 위치(박)를 훑는다. 반환: { starts:[{index, beat}], total }
+  function scanMmlPartBeats(part) {
+    const src = String(part || "");
+    const starts = [];
+    let i = 0, beat = 0, defLen = 4, defDots = 0;
+    const readNum = () => { const m = /^\d+/.exec(src.slice(i)); if (!m) return null; i += m[0].length; return Number(m[0]); };
+    const readDots = () => { let n = 0; while (src[i] === ".") { n++; i++; } return n; };
+    const beatsOf = (len, dots) => { let b = 4 / Math.max(1, len), add = b / 2; for (let d = 0; d < dots; d++) { b += add; add /= 2; } return b; };
+    while (i < src.length) {
+      const ch = src[i].toLowerCase();
+      if ("cdefgabr".includes(ch)) {
+        starts.push({ index: i, beat });
+        i++;
+        if (ch !== "r" && "+#-".includes(src[i] || "")) i++;
+        const len = readNum(), dots = readDots();
+        beat += len ? beatsOf(len, dots) : beatsOf(defLen, defDots + dots);
+      } else if (ch === "n") {
+        starts.push({ index: i, beat });
+        i++; readNum();
+        beat += beatsOf(defLen, defDots + readDots());
+      } else if (ch === "l") {
+        i++; const len = readNum(); const dots = readDots();
+        if (len) { defLen = len; defDots = dots; }
+      } else i++;
+    }
+    return { starts, total: beat };
+  }
+  // 템포 이벤트를 파트의 해당 위치(가장 가까운 다음 음/쉼표 앞)에 t 명령으로 넣는다. 끝보다 뒤면 쉼표로 늘려서 넣는다.
+  function insertMmiTempoEvents(part, events) {
+    let out = String(part || "");
+    const list = (events || []).filter(e => Number.isFinite(Number(e?.beat)) && Number.isFinite(Number(e?.bpm)))
+      .map(e => ({ beat: Math.max(0, Number(e.beat)), bpm: Math.round(Number(e.bpm)) }))
+      .sort((a, b) => a.beat - b.beat);
+    if (!list.length) return out;
+    const { starts, total } = scanMmlPartBeats(out);
+    const inserts = [];
+    let tail = "";
+    let tailBeat = total;
+    for (const ev of list) {
+      const hit = starts.find(item => item.beat >= ev.beat - 1e-6);
+      if (hit) inserts.push({ index: hit.index, text: `t${ev.bpm}` });
+      else {
+        if (ev.beat > tailBeat + 1e-6) { tail += mmiTicksToRests((ev.beat - tailBeat) * 96); tailBeat = ev.beat; }
+        tail += `t${ev.bpm}`;
+      }
+    }
+    for (const item of inserts.sort((a, b) => b.index - a.index)) out = out.slice(0, item.index) + item.text + out.slice(item.index);
+    return out + tail;
+  }
+  // 후보(트랙 파트)를 MabiIcco 시간 정보에 맞춰 바꾼다: 시작 위치만큼 쉼표 + (전역 템포가 있으면) 템포를 파트 안으로.
+  function applyMmiTimingToCandidates(candidates) {
+    const globalTempo = (candidates.find(c => Array.isArray(c.mmiGlobalTempoEvents) && c.mmiGlobalTempoEvents.length)?.mmiGlobalTempoEvents) || [];
+    return candidates.map(candidate => {
+      let value = normalizeMmiLegacyLengthsInPart(cleanupMmiMmlValue(candidate.value || ""));
+      if (globalTempo.length) value = value.replace(/t\d+/gi, "");
+      const startTick = Math.max(0, Number(candidate.mmiStartTick) || 0);
+      if (startTick > 0) value = mmiTicksToRests(startTick) + value;
+      if (globalTempo.length) value = insertMmiTempoEvents(value, globalTempo);
+      return { ...candidate, value, mmiHasGlobalTempo: globalTempo.length > 0, mmiTempoEvents: globalTempo };
+    });
+  }
+  // 선택된 파트들: 템포는 Mabinogi 에서 전 파트 공통이므로, 가장 긴 파트 하나에만 남겨 글자 수를 아낀다.
+  function keepMmiTempoInLongestPart(parts, events) {
+    if (!events?.length) return parts;
+    const stripped = parts.map(part => String(part || "").replace(/t\d+/gi, ""));
+    let carrier = 0, longest = -1;
+    stripped.forEach((part, index) => { if (!part.trim()) return; const total = scanMmlPartBeats(part).total; if (total > longest) { longest = total; carrier = index; } });
+    stripped[carrier] = insertMmiTempoEvents(stripped[carrier], events);
+    return stripped;
+  }
+
   async function readMabiIccoMmiFile(data, name = i18nText("file.mmi")) {
     const text = decodeTextFileBytes(data).replace(/^\uFEFF/, "");
-    const candidates = extractMabiIccoMmlPartCandidates(text);
+    const candidates = applyMmiTimingToCandidates(extractMabiIccoMmlPartCandidates(text));
     if (!candidates.length) {
       throw new Error(i18nText("mml.code_not_found", [name]));
     }
-    const selectedParts = await openMmiImportDialog(candidates, name);
+    const tempoEvents = candidates[0]?.mmiTempoEvents || [];
+    let selectedParts = await openMmiImportDialog(candidates, name);
     if (!selectedParts) return null;
+    selectedParts = keepMmiTempoInLongestPart(selectedParts.slice(0, MMI_IMPORT_MAX_CHANNELS), tempoEvents);
     while (selectedParts.length < MMI_IMPORT_MAX_CHANNELS) selectedParts.push("");
     const normalizedParts = selectedParts
       .slice(0, MMI_IMPORT_MAX_CHANNELS)
@@ -12840,6 +12925,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       storageKey: `${PREF_PREFIX}spatialRoomV1`,
       // 같은 곡(원본 MML)이면 스피커 채널 선택을 기억한다.
       getSongKey: () => window.MobibardPlayerLayout?.originalMml || null,
+      getSpeakerLevels: () => spatialEngine?.getLevels?.() || null,
       getLang: () => document.documentElement.lang || "ko",
       getChannels: () => Array.from({ length: 6 }, (_, index) => ({ id: String(index + 1), name: PART_LABELS[index] })),
       onChange: () => { applySpatialRouting(); updateSpatialButton(); },
@@ -12854,6 +12940,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
           duration: Number(progressSlider?.max) || 0,
           volume: Number(volumeSlider?.value ?? 100),
           speed: Number(speedSlider?.value ?? 1),
+          bpm: currentSpatialBpm(),
         }),
         togglePlay: () => playToggleBtn?.click(),
         toStart: () => rewindBtn?.click(),
@@ -12864,6 +12951,16 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         setSpeed: speed => setRangeValue(speedSlider, speed, ["input", "change"]),
       },
     });
+    // 현재 재생 위치의 템포(배속 반영). 캐릭터 지휘 속도에 쓴다.
+    function currentSpatialBpm() {
+      try {
+        const map = getPianoRollTempoMap() || [];
+        const position = Number(progressSlider?.value) || 0;
+        let bpm = 120;
+        for (const tempo of map) { if (tempo.time > position + 1e-6) break; bpm = Number(tempo.bpm) || bpm; }
+        return bpm * (Number(playbackSpeed) || 1);
+      } catch { return 120; }
+    }
     function setRangeValue(input, value, events) {
       if (!input || input.disabled) return;
       input.value = String(value);
@@ -12872,10 +12969,9 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     const label = () => spatialRoom.text("open");
     const updateSpatialButton = () => {
       button.title = label(); button.setAttribute("aria-label", label());
-      button.style.borderColor = spatialRoom.isEnabled() ? "var(--accent)" : "";
-      button.setAttribute("aria-expanded", String(spatialRoom.isOpen()));
-      button.classList.toggle("active", spatialRoom.isOpen());
-      button.style.opacity = spatialRoom.isEnabled() ? "1" : "";
+      // 색 표시는 창 열림이 아니라 "공간 사운드로 듣기" 켜짐 여부를 따른다.
+      button.setAttribute("aria-pressed", String(spatialRoom.isEnabled()));
+      button.classList.toggle("active", spatialRoom.isEnabled());
     };
     button.addEventListener("click", () => spatialRoom.toggle());
     window.addEventListener("mobibard:languagechange", () => { updateSpatialButton(); spatialRoom.refresh(); });

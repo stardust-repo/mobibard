@@ -199,6 +199,10 @@
   // 3D 월드는 눈부심을 막기 위해 테마와 상관없이 항상 어두운 색으로 그린다(UI만 테마를 따름).
   const currentPalette = () => PALETTE.dark;
   let PAL = PALETTE.dark;
+  // 캐릭터 지휘 동작 상태(재생 중일 때만 움직임)
+  let isPlayingNow = false;
+  let currentBpm = 120;   // 지휘 속도: 120 BPM 에서 한 마디(4박) 2초, 템포에 비례
+  const conductState = { amp: 0, phase: 0, time: 0 };
   const TAU = Math.PI * 2;
   const MARGIN_NEAR = 0.15;
   const SPEED = 3.2;
@@ -241,6 +245,8 @@
     const onListener = typeof options.onListener === "function" ? options.onListener : () => {};
     const onVisibility = typeof options.onVisibility === "function" ? options.onVisibility : () => {};
     const getSongKey = typeof options.getSongKey === "function" ? options.getSongKey : null;
+    const getSpeakerLevels = typeof options.getSpeakerLevels === "function" ? options.getSpeakerLevels : null;
+    const speakerPulse = new Map();   // 스피커 id -> 0..1 (부드럽게 따라감)
     const getLang = typeof options.getLang === "function" ? options.getLang : () => document.documentElement.lang || "ko";
 
     function tr(key, vars) {
@@ -593,6 +599,8 @@
       if (!transport) return;
       let st;
       try { st = transport.getState() || {}; } catch (_) { return; }
+      isPlayingNow = !!st.playing;
+      currentBpm = clamp(Number(st.bpm) || 120, 20, 600);
       const playing = !!st.playing, duration = Math.max(0, Number(st.duration) || 0), position = clamp(Number(st.position) || 0, 0, duration || Infinity);
       if (lastT.playing !== playing) { tEl("tPlay").innerHTML = `<span class="sr-icon sr-icon-${playing ? "stop" : "play"}" aria-hidden="true"></span>`; tEl("tPlay").title = tr(playing ? "stop" : "play"); lastT.playing = playing; }
       if (lastT.loop !== !!st.loop) { tEl("tLoop").setAttribute("aria-pressed", String(!!st.loop)); lastT.loop = !!st.loop; }
@@ -832,7 +840,9 @@
       const l = Math.hypot(fx, fz);
       if (l < 1e-6) { fx = 0; fz = 1; } else { fx /= l; fz /= l; }
       const rx = -fz, rz = fx;
-      const w = 0.45, d = 0.3, h = 1.1;
+      // 소리가 날 때 아주 살짝 커졌다 작아진다(울림).
+      const k = 1 + 0.12 * (speakerPulse.get(s.id) || 0);
+      const w = 0.45 * k, d = 0.3 * k, h = 1.1 * k;
       const P = (a, b, y) => [s.x + fx * a * d + rx * b * w, y, s.z + fz * a * d + rz * b * w];
       const corners = [];
       for (const a of [-1, 1]) for (const b of [-1, 1]) for (const y of [0, h]) corners.push(P(a, b, y));
@@ -864,8 +874,9 @@
         drawPoly(f.q, `rgb(${v},${v + 4},${v + 16})`, "#0008", 1);
         if (f.front) {
           const circle = (b, y, rad, fill, stroke) => drawPoly(Array.from({ length: 20 }, (_, i) => { const t = i / 20 * TAU; return P(1.02, b + Math.cos(t) * rad / g.w, y + Math.sin(t) * rad); }), fill, stroke, 1.5);
-          circle(0, 0.42, 0.28, "#12151c", "#5b6786");
-          circle(0, 0.42, 0.11, "#2a3040", null);
+          const pulse = speakerPulse.get(s.id) || 0;
+          circle(0, 0.42, 0.28 * (1 + 0.1 * pulse), "#12151c", pulse > 0.02 ? `rgba(126,162,255,${0.35 + 0.65 * pulse})` : "#5b6786");
+          circle(0, 0.42, 0.11 * (1 + 0.35 * pulse), "#2a3040", null);
           circle(0, 0.92, 0.1, "#12151c", "#5b6786");
         }
       }
@@ -876,7 +887,9 @@
         const selected = s.id === selectedId;
         const r = Math.max(8, Math.min(14, 0.22 * p[3]));
         ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, TAU);
-        ctx.fillStyle = selected ? "#3b6cff" : PAL.badge; ctx.fill();
+        const bp = speakerPulse.get(s.id) || 0;
+        // 소리가 날수록 번호 배지가 초록으로 밝아진다(선택 중이면 파랑 유지).
+        ctx.fillStyle = selected ? "#3b6cff" : (bp > 0.02 ? `rgb(${Math.round(35 + (47 - 35) * bp)},${Math.round(42 + (191 - 42) * bp)},${Math.round(59 + (113 - 59) * bp)})` : PAL.badge); ctx.fill();
         ctx.strokeStyle = selected ? "#fff" : PAL.badgeLine; ctx.lineWidth = 1.5; ctx.stroke();
         ctx.fillStyle = selected || PAL === PALETTE.dark ? "#fff" : "#1d2433"; ctx.font = `bold ${Math.round(r * 1.1)}px system-ui,sans-serif`;
         ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(index), p[0], p[1] + 0.5);
@@ -937,26 +950,47 @@
       drawPoly(wedge, "#3b6cff2e", "#7ea2ff66", 1);
       drawPoly(disc3([L.x, 0.015, L.z], [1, 0, 0], [0, 0, 1], 0.38, 0.38, 14), "#00000055", null);
 
-      // 류트: 몸통(배 모양 타원)은 오른쪽 아래, 목은 왼쪽 위로 비스듬히
-      const luteC = at(0.27, 0.07, 0.48);
-      const A = norm3(add3(mul3(Rt, -0.72), mul3(UP, 0.7)));
-      const B = norm3(add3(mul3(Rt, 0.7), mul3(UP, 0.72)));
-      const drawLute = () => {
-        const neck0 = add3(luteC, mul3(A, 0.14)), neck1 = add3(luteC, mul3(A, 0.56));
-        const w = mul3(B, 0.028);
-        drawPoly([add3(neck0, w), add3(neck1, w), add3(neck1, mul3(w, -1)), add3(neck0, mul3(w, -1))], "#7a4a22", "#4a2a12", 1);
-        const head0 = neck1, head1 = add3(neck1, mul3(A, 0.11)), hw = mul3(B, 0.04);
-        drawPoly([add3(head0, hw), add3(head1, hw), add3(head1, mul3(hw, -1)), add3(head0, mul3(hw, -1))], "#5a3418", "#3a2010", 1);
-        drawPoly(disc3(luteC, A, B, 0.2, 0.155, 16), "#dcae62", "#6b4420", 1.5);
-        drawPoly(disc3(add3(luteC, mul3(Fw, 0.005), mul3(A, 0.03)), A, B, 0.052, 0.052, 10), "#3a2412", null);
-        for (const k of [-0.012, 0.012]) drawLine(add3(luteC, mul3(A, -0.13), mul3(B, k), mul3(Fw, 0.006)), add3(neck1, mul3(B, k)), "#f4ead0", 1);
-        sphere(add3(luteC, mul3(B, -0.07), mul3(A, -0.04), mul3(Fw, 0.05)), 0.06, "#5a3a22", "#2e1d10");   // 장갑 낀 오른손
-        sphere(add3(luteC, mul3(A, 0.44), mul3(Fw, 0.04)), 0.055, "#f6d3b0", "#b58a66");                  // 왼손
+      // 지휘봉: 오른손에 들고, 재생 중일 때만 4박 도형(아래→왼쪽→오른쪽→위)으로 휘젓는다.
+      const now = performance.now() / 1000;
+      const dtAmp = Math.min(0.1, Math.max(0, now - (conductState.time || now)));
+      conductState.time = now;
+      conductState.amp += ((isPlayingNow ? 1 : 0) - conductState.amp) * Math.min(1, dtAmp * 4);
+      const amp = conductState.amp;
+      if (amp > 0.001) conductState.phase += dtAmp * 0.5 * amp * (currentBpm / 120);   // 120 BPM 기준 한 마디 2초
+      const beatPts = [[0, -0.11], [-0.13, -0.02], [0.14, -0.01], [0.02, 0.13]];   // (오른쪽, 위) 상대 위치
+      const ph = ((conductState.phase % 1) + 1) % 1 * 4, bi = Math.floor(ph), bf = ph - bi;
+      const ease = bf * bf * (3 - 2 * bf);
+      const p0 = beatPts[bi], p1 = beatPts[(bi + 1) % 4];
+      const swing = [(p0[0] + (p1[0] - p0[0]) * ease) * amp, (p0[1] + (p1[1] - p0[1]) * ease) * amp];
+      const restHand = [0.2, 0.25, 0.46], playHand = [0.28, 0.24, 0.66];
+      const handF = restHand[0] + (playHand[0] - restHand[0]) * amp;
+      const handR = restHand[1] + (playHand[1] - restHand[1]) * amp + swing[0];
+      const handY = restHand[2] + (playHand[2] - restHand[2]) * amp + swing[1];
+      const handPos = at(handF, handR, handY);
+      // 지휘봉 방향: 쉴 때는 앞쪽 아래, 지휘할 때는 앞쪽 위 + 움직임 쪽으로 살짝 기운다.
+      const tipDir = norm3(add3(mul3(Fw, 0.75), mul3(UP, -0.35 + 1.25 * amp + swing[1] * 2), mul3(Rt, swing[0] * 2.5 - 0.1)));
+      const thickLine = (p, q, radius, color) => {
+        let ca = toCam(p), cb = toCam(q);
+        if (ca[2] < MARGIN_NEAR || cb[2] < MARGIN_NEAR) return;
+        const pa = proj(ca), pb = proj(cb);
+        ctx.beginPath(); ctx.moveTo(pa[0], pa[1]); ctx.lineTo(pb[0], pb[1]);
+        ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.2, radius * (pa[3] + pb[3])); ctx.lineCap = "round"; ctx.stroke();
+        ctx.lineCap = "butt";
+      };
+      const drawArms = () => {
+        // 왼팔은 옆에 편하게, 오른팔은 지휘봉을 든 손까지
+        const leftHand = at(0.08 + 0.06 * amp, -0.27, 0.42 + 0.08 * amp);
+        thickLine(at(0, -0.19, 0.62), leftHand, 0.055, "#2f8a4c");
+        sphere(leftHand, 0.055, "#f6d3b0", "#b58a66");
+        thickLine(at(0, 0.19, 0.62), handPos, 0.055, "#2f8a4c");
+        thickLine(add3(handPos, mul3(tipDir, -0.03)), add3(handPos, mul3(tipDir, 0.07)), 0.02, "#3a2412");   // 손잡이
+        thickLine(add3(handPos, mul3(tipDir, 0.07)), add3(handPos, mul3(tipDir, 0.42)), 0.007, "#f7f4ea");   // 봉
+        sphere(handPos, 0.06, "#5a3a22", "#2e1d10");   // 장갑 낀 오른손
       };
 
       // 부츠
       for (const side of [-1, 1]) drawPoly(disc3(at(0.1, side * 0.11, 0.02), Fw, Rt, 0.11, 0.07, 10), "#4a2e1a", "#2a190d", 1);
-      if (!front) drawLute();
+      if (!front) drawArms();
       // 몸통(초록 옷) + 흰 칼라
       prism(L.x, L.z, 0, 0.68, 0.27, 0.17, 8, [52, 150, 82]);
       drawPoly(disc3([L.x, 0.69, L.z], [1, 0, 0], [0, 0, 1], 0.19, 0.19, 10), "#f4f1e6", "#c9c3ad", 1);
@@ -980,7 +1014,7 @@
         for (let i = 0; i <= 8; i++) { const t = Math.PI + Math.PI * (i / 8); mouth.push(add3(fc, mul3(Rt, Math.cos(t) * 0.05), mul3(UP, -0.085 + Math.sin(t) * 0.045))); }
         drawPoly(mouth, "#c94a4a", "#7a2a2a", 1);
       }
-      if (front) drawLute();
+      if (front) drawArms();
       // 모자: 비스듬한 넓은 챙 + 크라운 + 갈색 띠
       const brimC = add3(headC, [0, 0.21, 0], mul3(Fw, -0.02));
       const Ft = norm3(add3(Fw, [0, -0.18, 0]));
@@ -1021,6 +1055,19 @@
       if (ctxPoint) {
         footprint(ctxPoint.cell.x, ctxPoint.cell.z, "#ffd166", "#ffd16633");
         drawPoly(disc3([ctxPoint.x, 0.02, ctxPoint.z], [1, 0, 0], [0, 0, 1], 0.12, 0.12, 12), "#ffd166", "#000a", 1);
+      }
+      // 재생 중 스피커 울림: 각 스피커의 소리 크기를 받아 바닥에 퍼지는 약한 원과 우퍼 떨림으로 보여 준다.
+      let levels = null;
+      try { levels = getSpeakerLevels ? getSpeakerLevels() : null; } catch (_) { levels = null; }
+      for (const s of config.speakers) {
+        const target = levels && isPlayingNow ? clamp((levels[s.id] || 0) * 7, 0, 1) : 0;
+        const prev = speakerPulse.get(s.id) || 0;
+        const next = target > prev ? prev + (target - prev) * 0.6 : prev + (target - prev) * 0.12;
+        speakerPulse.set(s.id, next < 0.005 ? 0 : next);
+        if (next > 0.02) {
+          const ringR = 0.62 + 0.35 * next + 0.08 * Math.sin(performance.now() / 90);
+          drawPoly(disc3([s.x, 0.012, s.z], [1, 0, 0], [0, 0, 1], ringR, ringR, 24), `rgba(126,162,255,${0.10 * next})`, `rgba(126,162,255,${0.45 * next})`, 1.5);
+        }
       }
       for (const s of config.speakers) footprint(s.x, s.z, s.id === selectedId ? "#7ea2ffcc" : PAL.foot, null);
       if (dragGhost) footprint(dragGhost.x, dragGhost.z, dragGhost.ok ? "#2fbf71" : "#ff5a6a", dragGhost.ok ? "#2fbf7133" : "#ff5a6a33");
@@ -1100,7 +1147,8 @@
       canvas.setPointerCapture?.(e.pointerId);
       const pt = canvasPoint(e);
       const hit = hitSpeaker(pt);
-      if (!ctxBox.hidden) closeContextMenu();
+      // 우클릭 메뉴가 떠 있을 때의 클릭은 메뉴만 닫는다(이동·선택 등은 하지 않음).
+      if (!ctxBox.hidden) { closeContextMenu(); if (e.button !== 2) { e.preventDefault(); return; } }
       const info = { id: e.pointerId, type: e.pointerType, button: e.button, start: pt, last: pt, moved: false, mode: "orbit", speaker: null, offset: [0, 0], timer: 0, longPressed: false };
       if (hit && e.button === 0) {
         info.mode = "speaker"; info.speaker = hit;

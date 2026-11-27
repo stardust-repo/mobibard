@@ -31304,6 +31304,7 @@
       storageKey: "mobibard-spatial-room-v1",
       // 같은 곡(프로젝트)이면 스피커 채널 선택을 기억한다.
       getSongKey: () => `editor|${state.projectName || ""}`,
+      getSpeakerLevels: () => spatialEngine?.getLevels?.() || null,
       getLang: () => document.documentElement.lang || "ko",
       getChannels: () => {
         const groups = new Map((state.channelGroups || []).map((group) => [String(group.id), group]));
@@ -31332,7 +31333,8 @@
           const rate = Math.max(0.01, Number(state.playbackRate) || 1);
           const endBeat = playing ? state.playback.endBeat : getPlaybackRangeBounds({ contentEndBeat: getPlaybackEndBeat() }).endBeat;
           const duration = (playing ? state.playback.endSeconds : beatToSeconds(endBeat)) / rate;
-          return { playing, loop: Boolean(state.playbackLoopEnabled), position: getPlayheadDisplaySeconds(), duration, volume: Math.round((Number(state.masterVolume) || 0) * 100), speed: rate };
+          const bpm = (Number(getTempoAtBeat(state.playhead.beat)) || 120) * rate;
+          return { playing, loop: Boolean(state.playbackLoopEnabled), position: getPlayheadDisplaySeconds(), duration, volume: Math.round((Number(state.masterVolume) || 0) * 100), speed: rate, bpm };
         },
         togglePlay: () => togglePlayback(),
         toStart: () => moveToTimelineStart(),
@@ -31346,9 +31348,9 @@
     const refreshSpatialButton = () => {
       const label = spatialRoom.text("open");
       button.title = label; button.setAttribute("aria-label", label);
-      button.style.borderColor = spatialRoom.isEnabled() ? "var(--accent, #3b6cff)" : "";
-      button.setAttribute("aria-pressed", String(spatialRoom.isOpen()));
-      button.classList.toggle("active", spatialRoom.isOpen());
+      // 색 표시는 창 열림이 아니라 "공간 사운드로 듣기" 켜짐 여부를 따른다.
+      button.setAttribute("aria-pressed", String(spatialRoom.isEnabled()));
+      button.classList.toggle("active", spatialRoom.isEnabled());
     };
     button.addEventListener("click", () => spatialRoom.toggle());
     refreshSpatialButton();

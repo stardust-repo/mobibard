@@ -218,6 +218,7 @@
     let config = defaultConfig();
     let listener = { x: 0, z: 0, yaw: 0 };
     let disposed = false;
+    let levelBuffer = null;
 
     function ensureChannel(channelId) {
       const key = String(channelId);
@@ -276,14 +277,18 @@
         if (pan) { gain.connect(pan); pan.connect(output); } else gain.connect(output);
         taps.push({ delay, gain, pan });
       }
-      return { cfg, input, panner, send, taps, connected: new Set() };
+      // 화면 효과용: 스피커로 들어가는 소리 크기를 잰다(출력에는 연결하지 않음).
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      input.connect(analyser);
+      return { cfg, input, panner, send, taps, analyser, connected: new Set() };
     }
 
     function destroySpeaker(speaker) {
       for (const [channelKey, bus] of channelBuses) {
         if (speaker.connected.has(channelKey)) { try { bus.disconnect(speaker.input); } catch (_) {} }
       }
-      for (const node of [speaker.input, speaker.panner, speaker.send, ...speaker.taps.flatMap(t => [t.delay, t.gain, t.pan])]) {
+      for (const node of [speaker.input, speaker.panner, speaker.send, speaker.analyser, ...speaker.taps.flatMap(t => [t.delay, t.gain, t.pan])]) {
         try { node?.disconnect(); } catch (_) {}
       }
     }
@@ -425,6 +430,19 @@
       getConfig: () => config,
       getListener: () => ({ ...listener }),
       dispose,
+      // 스피커별 현재 소리 크기(RMS). 룸 화면의 스피커 울림 효과에 쓴다.
+      getLevels() {
+        const out = {};
+        for (const [id, speaker] of speakers) {
+          if (!speaker.analyser) continue;
+          if (!levelBuffer || levelBuffer.length !== speaker.analyser.fftSize) levelBuffer = new Float32Array(speaker.analyser.fftSize);
+          speaker.analyser.getFloatTimeDomainData(levelBuffer);
+          let sum = 0;
+          for (let i = 0; i < levelBuffer.length; i++) sum += levelBuffer[i] * levelBuffer[i];
+          out[id] = Math.sqrt(sum / levelBuffer.length);
+        }
+        return out;
+      },
       diagnostics: () => ({ speakers: speakers.size, channels: channelBuses.size, reverbSeconds: reverbTime(config.env, config.size), env: config.env, size: config.size }),
     };
   }

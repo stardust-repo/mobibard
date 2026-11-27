@@ -10770,10 +10770,8 @@ a[class*="button"]:hover {
 /* 공간 사운드(3D) 버튼 */
 .spatial-room-btn { gap: 5px; }
 .spatial-room-label { color: var(--text); font-size: 12.5px; font-weight: 900; }
-.spatial-room-btn.active,
-.spatial-room-btn[aria-expanded="true"] { border-color: #ee9900 !important; background: #ee9900 !important; box-shadow: none !important; }
-.spatial-room-btn.active .spatial-room-label,
-.spatial-room-btn[aria-expanded="true"] .spatial-room-label { color: #fff; }
+.spatial-room-btn.active { border-color: #ee9900 !important; background: #ee9900 !important; box-shadow: none !important; }
+.spatial-room-btn.active .spatial-room-label { color: #fff; }
 
 /* 좁은 화면: [자유/원본 편집 라디오 ……… 채널 리셋·모두 리셋] / [글자 수·쉼표·볼륨 ……… 코드 도움말] */
 @media (max-width: 720px) {
