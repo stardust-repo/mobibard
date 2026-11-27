@@ -2252,6 +2252,7 @@
       if (node.dataset.hasFile) return;
       node.textContent = t(node.dataset.wb4Text);
     });
+    updateRevertButton();
     document.querySelectorAll(".wb6-channel-count-name").forEach((node, index) => { node.textContent = channelLabel(index); });
     document.querySelectorAll(".wb9-option-count").forEach(node => setCountBadge(node, node.dataset.count));
     document.querySelectorAll(".wb13-octave-range").forEach(node => {
@@ -2657,13 +2658,19 @@
     state.ui.codeRevertButton = el("button", "wb4-code-help-button wb6-code-help-button wb-code-revert-button", { type: "button" });
     state.ui.codeRevertButton.append(keyedText("codeRevertAll", "wb-code-revert-label"));
     state.ui.codeRevertButton.addEventListener("click", () => void revertAllToOriginal());
+    // 채널 탭에서는 그 채널만 원본으로 되돌리는 버튼도 함께 보인다.
+    state.ui.codeRevertChannelButton = el("button", "wb4-code-help-button wb6-code-help-button wb-code-revert-button wb-code-revert-channel", { type: "button" });
+    // 글자는 "멜로디 리셋"처럼 현재 채널 이름으로 updateRevertButton 에서 채운다.
+    state.ui.codeRevertChannelLabel = el("span", "wb-code-revert-label");
+    state.ui.codeRevertChannelButton.append(state.ui.codeRevertChannelLabel);
+    state.ui.codeRevertChannelButton.addEventListener("click", () => void revertChannelToOriginal());
     // 코드 도움말 버튼 바로 왼쪽에 둔다.
     const actions = el("div", "wb-code-actions");
     if (state.ui.codeHelpButton?.parentNode === tools) {
       tools.insertBefore(actions, state.ui.codeHelpButton);
-      actions.append(state.ui.codeRevertButton, state.ui.codeHelpButton);
+      actions.append(state.ui.codeRevertChannelButton, state.ui.codeRevertButton, state.ui.codeHelpButton);
     } else {
-      actions.append(state.ui.codeRevertButton);
+      actions.append(state.ui.codeRevertChannelButton, state.ui.codeRevertButton);
       tools.append(actions);
     }
     state.ui.sourceEditorHost = el("div", "wb4-channel-code-editor wb6-channel-code-editor wb-source-editor", { id: "wbSourceCodeEditor" });
@@ -2839,6 +2846,17 @@
     if (!button) return;
     button.hidden = !state.codeViewApplied;
     button.disabled = !state.originalMml || state.originalMml === state.sourceMml;
+    const channelButton = state.ui.codeRevertChannelButton;
+    if (channelButton) {
+      const view = Number(state.activeChannelView);
+      channelButton.hidden = !state.codeViewApplied || !(view >= 0);
+      if (view >= 0) {
+        channelButton.disabled = !state.originalMml
+          || normalizeMainToParts(state.originalMml)[view] === normalizeMainToParts(state.sourceMml)[view];
+        channelButton.title = t("codeRevertChannelTitle", [channelLabel(view)]);
+        if (state.ui.codeRevertChannelLabel) state.ui.codeRevertChannelLabel.textContent = t("codeRevertChannelNamed", [channelLabel(view)]);
+      }
+    }
   }
 
   function isFreeEditActive() {
@@ -2914,6 +2932,25 @@
     setSourceAndReapply(state.originalMml);
     refreshSourceEditor({ force: true });
     showToast(t("codeRevertDone"), "success");
+  }
+
+  async function revertChannelToOriginal() {
+    const view = Number(state.activeChannelView);
+    if (!(view >= 0) || !state.originalMml) return;
+    flushFreeEdit({ final: true });
+    const original = normalizeMainToParts(state.originalMml);
+    const current = normalizeMainToParts(state.sourceMml);
+    if (original[view] === current[view]) return;
+    const name = channelLabel(view);
+    const label = t("codeRevertChannelNamed", [name]);
+    const ok = await window.MobibardInlineUi?.confirm?.(t("codeRevertChannelConfirm", [name]), { modal: true, title: label, confirmText: label, cancelText: t("cancel") });
+    if (!ok) return;
+    freeEditDirty = false;
+    clearTimeout(freeEditTimer);
+    current[view] = original[view];
+    setSourceAndReapply(composeSourceMml(current));
+    refreshSourceEditor({ force: true });
+    showToast(t("codeRevertChannelDone", [name]), "success");
   }
 
   function installFreeEditHandlers() {
@@ -4419,6 +4456,7 @@
     const next = numeric < 0 ? -1 : Math.max(0, Math.min(5, Number.isFinite(numeric) ? numeric : 0));
     state.activeChannelView = next;
     if (next >= 0) state.activeChannel = next;
+    updateRevertButton();
     [state.ui.workspaceBlock, state.ui.overviewBlock, state.ui.workspacePanels?.code]
       .filter(Boolean)
       .forEach(node => node.setAttribute("data-active-channel", String(next)));

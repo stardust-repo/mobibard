@@ -10774,3 +10774,13 @@ a[class*="button"]:hover {
 .spatial-room-btn[aria-expanded="true"] { border-color: #ee9900 !important; background: #ee9900 !important; box-shadow: none !important; }
 .spatial-room-btn.active .spatial-room-label,
 .spatial-room-btn[aria-expanded="true"] .spatial-room-label { color: #fff; }
+
+/* 좁은 화면: [자유/원본 편집 라디오 ……… 채널 리셋·모두 리셋] / [글자 수·쉼표·볼륨 ……… 코드 도움말] */
+@media (max-width: 720px) {
+  .player-ui .wb6-code-panel .wb10-code-tools .wb-code-actions { display: contents; }
+  .player-ui .wb6-code-panel .wb10-code-tools .wb-code-view-radios { order: 0; flex: 1 1 auto; min-width: 0; margin-right: 0; flex-wrap: nowrap; }
+  .player-ui .wb6-code-panel .wb10-code-tools .wb-code-revert-button { order: 1; flex: none; padding-inline: 8px; white-space: nowrap; }
+  .player-ui .wb6-code-panel .wb10-code-tools::before { content: ""; order: 2; flex: 0 0 100%; height: 0; }
+  .player-ui .wb6-code-panel .wb10-code-tools .wb10-code-metrics { order: 3; flex: 1 1 auto; }
+  .player-ui .wb6-code-panel .wb10-code-tools .wb6-code-help-button:not(.wb-code-revert-button) { order: 4; margin-left: auto; }
+}
