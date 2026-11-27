@@ -433,7 +433,7 @@ function rewriteIrregularMmlLengths(text, options = {}) {
 
       if (Number.isInteger(denominator) && denominator > 0) {
         logicalDefault = makeApproxDuration(denominator, dots);
-        if (!isValidLength(denominator)) {
+        if (logicalDefault.irregular) {
           record("default", denominator, tokenStart, i);
           if (!convert) out += tokenText;
           continue;
@@ -458,7 +458,7 @@ function rewriteIrregularMmlLengths(text, options = {}) {
       const core = source.slice(tokenStart, coreEnd);
       const isRest = lower === "r";
 
-      if (Number.isInteger(denominator) && denominator > 0 && !isValidLength(denominator)) {
+      if (Number.isInteger(denominator) && denominator > 0 && makeApproxDuration(denominator, dots).irregular) {
         record(isRest ? "rest" : "note", denominator, tokenStart, i);
         if (convert) {
           const target = makeApproxDuration(denominator, dots).units;
@@ -468,6 +468,18 @@ function rewriteIrregularMmlLengths(text, options = {}) {
         } else {
           out += tokenText;
         }
+        continue;
+      }
+
+      if (denominator == null && logicalDefault && !logicalDefault.irregular && dots > 0 && !isOnApproxGrid(applyApproxDots(logicalDefault.units, dots))) {
+        // 기본 길이는 표준인데 점이 붙어 64분음표 칸을 벗어나는 경우(l64 다음 c. 등)
+        record(isRest ? "rest" : "note", logicalDefault.denominator, tokenStart, i);
+        if (convert) {
+          const target = applyApproxDots(logicalDefault.units, dots);
+          const rendered = renderApproxOrdinaryToken(core, target + approximationCarry, isRest);
+          approximationCarry += target - rendered.units;
+          out += rendered.text;
+        } else out += tokenText;
         continue;
       }
 
@@ -495,7 +507,9 @@ function rewriteIrregularMmlLengths(text, options = {}) {
       const dots = i - dotsStart;
       const tokenText = source.slice(tokenStart, i);
 
-      if (convert && Number.isInteger(noteNumber) && logicalDefault?.irregular) {
+      const offGridN = Number.isInteger(noteNumber) && logicalDefault && !logicalDefault.irregular && dots > 0 && !isOnApproxGrid(applyApproxDots(logicalDefault.units, dots));
+      if (offGridN) record(noteNumber === 0 ? "rest" : "note", logicalDefault.denominator, tokenStart, i);
+      if (convert && Number.isInteger(noteNumber) && (logicalDefault?.irregular || offGridN)) {
         const target = applyApproxDots(logicalDefault.units, dots);
         const rendered = renderApproxNumericToken(source.slice(tokenStart, coreEnd), target + approximationCarry, noteNumber === 0);
         approximationCarry += target - rendered.units;
@@ -525,10 +539,18 @@ function makeApproxDuration(denominator, dots = 0) {
   const base = APPROX_WHOLE_UNITS / denominator;
   return {
     units: applyApproxDots(base, dots),
-    irregular: !isValidLength(denominator),
+    // 2의 거듭제곱이 아닌 길이(c38 …)뿐 아니라, 64분음표 칸(16 단위)에 맞지 않는 점 길이(64. 32.. …)도
+    // 지원하지 않으므로 비표준으로 보고 누적 보정으로 바꾼다.
+    irregular: !isValidLength(denominator) || !isOnApproxGrid(applyApproxDots(base, dots)),
     denominator,
     dots
   };
+}
+
+const APPROX_GRID_UNITS = APPROX_WHOLE_UNITS / 64;   // 64분음표
+function isOnApproxGrid(units) {
+  const q = (Number(units) || 0) / APPROX_GRID_UNITS;
+  return Math.abs(q - Math.round(q)) <= 1e-9;
 }
 
 function applyApproxDots(base, dots = 0) {
@@ -548,6 +570,7 @@ function getApproxDurationCandidates() {
     for (let dots = 0; dots <= APPROX_MAX_DOTS; dots++) {
       const units = applyApproxDots(APPROX_WHOLE_UNITS / denominator, dots);
       if (!Number.isFinite(units) || Math.abs(units - Math.round(units)) > EPS) continue;
+      if (!isOnApproxGrid(units)) continue;   // 64. 같은 64분음표 칸 밖 길이는 만들지 않는다
       const rounded = Math.round(units);
       const suffix = `${denominator}${".".repeat(dots)}`;
       const old = map.get(rounded);

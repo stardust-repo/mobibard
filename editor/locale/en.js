@@ -96,6 +96,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "special_thanks.desc_prores": "Tested MIDI input and gave feedback on the metronome and input offset",
     "special_thanks.desc_witchhz": "Gave feedback on the guide",
     "special_thanks.desc_oboe": "Did overall QA and gave feedback on sound and ease of use in the Gamma version",
+    "special_thanks.desc_pasco": "Reported the MMI file compatibility bug and the timing drift caused by dotted 64th notes and non-standard lengths",
     "import.channel_color": "Color",
     "import.channel_color_aria": "Imported channel color mode",
     "import.overlap_title": "Overlap handling",

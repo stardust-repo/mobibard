@@ -31,11 +31,21 @@
 
   // ───────────────────────── 읽기 ─────────────────────────
 
+  // 옛/비표준 길이(l38, c34, 64. …)를 마비노기에서 쓸 수 있는 길이로 바꾼다.
+  // MabiIcco 처럼 온음표 = 384틱, 길이 n 의 틱 = floor(384 / n)(점은 절반씩, 버림)으로 정확한 위치를 계산하고,
+  // 64분음표(6틱) 칸에 "누적 위치"로 맞춘다(끝 위치는 버림). 음 하나하나를 반올림하면 오차가 쌓여 뒤가 다 밀리므로,
+  // 비표준 음 뒤에 오는 음이 정박에서 어긋나 있으면 그 음 길이를 늘리거나 줄여서 원래 박자로 되돌린다.
+  // 64분음표보다 짧은 칸(64. 의 반 칸 등)은 지원하지 않고 버린다.
+  const WHOLE_TICKS = 384;
+  const GRID_TICKS = 6;   // 64분음표
   function normalizeLegacyLengths(value) {
     const source = String(value || "");
     let index = 0;
     let output = "";
-    let legacyDefault = null;
+    let exactTick = 0;      // 원래 악보 기준 위치(틱)
+    let emittedTick = 0;    // 바꾼 MML 기준 위치(틱)
+    let defaultLength = 4;
+    let defaultDots = 0;
     const isDigit = (character) => /\d/.test(character || "");
     const readDigits = () => {
       const start = index;
@@ -47,101 +57,103 @@
       while (source[index] === ".") index += 1;
       return index - start;
     };
-    const dottedFactor = (dots) => {
-      let factor = 1;
-      let addition = 0.5;
-      for (let count = 0; count < dots; count += 1) {
-        factor += addition;
-        addition /= 2;
-      }
-      return factor;
-    };
     const isNativeLength = (length) => [1, 2, 4, 8, 16, 32, 64].includes(length);
-    const quantaFromSpec = (spec) => {
-      if (!spec?.length || spec.length <= 0) return 16;
-      return Math.max(1, Math.round((64 / spec.length) * dottedFactor(spec.dots || 0) * (spec.extraFactor || 1)));
+    const ticksOf = (length, dots) => {
+      const base = Math.floor(WHOLE_TICKS / Math.max(1, length));
+      let total = base;
+      let add = base;
+      for (let count = 0; count < dots; count += 1) { add = Math.floor(add / 2); total += add; }
+      return total;
     };
     const decomposeQuanta = (quanta) => {
       let remaining = Math.max(1, Math.floor(quanta));
       const result = [];
-      for (const entry of [
-        { length: 1, quanta: 64 },
-        { length: 2, quanta: 32 },
-        { length: 4, quanta: 16 },
-        { length: 8, quanta: 8 },
-        { length: 16, quanta: 4 },
-        { length: 32, quanta: 2 },
-        { length: 64, quanta: 1 },
-      ]) {
-        while (remaining >= entry.quanta) {
-          result.push(entry.length);
-          remaining -= entry.quanta;
-        }
+      for (const entry of [[1, 64], [2, 32], [4, 16], [8, 8], [16, 4], [32, 2], [64, 1]]) {
+        while (remaining >= entry[1]) { result.push(entry[0]); remaining -= entry[1]; }
       }
-      return result.length ? result : [64];
+      return result;
     };
-    const expandTimedToken = (head, spec, options = {}) => {
-      const lengths = decomposeQuanta(quantaFromSpec(spec));
-      const rest = options.rest || /^r$/i.test(head) || /^n0$/i.test(head);
-      if (options.needsLengthCommand) {
-        return lengths.map((length) => `l${length}${head}`).join(rest ? "" : "&");
+    const defaultIsNative = () => isNativeLength(defaultLength) && ticksOf(defaultLength, defaultDots) % GRID_TICKS === 0;
+    let defaultEmitted = true;   // 지금 기본 길이가 출력 MML 에도 l 명령으로 들어가 있는지
+
+    // 음/쉼표 하나를 처리한다. originalText 는 그대로 쓸 수 있을 때 쓰는 원문.
+    const handleTimed = (head, digits, dots, originalText, kind) => {
+      const explicit = digits ? Number(digits) : null;
+      const length = explicit || defaultLength;
+      const dotCount = explicit ? dots : defaultDots + dots;
+      const ticks = ticksOf(length, dotCount);
+      const exactEnd = exactTick + ticks;
+      const native = isNativeLength(length) && ticks % GRID_TICKS === 0 && (explicit ? true : defaultEmitted);
+      if (native && exactTick === emittedTick) {
+        output += originalText;
+        emittedTick = exactEnd;
+        exactTick = exactEnd;
+        return;
       }
-      return lengths.map((length) => `${head}${length}`).join(rest ? "" : "&");
+      let quantizedEnd = Math.floor(exactEnd / GRID_TICKS) * GRID_TICKS;
+      if (quantizedEnd <= emittedTick) quantizedEnd = emittedTick + GRID_TICKS;
+      const lengths = decomposeQuanta((quantizedEnd - emittedTick) / GRID_TICKS);
+      const rest = kind === "rest";
+      if (kind === "n") {
+        // n 은 길이를 붙일 수 없어 l 명령으로 바꾼 뒤, 원래 기본 길이를 되돌린다.
+        output += lengths.map((len) => `l${len}${head}`).join(rest ? "" : "&");
+        if (defaultIsNative()) output += `l${defaultLength}${".".repeat(defaultDots)}`;
+        else defaultEmitted = false;
+      } else {
+        output += lengths.map((len) => `${head}${len}`).join(rest ? "" : "&");
+      }
+      emittedTick = quantizedEnd;
+      exactTick = exactEnd;
     };
-    const defaultSpec = (dots = 0) => legacyDefault ? {
-      length: legacyDefault.length,
-      dots: legacyDefault.dots,
-      extraFactor: dottedFactor(dots),
-    } : null;
 
     while (index < source.length) {
       const character = source[index];
       const lower = character.toLowerCase();
+      if (character === ",") {
+        exactTick = 0; emittedTick = 0; defaultLength = 4; defaultDots = 0; defaultEmitted = true;
+        output += character; index += 1;
+        continue;
+      }
       if (lower === "l") {
         const start = index;
         index += 1;
         const digits = readDigits();
         const dots = readDots();
         const length = digits ? Number(digits) : null;
-        if (length && !isNativeLength(length)) legacyDefault = { length, dots };
-        else {
-          legacyDefault = null;
-          output += source.slice(start, index);
-        }
+        if (length) {
+          defaultLength = length;
+          defaultDots = dots;
+          if (defaultIsNative()) { output += source.slice(start, index); defaultEmitted = true; }
+          else defaultEmitted = false;   // 비표준 기본 길이는 l 을 쓰지 않고 음마다 길이를 붙인다
+        } else output += source.slice(start, index);
         continue;
       }
       if (/[cdefgab]/i.test(character)) {
+        const start = index;
         index += 1;
         let head = character;
         if (["+", "#", "-"].includes(source[index])) head += source[index++];
         const digits = readDigits();
         const dots = readDots();
-        const length = digits ? Number(digits) : null;
-        if (length && !isNativeLength(length)) output += expandTimedToken(head, { length, dots });
-        else if (!digits && legacyDefault) output += expandTimedToken(head, defaultSpec(dots));
-        else output += `${head}${digits}${".".repeat(dots)}`;
+        handleTimed(head, digits, dots, source.slice(start, index), "note");
         continue;
       }
       if (lower === "r") {
+        const start = index;
         index += 1;
         const digits = readDigits();
         const dots = readDots();
-        const length = digits ? Number(digits) : null;
-        if (length && !isNativeLength(length)) output += expandTimedToken(character, { length, dots }, { rest: true });
-        else if (!digits && legacyDefault) output += expandTimedToken(character, defaultSpec(dots), { rest: true });
-        else output += `${character}${digits}${".".repeat(dots)}`;
+        handleTimed(character, digits, dots, source.slice(start, index), "rest");
         continue;
       }
       if (lower === "n") {
+        const start = index;
         index += 1;
         const noteNumber = readDigits();
         const dots = readDots();
+        if (!noteNumber) { output += source.slice(start, index); continue; }
         const head = `n${noteNumber}`;
-        if (legacyDefault && noteNumber) {
-          output += expandTimedToken(head, defaultSpec(dots), { needsLengthCommand: true, rest: Number(noteNumber) === 0 });
-        } else {
-          output += `${head}${".".repeat(dots)}`;
-        }
+        handleTimed(head, "", dots, source.slice(start, index), Number(noteNumber) === 0 ? "rest" : "n");
         continue;
       }
       output += character;

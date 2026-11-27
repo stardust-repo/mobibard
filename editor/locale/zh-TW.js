@@ -96,6 +96,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "special_thanks.desc_prores": "測試了 MIDI 輸入功能，並就節拍器與輸入偏移提出了意見",
     "special_thanks.desc_witchhz": "就使用指南提出了意見",
     "special_thanks.desc_oboe": "對Gamma版本的聲音與操作便利性進行了全面QA並提出意見",
+    "special_thanks.desc_pasco": "回報了MMI檔案相容性錯誤，以及附點64分音符與非標準時值導致節拍錯位的錯誤",
     "import.channel_color": "顏色",
     "import.channel_color_aria": "匯入頻道顏色方式",
     "import.overlap_title": "重疊處理",

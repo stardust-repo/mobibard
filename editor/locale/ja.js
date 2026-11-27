@@ -96,6 +96,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "special_thanks.desc_prores": "MIDI入力機能をテストし、メトロノームと入力オフセットについてご意見をいただきました",
     "special_thanks.desc_witchhz": "ガイドについてご意見をいただきました",
     "special_thanks.desc_oboe": "ガンマ版のサウンドと操作性を全体的にQAし、ご意見をくださいました",
+    "special_thanks.desc_pasco": "MMIファイルの互換性バグと、付点64分音符・非標準の長さで拍がずれるバグを報告してくださいました",
     "import.channel_color": "色",
     "import.channel_color_aria": "読み込み時のチャンネル色基準",
     "import.overlap_title": "重なりの処理",

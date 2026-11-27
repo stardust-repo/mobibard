@@ -66,7 +66,7 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=6.0.0&rev=20261127-sp1";
+  const suffix = location.protocol === "file:" ? "" : "?v=6.0.0&rev=20261127-thx1";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
@@ -473,6 +473,7 @@
 <li><span class="special-thanks-server">던컨</span><span class="special-thanks-who"><span class="special-thanks-name">ProRes</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_prores">MIDI 입력 기능을 테스트하고 메트로놈과 입력 오프셋에 의견을 주셨어요</span></span></li>
 <li><span class="special-thanks-server">메이븐</span><span class="special-thanks-who"><span class="special-thanks-name">마녀히즈</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_witchhz">가이드에 의견을 주셨어요</span></span></li>
 <li><span class="special-thanks-server">라사</span><span class="special-thanks-who"><span class="special-thanks-name">오보에</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_oboe">감마 버전의 소리와 조작 편의성을 전체적으로 QA하고 의견을 주셨어요</span></span></li>
+<li><span class="special-thanks-server">던컨</span><span class="special-thanks-who"><span class="special-thanks-name">Pasco</span><span class="special-thanks-desc" data-i18n="special_thanks.desc_pasco">MMI 파일 호환 버그와 64분 점음표·비표준 길이 때문에 박자가 밀리는 버그를 제보해 주셨어요</span></span></li>
 <li class="special-thanks-all"><span class="special-thanks-name" data-i18n="special_thanks.everyone_interested">관심 가져주신 모든 분!</span></li>
 </ul>
 </div>
@@ -841,7 +842,7 @@
 <script src="../plugins/formats/guitarpro/guitarpro-local.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/vocal/vocal-format-parsers.js?v=5.1.0&amp;rev=20260820-022400"></script>
 <script src="../plugins/formats/midi/format-midi.js?v=5.1.0&amp;rev=20260819-194500"></script>
-<script src="../plugins/formats/mmi/format-mmi.js?v=1.0.0&amp;rev=20261118c"></script>
+<script src="../plugins/formats/mmi/format-mmi.js?v=1.1.0&amp;rev=20261127-q64"></script>
 <script src="../plugins/formats/playstation/format-playstation.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/nintendo/format-nintendo.js?v=5.1.0&amp;rev=20260820-003400"></script>
 <script src="../plugins/formats/legacy-pc/format-legacy-pc.js?v=5.1.0&amp;rev=20260824-final44"></script>

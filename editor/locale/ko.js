@@ -96,6 +96,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "special_thanks.desc_prores": "MIDI 입력 기능을 테스트하고 메트로놈과 입력 오프셋에 의견을 주셨어요",
     "special_thanks.desc_witchhz": "가이드에 의견을 주셨어요",
     "special_thanks.desc_oboe": "감마 버전의 소리와 조작 편의성을 전체적으로 QA하고 의견을 주셨어요",
+    "special_thanks.desc_pasco": "MMI 파일 호환 버그와 64분 점음표·비표준 길이 때문에 박자가 밀리는 버그를 제보해 주셨어요",
     "import.channel_color": "색상",
     "import.channel_color_aria": "불러오기 채널 색상 기준",
     "import.overlap_title": "겹침 처리",
