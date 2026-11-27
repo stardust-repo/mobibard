@@ -66,7 +66,7 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=6.0.0&rev=20261127-thx1";
+  const suffix = location.protocol === "file:" ? "" : "?v=6.0.0&rev=20261127-free2";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
@@ -105,7 +105,7 @@
   }
 })();
 </script>
-<link href="styles.css?v=6.0.0&amp;rev=20261127-sp5" rel="stylesheet"/>
+<link href="styles.css?v=6.0.0&amp;rev=20261127-free2" rel="stylesheet"/>
 <link href="../plugins/common/site-navigation.css?v=20260923-discord-hue1" rel="stylesheet"/><link href="../plugins/common/soundbank-stack.css?v=20261120-12" rel="stylesheet"/>
 <link href="../plugins/common/supported-files-ui.css?v=5.1.0&amp;rev=20260823-final25" rel="stylesheet"/>
 </head>
@@ -328,7 +328,7 @@
     <label class="measure-edit-field"><span data-i18n="timeline.duplicate_count">복제 횟수</span><span class="measure-edit-number-with-unit"><input id="measureEditDuplicateCountInput" type="number" inputmode="numeric" min="1" step="1" value="1"/><small data-i18n="ui.times">회</small></span></label>
   </div>
   <div class="measure-edit-options" id="measureEditDeleteOptions" hidden></div>
-  <div class="measure-edit-range-summary" id="measureEditRangeSummary"></div>
+  <div class="measure-edit-summary-row"><div class="measure-edit-range-summary" id="measureEditRangeSummary"></div><label class="measure-edit-free-select" title="체크하면 클릭한 위치부터 지금 편집 간격(1~7키) 길이만큼 잡습니다. 풀면 편집 간격 칸에 맞춰 잡습니다." data-i18n-title="measure.free_select_title"><input type="checkbox" id="measureEditFreeSelect"/><span data-i18n="measure.free_select">자유 선택</span></label></div>
   </div>
   <div class="inline-channel-select-toolbar measure-edit-channel-toolbar"><strong data-i18n="mml.channel_select">선택</strong><span></span><div class="inline-select-tools"><button type="button" class="channel-tree-action channel-tree-group-toggle channel-bulk-action inline-group-toggle" id="measureEditGroupToggleButton" aria-label="Collapse all groups" title="Collapse all groups" data-i18n-aria-label="group.collapse_all" data-i18n-title="group.collapse_all"><span class="channel-tree-action-glyph" aria-hidden="true">📂</span></button><button id="measureEditSelectToggleButton" type="button" class="inline-select-mark inline-select-toggle" data-state="none" data-i18n-title="selection.all_select" data-i18n-aria-label="selection.all_select" title="모두 선택" aria-label="모두 선택">○</button><button id="measureEditSelectAllButton" type="button" hidden aria-hidden="true" tabindex="-1">✓</button><button id="measureEditClearAllButton" type="button" hidden aria-hidden="true" tabindex="-1">○</button></div></div>
   <div class="measure-edit-scope-list inline-channel-select-list" id="measureEditScopeList"></div>
@@ -866,7 +866,7 @@
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=2.1.0"></script>
-<script src="app.js?v=6.0.0&amp;rev=20261127-mclick2"></script>
+<script src="app.js?v=6.0.0&amp;rev=20261127-crisp6"></script>
 <script src="js/account-drive.js?v=6.0.0&amp;rev=20261103-settings1" type="module"></script>
 </body>
 </html>

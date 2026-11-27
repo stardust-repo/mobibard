@@ -135,7 +135,7 @@
     dark: {
       rollPre: "#14161a",
       rollBackground: "#17191e",
-      blackRow: "#1c1f25",
+      blackRow: "#23272f",
       octaveLine: "#3a404b",
       pitchLine: "#2a2e36",
       measureGrid: "#5b6372",
@@ -162,7 +162,7 @@
     light: {
       rollPre: "#d4dbe4",
       rollBackground: "#ffffff",
-      blackRow: "#e4e9ef",
+      blackRow: "#d5dce5",
       octaveLine: "#667487",
       pitchLine: "#b7c0cb",
       measureGrid: "#4d5b6d",
@@ -3265,9 +3265,20 @@
     return null;
   }
 
+  // 자유 선택(체크 시): 위치를 64분음표 단위로 잡고, 클릭 한 번은 그 위치부터 편집 간격 길이만큼 선택한다.
+  const MEASURE_FREE_SELECT_KEY = "mobibard-measure-edit-free-select";
+  function isMeasureEditFreeSelect() {
+    try { return localStorage.getItem(MEASURE_FREE_SELECT_KEY) === "1"; } catch { return false; }
+  }
+  function setMeasureEditFreeSelect(value) {
+    try { localStorage.setItem(MEASURE_FREE_SELECT_KEY, value ? "1" : "0"); } catch {}
+  }
+
   function measureEditPointerBeat(event) {
     const raw = measureEditPointerRawBeat(event);
-    return raw == null ? null : clamp(snapBeat(raw), 0, getTotalBeats());
+    if (raw == null) return null;
+    const snapped = isMeasureEditFreeSelect() ? snapBeatToUnit(raw, CONFIG.minimumNoteBeat) : snapBeat(raw);
+    return clamp(snapped, 0, getTotalBeats());
   }
 
   function handleMeasureEditPointerDown(event) {
@@ -3304,7 +3315,11 @@
       // 그냥 클릭: 1마디 고정이 아니라 지금 선택된 편집 간격(1~7키) 한 칸을 잡는다. 클릭한 칸의 시작부터.
       const unit = Math.max(CONFIG.minimumNoteBeat, Number(getSnapBeat()) || 1);
       const raw = Number(state.measureEdit.clickRawBeat);
-      const start = clamp(Math.floor((Number.isFinite(raw) ? raw : Number(state.measureEdit.rangeStartBeat) || 0) / unit + 1e-9) * unit, 0, getTotalBeats());
+      const base = Number.isFinite(raw) ? raw : Number(state.measureEdit.rangeStartBeat) || 0;
+      // 자유 선택이면 클릭한 위치(64분음표 단위)부터, 아니면 클릭한 칸의 시작부터
+      const start = isMeasureEditFreeSelect()
+        ? clamp(snapBeatToUnit(base, CONFIG.minimumNoteBeat), 0, getTotalBeats())
+        : clamp(Math.floor(base / unit + 1e-9) * unit, 0, getTotalBeats());
       state.measureEdit.rangeStartBeat = start;
       state.measureEdit.rangeEndBeat = clamp(start + unit, 0, getTotalBeats());
     }
@@ -5027,7 +5042,9 @@
     state.rollSurface = { ...geometry };
     if (sizeChanged) {
       const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
-      const rollPixelRatio = Math.min(window.devicePixelRatio || 1, coarsePointer ? 1.25 : 1.5);
+      // 고해상도(2배) 화면에서 1.5배로 그리면 늘어나 뿌옇게 보이므로 마우스 환경은 2배까지 그린다.
+      const rollPixelRatio = Math.min(window.devicePixelRatio || 1, coarsePointer ? 1.5 : 2);
+      state.rollPixelRatio = rollPixelRatio;
       resizeCanvas(elements.rollCanvas, geometry.width, geometry.height, rollPixelRatio);
     }
     updateRollCanvasPosition();
@@ -6457,6 +6474,15 @@
     const totalHeight = getRollHeight();
     const editableStartX = beatToX(0);
     const theme = getCanvasTheme();
+    // 선·노트를 실제 화면 픽셀에 맞춰 그려 번짐(안티앨리어싱)을 없앤다.
+    const dpr = Math.max(1, Number(state.rollPixelRatio) || 1);
+    const crispWidth = (width) => Math.max(1, Math.round(width * dpr)) / dpr;
+    const crisp = (value, width = 1) => {
+      const devicePx = Math.max(1, Math.round(width * dpr));
+      const pos = Math.round(value * dpr);
+      return (devicePx % 2 ? pos + 0.5 : pos) / dpr;
+    };
+    const snapPx = (value) => Math.round(value * dpr) / dpr;
 
     context.clearRect(0, 0, viewportWidth, viewportHeight);
     context.save();
@@ -6481,12 +6507,17 @@
         context.fillStyle = theme.blackRow;
         context.fillRect(horizontalStart, y, Math.max(0, horizontalEnd - horizontalStart), getRowHeight());
       }
-      context.strokeStyle = theme.pitchLine;
-      context.lineWidth = 1;
-      context.beginPath();
-      context.moveTo(horizontalStart, y + 0.5);
-      context.lineTo(horizontalEnd, y + 0.5);
-      context.stroke();
+      // 음마다의 위아래 구분선은 그리지 않는다(검은 건반 줄 색만으로 구분).
+      // 흰 건반이 연속되는 E-F 사이에만 구분선을 넣는다(B-C 사이는 옥타브 선이 그어짐).
+      if (pitch % 12 === 5) {
+        const boundary = y + getRowHeight();
+        context.strokeStyle = theme.blackRow;   // 검은 건반 줄 배경색
+        context.lineWidth = crispWidth(1);
+        context.beginPath();
+        context.moveTo(horizontalStart, crisp(boundary, 1));
+        context.lineTo(horizontalEnd, crisp(boundary, 1));
+        context.stroke();
+      }
     }
 
     for (let pitch = CONFIG.maxPitch; pitch >= CONFIG.minPitch; pitch -= 1) {
@@ -6498,10 +6529,10 @@
         continue;
       }
       context.strokeStyle = theme.octaveLine;
-      context.lineWidth = 1.5;
+      context.lineWidth = crispWidth(1);
       context.beginPath();
-      context.moveTo(horizontalStart, Math.round(boundaryY) + 0.5);
-      context.lineTo(horizontalEnd, Math.round(boundaryY) + 0.5);
+      context.moveTo(horizontalStart, crisp(boundaryY, 1));
+      context.lineTo(horizontalEnd, crisp(boundaryY, 1));
       context.stroke();
     }
     context.lineWidth = 1;
@@ -6514,11 +6545,11 @@
     // painted in a separate pass so odd meters such as 3/8 or 5/16 do not need
     // to align to the global quarter-note grid.
     for (const { beat, rel } of getMinorGridBeats(visibleStartBeat, visibleEndBeat, drawingUnit)) {
-      const x = Math.round(beatToX(beat)) + 0.5;
+      const x = crisp(beatToX(beat), 1);
       const isThirtySecondBoundary = Math.abs(rel / 0.125 - Math.round(rel / 0.125)) < 1e-7;
       const isSixtyFourthSubdivision = Math.abs(drawingUnit - CONFIG.minimumNoteBeat) < 1e-7 && !isThirtySecondBoundary;
       context.strokeStyle = theme.minorGrid;
-      context.lineWidth = 1;
+      context.lineWidth = crispWidth(1);
       context.setLineDash(isSixtyFourthSubdivision ? [2, 3] : []);
       context.beginPath();
       context.moveTo(x, visibleTop);
@@ -6528,18 +6559,18 @@
     context.setLineDash([]);
     const signatureGrid = getTimeSignatureGridLines(visibleStartBeat, visibleEndBeat);
     for (const line of signatureGrid.beats) {
-      const x = Math.round(beatToX(line.beat)) + 0.5;
+      const x = crisp(beatToX(line.beat), 1);
       context.strokeStyle = theme.beatGrid;
-      context.lineWidth = 1;
+      context.lineWidth = crispWidth(1);
       context.beginPath();
       context.moveTo(x, visibleTop);
       context.lineTo(x, visibleBottom);
       context.stroke();
     }
     for (const line of signatureGrid.measures) {
-      const x = Math.round(beatToX(line.beat)) + 0.5;
+      const x = crisp(beatToX(line.beat), 1);
       context.strokeStyle = theme.measureGrid;
-      context.lineWidth = 1.5;
+      context.lineWidth = crispWidth(1);
       context.beginPath();
       context.moveTo(x, visibleTop);
       context.lineTo(x, visibleBottom);
@@ -6583,13 +6614,13 @@
         })
         : notesInView;
       for (const note of orderedNotesInView) {
-        const x = beatToX(note.startBeat);
-        const endX = beatToX(note.startBeat + note.durationBeat);
+        const x = snapPx(beatToX(note.startBeat));
+        const endX = snapPx(beatToX(note.startBeat + note.durationBeat));
         if (endX < visibleLeft || x > visibleRight) {
           continue;
         }
         // Active-channel notes are deliberately thicker than background notes.
-        const y = pitchToY(note.pitch) + (isActive ? 1 : 3);
+        const y = snapPx(pitchToY(note.pitch) + (isActive ? 1 : 3));
         const heightValue = Math.max(3, getRowHeight() - (isActive ? 2 : 6));
         if (y + heightValue < visibleTop || y > visibleBottom) {
           continue;
@@ -6600,6 +6631,7 @@
         const selectionDim = isActive && hasActiveSelection && !selected ? 0.75 : 1;
         context.globalAlpha = channelAlpha * (0.62 + noteVolume / 15 * 0.36) * selectionDim;
 
+        const px = crispWidth(1);   // 화면 1픽셀(CSS 1px)
         if (isActive) {
           // Cheap bevel/shadow treatment: no canvas blur, so dense projects stay fast.
           context.fillStyle = "rgba(0,0,0,.26)";
@@ -6618,12 +6650,15 @@
           context.globalAlpha = 1;
           context.fillStyle = theme.selectedOverlay;
           context.fillRect(x + 1, y, widthValue, heightValue);
+          // 선택 테두리: 바깥 번짐(halo)과 테두리 모두 얇고 선명하게
+          const haloWidth = crispWidth(3);
           context.strokeStyle = theme.selectedHalo;
-          context.lineWidth = 5;
-          context.strokeRect(x + 1.5, y + 0.5, widthValue - 1, heightValue - 1);
+          context.lineWidth = haloWidth;
+          context.strokeRect(x + 1 + px / 2, y + px / 2, widthValue - px, heightValue - px);
+          const strokeWidth = crispWidth(1.5);
           context.strokeStyle = theme.selectedStroke;
-          context.lineWidth = 2.5;
-          context.strokeRect(x + 1.5, y + 0.5, widthValue - 1, heightValue - 1);
+          context.lineWidth = strokeWidth;
+          context.strokeRect(x + 1 + strokeWidth / 2, y + strokeWidth / 2, widthValue - strokeWidth, heightValue - strokeWidth);
           context.restore();
         } else {
           context.strokeStyle = noteBorderColor;
@@ -8204,10 +8239,18 @@
       context.lineWidth = 1;
       context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke();
     }
+    // 마디선은 피아노롤과 같은 색·굵기(화면 1픽셀, 픽셀 경계에 맞춤)로 그린다.
+    const timelineDpr = Math.max(1, window.devicePixelRatio || 1);
+    const timelineLineWidth = Math.max(1, Math.round(timelineDpr)) / timelineDpr;
+    const timelineCrisp = (value) => {
+      const devicePx = Math.max(1, Math.round(timelineDpr));
+      const pos = Math.round(value * timelineDpr);
+      return (devicePx % 2 ? pos + 0.5 : pos) / timelineDpr;
+    };
     for (const line of signatureGrid.measures) {
-      const x = Math.round(beatToX(line.beat) - scrollLeft) + 0.5;
-      context.strokeStyle = theme.timelineMeasure;
-      context.lineWidth = 1.5;
+      const x = timelineCrisp(beatToX(line.beat) - scrollLeft);
+      context.strokeStyle = theme.measureGrid;
+      context.lineWidth = timelineLineWidth;
       context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke();
     }
     drawTimelineFadeOverlay(context, width, height, scrollLeft);
@@ -19470,6 +19513,39 @@
     }
   }
 
+  // 채널/그룹/오디오의 음소거·감추기·솔로 상태를 id 별로 기억한다(편집 기록과 별개, 세션 동안 유지).
+  const channelViewMemory = { channels: new Map(), groups: new Map(), audio: new Map() };
+  function rememberChannelViewStates() {
+    for (const channel of state.channels) {
+      const id = String(channel.id);
+      channelViewMemory.channels.set(id, { muted: Boolean(channel.muted), visible: channel.visible !== false, solo: state.soloChannelIds.has(id), visibilitySolo: state.visibilitySoloChannelIds.has(id) });
+    }
+    for (const group of state.channelGroups) {
+      const id = String(group.id);
+      channelViewMemory.groups.set(id, { muted: Boolean(group.muted), visible: group.visible !== false, solo: state.soloGroupIds.has(id), visibilitySolo: state.visibilitySoloGroupIds.has(id) });
+    }
+    for (const clip of state.audioClips) {
+      const id = String(clip.id);
+      channelViewMemory.audio.set(id, { muted: Boolean(clip.muted), visible: clip.visible !== false, solo: state.soloAudioClipIds.has(id), visibilitySolo: state.visibilitySoloAudioClipIds.has(id) });
+    }
+    return channelViewMemory;
+  }
+  function restoreChannelViewSolos(memory) {
+    const apply = (set, items, map, key) => {
+      set.clear();
+      for (const item of items) {
+        const id = String(item.id);
+        if (map.get(id)?.[key]) set.add(id);
+      }
+    };
+    apply(state.soloChannelIds, state.channels, memory.channels, "solo");
+    apply(state.visibilitySoloChannelIds, state.channels, memory.channels, "visibilitySolo");
+    apply(state.soloGroupIds, state.channelGroups, memory.groups, "solo");
+    apply(state.visibilitySoloGroupIds, state.channelGroups, memory.groups, "visibilitySolo");
+    apply(state.soloAudioClipIds, state.audioClips, memory.audio, "solo");
+    apply(state.visibilitySoloAudioClipIds, state.audioClips, memory.audio, "visibilitySolo");
+  }
+
   function restoreHistorySnapshot(snapshot, restorePlayheadBeat = null) {
     cancelItemTreeDrag(null, { rerender: false });
     const data = JSON.parse(snapshot);
@@ -19486,12 +19562,15 @@
     const playheadBeat = Number.isFinite(requestedPlayheadBeat)
       ? Math.max(0, requestedPlayheadBeat)
       : currentPlayheadBeat;
-    const mutedByChannelId = new Map(state.channels.map((channel) => [String(channel.id), Boolean(channel.muted)]));
-    const visibleByChannelId = new Map(state.channels.map((channel) => [String(channel.id), channel.visible !== false]));
-    const mutedByGroupId = new Map(state.channelGroups.map((group) => [String(group.id), Boolean(group.muted)]));
-    const visibleByGroupId = new Map(state.channelGroups.map((group) => [String(group.id), group.visible !== false]));
-    const mutedByAudioId = new Map(state.audioClips.map((clip) => [String(clip.id), Boolean(clip.muted)]));
-    const visibleByAudioId = new Map(state.audioClips.map((clip) => [String(clip.id), clip.visible !== false]));
+    // 음소거·감추기·솔로는 편집 기록이 아니라 "보기/듣기 설정"이다. 실행 취소/다시 실행으로 채널이
+    // 지워졌다가 돌아와도 설정이 풀리지 않도록, 지금까지 본 항목의 설정을 id 별로 기억해 두고 되살린다.
+    const viewMemory = rememberChannelViewStates();
+    const mutedByChannelId = new Map([...viewMemory.channels].map(([id, item]) => [id, item.muted]));
+    const visibleByChannelId = new Map([...viewMemory.channels].map(([id, item]) => [id, item.visible]));
+    const mutedByGroupId = new Map([...viewMemory.groups].map(([id, item]) => [id, item.muted]));
+    const visibleByGroupId = new Map([...viewMemory.groups].map(([id, item]) => [id, item.visible]));
+    const mutedByAudioId = new Map([...viewMemory.audio].map(([id, item]) => [id, item.muted]));
+    const visibleByAudioId = new Map([...viewMemory.audio].map(([id, item]) => [id, item.visible]));
 
     stopMidiInputRecording({ silent: true });
     stopPlayback(false);
@@ -19516,11 +19595,6 @@
         };
       });
       state.nextChannelGroupId = Math.max(1, Number(data.nextChannelGroupId) || 1, ...state.channelGroups.map((group) => Number(group.id) + 1));
-      state.soloGroupIds.clear();
-      state.soloAudioClipIds.clear();
-      state.visibilitySoloChannelIds.clear();
-      state.visibilitySoloGroupIds.clear();
-      state.visibilitySoloAudioClipIds.clear();
       state.channels = data.channels.map((channel, index) => {
         const channelId = Number(channel.id) || index + 1;
         return {
@@ -19584,6 +19658,7 @@
       state.nextNoteId = Math.max(1, Number(data.nextNoteId) || 1);
       state.nextTempoId = Math.max(2, Number(data.nextTempoId) || 2);
       state.nextAudioClipId = Math.max(1, Number(data.nextAudioClipId) || 1);
+      restoreChannelViewSolos(viewMemory);
       const restoredActiveIndex = activeChannelId == null
         ? -1
         : state.channels.findIndex((channel) => String(channel.id) === String(activeChannelId));
@@ -29442,8 +29517,8 @@
   function describeTimeEditAmount(measures, subdivisions) {
     const parts = [];
     if (measures) parts.push(i18nText("ui.measures_count", [measures]));
-    if (subdivisions) parts.push(`${subdivisions}/64 박자`);
-    return parts.join(" ") || "0박자";
+    if (subdivisions) parts.push(i18nText("ui.beat64_count", [subdivisions]));
+    return parts.join(" ") || i18nText("ui.beat_zero");
   }
 
   function normalizeTimeEditMeasureInput({ clampValue = false } = {}) {
@@ -29842,7 +29917,7 @@
     normalizeTimeEditSubdivisionInput({ clampValue: true });
     const { measures, subdivisions, amountBeats } = getTimeEditAmount();
     if (amountBeats <= 0) {
-      showToast("추가하거나 삭제할 마디 또는 1/64 박자를 입력하세요.");
+      showToast(i18nText("timeline.enter_measure_amount"));
       elements.timeEditMeasureInput?.focus();
       return false;
     }
@@ -37179,6 +37254,11 @@
     elements.editSelectAllButton.addEventListener("click", () => { closeEditMenu(); selectAllCurrentContext(); });
     elements.editDeleteButton.addEventListener("click", () => { closeEditMenu(); deleteCurrentSelection(); });
     elements.editMeasureButton?.addEventListener("click", () => { closeEditMenu(); openMeasureEditWorkspace({ beat: state.playhead.beat, scopeType: "all" }); });
+    const measureFreeSelect = document.getElementById("measureEditFreeSelect");
+    if (measureFreeSelect) {
+      measureFreeSelect.checked = isMeasureEditFreeSelect();   // 처음엔 꺼짐(격자 칸 단위), 바꾼 값은 저장
+      measureFreeSelect.addEventListener("change", () => setMeasureEditFreeSelect(measureFreeSelect.checked));
+    }
     elements.editRestCleanupButton?.addEventListener("click", () => { closeEditMenu(); openRestCleanupDialog(); });
     elements.editNoteVolumeButton?.addEventListener("click", () => { closeEditMenu(); openChannelVolumeDialog(); });
     elements.editAutoPartButton?.addEventListener("click", () => { closeEditMenu(); openAutoPartDialog(); });

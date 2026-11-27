@@ -16357,3 +16357,13 @@ body.merge-mode-active .channel-instrument-control select { pointer-events: auto
 }
 #spatialRoomButton.active .transport-utility-value,
 #spatialRoomButton[aria-pressed="true"] .transport-utility-value { color: #fff !important; }
+
+/* 마디 편집: 자유 선택 */
+.measure-edit-free-select { display:flex; align-items:center; gap:6px; margin:2px 2px 0; font-size:12.5px; font-weight:700; color:var(--text); cursor:pointer; user-select:none; }
+.measure-edit-free-select input { margin:0; width:15px; height:15px; accent-color:var(--accent); }
+
+/* 마디 편집: 자유 선택 체크박스는 '선택한 길이' 줄 맨 오른쪽 */
+#measureEditPanel .measure-edit-summary-row { display:flex; align-items:flex-start; gap:8px; min-width:0; }
+#measureEditPanel .measure-edit-summary-row .measure-edit-range-summary { flex:1 1 auto; min-width:0; }
+#measureEditPanel .measure-edit-summary-row .measure-edit-free-select { flex:none; margin:2px 2px 0 auto; white-space:nowrap; font-size:11.5px; }
+#measureEditPanel .measure-edit-range-row:has(#measureEditDuplicateOptions:not([hidden])) .measure-edit-summary-row { grid-column:1; grid-row:1; min-width:0; flex-wrap:wrap; }
