@@ -677,7 +677,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "layout.idleVolume": "Raise, lower or fix each channel's volume",
     "layout.idleDynamics": "Generate volume changes automatically",
     "layout.idleOctave": "Shift each channel's octave",
-    "layout.idleInstrument": "Assign instruments to channels",
+    "layout.idleInstrument": "Set instruments and note layout for each channel",
     "layout.channelApplied": "Channel options were applied.",
     "layout.channelCancelled": "Channel option changes were cancelled.",
     "layout.copyToast": "MML copied.",

@@ -2916,7 +2916,7 @@
     );
     if (state.ui.tutorialImage) {
       state.ui.tutorialImage.hidden = false;
-      state.ui.tutorialImage.src = `assets/tutorial/${folder}/${step.image}?rev=20261119-tutorial-sound`;
+      state.ui.tutorialImage.src = `assets/tutorial/${folder}/${step.image}?rev=20261127-tutorial-arrange`;
       state.ui.tutorialImage.alt = tutorialFormat("tutorial.image_alt", [title], `${title} screen example`);
     }
     if (state.ui.tutorialImageFallback) state.ui.tutorialImageFallback.hidden = true;
@@ -2937,7 +2937,7 @@
     const next = TUTORIAL_STEPS[tutorialStepIndex + 1];
     if (next) {
       const preload = new Image();
-      preload.src = `assets/tutorial/${folder}/${next.image}?rev=20261119-tutorial-sound`;
+      preload.src = `assets/tutorial/${folder}/${next.image}?rev=20261127-tutorial-arrange`;
     }
   }
 

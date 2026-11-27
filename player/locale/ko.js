@@ -677,7 +677,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "layout.idleVolume": "채널별 볼륨을 올리거나 고정해요",
     "layout.idleDynamics": "음 세기 변화를 자동으로 만들어요",
     "layout.idleOctave": "채널별 옥타브를 옮겨요",
-    "layout.idleInstrument": "악기를 채널에 배정해요",
+    "layout.idleInstrument": "채널마다 악기와 노트 배치를 정해요",
     "layout.channelApplied": "채널 옵션을 적용했습니다.",
     "layout.channelCancelled": "채널 옵션 변경을 취소했습니다.",
     "layout.instrumentCancelled": "악기 설정 변경을 취소했습니다.",

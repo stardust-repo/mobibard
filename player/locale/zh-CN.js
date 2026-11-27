@@ -677,7 +677,7 @@ window.__MOBIBARD_LOCALES__["zh-CN"] = {
     "layout.idleVolume": "按声道调整或固定音量",
     "layout.idleDynamics": "自动生成音量变化",
     "layout.idleOctave": "按声道移动八度",
-    "layout.idleInstrument": "将乐器分配到声道",
+    "layout.idleInstrument": "为每个声道设置乐器和音符布局",
     "layout.channelApplied": "已应用声道选项。",
     "layout.channelCancelled": "已取消声道选项的更改。",
     "layout.instrumentCancelled": "已取消乐器设置的更改。",

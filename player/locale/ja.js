@@ -677,7 +677,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "layout.idleVolume": "チャンネルごとに音量を調整・固定します",
     "layout.idleDynamics": "音量変化を自動で生成します",
     "layout.idleOctave": "チャンネルごとにオクターブを移します",
-    "layout.idleInstrument": "楽器をチャンネルに割り当てます",
+    "layout.idleInstrument": "チャンネルごとに楽器とノート配置を設定します",
     "layout.channelApplied": "チャンネルオプションを適用しました。",
     "layout.channelCancelled": "チャンネルオプションの変更を取り消しました。",
     "layout.instrumentCancelled": "楽器設定の変更を取り消しました。",
