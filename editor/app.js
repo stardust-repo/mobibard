@@ -3937,6 +3937,11 @@
   function chooseDefaultPresetForMidiGroup(group, notes = []) {
     const mapper = window.MobibardDefaultInstrumentMap;
     if (!mapper?.resolveRequest) return { bank: 0, program: 0, name: "Piano" };
+    // MMI(모비꼬)처럼 출처 악기를 이미 모비바드 악기로 정한 경우 그대로 쓴다.
+    if (group?.mobibardTarget) {
+      const direct = (mapper.targets || []).find((target) => target.id === group.mobibardTarget);
+      if (direct) return { bank: clamp(Math.round(Number(direct.bank) || 0), 0, 16383), program: clamp(Math.round(Number(direct.preset) || 0), 0, 127), name: String(direct.name || "Piano") };
+    }
     if (isMidiGroupDrums(group)) {
       const counts = new Map();
       for (const note of Array.isArray(notes) ? notes : []) {
@@ -15391,15 +15396,10 @@
       const durationSeconds = beatToSecondsInTempoMap(parsedOne.endBeat || 0, tempoMap);
       let instrumentLabel = i18nText("import.instrument_unspecified");
       if (Number.isFinite(Number(candidate.mmiPartProgram))) {
-        const requestedProgram = clamp(Math.round(Number(candidate.mmiPartProgram) || 0), 0, 127);
-        const resolvedPreset = resolveMidiGroupEditorPreset({
-          program: requestedProgram,
-          bank: 0,
-          channel: 0,
-          programName: GM_PROGRAM_NAMES[requestedProgram] || `Program ${requestedProgram + 1}`,
-          name: candidate.name || candidate.label || "",
-        }, parsedOne.noteParts?.[0]?.notes || []);
-        instrumentLabel = resolvedPreset?.name || GM_PROGRAM_NAMES[requestedProgram] || `Program ${requestedProgram + 1}`;
+        const request = getMmiPresetRequest(candidate);
+        const resolvedPreset = resolveMidiGroupEditorPreset(request, parsedOne.noteParts?.[0]?.notes || []);
+        const targetName = resolvedPreset?.name || GM_PROGRAM_NAMES[request.program] || `Program ${request.program + 1}`;
+        instrumentLabel = candidate.mmiInstrumentName ? `${candidate.mmiInstrumentName} → ${targetName}` : targetName;
       }
       const meta = document.createElement("small");
       meta.textContent = [
@@ -16090,14 +16090,8 @@
         tempoEvents = parsed.tempos || [];
         const tempoMap = createTempoTimeMap(tempoEvents);
         parsed.noteParts.forEach((part) => {
-          const requestedProgram = clamp(Math.round(Number(part.mmiPartProgram) || 0), 0, 127);
-          const pseudoGroup = {
-            program: requestedProgram,
-            bank: 0,
-            channel: 0,
-            programName: part.instrumentName || "",
-            name: part.label || "",
-          };
+          const pseudoGroup = getMmiPresetRequest(part);
+          const requestedProgram = pseudoGroup.program;
           const resolvedPreset = resolveMidiGroupEditorPreset(pseudoGroup, part.notes || []);
           const program = resolvedPreset
             ? clamp(Math.round(Number(resolvedPreset.preset) || 0), 0, 127)
@@ -27880,6 +27874,20 @@
     return group;
   }
 
+  // MMI 파트의 악기 요청: 모비꼬 악기 번호를 공용 표(MabiMmi.resolveMabiIccoInstrument)로 바꾼 값을 쓴다.
+  function getMmiPresetRequest(part) {
+    const known = part?.mmiGmProgram != null && Number.isFinite(Number(part.mmiGmProgram));
+    const program = known ? clamp(Math.round(Number(part.mmiGmProgram)), 0, 127) : clamp(Math.round(Number(part?.mmiPartProgram) || 0), 0, 127);
+    return {
+      program,
+      bank: 0,
+      channel: 0,
+      programName: part?.mmiInstrumentName || GM_PROGRAM_NAMES[program] || `Program ${program + 1}`,
+      name: part?.importName || part?.name || part?.label || "",
+      mobibardTarget: part?.mmiTarget || "",
+    };
+  }
+
   function createImportedChannel(part, partNumber) {
     const id = nextChannelId();
     const channel = createDefaultChannel(id, state.channels.length);
@@ -27887,14 +27895,7 @@
     channel.name = makeUniqueChannelName(requestedName, channel.id);
     channel.notes = part.notes.map((note) => ({ ...note, id: state.nextNoteId++ }));
     if (Number.isFinite(Number(part.mmiPartProgram))) {
-      const requestedProgram = clamp(Math.round(Number(part.mmiPartProgram) || 0), 0, 127);
-      const resolvedPreset = resolveMidiGroupEditorPreset({
-        program: requestedProgram,
-        bank: 0,
-        channel: 0,
-        programName: GM_PROGRAM_NAMES[requestedProgram] || `Program ${requestedProgram + 1}`,
-        name: part.importName || part.name || "",
-      }, channel.notes);
+      const resolvedPreset = resolveMidiGroupEditorPreset(getMmiPresetRequest(part), channel.notes);
       if (resolvedPreset) setChannelInstrumentPreset(channel, resolvedPreset);
     }
     if (Number.isFinite(Number(part.mmiTrackNumber))) {

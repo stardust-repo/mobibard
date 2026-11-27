@@ -29,6 +29,71 @@
     return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
   };
 
+  // ───────────────────────── 악기 ─────────────────────────
+  // MabiIcco(모비꼬) 악기 번호 → 모비바드 15개 악기.
+  // 출처: fourthline/mmlTools properties/instrument.properties. 번호는 "논리 프로그램" = (뱅크 << 9) + 프로그램이고,
+  // 마비노기 모바일 악기 세트(뱅크 2)는 1024 + 프로그램이다(예: 1045 = 피아노(모바일)).
+  // target: default-instrument-map.js 의 악기 id, gm: 사용자 사운드폰트(GM)를 쓸 때의 대표 GM 프로그램(0부터).
+  const MABIICCO_INSTRUMENTS = (() => {
+    const list = {};
+    const add = (programs, name, target, gm) => { for (const program of [].concat(programs)) list[program] = Object.freeze({ program, name, target, gm }); };
+    add(0, "Lute", "lute", 24);
+    add(1, "Ukulele", "guitar", 24);
+    add(2, "Mandolin", "mandolin", 105);
+    add(3, "Whistle", "flute", 78);
+    add(4, "Roncadora", "flute", 79);
+    add(5, "Flute", "flute", 73);
+    add(6, "Chalumeau", "chalumeau", 71);
+    add(7, "C-Bottle", "flute", 76); add(8, "D-Bottle", "flute", 76); add(9, "E-Bottle", "flute", 76); add(10, "F-Bottle", "flute", 76);
+    add(11, "G-Bottle", "flute", 76); add(12, "B-Bottle", "flute", 76); add(13, "A-Bottle", "flute", 76);
+    add(14, "GreenFinch", "flute", 72); add(15, "FairyPitta", "flute", 72); add(16, "KingFisher", "flute", 72); add(17, "GreenFinch_Short", "flute", 72);
+    add(18, "Physis Tuba", "chalumeau", 58);
+    add(19, "Lyre", "harp", 46);
+    add(20, "Electric Guitar", "guitar", 27);
+    add(21, "Piano", "piano", 0);
+    add(22, "Violin", "violin", 40);
+    add(23, "Cello", "violin", 42);
+    add(24, "Harp", "harp", 46);
+    add(25, "Tuned Violin", "violin", 40);
+    add(26, "Tuned Cello", "violin", 42);
+    add(27, "Drum set", "drum", 116);
+    add(28, "Gayageum", "harp", 46);
+    add(29, "Bass", "guitar", 33);
+    add(30, "10th Lute", "lute", 24); add(31, "10th Ukulele", "guitar", 24); add(32, "10th Mandolin", "mandolin", 105);
+    add(33, "10th Whistle", "flute", 78); add(34, "10th Flute", "flute", 73);
+    add(50, "Festival Lute", "lute", 24); add(51, "Festival Ukulele", "guitar", 24); add(52, "Festival Mandolin", "mandolin", 105);
+    add(53, "Festival Whistle", "flute", 78); add(54, "Festival Flute", "flute", 73);
+    add(55, "Tuned Flute", "flute", 73); add(56, "Tuned Whistle", "flute", 78);
+    add(65, "Snare", "drum", 116); add(66, "Bass Drum", "drum", 116); add(67, "Snare Drum", "drum", 116);
+    add(68, "Cymbals", "metal", 119);
+    add([69, 70, 71, 72, 73, 74, 75, 76], "Handbell", "musicBox", 112);
+    add(77, "Hand Chimes", "xylophone", 13);
+    add([80, 81, 82, 83, 84], "Male Voice", "vocal", 53);
+    add([90, 91, 92, 93, 94], "Female Voice", "vocal", 53);
+    add(100, "Male Chorus", "vocal", 52); add(110, "Female Chorus", "vocal", 52);
+    add(120, "Male Voice JP", "vocal", 53); add(121, "Female Voice JP", "vocal", 53);
+    // 마비노기 모바일 악기 세트(뱅크 2)
+    add(1024, "Lute (Mobile)", "lute", 24);
+    add(1026, "Mandolin (Mobile)", "mandolin", 105);
+    add(1029, "Flute (Mobile)", "flute", 73);
+    add(1030, "Chalumeau (Mobile)", "chalumeau", 71);
+    add(1045, "Piano (Mobile)", "piano", 0);
+    add(1046, "Violin (Mobile)", "violin", 40);
+    add(1048, "Harp (Mobile)", "harp", 46);
+    add(1053, "Music Box (Mobile)", "musicBox", 10);
+    add(1090, "Bass Drum (Mobile)", "drum", 116);
+    add(1092, "Cymbals (Mobile)", "metal", 119);
+    add(1101, "Xylophone (Mobile)", "xylophone", 13);
+    return Object.freeze(list);
+  })();
+
+  // 번호 하나 → { program, name, target, gm } 또는 null(모르는 번호). 모르는 고뱅크 번호는 하위 9비트(같은 프로그램)로 한 번 더 찾는다.
+  function resolveMabiIccoInstrument(program) {
+    const value = Math.trunc(Number(program));
+    if (!Number.isFinite(value) || value < 0) return null;
+    return MABIICCO_INSTRUMENTS[value] || (value >= 512 ? MABIICCO_INSTRUMENTS[value & 511] || null : null);
+  }
+
   // ───────────────────────── 읽기 ─────────────────────────
 
   // 옛/비표준 길이(l38, c34, 64. …)를 마비노기에서 쓸 수 있는 길이로 바꾼다.
@@ -362,6 +427,7 @@
         const displayTrackName = trackName || `Track ${trackNumber}`;
         const partProgram = partIndex === 3 && songProgram >= 0 ? songProgram : program;
         const startTick = Math.max(0, commonStartOffset + (partIndex === 3 ? startSongDelta : startDelta));
+        const instrument = resolveMabiIccoInstrument(partProgram);
         candidates.push({
           channelNumber: candidates.length + 1,
           label: `${displayTrackName} · ${role}`,
@@ -374,6 +440,10 @@
           mmiProgram: program,
           mmiSongProgram: songProgram,
           mmiPartProgram: partProgram,
+          // 모비꼬 악기를 모비바드 악기로: mmiTarget = 15개 악기 id, mmiGmProgram = GM 사운드폰트용 대표 번호
+          mmiInstrumentName: instrument ? instrument.name : "",
+          mmiTarget: instrument ? instrument.target : "",
+          mmiGmProgram: instrument ? instrument.gm : null,
           mmiPanpot: panpot,
           mmiVolume: volume,
           mmiVisible: visible,
@@ -527,6 +597,8 @@
   window.MabiMmi = Object.freeze({
     TICKS_PER_BEAT,
     PART_ROLES,
+    MABIICCO_INSTRUMENTS,
+    resolveMabiIccoInstrument,
     PARTS_PER_TRACK,
     normalizeLegacyLengths,
     cleanupMmlValue,
