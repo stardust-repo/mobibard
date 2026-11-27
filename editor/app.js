@@ -10984,8 +10984,12 @@
       gain.connect(audioEngine.masterGain || context.destination);
       const startAt = audioStartTime + Math.max(0, audibleStartSeconds - playbackStartSeconds) / globalRate;
       source.start(Math.max(context.currentTime + 0.004, startAt), sourceOffset, sourceDuration);
+      // 재생 중 볼륨 슬라이더를 움직이면 바로 반영할 수 있게 클립별 게인을 기억한다.
+      const liveGains = getLiveAudioClipGains(clip.id);
+      liveGains.add(gain);
       source.onended = () => {
         state.playback.audioSources.delete(source);
+        liveGains.delete(gain);
         try { source.disconnect(); } catch {}
         try { gain.disconnect(); } catch {}
       };
@@ -10995,15 +10999,39 @@
     return scheduled;
   }
 
+  const liveAudioClipGains = new Map();   // clipId -> Set<GainNode> (지금 재생 중인 소리)
+  function getLiveAudioClipGains(clipId) {
+    const key = String(clipId);
+    let set = liveAudioClipGains.get(key);
+    if (!set) { set = new Set(); liveAudioClipGains.set(key, set); }
+    return set;
+  }
+  // 재생 중인 클립 소리의 볼륨을 즉시 바꾼다(재생을 다시 시작하지 않음).
+  function applyLiveAudioClipVolume(clip) {
+    if (!clip) return;
+    const set = liveAudioClipGains.get(String(clip.id));
+    if (!set?.size) return;
+    const context = audioEngine.context;
+    const value = clamp(Number(clip.volume) || 0, 0, 1);
+    for (const gain of set) {
+      try {
+        if (context) gain.gain.setTargetAtTime(value, context.currentTime, 0.015);
+        else gain.gain.value = value;
+      } catch { try { gain.gain.value = value; } catch {} }
+    }
+  }
+
   function updateAudioClipSettings(clip, { offsetSeconds = null, volumePercent = null, playbackRate = null, commit = true } = {}) {
     if (!clip) return false;
     let changed = false;
+    let needsRestart = false;
     if (offsetSeconds != null) {
       const maxOffset = Math.max(0, Number(clip.sourceDurationSeconds) || 0);
       const nextOffset = clamp(Number(offsetSeconds) || 0, 0, maxOffset);
       if (Math.abs(nextOffset - (Number(clip.sourceOffsetSeconds) || 0)) > 1e-7) {
         clip.sourceOffsetSeconds = nextOffset;
         changed = true;
+        needsRestart = true;
       }
     }
     if (volumePercent != null) {
@@ -11018,10 +11046,13 @@
       if (Math.abs(nextRate - (Number(clip.playbackRate) || 1)) > 1e-7) {
         clip.playbackRate = nextRate;
         changed = true;
+        needsRestart = true;
       }
     }
     if (!changed) return false;
-    if (state.playback.running || state.playback.loading) {
+    applyLiveAudioClipVolume(clip);
+    // 볼륨만 바뀐 경우는 재생을 다시 시작하지 않고 바로 반영한다(시작 위치·배속은 다시 예약해야 함).
+    if (needsRestart && (state.playback.running || state.playback.loading)) {
       const beat = state.playhead.beat;
       stopPlayback(false);
       state.playhead.beat = beat;
@@ -38041,11 +38072,21 @@
     elements.audioSourceOffsetInput?.addEventListener("change", () => {
       updateAudioClipSettings(getActiveAudioClip(), { offsetSeconds: elements.audioSourceOffsetInput.value, commit: true });
     });
+    // 슬라이더를 움직이는 동안 바로 들리게 하고, 손을 뗄 때 한 번만 편집 기록에 남긴다.
+    let audioVolumeDragStart = null;
     elements.audioSourceVolumeInput?.addEventListener("input", () => {
       if (elements.audioSourceVolumeValue) elements.audioSourceVolumeValue.textContent = `${elements.audioSourceVolumeInput.value}%`;
+      const clip = getActiveAudioClip();
+      if (!clip) return;
+      if (!audioVolumeDragStart || audioVolumeDragStart.id !== clip.id) audioVolumeDragStart = { id: clip.id, volume: Number(clip.volume) || 0 };
+      clip.volume = clamp((Number(elements.audioSourceVolumeInput.value) || 0) / 100, 0, 1);
+      applyLiveAudioClipVolume(clip);
     });
     elements.audioSourceVolumeInput?.addEventListener("change", () => {
-      updateAudioClipSettings(getActiveAudioClip(), { volumePercent: elements.audioSourceVolumeInput.value, commit: true });
+      const clip = getActiveAudioClip();
+      if (clip && audioVolumeDragStart?.id === clip.id) clip.volume = audioVolumeDragStart.volume;
+      audioVolumeDragStart = null;
+      updateAudioClipSettings(clip, { volumePercent: elements.audioSourceVolumeInput.value, commit: true });
     });
     elements.audioSourceRateInput?.addEventListener("change", () => {
       updateAudioClipSettings(getActiveAudioClip(), { playbackRate: elements.audioSourceRateInput.value, commit: true });
