@@ -668,6 +668,7 @@ window.__MOBIBARD_LOCALES__["ko"] = {
     "arrange.inst_catHarmonica": "고양이의 하모니카",
     "arrange.inst_xylophone": "실로폰",
     "arrange.inst_musicBox": "오르골",
+    "arrange.inst_gramophone": "축음기",
     "arrange.inst_cymbal": "드럼 심벌",
     "arrange.inst_bigdrum": "드럼 북",
     "layout.instrumentPending": "악기 설정 변경 사항을 적용해 주세요.",

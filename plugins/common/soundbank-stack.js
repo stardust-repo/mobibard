@@ -280,7 +280,7 @@
   // Representative GM program per MobiBard target, used only for fonts that are
   // NOT MobiBard-compatible (plain GM numbering) when a product asks for a
   // MobiBard target such as "Violin".
-  const TARGET_PROGRAM = { piano: 0, chalumeau: 71, flute: 73, harp: 46, lute: 24, mandolin: 105, violin: 40, xylophone: 13, musicBox: 10, guitar: 25, harmonica: 22, vocal: 53 };
+  const TARGET_PROGRAM = { piano: 0, chalumeau: 71, flute: 73, harp: 46, lute: 24, mandolin: 105, violin: 40, xylophone: 13, musicBox: 10, guitar: 25, harmonica: 22, vocal: 53, gramophone: 0 };
   const TARGET_DRUM_NOTE = { drum: 38, metal: 42 };
 
   function findPreset(bank, bankNo, num) {

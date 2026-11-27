@@ -668,6 +668,7 @@ window.__MOBIBARD_LOCALES__["zh-TW"] = {
     "arrange.inst_catHarmonica": "貓咪口琴",
     "arrange.inst_xylophone": "木琴",
     "arrange.inst_musicBox": "音樂盒",
+    "arrange.inst_gramophone": "留聲機",
     "arrange.inst_cymbal": "鼓 鈸",
     "arrange.inst_bigdrum": "大鼓",
     "layout.instrumentPending": "請套用尚未確認的樂器設定。",

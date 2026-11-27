@@ -21,6 +21,7 @@
     { id: "vocal", name: "Cat", preset: 11 },
     { id: "drum", name: "BigDrum", preset: 12 },
     { id: "metal", name: "Cymbals", preset: 13 },
+    { id: "gramophone", name: "Gramophone", preset: 14 },
   ].map((target, priority) => Object.freeze({
     ...target,
     priority,

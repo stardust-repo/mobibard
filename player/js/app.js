@@ -2594,6 +2594,7 @@
     state.ui.instrumentApplyBar.append(pendingText, pendingActions);
     state.ui.assignmentHost = el("div", "wb4-assignment-host wb6-assignment-host");
     state.ui.assignmentEmpty = wb6Text("noInstrumentSource", "wb4-assignment-empty wb6-assignment-empty");
+    state.ui.assignmentEmpty.hidden = true; // 안내 문구 대신 악기 탭 내용을 항상 보여준다.
     state.ui.assignmentHost.append(state.ui.assignmentEmpty);
     panel.append(state.ui.instrumentApplyBar, state.ui.assignmentHost);
     return panel;
@@ -3063,7 +3064,8 @@
       panel.hidden = false;
       panel.setAttribute("aria-hidden", "false");
       if (panel.id === "midiConvertDialog") {
-        activateWorkspaceTab("instrument");
+        if (panel.dataset.keepTab === "1") delete panel.dataset.keepTab;
+        else activateWorkspaceTab("instrument");
         state.ui.assignmentEmpty.hidden = true;
         const leftHead = panel.querySelector(".midi-left-panel .dialog-section-head strong");
         if (leftHead) {
@@ -4964,7 +4966,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
           name: String(meta?.name || ""),
           sourceType: String(meta?.sourceType || ""),
           sourceLabel: String(meta?.sourceLabel || ""),
-          newSource: meta?.newSource === true
+          newSource: meta?.newSource === true,
+          fromMidiConvert: meta?.fromMidiConvert === true
         }
       }));
     } catch (_) {}
@@ -9269,9 +9272,74 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     }
   }
 
-  function openMidiConvertDialog(importData) {
+  // MML/MMI/텍스트/구글 문서처럼 노트를 읽을 수 있는 재료가 들어오면 MIDI로 바꿔 악기 탭을 켠다.
+  // MML에는 악기 정보가 없으므로 전부 자동(피아노 기준)으로 시작한다.
+  const MML_INSTRUMENT_TAB_SOURCE_TYPES = new Set(["mml", "mmi", "txt", "gdocs"]);
+
+  function clearMmlInstrumentTabSource() {
+    pendingMidiImport = null;
+    pendingMidiSettings = null;
+    midiAppliedSettingsSnapshot = null;
+    if (midiConvertDialog?.open) { try { midiConvertDialog.close("reload"); } catch (_) {} }
+  }
+
+  function prepareMidiImportFromMml(detail) {
+    const api = window.MabiMmlMidi;
+    if (typeof api?.buildMidiFromMml !== "function" || midiConvertBusy) return;
+    // 새 MML 소스가 들어왔으니 이전 소스(MIDI 포함)의 악기 설정은 버린다.
+    if (midiConvertDialog?.open) { try { midiConvertDialog.close("reload"); } catch (_) {} }
+    pendingMidiImport = null;
+    pendingMidiSettings = null;
+    midiAppliedSettingsSnapshot = null;
+    const name = String(detail?.name || i18nText("mml.pasted_name"));
+    let importData;
+    try {
+      const built = api.buildMidiFromMml(String(detail?.mml || ""), {
+        title: name,
+        embeddedDefault: true,
+        maxParts: 6,
+        partNames: [i18nText("part.melody"), ...[1, 2, 3, 4, 5].map(index => i18nText(`part.harmony${index}`))]
+      });
+      const bytes = built.bytes instanceof Uint8Array ? built.bytes : new Uint8Array(built.bytes || []);
+      importData = {
+        bytes,
+        name,
+        overview: analyzeMidi(bytes, name),
+        sourceType: String(detail?.sourceType || "mml"),
+        sourceLabel: String(detail?.sourceLabel || "MML"),
+        cacheFingerprint: buildSourceFileFingerprint("mml", bytes),
+        fromMml: true
+      };
+    } catch (_) {
+      clearMmlInstrumentTabSource();
+      return;
+    }
+    try {
+      openMidiConvertDialog(importData, { passive: true });
+    } catch (_) {
+      clearMmlInstrumentTabSource();
+    }
+  }
+
+  window.addEventListener("mobibard:source-baseline", event => {
+    const detail = event?.detail || {};
+    if (detail.newSource !== true || detail.fromMidiConvert === true) return;
+    if (!MML_INSTRUMENT_TAB_SOURCE_TYPES.has(String(detail.sourceType || ""))) return;
+    window.setTimeout(() => prepareMidiImportFromMml(detail), 0);
+  });
+
+  // 처음 나오는 샘플 멜로디도 바로 악기 탭에서 시험해 볼 수 있게, 시작 직후 소스가 없으면 현재 MML로 만든다.
+  window.setTimeout(() => {
+    if (pendingMidiImport || midiConvertBusy) return;
+    const text = String($("mainMml")?.value || "").trim();
+    if (!text) return;
+    prepareMidiImportFromMml({ mml: text, name: "", sourceType: "mml", sourceLabel: "MML" });
+  }, 1500);
+
+  // passive: MML 계열 소스에서 만든 가상 MIDI. 탭을 옮기거나 불러오자마자 변환하지 않고 악기 탭만 켜 둔다.
+  function openMidiConvertDialog(importData, { passive = false } = {}) {
     pendingMidiImport = importData;
-    pendingMidiStartsNewSource = true;
+    pendingMidiStartsNewSource = !passive;
     midiLastAppliedSignature = "";
     midiConvertQueued = false;
     midiConvertQueuedReason = "";
@@ -9286,8 +9354,10 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       throw new Error(i18nText("midi.group_not_found", [sourceLabel]));
     }
 
-    setPlayerUiOriginalMidiImport(importData);
+    setPlayerUiOriginalMidiImport(passive ? null : importData);
     pendingMidiSettings = createDefaultMidiSettings(groups);
+    // 판단 기준 기본값: 평소엔 악기, 오디오를 MIDI로 전사한 경우만 문맥.
+    pendingMidiSettings.arrange.trust = importData.sourceType === "audio-ai" ? 0 : 1;
     midiAppliedSettingsSnapshot = null;
     midiInstrumentSectionOpenState.clear();
     // A newly loaded file starts a fresh playerUi. Do not resurrect the previous
@@ -9305,10 +9375,11 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
     updateMidiRoleControls();
 
     if (midiConvertDialog?.showModal) {
+      if (passive) midiConvertDialog.dataset.keepTab = "1";
       midiConvertDialog.showModal();
       scheduleMidiInstrumentListHeightSync();
       // Source PlayerUi에서는 최초 채널 배정을 바로 적용해 불러오자마자 재생/편집할 수 있게 한다.
-      window.setTimeout(() => requestMidiConvert({ force: true }), 0);
+      if (!passive) window.setTimeout(() => requestMidiConvert({ force: true }), 0);
     } else {
       // 오래된 브라우저에서는 기본값으로 바로 변환한다.
       applyMidiConvertDialog();
@@ -9525,14 +9596,14 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   // 판단 기준(1 = 악기, 0.5 = 균형, 0 = 문맥), 사용할 채널 수, 메인 주자 채널 수,
   // 메인 주자 악기, 나머지 주자 악기(1채널씩, 드럼 심벌/드럼 북 포함) + 정리에 넣을 악기 그룹.
   const ARRANGE_TRUST_OPTIONS = [[1, "record"], [0.5, "balance"], [0, "context"]];
-  const ARRANGE_MELODIC_IDS = ["piano", "harp", "lute", "folkGuitar", "mandolin", "violin", "flute", "chalumeau", "harmonica", "catHarmonica", "xylophone", "musicBox"];
+  const ARRANGE_MELODIC_IDS = ["piano", "harp", "lute", "folkGuitar", "mandolin", "violin", "flute", "chalumeau", "harmonica", "catHarmonica", "xylophone", "musicBox", "gramophone"];
   const ARRANGE_DRUM_IDS = ["cymbal", "bigdrum"];
   const ARRANGE_DENSITY_OPTIONS = ["max", "mid", "low"];
   // 편곡 엔진 악기 id → 기본 SoundFont(MobiBard 14 프리셋) 악기 id
   const ARRANGE_TO_SOUNDFONT_ID = { folkGuitar: "guitar", catHarmonica: "vocal", cymbal: "metal", bigdrum: "drum" };
 
   function defaultArrangeSettings() {
-    return { manual: false, trust: 0.5, total: 6, mainCount: 3, mainInst: "auto", rows: ["auto", "auto", "auto", "auto", "auto"], cymbalDensity: "max", drumDensity: "max" };
+    return { manual: false, trust: 1, total: 6, mainCount: 3, mainInst: "auto", rows: ["auto", "auto", "auto", "auto", "auto"], cymbalDensity: "max", drumDensity: "max" };
   }
 
   function normalizeArrangeSettings(raw) {
@@ -9548,12 +9619,12 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       return ARRANGE_MELODIC_IDS.includes(id) || ARRANGE_DRUM_IDS.includes(id) ? id : "auto";
     });
     // 드럼 심벌·드럼 북은 각각 한 채널만 쓸 수 있다. 실제로 쓰는 나머지 주자 칸 안에서 두 번째부터는 자동으로 돌린다.
-    const rowCount = total - mainCount;
+    // rows[k]는 채널 k+1(화음 k)의 설정이라, 채널 수·메인 주자 수를 바꿔도 칸의 설정이 밀리지 않는다.
     const seenDrums = new Set();
-    for (let index = 0; index < rows.length; index++) {
+    for (let index = mainCount - 1; index < total - 1; index++) {
       if (!ARRANGE_DRUM_IDS.includes(rows[index])) continue;
-      if (index < rowCount && !seenDrums.has(rows[index])) seenDrums.add(rows[index]);
-      else if (index < rowCount) rows[index] = "auto";
+      if (!seenDrums.has(rows[index])) seenDrums.add(rows[index]);
+      else rows[index] = "auto";
     }
     const density = value => ARRANGE_DENSITY_OPTIONS.includes(value) ? value : "max";
     return { manual: source.manual === true, trust, total, mainCount, mainInst, rows, cymbalDensity: density(source.cymbalDensity), drumDensity: density(source.drumDensity) };
@@ -9583,7 +9654,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
   }
 
   function arrangeActiveRows(arrange) {
-    return arrange.rows.slice(0, Math.max(0, arrange.total - arrange.mainCount));
+    return arrange.rows.slice(Math.max(0, arrange.mainCount - 1), Math.max(0, arrange.total - 1));
   }
 
   function arrangeInstLabel(id) {
@@ -9723,7 +9794,7 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
       const usedElsewhere = value => ARRANGE_DRUM_IDS.includes(value) && rows.some((other, otherIndex) => otherIndex !== index && other === value);
       const select = renderArrangeSelect(
         ["auto", ...ARRANGE_MELODIC_IDS, ...ARRANGE_DRUM_IDS], id,
-        value => updateArrangeSetting(next => { next.rows[index] = value; }),
+        value => updateArrangeSetting(next => { next.rows[arrange.mainCount - 1 + index] = value; }),
         `${i18nText("arrange.rest_inst")} · ${name.textContent}`,
         usedElsewhere
       );
@@ -10891,7 +10962,8 @@ window.MobibardStartPlayerApp = function MobibardStartPlayerApp() {
         name: pendingMidiImport.name,
         sourceType,
         sourceLabel,
-        newSource: pendingMidiStartsNewSource
+        newSource: pendingMidiStartsNewSource,
+        fromMidiConvert: true
       });
       rememberSuggestedMmlSaveFileName(pendingMidiImport.name);
       googleDriveMmlFileName = "";

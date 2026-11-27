@@ -668,6 +668,7 @@ window.__MOBIBARD_LOCALES__["ja"] = {
     "arrange.inst_catHarmonica": "猫のハーモニカ",
     "arrange.inst_xylophone": "木琴",
     "arrange.inst_musicBox": "オルゴール",
+    "arrange.inst_gramophone": "蓄音機",
     "arrange.inst_cymbal": "ドラム シンバル",
     "arrange.inst_bigdrum": "ドラム 大太鼓",
     "layout.instrumentPending": "楽器設定の変更を適用してください。",

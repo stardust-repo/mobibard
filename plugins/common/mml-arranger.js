@@ -99,7 +99,11 @@ const DRUM_INST = [
   { id: 'cymbal', name: '드럼 심벌', drum: 'cymbal' },
   { id: 'bigdrum', name: '드럼 북', drum: 'drum' },
 ];
-const INST_BY_ID = Object.fromEntries([...INSTRUMENTS, ...DRUM_INST].map(x => [x.id, x]));
+// 축음기: 음색·음역 정보가 아직 없어 자동 선택 풀(INSTRUMENTS)에는 넣지 않고, 사용자가 직접 고른 경우에만 쓴다.
+const MANUAL_ONLY_INST = [
+  { id: 'gramophone', name: '축음기', prog: 0, lo: 36, hi: 96, sus: false, aff: { melody: .7, counter: .6, harmony: .7, bass: .3 } },
+];
+const INST_BY_ID = Object.fromEntries([...INSTRUMENTS, ...MANUAL_ONLY_INST, ...DRUM_INST].map(x => [x.id, x]));
 
 // GM 프로그램 → 모비바드 악기. MIDI→모비바드 악기 변환 규칙(window.MobibardInstrumentMap)을 그대로 따른다.
 // 북·심벌즈로 연결되는 프로그램은 음정 악기가 아니므로 피아노로 둔다.

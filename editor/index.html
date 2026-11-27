@@ -66,13 +66,13 @@
   document.documentElement.setAttribute("data-i18n-pending", "");
   window.__MOBIBARD_I18N_FAILSAFE__ = setTimeout(() => document.documentElement.removeAttribute("data-i18n-pending"), 3000);
   try { if (!querySelected && !storedSelected) localStorage.setItem(PREF_KEY, selected); } catch (_) {}
-  const suffix = location.protocol === "file:" ? "" : "?v=6.0.0&rev=20261126-ai21";
+  const suffix = location.protocol === "file:" ? "" : "?v=6.0.0&rev=20261127-gate4";
   const writeLocale = (language) => document.write('<script src="locale/' + FILES[language] + suffix + '"></' + 'script>');
   writeLocale(DEFAULT_LANGUAGE);
   if (selected !== DEFAULT_LANGUAGE) writeLocale(selected);
 })();
 </script>
-<script src="js/language-manager.js?v=6.0.0&amp;rev=20261126-ai21"></script>
+<script src="js/language-manager.js?v=6.0.0&amp;rev=20261127-gate4"></script>
 <title data-i18n="app.title">모비바드 v6.0 - MML 편집기</title>
 <script src="../plugins/common/seo-title.js" data-suffix=" - MML 편집기"></script>
 <meta name="description" content="MML·MIDI를 피아노롤에서 편집하고 채널, 템포, 참조 오디오를 프로젝트로 관리하는 MML 편집기입니다.">
@@ -492,24 +492,29 @@
       </div>
       <div id="w2mStateGroup">
         <div class="midi-import-slider-group">
-          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mStateBiasLegend" data-i18n="audio_midi.opt_state_bias">노트 시작 편향</span><output id="w2mStateBiasValue" for="w2mStateBias">0.00</output></div>
+          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mStateBiasLegend" data-i18n="audio_midi.opt_state_bias">노트 탐색</span><output id="w2mStateBiasValue" for="w2mStateBias">0.00</output></div>
           <input type="range" id="w2mStateBias" min="-1" max="1" step="0.05" value="0" aria-labelledby="w2mStateBiasLegend"/>
           <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_bias_left">확실한 노트만</span><span data-i18n="audio_midi.opt_bias_right">작은 노트까지</span></div>
         </div>
+      <div class="midi-import-slider-group" id="w2mNoteGateGroup">
+        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mNoteGateLegend" data-i18n="audio_midi.opt_note_gate">노트 선별</span><output id="w2mNoteGateValue" for="w2mNoteGate">OFF</output></div>
+        <input type="range" id="w2mNoteGate" min="0" max="0.3" step="0.03" value="0" aria-labelledby="w2mNoteGateLegend"/>
+        <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_note_gate_left">끔</span><span data-i18n="audio_midi.opt_note_gate_right">엄격하게</span></div>
+      </div>
       </div>
       <div id="w2mPeakGroup" hidden>
         <div class="midi-import-slider-group">
-          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mPeakOnsetLegend" data-i18n="audio_midi.opt_peak_onset">노트 시작 기준</span><output id="w2mPeakOnsetValue" for="w2mPeakOnset">0.25</output></div>
+          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mPeakOnsetLegend" data-i18n="audio_midi.opt_peak_onset">노트 검출</span><output id="w2mPeakOnsetValue" for="w2mPeakOnset">0.25</output></div>
           <input type="range" id="w2mPeakOnset" min="0.02" max="0.6" step="0.01" value="0.25" aria-labelledby="w2mPeakOnsetLegend"/>
           <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_peak_onset_left">작은 노트까지</span><span data-i18n="audio_midi.opt_peak_onset_right">확실한 노트만</span></div>
         </div>
         <div class="midi-import-slider-group">
-          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mPeakFrameLegend" data-i18n="audio_midi.opt_peak_frame">소리 유지 기준</span><output id="w2mPeakFrameValue" for="w2mPeakFrame">0.40</output></div>
+          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mPeakFrameLegend" data-i18n="audio_midi.opt_peak_frame">소리 유지</span><output id="w2mPeakFrameValue" for="w2mPeakFrame">0.40</output></div>
           <input type="range" id="w2mPeakFrame" min="0.1" max="0.9" step="0.05" value="0.40" aria-labelledby="w2mPeakFrameLegend"/>
           <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_peak_frame_left">길게 이어 붙임</span><span data-i18n="audio_midi.opt_peak_frame_right">짧게 끊음</span></div>
         </div>
         <div class="midi-import-slider-group">
-          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mPeakOffsetLegend" data-i18n="audio_midi.opt_peak_offset">노트 끝 기준</span><output id="w2mPeakOffsetValue" for="w2mPeakOffset">0.50</output></div>
+          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mPeakOffsetLegend" data-i18n="audio_midi.opt_peak_offset">노트 길이</span><output id="w2mPeakOffsetValue" for="w2mPeakOffset">0.50</output></div>
           <input type="range" id="w2mPeakOffset" min="0.1" max="0.9" step="0.05" value="0.50" aria-labelledby="w2mPeakOffsetLegend"/>
           <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_peak_offset_left">빨리 끝남</span><span data-i18n="audio_midi.opt_peak_offset_right">늦게 끝남</span></div>
         </div>
@@ -520,14 +525,9 @@
         </div>
       </div>
       <div class="midi-import-slider-group">
-        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mDrumLegend" data-i18n="audio_midi.opt_drum">드럼 검출 기준</span><output id="w2mDrumValue" for="w2mDrum">0.13</output></div>
+        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mDrumLegend" data-i18n="audio_midi.opt_drum">드럼 검출</span><output id="w2mDrumValue" for="w2mDrum">0.13</output></div>
         <input type="range" id="w2mDrum" min="0.05" max="0.4" step="0.01" value="0.13" aria-labelledby="w2mDrumLegend"/>
         <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_drum_left">약한 타격까지</span><span data-i18n="audio_midi.opt_drum_right">확실한 타격만</span></div>
-      </div>
-      <div class="midi-import-slider-group">
-        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mNoteGateLegend" data-i18n="audio_midi.opt_note_gate">가짜 노트 걸러내기</span><output id="w2mNoteGateValue" for="w2mNoteGate">OFF</output></div>
-        <input type="range" id="w2mNoteGate" min="0" max="0.9" step="0.05" value="0" aria-labelledby="w2mNoteGateLegend"/>
-        <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_note_gate_left">거르지 않음</span><span data-i18n="audio_midi.opt_note_gate_right">많이 거름</span></div>
       </div>
       <div class="midi-import-radio-group" role="radiogroup" aria-labelledby="w2mVolumeLegend">
         <span class="midi-import-setting-title" id="w2mVolumeLegend" data-i18n="audio_midi.opt_volume">볼륨(셈여림)</span>
@@ -538,13 +538,13 @@
       <div class="midi-import-radio-group" role="radiogroup" aria-labelledby="w2mTempoLegend">
         <span class="midi-import-setting-title" id="w2mTempoLegend" data-i18n="audio_midi.opt_tempo">템포</span>
         <label class="midi-import-radio"><input type="radio" name="w2mTempo" value="auto" checked/><span data-i18n="audio_midi.opt_tempo_auto">자동 감지</span></label>
+        <div class="midi-import-slider-group">
+          <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mTempoErrorLegend" data-i18n="audio_midi.opt_tempo_error">허용 오차</span></div>
+          <input type="range" id="w2mTempoError" min="0" max="10" step="1" value="0" aria-labelledby="w2mTempoErrorLegend"/>
+          <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_tempo_error_left">최소</span><span data-i18n="audio_midi.opt_tempo_error_right">최대</span></div>
+        </div>
         <label class="midi-import-radio"><input type="radio" name="w2mTempo" value="fixed"/><span data-i18n="audio_midi.opt_tempo_fixed">고정 BPM</span></label>
         <input id="w2mTempoBpm" type="number" min="32" max="255" step="1" value="120" inputmode="numeric" disabled aria-label="고정 BPM" data-i18n-aria-label="audio_midi.opt_tempo_fixed"/>
-      </div>
-      <div class="midi-import-slider-group">
-        <div class="midi-import-slider-head"><span class="midi-import-setting-title" id="w2mTempoErrorLegend" data-i18n="audio_midi.opt_tempo_error">템포 오차 허용</span></div>
-        <input type="range" id="w2mTempoError" min="0" max="10" step="1" value="0" aria-labelledby="w2mTempoErrorLegend"/>
-        <div class="midi-import-slider-ends"><span data-i18n="audio_midi.opt_tempo_error_left">최소</span><span data-i18n="audio_midi.opt_tempo_error_right">최대</span></div>
       </div>
     </div>
     <div class="midi-import-settings" id="midiImportMidiControls">
@@ -816,7 +816,7 @@
 <script src="../plugins/formats/vendor/pako_inflate.min.js?v=2.1.0"></script>
 <script src="../plugins/formats/midi/midi-parser.js?v=5.1.1&amp;rev=20260907-fixed92"></script>
 <script src="../plugins/common/midi-to-mml.js?v=5.1.1&amp;rev=20261119-smartmerge"></script>
-<script src="../plugins/common/mml-arranger.js?v=2.0.0&amp;rev=20261119-classify"></script>
+<script src="../plugins/common/mml-arranger.js?v=2.0.0&amp;rev=20261127-gramo"></script>
 <script src="../plugins/formats/notation/notation-utils.js?v=5.1.0"></script>
 <script src="../plugins/formats/music-format-core.js?v=5.1.1&amp;rev=20261123-bigtrack"></script>
 <script src="../plugins/formats/console-gm-normalizer.js?v=5.1.0&amp;rev=20260820-003400"></script>
@@ -852,9 +852,9 @@
 <script src="../plugins/formats/guitarpro/format-guitarpro.js?v=5.1.0&amp;rev=20260819-194500"></script>
 <script src="../plugins/formats/vocal/format-vocal.js?v=5.1.0"></script>
 <script src="../plugins/formats/soundbank/soundbank.js?v=5.1.0&amp;rev=20261120-env9"></script>
-<script src="../plugins/common/soundbank-stack.js?v=20261120-12"></script>
+<script src="../plugins/common/soundbank-stack.js?v=20261127-13"></script>
 <script src="../plugins/common/audio-export.js?v=1.0.5&amp;rev=20261025-48k"></script>
-<script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20260906-mobibard14"></script>
+<script src="../plugins/common/default-instrument-map.js?v=1.0.0&amp;rev=20261127-mobibard15"></script>
 <script src="js/soundbank-player.js?v=6.0.0&amp;rev=20261120-stack6"></script>
 <script src="../plugins/common/supported-files-ui.js?v=5.1.3&amp;rev=20261118c"></script>
 <script src="../plugins/common/site-navigation.js?v=20261106-tip"></script>
@@ -863,7 +863,7 @@
 <script src="../plugins/google/firebase-analytics.js?v=5.1.0&amp;rev=20260907-i18n-ready1" type="module"></script>
 <script src="js/item-tree.js?rev=20261003-unified-tree-v1"></script>
 <script src="../plugins/ai/wave2midi/wave2midi.js?v=2.1.0"></script>
-<script src="app.js?v=6.0.0&amp;rev=20261126-ai21"></script>
+<script src="app.js?v=6.0.0&amp;rev=20261127-gate4"></script>
 <script src="js/account-drive.js?v=6.0.0&amp;rev=20261103-settings1" type="module"></script>
 </body>
 </html>

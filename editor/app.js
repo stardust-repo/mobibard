@@ -14850,7 +14850,7 @@
       // w2m 표식(2.1)이 없는 저장값만 해당하고, 표식이 있으면 사용자가 고른 값 그대로입니다.
       stateBias: slotValue(src.stateBias, -1, 1, 0.05, d.stateBias),
       drumThreshold: slotValue(src.drumThreshold, 0.05, 0.4, 0.01, d.drumThreshold),
-      noteGate: slotValue(src.noteGate, 0, 0.9, 0.05, d.noteGate),
+      noteGate: Number(slotValue(src.noteGate, 0, 0.3, 0.03, d.noteGate).toFixed(2)),
       decoderMode: pick(src.decoderMode, ["state", "peak"], d.decoderMode),
       peakOnset: Number(src.w2m) === 2.1 ? slotValue(src.peakOnset, 0.02, 0.6, 0.01, d.peakOnset) : d.peakOnset,
       peakFrame: Number(src.w2m) === 2.1 ? slotValue(src.peakFrame, 0.1, 0.9, 0.05, d.peakFrame) : d.peakFrame,
@@ -15667,7 +15667,7 @@
     return Number(value.toFixed(2));
   }
   function readW2mNoteGate() {
-    const value = clamp(Math.round((Number(elements.w2mNoteGate?.value) || 0) / 0.05) * 0.05, 0, 0.9);
+    const value = clamp(Math.round((Number(elements.w2mNoteGate?.value) || 0) / 0.03) * 0.03, 0, 0.3);
     return Number(value.toFixed(2));
   }
 
@@ -15694,6 +15694,12 @@
     const peak = readW2mMode() === "peak";
     if (elements.w2mStateGroup) elements.w2mStateGroup.hidden = peak;
     if (elements.w2mPeakGroup) elements.w2mPeakGroup.hidden = !peak;
+    // 노트 선별은 어느 방식이든 "노트 탐색" 바로 아래에 둔다.
+    const gateGroup = document.querySelector("#w2mNoteGateGroup");
+    if (gateGroup) {
+      if (peak) elements.w2mPeakGroup?.querySelector(".midi-import-slider-group")?.after(gateGroup);
+      else elements.w2mStateGroup?.appendChild(gateGroup);
+    }
   }
 
   function updateW2mSliderReadouts() {

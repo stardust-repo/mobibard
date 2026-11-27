@@ -668,6 +668,7 @@ window.__MOBIBARD_LOCALES__["en"] = {
     "arrange.inst_catHarmonica": "Cat Harmonica",
     "arrange.inst_xylophone": "Xylophone",
     "arrange.inst_musicBox": "Music Box",
+    "arrange.inst_gramophone": "Gramophone",
     "arrange.inst_cymbal": "Drum Cymbal",
     "arrange.inst_bigdrum": "Big Drum",
     "layout.instrumentPending": "Apply the pending instrument settings.",
