@@ -73,7 +73,8 @@
     sourceMeta: {},
     applying: false,
     manualEdited: false,
-    codeViewApplied: false,
+    codeViewApplied: true, // true = 자유 편집(설정 반영 결과를 바로 고침), false = 원본 편집
+    originalMml: "",
     midiAutoTimer: 0,
     applyFrame: 0,
     applyTimer: 0,
@@ -989,6 +990,7 @@
       savedAt: Date.now(),
       name,
       sourceMml: String(state.sourceMml || ""),
+      originalMml: String(state.originalMml || state.sourceMml || ""),
       sourceMeta: { ...state.sourceMeta, name },
       resultMml: String($("mainMml")?.value || ""),
       options: JSON.parse(JSON.stringify(state.options)),
@@ -1070,6 +1072,7 @@
     try {
       state.options = normalizeSessionOptions(snapshot.options || {});
       state.sourceMml = String(snapshot.sourceMml || "");
+      state.originalMml = String(snapshot.originalMml || snapshot.sourceMml || "");
       state.sourceMeta = { ...(snapshot.sourceMeta || {}), name: String(snapshot.name || snapshot.sourceMeta?.name || "") };
       state.sourceVersion += 1;
       state.lastApplySignature = "";
@@ -1601,6 +1604,7 @@
       const visibleMml = String($("mainMml")?.value || "").trim();
       if (visibleMml) {
         state.sourceMml = visibleMml;
+        if (!state.originalMml) state.originalMml = visibleMml;
         if (!state.sourceMeta?.name) {
           state.sourceMeta = { name: "Sample MML", sourceType: "mml", sourceLabel: "MML" };
         }
@@ -2470,9 +2474,10 @@
 
     const allChannels = Number(index) < 0;
     const sourceView = state.activeWorkspaceTab === "code" && !state.codeViewApplied;
-    const sourceParts = sourceView ? normalizeMainToParts(state.sourceMml) : null;
+    const originalText = String(state.originalMml || state.sourceMml || "");
+    const sourceParts = sourceView ? normalizeMainToParts(originalText) : null;
     const metricText = sourceView
-      ? (allChannels ? String(state.sourceMml || "") : String(sourceParts[index] || ""))
+      ? (allChannels ? originalText : String(sourceParts[index] || ""))
       : (allChannels ? mainText : String(mainParts[index] || $(`part${index}`)?.value || ""));
     const charValue = sourceView
       ? metricText.length
@@ -2636,11 +2641,11 @@
       tools.append(state.ui.codeHelpButton);
     }
     state.ui.codeEditorHost = el("div", "wb4-channel-code-editor wb6-channel-code-editor", { id: "wb4ChannelCodeEditor" });
-    // Two views of the code tab: the editable ORIGINAL source, or the read-only RESULT with every
-    // setting applied. Edits only ever go to the original; settings are re-applied on top of it.
+    // Two views of the code tab: FREE edit (the result with every setting applied, edited directly;
+    // each edit is reverse-calculated onto the source) or the ORIGINAL source.
     const viewGroup = el("div", "wb-code-view-radios", { role: "radiogroup", "aria-label": t("codeEdit") });
     state.ui.codeViewRadios = {};
-    [["source", "codeViewSource", "codeViewSourceRadio"], ["applied", "codeViewApplied", "codeViewAppliedRadio"]].forEach(([mode, key, id]) => {
+    [["applied", "codeViewFree", "codeViewAppliedRadio"], ["source", "codeViewSource", "codeViewSourceRadio"]].forEach(([mode, key, id]) => {
       const label = el("label", "wb-code-view-toggle");
       const input = el("input", "", { type: "radio", name: "codeViewMode", id, value: mode });
       input.addEventListener("change", () => { if (input.checked) setCodeViewApplied(mode === "applied"); });
@@ -2649,6 +2654,18 @@
       viewGroup.append(label);
     });
     tools.prepend(viewGroup);
+    state.ui.codeRevertButton = el("button", "wb4-code-help-button wb6-code-help-button wb-code-revert-button", { type: "button" });
+    state.ui.codeRevertButton.append(keyedText("codeRevertAll", "wb-code-revert-label"));
+    state.ui.codeRevertButton.addEventListener("click", () => void revertAllToOriginal());
+    // 코드 도움말 버튼 바로 왼쪽에 둔다.
+    const actions = el("div", "wb-code-actions");
+    if (state.ui.codeHelpButton?.parentNode === tools) {
+      tools.insertBefore(actions, state.ui.codeHelpButton);
+      actions.append(state.ui.codeRevertButton, state.ui.codeHelpButton);
+    } else {
+      actions.append(state.ui.codeRevertButton);
+      tools.append(actions);
+    }
     state.ui.sourceEditorHost = el("div", "wb4-channel-code-editor wb6-channel-code-editor wb-source-editor", { id: "wbSourceCodeEditor" });
     // Same overlay structure as the applied view: a coloured <pre> under a transparent textarea.
     state.ui.sourceTextarea = el("textarea", "highlight-source wb-source-textarea", { id: "sourceMmlEditor", spellcheck: "false", "aria-label": t("codeViewSourceLabel") });
@@ -2684,7 +2701,9 @@
 
   function currentSourceEditorText() {
     const view = state.activeChannelView;
-    const text = view < 0 ? String(state.sourceMml || "") : String(normalizeMainToParts(state.sourceMml)[view] || "");
+    // 원본 편집은 언제나 처음 원본(자유 편집 수정이 섞이지 않은 것)을 보여주고 고친다.
+    const original = String(state.originalMml || state.sourceMml || "");
+    const text = view < 0 ? original : String(normalizeMainToParts(original)[view] || "");
     return normalizeSourceCommandCase(text);
   }
 
@@ -2745,12 +2764,21 @@
       state.ui.codeViewRadios.source.checked = !applied;
       state.ui.codeViewRadios.applied.checked = applied;
     }
+    // 자유 편집에서만 결과 코드를 고칠 수 있다.
+    ["mainMml", "part0", "part1", "part2", "part3", "part4", "part5"].forEach(id => {
+      const area = $(id);
+      if (area) { area.readOnly = !applied; area.setAttribute("aria-readonly", applied ? "false" : "true"); }
+    });
+    // 시작 직후처럼 설정 적용이 아직 한 번도 돌지 않았다면, 고치기 전에 결과를 먼저 만들어 둔다(역계산의 기준).
+    if (applied && !state.lastResultMml && state.sourceMml && window.MabiOptimizer) applyFromSource({ force: true });
+    updateRevertButton();
     updateCodeModeHint();
     if (!applied) refreshSourceEditor({ force: true });
   }
 
   function setCodeViewApplied(applied) {
     flushSourceEdit();
+    flushFreeEdit({ final: true });
     state.codeViewApplied = Boolean(applied);
     applyCodeViewVisibility();
     updateChannelCodeCount();
@@ -2769,18 +2797,61 @@
     const area = state.ui.sourceTextarea;
     if (!area || state.codeViewApplied) return;
     const view = state.activeChannelView;
-    const parts = normalizeMainToParts(state.sourceMml);
+    const original = String(state.originalMml || state.sourceMml || "");
+    const parts = normalizeMainToParts(original);
     let nextParts;
     if (view < 0) nextParts = normalizeMainToParts(area.value);
     else {
       nextParts = parts.slice();
       nextParts[view] = area.value;
     }
-    const next = composeSourceMml(nextParts);
-    if (next === state.sourceMml) {
+    const nextOriginal = composeSourceMml(nextParts);
+    if (nextOriginal === original) {
       updateChannelCodeCount();
       return;
     }
+    // 자유 편집 수정이 없으면 수정본도 원본과 같다. 있으면 "원본에서 바뀐 부분"을 수정본 위에 얹는다(채널별).
+    let nextSource = nextOriginal;
+    let dropped = [];
+    if (state.sourceMml && state.sourceMml !== original && window.MabiFreeEdit) {
+      try {
+        const merged = window.MabiFreeEdit.merge(state.sourceMml, original, nextOriginal);
+        nextSource = composeSourceMml(merged.parts);
+        dropped = merged.droppedParts || [];
+      } catch (_) {
+        nextSource = nextOriginal;
+        dropped = [0, 1, 2, 3, 4, 5];
+      }
+    }
+    state.originalMml = nextOriginal;
+    setSourceAndReapply(nextSource);
+    if (dropped.length) showToast(t("codeFreeDropped", [dropped.map(index => channelLabel(index)).join(", ")]), "info", 3600);
+  }
+
+  // ---- 자유 편집 -------------------------------------------------------------------------------
+  // 결과 코드를 고치면 (원본, 수정 전 결과, 고친 결과) 세 개만으로 원본 쪽 값을 역계산해 원본을 바꾸고
+  // 설정을 다시 적용한다(plugins/common/mml-free-edit.js). 히스토리는 없고 "원본으로 모두 되돌리기"만 있다.
+  let freeEditTimer = 0;
+  let freeEditDirty = false;
+
+  function updateRevertButton() {
+    const button = state.ui.codeRevertButton;
+    if (!button) return;
+    button.hidden = !state.codeViewApplied;
+    button.disabled = !state.originalMml || state.originalMml === state.sourceMml;
+  }
+
+  function isFreeEditActive() {
+    return Boolean(state.codeViewApplied && state.activeWorkspaceTab === "code");
+  }
+
+  function scheduleFreeEdit() {
+    freeEditDirty = true;
+    clearTimeout(freeEditTimer);
+    freeEditTimer = setTimeout(() => flushFreeEdit(), 800);
+  }
+
+  function setSourceAndReapply(next) {
     state.sourceMml = next;
     state.sourceVersion += 1;
     state.lastApplySignature = "";
@@ -2794,6 +2865,67 @@
     scheduleCopyRowsRender();
     scheduleOptionMetricsUpdate();
     scheduleSessionPersist();
+    updateRevertButton();
+  }
+
+  function flushFreeEdit({ final = false } = {}) {
+    clearTimeout(freeEditTimer);
+    freeEditTimer = 0;
+    if (!freeEditDirty) return;
+    const api = window.MabiFreeEdit;
+    const mainMml = $("mainMml");
+    const edited = String(mainMml?.value || "");
+    const base = String(state.lastResultMml || state.sourceMml || "");
+    if (!api || !mainMml || !base || edited === base) { freeEditDirty = false; return; }
+    let result;
+    try {
+      result = api.invert(state.sourceMml, base, edited);
+    } catch (error) {
+      if (!error?.code) {
+        // 입력 중인 문법 오류는 기다렸다가, 편집을 마칠 때(포커스 이동)만 알린다.
+        if (final) { freeEditDirty = false; showToast(t("codeFreeParseError"), "error", 2600); }
+        return;
+      }
+      freeEditDirty = false;
+      showToast(t("codeFreeUnmapped"), "error", 3200);
+      writeResultMml(base);
+      return;
+    }
+    freeEditDirty = false;
+    if (!result.changedParts.length) return;
+    const active = document.activeElement;
+    const selection = active && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
+    setSourceAndReapply(composeSourceMml(result.parts));
+    if (selection && active === document.activeElement) {
+      const length = String(active.value || "").length;
+      try { active.setSelectionRange(Math.min(selection[0], length), Math.min(selection[1], length)); } catch (_) {}
+    }
+    const missed = api.countMismatches(edited, state.lastResultMml, result.changedParts);
+    if (result.tempoEdited) showToast(t("codeFreeTempo"), "info", 3200);
+    else if (missed > 0) showToast(t("codeFreeMismatch", [missed]), "info", 3200);
+  }
+
+  async function revertAllToOriginal() {
+    if (!state.originalMml || state.originalMml === state.sourceMml) return;
+    const ok = await window.MobibardInlineUi?.confirm?.(t("codeRevertConfirm"), { modal: true, title: t("codeRevertAll"), confirmText: t("codeRevertAll"), cancelText: t("cancel") });
+    if (!ok) return;
+    freeEditDirty = false;
+    clearTimeout(freeEditTimer);
+    setSourceAndReapply(state.originalMml);
+    refreshSourceEditor({ force: true });
+    showToast(t("codeRevertDone"), "success");
+  }
+
+  function installFreeEditHandlers() {
+    ["mainMml", "part0", "part1", "part2", "part3", "part4", "part5"].forEach(id => {
+      const area = $(id);
+      if (!area) return;
+      area.addEventListener("input", event => {
+        if (state.applying || !event.isTrusted || !isFreeEditActive()) return;
+        scheduleFreeEdit();
+      });
+      area.addEventListener("blur", () => { if (freeEditDirty) flushFreeEdit({ final: true }); });
+    });
   }
 
   function buildCopyWorkspacePanel() {
@@ -4316,6 +4448,9 @@
       resetSubmenuStateForNewSource();
     }
     state.sourceMml = nextSource;
+    state.originalMml = nextSource;
+    freeEditDirty = false;
+    clearTimeout(freeEditTimer);
     state.sourceMeta = {
       name: detail.name || "",
       sourceType: detail.sourceType || "",
@@ -4340,6 +4475,7 @@
     scheduleChannelCountsUpdate();
     scheduleOptionMetricsUpdate();
     if (preserveEditedSession) scheduleSessionPersist();
+    updateRevertButton();
     refreshSourceEditor({ force: true });
   }
 
@@ -4377,6 +4513,7 @@
   convertDialogs();
   installTutorial();
   installGlobalHandling();
+  installFreeEditHandlers();
   updateLocalText();
   window.setTimeout(() => syncChannelCodeEditor(), 0);
 
