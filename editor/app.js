@@ -3259,13 +3259,15 @@
     return true;
   }
 
-  function measureEditPointerBeat(event) {
-    if (event.target === elements.timelineCanvas) return clamp(snapBeat(timelineBeatFromPointer(event)), 0, getTotalBeats());
-    if (event.target === elements.rollCanvas) {
-      const point = pointerToRoll(event);
-      return clamp(snapBeat(xToBeat(point.x)), 0, getTotalBeats());
-    }
+  function measureEditPointerRawBeat(event) {
+    if (event.target === elements.timelineCanvas) return timelineBeatFromPointer(event);
+    if (event.target === elements.rollCanvas) return xToBeat(pointerToRoll(event).x);
     return null;
+  }
+
+  function measureEditPointerBeat(event) {
+    const raw = measureEditPointerRawBeat(event);
+    return raw == null ? null : clamp(snapBeat(raw), 0, getTotalBeats());
   }
 
   function handleMeasureEditPointerDown(event) {
@@ -3274,6 +3276,7 @@
     if (beat == null) return false;
     state.measureEdit.selecting = true;
     state.measureEdit.pointerId = event.pointerId;
+    state.measureEdit.clickRawBeat = measureEditPointerRawBeat(event);
     state.measureEdit.rangeStartBeat = beat;
     state.measureEdit.rangeEndBeat = beat;
     try { event.target.setPointerCapture?.(event.pointerId); } catch {}
@@ -3298,9 +3301,12 @@
     if (beat != null) state.measureEdit.rangeEndBeat = beat;
     let range = getMeasureEditSelectedRange();
     if (!range) {
-      const start = Number(state.measureEdit.rangeStartBeat) || 0;
-      const length = getTimeSignatureMeasureLength(getTimeSignatureAtBeat(start));
-      state.measureEdit.rangeEndBeat = clamp(start + length, 0, getTotalBeats());
+      // 그냥 클릭: 1마디 고정이 아니라 지금 선택된 편집 간격(1~7키) 한 칸을 잡는다. 클릭한 칸의 시작부터.
+      const unit = Math.max(CONFIG.minimumNoteBeat, Number(getSnapBeat()) || 1);
+      const raw = Number(state.measureEdit.clickRawBeat);
+      const start = clamp(Math.floor((Number.isFinite(raw) ? raw : Number(state.measureEdit.rangeStartBeat) || 0) / unit + 1e-9) * unit, 0, getTotalBeats());
+      state.measureEdit.rangeStartBeat = start;
+      state.measureEdit.rangeEndBeat = clamp(start + unit, 0, getTotalBeats());
     }
     state.measureEdit.selecting = false;
     state.measureEdit.pointerId = null;
@@ -3330,6 +3336,12 @@
     if (!isMeasureEditWorkspaceActive()) return;
     if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); closeMeasureEditWorkspace(); return; }
     if (isMeasureEditPanelTarget(event.target) || isWorkspaceTopbarInteractionTarget(event.target) || isTutorialInteractionTarget(event.target)) return;
+    // 마디 편집 중에도 1~7키로 편집 간격을 바꿀 수 있게 한다(클릭 선택 범위가 이 간격을 따른다).
+    if (!event.ctrlKey && !event.metaKey && !event.altKey && !isTextEntryTarget(event.target) && EDIT_MODE_SHORTCUTS.has(event.key)) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) setEditMode(EDIT_MODE_SHORTCUTS.get(event.key));
+      return;
+    }
     event.preventDefault(); event.stopImmediatePropagation();
   }
 
